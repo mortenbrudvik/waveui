@@ -43,7 +43,7 @@ export interface CarouselProps extends React.HTMLAttributes<HTMLDivElement> {
 }
 
 /** Properties for the CarouselItem sub-component. */
-export interface CarouselItemProps extends React.HTMLAttributes<HTMLDivElement> {}
+export type CarouselItemProps = React.HTMLAttributes<HTMLDivElement>;
 
 const CarouselRoot = React.forwardRef<HTMLDivElement, CarouselProps>(
   (
@@ -67,30 +67,16 @@ const CarouselRoot = React.forwardRef<HTMLDivElement, CarouselProps>(
     );
 
     const items = React.Children.toArray(children).filter(
-      (child) =>
-        React.isValidElement(child) &&
-        child.type === CarouselItem,
+      (child) => React.isValidElement(child) && child.type === CarouselItem,
     );
     const total = items.length;
 
     const prev = React.useCallback(() => {
-      setActiveIndex(
-        activeIndex <= 0
-          ? loop
-            ? total - 1
-            : 0
-          : activeIndex - 1,
-      );
+      setActiveIndex(activeIndex <= 0 ? (loop ? total - 1 : 0) : activeIndex - 1);
     }, [activeIndex, loop, total, setActiveIndex]);
 
     const next = React.useCallback(() => {
-      setActiveIndex(
-        activeIndex >= total - 1
-          ? loop
-            ? 0
-            : total - 1
-          : activeIndex + 1,
-      );
+      setActiveIndex(activeIndex >= total - 1 ? (loop ? 0 : total - 1) : activeIndex + 1);
     }, [activeIndex, loop, total, setActiveIndex]);
 
     const goTo = React.useCallback(
@@ -105,9 +91,7 @@ const CarouselRoot = React.forwardRef<HTMLDivElement, CarouselProps>(
     React.useEffect(() => {
       if (!autoPlay || total <= 1) return;
       const id = setInterval(() => {
-        setActiveIndex(
-          activeIndex >= total - 1 ? (loop ? 0 : activeIndex) : activeIndex + 1,
-        );
+        setActiveIndex(activeIndex >= total - 1 ? (loop ? 0 : activeIndex) : activeIndex + 1);
       }, autoPlayInterval);
       return () => clearInterval(id);
     }, [autoPlay, autoPlayInterval, loop, total, activeIndex, setActiveIndex]);
@@ -158,7 +142,13 @@ const CarouselRoot = React.forwardRef<HTMLDivElement, CarouselProps>(
             )}
           >
             <svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">
-              <path d="M10 12L6 8l4-4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+              <path
+                d="M10 12L6 8l4-4"
+                stroke="currentColor"
+                strokeWidth="1.5"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              />
             </svg>
           </button>
           <button
@@ -172,7 +162,13 @@ const CarouselRoot = React.forwardRef<HTMLDivElement, CarouselProps>(
             )}
           >
             <svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">
-              <path d="M6 4l4 4-4 4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+              <path
+                d="M6 4l4 4-4 4"
+                stroke="currentColor"
+                strokeWidth="1.5"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              />
             </svg>
           </button>
           {/* Dot indicators */}

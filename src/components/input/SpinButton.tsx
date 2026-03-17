@@ -3,7 +3,10 @@ import { cn } from '../../lib/cn';
 import { useControllable } from '../../hooks/useControllable';
 
 /** Properties for the SpinButton component. */
-export interface SpinButtonProps extends Omit<React.HTMLAttributes<HTMLDivElement>, 'onChange' | 'defaultValue'> {
+export interface SpinButtonProps extends Omit<
+  React.HTMLAttributes<HTMLDivElement>,
+  'onChange' | 'defaultValue'
+> {
   /** Controlled numeric value. */
   value?: number;
   /** Initial value for uncontrolled usage.
@@ -74,7 +77,13 @@ export const SpinButton = React.forwardRef<HTMLDivElement, SpinButtonProps>(
           aria-label="Decrement"
           className="flex h-8 w-8 items-center justify-center border-r border-input text-foreground hover:bg-[#f5f5f5] active:bg-[#e0e0e0] disabled:pointer-events-none disabled:opacity-50"
         >
-          <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 12 12" fill="none">
+          <svg
+            xmlns="http://www.w3.org/2000/svg"
+            width="12"
+            height="12"
+            viewBox="0 0 12 12"
+            fill="none"
+          >
             <path d="M2.5 6h7" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
           </svg>
         </button>
@@ -100,8 +109,19 @@ export const SpinButton = React.forwardRef<HTMLDivElement, SpinButtonProps>(
           aria-label="Increment"
           className="flex h-8 w-8 items-center justify-center border-l border-input text-foreground hover:bg-[#f5f5f5] active:bg-[#e0e0e0] disabled:pointer-events-none disabled:opacity-50"
         >
-          <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 12 12" fill="none">
-            <path d="M6 2.5v7M2.5 6h7" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+          <svg
+            xmlns="http://www.w3.org/2000/svg"
+            width="12"
+            height="12"
+            viewBox="0 0 12 12"
+            fill="none"
+          >
+            <path
+              d="M6 2.5v7M2.5 6h7"
+              stroke="currentColor"
+              strokeWidth="1.5"
+              strokeLinecap="round"
+            />
           </svg>
         </button>
       </div>

@@ -2,7 +2,7 @@ import * as React from 'react';
 import { describe, it, expect } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import { Table } from '../Table';
-import { testForwardRef, testClassName } from '../../../test-utils';
+import { testForwardRef } from '../../../test-utils';
 
 const renderFullTable = (props: Record<string, unknown> = {}) =>
   render(
@@ -57,18 +57,14 @@ describe('Table', () => {
     renderFullTable({ striped: true });
     const rows = screen.getAllByRole('row');
     // tbody rows should have the striped class
-    const bodyRows = rows.filter(
-      (r) => r.parentElement?.tagName.toLowerCase() === 'tbody',
-    );
+    const bodyRows = rows.filter((r) => r.parentElement?.tagName.toLowerCase() === 'tbody');
     expect(bodyRows[0].className).toContain('odd:bg-[#fafafa]');
   });
 
   it('does not apply striped class by default', () => {
     renderFullTable();
     const rows = screen.getAllByRole('row');
-    const bodyRows = rows.filter(
-      (r) => r.parentElement?.tagName.toLowerCase() === 'tbody',
-    );
+    const bodyRows = rows.filter((r) => r.parentElement?.tagName.toLowerCase() === 'tbody');
     expect(bodyRows[0].className).not.toContain('odd:bg-[#fafafa]');
   });
 
@@ -85,7 +81,9 @@ describe('Table sub-component refs', () => {
     render(
       <table>
         <Table.Head ref={ref} data-testid="thead">
-          <tr><th>H</th></tr>
+          <tr>
+            <th>H</th>
+          </tr>
         </Table.Head>
       </table>,
     );
@@ -99,7 +97,9 @@ describe('Table sub-component refs', () => {
       <table>
         <thead>
           <tr>
-            <Table.HeadCell ref={ref} data-testid="th">H</Table.HeadCell>
+            <Table.HeadCell ref={ref} data-testid="th">
+              H
+            </Table.HeadCell>
           </tr>
         </thead>
       </table>,
@@ -113,7 +113,9 @@ describe('Table sub-component refs', () => {
     render(
       <table>
         <Table.Body ref={ref} data-testid="tbody">
-          <tr><td>C</td></tr>
+          <tr>
+            <td>C</td>
+          </tr>
         </Table.Body>
       </table>,
     );
@@ -142,7 +144,9 @@ describe('Table sub-component refs', () => {
       <table>
         <tbody>
           <tr>
-            <Table.Cell ref={ref} data-testid="td">C</Table.Cell>
+            <Table.Cell ref={ref} data-testid="td">
+              C
+            </Table.Cell>
           </tr>
         </tbody>
       </table>,

@@ -10,7 +10,14 @@ export default meta;
 type Story = StoryObj<typeof meta>;
 
 const Box = ({ children }: { children: React.ReactNode }) => (
-  <div style={{ padding: '12px 16px', background: '#f0f0f0', border: '1px solid #d1d1d1', borderRadius: 4 }}>
+  <div
+    style={{
+      padding: '12px 16px',
+      background: '#f0f0f0',
+      border: '1px solid #d1d1d1',
+      borderRadius: 4,
+    }}
+  >
     {children}
   </div>
 );
@@ -38,9 +45,39 @@ export const Column: Story = {
 export const AlignCenter: Story = {
   render: () => (
     <Flex align="center" gap="md" style={{ height: 120, border: '1px dashed #d1d1d1' }}>
-      <div style={{ padding: '8px 16px', background: '#f0f0f0', border: '1px solid #d1d1d1', borderRadius: 4, height: 40 }}>Short</div>
-      <div style={{ padding: '8px 16px', background: '#f0f0f0', border: '1px solid #d1d1d1', borderRadius: 4, height: 80 }}>Tall</div>
-      <div style={{ padding: '8px 16px', background: '#f0f0f0', border: '1px solid #d1d1d1', borderRadius: 4, height: 60 }}>Medium</div>
+      <div
+        style={{
+          padding: '8px 16px',
+          background: '#f0f0f0',
+          border: '1px solid #d1d1d1',
+          borderRadius: 4,
+          height: 40,
+        }}
+      >
+        Short
+      </div>
+      <div
+        style={{
+          padding: '8px 16px',
+          background: '#f0f0f0',
+          border: '1px solid #d1d1d1',
+          borderRadius: 4,
+          height: 80,
+        }}
+      >
+        Tall
+      </div>
+      <div
+        style={{
+          padding: '8px 16px',
+          background: '#f0f0f0',
+          border: '1px solid #d1d1d1',
+          borderRadius: 4,
+          height: 60,
+        }}
+      >
+        Medium
+      </div>
     </Flex>
   ),
 };

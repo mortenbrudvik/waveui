@@ -27,7 +27,13 @@ export const WithIcon: Story = {
   args: {
     children: (
       <>
-        <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor" style={{ marginRight: 4 }}>
+        <svg
+          width="16"
+          height="16"
+          viewBox="0 0 16 16"
+          fill="currentColor"
+          style={{ marginRight: 4 }}
+        >
           <circle cx="8" cy="8" r="6" />
         </svg>
         With icon

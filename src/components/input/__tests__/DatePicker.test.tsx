@@ -54,7 +54,8 @@ describe('DatePicker', () => {
   });
 
   it('formats date using formatDate prop', () => {
-    const formatDate = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+    const formatDate = (d: Date) =>
+      `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
     render(<DatePicker defaultValue={new Date(2025, 0, 15)} formatDate={formatDate} />);
     const input = screen.getByPlaceholderText('Select a date');
     expect(input).toHaveValue('2025-01-15');
@@ -64,7 +65,14 @@ describe('DatePicker', () => {
     const user = userEvent.setup();
     const disabledDates = (d: Date) => d.getDate() === 15;
     const onChange = vi.fn();
-    render(<DatePicker open defaultValue={new Date(2025, 5, 1)} disabledDates={disabledDates} onChange={onChange} />);
+    render(
+      <DatePicker
+        open
+        defaultValue={new Date(2025, 5, 1)}
+        disabledDates={disabledDates}
+        onChange={onChange}
+      />,
+    );
     const dayButtons = screen.getAllByRole('button').filter((btn) => btn.textContent === '15');
     // The 15th should be disabled
     const day15 = dayButtons[0];

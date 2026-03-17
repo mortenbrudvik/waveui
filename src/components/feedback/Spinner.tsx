@@ -35,7 +35,12 @@ export const Spinner = React.forwardRef<HTMLSpanElement, SpinnerProps>(
 
     if (labelVisible && label) {
       return (
-        <span ref={ref} {...rest} className={cn('inline-flex items-center gap-2', className)} role="status">
+        <span
+          ref={ref}
+          {...rest}
+          className={cn('inline-flex items-center gap-2', className)}
+          role="status"
+        >
           {spinner}
           <span className="text-body-1 text-muted-foreground">{label}</span>
         </span>
@@ -43,12 +48,17 @@ export const Spinner = React.forwardRef<HTMLSpanElement, SpinnerProps>(
     }
 
     return (
-      <span ref={ref} {...rest} className={cn('inline-flex items-center gap-2', className)} role="status">
+      <span
+        ref={ref}
+        {...rest}
+        className={cn('inline-flex items-center gap-2', className)}
+        role="status"
+      >
         {spinner}
         {label && <span className="sr-only">{label}</span>}
       </span>
     );
-  }
+  },
 );
 
 Spinner.displayName = 'Spinner';

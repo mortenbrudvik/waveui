@@ -18,10 +18,7 @@ export const Toolbar = React.forwardRef<HTMLDivElement, ToolbarProps>(
       <Component
         ref={ref}
         role="toolbar"
-        className={cn(
-          'inline-flex items-center gap-1 p-1 border border-border rounded',
-          className,
-        )}
+        className={cn('inline-flex items-center gap-1 p-1 border border-border rounded', className)}
         {...props}
       >
         {children}

@@ -59,9 +59,7 @@ const CardHeader = React.forwardRef<HTMLDivElement, CardHeaderProps>(
     return (
       <Component ref={ref} className={cn('p-4', className)} {...props}>
         {title && <div className="text-subtitle-1">{title}</div>}
-        {subtitle && (
-          <div className="text-caption-1 text-muted-foreground">{subtitle}</div>
-        )}
+        {subtitle && <div className="text-caption-1 text-muted-foreground">{subtitle}</div>}
         {children}
       </Component>
     );
@@ -95,7 +93,11 @@ export interface CardFooterProps extends React.HTMLAttributes<HTMLDivElement> {
 const CardFooter = React.forwardRef<HTMLDivElement, CardFooterProps>(
   ({ as: Component = 'div', className, ...props }, ref) => {
     return (
-      <Component ref={ref} className={cn('p-4 pt-0 flex justify-end gap-2', className)} {...props} />
+      <Component
+        ref={ref}
+        className={cn('p-4 pt-0 flex justify-end gap-2', className)}
+        {...props}
+      />
     );
   },
 );

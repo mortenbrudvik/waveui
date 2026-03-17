@@ -19,9 +19,15 @@ export const Default: Story = {
 export const WithButtons: Story = {
   render: () => (
     <Toolbar aria-label="Formatting options">
-      <Button appearance="subtle" size="small">Bold</Button>
-      <Button appearance="subtle" size="small">Italic</Button>
-      <Button appearance="subtle" size="small">Underline</Button>
+      <Button appearance="subtle" size="small">
+        Bold
+      </Button>
+      <Button appearance="subtle" size="small">
+        Italic
+      </Button>
+      <Button appearance="subtle" size="small">
+        Underline
+      </Button>
     </Toolbar>
   ),
 };

@@ -11,7 +11,16 @@ export default tseslint.config(
     rules: {
       ...reactHooks.configs.recommended.rules,
       '@typescript-eslint/no-explicit-any': 'warn',
-      '@typescript-eslint/no-unused-vars': ['warn', { argsIgnorePattern: '^_' }],
+      '@typescript-eslint/no-unused-vars': [
+        'warn',
+        { argsIgnorePattern: '^_', ignoreRestSiblings: true },
+      ],
+    },
+  },
+  {
+    files: ['stories/**/*.tsx'],
+    rules: {
+      'react-hooks/rules-of-hooks': 'off',
     },
   },
   prettier,

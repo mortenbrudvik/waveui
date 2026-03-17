@@ -108,7 +108,9 @@ describe('Menu', () => {
     const onClick = vi.fn();
     render(
       <Menu>
-        <Menu.Item disabled onClick={onClick}>Disabled</Menu.Item>
+        <Menu.Item disabled onClick={onClick}>
+          Disabled
+        </Menu.Item>
       </Menu>,
     );
     await user.click(screen.getByRole('menuitem'));

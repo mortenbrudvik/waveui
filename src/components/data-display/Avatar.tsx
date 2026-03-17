@@ -22,11 +22,11 @@ export interface AvatarProps extends React.HTMLAttributes<HTMLSpanElement> {
 }
 
 const sizeMap: Record<Size, string> = {
-  'extra-small': 'w-6 h-6 text-[10px]',    // 24px
-  small: 'w-8 h-8 text-xs',                 // 32px
-  medium: 'w-10 h-10 text-sm',              // 40px
-  large: 'w-12 h-12 text-base',             // 48px
-  'extra-large': 'w-14 h-14 text-lg',       // 56px
+  'extra-small': 'w-6 h-6 text-[10px]', // 24px
+  small: 'w-8 h-8 text-xs', // 32px
+  medium: 'w-10 h-10 text-sm', // 40px
+  large: 'w-12 h-12 text-base', // 48px
+  'extra-large': 'w-14 h-14 text-lg', // 56px
 };
 
 function getInitials(name: string): string {
@@ -40,7 +40,7 @@ function getInitials(name: string): string {
 
 export const Avatar = React.forwardRef<HTMLSpanElement, AvatarProps>(
   ({ src, name, size = 'medium', icon, image, badge, className, ...props }, ref) => {
-    const bgClass = src ? '' : (icon ? 'bg-[#f0f0f0] text-[#707070]' : 'bg-primary text-white');
+    const bgClass = src ? '' : icon ? 'bg-[#f0f0f0] text-[#707070]' : 'bg-primary text-white';
 
     const avatarElement = (
       <span
@@ -56,11 +56,7 @@ export const Avatar = React.forwardRef<HTMLSpanElement, AvatarProps>(
         {image ? (
           renderSlot(image, 'img', 'w-full h-full object-cover')
         ) : src ? (
-          <img
-            src={src}
-            alt={name ?? ''}
-            className="w-full h-full object-cover"
-          />
+          <img src={src} alt={name ?? ''} className="w-full h-full object-cover" />
         ) : icon ? (
           icon
         ) : name ? (
@@ -73,9 +69,7 @@ export const Avatar = React.forwardRef<HTMLSpanElement, AvatarProps>(
       return (
         <span className="relative inline-flex">
           {avatarElement}
-          <span className="absolute bottom-0 right-0">
-            {renderSlot(badge, 'span')}
-          </span>
+          <span className="absolute bottom-0 right-0">{renderSlot(badge, 'span')}</span>
         </span>
       );
     }

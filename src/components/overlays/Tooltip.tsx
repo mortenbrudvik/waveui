@@ -44,7 +44,9 @@ export const Tooltip = React.forwardRef<HTMLSpanElement, TooltipProps>(
 
     if (!React.isValidElement(children)) return null;
 
-    const child = React.cloneElement(children, { 'aria-describedby': visible ? tooltipId : undefined } as Partial<typeof children.props>);
+    const child = React.cloneElement(children, {
+      'aria-describedby': visible ? tooltipId : undefined,
+    } as Partial<typeof children.props>);
 
     return (
       <span
@@ -71,7 +73,7 @@ export const Tooltip = React.forwardRef<HTMLSpanElement, TooltipProps>(
         )}
       </span>
     );
-  }
+  },
 );
 
 Tooltip.displayName = 'Tooltip';

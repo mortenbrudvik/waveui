@@ -54,21 +54,12 @@ export const DefaultExpanded: Story = {
 export const WithIcons: Story = {
   render: () => (
     <Tree aria-label="Files with icons" style={{ width: 280 }}>
-      <Tree.Item
-        value="folder"
-        icon={<span style={{ fontSize: 14 }}>&#128193;</span>}
-      >
+      <Tree.Item value="folder" icon={<span style={{ fontSize: 14 }}>&#128193;</span>}>
         Folder
-        <Tree.Item
-          value="file1"
-          icon={<span style={{ fontSize: 14 }}>&#128196;</span>}
-        >
+        <Tree.Item value="file1" icon={<span style={{ fontSize: 14 }}>&#128196;</span>}>
           Document.txt
         </Tree.Item>
-        <Tree.Item
-          value="file2"
-          icon={<span style={{ fontSize: 14 }}>&#128196;</span>}
-        >
+        <Tree.Item value="file2" icon={<span style={{ fontSize: 14 }}>&#128196;</span>}>
           Notes.md
         </Tree.Item>
       </Tree.Item>

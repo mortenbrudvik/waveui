@@ -2,7 +2,12 @@ import { describe, it, expect, vi } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { CompoundButton } from '../CompoundButton';
-import { testForwardRef, testRestSpread, testClassName, testPolymorphicAs } from '../../../test-utils';
+import {
+  testForwardRef,
+  testRestSpread,
+  testClassName,
+  testPolymorphicAs,
+} from '../../../test-utils';
 
 describe('CompoundButton', () => {
   testForwardRef(CompoundButton, 'button');
@@ -29,12 +34,20 @@ describe('CompoundButton', () => {
   });
 
   it('renders as a different element via as prop', () => {
-    render(<CompoundButton as="a" data-testid="btn" href="#">Link</CompoundButton>);
+    render(
+      <CompoundButton as="a" data-testid="btn" href="#">
+        Link
+      </CompoundButton>,
+    );
     expect(screen.getByTestId('btn').tagName.toLowerCase()).toBe('a');
   });
 
   it('applies disabled state', () => {
-    render(<CompoundButton disabled data-testid="btn">Disabled</CompoundButton>);
+    render(
+      <CompoundButton disabled data-testid="btn">
+        Disabled
+      </CompoundButton>,
+    );
     expect(screen.getByTestId('btn')).toBeDisabled();
     expect(screen.getByTestId('btn').className).toContain('opacity-50');
   });

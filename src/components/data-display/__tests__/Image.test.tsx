@@ -38,13 +38,10 @@ describe('Image', () => {
     },
   );
 
-  it.each(['circular', 'rounded', 'square'] as const)(
-    'applies shape variant: %s',
-    (shape) => {
-      render(<Image shape={shape} src="test.png" data-testid="img" />);
-      expect(screen.getByTestId('img')).toBeInTheDocument();
-    },
-  );
+  it.each(['circular', 'rounded', 'square'] as const)('applies shape variant: %s', (shape) => {
+    render(<Image shape={shape} src="test.png" data-testid="img" />);
+    expect(screen.getByTestId('img')).toBeInTheDocument();
+  });
 
   it('applies circular shape class', () => {
     render(<Image shape="circular" src="test.png" data-testid="img" />);

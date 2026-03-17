@@ -1,7 +1,12 @@
 import { describe, it, expect } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import { Toolbar } from '../Toolbar';
-import { testForwardRef, testRestSpread, testClassName, testPolymorphicAs } from '../../../test-utils';
+import {
+  testForwardRef,
+  testRestSpread,
+  testClassName,
+  testPolymorphicAs,
+} from '../../../test-utils';
 
 describe('Toolbar', () => {
   testForwardRef(Toolbar, 'div');
@@ -31,7 +36,11 @@ describe('Toolbar', () => {
   });
 
   it('renders as a different element via as prop', () => {
-    render(<Toolbar as="nav" data-testid="toolbar" aria-label="Nav">Content</Toolbar>);
+    render(
+      <Toolbar as="nav" data-testid="toolbar" aria-label="Nav">
+        Content
+      </Toolbar>,
+    );
     expect(screen.getByTestId('toolbar').tagName.toLowerCase()).toBe('nav');
   });
 

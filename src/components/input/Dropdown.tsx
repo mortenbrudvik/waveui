@@ -160,11 +160,14 @@ const DropdownRoot = React.forwardRef<HTMLDivElement, DropdownProps>(
             className="absolute top-full left-0 z-50 mt-1 w-full max-h-60 overflow-auto rounded border border-border bg-background py-1 shadow-4"
             onMouseDown={(e) => e.preventDefault()}
           >
+            {/* eslint-disable-next-line react-hooks/refs -- false positive: Children.map + cloneElement pattern, no refs accessed */}
             {React.Children.map(children, (child, i) => {
               if (!React.isValidElement(child)) return child;
               if (child.type === Option) {
                 const props = child.props as OptionProps;
-                const originalOnClick = (child as React.ReactElement<{ onClick?: (e: React.MouseEvent) => void }>).props.onClick;
+                const originalOnClick = (
+                  child as React.ReactElement<{ onClick?: (e: React.MouseEvent) => void }>
+                ).props.onClick;
                 return React.cloneElement(child as React.ReactElement<Record<string, unknown>>, {
                   'aria-selected': props.value === selectedValue,
                   className: cn(

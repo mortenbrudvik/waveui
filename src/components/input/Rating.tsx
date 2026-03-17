@@ -154,10 +154,7 @@ export const RatingDisplay = React.forwardRef<HTMLDivElement, RatingDisplayProps
         {Array.from({ length: max }, (_, i) => (
           <span
             key={i}
-            className={cn(
-              'inline-flex',
-              value >= i + 1 ? 'text-[#f7b538]' : 'text-[#c4c4c4]',
-            )}
+            className={cn('inline-flex', value >= i + 1 ? 'text-[#f7b538]' : 'text-[#c4c4c4]')}
           >
             <StarIcon filled={value >= i + 1} className={starSize} />
           </span>

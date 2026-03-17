@@ -93,12 +93,8 @@ const ToastRoot = React.forwardRef<HTMLDivElement, ToastProps>(
           {statusIcons[status]}
         </span>
         <div className="flex-1 min-w-0">
-          {title && (
-            <div className="text-body-2 font-semibold text-foreground">{title}</div>
-          )}
-          {children && (
-            <div className="text-body-1 text-muted-foreground mt-0.5">{children}</div>
-          )}
+          {title && <div className="text-body-2 font-semibold text-foreground">{title}</div>}
+          {children && <div className="text-body-1 text-muted-foreground mt-0.5">{children}</div>}
         </div>
         {onDismiss && (
           <button
@@ -154,7 +150,9 @@ export const Toaster = React.forwardRef<HTMLDivElement, ToasterProps>(
     // Cleanup all timers on unmount
     React.useEffect(() => {
       const timers = timersRef.current;
-      return () => { timers.forEach(clearTimeout); };
+      return () => {
+        timers.forEach(clearTimeout);
+      };
     }, []);
 
     const dispatchToast = React.useCallback(
@@ -184,11 +182,7 @@ export const Toaster = React.forwardRef<HTMLDivElement, ToasterProps>(
         {children}
         <div
           ref={ref}
-          className={cn(
-            'fixed z-[100] flex flex-col gap-2 w-80',
-            positionMap[position],
-            className,
-          )}
+          className={cn('fixed z-[100] flex flex-col gap-2 w-80', positionMap[position], className)}
           {...rest}
         >
           {toasts.map((t) => (

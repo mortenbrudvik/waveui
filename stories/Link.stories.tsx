@@ -40,9 +40,15 @@ export const AsButton: Story = {
 export const Variants: Story = {
   render: () => (
     <div style={{ display: 'flex', gap: 16 }}>
-      <Link href="#" variant="inline">Inline</Link>
-      <Link href="#" variant="standalone">Standalone</Link>
-      <Link href="#" variant="subtle">Subtle</Link>
+      <Link href="#" variant="inline">
+        Inline
+      </Link>
+      <Link href="#" variant="standalone">
+        Standalone
+      </Link>
+      <Link href="#" variant="subtle">
+        Subtle
+      </Link>
     </div>
   ),
 };

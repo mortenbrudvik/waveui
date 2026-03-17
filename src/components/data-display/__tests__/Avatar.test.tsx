@@ -38,7 +38,12 @@ describe('Avatar', () => {
   it('renders image slot as SlotObject', () => {
     render(
       <Avatar
-        image={{ as: 'img', src: 'https://example.com/photo.jpg', alt: 'test' } as any}
+        image={
+          { as: 'img', src: 'https://example.com/photo.jpg', alt: 'test' } as Record<
+            string,
+            unknown
+          >
+        }
         data-testid="avatar"
       />,
     );
@@ -68,7 +73,9 @@ describe('Avatar', () => {
     render(
       <Avatar
         src="https://example.com/src.jpg"
-        image={{ as: 'img', src: 'https://example.com/slot.jpg', alt: 'slot' } as any}
+        image={
+          { as: 'img', src: 'https://example.com/slot.jpg', alt: 'slot' } as Record<string, unknown>
+        }
         data-testid="avatar"
       />,
     );

@@ -1,6 +1,6 @@
 import * as React from 'react';
 import { describe, it, expect, vi } from 'vitest';
-import { render, screen, act } from '@testing-library/react';
+import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { Toast, Toaster, useToastController } from '../Toast';
 
@@ -12,7 +12,11 @@ describe('Toast', () => {
 
   it('forwards ref to the root div', () => {
     const ref = React.createRef<HTMLDivElement>();
-    render(<Toast ref={ref} data-testid="toast">Hello</Toast>);
+    render(
+      <Toast ref={ref} data-testid="toast">
+        Hello
+      </Toast>,
+    );
     expect(ref.current).toBe(screen.getByTestId('toast'));
     expect(ref.current?.tagName.toLowerCase()).toBe('div');
   });
@@ -51,18 +55,30 @@ describe('Toast', () => {
   it.each(['success', 'warning', 'error', 'info'] as const)(
     'renders status variant: %s',
     (status) => {
-      render(<Toast status={status} data-testid="toast">Hello</Toast>);
+      render(
+        <Toast status={status} data-testid="toast">
+          Hello
+        </Toast>,
+      );
       expect(screen.getByTestId('toast')).toBeInTheDocument();
     },
   );
 
   it('merges custom className', () => {
-    render(<Toast className="my-class" data-testid="toast">Hello</Toast>);
+    render(
+      <Toast className="my-class" data-testid="toast">
+        Hello
+      </Toast>,
+    );
     expect(screen.getByTestId('toast').className).toContain('my-class');
   });
 
   it('spreads rest props', () => {
-    render(<Toast data-testid="toast" aria-label="toast-msg">Hello</Toast>);
+    render(
+      <Toast data-testid="toast" aria-label="toast-msg">
+        Hello
+      </Toast>,
+    );
     expect(screen.getByTestId('toast')).toHaveAttribute('aria-label', 'toast-msg');
   });
 });
@@ -74,7 +90,11 @@ describe('Toaster', () => {
   });
 
   it('renders children (app content)', () => {
-    render(<Toaster><div data-testid="app">App</div></Toaster>);
+    render(
+      <Toaster>
+        <div data-testid="app">App</div>
+      </Toaster>,
+    );
     expect(screen.getByTestId('app')).toBeInTheDocument();
   });
 });

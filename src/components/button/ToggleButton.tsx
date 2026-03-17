@@ -5,8 +5,10 @@ import { renderSlot } from '../../lib/slot';
 import type { Size, Appearance, Slot } from '../../lib/types';
 
 /** Properties for the ToggleButton component. */
-export interface ToggleButtonProps
-  extends Omit<React.ButtonHTMLAttributes<HTMLButtonElement>, 'onChange'> {
+export interface ToggleButtonProps extends Omit<
+  React.ButtonHTMLAttributes<HTMLButtonElement>,
+  'onChange'
+> {
   /** Controlled pressed state. */
   pressed?: boolean;
   /** Initial pressed state for uncontrolled usage.
@@ -43,18 +45,14 @@ const pressedClasses: Record<Appearance, string> = {
 };
 
 const appearanceClasses: Record<Appearance, string> = {
-  primary:
-    'bg-primary text-primary-foreground hover:bg-[#115ea3] active:bg-[#0c3b5e]',
+  primary: 'bg-primary text-primary-foreground hover:bg-[#115ea3] active:bg-[#0c3b5e]',
   outline:
     'border border-[#d1d1d1] bg-background text-foreground hover:bg-[#f5f5f5] active:bg-[#e0e0e0]',
   subtle: 'bg-transparent text-foreground hover:bg-[#f5f5f5] active:bg-[#e0e0e0]',
   transparent: 'bg-transparent text-primary hover:underline',
 };
 
-export const ToggleButton = React.forwardRef<
-  HTMLButtonElement,
-  ToggleButtonProps
->(
+export const ToggleButton = React.forwardRef<HTMLButtonElement, ToggleButtonProps>(
   (
     {
       pressed,
@@ -71,11 +69,7 @@ export const ToggleButton = React.forwardRef<
     },
     ref,
   ) => {
-    const [isPressed, setIsPressed] = useControllable(
-      pressed,
-      defaultPressed,
-      onPressedChange,
-    );
+    const [isPressed, setIsPressed] = useControllable(pressed, defaultPressed, onPressedChange);
 
     const handleClick = (e: React.MouseEvent<HTMLButtonElement>) => {
       setIsPressed(!isPressed);
@@ -92,9 +86,7 @@ export const ToggleButton = React.forwardRef<
           'rounded font-semibold inline-flex items-center justify-center min-w-[96px] transition-colors',
           'focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring',
           sizeClasses[size],
-          isPressed
-            ? pressedClasses[appearance]
-            : appearanceClasses[appearance],
+          isPressed ? pressedClasses[appearance] : appearanceClasses[appearance],
           icon && children && 'gap-1.5',
           disabled && 'opacity-50 cursor-not-allowed',
           className,

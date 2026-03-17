@@ -1,5 +1,5 @@
 import * as React from 'react';
-import { describe, it, expect, vi, beforeAll } from 'vitest';
+import { describe, it, expect, beforeAll } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import { Overflow, OverflowItem, useIsOverflowing } from '../Overflow';
 
@@ -17,7 +17,7 @@ beforeAll(() => {
       }
       unobserve() {}
       disconnect() {}
-    } as any;
+    } as unknown as typeof ResizeObserver;
   }
 });
 

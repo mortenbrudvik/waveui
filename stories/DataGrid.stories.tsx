@@ -15,8 +15,12 @@ export const Default: Story = {
     <DataGrid>
       <DataGrid.Header>
         <tr>
-          <DataGrid.HeaderCell columnId="name" sortable>Name</DataGrid.HeaderCell>
-          <DataGrid.HeaderCell columnId="role" sortable>Role</DataGrid.HeaderCell>
+          <DataGrid.HeaderCell columnId="name" sortable>
+            Name
+          </DataGrid.HeaderCell>
+          <DataGrid.HeaderCell columnId="role" sortable>
+            Role
+          </DataGrid.HeaderCell>
           <DataGrid.HeaderCell columnId="status">Status</DataGrid.HeaderCell>
         </tr>
       </DataGrid.Header>
@@ -47,7 +51,9 @@ export const WithSelection: Story = {
       <DataGrid.Header>
         <tr>
           <DataGrid.HeaderCell>&nbsp;</DataGrid.HeaderCell>
-          <DataGrid.HeaderCell columnId="name" sortable>Name</DataGrid.HeaderCell>
+          <DataGrid.HeaderCell columnId="name" sortable>
+            Name
+          </DataGrid.HeaderCell>
           <DataGrid.HeaderCell columnId="email">Email</DataGrid.HeaderCell>
         </tr>
       </DataGrid.Header>
@@ -75,8 +81,12 @@ export const SingleSelection: Story = {
       <DataGrid.Header>
         <tr>
           <DataGrid.HeaderCell>&nbsp;</DataGrid.HeaderCell>
-          <DataGrid.HeaderCell columnId="product" sortable>Product</DataGrid.HeaderCell>
-          <DataGrid.HeaderCell columnId="price" sortable>Price</DataGrid.HeaderCell>
+          <DataGrid.HeaderCell columnId="product" sortable>
+            Product
+          </DataGrid.HeaderCell>
+          <DataGrid.HeaderCell columnId="price" sortable>
+            Price
+          </DataGrid.HeaderCell>
         </tr>
       </DataGrid.Header>
       <DataGrid.Body>

@@ -30,11 +30,7 @@ function TestGroup({
   return (
     <div ref={containerRef} role="group" onKeyDown={handleKeyDown}>
       {items.map((item) => (
-        <button
-          key={item}
-          data-roving-value={item}
-          tabIndex={getTabIndex(item)}
-        >
+        <button key={item} data-roving-value={item} tabIndex={getTabIndex(item)}>
           {item}
         </button>
       ))}
@@ -59,9 +55,7 @@ describe('useRovingTabIndex', () => {
   it('moves focus right with ArrowRight (horizontal)', async () => {
     const user = userEvent.setup();
     const onFocusMove = vi.fn();
-    render(
-      <TestGroup activeValue="a" items={['a', 'b', 'c']} onFocusMove={onFocusMove} />,
-    );
+    render(<TestGroup activeValue="a" items={['a', 'b', 'c']} onFocusMove={onFocusMove} />);
     screen.getByText('a').focus();
     await user.keyboard('{ArrowRight}');
     expect(onFocusMove).toHaveBeenCalledWith('b');
@@ -71,9 +65,7 @@ describe('useRovingTabIndex', () => {
   it('moves focus left with ArrowLeft (horizontal)', async () => {
     const user = userEvent.setup();
     const onFocusMove = vi.fn();
-    render(
-      <TestGroup activeValue="b" items={['a', 'b', 'c']} onFocusMove={onFocusMove} />,
-    );
+    render(<TestGroup activeValue="b" items={['a', 'b', 'c']} onFocusMove={onFocusMove} />);
     screen.getByText('b').focus();
     await user.keyboard('{ArrowLeft}');
     expect(onFocusMove).toHaveBeenCalledWith('a');
@@ -83,9 +75,7 @@ describe('useRovingTabIndex', () => {
   it('wraps focus around with loop=true', async () => {
     const user = userEvent.setup();
     const onFocusMove = vi.fn();
-    render(
-      <TestGroup activeValue="c" items={['a', 'b', 'c']} loop onFocusMove={onFocusMove} />,
-    );
+    render(<TestGroup activeValue="c" items={['a', 'b', 'c']} loop onFocusMove={onFocusMove} />);
     screen.getByText('c').focus();
     await user.keyboard('{ArrowRight}');
     expect(onFocusMove).toHaveBeenCalledWith('a');
@@ -96,12 +86,7 @@ describe('useRovingTabIndex', () => {
     const user = userEvent.setup();
     const onFocusMove = vi.fn();
     render(
-      <TestGroup
-        activeValue="c"
-        items={['a', 'b', 'c']}
-        loop={false}
-        onFocusMove={onFocusMove}
-      />,
+      <TestGroup activeValue="c" items={['a', 'b', 'c']} loop={false} onFocusMove={onFocusMove} />,
     );
     screen.getByText('c').focus();
     await user.keyboard('{ArrowRight}');
@@ -147,9 +132,7 @@ describe('useRovingTabIndex', () => {
   it('Home moves to first item', async () => {
     const user = userEvent.setup();
     const onFocusMove = vi.fn();
-    render(
-      <TestGroup activeValue="c" items={['a', 'b', 'c']} onFocusMove={onFocusMove} />,
-    );
+    render(<TestGroup activeValue="c" items={['a', 'b', 'c']} onFocusMove={onFocusMove} />);
     screen.getByText('c').focus();
     await user.keyboard('{Home}');
     expect(onFocusMove).toHaveBeenCalledWith('a');
@@ -159,9 +142,7 @@ describe('useRovingTabIndex', () => {
   it('End moves to last item', async () => {
     const user = userEvent.setup();
     const onFocusMove = vi.fn();
-    render(
-      <TestGroup activeValue="a" items={['a', 'b', 'c']} onFocusMove={onFocusMove} />,
-    );
+    render(<TestGroup activeValue="a" items={['a', 'b', 'c']} onFocusMove={onFocusMove} />);
     screen.getByText('a').focus();
     await user.keyboard('{End}');
     expect(onFocusMove).toHaveBeenCalledWith('c');

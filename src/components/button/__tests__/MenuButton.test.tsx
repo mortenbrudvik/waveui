@@ -46,7 +46,9 @@ describe('MenuButton', () => {
 
   it('renders menuIcon as SlotObject', () => {
     render(
-      <MenuButton menuIcon={{ children: <span data-testid="slot-menu-icon">V</span>, className: 'custom' }}>
+      <MenuButton
+        menuIcon={{ children: <span data-testid="slot-menu-icon">V</span>, className: 'custom' }}
+      >
         Menu
       </MenuButton>,
     );

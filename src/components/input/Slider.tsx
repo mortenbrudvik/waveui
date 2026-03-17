@@ -2,8 +2,7 @@ import * as React from 'react';
 import { cn } from '../../lib/cn';
 
 /** Properties for the Slider component. */
-export interface SliderProps
-  extends Omit<React.InputHTMLAttributes<HTMLInputElement>, 'type'> {
+export interface SliderProps extends Omit<React.InputHTMLAttributes<HTMLInputElement>, 'type'> {
   /** Controlled slider value. */
   value?: number;
   /** Initial value for uncontrolled usage. */

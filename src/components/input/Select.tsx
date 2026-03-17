@@ -2,8 +2,7 @@ import * as React from 'react';
 import { cn } from '../../lib/cn';
 
 /** Properties for the Select component. */
-export interface SelectProps
-  extends React.SelectHTMLAttributes<HTMLSelectElement> {
+export interface SelectProps extends React.SelectHTMLAttributes<HTMLSelectElement> {
   /** Validation error message; sets `aria-invalid` when provided. */
   error?: string;
 }

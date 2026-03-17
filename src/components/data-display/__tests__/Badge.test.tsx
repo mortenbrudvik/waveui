@@ -18,18 +18,23 @@ describe('Badge', () => {
     expect(screen.getByText('New')).toBeInTheDocument();
   });
 
-  it.each(['filled', 'tint', 'outline'] as const)(
-    'renders appearance: %s',
-    (appearance) => {
-      render(<Badge appearance={appearance} data-testid="badge">Label</Badge>);
-      expect(screen.getByTestId('badge')).toBeInTheDocument();
-    },
-  );
+  it.each(['filled', 'tint', 'outline'] as const)('renders appearance: %s', (appearance) => {
+    render(
+      <Badge appearance={appearance} data-testid="badge">
+        Label
+      </Badge>,
+    );
+    expect(screen.getByTestId('badge')).toBeInTheDocument();
+  });
 
   it.each(['brand', 'success', 'warning', 'danger', 'important', 'informative'] as const)(
     'renders color: %s',
     (color) => {
-      render(<Badge color={color} data-testid="badge">Label</Badge>);
+      render(
+        <Badge color={color} data-testid="badge">
+          Label
+        </Badge>,
+      );
       expect(screen.getByTestId('badge')).toBeInTheDocument();
     },
   );
@@ -37,13 +42,21 @@ describe('Badge', () => {
   it.each(['extra-small', 'small', 'medium', 'large', 'extra-large'] as const)(
     'renders size: %s',
     (size) => {
-      render(<Badge size={size} data-testid="badge">Label</Badge>);
+      render(
+        <Badge size={size} data-testid="badge">
+          Label
+        </Badge>,
+      );
       expect(screen.getByTestId('badge')).toBeInTheDocument();
     },
   );
 
   it('combines appearance and color', () => {
-    render(<Badge appearance="tint" color="success" data-testid="badge">OK</Badge>);
+    render(
+      <Badge appearance="tint" color="success" data-testid="badge">
+        OK
+      </Badge>,
+    );
     expect(screen.getByTestId('badge')).toBeInTheDocument();
   });
 });

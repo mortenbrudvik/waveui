@@ -41,10 +41,9 @@ describe('useControllable', () => {
   it('warns when switching from controlled to uncontrolled', () => {
     const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
 
-    const { rerender } = renderHook(
-      ({ value }) => useControllable(value, 'default'),
-      { initialProps: { value: 'controlled' as string | undefined } },
-    );
+    const { rerender } = renderHook(({ value }) => useControllable(value, 'default'), {
+      initialProps: { value: 'controlled' as string | undefined },
+    });
 
     rerender({ value: undefined });
 

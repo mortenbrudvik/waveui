@@ -27,9 +27,15 @@ export const Default: Story = {
 export const Appearances: Story = {
   render: () => (
     <div style={{ display: 'flex', gap: 8 }}>
-      <Badge appearance="filled" color="brand">Filled</Badge>
-      <Badge appearance="tint" color="brand">Tint</Badge>
-      <Badge appearance="outline" color="brand">Outline</Badge>
+      <Badge appearance="filled" color="brand">
+        Filled
+      </Badge>
+      <Badge appearance="tint" color="brand">
+        Tint
+      </Badge>
+      <Badge appearance="outline" color="brand">
+        Outline
+      </Badge>
     </div>
   ),
 };

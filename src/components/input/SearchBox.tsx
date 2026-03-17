@@ -5,7 +5,10 @@ import { renderSlot } from '../../lib/slot';
 import type { Slot } from '../../lib/types';
 
 /** Properties for the SearchBox component. */
-export interface SearchBoxProps extends Omit<React.HTMLAttributes<HTMLDivElement>, 'onChange' | 'defaultValue'> {
+export interface SearchBoxProps extends Omit<
+  React.HTMLAttributes<HTMLDivElement>,
+  'onChange' | 'defaultValue'
+> {
   /** Controlled search text value. */
   value?: string;
   /** Initial search text for uncontrolled usage.
@@ -47,7 +50,12 @@ const DefaultSearchIcon = () => (
 );
 
 const DefaultDismissIcon = () => (
-  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="h-4 w-4">
+  <svg
+    xmlns="http://www.w3.org/2000/svg"
+    viewBox="0 0 20 20"
+    fill="currentColor"
+    className="h-4 w-4"
+  >
     <path d="M6.28 5.22a.75.75 0 00-1.06 1.06L8.94 10l-3.72 3.72a.75.75 0 101.06 1.06L10 11.06l3.72 3.72a.75.75 0 101.06-1.06L11.06 10l3.72-3.72a.75.75 0 00-1.06-1.06L10 8.94 6.28 5.22z" />
   </svg>
 );
@@ -77,10 +85,18 @@ export const SearchBox = React.forwardRef<HTMLDivElement, SearchBoxProps>(
     };
 
     return (
-      <div ref={ref} className={cn('relative inline-flex items-center w-full', className)} {...rest}>
+      <div
+        ref={ref}
+        className={cn('relative inline-flex items-center w-full', className)}
+        {...rest}
+      >
         {/* Search icon / contentBefore */}
         <span className="pointer-events-none absolute left-2">
-          {contentBefore != null ? renderSlot(contentBefore, 'span', 'shrink-0') : <DefaultSearchIcon />}
+          {contentBefore != null ? (
+            renderSlot(contentBefore, 'span', 'shrink-0')
+          ) : (
+            <DefaultSearchIcon />
+          )}
         </span>
 
         <input
@@ -99,9 +115,7 @@ export const SearchBox = React.forwardRef<HTMLDivElement, SearchBoxProps>(
 
         {/* contentAfter */}
         {contentAfter != null && (
-          <span className="absolute right-8">
-            {renderSlot(contentAfter, 'span', 'shrink-0')}
-          </span>
+          <span className="absolute right-8">{renderSlot(contentAfter, 'span', 'shrink-0')}</span>
         )}
 
         {/* Clear button / dismiss */}

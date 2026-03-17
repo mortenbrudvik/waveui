@@ -110,8 +110,14 @@ const NavCategory = React.forwardRef<HTMLLIElement, NavCategoryProps>(
           onClick={() => toggleCategory(value)}
           className="w-full flex items-center gap-2 px-4 py-2 text-body-1 font-semibold text-foreground hover:bg-[#f5f5f5] transition-colors"
         >
-          {icon && <span className="w-5 h-5 flex items-center justify-center flex-shrink-0">{icon}</span>}
-          <span className="flex-1 text-left">{typeof children === 'string' ? children : React.Children.toArray(children).find((c) => typeof c === 'string') || ''}</span>
+          {icon && (
+            <span className="w-5 h-5 flex items-center justify-center flex-shrink-0">{icon}</span>
+          )}
+          <span className="flex-1 text-left">
+            {typeof children === 'string'
+              ? children
+              : React.Children.toArray(children).find((c) => typeof c === 'string') || ''}
+          </span>
           <svg
             width="12"
             height="12"
@@ -120,7 +126,13 @@ const NavCategory = React.forwardRef<HTMLLIElement, NavCategoryProps>(
             aria-hidden="true"
             className={cn('transition-transform flex-shrink-0', isOpen && 'rotate-180')}
           >
-            <path d="M3 4.5l3 3 3-3" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+            <path
+              d="M3 4.5l3 3 3-3"
+              stroke="currentColor"
+              strokeWidth="1.5"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            />
           </svg>
         </button>
         {isOpen && (
@@ -166,7 +178,9 @@ const NavItem = React.forwardRef<HTMLButtonElement | HTMLAnchorElement, NavItemP
             className={sharedClassName}
             {...(rest as React.AnchorHTMLAttributes<HTMLAnchorElement>)}
           >
-            {icon && <span className="w-5 h-5 flex items-center justify-center flex-shrink-0">{icon}</span>}
+            {icon && (
+              <span className="w-5 h-5 flex items-center justify-center flex-shrink-0">{icon}</span>
+            )}
             <span className="flex-1 text-left">{children}</span>
           </a>
         ) : (
@@ -178,7 +192,9 @@ const NavItem = React.forwardRef<HTMLButtonElement | HTMLAnchorElement, NavItemP
             className={sharedClassName}
             {...rest}
           >
-            {icon && <span className="w-5 h-5 flex items-center justify-center flex-shrink-0">{icon}</span>}
+            {icon && (
+              <span className="w-5 h-5 flex items-center justify-center flex-shrink-0">{icon}</span>
+            )}
             <span className="flex-1 text-left">{children}</span>
           </button>
         )}

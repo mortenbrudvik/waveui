@@ -27,11 +27,7 @@ export const AvatarGroup = React.forwardRef<HTMLDivElement, AvatarGroupProps>(
     const overflow = max && items.length > max ? items.length - max : 0;
 
     return (
-      <div
-        ref={ref}
-        className={cn('inline-flex items-center', className)}
-        {...props}
-      >
+      <div ref={ref} className={cn('inline-flex items-center', className)} {...props}>
         {visible.map((child, i) => (
           <span
             key={(child as React.ReactElement)?.key ?? i}
@@ -41,10 +37,12 @@ export const AvatarGroup = React.forwardRef<HTMLDivElement, AvatarGroupProps>(
           </span>
         ))}
         {overflow > 0 && (
-          <span className={cn(
-            '-ml-2 ring-2 ring-white rounded-full inline-flex items-center justify-center bg-muted text-muted-foreground font-semibold',
-            overflowSizeMap[size],
-          )}>
+          <span
+            className={cn(
+              '-ml-2 ring-2 ring-white rounded-full inline-flex items-center justify-center bg-muted text-muted-foreground font-semibold',
+              overflowSizeMap[size],
+            )}
+          >
             +{overflow}
           </span>
         )}

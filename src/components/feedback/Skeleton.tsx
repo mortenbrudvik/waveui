@@ -34,7 +34,7 @@ export const Skeleton = React.forwardRef<HTMLDivElement, SkeletonProps>(
         aria-hidden="true"
       />
     );
-  }
+  },
 );
 
 Skeleton.displayName = 'Skeleton';

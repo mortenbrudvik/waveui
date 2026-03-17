@@ -41,7 +41,11 @@ describe('SplitButton', () => {
     const user = userEvent.setup();
     const onClick = vi.fn();
     const onMenuClick = vi.fn();
-    render(<SplitButton onClick={onClick} onMenuClick={onMenuClick}>Save</SplitButton>);
+    render(
+      <SplitButton onClick={onClick} onMenuClick={onMenuClick}>
+        Save
+      </SplitButton>,
+    );
     const buttons = screen.getAllByRole('button');
     await user.click(buttons[0]);
     expect(onClick).toHaveBeenCalledOnce();
@@ -52,7 +56,11 @@ describe('SplitButton', () => {
     const user = userEvent.setup();
     const onClick = vi.fn();
     const onMenuClick = vi.fn();
-    render(<SplitButton onClick={onClick} onMenuClick={onMenuClick}>Save</SplitButton>);
+    render(
+      <SplitButton onClick={onClick} onMenuClick={onMenuClick}>
+        Save
+      </SplitButton>,
+    );
     await user.click(screen.getByLabelText('More options'));
     expect(onMenuClick).toHaveBeenCalledOnce();
     expect(onClick).not.toHaveBeenCalled();

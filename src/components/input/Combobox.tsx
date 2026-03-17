@@ -48,9 +48,7 @@ export const OptionGroup = React.forwardRef<HTMLDivElement, OptionGroupProps>(
   ({ label, className, children, ...rest }, ref) => {
     return (
       <div ref={ref} role="group" aria-label={label} className={cn(className)} {...rest}>
-        <div className="px-3 py-1 text-caption-1 font-semibold text-muted-foreground">
-          {label}
-        </div>
+        <div className="px-3 py-1 text-caption-1 font-semibold text-muted-foreground">{label}</div>
         <ul role="presentation">{children}</ul>
       </div>
     );
@@ -173,7 +171,9 @@ const ComboboxRoot = React.forwardRef<HTMLDivElement, ComboboxProps>(
         if (!React.isValidElement(child)) return true;
         if (child.type === Option) {
           const props = child.props as OptionProps;
-          const text = (typeof props.children === 'string' ? props.children : props.value).toLowerCase();
+          const text = (
+            typeof props.children === 'string' ? props.children : props.value
+          ).toLowerCase();
           return text.includes(filter);
         }
         return true;
@@ -199,11 +199,7 @@ const ComboboxRoot = React.forwardRef<HTMLDivElement, ComboboxProps>(
 
     return (
       <ComboboxContext.Provider value={{ selectedValue, selectOption, activeIndex }}>
-        <div
-          ref={ref}
-          className={cn('relative inline-flex flex-col', className)}
-          {...rest}
-        >
+        <div ref={ref} className={cn('relative inline-flex flex-col', className)} {...rest}>
           <input
             ref={inputRef}
             role="combobox"
@@ -238,11 +234,14 @@ const ComboboxRoot = React.forwardRef<HTMLDivElement, ComboboxProps>(
               className="absolute top-full left-0 z-50 mt-1 w-full max-h-60 overflow-auto rounded border border-border bg-background py-1 shadow-4"
               onMouseDown={(e) => e.preventDefault()}
             >
+              {/* eslint-disable-next-line react-hooks/refs -- false positive: Children.map + cloneElement pattern, no refs accessed */}
               {React.Children.map(filteredChildren, (child, i) => {
                 if (!React.isValidElement(child)) return child;
                 if (child.type === Option) {
                   const props = child.props as OptionProps;
-                  const originalOnClick = (child as React.ReactElement<{ onClick?: (e: React.MouseEvent) => void }>).props.onClick;
+                  const originalOnClick = (
+                    child as React.ReactElement<{ onClick?: (e: React.MouseEvent) => void }>
+                  ).props.onClick;
                   return React.cloneElement(child as React.ReactElement<Record<string, unknown>>, {
                     'aria-selected': props.value === selectedValue,
                     className: cn(
@@ -252,7 +251,8 @@ const ComboboxRoot = React.forwardRef<HTMLDivElement, ComboboxProps>(
                     ),
                     onClick: (e: React.MouseEvent) => {
                       if (props.disabled) return;
-                      const label = typeof props.children === 'string' ? props.children : props.value;
+                      const label =
+                        typeof props.children === 'string' ? props.children : props.value;
                       selectOption(props.value, label);
                       originalOnClick?.(e);
                     },

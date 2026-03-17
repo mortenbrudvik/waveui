@@ -80,7 +80,9 @@ const ListRoot = React.forwardRef<HTMLUListElement, ListProps>(
     );
 
     const handleKeyDown = (e: React.KeyboardEvent<HTMLUListElement>) => {
-      const items = e.currentTarget.querySelectorAll<HTMLElement>('[role="option"], [role="listitem"]');
+      const items = e.currentTarget.querySelectorAll<HTMLElement>(
+        '[role="option"], [role="listitem"]',
+      );
       const currentIndex = Array.from(items).indexOf(document.activeElement as HTMLElement);
       let nextIndex = currentIndex;
 

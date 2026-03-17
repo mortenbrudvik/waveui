@@ -8,9 +8,17 @@ const meta = {
     variant: {
       control: 'select',
       options: [
-        'caption-2', 'caption-1', 'body-1', 'body-2',
-        'subtitle-2', 'subtitle-1', 'title-3', 'title-2',
-        'title-1', 'large-title', 'display',
+        'caption-2',
+        'caption-1',
+        'body-1',
+        'body-2',
+        'subtitle-2',
+        'subtitle-1',
+        'title-3',
+        'title-2',
+        'title-1',
+        'large-title',
+        'display',
       ],
     },
     weight: {

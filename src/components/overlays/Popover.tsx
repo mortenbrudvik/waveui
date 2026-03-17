@@ -94,7 +94,7 @@ const PopoverTrigger = React.forwardRef<HTMLSpanElement, PopoverTriggerProps>(
         {children}
       </span>
     );
-  }
+  },
 );
 PopoverTrigger.displayName = 'PopoverTrigger';
 
@@ -119,13 +119,13 @@ const PopoverContent = React.forwardRef<HTMLDivElement, PopoverContentProps>(
         {children}
       </div>
     );
-  }
+  },
 );
 PopoverContent.displayName = 'PopoverContent';
+
+PopoverRoot.displayName = 'Popover';
 
 export const Popover = Object.assign(PopoverRoot, {
   Trigger: PopoverTrigger,
   Content: PopoverContent,
 });
-
-(Popover as any).displayName = 'Popover';

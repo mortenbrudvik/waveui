@@ -124,9 +124,7 @@ const Step = React.forwardRef<HTMLDivElement, StepProps>(
     // Connector line
     const connectorClasses = cn(
       'transition-colors',
-      orientation === 'horizontal'
-        ? 'flex-1 h-0.5 mx-2'
-        : 'w-0.5 min-h-[24px] ml-4 my-1',
+      orientation === 'horizontal' ? 'flex-1 h-0.5 mx-2' : 'w-0.5 min-h-[24px] ml-4 my-1',
       isCompleted ? 'bg-success' : 'bg-border',
     );
 
@@ -155,7 +153,13 @@ const Step = React.forwardRef<HTMLDivElement, StepProps>(
               <span
                 className={cn(
                   'text-body-1 font-semibold',
-                  error ? 'text-error' : isActive ? 'text-primary' : isCompleted ? 'text-success' : 'text-foreground',
+                  error
+                    ? 'text-error'
+                    : isActive
+                      ? 'text-primary'
+                      : isCompleted
+                        ? 'text-success'
+                        : 'text-foreground',
                 )}
               >
                 {label}
@@ -172,7 +176,11 @@ const Step = React.forwardRef<HTMLDivElement, StepProps>(
 
     // Horizontal layout
     return (
-      <div ref={ref} className={cn('flex items-center', !isLast && 'flex-1', className)} {...domRest}>
+      <div
+        ref={ref}
+        className={cn('flex items-center', !isLast && 'flex-1', className)}
+        {...domRest}
+      >
         <div
           role="button"
           tabIndex={isClickable ? 0 : -1}
@@ -194,7 +202,13 @@ const Step = React.forwardRef<HTMLDivElement, StepProps>(
           <span
             className={cn(
               'text-caption-1 font-semibold whitespace-nowrap',
-              error ? 'text-error' : isActive ? 'text-primary' : isCompleted ? 'text-success' : 'text-foreground',
+              error
+                ? 'text-error'
+                : isActive
+                  ? 'text-primary'
+                  : isCompleted
+                    ? 'text-success'
+                    : 'text-foreground',
             )}
           >
             {label}

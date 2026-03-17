@@ -1,5 +1,10 @@
 export { Dialog } from './Dialog';
-export type { DialogProps, DialogContentProps, DialogFooterProps, DialogTriggerProps } from './Dialog';
+export type {
+  DialogProps,
+  DialogContentProps,
+  DialogFooterProps,
+  DialogTriggerProps,
+} from './Dialog';
 
 export { Popover } from './Popover';
 export type { PopoverProps, PopoverTriggerProps, PopoverContentProps } from './Popover';

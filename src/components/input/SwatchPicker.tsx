@@ -86,7 +86,9 @@ export const SwatchPicker = React.forwardRef<HTMLDivElement, SwatchPickerProps>(
                 shapeMap[shape],
                 'relative border-2 transition-all flex items-center justify-center flex-shrink-0',
                 'focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring',
-                isSelected ? 'border-primary shadow-2' : 'border-transparent hover:border-[#c0c0c0]',
+                isSelected
+                  ? 'border-primary shadow-2'
+                  : 'border-transparent hover:border-[#c0c0c0]',
               )}
               style={{ backgroundColor: item.color }}
             >

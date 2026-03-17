@@ -87,9 +87,7 @@ export function testA11y(
   requiredProps: Record<string, unknown> = {},
 ) {
   it('has no accessibility violations', async () => {
-    const { container } = render(
-      React.createElement(Component, { ...requiredProps }),
-    );
+    const { container } = render(React.createElement(Component, { ...requiredProps }));
     const results = await axe(container);
     expect(results).toHaveNoViolations();
   });

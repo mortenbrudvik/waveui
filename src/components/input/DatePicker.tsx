@@ -7,10 +7,6 @@ import { useId } from '../../hooks/useId';
 /*  Internal calendar helpers                                          */
 /* ------------------------------------------------------------------ */
 
-function getDaysInMonth(year: number, month: number): number {
-  return new Date(year, month + 1, 0).getDate();
-}
-
 function getCalendarDays(year: number, month: number, firstDayOfWeek: number): Date[] {
   const firstOfMonth = new Date(year, month, 1);
   const startDay = firstOfMonth.getDay();
@@ -55,8 +51,18 @@ function isDateDisabled(
 }
 
 const MONTH_NAMES = [
-  'January', 'February', 'March', 'April', 'May', 'June',
-  'July', 'August', 'September', 'October', 'November', 'December',
+  'January',
+  'February',
+  'March',
+  'April',
+  'May',
+  'June',
+  'July',
+  'August',
+  'September',
+  'October',
+  'November',
+  'December',
 ];
 
 const DAY_LABELS = ['Su', 'Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa'];
@@ -76,7 +82,10 @@ function defaultParseDate(str: string): Date | null {
 /* ------------------------------------------------------------------ */
 
 /** Properties for the DatePicker component. */
-export interface DatePickerProps extends Omit<React.HTMLAttributes<HTMLDivElement>, 'onChange' | 'defaultValue'> {
+export interface DatePickerProps extends Omit<
+  React.HTMLAttributes<HTMLDivElement>,
+  'onChange' | 'defaultValue'
+> {
   /** Controlled selected date. */
   value?: Date | null;
   /** Initial date for uncontrolled usage.
@@ -171,7 +180,12 @@ const DatePickerRoot = React.forwardRef<HTMLDivElement, DatePickerProps>(
     const today = new Date();
 
     // Clean up blur timeout on unmount
-    React.useEffect(() => () => { if (blurTimeoutRef.current) clearTimeout(blurTimeoutRef.current); }, []);
+    React.useEffect(
+      () => () => {
+        if (blurTimeoutRef.current) clearTimeout(blurTimeoutRef.current);
+      },
+      [],
+    );
 
     // Sync input text with selected date when calendar is not open
     React.useEffect(() => {
@@ -262,27 +276,51 @@ const DatePickerRoot = React.forwardRef<HTMLDivElement, DatePickerProps>(
       switch (e.key) {
         case 'ArrowRight':
           e.preventDefault();
-          next = new Date(focusedDay.getFullYear(), focusedDay.getMonth(), focusedDay.getDate() + 1);
+          next = new Date(
+            focusedDay.getFullYear(),
+            focusedDay.getMonth(),
+            focusedDay.getDate() + 1,
+          );
           break;
         case 'ArrowLeft':
           e.preventDefault();
-          next = new Date(focusedDay.getFullYear(), focusedDay.getMonth(), focusedDay.getDate() - 1);
+          next = new Date(
+            focusedDay.getFullYear(),
+            focusedDay.getMonth(),
+            focusedDay.getDate() - 1,
+          );
           break;
         case 'ArrowDown':
           e.preventDefault();
-          next = new Date(focusedDay.getFullYear(), focusedDay.getMonth(), focusedDay.getDate() + 7);
+          next = new Date(
+            focusedDay.getFullYear(),
+            focusedDay.getMonth(),
+            focusedDay.getDate() + 7,
+          );
           break;
         case 'ArrowUp':
           e.preventDefault();
-          next = new Date(focusedDay.getFullYear(), focusedDay.getMonth(), focusedDay.getDate() - 7);
+          next = new Date(
+            focusedDay.getFullYear(),
+            focusedDay.getMonth(),
+            focusedDay.getDate() - 7,
+          );
           break;
         case 'PageDown':
           e.preventDefault();
-          next = new Date(focusedDay.getFullYear(), focusedDay.getMonth() + 1, focusedDay.getDate());
+          next = new Date(
+            focusedDay.getFullYear(),
+            focusedDay.getMonth() + 1,
+            focusedDay.getDate(),
+          );
           break;
         case 'PageUp':
           e.preventDefault();
-          next = new Date(focusedDay.getFullYear(), focusedDay.getMonth() - 1, focusedDay.getDate());
+          next = new Date(
+            focusedDay.getFullYear(),
+            focusedDay.getMonth() - 1,
+            focusedDay.getDate(),
+          );
           break;
         case 'Enter':
           e.preventDefault();
@@ -336,7 +374,12 @@ const DatePickerRoot = React.forwardRef<HTMLDivElement, DatePickerProps>(
               className="absolute right-8 flex h-4 w-4 items-center justify-center text-[#707070] hover:text-foreground"
               aria-label="Clear date"
             >
-              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="h-4 w-4">
+              <svg
+                xmlns="http://www.w3.org/2000/svg"
+                viewBox="0 0 20 20"
+                fill="currentColor"
+                className="h-4 w-4"
+              >
                 <path d="M6.28 5.22a.75.75 0 00-1.06 1.06L8.94 10l-3.72 3.72a.75.75 0 101.06 1.06L10 11.06l3.72 3.72a.75.75 0 101.06-1.06L11.06 10l3.72-3.72a.75.75 0 00-1.06-1.06L10 8.94 6.28 5.22z" />
               </svg>
             </button>
@@ -348,8 +391,17 @@ const DatePickerRoot = React.forwardRef<HTMLDivElement, DatePickerProps>(
             className="absolute right-2 flex h-4 w-4 items-center justify-center text-[#707070] hover:text-foreground"
             aria-label="Open calendar"
           >
-            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="h-4 w-4">
-              <path fillRule="evenodd" d="M5.75 2a.75.75 0 01.75.75V4h7V2.75a.75.75 0 011.5 0V4h.25A2.75 2.75 0 0118 6.75v8.5A2.75 2.75 0 0115.25 18H4.75A2.75 2.75 0 012 15.25v-8.5A2.75 2.75 0 014.75 4H5V2.75A.75.75 0 015.75 2zm-1 5.5c-.69 0-1.25.56-1.25 1.25v6.5c0 .69.56 1.25 1.25 1.25h10.5c.69 0 1.25-.56 1.25-1.25v-6.5c0-.69-.56-1.25-1.25-1.25H4.75z" clipRule="evenodd" />
+            <svg
+              xmlns="http://www.w3.org/2000/svg"
+              viewBox="0 0 20 20"
+              fill="currentColor"
+              className="h-4 w-4"
+            >
+              <path
+                fillRule="evenodd"
+                d="M5.75 2a.75.75 0 01.75.75V4h7V2.75a.75.75 0 011.5 0V4h.25A2.75 2.75 0 0118 6.75v8.5A2.75 2.75 0 0115.25 18H4.75A2.75 2.75 0 012 15.25v-8.5A2.75 2.75 0 014.75 4H5V2.75A.75.75 0 015.75 2zm-1 5.5c-.69 0-1.25.56-1.25 1.25v6.5c0 .69.56 1.25 1.25 1.25h10.5c.69 0 1.25-.56 1.25-1.25v-6.5c0-.69-.56-1.25-1.25-1.25H4.75z"
+                clipRule="evenodd"
+              />
             </svg>
           </button>
         </div>

@@ -106,7 +106,9 @@ describe('Tree', () => {
   it('renders icon in tree item', () => {
     render(
       <Tree>
-        <Tree.Item value="a" icon={<span data-testid="icon">IC</span>}>Item</Tree.Item>
+        <Tree.Item value="a" icon={<span data-testid="icon">IC</span>}>
+          Item
+        </Tree.Item>
       </Tree>,
     );
     expect(screen.getByTestId('icon')).toBeInTheDocument();

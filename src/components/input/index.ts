@@ -9,7 +9,14 @@ export { SearchBox, type SearchBoxProps } from './SearchBox';
 export { Slider, type SliderProps } from './Slider';
 export { SpinButton, type SpinButtonProps } from './SpinButton';
 export { Label, type LabelProps } from './Label';
-export { Combobox, type ComboboxProps, Option, type OptionProps, OptionGroup, type OptionGroupProps } from './Combobox';
+export {
+  Combobox,
+  type ComboboxProps,
+  Option,
+  type OptionProps,
+  OptionGroup,
+  type OptionGroupProps,
+} from './Combobox';
 export { Dropdown, type DropdownProps } from './Dropdown';
 export { SwatchPicker, type SwatchPickerProps, type SwatchItem } from './SwatchPicker';
 export { ColorPicker, type ColorPickerProps } from './ColorPicker';

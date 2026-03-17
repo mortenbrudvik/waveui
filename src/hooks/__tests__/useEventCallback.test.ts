@@ -7,10 +7,9 @@ describe('useEventCallback', () => {
     const fn1 = vi.fn();
     const fn2 = vi.fn();
 
-    const { result, rerender } = renderHook(
-      ({ fn }) => useEventCallback(fn),
-      { initialProps: { fn: fn1 } },
-    );
+    const { result, rerender } = renderHook(({ fn }) => useEventCallback(fn), {
+      initialProps: { fn: fn1 },
+    });
 
     const first = result.current;
     rerender({ fn: fn2 });
@@ -23,10 +22,9 @@ describe('useEventCallback', () => {
     const fn1 = vi.fn(() => 'first');
     const fn2 = vi.fn(() => 'second');
 
-    const { result, rerender } = renderHook(
-      ({ fn }) => useEventCallback(fn),
-      { initialProps: { fn: fn1 } },
-    );
+    const { result, rerender } = renderHook(({ fn }) => useEventCallback(fn), {
+      initialProps: { fn: fn1 },
+    });
 
     result.current();
     expect(fn1).toHaveBeenCalledTimes(1);

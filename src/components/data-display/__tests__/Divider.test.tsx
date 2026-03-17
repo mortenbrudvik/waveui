@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import { Divider } from '../Divider';
-import { testForwardRef, testRestSpread, testClassName, testPolymorphicAs } from '../../../test-utils';
+import { testForwardRef, testRestSpread, testClassName } from '../../../test-utils';
 
 describe('Divider', () => {
   testForwardRef(Divider, 'hr');
@@ -45,7 +45,11 @@ describe('Divider', () => {
   });
 
   it('renders as custom element with children', () => {
-    render(<Divider as="section" data-testid="divider">Text</Divider>);
+    render(
+      <Divider as="section" data-testid="divider">
+        Text
+      </Divider>,
+    );
     expect(screen.getByTestId('divider').tagName.toLowerCase()).toBe('section');
   });
 

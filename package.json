@@ -4,6 +4,17 @@
   "type": "module",
   "description": "A comprehensive React component library with modern design tokens — accessible, composable components built with TypeScript and Tailwind CSS",
   "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/waveui/wave-ui-react.git"
+  },
+  "homepage": "https://github.com/waveui/wave-ui-react#readme",
+  "bugs": {
+    "url": "https://github.com/waveui/wave-ui-react/issues"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  },
   "keywords": [
     "react",
     "component-library",
@@ -43,7 +54,8 @@
     "lint": "eslint src/ stories/",
     "lint:fix": "eslint src/ stories/ --fix",
     "format": "prettier --write \"src/**/*.{ts,tsx}\" \"stories/**/*.{ts,tsx}\"",
-    "format:check": "prettier --check \"src/**/*.{ts,tsx}\" \"stories/**/*.{ts,tsx}\""
+    "format:check": "prettier --check \"src/**/*.{ts,tsx}\" \"stories/**/*.{ts,tsx}\"",
+    "prepublishOnly": "npm run build && npm test"
   },
   "peerDependencies": {
     "react": "^18.0.0 || ^19.0.0",
@@ -55,7 +67,7 @@
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",
-    "@storybook/addon-a11y": "^10.2.19",
+    "@storybook/addon-a11y": "^8.6.18",
     "@storybook/addon-essentials": "^8.5.0",
     "@storybook/react": "^8.5.0",
     "@storybook/react-vite": "^8.5.0",

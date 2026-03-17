@@ -60,9 +60,7 @@ function DialogRoot({ open, defaultOpen, onOpenChange, children }: DialogProps) 
   const [isOpen, setOpen] = useControllable(open, defaultOpen ?? false, onOpenChange);
 
   return (
-    <DialogContext.Provider value={{ open: isOpen, setOpen }}>
-      {children}
-    </DialogContext.Provider>
+    <DialogContext.Provider value={{ open: isOpen, setOpen }}>{children}</DialogContext.Provider>
   );
 }
 
@@ -74,7 +72,7 @@ const DialogTrigger = React.forwardRef<HTMLSpanElement, DialogTriggerProps>(
         {children}
       </span>
     );
-  }
+  },
 );
 DialogTrigger.displayName = 'DialogTrigger';
 
@@ -100,7 +98,9 @@ const DialogContent = React.forwardRef<HTMLDivElement, DialogContentProps>(
       if (open) {
         const prev = document.body.style.overflow;
         document.body.style.overflow = 'hidden';
-        return () => { document.body.style.overflow = prev; };
+        return () => {
+          document.body.style.overflow = prev;
+        };
       }
     }, [open]);
 
@@ -119,7 +119,7 @@ const DialogContent = React.forwardRef<HTMLDivElement, DialogContentProps>(
         previousFocusRef.current = document.activeElement as HTMLElement;
         requestAnimationFrame(() => {
           const firstFocusable = contentRef.current?.querySelector<HTMLElement>(
-            'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])'
+            'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])',
           );
           firstFocusable?.focus();
         });
@@ -135,7 +135,7 @@ const DialogContent = React.forwardRef<HTMLDivElement, DialogContentProps>(
         if (e.key === 'Escape') setOpen(false);
         if (e.key === 'Tab') {
           const focusableElements = contentRef.current?.querySelectorAll<HTMLElement>(
-            'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])'
+            'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])',
           );
           if (!focusableElements?.length) {
             e.preventDefault();
@@ -187,7 +187,9 @@ const DialogContent = React.forwardRef<HTMLDivElement, DialogContentProps>(
           )}
         >
           {title && (
-            <h2 id={titleId} className="text-subtitle-1 font-semibold">{title}</h2>
+            <h2 id={titleId} className="text-subtitle-1 font-semibold">
+              {title}
+            </h2>
           )}
           <button
             onClick={() => setOpen(false)}
@@ -195,7 +197,12 @@ const DialogContent = React.forwardRef<HTMLDivElement, DialogContentProps>(
             aria-label="Close"
           >
             <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
-              <path d="M3.5 3.5L12.5 12.5M12.5 3.5L3.5 12.5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+              <path
+                d="M3.5 3.5L12.5 12.5M12.5 3.5L3.5 12.5"
+                stroke="currentColor"
+                strokeWidth="1.5"
+                strokeLinecap="round"
+              />
             </svg>
           </button>
           <div className="text-body-1 text-muted-foreground mt-2">{children}</div>
@@ -203,7 +210,7 @@ const DialogContent = React.forwardRef<HTMLDivElement, DialogContentProps>(
       </div>,
       document.body,
     );
-  }
+  },
 );
 DialogContent.displayName = 'DialogContent';
 
@@ -214,14 +221,14 @@ const DialogFooter = React.forwardRef<HTMLDivElement, DialogFooterProps>(
         {children}
       </div>
     );
-  }
+  },
 );
 DialogFooter.displayName = 'DialogFooter';
+
+DialogRoot.displayName = 'Dialog';
 
 export const Dialog = Object.assign(DialogRoot, {
   Trigger: DialogTrigger,
   Content: DialogContent,
   Footer: DialogFooter,
 });
-
-(Dialog as any).displayName = 'Dialog';

@@ -4,8 +4,7 @@ import { renderSlot } from '../../lib/slot';
 import type { Slot } from '../../lib/types';
 
 /** Properties for the Input component. */
-export interface InputProps
-  extends React.InputHTMLAttributes<HTMLInputElement> {
+export interface InputProps extends React.InputHTMLAttributes<HTMLInputElement> {
   /** Validation error message; sets `aria-invalid` when provided. */
   error?: string;
   /** Slot rendered before the input text (e.g., an icon). */

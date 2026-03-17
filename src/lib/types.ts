@@ -10,29 +10,13 @@ export type Appearance = 'primary' | 'outline' | 'subtle' | 'transparent';
 export type BadgeAppearance = 'filled' | 'tint' | 'outline';
 
 /** Semantic color for Badge components. */
-export type BadgeColor =
-  | 'brand'
-  | 'success'
-  | 'warning'
-  | 'danger'
-  | 'important'
-  | 'informative';
+export type BadgeColor = 'brand' | 'success' | 'warning' | 'danger' | 'important' | 'informative';
 
 /** Semantic status used for alerts, messages, and status indicators. */
-export type Status =
-  | 'success'
-  | 'warning'
-  | 'error'
-  | 'info';
+export type Status = 'success' | 'warning' | 'error' | 'info';
 
 /** User presence status for Avatar and Persona components. */
-export type PresenceStatus =
-  | 'available'
-  | 'busy'
-  | 'away'
-  | 'offline'
-  | 'dnd'
-  | 'oof';
+export type PresenceStatus = 'available' | 'busy' | 'away' | 'offline' | 'dnd' | 'oof';
 
 /** Typography scale variant mapping to Fluent UI type ramp tokens. */
 export type TypographyVariant =
@@ -67,7 +51,4 @@ export type PolymorphicProps<
    * props are compatible with the target element.
    */
   as?: React.ElementType;
-} & Omit<
-    React.ComponentPropsWithoutRef<DefaultElement>,
-    keyof Props | 'as'
-  >;
+} & Omit<React.ComponentPropsWithoutRef<DefaultElement>, keyof Props | 'as'>;

@@ -42,7 +42,12 @@ describe('Pagination', () => {
     const user = userEvent.setup();
     const onPageChange = vi.fn();
     const { rerender } = render(
-      <Pagination totalPages={5} currentPage={1} onPageChange={onPageChange} showPreviousNext={false} />,
+      <Pagination
+        totalPages={5}
+        currentPage={1}
+        onPageChange={onPageChange}
+        showPreviousNext={false}
+      />,
     );
 
     await user.click(screen.getByLabelText('Page 4'));
@@ -51,7 +56,12 @@ describe('Pagination', () => {
     expect(screen.getByLabelText('Page 1')).toHaveAttribute('aria-current', 'page');
 
     rerender(
-      <Pagination totalPages={5} currentPage={4} onPageChange={onPageChange} showPreviousNext={false} />,
+      <Pagination
+        totalPages={5}
+        currentPage={4}
+        onPageChange={onPageChange}
+        showPreviousNext={false}
+      />,
     );
     expect(screen.getByLabelText('Page 4')).toHaveAttribute('aria-current', 'page');
   });
@@ -82,9 +92,7 @@ describe('Pagination', () => {
   });
 
   it('shows ellipsis for many pages', () => {
-    render(
-      <Pagination totalPages={20} defaultCurrentPage={10} showPreviousNext={false} />,
-    );
+    render(<Pagination totalPages={20} defaultCurrentPage={10} showPreviousNext={false} />);
     const ellipses = document.querySelectorAll('[aria-hidden="true"]');
     expect(ellipses.length).toBeGreaterThanOrEqual(2);
   });

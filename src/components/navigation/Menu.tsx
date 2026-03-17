@@ -22,12 +22,14 @@ export interface MenuItemProps extends React.HTMLAttributes<HTMLDivElement> {
 }
 
 /** Properties for the MenuDivider sub-component. */
-export interface MenuDividerProps extends React.HTMLAttributes<HTMLDivElement> {}
+export type MenuDividerProps = React.HTMLAttributes<HTMLDivElement>;
 
 const MenuRoot = React.forwardRef<HTMLDivElement, MenuProps>(
   ({ children, className, ...rest }, ref) => {
     const handleKeyDown = (e: React.KeyboardEvent) => {
-      const items = e.currentTarget.querySelectorAll<HTMLElement>('[role="menuitem"]:not([aria-disabled="true"])');
+      const items = e.currentTarget.querySelectorAll<HTMLElement>(
+        '[role="menuitem"]:not([aria-disabled="true"])',
+      );
       const currentIndex = Array.from(items).indexOf(document.activeElement as HTMLElement);
       let nextIndex = currentIndex;
 
@@ -63,7 +65,7 @@ const MenuRoot = React.forwardRef<HTMLDivElement, MenuProps>(
         {children}
       </div>
     );
-  }
+  },
 );
 MenuRoot.displayName = 'Menu';
 
@@ -89,23 +91,27 @@ const MenuItem = React.forwardRef<HTMLDivElement, MenuItemProps>(
           className,
         )}
       >
-        {icon !== undefined && renderSlot(icon, 'span', 'flex-shrink-0 w-5 h-5 flex items-center justify-center')}
+        {icon !== undefined &&
+          renderSlot(icon, 'span', 'flex-shrink-0 w-5 h-5 flex items-center justify-center')}
         <span className="flex-1">{children}</span>
-        {shortcut && (
-          <span className="text-caption-1 text-muted-foreground ml-4">
-            {shortcut}
-          </span>
-        )}
+        {shortcut && <span className="text-caption-1 text-muted-foreground ml-4">{shortcut}</span>}
       </div>
     );
-  }
+  },
 );
 MenuItem.displayName = 'MenuItem';
 
 const MenuDivider = React.forwardRef<HTMLDivElement, MenuDividerProps>(
   ({ className, ...rest }, ref) => {
-    return <div ref={ref} role="separator" {...rest} className={cn('border-t border-border my-1', className)} />;
-  }
+    return (
+      <div
+        ref={ref}
+        role="separator"
+        {...rest}
+        className={cn('border-t border-border my-1', className)}
+      />
+    );
+  },
 );
 MenuDivider.displayName = 'MenuDivider';
 

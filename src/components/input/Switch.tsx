@@ -4,7 +4,10 @@ import { useControllable } from '../../hooks/useControllable';
 import { useId } from '../../hooks/useId';
 
 /** Properties for the Switch component. */
-export interface SwitchProps extends Omit<React.HTMLAttributes<HTMLLabelElement>, 'onChange' | 'defaultChecked'> {
+export interface SwitchProps extends Omit<
+  React.HTMLAttributes<HTMLLabelElement>,
+  'onChange' | 'defaultChecked'
+> {
   /** Controlled checked (on/off) state. */
   checked?: boolean;
   /** Initial checked state for uncontrolled usage.

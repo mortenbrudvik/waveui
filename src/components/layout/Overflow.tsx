@@ -210,7 +210,13 @@ export const OverflowItem = React.forwardRef<HTMLDivElement, OverflowItemProps>(
         style={{
           ...style,
           ...(isHidden
-            ? { visibility: 'hidden' as const, position: 'absolute' as const, width: 0, height: 0, overflow: 'hidden' }
+            ? {
+                visibility: 'hidden' as const,
+                position: 'absolute' as const,
+                width: 0,
+                height: 0,
+                overflow: 'hidden',
+              }
             : {}),
         }}
         aria-hidden={isHidden || undefined}

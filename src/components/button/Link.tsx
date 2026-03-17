@@ -4,8 +4,7 @@ import { cn } from '../../lib/cn';
 export type LinkVariant = 'inline' | 'standalone' | 'subtle';
 
 /** Properties for the Link component. */
-export interface LinkProps
-  extends React.AnchorHTMLAttributes<HTMLAnchorElement> {
+export interface LinkProps extends React.AnchorHTMLAttributes<HTMLAnchorElement> {
   /** Custom element type to render as.
    * @default 'a'
    */

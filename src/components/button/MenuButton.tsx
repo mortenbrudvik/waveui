@@ -4,8 +4,7 @@ import { renderSlot } from '../../lib/slot';
 import type { Size, Appearance, Slot } from '../../lib/types';
 
 /** Properties for the MenuButton component. */
-export interface MenuButtonProps
-  extends React.ButtonHTMLAttributes<HTMLButtonElement> {
+export interface MenuButtonProps extends React.ButtonHTMLAttributes<HTMLButtonElement> {
   /** Visual style variant.
    * @default 'outline'
    */
@@ -31,8 +30,7 @@ const sizeClasses: Record<Size, string> = {
 };
 
 const appearanceClasses: Record<Appearance, string> = {
-  primary:
-    'bg-primary text-primary-foreground hover:bg-[#115ea3] active:bg-[#0c3b5e]',
+  primary: 'bg-primary text-primary-foreground hover:bg-[#115ea3] active:bg-[#0c3b5e]',
   outline:
     'border border-[#d1d1d1] bg-background text-foreground hover:bg-[#f5f5f5] active:bg-[#e0e0e0]',
   subtle: 'bg-transparent text-foreground hover:bg-[#f5f5f5] active:bg-[#e0e0e0]',

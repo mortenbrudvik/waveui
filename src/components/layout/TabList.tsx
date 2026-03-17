@@ -68,11 +68,7 @@ const TabListRoot = React.forwardRef<HTMLDivElement, TabListProps>(
     const items = React.useMemo(() => {
       const values: string[] = [];
       React.Children.forEach(children, (child) => {
-        if (
-          React.isValidElement<TabProps>(child) &&
-          child.props.value &&
-          child.type === Tab
-        ) {
+        if (React.isValidElement<TabProps>(child) && child.props.value && child.type === Tab) {
           values.push(child.props.value);
         }
       });

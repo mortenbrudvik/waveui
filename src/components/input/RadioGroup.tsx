@@ -16,7 +16,10 @@ const RadioCtx = React.createContext<RadioGroupContext | null>(null);
 
 /* ---- RadioGroup ---- */
 /** Properties for the RadioGroup component. */
-export interface RadioGroupProps extends Omit<React.HTMLAttributes<HTMLDivElement>, 'onChange' | 'defaultValue'> {
+export interface RadioGroupProps extends Omit<
+  React.HTMLAttributes<HTMLDivElement>,
+  'onChange' | 'defaultValue'
+> {
   /** Controlled selected value. */
   value?: string;
   /** Initial selected value for uncontrolled usage.
@@ -53,7 +56,11 @@ export const RadioGroup = React.forwardRef<HTMLDivElement, RadioGroupProps>(
     const items = React.useMemo(() => {
       const values: string[] = [];
       React.Children.forEach(children, (child) => {
-        if (React.isValidElement<RadioItemProps>(child) && child.props.value && !child.props.disabled) {
+        if (
+          React.isValidElement<RadioItemProps>(child) &&
+          child.props.value &&
+          !child.props.disabled
+        ) {
           values.push(child.props.value);
         }
       });

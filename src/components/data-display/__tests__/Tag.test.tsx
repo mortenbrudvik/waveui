@@ -2,7 +2,12 @@ import { describe, it, expect, vi } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { Tag } from '../Tag';
-import { testForwardRef, testRestSpread, testClassName, testPolymorphicAs } from '../../../test-utils';
+import {
+  testForwardRef,
+  testRestSpread,
+  testClassName,
+  testPolymorphicAs,
+} from '../../../test-utils';
 
 describe('Tag', () => {
   testForwardRef(Tag, 'span');
@@ -21,7 +26,11 @@ describe('Tag', () => {
   });
 
   it('renders as a different element via as prop', () => {
-    render(<Tag as="div" data-testid="tag">Label</Tag>);
+    render(
+      <Tag as="div" data-testid="tag">
+        Label
+      </Tag>,
+    );
     expect(screen.getByTestId('tag').tagName.toLowerCase()).toBe('div');
   });
 
@@ -38,7 +47,11 @@ describe('Tag', () => {
   it('calls onDismiss when dismiss button is clicked', async () => {
     const user = userEvent.setup();
     const onDismiss = vi.fn();
-    render(<Tag dismissible onDismiss={onDismiss}>Label</Tag>);
+    render(
+      <Tag dismissible onDismiss={onDismiss}>
+        Label
+      </Tag>,
+    );
     await user.click(screen.getByLabelText('Dismiss'));
     expect(onDismiss).toHaveBeenCalledTimes(1);
   });

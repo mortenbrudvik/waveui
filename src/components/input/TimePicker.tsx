@@ -135,9 +135,7 @@ const TimePickerRoot = React.forwardRef<HTMLDivElement, TimePickerProps>(
       if (!inputText) return allOptions;
       const lower = inputText.toLowerCase();
       return allOptions.filter(
-        (opt) =>
-          opt.label.toLowerCase().includes(lower) ||
-          opt.value.includes(lower),
+        (opt) => opt.label.toLowerCase().includes(lower) || opt.value.includes(lower),
       );
     }, [allOptions, inputText]);
 
@@ -236,7 +234,7 @@ const TimePickerRoot = React.forwardRef<HTMLDivElement, TimePickerProps>(
               'h-8 w-full rounded border border-input bg-background px-3 text-sm',
               'focus:outline-none focus:border-b-2 focus:border-b-primary',
               'disabled:opacity-50 disabled:cursor-not-allowed',
-              (clearable && selectedValue) && 'pr-8',
+              clearable && selectedValue && 'pr-8',
             )}
           />
           {clearable && selectedValue && (
@@ -247,7 +245,12 @@ const TimePickerRoot = React.forwardRef<HTMLDivElement, TimePickerProps>(
               className="absolute right-2 flex h-4 w-4 items-center justify-center text-[#707070] hover:text-foreground"
               aria-label="Clear time"
             >
-              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="h-4 w-4">
+              <svg
+                xmlns="http://www.w3.org/2000/svg"
+                viewBox="0 0 20 20"
+                fill="currentColor"
+                className="h-4 w-4"
+              >
                 <path d="M6.28 5.22a.75.75 0 00-1.06 1.06L8.94 10l-3.72 3.72a.75.75 0 101.06 1.06L10 11.06l3.72 3.72a.75.75 0 101.06-1.06L11.06 10l3.72-3.72a.75.75 0 00-1.06-1.06L10 8.94 6.28 5.22z" />
               </svg>
             </button>

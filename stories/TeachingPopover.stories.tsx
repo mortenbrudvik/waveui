@@ -1,4 +1,3 @@
-import * as React from 'react';
 import type { Meta, StoryObj } from '@storybook/react';
 import { TeachingPopover } from '../src';
 
@@ -16,7 +15,7 @@ const sampleSteps = [
     body: 'Use the share menu to invite collaborators and assign roles.',
   },
   {
-    title: 'You\'re All Set!',
+    title: "You're All Set!",
     body: 'You now know the basics. Explore the app to discover more features.',
   },
 ];

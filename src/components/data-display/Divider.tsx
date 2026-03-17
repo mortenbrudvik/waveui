@@ -36,9 +36,7 @@ export const Divider = React.forwardRef<HTMLElement, DividerProps>(
           {...props}
         >
           <hr className="flex-1 border-t border-border" />
-          <span className="text-caption-1 text-muted-foreground shrink-0">
-            {children}
-          </span>
+          <span className="text-caption-1 text-muted-foreground shrink-0">{children}</span>
           <hr className="flex-1 border-t border-border" />
         </WrapperComponent>
       );

@@ -62,9 +62,7 @@ export const Controlled: Story = {
     return (
       <div>
         <DatePicker value={value} onChange={setValue} style={{ width: 250 }} />
-        <p style={{ marginTop: 8 }}>
-          Selected: {value ? value.toLocaleDateString() : '(none)'}
-        </p>
+        <p style={{ marginTop: 8 }}>Selected: {value ? value.toLocaleDateString() : '(none)'}</p>
       </div>
     );
   },

@@ -29,9 +29,7 @@ export interface TreeProps extends React.HTMLAttributes<HTMLDivElement> {
 
 const TreeRoot = React.forwardRef<HTMLDivElement, TreeProps>(
   ({ defaultExpandedItems = [], className, children, ...rest }, ref) => {
-    const [expandedItems, setExpandedItems] = React.useState(
-      () => new Set(defaultExpandedItems),
-    );
+    const [expandedItems, setExpandedItems] = React.useState(() => new Set(defaultExpandedItems));
 
     const toggleItem = React.useCallback((value: string) => {
       setExpandedItems((prev) => {
@@ -44,12 +42,7 @@ const TreeRoot = React.forwardRef<HTMLDivElement, TreeProps>(
 
     return (
       <TreeContext.Provider value={{ expandedItems, toggleItem }}>
-        <div
-          ref={ref}
-          role="tree"
-          className={cn('text-body-1', className)}
-          {...rest}
-        >
+        <div ref={ref} role="tree" className={cn('text-body-1', className)} {...rest}>
           {children}
         </div>
       </TreeContext.Provider>
@@ -84,10 +77,7 @@ const TreeItem = React.forwardRef<HTMLDivElement, TreeItemProps>(
     const labelContent: React.ReactNode[] = [];
 
     React.Children.forEach(children, (child) => {
-      if (
-        React.isValidElement(child) &&
-        (child.type === TreeItem || child.type === TreeRoot)
-      ) {
+      if (React.isValidElement(child) && (child.type === TreeItem || child.type === TreeRoot)) {
         nestedItems.push(child);
       } else {
         labelContent.push(child);
@@ -128,10 +118,7 @@ const TreeItem = React.forwardRef<HTMLDivElement, TreeItemProps>(
               height="12"
               viewBox="0 0 12 12"
               fill="none"
-              className={cn(
-                'shrink-0 transition-transform',
-                isExpanded && 'rotate-90',
-              )}
+              className={cn('shrink-0 transition-transform', isExpanded && 'rotate-90')}
               aria-hidden="true"
             >
               <path

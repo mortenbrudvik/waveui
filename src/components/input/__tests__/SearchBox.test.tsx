@@ -35,7 +35,12 @@ describe('SearchBox', () => {
   });
 
   it('renders dismiss as SlotObject', () => {
-    render(<SearchBox defaultValue="test" dismiss={{ children: <span data-testid="dismiss-slot">X</span> }} />);
+    render(
+      <SearchBox
+        defaultValue="test"
+        dismiss={{ children: <span data-testid="dismiss-slot">X</span> }}
+      />,
+    );
     expect(screen.getByTestId('dismiss-slot')).toBeInTheDocument();
   });
 

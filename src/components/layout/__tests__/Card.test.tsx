@@ -2,7 +2,12 @@ import { describe, it, expect, vi } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { Card } from '../Card';
-import { testForwardRef, testRestSpread, testClassName, testPolymorphicAs } from '../../../test-utils';
+import {
+  testForwardRef,
+  testRestSpread,
+  testClassName,
+  testPolymorphicAs,
+} from '../../../test-utils';
 
 describe('Card', () => {
   testForwardRef(Card, 'div');
@@ -21,25 +26,41 @@ describe('Card', () => {
   });
 
   it('renders as custom element', () => {
-    render(<Card as="article" data-testid="card">Content</Card>);
+    render(
+      <Card as="article" data-testid="card">
+        Content
+      </Card>,
+    );
     expect(screen.getByTestId('card').tagName.toLowerCase()).toBe('article');
   });
 
   it('applies selected styling', () => {
-    render(<Card selected data-testid="card">Content</Card>);
+    render(
+      <Card selected data-testid="card">
+        Content
+      </Card>,
+    );
     expect(screen.getByTestId('card').className).toContain('border-primary');
   });
 
   it('calls onSelect when clicked', async () => {
     const user = userEvent.setup();
     const onSelect = vi.fn();
-    render(<Card onSelect={onSelect} data-testid="card">Content</Card>);
+    render(
+      <Card onSelect={onSelect} data-testid="card">
+        Content
+      </Card>,
+    );
     await user.click(screen.getByTestId('card'));
     expect(onSelect).toHaveBeenCalledTimes(1);
   });
 
   it('has cursor-pointer when onSelect is provided', () => {
-    render(<Card onSelect={() => {}} data-testid="card">Content</Card>);
+    render(
+      <Card onSelect={() => {}} data-testid="card">
+        Content
+      </Card>,
+    );
     expect(screen.getByTestId('card').className).toContain('cursor-pointer');
   });
 });

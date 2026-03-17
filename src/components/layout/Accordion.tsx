@@ -61,11 +61,7 @@ const AccordionRoot = React.forwardRef<HTMLDivElement, AccordionProps>(
 
     return (
       <AccordionContext.Provider value={{ openItems, toggle }}>
-        <div
-          ref={ref}
-          className={cn('divide-y divide-border', className)}
-          {...rest}
-        >
+        <div ref={ref} className={cn('divide-y divide-border', className)} {...rest}>
           {children}
         </div>
       </AccordionContext.Provider>
@@ -123,19 +119,14 @@ const AccordionItem = React.forwardRef<HTMLDivElement, AccordionItemProps>(
           className="w-full flex justify-between items-center py-3 px-4 font-semibold text-body-1"
         >
           {triggerChildren.length > 0
-            ? triggerChildren.map((c) =>
-                React.isValidElement(c) ? c.props.children : c,
-              )
+            ? triggerChildren.map((c) => (React.isValidElement(c) ? c.props.children : c))
             : value}
           <svg
             width="16"
             height="16"
             viewBox="0 0 16 16"
             fill="none"
-            className={cn(
-              'transition-transform shrink-0',
-              isOpen && 'rotate-180',
-            )}
+            className={cn('transition-transform shrink-0', isOpen && 'rotate-180')}
           >
             <path
               d="M4 6l4 4 4-4"
@@ -154,9 +145,7 @@ const AccordionItem = React.forwardRef<HTMLDivElement, AccordionItemProps>(
             className="px-4 pb-3 text-body-1 text-muted-foreground"
           >
             {panelChildren.length > 0
-              ? panelChildren.map((c) =>
-                  React.isValidElement(c) ? c.props.children : c,
-                )
+              ? panelChildren.map((c) => (React.isValidElement(c) ? c.props.children : c))
               : null}
             {otherChildren}
           </div>
@@ -169,14 +158,22 @@ AccordionItem.displayName = 'AccordionItem';
 
 const AccordionTrigger = React.forwardRef<HTMLSpanElement, React.HTMLAttributes<HTMLSpanElement>>(
   ({ children, ...rest }, ref) => {
-    return <span ref={ref} {...rest}>{children}</span>;
+    return (
+      <span ref={ref} {...rest}>
+        {children}
+      </span>
+    );
   },
 );
 AccordionTrigger.displayName = 'AccordionTrigger';
 
 const AccordionPanel = React.forwardRef<HTMLDivElement, React.HTMLAttributes<HTMLDivElement>>(
   ({ children, ...rest }, ref) => {
-    return <div ref={ref} {...rest}>{children}</div>;
+    return (
+      <div ref={ref} {...rest}>
+        {children}
+      </div>
+    );
   },
 );
 AccordionPanel.displayName = 'AccordionPanel';

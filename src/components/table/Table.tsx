@@ -50,10 +50,7 @@ const TableRoot = React.forwardRef<HTMLTableElement, TableProps>(
         <div className="overflow-hidden rounded-lg border border-border">
           <table
             ref={ref}
-            className={cn(
-              'w-full border-separate border-spacing-0',
-              className,
-            )}
+            className={cn('w-full border-separate border-spacing-0', className)}
             {...props}
           >
             {children}
@@ -61,14 +58,18 @@ const TableRoot = React.forwardRef<HTMLTableElement, TableProps>(
         </div>
       </TableContext.Provider>
     );
-  }
+  },
 );
 TableRoot.displayName = 'Table';
 
 const TableHead = React.forwardRef<HTMLTableSectionElement, TableHeadProps>(
   ({ children, className, ...rest }, ref) => {
-    return <thead ref={ref} {...rest} className={cn('bg-[#fafafa]', className)}>{children}</thead>;
-  }
+    return (
+      <thead ref={ref} {...rest} className={cn('bg-[#fafafa]', className)}>
+        {children}
+      </thead>
+    );
+  },
 );
 TableHead.displayName = 'TableHead';
 
@@ -87,14 +88,18 @@ const TableHeadCell = React.forwardRef<HTMLTableCellElement, TableHeadCellProps>
         {children}
       </th>
     );
-  }
+  },
 );
 TableHeadCell.displayName = 'TableHeadCell';
 
 const TableBody = React.forwardRef<HTMLTableSectionElement, TableBodyProps>(
   ({ children, className, ...rest }, ref) => {
-    return <tbody ref={ref} {...rest} className={className}>{children}</tbody>;
-  }
+    return (
+      <tbody ref={ref} {...rest} className={className}>
+        {children}
+      </tbody>
+    );
+  },
 );
 TableBody.displayName = 'TableBody';
 
@@ -114,7 +119,7 @@ const TableRow = React.forwardRef<HTMLTableRowElement, TableRowProps>(
         {children}
       </tr>
     );
-  }
+  },
 );
 TableRow.displayName = 'TableRow';
 
@@ -129,7 +134,7 @@ const TableCell = React.forwardRef<HTMLTableCellElement, TableCellProps>(
         {children}
       </td>
     );
-  }
+  },
 );
 TableCell.displayName = 'TableCell';
 

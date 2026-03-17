@@ -47,7 +47,9 @@ export const Controlled: Story = {
           </Nav.Category>
         </Nav>
         <div style={{ padding: 16 }}>
-          <p>Selected: <strong>{selected}</strong></p>
+          <p>
+            Selected: <strong>{selected}</strong>
+          </p>
         </div>
       </div>
     );

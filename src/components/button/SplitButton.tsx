@@ -3,8 +3,7 @@ import { cn } from '../../lib/cn';
 import type { Size, Appearance } from '../../lib/types';
 
 /** Properties for the SplitButton component. */
-export interface SplitButtonProps
-  extends Omit<React.HTMLAttributes<HTMLDivElement>, 'onClick'> {
+export interface SplitButtonProps extends Omit<React.HTMLAttributes<HTMLDivElement>, 'onClick'> {
   /** Whether the split button is disabled. */
   disabled?: boolean;
   /** Visual style variant.
@@ -38,8 +37,7 @@ const menuSizeClasses: Record<Size, string> = {
 };
 
 const appearanceClasses: Record<Appearance, string> = {
-  primary:
-    'bg-primary text-primary-foreground hover:bg-[#115ea3] active:bg-[#0c3b5e]',
+  primary: 'bg-primary text-primary-foreground hover:bg-[#115ea3] active:bg-[#0c3b5e]',
   outline:
     'border border-[#d1d1d1] bg-background text-foreground hover:bg-[#f5f5f5] active:bg-[#e0e0e0]',
   subtle: 'bg-transparent text-foreground hover:bg-[#f5f5f5] active:bg-[#e0e0e0]',

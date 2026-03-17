@@ -41,16 +41,12 @@ describe('Persona', () => {
   });
 
   it('renders custom avatar slot', () => {
-    render(
-      <Persona name="John" avatar={<span data-testid="custom-avatar">AV</span>} />,
-    );
+    render(<Persona name="John" avatar={<span data-testid="custom-avatar">AV</span>} />);
     expect(screen.getByTestId('custom-avatar')).toBeInTheDocument();
   });
 
   it('renders custom badge slot', () => {
-    render(
-      <Persona name="John" badge={<span data-testid="custom-badge">B</span>} />,
-    );
+    render(<Persona name="John" badge={<span data-testid="custom-badge">B</span>} />);
     expect(screen.getByTestId('custom-badge')).toBeInTheDocument();
   });
 

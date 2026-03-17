@@ -9,7 +9,9 @@ function renderGrid(props: Record<string, unknown> = {}) {
     <DataGrid {...props}>
       <DataGrid.Header>
         <tr>
-          <DataGrid.HeaderCell columnId="name" sortable>Name</DataGrid.HeaderCell>
+          <DataGrid.HeaderCell columnId="name" sortable>
+            Name
+          </DataGrid.HeaderCell>
           <DataGrid.HeaderCell columnId="role">Role</DataGrid.HeaderCell>
         </tr>
       </DataGrid.Header>
@@ -40,7 +42,9 @@ describe('DataGrid', () => {
     render(
       <DataGrid ref={ref} data-testid="grid">
         <DataGrid.Body>
-          <DataGrid.Row><DataGrid.Cell>C</DataGrid.Cell></DataGrid.Row>
+          <DataGrid.Row>
+            <DataGrid.Cell>C</DataGrid.Cell>
+          </DataGrid.Row>
         </DataGrid.Body>
       </DataGrid>,
     );
@@ -131,9 +135,7 @@ describe('DataGrid selection', () => {
       selectedKeys: new Set(['1']),
     });
     const rows = screen.getAllByRole('row');
-    const bodyRows = rows.filter(
-      (r) => r.parentElement?.tagName.toLowerCase() === 'tbody',
-    );
+    const bodyRows = rows.filter((r) => r.parentElement?.tagName.toLowerCase() === 'tbody');
     expect(bodyRows[0]).toHaveAttribute('aria-selected', 'true');
     expect(bodyRows[1]).toHaveAttribute('aria-selected', 'false');
   });
@@ -145,7 +147,9 @@ describe('DataGrid sub-component refs', () => {
     render(
       <table>
         <DataGrid.Header ref={ref} data-testid="hdr">
-          <tr><th>H</th></tr>
+          <tr>
+            <th>H</th>
+          </tr>
         </DataGrid.Header>
       </table>,
     );
@@ -156,9 +160,15 @@ describe('DataGrid sub-component refs', () => {
   it('DataGrid.HeaderCell forwards ref', () => {
     const ref = React.createRef<HTMLTableCellElement>();
     render(
-      <table><thead><tr>
-        <DataGrid.HeaderCell ref={ref} data-testid="hc">H</DataGrid.HeaderCell>
-      </tr></thead></table>,
+      <table>
+        <thead>
+          <tr>
+            <DataGrid.HeaderCell ref={ref} data-testid="hc">
+              H
+            </DataGrid.HeaderCell>
+          </tr>
+        </thead>
+      </table>,
     );
     expect(ref.current).toBe(screen.getByTestId('hc'));
     expect(ref.current!.tagName.toLowerCase()).toBe('th');
@@ -169,7 +179,9 @@ describe('DataGrid sub-component refs', () => {
     render(
       <table>
         <DataGrid.Body ref={ref} data-testid="body">
-          <tr><td>C</td></tr>
+          <tr>
+            <td>C</td>
+          </tr>
         </DataGrid.Body>
       </table>,
     );
@@ -195,9 +207,15 @@ describe('DataGrid sub-component refs', () => {
   it('DataGrid.Cell forwards ref', () => {
     const ref = React.createRef<HTMLTableCellElement>();
     render(
-      <table><tbody><tr>
-        <DataGrid.Cell ref={ref} data-testid="cell">C</DataGrid.Cell>
-      </tr></tbody></table>,
+      <table>
+        <tbody>
+          <tr>
+            <DataGrid.Cell ref={ref} data-testid="cell">
+              C
+            </DataGrid.Cell>
+          </tr>
+        </tbody>
+      </table>,
     );
     expect(ref.current).toBe(screen.getByTestId('cell'));
     expect(ref.current!.tagName.toLowerCase()).toBe('td');

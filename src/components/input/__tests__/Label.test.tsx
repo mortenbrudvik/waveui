@@ -19,7 +19,11 @@ describe('Label', () => {
   });
 
   it('shows required indicator', () => {
-    render(<Label required data-testid="label">Name</Label>);
+    render(
+      <Label required data-testid="label">
+        Name
+      </Label>,
+    );
     expect(screen.getByText('*')).toBeInTheDocument();
   });
 
@@ -29,25 +33,38 @@ describe('Label', () => {
   });
 
   it('applies disabled styling', () => {
-    render(<Label disabled data-testid="label">Name</Label>);
+    render(
+      <Label disabled data-testid="label">
+        Name
+      </Label>,
+    );
     expect(screen.getByTestId('label').className).toContain('text-muted-foreground');
   });
 
   it('passes htmlFor to the label element', () => {
-    render(<Label htmlFor="input-1" data-testid="label">Name</Label>);
+    render(
+      <Label htmlFor="input-1" data-testid="label">
+        Name
+      </Label>,
+    );
     expect(screen.getByTestId('label')).toHaveAttribute('for', 'input-1');
   });
 
-  it.each(['small', 'medium', 'large'] as const)(
-    'renders size variant: %s',
-    (size) => {
-      render(<Label size={size} data-testid="label">Name</Label>);
-      expect(screen.getByTestId('label')).toBeInTheDocument();
-    },
-  );
+  it.each(['small', 'medium', 'large'] as const)('renders size variant: %s', (size) => {
+    render(
+      <Label size={size} data-testid="label">
+        Name
+      </Label>,
+    );
+    expect(screen.getByTestId('label')).toBeInTheDocument();
+  });
 
   it('applies semibold weight', () => {
-    render(<Label weight="semibold" data-testid="label">Name</Label>);
+    render(
+      <Label weight="semibold" data-testid="label">
+        Name
+      </Label>,
+    );
     expect(screen.getByTestId('label').className).toContain('font-semibold');
   });
 });

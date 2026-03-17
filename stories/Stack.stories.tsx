@@ -10,7 +10,14 @@ export default meta;
 type Story = StoryObj<typeof meta>;
 
 const Box = ({ children }: { children: React.ReactNode }) => (
-  <div style={{ padding: '12px 16px', background: '#f0f0f0', border: '1px solid #d1d1d1', borderRadius: 4 }}>
+  <div
+    style={{
+      padding: '12px 16px',
+      background: '#f0f0f0',
+      border: '1px solid #d1d1d1',
+      borderRadius: 4,
+    }}
+  >
     {children}
   </div>
 );

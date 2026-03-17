@@ -20,17 +20,29 @@ describe('MessageBar', () => {
   });
 
   it('uses role="status" for success status', () => {
-    render(<MessageBar status="success" data-testid="bar">OK</MessageBar>);
+    render(
+      <MessageBar status="success" data-testid="bar">
+        OK
+      </MessageBar>,
+    );
     expect(screen.getByTestId('bar')).toHaveAttribute('role', 'status');
   });
 
   it('uses role="alert" for error status', () => {
-    render(<MessageBar status="error" data-testid="bar">Error</MessageBar>);
+    render(
+      <MessageBar status="error" data-testid="bar">
+        Error
+      </MessageBar>,
+    );
     expect(screen.getByTestId('bar')).toHaveAttribute('role', 'alert');
   });
 
   it('uses role="alert" for warning status', () => {
-    render(<MessageBar status="warning" data-testid="bar">Warning</MessageBar>);
+    render(
+      <MessageBar status="warning" data-testid="bar">
+        Warning
+      </MessageBar>,
+    );
     expect(screen.getByTestId('bar')).toHaveAttribute('role', 'alert');
   });
 
@@ -50,17 +62,23 @@ describe('MessageBar', () => {
   });
 
   it('renders custom icon slot', () => {
-    render(
-      <MessageBar icon={{ children: 'custom-icon' }}>Msg</MessageBar>,
-    );
+    render(<MessageBar icon={{ children: 'custom-icon' }}>Msg</MessageBar>);
     expect(screen.getByText('custom-icon')).toBeInTheDocument();
   });
 
   it('applies status-specific classes', () => {
-    const { rerender } = render(<MessageBar status="success" data-testid="bar">Msg</MessageBar>);
+    const { rerender } = render(
+      <MessageBar status="success" data-testid="bar">
+        Msg
+      </MessageBar>,
+    );
     expect(screen.getByTestId('bar').className).toContain('bg-[#e0f2e0]');
 
-    rerender(<MessageBar status="error" data-testid="bar">Msg</MessageBar>);
+    rerender(
+      <MessageBar status="error" data-testid="bar">
+        Msg
+      </MessageBar>,
+    );
     expect(screen.getByTestId('bar').className).toContain('bg-[#fde7e9]');
   });
 });

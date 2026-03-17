@@ -12,9 +12,7 @@ import { useCallback, useRef, useInsertionEffect } from 'react';
  * @returns A memoized function with a stable identity that delegates to the latest `fn`.
  */
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-export function useEventCallback<T extends (...args: any[]) => any>(
-  fn: T | undefined,
-): T {
+export function useEventCallback<T extends (...args: any[]) => any>(fn: T | undefined): T {
   const ref = useRef<T | undefined>(fn);
 
   // useInsertionEffect runs synchronously before layout effects,
@@ -24,8 +22,5 @@ export function useEventCallback<T extends (...args: any[]) => any>(
   });
 
   // The returned callback identity never changes.
-  return useCallback(
-    (...args: Parameters<T>) => ref.current?.(...args),
-    [],
-  ) as T;
+  return useCallback((...args: Parameters<T>) => ref.current?.(...args), []) as T;
 }

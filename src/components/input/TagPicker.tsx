@@ -56,12 +56,16 @@ export const TagPicker = React.forwardRef<HTMLDivElement, TagPickerProps>(
     const listboxId = useId('tagpicker-listbox');
 
     // Clean up blur timeout on unmount
-    React.useEffect(() => () => { if (blurTimeoutRef.current) clearTimeout(blurTimeoutRef.current); }, []);
+    React.useEffect(
+      () => () => {
+        if (blurTimeoutRef.current) clearTimeout(blurTimeoutRef.current);
+      },
+      [],
+    );
 
     const filteredOptions = options.filter(
       (opt) =>
-        !selected.includes(opt.value) &&
-        opt.label.toLowerCase().includes(query.toLowerCase()),
+        !selected.includes(opt.value) && opt.label.toLowerCase().includes(query.toLowerCase()),
     );
 
     const addTag = (val: string) => {
@@ -109,11 +113,7 @@ export const TagPicker = React.forwardRef<HTMLDivElement, TagPickerProps>(
     return (
       <div
         ref={ref}
-        className={cn(
-          'relative',
-          disabled && 'opacity-50 pointer-events-none',
-          className,
-        )}
+        className={cn('relative', disabled && 'opacity-50 pointer-events-none', className)}
         {...rest}
       >
         <div

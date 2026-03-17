@@ -146,9 +146,7 @@ const DataGridRoot = React.forwardRef<HTMLTableElement, DataGridProps>(
     const handleSort = React.useCallback(
       (columnId: string) => {
         const newDirection: SortDirection =
-          sortColumn === columnId && sortDirection === 'ascending'
-            ? 'descending'
-            : 'ascending';
+          sortColumn === columnId && sortDirection === 'ascending' ? 'descending' : 'ascending';
         setSortColumn(columnId);
         setSortDirection(newDirection);
         onSortChange?.(columnId, newDirection);
@@ -199,7 +197,15 @@ const DataGridRoot = React.forwardRef<HTMLTableElement, DataGridProps>(
         toggleSelection,
         toggleAll,
       }),
-      [sortColumn, sortDirection, handleSort, selectionMode, selectedKeys, toggleSelection, toggleAll],
+      [
+        sortColumn,
+        sortDirection,
+        handleSort,
+        selectionMode,
+        selectedKeys,
+        toggleSelection,
+        toggleAll,
+      ],
     );
 
     return (
@@ -265,12 +271,7 @@ const DataGridHeaderCell = React.forwardRef<HTMLTableCellElement, DataGridHeader
         <span className="inline-flex items-center gap-1">
           {children}
           {isSorted && (
-            <svg
-              className="h-3 w-3"
-              viewBox="0 0 12 12"
-              fill="currentColor"
-              aria-hidden="true"
-            >
+            <svg className="h-3 w-3" viewBox="0 0 12 12" fill="currentColor" aria-hidden="true">
               {sortDirection === 'ascending' ? (
                 <path d="M6 2L10 8H2L6 2Z" />
               ) : (

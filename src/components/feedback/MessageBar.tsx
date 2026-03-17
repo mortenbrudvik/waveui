@@ -51,25 +51,36 @@ const defaultIcons: Record<Status, React.ReactNode> = {
 
 export const MessageBar = React.forwardRef<HTMLDivElement, MessageBarProps>(
   ({ status = 'info', onDismiss, icon, dismiss, children, className, ...rest }, ref) => {
-    const renderedIcon = icon !== undefined
-      ? renderSlot(icon, 'span', 'flex-shrink-0 mt-0.5')
-      : <span className="flex-shrink-0 mt-0.5">{defaultIcons[status]}</span>;
+    const renderedIcon =
+      icon !== undefined ? (
+        renderSlot(icon, 'span', 'flex-shrink-0 mt-0.5')
+      ) : (
+        <span className="flex-shrink-0 mt-0.5">{defaultIcons[status]}</span>
+      );
 
-    const renderedDismiss = dismiss !== undefined
-      ? renderSlot(dismiss, 'button', 'ml-auto bg-transparent border-none cursor-pointer p-1 rounded hover:bg-black/5 text-muted-foreground')
-      : onDismiss
-        ? (
-          <button
-            onClick={onDismiss}
-            className="ml-auto bg-transparent border-none cursor-pointer p-1 rounded hover:bg-black/5 text-muted-foreground"
-            aria-label="Dismiss"
-          >
-            <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
-              <path d="M3.5 3.5L12.5 12.5M12.5 3.5L3.5 12.5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
-            </svg>
-          </button>
+    const renderedDismiss =
+      dismiss !== undefined ? (
+        renderSlot(
+          dismiss,
+          'button',
+          'ml-auto bg-transparent border-none cursor-pointer p-1 rounded hover:bg-black/5 text-muted-foreground',
         )
-        : null;
+      ) : onDismiss ? (
+        <button
+          onClick={onDismiss}
+          className="ml-auto bg-transparent border-none cursor-pointer p-1 rounded hover:bg-black/5 text-muted-foreground"
+          aria-label="Dismiss"
+        >
+          <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+            <path
+              d="M3.5 3.5L12.5 12.5M12.5 3.5L3.5 12.5"
+              stroke="currentColor"
+              strokeWidth="1.5"
+              strokeLinecap="round"
+            />
+          </svg>
+        </button>
+      ) : null;
 
     return (
       <div
@@ -87,7 +98,7 @@ export const MessageBar = React.forwardRef<HTMLDivElement, MessageBarProps>(
         {renderedDismiss}
       </div>
     );
-  }
+  },
 );
 
 MessageBar.displayName = 'MessageBar';

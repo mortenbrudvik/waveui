@@ -2,8 +2,6 @@ import { describe, it, expect, vi } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { Drawer } from '../Drawer';
-import { testClassName } from '../../../test-utils';
-
 describe('Drawer', () => {
   it('does not render when closed', () => {
     render(<Drawer>Content</Drawer>);
@@ -25,7 +23,11 @@ describe('Drawer', () => {
   });
 
   it('renders title', () => {
-    render(<Drawer defaultOpen title="Drawer Title">Content</Drawer>);
+    render(
+      <Drawer defaultOpen title="Drawer Title">
+        Content
+      </Drawer>,
+    );
     expect(screen.getByText('Drawer Title')).toBeInTheDocument();
   });
 
@@ -35,7 +37,11 @@ describe('Drawer', () => {
   });
 
   it('has aria-labelledby when title is provided', () => {
-    render(<Drawer defaultOpen title="My Drawer">Content</Drawer>);
+    render(
+      <Drawer defaultOpen title="My Drawer">
+        Content
+      </Drawer>,
+    );
     const dialog = screen.getByRole('dialog');
     const titleId = dialog.getAttribute('aria-labelledby');
     expect(titleId).toBeTruthy();
@@ -72,7 +78,11 @@ describe('Drawer', () => {
   });
 
   it('applies left position classes', () => {
-    render(<Drawer defaultOpen position="left">Content</Drawer>);
+    render(
+      <Drawer defaultOpen position="left">
+        Content
+      </Drawer>,
+    );
     const dialog = screen.getByRole('dialog');
     expect(dialog.className).toContain('left-0');
   });
@@ -87,14 +97,22 @@ describe('Drawer', () => {
   it('calls onOpenChange', async () => {
     const user = userEvent.setup();
     const onOpenChange = vi.fn();
-    render(<Drawer defaultOpen onOpenChange={onOpenChange}>Content</Drawer>);
+    render(
+      <Drawer defaultOpen onOpenChange={onOpenChange}>
+        Content
+      </Drawer>,
+    );
     await user.keyboard('{Escape}');
     expect(onOpenChange).toHaveBeenCalledWith(false);
   });
 
   it('forwards ref', () => {
     const ref = { current: null as HTMLDivElement | null };
-    render(<Drawer defaultOpen ref={ref}>Content</Drawer>);
+    render(
+      <Drawer defaultOpen ref={ref}>
+        Content
+      </Drawer>,
+    );
     expect(ref.current).toBe(screen.getByRole('dialog'));
   });
 });

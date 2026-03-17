@@ -22,14 +22,14 @@ export interface BreadcrumbItemProps extends React.HTMLAttributes<HTMLElement> {
 }
 
 const ChevronIcon = () => (
-  <svg
-    width="12"
-    height="12"
-    viewBox="0 0 12 12"
-    fill="none"
-    className="text-muted-foreground"
-  >
-    <path d="M4.5 2.5L7.5 6L4.5 9.5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+  <svg width="12" height="12" viewBox="0 0 12 12" fill="none" className="text-muted-foreground">
+    <path
+      d="M4.5 2.5L7.5 6L4.5 9.5"
+      stroke="currentColor"
+      strokeWidth="1.5"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    />
   </svg>
 );
 
@@ -53,7 +53,7 @@ const BreadcrumbRoot = React.forwardRef<HTMLElement, BreadcrumbProps>(
         </ol>
       </nav>
     );
-  }
+  },
 );
 BreadcrumbRoot.displayName = 'Breadcrumb';
 
@@ -80,13 +80,16 @@ const BreadcrumbItem = React.forwardRef<HTMLSpanElement | HTMLAnchorElement, Bre
         ref={ref as React.Ref<HTMLAnchorElement>}
         href={href}
         {...rest}
-        className={cn('text-primary hover:underline cursor-pointer inline-flex items-center', className)}
+        className={cn(
+          'text-primary hover:underline cursor-pointer inline-flex items-center',
+          className,
+        )}
       >
         {renderedIcon}
         {children}
       </a>
     );
-  }
+  },
 );
 BreadcrumbItem.displayName = 'BreadcrumbItem';
 

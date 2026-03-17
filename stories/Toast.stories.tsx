@@ -61,16 +61,42 @@ function ToasterDemo() {
   const { dispatchToast } = useToastController();
   return (
     <div style={{ display: 'flex', gap: 8 }}>
-      <button onClick={() => dispatchToast({ title: 'Success!', status: 'success', body: 'Task completed.', timeout: 3000 })}>
+      <button
+        onClick={() =>
+          dispatchToast({
+            title: 'Success!',
+            status: 'success',
+            body: 'Task completed.',
+            timeout: 3000,
+          })
+        }
+      >
         Success
       </button>
-      <button onClick={() => dispatchToast({ title: 'Warning', status: 'warning', body: 'Check input.', timeout: 3000 })}>
+      <button
+        onClick={() =>
+          dispatchToast({
+            title: 'Warning',
+            status: 'warning',
+            body: 'Check input.',
+            timeout: 3000,
+          })
+        }
+      >
         Warning
       </button>
-      <button onClick={() => dispatchToast({ title: 'Error', status: 'error', body: 'Failed.', timeout: 3000 })}>
+      <button
+        onClick={() =>
+          dispatchToast({ title: 'Error', status: 'error', body: 'Failed.', timeout: 3000 })
+        }
+      >
         Error
       </button>
-      <button onClick={() => dispatchToast({ title: 'Info', status: 'info', body: 'FYI.', timeout: 3000 })}>
+      <button
+        onClick={() =>
+          dispatchToast({ title: 'Info', status: 'info', body: 'FYI.', timeout: 3000 })
+        }
+      >
         Info
       </button>
     </div>

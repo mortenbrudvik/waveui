@@ -20,11 +20,12 @@ export function useControllable<T>(
   onChange?: (value: T) => void,
 ): [T, SetValue<T>] {
   const isControlledRef = useRef(controlledValue !== undefined);
+  // eslint-disable-next-line react-hooks/refs -- intentional: read initial ref to detect controlled/uncontrolled mode switch
   const isControlled = isControlledRef.current;
   const [internalValue, setInternalValue] = useState(defaultValue);
 
   // Warn in dev if switching between controlled and uncontrolled
-  // eslint-disable-next-line react-hooks/rules-of-hooks
+
   useEffect(() => {
     if (process.env.NODE_ENV !== 'production') {
       const wasControlled = isControlledRef.current;
@@ -46,16 +47,18 @@ export function useControllable<T>(
     (valueOrUpdater) => {
       if (!isControlled) {
         setInternalValue((prev) => {
-          const next = typeof valueOrUpdater === 'function'
-            ? (valueOrUpdater as (prev: T) => T)(prev)
-            : valueOrUpdater;
+          const next =
+            typeof valueOrUpdater === 'function'
+              ? (valueOrUpdater as (prev: T) => T)(prev)
+              : valueOrUpdater;
           onChange?.(next);
           return next;
         });
       } else {
-        const next = typeof valueOrUpdater === 'function'
-          ? (valueOrUpdater as (prev: T) => T)(internalValue)
-          : valueOrUpdater;
+        const next =
+          typeof valueOrUpdater === 'function'
+            ? (valueOrUpdater as (prev: T) => T)(internalValue)
+            : valueOrUpdater;
         onChange?.(next);
       }
     },

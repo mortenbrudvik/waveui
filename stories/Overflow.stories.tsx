@@ -20,15 +20,13 @@ export const Default: Story = {
           </button>
         )}
       >
-        {['Home', 'Products', 'Services', 'About', 'Blog', 'Contact', 'Careers'].map(
-          (item) => (
-            <OverflowItem key={item} itemId={item}>
-              <button className="px-3 py-1.5 text-body-1 rounded hover:bg-[#f0f0f0] whitespace-nowrap">
-                {item}
-              </button>
-            </OverflowItem>
-          ),
-        )}
+        {['Home', 'Products', 'Services', 'About', 'Blog', 'Contact', 'Careers'].map((item) => (
+          <OverflowItem key={item} itemId={item}>
+            <button className="px-3 py-1.5 text-body-1 rounded hover:bg-[#f0f0f0] whitespace-nowrap">
+              {item}
+            </button>
+          </OverflowItem>
+        ))}
       </Overflow>
     </div>
   ),
@@ -39,9 +37,7 @@ export const NarrowContainer: Story = {
     <div style={{ width: 200 }}>
       <Overflow
         overflowButton={(count) => (
-          <button className="px-2 py-1 text-caption-1 rounded bg-[#f0f0f0]">
-            +{count}
-          </button>
+          <button className="px-2 py-1 text-caption-1 rounded bg-[#f0f0f0]">+{count}</button>
         )}
       >
         {['Alpha', 'Beta', 'Gamma', 'Delta', 'Epsilon'].map((item) => (

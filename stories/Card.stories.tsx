@@ -61,10 +61,22 @@ export const FullComposition: Story = {
         <p>Body content with details about this card item.</p>
       </Card.Body>
       <Card.Footer>
-        <button type="button" style={{ padding: '6px 16px', borderRadius: 4, border: '1px solid #d1d1d1' }}>
+        <button
+          type="button"
+          style={{ padding: '6px 16px', borderRadius: 4, border: '1px solid #d1d1d1' }}
+        >
           Cancel
         </button>
-        <button type="button" style={{ padding: '6px 16px', borderRadius: 4, background: '#0f6cbd', color: '#fff', border: 'none' }}>
+        <button
+          type="button"
+          style={{
+            padding: '6px 16px',
+            borderRadius: 4,
+            background: '#0f6cbd',
+            color: '#fff',
+            border: 'none',
+          }}
+        >
           Confirm
         </button>
       </Card.Footer>

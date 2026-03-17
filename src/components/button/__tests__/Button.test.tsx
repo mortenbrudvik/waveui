@@ -2,7 +2,12 @@ import { describe, it, expect, vi } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { Button } from '../Button';
-import { testForwardRef, testRestSpread, testClassName, testPolymorphicAs } from '../../../test-utils';
+import {
+  testForwardRef,
+  testRestSpread,
+  testClassName,
+  testPolymorphicAs,
+} from '../../../test-utils';
 
 describe('Button', () => {
   testForwardRef(Button, 'button');
@@ -16,7 +21,11 @@ describe('Button', () => {
   });
 
   it('renders with primary appearance', () => {
-    render(<Button appearance="primary" data-testid="btn">Primary</Button>);
+    render(
+      <Button appearance="primary" data-testid="btn">
+        Primary
+      </Button>,
+    );
     expect(screen.getByTestId('btn').className).toContain('bg-primary');
   });
 
@@ -26,27 +35,47 @@ describe('Button', () => {
   });
 
   it('renders with subtle appearance', () => {
-    render(<Button appearance="subtle" data-testid="btn">Subtle</Button>);
+    render(
+      <Button appearance="subtle" data-testid="btn">
+        Subtle
+      </Button>,
+    );
     expect(screen.getByTestId('btn').className).toContain('bg-transparent');
   });
 
   it('renders with transparent appearance', () => {
-    render(<Button appearance="transparent" data-testid="btn">Transparent</Button>);
+    render(
+      <Button appearance="transparent" data-testid="btn">
+        Transparent
+      </Button>,
+    );
     expect(screen.getByTestId('btn').className).toContain('bg-transparent');
   });
 
   it('renders small size', () => {
-    render(<Button size="small" data-testid="btn">Small</Button>);
+    render(
+      <Button size="small" data-testid="btn">
+        Small
+      </Button>,
+    );
     expect(screen.getByTestId('btn').className).toContain('h-6');
   });
 
   it('renders large size', () => {
-    render(<Button size="large" data-testid="btn">Large</Button>);
+    render(
+      <Button size="large" data-testid="btn">
+        Large
+      </Button>,
+    );
     expect(screen.getByTestId('btn').className).toContain('h-10');
   });
 
   it('renders as a different element via as prop', () => {
-    render(<Button as="a" data-testid="btn" href="#">Link Button</Button>);
+    render(
+      <Button as="a" data-testid="btn" href="#">
+        Link Button
+      </Button>,
+    );
     expect(screen.getByTestId('btn').tagName.toLowerCase()).toBe('a');
   });
 
@@ -65,7 +94,11 @@ describe('Button', () => {
   });
 
   it('applies disabled state', () => {
-    render(<Button disabled data-testid="btn">Disabled</Button>);
+    render(
+      <Button disabled data-testid="btn">
+        Disabled
+      </Button>,
+    );
     expect(screen.getByTestId('btn')).toBeDisabled();
     expect(screen.getByTestId('btn').className).toContain('opacity-50');
   });

@@ -30,7 +30,16 @@ export const ColorPicker = React.forwardRef<HTMLDivElement, ColorPickerProps>(
       value: controlledValue,
       defaultValue = '#0f6cbd',
       onChange,
-      presets = ['#0f6cbd', '#d13438', '#107c10', '#ffb900', '#5c2d91', '#008272', '#e3008c', '#242424'],
+      presets = [
+        '#0f6cbd',
+        '#d13438',
+        '#107c10',
+        '#ffb900',
+        '#5c2d91',
+        '#008272',
+        '#e3008c',
+        '#242424',
+      ],
       showOpacity = false,
       className,
       ...rest
@@ -89,7 +98,10 @@ export const ColorPicker = React.forwardRef<HTMLDivElement, ColorPickerProps>(
     return (
       <div
         ref={ref}
-        className={cn('inline-flex flex-col gap-3 p-3 bg-background border border-border rounded shadow-4', className)}
+        className={cn(
+          'inline-flex flex-col gap-3 p-3 bg-background border border-border rounded shadow-4',
+          className,
+        )}
         {...rest}
       >
         {/* Color preview and hex input */}
@@ -131,7 +143,9 @@ export const ColorPicker = React.forwardRef<HTMLDivElement, ColorPickerProps>(
                   className={cn(
                     'w-7 h-7 rounded border-2 transition-all flex-shrink-0',
                     'focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring',
-                    isSelected ? 'border-primary shadow-2' : 'border-transparent hover:border-[#c0c0c0]',
+                    isSelected
+                      ? 'border-primary shadow-2'
+                      : 'border-transparent hover:border-[#c0c0c0]',
                   )}
                   style={{ backgroundColor: preset }}
                 />

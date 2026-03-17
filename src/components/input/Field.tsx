@@ -24,19 +24,7 @@ export interface FieldProps extends React.HTMLAttributes<HTMLDivElement> {
 }
 
 export const Field = React.forwardRef<HTMLDivElement, FieldProps>(
-  (
-    {
-      label,
-      hint,
-      error,
-      required,
-      htmlFor,
-      className,
-      children,
-      ...rest
-    },
-    ref,
-  ) => {
+  ({ label, hint, error, required, htmlFor, className, children, ...rest }, ref) => {
     const fieldId = useId('field');
     const id = htmlFor ?? fieldId;
     const errorId = error ? `${id}-error` : undefined;
@@ -62,9 +50,13 @@ export const Field = React.forwardRef<HTMLDivElement, FieldProps>(
             : child,
         )}
         {error ? (
-          <p id={errorId} className="mt-1 text-xs text-destructive">{error}</p>
+          <p id={errorId} className="mt-1 text-xs text-destructive">
+            {error}
+          </p>
         ) : hint ? (
-          <p id={hintId} className="mt-1 text-xs text-muted-foreground">{hint}</p>
+          <p id={hintId} className="mt-1 text-xs text-muted-foreground">
+            {hint}
+          </p>
         ) : null}
       </div>
     );

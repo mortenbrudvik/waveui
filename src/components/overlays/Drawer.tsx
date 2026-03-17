@@ -30,7 +30,19 @@ const positionClasses: Record<'left' | 'right', string> = {
 };
 
 export const Drawer = React.forwardRef<HTMLDivElement, DrawerProps>(
-  ({ open: openProp, defaultOpen, onOpenChange, position = 'right', title, children, className, ...rest }, ref) => {
+  (
+    {
+      open: openProp,
+      defaultOpen,
+      onOpenChange,
+      position = 'right',
+      title,
+      children,
+      className,
+      ...rest
+    },
+    ref,
+  ) => {
     const [open, setOpen] = useControllable(openProp, defaultOpen ?? false, onOpenChange);
     const panelRef = React.useRef<HTMLDivElement>(null);
     const previousFocusRef = React.useRef<HTMLElement | null>(null);
@@ -46,7 +58,9 @@ export const Drawer = React.forwardRef<HTMLDivElement, DrawerProps>(
       if (open) {
         const prev = document.body.style.overflow;
         document.body.style.overflow = 'hidden';
-        return () => { document.body.style.overflow = prev; };
+        return () => {
+          document.body.style.overflow = prev;
+        };
       }
     }, [open]);
 
@@ -65,7 +79,7 @@ export const Drawer = React.forwardRef<HTMLDivElement, DrawerProps>(
         previousFocusRef.current = document.activeElement as HTMLElement;
         requestAnimationFrame(() => {
           const firstFocusable = panelRef.current?.querySelector<HTMLElement>(
-            'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])'
+            'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])',
           );
           firstFocusable?.focus();
         });
@@ -81,7 +95,7 @@ export const Drawer = React.forwardRef<HTMLDivElement, DrawerProps>(
         if (e.key === 'Escape') setOpen(false);
         if (e.key === 'Tab') {
           const focusableElements = panelRef.current?.querySelectorAll<HTMLElement>(
-            'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])'
+            'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])',
           );
           if (!focusableElements?.length) {
             e.preventDefault();
@@ -132,14 +146,23 @@ export const Drawer = React.forwardRef<HTMLDivElement, DrawerProps>(
           )}
         >
           <div className="p-4 border-b border-border flex justify-between items-center">
-            {title && <h2 id={titleId} className="text-subtitle-1 font-semibold">{title}</h2>}
+            {title && (
+              <h2 id={titleId} className="text-subtitle-1 font-semibold">
+                {title}
+              </h2>
+            )}
             <button
               onClick={() => setOpen(false)}
               className="p-1 rounded hover:bg-[#f5f5f5] text-muted-foreground ml-auto"
               aria-label="Close"
             >
               <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
-                <path d="M3.5 3.5L12.5 12.5M12.5 3.5L3.5 12.5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+                <path
+                  d="M3.5 3.5L12.5 12.5M12.5 3.5L3.5 12.5"
+                  stroke="currentColor"
+                  strokeWidth="1.5"
+                  strokeLinecap="round"
+                />
               </svg>
             </button>
           </div>
@@ -148,7 +171,7 @@ export const Drawer = React.forwardRef<HTMLDivElement, DrawerProps>(
       </div>,
       document.body,
     );
-  }
+  },
 );
 
 Drawer.displayName = 'Drawer';

@@ -21,7 +21,9 @@ describe('ToggleButton', () => {
 
   it('renders icon as SlotObject', () => {
     render(
-      <ToggleButton icon={{ children: <span data-testid="slot-icon">I</span>, className: 'custom' }}>
+      <ToggleButton
+        icon={{ children: <span data-testid="slot-icon">I</span>, className: 'custom' }}
+      >
         Italic
       </ToggleButton>,
     );
@@ -60,7 +62,11 @@ describe('ToggleButton', () => {
   it('respects controlled pressed prop', async () => {
     const user = userEvent.setup();
     const onPressedChange = vi.fn();
-    render(<ToggleButton pressed={false} onPressedChange={onPressedChange}>Toggle</ToggleButton>);
+    render(
+      <ToggleButton pressed={false} onPressedChange={onPressedChange}>
+        Toggle
+      </ToggleButton>,
+    );
     const btn = screen.getByRole('button');
     expect(btn).toHaveAttribute('aria-pressed', 'false');
     await user.click(btn);

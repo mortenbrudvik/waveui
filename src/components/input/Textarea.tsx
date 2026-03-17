@@ -2,8 +2,7 @@ import * as React from 'react';
 import { cn } from '../../lib/cn';
 
 /** Properties for the Textarea component. */
-export interface TextareaProps
-  extends React.TextareaHTMLAttributes<HTMLTextAreaElement> {
+export interface TextareaProps extends React.TextareaHTMLAttributes<HTMLTextAreaElement> {
   /** Validation error message; sets `aria-invalid` when provided. */
   error?: string;
 }

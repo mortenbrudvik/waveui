@@ -71,7 +71,6 @@ describe('Dropdown', () => {
   });
 
   it('shows selected value text', async () => {
-    const user = userEvent.setup();
     render(
       <Dropdown defaultValue="a">
         <Option value="a">Alpha</Option>
