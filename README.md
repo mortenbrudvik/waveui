@@ -10,14 +10,14 @@ A comprehensive React component library inspired by Fluent UI 2 design language 
 ## Installation
 
 ```bash
-npm install waveui
+npm install @mortenbrudvik/waveui
 ```
 
 ## Quick Start
 
 ```tsx
-import { WaveProvider, Button } from 'waveui';
-import 'waveui/styles';
+import { WaveProvider, Button } from '@mortenbrudvik/waveui';
+import '@mortenbrudvik/waveui/styles';
 
 function App() {
   return (
@@ -172,7 +172,7 @@ Wrap your app (or subtree) in `<WaveProvider>` to apply Wave UI theming. All com
 Access the current theme in any component:
 
 ```tsx
-import { useWaveTheme } from 'waveui';
+import { useWaveTheme } from '@mortenbrudvik/waveui';
 
 function MyComponent() {
   const { theme, dir } = useWaveTheme();
