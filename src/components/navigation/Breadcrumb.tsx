@@ -33,8 +33,7 @@ const ChevronIcon = () => (
   </svg>
 );
 
-const BreadcrumbRoot = React.forwardRef<HTMLElement, BreadcrumbProps>(
-  ({ children, className, ...rest }, ref) => {
+const BreadcrumbRoot = ({ children, className, ref, ...rest }: BreadcrumbProps & { ref?: React.Ref<HTMLElement> }) => {
     const items = React.Children.toArray(children);
 
     return (
@@ -53,12 +52,10 @@ const BreadcrumbRoot = React.forwardRef<HTMLElement, BreadcrumbProps>(
         </ol>
       </nav>
     );
-  },
-);
+  };
 BreadcrumbRoot.displayName = 'Breadcrumb';
 
-const BreadcrumbItem = React.forwardRef<HTMLSpanElement | HTMLAnchorElement, BreadcrumbItemProps>(
-  ({ href, current, icon, children, className, ...rest }, ref) => {
+const BreadcrumbItem = ({ href, current, icon, children, className, ref, ...rest }: BreadcrumbItemProps & { ref?: React.Ref<HTMLSpanElement | HTMLAnchorElement> }) => {
     const renderedIcon = renderSlot(icon, 'span', 'flex-shrink-0 mr-1');
 
     if (current) {
@@ -89,8 +86,7 @@ const BreadcrumbItem = React.forwardRef<HTMLSpanElement | HTMLAnchorElement, Bre
         {children}
       </a>
     );
-  },
-);
+  };
 BreadcrumbItem.displayName = 'BreadcrumbItem';
 
 export const Breadcrumb = Object.assign(BreadcrumbRoot, {

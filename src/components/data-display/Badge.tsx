@@ -74,11 +74,8 @@ const sizeClasses: Record<Size, string> = {
   'extra-large': 'text-body-2 px-2.5 py-0.5',
 };
 
-export const Badge = React.forwardRef<HTMLSpanElement, BadgeProps>(
-  (
-    { appearance = 'filled', color = 'brand', size = 'medium', className, children, ...props },
-    ref,
-  ) => {
+export const Badge = (
+    { appearance = 'filled', color = 'brand', size = 'medium', className, children, ref, ...props }: BadgeProps & { ref?: React.Ref<HTMLSpanElement> }) => {
     const c = colorMap[color];
 
     const appearanceClasses =
@@ -102,7 +99,6 @@ export const Badge = React.forwardRef<HTMLSpanElement, BadgeProps>(
         {children}
       </span>
     );
-  },
-);
+  };
 
 Badge.displayName = 'Badge';

@@ -19,8 +19,7 @@ export interface SliderProps extends Omit<React.InputHTMLAttributes<HTMLInputEle
   label?: string;
 }
 
-export const Slider = React.forwardRef<HTMLInputElement, SliderProps>(
-  ({ className, label, ...props }, ref) => {
+export const Slider = ({ className, label, ref, ...props }: SliderProps & { ref?: React.Ref<HTMLInputElement> }) => {
     return (
       <input
         ref={ref}
@@ -43,7 +42,6 @@ export const Slider = React.forwardRef<HTMLInputElement, SliderProps>(
         {...props}
       />
     );
-  },
-);
+  };
 
 Slider.displayName = 'Slider';

@@ -54,18 +54,13 @@ export interface NavSubItemProps extends React.HTMLAttributes<HTMLButtonElement>
   href?: string;
 }
 
-const NavRoot = React.forwardRef<HTMLElement, NavProps>(
-  (
+const NavRoot = (
     {
       selectedValue: controlledValue,
       defaultSelectedValue = '',
       onNavItemSelect,
       className,
-      children,
-      ...rest
-    },
-    ref,
-  ) => {
+      children, ref, ...rest }: NavProps & { ref?: React.Ref<HTMLElement> }) => {
     const [selectedValue, setSelectedValue] = useControllable(
       controlledValue,
       defaultSelectedValue,
@@ -93,12 +88,10 @@ const NavRoot = React.forwardRef<HTMLElement, NavProps>(
         </nav>
       </NavContext.Provider>
     );
-  },
-);
+  };
 NavRoot.displayName = 'Nav';
 
-const NavCategory = React.forwardRef<HTMLLIElement, NavCategoryProps>(
-  ({ value, icon, className, children, ...rest }, ref) => {
+const NavCategory = ({ value, icon, className, children, ref, ...rest }: NavCategoryProps & { ref?: React.Ref<HTMLLIElement> }) => {
     const { openCategories, toggleCategory } = React.useContext(NavContext);
     const isOpen = openCategories.includes(value);
 
@@ -145,12 +138,10 @@ const NavCategory = React.forwardRef<HTMLLIElement, NavCategoryProps>(
         )}
       </li>
     );
-  },
-);
+  };
 NavCategory.displayName = 'NavCategory';
 
-const NavItem = React.forwardRef<HTMLButtonElement | HTMLAnchorElement, NavItemProps>(
-  ({ value, icon, href, className, children, onClick, ...rest }, ref) => {
+const NavItem = ({ value, icon, href, className, children, onClick, ref, ...rest }: NavItemProps & { ref?: React.Ref<HTMLButtonElement | HTMLAnchorElement> }) => {
     const { selectedValue, onSelect } = React.useContext(NavContext);
     const isSelected = selectedValue === value;
 
@@ -200,12 +191,10 @@ const NavItem = React.forwardRef<HTMLButtonElement | HTMLAnchorElement, NavItemP
         )}
       </li>
     );
-  },
-);
+  };
 NavItem.displayName = 'NavItem';
 
-const NavSubItem = React.forwardRef<HTMLButtonElement | HTMLAnchorElement, NavSubItemProps>(
-  ({ value, href, className, children, onClick, ...rest }, ref) => {
+const NavSubItem = ({ value, href, className, children, onClick, ref, ...rest }: NavSubItemProps & { ref?: React.Ref<HTMLButtonElement | HTMLAnchorElement> }) => {
     const { selectedValue, onSelect } = React.useContext(NavContext);
     const isSelected = selectedValue === value;
 
@@ -249,8 +238,7 @@ const NavSubItem = React.forwardRef<HTMLButtonElement | HTMLAnchorElement, NavSu
         )}
       </li>
     );
-  },
-);
+  };
 NavSubItem.displayName = 'NavSubItem';
 
 export const Nav = Object.assign(NavRoot, {

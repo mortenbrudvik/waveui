@@ -13,8 +13,7 @@ export interface ProgressBarProps extends React.HTMLAttributes<HTMLDivElement> {
   label?: string;
 }
 
-export const ProgressBar = React.forwardRef<HTMLDivElement, ProgressBarProps>(
-  ({ value, max = 100, label, className, ...rest }, ref) => {
+export const ProgressBar = ({ value, max = 100, label, className, ref, ...rest }: ProgressBarProps & { ref?: React.Ref<HTMLDivElement> }) => {
     const isIndeterminate = value === undefined;
     const percentage = isIndeterminate ? 0 : Math.min(100, Math.max(0, (value / max) * 100));
 
@@ -38,7 +37,6 @@ export const ProgressBar = React.forwardRef<HTMLDivElement, ProgressBarProps>(
         />
       </div>
     );
-  },
-);
+  };
 
 ProgressBar.displayName = 'ProgressBar';

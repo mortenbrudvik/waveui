@@ -23,8 +23,7 @@ const variantClasses: Record<LinkVariant, string> = {
   subtle: 'text-foreground hover:underline',
 };
 
-export const Link = React.forwardRef<HTMLAnchorElement, LinkProps>(
-  ({ as, variant = 'inline', disabled, className, children, onClick, ...props }, ref) => {
+export const Link = ({ as, variant = 'inline', disabled, className, children, onClick, ref, ...props }: LinkProps & { ref?: React.Ref<HTMLElement> }) => {
     const Component = as || 'a';
     const handleClick = (e: React.MouseEvent<HTMLAnchorElement>) => {
       if (disabled) {
@@ -52,7 +51,6 @@ export const Link = React.forwardRef<HTMLAnchorElement, LinkProps>(
         {children}
       </Component>
     );
-  },
-);
+  };
 
 Link.displayName = 'Link';

@@ -38,8 +38,7 @@ function getInitials(name: string): string {
   return (first + last).toUpperCase();
 }
 
-export const Avatar = React.forwardRef<HTMLSpanElement, AvatarProps>(
-  ({ src, name, size = 'medium', icon, image, badge, className, ...props }, ref) => {
+export const Avatar = ({ src, name, size = 'medium', icon, image, badge, className, ref, ...props }: AvatarProps & { ref?: React.Ref<HTMLSpanElement> }) => {
     const bgClass = src ? '' : icon ? 'bg-[#f0f0f0] text-[#707070]' : 'bg-primary text-white';
 
     const avatarElement = (
@@ -75,7 +74,6 @@ export const Avatar = React.forwardRef<HTMLSpanElement, AvatarProps>(
     }
 
     return avatarElement;
-  },
-);
+  };
 
 Avatar.displayName = 'Avatar';

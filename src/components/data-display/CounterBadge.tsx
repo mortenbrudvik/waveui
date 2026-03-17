@@ -15,8 +15,7 @@ export interface CounterBadgeProps extends React.HTMLAttributes<HTMLSpanElement>
   appearance?: 'filled' | 'outline';
 }
 
-export const CounterBadge = React.forwardRef<HTMLSpanElement, CounterBadgeProps>(
-  ({ count, overflowCount = 99, appearance = 'filled', className, ...props }, ref) => {
+export const CounterBadge = ({ count, overflowCount = 99, appearance = 'filled', className, ref, ...props }: CounterBadgeProps & { ref?: React.Ref<HTMLSpanElement> }) => {
     if (count <= 0) return null;
 
     const display = count > overflowCount ? `${overflowCount}+` : String(count);
@@ -36,7 +35,6 @@ export const CounterBadge = React.forwardRef<HTMLSpanElement, CounterBadgeProps>
         {display}
       </span>
     );
-  },
-);
+  };
 
 CounterBadge.displayName = 'CounterBadge';

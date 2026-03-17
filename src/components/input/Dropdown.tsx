@@ -29,20 +29,17 @@ export interface DropdownProps extends Omit<React.HTMLAttributes<HTMLDivElement>
   disabled?: boolean;
 }
 
-const DropdownRoot = React.forwardRef<HTMLDivElement, DropdownProps>(
-  (
-    {
-      value: controlledValue,
-      defaultValue = '',
-      onOptionSelect,
-      placeholder = 'Select an option',
-      disabled = false,
-      className,
-      children,
-      ...rest
-    },
-    ref,
-  ) => {
+const DropdownRoot = ({
+  value: controlledValue,
+  defaultValue = '',
+  onOptionSelect,
+  placeholder = 'Select an option',
+  disabled = false,
+  className,
+  children,
+  ref,
+  ...rest
+}: DropdownProps & { ref?: React.Ref<HTMLDivElement> }) => {
     const [selectedValue, setSelectedValue] = useControllable(
       controlledValue,
       defaultValue,
@@ -188,8 +185,7 @@ const DropdownRoot = React.forwardRef<HTMLDivElement, DropdownProps>(
         )}
       </div>
     );
-  },
-);
+};
 DropdownRoot.displayName = 'Dropdown';
 
 export const Dropdown = Object.assign(DropdownRoot, {

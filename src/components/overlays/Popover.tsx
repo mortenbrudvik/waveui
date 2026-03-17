@@ -79,8 +79,7 @@ function PopoverRoot({ open: openProp, defaultOpen, onOpenChange, children }: Po
   );
 }
 
-const PopoverTrigger = React.forwardRef<HTMLSpanElement, PopoverTriggerProps>(
-  ({ children, ...rest }, ref) => {
+const PopoverTrigger = ({ children, ref, ...rest }: PopoverTriggerProps & { ref?: React.Ref<HTMLSpanElement> }) => {
     const { open, setOpen, contentId } = usePopoverContext();
     return (
       <span
@@ -94,12 +93,10 @@ const PopoverTrigger = React.forwardRef<HTMLSpanElement, PopoverTriggerProps>(
         {children}
       </span>
     );
-  },
-);
+  };
 PopoverTrigger.displayName = 'PopoverTrigger';
 
-const PopoverContent = React.forwardRef<HTMLDivElement, PopoverContentProps>(
-  ({ children, className, ...rest }, ref) => {
+const PopoverContent = ({ children, className, ref, ...rest }: PopoverContentProps & { ref?: React.Ref<HTMLDivElement> }) => {
     const { open, contentId } = usePopoverContext();
 
     if (!open) return null;
@@ -119,8 +116,7 @@ const PopoverContent = React.forwardRef<HTMLDivElement, PopoverContentProps>(
         {children}
       </div>
     );
-  },
-);
+  };
 PopoverContent.displayName = 'PopoverContent';
 
 PopoverRoot.displayName = 'Popover';

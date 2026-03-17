@@ -13,8 +13,7 @@ export interface InputProps extends React.InputHTMLAttributes<HTMLInputElement> 
   contentAfter?: Slot<'span'>;
 }
 
-export const Input = React.forwardRef<HTMLInputElement, InputProps>(
-  ({ error, contentBefore, contentAfter, className, ...props }, ref) => {
+export const Input = ({ error, contentBefore, contentAfter, className, ref, ...props }: InputProps & { ref?: React.Ref<HTMLInputElement> }) => {
     if (contentBefore != null || contentAfter != null) {
       return (
         <span
@@ -58,7 +57,6 @@ export const Input = React.forwardRef<HTMLInputElement, InputProps>(
         {...props}
       />
     );
-  },
-);
+  };
 
 Input.displayName = 'Input';

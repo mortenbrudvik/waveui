@@ -47,8 +47,7 @@ const shapeMap = {
   rounded: 'rounded',
 };
 
-export const SwatchPicker = React.forwardRef<HTMLDivElement, SwatchPickerProps>(
-  (
+export const SwatchPicker = (
     {
       items,
       value: controlledValue,
@@ -56,11 +55,7 @@ export const SwatchPicker = React.forwardRef<HTMLDivElement, SwatchPickerProps>(
       onChange,
       size = 'medium',
       shape = 'circular',
-      className,
-      ...rest
-    },
-    ref,
-  ) => {
+      className, ref, ...rest }: SwatchPickerProps & { ref?: React.Ref<HTMLDivElement> }) => {
     const [value, setValue] = useControllable(controlledValue, defaultValue, onChange);
 
     return (
@@ -115,7 +110,6 @@ export const SwatchPicker = React.forwardRef<HTMLDivElement, SwatchPickerProps>(
         })}
       </div>
     );
-  },
-);
+  };
 
 SwatchPicker.displayName = 'SwatchPicker';

@@ -23,8 +23,7 @@ const variantClasses: Record<'dark' | 'light', string> = {
   light: 'bg-white border border-border text-foreground',
 };
 
-export const Tooltip = React.forwardRef<HTMLSpanElement, TooltipProps>(
-  ({ content, variant = 'dark', delay = 200, children, className, ...rest }, ref) => {
+export const Tooltip = ({ content, variant = 'dark', delay = 200, children, className, ref, ...rest }: TooltipProps & { ref?: React.Ref<HTMLSpanElement> }) => {
     const [visible, setVisible] = React.useState(false);
     const timeoutRef = React.useRef<ReturnType<typeof setTimeout>>(undefined);
     const tooltipId = useId('tooltip');
@@ -73,7 +72,6 @@ export const Tooltip = React.forwardRef<HTMLSpanElement, TooltipProps>(
         )}
       </span>
     );
-  },
-);
+  };
 
 Tooltip.displayName = 'Tooltip';

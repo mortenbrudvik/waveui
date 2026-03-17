@@ -22,19 +22,16 @@ export interface SwitchProps extends Omit<
   label?: string;
 }
 
-export const Switch = React.forwardRef<HTMLLabelElement, SwitchProps>(
-  (
-    {
-      checked: controlledChecked,
-      defaultChecked = false,
-      onChange,
-      disabled,
-      label,
-      className,
-      ...rest
-    },
-    ref,
-  ) => {
+export const Switch = ({
+  checked: controlledChecked,
+  defaultChecked = false,
+  onChange,
+  disabled,
+  label,
+  className,
+  ref,
+  ...rest
+}: SwitchProps & { ref?: React.Ref<HTMLLabelElement> }) => {
     const [checked, setChecked] = useControllable(controlledChecked, defaultChecked, onChange);
     const id = useId('switch');
 
@@ -71,7 +68,6 @@ export const Switch = React.forwardRef<HTMLLabelElement, SwitchProps>(
         {label && <span className="text-sm text-foreground">{label}</span>}
       </label>
     );
-  },
-);
+};
 
 Switch.displayName = 'Switch';

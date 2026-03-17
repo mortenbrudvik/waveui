@@ -66,8 +66,7 @@ export interface FlexProps extends React.HTMLAttributes<HTMLDivElement> {
   shrink?: boolean;
 }
 
-const FlexRoot = React.forwardRef<HTMLDivElement, FlexProps>(
-  (
+const FlexRoot = (
     {
       as: Component = 'div',
       direction = 'row',
@@ -79,11 +78,7 @@ const FlexRoot = React.forwardRef<HTMLDivElement, FlexProps>(
       grow,
       shrink,
       className,
-      children,
-      ...props
-    },
-    ref,
-  ) => {
+      children, ref, ...props }: FlexProps & { ref?: React.Ref<HTMLElement> }) => {
     return (
       <Component
         ref={ref}
@@ -103,8 +98,7 @@ const FlexRoot = React.forwardRef<HTMLDivElement, FlexProps>(
         {children}
       </Component>
     );
-  },
-);
+  };
 FlexRoot.displayName = 'Flex';
 
 export const Flex = FlexRoot;

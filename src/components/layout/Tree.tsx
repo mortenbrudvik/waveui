@@ -27,8 +27,7 @@ export interface TreeProps extends React.HTMLAttributes<HTMLDivElement> {
   defaultExpandedItems?: string[];
 }
 
-const TreeRoot = React.forwardRef<HTMLDivElement, TreeProps>(
-  ({ defaultExpandedItems = [], className, children, ...rest }, ref) => {
+const TreeRoot = ({ defaultExpandedItems = [], className, children, ref, ...rest }: TreeProps & { ref?: React.Ref<HTMLDivElement> }) => {
     const [expandedItems, setExpandedItems] = React.useState(() => new Set(defaultExpandedItems));
 
     const toggleItem = React.useCallback((value: string) => {
@@ -47,8 +46,7 @@ const TreeRoot = React.forwardRef<HTMLDivElement, TreeProps>(
         </div>
       </TreeContext.Provider>
     );
-  },
-);
+  };
 TreeRoot.displayName = 'Tree';
 
 /* ------------------------------------------------------------------ */
@@ -67,8 +65,7 @@ export interface TreeItemProps extends React.HTMLAttributes<HTMLDivElement> {
   leaf?: boolean;
 }
 
-const TreeItem = React.forwardRef<HTMLDivElement, TreeItemProps>(
-  ({ value, icon, leaf = false, className, children, ...rest }, ref) => {
+const TreeItem = ({ value, icon, leaf = false, className, children, ref, ...rest }: TreeItemProps & { ref?: React.Ref<HTMLDivElement> }) => {
     const { expandedItems, toggleItem } = React.useContext(TreeContext);
     const isExpanded = expandedItems.has(value);
 
@@ -141,8 +138,7 @@ const TreeItem = React.forwardRef<HTMLDivElement, TreeItemProps>(
         )}
       </div>
     );
-  },
-);
+};
 TreeItem.displayName = 'TreeItem';
 
 /* ------------------------------------------------------------------ */

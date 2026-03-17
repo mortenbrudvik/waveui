@@ -28,19 +28,14 @@ const sizeMap: Record<'small' | 'medium' | 'large', string> = {
   large: 'text-body-2',
 };
 
-export const Label = React.forwardRef<HTMLLabelElement, LabelProps>(
-  (
+export const Label = (
     {
       required = false,
       disabled = false,
       size = 'medium',
       weight = 'regular',
       className,
-      children,
-      ...rest
-    },
-    ref,
-  ) => {
+      children, ref, ...rest }: LabelProps & { ref?: React.Ref<HTMLLabelElement> }) => {
     return (
       <label
         ref={ref}
@@ -61,6 +56,5 @@ export const Label = React.forwardRef<HTMLLabelElement, LabelProps>(
         )}
       </label>
     );
-  },
-);
+  };
 Label.displayName = 'Label';

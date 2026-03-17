@@ -33,8 +33,7 @@ export interface TagPickerProps extends Omit<React.HTMLAttributes<HTMLDivElement
   disabled?: boolean;
 }
 
-export const TagPicker = React.forwardRef<HTMLDivElement, TagPickerProps>(
-  (
+export const TagPicker = (
     {
       options,
       value: valueProp,
@@ -42,11 +41,7 @@ export const TagPicker = React.forwardRef<HTMLDivElement, TagPickerProps>(
       onChange,
       placeholder = 'Select...',
       disabled = false,
-      className,
-      ...rest
-    },
-    ref,
-  ) => {
+      className, ref, ...rest }: TagPickerProps & { ref?: React.Ref<HTMLDivElement> }) => {
     const [selected, setSelected] = useControllable(valueProp, defaultValue ?? [], onChange);
     const [query, setQuery] = React.useState('');
     const [isOpen, setIsOpen] = React.useState(false);
@@ -199,6 +194,5 @@ export const TagPicker = React.forwardRef<HTMLDivElement, TagPickerProps>(
         )}
       </div>
     );
-  },
-);
+  };
 TagPicker.displayName = 'TagPicker';

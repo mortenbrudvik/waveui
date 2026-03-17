@@ -43,8 +43,7 @@ export interface TableCellProps extends React.TdHTMLAttributes<HTMLTableCellElem
 
 const TableContext = React.createContext<{ striped: boolean }>({ striped: false });
 
-const TableRoot = React.forwardRef<HTMLTableElement, TableProps>(
-  ({ striped = false, children, className, ...props }, ref) => {
+const TableRoot = ({ striped = false, children, className, ref, ...props }: TableProps & { ref?: React.Ref<HTMLTableElement> }) => {
     return (
       <TableContext.Provider value={{ striped }}>
         <div className="overflow-hidden rounded-lg border border-border">
@@ -58,23 +57,19 @@ const TableRoot = React.forwardRef<HTMLTableElement, TableProps>(
         </div>
       </TableContext.Provider>
     );
-  },
-);
+  };
 TableRoot.displayName = 'Table';
 
-const TableHead = React.forwardRef<HTMLTableSectionElement, TableHeadProps>(
-  ({ children, className, ...rest }, ref) => {
+const TableHead = ({ children, className, ref, ...rest }: TableHeadProps & { ref?: React.Ref<HTMLTableSectionElement> }) => {
     return (
       <thead ref={ref} {...rest} className={cn('bg-[#fafafa]', className)}>
         {children}
       </thead>
     );
-  },
-);
+  };
 TableHead.displayName = 'TableHead';
 
-const TableHeadCell = React.forwardRef<HTMLTableCellElement, TableHeadCellProps>(
-  ({ children, className, ...props }, ref) => {
+const TableHeadCell = ({ children, className, ref, ...props }: TableHeadCellProps & { ref?: React.Ref<HTMLTableCellElement> }) => {
     return (
       <th
         ref={ref}
@@ -88,23 +83,19 @@ const TableHeadCell = React.forwardRef<HTMLTableCellElement, TableHeadCellProps>
         {children}
       </th>
     );
-  },
-);
+  };
 TableHeadCell.displayName = 'TableHeadCell';
 
-const TableBody = React.forwardRef<HTMLTableSectionElement, TableBodyProps>(
-  ({ children, className, ...rest }, ref) => {
+const TableBody = ({ children, className, ref, ...rest }: TableBodyProps & { ref?: React.Ref<HTMLTableSectionElement> }) => {
     return (
       <tbody ref={ref} {...rest} className={className}>
         {children}
       </tbody>
     );
-  },
-);
+  };
 TableBody.displayName = 'TableBody';
 
-const TableRow = React.forwardRef<HTMLTableRowElement, TableRowProps>(
-  ({ children, className, ...props }, ref) => {
+const TableRow = ({ children, className, ref, ...props }: TableRowProps & { ref?: React.Ref<HTMLTableRowElement> }) => {
     const { striped } = React.useContext(TableContext);
     return (
       <tr
@@ -119,12 +110,10 @@ const TableRow = React.forwardRef<HTMLTableRowElement, TableRowProps>(
         {children}
       </tr>
     );
-  },
-);
+  };
 TableRow.displayName = 'TableRow';
 
-const TableCell = React.forwardRef<HTMLTableCellElement, TableCellProps>(
-  ({ children, className, ...props }, ref) => {
+const TableCell = ({ children, className, ref, ...props }: TableCellProps & { ref?: React.Ref<HTMLTableCellElement> }) => {
     return (
       <td
         ref={ref}
@@ -134,8 +123,7 @@ const TableCell = React.forwardRef<HTMLTableCellElement, TableCellProps>(
         {children}
       </td>
     );
-  },
-);
+  };
 TableCell.displayName = 'TableCell';
 
 export const Table = Object.assign(TableRoot, {

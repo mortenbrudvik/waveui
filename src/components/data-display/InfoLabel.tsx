@@ -9,8 +9,7 @@ export interface InfoLabelProps extends React.HTMLAttributes<HTMLSpanElement> {
   info: string;
 }
 
-export const InfoLabel = React.forwardRef<HTMLSpanElement, InfoLabelProps>(
-  ({ label, info, className, ...props }, ref) => {
+export const InfoLabel = ({ label, info, className, ref, ...props }: InfoLabelProps & { ref?: React.Ref<HTMLSpanElement> }) => {
     return (
       <span
         ref={ref}
@@ -41,7 +40,6 @@ export const InfoLabel = React.forwardRef<HTMLSpanElement, InfoLabelProps>(
         </span>
       </span>
     );
-  },
-);
+  };
 
 InfoLabel.displayName = 'InfoLabel';

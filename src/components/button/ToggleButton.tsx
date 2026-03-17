@@ -52,8 +52,7 @@ const appearanceClasses: Record<Appearance, string> = {
   transparent: 'bg-transparent text-primary hover:underline',
 };
 
-export const ToggleButton = React.forwardRef<HTMLButtonElement, ToggleButtonProps>(
-  (
+export const ToggleButton = (
     {
       pressed,
       defaultPressed = false,
@@ -64,11 +63,7 @@ export const ToggleButton = React.forwardRef<HTMLButtonElement, ToggleButtonProp
       disabled,
       className,
       children,
-      onClick,
-      ...props
-    },
-    ref,
-  ) => {
+      onClick, ref, ...props }: ToggleButtonProps & { ref?: React.Ref<HTMLButtonElement> }) => {
     const [isPressed, setIsPressed] = useControllable(pressed, defaultPressed, onPressedChange);
 
     const handleClick = (e: React.MouseEvent<HTMLButtonElement>) => {
@@ -97,7 +92,6 @@ export const ToggleButton = React.forwardRef<HTMLButtonElement, ToggleButtonProp
         {children}
       </button>
     );
-  },
-);
+  };
 
 ToggleButton.displayName = 'ToggleButton';

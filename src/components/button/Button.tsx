@@ -37,11 +37,8 @@ const appearanceClasses: Record<Appearance, string> = {
   transparent: 'bg-transparent text-primary hover:underline',
 };
 
-export const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
-  (
-    { as, appearance = 'outline', size = 'medium', icon, disabled, className, children, ...props },
-    ref,
-  ) => {
+export const Button = (
+    { as, appearance = 'outline', size = 'medium', icon, disabled, className, children, ref, ...props }: ButtonProps & { ref?: React.Ref<HTMLElement> }) => {
     const Component = as || 'button';
     return (
       <Component
@@ -63,7 +60,6 @@ export const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
         {children}
       </Component>
     );
-  },
-);
+  };
 
 Button.displayName = 'Button';

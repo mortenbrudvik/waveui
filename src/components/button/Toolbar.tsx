@@ -11,8 +11,7 @@ export interface ToolbarProps extends React.HTMLAttributes<HTMLDivElement> {
   as?: React.ElementType;
 }
 
-export const Toolbar = React.forwardRef<HTMLDivElement, ToolbarProps>(
-  ({ as, className, children, ...props }, ref) => {
+export const Toolbar = ({ as, className, children, ref, ...props }: ToolbarProps & { ref?: React.Ref<HTMLElement> }) => {
     const Component = as || 'div';
     return (
       <Component
@@ -24,7 +23,6 @@ export const Toolbar = React.forwardRef<HTMLDivElement, ToolbarProps>(
         {children}
       </Component>
     );
-  },
-);
+  };
 
 Toolbar.displayName = 'Toolbar';

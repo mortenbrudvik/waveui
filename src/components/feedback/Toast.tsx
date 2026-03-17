@@ -75,48 +75,46 @@ const statusIcons: Record<Status, string> = {
   info: '\u2139',
 };
 
-const ToastRoot = React.forwardRef<HTMLDivElement, ToastProps>(
-  ({ status = 'info', title, onDismiss, className, children, ...rest }, ref) => {
-    return (
-      <div
-        ref={ref}
-        role={status === 'error' ? 'alert' : 'status'}
-        aria-live={status === 'error' ? 'assertive' : 'polite'}
-        className={cn(
-          'flex items-start gap-3 rounded border border-border bg-background p-3 shadow-4',
-          statusStyles[status],
-          className,
-        )}
-        {...rest}
-      >
-        <span className="shrink-0 text-sm" aria-hidden="true">
-          {statusIcons[status]}
-        </span>
-        <div className="flex-1 min-w-0">
-          {title && <div className="text-body-2 font-semibold text-foreground">{title}</div>}
-          {children && <div className="text-body-1 text-muted-foreground mt-0.5">{children}</div>}
-        </div>
-        {onDismiss && (
-          <button
-            type="button"
-            onClick={onDismiss}
-            className="shrink-0 text-muted-foreground hover:text-foreground"
-            aria-label="Dismiss"
-          >
-            <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
-              <path
-                d="M4 4l8 8M12 4l-8 8"
-                stroke="currentColor"
-                strokeWidth="1.5"
-                strokeLinecap="round"
-              />
-            </svg>
-          </button>
-        )}
+const ToastRoot = ({ status = 'info', title, onDismiss, className, children, ref, ...rest }: ToastProps & { ref?: React.Ref<HTMLDivElement> }) => {
+  return (
+    <div
+      ref={ref}
+      role={status === 'error' ? 'alert' : 'status'}
+      aria-live={status === 'error' ? 'assertive' : 'polite'}
+      className={cn(
+        'flex items-start gap-3 rounded border border-border bg-background p-3 shadow-4',
+        statusStyles[status],
+        className,
+      )}
+      {...rest}
+    >
+      <span className="shrink-0 text-sm" aria-hidden="true">
+        {statusIcons[status]}
+      </span>
+      <div className="flex-1 min-w-0">
+        {title && <div className="text-body-2 font-semibold text-foreground">{title}</div>}
+        {children && <div className="text-body-1 text-muted-foreground mt-0.5">{children}</div>}
       </div>
-    );
-  },
-);
+      {onDismiss && (
+        <button
+          type="button"
+          onClick={onDismiss}
+          className="shrink-0 text-muted-foreground hover:text-foreground"
+          aria-label="Dismiss"
+        >
+          <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+            <path
+              d="M4 4l8 8M12 4l-8 8"
+              stroke="currentColor"
+              strokeWidth="1.5"
+              strokeLinecap="round"
+            />
+          </svg>
+        </button>
+      )}
+    </div>
+  );
+};
 ToastRoot.displayName = 'Toast';
 
 /* ------------------------------------------------------------------ */
@@ -140,8 +138,7 @@ const positionMap: Record<ToastPosition, string> = {
   'bottom-left': 'bottom-4 left-4',
 };
 
-export const Toaster = React.forwardRef<HTMLDivElement, ToasterProps>(
-  ({ position = 'bottom-right', className, children, ...rest }, ref) => {
+export const Toaster = ({ position = 'bottom-right', className, children, ref, ...rest }: ToasterProps & { ref?: React.Ref<HTMLDivElement> }) => {
     const [toasts, setToasts] = React.useState<ToastEntry[]>([]);
     const prefix = useId('toast');
     const counterRef = React.useRef(0);
@@ -198,8 +195,7 @@ export const Toaster = React.forwardRef<HTMLDivElement, ToasterProps>(
         </div>
       </ToasterContext.Provider>
     );
-  },
-);
+  };
 Toaster.displayName = 'Toaster';
 
 export const Toast = ToastRoot;

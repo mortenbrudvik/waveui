@@ -22,31 +22,17 @@ const sizeClasses: Record<Size, string> = {
   'extra-large': 'w-12 h-12',
 };
 
-export const Spinner = React.forwardRef<HTMLSpanElement, SpinnerProps>(
-  ({ size = 'medium', label, labelVisible, className, ...rest }, ref) => {
-    const spinner = (
-      <span
-        className={cn(
-          'border-2 border-[#e0e0e0] border-t-primary rounded-full animate-[wave-spin_0.8s_linear_infinite]',
-          sizeClasses[size],
-        )}
-      />
-    );
+export const Spinner = ({ size = 'medium', label, labelVisible, className, ref, ...rest }: SpinnerProps & { ref?: React.Ref<HTMLSpanElement> }) => {
+  const spinner = (
+    <span
+      className={cn(
+        'border-2 border-[#e0e0e0] border-t-primary rounded-full animate-[wave-spin_0.8s_linear_infinite]',
+        sizeClasses[size],
+      )}
+    />
+  );
 
-    if (labelVisible && label) {
-      return (
-        <span
-          ref={ref}
-          {...rest}
-          className={cn('inline-flex items-center gap-2', className)}
-          role="status"
-        >
-          {spinner}
-          <span className="text-body-1 text-muted-foreground">{label}</span>
-        </span>
-      );
-    }
-
+  if (labelVisible && label) {
     return (
       <span
         ref={ref}
@@ -55,10 +41,22 @@ export const Spinner = React.forwardRef<HTMLSpanElement, SpinnerProps>(
         role="status"
       >
         {spinner}
-        {label && <span className="sr-only">{label}</span>}
+        <span className="text-body-1 text-muted-foreground">{label}</span>
       </span>
     );
-  },
-);
+  }
+
+  return (
+    <span
+      ref={ref}
+      {...rest}
+      className={cn('inline-flex items-center gap-2', className)}
+      role="status"
+    >
+      {spinner}
+      {label && <span className="sr-only">{label}</span>}
+    </span>
+  );
+};
 
 Spinner.displayName = 'Spinner';

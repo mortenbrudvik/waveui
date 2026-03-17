@@ -64,16 +64,14 @@ function DialogRoot({ open, defaultOpen, onOpenChange, children }: DialogProps) 
   );
 }
 
-const DialogTrigger = React.forwardRef<HTMLSpanElement, DialogTriggerProps>(
-  ({ children, ...rest }, ref) => {
+const DialogTrigger = ({ children, ref, ...rest }: DialogTriggerProps & { ref?: React.Ref<HTMLSpanElement> }) => {
     const { setOpen } = useDialogContext();
     return (
       <span ref={ref} {...rest} onClick={() => setOpen(true)} className="inline-block">
         {children}
       </span>
     );
-  },
-);
+  };
 DialogTrigger.displayName = 'DialogTrigger';
 
 const sizeClasses: Record<'small' | 'medium', string> = {
@@ -81,8 +79,7 @@ const sizeClasses: Record<'small' | 'medium', string> = {
   medium: 'w-[600px]',
 };
 
-const DialogContent = React.forwardRef<HTMLDivElement, DialogContentProps>(
-  ({ title, size = 'medium', children, className, ...rest }, ref) => {
+const DialogContent = ({ title, size = 'medium', children, className, ref, ...rest }: DialogContentProps & { ref?: React.Ref<HTMLDivElement> }) => {
     const { open, setOpen } = useDialogContext();
     const contentRef = React.useRef<HTMLDivElement>(null);
     const previousFocusRef = React.useRef<HTMLElement | null>(null);
@@ -210,19 +207,16 @@ const DialogContent = React.forwardRef<HTMLDivElement, DialogContentProps>(
       </div>,
       document.body,
     );
-  },
-);
+  };
 DialogContent.displayName = 'DialogContent';
 
-const DialogFooter = React.forwardRef<HTMLDivElement, DialogFooterProps>(
-  ({ children, className, ...rest }, ref) => {
+const DialogFooter = ({ children, className, ref, ...rest }: DialogFooterProps & { ref?: React.Ref<HTMLDivElement> }) => {
     return (
       <div ref={ref} {...rest} className={cn('flex justify-end gap-2 mt-6', className)}>
         {children}
       </div>
     );
-  },
-);
+  };
 DialogFooter.displayName = 'DialogFooter';
 
 DialogRoot.displayName = 'Dialog';

@@ -32,19 +32,14 @@ export interface TabListProps extends React.HTMLAttributes<HTMLDivElement> {
   vertical?: boolean;
 }
 
-const TabListRoot = React.forwardRef<HTMLDivElement, TabListProps>(
-  (
+const TabListRoot = (
     {
       selectedValue: controlledValue,
       defaultSelectedValue = '',
       onTabSelect,
       vertical,
       className,
-      children,
-      ...rest
-    },
-    ref,
-  ) => {
+      children, ref, ...rest }: TabListProps & { ref?: React.Ref<HTMLDivElement> }) => {
     const [selectedValue, setSelectedValue] = useControllable(
       controlledValue,
       defaultSelectedValue,
@@ -122,8 +117,7 @@ const TabListRoot = React.forwardRef<HTMLDivElement, TabListProps>(
         </div>
       </TabListContext.Provider>
     );
-  },
-);
+  };
 TabListRoot.displayName = 'TabList';
 
 /** Properties for the Tab sub-component. */
@@ -132,8 +126,7 @@ export interface TabProps extends React.ButtonHTMLAttributes<HTMLButtonElement> 
   value: string;
 }
 
-const Tab = React.forwardRef<HTMLButtonElement, TabProps>(
-  ({ value, className, children, ...rest }, ref) => {
+const Tab = ({ value, className, children, ref, ...rest }: TabProps & { ref?: React.Ref<HTMLButtonElement> }) => {
     const { selectedValue, onSelect, vertical, getTabIndex } = useTabListContext();
     const isActive = selectedValue === value;
 
@@ -170,8 +163,7 @@ const Tab = React.forwardRef<HTMLButtonElement, TabProps>(
         {children}
       </button>
     );
-  },
-);
+  };
 Tab.displayName = 'Tab';
 
 /** Properties for the TabPanel sub-component. */
@@ -180,8 +172,7 @@ export interface TabPanelProps extends React.HTMLAttributes<HTMLDivElement> {
   value: string;
 }
 
-const TabPanel = React.forwardRef<HTMLDivElement, TabPanelProps>(
-  ({ value, children, className, ...rest }, ref) => {
+const TabPanel = ({ value, children, className, ref, ...rest }: TabPanelProps & { ref?: React.Ref<HTMLDivElement> }) => {
     const { selectedValue } = useTabListContext();
     if (selectedValue !== value) return null;
     return (
@@ -197,8 +188,7 @@ const TabPanel = React.forwardRef<HTMLDivElement, TabPanelProps>(
         {children}
       </div>
     );
-  },
-);
+  };
 TabPanel.displayName = 'TabPanel';
 
 export const TabList = Object.assign(TabListRoot, {

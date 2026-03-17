@@ -29,8 +29,7 @@ const positionClasses: Record<'left' | 'right', string> = {
   right: 'right-0 top-0 h-full w-80',
 };
 
-export const Drawer = React.forwardRef<HTMLDivElement, DrawerProps>(
-  (
+export const Drawer = (
     {
       open: openProp,
       defaultOpen,
@@ -38,11 +37,7 @@ export const Drawer = React.forwardRef<HTMLDivElement, DrawerProps>(
       position = 'right',
       title,
       children,
-      className,
-      ...rest
-    },
-    ref,
-  ) => {
+      className, ref, ...rest }: DrawerProps & { ref?: React.Ref<HTMLDivElement> }) => {
     const [open, setOpen] = useControllable(openProp, defaultOpen ?? false, onOpenChange);
     const panelRef = React.useRef<HTMLDivElement>(null);
     const previousFocusRef = React.useRef<HTMLElement | null>(null);
@@ -171,7 +166,6 @@ export const Drawer = React.forwardRef<HTMLDivElement, DrawerProps>(
       </div>,
       document.body,
     );
-  },
-);
+  };
 
 Drawer.displayName = 'Drawer';

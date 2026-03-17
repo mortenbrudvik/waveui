@@ -20,8 +20,7 @@ const overflowSizeMap: Record<Size, string> = {
   'extra-large': 'w-14 h-14 text-lg',
 };
 
-export const AvatarGroup = React.forwardRef<HTMLDivElement, AvatarGroupProps>(
-  ({ max, size = 'medium', className, children, ...props }, ref) => {
+export const AvatarGroup = ({ max, size = 'medium', className, children, ref, ...props }: AvatarGroupProps & { ref?: React.Ref<HTMLDivElement> }) => {
     const items = React.Children.toArray(children);
     const visible = max && items.length > max ? items.slice(0, max) : items;
     const overflow = max && items.length > max ? items.length - max : 0;
@@ -48,7 +47,6 @@ export const AvatarGroup = React.forwardRef<HTMLDivElement, AvatarGroupProps>(
         )}
       </div>
     );
-  },
-);
+  };
 
 AvatarGroup.displayName = 'AvatarGroup';

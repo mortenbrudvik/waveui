@@ -19,8 +19,7 @@ const variantClasses: Record<'text' | 'circular' | 'rectangular', string> = {
   rectangular: 'rounded',
 };
 
-export const Skeleton = React.forwardRef<HTMLDivElement, SkeletonProps>(
-  ({ width, height, variant = 'text', className, style, ...rest }, ref) => {
+export const Skeleton = ({ width, height, variant = 'text', className, style, ref, ...rest }: SkeletonProps & { ref?: React.Ref<HTMLDivElement> }) => {
     return (
       <div
         ref={ref}
@@ -34,7 +33,6 @@ export const Skeleton = React.forwardRef<HTMLDivElement, SkeletonProps>(
         aria-hidden="true"
       />
     );
-  },
-);
+  };
 
 Skeleton.displayName = 'Skeleton';

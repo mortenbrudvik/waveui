@@ -67,8 +67,7 @@ const ChevronDown = () => (
   </svg>
 );
 
-export const SplitButton = React.forwardRef<HTMLDivElement, SplitButtonProps>(
-  (
+export const SplitButton = (
     {
       appearance = 'outline',
       size = 'medium',
@@ -76,11 +75,7 @@ export const SplitButton = React.forwardRef<HTMLDivElement, SplitButtonProps>(
       className,
       children,
       onClick,
-      onMenuClick,
-      ...props
-    },
-    ref,
-  ) => {
+      onMenuClick, ref, ...props }: SplitButtonProps & { ref?: React.Ref<HTMLDivElement> }) => {
     return (
       <div ref={ref} role="group" className={cn('inline-flex', className)} {...props}>
         <button
@@ -115,7 +110,6 @@ export const SplitButton = React.forwardRef<HTMLDivElement, SplitButtonProps>(
         </button>
       </div>
     );
-  },
-);
+  };
 
 SplitButton.displayName = 'SplitButton';

@@ -24,20 +24,17 @@ export interface CheckboxProps extends Omit<
   label?: string;
 }
 
-export const Checkbox = React.forwardRef<HTMLLabelElement, CheckboxProps>(
-  (
-    {
-      checked: controlledChecked,
-      defaultChecked = false,
-      indeterminate = false,
-      onChange,
-      disabled,
-      label,
-      className,
-      ...rest
-    },
-    ref,
-  ) => {
+export const Checkbox = ({
+  checked: controlledChecked,
+  defaultChecked = false,
+  indeterminate = false,
+  onChange,
+  disabled,
+  label,
+  className,
+  ref,
+  ...rest
+}: CheckboxProps & { ref?: React.Ref<HTMLLabelElement> }) => {
     const [checked, setChecked] = useControllable(controlledChecked, defaultChecked, onChange);
     const id = useId('checkbox');
 
@@ -83,7 +80,6 @@ export const Checkbox = React.forwardRef<HTMLLabelElement, CheckboxProps>(
         {label && <span className="text-sm text-foreground">{label}</span>}
       </label>
     );
-  },
-);
+};
 
 Checkbox.displayName = 'Checkbox';
