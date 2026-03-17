@@ -34,7 +34,7 @@ export const AvatarGroup = React.forwardRef<HTMLDivElement, AvatarGroupProps>(
       >
         {visible.map((child, i) => (
           <span
-            key={i}
+            key={(child as React.ReactElement)?.key ?? i}
             className={cn(i > 0 && '-ml-2', 'ring-2 ring-white rounded-full')}
           >
             {child}

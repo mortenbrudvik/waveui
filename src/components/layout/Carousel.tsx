@@ -112,6 +112,10 @@ const CarouselRoot = React.forwardRef<HTMLDivElement, CarouselProps>(
       return () => clearInterval(id);
     }, [autoPlay, autoPlayInterval, loop, total, activeIndex, setActiveIndex]);
 
+    if (total === 0) {
+      return <div ref={ref} className={cn('relative', className)} {...rest} />;
+    }
+
     return (
       <CarouselContext.Provider value={{ activeIndex, total, goTo, prev, next }}>
         <div

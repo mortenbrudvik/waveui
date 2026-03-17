@@ -137,7 +137,6 @@ export function RadioItem({ value, label, disabled, className }: RadioItemProps)
         type="button"
         role="radio"
         aria-checked={selected}
-        aria-label={label}
         disabled={disabled}
         tabIndex={disabled ? -1 : ctx.getTabIndex(value)}
         data-roving-value={value}

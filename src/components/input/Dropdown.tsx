@@ -52,6 +52,13 @@ const DropdownRoot = React.forwardRef<HTMLDivElement, DropdownProps>(
     const [activeIndex, setActiveIndex] = React.useState(-1);
     const listboxId = useId('dropdown-listbox');
     const buttonRef = React.useRef<HTMLButtonElement>(null);
+    const blurTimeoutRef = React.useRef<ReturnType<typeof setTimeout>>();
+
+    React.useEffect(() => {
+      return () => {
+        if (blurTimeoutRef.current) clearTimeout(blurTimeoutRef.current);
+      };
+    }, []);
 
     // Derive display text from children
     const displayText = React.useMemo(() => {
@@ -117,7 +124,9 @@ const DropdownRoot = React.forwardRef<HTMLDivElement, DropdownProps>(
           disabled={disabled}
           onClick={() => setOpen((o) => !o)}
           onKeyDown={handleKeyDown}
-          onBlur={() => setTimeout(() => setOpen(false), 200)}
+          onBlur={() => {
+            blurTimeoutRef.current = setTimeout(() => setOpen(false), 200);
+          }}
           className={cn(
             'h-8 w-full rounded border border-input bg-background px-3 text-sm text-left',
             'flex items-center justify-between',
@@ -128,6 +137,7 @@ const DropdownRoot = React.forwardRef<HTMLDivElement, DropdownProps>(
         >
           <span className="truncate">{displayText || placeholder}</span>
           <svg
+            aria-hidden="true"
             width="12"
             height="12"
             viewBox="0 0 12 12"
@@ -154,7 +164,8 @@ const DropdownRoot = React.forwardRef<HTMLDivElement, DropdownProps>(
               if (!React.isValidElement(child)) return child;
               if (child.type === Option) {
                 const props = child.props as OptionProps;
-                return React.cloneElement(child as React.ReactElement<any>, {
+                const originalOnClick = (child as React.ReactElement<{ onClick?: (e: React.MouseEvent) => void }>).props.onClick;
+                return React.cloneElement(child as React.ReactElement<Record<string, unknown>>, {
                   'aria-selected': props.value === selectedValue,
                   className: cn(
                     props.className,
@@ -164,7 +175,7 @@ const DropdownRoot = React.forwardRef<HTMLDivElement, DropdownProps>(
                   onClick: (e: React.MouseEvent) => {
                     if (props.disabled) return;
                     selectOption(props.value);
-                    (props as any).onClick?.(e);
+                    originalOnClick?.(e);
                   },
                 });
               }

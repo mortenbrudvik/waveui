@@ -146,8 +146,8 @@ const Tab = React.forwardRef<HTMLButtonElement, TabProps>(
         ref={ref}
         type="button"
         role="tab"
-        id={`tab-${value}`}
-        aria-controls={isActive ? `tabpanel-${value}` : undefined}
+        id={`tab-${value.replace(/[^a-zA-Z0-9-_]/g, '_')}`}
+        aria-controls={isActive ? `tabpanel-${value.replace(/[^a-zA-Z0-9-_]/g, '_')}` : undefined}
         aria-selected={isActive}
         tabIndex={getTabIndex(value)}
         data-roving-value={value}
@@ -192,8 +192,8 @@ const TabPanel = React.forwardRef<HTMLDivElement, TabPanelProps>(
       <div
         ref={ref}
         role="tabpanel"
-        id={`tabpanel-${value}`}
-        aria-labelledby={`tab-${value}`}
+        id={`tabpanel-${value.replace(/[^a-zA-Z0-9-_]/g, '_')}`}
+        aria-labelledby={`tab-${value.replace(/[^a-zA-Z0-9-_]/g, '_')}`}
         tabIndex={0}
         className={cn('p-4', className)}
         {...rest}

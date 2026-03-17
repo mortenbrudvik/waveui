@@ -57,7 +57,7 @@ const BreadcrumbRoot = React.forwardRef<HTMLElement, BreadcrumbProps>(
 );
 BreadcrumbRoot.displayName = 'Breadcrumb';
 
-const BreadcrumbItem = React.forwardRef<HTMLElement, BreadcrumbItemProps>(
+const BreadcrumbItem = React.forwardRef<HTMLSpanElement | HTMLAnchorElement, BreadcrumbItemProps>(
   ({ href, current, icon, children, className, ...rest }, ref) => {
     const renderedIcon = renderSlot(icon, 'span', 'flex-shrink-0 mr-1');
 

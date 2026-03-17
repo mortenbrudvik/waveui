@@ -1,5 +1,5 @@
 {
-  "name": "wave-ui-react",
+  "name": "waveui",
   "version": "0.1.0",
   "type": "module",
   "description": "A comprehensive React component library with modern design tokens — accessible, composable components built with TypeScript and Tailwind CSS",
@@ -7,7 +7,7 @@
   "keywords": [
     "react",
     "component-library",
-    "wave-ui",
+    "waveui",
     "design-system",
     "typescript",
     "tailwind",

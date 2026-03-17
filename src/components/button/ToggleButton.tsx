@@ -96,7 +96,7 @@ export const ToggleButton = React.forwardRef<
             ? pressedClasses[appearance]
             : appearanceClasses[appearance],
           icon && children && 'gap-1.5',
-          disabled && 'opacity-50 cursor-not-allowed pointer-events-none',
+          disabled && 'opacity-50 cursor-not-allowed',
           className,
         )}
         {...props}

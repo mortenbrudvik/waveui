@@ -78,7 +78,7 @@ const DialogTrigger = React.forwardRef<HTMLSpanElement, DialogTriggerProps>(
 );
 DialogTrigger.displayName = 'DialogTrigger';
 
-const sizeClasses: Record<string, string> = {
+const sizeClasses: Record<'small' | 'medium', string> = {
   small: 'w-[400px]',
   medium: 'w-[600px]',
 };
@@ -89,6 +89,20 @@ const DialogContent = React.forwardRef<HTMLDivElement, DialogContentProps>(
     const contentRef = React.useRef<HTMLDivElement>(null);
     const previousFocusRef = React.useRef<HTMLElement | null>(null);
     const titleId = useId('dialog-title');
+    const [mounted, setMounted] = React.useState(false);
+
+    React.useEffect(() => {
+      setMounted(true);
+    }, []);
+
+    // Lock body scroll when open
+    React.useEffect(() => {
+      if (open) {
+        const prev = document.body.style.overflow;
+        document.body.style.overflow = 'hidden';
+        return () => { document.body.style.overflow = prev; };
+      }
+    }, [open]);
 
     // Merge refs
     const mergedRef = React.useCallback(
@@ -123,7 +137,11 @@ const DialogContent = React.forwardRef<HTMLDivElement, DialogContentProps>(
           const focusableElements = contentRef.current?.querySelectorAll<HTMLElement>(
             'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])'
           );
-          if (!focusableElements?.length) return;
+          if (!focusableElements?.length) {
+            e.preventDefault();
+            contentRef.current?.focus();
+            return;
+          }
           const first = focusableElements[0];
           const last = focusableElements[focusableElements.length - 1];
           if (e.shiftKey) {
@@ -143,7 +161,7 @@ const DialogContent = React.forwardRef<HTMLDivElement, DialogContentProps>(
       return () => document.removeEventListener('keydown', handleKey);
     }, [open, setOpen]);
 
-    if (!open) return null;
+    if (!mounted || !open) return null;
 
     return createPortal(
       <div
@@ -159,6 +177,7 @@ const DialogContent = React.forwardRef<HTMLDivElement, DialogContentProps>(
           role="dialog"
           aria-modal="true"
           aria-labelledby={title ? titleId : undefined}
+          tabIndex={-1}
           {...rest}
           className={cn(
             'bg-background rounded-xl p-6 relative',

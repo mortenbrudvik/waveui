@@ -1,12 +1,12 @@
-# wave-ui-react — Design & Development Guide
+# waveui — Design & Development Guide
 
-> **This documents our custom `wave-ui-react` library** — a standalone React + Tailwind CSS component library inspired by Fluent UI v2 design language, using CSS custom properties and utility classes. It is **not** the official `@fluentui/react-components` package from Microsoft.
+> **This documents our custom `waveui` library** — a standalone React + Tailwind CSS component library inspired by Fluent UI v2 design language, using CSS custom properties and utility classes. It is **not** the official `@fluentui/react-components` package from Microsoft.
 
 A comprehensive reference for designing and building features with this library. Covers design principles, tokens, component architecture, accessibility, and common patterns.
 
 ### How This Differs from Official Fluent UI
 
-| | **This library (`wave-ui-react`)** | **Official (`@fluentui/react-components`)** |
+| | **This library (`waveui`)** | **Official (`@fluentui/react-components`)** |
 |---|---|---|
 | **Styling** | Tailwind CSS + CSS variables (`tokens.css`) | Griffel CSS-in-JS + `makeStyles()` |
 | **Class merging** | `cn()` (clsx + tailwind-merge) | `mergeClasses()` |
@@ -14,7 +14,7 @@ A comprehensive reference for designing and building features with this library.
 | **Slot system** | `resolveSlot()` / `renderSlot()` (lightweight) | `slot()` / `resolveShorthand()` (full Griffel integration) |
 | **State hooks** | `useControllable()` | `useControllableState()` |
 | **Keyboard nav** | `useRovingTabIndex` hook + manual per component | Tabster library integration |
-| **Package** | Local codebase at `wave-ui-react/` | npm: `@fluentui/react-components` |
+| **Package** | Local codebase at `waveui/` | npm: `@fluentui/react-components` |
 
 All component APIs, token values, and patterns described below refer to **this library's implementation**, not the official Microsoft package.
 
@@ -730,7 +730,7 @@ Our high-contrast theme (`tokens.css` `.high-contrast` class) uses:
 The `WaveProvider` component wraps your app and provides theme context:
 
 ```tsx
-import { WaveProvider } from 'wave-ui-react';
+import { WaveProvider } from 'waveui';
 
 <WaveProvider theme="light" dir="ltr">
   <App />
@@ -1092,4 +1092,4 @@ focus-visible:outline focus-visible:outline-2               /* Keyboard-only foc
 
 ---
 
-*This guide documents the `wave-ui-react` library — a custom React + Tailwind CSS implementation inspired by Fluent UI v2 design language. This is **not** the official `@fluentui/react-components` package. For the official Microsoft library, see [Fluent UI React v9](https://react.fluentui.dev/). For the official design guidelines, see [Fluent 2 Design](https://fluent2.microsoft.design/).*
+*This guide documents the `waveui` library — a custom React + Tailwind CSS implementation inspired by Fluent UI v2 design language. This is **not** the official `@fluentui/react-components` package. For the official Microsoft library, see [Fluent UI React v9](https://react.fluentui.dev/). For the official design guidelines, see [Fluent 2 Design](https://fluent2.microsoft.design/).*

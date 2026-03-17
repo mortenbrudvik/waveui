@@ -251,8 +251,11 @@ const StepperRoot = React.forwardRef<HTMLDivElement, StepperProps>(
           )}
         >
           {childArray.map((child, index) => {
-            if (React.isValidElement(child)) {
-              return React.cloneElement(child as React.ReactElement<any>, { index });
+            if (React.isValidElement<StepProps>(child)) {
+              return React.cloneElement(
+                child as React.ReactElement<StepProps & StepInternalProps>,
+                { index },
+              );
             }
             return child;
           })}

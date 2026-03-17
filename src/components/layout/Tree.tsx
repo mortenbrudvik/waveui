@@ -110,20 +110,18 @@ const TreeItem = React.forwardRef<HTMLDivElement, TreeItemProps>(
     };
 
     return (
-      <div
-        ref={ref}
-        role="treeitem"
-        aria-expanded={hasChildren ? isExpanded : undefined}
-        tabIndex={0}
-        onClick={() => hasChildren && toggleItem(value)}
-        onKeyDown={handleKeyDown}
-        className={cn(
-          'flex items-center gap-1.5 px-2 py-1 cursor-pointer rounded',
-          'hover:bg-[#f5f5f5] focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary',
-          className,
-        )}
-        {...rest}
-      >
+      <div ref={ref} className={className} {...rest}>
+        <div
+          role="treeitem"
+          aria-expanded={hasChildren ? isExpanded : undefined}
+          tabIndex={0}
+          onClick={() => hasChildren && toggleItem(value)}
+          onKeyDown={handleKeyDown}
+          className={cn(
+            'flex items-center gap-1.5 px-2 py-1 cursor-pointer rounded',
+            'hover:bg-[#f5f5f5] focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary',
+          )}
+        >
           {hasChildren && (
             <svg
               width="12"
@@ -148,6 +146,7 @@ const TreeItem = React.forwardRef<HTMLDivElement, TreeItemProps>(
           {!hasChildren && <span className="w-3 shrink-0" />}
           {icon && <span className="shrink-0">{icon}</span>}
           <span className="truncate">{labelContent}</span>
+        </div>
         {hasChildren && isExpanded && (
           <div role="group" className="pl-4">
             {nestedItems}

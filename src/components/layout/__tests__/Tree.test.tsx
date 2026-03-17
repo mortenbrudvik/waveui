@@ -99,7 +99,8 @@ describe('Tree', () => {
         </Tree.Item>
       </Tree>,
     );
-    expect(screen.getByTestId('parent')).toHaveAttribute('aria-expanded', 'false');
+    // aria-expanded is on the inner treeitem role element, not the outer wrapper
+    expect(screen.getByRole('treeitem')).toHaveAttribute('aria-expanded', 'false');
   });
 
   it('renders icon in tree item', () => {

@@ -132,6 +132,13 @@ const ComboboxRoot = React.forwardRef<HTMLDivElement, ComboboxProps>(
     const [activeIndex, setActiveIndex] = React.useState(-1);
     const listboxId = useId('combobox-listbox');
     const inputRef = React.useRef<HTMLInputElement>(null);
+    const blurTimeoutRef = React.useRef<ReturnType<typeof setTimeout>>();
+
+    React.useEffect(() => {
+      return () => {
+        if (blurTimeoutRef.current) clearTimeout(blurTimeoutRef.current);
+      };
+    }, []);
 
     const selectOption = React.useCallback(
       (val: string, label: string) => {
@@ -171,7 +178,7 @@ const ComboboxRoot = React.forwardRef<HTMLDivElement, ComboboxProps>(
         }
         return true;
       });
-    }, [children, inputValue]);
+    }, [children, inputValue, freeform]);
 
     const handleKeyDown = (e: React.KeyboardEvent) => {
       if (e.key === 'ArrowDown') {
@@ -215,7 +222,7 @@ const ComboboxRoot = React.forwardRef<HTMLDivElement, ComboboxProps>(
             onFocus={() => setOpen(true)}
             onBlur={() => {
               // delay to allow click on option
-              setTimeout(() => setOpen(false), 200);
+              blurTimeoutRef.current = setTimeout(() => setOpen(false), 200);
             }}
             onKeyDown={handleKeyDown}
             className={cn(
@@ -235,7 +242,8 @@ const ComboboxRoot = React.forwardRef<HTMLDivElement, ComboboxProps>(
                 if (!React.isValidElement(child)) return child;
                 if (child.type === Option) {
                   const props = child.props as OptionProps;
-                  return React.cloneElement(child as React.ReactElement<any>, {
+                  const originalOnClick = (child as React.ReactElement<{ onClick?: (e: React.MouseEvent) => void }>).props.onClick;
+                  return React.cloneElement(child as React.ReactElement<Record<string, unknown>>, {
                     'aria-selected': props.value === selectedValue,
                     className: cn(
                       props.className,
@@ -246,7 +254,7 @@ const ComboboxRoot = React.forwardRef<HTMLDivElement, ComboboxProps>(
                       if (props.disabled) return;
                       const label = typeof props.children === 'string' ? props.children : props.value;
                       selectOption(props.value, label);
-                      (props as any).onClick?.(e);
+                      originalOnClick?.(e);
                     },
                   });
                 }

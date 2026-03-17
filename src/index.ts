@@ -1,4 +1,4 @@
-// Styles — consumers should import 'wave-ui-react/styles' or this CSS file
+// Styles — consumers should import 'waveui/styles' or this CSS file
 // import './styles/globals.css';
 
 // Utilities

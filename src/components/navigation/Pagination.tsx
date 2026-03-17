@@ -148,6 +148,8 @@ const Pagination = React.forwardRef<HTMLElement, PaginationProps>(
       onPageChange,
     );
 
+    if (totalPages < 1) return null;
+
     const range = getPaginationRange(totalPages, currentPage, siblingCount, boundaryCount);
 
     const sizeClasses = size === 'small' ? 'h-7 w-7 text-caption-1' : 'h-8 w-8 text-body-1';

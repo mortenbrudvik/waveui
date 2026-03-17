@@ -137,7 +137,7 @@ const NavCategory = React.forwardRef<HTMLLIElement, NavCategoryProps>(
 );
 NavCategory.displayName = 'NavCategory';
 
-const NavItem = React.forwardRef<HTMLButtonElement, NavItemProps>(
+const NavItem = React.forwardRef<HTMLButtonElement | HTMLAnchorElement, NavItemProps>(
   ({ value, icon, href, className, children, onClick, ...rest }, ref) => {
     const { selectedValue, onSelect } = React.useContext(NavContext);
     const isSelected = selectedValue === value;
@@ -171,7 +171,7 @@ const NavItem = React.forwardRef<HTMLButtonElement, NavItemProps>(
           </a>
         ) : (
           <button
-            ref={ref}
+            ref={ref as React.Ref<HTMLButtonElement>}
             type="button"
             aria-current={isSelected ? 'page' : undefined}
             onClick={handleClick}
@@ -188,7 +188,7 @@ const NavItem = React.forwardRef<HTMLButtonElement, NavItemProps>(
 );
 NavItem.displayName = 'NavItem';
 
-const NavSubItem = React.forwardRef<HTMLButtonElement, NavSubItemProps>(
+const NavSubItem = React.forwardRef<HTMLButtonElement | HTMLAnchorElement, NavSubItemProps>(
   ({ value, href, className, children, onClick, ...rest }, ref) => {
     const { selectedValue, onSelect } = React.useContext(NavContext);
     const isSelected = selectedValue === value;
@@ -221,7 +221,7 @@ const NavSubItem = React.forwardRef<HTMLButtonElement, NavSubItemProps>(
           </a>
         ) : (
           <button
-            ref={ref}
+            ref={ref as React.Ref<HTMLButtonElement>}
             type="button"
             aria-current={isSelected ? 'page' : undefined}
             onClick={handleClick}

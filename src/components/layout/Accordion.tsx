@@ -80,10 +80,10 @@ export interface AccordionItemProps extends React.HTMLAttributes<HTMLDivElement>
   value: string;
 }
 
-const getChildByDisplayName = (children: React.ReactNode, displayName: string) => {
+const getChildrenByType = (children: React.ReactNode, type: React.ElementType) => {
   const result: React.ReactNode[] = [];
   React.Children.forEach(children, (child) => {
-    if (React.isValidElement(child) && (child.type as any).displayName === displayName) {
+    if (React.isValidElement(child) && child.type === type) {
       result.push(child);
     }
   });
@@ -95,18 +95,18 @@ const AccordionItem = React.forwardRef<HTMLDivElement, AccordionItemProps>(
     const { openItems, toggle } = React.useContext(AccordionContext);
     const isOpen = openItems.includes(value);
 
-    const panelId = `accordion-panel-${value}`;
-    const triggerId = `accordion-trigger-${value}`;
+    const safeValue = value.replace(/[^a-zA-Z0-9-_]/g, '_');
+    const panelId = `accordion-panel-${safeValue}`;
+    const triggerId = `accordion-trigger-${safeValue}`;
 
-    const triggerChildren = getChildByDisplayName(children, 'AccordionTrigger');
-    const panelChildren = getChildByDisplayName(children, 'AccordionPanel');
+    const triggerChildren = getChildrenByType(children, AccordionTrigger);
+    const panelChildren = getChildrenByType(children, AccordionPanel);
 
     // Collect non-trigger, non-panel children into panel
     const otherChildren: React.ReactNode[] = [];
     React.Children.forEach(children, (child) => {
       if (React.isValidElement(child)) {
-        const dn = (child.type as any).displayName;
-        if (dn !== 'AccordionTrigger' && dn !== 'AccordionPanel') {
+        if (child.type !== AccordionTrigger && child.type !== AccordionPanel) {
           otherChildren.push(child);
         }
       }

@@ -62,7 +62,10 @@ export type PolymorphicProps<
   DefaultElement extends React.ElementType = 'div',
   Props = object,
 > = Props & {
-  /** Override the rendered element type. */
+  /**
+   * Element type to render as. Consumer is responsible for ensuring
+   * props are compatible with the target element.
+   */
   as?: React.ElementType;
 } & Omit<
     React.ComponentPropsWithoutRef<DefaultElement>,

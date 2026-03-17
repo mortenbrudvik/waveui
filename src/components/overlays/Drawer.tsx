@@ -24,7 +24,7 @@ export interface DrawerProps extends React.HTMLAttributes<HTMLDivElement> {
   children: React.ReactNode;
 }
 
-const positionClasses: Record<string, string> = {
+const positionClasses: Record<'left' | 'right', string> = {
   left: 'left-0 top-0 h-full w-80',
   right: 'right-0 top-0 h-full w-80',
 };
@@ -35,6 +35,20 @@ export const Drawer = React.forwardRef<HTMLDivElement, DrawerProps>(
     const panelRef = React.useRef<HTMLDivElement>(null);
     const previousFocusRef = React.useRef<HTMLElement | null>(null);
     const titleId = useId('drawer-title');
+    const [mounted, setMounted] = React.useState(false);
+
+    React.useEffect(() => {
+      setMounted(true);
+    }, []);
+
+    // Lock body scroll when open
+    React.useEffect(() => {
+      if (open) {
+        const prev = document.body.style.overflow;
+        document.body.style.overflow = 'hidden';
+        return () => { document.body.style.overflow = prev; };
+      }
+    }, [open]);
 
     // Merge refs
     const mergedRef = React.useCallback(
@@ -69,7 +83,11 @@ export const Drawer = React.forwardRef<HTMLDivElement, DrawerProps>(
           const focusableElements = panelRef.current?.querySelectorAll<HTMLElement>(
             'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])'
           );
-          if (!focusableElements?.length) return;
+          if (!focusableElements?.length) {
+            e.preventDefault();
+            panelRef.current?.focus();
+            return;
+          }
           const first = focusableElements[0];
           const last = focusableElements[focusableElements.length - 1];
           if (e.shiftKey) {
@@ -89,7 +107,7 @@ export const Drawer = React.forwardRef<HTMLDivElement, DrawerProps>(
       return () => document.removeEventListener('keydown', handleKey);
     }, [open, setOpen]);
 
-    if (!open) return null;
+    if (!mounted || !open) return null;
 
     return createPortal(
       <div
@@ -105,6 +123,7 @@ export const Drawer = React.forwardRef<HTMLDivElement, DrawerProps>(
           role="dialog"
           aria-modal="true"
           aria-labelledby={title ? titleId : undefined}
+          tabIndex={-1}
           {...rest}
           className={cn(
             'fixed bg-background shadow-[0px_32px_64px_rgba(0,0,0,0.24)] flex flex-col',

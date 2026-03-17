@@ -60,6 +60,12 @@ const themeClassMap: Record<WaveTheme, string> = {
  */
 export const WaveProvider = React.forwardRef<HTMLDivElement, WaveProviderProps>(
   ({ theme = 'light', dir = 'ltr', children, className, ...rest }, ref) => {
+    if (process.env.NODE_ENV !== 'production') {
+      if (theme && !themeClassMap[theme as keyof typeof themeClassMap]) {
+        console.warn(`WaveProvider: unknown theme "${theme}". Valid themes: ${Object.keys(themeClassMap).join(', ')}`);
+      }
+    }
+
     const value = React.useMemo(() => ({ theme, dir }), [theme, dir]);
 
     return (

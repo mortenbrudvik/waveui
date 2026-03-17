@@ -30,7 +30,7 @@ const variantClasses: Record<TypographyVariant, string> = {
   display: 'text-display',
 };
 
-const weightClasses: Record<number, string> = {
+const weightClasses: Record<400 | 600 | 700, string> = {
   400: 'font-normal',
   600: 'font-semibold',
   700: 'font-bold',

@@ -8,7 +8,9 @@ import { useId } from '../../hooks/useId';
 /* ------------------------------------------------------------------ */
 
 function timeToMinutes(time: string): number {
-  const [h, m] = time.split(':').map(Number);
+  const parts = time.split(':').map(Number);
+  if (parts.length !== 2 || parts.some((p) => Number.isNaN(p))) return NaN;
+  const [h, m] = parts;
   return (h ?? 0) * 60 + (m ?? 0);
 }
 
@@ -31,6 +33,7 @@ function generateTimeOptions(
 ): Array<{ value: string; label: string }> {
   const minMinutes = timeToMinutes(min);
   const maxMinutes = timeToMinutes(max);
+  if (Number.isNaN(minMinutes) || Number.isNaN(maxMinutes)) return [];
   const options: Array<{ value: string; label: string }> = [];
   for (let m = minMinutes; m <= maxMinutes; m += step) {
     const h24 = Math.floor(m / 60) % 24;
@@ -115,6 +118,13 @@ const TimePickerRoot = React.forwardRef<HTMLDivElement, TimePickerProps>(
     const listboxId = useId('timepicker-listbox');
     const inputRef = React.useRef<HTMLInputElement>(null);
     const listRef = React.useRef<HTMLUListElement>(null);
+    const blurTimeoutRef = React.useRef<ReturnType<typeof setTimeout>>();
+
+    React.useEffect(() => {
+      return () => {
+        if (blurTimeoutRef.current) clearTimeout(blurTimeoutRef.current);
+      };
+    }, []);
 
     const allOptions = React.useMemo(
       () => generateTimeOptions(step, minTime, maxTime, format),
@@ -217,7 +227,9 @@ const TimePickerRoot = React.forwardRef<HTMLDivElement, TimePickerProps>(
             onChange={handleInputChange}
             onFocus={handleInputFocus}
             onKeyDown={handleKeyDown}
-            onBlur={() => setTimeout(() => setOpen(false), 200)}
+            onBlur={() => {
+              blurTimeoutRef.current = setTimeout(() => setOpen(false), 200);
+            }}
             placeholder={placeholder}
             disabled={disabled}
             className={cn(

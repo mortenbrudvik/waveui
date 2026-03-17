@@ -52,7 +52,11 @@ export const TagPicker = React.forwardRef<HTMLDivElement, TagPickerProps>(
     const [isOpen, setIsOpen] = React.useState(false);
     const [focusIndex, setFocusIndex] = React.useState(-1);
     const inputRef = React.useRef<HTMLInputElement>(null);
+    const blurTimeoutRef = React.useRef<ReturnType<typeof setTimeout>>();
     const listboxId = useId('tagpicker-listbox');
+
+    // Clean up blur timeout on unmount
+    React.useEffect(() => () => { if (blurTimeoutRef.current) clearTimeout(blurTimeoutRef.current); }, []);
 
     const filteredOptions = options.filter(
       (opt) =>
@@ -153,7 +157,7 @@ export const TagPicker = React.forwardRef<HTMLDivElement, TagPickerProps>(
             onFocus={() => setIsOpen(true)}
             onBlur={() => {
               // Delay to allow click on option
-              setTimeout(() => setIsOpen(false), 150);
+              blurTimeoutRef.current = setTimeout(() => setIsOpen(false), 150);
             }}
             onKeyDown={handleInputKeyDown}
             placeholder={selected.length === 0 ? placeholder : ''}

@@ -28,8 +28,6 @@ export interface SlotObject<T extends React.ElementType = 'span'> {
   className?: string;
   /** Inline styles to apply to the slot element. */
   style?: React.CSSProperties;
-  /** Additional HTML attributes forwarded to the slot element. */
-  [key: string]: unknown;
 }
 
 function isSlotObject(value: unknown): value is SlotObject {

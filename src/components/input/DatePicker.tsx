@@ -166,8 +166,12 @@ const DatePickerRoot = React.forwardRef<HTMLDivElement, DatePickerProps>(
     const gridId = useId('datepicker-grid');
     const inputRef = React.useRef<HTMLInputElement>(null);
     const gridRef = React.useRef<HTMLTableElement>(null);
+    const blurTimeoutRef = React.useRef<ReturnType<typeof setTimeout>>();
 
-    const today = React.useMemo(() => new Date(), []);
+    const today = new Date();
+
+    // Clean up blur timeout on unmount
+    React.useEffect(() => () => { if (blurTimeoutRef.current) clearTimeout(blurTimeoutRef.current); }, []);
 
     // Sync input text with selected date when calendar is not open
     React.useEffect(() => {
@@ -221,7 +225,7 @@ const DatePickerRoot = React.forwardRef<HTMLDivElement, DatePickerProps>(
         // Revert to previous value
         setInputText(selectedDate ? formatDate(selectedDate) : '');
       }
-      setTimeout(() => setOpen(false), 200);
+      blurTimeoutRef.current = setTimeout(() => setOpen(false), 200);
     };
 
     const handleInputKeyDown = (e: React.KeyboardEvent) => {

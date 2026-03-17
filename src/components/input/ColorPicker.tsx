@@ -41,7 +41,7 @@ export const ColorPicker = React.forwardRef<HTMLDivElement, ColorPickerProps>(
     const [inputValue, setInputValue] = React.useState(color);
     const [opacity, setOpacity] = React.useState(100);
 
-    React.useLayoutEffect(() => {
+    React.useEffect(() => {
       setInputValue(color);
     }, [color]);
 
@@ -68,10 +68,14 @@ export const ColorPicker = React.forwardRef<HTMLDivElement, ColorPickerProps>(
     };
 
     const applyOpacity = (hex: string, opacityValue: number): string => {
+      let fullHex = hex;
+      if (/^#[0-9a-fA-F]{3}$/.test(hex)) {
+        fullHex = `#${hex[1]}${hex[1]}${hex[2]}${hex[2]}${hex[3]}${hex[3]}`;
+      }
       const alpha = Math.round((opacityValue / 100) * 255)
         .toString(16)
         .padStart(2, '0');
-      return hex.slice(0, 7) + alpha;
+      return fullHex.slice(0, 7) + alpha;
     };
 
     const handleOpacityChange = (e: React.ChangeEvent<HTMLInputElement>) => {

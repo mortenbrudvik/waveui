@@ -1,18 +1,18 @@
-# wave-ui-react
+# waveui
 
 A comprehensive React component library inspired by Fluent UI 2 design language with shadcn/ui-inspired patterns. 58 accessible, composable components built with TypeScript, Tailwind CSS, and a flexible slot system.
 
 ## Installation
 
 ```bash
-npm install wave-ui-react
+npm install waveui
 ```
 
 ## Quick Start
 
 ```tsx
-import { WaveProvider, Button } from 'wave-ui-react';
-import 'wave-ui-react/styles/globals.css';
+import { WaveProvider, Button } from 'waveui';
+import 'waveui/styles/globals.css';
 
 function App() {
   return (
@@ -160,7 +160,7 @@ Wrap your app (or subtree) in `<WaveProvider>` to apply Wave UI theming. All com
 Access the current theme in any component:
 
 ```tsx
-import { useWaveTheme } from 'wave-ui-react';
+import { useWaveTheme } from 'waveui';
 
 function MyComponent() {
   const { theme, dir } = useWaveTheme();

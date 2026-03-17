@@ -135,7 +135,9 @@ export interface ToasterProps extends React.HTMLAttributes<HTMLDivElement> {
   position?: 'top-right' | 'top-left' | 'bottom-right' | 'bottom-left';
 }
 
-const positionMap: Record<string, string> = {
+type ToastPosition = NonNullable<ToasterProps['position']>;
+
+const positionMap: Record<ToastPosition, string> = {
   'top-right': 'top-4 right-4',
   'top-left': 'top-4 left-4',
   'bottom-right': 'bottom-4 right-4',

@@ -65,7 +65,7 @@ export const CompoundButton = React.forwardRef<
           'focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring',
           sizeClasses[size],
           appearanceClasses[appearance],
-          disabled && 'opacity-50 cursor-not-allowed pointer-events-none',
+          disabled && 'opacity-50 cursor-not-allowed',
           className,
         )}
         {...props}

@@ -18,7 +18,7 @@ export interface TooltipProps extends Omit<React.HTMLAttributes<HTMLSpanElement>
   children: React.ReactElement;
 }
 
-const variantClasses: Record<string, string> = {
+const variantClasses: Record<'dark' | 'light', string> = {
   dark: 'bg-[#242424] text-white',
   light: 'bg-white border border-border text-foreground',
 };
@@ -42,9 +42,9 @@ export const Tooltip = React.forwardRef<HTMLSpanElement, TooltipProps>(
       return () => clearTimeout(timeoutRef.current);
     }, []);
 
-    const child = React.isValidElement(children)
-      ? React.cloneElement(children as React.ReactElement<any>, { 'aria-describedby': visible ? tooltipId : undefined })
-      : children;
+    if (!React.isValidElement(children)) return null;
+
+    const child = React.cloneElement(children, { 'aria-describedby': visible ? tooltipId : undefined } as Partial<typeof children.props>);
 
     return (
       <span

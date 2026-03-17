@@ -57,6 +57,7 @@ export const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
     return (
       <Component
         ref={ref}
+        type={Component === 'button' ? 'button' : undefined}
         disabled={disabled}
         className={cn(
           'rounded font-semibold inline-flex items-center justify-center min-w-[96px] transition-colors',
@@ -64,7 +65,7 @@ export const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
           sizeClasses[size],
           appearanceClasses[appearance],
           icon && children && 'gap-1.5',
-          disabled && 'opacity-50 cursor-not-allowed pointer-events-none',
+          disabled && 'opacity-50 cursor-not-allowed',
           className,
         )}
         {...props}

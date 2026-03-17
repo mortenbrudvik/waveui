@@ -22,7 +22,7 @@ export interface LabelProps extends React.LabelHTMLAttributes<HTMLLabelElement> 
   weight?: 'regular' | 'semibold';
 }
 
-const sizeMap: Record<string, string> = {
+const sizeMap: Record<'small' | 'medium' | 'large', string> = {
   small: 'text-caption-1',
   medium: 'text-body-1',
   large: 'text-body-2',

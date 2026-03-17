@@ -79,7 +79,7 @@ const MenuItem = React.forwardRef<HTMLDivElement, MenuItemProps>(
         onKeyDown={(e) => {
           if (!disabled && (e.key === 'Enter' || e.key === ' ')) {
             e.preventDefault();
-            onClick?.(e as any);
+            (e.currentTarget as HTMLElement).click();
           }
         }}
         {...rest}

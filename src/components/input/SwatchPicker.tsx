@@ -1,6 +1,7 @@
 import * as React from 'react';
 import { cn } from '../../lib/cn';
 import { useControllable } from '../../hooks/useControllable';
+import type { Size } from '../../lib/types';
 
 /** Represents a single color swatch option. */
 export interface SwatchItem {
@@ -27,14 +28,14 @@ export interface SwatchPickerProps extends Omit<React.HTMLAttributes<HTMLDivElem
   /** Size of each swatch button.
    * @default 'medium'
    */
-  size?: 'small' | 'medium' | 'large';
+  size?: Extract<Size, 'small' | 'medium' | 'large'>;
   /** Shape of each swatch button.
    * @default 'circular'
    */
   shape?: 'circular' | 'square' | 'rounded';
 }
 
-const sizeMap = {
+const sizeMap: Record<'small' | 'medium' | 'large', string> = {
   small: 'w-6 h-6',
   medium: 'w-8 h-8',
   large: 'w-10 h-10',

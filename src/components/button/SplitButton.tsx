@@ -4,7 +4,9 @@ import type { Size, Appearance } from '../../lib/types';
 
 /** Properties for the SplitButton component. */
 export interface SplitButtonProps
-  extends Omit<React.ButtonHTMLAttributes<HTMLButtonElement>, 'onClick'> {
+  extends Omit<React.HTMLAttributes<HTMLDivElement>, 'onClick'> {
+  /** Whether the split button is disabled. */
+  disabled?: boolean;
   /** Visual style variant.
    * @default 'outline'
    */
@@ -82,8 +84,9 @@ export const SplitButton = React.forwardRef<HTMLDivElement, SplitButtonProps>(
     ref,
   ) => {
     return (
-      <div ref={ref} role="group" aria-label={props['aria-label']} className={cn('inline-flex', className)}>
+      <div ref={ref} role="group" className={cn('inline-flex', className)} {...props}>
         <button
+          type="button"
           disabled={disabled}
           onClick={onClick}
           className={cn(
@@ -91,9 +94,8 @@ export const SplitButton = React.forwardRef<HTMLDivElement, SplitButtonProps>(
             'focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring',
             sizeClasses[size],
             appearanceClasses[appearance],
-            disabled && 'opacity-50 cursor-not-allowed pointer-events-none',
+            disabled && 'opacity-50 cursor-not-allowed',
           )}
-          {...props}
         >
           {children}
         </button>
@@ -108,7 +110,7 @@ export const SplitButton = React.forwardRef<HTMLDivElement, SplitButtonProps>(
             menuSizeClasses[size],
             appearanceClasses[appearance],
             separatorClasses[appearance],
-            disabled && 'opacity-50 cursor-not-allowed pointer-events-none',
+            disabled && 'opacity-50 cursor-not-allowed',
           )}
         >
           <ChevronDown />

@@ -13,7 +13,7 @@ export interface SkeletonProps extends React.HTMLAttributes<HTMLDivElement> {
   variant?: 'text' | 'circular' | 'rectangular';
 }
 
-const variantClasses: Record<string, string> = {
+const variantClasses: Record<'text' | 'circular' | 'rectangular', string> = {
   text: 'rounded',
   circular: 'rounded-full',
   rectangular: 'rounded',

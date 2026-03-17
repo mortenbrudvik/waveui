@@ -45,7 +45,7 @@ export const Link = React.forwardRef<HTMLAnchorElement, LinkProps>(
           'transition-colors cursor-pointer',
           'focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring',
           variantClasses[variant],
-          disabled && 'opacity-50 cursor-not-allowed pointer-events-none',
+          disabled && 'opacity-50 cursor-not-allowed',
           className,
         )}
         {...props}

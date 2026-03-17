@@ -2,6 +2,13 @@ import * as React from 'react';
 import { cn } from '../../lib/cn';
 import { useId } from '../../hooks/useId';
 
+interface InjectedFieldProps {
+  id?: string;
+  'aria-describedby'?: string;
+  'aria-invalid'?: boolean;
+  'aria-required'?: boolean;
+}
+
 /** Properties for the Field component. */
 export interface FieldProps extends React.HTMLAttributes<HTMLDivElement> {
   /** Label text displayed above the field. */
@@ -46,10 +53,11 @@ export const Field = React.forwardRef<HTMLDivElement, FieldProps>(
         )}
         {React.Children.map(children, (child) =>
           React.isValidElement(child)
-            ? React.cloneElement(child as React.ReactElement<any>, {
+            ? React.cloneElement(child as React.ReactElement<InjectedFieldProps>, {
                 id,
                 'aria-describedby': describedBy,
                 'aria-invalid': error ? true : undefined,
+                'aria-required': required ? true : undefined,
               })
             : child,
         )}
