@@ -38,7 +38,7 @@ npm run format:check   # Prettier check
 ## Styling
 
 - CSS variables defined in `src/styles/tokens.css` (light, dark, high-contrast themes)
-- Tailwind config maps tokens to utility classes in `tailwind.config.ts`
+- Tailwind 4 CSS-first config via `@theme inline` in `src/styles/tokens.css`
 - Never use raw hex values — always reference CSS variables or Tailwind tokens
 - 4px base unit spacing grid
 
