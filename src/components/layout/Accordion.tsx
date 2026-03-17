@@ -119,7 +119,11 @@ const AccordionItem = React.forwardRef<HTMLDivElement, AccordionItemProps>(
           className="w-full flex justify-between items-center py-3 px-4 font-semibold text-body-1"
         >
           {triggerChildren.length > 0
-            ? triggerChildren.map((c) => (React.isValidElement(c) ? c.props.children : c))
+            ? triggerChildren.map((c) =>
+                React.isValidElement(c)
+                  ? (c.props as { children?: React.ReactNode }).children
+                  : c,
+              )
             : value}
           <svg
             width="16"
@@ -145,7 +149,11 @@ const AccordionItem = React.forwardRef<HTMLDivElement, AccordionItemProps>(
             className="px-4 pb-3 text-body-1 text-muted-foreground"
           >
             {panelChildren.length > 0
-              ? panelChildren.map((c) => (React.isValidElement(c) ? c.props.children : c))
+              ? panelChildren.map((c) =>
+                  React.isValidElement(c)
+                    ? (c.props as { children?: React.ReactNode }).children
+                    : c,
+                )
               : null}
             {otherChildren}
           </div>

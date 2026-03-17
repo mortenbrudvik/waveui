@@ -52,7 +52,7 @@ export const TagPicker = React.forwardRef<HTMLDivElement, TagPickerProps>(
     const [isOpen, setIsOpen] = React.useState(false);
     const [focusIndex, setFocusIndex] = React.useState(-1);
     const inputRef = React.useRef<HTMLInputElement>(null);
-    const blurTimeoutRef = React.useRef<ReturnType<typeof setTimeout>>();
+    const blurTimeoutRef = React.useRef<ReturnType<typeof setTimeout>>(undefined);
     const listboxId = useId('tagpicker-listbox');
 
     // Clean up blur timeout on unmount

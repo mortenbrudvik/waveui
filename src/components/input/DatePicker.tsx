@@ -175,7 +175,7 @@ const DatePickerRoot = React.forwardRef<HTMLDivElement, DatePickerProps>(
     const gridId = useId('datepicker-grid');
     const inputRef = React.useRef<HTMLInputElement>(null);
     const gridRef = React.useRef<HTMLTableElement>(null);
-    const blurTimeoutRef = React.useRef<ReturnType<typeof setTimeout>>();
+    const blurTimeoutRef = React.useRef<ReturnType<typeof setTimeout>>(undefined);
 
     const today = new Date();
 

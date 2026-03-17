@@ -130,7 +130,7 @@ const ComboboxRoot = React.forwardRef<HTMLDivElement, ComboboxProps>(
     const [activeIndex, setActiveIndex] = React.useState(-1);
     const listboxId = useId('combobox-listbox');
     const inputRef = React.useRef<HTMLInputElement>(null);
-    const blurTimeoutRef = React.useRef<ReturnType<typeof setTimeout>>();
+    const blurTimeoutRef = React.useRef<ReturnType<typeof setTimeout>>(undefined);
 
     React.useEffect(() => {
       return () => {

@@ -118,7 +118,7 @@ const TimePickerRoot = React.forwardRef<HTMLDivElement, TimePickerProps>(
     const listboxId = useId('timepicker-listbox');
     const inputRef = React.useRef<HTMLInputElement>(null);
     const listRef = React.useRef<HTMLUListElement>(null);
-    const blurTimeoutRef = React.useRef<ReturnType<typeof setTimeout>>();
+    const blurTimeoutRef = React.useRef<ReturnType<typeof setTimeout>>(undefined);
 
     React.useEffect(() => {
       return () => {

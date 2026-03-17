@@ -26,7 +26,7 @@ const variantClasses: Record<'dark' | 'light', string> = {
 export const Tooltip = React.forwardRef<HTMLSpanElement, TooltipProps>(
   ({ content, variant = 'dark', delay = 200, children, className, ...rest }, ref) => {
     const [visible, setVisible] = React.useState(false);
-    const timeoutRef = React.useRef<ReturnType<typeof setTimeout>>();
+    const timeoutRef = React.useRef<ReturnType<typeof setTimeout>>(undefined);
     const tooltipId = useId('tooltip');
 
     const show = () => {

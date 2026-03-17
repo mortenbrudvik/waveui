@@ -52,7 +52,7 @@ const DropdownRoot = React.forwardRef<HTMLDivElement, DropdownProps>(
     const [activeIndex, setActiveIndex] = React.useState(-1);
     const listboxId = useId('dropdown-listbox');
     const buttonRef = React.useRef<HTMLButtonElement>(null);
-    const blurTimeoutRef = React.useRef<ReturnType<typeof setTimeout>>();
+    const blurTimeoutRef = React.useRef<ReturnType<typeof setTimeout>>(undefined);
 
     React.useEffect(() => {
       return () => {
