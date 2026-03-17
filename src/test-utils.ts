@@ -6,7 +6,7 @@ import { axe } from 'vitest-axe';
  * Verify that a component forwards its ref to the correct DOM element.
  */
 export function testForwardRef(
-  Component: React.ForwardRefExoticComponent<any>,
+  Component: React.ComponentType<any>,
   expectedTag: string,
   requiredProps: Record<string, unknown> = {},
 ) {
@@ -23,7 +23,7 @@ export function testForwardRef(
  * Verify that rest/spread props (data-testid, aria-label, etc.) pass through.
  */
 export function testRestSpread(
-  Component: React.ForwardRefExoticComponent<any>,
+  Component: React.ComponentType<any>,
   requiredProps: Record<string, unknown> = {},
 ) {
   it('spreads rest props to DOM element', () => {
@@ -43,7 +43,7 @@ export function testRestSpread(
  * Verify that custom className merges with defaults (doesn't replace them).
  */
 export function testClassName(
-  Component: React.ForwardRefExoticComponent<any>,
+  Component: React.ComponentType<any>,
   requiredProps: Record<string, unknown> = {},
 ) {
   it('merges custom className', () => {
@@ -63,7 +63,7 @@ export function testClassName(
  * Verify that the `as` prop changes the rendered element type.
  */
 export function testPolymorphicAs(
-  Component: React.ForwardRefExoticComponent<any>,
+  Component: React.ComponentType<any>,
   requiredProps: Record<string, unknown> = {},
 ) {
   it('renders as a different element via `as` prop', () => {
@@ -83,7 +83,7 @@ export function testPolymorphicAs(
  * Verify that a component has no accessibility violations (via axe-core).
  */
 export function testA11y(
-  Component: React.ForwardRefExoticComponent<any>,
+  Component: React.ComponentType<any>,
   requiredProps: Record<string, unknown> = {},
 ) {
   it('has no accessibility violations', async () => {

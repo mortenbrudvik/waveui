@@ -1,5 +1,3 @@
-import type * as React from 'react';
-
 /** Component size affecting padding, font size, and spacing. */
 export type Size = 'extra-small' | 'small' | 'medium' | 'large' | 'extra-large';
 
@@ -36,19 +34,3 @@ export type TypographyVariant =
 export type { Slot, SlotObject } from './slot';
 export { resolveSlot, renderSlot } from './slot';
 
-/**
- * Helper type for polymorphic components that accept an `as` prop.
- *
- * @typeParam DefaultElement - The default HTML element type when `as` is not provided.
- * @typeParam Props - Additional component-specific props.
- */
-export type PolymorphicProps<
-  DefaultElement extends React.ElementType = 'div',
-  Props = object,
-> = Props & {
-  /**
-   * Element type to render as. Consumer is responsible for ensuring
-   * props are compatible with the target element.
-   */
-  as?: React.ElementType;
-} & Omit<React.ComponentPropsWithoutRef<DefaultElement>, keyof Props | 'as'>;

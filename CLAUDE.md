@@ -28,7 +28,7 @@ npm run format:check   # Prettier check
 
 ## Key Patterns
 
-- All components use `React.forwardRef` + `displayName`
+- All components accept `ref` as a prop (React 19 ref-as-prop) + set `displayName`
 - Compound components use `Object.assign` (e.g., `Card.Header`)
 - Slot system via `resolveSlot()` / `renderSlot()` for customizable sub-elements
 - `useControllable()` for controlled/uncontrolled state
