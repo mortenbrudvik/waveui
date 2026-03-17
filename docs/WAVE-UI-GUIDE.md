@@ -127,7 +127,7 @@ font-family: 'Segoe UI', 'Segoe UI Web (West European)', -apple-system,
   BlinkMacSystemFont, Roboto, 'Helvetica Neue', sans-serif;
 ```
 
-Tailwind: Use `font-sans` (configured in `tailwind.config.ts`).
+Tailwind: Use `font-sans` (configured via `@theme inline` in `src/styles/tokens.css`).
 
 ### Type Ramp
 
@@ -181,7 +181,7 @@ brand-80: #0f6cbd →  primary     →  button-primary-bg
 
 ### Alias Tokens (CSS Variables)
 
-Defined in `src/styles/tokens.css`, mapped to Tailwind in `tailwind.config.ts`:
+Defined in `src/styles/tokens.css`, mapped to Tailwind via `@theme inline` in the same file:
 
 | Token | Light | Dark | Tailwind | Usage |
 |-------|-------|------|----------|-------|
@@ -345,7 +345,7 @@ For JS-driven animations, check `window.matchMedia('(prefers-reduced-motion: red
 
 ### Codebase Animations
 
-Defined in `tailwind.config.ts`:
+Registered via `@theme inline` in `src/styles/tokens.css`:
 
 | Class | Keyframe | Duration | Usage |
 |-------|----------|----------|-------|
@@ -388,36 +388,36 @@ Defined in `tailwind.config.ts`:
 
 ## 8. Component Architecture
 
-### Pattern 1: forwardRef + displayName
+### Pattern 1: ref-as-prop + displayName
 
-Every component uses `React.forwardRef` and sets `displayName`:
+Every component accepts `ref` as a regular prop (React 19 pattern) and sets `displayName`:
 
 ```tsx
 export interface ButtonProps extends React.ButtonHTMLAttributes<HTMLButtonElement> {
-  appearance?: 'primary' | 'outline' | 'subtle' | 'transparent';
+  appearance?: Appearance;
   size?: Size;
 }
 
-export const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
-  ({ appearance = 'secondary', size = 'medium', className, children, ...rest }, ref) => {
-    return (
-      <button
-        ref={ref}
-        className={cn('...base classes...', className)}
-        {...rest}
-      >
-        {children}
-      </button>
-    );
-  },
-);
+export const Button = (
+  { appearance = 'outline', size = 'medium', className, children, ref, ...props }: ButtonProps & { ref?: React.Ref<HTMLElement> }
+) => {
+  return (
+    <button
+      ref={ref}
+      className={cn('...base classes...', className)}
+      {...props}
+    >
+      {children}
+    </button>
+  );
+};
 Button.displayName = 'Button';
 ```
 
 **Key points**:
 - Props interface extends the native HTML element attributes
-- Destructure with defaults, spread `...rest` onto the element
-- `ref` is forwarded to the root DOM element
+- Destructure with defaults, spread `...props` onto the element
+- `ref` is accepted as a regular prop and passed to the root DOM element (React 19 — no `forwardRef` wrapper needed)
 - `className` is merged using `cn()` — user classes always win
 - `displayName` is always set (required for DevTools and testing)
 
@@ -426,10 +426,14 @@ Button.displayName = 'Button';
 Complex components expose sub-components as static properties:
 
 ```tsx
-const CardRoot = React.forwardRef<HTMLDivElement, CardProps>(/* ... */);
+const CardRoot = ({ className, children, ref, ...props }: CardProps & { ref?: React.Ref<HTMLElement> }) => {
+  /* ... */
+};
 CardRoot.displayName = 'Card';
 
-const CardHeader = React.forwardRef<HTMLDivElement, CardHeaderProps>(/* ... */);
+const CardHeader = ({ className, children, ref, ...props }: CardHeaderProps & { ref?: React.Ref<HTMLElement> }) => {
+  /* ... */
+};
 CardHeader.displayName = 'Card.Header';
 
 export const Card = Object.assign(CardRoot, {
@@ -779,7 +783,7 @@ All design tokens are CSS custom properties. The full set:
 
 ### Tailwind ↔ Token Mapping
 
-Configured in `tailwind.config.ts`, tokens map to Tailwind utilities:
+Configured via `@theme inline` in `src/styles/tokens.css`, tokens map to Tailwind utilities:
 
 ```
 bg-background  → var(--background)
@@ -1065,7 +1069,6 @@ focus-visible:outline focus-visible:outline-2               /* Keyboard-only foc
 | File | Purpose |
 |------|---------|
 | `src/styles/tokens.css` | CSS custom properties (light, dark, high-contrast) |
-| `tailwind.config.ts` | Token → Tailwind mapping |
 | `src/lib/cn.ts` | Class name merge utility |
 | `src/lib/types.ts` | Shared types (Size, Appearance, Status, etc.) |
 | `src/lib/slot.ts` | Slot system for customizable sub-elements |

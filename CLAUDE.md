@@ -46,4 +46,6 @@ npm run format:check   # Prettier check
 
 - Vitest + React Testing Library + jsdom
 - Tests colocated in `__tests__/` directories next to components
-- `src/test-utils.ts` for shared test helpers
+- `src/test-utils.ts` — unified helpers: `testSystemProps()`, `testForwardRef()`, `testA11y()`, `testCompoundExposure()`, `testFocusEvents()`, `testDisplayName()`, `createOverlayTestWrapper()`
+- `vitest-axe` for automated axe-core accessibility checks
+- `npm run test:coverage` for V8 coverage reporting

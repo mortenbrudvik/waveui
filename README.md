@@ -2,6 +2,11 @@
 
 A comprehensive React component library inspired by Fluent UI 2 design language with shadcn/ui-inspired patterns. 65 accessible, composable components built with TypeScript, Tailwind CSS, and a flexible slot system.
 
+## Requirements
+
+- React 19+
+- Node.js 20.19+
+
 ## Installation
 
 ```bash
@@ -231,20 +236,17 @@ Slots accept `ReactNode` for simple cases or `SlotObject` for full control over 
 # Install dependencies
 npm install
 
-# Start dev server
-npm run dev
-
 # Run tests (928 unit tests)
-npx vitest run
+npm test
 
 # Type check
-npx tsc --noEmit
+npm run typecheck
 
 # Build
 npm run build
 
-# Launch Storybook
-npx storybook dev -p 6006
+# Launch Storybook dev server
+npm run dev
 ```
 
 ## Storybook

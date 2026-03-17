@@ -5,6 +5,41 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.4.0] - 2026-03-17
+
+### Changed (Breaking)
+
+- **React**: Peer dependency narrowed from `^18.0.0 || ^19.0.0` to `^19.0.0` — React 18 support dropped
+- **Node.js**: Minimum version raised from `>=18.0.0` to `>=20.19.0`
+- **tailwind-merge**: Upgraded from v2 to v3 (runtime dependency, affects consumers)
+
+### Changed (Infrastructure)
+
+- **Vite** 6 → 8 (build now uses Rolldown; `rolldownOptions` replaces `rollupOptions`)
+- **@vitejs/plugin-react** 4 → 6 (Oxc replaces Babel)
+- **Vitest** 3 → 4
+- **Tailwind CSS** 3 → 4 (CSS-first config via `@theme inline` in `tokens.css`; deleted `tailwind.config.ts` and `postcss.config.js`)
+- **Storybook** 8 → 10
+- **jsdom** 25 → 29
+- **@types/react** and **@types/react-dom** upgraded to v19
+
+### Refactored
+
+- All 65 components: removed `React.forwardRef` wrappers, adopted React 19 ref-as-prop pattern
+- Removed dead `PolymorphicProps` type from `src/lib/types.ts`
+
+### Added
+
+- **Testing overhaul**: Unified test helpers in `src/test-utils.ts` — `testSystemProps()`, `testCompoundExposure()`, `testFocusEvents()`, `testDisplayName()`, `createOverlayTestWrapper()`
+- **vitest-axe** for automated axe-core accessibility testing
+- **@vitest/coverage-v8** for test coverage reporting (`npm run test:coverage`)
+
+### Removed
+
+- `tailwind.config.ts` (replaced by `@theme inline` in CSS)
+- `postcss.config.js` (replaced by `@tailwindcss/vite` plugin)
+- `autoprefixer` and `postcss` dev dependencies
+
 ## [0.3.0] - 2026-03-17
 
 ### Added
