@@ -126,28 +126,25 @@ export interface DatePickerProps extends Omit<
   onOpenChange?: (open: boolean) => void;
 }
 
-const DatePickerRoot = React.forwardRef<HTMLDivElement, DatePickerProps>(
-  (
-    {
-      value: controlledValue,
-      defaultValue = null,
-      onChange,
-      formatDate = defaultFormatDate,
-      parseDate = defaultParseDate,
-      minDate,
-      maxDate,
-      disabledDates,
-      placeholder = 'Select a date',
-      disabled = false,
-      clearable = false,
-      firstDayOfWeek = 0,
-      open: controlledOpen,
-      onOpenChange,
-      className,
-      ...rest
-    },
-    ref,
-  ) => {
+const DatePickerRoot = ({
+  value: controlledValue,
+  defaultValue = null,
+  onChange,
+  formatDate = defaultFormatDate,
+  parseDate = defaultParseDate,
+  minDate,
+  maxDate,
+  disabledDates,
+  placeholder = 'Select a date',
+  disabled = false,
+  clearable = false,
+  firstDayOfWeek = 0,
+  open: controlledOpen,
+  onOpenChange,
+  className,
+  ref,
+  ...rest
+}: DatePickerProps & { ref?: React.Ref<HTMLDivElement> }) => {
     const [selectedDate, setSelectedDate] = useControllable<Date | null>(
       controlledValue,
       defaultValue,
@@ -175,7 +172,7 @@ const DatePickerRoot = React.forwardRef<HTMLDivElement, DatePickerProps>(
     const gridId = useId('datepicker-grid');
     const inputRef = React.useRef<HTMLInputElement>(null);
     const gridRef = React.useRef<HTMLTableElement>(null);
-    const blurTimeoutRef = React.useRef<ReturnType<typeof setTimeout>>();
+    const blurTimeoutRef = React.useRef<ReturnType<typeof setTimeout>>(undefined);
 
     const today = new Date();
 
@@ -512,8 +509,7 @@ const DatePickerRoot = React.forwardRef<HTMLDivElement, DatePickerProps>(
         )}
       </div>
     );
-  },
-);
+};
 DatePickerRoot.displayName = 'DatePicker';
 
 export const DatePicker = DatePickerRoot;

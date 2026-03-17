@@ -28,19 +28,14 @@ export interface AccordionProps extends React.HTMLAttributes<HTMLDivElement> {
   onOpenItemsChange?: (openItems: string[]) => void;
 }
 
-const AccordionRoot = React.forwardRef<HTMLDivElement, AccordionProps>(
-  (
+const AccordionRoot = (
     {
       type = 'single',
       openItems: controlledOpenItems,
       defaultOpenItems = [],
       onOpenItemsChange,
       className,
-      children,
-      ...rest
-    },
-    ref,
-  ) => {
+      children, ref, ...rest }: AccordionProps & { ref?: React.Ref<HTMLDivElement> }) => {
     const [openItems, setOpenItems] = useControllable(
       controlledOpenItems,
       defaultOpenItems,
@@ -66,8 +61,7 @@ const AccordionRoot = React.forwardRef<HTMLDivElement, AccordionProps>(
         </div>
       </AccordionContext.Provider>
     );
-  },
-);
+  };
 AccordionRoot.displayName = 'Accordion';
 
 /** Properties for the AccordionItem sub-component. */
@@ -86,8 +80,7 @@ const getChildrenByType = (children: React.ReactNode, type: React.ElementType) =
   return result;
 };
 
-const AccordionItem = React.forwardRef<HTMLDivElement, AccordionItemProps>(
-  ({ value, className, children, ...rest }, ref) => {
+const AccordionItem = ({ value, className, children, ref, ...rest }: AccordionItemProps & { ref?: React.Ref<HTMLDivElement> }) => {
     const { openItems, toggle } = React.useContext(AccordionContext);
     const isOpen = openItems.includes(value);
 
@@ -119,7 +112,11 @@ const AccordionItem = React.forwardRef<HTMLDivElement, AccordionItemProps>(
           className="w-full flex justify-between items-center py-3 px-4 font-semibold text-body-1"
         >
           {triggerChildren.length > 0
-            ? triggerChildren.map((c) => (React.isValidElement(c) ? c.props.children : c))
+            ? triggerChildren.map((c) =>
+                React.isValidElement(c)
+                  ? (c.props as { children?: React.ReactNode }).children
+                  : c,
+              )
             : value}
           <svg
             width="16"
@@ -145,37 +142,36 @@ const AccordionItem = React.forwardRef<HTMLDivElement, AccordionItemProps>(
             className="px-4 pb-3 text-body-1 text-muted-foreground"
           >
             {panelChildren.length > 0
-              ? panelChildren.map((c) => (React.isValidElement(c) ? c.props.children : c))
+              ? panelChildren.map((c) =>
+                  React.isValidElement(c)
+                    ? (c.props as { children?: React.ReactNode }).children
+                    : c,
+                )
               : null}
             {otherChildren}
           </div>
         )}
       </div>
     );
-  },
-);
+  };
 AccordionItem.displayName = 'AccordionItem';
 
-const AccordionTrigger = React.forwardRef<HTMLSpanElement, React.HTMLAttributes<HTMLSpanElement>>(
-  ({ children, ...rest }, ref) => {
-    return (
-      <span ref={ref} {...rest}>
-        {children}
-      </span>
-    );
-  },
-);
+const AccordionTrigger = ({ children, ref, ...rest }: React.HTMLAttributes<HTMLSpanElement> & { ref?: React.Ref<HTMLSpanElement> }) => {
+  return (
+    <span ref={ref} {...rest}>
+      {children}
+    </span>
+  );
+};
 AccordionTrigger.displayName = 'AccordionTrigger';
 
-const AccordionPanel = React.forwardRef<HTMLDivElement, React.HTMLAttributes<HTMLDivElement>>(
-  ({ children, ...rest }, ref) => {
-    return (
-      <div ref={ref} {...rest}>
-        {children}
-      </div>
-    );
-  },
-);
+const AccordionPanel = ({ children, ref, ...rest }: React.HTMLAttributes<HTMLDivElement> & { ref?: React.Ref<HTMLDivElement> }) => {
+  return (
+    <div ref={ref} {...rest}>
+      {children}
+    </div>
+  );
+};
 AccordionPanel.displayName = 'AccordionPanel';
 
 export const Accordion = Object.assign(AccordionRoot, {

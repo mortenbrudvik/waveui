@@ -58,8 +58,7 @@ const themeClassMap: Record<WaveTheme, string> = {
  *   on a wrapper `<div>` so that CSS custom properties from `tokens.css` take effect.
  * - Provides theme and dir values via React context for components that need them.
  */
-export const WaveProvider = React.forwardRef<HTMLDivElement, WaveProviderProps>(
-  ({ theme = 'light', dir = 'ltr', children, className, ...rest }, ref) => {
+export const WaveProvider = ({ theme = 'light', dir = 'ltr', children, className, ref, ...rest }: WaveProviderProps & { ref?: React.Ref<HTMLDivElement> }) => {
     if (process.env.NODE_ENV !== 'production') {
       if (theme && !themeClassMap[theme as keyof typeof themeClassMap]) {
         console.warn(
@@ -77,7 +76,6 @@ export const WaveProvider = React.forwardRef<HTMLDivElement, WaveProviderProps>(
         </div>
       </WaveContext.Provider>
     );
-  },
-);
+  };
 
 WaveProvider.displayName = 'WaveProvider';

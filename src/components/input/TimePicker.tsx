@@ -89,8 +89,7 @@ export interface TimePickerProps extends Omit<React.HTMLAttributes<HTMLDivElemen
   clearable?: boolean;
 }
 
-const TimePickerRoot = React.forwardRef<HTMLDivElement, TimePickerProps>(
-  (
+const TimePickerRoot = (
     {
       value: controlledValue,
       defaultValue = '',
@@ -102,11 +101,7 @@ const TimePickerRoot = React.forwardRef<HTMLDivElement, TimePickerProps>(
       placeholder = 'Select a time',
       disabled = false,
       clearable = false,
-      className,
-      ...rest
-    },
-    ref,
-  ) => {
+      className, ref, ...rest }: TimePickerProps & { ref?: React.Ref<HTMLDivElement> }) => {
     const [selectedValue, setSelectedValue] = useControllable(
       controlledValue,
       defaultValue,
@@ -118,7 +113,7 @@ const TimePickerRoot = React.forwardRef<HTMLDivElement, TimePickerProps>(
     const listboxId = useId('timepicker-listbox');
     const inputRef = React.useRef<HTMLInputElement>(null);
     const listRef = React.useRef<HTMLUListElement>(null);
-    const blurTimeoutRef = React.useRef<ReturnType<typeof setTimeout>>();
+    const blurTimeoutRef = React.useRef<ReturnType<typeof setTimeout>>(undefined);
 
     React.useEffect(() => {
       return () => {
@@ -284,8 +279,7 @@ const TimePickerRoot = React.forwardRef<HTMLDivElement, TimePickerProps>(
         )}
       </div>
     );
-  },
-);
+  };
 TimePickerRoot.displayName = 'TimePicker';
 
 export const TimePicker = TimePickerRoot;

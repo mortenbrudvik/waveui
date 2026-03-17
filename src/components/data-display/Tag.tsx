@@ -17,11 +17,8 @@ export interface TagProps extends React.HTMLAttributes<HTMLElement> {
   dismissIcon?: Slot<'span'>;
 }
 
-export const Tag = React.forwardRef<HTMLElement, TagProps>(
-  (
-    { as: Component = 'span', dismissible, onDismiss, dismissIcon, className, children, ...props },
-    ref,
-  ) => {
+export const Tag = (
+    { as: Component = 'span', dismissible, onDismiss, dismissIcon, className, children, ref, ...props }: TagProps & { ref?: React.Ref<HTMLElement> }) => {
     const defaultDismissButton = (
       <button
         type="button"
@@ -54,7 +51,6 @@ export const Tag = React.forwardRef<HTMLElement, TagProps>(
         {dismissible && (dismissIcon ? renderSlot(dismissIcon, 'span') : defaultDismissButton)}
       </Component>
     );
-  },
-);
+  };
 
 Tag.displayName = 'Tag';

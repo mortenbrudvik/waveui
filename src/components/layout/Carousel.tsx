@@ -45,21 +45,18 @@ export interface CarouselProps extends React.HTMLAttributes<HTMLDivElement> {
 /** Properties for the CarouselItem sub-component. */
 export type CarouselItemProps = React.HTMLAttributes<HTMLDivElement>;
 
-const CarouselRoot = React.forwardRef<HTMLDivElement, CarouselProps>(
-  (
-    {
-      value: controlledValue,
-      defaultValue = 0,
-      onValueChange,
-      autoPlay = false,
-      autoPlayInterval = 5000,
-      loop = false,
-      className,
-      children,
-      ...rest
-    },
-    ref,
-  ) => {
+const CarouselRoot = ({
+  value: controlledValue,
+  defaultValue = 0,
+  onValueChange,
+  autoPlay = false,
+  autoPlayInterval = 5000,
+  loop = false,
+  className,
+  children,
+  ref,
+  ...rest
+}: CarouselProps & { ref?: React.Ref<HTMLDivElement> }) => {
     const [activeIndex, setActiveIndex] = useControllable(
       controlledValue,
       defaultValue,
@@ -191,19 +188,16 @@ const CarouselRoot = React.forwardRef<HTMLDivElement, CarouselProps>(
         </div>
       </CarouselContext.Provider>
     );
-  },
-);
+};
 CarouselRoot.displayName = 'Carousel';
 
-const CarouselItem = React.forwardRef<HTMLDivElement, CarouselItemProps>(
-  ({ className, children, ...rest }, ref) => {
+const CarouselItem = ({ className, children, ref, ...rest }: CarouselItemProps & { ref?: React.Ref<HTMLDivElement> }) => {
     return (
       <div ref={ref} className={cn('p-4', className)} {...rest}>
         {children}
       </div>
     );
-  },
-);
+  };
 CarouselItem.displayName = 'CarouselItem';
 
 export const Carousel = Object.assign(CarouselRoot, {

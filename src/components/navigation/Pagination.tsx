@@ -160,8 +160,7 @@ const ChevronDoubleRightIcon = () => (
   </svg>
 );
 
-const Pagination = React.forwardRef<HTMLElement, PaginationProps>(
-  (
+const Pagination = (
     {
       currentPage: controlledPage,
       defaultCurrentPage = 1,
@@ -173,11 +172,7 @@ const Pagination = React.forwardRef<HTMLElement, PaginationProps>(
       showFirstLast = false,
       disabled = false,
       size = 'medium',
-      className,
-      ...rest
-    },
-    ref,
-  ) => {
+      className, ref, ...rest }: PaginationProps & { ref?: React.Ref<HTMLElement> }) => {
     const [currentPage, setCurrentPage] = useControllable(
       controlledPage,
       defaultCurrentPage,
@@ -313,8 +308,7 @@ const Pagination = React.forwardRef<HTMLElement, PaginationProps>(
         </ol>
       </nav>
     );
-  },
-);
+  };
 Pagination.displayName = 'Pagination';
 
 export { Pagination };

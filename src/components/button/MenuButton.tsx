@@ -53,43 +53,39 @@ const DefaultChevronDown = () => (
   </svg>
 );
 
-export const MenuButton = React.forwardRef<HTMLButtonElement, MenuButtonProps>(
-  (
-    {
-      appearance = 'outline',
-      size = 'medium',
-      icon,
-      menuIcon,
-      expanded,
-      disabled,
-      className,
-      children,
-      ...props
-    },
-    ref,
-  ) => {
-    return (
-      <button
-        ref={ref}
-        disabled={disabled}
-        aria-haspopup="menu"
-        aria-expanded={expanded}
-        className={cn(
-          'rounded font-semibold inline-flex items-center justify-center min-w-[96px] transition-colors gap-1.5',
-          'focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring',
-          sizeClasses[size],
-          appearanceClasses[appearance],
-          disabled && 'opacity-50 cursor-not-allowed',
-          className,
-        )}
-        {...props}
-      >
-        {renderSlot(icon, 'span', 'shrink-0')}
-        {children}
-        {menuIcon != null ? renderSlot(menuIcon, 'span', 'shrink-0') : <DefaultChevronDown />}
-      </button>
-    );
-  },
-);
+export const MenuButton = ({
+  appearance = 'outline',
+  size = 'medium',
+  icon,
+  menuIcon,
+  expanded,
+  disabled,
+  className,
+  children,
+  ref,
+  ...props
+}: MenuButtonProps & { ref?: React.Ref<HTMLButtonElement> }) => {
+  return (
+    <button
+      ref={ref}
+      disabled={disabled}
+      aria-haspopup="menu"
+      aria-expanded={expanded}
+      className={cn(
+        'rounded font-semibold inline-flex items-center justify-center min-w-[96px] transition-colors gap-1.5',
+        'focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring',
+        sizeClasses[size],
+        appearanceClasses[appearance],
+        disabled && 'opacity-50 cursor-not-allowed',
+        className,
+      )}
+      {...props}
+    >
+      {renderSlot(icon, 'span', 'shrink-0')}
+      {children}
+      {menuIcon != null ? renderSlot(menuIcon, 'span', 'shrink-0') : <DefaultChevronDown />}
+    </button>
+  );
+};
 
 MenuButton.displayName = 'MenuButton';

@@ -74,8 +74,7 @@ export interface GridProps extends React.HTMLAttributes<HTMLDivElement> {
   justify?: 'start' | 'center' | 'end' | 'stretch';
 }
 
-const GridRoot = React.forwardRef<HTMLDivElement, GridProps>(
-  (
+const GridRoot = (
     {
       as: Component = 'div',
       columns,
@@ -87,11 +86,7 @@ const GridRoot = React.forwardRef<HTMLDivElement, GridProps>(
       justify,
       className,
       style,
-      children,
-      ...props
-    },
-    ref,
-  ) => {
+      children, ref, ...props }: GridProps & { ref?: React.Ref<HTMLElement> }) => {
     const rowStyle = rows ? { gridTemplateRows: `repeat(${rows}, minmax(0, 1fr))` } : undefined;
 
     return (
@@ -113,8 +108,7 @@ const GridRoot = React.forwardRef<HTMLDivElement, GridProps>(
         {children}
       </Component>
     );
-  },
-);
+  };
 GridRoot.displayName = 'Grid';
 
 export const Grid = GridRoot;

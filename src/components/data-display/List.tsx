@@ -44,8 +44,7 @@ export interface ListItemProps extends React.HTMLAttributes<HTMLLIElement> {
   action?: React.ReactNode;
 }
 
-const ListRoot = React.forwardRef<HTMLUListElement, ListProps>(
-  (
+const ListRoot = (
     {
       selectable = false,
       selectionMode = 'single',
@@ -53,11 +52,7 @@ const ListRoot = React.forwardRef<HTMLUListElement, ListProps>(
       defaultSelectedItems = [],
       onSelectionChange,
       className,
-      children,
-      ...rest
-    },
-    ref,
-  ) => {
+      children, ref, ...rest }: ListProps & { ref?: React.Ref<HTMLUListElement> }) => {
     const [selectedItems, setSelectedItems] = useControllable(
       controlledSelected,
       defaultSelectedItems,
@@ -117,51 +112,48 @@ const ListRoot = React.forwardRef<HTMLUListElement, ListProps>(
         </ul>
       </ListContext.Provider>
     );
-  },
-);
+  };
 ListRoot.displayName = 'List';
 
-const ListItem = React.forwardRef<HTMLLIElement, ListItemProps>(
-  ({ value, action, className, children, onClick, ...rest }, ref) => {
-    const { selectable, selectedItems, toggleItem } = React.useContext(ListContext);
-    const isSelected = value ? selectedItems.includes(value) : false;
+const ListItem = ({ value, action, className, children, onClick, ref, ...rest }: ListItemProps & { ref?: React.Ref<HTMLLIElement> }) => {
+  const { selectable, selectedItems, toggleItem } = React.useContext(ListContext);
+  const isSelected = value ? selectedItems.includes(value) : false;
 
-    const handleClick = (e: React.MouseEvent<HTMLLIElement>) => {
-      if (selectable && value) {
-        toggleItem(value);
-      }
-      onClick?.(e);
-    };
+  const handleClick = (e: React.MouseEvent<HTMLLIElement>) => {
+    if (selectable && value) {
+      toggleItem(value);
+    }
+    onClick?.(e);
+  };
 
-    const handleKeyDown = (e: React.KeyboardEvent<HTMLLIElement>) => {
-      if (selectable && value && (e.key === 'Enter' || e.key === ' ')) {
-        e.preventDefault();
-        toggleItem(value);
-      }
-    };
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLLIElement>) => {
+    if (selectable && value && (e.key === 'Enter' || e.key === ' ')) {
+      e.preventDefault();
+      toggleItem(value);
+    }
+  };
 
-    return (
-      <li
-        ref={ref}
-        role={selectable ? 'option' : 'listitem'}
-        tabIndex={selectable ? 0 : undefined}
-        aria-selected={selectable ? isSelected : undefined}
-        onClick={handleClick}
-        onKeyDown={handleKeyDown}
-        className={cn(
-          'flex items-center px-4 py-2 text-body-1 border-b border-border',
-          selectable && 'cursor-pointer hover:bg-[#f5f5f5]',
-          isSelected && 'bg-[#f0f0f0]',
-          className,
-        )}
-        {...rest}
-      >
-        <span className="flex-1">{children}</span>
-        {action && <span className="flex-shrink-0 ml-2">{action}</span>}
-      </li>
-    );
-  },
-);
+  return (
+    <li
+      ref={ref}
+      role={selectable ? 'option' : 'listitem'}
+      tabIndex={selectable ? 0 : undefined}
+      aria-selected={selectable ? isSelected : undefined}
+      onClick={handleClick}
+      onKeyDown={handleKeyDown}
+      className={cn(
+        'flex items-center px-4 py-2 text-body-1 border-b border-border',
+        selectable && 'cursor-pointer hover:bg-[#f5f5f5]',
+        isSelected && 'bg-[#f0f0f0]',
+        className,
+      )}
+      {...rest}
+    >
+      <span className="flex-1">{children}</span>
+      {action && <span className="flex-shrink-0 ml-2">{action}</span>}
+    </li>
+  );
+};
 ListItem.displayName = 'ListItem';
 
 export const List = Object.assign(ListRoot, {

@@ -64,8 +64,7 @@ function StarIcon({ filled, className }: { filled: boolean; className?: string }
   );
 }
 
-export const Rating = React.forwardRef<HTMLDivElement, RatingProps>(
-  (
+export const Rating = (
     {
       value: valueProp,
       defaultValue,
@@ -73,11 +72,7 @@ export const Rating = React.forwardRef<HTMLDivElement, RatingProps>(
       max = 5,
       size = 'medium',
       disabled = false,
-      className,
-      ...rest
-    },
-    ref,
-  ) => {
+      className, ref, ...rest }: RatingProps & { ref?: React.Ref<HTMLDivElement> }) => {
     const [value, setValue] = useControllable(valueProp, defaultValue ?? 0, onChange);
     const [hovered, setHovered] = React.useState(0);
 
@@ -135,12 +130,10 @@ export const Rating = React.forwardRef<HTMLDivElement, RatingProps>(
         })}
       </div>
     );
-  },
-);
+  };
 Rating.displayName = 'Rating';
 
-export const RatingDisplay = React.forwardRef<HTMLDivElement, RatingDisplayProps>(
-  ({ value, max = 5, size = 'medium', className, ...rest }, ref) => {
+export const RatingDisplay = ({ value, max = 5, size = 'medium', className, ref, ...rest }: RatingDisplayProps & { ref?: React.Ref<HTMLDivElement> }) => {
     const starSize = sizeMap[size];
 
     return (
@@ -161,6 +154,5 @@ export const RatingDisplay = React.forwardRef<HTMLDivElement, RatingDisplayProps
         ))}
       </div>
     );
-  },
-);
+  };
 RatingDisplay.displayName = 'RatingDisplay';

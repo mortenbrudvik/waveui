@@ -24,8 +24,7 @@ export interface MenuItemProps extends React.HTMLAttributes<HTMLDivElement> {
 /** Properties for the MenuDivider sub-component. */
 export type MenuDividerProps = React.HTMLAttributes<HTMLDivElement>;
 
-const MenuRoot = React.forwardRef<HTMLDivElement, MenuProps>(
-  ({ children, className, ...rest }, ref) => {
+const MenuRoot = ({ children, className, ref, ...rest }: MenuProps & { ref?: React.Ref<HTMLDivElement> }) => {
     const handleKeyDown = (e: React.KeyboardEvent) => {
       const items = e.currentTarget.querySelectorAll<HTMLElement>(
         '[role="menuitem"]:not([aria-disabled="true"])',
@@ -65,44 +64,40 @@ const MenuRoot = React.forwardRef<HTMLDivElement, MenuProps>(
         {children}
       </div>
     );
-  },
-);
+  };
 MenuRoot.displayName = 'Menu';
 
-const MenuItem = React.forwardRef<HTMLDivElement, MenuItemProps>(
-  ({ icon, shortcut, disabled, onClick, children, className, ...rest }, ref) => {
-    return (
-      <div
-        ref={ref}
-        role="menuitem"
-        tabIndex={-1}
-        aria-disabled={disabled || undefined}
-        onClick={disabled ? undefined : onClick}
-        onKeyDown={(e) => {
-          if (!disabled && (e.key === 'Enter' || e.key === ' ')) {
-            e.preventDefault();
-            (e.currentTarget as HTMLElement).click();
-          }
-        }}
-        {...rest}
-        className={cn(
-          'px-3 py-1.5 text-body-1 hover:bg-[#f0f0f0] cursor-pointer flex items-center gap-2',
-          disabled && 'opacity-50 pointer-events-none',
-          className,
-        )}
-      >
-        {icon !== undefined &&
-          renderSlot(icon, 'span', 'flex-shrink-0 w-5 h-5 flex items-center justify-center')}
-        <span className="flex-1">{children}</span>
-        {shortcut && <span className="text-caption-1 text-muted-foreground ml-4">{shortcut}</span>}
-      </div>
-    );
-  },
-);
+const MenuItem = ({ icon, shortcut, disabled, onClick, children, className, ref, ...rest }: MenuItemProps & { ref?: React.Ref<HTMLDivElement> }) => {
+  return (
+    <div
+      ref={ref}
+      role="menuitem"
+      tabIndex={-1}
+      aria-disabled={disabled || undefined}
+      onClick={disabled ? undefined : onClick}
+      onKeyDown={(e) => {
+        if (!disabled && (e.key === 'Enter' || e.key === ' ')) {
+          e.preventDefault();
+          (e.currentTarget as HTMLElement).click();
+        }
+      }}
+      {...rest}
+      className={cn(
+        'px-3 py-1.5 text-body-1 hover:bg-[#f0f0f0] cursor-pointer flex items-center gap-2',
+        disabled && 'opacity-50 pointer-events-none',
+        className,
+      )}
+    >
+      {icon !== undefined &&
+        renderSlot(icon, 'span', 'flex-shrink-0 w-5 h-5 flex items-center justify-center')}
+      <span className="flex-1">{children}</span>
+      {shortcut && <span className="text-caption-1 text-muted-foreground ml-4">{shortcut}</span>}
+    </div>
+  );
+};
 MenuItem.displayName = 'MenuItem';
 
-const MenuDivider = React.forwardRef<HTMLDivElement, MenuDividerProps>(
-  ({ className, ...rest }, ref) => {
+const MenuDivider = ({ className, ref, ...rest }: MenuDividerProps & { ref?: React.Ref<HTMLDivElement> }) => {
     return (
       <div
         ref={ref}
@@ -111,8 +106,7 @@ const MenuDivider = React.forwardRef<HTMLDivElement, MenuDividerProps>(
         className={cn('border-t border-border my-1', className)}
       />
     );
-  },
-);
+  };
 MenuDivider.displayName = 'MenuDivider';
 
 export const Menu = Object.assign(MenuRoot, {

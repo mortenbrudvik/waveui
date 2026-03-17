@@ -15,8 +15,7 @@ export interface OptionProps extends React.LiHTMLAttributes<HTMLLIElement> {
   disabled?: boolean;
 }
 
-export const Option = React.forwardRef<HTMLLIElement, OptionProps>(
-  ({ value, disabled = false, className, children, ...rest }, ref) => {
+export const Option = ({ value, disabled = false, className, children, ref, ...rest }: OptionProps & { ref?: React.Ref<HTMLLIElement> }) => {
     return (
       <li
         ref={ref}
@@ -34,8 +33,7 @@ export const Option = React.forwardRef<HTMLLIElement, OptionProps>(
         {children ?? value}
       </li>
     );
-  },
-);
+  };
 Option.displayName = 'Option';
 
 /** Properties for the OptionGroup component used to group options. */
@@ -44,16 +42,14 @@ export interface OptionGroupProps extends React.HTMLAttributes<HTMLDivElement> {
   label: string;
 }
 
-export const OptionGroup = React.forwardRef<HTMLDivElement, OptionGroupProps>(
-  ({ label, className, children, ...rest }, ref) => {
+export const OptionGroup = ({ label, className, children, ref, ...rest }: OptionGroupProps & { ref?: React.Ref<HTMLDivElement> }) => {
     return (
       <div ref={ref} role="group" aria-label={label} className={cn(className)} {...rest}>
         <div className="px-3 py-1 text-caption-1 font-semibold text-muted-foreground">{label}</div>
         <ul role="presentation">{children}</ul>
       </div>
     );
-  },
-);
+  };
 OptionGroup.displayName = 'OptionGroup';
 
 /* ------------------------------------------------------------------ */
@@ -98,21 +94,18 @@ export interface ComboboxProps extends Omit<React.HTMLAttributes<HTMLDivElement>
   freeform?: boolean;
 }
 
-const ComboboxRoot = React.forwardRef<HTMLDivElement, ComboboxProps>(
-  (
-    {
-      value: controlledValue,
-      defaultValue = '',
-      onOptionSelect,
-      placeholder,
-      disabled = false,
-      freeform = false,
-      className,
-      children,
-      ...rest
-    },
-    ref,
-  ) => {
+const ComboboxRoot = ({
+  value: controlledValue,
+  defaultValue = '',
+  onOptionSelect,
+  placeholder,
+  disabled = false,
+  freeform = false,
+  className,
+  children,
+  ref,
+  ...rest
+}: ComboboxProps & { ref?: React.Ref<HTMLDivElement> }) => {
     const [selectedValue, setSelectedValue] = useControllable(
       controlledValue,
       defaultValue,
@@ -130,7 +123,7 @@ const ComboboxRoot = React.forwardRef<HTMLDivElement, ComboboxProps>(
     const [activeIndex, setActiveIndex] = React.useState(-1);
     const listboxId = useId('combobox-listbox');
     const inputRef = React.useRef<HTMLInputElement>(null);
-    const blurTimeoutRef = React.useRef<ReturnType<typeof setTimeout>>();
+    const blurTimeoutRef = React.useRef<ReturnType<typeof setTimeout>>(undefined);
 
     React.useEffect(() => {
       return () => {
@@ -265,8 +258,7 @@ const ComboboxRoot = React.forwardRef<HTMLDivElement, ComboboxProps>(
         </div>
       </ComboboxContext.Provider>
     );
-  },
-);
+};
 ComboboxRoot.displayName = 'Combobox';
 
 export const Combobox = Object.assign(ComboboxRoot, {

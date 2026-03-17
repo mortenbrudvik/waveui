@@ -19,8 +19,7 @@ export interface CardProps extends React.HTMLAttributes<HTMLDivElement> {
   onSelect?: () => void;
 }
 
-const CardRoot = React.forwardRef<HTMLDivElement, CardProps>(
-  ({ as: Component = 'div', selected, onSelect, className, children, ...props }, ref) => {
+const CardRoot = ({ as: Component = 'div', selected, onSelect, className, children, ref, ...props }: CardProps & { ref?: React.Ref<HTMLElement> }) => {
     return (
       <CardContext.Provider value={{ selected }}>
         <Component
@@ -38,8 +37,7 @@ const CardRoot = React.forwardRef<HTMLDivElement, CardProps>(
         </Component>
       </CardContext.Provider>
     );
-  },
-);
+  };
 CardRoot.displayName = 'Card';
 
 /** Properties for the CardHeader sub-component. */
@@ -54,17 +52,15 @@ export interface CardHeaderProps extends Omit<React.HTMLAttributes<HTMLDivElemen
   subtitle?: React.ReactNode;
 }
 
-const CardHeader = React.forwardRef<HTMLDivElement, CardHeaderProps>(
-  ({ as: Component = 'div', title, subtitle, className, children, ...props }, ref) => {
-    return (
-      <Component ref={ref} className={cn('p-4', className)} {...props}>
-        {title && <div className="text-subtitle-1">{title}</div>}
-        {subtitle && <div className="text-caption-1 text-muted-foreground">{subtitle}</div>}
-        {children}
-      </Component>
-    );
-  },
-);
+const CardHeader = ({ as: Component = 'div', title, subtitle, className, children, ref, ...props }: CardHeaderProps & { ref?: React.Ref<HTMLElement> }) => {
+  return (
+    <Component ref={ref} className={cn('p-4', className)} {...props}>
+      {title && <div className="text-subtitle-1">{title}</div>}
+      {subtitle && <div className="text-caption-1 text-muted-foreground">{subtitle}</div>}
+      {children}
+    </Component>
+  );
+};
 CardHeader.displayName = 'CardHeader';
 
 /** Properties for the CardBody sub-component. */
@@ -75,11 +71,9 @@ export interface CardBodyProps extends React.HTMLAttributes<HTMLDivElement> {
   as?: React.ElementType;
 }
 
-const CardBody = React.forwardRef<HTMLDivElement, CardBodyProps>(
-  ({ as: Component = 'div', className, ...props }, ref) => {
+const CardBody = ({ as: Component = 'div', className, ref, ...props }: CardBodyProps & { ref?: React.Ref<HTMLElement> }) => {
     return <Component ref={ref} className={cn('p-4 pt-0', className)} {...props} />;
-  },
-);
+  };
 CardBody.displayName = 'CardBody';
 
 /** Properties for the CardFooter sub-component. */
@@ -90,8 +84,7 @@ export interface CardFooterProps extends React.HTMLAttributes<HTMLDivElement> {
   as?: React.ElementType;
 }
 
-const CardFooter = React.forwardRef<HTMLDivElement, CardFooterProps>(
-  ({ as: Component = 'div', className, ...props }, ref) => {
+const CardFooter = ({ as: Component = 'div', className, ref, ...props }: CardFooterProps & { ref?: React.Ref<HTMLElement> }) => {
     return (
       <Component
         ref={ref}
@@ -99,8 +92,7 @@ const CardFooter = React.forwardRef<HTMLDivElement, CardFooterProps>(
         {...props}
       />
     );
-  },
-);
+  };
 CardFooter.displayName = 'CardFooter';
 
 export const Card = Object.assign(CardRoot, {

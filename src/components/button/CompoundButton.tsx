@@ -36,8 +36,7 @@ const appearanceClasses: Record<Appearance, string> = {
   transparent: 'bg-transparent text-primary hover:underline',
 };
 
-export const CompoundButton = React.forwardRef<HTMLButtonElement, CompoundButtonProps>(
-  (
+export const CompoundButton = (
     {
       as,
       secondaryText,
@@ -45,11 +44,7 @@ export const CompoundButton = React.forwardRef<HTMLButtonElement, CompoundButton
       size = 'medium',
       disabled,
       className,
-      children,
-      ...props
-    },
-    ref,
-  ) => {
+      children, ref, ...props }: CompoundButtonProps & { ref?: React.Ref<HTMLElement> }) => {
     const Component = as || 'button';
     return (
       <Component
@@ -78,7 +73,6 @@ export const CompoundButton = React.forwardRef<HTMLButtonElement, CompoundButton
         )}
       </Component>
     );
-  },
-);
+  };
 
 CompoundButton.displayName = 'CompoundButton';

@@ -24,28 +24,25 @@ export interface ColorPickerProps extends Omit<React.HTMLAttributes<HTMLDivEleme
 
 const isValidHex = (val: string): boolean => /^#[0-9A-Fa-f]{6}([0-9A-Fa-f]{2})?$/.test(val);
 
-export const ColorPicker = React.forwardRef<HTMLDivElement, ColorPickerProps>(
-  (
-    {
-      value: controlledValue,
-      defaultValue = '#0f6cbd',
-      onChange,
-      presets = [
-        '#0f6cbd',
-        '#d13438',
-        '#107c10',
-        '#ffb900',
-        '#5c2d91',
-        '#008272',
-        '#e3008c',
-        '#242424',
-      ],
-      showOpacity = false,
-      className,
-      ...rest
-    },
-    ref,
-  ) => {
+export const ColorPicker = ({
+  value: controlledValue,
+  defaultValue = '#0f6cbd',
+  onChange,
+  presets = [
+    '#0f6cbd',
+    '#d13438',
+    '#107c10',
+    '#ffb900',
+    '#5c2d91',
+    '#008272',
+    '#e3008c',
+    '#242424',
+  ],
+  showOpacity = false,
+  className,
+  ref,
+  ...rest
+}: ColorPickerProps & { ref?: React.Ref<HTMLDivElement> }) => {
     const [color, setColor] = useControllable(controlledValue, defaultValue, onChange);
     const [inputValue, setInputValue] = React.useState(color);
     const [opacity, setOpacity] = React.useState(100);
@@ -172,7 +169,6 @@ export const ColorPicker = React.forwardRef<HTMLDivElement, ColorPickerProps>(
         )}
       </div>
     );
-  },
-);
+};
 
 ColorPicker.displayName = 'ColorPicker';

@@ -42,8 +42,7 @@ const shapeMap: Record<ImageShape, string> = {
   square: 'rounded-none',
 };
 
-export const Image = React.forwardRef<HTMLImageElement, ImageProps>(
-  (
+export const Image = (
     {
       fit = 'default',
       shape = 'square',
@@ -51,11 +50,7 @@ export const Image = React.forwardRef<HTMLImageElement, ImageProps>(
       block = false,
       bordered = false,
       className,
-      alt,
-      ...rest
-    },
-    ref,
-  ) => {
+      alt, ref, ...rest }: ImageProps & { ref?: React.Ref<HTMLImageElement> }) => {
     return (
       <img
         ref={ref}
@@ -71,6 +66,5 @@ export const Image = React.forwardRef<HTMLImageElement, ImageProps>(
         {...rest}
       />
     );
-  },
-);
+  };
 Image.displayName = 'Image';

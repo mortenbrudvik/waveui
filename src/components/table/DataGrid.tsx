@@ -108,8 +108,7 @@ function useDataGridContext() {
   return React.useContext(DataGridContext);
 }
 
-const DataGridRoot = React.forwardRef<HTMLTableElement, DataGridProps>(
-  (
+const DataGridRoot = (
     {
       sortColumn: sortColumnProp,
       defaultSortColumn,
@@ -122,11 +121,7 @@ const DataGridRoot = React.forwardRef<HTMLTableElement, DataGridProps>(
       onSelectionChange,
       children,
       className,
-      columns: _columns,
-      ...rest
-    },
-    ref,
-  ) => {
+      columns: _columns, ref, ...rest }: DataGridProps & { ref?: React.Ref<HTMLTableElement> }) => {
     const [sortColumn, setSortColumn] = useControllable(
       sortColumnProp,
       defaultSortColumn ?? '',
@@ -222,21 +217,17 @@ const DataGridRoot = React.forwardRef<HTMLTableElement, DataGridProps>(
         </div>
       </DataGridContext.Provider>
     );
-  },
-);
+  };
 DataGridRoot.displayName = 'DataGrid';
 
-const DataGridHeader = React.forwardRef<HTMLTableSectionElement, DataGridHeaderProps>(
-  ({ children, className, ...rest }, ref) => (
-    <thead ref={ref} className={cn('bg-[#fafafa]', className)} {...rest}>
-      {children}
-    </thead>
-  ),
+const DataGridHeader = ({ children, className, ref, ...rest }: DataGridHeaderProps & { ref?: React.Ref<HTMLTableSectionElement> }) => (
+  <thead ref={ref} className={cn('bg-[#fafafa]', className)} {...rest}>
+    {children}
+  </thead>
 );
 DataGridHeader.displayName = 'DataGridHeader';
 
-const DataGridHeaderCell = React.forwardRef<HTMLTableCellElement, DataGridHeaderCellProps>(
-  ({ columnId, sortable = false, children, className, ...rest }, ref) => {
+const DataGridHeaderCell = ({ columnId, sortable = false, children, className, ref, ...rest }: DataGridHeaderCellProps & { ref?: React.Ref<HTMLTableCellElement> }) => {
     const { sortColumn, sortDirection, handleSort } = useDataGridContext();
     const isSorted = columnId != null && sortColumn === columnId;
 
@@ -282,21 +273,17 @@ const DataGridHeaderCell = React.forwardRef<HTMLTableCellElement, DataGridHeader
         </span>
       </th>
     );
-  },
-);
+  };
 DataGridHeaderCell.displayName = 'DataGridHeaderCell';
 
-const DataGridBody = React.forwardRef<HTMLTableSectionElement, DataGridBodyProps>(
-  ({ children, className, ...rest }, ref) => (
-    <tbody ref={ref} className={className} {...rest}>
-      {children}
-    </tbody>
-  ),
+const DataGridBody = ({ children, className, ref, ...rest }: DataGridBodyProps & { ref?: React.Ref<HTMLTableSectionElement> }) => (
+  <tbody ref={ref} className={className} {...rest}>
+    {children}
+  </tbody>
 );
 DataGridBody.displayName = 'DataGridBody';
 
-const DataGridRow = React.forwardRef<HTMLTableRowElement, DataGridRowProps>(
-  ({ rowId, children, className, ...rest }, ref) => {
+const DataGridRow = ({ rowId, children, className, ref, ...rest }: DataGridRowProps & { ref?: React.Ref<HTMLTableRowElement> }) => {
     const { selectionMode, selectedKeys, toggleSelection } = useDataGridContext();
     const isSelected = rowId != null && selectedKeys.has(rowId);
 
@@ -334,20 +321,17 @@ const DataGridRow = React.forwardRef<HTMLTableRowElement, DataGridRowProps>(
         {children}
       </tr>
     );
-  },
-);
+  };
 DataGridRow.displayName = 'DataGridRow';
 
-const DataGridCell = React.forwardRef<HTMLTableCellElement, DataGridCellProps>(
-  ({ children, className, ...rest }, ref) => (
-    <td
-      ref={ref}
-      className={cn('px-4 py-3 text-body-1 border-b border-[#f0f0f0]', className)}
-      {...rest}
-    >
-      {children}
-    </td>
-  ),
+const DataGridCell = ({ children, className, ref, ...rest }: DataGridCellProps & { ref?: React.Ref<HTMLTableCellElement> }) => (
+  <td
+    ref={ref}
+    className={cn('px-4 py-3 text-body-1 border-b border-[#f0f0f0]', className)}
+    {...rest}
+  >
+    {children}
+  </td>
 );
 DataGridCell.displayName = 'DataGridCell';
 

@@ -34,8 +34,7 @@ export interface RadioGroupProps extends Omit<
   orientation?: 'vertical' | 'horizontal';
 }
 
-export const RadioGroup = React.forwardRef<HTMLDivElement, RadioGroupProps>(
-  (
+export const RadioGroup = (
     {
       value: controlledValue,
       defaultValue = '',
@@ -43,11 +42,7 @@ export const RadioGroup = React.forwardRef<HTMLDivElement, RadioGroupProps>(
       orientation = 'vertical',
       children,
       className,
-      'aria-label': ariaLabel,
-      ...rest
-    },
-    ref,
-  ) => {
+      'aria-label': ariaLabel, ref, ...rest }: RadioGroupProps & { ref?: React.Ref<HTMLDivElement> }) => {
     const [value, setValue] = useControllable(controlledValue, defaultValue, onChange);
     const name = useId('radio');
     const containerRef = React.useRef<HTMLDivElement>(null);
@@ -106,8 +101,7 @@ export const RadioGroup = React.forwardRef<HTMLDivElement, RadioGroupProps>(
         </div>
       </RadioCtx.Provider>
     );
-  },
-);
+  };
 
 RadioGroup.displayName = 'RadioGroup';
 

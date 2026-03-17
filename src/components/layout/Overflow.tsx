@@ -49,8 +49,7 @@ export function useIsOverflowing(ref: React.RefObject<HTMLElement | null>): bool
   return isOverflowing;
 }
 
-const OverflowRoot = React.forwardRef<HTMLDivElement, OverflowProps>(
-  ({ overflowButton, children, className, ...rest }, ref) => {
+const OverflowRoot = ({ overflowButton, children, className, ref, ...rest }: OverflowProps & { ref?: React.Ref<HTMLDivElement> }) => {
     const containerRef = React.useRef<HTMLDivElement>(null);
     const itemsMap = React.useRef<Map<string, HTMLElement>>(new Map());
     const [hiddenIds, setHiddenIds] = React.useState<Set<string>>(new Set());
@@ -176,12 +175,10 @@ const OverflowRoot = React.forwardRef<HTMLDivElement, OverflowProps>(
         </div>
       </OverflowContext.Provider>
     );
-  },
-);
+  };
 OverflowRoot.displayName = 'Overflow';
 
-export const OverflowItem = React.forwardRef<HTMLDivElement, OverflowItemProps>(
-  ({ itemId, children, className, style, ...rest }, ref) => {
+export const OverflowItem = ({ itemId, children, className, style, ref, ...rest }: OverflowItemProps & { ref?: React.Ref<HTMLDivElement> }) => {
     const { registerItem, unregisterItem, hiddenIds } = React.useContext(OverflowContext);
     const itemRef = React.useRef<HTMLDivElement>(null);
     const isHidden = hiddenIds.has(itemId);
@@ -225,8 +222,7 @@ export const OverflowItem = React.forwardRef<HTMLDivElement, OverflowItemProps>(
         {children}
       </div>
     );
-  },
-);
+  };
 OverflowItem.displayName = 'OverflowItem';
 
 export const Overflow = Object.assign(OverflowRoot, {

@@ -50,8 +50,7 @@ export interface StackProps extends React.HTMLAttributes<HTMLDivElement> {
   inline?: boolean;
 }
 
-const StackRoot = React.forwardRef<HTMLDivElement, StackProps>(
-  (
+const StackRoot = (
     {
       as: Component = 'div',
       direction = 'vertical',
@@ -61,11 +60,7 @@ const StackRoot = React.forwardRef<HTMLDivElement, StackProps>(
       wrap,
       inline,
       className,
-      children,
-      ...props
-    },
-    ref,
-  ) => {
+      children, ref, ...props }: StackProps & { ref?: React.Ref<HTMLElement> }) => {
     return (
       <Component
         ref={ref}
@@ -83,8 +78,7 @@ const StackRoot = React.forwardRef<HTMLDivElement, StackProps>(
         {children}
       </Component>
     );
-  },
-);
+  };
 StackRoot.displayName = 'Stack';
 
 export const Stack = StackRoot;

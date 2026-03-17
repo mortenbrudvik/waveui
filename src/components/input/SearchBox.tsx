@@ -60,23 +60,20 @@ const DefaultDismissIcon = () => (
   </svg>
 );
 
-export const SearchBox = React.forwardRef<HTMLDivElement, SearchBoxProps>(
-  (
-    {
-      value: controlledValue,
-      defaultValue = '',
-      onChange,
-      onClear,
-      placeholder = 'Search',
-      disabled,
-      contentBefore,
-      contentAfter,
-      dismiss,
-      className,
-      ...rest
-    },
-    ref,
-  ) => {
+export const SearchBox = ({
+  value: controlledValue,
+  defaultValue = '',
+  onChange,
+  onClear,
+  placeholder = 'Search',
+  disabled,
+  contentBefore,
+  contentAfter,
+  dismiss,
+  className,
+  ref,
+  ...rest
+}: SearchBoxProps & { ref?: React.Ref<HTMLDivElement> }) => {
     const [value, setValue] = useControllable(controlledValue, defaultValue, onChange);
 
     const handleClear = () => {
@@ -132,7 +129,6 @@ export const SearchBox = React.forwardRef<HTMLDivElement, SearchBoxProps>(
         )}
       </div>
     );
-  },
-);
+};
 
 SearchBox.displayName = 'SearchBox';

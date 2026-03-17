@@ -70,8 +70,7 @@ const ErrorIcon = () => (
   </svg>
 );
 
-const Step = React.forwardRef<HTMLDivElement, StepProps>(
-  ({ label, description, icon, disabled, completed, error, className, onClick, ...rest }, ref) => {
+const Step = ({ label, description, icon, disabled, completed, error, className, onClick, ref, ...rest }: StepProps & { ref?: React.Ref<HTMLDivElement> }) => {
     // Read internal index from a data attribute set by the parent
     // We use context for stepper-level state
     const { activeStep, onStepChange, orientation, linear, totalSteps } =
@@ -222,12 +221,10 @@ const Step = React.forwardRef<HTMLDivElement, StepProps>(
         {!isLast && <div className={connectorClasses} />}
       </div>
     );
-  },
-);
+};
 Step.displayName = 'Step';
 
-const StepperRoot = React.forwardRef<HTMLDivElement, StepperProps>(
-  (
+const StepperRoot = (
     {
       activeStep: controlledStep,
       defaultActiveStep = 0,
@@ -235,11 +232,7 @@ const StepperRoot = React.forwardRef<HTMLDivElement, StepperProps>(
       orientation = 'horizontal',
       linear = false,
       className,
-      children,
-      ...rest
-    },
-    ref,
-  ) => {
+      children, ref, ...rest }: StepperProps & { ref?: React.Ref<HTMLDivElement> }) => {
     const [activeStep, setActiveStep] = useControllable(
       controlledStep,
       defaultActiveStep,
@@ -276,8 +269,7 @@ const StepperRoot = React.forwardRef<HTMLDivElement, StepperProps>(
         </div>
       </StepperContext.Provider>
     );
-  },
-);
+  };
 StepperRoot.displayName = 'Stepper';
 
 export const Stepper = Object.assign(StepperRoot, { Step });

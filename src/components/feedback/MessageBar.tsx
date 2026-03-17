@@ -49,8 +49,7 @@ const defaultIcons: Record<Status, React.ReactNode> = {
   ),
 };
 
-export const MessageBar = React.forwardRef<HTMLDivElement, MessageBarProps>(
-  ({ status = 'info', onDismiss, icon, dismiss, children, className, ...rest }, ref) => {
+export const MessageBar = ({ status = 'info', onDismiss, icon, dismiss, children, className, ref, ...rest }: MessageBarProps & { ref?: React.Ref<HTMLDivElement> }) => {
     const renderedIcon =
       icon !== undefined ? (
         renderSlot(icon, 'span', 'flex-shrink-0 mt-0.5')
@@ -98,7 +97,6 @@ export const MessageBar = React.forwardRef<HTMLDivElement, MessageBarProps>(
         {renderedDismiss}
       </div>
     );
-  },
-);
+  };
 
 MessageBar.displayName = 'MessageBar';

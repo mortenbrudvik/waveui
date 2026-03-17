@@ -36,8 +36,7 @@ const weightClasses: Record<400 | 600 | 700, string> = {
   700: 'font-bold',
 };
 
-export const Text = React.forwardRef<HTMLElement, TextProps>(
-  ({ variant = 'body-1', weight, as: Component = 'span', className, ...props }, ref) => {
+export const Text = ({ variant = 'body-1', weight, as: Component = 'span', className, ref, ...props }: TextProps & { ref?: React.Ref<HTMLElement> }) => {
     return (
       <Component
         ref={ref}
@@ -45,7 +44,6 @@ export const Text = React.forwardRef<HTMLElement, TextProps>(
         {...props}
       />
     );
-  },
-);
+  };
 
 Text.displayName = 'Text';

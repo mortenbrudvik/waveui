@@ -38,8 +38,7 @@ const sizeClasses: Record<Size, string> = {
   'extra-large': 'w-3.5 h-3.5',
 };
 
-export const PresenceBadge = React.forwardRef<HTMLSpanElement, PresenceBadgeProps>(
-  ({ status, size = 'medium', className, ...props }, ref) => {
+export const PresenceBadge = ({ status, size = 'medium', className, ref, ...props }: PresenceBadgeProps & { ref?: React.Ref<HTMLSpanElement> }) => {
     return (
       <span
         ref={ref}
@@ -54,7 +53,6 @@ export const PresenceBadge = React.forwardRef<HTMLSpanElement, PresenceBadgeProp
         {...props}
       />
     );
-  },
-);
+  };
 
 PresenceBadge.displayName = 'PresenceBadge';

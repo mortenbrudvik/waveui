@@ -31,8 +31,7 @@ export interface SpinButtonProps extends Omit<
   disabled?: boolean;
 }
 
-export const SpinButton = React.forwardRef<HTMLDivElement, SpinButtonProps>(
-  (
+export const SpinButton = (
     {
       value: controlledValue,
       defaultValue = 0,
@@ -41,11 +40,7 @@ export const SpinButton = React.forwardRef<HTMLDivElement, SpinButtonProps>(
       max = Infinity,
       step = 1,
       disabled,
-      className,
-      ...rest
-    },
-    ref,
-  ) => {
+      className, ref, ...rest }: SpinButtonProps & { ref?: React.Ref<HTMLDivElement> }) => {
     const [value, setValue] = useControllable(controlledValue, defaultValue, onChange);
 
     const clamp = (n: number) => Math.min(max, Math.max(min, n));
@@ -126,7 +121,6 @@ export const SpinButton = React.forwardRef<HTMLDivElement, SpinButtonProps>(
         </button>
       </div>
     );
-  },
-);
+  };
 
 SpinButton.displayName = 'SpinButton';

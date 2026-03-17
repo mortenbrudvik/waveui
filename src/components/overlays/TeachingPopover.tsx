@@ -31,20 +31,17 @@ export interface TeachingPopoverProps extends React.HTMLAttributes<HTMLDivElemen
   open?: boolean;
 }
 
-export const TeachingPopover = React.forwardRef<HTMLDivElement, TeachingPopoverProps>(
-  (
-    {
-      steps,
-      currentStep: currentStepProp,
-      defaultCurrentStep,
-      onStepChange,
-      onDismiss,
-      open = true,
-      className,
-      ...rest
-    },
-    ref,
-  ) => {
+export const TeachingPopover = ({
+  steps,
+  currentStep: currentStepProp,
+  defaultCurrentStep,
+  onStepChange,
+  onDismiss,
+  open = true,
+  className,
+  ref,
+  ...rest
+}: TeachingPopoverProps & { ref?: React.Ref<HTMLDivElement> }) => {
     const [currentStep, setCurrentStep] = useControllable(
       currentStepProp,
       defaultCurrentStep ?? 0,
@@ -159,6 +156,5 @@ export const TeachingPopover = React.forwardRef<HTMLDivElement, TeachingPopoverP
         </div>
       </div>
     );
-  },
-);
+};
 TeachingPopover.displayName = 'TeachingPopover';
