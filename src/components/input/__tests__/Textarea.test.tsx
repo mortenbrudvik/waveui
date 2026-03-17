@@ -2,12 +2,19 @@ import { describe, it, expect, vi } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { Textarea } from '../Textarea';
-import { testForwardRef, testRestSpread, testClassName } from '../../../test-utils';
+import { testSystemProps, testFocusEvents } from '../../../test-utils';
 
 describe('Textarea', () => {
-  testForwardRef(Textarea, 'textarea');
-  testRestSpread(Textarea);
-  testClassName(Textarea);
+  testSystemProps(Textarea, {
+    expectedTag: 'textarea',
+    displayName: 'Textarea',
+    defaultProps: { 'aria-label': 'test' },
+    a11yVariants: [
+      { name: 'disabled', props: { disabled: true } },
+    ],
+  });
+
+  testFocusEvents(Textarea, { 'aria-label': 'test' }, 'textarea');
 
   it('renders without crashing', () => {
     render(<Textarea placeholder="Enter text" />);

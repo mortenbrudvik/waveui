@@ -2,12 +2,14 @@ import { describe, it, expect } from 'vitest';
 import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { Tooltip } from '../Tooltip';
-import { testForwardRef, testRestSpread, testClassName } from '../../../test-utils';
+import { testSystemProps } from '../../../test-utils';
 
 describe('Tooltip', () => {
-  testForwardRef(Tooltip, 'span', { content: 'tip', children: <span>target</span> });
-  testRestSpread(Tooltip, { content: 'tip', children: <span>target</span> });
-  testClassName(Tooltip, { content: 'tip', children: <span>target</span> });
+  testSystemProps(Tooltip, {
+    expectedTag: 'span',
+    displayName: 'Tooltip',
+    defaultProps: { content: 'tip', children: <span>target</span> },
+  });
 
   it('does not show tooltip by default', () => {
     render(

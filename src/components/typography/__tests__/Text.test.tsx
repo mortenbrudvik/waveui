@@ -1,18 +1,14 @@
 import { describe, it, expect } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import { Text } from '../Text';
-import {
-  testForwardRef,
-  testRestSpread,
-  testClassName,
-  testPolymorphicAs,
-} from '../../../test-utils';
+import { testSystemProps } from '../../../test-utils';
 
 describe('Text', () => {
-  testForwardRef(Text, 'span');
-  testRestSpread(Text);
-  testClassName(Text);
-  testPolymorphicAs(Text);
+  testSystemProps(Text, {
+    expectedTag: 'span',
+    displayName: 'Text',
+    polymorphic: true,
+  });
 
   it('renders without crashing', () => {
     render(<Text data-testid="text">Hello</Text>);

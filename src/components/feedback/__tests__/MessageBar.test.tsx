@@ -2,12 +2,14 @@ import { describe, it, expect, vi } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MessageBar } from '../MessageBar';
-import { testForwardRef, testRestSpread, testClassName } from '../../../test-utils';
+import { testSystemProps } from '../../../test-utils';
 
 describe('MessageBar', () => {
-  testForwardRef(MessageBar, 'div', { children: 'msg' });
-  testRestSpread(MessageBar, { children: 'msg' });
-  testClassName(MessageBar, { children: 'msg' });
+  testSystemProps(MessageBar, {
+    expectedTag: 'div',
+    displayName: 'MessageBar',
+    defaultProps: { children: 'msg' },
+  });
 
   it('renders children', () => {
     render(<MessageBar>Hello world</MessageBar>);

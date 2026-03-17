@@ -2,18 +2,16 @@ import { describe, it, expect, vi } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { Card } from '../Card';
-import {
-  testForwardRef,
-  testRestSpread,
-  testClassName,
-  testPolymorphicAs,
-} from '../../../test-utils';
+import { testSystemProps, testCompoundExposure } from '../../../test-utils';
 
 describe('Card', () => {
-  testForwardRef(Card, 'div');
-  testRestSpread(Card);
-  testClassName(Card);
-  testPolymorphicAs(Card);
+  testSystemProps(Card, {
+    expectedTag: 'div',
+    displayName: 'Card',
+    polymorphic: true,
+  });
+
+  testCompoundExposure(Card, ['Header', 'Body', 'Footer']);
 
   it('renders without crashing', () => {
     render(<Card data-testid="card">Content</Card>);
@@ -66,10 +64,11 @@ describe('Card', () => {
 });
 
 describe('Card.Header', () => {
-  testForwardRef(Card.Header, 'div');
-  testRestSpread(Card.Header);
-  testClassName(Card.Header);
-  testPolymorphicAs(Card.Header);
+  testSystemProps(Card.Header, {
+    expectedTag: 'div',
+    displayName: 'CardHeader',
+    polymorphic: true,
+  });
 
   it('renders title', () => {
     render(<Card.Header title="Header Title" />);
@@ -88,10 +87,11 @@ describe('Card.Header', () => {
 });
 
 describe('Card.Body', () => {
-  testForwardRef(Card.Body, 'div');
-  testRestSpread(Card.Body);
-  testClassName(Card.Body);
-  testPolymorphicAs(Card.Body);
+  testSystemProps(Card.Body, {
+    expectedTag: 'div',
+    displayName: 'CardBody',
+    polymorphic: true,
+  });
 
   it('renders children', () => {
     render(<Card.Body>Body content</Card.Body>);
@@ -100,10 +100,11 @@ describe('Card.Body', () => {
 });
 
 describe('Card.Footer', () => {
-  testForwardRef(Card.Footer, 'div');
-  testRestSpread(Card.Footer);
-  testClassName(Card.Footer);
-  testPolymorphicAs(Card.Footer);
+  testSystemProps(Card.Footer, {
+    expectedTag: 'div',
+    displayName: 'CardFooter',
+    polymorphic: true,
+  });
 
   it('renders children', () => {
     render(<Card.Footer>Footer content</Card.Footer>);

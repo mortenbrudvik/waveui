@@ -2,8 +2,13 @@ import { describe, it, expect, vi } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { Dialog } from '../Dialog';
+import { testDisplayName, testCompoundExposure } from '../../../test-utils';
 
 describe('Dialog', () => {
+  testDisplayName(Dialog, 'Dialog');
+
+  testCompoundExposure(Dialog, ['Trigger', 'Content', 'Footer']);
+
   it('renders trigger and does not show content by default', () => {
     render(
       <Dialog>

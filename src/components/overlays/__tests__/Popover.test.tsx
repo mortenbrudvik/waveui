@@ -2,8 +2,13 @@ import { describe, it, expect, vi } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { Popover } from '../Popover';
+import { testDisplayName, testCompoundExposure } from '../../../test-utils';
 
 describe('Popover', () => {
+  testDisplayName(Popover, 'Popover');
+
+  testCompoundExposure(Popover, ['Trigger', 'Content']);
+
   it('does not show content by default', () => {
     render(
       <Popover>

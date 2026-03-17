@@ -2,12 +2,13 @@ import { describe, it, expect } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import { AvatarGroup } from '../AvatarGroup';
 import { Avatar } from '../Avatar';
-import { testForwardRef, testRestSpread, testClassName } from '../../../test-utils';
+import { testSystemProps } from '../../../test-utils';
 
 describe('AvatarGroup', () => {
-  testForwardRef(AvatarGroup, 'div');
-  testRestSpread(AvatarGroup);
-  testClassName(AvatarGroup);
+  testSystemProps(AvatarGroup, {
+    expectedTag: 'div',
+    displayName: 'AvatarGroup',
+  });
 
   it('renders without crashing', () => {
     render(<AvatarGroup data-testid="group" />);

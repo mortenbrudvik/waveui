@@ -2,12 +2,15 @@ import { describe, it, expect, vi } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { Accordion } from '../Accordion';
-import { testForwardRef, testRestSpread, testClassName } from '../../../test-utils';
+import { testSystemProps, testCompoundExposure } from '../../../test-utils';
 
 describe('Accordion', () => {
-  testForwardRef(Accordion, 'div');
-  testRestSpread(Accordion);
-  testClassName(Accordion);
+  testSystemProps(Accordion, {
+    expectedTag: 'div',
+    displayName: 'Accordion',
+  });
+
+  testCompoundExposure(Accordion, ['Item', 'Trigger', 'Panel']);
 
   it('renders without crashing', () => {
     render(

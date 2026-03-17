@@ -2,12 +2,15 @@ import { describe, it, expect, vi } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { TabList } from '../TabList';
-import { testForwardRef, testRestSpread, testClassName } from '../../../test-utils';
+import { testSystemProps, testCompoundExposure } from '../../../test-utils';
 
 describe('TabList', () => {
-  testForwardRef(TabList, 'div');
-  testRestSpread(TabList);
-  testClassName(TabList);
+  testSystemProps(TabList, {
+    expectedTag: 'div',
+    displayName: 'TabList',
+  });
+
+  testCompoundExposure(TabList, ['Tab', 'Panel']);
 
   it('renders without crashing', () => {
     render(

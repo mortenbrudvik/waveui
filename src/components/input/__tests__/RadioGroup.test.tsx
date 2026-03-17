@@ -2,14 +2,17 @@ import { describe, it, expect, vi } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { RadioGroup, RadioItem } from '../RadioGroup';
-import { testForwardRef, testRestSpread, testClassName } from '../../../test-utils';
-
-const requiredProps = { 'aria-label': 'Test group' };
+import { testSystemProps } from '../../../test-utils';
 
 describe('RadioGroup', () => {
-  testForwardRef(RadioGroup, 'div', requiredProps);
-  testRestSpread(RadioGroup, requiredProps);
-  testClassName(RadioGroup, requiredProps);
+  testSystemProps(RadioGroup, {
+    expectedTag: 'div',
+    displayName: 'RadioGroup',
+    defaultProps: { 'aria-label': 'Test group' },
+    a11yVariants: [
+      { name: 'disabled', props: { disabled: true } },
+    ],
+  });
 
   it('renders without crashing', () => {
     render(

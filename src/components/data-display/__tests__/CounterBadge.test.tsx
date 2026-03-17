@@ -1,12 +1,14 @@
 import { describe, it, expect } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import { CounterBadge } from '../CounterBadge';
-import { testForwardRef, testRestSpread, testClassName } from '../../../test-utils';
+import { testSystemProps } from '../../../test-utils';
 
 describe('CounterBadge', () => {
-  testForwardRef(CounterBadge, 'span', { count: 5 });
-  testRestSpread(CounterBadge, { count: 5 });
-  testClassName(CounterBadge, { count: 5 });
+  testSystemProps(CounterBadge, {
+    expectedTag: 'span',
+    displayName: 'CounterBadge',
+    defaultProps: { count: 5 },
+  });
 
   it('renders the count', () => {
     render(<CounterBadge count={7} data-testid="cb" />);

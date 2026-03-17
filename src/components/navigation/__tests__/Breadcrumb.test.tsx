@@ -1,18 +1,16 @@
 import { describe, it, expect } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import { Breadcrumb } from '../Breadcrumb';
-import { testForwardRef, testRestSpread, testClassName } from '../../../test-utils';
+import { testSystemProps, testCompoundExposure } from '../../../test-utils';
 
 describe('Breadcrumb', () => {
-  testForwardRef(Breadcrumb, 'nav', {
-    children: <Breadcrumb.Item>Home</Breadcrumb.Item>,
+  testSystemProps(Breadcrumb, {
+    expectedTag: 'nav',
+    displayName: 'Breadcrumb',
+    defaultProps: { children: <Breadcrumb.Item>Home</Breadcrumb.Item> },
   });
-  testRestSpread(Breadcrumb, {
-    children: <Breadcrumb.Item>Home</Breadcrumb.Item>,
-  });
-  testClassName(Breadcrumb, {
-    children: <Breadcrumb.Item>Home</Breadcrumb.Item>,
-  });
+
+  testCompoundExposure(Breadcrumb, ['Item']);
 
   it('renders with aria-label="Breadcrumb"', () => {
     render(

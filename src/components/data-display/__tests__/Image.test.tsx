@@ -1,12 +1,14 @@
 import { describe, it, expect } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import { Image } from '../Image';
-import { testForwardRef, testRestSpread, testClassName } from '../../../test-utils';
+import { testSystemProps } from '../../../test-utils';
 
 describe('Image', () => {
-  testForwardRef(Image, 'img');
-  testRestSpread(Image);
-  testClassName(Image);
+  testSystemProps(Image, {
+    expectedTag: 'img',
+    displayName: 'Image',
+    defaultProps: { src: 'test.png', alt: 'Test image' },
+  });
 
   it('renders without crashing', () => {
     render(<Image data-testid="img" src="test.png" />);

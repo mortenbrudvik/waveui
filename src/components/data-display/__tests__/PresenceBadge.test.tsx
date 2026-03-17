@@ -1,12 +1,14 @@
 import { describe, it, expect } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import { PresenceBadge } from '../PresenceBadge';
-import { testForwardRef, testRestSpread, testClassName } from '../../../test-utils';
+import { testSystemProps } from '../../../test-utils';
 
 describe('PresenceBadge', () => {
-  testForwardRef(PresenceBadge, 'span', { status: 'available' });
-  testRestSpread(PresenceBadge, { status: 'available' });
-  testClassName(PresenceBadge, { status: 'available' });
+  testSystemProps(PresenceBadge, {
+    expectedTag: 'span',
+    displayName: 'PresenceBadge',
+    defaultProps: { status: 'available' },
+  });
 
   it('renders with role="status"', () => {
     render(<PresenceBadge status="available" />);

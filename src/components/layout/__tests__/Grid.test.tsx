@@ -1,18 +1,14 @@
 import { describe, it, expect } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import { Grid } from '../Grid';
-import {
-  testForwardRef,
-  testRestSpread,
-  testClassName,
-  testPolymorphicAs,
-} from '../../../test-utils';
+import { testSystemProps } from '../../../test-utils';
 
 describe('Grid', () => {
-  testForwardRef(Grid, 'div');
-  testRestSpread(Grid);
-  testClassName(Grid);
-  testPolymorphicAs(Grid);
+  testSystemProps(Grid, {
+    expectedTag: 'div',
+    displayName: 'Grid',
+    polymorphic: true,
+  });
 
   it('renders without crashing', () => {
     render(<Grid data-testid="grid">Content</Grid>);

@@ -4,8 +4,11 @@ import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { Dropdown } from '../Dropdown';
 import { Option } from '../Combobox';
+import { testCompoundExposure } from '../../../test-utils';
 
 describe('Dropdown', () => {
+  testCompoundExposure(Dropdown, ['Option', 'OptionGroup']);
+
   it('forwards ref to the root div', () => {
     const ref = React.createRef<HTMLDivElement>();
     render(

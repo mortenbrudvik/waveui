@@ -2,12 +2,20 @@ import { describe, it, expect, vi } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { Switch } from '../Switch';
-import { testForwardRef, testRestSpread, testClassName } from '../../../test-utils';
+import { testSystemProps, testFocusEvents } from '../../../test-utils';
 
 describe('Switch', () => {
-  testForwardRef(Switch, 'label');
-  testRestSpread(Switch);
-  testClassName(Switch);
+  testSystemProps(Switch, {
+    expectedTag: 'label',
+    displayName: 'Switch',
+    defaultProps: { label: 'Dark mode' },
+    a11yVariants: [
+      { name: 'checked', props: { defaultChecked: true } },
+      { name: 'disabled', props: { disabled: true } },
+    ],
+  });
+
+  testFocusEvents(Switch, { label: 'Dark mode' }, 'button');
 
   it('renders without crashing', () => {
     render(<Switch label="Dark mode" />);

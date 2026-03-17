@@ -2,7 +2,7 @@ import { describe, it, expect, vi } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { SwatchPicker } from '../SwatchPicker';
-import { testForwardRef, testRestSpread, testClassName } from '../../../test-utils';
+import { testSystemProps } from '../../../test-utils';
 
 const defaultItems = [
   { value: 'red', color: '#d13438', label: 'Red' },
@@ -11,9 +11,11 @@ const defaultItems = [
 ];
 
 describe('SwatchPicker', () => {
-  testForwardRef(SwatchPicker, 'div', { items: defaultItems });
-  testRestSpread(SwatchPicker, { items: defaultItems });
-  testClassName(SwatchPicker, { items: defaultItems });
+  testSystemProps(SwatchPicker, {
+    expectedTag: 'div',
+    displayName: 'SwatchPicker',
+    defaultProps: { items: defaultItems, 'aria-label': 'Color picker' },
+  });
 
   it('renders without crashing', () => {
     render(<SwatchPicker items={defaultItems} data-testid="swatch" />);

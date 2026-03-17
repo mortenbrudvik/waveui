@@ -2,12 +2,16 @@ import { describe, it, expect, vi } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { SearchBox } from '../SearchBox';
-import { testForwardRef, testRestSpread, testClassName } from '../../../test-utils';
+import { testSystemProps, testFocusEvents } from '../../../test-utils';
 
 describe('SearchBox', () => {
-  testForwardRef(SearchBox, 'div');
-  testRestSpread(SearchBox);
-  testClassName(SearchBox);
+  testSystemProps(SearchBox, {
+    expectedTag: 'div',
+    displayName: 'SearchBox',
+    defaultProps: { 'aria-label': 'Search' },
+  });
+
+  testFocusEvents(SearchBox, { 'aria-label': 'Search' }, 'input');
 
   it('renders without crashing', () => {
     render(<SearchBox />);

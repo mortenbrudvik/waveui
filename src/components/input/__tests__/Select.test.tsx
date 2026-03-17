@@ -1,13 +1,21 @@
+import * as React from 'react';
 import { describe, it, expect, vi } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { Select } from '../Select';
-import { testForwardRef, testRestSpread, testClassName } from '../../../test-utils';
+import { testSystemProps, testFocusEvents } from '../../../test-utils';
 
 describe('Select', () => {
-  testForwardRef(Select, 'select');
-  testRestSpread(Select);
-  testClassName(Select);
+  testSystemProps(Select, {
+    expectedTag: 'select',
+    displayName: 'Select',
+    defaultProps: { 'aria-label': 'test', children: React.createElement('option', { value: 'a' }, 'A') },
+    a11yVariants: [
+      { name: 'disabled', props: { disabled: true } },
+    ],
+  });
+
+  testFocusEvents(Select, { 'aria-label': 'test', children: React.createElement('option', { value: 'a' }, 'A') }, 'select');
 
   it('renders without crashing', () => {
     render(

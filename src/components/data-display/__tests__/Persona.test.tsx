@@ -1,12 +1,14 @@
 import { describe, it, expect } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import { Persona } from '../Persona';
-import { testForwardRef, testRestSpread, testClassName } from '../../../test-utils';
+import { testSystemProps } from '../../../test-utils';
 
 describe('Persona', () => {
-  testForwardRef(Persona, 'div', { name: 'John Doe' });
-  testRestSpread(Persona, { name: 'John Doe' });
-  testClassName(Persona, { name: 'John Doe' });
+  testSystemProps(Persona, {
+    expectedTag: 'div',
+    displayName: 'Persona',
+    defaultProps: { name: 'John Doe' },
+  });
 
   it('renders without crashing', () => {
     render(<Persona name="John Doe" data-testid="persona" />);

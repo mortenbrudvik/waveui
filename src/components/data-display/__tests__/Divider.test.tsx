@@ -1,12 +1,13 @@
 import { describe, it, expect } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import { Divider } from '../Divider';
-import { testForwardRef, testRestSpread, testClassName } from '../../../test-utils';
+import { testSystemProps } from '../../../test-utils';
 
 describe('Divider', () => {
-  testForwardRef(Divider, 'hr');
-  testRestSpread(Divider);
-  testClassName(Divider);
+  testSystemProps(Divider, {
+    expectedTag: 'hr',
+    displayName: 'Divider',
+  });
 
   it('renders without crashing', () => {
     render(<Divider data-testid="divider" />);

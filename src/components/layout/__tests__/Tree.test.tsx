@@ -3,8 +3,11 @@ import { describe, it, expect } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { Tree } from '../Tree';
+import { testCompoundExposure } from '../../../test-utils';
 
 describe('Tree', () => {
+  testCompoundExposure(Tree, ['Item']);
+
   it('forwards ref to the root div', () => {
     const ref = React.createRef<HTMLDivElement>();
     render(

@@ -2,12 +2,14 @@ import { describe, it, expect, vi } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { Pagination } from '../Pagination';
-import { testForwardRef, testRestSpread, testClassName } from '../../../test-utils';
+import { testSystemProps } from '../../../test-utils';
 
 describe('Pagination', () => {
-  testForwardRef(Pagination, 'nav', { totalPages: 10 });
-  testRestSpread(Pagination, { totalPages: 10 });
-  testClassName(Pagination, { totalPages: 10 });
+  testSystemProps(Pagination, {
+    expectedTag: 'nav',
+    displayName: 'Pagination',
+    defaultProps: { totalPages: 10 },
+  });
 
   it('renders with aria-label="Pagination"', () => {
     render(<Pagination data-testid="pag" totalPages={5} />);

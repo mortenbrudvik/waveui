@@ -2,18 +2,15 @@ import { describe, it, expect, vi } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { Tag } from '../Tag';
-import {
-  testForwardRef,
-  testRestSpread,
-  testClassName,
-  testPolymorphicAs,
-} from '../../../test-utils';
+import { testSystemProps } from '../../../test-utils';
 
 describe('Tag', () => {
-  testForwardRef(Tag, 'span');
-  testRestSpread(Tag);
-  testClassName(Tag);
-  testPolymorphicAs(Tag);
+  testSystemProps(Tag, {
+    expectedTag: 'span',
+    displayName: 'Tag',
+    polymorphic: true,
+    defaultProps: { children: 'Label' },
+  });
 
   it('renders without crashing', () => {
     render(<Tag data-testid="tag">Label</Tag>);

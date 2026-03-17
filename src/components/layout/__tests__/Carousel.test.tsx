@@ -1,24 +1,21 @@
+import * as React from 'react';
 import { describe, it, expect, vi } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { Carousel } from '../Carousel';
-import { testRestSpread, testClassName } from '../../../test-utils';
+import { testSystemProps, testCompoundExposure } from '../../../test-utils';
 
 describe('Carousel', () => {
-  testRestSpread(Carousel);
-  testClassName(Carousel);
-
-  it('forwards ref to DOM element', () => {
-    const ref = { current: null as HTMLDivElement | null };
-    render(
-      <Carousel ref={ref} data-testid="ref-test">
-        <Carousel.Item>Slide 1</Carousel.Item>
-      </Carousel>,
-    );
-    const el = screen.getByTestId('ref-test');
-    expect(ref.current).toBe(el);
-    expect(el.tagName.toLowerCase()).toBe('div');
+  testSystemProps(Carousel, {
+    expectedTag: 'div',
+    displayName: 'Carousel',
+    defaultProps: {
+      'aria-label': 'Carousel',
+      children: React.createElement(Carousel.Item, null, 'Slide 1'),
+    },
   });
+
+  testCompoundExposure(Carousel, ['Item']);
 
   it('renders without crashing', () => {
     render(

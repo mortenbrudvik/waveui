@@ -2,12 +2,14 @@ import { describe, it, expect, vi } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MenuButton } from '../MenuButton';
-import { testForwardRef, testRestSpread, testClassName } from '../../../test-utils';
+import { testSystemProps } from '../../../test-utils';
 
 describe('MenuButton', () => {
-  testForwardRef(MenuButton, 'button');
-  testRestSpread(MenuButton);
-  testClassName(MenuButton);
+  testSystemProps(MenuButton, {
+    expectedTag: 'button',
+    displayName: 'MenuButton',
+    defaultProps: { children: 'Menu' },
+  });
 
   it('renders without crashing', () => {
     render(<MenuButton>Menu</MenuButton>);

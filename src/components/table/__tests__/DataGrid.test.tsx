@@ -3,6 +3,7 @@ import { describe, it, expect, vi } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { DataGrid } from '../DataGrid';
+import { testCompoundExposure } from '../../../test-utils';
 
 function renderGrid(props: Record<string, unknown> = {}) {
   return render(
@@ -30,6 +31,8 @@ function renderGrid(props: Record<string, unknown> = {}) {
 }
 
 describe('DataGrid', () => {
+  testCompoundExposure(DataGrid, ['Header', 'HeaderCell', 'Body', 'Row', 'Cell']);
+
   it('renders a table with role="grid"', () => {
     renderGrid({ 'data-testid': 'grid' });
     const table = screen.getByTestId('grid');

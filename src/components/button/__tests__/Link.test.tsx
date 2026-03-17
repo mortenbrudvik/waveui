@@ -2,18 +2,17 @@ import { describe, it, expect, vi } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { Link } from '../Link';
-import {
-  testForwardRef,
-  testRestSpread,
-  testClassName,
-  testPolymorphicAs,
-} from '../../../test-utils';
+import { testSystemProps, testFocusEvents } from '../../../test-utils';
 
 describe('Link', () => {
-  testForwardRef(Link, 'a');
-  testRestSpread(Link);
-  testClassName(Link);
-  testPolymorphicAs(Link);
+  testSystemProps(Link, {
+    expectedTag: 'a',
+    displayName: 'Link',
+    polymorphic: true,
+    defaultProps: { children: 'Go', href: '#' },
+  });
+
+  testFocusEvents(Link, { children: 'Go', href: '#' });
 
   it('renders without crashing', () => {
     render(<Link href="#">Go</Link>);

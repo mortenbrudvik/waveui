@@ -2,6 +2,7 @@ import * as React from 'react';
 import { describe, it, expect, beforeAll } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import { Overflow, OverflowItem, useIsOverflowing } from '../Overflow';
+import { testCompoundExposure } from '../../../test-utils';
 
 // Mock ResizeObserver for jsdom
 beforeAll(() => {
@@ -22,6 +23,8 @@ beforeAll(() => {
 });
 
 describe('Overflow', () => {
+  testCompoundExposure(Overflow, ['Item']);
+
   it('renders without crashing', () => {
     render(
       <Overflow data-testid="overflow">

@@ -1,12 +1,13 @@
 import { describe, it, expect } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import { Field } from '../Field';
-import { testForwardRef, testRestSpread, testClassName } from '../../../test-utils';
+import { testSystemProps } from '../../../test-utils';
 
 describe('Field', () => {
-  testForwardRef(Field, 'div');
-  testRestSpread(Field);
-  testClassName(Field);
+  testSystemProps(Field, {
+    expectedTag: 'div',
+    displayName: 'Field',
+  });
 
   it('renders without crashing', () => {
     render(

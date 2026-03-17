@@ -1,12 +1,19 @@
 import { describe, it, expect } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import { Slider } from '../Slider';
-import { testForwardRef, testRestSpread, testClassName } from '../../../test-utils';
+import { testSystemProps, testFocusEvents } from '../../../test-utils';
 
 describe('Slider', () => {
-  testForwardRef(Slider, 'input');
-  testRestSpread(Slider);
-  testClassName(Slider);
+  testSystemProps(Slider, {
+    expectedTag: 'input',
+    displayName: 'Slider',
+    defaultProps: { 'aria-label': 'Volume' },
+    a11yVariants: [
+      { name: 'disabled', props: { disabled: true } },
+    ],
+  });
+
+  testFocusEvents(Slider, { 'aria-label': 'Volume' }, 'input');
 
   it('renders without crashing', () => {
     render(<Slider aria-label="Volume" />);

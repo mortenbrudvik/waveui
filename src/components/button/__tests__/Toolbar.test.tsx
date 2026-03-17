@@ -1,18 +1,15 @@
 import { describe, it, expect } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import { Toolbar } from '../Toolbar';
-import {
-  testForwardRef,
-  testRestSpread,
-  testClassName,
-  testPolymorphicAs,
-} from '../../../test-utils';
+import { testSystemProps } from '../../../test-utils';
 
 describe('Toolbar', () => {
-  testForwardRef(Toolbar, 'div');
-  testRestSpread(Toolbar);
-  testClassName(Toolbar);
-  testPolymorphicAs(Toolbar);
+  testSystemProps(Toolbar, {
+    expectedTag: 'div',
+    displayName: 'Toolbar',
+    polymorphic: true,
+    defaultProps: { children: 'Content', 'aria-label': 'Toolbar' },
+  });
 
   it('renders without crashing', () => {
     render(<Toolbar aria-label="Formatting">Content</Toolbar>);

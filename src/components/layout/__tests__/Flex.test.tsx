@@ -1,18 +1,14 @@
 import { describe, it, expect } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import { Flex } from '../Flex';
-import {
-  testForwardRef,
-  testRestSpread,
-  testClassName,
-  testPolymorphicAs,
-} from '../../../test-utils';
+import { testSystemProps } from '../../../test-utils';
 
 describe('Flex', () => {
-  testForwardRef(Flex, 'div');
-  testRestSpread(Flex);
-  testClassName(Flex);
-  testPolymorphicAs(Flex);
+  testSystemProps(Flex, {
+    expectedTag: 'div',
+    displayName: 'Flex',
+    polymorphic: true,
+  });
 
   it('renders without crashing', () => {
     render(<Flex data-testid="flex">Content</Flex>);

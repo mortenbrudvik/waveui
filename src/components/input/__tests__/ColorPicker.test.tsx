@@ -2,12 +2,14 @@ import { describe, it, expect, vi } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { ColorPicker } from '../ColorPicker';
-import { testForwardRef, testRestSpread, testClassName } from '../../../test-utils';
+import { testSystemProps } from '../../../test-utils';
 
 describe('ColorPicker', () => {
-  testForwardRef(ColorPicker, 'div');
-  testRestSpread(ColorPicker);
-  testClassName(ColorPicker);
+  testSystemProps(ColorPicker, {
+    expectedTag: 'div',
+    displayName: 'ColorPicker',
+    defaultProps: { 'aria-label': 'Color picker' },
+  });
 
   it('renders without crashing', () => {
     render(<ColorPicker data-testid="picker" />);

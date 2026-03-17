@@ -1,12 +1,14 @@
 import { describe, it, expect } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import { ProgressBar } from '../ProgressBar';
-import { testForwardRef, testRestSpread, testClassName } from '../../../test-utils';
+import { testSystemProps } from '../../../test-utils';
 
 describe('ProgressBar', () => {
-  testForwardRef(ProgressBar, 'div');
-  testRestSpread(ProgressBar);
-  testClassName(ProgressBar);
+  testSystemProps(ProgressBar, {
+    expectedTag: 'div',
+    displayName: 'ProgressBar',
+    defaultProps: { label: 'Loading' },
+  });
 
   it('renders with role="progressbar"', () => {
     render(<ProgressBar data-testid="pb" />);

@@ -2,12 +2,18 @@ import { describe, it, expect, vi } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { ToggleButton } from '../ToggleButton';
-import { testForwardRef, testRestSpread, testClassName } from '../../../test-utils';
+import { testSystemProps, testFocusEvents } from '../../../test-utils';
 
 describe('ToggleButton', () => {
-  testForwardRef(ToggleButton, 'button');
-  testRestSpread(ToggleButton);
-  testClassName(ToggleButton);
+  testSystemProps(ToggleButton, {
+    expectedTag: 'button',
+    displayName: 'ToggleButton',
+    defaultProps: { children: 'Toggle' },
+    a11yVariants: [
+      { name: 'disabled', props: { disabled: true } },
+      { name: 'checked', props: { checked: true } },
+    ],
+  });
 
   it('renders without crashing', () => {
     render(<ToggleButton>Toggle</ToggleButton>);

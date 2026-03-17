@@ -3,6 +3,7 @@ import { describe, it, expect, vi } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { TeachingPopover } from '../TeachingPopover';
+import { testDisplayName } from '../../../test-utils';
 
 const steps = [
   { title: 'Welcome', body: 'This is step one.' },
@@ -11,6 +12,8 @@ const steps = [
 ];
 
 describe('TeachingPopover', () => {
+  testDisplayName(TeachingPopover, 'TeachingPopover');
+
   it('renders without crashing', () => {
     render(<TeachingPopover steps={steps} data-testid="tp" />);
     expect(screen.getByTestId('tp')).toBeInTheDocument();

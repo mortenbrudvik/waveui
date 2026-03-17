@@ -1,12 +1,14 @@
 import { describe, it, expect } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import { Label } from '../Label';
-import { testForwardRef, testRestSpread, testClassName } from '../../../test-utils';
+import { testSystemProps } from '../../../test-utils';
 
 describe('Label', () => {
-  testForwardRef(Label, 'label');
-  testRestSpread(Label);
-  testClassName(Label);
+  testSystemProps(Label, {
+    expectedTag: 'label',
+    displayName: 'Label',
+    defaultProps: { children: 'Name' },
+  });
 
   it('renders without crashing', () => {
     render(<Label data-testid="label">Name</Label>);

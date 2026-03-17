@@ -2,7 +2,7 @@ import { describe, it, expect, vi } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { Stepper } from '../Stepper';
-import { testForwardRef, testRestSpread, testClassName } from '../../../test-utils';
+import { testSystemProps, testCompoundExposure } from '../../../test-utils';
 
 const defaultChildren = (
   <>
@@ -13,9 +13,13 @@ const defaultChildren = (
 );
 
 describe('Stepper', () => {
-  testForwardRef(Stepper, 'div', { children: defaultChildren });
-  testRestSpread(Stepper, { children: defaultChildren });
-  testClassName(Stepper, { children: defaultChildren });
+  testSystemProps(Stepper, {
+    expectedTag: 'div',
+    displayName: 'Stepper',
+    defaultProps: { children: defaultChildren },
+  });
+
+  testCompoundExposure(Stepper, ['Step']);
 
   it('renders with role="group" and aria-label', () => {
     render(

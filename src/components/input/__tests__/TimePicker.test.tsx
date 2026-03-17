@@ -3,12 +3,14 @@ import { describe, it, expect, vi } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { TimePicker } from '../TimePicker';
-import { testForwardRef, testRestSpread, testClassName } from '../../../test-utils';
+import { testSystemProps } from '../../../test-utils';
 
 describe('TimePicker', () => {
-  testForwardRef(TimePicker, 'div');
-  testRestSpread(TimePicker);
-  testClassName(TimePicker);
+  testSystemProps(TimePicker, {
+    expectedTag: 'div',
+    displayName: 'TimePicker',
+    defaultProps: { 'aria-label': 'Time picker' },
+  });
 
   it('renders without crashing', () => {
     render(<TimePicker data-testid="tp" />);

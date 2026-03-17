@@ -1,12 +1,14 @@
 import { describe, it, expect } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import { Spinner } from '../Spinner';
-import { testForwardRef, testRestSpread, testClassName } from '../../../test-utils';
+import { testSystemProps } from '../../../test-utils';
 
 describe('Spinner', () => {
-  testForwardRef(Spinner, 'span');
-  testRestSpread(Spinner);
-  testClassName(Spinner);
+  testSystemProps(Spinner, {
+    expectedTag: 'span',
+    displayName: 'Spinner',
+    defaultProps: { label: 'Loading' },
+  });
 
   it('renders with role="status"', () => {
     render(<Spinner data-testid="sp" />);

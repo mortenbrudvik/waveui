@@ -2,19 +2,15 @@ import { describe, it, expect, vi } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { Nav } from '../Nav';
-import { testRestSpread, testClassName } from '../../../test-utils';
+import { testSystemProps, testCompoundExposure } from '../../../test-utils';
 
 describe('Nav', () => {
-  testRestSpread(Nav);
-  testClassName(Nav);
-
-  it('forwards ref to DOM element', () => {
-    const ref = { current: null as HTMLElement | null };
-    render(<Nav ref={ref} data-testid="ref-test" />);
-    const el = screen.getByTestId('ref-test');
-    expect(ref.current).toBe(el);
-    expect(el.tagName.toLowerCase()).toBe('nav');
+  testSystemProps(Nav, {
+    expectedTag: 'nav',
+    displayName: 'Nav',
   });
+
+  testCompoundExposure(Nav, ['Category', 'Item', 'SubItem']);
 
   it('renders without crashing', () => {
     render(

@@ -2,12 +2,18 @@ import { describe, it, expect, vi } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { Checkbox } from '../Checkbox';
-import { testForwardRef, testRestSpread, testClassName } from '../../../test-utils';
+import { testSystemProps } from '../../../test-utils';
 
 describe('Checkbox', () => {
-  testForwardRef(Checkbox, 'label');
-  testRestSpread(Checkbox);
-  testClassName(Checkbox);
+  testSystemProps(Checkbox, {
+    expectedTag: 'label',
+    displayName: 'Checkbox',
+    defaultProps: { label: 'Accept' },
+    a11yVariants: [
+      { name: 'checked', props: { defaultChecked: true } },
+      { name: 'disabled', props: { disabled: true } },
+    ],
+  });
 
   it('renders without crashing', () => {
     render(<Checkbox label="Accept" />);

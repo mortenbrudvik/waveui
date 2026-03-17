@@ -3,8 +3,11 @@ import { describe, it, expect, vi } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { Combobox, Option } from '../Combobox';
+import { testCompoundExposure } from '../../../test-utils';
 
 describe('Combobox', () => {
+  testCompoundExposure(Combobox, ['Option', 'OptionGroup']);
+
   it('forwards ref to the root div', () => {
     const ref = React.createRef<HTMLDivElement>();
     render(

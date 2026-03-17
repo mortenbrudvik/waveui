@@ -1,6 +1,11 @@
 import * as React from 'react';
 import { render, screen } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import { axe } from 'vitest-axe';
+
+// ---------------------------------------------------------------------------
+// Individual helpers (kept as public API for backward compatibility)
+// ---------------------------------------------------------------------------
 
 /**
  * Verify that a component forwards its ref to the correct DOM element.
@@ -91,4 +96,162 @@ export function testA11y(
     const results = await axe(container);
     expect(results).toHaveNoViolations();
   });
+}
+
+// ---------------------------------------------------------------------------
+// Unified mega-helper
+// ---------------------------------------------------------------------------
+
+export interface TestSystemPropsConfig {
+  /** Expected root HTML element tag name. */
+  expectedTag: string;
+  /** Expected Component.displayName. */
+  displayName: string;
+  /** Whether the component supports the `as` prop. @default false */
+  polymorphic?: boolean;
+  /** Whether to run axe a11y checks. @default true */
+  a11y?: boolean;
+  /** Required props for rendering (e.g. { children: 'Click me' }). */
+  defaultProps?: Record<string, unknown>;
+  /** Additional axe test variants (e.g., disabled, error states). */
+  a11yVariants?: Array<{ name: string; props: Record<string, unknown> }>;
+}
+
+/**
+ * Combined helper that verifies all cross-cutting system props for a component
+ * in a single call: ref forwarding, rest spread, className merging, displayName,
+ * polymorphic `as`, and axe accessibility.
+ */
+export function testSystemProps(
+  Component: React.ComponentType<any>,
+  config: TestSystemPropsConfig,
+) {
+  const props = config.defaultProps ?? {};
+
+  testForwardRef(Component, config.expectedTag, props);
+  testRestSpread(Component, props);
+  testClassName(Component, props);
+
+  if (config.polymorphic) {
+    testPolymorphicAs(Component, props);
+  }
+
+  testDisplayName(Component, config.displayName);
+
+  if (config.a11y !== false) {
+    testA11y(Component, props);
+
+    if (config.a11yVariants) {
+      for (const variant of config.a11yVariants) {
+        it(`has no accessibility violations (${variant.name})`, async () => {
+          const { container } = render(
+            React.createElement(Component, { ...props, ...variant.props }),
+          );
+          const results = await axe(container);
+          expect(results).toHaveNoViolations();
+        });
+      }
+    }
+  }
+}
+
+// ---------------------------------------------------------------------------
+// DisplayName verification
+// ---------------------------------------------------------------------------
+
+/**
+ * Verify that a component has the expected displayName.
+ */
+export function testDisplayName(
+  Component: React.ComponentType<any>,
+  expectedName: string,
+) {
+  it(`has displayName "${expectedName}"`, () => {
+    expect(Component.displayName).toBe(expectedName);
+  });
+}
+
+// ---------------------------------------------------------------------------
+// Compound component exposure
+// ---------------------------------------------------------------------------
+
+/**
+ * Verify that a compound component exposes all expected sub-components.
+ */
+export function testCompoundExposure(
+  Parent: Record<string, unknown>,
+  expectedSubComponents: string[],
+) {
+  describe('compound component exposure', () => {
+    for (const name of expectedSubComponents) {
+      it(`exposes ${name} sub-component`, () => {
+        expect(Parent[name]).toBeDefined();
+        expect(typeof Parent[name]).toBe('function');
+      });
+    }
+  });
+}
+
+// ---------------------------------------------------------------------------
+// Focus event testing
+// ---------------------------------------------------------------------------
+
+/**
+ * Verify that onFocus and onBlur callbacks fire correctly.
+ */
+export function testFocusEvents(
+  Component: React.ComponentType<any>,
+  defaultProps: Record<string, unknown> = {},
+  selector?: string,
+) {
+  describe('focus events', () => {
+    it('calls onFocus', async () => {
+      const onFocus = vi.fn();
+      const { container } = render(
+        React.createElement(Component, { ...defaultProps, onFocus }),
+      );
+      const element = selector
+        ? container.querySelector(selector)!
+        : container.firstElementChild!;
+      await userEvent.click(element as Element);
+      expect(onFocus).toHaveBeenCalled();
+    });
+
+    it('calls onBlur', async () => {
+      const onBlur = vi.fn();
+      const { container } = render(
+        React.createElement(Component, { ...defaultProps, onBlur }),
+      );
+      const element = selector
+        ? container.querySelector(selector)!
+        : container.firstElementChild!;
+      await userEvent.click(element as Element);
+      await userEvent.tab();
+      expect(onBlur).toHaveBeenCalled();
+    });
+  });
+}
+
+// ---------------------------------------------------------------------------
+// Overlay test wrapper
+// ---------------------------------------------------------------------------
+
+/**
+ * Creates a wrapper component for testing overlay sub-components in isolation.
+ *
+ * Usage:
+ * ```ts
+ * const DialogWrapper = createOverlayTestWrapper(Dialog, { open: true, onOpenChange: () => {} });
+ * render(<Dialog.Content>Content</Dialog.Content>, { wrapper: DialogWrapper });
+ * ```
+ */
+export function createOverlayTestWrapper(
+  OverlayRoot: React.ComponentType<any>,
+  rootProps: Record<string, unknown>,
+): React.ComponentType<{ children: React.ReactNode }> {
+  function Wrapper({ children }: { children: React.ReactNode }) {
+    return React.createElement(OverlayRoot, rootProps, children);
+  }
+  Wrapper.displayName = 'OverlayTestWrapper';
+  return Wrapper;
 }

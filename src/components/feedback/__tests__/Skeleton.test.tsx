@@ -1,12 +1,13 @@
 import { describe, it, expect } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import { Skeleton } from '../Skeleton';
-import { testForwardRef, testRestSpread, testClassName } from '../../../test-utils';
+import { testSystemProps } from '../../../test-utils';
 
 describe('Skeleton', () => {
-  testForwardRef(Skeleton, 'div');
-  testRestSpread(Skeleton);
-  testClassName(Skeleton);
+  testSystemProps(Skeleton, {
+    expectedTag: 'div',
+    displayName: 'Skeleton',
+  });
 
   it('renders with aria-hidden="true"', () => {
     render(<Skeleton data-testid="skel" />);

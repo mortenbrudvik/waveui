@@ -2,7 +2,7 @@ import * as React from 'react';
 import { describe, it, expect } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import { Table } from '../Table';
-import { testForwardRef } from '../../../test-utils';
+import { testSystemProps, testCompoundExposure } from '../../../test-utils';
 
 const renderFullTable = (props: Record<string, unknown> = {}) =>
   render(
@@ -27,15 +27,21 @@ const renderFullTable = (props: Record<string, unknown> = {}) =>
   );
 
 describe('Table', () => {
-  testForwardRef(Table, 'table', {
-    children: (
-      <Table.Body>
-        <Table.Row>
-          <Table.Cell>Cell</Table.Cell>
-        </Table.Row>
-      </Table.Body>
-    ),
+  testSystemProps(Table, {
+    expectedTag: 'table',
+    displayName: 'Table',
+    defaultProps: {
+      children: (
+        <Table.Body>
+          <Table.Row>
+            <Table.Cell>Cell</Table.Cell>
+          </Table.Row>
+        </Table.Body>
+      ),
+    },
   });
+
+  testCompoundExposure(Table, ['Head', 'HeadCell', 'Body', 'Row', 'Cell']);
 
   it('renders a table element', () => {
     renderFullTable({ 'data-testid': 'tbl' });

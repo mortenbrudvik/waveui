@@ -3,12 +3,14 @@ import { describe, it, expect, vi } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { DatePicker } from '../DatePicker';
-import { testForwardRef, testRestSpread, testClassName } from '../../../test-utils';
+import { testSystemProps } from '../../../test-utils';
 
 describe('DatePicker', () => {
-  testForwardRef(DatePicker, 'div');
-  testRestSpread(DatePicker);
-  testClassName(DatePicker);
+  testSystemProps(DatePicker, {
+    expectedTag: 'div',
+    displayName: 'DatePicker',
+    defaultProps: { 'aria-label': 'Date picker' },
+  });
 
   it('renders without crashing', () => {
     render(<DatePicker data-testid="dp" />);

@@ -2,12 +2,16 @@ import { describe, it, expect, vi } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { Menu } from '../Menu';
-import { testForwardRef, testRestSpread, testClassName } from '../../../test-utils';
+import { testSystemProps, testCompoundExposure } from '../../../test-utils';
 
 describe('Menu', () => {
-  testForwardRef(Menu, 'div', { children: <Menu.Item>Item</Menu.Item> });
-  testRestSpread(Menu, { children: <Menu.Item>Item</Menu.Item> });
-  testClassName(Menu, { children: <Menu.Item>Item</Menu.Item> });
+  testSystemProps(Menu, {
+    expectedTag: 'div',
+    displayName: 'Menu',
+    defaultProps: { children: <Menu.Item>Item</Menu.Item> },
+  });
+
+  testCompoundExposure(Menu, ['Item', 'Divider']);
 
   it('renders with role="menu"', () => {
     render(

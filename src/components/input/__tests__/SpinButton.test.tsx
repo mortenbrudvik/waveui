@@ -2,12 +2,19 @@ import { describe, it, expect, vi } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { SpinButton } from '../SpinButton';
-import { testForwardRef, testRestSpread, testClassName } from '../../../test-utils';
+import { testSystemProps, testFocusEvents } from '../../../test-utils';
 
 describe('SpinButton', () => {
-  testForwardRef(SpinButton, 'div');
-  testRestSpread(SpinButton);
-  testClassName(SpinButton);
+  testSystemProps(SpinButton, {
+    expectedTag: 'div',
+    displayName: 'SpinButton',
+    defaultProps: { 'aria-label': 'Quantity' },
+    a11yVariants: [
+      { name: 'disabled', props: { disabled: true } },
+    ],
+  });
+
+  testFocusEvents(SpinButton, { 'aria-label': 'Quantity' }, 'input');
 
   it('renders without crashing', () => {
     render(<SpinButton />);

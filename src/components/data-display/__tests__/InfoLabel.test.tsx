@@ -1,12 +1,14 @@
 import { describe, it, expect } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import { InfoLabel } from '../InfoLabel';
-import { testForwardRef, testRestSpread, testClassName } from '../../../test-utils';
+import { testSystemProps } from '../../../test-utils';
 
 describe('InfoLabel', () => {
-  testForwardRef(InfoLabel, 'span', { label: 'Name', info: 'Enter your name' });
-  testRestSpread(InfoLabel, { label: 'Name', info: 'Enter your name' });
-  testClassName(InfoLabel, { label: 'Name', info: 'Enter your name' });
+  testSystemProps(InfoLabel, {
+    expectedTag: 'span',
+    displayName: 'InfoLabel',
+    defaultProps: { label: 'Name', info: 'Enter your name' },
+  });
 
   it('renders the label text', () => {
     render(<InfoLabel label="Email" info="Your email address" />);

@@ -2,18 +2,20 @@ import { describe, it, expect, vi } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { CompoundButton } from '../CompoundButton';
-import {
-  testForwardRef,
-  testRestSpread,
-  testClassName,
-  testPolymorphicAs,
-} from '../../../test-utils';
+import { testSystemProps, testFocusEvents } from '../../../test-utils';
 
 describe('CompoundButton', () => {
-  testForwardRef(CompoundButton, 'button');
-  testRestSpread(CompoundButton);
-  testClassName(CompoundButton);
-  testPolymorphicAs(CompoundButton);
+  testSystemProps(CompoundButton, {
+    expectedTag: 'button',
+    displayName: 'CompoundButton',
+    polymorphic: true,
+    defaultProps: { children: 'Click me' },
+    a11yVariants: [
+      { name: 'disabled', props: { disabled: true } },
+    ],
+  });
+
+  testFocusEvents(CompoundButton, { children: 'Click me' });
 
   it('renders without crashing', () => {
     render(<CompoundButton>Click me</CompoundButton>);

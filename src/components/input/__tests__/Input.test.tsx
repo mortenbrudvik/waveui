@@ -2,12 +2,19 @@ import { describe, it, expect, vi } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { Input } from '../Input';
-import { testForwardRef, testRestSpread, testClassName } from '../../../test-utils';
+import { testSystemProps, testFocusEvents } from '../../../test-utils';
 
 describe('Input', () => {
-  testForwardRef(Input, 'input');
-  testRestSpread(Input);
-  testClassName(Input);
+  testSystemProps(Input, {
+    expectedTag: 'input',
+    displayName: 'Input',
+    defaultProps: { 'aria-label': 'test' },
+    a11yVariants: [
+      { name: 'disabled', props: { disabled: true } },
+    ],
+  });
+
+  testFocusEvents(Input, { 'aria-label': 'test' }, 'input');
 
   it('renders without crashing', () => {
     render(<Input placeholder="Enter text" />);

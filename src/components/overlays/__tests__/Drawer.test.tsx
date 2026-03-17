@@ -2,7 +2,11 @@ import { describe, it, expect, vi } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { Drawer } from '../Drawer';
+import { testDisplayName } from '../../../test-utils';
+
 describe('Drawer', () => {
+  testDisplayName(Drawer, 'Drawer');
+
   it('does not render when closed', () => {
     render(<Drawer>Content</Drawer>);
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
