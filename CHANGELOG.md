@@ -5,6 +5,35 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.3.0] - 2026-03-17
+
+### Added
+
+**7 New Components** completing the layout, navigation, and input categories:
+
+- **Inputs & Forms** (2):
+  - DatePicker — Interactive calendar-based date picker with validation, min/max constraints, and customizable formatting
+  - TimePicker — Dropdown time picker with searchable options, customizable intervals, and 12h/24h format support
+
+- **Layout** (3):
+  - Grid — CSS Grid layout component with customizable columns, rows, gaps, and alignment properties
+  - Stack — Flexbox-based stacking layout with vertical/horizontal direction and semantic spacing
+  - Flex — Low-level flexbox layout with full direction, wrapping, grow/shrink control
+
+- **Navigation** (2):
+  - Stepper — Multi-step process indicator with horizontal/vertical layouts, linear navigation, and completion tracking
+  - Pagination — Page navigation with ellipsis support, customizable boundaries, and previous/next controls
+
+**154 New Unit Tests**: Comprehensive test coverage for all 7 new components (928 total tests).
+
+**7 New Storybook Stories**: Interactive stories with controls for all new components (65 total story files).
+
+### Changed
+
+- Total component count: 58 → 65
+- Total test count: 774 → 928
+- Version bump: 0.2.0 → 0.3.0
+
 ## [0.2.0] - 2026-03-05
 
 ### Added

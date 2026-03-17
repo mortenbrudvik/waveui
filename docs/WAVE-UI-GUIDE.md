@@ -801,7 +801,7 @@ To create a custom brand, generate a 16-stop ramp from a single primary color:
 4. Generate lighter stops (90-160) by increasing lightness
 5. Update `--brand-*` CSS variables
 
-See `skills/brand-guidelines/brands/fluentui.json` for the complete brand token structure.
+Override the `--brand-*` CSS variables in your own stylesheet to apply a custom brand.
 
 ### Border Radius Scale
 
@@ -954,7 +954,7 @@ dispatchToast({
 | Need | Component |
 |------|-----------|
 | Trigger an action | `Button`, `CompoundButton`, `SplitButton` |
-| Navigate to a page | `Link`, `Breadcrumb`, `Nav` |
+| Navigate to a page | `Link`, `Breadcrumb`, `Nav`, `Pagination` |
 | Single-line text input | `Input`, `SearchBox` |
 | Multi-line text input | `Textarea` |
 | Select from options | `Dropdown` (closed list), `Combobox` (type + filter) |
@@ -967,11 +967,14 @@ dispatchToast({
 | Categorize items | `Badge`, `Tag`, `CounterBadge` |
 | Show status | `PresenceBadge`, `MessageBar` |
 | Display data | `Table`, `DataGrid`, `List` |
-| Organize content | `Card`, `Accordion`, `TabList`, `Tree` |
+| Organize content | `Card`, `Accordion`, `TabList`, `Tree`, `Grid`, `Stack`, `Flex` |
 | Overlay content | `Dialog`, `Drawer`, `Popover`, `Tooltip` |
 | Show progress | `Spinner`, `ProgressBar`, `Skeleton` |
 | Notify users | `Toast` / `Toaster`, `MessageBar` |
+| Pick a date | `DatePicker` |
+| Pick a time | `TimePicker` |
 | Guide users | `TeachingPopover` |
+| Show step progress | `Stepper` |
 | Handle overflow | `Overflow` / `OverflowItem` |
 | Browse content | `Carousel` |
 | Rate items | `Rating`, `RatingDisplay` |
@@ -981,22 +984,22 @@ dispatchToast({
 
 ## 12. Quick Reference
 
-### Component Catalog (60 components)
+### Component Catalog (65 components)
 
 **Buttons & Actions** (7)
 `Button` `CompoundButton` `ToggleButton` `SplitButton` `MenuButton` `Link` `Toolbar`
 
-**Input & Forms** (19)
-`Input` `Textarea` `Field` `Label` `Checkbox` `RadioGroup` `RadioItem` `Switch` `Select` `SearchBox` `Slider` `SpinButton` `Combobox` `Dropdown` `TagPicker` `Rating` `RatingDisplay` `ColorPicker` `SwatchPicker`
+**Input & Forms** (21)
+`Input` `Textarea` `Field` `Label` `Checkbox` `RadioGroup` `RadioItem` `Switch` `Select` `SearchBox` `Slider` `SpinButton` `Combobox` `Dropdown` `TagPicker` `Rating` `RatingDisplay` `ColorPicker` `SwatchPicker` `DatePicker` `TimePicker`
 
 **Data Display** (11)
 `Avatar` `AvatarGroup` `Badge` `PresenceBadge` `CounterBadge` `Tag` `Persona` `Divider` `InfoLabel` `Image` `List`
 
-**Layout** (6)
-`Card` `Accordion` `TabList` `Tree` `Carousel` `Overflow`
+**Layout** (9)
+`Card` `Accordion` `TabList` `Tree` `Carousel` `Overflow` `Grid` `Stack` `Flex`
 
-**Navigation** (3)
-`Breadcrumb` `Menu` `Nav`
+**Navigation** (5)
+`Breadcrumb` `Menu` `Nav` `Stepper` `Pagination`
 
 **Feedback** (5)
 `MessageBar` `ProgressBar` `Spinner` `Skeleton` `Toast`/`Toaster`

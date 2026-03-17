@@ -1,6 +1,6 @@
 # waveui
 
-A comprehensive React component library inspired by Fluent UI 2 design language with shadcn/ui-inspired patterns. 58 accessible, composable components built with TypeScript, Tailwind CSS, and a flexible slot system.
+A comprehensive React component library inspired by Fluent UI 2 design language with shadcn/ui-inspired patterns. 65 accessible, composable components built with TypeScript, Tailwind CSS, and a flexible slot system.
 
 ## Installation
 
@@ -12,7 +12,7 @@ npm install waveui
 
 ```tsx
 import { WaveProvider, Button } from 'waveui';
-import 'waveui/styles/globals.css';
+import 'waveui/styles';
 
 function App() {
   return (
@@ -54,6 +54,8 @@ Wrap your app (or subtree) in `<WaveProvider>` to apply Wave UI theming. All com
 | `SearchBox` | Search input with icon and clear button |
 | `Slider` | Range input with visual track and thumb |
 | `SpinButton` | Numeric input with increment/decrement buttons |
+| `DatePicker` | Interactive calendar-based date picker with validation and min/max constraints |
+| `TimePicker` | Dropdown time picker with searchable options and 12h/24h format support |
 | `Field` | Form field wrapper with label, hint, and error support |
 | `Label` | Form label with required indicator and size variants |
 | `Combobox` | Filterable dropdown with type-ahead, Option/OptionGroup sub-components |
@@ -95,6 +97,9 @@ Wrap your app (or subtree) in `<WaveProvider>` to apply Wave UI theming. All com
 | `Tree` | Hierarchical expandable list with TreeItem sub-components |
 | `Carousel` | Content slider with prev/next buttons and dot indicators |
 | `Overflow` | Overflow detection container with OverflowItem sub-components |
+| `Grid` | CSS Grid layout with customizable columns, rows, gaps, and alignment |
+| `Stack` | Flexbox stacking layout with vertical/horizontal direction and semantic spacing |
+| `Flex` | Low-level flexbox layout with full direction, wrapping, and grow/shrink control |
 
 ### Feedback
 
@@ -113,6 +118,8 @@ Wrap your app (or subtree) in `<WaveProvider>` to apply Wave UI theming. All com
 | `Breadcrumb` | Breadcrumb navigation with chevron separators |
 | `Menu` | Dropdown menu with icons, shortcuts, and dividers |
 | `Nav` | Sidebar navigation with NavCategory, NavItem, NavSubItem |
+| `Stepper` | Multi-step process indicator with horizontal/vertical layouts and completion tracking |
+| `Pagination` | Page navigation with ellipsis support and previous/next controls |
 
 ### Overlays
 
@@ -227,7 +234,7 @@ npm install
 # Start dev server
 npm run dev
 
-# Run tests (774 unit tests)
+# Run tests (928 unit tests)
 npx vitest run
 
 # Type check
@@ -242,7 +249,7 @@ npx storybook dev -p 6006
 
 ## Storybook
 
-Browse all 58 components with interactive controls:
+Browse all 65 components with interactive controls:
 
 ```bash
 npx storybook dev -p 6006
