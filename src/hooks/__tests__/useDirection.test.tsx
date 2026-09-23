@@ -1,5 +1,5 @@
 import { describe, it, expect, afterEach, vi } from 'vitest';
-import { render, renderHook, screen, act } from '@testing-library/react';
+import { render, renderHook, screen, act, cleanup } from '@testing-library/react';
 import { renderToString } from 'react-dom/server';
 import * as React from 'react';
 import { useDirection } from '../useDirection';
@@ -11,6 +11,9 @@ function Probe() {
 
 describe('useDirection', () => {
   afterEach(() => {
+    // Unmount first: a hook outside a provider observes the document direction, so resetting it
+    // while the hook is still mounted would re-render the hook outside act().
+    cleanup();
     document.documentElement.removeAttribute('dir');
     document.dir = '';
   });
