@@ -17,8 +17,15 @@ export default defineConfig({
     coverage: {
       provider: 'v8',
       reporter: ['text', 'lcov', 'json-summary'],
-      include: ['src/components/**/*.tsx', 'src/hooks/**/*.ts', 'src/lib/**/*.ts'],
-      exclude: ['**/*.test.tsx', '**/*.stories.tsx', '**/index.ts'],
+      include: ['src/components/**/*.{ts,tsx}', 'src/hooks/**/*.{ts,tsx}', 'src/lib/**/*.{ts,tsx}'],
+      exclude: [
+        '**/__tests__/**',
+        '**/*.test.{ts,tsx}',
+        '**/*.stories.tsx',
+        '**/index.ts',
+        '**/*.d.ts',
+        'src/test-utils*',
+      ],
       thresholds: {
         statements: 70,
         branches: 60,
