@@ -1153,6 +1153,8 @@ interface DataPickerProps extends HarnessOptions {
   defaultOpen?: boolean;
   onRowRender?: (value: string) => void;
   onSelectSpy?: (value: string, item: ListboxItem) => void;
+  /** React key of a row. @default the item value */
+  rowKey?: (item: ListboxItem, index: number) => string;
 }
 
 function DataPicker({
@@ -1160,6 +1162,7 @@ function DataPicker({
   defaultOpen = false,
   onRowRender,
   onSelectSpy,
+  rowKey = (item) => item.value,
   mode = 'editable',
   ...options
 }: DataPickerProps) {
@@ -1181,8 +1184,8 @@ function DataPicker({
     <ListboxContext.Provider value={lb.context}>
       <input {...lb.getComboboxProps()} aria-label="Fruit" onKeyDown={lb.onKeyDown} readOnly />
       <ul {...lb.getListboxProps()} aria-label="Fruits" hidden={!open}>
-        {lb.items.map((item) => (
-          <Row key={item.value} item={item} onRender={onRowRender} />
+        {lb.items.map((item, index) => (
+          <Row key={rowKey(item, index)} item={item} onRender={onRowRender} />
         ))}
       </ul>
       <output data-testid="value">{value}</output>
@@ -1243,9 +1246,22 @@ describe('useListbox — data mode', () => {
 
   it('warns about duplicate item values', () => {
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
-    render(<DataPicker items={[...ITEMS, { value: 'a', label: 'Again' }]} />);
-    expect(warn.mock.calls.filter((c) => String(c[0]).includes('"a"'))).toHaveLength(1);
-    warn.mockRestore();
+    // Not mocked: an unexpected error still prints. The rows get unique React keys, so the only
+    // duplicate is the item value under test (no React duplicate-key error).
+    const error = vi.spyOn(console, 'error');
+    try {
+      render(
+        <DataPicker
+          items={[...ITEMS, { value: 'a', label: 'Again' }]}
+          rowKey={(item, index) => `${index}:${item.value}`}
+        />,
+      );
+      expect(warn.mock.calls.filter((c) => String(c[0]).includes('"a"'))).toHaveLength(1);
+      expect(error).not.toHaveBeenCalled();
+    } finally {
+      warn.mockRestore();
+      error.mockRestore();
+    }
   });
 });
 

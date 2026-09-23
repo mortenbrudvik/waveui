@@ -141,6 +141,9 @@ describe('Portal', () => {
       );
       expect(getWrapper(screen.getByText('Doc dir'))).toHaveAttribute('dir', 'rtl');
     } finally {
+      // Unmount first: outside a provider the portal observes the document direction, so resetting
+      // it while the portal is still mounted would re-render the portal outside act().
+      cleanup();
       document.documentElement.removeAttribute('dir');
     }
   });
