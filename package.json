@@ -32,32 +32,46 @@
   "types": "./dist/index.d.ts",
   "exports": {
     ".": {
-      "types": "./dist/index.d.ts",
-      "import": "./dist/index.mjs",
-      "require": "./dist/index.cjs"
+      "import": {
+        "types": "./dist/index.d.ts",
+        "default": "./dist/index.mjs"
+      },
+      "require": {
+        "types": "./dist/index.d.cts",
+        "default": "./dist/index.cjs"
+      }
     },
-    "./styles": "./src/styles/globals.css",
-    "./tokens": "./src/styles/tokens.css"
+    "./styles": "./dist/styles.css",
+    "./styles.css": "./dist/styles.css",
+    "./preflight.css": "./dist/preflight.css",
+    "./tailwind": "./src/styles/tailwind.css",
+    "./tailwind.css": "./src/styles/tailwind.css",
+    "./tokens": "./src/styles/tokens.css",
+    "./tokens.css": "./src/styles/tokens.css",
+    "./legacy-tokens.css": "./src/styles/legacy-tokens.css",
+    "./package.json": "./package.json"
   },
   "files": [
     "dist",
-    "src/styles"
+    "src/styles",
+    "!src/styles/__tests__"
   ],
   "scripts": {
     "dev": "storybook dev -p 6006",
-    "build": "tsc -p tsconfig.json --noEmit && vite build",
+    "build": "tsc -p tsconfig.json --noEmit && vite build && node scripts/build-css.mjs && node scripts/verify-dist.mjs",
     "test": "vitest run",
     "test:watch": "vitest",
     "test:coverage": "vitest run --coverage",
     "storybook": "storybook dev -p 6006",
-    "build-storybook": "storybook build",
+    "build-storybook": "storybook build && node scripts/verify-storybook.mjs",
     "typecheck": "tsc -p tsconfig.json --noEmit && tsc -p tsconfig.dev.json --noEmit && tsc -p tsconfig.node.json --noEmit && node scripts/check-ts-coverage.mjs",
     "lint": "eslint src/ stories/ .storybook/ scripts/",
     "lint:fix": "eslint src/ stories/ .storybook/ scripts/ --fix",
     "format": "prettier --write \"src/**/*.{ts,tsx}\" \"stories/**/*.{ts,tsx}\" \".storybook/**/*.{ts,tsx,css}\" \"scripts/**/*.{js,mjs,cjs,ts,mts,cts,tsx,css,json}\"",
     "format:check": "prettier --check \"src/**/*.{ts,tsx}\" \"stories/**/*.{ts,tsx}\" \".storybook/**/*.{ts,tsx,css}\" \"scripts/**/*.{js,mjs,cjs,ts,mts,cts,tsx,css,json}\"",
     "check:package": "publint && attw --pack . --profile node16 --exclude-entrypoints styles styles.css preflight.css tailwind tailwind.css tokens tokens.css legacy-tokens.css",
-    "prepublishOnly": "npm run build && npm test"
+    "test:pack": "node scripts/pack-smoke.mjs",
+    "prepublishOnly": "npm run typecheck && npm run build && node scripts/verify-dist.mjs --final && npm test && npm run check:package && npm run test:pack"
   },
   "peerDependencies": {
     "react": "^19.0.0",

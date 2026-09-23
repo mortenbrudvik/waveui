@@ -1,0 +1,9 @@
+/*
+ * Storybook stylesheet (imported by preview.tsx, compiled by @tailwindcss/vite): the library's
+ * precompiled entry — the same CSS consumers get from `@mortenbrudvik/waveui/styles`, without
+ * Preflight — plus the stories as an extra source, so utilities used only in stories exist here
+ * and never in dist/styles.css (scripts/verify-storybook.mjs and scripts/build-css.mjs assert
+ * both directions).
+ */
+@import '../src/styles/styles.css';
+@source '../stories';

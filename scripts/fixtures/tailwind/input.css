@@ -1,0 +1,6 @@
+/*
+ * Tailwind 4 consumer entry, as documented: Tailwind first, then Wave's Tailwind entry. Compiled
+ * by scripts/pack-smoke.mjs with @tailwindcss/cli inside an installed copy of this fixture.
+ */
+@import 'tailwindcss';
+@import '@mortenbrudvik/waveui/tailwind';

@@ -1,0 +1,11 @@
+{
+  "name": "wave-pack-smoke-tailwind",
+  "private": true,
+  "description": "Packaging smoke fixture (scripts/pack-smoke.mjs): a Tailwind 4 app that imports @mortenbrudvik/waveui/tailwind.",
+  "type": "module",
+  "smokeDependencies": [
+    "react",
+    "react-dom",
+    "tailwindcss"
+  ]
+}
