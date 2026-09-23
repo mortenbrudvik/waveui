@@ -1,26 +1,36 @@
-import { useCallback, useRef, useInsertionEffect } from 'react';
+import { useCallback, useInsertionEffect, useRef } from 'react';
 
 /**
- * Returns a stable callback reference that always invokes the latest version
- * of the provided function. Useful for event handlers passed to child
- * components to avoid unnecessary re-renders.
+ * Returns a callback with a stable identity that always invokes the latest `fn` passed to the hook.
+ * Use it for handlers read by effects or passed to memoised children, so neither re-runs when the
+ * consumer passes a new inline function on every render.
  *
- * The returned function has a stable identity across renders.
+ * The latest `fn` is stored in an insertion effect, so it is current before any layout effect or
+ * event handler runs. Do not call the returned function during render.
  *
- * @typeParam T - The callback function signature.
- * @param fn - The callback to wrap. May be `undefined`, in which case calls are no-ops.
- * @returns A memoized function with a stable identity that delegates to the latest `fn`.
+ * @example
+ * const emitChange = useEventCallback(props.onValueChange); // optional prop
+ * emitChange(next); // always a function; returns `undefined` while the prop is not given
+ *
+ * @param fn - The callback to wrap. May be `undefined`; calls are then no-ops that return `undefined`.
+ * @returns A function with a stable identity that delegates to the latest `fn`.
  */
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-export function useEventCallback<T extends (...args: any[]) => any>(fn: T | undefined): T {
-  const ref = useRef<T | undefined>(fn);
+export function useEventCallback<Args extends unknown[], R>(
+  fn: (...args: Args) => R,
+): (...args: Args) => R;
+export function useEventCallback<Args extends unknown[], R>(
+  fn: ((...args: Args) => R) | undefined,
+): (...args: Args) => R | undefined;
+export function useEventCallback<Args extends unknown[], R>(
+  fn: ((...args: Args) => R) | undefined,
+): (...args: Args) => R | undefined {
+  const ref = useRef(fn);
 
-  // useInsertionEffect runs synchronously before layout effects,
-  // ensuring the ref is always up-to-date before any effect reads it.
+  // useInsertionEffect runs before layout effects, so the ref is up to date before any effect or
+  // event handler reads it.
   useInsertionEffect(() => {
     ref.current = fn;
   });
 
-  // The returned callback identity never changes.
-  return useCallback((...args: Parameters<T>) => ref.current?.(...args), []) as T;
+  return useCallback((...args: Args) => ref.current?.(...args), []);
 }

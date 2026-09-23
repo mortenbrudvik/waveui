@@ -1,36 +1,43 @@
-import { describe, it, expect, vi } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { describe, it, expect, vi, expectTypeOf } from 'vitest';
+import { render, screen, fireEvent, act } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
+import { renderToString } from 'react-dom/server';
 import * as React from 'react';
-import { useRovingTabIndex } from '../useRovingTabIndex';
+import {
+  useRovingTabIndex,
+  type UseRovingTabIndexOptions,
+  type UseRovingTabIndexResult,
+} from '../useRovingTabIndex';
 
-/** Minimal test harness for the roving tabindex hook */
+type Orientation = UseRovingTabIndexOptions['orientation'];
+
+/**
+ * Legacy harness (0.4 call shape: container ref + explicit `items`). Options are forwarded only
+ * when a test sets them, so the hook's own defaults are exercised.
+ */
 function TestGroup({
   activeValue,
   items,
-  orientation = 'horizontal',
-  loop = true,
+  orientation,
+  loop,
   onFocusMove,
 }: {
   activeValue: string;
   items: string[];
-  orientation?: 'horizontal' | 'vertical' | 'both';
+  orientation?: Orientation;
   loop?: boolean;
   onFocusMove?: (value: string) => void;
 }) {
   const containerRef = React.useRef<HTMLDivElement>(null);
-  const { handleKeyDown, getTabIndex } = useRovingTabIndex(containerRef, {
-    activeValue,
-    items,
-    orientation,
-    loop,
-    onFocusMove,
-  });
+  const options: UseRovingTabIndexOptions = { activeValue, items, onFocusMove };
+  if (orientation !== undefined) options.orientation = orientation;
+  if (loop !== undefined) options.loop = loop;
+  const { handleKeyDown, getTabIndex } = useRovingTabIndex(containerRef, options);
 
   return (
     <div ref={containerRef} role="group" onKeyDown={handleKeyDown}>
       {items.map((item) => (
-        <button key={item} data-roving-value={item} tabIndex={getTabIndex(item)}>
+        <button key={item} type="button" data-roving-value={item} tabIndex={getTabIndex(item)}>
           {item}
         </button>
       ))}
@@ -38,114 +45,1194 @@ function TestGroup({
   );
 }
 
+interface DomItem {
+  value: string;
+  label?: string;
+  disabled?: boolean;
+  ariaDisabled?: boolean;
+  text?: string;
+}
+
+/** DOM-mode harness: no `items`, items found through `data-roving-value`, `containerProps` spread. */
+function DomGroup({
+  items,
+  wrap = false,
+  onResult,
+  containerTabIndex,
+  ...options
+}: Omit<UseRovingTabIndexOptions, 'items'> & {
+  items: DomItem[];
+  wrap?: boolean;
+  onResult?: (result: UseRovingTabIndexResult) => void;
+  /** Makes the container itself focusable (a surface that takes focus before its items). */
+  containerTabIndex?: number;
+}) {
+  const result = useRovingTabIndex(options);
+  onResult?.(result);
+  return (
+    <div role="group" aria-label="group" tabIndex={containerTabIndex} {...result.containerProps}>
+      {items.map((item) => {
+        const button = (
+          <button
+            key={item.value}
+            type="button"
+            data-roving-value={item.value}
+            data-roving-text={item.text}
+            disabled={item.disabled}
+            aria-disabled={item.ariaDisabled || undefined}
+            tabIndex={result.getTabIndex(item.value)}
+          >
+            {item.label ?? item.value}
+          </button>
+        );
+        return wrap ? <div key={item.value}>{button}</div> : button;
+      })}
+    </div>
+  );
+}
+
+const ABC: DomItem[] = [{ value: 'a' }, { value: 'b' }, { value: 'c' }];
+
+const TOOLBAR_SELECTOR = 'button, [href], input, select, textarea, [role="button"], [tabindex]';
+
+/** Managed harness (Toolbar-like): the hook writes tabIndex onto children it does not render. */
+function Managed({
+  children,
+  tabStop,
+  orientation,
+  onResult,
+}: {
+  children: React.ReactNode;
+  tabStop?: 'active' | 'last-focused';
+  orientation?: Orientation;
+  onResult?: (result: UseRovingTabIndexResult) => void;
+}) {
+  const result = useRovingTabIndex({
+    itemSelector: TOOLBAR_SELECTOR,
+    manageTabIndex: true,
+    tabStop,
+    orientation,
+  });
+  onResult?.(result);
+  return (
+    <div role="toolbar" aria-label="Formatting" {...result.containerProps}>
+      {children}
+    </div>
+  );
+}
+
+function button(name: string) {
+  return screen.getByRole('button', { name });
+}
+
 describe('useRovingTabIndex', () => {
-  it('sets tabIndex 0 on active item and -1 on others', () => {
-    render(<TestGroup activeValue="b" items={['a', 'b', 'c']} />);
-    expect(screen.getByText('a')).toHaveAttribute('tabindex', '-1');
-    expect(screen.getByText('b')).toHaveAttribute('tabindex', '0');
-    expect(screen.getByText('c')).toHaveAttribute('tabindex', '-1');
+  describe('legacy call shape (container ref + items)', () => {
+    it('sets tabIndex 0 on active item and -1 on others', () => {
+      render(<TestGroup activeValue="b" items={['a', 'b', 'c']} />);
+      expect(button('a')).toHaveAttribute('tabindex', '-1');
+      expect(button('b')).toHaveAttribute('tabindex', '0');
+      expect(button('c')).toHaveAttribute('tabindex', '-1');
+    });
+
+    it('falls back to first item when activeValue is not in items', () => {
+      render(<TestGroup activeValue="z" items={['a', 'b', 'c']} />);
+      expect(button('a')).toHaveAttribute('tabindex', '0');
+      expect(button('b')).toHaveAttribute('tabindex', '-1');
+    });
+
+    it('moves focus right with ArrowRight (horizontal)', async () => {
+      const user = userEvent.setup();
+      const onFocusMove = vi.fn();
+      render(<TestGroup activeValue="a" items={['a', 'b', 'c']} onFocusMove={onFocusMove} />);
+      button('a').focus();
+      await user.keyboard('{ArrowRight}');
+      expect(onFocusMove).toHaveBeenCalledWith('b', expect.objectContaining({ key: 'ArrowRight' }));
+      expect(button('b')).toHaveFocus();
+    });
+
+    it('moves focus left with ArrowLeft (horizontal)', async () => {
+      const user = userEvent.setup();
+      const onFocusMove = vi.fn();
+      render(<TestGroup activeValue="b" items={['a', 'b', 'c']} onFocusMove={onFocusMove} />);
+      button('b').focus();
+      await user.keyboard('{ArrowLeft}');
+      expect(onFocusMove).toHaveBeenCalledWith('a', expect.anything());
+      expect(button('a')).toHaveFocus();
+    });
+
+    it('wraps focus around with loop=true', async () => {
+      const user = userEvent.setup();
+      const onFocusMove = vi.fn();
+      render(<TestGroup activeValue="c" items={['a', 'b', 'c']} loop onFocusMove={onFocusMove} />);
+      button('c').focus();
+      await user.keyboard('{ArrowRight}');
+      expect(onFocusMove).toHaveBeenCalledWith('a', expect.anything());
+      expect(button('a')).toHaveFocus();
+    });
+
+    it('does not wrap with loop=false', async () => {
+      const user = userEvent.setup();
+      const onFocusMove = vi.fn();
+      render(
+        <TestGroup
+          activeValue="c"
+          items={['a', 'b', 'c']}
+          loop={false}
+          onFocusMove={onFocusMove}
+        />,
+      );
+      button('c').focus();
+      await user.keyboard('{ArrowRight}');
+      expect(onFocusMove).not.toHaveBeenCalled();
+      expect(button('c')).toHaveFocus();
+    });
+
+    it('does not wrap at the start boundary with loop=false, but Home/End still work', async () => {
+      const user = userEvent.setup();
+      const onFocusMove = vi.fn();
+      render(
+        <TestGroup
+          activeValue="a"
+          items={['a', 'b', 'c']}
+          loop={false}
+          onFocusMove={onFocusMove}
+        />,
+      );
+      button('a').focus();
+      await user.keyboard('{ArrowLeft}');
+      expect(onFocusMove).not.toHaveBeenCalled();
+      expect(button('a')).toHaveFocus();
+
+      await user.keyboard('{End}');
+      expect(button('c')).toHaveFocus();
+      await user.keyboard('{Home}');
+      expect(button('a')).toHaveFocus();
+    });
+
+    it('supports vertical orientation with ArrowDown/ArrowUp', async () => {
+      const user = userEvent.setup();
+      const onFocusMove = vi.fn();
+      render(
+        <TestGroup
+          activeValue="a"
+          items={['a', 'b', 'c']}
+          orientation="vertical"
+          onFocusMove={onFocusMove}
+        />,
+      );
+      button('a').focus();
+      await user.keyboard('{ArrowDown}');
+      expect(onFocusMove).toHaveBeenLastCalledWith('b', expect.anything());
+
+      await user.keyboard('{ArrowUp}');
+      expect(onFocusMove).toHaveBeenLastCalledWith('a', expect.anything());
+
+      onFocusMove.mockClear();
+      await user.keyboard('{ArrowRight}');
+      expect(onFocusMove).not.toHaveBeenCalled();
+    });
+
+    it('does not respond to ArrowDown/ArrowUp in horizontal mode', async () => {
+      const user = userEvent.setup();
+      const onFocusMove = vi.fn();
+      render(
+        <TestGroup
+          activeValue="a"
+          items={['a', 'b', 'c']}
+          orientation="horizontal"
+          onFocusMove={onFocusMove}
+        />,
+      );
+      button('a').focus();
+      await user.keyboard('{ArrowDown}');
+      expect(onFocusMove).not.toHaveBeenCalled();
+    });
+
+    it('Home moves to first item', async () => {
+      const user = userEvent.setup();
+      render(<TestGroup activeValue="c" items={['a', 'b', 'c']} />);
+      button('c').focus();
+      await user.keyboard('{Home}');
+      expect(button('a')).toHaveFocus();
+    });
+
+    it('End moves to last item', async () => {
+      const user = userEvent.setup();
+      render(<TestGroup activeValue="a" items={['a', 'b', 'c']} />);
+      button('a').focus();
+      await user.keyboard('{End}');
+      expect(button('c')).toHaveFocus();
+    });
   });
 
-  it('falls back to first item when activeValue is not in items', () => {
-    render(<TestGroup activeValue="z" items={['a', 'b', 'c']} />);
-    expect(screen.getByText('a')).toHaveAttribute('tabindex', '0');
-    expect(screen.getByText('b')).toHaveAttribute('tabindex', '-1');
+  describe('defaults and key handling (table-core#29)', () => {
+    it('defaults to horizontal orientation with looping', async () => {
+      const user = userEvent.setup();
+      render(<TestGroup activeValue="c" items={['a', 'b', 'c']} />);
+      button('c').focus();
+      await user.keyboard('{ArrowDown}');
+      expect(button('c')).toHaveFocus();
+      await user.keyboard('{ArrowRight}');
+      expect(button('a')).toHaveFocus();
+    });
+
+    it("handles all four arrows with orientation 'both'", async () => {
+      const user = userEvent.setup();
+      render(<DomGroup items={ABC} orientation="both" activeValue="a" />);
+      button('a').focus();
+      await user.keyboard('{ArrowDown}');
+      expect(button('b')).toHaveFocus();
+      await user.keyboard('{ArrowRight}');
+      expect(button('c')).toHaveFocus();
+      await user.keyboard('{ArrowUp}');
+      expect(button('b')).toHaveFocus();
+      await user.keyboard('{ArrowLeft}');
+      expect(button('a')).toHaveFocus();
+    });
+
+    it('prevents the default action of handled keys only', () => {
+      render(<DomGroup items={ABC} activeValue="a" />);
+      const a = button('a');
+      a.focus();
+      expect(fireEvent.keyDown(a, { key: 'ArrowRight' })).toBe(false);
+      expect(fireEvent.keyDown(button('b'), { key: 'Home' })).toBe(false);
+      expect(fireEvent.keyDown(button('a'), { key: 'Tab' })).toBe(true);
+      expect(fireEvent.keyDown(button('a'), { key: 'Enter' })).toBe(true);
+      expect(fireEvent.keyDown(button('a'), { key: 'x' })).toBe(true);
+      // ArrowDown is not an arrow of a horizontal group
+      expect(fireEvent.keyDown(button('a'), { key: 'ArrowDown' })).toBe(true);
+    });
+
+    it('ignores keys whose default was already prevented', () => {
+      function Group() {
+        const { containerProps, getTabIndex } = useRovingTabIndex({ activeValue: 'a' });
+        return (
+          <div {...containerProps}>
+            <button
+              type="button"
+              data-roving-value="a"
+              tabIndex={getTabIndex('a')}
+              onKeyDown={(e) => e.preventDefault()}
+            >
+              a
+            </button>
+            <button type="button" data-roving-value="b" tabIndex={getTabIndex('b')}>
+              b
+            </button>
+          </div>
+        );
+      }
+      render(<Group />);
+      button('a').focus();
+      fireEvent.keyDown(button('a'), { key: 'ArrowRight' });
+      expect(button('a')).toHaveFocus();
+    });
+
+    it('ignores arrows with Alt, Ctrl or Meta held', () => {
+      render(<DomGroup items={ABC} activeValue="a" />);
+      button('a').focus();
+      expect(fireEvent.keyDown(button('a'), { key: 'ArrowRight', ctrlKey: true })).toBe(true);
+      expect(fireEvent.keyDown(button('a'), { key: 'ArrowRight', altKey: true })).toBe(true);
+      expect(fireEvent.keyDown(button('a'), { key: 'ArrowRight', metaKey: true })).toBe(true);
+      expect(button('a')).toHaveFocus();
+    });
+
+    it('follows an activeValue change, then arrows from the focused item', async () => {
+      const user = userEvent.setup();
+      const { rerender } = render(<TestGroup activeValue="a" items={['a', 'b', 'c']} />);
+      rerender(<TestGroup activeValue="c" items={['a', 'b', 'c']} />);
+      expect(button('c')).toHaveAttribute('tabindex', '0');
+      expect(button('a')).toHaveAttribute('tabindex', '-1');
+
+      await user.tab();
+      expect(button('c')).toHaveFocus();
+      await user.keyboard('{ArrowRight}');
+      expect(button('a')).toHaveFocus();
+    });
+
+    it('can disable Home/End handling', () => {
+      render(<DomGroup items={ABC} activeValue="b" homeEndKeys={false} />);
+      button('b').focus();
+      expect(fireEvent.keyDown(button('b'), { key: 'Home' })).toBe(true);
+      expect(button('b')).toHaveFocus();
+    });
   });
 
-  it('moves focus right with ArrowRight (horizontal)', async () => {
-    const user = userEvent.setup();
-    const onFocusMove = vi.fn();
-    render(<TestGroup activeValue="a" items={['a', 'b', 'c']} onFocusMove={onFocusMove} />);
-    screen.getByText('a').focus();
-    await user.keyboard('{ArrowRight}');
-    expect(onFocusMove).toHaveBeenCalledWith('b');
-    expect(screen.getByText('b')).toHaveFocus();
+  describe('no selected value (table-core#5)', () => {
+    it('makes the first item the tab stop and arrows move from it', async () => {
+      const user = userEvent.setup();
+      render(
+        <>
+          <button type="button">before</button>
+          <DomGroup items={ABC} />
+        </>,
+      );
+      expect(button('a')).toHaveAttribute('tabindex', '0');
+      button('before').focus();
+      await user.tab();
+      expect(button('a')).toHaveFocus();
+      await user.keyboard('{ArrowRight}');
+      expect(button('b')).toHaveFocus();
+    });
+
+    it("treats '' and null as no selection", () => {
+      const { rerender } = render(<DomGroup items={ABC} activeValue="" />);
+      expect(button('a')).toHaveAttribute('tabindex', '0');
+      rerender(<DomGroup items={ABC} activeValue={null} />);
+      expect(button('a')).toHaveAttribute('tabindex', '0');
+    });
+
+    it('moves to the first item with next when focus is on no item', () => {
+      render(<DomGroup items={ABC} loop={false} />);
+      fireEvent.keyDown(screen.getByRole('group', { name: 'group' }), { key: 'ArrowRight' });
+      expect(button('a')).toHaveFocus();
+    });
+
+    it('moves to the last item with prev when focus is on no item', () => {
+      render(<DomGroup items={ABC} loop={false} />);
+      fireEvent.keyDown(screen.getByRole('group', { name: 'group' }), { key: 'ArrowLeft' });
+      expect(button('c')).toHaveFocus();
+    });
+
+    it('ignores the last focused item when the key starts on the container itself', async () => {
+      const user = userEvent.setup();
+      render(<DomGroup items={ABC} loop={false} containerTabIndex={-1} />);
+      const group = screen.getByRole('group', { name: 'group' });
+      await user.click(button('b'));
+      act(() => group.focus());
+      await user.keyboard('{ArrowLeft}');
+      // Not 'a' (the item before the last focused 'b'): prev from no item is the last item.
+      expect(button('c')).toHaveFocus();
+      act(() => group.focus());
+      await user.keyboard('{ArrowRight}');
+      // Not "nothing" (next from the last focused 'c' at the end, loop=false): the first item.
+      expect(button('a')).toHaveFocus();
+    });
+
+    it('arrows start from the item that received the event even if the hook never saw it focused', () => {
+      render(<TestGroup activeValue="" items={['a', 'b', 'c']} />);
+      fireEvent.keyDown(button('b'), { key: 'ArrowRight' });
+      expect(button('c')).toHaveFocus();
+    });
   });
 
-  it('moves focus left with ArrowLeft (horizontal)', async () => {
-    const user = userEvent.setup();
-    const onFocusMove = vi.fn();
-    render(<TestGroup activeValue="b" items={['a', 'b', 'c']} onFocusMove={onFocusMove} />);
-    screen.getByText('b').focus();
-    await user.keyboard('{ArrowLeft}');
-    expect(onFocusMove).toHaveBeenCalledWith('a');
-    expect(screen.getByText('a')).toHaveFocus();
+  describe('RTL (table-core#7)', () => {
+    it('swaps ArrowLeft/ArrowRight under an rtl ancestor', async () => {
+      const user = userEvent.setup();
+      render(
+        <div dir="rtl">
+          <DomGroup items={ABC} activeValue="a" />
+        </div>,
+      );
+      button('a').focus();
+      await user.keyboard('{ArrowLeft}');
+      expect(button('b')).toHaveFocus();
+      await user.keyboard('{ArrowRight}');
+      expect(button('a')).toHaveFocus();
+    });
+
+    it("swaps Left/Right in orientation 'both' but keeps Up/Down", async () => {
+      const user = userEvent.setup();
+      render(
+        <div dir="rtl">
+          <DomGroup items={ABC} activeValue="a" orientation="both" />
+        </div>,
+      );
+      button('a').focus();
+      await user.keyboard('{ArrowLeft}');
+      expect(button('b')).toHaveFocus();
+      await user.keyboard('{ArrowDown}');
+      expect(button('c')).toHaveFocus();
+    });
+
+    it('does not change vertical navigation', async () => {
+      const user = userEvent.setup();
+      render(
+        <div dir="rtl">
+          <DomGroup items={ABC} activeValue="a" orientation="vertical" />
+        </div>,
+      );
+      button('a').focus();
+      await user.keyboard('{ArrowDown}');
+      expect(button('b')).toHaveFocus();
+    });
+
+    it('honours an explicit dir option', async () => {
+      const user = userEvent.setup();
+      render(<DomGroup items={ABC} activeValue="a" dir="rtl" />);
+      button('a').focus();
+      await user.keyboard('{ArrowLeft}');
+      expect(button('b')).toHaveFocus();
+    });
+
+    it('resolves the direction at key time (a later dir change applies)', async () => {
+      const user = userEvent.setup();
+      function Wrapper({ dir }: { dir: 'ltr' | 'rtl' }) {
+        return (
+          <div dir={dir}>
+            <DomGroup items={ABC} activeValue="a" />
+          </div>
+        );
+      }
+      const { rerender } = render(<Wrapper dir="ltr" />);
+      rerender(<Wrapper dir="rtl" />);
+      button('a').focus();
+      await user.keyboard('{ArrowLeft}');
+      expect(button('b')).toHaveFocus();
+    });
   });
 
-  it('wraps focus around with loop=true', async () => {
-    const user = userEvent.setup();
-    const onFocusMove = vi.fn();
-    render(<TestGroup activeValue="c" items={['a', 'b', 'c']} loop onFocusMove={onFocusMove} />);
-    screen.getByText('c').focus();
-    await user.keyboard('{ArrowRight}');
-    expect(onFocusMove).toHaveBeenCalledWith('a');
-    expect(screen.getByText('a')).toHaveFocus();
+  describe('disabled items (layout#13)', () => {
+    const WITH_DISABLED: DomItem[] = [
+      { value: 'a' },
+      { value: 'b', disabled: true },
+      { value: 'c', ariaDisabled: true },
+      { value: 'd' },
+    ];
+
+    it('skips disabled and aria-disabled items with arrows', async () => {
+      const user = userEvent.setup();
+      render(<DomGroup items={WITH_DISABLED} activeValue="a" />);
+      button('a').focus();
+      await user.keyboard('{ArrowRight}');
+      expect(button('d')).toHaveFocus();
+      await user.keyboard('{ArrowLeft}');
+      expect(button('a')).toHaveFocus();
+    });
+
+    it('skips disabled items with Home and End', async () => {
+      const user = userEvent.setup();
+      render(
+        <DomGroup
+          items={[
+            { value: 'a', disabled: true },
+            { value: 'b' },
+            { value: 'c' },
+            { value: 'd', disabled: true },
+          ]}
+          activeValue="b"
+        />,
+      );
+      button('b').focus();
+      await user.keyboard('{End}');
+      expect(button('c')).toHaveFocus();
+      await user.keyboard('{Home}');
+      expect(button('b')).toHaveFocus();
+    });
+
+    it('skips items marked data-roving-disabled', async () => {
+      const user = userEvent.setup();
+      function Group() {
+        const { containerProps, getTabIndex } = useRovingTabIndex({ activeValue: 'a' });
+        return (
+          <div {...containerProps}>
+            {['a', 'b', 'c'].map((v) => (
+              <button
+                key={v}
+                type="button"
+                data-roving-value={v}
+                data-roving-disabled={v === 'b' ? '' : undefined}
+                tabIndex={getTabIndex(v)}
+              >
+                {v}
+              </button>
+            ))}
+          </div>
+        );
+      }
+      render(<Group />);
+      button('a').focus();
+      await user.keyboard('{ArrowRight}');
+      expect(button('c')).toHaveFocus();
+    });
+
+    it('moves the tab stop to the first enabled item when the active item is disabled', () => {
+      render(<DomGroup items={[{ value: 'a' }, { value: 'b', disabled: true }]} activeValue="b" />);
+      expect(button('a')).toHaveAttribute('tabindex', '0');
+      expect(button('b')).toHaveAttribute('tabindex', '-1');
+    });
+
+    it('never gives the tab stop to a disabled first item', () => {
+      render(<DomGroup items={[{ value: 'a', disabled: true }, { value: 'b' }]} />);
+      expect(button('a')).toHaveAttribute('tabindex', '-1');
+      expect(button('b')).toHaveAttribute('tabindex', '0');
+    });
+
+    it('filters disabled items of an explicit items list too', async () => {
+      const user = userEvent.setup();
+      function Legacy() {
+        const ref = React.useRef<HTMLDivElement>(null);
+        const { handleKeyDown, getTabIndex } = useRovingTabIndex(ref, {
+          activeValue: 'a',
+          items: ['a', 'b', 'c'],
+        });
+        return (
+          <div ref={ref} onKeyDown={handleKeyDown}>
+            {['a', 'b', 'c'].map((v) => (
+              <button
+                key={v}
+                type="button"
+                data-roving-value={v}
+                disabled={v === 'b'}
+                tabIndex={getTabIndex(v)}
+              >
+                {v}
+              </button>
+            ))}
+          </div>
+        );
+      }
+      render(<Legacy />);
+      button('a').focus();
+      await user.keyboard('{ArrowRight}');
+      expect(button('c')).toHaveFocus();
+    });
+
+    it('updates the tab stop when an item disables itself without an owner re-render', async () => {
+      const toggles: Array<(disabled: boolean) => void> = [];
+      let ownerRenders = 0;
+      function SelfDisablingItem({ value, tabIndex }: { value: string; tabIndex: 0 | -1 }) {
+        const [disabled, setDisabled] = React.useState(false);
+        toggles.push(setDisabled);
+        return (
+          <button type="button" data-roving-value={value} disabled={disabled} tabIndex={tabIndex}>
+            {value}
+          </button>
+        );
+      }
+      const MemoItem = React.memo(SelfDisablingItem);
+      function Owner() {
+        ownerRenders++;
+        const { containerProps, getTabIndex } = useRovingTabIndex({ activeValue: 'a' });
+        return (
+          <div {...containerProps}>
+            <MemoItem value="a" tabIndex={getTabIndex('a')} />
+            <MemoItem value="b" tabIndex={getTabIndex('b')} />
+          </div>
+        );
+      }
+      render(<Owner />);
+      expect(button('a')).toHaveAttribute('tabindex', '0');
+      const rendersBefore = ownerRenders;
+
+      await act(async () => {
+        toggles[0](true);
+      });
+      expect(button('a')).toBeDisabled();
+      expect(button('b')).toHaveAttribute('tabindex', '0');
+      expect(ownerRenders).toBeGreaterThan(rendersBefore);
+
+      await act(async () => {
+        toggles[0](false);
+      });
+      expect(button('a')).toHaveAttribute('tabindex', '0');
+      expect(button('b')).toHaveAttribute('tabindex', '-1');
+    });
   });
 
-  it('does not wrap with loop=false', async () => {
-    const user = userEvent.setup();
-    const onFocusMove = vi.fn();
-    render(
-      <TestGroup activeValue="c" items={['a', 'b', 'c']} loop={false} onFocusMove={onFocusMove} />,
-    );
-    screen.getByText('c').focus();
-    await user.keyboard('{ArrowRight}');
-    expect(onFocusMove).not.toHaveBeenCalled();
+  describe('DOM item resolution (feedback-navigation#47)', () => {
+    it('finds items wrapped in other elements, in DOM order', async () => {
+      const user = userEvent.setup();
+      render(<DomGroup items={ABC} wrap activeValue="a" />);
+      button('a').focus();
+      await user.keyboard('{ArrowRight}');
+      expect(button('b')).toHaveFocus();
+      await user.keyboard('{End}');
+      expect(button('c')).toHaveFocus();
+    });
+
+    it('finds items rendered through Fragments and skips hidden ones', async () => {
+      const user = userEvent.setup();
+      function Item({ value, hidden }: { value: string; hidden?: boolean }) {
+        return (
+          <>
+            <button type="button" data-roving-value={value} hidden={hidden}>
+              {value}
+            </button>
+          </>
+        );
+      }
+      function Group() {
+        const { containerProps } = useRovingTabIndex({ activeValue: 'a' });
+        return (
+          <div {...containerProps}>
+            <Item value="a" />
+            <Item value="b" hidden />
+            <div hidden>
+              <Item value="c" />
+            </div>
+            <Item value="d" />
+          </div>
+        );
+      }
+      render(<Group />);
+      button('a').focus();
+      await user.keyboard('{ArrowRight}');
+      expect(button('d')).toHaveFocus();
+    });
+
+    it("ignores items of a nested roving container (they belong to that container's hook)", async () => {
+      const user = userEvent.setup();
+      function Inner() {
+        const { containerProps, getTabIndex } = useRovingTabIndex({ activeValue: 'x' });
+        return (
+          <div role="radiogroup" aria-label="inner" {...containerProps}>
+            <button
+              type="button"
+              role="radio"
+              aria-checked
+              data-roving-value="x"
+              tabIndex={getTabIndex('x')}
+            >
+              x
+            </button>
+            <button
+              type="button"
+              role="radio"
+              aria-checked={false}
+              data-roving-value="y"
+              tabIndex={getTabIndex('y')}
+            >
+              y
+            </button>
+          </div>
+        );
+      }
+      function Outer() {
+        const { containerProps, getTabIndex } = useRovingTabIndex({
+          activeValue: 'a',
+          orientation: 'both',
+        });
+        return (
+          <div {...containerProps}>
+            <button type="button" data-roving-value="a" tabIndex={getTabIndex('a')}>
+              a
+            </button>
+            <Inner />
+            <button type="button" data-roving-value="b" tabIndex={getTabIndex('b')}>
+              b
+            </button>
+          </div>
+        );
+      }
+      render(<Outer />);
+      button('a').focus();
+      await user.keyboard('{ArrowRight}');
+      // the nested composite is one item: focus lands on its own tab stop
+      expect(screen.getByRole('radio', { name: 'x' })).toHaveFocus();
+      // the inner group handles its arrows itself (preventDefault), so the outer ignores them
+      await user.keyboard('{ArrowRight}');
+      expect(screen.getByRole('radio', { name: 'y' })).toHaveFocus();
+      // keys the inner (horizontal) group does not handle continue in the outer group
+      await user.keyboard('{ArrowDown}');
+      expect(button('b')).toHaveFocus();
+      await user.keyboard('{ArrowUp}');
+      expect(screen.getByRole('radio', { name: 'x' })).toHaveFocus();
+    });
+
+    it('0.4 call shape: a container ref on a wrapper around a role=radiogroup keeps its items', async () => {
+      const user = userEvent.setup();
+      const values = ['a', 'b', 'c'];
+      function LegacyWrapper() {
+        const containerRef = React.useRef<HTMLDivElement>(null);
+        const { handleKeyDown, getTabIndex } = useRovingTabIndex(containerRef, {
+          activeValue: 'a',
+          items: values,
+        });
+        return (
+          <div ref={containerRef} onKeyDown={handleKeyDown}>
+            <div role="radiogroup" aria-label="choices">
+              {values.map((value) => (
+                <button
+                  key={value}
+                  type="button"
+                  role="radio"
+                  aria-checked={value === 'a'}
+                  data-roving-value={value}
+                  tabIndex={getTabIndex(value)}
+                >
+                  {value}
+                </button>
+              ))}
+            </div>
+          </div>
+        );
+      }
+      render(<LegacyWrapper />);
+      const radio = (name: string) => screen.getByRole('radio', { name });
+      expect(radio('a')).toHaveAttribute('tabindex', '0');
+      expect(radio('b')).toHaveAttribute('tabindex', '-1');
+      radio('a').focus();
+      await user.keyboard('{ArrowRight}');
+      expect(radio('b')).toHaveFocus();
+      await user.keyboard('{End}');
+      expect(radio('c')).toHaveFocus();
+    });
+
+    it('explicit items: a role-only composite between the container and the items is not collapsed', async () => {
+      const user = userEvent.setup();
+      const values = ['one', 'two', 'three'];
+      function ItemsWrapper() {
+        const { containerProps, getTabIndex } = useRovingTabIndex({ items: values });
+        return (
+          <div {...containerProps}>
+            <div role="tablist" aria-label="tabs">
+              {values.map((value) => (
+                <button
+                  key={value}
+                  type="button"
+                  role="tab"
+                  data-roving-value={value}
+                  tabIndex={getTabIndex(value)}
+                >
+                  {value}
+                </button>
+              ))}
+            </div>
+          </div>
+        );
+      }
+      render(<ItemsWrapper />);
+      const tab = (name: string) => screen.getByRole('tab', { name });
+      expect(tab('one')).toHaveAttribute('tabindex', '0');
+      tab('one').focus();
+      await user.keyboard('{ArrowRight}');
+      expect(tab('two')).toHaveFocus();
+      await user.keyboard('{ArrowLeft}{ArrowLeft}');
+      expect(tab('three')).toHaveFocus();
+    });
+
+    it('explicit items: a nested roving container still counts as one item', async () => {
+      const user = userEvent.setup();
+      function Inner() {
+        const { containerProps, getTabIndex } = useRovingTabIndex({ activeValue: 'x' });
+        return (
+          <div role="radiogroup" aria-label="inner" {...containerProps}>
+            {['x', 'y'].map((value) => (
+              <button
+                key={value}
+                type="button"
+                role="radio"
+                aria-checked={value === 'x'}
+                data-roving-value={value}
+                tabIndex={getTabIndex(value)}
+              >
+                {value}
+              </button>
+            ))}
+          </div>
+        );
+      }
+      function Outer() {
+        const containerRef = React.useRef<HTMLDivElement>(null);
+        const { handleKeyDown, getTabIndex } = useRovingTabIndex(containerRef, {
+          activeValue: 'a',
+          items: ['a', 'b'],
+          orientation: 'vertical',
+        });
+        return (
+          <div ref={containerRef} onKeyDown={handleKeyDown}>
+            <button type="button" data-roving-value="a" tabIndex={getTabIndex('a')}>
+              a
+            </button>
+            <Inner />
+            <button type="button" data-roving-value="b" tabIndex={getTabIndex('b')}>
+              b
+            </button>
+          </div>
+        );
+      }
+      render(<Outer />);
+      button('a').focus();
+      await user.keyboard('{ArrowDown}');
+      // The inner group's items are not in `items` and belong to the inner hook: skipped.
+      expect(button('b')).toHaveFocus();
+    });
+
+    it('generates values for items without data-roving-value (manageTabIndex)', () => {
+      render(
+        <Managed>
+          <button type="button">Bold</button>
+          <button type="button">Italic</button>
+        </Managed>,
+      );
+      const values = [button('Bold'), button('Italic')].map((el) =>
+        el.getAttribute('data-roving-value'),
+      );
+      expect(values[0]).toMatch(/^auto-/);
+      expect(values[1]).toMatch(/^auto-/);
+      expect(values[0]).not.toBe(values[1]);
+    });
   });
 
-  it('supports vertical orientation with ArrowDown/ArrowUp', async () => {
-    const user = userEvent.setup();
-    const onFocusMove = vi.fn();
-    render(
-      <TestGroup
-        activeValue="a"
-        items={['a', 'b', 'c']}
-        orientation="vertical"
-        onFocusMove={onFocusMove}
-      />,
-    );
-    screen.getByText('a').focus();
-    await user.keyboard('{ArrowDown}');
-    expect(onFocusMove).toHaveBeenCalledWith('b');
+  describe('manageTabIndex (button-provider#12)', () => {
+    it('writes tabIndex onto children it does not render and moves with arrows', async () => {
+      const user = userEvent.setup();
+      render(
+        <Managed>
+          <button type="button">Bold</button>
+          <button type="button">Italic</button>
+          <a href="#u">Underline</a>
+        </Managed>,
+      );
+      expect(button('Bold')).toHaveAttribute('tabindex', '0');
+      expect(button('Italic')).toHaveAttribute('tabindex', '-1');
+      expect(screen.getByRole('link', { name: 'Underline' })).toHaveAttribute('tabindex', '-1');
 
-    onFocusMove.mockClear();
-    await user.keyboard('{ArrowUp}');
-    expect(onFocusMove).toHaveBeenCalledWith('a');
+      await user.tab();
+      expect(button('Bold')).toHaveFocus();
+      await user.keyboard('{ArrowRight}');
+      expect(button('Italic')).toHaveFocus();
+      await user.keyboard('{ArrowRight}');
+      expect(screen.getByRole('link', { name: 'Underline' })).toHaveFocus();
+      await user.keyboard('{Home}');
+      expect(button('Bold')).toHaveFocus();
+    });
+
+    it('keeps the tab stop on the last focused item with tabStop="last-focused"', async () => {
+      const user = userEvent.setup();
+      render(
+        <>
+          <Managed tabStop="last-focused">
+            <button type="button">Bold</button>
+            <button type="button">Italic</button>
+            <button type="button">Underline</button>
+          </Managed>
+          <button type="button">after</button>
+        </>,
+      );
+      await user.tab();
+      await user.keyboard('{ArrowRight}');
+      expect(button('Italic')).toHaveFocus();
+      expect(button('Italic')).toHaveAttribute('tabindex', '0');
+      expect(button('Bold')).toHaveAttribute('tabindex', '-1');
+
+      await user.tab();
+      expect(button('after')).toHaveFocus();
+      await user.tab({ shift: true });
+      expect(button('Italic')).toHaveFocus();
+    });
+
+    it("keeps the tab stop on the active item with the default tabStop='active'", async () => {
+      const user = userEvent.setup();
+      render(<DomGroup items={ABC} activeValue="a" />);
+      button('a').focus();
+      await user.keyboard('{ArrowRight}');
+      expect(button('b')).toHaveFocus();
+      expect(button('a')).toHaveAttribute('tabindex', '0');
+      expect(button('b')).toHaveAttribute('tabindex', '-1');
+    });
+
+    it('skips a disabled child and re-includes it when it enables itself (no owner re-render)', async () => {
+      const user = userEvent.setup();
+      function Italic() {
+        const [disabled, setDisabled] = React.useState(true);
+        React.useEffect(() => {
+          const enable = () => setDisabled(false);
+          window.addEventListener('test:enable-italic', enable);
+          return () => window.removeEventListener('test:enable-italic', enable);
+        }, []);
+        return (
+          <button type="button" disabled={disabled}>
+            Italic
+          </button>
+        );
+      }
+      const italic = <Italic />;
+      render(
+        <Managed>
+          <button type="button">Bold</button>
+          {italic}
+          <button type="button">Underline</button>
+        </Managed>,
+      );
+      await user.tab();
+      await user.keyboard('{ArrowRight}');
+      expect(button('Underline')).toHaveFocus();
+
+      await act(async () => {
+        window.dispatchEvent(new Event('test:enable-italic'));
+      });
+      await user.keyboard('{ArrowLeft}');
+      expect(button('Italic')).toHaveFocus();
+    });
+
+    it('stamps children added later without an owner re-render', async () => {
+      function MoreButtons() {
+        const [shown, setShown] = React.useState(false);
+        React.useEffect(() => {
+          const show = () => setShown(true);
+          window.addEventListener('test:show-more', show);
+          return () => window.removeEventListener('test:show-more', show);
+        }, []);
+        return shown ? <button type="button">Strike</button> : null;
+      }
+      render(
+        <Managed>
+          <button type="button">Bold</button>
+          <MoreButtons />
+        </Managed>,
+      );
+      await act(async () => {
+        window.dispatchEvent(new Event('test:show-more'));
+      });
+      expect(button('Strike')).toHaveAttribute('tabindex', '-1');
+      expect(button('Bold')).toHaveAttribute('tabindex', '0');
+    });
+
+    it('leaves elements with an author tabindex=-1 untouched and skips them', async () => {
+      const user = userEvent.setup();
+      render(
+        <Managed>
+          <button type="button">Bold</button>
+          <span>
+            <button type="button" tabIndex={-1}>
+              Increment
+            </button>
+          </span>
+          <button type="button">Italic</button>
+        </Managed>,
+      );
+      expect(button('Increment')).toHaveAttribute('tabindex', '-1');
+      expect(button('Increment')).not.toHaveAttribute('data-roving-value');
+      button('Bold').focus();
+      await user.keyboard('{ArrowRight}');
+      expect(button('Italic')).toHaveFocus();
+    });
+
+    it('treats a nested composite as one item and never writes tabindex inside it', async () => {
+      const user = userEvent.setup();
+      render(
+        <Managed>
+          <button type="button">Bold</button>
+          <div role="radiogroup" aria-label="Align">
+            <button type="button" role="radio" aria-checked tabIndex={0}>
+              Left
+            </button>
+            <button type="button" role="radio" aria-checked={false} tabIndex={-1}>
+              Center
+            </button>
+          </div>
+          <button type="button">Italic</button>
+        </Managed>,
+      );
+      const left = screen.getByRole('radio', { name: 'Left' });
+      const center = screen.getByRole('radio', { name: 'Center' });
+      expect(left).toHaveAttribute('tabindex', '0');
+      expect(center).toHaveAttribute('tabindex', '-1');
+      expect(screen.getByRole('radiogroup')).not.toHaveAttribute('tabindex');
+
+      button('Bold').focus();
+      await user.keyboard('{ArrowRight}');
+      expect(left).toHaveFocus();
+      await user.keyboard('{ArrowRight}');
+      expect(button('Italic')).toHaveFocus();
+      await user.keyboard('{ArrowLeft}');
+      expect(left).toHaveFocus();
+      expect(left).toHaveAttribute('tabindex', '0');
+      expect(center).toHaveAttribute('tabindex', '-1');
+    });
+
+    it('keeps Left/Right for the caret in a text input (APG Toolbar)', async () => {
+      const user = userEvent.setup();
+      render(
+        <Managed>
+          <button type="button">Bold</button>
+          <input aria-label="Search" defaultValue="abc" />
+          <button type="button">Italic</button>
+        </Managed>,
+      );
+      const input = screen.getByRole('textbox', { name: 'Search' });
+      button('Bold').focus();
+      await user.keyboard('{ArrowRight}');
+      expect(input).toHaveFocus();
+      expect(fireEvent.keyDown(input, { key: 'ArrowRight' })).toBe(true);
+      expect(fireEvent.keyDown(input, { key: 'Home' })).toBe(true);
+      await user.keyboard('{ArrowLeft}');
+      expect(input).toHaveFocus();
+    });
+
+    it.each([
+      ['textarea', <textarea key="t" aria-label="field" />],
+      [
+        'select',
+        <select key="s" aria-label="field">
+          <option>1</option>
+        </select>,
+      ],
+      ['slider', <div key="sl" role="slider" aria-label="field" aria-valuenow={1} tabIndex={0} />],
+      ['spinbutton', <input key="sp" role="spinbutton" aria-label="field" />],
+      ['combobox', <input key="c" role="combobox" aria-label="field" aria-expanded={false} />],
+      [
+        'contenteditable',
+        <div
+          key="ce"
+          aria-label="field"
+          contentEditable
+          suppressContentEditableWarning
+          tabIndex={0}
+        />,
+      ],
+    ])('ignores arrow keys that start in a %s', (_name, field) => {
+      render(
+        <Managed>
+          <button type="button">Bold</button>
+          {field}
+        </Managed>,
+      );
+      const el = screen.getByLabelText('field');
+      el.focus();
+      expect(fireEvent.keyDown(el, { key: 'ArrowLeft' })).toBe(true);
+      expect(el).toHaveFocus();
+    });
+
+    it('supports vertical toolbars', async () => {
+      const user = userEvent.setup();
+      render(
+        <Managed orientation="vertical">
+          <button type="button">Bold</button>
+          <button type="button">Italic</button>
+        </Managed>,
+      );
+      button('Bold').focus();
+      await user.keyboard('{ArrowDown}');
+      expect(button('Italic')).toHaveFocus();
+    });
   });
 
-  it('does not respond to ArrowDown/ArrowUp in horizontal mode', async () => {
-    const user = userEvent.setup();
-    const onFocusMove = vi.fn();
-    render(
-      <TestGroup
-        activeValue="a"
-        items={['a', 'b', 'c']}
-        orientation="horizontal"
-        onFocusMove={onFocusMove}
-      />,
-    );
-    screen.getByText('a').focus();
-    await user.keyboard('{ArrowDown}');
-    expect(onFocusMove).not.toHaveBeenCalled();
+  describe('typeahead', () => {
+    it('moves focus to the next item whose text starts with the typed characters', async () => {
+      const user = userEvent.setup();
+      render(
+        <DomGroup
+          items={[
+            { value: 'new', label: 'New file' },
+            { value: 'open', label: 'Open' },
+            { value: 'close', label: 'Close', disabled: true },
+            { value: 'copy', label: 'Copy' },
+          ]}
+          orientation="vertical"
+          typeahead
+        />,
+      );
+      button('New file').focus();
+      await user.keyboard('c');
+      expect(button('Copy')).toHaveFocus();
+      await user.keyboard('o');
+      expect(button('Copy')).toHaveFocus();
+    });
+
+    it('uses data-roving-text when present', async () => {
+      const user = userEvent.setup();
+      render(
+        <DomGroup
+          items={[
+            { value: 'a', label: '★ Alpha', text: 'Alpha' },
+            { value: 'b', label: '★ Beta', text: 'Beta' },
+          ]}
+          typeahead
+        />,
+      );
+      button('★ Alpha').focus();
+      await user.keyboard('b');
+      expect(button('★ Beta')).toHaveFocus();
+    });
+
+    it('is off by default', async () => {
+      const user = userEvent.setup();
+      render(<DomGroup items={[{ value: 'a' }, { value: 'b' }]} />);
+      button('a').focus();
+      await user.keyboard('b');
+      expect(button('a')).toHaveFocus();
+    });
   });
 
-  it('Home moves to first item', async () => {
-    const user = userEvent.setup();
-    const onFocusMove = vi.fn();
-    render(<TestGroup activeValue="c" items={['a', 'b', 'c']} onFocusMove={onFocusMove} />);
-    screen.getByText('c').focus();
-    await user.keyboard('{Home}');
-    expect(onFocusMove).toHaveBeenCalledWith('a');
-    expect(screen.getByText('a')).toHaveFocus();
+  describe('rendering environments', () => {
+    it('works under StrictMode (store subscription survives the double mount)', async () => {
+      const user = userEvent.setup();
+      render(
+        <React.StrictMode>
+          <DomGroup items={[{ value: 'a' }, { value: 'b', disabled: true }, { value: 'c' }]} />
+        </React.StrictMode>,
+      );
+      expect(button('a')).toHaveAttribute('tabindex', '0');
+      await user.tab();
+      await user.keyboard('{ArrowRight}');
+      expect(button('c')).toHaveFocus();
+    });
+
+    it('renders on the server with the active item as the tab stop', () => {
+      const html = renderToString(<DomGroup items={ABC} activeValue="b" />);
+      expect(html).toContain('data-roving-container=""');
+      expect(html).toMatch(
+        /data-roving-value="b"[^>]*tabindex="0"|tabindex="0"[^>]*data-roving-value="b"/,
+      );
+    });
   });
 
-  it('End moves to last item', async () => {
-    const user = userEvent.setup();
-    const onFocusMove = vi.fn();
-    render(<TestGroup activeValue="a" items={['a', 'b', 'c']} onFocusMove={onFocusMove} />);
-    screen.getByText('a').focus();
-    await user.keyboard('{End}');
-    expect(onFocusMove).toHaveBeenCalledWith('c');
-    expect(screen.getByText('c')).toHaveFocus();
+  describe('result API', () => {
+    it('exposes container props, stable handlers and focus helpers', () => {
+      let latest: UseRovingTabIndexResult | undefined;
+      render(<DomGroup items={ABC} activeValue="b" onResult={(r) => (latest = r)} />);
+      const group = screen.getByRole('group', { name: 'group' });
+      expect(group).toHaveAttribute('data-roving-container', '');
+      expect(latest!.containerProps.onKeyDown).toBe(latest!.handleKeyDown);
+      expect(latest!.containerProps.onFocus).toBe(latest!.handleFocus);
+
+      act(() => latest!.focusLast());
+      expect(button('c')).toHaveFocus();
+      act(() => latest!.focusFirst());
+      expect(button('a')).toHaveFocus();
+      act(() => latest!.focusValue('b'));
+      expect(button('b')).toHaveFocus();
+      expect(latest!.focusedValue).toBe('b');
+    });
+
+    it('keeps handler identities across rerenders', () => {
+      const seen: UseRovingTabIndexResult[] = [];
+      const { rerender } = render(
+        <DomGroup items={ABC} activeValue="a" onResult={(r) => seen.push(r)} />,
+      );
+      rerender(<DomGroup items={ABC} activeValue="b" onResult={(r) => seen.push(r)} />);
+      const first = seen[0];
+      const last = seen[seen.length - 1];
+      expect(last.handleKeyDown).toBe(first.handleKeyDown);
+      expect(last.handleFocus).toBe(first.handleFocus);
+      expect(last.containerProps.ref).toBe(first.containerProps.ref);
+    });
+
+    it('focusValue ignores disabled and unknown values', () => {
+      let latest: UseRovingTabIndexResult | undefined;
+      render(
+        <DomGroup
+          items={[{ value: 'a' }, { value: 'b', disabled: true }]}
+          activeValue="a"
+          onResult={(r) => (latest = r)}
+        />,
+      );
+      button('a').focus();
+      act(() => latest!.focusValue('b'));
+      act(() => latest!.focusValue('zzz'));
+      expect(button('a')).toHaveFocus();
+    });
+
+    it('passes the keyboard event to onFocusMove', async () => {
+      const user = userEvent.setup();
+      const onFocusMove = vi.fn();
+      render(<DomGroup items={ABC} activeValue="a" onFocusMove={onFocusMove} />);
+      button('a').focus();
+      await user.keyboard('{End}');
+      expect(onFocusMove).toHaveBeenCalledWith('c', expect.objectContaining({ key: 'End' }));
+    });
+
+    it('has exported option and result types', () => {
+      expectTypeOf<UseRovingTabIndexResult['getTabIndex']>().toEqualTypeOf<
+        (value: string) => 0 | -1
+      >();
+      expectTypeOf<UseRovingTabIndexResult['focusedValue']>().toEqualTypeOf<string | null>();
+      expectTypeOf<UseRovingTabIndexOptions['tabStop']>().toEqualTypeOf<
+        'active' | 'last-focused' | undefined
+      >();
+    });
   });
 });

@@ -1,68 +1,143 @@
-import { useState, useCallback, useRef, useEffect } from 'react';
+import { useCallback, useEffect, useInsertionEffect, useRef, useState } from 'react';
+import { useEventCallback } from './useEventCallback';
+import { warnOnce } from '../lib/dev';
 
-/** Setter that accepts either a direct value or a functional updater. */
-type SetValue<T> = (valueOrUpdater: T | ((prev: T) => T)) => void;
+/** Setter returned by {@link useControllable}: a direct value or a functional updater. */
+export type SetValue<T> = (valueOrUpdater: T | ((prev: T) => T)) => void;
+
+type Mode = 'controlled' | 'uncontrolled';
 
 /**
- * Hook for components that can be either controlled or uncontrolled.
- * If `controlledValue` is provided, the component is controlled; otherwise it uses internal state.
- * Warns in development if a component switches between controlled and uncontrolled modes.
+ * Warns once per page and direction, through `src/lib/dev.ts` (C-DEV). `warnOnce(key, message)`
+ * logs one prefixed string, so the directions are part of the message text (`from ${from} to
+ * ${to}`) rather than separate console arguments.
+ */
+function warnModeSwitch(from: Mode, to: Mode): void {
+  warnOnce(
+    `useControllable:${from}->${to}`,
+    `A component is changing from ${from} to ${to}. Components should not switch between ` +
+      'controlled and uncontrolled: pass `undefined` only when the component is uncontrolled, and ' +
+      'the empty value (for example `[]`, `null` or `""`) to clear a controlled value.',
+  );
+}
+
+/**
+ * State for components that can be controlled (`value` + `onChange` from the parent) or
+ * uncontrolled (internal state seeded from `defaultValue`). Returns `[value, setValue]` like
+ * `useState`.
+ *
+ * - **Sticky controlled mode.** The component is controlled from the first render in which
+ *   `controlledValue !== undefined` on. A value that arrives after mount (data loaded later) takes
+ *   over immediately. A controlled value that later becomes `undefined` keeps the component
+ *   controlled and returns the `defaultValue` argument — pass the component's empty value there
+ *   (`defaultValueProp ?? []`), so `value={undefined}` clears it. Each direction warns once in
+ *   development.
+ * - **`setValue(valueOrUpdater)`** computes the next value from the value the user sees — the last
+ *   rendered controlled value (plus a value already emitted earlier in the same event, so two
+ *   functional updates in one handler chain) or the latest uncontrolled value — and calls
+ *   `onChange` exactly once from the event path (never inside a state updater, so StrictMode does
+ *   not double it). An update that does not change the value (`Object.is`) is skipped, including
+ *   its `onChange`. A controlled parent that ignores `onChange` never leaves a stale value behind:
+ *   the next event starts from the rendered value again.
+ * - **What "the same event" means** (controlled mode). A value emitted by `setValue` stays pending
+ *   until the next microtask checkpoint, and `setValue` calls made before then chain from it. Real
+ *   user events are separate tasks, so each one starts from the rendered value. Everything
+ *   dispatched synchronously within one task counts as one interaction and chains exactly like the
+ *   uncontrolled mode does, whether the parent accepts the value or not: a nested `el.focus()` or
+ *   `el.click()` from a handler, two `el.click()` calls from one timer callback, back-to-back
+ *   `fireEvent` calls, or several `setValue` calls in one `act()`. Tests that need two separate
+ *   interactions await a microtask between them (`await act(async () => {})`) or use `userEvent`.
+ * - `setValue` has a stable identity; the latest `onChange` is always called. The rendered value
+ *   and mode it reads are synced before any layout effect of a commit, so a layout or passive
+ *   effect (also a child's, which React runs first) that calls `setValue` starts from the value
+ *   committed in that same commit.
+ *
+ * Event-named callbacks that must fire on every activation (e.g. `onPageChange` on the current
+ * page) are called by the component from its handler, not through this hook.
  *
  * @typeParam T - The type of the state value.
- * @param controlledValue - The externally controlled value, or `undefined` for uncontrolled mode.
- * @param defaultValue - The initial value used when the component is uncontrolled.
- * @param onChange - Optional callback invoked when the value changes (in both modes).
- * @returns A `[value, setValue]` tuple matching the React useState signature.
+ * @param controlledValue - The controlled value, or `undefined` while the component is uncontrolled.
+ * @param defaultValue - Initial uncontrolled value; also the value returned while a once-controlled
+ *   value is `undefined`.
+ * @param onChange - Called with the next value whenever `setValue` changes it (both modes).
+ * @returns A `[value, setValue]` tuple.
  */
 export function useControllable<T>(
   controlledValue: T | undefined,
   defaultValue: T,
   onChange?: (value: T) => void,
 ): [T, SetValue<T>] {
-  const isControlledRef = useRef(controlledValue !== undefined);
-  // eslint-disable-next-line react-hooks/refs -- intentional: read initial ref to detect controlled/uncontrolled mode switch
-  const isControlled = isControlledRef.current;
-  const [internalValue, setInternalValue] = useState(defaultValue);
+  const [initiallyControlled] = useState(controlledValue !== undefined);
+  const [wasControlled, setWasControlled] = useState(initiallyControlled);
+  if (controlledValue !== undefined && !wasControlled) {
+    setWasControlled(true);
+  }
+  const isControlled = wasControlled || controlledValue !== undefined;
 
-  // Warn in dev if switching between controlled and uncontrolled
+  const [internalValue, setInternalValue] = useState(defaultValue);
+  const value: T = isControlled
+    ? controlledValue !== undefined
+      ? controlledValue
+      : defaultValue
+    : internalValue;
+
+  // Value and mode of the last commit. Written only by the insertion effect below, never by setValue.
+  const renderedRef = useRef(value);
+  const isControlledRef = useRef(isControlled);
+  // Uncontrolled: the latest value, updated optimistically by setValue (nobody can reject it).
+  const latestRef = useRef(internalValue);
+  // Controlled: the value emitted earlier in the same event; cleared in a microtask, never persisted
+  // across events.
+  const pendingRef = useRef<{ value: T } | null>(null);
+
+  // An insertion effect runs in the commit's mutation phase, before every layout effect of that
+  // commit, so a child's layout effect that calls setValue already sees the committed value and mode
+  // (React runs a child's layout effects before its parent's). Not run on the server, where setValue
+  // is never called.
+  useInsertionEffect(() => {
+    renderedRef.current = value;
+    isControlledRef.current = isControlled;
+    latestRef.current = internalValue;
+  });
 
   useEffect(() => {
-    if (process.env.NODE_ENV !== 'production') {
-      const wasControlled = isControlledRef.current;
-      const isNowControlled = controlledValue !== undefined;
-      if (wasControlled !== isNowControlled) {
-        console.warn(
-          'A component is changing from %s to %s. ' +
-            'Components should not switch between controlled and uncontrolled.',
-          wasControlled ? 'controlled' : 'uncontrolled',
-          isNowControlled ? 'controlled' : 'uncontrolled',
-        );
-      }
+    if (controlledValue === undefined && wasControlled) {
+      warnModeSwitch('controlled', 'uncontrolled');
+    } else if (controlledValue !== undefined && !initiallyControlled) {
+      warnModeSwitch('uncontrolled', 'controlled');
     }
-  }, [controlledValue]);
+  }, [controlledValue, wasControlled, initiallyControlled]);
 
-  const value = isControlled ? (controlledValue as T) : internalValue;
+  const emitChange = useEventCallback(onChange);
 
-  const setValue: SetValue<T> = useCallback(
+  const setValue = useCallback<SetValue<T>>(
     (valueOrUpdater) => {
-      if (!isControlled) {
-        setInternalValue((prev) => {
-          const next =
-            typeof valueOrUpdater === 'function'
-              ? (valueOrUpdater as (prev: T) => T)(prev)
-              : valueOrUpdater;
-          onChange?.(next);
-          return next;
-        });
+      const controlled = isControlledRef.current;
+      const base = controlled
+        ? pendingRef.current
+          ? pendingRef.current.value
+          : renderedRef.current
+        : latestRef.current;
+      const next =
+        typeof valueOrUpdater === 'function'
+          ? (valueOrUpdater as (prev: T) => T)(base)
+          : valueOrUpdater;
+      if (Object.is(next, base)) return;
+
+      if (controlled) {
+        if (!pendingRef.current) {
+          queueMicrotask(() => {
+            pendingRef.current = null;
+          });
+        }
+        pendingRef.current = { value: next };
       } else {
-        const next =
-          typeof valueOrUpdater === 'function'
-            ? (valueOrUpdater as (prev: T) => T)(internalValue)
-            : valueOrUpdater;
-        onChange?.(next);
+        latestRef.current = next;
+        setInternalValue(next);
       }
+      emitChange(next);
     },
-    [isControlled, onChange, internalValue],
+    [emitChange],
   );
 
   return [value, setValue];
