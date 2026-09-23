@@ -1,0 +1,15 @@
+/*
+ * Tailwind 4 consumer entry (`@mortenbrudvik/waveui/tailwind`):
+ *
+ *   @import 'tailwindcss';
+ *   @import '@mortenbrudvik/waveui/tailwind';
+ *
+ * Wave joins the consumer's own layer order (tokens in `theme`, base in `base`), so the scoped
+ * reset never beats a utility. `@source` makes Tailwind generate the classes used by the
+ * compiled components in `dist`. Import this entry, never `./styles`, in a Tailwind build.
+ */
+
+@import './tokens.css' layer(theme);
+@import './base.css' layer(base);
+
+@source '../../dist';

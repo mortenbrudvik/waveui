@@ -1,0 +1,24 @@
+/*
+ * Build input for the precompiled, unlayered `dist/styles.css` (`@mortenbrudvik/waveui/styles`),
+ * compiled by `scripts/build-css.mjs`. For apps without Tailwind; Tailwind users import
+ * `@mortenbrudvik/waveui/tailwind` instead.
+ *
+ * - `theme(inline)` inlines Tailwind's default theme into the utilities, so no `--spacing`,
+ *   `--font-sans`, `--radius-*` or palette variables are emitted.
+ * - `source(none)` disables automatic source detection; only the sources below are scanned
+ *   (tests excluded, stories never included).
+ * - Utilities come last so they beat the equal-specificity root rules of base.css.
+ * - The `animate-wave-*` utilities are always emitted, so the keyframes they reference are
+ *   always part of the precompiled CSS.
+ */
+
+@import 'tailwindcss/theme.css' theme(inline);
+@import './tokens.css';
+@import './base.css';
+@import 'tailwindcss/utilities.css' source(none);
+
+@source '../components';
+@source '../lib';
+@source not '../components/**/__tests__';
+@source not '../lib/**/__tests__';
+@source inline('animate-wave-spin animate-wave-spin-slow animate-wave-pulse animate-wave-indeterminate animate-wave-indeterminate-rtl');

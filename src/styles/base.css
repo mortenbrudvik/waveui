@@ -1,0 +1,91 @@
+/*
+ * Wave base styles, scoped to WaveProvider roots (`.wave-root`) and portal wrappers
+ * (`.wave-portal`). Nothing here touches the rest of the page: no Preflight, no `body` rules,
+ * no global `*` rules. WaveProvider is therefore required for the precompiled `./styles` path.
+ *
+ * Unlayered in `dist/styles.css`, `layer(base)` in the `./tailwind` entry. Every rule has zero
+ * specificity (`:where()`) except the two root rules, so any author style wins.
+ */
+
+.wave-root,
+.wave-portal {
+  font-family: var(--wave-font-family);
+  color: var(--wave-foreground);
+  font-size: 14px;
+  line-height: 20px;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* Portal wrappers never paint a background; surfaces paint their own. */
+.wave-root {
+  background-color: var(--wave-background);
+}
+
+/* Pseudo-elements stay outside :where(): they are invalid inside it and forgiving selector
+   parsing would drop them silently. */
+:where(.wave-root, .wave-portal) :where(*),
+:where(.wave-root, .wave-portal) :where(*)::before,
+:where(.wave-root, .wave-portal) :where(*)::after {
+  box-sizing: border-box;
+  border-color: var(--wave-border);
+}
+
+/* Native-element reset, limited to what Wave renders (C-NATIVE). `border: 0 solid` removes the
+   UA button border so a single `border-b-2` utility draws only the bottom edge. */
+:where(.wave-root, .wave-portal) :where(button, input, select, textarea) {
+  font: inherit;
+  color: inherit;
+  letter-spacing: inherit;
+  margin: 0;
+  padding: 0;
+  border: 0 solid;
+  background-color: transparent;
+}
+
+:where(.wave-root, .wave-portal) :where(button, [role='button']) {
+  cursor: pointer;
+}
+
+:where(.wave-root, .wave-portal) :where(ul, ol) {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+:where(.wave-root, .wave-portal) :where(h1, h2, h3, h4, h5, h6, p, figure, blockquote, dl, dd) {
+  margin: 0;
+}
+
+:where(.wave-root, .wave-portal) :where(h1, h2, h3, h4, h5, h6) {
+  font-size: inherit;
+  font-weight: inherit;
+}
+
+:where(.wave-root, .wave-portal) :where(fieldset) {
+  margin: 0;
+  padding: 0;
+  border: 0;
+  min-width: 0;
+}
+
+:where(.wave-root, .wave-portal) :where(legend) {
+  padding: 0;
+}
+
+:where(.wave-root, .wave-portal) :where(table) {
+  border-collapse: collapse;
+  text-indent: 0;
+}
+
+:where(.wave-root, .wave-portal) :where(hr) {
+  height: 0;
+  border: 0 solid;
+  border-top-width: 1px;
+  color: inherit;
+  margin: 0;
+}
+
+:where(.wave-root, .wave-portal) :where(img, svg, video) {
+  vertical-align: middle;
+}

@@ -1,0 +1,184 @@
+/*
+ * DEPRECATED 0.4 compatibility layer (`@mortenbrudvik/waveui/legacy-tokens.css`); removed in 1.0.
+ *
+ * 0.5 renamed the runtime variables to `--wave-*`. Import this file only if your app reads or
+ * overrides the 0.4 names (`--primary`, `--background`, `--border`, `--brand-80`, …), and load it
+ * AFTER `@mortenbrudvik/waveui/styles` or `@mortenbrudvik/waveui/tailwind`.
+ *
+ * Never import it in an app that defines shadcn/ui-style variables (`--primary`, `--background`,
+ * …): the names collide, which is why 0.5 prefixed them. Migration: rename your overrides to the
+ * `--wave-*` names and drop this import.
+ *
+ * - The 0.4 ramp names are declared as literal constants, so code that reads them keeps working.
+ *   They never reference `--wave-brand-*` (tokens.css reads them as fallbacks: no cycle).
+ * - The 0.4 semantic names are re-declared per theme with the 0.5 values, and the `--wave-*`
+ *   semantics point at them, so reading and overriding the 0.4 names both work.
+ * - Light values sit on `:root` (as in 0.4, so `:root { --primary: … }` overrides reach a light
+ *   WaveProvider) and on a light subtree nested inside another theme.
+ */
+
+/* 0.4 ramp names (constants, read-only compatibility) */
+:root {
+  --brand-10: #061724;
+  --brand-20: #082338;
+  --brand-30: #0a2e4a;
+  --brand-40: #0c3b5e;
+  --brand-50: #0e4775;
+  --brand-60: #0f548c;
+  --brand-70: #115ea3;
+  --brand-80: #0f6cbd;
+  --brand-90: #2886de;
+  --brand-100: #479ef5;
+  --brand-110: #62abf5;
+  --brand-120: #77b7f7;
+  --brand-130: #96c6fa;
+  --brand-140: #b4d6fa;
+  --brand-150: #cfe4fa;
+  --brand-160: #ebf3fc;
+
+  --grey-2: #050505;
+  --grey-4: #0a0a0a;
+  --grey-6: #0f0f0f;
+  --grey-8: #141414;
+  --grey-10: #1a1a1a;
+  --grey-12: #1f1f1f;
+  --grey-14: #242424;
+  --grey-16: #292929;
+  --grey-20: #333333;
+  --grey-24: #3d3d3d;
+  --grey-26: #424242;
+  --grey-30: #4d4d4d;
+  --grey-34: #575757;
+  --grey-38: #616161;
+  --grey-40: #666666;
+  --grey-44: #707070;
+  --grey-50: #808080;
+  --grey-60: #999999;
+  --grey-68: #adadad;
+  --grey-74: #bdbdbd;
+  --grey-78: #c7c7c7;
+  --grey-82: #d1d1d1;
+  --grey-86: #dbdbdb;
+  --grey-88: #e0e0e0;
+  --grey-90: #e6e6e6;
+  --grey-92: #ebebeb;
+  --grey-94: #f0f0f0;
+  --grey-96: #f5f5f5;
+  --grey-98: #fafafa;
+}
+
+/* 0.4 semantic names — light */
+:root,
+:where(.wave-dark, .dark, .wave-high-contrast, .high-contrast) .wave-light {
+  --background: #ffffff;
+  --foreground: #242424;
+  --card: #fafafa;
+  --card-foreground: var(--foreground);
+  --primary: var(--wave-brand-80);
+  --primary-foreground: #ffffff;
+  --secondary: #f5f5f5;
+  --secondary-foreground: var(--foreground);
+  --muted: #f0f0f0;
+  --muted-foreground: #616161;
+  --accent: var(--primary);
+  --accent-foreground: var(--primary-foreground);
+  --destructive: #c50f1f;
+  --destructive-foreground: #ffffff;
+  --subtle: transparent;
+  --border: #e0e0e0;
+  --input: #d1d1d1;
+  --ring: var(--wave-brand-80);
+  --success: #107c10;
+  --warning: #fde300;
+  --error: #c50f1f;
+  --info: #0f6cbd;
+  --severe: #da3b01;
+}
+
+/* 0.4 semantic names — dark */
+.wave-dark,
+.dark {
+  --background: #292929;
+  --foreground: #ffffff;
+  --card: #333333;
+  --card-foreground: var(--foreground);
+  --primary: var(--wave-brand-110);
+  --primary-foreground: #000000;
+  --secondary: #333333;
+  --secondary-foreground: var(--foreground);
+  --muted: #383838;
+  --muted-foreground: #adadad;
+  --accent: var(--primary);
+  --accent-foreground: var(--primary-foreground);
+  --destructive: #f48a94;
+  --destructive-foreground: #000000;
+  --subtle: transparent;
+  --border: #666666;
+  --input: #666666;
+  --ring: var(--wave-brand-100);
+  --success: #54b054;
+  --warning: #fde300;
+  --error: #f48a94;
+  --info: #479ef5;
+  --severe: #e97548;
+}
+
+/* 0.4 semantic names — high contrast */
+.wave-high-contrast,
+.high-contrast {
+  --background: #000000;
+  --foreground: #ffffff;
+  --card: #000000;
+  --card-foreground: var(--foreground);
+  --primary: #1aebff;
+  --primary-foreground: #000000;
+  --secondary: #000000;
+  --secondary-foreground: var(--foreground);
+  --muted: #1a1a1a;
+  --muted-foreground: #ffffff;
+  --accent: var(--primary);
+  --accent-foreground: var(--primary-foreground);
+  --destructive: #ff6060;
+  --destructive-foreground: #000000;
+  --subtle: transparent;
+  --border: #ffffff;
+  --input: #ffffff;
+  --ring: #ffff00;
+  --success: #3ff23f;
+  --warning: #ffff00;
+  --error: #ff6060;
+  --info: #1aebff;
+  --severe: #ff8c00;
+}
+
+/* The `--wave-*` semantics read the 0.4 names in every theme group. */
+:root,
+.wave-light,
+.wave-dark,
+.dark,
+.wave-high-contrast,
+.high-contrast {
+  --wave-background: var(--background);
+  --wave-foreground: var(--foreground);
+  --wave-card: var(--card);
+  --wave-card-foreground: var(--card-foreground);
+  --wave-primary: var(--primary);
+  --wave-primary-foreground: var(--primary-foreground);
+  --wave-secondary: var(--secondary);
+  --wave-secondary-foreground: var(--secondary-foreground);
+  --wave-muted: var(--muted);
+  --wave-muted-foreground: var(--muted-foreground);
+  --wave-accent: var(--accent);
+  --wave-accent-foreground: var(--accent-foreground);
+  --wave-destructive: var(--destructive);
+  --wave-destructive-foreground: var(--destructive-foreground);
+  --wave-subtle: var(--subtle);
+  --wave-border: var(--border);
+  --wave-input: var(--input);
+  --wave-ring: var(--ring);
+  --wave-success: var(--success);
+  --wave-warning: var(--warning);
+  --wave-error: var(--error);
+  --wave-info: var(--info);
+  --wave-severe: var(--severe);
+}

@@ -1,22 +1,9 @@
+/*
+ * Development entry (not exported). Mirrors the Tailwind consumer path of
+ * `@mortenbrudvik/waveui/tailwind`: Tailwind with its own sources, Wave tokens in the `theme`
+ * layer and Wave's scoped base in the `base` layer.
+ */
+
 @import 'tailwindcss';
-@import './tokens.css';
-@import './animations.css';
-
-@layer base {
-  body {
-    font-family: 'Segoe UI', 'Segoe UI Web (West European)', -apple-system,
-      BlinkMacSystemFont, Roboto, 'Helvetica Neue', sans-serif;
-    color: var(--foreground);
-    background-color: var(--background);
-    font-size: 14px;
-    line-height: 20px;
-    -webkit-font-smoothing: antialiased;
-    -moz-osx-font-smoothing: grayscale;
-  }
-
-  *,
-  *::before,
-  *::after {
-    border-color: var(--border);
-  }
-}
+@import './tokens.css' layer(theme);
+@import './base.css' layer(base);

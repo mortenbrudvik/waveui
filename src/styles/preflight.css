@@ -1,0 +1,7 @@
+/*
+ * Opt-in Tailwind Preflight (`@mortenbrudvik/waveui/preflight.css`), compiled unlayered to
+ * `dist/preflight.css` by `scripts/build-css.mjs`. Wave does not need it (base.css resets the
+ * native elements it renders inside `.wave-root`/`.wave-portal`); it applies to the whole page.
+ */
+
+@import 'tailwindcss/preflight.css';
