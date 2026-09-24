@@ -1,6 +1,6 @@
 import * as React from 'react';
 import { afterEach, describe, it, expect, vi } from 'vitest';
-import { act, render, screen, within } from '@testing-library/react';
+import { act, fireEvent, render, screen, within } from '@testing-library/react';
 import { renderToString } from 'react-dom/server';
 import userEvent from '@testing-library/user-event';
 import { TimePicker } from '../TimePicker';
@@ -572,6 +572,67 @@ describe('TimePicker', () => {
       await user.tab();
       expect(onValueChange).not.toHaveBeenCalled();
       expect(combobox('Time')).toHaveValue('9:00 AM');
+    });
+
+    it('reopening by click with kept typed text shows its matches and the option typing made active', async () => {
+      const user = userEvent.setup();
+      const onValueChange = vi.fn();
+      render(<TimePicker aria-label="Time" step={60} onValueChange={onValueChange} />);
+      await user.type(combobox('Time'), '10');
+      expect(optionNames()).toEqual(['10:00 AM', '10:00 PM']);
+      await user.keyboard('{Escape}');
+      expect(screen.queryByRole('listbox')).not.toBeInTheDocument();
+      expect(combobox('Time')).toHaveValue('10');
+
+      await user.click(combobox('Time'));
+      expect(combobox('Time')).toHaveValue('10');
+      expect(optionNames()).toEqual(['10:00 AM', '10:00 PM']);
+      expect(combobox('Time')).toHaveAttribute(
+        'aria-activedescendant',
+        screen.getByRole('option', { name: '10:00 AM' }).id,
+      );
+      await user.keyboard('{Enter}');
+      expect(onValueChange).toHaveBeenCalledWith('10:00');
+      expect(combobox('Time')).toHaveValue('10:00 AM');
+
+      // Once committed, the next opening shows every option again.
+      await user.click(combobox('Time'));
+      expect(screen.getAllByRole('option')).toHaveLength(24);
+    });
+
+    it('reopening with ArrowDown/ArrowUp with kept typed text starts at its first/last match', async () => {
+      const user = userEvent.setup();
+      render(<TimePicker aria-label="Time" step={60} />);
+      await user.type(combobox('Time'), '10{Escape}');
+      expect(screen.queryByRole('listbox')).not.toBeInTheDocument();
+      await user.keyboard('{ArrowDown}');
+      expect(optionNames()).toEqual(['10:00 AM', '10:00 PM']);
+      expect(combobox('Time')).toHaveAttribute(
+        'aria-activedescendant',
+        screen.getByRole('option', { name: '10:00 AM' }).id,
+      );
+      await user.keyboard('{Escape}{ArrowUp}');
+      expect(optionNames()).toEqual(['10:00 AM', '10:00 PM']);
+      expect(combobox('Time')).toHaveAttribute(
+        'aria-activedescendant',
+        screen.getByRole('option', { name: '10:00 PM' }).id,
+      );
+      expect(combobox('Time')).toHaveValue('10');
+    });
+
+    it('leaves the Enter that confirms an IME composition to the IME', async () => {
+      const user = userEvent.setup();
+      const onValueChange = vi.fn();
+      render(<TimePicker aria-label="Time" step={30} onValueChange={onValueChange} />);
+      // 9:15 is not in the list: only the typed-time commit could take it.
+      await user.type(combobox('Time'), '9:15');
+      const notPrevented = fireEvent.keyDown(combobox('Time'), { key: 'Enter', isComposing: true });
+      expect(notPrevented).toBe(true);
+      expect(onValueChange).not.toHaveBeenCalled();
+      expect(combobox('Time')).toHaveValue('9:15');
+      fireEvent.keyDown(combobox('Time'), { key: 'Enter' });
+      expect(onValueChange).toHaveBeenCalledWith('09:15');
+      expect(combobox('Time')).toHaveValue('9:15 AM');
     });
 
     it('Enter with the list closed and no edit is not prevented (forms submit)', async () => {

@@ -213,6 +213,19 @@ describe('DatePicker', () => {
       expect(textbox()).toHaveValue('12/24/2025');
     });
 
+    it('leaves the Enter that confirms an IME composition to the IME', async () => {
+      const user = userEvent.setup();
+      const onValueChange = vi.fn();
+      render(<DatePicker aria-label="Date" locale="en-US" onValueChange={onValueChange} />);
+      await user.type(textbox(), '12/24/2025');
+      const notPrevented = fireEvent.keyDown(textbox(), { key: 'Enter', isComposing: true });
+      expect(notPrevented).toBe(true);
+      expect(onValueChange).not.toHaveBeenCalled();
+      expect(textbox()).toHaveValue('12/24/2025');
+      fireEvent.keyDown(textbox(), { key: 'Enter' });
+      expect(fields(onValueChange.mock.calls[0][0] as Date)).toEqual([2025, 12, 24]);
+    });
+
     it('accepts ISO text in any locale', async () => {
       const user = userEvent.setup();
       const onValueChange = vi.fn();
@@ -1176,6 +1189,55 @@ describe('DatePicker', () => {
       expect(screen.getAllByRole('columnheader')[0]).toHaveAttribute('aria-label', 'Sonntag');
       expect(dayButton('Sonntag, 15. Juni 2025')).toHaveFocus();
       expect(textbox('Datum')).toHaveValue('15.06.2025');
+    });
+
+    it('exposes the selected state on the focused day button, not only on its gridcell', async () => {
+      const user = userEvent.setup();
+      render(<DatePicker aria-label="Date" locale="en-US" defaultValue={JUNE_15} />);
+      await openCalendar(user);
+      const selected = dayButton('Sunday, June 15, 2025');
+      expect(selected).toHaveFocus();
+      expect(selected).toHaveAttribute('aria-pressed', 'true');
+      const pressed = within(screen.getByRole('grid'))
+        .getAllByRole('button')
+        .filter((b) => b.hasAttribute('aria-pressed'));
+      expect(pressed).toEqual([selected]);
+      await user.keyboard('{ArrowRight}');
+      expect(dayButton('Monday, June 16, 2025')).toHaveFocus();
+      expect(dayButton('Monday, June 16, 2025')).not.toHaveAttribute('aria-pressed');
+      // axe on an open calendar with a selected (pressed) day: 'calendar dialog' tests above.
+    });
+
+    it('keeps the grid, heading, day labels and text Gregorian when the locale default calendar is not (fa-IR)', async () => {
+      const user = userEvent.setup();
+      const onValueChange = vi.fn();
+      render(
+        <DatePicker
+          aria-label="Date"
+          locale="fa-IR"
+          defaultValue={JUNE_15}
+          onValueChange={onValueChange}
+        />,
+      );
+      expect(textbox()).toHaveValue('۲۰۲۵/۰۶/۱۵');
+      await openCalendar(user);
+      const gregorian = (options: Intl.DateTimeFormatOptions) =>
+        new Intl.DateTimeFormat('fa-IR', { ...options, calendar: 'gregory' }).format(JUNE_15);
+      expect(
+        screen.getByRole('heading', { name: gregorian({ month: 'long', year: 'numeric' }) }),
+      ).toBeInTheDocument();
+      const selected = dayButton(
+        gregorian({ weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' }),
+      );
+      expect(selected).toHaveFocus();
+      expect(selected).toHaveTextContent('۱۵');
+      await user.keyboard('{Escape}');
+
+      await user.clear(textbox());
+      await user.type(textbox(), '۲۰۲۵/۰۶/۲۰{Enter}');
+      expect(fields(onValueChange.mock.calls[0][0] as Date)).toEqual([2025, 6, 20]);
+      expect(textbox()).toHaveValue('۲۰۲۵/۰۶/۲۰');
+      expect(textbox()).not.toHaveAttribute('aria-invalid');
     });
 
     it('uses the runtime locale by default', async () => {

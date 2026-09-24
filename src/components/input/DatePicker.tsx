@@ -62,7 +62,8 @@ export interface DatePickerProps extends Omit<
   /**
    * Formats the selected date for the input. Supply `parseDate` as its inverse: without it, typed
    * text is parsed with the default parser for `locale` (development warning).
-   * @default Intl.DateTimeFormat(locale, { year: 'numeric', month: '2-digit', day: '2-digit' })
+   * @default Intl.DateTimeFormat(locale, { year: 'numeric', month: '2-digit', day: '2-digit' }),
+   * in the Gregorian calendar when the locale's own has other months (see `locale`)
    */
   formatDate?: (date: Date) => string;
   /**
@@ -74,7 +75,9 @@ export interface DatePickerProps extends Omit<
   /**
    * BCP 47 locale of the default format/parse, the month and weekday names and the day labels
    * (runtime default when omitted). Pass it explicitly when rendering on the server, so the server
-   * and the browser format the same text.
+   * and the browser format the same text. The grid is Gregorian: a locale calendar with other
+   * months or eras (the Persian default of `fa-IR`, `-u-ca-islamic`, `-u-ca-japanese`) is replaced
+   * by the Gregorian one in the locale's language and digits; the Buddhist years of `th-TH` stay.
    */
   locale?: string;
   /** Earliest selectable day (the whole day is included). */
@@ -168,7 +171,9 @@ function toWeeks(days: Date[]): Date[][] {
  *   to the month), Home/End to the start/end of the week, Enter/Space select. Escape closes and
  *   returns focus to where the calendar was opened from (the toggle, or the input after
  *   Alt+ArrowDown); a press outside closes it too. Unavailable days stay focusable
- *   (`aria-disabled`); a day focused by pointer becomes the starting point of the arrow keys.
+ *   (`aria-disabled`); a day focused by pointer becomes the starting point of the arrow keys. The
+ *   selected day is `aria-selected` on its gridcell and `aria-pressed` on its focusable button, so
+ *   the state is announced when focus lands on it; today is `aria-current="date"`.
  * - The calendar closes when the picker becomes disabled or read-only (uncontrolled `open`: it
  *   stays closed when the picker is enabled again).
  * - `clearable` shows a clear button while a date is selected (not while read-only).
@@ -499,7 +504,8 @@ export const DatePicker = (props: DatePickerProps) => {
   const handleInputKeyDown = composeEventHandlers(
     onKeyDown,
     (event: React.KeyboardEvent<HTMLDivElement>) => {
-      if (!interactive) return;
+      // Keys that belong to an IME composition (its confirming Enter) are left to the IME.
+      if (!interactive || event.nativeEvent.isComposing) return;
       if (event.key === 'Enter' && draft !== null) {
         // An edit is committed instead of submitting the form; untouched text lets Enter submit.
         event.preventDefault();
@@ -762,10 +768,14 @@ export const DatePicker = (props: DatePickerProps) => {
                       const unavailable = isUnavailable(day);
                       return (
                         <td key={column} role="gridcell" aria-selected={isSelected} className="p-0">
+                          {/* Focus rests on the button, and screen readers do not reliably
+                              announce the gridcell's aria-selected from inside it: the selected
+                              day's button is also pressed. */}
                           <button
                             type="button"
                             tabIndex={isFocused ? 0 : -1}
                             aria-label={formatDayLabel(day, locale)}
+                            aria-pressed={isSelected || undefined}
                             aria-current={isToday ? 'date' : undefined}
                             {...focusableDisabledProps(unavailable)}
                             data-date={iso}

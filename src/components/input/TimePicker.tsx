@@ -162,7 +162,10 @@ function startsWithQuery(item: ListboxItem, text: string): boolean {
  * - Click the input, ArrowDown/ArrowUp or type to open; the list opens with every option and the
  *   selected one (when it is in the list) active and scrolled into view. Without one, no option is
  *   active until ArrowDown/ArrowUp or typing, so Enter lets the surrounding form submit. Escape,
- *   Tab, an outside press or focus leaving closes it.
+ *   Tab, an outside press or focus leaving closes it. Typed text kept after Escape closed the list
+ *   still filters it when it reopens: a click resumes the option typing made active,
+ *   ArrowDown/ArrowUp start at the first/last match.
+ * - Keys of an IME composition (its confirming Enter included) are left to the IME.
  * - `clearable` shows a clear button while a time is selected (not while read-only).
  * - The value is `HH:mm` (24-hour) whatever the display `format`; values off the `step` grid or
  *   outside the bounds are still displayed in `format`.
@@ -262,21 +265,24 @@ export const TimePicker = (props: TimePickerProps) => {
   if (open && !interactive) setOpen(false);
   /** Typed text; `null` shows the selected time's label (draft model). */
   const [draft, setDraft] = React.useState<string | null>(null);
-  /** Filter text: set only by typing, reset whenever the list opens (all options shown). */
-  const [query, setQuery] = React.useState('');
+  /**
+   * Filter text: the typed text only, never the selected time's label, so opening without an edit
+   * shows every option. Typed text kept while the list is closed (Escape) keeps filtering it, so
+   * a reopened list shows what the input says.
+   */
+  const query = draft ?? '';
 
   const openList = () => {
     if (!interactive || open) return;
-    setQuery('');
     setOpen(true);
   };
   const closeList = () => setOpen(false);
 
   const filter = React.useMemo(() => {
     const text = query.trim().toLowerCase();
-    if (!open || !text) return undefined;
+    if (!text) return undefined;
     return (item: ListboxItem) => matchesQuery(item, text);
-  }, [open, query]);
+  }, [query]);
 
   /**
    * The option that typing `text` makes active. A complete time (`2:00 PM`, `14:00`) activates its
@@ -313,7 +319,6 @@ export const TimePicker = (props: TimePickerProps) => {
   const commitValue = (next: string) => {
     setSelectedValue(next);
     setDraft(null);
-    setQuery('');
   };
 
   /**
@@ -333,10 +338,7 @@ export const TimePicker = (props: TimePickerProps) => {
     return true;
   };
 
-  const clearDraft = () => {
-    setDraft(null);
-    setQuery('');
-  };
+  const clearDraft = () => setDraft(null);
 
   // The listbox counts as open only while it shows options: with no match nothing is displayed,
   // so `aria-expanded` is false and Escape reverts the typed text instead of closing an empty list.
@@ -433,7 +435,6 @@ export const TimePicker = (props: TimePickerProps) => {
     if (!interactive) return;
     const text = event.target.value;
     setDraft(text);
-    setQuery(text);
     if (!open) setOpen(true);
     // Every edit re-ranks the highlight (it opens the list in the same update when closed).
     lb.setActiveValue(getTypedActiveValue(text));
@@ -446,13 +447,10 @@ export const TimePicker = (props: TimePickerProps) => {
       // Enter commits the active option: the exact typed time, the first match of partial text,
       // or the option moved to with the arrow keys.
       lb.onKeyDown(event);
-      if (event.defaultPrevented) return;
-      if (
-        event.key === 'Escape' &&
-        draft === '' &&
-        displayLabel !== '' &&
-        !event.nativeEvent.isComposing
-      ) {
+      // Keys that belong to an IME composition (its confirming Enter) are left to the IME, as
+      // useListbox leaves them.
+      if (event.defaultPrevented || event.nativeEvent.isComposing) return;
+      if (event.key === 'Escape' && draft === '' && displayLabel !== '') {
         // Erased text: useListbox calls onClearDraft only while the input has text, so Escape on a
         // closed list restores the selected time here (an open list was closed above). With nothing
         // to restore, Escape is left to enclosing layers.
@@ -470,6 +468,14 @@ export const TimePicker = (props: TimePickerProps) => {
     },
   );
   const handleKeyUp = composeEventHandlers(onKeyUp, lb.onKeyUp);
+
+  const handleInputClick = () => {
+    if (!interactive || open) return;
+    openList();
+    // Typed text kept after Escape resumes where typing left it: its matches (the filter) and the
+    // option typing made active, so Enter commits the same time as before the list closed.
+    if (draft !== null) lb.setActiveValue(getTypedActiveValue(draft));
+  };
 
   const handleBlur = composeEventHandlers(onBlur, () => {
     if (draft !== null && !commitDraft(draft)) clearDraft();
@@ -514,7 +520,7 @@ export const TimePicker = (props: TimePickerProps) => {
             aria-details={ariaDetails}
             value={draft ?? displayLabel}
             onChange={handleInputChange}
-            onClick={openList}
+            onClick={handleInputClick}
             onFocus={onFocus}
             onBlur={handleBlur}
             onKeyDown={handleKeyDown}

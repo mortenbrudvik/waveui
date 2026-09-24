@@ -166,8 +166,33 @@ describe('dateUtils — locale format and parse', () => {
   });
 
   it('is the exact inverse of formatDate for the same locale (round trip)', () => {
-    const locales = [undefined, 'en-GB', 'en-US', 'de-DE', 'fr-FR', 'nb-NO', 'ja-JP', 'sv-SE'];
-    const dates = [new Date(2025, 0, 1), new Date(2025, 3, 3), new Date(2024, 1, 29)];
+    const locales = [
+      undefined,
+      'en-GB',
+      'en-US',
+      'de-DE',
+      'fr-FR',
+      'nb-NO',
+      'ja-JP',
+      'sv-SE',
+      // Non-Latin digits, and default or explicit calendars other than the Gregorian one.
+      'ar-EG',
+      'fa-IR',
+      'fa-AF',
+      'ps-AF',
+      'th-TH',
+      'en-US-u-ca-islamic',
+      'en-US-u-ca-persian',
+      'en-US-u-ca-hebrew',
+      'ja-JP-u-ca-japanese',
+      'en-US-u-ca-buddhist',
+    ];
+    const dates = [
+      new Date(2024, 1, 29),
+      // The first and the last day of every month of 2025.
+      ...Array.from({ length: 12 }, (_, month) => new Date(2025, month, 1)),
+      ...Array.from({ length: 12 }, (_, month) => new Date(2025, month + 1, 0)),
+    ];
     for (const locale of locales) {
       for (const date of dates) {
         const text = formatDate(date, locale);
@@ -227,6 +252,59 @@ describe('dateUtils — localized names', () => {
     expect(formatMonthYear(new Date(2025, 4, 1), 'en-US')).toBe('May 2025');
     expect(formatMonthYear(new Date(2025, 4, 1), 'de-DE')).toBe('Mai 2025');
     expect(formatDayLabel(new Date(2025, 4, 26), 'en-US')).toBe('Monday, May 26, 2025');
+  });
+});
+
+describe('dateUtils — calendar systems', () => {
+  const june15 = new Date(2025, 5, 15);
+
+  /** What Intl writes for `locale` in the Gregorian calendar. */
+  function gregorian(locale: string, options: Intl.DateTimeFormatOptions) {
+    return new Intl.DateTimeFormat(locale, { ...options, calendar: 'gregory' }).format(june15);
+  }
+
+  it('writes the Gregorian date of the grid when the locale default calendar has other months (fa-IR, ps-AF)', () => {
+    // fa-IR defaults to the Persian calendar (15 June 2025 is 1404/03/25 there); the digits stay.
+    expect(formatDate(june15, 'fa-IR')).toBe('۲۰۲۵/۰۶/۱۵');
+    expect(getLocaleDateFormat('fa-IR')).toMatchObject({
+      order: ['year', 'month', 'day'],
+      pattern: 'YYYY/MM/DD',
+    });
+    expect(fields(parseDate('۲۰۲۵/۰۶/۱۵', 'fa-IR'))).toEqual([2025, 6, 15]);
+    expect(fields(parseDate('2025/06/15', 'fa-IR'))).toEqual([2025, 6, 15]);
+    // Typed numbers are Gregorian too: the Persian date's digits name the year 1404.
+    expect(fields(parseDate('۱۴۰۴/۰۳/۲۵', 'fa-IR'))).toEqual([1404, 3, 25]);
+    expect(formatDate(june15, 'ps-AF')).toBe('۲۰۲۵-۰۶-۱۵');
+  });
+
+  it('names the Gregorian month in the heading, the day label and the month names (fa-IR)', () => {
+    const heading = formatMonthYear(june15, 'fa-IR');
+    expect(heading).toBe(gregorian('fa-IR', { month: 'long', year: 'numeric' }));
+    expect(heading).toContain('۲۰۲۵');
+    const label = formatDayLabel(june15, 'fa-IR');
+    expect(label).toBe(
+      gregorian('fa-IR', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' }),
+    );
+    expect(label).toContain('۱۵');
+    expect(label).not.toContain('۱۴۰۴');
+    expect(getMonthNames('fa-IR')[5]).toBe(gregorian('fa-IR', { month: 'long' }));
+  });
+
+  it('formats an explicit calendar with other months or eras in the Gregorian one', () => {
+    expect(formatDate(june15, 'en-US-u-ca-islamic')).toBe('06/15/2025');
+    expect(formatDate(june15, 'ja-JP-u-ca-japanese')).toBe('2025/06/15');
+    expect(formatMonthYear(june15, 'en-US-u-ca-hebrew')).toBe('June 2025');
+    expect(formatDayLabel(june15, 'en-US-u-ca-persian')).toBe('Sunday, June 15, 2025');
+  });
+
+  it('keeps the Buddhist year of th-TH, whose months and days are the Gregorian ones', () => {
+    expect(formatDate(june15, 'th-TH')).toBe('15/06/2568');
+    expect(getLocaleDateFormat('th-TH').pattern).toBe('DD/MM/YYYY');
+    expect(fields(parseDate('15/06/2568', 'th-TH'))).toEqual([2025, 6, 15]);
+    expect(formatMonthYear(june15, 'th-TH')).toBe(
+      new Intl.DateTimeFormat('th-TH', { month: 'long', year: 'numeric' }).format(june15),
+    );
+    expect(formatMonthYear(june15, 'th-TH')).toContain('2568');
   });
 });
 

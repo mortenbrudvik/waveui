@@ -7,6 +7,10 @@
  *   '2-digit', day: '2-digit' })`, and {@link parseDate} is its exact inverse for the same
  *   `locale` (field order from `formatToParts`), so a formatted date always parses back to the
  *   same day. ISO `yyyy-mm-dd` text is accepted too.
+ * - Every formatter uses the locale's calendar only when it has the Gregorian months and days of
+ *   the grid (Gregorian, or the Buddhist calendar of `th-TH`, whose years are offset); any other
+ *   calendar (the Persian default of `fa-IR`, `-u-ca-islamic`, Japanese eras) is replaced by the
+ *   Gregorian one, so the text, the heading and the day labels name the day the grid shows.
  * - Pass an explicit `locale` when rendering on the server: the runtime default locale of the
  *   server and the browser may differ, which would change the formatted text between them.
  *
@@ -155,9 +159,44 @@ const DEFAULT_DATE_OPTIONS: Intl.DateTimeFormatOptions = {
   day: '2-digit',
 };
 
+/**
+ * Calendars with the Gregorian months and days, which the grid shows (`getCalendarDays`): a locale
+ * whose calendar is one of these keeps it. The Buddhist calendar (default of `th-TH`) only numbers
+ * the years differently.
+ */
+const GRID_CALENDARS = new Set(['gregory', 'buddhist']);
+
+const calendarCache = new Map<string, string>();
+
+/**
+ * The calendar every date helper formats `locale` in: the locale's own (its default or a `-u-ca-`
+ * extension) when it has the Gregorian months and days, else `'gregory'`. So a Persian default
+ * (`fa-IR`, `fa-AF`, `ps-AF`), an explicit `-u-ca-islamic` or the Japanese eras never label the
+ * Gregorian grid with other months or years, and the text stays parseable; the locale's digits
+ * stay. An invalid locale tag uses the runtime default's.
+ */
+function getCalendar(locale: string | undefined): string {
+  const key = locale ?? '';
+  let calendar = calendarCache.get(key);
+  if (calendar === undefined) {
+    let resolved: string;
+    try {
+      resolved = new Intl.DateTimeFormat(locale).resolvedOptions().calendar;
+    } catch {
+      resolved = new Intl.DateTimeFormat().resolvedOptions().calendar;
+    }
+    calendar = GRID_CALENDARS.has(resolved) ? resolved : 'gregory';
+    calendarCache.set(key, calendar);
+  }
+  return calendar;
+}
+
 const formatterCache = new Map<string, Intl.DateTimeFormat>();
 
-/** A cached `Intl.DateTimeFormat`; an invalid locale tag falls back to the runtime default. */
+/**
+ * A cached `Intl.DateTimeFormat` in the calendar of {@link getCalendar}; an invalid locale tag falls
+ * back to the runtime default.
+ */
 function getFormatter(
   locale: string | undefined,
   options: Intl.DateTimeFormatOptions,
@@ -165,10 +204,11 @@ function getFormatter(
   const key = `${locale ?? ''}|${JSON.stringify(options)}`;
   let formatter = formatterCache.get(key);
   if (!formatter) {
+    const withCalendar = { ...options, calendar: getCalendar(locale) };
     try {
-      formatter = new Intl.DateTimeFormat(locale, options);
+      formatter = new Intl.DateTimeFormat(locale, withCalendar);
     } catch {
-      formatter = new Intl.DateTimeFormat(undefined, options);
+      formatter = new Intl.DateTimeFormat(undefined, withCalendar);
     }
     formatterCache.set(key, formatter);
   }
@@ -256,7 +296,8 @@ export function getLocaleDateFormat(locale?: string): LocaleDateFormat {
 
 /**
  * The default DatePicker display text: `Intl.DateTimeFormat(locale, { year: 'numeric', month:
- * '2-digit', day: '2-digit' })`. {@link parseDate} with the same `locale` reverses it.
+ * '2-digit', day: '2-digit' })` in the grid-compatible calendar of {@link getCalendar} (`fa-IR`:
+ * `۲۰۲۵/۰۶/۱۵`, not the Persian `۱۴۰۴/۰۳/۲۵`). {@link parseDate} with the same `locale` reverses it.
  */
 export function formatDate(date: Date, locale?: string): string {
   return getFormatter(locale, DEFAULT_DATE_OPTIONS).format(date);
