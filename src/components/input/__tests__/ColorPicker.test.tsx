@@ -757,10 +757,38 @@ describe('ColorPicker — native forms (C-FORMS)', () => {
   });
 
   it('uncontrolled: form reset reports only the default color (input-basic#12)', async () => {
+    const user = userEvent.setup();
+    const onValueChange = vi.fn();
+    const untouched = vi.fn();
+    render(
+      <form aria-label="Form">
+        <ColorPicker
+          aria-label="Changed"
+          showOpacity
+          defaultValue="#0f6cbd80"
+          onValueChange={onValueChange}
+        />
+        <ColorPicker aria-label="Untouched" onValueChange={untouched} />
+      </form>,
+    );
+    const changed = screen.getByRole('group', { name: 'Changed' });
+    await user.click(within(changed).getByRole('radio', { name: 'Red' }));
+    expect(onValueChange.mock.calls).toEqual([['#d1343880']]);
+
+    act(() => getForm().reset());
+    expect(onValueChange.mock.calls).toEqual([['#d1343880'], ['#0f6cbd80']]);
+    expect(untouched).not.toHaveBeenCalled();
+    expect(within(changed).getByRole('radio', { name: 'Blue' })).toHaveAttribute(
+      'aria-checked',
+      'true',
+    );
+    expect(within(changed).getByRole('slider', { name: 'Opacity' })).toHaveValue('50');
+  });
+
+  it('deprecated onChange alias: a form reset reports only the default color, like onValueChange (C-NAMING, input-basic#12)', async () => {
     const warn = spyWarn();
     try {
       const user = userEvent.setup();
-      const onValueChange = vi.fn();
       const onChange = vi.fn();
       const untouched = vi.fn();
       render(
@@ -769,25 +797,19 @@ describe('ColorPicker — native forms (C-FORMS)', () => {
             aria-label="Changed"
             showOpacity
             defaultValue="#0f6cbd80"
-            onValueChange={onValueChange}
             onChange={onChange}
           />
-          <ColorPicker aria-label="Untouched" onValueChange={untouched} />
+          <ColorPicker aria-label="Untouched" onChange={untouched} />
         </form>,
       );
       const changed = screen.getByRole('group', { name: 'Changed' });
       await user.click(within(changed).getByRole('radio', { name: 'Red' }));
-      expect(onValueChange.mock.calls).toEqual([['#d1343880']]);
+      expect(onChange.mock.calls).toEqual([['#d1343880']]);
 
       act(() => getForm().reset());
-      expect(onValueChange.mock.calls).toEqual([['#d1343880'], ['#0f6cbd80']]);
       expect(onChange.mock.calls).toEqual([['#d1343880'], ['#0f6cbd80']]);
       expect(untouched).not.toHaveBeenCalled();
-      expect(within(changed).getByRole('radio', { name: 'Blue' })).toHaveAttribute(
-        'aria-checked',
-        'true',
-      );
-      expect(within(changed).getByRole('slider', { name: 'Opacity' })).toHaveValue('50');
+      expect(warnings(warn, 'ColorPicker: `onChange` is deprecated')).toHaveLength(1);
     } finally {
       warn.mockRestore();
     }

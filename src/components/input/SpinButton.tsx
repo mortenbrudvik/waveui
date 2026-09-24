@@ -14,7 +14,7 @@ import { HiddenInput } from '../internal/HiddenInput';
  * Props that SpinButton routes to its `<input role="spinbutton">` (C-ROUTING): the id, the ARIA
  * naming/validation attributes, native text-input attributes and the focus/keyboard handlers.
  */
-type SpinButtonInputProps = Pick<
+export type SpinButtonInputProps = Pick<
   React.InputHTMLAttributes<HTMLInputElement>,
   | 'id'
   | 'aria-label'
@@ -282,7 +282,9 @@ export const SpinButton = ({
   const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
     // Read-only: the keys keep their native caret behaviour and never change the value.
     if (!interactive || e.altKey || e.ctrlKey || e.metaKey) return;
-    const big = largeStep ?? step * 10;
+    // Ten steps, rounded: step * 10 carries float error (0.07 * 10 = 0.7000000000000001) that
+    // stepBy would otherwise keep, since it rounds to the precision of the delta too.
+    const big = largeStep ?? roundTo(step * 10, decimalsOf(step));
     switch (e.key) {
       case 'ArrowUp':
       case 'ArrowDown':

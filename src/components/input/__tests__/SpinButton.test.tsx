@@ -296,6 +296,34 @@ describe('SpinButton — decimal steps (input-basic#3)', () => {
     expect(spin()).toHaveValue('0.3');
     expect(incrementButton()).toBeDisabled();
   });
+
+  // step * 10 carries float error for many decimal steps (0.07 * 10 = 0.7000000000000001).
+  it.each([
+    [0.07, 0.7],
+    [0.09, 0.9],
+    [0.14, 1.4],
+    [0.33, 3.3],
+  ])('PageUp/PageDown with step=%s move by exactly ten steps', async (step, big) => {
+    const user = userEvent.setup();
+    const onValueChange = vi.fn();
+    render(<SpinButton aria-label="Quantity" step={step} onValueChange={onValueChange} />);
+    await user.click(spin());
+    await user.keyboard('{PageUp}');
+    expect(spin()).toHaveValue(String(big));
+    expect(spin()).toHaveAttribute('aria-valuenow', String(big));
+    expect(onValueChange).toHaveBeenLastCalledWith(big);
+    await user.keyboard('{PageDown}{PageDown}');
+    expect(spin()).toHaveValue(String(-big));
+    expect(onValueChange).toHaveBeenLastCalledWith(-big);
+  });
+
+  it('keeps the precision of a largeStep finer than the step', async () => {
+    const user = userEvent.setup();
+    render(<SpinButton aria-label="Quantity" step={1} largeStep={0.25} />);
+    await user.click(spin());
+    await user.keyboard('{PageUp}{PageUp}{PageUp}');
+    expect(spin()).toHaveValue('0.75');
+  });
 });
 
 describe('SpinButton — keyboard (input-basic#4)', () => {
