@@ -435,9 +435,29 @@ function textOf(element: HTMLElement): string {
 }
 
 /**
+ * The item an event started in: the innermost item element that is the target or one of its
+ * ancestors (up to the container). Items can nest (an APG treeitem contains the group of its child
+ * treeitems), so the first containing item in DOM order would be the outermost ancestor.
+ */
+function findOwningItem(
+  items: readonly ResolvedItem[],
+  target: EventTarget | null,
+  container: Node,
+): ResolvedItem | null {
+  if (items.length === 0 || !target || typeof (target as Node).nodeType !== 'number') return null;
+  const byElement = new Map<Node, ResolvedItem>(items.map((item) => [item.element, item]));
+  for (let node: Node | null = target as Node; node && node !== container; node = node.parentNode) {
+    const item = byElement.get(node);
+    if (item) return item;
+  }
+  return null;
+}
+
+/**
  * Implements the WAI-ARIA roving tabindex pattern for composite widgets: one item holds the tab
  * stop (`tabIndex=0`, all others `-1`), arrow keys move focus between items, Home/End jump to the
- * ends, and (optionally) typeahead jumps by text. Used by RadioGroup and TabList.
+ * ends, and (optionally) typeahead jumps by text. Used by RadioGroup, Rating, SwatchPicker, List,
+ * TabList, Tree, Menu and Toolbar.
  *
  * - **Items** come from the DOM at event time: elements matching `itemSelector` (default
  *   `[data-roving-value]`) whose nearest roving container is this one. A nested composite (an
@@ -455,8 +475,9 @@ function textOf(element: HTMLElement): string {
  * - **Keys** are ignored when another handler already called `preventDefault()`, with Alt/Ctrl/Meta,
  *   and when they start in a text field, select, contenteditable, slider, spinbutton or combobox
  *   (Left/Right keep moving the caret). Left/Right are mirrored in RTL (`dir`, else the direction of
- *   the container at key time). Arrows move from the item the key started in; when it started on no
- *   item (focus on the container itself) next goes to the first enabled item and prev to the last.
+ *   the container at key time). Arrows and typeahead move from the item the key started in — the
+ *   innermost one when items nest, as treeitems do inside their parent's group; when it started on
+ *   no item (focus on the container itself) next goes to the first enabled item and prev to the last.
  *   Handled keys call `preventDefault()`.
  *
  * @example
@@ -568,10 +589,9 @@ export function useRovingTabIndex(
     const enabled = ordered.filter((item) => !item.disabled);
     if (enabled.length === 0) return;
 
-    // The item the key started in. None (the container itself has focus): next → first, prev → last.
-    const target = e.target as Node;
-    const current =
-      ordered.find((item) => item.element === target || item.element.contains(target)) ?? null;
+    // The (innermost) item the key started in. None (the container itself has focus): next → first,
+    // prev → last.
+    const current = findOwningItem(ordered, e.target, container);
 
     let handled = false;
     let next: ResolvedItem | undefined;
@@ -623,10 +643,7 @@ export function useRovingTabIndex(
 
   const handleFocus = useEventCallback((e: React.FocusEvent) => {
     const container = store.container ?? (e.currentTarget as HTMLElement);
-    const target = e.target as Node;
-    const item = store
-      .resolve(container)
-      .find((candidate) => candidate.element === target || candidate.element.contains(target));
+    const item = findOwningItem(store.resolve(container), e.target, container);
     if (!item) return;
     store.setLastFocused(item.value);
     setFocusedValue(item.value);

@@ -75,7 +75,65 @@ describe('useControllable', () => {
     it('exports the SetValue type used by the setter', () => {
       const { result } = renderHook(() => useControllable<number>(undefined, 0));
       expectTypeOf(result.current[1]).toEqualTypeOf<SetValue<number>>();
-      expectTypeOf(result.current).toEqualTypeOf<[number, SetValue<number>]>();
+    });
+  });
+
+  describe('isControlled flag (third tuple element)', () => {
+    it('reports the sticky controlled mode', () => {
+      const { result, rerender } = renderHook(
+        ({ value }: { value: number | undefined }) => useControllable(value, 1),
+        { initialProps: { value: undefined as number | undefined } },
+      );
+      expect(result.current[2]).toBe(false); // uncontrolled
+      rerender({ value: 3 });
+      expect(result.current[2]).toBe(true); // a late value takes over
+      rerender({ value: undefined });
+      expect(result.current[2]).toBe(true); // sticky: stays controlled
+      expect(result.current[0]).toBe(1); // and reports the defaultValue argument
+    });
+
+    it('is true from the first render when mounted controlled', () => {
+      const seen: boolean[] = [];
+      renderHook(() => {
+        const state = useControllable(5, 1);
+        seen.push(state[2]);
+        return state;
+      });
+      expect(seen.length).toBeGreaterThan(0);
+      expect(seen.every(Boolean)).toBe(true);
+    });
+
+    it('is true in the very render in which a late value arrives', () => {
+      const seen: Array<[number, boolean]> = [];
+      const { rerender } = renderHook(
+        ({ value }: { value: number | undefined }) => {
+          const state = useControllable(value, 1);
+          seen.push([state[0], state[2]]);
+          return state;
+        },
+        { initialProps: { value: undefined as number | undefined } },
+      );
+      seen.length = 0;
+      rerender({ value: 3 });
+      // Every render that shows the controlled value also reports controlled mode.
+      expect(seen.length).toBeGreaterThan(0);
+      expect(seen.every(([value, controlled]) => value === 3 && controlled)).toBe(true);
+    });
+
+    it('keeps the [value, setValue] destructuring working', () => {
+      const onChange = vi.fn();
+      const { result } = renderHook(() => {
+        const [value, setValue] = useControllable<string>(undefined, 'a', onChange);
+        return { value, setValue };
+      });
+      act(() => result.current.setValue('b'));
+      expect(result.current.value).toBe('b');
+      expect(onChange).toHaveBeenCalledWith('b');
+    });
+
+    it('types the flag as boolean', () => {
+      const { result } = renderHook(() => useControllable<number>(undefined, 1));
+      expectTypeOf(result.current).toEqualTypeOf<[number, SetValue<number>, boolean]>();
     });
   });
 

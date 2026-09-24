@@ -24,7 +24,8 @@ function warnModeSwitch(from: Mode, to: Mode): void {
 /**
  * State for components that can be controlled (`value` + `onChange` from the parent) or
  * uncontrolled (internal state seeded from `defaultValue`). Returns `[value, setValue]` like
- * `useState`.
+ * `useState`, plus the current mode as a third element (`isControlled`) for components that treat
+ * the two modes differently (e.g. store a clamp only while uncontrolled).
  *
  * - **Sticky controlled mode.** The component is controlled from the first render in which
  *   `controlledValue !== undefined` on. A value that arrives after mount (data loaded later) takes
@@ -60,13 +61,16 @@ function warnModeSwitch(from: Mode, to: Mode): void {
  * @param defaultValue - Initial uncontrolled value; also the value returned while a once-controlled
  *   value is `undefined`.
  * @param onChange - Called with the next value whenever `setValue` changes it (both modes).
- * @returns A `[value, setValue]` tuple.
+ * @returns A `[value, setValue, isControlled]` tuple. `isControlled` is the sticky mode described
+ *   above: `true` from the first render with a defined `controlledValue` on (also in that render
+ *   itself and after the value becomes `undefined` again), `false` while the component has only
+ *   ever been uncontrolled. Read the mode from here rather than tracking it in the component.
  */
 export function useControllable<T>(
   controlledValue: T | undefined,
   defaultValue: T,
   onChange?: (value: T) => void,
-): [T, SetValue<T>] {
+): [value: T, setValue: SetValue<T>, isControlled: boolean] {
   const [initiallyControlled] = useState(controlledValue !== undefined);
   const [wasControlled, setWasControlled] = useState(initiallyControlled);
   if (controlledValue !== undefined && !wasControlled) {
@@ -140,5 +144,5 @@ export function useControllable<T>(
     [emitChange],
   );
 
-  return [value, setValue];
+  return [value, setValue, isControlled];
 }

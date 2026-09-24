@@ -1156,6 +1156,107 @@ describe('useRovingTabIndex', () => {
     });
   });
 
+  describe('nested items: the innermost item owns the event (layout#31, layout#30)', () => {
+    /** APG tree shape: div[role=treeitem] > text + div[role=group] > nested treeitems. */
+    function NestedTree({
+      tabStop,
+      typeahead,
+      onResult,
+    }: {
+      tabStop?: UseRovingTabIndexOptions['tabStop'];
+      typeahead?: boolean;
+      onResult?: (result: UseRovingTabIndexResult) => void;
+    }) {
+      const options: UseRovingTabIndexOptions = { orientation: 'vertical', loop: false };
+      if (tabStop !== undefined) options.tabStop = tabStop;
+      if (typeahead !== undefined) options.typeahead = typeahead;
+      const result = useRovingTabIndex(options);
+      onResult?.(result);
+      const { containerProps, getTabIndex } = result;
+      return (
+        <div role="tree" aria-label="Nested" {...containerProps}>
+          <div
+            role="treeitem"
+            aria-label="A"
+            aria-expanded="true"
+            data-roving-value="a"
+            data-roving-text="A"
+            tabIndex={getTabIndex('a')}
+          >
+            A
+            <div role="group">
+              <div
+                role="treeitem"
+                aria-label="A1"
+                data-roving-value="a1"
+                data-roving-text="Apple"
+                tabIndex={getTabIndex('a1')}
+              >
+                A1
+              </div>
+              <div
+                role="treeitem"
+                aria-label="A2"
+                data-roving-value="a2"
+                data-roving-text="Apricot"
+                tabIndex={getTabIndex('a2')}
+              >
+                A2
+              </div>
+            </div>
+          </div>
+          <div
+            role="treeitem"
+            aria-label="B"
+            data-roving-value="b"
+            data-roving-text="Banana"
+            tabIndex={getTabIndex('b')}
+          >
+            B
+          </div>
+        </div>
+      );
+    }
+    const treeitem = (name: string) => screen.getByRole('treeitem', { name });
+
+    it('arrow keys move from the innermost item that contains focus', async () => {
+      const user = userEvent.setup();
+      render(<NestedTree />);
+      await user.tab();
+      expect(treeitem('A')).toHaveFocus();
+      await user.keyboard('{ArrowDown}');
+      expect(treeitem('A1')).toHaveFocus();
+      await user.keyboard('{ArrowDown}');
+      expect(treeitem('A2')).toHaveFocus();
+      await user.keyboard('{ArrowDown}');
+      expect(treeitem('B')).toHaveFocus();
+      await user.keyboard('{ArrowUp}');
+      expect(treeitem('A2')).toHaveFocus();
+      await user.keyboard('{ArrowUp}');
+      expect(treeitem('A1')).toHaveFocus();
+      await user.keyboard('{ArrowUp}');
+      expect(treeitem('A')).toHaveFocus();
+    });
+
+    it('typeahead starts after the innermost focused item', async () => {
+      const user = userEvent.setup();
+      render(<NestedTree typeahead />);
+      focus(treeitem('A1'));
+      // From A1 ("Apple") the next item starting with "a" is A2 ("Apricot"), not A1 again.
+      await user.keyboard('a');
+      expect(treeitem('A2')).toHaveFocus();
+    });
+
+    it('records the innermost focused item (focusedValue and the last-focused tab stop)', () => {
+      let latest: UseRovingTabIndexResult | undefined;
+      render(<NestedTree tabStop="last-focused" onResult={(r) => (latest = r)} />);
+      focus(treeitem('A2'));
+      expect(latest!.focusedValue).toBe('a2');
+      expect(treeitem('A2')).toHaveAttribute('tabindex', '0');
+      expect(treeitem('A')).toHaveAttribute('tabindex', '-1');
+    });
+  });
+
   describe('rendering environments', () => {
     it('works under StrictMode (store subscription survives the double mount)', async () => {
       const user = userEvent.setup();
