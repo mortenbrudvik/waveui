@@ -1,7 +1,14 @@
 import * as React from 'react';
 import type { Meta, StoryObj } from '@storybook/react';
 import { fn } from 'storybook/test';
-import { Popover, Button } from '../src';
+import { Popover, Button, Tooltip } from '../src';
+
+/** Decorative filter icon (the Button hides its icon slot from assistive technology). */
+const FilterIcon = () => (
+  <svg viewBox="0 0 16 16" width="16" height="16" fill="none" stroke="currentColor">
+    <path d="M2.5 3.5h11l-4.25 5v4l-2.5 1.5v-5.5z" strokeWidth="1.2" strokeLinejoin="round" />
+  </svg>
+);
 
 const meta = {
   title: 'Components/Overlays/Popover',
@@ -46,6 +53,27 @@ export const LabelledByTrigger: Story = {
       <>
         <Popover.Trigger>
           <Button>Filters</Button>
+        </Popover.Trigger>
+        <Popover.Content>
+          <p style={{ margin: 0 }}>Choose which items to show.</p>
+        </Popover.Content>
+      </>
+    ),
+  },
+};
+
+/**
+ * An icon-only trigger named by `Tooltip relationship="label"`: the popover gets the trigger's name
+ * ("Filters") from the same label.
+ */
+export const IconOnlyTrigger: Story = {
+  args: {
+    children: (
+      <>
+        <Popover.Trigger>
+          <Tooltip content="Filters" relationship="label">
+            <Button icon={<FilterIcon />} />
+          </Tooltip>
         </Popover.Trigger>
         <Popover.Content>
           <p style={{ margin: 0 }}>Choose which items to show.</p>

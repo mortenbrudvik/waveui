@@ -1,8 +1,8 @@
 import * as React from 'react';
-import { afterEach, describe, it, expect, vi } from 'vitest';
+import { afterEach, describe, it, expect, expectTypeOf, vi } from 'vitest';
 import { act, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { TeachingPopover } from '../TeachingPopover';
+import { TeachingPopover, type TeachingPopoverProps } from '../TeachingPopover';
 import { __getAnnouncerText } from '../../../hooks/useAnnounce';
 import { getOpenLayers, subscribeLayers } from '../../../lib/layers';
 import {
@@ -61,6 +61,16 @@ describe('TeachingPopover', () => {
     render(<TeachingPopover steps={steps} />);
     expect(heading()).toHaveTextContent(/^Welcome/);
     expect(screen.getByText('This is step one.')).toBeInTheDocument();
+  });
+
+  it('accepts readonly steps (R6)', () => {
+    const readonlySteps = [
+      { title: 'Tip', body: 'Press Ctrl+K.' },
+      { title: 'Search', body: 'Type to filter.' },
+    ] as const;
+    expectTypeOf(readonlySteps).toExtend<TeachingPopoverProps['steps']>();
+    render(<TeachingPopover steps={readonlySteps} />);
+    expect(heading()).toHaveTextContent('Tip, step 1 of 2');
   });
 
   it('displays the step given by activeStep', () => {
@@ -128,7 +138,11 @@ describe('TeachingPopover', () => {
             'true',
           );
         }
-        expect(warn).toHaveBeenCalledWith(expect.stringMatching(/^\[WaveUI\] TeachingPopover/));
+        expect(warn.mock.calls).toEqual([
+          [
+            `[WaveUI] TeachingPopover: activeStep ${activeStep} is out of range for 3 steps; showing step ${position}.`,
+          ],
+        ]);
       },
     );
 
@@ -309,6 +323,22 @@ describe('TeachingPopover', () => {
       await waitFor(() => expect(__getAnnouncerText('polite')).toBe('Features, step 2 of 3'));
     });
 
+    it('keeps the dots visible in forced-colors mode, the current one in Highlight (x-styling-4)', () => {
+      render(<TeachingPopover steps={steps} activeStep={1} />);
+      const [first, second, third] = dots();
+      expect(second).toHaveClass(
+        'forced-colors:bg-[Highlight]',
+        'forced-colors:forced-color-adjust-none',
+      );
+      for (const dot of [first, third]) {
+        expect(dot).toHaveClass(
+          'forced-colors:bg-[CanvasText]',
+          'forced-colors:forced-color-adjust-none',
+        );
+        expect(dot).not.toHaveClass('forced-colors:bg-[Highlight]');
+      }
+    });
+
     it('marks the current dot with aria-current and a larger shape, decorative for AT', () => {
       render(<TeachingPopover steps={steps} activeStep={1} />);
       expect(dots()).toHaveLength(3);
@@ -326,24 +356,33 @@ describe('TeachingPopover', () => {
       const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
       render(<TeachingPopover steps={steps} currentStep={1} />);
       expect(heading()).toHaveTextContent(/^Features/);
-      expect(warn).toHaveBeenCalledWith(
-        '[WaveUI] TeachingPopover: `currentStep` is deprecated and will be removed in 1.0. Use `activeStep` instead.',
-      );
+      expect(warn.mock.calls).toEqual([
+        [
+          '[WaveUI] TeachingPopover: `currentStep` is deprecated and will be removed in 1.0. Use `activeStep` instead.',
+        ],
+      ]);
     });
 
     it('defaultCurrentStep still sets the initial step and warns once', () => {
       const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
       render(<TeachingPopover steps={steps} defaultCurrentStep={2} />);
       expect(heading()).toHaveTextContent(/^Done/);
-      expect(warn).toHaveBeenCalledWith(
-        '[WaveUI] TeachingPopover: `defaultCurrentStep` is deprecated and will be removed in 1.0. Use `defaultActiveStep` instead.',
-      );
+      expect(warn.mock.calls).toEqual([
+        [
+          '[WaveUI] TeachingPopover: `defaultCurrentStep` is deprecated and will be removed in 1.0. Use `defaultActiveStep` instead.',
+        ],
+      ]);
     });
 
     it('activeStep wins over currentStep', () => {
-      vi.spyOn(console, 'warn').mockImplementation(() => {});
+      const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
       render(<TeachingPopover steps={steps} activeStep={2} currentStep={0} />);
       expect(heading()).toHaveTextContent(/^Done/);
+      expect(warn.mock.calls).toEqual([
+        [
+          '[WaveUI] TeachingPopover: `currentStep` is deprecated and will be removed in 1.0. Use `activeStep` instead.',
+        ],
+      ]);
     });
   });
 
@@ -439,6 +478,163 @@ describe('TeachingPopover', () => {
         },
       };
     }
+
+    it.each([
+      ['Escape', async (user: ReturnType<typeof userEvent.setup>) => user.keyboard('{Escape}')],
+      [
+        'Done',
+        async (user: ReturnType<typeof userEvent.setup>) => {
+          await user.tab();
+          await user.tab();
+          await user.tab();
+          expect(screen.getByRole('button', { name: 'Done' })).toHaveFocus();
+          await user.keyboard('{Enter}');
+        },
+      ],
+    ])(
+      'returns focus to the target when a tour opened on page load is dismissed with %s (overlays-anchored-tests-3)',
+      async (_how, dismissWith) => {
+        const user = userEvent.setup();
+        const onDismiss = vi.fn();
+        function PageLoadTour() {
+          const targetRef = React.useRef<HTMLButtonElement>(null);
+          return (
+            <>
+              <button type="button" ref={targetRef}>
+                New feature
+              </button>
+              <TeachingPopover
+                steps={steps}
+                defaultActiveStep={2}
+                target={targetRef}
+                onDismiss={onDismiss}
+              />
+            </>
+          );
+        }
+        render(<PageLoadTour />);
+        // Opened on page load: nothing had focus, so the target is where focus goes back to.
+        const dialog = await screen.findByRole('dialog');
+        await waitFor(() => expect(dialog).toHaveFocus());
+        await dismissWith(user);
+        expect(onDismiss).toHaveBeenCalledTimes(1);
+        expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+        expect(screen.getByRole('button', { name: 'New feature' })).toHaveFocus();
+      },
+    );
+
+    describe('keyboard order next to the target (x-keyboard-4)', () => {
+      /** The focused element's name, `dialog` for the surface, or `body` when focus left the page. */
+      const focused = () => {
+        const el = document.activeElement;
+        if (!el || el === document.body) return 'body';
+        if (el.getAttribute('role') === 'dialog') return 'dialog';
+        return el.getAttribute('aria-label') ?? el.textContent;
+      };
+
+      async function tabs(user: ReturnType<typeof userEvent.setup>, count: number, shift = false) {
+        const visited: Array<string | null | undefined> = [];
+        for (let i = 0; i < count; i++) {
+          await user.tab({ shift });
+          visited.push(focused());
+        }
+        return visited;
+      }
+
+      /** A page with the tour's target in the middle; the popover is portaled after all of it. */
+      function Page({ target = 'button' }: { target?: 'button' | 'group' | 'heading' }) {
+        const targetRef = React.useRef<HTMLElement>(null);
+        return (
+          <>
+            <button type="button">Before</button>
+            {target === 'button' && (
+              <button type="button" ref={targetRef as React.RefObject<HTMLButtonElement>}>
+                New feature
+              </button>
+            )}
+            {target === 'group' && (
+              <div ref={targetRef as React.RefObject<HTMLDivElement>}>
+                <button type="button">Bold</button>
+                <button type="button">Italic</button>
+              </div>
+            )}
+            {target === 'heading' && (
+              <h2 ref={targetRef as React.RefObject<HTMLHeadingElement>}>Reports</h2>
+            )}
+            <button type="button">After</button>
+            <TeachingPopover steps={steps} defaultActiveStep={1} target={targetRef} />
+            <button type="button">End</button>
+          </>
+        );
+      }
+
+      async function renderPage(target?: 'button' | 'group' | 'heading') {
+        const user = userEvent.setup();
+        render(<Page target={target} />);
+        const dialog = await screen.findByRole('dialog');
+        await waitFor(() => expect(dialog).toHaveFocus());
+        return user;
+      }
+
+      it('Tab moves through the popover and continues after the target', async () => {
+        const user = await renderPage();
+        expect(await tabs(user, 4)).toEqual(['Close', 'Back', 'Next', 'After']);
+      });
+
+      it('Shift+Tab from the element after the target enters the popover at its last button', async () => {
+        const user = await renderPage();
+        screen.getByRole('button', { name: 'After' }).focus();
+        expect(await tabs(user, 4, true)).toEqual(['Next', 'Back', 'Close', 'New feature']);
+      });
+
+      it('Shift+Tab from the surface returns to the target, and Tab from the target enters the popover', async () => {
+        const user = await renderPage();
+        expect(await tabs(user, 2, true)).toEqual(['New feature', 'Before']);
+        expect(await tabs(user, 3)).toEqual(['New feature', 'Close', 'Back']);
+      });
+
+      it('Tab from the last element of the page reaches the popover natively, then leaves the page: no Tab cycle', async () => {
+        const user = await renderPage();
+        screen.getByRole('button', { name: 'End' }).focus();
+        expect(await tabs(user, 5)).toEqual(['Close', 'Back', 'Next', 'body', 'Before']);
+        expect(screen.getByRole('dialog')).toBeInTheDocument();
+      });
+
+      it.each([
+        ['Tab', false, ['After']],
+        ['Shift+Tab', true, ['Back', 'Close', 'New feature']],
+      ] as const)(
+        'a click on the last button with nothing focused keeps the order after the target: %s (R1-1)',
+        async (_key, shift, expected) => {
+          const user = await renderPage();
+          // A press where nothing takes focus (the tour stays open): focus moves to the body.
+          await user.click(document.body);
+          expect(document.body).toHaveFocus();
+          // Focus reaches the popover's last button from nothing, by a pointer press (Next moves on
+          // to the last step, where the same button reads Done): not Shift+Tab from the browser.
+          await user.click(screen.getByRole('button', { name: 'Next' }));
+          expect(screen.getByRole('button', { name: 'Done' })).toHaveFocus();
+          expect(await tabs(user, expected.length, shift)).toEqual(expected);
+        },
+      );
+
+      it('a target that is not focusable: the tab stops around it', async () => {
+        const user = await renderPage('group');
+        // The popover's place is after the target's last control.
+        expect(await tabs(user, 2, true)).toEqual(['Italic', 'Bold']);
+        expect(await tabs(user, 2)).toEqual(['Italic', 'Close']);
+        screen.getByRole('button', { name: 'Next' }).focus();
+        expect(await tabs(user, 1)).toEqual(['After']);
+      });
+
+      it('a target without anything focusable: the tab stops before and after it', async () => {
+        const user = await renderPage('heading');
+        expect(await tabs(user, 1, true)).toEqual(['Before']);
+        expect(await tabs(user, 1)).toEqual(['Close']);
+        screen.getByRole('button', { name: 'Next' }).focus();
+        expect(await tabs(user, 1)).toEqual(['After']);
+      });
+    });
 
     it('renders inline without a target (no portal, no beak)', () => {
       const { container } = render(<TeachingPopover steps={steps} />);

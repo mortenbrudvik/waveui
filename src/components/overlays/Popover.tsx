@@ -1,8 +1,9 @@
 import * as React from 'react';
 import { cn } from '../../lib/cn';
-import { isDev, warnOnce } from '../../lib/dev';
+import { isDev, reportMissingContext, warnOnce } from '../../lib/dev';
+import { slotRendersContent } from '../../lib/slot';
 import { composeEventHandlers } from '../../lib/composeEventHandlers';
-import { getFirstTabbable, getTabbableElements, isFocusable } from '../../lib/focus';
+import { getFirstTabbable, isFocusable } from '../../lib/focus';
 import type { PopupAlign, PopupSide } from '../../lib/types';
 import { useId } from '../../hooks/useId';
 import { useControllable, type SetValue } from '../../hooks/useControllable';
@@ -13,6 +14,7 @@ import { useMergedRefs } from '../../hooks/useMergedRefs';
 import { useEventCallback } from '../../hooks/useEventCallback';
 import { useTriggerElement } from '../../hooks/useTriggerElement';
 import { Portal } from '../portal/Portal';
+import { PopoverBeak, usePopoverTabOrder, type PopoverPhysicalSide } from './Popover.shared';
 
 /** Properties for the Popover component. */
 export interface PopoverProps {
@@ -54,6 +56,11 @@ export type PopoverTriggerChildProps = Omit<React.HTMLAttributes<HTMLElement>, '
   /** The content's id, only while the popover is open. */
   'aria-controls': string | undefined;
   onClick: React.MouseEventHandler<HTMLElement>;
+  /**
+   * Moves Tab from the open trigger into the portaled content (which lives at the end of the
+   * document), so the keyboard order follows the trigger.
+   */
+  onKeyDown: React.KeyboardEventHandler<HTMLElement>;
   ref: React.RefCallback<HTMLElement>;
 };
 
@@ -91,8 +98,6 @@ export interface PopoverContentProps extends Omit<React.HTMLAttributes<HTMLDivEl
   ref?: React.Ref<HTMLDivElement>;
 }
 
-type PhysicalSide = 'top' | 'bottom' | 'left' | 'right';
-
 interface PopoverContextValue {
   open: boolean;
   setOpen: SetValue<boolean>;
@@ -119,7 +124,7 @@ interface PopoverContextValue {
   layerId: string;
   floatingProps: { 'data-side': string; 'data-align': string; style: React.CSSProperties };
   arrowStyles: React.CSSProperties;
-  placedSide: PhysicalSide;
+  placedSide: PopoverPhysicalSide;
 }
 
 const PopoverContext = React.createContext<PopoverContextValue | null>(null);
@@ -155,23 +160,9 @@ function getInertContext(): PopoverContextValue {
 function usePopoverContext(componentName: string): PopoverContextValue {
   const context = React.useContext(PopoverContext);
   if (context) return context;
-  const message = `[WaveUI] ${componentName} must be used within Popover.`;
-  if (isDev) throw new Error(message);
-  console.error(message);
+  reportMissingContext(componentName, 'Popover');
   return getInertContext();
 }
-
-/** Borders of the rotated square beak that face the trigger, per final physical side. */
-const ARROW_BORDER: Record<PhysicalSide, string> = {
-  // wave-allow-physical: the beak follows the physical side resolved by the positioning
-  top: 'border-b border-r',
-  // wave-allow-physical: the beak follows the physical side resolved by the positioning
-  bottom: 'border-t border-l',
-  // wave-allow-physical: the beak follows the physical side resolved by the positioning
-  left: 'border-t border-r',
-  // wave-allow-physical: the beak follows the physical side resolved by the positioning
-  right: 'border-b border-l',
-};
 
 /**
  * The element that takes focus for the trigger: the trigger itself, or — for the wrapper `<span>`
@@ -182,38 +173,57 @@ function getTriggerFocusTarget(trigger: HTMLElement | null): HTMLElement | null 
   return isFocusable(trigger) ? trigger : getFirstTabbable(trigger);
 }
 
+/** The ids of an id list that exist in `doc`, joined; `undefined` when none does. */
+function presentIds(doc: Document, ids: string | null): string | undefined {
+  const present = (ids ?? '').split(/\s+/).filter((id) => id && doc.getElementById(id));
+  return present.length > 0 ? present.join(' ') : undefined;
+}
+
 /**
- * The trigger id that `Popover.Content`'s default `aria-labelledby` can point at: the resolved id
- * when an element in the document has it; otherwise the id the trigger element actually carries —
- * that of its focus target (for example the Button inside a Tooltip that sits between
- * `Popover.Trigger` and the Button, whose own id wins), else its own. `undefined` when the trigger
- * element has no id (a render-prop child that does not spread `id`), so the reference never
- * dangles. Before the trigger element is known, the resolved id.
+ * The ids `Popover.Content`'s default `aria-labelledby` points at, so the popover gets its
+ * trigger's name. The named element is the one with the resolved id when the document has it,
+ * otherwise the trigger's focus target (for example the Button inside a Tooltip that sits between
+ * `Popover.Trigger` and the Button, whose own id wins), else the trigger element. When that
+ * element is itself named through `aria-labelledby` (an icon-only Button inside
+ * `Tooltip relationship="label"`, or a button labelled by a visible label), its label ids are
+ * returned: a name computation does not follow a second `aria-labelledby` hop, so pointing at the
+ * button would leave the popover unnamed. Otherwise the element's id, else the trigger's own.
+ * `undefined` when none of them has an id (a render-prop child that does not spread `id`), so the
+ * reference never dangles; only ids present in the document are returned. Before the trigger
+ * element is known, the resolved id.
  */
 function findTriggerLabelId(
   trigger: HTMLElement | null,
   resolvedId: string | undefined,
 ): string | undefined {
   if (!trigger) return resolvedId;
-  if (resolvedId && trigger.ownerDocument.getElementById(resolvedId)) return resolvedId;
-  return getTriggerFocusTarget(trigger)?.id || trigger.id || undefined;
+  const doc = trigger.ownerDocument;
+  const named =
+    (resolvedId ? doc.getElementById(resolvedId) : null) ??
+    getTriggerFocusTarget(trigger) ??
+    trigger;
+  return (
+    presentIds(doc, named.getAttribute('aria-labelledby')) ?? (named.id || trigger.id || undefined)
+  );
+}
+
+/**
+ * Whether one of the elements an id list references has text for a name: its own `aria-label`
+ * or text, or a descendant's `aria-label`, `alt` or `title`. Deliberately lenient (it only drives
+ * a development warning): content that assistive technology ignores still counts as text.
+ */
+function referencesText(doc: Document, ids: string): boolean {
+  return ids.split(/\s+/).some((id) => {
+    const el = id ? doc.getElementById(id) : null;
+    if (!el) return false;
+    if (el.getAttribute('aria-label')?.trim() || el.textContent?.trim()) return true;
+    return !!el.querySelector(
+      '[aria-label]:not([aria-label=""]), [alt]:not([alt=""]), [title]:not([title=""])',
+    );
+  });
 }
 
 const subscribeNothing = (): (() => void) => () => {};
-
-/**
- * The first tabbable element after `anchor` in document order that is in the same portal as the
- * anchor (or, like it, in the page) and outside `exclude`.
- */
-function getTabbableAfter(anchor: HTMLElement, exclude: HTMLElement): HTMLElement | null {
-  const scope = anchor.closest('[data-wave-portal]');
-  for (const el of getTabbableElements(anchor.ownerDocument.body)) {
-    if (exclude.contains(el) || anchor.contains(el)) continue;
-    if (el.closest('[data-wave-portal]') !== scope) continue;
-    if (anchor.compareDocumentPosition(el) & Node.DOCUMENT_POSITION_FOLLOWING) return el;
-  }
-  return null;
-}
 
 // A const arrow (like DialogRoot and DrawerRoot): its type can be named in consumers' declaration
 // files, e.g. a story's `satisfies Meta<typeof Popover>` (a function declaration's `typeof` cannot,
@@ -269,10 +279,13 @@ const PopoverRoot = ({
   const triggerElementRef = useMergedRefs<HTMLElement>(triggerRef, setReference, setTriggerElement);
   const surfaceElementRef = useMergedRefs<HTMLElement>(surfaceRef, setSurface, setFloating);
 
-  // Keyboard order of the portaled content (it lives at the end of the document): Tab from the
-  // open trigger enters it, Tab past its last element continues after the trigger, and Shift+Tab
-  // from its first element returns to the trigger (the element inside a wrapper span) — the order
-  // of 0.4's inline content.
+  // Keyboard order of the portaled content (it lives at the end of the document), as if it
+  // followed the trigger like 0.4's inline content: Tab from the open trigger enters it (here, in
+  // the trigger's own `onKeyDown`, which runs before a dialog's focus trap), Tab past its last
+  // element continues after the trigger, Shift+Tab from its first element returns to the trigger
+  // (the element inside a wrapper span), and Shift+Tab from the element after the trigger enters
+  // it at its last element. Focus that reaches it natively from the end of the page follows the
+  // document order, so no Tab cycle forms (see usePopoverTabOrder).
   const onTriggerKeyDown = useEventCallback((event: React.KeyboardEvent<HTMLElement>) => {
     if (event.key !== 'Tab' || event.shiftKey || !open) return;
     const surfaceElement = surfaceRef.current;
@@ -282,27 +295,12 @@ const PopoverRoot = ({
     first.focus();
   });
 
-  const onContentKeyDown = useEventCallback((event: React.KeyboardEvent<HTMLElement>) => {
-    if (event.key !== 'Tab' || event.defaultPrevented) return;
-    const surfaceElement = surfaceRef.current;
-    const trigger = triggerRef.current;
-    const active = surfaceElement?.ownerDocument.activeElement;
-    // Events from nested portaled layers bubble here through React: only handle our own content.
-    if (!surfaceElement || !trigger || !active || !surfaceElement.contains(active)) return;
-    const tabbables = getTabbableElements(surfaceElement);
-    if (event.shiftKey) {
-      if (active !== surfaceElement && active !== tabbables[0]) return;
-      const target = getTriggerFocusTarget(trigger);
-      if (!target) return;
-      event.preventDefault();
-      target.focus();
-      return;
-    }
-    if (tabbables.length > 0 && active !== tabbables[tabbables.length - 1]) return;
-    const next = getTabbableAfter(trigger, surfaceElement);
-    if (!next) return;
-    event.preventDefault();
-    next.focus();
+  const onContentKeyDown = usePopoverTabOrder({
+    enabled: open,
+    surface,
+    anchorRef: triggerRef,
+    // Shift+Tab from the content's first element returns to the trigger (the element in a span).
+    getPreviousStop: getTriggerFocusTarget,
   });
 
   const context = React.useMemo<PopoverContextValue>(
@@ -424,11 +422,16 @@ PopoverTrigger.displayName = 'PopoverTrigger';
  * never clip it) and positioned next to the trigger with a beak, flipping and shifting to stay in
  * the viewport. It closes on Escape and on a press outside (presses inside nested overlays opened
  * from it count as inside), and focus returns to the trigger when it closes while focus was inside.
+ * In the keyboard order it follows the trigger, like inline content: Tab from the open trigger
+ * enters it, Tab past its last element continues after the trigger, and Shift+Tab from the element
+ * after the trigger enters it at its last element.
  * Named by `title`, `aria-label`/`aria-labelledby`, or else by its trigger: `aria-labelledby`
- * points at the id the trigger element carries in the document (never at a missing id; a
- * development warning names the problem when the trigger has none). A consumer `id` is
- * kept, and the trigger's `aria-controls` follows it. The beak inherits the surface's background
- * and border colors, so a `className` that changes them restyles the beak too.
+ * points at the id the trigger element carries in the document, or at the trigger's own label
+ * elements when the trigger is named through `aria-labelledby` (an icon-only Button inside
+ * `Tooltip relationship="label"`); never at a missing id. A development warning names the problem
+ * when the trigger has no id or no text. A consumer `id` is kept, and the trigger's
+ * `aria-controls` follows it. The beak inherits the surface's background and border colors, so a
+ * `className` that changes them restyles the beak too.
  *
  * Also exported as `PopoverContent` for React Server Components, which cannot use the dotted
  * `Popover.Content` (that needs a client file).
@@ -462,13 +465,14 @@ export const PopoverContent = ({
   } = usePopoverContext('Popover.Content');
   const titleId = useId('popover-title');
   const elementRef = useMergedRefs<HTMLDivElement>(ref, surfaceElementRef);
-  const hasTitle = title !== undefined && title !== null && title !== false && title !== '';
+  const hasTitle = slotRendersContent(title);
   const labelledByTrigger = ariaLabelledBy === undefined && !ariaLabel && !hasTitle;
   const checkTrigger = open && labelledByTrigger;
 
-  // The trigger id in the document, re-read when the trigger's ids change: a Tooltip between
-  // Popover.Trigger and the Button leaves the Button's own id in place, and a render-prop child
-  // may not spread `id` at all — never point aria-labelledby at an id that is not there.
+  // The trigger's label ids in the document, re-read when the trigger's ids or labels change: a
+  // Tooltip between Popover.Trigger and the Button leaves the Button's own id in place (and with
+  // `relationship="label"` names it through `aria-labelledby`), and a render-prop child may not
+  // spread `id` at all — never point aria-labelledby at an id that is not there.
   const subscribeTrigger = React.useCallback(
     (onChange: () => void) => {
       if (!checkTrigger || !triggerElement || typeof MutationObserver === 'undefined') {
@@ -477,7 +481,7 @@ export const PopoverContent = ({
       const observer = new MutationObserver(onChange);
       observer.observe(triggerElement, {
         attributes: true,
-        attributeFilter: ['id'],
+        attributeFilter: ['id', 'aria-labelledby'],
         childList: true,
         subtree: true,
       });
@@ -502,7 +506,7 @@ export const PopoverContent = ({
   }, [customId, setCustomContentId]);
 
   React.useEffect(() => {
-    if (!checkTrigger) return;
+    if (!checkTrigger || !isDev) return;
     // Read after commit: a trigger's ref is attached by now even before it reported its id.
     const trigger = triggerRef.current;
     if (!trigger) {
@@ -510,13 +514,21 @@ export const PopoverContent = ({
         'Popover.Content:name',
         'Popover.Content: the popover has no accessible name. Pass `title`, `aria-label` or `aria-labelledby`, or open it from a Popover.Trigger.',
       );
-    } else if (!findTriggerLabelId(trigger, resolvedTriggerId)) {
+      return;
+    }
+    const labelIds = findTriggerLabelId(trigger, resolvedTriggerId);
+    if (!labelIds) {
       warnOnce(
         'Popover.Content:trigger-id',
         'Popover.Content: the popover is named by its trigger, but the trigger element has no `id` (a render-prop child of Popover.Trigger must spread the `id` it receives), so the popover has no accessible name. Spread every trigger prop onto the element, or pass `title`, `aria-label` or `aria-labelledby`.',
       );
+    } else if (!referencesText(trigger.ownerDocument, labelIds)) {
+      warnOnce(
+        'Popover.Content:trigger-name',
+        'Popover.Content: the popover is named by its trigger, but the trigger has no text to name it (an icon-only trigger needs `aria-label`, or `aria-labelledby` pointing at text), so the popover has no accessible name. Name the trigger, or pass `title`, `aria-label` or `aria-labelledby`.',
+      );
     }
-  }, [checkTrigger, resolvedTriggerId, triggerRef]);
+  }, [checkTrigger, resolvedTriggerId, triggerRef, triggerLabelId]);
 
   if (!open) return null;
 
@@ -538,12 +550,11 @@ export const PopoverContent = ({
           className,
         )}
       >
-        <div
+        <PopoverBeak
           ref={arrowRef}
-          aria-hidden="true"
-          data-wave-popover-arrow=""
+          side={placedSide}
           style={arrowStyles}
-          className={cn('size-2 rotate-45 border-inherit bg-inherit', ARROW_BORDER[placedSide])}
+          data-wave-popover-arrow=""
         />
         {hasTitle && (
           <h2 id={titleId} className="mb-2 text-subtitle-2 font-semibold">

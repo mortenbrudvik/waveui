@@ -1,9 +1,10 @@
 import * as React from 'react';
-import { afterEach, describe, it, expect, vi } from 'vitest';
+import { afterEach, describe, it, expect, expectTypeOf, vi } from 'vitest';
 import { act, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { Popover, PopoverContent, PopoverTrigger, type PopoverTriggerChildProps } from '../Popover';
 import { Tooltip } from '../Tooltip';
+import { Button } from '../../button/Button';
 import { Portal } from '../../portal/Portal';
 import { useDismiss } from '../../../hooks/useDismiss';
 import {
@@ -300,7 +301,41 @@ describe('Popover', () => {
       );
       await user.click(screen.getByRole('button', { name: 'Fancy' }));
       expect(screen.getByRole('dialog')).toBeInTheDocument();
-      expect(warn).toHaveBeenCalledWith(expect.stringContaining('Popover.Trigger'));
+      expect(warn.mock.calls).toEqual([[expect.stringMatching(/^\[WaveUI\] Popover\.Trigger: /)]]);
+    });
+
+    it('a render-prop child receives onKeyDown, declared like onClick and ref (overlays-anchored-docs-3)', async () => {
+      // Tab from the open trigger into the portaled content goes through it.
+      expectTypeOf<PopoverTriggerChildProps['onKeyDown']>().toEqualTypeOf<
+        React.KeyboardEventHandler<HTMLElement>
+      >();
+      const user = userEvent.setup();
+      render(
+        <Popover defaultOpen>
+          <Popover.Trigger>
+            {({ id, ref, onClick, onKeyDown, ...stateAria }) => (
+              <button
+                type="button"
+                id={id}
+                ref={ref}
+                onClick={onClick}
+                onKeyDown={onKeyDown}
+                aria-haspopup={stateAria['aria-haspopup']}
+                aria-expanded={stateAria['aria-expanded']}
+                aria-controls={stateAria['aria-controls']}
+              >
+                Render prop
+              </button>
+            )}
+          </Popover.Trigger>
+          <Popover.Content aria-label="Options">
+            <button type="button">First</button>
+          </Popover.Content>
+        </Popover>,
+      );
+      screen.getByRole('button', { name: 'Render prop' }).focus();
+      await user.tab();
+      expect(screen.getByRole('button', { name: 'First' })).toHaveFocus();
     });
 
     it('supports a render-prop child', async () => {
@@ -523,8 +558,9 @@ describe('Popover', () => {
           <Popover.Content>Body</Popover.Content>
         </Popover>,
       );
-      expect(warn).toHaveBeenCalledWith(expect.stringContaining('Popover.Content'));
-      expect(warn.mock.calls[0]?.[0]).toMatch(/^\[WaveUI\] /);
+      expect(warn.mock.calls).toEqual([
+        [expect.stringMatching(/^\[WaveUI\] Popover\.Content: the popover has no accessible name/)],
+      ]);
     });
 
     it('does not warn when named by the trigger', () => {
@@ -561,6 +597,92 @@ describe('Popover', () => {
       expect(warn).toHaveBeenCalledWith(
         expect.stringMatching(/^\[WaveUI\] Popover\.Content: .*`id`/),
       );
+    });
+
+    describe('a trigger named through aria-labelledby (overlays-anchored-code-1)', () => {
+      it('an icon-only Button named by Tooltip relationship="label" names the popover', async () => {
+        const warn = vi.spyOn(console, 'warn');
+        const user = userEvent.setup();
+        render(
+          <Popover>
+            <Popover.Trigger>
+              <Tooltip content="Filters" relationship="label">
+                <Button icon={<svg viewBox="0 0 16 16" />} />
+              </Tooltip>
+            </Popover.Trigger>
+            <Popover.Content>
+              <p>Choose which items to show.</p>
+            </Popover.Content>
+          </Popover>,
+        );
+        const trigger = screen.getByRole('button', { name: 'Filters' });
+        await user.click(trigger);
+        const surface = screen.getByRole('dialog', { name: 'Filters' });
+        // A name computation does not follow the trigger's own aria-labelledby a second time: the
+        // popover references the trigger's label elements directly.
+        expect(surface).toHaveAttribute('aria-labelledby', trigger.getAttribute('aria-labelledby'));
+        await expectNoA11yViolations();
+        expect(warn).not.toHaveBeenCalled();
+      });
+
+      it('a trigger labelled by a visible label names the popover with that label', async () => {
+        const user = userEvent.setup();
+        render(
+          <>
+            <span id="filters-label">Filters</span>
+            <Popover>
+              <Popover.Trigger>
+                <button type="button" aria-labelledby="filters-label missing-id">
+                  <svg aria-hidden="true" viewBox="0 0 16 16" />
+                </button>
+              </Popover.Trigger>
+              <Popover.Content>Body</Popover.Content>
+            </Popover>
+          </>,
+        );
+        await user.click(screen.getByRole('button', { name: 'Filters' }));
+        // Only the ids that exist in the document: the popover's reference never dangles.
+        expect(screen.getByRole('dialog', { name: 'Filters' })).toHaveAttribute(
+          'aria-labelledby',
+          'filters-label',
+        );
+      });
+
+      it('warns in development when the trigger has no text to name the popover', async () => {
+        const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+        const user = userEvent.setup();
+        render(
+          <Popover>
+            <Popover.Trigger>
+              <button type="button" data-testid="unnamed">
+                <svg aria-hidden="true" viewBox="0 0 16 16" />
+              </button>
+            </Popover.Trigger>
+            <Popover.Content>Body</Popover.Content>
+          </Popover>,
+        );
+        await user.click(screen.getByTestId('unnamed'));
+        expect(screen.getByRole('dialog')).toHaveAttribute(
+          'aria-labelledby',
+          screen.getByTestId('unnamed').id,
+        );
+        expect(warn.mock.calls).toEqual([
+          [expect.stringMatching(/^\[WaveUI\] Popover\.Content: .*trigger has no text/)],
+        ]);
+      });
+    });
+
+    it('an empty title (renders nothing) leaves the popover labelled by its trigger', () => {
+      render(
+        <Popover defaultOpen>
+          <Popover.Trigger>
+            <button type="button">Toggle</button>
+          </Popover.Trigger>
+          <Popover.Content title={[null, false, '']}>Body</Popover.Content>
+        </Popover>,
+      );
+      expect(screen.getByRole('dialog', { name: 'Toggle' })).toBeInTheDocument();
+      expect(screen.queryByRole('heading')).not.toBeInTheDocument();
     });
 
     it('has no accessibility violations when open (table-core#20)', async () => {
@@ -632,35 +754,49 @@ describe('Popover', () => {
         <button type="button">{children}</button>
       );
 
-      function SpanTrigger({ mode }: { mode: 'asChild={false}' | 'fallback' }) {
+      function SpanTrigger({ mode }: { mode: Mode }) {
         const [open, setOpen] = React.useState(false);
         return (
-          <Popover open={open} onOpenChange={setOpen}>
-            {mode === 'fallback' ? (
-              <Popover.Trigger>
-                <Fancy>Toggle</Fancy>
-              </Popover.Trigger>
-            ) : (
-              <Popover.Trigger asChild={false}>
-                <button type="button">Toggle</button>
-              </Popover.Trigger>
-            )}
-            <Popover.Content aria-label="Options">
-              <button type="button">First</button>
-              <button type="button" onClick={() => setOpen(false)}>
-                Close
-              </button>
-            </Popover.Content>
-          </Popover>
+          <>
+            <Popover open={open} onOpenChange={setOpen}>
+              {mode === 'fallback' ? (
+                <Popover.Trigger>
+                  <Fancy>Toggle</Fancy>
+                </Popover.Trigger>
+              ) : (
+                <Popover.Trigger asChild={false}>
+                  <button type="button">Toggle</button>
+                </Popover.Trigger>
+              )}
+              <Popover.Content aria-label="Options">
+                <button type="button">First</button>
+                <button type="button" onClick={() => setOpen(false)}>
+                  Close
+                </button>
+              </Popover.Content>
+            </Popover>
+            <button type="button">After</button>
+          </>
         );
       }
 
-      const modes = ['asChild={false}', 'fallback'] as const;
+      type Mode = 'asChild={false}' | 'fallback';
+      const modes: readonly Mode[] = ['asChild={false}', 'fallback'];
+
+      /**
+       * `asChild={false}` asks for the span and must not warn; the automatic fallback warns once
+       * that the child did not attach the trigger ref (overlays-anchored-tests-5).
+       */
+      function expectSpanWarnings(warn: { mock: { calls: unknown[][] } }, mode: Mode) {
+        expect(warn.mock.calls).toEqual(
+          mode === 'fallback' ? [[expect.stringMatching(/^\[WaveUI\] Popover\.Trigger: /)]] : [],
+        );
+      }
 
       it.each(modes)(
         'Shift+Tab from the first element returns to the button inside the span (%s)',
         async (mode) => {
-          vi.spyOn(console, 'warn').mockImplementation(() => {});
+          const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
           const user = userEvent.setup();
           render(<SpanTrigger mode={mode} />);
           const toggle = screen.getByRole('button', { name: 'Toggle' });
@@ -669,13 +805,31 @@ describe('Popover', () => {
           expect(screen.getByRole('button', { name: 'First' })).toHaveFocus();
           await user.tab({ shift: true });
           expect(toggle).toHaveFocus();
+          expectSpanWarnings(warn, mode);
+        },
+      );
+
+      it.each(modes)(
+        'Tab past the last element continues after the span, not back to its button (%s, overlays-anchored-tests-2)',
+        async (mode) => {
+          const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+          const user = userEvent.setup();
+          render(<SpanTrigger mode={mode} />);
+          await user.click(screen.getByRole('button', { name: 'Toggle' }));
+          await user.tab();
+          expect(screen.getByRole('button', { name: 'First' })).toHaveFocus();
+          await user.tab();
+          expect(screen.getByRole('button', { name: 'Close' })).toHaveFocus();
+          await user.tab();
+          expect(screen.getByRole('button', { name: 'After' })).toHaveFocus();
+          expectSpanWarnings(warn, mode);
         },
       );
 
       it.each(modes)(
         'an inner Close button returns focus to the button inside the span (%s)',
         async (mode) => {
-          vi.spyOn(console, 'warn').mockImplementation(() => {});
+          const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
           const user = userEvent.setup();
           render(<SpanTrigger mode={mode} />);
           const toggle = screen.getByRole('button', { name: 'Toggle' });
@@ -683,13 +837,14 @@ describe('Popover', () => {
           await user.click(screen.getByRole('button', { name: 'Close' }));
           expect(dialog()).not.toBeInTheDocument();
           expect(toggle).toHaveFocus();
+          expectSpanWarnings(warn, mode);
         },
       );
 
       it.each(modes)(
         'Escape from inside the content returns focus to the button inside the span (%s)',
         async (mode) => {
-          vi.spyOn(console, 'warn').mockImplementation(() => {});
+          const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
           const user = userEvent.setup();
           render(<SpanTrigger mode={mode} />);
           const toggle = screen.getByRole('button', { name: 'Toggle' });
@@ -698,19 +853,34 @@ describe('Popover', () => {
           await user.keyboard('{Escape}');
           expect(dialog()).not.toBeInTheDocument();
           expect(toggle).toHaveFocus();
+          expectSpanWarnings(warn, mode);
         },
       );
     });
   });
 
   describe('keyboard order of the portaled content (overlays#36)', () => {
-    function TabOrder({ content = true }: { content?: boolean }) {
+    function TabOrder({
+      content = true,
+      defaultOpen = true,
+      clickFocusesTrigger = true,
+    }: {
+      content?: boolean;
+      defaultOpen?: boolean;
+      /** `false`: a click leaves the trigger unfocused, as in Safari and Firefox on macOS. */
+      clickFocusesTrigger?: boolean;
+    }) {
       return (
         <>
           <button type="button">Before</button>
-          <Popover defaultOpen>
+          <Popover defaultOpen={defaultOpen}>
             <Popover.Trigger>
-              <button type="button">Toggle</button>
+              <button
+                type="button"
+                onMouseDown={clickFocusesTrigger ? undefined : (event) => event.preventDefault()}
+              >
+                Toggle
+              </button>
             </Popover.Trigger>
             <Popover.Content aria-label="Options">
               {content ? (
@@ -754,6 +924,165 @@ describe('Popover', () => {
       screen.getByRole('button', { name: 'Toggle' }).focus();
       await user.tab();
       expect(screen.getByRole('button', { name: 'After' })).toHaveFocus();
+      await user.tab({ shift: true });
+      expect(screen.getByRole('button', { name: 'Toggle' })).toHaveFocus();
+    });
+
+    /** The focused element's text, or `body` when focus left the page. */
+    const focused = () =>
+      document.activeElement === document.body ? 'body' : document.activeElement?.textContent;
+
+    async function tabs(user: ReturnType<typeof userEvent.setup>, count: number, shift = false) {
+      const visited: Array<string | null | undefined> = [];
+      for (let i = 0; i < count; i++) {
+        await user.tab({ shift });
+        visited.push(focused());
+      }
+      return visited;
+    }
+
+    it('Tab from the last element of the page leaves the page after the content: no Tab cycle (overlays-anchored-code-2)', async () => {
+      const user = userEvent.setup();
+      render(<TabOrder />);
+      screen.getByRole('button', { name: 'Toggle' }).focus();
+      // The portaled content sits at the end of the document: the last element of the page reaches
+      // it natively, and from there Tab continues in the document order instead of jumping back
+      // to the element after the trigger.
+      expect(await tabs(user, 7)).toEqual([
+        'First',
+        'Last',
+        'After',
+        'First',
+        'Last',
+        'body',
+        'Before',
+      ]);
+      expect(screen.getByRole('dialog', { name: 'Options' })).toBeInTheDocument();
+    });
+
+    it('Shift+Tab from the element after the trigger enters the content at its last element (overlays-anchored-code-2)', async () => {
+      const user = userEvent.setup();
+      render(<TabOrder />);
+      screen.getByRole('button', { name: 'After' }).focus();
+      expect(await tabs(user, 4, true)).toEqual(['Last', 'First', 'Toggle', 'Before']);
+    });
+
+    it('Shift+Tab from outside the page reaches the content in the document order, then continues backwards', async () => {
+      const user = userEvent.setup();
+      render(<TabOrder />);
+      // Shift+Tab from the browser UI lands on the last element of the document: the content.
+      expect(await tabs(user, 6, true)).toEqual([
+        'Last',
+        'First',
+        'After',
+        'Last',
+        'First',
+        'Toggle',
+      ]);
+    });
+
+    it.each([
+      ['Tab', false, ['After']],
+      ['Shift+Tab', true, ['First', 'Toggle', 'Before']],
+    ] as const)(
+      'a click on the last element with nothing focused keeps the order after the trigger: %s (R1-1)',
+      async (_key, shift, expected) => {
+        const user = userEvent.setup();
+        render(<TabOrder defaultOpen={false} clickFocusesTrigger={false} />);
+        await user.click(screen.getByRole('button', { name: 'Toggle' }));
+        // The click opened the popover and left focus where it was: nowhere.
+        expect(screen.getByRole('dialog', { name: 'Options' })).toBeInTheDocument();
+        expect(document.body).toHaveFocus();
+        // Focus reaches the content's last element from nothing, by a pointer press: not Shift+Tab
+        // from the browser's own controls.
+        await user.click(screen.getByRole('button', { name: 'Last' }));
+        expect(await tabs(user, expected.length, shift)).toEqual(expected);
+      },
+    );
+
+    it('a click on the content where nothing takes focus, then on its last element, keeps the order after the trigger (R1-1)', async () => {
+      const user = userEvent.setup();
+      render(<TabOrder />);
+      await user.click(screen.getByRole('button', { name: 'First' }));
+      // The surface itself takes no focus: a press on it moves focus to the body.
+      await user.click(screen.getByRole('dialog', { name: 'Options' }));
+      expect(document.body).toHaveFocus();
+      await user.click(screen.getByRole('button', { name: 'Last' }));
+      expect(await tabs(user, 1)).toEqual(['After']);
+    });
+
+    it('a press inside the content, then Shift+Tab from the pressed point onto its last element, keeps the order after the trigger (R1-1)', async () => {
+      const user = userEvent.setup();
+      render(<TabOrder />);
+      // A press below the last button: focus moves to the body, and the browser starts sequential
+      // navigation at the pressed point, so Shift+Tab lands on the last button, from nothing.
+      await user.click(screen.getByRole('dialog', { name: 'Options' }));
+      expect(document.body).toHaveFocus();
+      expect(await tabs(user, 3, true)).toEqual(['Last', 'First', 'Toggle']);
+    });
+
+    it('focus that returns to the last element as the window gets focus back keeps its order (R1-1)', async () => {
+      const user = userEvent.setup();
+      render(<TabOrder />);
+      const last = screen.getByRole('button', { name: 'Last' });
+      await user.click(last);
+      // Another window takes focus and gives it back: the browser focuses Last again, from nothing.
+      act(() => {
+        window.dispatchEvent(new FocusEvent('blur'));
+        window.dispatchEvent(new FocusEvent('focus'));
+        last.dispatchEvent(new FocusEvent('focusin', { bubbles: true }));
+      });
+      expect(await tabs(user, 1)).toEqual(['After']);
+    });
+
+    it.each([
+      ['a script after a click', false, 'After'],
+      ['Shift+Tab from the browser controls', true, 'body'],
+    ] as const)(
+      'focus that reaches the last element from nothing by %s: the order it entered by',
+      async (_how, windowBlur, expected) => {
+        const user = userEvent.setup();
+        render(<TabOrder />);
+        // A press where nothing takes focus: focus stays on the body.
+        await user.click(screen.getByRole('dialog', { name: 'Options' }));
+        expect(document.body).toHaveFocus();
+        // Leaving for the browser's own controls blurs the window; no key press reaches the page
+        // when Shift+Tab there brings focus back to the document's last element.
+        if (windowBlur) act(() => void window.dispatchEvent(new FocusEvent('blur')));
+        act(() => screen.getByRole('button', { name: 'Last' }).focus());
+        expect(await tabs(user, 1)).toEqual([expected]);
+      },
+    );
+
+    it('a reopened popover whose content takes focus as it mounts keeps the order after the trigger (R1-1)', async () => {
+      const user = userEvent.setup();
+      render(
+        <>
+          <button type="button">Before</button>
+          <Popover defaultOpen>
+            <Popover.Trigger>
+              <button type="button">Toggle</button>
+            </Popover.Trigger>
+            <Popover.Content aria-label="Search">
+              <input aria-label="Query" autoFocus />
+            </Popover.Content>
+          </Popover>
+          <button type="button">After</button>
+        </>,
+      );
+      const query = () => screen.getByRole('textbox', { name: 'Query' });
+      // Mounted open, the field took focus. From nothing, Shift+Tab from the browser controls
+      // enters the content (the document's last element) in the document order ...
+      act(() => query().blur());
+      await user.tab({ shift: true });
+      expect(query()).toHaveFocus();
+      // ... and Escape closes it with focus back on the trigger.
+      await user.keyboard('{Escape}');
+      expect(screen.getByRole('button', { name: 'Toggle' })).toHaveFocus();
+      // Reopened from the trigger, the content's field takes focus as it mounts: after the trigger.
+      await user.keyboard('{Enter}');
+      expect(query()).toHaveFocus();
+      expect(await tabs(user, 1)).toEqual(['After']);
     });
   });
 
@@ -948,8 +1277,13 @@ describe('Popover', () => {
           <Popover.Content data-testid="content">Body</Popover.Content>
         </Popover>,
       );
-      await waitFor(() => expect(screen.getByRole('dialog')).toHaveAttribute('data-side', 'top'));
-      expect(screen.getByRole('dialog')).toHaveAttribute('data-align', 'center');
+      const surface = screen.getByRole('dialog');
+      // data-side/data-align start as the requested placement: wait for the computed position,
+      // centred above the trigger 8px away (overlays-anchored-tests-4).
+      // x = 400 + 80 / 2 - 256 / 2 = 312, y = 300 - 120 - 8 = 172.
+      await waitFor(() => expect(surface.style.transform).toBe('translate(312px, 172px)'));
+      expect(surface).toHaveAttribute('data-side', 'top');
+      expect(surface).toHaveAttribute('data-align', 'center');
     });
 
     it('flips to the other side when the requested side collides with the viewport', async () => {
@@ -1056,8 +1390,47 @@ describe('Popover', () => {
         ),
       ],
     ])('%s outside Popover throws in development', (name, Misplaced) => {
-      vi.spyOn(console, 'error').mockImplementation(() => {});
-      expect(() => render(<Misplaced />)).toThrow(`[WaveUI] ${name} must be used within Popover.`);
+      const error = vi.spyOn(console, 'error').mockImplementation(() => {});
+      expect(() => render(<Misplaced />)).toThrow(
+        new Error(`[WaveUI] ${name} must be used within Popover`),
+      );
+      // Thrown, not logged: the guard reports through the error only.
+      expect(error).not.toHaveBeenCalled();
+    });
+
+    describe('in production', () => {
+      afterEach(() => {
+        vi.unstubAllEnvs();
+      });
+
+      it('logs the missing Popover once and renders the parts inert (R3)', async () => {
+        vi.stubEnv('NODE_ENV', 'production');
+        const error = vi.spyOn(console, 'error').mockImplementation(() => {});
+        const user = userEvent.setup();
+        const { rerender } = render(
+          <>
+            <Popover.Trigger>
+              <button type="button">Toggle</button>
+            </Popover.Trigger>
+            <Popover.Content>Body</Popover.Content>
+          </>,
+        );
+        rerender(
+          <>
+            <Popover.Trigger>
+              <button type="button">Toggle</button>
+            </Popover.Trigger>
+            <Popover.Content>Body</Popover.Content>
+            <Popover.Content>Second</Popover.Content>
+          </>,
+        );
+        await user.click(screen.getByRole('button', { name: 'Toggle' }));
+        expect(dialog()).not.toBeInTheDocument();
+        expect(error.mock.calls).toEqual([
+          ['[WaveUI] Popover.Trigger must be used within Popover'],
+          ['[WaveUI] Popover.Content must be used within Popover'],
+        ]);
+      });
     });
   });
 

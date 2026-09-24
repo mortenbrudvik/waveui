@@ -95,6 +95,16 @@ function focus(el: HTMLElement) {
   });
 }
 
+/** The children-shape warning of the fallback span (renderTrigger). */
+const CHILDREN_WARNING = expect.stringMatching(
+  /^\[WaveUI\] Tooltip: expected a single React element child/,
+);
+
+/** The warning for a child that does not pass the relationship on to its focusable element. */
+const FOCUS_TARGET_WARNING = expect.stringMatching(
+  /^\[WaveUI\] Tooltip: the element that takes focus inside it did not get/,
+);
+
 /** The portaled visual surface (aria-hidden, so not reachable by role). */
 const surface = () => document.querySelector<HTMLElement>('[data-wave-tooltip-surface]');
 
@@ -412,7 +422,11 @@ describe('Tooltip', () => {
         </Tooltip>,
       );
       await user.hover(screen.getByRole('button', { name: 'Target' }));
-      await waitFor(() => expect(surface()).toHaveAttribute('data-side', 'top'));
+      // data-side/data-align start as the requested placement: wait for the computed position,
+      // centred above the wrapper 8px away (overlays-anchored-tests-4).
+      // x = 400 + 80 / 2 - 120 / 2 = 380, y = 300 - 28 - 8 = 264.
+      await waitFor(() => expect(surface()?.style.transform).toBe('translate(380px, 264px)'));
+      expect(surface()).toHaveAttribute('data-side', 'top');
       expect(surface()).toHaveAttribute('data-align', 'center');
     });
 
@@ -498,13 +512,18 @@ describe('Tooltip', () => {
     );
 
     it('appearance wins over the deprecated variant', async () => {
-      vi.spyOn(console, 'warn').mockImplementation(() => {});
+      const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
       const el = await showSurface(
         <Tooltip content="Tip" appearance="inverted" variant="light" delay={0}>
           <button type="button">Target</button>
         </Tooltip>,
       );
       expect(el).toHaveClass('bg-inverted');
+      expect(warn.mock.calls).toEqual([
+        [
+          '[WaveUI] Tooltip: `variant` is deprecated and will be removed in 1.0. Use `appearance` instead.',
+        ],
+      ]);
     });
   });
 
@@ -561,16 +580,17 @@ describe('Tooltip', () => {
       const described = container.querySelector('[aria-describedby]');
       expect(described?.tagName).toBe('SPAN');
       expect(described).toHaveAccessibleDescription('Help');
-      expect(warn).toHaveBeenCalledWith(expect.stringContaining('Tooltip'));
+      expect(warn.mock.calls).toEqual([[CHILDREN_WARNING]]);
     });
 
     it('renders several element children inside a described span', () => {
-      vi.spyOn(console, 'warn').mockImplementation(() => {});
+      const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
       const children = [<span key="a">A</span>, <span key="b">B</span>];
       const { container } = render(
         <Tooltip content="Help">{children as unknown as React.ReactElement}</Tooltip>,
       );
       expect(container.querySelector('[aria-describedby]')).toHaveTextContent('AB');
+      expect(warn.mock.calls).toEqual([[CHILDREN_WARNING]]);
     });
 
     it('describes the element of a single-element Fragment, without a wrapper or a warning', () => {
@@ -608,7 +628,7 @@ describe('Tooltip', () => {
     });
 
     it('names the first focusable element in the fallback span with relationship="label"', () => {
-      vi.spyOn(console, 'warn').mockImplementation(() => {});
+      const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
       render(
         <Tooltip content="Save" relationship="label">
           <>
@@ -620,6 +640,8 @@ describe('Tooltip', () => {
         </Tooltip>,
       );
       expect(screen.getByRole('button', { name: 'Save' })).not.toHaveAttribute('aria-describedby');
+      // Only the children-shape warning: the fallback itself is expected.
+      expect(warn.mock.calls).toEqual([[CHILDREN_WARNING]]);
     });
   });
 
@@ -660,11 +682,11 @@ describe('Tooltip', () => {
       expect(screen.getByRole('button', { name: 'Bold' })).toHaveAccessibleDescription(
         'Formatting',
       );
-      expect(warn).toHaveBeenCalledWith(expect.stringContaining('Tooltip'));
+      expect(warn.mock.calls).toEqual([[FOCUS_TARGET_WARNING]]);
     });
 
     it('keeps the focusable element’s own description ids', () => {
-      vi.spyOn(console, 'warn').mockImplementation(() => {});
+      const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
       render(
         <>
           <span id="own-hint">Ctrl+S</span>
@@ -680,10 +702,11 @@ describe('Tooltip', () => {
       expect(screen.getByRole('button', { name: 'Save' })).toHaveAccessibleDescription(
         'Ctrl+S Saves the draft',
       );
+      expect(warn.mock.calls).toEqual([[FOCUS_TARGET_WARNING]]);
     });
 
     it('describes a focusable element the child replaces without re-rendering the Tooltip', async () => {
-      vi.spyOn(console, 'warn').mockImplementation(() => {});
+      const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
       const user = userEvent.setup();
       function Swap() {
         const [count, setCount] = React.useState(0);
@@ -709,6 +732,8 @@ describe('Tooltip', () => {
           'Replaces the button',
         ),
       );
+      // Once per page, not again for the replacement.
+      expect(warn.mock.calls).toEqual([[FOCUS_TARGET_WARNING]]);
     });
 
     it('does not warn for a child without focusable content (text, a disabled button)', () => {
@@ -837,7 +862,7 @@ describe('Tooltip', () => {
     });
 
     it('keeps state ARIA from a parent off the fallback span', () => {
-      vi.spyOn(console, 'warn').mockImplementation(() => {});
+      const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
       const { container } = render(
         <Tooltip content="Tip" aria-haspopup="menu" aria-expanded={false}>
           <>
@@ -848,6 +873,7 @@ describe('Tooltip', () => {
       );
       expect(container.querySelector('[aria-expanded]')).toBeNull();
       expect(container.querySelector('[aria-haspopup]')).toBeNull();
+      expect(warn.mock.calls).toEqual([[CHILDREN_WARNING]]);
     });
 
     it('a click on the portaled tooltip surface does not reach the handlers it was given', async () => {
@@ -865,6 +891,97 @@ describe('Tooltip', () => {
       expect(onClick).not.toHaveBeenCalled();
       await user.click(target);
       expect(onClick).toHaveBeenCalledTimes(1);
+    });
+  });
+
+  describe('a child that renders a popup in a portal (overlays-anchored-code-3)', () => {
+    /** Stand-in for a DatePicker: an input and a calendar it portals while open (Enter opens it). */
+    function PickerStandIn(props: React.InputHTMLAttributes<HTMLInputElement>) {
+      const [open, setOpen] = React.useState(false);
+      return (
+        <>
+          <input
+            aria-label="Start"
+            {...props}
+            onKeyDown={(event) => {
+              if (event.key === 'Enter') setOpen(true);
+            }}
+          />
+          {open && (
+            <Portal>
+              <div role="dialog" aria-label="Calendar">
+                <button type="button">Day 1</button>
+                <button type="button">Day 2</button>
+              </div>
+            </Portal>
+          )}
+        </>
+      );
+    }
+
+    function renderPicker(handlers: Partial<React.ComponentProps<typeof Tooltip>> = {}) {
+      render(
+        <>
+          <Tooltip content="Pick the start date" delay={0} {...handlers}>
+            <PickerStandIn />
+          </Tooltip>
+          <button type="button">Elsewhere</button>
+        </>,
+      );
+      return screen.getByRole('textbox', { name: 'Start' });
+    }
+
+    it('focus inside the portaled popup neither shows the tooltip nor reaches onFocus/onBlur', async () => {
+      const user = setupTimers();
+      const onFocus = vi.fn();
+      const onBlur = vi.fn();
+      const input = renderPicker({ onFocus, onBlur, delay: 100 });
+      await user.tab();
+      expect(input).toHaveFocus();
+      advance(100);
+      await waitFor(() => expect(surface()).not.toBeNull());
+      await user.keyboard('{Enter}');
+      focus(screen.getByRole('button', { name: 'Day 1' }));
+      advance(500);
+      expect(surface()).toBeNull();
+      // Moving inside the calendar (an arrow key in a date grid).
+      focus(screen.getByRole('button', { name: 'Day 2' }));
+      advance(500);
+      expect(surface()).toBeNull();
+      // Focus leaving the calendar for the page is not the child's blur either.
+      focus(screen.getByRole('button', { name: 'Elsewhere' }));
+      advance(500);
+      expect(surface()).toBeNull();
+      expect(onFocus).toHaveBeenCalledTimes(1);
+      expect(onFocus.mock.calls[0]?.[0].target).toBe(input);
+      expect(onBlur).toHaveBeenCalledTimes(1);
+      expect(onBlur.mock.calls[0]?.[0].target).toBe(input);
+    });
+
+    it('the pointer on the portaled popup hides the tooltip and does not show it again', async () => {
+      const user = userEvent.setup();
+      const input = renderPicker();
+      focus(input);
+      await user.keyboard('{Enter}');
+      act(() => input.blur());
+      await user.hover(input);
+      await waitFor(() => expect(surface()).not.toBeNull());
+      // From the input onto the calendar: no mouseleave reaches the wrapper (React's tree).
+      await user.hover(screen.getByRole('button', { name: 'Day 1' }));
+      expect(surface()).toBeNull();
+      // From the page onto the calendar: a mouseenter reaches the wrapper through the portal.
+      await user.hover(screen.getByRole('button', { name: 'Elsewhere' }));
+      await user.hover(screen.getByRole('button', { name: 'Day 1' }));
+      expect(surface()).toBeNull();
+    });
+
+    it('the pointer on the tooltip surface itself keeps it shown (the hoverable surface)', async () => {
+      const user = userEvent.setup();
+      const input = renderPicker();
+      await user.hover(input);
+      await waitFor(() => expect(surface()).not.toBeNull());
+      await user.hover(surface()!);
+      expect(surface()).not.toBeNull();
     });
   });
 

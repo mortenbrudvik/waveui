@@ -99,9 +99,6 @@ const surfaceClasses = `max-w-60 whitespace-normal break-words rounded px-3 py-1
 /** Grace period before hiding after the pointer leaves, so it can move onto the tooltip. */
 const HIDE_DELAY_MS = 100;
 
-const useIsomorphicLayoutEffect =
-  typeof document !== 'undefined' ? React.useLayoutEffect : React.useEffect;
-
 type UnknownProps = Record<string, unknown>;
 type Relationship = NonNullable<TooltipProps['relationship']>;
 
@@ -109,6 +106,24 @@ const HANDLER_KEY = /^on[A-Z]/;
 
 /** Naming attributes a generic element such as the fallback `<span>` must not carry. */
 const NAMING_ARIA = ['aria-label', 'aria-labelledby'] as const;
+
+/**
+ * Whether an event reached the wrapper from its own DOM subtree — the child — rather than through
+ * a portal: React bubbles events from portaled content (the tooltip surface, a popup the child
+ * renders in a portal) through the component tree.
+ */
+function isOwnEvent(event: React.SyntheticEvent): boolean {
+  return (event.currentTarget as Node).contains(event.target as Node);
+}
+
+/** `handler`, called only for the wrapper's own events (see {@link isOwnEvent}). */
+function ownEventsOnly<E extends React.SyntheticEvent>(
+  handler: (event: E) => void,
+): (event: E) => void {
+  return (event) => {
+    if (isOwnEvent(event)) handler(event);
+  };
+}
 
 function isCloneableElement(node: unknown): node is React.ReactElement {
   return React.isValidElement(node) && node.type !== React.Fragment;
@@ -134,11 +149,7 @@ function splitProps(props: UnknownProps): { childProps: UnknownProps; wrapperPro
     else if (HANDLER_KEY.test(key) && typeof value === 'function') {
       // The wrapper sees the child's events as they bubble, but not those that reach it through
       // a portal, such as a click on the tooltip surface (it would toggle a parent trigger).
-      const handler = value as (event: React.SyntheticEvent) => void;
-      wrapperProps[key] = (event: React.SyntheticEvent) => {
-        if (!(event.currentTarget as Node).contains(event.target as Node)) return;
-        handler(event);
-      };
+      wrapperProps[key] = ownEventsOnly(value as (event: React.SyntheticEvent) => void);
     } else wrapperProps[key] = value;
   }
   return { childProps, wrapperProps };
@@ -179,7 +190,7 @@ function useRelationshipTarget(
   const appliedRef = React.useRef<{ element: Element; attribute: string } | null>(null);
   const attribute = relationship === 'label' ? 'aria-labelledby' : 'aria-describedby';
 
-  useIsomorphicLayoutEffect(() => {
+  React.useLayoutEffect(() => {
     const wrapper = wrapperRef.current;
     if (!wrapper) return;
 
@@ -233,12 +244,17 @@ function useRelationshipTarget(
  * - The visual surface is rendered in a portal only while visible (it is `aria-hidden`, a copy of
  *   the description), positioned on `side`/`align` with flipping and shifting to stay in view.
  * - It stays visible while the pointer moves onto it, hides shortly after the pointer leaves or
- *   immediately on blur, and Escape hides it without closing an enclosing dialog or popover.
+ *   immediately on blur, and Escape hides it without closing an enclosing dialog or popover. Focus
+ *   and hover inside a popup the child renders in a portal (a DatePicker calendar, a listbox) do
+ *   not show it, and the pointer moving onto such a popup hides it.
  * - `id` and `aria-*` props given to the Tooltip go to its child, merged with the child's own (the
  *   child's `id` wins, id lists are joined, `aria-expanded`/`aria-controls`/`aria-haspopup` from
  *   the Tooltip win). `className`, `style`, `ref`, `data-*` and event handlers stay on the wrapper
  *   `<span>`; the handlers see the child's events as they bubble, not events from portaled
- *   content such as the tooltip surface. So the Tooltip can sit inside a trigger, and the trigger's
+ *   content such as the tooltip surface or a popup the child renders in a portal (a DatePicker
+ *   calendar, a listbox). `onMouseEnter` and `onMouseLeave` are the exception: React fires them
+ *   along the component tree, so they also fire when the pointer moves onto or off the tooltip
+ *   surface or such a popup. So the Tooltip can sit inside a trigger, and the trigger's
  *   id and state reach the button: `<Menu.Trigger><Tooltip content="…"><Button /></Tooltip>
  *   </Menu.Trigger>` (also `Popover.Trigger`, `Dialog.Trigger`, `Drawer.Trigger`). Around a
  *   trigger works too, since triggers pass `aria-describedby` on to their child.
@@ -348,6 +364,17 @@ export const Tooltip = ({
     return () => clearTimeout(timer.current);
   }, []);
 
+  // The tooltip's own reactions ignore a popup the child renders in a portal: its focus and blur
+  // are not the child's, entering it does not show the tooltip, and the pointer moving onto it
+  // (no mouseleave reaches the wrapper then) hides the tooltip, which would cover it. The tooltip
+  // surface itself is portaled too but belongs to the tooltip: it stays hoverable.
+  const showOnEnter = useEventCallback((event: React.MouseEvent<HTMLSpanElement>) => {
+    if (isOwnEvent(event) || surfaceRef.current?.contains(event.target as Node)) show();
+  });
+  const hideOverPortaledPopup = useEventCallback((event: React.MouseEvent<HTMLSpanElement>) => {
+    if (!isOwnEvent(event) && !surfaceRef.current?.contains(event.target as Node)) hide();
+  });
+
   const { childProps, wrapperProps } = splitProps(rest);
   const target = unwrapFragment(children);
   const childIsFallback = !isCloneableElement(target);
@@ -369,10 +396,14 @@ export const Tooltip = ({
       ref={wrapperElementRef}
       {...wrapperProps}
       className={cn('inline-block', className)}
-      onMouseEnter={composeEventHandlers(onMouseEnter, show)}
+      onMouseEnter={composeEventHandlers(onMouseEnter, showOnEnter)}
       onMouseLeave={composeEventHandlers(onMouseLeave, scheduleHide)}
-      onFocus={composeEventHandlers(onFocus, show)}
-      onBlur={composeEventHandlers(onBlur, hide)}
+      onMouseOver={composeEventHandlers(
+        wrapperProps.onMouseOver as React.MouseEventHandler<HTMLSpanElement> | undefined,
+        hideOverPortaledPopup,
+      )}
+      onFocus={ownEventsOnly(composeEventHandlers(onFocus, show))}
+      onBlur={ownEventsOnly(composeEventHandlers(onBlur, hide))}
     >
       {child}
       <span id={tooltipId} role="tooltip" hidden>

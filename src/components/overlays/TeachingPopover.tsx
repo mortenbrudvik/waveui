@@ -3,7 +3,8 @@ import { cn } from '../../lib/cn';
 import { resolveDeprecatedProp, warnOnce } from '../../lib/dev';
 import { focusableDisabledProps, preventIfDisabled } from '../../lib/aria';
 import { DismissIcon } from '../../lib/icons';
-import { focusRing } from '../../lib/styles';
+import { composeEventHandlers } from '../../lib/composeEventHandlers';
+import { focusRing, forcedColors } from '../../lib/styles';
 import type { PopupAlign, PopupSide } from '../../lib/types';
 import { useControllable } from '../../hooks/useControllable';
 import { useId } from '../../hooks/useId';
@@ -14,9 +15,7 @@ import { useMergedRefs } from '../../hooks/useMergedRefs';
 import { useAnnounce } from '../../hooks/useAnnounce';
 import { Button } from '../button/Button';
 import { Portal } from '../portal/Portal';
-
-const useIsomorphicLayoutEffect =
-  typeof document !== 'undefined' ? React.useLayoutEffect : React.useEffect;
+import { getTabbableThrough, PopoverBeak, usePopoverTabOrder } from './Popover.shared';
 
 /** Defines a single step in a teaching popover sequence. */
 export interface TeachingPopoverStep {
@@ -28,8 +27,8 @@ export interface TeachingPopoverStep {
 
 /** Properties for the TeachingPopover component. */
 export interface TeachingPopoverProps extends React.HTMLAttributes<HTMLDivElement> {
-  /** Array of steps to display in the teaching popover. */
-  steps: TeachingPopoverStep[];
+  /** Steps to display in the teaching popover (a readonly array is accepted). */
+  steps: readonly TeachingPopoverStep[];
   /**
    * Controlled index of the displayed step. Out-of-range values are clamped to the first or last
    * step (with a development warning).
@@ -90,20 +89,6 @@ export interface TeachingPopoverProps extends React.HTMLAttributes<HTMLDivElemen
   ref?: React.Ref<HTMLDivElement>;
 }
 
-type PhysicalSide = 'top' | 'bottom' | 'left' | 'right';
-
-/** Borders of the rotated square beak that face the target, per final physical side. */
-const ARROW_BORDER: Record<PhysicalSide, string> = {
-  // wave-allow-physical: the beak follows the physical side resolved by the positioning
-  top: 'border-b border-r',
-  // wave-allow-physical: the beak follows the physical side resolved by the positioning
-  bottom: 'border-t border-l',
-  // wave-allow-physical: the beak follows the physical side resolved by the positioning
-  left: 'border-t border-r',
-  // wave-allow-physical: the beak follows the physical side resolved by the positioning
-  right: 'border-b border-l',
-};
-
 function isRefObject(
   target: NonNullable<TeachingPopoverProps['target']>,
 ): target is React.RefObject<HTMLElement | null> {
@@ -134,10 +119,16 @@ function clampStep(step: number, count: number): number {
  *   the available steps. The heading carries a visually hidden “step n of m”, the new step is
  *   announced politely, and Back stays focusable (`aria-disabled`) on the first step.
  * - Focus moves to the popover when it opens and returns to the element that had it when it
- *   closes.
+ *   closes (with `target`, to the target when nothing had focus, e.g. a tour opened on page load).
  * - With `target`, the popover is portaled and positioned next to that element with a beak (it
  *   inherits the surface colors); it stays hidden while the target is `null`, not positioned yet or
  *   no longer mounted (a ref target is read after each render of the popover; see `target`).
+ * - With `target`, the keyboard order treats the popover as if it followed the target: Tab past
+ *   its last button continues after the target, Shift+Tab from its first button (or from the
+ *   popover itself) returns to the target (for a target outside the Tab order, to the last control
+ *   inside it, else to the control before it), Tab from there enters the popover, and Shift+Tab
+ *   from the control after the target enters it at its last button. Reached natively from the far
+ *   end of the page, it follows the document order, so Tab never cycles.
  */
 export const TeachingPopover = ({
   steps,
@@ -155,6 +146,7 @@ export const TeachingPopover = ({
   align = 'center',
   className,
   style,
+  onKeyDown,
   ref,
   ...rest
 }: TeachingPopoverProps) => {
@@ -230,7 +222,7 @@ export const TeachingPopover = ({
   // commit is done (the C-HOOKS deferred-update pattern): a target that comes after the popover in
   // the tree attaches its ref after this effect has run. That update re-reads the latest target,
   // and only a changed element or availability updates the reference or the state.
-  useIsomorphicLayoutEffect(() => {
+  React.useLayoutEffect(() => {
     targetPropRef.current = target;
     availabilityRef.current = targetResolved;
     const element = resolveTarget(target);
@@ -270,6 +262,14 @@ export const TeachingPopover = ({
     container: surface,
     fallback: () => targetRef.current,
     onlyIfFocusInside: true,
+  });
+
+  // Portaled next to a target: the keyboard order of the popover placed right after the target.
+  const onSurfaceKeyDown = usePopoverTabOrder({
+    enabled: visible && hasTarget,
+    surface,
+    anchorRef: targetRef,
+    getPreviousStop: getTabbableThrough,
   });
 
   // Move focus into the popover when it becomes visible (and when a new surface mounts).
@@ -312,6 +312,7 @@ export const TeachingPopover = ({
         tabIndex={-1}
         {...rest}
         ref={elementRef}
+        onKeyDown={composeEventHandlers(onKeyDown, onSurfaceKeyDown)}
         {...(hasTarget
           ? {
               'data-side': floatingProps['data-side'],
@@ -330,12 +331,11 @@ export const TeachingPopover = ({
         )}
       >
         {hasTarget && (
-          <div
+          <PopoverBeak
             ref={arrowRef}
-            aria-hidden="true"
-            data-wave-teaching-popover-arrow=""
+            side={placedSide}
             style={arrowStyles}
-            className={cn('size-2 rotate-45 border-inherit bg-inherit', ARROW_BORDER[placedSide])}
+            data-wave-teaching-popover-arrow=""
           />
         )}
 
@@ -364,7 +364,9 @@ export const TeachingPopover = ({
                 aria-current={i === index ? 'step' : undefined}
                 className={cn(
                   'h-1.5 rounded-full transition-[width,background-color] motion-reduce:transition-none',
-                  i === index ? 'w-4 bg-primary' : 'w-1.5 bg-stroke-accessible',
+                  i === index
+                    ? cn('w-4 bg-primary', forcedColors.fill)
+                    : 'w-1.5 bg-stroke-accessible forced-colors:bg-[CanvasText] forced-colors:forced-color-adjust-none',
                 )}
               />
             ))}
