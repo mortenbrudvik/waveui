@@ -1039,6 +1039,137 @@ describe('Dialog opened from Popover.Content (overlays#41)', () => {
 });
 
 // ---------------------------------------------------------------------------
+// Confirm Dialog that deletes a row inside a Drawer (overlays#10)
+// ---------------------------------------------------------------------------
+
+describe('confirm Dialog deleting a row inside a Drawer (overlays#10)', () => {
+  type Layout = 'nested' | 'sibling';
+
+  /**
+   * A Drawer listing files; each row's action opens one controlled confirm Dialog, whose Confirm
+   * deletes that row. `nested`: the Dialog is rendered in the Drawer's content (a descendant layer
+   * of the Drawer); `sibling`: next to the Drawer. Focus must land in the same place either way.
+   */
+  function FileDrawer({ layout, rowMenu = false }: { layout: Layout; rowMenu?: boolean }) {
+    const [rows, setRows] = React.useState(['a', 'b', 'c']);
+    const [pending, setPending] = React.useState<string | null>(null);
+    const confirm = (
+      <Dialog open={pending !== null} onOpenChange={(open) => !open && setPending(null)}>
+        <Dialog.Content title="Delete file?">
+          <Button
+            onClick={() => {
+              setRows((current) => current.filter((row) => row !== pending));
+              setPending(null);
+            }}
+          >
+            Confirm
+          </Button>
+          <Dialog.Close>
+            <Button>Cancel</Button>
+          </Dialog.Close>
+        </Dialog.Content>
+      </Dialog>
+    );
+    return (
+      <>
+        <Drawer title="Files">
+          <Drawer.Trigger>
+            <Button>Files</Button>
+          </Drawer.Trigger>
+          <ul aria-label="Files">
+            {rows.map((row) => (
+              <li key={row}>
+                {`File ${row} `}
+                {rowMenu ? (
+                  <Menu>
+                    <Menu.Trigger>
+                      <MenuButton>{`Actions ${row}`}</MenuButton>
+                    </Menu.Trigger>
+                    <Menu.Popover>
+                      <Menu.Item onClick={() => setPending(row)}>Delete</Menu.Item>
+                    </Menu.Popover>
+                  </Menu>
+                ) : (
+                  <Button onClick={() => setPending(row)}>{`Delete ${row}`}</Button>
+                )}
+              </li>
+            ))}
+          </ul>
+          {layout === 'nested' && confirm}
+        </Drawer>
+        {layout === 'sibling' && confirm}
+      </>
+    );
+  }
+
+  const layouts: Array<[string, Layout]> = [
+    ['nested in the Drawer', 'nested'],
+    ['next to the Drawer', 'sibling'],
+  ];
+  const drawer = () => screen.getByRole('dialog', { name: 'Files' });
+
+  async function confirmDelete(user: ReturnType<typeof userEvent.setup>, action: string) {
+    await user.click(within(drawer()).getByRole('button', { name: action }));
+    const dialog = screen.getByRole('dialog', { name: 'Delete file?' });
+    await user.click(within(dialog).getByRole('button', { name: 'Confirm' }));
+    expect(screen.queryByRole('dialog', { name: 'Delete file?' })).not.toBeInTheDocument();
+  }
+
+  it.each(layouts)(
+    'Dialog %s: Confirm on a middle row focuses the next row’s action',
+    async (_name, layout) => {
+      const user = userEvent.setup();
+      render(<FileDrawer layout={layout} />);
+      await user.click(button('Files'));
+      await confirmDelete(user, 'Delete b');
+      expect(screen.queryByRole('button', { name: 'Delete b' })).not.toBeInTheDocument();
+      expect(drawer()).toBeInTheDocument();
+      expect(button('Delete c')).toHaveFocus();
+    },
+  );
+
+  it.each(layouts)(
+    'Dialog %s: Confirm on the last row focuses the previous row’s action',
+    async (_name, layout) => {
+      const user = userEvent.setup();
+      render(<FileDrawer layout={layout} />);
+      await user.click(button('Files'));
+      await confirmDelete(user, 'Delete c');
+      expect(button('Delete b')).toHaveFocus();
+    },
+  );
+
+  it.each(layouts)('Dialog %s: Cancel returns focus to the row’s action', async (_name, layout) => {
+    const user = userEvent.setup();
+    render(<FileDrawer layout={layout} />);
+    await user.click(button('Files'));
+    await user.click(button('Delete b'));
+    await user.click(button('Cancel'));
+    expect(button('Delete b')).toHaveFocus();
+  });
+
+  it.each(layouts)(
+    'Dialog %s: a row menu’s Delete returns to its menu button on Cancel, to the next one on Confirm',
+    async (_name, layout) => {
+      const user = userEvent.setup();
+      render(<FileDrawer layout={layout} rowMenu />);
+      await user.click(button('Files'));
+      await user.click(button('Actions b'));
+      await user.click(menuitem('Delete'));
+      await user.click(button('Cancel'));
+      expect(button('Actions b')).toHaveFocus();
+
+      await user.click(button('Actions b'));
+      await user.click(menuitem('Delete'));
+      await user.click(button('Confirm'));
+      expect(screen.queryByRole('button', { name: 'Actions b' })).not.toBeInTheDocument();
+      expect(drawer()).toBeInTheDocument();
+      expect(button('Actions c')).toHaveFocus();
+    },
+  );
+});
+
+// ---------------------------------------------------------------------------
 // Overflow hidden items in a Menu (layout#4)
 // ---------------------------------------------------------------------------
 

@@ -363,6 +363,20 @@ function isFocusInsideOrLost(container: HTMLElement | null | undefined): boolean
   return !!container && container.contains(active);
 }
 
+/**
+ * Where to go when the opener was removed or can no longer take focus, nearest first: the tabbable
+ * element next to where it was, else the trigger of the overlay it was in (a menu item's menu
+ * button), else the element next to that trigger.
+ */
+function* getReplacementTargets(
+  opener: OpenerRecord,
+  container: HTMLElement | null | undefined,
+): Generator<HTMLElement> {
+  yield* getNearbyTargets(opener.position, container);
+  for (const anchor of opener.anchors) yield anchor.element;
+  for (const anchor of opener.anchors) yield* getNearbyTargets(anchor.position, container);
+}
+
 /** Restore targets in order of preference, computed lazily (the later ones cost more). */
 function* restoreCandidates(
   latest: Latest,
@@ -373,15 +387,21 @@ function* restoreCandidates(
   yield opener?.element;
   yield options.triggerRef?.current;
   yield options.fallback?.();
-  yield* getLayerTargets(parentLayerId === null ? null : getLayer(parentLayerId));
-  if (opener) {
-    // The opener was removed or can no longer take focus: somewhere near it, else the trigger of
-    // the overlay it was in (a menu item's menu button), else somewhere near that trigger.
-    yield* getNearbyTargets(opener.position, options.container);
-    for (const anchor of opener.anchors) yield anchor.element;
-    for (const anchor of opener.anchors) {
-      yield* getNearbyTargets(anchor.position, options.container);
+  const replacements = opener ? getReplacementTargets(opener, options.container) : null;
+  const parentLayer = parentLayerId === null ? null : getLayer(parentLayerId);
+  const outsideParent: HTMLElement[] = [];
+  if (parentLayer) {
+    // The surface was rendered inside a layer that stays open (a confirm Dialog in a Drawer): the
+    // opener's replacement inside that layer (the next row after a delete) comes before the
+    // layer's surface, so where the surface sits in the React tree does not change the result.
+    for (const target of replacements ?? []) {
+      if (isInsideLayerTree(parentLayer.id, target)) yield target;
+      else outsideParent.push(target);
     }
+    yield* getLayerTargets(parentLayer);
+    yield* outsideParent;
+  } else if (replacements) {
+    yield* replacements;
   }
   // Still nothing: into the modal that stays open, never onto the inert page behind it.
   yield* getLayerTargets(getTopmostLayer((layer) => layer.kind === 'modal'));
@@ -412,15 +432,23 @@ function restore(latest: Latest, opener: OpenerRecord | null): void {
  *   while enabled. The unmount restore runs in a microtask and is cancelled if the same instance
  *   mounts again, so React StrictMode's simulated unmount does not pull focus out of a surface
  *   that just opened.
- * - **Targets**, first valid wins: `finalFocusRef` → the captured opener → `triggerRef` →
- *   `fallback()` → the parent layer's surface → when the opener was removed or cannot take focus:
- *   the tabbable element next to where it was (the next row's action after a delete, else the
- *   previous one), the trigger of the overlay it was in (a menu item's menu button), the element
- *   next to that trigger → the surface of the modal layer that stays open. A target is valid when
- *   it is connected, focusable, not inside `[inert]` or `[aria-hidden="true"]`, and not cut off
- *   behind another open modal layer — so focus never lands on the inert page behind a Drawer that
- *   stays open, and is not dropped on `<body>` while a valid target exists. Focus uses
- *   `preventScroll`.
+ * - **Targets**, first valid wins:
+ *   1. `finalFocusRef` → the captured opener → `triggerRef` → `fallback()`.
+ *   2. When the opener was removed or cannot take focus, its replacement, nearest first: the
+ *      tabbable element next to where it was (in the innermost surviving ancestor that holds one,
+ *      the next one — the next row's action after a delete — else the previous one; then the same
+ *      one level up), else the trigger of the overlay it was in (a menu item's menu button), else
+ *      the element next to that trigger. When the surface is rendered inside another open layer
+ *      (its parent layer, from `DismissLayerContext`: a confirm Dialog in a Drawer's content),
+ *      only the replacements inside that layer's tree are tried here.
+ *   3. The parent layer's surface, then the replacements outside the parent layer.
+ *   4. The surface of the modal layer that stays open.
+ *
+ *   So a confirm Dialog rendered in a Drawer's content and one rendered next to the Drawer both
+ *   return focus to the adjacent row, not to the Drawer's panel. A target is valid when it is
+ *   connected, focusable, not inside `[inert]` or `[aria-hidden="true"]`, and not cut off behind
+ *   another open modal layer — so focus never lands on the inert page behind a Drawer that stays
+ *   open, and is not dropped on `<body>` while a valid target exists. Focus uses `preventScroll`.
  * - `onlyIfFocusInside` (popovers): restores only when focus is inside the surface or was lost to
  *   `<body>`.
  */

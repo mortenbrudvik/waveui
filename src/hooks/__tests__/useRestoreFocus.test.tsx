@@ -744,6 +744,133 @@ describe('useRestoreFocus — validated targets', () => {
       parentSurface.remove();
     }
   });
+
+  /**
+   * A stand-in parent layer that stays open (a Drawer around a confirm Dialog): a focusable surface
+   * in `<body>`, registered as the layer `parent`. Render into `surface` inside
+   * `DismissLayerProvider layerId="parent"`, so the restoring surface is its React descendant.
+   */
+  function mountParentLayer(kind: LayerRecord['kind']) {
+    const surface = document.createElement('div');
+    surface.tabIndex = -1;
+    surface.setAttribute('aria-label', 'Parent surface');
+    document.body.appendChild(surface);
+    const unregister = registerLayer(makeLayer('parent', { kind, getElements: () => [surface] }));
+    return {
+      surface,
+      dispose() {
+        cleanup();
+        unregister();
+        surface.remove();
+      },
+    };
+  }
+
+  it('moves focus to the removed opener’s neighbour inside the parent layer, not its surface', async () => {
+    const user = userEvent.setup();
+    const parent = mountParentLayer('modal');
+    try {
+      render(
+        <DismissLayerProvider layerId="parent">
+          <DeleteRows />
+        </DismissLayerProvider>,
+        { container: parent.surface },
+      );
+      await user.click(button('Delete b'));
+      await user.click(button('Confirm'));
+      expect(screen.queryByRole('button', { name: 'Delete b' })).toBeNull();
+      expect(button('Delete c')).toHaveFocus();
+      // The last row: the previous one.
+      await user.click(button('Delete c'));
+      await user.click(button('Confirm'));
+      expect(button('Delete a')).toHaveFocus();
+    } finally {
+      parent.dispose();
+    }
+  });
+
+  it('restores to the trigger of the closed popover inside the parent layer, not its surface', async () => {
+    const user = userEvent.setup();
+    const parent = mountParentLayer('modal');
+    function App() {
+      const [open, setOpen] = React.useState(false);
+      return (
+        <>
+          <MenuPopover onPick={() => setOpen(true)} />
+          <Surface open={open}>
+            <input aria-label="New name" />
+            <button type="button" onClick={() => setOpen(false)}>
+              Cancel
+            </button>
+          </Surface>
+        </>
+      );
+    }
+    try {
+      render(
+        <DismissLayerProvider layerId="parent">
+          <App />
+        </DismissLayerProvider>,
+        { container: parent.surface },
+      );
+      await user.click(button('More actions'));
+      await user.click(screen.getByRole('menuitem', { name: 'Rename' }));
+      // Pressing into the surface closes the popover: its menu item (the opener) is removed.
+      await user.click(screen.getByRole('textbox', { name: 'New name' }));
+      expect(screen.queryByRole('menu')).toBeNull();
+      await user.click(button('Cancel'));
+      expect(button('More actions')).toHaveFocus();
+    } finally {
+      parent.dispose();
+    }
+  });
+
+  it('prefers the parent layer’s surface to a neighbour of the removed opener outside it', async () => {
+    const user = userEvent.setup();
+    const parent = mountParentLayer('popover');
+    const page = document.createElement('button');
+    page.type = 'button';
+    page.textContent = 'Page';
+    document.body.appendChild(page);
+    function App() {
+      const [open, setOpen] = React.useState(false);
+      const [showOpener, setShowOpener] = React.useState(true);
+      return (
+        <>
+          {showOpener && (
+            <button type="button" onClick={() => setOpen(true)}>
+              Menu item
+            </button>
+          )}
+          <Surface open={open}>
+            <button
+              type="button"
+              onClick={() => {
+                setShowOpener(false);
+                setOpen(false);
+              }}
+            >
+              Done
+            </button>
+          </Surface>
+        </>
+      );
+    }
+    try {
+      render(
+        <DismissLayerProvider layerId="parent">
+          <App />
+        </DismissLayerProvider>,
+        { container: parent.surface },
+      );
+      await user.click(button('Menu item'));
+      await user.click(button('Done'));
+      expect(parent.surface).toHaveFocus();
+    } finally {
+      parent.dispose();
+      page.remove();
+    }
+  });
 });
 
 describe('useRestoreFocus — opener removed in the commit that opens the surface', () => {
