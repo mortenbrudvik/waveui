@@ -1,6 +1,9 @@
 import * as React from 'react';
+import { flattenChildren, isElementOfType } from '../../lib/children';
 import { cn } from '../../lib/cn';
 import { composeEventHandlers } from '../../lib/composeEventHandlers';
+import { warnOnce } from '../../lib/dev';
+import { slotRendersContent } from '../../lib/slot';
 import { focusableDisabledProps, preventIfDisabled } from '../../lib/aria';
 import { disabledStyles, focusRing, forcedColors } from '../../lib/styles';
 import { ChevronLeftIcon, ChevronRightIcon } from '../../lib/icons';
@@ -21,6 +24,33 @@ export interface CarouselAutoPlayLabels {
    * @default 'Start slide rotation'
    */
   play?: string;
+}
+
+/**
+ * Accessible names of the Carousel's built-in controls and slides, for localization. Each member
+ * is optional and falls back to its English default. The rotation control has its own
+ * `autoPlayLabels`; the region's name comes from `aria-label` or `aria-labelledby`.
+ */
+export interface CarouselLabels {
+  /** Name of the Previous button.
+   * @default 'Previous slide'
+   */
+  previous?: string;
+  /** Name of the Next button.
+   * @default 'Next slide'
+   */
+  next?: string;
+  /** Name of the group that holds the slide picker buttons.
+   * @default 'Choose slide'
+   */
+  picker?: string;
+  /**
+   * Name of the slide at `index` (zero-based, like `value`) out of `total` slides. It names the
+   * slide itself and its picker button, and is announced by the live region when that slide is
+   * shown.
+   * @default (index, total) => `Slide ${index + 1} of ${total}`
+   */
+  slide?: (index: number, total: number) => string;
 }
 
 /** Properties for the Carousel component. */
@@ -54,6 +84,11 @@ export interface CarouselProps extends React.HTMLAttributes<HTMLDivElement> {
   autoPlayInterval?: number;
   /** Accessible names of the rotation control. */
   autoPlayLabels?: CarouselAutoPlayLabels;
+  /**
+   * Accessible names of the Previous and Next buttons, the slide picker and the slides (also
+   * announced by the live region), for localization. Unset members keep their English defaults.
+   */
+  labels?: CarouselLabels;
   /** Whether the carousel loops back to the first slide after the last.
    * @default false
    */
@@ -68,6 +103,10 @@ export interface CarouselItemProps extends React.HTMLAttributes<HTMLDivElement> 
 
 const DEFAULT_PAUSE_LABEL = 'Pause slide rotation';
 const DEFAULT_PLAY_LABEL = 'Start slide rotation';
+const DEFAULT_PREVIOUS_LABEL = 'Previous slide';
+const DEFAULT_NEXT_LABEL = 'Next slide';
+const DEFAULT_PICKER_LABEL = 'Choose slide';
+const defaultSlideLabel = (index: number, total: number) => `Slide ${index + 1} of ${total}`;
 
 function clampIndex(index: number, total: number): number {
   if (total <= 0 || !Number.isFinite(index)) return 0;
@@ -102,6 +141,10 @@ const PlayGlyph = () => (
  * A slideshow that shows one slide at a time (WAI-ARIA APG carousel with previous/next buttons
  * and a slide picker).
  *
+ * - Slides are the `Carousel.Item` (`CarouselItem`) children, written directly in the Carousel or
+ *   in Fragments. Other children are not rendered (a development warning says so). A component
+ *   that renders `Carousel.Item` itself is not recognised: write the `Carousel.Item` in the
+ *   Carousel and put the component inside it.
  * - Previous/Next stay focusable at the ends (`aria-disabled`), so keyboard focus is not lost.
  * - The slide picker is a group of buttons named "Slide n of m"; the active one has
  *   `aria-current="true"`.
@@ -116,6 +159,13 @@ const PlayGlyph = () => (
  * - Right-to-left layouts slide the other way and mirror the Previous/Next chevrons: the direction
  *   is read from the rendered element (its `dir` prop, the nearest ancestor's `dir`, WaveProvider
  *   `dir` or the document's), so an LTR section inside an RTL page stays LTR throughout.
+ * - Name the carousel with `aria-label` or `aria-labelledby` (the fallback name is "Carousel").
+ *   The built-in names are English: `labels` and `autoPlayLabels` translate them.
+ * - The controls are layered over the slides inside the carousel's own stacking context, so they
+ *   never paint over page headers that stay in view while the page scrolls.
+ *
+ * Compound access (`Carousel.Item`) needs a client module; React Server Components import the
+ * flat name `CarouselItem` instead.
  */
 const CarouselRoot = ({
   value: controlledValue,
@@ -124,6 +174,7 @@ const CarouselRoot = ({
   autoPlay = false,
   autoPlayInterval = 5000,
   autoPlayLabels,
+  labels,
   loop = false,
   className,
   children,
@@ -162,11 +213,28 @@ const CarouselRoot = ({
   const [focusWithin, setFocusWithin] = React.useState(false);
   const [startedFromControl, setStartedFromControl] = React.useState(false);
 
-  const items = React.Children.toArray(children).filter(
-    (child): child is React.ReactElement =>
-      React.isValidElement(child) && child.type === CarouselItem,
-  );
+  // Slides are the `CarouselItem` children, Fragments flattened; the element type is unwrapped, so
+  // slides written in a Server Component (lazy client references) count too (R1, R2).
+  const items: Array<{ key: string; node: React.ReactNode }> = [];
+  let droppedChildren = false;
+  for (const child of flattenChildren(children)) {
+    if (isElementOfType(child.node, CarouselItem)) items.push(child);
+    else if (slotRendersContent(child.node)) droppedChildren = true;
+  }
   const total = items.length;
+
+  React.useEffect(() => {
+    if (droppedChildren) {
+      warnOnce(
+        'Carousel:non-item-children',
+        'Carousel: only `Carousel.Item` (`CarouselItem`) children are slides, directly or in ' +
+          'Fragments; other children are not rendered. A component that renders `Carousel.Item` ' +
+          'itself is not recognised: render the `Carousel.Item` in the Carousel and put the ' +
+          'component inside it.',
+      );
+    }
+  }, [droppedChildren]);
+
   // Derived during render (C-HOOKS): removed slides or an out-of-range value show the nearest one.
   const index = clampIndex(storedIndex, total);
   const atStart = index <= 0;
@@ -223,8 +291,31 @@ const CarouselRoot = ({
     }
   };
 
+  // The consumer's pointer and focus handlers composed with the pause tracking (C-COMPOSE). The
+  // empty root gets them too: the consumer's handlers still run, and a pointer or focus that leaves
+  // while there are no slides (slides being reloaded) does not keep rotation paused afterwards.
+  const rootHandlers = {
+    onMouseEnter: composeEventHandlers(onMouseEnter, () => setHovered(true)),
+    onMouseLeave: composeEventHandlers(onMouseLeave, () => setHovered(false)),
+    onFocus: composeEventHandlers(onFocus, (event: React.FocusEvent<HTMLDivElement>) => {
+      // Any focus inside pauses (APG), the rotation control included. Focus that enters from
+      // outside or moves on to other content ends the exemption of an explicit Start.
+      const from = event.relatedTarget;
+      const entering = !(from instanceof Node && event.currentTarget.contains(from));
+      setFocusWithin(true);
+      if (entering || !isRotationControl(event.target)) setStartedFromControl(false);
+    }),
+    onBlur: composeEventHandlers(onBlur, (event: React.FocusEvent<HTMLDivElement>) => {
+      const next = event.relatedTarget;
+      if (!(next instanceof Node && event.currentTarget.contains(next))) {
+        setFocusWithin(false);
+        setStartedFromControl(false);
+      }
+    }),
+  };
+
   if (total === 0) {
-    return <div ref={rootRef} className={cn('relative', className)} {...rest} />;
+    return <div ref={rootRef} className={cn('relative', className)} {...rootHandlers} {...rest} />;
   }
 
   const offset = (dir === 'rtl' ? 1 : -1) * index * 100;
@@ -233,6 +324,10 @@ const CarouselRoot = ({
   const chevronClass = dir === 'rtl' ? '-scale-x-100' : undefined;
   const pauseLabel = autoPlayLabels?.pause ?? DEFAULT_PAUSE_LABEL;
   const playLabel = autoPlayLabels?.play ?? DEFAULT_PLAY_LABEL;
+  const previousLabel = labels?.previous ?? DEFAULT_PREVIOUS_LABEL;
+  const nextLabel = labels?.next ?? DEFAULT_NEXT_LABEL;
+  const pickerLabel = labels?.picker ?? DEFAULT_PICKER_LABEL;
+  const slideLabel = labels?.slide ?? defaultSlideLabel;
 
   return (
     <div
@@ -240,24 +335,9 @@ const CarouselRoot = ({
       role="region"
       aria-roledescription="carousel"
       aria-label="Carousel"
-      className={cn('relative overflow-hidden', className)}
-      onMouseEnter={composeEventHandlers(onMouseEnter, () => setHovered(true))}
-      onMouseLeave={composeEventHandlers(onMouseLeave, () => setHovered(false))}
-      onFocus={composeEventHandlers(onFocus, (event: React.FocusEvent<HTMLDivElement>) => {
-        // Any focus inside pauses (APG), the rotation control included. Focus that enters from
-        // outside or moves on to other content ends the exemption of an explicit Start.
-        const from = event.relatedTarget;
-        const entering = !(from instanceof Node && event.currentTarget.contains(from));
-        setFocusWithin(true);
-        if (entering || !isRotationControl(event.target)) setStartedFromControl(false);
-      })}
-      onBlur={composeEventHandlers(onBlur, (event: React.FocusEvent<HTMLDivElement>) => {
-        const next = event.relatedTarget;
-        if (!(next instanceof Node && event.currentTarget.contains(next))) {
-          setFocusWithin(false);
-          setStartedFromControl(false);
-        }
-      })}
+      // A stacking context of its own: the controls' z-index cannot lift them over page headers.
+      className={cn('relative isolate overflow-hidden', className)}
+      {...rootHandlers}
       {...rest}
     >
       {hasRotation && (
@@ -280,30 +360,30 @@ const CarouselRoot = ({
         className="flex transition-transform duration-300 ease-in-out motion-reduce:transition-none"
         style={{ transform: `translateX(${offset}%)` }}
       >
-        {items.map((child, i) => {
+        {items.map(({ key, node }, i) => {
           const active = i === index;
           return (
             <div
-              key={child.key ?? i}
+              key={key}
               role="group"
               aria-roledescription="slide"
-              aria-label={`Slide ${i + 1} of ${total}`}
+              aria-label={slideLabel(i, total)}
               aria-hidden={active ? undefined : true}
               inert={!active}
               className="w-full shrink-0"
             >
-              {child}
+              {node}
             </div>
           );
         })}
       </div>
       {/* Announces the current slide, except while slides rotate on their own. */}
       <div aria-live={rotating ? 'off' : 'polite'} aria-atomic="true" className="sr-only">
-        {`Slide ${index + 1} of ${total}`}
+        {slideLabel(index, total)}
       </div>
       <button
         type="button"
-        aria-label="Previous slide"
+        aria-label={previousLabel}
         aria-controls={trackId}
         {...focusableDisabledProps(prevDisabled)}
         onClick={preventIfDisabled(prevDisabled, goPrev)}
@@ -313,7 +393,7 @@ const CarouselRoot = ({
       </button>
       <button
         type="button"
-        aria-label="Next slide"
+        aria-label={nextLabel}
         aria-controls={trackId}
         {...focusableDisabledProps(nextDisabled)}
         onClick={preventIfDisabled(nextDisabled, goNext)}
@@ -323,16 +403,16 @@ const CarouselRoot = ({
       </button>
       <div
         role="group"
-        aria-label="Choose slide"
+        aria-label={pickerLabel}
         className="absolute inset-x-0 bottom-1 z-10 mx-auto flex w-fit"
       >
-        {items.map((child, i) => {
+        {items.map(({ key }, i) => {
           const active = i === index;
           return (
             <button
-              key={child.key ?? i}
+              key={key}
               type="button"
-              aria-label={`Slide ${i + 1} of ${total}`}
+              aria-label={slideLabel(i, total)}
               aria-current={active ? 'true' : undefined}
               onClick={() => goTo(i)}
               className={cn('group inline-flex h-6 min-w-6 items-center justify-center', focusRing)}
@@ -356,8 +436,9 @@ const CarouselRoot = ({
 CarouselRoot.displayName = 'Carousel';
 
 /**
- * One slide of a {@link Carousel}. Only direct `Carousel.Item` / `CarouselItem` children are
- * slides.
+ * One slide of a {@link Carousel}. Write it in the Carousel, directly or in a Fragment: a component
+ * that renders `Carousel.Item` itself is not recognised as a slide (put that component inside the
+ * `Carousel.Item` instead).
  */
 export const CarouselItem = ({ className, children, ref, ...rest }: CarouselItemProps) => {
   return (
@@ -369,8 +450,15 @@ export const CarouselItem = ({ className, children, ref, ...rest }: CarouselItem
 CarouselItem.displayName = 'CarouselItem';
 
 /**
- * Carousel with its slide as `Carousel.Item`. The same component is exported as `CarouselItem`;
- * React Server Components import that flat name (dotted access needs a client file).
+ * A slideshow that shows one slide at a time (WAI-ARIA APG carousel with previous/next buttons, a
+ * slide picker and an optional `autoPlay` rotation with a Pause/Start control).
+ *
+ * Slides are the `Carousel.Item` children, written directly in the Carousel or in Fragments; other
+ * children are not rendered (a development warning says so). Name the carousel with `aria-label`
+ * or `aria-labelledby`; `labels` and `autoPlayLabels` translate the built-in English names.
+ *
+ * The slide is also exported as `CarouselItem`: React Server Components import that flat name
+ * (dotted access needs a client file).
  */
 export const Carousel = /* @__PURE__ */ Object.assign(CarouselRoot, {
   Item: CarouselItem,

@@ -1,7 +1,8 @@
 import * as React from 'react';
+import { flattenChildren, getElementType, isElementOfType } from '../../lib/children';
 import { cn } from '../../lib/cn';
 import { composeEventHandlers } from '../../lib/composeEventHandlers';
-import { isDev, warnDeprecated, warnOnce } from '../../lib/dev';
+import { reportMissingContext, warnDeprecated, warnOnce } from '../../lib/dev';
 import { ChevronDownIcon } from '../../lib/icons';
 import { disabledStyles, focusRingInset } from '../../lib/styles';
 import type { SelectionMode } from '../../lib/types';
@@ -19,6 +20,8 @@ export type AccordionHeadingLevel = 1 | 2 | 3 | 4 | 5 | 6;
 interface AccordionContextValue {
   openItems: readonly string[];
   toggle: (value: string) => void;
+  /** Counts a mounted Item's value (warns when several Items share it); returns the unregister. */
+  registerItem: (value: string) => () => void;
   baseId: string;
   headingLevel: AccordionHeadingLevel;
 }
@@ -56,6 +59,7 @@ const EMPTY: readonly string[] = [];
 const INERT_ACCORDION: AccordionContextValue = {
   openItems: EMPTY,
   toggle: () => {},
+  registerItem: () => () => {},
   baseId: 'wave-accordion-inert',
   headingLevel: 3,
 };
@@ -85,25 +89,30 @@ const AccordionHeadingOutsideContext = React.createContext(false);
  */
 const HEADING_CLASS = 'm-0 grid';
 
-/** C-CONTEXT: throws in development, logs and returns an inert value in production. */
-function guardContext<T>(value: T | null, component: string, parent: string, inert: T): T {
-  if (value) return value;
-  const message = `[WaveUI] ${component} must be used within <${parent}>.`;
-  if (isDev) throw new Error(message);
-  console.error(message);
-  return inert;
-}
-
+/**
+ * C-CONTEXT: throws in development; in production logs once (`reportMissingContext`) and returns
+ * the inert value.
+ */
 function useAccordionContext(component: string): AccordionContextValue {
-  return guardContext(React.useContext(AccordionContext), component, 'Accordion', INERT_ACCORDION);
+  const context = React.useContext(AccordionContext);
+  if (context) return context;
+  reportMissingContext(component, '<Accordion>');
+  return INERT_ACCORDION;
 }
 
 function useAccordionItemContext(component: string): AccordionItemContextValue {
-  return guardContext(
-    React.useContext(AccordionItemContext),
-    component,
-    'Accordion.Item',
-    INERT_ITEM,
+  const context = React.useContext(AccordionItemContext);
+  if (context) return context;
+  reportMissingContext(component, '<Accordion.Item>');
+  return INERT_ITEM;
+}
+
+function warnDuplicateValue(value: string): void {
+  warnOnce(
+    `Accordion:duplicate:${value}`,
+    `Accordion: several items share the value "${value}". Item values must be unique within an ` +
+      'Accordion; items with the same value open and close together and share their trigger and ' +
+      'panel ids.',
   );
 }
 
@@ -137,12 +146,12 @@ export interface AccordionSingleProps extends AccordionBaseProps {
   /** Called with the new open item (`null` when it closed) when it changes. */
   onOpenItemChange?: (openItem: string | null) => void;
   /** @deprecated Use `openItem` (single mode); `openItems` belongs to `type="multiple"`. */
-  openItems?: string[];
+  openItems?: readonly string[];
   /**
    * @deprecated Use `defaultOpenItem` (single mode); `defaultOpenItems` belongs to
    * `type="multiple"`.
    */
-  defaultOpenItems?: string[];
+  defaultOpenItems?: readonly string[];
   /**
    * @deprecated Use `onOpenItemChange` (single mode); `onOpenItemsChange` belongs to
    * `type="multiple"`.
@@ -154,14 +163,14 @@ export interface AccordionSingleProps extends AccordionBaseProps {
 export interface AccordionMultipleProps extends AccordionBaseProps {
   /** Whether only one or multiple items can be open at a time. */
   type: Extract<SelectionMode, 'multiple'>;
-  /** Controlled array of open item values. */
-  openItems?: string[];
+  /** Controlled array of open item values (a readonly array is accepted). */
+  openItems?: readonly string[];
   /**
    * Initially open items for uncontrolled usage.
    * @default []
    */
-  defaultOpenItems?: string[];
-  /** Called with the new open items when they change. */
+  defaultOpenItems?: readonly string[];
+  /** Called with the new open items (a new array) when they change. */
   onOpenItemsChange?: (openItems: string[]) => void;
   openItem?: never;
   defaultOpenItem?: never;
@@ -185,10 +194,17 @@ function toItems(value: string | null | undefined): readonly string[] | undefine
   return value === null ? EMPTY : [value];
 }
 
+// The component-level JSDoc is written twice, here and on the exported `Accordion` const: Storybook
+// autodocs reads it from this function, the published declarations from the export (R13).
 /**
  * A vertically stacked set of disclosure sections (WAI-ARIA Accordion pattern). Each
  * `Accordion.Item` renders an `Accordion.Trigger` button inside a heading (`headingLevel`) and an
  * `Accordion.Panel` region that is shown while the item is open.
+ *
+ * Single mode (the default) keeps at most one item open (`openItem`, `defaultOpenItem`,
+ * `onOpenItemChange`); `type="multiple"` lets any number of items open (`openItems`,
+ * `defaultOpenItems`, `onOpenItemsChange`). Each Item's `value` must be unique within its
+ * Accordion: a development warning names a repeated value.
  *
  * Sub-components are also exported under flat names (`AccordionItem`, `AccordionTrigger`,
  * `AccordionPanel`) for React Server Components, which cannot use the dotted form.
@@ -278,10 +294,26 @@ const AccordionRoot = (props: AccordionProps) => {
     [multiple, setOpenItems],
   );
 
+  // How many mounted Items hold each value, to warn about a repeated value (R12). Only the Items'
+  // effects touch it (through `registerItem`), never render.
+  const itemCountsRef = React.useRef<Map<string, number>>(null);
+  const registerItem = React.useCallback((value: string) => {
+    itemCountsRef.current ??= new Map();
+    const counts = itemCountsRef.current;
+    const count = (counts.get(value) ?? 0) + 1;
+    counts.set(value, count);
+    if (count > 1) warnDuplicateValue(value);
+    return () => {
+      const remaining = (counts.get(value) ?? 1) - 1;
+      if (remaining > 0) counts.set(value, remaining);
+      else counts.delete(value);
+    };
+  }, []);
+
   const baseId = useId('accordion');
   const context = React.useMemo<AccordionContextValue>(
-    () => ({ openItems, toggle, baseId, headingLevel }),
-    [openItems, toggle, baseId, headingLevel],
+    () => ({ openItems, toggle, registerItem, baseId, headingLevel }),
+    [openItems, toggle, registerItem, baseId, headingLevel],
   );
 
   return (
@@ -315,57 +347,35 @@ export interface AccordionItemProps extends React.HTMLAttributes<HTMLDivElement>
   ref?: React.Ref<HTMLDivElement>;
 }
 
-/**
- * Direct children with Fragments flattened (`null`, `undefined` and booleans dropped), each with
- * a key that is unique across the flattened list and keeps the consumer's own `key`.
- */
-function flattenChildren(
-  children: React.ReactNode,
-  prefix = '',
-): Array<{ key: string; node: React.ReactNode }> {
-  const result: Array<{ key: string; node: React.ReactNode }> = [];
-  React.Children.toArray(children).forEach((child, index) => {
-    const key = `${prefix}${React.isValidElement(child) && child.key !== null ? child.key : index}`;
-    if (
-      React.isValidElement<{ children?: React.ReactNode }>(child) &&
-      child.type === React.Fragment
-    ) {
-      result.push(...flattenChildren(child.props.children, `${key}/`));
-    } else {
-      result.push({ key, node: child });
-    }
-  });
-  return result;
-}
-
 interface PartProps {
   id?: unknown;
   children?: unknown;
 }
 
 /**
- * The first element of `type` in `node`: the node itself, or an element found through Fragments
+ * The first `part` element in `node`: the node itself, or an element found through Fragments
  * and the `children` of wrapper elements (a Tooltip around a Trigger). The search does not enter
  * `barrier` elements or a nested Accordion/Item, and cannot see what a component renders itself.
+ * Parts are identified by their unwrapped element type, so parts written in a Server Component
+ * (lazy client references) are found too.
  */
 function findPart(
   node: unknown,
-  type: React.ElementType,
+  part: React.ElementType,
   barrier: React.ElementType,
 ): React.ReactElement<PartProps> | undefined {
   if (Array.isArray(node)) {
     for (const child of node) {
-      const found = findPart(child, type, barrier);
+      const found = findPart(child, part, barrier);
       if (found) return found;
     }
     return undefined;
   }
   if (!React.isValidElement<PartProps>(node)) return undefined;
-  if (node.type === type) return node;
-  if (node.type === barrier || node.type === AccordionRoot || node.type === AccordionItem) {
-    return undefined;
-  }
-  return findPart(node.props.children, type, barrier);
+  const type = getElementType(node);
+  if (type === part) return node;
+  if (type === barrier || type === AccordionRoot || type === AccordionItem) return undefined;
+  return findPart(node.props.children, part, barrier);
 }
 
 /**
@@ -384,19 +394,19 @@ function idOf(element: React.ReactElement<PartProps> | undefined): string | unde
  * (`<div>`, `<span>`) render as written: the heading stays inside them.
  */
 function wrapsTriggerOnly(node: unknown): boolean {
-  if (!React.isValidElement<PartProps>(node) || typeof node.type === 'string') return false;
+  if (!React.isValidElement<PartProps>(node)) return false;
+  const type = getElementType(node);
   if (
-    node.type === AccordionTrigger ||
-    node.type === AccordionPanel ||
-    node.type === AccordionRoot ||
-    node.type === AccordionItem
+    typeof type === 'string' ||
+    type === AccordionTrigger ||
+    type === AccordionPanel ||
+    type === AccordionRoot ||
+    type === AccordionItem
   ) {
     return false;
   }
-  const child = node.props.children;
-  return (
-    React.isValidElement(child) && (child.type === AccordionTrigger || wrapsTriggerOnly(child))
-  );
+  const child = node.props.children as React.ReactNode;
+  return isElementOfType(child, AccordionTrigger) || wrapsTriggerOnly(child);
 }
 
 function misplacedMessage(component: 'Accordion.Trigger' | 'Accordion.Panel'): string {
@@ -434,7 +444,8 @@ const AccordionItem = ({
 }: AccordionItemProps) => {
   const accordion = useAccordionContext('Accordion.Item');
   const isOpen = accordion.openItems.includes(value);
-  const { toggle: toggleValue, baseId } = accordion;
+  const { toggle: toggleValue, baseId, registerItem } = accordion;
+  React.useEffect(() => registerItem(value), [registerItem, value]);
   const headingLevel = headingLevelProp ?? accordion.headingLevel;
   const Heading: `h${AccordionHeadingLevel}` = `h${headingLevel}`;
 
@@ -629,7 +640,19 @@ AccordionPanel.displayName = 'AccordionPanel';
 /*  Export                                                             */
 /* ------------------------------------------------------------------ */
 
-/** Accordion compound component: `Accordion.Item`, `Accordion.Trigger`, `Accordion.Panel`. */
+/**
+ * A vertically stacked set of disclosure sections (WAI-ARIA Accordion pattern). Each
+ * `Accordion.Item` renders an `Accordion.Trigger` button inside a heading (`headingLevel`) and an
+ * `Accordion.Panel` region that is shown while the item is open.
+ *
+ * Single mode (the default) keeps at most one item open (`openItem`, `defaultOpenItem`,
+ * `onOpenItemChange`); `type="multiple"` lets any number of items open (`openItems`,
+ * `defaultOpenItems`, `onOpenItemsChange`). Each Item's `value` must be unique within its
+ * Accordion: a development warning names a repeated value.
+ *
+ * Sub-components are also exported under flat names (`AccordionItem`, `AccordionTrigger`,
+ * `AccordionPanel`) for React Server Components, which cannot use the dotted form.
+ */
 export const Accordion = /* @__PURE__ */ Object.assign(AccordionRoot, {
   Item: AccordionItem,
   Trigger: AccordionTrigger,

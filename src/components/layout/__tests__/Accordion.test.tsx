@@ -1,4 +1,5 @@
 import * as React from 'react';
+import { renderToString } from 'react-dom/server';
 import { describe, it, expect, expectTypeOf, vi, afterEach } from 'vitest';
 import { render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
@@ -16,6 +17,7 @@ import {
 import { Tooltip } from '../../overlays/Tooltip';
 import type { SelectionMode } from '../../../lib/types';
 import {
+  asClientReference,
   expectNoA11yViolations,
   testSystemProps,
   testCompoundExposure,
@@ -487,6 +489,7 @@ describe('Accordion.Trigger and Accordion.Panel (layout#17)', () => {
     expect(screen.getAllByRole('region')).toHaveLength(1);
     expectUniqueIds();
     const messages = warn.mock.calls.map(([message]) => String(message));
+    expect(messages).toHaveLength(2);
     expect(
       messages.filter((m) => m.startsWith('[WaveUI] Accordion.Trigger was rendered inside')),
     ).toHaveLength(1);
@@ -684,6 +687,85 @@ describe('Accordion - single and multiple APIs (layout#19)', () => {
     expect(button).toHaveAttribute('aria-expanded', 'false');
   });
 
+  it('single: a parent that accepts onOpenItemChange moves the open item', async () => {
+    const user = userEvent.setup();
+    function Controlled() {
+      const [openItem, setOpenItem] = React.useState<string | null>('1');
+      return (
+        <Accordion openItem={openItem} onOpenItemChange={setOpenItem}>
+          {items}
+        </Accordion>
+      );
+    }
+    render(<Controlled />);
+    expect(screen.getByRole('region', { name: 'Item 1' })).toHaveTextContent('Panel 1');
+    await user.click(screen.getByRole('button', { name: 'Item 2' }));
+    expect(screen.getByRole('region', { name: 'Item 2' })).toHaveTextContent('Panel 2');
+    expect(screen.queryByText('Panel 1')).not.toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'Item 2' }));
+    expect(screen.queryByRole('region')).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Item 2' })).toHaveAttribute(
+      'aria-expanded',
+      'false',
+    );
+  });
+
+  it('single: follows a new openItem from the parent', () => {
+    const { rerender } = render(<Accordion openItem="1">{items}</Accordion>);
+    expect(screen.getByRole('region', { name: 'Item 1' })).toBeInTheDocument();
+    rerender(<Accordion openItem="2">{items}</Accordion>);
+    expect(screen.getByRole('region', { name: 'Item 2' })).toHaveTextContent('Panel 2');
+    expect(screen.queryByText('Panel 1')).not.toBeInTheDocument();
+    rerender(<Accordion openItem={null}>{items}</Accordion>);
+    expect(screen.queryByRole('region')).not.toBeInTheDocument();
+  });
+
+  it('multiple: follows new openItems from the parent', () => {
+    const { rerender } = render(
+      <Accordion type="multiple" openItems={['1']}>
+        {items}
+      </Accordion>,
+    );
+    expect(screen.getAllByRole('region').map((region) => region.textContent)).toEqual(['Panel 1']);
+    rerender(
+      <Accordion type="multiple" openItems={['1', '2']}>
+        {items}
+      </Accordion>,
+    );
+    expect(screen.getAllByRole('region').map((region) => region.textContent)).toEqual([
+      'Panel 1',
+      'Panel 2',
+    ]);
+    rerender(
+      <Accordion type="multiple" openItems={[]}>
+        {items}
+      </Accordion>,
+    );
+    expect(screen.queryByRole('region')).not.toBeInTheDocument();
+  });
+
+  it('multiple: accepts readonly arrays and still reports a mutable array (R6)', async () => {
+    const user = userEvent.setup();
+    const openItems = ['1'] as const;
+    const onOpenItemsChange = vi.fn();
+    render(
+      <Accordion type="multiple" openItems={openItems} onOpenItemsChange={onOpenItemsChange}>
+        {items}
+      </Accordion>,
+    );
+    await user.click(screen.getByRole('button', { name: 'Item 2' }));
+    expect(onOpenItemsChange).toHaveBeenCalledWith(['1', '2']);
+    expectTypeOf<AccordionMultipleProps['openItems']>().toEqualTypeOf<
+      readonly string[] | undefined
+    >();
+    expectTypeOf<AccordionMultipleProps['defaultOpenItems']>().toEqualTypeOf<
+      readonly string[] | undefined
+    >();
+    expectTypeOf<
+      Parameters<NonNullable<AccordionMultipleProps['onOpenItemsChange']>>[0]
+    >().toEqualTypeOf<string[]>();
+  });
+
   it('single: the legacy openItems/defaultOpenItems/onOpenItemsChange still work and warn once', async () => {
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
     const user = userEvent.setup();
@@ -696,27 +778,50 @@ describe('Accordion - single and multiple APIs (layout#19)', () => {
     expect(screen.getByText('Panel 2')).toBeInTheDocument();
     await user.click(screen.getByRole('button', { name: 'Item 1' }));
     expect(onOpenItemsChange).toHaveBeenCalledWith(['1']);
-    const messages = warn.mock.calls.map(([message]) => String(message));
-    expect(messages.filter((m) => m.includes('`defaultOpenItems` is deprecated'))).toHaveLength(1);
-    expect(messages.filter((m) => m.includes('`onOpenItemsChange` is deprecated'))).toHaveLength(1);
-    expect(messages.every((m) => m.startsWith('[WaveUI] '))).toBe(true);
+    expect(warn.mock.calls.map(([message]) => String(message))).toEqual([
+      '[WaveUI] Accordion: `defaultOpenItems` is deprecated and will be removed in 1.0. Use `defaultOpenItem` instead. In single mode the Accordion takes one value.',
+      '[WaveUI] Accordion: `onOpenItemsChange` is deprecated and will be removed in 1.0. Use `onOpenItemChange` instead. In single mode the Accordion reports one value.',
+    ]);
   });
 
-  it('single: legacy controlled openItems still controls the open item', () => {
-    vi.spyOn(console, 'warn').mockImplementation(() => {});
-    render(<Accordion openItems={['1']}>{items}</Accordion>);
+  it('single: legacy controlled openItems still controls the open item and warns once', () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const { rerender } = render(<Accordion openItems={['1']}>{items}</Accordion>);
     expect(screen.getByText('Panel 1')).toBeInTheDocument();
     expect(screen.queryByText('Panel 2')).not.toBeInTheDocument();
+    rerender(<Accordion openItems={['1']}>{items}</Accordion>);
+    expect(warn.mock.calls.map(([message]) => String(message))).toEqual([
+      '[WaveUI] Accordion: `openItems` is deprecated and will be removed in 1.0. Use `openItem` instead. In single mode the Accordion takes one value.',
+    ]);
+  });
+
+  it('single: calls both onOpenItemChange and its deprecated alias onOpenItemsChange (C-NAMING)', async () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const user = userEvent.setup();
+    const onOpenItemChange = vi.fn();
+    const onOpenItemsChange = vi.fn();
+    render(
+      <Accordion onOpenItemChange={onOpenItemChange} onOpenItemsChange={onOpenItemsChange}>
+        {items}
+      </Accordion>,
+    );
+    await user.click(screen.getByRole('button', { name: 'Item 1' }));
+    expect(onOpenItemChange).toHaveBeenCalledTimes(1);
+    expect(onOpenItemChange).toHaveBeenCalledWith('1');
+    expect(onOpenItemsChange).toHaveBeenCalledTimes(1);
+    expect(onOpenItemsChange).toHaveBeenCalledWith(['1']);
+    expect(warn.mock.calls.map(([message]) => String(message))).toEqual([
+      '[WaveUI] Accordion: `onOpenItemsChange` is deprecated and will be removed in 1.0. Use `onOpenItemChange` instead. In single mode the Accordion reports one value.',
+    ]);
   });
 
   it('single: warns when more than one item is open', () => {
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
     render(<Accordion openItems={['1', '2']}>{items}</Accordion>);
-    expect(
-      warn.mock.calls.some(([message]) =>
-        String(message).includes('type="single" allows one open item'),
-      ),
-    ).toBe(true);
+    expect(warn.mock.calls.map(([message]) => String(message))).toEqual([
+      '[WaveUI] Accordion: `openItems` is deprecated and will be removed in 1.0. Use `openItem` instead. In single mode the Accordion takes one value.',
+      '[WaveUI] Accordion: type="single" allows one open item, but 2 are open. Pass `openItem`, or use type="multiple".',
+    ]);
   });
 
   it('multiple: openItems is not deprecated', async () => {
@@ -769,46 +874,235 @@ describe('Accordion - single and multiple APIs (layout#19)', () => {
 });
 
 describe('Accordion - context guards (overlays#34)', () => {
+  // A render error in a test is thrown by render(); nothing is logged (asserted, R14).
+  const expectThrows = (ui: React.ReactElement, text: string) => {
+    const error = vi.spyOn(console, 'error');
+    expect(() => render(ui)).toThrow(new Error(text));
+    expect(error).not.toHaveBeenCalled();
+  };
+
   it('throws when Accordion.Item is used outside an Accordion', () => {
-    vi.spyOn(console, 'error').mockImplementation(() => {});
-    expect(() => render(<Accordion.Item value="1">Orphan</Accordion.Item>)).toThrow(
+    expectThrows(
+      <Accordion.Item value="1">Orphan</Accordion.Item>,
       '[WaveUI] Accordion.Item must be used within <Accordion>',
     );
   });
 
   it('throws when Accordion.Trigger is used outside an Accordion.Item', () => {
-    vi.spyOn(console, 'error').mockImplementation(() => {});
-    expect(() =>
-      render(
-        <Accordion>
-          <Accordion.Trigger>Orphan</Accordion.Trigger>
-        </Accordion>,
-      ),
-    ).toThrow('[WaveUI] Accordion.Trigger must be used within <Accordion.Item>');
+    expectThrows(
+      <Accordion>
+        <Accordion.Trigger>Orphan</Accordion.Trigger>
+      </Accordion>,
+      '[WaveUI] Accordion.Trigger must be used within <Accordion.Item>',
+    );
   });
 
   it('a nested Accordion does not hand the outer item to a Trigger outside its own items', () => {
-    vi.spyOn(console, 'error').mockImplementation(() => {});
-    expect(() =>
-      render(
-        <Accordion defaultOpenItem="outer">
-          <Accordion.Item value="outer">
-            <Accordion.Trigger>Outer</Accordion.Trigger>
-            <Accordion.Panel>
-              <Accordion>
-                <Accordion.Trigger>Orphan</Accordion.Trigger>
-              </Accordion>
-            </Accordion.Panel>
-          </Accordion.Item>
-        </Accordion>,
-      ),
-    ).toThrow('[WaveUI] Accordion.Trigger must be used within <Accordion.Item>');
+    expectThrows(
+      <Accordion defaultOpenItem="outer">
+        <Accordion.Item value="outer">
+          <Accordion.Trigger>Outer</Accordion.Trigger>
+          <Accordion.Panel>
+            <Accordion>
+              <Accordion.Trigger>Orphan</Accordion.Trigger>
+            </Accordion>
+          </Accordion.Panel>
+        </Accordion.Item>
+      </Accordion>,
+      '[WaveUI] Accordion.Trigger must be used within <Accordion.Item>',
+    );
   });
 
   it('throws when Accordion.Panel is used outside an Accordion.Item', () => {
-    vi.spyOn(console, 'error').mockImplementation(() => {});
-    expect(() => render(<Accordion.Panel>Orphan</Accordion.Panel>)).toThrow(
+    expectThrows(
+      <Accordion.Panel>Orphan</Accordion.Panel>,
       '[WaveUI] Accordion.Panel must be used within <Accordion.Item>',
     );
+  });
+});
+
+describe('Accordion - context guards in production (R3)', () => {
+  afterEach(() => {
+    vi.unstubAllEnvs();
+  });
+
+  it('logs each missing-context error once and renders inert parts instead of throwing', async () => {
+    vi.stubEnv('NODE_ENV', 'production');
+    const error = vi.spyOn(console, 'error').mockImplementation(() => {});
+    const user = userEvent.setup();
+    const orphans = (
+      <>
+        <Accordion.Item value="1">
+          <Accordion.Trigger>Orphan item</Accordion.Trigger>
+        </Accordion.Item>
+        <Accordion.Item value="2">Second orphan</Accordion.Item>
+        <Accordion>
+          <Accordion.Panel>Orphan panel</Accordion.Panel>
+        </Accordion>
+      </>
+    );
+    const { rerender } = render(orphans);
+    rerender(orphans);
+    // Inert: the orphan item's trigger toggles nothing.
+    const trigger = screen.getByRole('button', { name: 'Orphan item' });
+    await user.click(trigger);
+    expect(trigger).toHaveAttribute('aria-expanded', 'false');
+    expect(screen.queryByText('Orphan panel')).not.toBeInTheDocument();
+    expect(error.mock.calls.map(([message]) => String(message))).toEqual([
+      '[WaveUI] Accordion.Item must be used within <Accordion>',
+      '[WaveUI] Accordion.Panel must be used within <Accordion.Item>',
+    ]);
+  });
+});
+
+describe('Accordion - duplicate item values (R12)', () => {
+  const duplicateMessage = (value: string) =>
+    `[WaveUI] Accordion: several items share the value "${value}". Item values must be unique ` +
+    'within an Accordion; items with the same value open and close together and share their ' +
+    'trigger and panel ids.';
+
+  it('warns once per duplicated value', () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const { rerender } = render(
+      <Accordion>
+        {['a', 'a', 'a', 'b', 'b', 'c'].map((value, i) => (
+          <Accordion.Item key={i} value={value}>
+            <Accordion.Trigger>{`Trigger ${i}`}</Accordion.Trigger>
+          </Accordion.Item>
+        ))}
+      </Accordion>,
+    );
+    rerender(
+      <Accordion>
+        {['a', 'a', 'a', 'b', 'b', 'c'].map((value, i) => (
+          <Accordion.Item key={i} value={value}>
+            <Accordion.Trigger>{`Trigger ${i}`}</Accordion.Trigger>
+          </Accordion.Item>
+        ))}
+      </Accordion>,
+    );
+    expect(warn.mock.calls.map(([message]) => String(message))).toEqual([
+      duplicateMessage('a'),
+      duplicateMessage('b'),
+    ]);
+  });
+
+  it('warns when an item added later repeats a value (wrapped items included)', () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    function Faq({ value }: { value: string }) {
+      return (
+        <Accordion.Item value={value}>
+          <Accordion.Trigger>{`Question ${value}`}</Accordion.Trigger>
+        </Accordion.Item>
+      );
+    }
+    const { rerender } = render(
+      <Accordion>
+        <Faq value="x" />
+      </Accordion>,
+    );
+    expect(warn).not.toHaveBeenCalled();
+    rerender(
+      <Accordion>
+        <Faq value="x" />
+        <Faq value="x" />
+      </Accordion>,
+    );
+    expect(warn.mock.calls.map(([message]) => String(message))).toEqual([duplicateMessage('x')]);
+  });
+
+  it('does not warn for unique values, in StrictMode, or for the same value in separate or nested accordions', () => {
+    const warn = vi.spyOn(console, 'warn');
+    const { rerender } = render(
+      <React.StrictMode>
+        <Accordion aria-label="First">{items}</Accordion>
+        <Accordion aria-label="Second" defaultOpenItem="1">
+          <Accordion.Item value="1">
+            <Accordion.Trigger>Outer</Accordion.Trigger>
+            <Accordion.Panel>
+              <Accordion>{items}</Accordion>
+            </Accordion.Panel>
+          </Accordion.Item>
+        </Accordion>
+      </React.StrictMode>,
+    );
+    // An item that is removed frees its value.
+    rerender(
+      <React.StrictMode>
+        <Accordion aria-label="First">
+          <Accordion.Item value="1">
+            <Accordion.Trigger>Replacement</Accordion.Trigger>
+          </Accordion.Item>
+        </Accordion>
+      </React.StrictMode>,
+    );
+    expect(warn).not.toHaveBeenCalled();
+  });
+});
+
+describe('Accordion - parts written in a Server Component (x-ssr-1)', () => {
+  // A client component written in a Server Component reaches the client as a lazy reference.
+  const Item = asClientReference(AccordionItem);
+  const Trigger = asClientReference(AccordionTrigger);
+  const Panel = asClientReference(AccordionPanel);
+  const Wrapper = asClientReference(WrapperStandIn);
+
+  const plainFaq = (
+    <Accordion defaultOpenItem="q1">
+      <AccordionItem value="q1">
+        <AccordionTrigger>Question one?</AccordionTrigger>
+        <AccordionPanel>Answer one.</AccordionPanel>
+      </AccordionItem>
+      <AccordionItem value="q2">
+        <WrapperStandIn>
+          <AccordionTrigger>Question two?</AccordionTrigger>
+        </WrapperStandIn>
+        <AccordionPanel>Answer two.</AccordionPanel>
+        Trailing note.
+      </AccordionItem>
+    </Accordion>
+  );
+  const lazyFaq = (
+    <Accordion defaultOpenItem="q1">
+      <Item value="q1">
+        <Trigger>Question one?</Trigger>
+        <Panel>Answer one.</Panel>
+      </Item>
+      <Item value="q2">
+        <Wrapper>
+          <Trigger>Question two?</Trigger>
+        </Wrapper>
+        <Panel>Answer two.</Panel>
+        Trailing note.
+      </Item>
+    </Accordion>
+  );
+
+  it('server-renders the same HTML as with the plain part types', () => {
+    const plain = renderToString(plainFaq);
+    expect(plain).toContain('Question one?');
+    expect(renderToString(lazyFaq)).toBe(plain);
+  });
+
+  it('finds the trigger and panel, and opens and closes like the plain parts', async () => {
+    const user = userEvent.setup();
+    render(lazyFaq);
+    // The real triggers, not a button labelled by the item value.
+    expect(screen.getAllByRole('button').map((button) => button.textContent)).toEqual([
+      'Question one?',
+      'Question two?',
+    ]);
+    expect(screen.getByRole('region', { name: 'Question one?' })).toHaveTextContent('Answer one.');
+    // The heading goes around the wrapper component that holds only the Trigger.
+    const heading = screen.getByRole('heading', { level: 3, name: 'Question two?' });
+    expect(heading.closest('span')).toBeNull();
+
+    await user.click(screen.getByRole('button', { name: 'Question two?' }));
+    expect(screen.queryByRole('region', { name: 'Question one?' })).not.toBeInTheDocument();
+    expect(screen.getByRole('region', { name: 'Question two?' })).toHaveTextContent(
+      'Answer two.Trailing note.',
+    );
+    expectUniqueIds();
+    await expectNoA11yViolations();
   });
 });

@@ -95,6 +95,28 @@ export const RightToLeftSection: Story = {
   ),
 };
 
+/**
+ * `labels` translates the names of Previous, Next, the slide picker and the slides (also what the
+ * live region announces), and `autoPlayLabels` those of the rotation control. `lang` marks the
+ * carousel's language for screen readers.
+ */
+export const Localized: Story = {
+  args: {
+    'aria-label': 'Angebote',
+    lang: 'de',
+    autoPlay: true,
+    loop: true,
+    autoPlayLabels: { pause: 'Rotation anhalten', play: 'Rotation starten' },
+    labels: {
+      previous: 'Vorherige Folie',
+      next: 'Nächste Folie',
+      picker: 'Folie auswählen',
+      slide: (index, total) => `Folie ${index + 1} von ${total}`,
+    },
+    children: tintedSlides,
+  },
+};
+
 /** Controls inside inactive slides are `inert`: Tab reaches only the visible slide's action. */
 export const InteractiveSlides: Story = {
   args: {

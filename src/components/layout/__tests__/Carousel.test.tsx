@@ -1,10 +1,17 @@
 import * as React from 'react';
+import { renderToString } from 'react-dom/server';
 import { describe, it, expect, expectTypeOf, vi, afterEach } from 'vitest';
 import { act, fireEvent, render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { Carousel, CarouselItem } from '../Carousel';
-import type { CarouselAutoPlayLabels, CarouselItemProps, CarouselProps } from '../Carousel';
+import type {
+  CarouselAutoPlayLabels,
+  CarouselItemProps,
+  CarouselLabels,
+  CarouselProps,
+} from '../Carousel';
 import {
+  asClientReference,
   expectNoA11yViolations,
   mockMatchMedia,
   renderWithProviders,
@@ -69,6 +76,7 @@ const nextButton = () => screen.getByRole('button', { name: 'Next slide' });
 
 afterEach(() => {
   vi.useRealTimers();
+  vi.restoreAllMocks();
 });
 
 describe('Carousel', () => {
@@ -1189,6 +1197,188 @@ describe('Carousel', () => {
       expect(onFocus).toHaveBeenCalled();
       expect(liveRegion()).toHaveAttribute('aria-live', 'polite');
     });
+
+    it('composes consumer blur and pointer-leave handlers with the resume behaviour (C-COMPOSE)', () => {
+      vi.useFakeTimers();
+      const onValueChange = vi.fn();
+      const onBlur = vi.fn();
+      const onMouseLeave = vi.fn();
+      render(
+        <>
+          <Carousel
+            autoPlay
+            loop
+            autoPlayInterval={1000}
+            onValueChange={onValueChange}
+            onBlur={onBlur}
+            onMouseLeave={onMouseLeave}
+          >
+            {slides(3)}
+          </Carousel>
+          <button type="button">Outside</button>
+        </>,
+      );
+      // Focus leaves the carousel: the consumer onBlur runs and rotation resumes.
+      act(() => {
+        nextButton().focus();
+      });
+      expect(liveRegion()).toHaveAttribute('aria-live', 'polite');
+      act(() => {
+        screen.getByRole('button', { name: 'Outside' }).focus();
+      });
+      expect(onBlur).toHaveBeenCalledTimes(1);
+      expect(liveRegion()).toHaveAttribute('aria-live', 'off');
+      act(() => {
+        vi.advanceTimersByTime(1000);
+      });
+      expect(onValueChange.mock.calls).toEqual([[1]]);
+
+      // The pointer leaves: the consumer onMouseLeave runs and rotation resumes.
+      fireEvent.mouseEnter(region());
+      expect(liveRegion()).toHaveAttribute('aria-live', 'polite');
+      fireEvent.mouseLeave(region());
+      expect(onMouseLeave).toHaveBeenCalledTimes(1);
+      expect(liveRegion()).toHaveAttribute('aria-live', 'off');
+      act(() => {
+        vi.advanceTimersByTime(1000);
+      });
+      expect(onValueChange.mock.calls).toEqual([[1], [2]]);
+    });
+  });
+
+  describe('without slides (layout-a-docs-1)', () => {
+    it('calls the consumer pointer and focus handlers on the empty root (C-COMPOSE)', () => {
+      const onMouseEnter = vi.fn();
+      const onMouseLeave = vi.fn();
+      const onFocus = vi.fn();
+      const onBlur = vi.fn();
+      render(
+        <Carousel
+          aria-label="Loading slides"
+          data-testid="empty"
+          tabIndex={-1}
+          onMouseEnter={onMouseEnter}
+          onMouseLeave={onMouseLeave}
+          onFocus={onFocus}
+          onBlur={onBlur}
+        />,
+      );
+      const root = screen.getByTestId('empty');
+      fireEvent.mouseEnter(root);
+      fireEvent.mouseLeave(root);
+      act(() => {
+        root.focus();
+      });
+      act(() => {
+        root.blur();
+      });
+      expect(onMouseEnter).toHaveBeenCalledTimes(1);
+      expect(onMouseLeave).toHaveBeenCalledTimes(1);
+      expect(onFocus).toHaveBeenCalledTimes(1);
+      expect(onBlur).toHaveBeenCalledTimes(1);
+    });
+
+    it('does not stay paused when the pointer left while the slides were being reloaded', () => {
+      vi.useFakeTimers();
+      const onValueChange = vi.fn();
+      const ui = (count: number) => (
+        <Carousel
+          data-testid="carousel"
+          autoPlay
+          loop
+          autoPlayInterval={1000}
+          onValueChange={onValueChange}
+        >
+          {slides(count)}
+        </Carousel>
+      );
+      const { rerender } = render(ui(3));
+      fireEvent.mouseEnter(screen.getByTestId('carousel'));
+      expect(liveRegion()).toHaveAttribute('aria-live', 'polite');
+
+      // A refetch empties the slides; the pointer leaves meanwhile; the slides come back.
+      rerender(ui(0));
+      fireEvent.mouseLeave(screen.getByTestId('carousel'));
+      rerender(ui(3));
+
+      expect(liveRegion()).toHaveAttribute('aria-live', 'off');
+      act(() => {
+        vi.advanceTimersByTime(1000);
+      });
+      expect(onValueChange).toHaveBeenCalledWith(1);
+    });
+  });
+
+  it('isolates its stacking context, so the controls stay under page headers (x-styling-6)', () => {
+    render(<Carousel aria-label="Featured">{threeSlides}</Carousel>);
+    expect(region()).toHaveClass('relative', 'isolate', 'overflow-hidden');
+    // The controls' z-index is local to the carousel.
+    expect(nextButton()).toHaveClass('z-10');
+  });
+
+  describe('localizable names (layout-a-code-1, R7)', () => {
+    const german: CarouselLabels = {
+      previous: 'Vorherige Folie',
+      next: 'Nächste Folie',
+      picker: 'Folie auswählen',
+      slide: (index, total) => `Folie ${index + 1} von ${total}`,
+    };
+
+    it('uses custom names for Previous, Next, the picker, the slides, the dots and the live region', async () => {
+      const user = userEvent.setup();
+      render(
+        <Carousel aria-label="Angebote" labels={german}>
+          {threeSlides}
+        </Carousel>,
+      );
+      expect(screen.getByRole('button', { name: 'Vorherige Folie' })).toBeInTheDocument();
+      const next = screen.getByRole('button', { name: 'Nächste Folie' });
+      const picker = screen.getByRole('group', { name: 'Folie auswählen' });
+      expect(
+        within(picker)
+          .getAllByRole('button')
+          .map((dot) => dot.getAttribute('aria-label')),
+      ).toEqual(['Folie 1 von 3', 'Folie 2 von 3', 'Folie 3 von 3']);
+      expect(slideGroups().map((slide) => slide.getAttribute('aria-label'))).toEqual([
+        'Folie 1 von 3',
+        'Folie 2 von 3',
+        'Folie 3 von 3',
+      ]);
+      expect(liveRegion()).toHaveTextContent('Folie 1 von 3');
+
+      await user.click(next);
+      expect(liveRegion()).toHaveTextContent('Folie 2 von 3');
+      expect(screen.queryByText(/Slide \d of \d/)).toBeNull();
+      expect(screen.queryByRole('button', { name: /slide/i })).toBeNull();
+      await expectNoA11yViolations();
+    });
+
+    it('keeps the English default for every name that is not given', () => {
+      render(
+        <Carousel aria-label="Angebote" labels={{ next: 'Weiter' }}>
+          {threeSlides}
+        </Carousel>,
+      );
+      expect(screen.getByRole('button', { name: 'Weiter' })).toBeInTheDocument();
+      expect(prevButton()).toBeInTheDocument();
+      expect(dots().map((dot) => dot.getAttribute('aria-label'))).toEqual([
+        'Slide 1 of 3',
+        'Slide 2 of 3',
+        'Slide 3 of 3',
+      ]);
+      expect(liveRegion()).toHaveTextContent('Slide 1 of 3');
+    });
+
+    it('types labels as optional members next to autoPlayLabels', () => {
+      expectTypeOf<CarouselProps['labels']>().toEqualTypeOf<CarouselLabels | undefined>();
+      expectTypeOf<CarouselLabels['slide']>().toEqualTypeOf<
+        ((index: number, total: number) => string) | undefined
+      >();
+      const partial: CarouselLabels = { previous: 'Zurück' };
+      // @ts-expect-error slide is a function of the index and the total
+      const wrong: CarouselLabels = { slide: 'Folie' };
+      expect([partial, wrong]).toHaveLength(2);
+    });
   });
 
   it('declares ref in its exported props (C-REF)', () => {
@@ -1211,5 +1401,125 @@ describe('Carousel', () => {
   it('renders an empty root without slides', () => {
     render(<Carousel data-testid="empty" />);
     expect(screen.getByTestId('empty')).toBeEmptyDOMElement();
+  });
+
+  describe('slides written in a Server Component (x-ssr-1)', () => {
+    // A client component written in a Server Component reaches the client as a lazy reference.
+    const Item = asClientReference(CarouselItem);
+    const plainSlides = ['First', 'Second', 'Third'].map((name) => (
+      <CarouselItem key={name}>{`${name} slide`}</CarouselItem>
+    ));
+    const lazySlides = ['First', 'Second', 'Third'].map((name) => (
+      <Item key={name}>{`${name} slide`}</Item>
+    ));
+
+    it('server-renders the same HTML as with the plain CarouselItem', () => {
+      const plain = renderToString(<Carousel aria-label="Promo">{plainSlides}</Carousel>);
+      expect(plain).toContain('First slide');
+      expect(renderToString(<Carousel aria-label="Promo">{lazySlides}</Carousel>)).toBe(plain);
+    });
+
+    it('renders and navigates the slides like the plain CarouselItem', async () => {
+      const user = userEvent.setup();
+      const onValueChange = vi.fn();
+      render(
+        <Carousel aria-label="Promo" onValueChange={onValueChange}>
+          {lazySlides}
+        </Carousel>,
+      );
+      expect(region()).toHaveAccessibleName('Promo');
+      expect(slideGroups()).toHaveLength(3);
+      await user.click(nextButton());
+      expect(onValueChange).toHaveBeenCalledWith(1);
+      expect(liveRegion()).toHaveTextContent('Slide 2 of 3');
+      expect(exposedSlides()).toEqual([2]);
+    });
+  });
+
+  describe('children that are not slides (x-errors-components-1)', () => {
+    it('finds slides inside Fragments, nested ones included', () => {
+      const warn = vi.spyOn(console, 'warn');
+      render(
+        <Carousel aria-label="News">
+          <>
+            <Carousel.Item>One</Carousel.Item>
+            <>
+              <Carousel.Item>Two</Carousel.Item>
+              {false}
+              {null}
+            </>
+          </>
+          <Carousel.Item>Three</Carousel.Item>
+        </Carousel>,
+      );
+      expect(slideGroups().map((slide) => slide.textContent)).toEqual(['One', 'Two', 'Three']);
+      expect(dots()).toHaveLength(3);
+      expect(warn).not.toHaveBeenCalled();
+    });
+
+    it('keeps a Fragment slide mounted when a slide is added before the Fragment (stable keys)', () => {
+      const { rerender } = render(
+        <Carousel aria-label="News">
+          <React.Fragment key="group">
+            <Carousel.Item key="a">
+              <input aria-label="Draft" defaultValue="" />
+            </Carousel.Item>
+          </React.Fragment>
+        </Carousel>,
+      );
+      const input = screen.getByRole('textbox', { name: 'Draft' });
+      rerender(
+        <Carousel aria-label="News">
+          <Carousel.Item key="first">First</Carousel.Item>
+          <React.Fragment key="group">
+            <Carousel.Item key="a">
+              <input aria-label="Draft" defaultValue="" />
+            </Carousel.Item>
+          </React.Fragment>
+        </Carousel>,
+      );
+      expect(screen.getByRole('textbox', { name: 'Draft', hidden: true })).toBe(input);
+    });
+
+    it('warns once in development when children other than Carousel.Item are dropped', () => {
+      const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+      function Slide({ title }: { title: string }) {
+        return <Carousel.Item>{title}</Carousel.Item>;
+      }
+      render(
+        <>
+          <Carousel aria-label="News" data-testid="wrapped">
+            <Slide title="Hidden one" />
+            <Slide title="Hidden two" />
+          </Carousel>
+          <Carousel aria-label="Mixed">
+            <Carousel.Item>Kept</Carousel.Item>
+            <p>Stray paragraph</p>
+          </Carousel>
+        </>,
+      );
+      // A component that renders Carousel.Item itself is not a slide: nothing of it renders.
+      expect(screen.getByTestId('wrapped')).toBeEmptyDOMElement();
+      expect(screen.queryByText('Stray paragraph')).toBeNull();
+      expect(screen.getByRole('region', { name: 'Mixed' })).toHaveTextContent('Kept');
+      expect(warn).toHaveBeenCalledTimes(1);
+      expect(String(warn.mock.calls[0][0])).toMatch(
+        /^\[WaveUI\] Carousel: only `Carousel\.Item` \(`CarouselItem`\) children are slides/,
+      );
+    });
+
+    it('does not warn for Carousel.Item children with nullish, boolean and empty-string children', () => {
+      const warn = vi.spyOn(console, 'warn');
+      render(
+        <Carousel aria-label="News">
+          {slides(2)}
+          {''}
+          {undefined}
+          {false}
+        </Carousel>,
+      );
+      expect(slideGroups()).toHaveLength(2);
+      expect(warn).not.toHaveBeenCalled();
+    });
   });
 });

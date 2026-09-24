@@ -194,8 +194,11 @@ describe('Flex', () => {
   });
 
   describe('reverse order with focusable content (layout#40)', () => {
+    const REVERSE_WARNING =
+      '[WaveUI] Flex: a reversed direction or wrap (`row-reverse`, `column-reverse`, `wrap-reverse`) changes the visual order only, so keyboard and screen-reader order run opposite to what users see. Reorder the DOM for focusable content instead.';
+    /** Every message the `console.warn` spy received (nothing else may be logged, R14). */
     const reverseMessages = (warn: { mock: { calls: unknown[][] } }) =>
-      warn.mock.calls.map((call) => String(call[0])).filter((m) => m.includes('reverse'));
+      warn.mock.calls.map((call) => String(call[0]));
 
     it.each([
       ['direction="row-reverse"', { direction: 'row-reverse' }],
@@ -209,9 +212,7 @@ describe('Flex', () => {
           <button type="button">Second</button>
         </Flex>,
       );
-      const messages = reverseMessages(warn);
-      expect(messages).toHaveLength(1);
-      expect(messages[0]).toMatch(/^\[WaveUI\] Flex:/);
+      expect(reverseMessages(warn)).toEqual([REVERSE_WARNING]);
     });
 
     it('does not warn for reversed static content', () => {
@@ -236,7 +237,7 @@ describe('Flex', () => {
     });
 
     it('skips the focusable-content scan once the warning has fired', () => {
-      vi.spyOn(console, 'warn').mockImplementation(() => {});
+      const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
       const querySelectorAll = vi.spyOn(Element.prototype, 'querySelectorAll');
       const scans = () =>
         querySelectorAll.mock.calls.filter(([selector]) => selector === FOCUSABLE_SELECTOR).length;
@@ -256,6 +257,7 @@ describe('Flex', () => {
       querySelectorAll.mockClear();
       rerender(rows('md'));
       expect(scans()).toBe(0);
+      expect(reverseMessages(warn)).toEqual([REVERSE_WARNING]);
     });
 
     it('warns when focusable content appears later', () => {
@@ -271,7 +273,7 @@ describe('Flex', () => {
           <a href="#next">Next</a>
         </Flex>,
       );
-      expect(reverseMessages(warn)).toHaveLength(1);
+      expect(reverseMessages(warn)).toEqual([REVERSE_WARNING]);
     });
   });
 

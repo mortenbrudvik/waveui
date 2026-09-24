@@ -23,6 +23,15 @@ import {
 
 const onSelectSpy = vi.fn();
 
+const NESTED_INTERACTIVE_WARNING =
+  '[WaveUI] Card: a selectable card (`onSelect`) is a button and must not contain focusable elements (buttons, links, inputs). Use `selectionControl="checkbox"` for cards with interactive content.';
+const CHECKBOX_NAME_WARNING =
+  '[WaveUI] Card: the selection checkbox has no accessible name. Render a `Card.Header` with a `title`, or pass `selectLabel`.';
+
+/** The messages a `console.warn` spy received. */
+const messagesOf = (spy: { mock: { calls: unknown[][] } }) =>
+  spy.mock.calls.map((call) => String(call[0]));
+
 /**
  * Runs `test` with a container inside an iframe's document, whose nodes belong to another realm
  * (like a popout window), then removes the iframe so `document.body` is empty again.
@@ -253,8 +262,8 @@ describe('Card', () => {
       const card = screen.getByRole('button', { name: 'Plan' });
       card.focus();
       expect(fireEvent.keyDown(card, { key: ' ' })).toBe(false);
-      // Held Space: repeated keydowns do not select either.
-      fireEvent.keyDown(card, { key: ' ', repeat: true });
+      // Held Space: the repeated keydowns are prevented too (no page scroll) and only arm.
+      expect(fireEvent.keyDown(card, { key: ' ', repeat: true })).toBe(false);
       expect(onSelect).not.toHaveBeenCalled();
       expect(fireEvent.keyUp(card, { key: ' ' })).toBe(false);
       expect(onSelect).toHaveBeenCalledTimes(1);
@@ -266,6 +275,10 @@ describe('Card', () => {
       const card = screen.getByRole('button', { name: 'Plan' });
       card.focus();
       expect(fireEvent.keyDown(card, { key: 'Enter' })).toBe(false);
+      expect(onSelect).toHaveBeenCalledTimes(1);
+      // A held Enter: the auto-repeated keydowns are still prevented but do not select again.
+      expect(fireEvent.keyDown(card, { key: 'Enter', repeat: true })).toBe(false);
+      expect(fireEvent.keyDown(card, { key: 'Enter', repeat: true })).toBe(false);
       expect(onSelect).toHaveBeenCalledTimes(1);
       fireEvent.keyUp(card, { key: 'Enter' });
       expect(onSelect).toHaveBeenCalledTimes(1);
@@ -417,7 +430,7 @@ describe('Card', () => {
     });
 
     it('ignores clicks and Enter that start inside a nested interactive element', async () => {
-      vi.spyOn(console, 'warn').mockImplementation(() => {});
+      const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
       const user = userEvent.setup();
       const onSelect = vi.fn();
       const onDetails = vi.fn();
@@ -441,10 +454,11 @@ describe('Card', () => {
       await user.keyboard(' ');
       expect(onDetails).toHaveBeenCalledTimes(3);
       expect(onSelect).not.toHaveBeenCalled();
+      expect(messagesOf(warn)).toEqual([NESTED_INTERACTIVE_WARNING]);
     });
 
     it('ignores events from nested links, inputs and focusable elements', async () => {
-      vi.spyOn(console, 'warn').mockImplementation(() => {});
+      const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
       const user = userEvent.setup();
       const onSelect = vi.fn();
       render(
@@ -464,6 +478,7 @@ describe('Card', () => {
       expect(screen.getByRole('checkbox', { name: 'Auto-renew' })).toBeChecked();
       await user.click(screen.getByText('Focusable note'));
       expect(onSelect).not.toHaveBeenCalled();
+      expect(messagesOf(warn)).toEqual([NESTED_INTERACTIVE_WARNING]);
     });
 
     it('warns once in development when the card contains tabbable elements', () => {
@@ -474,14 +489,11 @@ describe('Card', () => {
           <Card onSelect={() => {}}>{cardWithAction}</Card>
         </>,
       );
-      const messages = warn.mock.calls.map((call) => String(call[0]));
-      const nested = messages.filter((message) => message.includes('selectionControl="checkbox"'));
-      expect(nested).toHaveLength(1);
-      expect(nested[0]).toMatch(/^\[WaveUI\] Card:/);
+      expect(messagesOf(warn)).toEqual([NESTED_INTERACTIVE_WARNING]);
     });
 
     it('skips the tabbable-content scan once the warning has fired', () => {
-      vi.spyOn(console, 'warn').mockImplementation(() => {});
+      const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
       const querySelectorAll = vi.spyOn(Element.prototype, 'querySelectorAll');
       const scans = () =>
         querySelectorAll.mock.calls.filter(([selector]) => selector === FOCUSABLE_SELECTOR).length;
@@ -499,6 +511,7 @@ describe('Card', () => {
       querySelectorAll.mockClear();
       rerender(cards('Renamed'));
       expect(scans()).toBe(0);
+      expect(messagesOf(warn)).toEqual([NESTED_INTERACTIVE_WARNING]);
     });
 
     it('keeps scanning a card without tabbable content, so late content still warns', () => {
@@ -510,8 +523,7 @@ describe('Card', () => {
       );
       expect(warn).not.toHaveBeenCalled();
       rerender(<Card onSelect={() => {}}>{cardWithAction}</Card>);
-      const messages = warn.mock.calls.map((call) => String(call[0]));
-      expect(messages.filter((m) => m.includes('selectionControl="checkbox"'))).toHaveLength(1);
+      expect(messagesOf(warn)).toEqual([NESTED_INTERACTIVE_WARNING]);
     });
 
     it('does not warn when the card has no tabbable content', () => {
@@ -753,8 +765,7 @@ describe('Card', () => {
           <CardBody>No header here.</CardBody>
         </Card>,
       );
-      const messages = warn.mock.calls.map((call) => String(call[0]));
-      expect(messages.some((message) => message.includes('selectLabel'))).toBe(true);
+      expect(messagesOf(warn)).toEqual([CHECKBOX_NAME_WARNING]);
     });
 
     it('passes axe with a footer Button (no nested-interactive)', async () => {
@@ -789,10 +800,11 @@ describe('Card', () => {
     });
 
     it('the card mode with a footer Button is what the checkbox mode fixes (nested-interactive)', async () => {
-      vi.spyOn(console, 'warn').mockImplementation(() => {});
+      const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
       render(<Card onSelect={() => {}}>{cardWithAction}</Card>);
       const results = await axe(document.body);
       expect(results.violations.map((violation) => violation.id)).toContain('nested-interactive');
+      expect(messagesOf(warn)).toEqual([NESTED_INTERACTIVE_WARNING]);
     });
   });
 
