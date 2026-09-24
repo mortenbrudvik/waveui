@@ -56,9 +56,9 @@ export interface DrawerProps extends Omit<React.HTMLAttributes<HTMLDivElement>, 
    */
   title?: React.ReactNode;
   /**
-   * First element that receives focus when the drawer closes, ahead of the element that had focus
-   * when it opened and ahead of the trigger. Without it, focus returns to the opener, then to the
-   * trigger that opened this session.
+   * Where focus goes when the drawer closes, if it can take focus. Otherwise focus returns to the
+   * element that had focus when the drawer opened, then to the trigger, then to an element next to
+   * where that opener was.
    */
   finalFocusRef?: React.RefObject<HTMLElement | null>;
   /**
@@ -353,8 +353,8 @@ function splitChildren(children: React.ReactNode): {
  *   page is `inert` (instead of `aria-modal`), and the page does not scroll.
  * - **Closing**: Escape (only the topmost layer: a popup opened inside closes first), a click on the
  *   backdrop (a drag that starts inside does not close it), the Close button and `Drawer.Close`.
- *   Focus returns to `finalFocusRef` when passed, otherwise to the element that opened the drawer,
- *   then to the trigger.
+ *   Focus returns to the first of these that can take focus: `finalFocusRef`, the element that had
+ *   focus when the drawer opened, the trigger, an element next to where that opener was.
  * - **Position**: `end` (default) and `start` follow the text direction.
  *
  * The sub-components are also exported under flat names (`DrawerTrigger`, `DrawerClose`,

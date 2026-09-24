@@ -814,7 +814,7 @@ Tab / Shift+Tab → cycle through the dialog's focusable elements (trapped; toas
 Escape          → close (only the topmost layer: an open listbox inside closes first)
 ```
 
-Focus moves into the dialog on open (the first focusable element, unless something inside already has focus, such as an `autoFocus` input). On close it goes to `finalFocusRef` when given, else back to the element that had focus when the dialog opened: the trigger for a trigger click, the parent's own button of a controlled Dialog, or a text field focused before a keyboard-shortcut open. When nothing had focus (opened from code, or a Safari click), it goes to the trigger that opened the dialog, else the first mounted trigger; when that element is gone, to a mounted trigger or the overlay below.
+Focus moves into the dialog on open (the first focusable element, unless something inside already has focus, such as an `autoFocus` input). On close it goes to `finalFocusRef` when given, else back to the element that had focus when the dialog opened: the trigger for a trigger click, the parent's own button of a controlled Dialog, or a text field focused before a keyboard-shortcut open. When nothing had focus (opened from code, or a Safari click), it goes to the trigger that opened the dialog, else the first mounted trigger; when that element is gone, to a mounted trigger, then to an element next to where the opener was (the next row's action after a delete), then to the overlay below.
 
 #### DatePicker calendar
 
