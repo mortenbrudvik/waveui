@@ -107,6 +107,62 @@ describe('InfoLabel', () => {
       expect(getSurface()).toBeNull();
     });
 
+    // Safari and Firefox on macOS, and iOS, do not focus a button on a press. A press that ends
+    // without a click (dragged off and released elsewhere, or a touch that turns into a scroll)
+    // must not make the next keyboard focus look like pointer focus.
+    it.each([
+      [
+        'a mouse press dragged off the button',
+        (button: HTMLElement) => {
+          fireEvent.pointerDown(button, { pointerType: 'mouse' });
+          fireEvent.mouseDown(button);
+          fireEvent.pointerUp(document.body, { pointerType: 'mouse' });
+          fireEvent.mouseUp(document.body);
+        },
+      ],
+      [
+        'a touch that turns into a scroll',
+        (button: HTMLElement) => {
+          fireEvent.pointerDown(button, { pointerType: 'touch' });
+          fireEvent.pointerCancel(button, { pointerType: 'touch' });
+        },
+      ],
+    ])('opens on later keyboard focus after %s', async (_, press) => {
+      const user = userEvent.setup();
+      render(
+        <>
+          <button type="button">Previous</button>
+          <InfoLabel label="Password" info={INFO} />
+        </>,
+      );
+      const button = screen.getByRole('button', { name: 'Information' });
+      const previous = screen.getByRole('button', { name: 'Previous' });
+
+      press(button);
+      // The user does something else before tabbing to the info button.
+      await act(() => new Promise<void>((resolve) => setTimeout(resolve, 20)));
+      act(() => previous.focus());
+      await user.tab();
+
+      expect(button).toHaveFocus();
+      expect(button).toHaveAttribute('aria-expanded', 'true');
+      expect(getSurface()).toHaveTextContent(INFO);
+    });
+
+    it('does not open on the focus of a touch tap, whose mouse events follow the touch later', async () => {
+      const { button } = renderInfoLabel();
+      fireEvent.pointerDown(button, { pointerType: 'touch' });
+      fireEvent.pointerUp(button, { pointerType: 'touch' });
+      // Browsers dispatch the compatibility mouse events (and the focus) after the touch ends.
+      await act(() => new Promise<void>((resolve) => setTimeout(resolve, 20)));
+      fireEvent.mouseDown(button);
+      act(() => button.focus());
+      expect(button).toHaveAttribute('aria-expanded', 'false');
+      fireEvent.mouseUp(button);
+      fireEvent.click(button);
+      expect(button).toHaveAttribute('aria-expanded', 'true');
+    });
+
     it('pins a popup opened by focus when the trigger is clicked', async () => {
       const user = userEvent.setup();
       const { button } = renderInfoLabel();

@@ -68,8 +68,12 @@ export const InfoLabel = ({
 
   const triggerRef = React.useRef<HTMLButtonElement | null>(null);
   const surfaceRef = React.useRef<HTMLDivElement | null>(null);
-  /** Set by a pointer press on the button, so the focus that follows does not open the popup. */
+  /**
+   * Set by a pointer press on the button, so the focus that follows does not open the popup. It
+   * lasts only for the event turn of the press (see `handlePointerDown`).
+   */
   const pointerPressRef = React.useRef(false);
+  const pressTimerRef = React.useRef<Timer | null>(null);
   const showTimerRef = React.useRef<Timer | null>(null);
   const hideTimerRef = React.useRef<Timer | null>(null);
 
@@ -84,6 +88,7 @@ export const InfoLabel = ({
 
   React.useEffect(
     () => () => {
+      if (pressTimerRef.current !== null) clearTimeout(pressTimerRef.current);
       if (showTimerRef.current !== null) clearTimeout(showTimerRef.current);
       if (hideTimerRef.current !== null) clearTimeout(hideTimerRef.current);
     },
@@ -139,6 +144,17 @@ export const InfoLabel = ({
 
   const handlePointerDown = () => {
     pointerPressRef.current = true;
+    // A press focuses the button (where it does) as the default action of `mousedown`, in the same
+    // event turn. Forget the press after that turn: a press that does not focus the button (Safari
+    // and Firefox on macOS, iOS) and ends without a click (dragged off, or a touch that becomes a
+    // scroll) must not turn a later keyboard focus into pointer focus. A touch tap dispatches its
+    // compatibility `mousedown` (and the focus) after the touch ends; that `mousedown` sets the
+    // flag again.
+    if (pressTimerRef.current !== null) clearTimeout(pressTimerRef.current);
+    pressTimerRef.current = setTimeout(() => {
+      pressTimerRef.current = null;
+      pointerPressRef.current = false;
+    }, 0);
   };
 
   const handleFocus = () => {
@@ -150,12 +166,10 @@ export const InfoLabel = ({
   };
 
   const handleBlur = () => {
-    pointerPressRef.current = false;
     setOpenReason((reason) => (reason === 'focus' ? null : reason));
   };
 
   const handleClick = () => {
-    pointerPressRef.current = false;
     clearShowTimer();
     clearHideTimer();
     // Closed → pinned; open because of hover or focus → pinned; pinned → closed.
