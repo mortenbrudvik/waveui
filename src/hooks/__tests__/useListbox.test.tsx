@@ -1484,6 +1484,20 @@ describe('useListbox — select-only keys (APG)', () => {
     expect(expanded()).toBe(true);
   });
 
+  it('Space after an unmatched typeahead prefix does not commit', () => {
+    const onSelect = vi.fn();
+    render(
+      <Picker onSelectSpy={onSelect}>
+        <Opt value="cat">Cat</Opt>
+        <Opt value="dog">Dog</Opt>
+      </Picker>,
+    );
+    key('c');
+    expect(key(' ').defaultPrevented).toBe(true);
+    expect(onSelect).not.toHaveBeenCalled();
+    expect(expanded()).toBe(true);
+  });
+
   it('Enter and Space open, then commit the active option and close', () => {
     const onSelect = vi.fn();
     render(<Picker onSelectSpy={onSelect}>{FRUITS}</Picker>);

@@ -135,7 +135,9 @@ const DropdownRoot = (props: DropdownProps) => {
     'aria-labelledby': ariaLabelledBy,
     'aria-describedby': ariaDescribedBy,
     'aria-invalid': ariaInvalid,
-    'aria-required': ariaRequired ?? (required || undefined),
+    // An explicit `required={false}` wins over a required Field, so aria-required matches
+    // validation (`isRequired`).
+    'aria-required': ariaRequired ?? required,
   });
 
   const [value, setValue] = useControllable(valueProp, defaultValue ?? '', onValueChange);

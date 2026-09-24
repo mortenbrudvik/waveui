@@ -1336,6 +1336,19 @@ describe('DatePicker', () => {
       expect(input).toHaveAttribute('aria-required', 'true');
     });
 
+    it('an explicit required={false} wins over a required Field (aria-required matches validation)', () => {
+      renderWithFieldContext(
+        <form aria-label="Form">
+          <DatePicker required={false} />
+        </form>,
+        { required: true },
+      );
+      const input = textbox(FIELD_TEST_TEXT.label);
+      expect(input).not.toHaveAttribute('aria-required', 'true');
+      const form = screen.getByRole('form', { name: 'Form' }) as HTMLFormElement;
+      expect(form.checkValidity()).toBe(true);
+    });
+
     it('leaves the error text to a Field that renders its own error', async () => {
       const user = userEvent.setup();
       renderWithFieldContext(<DatePicker locale="en-GB" />, { errorId: FIELD_TEST_IDS.errorId });

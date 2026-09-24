@@ -386,6 +386,19 @@ describe('SwatchPicker — Field integration (FieldContext)', () => {
     expect(group).toHaveAttribute('aria-required', 'true');
   });
 
+  it('an explicit required={false} wins over a required Field (aria-required matches validation)', () => {
+    renderWithFieldContext(
+      <form aria-label="Form">
+        <SwatchPicker items={defaultItems} required={false} />
+      </form>,
+      { required: true },
+    );
+    const group = screen.getByRole('radiogroup', { name: FIELD_TEST_TEXT.label });
+    expect(group).not.toHaveAttribute('aria-required', 'true');
+    const form = screen.getByRole('form', { name: 'Form' }) as HTMLFormElement;
+    expect(form.checkValidity()).toBe(true);
+  });
+
   it('a consumer aria-label wins over the Field label', () => {
     renderWithFieldContext(<SwatchPicker items={defaultItems} aria-label="Accent" />);
     expect(screen.getByRole('radiogroup', { name: 'Accent' })).toBeInTheDocument();

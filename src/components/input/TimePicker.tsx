@@ -410,13 +410,15 @@ export const TimePicker = (props: TimePickerProps) => {
   /* ---- forms and Field ------------------------------------------- */
 
   const field = useFieldContext();
+  const isRequired = required ?? field?.required ?? false;
   const fieldProps = useFieldControl({
     id,
     'aria-label': ariaLabel,
     'aria-labelledby': ariaLabelledBy,
     'aria-describedby': ariaDescribedBy,
     'aria-invalid': ariaInvalid,
-    'aria-required': ariaRequired ?? (required || undefined),
+    // An explicit `required={false}` wins over a required Field (`false || undefined` would not).
+    'aria-required': ariaRequired ?? required,
   });
 
   useFormReset(
@@ -506,6 +508,9 @@ export const TimePicker = (props: TimePickerProps) => {
 
   // Read-only pickers offer no clear action (the value cannot change).
   const showClear = clearable && !readOnly && selectedValue !== '';
+  // aria-controls must name a listbox that is actually mounted. The closed list is inline only
+  // while options exist; the open list is mounted only while something matches.
+  const listboxMounted = (!open && allOptions.length > 0) || (open && hasMatches);
 
   return (
     <ListboxContext.Provider value={lb.context}>
@@ -515,6 +520,7 @@ export const TimePicker = (props: TimePickerProps) => {
             ref={inputRefs}
             type="text"
             {...lb.getComboboxProps()}
+            aria-controls={listboxMounted ? lb.listboxId : undefined}
             {...fieldProps}
             aria-errormessage={ariaErrorMessage}
             aria-details={ariaDetails}
@@ -572,7 +578,7 @@ export const TimePicker = (props: TimePickerProps) => {
           disabled={disabled}
           value={selectedValue}
           type="text"
-          required={required || field?.required}
+          required={isRequired}
           onInvalid={() => inputRef.current?.focus()}
         />
         {open && (

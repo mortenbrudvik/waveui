@@ -251,6 +251,7 @@ describe('TimePicker', () => {
       expect(screen.queryByRole('listbox')).not.toBeInTheDocument();
       expect(combobox('Time')).toHaveAttribute('aria-expanded', 'false');
       expect(combobox('Time')).not.toHaveAttribute('aria-activedescendant');
+      expect(combobox('Time')).not.toHaveAttribute('aria-controls');
       expect(screen.getByRole('status')).toHaveTextContent('No matching times');
     });
   });
@@ -682,6 +683,7 @@ describe('TimePicker', () => {
       await user.click(combobox('Time'));
       expect(screen.queryByRole('listbox')).not.toBeInTheDocument();
       expect(combobox('Time')).toHaveAttribute('aria-expanded', 'false');
+      expect(combobox('Time')).not.toHaveAttribute('aria-controls');
       expect(screen.getByRole('status')).toHaveTextContent('No times available');
     });
   });
@@ -868,6 +870,19 @@ describe('TimePicker', () => {
       expect(input).toHaveAccessibleDescription(`${FIELD_TEST_TEXT.error} ${FIELD_TEST_TEXT.hint}`);
       expect(input).toHaveAttribute('aria-invalid', 'true');
       expect(input).toHaveAttribute('aria-required', 'true');
+    });
+
+    it('an explicit required={false} wins over a required Field (aria-required matches validation)', () => {
+      renderWithFieldContext(
+        <form aria-label="Form">
+          <TimePicker required={false} />
+        </form>,
+        { required: true },
+      );
+      const input = combobox(FIELD_TEST_TEXT.label);
+      expect(input).not.toHaveAttribute('aria-required', 'true');
+      const form = screen.getByRole('form', { name: 'Form' }) as HTMLFormElement;
+      expect(form.checkValidity()).toBe(true);
     });
 
     it('routes id, aria-describedby, focus handlers and controlRef to the input', async () => {

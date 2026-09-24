@@ -332,12 +332,26 @@ function BreadcrumbItem(
   }
 
   if (kind === 'link') {
+    // `<a disabled>` does not block navigation, and an `aria-disabled` link only looks disabled
+    // unless the click is cancelled. Same contract as Link and Nav: no href, not in the tab order.
+    const { disabled: disabledAttr, ...anchorRest } = rest;
+    const ariaDisabled = anchorRest['aria-disabled'];
+    const linkDisabled = disabledAttr === true || ariaDisabled === true || ariaDisabled === 'true';
     return (
       <a
-        {...(rest as React.AnchorHTMLAttributes<HTMLAnchorElement>)}
+        {...(anchorRest as React.AnchorHTMLAttributes<HTMLAnchorElement>)}
         ref={ref as React.Ref<HTMLAnchorElement>}
-        href={href}
-        onClick={onClick}
+        href={linkDisabled ? undefined : href}
+        role={linkDisabled ? 'link' : anchorRest.role}
+        aria-disabled={linkDisabled ? true : ariaDisabled}
+        tabIndex={linkDisabled ? -1 : anchorRest.tabIndex}
+        onClick={
+          linkDisabled
+            ? (event) => {
+                event.preventDefault();
+              }
+            : onClick
+        }
         className={cn(linkClasses, className)}
       >
         {renderedIcon}

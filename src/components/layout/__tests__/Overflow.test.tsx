@@ -204,7 +204,11 @@ describe('Overflow', () => {
     render(<ThreeItems overflowButton={moreButton} />);
 
     expect(hiddenItems()).toEqual(['b', 'c']);
-    expect(screen.getByRole('button', { name: '+2' })).toBeInTheDocument();
+    const row = screen.getByTestId('overflow');
+    expect(row).toHaveClass('relative', 'overflow-hidden');
+    const button = screen.getByRole('button', { name: '+2' });
+    expect(button.parentElement).toHaveAttribute('data-overflow-button');
+    expect(button.parentElement).toHaveClass('absolute', 'end-0');
   });
 
   it('counts the flex gap between items and before the button', () => {

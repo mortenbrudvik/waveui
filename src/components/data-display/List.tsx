@@ -458,7 +458,20 @@ const ListRoot = <M extends ListSelectionMode = 'single'>(props: ListProps<M>): 
         {...rest}
         ref={rootRef}
         data-roving-container={selectable ? '' : undefined}
-        onKeyDown={selectable ? composeEventHandlers(onKeyDown, rovingKeyDown) : onKeyDown}
+        onKeyDown={
+          selectable
+            ? composeEventHandlers(onKeyDown, (event) => {
+                rovingKeyDown(event);
+                if (event.key !== ' ' || event.defaultPrevented) return;
+                const target = event.target;
+                if (!(target instanceof HTMLElement)) return;
+                const role = target.getAttribute('role');
+                if (role !== 'option' && role !== 'row') return;
+                event.preventDefault();
+                target.click();
+              })
+            : onKeyDown
+        }
         onFocus={
           selectable
             ? composeEventHandlers(onFocus, rovingFocus, { checkDefaultPrevented: false })
@@ -544,7 +557,9 @@ export const ListItem = ({
 
   const handleOptionKeyDown = (event: React.KeyboardEvent<HTMLElement>) => {
     if (startsInInteractiveContent(event)) return;
-    if (event.key === 'Enter' || event.key === ' ') {
+    // Space is handled by the list, after typeahead. Activating here would select before a search
+    // in progress could consume the key.
+    if (event.key === 'Enter') {
       event.preventDefault();
       activate();
     }
@@ -557,7 +572,8 @@ export const ListItem = ({
 
     if (!cell || !cell.contains(target)) {
       if (target !== rowElement) return;
-      if (event.key === 'Enter' || event.key === ' ') {
+      // Space is handled by the list, after typeahead.
+      if (event.key === 'Enter') {
         event.preventDefault();
         activate();
         return;

@@ -531,6 +531,23 @@ describe('Breadcrumb', () => {
       expect(onClick).not.toHaveBeenCalled();
     });
 
+    it('an aria-disabled link does not navigate or run onClick', () => {
+      const onClick = vi.fn();
+      render(
+        <Breadcrumb>
+          <Breadcrumb.Item href="/docs" aria-disabled="true" onClick={onClick}>
+            Docs
+          </Breadcrumb.Item>
+        </Breadcrumb>,
+      );
+      const link = screen.getByRole('link', { name: 'Docs' });
+      expect(link).toHaveAttribute('aria-disabled', 'true');
+      expect(link).not.toHaveAttribute('href');
+      expect(link).toHaveAttribute('tabindex', '-1');
+      fireEvent.click(link);
+      expect(onClick).not.toHaveBeenCalled();
+    });
+
     it('links gate the hover underline, so an aria-disabled link does not react to hover', () => {
       render(
         <Breadcrumb>

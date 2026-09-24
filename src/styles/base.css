@@ -3,8 +3,11 @@
  * (`.wave-portal`). Nothing here touches the rest of the page: no Preflight, no `body` rules,
  * no global `*` rules. WaveProvider is therefore required for the precompiled `./styles` path.
  *
- * Unlayered in `dist/styles.css`, `layer(base)` in the `./tailwind` entry. Every rule has zero
- * specificity (`:where()`) except the two root rules, so any author style wins.
+ * Unlayered in `dist/styles.css`, `layer(base)` in the `./tailwind` entry. The two root rules are
+ * class selectors (0,1,0). Every other rule is inside `:where()` (zero specificity), except the
+ * descendant `::before`/`::after` rule: those pseudo-elements cannot sit inside `:where()` (the
+ * selector would be dropped), so that rule is (0,0,1). An author `::before`/`::after` of the same
+ * specificity wins or loses by source order.
  */
 
 .wave-root,

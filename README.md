@@ -65,13 +65,13 @@ Wrap the app in `WaveProvider` here too. It selects the theme and direction, pai
 
 ## Styles
 
-| Import | What it is |
-|---|---|
-| `@mortenbrudvik/waveui/styles` (also `/styles.css`) | Precompiled, **unlayered** CSS: tokens, the provider-scoped base styles and every utility the components use (the only layered block is Tailwind's `--tw-*` fallback, see [Global effects](#global-effects)). No Preflight. For apps without Tailwind, and, imported into a layer, for apps with a prefixed Tailwind build. |
-| `@mortenbrudvik/waveui/tailwind` (also `/tailwind.css`) | Tailwind 4 source entry: tokens in `layer(theme)`, base in `layer(base)`, `@source` for the components. Import it after `@import 'tailwindcss'`. |
-| `@mortenbrudvik/waveui/tokens` (also `/tokens.css`) | The token source alone (`--wave-*` variables, theme classes and the `@theme inline` mapping), without base styles or `@source`. For custom Tailwind setups; `./tailwind` is the complete Tailwind entry. |
-| `@mortenbrudvik/waveui/preflight.css` | Opt-in Tailwind Preflight for the **whole page** (unlayered). Wave does not need it. |
-| `@mortenbrudvik/waveui/legacy-tokens.css` | Deprecated 0.4 compatibility layer (see [Theming](#theming)). |
+| Import                                                  | What it is                                                                                                                                                                                                                                                                                                                  |
+| ------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `@mortenbrudvik/waveui/styles` (also `/styles.css`)     | Precompiled, **unlayered** CSS: tokens, the provider-scoped base styles and every utility the components use (the only layered block is Tailwind's `--tw-*` fallback, see [Global effects](#global-effects)). No Preflight. For apps without Tailwind, and, imported into a layer, for apps with a prefixed Tailwind build. |
+| `@mortenbrudvik/waveui/tailwind` (also `/tailwind.css`) | Tailwind 4 source entry: tokens in `layer(theme)`, base in `layer(base)`, `@source` for the components. Import it after `@import 'tailwindcss'`.                                                                                                                                                                            |
+| `@mortenbrudvik/waveui/tokens` (also `/tokens.css`)     | The token source alone (`--wave-*` variables, theme classes and the `@theme inline` mapping), without base styles or `@source`. For custom Tailwind setups; `./tailwind` is the complete Tailwind entry.                                                                                                                    |
+| `@mortenbrudvik/waveui/preflight.css`                   | Opt-in Tailwind Preflight for the **whole page** (unlayered). Wave does not need it.                                                                                                                                                                                                                                        |
+| `@mortenbrudvik/waveui/legacy-tokens.css`               | Deprecated 0.4 compatibility layer (see [Theming](#theming)).                                                                                                                                                                                                                                                               |
 
 **Cascade.** `./styles` is unlayered on purpose: unlayered CSS beats any layered CSS, and Wave's class selectors beat element-level resets such as `*{padding:0}` or `button{background:none}`, so ordinary app resets cannot strip the components. To put Wave inside your own layer order, import it into a layer yourself. Unlayered app CSS (including resets) then wins over it:
 
@@ -160,69 +160,69 @@ Generated from `src/styles/tokens.css`. A value followed by a ramp or token name
 <details>
 <summary>All 61 color tokens per theme</summary>
 
-| Token (`--wave-…`) | Light | Dark | High contrast |
-|---|---|---|---|
-| `background` | `#ffffff` | `#292929` | `#000000` |
-| `foreground` | `#242424` | `#ffffff` | `#ffffff` |
-| `card` | `#fafafa` | `#333333` | `#000000` |
-| `secondary` | `#f5f5f5` | `#333333` | `#000000` |
-| `muted` | `#f0f0f0` | `#383838` | `#1a1a1a` |
-| `muted-foreground` | `#616161` | `#adadad` | `#ffffff` |
-| `primary` | `#0f6cbd` (brand-80) | `#62abf5` (brand-110) | `#1aebff` |
-| `primary-foreground` | `#ffffff` | `#000000` | `#000000` |
-| `primary-hover` | `#115ea3` (brand-70) | `#77b7f7` (brand-120) | `#6ef3ff` |
-| `primary-pressed` | `#0c3b5e` (brand-40) | `#2886de` (brand-90) | `#00c4d6` |
-| `destructive` | `#c50f1f` | `#f48a94` | `#ff6e6e` |
-| `destructive-foreground` | `#ffffff` | `#000000` | `#000000` |
-| `error` | `#c50f1f` | `#f48a94` | `#ff6e6e` |
-| `error-foreground` | `#ffffff` | `#000000` | `#000000` |
-| `subtle` | `transparent` | `transparent` | `transparent` |
-| `subtle-hover` | `#f5f5f5` | `#333333` | `#1f1f1f` |
-| `subtle-pressed` | `#ebebeb` | `#2e2e2e` | `#333333` |
-| `subtle-selected` | `#ebebeb` | `#383838` | `#333333` |
-| `selected` | `#ebf3fc` (brand-160) | `#082338` (brand-20) | `#003a40` |
-| `selected-foreground` | `#0f548c` (brand-60) | `#62abf5` (brand-110) | `#ffffff` |
-| `border` | `#e0e0e0` | `#666666` | `#ffffff` |
-| `stroke` | `#d1d1d1` | `#666666` | `#ffffff` |
-| `stroke-hover` | `#c7c7c7` | `#757575` | `#ffffff` |
-| `stroke-accessible` | `#616161` | `#adadad` | `#ffffff` |
-| `input` | `#d1d1d1` | `#666666` | `#ffffff` |
-| `ring` | `#0f6cbd` (brand-80) | `#479ef5` (brand-100) | `#ffff00` |
-| `success` | `#107c10` | `#5db55d` | `#3ff23f` |
-| `success-foreground` | `#ffffff` | `#000000` | `#000000` |
-| `success-tint` | `#f1faf1` | `#052505` | `#000000` |
-| `success-tint-foreground` | `#0e700e` | `#54b054` | `#3ff23f` |
-| `warning` | `#fde300` | `#fde300` | `#ffff00` |
-| `warning-foreground` | `#242424` | `#000000` | `#000000` |
-| `warning-tint` | `#fffbe6` | `#463100` | `#000000` |
-| `warning-tint-foreground` | `#6d5b00` | `#fde300` | `#ffff00` |
-| `error-tint` | `#fdf3f4` | `#3b0509` | `#000000` |
-| `error-tint-foreground` | `#b10e1c` | `#f48a94` | `#ff6060` |
-| `severe` | `#da3b01` | `#e97548` | `#ff8c00` |
-| `severe-foreground` | `#ffffff` | `#000000` | `#000000` |
-| `severe-tint` | `#fdf6f3` | `#411200` | `#000000` |
-| `severe-tint-foreground` | `#a52c00` | `#e97548` | `#ff8c00` |
-| `info` | `#0f6cbd` | `#479ef5` | `#1aebff` |
-| `info-foreground` | `#ffffff` | `#000000` | `#000000` |
-| `info-tint` | `#ebf3fc` | `#082338` | `#000000` |
-| `info-tint-foreground` | `#0f548c` | `#62abf5` | `#1aebff` |
-| `inverted` | `#292929` | `#ffffff` | `#000000` |
-| `inverted-foreground` | `#ffffff` | `#242424` | `#ffffff` |
-| `inverted-border` | `transparent` | `transparent` | `#ffffff` |
-| `track` | `#e0e0e0` | `#3d3d3d` | `#4d4d4d` |
-| `skeleton` | `#e0e0e0` | `#3d3d3d` | `#333333` |
-| `rating` | `#b86e00` | `#f7b538` | `#ffff00` |
-| `presence-available` | `#107c10` | `#54b054` | `#3ff23f` |
-| `presence-busy` | `#c50f1f` | `#f48a94` | `#ff6060` |
-| `presence-away` | `#a67c00` | `#f7b538` | `#ffff00` |
-| `presence-offline` | `#616161` | `#adadad` | `#ffffff` |
-| `presence-oof` | `#b4009e` | `#d696c8` | `#ff80ff` |
-| `presence-glyph` | `#ffffff` | `#000000` | `#000000` |
-| `backdrop` | `rgb(0 0 0 / 0.4)` | `rgb(0 0 0 / 0.5)` | `rgb(0 0 0 / 0.8)` |
-| `card-foreground` | `#242424` (foreground) | `#ffffff` (foreground) | `#ffffff` (foreground) |
-| `secondary-foreground` | `#242424` (foreground) | `#ffffff` (foreground) | `#ffffff` (foreground) |
-| `accent` | `#0f6cbd` (primary) | `#62abf5` (primary) | `#1aebff` (primary) |
-| `accent-foreground` | `#ffffff` (primary-foreground) | `#000000` (primary-foreground) | `#000000` (primary-foreground) |
+| Token (`--wave-…`)        | Light                          | Dark                           | High contrast                  |
+| ------------------------- | ------------------------------ | ------------------------------ | ------------------------------ |
+| `background`              | `#ffffff`                      | `#292929`                      | `#000000`                      |
+| `foreground`              | `#242424`                      | `#ffffff`                      | `#ffffff`                      |
+| `card`                    | `#fafafa`                      | `#333333`                      | `#000000`                      |
+| `secondary`               | `#f5f5f5`                      | `#333333`                      | `#000000`                      |
+| `muted`                   | `#f0f0f0`                      | `#383838`                      | `#1a1a1a`                      |
+| `muted-foreground`        | `#616161`                      | `#adadad`                      | `#ffffff`                      |
+| `primary`                 | `#0f6cbd` (brand-80)           | `#62abf5` (brand-110)          | `#1aebff`                      |
+| `primary-foreground`      | `#ffffff`                      | `#000000`                      | `#000000`                      |
+| `primary-hover`           | `#115ea3` (brand-70)           | `#77b7f7` (brand-120)          | `#6ef3ff`                      |
+| `primary-pressed`         | `#0c3b5e` (brand-40)           | `#2886de` (brand-90)           | `#00c4d6`                      |
+| `destructive`             | `#c50f1f`                      | `#f48a94`                      | `#ff6e6e`                      |
+| `destructive-foreground`  | `#ffffff`                      | `#000000`                      | `#000000`                      |
+| `error`                   | `#c50f1f`                      | `#f48a94`                      | `#ff6e6e`                      |
+| `error-foreground`        | `#ffffff`                      | `#000000`                      | `#000000`                      |
+| `subtle`                  | `transparent`                  | `transparent`                  | `transparent`                  |
+| `subtle-hover`            | `#f5f5f5`                      | `#333333`                      | `#1f1f1f`                      |
+| `subtle-pressed`          | `#ebebeb`                      | `#2e2e2e`                      | `#333333`                      |
+| `subtle-selected`         | `#ebebeb`                      | `#383838`                      | `#333333`                      |
+| `selected`                | `#ebf3fc` (brand-160)          | `#082338` (brand-20)           | `#003a40`                      |
+| `selected-foreground`     | `#0f548c` (brand-60)           | `#62abf5` (brand-110)          | `#ffffff`                      |
+| `border`                  | `#e0e0e0`                      | `#666666`                      | `#ffffff`                      |
+| `stroke`                  | `#d1d1d1`                      | `#666666`                      | `#ffffff`                      |
+| `stroke-hover`            | `#c7c7c7`                      | `#757575`                      | `#ffffff`                      |
+| `stroke-accessible`       | `#616161`                      | `#adadad`                      | `#ffffff`                      |
+| `input`                   | `#d1d1d1`                      | `#666666`                      | `#ffffff`                      |
+| `ring`                    | `#0f6cbd` (brand-80)           | `#479ef5` (brand-100)          | `#ffff00`                      |
+| `success`                 | `#107c10`                      | `#5db55d`                      | `#3ff23f`                      |
+| `success-foreground`      | `#ffffff`                      | `#000000`                      | `#000000`                      |
+| `success-tint`            | `#f1faf1`                      | `#052505`                      | `#000000`                      |
+| `success-tint-foreground` | `#0e700e`                      | `#54b054`                      | `#3ff23f`                      |
+| `warning`                 | `#fde300`                      | `#fde300`                      | `#ffff00`                      |
+| `warning-foreground`      | `#242424`                      | `#000000`                      | `#000000`                      |
+| `warning-tint`            | `#fffbe6`                      | `#463100`                      | `#000000`                      |
+| `warning-tint-foreground` | `#6d5b00`                      | `#fde300`                      | `#ffff00`                      |
+| `error-tint`              | `#fdf3f4`                      | `#3b0509`                      | `#000000`                      |
+| `error-tint-foreground`   | `#b10e1c`                      | `#f48a94`                      | `#ff6060`                      |
+| `severe`                  | `#da3b01`                      | `#e97548`                      | `#ff8c00`                      |
+| `severe-foreground`       | `#ffffff`                      | `#000000`                      | `#000000`                      |
+| `severe-tint`             | `#fdf6f3`                      | `#411200`                      | `#000000`                      |
+| `severe-tint-foreground`  | `#a52c00`                      | `#e97548`                      | `#ff8c00`                      |
+| `info`                    | `#0f6cbd`                      | `#479ef5`                      | `#1aebff`                      |
+| `info-foreground`         | `#ffffff`                      | `#000000`                      | `#000000`                      |
+| `info-tint`               | `#ebf3fc`                      | `#082338`                      | `#000000`                      |
+| `info-tint-foreground`    | `#0f548c`                      | `#62abf5`                      | `#1aebff`                      |
+| `inverted`                | `#292929`                      | `#ffffff`                      | `#000000`                      |
+| `inverted-foreground`     | `#ffffff`                      | `#242424`                      | `#ffffff`                      |
+| `inverted-border`         | `transparent`                  | `transparent`                  | `#ffffff`                      |
+| `track`                   | `#e0e0e0`                      | `#3d3d3d`                      | `#4d4d4d`                      |
+| `skeleton`                | `#e0e0e0`                      | `#3d3d3d`                      | `#333333`                      |
+| `rating`                  | `#b86e00`                      | `#f7b538`                      | `#ffff00`                      |
+| `presence-available`      | `#107c10`                      | `#54b054`                      | `#3ff23f`                      |
+| `presence-busy`           | `#c50f1f`                      | `#f48a94`                      | `#ff6060`                      |
+| `presence-away`           | `#a67c00`                      | `#f7b538`                      | `#ffff00`                      |
+| `presence-offline`        | `#616161`                      | `#adadad`                      | `#ffffff`                      |
+| `presence-oof`            | `#b4009e`                      | `#d696c8`                      | `#ff80ff`                      |
+| `presence-glyph`          | `#ffffff`                      | `#000000`                      | `#000000`                      |
+| `backdrop`                | `rgb(0 0 0 / 0.4)`             | `rgb(0 0 0 / 0.5)`             | `rgb(0 0 0 / 0.8)`             |
+| `card-foreground`         | `#242424` (foreground)         | `#ffffff` (foreground)         | `#ffffff` (foreground)         |
+| `secondary-foreground`    | `#242424` (foreground)         | `#ffffff` (foreground)         | `#ffffff` (foreground)         |
+| `accent`                  | `#0f6cbd` (primary)            | `#62abf5` (primary)            | `#1aebff` (primary)            |
+| `accent-foreground`       | `#ffffff` (primary-foreground) | `#000000` (primary-foreground) | `#000000` (primary-foreground) |
 
 </details>
 
@@ -239,11 +239,12 @@ What adding Wave changes outside its own components:
 - **Variables.** `--wave-*` custom properties on `:root` and on the theme classes (`.wave-light`, `.wave-dark`, `.wave-high-contrast`, and the deprecated `.dark` and `.high-contrast`). No unprefixed variables are defined.
 - **Base styles and reset, provider-scoped.** They apply inside `.wave-root` (WaveProvider) and `.wave-portal` (overlay wrappers) only, and your own content inside the provider receives them too:
   - Two root rules are plain class selectors (specificity 0,1,0): `.wave-root, .wave-portal` set the font family, text color, 14px font size and 20px line height, and `.wave-root` sets the background color. Override them with a class selector loaded after Wave's CSS, or with the provider's `className`.
-  - Every other rule is wrapped in `:where()` (zero specificity), so any unlayered style of yours wins. Layered CSS, such as Tailwind utilities, loses to the unlayered `./styles` whatever its specificity, unless you import `./styles` into a layer (see [Cascade](#styles) and the workarounds below). These rules set `box-sizing: border-box` and `border-color: var(--wave-border)` on every descendant (and its `::before`/`::after`), reset the native elements Wave renders (`button`, `input`, `select`, `textarea`, lists, headings, `p`, `figure`, `blockquote`, `dl`, `dd`, `fieldset`, `legend`, `table`, `hr`), set `vertical-align: middle` on `img`, `svg` and `video`, and give `button` and `[role=button]` a pointer cursor.
+  - Every other rule is wrapped in `:where()` (zero specificity), so any unlayered style of yours wins, except the descendant `::before`/`::after` rule. Those pseudo-elements cannot sit inside `:where()` (the selector would be dropped), so that one rule is specificity (0, 0, 1): an author `::before` or `::after` of the same specificity wins or loses by source order, and any selector with a class or element before the pseudo-element wins. Layered CSS, such as Tailwind utilities, loses to the unlayered `./styles` whatever its specificity, unless you import `./styles` into a layer (see [Cascade](#styles) and the workarounds below). These rules set `box-sizing: border-box` and `border-color: var(--wave-border)` on every descendant (and its `::before`/`::after`), reset the native elements Wave renders (`button`, `input`, `select`, `textarea`, lists, headings, `p`, `figure`, `blockquote`, `dl`, `dd`, `fieldset`, `legend`, `table`, `hr`), set `vertical-align: middle` on `img`, `svg` and `video`, and give `button` and `[role=button]` a pointer cursor.
   - This is not a subset of Tailwind's Preflight: Preflight leaves borders `currentColor` and buttons with the default cursor, while Wave uses its border token and a pointer.
   - On the Tailwind path all of them sit in `layer(base)`, so your utilities and unlayered CSS win over them.
 
   There are no `html` or `body` rules, no global reduced-motion override (each component handles reduced motion itself), and no Preflight unless you import it. The only global rule is Tailwind's `@layer properties` fallback in `./styles`: in browsers without `@property` support (detected by an `@supports` query) it sets the initial values of Tailwind's `--tw-*` custom properties on `*`, `::before`, `::after` and `::backdrop`, and nothing else. It is also the only layered block in that otherwise unlayered file.
+
 - **Utility classes (`./styles`).** The precompiled stylesheet contains the Tailwind utilities the components use (`.flex`, `.p-4`, `.bg-primary`, …) as ordinary class selectors, unlayered, plus Tailwind's `@property --tw-*` registrations. An element of yours with the same class name gets the same style.
 - **Theme (`./tailwind`).** Wave adds its color names, `font-wave`, the type ramp, the shadow scale and the `animate-wave-*` animations to your Tailwind theme.
 
@@ -264,6 +265,7 @@ Workarounds when your app has its own design system:
   ```
 
   Do not import `./styles` unlayered (from JavaScript, or without `layer(wave)`) as well. Unlayered, it beats every layered rule, so inside `WaveProvider` its base styles would override your utilities: `tw:text-2xl` on a heading stays 14px, `tw:mb-4` stays 0, `tw:border-red-500` gets Wave's border color, `tw:p-4` and `tw:bg-red-500` on a button have no effect, and `tw:list-disc` stays `none`; a `className="tw:bg-red-500"` on a Wave `Button` loses to its `bg-primary`. In the `wave` layer your utilities win over Wave's base styles and over Wave's own classes (so that `className` works), Wave's styles still win over Tailwind's Preflight (`base`), and Wave's components look the same.
+
 - Never import `legacy-tokens.css` in an app that defines shadcn/ui-style variables.
 
 Namespaced Wave utilities are being considered for 1.0.
@@ -292,7 +294,15 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
 
 ```tsx
 // app/page.tsx (Server Component): flat names, serializable props only
-import { Card, CardBody, CardHeader, Dialog, DialogContent, DialogTrigger, Button } from '@mortenbrudvik/waveui';
+import {
+  Card,
+  CardBody,
+  CardHeader,
+  Dialog,
+  DialogContent,
+  DialogTrigger,
+  Button,
+} from '@mortenbrudvik/waveui';
 
 export default function Page() {
   return (
@@ -303,7 +313,9 @@ export default function Page() {
           <DialogTrigger>
             <Button>Details</Button>
           </DialogTrigger>
-          <DialogContent title="Usage details">Rendered on the server, opened on the client.</DialogContent>
+          <DialogContent title="Usage details">
+            Rendered on the server, opened on the client.
+          </DialogContent>
         </Dialog>
       </CardBody>
     </Card>
@@ -330,28 +342,28 @@ export function SaveArea() {
 }
 ```
 
-| Compound | Flat names |
-|---|---|
-| `Accordion` | `AccordionItem`, `AccordionTrigger`, `AccordionPanel` |
-| `Breadcrumb` | `BreadcrumbItem` |
-| `Card` | `CardHeader`, `CardBody`, `CardFooter` |
-| `Carousel` | `CarouselItem` |
-| `Combobox` | `ComboboxOption`, `ComboboxOptionGroup` (also `Option`, `OptionGroup`) |
-| `DataGrid` | `DataGridHeader`, `DataGridHeaderCell`, `DataGridBody`, `DataGridRow`, `DataGridCell` |
-| `Dialog` | `DialogTrigger`, `DialogContent`, `DialogTitle`, `DialogFooter`, `DialogClose` |
-| `Drawer` | `DrawerTrigger`, `DrawerTitle`, `DrawerClose` |
-| `Dropdown` | `DropdownOption`, `DropdownOptionGroup` |
-| `List` | `ListItem` |
-| `Menu` | `MenuTrigger`, `MenuPopover`, `MenuItem`, `MenuDivider` |
-| `Nav` | `NavCategory`, `NavItem`, `NavSubItem` |
-| `Overflow` | `OverflowItem` |
-| `Popover` | `PopoverTrigger`, `PopoverContent` |
-| `RadioGroup` | `RadioGroupItem` (also `RadioItem`) |
-| `Skeleton` | `SkeletonGroup` |
-| `Stepper` | `StepperStep` |
-| `TabList` | `TabListTab`, `TabListPanel`, `TabListPanels` |
-| `Table` | `TableHeader`, `TableHeaderCell`, `TableBody`, `TableRow`, `TableCell` |
-| `Tree` | `TreeItem` |
+| Compound     | Flat names                                                                            |
+| ------------ | ------------------------------------------------------------------------------------- |
+| `Accordion`  | `AccordionItem`, `AccordionTrigger`, `AccordionPanel`                                 |
+| `Breadcrumb` | `BreadcrumbItem`                                                                      |
+| `Card`       | `CardHeader`, `CardBody`, `CardFooter`                                                |
+| `Carousel`   | `CarouselItem`                                                                        |
+| `Combobox`   | `ComboboxOption`, `ComboboxOptionGroup` (also `Option`, `OptionGroup`)                |
+| `DataGrid`   | `DataGridHeader`, `DataGridHeaderCell`, `DataGridBody`, `DataGridRow`, `DataGridCell` |
+| `Dialog`     | `DialogTrigger`, `DialogContent`, `DialogTitle`, `DialogFooter`, `DialogClose`        |
+| `Drawer`     | `DrawerTrigger`, `DrawerTitle`, `DrawerClose`                                         |
+| `Dropdown`   | `DropdownOption`, `DropdownOptionGroup`                                               |
+| `List`       | `ListItem`                                                                            |
+| `Menu`       | `MenuTrigger`, `MenuPopover`, `MenuItem`, `MenuDivider`                               |
+| `Nav`        | `NavCategory`, `NavItem`, `NavSubItem`                                                |
+| `Overflow`   | `OverflowItem`                                                                        |
+| `Popover`    | `PopoverTrigger`, `PopoverContent`                                                    |
+| `RadioGroup` | `RadioGroupItem` (also `RadioItem`)                                                   |
+| `Skeleton`   | `SkeletonGroup`                                                                       |
+| `Stepper`    | `StepperStep`                                                                         |
+| `TabList`    | `TabListTab`, `TabListPanel`, `TabListPanels`                                         |
+| `Table`      | `TableHeader`, `TableHeaderCell`, `TableBody`, `TableRow`, `TableCell`                |
+| `Tree`       | `TreeItem`                                                                            |
 
 ## Components
 
@@ -361,117 +373,117 @@ Your `className` is merged last with `cn()`, so it replaces a conflicting class 
 
 ### Buttons and actions
 
-| Component | Description |
-|---|---|
-| `Button` | `appearance` `primary`, `outline` (default), `subtle`, `transparent`; five sizes; decorative `icon` slot; `as` renders a link or router link with correctly typed props. `type="button"` by default. |
-| `CompoundButton` | Button with a `secondaryText` line. |
-| `ToggleButton` | Pressed/unpressed button (`pressed`, `defaultPressed`, `onPressedChange`; `aria-pressed`). |
-| `SplitButton` | Primary action joined to a menu chevron; `menuButtonProps` takes `Menu.Trigger`'s render props; `menuButtonLabel` names the chevron. |
-| `MenuButton` | Button with a chevron and `aria-haspopup="menu"`, for use inside `Menu.Trigger`. |
-| `Link` | `appearance` `inline` (always underlined), `standalone` or `subtle`; `disabled` removes the `href`; `as` renders router links. |
-| `Toolbar` | `role="toolbar"` with one Tab stop and arrow-key navigation over any child controls; `orientation`. |
+| Component        | Description                                                                                                                                                                                          |
+| ---------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `Button`         | `appearance` `primary`, `outline` (default), `subtle`, `transparent`; five sizes; decorative `icon` slot; `as` renders a link or router link with correctly typed props. `type="button"` by default. |
+| `CompoundButton` | Button with a `secondaryText` line.                                                                                                                                                                  |
+| `ToggleButton`   | Pressed/unpressed button (`pressed`, `defaultPressed`, `onPressedChange`; `aria-pressed`).                                                                                                           |
+| `SplitButton`    | Primary action joined to a menu chevron; `menuButtonProps` takes `Menu.Trigger`'s render props; `menuButtonLabel` names the chevron.                                                                 |
+| `MenuButton`     | Button with a chevron and `aria-haspopup="menu"`, for use inside `Menu.Trigger`.                                                                                                                     |
+| `Link`           | `appearance` `inline` (always underlined), `standalone` or `subtle`; `disabled` removes the `href`; `as` renders router links.                                                                       |
+| `Toolbar`        | `role="toolbar"` with one Tab stop and arrow-key navigation over any child controls; `orientation`.                                                                                                  |
 
 ### Inputs and forms
 
-| Component | Description |
-|---|---|
-| `Field` | Label, hint, error and required indicator, wired to the control inside it (library controls read the Field context wherever they are in it). |
-| `Label` | Form label with a decorative required asterisk, `size` and `weight`. |
-| `Input` | Text input with `contentBefore`/`contentAfter` slots, `onValueChange(value)` next to the native `onChange`, and an `error` message. |
-| `Textarea` | Multi-line text input with an `error` message. |
-| `Select` | Styled native `<select>` with an `error` message. |
-| `Checkbox` | `checked`/`defaultChecked`/`onCheckedChange`, `indeterminate`, native form support. |
-| `Switch` | On/off toggle (`role="switch"`), `onCheckedChange`, native form support. |
-| `RadioGroup` | Single choice with `RadioGroup.Item` items; `orientation`, `disabled`, `onValueChange`, native form support. |
-| `SearchBox` | Search input with a clear button; `onValueChange`; input attributes go to the `<input>`. |
-| `Slider` | Styled native range input; `onValueChange(number)`. |
-| `SpinButton` | Numeric input with step buttons; typed text is a draft committed on blur or Enter; `min`, `max`, `step`, `largeStep`. |
-| `Combobox` | Editable combobox: typing filters the options; `freeform` makes the typed text the value. `Combobox.Option`, `Combobox.OptionGroup`. |
-| `Dropdown` | Select-only combobox (a button) with typeahead. `Dropdown.Option`, `Dropdown.OptionGroup`. |
-| `TagPicker` | Multi-select combobox that shows the selection as removable tags (a list named "Selected"); the input is described by a summary of the selection ("Selected: Apple, Banana"), and additions and removals are announced. |
-| `DatePicker` | Date input with a calendar dialog; locale-aware format and parse, `minDate`, `maxDate`, `disabledDates`, `onInvalidInput`. |
-| `TimePicker` | Time combobox (`12h`/`24h`, `step`, `minTime`, `maxTime`); value is `HH:mm`. |
-| `ColorPicker` | Hex field, preset swatches and an optional opacity slider; value `#rrggbb` or `#rrggbbaa`. |
-| `SwatchPicker` | Radio group of color swatches (`items` with a `label` each). |
-| `Rating` | Star rating (`role="radiogroup"`); `RatingDisplay` is the read-only version. |
+| Component      | Description                                                                                                                                                                                                             |
+| -------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `Field`        | Label, hint, error and required indicator, wired to the control inside it (library controls read the Field context wherever they are in it).                                                                            |
+| `Label`        | Form label with a decorative required asterisk, `size` and `weight`.                                                                                                                                                    |
+| `Input`        | Text input with `contentBefore`/`contentAfter` slots, `onValueChange(value)` next to the native `onChange`, and an `error` message.                                                                                     |
+| `Textarea`     | Multi-line text input with an `error` message.                                                                                                                                                                          |
+| `Select`       | Styled native `<select>` with an `error` message.                                                                                                                                                                       |
+| `Checkbox`     | `checked`/`defaultChecked`/`onCheckedChange`, `indeterminate`, native form support.                                                                                                                                     |
+| `Switch`       | On/off toggle (`role="switch"`), `onCheckedChange`, native form support.                                                                                                                                                |
+| `RadioGroup`   | Single choice with `RadioGroup.Item` items; `orientation`, `disabled`, `onValueChange`, native form support.                                                                                                            |
+| `SearchBox`    | Search input with a clear button; `onValueChange`; input attributes go to the `<input>`.                                                                                                                                |
+| `Slider`       | Styled native range input; `onValueChange(number)`.                                                                                                                                                                     |
+| `SpinButton`   | Numeric input with step buttons; typed text is a draft committed on blur or Enter; `min`, `max`, `step`, `largeStep`.                                                                                                   |
+| `Combobox`     | Editable combobox: typing filters the options; `freeform` makes the typed text the value. `Combobox.Option`, `Combobox.OptionGroup`.                                                                                    |
+| `Dropdown`     | Select-only combobox (a button) with typeahead. `Dropdown.Option`, `Dropdown.OptionGroup`.                                                                                                                              |
+| `TagPicker`    | Multi-select combobox that shows the selection as removable tags (a list named "Selected"); the input is described by a summary of the selection ("Selected: Apple, Banana"), and additions and removals are announced. |
+| `DatePicker`   | Date input with a calendar dialog; locale-aware format and parse, `minDate`, `maxDate`, `disabledDates`, `onInvalidInput`.                                                                                              |
+| `TimePicker`   | Time combobox (`12h`/`24h`, `step`, `minTime`, `maxTime`); value is `HH:mm`.                                                                                                                                            |
+| `ColorPicker`  | Hex field, preset swatches and an optional opacity slider; value `#rrggbb` or `#rrggbbaa`.                                                                                                                              |
+| `SwatchPicker` | Radio group of color swatches (`items` with a `label` each).                                                                                                                                                            |
+| `Rating`       | Star rating (`role="radiogroup"`); `RatingDisplay` is the read-only version.                                                                                                                                            |
 
 ### Data display
 
-| Component | Description |
-|---|---|
-| `Avatar` | Image, initials or icon, with an image-failure fallback and an optional `badge`. |
-| `AvatarGroup` | Overlapping avatars; `max` adds an overflow button that lists the hidden members. |
-| `Badge` | Status or category label: `appearance` `filled`, `tint`, `outline`; semantic `color`. |
-| `CounterBadge` | Count pill (`99+` above `overflowCount`). |
-| `PresenceBadge` | Availability badge with a distinct shape per status. |
-| `Tag` | Chip with an optional dismiss button (`dismissible`, `onDismiss`, `dismissLabel`). |
-| `InfoLabel` | Label with an info button that shows extra text (a toggletip). |
-| `Persona` | Avatar with name, secondary text and presence. |
-| `Divider` | Horizontal or vertical separator, optionally labelled. |
-| `Image` | `<img>` with `fit`, `shape`, `shadow`, `bordered`; warns in development when `alt` is missing. |
-| `List` | Plain list, selectable listbox (single or multiple) or, with item `action`s, a grid. |
+| Component       | Description                                                                                    |
+| --------------- | ---------------------------------------------------------------------------------------------- |
+| `Avatar`        | Image, initials or icon, with an image-failure fallback and an optional `badge`.               |
+| `AvatarGroup`   | Overlapping avatars; `max` adds an overflow button that lists the hidden members.              |
+| `Badge`         | Status or category label: `appearance` `filled`, `tint`, `outline`; semantic `color`.          |
+| `CounterBadge`  | Count pill (`99+` above `overflowCount`).                                                      |
+| `PresenceBadge` | Availability badge with a distinct shape per status.                                           |
+| `Tag`           | Chip with an optional dismiss button (`dismissible`, `onDismiss`, `dismissLabel`).             |
+| `InfoLabel`     | Label with an info button that shows extra text (a toggletip).                                 |
+| `Persona`       | Avatar with name, secondary text and presence.                                                 |
+| `Divider`       | Horizontal or vertical separator, optionally labelled.                                         |
+| `Image`         | `<img>` with `fit`, `shape`, `shadow`, `bordered`; warns in development when `alt` is missing. |
+| `List`          | Plain list, selectable listbox (single or multiple) or, with item `action`s, a grid.           |
 
 ### Typography
 
-| Component | Description |
-|---|---|
-| `Text` | Type-ramp text (`variant`, `weight`); polymorphic `as`; inherits its color. |
+| Component | Description                                                                 |
+| --------- | --------------------------------------------------------------------------- |
+| `Text`    | Type-ramp text (`variant`, `weight`); polymorphic `as`; inherits its color. |
 
 ### Layout
 
-| Component | Description |
-|---|---|
-| `Card` | Surface with `Card.Header`, `Card.Body`, `Card.Footer`; optionally selectable (`onSelect`, `selected`, `selectionControl`). |
-| `Accordion` | Disclosure sections (`Accordion.Item`, `.Trigger`, `.Panel`); single (default) or `type="multiple"`; `headingLevel`. |
-| `TabList` | Tabs with automatic activation (`TabList.Tab`, `.Panel`, `.Panels`); `orientation`. |
-| `Tree` | Hierarchical tree (`Tree.Item`) with expand/collapse, selection and typeahead. |
-| `Carousel` | One slide at a time with previous/next, a slide picker and optional auto-rotation with a pause control. |
-| `Overflow` | Hides items that do not fit in one row and renders an overflow button (`useOverflowMenu` lists the hidden items). |
-| `Grid` | CSS grid with a column count and token gaps. |
-| `Stack` | Vertical or horizontal stack (`orientation`, `gap`). |
-| `Flex` | Flexbox container (`direction`, `wrap`, `align`, `justify`, `gap`). |
+| Component   | Description                                                                                                                 |
+| ----------- | --------------------------------------------------------------------------------------------------------------------------- |
+| `Card`      | Surface with `Card.Header`, `Card.Body`, `Card.Footer`; optionally selectable (`onSelect`, `selected`, `selectionControl`). |
+| `Accordion` | Disclosure sections (`Accordion.Item`, `.Trigger`, `.Panel`); single (default) or `type="multiple"`; `headingLevel`.        |
+| `TabList`   | Tabs with automatic activation (`TabList.Tab`, `.Panel`, `.Panels`); `orientation`.                                         |
+| `Tree`      | Hierarchical tree (`Tree.Item`) with expand/collapse, selection and typeahead.                                              |
+| `Carousel`  | One slide at a time with previous/next, a slide picker and optional auto-rotation with a pause control.                     |
+| `Overflow`  | Hides items that do not fit in one row and renders an overflow button (`useOverflowMenu` lists the hidden items).           |
+| `Grid`      | CSS grid with a column count and token gaps.                                                                                |
+| `Stack`     | Vertical or horizontal stack (`orientation`, `gap`).                                                                        |
+| `Flex`      | Flexbox container (`direction`, `wrap`, `align`, `justify`, `gap`).                                                         |
 
 ### Feedback
 
-| Component | Description |
-|---|---|
-| `MessageBar` | Inline status message (`info`, `success`, `warning`, `error`) with hidden status text and an optional dismiss button. |
-| `ProgressBar` | Determinate or indeterminate progress; name it with `label`. |
-| `Skeleton` | Loading placeholder (`width`, `height`, `shape`); `Skeleton.Group` marks the loading region busy. |
-| `Spinner` | Loading indicator announced as "Loading" (localize with `label`). |
-| `Toast` | Notifications shown by `<Toaster>` through `useToastController()`. |
+| Component     | Description                                                                                                           |
+| ------------- | --------------------------------------------------------------------------------------------------------------------- |
+| `MessageBar`  | Inline status message (`info`, `success`, `warning`, `error`) with hidden status text and an optional dismiss button. |
+| `ProgressBar` | Determinate or indeterminate progress; name it with `label`.                                                          |
+| `Skeleton`    | Loading placeholder (`width`, `height`, `shape`); `Skeleton.Group` marks the loading region busy.                     |
+| `Spinner`     | Loading indicator announced as "Loading" (localize with `label`).                                                     |
+| `Toast`       | Notifications shown by `<Toaster>` through `useToastController()`.                                                    |
 
 ### Navigation
 
-| Component | Description |
-|---|---|
-| `Breadcrumb` | Trail of links, buttons or text (`Breadcrumb.Item`, `current`). |
-| `Menu` | Popup menu (`Menu.Trigger`, `Menu.Popover`) or static menu; `Menu.Item`, `Menu.Divider`. |
-| `Nav` | Side navigation with items, collapsible categories and sub-items; links or buttons. |
-| `Stepper` | Multi-step progress (`Stepper.Step`), horizontal or vertical, optionally `linear`. |
-| `Pagination` | Page buttons with ellipses, previous/next and optional first/last. |
+| Component    | Description                                                                              |
+| ------------ | ---------------------------------------------------------------------------------------- |
+| `Breadcrumb` | Trail of links, buttons or text (`Breadcrumb.Item`, `current`).                          |
+| `Menu`       | Popup menu (`Menu.Trigger`, `Menu.Popover`) or static menu; `Menu.Item`, `Menu.Divider`. |
+| `Nav`        | Side navigation with items, collapsible categories and sub-items; links or buttons.      |
+| `Stepper`    | Multi-step progress (`Stepper.Step`), horizontal or vertical, optionally `linear`.       |
+| `Pagination` | Page buttons with ellipses, previous/next and optional first/last.                       |
 
 ### Overlays
 
-| Component | Description |
-|---|---|
-| `Dialog` | Modal dialog: `Dialog.Trigger`, `Dialog.Content`, `Dialog.Title`, `Dialog.Footer`, `Dialog.Close`. |
-| `Drawer` | Modal side panel (`position` `start`, `end`, `left`, `right`); `Drawer.Trigger`, `Drawer.Title`, `Drawer.Close`. |
-| `Popover` | Non-modal popup anchored to `Popover.Trigger`; `side`, `align`. |
-| `Tooltip` | Hover and focus text for its child, as a description or (`relationship="label"`) a name. |
-| `TeachingPopover` | Step-by-step onboarding popover, optionally pointing at a `target`. |
+| Component         | Description                                                                                                      |
+| ----------------- | ---------------------------------------------------------------------------------------------------------------- |
+| `Dialog`          | Modal dialog: `Dialog.Trigger`, `Dialog.Content`, `Dialog.Title`, `Dialog.Footer`, `Dialog.Close`.               |
+| `Drawer`          | Modal side panel (`position` `start`, `end`, `left`, `right`); `Drawer.Trigger`, `Drawer.Title`, `Drawer.Close`. |
+| `Popover`         | Non-modal popup anchored to `Popover.Trigger`; `side`, `align`.                                                  |
+| `Tooltip`         | Hover and focus text for its child, as a description or (`relationship="label"`) a name.                         |
+| `TeachingPopover` | Step-by-step onboarding popover, optionally pointing at a `target`.                                              |
 
 ### Tables
 
-| Component | Description |
-|---|---|
-| `Table` | Static table: `Table.Header`, `Table.HeaderCell`, `Table.Body`, `Table.Row`, `Table.Cell`; `striped`; scrolls horizontally. |
-| `DataGrid` | Interactive grid (APG grid keyboard model) with row selection and sortable headers; header from children or `columns`. |
+| Component  | Description                                                                                                                 |
+| ---------- | --------------------------------------------------------------------------------------------------------------------------- |
+| `Table`    | Static table: `Table.Header`, `Table.HeaderCell`, `Table.Body`, `Table.Row`, `Table.Cell`; `striped`; scrolls horizontally. |
+| `DataGrid` | Interactive grid (APG grid keyboard model) with row selection and sortable headers; header from children or `columns`.      |
 
 ### Provider
 
-| Component | Description |
-|---|---|
+| Component      | Description                                                               |
+| -------------- | ------------------------------------------------------------------------- |
 | `WaveProvider` | Theme (`light`, `dark`, `high-contrast`), direction and portal container. |
 
 `Portal` renders its children into `document.body` (or the provider's `portalContainer`) inside a themed `wave-portal` wrapper; use it for your own overlays.
@@ -539,11 +551,11 @@ export function SignupForm() {
 
 `onChange` is the native DOM change event (`Input`, `Textarea`, `Select`, `Slider`). State callbacks are named after the state and receive the value:
 
-| State | Props |
-|---|---|
-| single value | `value` / `defaultValue` / `onValueChange(value)` |
-| checked | `checked` / `defaultChecked` / `onCheckedChange(checked)` |
-| open | `open` / `defaultOpen` / `onOpenChange(open)` |
+| State        | Props                                                     |
+| ------------ | --------------------------------------------------------- |
+| single value | `value` / `defaultValue` / `onValueChange(value)`         |
+| checked      | `checked` / `defaultChecked` / `onCheckedChange(checked)` |
+| open         | `open` / `defaultOpen` / `onOpenChange(open)`             |
 
 These fire only when the value changes. Event callbacks such as `onPageChange`, `onStepChange` and `Tree`'s `onItemSelect` fire on every activation, also when the current item is activated again. The 0.4 names still work as deprecated aliases that warn once in development; see the [CHANGELOG](CHANGELOG.md) for the full table.
 
@@ -633,7 +645,11 @@ import { Button, Toaster, useToastController } from '@mortenbrudvik/waveui';
 function SaveButton() {
   const { dispatchToast } = useToastController();
   return (
-    <Button onClick={() => dispatchToast({ status: 'success', title: 'Saved', body: 'Your changes are saved.' })}>
+    <Button
+      onClick={() =>
+        dispatchToast({ status: 'success', title: 'Saved', body: 'Your changes are saved.' })
+      }
+    >
       Save
     </Button>
   );
@@ -679,7 +695,13 @@ export function People({ people }: { people: Person[] }) {
   }, [people, sort]);
 
   return (
-    <DataGrid aria-label="People" columns={columns} sort={sort} onSortChange={setSort} selectionMode="multiple">
+    <DataGrid
+      aria-label="People"
+      columns={columns}
+      sort={sort}
+      onSortChange={setSort}
+      selectionMode="multiple"
+    >
       <DataGrid.Body>
         {rows.map((person) => (
           <DataGrid.Row key={person.id} rowId={person.id}>
@@ -701,7 +723,11 @@ Props such as `icon`, `contentBefore` and `dismiss` are slots. A slot accepts co
 import { Input } from '@mortenbrudvik/waveui';
 
 export const Price = () => (
-  <Input aria-label="Price" contentBefore="$" contentAfter={{ children: 'USD', className: 'text-muted-foreground' }} />
+  <Input
+    aria-label="Price"
+    contentBefore="$"
+    contentAfter={{ children: 'USD', className: 'text-muted-foreground' }}
+  />
 );
 ```
 
@@ -711,49 +737,49 @@ Icon slots are decorative (`aria-hidden`). The dismiss and clear slots of `Messa
 
 As implemented in 0.5. Buttons, links, checkboxes, switches and the trigger buttons of Accordion, Carousel, Nav, Breadcrumb and Pagination are native elements: Tab to reach them, Enter or Space to activate.
 
-| Component | Keys |
-|---|---|
-| Toolbar | One Tab stop (the last focused control). Left/Right (Up/Down when vertical) move and wrap, Home/End jump; mirrored in RTL. Text fields, selects, sliders and spin buttons keep their own arrow keys. |
-| RadioGroup, SwatchPicker | One Tab stop. All four arrows move and select (wrapping), Home/End jump; Left/Right mirrored in RTL. |
-| Rating | Right/Up one star more, Left/Down one fewer (never below 1), Home/End first/last; mirrored in RTL. |
-| TabList | One Tab stop. Left/Right (Up/Down when vertical) move and select, Home/End; disabled tabs skipped; mirrored in RTL. |
-| Tree | One Tab stop. Up/Down, Home/End; Right expands or moves to the first child, Left collapses or moves to the parent (mirrored in RTL); Enter/Space activate; `*` expands siblings; type to jump. |
-| List (selectable) | One Tab stop. Up/Down (wrapping), Home/End, Enter/Space toggle, typeahead above 7 items. With item actions (grid): Up/Down between rows, Left/Right into the actions, Enter/F2 into a text field, Escape back. |
-| DataGrid | One Tab stop. Arrows between cells (mirrored in RTL), Home/End row start/end, Ctrl+Home/Ctrl+End grid start/end, PageUp/PageDown 10 rows; Enter/F2 into a cell's widgets, Escape back; Space on a cell toggles its row's selection. |
-| Menu | Trigger: Enter/Space/Down open and focus the first item, Up opens on the last. Menu: Up/Down (wrapping), Home/End, typeahead, Enter/Space activate, Escape closes and returns focus, Tab closes. |
+| Component                       | Keys                                                                                                                                                                                                                                                                                  |
+| ------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Toolbar                         | One Tab stop (the last focused control). Left/Right (Up/Down when vertical) move and wrap, Home/End jump; mirrored in RTL. Text fields, selects, sliders and spin buttons keep their own arrow keys.                                                                                  |
+| RadioGroup, SwatchPicker        | One Tab stop. All four arrows move and select (wrapping), Home/End jump; Left/Right mirrored in RTL.                                                                                                                                                                                  |
+| Rating                          | Right/Up one star more, Left/Down one fewer (never below 1), Home/End first/last; mirrored in RTL.                                                                                                                                                                                    |
+| TabList                         | One Tab stop. Left/Right (Up/Down when vertical) move and select, Home/End; disabled tabs skipped; mirrored in RTL.                                                                                                                                                                   |
+| Tree                            | One Tab stop. Up/Down, Home/End; Right expands or moves to the first child, Left collapses or moves to the parent (mirrored in RTL); Enter/Space activate; `*` expands siblings; type to jump.                                                                                        |
+| List (selectable)               | One Tab stop. Up/Down (wrapping), Home/End, Enter/Space toggle, typeahead above 7 items. With item actions (grid): Up/Down between rows, Left/Right into the actions, Enter/F2 into a text field, Escape back.                                                                        |
+| DataGrid                        | One Tab stop. Arrows between cells (mirrored in RTL), Home/End row start/end, Ctrl+Home/Ctrl+End grid start/end, PageUp/PageDown 10 rows; Enter/F2 into a cell's widgets, Escape back; Space on a cell toggles its row's selection.                                                   |
+| Menu                            | Trigger: Enter/Space/Down open and focus the first item, Up opens on the last. Menu: Up/Down (wrapping), Home/End, typeahead, Enter/Space activate, Escape closes and returns focus, Tab closes.                                                                                      |
 | Combobox, TagPicker, TimePicker | Down/Up open and move, Alt+Down opens, Enter commits the active option (with nothing to commit, Enter submits the form), Alt+Up and Tab close, Escape closes and then discards typed text. TagPicker: Backspace in the empty input focuses the last tag, Backspace/Delete removes it. |
-| Dropdown | Down/Up/Home/End and typing open and move, PageUp/PageDown move by 10, Enter/Space commit, Alt+Up and Tab commit and close, Escape closes. |
-| SpinButton | Up/Down step, PageUp/PageDown large step, Home/End min/max; Enter commits typed text, Escape reverts it. |
-| DatePicker | Alt+Down opens the calendar. Calendar: arrows by day/week (mirrored in RTL), PageUp/PageDown by month, Shift+PageUp/PageDown by year, Home/End week start/end, Enter/Space select, Escape closes; Tab stays inside. |
-| Dialog, Drawer | Focus is trapped; Escape closes; focus returns to the element that had focus when the modal opened (the trigger, for a trigger click) or to `finalFocusRef`. |
-| Popover, TeachingPopover | Escape closes. When focus was inside (or lost to `<body>`), Popover returns it to its trigger, TeachingPopover to where focus was before it opened. |
-| Tooltip, InfoLabel | Open on keyboard focus; Escape closes. InfoLabel: click pins it. |
-| Card (selectable) | With the default `selectionControl="card"`: Enter (key down) or Space (key up) selects. With `"checkbox"`: the built-in checkbox. |
-| Stepper | Each reachable step is a Tab stop; Enter/Space activate. |
-| Slider | Native range keys. |
+| Dropdown                        | Down/Up/Home/End and typing open and move, PageUp/PageDown move by 10, Enter/Space commit, Alt+Up and Tab commit and close, Escape closes.                                                                                                                                            |
+| SpinButton                      | Up/Down step, PageUp/PageDown large step, Home/End jump to a finite min/max (otherwise they move the caret); Enter commits typed text, Escape reverts it.                                                                                                                             |
+| DatePicker                      | Alt+Down opens the calendar. Calendar: arrows by day/week (mirrored in RTL), PageUp/PageDown by month, Shift+PageUp/PageDown by year, Home/End week start/end, Enter/Space select, Escape closes; Tab stays inside.                                                                   |
+| Dialog, Drawer                  | Focus is trapped; Escape closes; focus returns to `finalFocusRef` when passed, otherwise to the element that had focus when the modal opened (the trigger, for a trigger click).                                                                                                      |
+| Popover, TeachingPopover        | Escape closes. When focus was inside (or lost to `<body>`), Popover returns it to its trigger, TeachingPopover to where focus was before it opened.                                                                                                                                   |
+| Tooltip, InfoLabel              | Open on keyboard focus; Escape closes. InfoLabel: click pins it.                                                                                                                                                                                                                      |
+| Card (selectable)               | With the default `selectionControl="card"`: Enter (key down) or Space (key up) selects. With `"checkbox"`: the built-in checkbox.                                                                                                                                                     |
+| Stepper                         | Each reachable step is a Tab stop; Enter/Space activate.                                                                                                                                                                                                                              |
+| Slider                          | Native range keys.                                                                                                                                                                                                                                                                    |
 
 Accordion and Carousel have no arrow-key navigation: their triggers and controls are Tab stops.
 
 ## Hooks and utilities
 
-| Export | Purpose |
-|---|---|
-| `useControllable(value, defaultValue, onChange)` | Controlled/uncontrolled state; returns `[value, setValue, isControlled]`; `setValue` accepts a value or an updater and skips no-op updates. |
-| `useRovingTabIndex(options)` | Roving tab stop and arrow-key navigation for composite widgets. |
-| `useId(prefix?)` | SSR-safe ids (`prefix-<react id>`; never parse the React part). |
-| `useEventCallback(fn)` | Stable callback that always calls the latest `fn`. |
-| `useMergedRefs(...refs)` | One stable callback ref for several refs. |
-| `useIsClient()` | `false` on the server and during hydration. |
-| `useFieldControl(props, options?)` | Merge a custom control's labelling props with the surrounding `Field`. |
-| `useAnnounce()`, `announce(message, politeness?)` | Screen-reader announcements through a shared live region. |
-| `useWaveTheme()` | Current theme, direction and portal container. |
-| `useToastController()` | `dispatchToast` / `dismissToast` inside `<Toaster>`. |
-| `useIsOverflowing(target)`, `useOverflowMenu()`, `useIsOverflowItemVisible(id)` | Overflow detection. |
-| `cn(...classes)` | clsx + tailwind-merge that knows Wave's type ramp and shadows; the last class wins. |
-| `composeEventHandlers(theirs, ours)` | Run a consumer handler, then yours unless it called `preventDefault()`. |
-| `mergeRefs(...refs)` | Merge refs outside components. |
-| `resolveSlot`, `renderSlot` | The slot helpers the components use. |
-| `getThemeClassName(theme)` | The theme classes of a theme. |
+| Export                                                                          | Purpose                                                                                                                                     |
+| ------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------- |
+| `useControllable(value, defaultValue, onChange)`                                | Controlled/uncontrolled state; returns `[value, setValue, isControlled]`; `setValue` accepts a value or an updater and skips no-op updates. |
+| `useRovingTabIndex(options)`                                                    | Roving tab stop and arrow-key navigation for composite widgets.                                                                             |
+| `useId(prefix?)`                                                                | SSR-safe ids (`prefix-<react id>`; never parse the React part).                                                                             |
+| `useEventCallback(fn)`                                                          | Stable callback that always calls the latest `fn`.                                                                                          |
+| `useMergedRefs(...refs)`                                                        | One stable callback ref for several refs.                                                                                                   |
+| `useIsClient()`                                                                 | `false` on the server and during hydration.                                                                                                 |
+| `useFieldControl(props, options?)`                                              | Merge a custom control's labelling props with the surrounding `Field`.                                                                      |
+| `useAnnounce()`, `announce(message, politeness?)`                               | Screen-reader announcements through a shared live region.                                                                                   |
+| `useWaveTheme()`                                                                | Current theme, direction and portal container.                                                                                              |
+| `useToastController()`                                                          | `dispatchToast` / `dismissToast` inside `<Toaster>`.                                                                                        |
+| `useIsOverflowing(target)`, `useOverflowMenu()`, `useIsOverflowItemVisible(id)` | Overflow detection.                                                                                                                         |
+| `cn(...classes)`                                                                | clsx + tailwind-merge that knows Wave's type ramp and shadows; the last class wins.                                                         |
+| `composeEventHandlers(theirs, ours)`                                            | Run a consumer handler, then yours unless it called `preventDefault()`.                                                                     |
+| `mergeRefs(...refs)`                                                            | Merge refs outside components.                                                                                                              |
+| `resolveSlot`, `renderSlot`                                                     | The slot helpers the components use.                                                                                                        |
+| `getThemeClassName(theme)`                                                      | The theme classes of a theme.                                                                                                               |
 
 ## Upgrading from 0.4
 

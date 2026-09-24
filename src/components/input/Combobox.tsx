@@ -170,7 +170,9 @@ const ComboboxRoot = (props: ComboboxProps) => {
     'aria-labelledby': ariaLabelledBy,
     'aria-describedby': ariaDescribedBy,
     'aria-invalid': ariaInvalid,
-    'aria-required': ariaRequired ?? (required || undefined),
+    // An explicit `required={false}` wins over a required Field, so aria-required matches
+    // validation (`isRequired`). `false || undefined` would drop that false and the Field would win.
+    'aria-required': ariaRequired ?? required,
   });
 
   const [value, setValue] = useControllable(valueProp, defaultValue ?? '', onValueChange);

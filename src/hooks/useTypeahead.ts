@@ -24,8 +24,10 @@ export interface UseTypeaheadOptions {
 /** Result of {@link useTypeahead}. */
 export interface UseTypeaheadResult {
   /**
-   * Handles a key press. Returns `true` when the key was a typeahead character that matched an
-   * item (the caller should `preventDefault()`), `false` otherwise.
+   * Handles a key press. Returns `true` when the key was consumed as typeahead: it matched an
+   * item, or it continued a search already in progress (including a Space that matches nothing).
+   * The caller should `preventDefault()`. Returns `false` for a key that is not typeahead, and
+   * for a first character that matches nothing, so a closed listbox can still open on it.
    *
    * @param event        The keydown event (DOM or React).
    * @param currentValue The value of the focused or active item, or `null`.
@@ -71,7 +73,8 @@ export function useTypeahead(options: UseTypeaheadOptions): UseTypeaheadResult {
 
   const onTypeahead = useCallback(
     (event: KeyboardEvent | React.KeyboardEvent, currentValue: string | null): boolean => {
-      if (!isTypeaheadKey(event, bufferRef.current.length > 0)) return false;
+      const searching = bufferRef.current.length > 0;
+      if (!isTypeaheadKey(event, searching)) return false;
 
       const search = bufferRef.current + event.key.toLowerCase();
       bufferRef.current = search;
@@ -82,7 +85,9 @@ export function useTypeahead(options: UseTypeaheadOptions): UseTypeaheadResult {
       }, timeoutRef.current);
 
       const items = getItems().filter((item) => !item.disabled);
-      if (items.length === 0) return false;
+      // A search already in progress consumed this key even when nothing matches, so the caller
+      // must not activate or commit. The first unmatched character still returns false.
+      if (items.length === 0) return searching;
 
       const repeated = search.length > 1 && Array.from(search).every((c) => c === search[0]);
       const prefix = repeated ? search[0] : search;
@@ -94,7 +99,7 @@ export function useTypeahead(options: UseTypeaheadOptions): UseTypeaheadResult {
         candidates = candidates.filter((item) => item.value !== currentValue);
       }
       const match = candidates.find((item) => item.text.trim().toLowerCase().startsWith(prefix));
-      if (!match) return false;
+      if (!match) return searching;
       onMatch(match.value);
       return true;
     },

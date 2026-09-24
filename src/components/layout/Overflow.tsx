@@ -461,8 +461,10 @@ export function useIsOverflowing(
  * Wrap each entry in {@link OverflowItem} with a unique `itemId`; the row holds only items (other
  * content is not measured, see `children`). Items are measured while visible, hidden from the end
  * (in DOM order; the first item always stays) and hidden items get `data-overflow-hidden`, an
- * inline `display: none`, `aria-hidden` and `inert`. Reordered items (for example a keyed sort)
- * are re-measured in their new order. `overflowButton(count, hiddenIds)` renders the button (its
+ * inline `display: none`, `aria-hidden` and `inert`. The overflow button is pinned to the inline
+ * end of the row, so it stays reachable when that first item is wider than the row. Reordered items
+ * (for example a keyed sort) are re-measured in their new order. `overflowButton(count, hiddenIds)`
+ * renders the button (its
  * measured width is reserved); components inside it can use {@link useOverflowMenu} to list the
  * hidden items (e.g. in a Menu), and {@link useIsOverflowItemVisible} reports a single item.
  *
@@ -517,12 +519,16 @@ const OverflowRoot = ({ overflowButton, children, className, ref, ...rest }: Ove
     <OverflowContext.Provider value={ctx}>
       <div
         ref={containerRef}
-        className={cn('flex items-center overflow-hidden', className)}
+        className={cn('relative flex items-center overflow-hidden', className)}
         {...rest}
       >
         {children}
         {hiddenCount > 0 && overflowButton && (
-          <div ref={setButton} data-overflow-button="" className="shrink-0 ps-1">
+          <div
+            ref={setButton}
+            data-overflow-button=""
+            className="absolute end-0 flex items-center bg-background ps-1"
+          >
             {overflowButton(hiddenCount, buttonIds)}
           </div>
         )}

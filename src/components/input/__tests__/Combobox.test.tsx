@@ -1100,6 +1100,19 @@ describe('Combobox', () => {
       expect(control).toHaveAttribute('aria-required', 'true');
     });
 
+    it('an explicit required={false} wins over a required Field (aria-required matches validation)', () => {
+      renderWithFieldContext(
+        <form aria-label="Form">
+          <Combobox required={false}>{FRUITS}</Combobox>
+        </form>,
+        { required: true },
+      );
+      const control = screen.getByRole('combobox', { name: FIELD_TEST_TEXT.label });
+      expect(control).not.toHaveAttribute('aria-required', 'true');
+      const form = screen.getByRole('form', { name: 'Form' }) as HTMLFormElement;
+      expect(form.checkValidity()).toBe(true);
+    });
+
     it('is labelled through aria-labelledby when it carries its own id', () => {
       renderWithFieldContext(<Combobox id="own">{FRUITS}</Combobox>);
       expect(screen.getByRole('combobox', { name: FIELD_TEST_TEXT.label })).toHaveAttribute(

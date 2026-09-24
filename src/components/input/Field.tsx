@@ -36,9 +36,11 @@ export interface FieldProps extends React.HTMLAttributes<HTMLDivElement> {
   error?: React.ReactNode;
   /**
    * Whether the field is required: shows a decorative asterisk next to the label, sets
-   * `aria-required`, and the native `required` attribute on native form controls (`<input>`,
-   * `<select>`, `<textarea>` and the library's Input, Select, Textarea and Slider), so browser
-   * constraint validation runs.
+   * `aria-required`, and turns on native constraint validation. `<input>`, `<select>`,
+   * `<textarea>` and Input, Select, Textarea, Slider, SearchBox and SpinButton get the native
+   * `required` attribute. Checkbox, Switch, RadioGroup, Rating and the pickers render a required
+   * `HiddenInput` (with or without `name`), so submit is blocked until they have a value. An
+   * explicit `required={false}` on the control wins, including for `aria-required`.
    */
   required?: boolean;
   /**

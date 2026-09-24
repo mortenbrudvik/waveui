@@ -473,6 +473,7 @@ export const DatePicker = (props: DatePickerProps) => {
   /* ---- forms and Field --------------------------------------------- */
 
   const field = useFieldContext();
+  const isRequired = required ?? field?.required ?? false;
   const showOwnError = invalid !== null && !field?.hasErrorMessage;
   const fieldProps = useFieldControl({
     id,
@@ -480,7 +481,8 @@ export const DatePicker = (props: DatePickerProps) => {
     'aria-labelledby': ariaLabelledBy,
     'aria-describedby': joinIds(ariaDescribedBy, showOwnError ? errorId : undefined),
     'aria-invalid': invalid !== null ? true : ariaInvalid,
-    'aria-required': ariaRequired ?? (required || undefined),
+    // An explicit `required={false}` wins over a required Field (`false || undefined` would not).
+    'aria-required': ariaRequired ?? required,
   });
 
   useFormReset(
@@ -690,7 +692,7 @@ export const DatePicker = (props: DatePickerProps) => {
         disabled={disabled}
         value={selectedDate ? formatISODate(selectedDate) : ''}
         type="text"
-        required={required || field?.required}
+        required={isRequired}
         onInvalid={() => inputRef.current?.focus()}
       />
       {isOpen && (

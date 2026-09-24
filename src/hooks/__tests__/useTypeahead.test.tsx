@@ -129,6 +129,17 @@ describe('useTypeahead', () => {
     expect(onMatch).not.toHaveBeenCalled();
   });
 
+  it('consumes a space that continues a search even when nothing matches', () => {
+    const { onMatch, type } = setup([
+      { value: 'cat', text: 'Cat' },
+      { value: 'dog', text: 'Dog' },
+    ]);
+    expect(type(key('c'), null)).toBe(true);
+    expect(onMatch).toHaveBeenCalledTimes(1);
+    expect(type(key(' '), 'cat')).toBe(true);
+    expect(onMatch).toHaveBeenCalledTimes(1);
+  });
+
   it('keeps a stable handler that reads the latest items and callback', () => {
     const first = vi.fn();
     const second = vi.fn();

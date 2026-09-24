@@ -39,9 +39,10 @@ export interface DialogProps {
    */
   onOpenChange?: (open: boolean) => void;
   /**
-   * Element that receives focus when the dialog closes. By default focus returns to the trigger
-   * (or the element that opened the dialog); use this when that element may be gone, e.g. a
-   * confirm dialog that deletes the row whose button opened it.
+   * First element that receives focus when the dialog closes, ahead of the element that had focus
+   * when it opened and ahead of the trigger. Use it when that opener may be gone, for example a
+   * confirm dialog that deletes the row whose button opened it. Without it, focus returns to the
+   * opener, then to the trigger that opened this session.
    */
   finalFocusRef?: React.RefObject<HTMLElement | null>;
   /** `Dialog.Trigger` and `Dialog.Content`. */
@@ -169,7 +170,8 @@ function useDialogContext(componentName: string): DialogContextValue {
  *   the page does not scroll.
  * - **Closing**: Escape (only the topmost layer: a popup opened inside closes first), a click on
  *   the backdrop (a drag that starts inside does not close it), the Close button and `Dialog.Close`.
- *   Focus returns to the trigger, the element that opened the dialog, or `finalFocusRef`.
+ *   Focus returns to `finalFocusRef` when passed, otherwise to the element that opened the dialog,
+ *   then to the trigger.
  * - **Naming**: give `Dialog.Content` a `title`, a `Dialog.Title`, or `aria-label`.
  *
  * The sub-components are also exported under flat names (`DialogTrigger`, `DialogContent`,

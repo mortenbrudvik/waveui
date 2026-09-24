@@ -224,6 +224,22 @@ describe('Menu', () => {
       expect(item('Clear')).toHaveFocus();
     });
 
+    it('does not activate an item when Space continues a search that matches nothing', async () => {
+      const user = userEvent.setup();
+      const onClear = vi.fn();
+      renderStaticMenu(
+        {},
+        <>
+          <Menu.Item onClick={onClear}>Clear</Menu.Item>
+          <Menu.Item>Copy</Menu.Item>
+        </>,
+      );
+      await user.tab();
+      await user.keyboard('c ');
+      expect(onClear).not.toHaveBeenCalled();
+      expect(item('Copy')).toHaveFocus();
+    });
+
     it('keeps the last focused item as the tab stop (tabStop "last-focused")', async () => {
       const user = userEvent.setup();
       render(

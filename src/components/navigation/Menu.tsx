@@ -233,6 +233,23 @@ function useStaticMenuPartWarning(componentName: string, popup: boolean): void {
 
 const MENU_ITEM_SELECTOR = '[role="menuitem"],[role="menuitemcheckbox"],[role="menuitemradio"]';
 
+/**
+ * Runs menu typeahead, then activates the focused item on a Space that was not part of a search.
+ * Space cannot be handled on the item: that click would run before typeahead saw the key.
+ */
+function handleMenuKeyDown(
+  event: React.KeyboardEvent<HTMLDivElement>,
+  rovingKeyDown: (event: React.KeyboardEvent) => void,
+): void {
+  rovingKeyDown(event);
+  if (event.key !== ' ' || event.defaultPrevented) return;
+  const target = event.target;
+  if (!(target instanceof HTMLElement) || !target.matches(MENU_ITEM_SELECTOR)) return;
+  event.preventDefault();
+  if (target.getAttribute('aria-disabled') === 'true') return;
+  target.click();
+}
+
 const menuSurfaceClasses =
   'min-w-[180px] rounded-md border border-border bg-background py-1 shadow-4';
 
@@ -250,10 +267,12 @@ const menuItemClasses = cn(
 // ---------------------------------------------------------------------------
 
 /**
- * An action in a menu (`role="menuitem"`). Enter and Space activate it; in a popup menu,
- * activation closes the menu and returns focus to the trigger unless `persistOnClick` is set or
- * the consumer's `onClick` calls `preventDefault()`. Disabled items are `aria-disabled`, skipped by
- * keyboard navigation and never activated. The item's tab index is managed by the menu.
+ * An action in a menu (`role="menuitem"`). Enter activates it on the item. Space is handled by the
+ * menu after typeahead, so a search in progress does not click the item; a Space that is not part
+ * of a search activates it. In a popup menu, activation closes the menu and returns focus to the
+ * trigger unless `persistOnClick` is set or the consumer's `onClick` calls `preventDefault()`.
+ * Disabled items are `aria-disabled`, skipped by keyboard navigation and never activated. The
+ * item's tab index is managed by the menu.
  *
  * Also exported as `MenuItem` (import the flat name from React Server Components).
  */
@@ -294,8 +313,9 @@ const MenuItem = ({
   const handleKeyDown = composeEventHandlers(
     onKeyDown,
     (event: React.KeyboardEvent<HTMLDivElement>) => {
-      if (event.key !== 'Enter' && event.key !== ' ') return;
-      // Menu items consume Enter/Space (no page scroll), whether or not they can be activated.
+      // Space is left to the menu: it runs typeahead first, then activates when the key was not
+      // part of a search. Handling it here would click before that search could consume the key.
+      if (event.key !== 'Enter') return;
       event.preventDefault();
       if (!disabled) event.currentTarget.click();
     },
@@ -545,7 +565,7 @@ const MenuPopover = ({
       setOpen(false);
       return;
     }
-    rovingKeyDown(event);
+    handleMenuKeyDown(event, rovingKeyDown);
   };
 
   if (!open) return null;
@@ -776,7 +796,9 @@ const MenuRoot = ({
         ref={mergedRef}
         tabIndex={rest.tabIndex ?? (menuIsTabStop ? 0 : undefined)}
         data-roving-container=""
-        onKeyDown={composeEventHandlers(onKeyDown, rovingKeyDown)}
+        onKeyDown={composeEventHandlers(onKeyDown, (event) =>
+          handleMenuKeyDown(event, rovingKeyDown),
+        )}
         onFocus={composeEventHandlers(onFocus, rovingFocus, { checkDefaultPrevented: false })}
         className={cn(menuSurfaceClasses, focusRing, className)}
       >

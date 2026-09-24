@@ -775,6 +775,19 @@ describe('Dropdown', () => {
       expect(control).toHaveAttribute('aria-required', 'true');
     });
 
+    it('an explicit required={false} wins over a required Field (aria-required matches validation)', () => {
+      renderWithFieldContext(
+        <form aria-label="Form">
+          <Dropdown required={false}>{FRUITS}</Dropdown>
+        </form>,
+        { required: true },
+      );
+      const control = screen.getByRole('combobox', { name: FIELD_TEST_TEXT.label });
+      expect(control).not.toHaveAttribute('aria-required', 'true');
+      const form = screen.getByRole('form', { name: 'Form' }) as HTMLFormElement;
+      expect(form.checkValidity()).toBe(true);
+    });
+
     it('names its open listbox after the Field label', async () => {
       const user = userEvent.setup();
       renderWithFieldContext(<Dropdown>{FRUITS}</Dropdown>);
