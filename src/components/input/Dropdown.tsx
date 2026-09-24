@@ -1,194 +1,269 @@
 import * as React from 'react';
 import { cn } from '../../lib/cn';
+import { composeEventHandlers } from '../../lib/composeEventHandlers';
+import { warnDeprecated } from '../../lib/dev';
+import { ChevronDownIcon } from '../../lib/icons';
+import { disabledStyles, inputFocus } from '../../lib/styles';
 import { useControllable } from '../../hooks/useControllable';
-import { useId } from '../../hooks/useId';
-import { Option, OptionGroup } from './Combobox';
-import type { OptionProps } from './Combobox';
+import { useFieldContext, useFieldControl } from '../../hooks/useFieldControl';
+import { useFormReset } from '../../hooks/useFormReset';
+import { collectOptionLabels, useListbox } from '../../hooks/useListbox';
+import { useMergedRefs } from '../../hooks/useMergedRefs';
+import { HiddenInput } from '../internal/HiddenInput';
+import { ListboxSurface, Option, OptionGroup, useListboxPopup } from './Option';
 
 /* ------------------------------------------------------------------ */
 /*  Dropdown                                                          */
 /* ------------------------------------------------------------------ */
 
+type RoutedHandlers = 'onFocus' | 'onBlur' | 'onKeyDown' | 'onKeyUp';
+
 /** Properties for the Dropdown component. */
-export interface DropdownProps extends Omit<React.HTMLAttributes<HTMLDivElement>, 'onChange'> {
-  /** Controlled selected value. */
+export interface DropdownProps extends Omit<
+  React.HTMLAttributes<HTMLDivElement>,
+  'onChange' | 'defaultValue' | RoutedHandlers
+> {
+  /** Controlled selected value (`''` for none). */
   value?: string;
-  /** Initial selected value for uncontrolled usage.
+  /**
+   * Initial selected value for uncontrolled usage.
    * @default ''
    */
   defaultValue?: string;
-  /** Callback fired when an option is selected. */
+  /** Called with the new value when a different option is selected. */
+  onValueChange?: (value: string) => void;
+  /**
+   * Called on every option activation, also when the current option is selected again.
+   * @deprecated Use `onValueChange`.
+   */
   onOptionSelect?: (value: string) => void;
-  /** Placeholder text shown when no value is selected.
+  /** Controlled open state of the listbox. */
+  open?: boolean;
+  /**
+   * Initial open state for uncontrolled usage.
+   * @default false
+   */
+  defaultOpen?: boolean;
+  /** Called when the listbox opens or closes. */
+  onOpenChange?: (open: boolean) => void;
+  /**
+   * Placeholder text shown when no value is selected. It is not an accessible name: label the
+   * Dropdown with a `Field`, `aria-label` or `aria-labelledby`.
    * @default 'Select an option'
    */
   placeholder?: string;
-  /** Whether the dropdown is disabled and non-interactive.
+  /**
+   * Whether the dropdown is disabled and non-interactive. Turning it on while the listbox is open
+   * closes it (`onOpenChange(false)`).
    * @default false
    */
   disabled?: boolean;
+  /** Name of the value in form submissions (renders a hidden input). */
+  name?: string;
+  /** Id of the form the value belongs to, when the Dropdown is outside it. */
+  form?: string;
+  /** A value is required to submit the form (native constraint validation). */
+  required?: boolean;
+  /** Handlers of the `<button role="combobox">` (the root keeps the other handlers). */
+  onFocus?: React.FocusEventHandler<HTMLButtonElement>;
+  onBlur?: React.FocusEventHandler<HTMLButtonElement>;
+  onKeyDown?: React.KeyboardEventHandler<HTMLButtonElement>;
+  onKeyUp?: React.KeyboardEventHandler<HTMLButtonElement>;
+  /** Ref to the `<button role="combobox">` (the focusable element). */
+  controlRef?: React.Ref<HTMLButtonElement>;
+  /** Ref to the root `<div>`. */
+  ref?: React.Ref<HTMLDivElement>;
 }
 
-const DropdownRoot = ({
-  value: controlledValue,
-  defaultValue = '',
-  onOptionSelect,
-  placeholder = 'Select an option',
-  disabled = false,
-  className,
-  children,
-  ref,
-  ...rest
-}: DropdownProps & { ref?: React.Ref<HTMLDivElement> }) => {
-    const [selectedValue, setSelectedValue] = useControllable(
-      controlledValue,
-      defaultValue,
-      onOptionSelect,
-    );
-    const [open, setOpen] = React.useState(false);
-    const [activeIndex, setActiveIndex] = React.useState(-1);
-    const listboxId = useId('dropdown-listbox');
-    const buttonRef = React.useRef<HTMLButtonElement>(null);
-    const blurTimeoutRef = React.useRef<ReturnType<typeof setTimeout>>(undefined);
+/**
+ * A select-only combobox (APG): a button that opens a listbox of `Option`s. Enter, Space,
+ * ArrowDown/ArrowUp, Home/End and typing a character open it and move the highlight
+ * (`aria-activedescendant`); Enter/Space select, Tab selects the highlighted option and moves on,
+ * Escape closes.
+ *
+ * `id`, `aria-*`, `tabIndex`, `autoFocus` and focus/keyboard handlers go to the button; `ref`,
+ * `className`, `style` and other props stay on the root. Inside a `Field` the button is labelled
+ * and described by it — otherwise give it an `aria-label`. With `name`/`required` the value takes
+ * part in form submission, validation and reset. The open listbox renders in a portal; while
+ * closed it stays in the DOM, hidden.
+ *
+ * Sub-components: `Dropdown.Option`, `Dropdown.OptionGroup`. React Server Components import the
+ * flat names `DropdownOption` / `DropdownOptionGroup` (dotted access needs a client file).
+ */
+const DropdownRoot = (props: DropdownProps) => {
+  const {
+    value: valueProp,
+    defaultValue,
+    onValueChange,
+    onOptionSelect,
+    open: openProp,
+    defaultOpen,
+    onOpenChange,
+    placeholder = 'Select an option',
+    disabled = false,
+    name,
+    form,
+    required,
+    autoFocus,
+    tabIndex,
+    id,
+    'aria-label': ariaLabel,
+    'aria-labelledby': ariaLabelledBy,
+    'aria-describedby': ariaDescribedBy,
+    'aria-invalid': ariaInvalid,
+    'aria-required': ariaRequired,
+    'aria-errormessage': ariaErrorMessage,
+    'aria-details': ariaDetails,
+    onFocus,
+    onBlur,
+    onKeyDown,
+    onKeyUp,
+    controlRef,
+    className,
+    children,
+    ref,
+    ...rest
+  } = props;
 
-    React.useEffect(() => {
-      return () => {
-        if (blurTimeoutRef.current) clearTimeout(blurTimeoutRef.current);
-      };
-    }, []);
+  if (onOptionSelect !== undefined) warnDeprecated('Dropdown', 'onOptionSelect', 'onValueChange');
 
-    // Derive display text from children
-    const displayText = React.useMemo(() => {
-      let text = '';
-      React.Children.forEach(children, (child) => {
-        if (React.isValidElement(child) && child.type === Option) {
-          const props = child.props as OptionProps;
-          if (props.value === selectedValue) {
-            text = typeof props.children === 'string' ? props.children : props.value;
-          }
-        }
-      });
-      return text || selectedValue;
-    }, [children, selectedValue]);
+  const field = useFieldContext();
+  const isRequired = required ?? field?.required ?? false;
+  const fieldProps = useFieldControl({
+    id,
+    'aria-label': ariaLabel,
+    'aria-labelledby': ariaLabelledBy,
+    'aria-describedby': ariaDescribedBy,
+    'aria-invalid': ariaInvalid,
+    'aria-required': ariaRequired ?? (required || undefined),
+  });
 
-    const optionValues = React.useMemo(() => {
-      const vals: string[] = [];
-      React.Children.forEach(children, (child) => {
-        if (React.isValidElement(child) && child.type === Option) {
-          vals.push((child.props as OptionProps).value);
-        }
-      });
-      return vals;
-    }, [children]);
+  const [value, setValue] = useControllable(valueProp, defaultValue ?? '', onValueChange);
+  const [openState, setOpen] = useControllable(openProp, defaultOpen ?? false, onOpenChange);
+  const open = openState && !disabled;
+  // Disabling also closes the list itself, not only the derived `open`, so enabling it again does
+  // not reopen it without a user action. The close is reported through onOpenChange (a consumer
+  // callback from an effect, C-HOOKS); a controlled `open` that stays true is not shown meanwhile.
+  const lockedOpen = disabled && openState;
+  React.useEffect(() => {
+    if (lockedOpen) setOpen(false);
+  }, [lockedOpen, setOpen]);
 
-    const selectOption = React.useCallback(
-      (val: string) => {
-        setSelectedValue(val);
-        setOpen(false);
-        buttonRef.current?.focus();
-      },
-      [setSelectedValue],
-    );
+  const rootRef = React.useRef<HTMLDivElement | null>(null);
+  const buttonRef = React.useRef<HTMLButtonElement | null>(null);
 
-    const handleKeyDown = (e: React.KeyboardEvent) => {
-      if (e.key === 'ArrowDown' || e.key === ' ' || e.key === 'Enter') {
-        e.preventDefault();
-        if (!open) {
-          setOpen(true);
-        } else if (e.key === 'ArrowDown') {
-          setActiveIndex((i) => Math.min(i + 1, optionValues.length - 1));
-        } else if ((e.key === 'Enter' || e.key === ' ') && activeIndex >= 0) {
-          const val = optionValues[activeIndex];
-          if (val) selectOption(val);
-        }
-      } else if (e.key === 'ArrowUp') {
-        e.preventDefault();
-        setActiveIndex((i) => Math.max(i - 1, 0));
-      } else if (e.key === 'Escape') {
-        setOpen(false);
-      }
-    };
+  const labels = React.useMemo(() => collectOptionLabels(children), [children]);
 
-    return (
-      <div ref={ref} className={cn('relative inline-flex flex-col', className)} {...rest}>
-        <button
-          ref={buttonRef}
-          type="button"
-          role="combobox"
-          aria-expanded={open}
-          aria-controls={listboxId}
-          aria-haspopup="listbox"
-          disabled={disabled}
-          onClick={() => setOpen((o) => !o)}
-          onKeyDown={handleKeyDown}
-          onBlur={() => {
-            blurTimeoutRef.current = setTimeout(() => setOpen(false), 200);
-          }}
-          className={cn(
-            'h-8 w-full rounded border border-input bg-background px-3 text-sm text-left',
-            'flex items-center justify-between',
-            'focus:outline-none focus:border-b-2 focus:border-b-primary',
-            'disabled:opacity-50 disabled:cursor-not-allowed',
-            !displayText && 'text-muted-foreground',
-          )}
-        >
-          <span className="truncate">{displayText || placeholder}</span>
-          <svg
-            aria-hidden="true"
-            width="12"
-            height="12"
-            viewBox="0 0 12 12"
-            fill="none"
-            className={cn('shrink-0 ml-2 transition-transform', open && 'rotate-180')}
-          >
-            <path
-              d="M3 4.5l3 3 3-3"
-              stroke="currentColor"
-              strokeWidth="1.5"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-            />
-          </svg>
-        </button>
-        {open && (
-          <ul
-            id={listboxId}
-            role="listbox"
-            className="absolute top-full left-0 z-50 mt-1 w-full max-h-60 overflow-auto rounded border border-border bg-background py-1 shadow-4"
-            onMouseDown={(e) => e.preventDefault()}
-          >
-            {/* eslint-disable-next-line react-hooks/refs -- false positive: Children.map + cloneElement pattern, no refs accessed */}
-            {React.Children.map(children, (child, i) => {
-              if (!React.isValidElement(child)) return child;
-              if (child.type === Option) {
-                const props = child.props as OptionProps;
-                const originalOnClick = (
-                  child as React.ReactElement<{ onClick?: (e: React.MouseEvent) => void }>
-                ).props.onClick;
-                return React.cloneElement(child as React.ReactElement<Record<string, unknown>>, {
-                  'aria-selected': props.value === selectedValue,
-                  className: cn(
-                    props.className,
-                    props.value === selectedValue && 'bg-[#f0f0f0]',
-                    i === activeIndex && 'bg-[#f5f5f5]',
-                  ),
-                  onClick: (e: React.MouseEvent) => {
-                    if (props.disabled) return;
-                    selectOption(props.value);
-                    originalOnClick?.(e);
-                  },
-                });
-              }
-              return child;
-            })}
-          </ul>
+  const listbox = useListbox({
+    open,
+    onOpenChange: (next) => setOpen(next),
+    mode: 'select-only',
+    selectedValues: value ? [value] : [],
+    onSelect: (next) => {
+      setValue(next);
+      onOptionSelect?.(next);
+    },
+    idPrefix: 'dropdown-listbox',
+  });
+
+  const expanded = open && listbox.items.length > 0;
+  const { layerId, setReference, surfaceRef, floatingProps } = useListboxPopup({
+    open,
+    surfaceOpen: expanded,
+    onDismiss: () => setOpen(false),
+    rootRef,
+    anchorRef: buttonRef,
+  });
+
+  const rootMergedRef = useMergedRefs<HTMLDivElement>(rootRef, ref);
+  const buttonMergedRef = useMergedRefs<HTMLButtonElement>(buttonRef, controlRef, setReference);
+
+  useFormReset(buttonRef, () => setValue(defaultValue ?? ''), form);
+
+  const displayText = value ? (listbox.getItem(value)?.label ?? labels.get(value) ?? '') : '';
+
+  const handleKeyDown = (event: React.KeyboardEvent<HTMLButtonElement>) => {
+    if (event.key === 'Escape' && open && !expanded && !event.nativeEvent.isComposing) {
+      // Open with nothing shown (no options): close, but leave Escape to an enclosing layer
+      // (overlays#1) instead of consuming it for an invisible list.
+      setOpen(false);
+      return;
+    }
+    listbox.onKeyDown(event);
+  };
+
+  const listLabelledBy =
+    fieldProps['aria-label'] === undefined
+      ? (fieldProps['aria-labelledby'] ?? field?.labelId)
+      : fieldProps['aria-labelledby'];
+
+  return (
+    <div {...rest} ref={rootMergedRef} className={cn('relative inline-flex flex-col', className)}>
+      <button
+        type="button"
+        {...fieldProps}
+        {...listbox.getComboboxProps()}
+        aria-expanded={expanded}
+        aria-errormessage={ariaErrorMessage}
+        aria-details={ariaDetails}
+        ref={buttonMergedRef}
+        disabled={disabled}
+        autoFocus={autoFocus}
+        tabIndex={tabIndex}
+        onClick={() => setOpen((current) => !current)}
+        onKeyDown={composeEventHandlers(onKeyDown, handleKeyDown)}
+        onKeyUp={composeEventHandlers(onKeyUp, listbox.onKeyUp)}
+        onFocus={onFocus}
+        onBlur={onBlur}
+        className={cn(
+          'flex h-8 w-full items-center justify-between rounded border border-input bg-background px-3 text-start text-body-1 text-foreground',
+          inputFocus,
+          disabledStyles,
+          'aria-invalid:border-error',
         )}
-      </div>
-    );
+      >
+        <span className={cn('truncate', !displayText && 'text-muted-foreground')}>
+          {displayText || placeholder}
+        </span>
+        <ChevronDownIcon
+          className={cn(
+            'ms-2 shrink-0 transition-transform motion-reduce:transition-none',
+            expanded && 'rotate-180',
+          )}
+        />
+      </button>
+      <ListboxSurface
+        listbox={listbox}
+        layerId={layerId}
+        surfaceRef={surfaceRef}
+        floatingProps={floatingProps}
+        open={open}
+        expanded={expanded}
+        aria-label={fieldProps['aria-label']}
+        aria-labelledby={listLabelledBy}
+      >
+        {children}
+      </ListboxSurface>
+      <HiddenInput
+        name={name}
+        form={form}
+        disabled={disabled}
+        value={value}
+        type={isRequired ? 'text' : 'hidden'}
+        required={isRequired}
+        onInvalid={() => buttonRef.current?.focus()}
+      />
+    </div>
+  );
 };
 DropdownRoot.displayName = 'Dropdown';
 
-export const Dropdown = Object.assign(DropdownRoot, {
+/** Flat name of `Dropdown.Option` for React Server Components. */
+export const DropdownOption = Option;
+/** Flat name of `Dropdown.OptionGroup` for React Server Components. */
+export const DropdownOptionGroup = OptionGroup;
+
+export const Dropdown = /* @__PURE__ */ Object.assign(DropdownRoot, {
   Option,
   OptionGroup,
 });

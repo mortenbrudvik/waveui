@@ -1,267 +1,375 @@
 import * as React from 'react';
 import { cn } from '../../lib/cn';
+import { composeEventHandlers } from '../../lib/composeEventHandlers';
+import { warnDeprecated } from '../../lib/dev';
+import { disabledStyles, inputBase, inputFocus } from '../../lib/styles';
 import { useControllable } from '../../hooks/useControllable';
-import { useId } from '../../hooks/useId';
+import { useFieldContext, useFieldControl } from '../../hooks/useFieldControl';
+import { useFormReset } from '../../hooks/useFormReset';
+import { collectOptionLabels, useListbox, type ListboxItem } from '../../hooks/useListbox';
+import { useMergedRefs } from '../../hooks/useMergedRefs';
+import { HiddenInput } from '../internal/HiddenInput';
+import { ListboxSurface, Option, OptionGroup, useListboxPopup } from './Option';
 
-/* ------------------------------------------------------------------ */
-/*  Option & OptionGroup (shared with Dropdown)                       */
-/* ------------------------------------------------------------------ */
-
-/** Properties for the Option component used within Combobox and Dropdown. */
-export interface OptionProps extends React.LiHTMLAttributes<HTMLLIElement> {
-  /** Value associated with this option. */
-  value: string;
-  /** Whether the option is disabled and non-selectable. */
-  disabled?: boolean;
-}
-
-export const Option = ({ value, disabled = false, className, children, ref, ...rest }: OptionProps & { ref?: React.Ref<HTMLLIElement> }) => {
-    return (
-      <li
-        ref={ref}
-        role="option"
-        data-value={value}
-        aria-disabled={disabled || undefined}
-        className={cn(
-          'px-3 py-1.5 text-body-1 cursor-pointer select-none',
-          'hover:bg-[#f5f5f5]',
-          disabled && 'text-muted-foreground cursor-not-allowed',
-          className,
-        )}
-        {...rest}
-      >
-        {children ?? value}
-      </li>
-    );
-  };
-Option.displayName = 'Option';
-
-/** Properties for the OptionGroup component used to group options. */
-export interface OptionGroupProps extends React.HTMLAttributes<HTMLDivElement> {
-  /** Heading label for the option group. */
-  label: string;
-}
-
-export const OptionGroup = ({ label, className, children, ref, ...rest }: OptionGroupProps & { ref?: React.Ref<HTMLDivElement> }) => {
-    return (
-      <div ref={ref} role="group" aria-label={label} className={cn(className)} {...rest}>
-        <div className="px-3 py-1 text-caption-1 font-semibold text-muted-foreground">{label}</div>
-        <ul role="presentation">{children}</ul>
-      </div>
-    );
-  };
-OptionGroup.displayName = 'OptionGroup';
-
-/* ------------------------------------------------------------------ */
-/*  Combobox context                                                  */
-/* ------------------------------------------------------------------ */
-
-interface ComboboxContextValue {
-  selectedValue: string;
-  selectOption: (value: string, label: string) => void;
-  activeIndex: number;
-}
-
-const ComboboxContext = React.createContext<ComboboxContextValue>({
-  selectedValue: '',
-  selectOption: () => {},
-  activeIndex: -1,
-});
+export { Option, OptionGroup } from './Option';
+export type { OptionProps, OptionGroupProps } from './Option';
 
 /* ------------------------------------------------------------------ */
 /*  Combobox                                                          */
 /* ------------------------------------------------------------------ */
 
+type RoutedHandlers = 'onFocus' | 'onBlur' | 'onKeyDown' | 'onKeyUp';
+
 /** Properties for the Combobox component. */
-export interface ComboboxProps extends Omit<React.HTMLAttributes<HTMLDivElement>, 'onChange'> {
-  /** Controlled selected value. */
+export interface ComboboxProps extends Omit<
+  React.HTMLAttributes<HTMLDivElement>,
+  'onChange' | 'defaultValue' | RoutedHandlers
+> {
+  /** Controlled selected value (`''` for none). */
   value?: string;
-  /** Initial selected value for uncontrolled usage.
+  /**
+   * Initial selected value for uncontrolled usage.
    * @default ''
    */
   defaultValue?: string;
-  /** Callback fired when an option is selected. */
+  /**
+   * Called with the new value when it changes: an option is selected, or (with `freeform`) the
+   * text changes. Not called when the current option is selected again.
+   */
+  onValueChange?: (value: string) => void;
+  /**
+   * Called on every option activation, also when the current option is selected again (and, with
+   * `freeform`, on every text change).
+   * @deprecated Use `onValueChange`.
+   */
   onOptionSelect?: (value: string) => void;
+  /** Controlled open state of the listbox. */
+  open?: boolean;
+  /**
+   * Initial open state for uncontrolled usage.
+   * @default false
+   */
+  defaultOpen?: boolean;
+  /** Called when the listbox opens or closes. */
+  onOpenChange?: (open: boolean) => void;
   /** Placeholder text shown when no value is selected. */
   placeholder?: string;
-  /** Whether the combobox is disabled and non-interactive.
+  /**
+   * Whether the combobox is disabled and non-interactive.
    * @default false
    */
   disabled?: boolean;
-  /** Whether to allow free-form text input that filters options.
+  /**
+   * Whether the typed text is itself the value. Without it, typing only filters the options and
+   * the input shows the selected option's label again when the listbox closes or loses focus.
    * @default false
    */
   freeform?: boolean;
+  /** Name of the value in form submissions (renders a hidden input). */
+  name?: string;
+  /** Id of the form the value belongs to, when the Combobox is outside it. */
+  form?: string;
+  /**
+   * A value is required to submit the form (native constraint validation). Like a native readonly
+   * input, a `readOnly` Combobox does not block submission.
+   */
+  required?: boolean;
+  /** Text input attributes, applied to the `<input role="combobox">`. */
+  autoComplete?: string;
+  maxLength?: number;
+  /**
+   * The value cannot be changed: the input is read-only and the listbox neither opens (click,
+   * keyboard, a controlled `open`) nor commits; Escape is left to the page. Turning it (or
+   * `disabled`) on while the listbox is open closes it (`onOpenChange(false)`).
+   */
+  readOnly?: boolean;
+  /** Handlers of the `<input role="combobox">` (the root keeps the other handlers). */
+  onFocus?: React.FocusEventHandler<HTMLInputElement>;
+  onBlur?: React.FocusEventHandler<HTMLInputElement>;
+  onKeyDown?: React.KeyboardEventHandler<HTMLInputElement>;
+  onKeyUp?: React.KeyboardEventHandler<HTMLInputElement>;
+  /** Ref to the `<input role="combobox">` (the focusable element). */
+  controlRef?: React.Ref<HTMLInputElement>;
+  /** Ref to the root `<div>`. */
+  ref?: React.Ref<HTMLDivElement>;
 }
 
-const ComboboxRoot = ({
-  value: controlledValue,
-  defaultValue = '',
-  onOptionSelect,
-  placeholder,
-  disabled = false,
-  freeform = false,
-  className,
-  children,
-  ref,
-  ...rest
-}: ComboboxProps & { ref?: React.Ref<HTMLDivElement> }) => {
-    const [selectedValue, setSelectedValue] = useControllable(
-      controlledValue,
-      defaultValue,
-      onOptionSelect,
-    );
-    const [inputValue, setInputValue] = React.useState(defaultValue);
-    const [open, setOpen] = React.useState(false);
+function matchesText(item: ListboxItem, text: string): boolean {
+  return (item.textValue ?? item.label).toLowerCase().includes(text.toLowerCase());
+}
 
-    // Sync inputValue when controlled value changes externally
-    React.useEffect(() => {
-      if (controlledValue !== undefined) {
-        setInputValue(controlledValue);
-      }
-    }, [controlledValue]);
-    const [activeIndex, setActiveIndex] = React.useState(-1);
-    const listboxId = useId('combobox-listbox');
-    const inputRef = React.useRef<HTMLInputElement>(null);
-    const blurTimeoutRef = React.useRef<ReturnType<typeof setTimeout>>(undefined);
+/**
+ * An editable combobox: a text input with a filterable listbox of `Option`s (APG combobox with
+ * list autocomplete). Typing filters the options; ArrowDown/ArrowUp move the highlight
+ * (`aria-activedescendant`), Enter selects, Escape closes. Without `freeform` the text is only a
+ * filter: the input shows the selected option's label again when the listbox closes. With
+ * `freeform` the text itself is the value.
+ *
+ * `id`, `aria-*`, `tabIndex`, `autoFocus`, focus/keyboard handlers and text input attributes go to
+ * the `<input>`; `ref`, `className`, `style` and other props stay on the root. Inside a `Field`
+ * the input is labelled and described by it. With `name`/`required` the value takes part in form
+ * submission, validation and reset. The open listbox renders in a portal; while closed it stays
+ * in the DOM, hidden.
+ *
+ * Sub-components: `Combobox.Option`, `Combobox.OptionGroup`. React Server Components import the
+ * flat names `ComboboxOption` / `ComboboxOptionGroup` (dotted access needs a client file).
+ */
+const ComboboxRoot = (props: ComboboxProps) => {
+  const {
+    value: valueProp,
+    defaultValue,
+    onValueChange,
+    onOptionSelect,
+    open: openProp,
+    defaultOpen,
+    onOpenChange,
+    placeholder,
+    disabled = false,
+    freeform = false,
+    name,
+    form,
+    required,
+    autoComplete = 'off',
+    maxLength,
+    readOnly,
+    inputMode,
+    spellCheck,
+    enterKeyHint,
+    autoFocus,
+    tabIndex,
+    id,
+    'aria-label': ariaLabel,
+    'aria-labelledby': ariaLabelledBy,
+    'aria-describedby': ariaDescribedBy,
+    'aria-invalid': ariaInvalid,
+    'aria-required': ariaRequired,
+    'aria-errormessage': ariaErrorMessage,
+    'aria-details': ariaDetails,
+    onFocus,
+    onBlur,
+    onKeyDown,
+    onKeyUp,
+    controlRef,
+    className,
+    children,
+    ref,
+    ...rest
+  } = props;
 
-    React.useEffect(() => {
-      return () => {
-        if (blurTimeoutRef.current) clearTimeout(blurTimeoutRef.current);
-      };
-    }, []);
+  if (onOptionSelect !== undefined) warnDeprecated('Combobox', 'onOptionSelect', 'onValueChange');
 
-    const selectOption = React.useCallback(
-      (val: string, label: string) => {
-        setSelectedValue(val);
-        setInputValue(label);
-        setOpen(false);
-        inputRef.current?.focus();
-      },
-      [setSelectedValue],
-    );
+  const field = useFieldContext();
+  const isRequired = required ?? field?.required ?? false;
+  const validates = isRequired && !readOnly;
+  const fieldProps = useFieldControl({
+    id,
+    'aria-label': ariaLabel,
+    'aria-labelledby': ariaLabelledBy,
+    'aria-describedby': ariaDescribedBy,
+    'aria-invalid': ariaInvalid,
+    'aria-required': ariaRequired ?? (required || undefined),
+  });
 
-    // Collect option values and labels for keyboard nav
-    const optionEntries = React.useMemo(() => {
-      const entries: { value: string; label: string }[] = [];
-      React.Children.forEach(children, (child) => {
-        if (React.isValidElement(child) && child.type === Option) {
-          const props = child.props as OptionProps;
-          entries.push({
-            value: props.value,
-            label: typeof props.children === 'string' ? props.children : props.value,
-          });
-        }
-      });
-      return entries;
-    }, [children]);
+  const [value, setValue] = useControllable(valueProp, defaultValue ?? '', onValueChange);
+  const [openState, setOpen] = useControllable(openProp, defaultOpen ?? false, onOpenChange);
+  const interactive = !disabled && !readOnly;
+  const open = openState && interactive;
+  // Text typed since the last commit; `null` shows the committed value's label (input-pickers#7).
+  const [draft, setDraft] = React.useState<string | null>(null);
+  // Locking the control (readOnly/disabled) while typing drops the draft, so the input shows the
+  // committed value again (adjust-during-render pattern, C-HOOKS).
+  const [wasInteractive, setWasInteractive] = React.useState(interactive);
+  if (wasInteractive !== interactive) {
+    setWasInteractive(interactive);
+    if (!interactive) setDraft(null);
+  }
+  // Locking also closes the list itself, not only the derived `open`, so unlocking does not reopen
+  // it without a user action. The close is reported through onOpenChange (a consumer callback from
+  // an effect, C-HOOKS); a controlled `open` that stays true is still not shown while locked.
+  const lockedOpen = !interactive && openState;
+  React.useEffect(() => {
+    if (lockedOpen) setOpen(false);
+  }, [lockedOpen, setOpen]);
 
-    // Filter children based on input (only in freeform mode where user types freely)
-    const filteredChildren = React.useMemo(() => {
-      if (!freeform || !inputValue) return children;
-      const filter = inputValue.toLowerCase();
-      return React.Children.toArray(children).filter((child) => {
-        if (!React.isValidElement(child)) return true;
-        if (child.type === Option) {
-          const props = child.props as OptionProps;
-          const text = (
-            typeof props.children === 'string' ? props.children : props.value
-          ).toLowerCase();
-          return text.includes(filter);
-        }
-        return true;
-      });
-    }, [children, inputValue, freeform]);
+  const rootRef = React.useRef<HTMLDivElement | null>(null);
+  const inputRef = React.useRef<HTMLInputElement | null>(null);
 
-    const handleKeyDown = (e: React.KeyboardEvent) => {
-      if (e.key === 'ArrowDown') {
-        e.preventDefault();
-        setOpen(true);
-        setActiveIndex((i) => Math.min(i + 1, optionEntries.length - 1));
-      } else if (e.key === 'ArrowUp') {
-        e.preventDefault();
-        setActiveIndex((i) => Math.max(i - 1, 0));
-      } else if (e.key === 'Enter' && activeIndex >= 0 && open) {
-        e.preventDefault();
-        const entry = optionEntries[activeIndex];
-        if (entry) selectOption(entry.value, entry.label);
-      } else if (e.key === 'Escape') {
-        setOpen(false);
-      }
+  const labels = React.useMemo(() => collectOptionLabels(children), [children]);
+  const filter = React.useMemo(
+    () => (draft ? (item: ListboxItem) => matchesText(item, draft) : undefined),
+    [draft],
+  );
+
+  const commitText = (text: string) => {
+    setValue(text);
+    onOptionSelect?.(text);
+  };
+
+  const close = () => {
+    setOpen(false);
+    setDraft(null);
+  };
+
+  // APG: Escape on a closed listbox clears the textbox. Freeform: the text is the value, so it is
+  // cleared. Otherwise only a typed filter is dropped (the input shows the selected label again);
+  // without one there is nothing to clear and Escape is left to the page.
+  let clearDraft: (() => void) | undefined;
+  if (freeform) {
+    clearDraft = () => {
+      setDraft(null);
+      commitText('');
     };
+  } else if (draft) {
+    clearDraft = () => setDraft(null);
+  }
 
-    return (
-      <ComboboxContext.Provider value={{ selectedValue, selectOption, activeIndex }}>
-        <div ref={ref} className={cn('relative inline-flex flex-col', className)} {...rest}>
-          <input
-            ref={inputRef}
-            role="combobox"
-            aria-expanded={open}
-            aria-controls={listboxId}
-            aria-autocomplete="list"
-            disabled={disabled}
-            placeholder={placeholder}
-            value={inputValue}
-            onChange={(e) => {
-              setInputValue(e.target.value);
-              setOpen(true);
-              setActiveIndex(-1);
-              if (freeform) setSelectedValue(e.target.value);
-            }}
-            onFocus={() => setOpen(true)}
-            onBlur={() => {
-              // delay to allow click on option
-              blurTimeoutRef.current = setTimeout(() => setOpen(false), 200);
-            }}
-            onKeyDown={handleKeyDown}
-            className={cn(
-              'h-8 w-full rounded border border-input bg-background px-3 text-sm text-foreground',
-              'focus:outline-none focus:border-b-2 focus:border-b-primary',
-              'disabled:opacity-50 disabled:cursor-not-allowed',
-            )}
-          />
-          {open && (
-            <ul
-              id={listboxId}
-              role="listbox"
-              className="absolute top-full left-0 z-50 mt-1 w-full max-h-60 overflow-auto rounded border border-border bg-background py-1 shadow-4"
-              onMouseDown={(e) => e.preventDefault()}
-            >
-              {/* eslint-disable-next-line react-hooks/refs -- false positive: Children.map + cloneElement pattern, no refs accessed */}
-              {React.Children.map(filteredChildren, (child, i) => {
-                if (!React.isValidElement(child)) return child;
-                if (child.type === Option) {
-                  const props = child.props as OptionProps;
-                  const originalOnClick = (
-                    child as React.ReactElement<{ onClick?: (e: React.MouseEvent) => void }>
-                  ).props.onClick;
-                  return React.cloneElement(child as React.ReactElement<Record<string, unknown>>, {
-                    'aria-selected': props.value === selectedValue,
-                    className: cn(
-                      props.className,
-                      props.value === selectedValue && 'bg-[#f0f0f0]',
-                      i === activeIndex && 'bg-[#f5f5f5]',
-                    ),
-                    onClick: (e: React.MouseEvent) => {
-                      if (props.disabled) return;
-                      const label =
-                        typeof props.children === 'string' ? props.children : props.value;
-                      selectOption(props.value, label);
-                      originalOnClick?.(e);
-                    },
-                  });
-                }
-                return child;
-              })}
-            </ul>
-          )}
-        </div>
-      </ComboboxContext.Provider>
-    );
+  const listbox = useListbox({
+    open,
+    onOpenChange: (next) => {
+      if (next) setOpen(true);
+      else close();
+    },
+    mode: 'editable',
+    selectedValues: value ? [value] : [],
+    onSelect: (next) => {
+      setValue(next);
+      onOptionSelect?.(next);
+      setDraft(null);
+    },
+    filter,
+    autoHighlight: false,
+    idPrefix: 'combobox-listbox',
+    onClearDraft: clearDraft,
+  });
+
+  const expanded = open && listbox.items.length > 0;
+  // The popup shows the list, or "No matches" for a draft.
+  const surfaceOpen = open && (expanded || !!draft);
+  const { layerId, setReference, surfaceRef, floatingProps } = useListboxPopup({
+    open,
+    surfaceOpen,
+    onDismiss: close,
+    rootRef,
+    anchorRef: inputRef,
+  });
+
+  const rootMergedRef = useMergedRefs<HTMLDivElement>(rootRef, ref);
+  const inputMergedRef = useMergedRefs<HTMLInputElement>(inputRef, controlRef, setReference);
+
+  useFormReset(
+    inputRef,
+    () => {
+      setValue(defaultValue ?? '');
+      setDraft(null);
+    },
+    form,
+  );
+
+  const committedText = value
+    ? (listbox.getItem(value)?.label ?? labels.get(value) ?? (freeform ? value : ''))
+    : '';
+
+  const handleKeyDown = (event: React.KeyboardEvent<HTMLInputElement>) => {
+    if (event.key === 'Escape' && open && !surfaceOpen && !event.nativeEvent.isComposing) {
+      // Open with nothing shown (no options): close as a closed list would handle Escape — clear
+      // the text if there is any, otherwise leave the key to an enclosing layer (overlays#1).
+      close();
+      if (clearDraft && event.currentTarget.value !== '') {
+        event.preventDefault();
+        clearDraft();
+      }
+      return;
+    }
+    listbox.onKeyDown(event);
+  };
+
+  const handleChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const text = event.target.value;
+    setDraft(text);
+    if (!open) setOpen(true);
+    if (freeform) commitText(text);
+  };
+
+  const listLabelledBy =
+    fieldProps['aria-label'] === undefined
+      ? (fieldProps['aria-labelledby'] ?? field?.labelId)
+      : fieldProps['aria-labelledby'];
+
+  return (
+    <div {...rest} ref={rootMergedRef} className={cn('relative inline-flex flex-col', className)}>
+      <input
+        type="text"
+        autoComplete={autoComplete}
+        {...fieldProps}
+        {...listbox.getComboboxProps()}
+        aria-expanded={expanded}
+        aria-errormessage={ariaErrorMessage}
+        aria-details={ariaDetails}
+        ref={inputMergedRef}
+        disabled={disabled}
+        readOnly={readOnly}
+        placeholder={placeholder}
+        maxLength={maxLength}
+        inputMode={inputMode}
+        spellCheck={spellCheck}
+        enterKeyHint={enterKeyHint}
+        autoFocus={autoFocus}
+        tabIndex={tabIndex}
+        value={draft ?? committedText}
+        onChange={handleChange}
+        onClick={() => {
+          if (!open && interactive) setOpen(true);
+        }}
+        // Read-only: no listbox keys at all (they would open, commit or clear the value).
+        onKeyDown={composeEventHandlers(onKeyDown, readOnly ? undefined : handleKeyDown)}
+        onKeyUp={composeEventHandlers(onKeyUp, listbox.onKeyUp)}
+        onFocus={onFocus}
+        onBlur={composeEventHandlers(onBlur, () => setDraft(null), {
+          checkDefaultPrevented: false,
+        })}
+        className={cn(inputBase, inputFocus, disabledStyles, 'aria-invalid:border-error')}
+      />
+      <ListboxSurface
+        listbox={listbox}
+        layerId={layerId}
+        surfaceRef={surfaceRef}
+        floatingProps={floatingProps}
+        open={open}
+        expanded={expanded}
+        emptyContent={
+          draft ? (
+            <div role="status" className="px-3 py-1.5 text-body-1 text-muted-foreground">
+              No matches
+            </div>
+          ) : undefined
+        }
+        aria-label={fieldProps['aria-label']}
+        aria-labelledby={listLabelledBy}
+      >
+        {children}
+      </ListboxSurface>
+      <HiddenInput
+        name={name}
+        form={form}
+        disabled={disabled}
+        value={value}
+        // Like a native readonly input, a read-only Combobox is barred from constraint validation
+        // (the user could not fix it); its value is still submitted.
+        type={validates ? 'text' : 'hidden'}
+        required={validates}
+        onInvalid={() => inputRef.current?.focus()}
+      />
+    </div>
+  );
 };
 ComboboxRoot.displayName = 'Combobox';
 
-export const Combobox = Object.assign(ComboboxRoot, {
+/** Flat name of `Combobox.Option` for React Server Components. */
+export const ComboboxOption = Option;
+/** Flat name of `Combobox.OptionGroup` for React Server Components. */
+export const ComboboxOptionGroup = OptionGroup;
+
+export const Combobox = /* @__PURE__ */ Object.assign(ComboboxRoot, {
   Option,
   OptionGroup,
 });
