@@ -562,6 +562,108 @@ describe('Drawer', () => {
       });
     });
 
+    describe('triggers inside Fragments', () => {
+      function ConditionalTrigger({ showTrigger = true }: { showTrigger?: boolean }) {
+        return (
+          <Drawer title="Fragment">
+            {showTrigger && (
+              <>
+                <Drawer.Trigger>
+                  <button type="button">Open</button>
+                </Drawer.Trigger>
+                <p>Fragment body</p>
+              </>
+            )}
+            <p>Direct body</p>
+          </Drawer>
+        );
+      }
+
+      it('renders a Drawer.Trigger inside a (conditional) Fragment in place, and the rest of the Fragment in the panel', async () => {
+        const user = userEvent.setup();
+        const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+        const { rerender } = render(<ConditionalTrigger />);
+        // Closed: the trigger is on the page, the Fragment's other children are panel content.
+        expect(button('Open')).toBeInTheDocument();
+        expect(screen.queryByText('Fragment body')).not.toBeInTheDocument();
+        expect(screen.queryByText('Direct body')).not.toBeInTheDocument();
+
+        await user.click(button('Open'));
+        const panel = screen.getByRole('dialog', { name: 'Fragment' });
+        expect(panel).toContainElement(screen.getByText('Fragment body'));
+        expect(panel).toContainElement(screen.getByText('Direct body'));
+        expect(panel).not.toContainElement(button('Open'));
+        expect(button('Open')).toHaveAttribute('aria-expanded', 'true');
+
+        await user.keyboard('{Escape}');
+        expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+        expect(button('Open')).toHaveFocus();
+        expect(warn).not.toHaveBeenCalled();
+
+        rerender(<ConditionalTrigger showTrigger={false} />);
+        expect(screen.queryByRole('button', { name: 'Open' })).not.toBeInTheDocument();
+        warn.mockRestore();
+      });
+
+      it('finds a trigger in nested and keyed Fragments', async () => {
+        const user = userEvent.setup();
+        const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+        render(
+          <Drawer title="Nested fragments">
+            <React.Fragment key="outer">
+              <>
+                <Drawer.Trigger>
+                  <button type="button">Open</button>
+                </Drawer.Trigger>
+              </>
+              Body
+            </React.Fragment>
+          </Drawer>,
+        );
+        await user.click(button('Open'));
+        expect(screen.getByRole('dialog', { name: 'Nested fragments' })).toHaveTextContent('Body');
+        expect(warn).not.toHaveBeenCalled();
+        warn.mockRestore();
+      });
+
+      it('gives flattened Fragment children unique keys and keeps panel state when a sibling Fragment toggles', async () => {
+        const user = userEvent.setup();
+        const error = vi.spyOn(console, 'error').mockImplementation(() => {});
+        function Toggling({ extra }: { extra: boolean }) {
+          return (
+            <Drawer title="Keys" defaultOpen>
+              <>
+                <Drawer.Trigger>
+                  <button type="button">Open</button>
+                </Drawer.Trigger>
+                <p>One</p>
+              </>
+              {extra && (
+                <>
+                  <p>Extra</p>
+                </>
+              )}
+              <>
+                <p>Two</p>
+                <input aria-label="Kept" />
+              </>
+            </Drawer>
+          );
+        }
+        const { rerender } = render(<Toggling extra={false} />);
+        await user.type(screen.getByRole('textbox', { name: 'Kept' }), 'typed');
+        const input = screen.getByRole('textbox', { name: 'Kept' });
+
+        rerender(<Toggling extra />);
+        expect(screen.getByText('Extra')).toBeInTheDocument();
+        // Same element, same uncontrolled value: the flattened keys did not shift.
+        expect(screen.getByRole('textbox', { name: 'Kept' })).toBe(input);
+        expect(input).toHaveValue('typed');
+        expect(error).not.toHaveBeenCalled();
+        error.mockRestore();
+      });
+    });
+
     it.each([
       [
         'a wrapper element',
@@ -572,12 +674,14 @@ describe('Drawer', () => {
         </span>,
       ],
       [
-        'a Fragment',
-        <React.Fragment key="fragment">
-          <Drawer.Trigger>
-            <button type="button">Open</button>
-          </Drawer.Trigger>
-        </React.Fragment>,
+        'a Fragment inside a wrapper element',
+        <div key="wrapper">
+          <>
+            <Drawer.Trigger>
+              <button type="button">Open</button>
+            </Drawer.Trigger>
+          </>
+        </div>,
       ],
     ])('warns in development when Drawer.Trigger is nested in %s (never rendered)', (_, nested) => {
       const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
@@ -693,6 +797,15 @@ describe('Drawer', () => {
         <Drawer.Trigger key="trigger">
           <button type="button">Open</button>
         </Drawer.Trigger>,
+      ],
+      [
+        'its Drawer.Trigger is in a Fragment',
+        {},
+        <React.Fragment key="fragment">
+          <Drawer.Trigger>
+            <button type="button">Open</button>
+          </Drawer.Trigger>
+        </React.Fragment>,
       ],
     ] as const)('does not warn that the drawer can never open when %s', (_, props, trigger) => {
       const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});

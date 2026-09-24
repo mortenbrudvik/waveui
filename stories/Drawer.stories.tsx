@@ -53,10 +53,10 @@ export const StartPosition: Story = {
 };
 
 /**
- * `Drawer.Trigger` must be a direct child of `Drawer`: wrapped in another component it becomes
- * panel content, which exists only while the drawer is open. To add a Tooltip, put it inside the
- * trigger with a render-prop child, so the trigger props and the description land on the same
- * button.
+ * `Drawer.Trigger` must be a direct child of `Drawer` (a Fragment is fine): wrapped in another
+ * element or component it becomes panel content, which exists only while the drawer is open. To
+ * add a Tooltip, put it inside the trigger with a render-prop child, so the trigger props and the
+ * description land on the same button.
  */
 export const TriggerWithTooltip: Story = {
   render: function TriggerWithTooltipDrawer({ children, ...args }) {

@@ -61,13 +61,13 @@ export interface DrawerProps extends Omit<React.HTMLAttributes<HTMLDivElement>, 
    */
   finalFocusRef?: React.RefObject<HTMLElement | null>;
   /**
-   * The drawer body. `Drawer.Trigger` children placed directly inside the Drawer render in place
-   * (outside the panel); everything else renders in the panel's scrolling body. A `Drawer.Trigger`
-   * nested in another element or a Fragment, or rendered by a component, is panel content, so it
-   * only exists while the drawer is open (development warnings say so, also when an uncontrolled
-   * drawer has no direct trigger and can therefore never open; a controlled drawer whose trigger a
-   * component such as a Tooltip wraps warns only once it opens). Put wrappers inside the trigger
-   * instead: see `Drawer.Trigger`.
+   * The drawer body. `Drawer.Trigger` children placed directly inside the Drawer, or in a Fragment
+   * there (`{isMobile && <>…</>}`), render in place (outside the panel); everything else renders in
+   * the panel's scrolling body. A `Drawer.Trigger` nested in another element, or rendered by a
+   * component, is panel content, so it only exists while the drawer is open (development warnings
+   * say so, also when an uncontrolled drawer has no direct trigger and can therefore never open; a
+   * controlled drawer whose trigger a component such as a Tooltip wraps warns only once it opens).
+   * Put wrappers inside the trigger instead: see `Drawer.Trigger`.
    */
   children: React.ReactNode;
   /** Ref to the drawer panel (`role="dialog"`). */
@@ -166,16 +166,16 @@ const positionClasses: Record<DrawerPosition, string> = {
 
 const NESTED_TRIGGER_WARNING_KEY = 'Drawer.Trigger:nested';
 const NESTED_TRIGGER_WARNING =
-  'Drawer.Trigger must be a direct child of Drawer. Inside another element, a Fragment or a component it is rendered as panel content, which exists only while the drawer is open, so it cannot open the drawer. Make it a direct child, or control the Drawer with `open`/`onOpenChange` and open it from your own button.';
+  'Drawer.Trigger must be a direct child of Drawer (a Fragment is fine). Inside another element or a component it is rendered as panel content, which exists only while the drawer is open, so it cannot open the drawer. Make it a direct child, put wrappers such as a Tooltip inside the trigger, or control the Drawer with `open`/`onOpenChange` and open it from your own button.';
 
 const UNREACHABLE_WARNING_KEY = 'Drawer:unreachable';
 const UNREACHABLE_WARNING =
-  'Drawer can never open: it is uncontrolled (no `open` prop), closed, and has no Drawer.Trigger as a direct child. A Drawer.Trigger rendered by a component or nested in an element is panel content, which exists only while the drawer is open. Make the trigger a direct child of Drawer, or control the Drawer with `open`/`onOpenChange`.';
+  'Drawer can never open: it is uncontrolled (no `open` prop), closed, and has no Drawer.Trigger as a direct child (or in a Fragment there). A Drawer.Trigger rendered by a component or nested in an element is panel content, which exists only while the drawer is open. Make the trigger a direct child of Drawer, or control the Drawer with `open`/`onOpenChange`.';
 
 /**
- * Opens the drawer. Place it directly inside `Drawer` (not inside a wrapper element, a Fragment or
- * a component of your own): it renders in place, not in the panel; a misplaced one warns in
- * development. A Drawer may have several triggers: focus returns to the one that opened it. Puts
+ * Opens the drawer. Place it directly inside `Drawer`, or in a Fragment there (not inside a wrapper
+ * element or a component of your own): it renders in place, not in the panel; a misplaced one warns
+ * in development. A Drawer may have several triggers: focus returns to the one that opened it. Puts
  * `aria-haspopup="dialog"`, `aria-expanded`, `aria-controls` (while open), a click handler and a
  * ref on its single child, or passes them to a render-prop child. A custom child component must
  * forward `ref` and spread its props; one that does not is wrapped in a `<span>` automatically
@@ -275,34 +275,67 @@ DrawerTitle.displayName = 'DrawerTitle';
 const NESTED_TRIGGER_MAX_DEPTH = 32;
 
 /**
- * Development check: whether the Drawer's children hold a `Drawer.Trigger` below the top level
- * (inside a host element's or a Fragment's `children`), which would become panel content. Walks
- * the element tree the consumer wrote, not rendered output, so it descends only into host elements
- * (`<div>`, `<span>`, …) and Fragments, which render their `children` as written. A component's
+ * Development check: whether the Drawer's children hold a `Drawer.Trigger` inside a host element
+ * (at any depth, also through Fragments), which would become panel content; a trigger inside
+ * Fragments only is direct (see `splitChildren`). Walks the element tree the consumer wrote, not
+ * rendered output, so it descends only into host elements (`<div>`, `<span>`, …) and Fragments,
+ * which render their `children` as written. A component's
  * output is unknown here — a wrapper that renders its own Drawer around its children, for one —
  * so components are not walked; a trigger rendered by a component is caught when it renders in the
  * open panel, or, while the drawer can never open, by the unreachable-drawer check.
  */
 function hasNestedTrigger(children: React.ReactNode): boolean {
-  const visit = (node: unknown, depth: number): boolean => {
-    if (depth > NESTED_TRIGGER_MAX_DEPTH || typeof node !== 'object' || node === null) return false;
-    if (Array.isArray(node)) return node.some((item) => visit(item, depth));
+  // `depth` counts host elements only: a Fragment adds no level, as `splitChildren` flattens it.
+  const visit = (node: unknown, depth: number, level: number): boolean => {
+    if (level > NESTED_TRIGGER_MAX_DEPTH || typeof node !== 'object' || node === null) return false;
+    if (Array.isArray(node)) return node.some((item) => visit(item, depth, level));
     if (!React.isValidElement(node)) return false;
     if (node.type === DrawerTrigger) return depth > 0;
-    if (typeof node.type !== 'string' && node.type !== React.Fragment) return false;
-    return visit((node.props as { children?: unknown }).children, depth + 1);
+    const isFragment = node.type === React.Fragment;
+    if (typeof node.type !== 'string' && !isFragment) return false;
+    const { children: nested } = node.props as { children?: unknown };
+    return visit(nested, isFragment ? depth : depth + 1, level + 1);
   };
-  return visit(children, 0);
+  return visit(children, 0, 0);
 }
 
-/** Splits the Drawer's children into its direct `Drawer.Trigger` elements and the panel content. */
+function isFragmentElement(
+  node: React.ReactNode,
+): node is React.ReactElement<{ children?: React.ReactNode }> {
+  return React.isValidElement(node) && node.type === React.Fragment;
+}
+
+/**
+ * The Drawer's children with Fragments flattened (recursively), so a `Drawer.Trigger` in a Fragment
+ * — `{isMobile && <><Drawer.Trigger>…</Drawer.Trigger><Filters /></>}` — counts as a direct child.
+ * An element from a Fragment is keyed with the Fragment's key as a prefix: keys stay unique across
+ * Fragments and stable when a sibling Fragment toggles, so panel content keeps its state.
+ */
+function flattenFragments(children: React.ReactNode, keyPrefix = ''): React.ReactNode[] {
+  const flat: React.ReactNode[] = [];
+  for (const child of React.Children.toArray(children)) {
+    if (isFragmentElement(child)) {
+      flat.push(...flattenFragments(child.props.children, `${keyPrefix}${child.key ?? ''}/`));
+    } else if (keyPrefix !== '' && React.isValidElement(child)) {
+      flat.push(React.cloneElement(child, { key: `${keyPrefix}${child.key ?? ''}` }));
+    } else {
+      flat.push(child);
+    }
+  }
+  return flat;
+}
+
+/**
+ * Splits the Drawer's children into its direct `Drawer.Trigger` elements (a Fragment counts as
+ * direct) and the panel content.
+ */
 function splitChildren(children: React.ReactNode): {
   triggers: React.ReactNode[];
   content: React.ReactNode[];
 } {
   const triggers: React.ReactNode[] = [];
   const content: React.ReactNode[] = [];
-  for (const child of React.Children.toArray(children)) {
+  for (const child of flattenFragments(children)) {
     if (React.isValidElement(child) && child.type === DrawerTrigger) triggers.push(child);
     else content.push(child);
   }
@@ -314,7 +347,7 @@ function splitChildren(children: React.ReactNode): {
  * (inheriting the WaveProvider theme) while open.
  *
  * - **Opening**: controlled (`open`), or uncontrolled with a `Drawer.Trigger` placed directly inside
- *   the Drawer (it renders in place, outside the panel).
+ *   the Drawer or in a Fragment there (it renders in place, outside the panel).
  * - **Modal**: focus moves into the panel and Tab stays inside it (toasts included), the rest of the
  *   page is `inert` (instead of `aria-modal`), and the page does not scroll.
  * - **Closing**: Escape (only the topmost layer: a popup opened inside closes first), a click on the
@@ -388,7 +421,7 @@ const DrawerRoot = ({
 
   // Checked once, at mount: an uncontrolled closed drawer without a direct trigger can never open
   // (e.g. `<Drawer><FilterTrigger /></Drawer>`, whose trigger is panel content). A trigger nested
-  // in an element or a Fragment already has the more specific warning above.
+  // in an element already has the more specific warning above.
   const unreachable = openProp === undefined && !defaultOpen && triggers.length === 0;
   const reachabilityCheckedRef = React.useRef(false);
   React.useEffect(() => {
