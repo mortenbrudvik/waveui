@@ -8,6 +8,11 @@ import { useCallback, useInsertionEffect, useRef } from 'react';
  * The latest `fn` is stored in an insertion effect, so it is current before any layout effect or
  * event handler runs. Do not call the returned function during render.
  *
+ * Typing: for a required `fn` the result has exactly `fn`'s type `T` (overloads and generic call
+ * signatures included); for an optional `fn` it is `(...args: Parameters<T>) => ReturnType<T> |
+ * undefined`. The single function-type parameter of 0.4 is kept, so
+ * `useEventCallback<(event: React.MouseEvent) => void>((event) => …)` still types an inline lambda.
+ *
  * @example
  * const emitChange = useEventCallback(props.onValueChange); // optional prop
  * emitChange(next); // always a function; returns `undefined` while the prop is not given
@@ -15,15 +20,13 @@ import { useCallback, useInsertionEffect, useRef } from 'react';
  * @param fn - The callback to wrap. May be `undefined`; calls are then no-ops that return `undefined`.
  * @returns A function with a stable identity that delegates to the latest `fn`.
  */
-export function useEventCallback<Args extends unknown[], R>(
-  fn: (...args: Args) => R,
-): (...args: Args) => R;
-export function useEventCallback<Args extends unknown[], R>(
-  fn: ((...args: Args) => R) | undefined,
-): (...args: Args) => R | undefined;
-export function useEventCallback<Args extends unknown[], R>(
-  fn: ((...args: Args) => R) | undefined,
-): (...args: Args) => R | undefined {
+export function useEventCallback<T extends (...args: never[]) => unknown>(fn: T): T;
+export function useEventCallback<T extends (...args: never[]) => unknown>(
+  fn: T | undefined,
+): (...args: Parameters<T>) => ReturnType<T> | undefined;
+export function useEventCallback<T extends (...args: never[]) => unknown>(
+  fn: T | undefined,
+): (...args: Parameters<T>) => ReturnType<T> | undefined {
   const ref = useRef(fn);
 
   // useInsertionEffect runs before layout effects, so the ref is up to date before any effect or
@@ -32,5 +35,9 @@ export function useEventCallback<Args extends unknown[], R>(
     ref.current = fn;
   });
 
-  return useCallback((...args: Args) => ref.current?.(...args), []);
+  return useCallback((...args: Parameters<T>) => {
+    // `T` is only known to take `never[]`; calling it with its own parameters is sound.
+    const current = ref.current as ((...params: Parameters<T>) => ReturnType<T>) | undefined;
+    return current?.(...args);
+  }, []);
 }

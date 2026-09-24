@@ -2,6 +2,7 @@ import * as React from 'react';
 import { mergeProps } from '../lib/mergeProps';
 import { renderTrigger, STATE_ARIA, type TriggerChildren } from '../lib/renderTrigger';
 import { warnOnce } from '../lib/dev';
+import { FOCUSABLE_SELECTOR } from '../lib/focus';
 import { useMergedRefs } from './useMergedRefs';
 import { useEventCallback } from './useEventCallback';
 
@@ -34,6 +35,45 @@ function isElementNode(value: unknown): value is Element {
   return typeof value === 'object' && value !== null && (value as Node).nodeType === 1;
 }
 
+type StateAriaValues = Partial<Record<(typeof STATE_ARIA)[number], unknown>>;
+
+/** The state ARIA keys present in `props` (a key given as `undefined` removes the attribute). */
+function pickStateAria(props: UnknownProps): StateAriaValues {
+  const values: StateAriaValues = {};
+  for (const key of STATE_ARIA) {
+    if (key in props) values[key] = props[key];
+  }
+  return values;
+}
+
+/**
+ * The element that receives the state ARIA inside the fallback wrapper: its first element in the
+ * tab order by markup (`tabIndex >= 0`). Not `getFirstTabbable`: that skips an `inert` subtree,
+ * and the page around a trigger is inert while its modal dialog is open.
+ */
+function findStateAriaTarget(wrapper: Element): Element | null {
+  for (const el of wrapper.querySelectorAll<HTMLElement>(FOCUSABLE_SELECTOR)) {
+    const hiddenInput = el.localName === 'input' && (el as HTMLInputElement).type === 'hidden';
+    if (!hiddenInput && el.tabIndex >= 0) return el;
+  }
+  return null;
+}
+
+/** Writes `values` onto `target` and returns a cleanup that restores its own attributes. */
+function moveStateAria(target: Element, values: StateAriaValues): () => void {
+  const previous = Object.keys(values).map((key) => [key, target.getAttribute(key)] as const);
+  for (const [key, value] of Object.entries(values)) {
+    if (value === undefined || value === null) target.removeAttribute(key);
+    else target.setAttribute(key, String(value));
+  }
+  return () => {
+    for (const [key, value] of previous) {
+      if (value === null) target.removeAttribute(key);
+      else target.setAttribute(key, value);
+    }
+  };
+}
+
 /**
  * Renders a trigger (`Dialog.Trigger`, `Drawer.Trigger`, `Popover.Trigger`, `Menu.Trigger`,
  * `.Close`): puts `triggerProps` on the consumer's element.
@@ -55,8 +95,11 @@ function isElementNode(value: unknown): value is Element {
  * - **Automatic fallback**: when the cloned child has not attached its ref by the end of the mount
  *   layout effect (a custom component that neither forwards `ref` nor spreads props), the hook
  *   switches once to the wrapper span — whose click handler catches the bubbling click, so the
- *   trigger keeps working — and warns in development. A component that forwards `ref` but drops
- *   `onClick` cannot be detected.
+ *   trigger keeps working — and warns in development. The span keeps the other trigger props (`id`,
+ *   handlers, ref), but the state ARIA (`aria-haspopup`, `aria-expanded`, `aria-controls`), which
+ *   a generic span cannot carry, moves after each commit onto the first element inside it in the
+ *   tab order (the child's own values restored when it stops being that element), or is dropped
+ *   when there is none. A component that forwards `ref` but drops `onClick` cannot be detected.
  *
  * @param children      The trigger's children.
  * @param triggerProps  Props for the trigger element (`id`, state ARIA, handlers, `ref`; the ref may
@@ -97,6 +140,21 @@ export function useTriggerElement<P>(
     setWrapperFallback(true);
   }, [cloneable, componentName]);
 
+  // The automatic fallback of a single element child: the child meant to be the trigger renders
+  // inside the span, so the state ARIA goes to the element it rendered.
+  const autoWrapper =
+    asChild && wrapperFallback && typeof children !== 'function' && isCloneableElement(children);
+  const movedAria = autoWrapper ? pickStateAria(ourProps) : null;
+  // No deps: runs after every commit of the trigger (which re-renders on every state change), so
+  // the attributes follow the live state and the child's current first tabbable element. A new
+  // target rendered by the child without a trigger commit is picked up at the next one.
+  useIsomorphicLayoutEffect(() => {
+    const wrapper = attachedRef.current;
+    if (!movedAria || !wrapper) return undefined;
+    const target = findStateAriaTarget(wrapper);
+    return target ? moveStateAria(target, movedAria) : undefined;
+  });
+
   const ourId = typeof ourProps.id === 'string' ? ourProps.id : undefined;
   const childId =
     cloneTarget && typeof cloneTarget.props.id === 'string' ? cloneTarget.props.id : undefined;
@@ -111,6 +169,13 @@ export function useTriggerElement<P>(
     const { ref: _ourRef, ...ourRest } = ourProps;
     const merged = mergeProps(ourRest, theirProps, { oursWin: STATE_ARIA });
     return React.cloneElement(cloneTarget, { ...merged, ref: mergedRef });
+  }
+
+  if (autoWrapper) {
+    const { ref: _ourRef, ...ourRest } = ourProps;
+    const wrapperProps: UnknownProps = { ...ourRest, ref: mergedRef };
+    for (const key of STATE_ARIA) delete wrapperProps[key];
+    return renderTrigger(children, wrapperProps, { componentName, asChild: false });
   }
 
   return renderTrigger(children, triggerProps, {

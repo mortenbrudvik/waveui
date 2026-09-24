@@ -1,9 +1,12 @@
 import * as React from 'react';
 import { cn } from '../../lib/cn';
 import { warnOnce } from '../../lib/dev';
+import { getThemeClassName, isWaveTheme, WAVE_THEMES, type WaveTheme } from '../../lib/theme';
 
-/** Supported visual themes for the Wave design system. */
-export type WaveTheme = 'light' | 'dark' | 'high-contrast';
+// The theme helper lives in server-safe src/lib (no "use client"), so React Server Components can
+// call it; it stays exported from here too.
+export { getThemeClassName } from '../../lib/theme';
+export type { WaveTheme } from '../../lib/theme';
 
 /** Text direction for bidirectional layout support. */
 export type WaveDir = 'ltr' | 'rtl';
@@ -69,28 +72,6 @@ export function useWaveTheme(): WaveContextValue {
   return React.useContext(WaveContext);
 }
 
-const themeClassMap: Record<WaveTheme, string> = {
-  light: 'wave-light',
-  // The legacy `dark` / `high-contrast` classes stay emitted (deprecated) for consumers' `dark:`
-  // variants and 0.4 selectors.
-  dark: 'wave-dark dark',
-  'high-contrast': 'wave-high-contrast high-contrast',
-};
-
-function isWaveTheme(theme: unknown): theme is WaveTheme {
-  return typeof theme === 'string' && Object.hasOwn(themeClassMap, theme);
-}
-
-/**
- * The classes that select a theme's tokens: `'wave-light'`, `'wave-dark dark'` or
- * `'wave-high-contrast high-contrast'`. Unknown values fall back to the light classes.
- *
- * @param theme - A {@link WaveTheme}.
- */
-export function getThemeClassName(theme: WaveTheme): string {
-  return isWaveTheme(theme) ? themeClassMap[theme] : themeClassMap.light;
-}
-
 /**
  * Applies Wave theming to an application or subtree.
  *
@@ -115,13 +96,13 @@ export const WaveProvider = ({
 }: WaveProviderProps) => {
   // An unknown value (untyped callers) renders, and is reported, as the light theme.
   const resolvedTheme: WaveTheme = isWaveTheme(theme) ? theme : 'light';
-  const themeClassName = themeClassMap[resolvedTheme];
+  const themeClassName = getThemeClassName(resolvedTheme);
 
   React.useEffect(() => {
     if (!isWaveTheme(theme)) {
       warnOnce(
         `WaveProvider:theme:${String(theme)}`,
-        `WaveProvider: unknown theme "${String(theme)}". Valid themes: ${Object.keys(themeClassMap).join(', ')}. Using "light".`,
+        `WaveProvider: unknown theme "${String(theme)}". Valid themes: ${WAVE_THEMES.join(', ')}. Using "light".`,
       );
     }
   }, [theme]);

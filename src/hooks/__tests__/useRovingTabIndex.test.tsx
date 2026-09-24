@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, expectTypeOf } from 'vitest';
 import { render, screen, fireEvent, act } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
+import { createPortal } from 'react-dom';
 import { renderToString } from 'react-dom/server';
 import * as React from 'react';
 import {
@@ -1254,6 +1255,136 @@ describe('useRovingTabIndex', () => {
       expect(latest!.focusedValue).toBe('a2');
       expect(treeitem('A2')).toHaveAttribute('tabindex', '0');
       expect(treeitem('A')).toHaveAttribute('tabindex', '-1');
+    });
+  });
+
+  describe('events from a portal: only keys and focus inside the container DOM count', () => {
+    /**
+     * Popups a Toolbar item renders through a portal (Menu.Popover, Popover.Content): React
+     * bubbles their keydown and focus events through the Toolbar, but their DOM is in
+     * document.body. The menu is a vertical roving group of its own (Left/Right unhandled); the
+     * popover handles no keys at all.
+     */
+    function PopupMenu() {
+      const { containerProps, getTabIndex } = useRovingTabIndex({
+        orientation: 'vertical',
+        activeValue: 'cut',
+      });
+      return createPortal(
+        <div role="menu" aria-label="Edit" {...containerProps}>
+          <button
+            type="button"
+            role="menuitem"
+            data-roving-value="cut"
+            tabIndex={getTabIndex('cut')}
+          >
+            Cut
+          </button>
+          <button
+            type="button"
+            role="menuitem"
+            data-roving-value="copy"
+            tabIndex={getTabIndex('copy')}
+          >
+            Copy
+          </button>
+        </div>,
+        document.body,
+      );
+    }
+
+    function ToolbarWithPopups({
+      typeahead,
+      onResult,
+    }: {
+      typeahead?: boolean;
+      onResult?: (result: UseRovingTabIndexResult) => void;
+    }) {
+      const result = useRovingTabIndex({
+        itemSelector: TOOLBAR_SELECTOR,
+        manageTabIndex: true,
+        tabStop: 'last-focused',
+        typeahead,
+      });
+      onResult?.(result);
+      return (
+        <div role="toolbar" aria-label="Formatting" {...result.containerProps}>
+          <button type="button" data-roving-value="bold">
+            Bold
+          </button>
+          <button type="button" data-roving-value="edit">
+            Edit
+          </button>
+          <PopupMenu />
+          <button type="button" data-roving-value="link">
+            Link
+          </button>
+          {createPortal(
+            <div role="dialog" aria-label="Insert link">
+              <button type="button">Apply</button>
+            </div>,
+            document.body,
+          )}
+          <button type="button" data-roving-value="underline">
+            Underline
+          </button>
+        </div>
+      );
+    }
+    const menuitem = (name: string) => screen.getByRole('menuitem', { name });
+
+    it('arrows a portaled menu leaves unhandled do not move focus out of it', async () => {
+      const user = userEvent.setup();
+      render(<ToolbarWithPopups />);
+      focus(menuitem('Cut'));
+      await user.keyboard('{ArrowRight}');
+      expect(menuitem('Cut')).toHaveFocus();
+      await user.keyboard('{ArrowLeft}');
+      expect(menuitem('Cut')).toHaveFocus();
+      // The menu's own arrows still work.
+      await user.keyboard('{ArrowDown}');
+      expect(menuitem('Copy')).toHaveFocus();
+      await user.keyboard('{ArrowRight}');
+      expect(menuitem('Copy')).toHaveFocus();
+    });
+
+    it('does not handle or prevent arrows, Home or End pressed in a portaled popover', () => {
+      render(<ToolbarWithPopups />);
+      const apply = button('Apply');
+      focus(apply);
+      for (const key of ['ArrowRight', 'ArrowLeft', 'Home', 'End']) {
+        expect(fireEvent.keyDown(apply, { key })).toBe(true);
+        expect(apply).toHaveFocus();
+      }
+    });
+
+    it('typeahead ignores keys typed in a portal', async () => {
+      const user = userEvent.setup();
+      render(<ToolbarWithPopups typeahead />);
+      focus(button('Apply'));
+      await user.keyboard('u');
+      expect(button('Apply')).toHaveFocus();
+    });
+
+    it('focus in a portal does not move the tab stop or focusedValue', () => {
+      let latest: UseRovingTabIndexResult | undefined;
+      render(<ToolbarWithPopups onResult={(r) => (latest = r)} />);
+      focus(button('Edit'));
+      expect(latest!.focusedValue).toBe('edit');
+      focus(menuitem('Copy'));
+      focus(button('Apply'));
+      expect(latest!.focusedValue).toBe('edit');
+      expect(button('Edit')).toHaveAttribute('tabindex', '0');
+      expect(button('Bold')).toHaveAttribute('tabindex', '-1');
+    });
+
+    it('keys on the container itself still move to the first or last item', () => {
+      render(<ToolbarWithPopups />);
+      const toolbar = screen.getByRole('toolbar', { name: 'Formatting' });
+      fireEvent.keyDown(toolbar, { key: 'ArrowRight' });
+      expect(button('Bold')).toHaveFocus();
+      fireEvent.keyDown(toolbar, { key: 'End' });
+      expect(button('Underline')).toHaveFocus();
     });
   });
 

@@ -1,5 +1,6 @@
 import * as React from 'react';
-import { getArrowIntent, getDirection, type Direction } from '../lib/direction';
+import type { WaveDir } from '../components/provider/WaveProvider';
+import { getArrowIntent, getDirection } from '../lib/direction';
 import { getFirstTabbable } from '../lib/focus';
 import { setRef } from '../lib/mergeRefs';
 import { useEventCallback } from './useEventCallback';
@@ -29,7 +30,7 @@ export interface UseRovingTabIndexOptions {
    */
   loop?: boolean;
   /** Text direction. Defaults to the direction of the container at key time (`getDirection`). */
-  dir?: Direction;
+  dir?: WaveDir;
   /**
    * Selector for the item elements inside the container.
    * @default '[data-roving-value]'
@@ -435,6 +436,16 @@ function textOf(element: HTMLElement): string {
 }
 
 /**
+ * Whether an event target is the container or inside its DOM. React bubbles events from a portal
+ * (a Menu.Popover or Popover.Content a Toolbar item renders) through the container although their
+ * target is elsewhere in the document; those events are not the container's to handle.
+ */
+function isInContainer(container: Node, target: EventTarget | null): boolean {
+  if (!target || typeof (target as Node).nodeType !== 'number') return false;
+  return target === container || container.contains(target as Node);
+}
+
+/**
  * The item an event started in: the innermost item element that is the target or one of its
  * ancestors (up to the container). Items can nest (an APG treeitem contains the group of its child
  * treeitems), so the first containing item in DOM order would be the outermost ancestor.
@@ -478,7 +489,9 @@ function findOwningItem(
  *   the container at key time). Arrows and typeahead move from the item the key started in — the
  *   innermost one when items nest, as treeitems do inside their parent's group; when it started on
  *   no item (focus on the container itself) next goes to the first enabled item and prev to the last.
- *   Handled keys call `preventDefault()`.
+ *   Handled keys call `preventDefault()`. Keys and focus from outside the container's DOM — a
+ *   popup an item renders through a portal, whose events React bubbles through the container —
+ *   are ignored, so focus never leaves an open menu or popover for the container's items.
  *
  * @example
  * const { containerProps, getTabIndex } = useRovingTabIndex({ activeValue: value, orientation: 'both' });
@@ -585,6 +598,8 @@ export function useRovingTabIndex(
     if (e.defaultPrevented || e.altKey || e.ctrlKey || e.metaKey) return;
     if (ownsArrowKeys(e.target)) return;
     const container = store.container ?? (e.currentTarget as HTMLElement);
+    // A key from a portaled popup is the popup's: never pull focus back out of it.
+    if (!isInContainer(container, e.target)) return;
     const ordered = store.resolve(container);
     const enabled = ordered.filter((item) => !item.disabled);
     if (enabled.length === 0) return;
@@ -643,6 +658,7 @@ export function useRovingTabIndex(
 
   const handleFocus = useEventCallback((e: React.FocusEvent) => {
     const container = store.container ?? (e.currentTarget as HTMLElement);
+    if (!isInContainer(container, e.target)) return;
     const item = findOwningItem(store.resolve(container), e.target, container);
     if (!item) return;
     store.setLastFocused(item.value);

@@ -93,7 +93,9 @@ function detachAll<T>(state: MergedRefState<T>): void {
  * @param refs - Object refs, callback refs, `null` or `undefined` (ignored).
  * @returns A stable callback ref that forwards the node to every ref.
  */
-export function useMergedRefs<T>(...refs: Array<AnyRef<T>>): React.RefCallback<T> {
+export function useMergedRefs<T>(
+  ...refs: Array<React.Ref<T> | undefined | null>
+): React.RefCallback<T> {
   // Written only in the insertion effect, the ref callback and the layout effect below (C-HOOKS:
   // never during render). The initial `refs` is replaced by the insertion effect before any attach.
   const stateRef = useRef<MergedRefState<T>>({ refs, node: null, attached: [] });

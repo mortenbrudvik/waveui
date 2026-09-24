@@ -78,5 +78,45 @@ describe('useEventCallback', () => {
       // @ts-expect-error the argument is required
       result.current();
     });
+
+    it('accepts the 0.4 explicit function type argument, which types an inline lambda', () => {
+      const { result } = renderHook(() =>
+        useEventCallback<(value: string, index: number) => number>(
+          (value, index) => value.length + index,
+        ),
+      );
+      expectTypeOf(result.current).toEqualTypeOf<(value: string, index: number) => number>();
+      expect(result.current('ab', 1)).toBe(3);
+    });
+
+    it('accepts an explicit function type argument for an optional callback', () => {
+      const optional = undefined as ((value: string) => number) | undefined;
+      const { result } = renderHook(() => useEventCallback<(value: string) => number>(optional));
+      expectTypeOf(result.current).toEqualTypeOf<(value: string) => number | undefined>();
+      expect(result.current('a')).toBeUndefined();
+    });
+
+    it('keeps the overloads and generic signature of a required callback', () => {
+      function format(value: string): string;
+      function format(value: number): number;
+      function format(value: string | number): string | number {
+        return value;
+      }
+      const { result } = renderHook(() => useEventCallback(format));
+      expectTypeOf(result.current).toEqualTypeOf<typeof format>();
+      expectTypeOf(result.current(1)).toEqualTypeOf<number>();
+      expectTypeOf(result.current('a')).toEqualTypeOf<string>();
+
+      const identity = <V>(value: V): V => value;
+      const { result: generic } = renderHook(() => {
+        // A statement, as in a component: returned directly, renderHook's inferred result type
+        // would be the contextual type of the call, and TypeScript would instantiate `V` there.
+        const stable = useEventCallback(identity);
+        return stable;
+      });
+      expectTypeOf(generic.current).toEqualTypeOf<typeof identity>();
+      expectTypeOf(generic.current(true)).toEqualTypeOf<boolean>();
+      expect(generic.current(true)).toBe(true);
+    });
   });
 });

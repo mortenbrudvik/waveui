@@ -5,6 +5,7 @@ import * as React from 'react';
 import { useTriggerElement } from '../useTriggerElement';
 import { __resetWarnings } from '../../lib/dev';
 import { mergeRefs } from '../../lib/mergeRefs';
+import { expectNoA11yViolations } from '../../test-utils';
 
 interface TestTriggerProps {
   id: string;
@@ -355,13 +356,11 @@ describe('useTriggerElement', () => {
       );
       const wrapper = container.querySelector('span');
       expect(wrapper).not.toBeNull();
-      expect(wrapper).toHaveAttribute('aria-expanded', 'false');
       expect(wrapper).toHaveAttribute('id', 'generated-trigger');
       expect(triggerRef.current).toBe(wrapper);
 
       await user.click(screen.getByRole('button', { name: 'Fancy' }));
       expect(screen.getByText('Panel')).toBeInTheDocument();
-      expect(wrapper).toHaveAttribute('aria-expanded', 'true');
 
       rerender(
         <Harness triggerRef={triggerRef}>
@@ -370,6 +369,118 @@ describe('useTriggerElement', () => {
       );
       expect(warnSpy).toHaveBeenCalledTimes(1);
       expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining('Test.Trigger'));
+    });
+
+    it('moves the state ARIA from the generic span onto the button inside it', async () => {
+      const user = userEvent.setup();
+      const { container } = render(
+        <Harness>
+          <NonForwarding label="Fancy" />
+        </Harness>,
+      );
+      const wrapper = container.querySelector('span')!;
+      const button = screen.getByRole('button', { name: 'Fancy' });
+      for (const name of ['aria-haspopup', 'aria-expanded', 'aria-controls']) {
+        expect(wrapper).not.toHaveAttribute(name);
+      }
+      expect(button).toHaveAttribute('aria-haspopup', 'dialog');
+      expect(button).toHaveAttribute('aria-expanded', 'false');
+      expect(button).not.toHaveAttribute('aria-controls');
+      await expectNoA11yViolations(container);
+
+      await user.click(button);
+      expect(button).toHaveAttribute('aria-expanded', 'true');
+      expect(button).toHaveAttribute('aria-controls', 'panel');
+      expect(wrapper).not.toHaveAttribute('aria-expanded');
+      await expectNoA11yViolations(container);
+
+      await user.click(button);
+      expect(button).toHaveAttribute('aria-expanded', 'false');
+      expect(button).not.toHaveAttribute('aria-controls');
+    });
+
+    it("lets the live state win over the inner element's own attributes", async () => {
+      const user = userEvent.setup();
+      function StaleAria() {
+        return (
+          <button type="button" aria-expanded="true" aria-controls="stale" aria-haspopup="menu">
+            Fancy
+          </button>
+        );
+      }
+      render(
+        <Harness>
+          <StaleAria />
+        </Harness>,
+      );
+      const button = screen.getByRole('button', { name: 'Fancy' });
+      expect(button).toHaveAttribute('aria-haspopup', 'dialog');
+      expect(button).toHaveAttribute('aria-expanded', 'false');
+      expect(button).not.toHaveAttribute('aria-controls');
+      await user.click(button);
+      expect(button).toHaveAttribute('aria-controls', 'panel');
+    });
+
+    it('follows the first tabbable element and restores the one it leaves', () => {
+      function Pair({ firstTabbable }: { firstTabbable: boolean }) {
+        return (
+          <>
+            <button type="button" tabIndex={firstTabbable ? 0 : -1} aria-expanded="true">
+              One
+            </button>
+            <button type="button">Two</button>
+          </>
+        );
+      }
+      const { rerender } = render(
+        <Trigger>
+          <Pair firstTabbable />
+        </Trigger>,
+      );
+      const one = screen.getByRole('button', { name: 'One' });
+      const two = screen.getByRole('button', { name: 'Two' });
+      expect(one).toHaveAttribute('aria-expanded', 'false');
+      expect(one).toHaveAttribute('aria-haspopup', 'dialog');
+      expect(two).not.toHaveAttribute('aria-haspopup');
+
+      rerender(
+        <Trigger>
+          <Pair firstTabbable={false} />
+        </Trigger>,
+      );
+      expect(two).toHaveAttribute('aria-haspopup', 'dialog');
+      expect(two).toHaveAttribute('aria-expanded', 'false');
+      // The element left behind gets its own attributes back.
+      expect(one).not.toHaveAttribute('aria-haspopup');
+      expect(one).toHaveAttribute('aria-expanded', 'true');
+    });
+
+    it('keeps the state on the inner button while the page around it is inert (open modal)', () => {
+      render(
+        <div inert>
+          <Trigger open>
+            <NonForwarding label="Fancy" />
+          </Trigger>
+        </div>,
+      );
+      const button = screen.getByText('Fancy');
+      expect(button).toHaveAttribute('aria-expanded', 'true');
+      expect(button).toHaveAttribute('aria-controls', 'panel');
+    });
+
+    it('drops the state ARIA when the child renders nothing tabbable', async () => {
+      function Plain() {
+        return <b>Fancy</b>;
+      }
+      const { container } = render(
+        <Harness>
+          <Plain />
+        </Harness>,
+      );
+      const wrapper = container.querySelector('span')!;
+      expect(wrapper).toContainElement(screen.getByText('Fancy'));
+      expect(container.querySelector('[aria-expanded], [aria-haspopup]')).toBeNull();
+      await expectNoA11yViolations(container);
     });
   });
 

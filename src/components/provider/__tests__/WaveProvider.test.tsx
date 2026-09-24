@@ -8,6 +8,10 @@ import {
   type WaveContextValue,
   type WaveTheme,
 } from '../WaveProvider';
+import {
+  getThemeClassName as getLibThemeClassName,
+  type WaveTheme as LibWaveTheme,
+} from '../../../lib/theme';
 import { testSystemProps } from '../../../test-utils';
 import { __resetWarnings } from '../../../lib/dev';
 
@@ -119,6 +123,13 @@ describe('WaveProvider', () => {
 
     it('falls back to the light class for an unknown theme', () => {
       expect(getThemeClassName('neon' as WaveTheme)).toBe('wave-light');
+    });
+
+    it('is the helper of the server-safe src/lib module, callable from a Server Component', () => {
+      // The build heads every src/components module with "use client"; src/lib gets no directive,
+      // so `<html className={getThemeClassName('dark')}>` works in an RSC layout.
+      expect(getThemeClassName).toBe(getLibThemeClassName);
+      expectTypeOf<LibWaveTheme>().toEqualTypeOf<WaveTheme>();
     });
   });
 
