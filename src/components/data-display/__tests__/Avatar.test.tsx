@@ -1,6 +1,8 @@
 import * as React from 'react';
 import { describe, it, expect, expectTypeOf, vi } from 'vitest';
-import { fireEvent, render, screen } from '@testing-library/react';
+import { act, fireEvent, render, screen } from '@testing-library/react';
+import { renderToString } from 'react-dom/server';
+import { hydrateRoot } from 'react-dom/client';
 import { Avatar } from '../Avatar';
 import type { AvatarProps } from '../Avatar';
 import { PresenceBadge } from '../PresenceBadge';
@@ -503,6 +505,210 @@ describe('Avatar', () => {
       fireEvent.error(container.querySelector('img')!);
       expect(onError).toHaveBeenCalledTimes(1);
       expect(container.querySelector('img')).toBeNull();
+    });
+
+    // A framework image component whose `src` is not a string (a static-import object).
+    interface StaticImage {
+      url: string;
+    }
+    type FrameworkImageProps = Omit<React.ImgHTMLAttributes<HTMLImageElement>, 'src'> & {
+      src?: StaticImage;
+    };
+    const FrameworkImage = ({ src, alt = '', ...props }: FrameworkImageProps) => (
+      <img src={src?.url} alt={alt} {...props} />
+    );
+
+    it('retries when an element slot gets another non-string src, not an equal one', () => {
+      const { container, rerender } = render(
+        <Avatar name="Jane Doe" image={<FrameworkImage src={{ url: 'bad.png' }} />} />,
+      );
+      fireEvent.error(container.querySelector('img')!);
+      expect(container.querySelector('img')).toBeNull();
+
+      // An inline object with the same content is the same image: no retry on every render.
+      rerender(<Avatar name="Jane Doe" image={<FrameworkImage src={{ url: 'bad.png' }} />} />);
+      expect(container.querySelector('img')).toBeNull();
+
+      // Another person's image is tried.
+      rerender(<Avatar name="Jane Doe" image={<FrameworkImage src={{ url: 'good.png' }} />} />);
+      expect(container.querySelector('img')).toHaveAttribute('src', 'good.png');
+    });
+
+    it('retries when an object slot gets another srcSet', () => {
+      const { container, rerender } = render(
+        <Avatar name="Jane Doe" image={{ src: 'bad.png', srcSet: 'bad.png 1x' }} />,
+      );
+      fireEvent.error(container.querySelector('img')!);
+      expect(container.querySelector('img')).toBeNull();
+      rerender(<Avatar name="Jane Doe" image={{ src: 'bad.png', srcSet: 'good.png 1x' }} />);
+      expect(container.querySelector('img')).toHaveAttribute('srcset', 'good.png 1x');
+    });
+
+    it('retries when an element slot without src gets another srcSet or key', () => {
+      const { container, rerender } = render(
+        <Avatar name="Jane Doe" image={<img srcSet="bad.png 1x" alt="" />} />,
+      );
+      fireEvent.error(container.querySelector('img')!);
+      expect(container.querySelector('img')).toBeNull();
+      rerender(<Avatar name="Jane Doe" image={<img srcSet="good.png 1x" alt="" />} />);
+      expect(container.querySelector('img')).toHaveAttribute('srcset', 'good.png 1x');
+
+      rerender(<Avatar name="Jane Doe" image={<FrameworkImage key="jane" />} />);
+      fireEvent.error(container.querySelector('img')!);
+      expect(container.querySelector('img')).toBeNull();
+      rerender(<Avatar name="Jane Doe" image={<FrameworkImage key="john" />} />);
+      expect(container.querySelector('img')).not.toBeNull();
+    });
+
+    describe('an image that failed before hydration', () => {
+      /**
+       * Server-renders `ui`, lets `prepare` settle the image state of the server markup (as the
+       * browser does before the client script runs), then hydrates it. React attaches its `error`
+       * listener during hydration and does not replay an event that already fired. Returns what
+       * React logged while hydrating (a mismatch), to assert that it is nothing.
+       */
+      async function hydrate(ui: React.ReactElement, prepare: (img: HTMLImageElement) => void) {
+        const host = document.createElement('div');
+        host.innerHTML = renderToString(ui);
+        document.body.appendChild(host);
+        prepare(host.querySelector('img')!);
+        const errors = vi.spyOn(console, 'error').mockImplementation(() => {});
+        let root: ReturnType<typeof hydrateRoot>;
+        let hydrationErrors: unknown[][];
+        try {
+          root = await act(async () => hydrateRoot(host, ui));
+        } finally {
+          // Copied before the restore, which clears the recorded calls.
+          hydrationErrors = [...errors.mock.calls];
+          errors.mockRestore();
+        }
+        return {
+          host,
+          hydrationErrors,
+          rerender(next: React.ReactElement) {
+            act(() => root.render(next));
+          },
+          cleanup() {
+            act(() => root.unmount());
+            host.remove();
+          },
+        };
+      }
+
+      /** A settled image: `complete`, with the given natural width and `decode()` behaviour. */
+      function settle(img: HTMLImageElement, naturalWidth: number, decode?: () => Promise<void>) {
+        Object.defineProperty(img, 'complete', { configurable: true, get: () => true });
+        Object.defineProperty(img, 'naturalWidth', { configurable: true, get: () => naturalWidth });
+        if (decode) Object.defineProperty(img, 'decode', { configurable: true, value: decode });
+      }
+
+      const ui = <Avatar name="Jane Doe" src="https://example.com/expired.jpg" />;
+
+      it('falls back to the initials (no decode support)', async () => {
+        const { host, hydrationErrors, cleanup } = await hydrate(ui, (img) => {
+          settle(img, 0);
+          img.dispatchEvent(new Event('error'));
+        });
+        try {
+          expect(hydrationErrors).toEqual([]);
+          expect(host.querySelector('img')).toBeNull();
+          const avatar = screen.getByRole('img', { name: 'Jane Doe' });
+          expect(avatar).toHaveTextContent('JD');
+          expect(avatar).toHaveClass('bg-primary');
+        } finally {
+          cleanup();
+        }
+      });
+
+      it('falls back to the initials when decode() rejects', async () => {
+        const decode = vi.fn(() => Promise.reject(new DOMException('broken', 'EncodingError')));
+        const { host, hydrationErrors, cleanup } = await hydrate(ui, (img) => {
+          settle(img, 0, decode);
+          img.dispatchEvent(new Event('error'));
+        });
+        try {
+          expect(hydrationErrors).toEqual([]);
+          expect(decode).toHaveBeenCalledTimes(1);
+          expect(host.querySelector('img')).toBeNull();
+          expect(screen.getByRole('img', { name: 'Jane Doe' })).toHaveTextContent('JD');
+        } finally {
+          cleanup();
+        }
+      });
+
+      it.each([
+        ['an element slot', { image: <FrameworkImage src={{ url: 'expired.png' }} /> }],
+        [
+          'an avatar with a badge',
+          { src: 'https://example.com/expired.jpg', badge: <PresenceBadge status="busy" /> },
+        ],
+      ] as Array<[string, AvatarProps]>)('checks %s too', async (_case, props) => {
+        const { host, hydrationErrors, cleanup } = await hydrate(
+          <Avatar name="Jane Doe" {...props} />,
+          (img) => {
+            settle(img, 0);
+            img.dispatchEvent(new Event('error'));
+          },
+        );
+        try {
+          expect(hydrationErrors).toEqual([]);
+          expect(host.querySelector('img')).toBeNull();
+          expect(screen.getByRole('img', { name: 'Jane Doe' })).toHaveTextContent('JD');
+        } finally {
+          cleanup();
+        }
+      });
+
+      it('keeps a loaded image without a natural size (an SVG whose decode() resolves)', async () => {
+        const svg = <Avatar name="Jane Doe" src="https://example.com/jane.svg" />;
+        const { host, hydrationErrors, cleanup } = await hydrate(svg, (img) => {
+          settle(img, 0, () => Promise.resolve());
+        });
+        try {
+          expect(hydrationErrors).toEqual([]);
+          expect(host.querySelector('img')).toHaveAttribute('alt', 'Jane Doe');
+        } finally {
+          cleanup();
+        }
+      });
+
+      it('keeps a loaded image and one that is still loading', async () => {
+        const loaded = await hydrate(ui, (img) => settle(img, 96));
+        try {
+          expect(loaded.hydrationErrors).toEqual([]);
+          expect(loaded.host.querySelector('img')).toHaveAttribute('alt', 'Jane Doe');
+        } finally {
+          loaded.cleanup();
+        }
+        // jsdom never loads the image: `complete` stays false, as while the browser loads it.
+        const loading = await hydrate(ui, () => {});
+        try {
+          expect(loading.hydrationErrors).toEqual([]);
+          expect(loading.host.querySelector('img')).toHaveAttribute('alt', 'Jane Doe');
+        } finally {
+          loading.cleanup();
+        }
+      });
+
+      it('ignores a late verdict on a source that was replaced meanwhile', async () => {
+        let rejectDecode: (reason: unknown) => void = () => {};
+        const decode = () =>
+          new Promise<void>((_resolve, reject) => {
+            rejectDecode = reject;
+          });
+        const { host, hydrationErrors, rerender, cleanup } = await hydrate(ui, (img) => {
+          settle(img, 0, decode);
+        });
+        try {
+          expect(hydrationErrors).toEqual([]);
+          // The client moves on to another photo before the check of the old one settles.
+          rerender(<Avatar name="Jane Doe" src={PHOTO} />);
+          await act(async () => rejectDecode(new DOMException('broken', 'EncodingError')));
+          expect(host.querySelector('img')).toHaveAttribute('src', PHOTO);
+        } finally {
+          cleanup();
+        }
+      });
     });
   });
 

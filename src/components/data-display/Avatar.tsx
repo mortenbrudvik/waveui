@@ -2,13 +2,17 @@ import * as React from 'react';
 import { joinIds } from '../../lib/aria';
 import { cn } from '../../lib/cn';
 import { composeEventHandlers } from '../../lib/composeEventHandlers';
+import { useMergedRefs } from '../../hooks/useMergedRefs';
 import { PersonIcon } from '../../lib/icons';
 import type { Size, Slot } from '../../lib/types';
 import { renderSlot, slotRendersContent } from '../../lib/slot';
 
 /** Properties for the Avatar component. */
 export interface AvatarProps extends React.HTMLAttributes<HTMLSpanElement> {
-  /** URL of the avatar image. When it fails to load, the avatar falls back to its icon or initials. */
+  /**
+   * URL of the avatar image. When it fails to load (also before hydration, for server-rendered
+   * markup), the avatar falls back to its icon or initials; a new `src` is tried again.
+   */
   src?: string;
   /**
    * Full name of the person. It names the avatar for assistive technology (the image `alt`; in
@@ -33,7 +37,9 @@ export interface AvatarProps extends React.HTMLAttributes<HTMLSpanElement> {
    * itself, e.g. `<img>` or a framework image component) or an object of `<img>` attributes
    * (`{ src, alt, … }`). Takes precedence over `src`; its `alt` defaults to `name`. When its alt
    * names the avatar, the avatar's `aria-describedby` ids are joined with the slot's own, while the
-   * slot's own `aria-description` and `aria-details` win over the avatar's.
+   * slot's own `aria-description` and `aria-details` win over the avatar's. After a load failure,
+   * a new image is tried again: another `src` or `srcSet` of any type (an equal inline object is
+   * the same image), or for an element slot another component type or `key`.
    */
   image?: Slot<'img'>;
   /**
@@ -95,6 +101,7 @@ interface SlotOverrides {
 /** The props of an element or object image slot that the avatar reads. */
 interface ImageSlotProps {
   src?: unknown;
+  srcSet?: unknown;
   alt?: unknown;
   onError?: unknown;
   'aria-describedby'?: unknown;
@@ -110,11 +117,51 @@ function readSlotProps(slot: unknown): ImageSlotProps | undefined {
 }
 
 /**
+ * What identifies the image, so a load failure is kept for it and a new image is tried again
+ * (data-display#4): the `src` and `srcSet`, of any type (a framework image component may take a
+ * static-import object), and for an element slot also its type and `key`.
+ */
+type ImageKey = readonly [type: unknown, key: unknown, src: unknown, srcSet: unknown];
+
+function getImageKey(
+  imageSlot: unknown,
+  slotProps: ImageSlotProps | undefined,
+  src: string | undefined,
+): ImageKey {
+  if (imageSlot === undefined) return [undefined, undefined, src || undefined, undefined];
+  if (typeof imageSlot === 'string') return [undefined, undefined, imageSlot, undefined];
+  const element = React.isValidElement(imageSlot) ? imageSlot : undefined;
+  return [element?.type, element?.key, slotProps?.src, slotProps?.srcSet];
+}
+
+function isPlainObject(value: unknown): value is Record<string, unknown> {
+  if (typeof value !== 'object' || value === null) return false;
+  const proto: unknown = Object.getPrototypeOf(value);
+  return proto === Object.prototype || proto === null;
+}
+
+/** Same value, or plain objects with the same entries (an inline `src={{ … }}` on each render). */
+function sameKeyPart(a: unknown, b: unknown): boolean {
+  if (Object.is(a, b)) return true;
+  if (!isPlainObject(a) || !isPlainObject(b)) return false;
+  const keys = Object.keys(a);
+  return (
+    keys.length === Object.keys(b).length &&
+    keys.every((k) => Object.prototype.hasOwnProperty.call(b, k) && Object.is(a[k], b[k]))
+  );
+}
+
+function sameImageKey(a: ImageKey, b: ImageKey): boolean {
+  return a.every((part, i) => sameKeyPart(part, b[i]));
+}
+
+/**
  * A circular picture of a person: their image, an icon, or the initials of their `name`.
  *
  * - **Image**: `image` (URL string, element or `{ src, alt }` object) or `src`. If the image fails
  *   to load, the avatar falls back to `icon`, the initials or a person glyph, with their
- *   background; a new `src` is tried again.
+ *   background; a new image is tried again. A server-rendered image that failed before hydration
+ *   is detected after mount (settled without a natural size, confirmed by `decode()`).
  * - **Accessible name**: an image uses `name` (whitespace collapsed) as its `alt`, or `''` when the
  *   name is blank. Without an image the avatar is `role="img"` with `aria-label={name}` and the
  *   initials/icon are hidden; without a name (and without `aria-label`/`aria-labelledby`) it is
@@ -153,23 +200,47 @@ export const Avatar = ({
       ? undefined
       : image;
   const slotProps = readSlotProps(imageSlot);
-  const imageSource =
-    imageSlot === undefined
-      ? src || undefined
-      : typeof imageSlot === 'string'
-        ? imageSlot
-        : typeof slotProps?.src === 'string'
-          ? slotProps.src
-          : undefined;
+  const imageKey = getImageKey(imageSlot, slotProps, src);
 
-  // Load failure of the current image source; a new source is tried again (C-HOOKS: adjust
-  // state during render on prop change).
+  // Load failure of the current image; a new image is tried again (C-HOOKS: adjust state during
+  // render on prop change).
   const [failed, setFailed] = React.useState(false);
-  const [prevSource, setPrevSource] = React.useState(imageSource);
-  if (prevSource !== imageSource) {
-    setPrevSource(imageSource);
+  const [prevImageKey, setPrevImageKey] = React.useState(imageKey);
+  if (!sameImageKey(prevImageKey, imageKey)) {
+    setPrevImageKey(imageKey);
     setFailed(false);
   }
+
+  // An image that failed before hydration (a fast 404 of server-rendered markup) never reaches
+  // `onError`: React attaches the listener while hydrating and does not replay the event. After
+  // mount, a settled image without a natural size is broken, unless it is an SVG without one, so
+  // `decode()` (which rejects for a broken image) confirms it where the browser supports it. Later
+  // images, rendered by the client, report their errors through `onError`.
+  const visualRef = React.useRef<HTMLSpanElement>(null);
+  React.useLayoutEffect(() => {
+    const img = visualRef.current?.querySelector('img');
+    if (!img || !img.complete || img.naturalWidth !== 0) return;
+    let active = true;
+    const checkedSrc = img.getAttribute('src');
+    const checkedSrcSet = img.getAttribute('srcset');
+    const markFailed = () => {
+      // Deferred (C-HOOKS); skipped if the image was replaced or got another source meanwhile.
+      if (
+        active &&
+        img.isConnected &&
+        img.getAttribute('src') === checkedSrc &&
+        img.getAttribute('srcset') === checkedSrcSet
+      ) {
+        setFailed(true);
+      }
+    };
+    if (typeof img.decode === 'function') img.decode().then(undefined, markFailed);
+    else queueMicrotask(markFailed);
+    return () => {
+      active = false;
+    };
+  }, []);
+  const rootVisualRef = useMergedRefs(ref, visualRef);
 
   const hasConsumerName = ariaLabel !== undefined || ariaLabelledBy !== undefined;
   // A consumer role goes to the visual span together with the name (data-display#19), so the
@@ -320,7 +391,7 @@ export const Avatar = ({
 
   if (!hasBadge) {
     return (
-      <span ref={ref} {...a11yProps} {...rest} className={cn(visualClassName, className)}>
+      <span ref={rootVisualRef} {...a11yProps} {...rest} className={cn(visualClassName, className)}>
         {content}
       </span>
     );
@@ -328,7 +399,7 @@ export const Avatar = ({
 
   return (
     <span ref={ref} {...rest} className={cn('relative inline-flex shrink-0', className)}>
-      <span {...a11yProps} className={visualClassName}>
+      <span ref={visualRef} {...a11yProps} className={visualClassName}>
         {content}
       </span>
       {badgeNode}
