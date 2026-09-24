@@ -1,6 +1,7 @@
 import type { Meta, StoryObj } from '@storybook/react';
 import { fn } from 'storybook/test';
 import { Link, Text } from '../src';
+import type { LinkProps } from '../src';
 
 const meta = {
   title: 'Components/Button/Link',
@@ -20,6 +21,11 @@ const meta = {
 
 export default meta;
 type Story = StoryObj<typeof meta>;
+/**
+ * A story that renders the link as a button takes the button's props, plus `href: undefined` to
+ * clear the default `href` arg of the meta.
+ */
+type ButtonStory = StoryObj<LinkProps<'button'> & { href?: undefined }>;
 
 export const Default: Story = {};
 
@@ -57,7 +63,7 @@ export const Disabled: Story = {
 };
 
 /** `as="button"` renders a `<button type="button">` styled as a link. */
-export const AsButton: Story = {
+export const AsButton: ButtonStory = {
   args: {
     as: 'button',
     href: undefined,

@@ -36,7 +36,8 @@ describe('Button', () => {
     vi.restoreAllMocks();
   });
 
-  testSystemProps(Button, {
+  // The `as` variants render other elements, so the props are typed for any element.
+  testSystemProps<ButtonProps<React.ElementType>>(Button, {
     expectedTag: 'button',
     displayName: 'Button',
     polymorphic: true,

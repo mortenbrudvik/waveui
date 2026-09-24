@@ -8,6 +8,7 @@ import { describe, it, expect, expectTypeOf } from 'vitest';
 import * as React from 'react';
 import type { PolymorphicComponent, PolymorphicProps } from '../polymorphic';
 import type * as Types from '../types';
+import type * as Wave from '../../index';
 
 /** The XOwnProps rule: ONLY component-specific props, no HTML-attribute inheritance. */
 interface ButtonOwnProps {
@@ -129,6 +130,61 @@ describe('PolymorphicProps / PolymorphicComponent', () => {
     }>;
     expect(element.type).toBe('a');
     expect(element.props.href).toBe('/x');
+  });
+
+  it('React.ComponentProps<typeof X> is the checked default-tag props type (x-types-core-1)', () => {
+    // Conditional-type inference (`ComponentProps`, `Parameters`, `memo`, Storybook `Meta<typeof X>`)
+    // reads the last call signature; a generic one would be read with C = React.ElementType, whose
+    // props collapse to a string index signature that accepts any key.
+    expectTypeOf<React.ComponentProps<typeof Button>>().toEqualTypeOf<ButtonProps>();
+    expectTypeOf<Parameters<typeof Button>[0]>().toEqualTypeOf<ButtonProps>();
+    expectTypeOf<React.ComponentPropsWithoutRef<typeof Button>>().not.toHaveProperty('apperance');
+    expectTypeOf<React.ComponentPropsWithoutRef<typeof Button>>().toHaveProperty('formAction');
+  });
+
+  it('a wrapper typed with React.ComponentProps<typeof X> rejects typos and mistyped handlers', () => {
+    const Save = (props: React.ComponentProps<typeof Button>) =>
+      Button({ appearance: 'primary', ...props });
+    expect(Save({ children: 'Save', type: 'submit' })).toBeTruthy();
+    // @ts-expect-error — misspelled prop
+    expect(Save({ apperance: 'subtle' })).toBeTruthy();
+    // @ts-expect-error — the handler does not take a mouse event
+    expect(Save({ onClick: (id: string) => id.length })).toBeTruthy();
+    const Memo = React.memo(Button);
+    expect(Memo.type).toBe(Button);
+    // @ts-expect-error — memo(X) keeps the checked props
+    const bad: React.ComponentProps<typeof Memo> = { apperance: 'subtle' };
+    expect(bad).toEqual({ apperance: 'subtle' });
+  });
+
+  it('JSX still picks the generic signature first (as="a" is inferred)', () => {
+    expect(Button({ as: 'a', href: '/docs' })).toBeTruthy();
+    expect(Button({ as: RouterLink, to: '/home' })).toBeTruthy();
+    // @ts-expect-error — neither signature accepts an anchor attribute on the default tag
+    expect(Button({ href: '/nope' })).toBeTruthy();
+  });
+
+  it('holds for every polymorphic component of the library', () => {
+    expectTypeOf<React.ComponentProps<typeof Wave.Button>>().toEqualTypeOf<Wave.ButtonProps>();
+    expectTypeOf<
+      React.ComponentProps<typeof Wave.CompoundButton>
+    >().toEqualTypeOf<Wave.CompoundButtonProps>();
+    expectTypeOf<React.ComponentProps<typeof Wave.Link>>().toEqualTypeOf<Wave.LinkProps>();
+    expectTypeOf<React.ComponentProps<typeof Wave.Toolbar>>().toEqualTypeOf<Wave.ToolbarProps>();
+    expectTypeOf<React.ComponentProps<typeof Wave.Divider>>().toEqualTypeOf<Wave.DividerProps>();
+    expectTypeOf<React.ComponentProps<typeof Wave.Tag>>().toEqualTypeOf<Wave.TagProps>();
+    expectTypeOf<React.ComponentProps<typeof Wave.Text>>().toEqualTypeOf<Wave.TextProps>();
+    expectTypeOf<React.ComponentProps<typeof Wave.Stack>>().toEqualTypeOf<Wave.StackProps>();
+    expectTypeOf<React.ComponentProps<typeof Wave.Flex>>().toEqualTypeOf<Wave.FlexProps>();
+    expectTypeOf<React.ComponentProps<typeof Wave.Grid>>().toEqualTypeOf<Wave.GridProps>();
+    expectTypeOf<React.ComponentProps<typeof Wave.Card>>().toEqualTypeOf<Wave.CardProps>();
+    expectTypeOf<
+      React.ComponentProps<typeof Wave.Card.Header>
+    >().toEqualTypeOf<Wave.CardHeaderProps>();
+    expectTypeOf<React.ComponentProps<typeof Wave.CardBody>>().toEqualTypeOf<Wave.CardBodyProps>();
+    expectTypeOf<
+      React.ComponentProps<typeof Wave.CardFooter>
+    >().toEqualTypeOf<Wave.CardFooterProps>();
   });
 
   it('is re-exported from types.ts', () => {

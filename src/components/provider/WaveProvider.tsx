@@ -16,17 +16,18 @@ export interface WaveProviderProps extends React.HTMLAttributes<HTMLDivElement> 
   /**
    * Visual theme applied to the subtree. Providers can be nested in any order: each root declares
    * its theme's tokens, so a light panel inside a dark app (and the reverse) renders correctly.
-   * @default 'light'
+   * @default the enclosing WaveProvider's theme, else 'light'
    */
   theme?: WaveTheme;
   /**
    * Text direction for the subtree (also read by portaled overlays and keyboard navigation).
-   * @default 'ltr'
+   * @default the enclosing WaveProvider's direction, else 'ltr'
    */
   dir?: WaveDir;
   /**
-   * Element that portaled overlays (dialogs, popovers, menus, toasts) render into.
-   * @default document.body
+   * Element that portaled overlays (dialogs, popovers, menus, toasts) render into. `null` renders
+   * them into `document.body`, also inside a provider that sets a container.
+   * @default the enclosing WaveProvider's container, else document.body
    */
   portalContainer?: HTMLElement | null;
   /** Content rendered inside the themed container. */
@@ -84,16 +85,29 @@ export function useWaveTheme(): WaveContextValue {
  *   development.
  * - Provides theme, direction, theme classes and the portal container through context, so
  *   portaled overlays render with the same theme and direction.
+ * - Nests: a provider inherits every prop it omits (`theme`, `dir`, `portalContainer`) from the
+ *   enclosing provider, so `<WaveProvider theme="light">` inside an RTL app is a light panel that
+ *   stays right-to-left and keeps the app's portal container. At the top level the defaults are
+ *   `'light'`, `'ltr'` and `document.body`.
  */
 export const WaveProvider = ({
-  theme = 'light',
-  dir = 'ltr',
-  portalContainer = null,
+  theme: themeProp,
+  dir: dirProp,
+  portalContainer: portalContainerProp,
   children,
   className,
   ref,
   ...rest
 }: WaveProviderProps) => {
+  // Omitted props come from the enclosing provider; outside one, DEFAULT_CONTEXT supplies the
+  // top-level defaults. An explicit `portalContainer={null}` means document.body, so only
+  // `undefined` inherits.
+  const parent = React.useContext(WaveContext);
+  const theme = themeProp ?? parent.theme;
+  const dir = dirProp ?? parent.dir;
+  const portalContainer =
+    portalContainerProp === undefined ? parent.portalContainer : portalContainerProp;
+
   // An unknown value (untyped callers) renders, and is reported, as the light theme.
   const resolvedTheme: WaveTheme = isWaveTheme(theme) ? theme : 'light';
   const themeClassName = getThemeClassName(resolvedTheme);

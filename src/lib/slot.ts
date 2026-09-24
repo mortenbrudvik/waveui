@@ -30,23 +30,18 @@ export type SlotObject<T extends React.ElementType = 'span'> = {
 /**
  * Slot definition — a customisable sub-element of a component. Accepts:
  *
- * - shorthand content (string, number, bigint, element, or any iterable of nodes such as an
- *   array, a `Set` or a generator), rendered **inside** the slot's default element;
- * - a {@link SlotObject} (`{ as, className, children, ...attributes }`) for full control;
- * - `null`, `undefined`, `false` or `true`, which render nothing.
+ * - any `React.ReactNode` as shorthand content (string, number, bigint, element, promise, or any
+ *   iterable of nodes such as an array, a `Set` or a generator), rendered **inside** the slot's
+ *   default element; `null`, `undefined`, `false` and `true` render nothing;
+ * - a {@link SlotObject} (`{ as, className, children, ...attributes }`) for full control.
+ *
+ * An attributes object typed by an interface (`React.ImgHTMLAttributes<…>`) has no implicit
+ * `data-*` index signature, so it is not assignable as is: spread it into a literal,
+ * `image={{ ...imgProps }}`.
  *
  * @typeParam T - The slot's default element type.
  */
-export type Slot<T extends React.ElementType = 'span'> =
-  | SlotObject<T>
-  | React.ReactElement
-  | string
-  | number
-  | bigint
-  | boolean
-  | null
-  | undefined
-  | Iterable<React.ReactNode>;
+export type Slot<T extends React.ElementType = 'span'> = SlotObject<T> | React.ReactNode;
 
 /** The normalized output of {@link resolveSlot}, ready for rendering. */
 export interface ResolvedSlot {

@@ -33,6 +33,21 @@ export const inputFocus = 'focus:outline-hidden focus:border-b-2 focus:border-b-
  */
 export const inputFocusWithin = 'focus-within:border-b-2 focus-within:border-b-primary';
 
+/**
+ * Invalid look of a text-entry control (Input, Select, Textarea, SearchBox, SpinButton, Combobox,
+ * Dropdown, the picker inputs): the destructive border, kept on the bottom stroke while focused.
+ * Apply it when the control's resolved `aria-invalid` is `true` (its own error state, the
+ * consumer's `aria-invalid` or the surrounding Field's), after {@link inputBase} and
+ * {@link inputFocus} in `cn()` so it replaces their border colours.
+ */
+export const inputInvalid = 'border-destructive focus:border-b-destructive';
+
+/**
+ * Wrapper form of {@link inputInvalid} for a control drawn by a styled wrapper around the
+ * focusable input (Input with slots, SpinButton), placed after {@link inputFocusWithin}.
+ */
+export const inputInvalidWithin = 'border-destructive focus-within:border-b-destructive';
+
 /** Disabled look for native `disabled` and `aria-disabled` (C-DISABLED) controls. */
 export const disabledStyles =
   'disabled:cursor-not-allowed disabled:opacity-50 aria-disabled:cursor-not-allowed aria-disabled:opacity-50';
@@ -64,8 +79,36 @@ export const forcedColors = {
   control: 'forced-colors:border-[ButtonText]',
   /** Border of a non-interactive surface (tracks, separators). */
   border: 'forced-colors:border-[CanvasText]',
-  /** Fill that must stay visible (ProgressBar fill, Slider range). */
-  fill: 'forced-colors:bg-[Highlight]',
+  /**
+   * Fill of a **leaf indicator drawn with its own background** that must stay visible in forced
+   * colors, where author backgrounds become Canvas: a step dot or connector, a pager dot, a
+   * progress segment. Paints `Highlight` and opts the element out of forced colors
+   * (`forced-color-adjust` is inherited: leaf elements only, as with `selectedLeaf`).
+   *
+   * It only colors the element's own background, so it cannot reach an indicator drawn by a
+   * pseudo-element or a border: use `rangeInput` for a native range input (Slider) and `ringArc`
+   * for a border-drawn ring (Spinner).
+   */
+  fill: 'forced-colors:bg-[Highlight] forced-colors:forced-color-adjust-none',
+  /**
+   * A native `<input type="range">` drawn through its track and thumb pseudo-elements (Slider):
+   * put it on the input, after the normal-mode classes. It opts the input out of forced colors
+   * and, because the pseudo-elements inherit that opt-out, gives every part the input paints a
+   * system color: the rail `CanvasText`, the thumb `Highlight` with a `Canvas` edge, rail and
+   * thumb `GrayText` while disabled, and the focus-visible outline `Highlight` (the opt-out would
+   * otherwise keep the author ring color). Covers the Blink/WebKit (`::-webkit-slider-*`) and
+   * Firefox (`::-moz-range-*`) parts.
+   */
+  rangeInput:
+    'forced-colors:forced-color-adjust-none forced-colors:[&::-webkit-slider-runnable-track]:bg-[CanvasText] forced-colors:[&::-moz-range-track]:bg-[CanvasText] forced-colors:[&::-webkit-slider-thumb]:bg-[Highlight] forced-colors:[&::-webkit-slider-thumb]:border-[Canvas] forced-colors:[&::-moz-range-thumb]:bg-[Highlight] forced-colors:[&::-moz-range-thumb]:border-[Canvas] forced-colors:disabled:[&::-webkit-slider-runnable-track]:bg-[GrayText] forced-colors:disabled:[&::-moz-range-track]:bg-[GrayText] forced-colors:disabled:[&::-webkit-slider-thumb]:bg-[GrayText] forced-colors:disabled:[&::-moz-range-thumb]:bg-[GrayText] forced-colors:focus-visible:outline-[Highlight]',
+  /**
+   * Arc of a **ring drawn with borders** whose top side is the arc (Spinner): put it on the ring,
+   * after its border classes. Forced colors would give all four sides the same system color, so
+   * the arc would disappear into the track. It opts the ring out of forced colors, hides the
+   * track in `Canvas` and draws the arc in `Highlight`. Leaf elements only, as with `fill`.
+   */
+  ringArc:
+    'forced-colors:forced-color-adjust-none forced-colors:border-[Canvas] forced-colors:border-t-[Highlight]',
   /** Disabled text and borders. */
   disabled: 'forced-colors:text-[GrayText] forced-colors:border-[GrayText]',
   /**

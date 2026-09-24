@@ -31,7 +31,7 @@ const meta = {
     docs: {
       description: {
         component:
-          'Applies a Wave theme and text direction to a subtree: the root paints the themed background, text colour and font, and portaled overlays inherit the theme. Providers can be nested in either order.',
+          'Applies a Wave theme and text direction to a subtree: the root paints the themed background, text colour and font, and portaled overlays inherit the theme. Providers can be nested in either order; a nested provider inherits every prop it omits (theme, direction, portal container) from the enclosing one.',
       },
     },
   },
@@ -71,6 +71,22 @@ export const DarkInsideLight: Story = {
       <SampleContent title="Light application" />
       <WaveProvider theme="dark" className="m-6 rounded-md border border-border">
         <SampleContent title="Dark panel" />
+      </WaveProvider>
+    </WaveProvider>
+  ),
+};
+
+/**
+ * A light panel inside a dark right-to-left app. The nested provider only sets `theme`, so it
+ * inherits `dir="rtl"` (and the portal container) from the enclosing provider.
+ */
+export const NestedInheritsDirection: Story = {
+  args: { theme: 'dark', dir: 'rtl' },
+  render: (args) => (
+    <WaveProvider {...args}>
+      <SampleContent title="Dark right-to-left application" />
+      <WaveProvider theme="light" className="m-6 rounded-md border border-border">
+        <SampleContent title="Light panel, still right-to-left" />
       </WaveProvider>
     </WaveProvider>
   ),

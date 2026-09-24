@@ -21,7 +21,7 @@ function asDirection(value: string | null | undefined): Direction | null {
  * 4. `'ltr'`.
  *
  * Without an element it reads `document.documentElement`. Returns `'ltr'` on the server.
- * Components with a WaveProvider context read F3's `useDirection()` during render and call this
+ * Components with a WaveProvider context read `useDirection()` during render and call this
  * at event time (`getDirection(event.currentTarget)`).
  */
 export function getDirection(el?: Element | null): Direction {

@@ -119,10 +119,52 @@ export function resolveDeprecatedProp<T>(
   return newValue !== undefined ? newValue : oldValue;
 }
 
+function getReportedMissingContexts(): Set<string> {
+  return getGlobalRegistry('missing-context', () => new Set<string>());
+}
+
 /**
- * Test-only: forgets every emitted warn-once key so each test starts clean (called from
- * `src/test-setup.ts` after each test).
+ * The C-CONTEXT guard for a compound part rendered outside its root: call it from the context
+ * hook when the context is `null`, then return the hook's inert value.
+ *
+ * The text is `[WaveUI] <componentName> must be used within <parentName>`, or `[WaveUI] <message>`
+ * when `message` is given. In development it throws `new Error(text)`. In production it logs the
+ * text with `console.error` once per text per page (not on every render of every misplaced
+ * instance) and returns; the set of logged texts lives in the global registry
+ * (`getGlobalRegistry('missing-context')`), shared by every copy of the library and cleared
+ * between tests by {@link __resetWarnings}.
+ *
+ * @param componentName The part as the consumer writes it, e.g. `'TabList.Tab'`.
+ * @param parentName    The root it must be rendered in, e.g. `'<TabList>'`.
+ * @param message       Replaces the default text (without the prefix).
+ *
+ * @example
+ * function useTabListContext(component: string): TabListContextValue {
+ *   const context = React.useContext(TabListContext);
+ *   if (context) return context;
+ *   reportMissingContext(component, '<TabList>');
+ *   return INERT_CONTEXT;
+ * }
+ */
+export function reportMissingContext(
+  componentName: string,
+  parentName: string,
+  message?: string,
+): void {
+  const text = PREFIX + (message ?? `${componentName} must be used within ${parentName}`);
+  if (isDevEnvironment()) throw new Error(text);
+  const reported = getReportedMissingContexts();
+  if (reported.has(text)) return;
+  reported.add(text);
+  console.error(text);
+}
+
+/**
+ * Test-only: forgets every emitted warn-once key and every missing-context text logged by
+ * {@link reportMissingContext}, so each test starts clean (called from `src/test-setup.ts` after
+ * each test).
  */
 export function __resetWarnings(): void {
   getWarnedKeys().clear();
+  getReportedMissingContexts().clear();
 }

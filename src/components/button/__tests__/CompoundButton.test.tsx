@@ -11,7 +11,8 @@ const HOVER_GATE = 'not-disabled:not-aria-disabled:hover:';
 const ACTIVE_GATE = 'not-disabled:not-aria-disabled:active:';
 
 describe('CompoundButton', () => {
-  testSystemProps(CompoundButton, {
+  // The `as` variants render other elements, so the props are typed for any element.
+  testSystemProps<CompoundButtonProps<React.ElementType>>(CompoundButton, {
     expectedTag: 'button',
     displayName: 'CompoundButton',
     polymorphic: true,

@@ -29,7 +29,7 @@ const ID_LIST_KEYS = new Set(['aria-describedby', 'aria-labelledby']);
  * - `className` = `cn(ours, theirs)` (theirs win Tailwind conflicts); `style` = `{ ...ours, ...theirs }`.
  * - `aria-describedby` / `aria-labelledby` are joined with `joinIds(theirs, ours)`.
  * - `ref`s are merged with `mergeRefs` (a new callback per call: components that clone on every
- *   render use F3 `useTriggerElement`/`useMergedRefs`, which memoise the merged ref).
+ *   render use `useTriggerElement`/`useMergedRefs`, which memoise the merged ref).
  * - keys listed in `options.oursWin` keep our value whenever `ours` defines them.
  * - any other key: theirs wins unless it is `undefined`.
  */

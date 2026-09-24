@@ -26,8 +26,9 @@ export function setRef<T>(
  * calls it on detach instead of calling the ref with `null`; that cleanup runs each callback ref's
  * own cleanup, calls callback refs without a cleanup with `null`, and resets object refs to `null`.
  *
- * The result is a new function on every call: inside components use F3's `useMergedRefs`, which
- * memoises it, so the refs are not detached and re-attached on every render.
+ * The result is a new function on every call: inside components use the `useMergedRefs` hook
+ * (also exported from this package), which memoises it, so the refs are not detached and
+ * re-attached on every render.
  */
 export function mergeRefs<T>(
   ...refs: Array<React.Ref<T> | undefined | null>

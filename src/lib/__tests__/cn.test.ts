@@ -27,6 +27,12 @@ describe('cn', () => {
   it('accepts arrays and objects (clsx inputs)', () => {
     expect(cn(['a', { b: true, c: false }], 'd')).toBe('a b d');
   });
+
+  it('accepts readonly arrays at any depth (R6)', () => {
+    const base = ['px-3', ['text-body-1', 'text-foreground']] as const;
+    const extra: readonly string[] = ['px-2'];
+    expect(cn(base, extra)).toBe('text-body-1 text-foreground px-2');
+  });
 });
 
 describe('cn — Wave type ramp (table-core#1)', () => {
@@ -110,9 +116,29 @@ describe('cn — token colours merge as colours', () => {
     expect(cn('border-2', 'border-stroke-accessible')).toBe('border-2 border-stroke-accessible');
   });
 
-  it('user classes win over internal state classes (C-CLASS)', () => {
+  it('a later user class replaces a conflicting class of the same variant', () => {
     expect(cn('text-body-1 text-foreground px-3', 'text-destructive px-2')).toBe(
       'text-body-1 text-destructive px-2',
+    );
+    expect(cn('hover:bg-subtle-hover', 'hover:bg-error')).toBe('hover:bg-error');
+  });
+
+  it('keeps gated hover and state classes next to a bare user class (C-CLASS, lib-provider-docs-1)', () => {
+    // Both stay; the gated (0,4,0) and data/aria (0,2,0)+ selectors win by specificity in the CSS.
+    const gatedHover = 'not-disabled:not-aria-disabled:hover:bg-primary-hover';
+    expect(cn(gatedHover, 'hover:bg-error')).toBe(`${gatedHover} hover:bg-error`);
+    expect(cn('data-[selected]:bg-selected', 'bg-error')).toBe(
+      'data-[selected]:bg-selected bg-error',
+    );
+    expect(cn('aria-invalid:border-error', 'border-primary')).toBe(
+      'aria-invalid:border-error border-primary',
+    );
+    // The same prefix (or the important modifier in the CSS) is what replaces them.
+    expect(cn(gatedHover, 'not-disabled:not-aria-disabled:hover:bg-error')).toBe(
+      'not-disabled:not-aria-disabled:hover:bg-error',
+    );
+    expect(cn('data-[selected]:bg-selected', 'data-[selected]:bg-error')).toBe(
+      'data-[selected]:bg-error',
     );
   });
 });

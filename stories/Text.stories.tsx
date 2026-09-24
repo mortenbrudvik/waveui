@@ -1,6 +1,6 @@
 import type { Meta, StoryObj } from '@storybook/react';
 import { Text } from '../src';
-import type { TypographyVariant } from '../src';
+import type { TextProps, TypographyVariant } from '../src';
 
 const variants: TypographyVariant[] = [
   'caption-2',
@@ -37,6 +37,8 @@ const meta = {
 
 export default meta;
 type Story = StoryObj<typeof meta>;
+/** A story that renders the text as a heading takes the heading's props. */
+type HeadingStory = StoryObj<TextProps<'h1'>>;
 
 export const Default: Story = {};
 
@@ -85,7 +87,7 @@ export const MutedCaption: Story = {
   },
 };
 
-export const AsHeading: Story = {
+export const AsHeading: HeadingStory = {
   args: {
     as: 'h1',
     children: 'Page heading',

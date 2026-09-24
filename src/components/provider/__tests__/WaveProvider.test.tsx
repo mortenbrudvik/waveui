@@ -14,6 +14,8 @@ import {
 } from '../../../lib/theme';
 import { testSystemProps } from '../../../test-utils';
 import { __resetWarnings } from '../../../lib/dev';
+import { useDirection } from '../../../hooks/useDirection';
+import { Portal } from '../../portal/Portal';
 
 function root(container: HTMLElement): HTMLElement {
   return container.firstElementChild as HTMLElement;
@@ -142,6 +144,143 @@ describe('WaveProvider', () => {
     it('sets dir="rtl" when specified', () => {
       const { container } = render(<WaveProvider dir="rtl">Content</WaveProvider>);
       expect(root(container)).toHaveAttribute('dir', 'rtl');
+    });
+  });
+
+  describe('nested providers inherit the props they omit (lib-provider-code-1)', () => {
+    function Capture({ onValue }: { onValue: (value: WaveContextValue) => void }) {
+      onValue(useWaveTheme());
+      return null;
+    }
+
+    function DirectionProbe() {
+      return <span data-testid="direction">{useDirection()}</span>;
+    }
+
+    it('a theme-only provider inside an RTL provider stays RTL (root dir, context and useDirection)', () => {
+      let inner: WaveContextValue | undefined;
+      render(
+        <WaveProvider theme="dark" dir="rtl">
+          <WaveProvider theme="light" data-testid="inner">
+            <Capture onValue={(value) => (inner = value)} />
+            <DirectionProbe />
+          </WaveProvider>
+        </WaveProvider>,
+      );
+      expect(screen.getByTestId('inner')).toHaveAttribute('dir', 'rtl');
+      expect(screen.getByTestId('inner')).toHaveClass('wave-light');
+      expect(inner).toMatchObject({ theme: 'light', dir: 'rtl', themeClassName: 'wave-light' });
+      expect(screen.getByTestId('direction')).toHaveTextContent('rtl');
+    });
+
+    it('a theme-only provider keeps the enclosing portalContainer, so its overlays render there', () => {
+      const appRoot = document.createElement('div');
+      document.body.append(appRoot);
+      try {
+        let inner: WaveContextValue | undefined;
+        const { unmount } = render(
+          <WaveProvider theme="dark" dir="rtl" portalContainer={appRoot}>
+            <WaveProvider theme="light">
+              <Capture onValue={(value) => (inner = value)} />
+              <Portal>
+                <span>Light panel overlay</span>
+              </Portal>
+            </WaveProvider>
+          </WaveProvider>,
+        );
+        expect(inner?.portalContainer).toBe(appRoot);
+        const overlay = screen.getByText('Light panel overlay');
+        expect(appRoot).toContainElement(overlay);
+        const wrapper = overlay.closest('[data-wave-portal]');
+        expect(wrapper).toHaveAttribute('dir', 'rtl');
+        expect(wrapper).toHaveClass('wave-light');
+        unmount();
+      } finally {
+        appRoot.remove();
+      }
+    });
+
+    it('a direction-only provider inside a dark provider stays dark', () => {
+      let inner: WaveContextValue | undefined;
+      render(
+        <WaveProvider theme="dark">
+          <WaveProvider dir="rtl" data-testid="inner">
+            <Capture onValue={(value) => (inner = value)} />
+          </WaveProvider>
+        </WaveProvider>,
+      );
+      const el = screen.getByTestId('inner');
+      expect(el).toHaveClass('wave-root', 'wave-dark', 'dark');
+      expect(el).not.toHaveClass('wave-light');
+      expect(el).toHaveAttribute('data-wave-theme', 'dark');
+      expect(el).toHaveAttribute('dir', 'rtl');
+      expect(inner).toMatchObject({ theme: 'dark', dir: 'rtl', themeClassName: 'wave-dark dark' });
+    });
+
+    it('inherits through several levels', () => {
+      const appRoot = document.createElement('div');
+      let innermost: WaveContextValue | undefined;
+      render(
+        <WaveProvider theme="high-contrast" dir="rtl" portalContainer={appRoot}>
+          <WaveProvider data-testid="middle">
+            <WaveProvider data-testid="innermost">
+              <Capture onValue={(value) => (innermost = value)} />
+            </WaveProvider>
+          </WaveProvider>
+        </WaveProvider>,
+      );
+      expect(screen.getByTestId('innermost')).toHaveAttribute('dir', 'rtl');
+      expect(screen.getByTestId('innermost')).toHaveClass('wave-high-contrast');
+      expect(innermost).toEqual({
+        theme: 'high-contrast',
+        dir: 'rtl',
+        themeClassName: 'wave-high-contrast high-contrast',
+        portalContainer: appRoot,
+        hasProvider: true,
+      });
+    });
+
+    it('props given on the nested provider win: dir, and portalContainer={null} for document.body', () => {
+      const appRoot = document.createElement('div');
+      let inner: WaveContextValue | undefined;
+      render(
+        <WaveProvider theme="dark" dir="rtl" portalContainer={appRoot}>
+          <WaveProvider theme="dark" dir="ltr" portalContainer={null} data-testid="inner">
+            <Capture onValue={(value) => (inner = value)} />
+          </WaveProvider>
+        </WaveProvider>,
+      );
+      expect(screen.getByTestId('inner')).toHaveAttribute('dir', 'ltr');
+      expect(inner).toMatchObject({ dir: 'ltr', portalContainer: null });
+    });
+
+    it('updates the nested subtree when the enclosing provider changes', () => {
+      let inner: WaveContextValue | undefined;
+      const tree = (dir: 'ltr' | 'rtl', theme: WaveTheme) => (
+        <WaveProvider theme={theme} dir={dir}>
+          <WaveProvider data-testid="inner">
+            <Capture onValue={(value) => (inner = value)} />
+          </WaveProvider>
+        </WaveProvider>
+      );
+      const { rerender } = render(tree('ltr', 'light'));
+      expect(inner).toMatchObject({ theme: 'light', dir: 'ltr' });
+      rerender(tree('rtl', 'dark'));
+      expect(screen.getByTestId('inner')).toHaveAttribute('dir', 'rtl');
+      expect(screen.getByTestId('inner')).toHaveClass('wave-dark');
+      expect(inner).toMatchObject({ theme: 'dark', dir: 'rtl' });
+    });
+
+    it('a top-level provider still defaults to light, ltr and document.body', () => {
+      let value: WaveContextValue | undefined;
+      const { container } = render(
+        <WaveProvider>
+          <Capture onValue={(next) => (value = next)} />
+        </WaveProvider>,
+      );
+      expect(root(container)).toHaveAttribute('dir', 'ltr');
+      expect(root(container)).toHaveClass('wave-light');
+      expect(value).toMatchObject({ theme: 'light', dir: 'ltr', portalContainer: null });
     });
   });
 

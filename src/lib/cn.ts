@@ -37,7 +37,13 @@ export const twMerge = extendTailwindMerge({
 
 /**
  * Joins class names (clsx) and resolves Tailwind conflicts so the **last** class wins — pass
- * internal classes first and the consumer's `className` last (user classes always win).
+ * internal classes first and the consumer's `className` last.
+ *
+ * A later class replaces only a conflicting class **of the same variant**. Variant and state
+ * classes such as the gated `not-disabled:not-aria-disabled:hover:bg-…` or `data-[selected]:bg-…`
+ * are kept next to a bare `hover:bg-…`/`bg-…` and win by specificity; override them with the same
+ * prefix (`not-disabled:not-aria-disabled:hover:bg-error`), the same data variant, or the important
+ * modifier (`hover:bg-error!`).
  *
  * @example
  * cn('text-body-1 text-foreground', className) // className="text-primary" keeps text-body-1

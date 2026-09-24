@@ -2,7 +2,8 @@ import * as React from 'react';
 import type { Meta, StoryObj } from '@storybook/react';
 import { fn } from 'storybook/test';
 import { Button, Tag } from '../src';
-/** The props Storybook passes (the polymorphic Tag's props for any `as`). */
+import type { TagProps } from '../src';
+/** The props Storybook passes (the default `<span>` Tag's props). */
 type TagStoryProps = React.ComponentProps<typeof Tag>;
 
 const meta = {
@@ -15,6 +16,8 @@ const meta = {
 
 export default meta;
 type Story = StoryObj<typeof meta>;
+/** A story that renders the tag as an anchor takes the anchor's props. */
+type AnchorStory = StoryObj<TagProps<'a'>>;
 
 /** Keeps the tag's visibility in local state so dismissing it actually removes it. */
 function DismissibleTag(props: TagStoryProps) {
@@ -104,7 +107,7 @@ export const WithIcon: Story = {
 };
 
 /** Polymorphic: `as="a"` renders a link chip (anchor props are type-checked). */
-export const AsLink: Story = {
+export const AsLink: AnchorStory = {
   args: {
     as: 'a',
     href: '#topics/react',

@@ -8,6 +8,7 @@ import {
   hasWarned,
   warnDeprecated,
   resolveDeprecatedProp,
+  reportMissingContext,
   __resetWarnings,
 } from '../dev';
 
@@ -221,5 +222,144 @@ describe('resolveDeprecatedProp', () => {
     rerender(ui('vertical'));
     expect(screen.getByTestId('stack')).toHaveAttribute('data-orientation', 'vertical');
     expect(warnSpy).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('reportMissingContext', () => {
+  let errorSpy: MockInstance<typeof console.error>;
+
+  beforeEach(() => {
+    errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+  });
+
+  afterEach(() => {
+    errorSpy.mockRestore();
+  });
+
+  it('throws "[WaveUI] <component> must be used within <parent>" in development', () => {
+    expect(() => reportMissingContext('TabList.Tab', '<TabList>')).toThrow(
+      new Error('[WaveUI] TabList.Tab must be used within <TabList>'),
+    );
+    expect(errorSpy).not.toHaveBeenCalled();
+  });
+
+  it('throws the custom message instead when one is given', () => {
+    expect(() =>
+      reportMissingContext(
+        'useToastController',
+        '<Toaster>',
+        'useToastController must be used within <Toaster>. Wrap your app in <Toaster>.',
+      ),
+    ).toThrow(
+      new Error(
+        '[WaveUI] useToastController must be used within <Toaster>. Wrap your app in <Toaster>.',
+      ),
+    );
+  });
+
+  it('throws on every call in development', () => {
+    const message = '[WaveUI] Menu.Item must be used within <Menu>';
+    expect(() => reportMissingContext('Menu.Item', '<Menu>')).toThrow(message);
+    expect(() => reportMissingContext('Menu.Item', '<Menu>')).toThrow(message);
+  });
+
+  it('logs the message with console.error once per text in production, without throwing', () => {
+    vi.stubEnv('NODE_ENV', 'production');
+    expect(() => reportMissingContext('TabList.Tab', '<TabList>')).not.toThrow();
+    reportMissingContext('TabList.Tab', '<TabList>');
+    reportMissingContext('TabList.Tab', '<TabList>');
+    expect(errorSpy).toHaveBeenCalledTimes(1);
+    expect(errorSpy).toHaveBeenCalledWith('[WaveUI] TabList.Tab must be used within <TabList>');
+  });
+
+  it('logs each different text once in production (other component, other parent, custom message)', () => {
+    vi.stubEnv('NODE_ENV', 'production');
+    reportMissingContext('TabList.Tab', '<TabList>');
+    reportMissingContext('TabList.Panel', '<TabList>');
+    reportMissingContext('TabList.Tab', '<TabList.Panels>');
+    reportMissingContext('TabList.Tab', '<TabList>', 'Tabs need a TabList.');
+    reportMissingContext('TabList.Panel', '<TabList>');
+    reportMissingContext('Other', '<Root>', 'Tabs need a TabList.');
+    expect(errorSpy.mock.calls).toEqual([
+      ['[WaveUI] TabList.Tab must be used within <TabList>'],
+      ['[WaveUI] TabList.Panel must be used within <TabList>'],
+      ['[WaveUI] TabList.Tab must be used within <TabList.Panels>'],
+      ['[WaveUI] Tabs need a TabList.'],
+    ]);
+  });
+
+  it('logs again after __resetWarnings()', () => {
+    vi.stubEnv('NODE_ENV', 'production');
+    reportMissingContext('Tree.Item', '<Tree>');
+    __resetWarnings();
+    reportMissingContext('Tree.Item', '<Tree>');
+    expect(errorSpy).toHaveBeenCalledTimes(2);
+  });
+
+  it('does not record the text in development, so production still logs it', () => {
+    expect(() => reportMissingContext('Nav.Item', '<Nav>')).toThrow(
+      '[WaveUI] Nav.Item must be used within <Nav>',
+    );
+    vi.stubEnv('NODE_ENV', 'production');
+    reportMissingContext('Nav.Item', '<Nav>');
+    expect(errorSpy).toHaveBeenCalledWith('[WaveUI] Nav.Item must be used within <Nav>');
+  });
+
+  it('keeps the logged set in the global registry so every library copy shares it', async () => {
+    vi.stubEnv('NODE_ENV', 'production');
+    reportMissingContext('Accordion.Item', '<Accordion>');
+    vi.resetModules();
+    const otherCopy = await import('../dev');
+    otherCopy.reportMissingContext('Accordion.Item', '<Accordion>');
+    expect(errorSpy).toHaveBeenCalledTimes(1);
+    const registry = (globalThis as unknown as Record<symbol, unknown>)[
+      Symbol.for('@mortenbrudvik/waveui/missing-context')
+    ];
+    expect(registry).toBeInstanceOf(Set);
+    expect(
+      (registry as Set<string>).has('[WaveUI] Accordion.Item must be used within <Accordion>'),
+    ).toBe(true);
+  });
+});
+
+describe('without a `process` global (lib-provider-tests-2)', () => {
+  // An unbundled ESM import in the browser: no bundler replaced `process.env.NODE_ENV` and there is
+  // no `process`. Development mode is assumed, so the diagnostics stay on.
+  function withoutProcess<T>(run: () => T): T {
+    vi.stubGlobal('process', undefined);
+    try {
+      return run();
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  }
+
+  it('the warning helpers still warn', () => {
+    withoutProcess(() => {
+      devWarn('No process.');
+      warnOnce('no-process', 'Once without process.');
+      warnOnce('no-process', 'Once without process.');
+    });
+    expect(warnSpy.mock.calls).toEqual([
+      ['[WaveUI] No process.'],
+      ['[WaveUI] Once without process.'],
+    ]);
+  });
+
+  it('reportMissingContext still throws', () => {
+    expect(() => withoutProcess(() => reportMissingContext('Tree.Item', '<Tree>'))).toThrow(
+      new Error('[WaveUI] Tree.Item must be used within <Tree>'),
+    );
+  });
+
+  it('isDev is true when the module is evaluated without it', async () => {
+    vi.resetModules();
+    vi.stubGlobal('process', undefined);
+    try {
+      const copy = await import('../dev');
+      expect(copy.isDev).toBe(true);
+    } finally {
+      vi.unstubAllGlobals();
+    }
   });
 });

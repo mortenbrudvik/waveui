@@ -123,7 +123,7 @@ export const ChevronUpIcon = /* @__PURE__ */ createIcon({
   content: <path d={CHEVRON_UP} />,
 });
 
-/** Chevron pointing left (physical). Mirror directional uses with `rtl:-scale-x-100`. */
+/** Chevron pointing left (physical). Mirror directional uses with `wave-rtl:-scale-x-100`. */
 export const ChevronLeftIcon = /* @__PURE__ */ createIcon({
   name: 'chevron-left',
   displayName: 'ChevronLeftIcon',
@@ -133,7 +133,7 @@ export const ChevronLeftIcon = /* @__PURE__ */ createIcon({
   content: <path d={CHEVRON_LEFT} />,
 });
 
-/** Chevron pointing right (physical). Mirror directional uses with `rtl:-scale-x-100`. */
+/** Chevron pointing right (physical). Mirror directional uses with `wave-rtl:-scale-x-100`. */
 export const ChevronRightIcon = /* @__PURE__ */ createIcon({
   name: 'chevron-right',
   displayName: 'ChevronRightIcon',
@@ -341,7 +341,7 @@ export const PersonIcon = /* @__PURE__ */ createIcon({
  * Presence glyphs (PresenceBadge). Drawn in a 16x16 box that the badge circle fills, with stroke
  * weights tuned for the 8-20px badge sizes; render them with `className="size-full"`. They differ
  * from CheckIcon/ClockIcon/DismissIcon in geometry, so every status keeps a distinct shape at
- * badge size. Mirror the out-of-office arrow in right-to-left layouts (`rtl:-scale-x-100`).
+ * badge size. Mirror the out-of-office arrow in right-to-left layouts (`wave-rtl:-scale-x-100`).
  */
 
 /** Presence "available": a check mark. */

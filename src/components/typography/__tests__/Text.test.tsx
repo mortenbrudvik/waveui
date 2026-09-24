@@ -31,7 +31,8 @@ describe('Text', () => {
     vi.restoreAllMocks();
   });
 
-  testSystemProps(Text, {
+  // The `as` variants render other elements, so the props are typed for any element.
+  testSystemProps<TextProps<React.ElementType>>(Text, {
     expectedTag: 'span',
     displayName: 'Text',
     polymorphic: true,

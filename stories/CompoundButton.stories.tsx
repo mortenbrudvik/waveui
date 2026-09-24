@@ -1,7 +1,7 @@
 import type { Meta, StoryObj } from '@storybook/react';
 import { fn } from 'storybook/test';
 import { CompoundButton } from '../src';
-import type { Size } from '../src';
+import type { CompoundButtonProps, Size } from '../src';
 import { appearanceArgType, sizeArgType } from './_helpers';
 
 const meta = {
@@ -20,6 +20,8 @@ const meta = {
 
 export default meta;
 type Story = StoryObj<typeof meta>;
+/** A story that renders the button as an anchor takes the anchor's props. */
+type AnchorStory = StoryObj<CompoundButtonProps<'a'>>;
 
 export const Default: Story = {};
 
@@ -45,7 +47,7 @@ export const Disabled: Story = {
 };
 
 /** `as="a"` renders a link styled as a compound button. */
-export const AsLink: Story = {
+export const AsLink: AnchorStory = {
   args: {
     as: 'a',
     href: '#compound-button-docs',

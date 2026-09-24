@@ -657,7 +657,32 @@ describe('Slot types (table-core#18)', () => {
     const truthy: Slot = true;
     expect([fromArray, fromSet, truthy]).toHaveLength(3);
     expectTypeOf<Iterable<React.ReactNode>>().toMatchTypeOf<Slot>();
+    expectTypeOf<readonly React.ReactNode[]>().toMatchTypeOf<Slot>();
     expectTypeOf<bigint>().toMatchTypeOf<Slot>();
+  });
+
+  it('accepts any React.ReactNode, promises included (x-types-core-2)', () => {
+    expectTypeOf<React.ReactNode>().toMatchTypeOf<Slot>();
+    expectTypeOf<React.ReactNode>().toMatchTypeOf<Slot<'img'>>();
+    expectTypeOf<Promise<string>>().toMatchTypeOf<Slot>();
+    // The usual consumer shape: content typed as ReactNode passed straight to a slot prop.
+    interface Action {
+      icon: React.ReactNode;
+      label: string;
+    }
+    const action: Action = { icon: '*', label: 'Star' };
+    const icon: Slot = action.icon;
+    const { container } = render(renderSlot(icon, 'span')!);
+    expect(container.querySelector('span')).toHaveTextContent('*');
+  });
+
+  it('takes an interface-typed attributes object through a spread', () => {
+    const imgProps: React.ImgHTMLAttributes<HTMLImageElement> = { src: 'a.png', alt: 'A' };
+    // @ts-expect-error — an interface has no implicit `data-*` index signature
+    const direct: Slot<'img'> = imgProps;
+    const spread: Slot<'img'> = { ...imgProps };
+    expect(resolveSlot(spread, 'img')!.props).toMatchObject({ src: 'a.png', alt: 'A' });
+    expect(direct).toBe(imgProps);
   });
 
   it('rejects props that the default element does not have', () => {

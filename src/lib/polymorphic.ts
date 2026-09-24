@@ -36,8 +36,25 @@ export type PolymorphicProps<C extends React.ElementType, OwnProps> = OwnProps &
  *   return <Component className={…} {...rest} />;
  * };
  * Button.displayName = 'Button';
+ *
+ * Type inference sees the default-tag props: `React.ComponentProps<typeof Button>`,
+ * `Parameters<typeof Button>[0]`, `React.memo(Button)` and Storybook's `Meta<typeof Button>` are
+ * `ButtonProps` (fully checked). For another element use the props type with its element:
+ * `ButtonProps<'a'>`.
  */
 export interface PolymorphicComponent<DefaultC extends React.ElementType, OwnProps> {
   <C extends React.ElementType = DefaultC>(props: PolymorphicProps<C, OwnProps>): React.ReactNode;
+  /**
+   * The default-tag signature. JSX and calls try the signature above first, so this one never
+   * changes what `<X as="a" href>` accepts. Conditional types (`React.ComponentProps`,
+   * `Parameters`) infer from the last signature, so they get the checked default-tag props instead
+   * of `PolymorphicProps<React.ElementType, …>`, which accepts any key. `C` is unused here: it keeps
+   * both signatures' type parameters identical, which TypeScript requires to contextually type an
+   * implementation `(props) => …` assigned to this interface.
+   */
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars -- C mirrors the signature above (see the JSDoc)
+  <C extends React.ElementType = DefaultC>(
+    props: PolymorphicProps<DefaultC, OwnProps>,
+  ): React.ReactNode;
   displayName?: string;
 }

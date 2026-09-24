@@ -26,7 +26,7 @@ function isCloneableElement(node: unknown): node is React.ReactElement<UnknownPr
 
 /**
  * Pure core of every trigger (`Dialog.Trigger`, `Popover.Trigger`, `Menu.Trigger`, `.Close`,
- * Tooltip). F3's `useTriggerElement` builds on it and adds the memoised ref and the automatic
+ * Tooltip). `useTriggerElement` builds on it and adds the memoised ref and the automatic
  * wrapper fallback.
  *
  * - Function child → `children(triggerProps)`.

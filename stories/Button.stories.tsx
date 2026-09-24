@@ -1,7 +1,7 @@
 import type { Meta, StoryObj } from '@storybook/react';
 import { fn } from 'storybook/test';
 import { Button } from '../src';
-import type { Size } from '../src';
+import type { ButtonProps, Size } from '../src';
 import { appearanceArgType, sizeArgType } from './_helpers';
 
 /** Decorative inline icon (the Button hides its icon slot from assistive technology). */
@@ -30,6 +30,8 @@ const meta = {
 
 export default meta;
 type Story = StoryObj<typeof meta>;
+/** A story that renders the button as an anchor takes the anchor's props. */
+type AnchorStory = StoryObj<ButtonProps<'a'>>;
 
 export const Default: Story = {
   args: {
@@ -106,7 +108,7 @@ export const Disabled: Story = {
 };
 
 /** `as="a"` renders a link styled as a button; the props are typed for the anchor. */
-export const AsLink: Story = {
+export const AsLink: AnchorStory = {
   args: {
     as: 'a',
     href: '#button-docs',
@@ -115,7 +117,7 @@ export const AsLink: Story = {
 };
 
 /** A disabled link drops its `href` and gets `aria-disabled` and `tabIndex={-1}`. */
-export const DisabledLink: Story = {
+export const DisabledLink: AnchorStory = {
   args: {
     as: 'a',
     href: '#button-docs',
