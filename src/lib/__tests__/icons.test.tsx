@@ -26,6 +26,14 @@ const ICONS: Array<[name: string, dataName: string, defaultSize: number]> = [
   ['WarningIcon', 'warning', 16],
   ['ErrorIcon', 'error', 16],
   ['StarIcon', 'star', 16],
+  ['AddIcon', 'add', 16],
+  ['PersonIcon', 'person', 16],
+  ['PresenceAvailableIcon', 'presence-available', 16],
+  ['PresenceBusyIcon', 'presence-busy', 16],
+  ['PresenceAwayIcon', 'presence-away', 16],
+  ['PresenceOfflineIcon', 'presence-offline', 16],
+  ['PresenceDndIcon', 'presence-dnd', 16],
+  ['PresenceOofIcon', 'presence-oof', 16],
 ];
 
 type IconComponent = (props: IconProps) => React.ReactNode;
@@ -188,6 +196,93 @@ describe('icons (input-datetime#22, button-provider#20)', () => {
     expect(svg).toHaveClass('rtl:-scale-x-100');
     expect(svg).toHaveAttribute('data-testid', 'chevron');
     expect(ref.current).toBe(svg);
+  });
+
+  it('AddIcon draws a stroked plus in the SubtractIcon geometry (SpinButton increment)', () => {
+    const { container } = render(
+      <>
+        <Icons.AddIcon size={12} />
+        <Icons.SubtractIcon size={12} />
+      </>,
+    );
+    const add = container.querySelector('svg[data-wave-icon="add"]')!;
+    const subtract = container.querySelector('svg[data-wave-icon="subtract"]')!;
+    expect(add).toHaveAttribute('aria-hidden', 'true');
+    expect(add).toHaveAttribute('width', '12');
+    for (const attr of ['viewBox', 'fill', 'stroke', 'stroke-width', 'stroke-linecap']) {
+      expect(add.getAttribute(attr)).toBe(subtract.getAttribute(attr));
+    }
+    // The plus is the subtract bar plus a vertical bar of the same length.
+    expect(add.querySelector('path')).toHaveAttribute('d', 'M6 2.5v7M2.5 6h7');
+    expect(subtract.querySelector('path')).toHaveAttribute('d', 'M2.5 6h7');
+  });
+
+  it('PersonIcon is a filled person glyph that scales with a relative size (Avatar fallback)', () => {
+    const { container } = render(<Icons.PersonIcon size="60%" />);
+    const svg = container.querySelector('svg[data-wave-icon="person"]')!;
+    expect(svg).toHaveAttribute('viewBox', '0 0 20 20');
+    expect(svg).toHaveAttribute('fill', 'currentColor');
+    expect(svg).not.toHaveAttribute('stroke');
+    expect(svg).toHaveAttribute('width', '60%');
+    expect(svg).toHaveAttribute('height', '60%');
+  });
+
+  describe('presence glyphs (PresenceBadge)', () => {
+    const PRESENCE: Array<[name: string, paint: 'fill' | 'stroke']> = [
+      ['PresenceAvailableIcon', 'stroke'],
+      ['PresenceBusyIcon', 'fill'],
+      ['PresenceAwayIcon', 'stroke'],
+      ['PresenceOfflineIcon', 'stroke'],
+      ['PresenceDndIcon', 'stroke'],
+      ['PresenceOofIcon', 'stroke'],
+    ];
+
+    it.each(PRESENCE)('%s is drawn in the 16x16 badge box', (name, paint) => {
+      const Icon = getIcon(name);
+      const { container } = render(<Icon className="size-full" />);
+      const svg = container.querySelector('svg')!;
+      expect(svg).toHaveAttribute('viewBox', '0 0 16 16');
+      expect(svg).toHaveClass('size-full');
+      if (paint === 'stroke') {
+        expect(svg).toHaveAttribute('fill', 'none');
+        expect(svg).toHaveAttribute('stroke', 'currentColor');
+        expect(svg).toHaveAttribute('stroke-linecap', 'round');
+        // Each glyph sets its own stroke weights for the badge sizes (8-20px).
+        const weights = Array.from(svg.querySelectorAll('path, circle')).map((el) =>
+          el.getAttribute('stroke-width'),
+        );
+        expect(weights.length).toBeGreaterThan(0);
+        expect(weights.every((w) => w !== null && Number(w) > 0)).toBe(true);
+      } else {
+        expect(svg).toHaveAttribute('fill', 'currentColor');
+        expect(svg).not.toHaveAttribute('stroke');
+      }
+    });
+
+    it('busy is a full disc, so forced colors keep it solid (not an empty ring)', () => {
+      const { container } = render(<Icons.PresenceBusyIcon />);
+      expect(container.querySelector('path')).toHaveAttribute(
+        'd',
+        'M8 0a8 8 0 1 1 0 16A8 8 0 0 1 8 0Z',
+      );
+    });
+
+    it('offline is a ring with an X', () => {
+      const { container } = render(<Icons.PresenceOfflineIcon />);
+      expect(container.querySelector('circle')).toHaveAttribute('r', '6.5');
+      expect(container.querySelector('path')).toHaveAttribute('d', 'M6 6l4 4m0-4l-4 4');
+    });
+
+    it('every presence glyph is distinct (status is not conveyed by color alone)', () => {
+      const shapes = PRESENCE.map(([name]) => {
+        const Icon = getIcon(name);
+        const { container, unmount } = render(<Icon />);
+        const markup = container.querySelector('svg')!.innerHTML;
+        unmount();
+        return markup;
+      });
+      expect(new Set(shapes).size).toBe(PRESENCE.length);
+    });
   });
 
   it('lets consumers override the default a11y attributes', () => {

@@ -58,6 +58,21 @@ export function warnOnce(key: string, message: string): void {
 }
 
 /**
+ * Whether {@link warnOnce} already emitted `key` (in any copy of the library, since the set lives
+ * in the shared `'warnings'` global registry). A pure read: it never consumes the key, so a later
+ * `warnOnce(key, …)` still warns when this returns `false`.
+ *
+ * Use it to skip development-only DOM work in an effect (a subtree scan, a focus-order check) once
+ * its warning has fired. It returns `false` in production, where `warnOnce` consumes no key, so
+ * guard that work with {@link isDev} as well.
+ *
+ * @param key The deduplication key passed to `warnOnce`, e.g. `'Card:nested-interactive'`.
+ */
+export function hasWarned(key: string): boolean {
+  return getWarnedKeys().has(key);
+}
+
+/**
  * Warns once per (component, prop) that a prop or value is deprecated (§5.10 format):
  *
  * `[WaveUI] TabList: \`selectedValue\` is deprecated and will be removed in 1.0. Use \`value\` instead.`

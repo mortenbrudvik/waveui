@@ -310,3 +310,104 @@ export const StarIcon = /* @__PURE__ */ createIcon({
     <path d="M10 1.5l2.47 5.01 5.53.8-4 3.9.94 5.49L10 13.88l-4.94 2.82.94-5.49-4-3.9 5.53-.8L10 1.5Z" />
   ),
 });
+
+/** Plus (SpinButton increment); the {@link SubtractIcon} bar plus a vertical bar. */
+export const AddIcon = /* @__PURE__ */ createIcon({
+  name: 'add',
+  displayName: 'AddIcon',
+  viewBox: '0 0 12 12',
+  defaultSize: 16,
+  paint: 'stroke',
+  strokeWidth: 2,
+  content: <path d="M6 2.5v7M2.5 6h7" />,
+});
+
+/**
+ * Generic person (Avatar fallback when there is no image, icon or name). Accepts a relative size
+ * such as `size="60%"` to scale with its container.
+ */
+export const PersonIcon = /* @__PURE__ */ createIcon({
+  name: 'person',
+  displayName: 'PersonIcon',
+  viewBox: '0 0 20 20',
+  defaultSize: 16,
+  paint: 'fill',
+  content: (
+    <path d="M10 2a4 4 0 1 1 0 8 4 4 0 0 1 0-8Zm-5.5 10h11A2.5 2.5 0 0 1 18 14.5v.5c0 2.4-2.9 4-8 4s-8-1.6-8-4v-.5A2.5 2.5 0 0 1 4.5 12Z" />
+  ),
+});
+
+/*
+ * Presence glyphs (PresenceBadge). Drawn in a 16x16 box that the badge circle fills, with stroke
+ * weights tuned for the 8-20px badge sizes; render them with `className="size-full"`. They differ
+ * from CheckIcon/ClockIcon/DismissIcon in geometry, so every status keeps a distinct shape at
+ * badge size. Mirror the out-of-office arrow in right-to-left layouts (`rtl:-scale-x-100`).
+ */
+
+/** Presence "available": a check mark. */
+export const PresenceAvailableIcon = /* @__PURE__ */ createIcon({
+  name: 'presence-available',
+  displayName: 'PresenceAvailableIcon',
+  viewBox: '0 0 16 16',
+  defaultSize: 16,
+  paint: 'stroke',
+  content: <path d="M4.6 8.3l2.2 2.2 4.6-4.8" strokeWidth={2} />,
+});
+
+/**
+ * Presence "busy": a full disc in `currentColor`. Forced-colors mode replaces the badge background
+ * with Canvas but forces `color` to CanvasText, so busy stays a solid dot instead of an empty ring.
+ */
+export const PresenceBusyIcon = /* @__PURE__ */ createIcon({
+  name: 'presence-busy',
+  displayName: 'PresenceBusyIcon',
+  viewBox: '0 0 16 16',
+  defaultSize: 16,
+  paint: 'fill',
+  content: <path d="M8 0a8 8 0 1 1 0 16A8 8 0 0 1 8 0Z" />,
+});
+
+/** Presence "away": clock hands. */
+export const PresenceAwayIcon = /* @__PURE__ */ createIcon({
+  name: 'presence-away',
+  displayName: 'PresenceAwayIcon',
+  viewBox: '0 0 16 16',
+  defaultSize: 16,
+  paint: 'stroke',
+  content: <path d="M8 4.4V8l2.6 1.8" strokeWidth={1.8} />,
+});
+
+/** Presence "offline": a hollow ring with an X. */
+export const PresenceOfflineIcon = /* @__PURE__ */ createIcon({
+  name: 'presence-offline',
+  displayName: 'PresenceOfflineIcon',
+  viewBox: '0 0 16 16',
+  defaultSize: 16,
+  paint: 'stroke',
+  content: (
+    <>
+      <circle cx={8} cy={8} r={6.5} strokeWidth={2.5} />
+      <path d="M6 6l4 4m0-4l-4 4" strokeWidth={1.6} />
+    </>
+  ),
+});
+
+/** Presence "do not disturb": a horizontal bar. */
+export const PresenceDndIcon = /* @__PURE__ */ createIcon({
+  name: 'presence-dnd',
+  displayName: 'PresenceDndIcon',
+  viewBox: '0 0 16 16',
+  defaultSize: 16,
+  paint: 'stroke',
+  content: <path d="M4.5 8h7" strokeWidth={2.2} />,
+});
+
+/** Presence "out of office": an arrow pointing left (physical; mirror it in RTL). */
+export const PresenceOofIcon = /* @__PURE__ */ createIcon({
+  name: 'presence-oof',
+  displayName: 'PresenceOofIcon',
+  viewBox: '0 0 16 16',
+  defaultSize: 16,
+  paint: 'stroke',
+  content: <path d="M11.4 8H4.8m2.9-3L4.7 8l3 3" strokeWidth={1.8} />,
+});

@@ -1,7 +1,7 @@
 import { describe, it, expect, expectTypeOf, vi, afterEach } from 'vitest';
 import * as React from 'react';
 import { render, screen } from '@testing-library/react';
-import { resolveSlot, renderSlot, VOID_ELEMENTS } from '../slot';
+import { resolveSlot, renderSlot, slotRendersContent, VOID_ELEMENTS } from '../slot';
 import type { ResolvedSlot, Slot, SlotObject } from '../slot';
 import type * as Types from '../types';
 import { __resetWarnings } from '../dev';
@@ -558,6 +558,81 @@ describe('renderSlot', () => {
   it('renders no empty class attribute for a slot object without classes', () => {
     const { container } = render(renderSlot({ title: 'Tip', children: 'x' }, 'span')!);
     expect(container.querySelector('span')).not.toHaveAttribute('class');
+  });
+});
+
+describe('slotRendersContent (data-display#31)', () => {
+  it.each<[label: string, make: () => unknown]>([
+    ['null', () => null],
+    ['undefined', () => undefined],
+    ['false', () => false],
+    ['true', () => true],
+    ["''", () => ''],
+    ['[]', () => []],
+    ["[null, false, '', [undefined]]", () => [null, false, '', [undefined]]],
+    ["a Set of null and ''", () => new Set([null, ''])],
+    [
+      "a generator of null and ''",
+      () =>
+        (function* () {
+          yield null;
+          yield '';
+        })(),
+    ],
+  ])('is false for %s (React renders nothing for it)', (_label, make) => {
+    expect(slotRendersContent(make())).toBe(false);
+  });
+
+  it.each<[label: string, make: () => unknown]>([
+    ["'x'", () => 'x'],
+    ['0', () => 0],
+    ['0n', () => BigInt(0)],
+    ["[null, 'x']", () => [null, 'x']],
+    ['<b />', () => React.createElement('b')],
+    ['an empty Fragment element', () => React.createElement(React.Fragment)],
+    ["a Set with 'x'", () => new Set([null, 'x'])],
+    ['a slot object without children (it renders its element)', () => ({ className: 'px-1' })],
+  ])('is true for %s', (_label, make) => {
+    expect(slotRendersContent(make())).toBe(true);
+  });
+
+  it('does not consume a generator: renderSlot still renders its items afterwards', () => {
+    function* parts() {
+      yield null;
+      yield 'one';
+      yield 'two';
+    }
+    const gen = parts();
+    expect(slotRendersContent(gen)).toBe(true);
+    expect(slotRendersContent(gen)).toBe(true);
+    const { container } = render(renderSlot(gen, 'span')!);
+    expect(container.querySelector('span')).toHaveTextContent('onetwo');
+  });
+
+  it('does not loop on a self-containing array', () => {
+    const cyclic: unknown[] = [null];
+    cyclic.push(cyclic);
+    expect(slotRendersContent(cyclic)).toBe(false);
+  });
+
+  it('does not warn', () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    slotRendersContent([null]);
+    slotRendersContent('x');
+    expect(warn).not.toHaveBeenCalled();
+  });
+
+  it('lets a consumer treat an icon collection that renders nothing as no icon', () => {
+    // The Avatar pattern: `icon && slotRendersContent(icon)` decides between the icon and a fallback.
+    const pick = (icon: Slot) =>
+      icon && slotRendersContent(icon)
+        ? renderSlot(icon, 'span', undefined, { 'aria-hidden': true })
+        : 'JD';
+    expect(pick([null, ''])).toBe('JD');
+    expect(pick(new Set<React.ReactNode>())).toBe('JD');
+    expect(pick(0)).toBe('JD');
+    const { container } = render(React.createElement('div', null, pick(['*'])));
+    expect(container.querySelector('span[aria-hidden="true"]')).toHaveTextContent('*');
   });
 });
 

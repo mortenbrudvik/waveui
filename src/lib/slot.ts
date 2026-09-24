@@ -136,6 +136,25 @@ function rendersContent(node: unknown, visiting: Set<object> = new Set()): boole
   }
 }
 
+/**
+ * Whether a slot value renders any content — the "renders nothing" rule of the slot helpers.
+ *
+ * `false` for `null`, `undefined`, booleans and `''`, and for an array, `Set`, generator or other
+ * iterable whose items, at any depth, are only those. `true` for everything else: text, numbers
+ * (including `0`), React elements (the helper cannot know what a component renders) and slot
+ * objects (they always render their element). Generators are materialised once and cached, so
+ * checking one does not consume it: a later `renderSlot` of the same generator renders its items.
+ * Never warns.
+ *
+ * Components use it to fall back when a slot is effectively empty, e.g. Avatar shows the initials
+ * unless `icon && slotRendersContent(icon)`.
+ *
+ * @param slot A slot value or any React node.
+ */
+export function slotRendersContent(slot: unknown): boolean {
+  return rendersContent(slot);
+}
+
 function normaliseContent(slot: unknown): React.ReactNode {
   if (
     typeof slot === 'object' &&

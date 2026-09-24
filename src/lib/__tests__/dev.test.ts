@@ -5,6 +5,7 @@ import {
   isDev,
   devWarn,
   warnOnce,
+  hasWarned,
   warnDeprecated,
   resolveDeprecatedProp,
   __resetWarnings,
@@ -93,6 +94,43 @@ describe('warnOnce', () => {
     vi.unstubAllEnvs();
     warnOnce('key-p', 'shown');
     expect(warnSpy).toHaveBeenCalledWith('[WaveUI] shown');
+  });
+});
+
+describe('hasWarned', () => {
+  it('hasWarned reports keys consumed by warnOnce without consuming them', () => {
+    expect(hasWarned('X:k')).toBe(false);
+    expect(hasWarned('X:k')).toBe(false);
+    warnOnce('X:k', 'msg');
+    expect(hasWarned('X:k')).toBe(true);
+    expect(warnSpy).toHaveBeenCalledTimes(1);
+    __resetWarnings();
+    expect(hasWarned('X:k')).toBe(false);
+  });
+
+  it('does not consume the key, so a later warnOnce still warns', () => {
+    expect(hasWarned('X:later')).toBe(false);
+    warnOnce('X:later', 'still shown');
+    expect(warnSpy).toHaveBeenCalledWith('[WaveUI] still shown');
+  });
+
+  it('sees keys emitted through warnDeprecated', () => {
+    warnDeprecated('TabList', 'vertical', 'orientation');
+    expect(hasWarned('deprecated:TabList:vertical')).toBe(true);
+    expect(hasWarned('deprecated:TabList:onTabSelect')).toBe(false);
+  });
+
+  it('reads the shared global registry, so another library copy sees the key', async () => {
+    warnOnce('shared-has-key', 'from copy one');
+    vi.resetModules();
+    const otherCopy = await import('../dev');
+    expect(otherCopy.hasWarned('shared-has-key')).toBe(true);
+  });
+
+  it('reports false in production, where warnOnce consumes no key', () => {
+    vi.stubEnv('NODE_ENV', 'production');
+    warnOnce('key-hp', 'hidden');
+    expect(hasWarned('key-hp')).toBe(false);
   });
 });
 
