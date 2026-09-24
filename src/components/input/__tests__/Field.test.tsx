@@ -765,6 +765,63 @@ describe('Field', () => {
       warn.mockRestore();
     });
 
+    it('names every library control inside a plain wrapper element and keeps the ids unique', async () => {
+      const warn = vi.spyOn(console, 'warn');
+      try {
+        render(
+          <Field label="Price range" hint="In euros">
+            <div>
+              <Input data-testid="min" />
+              <Input data-testid="max" />
+            </div>
+          </Field>,
+        );
+        const min = screen.getByTestId('min');
+        const max = screen.getByTestId('max');
+        // The first control takes the control id the label points at; the second gets an id of
+        // its own and is named through aria-labelledby.
+        expect(screen.getByText('Price range').closest('label')).toHaveAttribute('for', min.id);
+        expect(min).not.toHaveAttribute('aria-labelledby');
+        expect(max.id).not.toBe(min.id);
+        for (const input of [min, max]) {
+          expect(input).toHaveAccessibleName('Price range');
+          expect(input).toHaveAccessibleDescription('In euros');
+        }
+        for (const element of document.querySelectorAll('[id]')) {
+          expect(document.querySelectorAll(`[id="${element.id}"]`), element.id).toHaveLength(1);
+        }
+        // One element child: no multiple-children warning.
+        expect(warn).not.toHaveBeenCalled();
+      } finally {
+        warn.mockRestore();
+      }
+      await expectNoA11yViolations();
+    });
+
+    it('moves the control id to the next control inside the wrapper when the first one is removed', () => {
+      const error = vi.spyOn(console, 'error');
+      try {
+        const ui = (showMin: boolean) => (
+          <Field label="Price range">
+            <div>
+              {showMin && <Input data-testid="min" />}
+              <Input data-testid="max" />
+            </div>
+          </Field>
+        );
+        const { rerender } = render(ui(true));
+        expect(screen.getByTestId('max')).toHaveAttribute('aria-labelledby');
+        rerender(ui(false));
+        const max = screen.getByTestId('max');
+        expect(screen.getByText('Price range').closest('label')).toHaveAttribute('for', max.id);
+        expect(max).not.toHaveAttribute('aria-labelledby');
+        expect(max).toHaveAccessibleName('Price range');
+        expect(error).not.toHaveBeenCalled();
+      } finally {
+        error.mockRestore();
+      }
+    });
+
     it('leaves a Fragment first child alone (the control inside reads FieldContext)', () => {
       render(
         <Field label="Name" hint="Hint" required>

@@ -3,7 +3,11 @@ import { cn } from '../../lib/cn';
 import { joinIds } from '../../lib/aria';
 import { warnOnce } from '../../lib/dev';
 import { useId } from '../../hooks/useId';
-import { FieldContext, type FieldContextValue } from '../../hooks/useFieldControl';
+import {
+  FieldContext,
+  createFieldControlIdClaim,
+  type FieldContextValue,
+} from '../../hooks/useFieldControl';
 
 /** Props Field reads from and merges into its first element child. */
 interface InjectedFieldProps {
@@ -293,8 +297,10 @@ function rendersSomething(node: React.ReactNode): boolean {
  *   child). Further element children are rendered as they are. A library control among them
  *   still reads `FieldContext`, so it shares the Field's name and description (when the first
  *   child holds the control id, it gets an id of its own and is named through
- *   `aria-labelledby`). Several library controls inside one plain wrapper element (`<div>`)
- *   would all take the Field's control id.
+ *   `aria-labelledby`). Several library controls inside one plain wrapper element (`<div>`) are
+ *   all named and described too: the first one takes the control id the label points at, the
+ *   others get ids of their own and are named through `aria-labelledby` (when the first one is
+ *   removed, the next one takes the control id over).
  * - **Wrapper and layout components around a library control** (a `Tooltip`, your own `Row`):
  *   put them inside a plain element (`<div>`, `<div className="flex">`), which Field leaves
  *   alone; the library control inside then holds the control id and is labelled, described and
@@ -334,6 +340,8 @@ export const Field = ({
   ...rest
 }: FieldProps) => {
   const fieldId = useId('field');
+  // Hands the control id to one library control when Field leaves its first child alone.
+  const [controlIdClaim] = React.useState(createFieldControlIdClaim);
   const { elementCount, targetId, controlIdAssigned } = getChildInfo(children);
 
   const hasErrorMessage = rendersSomething(error);
@@ -366,8 +374,19 @@ export const Field = ({
       required,
       hasErrorMessage,
       controlIdAssigned,
+      controlIdClaim,
     }),
-    [controlId, labelId, hintId, errorId, hasError, required, hasErrorMessage, controlIdAssigned],
+    [
+      controlId,
+      labelId,
+      hintId,
+      errorId,
+      hasError,
+      required,
+      hasErrorMessage,
+      controlIdAssigned,
+      controlIdClaim,
+    ],
   );
 
   const content = mergeIntoFirstChild(children, {

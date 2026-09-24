@@ -60,6 +60,9 @@ export interface RenderWithFieldContextResult extends RenderResult {
  *   child that holds the control id yourself (`<Control id={FIELD_TEST_IDS.controlId} />`), the
  *   way `Field` passes it to its first child; controls without an `id` get their own id and are
  *   named through `aria-labelledby`.
+ * - `controlIdClaim` is passed through when given (absent otherwise). With a claim
+ *   (`createFieldControlIdClaim()`) only the first control without an `id` takes `controlId`, the
+ *   way `Field` hands it out when it leaves its first child alone (a plain `<div>`).
  */
 export function resolveFieldTestContext(value: Partial<FieldContextValue> = {}): FieldContextValue {
   const errorId = value.errorId;
@@ -73,6 +76,7 @@ export function resolveFieldTestContext(value: Partial<FieldContextValue> = {}):
     hasErrorMessage: value.hasErrorMessage ?? errorId !== undefined,
   };
   if (value.controlIdAssigned !== undefined) resolved.controlIdAssigned = value.controlIdAssigned;
+  if (value.controlIdClaim !== undefined) resolved.controlIdClaim = value.controlIdClaim;
   return resolved;
 }
 
