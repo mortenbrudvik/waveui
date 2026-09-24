@@ -6,7 +6,21 @@ import { renderToString } from 'react-dom/server';
 import { Tag } from '../Tag';
 import type { TagOwnProps, TagProps } from '../Tag';
 import { Button } from '../../button/Button';
-import { renderWithProviders, testNoImplicitSubmit, testSystemProps } from '../../../test-utils';
+import {
+  asClientReference,
+  renderWithProviders,
+  testNoImplicitSubmit,
+  testSystemProps,
+} from '../../../test-utils';
+
+/** The development warning of a `<button>`/`Button` element passed as `dismissIcon`. */
+const BUTTON_SLOT_WARNING = '[WaveUI] Tag: `dismissIcon` received a button.';
+/** The deprecation warning of the 0.4 button-object form of `dismissIcon`. */
+const BUTTON_OBJECT_WARNING =
+  '[WaveUI] Tag: `dismissIcon={{ onClick, type, disabled, … }} (button props on the slot object)` is deprecated';
+/** The warning for `aria-label`/`aria-labelledby` on the slot. */
+const NAME_IGNORED_WARNING =
+  '[WaveUI] Tag: `aria-label`/`aria-labelledby` on `dismissIcon` are ignored.';
 
 const CustomIcon = () => (
   <svg data-testid="custom-icon" width="12" height="12" viewBox="0 0 12 12">
@@ -97,6 +111,38 @@ describe('Tag', () => {
     });
   });
 
+  describe('dismiss props without dismissible', () => {
+    const NOT_DISMISSIBLE_WARNING =
+      '[WaveUI] Tag: `onDismiss` and `dismissIcon` take effect only with `dismissible`';
+
+    it.each([
+      ['onDismiss', { onDismiss: () => {} }],
+      ['dismissIcon', { dismissIcon: <CustomIcon /> }],
+    ])('warns when %s is passed without dismissible (no dismiss button renders)', (_, props) => {
+      const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+      render(<Tag {...props}>Cherry</Tag>);
+      expect(screen.queryByRole('button')).not.toBeInTheDocument();
+      expect(warn.mock.calls).toEqual([[expect.stringContaining(NOT_DISMISSIBLE_WARNING)]]);
+    });
+
+    it('does not warn when dismissible is set explicitly, true or false', () => {
+      const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+      render(
+        <>
+          <Tag dismissible onDismiss={() => {}}>
+            Cherry
+          </Tag>
+          {/* A tag that is dismissible only in some states keeps its handler. */}
+          <Tag dismissible={false} onDismiss={() => {}} dismissIcon={<CustomIcon />}>
+            Plum
+          </Tag>
+        </>,
+      );
+      expect(screen.getAllByRole('button')).toHaveLength(1);
+      expect(warn).not.toHaveBeenCalled();
+    });
+  });
+
   it('calls onDismiss when the dismiss button is clicked', async () => {
     const user = userEvent.setup();
     const onDismiss = vi.fn();
@@ -183,11 +229,12 @@ describe('Tag', () => {
       expect(buttons[0]).toContainElement(screen.getByTestId('custom-icon'));
       await user.click(buttons[0]);
       expect(calls).toEqual(['slot', 'onDismiss']);
-      expect(warn).toHaveBeenCalledWith(expect.stringContaining('[WaveUI] Tag:'));
+      // The element form gets its own warning, never the deprecation of the button-object form.
+      expect(warn.mock.calls).toEqual([[expect.stringContaining(BUTTON_SLOT_WARNING)]]);
     });
 
     it('lets a <button> slot that calls preventDefault() suppress onDismiss', async () => {
-      vi.spyOn(console, 'warn').mockImplementation(() => {});
+      const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
       const user = userEvent.setup();
       const onDismiss = vi.fn();
       render(
@@ -205,10 +252,11 @@ describe('Tag', () => {
       );
       await user.click(screen.getByRole('button', { name: 'Dismiss Cherry' }));
       expect(onDismiss).not.toHaveBeenCalled();
+      expect(warn.mock.calls).toEqual([[expect.stringContaining(BUTTON_SLOT_WARNING)]]);
     });
 
     it('merges a Wave Button slot into the wired button', async () => {
-      vi.spyOn(console, 'warn').mockImplementation(() => {});
+      const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
       const user = userEvent.setup();
       const onDismiss = vi.fn();
       const onClick = vi.fn();
@@ -228,7 +276,111 @@ describe('Tag', () => {
       await user.click(buttons[0]);
       expect(onClick).toHaveBeenCalledTimes(1);
       expect(onDismiss).toHaveBeenCalledTimes(1);
+      expect(warn.mock.calls).toEqual([[expect.stringContaining(BUTTON_SLOT_WARNING)]]);
     });
+
+    it('renders the icon and the text label of a Wave Button slot together (C-SLOTS)', () => {
+      const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+      render(
+        <Tag dismissible dismissIcon={<Button icon={<CustomIcon />}>Remove</Button>}>
+          Cherry
+        </Tag>,
+      );
+      const buttons = screen.getAllByRole('button');
+      expect(buttons).toHaveLength(1);
+      expect(buttons[0]).toHaveAccessibleName('Remove Cherry');
+      expect(buttons[0]).toContainElement(screen.getByTestId('custom-icon'));
+      expect(buttons[0]).toHaveTextContent('Remove');
+      // The icon comes first and stays decorative, as in MessageBar and SearchBox.
+      const iconSpan = screen.getByTestId('custom-icon').parentElement as HTMLElement;
+      expect(iconSpan).toHaveAttribute('aria-hidden', 'true');
+      expect(iconSpan.nextSibling?.textContent).toBe('Remove');
+      expect(warn.mock.calls).toEqual([[expect.stringContaining(BUTTON_SLOT_WARNING)]]);
+    });
+
+    it('merges a Wave Button written in a Server Component (lazy type) instead of nesting it', async () => {
+      const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+      const user = userEvent.setup();
+      const LazyButton = asClientReference(Button);
+      const onClick = vi.fn();
+      const onDismiss = vi.fn();
+      const tag = (SlotButton: typeof Button) => (
+        <Tag
+          dismissible
+          onDismiss={onDismiss}
+          dismissIcon={<SlotButton icon={<CustomIcon />} onClick={onClick} />}
+        >
+          Cherry
+        </Tag>
+      );
+      expect(renderToString(tag(LazyButton))).toBe(renderToString(tag(Button)));
+      render(tag(LazyButton));
+      const buttons = screen.getAllByRole('button');
+      expect(buttons).toHaveLength(1);
+      expect(buttons[0]).toHaveAccessibleName('Dismiss Cherry');
+      await user.click(buttons[0]);
+      expect(onClick).toHaveBeenCalledTimes(1);
+      expect(onDismiss).toHaveBeenCalledTimes(1);
+      expect(warn.mock.calls).toEqual([[expect.stringContaining(BUTTON_SLOT_WARNING)]]);
+    });
+
+    const emptyContentCases: Array<
+      [string, TagOwnProps['dismissIcon'], 'button' | 'content' | null, string | null]
+    > = [
+      ['a slot object without children', { className: 'text-error' }, 'content', null],
+      [
+        'the deprecated button-object form without children',
+        { as: 'button', className: 'text-error', onClick: () => {} },
+        'button',
+        BUTTON_OBJECT_WARNING,
+      ],
+      [
+        'a childless <button>',
+        <button key="b" type="button" className="text-error" />,
+        'button',
+        BUTTON_SLOT_WARNING,
+      ],
+      [
+        'a childless Wave Button',
+        <Button key="w" className="text-error" />,
+        'button',
+        BUTTON_SLOT_WARNING,
+      ],
+      [
+        'a <button> whose children render nothing',
+        <button key="e" type="button" className="text-error">
+          {false}
+        </button>,
+        'button',
+        BUTTON_SLOT_WARNING,
+      ],
+      ['content that renders nothing', [], null, null],
+    ];
+
+    it.each(emptyContentCases)(
+      'shows the default icon for %s (never an empty dismiss button)',
+      (_, dismissIcon, classTarget, warning) => {
+        const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+        render(
+          <Tag dismissible dismissIcon={dismissIcon}>
+            Cherry
+          </Tag>,
+        );
+        const button = screen.getByRole('button', { name: 'Dismiss Cherry' });
+        const icon = button.querySelector('[data-wave-icon="dismiss"]');
+        expect(icon).not.toBeNull();
+        expect(icon?.closest('[aria-hidden="true"]')).not.toBeNull();
+        if (classTarget === 'button') {
+          // A merged button (or the button-object form) keeps its className on the dismiss button.
+          expect(button).toHaveClass('text-error');
+        } else if (classTarget === 'content') {
+          // The slot object's element wraps the default icon and carries its className.
+          expect(icon?.parentElement).toHaveClass('text-error');
+          expect(button).not.toHaveClass('text-error');
+        }
+        expect(warn.mock.calls).toEqual(warning ? [[expect.stringContaining(warning)]] : []);
+      },
+    );
 
     it('merges the deprecated button-object form onto the wired button with a warning', async () => {
       const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
@@ -249,7 +401,7 @@ describe('Tag', () => {
       await user.click(buttons[0]);
       expect(onClick).toHaveBeenCalledTimes(1);
       expect(onDismiss).toHaveBeenCalledTimes(1);
-      expect(warn).toHaveBeenCalledWith(expect.stringContaining('deprecated'));
+      expect(warn.mock.calls).toEqual([[expect.stringContaining(BUTTON_OBJECT_WARNING)]]);
     });
 
     it('puts the button attributes of the deprecated button-object form on the dismiss button', () => {
@@ -286,7 +438,10 @@ describe('Tag', () => {
       expect(iconSpan).not.toHaveAttribute('aria-describedby');
       expect(iconSpan).not.toHaveAttribute('id');
       expect(iconSpan).not.toHaveClass('text-error');
-      expect(warn).toHaveBeenCalledWith(expect.stringContaining('`dismissLabel`'));
+      expect(warn.mock.calls).toEqual([
+        [expect.stringContaining(BUTTON_OBJECT_WARNING)],
+        [expect.stringContaining(NAME_IGNORED_WARNING)],
+      ]);
     });
 
     it('ignores aria-label on a <button> slot and says so (the name comes from dismissLabel)', () => {
@@ -306,7 +461,10 @@ describe('Tag', () => {
       const button = screen.getByRole('button');
       expect(button).toHaveAccessibleName('Dismiss Cherry');
       expect(button).not.toHaveAttribute('aria-label');
-      expect(warn).toHaveBeenCalledWith(expect.stringMatching(/aria-label.*ignored.*dismissLabel/));
+      expect(warn.mock.calls).toEqual([
+        [expect.stringContaining(BUTTON_SLOT_WARNING)],
+        [expect.stringMatching(/aria-label.*ignored.*dismissLabel/)],
+      ]);
     });
 
     it('moves aria attributes of an icon slot object to the dismiss button', () => {
@@ -335,8 +493,7 @@ describe('Tag', () => {
       expect(iconSpan).toHaveAttribute('aria-hidden', 'true');
       expect(iconSpan).not.toHaveAttribute('aria-label');
       expect(iconSpan).not.toHaveAttribute('aria-describedby');
-      expect(warn).toHaveBeenCalledWith(expect.stringMatching(/aria-label.*ignored.*dismissLabel/));
-      expect(warn).not.toHaveBeenCalledWith(expect.stringContaining('deprecated'));
+      expect(warn.mock.calls).toEqual([[expect.stringContaining(NAME_IGNORED_WARNING)]]);
     });
   });
 
@@ -347,7 +504,7 @@ describe('Tag', () => {
     }
 
     it('names the button by its visible text plus the tag content (P12 change request)', async () => {
-      vi.spyOn(console, 'warn').mockImplementation(() => {});
+      const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
       const user = userEvent.setup();
       const onDismiss = vi.fn();
       render(
@@ -361,6 +518,7 @@ describe('Tag', () => {
       expect(button).toHaveAccessibleName('Remove Cherry');
       await user.click(button);
       expect(onDismiss).toHaveBeenCalledTimes(1);
+      expect(warn.mock.calls).toEqual([[expect.stringContaining(BUTTON_SLOT_WARNING)]]);
     });
 
     it.each([
@@ -381,13 +539,14 @@ describe('Tag', () => {
         'Remove Cherry',
       ],
     ])('%s is named by its visible text', (_, dismissIcon, name) => {
-      vi.spyOn(console, 'warn').mockImplementation(() => {});
+      const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
       render(
         <Tag dismissible dismissIcon={dismissIcon}>
           Cherry
         </Tag>,
       );
       expect(screen.getByRole('button')).toHaveAccessibleName(name);
+      expect(warn.mock.calls).toEqual([[expect.stringContaining(BUTTON_SLOT_WARNING)]]);
     });
 
     it.each([
@@ -407,13 +566,14 @@ describe('Tag', () => {
         </span>,
       ],
     ])('a <button> whose content is %s keeps "Dismiss Cherry"', (_, children) => {
-      vi.spyOn(console, 'warn').mockImplementation(() => {});
+      const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
       render(
         <Tag dismissible dismissIcon={<button type="button">{children}</button>}>
           Cherry
         </Tag>,
       );
       expect(screen.getByRole('button')).toHaveAccessibleName('Dismiss Cherry');
+      expect(warn.mock.calls).toEqual([[expect.stringContaining(BUTTON_SLOT_WARNING)]]);
     });
 
     it('keeps "Dismiss Cherry" for text in icon content (slot content is decorative)', () => {
@@ -442,11 +602,14 @@ describe('Tag', () => {
       const button = screen.getByRole('button');
       expect(button).toHaveAccessibleName('Remove Cherry');
       expect(button).not.toHaveAttribute('aria-label');
-      expect(warn).toHaveBeenCalledWith(expect.stringMatching(/aria-label.*ignored.*dismissLabel/));
+      expect(warn.mock.calls).toEqual([
+        [expect.stringContaining(BUTTON_SLOT_WARNING)],
+        [expect.stringContaining(NAME_IGNORED_WARNING)],
+      ]);
     });
 
     it('follows text that a child component renders or removes later', async () => {
-      vi.spyOn(console, 'warn').mockImplementation(() => {});
+      const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
       const setTextRef = React.createRef<(text: string) => void>();
       function LateText({ ref }: { ref: React.Ref<(text: string) => void> }) {
         const [text, setText] = React.useState('');
@@ -474,10 +637,12 @@ describe('Tag', () => {
 
       act(() => setTextRef.current?.(''));
       await waitFor(() => expect(button).toHaveAccessibleName('Dismiss Cherry'));
+      expect(warn.mock.calls).toEqual([[expect.stringContaining(BUTTON_SLOT_WARNING)]]);
     });
 
     it('decides the server-rendered name from the literal children', () => {
-      vi.spyOn(console, 'warn').mockImplementation(() => {});
+      // The warnings come from effects, which never run on the server.
+      const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
       const host = document.createElement('div');
       document.body.appendChild(host);
       try {
@@ -494,6 +659,7 @@ describe('Tag', () => {
         const [named, glyph] = within(host).getAllByRole('button');
         expect(named).toHaveAccessibleName('Remove Cherry');
         expect(glyph).toHaveAccessibleName('Dismiss Plum');
+        expect(warn).not.toHaveBeenCalled();
       } finally {
         host.remove();
       }

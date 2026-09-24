@@ -18,7 +18,7 @@ type Story = StoryObj<typeof meta>;
 /** Controlled selection with a live readout of the selected values. */
 function SelectionDemo(props: ListProps) {
   const { onSelectionChange, defaultSelectedItems, ...rest } = props;
-  const [selected, setSelected] = React.useState<string[]>(defaultSelectedItems ?? []);
+  const [selected, setSelected] = React.useState<readonly string[]>(defaultSelectedItems ?? []);
   return (
     <div>
       <p className="mb-2 text-body-1">Selected: {selected.join(', ') || 'none'}</p>

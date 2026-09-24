@@ -1,9 +1,11 @@
 import * as React from 'react';
 import { cn } from '../../lib/cn';
+import { flattenChildren, isElementOfType } from '../../lib/children';
 import { composeEventHandlers } from '../../lib/composeEventHandlers';
-import { isDev, warnDeprecated, warnOnce } from '../../lib/dev';
+import { reportMissingContext, warnDeprecated, warnOnce } from '../../lib/dev';
 import { getArrowIntent, getDirection } from '../../lib/direction';
 import { FOCUSABLE_SELECTOR, isFocusable } from '../../lib/focus';
+import { slotRendersContent } from '../../lib/slot';
 import { focusRingInset, forcedColors } from '../../lib/styles';
 import type { SelectionMode } from '../../lib/types';
 import { useControllable } from '../../hooks/useControllable';
@@ -12,9 +14,6 @@ import { useId } from '../../hooks/useId';
 import { useMergedRefs } from '../../hooks/useMergedRefs';
 import { useRovingTabIndex } from '../../hooks/useRovingTabIndex';
 import { ListRegistry, type ListFocusLoss } from './List.registry';
-
-const useIsomorphicLayoutEffect =
-  typeof document !== 'undefined' ? React.useLayoutEffect : React.useEffect;
 
 /** Selection modes of {@link List}: the shared `SelectionMode` plus the deprecated `'multi'`. */
 export type ListSelectionMode = SelectionMode | 'multi';
@@ -43,11 +42,11 @@ export interface ListProps<
    * Controlled array of selected item values (both modes). In single mode prefer `selectedItem`;
    * a single-selection list that receives several values warns in development.
    */
-  selectedItems?: string[];
+  selectedItems?: readonly string[];
   /** Default selected items for uncontrolled usage.
    * @default []
    */
-  defaultSelectedItems?: string[];
+  defaultSelectedItems?: readonly string[];
   /** Called with the next array of selected values when the selection changes (both modes). */
   onSelectionChange?: (selected: string[]) => void;
   /** Single mode: the controlled selected value (`null`: nothing selected). */
@@ -72,11 +71,12 @@ export interface ListItemProps extends React.HTMLAttributes<HTMLLIElement> {
   value?: string;
   /**
    * Action element rendered at the end of the list item (e.g. a Delete button). Clicks and keys
-   * that start inside it never toggle the item's selection. In a selectable list, items with
-   * actions switch the list to grid semantics: the actions are reached with the arrow keys, and
-   * their focusable elements (also ones added later) get `tabindex="-1"`, except inside a nested
-   * composite widget such as a Toolbar, which keeps its own Tab stop. When the first action
-   * appears or the last one disappears, the items remount (see {@link List}).
+   * that start inside it, or inside a popup it opens, never toggle the item's selection. An
+   * action that renders nothing (`[]`, `null`, `false`, `''`) is no action. In a selectable list,
+   * items with actions switch the list to grid semantics: the actions are reached with the arrow
+   * keys, and their focusable elements (also ones added later) get `tabindex="-1"`, except inside
+   * a nested composite widget such as a Toolbar, which keeps its own Tab stop. When the first
+   * action appears or the last one disappears, the items remount (see {@link List}).
    */
   action?: React.ReactNode;
   /** Ref to the item element: an `<li>`, or a `<div role="row">` in grid mode. */
@@ -117,9 +117,7 @@ function getInertContext(): ListContextValue {
 function useListContext(componentName: string): ListContextValue {
   const context = React.useContext(ListContext);
   if (context) return context;
-  const message = `[WaveUI] ${componentName} must be used within a List.`;
-  if (isDev) throw new Error(message);
-  console.error(message);
+  reportMissingContext(componentName, 'a List');
   return getInertContext();
 }
 
@@ -127,24 +125,17 @@ function useListContext(componentName: string): ListContextValue {
 /*  Helpers                                                            */
 /* ------------------------------------------------------------------ */
 
-const EMPTY: string[] = [];
+const EMPTY: readonly string[] = [];
 
-function hasActionContent(action: React.ReactNode): boolean {
-  return action !== undefined && action !== null && typeof action !== 'boolean' && action !== '';
-}
-
-/** Static look-ahead for the server and the first render: a direct `List.Item` with an action. */
+/**
+ * Static look-ahead for the server and the first render: a direct `List.Item` (Fragments
+ * flattened, also an item written in a Server Component) whose action renders content.
+ */
 function childrenHaveAction(children: React.ReactNode): boolean {
-  let found = false;
-  React.Children.forEach(children, (child) => {
-    if (found || !React.isValidElement<ListItemProps>(child)) return;
-    if (child.type === React.Fragment) {
-      found = childrenHaveAction(child.props.children);
-    } else if (child.type === ListItem && hasActionContent(child.props.action)) {
-      found = true;
-    }
-  });
-  return found;
+  return flattenChildren(children).some(
+    ({ node }) =>
+      isElementOfType<ListItemProps>(node, ListItem) && slotRendersContent(node.props.action),
+  );
 }
 
 /** Elements whose events belong to themselves, not to the item that contains them. */
@@ -164,12 +155,21 @@ const INTERACTIVE_SELECTOR = [
   '[role="spinbutton"]',
 ].join(', ');
 
-/** Whether the event started inside the action container or a nested interactive element. */
-function startsInInteractiveContent(event: React.SyntheticEvent<HTMLElement>): boolean {
+/**
+ * Whether an item must leave `event` alone (no selection toggle): it started inside the action
+ * container or a nested interactive element, or outside the item's DOM. React bubbles the events
+ * of a popup portaled from an action (a Popover, Menu or Dialog) through the item's handlers
+ * although their target lives elsewhere in the document; those never toggle the item (as in
+ * Card).
+ */
+function isForeignEvent(event: React.SyntheticEvent<HTMLElement>): boolean {
   const item = event.currentTarget;
-  const target = event.target as Node;
+  const target = event.target as Partial<Node> | null;
+  if (!target || typeof target.nodeType !== 'number' || !item.contains(target as Node)) {
+    return true;
+  }
   let node: Element | null =
-    target.nodeType === Node.ELEMENT_NODE ? (target as Element) : target.parentElement;
+    target.nodeType === Node.ELEMENT_NODE ? (target as Element) : (target.parentElement ?? null);
   for (; node && node !== item; node = node.parentElement) {
     if (node.matches(INTERACTIVE_SELECTOR)) return true;
   }
@@ -276,40 +276,7 @@ function getActionStops(cell: HTMLElement): HTMLElement[] {
 /*  List                                                               */
 /* ------------------------------------------------------------------ */
 
-/**
- * A vertical list of items, optionally selectable.
- *
- * - **Plain** (`selectable` false): `role="list"` with `listitem`s; item actions stay in the
- *   normal Tab order.
- * - **Selectable** (APG Listbox): `role="listbox"` with `option`s and one Tab stop (the first
- *   selected option, else the first option). ArrowUp/Down move focus (wrapping), Home/End jump to
- *   the ends, typeahead is on for more than 7 items, Enter/Space and clicks toggle selection (a
- *   Space typed within 500 ms of a typeahead character continues the search instead).
- * - **Selectable with item actions** (APG Grid): `role="grid"` with `row`s (carrying
- *   `aria-selected`) and `gridcell`s for the content and the action. One Tab stop; Up/Down move
- *   between rows, Right/Left (mirrored in RTL) move into and out of the actions. A cell that holds
- *   a text-entry widget takes focus itself: Enter/F2 enter the widget, Escape returns to the cell.
- *   Clicks and keys that start inside an action never toggle selection.
- * - **Switching semantics remounts the items.** Listbox/list and grid use different elements
- *   (`ul`/`li` and `div`), so when a selectable list gains its first item action, loses its last
- *   one, or `selectable` changes while items have actions, React remounts the items and their
- *   content: state inside them (an inline rename input's draft, an uncontrolled checkbox) is reset.
- *   Focus that is on an item or inside it when the list switches moves to the same item (by
- *   `value`, else by position; the next item when the focused one was removed), so the switch
- *   never drops it to `<body>`. This includes focus inside the last action when that action
- *   removes itself (an inline rename input that unmounts on Enter). An action that removes itself
- *   while focused without causing a switch drops focus, like any removed element. When the list
- *   may switch, keep such state in the parent (or keep an action on at least one item).
- * - Selection: `selectionMode` `'single'` (default) or `'multiple'`; controlled with
- *   `selectedItems` (or `selectedItem` in single mode) or uncontrolled with the `default*` props.
- *   Values of items that are no longer rendered are dropped from the reported selection.
- *
- * @example
- * <List selectable selectionMode="multiple" aria-label="Fruits" onSelectionChange={setFruits}>
- *   <List.Item value="apple">Apple</List.Item>
- *   <List.Item value="banana">Banana</List.Item>
- * </List>
- */
+/** The List root (see the component documentation on {@link List}). */
 const ListRoot = <M extends ListSelectionMode = 'single'>(props: ListProps<M>): React.ReactNode => {
   const {
     selectable = false,
@@ -334,30 +301,32 @@ const ListRoot = <M extends ListSelectionMode = 'single'>(props: ListProps<M>): 
   }
   const multiple = selectionMode === 'multiple' || selectionMode === 'multi';
 
-  const controlledSelection = React.useMemo<string[] | undefined>(() => {
+  const controlledSelection = React.useMemo<readonly string[] | undefined>(() => {
     if (!multiple && selectedItem !== undefined) {
       return selectedItem === null ? EMPTY : [selectedItem];
     }
     return selectedItems;
   }, [multiple, selectedItem, selectedItems]);
-  const defaultSelection = React.useMemo<string[]>(() => {
+  const defaultSelection = React.useMemo<readonly string[]>(() => {
     if (!multiple && defaultSelectedItem !== undefined && defaultSelectedItem !== null) {
       return [defaultSelectedItem];
     }
     return defaultSelectedItems ?? EMPTY;
   }, [multiple, defaultSelectedItem, defaultSelectedItems]);
 
-  const [selected, setSelected] = useControllable<string[]>(
+  const [selected, setSelected] = useControllable<readonly string[]>(
     controlledSelection,
     defaultSelection,
     (next) => {
-      onSelectionChange?.(next);
-      if (!multiple) onSelectedItemChange?.(next[0] ?? null);
+      // The callbacks receive their own mutable copy (the props accept readonly arrays).
+      const selection = [...next];
+      onSelectionChange?.(selection);
+      if (!multiple) onSelectedItemChange?.(selection[0] ?? null);
     },
   );
 
   const [registry] = React.useState(() => new ListRegistry());
-  useIsomorphicLayoutEffect(() => {
+  React.useLayoutEffect(() => {
     registry.setActive(selectable);
   }, [registry, selectable]);
   const registered = React.useSyncExternalStore(
@@ -408,7 +377,7 @@ const ListRoot = <M extends ListSelectionMode = 'single'>(props: ListProps<M>): 
   // `div`), so React remounts the items and the focused one is removed. Items record, while they
   // are still in the document, that they held focus (see ListItem); after the new items mounted,
   // focus moves to the same item (C-DISABLED: focus is never dropped to <body>).
-  useIsomorphicLayoutEffect(() => {
+  React.useLayoutEffect(() => {
     const loss = registry.takeFocusLoss();
     const root = rootElementRef.current;
     if (!loss || !root) return;
@@ -422,7 +391,7 @@ const ListRoot = <M extends ListSelectionMode = 'single'>(props: ListProps<M>): 
   // After every commit (the items' layout effects ran first): keep the registered values in DOM
   // order, so `tabStopValue` is the first selected item in the DOM even after items were inserted
   // between others or reordered by key (table-core#22). O(n); re-renders only when the order changed.
-  useIsomorphicLayoutEffect(() => {
+  React.useLayoutEffect(() => {
     registry.syncOrder(rootElementRef.current);
   });
 
@@ -514,17 +483,18 @@ export const ListItem = ({
   const autoValue = useId('list-item');
   const selectableValue = value ? value : undefined;
   const rovingValue = selectableValue ?? autoValue;
-  const hasAction = hasActionContent(action);
+  // An action that renders nothing (`[]`, `null`, booleans, `''`) is no action.
+  const hasAction = slotRendersContent(action);
   const [token] = React.useState(() => ({}));
   const itemRef = React.useRef<HTMLLIElement | HTMLDivElement | null>(null);
   const itemRefs = useMergedRefs<HTMLLIElement | HTMLDivElement>(ref, itemRef);
 
   // The record is updated in place when the value or the action changes and removed only on
   // unmount, so the item keeps its place in the registry (table-core#22).
-  useIsomorphicLayoutEffect(() => {
+  React.useLayoutEffect(() => {
     registry.set(token, { value: selectableValue, hasAction, element: itemRef });
   }, [registry, token, selectableValue, hasAction]);
-  useIsomorphicLayoutEffect(() => () => registry.delete(token), [registry, token]);
+  React.useLayoutEffect(() => () => registry.delete(token), [registry, token]);
 
   // Focus inside the action when it disappears: if that switches the list from grid to listbox, the
   // List moves focus to this item in the next commit (see ListActionCell and ListRoot).
@@ -536,7 +506,7 @@ export const ListItem = ({
   // Unmount: a layout-effect cleanup runs while the element is still in the document, so it can
   // tell whether it held focus. The List moves focus to the same item when its items remount
   // (list ↔ grid semantics); see ListRoot.
-  useIsomorphicLayoutEffect(() => {
+  React.useLayoutEffect(() => {
     const node = itemRef.current;
     return () => {
       if (!node) return;
@@ -555,12 +525,12 @@ export const ListItem = ({
   };
 
   const handleClick = (event: React.MouseEvent<HTMLElement>) => {
-    if (startsInInteractiveContent(event)) return;
+    if (isForeignEvent(event)) return;
     activate();
   };
 
   const handleOptionKeyDown = (event: React.KeyboardEvent<HTMLElement>) => {
-    if (startsInInteractiveContent(event)) return;
+    if (isForeignEvent(event)) return;
     if (event.key === 'Enter' || event.key === ' ') {
       event.preventDefault();
       activate();
@@ -791,7 +761,7 @@ interface ListActionCellProps {
 function ListActionCell({ grid, onRemovedWithFocus, children }: ListActionCellProps) {
   const cellRef = React.useRef<HTMLElement | null>(null);
 
-  useIsomorphicLayoutEffect(() => {
+  React.useLayoutEffect(() => {
     const cell = cellRef.current;
     return () => {
       if (!cell) return;
@@ -800,7 +770,7 @@ function ListActionCell({ grid, onRemovedWithFocus, children }: ListActionCellPr
     };
   }, [onRemovedWithFocus, grid]);
 
-  useIsomorphicLayoutEffect(() => {
+  React.useLayoutEffect(() => {
     const cell = cellRef.current;
     return grid && cell ? stampActionCell(cell) : undefined;
   }, [grid]);
@@ -821,8 +791,40 @@ function ListActionCell({ grid, onRemovedWithFocus, children }: ListActionCellPr
 ListActionCell.displayName = 'ListActionCell';
 
 /**
- * A vertical list of items, optionally selectable (see {@link ListRoot}). Sub-component:
- * `List.Item` (also exported as `ListItem`).
+ * A vertical list of items, optionally selectable.
+ *
+ * - **Plain** (`selectable` false): `role="list"` with `listitem`s; item actions stay in the
+ *   normal Tab order.
+ * - **Selectable** (APG Listbox): `role="listbox"` with `option`s and one Tab stop (the first
+ *   selected option, else the first option). ArrowUp/Down move focus (wrapping), Home/End jump to
+ *   the ends, typeahead is on for more than 7 items, Enter/Space and clicks toggle selection (a
+ *   Space typed within 500 ms of a typeahead character continues the search instead).
+ * - **Selectable with item actions** (APG Grid): `role="grid"` with `row`s (carrying
+ *   `aria-selected`) and `gridcell`s for the content and the action. One Tab stop; Up/Down move
+ *   between rows, Right/Left (mirrored in RTL) move into and out of the actions. A cell that holds
+ *   a text-entry widget takes focus itself: Enter/F2 enter the widget, Escape returns to the cell.
+ *   Clicks and keys that start inside an action, or inside a popup it opens (a Popover, a Menu),
+ *   never toggle selection.
+ * - **Switching semantics remounts the items.** Listbox/list and grid use different elements
+ *   (`ul`/`li` and `div`), so when a selectable list gains its first item action, loses its last
+ *   one, or `selectable` changes while items have actions, React remounts the items and their
+ *   content: state inside them (an inline rename input's draft, an uncontrolled checkbox) is reset.
+ *   Focus that is on an item or inside it when the list switches moves to the same item (by
+ *   `value`, else by position; the next item when the focused one was removed), so the switch
+ *   never drops it to `<body>`. This includes focus inside the last action when that action
+ *   removes itself (an inline rename input that unmounts on Enter). An action that removes itself
+ *   while focused without causing a switch drops focus, like any removed element. When the list
+ *   may switch, keep such state in the parent (or keep an action on at least one item).
+ * - Selection: `selectionMode` `'single'` (default) or `'multiple'`; controlled with
+ *   `selectedItems` (or `selectedItem` in single mode) or uncontrolled with the `default*` props.
+ *   Values of items that are no longer rendered are dropped from the reported selection.
+ * - Sub-component: `List.Item` (also exported as `ListItem` for React Server Components).
+ *
+ * @example
+ * <List selectable selectionMode="multiple" aria-label="Fruits" onSelectionChange={setFruits}>
+ *   <List.Item value="apple">Apple</List.Item>
+ *   <List.Item value="banana">Banana</List.Item>
+ * </List>
  */
 export const List = /* @__PURE__ */ Object.assign(ListRoot, {
   Item: ListItem,

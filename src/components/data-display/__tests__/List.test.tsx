@@ -6,8 +6,12 @@ import userEvent from '@testing-library/user-event';
 import { List, ListItem } from '../List';
 import type { ListProps, ListSelectionMode } from '../List';
 import { ListRegistrySnapshot } from '../List.registry';
+import { Button } from '../../button/Button';
 import { Toolbar } from '../../button/Toolbar';
+import { Menu } from '../../navigation/Menu';
+import { Popover } from '../../overlays/Popover';
 import {
+  asClientReference,
   renderWithProviders,
   testComposedHandler,
   testCompoundExposure,
@@ -78,6 +82,7 @@ function DocumentList(
 describe('List', () => {
   afterEach(() => {
     vi.restoreAllMocks();
+    vi.unstubAllEnvs();
   });
 
   testSystemProps(List, {
@@ -145,6 +150,43 @@ describe('List', () => {
       expect(() => render(<ListItem>Orphan</ListItem>)).toThrow(
         '[WaveUI] ListItem must be used within a List',
       );
+    });
+
+    it('in production, an item outside a List logs once and renders a plain list item (C-CONTEXT, R3)', () => {
+      vi.stubEnv('NODE_ENV', 'production');
+      const error = vi.spyOn(console, 'error').mockImplementation(() => {});
+      const { rerender } = render(<ListItem value="a">Orphan</ListItem>);
+      rerender(<ListItem value="a">Orphan</ListItem>);
+      const item = screen.getByRole('listitem');
+      expect(item).toHaveTextContent('Orphan');
+      expect(item).not.toHaveAttribute('aria-selected');
+      expect(error.mock.calls).toEqual([['[WaveUI] ListItem must be used within a List']]);
+    });
+
+    it('items written in a Server Component (lazy types) render the same server HTML and behave the same (R1)', async () => {
+      const user = userEvent.setup();
+      const LazyItem = asClientReference(ListItem);
+      const docs = (Item: typeof ListItem) => (
+        <List selectable aria-label="Documents">
+          <Item value="a">Document A</Item>
+          <>
+            <Item value="b" action={<button type="button">Delete B</button>}>
+              Document B
+            </Item>
+          </>
+        </List>
+      );
+      const plain = renderToString(docs(ListItem));
+      expect(plain).toContain('role="grid"');
+      expect(renderToString(docs(LazyItem))).toBe(plain);
+
+      render(docs(LazyItem));
+      expect(screen.getByRole('grid', { name: 'Documents' })).toBeInTheDocument();
+      act(() => row(/Document B/).focus());
+      await user.keyboard('{ArrowRight}');
+      expect(screen.getByRole('button', { name: 'Delete B' })).toHaveFocus();
+      await user.keyboard('{ArrowLeft} ');
+      expect(row(/Document B/)).toHaveAttribute('aria-selected', 'true');
     });
   });
 
@@ -383,7 +425,7 @@ describe('List', () => {
     });
 
     it('clears when a controlled value becomes undefined and adopts a late value (table-core#4)', () => {
-      vi.spyOn(console, 'warn').mockImplementation(() => {});
+      const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
       const { rerender } = render(
         <List selectable selectedItems={['banana']} aria-label="Fruits">
           {fruits}
@@ -414,6 +456,19 @@ describe('List', () => {
         (el) => el.textContent === 'Cherry',
       );
       expect(cherry).toHaveAttribute('aria-selected', 'true');
+      // useControllable reports each mode switch once.
+      expect(warn.mock.calls).toEqual([
+        [
+          expect.stringContaining(
+            '[WaveUI] A component is changing from controlled to uncontrolled.',
+          ),
+        ],
+        [
+          expect.stringContaining(
+            '[WaveUI] A component is changing from uncontrolled to controlled.',
+          ),
+        ],
+      ]);
     });
   });
 
@@ -617,7 +672,13 @@ describe('List', () => {
       expect(
         screen.getAllByRole('option').filter((el) => el.getAttribute('aria-selected') === 'true'),
       ).toHaveLength(0);
-      expect(warn).toHaveBeenCalledWith(expect.stringContaining('from uncontrolled to controlled'));
+      expect(warn.mock.calls).toEqual([
+        [
+          expect.stringContaining(
+            '[WaveUI] A component is changing from uncontrolled to controlled.',
+          ),
+        ],
+      ]);
     });
 
     it('warns when a single-selection list receives several selected items', () => {
@@ -627,8 +688,13 @@ describe('List', () => {
           {fruits}
         </List>,
       );
-      expect(warn).toHaveBeenCalledWith(expect.stringContaining('[WaveUI] List:'));
-      expect(warn.mock.calls.flat().join(' ')).toContain('single');
+      expect(warn.mock.calls).toEqual([
+        [
+          expect.stringContaining(
+            '[WaveUI] List: a single-selection list (selectionMode "single") received 2 selected items.',
+          ),
+        ],
+      ]);
     });
 
     it('type-checks the single-only props against selectionMode', () => {
@@ -651,6 +717,22 @@ describe('List', () => {
         (item: string | null) => void
       >();
     });
+
+    it('accepts readonly selection arrays and reports mutable ones (R6)', () => {
+      const selected = ['apple'] as const;
+      const elements = [
+        <List key="1" selectable selectedItems={selected} />,
+        <List key="2" selectable selectionMode="multiple" defaultSelectedItems={selected} />,
+      ];
+      expect(elements).toHaveLength(2);
+      expectTypeOf<ListProps['selectedItems']>().toEqualTypeOf<readonly string[] | undefined>();
+      expectTypeOf<ListProps['defaultSelectedItems']>().toEqualTypeOf<
+        readonly string[] | undefined
+      >();
+      expectTypeOf<NonNullable<ListProps['onSelectionChange']>>().toEqualTypeOf<
+        (selected: string[]) => void
+      >();
+    });
   });
 
   describe("selectionMode 'multiple' (data-display#30)", () => {
@@ -667,8 +749,13 @@ describe('List', () => {
       await user.click(option('Apple'));
       await user.click(option('Banana'));
       expect(onChange).toHaveBeenLastCalledWith(['apple', 'banana']);
-      expect(warn).toHaveBeenCalledWith(expect.stringContaining('deprecated'));
-      expect(warn.mock.calls.flat().join(' ')).toContain('multiple');
+      expect(warn.mock.calls).toEqual([
+        [
+          expect.stringContaining(
+            '[WaveUI] List: `selectionMode="multi"` is deprecated and will be removed in 1.0. Use `selectionMode="multiple"` instead.',
+          ),
+        ],
+      ]);
     });
   });
 
@@ -844,6 +931,64 @@ describe('List', () => {
     });
   });
 
+  describe('interactive content inside an item never toggles it', () => {
+    it('listbox: clicks and keys on a checkbox, a label, a link or a role="button" element', async () => {
+      const user = userEvent.setup();
+      const onChange = vi.fn();
+      render(
+        <List selectable aria-label="Documents" onSelectionChange={onChange}>
+          <List.Item value="a">
+            <input id="pin-a" type="checkbox" />
+            <label htmlFor="pin-a">Pin</label>
+            <a href="#doc-a">Open</a>
+            <span role="button" tabIndex={0}>
+              Share
+            </span>
+            <span>Doc A</span>
+          </List.Item>
+        </List>,
+      );
+      const item = screen.getByRole('option');
+      const checkbox = screen.getByRole('checkbox', { name: 'Pin' });
+
+      await user.click(checkbox);
+      expect(checkbox).toBeChecked();
+      await user.click(screen.getByText('Pin'));
+      expect(checkbox).not.toBeChecked();
+      await user.click(screen.getByRole('link', { name: 'Open' }));
+      await user.click(screen.getByRole('button', { name: 'Share' }));
+      act(() => checkbox.focus());
+      await user.keyboard(' ');
+      expect(checkbox).toBeChecked();
+      await user.keyboard('{Enter}');
+      expect(onChange).not.toHaveBeenCalled();
+      expect(item).toHaveAttribute('aria-selected', 'false');
+
+      await user.click(screen.getByText('Doc A'));
+      expect(onChange).toHaveBeenCalledWith(['a']);
+      expect(item).toHaveAttribute('aria-selected', 'true');
+    });
+
+    it('grid: Enter or a click on a link in the content cell does not toggle the row', async () => {
+      const user = userEvent.setup();
+      const onChange = vi.fn();
+      render(
+        <List selectable aria-label="Documents" onSelectionChange={onChange}>
+          <List.Item value="a" action={<button type="button">Delete</button>}>
+            <a href="#doc-a">Open Document A</a>
+          </List.Item>
+        </List>,
+      );
+      const link = screen.getByRole('link', { name: 'Open Document A' });
+      act(() => link.focus());
+      await user.keyboard('{Enter}');
+      await user.keyboard(' ');
+      await user.click(link);
+      expect(onChange).not.toHaveBeenCalled();
+      expect(row(/Document A/)).toHaveAttribute('aria-selected', 'false');
+    });
+  });
+
   describe('actions in selectable lists (data-display#2)', () => {
     it('renders a grid with rows and gridcells', () => {
       render(<DocumentList />);
@@ -957,6 +1102,97 @@ describe('List', () => {
       expect(row(/Alpha/)).toHaveFocus();
       const actionCell = row(/Alpha/).querySelector('[data-list-action]');
       expect(actionCell).toHaveClass('ms-2');
+    });
+
+    describe('several arrow stops in one action', () => {
+      function TwoActionList() {
+        return (
+          <List selectable aria-label="Documents">
+            <List.Item
+              value="a"
+              action={
+                <>
+                  <button type="button">Rename</button>
+                  <button type="button">Delete</button>
+                </>
+              }
+            >
+              Document A
+            </List.Item>
+          </List>
+        );
+      }
+
+      it('moves between the stops with Right/Left and back to the row', async () => {
+        const user = userEvent.setup();
+        render(<TwoActionList />);
+        const docRow = row(/Document A/);
+        const rename = screen.getByRole('button', { name: 'Rename' });
+        const remove = screen.getByRole('button', { name: 'Delete' });
+        act(() => docRow.focus());
+        await user.keyboard('{ArrowRight}');
+        expect(rename).toHaveFocus();
+        await user.keyboard('{ArrowRight}');
+        expect(remove).toHaveFocus();
+        // The last stop keeps focus.
+        await user.keyboard('{ArrowRight}');
+        expect(remove).toHaveFocus();
+        await user.keyboard('{ArrowLeft}');
+        expect(rename).toHaveFocus();
+        await user.keyboard('{ArrowLeft}');
+        expect(docRow).toHaveFocus();
+        expect(docRow).toHaveAttribute('aria-selected', 'false');
+      });
+
+      it('mirrors Right/Left between the stops in RTL', async () => {
+        const user = userEvent.setup();
+        renderWithProviders(<TwoActionList />, { dir: 'rtl' });
+        const docRow = row(/Document A/);
+        const rename = screen.getByRole('button', { name: 'Rename' });
+        const remove = screen.getByRole('button', { name: 'Delete' });
+        act(() => docRow.focus());
+        await user.keyboard('{ArrowLeft}');
+        expect(rename).toHaveFocus();
+        await user.keyboard('{ArrowLeft}');
+        expect(remove).toHaveFocus();
+        await user.keyboard('{ArrowRight}');
+        expect(rename).toHaveFocus();
+        await user.keyboard('{ArrowRight}');
+        expect(docRow).toHaveFocus();
+      });
+    });
+
+    it('toggles a focused row with Enter as well as Space', async () => {
+      const user = userEvent.setup();
+      const onChange = vi.fn();
+      render(<DocumentList onSelectionChange={onChange} />);
+      act(() => row(/Beta/).focus());
+      await user.keyboard('{Enter}');
+      expect(onChange).toHaveBeenLastCalledWith(['beta']);
+      expect(row(/Beta/)).toHaveAttribute('aria-selected', 'true');
+      await user.keyboard(' ');
+      expect(onChange).toHaveBeenLastCalledWith([]);
+      expect(row(/Beta/)).toHaveAttribute('aria-selected', 'false');
+    });
+
+    it('ArrowLeft on a focused text-entry cell returns to the row', async () => {
+      const user = userEvent.setup();
+      render(
+        <List selectable aria-label="Documents">
+          <List.Item value="a" action={<input aria-label="Rename A" defaultValue="Draft" />}>
+            Document A
+          </List.Item>
+        </List>,
+      );
+      const docRow = row(/Document A/);
+      const cell = screen
+        .getByRole('textbox', { name: 'Rename A' })
+        .closest('[role="gridcell"]') as HTMLElement;
+      act(() => docRow.focus());
+      await user.keyboard('{ArrowRight}');
+      expect(cell).toHaveFocus();
+      await user.keyboard('{ArrowLeft}');
+      expect(docRow).toHaveFocus();
     });
 
     it('a text-entry cell takes focus on the cell; Enter/F2 enter it, Escape returns', async () => {
@@ -1195,6 +1431,97 @@ describe('List', () => {
       await flushItemObserver();
       expect(screen.getByRole('button', { name: 'Pinned' })).toHaveAttribute('tabindex', '0');
       expect(reapplied).toBe(1);
+    });
+
+    it('ignores clicks inside a popup portaled from an action (React portal bubbling, x-keyboard-3)', async () => {
+      const user = userEvent.setup();
+      const onChange = vi.fn();
+      render(
+        <List selectable aria-label="Documents" onSelectionChange={onChange}>
+          <List.Item
+            value="a"
+            action={
+              <Popover>
+                <Popover.Trigger>
+                  <Button>Info</Button>
+                </Popover.Trigger>
+                <Popover.Content title="Details">
+                  <p>Some details</p>
+                </Popover.Content>
+              </Popover>
+            }
+          >
+            Alpha
+          </List.Item>
+          <List.Item
+            value="b"
+            action={
+              <Menu>
+                <Menu.Trigger>
+                  <Button>More</Button>
+                </Menu.Trigger>
+                <Menu.Popover>
+                  <Menu.Item>Rename</Menu.Item>
+                  <Menu.Divider />
+                  <Menu.Item>Delete</Menu.Item>
+                </Menu.Popover>
+              </Menu>
+            }
+          >
+            Beta
+          </List.Item>
+        </List>,
+      );
+
+      await user.click(screen.getByRole('button', { name: 'Info' }));
+      const details = screen.getByText('Some details');
+      expect(row(/Alpha/).contains(details)).toBe(false);
+      await user.click(details);
+      await user.click(screen.getByRole('dialog', { name: 'Details' }));
+      expect(onChange).not.toHaveBeenCalled();
+      expect(row(/Alpha/)).toHaveAttribute('aria-selected', 'false');
+      await user.keyboard('{Escape}');
+
+      await user.click(screen.getByRole('button', { name: 'More' }));
+      await user.click(screen.getByRole('separator'));
+      expect(onChange).not.toHaveBeenCalled();
+      expect(row(/Beta/)).toHaveAttribute('aria-selected', 'false');
+      await user.keyboard('{Escape}');
+      expect(screen.queryByRole('menu')).not.toBeInTheDocument();
+
+      // The row itself still toggles.
+      await user.click(screen.getByText('Beta'));
+      expect(onChange).toHaveBeenCalledWith(['b']);
+    });
+
+    it.each([
+      ['an empty array', []],
+      ['an array of empty values', [null, false, '']],
+      ['an empty string', ''],
+    ])('an action that renders nothing (%s) is no action (R11)', (_, action) => {
+      const docs = (
+        <List selectable aria-label="Documents">
+          <List.Item value="a" action={action}>
+            Document A
+          </List.Item>
+        </List>
+      );
+      expect(renderToString(docs)).toContain('role="listbox"');
+      render(docs);
+      expect(screen.getByRole('listbox', { name: 'Documents' })).toBeInTheDocument();
+      expect(option('Document A').querySelector('[data-list-action]')).toBeNull();
+    });
+
+    it('an action of 0 renders (0 is content, R11)', () => {
+      render(
+        <List selectable aria-label="Documents">
+          <List.Item value="a" action={0}>
+            Document A
+          </List.Item>
+        </List>,
+      );
+      expect(screen.getByRole('grid', { name: 'Documents' })).toBeInTheDocument();
+      expect(document.querySelector('[data-list-action]')).toHaveTextContent('0');
     });
 
     it('keeps a non-selectable list with actions a plain list', () => {
@@ -1588,6 +1915,83 @@ describe('List', () => {
       assertInternalSuppressed: () => {
         expect(option('Apple')).toHaveFocus();
       },
+    });
+
+    it('composes a consumer onFocus on a selectable list; its preventDefault() blocks nothing', async () => {
+      const user = userEvent.setup();
+      const onFocus = vi.fn((event: React.FocusEvent) => event.preventDefault());
+      render(
+        <>
+          <button type="button">Before</button>
+          <List selectable aria-label="Fruits" onFocus={onFocus}>
+            {fruits}
+          </List>
+        </>,
+      );
+      await user.tab();
+      await user.tab();
+      expect(option('Apple')).toHaveFocus();
+      expect(onFocus).toHaveBeenCalledTimes(1);
+      expect(onFocus.mock.calls[0][0].target).toBe(option('Apple'));
+      await user.keyboard('{ArrowDown}');
+      expect(option('Banana')).toHaveFocus();
+      expect(onFocus).toHaveBeenCalledTimes(2);
+      expect(option('Apple')).toHaveAttribute('tabindex', '0');
+    });
+
+    it('composes a consumer onKeyDownCapture with the typeahead Space of a selectable list', async () => {
+      const user = userEvent.setup();
+      const onKeyDownCapture = vi.fn();
+      const onChange = vi.fn();
+      const cities = [
+        'Amsterdam',
+        'Berlin',
+        'Dublin',
+        'Lima',
+        'New Delhi',
+        'New York',
+        'Oslo',
+        'Paris',
+      ];
+      render(
+        <List
+          selectable
+          aria-label="Cities"
+          onKeyDownCapture={onKeyDownCapture}
+          onSelectionChange={onChange}
+        >
+          {cities.map((city) => (
+            <List.Item key={city} value={city}>
+              {city}
+            </List.Item>
+          ))}
+        </List>,
+      );
+      act(() => option('Amsterdam').focus());
+      await user.keyboard('new y');
+      expect(onKeyDownCapture).toHaveBeenCalledTimes(5);
+      // The list's own capture handler still runs: the Space continues the search.
+      expect(option('New York')).toHaveFocus();
+      expect(onChange).not.toHaveBeenCalled();
+    });
+
+    it('a consumer onKeyDownCapture that calls preventDefault() suppresses the list keys', async () => {
+      const user = userEvent.setup();
+      const onChange = vi.fn();
+      render(
+        <List
+          selectable
+          aria-label="Fruits"
+          onSelectionChange={onChange}
+          onKeyDownCapture={(event) => event.preventDefault()}
+        >
+          {fruits}
+        </List>,
+      );
+      act(() => option('Apple').focus());
+      await user.keyboard('{ArrowDown} ');
+      expect(option('Apple')).toHaveFocus();
+      expect(onChange).not.toHaveBeenCalled();
     });
 
     it('composes a ListItem onClick with selection (preventDefault suppresses it)', async () => {

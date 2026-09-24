@@ -251,6 +251,23 @@ describe('InfoLabel', () => {
       expect(getSurface()).toBeNull();
     });
 
+    it('closes a pinned (clicked) popup when focus moves on', async () => {
+      const user = userEvent.setup();
+      render(
+        <>
+          <InfoLabel label="Password" info={INFO} />
+          <button type="button">Next</button>
+        </>,
+      );
+      const button = screen.getByRole('button', { name: 'Information' });
+      await user.click(button);
+      expect(button).toHaveAttribute('aria-expanded', 'true');
+      await user.tab();
+      expect(screen.getByRole('button', { name: 'Next' })).toHaveFocus();
+      expect(button).toHaveAttribute('aria-expanded', 'false');
+      expect(getSurface()).toBeNull();
+    });
+
     it('closes a pinned popup on an outside press', async () => {
       const user = userEvent.setup();
       render(
@@ -298,6 +315,25 @@ describe('InfoLabel', () => {
         vi.advanceTimersByTime(400);
       });
       expect(getSurface()).toBeNull();
+    });
+
+    it('never opens on a brief hover that leaves before the show delay', async () => {
+      vi.useFakeTimers({ shouldAdvanceTime: true });
+      const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
+      const { button } = renderInfoLabel();
+      await user.hover(button);
+      act(() => {
+        vi.advanceTimersByTime(100);
+      });
+      await user.unhover(button);
+      // Past the show delay (250 ms) and the hide delay: the popup must never have appeared.
+      for (let elapsed = 0; elapsed < 1000; elapsed += 50) {
+        act(() => {
+          vi.advanceTimersByTime(50);
+        });
+        expect(getSurface()).toBeNull();
+        expect(button).toHaveAttribute('aria-expanded', 'false');
+      }
     });
 
     it('keeps a clicked popup open when the pointer leaves', async () => {

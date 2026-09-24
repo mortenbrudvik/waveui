@@ -2,7 +2,8 @@ import * as React from 'react';
 import { cn } from '../../lib/cn';
 import { warnDeprecated, warnOnce } from '../../lib/dev';
 import { mergeProps } from '../../lib/mergeProps';
-import { renderSlot } from '../../lib/slot';
+import { getElementType } from '../../lib/children';
+import { VOID_ELEMENTS, renderSlot, slotRendersContent } from '../../lib/slot';
 import { focusRing } from '../../lib/styles';
 import { DismissIcon } from '../../lib/icons';
 import { hasRenderedTextLabel, hasTextLabel, observeTextLabel } from '../../lib/labelInName';
@@ -16,9 +17,15 @@ import { Button } from '../button/Button';
  * Every other prop comes from the rendered element (`as`, default `span`).
  */
 export interface TagOwnProps {
-  /** Whether the tag renders a dismiss button. */
+  /**
+   * Whether the tag renders a dismiss button. `onDismiss` and `dismissIcon` take effect only with
+   * it (a development warning says so when they are passed without it).
+   */
   dismissible?: boolean;
-  /** Called when the dismiss button is activated (click, Enter or Space). */
+  /**
+   * Called when the dismiss button is activated (click, Enter or Space). Passing it does not render
+   * the dismiss button: set `dismissible` too.
+   */
   onDismiss?: () => void;
   /**
    * Content of the dismiss button (an icon). The Tag always renders its own dismiss
@@ -37,11 +44,17 @@ export interface TagOwnProps {
    * The dismiss button's name is `dismissLabel` plus the tag content ("Dismiss Cherry"):
    * `aria-label` and `aria-labelledby` on the slot are ignored (development warning). Icon
    * content is decorative (`aria-hidden`). The children of a merged `<button>`/`Button` are
-   * rendered as is: when they render a text label (at least two letters or digits outside
-   * `aria-hidden`/`hidden` content, text from components such as translations included), that text
-   * replaces `dismissLabel` in the name, so the name contains the visible label (WCAG 2.5.3):
-   * `<button>Remove</button>` on "Cherry" is named "Remove Cherry". An icon or a lone character
-   * (`x`, `×`) keeps "Dismiss Cherry". Text hidden only with CSS still counts as the label.
+   * rendered as is, after the decorative `icon` of a Wave `Button`: when they render a text label
+   * (at least two letters or digits outside `aria-hidden`/`hidden` content, text from components
+   * such as translations included), that text replaces `dismissLabel` in the name, so the name
+   * contains the visible label (WCAG 2.5.3): `<button>Remove</button>` or
+   * `<Button icon={<CloseIcon />}>Remove</Button>` on "Cherry" is named "Remove Cherry". An icon or
+   * a lone character (`x`, `×`) keeps "Dismiss Cherry". Text hidden only with CSS still counts as
+   * the label.
+   *
+   * When the slot renders no content (`[]`, a childless merged button, a slot object without
+   * `children`), the default dismiss icon is shown; a slot object then styles it, e.g.
+   * `{ className: 'text-error' }`. Only takes effect with `dismissible`.
    */
   dismissIcon?: Slot<'span'> | SlotObject<'button'>;
   /**
@@ -147,17 +160,25 @@ function isPlainObject(value: unknown): value is UnknownProps {
   return proto === null || proto === Object.prototype;
 }
 
+/** The decorative default dismiss glyph. */
+function defaultDismissContent(): React.ReactNode {
+  return <DismissIcon size={12} />;
+}
+
 /**
  * Splits the dismissIcon slot into dismiss-button props and icon content (C-SLOTS). The icon
  * content is `aria-hidden`, so no attribute that means something to assistive technology stays on
  * it: button-form props go to the dismiss button, and so do the `aria-*` attributes of an icon slot
  * object; the naming attributes are dropped (see {@link NAME_KEYS}).
+ *
+ * Content that renders nothing (`[]`, a childless merged button, a slot object without `children`)
+ * shows the default icon, so the dismiss button is never an empty, invisible Tab stop.
  */
 function resolveDismissSlot(slot: TagOwnProps['dismissIcon']): ResolvedDismissSlot {
-  if (!slot) {
+  if (!slotRendersContent(slot)) {
     return {
       buttonProps: null,
-      content: <DismissIcon size={12} />,
+      content: defaultDismissContent(),
       warning: null,
       ignoredName: false,
       contentMayName: false,
@@ -165,42 +186,48 @@ function resolveDismissSlot(slot: TagOwnProps['dismissIcon']): ResolvedDismissSl
     };
   }
 
-  if (React.isValidElement<UnknownProps>(slot)) {
-    if (slot.type === 'button') {
-      const { children, ...slotProps } = slot.props;
-      const { props: buttonProps, ignoredName } = withoutName(slotProps);
-      return {
-        buttonProps,
-        content: children as React.ReactNode,
-        warning: 'button-element',
-        ignoredName,
-        contentMayName: true,
-        literalTextLabel: hasTextLabel(children),
-      };
-    }
-    if (slot.type === Button) {
+  // A `<button>` or a Wave `Button` (also one written in a Server Component, whose type arrives as
+  // a lazy reference) is merged into the dismiss button. Its content is rendered as is, after the
+  // Button's icon, which is decorative (as in MessageBar and SearchBox); its text label names it.
+  const elementType = getElementType(slot as React.ReactNode);
+  if (
+    React.isValidElement<WaveButtonSlotProps>(slot) &&
+    (elementType === 'button' || elementType === Button)
+  ) {
+    const { children, ...elementProps } = slot.props;
+    let icon: Slot<'span'> | undefined;
+    let slotProps: UnknownProps = elementProps;
+    if (elementType === Button) {
       const {
         as: _as,
         appearance: _appearance,
         size: _size,
-        icon,
-        children,
-        ...slotProps
-      } = slot.props as WaveButtonSlotProps;
-      const { props: buttonProps, ignoredName } = withoutName(slotProps);
-      return {
-        buttonProps,
-        content:
-          icon !== undefined && icon !== null
-            ? renderSlot(icon, 'span', iconClassName, { 'aria-hidden': true })
-            : children,
-        warning: 'button-element',
-        ignoredName,
-        // With an icon, the content is the decorative icon alone.
-        contentMayName: true,
-        literalTextLabel: icon !== undefined && icon !== null ? false : hasTextLabel(children),
-      };
+        icon: buttonIcon,
+        ...rest
+      } = elementProps;
+      icon = buttonIcon;
+      slotProps = rest;
     }
+    const { props: buttonProps, ignoredName } = withoutName(slotProps);
+    const iconNode = slotRendersContent(icon)
+      ? renderSlot(icon, 'span', iconClassName, { 'aria-hidden': true })
+      : null;
+    return {
+      buttonProps,
+      content:
+        iconNode || slotRendersContent(children) ? (
+          <>
+            {iconNode}
+            {children}
+          </>
+        ) : (
+          defaultDismissContent()
+        ),
+      warning: 'button-element',
+      ignoredName,
+      contentMayName: true,
+      literalTextLabel: hasTextLabel(children),
+    };
   }
 
   if (isPlainObject(slot)) {
@@ -224,6 +251,13 @@ function resolveDismissSlot(slot: TagOwnProps['dismissIcon']): ResolvedDismissSl
       } else {
         contentProps[key] = value;
       }
+    }
+    // An object without content styles the default icon, e.g. `{ className: 'text-error' }` (as in
+    // MessageBar). A void element (an `img`) is content itself.
+    const contentAs = contentProps.as;
+    const isVoid = typeof contentAs === 'string' && VOID_ELEMENTS.has(contentAs);
+    if (!isVoid && !slotRendersContent(contentProps.children)) {
+      contentProps.children = defaultDismissContent();
     }
     return {
       buttonProps: isButtonObject || Object.keys(buttonProps).length > 0 ? buttonProps : null,
@@ -317,6 +351,19 @@ export const Tag: PolymorphicComponent<'span', TagOwnProps> = (props) => {
       );
     }
   }, [warning]);
+
+  // `onDismiss`/`dismissIcon` alone render no dismiss button (unlike MessageBar's `onDismiss`).
+  // An explicit `dismissible={false}` is a deliberate state, so only a missing flag warns.
+  const dismissPropsIgnored =
+    dismissible === undefined && (onDismiss !== undefined || dismissIcon !== undefined);
+  React.useEffect(() => {
+    if (dismissPropsIgnored) {
+      warnOnce(
+        'Tag:dismiss-without-dismissible',
+        'Tag: `onDismiss` and `dismissIcon` take effect only with `dismissible`; no dismiss button was rendered. Add `dismissible` to render it.',
+      );
+    }
+  }, [dismissPropsIgnored]);
 
   React.useEffect(() => {
     if (ignoredName) {
