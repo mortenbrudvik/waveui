@@ -25,14 +25,20 @@ export interface UseTypeaheadOptions {
 export interface UseTypeaheadResult {
   /**
    * Handles a key press. Returns `true` when the key was consumed as typeahead: it matched an
-   * item, or it continued a search already in progress (including a Space that matches nothing).
-   * The caller should `preventDefault()`. Returns `false` for a key that is not typeahead, and
-   * for a first character that matches nothing, so a closed listbox can still open on it.
+   * item, or it continued a search (see `isSearching`), even when nothing matches, a Space
+   * included. The caller should `preventDefault()`. Returns `false` for a key that is not
+   * typeahead, and for the first character of a search when it matches nothing (so a closed
+   * listbox can still open on it); that character still starts the search.
    *
    * @param event        The keydown event (DOM or React).
    * @param currentValue The value of the focused or active item, or `null`.
    */
   onTypeahead: (event: KeyboardEvent | React.KeyboardEvent, currentValue: string | null) => boolean;
+  /**
+   * Whether a search is in progress: a printable key was typed less than `timeout` ms ago,
+   * whether or not it matched. A Space typed now continues the search.
+   */
+  isSearching: () => boolean;
 }
 
 function isTypeaheadKey(event: KeyboardEvent | React.KeyboardEvent, searching: boolean): boolean {
@@ -106,5 +112,7 @@ export function useTypeahead(options: UseTypeaheadOptions): UseTypeaheadResult {
     [getItems, onMatch],
   );
 
-  return { onTypeahead };
+  const isSearching = useCallback(() => bufferRef.current.length > 0, []);
+
+  return { onTypeahead, isSearching };
 }

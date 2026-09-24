@@ -1155,6 +1155,91 @@ describe('useRovingTabIndex', () => {
       await user.keyboard('b');
       expect(button('a')).toHaveFocus();
     });
+
+    /** Items that activate on Enter/Space in their own keydown handler, as Menu, List and Tree items do. */
+    function ActivatingItems({ onActivate }: { onActivate: (value: string) => void }) {
+      const { containerProps, getTabIndex } = useRovingTabIndex({
+        orientation: 'vertical',
+        typeahead: true,
+      });
+      return (
+        <div role="group" aria-label="States" {...containerProps}>
+          {['New Jersey', 'New York', 'Ohio'].map((state) => (
+            <div
+              key={state}
+              role="button"
+              data-roving-value={state}
+              tabIndex={getTabIndex(state)}
+              onKeyDown={(event) => {
+                if (event.defaultPrevented || (event.key !== 'Enter' && event.key !== ' ')) return;
+                event.preventDefault();
+                onActivate(state);
+              }}
+            >
+              {state}
+            </div>
+          ))}
+        </div>
+      );
+    }
+
+    it('takes a Space that continues a search before the item can activate on it', async () => {
+      const user = userEvent.setup();
+      const onActivate = vi.fn();
+      render(<ActivatingItems onActivate={onActivate} />);
+      focus(button('New Jersey'));
+      await user.keyboard('new y');
+      expect(button('New York')).toHaveFocus();
+      expect(onActivate).not.toHaveBeenCalled();
+    });
+
+    it('leaves a Space with no search in progress to the item', async () => {
+      const user = userEvent.setup();
+      const onActivate = vi.fn();
+      render(<ActivatingItems onActivate={onActivate} />);
+      focus(button('Ohio'));
+      await user.keyboard(' ');
+      expect(onActivate).toHaveBeenCalledWith('Ohio');
+    });
+
+    /** Rows with an action button inside, like a List with actions. */
+    function RowsWithActions({ onDelete }: { onDelete: (name: string) => void }) {
+      const { containerProps, getTabIndex } = useRovingTabIndex({
+        orientation: 'vertical',
+        typeahead: true,
+      });
+      return (
+        <div role="grid" aria-label="Files" {...containerProps}>
+          {['Alpha', 'Beta'].map((name) => (
+            <div
+              key={name}
+              role="row"
+              aria-label={name}
+              data-roving-value={name}
+              tabIndex={getTabIndex(name)}
+            >
+              <span role="gridcell">{name}</span>
+              <span role="gridcell">
+                <button type="button" tabIndex={-1} onClick={() => onDelete(name)}>
+                  Delete {name}
+                </button>
+              </span>
+            </div>
+          ))}
+        </div>
+      );
+    }
+
+    it('ignores keys typed in content nested inside an item', async () => {
+      const user = userEvent.setup();
+      const onDelete = vi.fn();
+      render(<RowsWithActions onDelete={onDelete} />);
+      focus(button('Delete Alpha'));
+      await user.keyboard('b');
+      expect(button('Delete Alpha')).toHaveFocus();
+      await user.keyboard(' ');
+      expect(onDelete).toHaveBeenCalledWith('Alpha');
+    });
   });
 
   describe('nested items: the innermost item owns the event (layout#31, layout#30)', () => {
@@ -1418,6 +1503,7 @@ describe('useRovingTabIndex', () => {
       const group = screen.getByRole('group', { name: 'group' });
       expect(group).toHaveAttribute('data-roving-container', '');
       expect(latest!.containerProps.onKeyDown).toBe(latest!.handleKeyDown);
+      expect(latest!.containerProps.onKeyDownCapture).toBe(latest!.handleKeyDownCapture);
       expect(latest!.containerProps.onFocus).toBe(latest!.handleFocus);
 
       act(() => latest!.focusLast());
@@ -1438,6 +1524,7 @@ describe('useRovingTabIndex', () => {
       const first = seen[0];
       const last = seen[seen.length - 1];
       expect(last.handleKeyDown).toBe(first.handleKeyDown);
+      expect(last.handleKeyDownCapture).toBe(first.handleKeyDownCapture);
       expect(last.handleFocus).toBe(first.handleFocus);
       expect(last.containerProps.ref).toBe(first.containerProps.ref);
     });

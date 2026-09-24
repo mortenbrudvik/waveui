@@ -38,7 +38,11 @@ export interface UseRovingTabIndexOptions {
   itemSelector?: string;
   /**
    * Printable characters move focus to the next item whose text (`data-roving-text`, else its
-   * text content) starts with them.
+   * text content) starts with them. A Space typed within 500 ms of another character continues
+   * the search instead of activating the focused item: `containerProps.onKeyDownCapture` calls
+   * `preventDefault()` on it before an item's own keydown handler runs, so that handler must skip
+   * default-prevented events (`composeEventHandlers` does). Keys typed in content nested inside an
+   * item (a row's action button) are not typeahead.
    * @default false
    */
   typeahead?: boolean;
@@ -64,6 +68,8 @@ export interface RovingContainerProps {
   ref: React.RefCallback<HTMLElement>;
   'data-roving-container': '';
   onKeyDown: React.KeyboardEventHandler;
+  /** With `typeahead`: default-prevents a Space that continues a search, before item handlers. */
+  onKeyDownCapture: React.KeyboardEventHandler;
   onFocus: React.FocusEventHandler;
 }
 
@@ -73,6 +79,13 @@ export interface UseRovingTabIndexResult {
   containerProps: RovingContainerProps;
   /** The container's keydown handler (same function as `containerProps.onKeyDown`). */
   handleKeyDown: (e: React.KeyboardEvent) => void;
+  /**
+   * The container's capture-phase keydown handler (same function as
+   * `containerProps.onKeyDownCapture`). With `typeahead`, it extends the search with a Space that
+   * continues one and calls `preventDefault()`, before an item's own keydown handler runs: an item
+   * that activates on Space must skip default-prevented events (`composeEventHandlers` does).
+   */
+  handleKeyDownCapture: (e: React.KeyboardEvent) => void;
   /** The container's focus handler (same function as `containerProps.onFocus`). */
   handleFocus: (e: React.FocusEvent) => void;
   /** `0` for the item that holds the tab stop, `-1` for every other item. */
@@ -465,6 +478,14 @@ function findOwningItem(
 }
 
 /**
+ * Whether a key started on the item itself (on the container when it started on no item), not on
+ * content nested inside the item, such as a row's action button.
+ */
+function startsOnItem(item: ResolvedItem | null, target: EventTarget | null, container: Node) {
+  return item ? target === getFocusTarget(item) : target === container;
+}
+
+/**
  * Implements the WAI-ARIA roving tabindex pattern for composite widgets: one item holds the tab
  * stop (`tabIndex=0`, all others `-1`), arrow keys move focus between items, Home/End jump to the
  * ends, and (optionally) typeahead jumps by text. Used by RadioGroup, Rating, SwatchPicker, List,
@@ -500,7 +521,8 @@ function findOwningItem(
  * </div>
  *
  * The 0.4 call shape `useRovingTabIndex(containerRef, options)` still works: pass the container's
- * ref object and attach `handleKeyDown` (and ideally `handleFocus`) yourself.
+ * ref object and attach `handleKeyDown` (and ideally `handleFocus`, and with `typeahead`
+ * `handleKeyDownCapture` as `onKeyDownCapture`) yourself.
  *
  * @param options - See {@link UseRovingTabIndexOptions}.
  * @returns See {@link UseRovingTabIndexResult}.
@@ -578,7 +600,7 @@ export function useRovingTabIndex(
 
   const typeaheadItemsRef = React.useRef<TypeaheadItem[]>([]);
   const typeaheadMatchRef = React.useRef<string | null>(null);
-  const { onTypeahead } = useTypeahead({
+  const { onTypeahead, isSearching } = useTypeahead({
     getItems: () => typeaheadItemsRef.current,
     onMatch: (value) => {
       typeaheadMatchRef.current = value;
@@ -594,7 +616,8 @@ export function useRovingTabIndex(
     return true;
   };
 
-  const handleKeyDown = useEventCallback((e: React.KeyboardEvent) => {
+  // `spaceOnly` (the capture phase) handles nothing but a Space that continues a typeahead search.
+  const handleKeys = useEventCallback((e: React.KeyboardEvent, spaceOnly: boolean) => {
     if (e.defaultPrevented || e.altKey || e.ctrlKey || e.metaKey) return;
     if (ownsArrowKeys(e.target)) return;
     const container = store.container ?? (e.currentTarget as HTMLElement);
@@ -610,10 +633,12 @@ export function useRovingTabIndex(
 
     let handled = false;
     let next: ResolvedItem | undefined;
-    const intent = getArrowIntent(e.key, {
-      orientation,
-      dir: dir ?? getDirection(e.currentTarget as Element),
-    });
+    const intent = spaceOnly
+      ? null
+      : getArrowIntent(e.key, {
+          orientation,
+          dir: dir ?? getDirection(e.currentTarget as Element),
+        });
     if (intent) {
       handled = true;
       if (!current) {
@@ -634,10 +659,10 @@ export function useRovingTabIndex(
           }
         }
       }
-    } else if (homeEndKeys && (e.key === 'Home' || e.key === 'End')) {
+    } else if (!spaceOnly && homeEndKeys && (e.key === 'Home' || e.key === 'End')) {
       handled = true;
       next = e.key === 'Home' ? enabled[0] : enabled[enabled.length - 1];
-    } else if (typeahead) {
+    } else if (typeahead && startsOnItem(current, e.target, container)) {
       typeaheadItemsRef.current = ordered.map((item) => ({
         value: item.value,
         text: textOf(item.element),
@@ -654,6 +679,15 @@ export function useRovingTabIndex(
     e.preventDefault();
     if (!next || next === current) return;
     if (focusItem(next)) onFocusMove?.(next.value, e);
+  });
+
+  const handleKeyDown = useEventCallback((e: React.KeyboardEvent) => handleKeys(e, false));
+
+  // A Space that continues a typeahead search belongs to the search, not to the focused item: it is
+  // handled and default-prevented in the capture phase, so the item's own keydown handler, which
+  // skips default-prevented events, does not activate the item.
+  const handleKeyDownCapture = useEventCallback((e: React.KeyboardEvent) => {
+    if (typeahead && e.key === ' ' && isSearching()) handleKeys(e, true);
   });
 
   const handleFocus = useEventCallback((e: React.FocusEvent) => {
@@ -682,14 +716,16 @@ export function useRovingTabIndex(
       ref: containerRef,
       'data-roving-container': '',
       onKeyDown: handleKeyDown,
+      onKeyDownCapture: handleKeyDownCapture,
       onFocus: handleFocus,
     }),
-    [containerRef, handleKeyDown, handleFocus],
+    [containerRef, handleKeyDown, handleKeyDownCapture, handleFocus],
   );
 
   return {
     containerProps,
     handleKeyDown,
+    handleKeyDownCapture,
     handleFocus,
     getTabIndex,
     focusedValue,

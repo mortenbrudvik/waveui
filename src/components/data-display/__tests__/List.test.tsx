@@ -776,6 +776,72 @@ describe('List', () => {
       await user.keyboard('c');
       expect(option('Apple')).toHaveFocus();
     });
+
+    it('a Space inside a typeahead search does not toggle selection', async () => {
+      const user = userEvent.setup();
+      const onChange = vi.fn();
+      const cities = [
+        'Amsterdam',
+        'Berlin',
+        'Dublin',
+        'Lima',
+        'New Delhi',
+        'New York',
+        'Oslo',
+        'Paris',
+      ];
+      render(
+        <List selectable aria-label="Cities" onSelectionChange={onChange}>
+          {cities.map((city) => (
+            <List.Item key={city} value={city}>
+              {city}
+            </List.Item>
+          ))}
+        </List>,
+      );
+      act(() => option('Amsterdam').focus());
+      await user.keyboard('new y');
+      expect(option('New York')).toHaveFocus();
+      expect(onChange).not.toHaveBeenCalled();
+    });
+
+    it('Enter and Space toggle selection without calling the item onClick (pointer clicks only)', async () => {
+      const user = userEvent.setup();
+      const onClick = vi.fn();
+      const onChange = vi.fn();
+      render(
+        <List selectable selectionMode="multiple" aria-label="Fruits" onSelectionChange={onChange}>
+          <List.Item value="apple" onClick={onClick}>
+            Apple
+          </List.Item>
+          <List.Item value="pear">Pear</List.Item>
+        </List>,
+      );
+      act(() => option('Apple').focus());
+      await user.keyboard('{Enter}');
+      await user.keyboard(' ');
+      expect(onChange.mock.calls).toEqual([[['apple']], [[]]]);
+      expect(onClick).not.toHaveBeenCalled();
+      await user.click(option('Apple'));
+      expect(onClick).toHaveBeenCalledTimes(1);
+    });
+
+    it('an item onKeyDown that stops propagation keeps Enter and Space working', async () => {
+      const user = userEvent.setup();
+      const onChange = vi.fn();
+      render(
+        <List selectable selectionMode="multiple" aria-label="Fruits" onSelectionChange={onChange}>
+          <List.Item value="apple" onKeyDown={(event) => event.stopPropagation()}>
+            Apple
+          </List.Item>
+          <List.Item value="pear">Pear</List.Item>
+        </List>,
+      );
+      act(() => option('Apple').focus());
+      await user.keyboard(' ');
+      await user.keyboard('{Enter}');
+      expect(onChange.mock.calls).toEqual([[['apple']], [[]]]);
+    });
   });
 
   describe('actions in selectable lists (data-display#2)', () => {
@@ -810,6 +876,35 @@ describe('List', () => {
       await user.keyboard(' ');
       expect(onDelete).toHaveBeenCalledTimes(2);
       expect(onChange).not.toHaveBeenCalled();
+    });
+
+    it('a letter typed on an action is not typeahead, so a Space right after still runs it', async () => {
+      const user = userEvent.setup();
+      const onDelete = vi.fn();
+      // More than 7 rows: the list has typeahead.
+      const names = ['Alpha', 'Beta', 'Gamma', 'Delta', 'Epsilon', 'Zeta', 'Eta', 'Theta', 'Iota'];
+      render(
+        <List selectable aria-label="Documents">
+          {names.map((name) => (
+            <List.Item
+              key={name}
+              value={name}
+              action={
+                <button type="button" onClick={() => onDelete(name)}>
+                  Delete {name}
+                </button>
+              }
+            >
+              {name}
+            </List.Item>
+          ))}
+        </List>,
+      );
+      act(() => screen.getByRole('button', { name: 'Delete Alpha' }).focus());
+      await user.keyboard('b');
+      expect(screen.getByRole('button', { name: 'Delete Alpha' })).toHaveFocus();
+      await user.keyboard(' ');
+      expect(onDelete).toHaveBeenCalledWith('Alpha');
     });
 
     it('clicking the row content toggles selection', async () => {
@@ -964,6 +1059,68 @@ describe('List', () => {
       for (const button of screen.getAllByRole('button', { name: /Delete/ })) {
         expect(button).toHaveAttribute('tabindex', '-1');
       }
+    });
+
+    describe('with a Toolbar action in every row and typeahead (more than 7 rows)', () => {
+      const names = ['Alpha', 'Beta', 'Gamma', 'Delta', 'Epsilon', 'Zeta', 'Eta', 'Theta', 'Iota'];
+      const renderToolbarRows = (onEdit: (name: string) => void = () => {}) =>
+        render(
+          <List selectable aria-label="Documents">
+            {names.map((name) => (
+              <List.Item
+                key={name}
+                value={name}
+                action={
+                  <Toolbar aria-label={`${name} tools`}>
+                    <button type="button" onClick={() => onEdit(name)}>
+                      Edit {name}
+                    </button>
+                  </Toolbar>
+                }
+              >
+                {name}
+              </List.Item>
+            ))}
+          </List>,
+        );
+
+      it('ArrowDown and typeahead move between rows, never into a row action', async () => {
+        const user = userEvent.setup();
+        renderToolbarRows();
+        await flushItemObserver();
+        act(() => row(/^Alpha/).focus());
+        await user.keyboard('{ArrowDown}');
+        expect(row(/^Beta/)).toHaveFocus();
+        // "Edit Beta" starts with "e" too; typeahead matches rows only.
+        await user.keyboard('e');
+        expect(row(/^Epsilon/)).toHaveFocus();
+      });
+
+      it('a letter typed on an action is not typeahead, and a Space right after runs it', async () => {
+        const user = userEvent.setup();
+        const onEdit = vi.fn();
+        renderToolbarRows(onEdit);
+        await flushItemObserver();
+        act(() => screen.getByRole('button', { name: 'Edit Alpha' }).focus());
+        await user.keyboard('g');
+        expect(screen.getByRole('button', { name: 'Edit Alpha' })).toHaveFocus();
+        await user.keyboard(' ');
+        expect(onEdit).toHaveBeenCalledWith('Alpha');
+      });
+
+      it('a Space in an action right after typeahead to its row runs the action', async () => {
+        const user = userEvent.setup();
+        const onEdit = vi.fn();
+        renderToolbarRows(onEdit);
+        await flushItemObserver();
+        act(() => row(/^Alpha/).focus());
+        await user.keyboard('b');
+        expect(row(/^Beta/)).toHaveFocus();
+        await user.keyboard('{ArrowRight}');
+        expect(screen.getByRole('button', { name: 'Edit Beta' })).toHaveFocus();
+        await user.keyboard(' ');
+        expect(onEdit).toHaveBeenCalledWith('Beta');
+      });
     });
 
     it('leaves a nested composite in an action to manage its own Tab stop', async () => {

@@ -129,6 +129,18 @@ describe('useTypeahead', () => {
     expect(onMatch).not.toHaveBeenCalled();
   });
 
+  it('reports a search in progress from the first character, matched or not, until the timeout', () => {
+    const { type, hook } = setup(FRUITS, 500);
+    const isSearching = () => hook.result.current.isSearching();
+    expect(isSearching()).toBe(false);
+    expect(type(key('z'), null)).toBe(false);
+    expect(isSearching()).toBe(true);
+    vi.advanceTimersByTime(499);
+    expect(isSearching()).toBe(true);
+    vi.advanceTimersByTime(1);
+    expect(isSearching()).toBe(false);
+  });
+
   it('consumes a space that continues a search even when nothing matches', () => {
     const { onMatch, type } = setup([
       { value: 'cat', text: 'Cat' },

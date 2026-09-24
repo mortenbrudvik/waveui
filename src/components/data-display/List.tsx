@@ -283,7 +283,8 @@ function getActionStops(cell: HTMLElement): HTMLElement[] {
  *   normal Tab order.
  * - **Selectable** (APG Listbox): `role="listbox"` with `option`s and one Tab stop (the first
  *   selected option, else the first option). ArrowUp/Down move focus (wrapping), Home/End jump to
- *   the ends, typeahead is on for more than 7 items, Enter/Space and clicks toggle selection.
+ *   the ends, typeahead is on for more than 7 items, Enter/Space and clicks toggle selection (a
+ *   Space typed within 500 ms of a typeahead character continues the search instead).
  * - **Selectable with item actions** (APG Grid): `role="grid"` with `row`s (carrying
  *   `aria-selected`) and `gridcell`s for the content and the action. One Tab stop; Up/Down move
  *   between rows, Right/Left (mirrored in RTL) move into and out of the actions. A cell that holds
@@ -323,6 +324,7 @@ const ListRoot = <M extends ListSelectionMode = 'single'>(props: ListProps<M>): 
     children,
     ref,
     onKeyDown,
+    onKeyDownCapture,
     onFocus,
     ...rest
   } = props as ListProps;
@@ -385,8 +387,16 @@ const ListRoot = <M extends ListSelectionMode = 'single'>(props: ListProps<M>): 
     orientation: 'vertical',
     typeahead: (registered?.count ?? 0) > 7,
     tabStop: 'active',
+    // The items are the root's children. A composite in an item action (a Toolbar, a radio group)
+    // is part of its row, not an item: arrows and typeahead never move into it.
+    itemSelector: ':scope > [data-roving-value]',
   });
-  const { ref: rovingRef, onKeyDown: rovingKeyDown, onFocus: rovingFocus } = containerProps;
+  const {
+    ref: rovingRef,
+    onKeyDown: rovingKeyDown,
+    onKeyDownCapture: rovingKeyDownCapture,
+    onFocus: rovingFocus,
+  } = containerProps;
   const rootElementRef = React.useRef<HTMLUListElement | HTMLDivElement | null>(null);
   const rootRef = useMergedRefs<HTMLUListElement | HTMLDivElement>(
     ref,
@@ -458,19 +468,11 @@ const ListRoot = <M extends ListSelectionMode = 'single'>(props: ListProps<M>): 
         {...rest}
         ref={rootRef}
         data-roving-container={selectable ? '' : undefined}
-        onKeyDown={
+        onKeyDown={selectable ? composeEventHandlers(onKeyDown, rovingKeyDown) : onKeyDown}
+        onKeyDownCapture={
           selectable
-            ? composeEventHandlers(onKeyDown, (event) => {
-                rovingKeyDown(event);
-                if (event.key !== ' ' || event.defaultPrevented) return;
-                const target = event.target;
-                if (!(target instanceof HTMLElement)) return;
-                const role = target.getAttribute('role');
-                if (role !== 'option' && role !== 'row') return;
-                event.preventDefault();
-                target.click();
-              })
-            : onKeyDown
+            ? composeEventHandlers(onKeyDownCapture, rovingKeyDownCapture)
+            : onKeyDownCapture
         }
         onFocus={
           selectable
@@ -491,7 +493,9 @@ ListRoot.displayName = 'List';
 
 /**
  * An item of a {@link List} (also available as `List.Item`). Renders an `<li>` (`listitem`, or
- * `option` in a selectable list), or a `<div role="row">` in a selectable list with actions.
+ * `option` in a selectable list), or a `<div role="row">` in a selectable list with actions. In a
+ * selectable list, Enter and Space toggle the selection without calling `onClick`, which receives
+ * pointer clicks.
  *
  * Exported under the flat name `ListItem` so React Server Components can import it; `List.Item`
  * (dotted access) needs a client module.
@@ -557,9 +561,7 @@ export const ListItem = ({
 
   const handleOptionKeyDown = (event: React.KeyboardEvent<HTMLElement>) => {
     if (startsInInteractiveContent(event)) return;
-    // Space is handled by the list, after typeahead. Activating here would select before a search
-    // in progress could consume the key.
-    if (event.key === 'Enter') {
+    if (event.key === 'Enter' || event.key === ' ') {
       event.preventDefault();
       activate();
     }
@@ -572,8 +574,7 @@ export const ListItem = ({
 
     if (!cell || !cell.contains(target)) {
       if (target !== rowElement) return;
-      // Space is handled by the list, after typeahead.
-      if (event.key === 'Enter') {
+      if (event.key === 'Enter' || event.key === ' ') {
         event.preventDefault();
         activate();
         return;

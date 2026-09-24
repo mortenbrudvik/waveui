@@ -110,6 +110,7 @@ const TreeRoot = ({
   className,
   children,
   onKeyDown,
+  onKeyDownCapture,
   onFocus,
   onBlur,
   ref,
@@ -180,6 +181,12 @@ const TreeRoot = ({
     containerProps.onKeyDown(event);
   };
 
+  // A Space that continues a search is typeahead too, taken before the item would activate on it.
+  const handleKeyDownCapture = (event: React.KeyboardEvent<HTMLDivElement>) => {
+    if (event.key === ' ') syncTypeaheadText(event.currentTarget);
+    containerProps.onKeyDownCapture(event);
+  };
+
   const handleBlur = (event: React.FocusEvent<HTMLDivElement>) => {
     const next = event.relatedTarget as Node | null;
     if (!next || !event.currentTarget.contains(next)) setFocusedItem(null);
@@ -194,6 +201,7 @@ const TreeRoot = ({
           {...rest}
           data-roving-container=""
           onKeyDown={composeEventHandlers(onKeyDown, handleKeyDown)}
+          onKeyDownCapture={composeEventHandlers(onKeyDownCapture, handleKeyDownCapture)}
           onFocus={composeEventHandlers(onFocus, containerProps.onFocus, {
             checkDefaultPrevented: false,
           })}

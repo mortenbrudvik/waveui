@@ -743,6 +743,8 @@ Only one item holds `tabIndex={0}`. Disabled items are skipped. Left/Right are m
 | List (selectable) | Up/Down, wrapping; typeahead above 7 items; Enter/Space toggle selection |
 | Tree | see below |
 
+Wherever there is typeahead (Menu, selectable List, Tree, Dropdown), a Space typed within 500 ms of a character continues the search instead of activating or committing, so "new y" reaches "New York". Keys typed in content inside an item, such as a List row's action button, are not typeahead.
+
 #### Combobox, TagPicker, TimePicker (editable combobox)
 
 ```

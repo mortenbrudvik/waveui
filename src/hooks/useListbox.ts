@@ -774,8 +774,9 @@ function preventMouseDown(event: React.MouseEvent): void {
  *   clear the highlight, see above). Select-only:
  *   ArrowDown/ArrowUp/Home/End/typeahead open and position; PageUp/PageDown jump 10; Enter/Space
  *   open or commit (always prevented on keydown, Space also on keyup, so a `<button>` combobox is
- *   not clicked again); Alt+ArrowUp and Tab commit and close (Tab is not prevented); Escape
- *   closes. Disabled options are skipped and never committed.
+ *   not clicked again; a Space typed within 500 ms of a typeahead character continues the search
+ *   instead); Alt+ArrowUp and Tab commit and close (Tab is not prevented); Escape closes.
+ *   Disabled options are skipped and never committed.
  * - The active option is scrolled into view (`{ block: 'nearest' }`) in a layout effect, except
  *   after a pointer highlight (the list would scroll under the pointer).
  *

@@ -706,6 +706,22 @@ describe('Tree - keyboard (layout#31, feedback-navigation#47)', () => {
     expect(item('Documents')).toHaveFocus();
   });
 
+  it('a Space inside a typeahead search does not activate the item', async () => {
+    const user = userEvent.setup();
+    const onItemSelect = vi.fn();
+    render(
+      <Tree aria-label="States" onItemSelect={onItemSelect}>
+        <Tree.Item value="al">Alabama</Tree.Item>
+        <Tree.Item value="nj">New Jersey</Tree.Item>
+        <Tree.Item value="ny">New York</Tree.Item>
+      </Tree>,
+    );
+    act(() => item('Alabama').focus());
+    await user.keyboard('new y');
+    expect(item('New York')).toHaveFocus();
+    expect(onItemSelect).not.toHaveBeenCalled();
+  });
+
   it('typeahead from a nested item searches onward from that item, not from its parent', async () => {
     const user = userEvent.setup();
     renderTree({ defaultExpandedItems: ['docs', 'images'] });

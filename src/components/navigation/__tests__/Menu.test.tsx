@@ -224,19 +224,21 @@ describe('Menu', () => {
       expect(item('Clear')).toHaveFocus();
     });
 
-    it('does not activate an item when Space continues a search that matches nothing', async () => {
+    it('does not activate the focused item when Space continues a search that matches nothing', async () => {
       const user = userEvent.setup();
-      const onClear = vi.fn();
+      const onCopy = vi.fn();
       renderStaticMenu(
         {},
         <>
-          <Menu.Item onClick={onClear}>Clear</Menu.Item>
-          <Menu.Item>Copy</Menu.Item>
+          <Menu.Item>Clear</Menu.Item>
+          <Menu.Item onClick={onCopy}>Copy</Menu.Item>
         </>,
       );
       await user.tab();
-      await user.keyboard('c ');
-      expect(onClear).not.toHaveBeenCalled();
+      await user.keyboard('c');
+      expect(item('Copy')).toHaveFocus();
+      await user.keyboard(' ');
+      expect(onCopy).not.toHaveBeenCalled();
       expect(item('Copy')).toHaveFocus();
     });
 
@@ -385,6 +387,25 @@ describe('Menu', () => {
       expect(notPrevented).toBe(false);
     });
 
+    it('a consumer aria-disabled without disabled only changes the look: Enter and Space still activate', async () => {
+      const user = userEvent.setup();
+      const onClick = vi.fn();
+      renderStaticMenu(
+        {},
+        <>
+          <Menu.Item aria-disabled="true" onClick={onClick}>
+            Save
+          </Menu.Item>
+          <Menu.Item>Close</Menu.Item>
+        </>,
+      );
+      act(() => item('Save').focus());
+      await user.keyboard('{Enter}');
+      expect(onClick).toHaveBeenCalledTimes(1);
+      await user.keyboard(' ');
+      expect(onClick).toHaveBeenCalledTimes(2);
+    });
+
     it('renders disabled items with aria-disabled', () => {
       render(
         <Menu>
@@ -444,19 +465,39 @@ describe('Menu', () => {
       expect(onClick).toHaveBeenCalledTimes(1);
     });
 
-    it('a consumer onKeyDown on Menu.Item that prevents default suppresses activation', async () => {
+    it('a consumer onKeyDown on Menu.Item that stops propagation keeps Space activation', async () => {
       const user = userEvent.setup();
       const onClick = vi.fn();
       renderStaticMenu(
         {},
-        <Menu.Item onKeyDown={(e) => e.preventDefault()} onClick={onClick}>
+        <Menu.Item onKeyDown={(e) => e.stopPropagation()} onClick={onClick}>
           Save
         </Menu.Item>,
       );
       await user.tab();
-      await user.keyboard('{Enter}');
-      expect(onClick).not.toHaveBeenCalled();
+      await user.keyboard(' ');
+      expect(onClick).toHaveBeenCalledTimes(1);
     });
+
+    it.each([
+      ['Enter', '{Enter}'],
+      ['Space', ' '],
+    ])(
+      'a consumer onKeyDown on Menu.Item that prevents default suppresses %s activation',
+      async (_name, key) => {
+        const user = userEvent.setup();
+        const onClick = vi.fn();
+        renderStaticMenu(
+          {},
+          <Menu.Item onKeyDown={(e) => e.preventDefault()} onClick={onClick}>
+            Save
+          </Menu.Item>,
+        );
+        await user.tab();
+        await user.keyboard(key);
+        expect(onClick).not.toHaveBeenCalled();
+      },
+    );
   });
 
   describe('Menu.Item', () => {
@@ -743,6 +784,37 @@ describe('Menu popup (Menu.Trigger + Menu.Popover)', () => {
     expect(onEdit).toHaveBeenCalledTimes(1);
     expect(queryMenu()).not.toBeInTheDocument();
     expect(trigger()).toHaveFocus();
+  });
+
+  it('Space on an item selects it once, closes and restores focus', async () => {
+    const user = userEvent.setup();
+    const onEdit = vi.fn();
+    const onOpenChange = vi.fn();
+    render(
+      <React.StrictMode>
+        <PopupMenu onEdit={onEdit} onOpenChange={onOpenChange} />
+      </React.StrictMode>,
+    );
+    act(() => trigger().focus());
+    await user.keyboard('{Enter}');
+    expect(item('Edit')).toHaveFocus();
+    await user.keyboard(' ');
+    expect(onEdit).toHaveBeenCalledTimes(1);
+    expect(onOpenChange.mock.calls).toEqual([[true], [false]]);
+    expect(queryMenu()).not.toBeInTheDocument();
+    expect(trigger()).toHaveFocus();
+  });
+
+  it('a Space that continues a typeahead search does not activate the focused item', async () => {
+    const user = userEvent.setup();
+    const onDelete = vi.fn();
+    render(<PopupMenu onDelete={onDelete} />);
+    await user.click(trigger());
+    await user.keyboard('d');
+    expect(item('Delete')).toHaveFocus();
+    await user.keyboard(' ');
+    expect(onDelete).not.toHaveBeenCalled();
+    expect(item('Delete')).toHaveFocus();
   });
 
   it('persistOnClick keeps the menu open after selection', async () => {

@@ -233,23 +233,6 @@ function useStaticMenuPartWarning(componentName: string, popup: boolean): void {
 
 const MENU_ITEM_SELECTOR = '[role="menuitem"],[role="menuitemcheckbox"],[role="menuitemradio"]';
 
-/**
- * Runs menu typeahead, then activates the focused item on a Space that was not part of a search.
- * Space cannot be handled on the item: that click would run before typeahead saw the key.
- */
-function handleMenuKeyDown(
-  event: React.KeyboardEvent<HTMLDivElement>,
-  rovingKeyDown: (event: React.KeyboardEvent) => void,
-): void {
-  rovingKeyDown(event);
-  if (event.key !== ' ' || event.defaultPrevented) return;
-  const target = event.target;
-  if (!(target instanceof HTMLElement) || !target.matches(MENU_ITEM_SELECTOR)) return;
-  event.preventDefault();
-  if (target.getAttribute('aria-disabled') === 'true') return;
-  target.click();
-}
-
 const menuSurfaceClasses =
   'min-w-[180px] rounded-md border border-border bg-background py-1 shadow-4';
 
@@ -267,11 +250,12 @@ const menuItemClasses = cn(
 // ---------------------------------------------------------------------------
 
 /**
- * An action in a menu (`role="menuitem"`). Enter activates it on the item. Space is handled by the
- * menu after typeahead, so a search in progress does not click the item; a Space that is not part
- * of a search activates it. In a popup menu, activation closes the menu and returns focus to the
- * trigger unless `persistOnClick` is set or the consumer's `onClick` calls `preventDefault()`.
- * Disabled items are `aria-disabled`, skipped by keyboard navigation and never activated. The
+ * An action in a menu (`role="menuitem"`). Enter and Space activate it (a Space typed within 500 ms
+ * of a typeahead character continues the search instead); in a popup menu, activation closes the
+ * menu and returns focus to the trigger unless `persistOnClick` is set or the consumer's `onClick`
+ * calls `preventDefault()`. Disabled items are `aria-disabled`, skipped by keyboard navigation and
+ * never activated. A consumer `aria-disabled` without `disabled` only changes the look and
+ * keyboard navigation: activation still runs `onClick` (guard it yourself), as on Button. The
  * item's tab index is managed by the menu.
  *
  * Also exported as `MenuItem` (import the flat name from React Server Components).
@@ -313,9 +297,8 @@ const MenuItem = ({
   const handleKeyDown = composeEventHandlers(
     onKeyDown,
     (event: React.KeyboardEvent<HTMLDivElement>) => {
-      // Space is left to the menu: it runs typeahead first, then activates when the key was not
-      // part of a search. Handling it here would click before that search could consume the key.
-      if (event.key !== 'Enter') return;
+      if (event.key !== 'Enter' && event.key !== ' ') return;
+      // Menu items consume Enter/Space (no page scroll), whether or not they can be activated.
       event.preventDefault();
       if (!disabled) event.currentTarget.click();
     },
@@ -455,6 +438,7 @@ const MenuPopover = ({
   className,
   style,
   onKeyDown,
+  onKeyDownCapture,
   onFocus,
   ref,
   ...rest
@@ -522,6 +506,7 @@ const MenuPopover = ({
   const {
     containerProps: { ref: rovingRef },
     handleKeyDown: rovingKeyDown,
+    handleKeyDownCapture: rovingKeyDownCapture,
     handleFocus: rovingFocus,
     focusFirst,
     focusLast,
@@ -565,7 +550,7 @@ const MenuPopover = ({
       setOpen(false);
       return;
     }
-    handleMenuKeyDown(event, rovingKeyDown);
+    rovingKeyDown(event);
   };
 
   if (!open) return null;
@@ -587,6 +572,7 @@ const MenuPopover = ({
           data-roving-container=""
           style={{ ...floatingProps.style, ...style }}
           onKeyDown={handleKeyDown}
+          onKeyDownCapture={composeEventHandlers(onKeyDownCapture, rovingKeyDownCapture)}
           onFocus={composeEventHandlers(onFocus, rovingFocus, { checkDefaultPrevented: false })}
           className={cn(menuSurfaceClasses, className)}
         >
@@ -626,7 +612,8 @@ function hasPopupParts(children: React.ReactNode): boolean {
  *   element. The menu itself is not a tab stop: one item is (the last focused enabled item, else
  *   the first enabled one). When every item is disabled, the menu element holds the tab stop
  *   instead, so keyboard and screen-reader users still reach it. Arrow keys, Home/End and
- *   typeahead move between enabled items; Enter and Space activate the focused item.
+ *   typeahead move between enabled items; Enter and Space activate the focused item (a Space typed
+ *   within 500 ms of a typeahead character continues the search instead).
  * - **Popup menu** — with `Menu.Trigger` and `Menu.Popover` children (or `open`/`defaultOpen`/
  *   `onOpenChange`), the root renders no element of its own: the trigger opens the portaled
  *   `Menu.Popover`, item activation returns focus to the trigger and closes it (focus is on the
@@ -651,6 +638,7 @@ const MenuRoot = ({
   onOpenChange,
   className,
   onKeyDown,
+  onKeyDownCapture,
   onFocus,
   ref,
   ...rest
@@ -702,6 +690,7 @@ const MenuRoot = ({
   if (popup) {
     if (className !== undefined) ignoredProps.push('className');
     if (onKeyDown !== undefined) ignoredProps.push('onKeyDown');
+    if (onKeyDownCapture !== undefined) ignoredProps.push('onKeyDownCapture');
     if (onFocus !== undefined) ignoredProps.push('onFocus');
     for (const [name, value] of Object.entries(rest)) {
       if (value !== undefined) ignoredProps.push(name);
@@ -755,6 +744,7 @@ const MenuRoot = ({
   const {
     containerProps: { ref: rovingRef },
     handleKeyDown: rovingKeyDown,
+    handleKeyDownCapture: rovingKeyDownCapture,
     handleFocus: rovingFocus,
     focusFirst,
   } = useRovingTabIndex({
@@ -796,9 +786,8 @@ const MenuRoot = ({
         ref={mergedRef}
         tabIndex={rest.tabIndex ?? (menuIsTabStop ? 0 : undefined)}
         data-roving-container=""
-        onKeyDown={composeEventHandlers(onKeyDown, (event) =>
-          handleMenuKeyDown(event, rovingKeyDown),
-        )}
+        onKeyDown={composeEventHandlers(onKeyDown, rovingKeyDown)}
+        onKeyDownCapture={composeEventHandlers(onKeyDownCapture, rovingKeyDownCapture)}
         onFocus={composeEventHandlers(onFocus, rovingFocus, { checkDefaultPrevented: false })}
         className={cn(menuSurfaceClasses, focusRing, className)}
       >
