@@ -31,6 +31,9 @@ import {
   Popover,
   RadioGroup,
   Rating,
+  SearchBox,
+  Select,
+  Slider,
   SpinButton,
   SplitButton,
   Stack,
@@ -38,6 +41,7 @@ import {
   Switch,
   Table,
   TagPicker,
+  Textarea,
   TimePicker,
   Toaster,
   Tooltip,
@@ -695,7 +699,67 @@ describe('real Field around the P03–P06 controls (input-basic#1)', () => {
       expect(duplicateIds()).toEqual([]);
       await expectNoA11yViolations(document.body);
     });
+
+    // Field clones props into its first element child and only provides context to a nested one:
+    // both paths must let the control's own `required={false}` win.
+    it.each([
+      ['as its first child', (el: React.ReactElement) => el],
+      ['nested in a <div>', (el: React.ReactElement) => <div>{el}</div>],
+    ])('an explicit required={false} wins over a required Field %s', (_where, wrap) => {
+      const optional = React.cloneElement(control() as React.ReactElement<{ required?: boolean }>, {
+        required: false,
+      });
+      render(
+        <form aria-label="Form">
+          <Field label="Preference" required>
+            {wrap(optional)}
+          </Field>
+        </form>,
+      );
+      const el = screen.getByRole(role, { name: 'Preference' });
+      expect(el).not.toHaveAttribute('aria-required', 'true');
+      const form = screen.getByRole('form', { name: 'Form' }) as HTMLFormElement;
+      expect(form.checkValidity()).toBe(true);
+    });
   });
+});
+
+describe('real Field around the native-validation controls (input-basic#1)', () => {
+  const nativeCases: Array<{ name: string; role: string; control: React.ReactElement }> = [
+    { name: 'Input', role: 'textbox', control: <Input required={false} /> },
+    { name: 'Textarea', role: 'textbox', control: <Textarea required={false} /> },
+    {
+      name: 'Select',
+      role: 'combobox',
+      control: (
+        <Select required={false}>
+          <option value="">None</option>
+          <option value="a">Apple</option>
+        </Select>
+      ),
+    },
+    { name: 'SearchBox', role: 'searchbox', control: <SearchBox required={false} /> },
+    { name: 'Slider', role: 'slider', control: <Slider required={false} /> },
+    { name: 'a native <input>', role: 'textbox', control: <input required={false} /> },
+  ];
+
+  it.each(nativeCases)(
+    '$name: an explicit required={false} wins over a required Field',
+    ({ role, control }) => {
+      render(
+        <form aria-label="Form">
+          <Field label="Preference" required>
+            {control}
+          </Field>
+        </form>,
+      );
+      const el = screen.getByRole(role, { name: 'Preference' });
+      expect(el).not.toHaveAttribute('required');
+      expect(el).not.toHaveAttribute('aria-required', 'true');
+      const form = screen.getByRole('form', { name: 'Form' }) as HTMLFormElement;
+      expect(form.checkValidity()).toBe(true);
+    },
+  );
 });
 
 describe('Field with a wrapper component around the control (input-basic#1, input-basic#15)', () => {

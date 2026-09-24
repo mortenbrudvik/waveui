@@ -481,7 +481,8 @@ export const DatePicker = (props: DatePickerProps) => {
     'aria-labelledby': ariaLabelledBy,
     'aria-describedby': joinIds(ariaDescribedBy, showOwnError ? errorId : undefined),
     'aria-invalid': invalid !== null ? true : ariaInvalid,
-    // An explicit `required={false}` wins over a required Field (`false || undefined` would not).
+    // An explicit `required={false}` wins over a required Field, so aria-required matches
+    // `isRequired`.
     'aria-required': ariaRequired ?? required,
   });
 

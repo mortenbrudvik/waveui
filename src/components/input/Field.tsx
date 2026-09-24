@@ -38,9 +38,10 @@ export interface FieldProps extends React.HTMLAttributes<HTMLDivElement> {
    * Whether the field is required: shows a decorative asterisk next to the label, sets
    * `aria-required`, and turns on native constraint validation. `<input>`, `<select>`,
    * `<textarea>` and Input, Select, Textarea, Slider, SearchBox and SpinButton get the native
-   * `required` attribute. Checkbox, Switch, RadioGroup, Rating and the pickers render a required
-   * `HiddenInput` (with or without `name`), so submit is blocked until they have a value. An
-   * explicit `required={false}` on the control wins, including for `aria-required`.
+   * `required` attribute. Checkbox, Switch, RadioGroup, Rating, ColorPicker, SwatchPicker,
+   * Combobox, Dropdown, TagPicker, DatePicker and TimePicker render a hidden required input (with
+   * or without `name`), so submit is blocked until they are checked, switched on or have a value.
+   * An explicit `required={false}` on the control wins, including for `aria-required`.
    */
   required?: boolean;
   /**
@@ -222,7 +223,9 @@ function mergeIntoFirstChild(children: React.ReactNode, state: FieldMergeState):
     );
   }
   if (state.invalid) injected['aria-invalid'] = ariaTrue;
-  if (state.required) {
+  // A child's own `required={false}` wins: it gets neither `aria-required` nor `required`, so what
+  // is announced matches what is validated.
+  if (state.required && childProps.required !== false) {
     if (childProps['aria-required'] === undefined && supportsAriaRequired(target)) {
       injected['aria-required'] = ariaTrue;
     }

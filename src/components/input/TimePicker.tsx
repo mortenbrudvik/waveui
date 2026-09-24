@@ -417,7 +417,8 @@ export const TimePicker = (props: TimePickerProps) => {
     'aria-labelledby': ariaLabelledBy,
     'aria-describedby': ariaDescribedBy,
     'aria-invalid': ariaInvalid,
-    // An explicit `required={false}` wins over a required Field (`false || undefined` would not).
+    // An explicit `required={false}` wins over a required Field, so aria-required matches
+    // `isRequired`.
     'aria-required': ariaRequired ?? required,
   });
 

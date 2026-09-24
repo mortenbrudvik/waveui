@@ -180,7 +180,7 @@ export const SwatchPicker = ({
       'aria-describedby': ariaDescribedBy,
       'aria-invalid': ariaInvalid,
       // An explicit `required={false}` wins over a required Field, so aria-required matches
-      // validation (`isRequired`).
+      // `isRequired`.
       'aria-required': ariaRequired ?? required,
     },
     { labelable: false },

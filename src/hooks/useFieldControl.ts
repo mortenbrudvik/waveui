@@ -204,7 +204,7 @@ export interface UseFieldControlOptions {
  *   `<label htmlFor>` does not reach it), the consumer's ids plus the Field's `labelId`.
  * - `aria-describedby`: the consumer's ids, then the Field's error and hint ids (deduplicated).
  * - `aria-invalid` / `aria-required`: the consumer's value, else `true` when the Field is
- *   invalid/required.
+ *   invalid/required (`aria-required`: not when the consumer passes `required={false}`).
  * - `required`: only with `nativeRequired` — the consumer's value, else the Field's `required`.
  * - `aria-label`: passed through.
  *
@@ -256,7 +256,10 @@ export function useFieldControl(
     ? joinIds(props['aria-describedby'], field.errorId, field.hintId)
     : props['aria-describedby'];
   const invalid = props['aria-invalid'] ?? (field?.invalid || undefined);
-  const ariaRequired = props['aria-required'] ?? (field?.required || undefined);
+  // A consumer `required={false}` (native controls pass `required`) also keeps the Field's
+  // required state out of aria-required, so the announced state matches native validation.
+  const ariaRequired =
+    props['aria-required'] ?? (props.required === false ? undefined : field?.required || undefined);
   const required = nativeRequired ? (props.required ?? (field?.required || undefined)) : undefined;
 
   const result: FieldControlProps = {};

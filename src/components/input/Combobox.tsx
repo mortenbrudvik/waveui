@@ -171,7 +171,7 @@ const ComboboxRoot = (props: ComboboxProps) => {
     'aria-describedby': ariaDescribedBy,
     'aria-invalid': ariaInvalid,
     // An explicit `required={false}` wins over a required Field, so aria-required matches
-    // validation (`isRequired`). `false || undefined` would drop that false and the Field would win.
+    // `isRequired`.
     'aria-required': ariaRequired ?? required,
   });
 
