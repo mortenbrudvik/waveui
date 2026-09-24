@@ -1,4 +1,4 @@
-import { useEffect, useInsertionEffect, useLayoutEffect, useRef } from 'react';
+import { useInsertionEffect, useLayoutEffect, useRef } from 'react';
 import type * as React from 'react';
 import { getGlobalRegistry } from '../lib/globalRegistry';
 import { focusElement, getFirstTabbable, getTabbableElements, isFocusable } from '../lib/focus';
@@ -11,8 +11,6 @@ import {
   isDescendantLayer,
   type LayerRecord,
 } from '../lib/layers';
-
-const useIsomorphicLayoutEffect = typeof document !== 'undefined' ? useLayoutEffect : useEffect;
 
 /** Options of {@link useFocusTrap}. */
 export interface UseFocusTrapOptions {
@@ -189,10 +187,62 @@ function findDescendantLayer(
   return found;
 }
 
+/**
+ * The outermost element of the trap's layer tree (its own layer's elements left out) that contains
+ * `node`. Asked once no descendant layer's surface contains `node`, this is the wrapper of a plain
+ * `<Portal>` rendered inside the trapped surface (or inside one of its descendant layers).
+ */
+function findPortalWrapper(trap: TrapEntry, node: Node): HTMLElement | null {
+  if (trap.layerId === undefined) return null;
+  const containing = getLayerTreeElements(trap.layerId, { includeOwnElements: false }).filter(
+    (el) => el.contains(node),
+  );
+  return (
+    containing.find((el) => !containing.some((other) => other !== el && other.contains(el))) ?? null
+  );
+}
+
 function focusFirstPossible(candidates: Array<HTMLElement | null | undefined>): void {
   for (const candidate of candidates) {
     if (candidate && focusElement(candidate)) return;
   }
+}
+
+/** Whether Tab (Shift+Tab) from `from` leaves `region`: no tabbable of it follows (precedes). */
+function isAtRegionEdge(region: HTMLElement, from: HTMLElement, backward: boolean): boolean {
+  const tabbables = getTabbableElements(region);
+  const index = tabbables.indexOf(from);
+  if (index === -1) {
+    return backward
+      ? !tabbables.some((el) => precedes(from, el))
+      : !tabbables.some((el) => follows(from, el));
+  }
+  return backward ? index === 0 : index === tabbables.length - 1;
+}
+
+/** Leaving a region without an anchor: the first (Shift+Tab: last) element of the Tab cycle. */
+function focusCycleEdge(trap: TrapEntry, regions: HTMLElement[], backward: boolean): void {
+  const cycle = getCycle(trap, regions);
+  focusFirstPossible([backward ? cycle[cycle.length - 1]?.el : cycle[0]?.el, trap.container]);
+}
+
+/**
+ * Tab inside a plain portal wrapper of the trap's layer tree (see {@link findPortalWrapper}):
+ * native inside it; it has no anchor, so leaving it continues at the edge of the Tab cycle.
+ * Returns `true` when it handled the event.
+ */
+function handlePortalWrapperTab(
+  trap: TrapEntry,
+  event: KeyboardEvent,
+  active: HTMLElement,
+  regions: HTMLElement[],
+): boolean {
+  const wrapper = findPortalWrapper(trap, active);
+  if (!wrapper) return false;
+  if (!isAtRegionEdge(wrapper, active, event.shiftKey)) return true; // native Tab inside it
+  event.preventDefault();
+  focusCycleEdge(trap, regions, event.shiftKey);
+  return true;
 }
 
 /**
@@ -206,31 +256,19 @@ function handleDescendantLayerTab(
   regions: HTMLElement[],
 ): boolean {
   let from: HTMLElement = active;
+  const backward = event.shiftKey;
   // Nested descendant layers: leave each one whose edge is reached, up to the container.
   for (let depth = 0; depth < 10; depth++) {
     const found = findDescendantLayer(trap, from);
     if (!found) return false;
     const { layer, region } = found;
-    const tabbables = getTabbableElements(region);
-    const index = tabbables.indexOf(from);
-    const backward = event.shiftKey;
-    if (from === active) {
-      const atEdge =
-        index === -1
-          ? backward
-            ? !tabbables.some((el) => precedes(from, el))
-            : !tabbables.some((el) => follows(from, el))
-          : backward
-            ? index === 0
-            : index === tabbables.length - 1;
-      if (!atEdge) return true; // native Tab inside the layer
-    }
+    // Native Tab inside the layer.
+    if (from === active && !isAtRegionEdge(region, from, backward)) return true;
 
     const anchor = layer.getAnchor();
     event.preventDefault();
     if (!anchor || !anchor.isConnected) {
-      const cycle = getCycle(trap, regions);
-      focusFirstPossible([backward ? cycle[cycle.length - 1]?.el : cycle[0]?.el, trap.container]);
+      focusCycleEdge(trap, regions, backward);
       return true;
     }
     if (backward && isFocusable(anchor)) {
@@ -289,6 +327,7 @@ function handleTab(trap: TrapEntry, event: KeyboardEvent): void {
   if (active && !inContainer && regionIndex === -1 && active !== doc.body) {
     if (isInsideDescendantLayers(trap.layerId, active)) {
       if (handleDescendantLayerTab(trap, event, active, regions)) return;
+      if (handlePortalWrapperTab(trap, event, active, regions)) return;
     }
   }
 
@@ -343,13 +382,45 @@ function handleFocusIn(event: FocusEvent): void {
   if (!target || typeof target.nodeType !== 'number') return;
   const node = target as Node;
   if (node.nodeType !== 1) return;
-  if (isInsideTrap(trap, node)) {
-    trap.lastFocused = node as HTMLElement;
+  const el = node as HTMLElement;
+  if (isInsideTrap(trap, el)) {
+    trap.lastFocused = el;
+    return;
+  }
+  // Pulled out again by the focus being returned (another focus trap on the page): leave it there
+  // rather than fight forever.
+  if (reclaiming) return;
+  // Not in this dispatch: React applies `autoFocus` in the layout phase of the commit that mounts
+  // a surface, before the surface's portal wrapper and dismiss layer register and before its own
+  // trap starts (a nested dialog, a confirm dialog over a drawer, a popover opened from a dialog).
+  // Once that commit has run, the element is inside the trap that is active then.
+  queueMicrotask(() => reclaimFocus(el));
+}
+
+/** Whether {@link reclaimFocus} is moving focus (its `focusin` events are dispatched meanwhile). */
+let reclaiming = false;
+
+/** Returns focus that landed on `el`, outside the trap, to the last focused element inside. */
+function reclaimFocus(el: HTMLElement): void {
+  if (el.ownerDocument.activeElement !== el) return; // focus has moved on since
+  const trap = getActiveTrap(getState());
+  if (!trap) return;
+  if (isInsideTrap(trap, el)) {
+    trap.lastFocused = el;
     return;
   }
   const last = trap.lastFocused;
   const lastIsValid = !!last && last.isConnected && isInsideTrap(trap, last) && isFocusable(last);
-  focusFirstPossible([lastIsValid ? last : null, getFirstTabbable(trap.container), trap.container]);
+  reclaiming = true;
+  try {
+    focusFirstPossible([
+      lastIsValid ? last : null,
+      getFirstTabbable(trap.container),
+      trap.container,
+    ]);
+  } finally {
+    reclaiming = false;
+  }
 }
 
 function ensureListeners(state: TrapState): void {
@@ -406,11 +477,16 @@ function resolveInitialFocus(
  * - Tabbables inside `[data-wave-focus-trap-allow]` regions (the Toaster viewport) join the cycle.
  * - **Descendant layers** (a popover or menu opened from inside, identified through `layerId`):
  *   Tab moves natively inside them; leaving one moves focus to the element after its anchor
- *   (Shift+Tab: the anchor itself).
+ *   (Shift+Tab: the anchor itself). Inside a plain `<Portal>` rendered in the surface (no layer,
+ *   no anchor) Tab is native too; leaving it wraps to the first (Shift+Tab: last) element.
  * - Focus that lands outside (not in the container, an allowed region or a descendant layer)
- *   returns to the last focused element inside. The layer's own `refs` (its trigger, outside the
- *   container) are outside: opening from the focused trigger still moves focus in, and focus
- *   moving back onto the trigger is returned.
+ *   returns to the last focused element inside. That is decided in a microtask, once the current
+ *   commit has run: an `autoFocus` element of a surface opened above the trap (a nested or
+ *   stacked dialog, a popover opened from the surface) gets focus before that surface's layer and
+ *   trap exist, and keeps it. The layer's own `refs` (its trigger, outside the container) are
+ *   outside: opening from the focused trigger still moves focus in, and focus moving back onto
+ *   the trigger is returned. Focus pulled out again while it is being returned (another focus
+ *   trap on the page) is left there.
  * - Traps form a stack (shared through the global registry): only the topmost acts.
  */
 export function useFocusTrap(container: HTMLElement | null, options: UseFocusTrapOptions): void {
@@ -421,7 +497,7 @@ export function useFocusTrap(container: HTMLElement | null, options: UseFocusTra
     latestRef.current = options;
   });
 
-  useIsomorphicLayoutEffect(() => {
+  useLayoutEffect(() => {
     if (!enabled || !container) return;
     const latest = latestRef;
     const state = getState();

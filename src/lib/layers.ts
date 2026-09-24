@@ -58,10 +58,12 @@ export interface LayerRecord {
 export const ALLOW_OUTSIDE_SELECTOR = '[data-wave-focus-trap-allow]';
 
 interface PressSnapshot {
-  /** Layers with outside press enabled whose tree did not contain the pointerdown target. */
+  /**
+   * Layers with outside press enabled whose tree did not contain the pointerdown target. Only these
+   * can be dismissed by the click: a layer registered later (opened by that press, or closed and
+   * reopened, which registers a new record) is not in it, and a layer that unregisters is removed.
+   */
   layers: LayerRecord[];
-  /** The open-order counter at pointerdown: layers registered later are never dismissed. */
-  watermark: number;
 }
 
 interface InstalledListeners {
@@ -466,7 +468,7 @@ function handlePointerDown(event: PointerEvent): void {
     if (isInsideLayerTree(layer.id, target)) return false;
     return typeof outsidePress !== 'function' || outsidePress(event) !== false;
   });
-  state.press = { layers, watermark: state.counter };
+  state.press = { layers };
 }
 
 /**
@@ -508,12 +510,10 @@ function handleClick(event: MouseEvent): void {
   if (!press) return;
   const target = getEventTargetNode(event);
   const toDismiss = press.layers.filter(
-    (layer) =>
-      layer.order <= press.watermark &&
-      state.stack.includes(layer) &&
-      !(target && isInsideLayerTree(layer.id, target)),
+    (layer) => !(target && isInsideLayerTree(layer.id, target)),
   );
   for (const layer of sortTopmostFirst(toDismiss)) {
+    // An earlier layer's onDismiss may already have unregistered this one.
     if (state.stack.includes(layer)) layer.onDismiss('outside-press', event);
   }
 }

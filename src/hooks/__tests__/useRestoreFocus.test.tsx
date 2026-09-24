@@ -132,6 +132,34 @@ describe('useRestoreFocus — capture and restore', () => {
     expect(button('Open')).toHaveFocus();
   });
 
+  it('leaves focus on an autoFocus element that mounts in the commit that unmounts the open surface', async () => {
+    const user = userEvent.setup();
+    function App() {
+      const [show, setShow] = React.useState(false);
+      return (
+        <>
+          <button type="button" onClick={() => setShow(true)}>
+            Open
+          </button>
+          {show ? (
+            <Surface open>
+              <button type="button" onClick={() => setShow(false)}>
+                Done
+              </button>
+            </Surface>
+          ) : (
+            <input aria-label="Search" autoFocus />
+          )}
+        </>
+      );
+    }
+    render(<App />);
+    await user.click(button('Open'));
+    await user.click(button('Done'));
+    await flushMicrotasks();
+    expect(screen.getByRole('textbox', { name: 'Search' })).toHaveFocus();
+  });
+
   it('keeps focus inside when opened under StrictMode (no snap back)', async () => {
     const user = userEvent.setup();
     function App() {
@@ -1119,5 +1147,52 @@ describe('useRestoreFocus — onlyIfFocusInside (popovers)', () => {
     await user.click(button('Trigger'));
     await user.click(screen.getByRole('textbox', { name: 'Elsewhere' }));
     expect(screen.getByRole('textbox', { name: 'Elsewhere' })).toHaveFocus();
+  });
+
+  it('does not steal focus that moved elsewhere when the open surface unmounts', async () => {
+    const user = userEvent.setup();
+    function Conditional() {
+      const [show, setShow] = React.useState(false);
+      const triggerRef = React.useRef<HTMLButtonElement>(null);
+      return (
+        <>
+          <button type="button" ref={triggerRef} onClick={() => setShow(true)}>
+            Trigger
+          </button>
+          <button type="button" onClick={() => setShow(false)}>
+            Close from outside
+          </button>
+          {show && <Surface open triggerRef={triggerRef} onlyIfFocusInside />}
+        </>
+      );
+    }
+    render(<Conditional />);
+    await user.click(button('Trigger'));
+    await user.click(button('Close from outside'));
+    await flushMicrotasks();
+    expect(button('Close from outside')).toHaveFocus();
+  });
+
+  it('decides at unmount: focus elsewhere then, removed in the same commit, is not restored', async () => {
+    function Page({ show }: { show: boolean }) {
+      const triggerRef = React.useRef<HTMLButtonElement>(null);
+      return (
+        <>
+          <button type="button" ref={triggerRef}>
+            Trigger
+          </button>
+          {show && <Surface open triggerRef={triggerRef} onlyIfFocusInside />}
+          {/* Rendered after the surface, so it is removed after the surface's cleanup ran. */}
+          {show && <input aria-label="Note" />}
+        </>
+      );
+    }
+    const { rerender } = render(<Page show={false} />);
+    rerender(<Page show />);
+    act(() => screen.getByRole('textbox', { name: 'Note' }).focus());
+    rerender(<Page show={false} />);
+    await flushMicrotasks();
+    expect(button('Trigger')).not.toHaveFocus();
+    expect(document.activeElement).toBe(document.body);
   });
 });

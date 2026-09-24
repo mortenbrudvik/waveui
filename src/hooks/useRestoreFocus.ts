@@ -1,6 +1,6 @@
 import * as React from 'react';
-import { useEffect, useInsertionEffect, useLayoutEffect, useRef } from 'react';
-import { getFirstTabbable, getTabbableElements, isFocusable } from '../lib/focus';
+import { useInsertionEffect, useLayoutEffect, useRef } from 'react';
+import { focusElement, getFirstTabbable, getTabbableElements, isFocusable } from '../lib/focus';
 import { getGlobalRegistry } from '../lib/globalRegistry';
 import {
   ALLOW_OUTSIDE_SELECTOR,
@@ -14,8 +14,6 @@ import {
   type LayerRecord,
 } from '../lib/layers';
 import { DismissLayerContext } from './useDismiss';
-
-const useIsomorphicLayoutEffect = typeof document !== 'undefined' ? useLayoutEffect : useEffect;
 
 /** Options of {@link useRestoreFocus}. */
 export interface UseRestoreFocusOptions {
@@ -74,15 +72,6 @@ function isValidTarget(el: HTMLElement | null | undefined): el is HTMLElement {
   if (!isFocusable(el)) return false; // also rejects [inert] ancestors, hidden and disabled
   if (el.closest('[aria-hidden="true"]')) return false;
   return !isInsideOtherOpenModal(el);
-}
-
-function tryFocus(el: HTMLElement): boolean {
-  try {
-    el.focus({ preventScroll: true });
-  } catch {
-    return false;
-  }
-  return el.ownerDocument.activeElement === el;
 }
 
 function recordPosition(el: Element): DomPosition {
@@ -411,7 +400,7 @@ function restore(latest: Latest, opener: OpenerRecord | null): void {
   const container = latest.options.container;
   for (const candidate of restoreCandidates(latest, opener)) {
     if (container && candidate && container.contains(candidate)) continue;
-    if (isValidTarget(candidate) && tryFocus(candidate)) return;
+    if (isValidTarget(candidate) && focusElement(candidate, { preventScroll: true })) return;
   }
 }
 
@@ -462,7 +451,7 @@ export function useRestoreFocus(options: UseRestoreFocusOptions): void {
   const { enabled } = options;
 
   // Track focus while mounted, so an opener removed in the commit that opens the surface is known.
-  useIsomorphicLayoutEffect(() => retainFocusTracker(), []);
+  useLayoutEffect(() => retainFocusTracker(), []);
 
   // Mutation phase: record the latest options and capture the opener when `enabled` turns on,
   // before autoFocus (layout phase) or a focus trap's initial focus moves focus into the surface.
@@ -475,7 +464,7 @@ export function useRestoreFocus(options: UseRestoreFocusOptions): void {
 
   // `enabled` true → false: restore in the layout phase (after every cleanup of this commit, so a
   // modal's isolation is already gone).
-  useIsomorphicLayoutEffect(() => {
+  useLayoutEffect(() => {
     const wasEnabled = layoutEnabledRef.current;
     layoutEnabledRef.current = enabled;
     if (!wasEnabled || enabled) return;
@@ -489,7 +478,7 @@ export function useRestoreFocus(options: UseRestoreFocusOptions): void {
   }, [enabled]);
 
   // Unmount while enabled: restore in a microtask, cancelled by a remount of this instance.
-  useIsomorphicLayoutEffect(() => {
+  useLayoutEffect(() => {
     const latest = latestRef;
     const captured = capturedRef;
     const scheduled = scheduledRef;

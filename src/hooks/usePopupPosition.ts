@@ -31,7 +31,12 @@ export interface UsePopupPositionOptions {
   offset?: number;
   /** Flip to the opposite side when there is not enough room. @default true */
   flip?: boolean;
-  /** Shift along the side to stay inside the viewport. @default { padding: 8 } */
+  /**
+   * Shift along the side to stay inside the viewport. Its padding is also the viewport padding of
+   * `flip` and of `size` (`fitViewport`, `matchReferenceWidth`): `true` means 8px, and `false`
+   * lets the popup flip only once it touches the viewport edge and grow right up to it.
+   * @default { padding: 8 }
+   */
   shift?: boolean | { padding: number };
   /** Make the surface as wide as the anchor (listboxes). @default false */
   matchReferenceWidth?: boolean;
@@ -115,10 +120,11 @@ const sizeApply: NonNullable<SizeOptions['apply']> = ({
 
 /**
  * Positions a popup surface next to its anchor with `@floating-ui/react-dom` (Tooltip, Popover,
- * Menu, listboxes, the DatePicker calendar, TeachingPopover): `offset`, `flip`, `shift` (8px
- * viewport padding), optional `size` (reference width / available space as CSS variables) and
- * `arrow`. Logical `start`/`end` sides follow `useDirection()` (the WaveProvider `dir`, else the
- * document direction), and so does start/end alignment.
+ * Menu, listboxes, the DatePicker calendar, TeachingPopover): `offset`, `flip`, `shift`, optional
+ * `size` (reference width / available space as CSS variables) and `arrow`. `flip`, `shift` and
+ * `size` keep the same viewport padding, taken from the `shift` option (8px by default). Logical
+ * `start`/`end` sides follow `useDirection()` (the WaveProvider `dir`, else the document
+ * direction), and so does start/end alignment.
  *
  * Positions update only while `open` (`autoUpdate` on scroll/resize; element resizes and layout
  * shifts only where `ResizeObserver`/`IntersectionObserver` exist). Spread `floatingProps` onto the

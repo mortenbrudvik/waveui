@@ -1,5 +1,5 @@
 import * as React from 'react';
-import { useEffect, useInsertionEffect, useLayoutEffect, useMemo, useRef } from 'react';
+import { useInsertionEffect, useLayoutEffect, useMemo, useRef } from 'react';
 import { useId } from './useId';
 import {
   getTopmostLayer,
@@ -10,8 +10,6 @@ import {
 } from '../lib/layers';
 
 export type { DismissReason } from '../lib/layers';
-
-const useIsomorphicLayoutEffect = typeof document !== 'undefined' ? useLayoutEffect : useEffect;
 
 /** Options of {@link useDismiss}. */
 export interface UseDismissOptions {
@@ -120,7 +118,7 @@ export function useDismiss(options: UseDismissOptions): DismissLayer {
 
   const { open } = options;
 
-  useIsomorphicLayoutEffect(() => {
+  useLayoutEffect(() => {
     if (!open) return;
     const latest = latestRef;
     const record: LayerRecord = {

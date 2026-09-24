@@ -42,6 +42,13 @@ function button(name: string) {
   return screen.getByRole('button', { name });
 }
 
+/** Runs the microtask in which the trap returns focus that landed outside. */
+async function flushMicrotasks() {
+  await act(async () => {
+    await Promise.resolve();
+  });
+}
+
 describe('useFocusTrap — initial focus', () => {
   it('focuses the first tabbable synchronously when the element appears', () => {
     render(
@@ -129,17 +136,20 @@ describe('useFocusTrap — Tab cycle', () => {
       <Page>
         <Trap>
           <button type="button">Cancel</button>
+          <button type="button">OK</button>
           <button type="button" disabled>
             Save
           </button>
         </Trap>
       </Page>,
     );
-    expect(button('Cancel')).toHaveFocus();
+    act(() => button('OK').focus());
+    // Focus that left the trap would be returned to the element it left (OK, then Cancel), so
+    // landing on the other button shows the Tab itself wrapped.
     await user.tab();
     expect(button('Cancel')).toHaveFocus();
     await user.tab({ shift: true });
-    expect(button('Cancel')).toHaveFocus();
+    expect(button('OK')).toHaveFocus();
   });
 
   it('wraps past a tabindex=-1 button at the end', async () => {
@@ -324,7 +334,7 @@ describe('useFocusTrap — allow-listed regions', () => {
     expect(button('Dismiss toast')).toHaveFocus();
   });
 
-  it('does not pull focus back out of an allow-listed region', () => {
+  it('does not pull focus back out of an allow-listed region', async () => {
     render(
       <Page>
         <Toasts />
@@ -334,12 +344,13 @@ describe('useFocusTrap — allow-listed regions', () => {
       </Page>,
     );
     act(() => button('Toast action').focus());
+    await flushMicrotasks();
     expect(button('Toast action')).toHaveFocus();
   });
 });
 
 describe('useFocusTrap — focus leaving', () => {
-  it('returns focus to the last focused element inside when focus moves outside', () => {
+  it('returns focus to the last focused element inside when focus moves outside', async () => {
     render(
       <Page>
         <Trap>
@@ -350,6 +361,7 @@ describe('useFocusTrap — focus leaving', () => {
     );
     act(() => button('Second').focus());
     act(() => button('After').focus());
+    await flushMicrotasks();
     expect(button('Second')).toHaveFocus();
   });
 
@@ -370,10 +382,40 @@ describe('useFocusTrap — focus leaving', () => {
       </Page>,
     );
     act(() => button('After').focus());
+    await flushMicrotasks();
     expect(button('After')).toHaveFocus();
     act(() => button('Inside').focus());
     await user.tab();
     expect(button('After')).toHaveFocus();
+  });
+
+  it('does not fight a script that pulls focus out again while it is being returned', async () => {
+    render(
+      <Page>
+        <Trap>
+          <button type="button">Inside</button>
+        </Trap>
+      </Page>,
+    );
+    // Another focus trap on the page that keeps focus on "Before", synchronously (capped, so a
+    // regression fails instead of looping forever).
+    let pulls = 0;
+    const rival = (event: FocusEvent) => {
+      if (event.target === button('Before') || pulls >= 20) return;
+      pulls += 1;
+      button('Before').focus();
+    };
+    document.addEventListener('focusin', rival, true);
+    try {
+      act(() => button('Before').focus());
+      await flushMicrotasks();
+      await flushMicrotasks();
+      // The trap gave up: the other script keeps focus, and the fight ended before its cap.
+      expect(button('Before')).toHaveFocus();
+      expect(pulls).toBeLessThan(20);
+    } finally {
+      document.removeEventListener('focusin', rival, true);
+    }
   });
 });
 
@@ -460,7 +502,60 @@ describe('useFocusTrap — descendant layers', () => {
     render(<DialogWithPopover />);
     await user.click(button('Anchor'));
     act(() => screen.getByRole('link', { name: 'Link two' }).focus());
+    await flushMicrotasks();
     expect(screen.getByRole('link', { name: 'Link two' })).toHaveFocus();
+  });
+
+  it('tabs natively inside a raw Portal rendered in the surface, then wraps at its edges', async () => {
+    const user = userEvent.setup();
+    function DialogWithPortal() {
+      const [surface, setSurface] = React.useState<HTMLDivElement | null>(null);
+      const dialogRef = React.useRef<HTMLDivElement | null>(null);
+      const dialog = useDismiss({
+        open: true,
+        onDismiss: () => {},
+        refs: [dialogRef],
+        kind: 'modal',
+      });
+      useFocusTrap(surface, { enabled: true, layerId: dialog.layerId });
+      return (
+        <Portal layerId={dialog.layerId}>
+          <div
+            ref={(el) => {
+              dialogRef.current = el;
+              setSurface(el);
+            }}
+            role="dialog"
+            aria-label="Dialog"
+            tabIndex={-1}
+          >
+            <button type="button">In dialog</button>
+            <Portal>
+              <div role="group" aria-label="Portaled">
+                <button type="button">P1</button>
+                <button type="button">P2</button>
+              </div>
+            </Portal>
+            <button type="button">Last in dialog</button>
+          </div>
+        </Portal>
+      );
+    }
+    render(
+      <Page>
+        <DialogWithPortal />
+      </Page>,
+    );
+    act(() => button('P1').focus());
+    await user.tab();
+    expect(button('P2')).toHaveFocus();
+    await user.tab();
+    expect(button('In dialog')).toHaveFocus();
+    act(() => button('P2').focus());
+    await user.tab({ shift: true });
+    expect(button('P1')).toHaveFocus();
+    await user.tab({ shift: true });
+    expect(button('Last in dialog')).toHaveFocus();
   });
 });
 
@@ -520,6 +615,7 @@ describe('useFocusTrap — layer refs outside the container', () => {
     await user.click(button('Open calendar'));
     act(() => button('Day 2').focus());
     act(() => button('Open calendar').focus());
+    await flushMicrotasks();
     expect(button('Day 2')).toHaveFocus();
   });
 });
@@ -589,6 +685,59 @@ describe('useFocusTrap — trap stack', () => {
     act(() => button('Child B').focus());
     await user.tab();
     expect(button('Child A')).toHaveFocus();
+  });
+});
+
+describe('useFocusTrap — library copies', () => {
+  it('shares one trap stack with another copy of the library (global registry)', async () => {
+    vi.resetModules();
+    const copy = await import('../useFocusTrap');
+    expect(copy.useFocusTrap).not.toBe(useFocusTrap);
+    function CopyTrap({ children }: { children: React.ReactNode }) {
+      const [surface, setSurface] = React.useState<HTMLDivElement | null>(null);
+      copy.useFocusTrap(surface, { enabled: true });
+      return (
+        <div ref={setSurface} role="dialog" aria-label="Inner" tabIndex={-1}>
+          {children}
+        </div>
+      );
+    }
+    function Nested({ inner }: { inner: boolean }) {
+      return (
+        <Page>
+          <Trap label="Outer">
+            <button type="button">Outer one</button>
+          </Trap>
+          {inner && (
+            <CopyTrap>
+              <button type="button">Inner one</button>
+              <button type="button">Inner two</button>
+            </CopyTrap>
+          )}
+        </Page>
+      );
+    }
+    // Two separate stacks would each pull focus into their own trap, forever: stop such a fight
+    // (window capture runs before the traps' document listeners) so a regression fails instead.
+    let focusEvents = 0;
+    const breaker = (event: FocusEvent) => {
+      focusEvents += 1;
+      if (focusEvents > 50) event.stopImmediatePropagation();
+    };
+    window.addEventListener('focusin', breaker, true);
+    try {
+      const user = userEvent.setup();
+      const { rerender } = render(<Nested inner={false} />);
+      rerender(<Nested inner />);
+      await flushMicrotasks();
+      expect(button('Inner one')).toHaveFocus();
+      await user.tab();
+      await user.tab();
+      expect(button('Inner one')).toHaveFocus();
+      expect(focusEvents).toBeLessThan(10);
+    } finally {
+      window.removeEventListener('focusin', breaker, true);
+    }
   });
 });
 

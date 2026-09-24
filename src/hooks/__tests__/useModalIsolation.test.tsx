@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { act, cleanup, render, screen } from '@testing-library/react';
 import * as React from 'react';
 import { useModalIsolation } from '../useModalIsolation';
@@ -168,7 +168,22 @@ describe('useModalIsolation', () => {
     expect(popover.closest('[inert]')).toBeNull();
   });
 
-  it('inerts siblings added later, but not descendant layers opened later', async () => {
+  it('inerts content appended to <body> later, with no layer opening or closing (MutationObserver)', async () => {
+    render(<Modal open label="Dialog" />);
+    const late = document.createElement('div');
+    late.textContent = 'Late sibling';
+    try {
+      // The observer's callback runs in a microtask, which the async act() flushes.
+      await act(async () => {
+        document.body.appendChild(late);
+      });
+      expect(late).toHaveAttribute('inert');
+    } finally {
+      late.remove();
+    }
+  });
+
+  it('keeps a descendant layer opened later usable', async () => {
     function App({ childOpen }: { childOpen: boolean }) {
       return (
         <Modal open label="Dialog">
@@ -177,19 +192,9 @@ describe('useModalIsolation', () => {
       );
     }
     const { rerender } = render(<App childOpen={false} />);
-    const late = document.createElement('div');
-    late.textContent = 'Late sibling';
-    act(() => {
-      document.body.appendChild(late);
-    });
     rerender(<App childOpen />);
     await flushMicrotasks();
-    try {
-      expect(late).toHaveAttribute('inert');
-      expect(screen.getByRole('group', { name: 'Child popover' }).closest('[inert]')).toBeNull();
-    } finally {
-      late.remove();
-    }
+    expect(screen.getByRole('group', { name: 'Child popover' }).closest('[inert]')).toBeNull();
   });
 
   it('ref-counts nested modals so they restore in stack order', () => {
@@ -314,6 +319,53 @@ describe('useModalIsolation', () => {
     expect(screen.getByTestId('sibling')).toHaveAttribute('inert');
     expect(screen.getByTestId('section')).not.toHaveAttribute('inert');
     expect(screen.getByRole('dialog', { name: 'Inline' }).closest('[inert]')).toBeNull();
+  });
+
+  it('shares the inert counts with another copy of the library (global registry)', async () => {
+    vi.resetModules();
+    const copy = await import('../useModalIsolation');
+    expect(copy.useModalIsolation).not.toBe(useModalIsolation);
+    /** The Modal above, isolated through the other copy. */
+    function CopyModal({ open }: { open: boolean }) {
+      const [surface, setSurface] = React.useState<HTMLDivElement | null>(null);
+      const surfaceRef = React.useRef<HTMLDivElement | null>(null);
+      const setRefs = React.useCallback((el: HTMLDivElement | null) => {
+        surfaceRef.current = el;
+        setSurface(el);
+      }, []);
+      const { layerId } = useDismiss({
+        open,
+        onDismiss: () => {},
+        refs: [surfaceRef],
+        kind: 'modal',
+      });
+      copy.useModalIsolation(open, { layerId, container: surface });
+      if (!open) return null;
+      return (
+        <Portal layerId={layerId}>
+          <div ref={setRefs} role="dialog" aria-label="Confirm" />
+        </Portal>
+      );
+    }
+    function App({ settings, confirm }: { settings: boolean; confirm: boolean }) {
+      return (
+        <>
+          <button type="button">Page button</button>
+          <Modal open={settings} label="Settings" />
+          <CopyModal open={confirm} />
+        </>
+      );
+    }
+    const { container, rerender } = render(<App settings confirm={false} />);
+    rerender(<App settings confirm />);
+    await flushMicrotasks();
+    expect(container).toHaveAttribute('inert');
+    // The first modal closes while the one isolated by the other copy stays open.
+    rerender(<App settings={false} confirm />);
+    await flushMicrotasks();
+    expect(container).toHaveAttribute('inert');
+    rerender(<App settings={false} confirm={false} />);
+    expect(container).not.toHaveAttribute('inert');
   });
 
   it('works under StrictMode', () => {

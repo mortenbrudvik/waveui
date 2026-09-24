@@ -513,6 +513,95 @@ describe('useModalLayer', () => {
     expect(layer!.isTopmost()).toBe(true);
   });
 
+  describe('an autoFocus element in a surface opened above another modal keeps focus', () => {
+    it('in a confirm dialog opened over a drawer (React siblings)', async () => {
+      const user = userEvent.setup();
+      function DrawerWithConfirm() {
+        const [confirm, setConfirm] = React.useState(false);
+        return (
+          <>
+            <Dialog open onOpenChange={() => {}} label="Items">
+              <button type="button" onClick={() => setConfirm(true)}>
+                Delete
+              </button>
+            </Dialog>
+            <Dialog open={confirm} onOpenChange={setConfirm} label="Confirm">
+              <button type="button">OK</button>
+              <button type="button" autoFocus>
+                Cancel
+              </button>
+            </Dialog>
+          </>
+        );
+      }
+      render(<DrawerWithConfirm />);
+      await user.click(button('Delete'));
+      await flushMicrotasks();
+      expect(button('Cancel')).toHaveFocus();
+    });
+
+    it('in a dialog nested in another dialog’s content', async () => {
+      const user = userEvent.setup();
+      function NestedDialogs() {
+        const [inner, setInner] = React.useState(false);
+        return (
+          <Dialog open onOpenChange={() => {}} label="Outer">
+            <button type="button" onClick={() => setInner(true)}>
+              Open inner
+            </button>
+            <Dialog open={inner} onOpenChange={setInner} label="Inner">
+              <button type="button">Inner first</button>
+              <input aria-label="Inner name" autoFocus />
+            </Dialog>
+          </Dialog>
+        );
+      }
+      render(<NestedDialogs />);
+      await user.click(button('Open inner'));
+      await flushMicrotasks();
+      expect(screen.getByRole('textbox', { name: 'Inner name' })).toHaveFocus();
+    });
+
+    it('in a popover opened from inside a dialog', async () => {
+      const user = userEvent.setup();
+      /** A stand-in popover: a portaled child layer without a focus trap (as Popover). */
+      function FilterPopover() {
+        const [open, setOpen] = React.useState(false);
+        const surfaceRef = React.useRef<HTMLDivElement>(null);
+        const triggerRef = React.useRef<HTMLButtonElement>(null);
+        const { layerId } = useDismiss({
+          open,
+          onDismiss: () => setOpen(false),
+          refs: [surfaceRef, triggerRef],
+          anchorRef: triggerRef,
+        });
+        return (
+          <>
+            <button type="button" ref={triggerRef} onClick={() => setOpen((o) => !o)}>
+              Filter
+            </button>
+            {open && (
+              <Portal layerId={layerId}>
+                <div ref={surfaceRef} role="group" aria-label="Filter options">
+                  <button type="button">Clear</button>
+                  <input aria-label="Filter text" autoFocus />
+                </div>
+              </Portal>
+            )}
+          </>
+        );
+      }
+      render(
+        <Dialog open onOpenChange={() => {}}>
+          <FilterPopover />
+        </Dialog>,
+      );
+      await user.click(button('Filter'));
+      await flushMicrotasks();
+      expect(screen.getByRole('textbox', { name: 'Filter text' })).toHaveFocus();
+    });
+  });
+
   it('registers the modal as a child of an enclosing layer', async () => {
     const user = userEvent.setup();
     const onParent = vi.fn();

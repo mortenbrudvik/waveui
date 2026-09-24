@@ -309,18 +309,23 @@ describe('useDismiss — outside press', () => {
     expect(isOpen('Dropdown')).toBe(true);
   });
 
-  it('ignores a layer that closed and re-registered between pointerdown and click (watermark)', () => {
+  it('does not dismiss a layer reopened between pointerdown and click (a new record, not in the snapshot)', () => {
     function Harness({ open }: { open: boolean }) {
       const surfaceRef = React.useRef<HTMLDivElement>(null);
+      const keeperRef = React.useRef<HTMLDivElement>(null);
+      // A second layer stays open: the document listeners, and so the pending press, stay alive.
+      useDismiss({ open: true, onDismiss: onKeeperDismiss, refs: [keeperRef] });
       useDismiss({ open, onDismiss, refs: [surfaceRef] });
       return (
         <>
           <button type="button">Outside</button>
+          <div ref={keeperRef}>Keeper</div>
           {open && <div ref={surfaceRef}>Surface</div>}
         </>
       );
     }
     const onDismiss = vi.fn();
+    const onKeeperDismiss = vi.fn();
     const { rerender } = render(<Harness open />);
     const outside = screen.getByRole('button', { name: 'Outside' });
     fireEvent.pointerDown(outside);
@@ -328,6 +333,9 @@ describe('useDismiss — outside press', () => {
     rerender(<Harness open />);
     fireEvent.click(outside);
     expect(onDismiss).not.toHaveBeenCalled();
+    // The press itself was still pending: the layer that stayed open is dismissed by it.
+    expect(onKeeperDismiss).toHaveBeenCalledTimes(1);
+    expect(onKeeperDismiss).toHaveBeenCalledWith('outside-press', expect.any(Object));
   });
 
   it('lets an external toggle close the popup in one click', async () => {

@@ -42,6 +42,38 @@ function mockGutterSupport(supported: boolean) {
   };
 }
 
+/**
+ * Gives the `overflow` property of `<html>`'s inline style its browser behaviour (jsdom stores the
+ * shorthand as a property of its own): setting it sets (or, with '', removes) both longhands, and
+ * reading it returns a value only when both longhands are set with the same priority.
+ */
+function emulateOverflowShorthand() {
+  const style = html.style;
+  Object.defineProperty(style, 'overflow', {
+    configurable: true,
+    get() {
+      const [x, y] = [style.getPropertyValue('overflow-x'), style.getPropertyValue('overflow-y')];
+      const samePriority =
+        style.getPropertyPriority('overflow-x') === style.getPropertyPriority('overflow-y');
+      if (!x || !y || !samePriority) return '';
+      return x === y ? x : `${x} ${y}`;
+    },
+    set(value: string) {
+      if (!value) {
+        style.removeProperty('overflow-x');
+        style.removeProperty('overflow-y');
+        return;
+      }
+      const [x, y = x] = value.trim().split(/\s+/);
+      style.setProperty('overflow-x', x);
+      style.setProperty('overflow-y', y);
+    },
+  });
+  return () => {
+    Reflect.deleteProperty(style, 'overflow');
+  };
+}
+
 /** Simulates a classic 15px scrollbar: innerWidth 1024, documentElement.clientWidth 1009. */
 function mockScrollbar(width: number) {
   Object.defineProperty(html, 'clientWidth', { configurable: true, value: 1024 - width });
@@ -71,6 +103,37 @@ describe('useScrollLock', () => {
     expect(html.style.overflow).toBe('hidden');
     unmount();
     expect(html.style.overflow).toBe('scroll');
+  });
+
+  it('restores an inline overflow-x/overflow-y of <html> (browser shorthand semantics)', () => {
+    const restoreShorthand = emulateOverflowShorthand();
+    try {
+      html.style.setProperty('overflow-y', 'scroll');
+      html.style.setProperty('overflow-x', 'clip', 'important');
+      const { unmount } = render(<Lock />);
+      expect(html.style.getPropertyValue('overflow-x')).toBe('hidden');
+      expect(html.style.getPropertyValue('overflow-y')).toBe('hidden');
+      unmount();
+      expect(html.style.getPropertyValue('overflow-y')).toBe('scroll');
+      expect(html.style.getPropertyPriority('overflow-y')).toBe('');
+      expect(html.style.getPropertyValue('overflow-x')).toBe('clip');
+      expect(html.style.getPropertyPriority('overflow-x')).toBe('important');
+    } finally {
+      restoreShorthand();
+    }
+  });
+
+  it('removes the overflow longhands again when <html> had none (browser shorthand semantics)', () => {
+    const restoreShorthand = emulateOverflowShorthand();
+    try {
+      const { unmount } = render(<Lock />);
+      expect(html.style.overflow).toBe('hidden');
+      unmount();
+      expect(html.style.getPropertyValue('overflow-x')).toBe('');
+      expect(html.style.getPropertyValue('overflow-y')).toBe('');
+    } finally {
+      restoreShorthand();
+    }
   });
 
   it('does nothing while disabled', () => {

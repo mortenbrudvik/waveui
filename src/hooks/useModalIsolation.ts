@@ -1,4 +1,4 @@
-import { useEffect, useLayoutEffect } from 'react';
+import { useLayoutEffect } from 'react';
 import { getGlobalRegistry } from '../lib/globalRegistry';
 import {
   ALLOW_OUTSIDE_SELECTOR,
@@ -10,8 +10,6 @@ import {
   registerLayerIsolation,
   subscribeLayers,
 } from '../lib/layers';
-
-const useIsomorphicLayoutEffect = typeof document !== 'undefined' ? useLayoutEffect : useEffect;
 
 /** Live regions of `useAnnounce`; never made inert. */
 const ANNOUNCER_SELECTOR = '[data-wave-announcer]';
@@ -151,7 +149,7 @@ export function useModalIsolation(
 ): void {
   const { layerId, container } = options;
 
-  useIsomorphicLayoutEffect(() => {
+  useLayoutEffect(() => {
     if (!enabled || !container) return;
     const doc = container.ownerDocument;
     const body = doc.body;

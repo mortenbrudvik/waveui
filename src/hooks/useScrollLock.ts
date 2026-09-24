@@ -1,11 +1,27 @@
-import { useEffect, useLayoutEffect } from 'react';
+import { useLayoutEffect } from 'react';
 import { getGlobalRegistry } from '../lib/globalRegistry';
 
-const useIsomorphicLayoutEffect = typeof document !== 'undefined' ? useLayoutEffect : useEffect;
+/** An inline declaration as it was before the lock (`value` is '' when it was not set). */
+interface SavedDeclaration {
+  name: string;
+  value: string;
+  priority: string;
+}
 
+/**
+ * The longhands of `overflow`. A page may set `overflow-y: scroll` inline to keep its scrollbar:
+ * the shorthand alone reads '' then, and setting it replaces (restoring '' removes) the longhands.
+ */
+const OVERFLOW_LONGHANDS = ['overflow-x', 'overflow-y'];
+
+// The saved styles live in the global registry: another copy of the library (an older version
+// too) may unlock what this one locked, so fields are only ever added.
 interface SavedStyles {
   scroller: HTMLElement;
+  /** The scroller's inline `overflow` shorthand before the lock. */
   overflow: string;
+  /** Its inline `overflow-x`/`overflow-y` before the lock (missing when an older copy locked). */
+  overflowLonghands?: SavedDeclaration[];
   /** The inline `scrollbar-gutter` of `<html>` before the lock, or `null` when the lock left it. */
   scrollbarGutter: string | null;
   /** The inline `padding-inline-end` of `<body>` before the lock, or `null` when the lock left it. */
@@ -52,6 +68,11 @@ function lock(state: ScrollLockState): void {
   const saved: SavedStyles = {
     scroller,
     overflow: scroller.style.overflow,
+    overflowLonghands: OVERFLOW_LONGHANDS.map((name) => ({
+      name,
+      value: scroller.style.getPropertyValue(name),
+      priority: scroller.style.getPropertyPriority(name),
+    })),
     scrollbarGutter: null,
     bodyPaddingInlineEnd: null,
   };
@@ -75,7 +96,13 @@ function unlock(state: ScrollLockState): void {
   state.saved = null;
   if (!saved || typeof document === 'undefined') return;
   const html = document.documentElement;
-  saved.scroller.style.overflow = saved.overflow;
+  // Shorthand first: restoring '' removes the longhands, which are then set again where they were.
+  const style = saved.scroller.style;
+  style.overflow = saved.overflow;
+  for (const { name, value, priority } of saved.overflowLonghands ?? []) {
+    if (value) style.setProperty(name, value, priority);
+    else style.removeProperty(name);
+  }
   if (saved.scrollbarGutter !== null) {
     if (saved.scrollbarGutter) html.style.setProperty('scrollbar-gutter', saved.scrollbarGutter);
     else html.style.removeProperty('scrollbar-gutter');
@@ -104,7 +131,9 @@ function acquire(): () => void {
  * Locks are counted in a global registry shared by every copy of the library: the first lock
  * saves the document's inline styles and sets `overflow: hidden` on the document scroller; only
  * the last unlock restores them, so overlays that close out of order (or in the same commit) never
- * leave the page locked or unlocked too early.
+ * leave the page locked or unlocked too early. The scroller's `overflow-x` and `overflow-y` are
+ * saved and restored one by one, with their priority (an inline `overflow-y: scroll` that keeps
+ * the page's scrollbar survives).
  *
  * The layout stays put when a classic scrollbar disappears: with `scrollbar-gutter: stable` on
  * `<html>` where supported, otherwise by adding the measured scrollbar width to `<body>`'s
@@ -112,7 +141,7 @@ function acquire(): () => void {
  * styles the lock changed. SSR-safe.
  */
 export function useScrollLock(enabled: boolean): void {
-  useIsomorphicLayoutEffect(() => {
+  useLayoutEffect(() => {
     if (!enabled || typeof document === 'undefined') return;
     return acquire();
   }, [enabled]);
