@@ -511,7 +511,7 @@ export const TimePicker = (props: TimePickerProps) => {
   const showClear = clearable && !readOnly && selectedValue !== '';
   // aria-controls must name a listbox that is actually mounted. The closed list is inline only
   // while options exist; the open list is mounted only while something matches.
-  const listboxMounted = (!open && allOptions.length > 0) || (open && hasMatches);
+  const listboxMounted = open ? hasMatches : allOptions.length > 0;
 
   return (
     <ListboxContext.Provider value={lb.context}>
