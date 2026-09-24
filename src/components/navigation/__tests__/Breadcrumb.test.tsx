@@ -4,6 +4,7 @@ import { fireEvent, render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { Breadcrumb, BreadcrumbItem } from '../Breadcrumb';
 import type { BreadcrumbItemProps } from '../Breadcrumb';
+import type { Slot } from '../../../lib/types';
 import {
   createOverlayTestWrapper,
   renderWithProviders,
@@ -17,6 +18,24 @@ afterEach(() => {
 });
 
 const BreadcrumbWrapper = createOverlayTestWrapper(Breadcrumb, {});
+
+/**
+ * Icons that render nothing: `icon={name && <Icon />}` with `name` '' or a count of 0, and a list
+ * mapped to nothing (F2 `slotRendersContent`). A factory each, since a generator is one-shot.
+ */
+const EMPTY_ICONS = [
+  ["''", () => ''],
+  ['0', () => 0],
+  ['an empty array', () => []],
+  ['an array of empty items', () => [null, false, '', [undefined]]],
+  [
+    'a generator of empty items',
+    function* emptyItems() {
+      yield null;
+      yield '';
+    },
+  ],
+] as Array<[string, () => Slot<'span'>]>;
 
 const separatorsIn = (el: HTMLElement) => el.querySelectorAll('[data-wave-breadcrumb-separator]');
 
@@ -401,6 +420,41 @@ describe('Breadcrumb', () => {
       expect(screen.getByText('ico')).toHaveAttribute('aria-hidden', 'true');
       expect(screen.getByRole('link')).toHaveAccessibleName('Home');
       expect(screen.getByText('ico')).toHaveClass('me-1');
+    });
+
+    // An icon that renders nothing is no icon, as in Nav, Tree and Avatar: no empty span and no
+    // stray `me-1` margin before the text, also on an `asChild` element.
+    it.each(EMPTY_ICONS)('renders no icon span for an icon set to %s', (_kind, makeIcon) => {
+      render(
+        <Breadcrumb>
+          <Breadcrumb.Item href="/" icon={makeIcon()}>
+            Home
+          </Breadcrumb.Item>
+          <Breadcrumb.Item asChild icon={makeIcon()}>
+            <a href="/docs">Docs</a>
+          </Breadcrumb.Item>
+        </Breadcrumb>,
+      );
+      for (const name of ['Home', 'Docs']) {
+        const link = screen.getByRole('link', { name });
+        expect(link.querySelector('span')).toBeNull();
+        expect(link.textContent).toBe(name);
+      }
+    });
+
+    it('renders the items of a generator icon that has content (the check does not consume it)', () => {
+      function* glyphs() {
+        yield null;
+        yield <svg key="glyph" data-testid="glyph" />;
+      }
+      render(
+        <Breadcrumb>
+          <Breadcrumb.Item href="/" icon={glyphs()}>
+            Home
+          </Breadcrumb.Item>
+        </Breadcrumb>,
+      );
+      expect(screen.getByTestId('glyph').parentElement).toHaveAttribute('aria-hidden', 'true');
     });
 
     it('links and buttons carry the shared focus ring (C-FOCUS)', () => {

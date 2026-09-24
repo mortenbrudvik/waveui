@@ -4,6 +4,9 @@ import { act, fireEvent, render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { Menu, MenuDivider, MenuItem, MenuPopover, MenuTrigger } from '../Menu';
 import type { MenuItemProps, MenuProps, MenuTriggerProps } from '../Menu';
+import type { Slot } from '../../../lib/types';
+import { useModalLayer } from '../../../hooks/useModalLayer';
+import { Portal } from '../../portal/Portal';
 import {
   createOverlayTestWrapper,
   expectNoA11yViolations,
@@ -34,6 +37,24 @@ function renderStaticMenu(props: Partial<MenuProps> = {}, items?: React.ReactNod
 }
 
 const item = (name: string) => screen.getByRole('menuitem', { name });
+
+/**
+ * Icons that render nothing: `icon={name && <Icon />}` with `name` '' or a count of 0, and a list
+ * mapped to nothing (F2 `slotRendersContent`). A factory each, since a generator is one-shot.
+ */
+const EMPTY_ICONS = [
+  ["''", () => ''],
+  ['0', () => 0],
+  ['an empty array', () => []],
+  ['an array of empty items', () => [null, false, '', [undefined]]],
+  [
+    'a generator of empty items',
+    function* emptyItems() {
+      yield null;
+      yield '';
+    },
+  ],
+] as Array<[string, () => Slot<'span'>]>;
 
 describe('Menu', () => {
   testSystemProps(Menu, {
@@ -222,6 +243,93 @@ describe('Menu', () => {
       await user.tab({ shift: true });
       expect(item('Item 2')).toHaveFocus();
     });
+
+    describe('every item disabled', () => {
+      function AllDisabledMenu({ cutDisabled = true }: { cutDisabled?: boolean }) {
+        return (
+          <>
+            <button type="button">Before</button>
+            <Menu aria-label="Edit" data-testid="menu">
+              <Menu.Item disabled={cutDisabled}>Cut</Menu.Item>
+              <Menu.Item disabled>Copy</Menu.Item>
+            </Menu>
+            <button type="button">After</button>
+          </>
+        );
+      }
+
+      it('the menu itself holds the tab stop, so Tab still reaches it', async () => {
+        const user = userEvent.setup();
+        render(<AllDisabledMenu />);
+        const menu = screen.getByTestId('menu');
+        expect(menu).toHaveAttribute('tabindex', '0');
+        expect(item('Cut')).toHaveAttribute('tabindex', '-1');
+        expect(item('Copy')).toHaveAttribute('tabindex', '-1');
+
+        await user.tab();
+        await user.tab();
+        expect(menu).toHaveFocus();
+        // Nothing to move to: the keys leave focus on the menu.
+        await user.keyboard('{ArrowDown}{End}');
+        expect(menu).toHaveFocus();
+        await user.tab();
+        expect(screen.getByRole('button', { name: 'After' })).toHaveFocus();
+        await user.tab({ shift: true });
+        expect(menu).toHaveFocus();
+        await user.tab({ shift: true });
+        expect(screen.getByRole('button', { name: 'Before' })).toHaveFocus();
+      });
+
+      it('shows the focus ring on the menu while it holds focus (C-FOCUS)', () => {
+        render(<AllDisabledMenu />);
+        expect(screen.getByTestId('menu')).toHaveClass('focus-visible:outline-2');
+      });
+
+      it('gives the tab stop back to the items once one is enabled, moving focus there', async () => {
+        const { rerender } = render(<AllDisabledMenu />);
+        const menu = screen.getByTestId('menu');
+        act(() => menu.focus());
+        rerender(<AllDisabledMenu cutDisabled={false} />);
+        // The roving hook's MutationObserver reports the enabled item in a microtask.
+        await act(async () => {});
+        expect(menu).not.toHaveAttribute('tabindex');
+        expect(item('Cut')).toHaveAttribute('tabindex', '0');
+        expect(item('Cut')).toHaveFocus();
+      });
+
+      it('takes the tab stop when the last enabled item disables itself', async () => {
+        const user = userEvent.setup();
+        function DisablesItself() {
+          const [disabled, setDisabled] = React.useState(false);
+          return (
+            <Menu.Item disabled={disabled} onClick={() => setDisabled(true)}>
+              Once
+            </Menu.Item>
+          );
+        }
+        render(
+          <Menu aria-label="Edit" data-testid="menu">
+            <DisablesItself />
+            <Menu.Item disabled>Never</Menu.Item>
+          </Menu>,
+        );
+        const menu = screen.getByTestId('menu');
+        expect(menu).not.toHaveAttribute('tabindex');
+        await user.click(item('Once'));
+        await act(async () => {});
+        expect(item('Once')).toHaveAttribute('tabindex', '-1');
+        expect(menu).toHaveAttribute('tabindex', '0');
+      });
+
+      it("keeps the consumer's own tabIndex on the menu", () => {
+        render(
+          <Menu aria-label="Edit" data-testid="menu" tabIndex={-1}>
+            <Menu.Item disabled>Cut</Menu.Item>
+          </Menu>,
+        );
+        expect(screen.getByTestId('menu')).toHaveAttribute('tabindex', '-1');
+      });
+    });
   });
 
   describe('item activation', () => {
@@ -362,6 +470,31 @@ describe('Menu', () => {
         </Menu>,
       );
       expect(screen.getByText('icon-text')).toHaveAttribute('aria-hidden', 'false');
+    });
+
+    // An icon that renders nothing is no icon, as in Nav, Tree and Avatar: no empty 20px
+    // aria-hidden box before the label.
+    it.each(EMPTY_ICONS)('renders no icon box for an icon set to %s', (_kind, makeIcon) => {
+      render(
+        <Menu>
+          <Menu.Item icon={makeIcon()}>Item</Menu.Item>
+        </Menu>,
+      );
+      expect(screen.getByRole('menuitem').querySelector('[aria-hidden="true"]')).toBeNull();
+      expect(screen.getByRole('menuitem').textContent).toBe('Item');
+    });
+
+    it('renders the items of a generator icon that has content (the check does not consume it)', () => {
+      function* glyphs() {
+        yield null;
+        yield <svg key="glyph" data-testid="glyph" />;
+      }
+      render(
+        <Menu>
+          <Menu.Item icon={glyphs()}>Item</Menu.Item>
+        </Menu>,
+      );
+      expect(screen.getByTestId('glyph').parentElement).toHaveAttribute('aria-hidden', 'true');
     });
 
     it('renders shortcut text after the label with a logical margin (C-LOGICAL)', () => {
@@ -670,6 +803,101 @@ describe('Menu popup (Menu.Trigger + Menu.Popover)', () => {
     await user.click(screen.getByRole('button', { name: 'Elsewhere' }));
     expect(queryMenu()).not.toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Elsewhere' })).toHaveFocus();
+  });
+
+  describe('an item that opens a modal (a "Delete…" confirmation)', () => {
+    /**
+     * A stand-in Dialog on F4's useModalLayer + Portal (§5.9: the composition with the real
+     * Dialog is INTEGRATION's). Like Dialog, it records its opener when it opens, traps focus,
+     * makes the page inert and restores focus to the opener when it closes.
+     */
+    function StandInModal({
+      open,
+      onOpenChange,
+    }: {
+      open: boolean;
+      onOpenChange: (open: boolean) => void;
+    }) {
+      const [surface, setSurface] = React.useState<HTMLDivElement | null>(null);
+      const surfaceRef = React.useRef<HTMLDivElement | null>(null);
+      const attachSurface = React.useCallback((node: HTMLDivElement | null) => {
+        surfaceRef.current = node;
+        setSurface(node);
+      }, []);
+      const layer = useModalLayer({
+        open,
+        onDismiss: () => onOpenChange(false),
+        refs: [surfaceRef],
+        container: surface,
+      });
+      if (!open) return null;
+      return (
+        <Portal layerId={layer.layerId}>
+          <div ref={attachSurface} role="dialog" aria-label="Delete file?" tabIndex={-1}>
+            <button type="button">Confirm</button>
+          </div>
+        </Portal>
+      );
+    }
+
+    function MenuWithConfirm() {
+      const [confirmOpen, setConfirmOpen] = React.useState(false);
+      return (
+        <>
+          <Menu>
+            <Menu.Trigger>
+              <button type="button">Actions</button>
+            </Menu.Trigger>
+            <Menu.Popover>
+              <Menu.Item>Rename</Menu.Item>
+              <Menu.Item onClick={() => setConfirmOpen(true)}>Delete…</Menu.Item>
+            </Menu.Popover>
+          </Menu>
+          <StandInModal open={confirmOpen} onOpenChange={setConfirmOpen} />
+        </>
+      );
+    }
+
+    it('keyboard: focus moves into the modal, and back to the trigger when it closes', async () => {
+      const user = userEvent.setup();
+      render(<MenuWithConfirm />);
+      act(() => trigger().focus());
+      await user.keyboard('{ArrowDown}{ArrowDown}{Enter}');
+      const dialog = screen.getByRole('dialog', { name: 'Delete file?' });
+      expect(queryMenu()).not.toBeInTheDocument();
+      expect(dialog.contains(document.activeElement)).toBe(true);
+
+      await user.keyboard('{Escape}');
+      expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+      expect(trigger()).toHaveFocus();
+    });
+
+    it('mouse: focus returns to the trigger when the modal closes', async () => {
+      const user = userEvent.setup();
+      render(<MenuWithConfirm />);
+      await user.click(trigger());
+      await user.click(item('Delete…'));
+      expect(screen.getByRole('dialog').contains(document.activeElement)).toBe(true);
+
+      await user.keyboard('{Escape}');
+      expect(trigger()).toHaveFocus();
+    });
+
+    it('an item onClick that moves focus elsewhere keeps it there', async () => {
+      const user = userEvent.setup();
+      render(
+        <>
+          <PopupMenu
+            itemProps={{ onClick: () => screen.getByRole('textbox', { name: 'Name' }).focus() }}
+          />
+          <input aria-label="Name" />
+        </>,
+      );
+      await user.click(trigger());
+      await user.click(item('Edit'));
+      expect(queryMenu()).not.toBeInTheDocument();
+      expect(screen.getByRole('textbox', { name: 'Name' })).toHaveFocus();
+    });
   });
 
   it('clicking the trigger again closes the menu', async () => {

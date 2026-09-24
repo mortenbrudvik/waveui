@@ -4,6 +4,7 @@ import { act, render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { Nav, NavCategory, NavItem, NavSubItem } from '../Nav';
 import type { NavItemProps, NavProps, NavSubItemProps } from '../Nav';
+import type { Slot } from '../../../lib/types';
 import {
   createOverlayTestWrapper,
   renderWithProviders,
@@ -34,6 +35,24 @@ function SampleNav(props: Partial<NavProps>) {
 
 const button = (name: string) => screen.getByRole('button', { name });
 const toggle = () => screen.getByRole('button', { name: 'Docs' });
+
+/**
+ * Icons that render nothing: `icon={name && <Icon />}` with `name` '' or a count of 0, and a list
+ * mapped to nothing (F2 `slotRendersContent`). A factory each, since a generator is one-shot.
+ */
+const EMPTY_ICONS = [
+  ["''", () => ''],
+  ['0', () => 0],
+  ['an empty array', () => []],
+  ['an array of empty items', () => [null, false, '', [undefined]]],
+  [
+    'a generator of empty items',
+    function* emptyItems() {
+      yield null;
+      yield '';
+    },
+  ],
+] as Array<[string, () => Slot<'span'>]>;
 
 describe('Nav', () => {
   testSystemProps(Nav, {
@@ -196,6 +215,30 @@ describe('Nav', () => {
           String(message).includes('`onNavItemSelect` is deprecated'),
         );
         expect(deprecations).toHaveLength(1);
+      });
+
+      it('onNavItemSelect does not fire when a disabled item is activated, the current one included', async () => {
+        vi.spyOn(console, 'warn').mockImplementation(() => {});
+        const user = userEvent.setup();
+        const onNavItemSelect = vi.fn();
+        render(
+          <Nav value="docs" onNavItemSelect={onNavItemSelect}>
+            <Nav.Item value="home" disabled>
+              Home
+            </Nav.Item>
+            <Nav.Item value="docs" href="#docs" disabled>
+              Docs
+            </Nav.Item>
+            <Nav.Item value="settings">Settings</Nav.Item>
+          </Nav>,
+        );
+        await user.click(button('Home'));
+        // Re-selection fires the alias for an enabled item; a disabled current item stays silent.
+        await user.click(screen.getByRole('link', { name: 'Docs' }));
+        expect(onNavItemSelect).not.toHaveBeenCalled();
+        await user.click(button('Settings'));
+        expect(onNavItemSelect).toHaveBeenCalledTimes(1);
+        expect(onNavItemSelect).toHaveBeenCalledWith('settings');
       });
     });
   });
@@ -681,10 +724,8 @@ describe('Nav', () => {
     it('a disabled item whose value is the current value still shows as current', async () => {
       const user = userEvent.setup();
       const onValueChange = vi.fn();
-      const onNavItemSelect = vi.fn();
-      vi.spyOn(console, 'warn').mockImplementation(() => {});
       render(
-        <Nav value="home" onValueChange={onValueChange} onNavItemSelect={onNavItemSelect}>
+        <Nav value="home" onValueChange={onValueChange}>
           <Nav.Item value="home" disabled>
             Home
           </Nav.Item>
@@ -699,7 +740,6 @@ describe('Nav', () => {
       expect(button('Home')).toHaveClass('bg-subtle-selected', 'border-s-primary');
       await user.click(button('Home'));
       expect(onValueChange).not.toHaveBeenCalled();
-      expect(onNavItemSelect).not.toHaveBeenCalled();
       expect(screen.getByRole('link', { name: 'Docs' })).not.toHaveAttribute('aria-current');
     });
 
@@ -813,6 +853,40 @@ describe('Nav', () => {
       expect(icon).toHaveAttribute('aria-hidden', 'true');
       expect(button('Home')).toHaveAccessibleName('Home');
       expect(button('Docs')).toHaveAccessibleName('Docs');
+    });
+
+    // An icon that renders nothing is no icon, as in 0.4 (`{icon && …}`) and as in Avatar: no
+    // empty 20px aria-hidden box before the label.
+    it.each(EMPTY_ICONS)('renders no icon box for an icon set to %s', (_kind, makeIcon) => {
+      render(
+        <Nav>
+          <Nav.Item value="home" icon={makeIcon()}>
+            Home
+          </Nav.Item>
+          <Nav.Category value="docs" label="Docs" icon={makeIcon()}>
+            <Nav.SubItem value="intro">Introduction</Nav.SubItem>
+          </Nav.Category>
+        </Nav>,
+      );
+      for (const name of ['Home', 'Docs']) {
+        expect(button(name).querySelector('span[aria-hidden="true"]')).toBeNull();
+        expect(button(name).textContent).toBe(name);
+      }
+    });
+
+    it('renders the items of a generator icon that has content (the check does not consume it)', () => {
+      function* glyphs() {
+        yield null;
+        yield <svg key="glyph" data-testid="glyph" />;
+      }
+      render(
+        <Nav>
+          <Nav.Item value="home" icon={glyphs()}>
+            Home
+          </Nav.Item>
+        </Nav>,
+      );
+      expect(screen.getByTestId('glyph').parentElement).toHaveAttribute('aria-hidden', 'true');
     });
   });
 

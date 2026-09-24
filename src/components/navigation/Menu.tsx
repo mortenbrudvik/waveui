@@ -1,12 +1,13 @@
 import * as React from 'react';
 import { cn } from '../../lib/cn';
 import type { PopupAlign, PopupSide, Slot } from '../../lib/types';
-import { renderSlot } from '../../lib/slot';
+import { renderSlot, slotRendersContent } from '../../lib/slot';
 import { composeEventHandlers } from '../../lib/composeEventHandlers';
 import { isDev, warnOnce } from '../../lib/dev';
 import { mergeProps } from '../../lib/mergeProps';
 import { STATE_ARIA } from '../../lib/renderTrigger';
-import { disabledStyles, focusRingInset } from '../../lib/styles';
+import { getFirstTabbable } from '../../lib/focus';
+import { disabledStyles, focusRing, focusRingInset } from '../../lib/styles';
 import { useControllable } from '../../hooks/useControllable';
 import { useDismiss } from '../../hooks/useDismiss';
 import { useId } from '../../hooks/useId';
@@ -52,7 +53,10 @@ export interface MenuProps extends React.HTMLAttributes<HTMLDivElement> {
 
 /** Properties for the MenuItem sub-component. */
 export interface MenuItemProps extends React.HTMLAttributes<HTMLDivElement> {
-  /** Slot for an icon displayed before the item text. Rendered with `aria-hidden="true"`. */
+  /**
+   * Slot for an icon displayed before the item text. Rendered with `aria-hidden="true"`. A falsy
+   * icon (`''`, `0`) or a list of nothing renders no icon box.
+   */
   icon?: Slot<'span'>;
   /** Keyboard shortcut text displayed at the end of the item. */
   shortcut?: string;
@@ -202,6 +206,7 @@ function useMenuContext(componentName: string): MenuContextValue {
 
 /** The popup surface an item lives in: activating an item closes it. `null` in a static menu. */
 interface MenuSurfaceContextValue {
+  /** Closes the menu after an item was activated, putting focus on the trigger first. */
   close: () => void;
 }
 
@@ -266,6 +271,16 @@ const MenuItem = ({
 }: MenuItemProps) => {
   const surface = React.useContext(MenuSurfaceContext);
 
+  // A falsy icon (`icon={name && <Icon />}` with `name` '' or a count of 0) is no icon, as in Nav,
+  // Tree and Avatar, and so is a collection whose items render nothing: no empty 20px box before
+  // the label. The check does not consume a generator: renderSlot still renders its items.
+  const iconNode =
+    icon && slotRendersContent(icon)
+      ? renderSlot(icon, 'span', 'flex h-5 w-5 shrink-0 items-center justify-center', {
+          'aria-hidden': true,
+        })
+      : null;
+
   const handleClick = (event: React.MouseEvent<HTMLDivElement>) => {
     if (disabled) {
       event.preventDefault();
@@ -298,9 +313,7 @@ const MenuItem = ({
       onKeyDown={handleKeyDown}
       className={cn(menuItemClasses, className)}
     >
-      {renderSlot(icon, 'span', 'flex h-5 w-5 shrink-0 items-center justify-center', {
-        'aria-hidden': true,
-      })}
+      {iconNode}
       <span className="flex-1">{children}</span>
       {shortcut && <span className="ms-4 text-caption-1 text-muted-foreground">{shortcut}</span>}
     </div>
@@ -458,6 +471,23 @@ const MenuPopover = ({
 
   const close = React.useCallback(() => setOpen(false), [setOpen]);
 
+  // Item activation: focus goes back to the trigger before the menu closes (as for Tab), not after
+  // it. A surface the item opens in the same update (a "Delete…" confirmation Dialog) records the
+  // focused element as its opener while the menu is being removed; had focus stayed on the item,
+  // that would be nothing, and focus would drop to <body> when the Dialog closes. Focus the
+  // consumer's onClick moved out of the menu stays where it is.
+  const closeFromItem = React.useCallback(() => {
+    const surfaceElement = surfaceRef.current;
+    const trigger = triggerRef.current;
+    if (surfaceElement && trigger) {
+      const active = surfaceElement.ownerDocument.activeElement;
+      const focusInsideOrLost =
+        !active || active === surfaceElement.ownerDocument.body || surfaceElement.contains(active);
+      if (focusInsideOrLost) trigger.focus({ preventScroll: true });
+    }
+    setOpen(false);
+  }, [setOpen, triggerRef]);
+
   const { layerId } = useDismiss({
     open,
     onDismiss: close,
@@ -500,7 +530,10 @@ const MenuPopover = ({
     else focusFirst();
   }, [open, surface, takeInitialFocus, focusFirst, focusLast]);
 
-  const surfaceContext = React.useMemo<MenuSurfaceContextValue>(() => ({ close }), [close]);
+  const surfaceContext = React.useMemo<MenuSurfaceContextValue>(
+    () => ({ close: closeFromItem }),
+    [closeFromItem],
+  );
 
   // C-COMPOSE: the consumer's onKeyDown runs first; preventDefault() skips the built-in keys.
   const handleKeyDown = (event: React.KeyboardEvent<HTMLDivElement>) => {
@@ -571,12 +604,14 @@ function hasPopupParts(children: React.ReactNode): boolean {
  *
  * - **Static menu** — `Menu.Item`/`Menu.Divider` children render inline inside the `role="menu"`
  *   element. The menu itself is not a tab stop: one item is (the last focused enabled item, else
- *   the first enabled one). Arrow keys, Home/End and typeahead move between enabled items; Enter
- *   and Space activate the focused item.
+ *   the first enabled one). When every item is disabled, the menu element holds the tab stop
+ *   instead, so keyboard and screen-reader users still reach it. Arrow keys, Home/End and
+ *   typeahead move between enabled items; Enter and Space activate the focused item.
  * - **Popup menu** — with `Menu.Trigger` and `Menu.Popover` children (or `open`/`defaultOpen`/
  *   `onOpenChange`), the root renders no element of its own: the trigger opens the portaled
- *   `Menu.Popover`, item activation closes it and returns focus to the trigger. Open state is
- *   `open`/`defaultOpen`/`onOpenChange`.
+ *   `Menu.Popover`, item activation returns focus to the trigger and closes it (focus is on the
+ *   trigger before the menu goes, so a Dialog the item opens returns focus there when it closes).
+ *   Open state is `open`/`defaultOpen`/`onOpenChange`.
  *
  * **Popup detection**: Menu looks for `Menu.Trigger`/`Menu.Popover` among its direct children
  * and inside Fragments only. When they are wrapped in another element or component, pass `open`,
@@ -701,6 +736,7 @@ const MenuRoot = ({
     containerProps: { ref: rovingRef },
     handleKeyDown: rovingKeyDown,
     handleFocus: rovingFocus,
+    focusFirst,
   } = useRovingTabIndex({
     orientation: 'vertical',
     loop: true,
@@ -709,7 +745,24 @@ const MenuRoot = ({
     manageTabIndex: true,
     itemSelector: MENU_ITEM_SELECTOR,
   });
-  const mergedRef = useMergedRefs<HTMLDivElement>(ref, rovingRef);
+  const staticMenuRef = React.useRef<HTMLDivElement | null>(null);
+  const mergedRef = useMergedRefs<HTMLDivElement>(ref, rovingRef, staticMenuRef);
+
+  // Disabled items never hold the tab stop, so with no enabled item the static menu itself does:
+  // Tab still reaches it and a screen reader announces it. Checked after every render, which
+  // includes the ones the roving hook triggers when an item is enabled, disabled, added or removed
+  // (its tab stop is stamped by then: this effect runs after the hook's).
+  const [menuIsTabStop, setMenuIsTabStop] = React.useState(false);
+  useIsomorphicLayoutEffect(() => {
+    const menu = staticMenuRef.current;
+    if (popup || !menu) return;
+    const noItemTabStop = getFirstTabbable(menu) === null;
+    if (noItemTabStop === menuIsTabStop) return;
+    setMenuIsTabStop(noItemTabStop);
+    // An item became enabled while the menu itself had focus: focus moves on to it, rather than
+    // staying on an element that is no longer focusable.
+    if (!noItemTabStop && menu.ownerDocument.activeElement === menu) focusFirst();
+  });
 
   if (popup) {
     return <MenuContext.Provider value={contextValue}>{children}</MenuContext.Provider>;
@@ -721,10 +774,11 @@ const MenuRoot = ({
         role="menu"
         {...rest}
         ref={mergedRef}
+        tabIndex={rest.tabIndex ?? (menuIsTabStop ? 0 : undefined)}
         data-roving-container=""
         onKeyDown={composeEventHandlers(onKeyDown, rovingKeyDown)}
         onFocus={composeEventHandlers(onFocus, rovingFocus, { checkDefaultPrevented: false })}
-        className={cn(menuSurfaceClasses, className)}
+        className={cn(menuSurfaceClasses, focusRing, className)}
       >
         {children}
       </div>

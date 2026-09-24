@@ -1,7 +1,7 @@
 import * as React from 'react';
 import { cn } from '../../lib/cn';
 import type { Slot } from '../../lib/types';
-import { renderSlot } from '../../lib/slot';
+import { renderSlot, slotRendersContent } from '../../lib/slot';
 import { isDev, resolveDeprecatedProp, warnDeprecated } from '../../lib/dev';
 import { ChevronDownIcon } from '../../lib/icons';
 import { disabledStyles, focusRingInset } from '../../lib/styles';
@@ -88,7 +88,10 @@ export interface NavCategoryProps extends React.HTMLAttributes<HTMLLIElement> {
    * as the label — deprecated: pass the label here and only the sub-items as children.
    */
   label?: React.ReactNode;
-  /** Icon displayed before the category label. Rendered with `aria-hidden="true"`. */
+  /**
+   * Icon displayed before the category label. Rendered with `aria-hidden="true"`. A falsy icon
+   * (`''`, `0`) or a list of nothing renders no icon box.
+   */
   icon?: Slot<'span'>;
   /** The category's sub-items (`Nav.SubItem`), rendered in its list while it is open. */
   children?: React.ReactNode;
@@ -96,10 +99,17 @@ export interface NavCategoryProps extends React.HTMLAttributes<HTMLLIElement> {
   ref?: React.Ref<HTMLLIElement>;
 }
 
-interface NavItemOwnProps {
+/**
+ * The props of Nav.Item that every branch shares ({@link NavItemAnchorProps},
+ * {@link NavItemButtonProps}, {@link NavItemDynamicProps}).
+ */
+export interface NavItemOwnProps {
   /** Unique value identifying this nav item. */
   value: string;
-  /** Icon displayed before the item label. Rendered with `aria-hidden="true"`. */
+  /**
+   * Icon displayed before the item label. Rendered with `aria-hidden="true"`. A falsy icon (`''`,
+   * `0`) or a list of nothing renders no icon box.
+   */
   icon?: Slot<'span'>;
   /**
    * Whether the item is disabled: a native `disabled` button, or an `aria-disabled` link without
@@ -188,7 +198,11 @@ export interface NavItemDynamicProps
   ref?: React.Ref<HTMLAnchorElement | HTMLButtonElement>;
 }
 
-type NavSubItemOwnProps = Omit<NavItemOwnProps, 'icon'>;
+/**
+ * The props of Nav.SubItem that every branch shares: those of {@link NavItemOwnProps} without
+ * `icon`.
+ */
+export type NavSubItemOwnProps = Omit<NavItemOwnProps, 'icon'>;
 
 /**
  * Nav.SubItem rendered as a link (`href` given): anchor attributes, and handlers typed on
@@ -253,6 +267,18 @@ type NavEntryProps = NavItemOwnProps &
 // ---------------------------------------------------------------------------
 
 const iconClasses = 'flex h-5 w-5 shrink-0 items-center justify-center';
+
+/**
+ * The `icon` slot of Nav.Item and Nav.Category, or `null` when it renders nothing. A falsy icon
+ * (`icon={name && <Icon />}` with `name` '' or a count of 0) is no icon, as in 0.4 and as in
+ * Avatar, and so is a collection whose items render nothing, so no empty 20px box is rendered
+ * before the label. The check does not consume a generator: renderSlot still renders its items.
+ */
+function renderIcon(icon: Slot<'span'> | undefined): React.ReactElement | null {
+  return icon && slotRendersContent(icon)
+    ? renderSlot(icon, 'span', iconClasses, { 'aria-hidden': true })
+    : null;
+}
 
 const itemClasses = {
   base: cn(
@@ -351,7 +377,7 @@ function renderNavEntry(
 
   const content = (
     <>
-      {withIcon && renderSlot(icon, 'span', iconClasses, { 'aria-hidden': true })}
+      {withIcon && renderIcon(icon)}
       {withIcon ? <span className="flex-1 text-start">{children}</span> : children}
     </>
   );
@@ -445,7 +471,7 @@ const NavCategory = ({
         onClick={() => toggleCategory(value)}
         className={categoryButtonClasses}
       >
-        {renderSlot(icon, 'span', iconClasses, { 'aria-hidden': true })}
+        {renderIcon(icon)}
         <span className="flex-1 text-start">{buttonLabel}</span>
         <ChevronDownIcon
           className={cn(

@@ -1,7 +1,7 @@
 import * as React from 'react';
 import { cn } from '../../lib/cn';
 import type { Slot } from '../../lib/types';
-import { renderSlot } from '../../lib/slot';
+import { renderSlot, slotRendersContent } from '../../lib/slot';
 import { warnOnce } from '../../lib/dev';
 import { ChevronRightIcon } from '../../lib/icons';
 import { disabledStyles, focusRing } from '../../lib/styles';
@@ -15,10 +15,17 @@ export interface BreadcrumbProps extends React.HTMLAttributes<HTMLElement> {
   ref?: React.Ref<HTMLElement>;
 }
 
-interface BreadcrumbItemOwnProps {
+/**
+ * The props of Breadcrumb.Item that every branch shares ({@link BreadcrumbItemAnchorProps},
+ * {@link BreadcrumbItemButtonProps}, {@link BreadcrumbItemDynamicProps}).
+ */
+export interface BreadcrumbItemOwnProps {
   /** Whether this item represents the current page (`aria-current="page"`, rendered as text). */
   current?: boolean;
-  /** Slot for an icon displayed before the item text. Rendered with `aria-hidden="true"`. */
+  /**
+   * Slot for an icon displayed before the item text. Rendered with `aria-hidden="true"`. A falsy
+   * icon (`''`, `0`) or a list of nothing renders no icon span.
+   */
   icon?: Slot<'span'>;
   /**
    * Merge the item's props (classes, `aria-current`, handlers, ref) onto its single child element
@@ -253,9 +260,13 @@ function BreadcrumbItem(
     ...rest
   } = props as BreadcrumbEntryProps;
 
-  const renderedIcon = renderSlot(icon, 'span', 'me-1 inline-flex shrink-0', {
-    'aria-hidden': true,
-  });
+  // A falsy icon (`icon={name && <Icon />}` with `name` '' or a count of 0) is no icon, as in Nav,
+  // Tree and Avatar, and so is a collection whose items render nothing: no empty span and no stray
+  // `me-1` margin. The check does not consume a generator: renderSlot still renders its items.
+  const renderedIcon =
+    icon && slotRendersContent(icon)
+      ? renderSlot(icon, 'span', 'me-1 inline-flex shrink-0', { 'aria-hidden': true })
+      : null;
   const child =
     asChild && React.isValidElement<{ children?: React.ReactNode }>(children) ? children : null;
   const kind = child
