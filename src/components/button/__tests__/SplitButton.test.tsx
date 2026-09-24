@@ -139,6 +139,74 @@ describe('SplitButton', () => {
     expect(onMenuClick).not.toHaveBeenCalled();
   });
 
+  describe('per-half disabled and className (button-tests-2)', () => {
+    it('menuButtonProps.disabled disables only the menu button; its className is merged', async () => {
+      const user = userEvent.setup();
+      const onClick = vi.fn();
+      const onMenuClick = vi.fn();
+      render(
+        <SplitButton
+          menuButtonProps={{ disabled: true, className: 'custom-menu' }}
+          onClick={onClick}
+          onMenuClick={onMenuClick}
+        >
+          Save
+        </SplitButton>,
+      );
+      const primary = screen.getByRole('button', { name: 'Save' });
+      const menu = screen.getByRole('button', { name: 'More options' });
+      expect(menu).toBeDisabled();
+      expect(menu).toHaveClass('custom-menu', 'rounded-s-none', 'opacity-50');
+      expect(primary).toBeEnabled();
+      expect(primary).not.toHaveClass('opacity-50');
+
+      await user.click(menu);
+      expect(onMenuClick).not.toHaveBeenCalled();
+      await user.click(primary);
+      expect(onClick).toHaveBeenCalledOnce();
+    });
+
+    it('primaryActionButtonProps.disabled disables only the primary button', async () => {
+      const user = userEvent.setup();
+      const onClick = vi.fn();
+      const onMenuClick = vi.fn();
+      render(
+        <SplitButton
+          primaryActionButtonProps={{ disabled: true }}
+          onClick={onClick}
+          onMenuClick={onMenuClick}
+        >
+          Save
+        </SplitButton>,
+      );
+      const primary = screen.getByRole('button', { name: 'Save' });
+      const menu = screen.getByRole('button', { name: 'More options' });
+      expect(primary).toBeDisabled();
+      expect(primary).toHaveClass('opacity-50');
+      expect(menu).toBeEnabled();
+      expect(menu).not.toHaveClass('opacity-50');
+
+      await user.click(primary);
+      expect(onClick).not.toHaveBeenCalled();
+      await user.click(menu);
+      expect(onMenuClick).toHaveBeenCalledOnce();
+    });
+
+    it('a half-only disabled={false} does not enable a disabled SplitButton', () => {
+      render(
+        <SplitButton
+          disabled
+          primaryActionButtonProps={{ disabled: false }}
+          menuButtonProps={{ disabled: false }}
+        >
+          Save
+        </SplitButton>,
+      );
+      expect(screen.getByRole('button', { name: 'Save' })).toBeDisabled();
+      expect(screen.getByRole('button', { name: 'More options' })).toBeDisabled();
+    });
+  });
+
   describe('menu button pass-through (button-provider#13)', () => {
     it('menuButtonLabel names the menu button', () => {
       render(<SplitButton menuButtonLabel="Weitere Optionen">Speichern</SplitButton>);

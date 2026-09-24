@@ -36,7 +36,10 @@ type ToolbarImplProps = ToolbarOwnProps &
     ref?: React.Ref<HTMLElement>;
   };
 
-/** Every focusable control a toolbar can contain, whatever component renders it. */
+/**
+ * Every focusable control a toolbar can contain, whatever component renders it. Matches that
+ * cannot take focus (a `type="hidden"` input, a control CSS hides) are dropped by the roving hook.
+ */
 const TOOLBAR_ITEM_SELECTOR =
   'button, [href], input, select, textarea, [role="button"], [tabindex]';
 
@@ -44,15 +47,20 @@ const TOOLBAR_ITEM_SELECTOR =
  * A container for a set of controls (APG Toolbar pattern): `role="toolbar"`, one Tab stop, and
  * arrow-key navigation between its controls.
  *
- * - Works with any children (Buttons, ToggleButtons, links, inputs): the focusable controls are
- *   found in the DOM, and the Toolbar sets their `tabIndex` itself (one `0`, the rest `-1`).
+ * - Works with any children (Buttons, ToggleButtons, links, inputs, value controls such as
+ *   Checkbox or Dropdown): the focusable controls are found in the DOM, and the Toolbar sets their
+ *   `tabIndex` itself (one `0`, the rest `-1`). The `type="hidden"` input that a named value
+ *   control renders never counts as a control, and controls that CSS hides are skipped.
  * - Left/Right (Up/Down when `orientation="vertical"`) move focus and wrap; Home/End jump to the
  *   first/last control; Left/Right are mirrored in RTL. Disabled controls are skipped, also when
  *   a child disables them on its own.
- * - Tab returns to the control that was focused last.
- * - Text fields, selects, sliders and spin buttons keep their own arrow keys (the caret moves).
+ * - Tab returns to the last focused control. Focusing a nested composite (radio group, tab list)
+ *   or a text field, select, slider or spin button keeps the Tab stop where it was.
+ * - Text fields, selects, sliders, spin buttons and editable comboboxes keep their own arrow keys
+ *   (the caret moves). A Dropdown (select-only combobox) does not: Left/Right move past it. It
+ *   keeps Up/Down, Home and End for its list, so in a vertical toolbar the arrows cannot leave it.
  * - Elements with their own `tabIndex={-1}` are left alone, and a nested composite widget
- *   (radio group, tab list, …) counts as one control that keeps its own Tab stop.
+ *   (radio group, tab list, …) counts as one control that keeps its own Tab stop and arrow keys.
  * - A Menu or Popover opened from a control keeps its own keys: arrows, Home and End pressed in
  *   the popup never move focus back to the toolbar's controls.
  * - A consumer `onKeyDown` runs first; `event.preventDefault()` in it cancels the navigation.

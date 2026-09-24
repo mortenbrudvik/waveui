@@ -4,9 +4,9 @@ import { render, screen, fireEvent } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MenuButton } from '../MenuButton';
 import type { MenuButtonProps } from '../MenuButton';
-import { buttonClassName } from '../buttonStyles';
+import { buttonClassName, buttonSizeClasses } from '../buttonStyles';
 import { testSystemProps, testFocusEvents, testNoImplicitSubmit } from '../../../test-utils';
-import type { Appearance } from '../../../lib/types';
+import type { Appearance, Size } from '../../../lib/types';
 import { composeStories } from '@storybook/react';
 import * as stories from '../../../../stories/MenuButton.stories';
 
@@ -286,11 +286,52 @@ describe('MenuButton', () => {
       ['an empty string', ''],
       ['an empty array', []],
       ['an empty Fragment', <></>],
-    ])('treats %s icon like no icon, as Button does (no icon-only warning)', (_name, icon) => {
+    ])(
+      'treats %s icon like no icon, as Button does: no icon span, and the chevron-only button without a name warns once (button-docs-1)',
+      (_name, icon) => {
+        const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+        render(<MenuButton icon={icon} />);
+        const button = screen.getByRole('button');
+        expect(button.querySelector('[aria-hidden="true"]:not([data-wave-icon])')).toBeNull();
+        expect(button.querySelector('[data-wave-icon]')).toHaveAttribute(
+          'data-wave-icon',
+          'chevron-down',
+        );
+        expect(warn.mock.calls.map((call) => String(call[0]))).toEqual([
+          expect.stringMatching(/^\[WaveUI\] MenuButton: .*no accessible name/),
+        ]);
+      },
+    );
+
+    it('warns once when a chevron-only menu button has no accessible name (button-docs-1)', () => {
       const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
-      render(<MenuButton icon={icon} />);
-      const button = screen.getByRole('button');
-      expect(button.querySelector('[aria-hidden="true"]:not([data-wave-icon])')).toBeNull();
+      render(
+        <>
+          <MenuButton appearance="subtle" />
+          <MenuButton menuIcon={<span>▾</span>} />
+        </>,
+      );
+      expect(warn.mock.calls.map((call) => String(call[0]))).toEqual([
+        expect.stringMatching(/^\[WaveUI\] MenuButton: .*no accessible name/),
+      ]);
+    });
+
+    it.each([
+      ['aria-label', { 'aria-label': 'More actions' }],
+      ['aria-labelledby', { 'aria-labelledby': 'more-label' }],
+      ['title', { title: 'More actions' }],
+    ])('does not warn when a chevron-only menu button has %s', (_name, props) => {
+      const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+      render(
+        <>
+          <span id="more-label">More actions</span>
+          <MenuButton {...props} />
+        </>,
+      );
+      expect(screen.getByRole('button', { name: 'More actions' })).toHaveAttribute(
+        'aria-haspopup',
+        'menu',
+      );
       expect(warn).not.toHaveBeenCalled();
     });
 
@@ -446,6 +487,67 @@ describe('MenuButton', () => {
       const xl = screen.getByRole('button', { name: 'Extra large' });
       expect(xl).toHaveClass('text-[18px]/[24px]');
       expect(xl).not.toHaveClass('text-sm');
+    });
+
+    describe('without a label (button-code-1)', () => {
+      /** The padding of a menu button without a label: that of SplitButton's menu half. */
+      const compactPadding: Record<Size, string> = {
+        'extra-small': 'px-1.5',
+        small: 'px-1.5',
+        medium: 'px-2',
+        large: 'px-2',
+        'extra-large': 'px-3',
+      };
+      /** The labelled size classes Button would use (height, 96px minimum width, padding, font). */
+      const labelled = (size: Size) => buttonSizeClasses[size].split(' ');
+      const SIZES = Object.keys(compactPadding) as Size[];
+
+      it.each(SIZES)(
+        'an icon-only %s menu button drops the labelled minimum width and padding',
+        (size) => {
+          render(<MenuButton size={size} icon={<GearIcon />} aria-label="Settings" />);
+          const button = screen.getByRole('button', { name: 'Settings' });
+          const [height, minWidth, , font] = labelled(size);
+          expect(button).toHaveClass(height, font, 'min-w-0');
+          expect(button).not.toHaveClass(minWidth);
+          // The compact padding replaces the labelled one (no second `px-*` class is left).
+          const padding = Array.from(button.classList).filter((cls) => cls.startsWith('px-'));
+          expect(padding).toEqual([compactPadding[size]]);
+          expect(button.querySelector('[data-wave-icon]')).toHaveAttribute(
+            'data-wave-icon',
+            'chevron-down',
+          );
+        },
+      );
+
+      it.each(SIZES)('a chevron-only %s menu button is sized the same way', (size) => {
+        render(<MenuButton size={size} aria-label="More actions" />);
+        const button = screen.getByRole('button', { name: 'More actions' });
+        expect(button).toHaveClass('min-w-0');
+        expect(button).not.toHaveClass('min-w-24');
+        const padding = Array.from(button.classList).filter((cls) => cls.startsWith('px-'));
+        expect(padding).toEqual([compactPadding[size]]);
+      });
+
+      it('menuIcon={false} leaves an icon-only menu button to Button: square, no padding', () => {
+        render(<MenuButton icon={<GearIcon />} menuIcon={false} aria-label="Settings" />);
+        const button = screen.getByRole('button', { name: 'Settings' });
+        expect(button).toHaveClass('h-8', 'w-8', 'px-0');
+        expect(button).not.toHaveClass('min-w-24');
+        expect(button).not.toHaveClass('min-w-0');
+      });
+
+      it('a labelled menu button keeps the labelled sizing', () => {
+        render(<MenuButton icon={<GearIcon />}>Settings</MenuButton>);
+        expect(screen.getByRole('button', { name: 'Settings' })).toHaveClass(...labelled('medium'));
+      });
+
+      it('a consumer className still wins over the compact padding', () => {
+        render(<MenuButton icon={<GearIcon />} aria-label="Settings" className="px-4" />);
+        const button = screen.getByRole('button', { name: 'Settings' });
+        expect(button).toHaveClass('px-4', 'min-w-0');
+        expect(button).not.toHaveClass('px-2');
+      });
     });
 
     it('disabled: native disabled and the disabled look', async () => {

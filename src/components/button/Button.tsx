@@ -38,6 +38,7 @@ export interface ButtonOwnProps {
    * disabled button), and an `<a>` drops its `href`. Such an element leaves the tab order but, like
    * any `tabIndex={-1}` element, can still take focus from a mouse click, and a component's own
    * `:disabled` styling does not apply.
+   * @default false
    */
   disabled?: boolean;
 }

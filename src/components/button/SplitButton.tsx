@@ -23,7 +23,11 @@ export type SplitButtonPrimaryActionButtonProps = SplitButtonMenuButtonProps;
 
 /** Properties for the SplitButton component. */
 export interface SplitButtonProps extends Omit<React.HTMLAttributes<HTMLDivElement>, 'onClick'> {
-  /** Disables both buttons. */
+  /**
+   * Disables both buttons. A half's own `disabled` (`primaryActionButtonProps`,
+   * `menuButtonProps`) disables only that half.
+   * @default false
+   */
   disabled?: boolean;
   /** Visual style variant.
    * @default 'outline'

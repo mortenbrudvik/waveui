@@ -5,7 +5,11 @@ import userEvent from '@testing-library/user-event';
 import { Toolbar } from '../Toolbar';
 import type { ToolbarOwnProps, ToolbarProps } from '../Toolbar';
 import { Button } from '../Button';
+import { Link } from '../Link';
 import { MenuButton } from '../MenuButton';
+import { Checkbox } from '../../input/Checkbox';
+import { Dropdown } from '../../input/Dropdown';
+import { RadioGroup } from '../../input/RadioGroup';
 import { Menu } from '../../navigation/Menu';
 import { Popover } from '../../overlays/Popover';
 import { testSystemProps, renderWithProviders } from '../../../test-utils';
@@ -20,6 +24,18 @@ const FormattingButtons = () => (
 );
 
 const button = (name: string) => screen.getByRole('button', { name });
+
+/** The elements inside the toolbar that hold a Tab stop (`tabindex="0"`). */
+const tabStops = () =>
+  Array.from(screen.getByRole('toolbar').querySelectorAll<HTMLElement>('[tabindex="0"]'));
+
+/** A Dropdown (select-only combobox) with two sizes. */
+const SizeDropdown = (props: { name?: string }) => (
+  <Dropdown aria-label="Size" defaultValue="m" {...props}>
+    <Dropdown.Option value="s">Small</Dropdown.Option>
+    <Dropdown.Option value="m">Medium</Dropdown.Option>
+  </Dropdown>
+);
 
 /** A child that disables one of its own buttons without the Toolbar re-rendering. */
 const SelfDisablingGroup = () => {
@@ -418,6 +434,212 @@ describe('Toolbar', () => {
       expect(ref.current).toBe(screen.getByRole('toolbar'));
       await user.tab();
       expect(onFocus).toHaveBeenCalled();
+    });
+
+    it('a link and a Button as="div" are controls: one tab stop, reached by the arrows (button-tests-1)', async () => {
+      const user = userEvent.setup();
+      render(
+        <>
+          <Toolbar aria-label="Tools">
+            <Button appearance="subtle">Filter</Button>
+            <Link href="#help">Help</Link>
+            <Button as="div" appearance="subtle">
+              More
+            </Button>
+          </Toolbar>
+          <button type="button">After</button>
+        </>,
+      );
+      const help = screen.getByRole('link', { name: 'Help' });
+      expect(tabStops()).toEqual([button('Filter')]);
+      expect(help).toHaveAttribute('tabindex', '-1');
+      expect(button('More')).toHaveAttribute('tabindex', '-1');
+
+      await user.tab();
+      expect(button('Filter')).toHaveFocus();
+      await user.tab();
+      expect(button('After')).toHaveFocus();
+      await user.tab({ shift: true });
+      expect(button('Filter')).toHaveFocus();
+
+      await user.keyboard('{ArrowRight}');
+      expect(help).toHaveFocus();
+      await user.keyboard('{ArrowRight}');
+      expect(button('More')).toHaveFocus();
+      await user.keyboard('{ArrowRight}');
+      expect(button('Filter')).toHaveFocus();
+      await user.keyboard('{ArrowLeft}');
+      expect(button('More')).toHaveFocus();
+    });
+  });
+
+  describe('value controls with a hidden form input (x-keyboard-1)', () => {
+    it.each([
+      [
+        'a named Checkbox',
+        <Checkbox key="grid" name="grid" defaultChecked label="Grid" />,
+        'grid',
+        () => screen.getByRole('checkbox', { name: 'Grid' }),
+      ],
+      [
+        'a named Dropdown',
+        <SizeDropdown key="size" name="size" />,
+        'size',
+        () => screen.getByRole('combobox', { name: 'Size' }),
+      ],
+    ])(
+      '%s as the last child: End, wrap-around, a re-render and Tab reach the control, never its hidden input',
+      async (_name, lastChild, inputName, control) => {
+        const user = userEvent.setup();
+        const View = ({ label }: { label: string }) => (
+          <>
+            <button type="button">Before</button>
+            <Toolbar aria-label={label}>
+              <Button appearance="subtle">Bold</Button>
+              <Button appearance="subtle">Italic</Button>
+              {lastChild}
+            </Toolbar>
+            <button type="button">After</button>
+          </>
+        );
+        const { rerender } = render(<View label="View" />);
+        const hiddenInput = screen.getByRole('toolbar').querySelector('input[type="hidden"]');
+        expect(hiddenInput).toHaveAttribute('name', inputName);
+
+        button('Before').focus();
+        await user.tab();
+        expect(button('Bold')).toHaveFocus();
+        await user.keyboard('{End}');
+        expect(control()).toHaveFocus();
+        await user.keyboard('{ArrowRight}');
+        expect(button('Bold')).toHaveFocus();
+        await user.keyboard('{ArrowLeft}');
+        expect(control()).toHaveFocus();
+        expect(tabStops()).toEqual([control()]);
+
+        // A Toolbar re-render stamps the tab indexes again: the stop stays on the control.
+        rerender(<View label="View options" />);
+        expect(tabStops()).toEqual([control()]);
+        expect(hiddenInput).not.toHaveAttribute('tabindex');
+
+        await user.tab();
+        expect(button('After')).toHaveFocus();
+        await user.tab({ shift: true });
+        expect(control()).toHaveFocus();
+        button('Before').focus();
+        await user.tab();
+        expect(control()).toHaveFocus();
+      },
+    );
+  });
+
+  describe('nested widgets keep every control reachable (x-keyboard-2)', () => {
+    it('a RadioGroup child keeps its own keys, and the toolbar keeps its Tab stop on the control focused last', async () => {
+      const user = userEvent.setup();
+      render(
+        <>
+          <button type="button">Before</button>
+          <Toolbar aria-label="Text">
+            <Button appearance="subtle">Bold</Button>
+            <RadioGroup aria-label="Align" orientation="horizontal" defaultValue="left">
+              <RadioGroup.Item value="left" label="Left" />
+              <RadioGroup.Item value="center" label="Center" />
+            </RadioGroup>
+            <Button appearance="subtle">Copy</Button>
+          </Toolbar>
+          <button type="button">After</button>
+        </>,
+      );
+      const radio = (name: string) => screen.getByRole('radio', { name });
+
+      button('Before').focus();
+      await user.tab();
+      expect(button('Bold')).toHaveFocus();
+      await user.keyboard('{ArrowRight}');
+      expect(radio('Left')).toHaveFocus();
+      // The radio group handles its own arrows (APG radio group): Right selects the next radio.
+      await user.keyboard('{ArrowRight}');
+      expect(radio('Center')).toHaveFocus();
+      expect(radio('Center')).toBeChecked();
+      // The group keeps its own stop; the toolbar's stays on the last focused control.
+      expect(tabStops()).toEqual([button('Bold'), radio('Center')]);
+      expect(button('Copy')).toHaveAttribute('tabindex', '-1');
+
+      await user.tab();
+      expect(button('After')).toHaveFocus();
+      await user.tab({ shift: true });
+      expect(radio('Center')).toHaveFocus();
+      await user.tab({ shift: true });
+      expect(button('Bold')).toHaveFocus();
+
+      // From the toolbar's own controls, the keys pass the group as one control.
+      await user.keyboard('{End}');
+      expect(button('Copy')).toHaveFocus();
+      await user.keyboard('{Home}');
+      expect(button('Bold')).toHaveFocus();
+      await user.keyboard('{ArrowLeft}');
+      expect(button('Copy')).toHaveFocus();
+      await user.keyboard('{ArrowLeft}');
+      expect(radio('Center')).toHaveFocus();
+      expect(tabStops()).toEqual([radio('Center'), button('Copy')]);
+
+      // Every control stays reachable by Tab and Shift+Tab.
+      button('Before').focus();
+      await user.tab();
+      expect(radio('Center')).toHaveFocus();
+      await user.tab();
+      expect(button('Copy')).toHaveFocus();
+      await user.tab();
+      expect(button('After')).toHaveFocus();
+      await user.tab({ shift: true });
+      expect(button('Copy')).toHaveFocus();
+      await user.tab({ shift: true });
+      expect(radio('Center')).toHaveFocus();
+    });
+
+    it('Left/Right leave a Dropdown child, which can hold the Tab stop like any control', async () => {
+      const user = userEvent.setup();
+      render(
+        <>
+          <button type="button">Before</button>
+          <Toolbar aria-label="Text">
+            <Button appearance="subtle">Bold</Button>
+            <SizeDropdown />
+            <Button appearance="subtle">Italic</Button>
+          </Toolbar>
+          <button type="button">After</button>
+        </>,
+      );
+      const size = screen.getByRole('combobox', { name: 'Size' });
+
+      button('Before').focus();
+      await user.tab();
+      expect(button('Bold')).toHaveFocus();
+      await user.keyboard('{ArrowRight}');
+      expect(size).toHaveFocus();
+      await user.keyboard('{ArrowRight}');
+      expect(button('Italic')).toHaveFocus();
+      await user.keyboard('{ArrowLeft}');
+      expect(size).toHaveFocus();
+      await user.keyboard('{ArrowLeft}');
+      expect(button('Bold')).toHaveFocus();
+      await user.keyboard('{End}');
+      expect(button('Italic')).toHaveFocus();
+      await user.keyboard('{Home}');
+      expect(button('Bold')).toHaveFocus();
+
+      await user.keyboard('{ArrowRight}');
+      expect(size).toHaveFocus();
+      expect(tabStops()).toEqual([size]);
+      await user.tab();
+      expect(button('After')).toHaveFocus();
+      await user.tab({ shift: true });
+      expect(size).toHaveFocus();
+      await user.keyboard('{ArrowLeft}');
+      expect(button('Bold')).toHaveFocus();
+      expect(tabStops()).toEqual([button('Bold')]);
+      // Left/Right never opened the listbox.
+      expect(size).toHaveAttribute('aria-expanded', 'false');
     });
   });
 

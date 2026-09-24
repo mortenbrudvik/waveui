@@ -35,6 +35,7 @@ export interface LinkOwnProps {
    * context menu or drag), keeps `role="link"`, and gets `aria-disabled="true"` and
    * `tabIndex={-1}` (neither can be overridden); a custom `as` (router link) gets the same ARIA
    * and tab index and its click is prevented. `as="button"` uses the native `disabled` attribute.
+   * @default false
    */
   disabled?: boolean;
 }

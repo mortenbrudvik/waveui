@@ -23,6 +23,7 @@ export interface CompoundButtonOwnProps {
    * Disables the button. As with {@link Button}: a native `disabled` attribute for form controls
    * (the default `button`); every other `as` gets `aria-disabled="true"` and `tabIndex={-1}`, its
    * activation is prevented and an `<a>` drops its `href`.
+   * @default false
    */
   disabled?: boolean;
 }
@@ -37,7 +38,10 @@ export type CompoundButtonProps<C extends React.ElementType = 'button'> = Polymo
   CompoundButtonOwnProps
 >;
 
-/** Vertical padding per size; height, horizontal padding and font size come from Button. */
+/**
+ * Vertical padding per size. The height is content-sized (`h-auto` replaces Button's fixed
+ * height); horizontal padding and font size come from Button.
+ */
 const paddingClasses: Record<Size, string> = {
   'extra-small': 'py-0.5',
   small: 'py-1',
