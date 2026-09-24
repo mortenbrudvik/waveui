@@ -537,48 +537,59 @@ describe('TeachingPopover', () => {
       expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
     });
 
-    it('hides when a ref target unmounts after it was positioned, and shows again when it returns', async () => {
-      const user = userEvent.setup();
-      const onDismiss = vi.fn();
-      function RefTarget() {
-        const targetRef = React.useRef<HTMLButtonElement>(null);
-        const [attached, setAttached] = React.useState(true);
-        return (
-          <>
-            <button type="button" onClick={() => setAttached((value) => !value)}>
-              Toggle target
-            </button>
-            {attached && (
-              <button type="button" ref={targetRef}>
-                New feature
-              </button>
-            )}
+    it.each([
+      ['after', false],
+      ['before', true],
+    ])(
+      'hides when a ref target unmounts after it was positioned, and shows again when it returns (popover %s the target in the tree)',
+      async (_order, popoverFirst) => {
+        const user = userEvent.setup();
+        const onDismiss = vi.fn();
+        function RefTarget() {
+          const targetRef = React.useRef<HTMLButtonElement>(null);
+          const [attached, setAttached] = React.useState(true);
+          // Before the target, the popover's layout effect runs before the ref attaches.
+          const popover = (
             <TeachingPopover
               steps={steps}
               target={targetRef}
               onDismiss={onDismiss}
               data-testid="tp"
             />
-          </>
-        );
-      }
-      render(<RefTarget />);
-      const dialog = await screen.findByRole('dialog');
-      await waitFor(() => expect(dialog).toHaveFocus());
+          );
+          return (
+            <>
+              <button type="button" onClick={() => setAttached((value) => !value)}>
+                Toggle target
+              </button>
+              {popoverFirst && popover}
+              {attached && (
+                <button type="button" ref={targetRef}>
+                  New feature
+                </button>
+              )}
+              {!popoverFirst && popover}
+            </>
+          );
+        }
+        render(<RefTarget />);
+        const dialog = await screen.findByRole('dialog');
+        await waitFor(() => expect(dialog).toHaveFocus());
 
-      await user.click(screen.getByRole('button', { name: 'Toggle target' }));
-      await waitFor(() => expect(screen.getByTestId('tp')).toHaveStyle({ visibility: 'hidden' }));
-      expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
-      await user.keyboard('{Escape}');
-      expect(onDismiss).not.toHaveBeenCalled();
+        await user.click(screen.getByRole('button', { name: 'Toggle target' }));
+        await waitFor(() => expect(screen.getByTestId('tp')).toHaveStyle({ visibility: 'hidden' }));
+        expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+        await user.keyboard('{Escape}');
+        expect(onDismiss).not.toHaveBeenCalled();
 
-      await user.click(screen.getByRole('button', { name: 'Toggle target' }));
-      const again = await screen.findByRole('dialog');
-      expect(again).toBe(dialog);
-      await waitFor(() => expect(again).toHaveFocus());
-      await user.keyboard('{Escape}');
-      expect(onDismiss).toHaveBeenCalledTimes(1);
-    });
+        await user.click(screen.getByRole('button', { name: 'Toggle target' }));
+        const again = await screen.findByRole('dialog');
+        expect(again).toBe(dialog);
+        await waitFor(() => expect(again).toHaveFocus());
+        await user.keyboard('{Escape}');
+        expect(onDismiss).toHaveBeenCalledTimes(1);
+      },
+    );
 
     it('hides when the target switches to a ref that is not attached', async () => {
       function TwoRefs({ useSecond }: { useSecond: boolean }) {
@@ -608,41 +619,63 @@ describe('TeachingPopover', () => {
     });
 
     describe('moving between attached ref targets (a multi-target tour)', () => {
-      function RefTour({ onDismiss }: { onDismiss?: () => void }) {
+      interface TourOptions {
+        strict?: boolean;
+        popoverFirst?: boolean;
+      }
+
+      function RefTour({
+        onDismiss,
+        onOpenChange,
+        popoverFirst = false,
+      }: {
+        onDismiss: () => void;
+        onOpenChange: (open: boolean) => void;
+        popoverFirst?: boolean;
+      }) {
         const firstRef = React.useRef<HTMLButtonElement>(null);
         const secondRef = React.useRef<HTMLButtonElement>(null);
         const [step, setStep] = React.useState(0);
+        const popover = (
+          <TeachingPopover
+            steps={steps}
+            activeStep={step}
+            onStepChange={setStep}
+            target={step === 0 ? firstRef : secondRef}
+            onDismiss={onDismiss}
+            onOpenChange={onOpenChange}
+          />
+        );
         return (
           <>
+            {popoverFirst && popover}
             <button type="button" ref={firstRef}>
               Target A
             </button>
             <button type="button" ref={secondRef}>
               Target B
             </button>
-            <TeachingPopover
-              steps={steps}
-              activeStep={step}
-              onStepChange={setStep}
-              target={step === 0 ? firstRef : secondRef}
-              onDismiss={onDismiss}
-            />
+            {!popoverFirst && popover}
           </>
         );
       }
 
-      async function renderTour() {
+      async function renderTour({ strict = false, popoverFirst = false }: TourOptions = {}) {
         const onDismiss = vi.fn();
-        render(<RefTour onDismiss={onDismiss} />);
+        const onOpenChange = vi.fn();
+        const tour = (
+          <RefTour onDismiss={onDismiss} onOpenChange={onOpenChange} popoverFirst={popoverFirst} />
+        );
+        render(strict ? <React.StrictMode>{tour}</React.StrictMode> : tour);
         const dialog = await screen.findByRole('dialog');
         await waitFor(() => expect(dialog).toHaveFocus());
         expect(getOpenLayers()).toHaveLength(1);
-        return { dialog, onDismiss };
+        return { dialog, onDismiss, onOpenChange };
       }
 
       it('keeps the dialog shown and focus on Next when Next is clicked', async () => {
         const user = userEvent.setup();
-        const { dialog, onDismiss } = await renderTour();
+        const { dialog, onDismiss, onOpenChange } = await renderTour();
         const watcher = watch(dialog);
 
         await user.click(screen.getByRole('button', { name: 'Next' }));
@@ -664,33 +697,59 @@ describe('TeachingPopover', () => {
         expect(watcher.focused).toEqual(['Next', 'Back']);
         expect(watcher.layerChanges).not.toHaveBeenCalled();
         expect(getOpenLayers()).toHaveLength(1);
+        expect(onOpenChange).not.toHaveBeenCalled();
 
         await user.keyboard('{Escape}');
         expect(onDismiss).toHaveBeenCalledTimes(1);
+        expect(onOpenChange.mock.calls).toEqual([[false]]);
         expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
       });
 
-      it('keeps the dialog shown and focus on Next when Next is pressed with Enter', async () => {
-        const user = userEvent.setup();
-        const { dialog, onDismiss } = await renderTour();
-        screen.getByRole('button', { name: 'Next' }).focus();
-        const watcher = watch(dialog);
+      it.each<[string, TourOptions]>([
+        ['', {}],
+        [' under StrictMode', { strict: true }],
+        [' when the popover comes before its targets in the tree', { popoverFirst: true }],
+      ])(
+        'keeps the dialog shown and focus on Next when Next is pressed with Enter%s',
+        async (_name, options) => {
+          const user = userEvent.setup();
+          const { dialog, onDismiss, onOpenChange } = await renderTour(options);
+          await user.tab();
+          expect(screen.getByRole('button', { name: 'Close' })).toHaveFocus();
+          await user.tab();
+          await user.tab();
+          expect(screen.getByRole('button', { name: 'Next' })).toHaveFocus();
+          const watcher = watch(dialog);
 
-        await user.keyboard('{Enter}');
-        await act(async () => {});
+          await user.keyboard('{Enter}');
+          await act(async () => {});
 
-        expect(screen.getByRole('dialog', { name: 'Features, step 2 of 3' })).toBe(dialog);
-        expect(screen.getByRole('button', { name: 'Next' })).toHaveFocus();
-        await waitFor(() => expect(__getAnnouncerText('polite')).toBe('Features, step 2 of 3'));
+          expect(screen.getByRole('dialog', { name: 'Features, step 2 of 3' })).toBe(dialog);
+          expect(screen.getByRole('button', { name: 'Next' })).toHaveFocus();
+          await waitFor(() => expect(__getAnnouncerText('polite')).toBe('Features, step 2 of 3'));
 
-        await watcher.stop();
-        expect(watcher.styles.filter((style) => style.includes('hidden'))).toEqual([]);
-        expect(watcher.focused).toEqual([]);
-        expect(watcher.layerChanges).not.toHaveBeenCalled();
+          // Space on Back moves to the first target again, with the same guarantees.
+          await user.tab({ shift: true });
+          expect(screen.getByRole('button', { name: 'Back' })).toHaveFocus();
+          await user.keyboard(' ');
+          await act(async () => {});
+          expect(screen.getByRole('dialog', { name: 'Welcome, step 1 of 3' })).toBe(dialog);
+          expect(screen.getByRole('button', { name: 'Back' })).toHaveFocus();
 
-        await user.keyboard('{Escape}');
-        expect(onDismiss).toHaveBeenCalledTimes(1);
-      });
+          await watcher.stop();
+          expect(watcher.styles.filter((style) => style.includes('hidden'))).toEqual([]);
+          // Only the Tab to Back moved focus: nothing left the popover or came back to it.
+          expect(watcher.focused).toEqual(['Back']);
+          expect(watcher.layerChanges).not.toHaveBeenCalled();
+          expect(getOpenLayers()).toHaveLength(1);
+          expect(onOpenChange).not.toHaveBeenCalled();
+
+          await user.keyboard('{Escape}');
+          expect(onDismiss).toHaveBeenCalledTimes(1);
+          expect(onOpenChange.mock.calls).toEqual([[false]]);
+          expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+        },
+      );
     });
 
     it('stays shown when a new ref object is passed on every render', async () => {

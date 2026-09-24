@@ -66,14 +66,16 @@ export interface TeachingPopoverProps extends React.HTMLAttributes<HTMLDivElemen
    * when a target returns.
    *
    * An element (for example one held in state through a callback ref) is followed as soon as the
-   * prop changes. A ref cannot be observed, so it is read after every render of the popover: an
-   * element attaching to or detaching from the ref is noticed the next time the popover renders
-   * (for example when the parent that mounts or unmounts the target re-renders it; a memoized
-   * popover whose target unmounts in another subtree keeps pointing at the removed element). A
-   * newly passed ref keeps the previous visibility until it has been read, so a tour can move
-   * between attached refs (`target={step === 0 ? aRef : bRef}`) without hiding, and a switch to a
-   * ref that is not attached hides the popover right after that commit. Pass the element held in
-   * state when the target can unmount without the popover re-rendering.
+   * prop changes. A ref cannot be observed, so it is read after each render of the popover is
+   * committed, wherever the target is in the tree: an element attaching to or detaching from the
+   * ref is noticed the next time the popover renders (for example when the parent that mounts or
+   * unmounts the target re-renders it), not in a commit that does not render the popover. A
+   * memoized popover whose target mounts or unmounts in another subtree therefore stays hidden,
+   * or keeps pointing at the removed element, until it renders again. A newly passed ref keeps
+   * the previous visibility until it has been read, so a tour can move between attached refs
+   * (`target={step === 0 ? aRef : bRef}`) without hiding, and a switch to a ref that is not
+   * attached hides the popover right after that commit. Pass the element held in state when the
+   * target can mount or unmount without the popover re-rendering.
    */
   target?: React.RefObject<HTMLElement | null> | HTMLElement | null;
   /** Side of the `target` to open on; `start`/`end` follow the writing direction.
@@ -108,6 +110,10 @@ function isRefObject(
   return 'current' in target;
 }
 
+function isElementTarget(target: TeachingPopoverProps['target']): target is HTMLElement {
+  return target != null && !isRefObject(target);
+}
+
 function resolveTarget(target: TeachingPopoverProps['target']): HTMLElement | null {
   if (!target) return null;
   return isRefObject(target) ? target.current : target;
@@ -131,7 +137,7 @@ function clampStep(step: number, count: number): number {
  *   closes.
  * - With `target`, the popover is portaled and positioned next to that element with a beak (it
  *   inherits the surface colors); it stays hidden while the target is `null`, not positioned yet or
- *   no longer mounted (a ref target is read each time the popover renders; see `target`).
+ *   no longer mounted (a ref target is read after each render of the popover; see `target`).
  */
 export const TeachingPopover = ({
   steps,
@@ -183,20 +189,25 @@ export const TeachingPopover = ({
   const hasTarget = target !== undefined;
 
   const [surface, setSurface] = React.useState<HTMLDivElement | null>(null);
-  // Whether `target` resolved to an element at the last commit. React does not re-render when a
-  // ref attaches or detaches, and floating-ui keeps `isPositioned` after `setReference(null)`, so
-  // the layout effect below mirrors the resolution here through a deferred update (C-HOOKS). A
-  // ref cannot be read during render, so a newly passed ref keeps this last known availability
-  // until the deferred update has read it: moving between attached refs (a multi-target tour) or
-  // passing a new ref object on every render never hides the popover, and a switch to a ref that
-  // is not attached hides it once the update lands.
-  const [targetResolved, setTargetResolved] = React.useState(
-    () => target != null && !isRefObject(target),
-  );
+  // Whether `target` pointed at an element when it was last read. An element (or `null`) is known
+  // during render and is mirrored here right away (C-HOOKS: adjust state during render). A ref
+  // cannot be read during render, React does not re-render when it attaches or detaches, and
+  // floating-ui keeps `isPositioned` after `setReference(null)`, so the layout effect below reads
+  // a ref after each commit and mirrors it here through a deferred update (C-HOOKS). Until that
+  // update has read a newly passed ref, the ref keeps this last known availability: moving between
+  // attached refs (a multi-target tour) or passing a new ref object on every render never hides
+  // the popover, and a switch to a ref that is not attached hides it once the update lands.
+  const [targetResolved, setTargetResolved] = React.useState(() => isElementTarget(target));
+  const elementAvailable = target === null ? false : isElementTarget(target) ? true : undefined;
+  if (elementAvailable !== undefined && elementAvailable !== targetResolved) {
+    setTargetResolved(elementAvailable);
+  }
   const surfaceRef = React.useRef<HTMLDivElement | null>(null);
   const targetRef = React.useRef<HTMLElement | null>(null);
-  // The latest `target` prop, read by the deferred update so the newest target and attachment win.
+  // The latest `target` prop and committed availability, read by the deferred update so that the
+  // newest target and attachment win and an unchanged resolution sets no state.
   const targetPropRef = React.useRef(target);
+  const availabilityRef = React.useRef(targetResolved);
   const arrowRef = React.useRef<HTMLDivElement | null>(null);
 
   // Destructured: react-hooks/refs treats an object whose member is passed to `ref` as a ref.
@@ -215,17 +226,29 @@ export const TeachingPopover = ({
   const visible = shown && anchorReady;
   const elementRef = useMergedRefs<HTMLDivElement>(ref, surfaceRef, setSurface, setFloating);
 
-  // The target may be a ref attached (or detached) in the same commit: resolve it after every
-  // commit. A change of the resolution is mirrored into state in a microtask (the C-HOOKS
-  // deferred-update pattern), which re-reads the latest target so the newest attachment wins.
+  // Point the positioning at the target after every commit. A ref is read once more when the whole
+  // commit is done (the C-HOOKS deferred-update pattern): a target that comes after the popover in
+  // the tree attaches its ref after this effect has run. That update re-reads the latest target,
+  // and only a changed element or availability updates the reference or the state.
   useIsomorphicLayoutEffect(() => {
     targetPropRef.current = target;
+    availabilityRef.current = targetResolved;
     const element = resolveTarget(target);
     targetRef.current = element;
     setReference(element);
-    if ((element !== null) !== targetResolved) {
-      queueMicrotask(() => setTargetResolved(resolveTarget(targetPropRef.current) !== null));
-    }
+    if (target == null || !isRefObject(target)) return;
+    queueMicrotask(() => {
+      const latest = resolveTarget(targetPropRef.current);
+      if (latest !== targetRef.current) {
+        targetRef.current = latest;
+        setReference(latest);
+      }
+      const available = latest !== null;
+      if (available !== availabilityRef.current) {
+        availabilityRef.current = available;
+        setTargetResolved(available);
+      }
+    });
   });
 
   const dismiss = () => {
