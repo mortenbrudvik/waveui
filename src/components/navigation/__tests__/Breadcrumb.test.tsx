@@ -572,16 +572,20 @@ describe('Breadcrumb', () => {
           <Breadcrumb.Item onClick={(e: React.MouseEvent<HTMLButtonElement>) => e}>
             Back
           </Breadcrumb.Item>
-          {/* @ts-expect-error formAction is a button attribute; not valid on a link item */}
-          <Breadcrumb.Item href="/bad" formAction="/submit">
-            Bad
-          </Breadcrumb.Item>
           {/* @ts-expect-error target needs href: without it the item is a button */}
           <Breadcrumb.Item target="_blank" onClick={() => {}}>
             No href
           </Breadcrumb.Item>
         </Breadcrumb>,
       );
+      // Type-only: never rendered (React logs an error for `formAction` on an <a>).
+      const invalidLinkItem = (
+        // @ts-expect-error formAction is a button attribute; not valid on a link item
+        <Breadcrumb.Item href="/bad" formAction="/submit">
+          Bad
+        </Breadcrumb.Item>
+      );
+      expect(React.isValidElement(invalidLinkItem)).toBe(true);
       expect(screen.getByRole('link', { name: 'File' })).toHaveAttribute('target', '_blank');
       expectTypeOf<{ target: string; children: string }>().not.toMatchTypeOf<BreadcrumbItemProps>();
       expectTypeOf<{

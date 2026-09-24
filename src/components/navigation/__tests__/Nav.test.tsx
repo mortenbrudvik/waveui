@@ -403,12 +403,16 @@ describe('Nav', () => {
           <Nav.Item value="save" disabled onClick={(e: React.MouseEvent<HTMLButtonElement>) => e}>
             Save
           </Nav.Item>
-          {/* @ts-expect-error formAction is a button attribute; not valid on a link item */}
-          <Nav.Item value="bad" href="/bad" formAction="/submit">
-            Bad
-          </Nav.Item>
         </Nav>,
       );
+      // Type-only: never rendered (React logs an error for `formAction` on an <a>).
+      const invalidLinkItem = (
+        // @ts-expect-error formAction is a button attribute; not valid on a link item
+        <Nav.Item value="bad" href="/bad" formAction="/submit">
+          Bad
+        </Nav.Item>
+      );
+      expect(React.isValidElement(invalidLinkItem)).toBe(true);
       expect(screen.getByRole('link', { name: 'Docs' })).toHaveAttribute('target', '_blank');
       expectTypeOf<{ value: 'a'; target: string }>().not.toMatchTypeOf<NavItemProps>();
       expectTypeOf<NavItemProps>().toBeObject();

@@ -780,6 +780,108 @@ describe('Menu popup (Menu.Trigger + Menu.Popover)', () => {
     expect(trigger()).toHaveAttribute('aria-haspopup', 'menu');
   });
 
+  // §5.3: a Tooltip clones `aria-describedby` onto Menu.Trigger, which must reach the child.
+  it('forwards unknown props, className, ref and handlers of Menu.Trigger to its child', async () => {
+    const user = userEvent.setup();
+    const onClick = vi.fn();
+    const ref = React.createRef<HTMLElement>();
+    render(
+      <>
+        <span id="own-hint">Own hint.</span>
+        <span id="tooltip-hint">Opens the file actions.</span>
+        <Menu>
+          <Menu.Trigger
+            ref={ref}
+            id="from-trigger"
+            aria-describedby="tooltip-hint"
+            aria-expanded="true"
+            className="trigger-class"
+            data-testid="menu-trigger"
+            title="File actions"
+            onClick={onClick}
+          >
+            <button type="button" aria-describedby="own-hint" className="child-class">
+              Actions
+            </button>
+          </Menu.Trigger>
+          <Menu.Popover>
+            <Menu.Item>Edit</Menu.Item>
+          </Menu.Popover>
+        </Menu>
+      </>,
+    );
+    const button = trigger();
+    expect(screen.getByTestId('menu-trigger')).toBe(button);
+    expect(ref.current).toBe(button);
+    expect(button).toHaveAttribute('id', 'from-trigger');
+    expect(button).toHaveAttribute('title', 'File actions');
+    expect(button).toHaveClass('trigger-class', 'child-class');
+    expect(button.getAttribute('aria-describedby')?.split(' ').sort()).toEqual([
+      'own-hint',
+      'tooltip-hint',
+    ]);
+    expect(button).toHaveAccessibleDescription(/Opens the file actions\./);
+    // Live state ARIA still wins over a static value passed to Menu.Trigger.
+    expect(button).toHaveAttribute('aria-expanded', 'false');
+    await user.click(button);
+    expect(onClick).toHaveBeenCalledTimes(1);
+    expect(screen.getByRole('menu')).toHaveAttribute('aria-labelledby', 'from-trigger');
+    expect(button).toHaveAttribute('aria-expanded', 'true');
+    expect(item('Edit')).toHaveFocus();
+  });
+
+  it('a Menu.Trigger onClick or onKeyDown that prevents default suppresses opening', async () => {
+    const user = userEvent.setup();
+    render(
+      <Menu>
+        <Menu.Trigger onClick={(e) => e.preventDefault()} onKeyDown={(e) => e.preventDefault()}>
+          <button type="button">Actions</button>
+        </Menu.Trigger>
+        <Menu.Popover>
+          <Menu.Item>Edit</Menu.Item>
+        </Menu.Popover>
+      </Menu>,
+    );
+    await user.click(trigger());
+    expect(queryMenu()).not.toBeInTheDocument();
+    act(() => trigger().focus());
+    await user.keyboard('{ArrowDown}');
+    expect(queryMenu()).not.toBeInTheDocument();
+  });
+
+  it('passes forwarded props to a render-prop child and to the asChild={false} wrapper', () => {
+    render(
+      <>
+        <Menu>
+          <Menu.Trigger aria-describedby="hint-a">
+            {(props: MenuTriggerProps) => (
+              <button type="button" {...props}>
+                Actions
+              </button>
+            )}
+          </Menu.Trigger>
+          <Menu.Popover>
+            <Menu.Item>Edit</Menu.Item>
+          </Menu.Popover>
+        </Menu>
+        <Menu>
+          <Menu.Trigger asChild={false} aria-describedby="hint-b" data-testid="wrapper">
+            Open menu
+          </Menu.Trigger>
+          <Menu.Popover>
+            <Menu.Item>Edit</Menu.Item>
+          </Menu.Popover>
+        </Menu>
+      </>,
+    );
+    expect(trigger()).toHaveAttribute('aria-describedby', 'hint-a');
+    expect(trigger()).toHaveAttribute('aria-haspopup', 'menu');
+    const wrapper = screen.getByTestId('wrapper');
+    expect(wrapper.tagName).toBe('SPAN');
+    expect(wrapper).toHaveAttribute('aria-describedby', 'hint-b');
+    expect(wrapper).toHaveAttribute('aria-haspopup', 'menu');
+  });
+
   it('accepts a render-prop child that receives the trigger props', async () => {
     const user = userEvent.setup();
     const seen: MenuTriggerProps[] = [];

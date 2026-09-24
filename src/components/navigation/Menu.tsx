@@ -4,6 +4,8 @@ import type { PopupAlign, PopupSide, Slot } from '../../lib/types';
 import { renderSlot } from '../../lib/slot';
 import { composeEventHandlers } from '../../lib/composeEventHandlers';
 import { isDev, warnOnce } from '../../lib/dev';
+import { mergeProps } from '../../lib/mergeProps';
+import { STATE_ARIA } from '../../lib/renderTrigger';
 import { disabledStyles, focusRingInset } from '../../lib/styles';
 import { useControllable } from '../../hooks/useControllable';
 import { useDismiss } from '../../hooks/useDismiss';
@@ -94,12 +96,20 @@ export type MenuTriggerProps = {
   ref: React.RefCallback<HTMLElement>;
 };
 
-/** Properties for the MenuTrigger sub-component. */
-export interface MenuTriggerComponentProps {
+/**
+ * Properties for the MenuTrigger sub-component. Other props (`aria-describedby` from a wrapping
+ * `Tooltip`, `className`, `data-*`, handlers, …) are forwarded to the trigger element: merged with
+ * the child's own props (handlers composed, classes joined, `aria-describedby` ids joined), or
+ * passed to a render-prop child together with {@link MenuTriggerProps}.
+ */
+export interface MenuTriggerComponentProps extends Omit<
+  React.HTMLAttributes<HTMLElement>,
+  'children'
+> {
   /**
    * A single element that receives {@link MenuTriggerProps} (its own handlers run first; its own
    * `id` is kept; the trigger's `aria-expanded`/`aria-controls`/`aria-haspopup` always win), or a
-   * render function that receives them.
+   * render function that receives them (plus the forwarded props).
    */
   children: React.ReactNode | ((props: MenuTriggerProps) => React.ReactNode);
   /**
@@ -108,6 +118,8 @@ export interface MenuTriggerComponentProps {
    * @default true
    */
   asChild?: boolean;
+  /** Ref to the trigger element (the child, or the wrapper span); the child's own ref is kept. */
+  ref?: React.Ref<HTMLElement>;
 }
 
 /** Properties for the MenuPopover sub-component. */
@@ -322,6 +334,8 @@ MenuDivider.displayName = 'MenuDivider';
  * (`aria-haspopup="menu"`, `aria-expanded`, `aria-controls` while open, an id and composed
  * `onClick`/`onKeyDown`); a render function receives them instead. Click, Enter, Space and
  * ArrowDown open the menu and focus its first enabled item; ArrowUp opens it and focuses the last.
+ * Other props passed to `Menu.Trigger` are forwarded to the child, so
+ * `<Tooltip><Menu.Trigger><MenuButton /></Menu.Trigger></Tooltip>` describes the MenuButton.
  *
  * Also exported as `MenuTrigger` (import the flat name from React Server Components).
  *
@@ -331,10 +345,11 @@ MenuDivider.displayName = 'MenuDivider';
  *   <Menu.Popover><Menu.Item onClick={edit}>Edit</Menu.Item></Menu.Popover>
  * </Menu>
  */
-const MenuTrigger = ({ children, asChild }: MenuTriggerComponentProps) => {
+const MenuTrigger = ({ children, asChild, ref, ...rest }: MenuTriggerComponentProps) => {
   const { popup, open, setOpen, openWithFocus, triggerId, menuId, onTriggerId, setTriggerElement } =
     useMenuContext('Menu.Trigger');
   useStaticMenuPartWarning('Menu.Trigger', popup);
+  const triggerRef = useMergedRefs<HTMLElement>(setTriggerElement, ref);
 
   const handleClick = (event: React.MouseEvent<HTMLElement>) => {
     if (event.defaultPrevented) return;
@@ -365,15 +380,18 @@ const MenuTrigger = ({ children, asChild }: MenuTriggerComponentProps) => {
     }
   };
 
-  const triggerProps: MenuTriggerProps = {
+  const ownProps: MenuTriggerProps = {
     id: triggerId,
     'aria-haspopup': 'menu',
     'aria-expanded': open,
     'aria-controls': open ? menuId : undefined,
     onClick: handleClick,
     onKeyDown: handleKeyDown,
-    ref: setTriggerElement,
+    ref: triggerRef,
   };
+  // §5.3: forwarded props merge in (a consumer `id` wins, handlers compose consumer-first), but the
+  // live state ARIA always wins.
+  const triggerProps = mergeProps(ownProps, rest, { oursWin: STATE_ARIA });
 
   return useTriggerElement(children, triggerProps, {
     componentName: 'Menu.Trigger',
