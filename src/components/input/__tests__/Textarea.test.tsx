@@ -3,6 +3,7 @@ import { describe, it, expect, vi, expectTypeOf } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { Textarea, type TextareaProps } from '../Textarea';
+import { inputInvalid } from '../../../lib/styles';
 import { testSystemProps, testFocusEvents, expectNoA11yViolations } from '../../../test-utils';
 
 describe('Textarea', () => {
@@ -109,6 +110,20 @@ describe('Textarea', () => {
       }
       expect(screen.queryByRole('alert')).not.toBeInTheDocument();
       expect(screen.queryByText('Checking')).not.toBeInTheDocument();
+    });
+
+    it('draws the invalid look with the shared inputInvalid recipe (R8)', () => {
+      render(
+        <>
+          <Textarea aria-label="Message" error />
+          <Textarea aria-label="Notes" aria-invalid />
+        </>,
+      );
+      for (const name of ['Message', 'Notes']) {
+        const textarea = screen.getByRole('textbox', { name });
+        expect(textarea).toHaveClass(...inputInvalid.split(' '));
+        expect(textarea).not.toHaveClass('border-input');
+      }
     });
 
     it('does not set aria-invalid without an error', () => {

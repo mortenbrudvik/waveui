@@ -35,7 +35,13 @@ export interface CheckboxProps extends Omit<
    * @default false
    */
   defaultChecked?: boolean;
-  /** Whether the checkbox shows an indeterminate (mixed) state. */
+  /**
+   * Shows the mixed state: the dash glyph and `aria-checked="mixed"`, whatever `checked` is. A
+   * click still toggles `checked` and calls `onCheckedChange`, but the checkbox keeps showing and
+   * announcing "mixed" until you clear `indeterminate`. For a tri-state "select all", derive
+   * `checked` and `indeterminate` from the items and set every item in `onCheckedChange`.
+   * @default false
+   */
   indeterminate?: boolean;
   /** Called with the new checked state when it changes (not for no-op updates). */
   onCheckedChange?: (checked: boolean) => void;
@@ -198,7 +204,9 @@ export const Checkbox = ({
         disabled={disabled}
         onClick={composeEventHandlers(onClick, () => setChecked((prev) => !prev))}
         className={cn(
-          'flex h-[18px] w-[18px] shrink-0 items-center justify-center rounded-xs border transition-colors motion-reduce:transition-none',
+          // p-0 and the unchecked bg-transparent are set here, not left to the native reset, which
+          // any app button style overrides (C-NATIVE).
+          'flex h-[18px] w-[18px] shrink-0 items-center justify-center rounded-xs border p-0 transition-colors motion-reduce:transition-none',
           focusRing,
           on
             ? cn(
@@ -206,7 +214,7 @@ export const Checkbox = ({
                 disabled ? disabledCheckedBox : checkedBox,
               )
             : cn(
-                'border-stroke-accessible',
+                'border-stroke-accessible bg-transparent',
                 disabled ? forcedColors.disabled : forcedColors.control,
               ),
         )}
@@ -218,7 +226,7 @@ export const Checkbox = ({
         ) : null}
       </button>
       {label && (
-        <span id={labelTextId} className="text-sm text-foreground">
+        <span id={labelTextId} className="text-body-1 text-foreground">
           {label}
         </span>
       )}

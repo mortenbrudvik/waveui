@@ -329,6 +329,74 @@ describe('Field', () => {
       expect(screen.getByRole('textbox', { name: 'Name' })).not.toHaveAttribute('aria-invalid');
     });
 
+    it('treats an error list that renders nothing as no error: the control stays valid and the hint shows (R11)', () => {
+      const errors: string[] = [];
+      render(
+        <>
+          <Field
+            label="Email"
+            hint="We never share it"
+            error={errors.map((e) => (
+              <span key={e}>{e}</span>
+            ))}
+          >
+            <Input />
+          </Field>
+          <Field label="Name" hint="Your full name" error={[null, false, '']}>
+            <input />
+          </Field>
+        </>,
+      );
+      const email = screen.getByRole('textbox', { name: 'Email' });
+      const name = screen.getByRole('textbox', { name: 'Name' });
+      for (const control of [email, name]) {
+        expect(control).not.toHaveAttribute('aria-invalid');
+        expect(control).not.toHaveClass('border-destructive');
+      }
+      expect(email).toHaveAccessibleDescription('We never share it');
+      expect(name).toHaveAccessibleDescription('Your full name');
+      expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+    });
+
+    it('renders no label or hint element for values that render nothing (R11)', () => {
+      render(
+        <Field label={[]} hint={[undefined, true]}>
+          <input aria-label="Code" />
+        </Field>,
+      );
+      const input = screen.getByRole('textbox', { name: 'Code' });
+      expect(document.querySelector('label')).toBeNull();
+      expect(input).not.toHaveAttribute('aria-describedby');
+      expect(input).not.toHaveAttribute('aria-labelledby');
+    });
+
+    it('still counts an error list with content (and 0) as an error message', () => {
+      render(
+        <>
+          <Field
+            label="Email"
+            error={['Too short'].map((e) => (
+              <span key={e}>{e}</span>
+            ))}
+          >
+            <input />
+          </Field>
+          <Field label="Count" error={0}>
+            <input />
+          </Field>
+        </>,
+      );
+      expect(screen.getByRole('textbox', { name: 'Email' })).toHaveAccessibleDescription(
+        'Too short',
+      );
+      expect(screen.getByRole('textbox', { name: 'Email' })).toHaveAttribute(
+        'aria-invalid',
+        'true',
+      );
+      expect(screen.getByRole('textbox', { name: 'Count' })).toHaveAccessibleDescription('0');
+      expect(screen.getAllByRole('alert')).toHaveLength(2);
+    });
+
     it('error={true} marks the control invalid without a message', () => {
       render(
         <Field label="Name" error hint="Hint">
@@ -383,6 +451,37 @@ describe('Field', () => {
       );
     });
 
+    it("keeps a first child's own aria-invalid, as for a nested control (the Field error still describes it)", () => {
+      render(
+        <>
+          <Field label="Code" error="Checking">
+            <Input aria-invalid={false} />
+          </Field>
+          <Field label="Nested" error="Checking">
+            <div>
+              <Input aria-invalid={false} />
+            </div>
+          </Field>
+          <Field label="Native" error="Checking">
+            <input aria-invalid="false" />
+          </Field>
+          <Field label="Spelling" error="Checking">
+            <input aria-invalid="spelling" />
+          </Field>
+        </>,
+      );
+      for (const name of ['Code', 'Nested', 'Native']) {
+        const control = screen.getByRole('textbox', { name });
+        expect(control, name).toHaveAttribute('aria-invalid', 'false');
+        expect(control, name).toHaveAccessibleDescription('Checking');
+      }
+      expect(screen.getByRole('textbox', { name: 'Code' })).not.toHaveClass('border-destructive');
+      expect(screen.getByRole('textbox', { name: 'Spelling' })).toHaveAttribute(
+        'aria-invalid',
+        'spelling',
+      );
+    });
+
     it('passes only defined keys to the child', () => {
       const received: Array<Record<string, unknown>> = [];
       function Probe(props: Record<string, unknown>) {
@@ -400,17 +499,22 @@ describe('Field', () => {
 
     it('gives only the first element child the id and warns about more', () => {
       const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
-      render(
-        <Field label="First">
-          <input data-testid="first" />
-          <input data-testid="second" />
-        </Field>,
-      );
-      expect(screen.getByTestId('first')).toHaveAccessibleName('First');
-      expect(screen.getByTestId('second')).not.toHaveAttribute('id');
-      expect(warn).toHaveBeenCalledTimes(1);
-      expect(warn.mock.calls[0][0]).toMatch(/^\[WaveUI\] Field:/);
-      warn.mockRestore();
+      try {
+        render(
+          <Field label="First">
+            <input data-testid="first" />
+            <input data-testid="second" />
+          </Field>,
+        );
+        expect(screen.getByTestId('first')).toHaveAccessibleName('First');
+        expect(screen.getByTestId('second')).not.toHaveAttribute('id');
+        expect(warn).toHaveBeenCalledTimes(1);
+        expect(warn.mock.calls[0][0]).toMatch(
+          /^\[WaveUI\] Field: only the first element child receives the Field's id and ARIA attributes; the other 1 element child\(ren\) are rendered unchanged\./,
+        );
+      } finally {
+        warn.mockRestore();
+      }
     });
 
     it('does not clone a non-labelable wrapper element (the control inside reads FieldContext)', () => {
@@ -565,7 +669,10 @@ describe('Field', () => {
       expect(screen.getByRole('combobox', { name: 'Country' })).toHaveClass('border-destructive');
       expect(screen.getByRole('textbox', { name: 'Bio' })).toHaveClass('border-destructive');
       expect(screen.getByRole('textbox', { name: 'City' })).toHaveClass('border-destructive');
-      expect(screen.getByRole('searchbox', { name: 'Find' })).toHaveClass('border-destructive');
+      // SearchBox draws the field with its root, around the input.
+      expect(screen.getByRole('searchbox', { name: 'Find' }).parentElement).toHaveClass(
+        'border-destructive',
+      );
     });
 
     it('keeps the normal border without an error', () => {
@@ -744,25 +851,31 @@ describe('Field', () => {
 
     it('names a second library control that is a later sibling of the first child', () => {
       const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
-      render(
-        <Field label="Range" hint="Hint">
-          <Input data-testid="first" />
-          <Input data-testid="second" />
-        </Field>,
-      );
-      const first = screen.getByTestId('first');
-      const second = screen.getByTestId('second');
-      expect(first).toHaveAccessibleName('Range');
-      expect(first).not.toHaveAttribute('aria-labelledby');
-      expect(second).toHaveAccessibleName('Range');
-      expect(second).toHaveAccessibleDescription('Hint');
-      expect(second.id).not.toBe(first.id);
-      for (const element of document.querySelectorAll('[id]')) {
-        expect(document.querySelectorAll(`[id="${element.id}"]`), element.id).toHaveLength(1);
+      try {
+        render(
+          <Field label="Range" hint="Hint">
+            <Input data-testid="first" />
+            <Input data-testid="second" />
+          </Field>,
+        );
+        const first = screen.getByTestId('first');
+        const second = screen.getByTestId('second');
+        expect(first).toHaveAccessibleName('Range');
+        expect(first).not.toHaveAttribute('aria-labelledby');
+        expect(second).toHaveAccessibleName('Range');
+        expect(second).toHaveAccessibleDescription('Hint');
+        expect(second.id).not.toBe(first.id);
+        for (const element of document.querySelectorAll('[id]')) {
+          expect(document.querySelectorAll(`[id="${element.id}"]`), element.id).toHaveLength(1);
+        }
+        // Still one control per Field: the multiple-children warning stays.
+        expect(warn).toHaveBeenCalledTimes(1);
+        expect(warn.mock.calls[0][0]).toMatch(
+          /^\[WaveUI\] Field: only the first element child receives the Field's id/,
+        );
+      } finally {
+        warn.mockRestore();
       }
-      // Still one control per Field: the multiple-children warning stays.
-      expect(warn).toHaveBeenCalledTimes(1);
-      warn.mockRestore();
     });
 
     it('names every library control inside a plain wrapper element and keeps the ids unique', async () => {
@@ -840,48 +953,59 @@ describe('Field', () => {
 
     it('tells the controls inside whether the first child holds the control id (controlIdAssigned)', () => {
       const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
-      const seen: Record<string, boolean | undefined> = {};
-      function Probe({ name, ...props }: React.HTMLAttributes<HTMLSpanElement> & { name: string }) {
-        seen[name] = useFieldContext()?.controlIdAssigned;
-        return <span {...props} />;
+      try {
+        const seen: Record<string, boolean | undefined> = {};
+        function Probe({
+          name,
+          ...props
+        }: React.HTMLAttributes<HTMLSpanElement> & { name: string }) {
+          seen[name] = useFieldContext()?.controlIdAssigned;
+          return <span {...props} />;
+        }
+        function Row(props: React.HTMLAttributes<HTMLDivElement>) {
+          return <div {...props} />;
+        }
+        render(
+          <>
+            <Field label="Component">
+              <Probe name="component" />
+            </Field>
+            <Field label="Own id">
+              <Row id="own">
+                <Probe name="nested" />
+              </Row>
+            </Field>
+            <Field label="Input">
+              <input />
+              <Probe name="sibling" />
+            </Field>
+            <Field label="Plain wrapper">
+              <div>
+                <Probe name="div" />
+              </div>
+            </Field>
+            <Field label="Role widget">
+              <div role="group">
+                <Probe name="group" />
+              </div>
+            </Field>
+          </>,
+        );
+        expect(seen).toEqual({
+          component: true,
+          nested: true,
+          sibling: true,
+          div: false,
+          group: false,
+        });
+        // Only the "Input" Field has two element children.
+        expect(warn).toHaveBeenCalledTimes(1);
+        expect(warn.mock.calls[0][0]).toMatch(
+          /^\[WaveUI\] Field: only the first element child receives the Field's id/,
+        );
+      } finally {
+        warn.mockRestore();
       }
-      function Row(props: React.HTMLAttributes<HTMLDivElement>) {
-        return <div {...props} />;
-      }
-      render(
-        <>
-          <Field label="Component">
-            <Probe name="component" />
-          </Field>
-          <Field label="Own id">
-            <Row id="own">
-              <Probe name="nested" />
-            </Row>
-          </Field>
-          <Field label="Input">
-            <input />
-            <Probe name="sibling" />
-          </Field>
-          <Field label="Plain wrapper">
-            <div>
-              <Probe name="div" />
-            </div>
-          </Field>
-          <Field label="Role widget">
-            <div role="group">
-              <Probe name="group" />
-            </div>
-          </Field>
-        </>,
-      );
-      expect(seen).toEqual({
-        component: true,
-        nested: true,
-        sibling: true,
-        div: false,
-        group: false,
-      });
-      warn.mockRestore();
     });
 
     it('passes axe with a library control, hint and required', async () => {

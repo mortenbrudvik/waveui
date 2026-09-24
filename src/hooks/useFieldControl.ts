@@ -3,8 +3,9 @@ import { joinIds } from '../lib/aria';
 import { useId } from './useId';
 
 /**
- * What a `Field` tells the control inside it (spec §2.5, §5.1). `Field` (P02) provides it; every
- * library input reads it through {@link useFieldControl}.
+ * What a `Field` tells the controls inside it: the ids of its label, hint and error, and its
+ * invalid and required state. `Field` provides it; every library input reads it through
+ * {@link useFieldControl}, and so can your own control.
  */
 export interface FieldContextValue {
   /** The id the Field's `<label htmlFor>` points at. */
@@ -35,8 +36,8 @@ export interface FieldContextValue {
    * Hands `controlId` to one control when `controlIdAssigned` is not set — Field left its first
    * child alone (a plain `<div>`, a Fragment), so every library control inside reads this context.
    * The first control without an `id` of its own takes `controlId`; the others get their own id
-   * and are named through `aria-labelledby`, so no id is duplicated. `Field` provides one
-   * ({@link createFieldControlIdClaim}). Absent: every control without an `id` uses `controlId`.
+   * and are named through `aria-labelledby`, so no id is duplicated. `Field` creates one for each
+   * Field. Absent: every control without an `id` uses `controlId`.
    */
   controlIdClaim?: FieldControlIdClaim;
 }
@@ -44,8 +45,9 @@ export interface FieldContextValue {
 /**
  * Decides which control inside a `Field` takes the Field's `controlId` (the id its
  * `<label htmlFor>` points at) when several library controls without an `id` of their own read
- * the same context. Create one per Field with {@link createFieldControlIdClaim} and pass it as
- * {@link FieldContextValue.controlIdClaim}; {@link useFieldControl} calls the methods.
+ * the same context. `Field` creates one for each Field and passes it as
+ * {@link FieldContextValue.controlIdClaim}; {@link useFieldControl} calls the methods, so a
+ * control never calls them itself.
  *
  * - The first control to render takes `controlId`: on the first render (and on the server, so
  *   hydration matches) that is the first one in document order. It keeps it across re-renders.
@@ -135,13 +137,12 @@ class FieldControlIdClaimStore implements FieldControlIdClaim {
 /**
  * Creates the {@link FieldControlIdClaim} a Field puts into its context (one per Field instance,
  * e.g. `const [claim] = useState(createFieldControlIdClaim)`).
+ *
+ * @internal Not exported from the package.
  */
 export function createFieldControlIdClaim(): FieldControlIdClaim {
   return new FieldControlIdClaimStore();
 }
-
-const useIsomorphicLayoutEffect =
-  typeof document !== 'undefined' ? React.useLayoutEffect : React.useEffect;
 
 const subscribeNothing = (): (() => void) => () => {};
 const noVersion = (): number => 0;
@@ -188,9 +189,10 @@ export interface UseFieldControlOptions {
 }
 
 /**
- * Merges a control's own labelling props with its surrounding `Field` (spec §2.5). Spread the
- * result onto the **focusable element** (C-ROUTING). Consumer values are merged, never overwritten,
- * and only defined keys are returned, so spreading never clears an attribute.
+ * Merges a control's own labelling props with its surrounding `Field`. Spread the result onto the
+ * **focusable element** (for a control whose root wraps it, not onto the root). Consumer values
+ * are merged, never overwritten, and only defined keys are returned, so spreading never clears an
+ * attribute.
  *
  * - `id`: the consumer's id; else, when the Field already gave `controlId` to its first child
  *   (`controlIdAssigned`) — so this control is nested inside that child or a later sibling — a
@@ -234,8 +236,9 @@ export function useFieldControl(
     claim ? claim.getVersion : noVersion,
   );
   const holdsControlId = wantsControlId && (claim ? claim.claim(fallbackId) : true);
-  useIsomorphicLayoutEffect(() => claim?.mount(fallbackId), [claim, fallbackId]);
-  useIsomorphicLayoutEffect(() => {
+  // Layout effects do nothing on the server, and React 19 no longer warns about them there.
+  React.useLayoutEffect(() => claim?.mount(fallbackId), [claim, fallbackId]);
+  React.useLayoutEffect(() => {
     if (claim && holdsControlId) claim.hold(fallbackId);
   }, [claim, holdsControlId, fallbackId]);
   // After every commit (all layout effects of the commit, and so every mount, have run): a

@@ -1,4 +1,5 @@
 import type { Meta, StoryObj } from '@storybook/react';
+import { useState } from 'react';
 import { fn } from 'storybook/test';
 import { Button, Checkbox } from '../src';
 
@@ -22,10 +23,42 @@ export const Checked: Story = {
   },
 };
 
+/**
+ * `indeterminate` overrides `checked` for display and `aria-checked` ("mixed") until it is
+ * cleared. A tri-state "select all" derives `checked` and `indeterminate` from its items and sets
+ * every item in `onCheckedChange`.
+ */
 export const Indeterminate: Story = {
   args: {
     label: 'Select all',
-    indeterminate: true,
+  },
+  render: function SelectAll(args) {
+    const fruits = ['Apples', 'Bananas', 'Cherries'];
+    const [picked, setPicked] = useState([true, false, false]);
+    const all = picked.every(Boolean);
+    return (
+      <div className="flex flex-col gap-2">
+        <Checkbox
+          {...args}
+          checked={all}
+          indeterminate={!all && picked.some(Boolean)}
+          onCheckedChange={(next) => {
+            setPicked(picked.map(() => next));
+            args.onCheckedChange?.(next);
+          }}
+        />
+        <div className="flex flex-col gap-2 ps-6">
+          {fruits.map((fruit, i) => (
+            <Checkbox
+              key={fruit}
+              label={fruit}
+              checked={picked[i]}
+              onCheckedChange={(next) => setPicked(picked.map((v, j) => (j === i ? next : v)))}
+            />
+          ))}
+        </div>
+      </div>
+    );
   },
 };
 

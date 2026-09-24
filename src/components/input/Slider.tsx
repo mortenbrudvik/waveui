@@ -1,6 +1,6 @@
 import * as React from 'react';
 import { cn } from '../../lib/cn';
-import { focusRing } from '../../lib/styles';
+import { focusRing, forcedColors } from '../../lib/styles';
 import { useFieldControl } from '../../hooks/useFieldControl';
 
 /** Properties for the Slider component. */
@@ -30,8 +30,9 @@ export interface SliderProps extends Omit<React.InputHTMLAttributes<HTMLInputEle
 
 /**
  * A native range input with Fluent styling: a rail drawn in the accessible stroke color (3:1
- * against the page) and a primary thumb. Inside a `Field` it picks up the label, hint, error,
- * `required` and invalid state automatically.
+ * against the page) and a primary thumb; in forced-colors mode the rail and thumb are drawn in
+ * system colors. Inside a `Field` it picks up the label, hint, error, `required` and invalid state
+ * automatically.
  *
  * @example
  * <Slider label="Volume" min={0} max={100} value={volume} onValueChange={setVolume} />
@@ -80,14 +81,19 @@ export const Slider = ({
         'w-full cursor-pointer appearance-none bg-transparent',
         // Rail: the accessible stroke gives the rail itself 3:1 non-text contrast.
         '[&::-webkit-slider-runnable-track]:h-1 [&::-webkit-slider-runnable-track]:rounded-full [&::-webkit-slider-runnable-track]:bg-stroke-accessible',
-        // Thumb
-        '[&::-webkit-slider-thumb]:mt-[-8px] [&::-webkit-slider-thumb]:h-5 [&::-webkit-slider-thumb]:w-5 [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:border-2 [&::-webkit-slider-thumb]:border-background [&::-webkit-slider-thumb]:bg-primary [&::-webkit-slider-thumb]:shadow',
+        // Thumb. WebKit and Blink align its top with the rail's top, so it is pulled up by half the
+        // difference of the two heights (5 and 1 spacing units): it stays centred at any root
+        // font size.
+        '[&::-webkit-slider-thumb]:-mt-2 [&::-webkit-slider-thumb]:h-5 [&::-webkit-slider-thumb]:w-5 [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:border-2 [&::-webkit-slider-thumb]:border-background [&::-webkit-slider-thumb]:bg-primary [&::-webkit-slider-thumb]:shadow',
         // Firefox rail
         '[&::-moz-range-track]:h-1 [&::-moz-range-track]:rounded-full [&::-moz-range-track]:bg-stroke-accessible',
         // Firefox thumb
         '[&::-moz-range-thumb]:h-5 [&::-moz-range-thumb]:w-5 [&::-moz-range-thumb]:rounded-full [&::-moz-range-thumb]:border-2 [&::-moz-range-thumb]:border-background [&::-moz-range-thumb]:bg-primary [&::-moz-range-thumb]:shadow',
         'disabled:cursor-not-allowed disabled:opacity-50',
         focusRing,
+        // Forced colors replace the author backgrounds of the rail and thumb with Canvas: give
+        // every part a system color instead.
+        forcedColors.rangeInput,
         className,
       )}
       {...props}

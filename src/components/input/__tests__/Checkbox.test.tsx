@@ -125,14 +125,78 @@ describe('Checkbox', () => {
       );
       expect(deprecations).toHaveLength(1);
       expect(String(deprecations[0][0])).toContain('Use `onCheckedChange` instead.');
+      expect(warn).toHaveBeenCalledTimes(1);
     } finally {
       warn.mockRestore();
     }
   });
 
+  it('toggles with Space from the keyboard', async () => {
+    const user = userEvent.setup();
+    const onCheckedChange = vi.fn();
+    render(<Checkbox label="Accept" onCheckedChange={onCheckedChange} />);
+    const cb = screen.getByRole('checkbox', { name: 'Accept' });
+    await user.tab();
+    expect(cb).toHaveFocus();
+    await user.keyboard(' ');
+    expect(cb).toHaveAttribute('aria-checked', 'true');
+    await user.keyboard(' ');
+    expect(cb).toHaveAttribute('aria-checked', 'false');
+    expect(onCheckedChange.mock.calls).toEqual([[true], [false]]);
+  });
+
   it('renders indeterminate state', () => {
     render(<Checkbox indeterminate />);
     expect(screen.getByRole('checkbox')).toHaveAttribute('aria-checked', 'mixed');
+  });
+
+  it('indeterminate overrides checked until the consumer clears it: a click still reports the toggled state', async () => {
+    const user = userEvent.setup();
+    const onCheckedChange = vi.fn();
+    render(<Checkbox label="Select all" indeterminate onCheckedChange={onCheckedChange} />);
+    const cb = screen.getByRole('checkbox', { name: 'Select all' });
+    await user.click(cb);
+    await user.click(cb);
+    expect(onCheckedChange.mock.calls).toEqual([[true], [false]]);
+    // Display and aria-checked keep following `indeterminate`.
+    expect(cb).toHaveAttribute('aria-checked', 'mixed');
+  });
+
+  it('tri-state "select all": clearing indeterminate in onCheckedChange shows the new state', async () => {
+    const user = userEvent.setup();
+    function SelectAll() {
+      const [items, setItems] = React.useState([true, false]);
+      const all = items.every(Boolean);
+      return (
+        <>
+          <Checkbox
+            label="Select all"
+            checked={all}
+            indeterminate={!all && items.some(Boolean)}
+            onCheckedChange={(next) => setItems(items.map(() => next))}
+          />
+          {items.map((checked, i) => (
+            <Checkbox
+              key={i}
+              label={`Item ${i + 1}`}
+              checked={checked}
+              onCheckedChange={(next) => setItems(items.map((v, j) => (j === i ? next : v)))}
+            />
+          ))}
+        </>
+      );
+    }
+    render(<SelectAll />);
+    const selectAll = screen.getByRole('checkbox', { name: 'Select all' });
+    expect(selectAll).toHaveAttribute('aria-checked', 'mixed');
+    await user.click(selectAll);
+    expect(selectAll).toHaveAttribute('aria-checked', 'true');
+    expect(screen.getByRole('checkbox', { name: 'Item 2' })).toHaveAttribute(
+      'aria-checked',
+      'true',
+    );
+    await user.click(screen.getByRole('checkbox', { name: 'Item 1' }));
+    expect(selectAll).toHaveAttribute('aria-checked', 'mixed');
   });
 
   it('applies disabled state', () => {
@@ -472,6 +536,46 @@ describe('Checkbox — native forms (C-FORMS)', () => {
     expect(cb).toHaveAttribute('aria-checked', 'true');
   });
 
+  it('a disabled checkbox is neither submitted nor validated, like a native one', () => {
+    render(
+      <form aria-label="Form">
+        <Checkbox name="terms" required disabled label="Accept" />
+        <Checkbox name="newsletter" defaultChecked disabled label="Newsletter" />
+      </form>,
+    );
+    // The user cannot check a disabled box, so its requirement must not block the form.
+    expect(getForm().checkValidity()).toBe(true);
+    expect(Array.from(new FormData(getForm()).keys())).toEqual([]);
+  });
+
+  it('controlled: a form reset reports defaultChecked once through onCheckedChange', async () => {
+    const user = userEvent.setup();
+    const onCheckedChange = vi.fn();
+    function Controlled() {
+      const [checked, setChecked] = React.useState(false);
+      return (
+        <form aria-label="Form">
+          <Checkbox
+            label="Accept"
+            checked={checked}
+            onCheckedChange={(next) => {
+              onCheckedChange(next);
+              setChecked(next);
+            }}
+          />
+        </form>
+      );
+    }
+    render(<Controlled />);
+    const cb = screen.getByRole('checkbox', { name: 'Accept' });
+    await user.click(cb);
+    expect(cb).toHaveAttribute('aria-checked', 'true');
+    onCheckedChange.mockClear();
+    act(() => getForm().reset());
+    expect(onCheckedChange.mock.calls).toEqual([[false]]);
+    expect(cb).toHaveAttribute('aria-checked', 'false');
+  });
+
   it('form reset also restores a checkbox without a name', async () => {
     const user = userEvent.setup();
     render(
@@ -545,6 +649,26 @@ describe('Checkbox — styling tokens', () => {
     render(<Checkbox label="Accept" indeterminate />);
     const glyph = screen.getByRole('checkbox', { name: 'Accept' }).querySelector('svg');
     expect(glyph).toHaveAttribute('stroke', 'currentColor');
+  });
+
+  it('sets its own zero padding and unchecked background, so app button styles cannot shift or fill the box (C-NATIVE)', () => {
+    render(
+      <>
+        <Checkbox label="Off" />
+        <Checkbox label="On" defaultChecked />
+        <Checkbox label="Mixed" indeterminate />
+      </>,
+    );
+    expect(screen.getByRole('checkbox', { name: 'Off' })).toHaveClass('p-0', 'bg-transparent');
+    for (const name of ['On', 'Mixed']) {
+      expect(screen.getByRole('checkbox', { name })).toHaveClass('p-0', 'bg-primary');
+    }
+  });
+
+  it('draws the label text on the px type ramp like Field and Label (text-body-1)', () => {
+    render(<Checkbox label="Accept" />);
+    expect(screen.getByText('Accept')).toHaveClass('text-body-1');
+    expect(screen.getByText('Accept')).not.toHaveClass('text-sm');
   });
 
   it('turns off the color transition for reduced motion', () => {

@@ -2,6 +2,7 @@ import * as React from 'react';
 import { cn } from '../../lib/cn';
 import { joinIds } from '../../lib/aria';
 import { warnOnce } from '../../lib/dev';
+import { slotRendersContent } from '../../lib/slot';
 import { useId } from '../../hooks/useId';
 import {
   FieldContext,
@@ -31,7 +32,8 @@ export interface FieldProps extends React.HTMLAttributes<HTMLDivElement> {
   /**
    * Validation error. Content is rendered below the control in a `role="alert"` element that
    * describes the control, and the control is marked `aria-invalid`. `true` marks the control
-   * invalid without a message.
+   * invalid without a message. A value that renders nothing (`null`, `false`, `''`, or an array of
+   * only those, such as an empty `errors.map(…)`) is no error; `0` is content.
    */
   error?: React.ReactNode;
   /**
@@ -198,8 +200,8 @@ interface FieldMergeState {
 
 /**
  * Returns `children` with Field's props merged into the merge target (only defined keys; the
- * child's own `id`, `aria-label`, `aria-required` and `required` are kept, its `aria-labelledby`
- * and `aria-describedby` are joined).
+ * child's own `id`, `aria-label`, `aria-invalid`, `aria-required` and `required` are kept, its
+ * `aria-labelledby` and `aria-describedby` are joined).
  */
 function mergeIntoFirstChild(children: React.ReactNode, state: FieldMergeState): React.ReactNode {
   const { target, mode } = inspectChildren(children);
@@ -222,7 +224,10 @@ function mergeIntoFirstChild(children: React.ReactNode, state: FieldMergeState):
       state.hintId,
     );
   }
-  if (state.invalid) injected['aria-invalid'] = ariaTrue;
+  // The child's own `aria-invalid` wins, as `useFieldControl` lets it win for a nested control.
+  if (state.invalid && childProps['aria-invalid'] === undefined) {
+    injected['aria-invalid'] = ariaTrue;
+  }
   // A child's own `required={false}` wins: it gets neither `aria-required` nor `required`, so what
   // is announced matches what is validated.
   if (state.required && childProps.required !== false) {
@@ -262,11 +267,6 @@ function getChildInfo(children: React.ReactNode): {
   };
 }
 
-/** Whether React renders anything for a label/hint/error value (`''`, booleans and nullish do not). */
-function rendersSomething(node: React.ReactNode): boolean {
-  return node !== undefined && node !== null && typeof node !== 'boolean' && node !== '';
-}
-
 /**
  * Lays out a form control with a label, a hint or an error message, and a required indicator,
  * and wires them to the control.
@@ -279,8 +279,9 @@ function rendersSomething(node: React.ReactNode): boolean {
  *   library control or your own component): `id` (unless the child has one — the label then
  *   points at the child's id), `aria-describedby` (joined with the child's own ids),
  *   `aria-invalid` (with an error), `aria-required` and, for native form controls that take a
- *   value, `required`. Only defined values are merged; the child's own values are kept. Further
- *   element children are rendered as they are.
+ *   value, `required`. Only defined values are merged; the child's own values are kept, so a
+ *   child's `aria-invalid={false}` stays valid while the Field error still describes it (as for a
+ *   library control nested deeper). Further element children are rendered as they are.
  * - `aria-required` is added only where it is allowed: components (Field cannot see what they
  *   render, so they decide where it goes — see the wrapper note below), `<input>` (not
  *   `type="button"`/`"submit"`/`"reset"`/`"image"`), `<select>`, `<textarea>`, and elements
@@ -349,12 +350,14 @@ export const Field = ({
   const [controlIdClaim] = React.useState(createFieldControlIdClaim);
   const { elementCount, targetId, controlIdAssigned } = getChildInfo(children);
 
-  const hasErrorMessage = rendersSomething(error);
+  // The library's "renders nothing" rule: nullish, booleans, '' and collections of only those (an
+  // empty `errors.map(…)`) are no label, hint or error; `0` is content.
+  const hasErrorMessage = slotRendersContent(error);
   const hasError = error === true || hasErrorMessage;
-  const hasHint = !hasErrorMessage && rendersSomething(hint);
+  const hasHint = !hasErrorMessage && slotRendersContent(hint);
 
   const controlId = targetId ?? htmlFor ?? fieldId;
-  const hasLabel = rendersSomething(label);
+  const hasLabel = slotRendersContent(label);
   const labelId = hasLabel ? `${fieldId}-label` : undefined;
   const errorId = hasErrorMessage ? `${fieldId}-error` : undefined;
   const hintId = hasHint ? `${fieldId}-hint` : undefined;

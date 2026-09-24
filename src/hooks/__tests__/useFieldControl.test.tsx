@@ -504,15 +504,18 @@ describe('useFieldControl — one control takes the controlId (controlIdClaim)',
       </ClaimingField>
     );
     const container = document.createElement('div');
-    container.innerHTML = renderToString(ui);
-    document.body.appendChild(container);
-    const ids = () => Array.from(container.querySelectorAll('input'), (input) => input.id);
-    const serverIds = ids();
-    expect(serverIds[0]).toBe('ctl');
-    expect(serverIds[1]).not.toBe('ctl');
     const error = vi.spyOn(console, 'error').mockImplementation(() => {});
     let root: ReturnType<typeof hydrateRoot> | undefined;
     try {
+      // The claim's layout effects run through React.useLayoutEffect directly (R5): the server
+      // render logs nothing.
+      container.innerHTML = renderToString(ui);
+      expect(error).not.toHaveBeenCalled();
+      document.body.appendChild(container);
+      const ids = () => Array.from(container.querySelectorAll('input'), (input) => input.id);
+      const serverIds = ids();
+      expect(serverIds[0]).toBe('ctl');
+      expect(serverIds[1]).not.toBe('ctl');
       await act(async () => {
         root = hydrateRoot(container, ui);
       });

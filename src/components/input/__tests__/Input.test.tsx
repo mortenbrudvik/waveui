@@ -84,6 +84,69 @@ describe('Input', () => {
       expect(screen.getByRole('textbox', { name: 'Price' })).toHaveClass('focus:outline-hidden');
     });
 
+    it('puts className, style and hidden on the bordered wrapper; ref, id, aria-* and data-* on the input', () => {
+      const ref = React.createRef<HTMLInputElement>();
+      render(
+        <Input
+          ref={ref}
+          aria-label="Price"
+          contentBefore="$"
+          id="price"
+          data-testid="price"
+          className="w-40"
+          style={{ maxWidth: 160 }}
+        />,
+      );
+      const input = screen.getByRole('textbox', { name: 'Price' });
+      const wrapper = input.parentElement as HTMLElement;
+      expect(wrapper.tagName.toLowerCase()).toBe('span');
+      // The wrapper is the visible field: both sizing mechanisms reach it.
+      expect(wrapper).toHaveClass('w-40');
+      expect(wrapper).toHaveStyle({ maxWidth: '160px' });
+      expect(input).not.toHaveAttribute('style');
+      expect(input).not.toHaveClass('w-40');
+      expect(ref.current).toBe(input);
+      expect(input).toHaveAttribute('id', 'price');
+      expect(screen.getByTestId('price')).toBe(input);
+    });
+
+    it('hides the whole field with hidden, not only the inner input', () => {
+      const { container } = render(<Input aria-label="Price" contentAfter="kg" hidden />);
+      const wrapper = container.firstElementChild as HTMLElement;
+      expect(wrapper).toHaveAttribute('hidden');
+      // The wrapper's display utility would beat the hidden attribute's UA display rule.
+      expect(wrapper).toHaveClass('hidden');
+      expect(wrapper).not.toHaveClass('inline-flex');
+      expect(wrapper.querySelector('input')).not.toHaveAttribute('hidden');
+    });
+
+    it('renders a plain input for slot values that render nothing (R11)', () => {
+      const showIcon = false;
+      const { container } = render(
+        <>
+          <Input aria-label="Search" contentBefore={showIcon && <span>?</span>} className="w-40" />
+          <Input aria-label="Weight" contentAfter="" contentBefore={[]} className="w-40" />
+        </>,
+      );
+      for (const name of ['Search', 'Weight']) {
+        const input = screen.getByRole('textbox', { name });
+        expect(input.parentElement).toBe(container);
+        expect(input).toHaveClass('w-40', 'px-3');
+      }
+      expect(container.querySelector('span')).toBeNull();
+    });
+
+    it('keeps className, style and hidden on the input without slots', () => {
+      const { container } = render(
+        <Input aria-label="Name" className="w-40" style={{ maxWidth: 160 }} hidden />,
+      );
+      const input = container.firstElementChild as HTMLElement;
+      expect(input.tagName.toLowerCase()).toBe('input');
+      expect(input).toHaveClass('w-40');
+      expect(input).toHaveStyle({ maxWidth: '160px' });
+      expect(input).toHaveAttribute('hidden');
+    });
+
     it('uses logical padding for the slots in RTL (C-LOGICAL)', () => {
       renderWithProviders(
         <Input

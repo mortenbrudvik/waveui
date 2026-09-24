@@ -1,7 +1,7 @@
 import * as React from 'react';
 import { cn } from '../../lib/cn';
 import { joinIds } from '../../lib/aria';
-import { inputFocus } from '../../lib/styles';
+import { inputFocus, inputInvalid } from '../../lib/styles';
 import { useFieldControl } from '../../hooks/useFieldControl';
 import { isInvalidLook, useControlErrorMessage, type InputErrorMessageProps } from './Input';
 
@@ -79,7 +79,7 @@ export const Textarea = ({
         'placeholder:text-muted-foreground',
         inputFocus,
         'disabled:cursor-not-allowed disabled:opacity-50',
-        invalidLook && 'border-destructive focus:border-b-destructive',
+        invalidLook && inputInvalid,
         className,
       )}
       {...props}

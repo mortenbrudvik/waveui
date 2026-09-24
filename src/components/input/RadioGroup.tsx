@@ -2,7 +2,7 @@ import * as React from 'react';
 import { joinIds } from '../../lib/aria';
 import { cn } from '../../lib/cn';
 import { composeEventHandlers } from '../../lib/composeEventHandlers';
-import { isDev, warnDeprecated } from '../../lib/dev';
+import { isDev, reportMissingContext, warnDeprecated, warnOnce } from '../../lib/dev';
 import { focusRing, forcedColors } from '../../lib/styles';
 import type { Orientation } from '../../lib/types';
 import { useControllable } from '../../hooks/useControllable';
@@ -40,14 +40,23 @@ const INERT_CONTEXT: RadioGroupContextValue = {
   getTabIndex: () => -1,
 };
 
-/** The surrounding RadioGroup's context; throws in development outside one (C-CONTEXT). */
+/**
+ * The surrounding RadioGroup's context; throws in development outside one, logs once and returns
+ * an inert value in production (C-CONTEXT).
+ */
 function useRadioGroupContext(componentName: string): RadioGroupContextValue {
   const context = React.useContext(RadioGroupContext);
   if (context) return context;
-  const message = `[WaveUI] ${componentName} must be used within a RadioGroup`;
-  if (isDev) throw new Error(message);
-  console.error(message);
+  reportMissingContext(componentName, 'a RadioGroup');
   return INERT_CONTEXT;
+}
+
+function warnDuplicateValue(value: string): void {
+  warnOnce(
+    `RadioGroup:duplicate:${value}`,
+    `RadioGroup: several items share the value "${value}". Item values must be unique within a ` +
+      'RadioGroup; items that share a value are checked together.',
+  );
 }
 
 /* ---- RadioGroup ---- */
@@ -92,21 +101,7 @@ export interface RadioGroupProps extends Omit<
   ref?: React.Ref<HTMLDivElement>;
 }
 
-/**
- * A single-choice group of {@link RadioItem}s (`role="radiogroup"`).
- *
- * - One tab stop (the selected item, else the first enabled one); arrow keys move focus and select
- *   (APG radio group), Home/End jump to the ends, disabled items are skipped. Items may sit inside
- *   Fragments or wrapper elements.
- * - Inside a `Field` it is named by the Field label (`aria-labelledby`) and described by its hint
- *   and error.
- * - With `name` (or `required`) it takes part in native forms; a form reset restores
- *   `defaultValue`.
- *
- * Use `RadioGroup.Item` (or the flat `RadioGroupItem`/`RadioItem` names) for the items. React
- * Server Components cannot access the dotted form, so they import the flat names; dotted access
- * needs a client file.
- */
+/** The `role="radiogroup"` root of {@link RadioGroup} (documented there). */
 const RadioGroupRoot = ({
   value: valueProp,
   defaultValue,
@@ -165,6 +160,20 @@ const RadioGroupRoot = ({
   const isRequired = required ?? field?.required ?? false;
 
   useFormReset(rootRef, () => setValue(initialValue), form);
+
+  // Development diagnostic (R12): the items may sit anywhere inside the group (Fragments, wrapper
+  // elements), so they are read from the DOM after each commit.
+  React.useEffect(() => {
+    const root = rootRef.current;
+    if (!isDev || !root) return;
+    const seen = new Set<string>();
+    for (const item of root.querySelectorAll<HTMLElement>('[role="radio"][data-roving-value]')) {
+      if (item.closest('[role="radiogroup"]') !== root) continue;
+      const itemValue = item.getAttribute('data-roving-value') ?? '';
+      if (seen.has(itemValue)) warnDuplicateValue(itemValue);
+      seen.add(itemValue);
+    }
+  });
 
   const focusTabStop = () => {
     rootRef.current?.querySelector<HTMLElement>('[data-roving-value][tabindex="0"]')?.focus();
@@ -293,7 +302,9 @@ export function RadioItem({
         data-roving-value={value}
         onClick={composeEventHandlers(onClick, () => ctx.select(value))}
         className={cn(
-          'flex h-[18px] w-[18px] shrink-0 items-center justify-center rounded-full border transition-colors motion-reduce:transition-none',
+          // p-0 and bg-transparent are set here, not left to the native reset, which any app button
+          // style overrides (C-NATIVE).
+          'flex h-[18px] w-[18px] shrink-0 items-center justify-center rounded-full border bg-transparent p-0 transition-colors motion-reduce:transition-none',
           focusRing,
           selected ? 'border-2 border-primary' : 'border-stroke-accessible',
           // Forced colors: the focusable circle keeps system colors (its focus outline stays
@@ -316,7 +327,7 @@ export function RadioItem({
         )}
       </button>
       {label && (
-        <span id={labelTextId} className={cn('text-sm text-foreground', labelClassName)}>
+        <span id={labelTextId} className={cn('text-body-1 text-foreground', labelClassName)}>
           {label}
         </span>
       )}
@@ -336,7 +347,19 @@ export const RadioGroupItem = RadioItem;
 export type RadioGroupItemProps = RadioItemProps;
 
 /**
- * A single-choice group of radio items. `RadioGroup.Item` is the item component (also exported
- * as `RadioGroupItem` and `RadioItem`; use the flat names from React Server Components).
+ * A single-choice group of {@link RadioItem}s (`role="radiogroup"`).
+ *
+ * - One tab stop (the selected item, else the first enabled one); arrow keys move focus and select
+ *   (APG radio group), Home/End jump to the ends, disabled items are skipped. Items may sit inside
+ *   Fragments or wrapper elements. Every item needs its own `value` (a development warning names
+ *   a value that several items share).
+ * - Inside a `Field` it is named by the Field label (`aria-labelledby`) and described by its hint
+ *   and error.
+ * - With `name` (or `required`) it takes part in native forms; a form reset restores
+ *   `defaultValue`.
+ *
+ * Use `RadioGroup.Item` (or the flat `RadioGroupItem`/`RadioItem` names) for the items. React
+ * Server Components cannot access the dotted form, so they import the flat names; dotted access
+ * needs a client file.
  */
 export const RadioGroup = /* @__PURE__ */ Object.assign(RadioGroupRoot, { Item: RadioItem });

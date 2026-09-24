@@ -1,8 +1,8 @@
 import * as React from 'react';
 import { cn } from '../../lib/cn';
 import { joinIds } from '../../lib/aria';
-import { renderSlot } from '../../lib/slot';
-import { inputFocus, inputFocusWithin } from '../../lib/styles';
+import { renderSlot, slotRendersContent } from '../../lib/slot';
+import { inputFocus, inputFocusWithin, inputInvalid, inputInvalidWithin } from '../../lib/styles';
 import type { Slot } from '../../lib/types';
 import { useId } from '../../hooks/useId';
 import { useFieldContext, useFieldControl } from '../../hooks/useFieldControl';
@@ -100,10 +100,10 @@ export function isInvalidLook(
 export interface InputProps extends React.InputHTMLAttributes<HTMLInputElement> {
   /**
    * Validation error.
-   * - A non-empty string renders the message in a `role="alert"` element **after** the input
-   *   (a sibling, so `ref` and `className` stay on the input) and links it through
-   *   `aria-describedby` and `aria-errormessage`. Inside a `Field` that renders its own `error`,
-   *   the message is not repeated.
+   * - A non-empty string renders the message in a `role="alert"` element **after** the field (a
+   *   sibling, so it does not change which element receives `ref`, `className` or `style`) and
+   *   links it through `aria-describedby` and `aria-errormessage`. Inside a `Field` that renders
+   *   its own `error`, the message is not repeated.
    * - `true` only marks the input invalid (`aria-invalid` and the error border), as in 0.4.
    *
    * The error border also shows whenever the input ends up `aria-invalid="true"` without this
@@ -115,9 +115,14 @@ export interface InputProps extends React.InputHTMLAttributes<HTMLInputElement> 
   error?: string | boolean;
   /** Props of the error message element (`id`, `className`, …) rendered for a string `error`. */
   errorMessageProps?: InputErrorMessageProps;
-  /** Slot rendered before the input text (e.g., an icon). */
+  /**
+   * Slot rendered before the input text (e.g., an icon). With content in either slot, a bordered
+   * `<span>` around the input draws the field: it receives `className`, `style` and `hidden`,
+   * while `ref`, `id`, `aria-*`, `data-*`, handlers and native attributes stay on the `<input>`.
+   * A value that renders nothing (`false`, `''`, `[]`) is no slot.
+   */
   contentBefore?: Slot<'span'>;
-  /** Slot rendered after the input text (e.g., a suffix). */
+  /** Slot rendered after the input text (e.g., a suffix). Same wrapper as `contentBefore`. */
   contentAfter?: Slot<'span'>;
   /**
    * Called with the new string value on every change, next to the native `onChange` event
@@ -133,6 +138,9 @@ export interface InputProps extends React.InputHTMLAttributes<HTMLInputElement> 
  * primary bottom border while focused, optional `contentBefore`/`contentAfter` slots and an
  * optional error message. Inside a `Field` it picks up the label, hint, error, `required` (native
  * attribute) and invalid state automatically.
+ *
+ * Every prop reaches the `<input>`, except with slot content: then a bordered `<span>` wrapper
+ * draws the field and receives `className`, `style` and `hidden` (`ref` stays on the input).
  *
  * @example
  * <Field label="Email" hint="We never share it" required>
@@ -192,19 +200,29 @@ export const Input = ({
     onChange: handleChange,
   };
 
+  const hasBefore = slotRendersContent(contentBefore);
+  const hasAfter = slotRendersContent(contentAfter);
+
   let control: React.ReactElement;
-  if (contentBefore != null || contentAfter != null) {
+  if (hasBefore || hasAfter) {
+    // The bordered wrapper is the visible field: `className`, `style` and `hidden` size, style and
+    // hide it; `ref`, `id`, `aria-*`, `data-*`, handlers and native attributes go to the input.
+    const { style, hidden, ...inputProps } = controlProps;
     control = (
       <span
+        hidden={hidden}
+        style={style}
         className={cn(
           'inline-flex h-8 w-full items-center rounded border border-input border-b-stroke-accessible bg-background text-body-1 text-foreground',
           inputFocusWithin,
-          invalidLook && 'border-destructive focus-within:border-b-destructive',
+          invalidLook && inputInvalidWithin,
           props.disabled && 'cursor-not-allowed opacity-50',
+          // The display utility above would beat the `hidden` attribute's own display rule.
+          hidden && 'hidden',
           className,
         )}
       >
-        {contentBefore != null && renderSlot(contentBefore, 'span', 'shrink-0 ps-2')}
+        {hasBefore && renderSlot(contentBefore, 'span', 'shrink-0 ps-2')}
         <input
           ref={ref}
           className={cn(
@@ -213,9 +231,9 @@ export const Input = ({
             'focus:outline-hidden',
             'disabled:cursor-not-allowed',
           )}
-          {...controlProps}
+          {...inputProps}
         />
-        {contentAfter != null && renderSlot(contentAfter, 'span', 'shrink-0 pe-2')}
+        {hasAfter && renderSlot(contentAfter, 'span', 'shrink-0 pe-2')}
       </span>
     );
   } else {
@@ -227,7 +245,7 @@ export const Input = ({
           'placeholder:text-muted-foreground',
           inputFocus,
           'disabled:cursor-not-allowed disabled:opacity-50',
-          invalidLook && 'border-destructive focus:border-b-destructive',
+          invalidLook && inputInvalid,
           className,
         )}
         {...controlProps}

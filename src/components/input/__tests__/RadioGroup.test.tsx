@@ -1,5 +1,5 @@
 import * as React from 'react';
-import { describe, it, expect, expectTypeOf, vi } from 'vitest';
+import { afterEach, describe, it, expect, expectTypeOf, vi } from 'vitest';
 import { act, render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { RadioGroup, RadioGroupItem, RadioItem } from '../RadioGroup';
@@ -23,6 +23,9 @@ const twoItems = [
 function radio(name: string): HTMLElement {
   return screen.getByRole('radio', { name });
 }
+
+const ONCHANGE_DEPRECATION =
+  '[WaveUI] RadioGroup: `onChange` is deprecated and will be removed in 1.0. Use `onValueChange` instead.';
 
 describe('RadioGroup', () => {
   testSystemProps(RadioGroup, {
@@ -165,6 +168,7 @@ describe('RadioGroup', () => {
       );
       expect(deprecations).toHaveLength(1);
       expect(String(deprecations[0][0])).toContain('Use `onValueChange` instead.');
+      expect(warn).toHaveBeenCalledTimes(1);
     } finally {
       warn.mockRestore();
     }
@@ -196,6 +200,7 @@ describe('RadioGroup', () => {
       await user.keyboard('{ArrowUp}');
       expect(onChange.mock.calls).toEqual([['b'], ['a']]);
       expect(onValueChange.mock.calls).toEqual([['b'], ['a']]);
+      expect(warn.mock.calls).toEqual([[ONCHANGE_DEPRECATION]]);
     } finally {
       warn.mockRestore();
     }
@@ -231,6 +236,7 @@ describe('RadioGroup', () => {
       await user.keyboard('{ArrowDown}');
       expect(onChange.mock.calls).toEqual([['b'], ['b']]);
       expect(onValueChange.mock.calls).toEqual([['b'], ['b']]);
+      expect(warn.mock.calls).toEqual([[ONCHANGE_DEPRECATION]]);
     } finally {
       warn.mockRestore();
     }
@@ -311,6 +317,85 @@ describe('RadioGroup', () => {
     } finally {
       error.mockRestore();
     }
+  });
+
+  describe('in production (R3)', () => {
+    afterEach(() => {
+      vi.unstubAllEnvs();
+    });
+
+    it('logs a RadioItem outside a RadioGroup once and renders it inert', () => {
+      vi.stubEnv('NODE_ENV', 'production');
+      const error = vi.spyOn(console, 'error').mockImplementation(() => {});
+      try {
+        const { rerender } = render(
+          <>
+            <RadioItem value="a" label="Orphan" />
+            <RadioItem value="b" label="Stray" />
+          </>,
+        );
+        rerender(
+          <>
+            <RadioItem value="a" label="Orphan" />
+            <RadioItem value="b" label="Stray" />
+          </>,
+        );
+        expect(error.mock.calls).toEqual([['[WaveUI] RadioItem must be used within a RadioGroup']]);
+        expect(radio('Orphan')).toHaveAttribute('aria-checked', 'false');
+        expect(radio('Orphan')).toHaveAttribute('tabindex', '-1');
+      } finally {
+        error.mockRestore();
+      }
+    });
+  });
+
+  describe('duplicate item values (R12)', () => {
+    it('warns once per value that several items share', () => {
+      const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+      try {
+        const ui = (
+          <RadioGroup aria-label="Options">
+            <RadioItem value="a" label="Alpha" />
+            <div>
+              <RadioItem value="a" label="Alpha again" />
+            </div>
+            <RadioItem value="b" label="Beta" />
+            <RadioItem value="b" label="Beta again" />
+            <RadioItem value="b" label="Beta once more" />
+            <RadioItem value="c" label="Charlie" />
+          </RadioGroup>
+        );
+        const { rerender } = render(ui);
+        rerender(ui);
+        expect(warn.mock.calls).toEqual([
+          [
+            '[WaveUI] RadioGroup: several items share the value "a". Item values must be unique ' +
+              'within a RadioGroup; items that share a value are checked together.',
+          ],
+          [
+            '[WaveUI] RadioGroup: several items share the value "b". Item values must be unique ' +
+              'within a RadioGroup; items that share a value are checked together.',
+          ],
+        ]);
+      } finally {
+        warn.mockRestore();
+      }
+    });
+
+    it('does not warn for unique values, including the same value in two separate groups', () => {
+      const warn = vi.spyOn(console, 'warn');
+      try {
+        render(
+          <>
+            <RadioGroup aria-label="Size">{twoItems}</RadioGroup>
+            <RadioGroup aria-label="Colour">{twoItems}</RadioGroup>
+          </>,
+        );
+        expect(warn).not.toHaveBeenCalled();
+      } finally {
+        warn.mockRestore();
+      }
+    });
   });
 
   it('keeps the same context value across unrelated re-renders (memoized provider)', () => {
@@ -427,6 +512,22 @@ describe('RadioItem', () => {
     expect(radio('Beta')).toHaveAttribute('aria-checked', 'false');
   });
 
+  it('selects the item when its label text is clicked; a consumer onClick runs once', async () => {
+    const user = userEvent.setup();
+    const onClick = vi.fn();
+    const onValueChange = vi.fn();
+    render(
+      <RadioGroup aria-label="Options" onValueChange={onValueChange}>
+        <RadioItem value="a" label="Alpha" />
+        <RadioItem value="b" label="Beta" onClick={onClick} />
+      </RadioGroup>,
+    );
+    await user.click(screen.getByText('Beta'));
+    expect(radio('Beta')).toHaveAttribute('aria-checked', 'true');
+    expect(onClick).toHaveBeenCalledTimes(1);
+    expect(onValueChange.mock.calls).toEqual([['b']]);
+  });
+
   it('draws the unchecked circle with the accessible stroke and the checked dot as a forced-colors leaf', () => {
     render(
       <RadioGroup aria-label="Options" defaultValue="b">
@@ -446,6 +547,27 @@ describe('RadioItem', () => {
       'forced-colors:forced-color-adjust-none',
     );
     expect(radio('Alpha')).toHaveClass('motion-reduce:transition-none');
+  });
+
+  it('sets its own zero padding and transparent circle, so app button styles cannot shift or fill it (C-NATIVE)', () => {
+    render(
+      <RadioGroup aria-label="Options" defaultValue="b">
+        {twoItems}
+      </RadioGroup>,
+    );
+    for (const name of ['Alpha', 'Beta']) {
+      expect(radio(name)).toHaveClass('p-0', 'bg-transparent');
+    }
+  });
+
+  it('draws the label text on the px type ramp like Field and Label (text-body-1)', () => {
+    render(
+      <RadioGroup aria-label="Options">
+        <RadioItem value="a" label="Alpha" labelClassName="italic" />
+      </RadioGroup>,
+    );
+    expect(screen.getByText('Alpha')).toHaveClass('text-body-1', 'italic');
+    expect(screen.getByText('Alpha')).not.toHaveClass('text-sm');
   });
 
   it('forced colors: the radio circle keeps system colors; only the dot opts out (leaf)', () => {
@@ -591,6 +713,23 @@ describe('RadioGroup - roving tabindex', () => {
     expect(radio('Beta')).toHaveFocus();
     expect(radio('Beta')).toHaveAttribute('aria-checked', 'true');
     expect(radio('Beta')).toHaveAttribute('tabindex', '0');
+  });
+
+  it('with no value, Tab reaches the first radio and Space checks it (APG)', async () => {
+    const user = userEvent.setup();
+    const onValueChange = vi.fn();
+    render(
+      <RadioGroup aria-label="Options" onValueChange={onValueChange}>
+        <RadioItem value="a" label="Alpha" />
+        <RadioItem value="b" label="Beta" />
+      </RadioGroup>,
+    );
+    await user.tab();
+    expect(radio('Alpha')).toHaveFocus();
+    expect(radio('Alpha')).toHaveAttribute('aria-checked', 'false');
+    await user.keyboard(' ');
+    expect(radio('Alpha')).toHaveAttribute('aria-checked', 'true');
+    expect(onValueChange.mock.calls).toEqual([['a']]);
   });
 
   it('finds items inside Fragments and wrapper elements', async () => {
@@ -849,6 +988,25 @@ describe('RadioGroup — Field integration (FieldContext)', () => {
     }
   });
 
+  it('a required Field blocks the form until a value is selected (no name needed)', async () => {
+    const user = userEvent.setup();
+    renderWithFieldContext(
+      <form aria-label="Form">
+        <RadioGroup>{twoItems}</RadioGroup>
+      </form>,
+      { required: true },
+    );
+    const form = screen.getByRole('form', { name: 'Form' }) as HTMLFormElement;
+    // A failed check fires `invalid`, which focuses the tab stop and updates state: run it in act.
+    let valid = true;
+    act(() => {
+      valid = form.checkValidity();
+    });
+    expect(valid).toBe(false);
+    await user.click(radio('Alpha'));
+    expect(form.checkValidity()).toBe(true);
+  });
+
   it('an explicit required={false} wins over a required Field (aria-required matches validation)', () => {
     renderWithFieldContext(
       <form aria-label="Form">
@@ -935,6 +1093,54 @@ describe('RadioGroup — native forms (C-FORMS)', () => {
       getForm().reportValidity();
     });
     expect(radio('Alpha')).toHaveFocus();
+  });
+
+  it('a disabled group is neither submitted nor validated, like native radios', () => {
+    render(
+      <form aria-label="Form">
+        <RadioGroup aria-label="Size" name="size" defaultValue="a" disabled>
+          {twoItems}
+        </RadioGroup>
+        <RadioGroup aria-label="Plan" name="plan" required disabled>
+          <RadioItem value="free" label="Free" />
+          <RadioItem value="pro" label="Pro" />
+        </RadioGroup>
+      </form>,
+    );
+    // The user cannot choose in a disabled group, so its requirement must not block the form.
+    expect(checkValidity()).toBe(true);
+    expect(Array.from(new FormData(getForm()).keys())).toEqual([]);
+  });
+
+  it('controlled: a form reset reports defaultValue once through onValueChange', async () => {
+    const user = userEvent.setup();
+    const onValueChange = vi.fn();
+    function Controlled() {
+      const [value, setValue] = React.useState('a');
+      return (
+        <form aria-label="Form">
+          <RadioGroup
+            aria-label="Options"
+            defaultValue="a"
+            value={value}
+            onValueChange={(next) => {
+              onValueChange(next);
+              setValue(next);
+            }}
+          >
+            {twoItems}
+          </RadioGroup>
+        </form>
+      );
+    }
+    render(<Controlled />);
+    await user.click(radio('Beta'));
+    expect(radio('Beta')).toHaveAttribute('aria-checked', 'true');
+    onValueChange.mockClear();
+    act(() => getForm().reset());
+    expect(onValueChange.mock.calls).toEqual([['a']]);
+    expect(radio('Alpha')).toHaveAttribute('aria-checked', 'true');
+    expect(radio('Beta')).toHaveAttribute('aria-checked', 'false');
   });
 
   it('form reset restores defaultValue (with and without a name)', async () => {

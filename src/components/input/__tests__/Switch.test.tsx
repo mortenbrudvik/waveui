@@ -128,9 +128,24 @@ describe('Switch', () => {
       );
       expect(deprecations).toHaveLength(1);
       expect(String(deprecations[0][0])).toContain('Use `onCheckedChange` instead.');
+      expect(warn).toHaveBeenCalledTimes(1);
     } finally {
       warn.mockRestore();
     }
+  });
+
+  it('toggles with Space from the keyboard', async () => {
+    const user = userEvent.setup();
+    const onCheckedChange = vi.fn();
+    render(<Switch label="Dark mode" onCheckedChange={onCheckedChange} />);
+    const sw = screen.getByRole('switch', { name: 'Dark mode' });
+    await user.tab();
+    expect(sw).toHaveFocus();
+    await user.keyboard(' ');
+    expect(sw).toHaveAttribute('aria-checked', 'true');
+    await user.keyboard(' ');
+    expect(sw).toHaveAttribute('aria-checked', 'false');
+    expect(onCheckedChange.mock.calls).toEqual([[true], [false]]);
   });
 
   it('applies disabled state', () => {
@@ -344,6 +359,20 @@ describe('Switch — Field integration (FieldContext)', () => {
     expect(sw).toHaveAccessibleName(`Display ${FIELD_TEST_TEXT.label} Dark mode`);
   });
 
+  it('a required Field blocks the form until the switch is on (no name needed)', async () => {
+    const user = userEvent.setup();
+    renderWithFieldContext(
+      <form aria-label="Form">
+        <Switch />
+      </form>,
+      { required: true },
+    );
+    const form = screen.getByRole('form', { name: 'Form' }) as HTMLFormElement;
+    expect(form.checkValidity()).toBe(false);
+    await user.click(screen.getByRole('switch', { name: FIELD_TEST_TEXT.label }));
+    expect(form.checkValidity()).toBe(true);
+  });
+
   it('an explicit required={false} wins over a required Field (aria-required matches validation)', () => {
     renderWithFieldContext(
       <form aria-label="Form">
@@ -394,6 +423,47 @@ describe('Switch — native forms (C-FORMS)', () => {
     expect(getForm().checkValidity()).toBe(false);
     await user.click(screen.getByRole('switch', { name: 'Dark mode' }));
     expect(getForm().checkValidity()).toBe(true);
+  });
+
+  it('a disabled switch is neither submitted nor validated, like a native checkbox', () => {
+    render(
+      <form aria-label="Form">
+        <Switch name="dark" required disabled label="Dark mode" />
+        <Switch name="compact" defaultChecked disabled label="Compact" />
+      </form>,
+    );
+    // The user cannot switch a disabled switch on, so its requirement must not block the form.
+    expect(getForm().checkValidity()).toBe(true);
+    expect(Array.from(new FormData(getForm()).keys())).toEqual([]);
+  });
+
+  it('controlled: a form reset reports defaultChecked once through onCheckedChange', async () => {
+    const user = userEvent.setup();
+    const onCheckedChange = vi.fn();
+    function Controlled() {
+      const [checked, setChecked] = React.useState(true);
+      return (
+        <form aria-label="Form">
+          <Switch
+            label="Dark mode"
+            defaultChecked
+            checked={checked}
+            onCheckedChange={(next) => {
+              onCheckedChange(next);
+              setChecked(next);
+            }}
+          />
+        </form>
+      );
+    }
+    render(<Controlled />);
+    const sw = screen.getByRole('switch', { name: 'Dark mode' });
+    await user.click(sw);
+    expect(sw).toHaveAttribute('aria-checked', 'false');
+    onCheckedChange.mockClear();
+    act(() => getForm().reset());
+    expect(onCheckedChange.mock.calls).toEqual([[true]]);
+    expect(sw).toHaveAttribute('aria-checked', 'true');
   });
 
   it('form reset restores defaultChecked (with and without a name)', async () => {
@@ -468,6 +538,53 @@ describe('Switch — styling tokens', () => {
     expect(getThumb(sw)).not.toHaveClass('forced-colors:bg-[ButtonText]');
   });
 
+  it('sizes the track and the thumb in one unit (px), so the thumb fits the track at any root font size', () => {
+    /** The value of a `<utility>-[<n>px]` class (not one behind a variant). */
+    function px(element: HTMLElement, utility: string): number {
+      const match = element.className.match(
+        new RegExp(`(?:^|\\s)${utility}-\\[(\\d+(?:\\.\\d+)?)px\\](?=\\s|$)`),
+      );
+      if (!match) throw new Error(`no ${utility}-[…px] class in "${element.className}"`);
+      return Number(match[1]);
+    }
+    render(
+      <>
+        <Switch label="Off" />
+        <Switch label="On" defaultChecked />
+      </>,
+    );
+    const off = screen.getByRole('switch', { name: 'Off' });
+    const on = screen.getByRole('switch', { name: 'On' });
+    // A rem track (h-5 w-10) scales with the root font size while the px thumb does not.
+    expect(on.className).not.toMatch(/(^|\s)(h|w|size)-\d/);
+    expect(on).toHaveClass('border');
+    const border = 1;
+    const thumb = px(getThumb(on), 'w');
+    expect(px(getThumb(on), 'h')).toBe(thumb);
+    const offInset = px(getThumb(off), 'translate-x');
+    // The checked thumb stops as far from the inline end as the unchecked one from the start…
+    expect(px(on, 'w') - 2 * border - thumb - px(getThumb(on), 'translate-x')).toBe(offInset);
+    // …and the same distance from the top and bottom.
+    expect(px(on, 'h') - 2 * border - thumb).toBe(2 * offInset);
+  });
+
+  it('sets its own zero track padding, so app button styles cannot shift the thumb (C-NATIVE)', () => {
+    render(
+      <>
+        <Switch label="Off" />
+        <Switch label="On" defaultChecked />
+      </>,
+    );
+    expect(screen.getByRole('switch', { name: 'Off' })).toHaveClass('p-0', 'bg-transparent');
+    expect(screen.getByRole('switch', { name: 'On' })).toHaveClass('p-0', 'bg-primary');
+  });
+
+  it('draws the label text on the px type ramp like Field and Label (text-body-1)', () => {
+    render(<Switch label="Dark mode" />);
+    expect(screen.getByText('Dark mode')).toHaveClass('text-body-1');
+    expect(screen.getByText('Dark mode')).not.toHaveClass('text-sm');
+  });
+
   it('turns off the track and thumb transitions for reduced motion', () => {
     render(<Switch label="Dark mode" />);
     const sw = screen.getByRole('switch', { name: 'Dark mode' });
@@ -475,7 +592,7 @@ describe('Switch — styling tokens', () => {
     expect(getThumb(sw)).toHaveClass('motion-reduce:transition-none');
   });
 
-  it('mirrors the thumb position under dir="rtl"', () => {
+  it('mirrors the thumb position under dir="rtl" (wave-rtl: variant, R4)', () => {
     renderWithProviders(
       <>
         <Switch label="Off" />
@@ -485,11 +602,32 @@ describe('Switch — styling tokens', () => {
     );
     expect(getThumb(screen.getByRole('switch', { name: 'Off' }))).toHaveClass(
       'translate-x-[2px]',
-      'rtl:-translate-x-[2px]',
+      'wave-rtl:-translate-x-[2px]',
     );
     expect(getThumb(screen.getByRole('switch', { name: 'On' }))).toHaveClass(
       'translate-x-[22px]',
-      'rtl:-translate-x-[22px]',
+      'wave-rtl:-translate-x-[22px]',
+    );
+  });
+
+  it('mirrors by its own direction, not by an RTL ancestor: no bare rtl: class inside an LTR subtree (R4)', () => {
+    // Tailwind's `rtl:` also matches `[dir=rtl] *`, so it would push the thumb of a switch in an LTR
+    // subtree of an RTL page out of its track; `wave-rtl:` uses the element's own direction.
+    renderWithProviders(
+      <div dir="ltr">
+        <Switch label="Off" />
+        <Switch label="On" defaultChecked />
+      </div>,
+      { dir: 'rtl' },
+    );
+    for (const name of ['Off', 'On']) {
+      const sw = screen.getByRole('switch', { name });
+      for (const element of [sw, getThumb(sw)]) {
+        expect(element.className, name).not.toMatch(/(^|\s)rtl:/);
+      }
+    }
+    expect(getThumb(screen.getByRole('switch', { name: 'On' }))).toHaveClass(
+      'wave-rtl:-translate-x-[22px]',
     );
   });
 });

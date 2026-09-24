@@ -1,7 +1,7 @@
 import * as React from 'react';
 import { cn } from '../../lib/cn';
 import { joinIds } from '../../lib/aria';
-import { inputFocus } from '../../lib/styles';
+import { inputFocus, inputInvalid } from '../../lib/styles';
 import { useFieldControl } from '../../hooks/useFieldControl';
 import { isInvalidLook, useControlErrorMessage, type InputErrorMessageProps } from './Input';
 
@@ -82,13 +82,13 @@ export const Select = ({
       className={cn(
         'h-8 w-full appearance-none rounded border border-input border-b-stroke-accessible bg-background ps-3 pe-8 text-body-1 text-foreground',
         // Chevron: two token-colored gradient halves of a small triangle at the inline end.
-        'bg-no-repeat bg-[size:5px_5px,5px_5px] bg-[position:right_16px_center,right_11px_center] rtl:bg-[position:left_11px_center,left_16px_center]',
+        'bg-no-repeat bg-[size:5px_5px,5px_5px] bg-[position:right_16px_center,right_11px_center] wave-rtl:bg-[position:left_11px_center,left_16px_center]',
         'bg-[image:linear-gradient(45deg,transparent_50%,var(--wave-muted-foreground)_50%),linear-gradient(135deg,var(--wave-muted-foreground)_50%,transparent_50%)]',
         // Forced colors drop the background chevron: show the native arrow instead.
         'forced-colors:appearance-auto forced-colors:bg-none',
         inputFocus,
         'disabled:cursor-not-allowed disabled:opacity-50',
-        invalidLook && 'border-destructive focus:border-b-destructive',
+        invalidLook && inputInvalid,
         className,
       )}
       {...props}

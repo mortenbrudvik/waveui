@@ -3,6 +3,7 @@ import { describe, it, expect, vi, expectTypeOf } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { Select, type SelectProps } from '../Select';
+import { inputInvalid } from '../../../lib/styles';
 import {
   testSystemProps,
   testFocusEvents,
@@ -78,12 +79,30 @@ describe('Select', () => {
       expect(select.className).not.toMatch(/%23|#[0-9a-f]{3,8}|outline-none/i);
     });
 
-    it('places the chevron at the inline end in RTL (C-LOGICAL)', () => {
+    it('places the chevron at the inline end in RTL (C-LOGICAL, wave-rtl: variant R4)', () => {
       renderWithProviders(<Select aria-label="Letter">{options}</Select>, { dir: 'rtl' });
       const select = screen.getByRole('combobox', { name: 'Letter' });
-      expect(select).toHaveClass('ps-3', 'pe-8');
-      expect(select.className).toContain('rtl:bg-[position:left_');
+      expect(select).toHaveClass(
+        'ps-3',
+        'pe-8',
+        'bg-[position:right_16px_center,right_11px_center]',
+        'wave-rtl:bg-[position:left_11px_center,left_16px_center]',
+      );
       expect(select.className).not.toMatch(/\b(pl|pr)-/);
+    });
+
+    it('places the chevron by its own direction, not by an RTL ancestor (R4)', () => {
+      // Tailwind's `rtl:` also matches `[dir=rtl] *`: the chevron of a select in an LTR subtree of
+      // an RTL page would sit at the left, over the option text, with `pe-8` reserving the right.
+      renderWithProviders(
+        <div dir="ltr">
+          <Select aria-label="Letter">{options}</Select>
+        </div>,
+        { dir: 'rtl' },
+      );
+      const select = screen.getByRole('combobox', { name: 'Letter' });
+      expect(select.className).not.toMatch(/(^|\s)rtl:/);
+      expect(select).toHaveClass('wave-rtl:bg-[position:left_11px_center,left_16px_center]');
     });
   });
 
@@ -146,6 +165,24 @@ describe('Select', () => {
       }
       expect(screen.queryByRole('alert')).not.toBeInTheDocument();
       expect(screen.queryByText('Checking')).not.toBeInTheDocument();
+    });
+
+    it('draws the invalid look with the shared inputInvalid recipe (R8)', () => {
+      render(
+        <>
+          <Select aria-label="Letter" error>
+            {options}
+          </Select>
+          <Select aria-label="Digit" aria-invalid>
+            {options}
+          </Select>
+        </>,
+      );
+      for (const name of ['Letter', 'Digit']) {
+        const select = screen.getByRole('combobox', { name });
+        expect(select).toHaveClass(...inputInvalid.split(' '));
+        expect(select).not.toHaveClass('border-input');
+      }
     });
 
     it('does not set aria-invalid without an error', () => {

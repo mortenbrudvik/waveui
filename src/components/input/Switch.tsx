@@ -88,7 +88,8 @@ export interface SwitchProps extends Omit<
  *   by the Field hint and error.
  * - With `name` (or `required`) it takes part in native forms like `<input type="checkbox">`, and
  *   a form reset restores `defaultChecked`.
- * - The thumb position mirrors under `dir="rtl"`.
+ * - The thumb position mirrors when the switch itself is right-to-left (its nearest `dir`), so a
+ *   switch in an LTR subtree of an RTL page keeps the LTR layout.
  */
 export const Switch = ({
   checked: checkedProp,
@@ -189,7 +190,12 @@ export const Switch = ({
         disabled={disabled}
         onClick={composeEventHandlers(onClick, () => setChecked((prev) => !prev))}
         className={cn(
-          'relative inline-flex h-5 w-10 shrink-0 items-center rounded-full border transition-colors duration-200 motion-reduce:transition-none',
+          // The whole control is sized in px, like the Checkbox box and the radio circle: the thumb
+          // and its offsets are px, so a track in rem would stop fitting them at any root font size
+          // other than 16px. The 40x20 track (1px border) leaves a 2px inset around the 14px thumb.
+          // p-0 is set here, not left to the native reset, which any app button style overrides
+          // (C-NATIVE): the thumb offsets assume no padding.
+          'relative inline-flex h-[20px] w-[40px] shrink-0 items-center rounded-full border p-0 transition-colors duration-200 motion-reduce:transition-none',
           focusRing,
           checked
             ? cn('border-primary bg-primary', disabled ? disabledOnTrack : onTrack)
@@ -204,8 +210,8 @@ export const Switch = ({
           className={cn(
             'block h-[14px] w-[14px] rounded-full transition-transform duration-200 motion-reduce:transition-none forced-colors:forced-color-adjust-none',
             checked
-              ? 'translate-x-[22px] rtl:-translate-x-[22px] bg-primary-foreground'
-              : 'translate-x-[2px] rtl:-translate-x-[2px] bg-stroke-accessible',
+              ? 'translate-x-[22px] wave-rtl:-translate-x-[22px] bg-primary-foreground'
+              : 'translate-x-[2px] wave-rtl:-translate-x-[2px] bg-stroke-accessible',
             disabled
               ? 'forced-colors:bg-[GrayText]'
               : checked
@@ -215,7 +221,7 @@ export const Switch = ({
         />
       </button>
       {label && (
-        <span id={labelTextId} className="text-sm text-foreground">
+        <span id={labelTextId} className="text-body-1 text-foreground">
           {label}
         </span>
       )}

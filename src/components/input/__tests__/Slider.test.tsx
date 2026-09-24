@@ -2,6 +2,7 @@ import * as React from 'react';
 import { describe, it, expect, vi, expectTypeOf } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/react';
 import { Slider, type SliderProps } from '../Slider';
+import { forcedColors } from '../../../lib/styles';
 import { testSystemProps, testFocusEvents } from '../../../test-utils';
 
 describe('Slider', () => {
@@ -122,6 +123,42 @@ describe('Slider', () => {
         'focus-visible:outline-ring',
       );
       expect(slider.className).not.toMatch(/#[0-9a-f]{3,8}|border-white|bg-white/i);
+    });
+
+    it('keeps the rail, the thumb and the focus outline visible in forced colors (x-styling-4)', () => {
+      // The rail and thumb are author backgrounds of pseudo-elements, which forced colors replace
+      // with Canvas: without the recipe only a hollow thumb outline would remain.
+      render(
+        <>
+          <Slider aria-label="Volume" />
+          <Slider aria-label="Balance" disabled />
+        </>,
+      );
+      for (const name of ['Volume', 'Balance']) {
+        expect(screen.getByRole('slider', { name })).toHaveClass(
+          ...forcedColors.rangeInput.split(' '),
+        );
+      }
+    });
+
+    it('centres the thumb on the rail with a margin derived from both sizes, not a px offset (x-styling-3)', () => {
+      render(<Slider aria-label="Volume" />);
+      const className = screen.getByRole('slider', { name: 'Volume' }).className;
+      /** The spacing-scale number of a `<part>:<utility>-<n>` class. */
+      function units(part: string, utility: string): number {
+        const escaped = `${part}:${utility}`.replace(/[[\]&:]/g, (c) => `\\${c}`);
+        const match = className.match(
+          new RegExp(`(?:^|\\s)${escaped}-(\\d+(?:\\.\\d+)?)(?=\\s|$)`),
+        );
+        if (!match) throw new Error(`no ${part}:${utility}-<n> class in "${className}"`);
+        return Number(match[1]);
+      }
+      const thumb = '[&::-webkit-slider-thumb]';
+      const track = '[&::-webkit-slider-runnable-track]';
+      // WebKit/Blink align the thumb's top with the track's top: pull it up by half the difference.
+      expect(units(thumb, '-mt')).toBe((units(thumb, 'h') - units(track, 'h')) / 2);
+      expect(units(thumb, 'w')).toBe(units(thumb, 'h'));
+      expect(className).not.toMatch(/slider-thumb\]:-?mt-\[/);
     });
   });
 });
