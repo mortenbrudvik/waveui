@@ -245,13 +245,13 @@ const TOKENS: Record<string, [string, string, string]> = {
   'primary-pressed': ['#0c3b5e', '#2886de', '#00c4d6'],
   accent: ['#0f6cbd', '#62abf5', '#1aebff'],
   'accent-foreground': ['#ffffff', '#000000', '#000000'],
-  destructive: ['#c50f1f', '#f48a94', '#ff6060'],
+  destructive: ['#c50f1f', '#f48a94', '#ff6e6e'],
   'destructive-foreground': ['#ffffff', '#000000', '#000000'],
-  error: ['#c50f1f', '#f48a94', '#ff6060'],
+  error: ['#c50f1f', '#f48a94', '#ff6e6e'],
   'error-foreground': ['#ffffff', '#000000', '#000000'],
   subtle: ['transparent', 'transparent', 'transparent'],
   'subtle-hover': ['#f5f5f5', '#333333', '#1f1f1f'],
-  'subtle-pressed': ['#e0e0e0', '#2e2e2e', '#333333'],
+  'subtle-pressed': ['#ebebeb', '#2e2e2e', '#333333'],
   'subtle-selected': ['#ebebeb', '#383838', '#333333'],
   selected: ['#ebf3fc', '#082338', '#003a40'],
   'selected-foreground': ['#0f548c', '#62abf5', '#ffffff'],
@@ -261,7 +261,7 @@ const TOKENS: Record<string, [string, string, string]> = {
   'stroke-accessible': ['#616161', '#adadad', '#ffffff'],
   input: ['#d1d1d1', '#666666', '#ffffff'],
   ring: ['#0f6cbd', '#479ef5', '#ffff00'],
-  success: ['#107c10', '#54b054', '#3ff23f'],
+  success: ['#107c10', '#5db55d', '#3ff23f'],
   'success-foreground': ['#ffffff', '#000000', '#000000'],
   'success-tint': ['#f1faf1', '#052505', '#000000'],
   'success-tint-foreground': ['#0e700e', '#54b054', '#3ff23f'],
@@ -278,7 +278,7 @@ const TOKENS: Record<string, [string, string, string]> = {
   info: ['#0f6cbd', '#479ef5', '#1aebff'],
   'info-foreground': ['#ffffff', '#000000', '#000000'],
   'info-tint': ['#ebf3fc', '#082338', '#000000'],
-  'info-tint-foreground': ['#0f548c', '#479ef5', '#1aebff'],
+  'info-tint-foreground': ['#0f548c', '#62abf5', '#1aebff'],
   inverted: ['#292929', '#ffffff', '#000000'],
   'inverted-foreground': ['#ffffff', '#242424', '#ffffff'],
   'inverted-border': ['transparent', 'transparent', '#ffffff'],
@@ -479,10 +479,10 @@ const TABLED_RATIOS: Array<[string, string, [number | null, number | null, numbe
   ['ring', 'selected', [4.81, 5.72, 11.65]],
   ['stroke-accessible', 'background', [6.19, 6.48, 21.0]],
   ['primary', 'track', [4.08, 4.48, 5.78]],
-  ['error', 'background', [6.07, 6.17, 7.09]],
+  ['error', 'background', [6.07, 6.17, 7.71]],
   ['error', 'card', [null, 5.36, null]],
-  ['error-foreground', 'error', [6.07, 8.91, 7.09]],
-  ['success-foreground', 'success', [5.37, 7.72, 13.98]],
+  ['error-foreground', 'error', [6.07, 8.91, 7.71]],
+  ['success-foreground', 'success', [5.37, 8.23, 13.98]],
   ['warning-foreground', 'warning', [11.95, 16.16, 19.56]],
   ['severe-foreground', 'severe', [4.56, 7.1, 9.0]],
   ['info-foreground', 'info', [5.38, 7.48, 14.37]],
@@ -490,7 +490,7 @@ const TABLED_RATIOS: Array<[string, string, [number | null, number | null, numbe
   ['warning-tint-foreground', 'warning-tint', [6.42, 9.51, 19.56]],
   ['error-tint-foreground', 'error-tint', [6.55, 7.35, 7.09]],
   ['severe-tint-foreground', 'severe-tint', [6.64, 5.42, 9.0]],
-  ['info-tint-foreground', 'info-tint', [7.03, 5.72, 14.37]],
+  ['info-tint-foreground', 'info-tint', [7.03, 6.62, 14.37]],
   ['inverted-foreground', 'inverted', [14.55, 15.52, 21.0]],
   ['rating', 'background', [3.99, 8.05, 19.56]],
   ['presence-away', 'background', [3.82, 8.05, 19.56]],
@@ -527,6 +527,109 @@ const TABLED_MINIMUMS = [
   'presence-away',
   'presence-oof',
 ].map((fill): MinimumPair => ['high-contrast', 'presence-glyph', fill, 7.09]);
+
+/**
+ * Text contrast matrix (WCAG 1.4.3: 4.5:1, compared unrounded). The pairs above are the ones the
+ * spec tables; components and consumers also combine a text token with any surface of its theme.
+ * A real-browser axe sweep of every story found high-contrast `error` text at 4.27:1 in a selected,
+ * pressed List row (a subtle Button with `text-error` on `subtle-pressed`), a pair no table listed.
+ * So every text-capable token is checked against every surface it can sit on, and every colour
+ * token is classified (text, surface or excluded with a reason), so a new token cannot skip it.
+ */
+
+/**
+ * Surfaces any text can sit on: the page (popovers, menus, dialogs and toasts are `background`
+ * too), cards, neutral chips, the subtle control states, the selection tint, and the status tints
+ * (MessageBar renders its title, body, links, actions and dismiss button on the tint).
+ */
+const TEXT_SURFACES = [
+  'background',
+  'card',
+  'secondary',
+  'muted',
+  'subtle-hover',
+  'subtle-pressed',
+  'subtle-selected',
+  'selected',
+  'success-tint',
+  'warning-tint',
+  'error-tint',
+  'severe-tint',
+  'info-tint',
+];
+
+/** Text tokens that may sit on every `TEXT_SURFACES` entry, with where they are used as text. */
+const SURFACE_TEXT_TOKENS: Record<string, string> = {
+  foreground: 'body text',
+  'card-foreground': 'alias of foreground',
+  'secondary-foreground': 'alias of foreground',
+  'muted-foreground': 'secondary text, placeholders, icon buttons',
+  primary: 'links, transparent buttons, selected Nav/TabList/Stepper text',
+  accent: 'alias of primary',
+  error: 'validation messages, required markers, destructive actions (`text-error`)',
+  // §2.1.3 gives destructive and error one value; 0.4 and shadcn-style code writes text-destructive.
+  destructive: 'alias of error',
+  success: 'completed Stepper steps (`text-success`)',
+  'warning-tint-foreground': "warning's text token (the warning fill is not text, see below)",
+  'info-tint-foreground': "info's text token (the info fill is a fill and border, see below)",
+};
+
+/** Text tokens bound to particular surfaces: their own fill or tint, or the inverted tooltip. */
+const BOUND_TEXT_SURFACES: Record<string, string[]> = {
+  'selected-foreground': ['selected'],
+  'inverted-foreground': ['inverted'],
+  // Status icons and badge text: on their tint (MessageBar, Badge, Stepper) and on the page (Toast).
+  'success-tint-foreground': ['success-tint', 'background'],
+  'error-tint-foreground': ['error-tint', 'background'],
+  'severe-tint-foreground': ['severe-tint', 'background'],
+  // Text on fills.
+  'primary-foreground': ['primary', 'primary-hover', 'primary-pressed'],
+  'accent-foreground': ['accent'],
+  'error-foreground': ['error'],
+  'destructive-foreground': ['destructive'],
+  'success-foreground': ['success'],
+  'warning-foreground': ['warning'],
+  'severe-foreground': ['severe'],
+  'info-foreground': ['info'],
+};
+
+/**
+ * Colour tokens that are never text on a surface, with the reason. Non-text contrast (3:1, WCAG
+ * 1.4.11) of the strokes and graphics is asserted in `CONTRAST_PAIRS`.
+ */
+const NOT_TEXT_TOKENS: Record<string, string> = {
+  // Fills only by design, each carrying its own -foreground (BOUND_TEXT_SURFACES).
+  warning: 'fill only: 1.30:1 on white; warning text and icons use warning-tint-foreground',
+  severe: 'fill only (with severe-foreground); severe text uses severe-tint-foreground',
+  info: 'fill and start border only (with info-foreground); info text uses info-tint-foreground',
+  'primary-hover': 'fill state of primary (with primary-foreground)',
+  'primary-pressed': 'fill state of primary (with primary-foreground)',
+  subtle: 'transparent rest state of subtle controls',
+  // Strokes, focus ring and graphics.
+  border: 'decorative divider',
+  stroke: 'control border (paired with stroke-accessible for 3:1 where it identifies a control)',
+  'stroke-hover': 'control border state',
+  'stroke-accessible': 'control border, Slider rail, Rating outline star (3:1)',
+  input: 'control border',
+  ring: 'focus indicator (3:1)',
+  track: 'progress track (the primary fill carries 3:1)',
+  skeleton: 'loading placeholder',
+  rating: 'Rating star glyph (3:1)',
+  'presence-available': 'presence glyph (3:1)',
+  'presence-busy': 'presence glyph (3:1)',
+  'presence-away': 'presence glyph (3:1)',
+  'presence-offline': 'presence glyph (3:1)',
+  'presence-oof': 'presence glyph (3:1)',
+  'presence-glyph': 'glyph drawn on a presence fill (3:1)',
+  'inverted-border': 'tooltip border',
+  backdrop: 'translucent overlay scrim',
+};
+
+/** Each text token with every surface it is checked against. */
+const TEXT_MATRIX: Array<{ fg: string; surfaces: string[] }> = [
+  ...Object.keys(SURFACE_TEXT_TOKENS).map((fg) => ({ fg, surfaces: TEXT_SURFACES })),
+  ...Object.entries(BOUND_TEXT_SURFACES).map(([fg, surfaces]) => ({ fg, surfaces })),
+];
 
 // ---------------------------------------------------------------------------------------------
 // Shared lookups
@@ -760,6 +863,40 @@ describe('tokens.css — contrast (WCAG 2.2, unrounded; button-provider#3, #10, 
   it('covers every §4.5 component combination in the threshold pairs', () => {
     const listed = new Set(CONTRAST_PAIRS.map((pair) => pair.join(' ')));
     expect(SECTION_4_5_MATRIX.filter((pair) => !listed.has(pair.join(' ')))).toEqual([]);
+  });
+
+  describe('text matrix: every text token on every surface it can sit on (WCAG 1.4.3)', () => {
+    const matrixCases = THEMES.flatMap((theme) =>
+      TEXT_MATRIX.map(({ fg, surfaces }) => ({ theme, fg, surfaces })),
+    );
+
+    it.each(matrixCases)(
+      '$theme: $fg is at least 4.5:1 on each of its surfaces',
+      ({ theme, fg, surfaces }) => {
+        const text = resolved(theme, fg);
+        const below = surfaces
+          .map((bg) => ({ bg, value: resolved(theme, bg) }))
+          .map(({ bg, value }) => ({ bg, value, ratio: contrastRatio(text, value) }))
+          .filter(({ ratio }) => ratio < 4.5)
+          .map(({ bg, value, ratio }) => `${fg} ${text} on ${bg} ${value}: ${ratio.toFixed(3)}:1`);
+        expect(below).toEqual([]);
+      },
+    );
+
+    it('classifies every colour token as text, a matrix surface, or excluded with a reason', () => {
+      const classified = new Set([
+        ...Object.keys(SURFACE_TEXT_TOKENS),
+        ...TEXT_SURFACES,
+        ...Object.keys(BOUND_TEXT_SURFACES),
+        ...Object.values(BOUND_TEXT_SURFACES).flat(),
+        ...Object.keys(NOT_TEXT_TOKENS),
+      ]);
+      expect(Object.keys(TOKENS).filter((token) => !classified.has(token))).toEqual([]);
+      // Nothing is both excluded and checked as text, and every name is a real token.
+      const text = [...Object.keys(SURFACE_TEXT_TOKENS), ...Object.keys(BOUND_TEXT_SURFACES)];
+      expect(text.filter((token) => token in NOT_TEXT_TOKENS)).toEqual([]);
+      expect([...classified].filter((token) => !(token in TOKENS))).toEqual([]);
+    });
   });
 
   it('compares unrounded: a 4.499:1 pair fails although it rounds to 4.50', () => {

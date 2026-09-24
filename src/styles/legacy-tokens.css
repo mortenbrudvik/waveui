@@ -116,7 +116,7 @@
   --border: #666666;
   --input: #666666;
   --ring: var(--wave-brand-100);
-  --success: #54b054;
+  --success: #5db55d;
   --warning: #fde300;
   --error: #f48a94;
   --info: #479ef5;
@@ -138,7 +138,7 @@
   --muted-foreground: #ffffff;
   --accent: var(--primary);
   --accent-foreground: var(--primary-foreground);
-  --destructive: #ff6060;
+  --destructive: #ff6e6e;
   --destructive-foreground: #000000;
   --subtle: transparent;
   --border: #ffffff;
@@ -146,7 +146,7 @@
   --ring: #ffff00;
   --success: #3ff23f;
   --warning: #ffff00;
-  --error: #ff6060;
+  --error: #ff6e6e;
   --info: #1aebff;
   --severe: #ff8c00;
 }

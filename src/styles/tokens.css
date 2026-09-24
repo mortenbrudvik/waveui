@@ -9,7 +9,8 @@
  *   re-resolves all of them.
  * - To override a semantic token, target the theme selector: `:root, .wave-light { --wave-primary: … }`.
  *   To re-brand, override the ramp on `:root` (`--wave-brand-80`, or the 0.4 name `--brand-80`).
- * - Contrast ratios of every pair are asserted by `src/styles/__tests__/tokens.test.ts`.
+ * - Contrast ratios of every pair, and of every text token on every surface it can sit on (4.5:1,
+ *   unrounded), are asserted by `src/styles/__tests__/tokens.test.ts`.
  */
 
 /* ---------------------------------------------------------------------------------------------
@@ -99,10 +100,11 @@
   --wave-error: #c50f1f;
   --wave-error-foreground: #ffffff;
 
-  /* Subtle (transparent) controls and selection */
+  /* Subtle (transparent) controls and selection. Pressed is grey-92 like selected, not Fluent's
+     grey-88 #e0e0e0 (primary text 4.08:1, success 4.07): primary 4.52, success 4.50 */
   --wave-subtle: transparent;
   --wave-subtle-hover: #f5f5f5;
-  --wave-subtle-pressed: #e0e0e0;
+  --wave-subtle-pressed: #ebebeb;
   --wave-subtle-selected: #ebebeb;
   --wave-selected: var(--wave-brand-160);
   --wave-selected-foreground: var(--wave-brand-60);
@@ -200,8 +202,10 @@
   --wave-input: #666666;
   --wave-ring: var(--wave-brand-100);
 
-  /* Status */
-  --wave-success: #54b054;
+  /* Status. success is text too (4.60:1 on muted and subtle-selected #383838, where Fluent's
+     green tint30 #54b054 reaches 4.31); info text uses info-tint-foreground, brand-110 like
+     primary (4.84 on #383838; #479ef5 was 4.499 on card). */
+  --wave-success: #5db55d;
   --wave-success-foreground: #000000;
   --wave-success-tint: #052505;
   --wave-success-tint-foreground: #54b054;
@@ -218,7 +222,7 @@
   --wave-info: #479ef5;
   --wave-info-foreground: #000000;
   --wave-info-tint: #082338;
-  --wave-info-tint-foreground: #479ef5;
+  --wave-info-tint-foreground: #62abf5;
 
   /* Inverted surfaces (tooltips) */
   --wave-inverted: #ffffff;
@@ -263,14 +267,15 @@
   --wave-primary-hover: #6ef3ff;
   --wave-primary-pressed: #00c4d6;
 
-  /* Destructive / error */
-  --wave-destructive: #ff6060;
+  /* Destructive / error: error text stays 4.5:1 on the grey subtle states and the cyan selection
+     (4.64 on #333333, 4.59 on #003a40; #ff6060 was 4.27 and 4.22) */
+  --wave-destructive: #ff6e6e;
   --wave-destructive-foreground: #000000;
-  --wave-error: #ff6060;
+  --wave-error: #ff6e6e;
   --wave-error-foreground: #000000;
 
   /* Subtle (transparent) controls and selection: a dark cyan tint keeps white text,
-     cyan primary text and the yellow ring readable on selected items */
+     cyan primary text, error text and the yellow ring readable on selected items */
   --wave-subtle: transparent;
   --wave-subtle-hover: #1f1f1f;
   --wave-subtle-pressed: #333333;
