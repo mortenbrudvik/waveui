@@ -9,7 +9,15 @@
  * exactly as it does from the real `dist/` (the react-server check needs it).
  */
 import { spawn } from 'node:child_process';
-import { existsSync, mkdirSync, mkdtempSync, readdirSync, writeFileSync } from 'node:fs';
+import {
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readdirSync,
+  symlinkSync,
+  unlinkSync,
+  writeFileSync,
+} from 'node:fs';
 import { basename, dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { afterAll, describe, expect, it } from 'vitest';
@@ -653,6 +661,30 @@ describe('probeTreeShaking (repo-level#3)', () => {
     const errors = await probeTreeShaking(dist);
     expect(errors.join('\n')).toMatch(/index\.mjs/);
     expect(errors.join('\n')).toMatch(/Dialog/);
+    expect(errors.join('\n')).toMatch(/components\/button\/Button\.mjs is not in the bundle/);
+  });
+
+  // The bundler reports module ids as real paths, so a dist reached through a symlink or a
+  // junction (a linked node_modules, a linked checkout) must still be matched module by module.
+  it('checks every module of a dist reached through a symlink or junction', async () => {
+    const linked = (dir) => {
+      const link = join(fixtureRoot, `link-${basename(dir)}`);
+      symlinkSync(dir, link, 'junction');
+      return { link, dist: join(link, 'dist') };
+    };
+    const good = linked(fixture().dir);
+    const leaky = linked(
+      fixture({ 'package.json': JSON.stringify({ name: 'wave-fixture', type: 'module' }) }).dir,
+    );
+    try {
+      expect(await probeTreeShaking(good.dist)).toEqual([]);
+      expect((await probeTreeShaking(leaky.dist)).join('\n')).toMatch(
+        /components\/overlays\/Dialog\.mjs is in the bundle/,
+      );
+    } finally {
+      unlinkSync(good.link);
+      unlinkSync(leaky.link);
+    }
   });
 });
 

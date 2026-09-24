@@ -730,12 +730,16 @@ function fold(path) {
 /**
  * Tree-shaking probe (repo-level#3): bundles an entry that imports only `keep` from
  * `dist/index.mjs` with Vite's `build()` API (no write, no minification, bare imports external)
- * and asserts that the bundle holds only `keep`'s module and its static imports, and no code of
- * `drop` (its module or its `displayName`).
+ * and asserts that the bundle holds `keep`'s module, only it and its static imports, and no code
+ * of `drop` (its module or its `displayName`).
+ *
+ * The bundler reports module ids as real paths, so the probe imports and matches them through
+ * the real path of `dist`: a dist reached through a symlink or a junction (a linked checkout or
+ * `node_modules`) is checked module by module, not silently passed with no module matched.
  */
 export async function probeTreeShaking(dist, { keep = 'Button', drop = 'Dialog' } = {}) {
   const errors = [];
-  const distRoot = resolve(dist);
+  const distRoot = realpathSync(resolve(dist));
   const components = listFiles(distRoot).filter((path) => path.startsWith('components/'));
   const keepModules = components.filter((path) => path.endsWith(`/${keep}.mjs`));
   const dropModules = components.filter((path) => path.endsWith(`/${drop}.mjs`));
@@ -794,6 +798,11 @@ export async function probeTreeShaking(dist, { keep = 'Button', drop = 'Dialog' 
     for (const module of importClosure(distRoot, path)) allowed.add(fold(module));
   }
   const dropped = new Set(dropModules.map(fold));
+  for (const path of keepModules) {
+    if (!included.has(path)) {
+      errors.push(`${path} is not in the bundle of an import of only ${keep}`);
+    }
+  }
   for (const path of [...included].sort()) {
     if (dropped.has(fold(path))) {
       errors.push(
