@@ -8,6 +8,10 @@ const meta = {
     value: { control: { type: 'range', min: 0, max: 100 } },
     max: { control: 'number' },
   },
+  args: {
+    label: 'Uploading files',
+    max: 100,
+  },
 } satisfies Meta<typeof ProgressBar>;
 
 export default meta;
@@ -16,18 +20,19 @@ type Story = StoryObj<typeof meta>;
 export const Default: Story = {
   args: {
     value: 60,
-    max: 100,
   },
 };
 
 export const Indeterminate: Story = {
-  args: {},
+  args: {
+    label: 'Syncing',
+  },
 };
 
 export const WithLabel: Story = {
   args: {
     value: 75,
-    max: 100,
     label: 'Uploading files...',
+    showLabel: true,
   },
 };

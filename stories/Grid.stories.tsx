@@ -1,31 +1,27 @@
+import type * as React from 'react';
 import type { Meta, StoryObj } from '@storybook/react';
 import { Grid } from '../src';
 
 const meta = {
-  title: 'Layout/Grid',
+  title: 'Components/Layout/Grid',
   component: Grid,
+  args: {
+    columns: 3,
+    gap: 'md',
+  },
 } satisfies Meta<typeof Grid>;
 
 export default meta;
 type Story = StoryObj<typeof meta>;
 
+/** Demo cell drawn with theme tokens. */
 const Box = ({ children }: { children: React.ReactNode }) => (
-  <div
-    style={{
-      padding: '12px 16px',
-      background: '#f0f0f0',
-      border: '1px solid #d1d1d1',
-      borderRadius: 4,
-      textAlign: 'center',
-    }}
-  >
-    {children}
-  </div>
+  <div className="rounded border border-border bg-muted px-4 py-3 text-center">{children}</div>
 );
 
 export const Default: Story = {
   render: (args) => (
-    <Grid {...args} columns={3} gap="md">
+    <Grid {...args}>
       <Box>1</Box>
       <Box>2</Box>
       <Box>3</Box>
@@ -37,8 +33,12 @@ export const Default: Story = {
 };
 
 export const TwoColumns: Story = {
-  render: () => (
-    <Grid columns={2} gap="md" style={{ width: 400 }}>
+  args: {
+    columns: 2,
+    style: { width: 400 },
+  },
+  render: (args) => (
+    <Grid {...args}>
       <Box>Left</Box>
       <Box>Right</Box>
       <Box>Left</Box>
@@ -48,8 +48,12 @@ export const TwoColumns: Story = {
 };
 
 export const FourColumns: Story = {
-  render: () => (
-    <Grid columns={4} gap="sm">
+  args: {
+    columns: 4,
+    gap: 'sm',
+  },
+  render: (args) => (
+    <Grid {...args}>
       <Box>1</Box>
       <Box>2</Box>
       <Box>3</Box>
@@ -63,8 +67,12 @@ export const FourColumns: Story = {
 };
 
 export const TwelveColumnGrid: Story = {
-  render: () => (
-    <Grid columns={12} gap="xs">
+  args: {
+    columns: 12,
+    gap: 'xs',
+  },
+  render: (args) => (
+    <Grid {...args}>
       {Array.from({ length: 12 }, (_, i) => (
         <Box key={i}>{i + 1}</Box>
       ))}
@@ -73,8 +81,12 @@ export const TwelveColumnGrid: Story = {
 };
 
 export const WithRows: Story = {
-  render: () => (
-    <Grid columns={3} rows={2} gap="md" style={{ height: 200 }}>
+  args: {
+    rows: 2,
+    style: { height: 200 },
+  },
+  render: (args) => (
+    <Grid {...args}>
       <Box>1</Box>
       <Box>2</Box>
       <Box>3</Box>
@@ -86,8 +98,13 @@ export const WithRows: Story = {
 };
 
 export const SeparateGaps: Story = {
-  render: () => (
-    <Grid columns={3} columnGap="xl" rowGap="xs">
+  args: {
+    gap: undefined,
+    columnGap: 'xl',
+    rowGap: 'xs',
+  },
+  render: (args) => (
+    <Grid {...args}>
       <Box>1</Box>
       <Box>2</Box>
       <Box>3</Box>

@@ -1,5 +1,6 @@
 import * as React from 'react';
 import { cn } from '../../lib/cn';
+import type { PolymorphicComponent, PolymorphicProps } from '../../lib/polymorphic';
 
 const columnsMap = {
   1: 'grid-cols-1',
@@ -52,15 +53,14 @@ const justifyMap = {
   stretch: 'justify-items-stretch',
 } as const;
 
-/** Properties for the Grid component. */
-export interface GridProps extends React.HTMLAttributes<HTMLDivElement> {
-  /** Element type to render as.
-   * @default 'div'
-   */
-  as?: React.ElementType;
+/**
+ * The Grid's own props (the XOwnProps rule of `PolymorphicProps`: component-specific props only).
+ * Every other prop comes from the rendered element (`as`).
+ */
+export interface GridOwnProps {
   /** Number of grid columns. */
   columns?: 1 | 2 | 3 | 4 | 5 | 6 | 12;
-  /** Number of grid rows. */
+  /** Number of equal-height grid rows (`grid-template-rows`, merged with `style`). */
   rows?: number;
   /** Uniform gap size between grid items. */
   gap?: 'none' | 'xs' | 'sm' | 'md' | 'lg' | 'xl';
@@ -74,41 +74,65 @@ export interface GridProps extends React.HTMLAttributes<HTMLDivElement> {
   justify?: 'start' | 'center' | 'end' | 'stretch';
 }
 
-const GridRoot = (
-    {
-      as: Component = 'div',
-      columns,
-      rows,
-      gap,
-      columnGap,
-      rowGap,
-      align,
-      justify,
-      className,
-      style,
-      children, ref, ...props }: GridProps & { ref?: React.Ref<HTMLElement> }) => {
-    const rowStyle = rows ? { gridTemplateRows: `repeat(${rows}, minmax(0, 1fr))` } : undefined;
+/**
+ * Props of {@link Grid} rendered as `C` (default `'div'`). `GridProps` without a type argument is
+ * the 0.4 name: the props of a Grid rendered as a `<div>`, including `ref`.
+ */
+export type GridProps<C extends React.ElementType = 'div'> = PolymorphicProps<C, GridOwnProps>;
 
-    return (
-      <Component
-        ref={ref}
-        className={cn(
-          'grid',
-          columns && columnsMap[columns],
-          gap && gapMap[gap],
-          columnGap && columnGapMap[columnGap],
-          rowGap && rowGapMap[rowGap],
-          align && alignMap[align],
-          justify && justifyMap[justify],
-          className,
-        )}
-        style={{ ...rowStyle, ...style }}
-        {...props}
-      >
-        {children}
-      </Component>
-    );
+type GridImplProps = GridOwnProps &
+  React.HTMLAttributes<HTMLElement> & {
+    as?: React.ElementType;
+    ref?: React.Ref<HTMLElement>;
   };
-GridRoot.displayName = 'Grid';
 
-export const Grid = GridRoot;
+/**
+ * A CSS grid layout with a fixed column count and token gaps.
+ *
+ * @example
+ * <Grid columns={3} gap="md">
+ *   <Card>…</Card>
+ *   <Card>…</Card>
+ *   <Card>…</Card>
+ * </Grid>
+ */
+export const Grid: PolymorphicComponent<'div', GridOwnProps> = (props) => {
+  const {
+    as,
+    columns,
+    rows,
+    gap,
+    columnGap,
+    rowGap,
+    align,
+    justify,
+    className,
+    style,
+    children,
+    ref,
+    ...rest
+  } = props as GridImplProps;
+  const Component: React.ElementType = as ?? 'div';
+  const rowStyle = rows ? { gridTemplateRows: `repeat(${rows}, minmax(0, 1fr))` } : undefined;
+
+  return (
+    <Component
+      ref={ref}
+      className={cn(
+        'grid',
+        columns && columnsMap[columns],
+        gap && gapMap[gap],
+        columnGap && columnGapMap[columnGap],
+        rowGap && rowGapMap[rowGap],
+        align && alignMap[align],
+        justify && justifyMap[justify],
+        className,
+      )}
+      style={{ ...rowStyle, ...style }}
+      {...rest}
+    >
+      {children}
+    </Component>
+  );
+};
+Grid.displayName = 'Grid';
