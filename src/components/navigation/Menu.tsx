@@ -3,10 +3,11 @@ import { cn } from '../../lib/cn';
 import type { PopupAlign, PopupSide, Slot } from '../../lib/types';
 import { renderSlot, slotRendersContent } from '../../lib/slot';
 import { composeEventHandlers } from '../../lib/composeEventHandlers';
-import { isDev, warnOnce } from '../../lib/dev';
+import { reportMissingContext, warnOnce } from '../../lib/dev';
+import { flattenChildren, isElementOfType } from '../../lib/children';
 import { mergeProps } from '../../lib/mergeProps';
 import { STATE_ARIA } from '../../lib/renderTrigger';
-import { getFirstTabbable } from '../../lib/focus';
+import { FOCUSABLE_SELECTOR, getFirstTabbable, isFocusable } from '../../lib/focus';
 import { disabledStyles, focusRing, focusRingInset } from '../../lib/styles';
 import { useControllable } from '../../hooks/useControllable';
 import { useDismiss } from '../../hooks/useDismiss';
@@ -17,9 +18,6 @@ import { useRestoreFocus } from '../../hooks/useRestoreFocus';
 import { useRovingTabIndex } from '../../hooks/useRovingTabIndex';
 import { useTriggerElement } from '../../hooks/useTriggerElement';
 import { Portal } from '../portal/Portal';
-
-const useIsomorphicLayoutEffect =
-  typeof document !== 'undefined' ? React.useLayoutEffect : React.useEffect;
 
 // ---------------------------------------------------------------------------
 // Types
@@ -32,16 +30,23 @@ export interface MenuProps extends React.HTMLAttributes<HTMLDivElement> {
    */
   children: React.ReactNode;
   /**
-   * Controlled open state of a popup menu (`Menu.Trigger` + `Menu.Popover`). Ignored by the static
-   * menu.
+   * Controlled open state of a popup menu (`Menu.Trigger` + `Menu.Popover`). Passing it, even
+   * `false` (like passing `defaultOpen` or `onOpenChange`), makes Menu a popup menu that renders no
+   * element of its own: use it only with `Menu.Trigger`/`Menu.Popover`. Items outside
+   * `Menu.Popover` then have no `role="menu"` parent (development warning). Leave all three out
+   * for a static menu.
    */
   open?: boolean;
   /**
-   * Initial open state of an uncontrolled popup menu.
-   * @default false
+   * Initial open state of an uncontrolled popup menu; a popup menu starts closed without it.
+   * Passing it, even `false`, makes Menu a popup menu (see `open`), so for a Menu without
+   * `Menu.Trigger`/`Menu.Popover` children, leaving it out is not the same as `false`.
    */
   defaultOpen?: boolean;
-  /** Called with the next open state when the popup menu opens or closes (only on change). */
+  /**
+   * Called with the next open state when the popup menu opens or closes (only on change). Passing
+   * it makes Menu a popup menu (see `open`).
+   */
   onOpenChange?: (open: boolean) => void;
   /**
    * Ref to the static menu element (`role="menu"`). A popup menu renders no root element, so it
@@ -118,7 +123,10 @@ export interface MenuTriggerComponentProps extends Omit<
   children: React.ReactNode | ((props: MenuTriggerProps) => React.ReactNode);
   /**
    * `false` renders a wrapper `<span>` carrying the trigger props instead of merging them onto the
-   * child (the 0.4-style wrapper).
+   * child (the 0.4-style wrapper). The state ARIA (`aria-haspopup`, `aria-expanded`,
+   * `aria-controls`), which a generic span cannot carry, goes to the first element in the tab
+   * order inside the span (none for text children), and focus returns to that element when the
+   * menu closes. A render-prop child still receives every prop.
    * @default true
    */
   asChild?: boolean;
@@ -194,13 +202,11 @@ const INERT_MENU_CONTEXT: MenuContextValue = {
   setTriggerElement: noop,
 };
 
-/** C-CONTEXT: throws in development, logs and returns an inert value in production. */
+/** C-CONTEXT: throws in development, logs once and returns an inert value in production. */
 function useMenuContext(componentName: string): MenuContextValue {
   const context = React.useContext(MenuContext);
   if (context) return context;
-  const message = `[WaveUI] ${componentName} must be used within Menu`;
-  if (isDev) throw new Error(message);
-  console.error(message);
+  reportMissingContext(componentName, 'Menu');
   return INERT_MENU_CONTEXT;
 }
 
@@ -233,6 +239,57 @@ function useStaticMenuPartWarning(componentName: string, popup: boolean): void {
 
 const MENU_ITEM_SELECTOR = '[role="menuitem"],[role="menuitemcheckbox"],[role="menuitemradio"]';
 
+/**
+ * Typeahead matches an item's `data-roving-text`, else its whole text, which would start with the
+ * icon's text (an emoji, an icon-font ligature) and end with the shortcut. A string label is
+ * passed as `data-roving-text` when the item renders. Any other label (an i18n component) marks
+ * its element with `data-menu-label`, and the menu copies that element's current text onto the
+ * item right before it handles a printable key, so a label that re-renders on its own is matched
+ * by what it shows.
+ */
+function withTypeaheadText(
+  handleKeyDownCapture: React.KeyboardEventHandler<HTMLDivElement>,
+): React.KeyboardEventHandler<HTMLDivElement> {
+  return (event) => {
+    if (event.key.length === 1) {
+      for (const label of event.currentTarget.querySelectorAll('[data-menu-label]')) {
+        const menuItem = label.closest(MENU_ITEM_SELECTOR);
+        menuItem?.setAttribute('data-roving-text', label.textContent ?? '');
+      }
+    }
+    handleKeyDownCapture(event);
+  };
+}
+
+/**
+ * The element that takes focus for the trigger: the trigger itself, or, for the wrapper span of
+ * `asChild={false}` and of the automatic fallback, the first tabbable element inside it.
+ */
+function getTriggerFocusTarget(trigger: HTMLElement | null): HTMLElement | null {
+  if (!trigger) return null;
+  return isFocusable(trigger) ? trigger : getFirstTabbable(trigger);
+}
+
+/**
+ * The element inside the `asChild={false}` wrapper span that carries the state ARIA: the first one
+ * in the tab order by markup (`tabIndex >= 0`), the rule of the automatic fallback in
+ * `useTriggerElement` (not `getFirstTabbable`, which skips the page while a modal Dialog makes it
+ * inert).
+ *
+ * A copy of that hook's private `findStateAriaTarget` (and, in `MenuTrigger`'s layout effect, of
+ * its `moveStateAria`): the hook moves the state ARIA for its implicit wrappers only and exports
+ * neither. The "wrapper span" tests run both copies through the same cases. Replace both with the
+ * hook's mover once it exposes one.
+ */
+function findStateAriaTarget(wrapper: Element): Element | null {
+  for (const element of wrapper.querySelectorAll<HTMLElement>(FOCUSABLE_SELECTOR)) {
+    const hiddenInput =
+      element.localName === 'input' && (element as HTMLInputElement).type === 'hidden';
+    if (!hiddenInput && element.tabIndex >= 0) return element;
+  }
+  return null;
+}
+
 const menuSurfaceClasses =
   'min-w-[180px] rounded-md border border-border bg-background py-1 shadow-4';
 
@@ -256,7 +313,8 @@ const menuItemClasses = cn(
  * calls `preventDefault()`. Disabled items are `aria-disabled`, skipped by keyboard navigation and
  * never activated. A consumer `aria-disabled` without `disabled` only changes the look and
  * keyboard navigation: activation still runs `onClick` (guard it yourself), as on Button. The
- * item's tab index is managed by the menu.
+ * item's tab index is managed by the menu. Typeahead matches the label (`children`), not the icon
+ * or the shortcut; a `data-roving-text` you pass replaces the label's text.
  *
  * Also exported as `MenuItem` (import the flat name from React Server Components).
  */
@@ -273,6 +331,24 @@ const MenuItem = ({
   ...rest
 }: MenuItemProps) => {
   const surface = React.useContext(MenuSurfaceContext);
+  const menu = React.useContext(MenuContext);
+
+  // C-DEV: `open`, `defaultOpen` or `onOpenChange` on a Menu of items makes it a popup menu,
+  // which renders no `role="menu"` element around items outside Menu.Popover.
+  const outsidePopover = menu !== null && menu.popup && surface === null;
+  React.useEffect(() => {
+    if (!outsidePopover) return;
+    warnOnce(
+      'Menu:item-outside-popover',
+      'Menu.Item: rendered in a popup menu outside Menu.Popover, so it has no `role="menu"` parent. A Menu with `open`, `defaultOpen` or `onOpenChange` is a popup menu that renders no element of its own: put the items in Menu.Popover, or leave these props out for a static menu.',
+    );
+  }, [outsidePopover]);
+
+  // Typeahead text: a string label directly; any other label through its marked element.
+  const stringLabel = typeof children === 'string' ? children : undefined;
+  const markLabel =
+    stringLabel === undefined &&
+    (rest as Record<string, unknown>)['data-roving-text'] === undefined;
 
   // A falsy icon (`icon={name && <Icon />}` with `name` '' or a count of 0) is no icon, as in Nav,
   // Tree and Avatar, and so is a collection whose items render nothing: no empty 20px box before
@@ -307,7 +383,7 @@ const MenuItem = ({
   return (
     <div
       role="menuitem"
-      data-roving-text={typeof children === 'string' ? children : undefined}
+      data-roving-text={stringLabel}
       {...rest}
       ref={ref}
       aria-disabled={disabled ? true : rest['aria-disabled']}
@@ -317,7 +393,9 @@ const MenuItem = ({
       className={cn(menuItemClasses, className)}
     >
       {iconNode}
-      <span className="flex-1">{children}</span>
+      <span className="flex-1" data-menu-label={markLabel ? '' : undefined}>
+        {children}
+      </span>
       {shortcut && <span className="ms-4 text-caption-1 text-muted-foreground">{shortcut}</span>}
     </div>
   );
@@ -353,6 +431,10 @@ MenuDivider.displayName = 'MenuDivider';
  * Other props passed to `Menu.Trigger` are forwarded to the child, so
  * `<Tooltip><Menu.Trigger><MenuButton /></Menu.Trigger></Tooltip>` describes the MenuButton.
  *
+ * With `asChild={false}` (and for a child that does not attach the ref, automatically) the props
+ * go on a wrapper span instead; the state ARIA then goes to the first element in the tab order
+ * inside it, and focus returns to that element.
+ *
  * Also exported as `MenuTrigger` (import the flat name from React Server Components).
  *
  * @example
@@ -362,10 +444,50 @@ MenuDivider.displayName = 'MenuDivider';
  * </Menu>
  */
 const MenuTrigger = ({ children, asChild, ref, ...rest }: MenuTriggerComponentProps) => {
-  const { popup, open, setOpen, openWithFocus, triggerId, menuId, onTriggerId, setTriggerElement } =
-    useMenuContext('Menu.Trigger');
+  const {
+    popup,
+    open,
+    setOpen,
+    openWithFocus,
+    triggerId,
+    menuId,
+    onTriggerId,
+    triggerRef,
+    setTriggerElement,
+  } = useMenuContext('Menu.Trigger');
   useStaticMenuPartWarning('Menu.Trigger', popup);
-  const triggerRef = useMergedRefs<HTMLElement>(setTriggerElement, ref);
+  const elementRef = useMergedRefs<HTMLElement>(setTriggerElement, ref);
+
+  // The explicit wrapper span (0.4 markup) cannot carry the state ARIA (a generic span: axe
+  // aria-allowed-attr). It goes to the first element in the tab order inside the span, like the
+  // automatic fallback of useTriggerElement does, so the button there is announced as a menu
+  // button. A render-prop child still receives it.
+  const explicitWrapper = asChild === false && typeof children !== 'function';
+  // No deps: runs after every commit of the trigger (it re-renders on every open change), so the
+  // attributes follow the state and the current element inside the span. The cleanup restores
+  // that element's own attributes.
+  React.useLayoutEffect(() => {
+    const wrapper = triggerRef.current;
+    const target = explicitWrapper && wrapper ? findStateAriaTarget(wrapper) : null;
+    if (!target) return undefined;
+    const values: Record<(typeof STATE_ARIA)[number], string | null> = {
+      'aria-haspopup': 'menu',
+      'aria-expanded': String(open),
+      'aria-controls': open ? menuId : null,
+    };
+    const previous = STATE_ARIA.map((name) => [name, target.getAttribute(name)] as const);
+    for (const name of STATE_ARIA) {
+      const value = values[name];
+      if (value === null) target.removeAttribute(name);
+      else target.setAttribute(name, value);
+    }
+    return () => {
+      for (const [name, value] of previous) {
+        if (value === null) target.removeAttribute(name);
+        else target.setAttribute(name, value);
+      }
+    };
+  });
 
   const handleClick = (event: React.MouseEvent<HTMLElement>) => {
     if (event.defaultPrevented) return;
@@ -403,11 +525,14 @@ const MenuTrigger = ({ children, asChild, ref, ...rest }: MenuTriggerComponentPr
     'aria-controls': open ? menuId : undefined,
     onClick: handleClick,
     onKeyDown: handleKeyDown,
-    ref: triggerRef,
+    ref: elementRef,
   };
   // §5.3: forwarded props merge in (a consumer `id` wins, handlers compose consumer-first), but the
-  // live state ARIA always wins.
+  // live state ARIA always wins. The explicit wrapper span carries none (moved above).
   const triggerProps = mergeProps(ownProps, rest, { oursWin: STATE_ARIA });
+  if (explicitWrapper) {
+    for (const name of STATE_ARIA) delete (triggerProps as Record<string, unknown>)[name];
+  }
 
   return useTriggerElement(children, triggerProps, {
     componentName: 'Menu.Trigger',
@@ -424,9 +549,12 @@ MenuTrigger.displayName = 'MenuTrigger';
 /**
  * The portaled `role="menu"` surface of a popup menu, positioned next to `Menu.Trigger`. Focus
  * moves to the first (ArrowUp: last) enabled item when it opens; arrows, Home/End and typeahead
- * move between enabled items. Escape and outside presses close it and return focus to the
- * trigger; Tab closes it and moves focus to the trigger without preventing the default, so
- * tabbing continues from the trigger (inside a Dialog, the focus trap moves on from there).
+ * move between enabled items. Escape closes it and returns focus to the trigger. An outside press
+ * closes it and leaves focus where the press put it (on the trigger only when focus was still in
+ * the menu or lost to the page). Tab closes it and moves focus to the trigger without preventing
+ * the default, so tabbing continues from the trigger (inside a Dialog, the focus trap moves on
+ * from there). The trigger here is the element that takes its focus: for a wrapper span, the
+ * first tabbable element inside it.
  *
  * Also exported as `MenuPopover` (import the flat name from React Server Components).
  */
@@ -469,7 +597,7 @@ const MenuPopover = ({
     align,
     offset,
   });
-  useIsomorphicLayoutEffect(() => {
+  React.useLayoutEffect(() => {
     setReference(triggerElement);
   }, [setReference, triggerElement]);
 
@@ -482,12 +610,12 @@ const MenuPopover = ({
   // consumer's onClick moved out of the menu stays where it is.
   const closeFromItem = React.useCallback(() => {
     const surfaceElement = surfaceRef.current;
-    const trigger = triggerRef.current;
-    if (surfaceElement && trigger) {
+    const target = getTriggerFocusTarget(triggerRef.current);
+    if (surfaceElement && target) {
       const active = surfaceElement.ownerDocument.activeElement;
       const focusInsideOrLost =
         !active || active === surfaceElement.ownerDocument.body || surfaceElement.contains(active);
-      if (focusInsideOrLost) trigger.focus({ preventScroll: true });
+      if (focusInsideOrLost) target.focus({ preventScroll: true });
     }
     setOpen(false);
   }, [setOpen, triggerRef]);
@@ -501,7 +629,18 @@ const MenuPopover = ({
     focusOutside: true,
   });
 
-  useRestoreFocus({ enabled: open, container: surface, triggerRef, onlyIfFocusInside: true });
+  // A wrapper-span trigger cannot take focus itself: fall back to the element inside it.
+  const getRestoreFallback = React.useCallback(
+    () => getTriggerFocusTarget(triggerRef.current),
+    [triggerRef],
+  );
+  useRestoreFocus({
+    enabled: open,
+    container: surface,
+    triggerRef,
+    fallback: getRestoreFallback,
+    onlyIfFocusInside: true,
+  });
 
   const {
     containerProps: { ref: rovingRef },
@@ -521,14 +660,14 @@ const MenuPopover = ({
   const mergedRef = useMergedRefs<HTMLDivElement>(ref, setSurfaceElement, rovingRef, setFloating);
 
   // Lets the trigger move focus into an already open menu (ArrowDown/ArrowUp on the trigger).
-  useIsomorphicLayoutEffect(() => {
+  React.useLayoutEffect(() => {
     if (!surface) return;
     registerSurface({ focusFirst, focusLast });
     return () => registerSurface(null);
   }, [surface, registerSurface, focusFirst, focusLast]);
 
   // Initial focus: the first (or last) enabled item, unless focus is already inside.
-  useIsomorphicLayoutEffect(() => {
+  React.useLayoutEffect(() => {
     if (!open || !surface) return;
     if (surface.contains(surface.ownerDocument.activeElement)) return;
     if (takeInitialFocus() === 'last') focusLast();
@@ -546,7 +685,7 @@ const MenuPopover = ({
     if (event.defaultPrevented) return;
     if (event.key === 'Tab') {
       // Close and put focus on the trigger; the default Tab action then continues from there.
-      triggerRef.current?.focus();
+      getTriggerFocusTarget(triggerRef.current)?.focus();
       setOpen(false);
       return;
     }
@@ -572,7 +711,9 @@ const MenuPopover = ({
           data-roving-container=""
           style={{ ...floatingProps.style, ...style }}
           onKeyDown={handleKeyDown}
-          onKeyDownCapture={composeEventHandlers(onKeyDownCapture, rovingKeyDownCapture)}
+          onKeyDownCapture={withTypeaheadText(
+            composeEventHandlers(onKeyDownCapture, rovingKeyDownCapture),
+          )}
           onFocus={composeEventHandlers(onFocus, rovingFocus, { checkDefaultPrevented: false })}
           className={cn(menuSurfaceClasses, className)}
         >
@@ -590,47 +731,15 @@ MenuPopover.displayName = 'MenuPopover';
 
 /**
  * Whether the children contain a `Menu.Trigger` or `Menu.Popover`: direct children and the
- * children of Fragments only (other elements and components are not searched).
+ * children of Fragments only (other elements and components are not searched). Parts written in
+ * a Server Component (lazy client references) are recognised too.
  */
 function hasPopupParts(children: React.ReactNode): boolean {
-  let found = false;
-  React.Children.forEach(children, (child) => {
-    if (found || !React.isValidElement<{ children?: React.ReactNode }>(child)) return;
-    if (child.type === MenuTrigger || child.type === MenuPopover) {
-      found = true;
-    } else if (child.type === React.Fragment) {
-      found = hasPopupParts(child.props.children);
-    }
-  });
-  return found;
+  return flattenChildren(children).some(({ node }) =>
+    isElementOfType(node, MenuTrigger, MenuPopover),
+  );
 }
 
-/**
- * A menu of actions (`role="menu"`), in one of two forms:
- *
- * - **Static menu** — `Menu.Item`/`Menu.Divider` children render inline inside the `role="menu"`
- *   element. The menu itself is not a tab stop: one item is (the last focused enabled item, else
- *   the first enabled one). When every item is disabled, the menu element holds the tab stop
- *   instead, so keyboard and screen-reader users still reach it. Arrow keys, Home/End and
- *   typeahead move between enabled items; Enter and Space activate the focused item (a Space typed
- *   within 500 ms of a typeahead character continues the search instead).
- * - **Popup menu** — with `Menu.Trigger` and `Menu.Popover` children (or `open`/`defaultOpen`/
- *   `onOpenChange`), the root renders no element of its own: the trigger opens the portaled
- *   `Menu.Popover`, item activation returns focus to the trigger and closes it (focus is on the
- *   trigger before the menu goes, so a Dialog the item opens returns focus there when it closes).
- *   Open state is `open`/`defaultOpen`/`onOpenChange`.
- *
- * **Popup detection**: Menu looks for `Menu.Trigger`/`Menu.Popover` among its direct children
- * and inside Fragments only. When they are wrapped in another element or component, pass `open`,
- * `defaultOpen` or `onOpenChange` to force popup mode; otherwise the static `role="menu"` element
- * is rendered around them (development warning). A popup menu renders no root element, so
- * `className`, `ref` and other DOM props on `Menu` are ignored (development warning): put them on
- * `Menu.Popover`.
- *
- * Sub-components are also exported under flat names (`MenuItem`, `MenuDivider`, `MenuTrigger`,
- * `MenuPopover`): React Server Components import those, because dotted access (`Menu.Item`)
- * needs a client file.
- */
 const MenuRoot = ({
   children,
   open: openProp,
@@ -747,6 +856,7 @@ const MenuRoot = ({
     handleKeyDownCapture: rovingKeyDownCapture,
     handleFocus: rovingFocus,
     focusFirst,
+    getTabIndex,
   } = useRovingTabIndex({
     orientation: 'vertical',
     loop: true,
@@ -759,11 +869,11 @@ const MenuRoot = ({
   const mergedRef = useMergedRefs<HTMLDivElement>(ref, rovingRef, staticMenuRef);
 
   // Disabled items never hold the tab stop, so with no enabled item the static menu itself does:
-  // Tab still reaches it and a screen reader announces it. Checked after every render, which
-  // includes the ones the roving hook triggers when an item is enabled, disabled, added or removed
-  // (its tab stop is stamped by then: this effect runs after the hook's).
+  // Tab still reaches it and a screen reader announces it. Checked whenever the roving hook's tab
+  // stop changes (`getTabIndex` changes with it: an item enabled, disabled, added or removed), and
+  // after it is stamped (this effect runs after the hook's).
   const [menuIsTabStop, setMenuIsTabStop] = React.useState(false);
-  useIsomorphicLayoutEffect(() => {
+  React.useLayoutEffect(() => {
     const menu = staticMenuRef.current;
     if (popup || !menu) return;
     const noItemTabStop = getFirstTabbable(menu) === null;
@@ -772,7 +882,7 @@ const MenuRoot = ({
     // An item became enabled while the menu itself had focus: focus moves on to it, rather than
     // staying on an element that is no longer focusable.
     if (!noItemTabStop && menu.ownerDocument.activeElement === menu) focusFirst();
-  });
+  }, [popup, menuIsTabStop, focusFirst, getTabIndex]);
 
   if (popup) {
     return <MenuContext.Provider value={contextValue}>{children}</MenuContext.Provider>;
@@ -787,7 +897,9 @@ const MenuRoot = ({
         tabIndex={rest.tabIndex ?? (menuIsTabStop ? 0 : undefined)}
         data-roving-container=""
         onKeyDown={composeEventHandlers(onKeyDown, rovingKeyDown)}
-        onKeyDownCapture={composeEventHandlers(onKeyDownCapture, rovingKeyDownCapture)}
+        onKeyDownCapture={withTypeaheadText(
+          composeEventHandlers(onKeyDownCapture, rovingKeyDownCapture),
+        )}
         onFocus={composeEventHandlers(onFocus, rovingFocus, { checkDefaultPrevented: false })}
         className={cn(menuSurfaceClasses, focusRing, className)}
       >
@@ -798,6 +910,33 @@ const MenuRoot = ({
 };
 MenuRoot.displayName = 'Menu';
 
+/**
+ * A menu of actions (`role="menu"`), in one of two forms:
+ *
+ * - **Static menu** — `Menu.Item`/`Menu.Divider` children render inline inside the `role="menu"`
+ *   element. The menu itself is not a tab stop: one item is (the last focused enabled item, else
+ *   the first enabled one). When every item is disabled, the menu element holds the tab stop
+ *   instead, so keyboard and screen-reader users still reach it. Arrow keys, Home/End and
+ *   typeahead move between enabled items; Enter and Space activate the focused item (a Space typed
+ *   within 500 ms of a typeahead character continues the search instead).
+ * - **Popup menu** — with `Menu.Trigger` and `Menu.Popover` children, or whenever `open`,
+ *   `defaultOpen` or `onOpenChange` is passed (even `false`), the root renders no element of its
+ *   own: the trigger opens the portaled `Menu.Popover`, item activation returns focus to the
+ *   trigger and closes it (focus is on the trigger before the menu goes, so a Dialog the item
+ *   opens returns focus there when it closes). Open state is `open`/`defaultOpen`/`onOpenChange`.
+ *
+ * **Popup detection**: Menu looks for `Menu.Trigger`/`Menu.Popover` (also under their flat names
+ * from a Server Component) among its direct children and inside Fragments only. When they are
+ * wrapped in another element or component, pass `open`, `defaultOpen` or `onOpenChange` to force
+ * popup mode; otherwise the static `role="menu"` element is rendered around them (development
+ * warning). A popup menu renders no root element, so `className`, `ref` and other DOM props on
+ * `Menu` are ignored (development warning): put them on `Menu.Popover`. Items rendered in a popup
+ * menu outside `Menu.Popover` have no `role="menu"` parent (development warning).
+ *
+ * Sub-components are also exported under flat names (`MenuItem`, `MenuDivider`, `MenuTrigger`,
+ * `MenuPopover`): React Server Components import those, because dotted access (`Menu.Item`)
+ * needs a client file.
+ */
 export const Menu = /* @__PURE__ */ Object.assign(MenuRoot, {
   Item: MenuItem,
   Divider: MenuDivider,

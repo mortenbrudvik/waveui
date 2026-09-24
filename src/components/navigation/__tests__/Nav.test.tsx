@@ -1,11 +1,13 @@
 import * as React from 'react';
 import { describe, it, expect, vi, afterEach, expectTypeOf } from 'vitest';
-import { act, render, screen, within } from '@testing-library/react';
+import { act, fireEvent, render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
+import { renderToString } from 'react-dom/server';
 import { Nav, NavCategory, NavItem, NavSubItem } from '../Nav';
 import type { NavItemProps, NavProps, NavSubItemProps } from '../Nav';
 import type { Slot } from '../../../lib/types';
 import {
+  asClientReference,
   createOverlayTestWrapper,
   renderWithProviders,
   testCompoundExposure,
@@ -35,6 +37,10 @@ function SampleNav(props: Partial<NavProps>) {
 
 const button = (name: string) => screen.getByRole('button', { name });
 const toggle = () => screen.getByRole('button', { name: 'Docs' });
+
+/** The deprecation warning of a renamed Nav prop (R14: asserted, never silenced). */
+const deprecated = (oldName: string, newName: string) =>
+  `[WaveUI] Nav: \`${oldName}\` is deprecated and will be removed in 1.0. Use \`${newName}\` instead.`;
 
 /**
  * Icons that render nothing: `icon={name && <Icon />}` with `name` '' or a count of 0, and a list
@@ -95,6 +101,148 @@ describe('Nav', () => {
     expect(NavCategory).toBe(Nav.Category);
     expect(NavItem).toBe(Nav.Item);
     expect(NavSubItem).toBe(Nav.SubItem);
+  });
+
+  // R1 (x-ssr-1): parts written in a Server Component reach the client as lazy references.
+  it.each([
+    ['uncontrolled', { defaultValue: 'api' }],
+    ['controlled', { value: 'api' }],
+  ])(
+    'parts as client references (%s) render the same server HTML and open the current category',
+    async (_mode, props) => {
+      const user = userEvent.setup();
+      const LazyCategory = asClientReference(NavCategory);
+      const LazyItem = asClientReference(NavItem);
+      const LazySubItem = asClientReference(NavSubItem);
+      const plain = renderToString(
+        <Nav {...props}>
+          <NavItem value="home">Home</NavItem>
+          <NavCategory value="docs" label="Docs">
+            <NavSubItem value="intro">Introduction</NavSubItem>
+            <NavSubItem value="api">API</NavSubItem>
+          </NavCategory>
+        </Nav>,
+      );
+      expect(plain).toContain('aria-expanded="true"');
+      expect(plain).toContain('aria-current="page"');
+      const lazy = (
+        <Nav {...props}>
+          <LazyItem value="home">Home</LazyItem>
+          <LazyCategory value="docs" label="Docs">
+            <LazySubItem value="intro">Introduction</LazySubItem>
+            <LazySubItem value="api">API</LazySubItem>
+          </LazyCategory>
+        </Nav>
+      );
+      expect(renderToString(lazy)).toBe(plain);
+
+      render(lazy);
+      expect(toggle()).toHaveAttribute('aria-expanded', 'true');
+      expect(button('API')).toHaveAttribute('aria-current', 'page');
+      await user.click(toggle());
+      expect(toggle()).toHaveAttribute('aria-expanded', 'false');
+    },
+  );
+
+  // The walk that finds the category of the current value reaches consumer content too: content
+  // still loading inside the consumer's own <Suspense> suspends that boundary only, never Nav.
+  describe('consumer content still loading inside its own Suspense', () => {
+    type AdminModule = { default: React.ComponentType<{ children?: React.ReactNode }> };
+
+    function AdminLinks({ children }: { children?: React.ReactNode }) {
+      return (
+        <>
+          <Nav.Item value="admin">Admin</Nav.Item>
+          {children}
+        </>
+      );
+    }
+
+    function Passthrough({ children }: { children?: React.ReactNode }) {
+      return <>{children}</>;
+    }
+
+    /** A `React.lazy` of `component` whose chunk loads only when `load()` is called. */
+    function pendingLazy(component: AdminModule['default'] = AdminLinks) {
+      let resolveModule: (module: AdminModule) => void = () => {};
+      const loading = new Promise<AdminModule>((resolve) => {
+        resolveModule = resolve;
+      });
+      const Lazy = React.lazy(() => loading);
+      return { Lazy, load: () => resolveModule({ default: component }) };
+    }
+
+    function Shell({ slot, value = 'api' }: { slot: React.ReactNode; value?: string }) {
+      return (
+        <Nav value={value}>
+          <Nav.Item value="home">Home</Nav.Item>
+          <React.Suspense fallback={null}>{slot}</React.Suspense>
+          <Nav.Category value="docs" label="Docs">
+            <Nav.SubItem value="intro">Introduction</Nav.SubItem>
+            <Nav.SubItem value="api">API</Nav.SubItem>
+          </Nav.Category>
+        </Nav>
+      );
+    }
+
+    it('a React.lazy component does not suspend Nav; the current category still opens', async () => {
+      const { Lazy, load } = pendingLazy();
+      render(<Shell slot={<Lazy />} />);
+      expect(button('Home')).toBeInTheDocument();
+      expect(toggle()).toHaveAttribute('aria-expanded', 'true');
+      expect(button('API')).toHaveAttribute('aria-current', 'page');
+      expect(screen.queryByRole('button', { name: 'Admin' })).not.toBeInTheDocument();
+
+      await act(async () => load());
+      expect(button('Admin')).toBeInTheDocument();
+      expect(toggle()).toHaveAttribute('aria-expanded', 'true');
+      expect(button('API')).toHaveAttribute('aria-current', 'page');
+    });
+
+    it('a promise child does not suspend Nav; the current category still opens', async () => {
+      let resolveChild: (node: React.ReactElement) => void = () => {};
+      const child = new Promise<React.ReactElement>((resolve) => {
+        resolveChild = resolve;
+      });
+      // Awaited: React attaches the retry of a suspended promise child when the act scope ends.
+      await act(async () => {
+        render(<Shell slot={child} />);
+      });
+      expect(button('Home')).toBeInTheDocument();
+      expect(toggle()).toHaveAttribute('aria-expanded', 'true');
+      expect(button('API')).toHaveAttribute('aria-current', 'page');
+
+      await act(async () => resolveChild(<Nav.Item value="admin">Admin</Nav.Item>));
+      expect(button('Admin')).toBeInTheDocument();
+    });
+
+    it('the server renders Nav with the current category open around the loading content', () => {
+      const { Lazy } = pendingLazy();
+      const html = renderToString(<Shell slot={<Lazy />} />);
+      expect(html).toContain('aria-expanded="true"');
+      expect(html).toMatch(/aria-current="page"[^>]*>API</);
+    });
+
+    it('a category holding the value opens when its sub-items sit inside a loading React.lazy', async () => {
+      const { Lazy, load } = pendingLazy(Passthrough);
+      render(
+        <Nav value="api">
+          <Nav.Item value="home">Home</Nav.Item>
+          <Nav.Category value="docs" label="Docs">
+            <React.Suspense fallback={null}>
+              <Lazy>
+                <Nav.SubItem value="api">API</Nav.SubItem>
+              </Lazy>
+            </React.Suspense>
+          </Nav.Category>
+        </Nav>,
+      );
+      expect(button('Home')).toBeInTheDocument();
+      expect(toggle()).toHaveAttribute('aria-expanded', 'true');
+
+      await act(async () => load());
+      expect(button('API')).toHaveAttribute('aria-current', 'page');
+    });
   });
 
   it('has navigation aria-label', () => {
@@ -171,24 +319,21 @@ describe('Nav', () => {
         const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
         render(<SampleNav selectedValue="settings" />);
         expect(button('Settings')).toHaveAttribute('aria-current', 'page');
-        expect(warn).toHaveBeenCalledWith(
-          '[WaveUI] Nav: `selectedValue` is deprecated and will be removed in 1.0. Use `value` instead.',
-        );
+        expect(warn.mock.calls).toEqual([[deprecated('selectedValue', 'value')]]);
       });
 
       it('defaultSelectedValue still sets the initial selection and warns', () => {
         const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
         render(<SampleNav defaultSelectedValue="home" />);
         expect(button('Home')).toHaveAttribute('aria-current', 'page');
-        expect(warn).toHaveBeenCalledWith(
-          expect.stringContaining('Nav: `defaultSelectedValue` is deprecated'),
-        );
+        expect(warn.mock.calls).toEqual([[deprecated('defaultSelectedValue', 'defaultValue')]]);
       });
 
       it('value wins over selectedValue when both are given', () => {
-        vi.spyOn(console, 'warn').mockImplementation(() => {});
+        const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
         render(<SampleNav value="home" selectedValue="settings" />);
         expect(button('Home')).toHaveAttribute('aria-current', 'page');
+        expect(warn.mock.calls).toEqual([[deprecated('selectedValue', 'value')]]);
       });
 
       it('onNavItemSelect warns once and still fires on every activation, re-selection included', async () => {
@@ -211,14 +356,11 @@ describe('Nav', () => {
         await user.click(button('Settings'));
         expect(onNavItemSelect).toHaveBeenLastCalledWith('settings');
         expect(onValueChange).toHaveBeenCalledWith('settings');
-        const deprecations = warn.mock.calls.filter(([message]) =>
-          String(message).includes('`onNavItemSelect` is deprecated'),
-        );
-        expect(deprecations).toHaveLength(1);
+        expect(warn.mock.calls).toEqual([[deprecated('onNavItemSelect', 'onValueChange')]]);
       });
 
       it('onNavItemSelect does not fire when a disabled item is activated, the current one included', async () => {
-        vi.spyOn(console, 'warn').mockImplementation(() => {});
+        const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
         const user = userEvent.setup();
         const onNavItemSelect = vi.fn();
         render(
@@ -239,6 +381,7 @@ describe('Nav', () => {
         await user.click(button('Settings'));
         expect(onNavItemSelect).toHaveBeenCalledTimes(1);
         expect(onNavItemSelect).toHaveBeenCalledWith('settings');
+        expect(warn.mock.calls).toEqual([[deprecated('onNavItemSelect', 'onValueChange')]]);
       });
     });
   });
@@ -324,8 +467,11 @@ describe('Nav', () => {
         </Nav>,
       );
       const categoryButton = screen.getByRole('button', { name: 'Inbox (3)' });
-      expect(warn).toHaveBeenCalledWith(expect.stringContaining('Nav.Category'));
-      expect(warn).toHaveBeenCalledWith(expect.stringContaining('Use `label` instead.'));
+      expect(warn.mock.calls).toEqual([
+        [
+          '[WaveUI] Nav.Category: `text children as the label` is deprecated and will be removed in 1.0. Use `label` instead. Pass the category label in `label` and only the sub-items as children.',
+        ],
+      ]);
       await user.click(categoryButton);
       const list = button('Unread').closest('ul') as HTMLElement;
       expect(within(list).getAllByRole('listitem')).toHaveLength(1);
@@ -342,6 +488,44 @@ describe('Nav', () => {
       render(<SampleNav defaultValue="api" />);
       expect(toggle()).toHaveAttribute('aria-expanded', 'true');
       expect(button('API')).toHaveAttribute('aria-current', 'page');
+    });
+
+    // nav-menu-tests-1: the router pattern, `<Nav value={pathname}>`.
+    it('controlled: opens the category that contains the controlled value', () => {
+      render(<SampleNav value="api" />);
+      expect(toggle()).toHaveAttribute('aria-expanded', 'true');
+      expect(button('API')).toHaveAttribute('aria-current', 'page');
+    });
+
+    it('deprecated selectedValue also opens the category that contains it', () => {
+      const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+      render(<SampleNav selectedValue="api" />);
+      expect(toggle()).toHaveAttribute('aria-expanded', 'true');
+      expect(button('API')).toHaveAttribute('aria-current', 'page');
+      expect(warn.mock.calls).toEqual([[deprecated('selectedValue', 'value')]]);
+    });
+
+    it('defaultOpenCategories replaces the automatic opening, an empty list included', () => {
+      render(<SampleNav defaultValue="api" defaultOpenCategories={[]} />);
+      expect(toggle()).toHaveAttribute('aria-expanded', 'false');
+      expect(screen.queryByRole('button', { name: 'API' })).not.toBeInTheDocument();
+    });
+
+    it('accepts readonly category lists and reports a mutable copy (R6)', async () => {
+      const user = userEvent.setup();
+      const onOpenCategoriesChange = vi.fn();
+      const open = ['docs'] as const;
+      render(
+        <SampleNav defaultOpenCategories={open} onOpenCategoriesChange={onOpenCategoriesChange} />,
+      );
+      expect(toggle()).toHaveAttribute('aria-expanded', 'true');
+      await user.click(toggle());
+      expect(onOpenCategoriesChange).toHaveBeenCalledWith([]);
+      expectTypeOf(open).toMatchTypeOf<NonNullable<NavProps['openCategories']>>();
+      expectTypeOf(open).toMatchTypeOf<NonNullable<NavProps['defaultOpenCategories']>>();
+      expectTypeOf<Parameters<NonNullable<NavProps['onOpenCategoriesChange']>>[0]>().toEqualTypeOf<
+        string[]
+      >();
     });
 
     it('controlled openCategories: reports changes and follows the prop', async () => {
@@ -432,6 +616,113 @@ describe('Nav', () => {
       expect(onHomeClick).toHaveBeenCalledTimes(1);
       expect(onValueChange).toHaveBeenCalledWith('home');
       expect(screen.getByRole('link', { name: 'Home' })).toHaveAttribute('aria-current', 'page');
+    });
+
+    // nav-menu-code-3: a click that opens the link elsewhere leaves the current page current.
+    describe('a click that opens the link somewhere else', () => {
+      function ReportsNav({
+        onValueChange,
+        onNavItemSelect,
+        onReportsClick,
+        target,
+        download,
+      }: {
+        onValueChange?: (value: string) => void;
+        onNavItemSelect?: (value: string) => void;
+        onReportsClick?: React.MouseEventHandler<HTMLAnchorElement>;
+        target?: string;
+        download?: boolean;
+      }) {
+        return (
+          <Nav defaultValue="home" onValueChange={onValueChange} onNavItemSelect={onNavItemSelect}>
+            <Nav.Item value="home" href="#home">
+              Home
+            </Nav.Item>
+            <Nav.Item
+              value="reports"
+              href="#reports"
+              target={target}
+              download={download}
+              onClick={onReportsClick}
+            >
+              Reports
+            </Nav.Item>
+          </Nav>
+        );
+      }
+
+      const link = (name: string) => screen.getByRole('link', { name });
+
+      function expectHomeStillCurrent(onValueChange: ReturnType<typeof vi.fn>) {
+        expect(onValueChange).not.toHaveBeenCalled();
+        expect(link('Home')).toHaveAttribute('aria-current', 'page');
+        expect(link('Reports')).not.toHaveAttribute('aria-current');
+      }
+
+      it.each([
+        ['Ctrl+click', { ctrlKey: true }],
+        ['Cmd+click', { metaKey: true }],
+        ['Shift+click', { shiftKey: true }],
+        ['Alt+click', { altKey: true }],
+        ['a click with another mouse button', { button: 1 }],
+      ])('%s calls onClick, lets the browser open the link and selects nothing', (_name, init) => {
+        const onValueChange = vi.fn();
+        const onReportsClick = vi.fn();
+        render(<ReportsNav onValueChange={onValueChange} onReportsClick={onReportsClick} />);
+        const notPrevented = fireEvent.click(link('Reports'), init);
+        expect(notPrevented).toBe(true);
+        expect(onReportsClick).toHaveBeenCalledTimes(1);
+        expectHomeStillCurrent(onValueChange);
+      });
+
+      it.each([['_blank'], ['_top'], ['reports-window']])(
+        'a plain click on a link with target="%s" selects nothing',
+        async (target) => {
+          const user = userEvent.setup();
+          const onValueChange = vi.fn();
+          const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+          const onNavItemSelect = vi.fn();
+          render(
+            <ReportsNav
+              target={target}
+              onValueChange={onValueChange}
+              onNavItemSelect={onNavItemSelect}
+            />,
+          );
+          await user.click(link('Reports'));
+          expectHomeStillCurrent(onValueChange);
+          expect(onNavItemSelect).not.toHaveBeenCalled();
+          expect(warn.mock.calls).toEqual([[deprecated('onNavItemSelect', 'onValueChange')]]);
+        },
+      );
+
+      it('a plain click on a download link selects nothing', async () => {
+        const user = userEvent.setup();
+        const onValueChange = vi.fn();
+        render(<ReportsNav download onValueChange={onValueChange} />);
+        await user.click(link('Reports'));
+        expectHomeStillCurrent(onValueChange);
+      });
+
+      it.each([['_self'], ['']])(
+        'a plain click on a link with target="%s" still selects it',
+        async (target) => {
+          const user = userEvent.setup();
+          const onValueChange = vi.fn();
+          render(<ReportsNav target={target} onValueChange={onValueChange} />);
+          await user.click(link('Reports'));
+          expect(onValueChange).toHaveBeenCalledWith('reports');
+          expect(link('Reports')).toHaveAttribute('aria-current', 'page');
+        },
+      );
+
+      it('a button item is selected whatever the modifier keys (it opens nothing)', () => {
+        const onValueChange = vi.fn();
+        render(<SampleNav onValueChange={onValueChange} />);
+        fireEvent.click(button('Settings'), { ctrlKey: true });
+        expect(onValueChange).toHaveBeenCalledWith('settings');
+        expect(button('Settings')).toHaveAttribute('aria-current', 'page');
+      });
     });
 
     it('anchor props are typed for links and button props for buttons', () => {
@@ -981,6 +1272,96 @@ describe('Nav', () => {
     ])('%s outside a Nav throws in development', (name, renderOrphan) => {
       vi.spyOn(console, 'error').mockImplementation(() => {});
       expect(() => render(renderOrphan())).toThrow(`[WaveUI] ${name} must be used within Nav`);
+    });
+
+    it('logs each misplaced part once in production and renders it inert', async () => {
+      vi.stubEnv('NODE_ENV', 'production');
+      const error = vi.spyOn(console, 'error').mockImplementation(() => {});
+      try {
+        const user = userEvent.setup();
+        const orphans = (count: number) => (
+          <ul>
+            {Array.from({ length: count }, (_, index) => (
+              <React.Fragment key={index}>
+                <Nav.Item value="a">A</Nav.Item>
+                <Nav.SubItem value="b">B</Nav.SubItem>
+                <Nav.Category value="c" label="C">
+                  {null}
+                </Nav.Category>
+              </React.Fragment>
+            ))}
+          </ul>
+        );
+        const { rerender } = render(orphans(1));
+        rerender(orphans(2));
+        expect(screen.getAllByRole('button', { name: 'A' })).toHaveLength(2);
+        await user.click(screen.getAllByRole('button', { name: 'C' })[0]);
+        expect(screen.getAllByRole('button', { name: 'C' })[0]).toHaveAttribute(
+          'aria-expanded',
+          'false',
+        );
+        expect(error.mock.calls).toEqual([
+          ['[WaveUI] Nav.Item must be used within Nav'],
+          ['[WaveUI] Nav.SubItem must be used within Nav'],
+          ['[WaveUI] Nav.Category must be used within Nav'],
+        ]);
+      } finally {
+        error.mockRestore();
+        vi.unstubAllEnvs();
+      }
+    });
+
+    // R12: one value per item (Nav.Item and Nav.SubItem share them) and one per category.
+    it('warns once per value that several items or several categories share', () => {
+      const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+      // Sub-items register while their category is open (they are rendered only then).
+      const tree = (
+        <Nav defaultOpenCategories={['docs']}>
+          <Nav.Item value="home">Home</Nav.Item>
+          <Nav.Item value="docs">Docs home</Nav.Item>
+          <Nav.Category value="docs" label="Docs">
+            <Nav.SubItem value="home">Start</Nav.SubItem>
+          </Nav.Category>
+          <Nav.Category value="docs" label="Guides">
+            <Nav.SubItem value="guide">Guide</Nav.SubItem>
+          </Nav.Category>
+        </Nav>
+      );
+      const { rerender } = render(tree);
+      rerender(tree);
+      expect(warn.mock.calls).toEqual([
+        [
+          '[WaveUI] Nav: several items share the value "home". Nav.Item and Nav.SubItem values must be unique within a Nav; every item with the current value is marked as the current page.',
+        ],
+        [
+          '[WaveUI] Nav: several categories share the value "docs". Nav.Category values must be unique within a Nav; they open and close together.',
+        ],
+      ]);
+    });
+
+    it('does not warn for unique values, in StrictMode or when an item replaces another', () => {
+      const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+      const tree = (swap: boolean) => (
+        <React.StrictMode>
+          <Nav>
+            {swap ? (
+              <Nav.Item key="start" value="home">
+                Start
+              </Nav.Item>
+            ) : (
+              <Nav.Item key="home" value="home" href="#home">
+                Home
+              </Nav.Item>
+            )}
+            <Nav.Category value="home" label="Home pages">
+              <Nav.SubItem value="intro">Introduction</Nav.SubItem>
+            </Nav.Category>
+          </Nav>
+        </React.StrictMode>
+      );
+      const { rerender } = render(tree(false));
+      rerender(tree(true));
+      expect(warn).not.toHaveBeenCalled();
     });
 
     it('re-rendering Nav with unchanged state does not re-render memoized items', () => {

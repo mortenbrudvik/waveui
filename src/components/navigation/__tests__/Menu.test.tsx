@@ -2,14 +2,17 @@ import * as React from 'react';
 import { describe, it, expect, vi, afterEach } from 'vitest';
 import { act, fireEvent, render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
+import { renderToString } from 'react-dom/server';
 import { Menu, MenuDivider, MenuItem, MenuPopover, MenuTrigger } from '../Menu';
 import type { MenuItemProps, MenuProps, MenuTriggerProps } from '../Menu';
 import type { Slot } from '../../../lib/types';
 import { useModalLayer } from '../../../hooks/useModalLayer';
 import { Portal } from '../../portal/Portal';
 import {
+  asClientReference,
   createOverlayTestWrapper,
   expectNoA11yViolations,
+  findDanglingIdRefs,
   renderWithProviders,
   testCompoundExposure,
   testComposedHandler,
@@ -222,6 +225,40 @@ describe('Menu', () => {
       expect(item('Copy')).toHaveFocus();
       await user.keyboard('c');
       expect(item('Clear')).toHaveFocus();
+    });
+
+    // nav-menu-code-5: an element label (an i18n component) is matched by its own text, not by
+    // the item's whole text, which starts with the icon's text (an icon-font ligature, an emoji).
+    it('typeahead matches an element label, not the text of the icon before it', async () => {
+      const user = userEvent.setup();
+      const Label = ({ text }: { text: string }) => <>{text}</>;
+      renderStaticMenu(
+        {},
+        <>
+          <Menu.Item icon={{ children: 'content_cut' }}>
+            <Label text="Cut" />
+          </Menu.Item>
+          <Menu.Item icon={{ children: 'content_copy' }} shortcut="Ctrl+C">
+            <Label text="Copy" />
+          </Menu.Item>
+          <Menu.Item icon={{ children: 'content_paste' }}>
+            <Label text="Paste" />
+          </Menu.Item>
+        </>,
+      );
+      await user.tab();
+      expect(item('Cut')).toHaveFocus();
+      await user.keyboard('p');
+      expect(item('Paste')).toHaveFocus();
+    });
+
+    it('typeahead uses a label given as a string, as before', () => {
+      render(
+        <Menu aria-label="Edit">
+          <Menu.Item icon={{ children: 'content_cut' }}>Cut</Menu.Item>
+        </Menu>,
+      );
+      expect(item('Cut')).toHaveAttribute('data-roving-text', 'Cut');
     });
 
     it('does not activate the focused item when Space continues a search that matches nothing', async () => {
@@ -1195,7 +1232,10 @@ describe('Menu popup (Menu.Trigger + Menu.Popover)', () => {
     const wrapper = screen.getByTestId('wrapper');
     expect(wrapper.tagName).toBe('SPAN');
     expect(wrapper).toHaveAttribute('aria-describedby', 'hint-b');
-    expect(wrapper).toHaveAttribute('aria-haspopup', 'menu');
+    // A generic span cannot carry the state ARIA (axe aria-allowed-attr), and text has no
+    // element to move it to.
+    expect(wrapper).not.toHaveAttribute('aria-haspopup');
+    expect(wrapper).not.toHaveAttribute('aria-expanded');
   });
 
   it('accepts a render-prop child that receives the trigger props', async () => {
@@ -1239,9 +1279,11 @@ describe('Menu popup (Menu.Trigger + Menu.Popover)', () => {
     );
     const wrapper = screen.getByText('Open menu');
     expect(wrapper.tagName).toBe('SPAN');
-    expect(wrapper).toHaveAttribute('aria-haspopup', 'menu');
+    expect(wrapper).not.toHaveAttribute('aria-haspopup');
     await user.click(wrapper);
     expect(screen.getByRole('menu')).toBeInTheDocument();
+    expect(wrapper).not.toHaveAttribute('aria-expanded');
+    expect(wrapper).not.toHaveAttribute('aria-controls');
   });
 
   it('forwards className, ref and rest props of Menu.Popover to the menu surface', async () => {
@@ -1283,6 +1325,115 @@ describe('Menu popup (Menu.Trigger + Menu.Popover)', () => {
     await user.keyboard('{ArrowDown}');
     expect(onKeyDown).toHaveBeenCalled();
     expect(item('Delete')).toHaveFocus();
+  });
+
+  // nav-menu-tests-4 (C-COMPOSE): preventDefault() in the consumer's handler skips ours.
+  it('a Menu.Popover onKeyDown that prevents default skips roving and the Tab close', async () => {
+    const user = userEvent.setup();
+    render(
+      <Menu>
+        <Menu.Trigger>
+          <button type="button">Actions</button>
+        </Menu.Trigger>
+        <Menu.Popover onKeyDown={(e) => e.preventDefault()}>
+          <Menu.Item>Edit</Menu.Item>
+          <Menu.Item>Delete</Menu.Item>
+        </Menu.Popover>
+      </Menu>,
+    );
+    await user.click(trigger());
+    await user.keyboard('{ArrowDown}');
+    expect(item('Edit')).toHaveFocus();
+    fireEvent.keyDown(item('Edit'), { key: 'Tab' });
+    expect(screen.getByRole('menu')).toBeInTheDocument();
+    expect(trigger()).toHaveAttribute('aria-expanded', 'true');
+    expect(item('Edit')).toHaveFocus();
+  });
+
+  // nav-menu-tests-3: the already-open branch of the trigger keys (the registered surface).
+  it('ArrowUp/ArrowDown on the trigger of an open menu focus its last/first enabled item', async () => {
+    const user = userEvent.setup();
+    const onOpenChange = vi.fn();
+    render(<PopupMenu defaultOpen onOpenChange={onOpenChange} />);
+    expect(item('Edit')).toHaveFocus();
+    // Programmatic focus (or a screen reader) on the trigger keeps the menu open.
+    act(() => trigger().focus());
+    expect(screen.getByRole('menu')).toBeInTheDocument();
+    await user.keyboard('{ArrowUp}');
+    expect(item('Delete')).toHaveFocus();
+    act(() => trigger().focus());
+    await user.keyboard('{ArrowDown}');
+    expect(item('Edit')).toHaveFocus();
+    expect(onOpenChange).not.toHaveBeenCalled();
+  });
+
+  // nav-menu-tests-2: `aria-label` replaces the default name from the trigger.
+  it('Menu.Popover aria-label names the menu instead of the trigger', async () => {
+    const user = userEvent.setup();
+    render(
+      <Menu>
+        <Menu.Trigger>
+          <button type="button">Actions</button>
+        </Menu.Trigger>
+        <Menu.Popover aria-label="File actions">
+          <Menu.Item>Edit</Menu.Item>
+        </Menu.Popover>
+      </Menu>,
+    );
+    await user.click(trigger());
+    const menu = screen.getByRole('menu', { name: 'File actions' });
+    expect(menu).not.toHaveAttribute('aria-labelledby');
+    await expectNoA11yViolations();
+  });
+
+  it('a popup menu without Menu.Trigger does not point aria-labelledby at a missing id', () => {
+    render(
+      <Menu defaultOpen>
+        <Menu.Popover>
+          <Menu.Item>Edit</Menu.Item>
+        </Menu.Popover>
+      </Menu>,
+    );
+    expect(screen.getByRole('menu')).not.toHaveAttribute('aria-labelledby');
+    expect(findDanglingIdRefs()).toEqual([]);
+  });
+
+  // nav-menu-code-5: the label's current text, read when the key is pressed.
+  it('typeahead in the popover matches an element label by its current text', async () => {
+    const user = userEvent.setup();
+    let label = 'Paste';
+    const listeners = new Set<() => void>();
+    const store = {
+      subscribe: (listener: () => void) => {
+        listeners.add(listener);
+        return () => {
+          listeners.delete(listener);
+        };
+      },
+      get: () => label,
+    };
+    // A label that re-renders on its own (a translation that arrives later), not with the item.
+    const LiveLabel = () => <>{React.useSyncExternalStore(store.subscribe, store.get)}</>;
+    render(
+      <Menu>
+        <Menu.Trigger>
+          <button type="button">Actions</button>
+        </Menu.Trigger>
+        <Menu.Popover>
+          <Menu.Item icon={{ children: 'content_cut' }}>Cut</Menu.Item>
+          <Menu.Item icon={{ children: 'content_paste' }}>
+            <LiveLabel />
+          </Menu.Item>
+        </Menu.Popover>
+      </Menu>,
+    );
+    await user.click(trigger());
+    act(() => {
+      label = 'Insert';
+      listeners.forEach((listener) => listener());
+    });
+    await user.keyboard('i');
+    expect(item('Insert')).toHaveFocus();
   });
 
   it('has no axe violations while open', async () => {
@@ -1328,6 +1479,7 @@ describe('Menu popup (Menu.Trigger + Menu.Popover)', () => {
       const messages = warn.mock.calls.map(([message]) => String(message));
       const ignored = messages.filter((message) => message.includes('popup menu'));
       expect(ignored).toHaveLength(1);
+      expect(messages).toEqual(ignored); // nothing else is logged (R14)
       expect(ignored[0]).toContain('[WaveUI] Menu:');
       for (const name of ['className', 'aria-label', 'data-testid', 'ref']) {
         expect(ignored[0]).toContain(`\`${name}\``);
@@ -1360,6 +1512,7 @@ describe('Menu popup (Menu.Trigger + Menu.Popover)', () => {
       const messages = warn.mock.calls.map(([message]) => String(message));
       const fallback = messages.filter((message) => message.includes('static menu'));
       expect(fallback).toHaveLength(1);
+      expect(messages).toEqual(fallback); // nothing else is logged (R14)
       expect(fallback[0]).toContain('[WaveUI] Menu.Trigger:');
       for (const name of ['open', 'defaultOpen', 'onOpenChange']) {
         expect(fallback[0]).toContain(`\`${name}\``);
@@ -1387,6 +1540,300 @@ describe('Menu popup (Menu.Trigger + Menu.Popover)', () => {
       expect(item('Edit')).toHaveFocus();
       expect(warn).not.toHaveBeenCalled();
     });
+
+    // nav-menu-code-4: `open` is not ignored by a menu of items; it makes Menu a popup menu.
+    it('warns once when open state turns a menu of items into a popup menu without Menu.Popover', () => {
+      const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+      const items = (
+        <>
+          <Menu.Item>Cut</Menu.Item>
+          <Menu.Item>Copy</Menu.Item>
+        </>
+      );
+      const { rerender } = render(<Menu open={false}>{items}</Menu>);
+      rerender(<Menu open={false}>{items}</Menu>);
+      expect(queryMenu()).not.toBeInTheDocument();
+      expect(warn.mock.calls).toEqual([
+        [
+          '[WaveUI] Menu.Item: rendered in a popup menu outside Menu.Popover, so it has no `role="menu"` parent. A Menu with `open`, `defaultOpen` or `onOpenChange` is a popup menu that renders no element of its own: put the items in Menu.Popover, or leave these props out for a static menu.',
+        ],
+      ]);
+    });
+
+    it('does not warn for the items of Menu.Popover or of a static menu', async () => {
+      const user = userEvent.setup();
+      const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+      render(
+        <>
+          <PopupMenu defaultOpen={false} />
+          <Menu aria-label="Edit">
+            <Menu.Item>Cut</Menu.Item>
+          </Menu>
+        </>,
+      );
+      await user.click(trigger());
+      expect(item('Edit')).toHaveFocus();
+      expect(warn).not.toHaveBeenCalled();
+    });
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Wrapper-span triggers: asChild={false} and the automatic fallback (nav-menu-code-1/2)
+// ---------------------------------------------------------------------------
+
+/** A trigger child that neither forwards `ref` nor spreads its props (the automatic fallback). */
+function NoRefButton({
+  children,
+  onClick,
+}: {
+  children: React.ReactNode;
+  onClick?: React.MouseEventHandler<HTMLButtonElement>;
+}) {
+  return (
+    <button type="button" onClick={onClick}>
+      {children}
+    </button>
+  );
+}
+
+function WrapperTriggerMenu({ automatic }: { automatic: boolean }) {
+  return (
+    <>
+      <Menu>
+        {automatic ? (
+          <Menu.Trigger>
+            <NoRefButton>Actions</NoRefButton>
+          </Menu.Trigger>
+        ) : (
+          <Menu.Trigger asChild={false}>
+            <button type="button">Actions</button>
+          </Menu.Trigger>
+        )}
+        <Menu.Popover>
+          <Menu.Item>Edit</Menu.Item>
+          <Menu.Item>Delete</Menu.Item>
+        </Menu.Popover>
+      </Menu>
+      <button type="button">Next</button>
+    </>
+  );
+}
+
+const WRAPPER_TRIGGERS = [
+  ['asChild={false}', false],
+  ['the automatic fallback', true],
+] as const;
+
+describe('Menu.Trigger rendered as a wrapper span', () => {
+  /** Renders the menu; only the automatic fallback warns (once). */
+  function renderWrapperMenu(automatic: boolean) {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    render(<WrapperTriggerMenu automatic={automatic} />);
+    return () =>
+      expect(warn.mock.calls.map(([message]) => String(message))).toEqual(
+        automatic
+          ? [
+              expect.stringContaining(
+                '[WaveUI] Menu.Trigger: its child did not attach the trigger ref',
+              ),
+            ]
+          : [],
+      );
+  }
+
+  it.each(WRAPPER_TRIGGERS)(
+    '%s: Escape returns focus to the button inside the wrapper',
+    async (_name, automatic) => {
+      const user = userEvent.setup();
+      const expectWarnings = renderWrapperMenu(automatic);
+      await user.click(trigger());
+      expect(item('Edit')).toHaveFocus();
+      await user.keyboard('{Escape}');
+      expect(queryMenu()).not.toBeInTheDocument();
+      expect(trigger()).toHaveFocus();
+      expectWarnings();
+    },
+  );
+
+  it.each(WRAPPER_TRIGGERS)(
+    '%s: activating an item returns focus to the button inside the wrapper',
+    async (_name, automatic) => {
+      const user = userEvent.setup();
+      const expectWarnings = renderWrapperMenu(automatic);
+      await user.click(trigger());
+      await user.click(item('Edit'));
+      expect(queryMenu()).not.toBeInTheDocument();
+      expect(trigger()).toHaveFocus();
+      expectWarnings();
+    },
+  );
+
+  it.each(WRAPPER_TRIGGERS)(
+    '%s: Tab closes the menu and puts focus on the button inside the wrapper',
+    async (_name, automatic) => {
+      const user = userEvent.setup();
+      const expectWarnings = renderWrapperMenu(automatic);
+      await user.click(trigger());
+      const notPrevented = fireEvent.keyDown(item('Edit'), { key: 'Tab' });
+      expect(notPrevented).toBe(true);
+      expect(queryMenu()).not.toBeInTheDocument();
+      expect(trigger()).toHaveFocus();
+      expectWarnings();
+    },
+  );
+
+  it.each(WRAPPER_TRIGGERS)(
+    '%s: the button inside the wrapper carries the state ARIA, the span none (axe)',
+    async (_name, automatic) => {
+      const user = userEvent.setup();
+      const expectWarnings = renderWrapperMenu(automatic);
+      const button = trigger();
+      const wrapper = button.parentElement as HTMLElement;
+      const expectBareWrapper = () => {
+        expect(wrapper.tagName).toBe('SPAN');
+        for (const name of ['aria-haspopup', 'aria-expanded', 'aria-controls']) {
+          expect(wrapper).not.toHaveAttribute(name);
+        }
+      };
+      expectBareWrapper();
+      expect(button).toHaveAttribute('aria-haspopup', 'menu');
+      expect(button).toHaveAttribute('aria-expanded', 'false');
+      expect(button).not.toHaveAttribute('aria-controls');
+      await expectNoA11yViolations();
+
+      await user.click(button);
+      const menu = screen.getByRole('menu', { name: 'Actions' });
+      expectBareWrapper();
+      expect(button).toHaveAttribute('aria-expanded', 'true');
+      expect(button).toHaveAttribute('aria-controls', menu.id);
+      await expectNoA11yViolations();
+
+      await user.keyboard('{Escape}');
+      expect(button).toHaveAttribute('aria-expanded', 'false');
+      expect(button).not.toHaveAttribute('aria-controls');
+      expectWarnings();
+    },
+  );
+
+  // Menu.Trigger (explicit span) and useTriggerElement (automatic span) each pick the element that
+  // takes the state ARIA; both must apply the same rule (the first element in the tab order by
+  // markup: hidden inputs and tabIndex -1 skipped), so one of these cases fails if they drift.
+  it.each(WRAPPER_TRIGGERS)(
+    '%s: the state ARIA skips hidden inputs and elements out of the tab order',
+    async (_name, automatic) => {
+      const user = userEvent.setup();
+      const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+      /** Neither forwards `ref` nor spreads props: the automatic fallback wraps it too. */
+      function Content() {
+        return (
+          <>
+            <input type="hidden" name="scope" value="all" data-testid="hidden" />
+            <span tabIndex={-1} data-testid="skipped">
+              Busy
+            </span>
+            <button type="button" aria-haspopup="true">
+              Actions
+            </button>
+          </>
+        );
+      }
+      render(
+        <Menu>
+          <Menu.Trigger asChild={automatic}>
+            <Content />
+          </Menu.Trigger>
+          <Menu.Popover>
+            <Menu.Item>Edit</Menu.Item>
+          </Menu.Popover>
+        </Menu>,
+      );
+      for (const testId of ['hidden', 'skipped']) {
+        expect(screen.getByTestId(testId)).not.toHaveAttribute('aria-haspopup');
+        expect(screen.getByTestId(testId)).not.toHaveAttribute('aria-expanded');
+      }
+      expect(trigger()).toHaveAttribute('aria-haspopup', 'menu');
+      expect(trigger()).toHaveAttribute('aria-expanded', 'false');
+      await user.click(trigger());
+      expect(trigger()).toHaveAttribute('aria-expanded', 'true');
+      expect(screen.getByTestId('skipped')).not.toHaveAttribute('aria-expanded');
+      expect(warn.mock.calls.map(([message]) => String(message))).toEqual(
+        automatic
+          ? [
+              expect.stringContaining(
+                '[WaveUI] Menu.Trigger: its child did not attach the trigger ref',
+              ),
+            ]
+          : [],
+      );
+    },
+  );
+
+  it('asChild={false}: state ARIA passed to Menu.Trigger stays off the span', () => {
+    render(
+      <Menu>
+        <Menu.Trigger asChild={false} aria-expanded="true" aria-haspopup="true" data-testid="wrap">
+          <button type="button">Actions</button>
+        </Menu.Trigger>
+        <Menu.Popover>
+          <Menu.Item>Edit</Menu.Item>
+        </Menu.Popover>
+      </Menu>,
+    );
+    const wrapper = screen.getByTestId('wrap');
+    expect(wrapper).not.toHaveAttribute('aria-expanded');
+    expect(wrapper).not.toHaveAttribute('aria-haspopup');
+    expect(trigger()).toHaveAttribute('aria-expanded', 'false');
+    expect(trigger()).toHaveAttribute('aria-haspopup', 'menu');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Parts written in a React Server Component: lazy element types (R1, x-ssr-1)
+// ---------------------------------------------------------------------------
+
+describe('Menu parts as client references (lazy element types)', () => {
+  it('a popup menu of lazy parts renders the same server HTML and works the same', async () => {
+    const user = userEvent.setup();
+    const LazyTrigger = asClientReference(MenuTrigger);
+    const LazyPopover = asClientReference(MenuPopover);
+    const LazyItem = asClientReference(MenuItem);
+    const plain = renderToString(
+      <Menu>
+        <MenuTrigger>
+          <button type="button">Actions</button>
+        </MenuTrigger>
+        <>
+          <MenuPopover>
+            <MenuItem>Edit</MenuItem>
+          </MenuPopover>
+        </>
+      </Menu>,
+    );
+    expect(plain).toContain('aria-haspopup="menu"');
+    expect(plain).not.toContain('role="menu"');
+    const lazy = (
+      <Menu>
+        <LazyTrigger>
+          <button type="button">Actions</button>
+        </LazyTrigger>
+        <>
+          <LazyPopover>
+            <LazyItem>Edit</LazyItem>
+          </LazyPopover>
+        </>
+      </Menu>
+    );
+    expect(renderToString(lazy)).toBe(plain);
+
+    render(lazy);
+    expect(queryMenu()).not.toBeInTheDocument();
+    await user.click(trigger());
+    expect(screen.getByRole('menu', { name: 'Actions' })).toBeInTheDocument();
+    expect(item('Edit')).toHaveFocus();
+    await user.click(item('Edit'));
+    expect(queryMenu()).not.toBeInTheDocument();
+    expect(trigger()).toHaveFocus();
   });
 });
 
@@ -1411,5 +1858,38 @@ describe('Menu context (C-CONTEXT)', () => {
         </Menu.Popover>,
       ),
     ).toThrow('[WaveUI] Menu.Popover must be used within Menu');
+  });
+
+  it('logs each misplaced part once in production and renders it inert', () => {
+    vi.stubEnv('NODE_ENV', 'production');
+    const error = vi.spyOn(console, 'error').mockImplementation(() => {});
+    try {
+      const orphans = (count: number) =>
+        Array.from({ length: count }, (_, index) => (
+          <React.Fragment key={index}>
+            <Menu.Trigger>
+              <button type="button">Orphan</button>
+            </Menu.Trigger>
+            <Menu.Popover>
+              <Menu.Item>Edit</Menu.Item>
+            </Menu.Popover>
+          </React.Fragment>
+        ));
+      const { rerender } = render(<>{orphans(1)}</>);
+      rerender(<>{orphans(2)}</>);
+      expect(screen.getAllByRole('button', { name: 'Orphan' })).toHaveLength(2);
+      expect(screen.getAllByRole('button', { name: 'Orphan' })[0]).toHaveAttribute(
+        'aria-expanded',
+        'false',
+      );
+      expect(queryMenu()).not.toBeInTheDocument();
+      expect(error.mock.calls).toEqual([
+        ['[WaveUI] Menu.Trigger must be used within Menu'],
+        ['[WaveUI] Menu.Popover must be used within Menu'],
+      ]);
+    } finally {
+      error.mockRestore();
+      vi.unstubAllEnvs();
+    }
   });
 });
