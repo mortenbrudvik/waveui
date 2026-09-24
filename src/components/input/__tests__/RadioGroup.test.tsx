@@ -57,7 +57,7 @@ describe('RadioGroup', () => {
     handler: 'onKeyDown',
     defaultProps: { 'aria-label': 'Options', defaultValue: 'a', children: twoItems },
     act: async ({ user }) => {
-      radio('Alpha').focus();
+      act(() => radio('Alpha').focus());
       await user.keyboard('{ArrowDown}');
     },
     assertInternal: () => {
@@ -538,7 +538,7 @@ describe('RadioGroup - roving tabindex', () => {
         <RadioItem value="c" label="Charlie" />
       </RadioGroup>,
     );
-    radio('Alpha').focus();
+    act(() => radio('Alpha').focus());
     await user.keyboard('{ArrowDown}');
     expect(onValueChange).toHaveBeenCalledWith('b');
     expect(radio('Beta')).toHaveFocus();
@@ -557,7 +557,7 @@ describe('RadioGroup - roving tabindex', () => {
         <RadioItem value="c" label="Charlie" />
       </RadioGroup>,
     );
-    radio('Beta').focus();
+    act(() => radio('Beta').focus());
     await user.keyboard('{ArrowUp}');
     expect(onValueChange).toHaveBeenCalledWith('a');
     expect(radio('Alpha')).toHaveFocus();
@@ -579,7 +579,7 @@ describe('RadioGroup - roving tabindex', () => {
         <RadioItem value="b" label="Beta" />
       </RadioGroup>,
     );
-    radio('Alpha').focus();
+    act(() => radio('Alpha').focus());
     await user.keyboard('{ArrowRight}');
     expect(onValueChange).toHaveBeenLastCalledWith('b');
     expect(radio('Beta')).toHaveFocus();
@@ -598,7 +598,7 @@ describe('RadioGroup - roving tabindex', () => {
         <RadioItem value="b" label="Beta" />
       </RadioGroup>,
     );
-    radio('Alpha').focus();
+    act(() => radio('Alpha').focus());
     await user.keyboard('{ArrowRight}');
     expect(radio('Beta')).toHaveFocus();
     expect(radio('Beta')).toHaveAttribute('aria-checked', 'true');
@@ -615,7 +615,7 @@ describe('RadioGroup - roving tabindex', () => {
         <RadioItem value="b" label="Beta" />
       </RadioGroup>,
     );
-    radio('Alpha').focus();
+    act(() => radio('Alpha').focus());
     await user.keyboard('{ArrowDown}');
     expect(radio('Beta')).toHaveFocus();
     expect(radio('Beta')).toHaveAttribute('aria-checked', 'true');
@@ -634,7 +634,7 @@ describe('RadioGroup - roving tabindex', () => {
       </RadioGroup>,
       { dir: 'rtl' },
     );
-    radio('Alpha').focus();
+    act(() => radio('Alpha').focus());
     await user.keyboard('{ArrowLeft}');
     expect(radio('Beta')).toHaveFocus();
     expect(radio('Beta')).toHaveAttribute('aria-checked', 'true');
@@ -653,7 +653,7 @@ describe('RadioGroup - roving tabindex', () => {
         <RadioItem value="c" label="Charlie" />
       </RadioGroup>,
     );
-    radio('Charlie').focus();
+    act(() => radio('Charlie').focus());
     await user.keyboard('{ArrowDown}');
     expect(onValueChange).toHaveBeenCalledWith('a');
     expect(radio('Alpha')).toHaveFocus();
@@ -686,7 +686,7 @@ describe('RadioGroup - roving tabindex', () => {
         <RadioItem value="c" label="Charlie" />
       </RadioGroup>,
     );
-    radio('Alpha').focus();
+    act(() => radio('Alpha').focus());
     await user.keyboard('{ArrowDown}');
     // Should skip disabled "b" and go straight to "c"
     expect(onValueChange).toHaveBeenCalledWith('c');
@@ -705,7 +705,7 @@ describe('RadioGroup - roving tabindex', () => {
         <RadioItem value="c" label="Charlie" />
       </RadioGroup>,
     );
-    radio('Charlie').focus();
+    act(() => radio('Charlie').focus());
     await user.keyboard('{Home}');
     expect(onValueChange).toHaveBeenCalledWith('a');
     expect(radio('Alpha')).toHaveFocus();
@@ -722,7 +722,7 @@ describe('RadioGroup - roving tabindex', () => {
         <RadioItem value="c" label="Charlie" />
       </RadioGroup>,
     );
-    radio('Alpha').focus();
+    act(() => radio('Alpha').focus());
     await user.keyboard('{End}');
     expect(onValueChange).toHaveBeenCalledWith('c');
     expect(radio('Charlie')).toHaveFocus();
@@ -770,6 +770,15 @@ describe('RadioGroup — native forms (C-FORMS)', () => {
     return screen.getByRole('form', { name: 'Form' }) as HTMLFormElement;
   }
 
+  /** A failed check fires `invalid`, which focuses the tab stop and updates state: run it in act. */
+  function checkValidity(): boolean {
+    let valid = false;
+    act(() => {
+      valid = getForm().checkValidity();
+    });
+    return valid;
+  }
+
   it('adds nothing to FormData without a name (no generated default name)', async () => {
     const user = userEvent.setup();
     render(
@@ -806,13 +815,13 @@ describe('RadioGroup — native forms (C-FORMS)', () => {
         </RadioGroup>
       </form>,
     );
-    expect(getForm().checkValidity()).toBe(false);
+    expect(checkValidity()).toBe(false);
     expect(screen.getByRole('radiogroup', { name: 'Options' })).toHaveAttribute(
       'aria-required',
       'true',
     );
     await user.click(radio('Alpha'));
-    expect(getForm().checkValidity()).toBe(true);
+    expect(checkValidity()).toBe(true);
     expect(new FormData(getForm()).get('letter')).toBe('a');
   });
 

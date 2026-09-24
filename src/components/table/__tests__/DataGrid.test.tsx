@@ -414,7 +414,7 @@ describe('DataGrid sorting', () => {
   });
 
   it('clears a controlled sort that becomes undefined (deprecated sortColumn alias)', () => {
-    vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
     const { rerender } = renderGrid({ sortColumn: 'name', sortDirection: 'descending' });
     expect(header('Name')).toHaveAttribute('aria-sort', 'descending');
     rerender(
@@ -423,17 +423,26 @@ describe('DataGrid sorting', () => {
       </DataGrid>,
     );
     expect(header('Name')).toHaveAttribute('aria-sort', 'none');
+    expect(warn).toHaveBeenCalledWith(
+      expect.stringContaining('changing from controlled to uncontrolled'),
+    );
   });
 
   it('honours a controlled sort that arrives after mount', () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
     const { rerender } = renderGrid({ sort: undefined });
     expect(header('Role')).toHaveAttribute('aria-sort', 'none');
+    expect(warn).not.toHaveBeenCalled();
     rerender(
       <DataGrid aria-label="People" sort={{ columnId: 'role', direction: 'ascending' }}>
         {gridContent()}
       </DataGrid>,
     );
     expect(header('Role')).toHaveAttribute('aria-sort', 'ascending');
+    expect(warn).toHaveBeenCalledTimes(1);
+    expect(warn).toHaveBeenCalledWith(
+      expect.stringContaining('changing from uncontrolled to controlled'),
+    );
   });
 
   it('warns when the sort API and the deprecated sortColumn/sortDirection are mixed', () => {
@@ -1026,7 +1035,7 @@ describe('DataGrid selection', () => {
   it('clears a controlled selection that becomes undefined', () => {
     const { rerender } = renderGrid({ selectionMode: 'multiple', selectedItems: ['1', '2'] });
     expect(screen.getByRole('checkbox', { name: 'Alice' })).toBeChecked();
-    vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
     rerender(
       <DataGrid aria-label="People" selectionMode="multiple" selectedItems={undefined}>
         {gridContent()}
@@ -1034,10 +1043,13 @@ describe('DataGrid selection', () => {
     );
     expect(screen.getByRole('checkbox', { name: 'Alice' })).not.toBeChecked();
     expect(screen.getByRole('checkbox', { name: 'Select all rows' })).not.toBeChecked();
+    expect(warn).toHaveBeenCalledWith(
+      expect.stringContaining('changing from controlled to uncontrolled'),
+    );
   });
 
   it('honours a controlled selection that arrives after mount', () => {
-    vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
     const { rerender } = renderGrid({ selectionMode: 'multiple', selectedItems: undefined });
     rerender(
       <DataGrid aria-label="People" selectionMode="multiple" selectedItems={['2']}>
@@ -1045,6 +1057,9 @@ describe('DataGrid selection', () => {
       </DataGrid>,
     );
     expect(screen.getByRole('checkbox', { name: 'Bob' })).toBeChecked();
+    expect(warn).toHaveBeenCalledWith(
+      expect.stringContaining('changing from uncontrolled to controlled'),
+    );
   });
 
   it('calls onSelectedItemsChange once per click in StrictMode', async () => {

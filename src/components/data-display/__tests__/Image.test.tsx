@@ -4,7 +4,6 @@ import { render, screen } from '@testing-library/react';
 import { Image } from '../Image';
 import type { ImageFit, ImageProps, ImageShape, StrictImageProps } from '../Image';
 import type { Shape } from '../../../lib/types';
-import imageStorySource from '../../../../stories/Image.stories.tsx?raw';
 import { testSystemProps } from '../../../test-utils';
 
 describe('Image', () => {
@@ -126,29 +125,8 @@ describe('Image', () => {
     expect(screen.getByTestId('img')).not.toHaveClass('border');
   });
 
-  // repo-level#32: the story placeholder paints visible fills (the `#` is encoded exactly once).
-  // The story is read as text: importing it would load the whole `../src` barrel, i.e. every other
-  // package's in-flight module (§5.9).
-  it('story placeholder writes literal "#" paint colors and encodes them exactly once', () => {
-    const colors = Object.fromEntries(
-      Array.from(imageStorySource.matchAll(/const (PLACEHOLDER_\w+) = '([^']*)';/g), (match) => [
-        match[1],
-        match[2],
-      ]),
-    );
-    expect(colors).toEqual({
-      PLACEHOLDER_FILL: expect.stringMatching(/^#[0-9a-f]{6}$/),
-      PLACEHOLDER_TEXT: expect.stringMatching(/^#[0-9a-f]{6}$/),
-    });
-    expect(imageStorySource).not.toContain('%23');
-    expect(imageStorySource.match(/encodeURIComponent\(/g)).toHaveLength(1);
-    expect(imageStorySource).toMatch(/`data:image\/svg\+xml,\$\{encodeURIComponent\(/);
-    expect(imageStorySource).toMatch(/<rect[^>]* fill="\$\{PLACEHOLDER_FILL\}"/);
-    expect(imageStorySource).toMatch(/<text[^>]* fill="\$\{PLACEHOLDER_TEXT\}"/);
-    expect(imageStorySource).toMatch(
-      /export const Default: Story = \{\s*args: \{\s*src: placeholder\(/,
-    );
-  });
+  // repo-level#32: the story placeholder (literal #rrggbb paint, encoded exactly once) is checked
+  // on the rendered story args in src/__tests__/integration.test.tsx.
 
   // button-provider#27 (C-REF): ref is declared in the props interface.
   it('declares ref in ImageProps (C-REF)', () => {

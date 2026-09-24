@@ -22,6 +22,14 @@
  * container. jsdom cannot compute color contrast; contrast is guarded by
  * `src/styles/__tests__/tokens.test.ts` (spec §4.5).
  *
+ * Before auditing, these helpers let pending updates land inside `act()` — one macrotask, then one
+ * animation frame (floating-ui positioning of an open popup, useListbox's microtask publish,
+ * Spinner's deferred announce) — so the audit sees the settled DOM and React logs no "not wrapped
+ * in act(...)" warning; that wait uses the real timers, so a `requestAnimationFrame` stub holding a
+ * frame back cannot stall it. axe-core itself waits on the global `setTimeout`: audit with real
+ * timers or `vi.useFakeTimers({ shouldAdvanceTime: true })`. A direct `axe(el)` call settles
+ * nothing.
+ *
  * ## Environment provided by `src/test-setup.ts`
  * - jest-dom matchers (`@testing-library/jest-dom/vitest`) and vitest-axe's `toHaveNoViolations`.
  * - `Element.prototype.scrollIntoView` is a `vi.fn()` when jsdom lacks it; its calls are cleared
@@ -169,13 +177,45 @@ export const axe: ReturnType<typeof configureAxe> = configureAxe({
   rules: { region: { enabled: false } },
 });
 
+/*
+ * The timer functions as they were when this module loaded, before any test stubs or fakes them,
+ * so a test that holds a component's frame back (a `requestAnimationFrame` stub, fake timers)
+ * cannot stall the settle step below; the held-back update simply stays held back.
+ */
+const realSetTimeout = globalThis.setTimeout;
+const realRequestAnimationFrame = globalThis.requestAnimationFrame;
+
+/**
+ * Lets the updates a render leaves pending land inside `act()`: one macrotask (by then every
+ * queued microtask and promise chain has run — floating-ui's `computePosition` for an open popup,
+ * useListbox's microtask publish), then one animation frame (Spinner's deferred announce). When
+ * the callback resolves, `act()` flushes the React work those updates scheduled, a task at a time
+ * until none is left. Without this they fire while axe runs, outside `act()`: React logs "An
+ * update to X inside a test was not wrapped in act(...)" and the audit races the DOM changes.
+ */
+async function settlePendingUpdates(): Promise<void> {
+  await act(async () => {
+    await new Promise<void>((resolve) => realSetTimeout(resolve, 0));
+    await new Promise<void>((resolve) => realRequestAnimationFrame(() => resolve()));
+  });
+}
+
 /**
  * Audits `root` (default `document.body`, portals included) with the shared {@link axe} instance
  * and fails the test on any violation.
  *
+ * Before the audit it lets pending updates land inside `act()` — one macrotask, then one
+ * animation frame (popup positioning, listbox registration, deferred announcements) — so the
+ * audit sees the settled DOM and logs no act() warning. That wait uses the real timers, so a
+ * `requestAnimationFrame` stub holding a component's frame back cannot stall it. axe-core itself
+ * waits on the global `setTimeout`: audit with real timers or
+ * `vi.useFakeTimers({ shouldAdvanceTime: true })`, and switch plain fake timers off
+ * (`vi.useRealTimers()`) first.
+ *
  * @param root Element to audit. Defaults to `document.body`.
  */
 export async function expectNoA11yViolations(root?: Element): Promise<void> {
+  await settlePendingUpdates();
   const results = await axe(root ?? document.body);
   expect(results).toHaveNoViolations();
 }
@@ -198,6 +238,7 @@ function renderComponent<P>(
   return render(element, { wrapper: options.wrapper });
 }
 
+/** Audits a helper's render with {@link expectNoA11yViolations} (pending updates settled first). */
 async function auditRender(utils: RenderResult, scope: A11yScope = 'document'): Promise<void> {
   const target = scope === 'container' ? utils.container : utils.baseElement;
   await expectNoA11yViolations(target);

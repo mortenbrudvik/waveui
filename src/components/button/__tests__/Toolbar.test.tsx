@@ -1,6 +1,6 @@
 import * as React from 'react';
 import { describe, it, expect, expectTypeOf, vi } from 'vitest';
-import { render, screen, fireEvent } from '@testing-library/react';
+import { act, render, screen, fireEvent } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { Toolbar } from '../Toolbar';
 import type { ToolbarOwnProps, ToolbarProps } from '../Toolbar';
@@ -299,7 +299,8 @@ describe('Toolbar', () => {
       expect(input).toHaveFocus();
 
       // Tab stops: the text field is still reachable, but arrows start from the buttons.
-      button('Filter').focus();
+      // Focusing an item updates the Toolbar's roving state, so it goes through act().
+      act(() => button('Filter').focus());
       await user.keyboard('{ArrowRight}');
       expect(input).toHaveFocus();
     });

@@ -591,6 +591,7 @@ describe('Combobox', () => {
 
   describe('value callbacks (input-basic#29)', () => {
     it('onValueChange fires on change only; the deprecated onOptionSelect on every activation', async () => {
+      const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
       const user = userEvent.setup();
       const onValueChange = vi.fn();
       const onOptionSelect = vi.fn();
@@ -603,6 +604,10 @@ describe('Combobox', () => {
       await user.click(option('Beta'));
       expect(onValueChange).toHaveBeenCalledWith('b');
       expect(onOptionSelect).toHaveBeenCalledTimes(2);
+      expect(warn).toHaveBeenCalledTimes(1);
+      expect(String(warn.mock.calls[0][0])).toContain(
+        '[WaveUI] Combobox: `onOptionSelect` is deprecated',
+      );
     });
 
     it('warns once that onOptionSelect is deprecated', () => {

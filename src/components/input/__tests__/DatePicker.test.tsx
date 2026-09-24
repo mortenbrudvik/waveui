@@ -1,6 +1,6 @@
 import * as React from 'react';
 import { afterEach, beforeEach, describe, it, expect, vi } from 'vitest';
-import { act, render, screen, waitFor, within } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { renderToString } from 'react-dom/server';
 import userEvent from '@testing-library/user-event';
 import { DatePicker } from '../DatePicker';
@@ -46,6 +46,19 @@ function dayButton(name: string) {
 async function openCalendar(user: ReturnType<typeof userEvent.setup>) {
   await user.click(toggle());
   return dialog();
+}
+
+/**
+ * Focuses the input and replaces its text as one edit, without userEvent's change-on-blur
+ * emulation. Use it before Alt+ArrowDown: the calendar then takes focus inside React's commit, and
+ * userEvent would dispatch its emulated `change` for text it typed through a nested `act()` while
+ * the outer one is still flushing, which React reports ("A component suspended inside an `act`
+ * scope").
+ */
+function editText(text: string) {
+  const input = textbox();
+  act(() => input.focus());
+  fireEvent.change(input, { target: { value: text } });
 }
 
 /** A hex/white/black color utility or the banned `enabled:` variant (C-TOKENS). */
@@ -394,10 +407,9 @@ describe('DatePicker', () => {
       }
       render(<Parent />);
       await user.type(textbox(), 'Jun 1');
-      screen
-        .getByRole('button', { name: 'Re-render' })
-        .dispatchEvent(new MouseEvent('click', { bubbles: true }));
-      await act(async () => {});
+      // fireEvent leaves focus in the input, so the text is not committed by a blur.
+      fireEvent.click(screen.getByRole('button', { name: 'Re-render' }));
+      expect(textbox()).toHaveFocus();
       expect(textbox()).toHaveValue('Jun 1');
     });
 
@@ -600,8 +612,7 @@ describe('DatePicker', () => {
           onValueChange={onValueChange}
         />,
       );
-      await user.clear(textbox());
-      await user.type(textbox(), '09/10/2025');
+      editText('09/10/2025');
       await user.keyboard('{Alt>}{ArrowDown}{/Alt}');
       expect(onValueChange).toHaveBeenCalledTimes(1);
       expect(fields(onValueChange.mock.calls[0][0] as Date)).toEqual([2025, 9, 10]);
@@ -613,7 +624,7 @@ describe('DatePicker', () => {
       const user = userEvent.setup();
       const onInvalidInput = vi.fn();
       render(<DatePicker aria-label="Date" locale="en-US" onInvalidInput={onInvalidInput} />);
-      await user.type(textbox(), 'soon');
+      editText('soon');
       await user.keyboard('{Alt>}{ArrowDown}{/Alt}');
       expect(dialog()).toBeInTheDocument();
       expect(onInvalidInput).toHaveBeenCalledTimes(1);

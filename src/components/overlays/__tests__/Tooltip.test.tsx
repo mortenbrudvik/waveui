@@ -65,6 +65,35 @@ function setupTimers() {
   return userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
 }
 
+/**
+ * Advances the fake clock inside a synchronous act(): the show/hide timers set Tooltip state.
+ * Synchronous on purpose — an async act yields a macrotask, and `shouldAdvanceTime` would then
+ * move the clock by real elapsed time, blurring the exact delay boundaries these tests check.
+ */
+function advance(ms: number) {
+  act(() => {
+    vi.advanceTimersByTime(ms);
+  });
+}
+
+/**
+ * Advances the fake clock (inside act) to an absolute fake time. user-event's own awaits yield
+ * to macrotasks, where `shouldAdvanceTime` moves the clock by real elapsed time; measuring from a
+ * timestamp taken when the timer was scheduled keeps delay boundaries exact.
+ */
+function advanceTo(time: number) {
+  const ms = time - Date.now();
+  expect(ms, 'user-event already consumed the delay under test').toBeGreaterThanOrEqual(0);
+  advance(ms);
+}
+
+/** Moves focus directly inside act(): the focus/blur handlers set Tooltip state. */
+function focus(el: HTMLElement) {
+  act(() => {
+    el.focus();
+  });
+}
+
 /** The portaled visual surface (aria-hidden, so not reachable by role). */
 const surface = () => document.querySelector<HTMLElement>('[data-wave-tooltip-surface]');
 
@@ -152,7 +181,7 @@ describe('Tooltip', () => {
       await waitFor(() => expect(surface()).not.toBeNull());
       expect(button).toHaveAttribute('aria-describedby', `own-hint ${tooltipId}`);
       await user.unhover(button);
-      vi.advanceTimersByTime(200);
+      advance(200);
       await waitFor(() => expect(surface()).toBeNull());
       expect(button).toHaveAttribute('aria-describedby', `own-hint ${tooltipId}`);
     });
@@ -161,23 +190,27 @@ describe('Tooltip', () => {
   describe('delay and timers (overlays#17, overlays#22)', () => {
     it('shows the surface on hover only once the delay has elapsed', async () => {
       const user = setupTimers();
+      // The consumer handler runs just before the built-in one schedules the show timer.
+      let enteredAt = 0;
       render(
-        <Tooltip content="Tooltip text" delay={300}>
+        <Tooltip content="Tooltip text" delay={300} onMouseEnter={() => (enteredAt = Date.now())}>
           <button type="button">Hover me</button>
         </Tooltip>,
       );
       await user.hover(screen.getByRole('button', { name: 'Hover me' }));
-      vi.advanceTimersByTime(299);
+      advanceTo(enteredAt + 299);
       expect(surface()).toBeNull();
-      vi.advanceTimersByTime(1);
+      advance(1);
       await waitFor(() => expect(surface()).toHaveTextContent('Tooltip text'));
     });
 
     it('shows on Tab-to after the delay and hides on Tab-away', async () => {
       const user = setupTimers();
+      // The consumer handler runs just before the built-in one schedules the show timer.
+      let focusedAt = 0;
       render(
         <>
-          <Tooltip content="Tooltip text" delay={200}>
+          <Tooltip content="Tooltip text" delay={200} onFocus={() => (focusedAt = Date.now())}>
             <button type="button">Target</button>
           </Tooltip>
           <button type="button">Next</button>
@@ -185,9 +218,9 @@ describe('Tooltip', () => {
       );
       await user.tab();
       expect(screen.getByRole('button', { name: 'Target' })).toHaveFocus();
-      vi.advanceTimersByTime(199);
+      advanceTo(focusedAt + 199);
       expect(surface()).toBeNull();
-      vi.advanceTimersByTime(1);
+      advance(1);
       await waitFor(() => expect(surface()).not.toBeNull());
       await user.tab();
       expect(screen.getByRole('button', { name: 'Next' })).toHaveFocus();
@@ -206,12 +239,10 @@ describe('Tooltip', () => {
       );
       const target = screen.getByRole('button', { name: 'Target' });
       await user.hover(target);
-      target.focus();
+      focus(target);
       await user.unhover(target);
-      screen.getByRole('button', { name: 'Elsewhere' }).focus();
-      await act(async () => {
-        vi.advanceTimersByTime(1000);
-      });
+      focus(screen.getByRole('button', { name: 'Elsewhere' }));
+      advance(1000);
       expect(isShown()).toBe(false);
     });
 
@@ -224,11 +255,9 @@ describe('Tooltip', () => {
       );
       const target = screen.getByRole('button', { name: 'Target' });
       await user.hover(target);
-      vi.advanceTimersByTime(100);
+      advance(100);
       await user.unhover(target);
-      await act(async () => {
-        vi.advanceTimersByTime(1000);
-      });
+      advance(1000);
       expect(isShown()).toBe(false);
     });
   });
@@ -246,7 +275,7 @@ describe('Tooltip', () => {
       await waitFor(() => expect(surface()).not.toBeNull());
       await user.unhover(target);
       expect(surface()).not.toBeNull();
-      vi.advanceTimersByTime(150);
+      advance(150);
       await waitFor(() => expect(surface()).toBeNull());
     });
 
@@ -262,11 +291,10 @@ describe('Tooltip', () => {
       await waitFor(() => expect(surface()).not.toBeNull());
       await user.unhover(target);
       await user.hover(surface()!);
-      vi.advanceTimersByTime(500);
-      await Promise.resolve();
+      advance(500);
       expect(surface()).not.toBeNull();
       await user.unhover(surface()!);
-      vi.advanceTimersByTime(150);
+      advance(150);
       await waitFor(() => expect(surface()).toBeNull());
     });
 
@@ -323,7 +351,7 @@ describe('Tooltip', () => {
           </Tooltip>
         </ParentLayer>,
       );
-      screen.getByRole('button', { name: 'Target' }).focus();
+      focus(screen.getByRole('button', { name: 'Target' }));
       await waitFor(() => expect(surface()).not.toBeNull());
       await user.keyboard('{Escape}');
       expect(surface()).toBeNull();

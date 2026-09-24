@@ -425,9 +425,18 @@ describe('SwatchPicker — native forms (C-FORMS)', () => {
         <SwatchPicker items={defaultItems} aria-label="Brand colors" name="color" required />
       </form>,
     );
-    expect(getForm().checkValidity()).toBe(false);
-    await user.click(swatch('Red'));
-    expect(getForm().checkValidity()).toBe(true);
+    // The `invalid` event focuses the visible tab stop, which updates roving state: keep it in act.
+    let valid: boolean | undefined;
+    act(() => {
+      valid = getForm().checkValidity();
+    });
+    expect(valid).toBe(false);
+    expect(swatch('Red')).toHaveFocus();
+    await user.click(swatch('Green'));
+    act(() => {
+      valid = getForm().checkValidity();
+    });
+    expect(valid).toBe(true);
   });
 
   it('form reset restores defaultValue (with and without a name)', async () => {

@@ -3,7 +3,7 @@ import * as React from 'react';
 import { render, screen, waitFor } from '@testing-library/react';
 import { Spinner } from '../Spinner';
 import type { SpinnerProps } from '../Spinner';
-import { testSystemProps } from '../../../test-utils';
+import { expectNoA11yViolations, testSystemProps } from '../../../test-utils';
 
 /** Resolves after the next animation frame has run (and React has committed its update). */
 const nextFrame = () =>
@@ -16,15 +16,42 @@ describe('Spinner', () => {
     vi.restoreAllMocks();
   });
 
+  // The axe tests are registered below instead of by testSystemProps: the label arrives one
+  // animation frame after mount, and an audit that outlasts that frame would let the update run
+  // outside act(). Each audit first lets the frame run inside act().
   testSystemProps(Spinner, {
     expectedTag: 'span',
     displayName: 'Spinner',
     defaultProps: { label: 'Loading' },
-    a11yVariants: [
-      { name: 'default label', props: { label: undefined } },
-      { name: 'visible label', props: { label: 'Loading data', labelVisible: true } },
-      { name: 'role override', props: { role: 'progressbar', 'aria-label': 'Loading data' } },
-    ],
+    a11y: false,
+  });
+
+  describe('accessibility', () => {
+    const cases: Array<[name: string, props: SpinnerProps]> = [
+      ['label', { label: 'Loading' }],
+      ['default label', {}],
+      ['visible label', { label: 'Loading data', labelVisible: true }],
+      ['role override', { role: 'progressbar', 'aria-label': 'Loading data' }],
+    ];
+
+    it.each(cases)('has no accessibility violations once announced (%s)', async (_, props) => {
+      const error = vi.spyOn(console, 'error').mockImplementation(() => {});
+      render(<Spinner {...props} />);
+      await React.act(nextFrame);
+      await expectNoA11yViolations();
+      expect(error).not.toHaveBeenCalled();
+    });
+
+    it('has no accessibility violations before the label is announced (empty region)', async () => {
+      // Hold back only the Spinner's frame (its effect runs inside render's act); axe needs the
+      // real requestAnimationFrame, so it is restored before the audit.
+      const raf = vi.spyOn(window, 'requestAnimationFrame').mockImplementation(() => 0);
+      render(<Spinner data-testid="sp" />);
+      expect(raf).toHaveBeenCalledTimes(1);
+      raf.mockRestore();
+      expect(screen.getByTestId('sp')).toHaveTextContent('');
+      await expectNoA11yViolations();
+    });
   });
 
   it('renders with role="status"', () => {

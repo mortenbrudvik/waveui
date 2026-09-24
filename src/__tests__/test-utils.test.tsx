@@ -171,6 +171,57 @@ const SectionWrapper = ({ children }: { children: React.ReactNode }) => (
   <section aria-label="Wrapper section">{children}</section>
 );
 
+type SettleStep = 'microtask' | 'macrotask' | 'frame';
+
+/**
+ * Updates its state after mounting the way open popups and Spinner do: in a microtask
+ * (useListbox's publish), in a macrotask (a floating-ui position resolving) and in the next
+ * animation frame (Spinner's deferred announce). With `breaksLater`, the frame update adds an
+ * unnamed button, so only an audit of the settled DOM reports `button-name`.
+ */
+const DeferredUpdates = ({ breaksLater = false }: { breaksLater?: boolean }) => {
+  const [done, setDone] = React.useState<SettleStep[]>([]);
+  React.useEffect(() => {
+    let active = true;
+    const mark = (step: SettleStep) => {
+      if (active) setDone((steps) => [...steps, step]);
+    };
+    queueMicrotask(() => mark('microtask'));
+    const timer = setTimeout(() => mark('macrotask'), 0);
+    const frame = requestAnimationFrame(() => mark('frame'));
+    return () => {
+      active = false;
+      clearTimeout(timer);
+      cancelAnimationFrame(frame);
+    };
+  }, []);
+  const settled = (['microtask', 'macrotask', 'frame'] as const).filter((s) => done.includes(s));
+  return (
+    <div>
+      <p>Settled: {settled.join(' ') || 'nothing'}</p>
+      {breaksLater && done.includes('frame') && <button type="button" />}
+    </div>
+  );
+};
+DeferredUpdates.displayName = 'DeferredUpdates';
+
+/**
+ * Runs `audit` and returns the "not wrapped in act(...)" warnings React logged during it and in
+ * the moment after (an update still pending when the audit returns would land then).
+ */
+async function actWarningsDuring(audit: () => Promise<unknown>): Promise<string[]> {
+  const error = vi.spyOn(console, 'error');
+  try {
+    await audit();
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    return error.mock.calls
+      .map(([message]) => String(message))
+      .filter((message) => message.includes('not wrapped in act'));
+  } finally {
+    error.mockRestore();
+  }
+}
+
 /** Renders an unnamed button into a portal: invisible to a `container` audit. */
 const PortaledUnnamedButton = ({ open = true }: { open?: boolean }) =>
   open ? createPortal(<button type="button" />, document.body) : <span>closed</span>;
@@ -342,6 +393,72 @@ describe('axe (shared instance)', () => {
 
   it('is typed as a configureAxe instance', () => {
     expectTypeOf(axe).toEqualTypeOf<ReturnType<typeof configureAxe>>();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Audits settle pending updates inside act() first (no act() warnings, settled DOM)
+// ---------------------------------------------------------------------------
+
+describe('audits settle pending updates first', () => {
+  it('expectNoA11yViolations lets microtask, macrotask and animation-frame updates land inside act()', async () => {
+    render(<DeferredUpdates />);
+    const warnings = await actWarningsDuring(async () => {
+      await expectNoA11yViolations();
+      expect(screen.getByText('Settled: microtask macrotask frame')).toBeInTheDocument();
+    });
+    expect(warnings).toEqual([]);
+  });
+
+  it('expectNoA11yViolations audits the settled DOM (a violation added in the next frame)', async () => {
+    render(<DeferredUpdates breaksLater />);
+    await expect(expectNoA11yViolations()).rejects.toThrow(/button-name/);
+  });
+
+  it('does not stall on a requestAnimationFrame stub that holds a frame back', async () => {
+    // As a test auditing the state before a deferred update does (Spinner's empty region).
+    const raf = vi.spyOn(window, 'requestAnimationFrame').mockImplementation(() => 0);
+    try {
+      render(<DeferredUpdates breaksLater />);
+      await expectNoA11yViolations();
+      expect(screen.getByText('Settled: microtask macrotask')).toBeInTheDocument();
+    } finally {
+      raf.mockRestore();
+    }
+  });
+
+  it('testA11y audits after the pending updates landed inside act()', async () => {
+    const [test] = collect(() => testA11y(DeferredUpdates));
+    expect(await actWarningsDuring(() => run(test))).toEqual([]);
+  });
+
+  it('testA11y audits the settled DOM', async () => {
+    const [test] = collect(() => testA11y(DeferredUpdates, { breaksLater: true }));
+    await expect(run(test)).rejects.toThrow(/button-name/);
+  });
+
+  describe('the a11yVariants loop of testSystemProps', () => {
+    const tests = () =>
+      collect(() =>
+        testSystemProps(DeferredUpdates, {
+          expectedTag: 'div',
+          displayName: 'DeferredUpdates',
+          a11yVariants: [
+            { name: 'quiet', props: { breaksLater: false } },
+            { name: 'late violation', props: { breaksLater: true } },
+          ],
+        }),
+      );
+
+    it('audits after the pending updates landed inside act()', async () => {
+      const variant = pick(tests(), 'has no accessibility violations (quiet)');
+      expect(await actWarningsDuring(() => run(variant))).toEqual([]);
+    });
+
+    it('audits the settled DOM', async () => {
+      const variant = pick(tests(), 'has no accessibility violations (late violation)');
+      await expect(run(variant)).rejects.toThrow(/button-name/);
+    });
   });
 });
 

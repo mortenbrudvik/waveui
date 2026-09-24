@@ -118,6 +118,43 @@ describe('Storybook preview annotations', () => {
 // Stories gate
 // ---------------------------------------------------------------------------
 
+/**
+ * Lets the updates a story schedules right after mount land inside `act()` before the audit:
+ * microtasks (announcers, measured layout) and the next animation frame (Spinner's deferred
+ * announce). Without the frame it would fire while axe runs, outside `act()`.
+ */
+async function settle(): Promise<void> {
+  await act(async () => {
+    await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
+  });
+}
+
+describe('settle', () => {
+  // A deferred update like Spinner's announce: state set in the next animation frame.
+  function FrameProbe() {
+    const [ready, setReady] = React.useState(false);
+    React.useEffect(() => {
+      const frame = requestAnimationFrame(() => setReady(true));
+      return () => cancelAnimationFrame(frame);
+    }, []);
+    return <p>{ready ? 'Ready' : 'Pending'}</p>;
+  }
+
+  it('lands updates scheduled for the next animation frame inside act()', async () => {
+    const error = vi.spyOn(console, 'error').mockImplementation(() => {});
+    try {
+      render(<FrameProbe />);
+      await settle();
+      expect(screen.getByText('Ready')).toBeInTheDocument();
+      // Nothing is left to update outside act() while axe runs.
+      await new Promise((resolve) => setTimeout(resolve, 50));
+      expect(error).not.toHaveBeenCalled();
+    } finally {
+      error.mockRestore();
+    }
+  });
+});
+
 /** Whether a composed story opted out with `parameters.a11y.test = 'todo'`. */
 function isTodo(parameters: Record<string, unknown> | undefined): boolean {
   const a11y = parameters?.a11y as { test?: unknown } | undefined;
@@ -294,8 +331,7 @@ for (const [path, load] of Object.entries(storyModules).sort(([a], [b]) => a.loc
       }
       it(name, async () => {
         render(<Story />);
-        // Let updates scheduled in a microtask after mount (announcers, measured layout) land.
-        await act(async () => {});
+        await settle();
         expect(await axe(document.body)).toHaveNoViolations();
       });
     }

@@ -528,6 +528,7 @@ describe('Dropdown', () => {
 
   describe('value callbacks (input-basic#29, table-core#3)', () => {
     it('onValueChange fires only on change; the deprecated onOptionSelect on every activation', async () => {
+      const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
       const user = userEvent.setup();
       const onValueChange = vi.fn();
       const onOptionSelect = vi.fn();
@@ -541,6 +542,10 @@ describe('Dropdown', () => {
       expect(onValueChange).toHaveBeenCalledTimes(1);
       expect(onValueChange).toHaveBeenCalledWith('b');
       expect(onOptionSelect).toHaveBeenCalledTimes(2);
+      expect(warn).toHaveBeenCalledTimes(1);
+      expect(String(warn.mock.calls[0][0])).toContain(
+        '[WaveUI] Dropdown: `onOptionSelect` is deprecated',
+      );
     });
 
     it('warns once that onOptionSelect is deprecated', () => {

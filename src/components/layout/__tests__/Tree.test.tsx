@@ -1,6 +1,6 @@
 import * as React from 'react';
 import { describe, it, expect, expectTypeOf, vi, afterEach } from 'vitest';
-import { render, screen, within } from '@testing-library/react';
+import { act, render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { Tree, TreeItem, type TreeProps, type TreeItemProps } from '../Tree';
 import {
@@ -248,7 +248,7 @@ describe('Tree.Item - treeitem element (layout#30)', () => {
     await user.click(screen.getByText('Child'));
     expect(onChildClick).toHaveBeenCalledTimes(1);
     expect(onParentClick).not.toHaveBeenCalled();
-    item('Child').focus();
+    act(() => item('Child').focus());
     await user.keyboard('{Enter}');
     expect(onParentKeyDown).not.toHaveBeenCalled();
     expect(item('Parent')).toHaveAttribute('aria-expanded', 'true');
@@ -305,7 +305,7 @@ describe('Tree.Item - treeitem element (layout#30)', () => {
     await user.click(screen.getByText('Readme.md'));
     await user.click(screen.getByText('Readme.md'));
     expect(onItemSelect.mock.calls).toEqual([['readme'], ['readme']]);
-    item('Documents').focus();
+    act(() => item('Documents').focus());
     await user.keyboard('{Enter}');
     expect(onItemSelect).toHaveBeenLastCalledWith('docs');
     expect(item('Documents')).toHaveAttribute('aria-expanded', 'true');
@@ -469,7 +469,7 @@ describe('Tree - keyboard (layout#31, feedback-navigation#47)', () => {
         <button type="button">After</button>
       </>,
     );
-    item('Documents').focus();
+    act(() => item('Documents').focus());
     await user.keyboard('{ArrowDown}{ArrowDown}');
     expect(item('Readme.md')).toHaveFocus();
     expect(item('Readme.md')).toHaveAttribute('tabindex', '0');
@@ -483,7 +483,7 @@ describe('Tree - keyboard (layout#31, feedback-navigation#47)', () => {
   it('Home and End move to the first and last visible items', async () => {
     const user = userEvent.setup();
     renderTree({ defaultExpandedItems: ['images'] });
-    item('Documents').focus();
+    act(() => item('Documents').focus());
     await user.keyboard('{End}');
     expect(item('Readme.md')).toHaveFocus();
     await user.keyboard('{Home}');
@@ -493,7 +493,7 @@ describe('Tree - keyboard (layout#31, feedback-navigation#47)', () => {
   it('ArrowRight expands a closed parent, then moves to its first child', async () => {
     const user = userEvent.setup();
     renderTree();
-    item('Documents').focus();
+    act(() => item('Documents').focus());
     await user.keyboard('{ArrowRight}');
     expect(item('Documents')).toHaveAttribute('aria-expanded', 'true');
     expect(item('Documents')).toHaveFocus();
@@ -504,7 +504,7 @@ describe('Tree - keyboard (layout#31, feedback-navigation#47)', () => {
   it('ArrowRight on a leaf does nothing', async () => {
     const user = userEvent.setup();
     renderTree();
-    item('Readme.md').focus();
+    act(() => item('Readme.md').focus());
     await user.keyboard('{ArrowRight}');
     expect(item('Readme.md')).toHaveFocus();
   });
@@ -512,7 +512,7 @@ describe('Tree - keyboard (layout#31, feedback-navigation#47)', () => {
   it('ArrowLeft collapses an open parent, and moves from a child to its parent', async () => {
     const user = userEvent.setup();
     renderTree({ defaultExpandedItems: ['docs', 'work'] });
-    item('Report.docx').focus();
+    act(() => item('Report.docx').focus());
     await user.keyboard('{ArrowLeft}');
     expect(item('Work')).toHaveFocus();
     await user.keyboard('{ArrowLeft}');
@@ -529,7 +529,7 @@ describe('Tree - keyboard (layout#31, feedback-navigation#47)', () => {
   it('Enter and Space toggle a parent', async () => {
     const user = userEvent.setup();
     renderTree();
-    item('Images').focus();
+    act(() => item('Images').focus());
     await user.keyboard('{Enter}');
     expect(item('Images')).toHaveAttribute('aria-expanded', 'true');
     await user.keyboard(' ');
@@ -539,7 +539,7 @@ describe('Tree - keyboard (layout#31, feedback-navigation#47)', () => {
   it('* expands every sibling of the focused item', async () => {
     const user = userEvent.setup();
     renderTree();
-    item('Documents').focus();
+    act(() => item('Documents').focus());
     await user.keyboard('*');
     expect(item('Documents')).toHaveAttribute('aria-expanded', 'true');
     expect(item('Images')).toHaveAttribute('aria-expanded', 'true');
@@ -549,7 +549,7 @@ describe('Tree - keyboard (layout#31, feedback-navigation#47)', () => {
   it('typeahead moves focus to the next visible item starting with the typed text', async () => {
     const user = userEvent.setup();
     renderTree({ defaultExpandedItems: ['docs'] });
-    item('Documents').focus();
+    act(() => item('Documents').focus());
     await user.keyboard('r');
     expect(item('Readme.md')).toHaveFocus();
   });
@@ -577,7 +577,7 @@ describe('Tree - keyboard (layout#31, feedback-navigation#47)', () => {
     it('matches a label made of elements', async () => {
       const user = userEvent.setup();
       renderLabels();
-      item('Alpha').focus();
+      act(() => item('Alpha').focus());
       await user.keyboard('b');
       expect(item('Beta item')).toHaveFocus();
     });
@@ -585,7 +585,7 @@ describe('Tree - keyboard (layout#31, feedback-navigation#47)', () => {
     it('ignores icon text: "x" from Xray does not match the items with an "X" icon', async () => {
       const user = userEvent.setup();
       renderLabels();
-      item('Xray').focus();
+      act(() => item('Xray').focus());
       await user.keyboard('x');
       expect(item('Xray')).toHaveFocus();
     });
@@ -593,7 +593,7 @@ describe('Tree - keyboard (layout#31, feedback-navigation#47)', () => {
     it('a consumer data-roving-text still decides the typeahead text', async () => {
       const user = userEvent.setup();
       renderLabels();
-      item('Alpha').focus();
+      act(() => item('Alpha').focus());
       await user.keyboard('o');
       expect(item('Shown')).toHaveFocus();
     });
@@ -602,7 +602,7 @@ describe('Tree - keyboard (layout#31, feedback-navigation#47)', () => {
   it('typeahead reaches visible nested items by their own label', async () => {
     const user = userEvent.setup();
     renderTree({ defaultExpandedItems: ['docs'] });
-    item('Documents').focus();
+    act(() => item('Documents').focus());
     await user.keyboard('pe');
     expect(item('Personal.txt')).toHaveFocus();
   });
@@ -610,7 +610,7 @@ describe('Tree - keyboard (layout#31, feedback-navigation#47)', () => {
   it('arrow keys start from the focused nested item, not from its ancestors', async () => {
     const user = userEvent.setup();
     renderTree({ defaultExpandedItems: ['docs', 'work'] });
-    item('Report.docx').focus();
+    act(() => item('Report.docx').focus());
     await user.keyboard('{ArrowDown}');
     expect(item('Personal.txt')).toHaveFocus();
     await user.keyboard('{ArrowUp}{ArrowUp}');
@@ -622,7 +622,7 @@ describe('Tree - keyboard (layout#31, feedback-navigation#47)', () => {
   it('typeahead from a nested item searches onward from that item, not from its parent', async () => {
     const user = userEvent.setup();
     renderTree({ defaultExpandedItems: ['docs', 'images'] });
-    item('Personal.txt').focus();
+    act(() => item('Personal.txt').focus());
     await user.keyboard('p');
     expect(item('Photo.jpg')).toHaveFocus();
   });
@@ -632,7 +632,7 @@ describe('Tree - RTL (layout#32)', () => {
   it('swaps ArrowRight and ArrowLeft in right-to-left', async () => {
     const user = userEvent.setup();
     renderWithProviders(<Tree aria-label="Files">{fileTree}</Tree>, { dir: 'rtl' });
-    item('Documents').focus();
+    act(() => item('Documents').focus());
     await user.keyboard('{ArrowLeft}');
     expect(item('Documents')).toHaveAttribute('aria-expanded', 'true');
     await user.keyboard('{ArrowLeft}');

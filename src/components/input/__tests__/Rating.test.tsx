@@ -40,7 +40,7 @@ describe('Rating', () => {
     handler: 'onKeyDown',
     defaultProps: { defaultValue: 2 },
     act: async ({ user }) => {
-      star(2).focus();
+      act(() => star(2).focus());
       await user.keyboard('{ArrowRight}');
     },
     assertInternal: () => {
@@ -227,7 +227,7 @@ describe('Rating — roving focus between the stars', () => {
     const user = userEvent.setup();
     const onValueChange = vi.fn();
     render(<Rating defaultValue={4} onValueChange={onValueChange} />);
-    star(4).focus();
+    act(() => star(4).focus());
     await user.keyboard('{ArrowLeft}');
     expect(star(3)).toHaveFocus();
     expect(star(3)).toHaveAttribute('aria-checked', 'true');
@@ -240,7 +240,7 @@ describe('Rating — roving focus between the stars', () => {
   it('Home and End select the first and last star', async () => {
     const user = userEvent.setup();
     render(<Rating defaultValue={3} />);
-    star(3).focus();
+    act(() => star(3).focus());
     await user.keyboard('{End}');
     expect(star(5)).toHaveFocus();
     expect(star(5)).toHaveAttribute('aria-checked', 'true');
@@ -256,7 +256,7 @@ describe('Rating — roving focus between the stars', () => {
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
     try {
       render(<Rating defaultValue={5} onValueChange={onValueChange} onChange={onChange} />);
-      star(5).focus();
+      act(() => star(5).focus());
       await user.keyboard('{ArrowRight}');
       await user.keyboard('{ArrowUp}');
       await user.keyboard('{End}');
@@ -276,7 +276,7 @@ describe('Rating — roving focus between the stars', () => {
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
     try {
       render(<Rating defaultValue={1} onValueChange={onValueChange} onChange={onChange} />);
-      star(1).focus();
+      act(() => star(1).focus());
       await user.keyboard('{ArrowLeft}');
       await user.keyboard('{ArrowDown}');
       expect(onValueChange).not.toHaveBeenCalled();
@@ -291,7 +291,7 @@ describe('Rating — roving focus between the stars', () => {
   it('mirrors Left/Right under dir="rtl"', async () => {
     const user = userEvent.setup();
     renderWithProviders(<Rating defaultValue={2} />, { dir: 'rtl' });
-    star(2).focus();
+    act(() => star(2).focus());
     await user.keyboard('{ArrowLeft}');
     expect(star(3)).toHaveFocus();
     expect(star(3)).toHaveAttribute('aria-checked', 'true');
@@ -377,7 +377,7 @@ describe('Rating — roving focus between the stars', () => {
     const onValueChange = vi.fn();
     // The parent never accepts a change, so the value stays 2.
     render(<Rating value={2} onValueChange={onValueChange} />);
-    star(2).focus();
+    act(() => star(2).focus());
     await user.keyboard('{ArrowRight}');
     expect(star(3)).toHaveFocus();
     expect(star(3)).toHaveAttribute('aria-checked', 'false');
@@ -449,6 +449,15 @@ describe('Rating — native forms (C-FORMS)', () => {
     return screen.getByRole('form', { name: 'Form' }) as HTMLFormElement;
   }
 
+  /** A failed check fires `invalid`, which focuses the tab stop and updates state: run it in act. */
+  function checkValidity(): boolean {
+    let valid = false;
+    act(() => {
+      valid = getForm().checkValidity();
+    });
+    return valid;
+  }
+
   it('submits the rating under its name once a star is chosen', async () => {
     const user = userEvent.setup();
     render(
@@ -477,9 +486,9 @@ describe('Rating — native forms (C-FORMS)', () => {
         <Rating name="score" required />
       </form>,
     );
-    expect(getForm().checkValidity()).toBe(false);
+    expect(checkValidity()).toBe(false);
     await user.click(star(2));
-    expect(getForm().checkValidity()).toBe(true);
+    expect(checkValidity()).toBe(true);
   });
 
   it('form reset restores defaultValue (with and without a name)', async () => {

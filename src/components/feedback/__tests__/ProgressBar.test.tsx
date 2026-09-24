@@ -3,7 +3,12 @@ import * as React from 'react';
 import { render, screen } from '@testing-library/react';
 import { ProgressBar } from '../ProgressBar';
 import type { ProgressBarProps } from '../ProgressBar';
-import { axe, renderWithProviders, testSystemProps } from '../../../test-utils';
+import {
+  axe,
+  expectNoA11yViolations,
+  renderWithProviders,
+  testSystemProps,
+} from '../../../test-utils';
 
 const fillOf = (bar: HTMLElement) => bar.firstElementChild as HTMLElement;
 
@@ -25,7 +30,6 @@ describe('ProgressBar', () => {
       { name: 'visible label', props: { value: 40, showLabel: true } },
       { name: 'aria-label', props: { label: undefined, 'aria-label': 'Syncing' } },
       { name: 'out of range', props: { value: 150 } },
-      { name: 'max 0', props: { value: 0, max: 0 } },
     ],
   });
 
@@ -96,6 +100,17 @@ describe('ProgressBar', () => {
       const messages = warnings(warn).filter((m) => m.includes('`max`'));
       expect(messages).toHaveLength(1);
       expect(messages[0]).toMatch(/^\[WaveUI\] ProgressBar:/);
+    });
+
+    it('has no accessibility violations for max 0, with its one development warning', async () => {
+      const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+      render(<ProgressBar value={0} max={0} label="Loading" />);
+      expect(warnings(warn)).toEqual([
+        expect.stringMatching(
+          /^\[WaveUI\] ProgressBar: `max` must be a finite number greater than 0/,
+        ),
+      ]);
+      await expectNoA11yViolations();
     });
 
     it('renders 0% for a negative max', () => {

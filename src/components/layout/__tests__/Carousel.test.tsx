@@ -247,7 +247,9 @@ describe('Carousel', () => {
           {slides(3)}
         </Carousel>,
       );
-      nextButton().focus();
+      act(() => {
+        nextButton().focus();
+      });
       await user.keyboard('{Enter}');
       expect(onValueChange).toHaveBeenLastCalledWith(2);
       expect(nextButton()).toHaveAttribute('aria-disabled', 'true');

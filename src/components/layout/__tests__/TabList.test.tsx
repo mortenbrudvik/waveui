@@ -629,7 +629,7 @@ describe('TabList - registration and structure (layout#12)', () => {
     for (const name of ['Tab A', 'Tab B', 'Tab C']) {
       expect(tablist).toContainElement(tab(name));
     }
-    tab('Tab A').focus();
+    act(() => tab('Tab A').focus());
     await user.keyboard('{ArrowRight}{ArrowRight}');
     expect(tab('Tab C')).toHaveFocus();
     expect(screen.getByRole('tabpanel', { name: 'Tab C' })).toHaveTextContent('Panel C');
@@ -654,7 +654,7 @@ describe('TabList - registration and structure (layout#12)', () => {
     expect(within(panels).getByRole('tabpanel', { name: 'Tab B' })).toHaveTextContent('Panel B');
   });
 
-  it('keeps keyed tabs mounted (and focused) when they are reordered', () => {
+  it('keeps keyed tabs mounted (and focused) when they are reordered', async () => {
     const renderTabs = (order: string[]) => (
       <TabList defaultValue="b">
         {order.map((value) => (
@@ -664,8 +664,9 @@ describe('TabList - registration and structure (layout#12)', () => {
     );
     const { rerender } = render(renderTabs(['a', 'b', 'c']));
     const tabB = tab('Tab B');
-    tabB.focus();
-    rerender(renderTabs(['c', 'a', 'b']));
+    act(() => tabB.focus());
+    // Async act: the reorder is seen by the roving store's MutationObserver in a microtask.
+    await act(async () => rerender(renderTabs(['c', 'a', 'b'])));
     expect(tab('Tab B')).toBe(tabB);
     expect(tabB).toHaveFocus();
   });
@@ -687,7 +688,7 @@ describe('TabList - keyboard', () => {
         {threeTabs}
       </TabList>,
     );
-    tab('Tab A').focus();
+    act(() => tab('Tab A').focus());
     await user.keyboard('{ArrowRight}');
     expect(onValueChange).toHaveBeenCalledWith('b');
     expect(tab('Tab B')).toHaveFocus();
@@ -701,7 +702,7 @@ describe('TabList - keyboard', () => {
         {threeTabs}
       </TabList>,
     );
-    tab('Tab B').focus();
+    act(() => tab('Tab B').focus());
     await user.keyboard('{ArrowLeft}');
     expect(onValueChange).toHaveBeenCalledWith('a');
     expect(tab('Tab A')).toHaveFocus();
@@ -710,7 +711,7 @@ describe('TabList - keyboard', () => {
   it('wraps from the last to the first tab', async () => {
     const user = userEvent.setup();
     render(<TabList defaultValue="c">{threeTabs}</TabList>);
-    tab('Tab C').focus();
+    act(() => tab('Tab C').focus());
     await user.keyboard('{ArrowRight}');
     expect(tab('Tab A')).toHaveFocus();
     expect(tab('Tab A')).toHaveAttribute('aria-selected', 'true');
@@ -719,7 +720,7 @@ describe('TabList - keyboard', () => {
   it('Home and End move to the first and last tab', async () => {
     const user = userEvent.setup();
     render(<TabList defaultValue="b">{threeTabs}</TabList>);
-    tab('Tab B').focus();
+    act(() => tab('Tab B').focus());
     await user.keyboard('{End}');
     expect(tab('Tab C')).toHaveFocus();
     await user.keyboard('{Home}');
@@ -735,7 +736,7 @@ describe('TabList - keyboard', () => {
         {threeTabs}
       </TabList>,
     );
-    tab('Tab A').focus();
+    act(() => tab('Tab A').focus());
     await user.keyboard('{ArrowDown}');
     expect(tab('Tab B')).toHaveFocus();
     expect(onValueChange).toHaveBeenLastCalledWith('b');
@@ -755,7 +756,7 @@ describe('TabList - keyboard', () => {
         {threeTabs}
       </TabList>,
     );
-    tab('Tab C').focus();
+    act(() => tab('Tab C').focus());
     await user.keyboard('{ArrowDown}');
     expect(tab('Tab A')).toHaveFocus();
   });
@@ -763,7 +764,7 @@ describe('TabList - keyboard', () => {
   it('RTL: ArrowLeft moves to the next tab and ArrowRight to the previous (table-core#7)', async () => {
     const user = userEvent.setup();
     renderWithProviders(<TabList defaultValue="b">{threeTabs}</TabList>, { dir: 'rtl' });
-    tab('Tab B').focus();
+    act(() => tab('Tab B').focus());
     await user.keyboard('{ArrowLeft}');
     expect(tab('Tab C')).toHaveFocus();
     expect(tab('Tab C')).toHaveAttribute('aria-selected', 'true');
@@ -775,7 +776,7 @@ describe('TabList - keyboard', () => {
     handler: 'onKeyDown',
     defaultProps: { children: threeTabs, defaultValue: 'a' },
     act: async ({ user }) => {
-      tab('Tab A').focus();
+      act(() => tab('Tab A').focus());
       await user.keyboard('{ArrowRight}');
     },
     assertInternal: () => {
@@ -826,7 +827,7 @@ describe('TabList - disabled tabs (layout#13)', () => {
         {withDisabledB}
       </TabList>,
     );
-    tab('Tab A').focus();
+    act(() => tab('Tab A').focus());
     await user.keyboard('{ArrowRight}');
     expect(tab('Tab C')).toHaveFocus();
     await user.keyboard('{ArrowLeft}');
@@ -851,7 +852,7 @@ describe('TabList - disabled tabs (layout#13)', () => {
         </TabList.Tab>
       </TabList>,
     );
-    tab('Tab B').focus();
+    act(() => tab('Tab B').focus());
     await user.keyboard('{End}');
     expect(tab('Tab D')).toHaveFocus();
     await user.keyboard('{Home}');
@@ -917,7 +918,7 @@ describe('TabList - disabled tabs (layout#13)', () => {
     expect(tab('Tab A')).toHaveAttribute('tabindex', '0');
     expect(tab('Tab B')).toHaveAttribute('tabindex', '-1');
     expect(ownerRenders).toBe(1);
-    tab('Tab A').focus();
+    act(() => tab('Tab A').focus());
     await user.keyboard('{ArrowRight}');
     expect(tab('Tab C')).toHaveFocus();
   });
