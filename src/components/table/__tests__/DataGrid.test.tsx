@@ -2,6 +2,7 @@ import * as React from 'react';
 import { describe, it, expect, expectTypeOf, vi, afterEach } from 'vitest';
 import { act, fireEvent, render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
+import { renderToString } from 'react-dom/server';
 import {
   DataGrid,
   DataGridBody,
@@ -9,10 +10,12 @@ import {
   DataGridHeader,
   DataGridHeaderCell,
   DataGridRow,
+  createSelectionStore,
 } from '../DataGrid';
 import type {
   DataGridCellProps,
   DataGridColumn,
+  DataGridHeaderCellProps,
   DataGridProps,
   DataGridRowProps,
   DataGridSort,
@@ -63,6 +66,27 @@ function gridContent(people: Person[] = PEOPLE) {
         </DataGrid.Row>
       ))}
     </DataGrid.Body>,
+  ];
+}
+
+/** A two-row header (a group row above the column row) plus the body rows. */
+function groupedGridContent() {
+  const [, body] = gridContent();
+  return [
+    <DataGrid.Header key="header">
+      <tr>
+        <DataGrid.HeaderCell colSpan={2}>Person</DataGrid.HeaderCell>
+        <DataGrid.HeaderCell>Other</DataGrid.HeaderCell>
+      </tr>
+      <tr>
+        <DataGrid.HeaderCell columnId="name" sortable>
+          Name
+        </DataGrid.HeaderCell>
+        <DataGrid.HeaderCell>Role</DataGrid.HeaderCell>
+        <DataGrid.HeaderCell>Notes</DataGrid.HeaderCell>
+      </tr>
+    </DataGrid.Header>,
+    body,
   ];
 }
 
@@ -117,6 +141,14 @@ describe('DataGrid', () => {
       },
       { name: 'single selection', props: { selectionMode: 'single', defaultSelectedItems: ['2'] } },
       { name: 'sorted', props: { defaultSort: { columnId: 'name', direction: 'descending' } } },
+      {
+        name: 'grouped header, multiple selection',
+        props: { selectionMode: 'multiple', children: groupedGridContent() },
+      },
+      {
+        name: 'grouped header, single selection',
+        props: { selectionMode: 'single', children: groupedGridContent() },
+      },
     ],
   });
 
@@ -445,6 +477,137 @@ describe('DataGrid sorting', () => {
     );
   });
 
+  describe('deprecated sortColumn/sortDirection controlled one at a time (0.4 mixed control)', () => {
+    it('keeps the direction internal when only sortColumn is controlled, and warns', async () => {
+      const user = userEvent.setup();
+      const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+      const calls: [string, SortDirection][] = [];
+      function Parent() {
+        const [column, setColumn] = React.useState('name');
+        return (
+          <DataGrid
+            aria-label="People"
+            sortColumn={column}
+            onSortChange={(columnId, direction) => {
+              calls.push([columnId, direction]);
+              setColumn(columnId);
+            }}
+          >
+            {gridContent()}
+          </DataGrid>
+        );
+      }
+      render(<Parent />);
+      expect(header('Name')).toHaveAttribute('aria-sort', 'ascending');
+
+      await user.click(sortButton('Name'));
+      expect(header('Name')).toHaveAttribute('aria-sort', 'descending');
+      await user.click(sortButton('Name'));
+      expect(header('Name')).toHaveAttribute('aria-sort', 'ascending');
+      await user.click(sortButton('Name'));
+      expect(header('Name')).toHaveAttribute('aria-sort', 'descending');
+      await user.click(sortButton('Role'));
+      expect(header('Role')).toHaveAttribute('aria-sort', 'ascending');
+      expect(header('Name')).toHaveAttribute('aria-sort', 'none');
+
+      // Every reported sort is the one aria-sort shows.
+      expect(calls).toEqual([
+        ['name', 'descending'],
+        ['name', 'ascending'],
+        ['name', 'descending'],
+        ['role', 'ascending'],
+      ]);
+      expect(warn).toHaveBeenCalledWith(
+        expect.stringContaining(
+          '[WaveUI] DataGrid: `sortColumn` is controlled but `sortDirection` is not (mixed control)',
+        ),
+      );
+    });
+
+    it('keeps the column internal when only sortDirection is controlled, and warns', async () => {
+      const user = userEvent.setup();
+      const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+      const calls: [string, SortDirection][] = [];
+      function Parent() {
+        const [direction, setDirection] = React.useState<SortDirection>('ascending');
+        return (
+          <DataGrid
+            aria-label="People"
+            sortDirection={direction}
+            onSortChange={(columnId, next) => {
+              calls.push([columnId, next]);
+              setDirection(next);
+            }}
+          >
+            {gridContent()}
+          </DataGrid>
+        );
+      }
+      render(<Parent />);
+      expect(header('Name')).toHaveAttribute('aria-sort', 'none');
+
+      await user.click(sortButton('Name'));
+      expect(header('Name')).toHaveAttribute('aria-sort', 'ascending');
+      await user.click(sortButton('Name'));
+      expect(header('Name')).toHaveAttribute('aria-sort', 'descending');
+      await user.click(sortButton('Role'));
+      expect(header('Role')).toHaveAttribute('aria-sort', 'ascending');
+      expect(header('Name')).toHaveAttribute('aria-sort', 'none');
+
+      expect(calls).toEqual([
+        ['name', 'ascending'],
+        ['name', 'descending'],
+        ['role', 'ascending'],
+      ]);
+      expect(warn).toHaveBeenCalledWith(
+        expect.stringContaining(
+          '[WaveUI] DataGrid: `sortDirection` is controlled but `sortColumn` is not (mixed control)',
+        ),
+      );
+    });
+
+    it('starts the internal column from defaultSortColumn and follows a direction the parent keeps', async () => {
+      const user = userEvent.setup();
+      vi.spyOn(console, 'warn').mockImplementation(() => {});
+      const onSortChange = vi.fn();
+      renderGrid({ sortDirection: 'descending', defaultSortColumn: 'role', onSortChange });
+      expect(header('Role')).toHaveAttribute('aria-sort', 'descending');
+      // The parent does not accept the new direction: the controlled half stays.
+      await user.click(sortButton('Role'));
+      expect(onSortChange).toHaveBeenLastCalledWith('role', 'ascending');
+      expect(header('Role')).toHaveAttribute('aria-sort', 'descending');
+      // The internal half (the column) follows the click.
+      await user.click(sortButton('Name'));
+      expect(onSortChange).toHaveBeenLastCalledWith('name', 'ascending');
+      expect(header('Name')).toHaveAttribute('aria-sort', 'descending');
+      expect(header('Role')).toHaveAttribute('aria-sort', 'none');
+    });
+
+    it('calls onSortChange once per click in StrictMode', async () => {
+      const user = userEvent.setup();
+      vi.spyOn(console, 'warn').mockImplementation(() => {});
+      const onSortChange = vi.fn();
+      render(
+        <React.StrictMode>
+          <DataGrid aria-label="People" sortColumn="name" onSortChange={onSortChange}>
+            {gridContent()}
+          </DataGrid>
+        </React.StrictMode>,
+      );
+      await user.click(sortButton('Name'));
+      expect(onSortChange).toHaveBeenCalledTimes(1);
+      expect(onSortChange).toHaveBeenCalledWith('name', 'descending');
+      expect(header('Name')).toHaveAttribute('aria-sort', 'descending');
+    });
+
+    it('does not warn about mixed control when both or neither are controlled', () => {
+      const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+      renderGrid({ sortColumn: 'name', sortDirection: 'descending' });
+      renderGrid({ defaultSortColumn: 'name' });
+      expect(warn).not.toHaveBeenCalledWith(expect.stringContaining('mixed control'));
+    });
+  });
+
   it('warns when the sort API and the deprecated sortColumn/sortDirection are mixed', () => {
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
     renderGrid({ sort: { columnId: 'name', direction: 'ascending' }, sortColumn: 'role' });
@@ -624,6 +787,159 @@ describe('DataGrid selection', () => {
     expect(screen.getByRole('checkbox', { name: 'Select all rows' })).toBeVisible();
   });
 
+  describe('several header rows (grouped header)', () => {
+    function body() {
+      return (
+        <DataGrid.Body>
+          {PEOPLE.map((person) => (
+            <DataGrid.Row key={person.id} rowId={person.id}>
+              <DataGrid.Cell>{person.name}</DataGrid.Cell>
+              <DataGrid.Cell>{person.role}</DataGrid.Cell>
+              <DataGrid.Cell>-</DataGrid.Cell>
+            </DataGrid.Row>
+          ))}
+        </DataGrid.Body>
+      );
+    }
+
+    function groupRow() {
+      return (
+        <>
+          <DataGrid.HeaderCell colSpan={2}>Person</DataGrid.HeaderCell>
+          <DataGrid.HeaderCell>Other</DataGrid.HeaderCell>
+        </>
+      );
+    }
+
+    function columnRow() {
+      return (
+        <>
+          <DataGrid.HeaderCell columnId="name" sortable>
+            Name
+          </DataGrid.HeaderCell>
+          <DataGrid.HeaderCell>Role</DataGrid.HeaderCell>
+          <DataGrid.HeaderCell>Notes</DataGrid.HeaderCell>
+        </>
+      );
+    }
+
+    function GroupedGrid({
+      selectionMode = 'multiple',
+      withGroupRow = true,
+    }: {
+      selectionMode?: 'single' | 'multiple';
+      withGroupRow?: boolean;
+    }) {
+      return (
+        <DataGrid aria-label="People" selectionMode={selectionMode}>
+          <DataGrid.Header>
+            {withGroupRow && <tr>{groupRow()}</tr>}
+            <tr>{columnRow()}</tr>
+          </DataGrid.Header>
+          {body()}
+        </DataGrid>
+      );
+    }
+
+    function headerRows(): HTMLTableRowElement[] {
+      return Array.from(screen.getByRole('grid').querySelectorAll('thead > tr'));
+    }
+
+    it('renders one "Select all rows" control, in the first header row', () => {
+      const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+      render(<GroupedGrid />);
+      const selectAll = screen.getAllByRole('checkbox', { name: 'Select all rows' });
+      expect(selectAll).toHaveLength(1);
+      const [first, second] = headerRows();
+      expect(selectAll[0].closest('tr')).toBe(first);
+      // The later row keeps the selection column with an empty cell (no second control).
+      expect(second.cells[0]).toHaveAttribute('data-selection-cell');
+      expect(second.cells[0].tagName.toLowerCase()).toBe('td');
+      expect(second.cells[0]).toBeEmptyDOMElement();
+      expect(within(second).getAllByRole('columnheader')).toHaveLength(3);
+      expect(warn).not.toHaveBeenCalled();
+    });
+
+    it('renders the single-mode "Selection" header once', () => {
+      render(<GroupedGrid selectionMode="single" />);
+      expect(screen.getAllByText('Selection')).toHaveLength(1);
+      expect(screen.getByText('Selection').closest('tr')).toBe(headerRows()[0]);
+    });
+
+    it('keeps a single tab stop and moves between the header rows with the arrow keys', async () => {
+      const user = userEvent.setup();
+      render(<GroupedGrid />);
+      const grid = screen.getByRole('grid');
+      expect(grid.querySelectorAll('[tabindex="0"]')).toHaveLength(1);
+      const selectAll = screen.getByRole('checkbox', { name: 'Select all rows' });
+      act(() => selectAll.focus());
+      await user.keyboard('{ArrowDown}');
+      expect(headerRows()[1].cells[0]).toHaveFocus();
+      await user.keyboard('{ArrowRight}');
+      expect(sortButton('Name')).toHaveFocus();
+      await user.keyboard('{ArrowDown}');
+      expect(cell('Alice')).toHaveFocus();
+    });
+
+    it('selects every row from the one control', async () => {
+      const user = userEvent.setup();
+      render(<GroupedGrid />);
+      await user.click(screen.getByRole('checkbox', { name: 'Select all rows' }));
+      expect(bodyRows().every((row) => row.getAttribute('aria-selected') === 'true')).toBe(true);
+    });
+
+    it('moves the control to a header row added above the others', () => {
+      const { rerender } = render(<GroupedGrid withGroupRow={false} />);
+      expect(screen.getAllByRole('checkbox', { name: 'Select all rows' })).toHaveLength(1);
+      rerender(<GroupedGrid withGroupRow />);
+      const selectAll = screen.getAllByRole('checkbox', { name: 'Select all rows' });
+      expect(selectAll).toHaveLength(1);
+      expect(selectAll[0].closest('tr')).toBe(headerRows()[0]);
+      expect(headerRows()[1].cells[0]).toBeEmptyDOMElement();
+      rerender(<GroupedGrid withGroupRow={false} />);
+      expect(screen.getAllByRole('checkbox', { name: 'Select all rows' })).toHaveLength(1);
+      expect(headerRows()).toHaveLength(1);
+    });
+
+    it('renders one control for header rows that other components render as DataGrid.Row', () => {
+      const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+      function GroupHeaderRow() {
+        return <DataGrid.Row>{groupRow()}</DataGrid.Row>;
+      }
+      function ColumnHeaderRow() {
+        return <DataGrid.Row>{columnRow()}</DataGrid.Row>;
+      }
+      render(
+        <DataGrid aria-label="People" selectionMode="multiple">
+          <DataGrid.Header>
+            <GroupHeaderRow />
+            <ColumnHeaderRow />
+          </DataGrid.Header>
+          {body()}
+        </DataGrid>,
+      );
+      const selectAll = screen.getAllByRole('checkbox', { name: 'Select all rows' });
+      expect(selectAll).toHaveLength(1);
+      expect(selectAll[0].closest('tr')).toBe(headerRows()[0]);
+      expect(headerRows()[1].cells[0]).toHaveAttribute('data-selection-cell');
+      expect(headerRows()[1].cells[0]).toBeEmptyDOMElement();
+      expect(warn).not.toHaveBeenCalled();
+    });
+
+    it('renders one control on the server too', () => {
+      const html = renderToString(
+        <DataGrid aria-label="People" selectionMode="multiple">
+          <DataGrid.Header>
+            <tr>{groupRow()}</tr>
+            <DataGrid.Row>{columnRow()}</DataGrid.Row>
+          </DataGrid.Header>
+          {body()}
+        </DataGrid>,
+      );
+      expect(html.match(/Select all rows/g)).toHaveLength(1);
+    });
+  });
+
   it('warns when a selectable header row has no selection header cell (a custom row component)', () => {
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
     function HeaderRow() {
@@ -776,6 +1092,28 @@ describe('DataGrid selection', () => {
     const name = radios[0].getAttribute('name');
     expect(name).toBeTruthy();
     for (const radio of radios) expect(radio).toHaveAttribute('name', name!);
+  });
+
+  it('keeps the single-mode radios out of an enclosing form (no extra form field)', async () => {
+    const user = userEvent.setup();
+    render(
+      <form aria-label="Edit people" data-testid="form">
+        <input name="real" defaultValue="1" />
+        <DataGrid aria-label="People" selectionMode="single">
+          {gridContent()}
+        </DataGrid>
+      </form>,
+    );
+    await user.click(screen.getByRole('radio', { name: 'Bob' }));
+    expect(screen.getByRole('radio', { name: 'Bob' })).toBeChecked();
+
+    const form = screen.getByTestId('form') as HTMLFormElement;
+    expect(Array.from(new FormData(form).entries())).toEqual([['real', '1']]);
+    for (const radio of screen.getAllByRole<HTMLInputElement>('radio')) {
+      // Not associated with the form, but still one named group.
+      expect(radio.form).toBeNull();
+      expect(radio.name).toBe(screen.getAllByRole<HTMLInputElement>('radio')[0].name);
+    }
   });
 
   it('gives two grids different radio group names', () => {
@@ -1163,6 +1501,63 @@ describe('DataGrid selection', () => {
     await user.click(screen.getByRole('checkbox', { name: 'Bob' }));
     expect(screen.getByRole('checkbox', { name: 'Bob' })).toBeChecked();
     expect(new Set(commits)).toEqual(new Set(['row-2']));
+  });
+});
+
+describe('DataGrid selection store', () => {
+  it('notifies the rows only when the selection changes, never when rows register', () => {
+    const store = createSelectionStore(['1']);
+    const rowListener = vi.fn();
+    const selectAllListener = vi.fn();
+    store.subscribe(rowListener);
+    store.subscribeSelectAll(selectAllListener);
+
+    const unregister = Array.from({ length: 1000 }, (_, index) => store.register(String(index)));
+    expect(store.getSelectAllState()).toBe('some');
+    // Filtering 1000 rows down to '0' and '1' notifies no row.
+    for (const done of unregister.slice(2)) done();
+    expect(rowListener).not.toHaveBeenCalled();
+    expect(store.getSelectAllState()).toBe('some');
+    unregister[0]();
+    expect(store.getSelectAllState()).toBe('all');
+    // The select-all subscribers hear only the state changes: none -> some -> all.
+    expect(selectAllListener).toHaveBeenCalledTimes(2);
+
+    store.setSelected([]);
+    expect(rowListener).toHaveBeenCalledTimes(1);
+    expect(store.getSelectAllState()).toBe('none');
+    expect(selectAllListener).toHaveBeenCalledTimes(3);
+    store.setSelected([]);
+    expect(rowListener).toHaveBeenCalledTimes(1);
+  });
+
+  it('keeps the select-all state in step with registrations and the selection', () => {
+    const store = createSelectionStore([]);
+    expect(store.getSelectAllState()).toBe('none');
+    const a1 = store.register('a');
+    const a2 = store.register('a');
+    const b = store.register('b');
+    expect(store.getRegistered()).toEqual(['a', 'b']);
+
+    store.setSelected(['a', 'x']);
+    expect(store.isSelected('a')).toBe(true);
+    expect(store.getSelectAllState()).toBe('some');
+    expect(store.prune(['x', 'a'])).toEqual(['a']);
+    // 'a' is registered twice: it stays registered until both registrations are gone.
+    a1();
+    expect(store.getSelectAllState()).toBe('some');
+    b();
+    expect(store.getSelectAllState()).toBe('all');
+    a2();
+    expect(store.getRegistered()).toEqual([]);
+    expect(store.getSelectAllState()).toBe('none');
+    // A selected id registered later counts at once.
+    store.register('x');
+    expect(store.getSelectAllState()).toBe('all');
+    store.register('y');
+    expect(store.getSelectAllState()).toBe('some');
+    store.setSelected(['x', 'y']);
+    expect(store.getSelectAllState()).toBe('all');
   });
 });
 
@@ -1562,6 +1957,83 @@ describe('DataGrid handler composition', () => {
     expect(onFocus).toHaveBeenCalled();
     expect(onKeyDown).toHaveBeenCalled();
     expect(cell('Bob')).toHaveFocus();
+  });
+
+  const onHeaderSort = vi.fn();
+  function SortableHeader(props: Omit<DataGridHeaderCellProps, 'children'>) {
+    return (
+      <DataGrid aria-label="People" onSortChange={onHeaderSort}>
+        <DataGrid.Header>
+          <tr>
+            <DataGrid.HeaderCell columnId="name" sortable {...props}>
+              Name
+            </DataGrid.HeaderCell>
+          </tr>
+        </DataGrid.Header>
+      </DataGrid>
+    );
+  }
+  SortableHeader.displayName = 'SortableHeader';
+
+  describe('sortable header onClick', () => {
+    testComposedHandler(SortableHeader, {
+      handler: 'onClick',
+      act: async ({ user }) => {
+        onHeaderSort.mockClear();
+        await user.click(sortButton('Name'));
+      },
+      assertInternal: () => {
+        expect(onHeaderSort).toHaveBeenCalledTimes(1);
+        expect(onHeaderSort).toHaveBeenCalledWith('name', 'ascending');
+        expect(header('Name')).toHaveAttribute('aria-sort', 'ascending');
+      },
+      assertInternalSuppressed: () => {
+        expect(onHeaderSort).not.toHaveBeenCalled();
+        expect(header('Name')).toHaveAttribute('aria-sort', 'none');
+      },
+    });
+
+    it('runs the consumer onClick before sorting, also for Enter on the sort button', async () => {
+      const user = userEvent.setup();
+      const order: string[] = [];
+      onHeaderSort.mockReset();
+      onHeaderSort.mockImplementation(() => order.push('sort'));
+      render(
+        <SortableHeader
+          onClick={(event) => {
+            order.push('consumer');
+            expect(event.currentTarget.tagName.toLowerCase()).toBe('th');
+          }}
+        />,
+      );
+      await user.click(sortButton('Name'));
+      expect(order).toEqual(['consumer', 'sort']);
+
+      order.length = 0;
+      act(() => sortButton('Name').focus());
+      await user.keyboard('{Enter}');
+      expect(order).toEqual(['consumer', 'sort']);
+    });
+
+    it('a consumer preventDefault() vetoes a keyboard sort too', async () => {
+      const user = userEvent.setup();
+      onHeaderSort.mockReset();
+      render(<SortableHeader onClick={(event) => event.preventDefault()} />);
+      act(() => sortButton('Name').focus());
+      await user.keyboard('{Enter}');
+      await user.keyboard(' ');
+      expect(onHeaderSort).not.toHaveBeenCalled();
+      expect(header('Name')).toHaveAttribute('aria-sort', 'none');
+    });
+
+    it('does not sort for a click on the header cell outside the sort button', () => {
+      const onClick = vi.fn();
+      onHeaderSort.mockReset();
+      render(<SortableHeader onClick={onClick} />);
+      fireEvent.click(header('Name'));
+      expect(onClick).toHaveBeenCalledTimes(1);
+      expect(onHeaderSort).not.toHaveBeenCalled();
+    });
   });
 
   it('calls a consumer onClick on a sortable header next to sorting', async () => {

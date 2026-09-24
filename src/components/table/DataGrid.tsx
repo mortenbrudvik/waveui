@@ -108,16 +108,24 @@ export interface DataGridUncontrolledSortProps extends NoDeprecatedSortProps {
 
 /**
  * The 0.4 sort API: `onSortChange(columnId, direction)` and the deprecated `sortColumn`/
- * `sortDirection` props. It applies whenever neither `sort` nor `defaultSort` is given.
+ * `sortDirection` props. It applies whenever neither `sort` nor `defaultSort` is given. As in 0.4,
+ * the column and the direction can be controlled independently: the half that is not controlled is
+ * kept internally and follows every sort request (mixed control, warned in development).
  */
 export interface DataGridLegacySortProps {
   sort?: undefined;
   defaultSort?: undefined;
-  /** @deprecated Use `sort` (`{ columnId, direction }` or `null`). */
+  /**
+   * @deprecated Use `sort` (`{ columnId, direction }` or `null`). Without `sortDirection`, the
+   * direction is kept internally (it toggles on repeated clicks).
+   */
   sortColumn?: string;
   /** @deprecated Use `defaultSort`. */
   defaultSortColumn?: string;
-  /** @deprecated Use `sort`. */
+  /**
+   * @deprecated Use `sort`. Without `sortColumn`, the column is kept internally (it follows the
+   * clicked header, starting from `defaultSortColumn`).
+   */
   sortDirection?: SortDirection;
   /** @deprecated Use `defaultSort`. */
   defaultSortDirection?: SortDirection;
@@ -147,7 +155,8 @@ export interface DataGridHeaderProps extends React.HTMLAttributes<HTMLTableSecti
   /**
    * Header row elements. Each `<tr>` child (also inside a Fragment) gets the selection column's
    * header cell prepended when the grid is selectable; a header row rendered by another component
-   * should be a `DataGrid.Row`, which adds the cell itself.
+   * should be a `DataGrid.Row`, which adds the cell itself. With several header rows (a grouped
+   * header), only the first one gets the "Select all rows" control; later rows get an empty cell.
    */
   children: React.ReactNode;
   /** Ref to the `<thead>` element. */
@@ -215,14 +224,26 @@ type SelectAllState = 'all' | 'some' | 'none';
  * re-renders only that row (and the select-all header cell). The root pushes the committed
  * selection in a layout effect; rows register their ids. The effective selection is always
  * `selected ∩ registered`, derived on read (no pruning effect).
+ *
+ * @internal Not exported from the package (exported for its unit tests).
  */
-interface SelectionStore {
+export interface SelectionStore {
+  /**
+   * Row subscription: notified only when the selection changes. Rows registering or unregistering
+   * notify no row, so adding or removing k of n rows costs O(k), not O(k·n).
+   */
   subscribe(listener: () => void): () => void;
+  /**
+   * Select-all subscription: notified only when {@link getSelectAllState} changes (through the
+   * selection or through rows registering and unregistering).
+   */
+  subscribeSelectAll(listener: () => void): () => void;
   /** Registers a rendered row id; returns the unregister function. */
   register(rowId: string): () => void;
   /** Sets the committed selection (layout effect of the root). */
   setSelected(items: readonly string[]): void;
   isSelected(rowId: string): boolean;
+  /** Whether all, some or none of the registered rows are selected. O(1). */
   getSelectAllState(): SelectAllState;
   /** Registered row ids in registration order. */
   getRegistered(): string[];
@@ -230,14 +251,130 @@ interface SelectionStore {
   prune(items: readonly string[]): string[];
 }
 
-function createSelectionStore(initial: readonly string[]): SelectionStore {
+/**
+ * Creates the {@link SelectionStore} of one DataGrid.
+ *
+ * @internal Not exported from the package (exported for its unit tests).
+ */
+export function createSelectionStore(initial: readonly string[]): SelectionStore {
   let selected: ReadonlySet<string> = new Set(initial);
+  /** Registered row id -> number of rows registered with it. */
   const registered = new Map<string, number>();
-  const listeners = new Set<() => void>();
-  let selectAll: SelectAllState | null = null;
+  /** How many registered row ids are selected (kept up to date, so select-all is O(1)). */
+  let selectedRegistered = 0;
+  let selectAll: SelectAllState = 'none';
+  const rowListeners = new Set<() => void>();
+  const selectAllListeners = new Set<() => void>();
 
-  const emit = () => {
-    selectAll = null;
+  const notify = (listeners: Set<() => void>) => {
+    for (const listener of Array.from(listeners)) listener();
+  };
+
+  const updateSelectAll = () => {
+    const next: SelectAllState =
+      selectedRegistered === 0 ? 'none' : selectedRegistered === registered.size ? 'all' : 'some';
+    if (next === selectAll) return;
+    selectAll = next;
+    notify(selectAllListeners);
+  };
+
+  const subscribeTo = (listeners: Set<() => void>) => (listener: () => void) => {
+    listeners.add(listener);
+    return () => {
+      listeners.delete(listener);
+    };
+  };
+
+  return {
+    subscribe: subscribeTo(rowListeners),
+    subscribeSelectAll: subscribeTo(selectAllListeners),
+    register(rowId) {
+      const count = registered.get(rowId) ?? 0;
+      registered.set(rowId, count + 1);
+      if (count === 0 && selected.has(rowId)) selectedRegistered += 1;
+      updateSelectAll();
+      let done = false;
+      return () => {
+        if (done) return;
+        done = true;
+        const remaining = (registered.get(rowId) ?? 0) - 1;
+        if (remaining > 0) {
+          registered.set(rowId, remaining);
+          return;
+        }
+        registered.delete(rowId);
+        if (selected.has(rowId)) selectedRegistered -= 1;
+        updateSelectAll();
+      };
+    },
+    setSelected(items) {
+      const next = new Set(items);
+      if (next.size === selected.size && items.every((item) => selected.has(item))) return;
+      selected = next;
+      selectedRegistered = 0;
+      for (const rowId of next) if (registered.has(rowId)) selectedRegistered += 1;
+      notify(rowListeners);
+      updateSelectAll();
+    },
+    isSelected(rowId) {
+      return selected.has(rowId);
+    },
+    getSelectAllState() {
+      return selectAll;
+    },
+    getRegistered() {
+      return Array.from(registered.keys());
+    },
+    prune(items) {
+      return items.filter((item) => registered.has(item));
+    },
+  };
+}
+
+// ---------------------------------------------------------------------------
+// Header selection slots
+// ---------------------------------------------------------------------------
+
+/**
+ * The selection column's header slots of one `DataGrid.Header`, one per header row. Only the first
+ * slot in document order renders the "Select all rows" control (the "Selection" text in single
+ * mode); the others render an empty cell, so a grouped header (several header rows) has one control
+ * and every header row keeps the selection column.
+ */
+interface HeaderSlotRegistry {
+  subscribe(listener: () => void): () => void;
+  /** Registers a slot and a getter for its current cell; returns the unregister function. */
+  register(slot: object, getCell: () => Element | null): () => void;
+  /** The first slot in document order, or `null` while no slot is registered. */
+  getFirst(): object | null;
+  /** Re-checks the order: header rows can move without a slot mounting or unmounting. */
+  refresh(): void;
+}
+
+function createHeaderSlotRegistry(): HeaderSlotRegistry {
+  const slots = new Map<object, () => Element | null>();
+  const listeners = new Set<() => void>();
+  let first: object | null = null;
+
+  const update = () => {
+    let next: object | null = null;
+    let nextCell: Element | null = null;
+    for (const [slot, getCell] of slots) {
+      const cell = getCell();
+      if (!cell) {
+        // A slot whose cell is being replaced (control <-> empty cell): keep the current order
+        // until the next registration or header commit sees every cell again.
+        if (first !== null && slots.has(first)) return;
+        continue;
+      }
+      if (!nextCell || cell.compareDocumentPosition(nextCell) & Node.DOCUMENT_POSITION_FOLLOWING) {
+        next = slot;
+        nextCell = cell;
+      }
+    }
+    if (next === null) next = slots.keys().next().value ?? null;
+    if (next === first) return;
+    first = next;
     for (const listener of Array.from(listeners)) listener();
   };
 
@@ -248,39 +385,16 @@ function createSelectionStore(initial: readonly string[]): SelectionStore {
         listeners.delete(listener);
       };
     },
-    register(rowId) {
-      registered.set(rowId, (registered.get(rowId) ?? 0) + 1);
-      emit();
+    register(slot, getCell) {
+      slots.set(slot, getCell);
+      update();
       return () => {
-        const count = registered.get(rowId) ?? 0;
-        if (count <= 1) registered.delete(rowId);
-        else registered.set(rowId, count - 1);
-        emit();
+        slots.delete(slot);
+        update();
       };
     },
-    setSelected(items) {
-      const next = new Set(items);
-      if (next.size === selected.size && items.every((item) => selected.has(item))) return;
-      selected = next;
-      emit();
-    },
-    isSelected(rowId) {
-      return selected.has(rowId);
-    },
-    getSelectAllState() {
-      if (selectAll === null) {
-        let count = 0;
-        for (const rowId of registered.keys()) if (selected.has(rowId)) count += 1;
-        selectAll = count === 0 ? 'none' : count === registered.size ? 'all' : 'some';
-      }
-      return selectAll;
-    },
-    getRegistered() {
-      return Array.from(registered.keys());
-    },
-    prune(items) {
-      return items.filter((item) => registered.has(item));
-    },
+    getFirst: () => first,
+    refresh: update,
   };
 }
 
@@ -295,7 +409,7 @@ interface DataGridContextValue {
   toggleRow: (rowId: string) => void;
   /** Selects every rendered row, or clears the selection when all are selected. */
   toggleAll: () => void;
-  /** Shared `name` of the single-mode radios. */
+  /** Shared `name` of the single-mode radios (they are kept out of any form with `form=""`). */
   radioName: string;
 }
 
@@ -310,6 +424,13 @@ const DataGridContext = React.createContext<DataGridContextValue | null>(null);
 const DataGridSortContext = React.createContext<DataGridSortContextValue | null>(null);
 /** Whether a row is rendered in the header or the body (rows in a header get a header cell). */
 const DataGridSectionContext = React.createContext<DataGridSection>('body');
+/** The header's selection slots (see {@link HeaderSlotRegistry}). */
+const DataGridHeaderSlotsContext = React.createContext<HeaderSlotRegistry | null>(null);
+/**
+ * Whether the header row below is the header's first row, as far as the header can tell from its
+ * children. Only the initial (and server) render uses it; the slots then follow the DOM order.
+ */
+const DataGridHeaderRowHintContext = React.createContext(true);
 
 const INERT_STORE = createSelectionStore([]);
 const INERT_CONTEXT: DataGridContextValue = {
@@ -453,21 +574,44 @@ const DataGridRoot = (props: DataGridProps) => {
       );
     }
   }, [mixedSortApi]);
+  // 0.4 mixed control: `sortColumn` and `sortDirection` are controlled independently. The half the
+  // parent does not control is kept here (seeded from its default) and follows every sort request,
+  // as 0.4 did, so repeated clicks still alternate and aria-sort shows what was reported.
   React.useEffect(() => {
-    if (!usesSortApi && sortDirectionProp !== undefined && sortColumnProp === undefined) {
+    if (usesSortApi) return;
+    if (sortColumnProp !== undefined && sortDirectionProp === undefined) {
+      warnOnce(
+        'DataGrid:sortColumn-without-sortDirection',
+        'DataGrid: `sortColumn` is controlled but `sortDirection` is not (mixed control). The ' +
+          'direction is kept internally and toggles on repeated clicks, as in 0.4. Pass `sort` ' +
+          '(`{ columnId, direction }`) to control both.',
+      );
+    } else if (sortDirectionProp !== undefined && sortColumnProp === undefined) {
       warnOnce(
         'DataGrid:sortDirection-without-sortColumn',
-        'DataGrid: `sortDirection` is ignored without `sortColumn` (mixed control). Pass `sort` instead.',
+        'DataGrid: `sortDirection` is controlled but `sortColumn` is not (mixed control). The ' +
+          'column is kept internally and follows the clicked header, as in 0.4. Pass `sort` ' +
+          '(`{ columnId, direction }`) to control both.',
       );
     }
   }, [usesSortApi, sortColumnProp, sortDirectionProp]);
 
+  /** The uncontrolled halves of the 0.4 sort props (used while the other half is controlled). */
+  const [legacyHalves, setLegacyHalves] = React.useState<{
+    column: string;
+    direction: SortDirection;
+  }>(() => ({
+    column: defaultSortColumn ?? '',
+    direction: defaultSortDirection ?? 'ascending',
+  }));
+
   const legacyControlledSort = React.useMemo<DataGridSort | null | undefined>(() => {
-    if (sortColumnProp === undefined) return undefined;
-    return sortColumnProp === ''
+    if (sortColumnProp === undefined && sortDirectionProp === undefined) return undefined;
+    const column = sortColumnProp ?? legacyHalves.column;
+    return column === ''
       ? null
-      : { columnId: sortColumnProp, direction: sortDirectionProp ?? 'ascending' };
-  }, [sortColumnProp, sortDirectionProp]);
+      : { columnId: column, direction: sortDirectionProp ?? legacyHalves.direction };
+  }, [sortColumnProp, sortDirectionProp, legacyHalves]);
 
   const legacyDefaultSort = React.useMemo<DataGridSort | null>(
     () =>
@@ -481,7 +625,15 @@ const DataGridRoot = (props: DataGridProps) => {
   const initialSort = defaultSort !== undefined ? defaultSort : legacyDefaultSort;
 
   const emitSortChange = (next: DataGridSort | null) => {
-    if (!next || !onSortChange) return;
+    if (!next) return;
+    if (!usesSortApi) {
+      setLegacyHalves((previous) =>
+        previous.column === next.columnId && previous.direction === next.direction
+          ? previous
+          : { column: next.columnId, direction: next.direction },
+      );
+    }
+    if (!onSortChange) return;
     if (objectCallbacks) {
       (onSortChange as (sort: DataGridSort) => void)(next);
     } else {
@@ -672,10 +824,16 @@ DataGridRoot.displayName = 'DataGrid';
 // Selection header cell (internal)
 // ---------------------------------------------------------------------------
 
-function DataGridSelectionHeaderCell({ selectionMode }: { selectionMode: SelectionMode }) {
+function DataGridSelectionHeaderCell({
+  selectionMode,
+  ref,
+}: {
+  selectionMode: SelectionMode;
+  ref?: React.Ref<HTMLTableCellElement>;
+}) {
   const { store, toggleAll } = useDataGridContext('DataGrid.Header');
   const state = React.useSyncExternalStore(
-    store.subscribe,
+    store.subscribeSelectAll,
     store.getSelectAllState,
     store.getSelectAllState,
   );
@@ -687,6 +845,7 @@ function DataGridSelectionHeaderCell({ selectionMode }: { selectionMode: Selecti
 
   return (
     <th
+      ref={ref}
       scope="col"
       data-selection-cell=""
       className={cn(selectionCell, 'text-start', focusRingInset)}
@@ -707,48 +866,102 @@ function DataGridSelectionHeaderCell({ selectionMode }: { selectionMode: Selecti
   );
 }
 
+const INERT_HEADER_SLOTS: HeaderSlotRegistry = {
+  subscribe: () => () => {},
+  register: () => () => {},
+  getFirst: () => null,
+  refresh: () => {},
+};
+
+/**
+ * The selection column's cell of one header row: the select-all header cell in the header's first
+ * row (document order), an empty cell in every later row. `initialFirst` is the header's guess from
+ * its children, used until the slots are registered (the initial and the server render).
+ */
+function DataGridSelectionHeaderSlot({
+  selectionMode,
+  initialFirst,
+}: {
+  selectionMode: SelectionMode;
+  initialFirst: boolean;
+}) {
+  const slots = React.useContext(DataGridHeaderSlotsContext) ?? INERT_HEADER_SLOTS;
+  const [slot] = React.useState(() => ({}));
+  const cellRef = React.useRef<HTMLTableCellElement | null>(null);
+
+  const getIsFirst = React.useCallback(() => {
+    const first = slots.getFirst();
+    return first === null ? initialFirst : first === slot;
+  }, [slots, slot, initialFirst]);
+  const getServerIsFirst = React.useCallback(() => initialFirst, [initialFirst]);
+  const isFirst = React.useSyncExternalStore(slots.subscribe, getIsFirst, getServerIsFirst);
+
+  useIsomorphicLayoutEffect(() => slots.register(slot, () => cellRef.current), [slots, slot]);
+
+  return isFirst ? (
+    <DataGridSelectionHeaderCell ref={cellRef} selectionMode={selectionMode} />
+  ) : (
+    <td ref={cellRef} data-selection-cell="" className={cn(selectionCell, focusRingInset)} />
+  );
+}
+
 // ---------------------------------------------------------------------------
 // Sub-components
 // ---------------------------------------------------------------------------
 
 /**
- * Prepends `selectionCell` (or `null`) to every `<tr>` in `children`, looking inside Fragments.
- * Every row gets the same child shape in every selection mode, so switching `selectionMode` does
- * not remount the header cells.
+ * Prepends the selection column's header slot (or `null`) to every `<tr>` in `children`, looking
+ * inside Fragments, and tells every other element child (a `DataGrid.Row`, or a component that
+ * renders one) whether it is the header's first row. Every row gets the same child shape in every
+ * selection mode, so switching `selectionMode` does not remount the header cells.
  */
-function withSelectionHeaderCell(
+function withSelectionHeaderSlots(
   children: React.ReactNode,
-  selectionCell: React.ReactNode,
+  selectionMode: 'none' | SelectionMode,
 ): React.ReactNode {
-  return React.Children.map(children, (child) => {
-    if (isElementOfType<{ children?: React.ReactNode }>(child, React.Fragment)) {
-      return React.cloneElement(
-        child,
-        undefined,
-        withSelectionHeaderCell(child.props.children, selectionCell),
+  let first = true;
+  const visit = (nodes: React.ReactNode): React.ReactNode =>
+    React.Children.map(nodes, (child) => {
+      if (isElementOfType<{ children?: React.ReactNode }>(child, React.Fragment)) {
+        return React.cloneElement(child, undefined, visit(child.props.children));
+      }
+      if (!React.isValidElement(child)) return child;
+      const isFirst = first;
+      first = false;
+      if (isElementOfType<{ children?: React.ReactNode }>(child, 'tr')) {
+        const slot =
+          selectionMode === 'none' ? null : (
+            <DataGridSelectionHeaderSlot selectionMode={selectionMode} initialFirst={isFirst} />
+          );
+        return React.cloneElement(child, undefined, slot, child.props.children);
+      }
+      return (
+        <DataGridHeaderRowHintContext.Provider value={isFirst}>
+          {child}
+        </DataGridHeaderRowHintContext.Provider>
       );
-    }
-    if (isElementOfType<{ children?: React.ReactNode }>(child, 'tr')) {
-      return React.cloneElement(child, undefined, selectionCell, child.props.children);
-    }
-    return child;
-  });
+    });
+  return visit(children);
 }
 
 /**
  * The grid's `<thead>`. When the grid is selectable, it prepends the selection column's header
- * cell ("Select all rows" checkbox in multiple mode) to each `<tr>` child, also inside a Fragment.
- * A header row rendered by another component cannot get it (a development warning says so): use
- * `DataGrid.Row` for such a row, which adds the cell itself.
+ * cell to each `<tr>` child, also inside a Fragment: the first header row gets the "Select all
+ * rows" checkbox (multiple mode) or the "Selection" header (single mode), later rows of a grouped
+ * header an empty cell. A header row rendered by another component cannot get it (a development
+ * warning says so): use `DataGrid.Row` for such a row, which adds the cell itself.
  */
 const DataGridHeader = ({ children, className, ref, ...rest }: DataGridHeaderProps) => {
   const { selectionMode } = useDataGridContext('DataGrid.Header');
   const [thead, setThead] = React.useState<HTMLTableSectionElement | null>(null);
   const mergedRef = useMergedRefs<HTMLTableSectionElement>(ref, setThead);
-  const content = withSelectionHeaderCell(
-    children,
-    selectionMode === 'none' ? null : <DataGridSelectionHeaderCell selectionMode={selectionMode} />,
-  );
+  const [slots] = React.useState(createHeaderSlotRegistry);
+  const content = withSelectionHeaderSlots(children, selectionMode);
+
+  // Every commit, after the rows' slots registered: header rows can move without a slot mounting.
+  useIsomorphicLayoutEffect(() => {
+    slots.refresh();
+  });
 
   // Every commit: header rows can come from components the header cannot see into.
   React.useEffect(() => {
@@ -769,9 +982,11 @@ const DataGridHeader = ({ children, className, ref, ...rest }: DataGridHeaderPro
 
   return (
     <DataGridSectionContext.Provider value="header">
-      <thead ref={mergedRef} className={cn('bg-card', className)} {...rest}>
-        {content}
-      </thead>
+      <DataGridHeaderSlotsContext.Provider value={slots}>
+        <thead ref={mergedRef} className={cn('bg-card', className)} {...rest}>
+          {content}
+        </thead>
+      </DataGridHeaderSlotsContext.Provider>
     </DataGridSectionContext.Provider>
   );
 };
@@ -791,13 +1006,16 @@ const sortIcon = (direction: SortDirection) => (
 
 /**
  * A column header cell. A `sortable` header (with a `columnId`) renders its content inside a
- * `<button type="button">` that toggles the sort; the `<th>` carries `aria-sort`.
+ * `<button type="button">` that toggles the sort; the `<th>` carries `aria-sort`. A consumer
+ * `onClick` (on the `<th>`) runs before the sort, and calling `preventDefault()` in it cancels the
+ * sort (also for Enter/Space on the button, which click it).
  */
 const DataGridHeaderCell = ({
   columnId,
   sortable = false,
   children,
   className,
+  onClick,
   ref,
   ...rest
 }: DataGridHeaderCellProps) => {
@@ -806,6 +1024,20 @@ const DataGridHeaderCell = ({
   const sortColumnId = sortable && columnId ? columnId : undefined;
   const sortedDirection =
     sortColumnId !== undefined && sort?.columnId === sortColumnId ? sort.direction : null;
+
+  // The sort runs from the `<th>` once the button's click bubbled up to it, composed after the
+  // consumer's `onClick` (C-COMPOSE): the consumer runs first and can cancel with preventDefault().
+  // The sort button is the `<th>`'s only child; clicks elsewhere in the cell do not sort.
+  const sortOnButtonClick = (event: React.MouseEvent<HTMLTableCellElement>) => {
+    const button = event.currentTarget.firstElementChild;
+    if (
+      sortColumnId !== undefined &&
+      button?.localName === 'button' &&
+      button.contains(event.target as Node)
+    ) {
+      requestSort(sortColumnId);
+    }
+  };
 
   React.useEffect(() => {
     if (sortable && !columnId) {
@@ -829,11 +1061,13 @@ const DataGridHeaderCell = ({
         className,
       )}
       {...rest}
+      onClick={
+        sortColumnId !== undefined ? composeEventHandlers(onClick, sortOnButtonClick) : onClick
+      }
     >
       {sortColumnId !== undefined ? (
         <button
           type="button"
-          onClick={() => requestSort(sortColumnId)}
           className={cn(
             'inline-flex w-full cursor-pointer select-none items-center gap-1 border-0 bg-transparent px-4 py-3 text-start text-inherit [font:inherit] uppercase tracking-wider',
             focusRingInset,
@@ -875,6 +1109,7 @@ const DataGridRow = ({
 }: DataGridRowProps) => {
   const { selectionMode, store, toggleRow, radioName } = useDataGridContext('DataGrid.Row');
   const section = React.useContext(DataGridSectionContext);
+  const firstHeaderRowHint = React.useContext(DataGridHeaderRowHintContext);
   const inHeader = section === 'header';
   const selectable = selectionMode !== 'none' && !inHeader;
   const labelId = useId('wave-datagrid-row-label');
@@ -883,6 +1118,7 @@ const DataGridRow = ({
     () => rowId !== undefined && store.isSelected(rowId),
     [rowId, store],
   );
+  // Notified only when the selection changes (rows registering notify no row).
   const isSelected = React.useSyncExternalStore(store.subscribe, getSelected, getSelected);
 
   useIsomorphicLayoutEffect(() => {
@@ -946,7 +1182,12 @@ const DataGridRow = ({
 
   let selectionCellElement: React.ReactNode = null;
   if (inHeader && selectionMode !== 'none') {
-    selectionCellElement = <DataGridSelectionHeaderCell selectionMode={selectionMode} />;
+    selectionCellElement = (
+      <DataGridSelectionHeaderSlot
+        selectionMode={selectionMode}
+        initialFirst={firstHeaderRowHint}
+      />
+    );
   } else if (selectable) {
     selectionCellElement = (
       <td role="gridcell" data-selection-cell="" className={cn(selectionCell, focusRingInset)}>
@@ -954,6 +1195,10 @@ const DataGridRow = ({
           <input
             type={selectionMode === 'multiple' ? 'checkbox' : 'radio'}
             name={selectionMode === 'single' ? radioName : undefined}
+            // The shared name groups the radios. `form=""` matches no form, so they have no form
+            // owner (still one group: same name, both ownerless) and never add a generated field
+            // to an enclosing form's submission.
+            form={selectionMode === 'single' ? '' : undefined}
             checked={isSelected}
             onChange={() => toggleRow(rowId)}
             aria-label={selectionLabel ?? (labelledBy ? undefined : 'Select row')}
