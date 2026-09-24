@@ -1095,7 +1095,10 @@ export function ProfileForm() {
   const error = submitted && name.trim() === '' ? 'Enter your name' : undefined;
 
   return (
+    // noValidate: this form shows its own errors. Without it, the browser's constraint
+    // validation (Field `required` sets the native attribute) blocks an empty submit first.
     <form
+      noValidate
       onSubmit={(event) => {
         event.preventDefault();
         setSubmitted(true);
@@ -1127,7 +1130,7 @@ export function ProfileForm() {
 
 - Stack fields vertically with `gap="lg"` (16px)
 - Labels above controls (not inline, unless it is a horizontal form)
-- `required` on the Field shows a decorative `*`, sets `aria-required` and, on native inputs, the native `required` attribute
+- `required` on the Field shows a decorative `*`, sets `aria-required` and turns on the browser's constraint validation: native inputs get the native `required` attribute, and choice and picker controls (Checkbox, Switch, RadioGroup, Dropdown, DatePicker, …) render a required hidden input, so the form does not submit while the control is empty, unchecked or off. A form that shows its own errors on submit, like the one above, sets `noValidate`
 - Field's `error` renders the message below the control in a `role="alert"` element and marks the control invalid; `hint` describes it
 - One control per Field; wrap layout or wrapper components (a Tooltip) in a plain `<div>` inside the Field
 - Primary action button end-aligned, or full-width on mobile

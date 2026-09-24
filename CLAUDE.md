@@ -2,7 +2,7 @@
 
 ## What is this?
 
-`@mortenbrudvik/waveui` (published as `waveui` up to 0.4): a React 19 component library of 65 components inspired by the Fluent UI 2 design language, built with TypeScript, Tailwind CSS 4 and `--wave-*` CSS custom properties, with light, dark and high-contrast themes and RTL support. It is **not** Microsoft's `@fluentui/react-components`.
+`@mortenbrudvik/waveui` (the npm name since 0.4.0; the repository's `package.json` said `waveui` before 0.5): a React 19 component library of 65 components inspired by the Fluent UI 2 design language, built with TypeScript, Tailwind CSS 4 and `--wave-*` CSS custom properties, with light, dark and high-contrast themes and RTL support. It is **not** Microsoft's `@fluentui/react-components`.
 
 User docs: `README.md` (install, styles, theming, RSC, keyboard), `CHANGELOG.md`, `docs/WAVE-UI-GUIDE.md` (design and development guide), `docs/testing-best-practices.md` (how to test here). The 0.5 design and every convention below come from `docs/superpowers/specs/2026-09-23-review-fixes-design.md` (§1 lists the C-* conventions in full).
 
@@ -169,7 +169,7 @@ Toggle.displayName = 'Toggle';
 ```
 
 - `useFieldControl(props, { labelable, nativeRequired })` returns only defined keys: the consumer's id, else the Field's `controlId` (only the first control of a Field takes it); `aria-labelledby` pointing at the Field label when `<label htmlFor>` cannot reach the control (`labelable: false` for `role="radiogroup"`/`role="group"` roots, or a control that is not Field's first child); `aria-describedby` joined with the Field's error and hint; `aria-invalid`/`aria-required` from the Field; `required` only with `nativeRequired: true` (native inputs: Input, Select, Textarea, Slider, SpinButton, SearchBox).
-- `HiddenInput` renders nothing without `name` or `required`; use `type="radio"` for single-choice groups, `"checkbox"` for booleans, `"text"` for free values (pickers, SpinButton), and pass arrays for multi-value controls (one input per value).
+- `HiddenInput` renders nothing without `name` or `required`. Pass `required ?? field?.required`, so a required Field makes the control natively required even without `name` (the CHANGELOG documents this); an explicit `required={false}` wins, for `aria-required` too. Use `type="radio"` for single-choice groups, `"checkbox"` for booleans, `"text"` for free values (pickers, SpinButton), and pass arrays for multi-value controls (one input per value).
 - Test Field consumption without the real Field through `renderWithFieldContext` (`src/test-utils-field.tsx`).
 
 ## Styling

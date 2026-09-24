@@ -8,6 +8,8 @@ How tests are written in this repository, with the helpers of `src/test-utils.ts
 
 Vitest 4, React Testing Library, `@testing-library/user-event`, jsdom and vitest-axe. Tests live in `__tests__/` next to the module they test (`src/components/input/__tests__/Switch.test.tsx`) and import it from its module path (`../Switch`); repo-level suites live in `src/__tests__/`.
 
+Each example below starts with a comment naming the test file it belongs in: the component's own `<Component>.test.tsx`, which exists for every component. The examples are condensed to show one pattern each; they are not copies of tests in those files.
+
 ```bash
 npm test                                          # everything
 npx vitest run src/components/input/__tests__/Switch.test.tsx
@@ -92,7 +94,7 @@ The helpers named `test*` register tests through the Vitest globals: call them a
 - Audit important states, not only the default: `a11yVariants` for props, and an open-state audit for every popup:
 
 ```tsx
-// src/components/overlays/__tests__/Popover.a11y.test.tsx
+// src/components/overlays/__tests__/Popover.test.tsx
 import { render } from '@testing-library/react';
 import { Popover } from '../Popover';
 import { expectNoA11yViolations } from '../../../test-utils';
@@ -119,7 +121,7 @@ jsdom cannot compute color contrast: contrast is asserted per theme by `src/styl
 Renders the component inside `<form onSubmit={spy}>`, checks that every `<button>` in `document.body` (portaled ones included) is `type="button"`, and clicks every target inside the form without submitting it. Open overlays so their buttons are checked:
 
 ```tsx
-// src/components/overlays/__tests__/Dialog.submit.test.tsx
+// src/components/overlays/__tests__/Dialog.test.tsx
 import { Dialog } from '../Dialog';
 import { testNoImplicitSubmit } from '../../../test-utils';
 
@@ -135,7 +137,7 @@ describe('Dialog', () => {
 The C-COMPOSE contract: a consumer handler runs and the built-in behaviour still happens; with `assertInternalSuppressed`, a handler that calls `preventDefault()` suppresses it.
 
 ```tsx
-// src/components/layout/__tests__/TabList.compose.test.tsx
+// src/components/layout/__tests__/TabList.test.tsx
 import { screen } from '@testing-library/react';
 import { TabList } from '../TabList';
 import { testComposedHandler } from '../../../test-utils';
@@ -170,7 +172,7 @@ describe('TabList', () => {
 Asserts that each `Parent[name]` is a component with a non-empty `displayName`. Add one test that the flat exports are the dotted members (C-COMPOUND):
 
 ```tsx
-// src/components/layout/__tests__/Card.exports.test.tsx
+// src/components/layout/__tests__/Card.test.tsx
 import { Card, CardBody, CardFooter, CardHeader } from '../Card';
 import { testCompoundExposure } from '../../../test-utils';
 
@@ -194,7 +196,7 @@ Registers `calls onFocus` and `calls onBlur`: clicks the element matched by `sel
 A wrapper that renders `Root` with `rootProps` around its children, for rendering overlay sub-components in isolation:
 
 ```tsx
-// src/components/overlays/__tests__/DialogContent.test.tsx
+// src/components/overlays/__tests__/Dialog.test.tsx
 import { render, screen } from '@testing-library/react';
 import { Dialog } from '../Dialog';
 import { createOverlayTestWrapper } from '../../../test-utils';
@@ -212,7 +214,7 @@ it('renders its content in the open dialog', () => {
 Renders inside `<WaveProvider theme dir>` (a `wrapper` option goes inside the provider; `rerender` keeps the providers). Every directional component has at least one RTL test:
 
 ```tsx
-// src/components/input/__tests__/RadioGroup.rtl.test.tsx
+// src/components/input/__tests__/RadioGroup.test.tsx
 import { screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { RadioGroup } from '../RadioGroup';
@@ -238,7 +240,7 @@ it('mirrors ArrowLeft in RTL', async () => {
 Renders the control inside a `FieldContext` provider with a real `<label>`, hint and error, the way `Field` does, so a control's Field integration is tested without depending on `Field` itself. `FIELD_TEST_IDS` and `FIELD_TEST_TEXT` hold the default ids and texts; `value` is a partial `FieldContextValue` (`hintId`, `errorId`, `required`, `invalid`, …).
 
 ```tsx
-// src/components/input/__tests__/Checkbox.field.test.tsx
+// src/components/input/__tests__/Checkbox.test.tsx
 import { screen } from '@testing-library/react';
 import { Checkbox } from '../Checkbox';
 import { FIELD_TEST_IDS, FIELD_TEST_TEXT, renderWithFieldContext } from '../../../test-utils-field';
@@ -260,12 +262,11 @@ The real `Field` around every control is covered by `src/__tests__/integration.t
 - `mockMatchMedia({ query: boolean })` answers `matchMedia` queries and notifies mounted listeners. The answers last one test: call it in the test or in `beforeEach`, never in `beforeAll`.
 
 ```tsx
-// src/components/layout/__tests__/Overflow.mocks.test.tsx
+// src/components/layout/__tests__/Overflow.test.tsx
 import * as React from 'react';
 import { render, screen } from '@testing-library/react';
-import { Carousel } from '../Carousel';
 import { useIsOverflowing } from '../Overflow';
-import { installResizeObserverMock, mockMatchMedia, mockRect } from '../../../test-utils';
+import { installResizeObserverMock, mockRect } from '../../../test-utils';
 import type { ResizeObserverMock } from '../../../test-utils';
 
 function Probe() {
@@ -278,7 +279,7 @@ function Probe() {
   );
 }
 
-describe('browser API mocks', () => {
+describe('useIsOverflowing', () => {
   let resizeObserver: ResizeObserverMock;
   beforeEach(() => {
     resizeObserver = installResizeObserverMock();
@@ -295,17 +296,24 @@ describe('browser API mocks', () => {
     resizeObserver.trigger(box);
     expect(box).toHaveTextContent('overflowing');
   });
+});
+```
 
-  it('starts auto-rotation stopped for reduced motion', () => {
-    mockMatchMedia({ '(prefers-reduced-motion: reduce)': true });
-    render(
-      <Carousel autoPlay aria-label="Highlights">
-        <Carousel.Item>One</Carousel.Item>
-        <Carousel.Item>Two</Carousel.Item>
-      </Carousel>,
-    );
-    expect(screen.getByRole('button', { name: 'Start slide rotation' })).toBeEnabled();
-  });
+```tsx
+// src/components/layout/__tests__/Carousel.test.tsx
+import { render, screen } from '@testing-library/react';
+import { Carousel } from '../Carousel';
+import { mockMatchMedia } from '../../../test-utils';
+
+it('starts auto-rotation stopped for reduced motion', () => {
+  mockMatchMedia({ '(prefers-reduced-motion: reduce)': true });
+  render(
+    <Carousel autoPlay aria-label="Highlights">
+      <Carousel.Item>One</Carousel.Item>
+      <Carousel.Item>Two</Carousel.Item>
+    </Carousel>,
+  );
+  expect(screen.getByRole('button', { name: 'Start slide rotation' })).toBeEnabled();
 });
 ```
 
@@ -316,7 +324,7 @@ describe('browser API mocks', () => {
 - **Change-only vs every activation.** Value callbacks (`onValueChange`, `onCheckedChange`, `onOpenChange`) fire only on change; event callbacks (`onPageChange`, `onStepChange`, `Tree` `onItemSelect`, the deprecated `onTabSelect`/`onNavItemSelect`/`onOptionSelect`) fire on every activation. Test re-selection for both kinds.
 
 ```tsx
-// src/components/button/__tests__/ToggleButton.controlled.test.tsx
+// src/components/button/__tests__/ToggleButton.test.tsx
 import * as React from 'react';
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
@@ -354,7 +362,7 @@ it('fires once per click in StrictMode', async () => {
 Use fake timers that still advance with real time, and give `userEvent` the fake clock (with plain `vi.useFakeTimers()`, `userEvent` hangs):
 
 ```tsx
-// src/components/overlays/__tests__/Tooltip.timers.test.tsx
+// src/components/overlays/__tests__/Tooltip.test.tsx
 import { act, render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { Tooltip } from '../Tooltip';
@@ -395,7 +403,7 @@ describe('Tooltip delay', () => {
 Warnings go through `src/lib/dev.ts` as `console.warn('[WaveUI] …')` and are deduplicated per test (the registry is reset after every test). Assert the ones a test provokes, and restore the spy:
 
 ```tsx
-// src/components/input/__tests__/Switch.deprecation.test.tsx
+// src/components/input/__tests__/Switch.test.tsx
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { Switch } from '../Switch';
@@ -418,7 +426,7 @@ it('still calls the deprecated onChange and warns once', async () => {
 
 ## 9. Keep the output clean
 
-A passing test prints nothing, apart from jsdom's `Not implemented: HTMLCanvasElement's getContext()` notice, which axe-core's color checks trigger in jsdom and which is harmless. Check with `--reporter=default`, and fix the cause of anything else:
+A passing test prints nothing, apart from two harmless jsdom notices that axe-core audits trigger: `Not implemented: HTMLCanvasElement's getContext()` (its color checks) and `Not implemented: Window's getComputedStyle() method: with pseudo-elements`. Component test files with audits print some of them, and the stories gate (`src/__tests__/stories.a11y.test.tsx`), which audits every story, prints hundreds. Check with `--reporter=default`, and fix the cause of anything else:
 
 - **act() warnings**: a bare `element.focus()` or `form.checkValidity()` that makes a component update state belongs in `act(() => …)`, or use `userEvent` (`await user.tab()`, `await user.click(…)`). Timer advances go in `act()` too.
 - **Unasserted `[WaveUI]` warnings**: spy on `console.warn` and assert the message (section 8), or change the test so it no longer provokes the warning.
@@ -434,7 +442,7 @@ A passing test prints nothing, apart from jsdom's `Not implemented: HTMLCanvasEl
 - Type-level contracts go in `__tests__` too; `tsconfig.dev.json` type-checks them:
 
 ```tsx
-// src/components/button/__tests__/Button.types.test.tsx
+// src/components/button/__tests__/Button.test.tsx
 import { expectTypeOf } from 'vitest';
 import type { ButtonProps } from '../Button';
 
