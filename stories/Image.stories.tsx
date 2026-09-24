@@ -89,16 +89,25 @@ export const Decorative: Story = {
   },
 };
 
+/**
+ * A block image fills the width of its parent. With the default fit its `width` and `height`
+ * attributes keep the aspect ratio (and reserve the space before it loads).
+ */
 export const Block: Story = {
   args: {
     src: placeholder(600, 200),
     alt: 'Block image',
     block: true,
-    width: undefined,
-    height: undefined,
+    width: 600,
+    height: 200,
   },
 };
 
+/**
+ * A 200×100 image in a 100×100 box: `none` keeps its top-left corner in view and `center` its
+ * middle (both unscaled), `contain` and `cover` scale it, and the default fit keeps its aspect
+ * ratio.
+ */
 export const FitModes: Story = {
   args: {
     src: placeholder(200, 100),

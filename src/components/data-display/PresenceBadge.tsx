@@ -115,7 +115,7 @@ export const PresenceBadge = ({
         className,
       )}
     >
-      <Icon size="100%" className={cn('size-full', glyph === 'arrow' && 'rtl:-scale-x-100')} />
+      <Icon size="100%" className={cn('size-full', glyph === 'arrow' && 'wave-rtl:-scale-x-100')} />
     </span>
   );
 };

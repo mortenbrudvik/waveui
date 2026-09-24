@@ -81,17 +81,42 @@ describe('Persona', () => {
     expect(screen.queryByRole('img', { name: 'Busy' })).toBeNull();
   });
 
-  // data-display#29: presence size mapping.
+  // data-display#29: presence size mapping; data-display-a-tests-5: the size reaches the avatar.
   it.each([
-    ['extra-small', 'size-2.5'],
-    ['small', 'size-2.5'],
-    ['medium', 'size-3'],
-    ['large', 'size-3'],
-    ['extra-large', 'size-3'],
-  ] as Array<[Size, string]>)('a %s persona uses the %s presence badge', (size, sizeClass) => {
-    render(<Persona name="John" size={size} status="away" />);
-    expect(screen.getByRole('img', { name: 'Away' })).toHaveClass(sizeClass);
-  });
+    ['extra-small', 'size-2.5', 'w-6'],
+    ['small', 'size-2.5', 'w-8'],
+    ['medium', 'size-3', 'w-10'],
+    ['large', 'size-3', 'w-12'],
+    ['extra-large', 'size-3', 'w-14'],
+  ] as Array<[Size, string, string]>)(
+    'a %s persona uses the %s presence badge and a %s avatar',
+    (size, sizeClass, avatarWidth) => {
+      render(<Persona name="John" size={size} status="away" />);
+      expect(screen.getByRole('img', { name: 'Away' })).toHaveClass(sizeClass);
+      // The decorative avatar visual around the initials.
+      const avatar = screen.getByText('J').parentElement!;
+      expect(avatar).toHaveAttribute('aria-hidden', 'true');
+      expect(avatar).toHaveClass(avatarWidth, avatarWidth.replace('w-', 'h-'));
+    },
+  );
+
+  // R11: a badge or avatar slot that renders nothing (`badge={count && …}` with count 0, an empty
+  // `.map()` result) is not given: the status badge and the built-in avatar are shown.
+  it.each([
+    ['0', () => 0],
+    ['an empty array', () => []],
+    ['an array of empty items', () => [null, false, '']],
+  ] as Array<[string, () => PersonaProps['badge']]>)(
+    'treats a badge or avatar set to %s as not given',
+    (_kind, makeSlot) => {
+      const { container } = render(
+        <Persona name="John Doe" status="busy" badge={makeSlot()} avatar={makeSlot()} />,
+      );
+      expect(screen.getByRole('img', { name: 'Busy' })).toBeInTheDocument();
+      expect(screen.getByText('JD')).toBeInTheDocument();
+      expect(container).not.toHaveTextContent(/0/);
+    },
+  );
 
   // feedback-navigation#34
   it('positions the badge at the logical end corner (RTL-safe)', () => {

@@ -99,6 +99,38 @@ describe('Avatar', () => {
       expect(root).not.toHaveAttribute('aria-description');
       expect(root).not.toHaveAttribute('aria-details');
     });
+
+    // data-display-a-code-4 / data-display-a-tests-1: a falsy badge (`badge={count && <CounterBadge
+    // … />}` with count 0) is no badge, as in 0.4 and like `icon`, and so is a collection whose
+    // items render nothing: no stray "0" in the corner, and the root props stay on the avatar.
+    describe.each([
+      ['null', () => null],
+      ['false', () => false],
+      ['an empty string', () => ''],
+      ['0', () => 0],
+      ['NaN', () => NaN],
+      ['an empty array', () => []],
+      ['an array of empty items', () => [null, false, '', [undefined]]],
+    ] as Array<[string, () => AvatarProps['badge']]>)('badge set to %s', (_kind, makeBadge) => {
+      it('renders the avatar without a badge wrapper', () => {
+        const ref = React.createRef<HTMLSpanElement>();
+        const { container } = render(
+          <Avatar
+            ref={ref}
+            name="Jane Doe"
+            badge={makeBadge()}
+            className="custom-root"
+            data-testid="avatar"
+          />,
+        );
+        const avatar = screen.getByTestId('avatar');
+        expect(screen.getByRole('img', { name: 'Jane Doe' })).toBe(avatar);
+        expect(container.firstElementChild).toBe(avatar);
+        expect(ref.current).toBe(avatar);
+        expect(avatar).toHaveClass('custom-root');
+        expect(avatar.textContent).toBe('JD');
+      });
+    });
   });
 
   it('renders initials from name', () => {
@@ -457,6 +489,48 @@ describe('Avatar', () => {
       );
       expect(screen.getByRole('img')).toHaveAttribute('src', 'https://example.com/slot.jpg');
     });
+
+    // data-display-a-code-2: an undefined slot alt (an optional `alt: user.photoAlt`, or a wrapper
+    // forwarding `alt={alt}`) is no alt of its own, so the image alt still defaults to `name`.
+    describe.each([
+      ['object', () => ({ src: PHOTO, alt: undefined })],
+      ['element', () => <img src={PHOTO} alt={undefined} />],
+    ] as Array<[string, () => AvatarProps['image']]>)(
+      'an %s image slot whose alt is undefined',
+      (_form, makeImage) => {
+        it('takes the name as its alt', async () => {
+          const { container } = render(
+            <>
+              <span id="team-role">Team lead</span>
+              <Avatar name="Jane Doe" image={makeImage()} aria-describedby="team-role" />
+            </>,
+          );
+          const img = screen.getByRole('img', { name: 'Jane Doe' });
+          expect(img.tagName).toBe('IMG');
+          expect(img).toHaveAttribute('alt', 'Jane Doe');
+          expect(img).toHaveAccessibleDescription('Team lead');
+          expect(container.querySelectorAll('[aria-describedby]')).toHaveLength(1);
+          await expectNoA11yViolations();
+        });
+
+        it('server-renders the name as its alt', () => {
+          const html = renderToString(<Avatar name="Jane Doe" image={makeImage()} />);
+          expect(html).toContain('alt="Jane Doe"');
+        });
+
+        it.each([
+          ['decorative', { decorative: true }],
+          ['named by aria-label', { 'aria-label': 'Jane, team lead' }],
+          ['without a name', { name: undefined }],
+        ] as Array<[string, Partial<AvatarProps>]>)(
+          'takes an empty alt when the avatar is %s',
+          (_case, props) => {
+            const { container } = render(<Avatar name="Jane Doe" image={makeImage()} {...props} />);
+            expect(container.querySelector('img')).toHaveAttribute('alt', '');
+          },
+        );
+      },
+    );
   });
 
   // data-display#4
@@ -473,6 +547,62 @@ describe('Avatar', () => {
       expect(avatar).toHaveTextContent('JD');
       expect(avatar).toHaveClass('bg-primary', 'text-primary-foreground');
     });
+
+    // data-display-a-code-1: an image slot's own alt names the avatar (the avatar has no `name`).
+    // That name survives a load failure: the fallback visual carries it instead of turning
+    // aria-hidden. The alt describes the image, so no initials are made from it.
+    it.each([
+      ['object', () => ({ src: 'https://example.com/expired.png', alt: '  Bob   Smith ' })],
+      ['element', () => <img src="https://example.com/expired.png" alt="Bob Smith" />],
+    ] as Array<[string, () => AvatarProps['image']]>)(
+      'keeps the name given by the alt of an %s image slot when the image fails',
+      async (_form, makeImage) => {
+        const { container } = render(<Avatar image={makeImage()} data-testid="avatar" />);
+        expect(screen.getByRole('img', { name: 'Bob Smith' }).tagName).toBe('IMG');
+        fireEvent.error(container.querySelector('img')!);
+        expect(container.querySelector('img')).toBeNull();
+        const avatar = screen.getByRole('img', { name: 'Bob Smith' });
+        expect(avatar).toBe(screen.getByTestId('avatar'));
+        expect(avatar).toHaveAttribute('aria-label', 'Bob Smith');
+        expect(avatar).not.toHaveAttribute('aria-hidden');
+        expect(container.querySelector('svg[data-wave-icon="person"]')).not.toBeNull();
+        await expectNoA11yViolations();
+      },
+    );
+
+    it.each([
+      [
+        'the name over the slot alt',
+        { name: 'Jane Doe', image: { src: 'bad.png', alt: 'Portrait' } },
+        'Jane Doe',
+      ],
+      [
+        'a consumer role with the slot alt',
+        { role: 'img', image: { src: 'bad.png', alt: 'Bob Smith' } },
+        'Bob Smith',
+      ],
+    ] as Array<[string, AvatarProps, string]>)(
+      'names the fallback with %s when the image fails',
+      (_case, props, name) => {
+        const { container } = render(<Avatar {...props} data-testid="avatar" />);
+        fireEvent.error(container.querySelector('img')!);
+        expect(screen.getByRole('img', { name })).toBe(screen.getByTestId('avatar'));
+      },
+    );
+
+    it.each([
+      ['decorative', { decorative: true, image: { src: 'bad.png', alt: 'Bob Smith' } }],
+      ['named by an empty slot alt', { image: { src: 'bad.png', alt: '' } }],
+      ['named by a blank slot alt', { image: <img src="bad.png" alt="   " /> }],
+    ] as Array<[string, AvatarProps]>)(
+      'keeps a failed image avatar hidden when it is %s',
+      (_case, props) => {
+        const { container } = render(<Avatar {...props} data-testid="avatar" />);
+        fireEvent.error(container.querySelector('img')!);
+        expect(screen.getByTestId('avatar')).toHaveAttribute('aria-hidden', 'true');
+        expect(screen.queryByRole('img')).toBeNull();
+      },
+    );
 
     it('falls back to the icon when an unnamed image fails', () => {
       const { container } = render(

@@ -35,18 +35,23 @@ export interface AvatarProps extends React.HTMLAttributes<HTMLSpanElement> {
   /**
    * Custom image. Accepts a URL string (treated like `src`), an element (rendered as the image
    * itself, e.g. `<img>` or a framework image component) or an object of `<img>` attributes
-   * (`{ src, alt, … }`). Takes precedence over `src`; its `alt` defaults to `name`. When its alt
-   * names the avatar, the avatar's `aria-describedby` ids are joined with the slot's own, while the
-   * slot's own `aria-description` and `aria-details` win over the avatar's. After a load failure,
-   * a new image is tried again: another `src` or `srcSet` of any type (an equal inline object is
-   * the same image), or for an element slot another component type or `key`.
+   * (`{ src, alt, … }`). Takes precedence over `src`; its `alt` defaults to `name` (an `alt` that
+   * is `undefined` counts as not given). When its alt names the avatar, the avatar's
+   * `aria-describedby` ids are joined with the slot's own, while the slot's own `aria-description`
+   * and `aria-details` win over the avatar's. When the image fails to load, an avatar without a
+   * `name` keeps the name of the slot's own `alt`. After a load failure, a new image is tried
+   * again: another `src` or `srcSet` of any type (an equal inline object is the same image), or
+   * for an element slot another component type or `key`.
    */
   image?: Slot<'img'>;
   /**
    * Badge shown at the bottom end corner, e.g. `<PresenceBadge status="busy" />`. With a badge
    * the avatar is wrapped in an outer `<span>` that receives `ref`, `className` and the other
    * props; `role`, `aria-label`, `aria-labelledby`, `aria-describedby`, `aria-description` and
-   * `aria-details` stay on the avatar visual, so the badge keeps its own accessible name.
+   * `aria-details` stay on the avatar visual, so the badge keeps its own accessible name. A falsy
+   * value (`null`, `false`, `''`, `0`, `NaN`, e.g. `badge={count && <CounterBadge count={count} />}`)
+   * counts as no badge, as in 0.4, and so does an array, `Set` or generator whose items render
+   * nothing: the avatar then renders without the wrapper.
    */
   badge?: Slot<'span'>;
   /**
@@ -60,7 +65,11 @@ export interface AvatarProps extends React.HTMLAttributes<HTMLSpanElement> {
   ref?: React.Ref<HTMLSpanElement>;
 }
 
-const sizeMap: Record<Size, string> = {
+/**
+ * Width, height and text size classes of the avatar per `size`. Module-only (not in the barrel):
+ * AvatarGroup sizes its overflow button with the same classes, so the two always match.
+ */
+export const avatarSizeClasses: Readonly<Record<Size, string>> = {
   'extra-small': 'w-6 h-6 text-[10px]', // 24px
   small: 'w-8 h-8 text-xs', // 32px
   medium: 'w-10 h-10 text-sm', // 40px
@@ -95,6 +104,7 @@ type DescriptionProps = Pick<
 /** Props the avatar sets on an element or object image slot, over the slot's own. */
 interface SlotOverrides {
   onError: ImageErrorHandler;
+  alt?: string;
   'aria-describedby'?: string;
 }
 
@@ -163,9 +173,10 @@ function sameImageKey(a: ImageKey, b: ImageKey): boolean {
  *   background; a new image is tried again. A server-rendered image that failed before hydration
  *   is detected after mount (settled without a natural size, confirmed by `decode()`).
  * - **Accessible name**: an image uses `name` (whitespace collapsed) as its `alt`, or `''` when the
- *   name is blank. Without an image the avatar is `role="img"` with `aria-label={name}` and the
- *   initials/icon are hidden; without a name (and without `aria-label`/`aria-labelledby`) it is
- *   decorative (`aria-hidden`). A consumer `aria-label`, `aria-labelledby` or `role` (other than
+ *   name is blank. Without an image (none given, or it failed to load) the avatar is `role="img"`
+ *   with `aria-label={name}` (without a name: the image slot's own `alt`) and the initials/icon
+ *   are hidden; without either (and without `aria-label`/`aria-labelledby`) it is decorative
+ *   (`aria-hidden`). A consumer `aria-label`, `aria-labelledby` or `role` (other than
  *   `presentation`/`none`) puts the name on the avatar visual, and an image inside it gets
  *   `alt=""`. `decorative` hides it in every mode. `aria-describedby`, `aria-description` and
  *   `aria-details` go to the element that carries the name: the `<img>` when a non-blank `alt`
@@ -252,11 +263,12 @@ export const Avatar = ({
   const imageAlt = decorative || hasConsumerName || roleCarriesName ? '' : (normalisedName ?? '');
   const handleError: ImageErrorHandler = () => setFailed(true);
 
-  // The alt text the image renders with: an element or object slot's own `alt` wins over ours.
-  const renderedAlt: unknown =
-    slotProps !== undefined && typeof imageSlot !== 'string' && 'alt' in slotProps
-      ? slotProps.alt
-      : imageAlt;
+  // The alt text the image renders with: an element or object slot's own `alt` wins over ours. An
+  // `alt` that is `undefined` (an optional `alt: user.photoAlt`, a wrapper forwarding `alt={alt}`)
+  // or `null` is not given, so ours applies (the slot's own value would otherwise override it).
+  const ownAlt = slotProps?.alt;
+  const hasOwnAlt = ownAlt !== undefined && ownAlt !== null;
+  const renderedAlt: unknown = hasOwnAlt ? ownAlt : imageAlt;
 
   // The description goes to the element that carries the name: the image itself when a non-blank
   // `alt` names it (the visual span then has no role, or a presentational one), otherwise the
@@ -288,15 +300,17 @@ export const Avatar = ({
         />
       );
     } else if (imageSlot !== undefined) {
-      // The slot's own props win over renderSlot's defaults, so the composed `onError` and the
-      // joined `aria-describedby` (the avatar's ids, then the slot's) are set on the slot itself.
-      // A slot's own `aria-description` and `aria-details` win over the avatar's.
+      // The slot's own props win over renderSlot's defaults, so the composed `onError`, the
+      // default `alt` (when the slot gives none) and the joined `aria-describedby` (the avatar's
+      // ids, then the slot's) are set on the slot itself. A slot's own `aria-description` and
+      // `aria-details` win over the avatar's.
       const overrides: SlotOverrides = {
         onError: composeEventHandlers(
           slotProps?.onError as ImageErrorHandler | undefined,
           handleError,
         ),
       };
+      if (!hasOwnAlt) overrides.alt = imageAlt;
       if (imageIsNamed) {
         const ownIds = slotProps?.['aria-describedby'];
         overrides['aria-describedby'] = joinIds(
@@ -353,14 +367,17 @@ export const Avatar = ({
 
   // Accessible name of the avatar visual (data-display#19, #27). With a consumer role and an
   // image it is the name the image would carry: an element or object slot's own alt, else `name`.
+  // Without an image (none given, or it failed to load) it is `name`, else the slot's own alt: an
+  // avatar named only by its image alt keeps that name when the image fails.
   const imageName =
     imageNode !== null && roleCarriesName && typeof renderedAlt === 'string'
       ? normaliseName(renderedAlt)
       : undefined;
+  const slotAltName = typeof ownAlt === 'string' ? normaliseName(ownAlt) : undefined;
   const label =
     ariaLabel ??
     (imageNode === null
-      ? normalisedName
+      ? (normalisedName ?? slotAltName)
       : roleCarriesName
         ? (imageName ?? normalisedName)
         : undefined);
@@ -380,12 +397,17 @@ export const Avatar = ({
     a11yProps = { 'aria-hidden': true, ...visualDescription };
   }
 
-  const badgeNode = renderSlot(badge, 'span', 'absolute bottom-0 end-0 inline-flex');
+  // A falsy or empty badge (`badge={count && <CounterBadge … />}` with count 0) is no badge, as in
+  // 0.4 and like `icon`: no stray "0" in the corner, and no wrapper taking the root props.
+  const badgeNode =
+    badge && slotRendersContent(badge)
+      ? renderSlot(badge, 'span', 'absolute bottom-0 end-0 inline-flex')
+      : null;
   const hasBadge = badgeNode !== null;
 
   const visualClassName = cn(
     'inline-flex items-center justify-center rounded-full overflow-hidden shrink-0 font-bold',
-    sizeMap[size],
+    avatarSizeClasses[size],
     colorClass,
   );
 

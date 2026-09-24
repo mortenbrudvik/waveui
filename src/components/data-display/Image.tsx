@@ -3,6 +3,18 @@ import { cn } from '../../lib/cn';
 import { warnOnce } from '../../lib/dev';
 import type { Shape } from '../../lib/types';
 
+/**
+ * How an image fits its box (the `width`/`height` attributes, or a size set with `className`):
+ *
+ * - `'default'`: the image fills the box. Its height follows its width, so the aspect ratio is
+ *   kept (the attributes only give the ratio before the image loads); a height set with
+ *   `className` fixes the box, and the image then stretches to it.
+ * - `'none'`: not scaled; the image's top-left corner stays in view and the rest is cropped.
+ * - `'center'`: not scaled; the middle of the image stays in view and the edges are cropped.
+ * - `'contain'`: scaled to fit inside the box, keeping its aspect ratio (the box may show empty
+ *   bands).
+ * - `'cover'`: scaled to fill the box, keeping its aspect ratio (the edges are cropped).
+ */
 export type ImageFit = 'none' | 'center' | 'contain' | 'cover' | 'default';
 /** Shape of the image corners (the shared {@link Shape} vocabulary). */
 export type ImageShape = Shape;
@@ -15,7 +27,10 @@ export interface ImageProps extends React.ImgHTMLAttributes<HTMLImageElement> {
    * warning; use {@link StrictImageProps} to require it at compile time (required in 1.0).
    */
   alt?: string;
-  /** How the image fits within its container.
+  /**
+   * How the image fits its box: `'default'` (fills it, keeping the aspect ratio through an
+   * automatic height), `'none'` (not scaled, top-left corner in view), `'center'` (not scaled,
+   * middle in view), `'contain'` or `'cover'`. See {@link ImageFit}.
    * @default 'default'
    */
   fit?: ImageFit;
@@ -27,7 +42,10 @@ export interface ImageProps extends React.ImgHTMLAttributes<HTMLImageElement> {
    * @default false
    */
   shadow?: boolean;
-  /** Whether the image is displayed as a block element filling its container width.
+  /**
+   * Whether the image is displayed as a block element filling the width of its parent. Otherwise
+   * it is inline and never wider than its parent. With the default `fit` the height follows the
+   * width (the aspect ratio is kept); with another `fit` the box keeps its `height`.
    * @default false
    */
   block?: boolean;
@@ -52,7 +70,8 @@ export interface StrictImageProps extends Omit<ImageProps, 'alt'> {
 }
 
 const fitMap: Record<ImageFit, string> = {
-  none: 'object-none',
+  // wave-allow-physical: the anchor is the image's own corner; image pixels never mirror in RTL.
+  none: 'object-none object-left-top',
   center: 'object-none object-center',
   contain: 'object-contain',
   cover: 'object-cover',
@@ -102,7 +121,10 @@ export const Image = ({
       className={cn(
         fitMap[fit],
         shapeMap[shape],
-        block ? 'block w-full' : 'inline-block',
+        // Set here, not left to Preflight (C-NATIVE). The default fit fills the box, so an
+        // automatic height keeps the aspect ratio; the other fits fit the image into the box.
+        block ? 'block w-full' : 'inline-block max-w-full',
+        fit === 'default' && 'h-auto',
         shadow && 'shadow-4',
         bordered && 'border border-border',
         className,

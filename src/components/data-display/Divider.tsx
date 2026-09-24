@@ -1,6 +1,7 @@
 import * as React from 'react';
 import { cn } from '../../lib/cn';
 import { joinIds } from '../../lib/aria';
+import { renderSlot, slotRendersContent } from '../../lib/slot';
 import { useId } from '../../hooks/useId';
 import type { Orientation } from '../../lib/types';
 import type { PolymorphicComponent, PolymorphicProps } from '../../lib/polymorphic';
@@ -33,20 +34,15 @@ type DividerImplProps = DividerOwnProps &
     as?: React.ElementType;
   };
 
-/** Whether React renders anything for `children` (`0` counts as a label). */
-function hasContent(children: React.ReactNode): boolean {
-  return (
-    children !== undefined && children !== null && typeof children !== 'boolean' && children !== ''
-  );
-}
-
 const labelClassName = 'shrink-0 text-caption-1 text-muted-foreground';
 
 /**
  * A line that separates content, horizontally or vertically, optionally with a label in the middle.
  *
  * - A plain horizontal divider renders an `<hr>`; a vertical or labelled divider renders a
- *   `<div role="separator">` (`as` replaces the element in every case).
+ *   `<div role="separator">` (`as` replaces the element in every case). `children` that render
+ *   nothing (`''`, or an array, `Set` or generator of only empty items, such as an empty `.map()`
+ *   result) are no label; `0` is one.
  * - A labelled divider is **one** separator named by its label (`aria-labelledby`); the two line
  *   segments around the label are presentational (`aria-hidden`). A consumer `aria-label` names it
  *   instead, and a consumer `aria-labelledby` is joined with the label.
@@ -70,7 +66,9 @@ export const Divider: PolymorphicComponent<'hr', DividerOwnProps> = (props) => {
   const labelId = useId('divider-label');
   const vertical = orientation === 'vertical';
 
-  if (hasContent(children)) {
+  // The library's "renders nothing" rule: `0` is a label, while `''` or an array, Set or generator
+  // of only empty items (an empty `.map()` result) is none.
+  if (slotRendersContent(children)) {
     const Wrapper: React.ElementType = as ?? 'div';
     // A consumer aria-label names the separator; aria-labelledby would take precedence over it.
     const labelledBy = rest['aria-label'] ? ariaLabelledBy : joinIds(ariaLabelledBy, labelId);
@@ -92,9 +90,9 @@ export const Divider: PolymorphicComponent<'hr', DividerOwnProps> = (props) => {
         aria-labelledby={labelledBy}
       >
         <div aria-hidden="true" className={lineClassName} />
-        <span id={labelId} className={labelClassName}>
-          {children}
-        </span>
+        {/* Rendered as a slot: a generator checked above was read once, and renderSlot renders
+            the items read then. */}
+        {renderSlot(children, 'span', labelClassName, { id: labelId })}
         <div aria-hidden="true" className={lineClassName} />
       </Wrapper>
     );

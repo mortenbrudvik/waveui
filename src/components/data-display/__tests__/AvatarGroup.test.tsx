@@ -2,12 +2,14 @@ import * as React from 'react';
 import { describe, it, expect, vi, expectTypeOf } from 'vitest';
 import { act, fireEvent, render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
+import { renderToString } from 'react-dom/server';
 import { AvatarGroup } from '../AvatarGroup';
 import type { AvatarGroupProps } from '../AvatarGroup';
 import { Avatar } from '../Avatar';
 import { DismissLayerProvider, useDismiss } from '../../../hooks/useDismiss';
 import { useFocusTrap } from '../../../hooks/useFocusTrap';
 import {
+  asClientReference,
   expectNoA11yViolations,
   renderWithProviders,
   testNoImplicitSubmit,
@@ -98,6 +100,21 @@ describe('AvatarGroup', () => {
       }
     });
 
+    // data-display-a-tests-2: the name given by aria-labelledby reaches the group (the warning is
+    // computed from the props, so it stays silent even when the attribute is lost).
+    it('is a group named by aria-labelledby', () => {
+      render(
+        <>
+          <span id="team">Design team</span>
+          <AvatarGroup aria-labelledby="team">{members()}</AvatarGroup>
+        </>,
+      );
+      expect(screen.getByRole('group', { name: 'Design team' })).toHaveAttribute(
+        'aria-labelledby',
+        'team',
+      );
+    });
+
     it.each([
       ['aria-label', { 'aria-label': 'Team' }],
       ['aria-labelledby', { 'aria-labelledby': 'heading' }],
@@ -152,6 +169,101 @@ describe('AvatarGroup', () => {
       expect(screen.queryAllByRole('img')).toHaveLength(0);
       expect(screen.getByRole('button', { name: '4 more' })).toHaveTextContent('+4');
     });
+
+    // data-display-a-tests-6: a computed max is sanitised. A negative value shows only the
+    // overflow button (never `slice(0, -1)`), a fraction is rounded down and NaN is no limit.
+    it.each([
+      ['a negative max', -1, [], '4 more'],
+      ['a fractional max', 2.9, ['Alice', 'Bob'], '2 more'],
+      ['NaN', NaN, NAMES, null],
+    ] as Array<[string, number, string[], string | null]>)(
+      'sanitises %s',
+      (_case, max, shown, overflowName) => {
+        render(
+          <AvatarGroup aria-label="Team" max={max}>
+            {members()}
+          </AvatarGroup>,
+        );
+        const names = screen.queryAllByRole('img').map((img) => img.getAttribute('aria-label'));
+        expect(names).toEqual(shown);
+        if (overflowName === null) {
+          expect(screen.queryByRole('button')).toBeNull();
+        } else {
+          expect(screen.getByRole('button', { name: overflowName })).toBeInTheDocument();
+        }
+      },
+    );
+
+    // x-errors-components-3 (R2): the members of a Fragment count one by one.
+    it('counts, slices and overlaps the members of a Fragment one by one', () => {
+      render(
+        <AvatarGroup aria-label="Team" max={2}>
+          <>
+            <Avatar name="Alice" />
+            <>
+              <Avatar name="Bob" />
+            </>
+          </>
+          <Avatar name="Charlie" />
+          {null}
+          {false}
+        </AvatarGroup>,
+      );
+      const alice = screen.getByRole('img', { name: 'Alice' });
+      const bob = screen.getByRole('img', { name: 'Bob' });
+      expect(screen.queryByRole('img', { name: 'Charlie' })).toBeNull();
+      expect(screen.getByRole('button', { name: '1 more' })).toHaveTextContent('+1');
+      // Each member has its own overlap wrapper.
+      expect(alice.parentElement).not.toBe(bob.parentElement);
+      expect(alice.parentElement).not.toHaveClass('-ms-2');
+      expect(bob.parentElement).toHaveClass('-ms-2', 'ring-2', 'ring-background');
+    });
+  });
+
+  // x-ssr-1 (R1): a member written in a Server Component reaches the client as a lazy reference
+  // (`element.type` is not `Avatar`); it is still listed by its name.
+  describe('members written in a Server Component', () => {
+    const ClientAvatar = asClientReference(Avatar);
+    const group = (Member: typeof Avatar) => (
+      <AvatarGroup aria-label="Team" max={1}>
+        <Member name="Alice" />
+        <Member name="Bob" aria-label="Bob, admin" />
+        <Member name="Carol" />
+        <Member icon={<svg />} />
+      </AvatarGroup>
+    );
+
+    it('renders the same markup as with the plain component', () => {
+      expect(renderToString(group(ClientAvatar))).toBe(renderToString(group(Avatar)));
+    });
+
+    it.each([
+      ['plain', Avatar],
+      ['lazy', ClientAvatar],
+    ] as Array<[string, typeof Avatar]>)(
+      'lists hidden %s members by their names',
+      async (_kind, Member) => {
+        const user = userEvent.setup();
+        const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+        try {
+          render(group(Member));
+          await user.click(screen.getByRole('button', { name: '3 more' }));
+          const items = within(screen.getByRole('dialog')).getAllByRole('listitem');
+          expect(items.map((item) => item.textContent)).toEqual([
+            'Bob, admin',
+            'Carol',
+            'Unnamed member',
+          ]);
+          expect(warn.mock.calls.map(([message]) => String(message))).toEqual([
+            expect.stringMatching(
+              /^\[WaveUI\] AvatarGroup: a hidden member has no accessible name/,
+            ),
+          ]);
+        } finally {
+          warn.mockRestore();
+        }
+      },
+    );
   });
 
   // data-display#26
@@ -559,6 +671,36 @@ describe('AvatarGroup', () => {
         expect(within(popup).queryByText('Unnamed member')).toBeNull();
       },
     );
+
+    // data-display-a-code-1: a member named only by its image alt keeps that name when the image
+    // fails in the popup, so its list item is never empty for assistive technology.
+    it.each([
+      [
+        'an element image alt',
+        <img key="i" src="https://example.com/expired.png" alt="Bob Smith" />,
+      ],
+      ['an object image alt', { src: 'https://example.com/expired.png', alt: 'Bob Smith' }],
+    ] as Array<[string, React.ComponentProps<typeof Avatar>['image']]>)(
+      'keeps a member named by %s named when its image fails',
+      async (_kind, image) => {
+        const user = userEvent.setup();
+        render(
+          <AvatarGroup aria-label="Team" max={1}>
+            <Avatar name="Alice" />
+            <Avatar image={image} />
+          </AvatarGroup>,
+        );
+        await user.click(screen.getByRole('button', { name: '1 more' }));
+        const popup = screen.getByRole('dialog');
+        fireEvent.error(popup.querySelector('img')!);
+        expect(popup.querySelector('img')).toBeNull();
+        const item = within(popup).getByRole('listitem');
+        expect(within(item).getByRole('img', { name: 'Bob Smith' })).not.toHaveAttribute(
+          'aria-hidden',
+        );
+        await expectNoA11yViolations();
+      },
+    );
   });
 
   // data-display#16
@@ -571,10 +713,18 @@ describe('AvatarGroup', () => {
   ] as Array<[Size, string]>)('size %s renders a %s overflow button', (size, width) => {
     render(
       <AvatarGroup aria-label="Team" max={1} size={size}>
-        {members()}
+        {NAMES.map((name) => (
+          <Avatar key={name} name={name} size={size} />
+        ))}
       </AvatarGroup>,
     );
-    expect(screen.getByRole('button')).toHaveClass(width, width.replace('w-', 'h-'));
+    const button = screen.getByRole('button');
+    expect(button).toHaveClass(width, width.replace('w-', 'h-'));
+    // data-display-a-docs-4: the button takes the same-size avatars' own size classes.
+    const sizeClasses = (el: Element) =>
+      Array.from(el.classList).filter((cls) => /^(w-|h-|text-(\[|xs$|sm$|base$|lg$))/.test(cls));
+    expect(sizeClasses(button)).toHaveLength(3);
+    expect(sizeClasses(button)).toEqual(sizeClasses(screen.getByRole('img', { name: 'Alice' })));
   });
 
   // feedback-navigation#34 / button-provider#3

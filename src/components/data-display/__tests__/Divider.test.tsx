@@ -109,6 +109,77 @@ describe('Divider', () => {
     });
   });
 
+  // data-display-a-tests-3: a consumer aria-labelledby names the unlabelled separators too.
+  it.each([
+    ['plain', {}, 'HR'],
+    ['vertical', { orientation: 'vertical' }, 'DIV'],
+  ] as Array<[string, DividerProps, string]>)(
+    'names the %s separator with a consumer aria-labelledby',
+    (_case, props, tagName) => {
+      render(
+        <>
+          <span id="section-title">Options</span>
+          <Divider {...props} aria-labelledby="section-title" />
+        </>,
+      );
+      expect(screen.getByRole('separator', { name: 'Options' }).tagName).toBe(tagName);
+    },
+  );
+
+  // data-display-a-docs-3 / x-types-components-3 (R11): children that render nothing (an empty
+  // `.map()` result) are no label: the divider stays a plain, unnamed separator.
+  describe.each([
+    ['an empty array', () => []],
+    ['an array of empty items', () => [null, false, '', [undefined]]],
+    ['a Set of empty items', () => new Set([null, ''])],
+    [
+      'a generator of empty items',
+      function* emptyItems() {
+        yield null;
+        yield false;
+      },
+    ],
+  ] as Array<[string, () => React.ReactNode]>)('children set to %s', (_kind, makeChildren) => {
+    it('renders the plain horizontal rule', () => {
+      render(<Divider data-testid="divider">{makeChildren()}</Divider>);
+      const divider = screen.getByTestId('divider');
+      expect(divider.tagName).toBe('HR');
+      expect(divider).not.toHaveAttribute('aria-labelledby');
+      expect(screen.getByRole('separator')).toBe(divider);
+    });
+
+    it('renders the plain vertical line', () => {
+      render(
+        <Divider orientation="vertical" data-testid="divider">
+          {makeChildren()}
+        </Divider>,
+      );
+      const divider = screen.getByTestId('divider');
+      expect(divider).toHaveClass('inline-block', 'h-6');
+      expect(divider).toBeEmptyDOMElement();
+      expect(divider).not.toHaveAttribute('aria-labelledby');
+    });
+  });
+
+  it.each([
+    ['0', () => 0, '0'],
+    ['an array with a label', () => [null, 'OR'], 'OR'],
+    [
+      'a generator with a label',
+      function* label() {
+        yield null;
+        yield 'OR';
+      },
+      'OR',
+    ],
+  ] as Array<[string, () => React.ReactNode, string]>)(
+    'renders %s as the label',
+    (_kind, makeChildren, name) => {
+      render(<Divider>{makeChildren()}</Divider>);
+      expect(screen.getByRole('separator', { name })).toHaveTextContent(name);
+    },
+  );
+
   it('uses logical borders, so a vertical divider is RTL-safe (feedback-navigation#34)', () => {
     renderWithProviders(<Divider orientation="vertical" data-testid="divider" />, { dir: 'rtl' });
     const divider = screen.getByTestId('divider');

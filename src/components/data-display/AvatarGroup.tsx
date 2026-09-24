@@ -1,4 +1,5 @@
 import * as React from 'react';
+import { flattenChildren, isElementOfType } from '../../lib/children';
 import { cn } from '../../lib/cn';
 import { warnOnce } from '../../lib/dev';
 import { getTabbableElements } from '../../lib/focus';
@@ -11,14 +12,16 @@ import { useMergedRefs } from '../../hooks/useMergedRefs';
 import { usePopupPosition } from '../../hooks/usePopupPosition';
 import { useRestoreFocus } from '../../hooks/useRestoreFocus';
 import { Portal } from '../portal/Portal';
-import { Avatar } from './Avatar';
+import { Avatar, avatarSizeClasses } from './Avatar';
 import type { AvatarProps } from './Avatar';
 
 /** Properties for the AvatarGroup component. */
 export interface AvatarGroupProps extends React.HTMLAttributes<HTMLDivElement> {
   /**
    * Maximum number of avatars to display. The others are replaced by an overflow button that
-   * lists their names. `0` shows only the overflow button.
+   * lists their names. `0` or a negative value shows only the overflow button, a fraction is
+   * rounded down, and `NaN` shows every member (as without `max`). The members of a Fragment
+   * count one by one.
    */
   max?: number;
   /** Size of the overflow button (match it to the avatars).
@@ -42,14 +45,6 @@ export interface AvatarGroupProps extends React.HTMLAttributes<HTMLDivElement> {
   ref?: React.Ref<HTMLDivElement>;
 }
 
-const overflowSizeMap: Record<Size, string> = {
-  'extra-small': 'w-6 h-6 text-[10px]',
-  small: 'w-8 h-8 text-xs',
-  medium: 'w-10 h-10 text-sm',
-  large: 'w-12 h-12 text-base',
-  'extra-large': 'w-14 h-14 text-lg',
-};
-
 /** Default text listed for a hidden member that would render with no accessible name. */
 const DEFAULT_UNNAMED_MEMBER_LABEL = 'Unnamed member';
 
@@ -66,13 +61,8 @@ function getMemberName(member: React.ReactNode): string | undefined {
   if (typeof member === 'string' || typeof member === 'number') {
     return String(member).trim() || undefined;
   }
-  if (!React.isValidElement(member) || member.type !== Avatar) return undefined;
-  const {
-    decorative,
-    name,
-    'aria-label': label,
-    'aria-labelledby': labelledBy,
-  } = member.props as AvatarProps;
+  if (!isElementOfType<AvatarProps>(member, Avatar)) return undefined;
+  const { decorative, name, 'aria-label': label, 'aria-labelledby': labelledBy } = member.props;
   if (!decorative && nonBlank(labelledBy)) return undefined;
   for (const value of [label, name]) {
     if (nonBlank(value)) return value.trim();
@@ -88,8 +78,8 @@ function getMemberName(member: React.ReactNode): string | undefined {
  */
 function rendersUnnamed(member: React.ReactNode): boolean {
   if (typeof member === 'string' || typeof member === 'number') return true;
-  if (!React.isValidElement(member) || member.type !== Avatar) return false;
-  const { decorative, image, 'aria-labelledby': labelledBy } = member.props as AvatarProps;
+  if (!isElementOfType<AvatarProps>(member, Avatar)) return false;
+  const { decorative, image, 'aria-labelledby': labelledBy } = member.props;
   if (decorative) return true;
   if (nonBlank(labelledBy)) return false;
   const imageProps: unknown = React.isValidElement(image) ? image.props : image;
@@ -133,7 +123,8 @@ export const AvatarGroup = ({
   'aria-labelledby': ariaLabelledBy,
   ...props
 }: AvatarGroupProps) => {
-  const items = React.Children.toArray(children);
+  // Fragments are flattened, so each member counts, overlaps and is listed on its own (R2).
+  const items = flattenChildren(children);
   const limit = max === undefined || Number.isNaN(max) ? Infinity : Math.max(0, Math.floor(max));
   const visible = items.slice(0, limit);
   const hidden = items.slice(visible.length);
@@ -227,7 +218,7 @@ export const AvatarGroup = ({
   };
 
   const hasUnnamedMember =
-    isOpen && hidden.some((child) => getMemberName(child) === undefined && rendersUnnamed(child));
+    isOpen && hidden.some(({ node }) => getMemberName(node) === undefined && rendersUnnamed(node));
   React.useEffect(() => {
     if (hasUnnamedMember) {
       warnOnce(
@@ -246,12 +237,12 @@ export const AvatarGroup = ({
       {...props}
       className={cn('inline-flex items-center', className)}
     >
-      {visible.map((child, i) => (
+      {visible.map(({ key, node }, i) => (
         <span
-          key={React.isValidElement(child) && child.key !== null ? child.key : i}
+          key={key}
           className={cn('inline-flex rounded-full ring-2 ring-background', i > 0 && '-ms-2')}
         >
-          {child}
+          {node}
         </span>
       ))}
       {overflow > 0 && (
@@ -268,7 +259,7 @@ export const AvatarGroup = ({
             'not-disabled:not-aria-disabled:hover:bg-subtle-pressed',
             focusRing,
             visible.length > 0 && '-ms-2',
-            overflowSizeMap[size],
+            avatarSizeClasses[size],
           )}
           onClick={() => setOpen((value) => !value)}
         >
@@ -292,12 +283,9 @@ export const AvatarGroup = ({
             onKeyDown={handleSurfaceKeyDown}
           >
             <ul className="m-0 flex list-none flex-col gap-1 p-0">
-              {hidden.map((child, i) => (
-                <li
-                  key={React.isValidElement(child) && child.key !== null ? child.key : i}
-                  className="px-1 py-0.5"
-                >
-                  {getMemberName(child) ?? (rendersUnnamed(child) ? unnamedMemberLabel : child)}
+              {hidden.map(({ key, node }) => (
+                <li key={key} className="px-1 py-0.5">
+                  {getMemberName(node) ?? (rendersUnnamed(node) ? unnamedMemberLabel : node)}
                 </li>
               ))}
             </ul>

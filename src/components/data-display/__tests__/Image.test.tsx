@@ -33,6 +33,10 @@ describe('Image', () => {
     try {
       render(<Image src="photo.jpg" data-testid="img" />);
       expect(screen.getByTestId('img')).not.toHaveAttribute('alt');
+      // data-display-a-tests-7: the expected warning, and nothing else.
+      expect(warn.mock.calls.map(([message]) => String(message))).toEqual([
+        expect.stringMatching(/^\[WaveUI\] Image: `alt` is missing/),
+      ]);
     } finally {
       warn.mockRestore();
     }
@@ -83,15 +87,21 @@ describe('Image', () => {
     expectTypeOf<ImageProps['shape']>().toEqualTypeOf<Shape | undefined>();
   });
 
-  // data-display#16
+  // data-display#16; data-display-a-code-5 / docs-2: `none` keeps the image's top-left corner in
+  // view, `center` its middle (the initial object-position), so the two values differ.
   it.each([
-    ['none', ['object-none']],
+    ['none', ['object-none', 'object-left-top']],
     ['center', ['object-none', 'object-center']],
     ['contain', ['object-contain']],
     ['cover', ['object-cover']],
   ] as Array<[ImageFit, string[]]>)('fit %s applies %j', (fit, classes) => {
     render(<Image fit={fit} src="test.png" alt="" data-testid="img" />);
-    expect(screen.getByTestId('img')).toHaveClass(...classes);
+    const img = screen.getByTestId('img');
+    expect(img).toHaveClass(...classes);
+    const positions = Array.from(img.classList).filter((cls) =>
+      /^object-(center|left|right|top|bottom)/.test(cls),
+    );
+    expect(positions).toHaveLength(fit === 'none' || fit === 'center' ? 1 : 0);
   });
 
   it('applies no object-fit class for the default fit', () => {
@@ -123,6 +133,42 @@ describe('Image', () => {
     // One class per assertion: a multi-class `.not.toHaveClass` passes when any one is missing.
     expect(screen.getByTestId('img')).not.toHaveClass('shadow-4');
     expect(screen.getByTestId('img')).not.toHaveClass('border');
+  });
+
+  // data-display-a-code-3 (C-NATIVE): Preflight is opt-in, so the image sets the sizing it relies
+  // on. It never grows past its container, and with the default fit (the image fills its box) the
+  // height follows the width, so `width`/`height` attributes keep the aspect ratio instead of
+  // distorting it. Another fit fits the image into the box, whose height is then kept.
+  describe('sizing', () => {
+    it.each([
+      ['inline', {}, ['inline-block', 'max-w-full', 'h-auto']],
+      ['block', { block: true }, ['block', 'w-full', 'h-auto']],
+    ] as Array<[string, Partial<ImageProps>, string[]]>)(
+      'keeps the aspect ratio of a default-fit %s image',
+      (_case, props, classes) => {
+        render(
+          <Image {...props} src="hero.jpg" width={1200} height={400} alt="" data-testid="img" />,
+        );
+        expect(screen.getByTestId('img')).toHaveClass(...classes);
+      },
+    );
+
+    it.each(['none', 'center', 'contain', 'cover'] as ImageFit[])(
+      'keeps the box height for fit %s',
+      (fit) => {
+        render(<Image block fit={fit} src="hero.jpg" height={300} alt="" data-testid="img" />);
+        const img = screen.getByTestId('img');
+        expect(img).toHaveClass('block', 'w-full');
+        expect(img).not.toHaveClass('h-auto');
+      },
+    );
+
+    it('lets a className height replace the automatic height', () => {
+      render(<Image block className="h-48" src="hero.jpg" alt="" data-testid="img" />);
+      const img = screen.getByTestId('img');
+      expect(img).toHaveClass('h-48');
+      expect(img).not.toHaveClass('h-auto');
+    });
   });
 
   // repo-level#32: the story placeholder (literal #rrggbb paint, encoded exactly once) is checked

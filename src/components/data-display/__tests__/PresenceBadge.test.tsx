@@ -3,7 +3,7 @@ import { describe, it, expect, expectTypeOf } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import { PresenceBadge } from '../PresenceBadge';
 import type { PresenceBadgeProps } from '../PresenceBadge';
-import { testSystemProps } from '../../../test-utils';
+import { renderWithProviders, testSystemProps } from '../../../test-utils';
 import type { PresenceStatus, Size } from '../../../lib/types';
 
 const STATUSES: PresenceStatus[] = ['available', 'busy', 'away', 'offline', 'dnd', 'oof'];
@@ -109,9 +109,29 @@ describe('PresenceBadge', () => {
     expect(screen.getByRole('img', { name: 'Busy until 3 PM' })).toBeInTheDocument();
   });
 
-  it('mirrors the out-of-office arrow in right-to-left layouts', () => {
-    render(<PresenceBadge status="oof" />);
-    expect(screen.getByRole('img').querySelector('svg')).toHaveClass('rtl:-scale-x-100');
+  // R4: Wave's `wave-rtl:` follows the element's own direction, so an LTR subtree of an RTL page
+  // keeps the arrow unmirrored (Tailwind's `rtl:` also matches `[dir=rtl] *`). The variant's CSS
+  // is checked by the styles build; jsdom asserts the class.
+  it('mirrors the out-of-office arrow in right-to-left layouts with the wave-rtl variant', () => {
+    renderWithProviders(
+      <div dir="ltr">
+        <PresenceBadge status="oof" />
+      </div>,
+      { dir: 'rtl' },
+    );
+    const svg = screen.getByRole('img', { name: 'Out of office' }).querySelector('svg')!;
+    expect(svg).toHaveClass('wave-rtl:-scale-x-100');
+    expect(svg).not.toHaveClass('rtl:-scale-x-100');
+  });
+
+  it('mirrors no other status glyph', () => {
+    for (const status of STATUSES.filter((s) => s !== 'oof')) {
+      const { unmount } = render(<PresenceBadge status={status} />);
+      expect(screen.getByRole('img').querySelector('svg')!.getAttribute('class')).not.toMatch(
+        /scale-x/,
+      );
+      unmount();
+    }
   });
 
   // button-provider#27 (C-REF): ref is declared in the props interface.

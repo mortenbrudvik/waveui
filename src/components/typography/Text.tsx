@@ -14,8 +14,11 @@ export interface TextOwnProps {
    */
   variant?: TypographyVariant;
   /**
-   * Font weight: `'regular'`, `'semibold'` or `'bold'`. Unset, the weight is inherited.
-   * The numeric 0.4 values `400`, `600` and `700` still work but are deprecated.
+   * Font weight: `'regular'`, `'semibold'` or `'bold'`. Unset, the variant's own weight applies:
+   * semibold for `'subtitle-2'` and every larger variant (`'subtitle-1'`, the titles,
+   * `'large-title'`, `'display'`), inherited for the caption and body variants. Pass `'regular'`
+   * for a title at regular weight. The numeric 0.4 values `400`, `600` and `700` still work but
+   * are deprecated.
    */
   weight?: TextWeight | 400 | 600 | 700;
 }
@@ -73,7 +76,8 @@ const numericWeights: Record<DeprecatedNumericWeight, TextWeight> = {
  * stays applied.
  *
  * @example
- * <Text as="h2" variant="title-2" weight="semibold">Settings</Text>
+ * <Text as="h2" variant="title-2">Settings</Text>
+ * <Text variant="body-1" weight="semibold">Unsaved changes</Text>
  * <Text variant="caption-1" className="text-muted-foreground">Last saved 2 minutes ago</Text>
  */
 export const Text: PolymorphicComponent<'span', TextOwnProps> = (props) => {

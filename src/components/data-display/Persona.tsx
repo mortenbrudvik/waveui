@@ -1,7 +1,7 @@
 import * as React from 'react';
 import { cn } from '../../lib/cn';
 import type { PresenceStatus, Size, Slot } from '../../lib/types';
-import { renderSlot } from '../../lib/slot';
+import { renderSlot, slotRendersContent } from '../../lib/slot';
 import { Avatar } from './Avatar';
 import { PresenceBadge } from './PresenceBadge';
 
@@ -17,14 +17,20 @@ export interface PersonaProps extends React.HTMLAttributes<HTMLDivElement> {
    * @default 'medium'
    */
   size?: Size;
-  /** Presence status shown as a badge on the avatar. Ignored when `badge` is given. */
+  /** Presence status shown as a badge on the avatar. Ignored when a `badge` is given. */
   status?: PresenceStatus;
   /**
    * Slot for a custom avatar element, replacing the built-in one. The name is already visible
-   * next to it, so make a custom avatar decorative (e.g. `<Avatar decorative … />`).
+   * next to it, so make a custom avatar decorative (e.g. `<Avatar decorative … />`). A value that
+   * renders nothing (`null`, `false`, `''`, `0`, `NaN`, or an array, `Set` or generator of only
+   * such items) counts as not given.
    */
   avatar?: Slot<'span'>;
-  /** Slot for a custom badge element. Takes precedence over `status`. */
+  /**
+   * Slot for a custom badge element. Takes precedence over `status`. A value that renders nothing
+   * (`null`, `false`, `''`, `0`, `NaN`, e.g. `badge={count && <CounterBadge count={count} />}`,
+   * or an array, `Set` or generator of only such items) counts as not given.
+   */
   badge?: Slot<'span'>;
   /** Ref to the root `<div>`. */
   ref?: React.Ref<HTMLDivElement>;
@@ -56,16 +62,19 @@ export const Persona = ({
   ref,
   ...props
 }: PersonaProps) => {
-  const badgeNode = badge ? (
-    renderSlot(badge, 'span')
-  ) : status ? (
-    <PresenceBadge status={status} size={derivePresenceSize(size)} />
-  ) : null;
+  // A slot that renders nothing (`badge={count && …}` with count 0, an empty `.map()` result) is
+  // not given (R11), so the status badge and the built-in avatar apply.
+  const badgeNode =
+    badge && slotRendersContent(badge) ? (
+      renderSlot(badge, 'span')
+    ) : status ? (
+      <PresenceBadge status={status} size={derivePresenceSize(size)} />
+    ) : null;
 
   return (
     <div ref={ref} className={cn('inline-flex items-center gap-3', className)} {...props}>
       <div className="relative inline-flex shrink-0">
-        {avatar ? (
+        {avatar && slotRendersContent(avatar) ? (
           renderSlot(avatar, 'span')
         ) : (
           <Avatar src={src} name={name} size={size} decorative />
