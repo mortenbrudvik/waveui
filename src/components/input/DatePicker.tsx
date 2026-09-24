@@ -1,502 +1,786 @@
 import * as React from 'react';
 import { cn } from '../../lib/cn';
+import { focusableDisabledProps, joinIds, preventIfDisabled } from '../../lib/aria';
+import { composeEventHandlers } from '../../lib/composeEventHandlers';
+import { warnDeprecated, warnOnce } from '../../lib/dev';
+import { getArrowIntent, getDirection } from '../../lib/direction';
+import { FOCUSABLE_SELECTOR } from '../../lib/focus';
+import { CalendarIcon, ChevronLeftIcon, ChevronRightIcon, DismissIcon } from '../../lib/icons';
+import { disabledStyles, focusRing, forcedColors, inputBase, inputFocus } from '../../lib/styles';
 import { useControllable } from '../../hooks/useControllable';
+import { useDismiss } from '../../hooks/useDismiss';
+import { useFieldContext, useFieldControl } from '../../hooks/useFieldControl';
+import { useFocusTrap } from '../../hooks/useFocusTrap';
+import { useFormReset } from '../../hooks/useFormReset';
 import { useId } from '../../hooks/useId';
+import { useMergedRefs } from '../../hooks/useMergedRefs';
+import { usePopupPosition } from '../../hooks/usePopupPosition';
+import { useRestoreFocus } from '../../hooks/useRestoreFocus';
+import { HiddenInput } from '../internal/HiddenInput';
+import { Portal } from '../portal/Portal';
+import {
+  addDays,
+  addMonths,
+  clampDate,
+  formatDate as formatLocaleDate,
+  formatDayLabel,
+  formatDayNumber,
+  formatISODate,
+  formatMonthYear,
+  getCalendarDays,
+  getLocaleDateFormat,
+  getWeekdayNames,
+  isDateInRange,
+  isSameDay,
+  isSameMonth,
+  parseDate as parseLocaleDate,
+  startOfDay,
+  startOfMonth,
+} from './dateUtils';
 
-/* ------------------------------------------------------------------ */
-/*  Internal calendar helpers                                          */
-/* ------------------------------------------------------------------ */
-
-function getCalendarDays(year: number, month: number, firstDayOfWeek: number): Date[] {
-  const firstOfMonth = new Date(year, month, 1);
-  const startDay = firstOfMonth.getDay();
-  const offset = (startDay - firstDayOfWeek + 7) % 7;
-  const days: Date[] = [];
-
-  // Fill 6 rows x 7 columns = 42 cells
-  for (let i = -offset; i < 42 - offset; i++) {
-    days.push(new Date(year, month, 1 + i));
-  }
-  return days;
-}
-
-function isSameDay(a: Date, b: Date): boolean {
-  return (
-    a.getFullYear() === b.getFullYear() &&
-    a.getMonth() === b.getMonth() &&
-    a.getDate() === b.getDate()
-  );
-}
-
-function isSameMonth(a: Date, b: Date): boolean {
-  return a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth();
-}
-
-function isDateDisabled(
-  date: Date,
-  minDate?: Date,
-  maxDate?: Date,
-  disabledDates?: (d: Date) => boolean,
-): boolean {
-  if (minDate && date < new Date(minDate.getFullYear(), minDate.getMonth(), minDate.getDate())) {
-    return true;
-  }
-  if (maxDate && date > new Date(maxDate.getFullYear(), maxDate.getMonth(), maxDate.getDate())) {
-    return true;
-  }
-  if (disabledDates?.(date)) {
-    return true;
-  }
-  return false;
-}
-
-const MONTH_NAMES = [
-  'January',
-  'February',
-  'March',
-  'April',
-  'May',
-  'June',
-  'July',
-  'August',
-  'September',
-  'October',
-  'November',
-  'December',
-];
-
-const DAY_LABELS = ['Su', 'Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa'];
-
-function defaultFormatDate(date: Date): string {
-  return date.toLocaleDateString();
-}
-
-function defaultParseDate(str: string): Date | null {
-  if (!str.trim()) return null;
-  const d = new Date(str);
-  return isNaN(d.getTime()) ? null : d;
-}
-
-/* ------------------------------------------------------------------ */
-/*  DatePicker                                                         */
-/* ------------------------------------------------------------------ */
+/** Why typed text was not accepted (see {@link DatePickerProps.onInvalidInput}). */
+export type DatePickerInvalidReason = 'unparseable' | 'out-of-range' | 'disabled';
 
 /** Properties for the DatePicker component. */
 export interface DatePickerProps extends Omit<
   React.HTMLAttributes<HTMLDivElement>,
-  'onChange' | 'defaultValue'
+  'onChange' | 'defaultValue' | 'placeholder'
 > {
-  /** Controlled selected date. */
+  /** Controlled selected date (`null` for none). Emitted dates are always local midnight. */
   value?: Date | null;
-  /** Initial date for uncontrolled usage.
+  /**
+   * Initial date for uncontrolled usage.
    * @default null
    */
   defaultValue?: Date | null;
-  /** Callback fired when the selected date changes. */
+  /** Called with the new date (local midnight) or `null` whenever the selected day changes. */
+  onValueChange?: (date: Date | null) => void;
+  /**
+   * @deprecated Use `onValueChange`. Still called with the new date (warns once in development).
+   */
   onChange?: (date: Date | null) => void;
-  /** Custom function to format a Date into display text. */
+  /**
+   * Formats the selected date for the input. Supply `parseDate` as its inverse: without it, typed
+   * text is parsed with the default parser for `locale` (development warning).
+   * @default Intl.DateTimeFormat(locale, { year: 'numeric', month: '2-digit', day: '2-digit' })
+   */
   formatDate?: (date: Date) => string;
-  /** Custom function to parse user input text into a Date. */
-  parseDate?: (str: string) => Date | null;
-  /** Earliest selectable date. */
+  /**
+   * Parses typed text into a date (`null` when it is not one); the result is normalized to local
+   * midnight. The default is the exact inverse of the default format for `locale` and also
+   * accepts ISO `yyyy-mm-dd`.
+   */
+  parseDate?: (text: string) => Date | null;
+  /**
+   * BCP 47 locale of the default format/parse, the month and weekday names and the day labels
+   * (runtime default when omitted). Pass it explicitly when rendering on the server, so the server
+   * and the browser format the same text.
+   */
+  locale?: string;
+  /** Earliest selectable day (the whole day is included). */
   minDate?: Date;
-  /** Latest selectable date. */
+  /** Latest selectable day (the whole day is included). */
   maxDate?: Date;
-  /** Function returning true for dates that should be disabled. */
+  /** Returns `true` for days that cannot be selected (called with local-midnight dates). */
   disabledDates?: (date: Date) => boolean;
-  /** Placeholder text shown when no date is selected.
+  /**
+   * Placeholder text shown when no date is selected.
    * @default 'Select a date'
    */
   placeholder?: string;
-  /** Whether the date picker is disabled and non-interactive.
+  /**
+   * Whether the date picker is disabled and non-interactive (the calendar is not shown).
    * @default false
    */
   disabled?: boolean;
-  /** Whether to show a clear button when a date is selected.
+  /** Makes the input read-only: the calendar does not open and the value cannot change. */
+  readOnly?: boolean;
+  /**
+   * Whether to show a clear button when a date is selected (not shown while `readOnly`).
    * @default false
    */
   clearable?: boolean;
-  /** First day of the week (0 = Sunday, 1 = Monday, etc.).
+  /**
+   * First day of the week (0 = Sunday, 1 = Monday, etc.).
    * @default 0
    */
   firstDayOfWeek?: 0 | 1 | 2 | 3 | 4 | 5 | 6;
-  /** Controlled open state of the calendar popup. */
+  /** Controlled open state of the calendar. */
   open?: boolean;
-  /** Callback fired when the calendar popup open state changes. */
+  /**
+   * Initial open state for uncontrolled usage.
+   * @default false
+   */
+  defaultOpen?: boolean;
+  /** Called when the calendar opens or closes (only when the state changes). */
   onOpenChange?: (open: boolean) => void;
+  /**
+   * Called when typed text is not accepted on Enter, Alt+ArrowDown or blur (once per edit): it
+   * cannot be parsed (`'unparseable'`), lies outside `minDate`/`maxDate` (`'out-of-range'`) or is
+   * excluded by `disabledDates` (`'disabled'`). The text stays in the input, which is marked
+   * `aria-invalid` and described by an error message (left to the surrounding `Field` when it
+   * shows an error). Enter reports it again when pressed again.
+   */
+  onInvalidInput?: (text: string, reason: DatePickerInvalidReason) => void;
+  /** Form field name: the date is submitted as ISO `yyyy-mm-dd` (hidden input). */
+  name?: string;
+  /** Id of the `<form>` the value belongs to, when the picker is outside it. */
+  form?: string;
+  /** Blocks form submission while no date is selected; sets `aria-required` on the input. */
+  required?: boolean;
+  /** Native `autocomplete` of the input. @default 'off' */
+  autoComplete?: string;
+  /** Ref to the text input; `ref` stays on the root. */
+  controlRef?: React.Ref<HTMLInputElement>;
+  /** Ref to the root element. */
+  ref?: React.Ref<HTMLDivElement>;
 }
 
-const DatePickerRoot = ({
-  value: controlledValue,
-  defaultValue = null,
-  onChange,
-  formatDate = defaultFormatDate,
-  parseDate = defaultParseDate,
-  minDate,
-  maxDate,
-  disabledDates,
-  placeholder = 'Select a date',
-  disabled = false,
-  clearable = false,
-  firstDayOfWeek = 0,
-  open: controlledOpen,
-  onOpenChange,
-  className,
-  ref,
-  ...rest
-}: DatePickerProps & { ref?: React.Ref<HTMLDivElement> }) => {
-    const [selectedDate, setSelectedDate] = useControllable<Date | null>(
-      controlledValue,
-      defaultValue,
-      onChange,
-    );
-    const [openState, setOpenState] = React.useState(false);
-    const open = controlledOpen !== undefined ? controlledOpen : openState;
-    const setOpen = React.useCallback(
-      (val: boolean) => {
-        if (controlledOpen === undefined) {
-          setOpenState(val);
-        }
-        onOpenChange?.(val);
-      },
-      [controlledOpen, onOpenChange],
-    );
+const ICON_BUTTON_CLASSES =
+  'absolute flex h-6 w-6 items-center justify-center rounded text-muted-foreground not-disabled:not-aria-disabled:hover:bg-subtle-hover not-disabled:not-aria-disabled:hover:text-foreground';
 
-    const [inputText, setInputText] = React.useState('');
-    const [viewMonth, setViewMonth] = React.useState(() => {
-      const d = selectedDate ?? new Date();
-      return new Date(d.getFullYear(), d.getMonth(), 1);
-    });
-    const [focusedDay, setFocusedDay] = React.useState<Date | null>(null);
+const NAV_BUTTON_CLASSES =
+  'flex h-8 w-8 items-center justify-center rounded text-foreground not-disabled:not-aria-disabled:hover:bg-subtle-hover';
 
-    const gridId = useId('datepicker-grid');
-    const inputRef = React.useRef<HTMLInputElement>(null);
-    const gridRef = React.useRef<HTMLTableElement>(null);
-    const blurTimeoutRef = React.useRef<ReturnType<typeof setTimeout>>(undefined);
+const DAY_CLASSES =
+  'flex h-8 w-8 items-center justify-center rounded text-caption-1 text-foreground not-disabled:not-aria-disabled:hover:bg-subtle-hover data-[outside]:text-muted-foreground data-[today]:border data-[today]:border-primary data-[today]:font-semibold data-[selected]:bg-primary data-[selected]:font-semibold data-[selected]:text-primary-foreground not-disabled:not-aria-disabled:data-[selected]:hover:bg-primary-hover aria-disabled:cursor-not-allowed aria-disabled:line-through aria-disabled:opacity-50';
 
-    const today = new Date();
+/** The 42 grid days as 6 weeks. */
+function toWeeks(days: Date[]): Date[][] {
+  const weeks: Date[][] = [];
+  for (let i = 0; i < days.length; i += 7) weeks.push(days.slice(i, i + 7));
+  return weeks;
+}
 
-    // Clean up blur timeout on unmount
-    React.useEffect(
-      () => () => {
-        if (blurTimeoutRef.current) clearTimeout(blurTimeoutRef.current);
-      },
-      [],
-    );
+/**
+ * A date input with a calendar dialog (APG date picker dialog).
+ *
+ * - **Typing**: the input accepts the default display format of `locale` (`Intl` numeric
+ *   year/month/day, e.g. `03/04/2025` for `en-GB`, `04/03/2025` for `en-US`) and ISO
+ *   `yyyy-mm-dd`. Text is committed on Enter, on Alt+ArrowDown (before the calendar opens) or when
+ *   the field loses focus — only when it was edited, and only when it names a different day. Text
+ *   that is not an available date is kept, the input is marked invalid and an error message
+ *   describes it (`onInvalidInput`, reported once per edit).
+ * - **Calendar**: the toggle (`aria-haspopup="dialog"`) or Alt+ArrowDown in the input opens a
+ *   modal dialog labelled by the month heading. Focus moves to the selected day (else today, else
+ *   the first available day of the month) and Tab stays inside. Arrow keys move by day/week
+ *   (mirrored in RTL), PageUp/PageDown by month, Shift+PageUp/PageDown by year (the day is clamped
+ *   to the month), Home/End to the start/end of the week, Enter/Space select. Escape closes and
+ *   returns focus to where the calendar was opened from (the toggle, or the input after
+ *   Alt+ArrowDown); a press outside closes it too. Unavailable days stay focusable
+ *   (`aria-disabled`); a day focused by pointer becomes the starting point of the arrow keys.
+ * - The calendar closes when the picker becomes disabled or read-only (uncontrolled `open`: it
+ *   stays closed when the picker is enabled again).
+ * - `clearable` shows a clear button while a date is selected (not while read-only).
+ * - Every emitted date is local midnight. The calendar opens on the month of the selected date or
+ *   today, clamped into `minDate`/`maxDate`.
+ * - Labelling props (`id`, `aria-*`), focus/key handlers and native input attributes go to the
+ *   input (`controlRef`); `ref`, `className`, `style` and other props stay on the root. Inside a
+ *   `Field`, the input is labelled and described by it.
+ * - `name`/`required` add a hidden input for native forms (ISO `yyyy-mm-dd`); the value resets
+ *   with its form.
+ * - Pass `locale` explicitly when rendering on the server (see `locale`).
+ */
+export const DatePicker = (props: DatePickerProps) => {
+  const {
+    value: valueProp,
+    defaultValue,
+    onValueChange,
+    onChange,
+    formatDate: formatDateProp,
+    parseDate: parseDateProp,
+    locale,
+    minDate,
+    maxDate,
+    disabledDates,
+    placeholder = 'Select a date',
+    disabled = false,
+    readOnly,
+    clearable = false,
+    firstDayOfWeek = 0,
+    open: openProp,
+    defaultOpen,
+    onOpenChange,
+    onInvalidInput,
+    name,
+    form,
+    required,
+    autoComplete = 'off',
+    enterKeyHint,
+    inputMode,
+    spellCheck,
+    autoFocus,
+    tabIndex,
+    id,
+    'aria-label': ariaLabel,
+    'aria-labelledby': ariaLabelledBy,
+    'aria-describedby': ariaDescribedBy,
+    'aria-invalid': ariaInvalid,
+    'aria-required': ariaRequired,
+    'aria-errormessage': ariaErrorMessage,
+    'aria-details': ariaDetails,
+    onFocus,
+    onBlur,
+    onKeyDown,
+    onKeyUp,
+    controlRef,
+    className,
+    ref,
+    ...rest
+  } = props;
 
-    // Sync input text with selected date when calendar is not open
-    React.useEffect(() => {
-      if (!open) {
-        setInputText(selectedDate ? formatDate(selectedDate) : '');
+  if (onChange !== undefined) warnDeprecated('DatePicker', 'onChange', 'onValueChange');
+
+  const hasCustomFormat = formatDateProp !== undefined;
+  const hasCustomParse = parseDateProp !== undefined;
+  React.useEffect(() => {
+    if (hasCustomFormat && !hasCustomParse) {
+      warnOnce(
+        'DatePicker:formatDate-without-parseDate',
+        'DatePicker: `formatDate` is set without `parseDate`. Typed dates are parsed with the ' +
+          'default parser for `locale` (its numeric format or yyyy-mm-dd), which may not read ' +
+          'your format; pass `parseDate` as the inverse of `formatDate`.',
+      );
+    }
+  }, [hasCustomFormat, hasCustomParse]);
+
+  const [selectedDate, setSelectedDate] = useControllable<Date | null>(
+    valueProp,
+    defaultValue ?? null,
+    (next) => {
+      onValueChange?.(next);
+      onChange?.(next);
+    },
+  );
+  const [openState, setOpen] = useControllable<boolean>(
+    openProp,
+    defaultOpen ?? false,
+    onOpenChange,
+  );
+  const interactive = !disabled && !readOnly;
+  const isOpen = openState && interactive;
+  const openControlled = openProp !== undefined;
+
+  // A calendar hidden because the picker became disabled or read-only is closed for good
+  // (uncontrolled), so enabling the picker again does not bring it back and take focus.
+  // onOpenChange(false) reports it; a controlled `open` stays the parent's.
+  React.useEffect(() => {
+    if (!interactive && openState && !openControlled) setOpen(false);
+  }, [interactive, openState, openControlled, setOpen]);
+
+  const format = (date: Date) =>
+    formatDateProp ? formatDateProp(date) : formatLocaleDate(date, locale);
+  const parse = (text: string) =>
+    parseDateProp ? parseDateProp(text) : parseLocaleDate(text, locale);
+
+  /* ---- draft text and validation ---------------------------------- */
+
+  /** Typed text; `null` shows the formatted selected date (draft model). */
+  const [draft, setDraft] = React.useState<string | null>(null);
+  const [invalid, setInvalid] = React.useState<DatePickerInvalidReason | null>(null);
+
+  const isUnavailable = (date: Date) =>
+    !isDateInRange(date, minDate, maxDate) || !!disabledDates?.(startOfDay(date));
+
+  /** Commits a day (or `null`); nothing is emitted when it is the same day. */
+  const commitDate = (next: Date | null) => {
+    const normalized = next ? startOfDay(next) : null;
+    const unchanged = normalized ? isSameDay(normalized, selectedDate) : selectedDate === null;
+    if (!unchanged) setSelectedDate(normalized);
+    setDraft(null);
+    setInvalid(null);
+  };
+
+  /** Validates and commits the typed text; `false` when it was rejected (the text is kept). */
+  const commitDraft = (text: string): boolean => {
+    if (!text.trim()) {
+      commitDate(null);
+      return true;
+    }
+    const parsed = parse(text);
+    let reason: DatePickerInvalidReason | null = null;
+    if (!parsed || Number.isNaN(parsed.getTime())) reason = 'unparseable';
+    else if (!isDateInRange(parsed, minDate, maxDate)) reason = 'out-of-range';
+    else if (disabledDates?.(startOfDay(parsed))) reason = 'disabled';
+    if (reason || !parsed) {
+      const rejected = reason ?? 'unparseable';
+      setInvalid(rejected);
+      onInvalidInput?.(text, rejected);
+      return false;
+    }
+    commitDate(parsed);
+    return true;
+  };
+
+  /* ---- calendar view and focused day ------------------------------- */
+
+  const today = startOfDay(new Date());
+  const initialView = () => startOfMonth(clampDate(selectedDate ?? today, minDate, maxDate));
+  const [viewMonth, setViewMonth] = React.useState<Date>(initialView);
+  const [focusedDay, setFocusedDay] = React.useState<Date | null>(null);
+
+  /** Opened with Alt+ArrowDown in the input: Escape returns focus there instead of the toggle. */
+  const [openedFromInput, setOpenedFromInput] = React.useState(false);
+
+  // Every opening shows the selected (or current) month again: adjusted during render (C-HOOKS).
+  const [openSeen, setOpenSeen] = React.useState(isOpen);
+  if (openSeen !== isOpen) {
+    setOpenSeen(isOpen);
+    if (isOpen) {
+      setViewMonth(initialView());
+      setFocusedDay(null);
+    }
+  }
+  // A closed calendar forgets where it was opened from. This also drops an Alt+ArrowDown whose
+  // opening a controlled parent declined (it renders in the same update, still closed), so a later
+  // opening by the parent returns focus to the toggle, not the input.
+  if (openedFromInput && !isOpen) setOpenedFromInput(false);
+
+  const weeks = React.useMemo(
+    () => toWeeks(getCalendarDays(viewMonth, firstDayOfWeek)),
+    [viewMonth, firstDayOfWeek],
+  );
+
+  // The focused day is derived: the day moved to while it is shown (a pointer-focused day of the
+  // previous/next month counts too), else the selected day of the month, else today (clamped into
+  // the range), else the first available day of the month.
+  const inView = (date: Date | null | undefined): date is Date =>
+    !!date && isSameMonth(date, viewMonth);
+  const inGrid = (date: Date | null | undefined): date is Date =>
+    !!date && date >= weeks[0][0] && date <= weeks[weeks.length - 1][6];
+  const clampedToday = clampDate(today, minDate, maxDate);
+  const firstInRange = clampDate(viewMonth, minDate, maxDate);
+  const focusTarget = inGrid(focusedDay)
+    ? focusedDay
+    : inView(selectedDate)
+      ? startOfDay(selectedDate)
+      : inView(clampedToday)
+        ? clampedToday
+        : inView(firstInRange)
+          ? firstInRange
+          : viewMonth;
+  const focusIso = formatISODate(focusTarget);
+
+  const moveFocus = (next: Date) => {
+    const target = clampDate(next, minDate, maxDate);
+    setFocusedDay(target);
+    if (!isSameMonth(target, viewMonth)) setViewMonth(startOfMonth(target));
+  };
+
+  const navigateMonth = (delta: number) => {
+    const nextView = addMonths(viewMonth, delta);
+    const moved = clampDate(addMonths(focusTarget, delta), minDate, maxDate);
+    setViewMonth(nextView);
+    // From a day of the previous/next month the moved day may fall outside the new month: the
+    // focused day is then derived again (selected, today or the first day of the month).
+    setFocusedDay(isSameMonth(moved, nextView) ? moved : null);
+  };
+
+  /** Pointer (or assistive technology) focus on a day makes it the roving day; the month stays. */
+  const handleDayFocus = (day: Date) => {
+    if (!isSameDay(day, focusTarget)) setFocusedDay(day);
+  };
+
+  const previousDisabled = !!minDate && addDays(viewMonth, -1) < startOfDay(minDate);
+  const nextDisabled = !!maxDate && addMonths(viewMonth, 1) > startOfDay(maxDate);
+
+  const weekdays = React.useMemo(
+    () => getWeekdayNames(locale, firstDayOfWeek),
+    [locale, firstDayOfWeek],
+  );
+
+  /* ---- elements, popup primitives ---------------------------------- */
+
+  const rootRef = React.useRef<HTMLDivElement | null>(null);
+  const inputRef = React.useRef<HTMLInputElement | null>(null);
+  const toggleRef = React.useRef<HTMLButtonElement | null>(null);
+  const gridRef = React.useRef<HTMLTableElement | null>(null);
+  const surfaceRef = React.useRef<HTMLDivElement | null>(null);
+  /** Where focus goes when the calendar closes (`null`: back to the toggle). */
+  const restoreTargetRef = React.useRef<HTMLElement | null>(null);
+  const [surface, setSurface] = React.useState<HTMLDivElement | null>(null);
+  const rootRefs = useMergedRefs<HTMLDivElement>(ref, rootRef);
+  const inputRefs = useMergedRefs<HTMLInputElement>(controlRef, inputRef);
+
+  const dialogId = useId('datepicker-dialog');
+  const headingId = useId('datepicker-heading');
+  const gridId = useId('datepicker-grid');
+  const errorId = useId('datepicker-error');
+
+  const close = (restoreTo: HTMLElement | null) => {
+    restoreTargetRef.current = restoreTo;
+    setOpen(false);
+  };
+
+  const { layerId } = useDismiss({
+    open: isOpen,
+    onDismiss: (reason, event) => {
+      // An outside press on another control hands focus to it (the trap held it until now);
+      // otherwise focus returns to where the calendar was opened from.
+      const target =
+        reason === 'outside-press' && event.target instanceof Element
+          ? event.target.closest<HTMLElement>(FOCUSABLE_SELECTOR)
+          : null;
+      close(target ?? (openedFromInput ? inputRef.current : null));
+    },
+    refs: [surfaceRef, toggleRef],
+    anchorRef: toggleRef,
+    kind: 'modal',
+  });
+
+  const { setReference, setFloating, floatingProps } = usePopupPosition({
+    open: isOpen,
+    side: 'bottom',
+    align: 'start',
+  });
+  const surfaceRefs = useMergedRefs<HTMLDivElement>(surfaceRef, setSurface, setFloating);
+
+  useFocusTrap(surface, {
+    enabled: isOpen,
+    layerId,
+    initialFocus: () => gridRef.current?.querySelector<HTMLElement>('button[tabindex="0"]') ?? null,
+  });
+
+  useRestoreFocus({
+    enabled: isOpen,
+    container: surface,
+    triggerRef: toggleRef,
+    finalFocusRef: restoreTargetRef,
+    onlyIfFocusInside: true,
+  });
+
+  // A new opening starts without a restore target (the toggle returns focus to itself, Escape to
+  // where the calendar was opened from).
+  React.useLayoutEffect(() => {
+    if (isOpen) restoreTargetRef.current = null;
+  }, [isOpen]);
+
+  // Roving focus: while the grid holds focus, focus follows the focused day.
+  React.useLayoutEffect(() => {
+    const grid = gridRef.current;
+    if (!grid) return;
+    const active = grid.ownerDocument.activeElement;
+    if (!active || !grid.contains(active)) return;
+    const button = grid.querySelector<HTMLElement>(`button[data-date="${focusIso}"]`);
+    if (button && button !== active) button.focus();
+  }, [focusIso]);
+
+  /* ---- forms and Field --------------------------------------------- */
+
+  const field = useFieldContext();
+  const showOwnError = invalid !== null && !field?.hasErrorMessage;
+  const fieldProps = useFieldControl({
+    id,
+    'aria-label': ariaLabel,
+    'aria-labelledby': ariaLabelledBy,
+    'aria-describedby': joinIds(ariaDescribedBy, showOwnError ? errorId : undefined),
+    'aria-invalid': invalid !== null ? true : ariaInvalid,
+    'aria-required': ariaRequired ?? (required || undefined),
+  });
+
+  useFormReset(
+    inputRef,
+    () => {
+      setSelectedDate(defaultValue ?? null);
+      setDraft(null);
+      setInvalid(null);
+    },
+    form,
+  );
+
+  /* ---- handlers ---------------------------------------------------- */
+
+  const handleInputChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+    if (!interactive) return;
+    setDraft(event.target.value);
+    setInvalid(null);
+  };
+
+  const handleInputKeyDown = composeEventHandlers(
+    onKeyDown,
+    (event: React.KeyboardEvent<HTMLDivElement>) => {
+      if (!interactive) return;
+      if (event.key === 'Enter' && draft !== null) {
+        // An edit is committed instead of submitting the form; untouched text lets Enter submit.
+        event.preventDefault();
+        commitDraft(draft);
+      } else if (event.key === 'ArrowDown' && event.altKey && !isOpen) {
+        event.preventDefault();
+        // The edit is committed first, so the calendar opens on the typed month; rejected text is
+        // kept and reported once (the blur that follows does not report it again).
+        if (draft !== null && invalid === null) commitDraft(draft);
+        setOpenedFromInput(true);
+        setOpen(true);
       }
-    }, [open, selectedDate, formatDate]);
+    },
+  );
 
-    // Update viewMonth when selected date changes
-    React.useEffect(() => {
-      if (selectedDate) {
-        setViewMonth(new Date(selectedDate.getFullYear(), selectedDate.getMonth(), 1));
+  const handleInputBlur = composeEventHandlers(onBlur, () => {
+    // Text already rejected (Enter, Alt+ArrowDown) is kept without being reported again.
+    if (draft !== null && invalid === null) commitDraft(draft);
+  });
+
+  const handleToggle = () => {
+    if (!interactive) return;
+    restoreTargetRef.current = null;
+    setOpenedFromInput(false);
+    setOpen(!isOpen);
+  };
+
+  const handleClear = () => {
+    if (!interactive) return;
+    commitDate(null);
+    inputRef.current?.focus();
+  };
+
+  // The clear button keeps focus on the input: its blur would otherwise commit (or reject) the
+  // edited text just before the clear, emitting twice for one click.
+  const handleClearMouseDown = (event: React.MouseEvent<HTMLButtonElement>) => {
+    event.preventDefault();
+  };
+
+  const selectDate = (day: Date) => {
+    if (!interactive || isUnavailable(day)) return;
+    commitDate(day);
+    close(inputRef.current);
+  };
+
+  const handleDialogKeyDown = (event: React.KeyboardEvent<HTMLDivElement>) => {
+    if (event.key !== 'Escape' || event.defaultPrevented || event.nativeEvent.isComposing) return;
+    // Consumed here, so enclosing layers (a Dialog around the picker) ignore it.
+    event.preventDefault();
+    close(openedFromInput ? inputRef.current : null);
+  };
+
+  const handleGridKeyDown = (event: React.KeyboardEvent<HTMLTableElement>) => {
+    if (event.altKey || event.ctrlKey || event.metaKey) return;
+    const weekOffset = (focusTarget.getDay() - firstDayOfWeek + 7) % 7;
+    let next: Date;
+    switch (event.key) {
+      case 'ArrowLeft':
+      case 'ArrowRight': {
+        const intent = getArrowIntent(event.key, {
+          orientation: 'horizontal',
+          dir: getDirection(event.currentTarget),
+        });
+        next = addDays(focusTarget, intent === 'next' ? 1 : -1);
+        break;
       }
-    }, [selectedDate]);
+      case 'ArrowDown':
+        next = addDays(focusTarget, 7);
+        break;
+      case 'ArrowUp':
+        next = addDays(focusTarget, -7);
+        break;
+      case 'PageDown':
+        next = addMonths(focusTarget, event.shiftKey ? 12 : 1);
+        break;
+      case 'PageUp':
+        next = addMonths(focusTarget, event.shiftKey ? -12 : -1);
+        break;
+      case 'Home':
+        next = addDays(focusTarget, -weekOffset);
+        break;
+      case 'End':
+        next = addDays(focusTarget, 6 - weekOffset);
+        break;
+      default:
+        // Enter and Space activate the focused day button natively (click).
+        return;
+    }
+    event.preventDefault();
+    moveFocus(next);
+  };
 
-    const calendarDays = React.useMemo(
-      () => getCalendarDays(viewMonth.getFullYear(), viewMonth.getMonth(), firstDayOfWeek),
-      [viewMonth, firstDayOfWeek],
-    );
+  /* ---- render ------------------------------------------------------ */
 
-    const dayHeaders = React.useMemo(() => {
-      const headers: string[] = [];
-      for (let i = 0; i < 7; i++) {
-        headers.push(DAY_LABELS[(firstDayOfWeek + i) % 7]);
-      }
-      return headers;
-    }, [firstDayOfWeek]);
+  const inputText = draft ?? (selectedDate ? format(selectedDate) : '');
+  // Read-only pickers offer no clear action (the value cannot change).
+  const showClear = clearable && !readOnly && selectedDate !== null;
 
-    const selectDate = React.useCallback(
-      (date: Date) => {
-        if (isDateDisabled(date, minDate, maxDate, disabledDates)) return;
-        setSelectedDate(date);
-        setOpen(false);
-        inputRef.current?.focus();
-      },
-      [setSelectedDate, setOpen, minDate, maxDate, disabledDates],
-    );
+  let errorMessage = '';
+  if (invalid === 'unparseable') {
+    errorMessage = hasCustomParse
+      ? 'Enter a valid date.'
+      : `Enter a date in the format ${getLocaleDateFormat(locale).pattern}.`;
+  } else if (invalid === 'out-of-range') {
+    if (minDate && maxDate) {
+      errorMessage = `Enter a date between ${format(startOfDay(minDate))} and ${format(startOfDay(maxDate))}.`;
+    } else if (minDate) {
+      errorMessage = `Enter a date on or after ${format(startOfDay(minDate))}.`;
+    } else if (maxDate) {
+      errorMessage = `Enter a date on or before ${format(startOfDay(maxDate))}.`;
+    }
+  } else if (invalid === 'disabled') {
+    errorMessage = 'This date is not available.';
+  }
 
-    const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-      setInputText(e.target.value);
-    };
-
-    const handleInputBlur = () => {
-      // Try to parse the typed text
-      const parsed = parseDate(inputText);
-      if (parsed && !isDateDisabled(parsed, minDate, maxDate, disabledDates)) {
-        setSelectedDate(parsed);
-      } else if (!inputText.trim()) {
-        setSelectedDate(null);
-      } else {
-        // Revert to previous value
-        setInputText(selectedDate ? formatDate(selectedDate) : '');
-      }
-      blurTimeoutRef.current = setTimeout(() => setOpen(false), 200);
-    };
-
-    const handleInputKeyDown = (e: React.KeyboardEvent) => {
-      if (e.key === 'Enter') {
-        e.preventDefault();
-        const parsed = parseDate(inputText);
-        if (parsed && !isDateDisabled(parsed, minDate, maxDate, disabledDates)) {
-          selectDate(parsed);
-        }
-      } else if (e.key === 'Escape') {
-        setOpen(false);
-      }
-    };
-
-    const handleToggleCalendar = () => {
-      if (disabled) return;
-      setOpen(!open);
-      if (!open) {
-        const d = selectedDate ?? today;
-        setFocusedDay(d);
-        setViewMonth(new Date(d.getFullYear(), d.getMonth(), 1));
-      }
-    };
-
-    const navigateMonth = (delta: number) => {
-      setViewMonth((prev) => new Date(prev.getFullYear(), prev.getMonth() + delta, 1));
-    };
-
-    const handleGridKeyDown = (e: React.KeyboardEvent) => {
-      if (!focusedDay) return;
-
-      let next: Date | null = null;
-
-      switch (e.key) {
-        case 'ArrowRight':
-          e.preventDefault();
-          next = new Date(
-            focusedDay.getFullYear(),
-            focusedDay.getMonth(),
-            focusedDay.getDate() + 1,
-          );
-          break;
-        case 'ArrowLeft':
-          e.preventDefault();
-          next = new Date(
-            focusedDay.getFullYear(),
-            focusedDay.getMonth(),
-            focusedDay.getDate() - 1,
-          );
-          break;
-        case 'ArrowDown':
-          e.preventDefault();
-          next = new Date(
-            focusedDay.getFullYear(),
-            focusedDay.getMonth(),
-            focusedDay.getDate() + 7,
-          );
-          break;
-        case 'ArrowUp':
-          e.preventDefault();
-          next = new Date(
-            focusedDay.getFullYear(),
-            focusedDay.getMonth(),
-            focusedDay.getDate() - 7,
-          );
-          break;
-        case 'PageDown':
-          e.preventDefault();
-          next = new Date(
-            focusedDay.getFullYear(),
-            focusedDay.getMonth() + 1,
-            focusedDay.getDate(),
-          );
-          break;
-        case 'PageUp':
-          e.preventDefault();
-          next = new Date(
-            focusedDay.getFullYear(),
-            focusedDay.getMonth() - 1,
-            focusedDay.getDate(),
-          );
-          break;
-        case 'Enter':
-          e.preventDefault();
-          selectDate(focusedDay);
-          return;
-        case 'Escape':
-          e.preventDefault();
-          setOpen(false);
-          inputRef.current?.focus();
-          return;
-      }
-
-      if (next) {
-        setFocusedDay(next);
-        if (!isSameMonth(next, viewMonth)) {
-          setViewMonth(new Date(next.getFullYear(), next.getMonth(), 1));
-        }
-      }
-    };
-
-    const handleClear = (e: React.MouseEvent) => {
-      e.stopPropagation();
-      setSelectedDate(null);
-      setInputText('');
-      inputRef.current?.focus();
-    };
-
-    return (
-      <div ref={ref} className={cn('relative inline-flex flex-col', className)} {...rest}>
-        <div className="relative flex items-center">
-          <input
-            ref={inputRef}
-            type="text"
-            value={inputText}
-            onChange={handleInputChange}
-            onBlur={handleInputBlur}
-            onKeyDown={handleInputKeyDown}
-            placeholder={placeholder}
-            disabled={disabled}
-            className={cn(
-              'h-8 w-full rounded border border-input bg-background px-3 pr-16 text-sm',
-              'focus:outline-none focus:border-b-2 focus:border-b-primary',
-              'disabled:opacity-50 disabled:cursor-not-allowed',
-            )}
-          />
-          {clearable && selectedDate && (
-            <button
-              type="button"
-              onClick={handleClear}
-              disabled={disabled}
-              className="absolute right-8 flex h-4 w-4 items-center justify-center text-[#707070] hover:text-foreground"
-              aria-label="Clear date"
-            >
-              <svg
-                xmlns="http://www.w3.org/2000/svg"
-                viewBox="0 0 20 20"
-                fill="currentColor"
-                className="h-4 w-4"
-              >
-                <path d="M6.28 5.22a.75.75 0 00-1.06 1.06L8.94 10l-3.72 3.72a.75.75 0 101.06 1.06L10 11.06l3.72 3.72a.75.75 0 101.06-1.06L11.06 10l3.72-3.72a.75.75 0 00-1.06-1.06L10 8.94 6.28 5.22z" />
-              </svg>
-            </button>
+  return (
+    <div {...rest} ref={rootRefs} className={cn('relative inline-flex flex-col', className)}>
+      <div ref={setReference} className="relative flex items-center">
+        <input
+          ref={inputRefs}
+          type="text"
+          {...fieldProps}
+          aria-errormessage={ariaErrorMessage}
+          aria-details={ariaDetails}
+          value={inputText}
+          onChange={handleInputChange}
+          onFocus={onFocus}
+          onBlur={handleInputBlur}
+          onKeyDown={handleInputKeyDown}
+          onKeyUp={onKeyUp}
+          placeholder={placeholder}
+          disabled={disabled}
+          readOnly={readOnly}
+          autoComplete={autoComplete}
+          enterKeyHint={enterKeyHint}
+          inputMode={inputMode}
+          spellCheck={spellCheck}
+          autoFocus={autoFocus}
+          tabIndex={tabIndex}
+          className={cn(
+            inputBase,
+            'border-b-stroke-accessible',
+            inputFocus,
+            disabledStyles,
+            showClear ? 'pe-14' : 'pe-8',
           )}
+        />
+        {showClear && (
           <button
             type="button"
-            onClick={handleToggleCalendar}
+            aria-label="Clear date"
             disabled={disabled}
-            className="absolute right-2 flex h-4 w-4 items-center justify-center text-[#707070] hover:text-foreground"
-            aria-label="Open calendar"
+            onMouseDown={handleClearMouseDown}
+            onClick={handleClear}
+            className={cn(ICON_BUTTON_CLASSES, 'end-7', focusRing, disabledStyles)}
           >
-            <svg
-              xmlns="http://www.w3.org/2000/svg"
-              viewBox="0 0 20 20"
-              fill="currentColor"
-              className="h-4 w-4"
-            >
-              <path
-                fillRule="evenodd"
-                d="M5.75 2a.75.75 0 01.75.75V4h7V2.75a.75.75 0 011.5 0V4h.25A2.75 2.75 0 0118 6.75v8.5A2.75 2.75 0 0115.25 18H4.75A2.75 2.75 0 012 15.25v-8.5A2.75 2.75 0 014.75 4H5V2.75A.75.75 0 015.75 2zm-1 5.5c-.69 0-1.25.56-1.25 1.25v6.5c0 .69.56 1.25 1.25 1.25h10.5c.69 0 1.25-.56 1.25-1.25v-6.5c0-.69-.56-1.25-1.25-1.25H4.75z"
-                clipRule="evenodd"
-              />
-            </svg>
+            <DismissIcon />
           </button>
-        </div>
-        {open && (
+        )}
+        <button
+          ref={toggleRef}
+          type="button"
+          aria-label="Open calendar"
+          aria-haspopup="dialog"
+          aria-expanded={isOpen}
+          aria-controls={isOpen ? dialogId : undefined}
+          disabled={disabled || readOnly}
+          onClick={handleToggle}
+          className={cn(ICON_BUTTON_CLASSES, 'end-1', focusRing, disabledStyles)}
+        >
+          <CalendarIcon />
+        </button>
+      </div>
+      {showOwnError && (
+        <p id={errorId} role="alert" className="mt-1 text-caption-1 text-error">
+          {errorMessage}
+        </p>
+      )}
+      <HiddenInput
+        name={name}
+        form={form}
+        disabled={disabled}
+        value={selectedDate ? formatISODate(selectedDate) : ''}
+        type="text"
+        required={required || field?.required}
+        onInvalid={() => inputRef.current?.focus()}
+      />
+      {isOpen && (
+        <Portal layerId={layerId}>
           <div
-            className="absolute top-full left-0 z-50 mt-1 rounded border border-border bg-background p-3 shadow-4"
-            onMouseDown={(e) => e.preventDefault()}
+            ref={surfaceRefs}
+            id={dialogId}
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby={headingId}
+            {...floatingProps}
+            data-state="open"
+            onKeyDown={handleDialogKeyDown}
+            className="rounded-md border border-border bg-background p-3 text-foreground shadow-16"
           >
-            {/* Calendar header */}
-            <div className="mb-2 flex items-center justify-between">
+            <div className="mb-2 flex items-center justify-between gap-2">
               <button
                 type="button"
-                onClick={() => navigateMonth(-1)}
-                className="flex h-6 w-6 items-center justify-center rounded hover:bg-[#f5f5f5]"
                 aria-label="Previous month"
+                aria-controls={gridId}
+                {...focusableDisabledProps(previousDisabled)}
+                onClick={preventIfDisabled(previousDisabled, () => navigateMonth(-1))}
+                className={cn(NAV_BUTTON_CLASSES, focusRing, disabledStyles)}
               >
-                <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
-                  <path
-                    d="M7.5 9L4.5 6l3-3"
-                    stroke="currentColor"
-                    strokeWidth="1.5"
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                  />
-                </svg>
+                <ChevronLeftIcon className="rtl:-scale-x-100" />
               </button>
-              <span className="text-sm font-semibold">
-                {MONTH_NAMES[viewMonth.getMonth()]} {viewMonth.getFullYear()}
-              </span>
+              <h2 id={headingId} aria-live="polite" className="text-body-1 font-semibold">
+                {formatMonthYear(viewMonth, locale)}
+              </h2>
               <button
                 type="button"
-                onClick={() => navigateMonth(1)}
-                className="flex h-6 w-6 items-center justify-center rounded hover:bg-[#f5f5f5]"
                 aria-label="Next month"
+                aria-controls={gridId}
+                {...focusableDisabledProps(nextDisabled)}
+                onClick={preventIfDisabled(nextDisabled, () => navigateMonth(1))}
+                className={cn(NAV_BUTTON_CLASSES, focusRing, disabledStyles)}
               >
-                <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
-                  <path
-                    d="M4.5 3l3 3-3 3"
-                    stroke="currentColor"
-                    strokeWidth="1.5"
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                  />
-                </svg>
+                <ChevronRightIcon className="rtl:-scale-x-100" />
               </button>
             </div>
-            {/* Calendar grid */}
             <table
               ref={gridRef}
               id={gridId}
               role="grid"
-              tabIndex={0}
+              aria-labelledby={headingId}
               onKeyDown={handleGridKeyDown}
               className="border-collapse"
-              aria-label="Calendar"
             >
               <thead>
                 <tr>
-                  {dayHeaders.map((d) => (
+                  {weekdays.map((weekday) => (
                     <th
-                      key={d}
-                      className="h-7 w-7 text-center text-xs font-medium text-muted-foreground"
+                      key={weekday.long}
                       scope="col"
+                      abbr={weekday.long}
+                      aria-label={weekday.long}
+                      className="h-8 w-8 text-center text-caption-1 font-normal text-muted-foreground"
                     >
-                      {d}
+                      <span aria-hidden="true">{weekday.short}</span>
+                      <span className="sr-only">{weekday.long}</span>
                     </th>
                   ))}
                 </tr>
               </thead>
               <tbody>
-                {Array.from({ length: 6 }, (_, row) => (
+                {weeks.map((week, row) => (
+                  // Rows and cells are keyed by position, so the focused button survives a
+                  // month change and focus stays in the grid while it moves to the new day.
                   <tr key={row}>
-                    {calendarDays.slice(row * 7, row * 7 + 7).map((day, col) => {
-                      const isCurrentMonth = isSameMonth(day, viewMonth);
-                      const isSelected = selectedDate != null && isSameDay(day, selectedDate);
+                    {week.map((day, column) => {
+                      const iso = formatISODate(day);
+                      const isSelected = isSameDay(day, selectedDate);
                       const isToday = isSameDay(day, today);
-                      const isFocused = focusedDay != null && isSameDay(day, focusedDay);
-                      const isDisabled = isDateDisabled(day, minDate, maxDate, disabledDates);
-
+                      const isFocused = iso === focusIso;
+                      const unavailable = isUnavailable(day);
                       return (
-                        <td key={col} className="p-0">
+                        <td key={column} role="gridcell" aria-selected={isSelected} className="p-0">
                           <button
                             type="button"
-                            tabIndex={-1}
-                            disabled={isDisabled}
+                            tabIndex={isFocused ? 0 : -1}
+                            aria-label={formatDayLabel(day, locale)}
+                            aria-current={isToday ? 'date' : undefined}
+                            {...focusableDisabledProps(unavailable)}
+                            data-date={iso}
+                            data-selected={isSelected ? '' : undefined}
+                            data-today={isToday ? '' : undefined}
+                            data-outside={isSameMonth(day, viewMonth) ? undefined : ''}
+                            onFocus={() => handleDayFocus(day)}
                             onClick={() => selectDate(day)}
                             className={cn(
-                              'h-7 w-7 rounded text-xs',
-                              'hover:bg-[#f5f5f5]',
-                              !isCurrentMonth && 'text-muted-foreground opacity-40',
-                              isToday && !isSelected && 'border border-primary',
-                              isSelected && 'bg-primary text-white hover:bg-primary',
-                              isFocused && !isSelected && 'ring-1 ring-primary',
-                              isDisabled && 'opacity-50 cursor-not-allowed hover:bg-transparent',
+                              DAY_CLASSES,
+                              focusRing,
+                              isSelected && forcedColors.selectedLeaf,
                             )}
-                            aria-label={day.toDateString()}
                           >
-                            {day.getDate()}
+                            {formatDayNumber(day, locale)}
                           </button>
                         </td>
                       );
@@ -506,10 +790,10 @@ const DatePickerRoot = ({
               </tbody>
             </table>
           </div>
-        )}
-      </div>
-    );
+        </Portal>
+      )}
+    </div>
+  );
 };
-DatePickerRoot.displayName = 'DatePicker';
 
-export const DatePicker = DatePickerRoot;
+DatePicker.displayName = 'DatePicker';

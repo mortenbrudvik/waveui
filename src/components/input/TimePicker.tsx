@@ -1,285 +1,595 @@
 import * as React from 'react';
 import { cn } from '../../lib/cn';
+import { joinIds } from '../../lib/aria';
+import { composeEventHandlers } from '../../lib/composeEventHandlers';
+import { isDev, warnDeprecated } from '../../lib/dev';
+import { CheckIcon, DismissIcon } from '../../lib/icons';
+import { disabledStyles, focusRing, forcedColors, inputBase, inputFocus } from '../../lib/styles';
 import { useControllable } from '../../hooks/useControllable';
-import { useId } from '../../hooks/useId';
+import { useDismiss } from '../../hooks/useDismiss';
+import { useFieldContext, useFieldControl } from '../../hooks/useFieldControl';
+import { useFormReset } from '../../hooks/useFormReset';
+import { ListboxContext, useListbox, useListboxOption } from '../../hooks/useListbox';
+import type { ListboxItem } from '../../hooks/useListbox';
+import { useMergedRefs } from '../../hooks/useMergedRefs';
+import { usePopupPosition } from '../../hooks/usePopupPosition';
+import { HiddenInput } from '../internal/HiddenInput';
+import { Portal } from '../portal/Portal';
+import {
+  DEFAULT_TIME_STEP,
+  generateTimeOptions,
+  minutesToTime,
+  minutesToValue,
+  normalizeTimeStep,
+  timeToMinutes,
+} from './dateUtils';
 
 /* ------------------------------------------------------------------ */
-/*  Internal helpers                                                   */
+/*  Option                                                             */
 /* ------------------------------------------------------------------ */
 
-function timeToMinutes(time: string): number {
-  const parts = time.split(':').map(Number);
-  if (parts.length !== 2 || parts.some((p) => Number.isNaN(p))) return NaN;
-  const [h, m] = parts;
-  return (h ?? 0) * 60 + (m ?? 0);
+const OPTION_CLASSES =
+  'flex cursor-pointer items-center gap-2 px-3 py-1.5 text-body-1 text-foreground hover:bg-subtle-hover data-[active]:bg-subtle-hover data-[active]:outline-2 data-[active]:outline-ring data-[active]:-outline-offset-2 data-[selected]:bg-subtle-selected data-[selected]:font-semibold';
+
+interface TimePickerOptionProps {
+  value: string;
+  label: string;
 }
 
-function minutesToTime(minutes: number, format: '12h' | '24h'): string {
-  const h = Math.floor(minutes / 60) % 24;
-  const m = minutes % 60;
-  if (format === '24h') {
-    return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
-  }
-  const period = h >= 12 ? 'PM' : 'AM';
-  const h12 = h === 0 ? 12 : h > 12 ? h - 12 : h;
-  return `${h12}:${String(m).padStart(2, '0')} ${period}`;
-}
-
-function generateTimeOptions(
-  step: number,
-  min: string,
-  max: string,
-  format: '12h' | '24h',
-): Array<{ value: string; label: string }> {
-  const minMinutes = timeToMinutes(min);
-  const maxMinutes = timeToMinutes(max);
-  if (Number.isNaN(minMinutes) || Number.isNaN(maxMinutes)) return [];
-  const options: Array<{ value: string; label: string }> = [];
-  for (let m = minMinutes; m <= maxMinutes; m += step) {
-    const h24 = Math.floor(m / 60) % 24;
-    const mm = m % 60;
-    const value = `${String(h24).padStart(2, '0')}:${String(mm).padStart(2, '0')}`;
-    const label = minutesToTime(m, format);
-    options.push({ value, label });
-  }
-  return options;
-}
+/**
+ * One time option. Memoized: it re-renders only when its own active/selected state changes (read
+ * from the listbox store), so moving the highlight renders two options, not the whole list.
+ */
+const TimePickerOption = React.memo(function TimePickerOption({
+  value,
+  label,
+}: TimePickerOptionProps) {
+  const { selected, optionProps } = useListboxOption<HTMLLIElement>({ value, label });
+  return (
+    <li {...optionProps} className={cn(OPTION_CLASSES, selected && forcedColors.selectedContainer)}>
+      <span className="flex h-4 w-4 shrink-0 items-center justify-center">
+        {selected ? <CheckIcon size={12} /> : null}
+      </span>
+      {label}
+    </li>
+  );
+});
+TimePickerOption.displayName = 'TimePickerOption';
 
 /* ------------------------------------------------------------------ */
 /*  TimePicker                                                         */
 /* ------------------------------------------------------------------ */
 
 /** Properties for the TimePicker component. */
-export interface TimePickerProps extends Omit<React.HTMLAttributes<HTMLDivElement>, 'onChange'> {
-  /** Controlled selected time in 'HH:mm' format. */
+export interface TimePickerProps extends Omit<
+  React.HTMLAttributes<HTMLDivElement>,
+  'onChange' | 'defaultValue' | 'placeholder'
+> {
+  /** Controlled selected time in `HH:mm` (24-hour) format; `''` for no time. */
   value?: string;
-  /** Initial time for uncontrolled usage.
+  /**
+   * Initial time for uncontrolled usage (`HH:mm`).
    * @default ''
    */
   defaultValue?: string;
-  /** Callback fired when the selected time changes. */
-  onChange?: (time: string) => void;
-  /** Time display format.
+  /** Called with the new `HH:mm` value (`''` when cleared) whenever the selected time changes. */
+  onValueChange?: (value: string) => void;
+  /**
+   * @deprecated Use `onValueChange`. Still called with the new value (warns once in development).
+   */
+  onChange?: (value: string) => void;
+  /**
+   * Time display format of the input and the options.
    * @default '12h'
    */
   format?: '12h' | '24h';
-  /** Interval in minutes between available time options.
+  /**
+   * Minutes between options. A non-finite or non-positive value falls back to 30 (development
+   * error); fractions are floored.
    * @default 30
    */
   step?: number;
-  /** Earliest selectable time in 'HH:mm' format.
+  /**
+   * Earliest time (inclusive): `HH:mm`, `HH:mm:ss` or `h:mm AM`.
    * @default '00:00'
    */
   minTime?: string;
-  /** Latest selectable time in 'HH:mm' format.
+  /**
+   * Latest time (inclusive): `HH:mm`, `HH:mm:ss` or `h:mm AM`. Invalid or reversed bounds give no
+   * options (development error, "No times available").
    * @default '23:59'
    */
   maxTime?: string;
-  /** Placeholder text shown when no time is selected.
+  /**
+   * Placeholder text shown when no time is selected.
    * @default 'Select a time'
    */
   placeholder?: string;
-  /** Whether the time picker is disabled and non-interactive.
+  /**
+   * Whether the time picker is disabled and non-interactive.
    * @default false
    */
   disabled?: boolean;
-  /** Whether to show a clear button when a time is selected.
+  /** Makes the input read-only: the list does not open and the value cannot change. */
+  readOnly?: boolean;
+  /**
+   * Whether to show a clear button when a time is selected (not shown while `readOnly`).
    * @default false
    */
   clearable?: boolean;
+  /** Form field name: the `HH:mm` value is submitted under it (hidden input). */
+  name?: string;
+  /** Id of the `<form>` the value belongs to, when the picker is outside it. */
+  form?: string;
+  /** Blocks form submission while no time is selected; sets `aria-required` on the input. */
+  required?: boolean;
+  /** Native `autocomplete` of the input. @default 'off' */
+  autoComplete?: string;
+  /** Native `maxlength` of the input. */
+  maxLength?: number;
+  /** Ref to the text input (the `role="combobox"` element); `ref` stays on the root. */
+  controlRef?: React.Ref<HTMLInputElement>;
+  /** Ref to the root element. */
+  ref?: React.Ref<HTMLDivElement>;
 }
 
-const TimePickerRoot = (
-    {
-      value: controlledValue,
-      defaultValue = '',
-      onChange,
-      format = '12h',
-      step = 30,
-      minTime = '00:00',
-      maxTime = '23:59',
-      placeholder = 'Select a time',
-      disabled = false,
-      clearable = false,
-      className, ref, ...rest }: TimePickerProps & { ref?: React.Ref<HTMLDivElement> }) => {
-    const [selectedValue, setSelectedValue] = useControllable(
-      controlledValue,
-      defaultValue,
-      onChange,
-    );
-    const [open, setOpen] = React.useState(false);
-    const [inputText, setInputText] = React.useState('');
-    const [activeIndex, setActiveIndex] = React.useState(-1);
-    const listboxId = useId('timepicker-listbox');
-    const inputRef = React.useRef<HTMLInputElement>(null);
-    const listRef = React.useRef<HTMLUListElement>(null);
-    const blurTimeoutRef = React.useRef<ReturnType<typeof setTimeout>>(undefined);
+function displayTime(value: string, format: '12h' | '24h'): string {
+  const minutes = timeToMinutes(value);
+  return Number.isNaN(minutes) ? value : minutesToTime(minutes, format);
+}
 
-    React.useEffect(() => {
-      return () => {
-        if (blurTimeoutRef.current) clearTimeout(blurTimeoutRef.current);
-      };
-    }, []);
+/** Whether an option matches the (trimmed, lower-case) typed text: by label or `HH:mm` value. */
+function matchesQuery(item: ListboxItem, text: string): boolean {
+  return item.label.toLowerCase().includes(text) || item.value.includes(text);
+}
 
-    const allOptions = React.useMemo(
-      () => generateTimeOptions(step, minTime, maxTime, format),
-      [step, minTime, maxTime, format],
-    );
+/** Whether an option's label or `HH:mm` value starts with the (trimmed, lower-case) typed text. */
+function startsWithQuery(item: ListboxItem, text: string): boolean {
+  return item.label.toLowerCase().startsWith(text) || item.value.startsWith(text);
+}
 
-    const filteredOptions = React.useMemo(() => {
-      if (!inputText) return allOptions;
-      const lower = inputText.toLowerCase();
-      return allOptions.filter(
-        (opt) => opt.label.toLowerCase().includes(lower) || opt.value.includes(lower),
+/**
+ * A time input with a filterable list of times (APG editable combobox with list autocomplete).
+ *
+ * - Type to filter (by label or `HH:mm` value). A complete typed time (`2:00 PM`, `14:00`) makes
+ *   its own option active — not an earlier one that merely contains the text, such as `12:00 PM`
+ *   — and partial text makes the first option that starts with it active (`2:00 p` -> `2:00 PM`),
+ *   else the first one that contains it; Enter commits the active option. Enter or leaving the
+ *   field also commits a complete typed time that is not in the list (`9:15 AM`, `14:45`) when it
+ *   lies within `minTime`/`maxTime`, and erased text clears the value (as the clear button does);
+ *   Enter never submits the form with edited text. Other typed text is reverted on blur. Escape on
+ *   a closed list reverts any edit, erased text included, to the selected time.
+ * - Click the input, ArrowDown/ArrowUp or type to open; the list opens with every option and the
+ *   selected one (when it is in the list) active and scrolled into view. Without one, no option is
+ *   active until ArrowDown/ArrowUp or typing, so Enter lets the surrounding form submit. Escape,
+ *   Tab, an outside press or focus leaving closes it.
+ * - `clearable` shows a clear button while a time is selected (not while read-only).
+ * - The value is `HH:mm` (24-hour) whatever the display `format`; values off the `step` grid or
+ *   outside the bounds are still displayed in `format`.
+ * - Labelling props (`id`, `aria-*`), focus/key handlers and native input attributes go to the
+ *   input (`controlRef`); `ref`, `className`, `style` and other props stay on the root. Inside a
+ *   `Field`, the input is labelled and described by it.
+ * - `name`/`required` add a hidden input for native forms (`HH:mm`); the value resets with its form.
+ */
+export const TimePicker = (props: TimePickerProps) => {
+  const {
+    value: valueProp,
+    defaultValue,
+    onValueChange,
+    onChange,
+    format = '12h',
+    step = DEFAULT_TIME_STEP,
+    minTime = '00:00',
+    maxTime = '23:59',
+    placeholder = 'Select a time',
+    disabled = false,
+    readOnly,
+    clearable = false,
+    name,
+    form,
+    required,
+    autoComplete = 'off',
+    maxLength,
+    enterKeyHint,
+    inputMode,
+    spellCheck,
+    autoFocus,
+    tabIndex,
+    id,
+    'aria-label': ariaLabel,
+    'aria-labelledby': ariaLabelledBy,
+    'aria-describedby': ariaDescribedBy,
+    'aria-invalid': ariaInvalid,
+    'aria-required': ariaRequired,
+    'aria-errormessage': ariaErrorMessage,
+    'aria-details': ariaDetails,
+    onFocus,
+    onBlur,
+    onKeyDown,
+    onKeyUp,
+    controlRef,
+    className,
+    ref,
+    ...rest
+  } = props;
+
+  if (onChange !== undefined) warnDeprecated('TimePicker', 'onChange', 'onValueChange');
+
+  const [selectedValue, setSelectedValue] = useControllable<string>(
+    valueProp,
+    defaultValue ?? '',
+    (next) => {
+      onValueChange?.(next);
+      onChange?.(next);
+    },
+  );
+
+  /* ---- options, step and bounds ---------------------------------- */
+
+  const stepValid = normalizeTimeStep(step).valid;
+  const minMinutes = timeToMinutes(minTime);
+  const maxMinutes = timeToMinutes(maxTime);
+  const boundsValid =
+    !Number.isNaN(minMinutes) && !Number.isNaN(maxMinutes) && minMinutes <= maxMinutes;
+  const allOptions = React.useMemo(
+    () => generateTimeOptions(step, minTime, maxTime, format),
+    [step, minTime, maxTime, format],
+  );
+
+  React.useEffect(() => {
+    if (isDev && !stepValid) {
+      console.error(
+        `[WaveUI] TimePicker: \`step\` must be a positive number of minutes (received ${String(step)}); ` +
+          `using ${DEFAULT_TIME_STEP}.`,
       );
-    }, [allOptions, inputText]);
+    }
+  }, [step, stepValid]);
 
-    // Derive display text from selected value
-    const displayLabel = React.useMemo(() => {
-      if (!selectedValue) return '';
-      const opt = allOptions.find((o) => o.value === selectedValue);
-      return opt ? opt.label : selectedValue;
-    }, [selectedValue, allOptions]);
+  React.useEffect(() => {
+    if (isDev && !boundsValid) {
+      console.error(
+        `[WaveUI] TimePicker: \`minTime\`/\`maxTime\` must be times such as "09:00", "09:00:00" or ` +
+          `"9:00 AM" with minTime <= maxTime (received "${minTime}" / "${maxTime}"); no times are available.`,
+      );
+    }
+  }, [minTime, maxTime, boundsValid]);
 
-    // Sync input text with selected value when not open
-    React.useEffect(() => {
-      if (!open) {
-        setInputText(displayLabel);
+  /* ---- open state, draft text and query -------------------------- */
+
+  const interactive = !disabled && !readOnly;
+  const [open, setOpen] = React.useState(false);
+  // A picker that becomes disabled/read-only while open closes (own state: adjusted during render).
+  if (open && !interactive) setOpen(false);
+  /** Typed text; `null` shows the selected time's label (draft model). */
+  const [draft, setDraft] = React.useState<string | null>(null);
+  /** Filter text: set only by typing, reset whenever the list opens (all options shown). */
+  const [query, setQuery] = React.useState('');
+
+  const openList = () => {
+    if (!interactive || open) return;
+    setQuery('');
+    setOpen(true);
+  };
+  const closeList = () => setOpen(false);
+
+  const filter = React.useMemo(() => {
+    const text = query.trim().toLowerCase();
+    if (!open || !text) return undefined;
+    return (item: ListboxItem) => matchesQuery(item, text);
+  }, [open, query]);
+
+  /**
+   * The option that typing `text` makes active. A complete time (`2:00 PM`, `14:00`) activates its
+   * own option, never another one that merely contains the text (`12:00 PM`); when it is not in
+   * the list (off-grid or out of bounds) nothing is active, so Enter commits the typed time or
+   * nothing. Partial text activates the first option whose label or value starts with it (`2:00 p`
+   * -> `2:00 PM`, `2` -> `2:00 AM`, not `12:00 AM`), else the first option that contains it.
+   */
+  const getTypedActiveValue = (text: string): string | null => {
+    const needle = text.trim().toLowerCase();
+    if (!needle) return null;
+    const minutes = timeToMinutes(text);
+    if (!Number.isNaN(minutes)) {
+      const exact = minutesToValue(minutes);
+      return allOptions.some((item) => item.value === exact) ? exact : null;
+    }
+    const match =
+      allOptions.find((item) => startsWithQuery(item, needle)) ??
+      allOptions.find((item) => matchesQuery(item, needle));
+    return match?.value ?? null;
+  };
+
+  // Opening without typing activates the selected option only when it is in the list. An empty,
+  // off-grid or out-of-range value activates nothing (ArrowDown/ArrowUp start at the first/last
+  // option), so Enter on a freshly opened list commits nothing and the surrounding form submits.
+  const selectedInList =
+    selectedValue !== '' && allOptions.some((item) => item.value === selectedValue);
+
+  const selectedValues = React.useMemo(
+    () => (selectedValue ? [selectedValue] : []),
+    [selectedValue],
+  );
+
+  const commitValue = (next: string) => {
+    setSelectedValue(next);
+    setDraft(null);
+    setQuery('');
+  };
+
+  /**
+   * Commits the typed text: erased text clears the value, a complete time within the bounds selects
+   * it; `false` for any other text (it is kept).
+   */
+  const commitDraft = (text: string): boolean => {
+    if (!text.trim()) {
+      commitValue('');
+      return true;
+    }
+    const minutes = timeToMinutes(text);
+    if (Number.isNaN(minutes) || !boundsValid || minutes < minMinutes || minutes > maxMinutes) {
+      return false;
+    }
+    commitValue(minutesToValue(minutes));
+    return true;
+  };
+
+  const clearDraft = () => {
+    setDraft(null);
+    setQuery('');
+  };
+
+  // The listbox counts as open only while it shows options: with no match nothing is displayed,
+  // so `aria-expanded` is false and Escape reverts the typed text instead of closing an empty list.
+  const hasMatches = React.useMemo(
+    () => (filter ? allOptions.some(filter) : allOptions.length > 0),
+    [allOptions, filter],
+  );
+  const expanded = open && hasMatches;
+
+  const lb = useListbox({
+    open: expanded,
+    onOpenChange: (next) => (next ? openList() : closeList()),
+    mode: 'editable',
+    selectedValues,
+    onSelect: (next) => commitValue(next),
+    items: allOptions,
+    filter,
+    // Typing sets the active option itself (getTypedActiveValue in handleInputChange), so an exact
+    // typed time wins over an earlier substring match; highlightOnFilter would force the first one.
+    autoHighlight: draft === null && selectedInList ? 'selected' : false,
+    idPrefix: 'timepicker-listbox',
+    // Escape on a closed list reverts typed text (erased text: handleKeyDown); without a draft it is
+    // left to enclosing layers.
+    onClearDraft:
+      draft !== null
+        ? () => {
+            clearDraft();
+            closeList();
+          }
+        : undefined,
+  });
+
+  const displayLabel = selectedValue
+    ? (lb.getItem(selectedValue)?.label ?? displayTime(selectedValue, format))
+    : '';
+  const statusMessage =
+    open && !hasMatches
+      ? allOptions.length === 0
+        ? 'No times available'
+        : 'No matching times'
+      : '';
+
+  /* ---- elements, dismissal, positioning --------------------------- */
+
+  const rootRef = React.useRef<HTMLDivElement | null>(null);
+  const inputRef = React.useRef<HTMLInputElement | null>(null);
+  const surfaceRef = React.useRef<HTMLDivElement | null>(null);
+  const rootRefs = useMergedRefs<HTMLDivElement>(ref, rootRef);
+  const inputRefs = useMergedRefs<HTMLInputElement>(controlRef, inputRef);
+
+  const { layerId } = useDismiss({
+    open,
+    onDismiss: closeList,
+    refs: [surfaceRef, rootRef],
+    anchorRef: inputRef,
+    kind: 'listbox',
+    focusOutside: true,
+  });
+
+  const { setReference, setFloating, floatingProps } = usePopupPosition({
+    open,
+    side: 'bottom',
+    align: 'start',
+    matchReferenceWidth: true,
+    fitViewport: true,
+  });
+  const surfaceRefs = useMergedRefs<HTMLDivElement>(surfaceRef, setFloating);
+
+  /* ---- forms and Field ------------------------------------------- */
+
+  const field = useFieldContext();
+  const fieldProps = useFieldControl({
+    id,
+    'aria-label': ariaLabel,
+    'aria-labelledby': ariaLabelledBy,
+    'aria-describedby': ariaDescribedBy,
+    'aria-invalid': ariaInvalid,
+    'aria-required': ariaRequired ?? (required || undefined),
+  });
+
+  useFormReset(
+    inputRef,
+    () => {
+      setSelectedValue(defaultValue ?? '');
+      clearDraft();
+      closeList();
+    },
+    form,
+  );
+
+  /* ---- handlers --------------------------------------------------- */
+
+  const handleInputChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+    if (!interactive) return;
+    const text = event.target.value;
+    setDraft(text);
+    setQuery(text);
+    if (!open) setOpen(true);
+    // Every edit re-ranks the highlight (it opens the list in the same update when closed).
+    lb.setActiveValue(getTypedActiveValue(text));
+  };
+
+  const handleKeyDown = composeEventHandlers(
+    onKeyDown,
+    (event: React.KeyboardEvent<HTMLDivElement>) => {
+      if (!interactive) return;
+      // Enter commits the active option: the exact typed time, the first match of partial text,
+      // or the option moved to with the arrow keys.
+      lb.onKeyDown(event);
+      if (event.defaultPrevented) return;
+      if (
+        event.key === 'Escape' &&
+        draft === '' &&
+        displayLabel !== '' &&
+        !event.nativeEvent.isComposing
+      ) {
+        // Erased text: useListbox calls onClearDraft only while the input has text, so Escape on a
+        // closed list restores the selected time here (an open list was closed above). With nothing
+        // to restore, Escape is left to enclosing layers.
+        event.preventDefault();
+        clearDraft();
+        closeList();
+        return;
       }
-    }, [open, displayLabel]);
-
-    // Scroll active option into view
-    React.useEffect(() => {
-      if (open && activeIndex >= 0 && listRef.current) {
-        const item = listRef.current.children[activeIndex] as HTMLElement | undefined;
-        item?.scrollIntoView({ block: 'nearest' });
+      if (event.key === 'Enter' && draft !== null) {
+        // Edited text is committed (a complete time within the bounds; erased text clears) or kept,
+        // never submitted with the form; untouched text lets Enter submit.
+        event.preventDefault();
+        if (commitDraft(draft)) closeList();
       }
-    }, [open, activeIndex]);
+    },
+  );
+  const handleKeyUp = composeEventHandlers(onKeyUp, lb.onKeyUp);
 
-    const selectOption = React.useCallback(
-      (val: string) => {
-        setSelectedValue(val);
-        setOpen(false);
-        setActiveIndex(-1);
-        inputRef.current?.focus();
-      },
-      [setSelectedValue],
-    );
+  const handleBlur = composeEventHandlers(onBlur, () => {
+    if (draft !== null && !commitDraft(draft)) clearDraft();
+  });
 
-    const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-      setInputText(e.target.value);
-      if (!open) setOpen(true);
-      setActiveIndex(-1);
-    };
+  const handleClear = () => {
+    if (!interactive) return;
+    commitValue('');
+    inputRef.current?.focus();
+  };
 
-    const handleInputFocus = () => {
-      setOpen(true);
-    };
+  /* ---- render ---------------------------------------------------- */
 
-    const handleKeyDown = (e: React.KeyboardEvent) => {
-      if (e.key === 'ArrowDown') {
-        e.preventDefault();
-        if (!open) {
-          setOpen(true);
-        } else {
-          setActiveIndex((i) => Math.min(i + 1, filteredOptions.length - 1));
-        }
-      } else if (e.key === 'ArrowUp') {
-        e.preventDefault();
-        setActiveIndex((i) => Math.max(i - 1, 0));
-      } else if (e.key === 'Enter') {
-        e.preventDefault();
-        if (open && activeIndex >= 0 && filteredOptions[activeIndex]) {
-          selectOption(filteredOptions[activeIndex].value);
-        }
-      } else if (e.key === 'Escape') {
-        setOpen(false);
-        setActiveIndex(-1);
-      }
-    };
+  const listboxLabelledBy = joinIds(ariaLabelledBy, field?.labelId);
+  const renderListbox = (hidden: boolean) => (
+    <ul
+      {...lb.getListboxProps()}
+      aria-labelledby={listboxLabelledBy}
+      aria-label={listboxLabelledBy ? undefined : (ariaLabel ?? 'Times')}
+      hidden={hidden || undefined}
+      className="max-h-60 min-h-0 overflow-auto py-1 focus:outline-hidden"
+    >
+      {lb.items.map((item) => (
+        <TimePickerOption key={item.value} value={item.value} label={item.label} />
+      ))}
+    </ul>
+  );
 
-    const handleClear = (e: React.MouseEvent) => {
-      e.stopPropagation();
-      setSelectedValue('');
-      setInputText('');
-      inputRef.current?.focus();
-    };
+  // Read-only pickers offer no clear action (the value cannot change).
+  const showClear = clearable && !readOnly && selectedValue !== '';
 
-    return (
-      <div ref={ref} className={cn('relative inline-flex flex-col', className)} {...rest}>
-        <div className="relative flex items-center">
+  return (
+    <ListboxContext.Provider value={lb.context}>
+      <div {...rest} ref={rootRefs} className={cn('relative inline-flex flex-col', className)}>
+        <div ref={setReference} className="relative flex items-center">
           <input
-            ref={inputRef}
+            ref={inputRefs}
             type="text"
-            role="combobox"
-            aria-expanded={open}
-            aria-controls={listboxId}
-            aria-haspopup="listbox"
-            aria-autocomplete="list"
-            value={inputText}
+            {...lb.getComboboxProps()}
+            {...fieldProps}
+            aria-errormessage={ariaErrorMessage}
+            aria-details={ariaDetails}
+            value={draft ?? displayLabel}
             onChange={handleInputChange}
-            onFocus={handleInputFocus}
+            onClick={openList}
+            onFocus={onFocus}
+            onBlur={handleBlur}
             onKeyDown={handleKeyDown}
-            onBlur={() => {
-              blurTimeoutRef.current = setTimeout(() => setOpen(false), 200);
-            }}
+            onKeyUp={handleKeyUp}
             placeholder={placeholder}
             disabled={disabled}
+            readOnly={readOnly}
+            autoComplete={autoComplete}
+            maxLength={maxLength}
+            enterKeyHint={enterKeyHint}
+            inputMode={inputMode}
+            spellCheck={spellCheck}
+            autoFocus={autoFocus}
+            tabIndex={tabIndex}
             className={cn(
-              'h-8 w-full rounded border border-input bg-background px-3 text-sm',
-              'focus:outline-none focus:border-b-2 focus:border-b-primary',
-              'disabled:opacity-50 disabled:cursor-not-allowed',
-              clearable && selectedValue && 'pr-8',
+              inputBase,
+              'border-b-stroke-accessible',
+              inputFocus,
+              disabledStyles,
+              showClear && 'pe-8',
             )}
           />
-          {clearable && selectedValue && (
+          {showClear && (
             <button
               type="button"
-              onClick={handleClear}
-              disabled={disabled}
-              className="absolute right-2 flex h-4 w-4 items-center justify-center text-[#707070] hover:text-foreground"
               aria-label="Clear time"
+              disabled={disabled}
+              // Keeps focus (and an open list) on the input while the pointer clears it.
+              onMouseDown={(event) => event.preventDefault()}
+              onClick={handleClear}
+              className={cn(
+                'absolute end-1 flex h-6 w-6 items-center justify-center rounded text-muted-foreground',
+                'not-disabled:not-aria-disabled:hover:bg-subtle-hover not-disabled:not-aria-disabled:hover:text-foreground',
+                focusRing,
+                disabledStyles,
+              )}
             >
-              <svg
-                xmlns="http://www.w3.org/2000/svg"
-                viewBox="0 0 20 20"
-                fill="currentColor"
-                className="h-4 w-4"
-              >
-                <path d="M6.28 5.22a.75.75 0 00-1.06 1.06L8.94 10l-3.72 3.72a.75.75 0 101.06 1.06L10 11.06l3.72 3.72a.75.75 0 101.06-1.06L11.06 10l3.72-3.72a.75.75 0 00-1.06-1.06L10 8.94 6.28 5.22z" />
-              </svg>
+              <DismissIcon />
             </button>
           )}
         </div>
-        {open && filteredOptions.length > 0 && (
-          <ul
-            ref={listRef}
-            id={listboxId}
-            role="listbox"
-            className="absolute top-full left-0 z-50 mt-1 w-full max-h-60 overflow-auto rounded border border-border bg-background py-1 shadow-4"
-            onMouseDown={(e) => e.preventDefault()}
-          >
-            {filteredOptions.map((opt, i) => (
-              <li
-                key={opt.value}
-                role="option"
-                aria-selected={opt.value === selectedValue}
-                className={cn(
-                  'cursor-pointer px-3 py-1.5 text-sm',
-                  'hover:bg-[#f5f5f5]',
-                  opt.value === selectedValue && 'bg-[#f0f0f0]',
-                  i === activeIndex && 'bg-[#f5f5f5]',
-                )}
-                onClick={() => selectOption(opt.value)}
-              >
-                {opt.label}
-              </li>
-            ))}
-          </ul>
+        {!open && allOptions.length > 0 && renderListbox(true)}
+        <span role="status" className="sr-only">
+          {statusMessage}
+        </span>
+        <HiddenInput
+          name={name}
+          form={form}
+          disabled={disabled}
+          value={selectedValue}
+          type="text"
+          required={required || field?.required}
+          onInvalid={() => inputRef.current?.focus()}
+        />
+        {open && (
+          <Portal layerId={layerId}>
+            <div
+              ref={surfaceRefs}
+              {...floatingProps}
+              data-state="open"
+              className="flex flex-col overflow-hidden rounded border border-border bg-background shadow-8"
+            >
+              {hasMatches ? (
+                renderListbox(false)
+              ) : (
+                <div aria-hidden="true" className="px-3 py-1.5 text-body-1 text-muted-foreground">
+                  {statusMessage}
+                </div>
+              )}
+            </div>
+          </Portal>
         )}
       </div>
-    );
-  };
-TimePickerRoot.displayName = 'TimePicker';
+    </ListboxContext.Provider>
+  );
+};
 
-export const TimePicker = TimePickerRoot;
+TimePicker.displayName = 'TimePicker';
