@@ -1,5 +1,6 @@
 import * as React from 'react';
 import { joinIds } from '../lib/aria';
+import { useId } from './useId';
 
 /**
  * What a `Field` tells the control inside it (spec §2.5, §5.1). `Field` (P02) provides it; every
@@ -20,6 +21,15 @@ export interface FieldContextValue {
   required: boolean;
   /** Field renders the error message itself; controls with their own `error` must not repeat it. */
   hasErrorMessage: boolean;
+  /**
+   * Field already gave `controlId` to its first child, a label-for merge target (component,
+   * labelable element, custom element), whether Field merged it or it was the child's own id; a
+   * control that receives no `id` prop is then not that child (it is nested inside it, e.g.
+   * `Field > Tooltip > Input`, or a later sibling) and must not reuse `controlId`.
+   * {@link useFieldControl} gives such a control its own id and names it through
+   * `aria-labelledby`. Absent or `false`: a control without an `id` uses `controlId`.
+   */
+  controlIdAssigned?: boolean;
 }
 
 /**
@@ -68,7 +78,10 @@ export interface UseFieldControlOptions {
  * result onto the **focusable element** (C-ROUTING). Consumer values are merged, never overwritten,
  * and only defined keys are returned, so spreading never clears an attribute.
  *
- * - `id`: the consumer's id, else the Field's `controlId`.
+ * - `id`: the consumer's id; else, when the Field already gave `controlId` to its first child
+ *   (`controlIdAssigned`) — so this control is nested inside that child or a later sibling — a
+ *   generated id of its own; else the Field's `controlId`. The first child itself receives
+ *   `controlId` as its `id` prop from Field, so it keeps it.
  * - `aria-labelledby`: when the consumer set an `aria-label`, only the consumer's
  *   `aria-labelledby`; otherwise, when the control is not labelable **or** its id is not the
  *   Field's `controlId` (it carries its own id, or is not the Field's first child, so
@@ -89,9 +102,11 @@ export function useFieldControl(
   options: UseFieldControlOptions = {},
 ): FieldControlProps {
   const field = useFieldContext();
+  // Always called (stable hook order); used only when the Field's controlId is taken.
+  const fallbackId = useId('field-control');
   const { labelable = true, nativeRequired = false } = options;
 
-  const id = props.id ?? field?.controlId;
+  const id = props.id ?? (field?.controlIdAssigned ? fallbackId : field?.controlId);
 
   let labelledBy = props['aria-labelledby'];
   if (field && props['aria-label'] === undefined && (!labelable || id !== field.controlId)) {

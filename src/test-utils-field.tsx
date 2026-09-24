@@ -56,10 +56,14 @@ export interface RenderWithFieldContextResult extends RenderResult {
  * - `hintId`/`errorId` default to `undefined` (nothing rendered).
  * - `invalid` and `hasErrorMessage` default to "an `errorId` is given" (like `Field` with an
  *   `error`); `required` defaults to `false`.
+ * - `controlIdAssigned` is passed through when given (absent otherwise). With `true`, render the
+ *   child that holds the control id yourself (`<Control id={FIELD_TEST_IDS.controlId} />`), the
+ *   way `Field` passes it to its first child; controls without an `id` get their own id and are
+ *   named through `aria-labelledby`.
  */
 export function resolveFieldTestContext(value: Partial<FieldContextValue> = {}): FieldContextValue {
   const errorId = value.errorId;
-  return {
+  const resolved: FieldContextValue = {
     controlId: value.controlId ?? FIELD_TEST_IDS.controlId,
     labelId: 'labelId' in value ? value.labelId : FIELD_TEST_IDS.labelId,
     hintId: value.hintId,
@@ -68,6 +72,8 @@ export function resolveFieldTestContext(value: Partial<FieldContextValue> = {}):
     required: value.required ?? false,
     hasErrorMessage: value.hasErrorMessage ?? errorId !== undefined,
   };
+  if (value.controlIdAssigned !== undefined) resolved.controlIdAssigned = value.controlIdAssigned;
+  return resolved;
 }
 
 interface FieldHarnessProps {

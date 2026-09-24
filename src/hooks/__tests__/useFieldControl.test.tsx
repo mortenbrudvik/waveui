@@ -143,6 +143,57 @@ describe('useFieldControl — merge rules', () => {
     expect(merge({ required: true }, null, { nativeRequired: true }).required).toBe(true);
   });
 
+  it('controlIdAssigned: a control without an id gets its own id and aria-labelledby = labelId', () => {
+    const assigned = { ...FIELD, controlIdAssigned: true };
+    const nested = merge({}, assigned);
+    expect(nested.id).toMatch(/^field-control-/);
+    expect(nested.id).not.toBe('ctl');
+    expect(nested['aria-labelledby']).toBe('lbl');
+    expect(merge({ 'aria-labelledby': 'x' }, assigned)['aria-labelledby']).toBe('x lbl');
+    // The consumer named the control: no added labelledby, but the id is still its own.
+    const named = merge({ 'aria-label': 'Custom' }, assigned);
+    expect(named.id).not.toBe('ctl');
+    expect(named['aria-labelledby']).toBeUndefined();
+  });
+
+  it('controlIdAssigned: the first child (id = controlId) and an own id are unchanged', () => {
+    const assigned = { ...FIELD, controlIdAssigned: true };
+    const target = merge({ id: 'ctl' }, assigned);
+    expect(target.id).toBe('ctl');
+    expect(target['aria-labelledby']).toBeUndefined();
+    const own = merge({ id: 'own' }, assigned);
+    expect(own.id).toBe('own');
+    expect(own['aria-labelledby']).toBe('lbl');
+  });
+
+  it('controlIdAssigned false or absent keeps controlId as the default id', () => {
+    for (const field of [{ ...FIELD, controlIdAssigned: false }, FIELD]) {
+      expect(merge({}, field)).toEqual({ id: 'ctl', 'aria-describedby': 'hint' });
+    }
+  });
+
+  it('keeps a stable hook order and fallback id while controlIdAssigned changes', () => {
+    const seen: (string | undefined)[] = [];
+    function Probe() {
+      const props = useFieldControl({});
+      seen.push(props.id);
+      return <input {...props} />;
+    }
+    const at = (controlIdAssigned: boolean | undefined) => (
+      <FieldContext.Provider value={{ ...FIELD, controlIdAssigned }}>
+        <Probe />
+      </FieldContext.Provider>
+    );
+    const { rerender } = render(at(true));
+    const fallback = screen.getByRole('textbox').id;
+    expect(fallback).not.toBe('ctl');
+    rerender(at(undefined));
+    expect(screen.getByRole('textbox')).toHaveAttribute('id', 'ctl');
+    rerender(at(true));
+    expect(screen.getByRole('textbox')).toHaveAttribute('id', fallback);
+    expect(new Set(seen)).toEqual(new Set([fallback, 'ctl']));
+  });
+
   it('useFieldContext is null outside a Field and the value inside', () => {
     expect(renderHook(() => useFieldContext()).result.current).toBeNull();
     expect(renderHook(() => useFieldContext(), { wrapper: withField(FIELD) }).result.current).toBe(
@@ -195,6 +246,48 @@ describe('useFieldControl — accessible name and description (renderWithFieldCo
     renderWithFieldContext(<GroupControl aria-label="Custom name" />);
     expect(screen.getByRole('radiogroup', { name: 'Custom name' })).toBeInTheDocument();
   });
+
+  it('does not reuse controlId when Field already gave it to its first child', () => {
+    function Probe(props: FieldControlProps) {
+      return <input {...useFieldControl(props)} />;
+    }
+    renderWithFieldContext(
+      <>
+        <Probe />
+        <Probe id={FIELD_TEST_IDS.controlId} />
+        <Probe id="own" />
+      </>,
+      { controlIdAssigned: true },
+    );
+    const [nested, target, own] = screen.getAllByRole('textbox');
+    expect(nested.id).not.toBe(FIELD_TEST_IDS.controlId);
+    expect(nested).toHaveAttribute('aria-labelledby', FIELD_TEST_IDS.labelId);
+    expect(target).toHaveAttribute('id', FIELD_TEST_IDS.controlId);
+    expect(target).not.toHaveAttribute('aria-labelledby');
+    expect(own).toHaveAttribute('aria-labelledby', FIELD_TEST_IDS.labelId);
+  });
+
+  it('controlIdAssigned: every control is named and described, and no id is duplicated', () => {
+    renderWithFieldContext(
+      <>
+        <InputControl id={FIELD_TEST_IDS.controlId} />
+        <InputControl />
+        <ButtonControl />
+      </>,
+      { controlIdAssigned: true, hintId: FIELD_TEST_IDS.hintId },
+    );
+    const controls = [
+      ...screen.getAllByRole('textbox', { name: FIELD_TEST_TEXT.label }),
+      screen.getByRole('checkbox', { name: FIELD_TEST_TEXT.label }),
+    ];
+    expect(controls).toHaveLength(3);
+    for (const control of controls) {
+      expect(control).toHaveAccessibleDescription(FIELD_TEST_TEXT.hint);
+    }
+    for (const el of document.querySelectorAll('[id]')) {
+      expect(document.querySelectorAll(`[id="${CSS.escape(el.id)}"]`), el.id).toHaveLength(1);
+    }
+  });
 });
 
 describe('renderWithFieldContext', () => {
@@ -228,6 +321,13 @@ describe('renderWithFieldContext', () => {
     expect(document.getElementById('e')).toHaveAttribute('role', 'alert');
     expect(field.invalid).toBe(true);
     expect(field.hasErrorMessage).toBe(true);
+  });
+
+  it('passes controlIdAssigned through only when given', () => {
+    expect(renderWithFieldContext(<span />, { controlIdAssigned: true }).field).toMatchObject({
+      controlIdAssigned: true,
+    });
+    expect('controlIdAssigned' in renderWithFieldContext(<span />).field).toBe(false);
   });
 
   it('labelId: undefined renders no label', () => {
