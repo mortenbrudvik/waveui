@@ -7,8 +7,8 @@ export type { ProgressBarProps } from './ProgressBar';
 export { Spinner } from './Spinner';
 export type { SpinnerProps } from './Spinner';
 
-export { Skeleton } from './Skeleton';
-export type { SkeletonProps } from './Skeleton';
+export { Skeleton, SkeletonGroup } from './Skeleton';
+export type { SkeletonProps, SkeletonGroupProps } from './Skeleton';
 
 export { Toast, Toaster, useToastController } from './Toast';
-export type { ToastProps, ToasterProps, ToastOptions } from './Toast';
+export type { ToastProps, ToasterProps, ToastOptions, ToastController } from './Toast';

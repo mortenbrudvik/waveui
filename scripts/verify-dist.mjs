@@ -61,40 +61,17 @@ const require = createRequire(import.meta.url);
 
 /**
  * A temporary bridge: components whose flat sub-component names (`<Parent><Member>`,
- * C-COMPOUND) are not exported from `dist/index.mjs` yet. The component packages add the flat
- * names to their modules in wave D and INTEGRATION re-exports them from the barrels in wave E1,
- * emptying this list as it goes:
+ * C-COMPOUND) are not exported from `dist/index.mjs` yet. It is empty since INTEGRATION
+ * re-exported every flat name from the barrels (wave E1), and it must stay empty:
  *   - an entry whose flat names all exist fails the check ("remove it"), and so does an entry
  *     that is not an exported component, so the list only shrinks;
- *   - an entry that is exported but not a compound yet is tolerated: Drawer, RadioGroup and
- *     Skeleton become compounds in wave D (`Drawer.Trigger`, `RadioGroup.Item`,
- *     `Skeleton.Group`), before INTEGRATION can re-export their flat names;
+ *   - an entry that is exported but not a compound yet is tolerated;
  *   - `--final` (`prepublishOnly`, the final gate) ignores the list and fails while it is not
  *     empty, so no release ships with the bridge open.
  * A compound that is not listed must export every flat name. A flat name that is exported must
  * equal its dotted member, listed or not.
  */
-export const PENDING_FLAT_EXPORTS = [
-  'Accordion',
-  'Breadcrumb',
-  'Card',
-  'Carousel',
-  'Combobox',
-  'DataGrid',
-  'Dialog',
-  'Drawer',
-  'Dropdown',
-  'List',
-  'Menu',
-  'Nav',
-  'Popover',
-  'RadioGroup',
-  'Skeleton',
-  'Stepper',
-  'TabList',
-  'Table',
-  'Tree',
-];
+export const PENDING_FLAT_EXPORTS = [];
 
 const JS_FILE = /\.(mjs|cjs|js)$/;
 

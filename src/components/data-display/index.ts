@@ -14,19 +14,19 @@ export { CounterBadge } from './CounterBadge';
 export type { CounterBadgeProps } from './CounterBadge';
 
 export { Tag } from './Tag';
-export type { TagProps } from './Tag';
+export type { TagProps, TagOwnProps } from './Tag';
 
 export { Persona } from './Persona';
 export type { PersonaProps } from './Persona';
 
 export { Divider } from './Divider';
-export type { DividerProps } from './Divider';
+export type { DividerProps, DividerOwnProps } from './Divider';
 
 export { InfoLabel } from './InfoLabel';
 export type { InfoLabelProps } from './InfoLabel';
 
 export { Image } from './Image';
-export type { ImageProps, ImageFit, ImageShape } from './Image';
+export type { ImageProps, StrictImageProps, ImageFit, ImageShape } from './Image';
 
-export { List } from './List';
-export type { ListProps, ListItemProps } from './List';
+export { List, ListItem } from './List';
+export type { ListProps, ListItemProps, ListSelectionMode } from './List';

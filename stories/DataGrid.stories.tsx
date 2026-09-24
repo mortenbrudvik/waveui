@@ -2,8 +2,7 @@ import * as React from 'react';
 import type { Meta, StoryObj } from '@storybook/react';
 import { fn } from 'storybook/test';
 import { DataGrid } from '../src';
-import type { DataGridColumn } from '../src';
-import type { DataGridBaseProps, DataGridSort } from '../src/components/table/DataGrid';
+import type { DataGridBaseProps, DataGridColumn, DataGridSort } from '../src';
 
 interface Member {
   id: string;

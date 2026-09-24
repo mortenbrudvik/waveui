@@ -1,47 +1,25 @@
-import * as React from 'react';
 import type { Meta, StoryObj } from '@storybook/react';
-import { Button, Overflow, OverflowItem } from '../src';
-import { useOverflowMenu } from '../src/components/layout/Overflow';
+import { Button, Menu, MenuButton, Overflow, OverflowItem, useOverflowMenu } from '../src';
 
 const pages = ['Home', 'Products', 'Services', 'About', 'Blog', 'Contact', 'Careers'];
 
 /**
- * Lists the hidden items in a disclosure. A stand-in for a Menu (INTEGRATION switches this story
- * to `Menu.Trigger`/`Menu.Popover`, which render in a portal); the inline list needs the row to
- * be `overflow-visible` so it is not clipped. Hidden items are `display: none`, so nothing else
- * spills out.
+ * Lists the hidden items in a popup menu. `useOverflowMenu()` gives the ids of the hidden items in
+ * DOM order; `Menu.Popover` renders in a portal, so the `overflow-hidden` row does not clip it.
  */
-function HiddenItemsDisclosure() {
+function HiddenItemsMenu() {
   const { hiddenIds, count } = useOverflowMenu();
-  const [open, setOpen] = React.useState(false);
-  const listId = React.useId();
   return (
-    <div className="relative">
-      <Button
-        appearance="subtle"
-        aria-expanded={open}
-        aria-controls={listId}
-        onClick={() => setOpen((value) => !value)}
-      >
-        +{count} more
-      </Button>
-      <ul
-        id={listId}
-        hidden={!open}
-        className="absolute end-0 top-full z-10 m-0 mt-1 min-w-40 list-none rounded-md border border-border bg-background p-1 shadow-8"
-      >
+    <Menu>
+      <Menu.Trigger>
+        <MenuButton appearance="subtle">+{count} more</MenuButton>
+      </Menu.Trigger>
+      <Menu.Popover align="end">
         {hiddenIds.map((id) => (
-          <li key={id}>
-            <button
-              type="button"
-              className="w-full rounded px-3 py-1.5 text-start text-body-1 text-foreground not-disabled:not-aria-disabled:hover:bg-subtle-hover"
-            >
-              {id}
-            </button>
-          </li>
+          <Menu.Item key={id}>{id}</Menu.Item>
         ))}
-      </ul>
-    </div>
+      </Menu.Popover>
+    </Menu>
   );
 }
 
@@ -49,8 +27,8 @@ const meta = {
   title: 'Components/Layout/Overflow',
   component: Overflow,
   args: {
-    className: 'gap-1 overflow-visible',
-    overflowButton: () => <HiddenItemsDisclosure />,
+    className: 'gap-1',
+    overflowButton: () => <HiddenItemsMenu />,
     children: pages.map((page) => (
       <OverflowItem key={page} itemId={page}>
         <Button appearance="subtle" className="whitespace-nowrap">

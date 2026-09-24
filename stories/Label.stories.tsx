@@ -1,6 +1,6 @@
 import type { Meta, StoryObj } from '@storybook/react';
 import { Label } from '../src';
-import type { TextWeight } from '../src/lib/types';
+import type { TextWeight } from '../src';
 
 const weights = ['regular', 'semibold', 'bold'] as const satisfies readonly TextWeight[];
 

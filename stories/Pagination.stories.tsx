@@ -2,7 +2,7 @@ import * as React from 'react';
 import type { Meta, StoryObj } from '@storybook/react';
 import { fn } from 'storybook/test';
 import { Pagination } from '../src';
-import type { PaginationItemType } from '../src/components/navigation/Pagination';
+import type { PaginationItemType } from '../src';
 
 const meta = {
   title: 'Components/Navigation/Pagination',

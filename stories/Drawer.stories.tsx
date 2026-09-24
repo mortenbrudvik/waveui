@@ -2,7 +2,7 @@ import * as React from 'react';
 import type { Meta, StoryObj } from '@storybook/react';
 import { fn } from 'storybook/test';
 import { Drawer, Button, Tooltip } from '../src';
-import type { DrawerPosition } from '../src/components/overlays/Drawer';
+import type { DrawerPosition } from '../src';
 
 const positions = ['start', 'end', 'left', 'right'] as const satisfies readonly DrawerPosition[];
 

@@ -1,20 +1,24 @@
 export { Button } from './Button';
-export type { ButtonProps } from './Button';
+export type { ButtonProps, ButtonOwnProps } from './Button';
 
 export { CompoundButton } from './CompoundButton';
-export type { CompoundButtonProps } from './CompoundButton';
+export type { CompoundButtonProps, CompoundButtonOwnProps } from './CompoundButton';
 
 export { ToggleButton } from './ToggleButton';
 export type { ToggleButtonProps } from './ToggleButton';
 
 export { SplitButton } from './SplitButton';
-export type { SplitButtonProps } from './SplitButton';
+export type {
+  SplitButtonProps,
+  SplitButtonMenuButtonProps,
+  SplitButtonPrimaryActionButtonProps,
+} from './SplitButton';
 
 export { MenuButton } from './MenuButton';
 export type { MenuButtonProps } from './MenuButton';
 
 export { Link } from './Link';
-export type { LinkProps, LinkVariant } from './Link';
+export type { LinkProps, LinkOwnProps, LinkAppearance, LinkVariant } from './Link';
 
 export { Toolbar } from './Toolbar';
-export type { ToolbarProps } from './Toolbar';
+export type { ToolbarProps, ToolbarOwnProps } from './Toolbar';

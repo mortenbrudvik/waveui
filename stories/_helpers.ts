@@ -14,7 +14,7 @@
  * } satisfies Meta<typeof Button>;
  */
 import type { ArgTypes } from '@storybook/react';
-import type { Appearance, BadgeAppearance, BadgeColor, Orientation, Size } from '../src/lib/types';
+import type { Appearance, BadgeAppearance, BadgeColor, Orientation, Size } from '../src';
 
 const sizes = [
   'extra-small',
