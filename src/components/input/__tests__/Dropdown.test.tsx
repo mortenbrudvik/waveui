@@ -865,24 +865,78 @@ describe('Dropdown', () => {
   });
 
   describe('styling (input-pickers#20, feedback-navigation#34)', () => {
-    it('lets a consumer option class win over the active state classes', async () => {
-      const user = userEvent.setup();
+    /** A class without its variants: `data-[active]:[--x:var(--y)]` → `[--x:var(--y)]`. */
+    function utilityOf(className: string): string {
+      let depth = 0;
+      let start = 0;
+      for (let i = 0; i < className.length; i++) {
+        const ch = className[i];
+        if (ch === '[' || ch === '(') depth += 1;
+        else if (ch === ']' || ch === ')') depth -= 1;
+        else if (ch === ':' && depth === 0) start = i + 1;
+      }
+      return className.slice(start);
+    }
+
+    /** The classes of `el` that set a background, with their variants, sorted. */
+    function backgroundClasses(el: Element): string[] {
+      return [...el.classList].filter((c) => utilityOf(c).startsWith('bg-')).sort();
+    }
+
+    function renderStyledApple(className: string) {
       renderDropdown({
+        defaultValue: 'a',
         children: (
           <>
-            <Option value="a" className="bg-primary data-[active]:bg-selected">
+            <Option value="a" className={className}>
               Apple
             </Option>
             <Option value="b">Banana</Option>
           </>
         ),
       });
+    }
+
+    it('paints the state backgrounds through a single unconditional background class', async () => {
+      const user = userEvent.setup();
+      renderDropdown({ defaultValue: 'a' });
+      await user.click(combobox());
+      const apple = option('Apple');
+      expect(apple).toHaveAttribute('data-selected');
+      expect(apple).toHaveAttribute('data-active');
+      // The hover/selected/active variants only set `--option-bg`: no state class declares a
+      // background of its own that would out-specify (class + attribute) a consumer's plain `bg-*`.
+      expect(backgroundClasses(apple)).toEqual(['bg-(--option-bg)']);
+      expect(backgroundClasses(option('Banana'))).toEqual(['bg-(--option-bg)']);
+      expect(apple).toHaveClass(
+        'data-[selected]:[--option-bg:var(--wave-subtle-selected)]',
+        'data-[active]:[--option-bg:var(--wave-subtle-hover)]',
+      );
+    });
+
+    it('lets a plain consumer background replace the state backgrounds while selected and active', async () => {
+      const user = userEvent.setup();
+      renderStyledApple('bg-primary text-primary-foreground');
+      await user.click(combobox());
+      const apple = option('Apple');
+      expect(apple).toHaveAttribute('data-selected');
+      expect(apple).toHaveAttribute('data-active');
+      // tailwind-merge replaced the built-in `bg-(--option-bg)`: the consumer's class is the only
+      // background left on the option, so it wins the cascade in every state.
+      expect(backgroundClasses(apple)).toEqual(['bg-primary']);
+      expect(apple).toHaveClass('text-primary-foreground');
+      expect(apple).not.toHaveClass('text-foreground');
+      expect(backgroundClasses(option('Banana'))).toEqual(['bg-(--option-bg)']);
+    });
+
+    it('lets a consumer restyle one state with a data variant', async () => {
+      const user = userEvent.setup();
+      renderStyledApple('data-[active]:bg-selected');
       await user.click(combobox());
       const apple = option('Apple');
       expect(apple).toHaveAttribute('data-active');
-      expect(apple).toHaveClass('bg-primary', 'data-[active]:bg-selected');
-      expect(apple).not.toHaveClass('data-[active]:bg-subtle-hover');
-      expect(option('Banana')).toHaveClass('data-[active]:bg-subtle-hover');
+      // The variant (class + attribute) out-specifies the unconditional `bg-(--option-bg)`.
+      expect(backgroundClasses(apple)).toEqual(['bg-(--option-bg)', 'data-[active]:bg-selected']);
     });
 
     it('uses logical classes in RTL', () => {

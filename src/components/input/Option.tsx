@@ -49,8 +49,15 @@ OptionCheckContext.displayName = 'OptionCheckContext';
 
 /*
  * State is exposed as data attributes (C-CLASS): `data-active` (keyboard/pointer highlight),
- * `data-selected`, `data-disabled`. State classes come before the consumer's `className` in `cn()`,
- * so a consumer `data-[active]:bg-…` replaces the built-in highlight.
+ * `data-selected`, `data-disabled`. State classes come before the consumer's `className` in `cn()`.
+ *
+ * Backgrounds (input-pickers#20): one unconditional `bg-(--option-bg)` paints the option, and the
+ * hover/selected/active variants only set `--option-bg`. A variant that set `background-color`
+ * itself (class + attribute or pseudo-class) would out-specify a consumer's plain `bg-*` class in
+ * the cascade even though `cn()` keeps it; instead tailwind-merge replaces `bg-(--option-bg)` with
+ * the consumer's class, which is then the only background declaration on the option. A consumer
+ * `data-[active]:bg-…` / `data-[selected]:bg-…` restyles a single state (it out-specifies the
+ * unconditional reader). The active outline is the focus indicator and stays a state variant.
  *
  * `[&[hidden]]:hidden`: a filtered-out option carries the `hidden` attribute, but without Preflight
  * (Wave ships none) the author `display: flex` would override the user-agent
@@ -62,11 +69,70 @@ const HIDDEN_WINS = '[&[hidden]]:hidden';
 const OPTION_CLASSES = cn(
   'flex cursor-pointer select-none items-center gap-2 px-3 py-1.5 text-body-1 text-foreground',
   HIDDEN_WINS,
-  'not-disabled:not-aria-disabled:hover:bg-subtle-hover',
-  'data-[selected]:bg-subtle-selected',
-  'data-[active]:bg-subtle-hover data-[active]:outline-2 data-[active]:-outline-offset-2 data-[active]:outline-ring',
+  'bg-(--option-bg) [--option-bg:transparent]',
+  'not-disabled:not-aria-disabled:hover:[--option-bg:var(--wave-subtle-hover)]',
+  'data-[selected]:[--option-bg:var(--wave-subtle-selected)]',
+  'data-[active]:[--option-bg:var(--wave-subtle-hover)]',
+  'data-[active]:outline-2 data-[active]:-outline-offset-2 data-[active]:outline-ring',
   'aria-disabled:cursor-not-allowed aria-disabled:text-muted-foreground',
 );
+
+/**
+ * The values of the options rendered inside an `OptionGroup`, whatever wraps them (custom
+ * components, Fragments, nested groups): each option adds its value from a layout effect.
+ */
+class OptionGroupMembers {
+  private readonly counts = new Map<string, number>();
+  private readonly listeners = new Set<() => void>();
+
+  subscribe = (listener: () => void): (() => void) => {
+    this.listeners.add(listener);
+    return () => {
+      this.listeners.delete(listener);
+    };
+  };
+
+  add(value: string): () => void {
+    this.counts.set(value, (this.counts.get(value) ?? 0) + 1);
+    this.notify();
+    return () => {
+      const count = (this.counts.get(value) ?? 1) - 1;
+      if (count > 0) this.counts.set(value, count);
+      else this.counts.delete(value);
+      this.notify();
+    };
+  }
+
+  /** At least one option, and a filter hides every one of them. */
+  allHidden(store: ListboxStore | undefined): boolean {
+    if (store === undefined || this.counts.size === 0) return false;
+    for (const value of this.counts.keys()) if (!store.isHidden(value)) return false;
+    return true;
+  }
+
+  private notify(): void {
+    for (const listener of [...this.listeners]) listener();
+  }
+}
+
+/** The groups around an option, outermost first (P05-internal). */
+const OptionGroupContext = React.createContext<readonly OptionGroupMembers[]>([]);
+OptionGroupContext.displayName = 'OptionGroupContext';
+
+const useIsomorphicLayoutEffect =
+  typeof document !== 'undefined' ? React.useLayoutEffect : React.useEffect;
+
+/** Adds an option's value to every group around it while the option is mounted. */
+function useOptionGroupMembership(value: string): void {
+  const groups = React.useContext(OptionGroupContext);
+  useIsomorphicLayoutEffect(() => {
+    if (groups.length === 0) return;
+    const removes = groups.map((group) => group.add(value));
+    return () => {
+      for (const remove of removes) remove();
+    };
+  }, [groups, value]);
+}
 
 function OptionImpl(props: OptionProps) {
   const {
@@ -86,6 +152,7 @@ function OptionImpl(props: OptionProps) {
     { value, label, textValue, disabled },
     ref,
   );
+  useOptionGroupMembership(value);
   const {
     ref: optionRef,
     onClick: selectOption,
@@ -122,6 +189,11 @@ MemoOption.displayName = 'Option';
  * wrapped, grouped or rendered conditionally. The option is memoized: moving the highlight
  * re-renders only the previously and the newly active option.
  *
+ * Styling: `className` comes last. A plain background class (`className="bg-primary"`) replaces
+ * the built-in hover, selected and active backgrounds in every state. To restyle one state only,
+ * use its data variant (`data-[active]:bg-…`, `data-[selected]:bg-…`). The active option keeps
+ * its focus outline.
+ *
  * Use it inside a `Combobox` or `Dropdown` only; it throws in development elsewhere.
  */
 export const Option: React.NamedExoticComponent<OptionProps> = /* @__PURE__ */ markListboxElement(
@@ -141,38 +213,30 @@ export interface OptionGroupProps extends React.LiHTMLAttributes<HTMLLIElement> 
   ref?: React.Ref<HTMLLIElement>;
 }
 
-function subscribeNothing(): () => void {
-  return () => {};
-}
-
-/** Values of the `Option` elements among `children` (Fragments and nested groups included). */
-function collectOptionValues(children: React.ReactNode, values: string[]): string[] {
-  React.Children.forEach(children, (child) => {
-    if (!React.isValidElement<{ value?: unknown; children?: React.ReactNode }>(child)) return;
-    if (child.type === Option) {
-      if (typeof child.props.value === 'string') values.push(child.props.value);
-      return;
-    }
-    if (child.type === React.Fragment || child.type === OptionGroup) {
-      collectOptionValues(child.props.children, values);
-    }
-  });
-  return values;
-}
-
-function allHidden(store: ListboxStore | undefined, values: readonly string[]): boolean {
-  return store !== undefined && values.length > 0 && values.every((v) => store.isHidden(v));
-}
-
 function OptionGroupImpl({ label, className, children, hidden, ref, ...rest }: OptionGroupProps) {
   const labelId = useId('option-group');
   const store = React.useContext(ListboxContext)?.store;
-  const values = collectOptionValues(children, []);
-  // Hidden while a filter hides every one of its options (re-read when the listbox state changes).
+  const parentGroups = React.useContext(OptionGroupContext);
+  const [members] = React.useState(() => new OptionGroupMembers());
+  const groups = React.useMemo(() => [...parentGroups, members], [parentGroups, members]);
+  const subscribe = React.useCallback(
+    (listener: () => void) => {
+      const unsubscribeMembers = members.subscribe(listener);
+      const unsubscribeStore = store?.subscribe(listener);
+      return () => {
+        unsubscribeMembers();
+        unsubscribeStore?.();
+      };
+    },
+    [members, store],
+  );
+  // Hidden while a filter hides every option inside it, also options wrapped in a component (the
+  // options register with the group; re-read when they do and when the listbox state changes).
+  // The server render and the first client render show the group: no option has registered yet.
   const empty = React.useSyncExternalStore(
-    store ? store.subscribe : subscribeNothing,
-    () => allHidden(store, values),
-    () => allHidden(store, values),
+    subscribe,
+    () => members.allHidden(store),
+    () => false,
   );
 
   return (
@@ -191,7 +255,7 @@ function OptionGroupImpl({ label, className, children, hidden, ref, ...rest }: O
         {label}
       </div>
       <ul role="group" aria-labelledby={labelId}>
-        {children}
+        <OptionGroupContext.Provider value={groups}>{children}</OptionGroupContext.Provider>
       </ul>
     </li>
   );
@@ -200,7 +264,8 @@ OptionGroupImpl.displayName = 'OptionGroup';
 
 /**
  * Groups options under a heading: `<li role="presentation">` with the heading and a
- * `<ul role="group" aria-labelledby>` of the options. Hidden while a filter hides all its options.
+ * `<ul role="group" aria-labelledby>` of the options. Hidden while a filter hides all its options,
+ * also options wrapped in a component or in nested groups.
  */
 export const OptionGroup: React.FC<OptionGroupProps> = /* @__PURE__ */ markListboxElement(
   OptionGroupImpl,

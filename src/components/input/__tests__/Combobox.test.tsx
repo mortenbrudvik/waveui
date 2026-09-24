@@ -2,6 +2,7 @@ import * as React from 'react';
 import { afterEach, describe, it, expect, vi } from 'vitest';
 import { act, render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
+import { hydrateRoot } from 'react-dom/client';
 import { renderToString } from 'react-dom/server';
 import { Combobox, ComboboxOption, ComboboxOptionGroup, Option, OptionGroup } from '../Combobox';
 import { testCompoundExposure, testSystemProps } from '../../../test-utils';
@@ -377,6 +378,112 @@ describe('Combobox', () => {
       expect(screen.getByRole('group', { name: 'Vegetables' })).toBeInTheDocument();
       expect(screen.queryByRole('group', { name: 'Fruit' })).toBeNull();
     });
+
+    it('hides a group whose options are wrapped in a component when a filter empties it', async () => {
+      const user = userEvent.setup();
+      function WrappedOption(props: React.ComponentProps<typeof Option>) {
+        return <Option {...props} />;
+      }
+      renderCombobox({
+        children: (
+          <>
+            <OptionGroup label="Fruit">
+              <WrappedOption value="a">Apple</WrappedOption>
+            </OptionGroup>
+            <OptionGroup label="Vegetables">
+              <WrappedOption value="c">Carrot</WrappedOption>
+            </OptionGroup>
+          </>
+        ),
+      });
+      await user.type(combobox(), 'car');
+      expect(screen.getByRole('group', { name: 'Vegetables' })).toBeInTheDocument();
+      expect(screen.queryByRole('group', { name: 'Fruit' })).toBeNull();
+      await user.clear(combobox());
+      expect(screen.getByRole('group', { name: 'Fruit' })).toBeInTheDocument();
+      expect(screen.getByRole('group', { name: 'Vegetables' })).toBeInTheDocument();
+    });
+
+    it('hides an outer group once a filter empties its nested groups', async () => {
+      const user = userEvent.setup();
+      renderCombobox({
+        children: (
+          <>
+            <OptionGroup label="Produce">
+              <OptionGroup label="Fruit">
+                <Option value="a">Apple</Option>
+              </OptionGroup>
+            </OptionGroup>
+            <Option value="c">Carrot</Option>
+          </>
+        ),
+      });
+      await user.type(combobox(), 'car');
+      expect(visibleOptions()).toEqual(['Carrot']);
+      expect(screen.queryByRole('group', { name: 'Produce' })).toBeNull();
+      expect(screen.queryByRole('group', { name: 'Fruit' })).toBeNull();
+    });
+
+    it('makes the first match active while typing, so Enter selects it instead of submitting', async () => {
+      const user = userEvent.setup();
+      const onValueChange = vi.fn();
+      const onSubmit = vi.fn((e: React.FormEvent) => e.preventDefault());
+      render(
+        <form aria-label="Order" onSubmit={onSubmit}>
+          <Combobox aria-label="Fruit" name="fruit" onValueChange={onValueChange}>
+            {FRUITS}
+          </Combobox>
+          <button type="submit">Send</button>
+        </form>,
+      );
+      await user.type(combobox(), 'e');
+      expect(visibleOptions()).toEqual(['Apple', 'Beta', 'Cherry']);
+      expect(activeOption()).toHaveTextContent('Apple');
+      await user.type(combobox(), 'r');
+      expect(activeOption()).toHaveTextContent('Cherry');
+      await user.keyboard('{Enter}');
+      expect(onSubmit).not.toHaveBeenCalled();
+      expect(onValueChange).toHaveBeenCalledWith('c');
+      expect(combobox()).toHaveValue('Cherry');
+      expect(combobox()).toHaveAttribute('aria-expanded', 'false');
+    });
+
+    it('makes the first match active again after the user moved and typed on', async () => {
+      const user = userEvent.setup();
+      const onValueChange = vi.fn();
+      renderCombobox({
+        onValueChange,
+        children: ['Apple', 'Banana', 'Blackberry', 'Blueberry'].map((name) => (
+          <Option key={name} value={name.toLowerCase()}>
+            {name}
+          </Option>
+        )),
+      });
+      await user.type(combobox(), 'b');
+      expect(activeOption()).toHaveTextContent('Banana');
+      await user.keyboard('{ArrowDown}{ArrowDown}');
+      expect(activeOption()).toHaveTextContent('Blueberry');
+      // Typing returns visual focus to the text (APG); the first match of the new text is active.
+      await user.keyboard('e');
+      expect(visibleOptions()).toEqual(['Blackberry', 'Blueberry']);
+      expect(activeOption()).toHaveTextContent('Blackberry');
+      await user.keyboard('{Enter}');
+      expect(onValueChange).toHaveBeenCalledWith('blackberry');
+      expect(combobox()).toHaveValue('Blackberry');
+    });
+
+    it('activates no option on open or once the typed text is cleared', async () => {
+      const user = userEvent.setup();
+      renderCombobox();
+      await user.click(combobox());
+      expect(combobox()).toHaveAttribute('aria-expanded', 'true');
+      expect(activeOption()).toBeNull();
+      await user.type(combobox(), 'b');
+      expect(activeOption()).toHaveTextContent('Beta');
+      await user.clear(combobox());
+      expect(visibleOptions()).toEqual(['Apple', 'Beta', 'Cherry']);
+      expect(activeOption()).toBeNull();
+    });
   });
 
   describe('freeform', () => {
@@ -446,6 +553,105 @@ describe('Combobox', () => {
       expect(onValueChange).toHaveBeenCalledTimes(1);
       expect(onValueChange).toHaveBeenCalledWith('k');
     });
+
+    it('shows the text of a controlled parent that normalizes it while typing', async () => {
+      const user = userEvent.setup();
+      let data: FormData | null = null;
+      function Uppercase() {
+        const [value, setValue] = React.useState('');
+        return (
+          <form
+            aria-label="Order"
+            onSubmit={(e) => {
+              e.preventDefault();
+              data = new FormData(e.currentTarget);
+            }}
+          >
+            <Combobox
+              aria-label="Fruit"
+              name="fruit"
+              freeform
+              value={value}
+              onValueChange={(next) => setValue(next.toUpperCase())}
+            >
+              {FRUITS}
+            </Combobox>
+            <button type="submit">Send</button>
+          </form>
+        );
+      }
+      render(<Uppercase />);
+      await user.type(combobox(), 'ch');
+      // Shown while the input still has focus, not only after blur.
+      expect(combobox()).toHaveFocus();
+      expect(combobox()).toHaveValue('CH');
+      expect(visibleOptions()).toEqual(['Cherry']);
+      await user.type(combobox(), 'e');
+      expect(combobox()).toHaveValue('CHE');
+      await user.click(screen.getByRole('button', { name: 'Send' }));
+      expect(data!.get('fruit')).toBe('CHE');
+      expect(combobox()).toHaveValue('CHE');
+    });
+
+    it('keeps the text of a controlled parent that rejects the typing', async () => {
+      const user = userEvent.setup();
+      const onValueChange = vi.fn();
+      renderCombobox({ freeform: true, value: 'kiwi', onValueChange });
+      await user.type(combobox(), 's');
+      expect(onValueChange).toHaveBeenCalledWith('kiwis');
+      expect(combobox()).toHaveValue('kiwi');
+    });
+
+    it('keeps typed text that equals an option value as typed', async () => {
+      const user = userEvent.setup();
+      const onValueChange = vi.fn();
+      render(
+        <>
+          <Combobox aria-label="Fruit" freeform onValueChange={onValueChange}>
+            {FRUITS}
+          </Combobox>
+          <button type="button">Next</button>
+        </>,
+      );
+      await user.type(combobox(), 'a');
+      expect(onValueChange).toHaveBeenLastCalledWith('a');
+      await user.tab();
+      expect(combobox()).toHaveValue('a');
+      // Selecting the option with that value shows its label.
+      await user.click(combobox());
+      await user.click(option('Apple'));
+      expect(combobox()).toHaveValue('Apple');
+    });
+
+    it('shows the label of an option value that was not typed', () => {
+      renderCombobox({ freeform: true, defaultValue: 'us', children: COUNTRIES });
+      expect(combobox()).toHaveValue('United States');
+    });
+
+    it('activates no option while typing, so Enter submits the typed text', async () => {
+      const user = userEvent.setup();
+      let data: FormData | null = null;
+      render(
+        <form
+          aria-label="Order"
+          onSubmit={(e) => {
+            e.preventDefault();
+            data = new FormData(e.currentTarget);
+          }}
+        >
+          <Combobox aria-label="Fruit" name="fruit" freeform>
+            {FRUITS}
+          </Combobox>
+          <button type="submit">Send</button>
+        </form>,
+      );
+      await user.type(combobox(), 'ap');
+      expect(visibleOptions()).toEqual(['Apple']);
+      expect(activeOption()).toBeNull();
+      await user.keyboard('{Enter}');
+      expect(data!.get('fruit')).toBe('ap');
+      expect(combobox()).toHaveValue('ap');
+    });
   });
 
   describe('display text (input-pickers#6)', () => {
@@ -488,6 +694,42 @@ describe('Combobox', () => {
         'value',
         'United States',
       );
+    });
+
+    it('hydrates grouped options without mismatches, then hides an emptied group', async () => {
+      function WrappedOption(props: React.ComponentProps<typeof Option>) {
+        return <Option {...props} />;
+      }
+      const element = (
+        <Combobox aria-label="Fruit" defaultValue="a">
+          <OptionGroup label="Fruit">
+            <WrappedOption value="a">Apple</WrappedOption>
+          </OptionGroup>
+          <OptionGroup label="Vegetables">
+            <WrappedOption value="c">Carrot</WrappedOption>
+          </OptionGroup>
+        </Combobox>
+      );
+      const container = document.createElement('div');
+      container.innerHTML = renderToString(element);
+      document.body.appendChild(container);
+      const error = vi.spyOn(console, 'error').mockImplementation(() => {});
+      let root: ReturnType<typeof hydrateRoot> | undefined;
+      try {
+        await act(async () => {
+          root = hydrateRoot(container, element);
+        });
+        expect(error).not.toHaveBeenCalled();
+        expect(combobox()).toHaveValue('Apple');
+        const user = userEvent.setup();
+        await user.clear(combobox());
+        await user.type(combobox(), 'car');
+        expect(screen.getByRole('group', { name: 'Vegetables' })).toBeInTheDocument();
+        expect(screen.queryByRole('group', { name: 'Fruit' })).toBeNull();
+      } finally {
+        act(() => root?.unmount());
+        container.remove();
+      }
     });
 
     it('clears when a controlled value becomes undefined (table-core#4)', () => {
@@ -958,7 +1200,33 @@ describe('Combobox', () => {
     combobox().focus();
     await user.keyboard('{ArrowDown}');
     expect(option('Apple')).toHaveAttribute('data-active');
-    expect(option('Apple')).toHaveClass('data-[active]:bg-selected');
-    expect(option('Apple')).not.toHaveClass('data-[active]:bg-subtle-hover');
+    // The built-in active state only sets `--option-bg`, read by the unconditional
+    // `bg-(--option-bg)`; the consumer's variant out-specifies that reader.
+    expect(option('Apple')).toHaveClass(
+      'bg-(--option-bg)',
+      'data-[active]:[--option-bg:var(--wave-subtle-hover)]',
+      'data-[active]:bg-selected',
+    );
+  });
+
+  it('lets a plain consumer option background win while selected and active (input-pickers#20)', async () => {
+    const user = userEvent.setup();
+    renderCombobox({
+      defaultValue: 'a',
+      children: (
+        <Option value="a" className="bg-primary text-primary-foreground">
+          Apple
+        </Option>
+      ),
+    });
+    combobox().focus();
+    await user.keyboard('{ArrowDown}');
+    const apple = option('Apple');
+    expect(apple).toHaveAttribute('data-selected');
+    expect(apple).toHaveAttribute('data-active');
+    // No state variant sets a background, and tailwind-merge dropped the built-in reader: the
+    // consumer's plain class is the option's only background.
+    const backgrounds = [...apple.classList].filter((c) => /(?:^|:)bg-/.test(c));
+    expect(backgrounds).toEqual(['bg-primary']);
   });
 });

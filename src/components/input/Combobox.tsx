@@ -60,8 +60,11 @@ export interface ComboboxProps extends Omit<
    */
   disabled?: boolean;
   /**
-   * Whether the typed text is itself the value. Without it, typing only filters the options and
-   * the input shows the selected option's label again when the listbox closes or loses focus.
+   * Whether the typed text is itself the value. Without it, typing only filters the options (the
+   * first match becomes active, so Enter selects it) and the input shows the selected option's
+   * label again when the listbox closes or loses focus. With it, the input shows typed text as
+   * typed (also when it equals an option's value), a selected option's label, and a controlled
+   * `value` as soon as the parent sets it (a parent that normalizes or rejects the text).
    * @default false
    */
   freeform?: boolean;
@@ -102,8 +105,8 @@ function matchesText(item: ListboxItem, text: string): boolean {
  * An editable combobox: a text input with a filterable listbox of `Option`s (APG combobox with
  * list autocomplete). Typing filters the options; ArrowDown/ArrowUp move the highlight
  * (`aria-activedescendant`), Enter selects, Escape closes. Without `freeform` the text is only a
- * filter: the input shows the selected option's label again when the listbox closes. With
- * `freeform` the text itself is the value.
+ * filter: its first match becomes active while typing, and the input shows the selected option's
+ * label again when the listbox closes. With `freeform` the text itself is the value.
  *
  * `id`, `aria-*`, `tabIndex`, `autoFocus`, focus/keyboard handlers and text input attributes go to
  * the `<input>`; `ref`, `className`, `style` and other props stay on the root. Inside a `Field`
@@ -174,7 +177,8 @@ const ComboboxRoot = (props: ComboboxProps) => {
   const [openState, setOpen] = useControllable(openProp, defaultOpen ?? false, onOpenChange);
   const interactive = !disabled && !readOnly;
   const open = openState && interactive;
-  // Text typed since the last commit; `null` shows the committed value's label (input-pickers#7).
+  // Text typed since the last commit, the filter; `null` shows the committed value's label
+  // (input-pickers#7). Freeform: the input shows the value, and the draft follows that text.
   const [draft, setDraft] = React.useState<string | null>(null);
   // Locking the control (readOnly/disabled) while typing drops the draft, so the input shows the
   // committed value again (adjust-during-render pattern, C-HOOKS).
@@ -191,6 +195,10 @@ const ComboboxRoot = (props: ComboboxProps) => {
     if (lockedOpen) setOpen(false);
   }, [lockedOpen, setOpen]);
 
+  // Freeform: the value the user typed last. While the value still equals it, the input shows it
+  // as typed, even when it equals an option's value (not that option's label).
+  const [typedValue, setTypedValue] = React.useState<string | null>(null);
+
   const rootRef = React.useRef<HTMLDivElement | null>(null);
   const inputRef = React.useRef<HTMLInputElement | null>(null);
 
@@ -201,6 +209,7 @@ const ComboboxRoot = (props: ComboboxProps) => {
   );
 
   const commitText = (text: string) => {
+    setTypedValue(text);
     setValue(text);
     onOptionSelect?.(text);
   };
@@ -235,12 +244,29 @@ const ComboboxRoot = (props: ComboboxProps) => {
       setValue(next);
       onOptionSelect?.(next);
       setDraft(null);
+      setTypedValue(null);
     },
     filter,
-    autoHighlight: false,
+    // Typing a filter makes its first match active (like Fluent's Combobox), so Enter selects what
+    // the list shows instead of submitting the form. Nothing is active on open or with the text
+    // cleared. Freeform: the text is the value, so Enter keeps it unless the user moved to an
+    // option.
+    autoHighlight: !freeform && draft ? 'first' : false,
     idPrefix: 'combobox-listbox',
     onClearDraft: clearDraft,
   });
+
+  // The input text. Freeform: the value as typed while it is the value the user typed last, else
+  // the label of the option with that value, else the value itself — so the text follows a
+  // controlled parent that normalizes or rejects what was typed while the input still has focus.
+  // Otherwise: the typed filter, else the selected option's label.
+  const optionLabel = value ? (listbox.getItem(value)?.label ?? labels.get(value)) : undefined;
+  let inputText: string;
+  if (freeform) inputText = value === typedValue ? value : (optionLabel ?? value);
+  else inputText = draft ?? optionLabel ?? '';
+  // Freeform: the filter follows the text (adjust-during-render pattern, C-HOOKS; the text does not
+  // depend on the filter, so this settles in one pass).
+  if (freeform && draft !== null && draft !== inputText) setDraft(inputText);
 
   const expanded = open && listbox.items.length > 0;
   // The popup shows the list, or "No matches" for a draft.
@@ -261,13 +287,10 @@ const ComboboxRoot = (props: ComboboxProps) => {
     () => {
       setValue(defaultValue ?? '');
       setDraft(null);
+      setTypedValue(null);
     },
     form,
   );
-
-  const committedText = value
-    ? (listbox.getItem(value)?.label ?? labels.get(value) ?? (freeform ? value : ''))
-    : '';
 
   const handleKeyDown = (event: React.KeyboardEvent<HTMLInputElement>) => {
     if (event.key === 'Escape' && open && !surfaceOpen && !event.nativeEvent.isComposing) {
@@ -315,7 +338,7 @@ const ComboboxRoot = (props: ComboboxProps) => {
         enterKeyHint={enterKeyHint}
         autoFocus={autoFocus}
         tabIndex={tabIndex}
-        value={draft ?? committedText}
+        value={inputText}
         onChange={handleChange}
         onClick={() => {
           if (!open && interactive) setOpen(true);
