@@ -1,115 +1,124 @@
 import type { Meta, StoryObj } from '@storybook/react';
 import { Table } from '../src';
 
+const members = [
+  {
+    id: '001',
+    name: 'Alice Johnson',
+    email: 'alice@example.com',
+    role: 'Engineer',
+    location: 'Seattle',
+  },
+  {
+    id: '002',
+    name: 'Bob Smith',
+    email: 'bob@example.com',
+    role: 'Designer',
+    location: 'New York',
+  },
+  {
+    id: '003',
+    name: 'Carol White',
+    email: 'carol@example.com',
+    role: 'Manager',
+    location: 'London',
+  },
+  { id: '004', name: 'David Brown', email: 'david@example.com', role: 'Analyst', location: 'Oslo' },
+];
+
+function header(labels: string[]) {
+  return (
+    <Table.Header>
+      <tr>
+        {labels.map((label) => (
+          <Table.HeaderCell key={label}>{label}</Table.HeaderCell>
+        ))}
+      </tr>
+    </Table.Header>
+  );
+}
+
+/**
+ * A non-interactive data table. `striped` shades odd body rows. The table sits in a horizontally
+ * scrollable wrapper that becomes a focusable, named region while it scrolls.
+ */
 const meta = {
   title: 'Components/Table/Table',
   component: Table,
+  args: {
+    striped: false,
+    children: null,
+  },
+  render: (args) => (
+    <Table {...args}>
+      {header(['Name', 'Role', 'Location'])}
+      <Table.Body>
+        {members.slice(0, 3).map((member) => (
+          <Table.Row key={member.id}>
+            <Table.Cell>{member.name}</Table.Cell>
+            <Table.Cell>{member.role}</Table.Cell>
+            <Table.Cell>{member.location}</Table.Cell>
+          </Table.Row>
+        ))}
+      </Table.Body>
+    </Table>
+  ),
 } satisfies Meta<typeof Table>;
 
 export default meta;
 type Story = StoryObj<typeof meta>;
 
-export const Default: Story = {
-  render: () => (
-    <Table>
-      <Table.Head>
-        <tr>
-          <Table.HeadCell>Name</Table.HeadCell>
-          <Table.HeadCell>Role</Table.HeadCell>
-          <Table.HeadCell>Status</Table.HeadCell>
-        </tr>
-      </Table.Head>
-      <Table.Body>
-        <Table.Row>
-          <Table.Cell>Alice Johnson</Table.Cell>
-          <Table.Cell>Engineer</Table.Cell>
-          <Table.Cell>Active</Table.Cell>
-        </Table.Row>
-        <Table.Row>
-          <Table.Cell>Bob Smith</Table.Cell>
-          <Table.Cell>Designer</Table.Cell>
-          <Table.Cell>Active</Table.Cell>
-        </Table.Row>
-        <Table.Row>
-          <Table.Cell>Carol White</Table.Cell>
-          <Table.Cell>Manager</Table.Cell>
-          <Table.Cell>On Leave</Table.Cell>
-        </Table.Row>
-      </Table.Body>
-    </Table>
-  ),
+export const Default: Story = {};
+
+/** Odd body rows get the card background (a CSS selector on the table, no row context). */
+export const Striped: Story = {
+  args: {
+    striped: true,
+  },
 };
 
-export const Striped: Story = {
-  render: () => (
-    <Table striped>
-      <Table.Head>
-        <tr>
-          <Table.HeadCell>Product</Table.HeadCell>
-          <Table.HeadCell>Price</Table.HeadCell>
-          <Table.HeadCell>Stock</Table.HeadCell>
-        </tr>
-      </Table.Head>
+/**
+ * A wide table in a narrow container: the wrapper scrolls horizontally and, while it does, is a
+ * focusable region named by the caption, so keyboard users can scroll it.
+ */
+export const WithCaptionAndScroll: Story = {
+  args: {
+    containerProps: { className: 'max-w-md' },
+    className: 'min-w-[40rem]',
+  },
+  render: (args) => (
+    <Table {...args}>
+      <caption className="px-4 py-2 text-start text-body-1 font-semibold">Team directory</caption>
+      {header(['ID', 'Name', 'Email', 'Role', 'Location'])}
       <Table.Body>
-        <Table.Row>
-          <Table.Cell>Widget A</Table.Cell>
-          <Table.Cell>$19.99</Table.Cell>
-          <Table.Cell>142</Table.Cell>
-        </Table.Row>
-        <Table.Row>
-          <Table.Cell>Widget B</Table.Cell>
-          <Table.Cell>$29.99</Table.Cell>
-          <Table.Cell>83</Table.Cell>
-        </Table.Row>
-        <Table.Row>
-          <Table.Cell>Widget C</Table.Cell>
-          <Table.Cell>$9.99</Table.Cell>
-          <Table.Cell>310</Table.Cell>
-        </Table.Row>
-        <Table.Row>
-          <Table.Cell>Widget D</Table.Cell>
-          <Table.Cell>$49.99</Table.Cell>
-          <Table.Cell>27</Table.Cell>
-        </Table.Row>
+        {members.map((member) => (
+          <Table.Row key={member.id}>
+            <Table.Cell>{member.id}</Table.Cell>
+            <Table.Cell>{member.name}</Table.Cell>
+            <Table.Cell>{member.email}</Table.Cell>
+            <Table.Cell>{member.role}</Table.Cell>
+            <Table.Cell>{member.location}</Table.Cell>
+          </Table.Row>
+        ))}
       </Table.Body>
     </Table>
   ),
 };
 
 export const FullComposition: Story = {
-  render: () => (
-    <Table>
-      <Table.Head>
-        <tr>
-          <Table.HeadCell>ID</Table.HeadCell>
-          <Table.HeadCell>Name</Table.HeadCell>
-          <Table.HeadCell>Email</Table.HeadCell>
-          <Table.HeadCell>Department</Table.HeadCell>
-          <Table.HeadCell>Location</Table.HeadCell>
-        </tr>
-      </Table.Head>
+  render: (args) => (
+    <Table {...args}>
+      {header(['ID', 'Name', 'Email', 'Role', 'Location'])}
       <Table.Body>
-        <Table.Row>
-          <Table.Cell>001</Table.Cell>
-          <Table.Cell>Alice Johnson</Table.Cell>
-          <Table.Cell>alice@example.com</Table.Cell>
-          <Table.Cell>Engineering</Table.Cell>
-          <Table.Cell>Seattle</Table.Cell>
-        </Table.Row>
-        <Table.Row>
-          <Table.Cell>002</Table.Cell>
-          <Table.Cell>Bob Smith</Table.Cell>
-          <Table.Cell>bob@example.com</Table.Cell>
-          <Table.Cell>Design</Table.Cell>
-          <Table.Cell>New York</Table.Cell>
-        </Table.Row>
-        <Table.Row>
-          <Table.Cell>003</Table.Cell>
-          <Table.Cell>Carol White</Table.Cell>
-          <Table.Cell>carol@example.com</Table.Cell>
-          <Table.Cell>Marketing</Table.Cell>
-          <Table.Cell>London</Table.Cell>
-        </Table.Row>
+        {members.map((member) => (
+          <Table.Row key={member.id}>
+            <Table.Cell>{member.id}</Table.Cell>
+            <Table.Cell>{member.name}</Table.Cell>
+            <Table.Cell>{member.email}</Table.Cell>
+            <Table.Cell>{member.role}</Table.Cell>
+            <Table.Cell>{member.location}</Table.Cell>
+          </Table.Row>
+        ))}
       </Table.Body>
     </Table>
   ),
