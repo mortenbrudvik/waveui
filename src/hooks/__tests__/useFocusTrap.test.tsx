@@ -336,47 +336,6 @@ describe('useFocusTrap — allow-listed regions', () => {
     act(() => button('Toast action').focus());
     expect(button('Toast action')).toHaveFocus();
   });
-
-  it('does not reclaim focus when a removed allow-listed control drops focus on body', () => {
-    render(
-      <Page>
-        <div data-wave-focus-trap-allow="" role="region" aria-label="Notifications">
-          <button type="button">Dismiss toast</button>
-        </div>
-        <Trap>
-          <button type="button">Close</button>
-        </Trap>
-      </Page>,
-    );
-    const dismiss = button('Dismiss toast');
-    act(() => dismiss.focus());
-    expect(dismiss).toHaveFocus();
-    // jsdom does not fire focusin when a focused node is removed. A browser does, onto <body>,
-    // and the trap must leave that for usePreserveFocus instead of focusing Close.
-    act(() => {
-      dismiss.remove();
-      document.body.dispatchEvent(new FocusEvent('focusin', { bubbles: true }));
-    });
-    expect(button('Close')).not.toHaveFocus();
-  });
-
-  it('returns focus to a connected allow-listed control when focus moves to body', () => {
-    render(
-      <Page>
-        <div data-wave-focus-trap-allow="" role="region" aria-label="Notifications">
-          <button type="button">Dismiss toast</button>
-        </div>
-        <Trap>
-          <button type="button">Close</button>
-        </Trap>
-      </Page>,
-    );
-    act(() => button('Dismiss toast').focus());
-    act(() => {
-      document.body.dispatchEvent(new FocusEvent('focusin', { bubbles: true }));
-    });
-    expect(button('Dismiss toast')).toHaveFocus();
-  });
 });
 
 describe('useFocusTrap — focus leaving', () => {

@@ -42,8 +42,6 @@ interface TrapEntry {
   readonly layerId: string | undefined;
   readonly allowOutsideSelector: string;
   lastFocused: HTMLElement | null;
-  /** `lastFocused` was inside an allow-listed region (a toast) while it was connected. */
-  lastFocusedInAllow: boolean;
 }
 
 interface TrapState {
@@ -346,21 +344,7 @@ function handleFocusIn(event: FocusEvent): void {
   const node = target as Node;
   if (node.nodeType !== 1) return;
   if (isInsideTrap(trap, node)) {
-    const element = node as HTMLElement;
-    trap.lastFocused = element;
-    trap.lastFocusedInAllow = element.closest(trap.allowOutsideSelector) !== null;
-    return;
-  }
-  // Removing a focused toast moves focus to <body> and fires focusin during removeChild.
-  // usePreserveFocus puts it back in a microtask. Reclaiming here would focus the dialog's
-  // first tabbable (Close) and that microtask would then treat focus as already placed.
-  const doc = trap.container.ownerDocument;
-  if (
-    (node === doc.body || node === doc.documentElement) &&
-    trap.lastFocusedInAllow &&
-    trap.lastFocused !== null &&
-    !trap.lastFocused.isConnected
-  ) {
+    trap.lastFocused = node as HTMLElement;
     return;
   }
   const last = trap.lastFocused;
@@ -426,8 +410,7 @@ function resolveInitialFocus(
  * - Focus that lands outside (not in the container, an allowed region or a descendant layer)
  *   returns to the last focused element inside. The layer's own `refs` (its trigger, outside the
  *   container) are outside: opening from the focused trigger still moves focus in, and focus
- *   moving back onto the trigger is returned. Focus that falls on `<body>` or `<html>` because a
- *   focused allow-listed control was removed is left alone: `usePreserveFocus` restores it.
+ *   moving back onto the trigger is returned.
  * - Traps form a stack (shared through the global registry): only the topmost acts.
  */
 export function useFocusTrap(container: HTMLElement | null, options: UseFocusTrapOptions): void {
@@ -453,7 +436,6 @@ export function useFocusTrap(container: HTMLElement | null, options: UseFocusTra
         return latest.current.allowOutsideSelector ?? ALLOW_OUTSIDE_SELECTOR;
       },
       lastFocused: null,
-      lastFocusedInAllow: false,
     };
     const release = pushTrap(entry);
 
