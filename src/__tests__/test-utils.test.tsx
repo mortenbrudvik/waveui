@@ -1,19 +1,31 @@
 import * as React from 'react';
 import { createPortal } from 'react-dom';
+import { renderToString } from 'react-dom/server';
 import { cleanup, render, screen } from '@testing-library/react';
 import type { UserEvent } from '@testing-library/user-event';
 import { axe as defaultVitestAxe, configureAxe } from 'vitest-axe';
 import { Button } from '../components/button/Button';
 import { useWaveTheme } from '../components/provider/WaveProvider';
+import { useDismiss } from '../hooks/useDismiss';
+import { useFocusTrap } from '../hooks/useFocusTrap';
+import { useModalIsolation } from '../hooks/useModalIsolation';
+import { useRestoreFocus } from '../hooks/useRestoreFocus';
+import { useScrollLock } from '../hooks/useScrollLock';
+import { getElementType } from '../lib/children';
 import { cn } from '../lib/cn';
 import { composeEventHandlers } from '../lib/composeEventHandlers';
 import { warnOnce } from '../lib/dev';
+import { getOpenLayers, registerLayer } from '../lib/layers';
+import type { LayerKind, LayerRecord } from '../lib/layers';
 import type { PolymorphicComponent } from '../lib/polymorphic';
 import {
+  asClientReference,
   assertEmptyBody,
+  assertOverlayStateReleased,
   axe,
   createOverlayTestWrapper,
   expectNoA11yViolations,
+  findDanglingIdRefs,
   installResizeObserverMock,
   mockMatchMedia,
   mockRect,
@@ -222,6 +234,22 @@ async function actWarningsDuring(audit: () => Promise<unknown>): Promise<string[
   }
 }
 
+/** A dismiss layer registered directly, as `useDismiss` registers one. */
+function layerRecord(id: string, kind: LayerKind): LayerRecord {
+  return {
+    id,
+    parentId: null,
+    kind,
+    order: 0,
+    getElements: () => [],
+    getAnchor: () => null,
+    escape: true,
+    outsidePress: false,
+    focusOutside: false,
+    onDismiss: () => {},
+  };
+}
+
 /** Renders an unnamed button into a portal: invisible to a `container` audit. */
 const PortaledUnnamedButton = ({ open = true }: { open?: boolean }) =>
   open ? createPortal(<button type="button" />, document.body) : <span>closed</span>;
@@ -362,11 +390,31 @@ const ScriptSubmitter = () => (
 describe('axe (shared instance)', () => {
   it('disables `region`, which the default vitest-axe instance reports on document.body', async () => {
     render(<p>Hello</p>);
-    const defaults = await defaultVitestAxe(document.body);
+    // color-contrast off here too: it cannot run in jsdom and would print jsdom's canvas notice.
+    const defaults = await defaultVitestAxe(document.body, {
+      rules: { 'color-contrast': { enabled: false } },
+    });
     expect(defaults.violations.map((v) => v.id)).toContain('region');
 
     const shared = await axe(document.body);
     expect(shared.violations).toEqual([]);
+  });
+
+  it('disables color-contrast, which jsdom cannot evaluate (tokens.test.ts guards contrast)', async () => {
+    // Enabled, the rule's canvas probe fails in jsdom (which prints "Not implemented:
+    // HTMLCanvasElement's getContext()" on every audit) and axe files it under `incomplete`,
+    // having checked nothing.
+    render(<p>Hello</p>);
+    const results = await axe(document.body);
+    const ran = [
+      ...results.violations,
+      ...results.incomplete,
+      ...results.passes,
+      ...results.inapplicable,
+    ].map((result) => result.id);
+    expect(ran).toContain('button-name'); // the audit ran the other rules
+    expect(ran).not.toContain('color-contrast');
+    expect(results.incomplete).toEqual([]);
   });
 
   it('passes a bare <button> on document.body', async () => {
@@ -393,6 +441,121 @@ describe('axe (shared instance)', () => {
 
   it('is typed as a configureAxe instance', () => {
     expectTypeOf(axe).toEqualTypeOf<ReturnType<typeof configureAxe>>();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Dangling ARIA id references (axe files them under `incomplete` or accepts a partial list)
+// ---------------------------------------------------------------------------
+
+describe('dangling ARIA id references', () => {
+  it.each([
+    ['aria-describedby', <input aria-label="Email" aria-describedby="missing-hint" />],
+    ['aria-labelledby', <input aria-label="Email" aria-labelledby="missing-label" />],
+    [
+      'aria-errormessage',
+      <input aria-label="Email" aria-invalid aria-errormessage="missing-error" />,
+    ],
+  ])('expectNoA11yViolations fails on an %s that points at no element', async (attr, ui) => {
+    render(ui);
+    // axe itself reports no violation for these: it files them under `incomplete`.
+    expect((await axe(document.body)).violations).toEqual([]);
+    await expect(expectNoA11yViolations()).rejects.toThrow(new RegExp(`${attr}="missing-`));
+  });
+
+  it('fails on one dangling id of a list whose other ids resolve (axe accepts that)', async () => {
+    render(
+      <>
+        <p id="email-hint">We never share it.</p>
+        <input aria-label="Email" aria-describedby="email-hint email-error" />
+      </>,
+    );
+    const results = await axe(document.body);
+    expect([...results.violations, ...results.incomplete]).toEqual([]);
+    await expect(expectNoA11yViolations()).rejects.toThrow(/"email-error"/);
+  });
+
+  it('passes references that resolve, also into a portal when only the container is audited', async () => {
+    const { container } = render(
+      <>
+        <span id="field-label">Email</span>
+        <input aria-labelledby="field-label" aria-describedby="field-hint" />
+        {createPortal(<p id="field-hint">We never share it.</p>, document.body)}
+      </>,
+    );
+    await expectNoA11yViolations();
+    await expectNoA11yViolations(container);
+  });
+
+  it('leaves aria-controls alone (a closed popup may not be rendered)', async () => {
+    render(
+      <button type="button" aria-expanded="false" aria-controls="menu-list">
+        Menu
+      </button>,
+    );
+    await expectNoA11yViolations();
+  });
+
+  it('testA11y and the a11yVariants loop fail on a dangling reference', async () => {
+    const Described = ({ hint = true }: { hint?: boolean }) => (
+      <div>
+        <input aria-label="Email" aria-describedby="email-hint" />
+        {hint && <p id="email-hint">We never share it.</p>}
+      </div>
+    );
+    Described.displayName = 'Described';
+    await expect(run(collect(() => testA11y(Described))[0])).resolves.toBeUndefined();
+    await expect(run(collect(() => testA11y(Described, { hint: false }))[0])).rejects.toThrow(
+      /aria-describedby="email-hint"/,
+    );
+    const variants = collect(() =>
+      testSystemProps(Described, {
+        expectedTag: 'div',
+        displayName: 'Described',
+        a11yVariants: [{ name: 'without hint', props: { hint: false } }],
+      }),
+    );
+    await expect(
+      run(pick(variants, 'has no accessibility violations (without hint)')),
+    ).rejects.toThrow(/aria-describedby="email-hint"/);
+  });
+
+  describe('findDanglingIdRefs', () => {
+    it('lists every dangling id of aria-activedescendant/-describedby/-errormessage/-labelledby', () => {
+      render(
+        <div role="listbox" aria-label="Fruit" aria-activedescendant="missing-option" tabIndex={0}>
+          <span id="present">Present</span>
+          <div role="option" aria-selected="false" aria-labelledby="present gone">
+            Apple
+          </div>
+        </div>,
+      );
+      expect(findDanglingIdRefs()).toEqual([
+        'div[role="listbox"] "Fruit": aria-activedescendant="missing-option" (no element with id "missing-option")',
+        'div[role="option"] "Apple": aria-labelledby="present gone" (no element with id "gone")',
+      ]);
+    });
+
+    it('checks `root` itself and its descendants only, resolving ids in the whole document', () => {
+      const { container } = render(
+        <>
+          <input aria-label="Outside" aria-describedby="nowhere" />
+          <section aria-label="Scope" aria-describedby="outside-hint">
+            <input aria-label="Inside" aria-describedby="also-nowhere" />
+          </section>
+          <p id="outside-hint">Hint</p>
+        </>,
+      );
+      const scope = container.querySelector('section') as HTMLElement;
+      expect(findDanglingIdRefs(scope)).toEqual([
+        'input "Inside": aria-describedby="also-nowhere" (no element with id "also-nowhere")',
+      ]);
+    });
+
+    it('ignores empty and whitespace-only values', () => {
+      render(<input aria-label="Email" aria-describedby=" " aria-labelledby="" />);
+      expect(findDanglingIdRefs()).toEqual([]);
+    });
   });
 });
 
@@ -1119,6 +1282,61 @@ describe('mockRect', () => {
 });
 
 // ---------------------------------------------------------------------------
+// asClientReference (R1: element types from Server Components)
+// ---------------------------------------------------------------------------
+
+describe('asClientReference', () => {
+  interface BadgeProps {
+    tone?: string;
+    children?: React.ReactNode;
+    ref?: React.Ref<HTMLSpanElement>;
+  }
+  const Badge = ({ tone = 'neutral', ...rest }: BadgeProps) => <span data-tone={tone} {...rest} />;
+  Badge.displayName = 'Badge';
+
+  it('returns a React.lazy element type, not the component (the shape Flight delivers)', () => {
+    const LazyBadge = asClientReference(Badge);
+    const element = <LazyBadge />;
+    expect(element.type).not.toBe(Badge);
+    expect((element.type as unknown as { $$typeof: symbol }).$$typeof).toBe(
+      Symbol.for('react.lazy'),
+    );
+  });
+
+  it('is already resolved: getElementType unwraps it to the component', () => {
+    expect(getElementType(React.createElement(asClientReference(Badge)))).toBe(Badge);
+  });
+
+  it('server-renders exactly like the component', () => {
+    const LazyBadge = asClientReference(Badge);
+    const html = renderToString(<LazyBadge tone="brand">New</LazyBadge>);
+    expect(html).toBe(renderToString(<Badge tone="brand">New</Badge>));
+    expect(html).toContain('New');
+  });
+
+  it('renders on the first client render without suspending, with its props and ref', () => {
+    const LazyBadge = asClientReference(Badge);
+    const ref = React.createRef<HTMLSpanElement>();
+    render(
+      <React.Suspense fallback={<p>Loading</p>}>
+        <LazyBadge ref={ref} tone="brand">
+          New
+        </LazyBadge>
+      </React.Suspense>,
+    );
+    const badge = screen.getByText('New');
+    expect(badge).toHaveAttribute('data-tone', 'brand');
+    expect(ref.current).toBe(badge);
+    expect(screen.queryByText('Loading')).not.toBeInTheDocument();
+  });
+
+  it('keeps the component type, so JSX props stay checked', () => {
+    expectTypeOf(asClientReference(Badge)).toEqualTypeOf<typeof Badge>();
+    expectTypeOf(asClientReference(Button)).toEqualTypeOf<typeof Button>();
+  });
+});
+
+// ---------------------------------------------------------------------------
 // src/test-setup.ts
 // ---------------------------------------------------------------------------
 
@@ -1223,6 +1441,150 @@ describe('test-setup', () => {
 
     it('passes an empty body', () => {
       expect(() => assertEmptyBody()).not.toThrow();
+    });
+  });
+
+  describe('assertOverlayStateReleased (the overlay-state release assertion)', () => {
+    /** The registry as `getGlobalRegistry(key)` stores it, `undefined` when there is none. */
+    const registry = (key: string): unknown =>
+      Reflect.get(globalThis, Symbol.for(`@mortenbrudvik/waveui/${key}`));
+
+    // Runs before the setup's body check (a node the test appended itself).
+    afterEach(() => document.getElementById('outside')?.remove());
+
+    /** A modal surface built from the real overlay hooks. */
+    function Trapped() {
+      const surfaceRef = React.useRef<HTMLDivElement | null>(null);
+      const [surface, setSurface] = React.useState<HTMLDivElement | null>(null);
+      const setRefs = React.useCallback((el: HTMLDivElement | null) => {
+        surfaceRef.current = el;
+        setSurface(el);
+      }, []);
+      const { layerId } = useDismiss({
+        open: true,
+        onDismiss: () => {},
+        refs: [surfaceRef],
+        kind: 'modal',
+      });
+      useFocusTrap(surface, { enabled: true, layerId });
+      useModalIsolation(true, { layerId, container: surface });
+      useScrollLock(true);
+      return (
+        <div ref={setRefs} role="dialog" aria-label="Trapped">
+          <button type="button">Inside</button>
+        </div>
+      );
+    }
+
+    it('passes once the real overlay hooks released everything on unmount', () => {
+      render(<Trapped />);
+      expect(getOpenLayers()).toHaveLength(1);
+      expect(document.documentElement.style.overflow).toBe('hidden');
+      cleanup();
+      expect(() => assertOverlayStateReleased()).not.toThrow();
+    });
+
+    it('names every leak, releases it and drops the leaked registries', () => {
+      const outside = document.createElement('div');
+      outside.id = 'outside';
+      document.body.append(outside);
+      const unregister = registerLayer(layerRecord('leaked-popover', 'popover'));
+      // Still mounted when the check runs: to the check, everything below leaked.
+      const { unmount } = render(<Trapped />);
+      expect(outside).toHaveAttribute('inert');
+      const html = document.documentElement;
+
+      let message = '';
+      try {
+        assertOverlayStateReleased();
+      } catch (error) {
+        message = (error as Error).message;
+      }
+      expect(message).toMatch(/^overlay state outlived its test: /);
+      expect(message).toMatch(/2 open dismiss layers \(popover, modal\)/);
+      expect(message).toMatch(/1 isolating modal\b/);
+      expect(message).toMatch(/1 focus trap\b/);
+      expect(message).toMatch(/1 scroll lock\b/);
+      expect(message).toMatch(/1 element made inert by modal isolation \(div#outside\)/);
+      expect(message).toMatch(/inline overflow on <html> \(overflow: hidden\)/);
+
+      for (const key of ['layers', 'traps', 'scrollLock', 'inert']) {
+        expect(registry(key), key).toBeUndefined();
+      }
+      expect(getOpenLayers()).toEqual([]);
+      expect(outside).not.toHaveAttribute('inert');
+      expect(html.style.overflow).toBe('');
+
+      // The late cleanups of the leaked registrations touch only the dropped registries.
+      unregister();
+      unmount();
+      expect(() => assertOverlayStateReleased()).not.toThrow();
+    });
+
+    it('reports and removes an inert attribute or inline overflow the test left itself', () => {
+      document.body.setAttribute('inert', '');
+      document.documentElement.style.overflowY = 'hidden';
+      expect(() => assertOverlayStateReleased()).toThrow(
+        /inert attribute on body; inline overflow on <html> \(overflow-y: hidden\)/,
+      );
+      expect(document.body).not.toHaveAttribute('inert');
+      expect(document.documentElement.style.overflowY).toBe('');
+    });
+
+    it('uninstalls every document listener the leaked layer and focus-trap stacks installed', () => {
+      const capture = (options: unknown) =>
+        typeof options === 'boolean' ? options : Boolean(Object(options).capture);
+      const added = vi.spyOn(document, 'addEventListener');
+      const removed = vi.spyOn(document, 'removeEventListener');
+      try {
+        render(<Trapped />);
+        // React DOM's own `selectionchange` listener stays for the document's lifetime.
+        const installed = added.mock.calls.filter(([type]) => type !== 'selectionchange');
+        expect(installed.map(([type]) => type)).toEqual(
+          expect.arrayContaining(['keydown', 'pointerdown', 'focusin']),
+        );
+        expect(() => assertOverlayStateReleased()).toThrow(/1 open dismiss layer \(modal\)/);
+        const remaining = installed.filter(
+          ([type, listener, options]) =>
+            !removed.mock.calls.some(
+              ([t, l, o]) => t === type && l === listener && capture(o) === capture(options),
+            ),
+        );
+        expect(remaining.map(([type]) => type)).toEqual([]);
+      } finally {
+        added.mockRestore();
+        removed.mockRestore();
+      }
+    });
+
+    it('reports a leaked useRestoreFocus focus tracker', () => {
+      function Restoring() {
+        useRestoreFocus({ enabled: false });
+        return null;
+      }
+      render(<Restoring />);
+      expect(() => assertOverlayStateReleased()).toThrow(/1 useRestoreFocus focus tracker user/);
+      expect(registry('restoreFocusTracker')).toBeUndefined();
+    });
+  });
+
+  describe('overlay state must be released after every test (setup wiring)', () => {
+    // As for the body check below: the error is captured by the it.fails test and checked in
+    // afterAll, so the check holds in any order and under `-t`.
+    let leakTestRan = false;
+    let leakError = '';
+    afterAll(() => {
+      if (!leakTestRan) return;
+      expect(leakError).toMatch(/overlay state outlived its test: 1 open dismiss layer \(menu\)/);
+      expect(getOpenLayers()).toEqual([]);
+    });
+
+    it.fails('fails a test that leaves a dismiss layer registered', ({ onTestFailed }) => {
+      leakTestRan = true;
+      onTestFailed(({ task }) => {
+        leakError = (task.result?.errors ?? []).map((e) => e.message).join('\n');
+      });
+      registerLayer(layerRecord('leaked-menu', 'menu'));
     });
   });
 

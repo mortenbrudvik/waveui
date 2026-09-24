@@ -11,16 +11,20 @@
  * - After every test (this hook runs after the test file's own `afterEach` hooks): RTL
  *   `cleanup()`, `__resetWarnings()`, {@link resetMatchMediaMock} (the {@link mockMatchMedia}
  *   answer table is empty again, so a forgotten `restore()` cannot leak into the next test), then
- *   the body-cleanup assertion {@link assertEmptyBody} — leftover `document.body` children are
- *   removed and the test fails with an error naming them.
+ *   the overlay-state release assertion {@link assertOverlayStateReleased} (open dismiss layers,
+ *   focus traps, scroll locks, modal isolation, restore-focus tracker users, inline `overflow` on
+ *   `<html>`/`<body>`) and the body-cleanup assertion {@link assertEmptyBody} (leftover
+ *   `document.body` children). Both always run: what they find is released or removed, and the
+ *   test fails with one error naming all of it.
  *
  * The DOM parts are skipped for test files that opt into `// @vitest-environment node`
  * (`scripts/__tests__`).
  *
  * ## Module graph: this file imports no component
  * The environment machinery ({@link mockMatchMedia}, {@link resetMatchMediaMock},
- * {@link assertEmptyBody}, {@link describeElement}) is defined **here** and re-exported by
- * `src/test-utils.ts`. The setup file and the test file share one module cache, so a test's
+ * {@link assertEmptyBody}, {@link assertOverlayStateReleased}, {@link describeElement}) is defined
+ * **here** and re-exported by `src/test-utils.ts`. The setup file and the test file share one
+ * module cache, so a test's
  * import of this module (directly or through `src/test-utils.ts`) reuses the instance the setup
  * evaluated: one answer table, shared by the setup's after-each reset and a test's
  * `mockMatchMedia()`, which therefore never replaces the `window.matchMedia` installed here
@@ -28,7 +32,8 @@
  * Testing Library, vitest-axe's matchers and `src/lib/dev` — never `src/test-utils.ts`, a
  * component or a hook — so a broken component module fails only the test files that import it
  * (directly, or through `src/test-utils.ts`, which imports `WaveProvider` for
- * `renderWithProviders`), not every test file of the suite.
+ * `renderWithProviders`), not every test file of the suite. The overlay registries are read off
+ * `globalThis` for the same reason (see {@link assertOverlayStateReleased}).
  *
  * ## `vi.mock()` in a test file
  * A test file's `vi.mock()` works as usual, also for the modules imported here (`src/lib/dev`,
@@ -107,6 +112,176 @@ export function assertEmptyBody(): void {
       `document.body is not empty after cleanup: ${names}. ` +
         'A portal, live region or node outlived its test (removed now so later audits of ' +
         'document.body do not see it). Unmount it or remove it in the test file’s afterEach.',
+    );
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Overlay-state release assertion
+// ---------------------------------------------------------------------------
+
+type Registry = Record<string, unknown>;
+
+const registryKey = (key: string) => Symbol.for(`@mortenbrudvik/waveui/${key}`);
+
+/**
+ * The registry `getGlobalRegistry(key)` (`src/lib/globalRegistry.ts`) keeps on `globalThis`, or
+ * `undefined` while nothing has created it. Read directly: `getGlobalRegistry` would create a
+ * missing registry, and only its owning module knows the initial shape (this file imports no hook).
+ */
+function peekRegistry(key: string): Registry | undefined {
+  const value: unknown = Reflect.get(globalThis, registryKey(key));
+  return typeof value === 'object' && value !== null ? (value as Registry) : undefined;
+}
+
+/** Entries of an array, `Map` or `Set` field of a registry (0 for anything else). */
+function sizeOf(value: unknown): number {
+  if (Array.isArray(value)) return value.length;
+  return value instanceof Map || value instanceof Set ? value.size : 0;
+}
+
+/** Calls `holder.remove()` (installed document listeners) when there is one. */
+function removeListeners(holder: unknown): void {
+  const remove: unknown =
+    typeof holder === 'object' && holder !== null ? Reflect.get(holder, 'remove') : undefined;
+  if (typeof remove === 'function') remove.call(holder);
+}
+
+const count = (n: number, noun: string, plural = `${noun}s`) => `${n} ${n === 1 ? noun : plural}`;
+
+interface RegistryCheck {
+  key: string;
+  /** What the registry still holds after cleanup (empty when it was released). */
+  leaks(registry: Registry): string[];
+  /** Undoes what the registry installed outside itself (document listeners, attributes). */
+  release(registry: Registry): void;
+}
+
+/**
+ * The overlay registries of `src/lib/layers.ts` and the overlay hooks, read by shape.
+ * `src/__tests__/test-utils.test.tsx` drives the real hooks through this check, so a changed
+ * shape fails there.
+ */
+const OVERLAY_REGISTRIES: RegistryCheck[] = [
+  {
+    key: 'layers',
+    leaks(layers) {
+      const found: string[] = [];
+      const stack = Array.isArray(layers.stack) ? (layers.stack as unknown[]) : [];
+      if (stack.length > 0) {
+        const kinds = stack.map((layer) => String(Reflect.get(Object(layer), 'kind')));
+        found.push(`${count(stack.length, 'open dismiss layer')} (${kinds.join(', ')})`);
+      } else if (layers.listeners) {
+        found.push('the document listeners of an empty dismiss-layer stack');
+      }
+      const isolated = sizeOf(layers.isolated);
+      if (isolated > 0) found.push(count(isolated, 'isolating modal'));
+      const elements = sizeOf(layers.elements);
+      if (elements > 0) found.push(`portal elements registered with ${count(elements, 'layer')}`);
+      const subscribers = sizeOf(layers.subscribers);
+      if (subscribers > 0) found.push(count(subscribers, 'layer-stack subscriber'));
+      return found;
+    },
+    release: (layers) => removeListeners(layers.listeners),
+  },
+  {
+    key: 'traps',
+    leaks(traps) {
+      const n = sizeOf(traps.traps);
+      if (n > 0) return [count(n, 'focus trap')];
+      return traps.listeners ? ['the document listeners of an empty focus-trap stack'] : [];
+    },
+    release: (traps) => removeListeners(traps.listeners),
+  },
+  {
+    key: 'scrollLock',
+    leaks: (lock) =>
+      typeof lock.count === 'number' && lock.count > 0 ? [count(lock.count, 'scroll lock')] : [],
+    release: () => {},
+  },
+  {
+    key: 'inert',
+    leaks(inert) {
+      if (!(inert.entries instanceof Map) || inert.entries.size === 0) return [];
+      const names = Array.from(inert.entries.keys(), (el) =>
+        el instanceof Node ? describeElement(el) : String(el),
+      );
+      return [
+        `${count(names.length, 'element')} made inert by modal isolation (${names.join(', ')})`,
+      ];
+    },
+    release(inert) {
+      if (!(inert.entries instanceof Map)) return;
+      for (const [el, entry] of inert.entries) {
+        if (el instanceof Element && !Reflect.get(Object(entry), 'original')) {
+          el.removeAttribute('inert');
+        }
+      }
+    },
+  },
+  {
+    key: 'restoreFocusTracker',
+    leaks: (tracker) =>
+      typeof tracker.users === 'number' && tracker.users > 0
+        ? [count(tracker.users, 'useRestoreFocus focus tracker user')]
+        : [],
+    release(tracker) {
+      if (typeof tracker.uninstall === 'function') tracker.uninstall();
+    },
+  },
+];
+
+const OVERFLOW_PROPERTIES = ['overflow', 'overflow-x', 'overflow-y'];
+
+/**
+ * The overlay-state release assertion that this file runs after every test (after RTL
+ * `cleanup()`, before {@link assertEmptyBody}). Once every tree is unmounted, nothing may still
+ * hold:
+ * - an open dismiss layer (`useDismiss`, `registerLayer`), the layer stack's document listeners,
+ *   an isolating modal, portal elements registered with a layer or a layer-stack subscriber;
+ * - a focus trap (`useFocusTrap`) or the trap stack's document listeners;
+ * - a scroll lock (`useScrollLock`), or an inline `overflow` on `<html>`/`<body>`;
+ * - an element made inert by modal isolation (`useModalIsolation`), or any `inert` attribute;
+ * - a `useRestoreFocus` user of the shared focus tracker.
+ *
+ * Leaks are released — document listeners removed, `inert` attributes and inline overflow
+ * removed, and each leaked registry dropped from `globalThis` so its owner creates a fresh one —
+ * and then the assertion throws an error naming them. So a component that skips an overlay hook's
+ * cleanup fails the test that leaked it, and later tests start clean. Registries nothing created
+ * are not created here. Re-exported by `src/test-utils.ts`.
+ */
+export function assertOverlayStateReleased(): void {
+  const leaks: string[] = [];
+  for (const check of OVERLAY_REGISTRIES) {
+    const registry = peekRegistry(check.key);
+    if (!registry) continue;
+    const found = check.leaks(registry);
+    if (found.length === 0) continue;
+    leaks.push(...found);
+    check.release(registry);
+    Reflect.deleteProperty(globalThis, registryKey(check.key));
+  }
+  for (const el of Array.from(document.querySelectorAll('[inert]'))) {
+    leaks.push(`inert attribute on ${describeElement(el)}`);
+    el.removeAttribute('inert');
+  }
+  for (const [el, name] of [
+    [document.documentElement, '<html>'],
+    [document.body, '<body>'],
+  ] as const) {
+    for (const property of OVERFLOW_PROPERTIES) {
+      const value = el.style.getPropertyValue(property);
+      if (!value) continue;
+      leaks.push(`inline overflow on ${name} (${property}: ${value})`);
+      el.style.removeProperty(property);
+    }
+  }
+  if (leaks.length > 0) {
+    throw new Error(
+      `overlay state outlived its test: ${leaks.join('; ')}. ` +
+        'Released now so later tests start clean. A component skipped the cleanup of an overlay ' +
+        'hook (useDismiss, useFocusTrap, useScrollLock, useModalIsolation, useRestoreFocus), or ' +
+        'the test registered or set one itself and did not release it.',
     );
   }
 }
@@ -316,5 +491,15 @@ afterEach(() => {
   __resetWarnings();
   scrollIntoViewStub?.mockClear();
   resetMatchMediaMock();
-  if (hasDom) assertEmptyBody();
+  if (!hasDom) return;
+  // Both checks always run (each releases what it finds); their errors are reported together.
+  const errors: string[] = [];
+  for (const check of [assertOverlayStateReleased, assertEmptyBody]) {
+    try {
+      check();
+    } catch (error) {
+      errors.push((error as Error).message);
+    }
+  }
+  if (errors.length > 0) throw new Error(errors.join('\n'));
 });

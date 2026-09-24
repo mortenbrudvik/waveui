@@ -5,9 +5,10 @@
  * Every story of `stories/*.stories.tsx` is composed with the project annotations of
  * `.storybook/preview.tsx` (`setProjectAnnotations`, so the WaveProvider decorator and the
  * default light theme apply), rendered, and audited on `document.body` (portals included) with
- * the shared axe instance of `src/test-utils.ts` (`region` disabled — stories are components in
- * isolation). Structural rules only: jsdom cannot compute colour contrast, which
- * `src/styles/__tests__/tokens.test.ts` guards per theme (§4.5).
+ * `expectNoA11yViolations` from `src/test-utils.ts`: the shared axe instance (`region` disabled —
+ * stories are components in isolation — and `color-contrast` disabled: jsdom cannot compute
+ * colour contrast, which `src/styles/__tests__/tokens.test.ts` guards per theme, §4.5) plus the
+ * dangling ARIA id reference check (`findDanglingIdRefs`).
  *
  * - The story files are loaded with a **non-eager** `import.meta.glob`: each file has its own
  *   `describe` that awaits the file's import, so a story file that fails to import (a syntax or
@@ -21,12 +22,12 @@
  *   Other a11y parameters (`test: 'off'`, `disable`, rule configuration) do not exempt a story.
  */
 import * as React from 'react';
-import { act, render, screen } from '@testing-library/react';
+import { render, screen } from '@testing-library/react';
 import { composeStories, composeStory, setProjectAnnotations } from '@storybook/react';
 import type { Decorator, Meta, ReactRenderer, StoryContext } from '@storybook/react';
 import type { ComposedStoryFn, Store_CSFExports } from 'storybook/internal/types';
 import preview from '../../.storybook/preview';
-import { axe } from '../test-utils';
+import { expectNoA11yViolations } from '../test-utils';
 
 setProjectAnnotations(preview);
 
@@ -119,17 +120,19 @@ describe('Storybook preview annotations', () => {
 // ---------------------------------------------------------------------------
 
 /**
- * Lets the updates a story schedules right after mount land inside `act()` before the audit:
- * microtasks (announcers, measured layout) and the next animation frame (Spinner's deferred
- * announce). Without the frame it would fire while axe runs, outside `act()`.
+ * The gate's check of one story: renders it and audits `document.body` with
+ * `expectNoA11yViolations` (`src/test-utils.ts`), which first lets the updates the story schedules
+ * right after mount land inside `act()` — microtasks (announcers, measured layout), a macrotask
+ * (popup positioning) and the next animation frame (Spinner's deferred announce), which would
+ * otherwise fire while axe runs — and then fails on axe violations and on dangling ARIA id
+ * references.
  */
-async function settle(): Promise<void> {
-  await act(async () => {
-    await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
-  });
+async function auditStory(Story: React.ComponentType): Promise<void> {
+  render(<Story />);
+  await expectNoA11yViolations();
 }
 
-describe('settle', () => {
+describe('auditStory', () => {
   // A deferred update like Spinner's announce: state set in the next animation frame.
   function FrameProbe() {
     const [ready, setReady] = React.useState(false);
@@ -143,8 +146,7 @@ describe('settle', () => {
   it('lands updates scheduled for the next animation frame inside act()', async () => {
     const error = vi.spyOn(console, 'error').mockImplementation(() => {});
     try {
-      render(<FrameProbe />);
-      await settle();
+      await auditStory(FrameProbe);
       expect(screen.getByText('Ready')).toBeInTheDocument();
       // Nothing is left to update outside act() while axe runs.
       await new Promise((resolve) => setTimeout(resolve, 50));
@@ -152,6 +154,15 @@ describe('settle', () => {
     } finally {
       error.mockRestore();
     }
+  });
+
+  it('fails a story with an axe violation', async () => {
+    await expect(auditStory(() => <button type="button" />)).rejects.toThrow(/button-name/);
+  });
+
+  it('fails a story with a dangling ARIA id reference', async () => {
+    const Dangling = () => <input aria-label="Email" aria-describedby="email-hint" />;
+    await expect(auditStory(Dangling)).rejects.toThrow(/aria-describedby="email-hint"/);
   });
 });
 
@@ -330,9 +341,7 @@ for (const [path, load] of Object.entries(storyModules).sort(([a], [b]) => a.loc
         continue;
       }
       it(name, async () => {
-        render(<Story />);
-        await settle();
-        expect(await axe(document.body)).toHaveNoViolations();
+        await auditStory(Story);
       });
     }
   });

@@ -24,10 +24,10 @@
  *   exception for user swatches), never a color utility class.
  * - `physical` (C-LOGICAL): `ml-/mr-/pl-/pr-/left-/right-`, `scroll-m|p` l/r, `border-l/r`,
  *   `rounded-l/r/tl/tr/bl/br`, `text-/float-/clear-left|right`, `origin-*left|right`,
- *   `bg-linear-to-l/r` — unless scoped with `rtl:`/`ltr:` or the line carries
- *   `wave-allow-physical: <reason>`.
+ *   `bg-linear-to-l/r` — unless scoped with a direction variant (`wave-rtl:`, or Tailwind's
+ *   `rtl:`/`ltr:`) or the line carries `wave-allow-physical: <reason>`.
  * - `translate-x` (C-LOGICAL): a `translate-x-*` class (other than `translate-x-0`) on a line
- *   without an `rtl:` `translate-x-*` counterpart (or `wave-allow-physical`).
+ *   without a `wave-rtl:` (or `rtl:`) `translate-x-*` counterpart (or `wave-allow-physical`).
  * - `focus-outline-none` (C-FOCUS): `focus:`/`focus-visible:`/`focus-within:outline-none`.
  * - `arbitrary-animate` (C-MOTION): `animate-[…]` — use the `animate-wave-*` tokens.
  * - `forward-ref` (C-REF): `forwardRef(` — React 19 ref-as-prop.
@@ -45,10 +45,14 @@
  *   {@link MAX_TEMPLATE_LINES} lines). Every other finding of that file is unreliable, so this is
  *   a failure of its own rather than a silently disabled gate.
  *
+ * Direction variants (R4): Wave's own `wave-rtl:` (defined in its CSS entries with `:dir(rtl)`) is
+ * the one to use, because Tailwind's `rtl:` also matches inside an LTR subtree of an RTL ancestor.
+ * Bare `rtl:`/`ltr:` are still accepted while the component packages migrate.
+ *
  * An allow marker counts on the offending line or on the comment-only line directly above it
  * (`// …`, `/* … *\/` or a JSX comment `{/* … *\/}`). Comments are ignored by every rule. The gate
- * is expected to be red until every P package has landed (wave D); each package runs it filtered
- * to its own files.
+ * is green: a failing file has a convention violation (or a lexer limitation, reported as
+ * `lexer`), never an expected failure.
  *
  * The lexer understands comments, string and template literals (with nested `${…}`), regex
  * literals (a `/` where an expression can start) and, in `.tsx` files, JSX: text between tags is
@@ -95,7 +99,7 @@ const HINTS: Record<RuleId, string> = {
   physical:
     'use a logical utility (ms/me/ps/pe/start/end/border-s/e/rounded-s/e/text-start/end) or add `// wave-allow-physical: <reason>` (C-LOGICAL)',
   'translate-x':
-    'add the `rtl:` counterpart on the same line (e.g. `translate-x-4 rtl:-translate-x-4`) or `// wave-allow-physical: <reason>` (C-LOGICAL)',
+    'add the `wave-rtl:` counterpart on the same line (e.g. `translate-x-4 wave-rtl:-translate-x-4`) or `// wave-allow-physical: <reason>` (C-LOGICAL)',
   'focus-outline-none': 'use `focus:outline-hidden` (C-FOCUS)',
   'arbitrary-animate': 'use an `animate-wave-*` token (C-MOTION)',
   'forward-ref': 'use React 19 ref-as-prop (C-REF)',
@@ -692,7 +696,11 @@ const MARKERS = {
 
 type MotionKind = 'transition' | 'animate';
 
-const isDirectional = (t: ClassToken) => t.variants.some((v) => v === 'rtl' || v === 'ltr');
+/** Direction variants: Wave's `wave-rtl:` (R4) and, while components migrate, `rtl:`/`ltr:`. */
+const RTL_VARIANTS = new Set(['wave-rtl', 'rtl']);
+const DIRECTION_VARIANTS = new Set([...RTL_VARIANTS, 'ltr']);
+
+const isDirectional = (t: ClassToken) => t.variants.some((v) => DIRECTION_VARIANTS.has(v));
 const isMotionScoped = (t: ClassToken) =>
   t.variants.some((v) => v === 'motion-reduce' || v === 'motion-safe');
 /** The motion a utility adds (`transition-none`/`animate-none` add none). */
@@ -950,7 +958,7 @@ function scanSource(source: string, kind: SourceKind, jsx = true): Violation[] {
   // physical and translate-x
   const rtlTranslateLines = new Set(
     tokens
-      .filter((t) => t.variants.includes('rtl') && TRANSLATE_X.test(t.utility))
+      .filter((t) => t.variants.some((v) => RTL_VARIANTS.has(v)) && TRANSLATE_X.test(t.utility))
       .map((t) => t.line),
   );
   for (const t of tokens) {
@@ -1343,6 +1351,15 @@ describe('conventions gate rules', () => {
       expect(rules(source)).toEqual([]);
     });
 
+    it('allows physical utilities scoped with the wave-rtl: variant (R4)', () => {
+      const source = [
+        `const a = 'wave-rtl:ml-2 wave-rtl:rounded-l hover:wave-rtl:pr-2';`,
+        `const b = 'wave-rtl:bg-[position:left_8px_center] wave-rtl:left-0';`,
+        `const c = 'not-wave-rtl:ml-2';`,
+      ].join('\n');
+      expect(rules(source)).toEqual(['3:physical:not-wave-rtl:ml-2']);
+    });
+
     it('wave-allow-physical on the line or the comment line above allows it', () => {
       const source = [
         `const a = <span className="absolute left-1/2" />; // wave-allow-physical: centring`,
@@ -1380,6 +1397,21 @@ describe('conventions gate rules', () => {
       expect(rules(source)).toEqual([
         '1:translate-x:translate-x-4',
         '2:translate-x:data-[state=checked]:translate-x-5',
+      ]);
+    });
+
+    it('accepts a wave-rtl: counterpart (R4) like an rtl: one', () => {
+      const source = [
+        `const a = 'translate-x-4 wave-rtl:-translate-x-4';`,
+        `cn(checked && 'translate-x-[22px]', checked && 'wave-rtl:-translate-x-[22px]');`,
+        `const b = 'data-[state=checked]:translate-x-5 data-[state=checked]:wave-rtl:-translate-x-5';`,
+        `const c = 'translate-x-4 wave-rtl:scale-x-100';`,
+        `const d = 'translate-x-4 not-wave-rtl:-translate-x-4';`,
+      ].join('\n');
+      expect(rules(source)).toEqual([
+        '4:translate-x:translate-x-4',
+        '5:translate-x:translate-x-4',
+        '5:translate-x:not-wave-rtl:-translate-x-4',
       ]);
     });
   });

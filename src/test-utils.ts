@@ -11,17 +11,24 @@
  * ## Accessibility audits
  * {@link axe} is the one axe-core instance used by {@link testA11y}, the `a11yVariants` loop of
  * {@link testSystemProps}, {@link expectNoA11yViolations} and the Storybook stories gate
- * (`src/__tests__/stories.a11y.test.tsx`). It is `configureAxe({ rules: { region: { enabled: false } } })`:
- * components are audited **in isolation**, and the page-level landmark rule `region` ("all page
- * content should be contained by landmarks") has no meaning for a single component — scanning
- * `document.body` with the default rule set flags every piece of text outside a landmark. Every
- * other rule stays enabled.
+ * (`src/__tests__/stories.a11y.test.tsx`). It is
+ * `configureAxe({ rules: { region: { enabled: false }, 'color-contrast': { enabled: false } } })`:
+ * - components are audited **in isolation**, and the page-level landmark rule `region` ("all page
+ *   content should be contained by landmarks") has no meaning for a single component — scanning
+ *   `document.body` with the default rule set flags every piece of text outside a landmark;
+ * - jsdom cannot compute color contrast: enabled, `color-contrast` fails on its canvas probe
+ *   (jsdom prints "Not implemented: HTMLCanvasElement's getContext()") and ends up `incomplete`,
+ *   having checked nothing. Contrast is guarded per theme by
+ *   `src/styles/__tests__/tokens.test.ts` (spec §4.5).
+ *
+ * Every other rule stays enabled. {@link expectNoA11yViolations} (and so every audit helper and
+ * the stories gate) also fails on **dangling ARIA id references** ({@link findDanglingIdRefs}),
+ * which axe files under `incomplete` or accepts as long as one id of a list resolves.
  *
  * Audits scan **`document.body`** (the render result's `baseElement`) by default, so content a
  * component portals out of its render container (Dialog, Drawer, Popover, listboxes, tooltips) is
  * audited too. Pass `scope: 'container'` / `a11yScope: 'container'` to audit only the render
- * container. jsdom cannot compute color contrast; contrast is guarded by
- * `src/styles/__tests__/tokens.test.ts` (spec §4.5).
+ * container.
  *
  * Before auditing, these helpers let pending updates land inside `act()` — one macrotask, then one
  * animation frame (floating-ui positioning of an open popup, useListbox's microtask publish,
@@ -42,12 +49,19 @@
  * - After every test: RTL `cleanup()`, then the warn-once registry is reset (`__resetWarnings()`,
  *   so every test sees first-time dev warnings), then {@link resetMatchMediaMock} (the
  *   {@link mockMatchMedia} answer table is empty again, so a mock set in `beforeAll` is gone
- *   after the file's first test — mock in the test or in `beforeEach`), then the
- *   **body-cleanup assertion** {@link assertEmptyBody}: if `document.body` still has children (a
- *   leaked portal, announcer, toast region or a node a test appended itself), they are removed
- *   and the test **fails** with an error naming them. A later test's `document.body` audit can
- *   therefore never see another test's leftovers. Tests that append nodes themselves remove them
- *   in their own `afterEach` (which runs before the setup's).
+ *   after the file's first test — mock in the test or in `beforeEach`), then two assertions,
+ *   whose errors are reported together:
+ *   - the **overlay-state release assertion** {@link assertOverlayStateReleased}: if an open
+ *     dismiss layer, a focus trap, a scroll lock, modal isolation (`inert`), a `useRestoreFocus`
+ *     tracker user or an inline `overflow` on `<html>`/`<body>` outlived the unmounted trees, it
+ *     is released and the test **fails** naming it;
+ *   - the **body-cleanup assertion** {@link assertEmptyBody}: if `document.body` still has
+ *     children (a leaked portal, announcer, toast region or a node a test appended itself), they
+ *     are removed and the test **fails** with an error naming them.
+ *
+ *   A later test therefore never sees another test's leftovers (in a `document.body` audit, or as
+ *   a stale layer handling its Escape). Tests that append nodes, register layers or set such
+ *   styles themselves undo that in their own `afterEach` (which runs before the setup's).
  *
  * ## Building blocks
  * {@link testSystemProps} registers {@link testForwardRef}, {@link testRestSpread},
@@ -68,12 +82,17 @@
  *   suppress it with `preventDefault()` (C-COMPOSE).
  * - {@link testCompoundExposure} (members are components with a `displayName`),
  *   {@link testFocusEvents}, {@link createOverlayTestWrapper}.
+ * - {@link asClientReference}: a component as a Server Component delivers it to the client (a
+ *   pre-resolved `React.lazy` type), for testing how a compound identifies its parts (R1).
  * - Browser API mocks: {@link installResizeObserverMock}, {@link mockMatchMedia} (its answers
  *   last one test — call it inside the test or in `beforeEach`, never `beforeAll`), {@link mockRect}.
  * - The environment machinery {@link mockMatchMedia}, {@link resetMatchMediaMock},
- *   {@link assertEmptyBody} and {@link describeElement} is **defined in `src/test-setup.ts`** and
- *   re-exported here — one instance, the one the setup evaluated — so the setup file imports no
- *   component (a broken component module does not fail every test file).
+ *   {@link assertEmptyBody}, {@link assertOverlayStateReleased} and {@link describeElement} is
+ *   **defined in `src/test-setup.ts`** and re-exported here — one instance, the one the setup
+ *   evaluated — so the setup file imports no component or hook (a broken component module does
+ *   not fail every test file).
+ * - {@link findDanglingIdRefs}: the ARIA id references that point at no element (part of every
+ *   audit).
  * - `vi.mock()` in a test file works as usual, also for the modules the setup imports
  *   (`src/lib/dev`, RTL): the mock applies to the test file's imports and to every module it
  *   loads afterwards; only the setup's own bindings (its after-each `cleanup()` and
@@ -101,6 +120,7 @@ import { describeElement } from './test-setup';
  */
 export {
   assertEmptyBody,
+  assertOverlayStateReleased,
   describeElement,
   mockMatchMedia,
   resetMatchMediaMock,
@@ -168,14 +188,20 @@ export interface ControlQuery {
 
 /**
  * The one axe instance used by every helper and by the stories gate:
- * `configureAxe({ rules: { region: { enabled: false } } })`.
+ * `configureAxe({ rules: { region: { enabled: false }, 'color-contrast': { enabled: false } } })`.
  *
- * `region` is disabled because components are audited in isolation (landmark rules are
- * page-level); all other rules run. Use it directly as `expect(await axe(el)).toHaveNoViolations()`
- * or through {@link expectNoA11yViolations}.
+ * Two rules are disabled; all other rules run.
+ * - `region`: components are audited in isolation, and landmark rules are page-level.
+ * - `color-contrast`: jsdom cannot evaluate it. Its canvas probe fails (jsdom prints
+ *   "Not implemented: HTMLCanvasElement's getContext()"), so the rule would only ever land in
+ *   `incomplete`, having checked nothing. Contrast is guarded per theme by
+ *   `src/styles/__tests__/tokens.test.ts`.
+ *
+ * Use it directly as `expect(await axe(el)).toHaveNoViolations()`, or through
+ * {@link expectNoA11yViolations}, which also checks ARIA id references.
  */
 export const axe: ReturnType<typeof configureAxe> = configureAxe({
-  rules: { region: { enabled: false } },
+  rules: { region: { enabled: false }, 'color-contrast': { enabled: false } },
 });
 
 /*
@@ -201,9 +227,57 @@ async function settlePendingUpdates(): Promise<void> {
   });
 }
 
+/** The ARIA attributes whose every id {@link findDanglingIdRefs} requires to resolve. */
+const ID_REFERENCE_ATTRIBUTES = [
+  'aria-activedescendant',
+  'aria-describedby',
+  'aria-errormessage',
+  'aria-labelledby',
+] as const;
+
+const ID_REFERENCE_SELECTOR = ID_REFERENCE_ATTRIBUTES.map((attr) => `[${attr}]`).join(',');
+
+/**
+ * The dangling ARIA id references of `root` and its descendants: every id in `aria-describedby`,
+ * `aria-labelledby`, `aria-errormessage` or `aria-activedescendant` that no element in the
+ * element's document (or shadow root) carries. Ids resolve in the whole document, so a reference
+ * into a portal counts as resolved when only the render container is checked. Empty values are
+ * ignored, and so is `aria-controls` (a closed popup need not be rendered).
+ *
+ * axe misses most of these: it files a dangling `aria-describedby`/`aria-labelledby`/
+ * `aria-errormessage` under `incomplete` (which `toHaveNoViolations` ignores) and accepts an id
+ * list as long as one id resolves — the failure modes of Field wiring and C-ROUTING (a control
+ * still described by a hint or error that is no longer rendered). {@link expectNoA11yViolations}
+ * fails on them.
+ *
+ * @param root Element to check. Defaults to `document.body`.
+ * @returns One line per attribute, e.g.
+ *   `input "Email": aria-describedby="hint error" (no element with id "error")`.
+ */
+export function findDanglingIdRefs(root: Element = document.body): string[] {
+  const elements = [root, ...Array.from(root.querySelectorAll(ID_REFERENCE_SELECTOR))];
+  const found: string[] = [];
+  for (const el of elements) {
+    const scope = el.getRootNode();
+    if (!(scope instanceof Document || scope instanceof ShadowRoot)) continue; // detached
+    for (const attr of ID_REFERENCE_ATTRIBUTES) {
+      const value = el.getAttribute(attr);
+      if (value === null) continue;
+      const missing = value
+        .split(/\s+/)
+        .filter((id) => id !== '' && scope.getElementById(id) === null);
+      if (missing.length === 0) continue;
+      const ids = missing.map((id) => `"${id}"`).join(', ');
+      found.push(`${describeElement(el)}: ${attr}="${value}" (no element with id ${ids})`);
+    }
+  }
+  return found;
+}
+
 /**
  * Audits `root` (default `document.body`, portals included) with the shared {@link axe} instance
- * and fails the test on any violation.
+ * and fails the test on any violation, and on any dangling ARIA id reference
+ * ({@link findDanglingIdRefs}) in `root`.
  *
  * Before the audit it lets pending updates land inside `act()` — one macrotask, then one
  * animation frame (popup positioning, listbox registration, deferred announcements) — so the
@@ -217,8 +291,14 @@ async function settlePendingUpdates(): Promise<void> {
  */
 export async function expectNoA11yViolations(root?: Element): Promise<void> {
   await settlePendingUpdates();
-  const results = await axe(root ?? document.body);
+  const target = root ?? document.body;
+  const results = await axe(target);
   expect(results).toHaveNoViolations();
+  const dangling = findDanglingIdRefs(target);
+  expect(
+    dangling.length,
+    `ARIA id references that point at no element:\n${dangling.join('\n')}\n`,
+  ).toBe(0);
 }
 
 // ---------------------------------------------------------------------------
@@ -412,8 +492,9 @@ export function testPolymorphicAs<P extends object>(
 }
 
 /**
- * Registers `has no accessibility violations`: renders the component and audits it with the
- * shared {@link axe} instance.
+ * Registers `has no accessibility violations`: renders the component and audits it with
+ * {@link expectNoA11yViolations} (the shared {@link axe} instance and the dangling ARIA id
+ * reference check).
  *
  * @param Component The component under test.
  * @param props     Props for the render (use real, representative content).
@@ -567,8 +648,8 @@ export interface TestSystemPropsConfig<P> {
  * Registers every cross-cutting system-prop test for a component: {@link testForwardRef},
  * {@link testRestSpread} (with `control`), {@link testClassName} (with `conflictingClass`),
  * {@link testPolymorphicAs} (when `polymorphic`), {@link testDisplayName}, {@link testA11y} and one
- * `has no accessibility violations (<name>)` test per `a11yVariants` entry — all audited with the
- * shared {@link axe} instance on `a11yScope` (default `document.body`).
+ * `has no accessibility violations (<name>)` test per `a11yVariants` entry — all audited with
+ * {@link expectNoA11yViolations} on `a11yScope` (default `document.body`).
  *
  * @example
  * testSystemProps(ToggleButton, {
@@ -791,6 +872,33 @@ export function renderWithProviders(
     return React.createElement(WaveProvider, { theme, dir, children: inner });
   }
   return render(ui, { ...renderOptions, wrapper: Providers });
+}
+
+/**
+ * Returns `component` the way React Flight hands a client component written in a Server Component
+ * to the client: as a `React.lazy` element type (`{ $$typeof: Symbol.for('react.lazy'), _payload,
+ * _init }`) whose chunk has already loaded. So `<Lazy />.type !== component`, while the lazy
+ * resolves synchronously to `component`: `renderToString` and the first client render show the
+ * component (props and `ref` included) without suspending, and `getElementType` from
+ * `src/lib/children.ts` unwraps it to `component`.
+ *
+ * Use it to test a compound that identifies its parts (R1): render the tree once with the plain
+ * part types and once with `asClientReference(Part)`, and assert the same `renderToString` output
+ * and the same behaviour. The return type is the component's own type, so JSX props stay checked.
+ *
+ * @example
+ * const Tab = asClientReference(TabList.Tab);
+ * const html = renderToString(<TabList><Tab value="a">A</Tab></TabList>);
+ * expect(html).toBe(renderToString(<TabList><TabList.Tab value="a">A</TabList.Tab></TabList>));
+ */
+export function asClientReference<T extends React.JSXElementConstructor<never>>(component: T): T {
+  type LoadedModule = { default: React.ComponentType<object> };
+  const loaded = {
+    then(onFulfilled: (module: LoadedModule) => void) {
+      onFulfilled({ default: component as unknown as React.ComponentType<object> });
+    },
+  };
+  return React.lazy(() => loaded as unknown as Promise<LoadedModule>) as unknown as T;
 }
 
 /**
