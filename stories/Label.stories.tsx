@@ -1,8 +1,11 @@
 import type { Meta, StoryObj } from '@storybook/react';
 import { Label } from '../src';
+import type { TextWeight } from '../src/lib/types';
+
+const weights = ['regular', 'semibold', 'bold'] as const satisfies readonly TextWeight[];
 
 const meta = {
-  title: 'Input/Label',
+  title: 'Components/Input/Label',
   component: Label,
   argTypes: {
     size: {
@@ -11,21 +14,20 @@ const meta = {
     },
     weight: {
       control: 'select',
-      options: ['regular', 'semibold'],
+      options: weights,
     },
     required: { control: 'boolean' },
     disabled: { control: 'boolean' },
+  },
+  args: {
+    children: 'First name',
   },
 } satisfies Meta<typeof Label>;
 
 export default meta;
 type Story = StoryObj<typeof meta>;
 
-export const Default: Story = {
-  args: {
-    children: 'First name',
-  },
-};
+export const Default: Story = {};
 
 export const Required: Story = {
   args: {
@@ -43,17 +45,30 @@ export const Disabled: Story = {
 
 export const Semibold: Story = {
   args: {
-    children: 'Bold label',
+    children: 'Semibold label',
     weight: 'semibold',
   },
 };
 
+export const Bold: Story = {
+  args: {
+    children: 'Bold label',
+    weight: 'bold',
+  },
+};
+
 export const Sizes: Story = {
-  render: () => (
+  render: (args) => (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-      <Label size="small">Small label</Label>
-      <Label size="medium">Medium label</Label>
-      <Label size="large">Large label</Label>
+      <Label {...args} size="small">
+        Small label
+      </Label>
+      <Label {...args} size="medium">
+        Medium label
+      </Label>
+      <Label {...args} size="large">
+        Large label
+      </Label>
     </div>
   ),
 };

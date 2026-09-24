@@ -1,20 +1,21 @@
 import type { Meta, StoryObj } from '@storybook/react';
+import { fn } from 'storybook/test';
 import { Slider } from '../src';
 
 const meta = {
   title: 'Components/Input/Slider',
   component: Slider,
+  args: {
+    label: 'Volume',
+    defaultValue: 50,
+    onValueChange: fn(),
+  },
 } satisfies Meta<typeof Slider>;
 
 export default meta;
 type Story = StoryObj<typeof meta>;
 
-export const Default: Story = {
-  args: {
-    label: 'Volume',
-    defaultValue: 50,
-  },
-};
+export const Default: Story = {};
 
 export const MinMax: Story = {
   args: {
@@ -32,5 +33,12 @@ export const WithStep: Story = {
     max: 50,
     step: 5,
     defaultValue: 10,
+  },
+};
+
+export const Disabled: Story = {
+  args: {
+    label: 'Brightness',
+    disabled: true,
   },
 };
