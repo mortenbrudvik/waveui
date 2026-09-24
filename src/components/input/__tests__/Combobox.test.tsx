@@ -5,9 +5,11 @@ import userEvent from '@testing-library/user-event';
 import { hydrateRoot } from 'react-dom/client';
 import { renderToString } from 'react-dom/server';
 import { Combobox, ComboboxOption, ComboboxOptionGroup, Option, OptionGroup } from '../Combobox';
-import { testCompoundExposure, testSystemProps } from '../../../test-utils';
+import { asClientReference, testCompoundExposure, testSystemProps } from '../../../test-utils';
 import { FIELD_TEST_IDS, FIELD_TEST_TEXT, renderWithFieldContext } from '../../../test-utils-field';
 import { DismissLayerProvider, useDismiss } from '../../../hooks/useDismiss';
+import comboboxSource from '../Combobox.tsx?raw';
+import comboboxStoriesSource from '../../../../stories/Combobox.stories.tsx?raw';
 
 const FRUITS = [
   <Option key="a" value="a">
@@ -297,6 +299,29 @@ describe('Combobox', () => {
       expect(screen.getByRole('status')).toHaveTextContent('No matches');
       expect(combobox()).toHaveAttribute('aria-expanded', 'false');
       expect(screen.queryByRole('listbox')).toBeNull();
+    });
+
+    it('announces "No matches" through a status region mounted before the text (x-lifecycle-3)', async () => {
+      const user = userEvent.setup();
+      const { container } = renderCombobox();
+      // A live region added together with its text is not announced by every screen reader.
+      const status = within(container).getByRole('status');
+      expect(status).toBeEmptyDOMElement();
+      await user.type(combobox(), 'zzz');
+      expect(within(container).getByRole('status')).toBe(status);
+      expect(status).toHaveTextContent('No matches');
+      // The visible row in the popup is a copy, hidden from assistive technology.
+      const surface = document.querySelector<HTMLElement>('[data-wave-listbox-surface]')!;
+      expect(within(surface).getByText('No matches')).toHaveAttribute('aria-hidden', 'true');
+      expect(screen.getAllByRole('status')).toEqual([status]);
+      await user.clear(combobox());
+      await user.type(combobox(), 'ch');
+      expect(visibleOptions()).toEqual(['Cherry']);
+      expect(status).toBeEmptyDOMElement();
+      await user.type(combobox(), 'zz');
+      expect(status).toHaveTextContent('No matches');
+      await user.keyboard('{Escape}');
+      expect(status).toBeEmptyDOMElement();
     });
 
     it('shows no "No matches" surface while a controlled parent keeps the list closed (input-pickers#21)', async () => {
@@ -732,8 +757,37 @@ describe('Combobox', () => {
       }
     });
 
+    it('renders the selected label of options written in a Server Component (R1)', () => {
+      // React Flight delivers Option/OptionGroup written in a Server Component as lazy types.
+      const ClientOption = asClientReference(Option);
+      const ClientOptionGroup = asClientReference(OptionGroup);
+      const plain = renderToString(
+        <Combobox aria-label="Country" defaultValue="uk">
+          <Option value="us">United States</Option>
+          <OptionGroup label="Europe">
+            <Option value="uk">United Kingdom</Option>
+          </OptionGroup>
+        </Combobox>,
+      );
+      const client = renderToString(
+        <Combobox aria-label="Country" defaultValue="uk">
+          <ClientOption value="us">United States</ClientOption>
+          <ClientOptionGroup label="Europe">
+            <ClientOption value="uk">United Kingdom</ClientOption>
+          </ClientOptionGroup>
+        </Combobox>,
+      );
+      expect(client).toBe(plain);
+      const host = document.createElement('div');
+      host.innerHTML = client;
+      expect(host.querySelector('input[role="combobox"]')).toHaveAttribute(
+        'value',
+        'United Kingdom',
+      );
+    });
+
     it('clears when a controlled value becomes undefined (table-core#4)', () => {
-      vi.spyOn(console, 'warn').mockImplementation(() => {});
+      const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
       const { rerender } = renderCombobox({ value: 'a' });
       expect(combobox()).toHaveValue('Apple');
       rerender(
@@ -742,6 +796,12 @@ describe('Combobox', () => {
         </Combobox>,
       );
       expect(combobox()).toHaveValue('');
+      expect(warn).toHaveBeenCalledTimes(1);
+      expect(warn).toHaveBeenCalledWith(
+        expect.stringContaining(
+          '[WaveUI] A component is changing from controlled to uncontrolled.',
+        ),
+      );
     });
   });
 
@@ -1113,6 +1173,29 @@ describe('Combobox', () => {
       expect(form.checkValidity()).toBe(true);
     });
 
+    it('blocks submission inside a required Field until an option is chosen (listbox-consumers-tests-1)', async () => {
+      const user = userEvent.setup();
+      renderWithFieldContext(
+        <form aria-label="Form">
+          <Combobox>{FRUITS}</Combobox>
+        </form>,
+        { required: true },
+      );
+      const form = screen.getByRole('form', { name: 'Form' }) as HTMLFormElement;
+      // Natively required through the Field alone: no own `required` and no `name`.
+      expect(form.checkValidity()).toBe(false);
+      await user.click(combobox(FIELD_TEST_TEXT.label));
+      await user.click(option('Beta'));
+      expect(form.checkValidity()).toBe(true);
+    });
+
+    it('names its open listbox after the Field label (listbox-consumers-tests-4)', async () => {
+      const user = userEvent.setup();
+      renderWithFieldContext(<Combobox>{FRUITS}</Combobox>);
+      await user.click(combobox(FIELD_TEST_TEXT.label));
+      expect(screen.getByRole('listbox', { name: FIELD_TEST_TEXT.label })).toBeInTheDocument();
+    });
+
     it('is labelled through aria-labelledby when it carries its own id', () => {
       renderWithFieldContext(<Combobox id="own">{FRUITS}</Combobox>);
       expect(screen.getByRole('combobox', { name: FIELD_TEST_TEXT.label })).toHaveAttribute(
@@ -1146,6 +1229,26 @@ describe('Combobox', () => {
       expect(ref.current).toBe(screen.getByTestId('root'));
       act(() => combobox().focus());
       expect(onFocus).toHaveBeenCalled();
+    });
+
+    it('routes the text input attributes autoCapitalize and autoCorrect to the input (listbox-consumers-docs-2)', () => {
+      render(
+        <Combobox aria-label="Fruit" autoCapitalize="none" autoCorrect="off" data-testid="root">
+          {FRUITS}
+        </Combobox>,
+      );
+      expect(combobox()).toHaveAttribute('autocapitalize', 'none');
+      expect(combobox()).toHaveAttribute('autocorrect', 'off');
+      expect(screen.getByTestId('root')).not.toHaveAttribute('autocapitalize');
+      expect(screen.getByTestId('root')).not.toHaveAttribute('autocorrect');
+    });
+
+    it('turns browser autocomplete off unless the consumer sets it', () => {
+      const { unmount } = renderCombobox();
+      expect(combobox()).toHaveAttribute('autocomplete', 'off');
+      unmount();
+      renderCombobox({ autoComplete: 'on' });
+      expect(combobox()).toHaveAttribute('autocomplete', 'on');
     });
   });
 
@@ -1199,6 +1302,68 @@ describe('Combobox', () => {
       expect(form.checkValidity()).toBe(false);
       expect(combobox()).toHaveAttribute('aria-required', 'true');
     });
+
+    it('is neither validated nor submitted while disabled, like a native control (listbox-consumers-tests-2)', () => {
+      render(
+        <form aria-label="Order">
+          <Combobox aria-label="Fruit" name="fruit" required disabled>
+            {FRUITS}
+          </Combobox>
+          <Combobox aria-label="Snack" name="snack" required disabled defaultValue="a">
+            {FRUITS}
+          </Combobox>
+        </form>,
+      );
+      const form = screen.getByRole('form', { name: 'Order' }) as HTMLFormElement;
+      expect(form.checkValidity()).toBe(true);
+      const data = new FormData(form);
+      expect(data.get('fruit')).toBeNull();
+      expect(data.get('snack')).toBeNull();
+    });
+  });
+
+  describe('field look (x-api-4, x-api-3)', () => {
+    it('draws the field boundary with the accessible bottom stroke (WCAG 1.4.11)', () => {
+      renderCombobox();
+      expect(combobox()).toHaveClass(
+        'border',
+        'border-input',
+        'border-b-stroke-accessible',
+        'focus:border-b-primary',
+      );
+      expect(combobox()).not.toHaveClass('border-destructive');
+    });
+
+    it.each([
+      ['its own aria-invalid', () => renderCombobox({ 'aria-invalid': true })],
+      [
+        'a Field error',
+        () =>
+          renderWithFieldContext(<Combobox>{FRUITS}</Combobox>, {
+            errorId: FIELD_TEST_IDS.errorId,
+          }),
+      ],
+    ])('shows the destructive border while invalid through %s (R8)', (_, renderInvalid) => {
+      renderInvalid();
+      const control = screen.getByRole('combobox');
+      expect(control).toHaveAttribute('aria-invalid', 'true');
+      expect(control).toHaveClass('border', 'border-destructive', 'focus:border-b-destructive');
+      expect(control).not.toHaveClass(
+        'border-input',
+        'border-b-stroke-accessible',
+        'focus:border-b-primary',
+      );
+    });
+
+    it('keeps the valid look when its own aria-invalid={false} overrides an invalid Field', () => {
+      renderWithFieldContext(<Combobox aria-invalid={false}>{FRUITS}</Combobox>, {
+        errorId: FIELD_TEST_IDS.errorId,
+      });
+      const control = screen.getByRole('combobox');
+      expect(control).toHaveAttribute('aria-invalid', 'false');
+      expect(control).toHaveClass('border-input', 'border-b-stroke-accessible');
+      expect(control).not.toHaveClass('border-destructive');
+    });
   });
 
   it('keeps a consumer option class next to the state classes (input-pickers#20)', async () => {
@@ -1241,5 +1406,34 @@ describe('Combobox', () => {
     // consumer's plain class is the option's only background.
     const backgrounds = [...apple.classList].filter((c) => /(?:^|:)bg-/.test(c));
     expect(backgrounds).toEqual(['bg-primary']);
+  });
+});
+
+/**
+ * The text of the JSDoc block right before `marker` in `source`, with the comment syntax
+ * stripped the way Storybook's CSF enrichment strips it; `null` when no JSDoc precedes it.
+ */
+function jsdocBefore(source: string, marker: string): string | null {
+  const at = source.indexOf(marker);
+  if (at === -1) return null;
+  const before = source.slice(0, at).trimEnd();
+  if (!before.endsWith('*/')) return null;
+  return before
+    .slice(before.lastIndexOf('/**') + 3, -2)
+    .split(/\r?\n/)
+    .map((line) => line.replace(/^(\s+)?(\*+)?(\s)?/, ''))
+    .join('\n')
+    .trim();
+}
+
+describe('Combobox docs (C-DOCS, R13)', () => {
+  // react-docgen takes a component's description from the function it resolves the export to,
+  // not from the exported `Object.assign` const that carries the JSDoc (R13). The autodocs page
+  // therefore reads it from the JSDoc on the stories' meta, which Storybook's CSF enrichment
+  // turns into `parameters.docs.description.component`.
+  it('gives the Storybook autodocs page the component JSDoc', () => {
+    const description = jsdocBefore(comboboxSource, 'export const Combobox =');
+    expect(description).toMatch(/^An editable combobox: /);
+    expect(jsdocBefore(comboboxStoriesSource, 'const meta =')).toBe(description);
   });
 });

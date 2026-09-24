@@ -1,8 +1,8 @@
 import * as React from 'react';
-import { afterEach, describe, it, expect, vi } from 'vitest';
+import { afterEach, describe, it, expect, expectTypeOf, vi } from 'vitest';
 import { act, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { TagPicker } from '../TagPicker';
+import { TagPicker, type TagPickerOption, type TagPickerProps } from '../TagPicker';
 import { renderWithProviders, testNoImplicitSubmit, testSystemProps } from '../../../test-utils';
 import { FIELD_TEST_IDS, FIELD_TEST_TEXT, renderWithFieldContext } from '../../../test-utils-field';
 import { DismissLayerProvider, useDismiss } from '../../../hooks/useDismiss';
@@ -133,10 +133,15 @@ describe('TagPicker', () => {
   it('removes a tag when its remove button is clicked', async () => {
     const user = userEvent.setup();
     const onValueChange = vi.fn();
-    renderPicker({ value: ['apple', 'banana'], onValueChange });
+    const onOpenChange = vi.fn();
+    renderPicker({ value: ['apple', 'banana'], onValueChange, onOpenChange });
     await user.click(screen.getByRole('button', { name: 'Remove Apple' }));
     expect(onValueChange).toHaveBeenCalledWith(['banana']);
     expect(combobox()).toHaveFocus();
+    // The click does not reach the group's open-on-click (listbox-consumers-tests-5).
+    expect(combobox()).toHaveAttribute('aria-expanded', 'false');
+    expect(screen.queryByRole('listbox')).toBeNull();
+    expect(onOpenChange).not.toHaveBeenCalled();
   });
 
   it('navigates options with arrow keys and adds the highlighted one with Enter', async () => {
@@ -147,6 +152,59 @@ describe('TagPicker', () => {
     await user.keyboard('{ArrowDown}');
     await user.keyboard('{Enter}');
     expect(onValueChange).toHaveBeenCalledWith(['apple']);
+  });
+
+  describe('Enter and the surrounding form (listbox-consumers-code-2)', () => {
+    function renderInForm(onValueChange = vi.fn()) {
+      const onSubmit = vi.fn((e: React.FormEvent) => e.preventDefault());
+      render(
+        <form aria-label="Order" onSubmit={onSubmit}>
+          <TagPicker aria-label="Fruits" options={options} onValueChange={onValueChange} />
+          <button type="submit">Save</button>
+        </form>,
+      );
+      return onSubmit;
+    }
+
+    it('makes the first match of a typed filter active, so Enter adds it instead of submitting', async () => {
+      const user = userEvent.setup();
+      const onValueChange = vi.fn();
+      const onSubmit = renderInForm(onValueChange);
+      await user.type(combobox(), 'ban');
+      expect(activeOption()).toHaveTextContent('Banana');
+      await user.keyboard('{Enter}');
+      expect(onSubmit).not.toHaveBeenCalled();
+      expect(onValueChange).toHaveBeenCalledWith(['banana']);
+      expect(tags()).toEqual(['Banana']);
+      // The text is cleared and the list stays open, with nothing active again.
+      expect(combobox()).toHaveValue('');
+      expect(combobox()).toHaveAttribute('aria-expanded', 'true');
+      expect(activeOption()).toBeNull();
+    });
+
+    it('activates no option on open or once the typed text is cleared', async () => {
+      const user = userEvent.setup();
+      renderInForm();
+      await user.click(combobox());
+      expect(combobox()).toHaveAttribute('aria-expanded', 'true');
+      expect(activeOption()).toBeNull();
+      await user.type(combobox(), 'e');
+      expect(activeOption()).toHaveTextContent('Apple');
+      await user.type(combobox(), 'r');
+      expect(activeOption()).toHaveTextContent('Cherry');
+      await user.clear(combobox());
+      expect(activeOption()).toBeNull();
+    });
+
+    it('Enter with no typed text and the list closed submits the surrounding form', async () => {
+      const user = userEvent.setup();
+      const onValueChange = vi.fn();
+      const onSubmit = renderInForm(onValueChange);
+      combobox().focus();
+      await user.keyboard('{Enter}');
+      expect(onSubmit).toHaveBeenCalledTimes(1);
+      expect(onValueChange).not.toHaveBeenCalled();
+    });
   });
 
   it('does not list already-selected options', async () => {
@@ -184,11 +242,36 @@ describe('TagPicker', () => {
 
     it('shows "No matches" with aria-expanded false when nothing matches', async () => {
       const user = userEvent.setup();
-      renderPicker();
+      const { container } = renderPicker();
       await user.type(combobox(), 'zzz');
       expect(combobox()).toHaveAttribute('aria-expanded', 'false');
       // (the page-level announcer is a status region too)
-      expect(screen.getByText('No matches')).toHaveAttribute('role', 'status');
+      expect(within(container).getByRole('status')).toHaveTextContent('No matches');
+      const surface = document.querySelector<HTMLElement>('[data-wave-listbox-surface]')!;
+      expect(within(surface).getByText('No matches')).toBeVisible();
+    });
+
+    it('announces "No matches" through a status region mounted before the text (x-lifecycle-3)', async () => {
+      const user = userEvent.setup();
+      const { container } = renderPicker();
+      // A live region added together with its text is not announced by every screen reader.
+      const status = within(container).getByRole('status');
+      expect(status).toBeEmptyDOMElement();
+      await user.type(combobox(), 'zzz');
+      expect(within(container).getByRole('status')).toBe(status);
+      expect(status).toHaveTextContent('No matches');
+      // The visible row in the popup is a copy, hidden from assistive technology.
+      const surface = document.querySelector<HTMLElement>('[data-wave-listbox-surface]')!;
+      expect(within(surface).getByText('No matches')).toHaveAttribute('aria-hidden', 'true');
+      expect(within(surface).queryByRole('status')).toBeNull();
+      await user.clear(combobox());
+      await user.type(combobox(), 'ch');
+      expect(screen.getByRole('option', { name: 'Cherry' })).toBeInTheDocument();
+      expect(status).toBeEmptyDOMElement();
+      await user.type(combobox(), 'zz');
+      expect(status).toHaveTextContent('No matches');
+      await user.keyboard('{Escape}');
+      expect(status).toBeEmptyDOMElement();
     });
 
     it('marks the listbox multi-selectable', async () => {
@@ -494,7 +577,7 @@ describe('TagPicker', () => {
     });
 
     it('Backspace targets the last rendered tag', async () => {
-      vi.spyOn(console, 'warn').mockImplementation(() => {});
+      const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
       const user = userEvent.setup();
       const onValueChange = vi.fn();
       renderPicker({ defaultValue: ['apple', 'kiwi'], onValueChange });
@@ -504,6 +587,10 @@ describe('TagPicker', () => {
       await user.keyboard('{Backspace}');
       expect(onValueChange).toHaveBeenCalledWith(['apple']);
       expect(tags()).toEqual(['Apple']);
+      expect(warn).toHaveBeenCalledTimes(1);
+      expect(warn).toHaveBeenCalledWith(
+        '[WaveUI] TagPicker: the selected value(s) "kiwi" match no option; the raw value is shown as the tag label.',
+      );
     });
   });
 
@@ -657,13 +744,61 @@ describe('TagPicker', () => {
     });
 
     it('clears to no tags when a controlled value becomes undefined, and adopts a late value', () => {
-      vi.spyOn(console, 'warn').mockImplementation(() => {});
+      const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
       const { rerender } = renderPicker({ value: undefined });
       expect(tags()).toEqual([]);
       rerender(<TagPicker aria-label="Fruits" options={options} value={['date']} />);
       expect(tags()).toEqual(['Date']);
       rerender(<TagPicker aria-label="Fruits" options={options} value={undefined} />);
       expect(tags()).toEqual([]);
+      expect(warn.mock.calls).toEqual([
+        [
+          expect.stringContaining(
+            '[WaveUI] A component is changing from uncontrolled to controlled.',
+          ),
+        ],
+        [
+          expect.stringContaining(
+            '[WaveUI] A component is changing from controlled to uncontrolled.',
+          ),
+        ],
+      ]);
+    });
+
+    it('accepts readonly arrays and emits mutable copies (R6)', async () => {
+      expectTypeOf<readonly TagPickerOption[]>().toExtend<TagPickerProps['options']>();
+      expectTypeOf<readonly string[]>().toExtend<NonNullable<TagPickerProps['value']>>();
+      expectTypeOf<readonly string[]>().toExtend<NonNullable<TagPickerProps['defaultValue']>>();
+      expectTypeOf<Parameters<NonNullable<TagPickerProps['onValueChange']>>[0]>().toEqualTypeOf<
+        string[]
+      >();
+      const user = userEvent.setup();
+      const onValueChange = vi.fn();
+      const fixedOptions = [
+        { value: 'apple', label: 'Apple' },
+        { value: 'banana', label: 'Banana' },
+      ] as const;
+      const fixedDefault = Object.freeze(['apple'] as const);
+      render(
+        <form aria-label="Order">
+          <TagPicker
+            aria-label="Fruits"
+            options={fixedOptions}
+            defaultValue={fixedDefault}
+            onValueChange={onValueChange}
+          />
+          <button type="reset">Reset</button>
+        </form>,
+      );
+      expect(tags()).toEqual(['Apple']);
+      await user.click(combobox());
+      await user.click(screen.getByRole('option', { name: 'Banana' }));
+      await user.click(screen.getByRole('button', { name: 'Reset' }));
+      expect(onValueChange.mock.calls).toEqual([[['apple', 'banana']], [['apple']]]);
+      // The reset emits a copy of the (frozen) default, which the consumer may change.
+      const emitted: string[] = onValueChange.mock.calls[1][0];
+      expect(emitted).not.toBe(fixedDefault);
+      expect(Object.isFrozen(emitted)).toBe(false);
     });
   });
 
@@ -693,6 +828,48 @@ describe('TagPicker', () => {
       expect(control).not.toHaveAttribute('aria-required', 'true');
       const form = screen.getByRole('form', { name: 'Form' }) as HTMLFormElement;
       expect(form.checkValidity()).toBe(true);
+    });
+
+    it('blocks submission inside a required Field until a tag is added (listbox-consumers-tests-1)', async () => {
+      const user = userEvent.setup();
+      renderWithFieldContext(
+        <form aria-label="Form">
+          <TagPicker options={options} />
+        </form>,
+        { required: true },
+      );
+      const form = screen.getByRole('form', { name: 'Form' }) as HTMLFormElement;
+      // Natively required through the Field alone: no own `required` and no `name`.
+      expect(form.checkValidity()).toBe(false);
+      await user.click(combobox(FIELD_TEST_TEXT.label));
+      await user.click(screen.getByRole('option', { name: 'Cherry' }));
+      expect(form.checkValidity()).toBe(true);
+    });
+
+    it('names its open listbox after the Field label (listbox-consumers-tests-4)', async () => {
+      const user = userEvent.setup();
+      renderWithFieldContext(<TagPicker options={options} />);
+      await user.click(combobox(FIELD_TEST_TEXT.label));
+      expect(screen.getByRole('listbox', { name: FIELD_TEST_TEXT.label })).toBeInTheDocument();
+    });
+
+    it('routes the text input attributes to the input (listbox-consumers-docs-2)', () => {
+      render(
+        <TagPicker
+          aria-label="Fruits"
+          options={options}
+          autoCapitalize="none"
+          autoCorrect="off"
+          maxLength={12}
+          data-testid="root"
+        />,
+      );
+      expect(combobox()).toHaveAttribute('autocapitalize', 'none');
+      expect(combobox()).toHaveAttribute('autocorrect', 'off');
+      expect(combobox()).toHaveAttribute('maxlength', '12');
+      expect(combobox()).toHaveAttribute('autocomplete', 'off');
+      expect(screen.getByTestId('root')).not.toHaveAttribute('autocapitalize');
+      expect(screen.getByTestId('root')).not.toHaveAttribute('autocorrect');
     });
 
     it('submits one entry per value', async () => {
@@ -733,6 +910,45 @@ describe('TagPicker', () => {
       expect(tags()).toEqual(['Apple']);
     });
 
+    it('reports a reset only when it changes the tags (x-api-5, R10)', async () => {
+      const user = userEvent.setup();
+      const onValueChange = vi.fn();
+      function Parent() {
+        const [count, setCount] = React.useState(0);
+        return (
+          <form aria-label="Order">
+            {/* An inline default: a new array on every render of the parent. */}
+            <TagPicker
+              aria-label="Fruits"
+              options={options}
+              name="fruit"
+              defaultValue={['apple', 'banana']}
+              onValueChange={onValueChange}
+            />
+            <button type="button" onClick={() => setCount(count + 1)}>
+              Renders {count}
+            </button>
+            <button type="reset">Reset</button>
+          </form>
+        );
+      }
+      render(<Parent />);
+      await user.click(screen.getByRole('button', { name: 'Renders 0' }));
+      await user.click(screen.getByRole('button', { name: 'Reset' }));
+      expect(onValueChange).not.toHaveBeenCalled();
+      expect(tags()).toEqual(['Apple', 'Banana']);
+
+      // Same tags in another order: the reset restores the order and reports it.
+      await user.click(screen.getByRole('button', { name: 'Remove Apple' }));
+      await user.click(combobox());
+      await user.click(screen.getByRole('option', { name: 'Apple' }));
+      expect(tags()).toEqual(['Banana', 'Apple']);
+      onValueChange.mockClear();
+      await user.click(screen.getByRole('button', { name: 'Reset' }));
+      expect(onValueChange.mock.calls).toEqual([[['apple', 'banana']]]);
+      expect(tags()).toEqual(['Apple', 'Banana']);
+    });
+
     it('blocks submission while required and empty', () => {
       render(
         <form aria-label="Order">
@@ -742,13 +958,83 @@ describe('TagPicker', () => {
       const form = screen.getByRole('form', { name: 'Order' }) as HTMLFormElement;
       expect(form.checkValidity()).toBe(false);
     });
+
+    it('is neither validated nor submitted while disabled (listbox-consumers-tests-2)', () => {
+      render(
+        <form aria-label="Order">
+          <TagPicker aria-label="Fruits" options={options} name="fruit" required disabled />
+          <TagPicker
+            aria-label="Snacks"
+            options={options}
+            name="snack"
+            required
+            disabled
+            defaultValue={['apple', 'date']}
+          />
+        </form>,
+      );
+      const form = screen.getByRole('form', { name: 'Order' }) as HTMLFormElement;
+      expect(form.checkValidity()).toBe(true);
+      const data = new FormData(form);
+      expect(data.getAll('fruit')).toEqual([]);
+      expect(data.getAll('snack')).toEqual([]);
+    });
   });
 
-  it('uses the input focus recipe instead of a ring (input-basic#9)', () => {
-    renderPicker();
-    expect(combobox()).toHaveClass('focus:outline-hidden');
-    const control = screen.getByRole('group');
-    expect(control).toHaveClass('focus-within:border-b-2');
-    expect(control.className).not.toMatch(/ring/);
+  describe('field look (x-api-4, x-api-3)', () => {
+    it('uses the input focus recipe instead of a ring (input-basic#9)', () => {
+      renderPicker();
+      expect(combobox()).toHaveClass('focus:outline-hidden');
+      const control = screen.getByRole('group');
+      expect(control).toHaveClass('focus-within:border-b-2');
+      expect(control.className).not.toMatch(/ring/);
+    });
+
+    it('draws the field boundary with the accessible bottom stroke (WCAG 1.4.11)', () => {
+      renderPicker();
+      const control = screen.getByRole('group');
+      expect(control).toHaveClass(
+        'border',
+        'border-input',
+        'border-b-stroke-accessible',
+        'focus-within:border-b-primary',
+      );
+      expect(control).not.toHaveClass('border-border', 'border-destructive');
+    });
+
+    it.each([
+      ['its own aria-invalid', () => renderPicker({ 'aria-invalid': true })],
+      [
+        'a Field error',
+        () =>
+          renderWithFieldContext(<TagPicker options={options} />, {
+            errorId: FIELD_TEST_IDS.errorId,
+          }),
+      ],
+    ])('shows the destructive border while invalid through %s (R8)', (_, renderInvalid) => {
+      renderInvalid();
+      expect(screen.getByRole('combobox')).toHaveAttribute('aria-invalid', 'true');
+      const control = screen.getByRole('group');
+      expect(control).toHaveClass(
+        'border',
+        'border-destructive',
+        'focus-within:border-b-destructive',
+      );
+      expect(control).not.toHaveClass(
+        'border-input',
+        'border-b-stroke-accessible',
+        'focus-within:border-b-primary',
+      );
+    });
+
+    it('keeps the valid look when its own aria-invalid={false} overrides an invalid Field', () => {
+      renderWithFieldContext(<TagPicker options={options} aria-invalid={false} />, {
+        errorId: FIELD_TEST_IDS.errorId,
+      });
+      expect(screen.getByRole('combobox')).toHaveAttribute('aria-invalid', 'false');
+      const control = screen.getByRole('group');
+      expect(control).toHaveClass('border-input', 'border-b-stroke-accessible');
+      expect(control).not.toHaveClass('border-destructive');
+    });
   });
 });

@@ -2,13 +2,14 @@ import * as React from 'react';
 import { cn } from '../../lib/cn';
 import { composeEventHandlers } from '../../lib/composeEventHandlers';
 import { warnDeprecated } from '../../lib/dev';
-import { disabledStyles, inputBase, inputFocus } from '../../lib/styles';
+import { disabledStyles, inputBase, inputFocus, inputInvalid } from '../../lib/styles';
 import { useControllable } from '../../hooks/useControllable';
 import { useFieldContext, useFieldControl } from '../../hooks/useFieldControl';
 import { useFormReset } from '../../hooks/useFormReset';
 import { collectOptionLabels, useListbox, type ListboxItem } from '../../hooks/useListbox';
 import { useMergedRefs } from '../../hooks/useMergedRefs';
 import { HiddenInput } from '../internal/HiddenInput';
+import { isInvalidLook } from './Input';
 import { ListboxSurface, Option, OptionGroup, useListboxPopup } from './Option';
 
 export { Option, OptionGroup } from './Option';
@@ -77,8 +78,13 @@ export interface ComboboxProps extends Omit<
    * input, a `readOnly` Combobox does not block submission.
    */
   required?: boolean;
-  /** Text input attributes, applied to the `<input role="combobox">`. */
+  /**
+   * The `autocomplete` attribute of the `<input role="combobox">`. Browser autofill is off unless
+   * you set it (for example `'on'`).
+   * @default 'off'
+   */
   autoComplete?: string;
+  /** The maximum length of the typed text (`maxlength` of the `<input role="combobox">`). */
   maxLength?: number;
   /**
    * The value cannot be changed: the input is read-only and the listbox neither opens (click,
@@ -86,10 +92,16 @@ export interface ComboboxProps extends Omit<
    * `disabled`) on while the listbox is open closes it (`onOpenChange(false)`).
    */
   readOnly?: boolean;
-  /** Handlers of the `<input role="combobox">` (the root keeps the other handlers). */
+  /** Called when the `<input role="combobox">` receives focus (the root keeps other handlers). */
   onFocus?: React.FocusEventHandler<HTMLInputElement>;
+  /** Called when the `<input role="combobox">` loses focus. */
   onBlur?: React.FocusEventHandler<HTMLInputElement>;
+  /**
+   * Called on a key press in the `<input role="combobox">`, before the built-in listbox keys;
+   * `event.preventDefault()` skips them.
+   */
   onKeyDown?: React.KeyboardEventHandler<HTMLInputElement>;
+  /** Called when a key is released in the `<input role="combobox">`. */
   onKeyUp?: React.KeyboardEventHandler<HTMLInputElement>;
   /** Ref to the `<input role="combobox">` (the focusable element). */
   controlRef?: React.Ref<HTMLInputElement>;
@@ -101,22 +113,6 @@ function matchesText(item: ListboxItem, text: string): boolean {
   return (item.textValue ?? item.label).toLowerCase().includes(text.toLowerCase());
 }
 
-/**
- * An editable combobox: a text input with a filterable listbox of `Option`s (APG combobox with
- * list autocomplete). Typing filters the options; ArrowDown/ArrowUp move the highlight
- * (`aria-activedescendant`), Enter selects, Escape closes. Without `freeform` the text is only a
- * filter: its first match becomes active while typing, and the input shows the selected option's
- * label again when the listbox closes. With `freeform` the text itself is the value.
- *
- * `id`, `aria-*`, `tabIndex`, `autoFocus`, focus/keyboard handlers and text input attributes go to
- * the `<input>`; `ref`, `className`, `style` and other props stay on the root. Inside a `Field`
- * the input is labelled and described by it. With `name`/`required` the value takes part in form
- * submission, validation and reset. The open listbox renders in a portal; while closed it stays
- * in the DOM, hidden.
- *
- * Sub-components: `Combobox.Option`, `Combobox.OptionGroup`. React Server Components import the
- * flat names `ComboboxOption` / `ComboboxOptionGroup` (dotted access needs a client file).
- */
 const ComboboxRoot = (props: ComboboxProps) => {
   const {
     value: valueProp,
@@ -133,6 +129,8 @@ const ComboboxRoot = (props: ComboboxProps) => {
     form,
     required,
     autoComplete = 'off',
+    autoCapitalize,
+    autoCorrect,
     maxLength,
     readOnly,
     inputMode,
@@ -174,6 +172,8 @@ const ComboboxRoot = (props: ComboboxProps) => {
     // `isRequired`.
     'aria-required': ariaRequired ?? required,
   });
+  // The error look follows the resolved state: the consumer's `aria-invalid` or the Field's (R8).
+  const invalidLook = isInvalidLook(false, fieldProps['aria-invalid']);
 
   const [value, setValue] = useControllable(valueProp, defaultValue ?? '', onValueChange);
   const [openState, setOpen] = useControllable(openProp, defaultOpen ?? false, onOpenChange);
@@ -273,6 +273,7 @@ const ComboboxRoot = (props: ComboboxProps) => {
   const expanded = open && listbox.items.length > 0;
   // The popup shows the list, or "No matches" for a draft.
   const surfaceOpen = open && (expanded || !!draft);
+  const noMatches = surfaceOpen && !expanded;
   const { layerId, setReference, surfaceRef, floatingProps } = useListboxPopup({
     open,
     surfaceOpen,
@@ -334,6 +335,8 @@ const ComboboxRoot = (props: ComboboxProps) => {
         disabled={disabled}
         readOnly={readOnly}
         placeholder={placeholder}
+        autoCapitalize={autoCapitalize}
+        autoCorrect={autoCorrect}
         maxLength={maxLength}
         inputMode={inputMode}
         spellCheck={spellCheck}
@@ -352,8 +355,19 @@ const ComboboxRoot = (props: ComboboxProps) => {
         onBlur={composeEventHandlers(onBlur, () => setDraft(null), {
           checkDefaultPrevented: false,
         })}
-        className={cn(inputBase, inputFocus, disabledStyles, 'aria-invalid:border-error')}
+        className={cn(
+          inputBase,
+          'border-b-stroke-accessible',
+          inputFocus,
+          disabledStyles,
+          invalidLook && inputInvalid,
+        )}
       />
+      {/* Mounted before its text: a live region added together with its text is not announced by
+          every screen reader. The row in the popup is the visible copy. */}
+      <span role="status" className="sr-only">
+        {noMatches && 'No matches'}
+      </span>
       <ListboxSurface
         listbox={listbox}
         layerId={layerId}
@@ -363,7 +377,7 @@ const ComboboxRoot = (props: ComboboxProps) => {
         expanded={expanded}
         emptyContent={
           draft ? (
-            <div role="status" className="px-3 py-1.5 text-body-1 text-muted-foreground">
+            <div aria-hidden="true" className="px-3 py-1.5 text-body-1 text-muted-foreground">
               No matches
             </div>
           ) : undefined
@@ -378,9 +392,9 @@ const ComboboxRoot = (props: ComboboxProps) => {
         form={form}
         disabled={disabled}
         value={value}
+        type="text"
         // Like a native readonly input, a read-only Combobox is barred from constraint validation
         // (the user could not fix it); its value is still submitted.
-        type={validates ? 'text' : 'hidden'}
         required={validates}
         onInvalid={() => inputRef.current?.focus()}
       />
@@ -394,6 +408,27 @@ export const ComboboxOption = Option;
 /** Flat name of `Combobox.OptionGroup` for React Server Components. */
 export const ComboboxOptionGroup = OptionGroup;
 
+/**
+ * An editable combobox: a text input with a filterable listbox of `Option`s (APG combobox with
+ * list autocomplete). Typing filters the options; ArrowDown/ArrowUp move the highlight
+ * (`aria-activedescendant`), Enter selects, Escape closes. Without `freeform` the text is only a
+ * filter: its first match becomes active while typing, and the input shows the selected option's
+ * label again when the listbox closes. With `freeform` the text itself is the value. Text that
+ * matches no option shows "No matches", announced through a status region.
+ *
+ * The `<input>` receives `id`, `aria-label`, `aria-labelledby`, `aria-describedby`,
+ * `aria-invalid`, `aria-required`, `aria-errormessage`, `aria-details`, `tabIndex`, `autoFocus`,
+ * `onFocus`/`onBlur`/`onKeyDown`/`onKeyUp` and the text input attributes `autoComplete`,
+ * `autoCapitalize`, `autoCorrect`, `maxLength`, `inputMode`, `spellCheck` and `enterKeyHint`.
+ * `ref`, `className`, `style`, other `aria-*` attributes and the remaining props stay on the root
+ * `<div>`. Inside a `Field` the input is labelled and described by it. It shows the error look
+ * whenever it ends up `aria-invalid` (its own `aria-invalid` or a `Field` error). With
+ * `name`/`required` the value takes part in form submission, validation and reset. The open
+ * listbox renders in a portal; while closed it stays in the DOM, hidden.
+ *
+ * Sub-components: `Combobox.Option`, `Combobox.OptionGroup`. React Server Components import the
+ * flat names `ComboboxOption` / `ComboboxOptionGroup` (dotted access needs a client file).
+ */
 export const Combobox = /* @__PURE__ */ Object.assign(ComboboxRoot, {
   Option,
   OptionGroup,

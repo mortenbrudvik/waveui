@@ -5,7 +5,7 @@ import { composeEventHandlers } from '../../lib/composeEventHandlers';
 import { warnDeprecated, warnOnce } from '../../lib/dev';
 import { getArrowIntent, getDirection } from '../../lib/direction';
 import { DismissIcon } from '../../lib/icons';
-import { focusRing, inputFocusWithin } from '../../lib/styles';
+import { focusRing, inputFocusWithin, inputInvalidWithin } from '../../lib/styles';
 import { useAnnounce } from '../../hooks/useAnnounce';
 import { useControllable } from '../../hooks/useControllable';
 import { useFieldContext, useFieldControl } from '../../hooks/useFieldControl';
@@ -15,6 +15,7 @@ import { useListbox, type ListboxItem } from '../../hooks/useListbox';
 import { useMergedRefs } from '../../hooks/useMergedRefs';
 import { usePreserveFocus } from '../../hooks/usePreserveFocus';
 import { HiddenInput } from '../internal/HiddenInput';
+import { isInvalidLook } from './Input';
 import { ListboxSurface, Option, useListboxPopup } from './Option';
 
 /** Represents a single selectable tag option. */
@@ -33,18 +34,22 @@ export interface TagPickerProps extends Omit<
   'onChange' | 'defaultValue' | RoutedHandlers
 > {
   /** Available options to choose from. */
-  options: TagPickerOption[];
+  options: readonly TagPickerOption[];
   /** Controlled array of selected option values (`[]` for none). */
-  value?: string[];
+  value?: readonly string[];
   /**
-   * Initial selected values for uncontrolled usage.
+   * Initial selected values for uncontrolled usage; a form reset restores them.
    * @default []
    */
-  defaultValue?: string[];
-  /** Called with the new selection when a tag is added or removed. */
+  defaultValue?: readonly string[];
+  /**
+   * Called with the new selection when it changes: a tag is added or removed, or a form reset
+   * restores different tags.
+   */
   onValueChange?: (value: string[]) => void;
   /**
-   * Called with the new selection when a tag is added or removed.
+   * Called with the new selection when it changes: a tag is added or removed, or a form reset
+   * restores different tags.
    * @deprecated Use `onValueChange`.
    */
   onChange?: (value: string[]) => void;
@@ -77,8 +82,13 @@ export interface TagPickerProps extends Omit<
    * readonly input, a `readOnly` TagPicker does not block submission.
    */
   required?: boolean;
-  /** Text input attributes, applied to the `<input role="combobox">`. */
+  /**
+   * The `autocomplete` attribute of the `<input role="combobox">`. Browser autofill is off unless
+   * you set it (for example `'on'`).
+   * @default 'off'
+   */
   autoComplete?: string;
+  /** The maximum length of the typed text (`maxlength` of the `<input role="combobox">`). */
   maxLength?: number;
   /**
    * The selection cannot be changed: the input is read-only, the tags have no remove buttons, and
@@ -87,10 +97,16 @@ export interface TagPickerProps extends Omit<
    * (`onOpenChange(false)`); a focused remove button hands focus to the input.
    */
   readOnly?: boolean;
-  /** Handlers of the `<input role="combobox">` (the root keeps the other handlers). */
+  /** Called when the `<input role="combobox">` receives focus (the root keeps other handlers). */
   onFocus?: React.FocusEventHandler<HTMLInputElement>;
+  /** Called when the `<input role="combobox">` loses focus. */
   onBlur?: React.FocusEventHandler<HTMLInputElement>;
+  /**
+   * Called on a key press in the `<input role="combobox">`, before the built-in listbox and tag
+   * keys; `event.preventDefault()` skips them.
+   */
   onKeyDown?: React.KeyboardEventHandler<HTMLInputElement>;
+  /** Called when a key is released in the `<input role="combobox">`. */
   onKeyUp?: React.KeyboardEventHandler<HTMLInputElement>;
   /** Ref to the `<input role="combobox">` (the focusable element). */
   controlRef?: React.Ref<HTMLInputElement>;
@@ -98,7 +114,12 @@ export interface TagPickerProps extends Omit<
   ref?: React.Ref<HTMLDivElement>;
 }
 
-const EMPTY: string[] = [];
+const EMPTY: readonly string[] = [];
+
+/** Whether two selections hold the same values in the same order. */
+function sameTags(a: readonly string[], b: readonly string[]): boolean {
+  return a.length === b.length && a.every((value, index) => value === b[index]);
+}
 
 interface TagRemoveButtonProps {
   label: string;
@@ -143,17 +164,24 @@ function TagRemoveButton({
 
 /**
  * A multi-select combobox that shows the selected values as removable tags. Typing filters the
- * options; ArrowDown/ArrowUp move the highlight (`aria-activedescendant`), Enter adds the
- * highlighted option and keeps the list open, Escape closes the list (and then clears the typed
- * text). Backspace in the empty input moves focus to the last tag; Backspace or Delete there
- * removes it. Additions and removals are announced ("Cherry removed, 2 selected").
+ * options and makes the first match active; ArrowDown/ArrowUp move the highlight
+ * (`aria-activedescendant`), Enter adds the highlighted option and keeps the list open (with no
+ * typed text and nothing highlighted, Enter is left to the surrounding form), Escape closes the
+ * list (and then clears the typed text). Backspace in the empty input moves focus to the last tag;
+ * Backspace or Delete there removes it. Additions and removals are announced ("Cherry removed, 2
+ * selected"), and so is "No matches" for text that matches no option.
  *
  * The tags form a list named "Selected"; the input is described by a summary of the selected
- * labels ("Selected: Apple, Banana"). `id`, `aria-*`, `tabIndex`, `autoFocus`, focus/keyboard
- * handlers and text input attributes go to the `<input>`; `ref`, `className`, `style` and other
- * props stay on the root. Inside a `Field` the input is labelled and described by it. With
- * `name`/`required` the values take part in form submission, validation and reset. Selected
- * values without a matching option are shown with their raw value.
+ * labels ("Selected: Apple, Banana"). The `<input>` receives `id`, `aria-label`,
+ * `aria-labelledby`, `aria-describedby`, `aria-invalid`, `aria-required`, `aria-errormessage`,
+ * `aria-details`, `tabIndex`, `autoFocus`, `onFocus`/`onBlur`/`onKeyDown`/`onKeyUp` and the text
+ * input attributes `autoComplete`, `autoCapitalize`, `autoCorrect`, `maxLength`, `inputMode`,
+ * `spellCheck` and `enterKeyHint`. `ref`, `className`, `style`, other `aria-*` attributes and the
+ * remaining props stay on the root `<div>`. Inside a `Field` the input is labelled and described
+ * by it. The tag area shows the error look whenever the input ends up `aria-invalid` (its own
+ * `aria-invalid` or a `Field` error). With `name`/`required` the values take part in form
+ * submission, validation and reset. Selected values without a matching option are shown with
+ * their raw value.
  */
 export const TagPicker = (props: TagPickerProps) => {
   const {
@@ -171,6 +199,8 @@ export const TagPicker = (props: TagPickerProps) => {
     form,
     required,
     autoComplete = 'off',
+    autoCapitalize,
+    autoCorrect,
     maxLength,
     readOnly,
     inputMode,
@@ -213,13 +243,17 @@ export const TagPicker = (props: TagPickerProps) => {
     // `isRequired`.
     'aria-required': ariaRequired ?? required,
   });
+  // The error look follows the resolved state: the consumer's `aria-invalid` or the Field's (R8).
+  const invalidLook = isInvalidLook(false, fieldProps['aria-invalid']);
 
-  const [selected, setSelected] = useControllable(
+  const [selected, setSelected] = useControllable<readonly string[]>(
     valueProp,
     defaultValue ?? EMPTY,
-    (next: string[]) => {
-      onValueChange?.(next);
-      onChange?.(next);
+    (next) => {
+      // The props are read only; the callbacks receive an array of their own.
+      const list = [...next];
+      onValueChange?.(list);
+      onChange?.(list);
     },
   );
   const [openState, setOpen] = useControllable(openProp, defaultOpen ?? false, onOpenChange);
@@ -308,7 +342,9 @@ export const TagPicker = (props: TagPickerProps) => {
     onSelect: (value) => addTag(value),
     items: available,
     filter,
-    autoHighlight: false,
+    // Typing a filter makes its first match active (as in Combobox), so Enter adds what the list
+    // shows instead of submitting the form. Nothing is active on open or with the text cleared.
+    autoHighlight: query ? 'first' : false,
     idPrefix: 'tagpicker-listbox',
     onClearDraft: query ? () => setQuery('') : undefined,
   });
@@ -317,6 +353,7 @@ export const TagPicker = (props: TagPickerProps) => {
   const expanded = open && listbox.items.length > 0;
   // The popup shows the options, or "No matches" for a query.
   const surfaceOpen = open && (expanded || query !== '');
+  const noMatches = surfaceOpen && !expanded;
   const { layerId, setReference, surfaceRef, floatingProps } = useListboxPopup({
     open,
     surfaceOpen,
@@ -331,7 +368,10 @@ export const TagPicker = (props: TagPickerProps) => {
   useFormReset(
     inputRef,
     () => {
-      setSelected(defaultValue ?? EMPTY);
+      // Compared by content (R10): an inline default is a new array on every render, and a reset
+      // that keeps the same tags reports nothing.
+      const initial = defaultValue ?? EMPTY;
+      setSelected((current) => (sameTags(current, initial) ? current : [...initial]));
       setQuery('');
     },
     form,
@@ -405,8 +445,9 @@ export const TagPicker = (props: TagPickerProps) => {
         role="group"
         aria-disabled={disabled || undefined}
         className={cn(
-          'flex flex-wrap items-center gap-1 rounded border border-border bg-background px-2 py-1.5',
+          'flex flex-wrap items-center gap-1 rounded border border-input border-b-stroke-accessible bg-background px-2 py-1.5',
           inputFocusWithin,
+          invalidLook && inputInvalidWithin,
           disabled && 'cursor-not-allowed opacity-50',
         )}
         onClick={(event) => {
@@ -462,6 +503,8 @@ export const TagPicker = (props: TagPickerProps) => {
           disabled={disabled}
           readOnly={readOnly}
           placeholder={selected.length === 0 ? placeholder : ''}
+          autoCapitalize={autoCapitalize}
+          autoCorrect={autoCorrect}
           maxLength={maxLength}
           inputMode={inputMode}
           spellCheck={spellCheck}
@@ -481,6 +524,11 @@ export const TagPicker = (props: TagPickerProps) => {
           className="min-w-15 flex-1 bg-transparent py-0.5 text-body-1 text-foreground placeholder:text-muted-foreground focus:outline-hidden"
         />
       </div>
+      {/* Mounted before its text: a live region added together with its text is not announced by
+          every screen reader. The row in the popup is the visible copy. */}
+      <span role="status" className="sr-only">
+        {noMatches && 'No matches'}
+      </span>
       <ListboxSurface
         listbox={listbox}
         layerId={layerId}
@@ -491,7 +539,7 @@ export const TagPicker = (props: TagPickerProps) => {
         showCheck={false}
         emptyContent={
           query !== '' ? (
-            <div role="status" className="px-3 py-1.5 text-body-1 text-muted-foreground">
+            <div aria-hidden="true" className="px-3 py-1.5 text-body-1 text-muted-foreground">
               No matches
             </div>
           ) : undefined
@@ -511,7 +559,7 @@ export const TagPicker = (props: TagPickerProps) => {
         form={form}
         disabled={disabled}
         value={selected}
-        type={validates ? 'text' : 'hidden'}
+        type="text"
         required={validates}
         onInvalid={focusInput}
       />

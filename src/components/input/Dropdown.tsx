@@ -3,13 +3,14 @@ import { cn } from '../../lib/cn';
 import { composeEventHandlers } from '../../lib/composeEventHandlers';
 import { warnDeprecated } from '../../lib/dev';
 import { ChevronDownIcon } from '../../lib/icons';
-import { disabledStyles, inputFocus } from '../../lib/styles';
+import { disabledStyles, inputFocus, inputInvalid } from '../../lib/styles';
 import { useControllable } from '../../hooks/useControllable';
 import { useFieldContext, useFieldControl } from '../../hooks/useFieldControl';
 import { useFormReset } from '../../hooks/useFormReset';
 import { collectOptionLabels, useListbox } from '../../hooks/useListbox';
 import { useMergedRefs } from '../../hooks/useMergedRefs';
 import { HiddenInput } from '../internal/HiddenInput';
+import { isInvalidLook } from './Input';
 import { ListboxSurface, Option, OptionGroup, useListboxPopup } from './Option';
 
 /* ------------------------------------------------------------------ */
@@ -64,10 +65,16 @@ export interface DropdownProps extends Omit<
   form?: string;
   /** A value is required to submit the form (native constraint validation). */
   required?: boolean;
-  /** Handlers of the `<button role="combobox">` (the root keeps the other handlers). */
+  /** Called when the `<button role="combobox">` receives focus (the root keeps other handlers). */
   onFocus?: React.FocusEventHandler<HTMLButtonElement>;
+  /** Called when the `<button role="combobox">` loses focus. */
   onBlur?: React.FocusEventHandler<HTMLButtonElement>;
+  /**
+   * Called on a key press on the `<button role="combobox">`, before the built-in listbox keys;
+   * `event.preventDefault()` skips them.
+   */
   onKeyDown?: React.KeyboardEventHandler<HTMLButtonElement>;
+  /** Called when a key is released on the `<button role="combobox">`. */
   onKeyUp?: React.KeyboardEventHandler<HTMLButtonElement>;
   /** Ref to the `<button role="combobox">` (the focusable element). */
   controlRef?: React.Ref<HTMLButtonElement>;
@@ -75,21 +82,6 @@ export interface DropdownProps extends Omit<
   ref?: React.Ref<HTMLDivElement>;
 }
 
-/**
- * A select-only combobox (APG): a button that opens a listbox of `Option`s. Enter, Space,
- * ArrowDown/ArrowUp, Home/End and typing a character open it and move the highlight
- * (`aria-activedescendant`); Enter/Space select, Tab selects the highlighted option and moves on,
- * Escape closes.
- *
- * `id`, `aria-*`, `tabIndex`, `autoFocus` and focus/keyboard handlers go to the button; `ref`,
- * `className`, `style` and other props stay on the root. Inside a `Field` the button is labelled
- * and described by it — otherwise give it an `aria-label`. With `name`/`required` the value takes
- * part in form submission, validation and reset. The open listbox renders in a portal; while
- * closed it stays in the DOM, hidden.
- *
- * Sub-components: `Dropdown.Option`, `Dropdown.OptionGroup`. React Server Components import the
- * flat names `DropdownOption` / `DropdownOptionGroup` (dotted access needs a client file).
- */
 const DropdownRoot = (props: DropdownProps) => {
   const {
     value: valueProp,
@@ -139,6 +131,8 @@ const DropdownRoot = (props: DropdownProps) => {
     // `isRequired`.
     'aria-required': ariaRequired ?? required,
   });
+  // The error look follows the resolved state: the consumer's `aria-invalid` or the Field's (R8).
+  const invalidLook = isInvalidLook(false, fieldProps['aria-invalid']);
 
   const [value, setValue] = useControllable(valueProp, defaultValue ?? '', onValueChange);
   const [openState, setOpen] = useControllable(openProp, defaultOpen ?? false, onOpenChange);
@@ -218,10 +212,10 @@ const DropdownRoot = (props: DropdownProps) => {
         onFocus={onFocus}
         onBlur={onBlur}
         className={cn(
-          'flex h-8 w-full items-center justify-between rounded border border-input bg-background px-3 text-start text-body-1 text-foreground',
+          'flex h-8 w-full items-center justify-between rounded border border-input border-b-stroke-accessible bg-background px-3 text-start text-body-1 text-foreground',
           inputFocus,
           disabledStyles,
-          'aria-invalid:border-error',
+          invalidLook && inputInvalid,
         )}
       >
         <span className={cn('truncate', !displayText && 'text-muted-foreground')}>
@@ -251,7 +245,7 @@ const DropdownRoot = (props: DropdownProps) => {
         form={form}
         disabled={disabled}
         value={value}
-        type={isRequired ? 'text' : 'hidden'}
+        type="text"
         required={isRequired}
         onInvalid={() => buttonRef.current?.focus()}
       />
@@ -265,6 +259,24 @@ export const DropdownOption = Option;
 /** Flat name of `Dropdown.OptionGroup` for React Server Components. */
 export const DropdownOptionGroup = OptionGroup;
 
+/**
+ * A select-only combobox (APG): a button that opens a listbox of `Option`s. Enter, Space,
+ * ArrowDown/ArrowUp, Home/End and typing a character open it and move the highlight
+ * (`aria-activedescendant`); Enter/Space select, Tab selects the highlighted option and moves on,
+ * Escape closes.
+ *
+ * The `<button>` receives `id`, `aria-label`, `aria-labelledby`, `aria-describedby`,
+ * `aria-invalid`, `aria-required`, `aria-errormessage`, `aria-details`, `tabIndex`, `autoFocus`
+ * and `onFocus`/`onBlur`/`onKeyDown`/`onKeyUp`. `ref`, `className`, `style`, other `aria-*`
+ * attributes and the remaining props stay on the root `<div>`. Inside a `Field` the button is
+ * labelled and described by it — otherwise give it an `aria-label`. It shows the error look
+ * whenever it ends up `aria-invalid` (its own `aria-invalid` or a `Field` error). With
+ * `name`/`required` the value takes part in form submission, validation and reset. The open
+ * listbox renders in a portal; while closed it stays in the DOM, hidden.
+ *
+ * Sub-components: `Dropdown.Option`, `Dropdown.OptionGroup`. React Server Components import the
+ * flat names `DropdownOption` / `DropdownOptionGroup` (dotted access needs a client file).
+ */
 export const Dropdown = /* @__PURE__ */ Object.assign(DropdownRoot, {
   Option,
   OptionGroup,

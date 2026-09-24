@@ -7,6 +7,7 @@ import { hydrateRoot } from 'react-dom/client';
 import { Dropdown, DropdownOption, DropdownOptionGroup } from '../Dropdown';
 import { Option, OptionGroup } from '../Combobox';
 import {
+  asClientReference,
   renderWithProviders,
   testCompoundExposure,
   testNoImplicitSubmit,
@@ -14,6 +15,8 @@ import {
 } from '../../../test-utils';
 import { FIELD_TEST_IDS, FIELD_TEST_TEXT, renderWithFieldContext } from '../../../test-utils-field';
 import { DismissLayerProvider, useDismiss } from '../../../hooks/useDismiss';
+import dropdownSource from '../Dropdown.tsx?raw';
+import dropdownStoriesSource from '../../../../stories/Dropdown.stories.tsx?raw';
 
 const FRUITS = [
   <Option key="a" value="a">
@@ -204,6 +207,32 @@ describe('Dropdown', () => {
       host.innerHTML = html;
       // The closed option list is in the markup too: assert the combobox's own text.
       expect(host.querySelector('[role="combobox"]')).toHaveTextContent('United States');
+    });
+
+    it('renders the selected label of options written in a Server Component (R1)', () => {
+      // React Flight delivers Option/OptionGroup written in a Server Component as lazy types.
+      const ClientOption = asClientReference(DropdownOption);
+      const ClientOptionGroup = asClientReference(DropdownOptionGroup);
+      const plain = renderToString(
+        <Dropdown aria-label="Country" defaultValue="uk">
+          <DropdownOption value="us">United States</DropdownOption>
+          <DropdownOptionGroup label="Europe">
+            <DropdownOption value="uk">United Kingdom</DropdownOption>
+          </DropdownOptionGroup>
+        </Dropdown>,
+      );
+      const client = renderToString(
+        <Dropdown aria-label="Country" defaultValue="uk">
+          <ClientOption value="us">United States</ClientOption>
+          <ClientOptionGroup label="Europe">
+            <ClientOption value="uk">United Kingdom</ClientOption>
+          </ClientOptionGroup>
+        </Dropdown>,
+      );
+      expect(client).toBe(plain);
+      const host = document.createElement('div');
+      host.innerHTML = client;
+      expect(host.querySelector('[role="combobox"]')).toHaveTextContent('United Kingdom');
     });
 
     it('hydrates without mismatches and then opens with the registered options', async () => {
@@ -602,13 +631,19 @@ describe('Dropdown', () => {
     it('clears to the placeholder when a controlled value becomes undefined (table-core#4)', () => {
       const { rerender } = renderDropdown({ value: 'a', placeholder: 'Pick' });
       expect(combobox()).toHaveTextContent('Apple');
-      vi.spyOn(console, 'warn').mockImplementation(() => {});
+      const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
       rerender(
         <Dropdown aria-label="Fruit" value={undefined} placeholder="Pick">
           {FRUITS}
         </Dropdown>,
       );
       expect(combobox()).toHaveTextContent('Pick');
+      expect(warn).toHaveBeenCalledTimes(1);
+      expect(warn).toHaveBeenCalledWith(
+        expect.stringContaining(
+          '[WaveUI] A component is changing from controlled to uncontrolled.',
+        ),
+      );
     });
   });
 
@@ -788,6 +823,22 @@ describe('Dropdown', () => {
       expect(form.checkValidity()).toBe(true);
     });
 
+    it('blocks submission inside a required Field until an option is chosen (listbox-consumers-tests-1)', async () => {
+      const user = userEvent.setup();
+      renderWithFieldContext(
+        <form aria-label="Form">
+          <Dropdown>{FRUITS}</Dropdown>
+        </form>,
+        { required: true },
+      );
+      const form = screen.getByRole('form', { name: 'Form' }) as HTMLFormElement;
+      // Natively required through the Field alone: no own `required` and no `name`.
+      expect(form.checkValidity()).toBe(false);
+      await user.click(combobox(FIELD_TEST_TEXT.label));
+      await user.click(option('Banana'));
+      expect(form.checkValidity()).toBe(true);
+    });
+
     it('names its open listbox after the Field label', async () => {
       const user = userEvent.setup();
       renderWithFieldContext(<Dropdown>{FRUITS}</Dropdown>);
@@ -874,6 +925,68 @@ describe('Dropdown', () => {
       const form = screen.getByRole('form', { name: 'Order' }) as HTMLFormElement;
       expect(form.checkValidity()).toBe(false);
       expect(combobox()).toHaveAttribute('aria-required', 'true');
+    });
+
+    it('is neither validated nor submitted while disabled, like a native select (listbox-consumers-tests-2)', () => {
+      render(
+        <form aria-label="Order">
+          <Dropdown aria-label="Fruit" name="fruit" required disabled>
+            {FRUITS}
+          </Dropdown>
+          <Dropdown aria-label="Snack" name="snack" required disabled defaultValue="a">
+            {FRUITS}
+          </Dropdown>
+        </form>,
+      );
+      const form = screen.getByRole('form', { name: 'Order' }) as HTMLFormElement;
+      expect(form.checkValidity()).toBe(true);
+      const data = new FormData(form);
+      expect(data.get('fruit')).toBeNull();
+      expect(data.get('snack')).toBeNull();
+    });
+  });
+
+  describe('field look (x-api-4, x-api-3)', () => {
+    it('draws the field boundary with the accessible bottom stroke (WCAG 1.4.11)', () => {
+      renderDropdown();
+      expect(combobox()).toHaveClass(
+        'border',
+        'border-input',
+        'border-b-stroke-accessible',
+        'focus:border-b-primary',
+      );
+      expect(combobox()).not.toHaveClass('border-destructive');
+    });
+
+    it.each([
+      ['its own aria-invalid', () => renderDropdown({ 'aria-invalid': true })],
+      [
+        'a Field error',
+        () =>
+          renderWithFieldContext(<Dropdown>{FRUITS}</Dropdown>, {
+            errorId: FIELD_TEST_IDS.errorId,
+          }),
+      ],
+    ])('shows the destructive border while invalid through %s (R8)', (_, renderInvalid) => {
+      renderInvalid();
+      const control = screen.getByRole('combobox');
+      expect(control).toHaveAttribute('aria-invalid', 'true');
+      expect(control).toHaveClass('border', 'border-destructive', 'focus:border-b-destructive');
+      expect(control).not.toHaveClass(
+        'border-input',
+        'border-b-stroke-accessible',
+        'focus:border-b-primary',
+      );
+    });
+
+    it('keeps the valid look when its own aria-invalid={false} overrides an invalid Field', () => {
+      renderWithFieldContext(<Dropdown aria-invalid={false}>{FRUITS}</Dropdown>, {
+        errorId: FIELD_TEST_IDS.errorId,
+      });
+      const control = screen.getByRole('combobox');
+      expect(control).toHaveAttribute('aria-invalid', 'false');
+      expect(control).toHaveClass('border-input', 'border-b-stroke-accessible');
+      expect(control).not.toHaveClass('border-destructive');
     });
   });
 
@@ -1026,5 +1139,34 @@ describe('Dropdown', () => {
     const group = screen.getByRole('group', { name: 'Fruit' });
     expect(group.closest('[data-wave-listbox-surface]')).not.toBeNull();
     expect(within(group).getByRole('option', { name: 'Apple' })).toBeInTheDocument();
+  });
+});
+
+/**
+ * The text of the JSDoc block right before `marker` in `source`, with the comment syntax
+ * stripped the way Storybook's CSF enrichment strips it; `null` when no JSDoc precedes it.
+ */
+function jsdocBefore(source: string, marker: string): string | null {
+  const at = source.indexOf(marker);
+  if (at === -1) return null;
+  const before = source.slice(0, at).trimEnd();
+  if (!before.endsWith('*/')) return null;
+  return before
+    .slice(before.lastIndexOf('/**') + 3, -2)
+    .split(/\r?\n/)
+    .map((line) => line.replace(/^(\s+)?(\*+)?(\s)?/, ''))
+    .join('\n')
+    .trim();
+}
+
+describe('Dropdown docs (C-DOCS, R13)', () => {
+  // react-docgen takes a component's description from the function it resolves the export to,
+  // not from the exported `Object.assign` const that carries the JSDoc (R13). The autodocs page
+  // therefore reads it from the JSDoc on the stories' meta, which Storybook's CSF enrichment
+  // turns into `parameters.docs.description.component`.
+  it('gives the Storybook autodocs page the component JSDoc', () => {
+    const description = jsdocBefore(dropdownSource, 'export const Dropdown =');
+    expect(description).toMatch(/^A select-only combobox \(APG\): /);
+    expect(jsdocBefore(dropdownStoriesSource, 'const meta =')).toBe(description);
   });
 });
