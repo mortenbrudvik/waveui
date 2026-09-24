@@ -5,6 +5,9 @@ import userEvent from '@testing-library/user-event';
 import { Toolbar } from '../Toolbar';
 import type { ToolbarOwnProps, ToolbarProps } from '../Toolbar';
 import { Button } from '../Button';
+import { MenuButton } from '../MenuButton';
+import { Menu } from '../../navigation/Menu';
+import { Popover } from '../../overlays/Popover';
 import { testSystemProps, renderWithProviders } from '../../../test-utils';
 
 /** Three formatting buttons, the usual toolbar content. */
@@ -343,6 +346,64 @@ describe('Toolbar', () => {
       expect(button('Bold')).toHaveFocus();
       await user.keyboard('{End}');
       expect(button('Underline')).toHaveFocus();
+    });
+
+    it('keys in a menu opened from a toolbar MenuButton stay in the menu', async () => {
+      const user = userEvent.setup();
+      render(
+        <Toolbar aria-label="Formatting">
+          <Button appearance="subtle">Bold</Button>
+          <Menu>
+            <Menu.Trigger>
+              <MenuButton appearance="subtle">Insert</MenuButton>
+            </Menu.Trigger>
+            <Menu.Popover>
+              <Menu.Item>Table</Menu.Item>
+              <Menu.Item>Image</Menu.Item>
+            </Menu.Popover>
+          </Menu>
+          <Button appearance="subtle">Underline</Button>
+        </Toolbar>,
+      );
+      const menuitem = (name: string) => screen.getByRole('menuitem', { name });
+      await user.click(button('Insert'));
+      expect(menuitem('Table')).toHaveFocus();
+
+      // The menu leaves Left/Right to the page; they bubble through the Toolbar (React tree) but
+      // must not move focus back into it.
+      await user.keyboard('{ArrowRight}');
+      expect(menuitem('Table')).toHaveFocus();
+      await user.keyboard('{ArrowLeft}');
+      expect(menuitem('Table')).toHaveFocus();
+      expect(screen.getByRole('menu')).toBeInTheDocument();
+      await user.keyboard('{End}');
+      expect(menuitem('Image')).toHaveFocus();
+    });
+
+    it('keys in a Popover opened from a toolbar button stay in the Popover', async () => {
+      const user = userEvent.setup();
+      render(
+        <Toolbar aria-label="Formatting">
+          <Button appearance="subtle">Bold</Button>
+          <Popover>
+            <Popover.Trigger>
+              <Button appearance="subtle">Link</Button>
+            </Popover.Trigger>
+            <Popover.Content aria-label="Insert link">
+              <Button>Apply</Button>
+              <Button>Remove</Button>
+            </Popover.Content>
+          </Popover>
+          <Button appearance="subtle">Underline</Button>
+        </Toolbar>,
+      );
+      await user.click(button('Link'));
+      act(() => button('Remove').focus());
+      for (const key of ['{End}', '{Home}', '{ArrowRight}', '{ArrowLeft}']) {
+        await user.keyboard(key);
+        expect(button('Remove')).toHaveFocus();
+      }
+      expect(button('Link')).toHaveAttribute('tabindex', '0');
     });
 
     it('a consumer onFocus is called and the ref receives the element', async () => {

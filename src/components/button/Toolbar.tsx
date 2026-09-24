@@ -53,6 +53,8 @@ const TOOLBAR_ITEM_SELECTOR =
  * - Text fields, selects, sliders and spin buttons keep their own arrow keys (the caret moves).
  * - Elements with their own `tabIndex={-1}` are left alone, and a nested composite widget
  *   (radio group, tab list, …) counts as one control that keeps its own Tab stop.
+ * - A Menu or Popover opened from a control keeps its own keys: arrows, Home and End pressed in
+ *   the popup never move focus back to the toolbar's controls.
  * - A consumer `onKeyDown` runs first; `event.preventDefault()` in it cancels the navigation.
  *
  * @example

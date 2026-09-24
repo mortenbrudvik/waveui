@@ -7,6 +7,21 @@ import type { MenuButtonProps } from '../MenuButton';
 import { buttonClassName } from '../buttonStyles';
 import { testSystemProps, testFocusEvents, testNoImplicitSubmit } from '../../../test-utils';
 import type { Appearance } from '../../../lib/types';
+import { composeStories } from '@storybook/react';
+import * as stories from '../../../../stories/MenuButton.stories';
+
+/**
+ * Elements that show an open popup (`aria-expanded="true"`) without controlling a rendered menu:
+ * a story must not show the open state of a menu that does not exist.
+ */
+function expandedWithoutMenu(): HTMLElement[] {
+  return Array.from(document.querySelectorAll<HTMLElement>('[aria-expanded="true"]')).filter(
+    (element) => {
+      const controls = element.getAttribute('aria-controls');
+      return !controls || document.getElementById(controls)?.getAttribute('role') !== 'menu';
+    },
+  );
+}
 
 const APPEARANCES: Appearance[] = ['primary', 'outline', 'subtle', 'transparent'];
 
@@ -17,8 +32,9 @@ const GearIcon = () => (
 );
 
 /**
- * Local stand-in for the props `Menu.Trigger` passes to its child (spec §5.2, §5.9): P01 tests
- * never import P13's Menu.
+ * Local stand-in for the props `Menu.Trigger` passes to its child (spec §5.2, §5.9): the unit
+ * tests never import P13's Menu. Only the stories block renders the real Menu, through the
+ * `WithMenu` story that composes it.
  */
 function createTriggerProps(overrides: { expanded?: boolean } = {}) {
   const ref = React.createRef<HTMLButtonElement>();
@@ -464,6 +480,40 @@ describe('MenuButton', () => {
       const ref = React.createRef<HTMLButtonElement>();
       render(<MenuButton ref={ref}>Actions</MenuButton>);
       expect(ref.current).toBe(screen.getByRole('button', { name: 'Actions' }));
+    });
+  });
+
+  describe('stories (probe-menu-trigger-composition.5)', () => {
+    const composed = composeStories(stories);
+
+    it.each(Object.entries(composed))(
+      '%s shows no open-menu state without a menu',
+      (_name, Story) => {
+        render(<Story />);
+        expect(expandedWithoutMenu()).toEqual([]);
+      },
+    );
+
+    it('WithMenu opens a real Menu from the MenuButton as the Menu.Trigger child', async () => {
+      const user = userEvent.setup();
+      const { WithMenu } = composed;
+      render(<WithMenu />);
+      const trigger = screen.getByRole('button', { name: 'Actions' });
+      expect(trigger).toHaveAttribute('aria-haspopup', 'menu');
+      expect(trigger).toHaveAttribute('aria-expanded', 'false');
+      expect(screen.queryByRole('menu')).not.toBeInTheDocument();
+
+      await user.click(trigger);
+      const menu = screen.getByRole('menu', { name: 'Actions' });
+      expect(trigger).toHaveAttribute('aria-expanded', 'true');
+      expect(trigger).toHaveAttribute('aria-controls', menu.id);
+      expect(screen.getAllByRole('menuitem').length).toBeGreaterThan(0);
+      expect(expandedWithoutMenu()).toEqual([]);
+
+      await user.keyboard('{Escape}');
+      expect(screen.queryByRole('menu')).not.toBeInTheDocument();
+      expect(trigger).toHaveAttribute('aria-expanded', 'false');
+      expect(trigger).toHaveFocus();
     });
   });
 });

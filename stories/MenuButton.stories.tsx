@@ -1,6 +1,6 @@
 import type { Meta, StoryObj } from '@storybook/react';
 import { fn } from 'storybook/test';
-import { MenuButton } from '../src';
+import { Menu, MenuButton } from '../src';
 import { appearanceArgType, sizeArgType } from './_helpers';
 
 /** Decorative gear icon (the MenuButton hides its icon slot from assistive technology). */
@@ -55,11 +55,26 @@ export const IconOnly: Story = {
   },
 };
 
-/** `aria-expanded="true"` while the menu is open (Menu.Trigger sets it for you). */
-export const Expanded: Story = {
-  args: {
-    expanded: true,
-  },
+/**
+ * A MenuButton opens a menu as the child of `Menu.Trigger`, which merges `id`, `aria-expanded`,
+ * `aria-controls` (while open), the open handlers and the ref onto it — leave `expanded` unset.
+ * Enter, Space and ArrowDown open the menu on its first item, ArrowUp on its last; selecting an
+ * item, Escape or an outside click closes it and returns focus to the button.
+ */
+export const WithMenu: Story = {
+  render: (args) => (
+    <Menu>
+      <Menu.Trigger>
+        <MenuButton {...args} />
+      </Menu.Trigger>
+      <Menu.Popover>
+        <Menu.Item onClick={fn()}>Edit</Menu.Item>
+        <Menu.Item onClick={fn()}>Duplicate</Menu.Item>
+        <Menu.Divider />
+        <Menu.Item onClick={fn()}>Delete</Menu.Item>
+      </Menu.Popover>
+    </Menu>
+  ),
 };
 
 export const Disabled: Story = {

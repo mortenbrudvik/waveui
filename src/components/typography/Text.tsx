@@ -4,9 +4,6 @@ import { warnDeprecated } from '../../lib/dev';
 import type { PolymorphicComponent, PolymorphicProps } from '../../lib/polymorphic';
 import type { TextWeight, TypographyVariant } from '../../lib/types';
 
-/** The 0.4 numeric weights, kept as deprecated aliases of {@link TextWeight}. */
-type DeprecatedNumericWeight = 400 | 600 | 700;
-
 /**
  * The Text's own props (the XOwnProps rule of `PolymorphicProps`: component-specific props only).
  * Every other prop comes from the rendered element (`as`, default `'span'`).
@@ -20,8 +17,14 @@ export interface TextOwnProps {
    * Font weight: `'regular'`, `'semibold'` or `'bold'`. Unset, the weight is inherited.
    * The numeric 0.4 values `400`, `600` and `700` still work but are deprecated.
    */
-  weight?: TextWeight | DeprecatedNumericWeight;
+  weight?: TextWeight | 400 | 600 | 700;
 }
+
+/**
+ * The 0.4 numeric weights, kept as deprecated aliases of {@link TextWeight} (written out in
+ * {@link TextOwnProps}, not a public name).
+ */
+type DeprecatedNumericWeight = Exclude<NonNullable<TextOwnProps['weight']>, TextWeight>;
 
 /**
  * Props of {@link Text} rendered as `C` (default `'span'`). `TextProps` without a type argument

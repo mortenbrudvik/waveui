@@ -1,6 +1,6 @@
 import type { Meta, StoryObj } from '@storybook/react';
 import { fn } from 'storybook/test';
-import { SplitButton } from '../src';
+import { Menu, SplitButton } from '../src';
 import { appearanceArgType, sizeArgType } from './_helpers';
 
 const meta = {
@@ -45,13 +45,26 @@ export const LocalizedMenuLabel: Story = {
 };
 
 /**
- * `menuButtonProps` reach the chevron button: pass the render-prop props of `Menu.Trigger`, or
- * wire `aria-expanded`/`aria-controls` yourself.
+ * The chevron opens a menu: `Menu.Trigger` with a render-prop child passes its props (`id`,
+ * `aria-expanded`, `aria-controls`, the open handlers and the ref) to `menuButtonProps`, so only
+ * the chevron is the menu button and the primary half keeps running its own action. The menu is
+ * labelled by the chevron; selecting an item, Escape or an outside click closes it and returns
+ * focus to the chevron.
  */
-export const MenuOpen: Story = {
-  args: {
-    menuButtonProps: { 'aria-expanded': true },
-  },
+export const WithMenu: Story = {
+  render: (args) => (
+    <Menu>
+      <Menu.Trigger>
+        {(triggerProps) => <SplitButton {...args} menuButtonProps={triggerProps} />}
+      </Menu.Trigger>
+      <Menu.Popover>
+        <Menu.Item onClick={fn()}>Save as…</Menu.Item>
+        <Menu.Item onClick={fn()}>Save a copy</Menu.Item>
+        <Menu.Divider />
+        <Menu.Item onClick={fn()}>Save all</Menu.Item>
+      </Menu.Popover>
+    </Menu>
+  ),
 };
 
 /** The chevron keeps a 24×24px target at every size (an extra-small SplitButton is 24px tall). */
