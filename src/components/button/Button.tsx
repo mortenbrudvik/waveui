@@ -7,6 +7,7 @@ import { renderSlot, VOID_ELEMENTS } from '../../lib/slot';
 import type { PolymorphicComponent, PolymorphicProps } from '../../lib/polymorphic';
 import type { Size, Appearance, Slot } from '../../lib/types';
 import { buttonClassName } from './buttonStyles';
+import { buttonIconRenders, rendersContent } from './Button.utils';
 
 /**
  * The Button's own props (the XOwnProps rule of `PolymorphicProps`: component-specific props only).
@@ -85,33 +86,6 @@ const NATIVE_DISABLED_ELEMENTS: ReadonlySet<string> = new Set([
 const isActivationKey = (key: string) => key === 'Enter' || key === ' ';
 
 /**
- * Whether React renders anything for `node`: `null`, `undefined`, booleans and `''` render
- * nothing, and a Fragment or array counts only through its own children (`<></>` is empty).
- */
-function rendersContent(node: React.ReactNode): boolean {
-  return React.Children.toArray(node).some((child) => {
-    if (child === '') return false;
-    if (React.isValidElement(child) && child.type === React.Fragment) {
-      return rendersContent((child.props as { children?: React.ReactNode }).children);
-    }
-    return true;
-  });
-}
-
-/**
- * An `icon` shorthand that renders nothing — `''` (from `icon={name && <Icon />}` with an empty
- * `name`), an empty array or an empty Fragment — is treated like no icon: no empty `aria-hidden`
- * span, no gap and no icon-only sizing. Slot objects and other iterables are kept as they are
- * (a one-shot generator must not be consumed before `renderSlot` reads it).
- */
-function isEmptyIcon(icon: Slot<'span'> | undefined): boolean {
-  if (icon === '') return true;
-  if (Array.isArray(icon)) return !rendersContent(icon as React.ReactNode);
-  if (React.isValidElement(icon) && icon.type === React.Fragment) return !rendersContent(icon);
-  return false;
-}
-
-/**
  * A button with Fluent appearances and sizes.
  *
  * - Renders a `<button type="button">` by default (pass `type="submit"` to submit a form).
@@ -179,8 +153,12 @@ export const Button: PolymorphicComponent<'button', ButtonOwnProps> = (props) =>
   const needsButtonSemantics = tag !== null && !INTERACTIVE_ELEMENTS.has(tag);
   const isVoid = tag !== null && VOID_ELEMENTS.has(tag);
   const ariaDisabled = rest['aria-disabled'];
+  /**
+   * An `icon` that renders nothing (`''` from `icon={name && <Icon />}`, an empty array or
+   * Fragment) is treated like no icon: no empty `aria-hidden` span, no gap, no icon-only sizing.
+   */
   const iconElement = renderSlot(
-    isEmptyIcon(icon) ? undefined : icon,
+    buttonIconRenders(icon) ? icon : undefined,
     'span',
     'inline-flex shrink-0 items-center',
     { 'aria-hidden': true },

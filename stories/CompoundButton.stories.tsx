@@ -1,5 +1,7 @@
 import type { Meta, StoryObj } from '@storybook/react';
+import { fn } from 'storybook/test';
 import { CompoundButton } from '../src';
+import type { Size } from '../src';
 import { appearanceArgType, sizeArgType } from './_helpers';
 
 const meta = {
@@ -9,44 +11,63 @@ const meta = {
     ...appearanceArgType,
     ...sizeArgType,
   },
+  args: {
+    children: 'Send mail',
+    secondaryText: 'Opens your email client',
+    onClick: fn(),
+  },
 } satisfies Meta<typeof CompoundButton>;
 
 export default meta;
 type Story = StoryObj<typeof meta>;
 
-export const Default: Story = {
-  args: {
-    children: 'Compound Button',
-  },
-};
+export const Default: Story = {};
 
-export const WithSecondaryText: Story = {
+export const WithoutSecondaryText: Story = {
   args: {
-    children: 'Send Mail',
-    secondaryText: 'Opens your email client',
+    children: 'Compound button',
+    secondaryText: undefined,
   },
 };
 
 export const Primary: Story = {
   args: {
     appearance: 'primary',
-    children: 'Create Account',
+    children: 'Create account',
     secondaryText: 'Free for 30 days',
   },
 };
 
+export const Disabled: Story = {
+  args: {
+    disabled: true,
+  },
+};
+
+/** `as="a"` renders a link styled as a compound button. */
+export const AsLink: Story = {
+  args: {
+    as: 'a',
+    href: '#compound-button-docs',
+    children: 'Read the guide',
+    secondaryText: 'Five-minute introduction',
+  },
+};
+
+const sizes: Size[] = ['small', 'medium', 'large'];
+
+/** Several sizes side by side (the size control is off here: each button sets its own size). */
 export const Sizes: Story = {
-  render: () => (
-    <div style={{ display: 'flex', alignItems: 'start', gap: 8 }}>
-      <CompoundButton size="small" secondaryText="Small size">
-        Small
-      </CompoundButton>
-      <CompoundButton size="medium" secondaryText="Medium size">
-        Medium
-      </CompoundButton>
-      <CompoundButton size="large" secondaryText="Large size">
-        Large
-      </CompoundButton>
+  argTypes: {
+    size: { control: false },
+  },
+  render: (args) => (
+    <div className="flex items-start gap-2">
+      {sizes.map((size) => (
+        <CompoundButton key={size} {...args} size={size} secondaryText={`${size} size`}>
+          {size}
+        </CompoundButton>
+      ))}
     </div>
   ),
 };
