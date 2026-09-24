@@ -362,21 +362,36 @@ describe('Overflow', () => {
     for (let i = 0; i < 3; i++) resize.trigger(screen.getByTestId('overflow'));
 
     expect(hiddenItems()).toEqual(['b', 'c']);
-    for (const id of ['a', 'b', 'c']) {
-      // Only the consumer's style: no visibility/position/size written by a measurement pass.
-      expect(screen.getByTestId(`item-${id}`).getAttribute('style')).toBe('opacity: 0.5;');
+    // Only the consumer's style, plus the `display: none` React renders on a hidden item: no
+    // visibility/position/size written by a measurement pass.
+    expect(screen.getByTestId('item-a').getAttribute('style')).toBe('opacity: 0.5;');
+    for (const id of ['b', 'c']) {
+      expect(screen.getByTestId(`item-${id}`).getAttribute('style')).toBe(
+        'opacity: 0.5; display: none;',
+      );
     }
     expect(screen.getByTestId('item-c')).toHaveAttribute('data-overflow-hidden');
   });
 
-  it('keeps the consumer class next to the hiding class of a hidden item', () => {
-    layoutWith({ overflow: 70, 'item-a': 40, 'item-b': 40, button: 30 });
+  it('hides an item with an inline display: none that consumer styles and classes cannot override', () => {
+    const resize = withResizeObserver();
+    const stub = layoutWith({ overflow: 70, 'item-a': 40, 'item-b': 40, button: 30 });
     render(
       <Overflow data-testid="overflow" overflowButton={moreButton}>
-        <OverflowItem itemId="a" data-testid="item-a" className="flex">
+        <OverflowItem
+          itemId="a"
+          data-testid="item-a"
+          className="flex"
+          style={{ display: 'flex', opacity: 0.5 }}
+        >
           A
         </OverflowItem>
-        <OverflowItem itemId="b" data-testid="item-b" className="flex">
+        <OverflowItem
+          itemId="b"
+          data-testid="item-b"
+          className="flex"
+          style={{ display: 'flex', opacity: 0.5 }}
+        >
           B
         </OverflowItem>
       </Overflow>,
@@ -385,12 +400,24 @@ describe('Overflow', () => {
     expect(hiddenItems()).toEqual(['b']);
     const hidden = screen.getByTestId('item-b');
     expect(hidden).toHaveAttribute('data-overflow-hidden');
-    // The consumer's display class stays; hiding is a data-attribute variant (more specific than
-    // a bare `flex`), so the consumer class cannot un-hide the item (C-CLASS).
-    expect(hidden).toHaveClass('flex', 'data-[overflow-hidden]:hidden');
+    // An inline `display: none` placed after the consumer's own style: it beats the consumer's
+    // inline `display` and any display utility in any cascade layer (a prefixed-Tailwind app's
+    // `tw:flex` layered above Wave's styles included), so a hidden item is never shown while it is
+    // aria-hidden, inert and counted in "+N". The consumer's class and other styles stay.
+    expect(hidden.style.display).toBe('none');
+    expect(hidden.style.opacity).toBe('0.5');
+    expect(window.getComputedStyle(hidden).display).toBe('none');
+    expect(hidden).toHaveClass('flex');
     const visible = screen.getByTestId('item-a');
     expect(visible).not.toHaveAttribute('data-overflow-hidden');
-    expect(visible).toHaveClass('flex', 'data-[overflow-hidden]:hidden');
+    expect(visible.style.display).toBe('flex');
+
+    // Shown again: the consumer's display comes back.
+    stub.widths.overflow = 200;
+    resize.trigger(screen.getByTestId('overflow'));
+    expect(hiddenItems()).toEqual([]);
+    expect(hidden.style.display).toBe('flex');
+    expect(hidden).not.toHaveAttribute('data-overflow-hidden');
   });
 
   it('decides in DOM order, also for an item that mounts later but renders first (layout#3)', () => {
@@ -428,6 +455,105 @@ describe('Overflow', () => {
 
     expect(hiddenItems()).toEqual(['b', 'c']);
     expect(renderButton).toHaveBeenLastCalledWith(2, ['b', 'c']);
+  });
+
+  function domItemOrder(): string[] {
+    return Array.from(
+      screen.getByTestId('overflow').querySelectorAll('[data-testid^="item-"]'),
+      (el) => el.getAttribute('data-testid') ?? '',
+    );
+  }
+
+  it('re-measures when mounted items are reordered without any size change (layout#3)', () => {
+    // A real ResizeObserver would not fire: no size changes, nothing registers again.
+    withResizeObserver();
+    const renderButton = vi.fn(moreButton);
+    layoutWith({ overflow: 100, 'item-a': 40, 'item-b': 40, 'item-c': 40, button: 30 });
+    const row = (order: string[]) => (
+      <Overflow data-testid="overflow" overflowButton={renderButton}>
+        {order.map((id) => (
+          <OverflowItem key={id} itemId={id} data-testid={`item-${id}`}>
+            {id.toUpperCase()}
+          </OverflowItem>
+        ))}
+      </Overflow>
+    );
+    const { rerender } = render(row(['a', 'b', 'c']));
+    expect(hiddenItems()).toEqual(['b', 'c']);
+
+    rerender(row(['c', 'a', 'b']));
+    expect(domItemOrder()).toEqual(['item-c', 'item-a', 'item-b']);
+    // The first DOM item (C) stays; the trailing ones (A, B) hide, and the menu lists them.
+    expect(screen.getByTestId('item-c')).not.toHaveAttribute('data-overflow-hidden');
+    expect(hiddenItems()).toEqual(['a', 'b']);
+    expect(renderButton).toHaveBeenLastCalledWith(2, ['a', 'b']);
+  });
+
+  it('re-measures when a child component reorders items without rendering the Overflow (layout#3)', async () => {
+    withResizeObserver();
+    const renderButton = vi.fn(moreButton);
+    layoutWith({ overflow: 100, 'item-a': 40, 'item-b': 40, 'item-c': 40, button: 30 });
+    const reorder = React.createRef<(order: string[]) => void>();
+    // The list owns its order: reordering renders neither the Overflow nor the (unchanged) items.
+    function Items({ api }: { api: React.Ref<(order: string[]) => void> }) {
+      const [order, setOrder] = React.useState(['a', 'b', 'c']);
+      React.useImperativeHandle(api, () => setOrder, []);
+      return order.map((id) => (
+        <OverflowItem key={id} itemId={id} data-testid={`item-${id}`}>
+          {id.toUpperCase()}
+        </OverflowItem>
+      ));
+    }
+    render(
+      <Overflow data-testid="overflow" overflowButton={renderButton}>
+        <Items api={reorder} />
+      </Overflow>,
+    );
+    expect(hiddenItems()).toEqual(['b', 'c']);
+
+    await act(async () => {
+      reorder.current?.(['c', 'a', 'b']);
+    });
+    expect(domItemOrder()).toEqual(['item-c', 'item-a', 'item-b']);
+    expect(screen.getByTestId('item-c')).not.toHaveAttribute('data-overflow-hidden');
+    expect(hiddenItems()).toEqual(['a', 'b']);
+    expect(renderButton).toHaveBeenLastCalledWith(2, ['a', 'b']);
+  });
+
+  it('does not re-render when the row changes without reordering items (layout#3)', async () => {
+    withResizeObserver();
+    layoutWith({ overflow: 100, 'item-a': 40, 'item-b': 40, 'item-c': 40, button: 30 });
+    const showMark = React.createRef<(show: boolean) => void>();
+    function Label({ api }: { api: React.Ref<(show: boolean) => void> }) {
+      const [mark, setMark] = React.useState(false);
+      React.useImperativeHandle(api, () => setMark, []);
+      return <span>A{mark && <b>!</b>}</span>;
+    }
+    const onRender = vi.fn();
+    render(
+      <React.Profiler id="overflow" onRender={onRender}>
+        <Overflow data-testid="overflow" overflowButton={moreButton}>
+          <OverflowItem itemId="a" data-testid="item-a">
+            <Label api={showMark} />
+          </OverflowItem>
+          <OverflowItem itemId="b" data-testid="item-b">
+            B
+          </OverflowItem>
+          <OverflowItem itemId="c" data-testid="item-c">
+            C
+          </OverflowItem>
+        </Overflow>
+      </React.Profiler>,
+    );
+    expect(hiddenItems()).toEqual(['b', 'c']);
+    onRender.mockClear();
+
+    // An element added inside an item (a childList mutation in the row) renders only the Label.
+    await act(async () => {
+      showMark.current?.(true);
+    });
+    expect(onRender).toHaveBeenCalledTimes(1);
+    expect(hiddenItems()).toEqual(['b', 'c']);
   });
 
   it('follows an itemId change', () => {

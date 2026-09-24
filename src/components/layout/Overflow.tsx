@@ -65,6 +65,9 @@ function documentOrder(a: Element, b: Element): number {
   return a.compareDocumentPosition(b) & Node.DOCUMENT_POSITION_FOLLOWING ? -1 : 1;
 }
 
+/** Moves anywhere in the row: items reordered directly or inside wrappers. */
+const REORDER_OBSERVER_OPTIONS: MutationObserverInit = { childList: true, subtree: true };
+
 function sameIds(a: readonly string[], b: readonly string[]): boolean {
   return a.length === b.length && a.every((id, i) => id === b[i]);
 }
@@ -87,13 +90,19 @@ function readContainer(container: HTMLElement): { available: number; gap: number
  * of the hidden items (DOM order) to `useSyncExternalStore`.
  *
  * - **Measurement never writes styles.** An item's width is read (`offsetWidth`) only while it is
- *   visible and cached; a hidden item (`data-overflow-hidden`, rendered by React) keeps its last
- *   visible width. All reads happen before React applies the result.
+ *   visible and cached; a hidden item (`data-overflow-hidden` and an inline `display: none`, both
+ *   rendered by React) keeps its last visible width. All reads happen before React applies the
+ *   result.
  * - **Membership-only updates.** A new snapshot is published only when the hidden set changes, so
  *   a resize that hides the same items renders nothing.
  * - **One observer.** A single `ResizeObserver` (created when the root mounts) watches the
  *   container, every item and the overflow button. Without `ResizeObserver` the store measures
  *   whenever something registers and on window `resize`.
+ * - **Reorders.** A keyed reorder moves item elements without registering them again or changing
+ *   a size. The order of the last measurement is re-checked (n − 1 `compareDocumentPosition`
+ *   calls, no layout reads) after every commit of the root and, through a `MutationObserver`
+ *   (`childList`, `subtree`) on the container, after moves that do not render the root (a list
+ *   component inside the row that owns its order); only an inversion re-measures.
  */
 class OverflowStore {
   private container: HTMLElement | null = null;
@@ -103,8 +112,11 @@ class OverflowStore {
   private readonly widths = new WeakMap<HTMLElement, number>();
   private readonly listeners = new Set<() => void>();
   private hidden: string[] = NO_IDS;
+  /** The item elements of the last measurement, in the DOM order they had then. */
+  private order: HTMLElement[] = [];
   private connected = false;
   private observer: ResizeObserver | null = null;
+  private reorderObserver: MutationObserver | null = null;
   private removeResizeListener: (() => void) | null = null;
 
   subscribe = (listener: () => void): (() => void) => {
@@ -129,11 +141,17 @@ class OverflowStore {
       window.addEventListener('resize', onResize);
       this.removeResizeListener = () => window.removeEventListener('resize', onResize);
     }
+    if (typeof MutationObserver !== 'undefined') {
+      this.reorderObserver = new MutationObserver(() => this.checkOrder());
+      if (this.container) this.reorderObserver.observe(this.container, REORDER_OBSERVER_OPTIONS);
+    }
     this.measure();
     return () => {
       this.connected = false;
       this.observer?.disconnect();
       this.observer = null;
+      this.reorderObserver?.disconnect();
+      this.reorderObserver = null;
       this.removeResizeListener?.();
       this.removeResizeListener = null;
     };
@@ -145,7 +163,25 @@ class OverflowStore {
     if (this.container) this.observer?.unobserve(this.container);
     this.container = node;
     if (node) this.observer?.observe(node);
+    if (this.reorderObserver) {
+      this.reorderObserver.disconnect();
+      if (node) this.reorderObserver.observe(node, REORDER_OBSERVER_OPTIONS);
+    }
     this.measure();
+  };
+
+  /**
+   * Re-measures when the items of the last measurement are no longer in DOM order (a keyed
+   * reorder). Cheap: neighbour comparisons only, no layout reads.
+   */
+  checkOrder = (): void => {
+    const order = this.order;
+    for (let i = 1; i < order.length; i++) {
+      if (documentOrder(order[i - 1], order[i]) > 0) {
+        this.measure();
+        return;
+      }
+    }
   };
 
   /** Ref callback of the overflow button wrapper. The last measured width outlives it. */
@@ -185,6 +221,7 @@ class OverflowStore {
     const entries = Array.from(this.items)
       .filter(([el]) => el.isConnected && container.contains(el))
       .sort(([a], [b]) => documentOrder(a, b));
+    this.order = entries.map(([el]) => el);
     for (const [el] of entries) {
       if (!el.hasAttribute('data-overflow-hidden')) this.widths.set(el, el.offsetWidth);
     }
@@ -423,13 +460,14 @@ export function useIsOverflowing(
  *
  * Wrap each entry in {@link OverflowItem} with a unique `itemId`; the row holds only items (other
  * content is not measured, see `children`). Items are measured while visible, hidden from the end
- * (in DOM order; the first item always stays) and hidden items get `data-overflow-hidden`,
- * `aria-hidden` and `inert`. `overflowButton(count, hiddenIds)` renders the button (its measured
- * width is reserved); components inside it can use {@link useOverflowMenu} to list the hidden
- * items (e.g. in a Menu), and {@link useIsOverflowItemVisible} reports a single item.
+ * (in DOM order; the first item always stays) and hidden items get `data-overflow-hidden`, an
+ * inline `display: none`, `aria-hidden` and `inert`. Reordered items (for example a keyed sort)
+ * are re-measured in their new order. `overflowButton(count, hiddenIds)` renders the button (its
+ * measured width is reserved); components inside it can use {@link useOverflowMenu} to list the
+ * hidden items (e.g. in a Menu), and {@link useIsOverflowItemVisible} reports a single item.
  *
  * Works without `ResizeObserver` (jsdom, old browsers): it then re-measures on window resize and
- * when items mount or unmount.
+ * when items mount, unmount or move.
  */
 const OverflowRoot = ({ overflowButton, children, className, ref, ...rest }: OverflowProps) => {
   const [store] = React.useState(() => new OverflowStore());
@@ -458,6 +496,12 @@ const OverflowRoot = ({ overflowButton, children, className, ref, ...rest }: Ove
     unsubscribe();
     return disconnect;
   }, [store, forceRender]);
+
+  // After every commit of the root (new children, a keyed reorder): items moved without any size
+  // change or registration are re-measured before paint. Cheap when nothing moved.
+  useIsomorphicLayoutEffect(() => {
+    store.checkOrder();
+  });
 
   const hiddenSet = React.useMemo(() => new Set(hiddenIds), [hiddenIds]);
   // The overflowButton's own copy (consumers may sort it in place).
@@ -490,13 +534,16 @@ OverflowRoot.displayName = 'Overflow';
 
 /**
  * One entry of an {@link Overflow}. While it does not fit it stays mounted but is hidden
- * (`data-overflow-hidden`, `display: none`), `aria-hidden` and `inert`. Must be rendered inside
- * `Overflow`.
+ * (`data-overflow-hidden` and an inline `display: none` placed after the consumer's own `style`),
+ * `aria-hidden` and `inert`. The inline style wins over the consumer's `style.display` and over
+ * display utilities in any cascade layer (a prefixed Tailwind app's `tw:flex` included), so a
+ * hidden item is never shown while it is counted in "+N". Must be rendered inside `Overflow`.
  */
 export const OverflowItem = ({
   itemId,
   children,
   className,
+  style,
   ref,
   'aria-hidden': ariaHidden,
   inert,
@@ -514,8 +561,9 @@ export const OverflowItem = ({
   return (
     <div
       ref={mergedRef}
-      className={cn('shrink-0 data-[overflow-hidden]:hidden', className)}
+      className={cn('shrink-0', className)}
       {...rest}
+      style={isHidden ? { ...style, display: 'none' } : style}
       aria-hidden={isHidden ? true : ariaHidden}
       inert={isHidden ? true : inert}
       data-overflow-hidden={isHidden ? '' : undefined}

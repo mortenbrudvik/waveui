@@ -459,13 +459,86 @@ describe('Carousel', () => {
       }
     });
 
+    /** The chevron of a control: its icon name and whether it is mirrored (or left to CSS `rtl:`). */
+    function chevron(button: HTMLElement) {
+      const svg = button.querySelector('svg');
+      if (!svg) throw new Error('no chevron');
+      const classes = (svg.getAttribute('class') ?? '').split(/\s+/);
+      return {
+        icon: svg.getAttribute('data-wave-icon'),
+        mirrored: classes.includes('-scale-x-100'),
+        cssDirectionVariant: classes.some((c) => c.startsWith('rtl:') || c.startsWith('ltr:')),
+      };
+    }
+
     it('places previous/next with logical insets and mirrors the chevrons', () => {
       renderWithProviders(<Carousel>{threeSlides}</Carousel>, { dir: 'rtl' });
       expect(prevButton()).toHaveClass('start-2');
       expect(nextButton()).toHaveClass('end-2');
+      // Previous (at the start, the right edge) points right; Next points left.
+      expect(chevron(prevButton())).toEqual({
+        icon: 'chevron-left',
+        mirrored: true,
+        cssDirectionVariant: false,
+      });
+      expect(chevron(nextButton())).toEqual({
+        icon: 'chevron-right',
+        mirrored: true,
+        cssDirectionVariant: false,
+      });
+    });
+
+    it('mirrors the chevrons by the direction the carousel resolved, not by any RTL ancestor', () => {
+      // An LTR section inside an RTL provider: a CSS `rtl:` variant (`[dir=rtl] *`) would still
+      // match here and mirror the chevrons while the track slides LTR.
+      const { unmount } = renderWithProviders(
+        <div dir="ltr">
+          <Carousel defaultValue={1}>{threeSlides}</Carousel>
+        </div>,
+        { dir: 'rtl' },
+      );
+      expect(track().style.transform).toBe('translateX(-100%)');
       for (const button of [prevButton(), nextButton()]) {
-        expect(button.querySelector('svg')).toHaveClass('rtl:-scale-x-100');
+        expect(chevron(button)).toMatchObject({ mirrored: false, cssDirectionVariant: false });
       }
+      unmount();
+
+      // The carousel's own dir prop inside an RTL provider behaves the same.
+      const second = renderWithProviders(
+        <Carousel dir="ltr" defaultValue={1}>
+          {threeSlides}
+        </Carousel>,
+        { dir: 'rtl' },
+      );
+      expect(track().style.transform).toBe('translateX(-100%)');
+      expect(chevron(prevButton()).mirrored).toBe(false);
+      expect(chevron(nextButton()).mirrored).toBe(false);
+      second.unmount();
+
+      // And the reverse: an RTL section inside an LTR provider mirrors them.
+      renderWithProviders(
+        <div dir="rtl">
+          <Carousel defaultValue={1}>{threeSlides}</Carousel>
+        </div>,
+        { dir: 'ltr' },
+      );
+      expect(track().style.transform).toBe('translateX(100%)');
+      expect(chevron(prevButton()).mirrored).toBe(true);
+      expect(chevron(nextButton()).mirrored).toBe(true);
+    });
+
+    it('updates the chevrons when an ancestor dir attribute changes later', async () => {
+      render(
+        <section data-testid="section" dir="ltr">
+          <Carousel>{threeSlides}</Carousel>
+        </section>,
+      );
+      expect(chevron(prevButton()).mirrored).toBe(false);
+      await act(async () => {
+        screen.getByTestId('section').setAttribute('dir', 'rtl');
+      });
+      expect(chevron(prevButton()).mirrored).toBe(true);
+      expect(chevron(nextButton()).mirrored).toBe(true);
     });
   });
 

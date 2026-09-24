@@ -113,8 +113,9 @@ const PlayGlyph = () => (
  *   silent (`aria-live="off"`) while slides rotate. Without `loop` rotation ends at the last slide
  *   and stays stopped until the control's Start is activated (or the number of slides changes, or
  *   `loop` is turned on).
- * - Right-to-left layouts slide the other way: the direction is read from the rendered element
- *   (its `dir` prop, an ancestor's `dir`, WaveProvider `dir` or the document's).
+ * - Right-to-left layouts slide the other way and mirror the Previous/Next chevrons: the direction
+ *   is read from the rendered element (its `dir` prop, the nearest ancestor's `dir`, WaveProvider
+ *   `dir` or the document's), so an LTR section inside an RTL page stays LTR throughout.
  */
 const CarouselRoot = ({
   value: controlledValue,
@@ -227,6 +228,9 @@ const CarouselRoot = ({
   }
 
   const offset = (dir === 'rtl' ? 1 : -1) * index * 100;
+  // The chevrons mirror by the same resolved direction as the track. A CSS `rtl:` variant would
+  // also match `[dir=rtl] *`, so an LTR carousel inside an RTL ancestor got mirrored chevrons.
+  const chevronClass = dir === 'rtl' ? '-scale-x-100' : undefined;
   const pauseLabel = autoPlayLabels?.pause ?? DEFAULT_PAUSE_LABEL;
   const playLabel = autoPlayLabels?.play ?? DEFAULT_PLAY_LABEL;
 
@@ -305,7 +309,7 @@ const CarouselRoot = ({
         onClick={preventIfDisabled(prevDisabled, goPrev)}
         className={cn(controlButton, 'top-1/2 start-2 -translate-y-1/2')}
       >
-        <ChevronLeftIcon size={16} className="rtl:-scale-x-100" />
+        <ChevronLeftIcon size={16} className={chevronClass} />
       </button>
       <button
         type="button"
@@ -315,7 +319,7 @@ const CarouselRoot = ({
         onClick={preventIfDisabled(nextDisabled, goNext)}
         className={cn(controlButton, 'top-1/2 end-2 -translate-y-1/2')}
       >
-        <ChevronRightIcon size={16} className="rtl:-scale-x-100" />
+        <ChevronRightIcon size={16} className={chevronClass} />
       </button>
       <div
         role="group"
