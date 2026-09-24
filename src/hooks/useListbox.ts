@@ -63,16 +63,18 @@ export interface UseListboxOptions {
   /** Printable characters move to the matching option. @default mode === 'select-only' */
   typeahead?: boolean;
   /**
-   * The option that is active while no option was explicitly highlighted, or when the highlighted
-   * one left the navigable set: `'selected'` — the first selected navigable option, else the first
-   * option; `'first'` — the first option; `false` — none.
+   * The option that is active while no option is highlighted: `'selected'` — the first selected
+   * navigable option, else the first option; `'first'` — the first option; `false` — none. A
+   * highlighted option that leaves the navigable set is dropped (the fallback takes over, also
+   * when the option returns); in editable mode a text-editing key clears the highlight.
    * @default 'selected'
    */
   autoHighlight?: 'selected' | 'first' | false;
   /**
    * Editable: whenever the navigable set changes while open (typing), its first option becomes
    * active — also when the keystroke that opens the listbox changes the set (compared with the set
-   * before opening). Opening with an unchanged set keeps the `autoHighlight` start.
+   * before opening) — and so does every text-editing key while open, also when the set stays the
+   * same. Opening with an unchanged set keeps the `autoHighlight` start.
    */
   highlightOnFilter?: boolean;
   /** Prefix of the generated listbox id. @default 'listbox' */
@@ -118,7 +120,10 @@ export interface UseListboxResult {
   getItem(value: string): ListboxItem | undefined;
   /** `${listboxId}-opt-${n}`; `n` is assigned the first time a value is seen and never changes. */
   getOptionId(value: string): string;
-  /** Highlights an option while open (ignored when it is not navigable or disabled). */
+  /**
+   * Highlights an option while open (ignored when it is not navigable or disabled; dropped when it
+   * leaves the navigable set later). Scrolled into view like a keyboard highlight.
+   */
   setActiveValue(value: string | null): void;
   /** Attach to the combobox element. Ignores events a consumer handler already prevented. */
   onKeyDown(event: React.KeyboardEvent): void;
@@ -158,7 +163,7 @@ export interface ListboxContextValue {
   store: ListboxStore;
   /** Commits `value` (option click). */
   select(value: string, item: ListboxItem): void;
-  /** Highlights `value` (pointer movement). */
+  /** Highlights `value` (pointer movement); not scrolled into view, so the list stays put. */
   highlight(value: string): void;
 }
 
@@ -704,6 +709,32 @@ function hasText(element: EventTarget): boolean {
   );
 }
 
+/** Ctrl/Cmd shortcuts that change the text: cut, paste, undo, redo. */
+const TEXT_SHORTCUTS: ReadonlySet<string> = new Set(['x', 'v', 'z', 'y']);
+
+/**
+ * Editable: whether a keydown edits the text of the combobox input — printable characters (AltGr,
+ * i.e. Ctrl+Alt, included), Backspace/Delete, the cut/paste/undo/redo shortcuts and the
+ * `Process`/`Unidentified` keys of IMEs and virtual keyboards. Nothing edits a read-only or
+ * disabled input.
+ */
+function editsText(event: React.KeyboardEvent): boolean {
+  const target = event.currentTarget;
+  if (
+    (target instanceof HTMLInputElement || target instanceof HTMLTextAreaElement) &&
+    (target.readOnly || target.disabled)
+  ) {
+    return false;
+  }
+  const { key } = event;
+  if (key === 'Backspace' || key === 'Delete' || key === 'Process' || key === 'Unidentified') {
+    return true;
+  }
+  if (key.length !== 1) return false;
+  const shortcut = event.metaKey || (event.ctrlKey && !event.altKey);
+  return !shortcut || TEXT_SHORTCUTS.has(key.toLowerCase());
+}
+
 function preventMouseDown(event: React.MouseEvent): void {
   event.preventDefault();
 }
@@ -725,8 +756,13 @@ function preventMouseDown(event: React.MouseEvent): void {
  *   render. Options register even when filtered out (they render `hidden`), so labels are always
  *   known — use {@link collectOptionLabels} for the display text before registration (SSR/first
  *   render).
- * - **Active option** is derived during render: the highlighted value while it is navigable and
- *   enabled, else the `autoHighlight` fallback; reset on close and after a single-select commit.
+ * - **Active option** is derived during render: the highlighted value, else the `autoHighlight`
+ *   fallback. The highlight is reset on close and after a single-select commit, and dropped once
+ *   it is not navigable and enabled any more (filtered out, removed by an update, disabled), so it
+ *   does not come back without a user action when the option returns. Editable: a text-editing
+ *   key (printable characters, Backspace/Delete, cut/paste/undo/redo) clears it — visual focus
+ *   returns to the textbox (APG) — so Enter after typing never commits an option highlighted
+ *   before the edit.
  * - **Ids** `${listboxId}-opt-${n}` are stable per value (across filtering and remounts between
  *   an inline closed list and a portaled open list).
  * - **Store.** Options read their active/selected/hidden flags through a store, so moving the
@@ -734,12 +770,14 @@ function preventMouseDown(event: React.MouseEvent): void {
  * - **Keys (APG).** Editable: ArrowDown/ArrowUp open (selected, else first/last) and move;
  *   Alt+ArrowDown opens without moving; Alt+ArrowUp closes; Enter commits the active option (with
  *   the listbox closed Enter is not prevented, so forms submit); Escape closes (closed + text:
- *   `onClearDraft`); Tab closes; Home/End/printable keys stay with the input. Select-only:
+ *   `onClearDraft`); Tab closes; Home/End/printable keys stay with the input (text-editing keys
+ *   clear the highlight, see above). Select-only:
  *   ArrowDown/ArrowUp/Home/End/typeahead open and position; PageUp/PageDown jump 10; Enter/Space
  *   open or commit (always prevented on keydown, Space also on keyup, so a `<button>` combobox is
  *   not clicked again); Alt+ArrowUp and Tab commit and close (Tab is not prevented); Escape
  *   closes. Disabled options are skipped and never committed.
- * - The active option is scrolled into view (`{ block: 'nearest' }`) in a layout effect.
+ * - The active option is scrolled into view (`{ block: 'nearest' }`) in a layout effect, except
+ *   after a pointer highlight (the list would scroll under the pointer).
  *
  * **Consumer contract** (Combobox, Dropdown, TagPicker, TimePicker). Beyond the spec §2.5 signature:
  * - All options of a listbox live in a single container at a time (§5.5: inline only while
@@ -808,9 +846,14 @@ export function useListbox(options: UseListboxOptions): UseListboxResult {
   }, [allItems, navigable, filter]);
   const selectedSet = new Set(selectedValues);
 
+  // The highlighted value (keyboard, pointer, typeahead, setActiveValue), adjusted during render
+  // (C-HOOKS: no effect) and stored once:
+  // - reset on close (also a highlight set while closed);
+  // - highlightOnFilter: moved to the first option when the navigable set changes (below);
+  // - dropped once it is not navigable and enabled any more (filtered out, removed by an update,
+  //   disabled), so the option is not highlighted again without a user action when it returns.
   const [activeRaw, setActiveRaw] = useState<string | null>(null);
-  // Reset on close (and drop a highlight set while closed): derived, no effect (C-HOOKS).
-  if (!open && activeRaw !== null) setActiveRaw(null);
+  let highlighted = open ? activeRaw : null;
 
   // highlightOnFilter: compared by content, not identity — an inline `filter` yields a new array on
   // every render pass (also the pass React repeats after this state update). The set is tracked
@@ -822,22 +865,17 @@ export function useListbox(options: UseListboxOptions): UseListboxResult {
     const itemsChanged = !sameValues(filterTrack.items, navigable);
     if (itemsChanged || filterTrack.open !== open) {
       setFilterTrack({ open, items: navigable });
-      if (open && itemsChanged) {
-        const first = enabledValues[0] ?? null;
-        if (first !== activeRaw) setActiveRaw(first);
-      }
+      if (open && itemsChanged) highlighted = enabledValues[0] ?? null;
     }
   }
+  if (highlighted !== null && !enabledSet.has(highlighted)) highlighted = null;
+  if (highlighted !== activeRaw) setActiveRaw(highlighted);
 
   const firstSelected = selectedValues.find((value) => enabledSet.has(value)) ?? null;
   let fallback: string | null = null;
   if (autoHighlight === 'selected') fallback = firstSelected ?? enabledValues[0] ?? null;
   else if (autoHighlight === 'first') fallback = enabledValues[0] ?? null;
-  const activeValue = !open
-    ? null
-    : activeRaw !== null && enabledSet.has(activeRaw)
-      ? activeRaw
-      : fallback;
+  const activeValue = open ? (highlighted ?? fallback) : null;
 
   const getOptionId = useCallback(
     (value: string) => `${listboxId}-opt-${store.getIndex(value)}`,
@@ -846,15 +884,24 @@ export function useListbox(options: UseListboxOptions): UseListboxResult {
   const activeDescendantId = activeValue !== null ? getOptionId(activeValue) : undefined;
   const getItem = useCallback((value: string) => itemByValue.get(value), [itemByValue]);
 
+  // The value the pointer highlighted, until the scroll effect has seen it: a pointer highlight is
+  // not scrolled into view. Every other highlight (keyboard, typeahead, setActiveValue) clears it.
+  const pointerHighlightRef = useRef<string | null>(null);
+  const setActive = useCallback((value: string | null) => {
+    pointerHighlightRef.current = null;
+    setActiveRaw(value);
+  }, []);
+  const setActiveValue = setActive;
+
   const commit = useEventCallback(
     (value: string, reason: 'select' | 'tab', fallbackItem?: ListboxItem): void => {
       const item = itemByValue.get(value) ?? fallbackItem;
       if (!item || item.disabled) return;
       onSelect(value, item);
       if (multiple && reason === 'select') {
-        setActiveRaw(value);
+        setActive(value);
       } else {
-        setActiveRaw(null);
+        setActive(null);
         onOpenChange(false, reason);
       }
     },
@@ -865,10 +912,10 @@ export function useListbox(options: UseListboxOptions): UseListboxResult {
   });
 
   const highlight = useEventCallback((value: string) => {
-    if (open && enabledSet.has(value) && value !== activeValue) setActiveRaw(value);
+    if (!open || !enabledSet.has(value) || value === activeValue) return;
+    pointerHighlightRef.current = value;
+    setActiveRaw(value);
   });
-
-  const setActiveValue = useCallback((value: string | null) => setActiveRaw(value), []);
 
   const { onTypeahead } = useTypeahead({
     getItems: () =>
@@ -878,13 +925,19 @@ export function useListbox(options: UseListboxOptions): UseListboxResult {
         disabled: item.disabled,
       })),
     onMatch: (value) => {
-      setActiveRaw(value);
+      setActive(value);
       if (!open) onOpenChange(true, 'keyboard');
     },
   });
 
   const onKeyDown = useEventCallback((event: React.KeyboardEvent) => {
     if (event.defaultPrevented || event.nativeEvent.isComposing) return;
+    // Editable: a key that edits the text returns visual focus to the textbox (APG) and is left to
+    // the input: the highlight is cleared (highlightOnFilter: the first option), so Enter after
+    // typing never commits an option highlighted before the edit.
+    if (mode === 'editable' && open && editsText(event)) {
+      setActive(highlightOnFilter ? (enabledValues[0] ?? null) : null);
+    }
     if (event.ctrlKey || event.metaKey) return;
     const { key, altKey } = event;
     const selectOnly = mode === 'select-only';
@@ -892,10 +945,10 @@ export function useListbox(options: UseListboxOptions): UseListboxResult {
     const last = enabledValues[enabledValues.length - 1] ?? null;
 
     const openWith = (value: string | null) => {
-      setActiveRaw(value);
+      setActive(value);
       if (!open) onOpenChange(true, 'keyboard');
     };
-    const move = (delta: number) => setActiveRaw(step(enabledValues, activeValue, delta, loop));
+    const move = (delta: number) => setActive(step(enabledValues, activeValue, delta, loop));
     const commitOrClose = () => {
       if (activeValue !== null) commit(activeValue, 'select');
       else if (!multiple) onOpenChange(false, 'keyboard');
@@ -1016,9 +1069,13 @@ export function useListbox(options: UseListboxOptions): UseListboxResult {
     return () => store.disconnect();
   }, [store]);
 
-  // Keep the active option visible in the scrollable listbox.
+  // Keep the active option visible in the scrollable listbox — not after a pointer highlight: the
+  // option under the pointer is already (at least partly) visible, and scrolling would move the
+  // list under the pointer.
   useIsomorphicLayoutEffect(() => {
-    if (activeValue === null) return;
+    const fromPointer = activeValue !== null && activeValue === pointerHighlightRef.current;
+    pointerHighlightRef.current = null;
+    if (activeValue === null || fromPointer) return;
     const element =
       store.getElement(activeValue) ??
       (typeof document !== 'undefined' ? document.getElementById(getOptionId(activeValue)) : null);

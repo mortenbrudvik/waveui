@@ -1038,6 +1038,50 @@ describe('useListbox — one navigable list, derived active value (input-pickers
     expect(activeText()).toBe('Apple');
   });
 
+  it('drops an active option that leaves the navigable set: it is not active again when it returns', () => {
+    const { rerender } = render(<DataPicker mode="select-only" items={ITEMS} defaultOpen />);
+    key('ArrowDown');
+    key('ArrowDown');
+    expect(activeText()).toBe('Cherry');
+    // An async update removes Cherry: the autoHighlight fallback (the first option) takes over.
+    const withoutCherry = ITEMS.filter((item) => item.value !== 'c');
+    rerender(<DataPicker mode="select-only" items={withoutCherry} defaultOpen />);
+    expect(activeText()).toBe('Apple');
+    // Cherry comes back: the highlight does not jump to it without a user action.
+    rerender(<DataPicker mode="select-only" items={ITEMS} defaultOpen />);
+    expect(activeText()).toBe('Apple');
+    // The same when the active option is disabled and enabled again.
+    key('ArrowDown');
+    expect(activeText()).toBe('Banana');
+    const bananaDisabled = ITEMS.map((item) =>
+      item.value === 'b' ? { ...item, disabled: true } : item,
+    );
+    rerender(<DataPicker mode="select-only" items={bananaDisabled} defaultOpen />);
+    expect(activeText()).toBe('Apple');
+    rerender(<DataPicker mode="select-only" items={ITEMS} defaultOpen />);
+    expect(activeText()).toBe('Apple');
+  });
+
+  it('editable: an option filtered out by a text change (no keystroke) is not active again when it returns', () => {
+    const onSelect = vi.fn();
+    render(
+      <Picker mode="editable" filterByText autoHighlight={false} onSelectSpy={onSelect}>
+        {FRUITS}
+      </Picker>,
+    );
+    key('ArrowDown');
+    key('ArrowDown');
+    expect(activeText()).toBe('Banana');
+    // A paste or drop from the context menu changes the text without a keydown.
+    fireEvent.change(combobox(), { target: { value: 'ch' } });
+    expect(activeOption()).toBeNull();
+    fireEvent.change(combobox(), { target: { value: 'an' } });
+    expect(screen.getAllByRole('option').map((o) => o.textContent)).toEqual(['Banana']);
+    expect(activeOption()).toBeNull();
+    expect(key('Enter').defaultPrevented).toBe(false);
+    expect(onSelect).not.toHaveBeenCalled();
+  });
+
   it('resets on close: reopening starts at the selected option again', () => {
     render(<Picker defaultValue="b">{FRUITS}</Picker>);
     key('ArrowDown');
@@ -1091,6 +1135,28 @@ describe('useListbox — one navigable list, derived active value (input-pickers
     key('Escape'); // closes; the harness drops the draft
     key('ArrowDown');
     expect(activeText()).toBe('Delta');
+  });
+
+  it('highlightOnFilter: a keystroke that keeps the navigable set highlights the first match', async () => {
+    const user = userEvent.setup();
+    render(
+      <Picker mode="editable" filterByText highlightOnFilter autoHighlight={false}>
+        <Opt value="u">Blueberry</Opt>
+        <Opt value="a">Blackberry</Opt>
+        <Opt value="c">Cherry</Opt>
+      </Picker>,
+    );
+    await user.type(combobox(), 'b');
+    expect(activeText()).toBe('Blueberry');
+    await user.keyboard('{ArrowDown}');
+    expect(activeText()).toBe('Blackberry');
+    // 'be' matches the same two options: the edit still moves the highlight to the first match.
+    await user.keyboard('e');
+    expect(screen.getAllByRole('option').map((o) => o.textContent)).toEqual([
+      'Blueberry',
+      'Blackberry',
+    ]);
+    expect(activeText()).toBe('Blueberry');
   });
 
   it('highlightOnFilter with an inline (unmemoized) filter neither loops nor resets on arrows', () => {
@@ -1559,6 +1625,104 @@ describe('useListbox — editable keys (APG)', () => {
     expect(key('b').defaultPrevented).toBe(false);
   });
 
+  it('typing returns visual focus to the textbox, also when the active option still matches (APG)', async () => {
+    const user = userEvent.setup();
+    const onSelect = vi.fn();
+    render(
+      <Picker mode="editable" filterByText autoHighlight={false} onSelectSpy={onSelect}>
+        {FRUITS}
+      </Picker>,
+    );
+    combobox().focus();
+    await user.keyboard('{ArrowDown}{ArrowDown}');
+    expect(activeText()).toBe('Banana');
+    await user.keyboard('b');
+    expect(screen.getAllByRole('option').map((o) => o.textContent)).toEqual(['Banana']);
+    expect(activeOption()).toBeNull();
+    await user.keyboard('{Enter}');
+    expect(onSelect).not.toHaveBeenCalled();
+    expect(expanded()).toBe(true);
+  });
+
+  it('an option filtered out while typing is not active again after Backspace brings it back', async () => {
+    const user = userEvent.setup();
+    const onSelect = vi.fn();
+    render(
+      <Picker mode="editable" multiple filterByText autoHighlight={false} onSelectSpy={onSelect}>
+        <Opt value="a">Apple</Opt>
+        <Opt value="b">Banana</Opt>
+        <Opt value="bl">Blueberry</Opt>
+        <Opt value="c">Cherry</Opt>
+      </Picker>,
+    );
+    combobox().focus();
+    await user.keyboard('{ArrowDown}{ArrowDown}');
+    expect(activeText()).toBe('Banana');
+    await user.keyboard('bl');
+    expect(activeOption()).toBeNull();
+    await user.keyboard('{Backspace}');
+    expect(screen.getAllByRole('option').map((o) => o.textContent)).toEqual([
+      'Banana',
+      'Blueberry',
+    ]);
+    expect(activeOption()).toBeNull();
+    await user.keyboard('{Enter}');
+    expect(onSelect).not.toHaveBeenCalled();
+  });
+
+  it('text-editing keys clear the highlight without preventing them; other keys keep it', () => {
+    render(
+      <Picker mode="editable" defaultOpen autoHighlight={false}>
+        {FRUITS}
+      </Picker>,
+    );
+    const clearing: Array<[string, Partial<KeyboardEventInit>]> = [
+      ['x', {}],
+      [' ', {}],
+      ['X', { shiftKey: true }],
+      ['Backspace', {}],
+      ['Backspace', { ctrlKey: true }],
+      ['Delete', {}],
+      ['v', { ctrlKey: true }], // paste
+      ['x', { metaKey: true }], // cut
+      ['z', { ctrlKey: true }], // undo
+      ['y', { ctrlKey: true }], // redo
+      ['@', { ctrlKey: true, altKey: true }], // AltGr
+      ['Unidentified', {}], // virtual keyboards
+    ];
+    for (const [k, init] of clearing) {
+      key('ArrowDown');
+      key('ArrowDown');
+      expect(activeText()).toBe('Banana');
+      expect(key(k, init).defaultPrevented, k).toBe(false);
+      expect(activeOption(), `${k} ${JSON.stringify(init)}`).toBeNull();
+    }
+    key('ArrowDown');
+    key('ArrowDown');
+    const keeping: Array<[string, Partial<KeyboardEventInit>]> = [
+      ['c', { ctrlKey: true }], // copy
+      ['a', { metaKey: true }], // select all
+      ['Shift', { shiftKey: true }],
+      ['ArrowLeft', {}],
+      ['Home', {}],
+      ['F2', {}],
+    ];
+    for (const [k, init] of keeping) {
+      key(k, init);
+      expect(activeText(), `${k} ${JSON.stringify(init)}`).toBe('Banana');
+    }
+  });
+
+  it('text keys in a read-only input keep the highlight (the text cannot change)', () => {
+    render(<DataPicker items={ITEMS} defaultOpen autoHighlight={false} />);
+    key('ArrowDown');
+    key('ArrowDown');
+    expect(activeText()).toBe('Banana');
+    key('x');
+    key('Backspace');
+    expect(activeText()).toBe('Banana');
+  });
+
   it('Enter commits the active option; with the listbox closed Enter submits the form', async () => {
     const user = userEvent.setup();
     const onSubmit = vi.fn((e: React.FormEvent) => e.preventDefault());
@@ -1750,6 +1914,52 @@ describe('useListbox — scrollIntoView (input-pickers#18)', () => {
       const calls = scroll.mock.calls.length;
       key('ArrowDown'); // stays on Date (loop=false): no new scroll
       expect(scroll.mock.calls.length).toBe(calls);
+    } finally {
+      Element.prototype.scrollIntoView = original;
+    }
+  });
+
+  it('a pointer highlight does not scroll the list under the pointer; keyboard moves still do', () => {
+    const scroll = vi.fn();
+    const original = Element.prototype.scrollIntoView;
+    Element.prototype.scrollIntoView = scroll;
+    try {
+      render(<Picker defaultOpen>{FRUITS}</Picker>);
+      expect(activeText()).toBe('Apple');
+      scroll.mockClear();
+      fireEvent.pointerMove(screen.getByRole('option', { name: 'Cherry' }));
+      expect(activeText()).toBe('Cherry');
+      fireEvent.pointerMove(screen.getByRole('option', { name: 'Date' }));
+      expect(activeText()).toBe('Date');
+      expect(scroll).not.toHaveBeenCalled();
+      key('ArrowUp');
+      expect(scroll.mock.contexts.at(-1)).toBe(screen.getByRole('option', { name: 'Cherry' }));
+      // Back to the option the pointer highlighted before: a keyboard move, so it scrolls.
+      key('ArrowDown');
+      expect(scroll).toHaveBeenCalledTimes(2);
+      expect(scroll.mock.contexts.at(-1)).toBe(screen.getByRole('option', { name: 'Date' }));
+      // A pointer highlight after keyboard moves still does not scroll.
+      fireEvent.pointerMove(screen.getByRole('option', { name: 'Banana' }));
+      expect(activeText()).toBe('Banana');
+      expect(scroll).toHaveBeenCalledTimes(2);
+    } finally {
+      Element.prototype.scrollIntoView = original;
+    }
+  });
+
+  it('a pointer-highlighted option that becomes the fallback later is scrolled into view', () => {
+    const scroll = vi.fn();
+    const original = Element.prototype.scrollIntoView;
+    Element.prototype.scrollIntoView = scroll;
+    try {
+      const { rerender } = render(<DataPicker mode="select-only" items={ITEMS} defaultOpen />);
+      fireEvent.pointerMove(screen.getByRole('option', { name: 'Banana' }));
+      expect(activeText()).toBe('Banana');
+      scroll.mockClear();
+      // Banana is removed: the fallback (Apple) is not a pointer highlight, so it scrolls.
+      rerender(<DataPicker mode="select-only" items={[ITEMS[0], ITEMS[2]]} defaultOpen />);
+      expect(activeText()).toBe('Apple');
+      expect(scroll.mock.contexts.at(-1)).toBe(screen.getByRole('option', { name: 'Apple' }));
     } finally {
       Element.prototype.scrollIntoView = original;
     }
