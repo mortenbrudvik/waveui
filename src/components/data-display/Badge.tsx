@@ -16,52 +16,40 @@ export interface BadgeProps extends React.HTMLAttributes<HTMLSpanElement> {
    * @default 'medium'
    */
   size?: Size;
+  /** Ref to the root `<span>`. */
+  ref?: React.Ref<HTMLSpanElement>;
 }
 
-const colorMap: Record<
-  BadgeColor,
-  { bg: string; text: string; tintBg: string; tintText: string; border: string }
-> = {
+/** Theme-token classes per color (the foreground tokens keep text readable in every theme). */
+const colorMap: Record<BadgeColor, { filled: string; tint: string; border: string }> = {
   brand: {
-    bg: 'bg-primary',
-    text: 'text-white',
-    tintBg: 'bg-[#ebf3fc]',
-    tintText: 'text-[#0f6cbd]',
+    filled: 'bg-primary text-primary-foreground',
+    tint: 'bg-info-tint text-info-tint-foreground',
     border: 'border-primary',
   },
   success: {
-    bg: 'bg-success',
-    text: 'text-white',
-    tintBg: 'bg-[#e6f2e6]',
-    tintText: 'text-[#107c10]',
+    filled: 'bg-success text-success-foreground',
+    tint: 'bg-success-tint text-success-tint-foreground',
     border: 'border-success',
   },
   warning: {
-    bg: 'bg-warning',
-    text: 'text-[#242424]',
-    tintBg: 'bg-[#fefce8]',
-    tintText: 'text-[#4d2c00]',
+    filled: 'bg-warning text-warning-foreground',
+    tint: 'bg-warning-tint text-warning-tint-foreground',
     border: 'border-warning',
   },
   danger: {
-    bg: 'bg-destructive',
-    text: 'text-white',
-    tintBg: 'bg-[#fde7e9]',
-    tintText: 'text-[#c50f1f]',
+    filled: 'bg-destructive text-destructive-foreground',
+    tint: 'bg-error-tint text-error-tint-foreground',
     border: 'border-destructive',
   },
   important: {
-    bg: 'bg-severe',
-    text: 'text-white',
-    tintBg: 'bg-[#fdf0ec]',
-    tintText: 'text-[#da3b01]',
+    filled: 'bg-severe text-severe-foreground',
+    tint: 'bg-severe-tint text-severe-tint-foreground',
     border: 'border-severe',
   },
   informative: {
-    bg: 'bg-muted',
-    text: 'text-foreground',
-    tintBg: 'bg-muted',
-    tintText: 'text-foreground',
+    filled: 'bg-muted text-foreground',
+    tint: 'bg-muted text-foreground',
     border: 'border-border',
   },
 };
@@ -74,31 +62,47 @@ const sizeClasses: Record<Size, string> = {
   'extra-large': 'text-body-2 px-2.5 py-0.5',
 };
 
-export const Badge = (
-    { appearance = 'filled', color = 'brand', size = 'medium', className, children, ref, ...props }: BadgeProps & { ref?: React.Ref<HTMLSpanElement> }) => {
-    const c = colorMap[color];
+/**
+ * A short, non-interactive label that highlights a status or category ("New", "Beta", "3").
+ * `appearance` picks a solid fill, a light tint or an outline; `color` the semantic color. Colors
+ * come from the theme tokens, so the text keeps its contrast in the light, dark and high-contrast
+ * themes.
+ *
+ * @example
+ * <Badge appearance="tint" color="success">Passed</Badge>
+ */
+export const Badge = ({
+  appearance = 'filled',
+  color = 'brand',
+  size = 'medium',
+  className,
+  children,
+  ref,
+  ...props
+}: BadgeProps) => {
+  const c = colorMap[color];
 
-    const appearanceClasses =
-      appearance === 'filled'
-        ? cn(c.bg, c.text)
-        : appearance === 'tint'
-          ? cn(c.tintBg, c.tintText)
-          : cn('bg-transparent border', c.border, 'text-foreground');
+  const appearanceClasses =
+    appearance === 'filled'
+      ? c.filled
+      : appearance === 'tint'
+        ? c.tint
+        : cn('bg-transparent border text-foreground', c.border);
 
-    return (
-      <span
-        ref={ref}
-        className={cn(
-          'rounded-full inline-flex items-center font-semibold',
-          sizeClasses[size],
-          appearanceClasses,
-          className,
-        )}
-        {...props}
-      >
-        {children}
-      </span>
-    );
-  };
+  return (
+    <span
+      ref={ref}
+      className={cn(
+        'rounded-full inline-flex items-center font-semibold',
+        sizeClasses[size],
+        appearanceClasses,
+        className,
+      )}
+      {...props}
+    >
+      {children}
+    </span>
+  );
+};
 
 Badge.displayName = 'Badge';

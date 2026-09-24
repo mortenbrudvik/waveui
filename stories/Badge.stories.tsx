@@ -1,66 +1,69 @@
 import type { Meta, StoryObj } from '@storybook/react';
 import { Badge } from '../src';
+import type { BadgeAppearance, BadgeColor, Size } from '../src';
 import { badgeAppearanceArgType, badgeColorArgType, sizeArgType } from './_helpers';
 
+const APPEARANCES: BadgeAppearance[] = ['filled', 'tint', 'outline'];
+const COLORS: BadgeColor[] = ['brand', 'success', 'warning', 'danger', 'important', 'informative'];
+const SIZES: Size[] = ['extra-small', 'small', 'medium', 'large', 'extra-large'];
+
 const meta = {
-  title: 'Data Display/Badge',
+  title: 'Components/Data Display/Badge',
   component: Badge,
   argTypes: {
     ...badgeAppearanceArgType,
     ...badgeColorArgType,
     ...sizeArgType,
   },
-} satisfies Meta<typeof Badge>;
-
-export default meta;
-type Story = StoryObj<typeof meta>;
-
-export const Default: Story = {
   args: {
     children: 'Badge',
     appearance: 'filled',
     color: 'brand',
     size: 'medium',
   },
-};
+} satisfies Meta<typeof Badge>;
+
+export default meta;
+type Story = StoryObj<typeof meta>;
+
+export const Default: Story = {};
 
 export const Appearances: Story = {
-  render: () => (
-    <div style={{ display: 'flex', gap: 8 }}>
-      <Badge appearance="filled" color="brand">
-        Filled
-      </Badge>
-      <Badge appearance="tint" color="brand">
-        Tint
-      </Badge>
-      <Badge appearance="outline" color="brand">
-        Outline
-      </Badge>
+  render: (args) => (
+    <div className="flex gap-2">
+      {APPEARANCES.map((appearance) => (
+        <Badge key={appearance} {...args} appearance={appearance}>
+          {appearance}
+        </Badge>
+      ))}
     </div>
   ),
 };
 
 export const Colors: Story = {
-  render: () => (
-    <div style={{ display: 'flex', gap: 8 }}>
-      <Badge color="brand">Brand</Badge>
-      <Badge color="success">Success</Badge>
-      <Badge color="warning">Warning</Badge>
-      <Badge color="danger">Danger</Badge>
-      <Badge color="important">Important</Badge>
-      <Badge color="informative">Informative</Badge>
+  render: (args) => (
+    <div className="flex flex-col gap-2">
+      {APPEARANCES.map((appearance) => (
+        <div key={appearance} className="flex gap-2">
+          {COLORS.map((color) => (
+            <Badge key={color} {...args} appearance={appearance} color={color}>
+              {color}
+            </Badge>
+          ))}
+        </div>
+      ))}
     </div>
   ),
 };
 
 export const Sizes: Story = {
-  render: () => (
-    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-      <Badge size="extra-small">XS</Badge>
-      <Badge size="small">SM</Badge>
-      <Badge size="medium">MD</Badge>
-      <Badge size="large">LG</Badge>
-      <Badge size="extra-large">XL</Badge>
+  render: (args) => (
+    <div className="flex items-center gap-2">
+      {SIZES.map((size) => (
+        <Badge key={size} {...args} size={size}>
+          {size}
+        </Badge>
+      ))}
     </div>
   ),
 };

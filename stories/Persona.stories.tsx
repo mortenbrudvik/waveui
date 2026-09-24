@@ -3,7 +3,7 @@ import { Persona } from '../src';
 import { sizeArgType } from './_helpers';
 
 const meta = {
-  title: 'Data Display/Persona',
+  title: 'Components/Data Display/Persona',
   component: Persona,
   argTypes: {
     ...sizeArgType,
@@ -12,31 +12,34 @@ const meta = {
       options: ['available', 'busy', 'away', 'offline', 'dnd', 'oof'],
     },
   },
+  args: {
+    name: 'Jane Doe',
+    size: 'medium',
+  },
 } satisfies Meta<typeof Persona>;
 
 export default meta;
 type Story = StoryObj<typeof meta>;
 
-export const Default: Story = {
-  args: {
-    name: 'Jane Doe',
-    size: 'medium',
-  },
-};
+export const Default: Story = {};
 
 export const WithBadge: Story = {
   args: {
-    name: 'Jane Doe',
     status: 'available',
-    size: 'medium',
   },
 };
 
 export const WithSecondaryText: Story = {
   args: {
-    name: 'Jane Doe',
     secondaryText: 'Software Engineer',
     status: 'busy',
-    size: 'medium',
+  },
+};
+
+export const WithImage: Story = {
+  args: {
+    src: 'https://i.pravatar.cc/150?u=persona-story',
+    secondaryText: 'Product Designer',
+    status: 'away',
   },
 };

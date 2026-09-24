@@ -13,28 +13,44 @@ export interface CounterBadgeProps extends React.HTMLAttributes<HTMLSpanElement>
    * @default 'filled'
    */
   appearance?: 'filled' | 'outline';
+  /** Ref to the root `<span>`. */
+  ref?: React.Ref<HTMLSpanElement>;
 }
 
-export const CounterBadge = ({ count, overflowCount = 99, appearance = 'filled', className, ref, ...props }: CounterBadgeProps & { ref?: React.Ref<HTMLSpanElement> }) => {
-    if (count <= 0) return null;
+/**
+ * A small pill showing a count (unread messages, notifications). Renders nothing for a count of
+ * 0 or less, and `overflowCount+` above `overflowCount`.
+ *
+ * @example
+ * <CounterBadge count={12} />
+ */
+export const CounterBadge = ({
+  count,
+  overflowCount = 99,
+  appearance = 'filled',
+  className,
+  ref,
+  ...props
+}: CounterBadgeProps) => {
+  if (count <= 0) return null;
 
-    const display = count > overflowCount ? `${overflowCount}+` : String(count);
+  const display = count > overflowCount ? `${overflowCount}+` : String(count);
 
-    return (
-      <span
-        ref={ref}
-        className={cn(
-          'min-w-5 h-5 rounded-full text-caption-1 font-semibold inline-flex items-center justify-center px-1.5',
-          appearance === 'filled'
-            ? 'bg-primary text-white'
-            : 'bg-transparent border border-primary text-primary',
-          className,
-        )}
-        {...props}
-      >
-        {display}
-      </span>
-    );
-  };
+  return (
+    <span
+      ref={ref}
+      className={cn(
+        'min-w-5 h-5 rounded-full text-caption-1 font-semibold inline-flex items-center justify-center px-1.5',
+        appearance === 'filled'
+          ? 'bg-primary text-primary-foreground'
+          : 'bg-transparent border border-primary text-primary',
+        className,
+      )}
+      {...props}
+    >
+      {display}
+    </span>
+  );
+};
 
 CounterBadge.displayName = 'CounterBadge';
