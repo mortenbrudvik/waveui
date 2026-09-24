@@ -1,93 +1,109 @@
 import React from 'react';
 import type { Meta, StoryObj } from '@storybook/react';
+import { fn } from 'storybook/test';
 import { Accordion } from '../src';
 
+const faqItems = (
+  <>
+    <Accordion.Item value="item-1">
+      <Accordion.Trigger>What is Wave UI?</Accordion.Trigger>
+      <Accordion.Panel>
+        Wave UI is a collection of React components for creating cross-platform apps.
+      </Accordion.Panel>
+    </Accordion.Item>
+    <Accordion.Item value="item-2">
+      <Accordion.Trigger>Is it accessible?</Accordion.Trigger>
+      <Accordion.Panel>
+        Yes. It follows WAI-ARIA patterns for accessible components.
+      </Accordion.Panel>
+    </Accordion.Item>
+    <Accordion.Item value="item-3">
+      <Accordion.Trigger>Can I customize it?</Accordion.Trigger>
+      <Accordion.Panel>
+        Absolutely. Components accept className and style overrides.
+      </Accordion.Panel>
+    </Accordion.Item>
+  </>
+);
+
 const meta = {
-  title: 'Layout/Accordion',
+  title: 'Components/Layout/Accordion',
   component: Accordion,
+  args: {
+    style: { width: 400 },
+  },
 } satisfies Meta<typeof Accordion>;
 
 export default meta;
 type Story = StoryObj<typeof meta>;
 
+/** Single mode (default): opening an item closes the open one. */
 export const Default: Story = {
-  render: (args) => (
-    <Accordion {...args} style={{ width: 400 }}>
-      <Accordion.Item value="item-1">
-        <Accordion.Trigger>What is Wave UI?</Accordion.Trigger>
-        <Accordion.Panel>
-          Wave UI is a collection of React components for creating cross-platform apps.
-        </Accordion.Panel>
-      </Accordion.Item>
-      <Accordion.Item value="item-2">
-        <Accordion.Trigger>Is it accessible?</Accordion.Trigger>
-        <Accordion.Panel>
-          Yes. It follows WAI-ARIA patterns for accessible components.
-        </Accordion.Panel>
-      </Accordion.Item>
-      <Accordion.Item value="item-3">
-        <Accordion.Trigger>Can I customize it?</Accordion.Trigger>
-        <Accordion.Panel>
-          Absolutely. Components accept className and style overrides.
-        </Accordion.Panel>
-      </Accordion.Item>
-    </Accordion>
-  ),
+  args: {
+    onOpenItemChange: fn(),
+  },
+  render: (args) => <Accordion {...args}>{faqItems}</Accordion>,
 };
 
+/** `type="multiple"`: any number of items can be open. */
 export const Multiple: Story = {
   args: {
     type: 'multiple',
+    onOpenItemsChange: fn(),
   },
-  render: (args) => (
-    <Accordion {...args} style={{ width: 400 }}>
-      <Accordion.Item value="item-1">
-        <Accordion.Trigger>Section A</Accordion.Trigger>
-        <Accordion.Panel>Content for section A.</Accordion.Panel>
-      </Accordion.Item>
-      <Accordion.Item value="item-2">
-        <Accordion.Trigger>Section B</Accordion.Trigger>
-        <Accordion.Panel>Content for section B.</Accordion.Panel>
-      </Accordion.Item>
-      <Accordion.Item value="item-3">
-        <Accordion.Trigger>Section C</Accordion.Trigger>
-        <Accordion.Panel>Content for section C.</Accordion.Panel>
-      </Accordion.Item>
-    </Accordion>
-  ),
+  render: (args) => <Accordion {...args}>{faqItems}</Accordion>,
 };
 
+/** Controlled single mode: `openItem` + `onOpenItemChange` (`null` closes every item). */
 export const Controlled: Story = {
-  render: () => {
-    const [openItems, setOpenItems] = React.useState<string[]>(['item-1']);
+  args: {
+    onOpenItemChange: fn(),
+  },
+  render: function ControlledAccordion(args) {
+    const [openItem, setOpenItem] = React.useState<string | null>('item-1');
     return (
-      <Accordion openItems={openItems} onOpenItemsChange={setOpenItems} style={{ width: 400 }}>
-        <Accordion.Item value="item-1">
-          <Accordion.Trigger>Controlled A</Accordion.Trigger>
-          <Accordion.Panel>Panel A content.</Accordion.Panel>
-        </Accordion.Item>
-        <Accordion.Item value="item-2">
-          <Accordion.Trigger>Controlled B</Accordion.Trigger>
-          <Accordion.Panel>Panel B content.</Accordion.Panel>
-        </Accordion.Item>
+      <Accordion
+        {...args}
+        type="single"
+        openItem={openItem}
+        onOpenItemChange={(next) => {
+          setOpenItem(next);
+          args.onOpenItemChange?.(next);
+        }}
+      >
+        {faqItems}
       </Accordion>
     );
   },
 };
 
+/** `defaultOpenItem` opens an item on load (uncontrolled). */
 export const DefaultOpen: Story = {
   args: {
-    defaultOpenItems: ['item-2'],
+    defaultOpenItem: 'item-2',
   },
+  render: (args) => <Accordion {...args}>{faqItems}</Accordion>,
+};
+
+/** `headingLevel` sets the heading element that wraps every trigger (default `<h3>`). */
+export const HeadingLevel: Story = {
+  args: {
+    headingLevel: 2,
+  },
+  render: (args) => <Accordion {...args}>{faqItems}</Accordion>,
+};
+
+/** A disabled trigger cannot be toggled. */
+export const WithDisabledItem: Story = {
   render: (args) => (
-    <Accordion {...args} style={{ width: 400 }}>
+    <Accordion {...args}>
       <Accordion.Item value="item-1">
-        <Accordion.Trigger>First</Accordion.Trigger>
-        <Accordion.Panel>First panel content.</Accordion.Panel>
+        <Accordion.Trigger>Available section</Accordion.Trigger>
+        <Accordion.Panel>This section can be opened.</Accordion.Panel>
       </Accordion.Item>
       <Accordion.Item value="item-2">
-        <Accordion.Trigger>Second (open by default)</Accordion.Trigger>
-        <Accordion.Panel>Second panel content is visible on load.</Accordion.Panel>
+        <Accordion.Trigger disabled>Unavailable section</Accordion.Trigger>
+        <Accordion.Panel>This section is disabled.</Accordion.Panel>
       </Accordion.Item>
     </Accordion>
   ),
