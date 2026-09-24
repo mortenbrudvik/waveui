@@ -2,7 +2,7 @@ import * as React from 'react';
 import { cn } from '../../lib/cn';
 import { warnDeprecated, warnOnce } from '../../lib/dev';
 import { joinIds } from '../../lib/aria';
-import { inputFocus } from '../../lib/styles';
+import { focusRing, inputFocus, inputInvalid } from '../../lib/styles';
 import { useControllable } from '../../hooks/useControllable';
 import { FieldContext, useFieldContext, useFieldControl } from '../../hooks/useFieldControl';
 import { useFormReset } from '../../hooks/useFormReset';
@@ -15,6 +15,7 @@ import {
   alphaToOpacity,
   formatHexColor,
   isHexDraft,
+  normalizeHexColor,
   opacityToAlpha,
   parseHexColor,
   parseHexInput,
@@ -22,7 +23,11 @@ import {
 
 /** A named preset color. */
 export interface ColorPickerPreset {
-  /** Hex color (`#rrggbb`; `#rgb` is expanded). */
+  /**
+   * Hex color (`#rrggbb`; `#rgb` is expanded). A preset has no opacity of its own: alpha digits
+   * (`#rgba`, `#rrggbbaa`) are ignored with a development warning, and picking the preset keeps
+   * the current opacity.
+   */
   color: string;
   /** Accessible name of the preset swatch, e.g. `'Cranberry'`. */
   label: string;
@@ -66,7 +71,10 @@ export interface ColorPickerProps extends Omit<
    * 50% opacity). Other formats are not supported (development warning).
    */
   value?: string;
-  /** Initial hex color for uncontrolled usage (also what a form reset restores).
+  /**
+   * Initial hex color for uncontrolled usage (also what a form reset restores). Like every edit it
+   * is shown, submitted and reported as a lowercase `#rrggbb`, or `#rrggbbaa` when it is not fully
+   * opaque (`'#ABC'` becomes `'#aabbcc'`).
    * @default '#0f6cbd'
    */
   defaultValue?: string;
@@ -83,7 +91,9 @@ export interface ColorPickerProps extends Omit<
   /**
    * Preset colors shown as quick-select swatches. Pass `{ color, label }` objects so screen reader
    * users hear a name; a plain hex string is announced by its hex code. Non-hex presets are
-   * skipped (development warning). Picking a preset keeps the current opacity.
+   * skipped (development warning). Picking a preset keeps the current opacity: a preset's alpha
+   * digits are ignored (development warning), and a string preset that carries them is announced
+   * by the `#rrggbb` color it applies.
    * @default Blue, Red, Green, Yellow, Purple, Teal, Pink and Black (Fluent brand colors)
    */
   presets?: ReadonlyArray<string | ColorPickerPreset>;
@@ -131,13 +141,17 @@ const DEFAULT_PRESETS: readonly ColorPickerPreset[] = [
 
 interface ResolvedPresets {
   items: SwatchItem[];
+  /** Presets that are not hex colors (skipped). */
   invalid: string[];
+  /** Presets with an alpha byte below 255, which a preset cannot apply (ignored). */
+  translucent: string[];
 }
 
 /** Normalises presets to swatch items keyed by their lowercase `#rrggbb` (duplicates dropped). */
 function resolvePresets(presets: ReadonlyArray<string | ColorPickerPreset>): ResolvedPresets {
   const items: SwatchItem[] = [];
   const invalid: string[] = [];
+  const translucent: string[] = [];
   const seen = new Set<string>();
   for (const preset of presets) {
     const color = typeof preset === 'string' ? preset : preset.color;
@@ -146,15 +160,20 @@ function resolvePresets(presets: ReadonlyArray<string | ColorPickerPreset>): Res
       invalid.push(color);
       continue;
     }
+    // Picking a preset keeps the current opacity, so its own alpha never applies.
+    const hasAlpha = parsed.alpha !== 255;
+    if (hasAlpha) translucent.push(color);
     if (seen.has(parsed.rgb)) continue;
     seen.add(parsed.rgb);
+    // A string preset is announced by its hex code: the color it applies, without the alpha.
+    const stringLabel = hasAlpha ? parsed.rgb : color;
     items.push({
       value: parsed.rgb,
       color: parsed.rgb,
-      label: typeof preset === 'string' ? preset : preset.label,
+      label: typeof preset === 'string' ? stringLabel : preset.label,
     });
   }
-  return { items, invalid };
+  return { items, invalid, translucent };
 }
 
 /** The hex field's text while the user edits it (`null` state = the field shows the value). */
@@ -202,7 +221,7 @@ function hasAlphaDigits(text: string): boolean {
  *   required instead of reaching the group. The texts of the picker's own parts are localised with
  *   `labels`.
  * - **Forms**: with `name` the color is submitted with the form; a form reset restores
- *   `defaultValue` (and reports only that color through `onValueChange`).
+ *   `defaultValue` and reports it through `onValueChange` only when the color changes.
  *
  * @example
  * <ColorPicker aria-label="Accent color" showOpacity value={color} onValueChange={setColor} />
@@ -230,7 +249,10 @@ export const ColorPicker = ({
   ...rest
 }: ColorPickerProps) => {
   if (onChange !== undefined) warnDeprecated('ColorPicker', 'onChange', 'onValueChange');
-  const initialValue = defaultValue ?? DEFAULT_COLOR;
+  // The default is written like every edit (R10): the picker shows, submits and restores it as a
+  // lowercase `#rrggbb`/`#rrggbbaa`. A value that is not a hex color stays as given (warning below).
+  const rawDefault = defaultValue ?? DEFAULT_COLOR;
+  const initialValue = normalizeHexColor(rawDefault) ?? rawDefault;
   const strings = { ...DEFAULT_LABELS, ...labels };
   const [color, setColor] = useControllable(valueProp, initialValue, (next: string) => {
     onValueChange?.(next);
@@ -260,8 +282,13 @@ export const ColorPicker = ({
   const draftInvalid =
     draft !== null && !isBlankDraft(draft.text) && (draft.flagged || !isHexDraft(draft.text));
 
-  const { items: presetItems, invalid: invalidPresets } = resolvePresets(presets);
+  const {
+    items: presetItems,
+    invalid: invalidPresets,
+    translucent: translucentPresets,
+  } = resolvePresets(presets);
   const invalidPresetKey = invalidPresets.join('\n');
+  const translucentPresetKey = translucentPresets.join('\n');
   const invalidValue = parsed ? null : color;
 
   React.useEffect(() => {
@@ -281,6 +308,15 @@ export const ColorPicker = ({
       );
     }
   }, [invalidPresetKey]);
+  React.useEffect(() => {
+    if (!translucentPresetKey) return;
+    for (const preset of translucentPresetKey.split('\n')) {
+      warnOnce(
+        `ColorPicker:alpha-preset:${preset}`,
+        `ColorPicker: preset "${preset}" has an alpha byte, which is ignored: picking a preset keeps the current opacity. Pass the color as #rgb or #rrggbb.`,
+      );
+    }
+  }, [translucentPresetKey]);
 
   const rootRef = React.useRef<HTMLDivElement>(null);
   const hexInputRef = React.useRef<HTMLInputElement>(null);
@@ -317,13 +353,17 @@ export const ColorPicker = ({
   useFormReset(
     rootRef,
     () => {
-      setColor(initialValue);
+      // Only a real change is reported: the same color in another spelling (a controlled `#ABC`
+      // against the default `#aabbcc`) is not one.
+      if ((normalizeHexColor(color) ?? color) !== initialValue) setColor(initialValue);
       setDraft(null);
     },
     form,
   );
 
   const errorId = useId('wave-color-picker-error');
+  // The hex field carries the picker's invalid state: its own flagged text, or the Field's/prop's.
+  const hexInvalid = draftInvalid || fieldInvalid;
 
   const handleHexChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     // Surrounding whitespace (a pasted `'#abcdef '`) is dropped, so the text that is checked,
@@ -405,7 +445,7 @@ export const ColorPicker = ({
             onKeyDown={handleHexKeyDown}
             onBlur={finishHexDraft}
             aria-label={strings.hexInput}
-            aria-invalid={draftInvalid || fieldInvalid || undefined}
+            aria-invalid={hexInvalid || undefined}
             aria-errormessage={errorMessageId}
             aria-describedby={joinIds(
               draftInvalid && errorId,
@@ -416,9 +456,9 @@ export const ColorPicker = ({
             spellCheck={false}
             autoComplete="off"
             className={cn(
-              'w-24 rounded border border-border bg-background px-2 py-1 text-body-1 text-foreground',
+              'w-24 rounded border border-input border-b-stroke-accessible bg-background px-2 py-1 text-body-1 text-foreground',
               inputFocus,
-              'aria-invalid:border-error aria-invalid:focus:border-b-error',
+              hexInvalid && inputInvalid,
             )}
           />
         </label>
@@ -457,7 +497,10 @@ export const ColorPicker = ({
             disabled={!parsed}
             aria-label={strings.opacity}
             aria-valuetext={`${opacity}%`}
-            className="h-1 flex-1 accent-primary disabled:cursor-not-allowed disabled:opacity-50"
+            className={cn(
+              'h-1 flex-1 accent-primary disabled:cursor-not-allowed disabled:opacity-50',
+              focusRing,
+            )}
           />
           <span className="w-10 text-end text-caption-1 text-muted-foreground">{opacity}%</span>
         </div>

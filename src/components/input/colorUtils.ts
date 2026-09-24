@@ -100,6 +100,19 @@ export function formatHexColor(rgb: string, alpha = 255): string {
   return byte === 255 ? rgb : rgb + toHexByte(byte);
 }
 
+/**
+ * A hex color in the one form ColorPicker reports: `#rrggbb` in lower case, or `#rrggbbaa` when
+ * the alpha byte is not 255 (short forms expanded, surrounding whitespace dropped). Returns `null`
+ * for anything {@link parseHexColor} rejects.
+ *
+ * @example normalizeHexColor('#ABC') // '#aabbcc'
+ * @example normalizeHexColor('#0f6cbdff') // '#0f6cbd'
+ */
+export function normalizeHexColor(value: string): string | null {
+  const parsed = parseHexColor(value);
+  return parsed ? formatHexColor(parsed.rgb, parsed.alpha) : null;
+}
+
 /** Alpha byte (0–255) → whole opacity percentage (0–100). */
 export function alphaToOpacity(alpha: number): number {
   return Math.round((clamp(alpha, 0, 255) / 255) * 100);

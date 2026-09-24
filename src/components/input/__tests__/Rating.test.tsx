@@ -487,8 +487,21 @@ describe('Rating — native forms (C-FORMS)', () => {
       </form>,
     );
     expect(checkValidity()).toBe(false);
+    // The blocked submission moves focus to the star tab stop, where the user can fix it.
+    expect(star(1)).toHaveFocus();
     await user.click(star(2));
     expect(checkValidity()).toBe(true);
+  });
+
+  it('a disabled rating neither blocks validation nor submits a value', () => {
+    render(
+      <form aria-label="Form">
+        <Rating name="score" required disabled />
+        <Rating name="kept" defaultValue={4} disabled aria-label="Kept" />
+      </form>,
+    );
+    expect(checkValidity()).toBe(true);
+    expect(Array.from(new FormData(getForm()).keys())).toEqual([]);
   });
 
   it('form reset restores defaultValue (with and without a name)', async () => {
@@ -557,6 +570,33 @@ describe('RatingDisplay', () => {
     const el = screen.getByRole('img', { name: 'Rating: 3 out of 7' });
     // 7 span children for stars
     expect(el.children).toHaveLength(7);
+  });
+
+  it('draws a fraction as a partly filled star, so the stars show the value the name reports (input-other-docs-5)', () => {
+    render(<RatingDisplay value={4.6} />);
+    const stars = Array.from(screen.getByRole('img', { name: 'Rating: 4.6 out of 5' }).children);
+    expect(stars).toHaveLength(5);
+    for (const whole of stars.slice(0, 4)) expect(whole).toHaveClass('text-rating');
+    const partial = stars[4] as HTMLElement;
+    // The outline of the empty star, with the filled star clipped to the fraction over it.
+    expect(partial).toHaveClass('relative', 'text-stroke-accessible');
+    const clip = partial.lastElementChild as HTMLElement;
+    expect(clip).toHaveClass('absolute', 'start-0', 'overflow-hidden', 'text-rating');
+    expect(clip).toHaveStyle({ width: '60%' });
+    expect(clip.querySelector('svg')).toHaveAttribute('fill', 'currentColor');
+    expect(partial.firstElementChild).toHaveAttribute('fill', 'none');
+  });
+
+  it('fills the partly filled star from the inline start, also under dir="rtl"', () => {
+    const { container } = renderWithProviders(<RatingDisplay value={0.25} max={2} />, {
+      dir: 'rtl',
+    });
+    const [first, second] = Array.from(screen.getByRole('img').children);
+    expect(first.lastElementChild).toHaveClass('start-0');
+    expect(first.lastElementChild).toHaveStyle({ width: '25%' });
+    expect(second).toHaveClass('text-stroke-accessible');
+    expect(second.children).toHaveLength(1);
+    expect(container.innerHTML).not.toMatch(/\b(left|right)-0\b/);
   });
 
   it('draws filled stars with the rating token and empty ones as accessible-stroke outlines', () => {

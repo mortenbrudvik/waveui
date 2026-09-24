@@ -3,6 +3,7 @@ import { describe, it, expect, vi } from 'vitest';
 import { act, render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { SpinButton } from '../SpinButton';
+import { inputInvalidWithin } from '../../../lib/styles';
 import { testFocusEvents, testSystemProps } from '../../../test-utils';
 import { renderWithFieldContext, FIELD_TEST_IDS, FIELD_TEST_TEXT } from '../../../test-utils-field';
 
@@ -245,6 +246,30 @@ describe('SpinButton — typing (draft model, input-basic#2)', () => {
     await user.clear(spin());
     await user.type(spin(), '9{Escape}');
     expect(spin()).toHaveValue('4');
+  });
+
+  it('consumes the Escape that reverts a draft; without a draft Escape reaches enclosing layers (C-POPUPS)', async () => {
+    const user = userEvent.setup();
+    const onValueChange = vi.fn();
+    render(<SpinButton aria-label="Quantity" defaultValue={4} onValueChange={onValueChange} />);
+    // Wave's layer stack (Dialog, Drawer, Popover) listens on the document and skips prevented
+    // events: a prevented Escape keeps an enclosing Dialog open.
+    const prevented: boolean[] = [];
+    const listener = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') prevented.push(event.defaultPrevented);
+    };
+    document.addEventListener('keydown', listener);
+    try {
+      await user.clear(spin());
+      await user.type(spin(), '9{Escape}');
+      expect(spin()).toHaveValue('4');
+      await user.keyboard('{Escape}');
+      expect(prevented).toEqual([true, false]);
+      expect(spin()).toHaveValue('4');
+      expect(onValueChange).not.toHaveBeenCalled();
+    } finally {
+      document.removeEventListener('keydown', listener);
+    }
   });
 
   it('resyncs the draft when the value changes from outside', async () => {
@@ -578,10 +603,12 @@ describe('SpinButton — naming, routing and styling', () => {
     }
   });
 
-  it('marks an invalid state on the wrapper', () => {
+  it('marks an invalid state on the wrapper with the shared recipe (R8)', () => {
     render(<SpinButton aria-label="Quantity" aria-invalid data-testid="root" />);
     expect(spin()).toHaveAttribute('aria-invalid', 'true');
-    expect(screen.getByTestId('root')).toHaveClass('border-destructive');
+    const root = screen.getByTestId('root');
+    expect(root).toHaveClass(...inputInvalidWithin.split(' '));
+    expect(root).not.toHaveClass('border-input', 'focus-within:border-b-primary');
   });
 
   it.each([
@@ -659,6 +686,55 @@ describe('SpinButton — native forms (C-FORMS)', () => {
     expect(getForm().checkValidity()).toBe(true);
     await user.clear(spin());
     expect(getForm().checkValidity()).toBe(false);
+  });
+
+  it('Enter commits the typed draft and still submits the form with it', async () => {
+    const user = userEvent.setup();
+    const submitted: unknown[] = [];
+    render(
+      <form
+        aria-label="Form"
+        onSubmit={(event) => {
+          event.preventDefault();
+          submitted.push(new FormData(event.currentTarget).get('qty'));
+        }}
+      >
+        <SpinButton aria-label="Quantity" name="qty" defaultValue={2} />
+        <button type="submit">Save</button>
+      </form>,
+    );
+    await user.clear(spin());
+    await user.type(spin(), '7{Enter}');
+    expect(submitted).toEqual(['7']);
+    expect(spin()).toHaveValue('7');
+  });
+
+  it('a disabled spin button submits nothing', () => {
+    render(
+      <form aria-label="Form">
+        <SpinButton aria-label="Quantity" name="qty" defaultValue={3} disabled />
+      </form>,
+    );
+    expect(new FormData(getForm()).getAll('qty')).toEqual([]);
+  });
+
+  it('form reset clears a typed draft although the value already equals defaultValue', async () => {
+    const user = userEvent.setup();
+    const onValueChange = vi.fn();
+    render(
+      <form aria-label="Form">
+        <SpinButton aria-label="Quantity" defaultValue={4} onValueChange={onValueChange} />
+      </form>,
+    );
+    await user.clear(spin());
+    await user.type(spin(), 'abc');
+    expect(spin()).toHaveAttribute('aria-invalid', 'true');
+    // A programmatic reset while the input keeps focus (no blur commits or reverts the draft).
+    act(() => getForm().reset());
+    expect(spin()).toHaveFocus();
+    expect(spin()).toHaveValue('4');
+    expect(spin()).not.toHaveAttribute('aria-invalid');
+    expect(onValueChange).not.toHaveBeenCalled();
   });
 
   it('form reset restores defaultValue (with and without a name)', async () => {

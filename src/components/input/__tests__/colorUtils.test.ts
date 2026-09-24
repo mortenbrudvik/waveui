@@ -5,6 +5,7 @@ import {
   getCheckColors,
   getRelativeLuminance,
   isHexDraft,
+  normalizeHexColor,
   opacityToAlpha,
   parseCssColor,
   parseHexColor,
@@ -88,6 +89,23 @@ describe('formatHexColor', () => {
     expect(formatHexColor('#000000', 300)).toBe('#000000');
     expect(formatHexColor('#000000', -4)).toBe('#00000000');
     expect(formatHexColor('#000000', 15.6)).toBe('#00000010');
+  });
+});
+
+describe('normalizeHexColor', () => {
+  it('writes every hex form as a lowercase #rrggbb, or #rrggbbaa when not opaque', () => {
+    expect(normalizeHexColor('#0F6CBD')).toBe('#0f6cbd');
+    expect(normalizeHexColor('#ABC')).toBe('#aabbcc');
+    expect(normalizeHexColor('#abc8')).toBe('#aabbcc88');
+    expect(normalizeHexColor('#0f6cbdFF')).toBe('#0f6cbd');
+    expect(normalizeHexColor('#0F6CBD80')).toBe('#0f6cbd80');
+    expect(normalizeHexColor(' #112233 ')).toBe('#112233');
+  });
+
+  it('returns null for anything that is not a hex color', () => {
+    for (const value of ['red', '', '#12345', 'rgb(0,0,0)']) {
+      expect(normalizeHexColor(value), value).toBeNull();
+    }
   });
 });
 

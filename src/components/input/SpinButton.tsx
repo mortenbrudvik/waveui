@@ -3,7 +3,7 @@ import { cn } from '../../lib/cn';
 import { composeEventHandlers } from '../../lib/composeEventHandlers';
 import { warnDeprecated, warnOnce } from '../../lib/dev';
 import { AddIcon, SubtractIcon } from '../../lib/icons';
-import { inputFocusWithin } from '../../lib/styles';
+import { inputFocusWithin, inputInvalidWithin } from '../../lib/styles';
 import { useControllable } from '../../hooks/useControllable';
 import { useFieldControl } from '../../hooks/useFieldControl';
 import { useFormReset } from '../../hooks/useFormReset';
@@ -330,7 +330,7 @@ export const SpinButton = ({
       className={cn(
         'relative inline-flex items-center rounded border border-input border-b-stroke-accessible bg-background',
         inputFocusWithin,
-        invalid && 'border-destructive focus-within:border-b-destructive',
+        invalid && inputInvalidWithin,
         disabled && 'cursor-not-allowed opacity-50',
         className,
       )}

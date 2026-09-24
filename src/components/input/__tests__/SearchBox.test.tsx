@@ -6,13 +6,29 @@ import { renderToString } from 'react-dom/server';
 import { SearchBox, type SearchBoxProps } from '../SearchBox';
 import { Button } from '../../button/Button';
 import type { Slot, SlotObject } from '../../../lib/types';
+import { inputInvalidWithin } from '../../../lib/styles';
 import {
   testSystemProps,
   testFocusEvents,
   testNoImplicitSubmit,
   renderWithProviders,
   expectNoA11yViolations,
+  asClientReference,
 } from '../../../test-utils';
+import { renderWithFieldContext, FIELD_TEST_IDS, FIELD_TEST_TEXT } from '../../../test-utils-field';
+
+/** The development warnings of the `dismiss` slot (C-SLOTS). */
+const ELEMENT_WARNING = /^\[WaveUI\] SearchBox: `dismiss` received a button element/;
+const OBJECT_WARNING = /^\[WaveUI\] SearchBox: `dismiss` with button props .* is deprecated/;
+
+/** Asserts that `warn` logged exactly one message per pattern (in any order) and nothing else. */
+function expectWarnings(warn: { mock: { calls: unknown[][] } }, patterns: RegExp[]) {
+  const messages = warn.mock.calls.map(([message]) => String(message));
+  expect(messages).toHaveLength(patterns.length);
+  for (const pattern of patterns) {
+    expect(messages.filter((message) => pattern.test(message))).toHaveLength(1);
+  }
+}
 
 describe('SearchBox', () => {
   testSystemProps(SearchBox, {
@@ -103,7 +119,8 @@ describe('SearchBox', () => {
       const after = screen.getByTestId('after');
       const slot = after.parentElement;
       expect(slot).toHaveClass('shrink-0');
-      expect(slot?.parentElement).toHaveClass('absolute', 'end-8');
+      expect(slot?.parentElement).toHaveClass('shrink-0');
+      expect(slot?.parentElement).not.toHaveClass('absolute');
       expect(slot?.parentElement?.parentElement).toBe(screen.getByTestId('root'));
       const input = screen.getByRole('searchbox', { name: 'Search' });
       expect(input).not.toContainElement(after);
@@ -113,6 +130,95 @@ describe('SearchBox', () => {
         after.compareDocumentPosition(screen.getByRole('button', { name: 'Clear search' })) &
           Node.DOCUMENT_POSITION_FOLLOWING,
       ).toBeTruthy();
+    });
+  });
+
+  describe('layout (input-other-code-2)', () => {
+    it('lays the slots, the text and the clear button out side by side, so no slot covers the text', () => {
+      render(
+        <SearchBox
+          data-testid="root"
+          aria-label="Search"
+          defaultValue="quarterly financial report draft v2"
+          contentBefore={<span data-testid="before">Files:</span>}
+          contentAfter={<span data-testid="after">⌘K</span>}
+        />,
+      );
+      const root = screen.getByTestId('root');
+      const input = screen.getByRole('searchbox', { name: 'Search' });
+      // Each slot renders inside its own span, held by a layout box of the field.
+      const before = screen.getByTestId('before').parentElement!.parentElement!;
+      const after = screen.getByTestId('after').parentElement!.parentElement!;
+      const clear = screen.getByRole('button', { name: 'Clear search' });
+      // In document order, as flex items of the root: none of them is positioned over the input.
+      expect(Array.from(root.children)).toEqual([before, input, after, clear]);
+      expect(root).toHaveClass('inline-flex', 'items-center');
+      for (const part of [before, input, after, clear]) {
+        expect(part).not.toHaveClass('absolute');
+        expect(part.className).not.toMatch(/(^|\s)(start|end)-\d/);
+      }
+      // The text takes the room the slots and the clear button leave; they keep their size.
+      expect(input).toHaveClass('min-w-0', 'flex-1');
+      expect(input.className).not.toMatch(/(^|\s)(ps|pe)-(8|9)(\s|$)/);
+      for (const part of [before, after, clear]) expect(part).toHaveClass('shrink-0');
+    });
+
+    it('draws the field (border, focus and disabled look) on the root around the input', () => {
+      render(<SearchBox data-testid="root" aria-label="Search" disabled defaultValue="a" />);
+      const root = screen.getByTestId('root');
+      const input = screen.getByRole('searchbox', { name: 'Search' });
+      expect(root).toHaveClass(
+        'border',
+        'border-input',
+        'border-b-stroke-accessible',
+        'bg-background',
+        'focus-within:border-b-2',
+        'focus-within:border-b-primary',
+        'opacity-50',
+      );
+      expect(input).toHaveClass('border-none', 'bg-transparent', 'focus:outline-hidden');
+      expect(input).not.toHaveClass('outline-none', 'outline-hidden', 'border-input');
+    });
+
+    it('pressing the icon, a slot or the padding focuses the input', () => {
+      const { container } = render(
+        <SearchBox
+          data-testid="root"
+          aria-label="Search"
+          contentAfter={<span data-testid="after">⌘K</span>}
+        />,
+      );
+      const input = screen.getByRole('searchbox', { name: 'Search' });
+      const icon = container.querySelector('[data-wave-icon="search"]')!;
+      for (const target of [icon, screen.getByTestId('after'), screen.getByTestId('root')]) {
+        act(() => input.blur());
+        // fireEvent returns false when the default (focus moving to the pressed element) is prevented.
+        expect(fireEvent.mouseDown(target)).toBe(false);
+        expect(input).toHaveFocus();
+      }
+    });
+
+    it('leaves a press on a control inside a slot, a secondary-button press and a disabled box alone', () => {
+      const { container, rerender } = render(
+        <SearchBox aria-label="Search" contentAfter={<button type="button">Filters</button>} />,
+      );
+      const input = screen.getByRole('searchbox', { name: 'Search' });
+      expect(fireEvent.mouseDown(screen.getByRole('button', { name: 'Filters' }))).toBe(true);
+      expect(input).not.toHaveFocus();
+      const icon = () => container.querySelector('[data-wave-icon="search"]')!;
+      expect(fireEvent.mouseDown(icon(), { button: 2 })).toBe(true);
+      expect(input).not.toHaveFocus();
+      rerender(<SearchBox aria-label="Search" disabled />);
+      expect(fireEvent.mouseDown(icon())).toBe(true);
+      expect(input).not.toHaveFocus();
+    });
+
+    it('runs a consumer onMouseDown first; its preventDefault keeps focus where it is', () => {
+      const onMouseDown = vi.fn((event: React.MouseEvent) => event.preventDefault());
+      const { container } = render(<SearchBox aria-label="Search" onMouseDown={onMouseDown} />);
+      fireEvent.mouseDown(container.querySelector('[data-wave-icon="search"]')!);
+      expect(onMouseDown).toHaveBeenCalledOnce();
+      expect(screen.getByRole('searchbox', { name: 'Search' })).not.toHaveFocus();
     });
   });
 
@@ -192,10 +298,12 @@ describe('SearchBox', () => {
       expect(controlRef.current).toHaveFocus();
     });
 
-    it('has a 24px target with room reserved in the input (input-basic#20)', () => {
+    it('has a 24px target beside the text, never over it (input-basic#20)', () => {
       render(<SearchBox aria-label="Search" defaultValue="abc" />);
-      expect(screen.getByRole('button', { name: 'Clear search' })).toHaveClass('h-6', 'w-6');
-      expect(screen.getByRole('searchbox', { name: 'Search' })).toHaveClass('pe-9');
+      const clear = screen.getByRole('button', { name: 'Clear search' });
+      expect(clear).toHaveClass('h-6', 'w-6', 'shrink-0');
+      expect(clear).not.toHaveClass('absolute');
+      expect(clear.previousElementSibling).toBe(screen.getByRole('searchbox', { name: 'Search' }));
     });
 
     it('is disabled with the SearchBox', () => {
@@ -284,7 +392,7 @@ describe('SearchBox', () => {
       expect(onClick).toHaveBeenCalledOnce();
       expect(onClear).toHaveBeenCalledOnce();
       expect(screen.getByRole('searchbox', { name: 'Search' })).toHaveValue('');
-      expect(warn).toHaveBeenCalledWith(expect.stringMatching(/^\[WaveUI\] SearchBox: `dismiss`/));
+      expectWarnings(warn, [ELEMENT_WARNING]);
       warn.mockRestore();
     });
 
@@ -309,6 +417,7 @@ describe('SearchBox', () => {
       await user.click(clear);
       expect(onClick).toHaveBeenCalledOnce();
       expect(screen.getByRole('searchbox', { name: 'Search' })).toHaveValue('');
+      expectWarnings(warn, [ELEMENT_WARNING]);
       warn.mockRestore();
     });
 
@@ -324,6 +433,7 @@ describe('SearchBox', () => {
       expect(clear).toHaveAttribute('type', 'button');
       fireEvent.click(clear);
       expect(onSubmit).not.toHaveBeenCalled();
+      expectWarnings(warn, [ELEMENT_WARNING]);
       warn.mockRestore();
     });
 
@@ -348,6 +458,7 @@ describe('SearchBox', () => {
         await user.click(clear);
       }
       expect(onSubmit).not.toHaveBeenCalled();
+      expectWarnings(warn, [OBJECT_WARNING, ELEMENT_WARNING]);
       warn.mockRestore();
     });
 
@@ -363,6 +474,7 @@ describe('SearchBox', () => {
       );
       await user.click(screen.getByRole('button', { name: 'Clear search' }));
       expect(screen.getByRole('searchbox', { name: 'Search' })).toHaveValue('keep');
+      expectWarnings(warn, [ELEMENT_WARNING]);
       warn.mockRestore();
     });
 
@@ -385,7 +497,7 @@ describe('SearchBox', () => {
       await user.click(clear);
       expect(onClick).toHaveBeenCalledOnce();
       expect(onClear).toHaveBeenCalledOnce();
-      expect(warn).toHaveBeenCalledWith(expect.stringMatching(/SearchBox: `dismiss`.*deprecated/));
+      expectWarnings(warn, [OBJECT_WARNING]);
       warn.mockRestore();
     });
 
@@ -418,6 +530,7 @@ describe('SearchBox', () => {
       await user.click(clears[0]);
       expect(onClick).toHaveBeenCalledOnce();
       expect(screen.getByRole('searchbox', { name: 'First' })).toHaveValue('');
+      expectWarnings(warn, [OBJECT_WARNING]);
       warn.mockRestore();
     });
 
@@ -537,6 +650,42 @@ describe('SearchBox', () => {
       expect(second.querySelector('[data-wave-icon="dismiss"]')).toBeNull();
     });
 
+    it('merges a Wave Button written in a Server Component (a lazy client reference) like a plain one (R1)', async () => {
+      const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+      try {
+        const user = userEvent.setup();
+        const ClientButton = asClientReference(Button);
+        const onClick = vi.fn();
+        const plain = renderToString(
+          <SearchBox aria-label="Search" defaultValue="a" dismiss={<Button>Reset</Button>} />,
+        );
+        const fromServer = renderToString(
+          <SearchBox
+            aria-label="Search"
+            defaultValue="a"
+            dismiss={<ClientButton>Reset</ClientButton>}
+          />,
+        );
+        expect(fromServer).toBe(plain);
+
+        render(
+          <SearchBox
+            aria-label="Search"
+            defaultValue="a"
+            dismiss={<ClientButton onClick={onClick}>Reset</ClientButton>}
+          />,
+        );
+        // Merged into the built-in clear button, not nested inside it.
+        expect(screen.getAllByRole('button')).toHaveLength(1);
+        await user.click(screen.getByRole('button', { name: 'Reset' }));
+        expect(onClick).toHaveBeenCalledOnce();
+        expect(screen.getByRole('searchbox', { name: 'Search' })).toHaveValue('');
+        expectWarnings(warn, [ELEMENT_WARNING]);
+      } finally {
+        warn.mockRestore();
+      }
+    });
+
     it("renders { as: 'button' } without nesting buttons", () => {
       const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
       render(
@@ -548,6 +697,7 @@ describe('SearchBox', () => {
       );
       expect(screen.getAllByRole('button')).toHaveLength(1);
       expect(screen.getByRole('button', { name: 'Clear search' })).toHaveClass('obj-button');
+      expectWarnings(warn, [OBJECT_WARNING]);
       warn.mockRestore();
     });
   });
@@ -576,6 +726,7 @@ describe('SearchBox', () => {
       await user.click(clear);
       expect(onClear).toHaveBeenCalledOnce();
       expect(screen.getByRole('searchbox', { name: 'Search' })).toHaveValue('');
+      expectWarnings(warn, [ELEMENT_WARNING]);
       warn.mockRestore();
     });
 
@@ -593,6 +744,7 @@ describe('SearchBox', () => {
       render(<SearchBox aria-label="Search" defaultValue="a" dismiss={dismiss} />);
       expect(screen.getAllByRole('button')).toHaveLength(1);
       expect(screen.getByRole('button')).toHaveAccessibleName('Reset');
+      expectWarnings(warn, [React.isValidElement(dismiss) ? ELEMENT_WARNING : OBJECT_WARNING]);
       warn.mockRestore();
     });
 
@@ -622,6 +774,7 @@ describe('SearchBox', () => {
         />,
       );
       expect(screen.getByRole('button')).toHaveAccessibleName('Clear search');
+      expectWarnings(warn, [ELEMENT_WARNING]);
       warn.mockRestore();
     });
 
@@ -659,6 +812,7 @@ describe('SearchBox', () => {
 
       act(() => setTextRef.current?.(''));
       await waitFor(() => expect(clear).toHaveAccessibleName('Clear search'));
+      expectWarnings(warn, [ELEMENT_WARNING]);
       warn.mockRestore();
     });
 
@@ -693,6 +847,7 @@ describe('SearchBox', () => {
       const clear = screen.getByRole('button');
       expect(clear).toHaveAccessibleName(name);
       expect(clear).not.toHaveAttribute('aria-label', 'Clear search');
+      expectWarnings(warn, React.isValidElement(dismiss) ? [ELEMENT_WARNING] : []);
       warn.mockRestore();
     });
 
@@ -733,7 +888,101 @@ describe('SearchBox', () => {
         />,
       );
       expect(glyph).toContain('aria-label="Clear search"');
+      expect(warn).not.toHaveBeenCalled();
       warn.mockRestore();
+    });
+  });
+
+  describe('Escape (x-keyboard-5)', () => {
+    /**
+     * Records whether each Escape keydown reached the document already prevented. Wave's layer
+     * stack (Dialog, Drawer, Popover) listens there and ignores prevented events.
+     */
+    function recordEscapes() {
+      const prevented: boolean[] = [];
+      const listener = (event: KeyboardEvent) => {
+        if (event.key === 'Escape') prevented.push(event.defaultPrevented);
+      };
+      document.addEventListener('keydown', listener);
+      return { prevented, stop: () => document.removeEventListener('keydown', listener) };
+    }
+
+    it('clears the text and consumes the key; with an empty field it reaches enclosing layers', async () => {
+      const user = userEvent.setup();
+      const onValueChange = vi.fn();
+      const onClear = vi.fn();
+      render(
+        <SearchBox
+          aria-label="Search"
+          defaultValue="abc"
+          onValueChange={onValueChange}
+          onClear={onClear}
+        />,
+      );
+      const input = screen.getByRole('searchbox', { name: 'Search' });
+      const escapes = recordEscapes();
+      try {
+        await user.click(input);
+        await user.keyboard('{Escape}');
+        expect(input).toHaveValue('');
+        expect(input).toHaveFocus();
+        expect(onValueChange.mock.calls).toEqual([['']]);
+        expect(onClear).toHaveBeenCalledOnce();
+        expect(screen.queryByRole('button', { name: 'Clear search' })).not.toBeInTheDocument();
+
+        await user.keyboard('{Escape}');
+        expect(escapes.prevented).toEqual([true, false]);
+        expect(onValueChange).toHaveBeenCalledOnce();
+        expect(onClear).toHaveBeenCalledOnce();
+      } finally {
+        escapes.stop();
+      }
+    });
+
+    it('leaves Escape alone while read-only, and after a consumer onKeyDown prevented it', async () => {
+      const user = userEvent.setup();
+      const onValueChange = vi.fn();
+      render(
+        <>
+          <SearchBox
+            aria-label="Read-only"
+            defaultValue="abc"
+            readOnly
+            onValueChange={onValueChange}
+          />
+          <SearchBox
+            aria-label="Handled"
+            defaultValue="abc"
+            onValueChange={onValueChange}
+            onKeyDown={(event) => {
+              if (event.key === 'Escape') event.preventDefault();
+            }}
+          />
+        </>,
+      );
+      const escapes = recordEscapes();
+      try {
+        await user.click(screen.getByRole('searchbox', { name: 'Read-only' }));
+        await user.keyboard('{Escape}');
+        expect(screen.getByRole('searchbox', { name: 'Read-only' })).toHaveValue('abc');
+        expect(escapes.prevented).toEqual([false]);
+
+        await user.click(screen.getByRole('searchbox', { name: 'Handled' }));
+        await user.keyboard('{Escape}');
+        expect(screen.getByRole('searchbox', { name: 'Handled' })).toHaveValue('abc');
+        expect(onValueChange).not.toHaveBeenCalled();
+      } finally {
+        escapes.stop();
+      }
+    });
+
+    it('controlled: Escape reports the empty text to the parent', async () => {
+      const user = userEvent.setup();
+      const onValueChange = vi.fn();
+      render(<SearchBox aria-label="Search" value="fixed" onValueChange={onValueChange} />);
+      await user.click(screen.getByRole('searchbox', { name: 'Search' }));
+      await user.keyboard('{Escape}');
+      expect(onValueChange.mock.calls).toEqual([['']]);
     });
   });
 
@@ -777,6 +1026,7 @@ describe('SearchBox', () => {
         String(message).includes('SearchBox: `onChange` is deprecated'),
       );
       expect(deprecations).toHaveLength(1);
+      expect(warn).toHaveBeenCalledOnce();
       warn.mockRestore();
     });
 
@@ -791,6 +1041,93 @@ describe('SearchBox', () => {
       await user.type(screen.getByRole('searchbox', { name: 'Search' }), 'a');
       expect(onValueChange).toHaveBeenCalledTimes(1);
       expect(onValueChange).toHaveBeenCalledWith('a');
+    });
+  });
+
+  describe('native forms (C-FORMS)', () => {
+    const getForm = () => screen.getByRole('form', { name: 'Form' }) as HTMLFormElement;
+
+    it('form reset restores defaultValue (with and without a name) and removes the clear button', async () => {
+      const user = userEvent.setup();
+      render(
+        <form aria-label="Form">
+          <SearchBox aria-label="Named" name="q" />
+          <SearchBox aria-label="Unnamed" defaultValue="init" />
+        </form>,
+      );
+      const named = screen.getByRole('searchbox', { name: 'Named' });
+      const unnamed = screen.getByRole('searchbox', { name: 'Unnamed' });
+      await user.type(named, 'typed');
+      await user.clear(unnamed);
+      await user.type(unnamed, 'other');
+      expect(new FormData(getForm()).getAll('q')).toEqual(['typed']);
+
+      act(() => getForm().reset());
+      expect(named).toHaveValue('');
+      expect(unnamed).toHaveValue('init');
+      expect(new FormData(getForm()).getAll('q')).toEqual(['']);
+      // Only the unnamed box (default "init") still has text to clear.
+      expect(screen.getAllByRole('button', { name: 'Clear search' })).toHaveLength(1);
+    });
+
+    it('form reset reports defaultValue once, and nothing for an untouched box', async () => {
+      const user = userEvent.setup();
+      const onValueChange = vi.fn();
+      const untouched = vi.fn();
+      render(
+        <form aria-label="Form">
+          <SearchBox aria-label="Changed" defaultValue="init" onValueChange={onValueChange} />
+          <SearchBox aria-label="Untouched" defaultValue="same" onValueChange={untouched} />
+        </form>,
+      );
+      await user.type(screen.getByRole('searchbox', { name: 'Changed' }), 'x');
+      expect(onValueChange.mock.calls).toEqual([['initx']]);
+      act(() => getForm().reset());
+      expect(onValueChange.mock.calls).toEqual([['initx'], ['init']]);
+      expect(untouched).not.toHaveBeenCalled();
+    });
+
+    it('controlled: form reset reports defaultValue to the parent', async () => {
+      const user = userEvent.setup();
+      const onValueChange = vi.fn();
+      function Controlled() {
+        const [value, setValue] = React.useState('');
+        return (
+          <SearchBox
+            aria-label="Search"
+            name="q"
+            value={value}
+            onValueChange={(next) => {
+              onValueChange(next);
+              setValue(next);
+            }}
+          />
+        );
+      }
+      render(
+        <form aria-label="Form">
+          <Controlled />
+        </form>,
+      );
+      await user.type(screen.getByRole('searchbox', { name: 'Search' }), 'ab');
+      act(() => getForm().reset());
+      expect(onValueChange).toHaveBeenLastCalledWith('');
+      expect(onValueChange).toHaveBeenCalledTimes(3);
+      expect(screen.getByRole('searchbox', { name: 'Search' })).toHaveValue('');
+    });
+
+    it('resets with the form named by `form` when it is rendered outside it', async () => {
+      const user = userEvent.setup();
+      render(
+        <>
+          <form id="search-form" aria-label="Form" />
+          <SearchBox aria-label="Search" name="q" form="search-form" defaultValue="a" />
+        </>,
+      );
+      const input = screen.getByRole('searchbox', { name: 'Search' });
+      await user.type(input, 'bc');
+      act(() => getForm().reset());
+      expect(input).toHaveValue('a');
     });
   });
 
@@ -872,14 +1209,12 @@ describe('SearchBox', () => {
 
   describe('styles', () => {
     it('uses token classes only (button-provider#3, input-basic#7)', () => {
-      const { container } = render(<SearchBox aria-label="Search" defaultValue="abc" />);
-      const input = screen.getByRole('searchbox', { name: 'Search' });
-      expect(input).toHaveClass(
-        'border-input',
-        'border-b-stroke-accessible',
-        'placeholder:text-muted-foreground',
-        'focus:outline-hidden',
+      const { container } = render(
+        <SearchBox data-testid="root" aria-label="Search" defaultValue="abc" />,
       );
+      expect(screen.getByTestId('root')).toHaveClass('border-input', 'border-b-stroke-accessible');
+      const input = screen.getByRole('searchbox', { name: 'Search' });
+      expect(input).toHaveClass('placeholder:text-muted-foreground', 'focus:outline-hidden');
       const clear = screen.getByRole('button', { name: 'Clear search' });
       expect(clear).toHaveClass(
         'text-muted-foreground',
@@ -888,20 +1223,32 @@ describe('SearchBox', () => {
       expect(container.innerHTML).not.toMatch(/#[0-9a-f]{3,8}|outline-none|enabled:/i);
     });
 
-    it('shows the error border when the input is invalid (input-basic#1)', () => {
+    it('shows the shared error border when the input is invalid (input-basic#1, R8)', () => {
       render(
         <>
-          <SearchBox aria-label="Invalid" aria-invalid />
-          <SearchBox aria-label="Valid" />
+          <SearchBox data-testid="invalid" aria-label="Invalid" aria-invalid />
+          <SearchBox data-testid="valid" aria-label="Valid" />
         </>,
       );
-      expect(screen.getByRole('searchbox', { name: 'Invalid' })).toHaveClass(
-        'border-destructive',
-        'focus:border-b-destructive',
+      expect(screen.getByRole('searchbox', { name: 'Invalid' })).toHaveAttribute(
+        'aria-invalid',
+        'true',
       );
-      expect(screen.getByRole('searchbox', { name: 'Valid' })).not.toHaveClass(
-        'border-destructive',
+      // The wrapper form of the shared recipe: the root draws the field around the input.
+      const invalid = screen.getByTestId('invalid');
+      expect(invalid).toHaveClass(...inputInvalidWithin.split(' '));
+      expect(invalid).toHaveClass('border-destructive', 'focus-within:border-b-destructive');
+      expect(invalid).not.toHaveClass('border-input', 'focus-within:border-b-primary');
+      expect(screen.getByTestId('valid')).not.toHaveClass('border-destructive');
+    });
+
+    it('shows the error border for the invalid state of a surrounding Field', () => {
+      renderWithFieldContext(<SearchBox data-testid="root" />, { errorId: FIELD_TEST_IDS.errorId });
+      expect(screen.getByRole('searchbox', { name: FIELD_TEST_TEXT.label })).toHaveAttribute(
+        'aria-invalid',
+        'true',
       );
+      expect(screen.getByTestId('root')).toHaveClass('border-destructive');
     });
 
     it('positions the icon and clear button with logical utilities in RTL (C-LOGICAL)', () => {
@@ -910,10 +1257,10 @@ describe('SearchBox', () => {
         { dir: 'rtl' },
       );
       const input = screen.getByRole('searchbox', { name: 'Search' });
-      expect(input).toHaveClass('ps-8', 'pe-9');
-      expect(screen.getByRole('button', { name: 'Clear search' })).toHaveClass('end-1');
+      expect(input).toHaveClass('px-2');
+      expect(screen.getByRole('button', { name: 'Clear search' })).toHaveClass('me-1');
       const icon = container.querySelector('[data-wave-icon="search"]');
-      expect(icon?.parentElement).toHaveClass('start-2');
+      expect(icon?.parentElement).toHaveClass('ps-2');
       expect(container.innerHTML).not.toMatch(/\b(left|right|pl|pr|ml|mr)-\d/);
     });
   });

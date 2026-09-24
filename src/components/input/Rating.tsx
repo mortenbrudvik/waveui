@@ -59,7 +59,10 @@ export interface RatingProps extends Omit<
 
 /** Properties for the RatingDisplay (read-only) component. */
 export interface RatingDisplayProps extends React.HTMLAttributes<HTMLDivElement> {
-  /** Rating value to display. */
+  /**
+   * Rating value to display. A fraction is drawn as a partly filled star (`4.6` fills 60% of the
+   * fifth star), so the stars show the value the accessible name reports.
+   */
   value: number;
   /** Maximum number of stars.
    * @default 5
@@ -285,7 +288,10 @@ export const Rating = ({
 };
 Rating.displayName = 'Rating';
 
-/** A read-only star rating (`role="img"` named "Rating: <value> out of <max>"). */
+/**
+ * A read-only star rating (`role="img"` named "Rating: <value> out of <max>"). A fractional value
+ * is drawn with a partly filled star, so the stars and the name show the same value.
+ */
 export const RatingDisplay = ({
   value,
   max = 5,
@@ -305,7 +311,24 @@ export const RatingDisplay = ({
       {...rest}
     >
       {Array.from({ length: max }, (_, i) => {
-        const filled = value >= i + 1;
+        // The share of this star that the value covers, in whole percent.
+        const percent = Math.round(Math.min(1, Math.max(0, value - i)) * 100);
+        if (percent > 0 && percent < 100) {
+          // The outline of an empty star, with the filled star clipped to the fraction over it
+          // from the inline start (the reading direction of the stars, also under RTL).
+          return (
+            <span key={i} className="relative inline-flex text-stroke-accessible">
+              <Star filled={false} className={starSize} />
+              <span
+                className="absolute inset-y-0 start-0 flex overflow-hidden text-rating"
+                style={{ width: `${percent}%` }}
+              >
+                <Star filled className={cn(starSize, 'shrink-0')} />
+              </span>
+            </span>
+          );
+        }
+        const filled = percent === 100;
         return (
           <span
             key={i}

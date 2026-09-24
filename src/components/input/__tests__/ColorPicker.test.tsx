@@ -3,6 +3,7 @@ import { describe, it, expect, vi } from 'vitest';
 import { act, fireEvent, render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { ColorPicker } from '../ColorPicker';
+import { focusRing, inputInvalid } from '../../../lib/styles';
 import { expectNoA11yViolations, testSystemProps } from '../../../test-utils';
 import { renderWithFieldContext, FIELD_TEST_IDS, FIELD_TEST_TEXT } from '../../../test-utils-field';
 
@@ -360,6 +361,37 @@ describe('ColorPicker — hex input (input-basic#41, input-pickers#24, #25)', ()
     expect(preset('Green')).toHaveAttribute('aria-checked', 'true');
   });
 
+  it('draws the hex field boundary like Input: border-input plus the accessible bottom stroke (R9)', () => {
+    render(<ColorPicker />);
+    expect(hexInput()).toHaveClass('border', 'border-input', 'border-b-stroke-accessible');
+    expect(hexInput()).not.toHaveClass('border-border', 'border-destructive');
+  });
+
+  it('shows the shared invalid look while the hex text is flagged or the picker is invalid (R8)', async () => {
+    const user = userEvent.setup();
+    render(
+      <>
+        <ColorPicker aria-label="Typed" />
+        <ColorPicker aria-label="Consumer" aria-invalid />
+      </>,
+    );
+    const [typed, consumer] = screen.getAllByRole('textbox', { name: 'Hex color value' });
+    expect(typed).not.toHaveClass('border-destructive');
+    expect(consumer).toHaveClass(...inputInvalid.split(' '));
+    await user.tripleClick(typed);
+    await user.keyboard('#zzz');
+    expect(typed).toHaveClass(...inputInvalid.split(' '));
+    expect(typed).not.toHaveClass('border-input', 'focus:border-b-primary');
+    for (const input of [typed, consumer]) {
+      expect(input.className).not.toMatch(/aria-invalid:|border-error/);
+    }
+  });
+
+  it('shows the invalid look for the invalid state of a surrounding Field (R8)', () => {
+    renderWithFieldContext(<ColorPicker />, { errorId: FIELD_TEST_IDS.errorId });
+    expect(hexInput()).toHaveClass(...inputInvalid.split(' '));
+  });
+
   it('uses the shared input focus indicator (focus:outline-hidden, never outline-none)', () => {
     render(<ColorPicker />);
     expect(hexInput()).toHaveClass('focus:outline-hidden', 'focus:border-b-primary');
@@ -368,6 +400,12 @@ describe('ColorPicker — hex input (input-basic#41, input-pickers#24, #25)', ()
 });
 
 describe('ColorPicker — opacity (input-pickers#15, input-basic#30)', () => {
+  it('shows the shared focus ring on the opacity slider (C-FOCUS)', () => {
+    render(<ColorPicker showOpacity />);
+    expect(opacitySlider()).toHaveClass(...focusRing.split(' '));
+    expect(opacitySlider()).not.toHaveClass('outline-none', 'focus:outline-none');
+  });
+
   it('renders the opacity slider only with showOpacity', () => {
     const { rerender } = render(<ColorPicker />);
     expect(screen.queryByRole('slider', { name: 'Opacity' })).not.toBeInTheDocument();
@@ -501,6 +539,37 @@ describe('ColorPicker — presets (input-pickers#16, #17, #23)', () => {
     expect(preset('#0000ff')).toHaveFocus();
     expect(onValueChange).toHaveBeenLastCalledWith('#0000ff');
     expect(hexInput()).toHaveValue('#0000ff');
+  });
+
+  it('applies an alpha preset at the current opacity, names a string one by that color and warns (input-other-docs-4)', async () => {
+    const warn = spyWarn();
+    try {
+      const user = userEvent.setup();
+      const onValueChange = vi.fn();
+      render(
+        <ColorPicker
+          showOpacity
+          defaultValue="#ff0000"
+          presets={['#0f6cbd80', { color: '#abc8', label: 'Slate' }, '#107c10ff']}
+          onValueChange={onValueChange}
+        />,
+      );
+      // The string preset is announced by the color it applies, not by the alpha it ignores.
+      expect(screen.queryByRole('radio', { name: '#0f6cbd80' })).not.toBeInTheDocument();
+      await user.click(preset('#0f6cbd'));
+      expect(onValueChange).toHaveBeenLastCalledWith('#0f6cbd');
+      expect(opacitySlider()).toHaveValue('100');
+      await user.click(preset('Slate'));
+      expect(onValueChange).toHaveBeenLastCalledWith('#aabbcc');
+      // An opaque alpha byte changes nothing: no warning, and the name stays as written.
+      expect(preset('#107c10ff')).toBeInTheDocument();
+      expect(warn.mock.calls).toEqual([
+        [expect.stringContaining('ColorPicker: preset "#0f6cbd80" has an alpha byte')],
+        [expect.stringContaining('ColorPicker: preset "#abc8" has an alpha byte')],
+      ]);
+    } finally {
+      warn.mockRestore();
+    }
   });
 
   it('drops non-hex presets with a development warning', () => {
@@ -856,5 +925,88 @@ describe('ColorPicker — native forms (C-FORMS)', () => {
       'aria-checked',
       'true',
     );
+  });
+
+  it('form reset reports defaultValue as a lowercase #rrggbb, like every edit (R10, x-api-5)', async () => {
+    const user = userEvent.setup();
+    const onValueChange = vi.fn();
+    render(
+      <form aria-label="Form">
+        <ColorPicker
+          aria-label="Accent"
+          name="color"
+          defaultValue="#0F6CBD"
+          onValueChange={onValueChange}
+        />
+      </form>,
+    );
+    await user.click(preset('Red'));
+    act(() => getForm().reset());
+    expect(onValueChange.mock.calls).toEqual([['#d13438'], ['#0f6cbd']]);
+    expect(hexInput()).toHaveValue('#0f6cbd');
+    expect(new FormData(getForm()).getAll('color')).toEqual(['#0f6cbd']);
+  });
+
+  it.each([
+    ['a short #rgb', '#ABC', '#aabbcc'],
+    ['an opaque #rrggbbff', '#0F6CBDFF', '#0f6cbd'],
+    ['a #rgba', '#abc8', '#aabbcc88'],
+  ])(
+    'shows and submits %s defaultValue in the emitted form, so a reset of an untouched picker emits nothing (R10)',
+    (_, defaultValue, normalised) => {
+      const onValueChange = vi.fn();
+      render(
+        <form aria-label="Form">
+          <ColorPicker
+            aria-label="Accent"
+            name="color"
+            defaultValue={defaultValue}
+            onValueChange={onValueChange}
+          />
+        </form>,
+      );
+      expect(hexInput()).toHaveValue(normalised);
+      expect(new FormData(getForm()).getAll('color')).toEqual([normalised]);
+      act(() => getForm().reset());
+      expect(onValueChange).not.toHaveBeenCalled();
+      expect(hexInput()).toHaveValue(normalised);
+    },
+  );
+
+  it('controlled: a form reset to the color already shown, spelled differently, emits nothing (R10)', () => {
+    const onValueChange = vi.fn();
+    render(
+      <form aria-label="Form">
+        <ColorPicker
+          aria-label="Accent"
+          value="#AABBCC"
+          defaultValue="#abc"
+          onValueChange={onValueChange}
+        />
+      </form>,
+    );
+    act(() => getForm().reset());
+    expect(onValueChange).not.toHaveBeenCalled();
+  });
+
+  it('form reset clears a flagged hex text although the color already equals defaultValue', async () => {
+    const user = userEvent.setup();
+    const onValueChange = vi.fn();
+    render(
+      <form aria-label="Form">
+        <ColorPicker aria-label="Accent" defaultValue="#0f6cbd" onValueChange={onValueChange} />
+      </form>,
+    );
+    await user.tripleClick(hexInput());
+    await user.keyboard('#zzz');
+    await user.tab();
+    expect(hexInput()).toHaveValue('#zzz');
+    expect(hexInput()).toHaveAttribute('aria-invalid', 'true');
+
+    act(() => getForm().reset());
+    expect(hexInput()).toHaveValue('#0f6cbd');
+    expect(hexInput()).not.toHaveAttribute('aria-invalid');
+    expect(hexInput()).not.toHaveAccessibleDescription();
+    expect(onValueChange).not.toHaveBeenCalled();
   });
 });

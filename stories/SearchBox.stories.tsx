@@ -19,11 +19,12 @@ type Story = StoryObj<typeof meta>;
 
 export const Default: Story = {};
 
+/** The slots sit beside the text, so a long query never runs under the shortcut hint. */
 export const WithSlots: Story = {
   args: {
     'aria-label': 'Search files',
     placeholder: 'Search files...',
-    defaultValue: 'report',
+    defaultValue: 'quarterly financial report draft v2',
     contentAfter: { children: '⌘K', 'aria-hidden': true },
   },
 };

@@ -61,11 +61,13 @@ export const Labelled: Story = {
   },
 };
 
+/** A fractional value (an average) is drawn with a partly filled star. */
 export const ReadOnly: StoryObj<typeof RatingDisplay> = {
   render: () => (
     <div className="flex flex-col gap-4">
       <RatingDisplay value={5} size="small" />
       <RatingDisplay value={3} size="medium" />
+      <RatingDisplay value={4.6} size="medium" />
       <RatingDisplay value={1} size="large" />
     </div>
   ),

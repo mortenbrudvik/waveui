@@ -3,7 +3,7 @@ import { describe, it, expect, vi, expectTypeOf } from 'vitest';
 import { act, render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { SwatchPicker } from '../SwatchPicker';
-import type { SwatchPickerProps } from '../SwatchPicker';
+import type { SwatchItem, SwatchPickerProps } from '../SwatchPicker';
 import type { Shape } from '../../../lib/types';
 import { renderWithProviders, testSystemProps } from '../../../test-utils';
 import { renderWithFieldContext, FIELD_TEST_IDS, FIELD_TEST_TEXT } from '../../../test-utils-field';
@@ -188,6 +188,16 @@ describe('SwatchPicker — shape and size', () => {
 
   it('types shape with the shared Shape type', () => {
     expectTypeOf<NonNullable<SwatchPickerProps['shape']>>().toEqualTypeOf<Shape>();
+  });
+
+  it('accepts a readonly item list, such as a module-level `as const` palette (R6)', () => {
+    expectTypeOf<SwatchPickerProps['items']>().toEqualTypeOf<readonly SwatchItem[]>();
+    const palette = [
+      { value: 'red', color: '#d13438', label: 'Red' },
+      { value: 'blue', color: '#0f6cbd', label: 'Blue' },
+    ] as const;
+    render(<SwatchPicker items={palette} aria-label="Brand colors" defaultValue="blue" />);
+    expect(swatch('Blue')).toHaveAttribute('aria-checked', 'true');
   });
 });
 

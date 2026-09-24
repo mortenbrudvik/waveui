@@ -1,4 +1,5 @@
 import * as React from 'react';
+import { getElementType, isElementOfType } from '../../lib/children';
 import { cn } from '../../lib/cn';
 import { composeEventHandlers } from '../../lib/composeEventHandlers';
 import { warnDeprecated, warnOnce } from '../../lib/dev';
@@ -6,10 +7,11 @@ import { DismissIcon, SearchIcon } from '../../lib/icons';
 import { hasRenderedTextLabel, hasTextLabel, observeTextLabel } from '../../lib/labelInName';
 import { mergeProps } from '../../lib/mergeProps';
 import { renderSlot, resolveSlot, VOID_ELEMENTS } from '../../lib/slot';
-import { focusRing, inputFocus } from '../../lib/styles';
+import { focusRing, inputFocusWithin, inputInvalidWithin } from '../../lib/styles';
 import type { Slot, SlotObject } from '../../lib/types';
 import { useControllable } from '../../hooks/useControllable';
 import { useFieldControl } from '../../hooks/useFieldControl';
+import { useFormReset } from '../../hooks/useFormReset';
 import { useMergedRefs } from '../../hooks/useMergedRefs';
 import { Button } from '../button/Button';
 import { isInvalidLook } from './Input';
@@ -59,7 +61,7 @@ export interface SearchBoxProps
     SearchBoxInputProps {
   /** Controlled search text value. */
   value?: string;
-  /** Initial search text for uncontrolled usage.
+  /** Initial search text for uncontrolled usage (also what a form reset restores).
    * @default ''
    */
   defaultValue?: string;
@@ -70,7 +72,10 @@ export interface SearchBoxProps
    * @deprecated Use `onValueChange`. (`onChange` is reserved for native change events.)
    */
   onChange?: (value: string) => void;
-  /** Callback fired when the search is cleared with the clear button. */
+  /**
+   * Called when the user clears the search: with the clear button, or with Escape while there is
+   * text (after `onValueChange('')`).
+   */
   onClear?: () => void;
   /** Placeholder text shown when the input is empty.
    * @default 'Search'
@@ -78,9 +83,15 @@ export interface SearchBoxProps
   placeholder?: string;
   /** Whether the search box is disabled and non-interactive. */
   disabled?: boolean;
-  /** Slot rendered before the input (replaces the default search icon). */
+  /**
+   * Slot rendered before the text (replaces the default search icon). It takes the room it needs;
+   * the text starts after it.
+   */
   contentBefore?: Slot<'span'>;
-  /** Slot rendered after the input text. */
+  /**
+   * Slot rendered after the text, before the clear button. It takes the room it needs; the text
+   * ends before it.
+   */
   contentAfter?: Slot<'span'>;
   /**
    * Content of the clear button (replaces the default dismiss icon). It always renders **inside**
@@ -166,6 +177,13 @@ interface DismissParts {
 
 const noop = () => {};
 
+/**
+ * Elements inside the field that keep a press to themselves: a control in a slot, the clear
+ * button.
+ */
+const INTERACTIVE_CONTENT =
+  'a[href], button, input, select, textarea, [tabindex], [contenteditable]:not([contenteditable="false"])';
+
 /** Whether React renders nothing for `node` (`null`, `undefined`, booleans, `''`). */
 function rendersNothing(node: React.ReactNode): boolean {
   return node === undefined || node === null || typeof node === 'boolean' || node === '';
@@ -181,8 +199,11 @@ function rendersNothing(node: React.ReactNode): boolean {
 function isEmptyContent(content: unknown, visiting: Set<object> = new Set()): boolean {
   if (rendersNothing(content as React.ReactNode)) return true;
   if (typeof content !== 'object' || content === null) return false;
-  if (React.isValidElement<{ children?: React.ReactNode }>(content)) {
-    return content.type === React.Fragment && isEmptyContent(content.props.children, visiting);
+  if (React.isValidElement(content)) {
+    return (
+      isElementOfType<{ children?: React.ReactNode }>(content, React.Fragment) &&
+      isEmptyContent(content.props.children, visiting)
+    );
   }
   if (!(Symbol.iterator in content)) return false;
   const iterable = content as Iterable<unknown>;
@@ -257,9 +278,16 @@ function splitButtonLike(type: unknown, props: UnknownProps, children: React.Rea
  * wraps the default icon in its element.
  */
 function resolveDismiss(dismiss: SearchBoxProps['dismiss']): DismissParts {
-  if (React.isValidElement<UnknownProps>(dismiss) && isButtonType(dismiss.type)) {
-    const children = dismiss.props.children as React.ReactNode;
-    return { kind: 'element', ...splitButtonLike(dismiss.type, dismiss.props, children) };
+  // The type is unwrapped (R1): a Button written in a Server Component arrives as a lazy client
+  // reference, and must be merged like a plain one rather than nested inside the clear button.
+  // A slot object is never an element, so the check can take any slot value as a node.
+  const node = dismiss as React.ReactNode;
+  if (isElementOfType<UnknownProps>(node, 'button', Button)) {
+    const children = node.props.children as React.ReactNode;
+    return {
+      kind: 'element',
+      ...splitButtonLike(getElementType(node), node.props, children),
+    };
   }
   // Resolved once: a generator is materialised (and cached) by resolveSlot, so it can be checked
   // for emptiness and rendered without being consumed twice.
@@ -310,10 +338,20 @@ function resolveDismiss(dismiss: SearchBoxProps['dismiss']): DismissParts {
 
 /**
  * A search input with a leading search icon and a clear button that appears while there is text
- * (not while `readOnly`). Clearing moves focus back to the input. `id`, ARIA and native input attributes and the
- * focus/keyboard handlers go to the `<input type="search">` (role `searchbox`); `className`,
- * `style`, `data-*`, other handlers and `ref` stay on the root `<div>` (`controlRef` reaches the
- * input). Inside a `Field` it picks up the label, hint, error and required state automatically.
+ * (not while `readOnly`).
+ *
+ * - **Layout**: the root `<div>` draws the field (its outline, focus and invalid look). The icon
+ *   (or `contentBefore`), the text, `contentAfter` and the clear button sit side by side in it, so
+ *   no slot covers the text. Pressing the field outside a control of its own focuses the input.
+ * - **Clearing**: the clear button clears the text and moves focus back to the input. Escape
+ *   clears the text too while there is any, and is then consumed, so an enclosing Dialog, Drawer
+ *   or Popover stays open; in an empty field Escape reaches them. Both call `onClear`.
+ * - **Routing**: `id`, ARIA and native input attributes and the focus/keyboard handlers go to the
+ *   `<input type="search">` (role `searchbox`); `className`, `style`, `data-*`, other handlers and
+ *   `ref` stay on the root `<div>` (`controlRef` reaches the input). Inside a `Field` it picks up
+ *   the label, hint, error and required state automatically.
+ * - **Forms**: with `name` the text is submitted with the form; a form reset restores
+ *   `defaultValue`.
  *
  * @example
  * <SearchBox aria-label="Search files" value={query} onValueChange={setQuery} />
@@ -360,6 +398,7 @@ export const SearchBox = ({
   onBlur,
   onKeyDown,
   onKeyUp,
+  onMouseDown,
   ...rest
 }: SearchBoxProps) => {
   if (onChange !== undefined) warnDeprecated('SearchBox', 'onChange', 'onValueChange');
@@ -371,6 +410,9 @@ export const SearchBox = ({
 
   const inputRef = React.useRef<HTMLInputElement>(null);
   const mergedInputRef = useMergedRefs(inputRef, controlRef);
+  // The input is always React-controlled, so the browser's own reset would put the current text
+  // back: restore the default here instead (C-FORMS).
+  useFormReset(inputRef, () => setValue(defaultValue), form);
 
   const fieldProps = useFieldControl(
     {
@@ -406,6 +448,31 @@ export const SearchBox = ({
     setValue('');
     onClear?.();
     inputRef.current?.focus();
+  };
+
+  // Escape clears the text first, as native search fields do, and is consumed so an enclosing
+  // Dialog, Drawer or Popover stays open; with an empty field it reaches them (C-POPUPS).
+  const handleKeyDown = (event: React.KeyboardEvent<HTMLInputElement>) => {
+    if (event.key !== 'Escape' || event.nativeEvent.isComposing) return;
+    if (!value || readOnly || disabled) return;
+    event.preventDefault();
+    setValue('');
+    onClear?.();
+  };
+
+  // The whole box is the field: pressing the icon, a slot or the padding around the text focuses
+  // the input, as it does in a native search field. A control inside a slot keeps its press.
+  const handleRootMouseDown = (event: React.MouseEvent<HTMLDivElement>) => {
+    const input = inputRef.current;
+    const root = event.currentTarget;
+    const target = event.target;
+    if (!input || disabled || event.button !== 0 || target === input) return;
+    // Events that bubble through React portals from outside this box are not ours (R15).
+    if (!(target instanceof Element) || !root.contains(target)) return;
+    const control = target.closest(INTERACTIVE_CONTENT);
+    if (control && root.contains(control)) return;
+    event.preventDefault(); // keeps the press from moving focus to the page
+    input.focus();
   };
 
   // The slot's onClick is composed at click time (it runs first; preventDefault() cancels the
@@ -451,7 +518,7 @@ export const SearchBox = ({
       disabled,
       'aria-label': hasOwnName || namedByContent ? undefined : DEFAULT_CLEAR_LABEL,
       className: cn(
-        'absolute end-1 flex h-6 w-6 items-center justify-center rounded text-muted-foreground',
+        'me-1 flex h-6 w-6 shrink-0 items-center justify-center rounded text-muted-foreground',
         'not-disabled:not-aria-disabled:hover:text-foreground',
         focusRing,
         'disabled:cursor-not-allowed',
@@ -464,8 +531,22 @@ export const SearchBox = ({
     dismissKind === 'content' ? dismissParts.content : (dismissParts.content ?? <DismissIcon />);
 
   return (
-    <div ref={ref} className={cn('relative inline-flex w-full items-center', className)} {...rest}>
-      <span className="pointer-events-none absolute start-2 flex items-center">
+    <div
+      ref={ref}
+      className={cn(
+        // The root draws the field; the slots, the text and the clear button are laid out side by
+        // side inside it, so a slot never covers the text (input-other-code-2).
+        'relative inline-flex h-8 w-full items-center rounded border border-input border-b-stroke-accessible bg-background text-body-1 text-foreground',
+        inputFocusWithin,
+        invalidLook && inputInvalidWithin,
+        disabled && 'cursor-not-allowed opacity-50',
+        className,
+      )}
+      {...rest}
+      // Composed at press time, like the clear button's click: the handler reads the input ref.
+      onMouseDown={(event) => composeEventHandlers(onMouseDown, handleRootMouseDown)(event)}
+    >
+      <span className="flex shrink-0 items-center ps-2">
         {contentBefore != null ? (
           renderSlot(contentBefore, 'span', 'shrink-0')
         ) : (
@@ -481,12 +562,11 @@ export const SearchBox = ({
         placeholder={placeholder}
         disabled={disabled}
         className={cn(
-          'h-8 w-full rounded border border-input border-b-stroke-accessible bg-background ps-8 pe-9 text-body-1 text-foreground',
+          'h-full min-w-0 flex-1 appearance-none border-none bg-transparent px-2 text-body-1 text-foreground',
           'placeholder:text-muted-foreground',
-          inputFocus,
-          'disabled:cursor-not-allowed disabled:opacity-50',
+          'focus:outline-hidden',
+          'disabled:cursor-not-allowed',
           '[&::-webkit-search-cancel-button]:hidden',
-          invalidLook && 'border-destructive focus:border-b-destructive',
         )}
         aria-errormessage={ariaErrorMessage}
         aria-details={ariaDetails}
@@ -506,13 +586,13 @@ export const SearchBox = ({
         tabIndex={tabIndex}
         onFocus={onFocus}
         onBlur={onBlur}
-        onKeyDown={onKeyDown}
+        onKeyDown={composeEventHandlers(onKeyDown, handleKeyDown)}
         onKeyUp={onKeyUp}
         {...fieldProps}
       />
 
       {contentAfter != null && (
-        <span className="absolute end-8 flex items-center">
+        <span className="flex shrink-0 items-center pe-2">
           {renderSlot(contentAfter, 'span', 'shrink-0')}
         </span>
       )}

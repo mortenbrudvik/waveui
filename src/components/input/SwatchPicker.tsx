@@ -35,8 +35,8 @@ export interface SwatchPickerProps extends Omit<
   React.HTMLAttributes<HTMLDivElement>,
   'onChange' | 'defaultValue'
 > {
-  /** Array of swatch items to display. */
-  items: SwatchItem[];
+  /** The swatches to display, in order (a readonly array is accepted; it is never modified). */
+  items: readonly SwatchItem[];
   /** Controlled selected swatch value (`''` = nothing selected). */
   value?: string;
   /** Initial selected value for uncontrolled usage (also what a form reset restores).
