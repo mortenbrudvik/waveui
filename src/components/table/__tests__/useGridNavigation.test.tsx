@@ -14,13 +14,24 @@ interface HarnessProps {
   onEdit?: () => void;
   extraRow?: boolean;
   onGridKeyDown?: React.KeyboardEventHandler<HTMLTableElement>;
+  /** `onKeyDown` of the r2c2 text input. */
+  onNoteKeyDown?: React.KeyboardEventHandler<HTMLInputElement>;
+  /** The body row rendered `hidden`. */
+  hiddenRow?: number;
 }
 
 /**
  * A raw grid: a header row (A, B, C) and `rows` body rows of text cells `r<row>c<column>`, except:
  * r1c2 holds one button, r2c2 one text input, r3c2 two buttons.
  */
-function Harness({ rows = 5, onEdit, extraRow = false, onGridKeyDown }: HarnessProps) {
+function Harness({
+  rows = 5,
+  onEdit,
+  extraRow = false,
+  onGridKeyDown,
+  onNoteKeyDown,
+  hiddenRow,
+}: HarnessProps) {
   const { gridRef, gridProps } = useGridNavigation({ pageSize: 2 });
   const renderCell = (row: number, column: number) => {
     if (row === 1 && column === 2) {
@@ -30,7 +41,9 @@ function Harness({ rows = 5, onEdit, extraRow = false, onGridKeyDown }: HarnessP
         </button>
       );
     }
-    if (row === 2 && column === 2) return <input aria-label="Note 2" defaultValue="hello" />;
+    if (row === 2 && column === 2) {
+      return <input aria-label="Note 2" defaultValue="hello" onKeyDown={onNoteKeyDown} />;
+    }
     if (row === 3 && column === 2) {
       return (
         <>
@@ -63,7 +76,7 @@ function Harness({ rows = 5, onEdit, extraRow = false, onGridKeyDown }: HarnessP
       </thead>
       <tbody>
         {Array.from({ length: rows }, (_, index) => index + 1).map((row) => (
-          <tr key={row}>
+          <tr key={row} hidden={row === hiddenRow}>
             {[1, 2, 3].map((column) => (
               <td key={column} data-testid={`r${row}c${column}`}>
                 {renderCell(row, column)}
@@ -300,6 +313,67 @@ describe('useGridNavigation', () => {
       expect(headerCell('A')).toHaveFocus();
     });
 
+    it('keeps the visual column over cells that span rows or columns (the table model)', async () => {
+      const user = userEvent.setup();
+      function Spanned() {
+        const { gridRef, gridProps } = useGridNavigation({ pageSize: 2 });
+        return (
+          <table role="grid" aria-label="Teams" ref={gridRef} {...gridProps}>
+            <thead>
+              <tr>
+                <th scope="col">Team</th>
+                <th scope="colgroup" colSpan={2}>
+                  Member
+                </th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td rowSpan={2} data-testid="team-a">
+                  Team A
+                </td>
+                <td data-testid="alice">Alice</td>
+                <td data-testid="alice-role">Engineer</td>
+              </tr>
+              <tr>
+                <td data-testid="bob">Bob</td>
+                <td data-testid="bob-role">Designer</td>
+              </tr>
+              <tr>
+                <td data-testid="team-b">Team B</td>
+                <td data-testid="carol">Carol</td>
+                <td data-testid="carol-role">Manager</td>
+              </tr>
+            </tbody>
+          </table>
+        );
+      }
+      render(<Spanned />);
+      // A cell spanning rows is the cell above and below each row it covers.
+      focus(cell('team-b'));
+      await user.keyboard('{ArrowUp}');
+      expect(cell('team-a')).toHaveFocus();
+      // Down from it leaves the rows it covers.
+      await user.keyboard('{ArrowDown}');
+      expect(cell('team-b')).toHaveFocus();
+      // Cells after a row-spanning cell keep their visual column.
+      focus(cell('carol'));
+      await user.keyboard('{ArrowUp}');
+      expect(cell('bob')).toHaveFocus();
+      await user.keyboard('{ArrowUp}');
+      expect(cell('alice')).toHaveFocus();
+      focus(cell('bob-role'));
+      await user.keyboard('{ArrowDown}');
+      expect(cell('carol-role')).toHaveFocus();
+      // A cell spanning columns is entered at any column it covers and left from its first one.
+      await user.keyboard('{PageUp}');
+      expect(cell('alice-role')).toHaveFocus();
+      await user.keyboard('{ArrowUp}');
+      expect(headerCell('Member')).toHaveFocus();
+      await user.keyboard('{ArrowDown}');
+      expect(cell('alice')).toHaveFocus();
+    });
+
     it('mirrors ArrowLeft/ArrowRight in RTL', async () => {
       const user = userEvent.setup();
       renderWithProviders(<Harness />, { dir: 'rtl' });
@@ -352,6 +426,33 @@ describe('useGridNavigation', () => {
       await user.keyboard('{Escape}');
       expect(cell('r2c2')).toHaveFocus();
       expect(cell('r2c2')).toHaveAttribute('tabindex', '0');
+      expect(note).toHaveAttribute('tabindex', '-1');
+    });
+
+    it('leaves an Escape the widget handled (preventDefault) to the widget: focus stays in it', async () => {
+      const user = userEvent.setup();
+      // Like a combobox that closes its open list on the first Escape (C-POPUPS).
+      let listOpen = true;
+      render(
+        <Harness
+          onNoteKeyDown={(event) => {
+            if (event.key !== 'Escape' || !listOpen) return;
+            listOpen = false;
+            event.preventDefault();
+          }}
+        />,
+      );
+      focus(cell('r2c2'));
+      await user.keyboard('{Enter}');
+      const note = screen.getByRole('textbox', { name: 'Note 2' });
+      expect(note).toHaveFocus();
+      await user.keyboard('{Escape}');
+      expect(note).toHaveFocus();
+      expect(note).toHaveAttribute('tabindex', '0');
+      expect(cell('r2c2')).toHaveAttribute('tabindex', '-1');
+      // The next Escape is not handled by the widget: back to the cell.
+      await user.keyboard('{Escape}');
+      expect(cell('r2c2')).toHaveFocus();
       expect(note).toHaveAttribute('tabindex', '-1');
     });
 
@@ -428,6 +529,132 @@ describe('useGridNavigation', () => {
       focus(cell('r1c1'));
       expect(fireEvent.keyDown(cell('r1c1'), { key: 'Enter' })).toBe(true);
       expect(cell('r1c1')).toHaveFocus();
+    });
+  });
+
+  describe('widgets that cannot take focus', () => {
+    it('skips a disabled widget and an author tabindex="-1" (opt-out): their cells are the targets', async () => {
+      const user = userEvent.setup();
+      function Unfocusable() {
+        const { gridRef, gridProps } = useGridNavigation();
+        return (
+          <table role="grid" aria-label="Actions" ref={gridRef} {...gridProps}>
+            <tbody>
+              <tr>
+                <td data-testid="name">Alice</td>
+                <td data-testid="delete">
+                  <button type="button" disabled>
+                    Delete
+                  </button>
+                </td>
+                <td data-testid="profile">
+                  <a href="#profile" tabIndex={-1}>
+                    Profile
+                  </a>
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        );
+      }
+      render(<Unfocusable />);
+      const deleteButton = screen.getByRole('button', { name: 'Delete' });
+      const profile = screen.getByRole('link', { name: 'Profile' });
+      // Not widgets: the grid gives their cells a tab index and leaves them alone.
+      expect(cell('delete')).toHaveAttribute('tabindex', '-1');
+      expect(deleteButton).not.toHaveAttribute('tabindex');
+      expect(cell('profile')).toHaveAttribute('tabindex', '-1');
+
+      focus(cell('name'));
+      await user.keyboard('{ArrowRight}');
+      expect(cell('delete')).toHaveFocus();
+      expect(cell('delete')).toHaveAttribute('tabindex', '0');
+      expect(deleteButton).not.toHaveAttribute('tabindex');
+      await user.keyboard('{ArrowRight}');
+      expect(cell('profile')).toHaveFocus();
+      expect(profile).toHaveAttribute('tabindex', '-1');
+      expect(getTabbableElements(screen.getByRole('grid'))).toEqual([cell('profile')]);
+      // An opted-out element is not a widget of its cell: Enter has nothing to enter.
+      expect(fireEvent.keyDown(cell('profile'), { key: 'Enter' })).toBe(true);
+      expect(cell('profile')).toHaveFocus();
+    });
+
+    it('moves the tab stop to the cell while its lone widget is disabled, and back once enabled', async () => {
+      const user = userEvent.setup();
+      function Saving({ disabled }: { disabled: boolean }) {
+        const { gridRef, gridProps } = useGridNavigation();
+        return (
+          <>
+            <table role="grid" aria-label="Saving" ref={gridRef} {...gridProps}>
+              <tbody>
+                <tr>
+                  <td data-testid="name">Alice</td>
+                  <td data-testid="save">
+                    <button type="button" disabled={disabled}>
+                      Save
+                    </button>
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+            <button type="button">After</button>
+          </>
+        );
+      }
+      const { rerender } = render(<Saving disabled={false} />);
+      const grid = screen.getByRole('grid');
+      const save = screen.getByRole('button', { name: 'Save' });
+      focus(cell('name'));
+      await user.keyboard('{ArrowRight}');
+      expect(save).toHaveFocus();
+      focus(screen.getByRole('button', { name: 'After' }));
+
+      rerender(<Saving disabled />);
+      await flushObservers();
+      // The grid's only Tab stop is never a control that cannot take focus.
+      expect(getTabbableElements(grid)).toEqual([cell('save')]);
+
+      rerender(<Saving disabled={false} />);
+      await flushObservers();
+      expect(getTabbableElements(grid)).toEqual([save]);
+      expect(cell('save')).not.toHaveAttribute('tabindex');
+      await user.tab({ shift: true });
+      expect(save).toHaveFocus();
+
+      // A cell that does not hold the tab stop is re-synced too: while its button is disabled, the
+      // cell takes its place (focusable, e.g. by a click), and gives it back once enabled.
+      focus(cell('name'));
+      rerender(<Saving disabled />);
+      await flushObservers();
+      expect(cell('save')).toHaveAttribute('tabindex', '-1');
+      rerender(<Saving disabled={false} />);
+      await flushObservers();
+      expect(cell('save')).not.toHaveAttribute('tabindex');
+      expect(save).toHaveAttribute('tabindex', '-1');
+    });
+  });
+
+  describe('hidden rows', () => {
+    it('skips a hidden row', async () => {
+      const user = userEvent.setup();
+      render(<Harness hiddenRow={3} />);
+      expect(cell('r3c1')).not.toHaveAttribute('tabindex');
+      focus(cell('r2c1'));
+      await user.keyboard('{ArrowDown}');
+      expect(cell('r4c1')).toHaveFocus();
+      await user.keyboard('{ArrowUp}');
+      expect(cell('r2c1')).toHaveFocus();
+    });
+
+    it('moves the tab stop to the first cell when the active cell’s row is hidden', async () => {
+      const { rerender } = render(<Harness />);
+      focus(cell('r3c1'));
+      expect(cell('r3c1')).toHaveAttribute('tabindex', '0');
+      rerender(<Harness hiddenRow={3} />);
+      await flushObservers();
+      const stops = screen.getByRole('grid').querySelectorAll('[tabindex="0"]');
+      expect(stops).toHaveLength(1);
+      expect(stops[0]).toBe(headerCell('A'));
     });
   });
 

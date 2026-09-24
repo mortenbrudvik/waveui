@@ -2,6 +2,7 @@ import * as React from 'react';
 import { describe, it, expect, expectTypeOf, vi, afterEach } from 'vitest';
 import { act, fireEvent, render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
+import { createPortal } from 'react-dom';
 import { renderToString } from 'react-dom/server';
 import {
   DataGrid,
@@ -13,6 +14,7 @@ import {
   createSelectionStore,
 } from '../DataGrid';
 import type {
+  DataGridBaseProps,
   DataGridCellProps,
   DataGridColumn,
   DataGridHeaderCellProps,
@@ -23,7 +25,14 @@ import type {
 } from '../DataGrid';
 import { getTabbableElements } from '../../../lib/focus';
 import { useRovingTabIndex } from '../../../hooks/useRovingTabIndex';
+import { Button } from '../../button/Button';
+import { MenuButton } from '../../button/MenuButton';
+import { Toolbar } from '../../button/Toolbar';
+import { RadioGroup } from '../../input/RadioGroup';
+import { Menu } from '../../navigation/Menu';
 import {
+  asClientReference,
+  expectNoA11yViolations,
   renderWithProviders,
   testCompoundExposure,
   testComposedHandler,
@@ -275,6 +284,109 @@ describe('DataGrid', () => {
         ),
       ).toThrow(`[WaveUI] ${name} must be used within DataGrid`);
     });
+
+    describe('in production', () => {
+      afterEach(() => {
+        vi.unstubAllEnvs();
+      });
+
+      it('logs a part used outside a DataGrid once and renders it inert', () => {
+        vi.stubEnv('NODE_ENV', 'production');
+        const error = vi.spyOn(console, 'error').mockImplementation(() => {});
+        const misplaced = () => (
+          <table>
+            <tbody>
+              <DataGrid.Row rowId="1">
+                <DataGrid.Cell>Alice</DataGrid.Cell>
+              </DataGrid.Row>
+            </tbody>
+          </table>
+        );
+        render(misplaced());
+        render(misplaced());
+        expect(screen.getAllByRole('row')).toHaveLength(2);
+        expect(screen.queryByRole('checkbox')).toBeNull();
+        expect(error.mock.calls).toEqual([['[WaveUI] DataGrid.Row must be used within DataGrid']]);
+      });
+    });
+  });
+});
+
+describe('DataGrid parts written in a Server Component (lazy element types)', () => {
+  /** The parts as a Server Component delivers them to the client (pre-resolved lazy types). */
+  const LAZY = {
+    Header: asClientReference(DataGrid.Header),
+    HeaderCell: asClientReference(DataGrid.HeaderCell),
+    Body: asClientReference(DataGrid.Body),
+    Row: asClientReference(DataGrid.Row),
+    Cell: asClientReference(DataGrid.Cell),
+  };
+  const PLAIN: typeof LAZY = {
+    Header: DataGrid.Header,
+    HeaderCell: DataGrid.HeaderCell,
+    Body: DataGrid.Body,
+    Row: DataGrid.Row,
+    Cell: DataGrid.Cell,
+  };
+
+  function body(parts: typeof LAZY) {
+    const { Body, Row, Cell } = parts;
+    return (
+      <Body key="body">
+        {PEOPLE.map((person) => (
+          <Row key={person.id} rowId={person.id}>
+            <Cell>{person.name}</Cell>
+            <Cell>{person.role}</Cell>
+          </Row>
+        ))}
+      </Body>
+    );
+  }
+
+  function grid(parts: typeof LAZY, props: Partial<DataGridBaseProps> = {}) {
+    const { Header, HeaderCell } = parts;
+    return (
+      <DataGrid
+        aria-label="People"
+        selectionMode="multiple"
+        defaultSelectedItems={['2']}
+        columns={[{ id: 'generated', label: 'Generated' }]}
+        {...props}
+      >
+        <Header>
+          <tr>
+            <HeaderCell columnId="name" sortable>
+              Name
+            </HeaderCell>
+            <HeaderCell>Role</HeaderCell>
+          </tr>
+        </Header>
+        {body(parts)}
+      </DataGrid>
+    );
+  }
+
+  it('renders the same server HTML as the plain parts', () => {
+    const plain = renderToString(grid(PLAIN));
+    expect(plain).toContain('Select all rows');
+    expect(plain).not.toContain('Generated');
+    expect(renderToString(grid(LAZY))).toBe(plain);
+  });
+
+  it('finds the lazy header (no header from `columns`) and names each row control after its lazy first cell', async () => {
+    const user = userEvent.setup();
+    const warn = vi.spyOn(console, 'warn');
+    const onSelectedItemsChange = vi.fn();
+    render(grid(LAZY, { onSelectedItemsChange }));
+    expect(screen.getAllByRole('columnheader').map((th) => th.textContent)).toEqual([
+      '',
+      'Name',
+      'Role',
+    ]);
+    expect(screen.getByRole('checkbox', { name: 'Bob' })).toBeChecked();
+    await user.click(screen.getByRole('checkbox', { name: 'Alice' }));
+    expect(onSelectedItemsChange).toHaveBeenLastCalledWith(['2', '1']);
+    expect(warn).not.toHaveBeenCalled();
   });
 });
 
@@ -568,9 +680,16 @@ describe('DataGrid sorting', () => {
 
     it('starts the internal column from defaultSortColumn and follows a direction the parent keeps', async () => {
       const user = userEvent.setup();
-      vi.spyOn(console, 'warn').mockImplementation(() => {});
+      const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
       const onSortChange = vi.fn();
       renderGrid({ sortDirection: 'descending', defaultSortColumn: 'role', onSortChange });
+      expect(warn.mock.calls.map(([message]) => message)).toEqual([
+        '[WaveUI] DataGrid: `sortDirection` is deprecated and will be removed in 1.0. Use `sort` instead.',
+        '[WaveUI] DataGrid: `defaultSortColumn` is deprecated and will be removed in 1.0. Use `defaultSort` instead.',
+        expect.stringContaining(
+          '[WaveUI] DataGrid: `sortDirection` is controlled but `sortColumn` is not (mixed control)',
+        ),
+      ]);
       expect(header('Role')).toHaveAttribute('aria-sort', 'descending');
       // The parent does not accept the new direction: the controlled half stays.
       await user.click(sortButton('Role'));
@@ -585,7 +704,7 @@ describe('DataGrid sorting', () => {
 
     it('calls onSortChange once per click in StrictMode', async () => {
       const user = userEvent.setup();
-      vi.spyOn(console, 'warn').mockImplementation(() => {});
+      const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
       const onSortChange = vi.fn();
       render(
         <React.StrictMode>
@@ -598,6 +717,12 @@ describe('DataGrid sorting', () => {
       expect(onSortChange).toHaveBeenCalledTimes(1);
       expect(onSortChange).toHaveBeenCalledWith('name', 'descending');
       expect(header('Name')).toHaveAttribute('aria-sort', 'descending');
+      expect(warn.mock.calls.map(([message]) => message)).toEqual([
+        '[WaveUI] DataGrid: `sortColumn` is deprecated and will be removed in 1.0. Use `sort` instead.',
+        expect.stringContaining(
+          '[WaveUI] DataGrid: `sortColumn` is controlled but `sortDirection` is not (mixed control)',
+        ),
+      ]);
     });
 
     it('does not warn about mixed control when both or neither are controlled', () => {
@@ -709,6 +834,36 @@ describe('DataGrid header from columns', () => {
     expect(headers).toHaveLength(3);
     expect(within(headers[0]).getByRole('checkbox', { name: 'Select all rows' })).toBeVisible();
     expect(within(bodyRows()[0]).getAllByRole('gridcell')).toHaveLength(3);
+  });
+
+  it('keeps a caption first, also one inside a Fragment, and finds a header inside a Fragment', () => {
+    const { rerender } = render(
+      <DataGrid aria-label="People" columns={columns}>
+        <>
+          <caption>Team</caption>
+          {rows()}
+        </>
+      </DataGrid>,
+    );
+    const grid = screen.getByRole('grid');
+    expect(Array.from(grid.children).map((child) => child.localName)).toEqual([
+      'caption',
+      'thead',
+      'tbody',
+    ]);
+    rerender(
+      <DataGrid aria-label="People" columns={columns}>
+        <>
+          <DataGrid.Header>
+            <tr>
+              <DataGrid.HeaderCell>Custom</DataGrid.HeaderCell>
+            </tr>
+          </DataGrid.Header>
+        </>
+        {rows()}
+      </DataGrid>,
+    );
+    expect(screen.getAllByRole('columnheader').map((th) => th.textContent)).toEqual(['Custom']);
   });
 
   it('prefers a DataGrid.Header child over `columns`', () => {
@@ -879,6 +1034,78 @@ describe('DataGrid selection', () => {
       expect(sortButton('Name')).toHaveFocus();
       await user.keyboard('{ArrowDown}');
       expect(cell('Alice')).toHaveFocus();
+    });
+
+    it.each(['single', 'multiple'] as const)(
+      'keeps the visual column with Up/Down/PageUp/PageDown across the spanning group cell (%s selection)',
+      async (selectionMode) => {
+        const user = userEvent.setup();
+        render(<GroupedGrid selectionMode={selectionMode} />);
+        // Row 1: selection, Person (2 columns), Other. Row 2: selection, Name, Role, Notes.
+        act(() => header('Role').focus());
+        await user.keyboard('{ArrowUp}');
+        expect(header('Person')).toHaveFocus();
+        await user.keyboard('{ArrowDown}');
+        expect(sortButton('Name')).toHaveFocus();
+
+        act(() => header('Notes').focus());
+        await user.keyboard('{ArrowUp}');
+        expect(header('Other')).toHaveFocus();
+        await user.keyboard('{ArrowDown}');
+        expect(header('Notes')).toHaveFocus();
+
+        act(() => header('Other').focus());
+        await user.keyboard('{PageDown}');
+        expect(cell('-', 2)).toHaveFocus();
+        await user.keyboard('{PageUp}');
+        expect(header('Other')).toHaveFocus();
+      },
+    );
+
+    it('keeps the visual column without a selection column too', async () => {
+      const user = userEvent.setup();
+      renderGrid({ children: groupedGridContent() });
+      act(() => header('Other').focus());
+      await user.keyboard('{ArrowDown}');
+      expect(header('Notes')).toHaveFocus();
+      act(() => header('Role').focus());
+      await user.keyboard('{ArrowUp}');
+      expect(header('Person')).toHaveFocus();
+    });
+
+    it('treats a header cell spanning both header rows as the cell above and below them', async () => {
+      const user = userEvent.setup();
+      render(
+        <DataGrid aria-label="People" selectionMode="multiple">
+          <DataGrid.Header>
+            <tr>
+              <DataGrid.HeaderCell rowSpan={2} columnId="name" sortable>
+                Name
+              </DataGrid.HeaderCell>
+              <DataGrid.HeaderCell colSpan={2}>Details</DataGrid.HeaderCell>
+            </tr>
+            <tr>
+              <DataGrid.HeaderCell>Role</DataGrid.HeaderCell>
+              <DataGrid.HeaderCell>Notes</DataGrid.HeaderCell>
+            </tr>
+          </DataGrid.Header>
+          {body()}
+        </DataGrid>,
+      );
+      act(() => cell('Alice').focus());
+      await user.keyboard('{ArrowUp}');
+      expect(sortButton('Name')).toHaveFocus();
+      await user.keyboard('{ArrowDown}');
+      expect(cell('Alice')).toHaveFocus();
+
+      act(() => cell('Engineer').focus());
+      await user.keyboard('{ArrowUp}');
+      expect(header('Role')).toHaveFocus();
+      await user.keyboard('{ArrowUp}');
+      expect(header('Details')).toHaveFocus();
+      await user.keyboard('{ArrowDown}');
+      expect(header('Role')).toHaveFocus();
+      await expectNoA11yViolations(document.body);
     });
 
     it('selects every row from the one control', async () => {
@@ -1069,6 +1296,81 @@ describe('DataGrid selection', () => {
     expect(screen.getByRole('checkbox', { name: 'Select Alice Johnson' })).toBeInTheDocument();
   });
 
+  describe('selection control name without selectionLabel', () => {
+    function NameCell({ name }: { name: string }) {
+      return <DataGrid.Cell>{name}</DataGrid.Cell>;
+    }
+
+    function renderRow(children: React.ReactNode) {
+      return render(
+        <DataGrid aria-label="People" selectionMode="multiple">
+          <DataGrid.Body>
+            <DataGrid.Row rowId="1">{children}</DataGrid.Row>
+          </DataGrid.Body>
+        </DataGrid>,
+      );
+    }
+
+    it('is "Select row", with a warning, when no child is a DataGrid.Cell, <td> or <th>', async () => {
+      const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+      renderRow(<NameCell name="Alice" />);
+      const checkbox = screen.getByRole('checkbox', { name: 'Select row' });
+      expect(checkbox).not.toHaveAttribute('aria-labelledby');
+      expect(warn.mock.calls).toEqual([
+        [
+          '[WaveUI] DataGrid.Row: no child is a `DataGrid.Cell`, `<td>` or `<th>` element, so the row selection control is named "Select row". Pass `selectionLabel` (a cell rendered by another component is not seen).',
+        ],
+      ]);
+      warn.mockRestore();
+      await expectNoA11yViolations(document.body);
+    });
+
+    it('comes from the first DataGrid.Cell child: a cell another component renders is not seen', () => {
+      const warn = vi.spyOn(console, 'warn');
+      renderRow([
+        <NameCell key="name" name="Alice" />,
+        <DataGrid.Cell key="email">alice@example.com</DataGrid.Cell>,
+      ]);
+      expect(screen.getByRole('checkbox', { name: 'alice@example.com' })).toBeInTheDocument();
+      expect(warn).not.toHaveBeenCalled();
+    });
+
+    it('comes from the first cell inside a Fragment, and the cells stay mounted across modes', () => {
+      const warn = vi.spyOn(console, 'warn');
+      const grid = (selectionMode: 'none' | 'multiple') => (
+        <DataGrid aria-label="People" selectionMode={selectionMode}>
+          <DataGrid.Body>
+            <DataGrid.Row rowId="1">
+              <>
+                <DataGrid.Cell>Alice</DataGrid.Cell>
+                <DataGrid.Cell>
+                  <input aria-label="Note" />
+                </DataGrid.Cell>
+              </>
+            </DataGrid.Row>
+          </DataGrid.Body>
+        </DataGrid>
+      );
+      const { rerender } = render(grid('multiple'));
+      expect(screen.getByRole('checkbox', { name: 'Alice' })).toBeInTheDocument();
+      const input = screen.getByRole('textbox', { name: 'Note' });
+      rerender(grid('none'));
+      rerender(grid('multiple'));
+      expect(screen.getByRole('textbox', { name: 'Note' })).toBe(input);
+      expect(warn).not.toHaveBeenCalled();
+    });
+
+    it.each([
+      ['<td>', <td key="td">Alice</td>],
+      ['<th>', <th key="th">Alice</th>],
+    ])('comes from a raw %s first child', (_label, first) => {
+      const warn = vi.spyOn(console, 'warn');
+      renderRow([first, <DataGrid.Cell key="role">Engineer</DataGrid.Cell>]);
+      expect(screen.getByRole('checkbox', { name: 'Alice' })).toBeInTheDocument();
+      expect(warn).not.toHaveBeenCalled();
+    });
+  });
+
   it('keeps a first cell’s own id as the label reference', () => {
     render(
       <DataGrid aria-label="People" selectionMode="multiple">
@@ -1186,10 +1488,15 @@ describe('DataGrid selection', () => {
     ['a Set', new Set(['1'])],
     ['an array', ['1']],
   ])('accepts the deprecated selectedKeys as %s', (_label, selectedKeys) => {
-    vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
     renderGrid({ selectionMode: 'multiple', selectedKeys });
     expect(bodyRows()[0]).toHaveAttribute('aria-selected', 'true');
     expect(bodyRows()[1]).toHaveAttribute('aria-selected', 'false');
+    expect(warn.mock.calls).toEqual([
+      [
+        '[WaveUI] DataGrid: `selectedKeys` is deprecated and will be removed in 1.0. Use `selectedItems` instead.',
+      ],
+    ]);
   });
 
   it('accepts the deprecated defaultSelectedKeys and warns about the deprecated names', () => {
@@ -1250,6 +1557,46 @@ describe('DataGrid selection', () => {
     expect(selectAll).toBeChecked();
   });
 
+  it('stays mixed after a click when a controlled parent keeps the selection partial', async () => {
+    const user = userEvent.setup();
+    function Filtering() {
+      const [selected, setSelected] = React.useState<string[]>(['1']);
+      return (
+        <DataGrid
+          aria-label="People"
+          selectionMode="multiple"
+          selectedItems={selected}
+          // Carol's row cannot be selected (a locked row, a selection limit).
+          onSelectedItemsChange={(items) => setSelected(items.filter((id) => id !== '3'))}
+        >
+          {gridContent()}
+        </DataGrid>
+      );
+    }
+    render(<Filtering />);
+    const selectAll = screen.getByRole('checkbox', { name: 'Select all rows' });
+    expect(selectAll).toBePartiallyChecked();
+    await user.click(selectAll);
+    expect(screen.getByRole('checkbox', { name: 'Bob' })).toBeChecked();
+    expect(screen.getByRole('checkbox', { name: 'Carol' })).not.toBeChecked();
+    expect(selectAll).toBePartiallyChecked();
+    expect(selectAll).not.toBeChecked();
+  });
+
+  it('stays mixed after clicks that a controlled parent ignores', async () => {
+    const user = userEvent.setup();
+    const onSelectedItemsChange = vi.fn();
+    renderGrid({ selectionMode: 'multiple', selectedItems: ['1'], onSelectedItemsChange });
+    const selectAll = screen.getByRole('checkbox', { name: 'Select all rows' });
+    await user.click(selectAll);
+    expect(onSelectedItemsChange).toHaveBeenLastCalledWith(['1', '2', '3']);
+    expect(selectAll).toBePartiallyChecked();
+    expect(selectAll).not.toBeChecked();
+    await user.click(selectAll);
+    expect(onSelectedItemsChange).toHaveBeenCalledTimes(2);
+    expect(selectAll).toBePartiallyChecked();
+  });
+
   it('toggles the row with Space on a focused cell', async () => {
     const user = userEvent.setup();
     const onSelectedItemsChange = vi.fn();
@@ -1270,6 +1617,88 @@ describe('DataGrid selection', () => {
     await user.keyboard(' ');
     expect(onSelectedItemsChange).toHaveBeenCalledTimes(1);
     expect(onSelectedItemsChange).toHaveBeenCalledWith(['1']);
+  });
+
+  describe('single mode with several selected ids', () => {
+    const SEVERAL_SELECTED =
+      '[WaveUI] DataGrid: a single-selection grid (selectionMode "single") has';
+
+    /** Per body row: `aria-selected` and whether its radio is checked. */
+    function rowStates(): Array<[string | null, boolean]> {
+      return bodyRows().map((row) => [
+        row.getAttribute('aria-selected'),
+        within(row).getByRole<HTMLInputElement>('radio').checked,
+      ]);
+    }
+
+    it('selects only the first selected row after switching from multiple, and warns', async () => {
+      const user = userEvent.setup();
+      const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+      const onSelectedItemsChange = vi.fn();
+      const grid = (selectionMode: 'single' | 'multiple') => (
+        <DataGrid
+          aria-label="People"
+          selectionMode={selectionMode}
+          defaultSelectedItems={['1', '2']}
+          onSelectedItemsChange={onSelectedItemsChange}
+        >
+          {gridContent()}
+        </DataGrid>
+      );
+      const { rerender } = render(grid('multiple'));
+      expect(warn).not.toHaveBeenCalled();
+      rerender(grid('single'));
+      expect(rowStates()).toEqual([
+        ['true', true],
+        ['false', false],
+        ['false', false],
+      ]);
+      expect(warn).toHaveBeenCalledTimes(1);
+      expect(warn).toHaveBeenCalledWith(expect.stringContaining(SEVERAL_SELECTED));
+
+      await user.click(screen.getByRole('radio', { name: 'Bob' }));
+      expect(onSelectedItemsChange).toHaveBeenCalledTimes(1);
+      expect(onSelectedItemsChange).toHaveBeenCalledWith(['2']);
+      expect(rowStates()).toEqual([
+        ['false', false],
+        ['true', true],
+        ['false', false],
+      ]);
+    });
+
+    it('selects only the first rendered id of a controlled selection, and warns once', async () => {
+      const user = userEvent.setup();
+      const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+      const onSelectedItemsChange = vi.fn();
+      // '9' is not rendered: Bob is the first selected row that is.
+      renderGrid({
+        selectionMode: 'single',
+        selectedItems: ['9', '2', '1'],
+        onSelectedItemsChange,
+      });
+      expect(rowStates()).toEqual([
+        ['false', false],
+        ['true', true],
+        ['false', false],
+      ]);
+      await user.click(screen.getByRole('radio', { name: 'Alice' }));
+      expect(onSelectedItemsChange).toHaveBeenLastCalledWith(['1']);
+      act(() => cell('Bob').focus());
+      await user.keyboard(' ');
+      expect(onSelectedItemsChange).toHaveBeenLastCalledWith([]);
+      expect(onSelectedItemsChange).toHaveBeenCalledTimes(2);
+      expect(warn).toHaveBeenCalledTimes(1);
+      expect(warn).toHaveBeenCalledWith(
+        `${SEVERAL_SELECTED} 3 selected row ids; only the first one that is rendered is selected. Pass at most one id in \`selectedItems\`/\`defaultSelectedItems\`, or use selectionMode="multiple".`,
+      );
+    });
+
+    it('does not warn for one selected id', () => {
+      const warn = vi.spyOn(console, 'warn');
+      renderGrid({ selectionMode: 'single', defaultSelectedItems: ['2'] });
+      renderGrid({ selectionMode: 'multiple', defaultSelectedItems: ['1', '2'] });
+      expect(warn).not.toHaveBeenCalled();
+    });
   });
 
   it('deselects the selected row with Space in single mode', async () => {
@@ -1332,6 +1761,36 @@ describe('DataGrid selection', () => {
       await user.keyboard('a b');
       expect(input).toHaveValue('a b');
       expect(onSelectedItemsChange).not.toHaveBeenCalled();
+    });
+
+    it('ignores Space typed in a portal opened from a row (React bubbling)', async () => {
+      const user = userEvent.setup();
+      const onSelectedItemsChange = vi.fn();
+      function PortalNote() {
+        return createPortal(<input aria-label="Portal note" />, document.body);
+      }
+      render(
+        <DataGrid
+          aria-label="People"
+          selectionMode="multiple"
+          onSelectedItemsChange={onSelectedItemsChange}
+        >
+          <DataGrid.Body>
+            <DataGrid.Row rowId="1">
+              <DataGrid.Cell>
+                Alice
+                <PortalNote />
+              </DataGrid.Cell>
+            </DataGrid.Row>
+          </DataGrid.Body>
+        </DataGrid>,
+      );
+      const note = screen.getByRole('textbox', { name: 'Portal note' });
+      await user.click(note);
+      await user.keyboard(' a');
+      expect(note).toHaveValue(' a');
+      expect(onSelectedItemsChange).not.toHaveBeenCalled();
+      expect(bodyRows()[0]).toHaveAttribute('aria-selected', 'false');
     });
 
     it('a nested button keeps working with the keyboard', async () => {
@@ -1558,6 +2017,37 @@ describe('DataGrid selection store', () => {
     expect(store.getSelectAllState()).toBe('some');
     store.setSelected(['x', 'y']);
     expect(store.getSelectAllState()).toBe('all');
+  });
+
+  it('selects one row in single mode: the first selected id whose row is registered', () => {
+    const store = createSelectionStore(['9', 'b', 'a'], true);
+    const rowListener = vi.fn();
+    store.subscribe(rowListener);
+    // No row registered yet (the server render): the first selected id.
+    expect(store.isSelected('9', true)).toBe(true);
+    const a = store.register('a');
+    expect(store.isSelected('a', true)).toBe(true);
+    expect(store.isSelected('9', true)).toBe(false);
+    expect(rowListener).toHaveBeenCalledTimes(1);
+    const b = store.register('b');
+    expect(store.isSelected('b', true)).toBe(true);
+    expect(store.isSelected('a', true)).toBe(false);
+    // Without `single`, every selected id is selected.
+    expect(store.isSelected('a')).toBe(true);
+    expect(rowListener).toHaveBeenCalledTimes(2);
+    // Rows that do not move the selected row notify no row.
+    store.register('c');
+    a();
+    expect(rowListener).toHaveBeenCalledTimes(2);
+    b();
+    expect(store.isSelected('9', true)).toBe(true);
+    expect(rowListener).toHaveBeenCalledTimes(3);
+
+    // In multiple mode, rows registering notify no row.
+    store.setSingleMode(false);
+    store.register('b');
+    expect(rowListener).toHaveBeenCalledTimes(3);
+    expect(store.isSelected('b', true)).toBe(true);
   });
 });
 
@@ -1889,6 +2379,180 @@ describe('DataGrid grid keyboard model', () => {
   });
 });
 
+describe('DataGrid with the library’s composite widgets in its cells', () => {
+  /** Counts `tabindex` writes; stops writing after 500, so a write loop ends instead of hanging. */
+  function countTabIndexWrites(): { count: () => number } {
+    const original = Element.prototype.setAttribute;
+    let writes = 0;
+    vi.spyOn(Element.prototype, 'setAttribute').mockImplementation(function (
+      this: Element,
+      name: string,
+      value: string,
+    ) {
+      if (name === 'tabindex' && ++writes > 500) return;
+      original.call(this, name, value);
+    });
+    return { count: () => writes };
+  }
+
+  async function flushObservers() {
+    for (let index = 0; index < 10; index += 1) await act(async () => {});
+  }
+
+  const TASKS = ['Write', 'Review'];
+
+  /** The `[tabindex="0"]` elements of the grid outside its composites (the grid's own tab stop). */
+  function gridStops(): Element[] {
+    return Array.from(screen.getByRole('grid').querySelectorAll('[tabindex="0"]')).filter(
+      (el) => !el.closest('[role="toolbar"], [role="radiogroup"]'),
+    );
+  }
+
+  it('treats a Toolbar and a RadioGroup as one widget each: Enter enters, Escape returns', async () => {
+    const user = userEvent.setup();
+    const writes = countTabIndexWrites();
+    const onSelectedItemsChange = vi.fn();
+    render(
+      <DataGrid
+        aria-label="Tasks"
+        selectionMode="multiple"
+        onSelectedItemsChange={onSelectedItemsChange}
+      >
+        <DataGrid.Body>
+          {TASKS.map((task) => (
+            <DataGrid.Row key={task} rowId={task}>
+              <DataGrid.Cell>{task}</DataGrid.Cell>
+              <DataGrid.Cell>
+                <RadioGroup
+                  aria-label={`${task} priority`}
+                  orientation="horizontal"
+                  defaultValue="low"
+                >
+                  <RadioGroup.Item value="low" label="Low" />
+                  <RadioGroup.Item value="high" label="High" />
+                </RadioGroup>
+              </DataGrid.Cell>
+              <DataGrid.Cell>
+                <Toolbar aria-label={`${task} actions`}>
+                  <Button>Edit</Button>
+                  <Button>Delete</Button>
+                </Toolbar>
+              </DataGrid.Cell>
+            </DataGrid.Row>
+          ))}
+        </DataGrid.Body>
+      </DataGrid>,
+    );
+    await flushObservers();
+    // No write loop between the grid and the composites' own roving tab indexes.
+    expect(writes.count()).toBeLessThan(60);
+    for (const composite of [
+      ...screen.getAllByRole('toolbar'),
+      ...screen.getAllByRole('radiogroup'),
+    ]) {
+      expect(composite.querySelectorAll('[tabindex="0"]')).toHaveLength(1);
+    }
+    expect(gridStops()).toHaveLength(1);
+
+    const [writeRow] = bodyRows();
+    const priority = screen.getByRole('radiogroup', { name: 'Write priority' });
+    const actions = screen.getByRole('toolbar', { name: 'Write actions' });
+    act(() => cell('Write').focus());
+    await user.keyboard('{ArrowRight}');
+    expect(priority.parentElement).toHaveFocus();
+    await user.keyboard('{Enter}');
+    expect(within(priority).getByRole('radio', { name: 'Low' })).toHaveFocus();
+    // Inside, the arrow keys are the radio group's.
+    await user.keyboard('{ArrowRight}');
+    expect(within(priority).getByRole('radio', { name: 'High' })).toHaveFocus();
+    expect(within(priority).getByRole('radio', { name: 'High' })).toBeChecked();
+    await user.keyboard('{Escape}');
+    expect(priority.parentElement).toHaveFocus();
+
+    await user.keyboard('{ArrowRight}');
+    expect(actions.parentElement).toHaveFocus();
+    await user.keyboard('{Enter}');
+    expect(within(actions).getByRole('button', { name: 'Edit' })).toHaveFocus();
+    await user.keyboard('{ArrowRight}');
+    expect(within(actions).getByRole('button', { name: 'Delete' })).toHaveFocus();
+    await user.keyboard('{Escape}');
+    expect(actions.parentElement).toHaveFocus();
+    await user.keyboard('{ArrowDown}');
+    expect(screen.getByRole('toolbar', { name: 'Review actions' }).parentElement).toHaveFocus();
+
+    await flushObservers();
+    expect(writes.count()).toBeLessThan(120);
+    for (const toolbar of screen.getAllByRole('toolbar')) {
+      expect(toolbar.querySelectorAll('[tabindex="0"]')).toHaveLength(1);
+    }
+    expect(gridStops()).toHaveLength(1);
+    expect(writeRow).toHaveAttribute('aria-selected', 'false');
+    expect(onSelectedItemsChange).not.toHaveBeenCalled();
+  });
+
+  it('leaves a Menu opened from a cell to the menu (portal events never reach the grid or the row)', async () => {
+    const user = userEvent.setup();
+    const onSelectedItemsChange = vi.fn();
+    const onEdit = vi.fn();
+    render(
+      <DataGrid
+        aria-label="Tasks"
+        selectionMode="multiple"
+        onSelectedItemsChange={onSelectedItemsChange}
+      >
+        <DataGrid.Body>
+          {TASKS.map((task) => (
+            <DataGrid.Row key={task} rowId={task}>
+              <DataGrid.Cell>{task}</DataGrid.Cell>
+              <DataGrid.Cell>
+                <Menu>
+                  <Menu.Trigger>
+                    <MenuButton>{`${task} actions`}</MenuButton>
+                  </Menu.Trigger>
+                  <Menu.Popover>
+                    <Menu.Item onClick={onEdit}>Edit</Menu.Item>
+                    <Menu.Item>Delete</Menu.Item>
+                  </Menu.Popover>
+                </Menu>
+              </DataGrid.Cell>
+            </DataGrid.Row>
+          ))}
+        </DataGrid.Body>
+      </DataGrid>,
+    );
+    const trigger = screen.getByRole('button', { name: 'Write actions' });
+    act(() => cell('Write').focus());
+    await user.keyboard('{ArrowRight}');
+    expect(trigger).toHaveFocus();
+
+    // Enter opens the menu; its arrow keys, Escape and Space stay the menu's.
+    await user.keyboard('{Enter}');
+    const menu = screen.getByRole('menu', { name: 'Write actions' });
+    expect(screen.getByRole('grid').contains(menu)).toBe(false);
+    expect(within(menu).getByRole('menuitem', { name: 'Edit' })).toHaveFocus();
+    await user.keyboard('{ArrowDown}');
+    expect(within(menu).getByRole('menuitem', { name: 'Delete' })).toHaveFocus();
+    await user.keyboard('{Escape}');
+    expect(screen.queryByRole('menu')).toBeNull();
+    expect(trigger).toHaveFocus();
+
+    await user.keyboard('{Enter}');
+    await user.keyboard(' ');
+    expect(onEdit).toHaveBeenCalledTimes(1);
+    expect(screen.queryByRole('menu')).toBeNull();
+    expect(trigger).toHaveFocus();
+
+    expect(bodyRows()[0]).toHaveAttribute('aria-selected', 'false');
+    expect(onSelectedItemsChange).not.toHaveBeenCalled();
+    const stops = screen.getByRole('grid').querySelectorAll('[tabindex="0"]');
+    expect(stops).toHaveLength(1);
+    expect(stops[0]).toBe(trigger);
+    // The grid keys work again from the trigger.
+    await user.keyboard('{ArrowLeft}');
+    expect(cell('Write')).toHaveFocus();
+  });
+});
+
 describe('DataGrid handler composition', () => {
   testComposedHandler(DataGrid, {
     handler: 'onKeyDown',
@@ -1903,6 +2567,51 @@ describe('DataGrid handler composition', () => {
     assertInternalSuppressed: () => {
       expect(cell('Alice')).toHaveFocus();
     },
+  });
+
+  it('runs the grid focus handling next to a consumer onFocus/onBlur, even when they preventDefault()', async () => {
+    const user = userEvent.setup();
+    const onFocus = vi.fn((event: React.FocusEvent<HTMLTableElement>) => event.preventDefault());
+    const onBlur = vi.fn((event: React.FocusEvent<HTMLTableElement>) => event.preventDefault());
+    render(
+      <>
+        <DataGrid aria-label="People" onFocus={onFocus} onBlur={onBlur}>
+          <DataGrid.Body>
+            <DataGrid.Row rowId="1">
+              <DataGrid.Cell>Alice</DataGrid.Cell>
+              <DataGrid.Cell>
+                <input aria-label="Note" />
+              </DataGrid.Cell>
+            </DataGrid.Row>
+            <DataGrid.Row rowId="2">
+              <DataGrid.Cell>Bob</DataGrid.Cell>
+              <DataGrid.Cell>Designer</DataGrid.Cell>
+            </DataGrid.Row>
+          </DataGrid.Body>
+        </DataGrid>
+        <button type="button">After</button>
+      </>,
+    );
+    // A click on a cell moves the tab stop to it (the grid's onFocus).
+    await user.click(cell('Bob'));
+    expect(onFocus).toHaveBeenCalledTimes(1);
+    expect(cell('Bob')).toHaveAttribute('tabindex', '0');
+    expect(cell('Alice')).toHaveAttribute('tabindex', '-1');
+
+    // Leaving the grid from an edited text field ends interaction mode (the grid's onBlur).
+    const note = screen.getByRole('textbox', { name: 'Note' });
+    const noteCell = note.closest('td')!;
+    act(() => noteCell.focus());
+    await user.keyboard('{Enter}');
+    expect(note).toHaveFocus();
+    expect(note).toHaveAttribute('tabindex', '0');
+    await user.tab();
+    expect(screen.getByRole('button', { name: 'After' })).toHaveFocus();
+    expect(onBlur).toHaveBeenCalled();
+    expect(note).toHaveAttribute('tabindex', '-1');
+    expect(noteCell).toHaveAttribute('tabindex', '0');
+    await user.tab({ shift: true });
+    expect(noteCell).toHaveFocus();
   });
 
   const onRowSelection = vi.fn();
@@ -2194,6 +2903,33 @@ describe('DataGrid types', () => {
       </DataGrid>,
     ];
     expect(elements).toHaveLength(6);
-    expectTypeOf<DataGridProps['selectedItems']>().toEqualTypeOf<string[] | undefined>();
+  });
+
+  it('accepts readonly arrays (`as const`) for columns and the selection, and emits a mutable array', () => {
+    const COLUMNS = [
+      { id: 'name', label: 'Name', sortable: true },
+      { id: 'role', label: 'Role' },
+    ] as const;
+    const IDS = ['1', '2'] as const;
+    const element = (
+      <DataGrid
+        aria-label="People"
+        columns={COLUMNS}
+        selectionMode="multiple"
+        selectedItems={IDS}
+        defaultSelectedItems={IDS}
+        onSelectedItemsChange={(items) => {
+          expectTypeOf(items).toEqualTypeOf<string[]>();
+        }}
+      >
+        {null}
+      </DataGrid>
+    );
+    expect(element.props.selectedItems).toBe(IDS);
+    expectTypeOf<DataGridProps['selectedItems']>().toEqualTypeOf<readonly string[] | undefined>();
+    expectTypeOf<DataGridProps['defaultSelectedItems']>().toEqualTypeOf<
+      readonly string[] | undefined
+    >();
+    expectTypeOf<DataGridProps['columns']>().toEqualTypeOf<readonly DataGridColumn[] | undefined>();
   });
 });

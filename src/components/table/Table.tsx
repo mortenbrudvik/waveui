@@ -1,4 +1,5 @@
 import * as React from 'react';
+import { flattenChildren, isElementOfType } from '../../lib/children';
 import { cn } from '../../lib/cn';
 import { warnDeprecated, warnOnce } from '../../lib/dev';
 import { focusRing } from '../../lib/styles';
@@ -101,19 +102,10 @@ function useHorizontalOverflow(wrapper: HTMLDivElement | null): boolean {
 }
 
 function isCaption(node: React.ReactNode): node is React.ReactElement<{ id?: string }> {
-  return React.isValidElement(node) && node.type === 'caption';
+  return isElementOfType(node, 'caption');
 }
 
-/**
- * A non-interactive data table with an optional striped body. The table sits in a horizontally
- * scrollable wrapper; while it scrolls, the wrapper is a focusable region (named by
- * `containerProps` or the `<caption>`) so keyboard users can scroll it.
- *
- * Sub-components are available as `Table.Header`, `Table.HeaderCell`, `Table.Body`, `Table.Row`
- * and `Table.Cell` in client components, and as the flat exports `TableHeader`,
- * `TableHeaderCell`, `TableBody`, `TableRow` and `TableCell` (the form React Server Components
- * can import). `Table.Head`/`Table.HeadCell` (`TableHead`/`TableHeadCell`) are deprecated aliases.
- */
+// The component-level JSDoc sits on the exported `Table` below.
 const TableRoot = ({
   striped = false,
   containerProps,
@@ -134,18 +126,25 @@ const TableRoot = ({
   const wrapperRef = useMergedRefs<HTMLDivElement>(containerRef, setWrapper);
   const scrollable = useHorizontalOverflow(wrapper);
 
-  // Name the scroll region after the caption: keep its id, or give it one.
+  // Name the scroll region after the caption (also one inside a Fragment): keep its id, or give it
+  // one. The flattened children are then rendered under their flattened keys.
   const generatedCaptionId = useId('wave-table-caption');
-  const childArray = React.Children.toArray(children);
-  const captionIndex = childArray.findIndex(isCaption);
+  const flatChildren = flattenChildren(children);
+  const captionIndex = flatChildren.findIndex(({ node }) => isCaption(node));
   const caption =
-    captionIndex >= 0 ? (childArray[captionIndex] as React.ReactElement<{ id?: string }>) : null;
+    captionIndex >= 0
+      ? (flatChildren[captionIndex].node as React.ReactElement<{ id?: string }>)
+      : null;
   const captionId = caption ? (caption.props.id ?? generatedCaptionId) : undefined;
   const content =
     caption && caption.props.id === undefined
-      ? childArray.map((child, index) =>
-          index === captionIndex ? React.cloneElement(caption, { id: generatedCaptionId }) : child,
-        )
+      ? flatChildren.map(({ key, node }, index) => (
+          <React.Fragment key={key}>
+            {index === captionIndex
+              ? React.cloneElement(caption, { id: generatedCaptionId })
+              : node}
+          </React.Fragment>
+        ))
       : children;
 
   const regionLabelledBy = containerLabel ? undefined : (containerLabelledBy ?? captionId);
@@ -272,6 +271,16 @@ TableCell.displayName = 'TableCell';
 
 export { TableHeader, TableHeaderCell, TableHead, TableHeadCell, TableBody, TableRow, TableCell };
 
+/**
+ * A non-interactive data table with an optional striped body. The table sits in a horizontally
+ * scrollable wrapper; while it scrolls, the wrapper is a focusable region (named by
+ * `containerProps` or the `<caption>`) so keyboard users can scroll it.
+ *
+ * Sub-components are available as `Table.Header`, `Table.HeaderCell`, `Table.Body`, `Table.Row`
+ * and `Table.Cell` in client components, and as the flat exports `TableHeader`,
+ * `TableHeaderCell`, `TableBody`, `TableRow` and `TableCell` (the form React Server Components
+ * can import). `Table.Head`/`Table.HeadCell` (`TableHead`/`TableHeadCell`) are deprecated aliases.
+ */
 export const Table = /* @__PURE__ */ Object.assign(TableRoot, {
   Header: TableHeader,
   HeaderCell: TableHeaderCell,

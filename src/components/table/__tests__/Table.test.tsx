@@ -266,6 +266,26 @@ describe('Table', () => {
       }
     });
 
+    it('is named by a caption inside a Fragment too', () => {
+      const resize = installResizeObserverMock();
+      try {
+        render(
+          <Table>
+            <>
+              <caption>Quarterly figures</caption>
+              {tableContent()}
+            </>
+          </Table>,
+        );
+        const wrapper = screen.getByRole('table').parentElement!;
+        makeScrollable(wrapper);
+        resize.trigger(wrapper);
+        expect(screen.getByRole('region', { name: 'Quarterly figures' })).toBe(wrapper);
+      } finally {
+        resize.restore();
+      }
+    });
+
     it('keeps a caption’s own id and names the region with containerProps aria-label', () => {
       const resize = installResizeObserverMock();
       try {
@@ -359,7 +379,7 @@ describe('Table sub-component refs', () => {
   });
 
   it('Table.Head (deprecated) forwards ref to thead', () => {
-    vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
     const ref = React.createRef<HTMLTableSectionElement>();
     render(
       <table>
@@ -372,6 +392,11 @@ describe('Table sub-component refs', () => {
     );
     expect(ref.current).toBe(screen.getByTestId('thead'));
     expect(ref.current!.tagName.toLowerCase()).toBe('thead');
+    expect(warn.mock.calls).toEqual([
+      [
+        '[WaveUI] Table: `Table.Head` is deprecated and will be removed in 1.0. Use `Table.Header` instead.',
+      ],
+    ]);
   });
 
   it('Table.HeaderCell forwards ref to th', () => {
@@ -392,7 +417,7 @@ describe('Table sub-component refs', () => {
   });
 
   it('Table.HeadCell (deprecated) forwards ref to th', () => {
-    vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
     const ref = React.createRef<HTMLTableCellElement>();
     render(
       <table>
@@ -407,6 +432,11 @@ describe('Table sub-component refs', () => {
     );
     expect(ref.current).toBe(screen.getByTestId('th'));
     expect(ref.current!.tagName.toLowerCase()).toBe('th');
+    expect(warn.mock.calls).toEqual([
+      [
+        '[WaveUI] Table: `Table.HeadCell` is deprecated and will be removed in 1.0. Use `Table.HeaderCell` instead.',
+      ],
+    ]);
   });
 
   it('Table.Body forwards ref to tbody', () => {

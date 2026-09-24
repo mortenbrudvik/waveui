@@ -48,9 +48,12 @@ const KEY_CONSUMING_ROLES: ReadonlySet<string> = new Set([
 ]);
 
 /**
- * Roles of composite widgets that manage their own children (and usually their tab indexes). The
- * same rule as `useRovingTabIndex`: an element with one of them, or with `data-roving-container`,
- * is a nested composite.
+ * Roles of composite widgets that manage their own children (and usually their tab indexes): an
+ * element with one of them, or with `data-roving-container`, is a nested composite. Close to the
+ * list of `useRovingTabIndex`, which is kept separately and differs on purpose: here a `toolbar`
+ * is a composite (a toolbar in a cell is one widget), while `spinbutton` is not (it is one
+ * focusable control that uses the arrow keys, handled by `KEY_CONSUMING_ROLES` like a text
+ * field). Keep both lists in mind when adding a role.
  */
 const COMPOSITE_ROLES: readonly string[] = [
   'toolbar',
@@ -175,6 +178,59 @@ function getRows(grid: HTMLTableElement): HTMLTableRowElement[] {
   return Array.from(grid.rows).filter((row) => row.cells.length > 0 && !row.hidden);
 }
 
+/** Browsers clamp `colSpan` to 1..1000 (`rowSpan` 0 covers the rest of its row group). */
+const MAX_COL_SPAN = 1000;
+
+/** Per row, the cell covering each visual column (see {@link getColumnMap}). */
+type ColumnMap = ReadonlyArray<ReadonlyArray<HTMLTableCellElement | undefined>>;
+
+/**
+ * The HTML table model of `rows`: per row, the cell covering each visual column, with `colSpan` and
+ * `rowSpan` counted. A row span covers the next rows of its row group in the DOM (a hidden row
+ * counts, but gets no entry). A column no cell covers is empty. O(number of cells).
+ */
+function getColumnMap(rows: readonly HTMLTableRowElement[]): ColumnMap {
+  const indexOf = new Map<Element, number>(rows.map((row, index) => [row, index]));
+  const map: Array<Array<HTMLTableCellElement | undefined>> = rows.map(() => []);
+  const cover = (rowIndex: number, column: number, colSpan: number, cell: HTMLTableCellElement) => {
+    for (let offset = 0; offset < colSpan; offset += 1) map[rowIndex][column + offset] = cell;
+  };
+  rows.forEach((row, rowIndex) => {
+    const own = map[rowIndex];
+    let column = 0;
+    for (const cell of Array.from(row.cells)) {
+      while (own[column]) column += 1;
+      const colSpan = Math.min(Math.max(cell.colSpan, 1), MAX_COL_SPAN);
+      cover(rowIndex, column, colSpan, cell);
+      let remaining = cell.rowSpan === 0 ? Infinity : cell.rowSpan - 1;
+      for (
+        let next = row.nextElementSibling;
+        next && remaining > 0;
+        next = next.nextElementSibling
+      ) {
+        if (next.localName !== 'tr') continue;
+        remaining -= 1;
+        const covered = indexOf.get(next);
+        if (covered !== undefined) cover(covered, column, colSpan, cell);
+      }
+      column += colSpan;
+    }
+  });
+  return map;
+}
+
+/** The cell of a row (as {@link getColumnMap} maps it) at `column`, else the last one before it. */
+function getCellAtColumn(
+  rowMap: ReadonlyArray<HTMLTableCellElement | undefined>,
+  column: number,
+): HTMLTableCellElement | null {
+  for (let index = Math.min(column, rowMap.length - 1); index >= 0; index -= 1) {
+    const cell = rowMap[index];
+    if (cell) return cell;
+  }
+  return null;
+}
+
 /** The grid cells in `node` (itself, or its descendants that belong to `grid`). */
 function collectCells(grid: HTMLTableElement, node: Node, into: Set<HTMLTableCellElement>): void {
   if (!(node instanceof Element)) return;
@@ -204,10 +260,13 @@ interface CellWidget {
  *   When a widget becomes the target of the focused cell (Space on the cell checks its radio), the
  *   cell keeps focus and the tab stop (removing its `tabindex` would blur it) while its target stays
  *   at `tabindex="-1"`; the target takes the tab stop once the cell is blurred.
- * - **Navigation mode** (focus on a cell or on its target widget): ArrowLeft/ArrowRight (mirrored in
- *   RTL), ArrowUp/ArrowDown, Home/End (first/last cell of the row), Ctrl+Home/Ctrl+End (first cell
- *   of the grid / last cell of the last row) and PageUp/PageDown ({@link UseGridNavigationOptions.pageSize}
- *   rows) move focus between cells. Space and Enter on a target widget reach the widget.
+ * - **Navigation mode** (focus on a cell or on its target widget): ArrowLeft/ArrowRight (the
+ *   previous/next cell of the row, mirrored in RTL), ArrowUp/ArrowDown, Home/End (first/last cell
+ *   of the row), Ctrl+Home/Ctrl+End (first cell of the grid / last cell of the last row) and
+ *   PageUp/PageDown ({@link UseGridNavigationOptions.pageSize} rows) move focus between cells.
+ *   ArrowUp/ArrowDown and PageUp/PageDown keep the visual column (`colSpan` and `rowSpan` counted,
+ *   so a grouped header works), clamped to a shorter row. Space and Enter on a target widget reach
+ *   the widget.
  * - **Interaction mode**: Enter or F2 on a cell that is its own target moves focus into its first
  *   widget; clicking a widget that is not the cell's target (a text input) enters it too. The
  *   grid keys are then ignored, so the arrow keys move the caret, and Tab moves between the cell's
@@ -517,9 +576,10 @@ export function useGridNavigation(options: UseGridNavigationOptions = {}): UseGr
       const columnIndex = Array.from(rows[rowIndex].cells).indexOf(cell);
       const lastRow = rows.length - 1;
       const ctrl = event.ctrlKey;
-      /** Target row and column; `Infinity` means the row's last cell. */
+      /** Left/Right, Home/End: target row and cell index in it (`Infinity`: the row's last cell). */
       let next: [row: number, column: number] | null = null;
-      let horizontal = false;
+      /** Up/Down, PageUp/PageDown: the first row to try and the direction to keep going in. */
+      let vertical: [row: number, step: 1 | -1] | null = null;
 
       switch (event.key) {
         case 'ArrowLeft':
@@ -530,14 +590,13 @@ export function useGridNavigation(options: UseGridNavigationOptions = {}): UseGr
             dir: getDirection(table),
           });
           next = [rowIndex, columnIndex + (intent === 'next' ? 1 : -1)];
-          horizontal = true;
           break;
         }
         case 'ArrowDown':
-          if (!ctrl) next = [rowIndex + 1, columnIndex];
+          if (!ctrl) vertical = [rowIndex + 1, 1];
           break;
         case 'ArrowUp':
-          if (!ctrl) next = [rowIndex - 1, columnIndex];
+          if (!ctrl) vertical = [rowIndex - 1, -1];
           break;
         case 'Home':
           next = ctrl ? [0, 0] : [rowIndex, 0];
@@ -546,23 +605,37 @@ export function useGridNavigation(options: UseGridNavigationOptions = {}): UseGr
           next = ctrl ? [lastRow, Infinity] : [rowIndex, Infinity];
           break;
         case 'PageDown':
-          if (!ctrl) next = [Math.min(rowIndex + pageSizeRef.current, lastRow), columnIndex];
+          if (!ctrl) vertical = [Math.min(rowIndex + pageSizeRef.current, lastRow), 1];
           break;
         case 'PageUp':
-          if (!ctrl) next = [Math.max(rowIndex - pageSizeRef.current, 0), columnIndex];
+          if (!ctrl) vertical = [Math.max(rowIndex - pageSizeRef.current, 0), -1];
           break;
         default:
           break;
       }
-      if (!next) return;
+      if (!next && !vertical) return;
       // A handled key never scrolls the page or reaches the widget, even at the grid's edge.
       event.preventDefault();
-      const [nextRow, nextColumn] = next;
-      if (nextRow < 0 || nextRow > lastRow) return;
-      const rowCells = rows[nextRow].cells;
-      // Left/Right stop at the row's edges; Up/Down keep the column, clamped to a shorter row.
-      if (nextColumn < 0 || (horizontal && nextColumn >= rowCells.length)) return;
-      const destination = rowCells[Math.min(nextColumn, rowCells.length - 1)];
+      let destination: HTMLTableCellElement | null = null;
+      if (vertical) {
+        // Up/Down keep the visual column (spans counted), clamped to a shorter row; the rows a
+        // row-spanning cell covers are skipped when moving away from it.
+        const columns = getColumnMap(rows);
+        const column = Math.max(columns[rowIndex].indexOf(cell), 0);
+        for (let row = vertical[0]; row >= 0 && row <= lastRow; row += vertical[1]) {
+          const candidate = getCellAtColumn(columns[row], column);
+          if (candidate && candidate !== cell) {
+            destination = candidate;
+            break;
+          }
+        }
+      } else if (next) {
+        // Left/Right stop at the row's edges (no cell there).
+        const [nextRow, nextColumn] = next;
+        const rowCells = rows[nextRow].cells;
+        destination =
+          nextColumn === Infinity ? rowCells[rowCells.length - 1] : rowCells.item(nextColumn);
+      }
       if (destination && destination !== cell) focusCell(table, destination);
     },
     [activate, focusCell, getTarget, getWidgets],
