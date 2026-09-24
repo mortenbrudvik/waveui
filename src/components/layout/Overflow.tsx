@@ -1,6 +1,6 @@
 import * as React from 'react';
 import { cn } from '../../lib/cn';
-import { isDev } from '../../lib/dev';
+import { reportMissingContext } from '../../lib/dev';
 import { useMergedRefs } from '../../hooks/useMergedRefs';
 
 /** Properties for the Overflow component. */
@@ -290,19 +290,14 @@ const INERT_CONTEXT: OverflowContextValue = {
 
 /**
  * The enclosing Overflow's context. Outside an Overflow it throws in development and, in
- * production, logs an error and returns an inert value (C-CONTEXT).
+ * production, logs an error once and returns an inert value (C-CONTEXT).
  */
 function useOverflowContext(componentName: string): OverflowContextValue {
   const ctx = React.useContext(OverflowContext);
   if (ctx) return ctx;
-  const message = `[WaveUI] ${componentName} must be used within Overflow`;
-  if (isDev) throw new Error(message);
-  console.error(message);
+  reportMissingContext(componentName, 'Overflow');
   return INERT_CONTEXT;
 }
-
-const useIsomorphicLayoutEffect =
-  typeof document !== 'undefined' ? React.useLayoutEffect : React.useEffect;
 
 // ---------------------------------------------------------------------------
 // Hooks
@@ -455,13 +450,13 @@ export function useIsOverflowing(
   // Every render: follow the element the ref points to now (cheap identity check). A change found
   // here re-renders from the layout phase, before paint: useSyncExternalStore only subscribes in a
   // passive effect, so on mount it would pick the first value up after the browser painted.
-  useIsomorphicLayoutEffect(() => {
+  React.useLayoutEffect(() => {
     const unsubscribe = store.subscribe(forceRender);
     store.setElement(isRefObject(target) ? target.current : target);
     unsubscribe();
   });
 
-  useIsomorphicLayoutEffect(() => () => store.disconnect(), [store]);
+  React.useLayoutEffect(() => () => store.disconnect(), [store]);
 
   return isOverflowing;
 }
@@ -470,24 +465,6 @@ export function useIsOverflowing(
 // Components
 // ---------------------------------------------------------------------------
 
-/**
- * A single row that hides the items which do not fit and shows an overflow button instead.
- *
- * Wrap each entry in {@link OverflowItem} with a unique `itemId`; the row holds only items (other
- * content is not measured, see `children`). Items are measured while visible, hidden from the end
- * (in DOM order; the first item always stays) and hidden items get `data-overflow-hidden`, an
- * inline `display: none`, `aria-hidden` and `inert`. Reordered items (for example a keyed sort) are
- * re-measured in their new order. `overflowButton(count, hiddenIds)` renders the button after the
- * visible items (its measured width is reserved); components inside it can use
- * {@link useOverflowMenu} to list the hidden items (e.g. in a Menu), and
- * {@link useIsOverflowItemVisible} reports a single item. The button sticks to the inline end of
- * the row, so a first item wider than the room beside it cannot push it out of view: it then covers
- * the end of that item and gets `data-overflow-pinned`, with the `background` token behind it. (In
- * a right-to-left row, WebKit stops the pinned button short of the end, still inside the row.)
- *
- * Works without `ResizeObserver` (jsdom, old browsers): it then re-measures on window resize and
- * when items mount, unmount or move.
- */
 const OverflowRoot = ({ overflowButton, children, className, ref, ...rest }: OverflowProps) => {
   const [store] = React.useState(() => new OverflowStore());
   const hiddenIds = React.useSyncExternalStore(
@@ -514,7 +491,7 @@ const OverflowRoot = ({ overflowButton, children, className, ref, ...rest }: Ove
   // Observers are created once per instance (not per render or per children change). The first
   // measurement (in connect) re-renders from this layout effect, before paint: useSyncExternalStore
   // only subscribes in a passive effect, which can run after the browser painted every item.
-  useIsomorphicLayoutEffect(() => {
+  React.useLayoutEffect(() => {
     const unsubscribe = store.subscribe(forceRender);
     const disconnect = store.connect();
     unsubscribe();
@@ -523,7 +500,7 @@ const OverflowRoot = ({ overflowButton, children, className, ref, ...rest }: Ove
 
   // After every commit of the root (new children, a keyed reorder): items moved without any size
   // change or registration are re-measured before paint. Cheap when nothing moved.
-  useIsomorphicLayoutEffect(() => {
+  React.useLayoutEffect(() => {
     store.checkOrder();
   });
 
@@ -541,19 +518,25 @@ const OverflowRoot = ({ overflowButton, children, className, ref, ...rest }: Ove
     <OverflowContext.Provider value={ctx}>
       <div
         ref={containerRef}
-        className={cn('flex items-center overflow-hidden', className)}
+        // The row clips its content at its padding edge: the 4px padding (offset by the -4px
+        // margin, so the items keep their place) leaves room for the focus indicator a focused
+        // item draws 4px around itself. The store measures the room without the padding.
+        className={cn('-m-1 flex items-center overflow-hidden p-1', className)}
         {...rest}
       >
         {children}
         {hiddenCount > 0 && overflowButton && (
           // In the row's flow (it adds to the row height and follows justify-*), sticking to the
-          // inline end when the first item is wider than the room beside it. (WebKit stops a
-          // sticky element short of the inline end of a right-to-left row; it stays in the row.)
+          // inline end when the first item is wider than the room beside it. Browsers stop a
+          // sticky element at the scroll container's padding, so -end-1 lets it reach the
+          // clipping edge, and while pinned it keeps 4px inside for its own focus indicator.
+          // (WebKit stops a sticky element short of the inline end of a right-to-left row; it
+          // stays in the row.)
           <div
             ref={setButton}
             data-overflow-button=""
             data-overflow-pinned={pinned ? '' : undefined}
-            className="sticky end-0 flex shrink-0 items-center self-stretch ps-1 data-[overflow-pinned]:bg-background"
+            className="sticky -end-1 flex shrink-0 items-center self-stretch ps-1 data-[overflow-pinned]:bg-background data-[overflow-pinned]:pe-1"
           >
             {overflowButton(hiddenCount, buttonIds)}
           </div>
@@ -607,8 +590,29 @@ export const OverflowItem = ({
 OverflowItem.displayName = 'OverflowItem';
 
 /**
- * Overflow with its item as `Overflow.Item`. The same component is exported as `OverflowItem`;
- * React Server Components import that flat name (dotted access needs a client file).
+ * A single row that hides the items which do not fit and shows an overflow button instead.
+ *
+ * Wrap each entry in {@link OverflowItem} with a unique `itemId`; the row holds only items (other
+ * content is not measured, see `children`). Items are measured while visible, hidden from the end
+ * (in DOM order; the first item always stays) and hidden items get `data-overflow-hidden`, an
+ * inline `display: none`, `aria-hidden` and `inert`. Reordered items (for example a keyed sort) are
+ * re-measured in their new order. `overflowButton(count, hiddenIds)` renders the button after the
+ * visible items (its measured width is reserved); components inside it can use
+ * {@link useOverflowMenu} to list the hidden items (e.g. in a Menu), and
+ * {@link useIsOverflowItemVisible} reports a single item. The button sticks to the inline end of
+ * the row, so a first item wider than the room beside it cannot push it out of view: it then covers
+ * the end of that item and gets `data-overflow-pinned`, with the `background` token behind it. (In
+ * a right-to-left row, WebKit stops the pinned button short of the end, still inside the row.)
+ *
+ * The row clips what does not fit. So that the focus indicators of its items are not cut off, it
+ * has a 4px padding offset by a -4px margin: the items sit where they would without it, and the
+ * row's box reaches 4px beyond them. Override both together if you change either.
+ *
+ * Works without `ResizeObserver` (jsdom, old browsers): it then re-measures on window resize and
+ * when items mount, unmount or move.
+ *
+ * The item is also `Overflow.Item`. The same component is exported as `OverflowItem`; React Server
+ * Components import that flat name (dotted access needs a client file).
  */
 export const Overflow = /* @__PURE__ */ Object.assign(OverflowRoot, {
   Item: OverflowItem,

@@ -15,6 +15,7 @@ import {
 } from '../TabList';
 import type { Orientation } from '../../../lib/types';
 import {
+  asClientReference,
   expectNoA11yViolations,
   renderWithProviders,
   testSystemProps,
@@ -45,7 +46,12 @@ const tab = (name: string) => screen.getByRole('tab', { name });
 
 afterEach(() => {
   vi.restoreAllMocks();
+  vi.unstubAllEnvs();
 });
+
+/** The `[WaveUI]` warnings logged so far (R14: asserted, never silenced). */
+const warnings = (warn: { mock: { calls: unknown[][] } }) =>
+  warn.mock.calls.map(([message]) => String(message));
 
 describe('TabList', () => {
   testSystemProps(TabList, {
@@ -138,6 +144,106 @@ describe('TabList', () => {
     expect(() => render(<TabList.Panel value="a">Orphan</TabList.Panel>)).toThrow(
       '[WaveUI] TabList.Panel must be used within <TabList>',
     );
+  });
+
+  it('in production, parts outside a TabList log once each and render inertly (C-CONTEXT, R3)', () => {
+    vi.stubEnv('NODE_ENV', 'production');
+    const error = vi.spyOn(console, 'error').mockImplementation(() => {});
+    const orphans = (
+      <>
+        <TabList.Tab value="a">Orphan</TabList.Tab>
+        <TabList.Panel value="a">Orphan panel</TabList.Panel>
+      </>
+    );
+    const { rerender } = render(orphans);
+    rerender(orphans);
+    expect(tab('Orphan')).toHaveAttribute('aria-selected', 'false');
+    expect(screen.queryByText('Orphan panel')).not.toBeInTheDocument();
+    expect(error.mock.calls).toEqual([
+      ['[WaveUI] TabList.Tab must be used within <TabList>'],
+      ['[WaveUI] TabList.Panel must be used within <TabList>'],
+    ]);
+  });
+
+  it('parts written in a Server Component (lazy types) render the same server HTML and behave the same (R1)', async () => {
+    const user = userEvent.setup();
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const sections = (
+      Tab: typeof TabList.Tab,
+      Panel: typeof TabList.Panel,
+      Panels: typeof TabList.Panels,
+    ) => (
+      <TabList aria-label="Sections">
+        <Tab value="a" disabled>
+          Tab A
+        </Tab>
+        <Tab value="b">Tab B</Tab>
+        <Tab value="c" id="custom-tab-c">
+          Tab C
+        </Tab>
+        <Panel value="b">Panel B</Panel>
+        <Panels>
+          <Panel value="c" id="custom-panel-c">
+            Panel C
+          </Panel>
+        </Panels>
+      </TabList>
+    );
+    const plain = renderToString(sections(TabList.Tab, TabList.Panel, TabList.Panels));
+    const lazy = sections(
+      asClientReference(TabList.Tab),
+      asClientReference(TabList.Panel),
+      asClientReference(TabList.Panels),
+    );
+    expect(renderToString(lazy)).toBe(plain);
+
+    render(lazy);
+    // The first enabled written tab is the default, and the panels render after the tablist.
+    const tablist = screen.getByRole('tablist');
+    expect(tab('Tab B')).toHaveAttribute('aria-selected', 'true');
+    expect(tablist).not.toContainElement(screen.getByRole('tabpanel', { name: 'Tab B' }));
+    await user.click(tab('Tab C'));
+    expect(screen.getByRole('tabpanel', { name: 'Tab C' })).toHaveAttribute('id', 'custom-panel-c');
+    expect(tab('Tab C')).toHaveAttribute('aria-controls', 'custom-panel-c');
+    expect(warn).not.toHaveBeenCalled();
+    await expectNoA11yViolations();
+  });
+
+  it('warns once per value shared by several tabs (R12, x-errors-components-2)', () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const duplicated = (
+      <TabList aria-label="Sections" defaultValue="a">
+        <TabList.Tab value="a">First</TabList.Tab>
+        <TabList.Tab value="a">Copy</TabList.Tab>
+        <TabList.Tab value="b">Second</TabList.Tab>
+      </TabList>
+    );
+    const { rerender } = render(duplicated);
+    rerender(duplicated);
+    expect(warnings(warn)).toEqual([
+      expect.stringMatching(/^\[WaveUI\] TabList: several tabs share the value "a"\. /),
+    ]);
+  });
+
+  it('does not warn about tab values in StrictMode, when keyed tabs are reordered or when a tab is replaced (R12)', async () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const renderTabs = (keys: string[]) => (
+      <React.StrictMode>
+        <TabList aria-label="Sections" defaultValue="a">
+          {keys.map((key) => (
+            <TabList.Tab key={key} value={key.replace('-new', '')}>
+              {key}
+            </TabList.Tab>
+          ))}
+        </TabList>
+      </React.StrictMode>
+    );
+    const { rerender } = render(renderTabs(['a', 'b', 'c']));
+    // Async act: the roving store sees the moved tabs through a MutationObserver (a microtask).
+    await act(async () => rerender(renderTabs(['c', 'a', 'b'])));
+    await act(async () => rerender(renderTabs(['c', 'a-new', 'b'])));
+    expect(screen.getAllByRole('tab')).toHaveLength(3);
+    expect(warn).not.toHaveBeenCalled();
   });
 
   describe('re-rendering with unchanged state and inline callbacks does not re-render memoized tabs and panels (table-core#25)', () => {
@@ -367,6 +473,110 @@ describe('TabList - controlled', () => {
     expect(screen.queryByRole('tab', { selected: true })).not.toBeInTheDocument();
     expect(screen.queryByRole('tabpanel')).not.toBeInTheDocument();
     expect(tab('Tab A')).toHaveAttribute('tabindex', '0');
+  });
+
+  it('a controlled value that becomes undefined clears the selection and stays controlled (layout-b-code-2)', async () => {
+    const user = userEvent.setup();
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const onValueChange = vi.fn();
+    const { rerender } = render(
+      <TabList value="b" onValueChange={onValueChange}>
+        {tabsWithPanels}
+      </TabList>,
+    );
+    expect(tab('Tab B')).toHaveAttribute('aria-selected', 'true');
+    rerender(
+      <TabList value={undefined} onValueChange={onValueChange}>
+        {tabsWithPanels}
+      </TabList>,
+    );
+    // Like value="": no tab is selected and no panel is shown (the first tab stays the tab stop).
+    expect(screen.queryByRole('tab', { selected: true })).not.toBeInTheDocument();
+    expect(screen.queryByRole('tabpanel')).not.toBeInTheDocument();
+    expect(tab('Tab A')).toHaveAttribute('tabindex', '0');
+    // Still controlled: a click reports the tab and the parent decides.
+    await user.click(tab('Tab B'));
+    expect(onValueChange.mock.calls).toEqual([['b']]);
+    expect(screen.queryByRole('tab', { selected: true })).not.toBeInTheDocument();
+    expect(warnings(warn)).toEqual([
+      expect.stringMatching(
+        /^\[WaveUI\] A component is changing from controlled to uncontrolled\./,
+      ),
+    ]);
+  });
+});
+
+describe('TabList - parts that unmount (layout-b-tests-3)', () => {
+  type Toggle = (show: boolean) => void;
+
+  /** Renders its children until told otherwise, without rendering the TabList again. */
+  function Removable({ api, children }: { api: React.Ref<Toggle>; children: React.ReactNode }) {
+    const [show, setShow] = React.useState(true);
+    React.useImperativeHandle(api, () => setShow, []);
+    return show ? children : null;
+  }
+
+  it('a Panel that unmounts: its Tab drops aria-controls, and gets it back when it mounts again', async () => {
+    const toggle = React.createRef<Toggle>();
+    render(
+      <TabList aria-label="Sections" value="b">
+        {threeTabs}
+        <TabList.Panels>
+          <Removable api={toggle}>
+            <TabList.Panel value="b">Panel B</TabList.Panel>
+          </Removable>
+        </TabList.Panels>
+      </TabList>,
+    );
+    expect(tab('Tab B')).toHaveAttribute('aria-controls', screen.getByRole('tabpanel').id);
+
+    act(() => toggle.current?.(false));
+    expect(screen.queryByRole('tabpanel')).not.toBeInTheDocument();
+    expect(tab('Tab B')).not.toHaveAttribute('aria-controls');
+    await expectNoA11yViolations();
+
+    act(() => toggle.current?.(true));
+    expect(tab('Tab B')).toHaveAttribute('aria-controls', screen.getByRole('tabpanel').id);
+  });
+
+  it('a Tab that unmounts: its Panel drops aria-labelledby', async () => {
+    const toggle = React.createRef<Toggle>();
+    render(
+      <TabList aria-label="Sections" value="a">
+        <Removable api={toggle}>
+          <TabList.Tab value="a">Tab A</TabList.Tab>
+        </Removable>
+        <TabList.Tab value="b">Tab B</TabList.Tab>
+        <TabList.Panel value="a">Panel A</TabList.Panel>
+      </TabList>,
+    );
+    expect(screen.getByRole('tabpanel')).toHaveAttribute('aria-labelledby', tab('Tab A').id);
+
+    act(() => toggle.current?.(false));
+    expect(screen.getByRole('tabpanel')).not.toHaveAttribute('aria-labelledby');
+    await expectNoA11yViolations();
+  });
+
+  it('two Panels with the same value: when the first unmounts, the Tab references the second', () => {
+    const toggle = React.createRef<Toggle>();
+    render(
+      <TabList aria-label="Sections" value="b">
+        {threeTabs}
+        <TabList.Panels>
+          <Removable api={toggle}>
+            <TabList.Panel value="b" id="first-b">
+              First B
+            </TabList.Panel>
+          </Removable>
+          <TabList.Panel value="b" id="second-b">
+            Second B
+          </TabList.Panel>
+        </TabList.Panels>
+      </TabList>,
+    );
+    expect(tab('Tab B')).toHaveAttribute('aria-controls', 'first-b');
+    act(() => toggle.current?.(false));
+    expect(tab('Tab B')).toHaveAttribute('aria-controls', 'second-b');
   });
 });
 
@@ -948,6 +1158,32 @@ describe('TabList - keyboard', () => {
     assertInternalSuppressed: () => {
       expect(tab('Tab A')).toHaveFocus();
     },
+  });
+
+  it('a consumer onFocus runs for every tab that receives focus, also when it calls preventDefault(), and the keys still work (layout-b-tests-7)', async () => {
+    const user = userEvent.setup();
+    const onFocus = vi.fn((event: React.FocusEvent) => event.preventDefault());
+    const onValueChange = vi.fn();
+    render(
+      <>
+        <button type="button">Before</button>
+        <TabList defaultValue="a" onFocus={onFocus} onValueChange={onValueChange}>
+          {threeTabs}
+        </TabList>
+      </>,
+    );
+    await user.tab();
+    await user.tab();
+    expect(tab('Tab A')).toHaveFocus();
+    expect(onFocus).toHaveBeenCalledTimes(1);
+    expect(onFocus.mock.calls[0][0].target).toBe(tab('Tab A'));
+
+    await user.keyboard('{ArrowRight}');
+    expect(tab('Tab B')).toHaveFocus();
+    expect(tab('Tab B')).toHaveAttribute('aria-selected', 'true');
+    expect(onValueChange.mock.calls).toEqual([['b']]);
+    expect(onFocus).toHaveBeenCalledTimes(2);
+    expect(onFocus.mock.calls[1][0].target).toBe(tab('Tab B'));
   });
 
   testComposedHandler(TabList.Tab, {

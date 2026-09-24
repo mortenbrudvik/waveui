@@ -1,7 +1,8 @@
 import * as React from 'react';
+import { flattenChildren, isElementOfType } from '../../lib/children';
 import { cn } from '../../lib/cn';
 import { composeEventHandlers } from '../../lib/composeEventHandlers';
-import { isDev } from '../../lib/dev';
+import { isDev, reportMissingContext, warnOnce } from '../../lib/dev';
 import { getDirection } from '../../lib/direction';
 import { ChevronRightIcon } from '../../lib/icons';
 import { renderSlot, slotRendersContent, type Slot } from '../../lib/slot';
@@ -26,12 +27,24 @@ interface TreeContextValue {
   getTabIndex: (value: string) => 0 | -1;
   focusValue: (value: string) => void;
   onItemFocus: (value: string) => void;
+  /**
+   * Development only: counts a mounted item's value and warns once per value that several items
+   * share. Returns the unregistration.
+   */
+  registerValue: (value: string) => () => void;
 }
 
 const TreeContext = React.createContext<TreeContextValue | null>(null);
 
 /** Value of the enclosing Tree.Item (`null` at the top level), for ArrowLeft → parent. */
 const TreeParentContext = React.createContext<string | null>(null);
+
+/**
+ * `true` inside the label of a Tree.Item, where a nested Tree.Item ends up when a component
+ * renders it (the parent cannot see it among its children); its child group and every Tree root
+ * reset it.
+ */
+const TreeLabelContext = React.createContext(false);
 
 const EMPTY: readonly string[] = [];
 
@@ -45,16 +58,31 @@ const INERT_CONTEXT: TreeContextValue = {
   getTabIndex: () => -1,
   focusValue: () => {},
   onItemFocus: () => {},
+  registerValue: () => () => {},
 };
 
-/** C-CONTEXT: throws in development, logs and returns an inert value in production. */
+/** C-CONTEXT: throws in development, logs once and returns an inert value in production. */
 function useTreeContext(component: string): TreeContextValue {
   const context = React.useContext(TreeContext);
   if (context) return context;
-  const message = `[WaveUI] ${component} must be used within <Tree>.`;
-  if (isDev) throw new Error(message);
-  console.error(message);
+  reportMissingContext(component, '<Tree>');
   return INERT_CONTEXT;
+}
+
+const ITEM_IN_LABEL_MESSAGE =
+  'Tree.Item was rendered inside the label of another Tree.Item, so it is not part of that ' +
+  "item's child group: the parent cannot expand, its name includes the nested text, and a " +
+  'treeitem sits inside a label (axe aria-required-parent). A Tree.Item finds its nested items ' +
+  'among its own children (written directly, in Fragments, or returned by a render function such ' +
+  'as `children.map(renderNode)`), but not inside a component that renders Tree.Item itself. ' +
+  'Build a data-driven tree with a render function instead of a recursive component.';
+
+function warnDuplicateValue(value: string): void {
+  warnOnce(
+    `Tree:duplicate:${value}`,
+    `Tree: several items share the value "${value}". Item values must be unique within a Tree; ` +
+      'items with the same value share their expanded, selected and focus state.',
+  );
 }
 
 /* ------------------------------------------------------------------ */
@@ -64,12 +92,12 @@ function useTreeContext(component: string): TreeContextValue {
 /** Properties for the Tree component. */
 export interface TreeProps extends React.HTMLAttributes<HTMLDivElement> {
   /** Controlled list of expanded item values. */
-  expandedItems?: string[];
+  expandedItems?: readonly string[];
   /**
    * Item values that are expanded initially (uncontrolled).
    * @default []
    */
-  defaultExpandedItems?: string[];
+  defaultExpandedItems?: readonly string[];
   /** Called with the new list of expanded item values when an item expands or collapses. */
   onExpandedItemsChange?: (expandedItems: string[]) => void;
   /**
@@ -88,18 +116,6 @@ export interface TreeProps extends React.HTMLAttributes<HTMLDivElement> {
   ref?: React.Ref<HTMLDivElement>;
 }
 
-/**
- * A hierarchical list (WAI-ARIA Tree View pattern) with a single tab stop: Up/Down move between
- * visible items, Home/End to the first/last, Right expands or moves to the first child, Left
- * collapses or moves to the parent (both mirrored in RTL), Enter/Space activate (and toggle a
- * parent), `*` expands the siblings, and typing jumps to an item by its text.
- *
- * Keyboard focus enters at the `selected` item, else the first item; while focus is inside, the
- * tab stop follows it, so Shift+Tab leaves the tree.
- *
- * `Tree.Item` is also exported as `TreeItem` for React Server Components, which cannot use the
- * dotted form.
- */
 const TreeRoot = ({
   expandedItems,
   defaultExpandedItems,
@@ -151,6 +167,22 @@ const TreeRoot = ({
   // leaves the tree. Cleared when focus leaves; the next entry goes to `selected`, else the first.
   const [focusedItem, setFocusedItem] = React.useState<string | null>(null);
 
+  // How many mounted items carry each value (written from the items' effects only).
+  const valueCounts = React.useRef<Map<string, number> | null>(null);
+  const registerValue = React.useCallback((value: string) => {
+    if (!isDev) return () => {};
+    valueCounts.current ??= new Map();
+    const counts = valueCounts.current;
+    const count = (counts.get(value) ?? 0) + 1;
+    counts.set(value, count);
+    if (count > 1) warnDuplicateValue(value);
+    return () => {
+      const remaining = (counts.get(value) ?? 1) - 1;
+      if (remaining > 0) counts.set(value, remaining);
+      else counts.delete(value);
+    };
+  }, []);
+
   const { containerProps, getTabIndex, focusValue } = useRovingTabIndex({
     activeValue: focusedItem ?? selected ?? null,
     orientation: 'vertical',
@@ -169,8 +201,9 @@ const TreeRoot = ({
       getTabIndex,
       focusValue,
       onItemFocus: setFocusedItem,
+      registerValue,
     }),
-    [expanded, toggle, expand, activate, selected, current, getTabIndex, focusValue],
+    [expanded, toggle, expand, activate, selected, current, getTabIndex, focusValue, registerValue],
   );
 
   const mergedRef = useMergedRefs<HTMLDivElement>(ref, containerProps.ref);
@@ -208,7 +241,8 @@ const TreeRoot = ({
           onBlur={composeEventHandlers(onBlur, handleBlur, { checkDefaultPrevented: false })}
           ref={mergedRef}
         >
-          {children}
+          {/* A Tree has its own items, also when it renders inside a label (a portaled popup). */}
+          <TreeLabelContext.Provider value={false}>{children}</TreeLabelContext.Provider>
         </div>
       </TreeParentContext.Provider>
     </TreeContext.Provider>
@@ -231,7 +265,11 @@ export interface TreeItemProps extends React.HTMLAttributes<HTMLDivElement> {
    */
   icon?: Slot<'span'>;
   /**
-   * Whether this item is a leaf node with no expandable children.
+   * Renders the item as a leaf even when it has nested `Tree.Item`s: they are not rendered, and
+   * the item has no `aria-expanded` and does not expand. An item is expandable only while it has
+   * nested items, so `leaf={false}` does not make an item without them expandable. To load the
+   * children on first expansion, give the item a placeholder child (a "Loading…" `Tree.Item`)
+   * until they arrive.
    * @default false
    */
   leaf?: boolean;
@@ -278,31 +316,14 @@ function isOwnClick(event: React.MouseEvent<HTMLElement>): boolean {
 }
 
 /**
- * Direct children with Fragments flattened (`null`, `undefined` and booleans dropped), each with
- * a key that is unique across the flattened list and keeps the consumer's own `key`.
- */
-function flattenChildren(
-  children: React.ReactNode,
-  prefix = '',
-): Array<{ key: string; node: React.ReactNode }> {
-  const result: Array<{ key: string; node: React.ReactNode }> = [];
-  React.Children.toArray(children).forEach((child, index) => {
-    const key = `${prefix}${React.isValidElement(child) && child.key !== null ? child.key : index}`;
-    if (
-      React.isValidElement<{ children?: React.ReactNode }>(child) &&
-      child.type === React.Fragment
-    ) {
-      result.push(...flattenChildren(child.props.children, `${key}/`));
-    } else {
-      result.push({ key, node: child });
-    }
-  });
-  return result;
-}
-
-/**
  * One node of a Tree. Text and other content are the label; nested `Tree.Item` children form its
  * child group, which is shown while the item is expanded.
+ *
+ * Nested items must be `Tree.Item` elements among the item's own children: written directly, in
+ * Fragments, or returned by a render function (`{node.children.map(renderNode)}`). A component
+ * that renders `Tree.Item` itself (a recursive `<NodeView node={child} />`) is not recognised:
+ * its output becomes part of the label, so the parent cannot expand (a development warning names
+ * this). Render data-driven trees with a render function instead.
  *
  * `ref` and every other prop land on the `role="treeitem"` element, which contains the label row
  * and the child group. Its `onClick` receives only clicks on its own row (not on its child group
@@ -333,19 +354,28 @@ const TreeItem = ({
   };
   const ctx = useTreeContext('Tree.Item');
   const parent = React.useContext(TreeParentContext);
+  const insideLabel = React.useContext(TreeLabelContext);
   const isExpanded = ctx.expanded.has(value);
   const labelId = useId('tree-item-label');
 
+  const { registerValue } = ctx;
+  React.useEffect(() => registerValue(value), [registerValue, value]);
+  React.useEffect(() => {
+    if (insideLabel) warnOnce('Tree.Item:inside-label', ITEM_IN_LABEL_MESSAGE);
+  }, [insideLabel]);
+
   // Nested Tree.Items (and, as in 0.4, nested Trees) form the child group; the rest is the label.
+  // Parts are identified through their element type, so parts written in a Server Component
+  // (lazy references) count too.
   const nestedItems: React.ReactNode[] = [];
   const labelContent: React.ReactNode[] = [];
   let firstChildValue: string | undefined;
   flattenChildren(children).forEach(({ key, node: child }) => {
     const keyed = <React.Fragment key={key}>{child}</React.Fragment>;
-    if (React.isValidElement<TreeItemProps>(child) && child.type === TreeItem) {
+    if (isElementOfType<TreeItemProps>(child, TreeItem)) {
       firstChildValue ??= child.props.value;
       nestedItems.push(keyed);
-    } else if (React.isValidElement(child) && child.type === TreeRoot) {
+    } else if (isElementOfType(child, TreeRoot)) {
       nestedItems.push(keyed);
     } else {
       labelContent.push(keyed);
@@ -459,7 +489,7 @@ const TreeItem = ({
           <ChevronRightIcon
             className={cn(
               'shrink-0 transition-transform motion-reduce:transition-none',
-              isExpanded ? 'rotate-90' : 'rtl:-scale-x-100',
+              isExpanded ? 'rotate-90' : 'wave-rtl:-scale-x-100',
             )}
           />
         ) : (
@@ -467,14 +497,16 @@ const TreeItem = ({
         )}
         {iconNode}
         <span id={labelId} data-tree-label="" data-roving-text={typeaheadText} className="truncate">
-          {labelContent}
+          <TreeLabelContext.Provider value>{labelContent}</TreeLabelContext.Provider>
         </span>
       </div>
       {hasChildren && isExpanded && (
         <TreeParentContext.Provider value={value}>
-          <div role="group" className="ps-4">
-            {nestedItems}
-          </div>
+          <TreeLabelContext.Provider value={false}>
+            <div role="group" className="ps-4">
+              {nestedItems}
+            </div>
+          </TreeLabelContext.Provider>
         </TreeParentContext.Provider>
       )}
     </div>
@@ -486,7 +518,22 @@ TreeItem.displayName = 'TreeItem';
 /*  Export                                                             */
 /* ------------------------------------------------------------------ */
 
-/** Tree compound component: `Tree.Item`. */
+/**
+ * A hierarchical list (WAI-ARIA Tree View pattern) with a single tab stop: Up/Down move between
+ * visible items, Home/End to the first/last, Right expands or moves to the first child, Left
+ * collapses or moves to the parent (both mirrored in RTL), Enter/Space activate (and toggle a
+ * parent), `*` expands the siblings, and typing jumps to an item by its text.
+ *
+ * Keyboard focus enters at the `selected` item, else the first item; while focus is inside, the
+ * tab stop follows it, so Shift+Tab leaves the tree.
+ *
+ * Items are `Tree.Item` elements; nested items are written in their parent's children (directly,
+ * in Fragments, or returned by a render function), not rendered by a component of their own.
+ * Every item needs a `value` that is unique within the Tree.
+ *
+ * `Tree.Item` is also exported as `TreeItem` for React Server Components, which cannot use the
+ * dotted form.
+ */
 export const Tree = /* @__PURE__ */ Object.assign(TreeRoot, {
   Item: TreeItem,
 });

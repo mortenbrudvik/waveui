@@ -90,10 +90,13 @@ export const WithIcons: Story = {
   ),
 };
 
-/** Controlled expansion and selection: `expandedItems`, `selected` and `onItemSelect`. */
+/**
+ * Controlled expansion and selection: `expandedItems`, `selected` and `onItemSelect`. The selected
+ * item is visible on load, and Tab enters the tree there.
+ */
 export const ControlledSelection: Story = {
   render: function ControlledTree(args) {
-    const [expanded, setExpanded] = React.useState<string[]>(['docs']);
+    const [expanded, setExpanded] = React.useState<readonly string[]>(['docs', 'work']);
     const [selected, setSelected] = React.useState<string | null>('report');
     return (
       <Tree

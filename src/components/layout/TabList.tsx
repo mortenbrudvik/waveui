@@ -1,7 +1,13 @@
 import * as React from 'react';
+import { flattenChildren, getElementType } from '../../lib/children';
 import { cn } from '../../lib/cn';
 import { composeEventHandlers } from '../../lib/composeEventHandlers';
-import { isDev, resolveDeprecatedProp, warnDeprecated, warnOnce } from '../../lib/dev';
+import {
+  reportMissingContext,
+  resolveDeprecatedProp,
+  warnDeprecated,
+  warnOnce,
+} from '../../lib/dev';
 import { disabledStyles, focusRing, focusRingInset } from '../../lib/styles';
 import type { Orientation } from '../../lib/types';
 import { useControllable } from '../../hooks/useControllable';
@@ -40,6 +46,15 @@ interface TabListRegistry {
   subscribe: (listener: () => void) => () => void;
 }
 
+/** Tabs that share a value share one id, and are selected and tab stops together. */
+function warnDuplicateTabValue(value: string): void {
+  warnOnce(
+    `TabList:duplicate:${value}`,
+    `TabList: several tabs share the value "${value}". Tab values must be unique within a ` +
+      'TabList; tabs with the same value share one id and are selected (and tab stops) together.',
+  );
+}
+
 function createRegistry(): TabListRegistry {
   const entries: Record<TabListPart, Map<string, string[]>> = { tab: new Map(), panel: new Map() };
   const listeners = new Set<() => void>();
@@ -50,7 +65,11 @@ function createRegistry(): TabListRegistry {
   return {
     register(part, value, id) {
       const map = entries[part];
-      map.set(value, [...(map.get(value) ?? []), id]);
+      const ids = map.get(value) ?? [];
+      // Called from the part's layout effect (C-DEV). Two Panels may share a value (the Tab links
+      // to the first mounted one); two Tabs may not.
+      if (part === 'tab' && ids.length > 0) warnDuplicateTabValue(value);
+      map.set(value, [...ids, id]);
       emit();
       return () => {
         const ids = [...(map.get(value) ?? [])];
@@ -132,13 +151,11 @@ const INERT_CONTEXT: TabListContextValue = {
   registry: INERT_REGISTRY,
 };
 
-/** C-CONTEXT: throws in development, logs and returns an inert value in production. */
+/** C-CONTEXT: throws in development, logs once and returns an inert value in production. */
 function useTabListContext(component: string): TabListContextValue {
   const context = React.useContext(TabListContext);
   if (context) return context;
-  const message = `[WaveUI] ${component} must be used within <TabList>.`;
-  if (isDev) throw new Error(message);
-  console.error(message);
+  reportMissingContext(component, '<TabList>');
   return INERT_CONTEXT;
 }
 
@@ -161,7 +178,11 @@ function consumerId(id: unknown): string | null {
   return typeof id === 'string' && id !== '' ? id : null;
 }
 
-/** Walks the element tree of the TabList's children (see {@link TabListStructure}). */
+/**
+ * Walks the element tree of the TabList's children (see {@link TabListStructure}). Parts are
+ * identified through their element type, so parts written in a Server Component (lazy
+ * references) count too. Runs during render only.
+ */
 function collectStructure(node: unknown, into: TabListStructure): TabListStructure {
   if (Array.isArray(node)) {
     node.forEach((child) => collectStructure(child, into));
@@ -169,8 +190,9 @@ function collectStructure(node: unknown, into: TabListStructure): TabListStructu
   }
   if (!React.isValidElement<StructureProps>(node)) return into;
   const { props } = node;
+  const type = getElementType(node);
   const value = typeof props.value === 'string' ? props.value : undefined;
-  if (node.type === Tab) {
+  if (type === Tab) {
     if (value !== undefined) {
       if (into.firstEnabled === undefined && !isUnavailable(props)) into.firstEnabled = value;
       const id = consumerId(props.id);
@@ -178,11 +200,11 @@ function collectStructure(node: unknown, into: TabListStructure): TabListStructu
     }
     return into;
   }
-  if (node.type === TabPanel) {
+  if (type === TabPanel) {
     if (value !== undefined) into.panels.push([value, consumerId(props.id)]);
     return into;
   }
-  if (node.type === TabListRoot) return into;
+  if (type === TabListRoot) return into;
   return collectStructure(props.children, into);
 }
 
@@ -194,9 +216,10 @@ function collectStructure(node: unknown, into: TabListStructure): TabListStructu
 function containsPart(node: unknown, part: TabListPart): boolean {
   if (Array.isArray(node)) return node.some((child) => containsPart(child, part));
   if (!React.isValidElement<StructureProps>(node)) return false;
-  if (node.type === Tab) return part === 'tab';
-  if (node.type === TabPanel || node.type === TabPanels) return part === 'panel';
-  if (node.type === TabListRoot) return false;
+  const type = getElementType(node);
+  if (type === Tab) return part === 'tab';
+  if (type === TabPanel || type === TabPanels) return part === 'panel';
+  if (type === TabListRoot) return false;
   return containsPart(node.props.children, part);
 }
 
@@ -227,7 +250,10 @@ const PANEL_IN_TABLIST_MESSAGE =
 
 /** Properties for the TabList component. */
 export interface TabListProps extends Omit<React.HTMLAttributes<HTMLDivElement>, 'defaultValue'> {
-  /** Controlled value of the selected tab (`''`: no tab selected). */
+  /**
+   * Controlled value of the selected tab (`''`: no tab selected). A controlled value that becomes
+   * `undefined` also selects no tab: the TabList stays controlled.
+   */
   value?: string;
   /**
    * Selected tab for uncontrolled usage. When it is omitted (or `''`), the first enabled tab
@@ -263,45 +289,6 @@ export interface TabListProps extends Omit<React.HTMLAttributes<HTMLDivElement>,
   ref?: React.Ref<HTMLDivElement>;
 }
 
-/**
- * Direct children with Fragments flattened (`null`, `undefined` and booleans dropped), each with
- * a key that is unique across the flattened list and keeps the consumer's own `key`.
- */
-function flattenChildren(
-  children: React.ReactNode,
-  prefix = '',
-): Array<{ key: string; node: React.ReactNode }> {
-  const result: Array<{ key: string; node: React.ReactNode }> = [];
-  React.Children.toArray(children).forEach((child, index) => {
-    const key = `${prefix}${React.isValidElement(child) && child.key !== null ? child.key : index}`;
-    if (
-      React.isValidElement<{ children?: React.ReactNode }>(child) &&
-      child.type === React.Fragment
-    ) {
-      result.push(...flattenChildren(child.props.children, `${key}/`));
-    } else {
-      result.push({ key, node: child });
-    }
-  });
-  return result;
-}
-
-/**
- * A set of tabs with their panels (WAI-ARIA Tabs pattern, automatic activation): the arrow keys
- * (Left/Right, mirrored in RTL; Up/Down when vertical), Home and End move focus and select; the
- * selected tab is the only tab stop; disabled tabs are skipped.
- *
- * Tabs register through context and are found in DOM order, so they may be wrapped (a Fragment,
- * a Tooltip). The children render inside the `role="tablist"` element, except panels, which render
- * after it: a `TabList.Panel` or `TabList.Panels` child, or a wrapper (an element, `Suspense`, an
- * error boundary) that holds panels and no Tab. A Panel that a component renders itself cannot be
- * seen from the children: put that component inside `TabList.Panels` (a development warning names
- * a Panel that ends up inside the tablist). Content that is not a tab, such as a button next to
- * the tabs, does not belong in a tablist either: render it outside the TabList.
- *
- * Sub-components are also exported under flat names (`TabListTab`, `TabListPanel`,
- * `TabListPanels`) for React Server Components, which cannot use the dotted form.
- */
 const TabListRoot = ({
   value: valueProp,
   defaultValue: defaultValueProp,
@@ -349,8 +336,12 @@ const TabListRoot = ({
     );
   }
 
-  const [selected, setSelected] = useControllable(value, defaultValue ?? '', onValueChange);
-  const isControlled = value !== undefined;
+  // The sticky mode: a controlled value that becomes `undefined` clears the selection (`''`).
+  const [selected, setSelected, isControlled] = useControllable(
+    value,
+    defaultValue ?? '',
+    onValueChange,
+  );
 
   // The children are a new element tree on every parent render: memoized by content, so the
   // context value stays stable while the tabs and panels stay the same.
@@ -604,7 +595,23 @@ TabPanels.displayName = 'TabPanels';
 /*  Export                                                             */
 /* ------------------------------------------------------------------ */
 
-/** TabList compound component: `TabList.Tab`, `TabList.Panel`, `TabList.Panels`. */
+/**
+ * A set of tabs with their panels (WAI-ARIA Tabs pattern, automatic activation): the arrow keys
+ * (Left/Right, mirrored in RTL; Up/Down when vertical), Home and End move focus and select; the
+ * selected tab is the only tab stop; disabled tabs are skipped. Every tab needs a `value` that is
+ * unique within the TabList (a development warning names a value that several tabs share).
+ *
+ * Tabs register through context and are found in DOM order, so they may be wrapped (a Fragment,
+ * a Tooltip). The children render inside the `role="tablist"` element, except panels, which render
+ * after it: a `TabList.Panel` or `TabList.Panels` child, or a wrapper (an element, `Suspense`, an
+ * error boundary) that holds panels and no Tab. A Panel that a component renders itself cannot be
+ * seen from the children: put that component inside `TabList.Panels` (a development warning names
+ * a Panel that ends up inside the tablist). Content that is not a tab, such as a button next to
+ * the tabs, does not belong in a tablist either: render it outside the TabList.
+ *
+ * Sub-components are also exported under flat names (`TabListTab`, `TabListPanel`,
+ * `TabListPanels`) for React Server Components, which cannot use the dotted form.
+ */
 export const TabList = /* @__PURE__ */ Object.assign(TabListRoot, {
   Tab,
   Panel: TabPanel,

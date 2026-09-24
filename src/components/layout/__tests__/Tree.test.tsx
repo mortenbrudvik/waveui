@@ -1,13 +1,18 @@
 import * as React from 'react';
+import { createPortal } from 'react-dom';
+import { renderToString } from 'react-dom/server';
 import { describe, it, expect, expectTypeOf, vi, afterEach } from 'vitest';
-import { act, render, screen, within } from '@testing-library/react';
+import { act, fireEvent, render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { Tree, TreeItem, type TreeProps, type TreeItemProps } from '../Tree';
 import type { Slot } from '../../../lib/types';
 import {
+  asClientReference,
+  expectNoA11yViolations,
   renderWithProviders,
   testSystemProps,
   testCompoundExposure,
+  testComposedHandler,
   testDisplayName,
 } from '../../../test-utils';
 
@@ -61,7 +66,12 @@ const EMPTY_ICONS = [
 
 afterEach(() => {
   vi.restoreAllMocks();
+  vi.unstubAllEnvs();
 });
+
+/** The `[WaveUI]` warnings logged so far (R14: asserted, never silenced). */
+const warnings = (warn: { mock: { calls: unknown[][] } }) =>
+  warn.mock.calls.map(([message]) => String(message));
 
 describe('Tree', () => {
   testSystemProps(Tree, {
@@ -155,9 +165,127 @@ describe('Tree', () => {
     );
   });
 
+  it('in production, a Tree.Item outside a Tree logs once and renders inertly (C-CONTEXT, R3)', () => {
+    vi.stubEnv('NODE_ENV', 'production');
+    const error = vi.spyOn(console, 'error').mockImplementation(() => {});
+    const { rerender } = render(<Tree.Item value="a">Orphan</Tree.Item>);
+    rerender(
+      <>
+        <Tree.Item value="a">Orphan</Tree.Item>
+        <Tree.Item value="b">Second orphan</Tree.Item>
+      </>,
+    );
+    expect(screen.getByText('Second orphan')).toBeInTheDocument();
+    expect(error.mock.calls).toEqual([['[WaveUI] Tree.Item must be used within <Tree>']]);
+  });
+
   it('types ref on the Props interfaces (C-REF)', () => {
     expectTypeOf<TreeProps['ref']>().toEqualTypeOf<React.Ref<HTMLDivElement> | undefined>();
     expectTypeOf<TreeItemProps['ref']>().toEqualTypeOf<React.Ref<HTMLDivElement> | undefined>();
+  });
+
+  it('accepts readonly expanded lists and emits a mutable one (R6)', async () => {
+    expectTypeOf<TreeProps['expandedItems']>().toEqualTypeOf<readonly string[] | undefined>();
+    expectTypeOf<TreeProps['defaultExpandedItems']>().toEqualTypeOf<
+      readonly string[] | undefined
+    >();
+    expectTypeOf<NonNullable<TreeProps['onExpandedItemsChange']>>()
+      .parameter(0)
+      .toEqualTypeOf<string[]>();
+    const user = userEvent.setup();
+    const expanded = ['docs'] as const;
+    const onExpandedItemsChange = vi.fn();
+    const { unmount } = render(
+      <Tree
+        aria-label="Files"
+        expandedItems={expanded}
+        onExpandedItemsChange={onExpandedItemsChange}
+      >
+        {fileTree}
+      </Tree>,
+    );
+    expect(item('Documents')).toHaveAttribute('aria-expanded', 'true');
+    await user.click(screen.getByText('Images'));
+    expect(onExpandedItemsChange).toHaveBeenCalledWith(['docs', 'images']);
+    expect(Object.isFrozen(onExpandedItemsChange.mock.calls[0][0])).toBe(false);
+    unmount();
+    render(
+      <Tree aria-label="Files" defaultExpandedItems={['images'] as const}>
+        {fileTree}
+      </Tree>,
+    );
+    expect(item('Images')).toHaveAttribute('aria-expanded', 'true');
+  });
+
+  it('Tree.Item written in a Server Component (a lazy type) renders the same server HTML and behaves the same (R1)', async () => {
+    const user = userEvent.setup();
+    const LazyItem = asClientReference(Tree.Item);
+    const files = (Item: typeof Tree.Item) => (
+      <Tree aria-label="Files" defaultExpandedItems={['docs']}>
+        <Item value="docs">
+          Documents
+          <>
+            <Item value="work">Work</Item>
+          </>
+        </Item>
+        <Item value="readme">Readme.md</Item>
+      </Tree>
+    );
+    const plain = renderToString(files(Tree.Item));
+    expect(plain).toMatch(/role="group"/);
+    expect(renderToString(files(LazyItem))).toBe(plain);
+
+    render(files(LazyItem));
+    const docs = item('Documents');
+    expect(docs).toHaveAttribute('aria-expanded', 'true');
+    expect(within(within(docs).getByRole('group')).getByRole('treeitem')).toBe(item('Work'));
+    act(() => docs.focus());
+    await user.keyboard('{ArrowRight}');
+    expect(item('Work')).toHaveFocus();
+    await user.keyboard('{ArrowLeft}');
+    expect(docs).toHaveFocus();
+    await user.keyboard('{Enter}');
+    expect(docs).toHaveAttribute('aria-expanded', 'false');
+  });
+
+  it('warns once per value shared by several items (R12)', () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const duplicated = (
+      <Tree aria-label="Files">
+        <Tree.Item value="a">First</Tree.Item>
+        <Tree.Item value="a">Copy</Tree.Item>
+        <Tree.Item value="b">Second</Tree.Item>
+        <Tree.Item value="b">Second copy</Tree.Item>
+      </Tree>
+    );
+    const { rerender } = render(duplicated);
+    rerender(duplicated);
+    expect(warnings(warn)).toEqual([
+      expect.stringMatching(/^\[WaveUI\] Tree: several items share the value "a"\. /),
+      expect.stringMatching(/^\[WaveUI\] Tree: several items share the value "b"\. /),
+    ]);
+  });
+
+  it('does not warn about values in StrictMode, when keyed items are reordered or when an item is replaced (R12)', async () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const renderItems = (values: string[]) => (
+      <React.StrictMode>
+        <Tree aria-label="Files">
+          {values.map((value) => (
+            <Tree.Item key={value} value={value.replace('-new', '')}>
+              {value}
+            </Tree.Item>
+          ))}
+        </Tree>
+      </React.StrictMode>
+    );
+    const { rerender } = render(renderItems(['a', 'b', 'c']));
+    // Async act: the roving store sees the moved items through a MutationObserver (a microtask).
+    await act(async () => rerender(renderItems(['c', 'a', 'b'])));
+    // A new element (another key) takes over the value of the one it replaces.
+    await act(async () => rerender(renderItems(['c', 'a-new', 'b'])));
+    expect(screen.getAllByRole('treeitem')).toHaveLength(3);
+    expect(warn).not.toHaveBeenCalled();
   });
 
   it('re-rendering the Tree with unchanged state and inline callbacks does not re-render memoized items (table-core#25)', () => {
@@ -312,6 +440,89 @@ describe('Tree.Item - treeitem element (layout#30)', () => {
     expect(onParentClick).toHaveBeenCalledTimes(1);
   });
 
+  describe('consumer onKeyDown (layout-b-tests-1)', () => {
+    it('receives the keys pressed on its item, and the built-in behaviour still runs', async () => {
+      const user = userEvent.setup();
+      const onKeyDown = vi.fn();
+      const onItemSelect = vi.fn();
+      render(
+        <Tree aria-label="Files" onItemSelect={onItemSelect}>
+          <Tree.Item value="docs" onKeyDown={onKeyDown}>
+            Documents
+            <Tree.Item value="work">Work</Tree.Item>
+          </Tree.Item>
+        </Tree>,
+      );
+      act(() => item('Documents').focus());
+      await user.keyboard('{Enter}');
+      expect(onKeyDown).toHaveBeenCalledTimes(1);
+      expect(onKeyDown.mock.calls[0][0]).toMatchObject({ key: 'Enter' });
+      expect(item('Documents')).toHaveAttribute('aria-expanded', 'true');
+      expect(onItemSelect.mock.calls).toEqual([['docs']]);
+    });
+
+    it('calling preventDefault() skips the built-in behaviour for that key only (rename on Enter)', async () => {
+      const user = userEvent.setup();
+      const onItemSelect = vi.fn();
+      const startRename = vi.fn();
+      render(
+        <Tree aria-label="Files" onItemSelect={onItemSelect}>
+          <Tree.Item
+            value="docs"
+            onKeyDown={(event) => {
+              if (event.key !== 'Enter') return;
+              event.preventDefault();
+              startRename();
+            }}
+          >
+            Documents
+            <Tree.Item value="work">Work</Tree.Item>
+          </Tree.Item>
+        </Tree>,
+      );
+      act(() => item('Documents').focus());
+      await user.keyboard('{Enter}');
+      expect(startRename).toHaveBeenCalledTimes(1);
+      expect(item('Documents')).toHaveAttribute('aria-expanded', 'false');
+      expect(onItemSelect).not.toHaveBeenCalled();
+      await user.keyboard('{ArrowRight}');
+      expect(item('Documents')).toHaveAttribute('aria-expanded', 'true');
+    });
+
+    it.each<[string, { key: string; altKey?: boolean; ctrlKey?: boolean; metaKey?: boolean }]>([
+      ['Ctrl+Enter', { key: 'Enter', ctrlKey: true }],
+      ['Alt+Enter', { key: 'Enter', altKey: true }],
+      ['Meta+Space', { key: ' ', metaKey: true }],
+      ['Alt+ArrowRight', { key: 'ArrowRight', altKey: true }],
+      ['Alt+ArrowLeft (the browser Back shortcut)', { key: 'ArrowLeft', altKey: true }],
+      ['Ctrl+*', { key: '*', ctrlKey: true }],
+      ['Ctrl+Alt+Space (AltGr)', { key: ' ', ctrlKey: true, altKey: true }],
+      ['Ctrl+Alt+* (AltGr)', { key: '*', ctrlKey: true, altKey: true }],
+    ])('%s is left to the browser: no activation, expansion, collapse or move', (_name, init) => {
+      const onItemSelect = vi.fn();
+      const onKeyDown = vi.fn();
+      render(
+        <Tree aria-label="Files" defaultExpandedItems={['docs']} onItemSelect={onItemSelect}>
+          <Tree.Item value="docs" onKeyDown={onKeyDown}>
+            Documents
+            <Tree.Item value="work">Work</Tree.Item>
+          </Tree.Item>
+          <Tree.Item value="images">
+            Images
+            <Tree.Item value="photo">Photo.jpg</Tree.Item>
+          </Tree.Item>
+        </Tree>,
+      );
+      act(() => item('Documents').focus());
+      expect(fireEvent.keyDown(item('Documents'), init)).toBe(true);
+      expect(onKeyDown).toHaveBeenCalledTimes(1);
+      expect(onItemSelect).not.toHaveBeenCalled();
+      expect(item('Documents')).toHaveAttribute('aria-expanded', 'true');
+      expect(item('Images')).toHaveAttribute('aria-expanded', 'false');
+      expect(item('Documents')).toHaveFocus();
+    });
+  });
+
   it("a click in an expanded parent's child group (the indentation gutter) does not activate the parent", async () => {
     const user = userEvent.setup();
     const onItemSelect = vi.fn();
@@ -388,6 +599,22 @@ describe('Tree.Item - treeitem element (layout#30)', () => {
     expect(item('Readme.md')).not.toHaveAttribute('aria-selected');
   });
 
+  it('selected={null} (a controlled tree with nothing selected yet) puts aria-selected="false" on every item', () => {
+    render(
+      <Tree aria-label="Files" selected={null} defaultExpandedItems={['docs']}>
+        {fileTree}
+      </Tree>,
+    );
+    const items = screen.getAllByRole('treeitem');
+    expect(items).toHaveLength(5);
+    for (const treeitem of items) {
+      expect(treeitem).toHaveAttribute('aria-selected', 'false');
+      expect(treeitem).not.toHaveAttribute('data-selected');
+    }
+    // Nothing is selected, so keyboard focus enters at the first item.
+    expect(items.filter((el) => el.tabIndex === 0)).toEqual([item('Documents')]);
+  });
+
   it('renders the icon slot hidden from assistive technology (data-display#31)', () => {
     render(
       <Tree aria-label="Files">
@@ -436,6 +663,88 @@ describe('Tree.Item - treeitem element (layout#30)', () => {
       </Tree>,
     );
     expect(screen.getByTestId('glyph').parentElement).toHaveAttribute('aria-hidden', 'true');
+  });
+});
+
+describe('Tree.Item - nested items rendered by a component (layout-b-code-1)', () => {
+  interface FileNode {
+    id: string;
+    name: string;
+    children?: FileNode[];
+  }
+  const data: FileNode[] = [
+    { id: 'docs', name: 'Documents', children: [{ id: 'work', name: 'Work' }] },
+    { id: 'readme', name: 'Readme.md' },
+  ];
+
+  it('warns once in development when a Tree.Item ends up inside the label of another item', () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    // A recursive component: the parent cannot see the Tree.Item that NodeView renders, so the
+    // nested item lands in the parent's label instead of its child group.
+    function NodeView({ node }: { node: FileNode }) {
+      return (
+        <Tree.Item value={node.id}>
+          {node.name}
+          {node.children?.map((child) => (
+            <NodeView key={child.id} node={child} />
+          ))}
+        </Tree.Item>
+      );
+    }
+    const files = (
+      <Tree aria-label="Files">
+        {data.map((node) => (
+          <NodeView key={node.id} node={node} />
+        ))}
+      </Tree>
+    );
+    const { rerender } = render(files);
+    rerender(files);
+    expect(warnings(warn)).toEqual([
+      expect.stringMatching(
+        /^\[WaveUI\] Tree\.Item was rendered inside the label of another Tree\.Item.*render function/,
+      ),
+    ]);
+  });
+
+  it('a separate Tree portaled out of an item label (a popup) does not warn', () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    function Preview() {
+      return createPortal(
+        <Tree aria-label="Preview">
+          <Tree.Item value="p">Preview item</Tree.Item>
+        </Tree>,
+        document.body,
+      );
+    }
+    render(
+      <Tree aria-label="Files">
+        <Tree.Item value="docs">
+          Documents
+          <Preview />
+        </Tree.Item>
+      </Tree>,
+    );
+    expect(screen.getByRole('treeitem', { name: 'Preview item' })).toBeInTheDocument();
+    expect(warn).not.toHaveBeenCalled();
+  });
+
+  it('items returned by a render function (children.map(renderNode)) form the child group, without a warning', async () => {
+    const user = userEvent.setup();
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const renderNode = (node: FileNode): React.ReactNode => (
+      <Tree.Item key={node.id} value={node.id}>
+        {node.name}
+        {node.children?.map(renderNode)}
+      </Tree.Item>
+    );
+    render(<Tree aria-label="Files">{data.map(renderNode)}</Tree>);
+    await user.click(screen.getByText('Documents'));
+    const docs = item('Documents');
+    expect(docs).toHaveAttribute('aria-expanded', 'true');
+    expect(within(within(docs).getByRole('group')).getByRole('treeitem')).toBe(item('Work'));
+    expect(warn).not.toHaveBeenCalled();
+    await expectNoA11yViolations();
   });
 });
 
@@ -729,6 +1038,105 @@ describe('Tree - keyboard (layout#31, feedback-navigation#47)', () => {
     await user.keyboard('p');
     expect(item('Photo.jpg')).toHaveFocus();
   });
+
+  // Expected to fail until useRovingTabIndex lets a character typed with AltGr (Ctrl+Alt on
+  // Windows) reach its typeahead: Tree's typeahead is the roving hook's, and the hook's modifier
+  // guard returns first (the Tree.Item keydown handler neither prevents nor stops the key). Change
+  // `it.fails` to `it` together with that hook fix.
+  it.fails('typeahead accepts a letter typed with AltGr (Ctrl+Alt on Windows)', () => {
+    render(
+      <Tree aria-label="Cities">
+        <Tree.Item value="krakow">Kraków</Tree.Item>
+        <Tree.Item value="lodz">Łódź</Tree.Item>
+      </Tree>,
+    );
+    act(() => item('Kraków').focus());
+    // Polish (programmer) layout: AltGr+L types "ł".
+    expect(fireEvent.keyDown(item('Kraków'), { key: 'ł', ctrlKey: true, altKey: true })).toBe(
+      false,
+    );
+    expect(item('Łódź')).toHaveFocus();
+  });
+});
+
+describe('Tree - composed root handlers (layout-b-tests-2)', () => {
+  testComposedHandler(Tree, {
+    handler: 'onKeyDown',
+    defaultProps: { 'aria-label': 'Files', children: fileTree },
+    act: async ({ user }) => {
+      act(() => item('Documents').focus());
+      await user.keyboard('{ArrowDown}');
+    },
+    assertInternal: () => {
+      expect(item('Images')).toHaveFocus();
+    },
+    assertInternalSuppressed: () => {
+      expect(item('Documents')).toHaveFocus();
+    },
+  });
+
+  const states = (
+    <>
+      <Tree.Item value="al">Alabama</Tree.Item>
+      <Tree.Item value="nj">New Jersey</Tree.Item>
+      <Tree.Item value="ny">New York</Tree.Item>
+    </>
+  );
+
+  // The capture handler takes a Space that continues a search before the item activates on it.
+  testComposedHandler(Tree, {
+    handler: 'onKeyDownCapture',
+    defaultProps: { 'aria-label': 'States', children: states },
+    act: async ({ user }) => {
+      act(() => item('Alabama').focus());
+      await user.keyboard('new y');
+    },
+    assertInternal: () => {
+      expect(item('New York')).toHaveFocus();
+    },
+    assertInternalSuppressed: () => {
+      expect(item('Alabama')).toHaveFocus();
+    },
+  });
+
+  it('onFocus and onBlur of the Tree and onFocus of an item run, also when they call preventDefault(), and the tab stop still follows focus', async () => {
+    const user = userEvent.setup();
+    const prevent = (event: React.SyntheticEvent) => event.preventDefault();
+    const onFocus = vi.fn(prevent);
+    const onBlur = vi.fn(prevent);
+    const onReadmeFocus = vi.fn(prevent);
+    render(
+      <>
+        <button type="button">Before</button>
+        <Tree aria-label="Files" onFocus={onFocus} onBlur={onBlur}>
+          <Tree.Item value="docs">Documents</Tree.Item>
+          <Tree.Item value="images">Images</Tree.Item>
+          <Tree.Item value="readme" onFocus={onReadmeFocus}>
+            Readme.md
+          </Tree.Item>
+        </Tree>
+      </>,
+    );
+    await user.tab();
+    await user.tab();
+    expect(item('Documents')).toHaveFocus();
+    expect(onFocus).toHaveBeenCalledTimes(1);
+
+    await user.keyboard('{ArrowDown}{ArrowDown}');
+    expect(item('Readme.md')).toHaveFocus();
+    expect(onReadmeFocus).toHaveBeenCalledTimes(1);
+    expect(onFocus).toHaveBeenCalledTimes(3);
+    expect(onBlur).toHaveBeenCalledTimes(2);
+    expect(item('Readme.md')).toHaveAttribute('tabindex', '0');
+    expect(item('Documents')).toHaveAttribute('tabindex', '-1');
+
+    await user.tab({ shift: true });
+    expect(screen.getByRole('button', { name: 'Before' })).toHaveFocus();
+    expect(onBlur).toHaveBeenCalledTimes(3);
+    // Focus left the tree: the tab stop is back on the first item.
+    expect(item('Documents')).toHaveAttribute('tabindex', '0');
+    expect(item('Readme.md')).toHaveAttribute('tabindex', '-1');
+  });
 });
 
 describe('Tree - RTL (layout#32)', () => {
@@ -758,8 +1166,28 @@ describe('Tree - RTL (layout#32)', () => {
     expect(group.className).not.toMatch(/\bpl-/);
     const collapsedChevron = item('Images').querySelector('svg');
     const expandedChevron = item('Documents').querySelector('svg');
-    expect(collapsedChevron).toHaveClass('rtl:-scale-x-100');
+    expect(collapsedChevron).toHaveClass('wave-rtl:-scale-x-100');
     expect(expandedChevron).toHaveClass('rotate-90');
-    expect(expandedChevron).not.toHaveClass('rtl:-scale-x-100');
+    expect(expandedChevron).not.toHaveClass('wave-rtl:-scale-x-100');
+  });
+
+  it('inside a left-to-right subtree of a right-to-left page: LTR keys, and the chevron flips only through wave-rtl: (R4)', async () => {
+    const user = userEvent.setup();
+    renderWithProviders(
+      <div dir="ltr">
+        <Tree aria-label="Files">{fileTree}</Tree>
+      </div>,
+      { dir: 'rtl' },
+    );
+    // Tailwind's rtl: variant also matches `[dir=rtl] *`, so it would mirror this chevron; the
+    // wave-rtl: variant follows the element's own direction.
+    const chevron = item('Images').querySelector('svg')!;
+    expect(chevron).toHaveClass('wave-rtl:-scale-x-100');
+    expect(chevron.getAttribute('class')).not.toMatch(/(^|\s)rtl:/);
+    act(() => item('Documents').focus());
+    await user.keyboard('{ArrowRight}');
+    expect(item('Documents')).toHaveAttribute('aria-expanded', 'true');
+    await user.keyboard('{ArrowRight}');
+    expect(item('Work')).toHaveFocus();
   });
 });

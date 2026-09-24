@@ -1,4 +1,6 @@
 import * as React from 'react';
+import { hydrateRoot, type Root } from 'react-dom/client';
+import { renderToString } from 'react-dom/server';
 import { describe, it, expect, expectTypeOf, vi, beforeEach, afterEach } from 'vitest';
 import { act, render, screen } from '@testing-library/react';
 import {
@@ -86,6 +88,8 @@ afterEach(() => {
   layout = null;
   ro?.restore();
   ro = null;
+  vi.restoreAllMocks();
+  vi.unstubAllEnvs();
 });
 
 function layoutWith(widths: Widths, scrollWidths?: Widths): LayoutStub {
@@ -210,14 +214,49 @@ describe('Overflow', () => {
     // (C-CLASS) and gets a backing.
     const wrapper = screen.getByRole('button', { name: '+2' }).parentElement!;
     expect(wrapper).toHaveAttribute('data-overflow-button');
+    // It sticks at the row's clipping edge, past the row's padding (-end-1 offsets p-1), and
+    // keeps room inside for its own focus indicator while pinned.
     expect(wrapper).toHaveClass(
       'sticky',
-      'end-0',
+      '-end-1',
       'shrink-0',
       'data-[overflow-pinned]:bg-background',
+      'data-[overflow-pinned]:pe-1',
     );
     expect(wrapper).not.toHaveClass('absolute');
     expect(wrapper).toHaveAttribute('data-overflow-pinned');
+  });
+
+  it('leaves room inside its clipping for the focus indicators of its items (x-styling-5)', () => {
+    layoutWith({ overflow: 100, 'item-a': 40, 'item-b': 40, 'item-c': 40, button: 30 });
+    render(<ThreeItems overflowButton={moreButton} className="gap-1" />);
+    // jsdom has no layout: the classes are the contract. A 4px padding inside the clipping edge,
+    // offset by a -4px margin, so the items keep their place and a ring drawn 4px outside an item
+    // (focusRing: 2px offset + 2px width) stays inside the clipped box on every side.
+    const row = screen.getByTestId('overflow');
+    expect(row).toHaveClass('flex', 'overflow-hidden', 'p-1', '-m-1', 'gap-1');
+  });
+
+  it('measures the room for the items without the row padding', () => {
+    const renderButton = vi.fn(moreButton);
+    // clientWidth includes the padding: 110 - 2 × 5 leaves exactly the 100 the items need.
+    const stub = layoutWith({
+      overflow: 110,
+      'item-a': 40,
+      'item-b': 30,
+      'item-c': 30,
+      button: 30,
+    });
+    const { unmount } = render(
+      <ThreeItems overflowButton={renderButton} style={{ padding: '0 5px' }} />,
+    );
+    expect(hiddenItems()).toEqual([]);
+    unmount();
+    stub.widths.overflow = 108;
+    render(<ThreeItems overflowButton={renderButton} style={{ padding: '0 5px' }} />);
+    // 98 < 100 overflows; the button (30) leaves 68, where A and B (70 together) no longer fit.
+    expect(hiddenItems()).toEqual(['b', 'c']);
+    expect(renderButton).toHaveBeenLastCalledWith(2, ['b', 'c']);
   });
 
   it('marks the button pinned only while the first item is wider than the room beside it', () => {
@@ -640,6 +679,76 @@ describe('Overflow', () => {
     expect(hiddenItems()).toEqual(['b', 'c']);
   });
 
+  describe('item removal (layout-b-tests-4)', () => {
+    // Removing an item changes no size a ResizeObserver watches (the container keeps its width):
+    // only the unregistration re-measures.
+    const row = (ids: string[], renderButton: OverflowProps['overflowButton']) => (
+      <Overflow data-testid="overflow" overflowButton={renderButton}>
+        {ids.map((id) => (
+          <OverflowItem key={id} itemId={id} data-testid={`item-${id}`}>
+            {id.toUpperCase()}
+          </OverflowItem>
+        ))}
+      </Overflow>
+    );
+
+    it.each([
+      ['with ResizeObserver', true],
+      ['without ResizeObserver', false],
+    ])(
+      'shows the items that fit again once the overflowing ones are removed (%s)',
+      (_name, observe) => {
+        if (observe) withResizeObserver();
+        const renderButton = vi.fn(moreButton);
+        layoutWith({ overflow: 100, 'item-a': 40, 'item-b': 40, 'item-c': 40, button: 30 });
+        const { rerender } = render(row(['a', 'b', 'c'], renderButton));
+        expect(hiddenItems()).toEqual(['b', 'c']);
+        expect(screen.getByRole('button', { name: '+2' })).toBeInTheDocument();
+
+        // A + B (80) fit in 100 once C is gone.
+        rerender(row(['a', 'b'], renderButton));
+        expect(hiddenItems()).toEqual([]);
+        expect(screen.getByTestId('item-b')).not.toHaveAttribute('data-overflow-hidden');
+        expect(screen.queryByRole('button')).toBeNull();
+      },
+    );
+
+    it.each([
+      ['with ResizeObserver', true],
+      ['without ResizeObserver', false],
+    ])(
+      'drops a removed item from the count and the menu while others still overflow (%s)',
+      (_name, observe) => {
+        if (observe) withResizeObserver();
+        const renderButton = vi.fn<(count: number, hiddenIds: string[]) => void>();
+        const menus: string[][] = [];
+        function MoreMenu() {
+          const menu = useOverflowMenu();
+          menus.push(menu.hiddenIds);
+          return <button type="button">+{menu.count}</button>;
+        }
+        const withMenu: OverflowProps['overflowButton'] = (count, hiddenIds) => {
+          renderButton(count, hiddenIds);
+          return <MoreMenu />;
+        };
+        layoutWith({ overflow: 100, 'item-a': 40, 'item-b': 70, 'item-c': 40, button: 30 });
+        const { rerender } = render(row(['a', 'b', 'c'], withMenu));
+        expect(renderButton).toHaveBeenLastCalledWith(2, ['b', 'c']);
+
+        // A + B (110) still overflow 100: only B stays hidden.
+        rerender(row(['a', 'b'], withMenu));
+        expect(hiddenItems()).toEqual(['b']);
+        expect(renderButton).toHaveBeenLastCalledWith(1, ['b']);
+        expect(menus.at(-1)).toEqual(['b']);
+        expect(screen.getByRole('button', { name: '+1' })).toBeInTheDocument();
+
+        rerender(row(['a'], withMenu));
+        expect(hiddenItems()).toEqual([]);
+        expect(screen.queryByRole('button')).toBeNull();
+      },
+    );
+  });
+
   it('follows an itemId change', () => {
     const renderButton = vi.fn(moreButton);
     layoutWith({ overflow: 100, 'item-a': 40, 'item-b': 40, 'item-c': 40, button: 30 });
@@ -835,6 +944,34 @@ describe('Overflow', () => {
       spy.mockRestore();
     });
 
+    it('in production, logs once per part outside Overflow and renders inertly (R3)', () => {
+      vi.stubEnv('NODE_ENV', 'production');
+      const error = vi.spyOn(console, 'error').mockImplementation(() => {});
+      function Menu() {
+        const { count } = useOverflowMenu();
+        return <span>{count} hidden</span>;
+      }
+      const orphans = (
+        <>
+          <OverflowItem itemId="a" data-testid="item-a">
+            A
+          </OverflowItem>
+          <OverflowItem itemId="b" data-testid="item-b">
+            B
+          </OverflowItem>
+          <Menu />
+        </>
+      );
+      const { rerender } = render(orphans);
+      rerender(orphans);
+      expect(screen.getByTestId('item-a')).not.toHaveAttribute('data-overflow-hidden');
+      expect(screen.getByText('0 hidden')).toBeInTheDocument();
+      expect(error.mock.calls).toEqual([
+        ['[WaveUI] OverflowItem must be used within Overflow'],
+        ['[WaveUI] useOverflowMenu must be used within Overflow'],
+      ]);
+    });
+
     it('throws when the overflow hooks are used outside Overflow', () => {
       const spy = vi.spyOn(console, 'error').mockImplementation(() => {});
       function Menu() {
@@ -853,6 +990,67 @@ describe('Overflow', () => {
       );
       spy.mockRestore();
     });
+  });
+});
+
+describe('Overflow - server rendering (layout-b-tests-6)', () => {
+  function Probe() {
+    const ref = React.useRef<HTMLDivElement>(null);
+    const isOverflowing = useIsOverflowing(ref);
+    return (
+      <div ref={ref} data-testid="box">
+        {isOverflowing ? 'overflowing' : 'fits'}
+      </div>
+    );
+  }
+
+  const app = (
+    <>
+      <ThreeItems overflowButton={moreButton} />
+      <Probe />
+    </>
+  );
+
+  it('renders every item, no overflow button and a fitting useIsOverflowing on the server', () => {
+    // Parsed into a detached element of this document (never attached to the body).
+    const parsed = document.createElement('div');
+    parsed.innerHTML = renderToString(app);
+    const items = Array.from(parsed.querySelectorAll('[data-testid^="item-"]'));
+    expect(items.map((el) => el.textContent)).toEqual(['A', 'B', 'C']);
+    for (const el of items) {
+      expect(el).not.toHaveAttribute('data-overflow-hidden');
+      expect(el).not.toHaveAttribute('aria-hidden');
+      expect(el.getAttribute('style')).toBeNull();
+    }
+    expect(parsed.querySelector('[data-overflow-button]')).toBeNull();
+    expect(parsed.querySelector('[data-testid="box"]')?.textContent).toBe('fits');
+  });
+
+  it('hydrates the server HTML without a mismatch, then measures on the client', async () => {
+    const container = document.createElement('div');
+    container.innerHTML = renderToString(app);
+    document.body.appendChild(container);
+    layoutWith(
+      { overflow: 100, 'item-a': 40, 'item-b': 40, 'item-c': 40, button: 30, box: 100 },
+      { box: 180 },
+    );
+    const error = vi.spyOn(console, 'error').mockImplementation(() => {});
+    const onRecoverableError = vi.fn();
+    const hydrated: { root?: Root } = {};
+    try {
+      await act(async () => {
+        hydrated.root = hydrateRoot(container, app, { onRecoverableError });
+      });
+      expect(onRecoverableError).not.toHaveBeenCalled();
+      expect(error).not.toHaveBeenCalled();
+      // After hydration the client measures: B and C overflow, and the box overflows.
+      expect(hiddenItems()).toEqual(['b', 'c']);
+      expect(screen.getByRole('button', { name: '+2' })).toBeInTheDocument();
+      expect(screen.getByTestId('box')).toHaveTextContent('overflowing');
+    } finally {
+      act(() => hydrated.root?.unmount());
+      container.remove();
+    }
   });
 });
 
