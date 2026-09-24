@@ -218,13 +218,13 @@ Generated from `src/styles/tokens.css`. A value followed by a name is a referenc
 | `primary-foreground` | `#ffffff` | `#000000` | `#000000` |
 | `primary-hover` | `#115ea3` (brand-70) | `#77b7f7` (brand-120) | `#6ef3ff` |
 | `primary-pressed` | `#0c3b5e` (brand-40) | `#2886de` (brand-90) | `#00c4d6` |
-| `destructive` | `#c50f1f` | `#f48a94` | `#ff6060` |
+| `destructive` | `#c50f1f` | `#f48a94` | `#ff6e6e` |
 | `destructive-foreground` | `#ffffff` | `#000000` | `#000000` |
-| `error` | `#c50f1f` | `#f48a94` | `#ff6060` |
+| `error` | `#c50f1f` | `#f48a94` | `#ff6e6e` |
 | `error-foreground` | `#ffffff` | `#000000` | `#000000` |
 | `subtle` | `transparent` | `transparent` | `transparent` |
 | `subtle-hover` | `#f5f5f5` | `#333333` | `#1f1f1f` |
-| `subtle-pressed` | `#e0e0e0` | `#2e2e2e` | `#333333` |
+| `subtle-pressed` | `#ebebeb` | `#2e2e2e` | `#333333` |
 | `subtle-selected` | `#ebebeb` | `#383838` | `#333333` |
 | `selected` | `#ebf3fc` (brand-160) | `#082338` (brand-20) | `#003a40` |
 | `selected-foreground` | `#0f548c` (brand-60) | `#62abf5` (brand-110) | `#ffffff` |
@@ -234,7 +234,7 @@ Generated from `src/styles/tokens.css`. A value followed by a name is a referenc
 | `stroke-accessible` | `#616161` | `#adadad` | `#ffffff` |
 | `input` | `#d1d1d1` | `#666666` | `#ffffff` |
 | `ring` | `#0f6cbd` (brand-80) | `#479ef5` (brand-100) | `#ffff00` |
-| `success` | `#107c10` | `#54b054` | `#3ff23f` |
+| `success` | `#107c10` | `#5db55d` | `#3ff23f` |
 | `success-foreground` | `#ffffff` | `#000000` | `#000000` |
 | `success-tint` | `#f1faf1` | `#052505` | `#000000` |
 | `success-tint-foreground` | `#0e700e` | `#54b054` | `#3ff23f` |
@@ -251,7 +251,7 @@ Generated from `src/styles/tokens.css`. A value followed by a name is a referenc
 | `info` | `#0f6cbd` | `#479ef5` | `#1aebff` |
 | `info-foreground` | `#ffffff` | `#000000` | `#000000` |
 | `info-tint` | `#ebf3fc` | `#082338` | `#000000` |
-| `info-tint-foreground` | `#0f548c` | `#479ef5` | `#1aebff` |
+| `info-tint-foreground` | `#0f548c` | `#62abf5` | `#1aebff` |
 | `inverted` | `#292929` | `#ffffff` | `#000000` |
 | `inverted-foreground` | `#ffffff` | `#242424` | `#ffffff` |
 | `inverted-border` | `transparent` | `transparent` | `#ffffff` |
@@ -312,7 +312,8 @@ The dark theme uses brand-110 with **black** text (8.66:1); 0.4 used brand-100 w
 | `grey-14` | `#242424` | Default foreground (light) |
 | `grey-38` | `#616161` | Muted foreground and accessible strokes (light) |
 | `grey-82` | `#d1d1d1` | Control borders (`stroke`, `input`) |
-| `grey-88` | `#e0e0e0` | Dividers, borders, pressed subtle |
+| `grey-88` | `#e0e0e0` | Dividers and borders (`border`), tracks, skeletons |
+| `grey-92` | `#ebebeb` | Pressed and selected subtle controls (`subtle-pressed`, `subtle-selected`) |
 | `grey-94` | `#f0f0f0` | Muted backgrounds |
 | `grey-96` | `#f5f5f5` | Hover states |
 | `grey-98` | `#fafafa` | Card backgrounds |
@@ -923,7 +924,7 @@ Background colors are replaced and box shadows removed in forced-colors mode, so
 
 **System color keywords**: `Canvas`, `CanvasText`, `LinkText`, `Highlight`, `HighlightText`, `ButtonFace`, `ButtonText`, `GrayText`.
 
-The **high-contrast theme** (`WaveProvider theme="high-contrast"`) is a separate, Wave-drawn theme (not forced colors): background `#000000`, foreground `#ffffff`, primary `#1aebff` (cyan, with black text), focus ring `#ffff00`, error `#ff6060`, selected surfaces `#003a40` with white text.
+The **high-contrast theme** (`WaveProvider theme="high-contrast"`) is a separate, Wave-drawn theme (not forced colors): background `#000000`, foreground `#ffffff`, primary `#1aebff` (cyan, with black text), focus ring `#ffff00`, error `#ff6e6e`, selected surfaces `#003a40` with white text.
 
 ### Screen Reader Best Practices
 

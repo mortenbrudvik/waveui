@@ -172,13 +172,13 @@ Generated from `src/styles/tokens.css`. A value followed by a ramp or token name
 | `primary-foreground` | `#ffffff` | `#000000` | `#000000` |
 | `primary-hover` | `#115ea3` (brand-70) | `#77b7f7` (brand-120) | `#6ef3ff` |
 | `primary-pressed` | `#0c3b5e` (brand-40) | `#2886de` (brand-90) | `#00c4d6` |
-| `destructive` | `#c50f1f` | `#f48a94` | `#ff6060` |
+| `destructive` | `#c50f1f` | `#f48a94` | `#ff6e6e` |
 | `destructive-foreground` | `#ffffff` | `#000000` | `#000000` |
-| `error` | `#c50f1f` | `#f48a94` | `#ff6060` |
+| `error` | `#c50f1f` | `#f48a94` | `#ff6e6e` |
 | `error-foreground` | `#ffffff` | `#000000` | `#000000` |
 | `subtle` | `transparent` | `transparent` | `transparent` |
 | `subtle-hover` | `#f5f5f5` | `#333333` | `#1f1f1f` |
-| `subtle-pressed` | `#e0e0e0` | `#2e2e2e` | `#333333` |
+| `subtle-pressed` | `#ebebeb` | `#2e2e2e` | `#333333` |
 | `subtle-selected` | `#ebebeb` | `#383838` | `#333333` |
 | `selected` | `#ebf3fc` (brand-160) | `#082338` (brand-20) | `#003a40` |
 | `selected-foreground` | `#0f548c` (brand-60) | `#62abf5` (brand-110) | `#ffffff` |
@@ -188,7 +188,7 @@ Generated from `src/styles/tokens.css`. A value followed by a ramp or token name
 | `stroke-accessible` | `#616161` | `#adadad` | `#ffffff` |
 | `input` | `#d1d1d1` | `#666666` | `#ffffff` |
 | `ring` | `#0f6cbd` (brand-80) | `#479ef5` (brand-100) | `#ffff00` |
-| `success` | `#107c10` | `#54b054` | `#3ff23f` |
+| `success` | `#107c10` | `#5db55d` | `#3ff23f` |
 | `success-foreground` | `#ffffff` | `#000000` | `#000000` |
 | `success-tint` | `#f1faf1` | `#052505` | `#000000` |
 | `success-tint-foreground` | `#0e700e` | `#54b054` | `#3ff23f` |
@@ -205,7 +205,7 @@ Generated from `src/styles/tokens.css`. A value followed by a ramp or token name
 | `info` | `#0f6cbd` | `#479ef5` | `#1aebff` |
 | `info-foreground` | `#ffffff` | `#000000` | `#000000` |
 | `info-tint` | `#ebf3fc` | `#082338` | `#000000` |
-| `info-tint-foreground` | `#0f548c` | `#479ef5` | `#1aebff` |
+| `info-tint-foreground` | `#0f548c` | `#62abf5` | `#1aebff` |
 | `inverted` | `#292929` | `#ffffff` | `#000000` |
 | `inverted-foreground` | `#ffffff` | `#242424` | `#ffffff` |
 | `inverted-border` | `transparent` | `transparent` | `#ffffff` |
