@@ -1,7 +1,7 @@
 import * as React from 'react';
 import type { Meta, StoryObj } from '@storybook/react';
 import { fn } from 'storybook/test';
-import { Stepper } from '../src';
+import { Button, Stepper } from '../src';
 import { orientationArgType } from './_helpers';
 
 const meta = {
@@ -57,6 +57,22 @@ export const WithErrorAndDisabled: Story = {
   ),
 };
 
+/** Localized status text with `statusLabels`, and the group name with `aria-label`. */
+export const Localized: Story = {
+  args: {
+    'aria-label': 'Fremdrift',
+    defaultActiveStep: 2,
+    statusLabels: { completed: 'Fullført:', error: 'Feil:' },
+  },
+  render: (args) => (
+    <Stepper {...args}>
+      <Stepper.Step label="Konto" />
+      <Stepper.Step label="Betaling" error />
+      <Stepper.Step label="Bekreft" />
+    </Stepper>
+  ),
+};
+
 export const WithIcons: Story = {
   render: (args) => (
     <Stepper {...args}>
@@ -98,19 +114,24 @@ export const WithIcons: Story = {
   ),
 };
 
-/** Controlled and linear: only the step after the active one can be reached. */
+/**
+ * Controlled and linear: only the step after the active one can be reached. Back and Next use
+ * `aria-disabled` at the first and last step and ignore activation there, so the focused button
+ * keeps focus when it becomes unavailable (a natively `disabled` button would drop it to the page).
+ */
 export const Linear: Story = {
   args: {
     linear: true,
   },
   render: ({ onStepChange, ...args }) => {
+    const lastStep = 3;
     const [step, setStep] = React.useState(0);
     const changeStep = (next: number) => {
       setStep(next);
       onStepChange?.(next);
     };
-    const buttonClass =
-      'rounded px-4 py-2 text-body-1 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring disabled:cursor-not-allowed disabled:opacity-50';
+    const atStart = step === 0;
+    const atEnd = step === lastStep;
     return (
       <div className="flex flex-col gap-6">
         <Stepper activeStep={step} onStepChange={changeStep} {...args}>
@@ -120,22 +141,23 @@ export const Linear: Story = {
           <Stepper.Step label="Confirm" />
         </Stepper>
         <div className="flex gap-2">
-          <button
-            type="button"
-            className={`${buttonClass} border border-border bg-background text-foreground`}
-            disabled={step === 0}
-            onClick={() => changeStep(step - 1)}
+          <Button
+            aria-disabled={atStart || undefined}
+            onClick={() => {
+              if (!atStart) changeStep(step - 1);
+            }}
           >
             Back
-          </button>
-          <button
-            type="button"
-            className={`${buttonClass} border border-primary bg-primary text-primary-foreground`}
-            disabled={step === 3}
-            onClick={() => changeStep(step + 1)}
+          </Button>
+          <Button
+            appearance="primary"
+            aria-disabled={atEnd || undefined}
+            onClick={() => {
+              if (!atEnd) changeStep(step + 1);
+            }}
           >
             Next
-          </button>
+          </Button>
         </div>
       </div>
     );

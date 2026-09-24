@@ -1,5 +1,6 @@
 import * as React from 'react';
 import { preventIfDisabled } from '../../lib/aria';
+import { flattenChildren, isElementOfType } from '../../lib/children';
 import { cn } from '../../lib/cn';
 import type { Slot } from '../../lib/types';
 import { renderSlot, slotRendersContent } from '../../lib/slot';
@@ -10,7 +11,10 @@ import { useTriggerElement } from '../../hooks/useTriggerElement';
 
 /** Properties for the Breadcrumb component. */
 export interface BreadcrumbProps extends React.HTMLAttributes<HTMLElement> {
-  /** Breadcrumb items to render; each one is placed in its own list item. */
+  /**
+   * Breadcrumb items to render; each one is placed in its own list item. Fragments are opened, so
+   * the items of a conditional group (`{isAdmin && <>…</>}`) each get their own list item too.
+   */
   children: React.ReactNode;
   /** Ref to the `<nav>` element. */
   ref?: React.Ref<HTMLElement>;
@@ -21,7 +25,10 @@ export interface BreadcrumbProps extends React.HTMLAttributes<HTMLElement> {
  * {@link BreadcrumbItemButtonProps}, {@link BreadcrumbItemDynamicProps}).
  */
 export interface BreadcrumbItemOwnProps {
-  /** Whether this item represents the current page (`aria-current="page"`, rendered as text). */
+  /**
+   * Whether this item represents the current page (`aria-current="page"`, rendered as text).
+   * @default false
+   */
   current?: boolean;
   /**
    * Slot for an icon displayed before the item text. Rendered with `aria-hidden="true"`. A falsy
@@ -32,10 +39,11 @@ export interface BreadcrumbItemOwnProps {
    * Merge the item's props (classes, `aria-current`, handlers, ref) onto its single child element
    * instead of rendering an element — for router links:
    * `<Breadcrumb.Item asChild><RouterLink to="/docs">Docs</RouterLink></Breadcrumb.Item>`.
-   * The icon is rendered inside the child. `disabled` or `aria-disabled="true"`, on the item or on
-   * the element, makes it an unavailable link: `aria-disabled`, out of the tab order, its own
-   * `onClick` dropped and the click cancelled (a router link does not navigate); an `<a>` also
-   * loses its `href`.
+   * The icon is rendered inside the child. The item's `href` is passed on as a default (the
+   * element's own `href` wins); with a router link, give the link its destination (`to`) instead.
+   * `disabled` or `aria-disabled="true"`, on the item or on the element, makes it an unavailable
+   * link: `aria-disabled`, out of the tab order, its own `onClick` dropped and the click cancelled
+   * (a router link does not navigate); an `<a>` also loses its `href`.
    * @default false
    */
   asChild?: boolean;
@@ -62,9 +70,9 @@ export interface BreadcrumbItemAnchorProps
     BreadcrumbItemOwnProps,
     Omit<React.AnchorHTMLAttributes<HTMLAnchorElement>, keyof BreadcrumbItemOwnProps> {
   /**
-   * URL the breadcrumb item links to; renders an `<a>` (unless `current`). Required in this
-   * branch, so `href` discriminates the union and handlers without `href` are typed as button
-   * handlers.
+   * URL the breadcrumb item links to; renders an `<a>` (unless `current`). With `asChild` it is a
+   * default for the element, whose own `href` wins. Required in this branch, so `href`
+   * discriminates the union and handlers without `href` are typed as button handlers.
    */
   href: string;
   /**
@@ -143,6 +151,8 @@ const linkClasses = cn(
   disabledStyles,
 );
 const currentClasses = 'inline-flex items-center font-semibold text-foreground';
+/** A current `asChild` element is the consumer's link: it takes focus and can be disabled. */
+const currentChildClasses = cn(currentClasses, focusRing, disabledStyles);
 const textClasses = 'inline-flex items-center text-foreground';
 
 /**
@@ -195,29 +205,19 @@ function spanAttributes(rest: Record<string, unknown>): React.HTMLAttributes<HTM
   return attributes as React.HTMLAttributes<HTMLSpanElement>;
 }
 
-/**
- * A breadcrumb trail: a `<nav aria-label="Breadcrumb">` landmark with an ordered list. Each child
- * is placed in its own list item; from the second one on, the item starts with a decorative
- * separator chevron that is mirrored in right-to-left layouts.
- *
- * `Breadcrumb.Item` is also exported as `BreadcrumbItem`: React Server Components import the flat
- * name, because dotted access needs a client file.
- */
 const BreadcrumbRoot = ({ children, className, ref, ...rest }: BreadcrumbProps) => {
-  const items = React.Children.toArray(children);
+  // Fragments are opened (`{isAdmin && <>…</>}`), so every crumb gets its own list item and separator.
+  const items = flattenChildren(children);
 
   return (
     <nav ref={ref} aria-label="Breadcrumb" {...rest} className={className}>
       <ol className="m-0 flex list-none items-center gap-1 p-0 text-body-1">
-        {items.map((child, index) => (
-          <li
-            key={React.isValidElement(child) && child.key !== null ? child.key : index}
-            className="flex items-center gap-1"
-          >
+        {items.map(({ key, node: child }, index) => (
+          <li key={key} className="flex items-center gap-1">
             {index > 0 && (
               <ChevronRightIcon
                 data-wave-breadcrumb-separator=""
-                className="shrink-0 text-muted-foreground rtl:-scale-x-100"
+                className="shrink-0 text-muted-foreground wave-rtl:-scale-x-100"
               />
             )}
             {child}
@@ -230,6 +230,8 @@ const BreadcrumbRoot = ({ children, className, ref, ...rest }: BreadcrumbProps) 
 BreadcrumbRoot.displayName = 'Breadcrumb';
 
 interface BreadcrumbItemChildProps extends React.HTMLAttributes<HTMLElement> {
+  /** The item's `href`, a default for the element (the element's own `href` wins). */
+  href?: string;
   child: React.ReactElement<{ children?: React.ReactNode }>;
   icon: React.ReactNode;
   ref?: React.Ref<HTMLElement>;
@@ -243,8 +245,9 @@ interface BreadcrumbItemChildProps extends React.HTMLAttributes<HTMLElement> {
 function disableLinkChild(
   child: React.ReactElement<{ children?: React.ReactNode }>,
 ): React.ReactElement<{ children?: React.ReactNode }> {
-  const anchor =
-    child.type === 'a' ? { href: undefined, role: 'link', disabled: undefined } : undefined;
+  const anchor = isElementOfType(child, 'a')
+    ? { href: undefined, role: 'link', disabled: undefined }
+    : undefined;
   return React.cloneElement(child as React.ReactElement<Record<string, unknown>>, {
     ...anchor,
     'aria-disabled': true,
@@ -254,7 +257,7 @@ function disableLinkChild(
 }
 
 /**
- * `asChild` rendering: the item's props are merged onto the consumer's element with F3
+ * `asChild` rendering: the item's props are merged onto the consumer's element with
  * `useTriggerElement` (the element's own handlers run first and its classes win conflicts; its
  * ref and the item's ref are both attached). The icon is placed inside the element.
  */
@@ -351,13 +354,17 @@ function BreadcrumbItem(
 
   if (child) {
     const { disabled: _disabled, ...childRest } = rest;
+    // Like the other item props, `href` is a default for the element (its own `href` wins). A
+    // disabled link has no destination, so it is not passed then.
+    const childHref = href !== undefined && !linkDisabled ? { href } : undefined;
     return (
       <BreadcrumbItemChild
         {...(childRest as React.HTMLAttributes<HTMLElement>)}
+        {...childHref}
         ref={ref}
         onClick={preventIfDisabled(linkDisabled, onClick)}
         aria-current={current ? 'page' : undefined}
-        className={cn(current ? currentClasses : linkClasses, className)}
+        className={cn(current ? currentChildClasses : linkClasses, className)}
         icon={renderedIcon}
         child={linkDisabled ? disableLinkChild(child) : child}
       />
@@ -428,6 +435,21 @@ function BreadcrumbItem(
 }
 BreadcrumbItem.displayName = 'BreadcrumbItem';
 
+/**
+ * A breadcrumb trail: a `<nav aria-label="Breadcrumb">` landmark with an ordered list. Each child
+ * is placed in its own list item (Fragments are opened, so each of their items gets one too); from
+ * the second one on, the item begins with a decorative separator chevron that is mirrored in
+ * right-to-left layouts.
+ *
+ * `Breadcrumb.Item` is also exported as `BreadcrumbItem`: React Server Components import the flat
+ * name, because dotted access needs a client file.
+ *
+ * @example
+ * <Breadcrumb>
+ *   <Breadcrumb.Item href="/">Home</Breadcrumb.Item>
+ *   <Breadcrumb.Item current>Settings</Breadcrumb.Item>
+ * </Breadcrumb>
+ */
 export const Breadcrumb = /* @__PURE__ */ Object.assign(BreadcrumbRoot, {
   Item: BreadcrumbItem,
 });

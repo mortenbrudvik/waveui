@@ -1,12 +1,15 @@
 import * as React from 'react';
-import { describe, it, expect, vi, expectTypeOf } from 'vitest';
+import { describe, it, expect, vi, expectTypeOf, afterEach } from 'vitest';
 import { renderToString } from 'react-dom/server';
-import { act, render, screen, within } from '@testing-library/react';
+import { act, fireEvent, render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
+import { composeStories } from '@storybook/react';
+import * as stories from '../../../../stories/Stepper.stories';
 import { Stepper, StepperStep } from '../Stepper';
 import type { StepProps, StepperProps } from '../Stepper';
 import type { Orientation } from '../../../lib/types';
 import {
+  asClientReference,
   renderWithProviders,
   testClassName,
   testCompoundExposure,
@@ -83,6 +86,33 @@ describe('Stepper', () => {
     error.mockRestore();
   });
 
+  describe('context guard in production (R3)', () => {
+    afterEach(() => {
+      vi.unstubAllEnvs();
+      vi.restoreAllMocks();
+    });
+
+    it('logs the missing-context error once and renders an inert step instead of throwing', async () => {
+      vi.stubEnv('NODE_ENV', 'production');
+      const error = vi.spyOn(console, 'error').mockImplementation(() => {});
+      const user = userEvent.setup();
+      const onClick = vi.fn();
+      const orphans = (
+        <>
+          <Stepper.Step label="Orphan" onClick={onClick} />
+          <Stepper.Step label="Second orphan" />
+        </>
+      );
+      const { rerender } = render(orphans);
+      rerender(orphans);
+      await user.click(stepButton('Orphan'));
+      expect(onClick).toHaveBeenCalledTimes(1);
+      expect(error.mock.calls.map(([message]) => String(message))).toEqual([
+        '[WaveUI] Stepper.Step must be used within Stepper',
+      ]);
+    });
+  });
+
   describe('structure (feedback-navigation#38)', () => {
     it('keeps the root group and renders an ordered list with one item per step', () => {
       render(
@@ -151,6 +181,40 @@ describe('Stepper', () => {
       expect(within(items[3]).getByRole('button')).toHaveAccessibleName('4. Complete');
       // The status text is visually hidden; the visible label is unchanged.
       expect(within(items[1]).getByText('Error:', { exact: false })).toHaveClass('sr-only');
+    });
+
+    describe('statusLabels (nav-other-code-3, R7)', () => {
+      const renderSteps = (statusLabels: StepperProps['statusLabels']) =>
+        render(
+          <Stepper defaultActiveStep={2} aria-label="Fremdrift" statusLabels={statusLabels}>
+            <Stepper.Step label="Konto" />
+            <Stepper.Step label="Betaling" error />
+            <Stepper.Step label="Bekreft" />
+          </Stepper>,
+        );
+
+      it('replaces the status text of completed and error steps', () => {
+        renderSteps({ completed: 'Fullført:', error: 'Feil:' });
+        expect(screen.getByRole('group')).toHaveAccessibleName('Fremdrift');
+        const [konto, betaling, bekreft] = stepButtons();
+        expect(konto).toHaveAccessibleName('Fullført: 1. Konto');
+        expect(betaling).toHaveAccessibleName('Feil: 2. Betaling');
+        expect(bekreft).toHaveAccessibleName('3. Bekreft');
+      });
+
+      it('keeps the English default of a label that is not given', () => {
+        renderSteps({ error: 'Feil:' });
+        const [konto, betaling] = stepButtons();
+        expect(konto).toHaveAccessibleName('Completed: 1. Konto');
+        expect(betaling).toHaveAccessibleName('Feil: 2. Betaling');
+      });
+
+      it("leaves the status out with ''", () => {
+        renderSteps({ completed: '', error: '' });
+        const [konto, betaling] = stepButtons();
+        expect(konto).toHaveAccessibleName('1. Konto');
+        expect(betaling).toHaveAccessibleName('2. Betaling');
+      });
     });
 
     it('describes a step by its description instead of adding it to the name', () => {
@@ -430,6 +494,29 @@ describe('Stepper', () => {
       }
     });
 
+    it('numbers steps written in a Server Component (lazy client references) the same way (R1)', () => {
+      const Step = asClientReference(Stepper.Step);
+      const plain = renderToString(
+        <Stepper defaultActiveStep={1}>
+          <>
+            <Stepper.Step label="Account" />
+            <Stepper.Step label="Profile" />
+          </>
+          <Stepper.Step label="Review" />
+        </Stepper>,
+      );
+      const lazy = renderToString(
+        <Stepper defaultActiveStep={1}>
+          <>
+            <Step label="Account" />
+            <Step label="Profile" />
+          </>
+          <Step label="Review" />
+        </Stepper>,
+      );
+      expect(lazy).toBe(plain);
+    });
+
     it('lets the index prop override the position', () => {
       render(
         <Stepper defaultActiveStep={3}>
@@ -481,6 +568,18 @@ describe('Stepper', () => {
       await user.keyboard(' ');
       expect(onClick).toHaveBeenCalledTimes(2);
       expect(onStepChange).toHaveBeenCalledTimes(3);
+    });
+
+    it('stops the page from scrolling on Space keydown and activates only on keyup (nav-other-tests-2)', () => {
+      const onStepChange = vi.fn();
+      renderSteps({ onStepChange });
+      const profile = stepButton('Profile');
+      // fireEvent returns false when the default action (page scroll) was prevented.
+      expect(fireEvent.keyDown(profile, { key: ' ' })).toBe(false);
+      expect(onStepChange).not.toHaveBeenCalled();
+      expect(fireEvent.keyUp(profile, { key: ' ' })).toBe(false);
+      expect(onStepChange).toHaveBeenCalledTimes(1);
+      expect(onStepChange).toHaveBeenCalledWith(1);
     });
 
     it('does nothing for a disabled step: no onClick, no onStepChange (click and keyboard)', async () => {
@@ -694,8 +793,50 @@ describe('Stepper', () => {
         { dir: 'rtl' },
       );
       const connector = screen.getByTestId('step').querySelector('[data-wave-stepper-connector]');
-      expect(connector).toHaveClass('ms-[15px]');
+      expect(connector).toHaveClass('ms-3.75');
       expect(connector?.className).not.toMatch(/\bml-/);
+    });
+
+    it('centres the vertical connector under the circle in the same unit as the circle (x-styling-3)', () => {
+      render(
+        <Stepper orientation="vertical">
+          <Stepper.Step label="Account" data-testid="step" />
+          <Stepper.Step label="Profile" />
+        </Stepper>,
+      );
+      const step = screen.getByTestId('step');
+      const circle = step.querySelector('[role="button"] > [aria-hidden="true"]');
+      const connector = step.querySelector('[data-wave-stepper-connector]');
+      // Circle size-8 and connector w-0.5 are spacing units (rem), so the offset (8 - 0.5) / 2 =
+      // 3.75 units follows them at any root font size; a px offset only fits a 16px root.
+      expect(circle).toHaveClass('size-8');
+      expect(connector).toHaveClass('w-0.5', 'ms-3.75');
+      expect(connector?.className).not.toMatch(/\d+px/);
+    });
+
+    it('keeps the connectors visible in forced-colors mode (x-styling-4)', () => {
+      render(
+        <Stepper defaultActiveStep={1}>
+          <Stepper.Step label="Account" data-testid="done" />
+          <Stepper.Step label="Profile" data-testid="active" />
+          <Stepper.Step label="Review" />
+        </Stepper>,
+      );
+      const connectorOf = (testId: string) =>
+        screen.getByTestId(testId).querySelector('[data-wave-stepper-connector]');
+      // Author backgrounds become Canvas in forced colors: the completed part is painted in
+      // Highlight (forcedColors.fill), the rest in CanvasText, like a Slider rail.
+      expect(connectorOf('done')).toHaveClass(
+        'bg-success',
+        'forced-colors:bg-[Highlight]',
+        'forced-colors:forced-color-adjust-none',
+      );
+      expect(connectorOf('active')).toHaveClass(
+        'bg-border',
+        'forced-colors:bg-[CanvasText]',
+        'forced-colors:forced-color-adjust-none',
+      );
+      expect(connectorOf('active')).not.toHaveClass('forced-colors:bg-[Highlight]');
     });
   });
 
@@ -735,6 +876,37 @@ describe('Stepper', () => {
       ).not.toBeNull();
       expect(screen.getByTestId('custom').querySelector('svg[data-wave-icon="check"]')).toBeNull();
       expect(within(screen.getByTestId('custom')).getByText('*')).toBeInTheDocument();
+    });
+  });
+
+  describe('Linear story (nav-other-code-4)', () => {
+    const { Linear } = composeStories(stories);
+
+    it('keeps focus on Back and Next at the boundaries they reach (C-DISABLED)', async () => {
+      const user = userEvent.setup();
+      render(<Linear />);
+      const next = screen.getByRole('button', { name: 'Next' });
+      const back = screen.getByRole('button', { name: 'Back' });
+      expect(back).toHaveAttribute('aria-disabled', 'true');
+      expect(back).not.toBeDisabled();
+
+      next.focus();
+      await user.keyboard('{Enter}{Enter}{Enter}');
+      expect(screen.getByRole('button', { current: 'step' })).toHaveAccessibleName('4. Confirm');
+      expect(next).toHaveFocus();
+      expect(next).toHaveAttribute('aria-disabled', 'true');
+      expect(next).not.toBeDisabled();
+      // Activating the unavailable Next does nothing.
+      await user.keyboard('{Enter}');
+      expect(screen.getByRole('button', { current: 'step' })).toHaveAccessibleName('4. Confirm');
+
+      back.focus();
+      await user.keyboard('{Enter}{Enter}{Enter}{Enter}');
+      expect(screen.getByRole('button', { current: 'step' })).toHaveAccessibleName(
+        '1. Personal Info',
+      );
+      expect(back).toHaveFocus();
+      expect(back).toHaveAttribute('aria-disabled', 'true');
     });
   });
 

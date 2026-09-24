@@ -239,6 +239,27 @@ describe('Pagination', () => {
       expect(page(1)).toHaveFocus();
     });
 
+    it('keeps focus on the activated page button when the visible range changes (nav-other-tests-3)', async () => {
+      const user = userEvent.setup();
+      render(<Pagination totalPages={20} defaultCurrentPage={10} />);
+      // [1, …, 9, 10, 11, …, 20] → [1, …, 8, 9, 10, …, 20]: page 9 moves one slot on.
+      page(9).focus();
+      await user.keyboard('{Enter}');
+      expect(page(9)).toHaveAttribute('aria-current', 'page');
+      expect(page(9)).toHaveFocus();
+      // → [1, …, 19, 20]: the range shrinks from 7 to 4 items.
+      page(20).focus();
+      await user.keyboard('{Enter}');
+      expect(page(20)).toHaveAttribute('aria-current', 'page');
+      expect(page(20)).toHaveFocus();
+      // Previous keeps focus as well, and the pages follow it.
+      const previous = screen.getByRole('button', { name: 'Previous page' });
+      previous.focus();
+      await user.keyboard('{Enter}');
+      expect(page(19)).toHaveAttribute('aria-current', 'page');
+      expect(previous).toHaveFocus();
+    });
+
     it('gates hover and pressed styles so aria-disabled buttons do not react', () => {
       render(<Pagination totalPages={5} defaultCurrentPage={1} />);
       const previous = screen.getByRole('button', { name: 'Previous page' });
@@ -622,7 +643,24 @@ describe('Pagination', () => {
       for (const name of ['First page', 'Previous page', 'Next page', 'Last page']) {
         const icon = screen.getByRole('button', { name }).querySelector('svg');
         expect(icon).toHaveAttribute('aria-hidden', 'true');
-        expect(icon).toHaveClass('rtl:-scale-x-100');
+        expect(icon).toHaveClass('wave-rtl:-scale-x-100');
+      }
+    });
+
+    it('mirrors the chevrons by their own direction, not by any RTL ancestor (R4)', () => {
+      // Tailwind's `rtl:` also matches inside an LTR subtree of an RTL page; `wave-rtl:` follows
+      // the element's own direction (`:dir(rtl)`), so these chevrons keep their LTR direction.
+      renderWithProviders(
+        <div dir="ltr">
+          <Pagination totalPages={5} defaultCurrentPage={3} showFirstLast />
+        </div>,
+        { dir: 'rtl' },
+      );
+      for (const name of ['First page', 'Previous page', 'Next page', 'Last page']) {
+        const icon = screen.getByRole('button', { name }).querySelector('svg');
+        expect(icon?.closest('[dir]')).toHaveAttribute('dir', 'ltr');
+        expect(icon).toHaveClass('wave-rtl:-scale-x-100');
+        expect(icon?.getAttribute('class')).not.toMatch(/(^|\s)rtl:/);
       }
     });
   });
@@ -679,8 +717,66 @@ describe('Pagination', () => {
       },
       { name: 'current page below 1 is clamped', args: [20, -3], expected: [1, 2, 'ellipsis', 20] },
       { name: 'no pages', args: [0, 1], expected: [] },
+      // boundaryCount 0 pins no page at either end, so a gap before the first or after the last
+      // shown page is marked too (nav-other-tests-1); a single missing end page is shown instead.
+      {
+        name: 'boundaryCount 0: ellipses at both ends',
+        args: [20, 10, 1, 0],
+        expected: ['ellipsis', 9, 10, 11, 'ellipsis'],
+      },
+      {
+        name: 'boundaryCount 0 at the first page',
+        args: [20, 1, 1, 0],
+        expected: [1, 2, 'ellipsis'],
+      },
+      {
+        name: 'boundaryCount 0 at the last page',
+        args: [20, 20, 1, 0],
+        expected: ['ellipsis', 19, 20],
+      },
+      {
+        name: 'boundaryCount 0: a single missing first page is filled',
+        args: [20, 3, 1, 0],
+        expected: [1, 2, 3, 4, 'ellipsis'],
+      },
+      {
+        name: 'boundaryCount 0: a single missing last page is filled',
+        args: [20, 18, 1, 0],
+        expected: ['ellipsis', 17, 18, 19, 20],
+      },
+      {
+        name: 'boundaryCount 0 and siblingCount 0',
+        args: [20, 10, 0, 0],
+        expected: ['ellipsis', 10, 'ellipsis'],
+      },
+      {
+        name: 'boundaryCount 0: a total that fits the slots shows every page',
+        args: [5, 3, 1, 0],
+        expected: [1, 2, 3, 4, 5],
+      },
     ])('$name', ({ args, expected }) => {
       expect(getPaginationRange(...args)).toEqual(expected);
+    });
+
+    it('marks the gaps at both ends with boundaryCount={0}, with unique keys', async () => {
+      const user = userEvent.setup();
+      const error = vi.spyOn(console, 'error');
+      render(
+        <Pagination
+          totalPages={20}
+          defaultCurrentPage={10}
+          boundaryCount={0}
+          showPreviousNext={false}
+        />,
+      );
+      expect(renderedSequence()).toEqual(['ellipsis', 9, 10, 11, 'ellipsis']);
+      await user.click(page(11));
+      expect(renderedSequence()).toEqual(['ellipsis', 10, 11, 12, 'ellipsis']);
+      const list = screen.getByRole('navigation').querySelector('ol');
+      for (const item of [list?.firstElementChild, list?.lastElementChild]) {
+        expect(item).toHaveAttribute('aria-hidden', 'true');
+      }
+      expect(error).not.toHaveBeenCalled();
     });
 
     it('renders the computed sequence with ellipses in place', () => {

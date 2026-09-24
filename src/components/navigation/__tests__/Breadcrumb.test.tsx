@@ -1,11 +1,13 @@
 import * as React from 'react';
 import { describe, it, expect, vi, afterEach, expectTypeOf } from 'vitest';
+import { renderToString } from 'react-dom/server';
 import { fireEvent, render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { Breadcrumb, BreadcrumbItem } from '../Breadcrumb';
 import type { BreadcrumbItemProps } from '../Breadcrumb';
 import type { Slot } from '../../../lib/types';
 import {
+  asClientReference,
   createOverlayTestWrapper,
   expectNoA11yViolations,
   renderWithProviders,
@@ -116,6 +118,108 @@ describe('Breadcrumb', () => {
     expect(separatorsIn(items[1])).toHaveLength(1);
   });
 
+  describe('Fragments (nav-other-code-1, R2)', () => {
+    /** Each list item's link or text, and whether it starts with a separator. */
+    const trail = () =>
+      screen.getAllByRole('listitem').map((item) => ({
+        text: item.textContent,
+        separator: separatorsIn(item).length === 1 && item.firstElementChild?.tagName === 'svg',
+      }));
+
+    it('gives each item of a conditional Fragment its own list item and separator', () => {
+      const isAdmin = true;
+      render(
+        <Breadcrumb>
+          <Breadcrumb.Item href="/">Home</Breadcrumb.Item>
+          {isAdmin && (
+            <>
+              <Breadcrumb.Item href="/admin">Admin</Breadcrumb.Item>
+              <Breadcrumb.Item href="/admin/users">Users</Breadcrumb.Item>
+            </>
+          )}
+          <Breadcrumb.Item current>Alice</Breadcrumb.Item>
+        </Breadcrumb>,
+      );
+      expect(trail()).toEqual([
+        { text: 'Home', separator: false },
+        { text: 'Admin', separator: true },
+        { text: 'Users', separator: true },
+        { text: 'Alice', separator: true },
+      ]);
+    });
+
+    it('flattens nested and keyed Fragments of mapped items', () => {
+      render(
+        <Breadcrumb>
+          <>
+            {['Home', 'Docs'].map((title) => (
+              <Breadcrumb.Item key={title} href={`#${title}`}>
+                {title}
+              </Breadcrumb.Item>
+            ))}
+            <React.Fragment key="tail">
+              <>
+                <Breadcrumb.Item current>Page</Breadcrumb.Item>
+              </>
+            </React.Fragment>
+          </>
+        </Breadcrumb>,
+      );
+      expect(trail()).toEqual([
+        { text: 'Home', separator: false },
+        { text: 'Docs', separator: true },
+        { text: 'Page', separator: true },
+      ]);
+    });
+
+    it('keeps the list items of a trail that gains a Fragment (keys stay unique)', () => {
+      const error = vi.spyOn(console, 'error');
+      const Trail = ({ admin }: { admin: boolean }) => (
+        <Breadcrumb>
+          <Breadcrumb.Item href="/">Home</Breadcrumb.Item>
+          {admin && (
+            <>
+              <Breadcrumb.Item href="/admin">Admin</Breadcrumb.Item>
+              <Breadcrumb.Item href="/admin/users">Users</Breadcrumb.Item>
+            </>
+          )}
+          <Breadcrumb.Item current>Alice</Breadcrumb.Item>
+        </Breadcrumb>
+      );
+      const { rerender } = render(<Trail admin={false} />);
+      const home = screen.getByRole('link', { name: 'Home' });
+      rerender(<Trail admin />);
+      expect(screen.getAllByRole('listitem')).toHaveLength(4);
+      // The first crumb was not remounted by the keys of the flattened list.
+      expect(screen.getByRole('link', { name: 'Home' })).toBe(home);
+      expect(error).not.toHaveBeenCalled();
+    });
+
+    it('renders items written in a Server Component (lazy client references) the same way (R1)', () => {
+      const Item = asClientReference(Breadcrumb.Item);
+      const plain = renderToString(
+        <Breadcrumb>
+          <Breadcrumb.Item href="/">Home</Breadcrumb.Item>
+          <>
+            <Breadcrumb.Item href="/a">A</Breadcrumb.Item>
+            <Breadcrumb.Item current>B</Breadcrumb.Item>
+          </>
+        </Breadcrumb>,
+      );
+      const lazy = renderToString(
+        <Breadcrumb>
+          <Item href="/">Home</Item>
+          <>
+            <Item href="/a">A</Item>
+            <Item current>B</Item>
+          </>
+        </Breadcrumb>,
+      );
+      expect(lazy).toBe(plain);
+      expect(plain.match(/<li/g)).toHaveLength(3);
+    });
+  });
+
   it('mirrors the separator in RTL (C-LOGICAL)', () => {
     renderWithProviders(
       <Breadcrumb>
@@ -126,7 +230,25 @@ describe('Breadcrumb', () => {
     );
     const separator = separatorsIn(screen.getAllByRole('listitem')[1])[0];
     expect(separator.closest('[dir]')).toHaveAttribute('dir', 'rtl');
-    expect(separator).toHaveClass('rtl:-scale-x-100');
+    expect(separator).toHaveClass('wave-rtl:-scale-x-100');
+  });
+
+  it("mirrors by the separator's own direction, not by any RTL ancestor (R4)", () => {
+    // Tailwind's `rtl:` also matches inside an LTR subtree of an RTL page; `wave-rtl:` follows
+    // the element's own direction (`:dir(rtl)`), so the chevron keeps pointing forward here.
+    renderWithProviders(
+      <div dir="ltr">
+        <Breadcrumb>
+          <Breadcrumb.Item href="/">Home</Breadcrumb.Item>
+          <Breadcrumb.Item current>Widget</Breadcrumb.Item>
+        </Breadcrumb>
+      </div>,
+      { dir: 'rtl' },
+    );
+    const separator = separatorsIn(screen.getAllByRole('listitem')[1])[0];
+    expect(separator.closest('[dir]')).toHaveAttribute('dir', 'ltr');
+    expect(separator).toHaveClass('wave-rtl:-scale-x-100');
+    expect(separator.getAttribute('class')).not.toMatch(/(^|\s)rtl:/);
   });
 
   it('marks current item with aria-current="page"', () => {
@@ -381,6 +503,113 @@ describe('Breadcrumb', () => {
         </Breadcrumb>,
       );
       expect(screen.getByRole('link', { name: 'Here' })).toHaveAttribute('aria-current', 'page');
+    });
+
+    it('renders the item normally and warns once when asChild has no element child (nav-other-tests-4)', () => {
+      const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+      render(
+        <Breadcrumb>
+          <Breadcrumb.Item asChild href="/x">
+            Docs
+          </Breadcrumb.Item>
+          <Breadcrumb.Item asChild href="/y">
+            Guide
+          </Breadcrumb.Item>
+        </Breadcrumb>,
+      );
+      expect(screen.getByRole('link', { name: 'Docs' })).toHaveAttribute('href', '/x');
+      expect(screen.getByRole('link', { name: 'Guide' })).toHaveAttribute('href', '/y');
+      expect(warn.mock.calls).toEqual([
+        [
+          '[WaveUI] Breadcrumb.Item: `asChild` expects a single element child (e.g. a router link); the item was rendered normally instead.',
+        ],
+      ]);
+    });
+
+    it('makes an element that is itself disabled an unavailable link (nav-other-tests-4)', () => {
+      const navigate = vi.fn();
+      const onChildClick = vi.fn();
+      /** A router link with its own `disabled` prop, which it does not render. */
+      function DisablableLink({
+        to,
+        disabled: _disabled,
+        onClick,
+        ...props
+      }: { to: string; disabled?: boolean } & React.ComponentProps<'a'>) {
+        return (
+          <a
+            href={to}
+            {...props}
+            onClick={(event) => {
+              onClick?.(event);
+              if (!event.defaultPrevented) navigate(to);
+            }}
+          />
+        );
+      }
+      render(
+        <Breadcrumb>
+          <Breadcrumb.Item asChild>
+            <DisablableLink to="/docs" disabled onClick={onChildClick}>
+              Docs
+            </DisablableLink>
+          </Breadcrumb.Item>
+        </Breadcrumb>,
+      );
+      const link = screen.getByRole('link', { name: 'Docs' });
+      expect(link).toHaveAttribute('aria-disabled', 'true');
+      expect(link).toHaveAttribute('tabindex', '-1');
+      expect(fireEvent.click(link)).toBe(false);
+      expect(onChildClick).not.toHaveBeenCalled();
+      expect(navigate).not.toHaveBeenCalled();
+    });
+
+    it("passes the item's href to the element as a default; the element's own href wins (nav-other-docs-2)", () => {
+      render(
+        <Breadcrumb>
+          <Breadcrumb.Item asChild href="/docs">
+            <a>Docs</a>
+          </Breadcrumb.Item>
+          <Breadcrumb.Item asChild href="/ignored">
+            <a href="/guide">Guide</a>
+          </Breadcrumb.Item>
+          <Breadcrumb.Item asChild href="/api" disabled>
+            <a>API</a>
+          </Breadcrumb.Item>
+        </Breadcrumb>,
+      );
+      expect(screen.getByRole('link', { name: 'Docs' })).toHaveAttribute('href', '/docs');
+      expect(screen.getByRole('link', { name: 'Guide' })).toHaveAttribute('href', '/guide');
+      // A disabled link has no destination, also not the item's.
+      const api = screen.getByRole('link', { name: 'API' });
+      expect(api).toHaveAttribute('aria-disabled', 'true');
+      expect(api).not.toHaveAttribute('href');
+    });
+
+    it('gives a current router link the shared focus ring and the disabled look (C-FOCUS, nav-other-code-2)', () => {
+      render(
+        <Breadcrumb>
+          <Breadcrumb.Item asChild current>
+            <RouterLink to="/here">Here</RouterLink>
+          </Breadcrumb.Item>
+          <Breadcrumb.Item asChild current disabled>
+            <RouterLink to="/there">There</RouterLink>
+          </Breadcrumb.Item>
+        </Breadcrumb>,
+      );
+      const here = screen.getByRole('link', { name: 'Here' });
+      expect(here).toHaveClass(
+        'font-semibold',
+        'text-foreground',
+        'focus-visible:outline-2',
+        'focus-visible:outline-offset-2',
+        'focus-visible:outline-ring',
+      );
+      // Still the current page, not a link-styled crumb.
+      expect(here).not.toHaveClass('text-primary');
+      const there = screen.getByRole('link', { name: 'There' });
+      expect(there).toHaveAttribute('aria-disabled', 'true');
+      expect(there).toHaveClass('aria-disabled:opacity-50', 'focus-visible:outline-ring');
     });
   });
 

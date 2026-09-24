@@ -1,6 +1,7 @@
 import * as React from 'react';
+import { flattenChildren } from '../../lib/children';
 import { cn } from '../../lib/cn';
-import { isDev } from '../../lib/dev';
+import { reportMissingContext } from '../../lib/dev';
 import { CheckIcon, DismissIcon } from '../../lib/icons';
 import { renderSlot } from '../../lib/slot';
 import type { Slot } from '../../lib/slot';
@@ -33,9 +34,19 @@ export interface StepperProps extends React.HTMLAttributes<HTMLDivElement> {
    * @default false
    */
   linear?: boolean;
+  /**
+   * Visually hidden status text read before the number of a completed or error step ("Completed:
+   * 2. Profile"), for localization: `{ completed: 'Fullført:', error: 'Feil:' }`. A label that is
+   * not given keeps its English default; `''` leaves that status out of the step names.
+   * @default { completed: 'Completed:', error: 'Error:' }
+   */
+  statusLabels?: { completed?: string; error?: string };
   /** Ref to the root `<div>` element. */
   ref?: React.Ref<HTMLDivElement>;
 }
+
+const DEFAULT_COMPLETED_LABEL = 'Completed:';
+const DEFAULT_ERROR_LABEL = 'Error:';
 
 /** Properties for the Step sub-component. */
 export interface StepProps extends React.HTMLAttributes<HTMLDivElement> {
@@ -48,11 +59,17 @@ export interface StepProps extends React.HTMLAttributes<HTMLDivElement> {
    * control). Decorative: rendered with `aria-hidden="true"`; the step number stays in the name.
    */
   icon?: Slot<'span'>;
-  /** Whether the step is disabled and non-interactive. */
+  /**
+   * Whether the step is disabled and non-interactive.
+   * @default false
+   */
   disabled?: boolean;
   /** Whether the step is marked as completed. Defaults to `true` for steps before the active step. */
   completed?: boolean;
-  /** Whether the step is in an error state. */
+  /**
+   * Whether the step is in an error state.
+   * @default false
+   */
   error?: boolean;
   /**
    * Zero-based position of the step. Normally derived from the step's position in the Stepper
@@ -160,6 +177,10 @@ interface StepperContextValue {
   order: readonly string[];
   /** Number of element children after flattening Fragments (the pre-registration step count). */
   childCount: number;
+  /** Resolved `statusLabels.completed`. */
+  completedLabel: string;
+  /** Resolved `statusLabels.error`. */
+  errorLabel: string;
   register: StepRegistry['register'];
   sync: StepRegistry['sync'];
 }
@@ -182,49 +203,41 @@ const INERT_CONTEXT: StepperContextValue = {
   linear: false,
   order: EMPTY_ORDER,
   childCount: 0,
+  completedLabel: DEFAULT_COMPLETED_LABEL,
+  errorLabel: DEFAULT_ERROR_LABEL,
   register: () => noop,
   sync: noop,
 };
 
-/** Reads the Stepper context; a Step outside a Stepper throws in development (C-CONTEXT). */
+/**
+ * Reads the Stepper context; a Step outside a Stepper throws in development and logs once in
+ * production, where it renders inert (C-CONTEXT).
+ */
 function useStepperContext(componentName: string): StepperContextValue {
   const context = React.useContext(StepperContext);
   if (context) return context;
-  const message = `[WaveUI] ${componentName} must be used within Stepper`;
-  if (isDev) throw new Error(message);
-  console.error(message);
+  reportMissingContext(componentName, 'Stepper');
   return INERT_CONTEXT;
 }
 
-/** A Stepper child after flattening: elements carry a unique key and their position. */
-type StepperChild =
-  | { key: string; node: React.ReactElement; slot: number }
-  | { key: null; node: React.ReactNode; slot: null };
+/** A Stepper child after flattening; an element carries its position among the elements. */
+interface StepperChild {
+  key: string;
+  node: React.ReactNode;
+  slot: number | null;
+}
 
 /**
- * The Stepper's children with Fragments flattened (at any depth), `null`/booleans dropped, and every
- * element numbered in order. Keys are prefixed with their Fragment's key so they stay unique.
+ * The Stepper's children with Fragments flattened at any depth (`flattenChildren`: keys unique,
+ * `null`/booleans dropped) and every element numbered in order.
  */
-function flattenChildren(children: React.ReactNode): StepperChild[] {
-  const out: StepperChild[] = [];
+function numberChildren(children: React.ReactNode): StepperChild[] {
   let slot = 0;
-  const visit = (nodes: React.ReactNode, keyPrefix: string) => {
-    for (const child of React.Children.toArray(nodes)) {
-      if (!React.isValidElement<{ children?: React.ReactNode }>(child)) {
-        out.push({ key: null, node: child, slot: null });
-        continue;
-      }
-      const key = `${keyPrefix}${String(child.key)}`;
-      if (child.type === React.Fragment) {
-        visit(child.props.children, `${key}/`);
-      } else {
-        out.push({ key, node: child, slot });
-        slot += 1;
-      }
-    }
-  };
-  visit(children, '');
-  return out;
+  return flattenChildren(children).map(({ key, node }) => ({
+    key,
+    node,
+    slot: React.isValidElement(node) ? slot++ : null,
+  }));
 }
 
 // ---------------------------------------------------------------------------
@@ -232,6 +245,15 @@ function flattenChildren(children: React.ReactNode): StepperChild[] {
 // ---------------------------------------------------------------------------
 
 const indicatorSlotClasses = 'inline-flex items-center justify-center';
+
+/**
+ * Connector colors. A connector is drawn by its background only, which forced colors replace with
+ * Canvas, so it opts out there: a completed one is painted `Highlight` (`forcedColors.fill`), the
+ * others `CanvasText`, like a Slider rail.
+ */
+const connectorCompletedClasses = cn('bg-success', forcedColors.fill);
+const connectorPendingClasses =
+  'bg-border forced-colors:bg-[CanvasText] forced-colors:forced-color-adjust-none';
 
 /**
  * One step of a {@link Stepper}: a `role="button"` step (indicator, label, optional description)
@@ -253,8 +275,18 @@ const StepperStep = ({
   ref,
   ...rest
 }: StepProps) => {
-  const { activeStep, select, orientation, linear, order, childCount, register, sync } =
-    useStepperContext('Stepper.Step');
+  const {
+    activeStep,
+    select,
+    orientation,
+    linear,
+    order,
+    childCount,
+    completedLabel,
+    errorLabel,
+    register,
+    sync,
+  } = useStepperContext('Stepper.Step');
   const slotIndex = React.useContext(StepSlotContext);
   const key = useId('wave-step');
   const labelId = `${key}-label`;
@@ -314,7 +346,8 @@ const StepperStep = ({
     event.currentTarget.click();
   };
 
-  const status = error ? 'Error: ' : isCompleted ? 'Completed: ' : '';
+  const status = error ? errorLabel : isCompleted ? completedLabel : '';
+  const statusText = status ? `${status} ${index + 1}.` : `${index + 1}.`;
 
   let indicator: React.ReactNode;
   if (error) {
@@ -391,7 +424,7 @@ const StepperStep = ({
                 toneClass,
               )}
             >
-              <span className="sr-only">{`${status}${index + 1}.`}</span> {label}
+              <span className="sr-only">{statusText}</span> {label}
             </span>
             {description && (
               <span
@@ -412,8 +445,10 @@ const StepperStep = ({
             aria-hidden="true"
             className={cn(
               'transition-colors motion-reduce:transition-none',
-              horizontal ? 'mx-2 h-0.5 flex-1' : 'my-1 ms-[15px] min-h-6 w-0.5',
-              isCompleted ? 'bg-success' : 'bg-border',
+              // Vertical: centred under the size-8 circle, (8 - 0.5) / 2 spacing units in, so the
+              // offset scales with the circle at any root font size.
+              horizontal ? 'mx-2 h-0.5 flex-1' : 'my-1 ms-3.75 min-h-6 w-0.5',
+              isCompleted ? connectorCompletedClasses : connectorPendingClasses,
             )}
           />
         )}
@@ -433,11 +468,15 @@ const StepperRoot = ({
   onStepChange,
   orientation = 'horizontal',
   linear = false,
+  statusLabels,
   className,
   children,
   ref,
   ...rest
 }: StepperProps) => {
+  // Resolved to strings, so an inline `statusLabels` object does not change the context each render.
+  const completedLabel = statusLabels?.completed ?? DEFAULT_COMPLETED_LABEL;
+  const errorLabel = statusLabels?.error ?? DEFAULT_ERROR_LABEL;
   const [activeStep, setActiveStep] = useControllable(controlledStep, defaultActiveStep);
   const emitStepChange = useEventCallback(onStepChange);
   // Event callback semantics (C-NAMING): every activation emits, also of the active step.
@@ -463,7 +502,7 @@ const StepperRoot = ({
     return () => observer.disconnect();
   }, [registry]);
 
-  const items = React.useMemo(() => flattenChildren(children), [children]);
+  const items = React.useMemo(() => numberChildren(children), [children]);
   const childCount = items.filter((item) => item.slot !== null).length;
 
   const context = React.useMemo<StepperContextValue>(
@@ -474,10 +513,22 @@ const StepperRoot = ({
       linear,
       order,
       childCount,
+      completedLabel,
+      errorLabel,
       register: registry.register,
       sync: registry.sync,
     }),
-    [activeStep, select, orientation, linear, order, childCount, registry],
+    [
+      activeStep,
+      select,
+      orientation,
+      linear,
+      order,
+      childCount,
+      completedLabel,
+      errorLabel,
+      registry,
+    ],
   );
 
   const horizontal = orientation === 'horizontal';
@@ -503,7 +554,7 @@ const StepperRoot = ({
           )}
         >
           {items.map((item) =>
-            item.key === null ? (
+            item.slot === null ? (
               item.node
             ) : (
               <StepSlotContext.Provider key={item.key} value={item.slot}>
@@ -522,7 +573,8 @@ StepperRoot.displayName = 'Stepper';
  * A multi-step progress indicator. Steps are `Stepper.Step` children (Fragments, conditional steps
  * and wrapper components are numbered in DOM order) rendered as an ordered list inside a
  * `role="group"` root named "Progress" (override with `aria-label`). The active step's button
- * carries `aria-current="step"`; completed and error steps announce their status.
+ * carries `aria-current="step"`; completed and error steps announce their status ("Completed:",
+ * "Error:"; localized with `statusLabels`).
  *
  * Server rendering: before hydration, steps are numbered by their position among the Stepper's
  * children (Fragments flattened), so a wrapper component that renders more or fewer than one step

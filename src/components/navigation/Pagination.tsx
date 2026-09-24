@@ -45,7 +45,9 @@ export interface PaginationProps extends Omit<React.HTMLAttributes<HTMLElement>,
    * @default 1
    */
   siblingCount?: number;
-  /** Number of page buttons to always show at the start and end.
+  /**
+   * Number of page buttons to always show at the start and end. With `0` no page is pinned there,
+   * and an ellipsis marks the pages before or after the shown range.
    * @default 1
    */
   boundaryCount?: number;
@@ -109,13 +111,16 @@ function clampPage(page: number, pageCount: number): number {
  * The page items Pagination renders: page numbers and `'ellipsis'` markers, in order.
  *
  * Always shows `boundaryCount` pages at each end and `siblingCount` pages on each side of the
- * current page; a gap of exactly one page is filled with that page instead of an ellipsis. When
- * `totalPages` fits into those slots (`2 × boundaryCount + 2 × siblingCount + 3`), every page is
- * listed. `currentPage` is clamped into `1…totalPages`; `totalPages < 1` returns `[]`.
+ * current page; a gap of exactly one page is filled with that page instead of an ellipsis. With
+ * `boundaryCount` 0 no page is pinned at the ends, so a gap before the first or after the last
+ * shown page gets an ellipsis too. When `totalPages` fits into those slots
+ * (`2 × boundaryCount + 2 × siblingCount + 3`), every page is listed. `currentPage` is clamped
+ * into `1…totalPages`; `totalPages < 1` returns `[]`.
  *
  * Exported from this module for tests and custom pagers; not part of the package barrel.
  *
  * @example getPaginationRange(20, 10) // [1, 'ellipsis', 9, 10, 11, 'ellipsis', 20]
+ * @example getPaginationRange(20, 10, 1, 0) // ['ellipsis', 9, 10, 11, 'ellipsis']
  */
 export function getPaginationRange(
   totalPages: number,
@@ -145,18 +150,25 @@ export function getPaginationRange(
 
   const sorted = Array.from(pages).sort((a, b) => a - b);
   const range: Array<number | 'ellipsis'> = [];
-  sorted.forEach((pageNumber, i) => {
-    if (i > 0) {
-      const gap = pageNumber - sorted[i - 1];
-      if (gap === 2) {
-        // A single missing page: show it instead of an ellipsis.
-        range.push(pageNumber - 1);
-      } else if (gap > 2) {
-        range.push('ellipsis');
-      }
+  /** Marks the pages between `before` and `after` (both exclusive). */
+  const fillGap = (before: number, after: number) => {
+    const gap = after - before;
+    if (gap === 2) {
+      // A single missing page: show it instead of an ellipsis.
+      range.push(before + 1);
+    } else if (gap > 2) {
+      range.push('ellipsis');
     }
+  };
+  // The ends are virtual neighbours 0 and total + 1, so with `boundaryCount` 0 (no page pinned at
+  // an end) a gap before the first or after the last shown page is marked as well.
+  let previous = 0;
+  for (const pageNumber of sorted) {
+    fillGap(previous, pageNumber);
     range.push(pageNumber);
-  });
+    previous = pageNumber;
+  }
+  fillGap(previous, total + 1);
   return range;
 }
 
@@ -174,8 +186,11 @@ const currentItemClasses = cn(
   forcedColors.selectedLeaf,
 );
 
-/** Directional glyphs point the other way in right-to-left layouts (C-LOGICAL). */
-const chevronClasses = 'rtl:-scale-x-100';
+/**
+ * Directional glyphs point the other way in right-to-left layouts (C-LOGICAL), by the glyph's own
+ * direction: Tailwind's bare variant would also match inside an LTR subtree of an RTL page.
+ */
+const chevronClasses = 'wave-rtl:-scale-x-100';
 
 /**
  * Page navigation for paged content: page buttons with ellipses, optional Previous/Next and
