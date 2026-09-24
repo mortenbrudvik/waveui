@@ -3,6 +3,7 @@ import { cn } from '../../lib/cn';
 import { composeEventHandlers } from '../../lib/composeEventHandlers';
 import { warnDeprecated, warnOnce } from '../../lib/dev';
 import { DismissIcon, SearchIcon } from '../../lib/icons';
+import { hasRenderedTextLabel, hasTextLabel, observeTextLabel } from '../../lib/labelInName';
 import { mergeProps } from '../../lib/mergeProps';
 import { renderSlot, resolveSlot, VOID_ELEMENTS } from '../../lib/slot';
 import { focusRing, inputFocus } from '../../lib/styles';
@@ -161,106 +162,6 @@ interface DismissParts {
    * first client render. After mount the rendered button's text decides.
    */
   literalTextLabel: boolean;
-}
-
-// C-SLOTS naming predicate. Local copy of the rule MessageBar (P12) and Tag (P08) apply; it moves
-// to the shared F2 helper `src/lib/labelInName.ts` when that lands (spec revision 2.5).
-
-/** A letter or a digit. */
-const LABEL_CHARACTER = /[\p{L}\p{N}]/gu;
-
-/** Letters and digits a text label needs: a lone character (`X`, `×`, `+`) is a symbol. */
-const MIN_LABEL_CHARACTERS = 2;
-
-/** Elements whose text is never a visible label (SVG `<title>`/`<desc>`, scripts, styles). */
-const NON_LABEL_ELEMENTS: ReadonlySet<string> = new Set([
-  'title',
-  'desc',
-  'style',
-  'script',
-  'template',
-]);
-
-function countLabelCharacters(text: string): number {
-  return text.match(LABEL_CHARACTER)?.length ?? 0;
-}
-
-/**
- * Letters and digits in the literal strings and numbers of `node`, outside `aria-hidden`/`hidden`
- * elements (counting stops at {@link MIN_LABEL_CHARACTERS}). Text rendered by components, and
- * one-shot iterators (which reading would consume), are found by the DOM check after mount.
- */
-function countLiteralLabelCharacters(node: unknown): number {
-  if (typeof node === 'string') return countLabelCharacters(node);
-  if (typeof node === 'number' || typeof node === 'bigint') {
-    return countLabelCharacters(String(node));
-  }
-  if (typeof node !== 'object' || node === null) return 0;
-  if (React.isValidElement<UnknownProps>(node)) {
-    const { props } = node;
-    const ariaHidden = props['aria-hidden'];
-    if (ariaHidden === true || ariaHidden === 'true' || props.hidden) return 0;
-    if (typeof node.type === 'string' && NON_LABEL_ELEMENTS.has(node.type)) return 0;
-    return countLiteralLabelCharacters(props.children);
-  }
-  if (!(Symbol.iterator in node)) return 0;
-  const iterable = node as Iterable<unknown>;
-  if (!Array.isArray(iterable) && (iterable[Symbol.iterator]() as unknown) === iterable) return 0;
-  let count = 0;
-  for (const item of iterable) {
-    count += countLiteralLabelCharacters(item);
-    if (count >= MIN_LABEL_CHARACTERS) break;
-  }
-  return count;
-}
-
-/** Whether the literal `node` has a text label (see {@link countLiteralLabelCharacters}). */
-function hasTextLabel(node: unknown): boolean {
-  return countLiteralLabelCharacters(node) >= MIN_LABEL_CHARACTERS;
-}
-
-/**
- * Whether the rendered `root` contains a text label: at least two letters or digits in text outside
- * `aria-hidden` and `hidden` subtrees (visually hidden text included, since it names the button
- * too). Text hidden only by CSS is not detected and counts as a label (documented on `dismiss`).
- */
-function hasRenderedTextLabel(root: Element): boolean {
-  const walker = root.ownerDocument.createTreeWalker(
-    root,
-    NodeFilter.SHOW_ELEMENT | NodeFilter.SHOW_TEXT,
-    {
-      acceptNode(node) {
-        if (node.nodeType === Node.TEXT_NODE) return NodeFilter.FILTER_ACCEPT;
-        const element = node as Element;
-        return element.getAttribute('aria-hidden') === 'true' ||
-          element.hasAttribute('hidden') ||
-          NON_LABEL_ELEMENTS.has(element.localName)
-          ? NodeFilter.FILTER_REJECT
-          : NodeFilter.FILTER_SKIP;
-      },
-    },
-  );
-  let count = 0;
-  while (walker.nextNode()) {
-    count += countLabelCharacters(walker.currentNode.nodeValue ?? '');
-    if (count >= MIN_LABEL_CHARACTERS) return true;
-  }
-  return false;
-}
-
-/** Re-checks the name whenever the content changes (e.g. a translation loads). */
-const LABEL_MUTATIONS: MutationObserverInit = {
-  childList: true,
-  subtree: true,
-  characterData: true,
-  attributes: true,
-  attributeFilter: ['aria-hidden', 'hidden'],
-};
-
-function observeTextLabel(root: Element, onChange: () => void): () => void {
-  const observer = new MutationObserver(onChange);
-  observer.observe(root, LABEL_MUTATIONS);
-  return () => observer.disconnect();
 }
 
 const noop = () => {};
