@@ -1,4 +1,5 @@
 import * as React from 'react';
+import { joinIds } from '../../lib/aria';
 import { cn } from '../../lib/cn';
 import { composeEventHandlers } from '../../lib/composeEventHandlers';
 import { warnDeprecated } from '../../lib/dev';
@@ -45,7 +46,10 @@ export interface CheckboxProps extends Omit<
   onChange?: (checked: boolean) => void;
   /** Whether the checkbox is disabled and non-interactive. */
   disabled?: boolean;
-  /** Text label displayed next to the checkbox; it also names the control. */
+  /**
+   * Text label displayed next to the checkbox. It names the control through `aria-labelledby`,
+   * after a consumer or Field `aria-labelledby`; a consumer `aria-label` names it instead.
+   */
   label?: string;
   /**
    * Form field name. With a name, the checkbox takes part in native form submission: it submits
@@ -85,7 +89,8 @@ export interface CheckboxProps extends Omit<
  *   `-details`, `tabIndex`, `autoFocus` and the click, focus and key handlers (`controlRef` exposes
  *   it). A consumer `onClick` runs once per activation, before the toggle; `preventDefault()` in it
  *   cancels the toggle.
- * - Inside a `Field` it is named by the Field label and described by its hint and error.
+ * - Inside a `Field` it is named by the Field label (followed by its own `label` text) and described
+ *   by the Field hint and error.
  * - With `name` (or `required`) it takes part in native forms like `<input type="checkbox">`, and
  *   a form reset restores `defaultChecked`.
  */
@@ -128,6 +133,7 @@ export const Checkbox = ({
   });
 
   const generatedId = useId('checkbox');
+  const labelTextId = useId('checkbox-label');
   const field = useFieldContext();
   const fieldProps = useFieldControl({
     id,
@@ -140,6 +146,20 @@ export const Checkbox = ({
     'aria-required': ariaRequired ?? required,
   });
   const isRequired = required ?? field?.required ?? false;
+  // The label text names the control through aria-labelledby, disabled or not: axe exempts the
+  // dimmed text of a disabled control only when the control references it this way (its <label>
+  // exemption covers native inputs only). A consumer aria-label still names the control alone.
+  // The ids already there (the consumer's, the Field label from useFieldControl) come first, then
+  // the Field label whose <label htmlFor> targets this control (aria-labelledby would hide it), so
+  // the name keeps every label.
+  const labelledBy =
+    label && fieldProps['aria-label'] === undefined
+      ? joinIds(
+          fieldProps['aria-labelledby'],
+          field && fieldProps.id === field.controlId ? field.labelId : undefined,
+          labelTextId,
+        )
+      : fieldProps['aria-labelledby'];
 
   const buttonRef = React.useRef<HTMLButtonElement>(null);
   const mergedControlRef = useMergedRefs(buttonRef, controlRef);
@@ -163,6 +183,7 @@ export const Checkbox = ({
         id={generatedId}
         type="button"
         {...fieldProps}
+        aria-labelledby={labelledBy}
         aria-errormessage={ariaErrorMessage}
         aria-details={ariaDetails}
         autoFocus={autoFocus}
@@ -196,7 +217,11 @@ export const Checkbox = ({
           <CheckIcon size={12} className={glyphClassName} />
         ) : null}
       </button>
-      {label && <span className="text-sm text-foreground">{label}</span>}
+      {label && (
+        <span id={labelTextId} className="text-sm text-foreground">
+          {label}
+        </span>
+      )}
       <HiddenInput
         type="checkbox"
         name={name}

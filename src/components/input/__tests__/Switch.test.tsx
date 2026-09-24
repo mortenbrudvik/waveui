@@ -190,6 +190,88 @@ describe('Switch — props reach the switch control (C-ROUTING)', () => {
   });
 });
 
+// axe exempts the dimmed label text of a disabled control only when that control references the
+// text through aria-labelledby: its <label> exemption covers native inputs, not a role="switch"
+// button. The reference does not depend on the disabled state, and the name stays the same.
+describe('Switch — the label text names the control through aria-labelledby', () => {
+  it.each([
+    { state: 'enabled', disabled: false },
+    { state: 'disabled', disabled: true },
+  ])('references the label text and keeps its name ($state)', ({ disabled }) => {
+    render(<Switch label="Dark mode" disabled={disabled} />);
+    const sw = screen.getByRole('switch');
+    const text = screen.getByText('Dark mode');
+    expect(text.id).not.toBe('');
+    expect(sw).toHaveAttribute('aria-labelledby', text.id);
+    expect(sw).toHaveAccessibleName('Dark mode');
+  });
+
+  it('gives every switch its own label text id', () => {
+    render(
+      <>
+        <Switch label="Wi-Fi" />
+        <Switch label="Bluetooth" />
+      </>,
+    );
+    const wifi = screen.getByText('Wi-Fi');
+    const bluetooth = screen.getByText('Bluetooth');
+    expect(wifi.id).not.toBe(bluetooth.id);
+    expect(screen.getByRole('switch', { name: 'Wi-Fi' })).toHaveAttribute(
+      'aria-labelledby',
+      wifi.id,
+    );
+    expect(screen.getByRole('switch', { name: 'Bluetooth' })).toHaveAttribute(
+      'aria-labelledby',
+      bluetooth.id,
+    );
+  });
+
+  it('adds no aria-labelledby without label text (aria-label names it)', () => {
+    render(<Switch aria-label="Airplane mode" disabled />);
+    const sw = screen.getByRole('switch');
+    expect(sw).not.toHaveAttribute('aria-labelledby');
+    expect(sw).toHaveAccessibleName('Airplane mode');
+  });
+
+  it('a consumer aria-label keeps naming the control; no aria-labelledby is added', () => {
+    render(<Switch label="Dark mode" aria-label="Use the dark theme" />);
+    const sw = screen.getByRole('switch');
+    expect(sw).not.toHaveAttribute('aria-labelledby');
+    expect(sw).toHaveAccessibleName('Use the dark theme');
+  });
+
+  it('joins a consumer aria-labelledby with the label text (consumer ids first)', () => {
+    render(
+      <>
+        <span id="display-heading">Display</span>
+        <Switch label="Dark mode" aria-labelledby="display-heading" disabled />
+      </>,
+    );
+    const sw = screen.getByRole('switch');
+    expect(sw).toHaveAttribute(
+      'aria-labelledby',
+      `display-heading ${screen.getByText('Dark mode').id}`,
+    );
+    expect(sw).toHaveAccessibleName('Display Dark mode');
+  });
+
+  it('passes a consumer aria-labelledby through unchanged next to a consumer aria-label', () => {
+    render(
+      <>
+        <span id="display-heading">Display</span>
+        <Switch
+          label="Dark mode"
+          aria-label="Use the dark theme"
+          aria-labelledby="display-heading"
+        />
+      </>,
+    );
+    const sw = screen.getByRole('switch');
+    expect(sw).toHaveAttribute('aria-labelledby', 'display-heading');
+    expect(sw).toHaveAccessibleName('Display');
+  });
+});
+
 describe('Switch — Field integration (FieldContext)', () => {
   it('is named by the Field label and described by its hint and error', () => {
     renderWithFieldContext(<Switch />, {
@@ -199,6 +281,8 @@ describe('Switch — Field integration (FieldContext)', () => {
     });
     const sw = screen.getByRole('switch', { name: FIELD_TEST_TEXT.label });
     expect(sw).toHaveAttribute('id', FIELD_TEST_IDS.controlId);
+    // Without label text the Field's <label htmlFor> alone names it.
+    expect(sw).not.toHaveAttribute('aria-labelledby');
     expect(sw).toHaveAccessibleDescription(`${FIELD_TEST_TEXT.error} ${FIELD_TEST_TEXT.hint}`);
     expect(sw).toHaveAttribute('aria-invalid', 'true');
     expect(sw).toHaveAttribute('aria-required', 'true');
@@ -208,6 +292,56 @@ describe('Switch — Field integration (FieldContext)', () => {
     renderWithFieldContext(<Switch id="own-id" />);
     const sw = screen.getByRole('switch', { name: FIELD_TEST_TEXT.label });
     expect(sw).toHaveAttribute('aria-labelledby', FIELD_TEST_IDS.labelId);
+  });
+
+  it.each([
+    { state: 'enabled', disabled: false },
+    { state: 'disabled', disabled: true },
+  ])(
+    'with label text, keeps the Field label and the label text in its name ($state)',
+    ({ disabled }) => {
+      renderWithFieldContext(<Switch label="Dark mode" disabled={disabled} />);
+      const sw = screen.getByRole('switch');
+      expect(sw).toHaveAttribute('id', FIELD_TEST_IDS.controlId);
+      // Both <label>s named it; aria-labelledby lists them in the same (document) order.
+      expect(sw).toHaveAttribute(
+        'aria-labelledby',
+        `${FIELD_TEST_IDS.labelId} ${screen.getByText('Dark mode').id}`,
+      );
+      expect(sw).toHaveAccessibleName(`${FIELD_TEST_TEXT.label} Dark mode`);
+    },
+  );
+
+  it('with label text and its own id, joins the Field label and the label text', () => {
+    renderWithFieldContext(<Switch id="own-id" label="Dark mode" />);
+    const sw = screen.getByRole('switch');
+    expect(sw).toHaveAttribute(
+      'aria-labelledby',
+      `${FIELD_TEST_IDS.labelId} ${screen.getByText('Dark mode').id}`,
+    );
+    expect(sw).toHaveAccessibleName(`${FIELD_TEST_TEXT.label} Dark mode`);
+  });
+
+  it('a consumer aria-label wins over the Field label and the label text', () => {
+    renderWithFieldContext(<Switch label="Dark mode" aria-label="Use the dark theme" />);
+    const sw = screen.getByRole('switch');
+    expect(sw).not.toHaveAttribute('aria-labelledby');
+    expect(sw).toHaveAccessibleName('Use the dark theme');
+  });
+
+  it('a consumer aria-labelledby comes first, then the Field label and the label text', () => {
+    renderWithFieldContext(
+      <>
+        <span id="display-heading">Display</span>
+        <Switch label="Dark mode" aria-labelledby="display-heading" />
+      </>,
+    );
+    const sw = screen.getByRole('switch');
+    expect(sw).toHaveAttribute(
+      'aria-labelledby',
+      `display-heading ${FIELD_TEST_IDS.labelId} ${screen.getByText('Dark mode').id}`,
+    );
+    expect(sw).toHaveAccessibleName(`Display ${FIELD_TEST_TEXT.label} Dark mode`);
   });
 
   it('an explicit required={false} wins over a required Field (aria-required matches validation)', () => {

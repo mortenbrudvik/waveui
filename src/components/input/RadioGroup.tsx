@@ -1,4 +1,5 @@
 import * as React from 'react';
+import { joinIds } from '../../lib/aria';
 import { cn } from '../../lib/cn';
 import { composeEventHandlers } from '../../lib/composeEventHandlers';
 import { isDev, warnDeprecated } from '../../lib/dev';
@@ -222,7 +223,10 @@ export interface RadioItemProps extends Omit<
 > {
   /** Value associated with this radio option. */
   value: string;
-  /** Text label displayed next to the radio indicator; it also names the radio. */
+  /**
+   * Text label displayed next to the radio indicator. It names the radio through
+   * `aria-labelledby`, after a consumer `aria-labelledby`; a consumer `aria-label` names it instead.
+   */
   label?: string;
   /** Whether the radio item is disabled and non-interactive (also when the group is disabled). */
   disabled?: boolean;
@@ -249,14 +253,24 @@ export function RadioItem({
   className,
   labelClassName,
   onClick,
+  'aria-labelledby': ariaLabelledBy,
   ref,
   ...rest
 }: RadioItemProps) {
   const ctx = useRadioGroupContext('RadioItem');
   const generatedId = useId('radio-item');
+  const labelTextId = useId('radio-item-label');
 
   const isDisabled = Boolean(disabled || ctx.disabled);
   const selected = ctx.value === value;
+  // The label text names the radio through aria-labelledby, disabled or not: axe exempts the dimmed
+  // text of a disabled radio only when the radio references it this way (its <label> exemption
+  // covers native inputs only). A consumer aria-label still names the radio alone; a consumer
+  // aria-labelledby comes first.
+  const labelledBy =
+    label && rest['aria-label'] === undefined
+      ? joinIds(ariaLabelledBy, labelTextId)
+      : ariaLabelledBy;
 
   return (
     <label
@@ -272,6 +286,7 @@ export function RadioItem({
         role="radio"
         {...rest}
         ref={ref}
+        aria-labelledby={labelledBy}
         aria-checked={selected}
         disabled={isDisabled}
         tabIndex={isDisabled ? -1 : ctx.getTabIndex(value)}
@@ -300,7 +315,11 @@ export function RadioItem({
           />
         )}
       </button>
-      {label && <span className={cn('text-sm text-foreground', labelClassName)}>{label}</span>}
+      {label && (
+        <span id={labelTextId} className={cn('text-sm text-foreground', labelClassName)}>
+          {label}
+        </span>
+      )}
     </label>
   );
 }

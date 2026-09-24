@@ -477,6 +477,91 @@ describe('RadioItem', () => {
   });
 });
 
+// axe exempts the dimmed label text of a disabled radio only when that radio references the text
+// through aria-labelledby: its <label> exemption covers native inputs, not a role="radio" button.
+// The reference does not depend on the disabled state, and the name stays the same.
+describe('RadioItem — the label text names the radio through aria-labelledby', () => {
+  function expectNamedByLabelText(name: string) {
+    const button = radio(name);
+    const text = screen.getByText(name);
+    expect(text.id).not.toBe('');
+    expect(button).toHaveAttribute('aria-labelledby', text.id);
+    expect(button).toHaveAccessibleName(name);
+  }
+
+  it('references the label text of enabled and disabled items', () => {
+    render(
+      <RadioGroup aria-label="Plan">
+        <RadioItem value="free" label="Free" disabled />
+        <RadioItem value="pro" label="Pro" />
+      </RadioGroup>,
+    );
+    expectNamedByLabelText('Free');
+    expectNamedByLabelText('Pro');
+    expect(screen.getByText('Free').id).not.toBe(screen.getByText('Pro').id);
+  });
+
+  it('references the label text of every item of a disabled group', () => {
+    render(
+      <RadioGroup aria-label="Options" defaultValue="a" disabled>
+        {twoItems}
+      </RadioGroup>,
+    );
+    expect(screen.getByRole('radiogroup', { name: 'Options' })).toHaveAttribute(
+      'aria-disabled',
+      'true',
+    );
+    expectNamedByLabelText('Alpha');
+    expectNamedByLabelText('Beta');
+  });
+
+  it('adds no aria-labelledby without label text (aria-label names it)', () => {
+    render(
+      <RadioGroup aria-label="Options">
+        <RadioItem value="a" aria-label="Alpha" disabled />
+      </RadioGroup>,
+    );
+    const button = screen.getByRole('radio');
+    expect(button).not.toHaveAttribute('aria-labelledby');
+    expect(button).toHaveAccessibleName('Alpha');
+  });
+
+  it('a consumer aria-label keeps naming the radio; no aria-labelledby is added', () => {
+    render(
+      <RadioGroup aria-label="Options">
+        <RadioItem value="a" label="Alpha" aria-label="First letter" />
+      </RadioGroup>,
+    );
+    const button = screen.getByRole('radio');
+    expect(button).not.toHaveAttribute('aria-labelledby');
+    expect(button).toHaveAccessibleName('First letter');
+  });
+
+  it('joins a consumer aria-labelledby with the label text (consumer ids first)', () => {
+    render(
+      <RadioGroup aria-label="Options">
+        <span id="greek">Greek</span>
+        <RadioItem value="a" label="Alpha" aria-labelledby="greek" disabled />
+      </RadioGroup>,
+    );
+    const button = screen.getByRole('radio');
+    expect(button).toHaveAttribute('aria-labelledby', `greek ${screen.getByText('Alpha').id}`);
+    expect(button).toHaveAccessibleName('Greek Alpha');
+  });
+
+  it('passes a consumer aria-labelledby through unchanged next to a consumer aria-label', () => {
+    render(
+      <RadioGroup aria-label="Options">
+        <span id="greek">Greek</span>
+        <RadioItem value="a" label="Alpha" aria-label="First letter" aria-labelledby="greek" />
+      </RadioGroup>,
+    );
+    const button = screen.getByRole('radio');
+    expect(button).toHaveAttribute('aria-labelledby', 'greek');
+    expect(button).toHaveAccessibleName('Greek');
+  });
+});
+
 describe('RadioGroup - roving tabindex', () => {
   it('only the selected radio has tabIndex 0', () => {
     render(
@@ -749,6 +834,19 @@ describe('RadioGroup — Field integration (FieldContext)', () => {
     expect(screen.getByRole('radiogroup', { name: 'Own name' })).not.toHaveAttribute(
       'aria-labelledby',
     );
+  });
+
+  it('the items stay named by their own label text only (the Field names the group)', () => {
+    renderWithFieldContext(
+      <RadioGroup disabled>
+        <RadioItem value="a" label="Alpha" />
+        <RadioItem value="b" label="Beta" disabled />
+      </RadioGroup>,
+    );
+    for (const name of ['Alpha', 'Beta']) {
+      expect(radio(name)).toHaveAttribute('aria-labelledby', screen.getByText(name).id);
+      expect(radio(name)).toHaveAccessibleName(name);
+    }
   });
 
   it('an explicit required={false} wins over a required Field (aria-required matches validation)', () => {

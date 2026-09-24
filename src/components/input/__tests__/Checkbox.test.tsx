@@ -224,6 +224,81 @@ describe('Checkbox — props reach the checkbox control (C-ROUTING)', () => {
   });
 });
 
+// axe exempts the dimmed label text of a disabled control only when that control references the
+// text through aria-labelledby: its <label> exemption covers native inputs, not a role="checkbox"
+// button. The reference does not depend on the disabled state, and the name stays the same.
+describe('Checkbox — the label text names the control through aria-labelledby', () => {
+  it.each([
+    { state: 'enabled', disabled: false },
+    { state: 'disabled', disabled: true },
+  ])('references the label text and keeps its name ($state)', ({ disabled }) => {
+    render(<Checkbox label="Accept" disabled={disabled} />);
+    const cb = screen.getByRole('checkbox');
+    const text = screen.getByText('Accept');
+    expect(text.id).not.toBe('');
+    expect(cb).toHaveAttribute('aria-labelledby', text.id);
+    expect(cb).toHaveAccessibleName('Accept');
+  });
+
+  it('gives every checkbox its own label text id', () => {
+    render(
+      <>
+        <Checkbox label="Email" />
+        <Checkbox label="Phone" />
+      </>,
+    );
+    const email = screen.getByText('Email');
+    const phone = screen.getByText('Phone');
+    expect(email.id).not.toBe(phone.id);
+    expect(screen.getByRole('checkbox', { name: 'Email' })).toHaveAttribute(
+      'aria-labelledby',
+      email.id,
+    );
+    expect(screen.getByRole('checkbox', { name: 'Phone' })).toHaveAttribute(
+      'aria-labelledby',
+      phone.id,
+    );
+  });
+
+  it('adds no aria-labelledby without label text (aria-label names it)', () => {
+    render(<Checkbox aria-label="Select row" disabled />);
+    const cb = screen.getByRole('checkbox');
+    expect(cb).not.toHaveAttribute('aria-labelledby');
+    expect(cb).toHaveAccessibleName('Select row');
+  });
+
+  it('a consumer aria-label keeps naming the control; no aria-labelledby is added', () => {
+    render(<Checkbox label="Accept" aria-label="Accept the terms" />);
+    const cb = screen.getByRole('checkbox');
+    expect(cb).not.toHaveAttribute('aria-labelledby');
+    expect(cb).toHaveAccessibleName('Accept the terms');
+  });
+
+  it('joins a consumer aria-labelledby with the label text (consumer ids first)', () => {
+    render(
+      <>
+        <span id="terms-heading">Terms</span>
+        <Checkbox label="Accept" aria-labelledby="terms-heading" disabled />
+      </>,
+    );
+    const cb = screen.getByRole('checkbox');
+    expect(cb).toHaveAttribute('aria-labelledby', `terms-heading ${screen.getByText('Accept').id}`);
+    expect(cb).toHaveAccessibleName('Terms Accept');
+  });
+
+  it('passes a consumer aria-labelledby through unchanged next to a consumer aria-label', () => {
+    render(
+      <>
+        <span id="terms-heading">Terms</span>
+        <Checkbox label="Accept" aria-label="Accept the terms" aria-labelledby="terms-heading" />
+      </>,
+    );
+    const cb = screen.getByRole('checkbox');
+    expect(cb).toHaveAttribute('aria-labelledby', 'terms-heading');
+    expect(cb).toHaveAccessibleName('Terms');
+  });
+});
+
 describe('Checkbox — Field integration (FieldContext)', () => {
   it('is named by the Field label and described by its hint and error', () => {
     renderWithFieldContext(<Checkbox />, {
@@ -233,6 +308,8 @@ describe('Checkbox — Field integration (FieldContext)', () => {
     });
     const cb = screen.getByRole('checkbox', { name: FIELD_TEST_TEXT.label });
     expect(cb).toHaveAttribute('id', FIELD_TEST_IDS.controlId);
+    // Without label text the Field's <label htmlFor> alone names it.
+    expect(cb).not.toHaveAttribute('aria-labelledby');
     expect(cb).toHaveAccessibleDescription(`${FIELD_TEST_TEXT.error} ${FIELD_TEST_TEXT.hint}`);
     expect(cb).toHaveAttribute('aria-invalid', 'true');
     expect(cb).toHaveAttribute('aria-required', 'true');
@@ -243,6 +320,56 @@ describe('Checkbox — Field integration (FieldContext)', () => {
     const cb = screen.getByRole('checkbox', { name: FIELD_TEST_TEXT.label });
     expect(cb).toHaveAttribute('id', 'own-id');
     expect(cb).toHaveAttribute('aria-labelledby', FIELD_TEST_IDS.labelId);
+  });
+
+  it.each([
+    { state: 'enabled', disabled: false },
+    { state: 'disabled', disabled: true },
+  ])(
+    'with label text, keeps the Field label and the label text in its name ($state)',
+    ({ disabled }) => {
+      renderWithFieldContext(<Checkbox label="Accept" disabled={disabled} />);
+      const cb = screen.getByRole('checkbox');
+      expect(cb).toHaveAttribute('id', FIELD_TEST_IDS.controlId);
+      // Both <label>s named it; aria-labelledby lists them in the same (document) order.
+      expect(cb).toHaveAttribute(
+        'aria-labelledby',
+        `${FIELD_TEST_IDS.labelId} ${screen.getByText('Accept').id}`,
+      );
+      expect(cb).toHaveAccessibleName(`${FIELD_TEST_TEXT.label} Accept`);
+    },
+  );
+
+  it('with label text and its own id, joins the Field label and the label text', () => {
+    renderWithFieldContext(<Checkbox id="own-id" label="Accept" />);
+    const cb = screen.getByRole('checkbox');
+    expect(cb).toHaveAttribute(
+      'aria-labelledby',
+      `${FIELD_TEST_IDS.labelId} ${screen.getByText('Accept').id}`,
+    );
+    expect(cb).toHaveAccessibleName(`${FIELD_TEST_TEXT.label} Accept`);
+  });
+
+  it('a consumer aria-label wins over the Field label and the label text', () => {
+    renderWithFieldContext(<Checkbox label="Accept" aria-label="Accept the terms" />);
+    const cb = screen.getByRole('checkbox');
+    expect(cb).not.toHaveAttribute('aria-labelledby');
+    expect(cb).toHaveAccessibleName('Accept the terms');
+  });
+
+  it('a consumer aria-labelledby comes first, then the Field label and the label text', () => {
+    renderWithFieldContext(
+      <>
+        <span id="terms-heading">Terms</span>
+        <Checkbox label="Accept" aria-labelledby="terms-heading" />
+      </>,
+    );
+    const cb = screen.getByRole('checkbox');
+    expect(cb).toHaveAttribute(
+      'aria-labelledby',
+      `terms-heading ${FIELD_TEST_IDS.labelId} ${screen.getByText('Accept').id}`,
+    );
+    expect(cb).toHaveAccessibleName(`Terms ${FIELD_TEST_TEXT.label} Accept`);
   });
 
   it('a required Field makes the checkbox required in its form', () => {
