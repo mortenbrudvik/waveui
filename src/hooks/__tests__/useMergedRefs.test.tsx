@@ -2,6 +2,7 @@ import { describe, it, expect, vi } from 'vitest';
 import { act, render, renderHook, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import * as React from 'react';
+import { renderToString } from 'react-dom/server';
 import { useMergedRefs } from '../useMergedRefs';
 import { mergeRefs } from '../../lib/mergeRefs';
 
@@ -307,5 +308,17 @@ describe('useMergedRefs', () => {
       expect(propRef.current).toBeNull();
       expect(onNode).toHaveBeenLastCalledWith(null);
     });
+  });
+
+  it('renders on the server without a warning (its layout effect does not run there)', () => {
+    const error = vi.spyOn(console, 'error');
+    const warn = vi.spyOn(console, 'warn');
+    const ref = React.createRef<HTMLDivElement>();
+    expect(renderToString(<Box refs={[ref]} />)).toBe('<div>box</div>');
+    expect(ref.current).toBeNull();
+    expect(error).not.toHaveBeenCalled();
+    expect(warn).not.toHaveBeenCalled();
+    error.mockRestore();
+    warn.mockRestore();
   });
 });

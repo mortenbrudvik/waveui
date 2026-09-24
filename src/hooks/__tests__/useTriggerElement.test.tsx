@@ -524,13 +524,74 @@ describe('useTriggerElement', () => {
     });
   });
 
-  describe('non-element children', () => {
-    it('wraps text in a span and warns', () => {
+  describe('non-element children (overlays-anchored-code-4, overlays-anchored-docs-1)', () => {
+    const WRAPPED_WARNING =
+      '[WaveUI] Test.Trigger: expected a single React element child (not text, a Fragment or several elements); the children are rendered inside a <span> wrapper instead.';
+
+    it('wraps text in a span that carries no state ARIA, and warns', async () => {
       const { container } = render(<Harness>Open</Harness>);
-      const wrapper = container.querySelector('span');
+      const wrapper = container.querySelector('span')!;
       expect(wrapper).toHaveTextContent('Open');
-      expect(wrapper).toHaveAttribute('aria-haspopup', 'dialog');
-      expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining('Test.Trigger'));
+      expect(wrapper).toHaveAttribute('id', 'generated-trigger');
+      for (const name of ['aria-haspopup', 'aria-expanded', 'aria-controls']) {
+        expect(wrapper).not.toHaveAttribute(name);
+      }
+      await expectNoA11yViolations(container);
+      expect(warnSpy).toHaveBeenCalledTimes(1);
+      expect(warnSpy).toHaveBeenCalledWith(WRAPPED_WARNING);
+    });
+
+    it('clones the element of a single-element Fragment, without a wrapper or a warning', async () => {
+      const user = userEvent.setup();
+      const triggerRef = React.createRef<HTMLElement>();
+      const { container } = render(
+        <Harness triggerRef={triggerRef}>
+          <>
+            <button type="button">Open</button>
+          </>
+        </Harness>,
+      );
+      const button = screen.getByRole('button', { name: 'Open' });
+      expect(container.querySelector('span')).toBeNull();
+      expect(button).toHaveAttribute('id', 'generated-trigger');
+      expect(button).toHaveAttribute('aria-haspopup', 'dialog');
+      expect(button).toHaveAttribute('aria-expanded', 'false');
+      expect(triggerRef.current).toBe(button);
+      await user.click(button);
+      expect(button).toHaveAttribute('aria-expanded', 'true');
+      expect(button).toHaveAttribute('aria-controls', 'panel');
+      expect(warnSpy).not.toHaveBeenCalled();
+    });
+
+    it('moves the state ARIA of several children onto the first tabbable one, and warns', async () => {
+      const user = userEvent.setup();
+      const { container } = render(
+        <Harness>
+          <>
+            <button type="button">Open</button>
+            <button type="button">Other</button>
+          </>
+        </Harness>,
+      );
+      const wrapper = container.querySelector('span')!;
+      const open = screen.getByRole('button', { name: 'Open' });
+      const other = screen.getByRole('button', { name: 'Other' });
+      expect(wrapper).toHaveAttribute('id', 'generated-trigger');
+      for (const name of ['aria-haspopup', 'aria-expanded', 'aria-controls']) {
+        expect(wrapper).not.toHaveAttribute(name);
+        expect(other).not.toHaveAttribute(name);
+      }
+      expect(open).toHaveAttribute('aria-haspopup', 'dialog');
+      expect(open).toHaveAttribute('aria-expanded', 'false');
+      await expectNoA11yViolations(container);
+
+      await user.click(open);
+      expect(open).toHaveAttribute('aria-expanded', 'true');
+      expect(open).toHaveAttribute('aria-controls', 'panel');
+      expect(wrapper).not.toHaveAttribute('aria-expanded');
+      await expectNoA11yViolations(container);
+      expect(warnSpy).toHaveBeenCalledTimes(1);
+      expect(warnSpy).toHaveBeenCalledWith(WRAPPED_WARNING);
     });
   });
 });

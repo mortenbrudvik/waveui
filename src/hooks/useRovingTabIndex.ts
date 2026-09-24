@@ -1,5 +1,6 @@
 import * as React from 'react';
 import type { WaveDir } from '../components/provider/WaveProvider';
+import { isDev, warnOnce } from '../lib/dev';
 import { getArrowIntent, getDirection } from '../lib/direction';
 import { getFirstTabbable } from '../lib/focus';
 import { setRef } from '../lib/mergeRefs';
@@ -15,9 +16,10 @@ export interface UseRovingTabIndexOptions {
   activeValue?: string | null;
   /**
    * Explicit item order (0.4 call shape). Omitted ⇒ the DOM order of the elements matching
-   * `itemSelector`. Disabled items are skipped either way.
+   * `itemSelector`. Disabled items are skipped either way, and so are listed values with no
+   * element in the container (not rendered, or `hidden`/`inert`): they never hold the tab stop.
    */
-  items?: string[];
+  items?: readonly string[];
   /**
    * Arrow key axis: `'horizontal'` uses Left/Right (mirrored in RTL), `'vertical'` uses Up/Down,
    * `'both'` uses all four.
@@ -32,7 +34,8 @@ export interface UseRovingTabIndexOptions {
   /** Text direction. Defaults to the direction of the container at key time (`getDirection`). */
   dir?: WaveDir;
   /**
-   * Selector for the item elements inside the container.
+   * Selector for the item elements inside the container. A selector the browser rejects matches
+   * nothing (no item is navigable or tabbable) and logs a development warning.
    * @default '[data-roving-value]'
    */
   itemSelector?: string;
@@ -53,11 +56,18 @@ export interface UseRovingTabIndexOptions {
   homeEndKeys?: boolean;
   /** Which item holds the tab stop. 'active' (default): the enabled activeValue item, else the first
    *  enabled item — APG Tabs/Radio/Listbox/Tree. 'last-focused': the last focused enabled item, else
-   *  'active' — APG Toolbar (and the static Menu). */
+   *  'active' — APG Toolbar (and the static Menu). Either way a nested composite or a control that
+   *  uses the arrow keys itself (text field, select, slider, spin button, editable combobox) holds
+   *  it only when no other item can: arrows pressed there never lead back to the other items, so
+   *  focusing one keeps the tab stop on the last focused other item. */
   tabStop?: 'active' | 'last-focused';
   /** true ⇒ the hook writes tabIndex 0/-1 onto item elements itself and assigns
    *  data-roving-value="auto-<n>" to items that lack one. For containers that do not render their
-   *  items (Toolbar children, Menu items, Tree rows). Default false (items call getTabIndex). */
+   *  items (Toolbar children, Menu items, Tree rows). Default false (items call getTabIndex).
+   *  Matches that cannot take focus are no items: `input[type=hidden]` is skipped, and a control
+   *  hidden by CSS inside the container (`display: none` or `visibility: hidden` on it or on an
+   *  ancestor inside the container) is treated as disabled (skipped, never the tab stop, stamped
+   *  -1). A container hidden as a whole from outside keeps its items and tab stop. */
   manageTabIndex?: boolean;
   /** Called after an arrow, Home/End or typeahead key moved focus to `value`. */
   onFocusMove?: (value: string, event: React.KeyboardEvent) => void;
@@ -106,13 +116,17 @@ interface ResolvedItem {
   element: HTMLElement;
   /** A nested composite (own roving container or composite role) counts as one item. */
   nested: boolean;
+  /**
+   * Skipped by the keys and never the tab stop: disabled, a nested composite with nothing to
+   * focus, or (`manageTabIndex`) hidden by CSS.
+   */
   disabled: boolean;
 }
 
 interface StoreOptions {
   itemSelector: string;
   manageTabIndex: boolean;
-  items: string[] | undefined;
+  items: readonly string[] | undefined;
   activeValue: string | null;
   tabStop: 'active' | 'last-focused';
   /**
@@ -138,8 +152,12 @@ const COMPOSITE_ROLES = new Set([
   'spinbutton',
 ]);
 
-/** Roles whose widgets use the arrow keys themselves. */
-const ARROW_KEY_OWNER_ROLES = new Set(['slider', 'spinbutton', 'combobox', 'textbox', 'searchbox']);
+/**
+ * Roles whose widgets use the arrow keys themselves. A combobox does only when it is editable (an
+ * `<input>` or contenteditable, caught by the native checks): a select-only combobox such as
+ * Dropdown's `<button role="combobox">` uses Up/Down, Home and End, never Left/Right.
+ */
+const ARROW_KEY_OWNER_ROLES = new Set(['slider', 'spinbutton', 'textbox', 'searchbox']);
 
 /** `<input>` types that do not use the arrow keys for text editing. */
 const NON_TEXT_INPUT_TYPES = new Set([
@@ -164,10 +182,10 @@ const OBSERVED_ATTRIBUTES = [
   'hidden',
   'inert',
   'role',
+  // Whether an item uses the arrow keys itself (text input types, contenteditable).
+  'type',
+  'contenteditable',
 ];
-
-const useIsomorphicLayoutEffect =
-  typeof document !== 'undefined' ? React.useLayoutEffect : React.useEffect;
 
 function isNestedComposite(el: Element, roleComposites: boolean): boolean {
   if (el.hasAttribute('data-roving-container')) return true;
@@ -215,22 +233,107 @@ function ownsArrowKeys(target: EventTarget | null): boolean {
   return editable !== null && editable.getAttribute('contenteditable') !== 'false';
 }
 
+/**
+ * Whether an item can hold the container's tab stop: not a nested composite (it keeps a tab stop
+ * of its own) and not a control that uses the arrow keys itself. From either, the arrow keys never
+ * lead to the other items, so a tab stop there would leave them reachable by keyboard only through
+ * it (or not at all).
+ */
+function canHoldTabStop(item: ResolvedItem): boolean {
+  return !item.nested && !ownsArrowKeys(item.element);
+}
+
+function isHiddenInput(el: Element): boolean {
+  return el.localName === 'input' && (el as HTMLInputElement).type === 'hidden';
+}
+
+/**
+ * Whether CSS inside `container` keeps `el` from taking focus (browsers ignore `focus()` on it):
+ * `display: none` on it or on an ancestor inside `container`, `visibility: hidden`/`collapse` set
+ * inside `container`, or a place inside a closed `<details>` other than its summary. Hiding from
+ * outside the container (a surface that stays invisible until it is positioned, a consumer panel)
+ * hides the whole item set and does not count: showing it again changes nothing the hook observes,
+ * so nothing would re-stamp. `cache` holds, for one resolution, whether an element hides its whole
+ * subtree (the `display` and `<details>` checks).
+ */
+function isHiddenByCss(el: Element, container: Element, cache: Map<Element, boolean>): boolean {
+  const view = el.ownerDocument.defaultView;
+  if (!view) return false;
+  for (let node: Element | null = el; node && node !== container; node = node.parentElement) {
+    let hidden = cache.get(node);
+    if (hidden === undefined) {
+      const parent = node.parentElement;
+      hidden =
+        view.getComputedStyle(node).display === 'none' ||
+        (parent !== null &&
+          parent.localName === 'details' &&
+          !parent.hasAttribute('open') &&
+          Array.from(parent.children).find((child) => child.localName === 'summary') !== node);
+      cache.set(node, hidden);
+    }
+    if (hidden) return true;
+  }
+  const { visibility } = view.getComputedStyle(el);
+  if (visibility !== 'hidden' && visibility !== 'collapse') return false;
+  // Visibility is inherited, so `el` also reads hidden when an ancestor of the container hides the
+  // whole container. It counts only when the container itself is visible, i.e. when the hiding is
+  // set inside it (on `el` or on a wrapper between them).
+  return view.getComputedStyle(container).visibility === 'visible';
+}
+
+/** Whether focus is on `el` or inside it (in its document or shadow root). */
+function hasFocus(el: HTMLElement): boolean {
+  const active = (el.getRootNode() as Node & { activeElement?: Element | null }).activeElement;
+  return !!active && el.contains(active);
+}
+
+function isValidSelector(selector: string): boolean {
+  try {
+    document.createDocumentFragment().querySelector(selector);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * How an item takes part in the tab stop: `0` never (disabled), `1` can hold it, `2` holds it only
+ * when no item can (a nested composite, or a control that uses the arrow keys itself).
+ */
+type TabStopRank = 0 | 1 | 2;
+
+/** One item of the published DOM snapshot, and the input of {@link resolveTabStop}. */
+type SnapshotEntry = [value: string, rank: TabStopRank];
+
+function toEntry(item: ResolvedItem): SnapshotEntry {
+  return [item.value, item.disabled ? 0 : canHoldTabStop(item) ? 1 : 2];
+}
+
+/**
+ * The value that holds the tab stop, among the items of the best rank present (`1`, else `2`):
+ * with 'last-focused' the last focused one, else the `activeValue` item, else the first one.
+ */
 function resolveTabStop(
-  enabledValues: readonly string[],
+  entries: readonly SnapshotEntry[],
   activeValue: string | null,
   tabStop: 'active' | 'last-focused',
   lastFocused: string | null,
 ): string | null {
-  if (tabStop === 'last-focused' && lastFocused !== null && enabledValues.includes(lastFocused)) {
+  const rank = entries.some(([, r]) => r === 1) ? 1 : 2;
+  const values = entries.filter(([, r]) => r === rank).map(([value]) => value);
+  if (tabStop === 'last-focused' && lastFocused !== null && values.includes(lastFocused)) {
     return lastFocused;
   }
-  if (activeValue !== null && activeValue !== '' && enabledValues.includes(activeValue)) {
+  if (activeValue !== null && activeValue !== '' && values.includes(activeValue)) {
     return activeValue;
   }
-  return enabledValues[0] ?? null;
+  return values[0] ?? null;
 }
 
-function orderByItems(resolved: ResolvedItem[], items: string[] | undefined): ResolvedItem[] {
+function orderByItems(
+  resolved: ResolvedItem[],
+  items: readonly string[] | undefined,
+): ResolvedItem[] {
   if (!items) return resolved;
   const byValue = new Map(resolved.map((item) => [item.value, item]));
   const ordered: ResolvedItem[] = [];
@@ -240,8 +343,6 @@ function orderByItems(resolved: ResolvedItem[], items: string[] | undefined): Re
   }
   return ordered;
 }
-
-type SnapshotEntry = [value: string, enabled: 0 | 1];
 
 /**
  * Per-hook store: resolves items from the DOM, publishes the enabled set to React through
@@ -281,12 +382,8 @@ class RovingStore {
     if (!this.container) return '';
     if (this.dirty) {
       this.dirty = false;
-      // DOM facts only (order and disabled state); `items` is applied during render.
-      const entries: SnapshotEntry[] = this.resolveOwn().map((item) => [
-        item.value,
-        item.disabled ? 0 : 1,
-      ]);
-      this.snapshot = JSON.stringify(entries);
+      // DOM facts only (order and tab stop rank); `items` is applied during render.
+      this.snapshot = JSON.stringify(this.resolveOwn().map(toEntry));
     }
     return this.snapshot;
   };
@@ -304,8 +401,12 @@ class RovingStore {
     }
   }
 
-  setLastFocused(value: string | null): void {
-    this.lastFocused = value;
+  /**
+   * Records a focused item for the 'last-focused' tab stop. An item that cannot hold the tab stop
+   * (a nested composite, a control that uses the arrow keys itself) leaves the last one in place.
+   */
+  recordFocus(item: ResolvedItem): void {
+    if (canHoldTabStop(item)) this.lastFocused = item.value;
   }
 
   setOptions(options: StoreOptions): void {
@@ -334,11 +435,14 @@ class RovingStore {
     try {
       candidates = Array.from(container.querySelectorAll<HTMLElement>(itemSelector));
     } catch {
+      // An invalid selector (warned from an effect in development): this runs during render
+      // (getSnapshot), where throwing would take the whole tree down.
       return [];
     }
 
     const result: ResolvedItem[] = [];
     const seen = new Set<Element>();
+    const cssHidden = new Map<Element, boolean>();
     for (const candidate of candidates) {
       let composite: HTMLElement | null = null;
       let hidden = false;
@@ -355,14 +459,11 @@ class RovingStore {
       const element = composite ?? candidate;
       if (seen.has(element)) continue;
       const nested = composite !== null;
-      // An author tabindex="-1" (a SpinButton stepper, SplitButton internals) opts out.
-      if (
-        !nested &&
-        manageTabIndex &&
-        candidate.getAttribute('tabindex') === '-1' &&
-        !this.stamped.has(candidate)
-      ) {
-        continue;
+      if (!nested && manageTabIndex) {
+        // An author tabindex="-1" (a SpinButton stepper, SplitButton internals) opts out.
+        if (candidate.getAttribute('tabindex') === '-1' && !this.stamped.has(candidate)) continue;
+        // A hidden form input (HiddenInput's `type="hidden"`) is never focusable.
+        if (isHiddenInput(candidate)) continue;
       }
       seen.add(element);
 
@@ -373,6 +474,12 @@ class RovingStore {
         disabled: isDisabledElement(element),
       };
       if (nested && !item.disabled && !getFocusTarget(item)) item.disabled = true;
+      // Consumer children hidden by CSS (a responsive `hidden md:inline-flex` control). Treated as
+      // disabled rather than dropped, so it is stamped -1 and is no extra Tab stop once the CSS
+      // shows it again (a CSS change triggers no mutation, hence no re-stamp).
+      if (manageTabIndex && !item.disabled && isHiddenByCss(element, container, cssHidden)) {
+        item.disabled = true;
+      }
       result.push(item);
     }
     return result;
@@ -382,9 +489,8 @@ class RovingStore {
   stamp(): void {
     if (!this.options.manageTabIndex || !this.container) return;
     const resolved = this.resolve();
-    const enabledValues = resolved.filter((item) => !item.disabled).map((item) => item.value);
     const stop = resolveTabStop(
-      enabledValues,
+      resolved.map(toEntry),
       this.options.activeValue,
       this.options.tabStop,
       this.lastFocused,
@@ -501,15 +607,20 @@ function startsOnItem(item: ResolvedItem | null, target: EventTarget | null, con
  *   the items (the widget's root inside a wrapper that holds the ref) does not swallow them.
  * - **Disabled items** (`disabled`, `aria-disabled="true"`, `data-roving-disabled`) are skipped and
  *   never hold the tab stop. The enabled set is tracked with a MutationObserver, so an item that
- *   disables itself moves the tab stop without the owner re-rendering.
+ *   disables itself moves the tab stop without the owner re-rendering. With `manageTabIndex`, a
+ *   control hidden by CSS counts as disabled and `input[type=hidden]` is no item.
  * - **Tab stop** (`tabStop`): `'active'` — the enabled `activeValue` item, else the first enabled
- *   item; `'last-focused'` — the last focused enabled item, else the `'active'` rule.
+ *   item; `'last-focused'` — the last focused enabled item, else the `'active'` rule. A nested
+ *   composite or a control that uses the arrow keys itself holds it only when no other item can.
  * - **Keys** are ignored when another handler already called `preventDefault()`, with Alt/Ctrl/Meta,
- *   and when they start in a text field, select, contenteditable, slider, spinbutton or combobox
- *   (Left/Right keep moving the caret). Left/Right are mirrored in RTL (`dir`, else the direction of
+ *   and when they start in a text field, select, contenteditable, slider, spinbutton or editable
+ *   combobox (Left/Right keep moving the caret; a select-only combobox such as Dropdown's button
+ *   does not keep them). Left/Right are mirrored in RTL (`dir`, else the direction of
  *   the container at key time). Arrows and typeahead move from the item the key started in — the
  *   innermost one when items nest, as treeitems do inside their parent's group; when it started on
  *   no item (focus on the container itself) next goes to the first enabled item and prev to the last.
+ *   An item whose `focus()` leaves focus where it was (the browser ignores it on an element CSS
+ *   hides) is passed over for the next one, and is never recorded or reported to `onFocusMove`.
  *   Handled keys call `preventDefault()`. Keys and focus from outside the container's DOM — a
  *   popup an item renders through a portal, whose events React bubbles through the container —
  *   are ignored, so focus never leaves an open menu or popover for the container's items.
@@ -560,29 +671,49 @@ export function useRovingTabIndex(
     store.getServerSnapshot,
   );
   const [focusedValue, setFocusedValue] = React.useState<string | null>(null);
+  // The last focused item that can hold the tab stop ('last-focused' during render).
+  const [focusedStop, setFocusedStop] = React.useState<string | null>(null);
 
   // 0.4 call shape or explicit `items`: only elements with their own roving container are nested
   // composites (a role=radiogroup/tablist/… around the items is the widget's own root).
   const roleComposites = legacyRef === undefined && items === undefined;
 
-  useIsomorphicLayoutEffect(() => {
+  React.useLayoutEffect(() => {
     store.setOptions({ itemSelector, manageTabIndex, items, activeValue, tabStop, roleComposites });
     if (legacyRef) store.setContainer(legacyRef.current);
     store.stamp();
   });
 
+  // C-DEV: `resolveOwn` treats a selector the browser rejects as "no items" (it runs during render,
+  // where it must not throw), so the developer hears about it here.
+  React.useEffect(() => {
+    if (isDev && !isValidSelector(itemSelector)) {
+      warnOnce(
+        `useRovingTabIndex:itemSelector:${itemSelector}`,
+        `useRovingTabIndex: itemSelector "${itemSelector}" is not a valid CSS selector in this browser; no item is navigable or tabbable.`,
+      );
+    }
+  }, [itemSelector]);
+
   // Tab stop during render, from the DOM snapshot (null before the container is known).
   const domItems = React.useMemo(() => parseSnapshot(snapshot), [snapshot]);
-  const enabledValues = React.useMemo<string[] | null>(() => {
-    if (items) {
-      if (!domItems) return items;
-      const disabled = new Set(domItems.filter(([, on]) => on === 0).map(([value]) => value));
-      return items.filter((value) => !disabled.has(value));
+  const stopEntries = React.useMemo<readonly SnapshotEntry[] | null>(() => {
+    if (!items) return domItems;
+    // Explicit `items`: the listed values the DOM has, in the listed order. Every listed value
+    // before the container is known, or while the DOM has none of them yet (items rendered in the
+    // commit the snapshot has not caught up with).
+    if (domItems) {
+      const ranks = new Map(domItems);
+      const present = items.flatMap((value): SnapshotEntry[] => {
+        const rank = ranks.get(value);
+        return rank === undefined ? [] : [[value, rank]];
+      });
+      if (present.length > 0) return present;
     }
-    return domItems ? domItems.filter(([, on]) => on === 1).map(([value]) => value) : null;
+    return items.map((value): SnapshotEntry => [value, 1]);
   }, [items, domItems]);
-  const tabStopValue = enabledValues
-    ? resolveTabStop(enabledValues, activeValue, tabStop, focusedValue)
+  const tabStopValue = stopEntries
+    ? resolveTabStop(stopEntries, activeValue, tabStop, focusedStop)
     : activeValue || null;
 
   const getTabIndex = React.useCallback(
@@ -607,13 +738,23 @@ export function useRovingTabIndex(
     },
   });
 
+  /** Focuses an item; `true` only when focus actually moved there (then it is recorded). */
   const focusItem = (item: ResolvedItem | undefined): boolean => {
     if (!item || item.disabled) return false;
     const target = getFocusTarget(item);
     if (!target) return false;
     target.focus();
-    store.setLastFocused(item.value);
+    // Browsers ignore focus() on an element CSS hides (display: none, visibility: hidden).
+    if (!hasFocus(target)) return false;
+    store.recordFocus(item);
     return true;
+  };
+
+  /** Focuses the first item of `candidates` that takes focus. */
+  const focusFirstOf = (candidates: readonly ResolvedItem[]): void => {
+    for (const item of candidates) {
+      if (focusItem(item)) return;
+    }
   };
 
   // `spaceOnly` (the capture phase) handles nothing but a Space that continues a typeahead search.
@@ -632,7 +773,9 @@ export function useRovingTabIndex(
     const current = findOwningItem(ordered, e.target, container);
 
     let handled = false;
-    let next: ResolvedItem | undefined;
+    // Where focus goes, in order of preference: an item whose focus() does not move focus (hidden
+    // by CSS) passes the key on to the next one.
+    let targets: ResolvedItem[] = [];
     const intent = spaceOnly
       ? null
       : getArrowIntent(e.key, {
@@ -642,26 +785,23 @@ export function useRovingTabIndex(
     if (intent) {
       handled = true;
       if (!current) {
-        next = intent === 'next' ? enabled[0] : enabled[enabled.length - 1];
+        targets = intent === 'next' ? enabled : [...enabled].reverse();
       } else {
         const step = intent === 'next' ? 1 : -1;
         const count = ordered.length;
         let index = ordered.indexOf(current);
-        for (let i = 0; i < count; i++) {
+        for (let i = 1; i < count; i++) {
           index += step;
           if (index < 0 || index >= count) {
             if (!loop) break;
             index = (index + count) % count;
           }
-          if (!ordered[index].disabled) {
-            next = ordered[index];
-            break;
-          }
+          if (!ordered[index].disabled) targets.push(ordered[index]);
         }
       }
     } else if (!spaceOnly && homeEndKeys && (e.key === 'Home' || e.key === 'End')) {
       handled = true;
-      next = e.key === 'Home' ? enabled[0] : enabled[enabled.length - 1];
+      targets = e.key === 'Home' ? enabled : [...enabled].reverse();
     } else if (typeahead && startsOnItem(current, e.target, container)) {
       typeaheadItemsRef.current = ordered.map((item) => ({
         value: item.value,
@@ -671,14 +811,21 @@ export function useRovingTabIndex(
       typeaheadMatchRef.current = null;
       if (onTypeahead(e, current?.value ?? null)) {
         handled = true;
-        next = enabled.find((item) => item.value === typeaheadMatchRef.current);
+        const match = enabled.find((item) => item.value === typeaheadMatchRef.current);
+        if (match) targets = [match];
       }
     }
 
     if (!handled) return;
     e.preventDefault();
-    if (!next || next === current) return;
-    if (focusItem(next)) onFocusMove?.(next.value, e);
+    for (const next of targets) {
+      // Back at the item the key started on (Home on the first item): focus stays.
+      if (next === current) return;
+      if (focusItem(next)) {
+        onFocusMove?.(next.value, e);
+        return;
+      }
+    }
   });
 
   const handleKeyDown = useEventCallback((e: React.KeyboardEvent) => handleKeys(e, false));
@@ -695,8 +842,9 @@ export function useRovingTabIndex(
     if (!isInContainer(container, e.target)) return;
     const item = findOwningItem(store.resolve(container), e.target, container);
     if (!item) return;
-    store.setLastFocused(item.value);
+    store.recordFocus(item);
     setFocusedValue(item.value);
+    if (canHoldTabStop(item)) setFocusedStop(item.value);
     store.stamp();
   });
 
@@ -704,11 +852,15 @@ export function useRovingTabIndex(
     focusItem(store.resolve().find((item) => item.value === value));
   });
   const focusFirst = useEventCallback(() => {
-    focusItem(store.resolve().find((item) => !item.disabled));
+    focusFirstOf(store.resolve().filter((item) => !item.disabled));
   });
   const focusLast = useEventCallback(() => {
-    const enabled = store.resolve().filter((item) => !item.disabled);
-    focusItem(enabled[enabled.length - 1]);
+    focusFirstOf(
+      store
+        .resolve()
+        .filter((item) => !item.disabled)
+        .reverse(),
+    );
   });
 
   const containerProps = React.useMemo<RovingContainerProps>(

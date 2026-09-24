@@ -101,11 +101,13 @@ function Managed({
   children,
   tabStop,
   orientation,
+  typeahead,
   onResult,
 }: {
   children: React.ReactNode;
   tabStop?: 'active' | 'last-focused';
   orientation?: Orientation;
+  typeahead?: boolean;
   onResult?: (result: UseRovingTabIndexResult) => void;
 }) {
   const result = useRovingTabIndex({
@@ -113,6 +115,7 @@ function Managed({
     manageTabIndex: true,
     tabStop,
     orientation,
+    typeahead,
   });
   onResult?.(result);
   return (
@@ -1096,6 +1099,57 @@ describe('useRovingTabIndex', () => {
       expect(el).toHaveFocus();
     });
 
+    it.each(['checkbox', 'radio', 'button'])(
+      'moves on with the arrow keys from a native <input type="%s"> (hooks-core-tests-3)',
+      (type) => {
+        render(
+          <Managed>
+            <button type="button">Bold</button>
+            <input type={type} aria-label="Wrap" />
+            <button type="button">Italic</button>
+          </Managed>,
+        );
+        const input = screen.getByLabelText('Wrap');
+        focus(input);
+        expect(fireEvent.keyDown(input, { key: 'ArrowRight' })).toBe(false);
+        expect(button('Italic')).toHaveFocus();
+        expect(fireEvent.keyDown(button('Italic'), { key: 'ArrowLeft' })).toBe(false);
+        expect(input).toHaveFocus();
+        expect(fireEvent.keyDown(input, { key: 'ArrowLeft' })).toBe(false);
+        expect(button('Bold')).toHaveFocus();
+      },
+    );
+
+    it('skips a nested composite with nothing focusable in it (hooks-core-tests-2)', async () => {
+      const user = userEvent.setup();
+      render(
+        <Managed typeahead>
+          <button type="button">Bold</button>
+          <div role="radiogroup" aria-label="Align">
+            <button type="button" role="radio" aria-checked={false} disabled tabIndex={-1}>
+              Center
+            </button>
+            <button type="button" role="radio" aria-checked={false} disabled tabIndex={-1}>
+              Justify
+            </button>
+          </div>
+          <button type="button">Clear</button>
+        </Managed>,
+      );
+      focus(button('Bold'));
+      await user.keyboard('{ArrowRight}');
+      expect(button('Clear')).toHaveFocus();
+      await user.keyboard('{ArrowLeft}');
+      expect(button('Bold')).toHaveFocus();
+      await user.keyboard('{End}');
+      expect(button('Clear')).toHaveFocus();
+      await user.keyboard('{Home}');
+      expect(button('Bold')).toHaveFocus();
+      // Typeahead skips it as a disabled item: "c" goes past its text ("CenterJustify") to Clear.
+      await user.keyboard('c');
+      expect(button('Clear')).toHaveFocus();
+    });
+
     it('supports vertical toolbars', async () => {
       const user = userEvent.setup();
       render(
@@ -1107,6 +1161,478 @@ describe('useRovingTabIndex', () => {
       focus(button('Bold'));
       await user.keyboard('{ArrowDown}');
       expect(button('Italic')).toHaveFocus();
+    });
+  });
+
+  describe('controls that cannot take focus (hooks-core-code-2, x-keyboard-1)', () => {
+    it.each([
+      [
+        'display: none',
+        <button key="i" type="button" style={{ display: 'none' }}>
+          Italic
+        </button>,
+      ],
+      [
+        'display: none on a wrapper',
+        <span key="i" style={{ display: 'none' }}>
+          <button type="button">Italic</button>
+        </span>,
+      ],
+      [
+        'visibility: hidden',
+        <button key="i" type="button" style={{ visibility: 'hidden' }}>
+          Italic
+        </button>,
+      ],
+      [
+        'visibility: hidden on a wrapper',
+        <span key="i" style={{ visibility: 'hidden' }}>
+          <button type="button">Italic</button>
+        </span>,
+      ],
+    ])('manageTabIndex: arrows skip a control hidden by CSS (%s)', async (_name, italic) => {
+      const user = userEvent.setup();
+      render(
+        <Managed tabStop="last-focused">
+          <button type="button">Bold</button>
+          {italic}
+          <button type="button">Underline</button>
+        </Managed>,
+      );
+      // Hidden by CSS, so it has no role in the accessibility tree.
+      const hidden = screen.getByText('Italic');
+      focus(button('Bold'));
+      await user.keyboard('{ArrowRight}');
+      expect(button('Underline')).toHaveFocus();
+      expect(button('Underline')).toHaveAttribute('tabindex', '0');
+      await user.keyboard('{ArrowLeft}');
+      expect(button('Bold')).toHaveFocus();
+      // Stamped -1 like a disabled control, so it is no extra Tab stop once the CSS shows it.
+      expect(hidden).toHaveAttribute('tabindex', '-1');
+    });
+
+    it('manageTabIndex: a first control hidden by CSS never holds the tab stop', () => {
+      render(
+        <Managed>
+          <button type="button" style={{ display: 'none' }}>
+            More
+          </button>
+          <button type="button">Bold</button>
+        </Managed>,
+      );
+      expect(button('Bold')).toHaveAttribute('tabindex', '0');
+      expect(screen.getByText('More')).toHaveAttribute('tabindex', '-1');
+    });
+
+    it('manageTabIndex: a toolbar inside an ancestor with visibility: hidden keeps its tab stop', async () => {
+      const user = userEvent.setup();
+      // Like TeachingPopover's surface before floating-ui has positioned it: the whole toolbar
+      // inherits visibility: hidden from outside the container.
+      const { container } = render(
+        <div style={{ visibility: 'hidden' }}>
+          <Managed tabStop="last-focused">
+            <button type="button">Bold</button>
+            <button type="button">Italic</button>
+          </Managed>
+        </div>,
+      );
+      // Invisible, so the controls have no role in the accessibility tree yet.
+      expect(screen.getByText('Bold')).toHaveAttribute('tabindex', '0');
+      expect(screen.getByText('Italic')).toHaveAttribute('tabindex', '-1');
+      // Shown by a style change outside the toolbar: no mutation it observes, no re-render, so no
+      // re-stamp. The stop stamped while it was invisible must already be the right one.
+      (container.firstElementChild as HTMLElement).style.visibility = 'visible';
+      expect(button('Bold')).toHaveAttribute('tabindex', '0');
+      focus(button('Bold'));
+      await user.keyboard('{ArrowRight}');
+      expect(button('Italic')).toHaveFocus();
+      expect(button('Italic')).toHaveAttribute('tabindex', '0');
+      expect(button('Bold')).toHaveAttribute('tabindex', '-1');
+    });
+
+    it('manageTabIndex: a hidden form input is never an item', async () => {
+      const user = userEvent.setup();
+      const { container } = render(
+        <Managed>
+          <button type="button">Bold</button>
+          <input type="hidden" name="format" value="rich" />
+          <button type="button">Italic</button>
+        </Managed>,
+      );
+      const hiddenInput = container.querySelector('input[type="hidden"]');
+      expect(hiddenInput).not.toHaveAttribute('tabindex');
+      expect(hiddenInput).not.toHaveAttribute('data-roving-value');
+      focus(button('Bold'));
+      await user.keyboard('{ArrowRight}');
+      expect(button('Italic')).toHaveFocus();
+      await user.keyboard('{ArrowLeft}');
+      expect(button('Bold')).toHaveFocus();
+    });
+
+    it('continues past an item whose focus() does not move focus, without reporting it', async () => {
+      const user = userEvent.setup();
+      const onFocusMove = vi.fn();
+      render(<DomGroup items={ABC} activeValue="a" onFocusMove={onFocusMove} />);
+      // Browsers ignore focus() on an element that CSS hides; jsdom does not, so 'b' refuses here.
+      const refuse = vi.spyOn(button('b'), 'focus').mockImplementation(() => {});
+      focus(button('a'));
+      await user.keyboard('{ArrowRight}');
+      expect(button('c')).toHaveFocus();
+      expect(onFocusMove).toHaveBeenCalledTimes(1);
+      expect(onFocusMove).toHaveBeenCalledWith('c', expect.objectContaining({ key: 'ArrowRight' }));
+      await user.keyboard('{ArrowLeft}');
+      expect(button('a')).toHaveFocus();
+      expect(onFocusMove).toHaveBeenLastCalledWith('a', expect.anything());
+      refuse.mockRestore();
+    });
+
+    it('Home/End continue inwards when the end item does not take focus', async () => {
+      const user = userEvent.setup();
+      render(<DomGroup items={[...ABC, { value: 'd' }]} activeValue="c" />);
+      const refuseA = vi.spyOn(button('a'), 'focus').mockImplementation(() => {});
+      const refuseD = vi.spyOn(button('d'), 'focus').mockImplementation(() => {});
+      focus(button('c'));
+      await user.keyboard('{Home}');
+      expect(button('b')).toHaveFocus();
+      await user.keyboard('{End}');
+      expect(button('c')).toHaveFocus();
+      refuseA.mockRestore();
+      refuseD.mockRestore();
+    });
+
+    it('manageTabIndex: the tab stop never goes to a control that refused focus', async () => {
+      const user = userEvent.setup();
+      const toolbar = (
+        <Managed tabStop="last-focused">
+          <button type="button">Bold</button>
+          <button type="button">Italic</button>
+          <button type="button">Underline</button>
+        </Managed>
+      );
+      const { rerender } = render(toolbar);
+      const refuse = vi.spyOn(button('Italic'), 'focus').mockImplementation(() => {});
+      focus(button('Bold'));
+      await user.keyboard('{ArrowRight}');
+      expect(button('Underline')).toHaveFocus();
+      // An owner re-render stamps again: the stop follows focus, not the refused control.
+      rerender(toolbar);
+      expect(button('Underline')).toHaveAttribute('tabindex', '0');
+      expect(button('Italic')).toHaveAttribute('tabindex', '-1');
+      expect(button('Bold')).toHaveAttribute('tabindex', '-1');
+      refuse.mockRestore();
+    });
+  });
+
+  describe('the tab stop stays where arrows work (x-keyboard-2)', () => {
+    /** A radio group with its own roving hook, like RadioGroup: it handles all four arrows. */
+    function AlignGroup() {
+      const [value, setValue] = React.useState('left');
+      const { containerProps, getTabIndex } = useRovingTabIndex({
+        activeValue: value,
+        orientation: 'both',
+        onFocusMove: setValue,
+      });
+      return (
+        <div role="radiogroup" aria-label="Align" {...containerProps}>
+          {['Left', 'Center'].map((label) => {
+            const v = label.toLowerCase();
+            return (
+              <button
+                key={v}
+                type="button"
+                role="radio"
+                aria-checked={value === v}
+                data-roving-value={v}
+                tabIndex={getTabIndex(v)}
+              >
+                {label}
+              </button>
+            );
+          })}
+        </div>
+      );
+    }
+    const radio = (name: string) => screen.getByRole('radio', { name });
+
+    it('focusing a nested composite keeps the tab stop on the last focused control', async () => {
+      const user = userEvent.setup();
+      render(
+        <>
+          <Managed tabStop="last-focused">
+            <button type="button">Bold</button>
+            <AlignGroup />
+            <button type="button">Copy</button>
+          </Managed>
+          <button type="button">after</button>
+        </>,
+      );
+      await user.tab();
+      expect(button('Bold')).toHaveFocus();
+      await user.keyboard('{ArrowRight}');
+      expect(radio('Left')).toHaveFocus();
+      // The radio group handles its own arrows (and Home/End).
+      await user.keyboard('{ArrowRight}');
+      expect(radio('Center')).toHaveFocus();
+      expect(button('Bold')).toHaveAttribute('tabindex', '0');
+      expect(button('Copy')).toHaveAttribute('tabindex', '-1');
+
+      await user.tab();
+      expect(button('after')).toHaveFocus();
+      await user.tab({ shift: true });
+      expect(radio('Center')).toHaveFocus();
+      await user.tab({ shift: true });
+      expect(button('Bold')).toHaveFocus();
+      await user.keyboard('{ArrowLeft}');
+      expect(button('Copy')).toHaveFocus();
+    });
+
+    it('a nested composite before the controls does not take their tab stop', () => {
+      render(
+        <Managed>
+          <AlignGroup />
+          <button type="button">Bold</button>
+          <button type="button">Italic</button>
+        </Managed>,
+      );
+      expect(button('Bold')).toHaveAttribute('tabindex', '0');
+      expect(button('Italic')).toHaveAttribute('tabindex', '-1');
+      expect(radio('Left')).toHaveAttribute('tabindex', '0');
+    });
+
+    it('focusing a text field keeps the tab stop on the last focused control', async () => {
+      const user = userEvent.setup();
+      render(
+        <>
+          <Managed tabStop="last-focused">
+            <button type="button">Bold</button>
+            <input aria-label="Search" />
+            <button type="button">Italic</button>
+          </Managed>
+          <button type="button">after</button>
+        </>,
+      );
+      const search = screen.getByRole('textbox', { name: 'Search' });
+      focus(button('Bold'));
+      await user.keyboard('{ArrowRight}');
+      expect(search).toHaveFocus();
+      expect(button('Bold')).toHaveAttribute('tabindex', '0');
+      expect(search).toHaveAttribute('tabindex', '-1');
+      await user.tab();
+      expect(button('after')).toHaveFocus();
+      await user.tab({ shift: true });
+      expect(button('Bold')).toHaveFocus();
+    });
+
+    it('a text field first does not hold the initial tab stop while a control can', () => {
+      render(
+        <Managed>
+          <input aria-label="Search" />
+          <button type="button">Bold</button>
+        </Managed>,
+      );
+      expect(button('Bold')).toHaveAttribute('tabindex', '0');
+      expect(screen.getByRole('textbox', { name: 'Search' })).toHaveAttribute('tabindex', '-1');
+    });
+
+    it('a text field holds the tab stop when there is nothing else', () => {
+      render(
+        <Managed>
+          <input aria-label="Search" />
+        </Managed>,
+      );
+      expect(screen.getByRole('textbox', { name: 'Search' })).toHaveAttribute('tabindex', '0');
+    });
+
+    it.each([
+      [
+        'button',
+        <button key="s" type="button" role="combobox" aria-expanded={false} aria-label="Size">
+          Medium
+        </button>,
+      ],
+      [
+        'div',
+        <div key="s" role="combobox" aria-expanded={false} aria-label="Size" tabIndex={0}>
+          Medium
+        </div>,
+      ],
+    ])('Left/Right leave a select-only combobox (%s)', async (_name, size) => {
+      const user = userEvent.setup();
+      render(
+        <Managed tabStop="last-focused">
+          <button type="button">Bold</button>
+          {size}
+          <button type="button">Italic</button>
+        </Managed>,
+      );
+      const combobox = screen.getByRole('combobox', { name: 'Size' });
+      focus(button('Bold'));
+      await user.keyboard('{ArrowRight}');
+      expect(combobox).toHaveFocus();
+      await user.keyboard('{ArrowRight}');
+      expect(button('Italic')).toHaveFocus();
+      await user.keyboard('{ArrowLeft}{ArrowLeft}');
+      expect(button('Bold')).toHaveFocus();
+      // It can hold the tab stop like any other control.
+      focus(combobox);
+      expect(combobox).toHaveAttribute('tabindex', '0');
+    });
+
+    it('DOM mode: getTabIndex keeps the stop on the last focused item, not on a text field', () => {
+      function Group() {
+        const { containerProps, getTabIndex } = useRovingTabIndex({ tabStop: 'last-focused' });
+        return (
+          <div role="group" aria-label="group" {...containerProps}>
+            <button type="button" data-roving-value="a" tabIndex={getTabIndex('a')}>
+              a
+            </button>
+            <button type="button" data-roving-value="b" tabIndex={getTabIndex('b')}>
+              b
+            </button>
+            <input
+              aria-label="Filter"
+              data-roving-value="filter"
+              tabIndex={getTabIndex('filter')}
+            />
+          </div>
+        );
+      }
+      render(<Group />);
+      const filter = screen.getByRole('textbox', { name: 'Filter' });
+      focus(button('b'));
+      expect(button('b')).toHaveAttribute('tabindex', '0');
+      focus(filter);
+      expect(button('b')).toHaveAttribute('tabindex', '0');
+      expect(filter).toHaveAttribute('tabindex', '-1');
+    });
+  });
+
+  describe('explicit items: only rendered, visible items hold the tab stop (hooks-core-code-1)', () => {
+    function LegacyItems({
+      activeValue,
+      hidden = [],
+      rendered = ['a', 'b', 'c'],
+    }: {
+      activeValue: string | null;
+      hidden?: string[];
+      rendered?: string[];
+    }) {
+      const ref = React.useRef<HTMLDivElement>(null);
+      const { handleKeyDown, getTabIndex } = useRovingTabIndex(ref, {
+        activeValue,
+        items: ['a', 'b', 'c'],
+      });
+      return (
+        <div ref={ref} role="group" aria-label="group" onKeyDown={handleKeyDown}>
+          {rendered.map((v) => (
+            <button
+              key={v}
+              type="button"
+              data-roving-value={v}
+              hidden={hidden.includes(v)}
+              tabIndex={getTabIndex(v)}
+            >
+              {v}
+            </button>
+          ))}
+        </div>
+      );
+    }
+
+    it('a hidden first item does not take the tab stop', () => {
+      render(<LegacyItems activeValue={null} hidden={['a']} />);
+      expect(button('b')).toHaveAttribute('tabindex', '0');
+      expect(button('c')).toHaveAttribute('tabindex', '-1');
+    });
+
+    it('a hidden active item does not take the tab stop', () => {
+      render(<LegacyItems activeValue="b" hidden={['b']} />);
+      expect(button('a')).toHaveAttribute('tabindex', '0');
+      expect(button('c')).toHaveAttribute('tabindex', '-1');
+    });
+
+    it('an item that is not rendered does not take the tab stop (options object)', () => {
+      function Items() {
+        const { containerProps, getTabIndex } = useRovingTabIndex({ items: ['a', 'b', 'c'] });
+        return (
+          <div role="group" aria-label="group" {...containerProps}>
+            {['b', 'c'].map((v) => (
+              <button key={v} type="button" data-roving-value={v} tabIndex={getTabIndex(v)}>
+                {v}
+              </button>
+            ))}
+          </div>
+        );
+      }
+      render(<Items />);
+      expect(button('b')).toHaveAttribute('tabindex', '0');
+      expect(button('c')).toHaveAttribute('tabindex', '-1');
+    });
+
+    it('gives the stop to the first listed item while the DOM has none of the listed items yet', async () => {
+      function Swapped({ values }: { values: readonly string[] }) {
+        const { containerProps, getTabIndex } = useRovingTabIndex({ items: values });
+        return (
+          <div role="group" aria-label="group" {...containerProps}>
+            {values.map((v) => (
+              <button key={v} type="button" data-roving-value={v} tabIndex={getTabIndex(v)}>
+                {v}
+              </button>
+            ))}
+          </div>
+        );
+      }
+      const { rerender } = render(<Swapped values={['a', 'b']} />);
+      rerender(<Swapped values={['x', 'y']} />);
+      // Rendered before the MutationObserver reports the new items: no render without a stop.
+      expect(button('x')).toHaveAttribute('tabindex', '0');
+      expect(button('y')).toHaveAttribute('tabindex', '-1');
+      await act(async () => {});
+      expect(button('x')).toHaveAttribute('tabindex', '0');
+      expect(button('y')).toHaveAttribute('tabindex', '-1');
+    });
+
+    it('accepts a readonly items array (x-types-core-3)', () => {
+      const TABS = ['general', 'billing'] as const;
+      expectTypeOf(TABS).toExtend<NonNullable<UseRovingTabIndexOptions['items']>>();
+      function Tabs() {
+        const { containerProps, getTabIndex } = useRovingTabIndex({ items: TABS });
+        return (
+          <div role="group" aria-label="Settings" {...containerProps}>
+            {TABS.map((v) => (
+              <button key={v} type="button" data-roving-value={v} tabIndex={getTabIndex(v)}>
+                {v}
+              </button>
+            ))}
+          </div>
+        );
+      }
+      render(<Tabs />);
+      expect(button('general')).toHaveAttribute('tabindex', '0');
+      expect(button('billing')).toHaveAttribute('tabindex', '-1');
+    });
+  });
+
+  describe('invalid itemSelector (x-errors-components-6)', () => {
+    it('warns once in development that no item is navigable', () => {
+      const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+      const { rerender } = render(
+        <>
+          <DomGroup items={ABC} itemSelector="button, " />
+          <DomGroup items={ABC} />
+        </>,
+      );
+      rerender(
+        <>
+          <DomGroup items={ABC} itemSelector="button, " activeValue="b" />
+          <DomGroup items={ABC} activeValue="b" />
+        </>,
+      );
+      expect(warn).toHaveBeenCalledTimes(1);
+      expect(warn).toHaveBeenCalledWith(
+        '[WaveUI] useRovingTabIndex: itemSelector "button, " is not a valid CSS selector in this browser; no item is navigable or tabbable.',
+      );
+      warn.mockRestore();
     });
   });
 
@@ -1488,11 +2014,15 @@ describe('useRovingTabIndex', () => {
     });
 
     it('renders on the server with the active item as the tab stop', () => {
+      const error = vi.spyOn(console, 'error');
       const html = renderToString(<DomGroup items={ABC} activeValue="b" />);
       expect(html).toContain('data-roving-container=""');
       expect(html).toMatch(
         /data-roving-value="b"[^>]*tabindex="0"|tabindex="0"[^>]*data-roving-value="b"/,
       );
+      // Its layout effect does not run (and React 19 does not warn about it) on the server.
+      expect(error).not.toHaveBeenCalled();
+      error.mockRestore();
     });
   });
 

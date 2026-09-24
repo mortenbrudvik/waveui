@@ -6,9 +6,6 @@ import { FOCUSABLE_SELECTOR } from '../lib/focus';
 import { useMergedRefs } from './useMergedRefs';
 import { useEventCallback } from './useEventCallback';
 
-const useIsomorphicLayoutEffect =
-  typeof document !== 'undefined' ? React.useLayoutEffect : React.useEffect;
-
 /**
  * Options of {@link useTriggerElement}. (`triggerProps.ref`, the hook's second argument, may be an
  * inline callback: it is re-attached after each commit; a stable ref is attached once.)
@@ -29,6 +26,13 @@ type UnknownProps = Record<string, unknown>;
 
 function isCloneableElement(node: unknown): node is React.ReactElement<UnknownProps> {
   return React.isValidElement(node) && node.type !== React.Fragment;
+}
+
+/** The element of a single-element Fragment (`<><Button /></>`); other children as given. */
+function unwrapFragment(children: React.ReactNode): React.ReactNode {
+  if (!React.isValidElement(children) || children.type !== React.Fragment) return children;
+  const inner = (children.props as { children?: React.ReactNode }).children;
+  return React.isValidElement(inner) ? unwrapFragment(inner) : children;
 }
 
 function isElementNode(value: unknown): value is Element {
@@ -78,20 +82,23 @@ function moveStateAria(target: Element, values: StateAriaValues): () => void {
  * Renders a trigger (`Dialog.Trigger`, `Drawer.Trigger`, `Popover.Trigger`, `Menu.Trigger`,
  * `.Close`): puts `triggerProps` on the consumer's element.
  *
- * - **Single element child** (default): cloned with the trigger props merged in (F2 `mergeProps`):
+ * - **Single element child** (default): cloned with the trigger props merged in (`mergeProps`):
  *   handlers composed (the child's run first; `preventDefault()` skips the trigger's), classes and
  *   styles merged, the child's own `id` kept, and live `aria-expanded` / `aria-controls` /
  *   `aria-haspopup` always winning over the child's values. The trigger ref and the child's own ref
  *   are merged with {@link useMergedRefs}, so a ref that keeps its identity is attached once and
  *   the element is not detached and re-attached on every render (stable positioning anchor and
- *   focus-restore target).
+ *   focus-restore target). A Fragment around a single element (`<><Button /></>`) is unwrapped and
+ *   its element cloned.
  * - **`triggerProps.ref`** does not have to be stable: an inline callback or a fresh `mergeRefs(…)`
  *   result is detached and re-attached after each commit (as React does for an inline ref), and a
  *   state-setting ref (`ref: setAnchor`) never loops. Pass a stable ref (an object ref, a
  *   `useCallback` or a state setter) so floating-ui's reference and restore targets are set once.
  * - **Render-prop child**: called with `triggerProps`.
- * - **`asChild={false}`**, text, Fragments or several children: the 0.4 wrapper `<span>` carrying
- *   the trigger props (F2 `renderTrigger`).
+ * - **`asChild={false}`**: the 0.4 wrapper `<span>` carrying the trigger props (`renderTrigger`).
+ * - **Text, a Fragment of several elements, several children**: a wrapper `<span>` (with a
+ *   development warning from `renderTrigger`) carrying the trigger props except the state ARIA,
+ *   which moves as in the automatic fallback below.
  * - **Automatic fallback**: when the cloned child has not attached its ref by the end of the mount
  *   layout effect (a custom component that neither forwards `ref` nor spreads props), the hook
  *   switches once to the wrapper span — whose click handler catches the bubbling click, so the
@@ -114,9 +121,12 @@ export function useTriggerElement<P>(
   const { componentName, asChild = true, onResolvedId } = options;
   const [wrapperFallback, setWrapperFallback] = React.useState(false);
 
-  const cloneable =
-    asChild && !wrapperFallback && typeof children !== 'function' && isCloneableElement(children);
-  const cloneTarget = cloneable ? (children as React.ReactElement<UnknownProps>) : null;
+  const isRenderProp = typeof children === 'function';
+  // A Fragment around one element is that element (children of a conditional expression).
+  const content = isRenderProp ? null : unwrapFragment(children as React.ReactNode);
+  const singleElement = isCloneableElement(content);
+  const cloneable = asChild && !wrapperFallback && singleElement;
+  const cloneTarget = cloneable ? (content as React.ReactElement<UnknownProps>) : null;
   const ourProps = triggerProps as UnknownProps;
   const ourRef = ourProps.ref as React.Ref<Element> | undefined;
   // The cloned child's own `ref` prop is read to merge it (React 19 keeps `ref` in props).
@@ -130,7 +140,7 @@ export function useTriggerElement<P>(
   }, []);
   const mergedRef = useMergedRefs<Element>(ourRef, childRef, detectAttach);
 
-  useIsomorphicLayoutEffect(() => {
+  React.useLayoutEffect(() => {
     if (!cloneable || attachedRef.current) return;
     warnOnce(
       `trigger-ref:${componentName}`,
@@ -140,15 +150,17 @@ export function useTriggerElement<P>(
     setWrapperFallback(true);
   }, [cloneable, componentName]);
 
-  // The automatic fallback of a single element child: the child meant to be the trigger renders
-  // inside the span, so the state ARIA goes to the element it rendered.
-  const autoWrapper =
-    asChild && wrapperFallback && typeof children !== 'function' && isCloneableElement(children);
-  const movedAria = autoWrapper ? pickStateAria(ourProps) : null;
+  // A wrapper span the consumer did not ask for (`asChild` is not false): the automatic fallback of
+  // a single element child, or children that cannot be cloned (text, several elements). The
+  // trigger is the element inside, so the state ARIA, which a generic span cannot carry, goes to
+  // the first element it rendered in the tab order.
+  const autoWrapper = asChild && wrapperFallback && singleElement;
+  const implicitWrapper = asChild && !isRenderProp && !cloneable;
+  const movedAria = implicitWrapper ? pickStateAria(ourProps) : null;
   // No deps: runs after every commit of the trigger (which re-renders on every state change), so
   // the attributes follow the live state and the child's current first tabbable element. A new
   // target rendered by the child without a trigger commit is picked up at the next one.
-  useIsomorphicLayoutEffect(() => {
+  React.useLayoutEffect(() => {
     const wrapper = attachedRef.current;
     if (!movedAria || !wrapper) return undefined;
     const target = findStateAriaTarget(wrapper);
@@ -171,15 +183,15 @@ export function useTriggerElement<P>(
     return React.cloneElement(cloneTarget, { ...merged, ref: mergedRef });
   }
 
-  if (autoWrapper) {
+  if (implicitWrapper) {
     const { ref: _ourRef, ...ourRest } = ourProps;
     const wrapperProps: UnknownProps = { ...ourRest, ref: mergedRef };
     for (const key of STATE_ARIA) delete wrapperProps[key];
-    return renderTrigger(children, wrapperProps, { componentName, asChild: false });
+    // `asChild` lets renderTrigger warn about children it cannot clone; the automatic fallback
+    // (a single element, never cloned again) warned above.
+    return renderTrigger(content, wrapperProps, { componentName, asChild: !autoWrapper });
   }
 
-  return renderTrigger(children, triggerProps, {
-    componentName,
-    asChild: asChild && !wrapperFallback,
-  });
+  // A render-prop child, or the explicit 0.4 wrapper span (`asChild={false}`).
+  return renderTrigger(children, triggerProps, { componentName, asChild: false });
 }

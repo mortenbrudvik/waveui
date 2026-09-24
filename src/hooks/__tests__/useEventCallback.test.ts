@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, expectTypeOf } from 'vitest';
-import { renderHook } from '@testing-library/react';
+import { render, renderHook } from '@testing-library/react';
+import * as React from 'react';
 import { useEventCallback } from '../useEventCallback';
 
 describe('useEventCallback', () => {
@@ -32,6 +33,37 @@ describe('useEventCallback', () => {
     rerender({ fn: fn2 });
     result.current();
     expect(fn2).toHaveBeenCalledTimes(1);
+  });
+
+  it('is current for the layout effects of the commit that passed a new fn (hooks-core-tests-1)', () => {
+    const log: string[] = [];
+    function Child({ tick, callback }: { tick: number; callback: () => void }) {
+      // Child layout effects run before the parent's: the callback must already be the new one.
+      React.useLayoutEffect(() => {
+        callback();
+      }, [tick, callback]);
+      return null;
+    }
+    function Parent({ tick }: { tick: number }) {
+      const callback = useEventCallback(() => {
+        log.push(`child effect sees ${tick}`);
+      });
+      const parentCallback = useEventCallback(() => {
+        log.push(`parent effect sees ${tick}`);
+      });
+      React.useLayoutEffect(() => {
+        parentCallback();
+      }, [tick, parentCallback]);
+      return React.createElement(Child, { tick, callback });
+    }
+    const { rerender } = render(React.createElement(Parent, { tick: 1 }));
+    rerender(React.createElement(Parent, { tick: 2 }));
+    expect(log).toEqual([
+      'child effect sees 1',
+      'parent effect sees 1',
+      'child effect sees 2',
+      'parent effect sees 2',
+    ]);
   });
 
   it('forwards arguments and returns the result', () => {

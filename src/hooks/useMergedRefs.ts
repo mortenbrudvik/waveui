@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useInsertionEffect, useLayoutEffect, useRef } from 'react';
+import { useCallback, useInsertionEffect, useLayoutEffect, useRef } from 'react';
 import type * as React from 'react';
 import { setRef } from '../lib/mergeRefs';
 
@@ -25,8 +25,6 @@ interface MergedRefState<T> {
   /** The refs `node` is attached to, each with its detach function. */
   attached: AttachedRef<T>[];
 }
-
-const useIsomorphicLayoutEffect = typeof document !== 'undefined' ? useLayoutEffect : useEffect;
 
 function sameRefs<T>(a: RefList<T>, b: RefList<T>): boolean {
   if (a === b) return true;
@@ -67,7 +65,7 @@ function detachAll<T>(state: MergedRefState<T>): void {
 
 /**
  * Merges several refs into one callback ref whose identity never changes (React 19 cleanup-aware,
- * like F2 `mergeRefs`).
+ * like {@link mergeRefs}, which merges refs without a hook).
  *
  * - The element is attached to every ref when it mounts and detached when it unmounts (object refs
  *   reset to `null`; callback refs get their React 19 cleanup called, or `null`).
@@ -120,7 +118,7 @@ export function useMergedRefs<T>(
 
   // After every commit in which the element stayed: bring the attached refs in line with this
   // render's refs (the ref callback already used them when the element changed).
-  useIsomorphicLayoutEffect(() => {
+  useLayoutEffect(() => {
     const state = stateRef.current;
     const { node } = state;
     if (node === null) return;
