@@ -1,10 +1,13 @@
 import * as React from 'react';
 import { cn } from '../../lib/cn';
 import { isDev } from '../../lib/dev';
+import { getDirection } from '../../lib/direction';
 import { getFirstTabbable } from '../../lib/focus';
 import { DismissIcon } from '../../lib/icons';
+import { getOpenLayers, subscribeLayers } from '../../lib/layers';
 import { focusRing } from '../../lib/styles';
 import type { Status } from '../../lib/types';
+import { useDirection } from '../../hooks/useDirection';
 import { useId } from '../../hooks/useId';
 import { useMergedRefs } from '../../hooks/useMergedRefs';
 import { usePreserveFocus } from '../../hooks/usePreserveFocus';
@@ -75,6 +78,13 @@ interface ToastEntry {
 
 const ToasterContext = React.createContext<ToastController | null>(null);
 ToasterContext.displayName = 'ToasterContext';
+
+/**
+ * `true` for the toasts the Toaster renders in its region, which its live regions announce. A
+ * Toast rendered anywhere else (also as app content inside `<Toaster>`) is a live region itself.
+ */
+const ToasterRegionContext = React.createContext(false);
+ToasterRegionContext.displayName = 'ToasterRegionContext';
 
 const INERT_CONTROLLER: ToastController = {
   dispatchToast: (options) => options.toastId ?? '',
@@ -147,8 +157,13 @@ export interface ToastProps extends React.HTMLAttributes<HTMLDivElement> {
  * The visual of a single notification: status icon, visually hidden status text, title, body and an
  * optional dismiss button. Usually rendered by `<Toaster>` through `useToastController()`.
  *
- * A Toast is not a live region itself: the Toaster announces its toasts through permanent live
- * regions. A Toast rendered on its own is not announced.
+ * - **In a Toaster** (dispatched with `useToastController()`): not a live region itself; the
+ *   Toaster announces it through its permanent live regions.
+ * - **On its own** (your own container, an inline notice): a live region, as in 0.4 —
+ *   `role="status"` with `aria-live="polite"`, or `role="alert"` with `aria-live="assertive"` for
+ *   `error` (override with `role`/`aria-live`). A live region that is added together with its
+ *   text is not announced by every screen reader, so render the Toast in advance and change its
+ *   content, or dispatch it through a Toaster.
  */
 export const Toast = ({
   status = 'info',
@@ -160,10 +175,17 @@ export const Toast = ({
   ref,
   ...rest
 }: ToastProps) => {
+  const inToasterRegion = React.useContext(ToasterRegionContext);
   const hasBody = children !== undefined && children !== null && children !== false;
+  const liveRegion: React.HTMLAttributes<HTMLDivElement> = inToasterRegion
+    ? {}
+    : status === 'error'
+      ? { role: 'alert', 'aria-live': 'assertive' }
+      : { role: 'status', 'aria-live': 'polite' };
   return (
     <div
       ref={ref}
+      {...liveRegion}
       {...rest}
       className={cn(
         'flex items-start gap-3 rounded border border-s-4 border-border bg-background p-3 text-foreground shadow-4',
@@ -306,7 +328,11 @@ function createToastTimers(onExpire: (id: string) => void): ToastTimers {
 /*  Toaster (container)                                               */
 /* ------------------------------------------------------------------ */
 
-type ToastPosition =
+/**
+ * Corner of the viewport a {@link Toaster} shows its toasts in (`ToasterProps.position`).
+ * `start`/`end` follow the writing direction; `left`/`right` are physical.
+ */
+export type ToastPosition =
   | 'top-start'
   | 'top-end'
   | 'bottom-start'
@@ -328,21 +354,96 @@ export interface ToasterProps extends React.HTMLAttributes<HTMLDivElement> {
   ref?: React.Ref<HTMLDivElement>;
 }
 
+/**
+ * Corner placement. The margin on the toasts' side is `--wave-toaster-offset`, which the Toaster
+ * sets while a modal panel covers that side (see {@link getSidePanelOffset}); unset, it is `0`.
+ */
 const positionClasses: Record<ToastPosition, string> = {
-  'top-start': 'top-4 start-4',
-  'top-end': 'top-4 end-4',
-  'bottom-start': 'bottom-4 start-4',
-  'bottom-end': 'bottom-4 end-4',
-  'top-right': 'top-4 right-4', // wave-allow-physical: explicit physical position value
-  'top-left': 'top-4 left-4', // wave-allow-physical: explicit physical position value
-  'bottom-right': 'bottom-4 right-4', // wave-allow-physical: explicit physical position value
-  'bottom-left': 'bottom-4 left-4', // wave-allow-physical: explicit physical position value
+  'top-start': 'top-4 start-4 ms-(--wave-toaster-offset)',
+  'top-end': 'top-4 end-4 me-(--wave-toaster-offset)',
+  'bottom-start': 'bottom-4 start-4 ms-(--wave-toaster-offset)',
+  'bottom-end': 'bottom-4 end-4 me-(--wave-toaster-offset)',
+  'top-right': 'top-4 right-4 mr-(--wave-toaster-offset)', // wave-allow-physical: explicit physical position value
+  'top-left': 'top-4 left-4 ml-(--wave-toaster-offset)', // wave-allow-physical: explicit physical position value
+  'bottom-right': 'bottom-4 right-4 mr-(--wave-toaster-offset)', // wave-allow-physical: explicit physical position value
+  'bottom-left': 'bottom-4 left-4 ml-(--wave-toaster-offset)', // wave-allow-physical: explicit physical position value
 };
+
+/** The toasts' distance from the window edges (`*-4`), also the tolerance for "at the edge". */
+const EDGE_GAP = 16;
+
+const useIsomorphicLayoutEffect =
+  typeof document !== 'undefined' ? React.useLayoutEffect : React.useEffect;
+
+/** Whether the toasts sit at the right edge of the window (`end` is the right in LTR). */
+function isOnRightSide(position: ToastPosition, viewport: HTMLElement): boolean {
+  const inline = position.slice(position.indexOf('-') + 1);
+  if (inline === 'right' || inline === 'left') return inline === 'right';
+  const rtl = getDirection(viewport) === 'rtl';
+  return inline === 'end' ? !rtl : rtl;
+}
+
+/**
+ * How far the toasts move away from their side while an open modal surface (a Drawer panel) covers
+ * their corner, so they never hide the panel's controls (WCAG 2.4.11 Focus Not Obscured): the
+ * surface's width from that side of the window, which leaves the usual gap between toasts and
+ * panel. A surface counts when it reaches the toasts' side and their top or bottom edge (a centered
+ * Dialog does not). `0` when no such surface is open, or when the toasts would not fit beside it
+ * (a full-width panel on a phone): then they keep their corner.
+ */
+function getSidePanelOffset(viewport: HTMLElement, position: ToastPosition): number {
+  const modals = getOpenLayers().filter((layer) => layer.kind === 'modal');
+  if (modals.length === 0) return 0;
+  const doc = viewport.ownerDocument;
+  const view = doc.defaultView;
+  if (!view) return 0;
+  // The box fixed elements are placed in: the window without its scrollbars.
+  const width = doc.documentElement.clientWidth || view.innerWidth;
+  const height = doc.documentElement.clientHeight || view.innerHeight;
+  const right = isOnRightSide(position, viewport);
+  const top = position.startsWith('top');
+
+  let offset = 0;
+  for (const layer of modals) {
+    for (const el of layer.getElements()) {
+      if (!el?.isConnected) continue;
+      const box = el.getBoundingClientRect();
+      if (box.width <= 0 || box.height <= 0) continue;
+      const onSide = right ? box.right >= width - EDGE_GAP : box.left <= EDGE_GAP;
+      const onEdge = top ? box.top <= EDGE_GAP : box.bottom >= height - EDGE_GAP;
+      if (onSide && onEdge) offset = Math.max(offset, right ? width - box.left : box.right);
+    }
+  }
+  if (offset <= 0 || width - offset < viewport.offsetWidth + 2 * EDGE_GAP) return 0;
+  return Math.ceil(offset);
+}
 
 /** The text written into the live region for a toast ("Error: Upload failed Try again."). */
 function getAnnouncement({ status = 'info', statusLabel, title, body }: ToastOptions): string {
   return [getStatusLabel(status, statusLabel), title, body].filter(Boolean).join(' ');
 }
+
+/**
+ * How long a toast's text stays in the live region: long enough for screen readers to pick it up
+ * (also a polite message queued behind other speech), short enough that someone browsing the
+ * Notifications region later meets the text once, in the toast, not a second time in the region.
+ */
+const ANNOUNCEMENT_DURATION = 2000;
+
+/**
+ * One toast's message in a live region. It is added when the toast is dispatched (a replacement
+ * remounts it, so it is read again) and removed after {@link ANNOUNCEMENT_DURATION} or with the
+ * toast. Removal is not announced (`aria-relevant` stays at its default, additions and text).
+ */
+function LiveMessage({ text }: { text: string }) {
+  const [present, setPresent] = React.useState(true);
+  React.useEffect(() => {
+    const handle = setTimeout(() => setPresent(false), ANNOUNCEMENT_DURATION);
+    return () => clearTimeout(handle);
+  }, []);
+  return present ? <div>{text}</div> : null;
+}
+LiveMessage.displayName = 'LiveMessage';
 
 interface ToasterItemProps {
   entry: ToastEntry;
@@ -389,7 +490,11 @@ ToasterItem.displayName = 'ToasterItem';
  *   (`data-wave-focus-trap-allow`): it stays reachable by Tab and exposed to assistive technology
  *   while a Dialog or Drawer is open, and clicking a toast never dismisses the overlay below.
  * - Two permanent, visually hidden live regions (polite, and assertive for `error`) announce every
- *   toast; the toasts themselves are not live regions.
+ *   toast; the toasts themselves are not live regions. Each message stays in its live region for
+ *   2 seconds (or until its toast goes), so browsing the region later meets the text only once.
+ * - While an open modal panel covers the toasts' corner (a Drawer on the same side), the toasts
+ *   move beside it, so they never hide its focused controls (WCAG 2.4.11). Without room beside it
+ *   (a full-width panel on a narrow screen) they keep their corner.
  * - Timers pause while a toast is hovered or focused and while the window is in the background.
  *   When a toast that contains focus goes away, focus moves to the next toast, or back to the
  *   element that was focused before focus entered the toasts (kept across the moves between
@@ -404,6 +509,7 @@ ToasterItem.displayName = 'ToasterItem';
 export const Toaster = ({
   position = 'bottom-end',
   className,
+  style,
   children,
   onFocus,
   onBlur,
@@ -416,6 +522,29 @@ export const Toaster = ({
   const viewportRef = React.useRef<HTMLDivElement | null>(null);
   const viewportRefs = useMergedRefs(ref, viewportRef);
   const previousFocusRef = React.useRef<HTMLElement | null>(null);
+  const dir = useDirection();
+
+  // Beside an open modal panel on the toasts' side (a Drawer), not over its controls. Measured when
+  // a layer opens or closes (synchronously in its layout effect, before paint), on resize, and
+  // after a transition or animation (a panel that slides in reaches its place only then).
+  const [sideOffset, setSideOffset] = React.useState(0);
+  useIsomorphicLayoutEffect(() => {
+    const update = () => {
+      const viewport = viewportRef.current;
+      setSideOffset(viewport ? getSidePanelOffset(viewport, position) : 0);
+    };
+    update();
+    const unsubscribe = subscribeLayers(update);
+    window.addEventListener('resize', update);
+    document.addEventListener('transitionend', update, true);
+    document.addEventListener('animationend', update, true);
+    return () => {
+      unsubscribe();
+      window.removeEventListener('resize', update);
+      document.removeEventListener('transitionend', update, true);
+      document.removeEventListener('animationend', update, true);
+    };
+  }, [position, dir]);
 
   const [timers] = React.useState(() =>
     createToastTimers((id) =>
@@ -528,9 +657,14 @@ export const Toaster = ({
   const polite: React.ReactNode[] = [];
   const assertive: React.ReactNode[] = [];
   for (const toast of toasts) {
-    const message = <div key={toast.seq}>{getAnnouncement(toast.options)}</div>;
+    const message = <LiveMessage key={toast.seq} text={getAnnouncement(toast.options)} />;
     (toast.options.status === 'error' ? assertive : polite).push(message);
   }
+
+  const viewportStyle =
+    sideOffset > 0
+      ? ({ ...style, '--wave-toaster-offset': `${sideOffset}px` } as React.CSSProperties)
+      : style;
 
   return (
     <ToasterContext.Provider value={controller}>
@@ -543,6 +677,7 @@ export const Toaster = ({
           data-wave-focus-trap-allow=""
           data-position={position}
           {...rest}
+          style={viewportStyle}
           onFocus={(event) => {
             // Bookkeeping always runs (a consumer's preventDefault() cannot cancel a focus change).
             onFocus?.(event);
@@ -558,23 +693,25 @@ export const Toaster = ({
             className,
           )}
         >
-          {/* One message per shown toast; not atomic, so only the added message is read. */}
+          {/* One message per toast for its first 2 s; not atomic, so only the added one is read. */}
           <div role="status" aria-live="polite" aria-atomic="false" className="sr-only">
             {polite}
           </div>
           <div aria-live="assertive" aria-atomic="false" className="sr-only">
             {assertive}
           </div>
-          {toasts.map((toast, index) => (
-            <ToasterItem
-              key={toast.id}
-              entry={toast}
-              index={index}
-              timers={timers}
-              onDismiss={dismissToast}
-              getFocusFallback={getFocusFallback}
-            />
-          ))}
+          <ToasterRegionContext.Provider value={true}>
+            {toasts.map((toast, index) => (
+              <ToasterItem
+                key={toast.id}
+                entry={toast}
+                index={index}
+                timers={timers}
+                onDismiss={dismissToast}
+                getFocusFallback={getFocusFallback}
+              />
+            ))}
+          </ToasterRegionContext.Provider>
         </div>
       </Portal>
     </ToasterContext.Provider>

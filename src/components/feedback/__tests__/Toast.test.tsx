@@ -4,6 +4,7 @@ import { act, fireEvent, render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { Toast, Toaster, useToastController } from '../Toast';
 import type { ToastController, ToastOptions, ToastProps, ToasterProps } from '../Toast';
+import { useDismiss } from '../../../hooks/useDismiss';
 import { useModalIsolation } from '../../../hooks/useModalIsolation';
 import { Portal } from '../../portal/Portal';
 import {
@@ -58,6 +59,9 @@ function getLiveRegion(politeness: 'polite' | 'assertive'): HTMLElement {
 const getToasts = () =>
   Array.from(getViewport().querySelectorAll<HTMLElement>('[data-wave-toast]'));
 
+/** How long an announcement stays in the Toaster's live region. */
+const ANNOUNCEMENT_DURATION = 2000;
+
 const advance = (ms: number) => {
   act(() => {
     vi.advanceTimersByTime(ms);
@@ -107,15 +111,42 @@ describe('Toast', () => {
     testNoImplicitSubmit(Toast, { defaultProps: { title: 'Saved', onDismiss: () => {} } });
   });
 
-  it('carries no live-region role of its own (feedback-navigation#11)', () => {
-    render(
-      <Toast status="error" title="Failed" data-testid="toast">
-        Hello
-      </Toast>,
-    );
-    const toast = screen.getByTestId('toast');
-    expect(toast).not.toHaveAttribute('role');
-    expect(toast).not.toHaveAttribute('aria-live');
+  describe('live region outside a Toaster (0.4 behaviour kept)', () => {
+    it.each([
+      ['info', 'status', 'polite'],
+      ['success', 'status', 'polite'],
+      ['warning', 'status', 'polite'],
+      ['error', 'alert', 'assertive'],
+    ] as const)('a standalone %s Toast is role="%s" with aria-live="%s"', (status, role, live) => {
+      render(
+        <Toast status={status} title="Upload" data-testid="toast">
+          Details
+        </Toast>,
+      );
+      const toast = screen.getByTestId('toast');
+      expect(toast).toHaveAttribute('role', role);
+      expect(toast).toHaveAttribute('aria-live', live);
+      expect(screen.getByRole(role)).toBe(toast);
+    });
+
+    it('is a live region when rendered as app content inside a <Toaster>', () => {
+      render(
+        <Toaster>
+          <Toast status="success" title="Inline notice" data-testid="toast" />
+        </Toaster>,
+      );
+      const toast = screen.getByTestId('toast');
+      expect(getViewport()).not.toContainElement(toast);
+      expect(toast).toHaveAttribute('role', 'status');
+      expect(toast).toHaveAttribute('aria-live', 'polite');
+    });
+
+    it('lets the consumer override the role and politeness', () => {
+      render(<Toast title="Quiet" role="note" aria-live="off" data-testid="toast" />);
+      const toast = screen.getByTestId('toast');
+      expect(toast).toHaveAttribute('role', 'note');
+      expect(toast).toHaveAttribute('aria-live', 'off');
+    });
   });
 
   describe('status (feedback-navigation#4, #14)', () => {
@@ -358,12 +389,16 @@ describe('Toaster: ids and dismissal (feedback-navigation#7)', () => {
 
   it('dispatchToast returns an id; dismissToast(id) removes only that toast and its timer', () => {
     const { dispatch, dismiss } = renderToaster();
-    const first = dispatch({ title: 'First' });
     const second = dispatch({ title: 'Second', timeout: 0 });
+    // Let the announcement of the persistent toast clear (its only timer).
+    advance(ANNOUNCEMENT_DURATION);
+    expect(vi.getTimerCount()).toBe(0);
+    const first = dispatch({ title: 'First' });
     expect(typeof first).toBe('string');
     expect(first).not.toBe('');
     expect(second).not.toBe(first);
-    expect(vi.getTimerCount()).toBe(1);
+    // Its dismiss timer and the timer that clears its announcement.
+    expect(vi.getTimerCount()).toBe(2);
 
     dismiss(first);
     expect(screen.queryByText('First')).not.toBeInTheDocument();
@@ -411,6 +446,7 @@ describe('Toaster: announcements (feedback-navigation#11, #14)', () => {
     expect(getLiveRegion(politeness)).toHaveTextContent(`${label} Upload Details here`);
     expect(getLiveRegion(other)).toBeEmptyDOMElement();
 
+    // The Toaster's toasts are not live regions themselves (feedback-navigation#11).
     const [toast] = getToasts();
     expect(toast).not.toHaveAttribute('role');
     expect(toast).not.toHaveAttribute('aria-live');
@@ -435,6 +471,62 @@ describe('Toaster: announcements (feedback-navigation#11, #14)', () => {
     dispatch({ status: 'error', statusLabel: 'Fehler:', title: 'Upload', timeout: 0 });
     expect(getLiveRegion('assertive')).toHaveTextContent(/^Fehler: Upload$/);
     expect(getToasts()[0]).toHaveTextContent(/^Fehler:\s*Upload/);
+  });
+
+  describe('clearing after the announcement', () => {
+    beforeEach(() => {
+      vi.useFakeTimers();
+    });
+    afterEach(() => {
+      vi.useRealTimers();
+    });
+
+    it.each(['polite', 'assertive'] as const)(
+      'removes the %s message 2 s after it was written, so the region holds the text once',
+      (politeness) => {
+        const { dispatch } = renderToaster();
+        const status = politeness === 'assertive' ? 'error' : 'success';
+        const label = politeness === 'assertive' ? 'Error:' : 'Success:';
+        dispatch({ status, title: 'Upload', body: 'Details here', timeout: 0 });
+        const region = getLiveRegion(politeness);
+        expect(region).toHaveTextContent(`${label} Upload Details here`);
+
+        advance(ANNOUNCEMENT_DURATION - 1);
+        expect(region).toHaveTextContent(`${label} Upload Details here`);
+        advance(1);
+        expect(region).toBeEmptyDOMElement();
+
+        // The toast stays, and browsing the Notifications region meets its text once.
+        const [toast] = getToasts();
+        expect(toast).toHaveTextContent(new RegExp(`^${label}\\s*Upload\\s*Details here`));
+        expect(within(getViewport()).getAllByText('Upload')).toHaveLength(1);
+        expect(vi.getTimerCount()).toBe(0);
+      },
+    );
+
+    it('clears each toast on its own schedule and announces a replacement again', () => {
+      const { dispatch } = renderToaster();
+      dispatch({ toastId: 'save', title: 'Saving…', timeout: 0 });
+      advance(1500);
+      dispatch({ title: 'Other', timeout: 0 });
+      const polite = getLiveRegion('polite');
+      expect(polite).toHaveTextContent('Info: Saving…');
+      expect(polite).toHaveTextContent('Info: Other');
+
+      advance(500);
+      expect(polite).not.toHaveTextContent('Saving…');
+      expect(polite).toHaveTextContent('Info: Other');
+
+      // Replacing the toast writes its new text again, with a fresh 2 s.
+      dispatch({ toastId: 'save', status: 'success', title: 'Saved', timeout: 0 });
+      expect(polite).toHaveTextContent('Success: Saved');
+      advance(1500);
+      expect(polite).not.toHaveTextContent('Other');
+      expect(polite).toHaveTextContent(/^Success: Saved$/);
+      advance(500);
+      expect(polite).toBeEmptyDOMElement();
+      expect(getToasts()).toHaveLength(2);
+    });
   });
 });
 
@@ -465,23 +557,27 @@ describe('Toaster: timers (feedback-navigation#13)', () => {
     expect(screen.queryByText('Quick')).not.toBeInTheDocument();
   });
 
-  it('keeps a timeout: 0 toast (no timer)', () => {
+  it('keeps a timeout: 0 toast (no dismiss timer)', () => {
     const { dispatch } = renderToaster();
     dispatch({ title: 'Sticky', timeout: 0 });
-    expect(vi.getTimerCount()).toBe(0);
+    // Only the timer that clears the announcement.
+    expect(vi.getTimerCount()).toBe(1);
     advance(60_000);
     expect(screen.getByText('Sticky')).toBeInTheDocument();
+    expect(vi.getTimerCount()).toBe(0);
   });
 
   it('dismisses one of two toasts with its Dismiss button', () => {
     const { dispatch } = renderToaster();
     dispatch({ title: 'First' });
     dispatch({ title: 'Second' });
+    expect(vi.getTimerCount()).toBe(4);
     const [first] = getToasts();
     fireEvent.click(within(first).getByRole('button', { name: 'Dismiss' }));
     expect(screen.queryByText('First')).not.toBeInTheDocument();
     expect(screen.getByText('Second')).toBeInTheDocument();
-    expect(vi.getTimerCount()).toBe(1);
+    // The other toast's dismiss timer and the timer that clears its announcement.
+    expect(vi.getTimerCount()).toBe(2);
     advance(5000);
     expect(getToasts()).toHaveLength(0);
   });
@@ -492,7 +588,8 @@ describe('Toaster: timers (feedback-navigation#13)', () => {
     const { dispatch, unmount } = renderToaster();
     dispatch({ title: 'One' });
     dispatch({ title: 'Two', timeout: 1000 });
-    expect(vi.getTimerCount()).toBe(2);
+    // A dismiss timer and an announcement-clearing timer per toast.
+    expect(vi.getTimerCount()).toBe(4);
     unmount();
     expect(vi.getTimerCount()).toBe(0);
     advance(10_000);
@@ -900,6 +997,172 @@ describe('Toaster: focus (feedback-navigation#12)', () => {
     screen.getByRole('button', { name: 'Inside' }).focus();
     await user.tab();
     expect(within(viewport).getByRole('button', { name: 'Dismiss' })).toHaveFocus();
+  });
+});
+
+describe('Toaster: beside an open modal side panel (feedback-navigation#50, WCAG 2.4.11)', () => {
+  // jsdom's window is 1024 × 768 and has no layout: the stand-in panel reports a stubbed box.
+  interface Box {
+    left: number;
+    right: number;
+    top: number;
+    bottom: number;
+  }
+  const END_EDGE: Box = { left: 704, right: 1024, top: 0, bottom: 768 };
+  const START_EDGE: Box = { left: 0, right: 320, top: 0, bottom: 768 };
+  const CENTERED: Box = { left: 262, right: 762, top: 184, bottom: 584 };
+  const FULL_WIDTH: Box = { left: 0, right: 1024, top: 0, bottom: 768 };
+
+  const toDomRect = ({ left, right, top, bottom }: Box): DOMRect =>
+    ({
+      left,
+      right,
+      top,
+      bottom,
+      width: right - left,
+      height: bottom - top,
+      x: left,
+      y: top,
+      toJSON: () => ({}),
+    }) as DOMRect;
+
+  /** Stand-in for an open Drawer: a modal layer (F4 `useDismiss`) whose surface has `box`. */
+  function StandInPanel({ open, box }: { open: boolean; box: { current: Box } }) {
+    const surfaceRef = React.useRef<HTMLElement | null>(null);
+    const { layerId } = useDismiss({
+      open,
+      onDismiss: () => {},
+      refs: [surfaceRef],
+      kind: 'modal',
+    });
+    const attach = React.useCallback(
+      (el: HTMLDivElement | null) => {
+        surfaceRef.current = el;
+        if (el) el.getBoundingClientRect = () => toDomRect(box.current);
+      },
+      [box],
+    );
+    if (!open) return null;
+    return (
+      <Portal layerId={layerId}>
+        <div ref={attach} role="dialog" aria-label="Filters">
+          <button type="button">Apply</button>
+        </div>
+      </Portal>
+    );
+  }
+
+  function setup(
+    options: { position?: ToasterProps['position']; box?: Box; open?: boolean; dir?: 'rtl' } = {},
+  ) {
+    const box = { current: options.box ?? END_EDGE };
+    const ui = (open: boolean) => (
+      <Toaster position={options.position}>
+        <StandInPanel open={open} box={box} />
+      </Toaster>
+    );
+    const utils = options.dir
+      ? renderWithProviders(ui(options.open ?? true), { dir: options.dir })
+      : render(ui(options.open ?? true));
+    return { ...utils, box, setOpen: (open: boolean) => utils.rerender(ui(open)) };
+  }
+
+  const offset = () => getViewport().style.getPropertyValue('--wave-toaster-offset');
+
+  it('moves bottom-end toasts beside a panel at the end edge, and back when it closes', () => {
+    const { setOpen } = setup({ open: false });
+    expect(offset()).toBe('');
+    expect(getViewport()).toHaveClass('bottom-4', 'end-4', 'me-(--wave-toaster-offset)');
+
+    setOpen(true);
+    // The panel is 320px wide: the toasts sit left of it, with the same 1rem gap as at the edge.
+    expect(offset()).toBe('320px');
+
+    setOpen(false);
+    expect(offset()).toBe('');
+  });
+
+  it('measures a panel that is already open when the Toaster mounts', () => {
+    setup();
+    expect(offset()).toBe('320px');
+  });
+
+  it.each([
+    ['bottom-end', END_EDGE, '320px'],
+    ['top-end', END_EDGE, '320px'],
+    ['bottom-start', START_EDGE, '320px'],
+    ['bottom-right', END_EDGE, '320px'],
+    ['bottom-left', START_EDGE, '320px'],
+    ['bottom-end', START_EDGE, ''],
+    ['bottom-start', END_EDGE, ''],
+    ['bottom-left', END_EDGE, ''],
+  ] as const)('%s toasts and a panel spanning %o: offset "%s"', (position, box, expected) => {
+    setup({ position, box });
+    expect(offset()).toBe(expected);
+  });
+
+  it('follows the direction: under RTL the end edge is the left', () => {
+    setup({ dir: 'rtl', box: START_EDGE });
+    expect(getViewport().closest('[dir]')).toHaveAttribute('dir', 'rtl');
+    expect(offset()).toBe('320px');
+  });
+
+  it('under RTL, ignores a panel at the right edge for end toasts but not for physical right ones', () => {
+    const { unmount } = setup({ dir: 'rtl', box: END_EDGE });
+    expect(offset()).toBe('');
+    unmount();
+    setup({ dir: 'rtl', box: END_EDGE, position: 'bottom-right' });
+    expect(offset()).toBe('320px');
+  });
+
+  it('ignores a modal surface that does not reach its corner (a centered Dialog)', () => {
+    setup({ box: CENTERED });
+    expect(offset()).toBe('');
+  });
+
+  it('keeps its place when there is no room beside the panel (full-width panel on a phone)', () => {
+    setup({ box: FULL_WIDTH });
+    expect(offset()).toBe('');
+  });
+
+  it('measures again when the window is resized', () => {
+    const { box } = setup();
+    expect(offset()).toBe('320px');
+    box.current = { ...END_EDGE, left: 624 };
+    act(() => {
+      window.dispatchEvent(new Event('resize'));
+    });
+    expect(offset()).toBe('400px');
+  });
+
+  it('keeps the offset for a Dialog opened on top of the panel', () => {
+    const box = { current: END_EDGE };
+    const dialogBox = { current: CENTERED };
+    render(
+      <Toaster>
+        <StandInPanel open box={box} />
+        <StandInPanel open box={dialogBox} />
+      </Toaster>,
+    );
+    expect(offset()).toBe('320px');
+  });
+
+  it("keeps the consumer's style next to the offset", () => {
+    const box = { current: END_EDGE };
+    const { rerender } = render(
+      <Toaster style={{ gap: '12px' }}>
+        <StandInPanel open box={box} />
+      </Toaster>,
+    );
+    expect(getViewport()).toHaveStyle({ gap: '12px' });
+    expect(offset()).toBe('320px');
+    rerender(
+      <Toaster style={{ gap: '12px' }}>
+        <StandInPanel open={false} box={box} />
+      </Toaster>,
+    );
+    expect(getViewport()).toHaveStyle({ gap: '12px' });
+    expect(offset()).toBe('');
   });
 });
 

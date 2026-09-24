@@ -1,7 +1,7 @@
 import * as React from 'react';
 import type { Meta, StoryObj } from '@storybook/react';
 import { fn } from 'storybook/test';
-import { Button, Toast, Toaster, useToastController } from '../src';
+import { Button, Drawer, Toast, Toaster, useToastController } from '../src';
 import type { ToastProps } from '../src';
 
 const meta = {
@@ -136,6 +136,49 @@ export const ToasterTopStart: Story = {
   render: (args) => (
     <Toaster position="top-start">
       <ToasterDemo {...args} />
+    </Toaster>
+  ),
+};
+
+/** A Drawer whose Notify button shows a persistent toast while the drawer is open. */
+function DrawerWithToasts({ status, title, children }: ToastProps) {
+  const { dispatchToast } = useToastController();
+  const body = typeof children === 'string' ? children : undefined;
+  return (
+    <Drawer title="Filters">
+      <Drawer.Trigger>
+        <Button appearance="primary">Open drawer</Button>
+      </Drawer.Trigger>
+      <p>Toasts shown while the drawer is open sit beside it and never cover its actions.</p>
+      <div className="mt-4 flex justify-end gap-2">
+        <Button
+          onClick={() =>
+            dispatchToast({ status, title: title ?? 'Notification', body, timeout: 0 })
+          }
+        >
+          Notify
+        </Button>
+        <Drawer.Close>
+          <Button appearance="primary">Apply</Button>
+        </Drawer.Close>
+      </div>
+    </Drawer>
+  );
+}
+
+/**
+ * While a Drawer (or another modal panel) is open on the toasts' side, the toasts move beside it,
+ * so they never hide its focused controls. Tab reaches them from inside the drawer.
+ */
+export const ToasterBesideDrawer: Story = {
+  args: {
+    title: 'Filters saved',
+    status: 'success',
+    children: 'Dismiss this toast with its button.',
+  },
+  render: (args) => (
+    <Toaster>
+      <DrawerWithToasts {...args} />
     </Toaster>
   ),
 };
