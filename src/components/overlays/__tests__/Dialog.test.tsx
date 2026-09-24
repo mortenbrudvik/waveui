@@ -285,6 +285,24 @@ describe('Dialog', () => {
       expect(icon).toHaveAttribute('data-wave-icon', 'dismiss');
       expect(icon).toHaveAttribute('aria-hidden', 'true');
     });
+
+    it('names the Close button with closeLabel (overlays-modal-code-2)', async () => {
+      const user = userEvent.setup();
+      const onOpenChange = vi.fn();
+      render(
+        <Basic
+          dialogProps={{ defaultOpen: true, onOpenChange }}
+          contentProps={{ title: 'Slett fil?', closeLabel: 'Lukk' }}
+        />,
+      );
+      const dialog = screen.getByRole('dialog', { name: 'Slett fil?' });
+      expect(screen.queryByRole('button', { name: 'Close' })).not.toBeInTheDocument();
+      expect(dialog).not.toHaveAttribute('closeLabel');
+      expect(dialog).not.toHaveAttribute('closelabel');
+      await user.click(button('Lukk'));
+      expect(onOpenChange).toHaveBeenCalledWith(false);
+      expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+    });
   });
 
   describe('theme and tokens', () => {
@@ -301,6 +319,17 @@ describe('Dialog', () => {
       expect(backdrop()).toHaveClass('bg-backdrop');
       expect(dialog.className).not.toMatch(/#|rgba|black|white/);
       expect(backdrop().className).not.toMatch(/#|rgba|black|white/);
+    });
+
+    it('draws its edge with the border token, visible in high contrast and forced colors (overlays-modal-code-1)', () => {
+      // The page, the backdrop and the surface are all black in high contrast and the shadow is
+      // black too (forced colors drop it): only a border marks the surface, as on the other overlays.
+      renderWithProviders(<Basic dialogProps={{ defaultOpen: true }} />, {
+        theme: 'high-contrast',
+      });
+      const dialog = screen.getByRole('dialog');
+      expect(dialog.closest('.wave-high-contrast')).not.toBeNull();
+      expect(dialog).toHaveClass('border', 'border-border');
     });
   });
 
@@ -338,6 +367,27 @@ describe('Dialog', () => {
       );
       expect(screen.getByRole('dialog', { name: 'Rich title' })).toBeInTheDocument();
     });
+
+    it.each([
+      ['an empty array', []],
+      ['true', true],
+      ['an array of empty values', [null, false, '']],
+    ] as const)(
+      'renders no heading for a title that renders nothing (%s) and keeps the other name',
+      (_, title) => {
+        render(
+          <Dialog defaultOpen>
+            <Dialog.Content title={title} aria-label="Quick settings">
+              Body
+            </Dialog.Content>
+          </Dialog>,
+        );
+        expect(screen.queryByRole('heading')).not.toBeInTheDocument();
+        expect(screen.getByRole('dialog', { name: 'Quick settings' })).not.toHaveAttribute(
+          'aria-labelledby',
+        );
+      },
+    );
 
     it('names the dialog with Dialog.Title', () => {
       render(
@@ -421,6 +471,71 @@ describe('Dialog', () => {
       expect(screen.getByRole('dialog', { name: 'Strict title' })).toBeInTheDocument();
       expect(warn).not.toHaveBeenCalled();
       warn.mockRestore();
+    });
+
+    describe('titles that change while open (overlays-modal-tests-3)', () => {
+      /** The surface is named by an element in the document with that name. */
+      function expectNamedBy(name: string) {
+        const dialog = screen.getByRole('dialog', { name });
+        const labelledBy = dialog.getAttribute('aria-labelledby') ?? '';
+        expect(document.getElementById(labelledBy)).toHaveTextContent(name);
+      }
+
+      it('follows a Dialog.Title that replaces another', () => {
+        function Steps({ step }: { step: 'loading' | 'edit' }) {
+          return (
+            <Dialog defaultOpen>
+              <Dialog.Content>
+                {step === 'loading' ? (
+                  <Dialog.Title key="loading">Loading</Dialog.Title>
+                ) : (
+                  <Dialog.Title key="edit">Edit user</Dialog.Title>
+                )}
+              </Dialog.Content>
+            </Dialog>
+          );
+        }
+        const { rerender } = render(<Steps step="loading" />);
+        expectNamedBy('Loading');
+        rerender(<Steps step="edit" />);
+        expectNamedBy('Edit user');
+        rerender(<Steps step="loading" />);
+        expectNamedBy('Loading');
+      });
+
+      it('falls back to the remaining title when the first of two is removed', () => {
+        function Titles({ showFirst }: { showFirst: boolean }) {
+          return (
+            <Dialog defaultOpen>
+              <Dialog.Content>
+                {showFirst && <Dialog.Title>Loading</Dialog.Title>}
+                <Dialog.Title>Edit user</Dialog.Title>
+              </Dialog.Content>
+            </Dialog>
+          );
+        }
+        const { rerender } = render(<Titles showFirst />);
+        expectNamedBy('Loading');
+        rerender(<Titles showFirst={false} />);
+        expectNamedBy('Edit user');
+      });
+
+      it('follows a Dialog.Title whose id changes', () => {
+        function Titled({ id }: { id: string }) {
+          return (
+            <Dialog defaultOpen>
+              <Dialog.Content>
+                <Dialog.Title id={id}>Edit user</Dialog.Title>
+              </Dialog.Content>
+            </Dialog>
+          );
+        }
+        const { rerender } = render(<Titled id="first-title" />);
+        expect(screen.getByRole('dialog')).toHaveAttribute('aria-labelledby', 'first-title');
+        rerender(<Titled id="second-title" />);
+        expect(screen.getByRole('dialog')).toHaveAttribute('aria-labelledby', 'second-title');
+        expectNamedBy('Edit user');
+      });
     });
 
     it('does not warn when named by Dialog.Title', () => {
@@ -720,6 +835,41 @@ describe('Dialog', () => {
       expect(() => render(element)).toThrow(`[WaveUI] ${name} must be used within ${parent}`);
       error.mockRestore();
     });
+
+    describe('in production (x-errors-components-4)', () => {
+      afterEach(() => {
+        vi.unstubAllEnvs();
+      });
+
+      it('logs each misplaced part once, not on every render, and renders it inert', () => {
+        vi.stubEnv('NODE_ENV', 'production');
+        const error = vi.spyOn(console, 'error').mockImplementation(() => {});
+        function Misplaced({ tick }: { tick: number }) {
+          return (
+            <>
+              <Dialog.Trigger>
+                <button type="button">Open {tick}</button>
+              </Dialog.Trigger>
+              <Dialog defaultOpen>
+                <Dialog.Title>Orphan title</Dialog.Title>
+              </Dialog>
+            </>
+          );
+        }
+        const { rerender } = render(<Misplaced tick={0} />);
+        rerender(<Misplaced tick={1} />);
+        rerender(<Misplaced tick={2} />);
+        expect(error.mock.calls).toEqual([
+          ['[WaveUI] Dialog.Trigger must be used within Dialog'],
+          ['[WaveUI] Dialog.Title must be used within Dialog.Content'],
+        ]);
+        // Inert: the trigger renders but opens nothing.
+        fireEvent.click(button('Open 2'));
+        expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+        expect(screen.getByRole('heading', { name: 'Orphan title' })).toBeInTheDocument();
+        error.mockRestore();
+      });
+    });
   });
 
   describe('keyboard and focus (overlays#3, overlays#31)', () => {
@@ -873,23 +1023,45 @@ describe('Dialog', () => {
       expect(screen.getByRole('dialog')).toContainElement(document.activeElement as HTMLElement);
     });
 
-    it('focuses finalFocusRef when the opener was removed', async () => {
+    it('focuses finalFocusRef instead of the trigger that opened the dialog (overlays-modal-tests-1)', async () => {
+      const user = userEvent.setup();
+      function WithFinalFocus() {
+        const ref = React.useRef<HTMLButtonElement>(null);
+        return (
+          <>
+            <button type="button" ref={ref}>
+              Elsewhere
+            </button>
+            <Basic dialogProps={{ finalFocusRef: ref }} />
+          </>
+        );
+      }
+      render(<WithFinalFocus />);
+      await user.click(button('Open'));
+      await user.keyboard('{Escape}');
+      expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+      // The trigger is still there and could take focus: only finalFocusRef sends it elsewhere.
+      expect(button('Elsewhere')).toHaveFocus();
+    });
+
+    it('focuses finalFocusRef, not the neighbour of the removed opener', async () => {
       const user = userEvent.setup();
       function RemovableOpener() {
         const [open, setOpen] = React.useState(false);
         const [showOpener, setShowOpener] = React.useState(true);
-        const nextRef = React.useRef<HTMLButtonElement>(null);
+        const summaryRef = React.useRef<HTMLButtonElement>(null);
         return (
           <>
+            <button type="button" ref={summaryRef}>
+              Summary
+            </button>
             {showOpener && (
               <button type="button" onClick={() => setOpen(true)}>
                 Delete row
               </button>
             )}
-            <button type="button" ref={nextRef}>
-              Next row
-            </button>
-            <Dialog open={open} onOpenChange={setOpen} finalFocusRef={nextRef}>
+            <button type="button">Next row</button>
+            <Dialog open={open} onOpenChange={setOpen} finalFocusRef={summaryRef}>
               <Dialog.Content title="Confirm delete">
                 <button
                   type="button"
@@ -909,7 +1081,8 @@ describe('Dialog', () => {
       await user.click(button('Delete row'));
       await user.click(button('Confirm'));
       expect(screen.queryByRole('button', { name: 'Delete row' })).not.toBeInTheDocument();
-      expect(button('Next row')).toHaveFocus();
+      // Without finalFocusRef, the fallback would pick 'Next row' (the element after the opener).
+      expect(button('Summary')).toHaveFocus();
     });
 
     it('returns focus to the button inside an asChild={false} wrapper span', async () => {
@@ -1119,6 +1292,34 @@ describe('Dialog', () => {
         expect(screen.getByRole('dialog', { name: 'Scoped' })).toBeInTheDocument();
         await user.keyboard('{Escape}');
         expect(button('External')).toHaveFocus();
+      });
+
+      it('forgets a trigger click the parent rejected also when nothing has focus (Safari, overlays-modal-tests-2)', async () => {
+        const user = userEvent.setup();
+        render(<TriggersAndExternal acceptTriggers={false} />);
+        // Plain clicks: focus stays on <body>, so the restore cannot capture the opener.
+        fireEvent.click(button('Second'));
+        expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+        // A later click is a later task.
+        await act(() => new Promise((resolve) => setTimeout(resolve, 0)));
+
+        expect(document.activeElement).toBe(document.body);
+        fireEvent.click(button('External'));
+        expect(screen.getByRole('dialog', { name: 'Scoped' })).toBeInTheDocument();
+        await user.keyboard('{Escape}');
+        // No trigger opened this session: the documented fallback is the first mounted trigger.
+        expect(button('First')).toHaveFocus();
+      });
+
+      it('returns focus to a trigger clicked without focus whose click the parent accepted (Safari)', async () => {
+        const user = userEvent.setup();
+        render(<TriggersAndExternal />);
+        fireEvent.click(button('Second'));
+        expect(screen.getByRole('dialog', { name: 'Scoped' })).toBeInTheDocument();
+        // The session keeps the activated trigger past the end of the opening task.
+        await act(() => new Promise((resolve) => setTimeout(resolve, 0)));
+        await user.keyboard('{Escape}');
+        expect(button('Second')).toHaveFocus();
       });
 
       it.each([

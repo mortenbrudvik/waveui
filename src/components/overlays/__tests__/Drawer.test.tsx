@@ -18,6 +18,7 @@ import { useDismiss } from '../../../hooks/useDismiss';
 import { Portal } from '../../portal/Portal';
 import { getTopmostLayer } from '../../../lib/layers';
 import {
+  asClientReference,
   expectNoA11yViolations,
   renderWithProviders,
   testCompoundExposure,
@@ -246,6 +247,22 @@ describe('Drawer', () => {
       expect(icon).toHaveAttribute('data-wave-icon', 'dismiss');
       expect(icon).toHaveAttribute('aria-hidden', 'true');
     });
+
+    it('names the Close button with closeLabel (overlays-modal-code-2)', async () => {
+      const user = userEvent.setup();
+      const onOpenChange = vi.fn();
+      render(
+        <Drawer defaultOpen title="Filtre" closeLabel="Lukk" onOpenChange={onOpenChange}>
+          Innhold
+        </Drawer>,
+      );
+      const panel = screen.getByRole('dialog', { name: 'Filtre' });
+      expect(screen.queryByRole('button', { name: 'Close' })).not.toBeInTheDocument();
+      expect(panel).not.toHaveAttribute('closelabel');
+      await user.click(button('Lukk'));
+      expect(onOpenChange).toHaveBeenCalledWith(false);
+      expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+    });
   });
 
   describe('positions (overlays#40)', () => {
@@ -264,6 +281,33 @@ describe('Drawer', () => {
       expect(screen.getByRole('dialog')).toHaveClass(expected);
     });
 
+    const edgeClasses = ['border-s', 'border-e', 'border-l', 'border-r'];
+    it.each([
+      [undefined, 'border-s'],
+      ['end', 'border-s'],
+      ['start', 'border-e'],
+      ['left', 'border-r'],
+      ['right', 'border-l'],
+    ] as const)(
+      'position %s draws a border on the inner edge only, %s (overlays-modal-code-1)',
+      (position, expected) => {
+        // High contrast paints the page, the backdrop and the panel black and the shadow is black
+        // too (forced colors drop it): only the border marks the edge facing the page.
+        renderWithProviders(
+          <Drawer defaultOpen position={position} title="Drawer">
+            Content
+          </Drawer>,
+          { theme: 'high-contrast' },
+        );
+        const dialog = screen.getByRole('dialog');
+        expect(dialog).toHaveClass(expected, 'border-border');
+        for (const other of edgeClasses.filter((edge) => edge !== expected)) {
+          expect(dialog).not.toHaveClass(other);
+        }
+        expect(dialog).not.toHaveClass('border');
+      },
+    );
+
     it('places a start drawer with logical utilities under rtl', () => {
       renderWithProviders(
         <Drawer defaultOpen position="start" title="Drawer">
@@ -273,8 +317,12 @@ describe('Drawer', () => {
       );
       const dialog = screen.getByRole('dialog');
       expect(dialog.closest('[data-wave-portal]')).toHaveAttribute('dir', 'rtl');
-      expect(dialog).toHaveClass('start-0');
-      expect(dialog).not.toHaveClass('left-0', 'right-0');
+      expect(dialog).toHaveClass('start-0', 'border-e');
+      // One class per assertion: a multi-class `not.toHaveClass` passes when any one is missing.
+      expect(dialog).not.toHaveClass('left-0');
+      expect(dialog).not.toHaveClass('right-0');
+      expect(dialog).not.toHaveClass('border-l');
+      expect(dialog).not.toHaveClass('border-r');
       expect(button('Close')).toHaveClass('ms-auto');
       expect(button('Close')).not.toHaveClass('ml-auto');
     });
@@ -605,6 +653,27 @@ describe('Drawer', () => {
         warn.mockRestore();
       });
 
+      it('does not warn that the drawer cannot open when its Fragment trigger appears after mount (overlays-modal-code-4)', async () => {
+        vi.useFakeTimers({ shouldAdvanceTime: true });
+        const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
+        const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+        try {
+          // `{isMobile && <>…</>}` with an SSR-safe media query: false in the first render.
+          const { rerender } = render(<ConditionalTrigger showTrigger={false} />);
+          rerender(<ConditionalTrigger showTrigger />);
+          act(() => {
+            vi.advanceTimersByTime(5000);
+          });
+          expect(warn).not.toHaveBeenCalled();
+          await user.click(button('Open'));
+          expect(screen.getByRole('dialog', { name: 'Fragment' })).toBeInTheDocument();
+          expect(warn).not.toHaveBeenCalled();
+        } finally {
+          warn.mockRestore();
+          vi.useRealTimers();
+        }
+      });
+
       it('finds a trigger in nested and keyed Fragments', async () => {
         const user = userEvent.setup();
         const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
@@ -767,7 +836,8 @@ describe('Drawer', () => {
       warn.mockRestore();
     });
 
-    it('warns in development when an uncontrolled closed drawer has no direct Drawer.Trigger', () => {
+    it('warns in development when an uncontrolled closed drawer still has no direct Drawer.Trigger a moment after mount', () => {
+      vi.useFakeTimers({ shouldAdvanceTime: true });
       const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
       // A component that renders the trigger makes it panel content: it can never open the drawer.
       function FilterTrigger() {
@@ -777,15 +847,26 @@ describe('Drawer', () => {
           </Drawer.Trigger>
         );
       }
-      render(
-        <Drawer title="Filters">
-          <FilterTrigger />
-        </Drawer>,
-      );
-      expect(screen.queryByRole('button', { name: 'Filters' })).not.toBeInTheDocument();
-      expect(warn).toHaveBeenCalledTimes(1);
-      expect(warn).toHaveBeenCalledWith(expect.stringContaining('[WaveUI] Drawer can never open'));
-      warn.mockRestore();
+      try {
+        render(
+          <Drawer title="Filters">
+            <FilterTrigger />
+          </Drawer>,
+        );
+        expect(screen.queryByRole('button', { name: 'Filters' })).not.toBeInTheDocument();
+        // Not at mount: a conditional trigger may still appear right after it.
+        expect(warn).not.toHaveBeenCalled();
+        act(() => {
+          vi.advanceTimersByTime(1000);
+        });
+        expect(warn).toHaveBeenCalledTimes(1);
+        expect(warn).toHaveBeenCalledWith(
+          expect.stringContaining('[WaveUI] Drawer has no way to open'),
+        );
+      } finally {
+        warn.mockRestore();
+        vi.useRealTimers();
+      }
     });
 
     it.each([
@@ -807,18 +888,26 @@ describe('Drawer', () => {
           </Drawer.Trigger>
         </React.Fragment>,
       ],
-    ] as const)('does not warn that the drawer can never open when %s', (_, props, trigger) => {
+    ] as const)('does not warn that the drawer cannot open when %s', (_, props, trigger) => {
+      vi.useFakeTimers({ shouldAdvanceTime: true });
       const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
-      render(
-        <React.StrictMode>
-          <Drawer title="Reachable" {...props}>
-            {trigger}
-            Body
-          </Drawer>
-        </React.StrictMode>,
-      );
-      expect(warn).not.toHaveBeenCalled();
-      warn.mockRestore();
+      try {
+        render(
+          <React.StrictMode>
+            <Drawer title="Reachable" {...props}>
+              {trigger}
+              Body
+            </Drawer>
+          </React.StrictMode>,
+        );
+        act(() => {
+          vi.advanceTimersByTime(5000);
+        });
+        expect(warn).not.toHaveBeenCalled();
+      } finally {
+        warn.mockRestore();
+        vi.useRealTimers();
+      }
     });
 
     it('stops walking the children for nested triggers once it has warned', () => {
@@ -901,6 +990,24 @@ describe('Drawer', () => {
       expect(screen.getByRole('dialog', { name: 'Rich title' })).toBeInTheDocument();
     });
 
+    it.each([
+      ['an empty array', []],
+      ['true', true],
+    ] as const)(
+      'renders no heading for a title that renders nothing (%s) and keeps the other name',
+      (_, title) => {
+        render(
+          <Drawer defaultOpen title={title} aria-label="Quick settings">
+            Body
+          </Drawer>,
+        );
+        expect(screen.queryByRole('heading')).not.toBeInTheDocument();
+        expect(screen.getByRole('dialog', { name: 'Quick settings' })).not.toHaveAttribute(
+          'aria-labelledby',
+        );
+      },
+    );
+
     it('names the panel with Drawer.Title', () => {
       render(
         <Drawer defaultOpen>
@@ -909,6 +1016,27 @@ describe('Drawer', () => {
         </Drawer>,
       );
       expect(screen.getByRole('dialog', { name: 'Notifications' })).toBeInTheDocument();
+    });
+
+    it('follows a Drawer.Title that replaces another while open (overlays-modal-tests-3)', () => {
+      function Steps({ step }: { step: 'loading' | 'edit' }) {
+        return (
+          <Drawer defaultOpen>
+            {step === 'loading' ? (
+              <Drawer.Title key="loading">Loading</Drawer.Title>
+            ) : (
+              <Drawer.Title key="edit">Edit user</Drawer.Title>
+            )}
+          </Drawer>
+        );
+      }
+      const { rerender } = render(<Steps step="loading" />);
+      expect(screen.getByRole('dialog', { name: 'Loading' })).toBeInTheDocument();
+      rerender(<Steps step="edit" />);
+      const panel = screen.getByRole('dialog', { name: 'Edit user' });
+      expect(
+        document.getElementById(panel.getAttribute('aria-labelledby') ?? ''),
+      ).toHaveTextContent('Edit user');
     });
 
     it('warns in development when the drawer has no accessible name', () => {
@@ -1221,6 +1349,78 @@ describe('Drawer', () => {
       render(<WithTrigger />);
       await user.click(button('Open filters'));
       await expectNoA11yViolations();
+    });
+  });
+
+  describe('parts written in a Server Component (x-ssr-1)', () => {
+    // A client component written in a Server Component reaches the client as a lazy reference.
+    const lazyParts = {
+      Trigger: asClientReference(DrawerTrigger),
+      Close: asClientReference(DrawerClose),
+      Title: asClientReference(DrawerTitle),
+    };
+    const plainParts = { Trigger: DrawerTrigger, Close: DrawerClose, Title: DrawerTitle };
+
+    function Filters({ parts }: { parts: typeof plainParts }) {
+      return (
+        <Drawer>
+          <parts.Trigger>
+            <button type="button">Open filters</button>
+          </parts.Trigger>
+          <parts.Title>Filters</parts.Title>
+          <p>Body</p>
+          <parts.Close>
+            <button type="button">Apply</button>
+          </parts.Close>
+        </Drawer>
+      );
+    }
+
+    it('server-renders the trigger in place, the same HTML as with the plain part types', () => {
+      const plain = renderToString(<Filters parts={plainParts} />);
+      expect(plain).toContain('Open filters');
+      expect(renderToString(<Filters parts={lazyParts} />)).toBe(plain);
+    });
+
+    it('renders the trigger in place, opens from it and closes like the plain parts', async () => {
+      const user = userEvent.setup();
+      const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+      const { container } = render(<Filters parts={lazyParts} />);
+      const trigger = button('Open filters');
+      expect(container).toContainElement(trigger);
+      expect(trigger).toHaveAttribute('aria-haspopup', 'dialog');
+      expect(screen.queryByText('Body')).not.toBeInTheDocument();
+
+      await user.click(trigger);
+      const panel = screen.getByRole('dialog', { name: 'Filters' });
+      expect(panel).toHaveTextContent('Body');
+      expect(panel).not.toContainElement(trigger);
+      expect(trigger).toHaveAttribute('aria-controls', panel.id);
+
+      await user.click(button('Apply'));
+      expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+      expect(trigger).toHaveFocus();
+      expect(warn).not.toHaveBeenCalled();
+      warn.mockRestore();
+    });
+
+    it('warns about a lazy Drawer.Trigger nested in an element, as about a plain one', () => {
+      const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+      const Trigger = lazyParts.Trigger;
+      render(
+        <Drawer title="Nested">
+          <div>
+            <Trigger>
+              <button type="button">Open</button>
+            </Trigger>
+          </div>
+        </Drawer>,
+      );
+      expect(warn).toHaveBeenCalledTimes(1);
+      expect(warn).toHaveBeenCalledWith(
+        expect.stringContaining('[WaveUI] Drawer.Trigger must be a direct child of Drawer'),
+      );
+      warn.mockRestore();
     });
   });
 });

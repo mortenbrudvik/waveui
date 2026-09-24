@@ -2,21 +2,20 @@ import * as React from 'react';
 import { cn } from '../../lib/cn';
 import { warnOnce } from '../../lib/dev';
 import { DismissIcon } from '../../lib/icons';
-import { mergeProps } from '../../lib/mergeProps';
-import { STATE_ARIA } from '../../lib/renderTrigger';
+import { slotRendersContent } from '../../lib/slot';
 import { useControllable, type SetValue } from '../../hooks/useControllable';
 import { useId } from '../../hooks/useId';
 import { useMergedRefs } from '../../hooks/useMergedRefs';
 import { useModalLayer } from '../../hooks/useModalLayer';
-import { useTriggerElement } from '../../hooks/useTriggerElement';
 import { Button } from '../button/Button';
 import { Portal } from '../portal/Portal';
 import {
   inertModalTrigger,
   ModalSurfaceContext,
+  useModalClosePart,
   useModalTitle,
   useModalTrigger,
-  useModalTriggerElement,
+  useModalTriggerPart,
   useModalTriggerSession,
   useRequiredContext,
   useTitleRegistry,
@@ -53,13 +52,20 @@ export interface DialogProps {
 export interface DialogContentProps extends Omit<React.HTMLAttributes<HTMLDivElement>, 'title'> {
   /**
    * Title rendered as the dialog's heading; it names the dialog (`aria-labelledby`). Without it,
-   * render a `Dialog.Title` or pass `aria-label`/`aria-labelledby`.
+   * render a `Dialog.Title` or pass `aria-label`/`aria-labelledby`. A title that renders nothing
+   * (`''`, `[]`, `true`) counts as none.
    */
   title?: React.ReactNode;
   /** Maximum width of the dialog: 400px (`small`) or 600px (`medium`); it never exceeds the viewport.
    * @default 'medium'
    */
   size?: 'small' | 'medium';
+  /**
+   * Accessible name of the built-in Close button (an icon-only button). Localize it with the
+   * page's language.
+   * @default 'Close'
+   */
+  closeLabel?: string;
   /** Content rendered inside the dialog body (put `Dialog.Footer` here as well). */
   children: React.ReactNode;
   /** Ref to the dialog surface (`role="dialog"`). */
@@ -159,42 +165,14 @@ function useDialogContext(componentName: string): DialogContextValue {
   return useRequiredContext(DialogContext, componentName, 'Dialog', () => inertDialogContext);
 }
 
-// A const arrow (like DrawerRoot): its type can be named in consumers' declaration files, e.g. a
-// story's `satisfies Meta<typeof Dialog>` (a function declaration's `typeof` cannot, TS4023).
-/**
- * A modal dialog (Fluent UI v2 style): `Dialog` holds the open state; `Dialog.Trigger` opens it and
- * `Dialog.Content` renders the surface in a portal while open.
- *
- * - **Modal**: focus moves into the dialog and Tab stays inside it (toasts included), the rest of
- *   the page is `inert` (instead of `aria-modal`, so toasts and live regions stay announced), and
- *   the page does not scroll.
- * - **Closing**: Escape (only the topmost layer: a popup opened inside closes first), a click on
- *   the backdrop (a drag that starts inside does not close it), the Close button and `Dialog.Close`.
- *   Focus returns to the first of these that can take focus: `finalFocusRef`, the element that had
- *   focus when the dialog opened, the trigger, an element next to where that opener was.
- * - **Naming**: give `Dialog.Content` a `title`, a `Dialog.Title`, or `aria-label`.
- *
- * The sub-components are also exported under flat names (`DialogTrigger`, `DialogContent`,
- * `DialogFooter`, `DialogTitle`, `DialogClose`) for React Server Components, which cannot use the
- * dotted form; dotted access (`Dialog.Content`) needs a client file.
- *
- * @example
- * <Dialog>
- *   <Dialog.Trigger><Button>Delete</Button></Dialog.Trigger>
- *   <Dialog.Content title="Delete file?">
- *     This cannot be undone.
- *     <Dialog.Footer>
- *       <Dialog.Close><Button appearance="subtle">Cancel</Button></Dialog.Close>
- *       <Button appearance="primary" onClick={remove}>Delete</Button>
- *     </Dialog.Footer>
- *   </Dialog.Content>
- * </Dialog>
- */
+// The root of `Dialog` (documented on the export below). A const arrow (like DrawerRoot): its type
+// can be named in consumers' declaration files, e.g. a story's `satisfies Meta<typeof Dialog>` (a
+// function declaration's `typeof` cannot, TS4023).
 const DialogRoot = ({ open, defaultOpen, onOpenChange, finalFocusRef, children }: DialogProps) => {
   const [isOpen, setOpen] = useControllable(open, defaultOpen ?? false, onOpenChange);
   const trigger = useModalTrigger();
-  // After Dialog.Content's focus restore (a child's layout effects run first), forget the trigger
-  // that opened this session.
+  // After Dialog.Content's focus restore (a child's layout effects run first), start the trigger
+  // session, or end it and forget the trigger that opened it.
   useModalTriggerSession(trigger, isOpen);
   const [contentId, setContentId] = React.useState<string | undefined>(undefined);
   const registerContentId = React.useCallback((id: string) => {
@@ -226,37 +204,13 @@ DialogRoot.displayName = 'Dialog';
  * the trigger when the dialog closes (with several triggers, to the one that opened it); with a
  * wrapper span, to the first focusable element in it.
  */
-export const DialogTrigger = ({ children, asChild, ref, ...rest }: DialogTriggerProps) => {
+export const DialogTrigger = (props: DialogTriggerProps) => {
   const { open, setOpen, trigger, contentId } = useDialogContext('Dialog.Trigger');
-  const { attach, activate } = useModalTriggerElement(trigger);
-  const mergedRef = useMergedRefs<HTMLElement>(attach, ref);
-  const openDialog = React.useCallback(
-    (event?: React.MouseEvent<HTMLElement>) => {
-      // Focus returns to this trigger, also when the dialog has several (overlays#9), and also when
-      // a render-prop child calls `onClick()` without the event.
-      activate(event);
-      setOpen(true);
-    },
-    [activate, setOpen],
+  return useModalTriggerPart<DialogTriggerRenderProps>(
+    { open, setOpen, trigger, controlsId: contentId },
+    props,
+    'Dialog.Trigger',
   );
-
-  // The explicit wrapper span (0.4 markup) carries no ARIA state: a generic span cannot.
-  const stateAria =
-    asChild === false && typeof children !== 'function'
-      ? {}
-      : {
-          'aria-haspopup': 'dialog' as const,
-          'aria-expanded': open,
-          'aria-controls': open ? contentId : undefined,
-        };
-  const triggerProps = mergeProps({ ...stateAria, onClick: openDialog, ref: mergedRef }, rest, {
-    oursWin: STATE_ARIA,
-  });
-
-  return useTriggerElement(children, triggerProps as DialogTriggerRenderProps, {
-    componentName: 'Dialog.Trigger',
-    asChild,
-  });
 };
 DialogTrigger.displayName = 'DialogTrigger';
 
@@ -267,15 +221,9 @@ DialogTrigger.displayName = 'DialogTrigger';
  * @example
  * <Dialog.Close><Button appearance="subtle">Cancel</Button></Dialog.Close>
  */
-export const DialogClose = ({ children, asChild, ref, ...rest }: DialogCloseProps) => {
+export const DialogClose = (props: DialogCloseProps) => {
   const { setOpen } = useDialogContext('Dialog.Close');
-  const mergedRef = useMergedRefs<HTMLElement>(ref);
-  const close = React.useCallback(() => setOpen(false), [setOpen]);
-  const closeProps = mergeProps({ onClick: close, ref: mergedRef }, rest);
-  return useTriggerElement(children, closeProps as DialogCloseRenderProps, {
-    componentName: 'Dialog.Close',
-    asChild,
-  });
+  return useModalClosePart<DialogCloseRenderProps>(setOpen, props, 'Dialog.Close');
 };
 DialogClose.displayName = 'DialogClose';
 
@@ -292,6 +240,7 @@ const sizeClasses: Record<'small' | 'medium', string> = {
 export const DialogContent = ({
   title,
   size = 'medium',
+  closeLabel = 'Close',
   children,
   className,
   id,
@@ -332,7 +281,7 @@ export const DialogContent = ({
 
   if (!open) return null;
 
-  const hasTitle = title !== undefined && title !== null && title !== false && title !== '';
+  const hasTitle = slotRendersContent(title);
 
   return (
     <Portal layerId={layer.layerId}>
@@ -345,7 +294,9 @@ export const DialogContent = ({
           tabIndex={-1}
           {...rest}
           className={cn(
-            'relative flex max-h-[calc(100dvh-2rem)] w-full flex-col rounded-lg bg-background p-6 text-foreground shadow-64',
+            // The border marks the surface where the shadow cannot: in high contrast the page,
+            // the backdrop and the surface are black, and forced colors drop shadows.
+            'relative flex max-h-[calc(100dvh-2rem)] w-full flex-col rounded-lg border border-border bg-background p-6 text-foreground shadow-64',
             sizeClasses[size],
             className,
           )}
@@ -360,7 +311,7 @@ export const DialogContent = ({
               appearance="subtle"
               size="small"
               icon={<DismissIcon />}
-              aria-label="Close"
+              aria-label={closeLabel}
               onClick={close}
               className="absolute end-4 top-4 text-muted-foreground"
             />
@@ -418,6 +369,35 @@ export const DialogFooter = ({ children, className, ref, ...rest }: DialogFooter
 };
 DialogFooter.displayName = 'DialogFooter';
 
+/**
+ * A modal dialog (Fluent UI v2 style): `Dialog` holds the open state; `Dialog.Trigger` opens it and
+ * `Dialog.Content` renders the surface in a portal while open.
+ *
+ * - **Modal**: focus moves into the dialog and Tab stays inside it (toasts included), the rest of
+ *   the page is `inert` (instead of `aria-modal`, so toasts and live regions stay announced), and
+ *   the page does not scroll.
+ * - **Closing**: Escape (only the topmost layer: a popup opened inside closes first), a click on
+ *   the backdrop (a drag that starts inside does not close it), the Close button and `Dialog.Close`.
+ *   Focus returns to the first of these that can take focus: `finalFocusRef`, the element that had
+ *   focus when the dialog opened, the trigger, an element next to where that opener was.
+ * - **Naming**: give `Dialog.Content` a `title`, a `Dialog.Title`, or `aria-label`.
+ *
+ * The sub-components are also exported under flat names (`DialogTrigger`, `DialogContent`,
+ * `DialogFooter`, `DialogTitle`, `DialogClose`) for React Server Components, which cannot use the
+ * dotted form; dotted access (`Dialog.Content`) needs a client file.
+ *
+ * @example
+ * <Dialog>
+ *   <Dialog.Trigger><Button>Delete</Button></Dialog.Trigger>
+ *   <Dialog.Content title="Delete file?">
+ *     This cannot be undone.
+ *     <Dialog.Footer>
+ *       <Dialog.Close><Button appearance="subtle">Cancel</Button></Dialog.Close>
+ *       <Button appearance="primary" onClick={remove}>Delete</Button>
+ *     </Dialog.Footer>
+ *   </Dialog.Content>
+ * </Dialog>
+ */
 export const Dialog = /* @__PURE__ */ Object.assign(DialogRoot, {
   Trigger: DialogTrigger,
   Content: DialogContent,

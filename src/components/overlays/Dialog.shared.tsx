@@ -1,15 +1,16 @@
 import * as React from 'react';
-import { isDev, warnOnce } from '../../lib/dev';
+import { reportMissingContext, warnOnce } from '../../lib/dev';
 import { getFirstTabbable, isFocusable } from '../../lib/focus';
+import { mergeProps } from '../../lib/mergeProps';
+import { STATE_ARIA } from '../../lib/renderTrigger';
+import type { SetValue } from '../../hooks/useControllable';
 import { useId } from '../../hooks/useId';
 import { useMergedRefs } from '../../hooks/useMergedRefs';
+import { useTriggerElement } from '../../hooks/useTriggerElement';
 
 /*
  * Internal helpers shared by Dialog and Drawer (P15). Not exported from the package.
  */
-
-const useIsomorphicLayoutEffect =
-  typeof document !== 'undefined' ? React.useLayoutEffect : React.useEffect;
 
 /** Returned by {@link useModalTrigger}. */
 export interface ModalTrigger {
@@ -23,9 +24,18 @@ export interface ModalTrigger {
   /**
    * Records the trigger that is opening the modal, for the open session that follows (anything that
    * is not an element is ignored). Focus returns to that trigger, not to another one of the same
-   * root. Triggers call it through {@link useModalTriggerElement}.
+   * root. Triggers call it through {@link useModalTriggerPart}.
+   *
+   * An activation the modal did not open for by the end of the task (a click that the parent of a
+   * controlled modal rejected) is dropped, so it does not decide where focus returns after a later
+   * open that no trigger started. React commits an accepted open within the same task.
    */
   activate: (target: unknown) => void;
+  /**
+   * Starts the open session: the activated trigger belongs to it until {@link endSession}.
+   * {@link useModalTriggerSession} calls it when the modal opens.
+   */
+  startSession: () => void;
   /**
    * Ends the open session: forgets the activated trigger, so it does not decide where focus
    * returns after a later open that no trigger started. {@link useModalTriggerSession} calls it
@@ -54,6 +64,7 @@ export interface ModalTrigger {
 export const inertModalTrigger: ModalTrigger = {
   attach: () => undefined,
   activate: () => {},
+  startSession: () => {},
   endSession: () => {},
   focusRef: { current: null },
 };
@@ -78,9 +89,11 @@ function resolveTriggerFocusTarget(node: HTMLElement): HTMLElement | null {
 function createModalTrigger(): ModalTrigger {
   // Every mounted trigger element, in the order they attached.
   const attached = new Set<HTMLElement>();
-  // The trigger clicked in the current open session; forgotten when the modal closes or the
-  // element detaches.
+  // The trigger clicked in the current open session (or in the task that is opening it);
+  // forgotten when the modal closes, when the element detaches, or when no open followed the click.
   let activated: HTMLElement | null = null;
+  // Whether an open session is running (between startSession and endSession).
+  let sessionOpen = false;
   return {
     attach: (element) => {
       // Detaching runs the cleanup below (React 19 and useMergedRefs call it instead of passing
@@ -93,9 +106,20 @@ function createModalTrigger(): ModalTrigger {
       };
     },
     activate: (target) => {
-      if (isElementTarget(target)) activated = target;
+      if (!isElementTarget(target)) return;
+      activated = target;
+      if (sessionOpen) return;
+      // An accepted open commits before the next task starts; a rejected click leaves the modal
+      // closed, and its activation must not outlive the task (overlays-modal-tests-2).
+      setTimeout(() => {
+        if (!sessionOpen && activated === target) activated = null;
+      }, 0);
+    },
+    startSession: () => {
+      sessionOpen = true;
     },
     endSession: () => {
+      sessionOpen = false;
       activated = null;
     },
     focusRef: {
@@ -118,7 +142,7 @@ function createModalTrigger(): ModalTrigger {
 /**
  * The triggers of a modal root (`Dialog`, `Drawer`), overlays#9. Each `Dialog.Trigger`/
  * `Drawer.Trigger` attaches its element and activates it from its click handler through
- * {@link useModalTriggerElement}; the root passes `focusRef` to `useModalLayer` as its
+ * {@link useModalTriggerPart}; the root passes `focusRef` to `useModalLayer` as its
  * `triggerRef` and scopes the activation to one open session with {@link useModalTriggerSession}.
  * Focus returns to the element that had focus when the modal opened; when nothing had focus, to
  * the trigger that opened it, else to the first mounted trigger. A wrapper `<span>` is not
@@ -132,7 +156,7 @@ export function useModalTrigger(): ModalTrigger {
 }
 
 /** Returned by {@link useModalTriggerElement}. */
-export interface ModalTriggerElement {
+interface ModalTriggerElement {
   /**
    * Callback ref for the element one trigger renders (merge it with the consumer's ref): registers
    * it with the root's triggers and remembers it for `activate`. Stable.
@@ -175,29 +199,116 @@ function createModalTriggerElement(trigger: ModalTrigger): ModalTriggerElement {
  * One `Dialog.Trigger`/`Drawer.Trigger` of a modal root (overlays#9): attach `attach` to the
  * element the trigger renders and call `activate` from its click handler.
  */
-export function useModalTriggerElement(trigger: ModalTrigger): ModalTriggerElement {
+function useModalTriggerElement(trigger: ModalTrigger): ModalTriggerElement {
   return React.useMemo(() => createModalTriggerElement(trigger), [trigger]);
 }
 
+/** The props of a trigger or close part (`Dialog.Trigger`, `Drawer.Close`, …). */
+export interface ModalPartProps<RenderProps> extends Omit<
+  React.HTMLAttributes<HTMLElement>,
+  'children'
+> {
+  /** A single element that receives the part's props, or a function that receives them. */
+  children: React.ReactNode | ((props: RenderProps) => React.ReactNode);
+  /** `false` renders a wrapper `<span>` carrying the click handler. */
+  asChild?: boolean;
+  /** Ref to the element the part renders. */
+  ref?: React.Ref<HTMLElement>;
+}
+
+/** What {@link useModalTriggerPart} reads from the modal root. */
+export interface ModalTriggerState {
+  open: boolean;
+  setOpen: SetValue<boolean>;
+  trigger: ModalTrigger;
+  /** The surface's id for `aria-controls` while the modal is open. */
+  controlsId: string | undefined;
+}
+
 /**
- * Scopes a trigger's activation to one open session (overlays#9): when the modal closes, the
- * activated trigger is forgotten, so a later open that no trigger started (a controlled modal
- * opened by the parent) does not return focus to it.
+ * Renders a `Dialog.Trigger`/`Drawer.Trigger`: its element gets `aria-haspopup="dialog"`,
+ * `aria-expanded`, `aria-controls` (while open; these always win over the child's own), a click
+ * handler that records the trigger (overlays#9) and opens the modal, and a ref that registers it
+ * with the root's triggers. The explicit wrapper span (`asChild={false}` with element children)
+ * carries no state ARIA: a generic span cannot.
  *
- * It clears the activation in a layout effect, after the modal's focus restore has used it: call
- * it in the root component (whose effects run after its children's) and, when that component also
- * calls `useModalLayer`, after that call (a component's effects run in order).
+ * @param modal         The root's state, from its context.
+ * @param props         The part's props.
+ * @param componentName The public name for development warnings, e.g. `'Dialog.Trigger'`.
+ */
+export function useModalTriggerPart<RenderProps>(
+  modal: ModalTriggerState,
+  { children, asChild, ref, ...rest }: ModalPartProps<RenderProps>,
+  componentName: string,
+): React.ReactNode {
+  const { open, setOpen, trigger, controlsId } = modal;
+  const { attach, activate } = useModalTriggerElement(trigger);
+  const mergedRef = useMergedRefs<HTMLElement>(attach, ref);
+  const openModal = React.useCallback(
+    (event?: React.MouseEvent<HTMLElement>) => {
+      // Focus returns to this trigger, also when the root has several (overlays#9), and also when
+      // a render-prop child calls `onClick()` without the event.
+      activate(event);
+      setOpen(true);
+    },
+    [activate, setOpen],
+  );
+
+  const stateAria =
+    asChild === false && typeof children !== 'function'
+      ? {}
+      : {
+          'aria-haspopup': 'dialog' as const,
+          'aria-expanded': open,
+          'aria-controls': open ? controlsId : undefined,
+        };
+  const triggerProps = mergeProps({ ...stateAria, onClick: openModal, ref: mergedRef }, rest, {
+    oursWin: STATE_ARIA,
+  });
+
+  return useTriggerElement(children, triggerProps as RenderProps, { componentName, asChild });
+}
+
+/**
+ * Renders a `Dialog.Close`/`Drawer.Close`: composes a click handler that closes the modal onto its
+ * element (the child's own `onClick` runs first; `preventDefault()` there keeps the modal open).
+ *
+ * @param setOpen       The root's setter, from its context.
+ * @param props         The part's props.
+ * @param componentName The public name for development warnings, e.g. `'Dialog.Close'`.
+ */
+export function useModalClosePart<RenderProps>(
+  setOpen: SetValue<boolean>,
+  { children, asChild, ref, ...rest }: ModalPartProps<RenderProps>,
+  componentName: string,
+): React.ReactNode {
+  const mergedRef = useMergedRefs<HTMLElement>(ref);
+  const close = React.useCallback(() => setOpen(false), [setOpen]);
+  const closeProps = mergeProps({ onClick: close, ref: mergedRef }, rest);
+  return useTriggerElement(children, closeProps as RenderProps, { componentName, asChild });
+}
+
+/**
+ * Scopes a trigger's activation to one open session (overlays#9): when the modal opens, the
+ * activated trigger joins the session; when it closes, the trigger is forgotten, so a later open
+ * that no trigger started (a controlled modal opened by the parent) does not return focus to it.
+ *
+ * It updates the session in a layout effect, after the modal's focus restore has used the
+ * activation: call it in the root component (whose effects run after its children's) and, when
+ * that component also calls `useModalLayer`, after that call (a component's effects run in order).
  */
 export function useModalTriggerSession(trigger: ModalTrigger, open: boolean): void {
-  useIsomorphicLayoutEffect(() => {
-    if (!open) trigger.endSession();
+  React.useLayoutEffect(() => {
+    if (open) trigger.startSession();
+    else trigger.endSession();
   }, [trigger, open]);
 }
 
 /**
  * C-CONTEXT: reads a compound component's context. Outside its root it throws
  * `[WaveUI] <componentName> must be used within <parentName>` in development, and in production
- * logs the same message and returns the inert value from `getInert`.
+ * logs the same message once per page (`reportMissingContext`) and returns the inert value from
+ * `getInert`.
  */
 export function useRequiredContext<T>(
   context: React.Context<T | null>,
@@ -207,9 +318,7 @@ export function useRequiredContext<T>(
 ): T {
   const value = React.useContext(context);
   if (value !== null) return value;
-  const message = `[WaveUI] ${componentName} must be used within ${parentName}`;
-  if (isDev) throw new Error(message);
-  console.error(message);
+  reportMissingContext(componentName, parentName);
   return getInert();
 }
 
