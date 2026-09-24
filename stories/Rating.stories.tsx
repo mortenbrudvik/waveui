@@ -1,17 +1,17 @@
-import * as React from 'react';
 import type { Meta, StoryObj } from '@storybook/react';
+import { fn } from 'storybook/test';
 import { Rating, RatingDisplay } from '../src';
+import { sizeArgType } from './_helpers';
 
 const meta = {
   title: 'Components/Input/Rating',
   component: Rating,
   argTypes: {
     max: { control: { type: 'number', min: 1, max: 10 } },
-    size: {
-      control: 'select',
-      options: ['extra-small', 'small', 'medium', 'large', 'extra-large'],
-    },
-    disabled: { control: 'boolean' },
+    ...sizeArgType,
+  },
+  args: {
+    onValueChange: fn(),
   },
 } satisfies Meta<typeof Rating>;
 
@@ -31,6 +31,14 @@ export const Large: Story = {
   },
 };
 
+/** Small stars keep a 24×24px target through padding. */
+export const Small: Story = {
+  args: {
+    defaultValue: 2,
+    size: 'extra-small',
+  },
+};
+
 export const TenStars: Story = {
   args: {
     max: 10,
@@ -42,6 +50,14 @@ export const Disabled: Story = {
   args: {
     value: 3,
     disabled: true,
+  },
+};
+
+/** A custom accessible name replaces the default "Rating". */
+export const Labelled: Story = {
+  args: {
+    'aria-label': 'Product quality',
+    defaultValue: 4,
   },
 };
 
