@@ -15,6 +15,7 @@ import {
   isDateInRange,
   isSameDay,
   isSameMonth,
+  isValidLocaleTag,
   minutesToTime,
   minutesToValue,
   normalizeTimeStep,
@@ -223,6 +224,16 @@ describe('dateUtils — locale format and parse', () => {
     const date = new Date(2025, 3, 3);
     expect(formatDate(date, 'not a locale!!')).toBe(formatDate(date));
     expect(fields(parseDate(formatDate(date), 'not a locale!!'))).toEqual([2025, 4, 3]);
+  });
+
+  it('isValidLocaleTag accepts the tags Intl accepts and rejects the ones the fallback replaces', () => {
+    for (const tag of ['en-US', 'de-DE', 'EN-us', 'fa-IR', 'en-US-u-ca-islamic', 'pt-BR']) {
+      expect(isValidLocaleTag(tag)).toBe(true);
+    }
+    for (const tag of ['de_DE', 'pt_BR', '', 'not a locale!!', 'x']) {
+      expect(isValidLocaleTag(tag)).toBe(false);
+      expect(formatDate(new Date(2025, 3, 3), tag)).toBe(formatDate(new Date(2025, 3, 3)));
+    }
   });
 });
 

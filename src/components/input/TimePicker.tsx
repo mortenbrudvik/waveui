@@ -2,9 +2,16 @@ import * as React from 'react';
 import { cn } from '../../lib/cn';
 import { joinIds } from '../../lib/aria';
 import { composeEventHandlers } from '../../lib/composeEventHandlers';
-import { isDev, warnDeprecated } from '../../lib/dev';
+import { warnDeprecated, warnOnce } from '../../lib/dev';
 import { CheckIcon, DismissIcon } from '../../lib/icons';
-import { disabledStyles, focusRing, forcedColors, inputBase, inputFocus } from '../../lib/styles';
+import {
+  disabledStyles,
+  focusRing,
+  forcedColors,
+  inputBase,
+  inputFocus,
+  inputInvalid,
+} from '../../lib/styles';
 import { useControllable } from '../../hooks/useControllable';
 import { useDismiss } from '../../hooks/useDismiss';
 import { useFieldContext, useFieldControl } from '../../hooks/useFieldControl';
@@ -23,6 +30,7 @@ import {
   normalizeTimeStep,
   timeToMinutes,
 } from './dateUtils';
+import { isInvalidLook } from './Input';
 
 /* ------------------------------------------------------------------ */
 /*  Option                                                             */
@@ -60,10 +68,13 @@ TimePickerOption.displayName = 'TimePickerOption';
 /*  TimePicker                                                         */
 /* ------------------------------------------------------------------ */
 
+/** Focus and key handlers the picker routes to its text input (C-ROUTING). */
+type RoutedHandlers = 'onFocus' | 'onBlur' | 'onKeyDown' | 'onKeyUp';
+
 /** Properties for the TimePicker component. */
 export interface TimePickerProps extends Omit<
   React.HTMLAttributes<HTMLDivElement>,
-  'onChange' | 'defaultValue' | 'placeholder'
+  'onChange' | 'defaultValue' | 'placeholder' | RoutedHandlers
 > {
   /** Controlled selected time in `HH:mm` (24-hour) format; `''` for no time. */
   value?: string;
@@ -85,7 +96,7 @@ export interface TimePickerProps extends Omit<
   format?: '12h' | '24h';
   /**
    * Minutes between options. A non-finite or non-positive value falls back to 30 (development
-   * error); fractions are floored.
+   * warning); fractions are floored.
    * @default 30
    */
   step?: number;
@@ -96,7 +107,7 @@ export interface TimePickerProps extends Omit<
   minTime?: string;
   /**
    * Latest time (inclusive): `HH:mm`, `HH:mm:ss` or `h:mm AM`. Invalid or reversed bounds give no
-   * options (development error, "No times available").
+   * options (development warning, "No times available").
    * @default '23:59'
    */
   maxTime?: string;
@@ -110,23 +121,46 @@ export interface TimePickerProps extends Omit<
    * @default false
    */
   disabled?: boolean;
-  /** Makes the input read-only: the list does not open and the value cannot change. */
+  /**
+   * Makes the input read-only: the list does not open and the value cannot change. Turning it (or
+   * `disabled`) on while the user is typing drops the typed text.
+   */
   readOnly?: boolean;
   /**
    * Whether to show a clear button when a time is selected (not shown while `readOnly`).
    * @default false
    */
   clearable?: boolean;
+  /** Controlled open state of the list (never shown while `disabled` or `readOnly`). */
+  open?: boolean;
+  /**
+   * Initial open state of the list for uncontrolled usage.
+   * @default false
+   */
+  defaultOpen?: boolean;
+  /** Called when the list opens or closes (only when the state changes). */
+  onOpenChange?: (open: boolean) => void;
   /** Form field name: the `HH:mm` value is submitted under it (hidden input). */
   name?: string;
   /** Id of the `<form>` the value belongs to, when the picker is outside it. */
   form?: string;
-  /** Blocks form submission while no time is selected; sets `aria-required` on the input. */
+  /**
+   * Blocks form submission while no time is selected; sets `aria-required` on the input. Like a
+   * native readonly input, a `readOnly` TimePicker does not block submission.
+   */
   required?: boolean;
   /** Native `autocomplete` of the input. @default 'off' */
   autoComplete?: string;
   /** Native `maxlength` of the input. */
   maxLength?: number;
+  /** Focus handler of the text input (the root keeps the other handlers). */
+  onFocus?: React.FocusEventHandler<HTMLInputElement>;
+  /** Blur handler of the text input. */
+  onBlur?: React.FocusEventHandler<HTMLInputElement>;
+  /** Key handler of the text input; `preventDefault()` skips the picker's own keys. */
+  onKeyDown?: React.KeyboardEventHandler<HTMLInputElement>;
+  /** Key handler of the text input. */
+  onKeyUp?: React.KeyboardEventHandler<HTMLInputElement>;
   /** Ref to the text input (the `role="combobox"` element); `ref` stays on the root. */
   controlRef?: React.Ref<HTMLInputElement>;
   /** Ref to the root element. */
@@ -165,6 +199,9 @@ function startsWithQuery(item: ListboxItem, text: string): boolean {
  *   Tab, an outside press or focus leaving closes it. Typed text kept after Escape closed the list
  *   still filters it when it reopens: a click resumes the option typing made active,
  *   ArrowDown/ArrowUp start at the first/last match.
+ * - `open`/`defaultOpen`/`onOpenChange` control the list. It closes when the picker becomes
+ *   disabled or read-only (uncontrolled `open`: it stays closed when the picker is enabled again),
+ *   and the text typed until then is dropped.
  * - Keys of an IME composition (its confirming Enter included) are left to the IME.
  * - `clearable` shows a clear button while a time is selected (not while read-only).
  * - The value is `HH:mm` (24-hour) whatever the display `format`; values off the `step` grid or
@@ -188,6 +225,9 @@ export const TimePicker = (props: TimePickerProps) => {
     disabled = false,
     readOnly,
     clearable = false,
+    open: openProp,
+    defaultOpen,
+    onOpenChange,
     name,
     form,
     required,
@@ -239,19 +279,22 @@ export const TimePicker = (props: TimePickerProps) => {
     [step, minTime, maxTime, format],
   );
 
+  // Once per invalid value and page (C-DEV), not once per instance and effect run.
   React.useEffect(() => {
-    if (isDev && !stepValid) {
-      console.error(
-        `[WaveUI] TimePicker: \`step\` must be a positive number of minutes (received ${String(step)}); ` +
+    if (!stepValid) {
+      warnOnce(
+        `TimePicker:step:${String(step)}`,
+        `TimePicker: \`step\` must be a positive number of minutes (received ${String(step)}); ` +
           `using ${DEFAULT_TIME_STEP}.`,
       );
     }
   }, [step, stepValid]);
 
   React.useEffect(() => {
-    if (isDev && !boundsValid) {
-      console.error(
-        `[WaveUI] TimePicker: \`minTime\`/\`maxTime\` must be times such as "09:00", "09:00:00" or ` +
+    if (!boundsValid) {
+      warnOnce(
+        `TimePicker:bounds:${minTime}|${maxTime}`,
+        `TimePicker: \`minTime\`/\`maxTime\` must be times such as "09:00", "09:00:00" or ` +
           `"9:00 AM" with minTime <= maxTime (received "${minTime}" / "${maxTime}"); no times are available.`,
       );
     }
@@ -260,11 +303,27 @@ export const TimePicker = (props: TimePickerProps) => {
   /* ---- open state, draft text and query -------------------------- */
 
   const interactive = !disabled && !readOnly;
-  const [open, setOpen] = React.useState(false);
-  // A picker that becomes disabled/read-only while open closes (own state: adjusted during render).
-  if (open && !interactive) setOpen(false);
+  const [openState, setOpen, openControlled] = useControllable<boolean>(
+    openProp,
+    defaultOpen ?? false,
+    onOpenChange,
+  );
+  const open = openState && interactive;
+  // A list hidden because the picker became disabled or read-only is closed for good
+  // (uncontrolled), so enabling the picker again does not bring it back; onOpenChange(false)
+  // reports it (a consumer callback, so from an effect). A controlled `open` stays the parent's.
+  React.useEffect(() => {
+    if (!interactive && openState && !openControlled) setOpen(false);
+  }, [interactive, openState, openControlled, setOpen]);
   /** Typed text; `null` shows the selected time's label (draft model). */
   const [draft, setDraft] = React.useState<string | null>(null);
+  // Locking the picker while the user types drops the typed text, so no later blur commits it
+  // (adjusted during render, C-HOOKS).
+  const [wasInteractive, setWasInteractive] = React.useState(interactive);
+  if (wasInteractive !== interactive) {
+    setWasInteractive(interactive);
+    if (!interactive) setDraft(null);
+  }
   /**
    * Filter text: the typed text only, never the selected time's label, so opening without an edit
    * shows every option. Typed text kept while the list is closed (Escape) keeps filtering it, so
@@ -278,10 +337,14 @@ export const TimePicker = (props: TimePickerProps) => {
   };
   const closeList = () => setOpen(false);
 
+  // A complete time in any spelling the commit accepts (`2:00pm`, `09:00 AM`, `14:00:00`) keeps its
+  // own option, so it stays listed and active, as Enter and blur commit it.
   const filter = React.useMemo(() => {
     const text = query.trim().toLowerCase();
     if (!text) return undefined;
-    return (item: ListboxItem) => matchesQuery(item, text);
+    const minutes = timeToMinutes(text);
+    const exact = Number.isNaN(minutes) ? null : minutesToValue(minutes);
+    return (item: ListboxItem) => item.value === exact || matchesQuery(item, text);
   }, [query]);
 
   /**
@@ -411,6 +474,9 @@ export const TimePicker = (props: TimePickerProps) => {
 
   const field = useFieldContext();
   const isRequired = required ?? field?.required ?? false;
+  // Like a native readonly input, a read-only picker is barred from constraint validation (the
+  // user could not fix it); its value is still submitted.
+  const validates = isRequired && !readOnly;
   const fieldProps = useFieldControl({
     id,
     'aria-label': ariaLabel,
@@ -421,6 +487,7 @@ export const TimePicker = (props: TimePickerProps) => {
     // `isRequired`.
     'aria-required': ariaRequired ?? required,
   });
+  const invalidLook = isInvalidLook(false, fieldProps['aria-invalid']);
 
   useFormReset(
     inputRef,
@@ -445,7 +512,7 @@ export const TimePicker = (props: TimePickerProps) => {
 
   const handleKeyDown = composeEventHandlers(
     onKeyDown,
-    (event: React.KeyboardEvent<HTMLDivElement>) => {
+    (event: React.KeyboardEvent<HTMLInputElement>) => {
       if (!interactive) return;
       // Enter commits the active option: the exact typed time, the first match of partial text,
       // or the option moved to with the arrow keys.
@@ -481,7 +548,7 @@ export const TimePicker = (props: TimePickerProps) => {
   };
 
   const handleBlur = composeEventHandlers(onBlur, () => {
-    if (draft !== null && !commitDraft(draft)) clearDraft();
+    if (interactive && draft !== null && !commitDraft(draft)) clearDraft();
   });
 
   const handleClear = () => {
@@ -547,6 +614,7 @@ export const TimePicker = (props: TimePickerProps) => {
               'border-b-stroke-accessible',
               inputFocus,
               disabledStyles,
+              invalidLook && inputInvalid,
               showClear && 'pe-8',
             )}
           />
@@ -579,7 +647,7 @@ export const TimePicker = (props: TimePickerProps) => {
           disabled={disabled}
           value={selectedValue}
           type="text"
-          required={isRequired}
+          required={validates}
           onInvalid={() => inputRef.current?.focus()}
         />
         {open && (

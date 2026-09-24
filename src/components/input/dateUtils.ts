@@ -153,6 +153,20 @@ export interface LocaleDateFormat {
   pattern: string;
 }
 
+/**
+ * Whether `Intl` accepts `locale` as a language tag. Every helper below falls back to the runtime
+ * default locale for a tag it rejects (the POSIX `de_DE`, `''`, a typo), so DatePicker warns about
+ * one in development.
+ */
+export function isValidLocaleTag(locale: string): boolean {
+  try {
+    Intl.getCanonicalLocales(locale);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 const DEFAULT_DATE_OPTIONS: Intl.DateTimeFormatOptions = {
   year: 'numeric',
   month: '2-digit',

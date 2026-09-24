@@ -6,7 +6,14 @@ import { warnDeprecated, warnOnce } from '../../lib/dev';
 import { getArrowIntent, getDirection } from '../../lib/direction';
 import { FOCUSABLE_SELECTOR } from '../../lib/focus';
 import { CalendarIcon, ChevronLeftIcon, ChevronRightIcon, DismissIcon } from '../../lib/icons';
-import { disabledStyles, focusRing, forcedColors, inputBase, inputFocus } from '../../lib/styles';
+import {
+  disabledStyles,
+  focusRing,
+  forcedColors,
+  inputBase,
+  inputFocus,
+  inputInvalid,
+} from '../../lib/styles';
 import { useControllable } from '../../hooks/useControllable';
 import { useDismiss } from '../../hooks/useDismiss';
 import { useFieldContext, useFieldControl } from '../../hooks/useFieldControl';
@@ -33,18 +40,23 @@ import {
   isDateInRange,
   isSameDay,
   isSameMonth,
+  isValidLocaleTag,
   parseDate as parseLocaleDate,
   startOfDay,
   startOfMonth,
 } from './dateUtils';
+import { isInvalidLook } from './Input';
 
 /** Why typed text was not accepted (see {@link DatePickerProps.onInvalidInput}). */
 export type DatePickerInvalidReason = 'unparseable' | 'out-of-range' | 'disabled';
 
+/** Focus and key handlers the picker routes to its text input (C-ROUTING). */
+type RoutedHandlers = 'onFocus' | 'onBlur' | 'onKeyDown' | 'onKeyUp';
+
 /** Properties for the DatePicker component. */
 export interface DatePickerProps extends Omit<
   React.HTMLAttributes<HTMLDivElement>,
-  'onChange' | 'defaultValue' | 'placeholder'
+  'onChange' | 'defaultValue' | 'placeholder' | RoutedHandlers
 > {
   /** Controlled selected date (`null` for none). Emitted dates are always local midnight. */
   value?: Date | null;
@@ -78,6 +90,8 @@ export interface DatePickerProps extends Omit<
    * and the browser format the same text. The grid is Gregorian: a locale calendar with other
    * months or eras (the Persian default of `fa-IR`, `-u-ca-islamic`, `-u-ca-japanese`) is replaced
    * by the Gregorian one in the locale's language and digits; the Buddhist years of `th-TH` stay.
+   * A tag `Intl` rejects (the POSIX `de_DE`, a typo) falls back to the runtime default locale
+   * (development warning).
    */
   locale?: string;
   /** Earliest selectable day (the whole day is included). */
@@ -96,7 +110,10 @@ export interface DatePickerProps extends Omit<
    * @default false
    */
   disabled?: boolean;
-  /** Makes the input read-only: the calendar does not open and the value cannot change. */
+  /**
+   * Makes the input read-only: the calendar does not open and the value cannot change. Turning it
+   * (or `disabled`) on while the user is typing drops the typed text.
+   */
   readOnly?: boolean;
   /**
    * Whether to show a clear button when a date is selected (not shown while `readOnly`).
@@ -129,10 +146,21 @@ export interface DatePickerProps extends Omit<
   name?: string;
   /** Id of the `<form>` the value belongs to, when the picker is outside it. */
   form?: string;
-  /** Blocks form submission while no date is selected; sets `aria-required` on the input. */
+  /**
+   * Blocks form submission while no date is selected; sets `aria-required` on the input. Like a
+   * native readonly input, a `readOnly` DatePicker does not block submission.
+   */
   required?: boolean;
   /** Native `autocomplete` of the input. @default 'off' */
   autoComplete?: string;
+  /** Focus handler of the text input (the root keeps the other handlers). */
+  onFocus?: React.FocusEventHandler<HTMLInputElement>;
+  /** Blur handler of the text input. */
+  onBlur?: React.FocusEventHandler<HTMLInputElement>;
+  /** Key handler of the text input; `preventDefault()` skips the picker's own keys. */
+  onKeyDown?: React.KeyboardEventHandler<HTMLInputElement>;
+  /** Key handler of the text input. */
+  onKeyUp?: React.KeyboardEventHandler<HTMLInputElement>;
   /** Ref to the text input; `ref` stays on the root. */
   controlRef?: React.Ref<HTMLInputElement>;
   /** Ref to the root element. */
@@ -163,7 +191,8 @@ function toWeeks(days: Date[]): Date[][] {
  *   `yyyy-mm-dd`. Text is committed on Enter, on Alt+ArrowDown (before the calendar opens) or when
  *   the field loses focus — only when it was edited, and only when it names a different day. Text
  *   that is not an available date is kept, the input is marked invalid and an error message
- *   describes it (`onInvalidInput`, reported once per edit).
+ *   describes it (`onInvalidInput`, reported once per edit) until the text is edited or replaced
+ *   (a day picked in the calendar, the clear button, a form reset, a new day from the parent).
  * - **Calendar**: the toggle (`aria-haspopup="dialog"`) or Alt+ArrowDown in the input opens a
  *   modal dialog labelled by the month heading. Focus moves to the selected day (else today, else
  *   the first available day of the month) and Tab stays inside. Arrow keys move by day/week
@@ -175,7 +204,7 @@ function toWeeks(days: Date[]): Date[][] {
  *   selected day is `aria-selected` on its gridcell and `aria-pressed` on its focusable button, so
  *   the state is announced when focus lands on it; today is `aria-current="date"`.
  * - The calendar closes when the picker becomes disabled or read-only (uncontrolled `open`: it
- *   stays closed when the picker is enabled again).
+ *   stays closed when the picker is enabled again), and the text typed until then is dropped.
  * - `clearable` shows a clear button while a date is selected (not while read-only).
  * - Every emitted date is local midnight. The calendar opens on the month of the selected date or
  *   today, clamped into `minDate`/`maxDate`.
@@ -248,6 +277,16 @@ export const DatePicker = (props: DatePickerProps) => {
       );
     }
   }, [hasCustomFormat, hasCustomParse]);
+  React.useEffect(() => {
+    if (locale !== undefined && !isValidLocaleTag(locale)) {
+      warnOnce(
+        `DatePicker:invalid-locale:${locale}`,
+        `DatePicker: \`locale\` "${locale}" is not a valid BCP 47 language tag (use hyphens, as ` +
+          'in "en-US"). The runtime default locale formats and parses the dates instead, so the ' +
+          'server and the browser may render different text.',
+      );
+    }
+  }, [locale]);
 
   const [selectedDate, setSelectedDate] = useControllable<Date | null>(
     valueProp,
@@ -283,6 +322,28 @@ export const DatePicker = (props: DatePickerProps) => {
   /** Typed text; `null` shows the formatted selected date (draft model). */
   const [draft, setDraft] = React.useState<string | null>(null);
   const [invalid, setInvalid] = React.useState<DatePickerInvalidReason | null>(null);
+
+  // Adjusted during render (C-HOOKS). Locking the picker (readOnly/disabled) while the user types
+  // drops the typed text and its error, so no later blur commits it (the value cannot change).
+  const [wasInteractive, setWasInteractive] = React.useState(interactive);
+  if (wasInteractive !== interactive) {
+    setWasInteractive(interactive);
+    if (!interactive) {
+      setDraft(null);
+      setInvalid(null);
+    }
+  }
+  // A selected day the parent changes replaces rejected text (commits clear it themselves), so the
+  // input never shows an error next to a valid value. Text the user is still typing stays.
+  const selectedDay = selectedDate ? formatISODate(selectedDate) : '';
+  const [seenDay, setSeenDay] = React.useState(selectedDay);
+  if (seenDay !== selectedDay) {
+    setSeenDay(selectedDay);
+    if (invalid !== null) {
+      setDraft(null);
+      setInvalid(null);
+    }
+  }
 
   const isUnavailable = (date: Date) =>
     !isDateInRange(date, minDate, maxDate) || !!disabledDates?.(startOfDay(date));
@@ -396,7 +457,6 @@ export const DatePicker = (props: DatePickerProps) => {
 
   /* ---- elements, popup primitives ---------------------------------- */
 
-  const rootRef = React.useRef<HTMLDivElement | null>(null);
   const inputRef = React.useRef<HTMLInputElement | null>(null);
   const toggleRef = React.useRef<HTMLButtonElement | null>(null);
   const gridRef = React.useRef<HTMLTableElement | null>(null);
@@ -404,7 +464,6 @@ export const DatePicker = (props: DatePickerProps) => {
   /** Where focus goes when the calendar closes (`null`: back to the toggle). */
   const restoreTargetRef = React.useRef<HTMLElement | null>(null);
   const [surface, setSurface] = React.useState<HTMLDivElement | null>(null);
-  const rootRefs = useMergedRefs<HTMLDivElement>(ref, rootRef);
   const inputRefs = useMergedRefs<HTMLInputElement>(controlRef, inputRef);
 
   const dialogId = useId('datepicker-dialog');
@@ -474,6 +533,9 @@ export const DatePicker = (props: DatePickerProps) => {
 
   const field = useFieldContext();
   const isRequired = required ?? field?.required ?? false;
+  // Like a native readonly input, a read-only picker is barred from constraint validation (the
+  // user could not fix it); its value is still submitted.
+  const validates = isRequired && !readOnly;
   const showOwnError = invalid !== null && !field?.hasErrorMessage;
   const fieldProps = useFieldControl({
     id,
@@ -485,16 +547,11 @@ export const DatePicker = (props: DatePickerProps) => {
     // `isRequired`.
     'aria-required': ariaRequired ?? required,
   });
+  const invalidLook = isInvalidLook(false, fieldProps['aria-invalid']);
 
-  useFormReset(
-    inputRef,
-    () => {
-      setSelectedDate(defaultValue ?? null);
-      setDraft(null);
-      setInvalid(null);
-    },
-    form,
-  );
+  // Through the commit path: the default is emitted as local midnight, and only when it names
+  // another day; the typed text and its error are dropped.
+  useFormReset(inputRef, () => commitDate(defaultValue ?? null), form);
 
   /* ---- handlers ---------------------------------------------------- */
 
@@ -506,7 +563,7 @@ export const DatePicker = (props: DatePickerProps) => {
 
   const handleInputKeyDown = composeEventHandlers(
     onKeyDown,
-    (event: React.KeyboardEvent<HTMLDivElement>) => {
+    (event: React.KeyboardEvent<HTMLInputElement>) => {
       // Keys that belong to an IME composition (its confirming Enter) are left to the IME.
       if (!interactive || event.nativeEvent.isComposing) return;
       if (event.key === 'Enter' && draft !== null) {
@@ -526,7 +583,7 @@ export const DatePicker = (props: DatePickerProps) => {
 
   const handleInputBlur = composeEventHandlers(onBlur, () => {
     // Text already rejected (Enter, Alt+ArrowDown) is kept without being reported again.
-    if (draft !== null && invalid === null) commitDraft(draft);
+    if (interactive && draft !== null && invalid === null) commitDraft(draft);
   });
 
   const handleToggle = () => {
@@ -625,7 +682,7 @@ export const DatePicker = (props: DatePickerProps) => {
   }
 
   return (
-    <div {...rest} ref={rootRefs} className={cn('relative inline-flex flex-col', className)}>
+    <div {...rest} ref={ref} className={cn('relative inline-flex flex-col', className)}>
       <div ref={setReference} className="relative flex items-center">
         <input
           ref={inputRefs}
@@ -653,6 +710,7 @@ export const DatePicker = (props: DatePickerProps) => {
             'border-b-stroke-accessible',
             inputFocus,
             disabledStyles,
+            invalidLook && inputInvalid,
             showClear ? 'pe-14' : 'pe-8',
           )}
         />
@@ -693,7 +751,7 @@ export const DatePicker = (props: DatePickerProps) => {
         disabled={disabled}
         value={selectedDate ? formatISODate(selectedDate) : ''}
         type="text"
-        required={isRequired}
+        required={validates}
         onInvalid={() => inputRef.current?.focus()}
       />
       {isOpen && (
@@ -718,7 +776,7 @@ export const DatePicker = (props: DatePickerProps) => {
                 onClick={preventIfDisabled(previousDisabled, () => navigateMonth(-1))}
                 className={cn(NAV_BUTTON_CLASSES, focusRing, disabledStyles)}
               >
-                <ChevronLeftIcon className="rtl:-scale-x-100" />
+                <ChevronLeftIcon className="wave-rtl:-scale-x-100" />
               </button>
               <h2 id={headingId} aria-live="polite" className="text-body-1 font-semibold">
                 {formatMonthYear(viewMonth, locale)}
@@ -731,7 +789,7 @@ export const DatePicker = (props: DatePickerProps) => {
                 onClick={preventIfDisabled(nextDisabled, () => navigateMonth(1))}
                 className={cn(NAV_BUTTON_CLASSES, focusRing, disabledStyles)}
               >
-                <ChevronRightIcon className="rtl:-scale-x-100" />
+                <ChevronRightIcon className="wave-rtl:-scale-x-100" />
               </button>
             </div>
             <table

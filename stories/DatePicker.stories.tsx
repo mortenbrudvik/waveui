@@ -46,14 +46,23 @@ export const WithMinMax: Story = {
   },
 };
 
-/** A custom display format needs its inverse `parseDate`, so typed dates are read the same way. */
+/**
+ * A custom display format needs its inverse `parseDate`, so typed dates are read the same way. It
+ * returns `null` for text that is not a date, impossible days (`2025-02-30`) included: `new Date`
+ * would roll them over into the next month.
+ */
 export const CustomFormat: Story = {
   args: {
     defaultValue: new Date(2025, 5, 15),
     formatDate: toISO,
     parseDate: (text: string) => {
       const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(text.trim());
-      return match ? new Date(Number(match[1]), Number(match[2]) - 1, Number(match[3])) : null;
+      if (!match) return null;
+      const [year, month, day] = [Number(match[1]), Number(match[2]), Number(match[3])];
+      const date = new Date(year, month - 1, day);
+      return date.getFullYear() === year && date.getMonth() === month - 1 && date.getDate() === day
+        ? date
+        : null;
     },
     placeholder: 'YYYY-MM-DD',
   },
