@@ -7,6 +7,7 @@ import { disabledStyles, focusRingInset } from '../../lib/styles';
 import type { SelectionMode } from '../../lib/types';
 import { useControllable } from '../../hooks/useControllable';
 import { useId } from '../../hooks/useId';
+import { getPartId } from './disclosureIds';
 
 /** Heading level of the element that wraps each Accordion trigger. */
 export type AccordionHeadingLevel = 1 | 2 | 3 | 4 | 5 | 6;
@@ -71,6 +72,19 @@ const INERT_ITEM: AccordionItemContextValue = {
 
 const IN_PANEL: AccordionPanelSlotValue = { extra: null, inPanel: true };
 
+/**
+ * `true` inside a wrapper component chain that holds only the item's Trigger (a Tooltip): the Item
+ * renders the heading around the wrapper, so the Trigger renders its button without one.
+ */
+const AccordionHeadingOutsideContext = React.createContext(false);
+
+/**
+ * Classes of the heading around each trigger button. `grid` stretches its child to the full row,
+ * so a wrapper between the heading and the button (a Tooltip's inline-block `<span>`) does not
+ * shrink the full-width button and move its chevron away from the row end.
+ */
+const HEADING_CLASS = 'm-0 grid';
+
 /** C-CONTEXT: throws in development, logs and returns an inert value in production. */
 function guardContext<T>(value: T | null, component: string, parent: string, inert: T): T {
   if (value) return value;
@@ -93,25 +107,12 @@ function useAccordionItemContext(component: string): AccordionItemContextValue {
   );
 }
 
-/**
- * Encodes an item value for use inside a DOM id without collisions: every character outside
- * `[A-Za-z0-9-]` (including `_`) becomes `_<hex code>_`, so `'a b'`, `'a.b'` and `'a_b'` stay
- * distinct.
- */
-function encodeIdPart(value: string): string {
-  return value.replace(/[^A-Za-z0-9-]/g, (char) => `_${char.charCodeAt(0).toString(16)}_`);
-}
-
-/** The one id helper (C-IDS): `${baseId}-${part}-${encoded value}`; `baseId` comes from `useId`. */
-function getAccordionId(baseId: string, part: 'trigger' | 'panel', value: string): string {
-  return `${baseId}-${part}-${encodeIdPart(value)}`;
-}
-
 /* ------------------------------------------------------------------ */
 /*  Accordion                                                          */
 /* ------------------------------------------------------------------ */
 
-interface AccordionBaseProps extends React.HTMLAttributes<HTMLDivElement> {
+/** Props shared by {@link AccordionSingleProps} and {@link AccordionMultipleProps}. */
+export interface AccordionBaseProps extends React.HTMLAttributes<HTMLDivElement> {
   /**
    * Level of the heading element (`<h1>`–`<h6>`) that wraps every trigger button (WAI-ARIA
    * Accordion pattern). Each `Accordion.Item` can override it.
@@ -288,9 +289,11 @@ const AccordionRoot = (props: AccordionProps) => {
       {/* A nested Accordion's direct children are not inside the outer Item. */}
       <AccordionItemContext.Provider value={null}>
         <AccordionPanelSlotContext.Provider value={null}>
-          <div ref={ref} className={cn('divide-y divide-border', className)} {...rest}>
-            {children}
-          </div>
+          <AccordionHeadingOutsideContext.Provider value={false}>
+            <div ref={ref} className={cn('divide-y divide-border', className)} {...rest}>
+              {children}
+            </div>
+          </AccordionHeadingOutsideContext.Provider>
         </AccordionPanelSlotContext.Provider>
       </AccordionItemContext.Provider>
     </AccordionContext.Provider>
@@ -374,6 +377,28 @@ function idOf(element: React.ReactElement<PartProps> | undefined): string | unde
   return typeof id === 'string' && id !== '' ? id : undefined;
 }
 
+/**
+ * Whether `node` is a chain of wrapper components, each with the next as its only child, that ends
+ * at an Accordion.Trigger: a Tooltip around the Trigger. The Item puts the heading around such a
+ * chain instead of inside it, so no heading ends up in a wrapper's phrasing `<span>`. Elements
+ * (`<div>`, `<span>`) render as written: the heading stays inside them.
+ */
+function wrapsTriggerOnly(node: unknown): boolean {
+  if (!React.isValidElement<PartProps>(node) || typeof node.type === 'string') return false;
+  if (
+    node.type === AccordionTrigger ||
+    node.type === AccordionPanel ||
+    node.type === AccordionRoot ||
+    node.type === AccordionItem
+  ) {
+    return false;
+  }
+  const child = node.props.children;
+  return (
+    React.isValidElement(child) && (child.type === AccordionTrigger || wrapsTriggerOnly(child))
+  );
+}
+
 function misplacedMessage(component: 'Accordion.Trigger' | 'Accordion.Panel'): string {
   return (
     `${component} was rendered inside the panel of an Accordion.Item, so it is not the item's ` +
@@ -390,6 +415,12 @@ function misplacedMessage(component: 'Accordion.Trigger' | 'Accordion.Panel'): s
  * around the Trigger). A component that renders a Trigger or Panel itself is not seen through: it
  * counts as panel content, and a development warning says so.
  *
+ * The trigger button sits in a heading (`headingLevel`). A wrapper component whose only child is
+ * the Trigger (a Tooltip, also several nested) goes inside that heading, around the button, so
+ * the heading never ends up in the wrapper's inline `<span>` and the button keeps the full row.
+ * An element such as a `<div>`, or a wrapper that holds more than the Trigger, renders as written,
+ * with the heading inside it.
+ *
  * Without a Trigger the item's `value` is the button label. Other children (plain text included)
  * are rendered in the panel, after the Panel's own content.
  */
@@ -405,6 +436,7 @@ const AccordionItem = ({
   const isOpen = accordion.openItems.includes(value);
   const { toggle: toggleValue, baseId } = accordion;
   const headingLevel = headingLevelProp ?? accordion.headingLevel;
+  const Heading: `h${AccordionHeadingLevel}` = `h${headingLevel}`;
 
   let triggerElement: React.ReactElement<PartProps> | undefined;
   let panelElement: React.ReactElement<PartProps> | undefined;
@@ -417,7 +449,17 @@ const AccordionItem = ({
     if (trigger || panel) {
       triggerElement ??= trigger;
       panelElement ??= panel;
-      parts.push(keyed);
+      parts.push(
+        wrapsTriggerOnly(child) ? (
+          <Heading key={key} className={HEADING_CLASS}>
+            <AccordionHeadingOutsideContext.Provider value={true}>
+              {child}
+            </AccordionHeadingOutsideContext.Provider>
+          </Heading>
+        ) : (
+          keyed
+        ),
+      );
     } else {
       extra.push(keyed);
     }
@@ -433,8 +475,8 @@ const AccordionItem = ({
     () => ({
       value,
       isOpen,
-      triggerId: triggerIdProp ?? getAccordionId(baseId, 'trigger', value),
-      panelId: panelIdProp ?? getAccordionId(baseId, 'panel', value),
+      triggerId: triggerIdProp ?? getPartId(baseId, 'trigger', value),
+      panelId: panelIdProp ?? getPartId(baseId, 'panel', value),
       hasPanelContent,
       headingLevel,
       toggle: () => toggleValue(value),
@@ -471,10 +513,12 @@ export interface AccordionTriggerProps extends React.ButtonHTMLAttributes<HTMLBu
 }
 
 /**
- * The button that opens and closes its Accordion.Item, wrapped in a heading (`headingLevel`).
- * Its props land on the `<button>`: `className` is merged (yours wins), `onClick` runs before the
- * toggle (call `event.preventDefault()` to keep the item as it is), `ref` receives the button, and
- * a non-empty `id` replaces the generated one (the panel's `aria-labelledby` follows it).
+ * The button that opens and closes its Accordion.Item, wrapped in a heading (`headingLevel`); when
+ * it is the only child of a wrapper component in the Item (a Tooltip), the heading goes around
+ * that wrapper instead (see `Accordion.Item`). Its props land on the `<button>`: `className` is
+ * merged (yours wins), `onClick` runs before the toggle (call `event.preventDefault()` to keep the
+ * item as it is), `ref` receives the button, and a non-empty `id` replaces the generated one (the
+ * panel's `aria-labelledby` follows it).
  */
 const AccordionTrigger = ({
   id: idProp,
@@ -491,42 +535,43 @@ const AccordionTrigger = ({
       warnOnce('Accordion.Trigger:inside-panel', misplacedMessage('Accordion.Trigger'));
     }
   }, [inPanel]);
+  const headingOutside = React.useContext(AccordionHeadingOutsideContext);
   const Heading: `h${AccordionHeadingLevel}` = `h${item.headingLevel}`;
   const state = item.isOpen ? 'open' : 'closed';
 
-  return (
-    <Heading className="m-0">
-      <button
-        type="button"
+  const button = (
+    <button
+      type="button"
+      className={cn(
+        'flex w-full items-center justify-between gap-2 px-4 py-3 text-start text-body-1 font-semibold text-foreground',
+        'not-disabled:not-aria-disabled:hover:bg-subtle-hover not-disabled:not-aria-disabled:active:bg-subtle-pressed',
+        disabledStyles,
+        focusRingInset,
+        className,
+      )}
+      {...rest}
+      // A misplaced Trigger (inside the panel) still toggles, but only the item's own trigger
+      // carries the item's id and panel reference.
+      id={idProp || (inPanel ? undefined : item.triggerId)}
+      // Only a panel region the item renders is referenced (none without panel content).
+      aria-controls={!inPanel && item.hasPanelContent ? item.panelId : undefined}
+      aria-expanded={item.isOpen}
+      data-state={state}
+      onClick={composeEventHandlers(onClick, item.toggle)}
+      ref={ref}
+    >
+      {children}
+      <ChevronDownIcon
+        size={16}
         className={cn(
-          'flex w-full items-center justify-between gap-2 px-4 py-3 text-start text-body-1 font-semibold text-foreground',
-          'not-disabled:not-aria-disabled:hover:bg-subtle-hover not-disabled:not-aria-disabled:active:bg-subtle-pressed',
-          disabledStyles,
-          focusRingInset,
-          className,
+          'shrink-0 transition-transform motion-reduce:transition-none',
+          item.isOpen && 'rotate-180',
         )}
-        {...rest}
-        // A misplaced Trigger (inside the panel) still toggles, but only the item's own trigger
-        // carries the item's id and panel reference.
-        id={idProp || (inPanel ? undefined : item.triggerId)}
-        // Only a panel region the item renders is referenced (none without panel content).
-        aria-controls={!inPanel && item.hasPanelContent ? item.panelId : undefined}
-        aria-expanded={item.isOpen}
-        data-state={state}
-        onClick={composeEventHandlers(onClick, item.toggle)}
-        ref={ref}
-      >
-        {children}
-        <ChevronDownIcon
-          size={16}
-          className={cn(
-            'shrink-0 transition-transform motion-reduce:transition-none',
-            item.isOpen && 'rotate-180',
-          )}
-        />
-      </button>
-    </Heading>
+      />
+    </button>
   );
+  // Inside a wrapper chain (a Tooltip) the Item has rendered the heading around the wrapper.
+  return headingOutside ? button : <Heading className={HEADING_CLASS}>{button}</Heading>;
 };
 AccordionTrigger.displayName = 'AccordionTrigger';
 

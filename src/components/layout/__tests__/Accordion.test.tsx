@@ -13,6 +13,7 @@ import {
   type AccordionTriggerProps,
   type AccordionPanelProps,
 } from '../Accordion';
+import { Tooltip } from '../../overlays/Tooltip';
 import type { SelectionMode } from '../../../lib/types';
 import {
   expectNoA11yViolations,
@@ -559,6 +560,78 @@ describe('Accordion - heading (layout#18)', () => {
         name: 'Level four',
       }),
     ).toBeInTheDocument();
+  });
+
+  it('a Tooltip around the Trigger renders inside the heading, which stretches it to the full row', async () => {
+    render(
+      <Accordion headingLevel={2} defaultOpenItem="x">
+        <Accordion.Item value="x">
+          <Tooltip content="Delivery times and costs">
+            <Accordion.Trigger>Shipping</Accordion.Trigger>
+          </Tooltip>
+          <Accordion.Panel>Ships in two days.</Accordion.Panel>
+        </Accordion.Item>
+      </Accordion>,
+    );
+    expect(screen.getAllByRole('heading')).toHaveLength(1);
+    const heading = screen.getByRole('heading', { level: 2, name: 'Shipping' });
+    const button = within(heading).getByRole('button', { name: 'Shipping' });
+    // The heading is the outer element: no heading inside the Tooltip's phrasing <span>.
+    expect(heading.closest('span')).toBeNull();
+    const tooltipWrapper = button.parentElement;
+    expect(tooltipWrapper?.tagName).toBe('SPAN');
+    expect(tooltipWrapper?.parentElement).toBe(heading);
+    // A grid heading stretches the inline-block wrapper, so the full-width button keeps its
+    // chevron at the end of the row.
+    expect(heading).toHaveClass('m-0', 'grid');
+    expect(button).toHaveClass('w-full');
+    expect(button).toHaveAccessibleDescription('Delivery times and costs');
+    const region = screen.getByRole('region', { name: 'Shipping' });
+    expect(button).toHaveAttribute('aria-controls', region.id);
+    expect(heading).not.toContainElement(region);
+    await expectNoA11yViolations();
+  });
+
+  it('a wrapper component chain around the Trigger alone moves inside the heading', () => {
+    render(
+      <Accordion>
+        <Accordion.Item value="x">
+          <WrapperStandIn>
+            <WrapperStandIn>
+              <Accordion.Trigger>Nested wrappers</Accordion.Trigger>
+            </WrapperStandIn>
+          </WrapperStandIn>
+        </Accordion.Item>
+      </Accordion>,
+    );
+    const heading = screen.getByRole('heading', { level: 3 });
+    expect(screen.getAllByRole('heading')).toHaveLength(1);
+    expect(heading.closest('span')).toBeNull();
+    expect(within(heading).getByRole('button', { name: 'Nested wrappers' })).toBeInTheDocument();
+  });
+
+  it('an element wrapper, or a wrapper that holds more than the Trigger, keeps the heading inside it', () => {
+    render(
+      <Accordion>
+        <Accordion.Item value="1">
+          <div data-testid="row">
+            <Accordion.Trigger>Element wrapper</Accordion.Trigger>
+          </div>
+        </Accordion.Item>
+        <Accordion.Item value="2">
+          <WrapperStandIn>
+            <Accordion.Trigger>Two children</Accordion.Trigger>
+            <span>Badge</span>
+          </WrapperStandIn>
+        </Accordion.Item>
+      </Accordion>,
+    );
+    const [first, second] = screen.getAllByRole('heading', { level: 3 });
+    expect(first.parentElement).toBe(screen.getByTestId('row'));
+    expect(within(first).getByRole('button', { name: 'Element wrapper' })).toBeInTheDocument();
+    expect(within(second).getByRole('button', { name: 'Two children' })).toBeInTheDocument();
+    expect(second).not.toHaveTextContent('Badge');
+    expect(screen.getByText('Badge').closest('h3')).toBeNull();
   });
 });
 

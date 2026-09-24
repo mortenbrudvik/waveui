@@ -96,7 +96,10 @@ export const WithDisabledTab: Story = {
   ),
 };
 
-/** `TabList.Panels` groups the panels after the tablist (use it when panels are wrapped). */
+/**
+ * `TabList.Panels` groups the panels after the tablist: use it to style the panel area, and for
+ * panels that components render themselves (the TabList cannot see those in its children).
+ */
 export const WithPanelsContainer: Story = {
   args: {
     defaultValue: 'tab2',

@@ -139,6 +139,58 @@ describe('TabList', () => {
       '[WaveUI] TabList.Panel must be used within <TabList>',
     );
   });
+
+  describe('re-rendering with unchanged state and inline callbacks does not re-render memoized tabs and panels (table-core#25)', () => {
+    const Tabs = React.memo(function Tabs({
+      onRender,
+    }: {
+      onRender: React.ProfilerOnRenderCallback;
+    }) {
+      return (
+        <React.Profiler id="tabs" onRender={onRender}>
+          <TabList.Tab value="a">Tab A</TabList.Tab>
+          <TabList.Tab value="b">Tab B</TabList.Tab>
+        </React.Profiler>
+      );
+    });
+    const Panels = React.memo(function Panels({
+      onRender,
+    }: {
+      onRender: React.ProfilerOnRenderCallback;
+    }) {
+      return (
+        <React.Profiler id="panels" onRender={onRender}>
+          <TabList.Panel value="a">Panel A</TabList.Panel>
+          <TabList.Panel value="b">Panel B</TabList.Panel>
+        </React.Profiler>
+      );
+    });
+
+    it.each<[string, Partial<TabListProps>, string]>([
+      ['uncontrolled with defaultValue', { defaultValue: 'b' }, 'Tab B'],
+      ['uncontrolled without a default (derived selection)', {}, 'Tab A'],
+      ['controlled', { value: 'b' }, 'Tab B'],
+    ])('%s', (_name, props, selectedTab) => {
+      const onRender = vi.fn();
+      function Host({ tick }: { tick: number }) {
+        return (
+          <TabList aria-label="Sections" data-tick={tick} {...props} onValueChange={() => {}}>
+            <Tabs onRender={onRender} />
+            <TabList.Panels>
+              <Panels onRender={onRender} />
+            </TabList.Panels>
+          </TabList>
+        );
+      }
+      const { rerender } = render(<Host tick={0} />);
+      expect(screen.getByRole('tabpanel', { name: selectedTab })).toBeInTheDocument();
+      const initial = onRender.mock.calls.length;
+      rerender(<Host tick={1} />);
+      rerender(<Host tick={2} />);
+      expect(screen.getByRole('tablist')).toHaveAttribute('data-tick', '2');
+      expect(onRender.mock.calls.length).toBe(initial);
+    });
+  });
 });
 
 describe('TabList - uncontrolled', () => {
@@ -383,6 +435,27 @@ describe('TabList - deprecated aliases (feedback-navigation#46, layout#16)', () 
     expect(onTabSelect).toHaveBeenLastCalledWith('b');
     expect(onValueChange).toHaveBeenCalledTimes(1);
     expect(onValueChange).toHaveBeenCalledWith('b');
+  });
+
+  it('onTabSelect does not fire when a disabled tab is clicked (layout#13)', async () => {
+    vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const user = userEvent.setup();
+    const onTabSelect = vi.fn();
+    render(
+      <TabList defaultValue="a" onTabSelect={onTabSelect}>
+        <TabList.Tab value="a">Tab A</TabList.Tab>
+        <TabList.Tab value="b" disabled>
+          Tab B
+        </TabList.Tab>
+        <TabList.Tab value="c" aria-disabled="true">
+          Tab C
+        </TabList.Tab>
+      </TabList>,
+    );
+    await user.click(tab('Tab B'));
+    await user.click(tab('Tab C'));
+    expect(onTabSelect).not.toHaveBeenCalled();
+    expect(tab('Tab A')).toHaveAttribute('aria-selected', 'true');
   });
 });
 
@@ -654,6 +727,96 @@ describe('TabList - registration and structure (layout#12)', () => {
     expect(within(panels).getByRole('tabpanel', { name: 'Tab B' })).toHaveTextContent('Panel B');
   });
 
+  /** Renders its children as they are, like an error boundary. */
+  function Boundary({ children }: { children: React.ReactNode }) {
+    return children;
+  }
+
+  it.each<[string, (panel: React.ReactNode) => React.ReactNode]>([
+    ['a wrapper component', (panel) => <WrapperStandIn>{panel}</WrapperStandIn>],
+    ['a component that renders its children', (panel) => <Boundary>{panel}</Boundary>],
+    ['Suspense', (panel) => <React.Suspense fallback={<p>Loading</p>}>{panel}</React.Suspense>],
+    [
+      'a <div> with other content',
+      (panel) => (
+        <div data-testid="panel-wrapper">
+          <p>Details</p>
+          {panel}
+        </div>
+      ),
+    ],
+  ])('renders a Panel wrapped in %s after the tablist, not inside it', async (_name, wrap) => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    render(
+      <TabList aria-label="Sections" defaultValue="a">
+        {threeTabs}
+        {wrap(<TabList.Panel value="a">Panel A</TabList.Panel>)}
+      </TabList>,
+    );
+    const tablist = screen.getByRole('tablist');
+    const panel = screen.getByRole('tabpanel', { name: 'Tab A' });
+    expect(tablist).not.toContainElement(panel);
+    expect(within(tablist).getAllByRole('tab')).toHaveLength(3);
+    expect(tab('Tab A')).toHaveAttribute('aria-controls', panel.id);
+    expect(warn).not.toHaveBeenCalled();
+    await expectNoA11yViolations();
+  });
+
+  function SettingsPanel() {
+    return <TabList.Panel value="a">Panel A</TabList.Panel>;
+  }
+
+  it.each<[string, React.ReactNode, string]>([
+    ['a component that renders the Panel itself', <SettingsPanel key="opaque" />, 'a'],
+    ['the same, while the Panel is hidden', <SettingsPanel key="opaque" />, 'b'],
+    [
+      'a wrapper that also holds a Tab',
+      <WrapperStandIn key="mixed">
+        <TabList.Tab value="d">Tab D</TabList.Tab>
+        <TabList.Panel value="a">Panel A</TabList.Panel>
+      </WrapperStandIn>,
+      'a',
+    ],
+  ])('warns once when a Panel ends up inside the tablist: %s', (_name, content, defaultValue) => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const renderTabList = () => (
+      <TabList defaultValue={defaultValue}>
+        {threeTabs}
+        {content}
+      </TabList>
+    );
+    const { rerender } = render(renderTabList());
+    rerender(renderTabList());
+    const messages = warn.mock.calls
+      .map(([message]) => String(message))
+      .filter((message) => message.includes('TabList.Panel'));
+    expect(messages).toHaveLength(1);
+    expect(messages[0]).toMatch(/^\[WaveUI\] TabList\.Panel .*role="tablist".*TabList\.Panels/);
+  });
+
+  it('Panels in TabList.Panels or after the tablist never warn, also when they show later', async () => {
+    const user = userEvent.setup();
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    function LaterPanel() {
+      return <TabList.Panel value="c">Panel C</TabList.Panel>;
+    }
+    render(
+      <TabList defaultValue="a">
+        {threeTabs}
+        <TabList.Panels>
+          <TabList.Panel value="a">Panel A</TabList.Panel>
+          <LaterPanel />
+        </TabList.Panels>
+        <TabList.Panel value="b">Panel B</TabList.Panel>
+      </TabList>,
+    );
+    await user.click(tab('Tab C'));
+    expect(screen.getByRole('tabpanel', { name: 'Tab C' })).toHaveTextContent('Panel C');
+    await user.click(tab('Tab B'));
+    expect(screen.getByRole('tabpanel', { name: 'Tab B' })).toHaveTextContent('Panel B');
+    expect(warn).not.toHaveBeenCalled();
+  });
+
   it('keeps keyed tabs mounted (and focused) when they are reordered', async () => {
     const renderTabs = (order: string[]) => (
       <TabList defaultValue="b">
@@ -862,10 +1025,8 @@ describe('TabList - disabled tabs (layout#13)', () => {
   it('clicking a disabled tab does not select it', async () => {
     const user = userEvent.setup();
     const onValueChange = vi.fn();
-    const onTabSelect = vi.fn();
-    vi.spyOn(console, 'warn').mockImplementation(() => {});
     render(
-      <TabList defaultValue="a" onValueChange={onValueChange} onTabSelect={onTabSelect}>
+      <TabList defaultValue="a" onValueChange={onValueChange}>
         {withDisabledB}
         <TabList.Tab value="d" aria-disabled="true">
           Tab D
@@ -875,7 +1036,6 @@ describe('TabList - disabled tabs (layout#13)', () => {
     await user.click(tab('Tab B'));
     await user.click(tab('Tab D'));
     expect(onValueChange).not.toHaveBeenCalled();
-    expect(onTabSelect).not.toHaveBeenCalled();
     expect(tab('Tab A')).toHaveAttribute('aria-selected', 'true');
   });
 

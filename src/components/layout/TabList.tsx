@@ -1,7 +1,7 @@
 import * as React from 'react';
 import { cn } from '../../lib/cn';
 import { composeEventHandlers } from '../../lib/composeEventHandlers';
-import { isDev, resolveDeprecatedProp, warnDeprecated } from '../../lib/dev';
+import { isDev, resolveDeprecatedProp, warnDeprecated, warnOnce } from '../../lib/dev';
 import { disabledStyles, focusRing, focusRingInset } from '../../lib/styles';
 import type { Orientation } from '../../lib/types';
 import { useControllable } from '../../hooks/useControllable';
@@ -9,6 +9,7 @@ import { useEventCallback } from '../../hooks/useEventCallback';
 import { useId } from '../../hooks/useId';
 import { useMergedRefs } from '../../hooks/useMergedRefs';
 import { useRovingTabIndex } from '../../hooks/useRovingTabIndex';
+import { getPartId } from './disclosureIds';
 
 /* ------------------------------------------------------------------ */
 /*  Context                                                            */
@@ -141,20 +142,6 @@ function useTabListContext(component: string): TabListContextValue {
   return INERT_CONTEXT;
 }
 
-/**
- * Encodes a tab value for use inside a DOM id without collisions: every character outside
- * `[A-Za-z0-9-]` (including `_`) becomes `_<hex code>_`, so `'a b'`, `'a.b'` and `'a_b'` stay
- * distinct.
- */
-function encodeIdPart(value: string): string {
-  return value.replace(/[^A-Za-z0-9-]/g, (char) => `_${char.charCodeAt(0).toString(16)}_`);
-}
-
-/** The one id helper (C-IDS): `${baseId}-${part}-${encoded value}`; `baseId` comes from `useId`. */
-function getTabListId(baseId: string, part: TabListPart, value: string): string {
-  return `${baseId}-${part}-${encodeIdPart(value)}`;
-}
-
 interface StructureProps {
   value?: unknown;
   id?: unknown;
@@ -198,6 +185,41 @@ function collectStructure(node: unknown, into: TabListStructure): TabListStructu
   if (node.type === TabListRoot) return into;
   return collectStructure(props.children, into);
 }
+
+/**
+ * Whether an element tree shows a Tab, or a Panel (`TabList.Panel` or `TabList.Panels`), found as
+ * in {@link collectStructure}: through Fragments and the `children` of wrapper elements, not inside
+ * a nested TabList or a component that renders the part itself.
+ */
+function containsPart(node: unknown, part: TabListPart): boolean {
+  if (Array.isArray(node)) return node.some((child) => containsPart(child, part));
+  if (!React.isValidElement<StructureProps>(node)) return false;
+  if (node.type === Tab) return part === 'tab';
+  if (node.type === TabPanel || node.type === TabPanels) return part === 'panel';
+  if (node.type === TabListRoot) return false;
+  return containsPart(node.props.children, part);
+}
+
+/**
+ * Whether a child of the TabList renders after the tablist: a Panel, `TabList.Panels`, or a
+ * wrapper (an element, `Suspense`, an error boundary) that holds panels and no tab.
+ */
+function rendersAfterTablist(child: React.ReactNode): boolean {
+  return containsPart(child, 'panel') && !containsPart(child, 'tab');
+}
+
+/**
+ * Where the TabList renders its children: inside the `role="tablist"` element (`'tabs'`) or after
+ * it (`'panels'`). A Panel that ends up inside the tablist warns in development.
+ */
+const TabListAreaContext = React.createContext<'tabs' | 'panels' | null>(null);
+
+const PANEL_IN_TABLIST_MESSAGE =
+  'TabList.Panel was rendered inside the role="tablist" element, where only tabs belong (axe ' +
+  'aria-required-children). The TabList moves a Panel after the tablist when it is its child, or ' +
+  'in a wrapper that holds no Tab, but it cannot see a Panel that a component renders itself, or ' +
+  "separate a wrapper's Panels from its Tabs. Place such panels inside TabList.Panels, which " +
+  'renders after the tablist.';
 
 /* ------------------------------------------------------------------ */
 /*  TabList                                                            */
@@ -270,9 +292,12 @@ function flattenChildren(
  * selected tab is the only tab stop; disabled tabs are skipped.
  *
  * Tabs register through context and are found in DOM order, so they may be wrapped (a Fragment,
- * a Tooltip). Every child except `TabList.Panel` and `TabList.Panels` renders inside the
- * `role="tablist"` element; panels render after it. Put panels that are wrapped in other
- * components inside `TabList.Panels`.
+ * a Tooltip). The children render inside the `role="tablist"` element, except panels, which render
+ * after it: a `TabList.Panel` or `TabList.Panels` child, or a wrapper (an element, `Suspense`, an
+ * error boundary) that holds panels and no Tab. A Panel that a component renders itself cannot be
+ * seen from the children: put that component inside `TabList.Panels` (a development warning names
+ * a Panel that ends up inside the tablist). Content that is not a tab, such as a button next to
+ * the tabs, does not belong in a tablist either: render it outside the TabList.
  *
  * Sub-components are also exported under flat names (`TabListTab`, `TabListPanel`,
  * `TabListPanels`) for React Server Components, which cannot use the dotted form.
@@ -375,13 +400,13 @@ const TabListRoot = ({
       isSelected,
       select,
       getTabIndex,
-      getGeneratedId: (part, itemValue) => getTabListId(baseId, part, itemValue),
+      getGeneratedId: (part, itemValue) => getPartId(baseId, part, itemValue),
       getStaticTabId: (tabValue) =>
-        structure.tabIds.get(tabValue) ?? getTabListId(baseId, 'tab', tabValue),
+        structure.tabIds.get(tabValue) ?? getPartId(baseId, 'tab', tabValue),
       getStaticPanelId: (tabValue) => {
         const panel = structure.panels.get(tabValue);
         if (panel === undefined) return undefined;
-        return panel ?? getTabListId(baseId, 'panel', tabValue);
+        return panel ?? getPartId(baseId, 'panel', tabValue);
       },
       registry,
     }),
@@ -394,9 +419,7 @@ const TabListRoot = ({
   const panels: React.ReactNode[] = [];
   flattenChildren(children).forEach(({ key, node: child }) => {
     const keyed = <React.Fragment key={key}>{child}</React.Fragment>;
-    const isPanel =
-      React.isValidElement(child) && (child.type === TabPanel || child.type === TabPanels);
-    (isPanel ? panels : tabs).push(keyed);
+    (rendersAfterTablist(child) ? panels : tabs).push(keyed);
   });
 
   const isVertical = orientation === 'vertical';
@@ -420,9 +443,9 @@ const TabListRoot = ({
           })}
           ref={mergedRef}
         >
-          {tabs}
+          <TabListAreaContext.Provider value="tabs">{tabs}</TabListAreaContext.Provider>
         </div>
-        {panels}
+        <TabListAreaContext.Provider value="panels">{panels}</TabListAreaContext.Provider>
       </div>
     </TabListContext.Provider>
   );
@@ -521,6 +544,10 @@ export interface TabPanelProps extends React.HTMLAttributes<HTMLDivElement> {
  */
 const TabPanel = ({ value, id: idProp, children, className, ref, ...rest }: TabPanelProps) => {
   const ctx = useTabListContext('TabList.Panel');
+  const insideTablist = React.useContext(TabListAreaContext) === 'tabs';
+  React.useEffect(() => {
+    if (insideTablist) warnOnce('TabList.Panel:inside-tablist', PANEL_IN_TABLIST_MESSAGE);
+  }, [insideTablist]);
   const { registry } = ctx;
   const id = consumerId(idProp) ?? ctx.getGeneratedId('panel', value);
   // Registered while mounted, also while hidden: the tab that selects it links to it.
@@ -561,9 +588,10 @@ export interface TabPanelsProps extends React.HTMLAttributes<HTMLDivElement> {
 }
 
 /**
- * Optional container for the panels, rendered after the tablist. Use it when panels are wrapped
- * in other components (anything that is not a direct `TabList.Panel` child renders inside the
- * tablist).
+ * Optional container for the panels, rendered after the tablist. Use it to style the panel area,
+ * and for panels that components render themselves: the TabList finds a Panel in its children, in
+ * a Fragment or in a wrapper that holds no Tab, but a component that renders a Panel itself
+ * renders inside the tablist unless it is placed in `TabList.Panels`.
  */
 const TabPanels = ({ className, children, ref, ...rest }: TabPanelsProps) => (
   <div ref={ref} className={cn('min-w-0 flex-1', className)} {...rest}>

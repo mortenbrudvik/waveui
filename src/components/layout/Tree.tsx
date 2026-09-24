@@ -4,7 +4,7 @@ import { composeEventHandlers } from '../../lib/composeEventHandlers';
 import { isDev } from '../../lib/dev';
 import { getDirection } from '../../lib/direction';
 import { ChevronRightIcon } from '../../lib/icons';
-import { renderSlot, type Slot } from '../../lib/slot';
+import { renderSlot, slotRendersContent, type Slot } from '../../lib/slot';
 import { forcedColors } from '../../lib/styles';
 import { useControllable } from '../../hooks/useControllable';
 import { useEventCallback } from '../../hooks/useEventCallback';
@@ -218,7 +218,8 @@ export interface TreeItemProps extends React.HTMLAttributes<HTMLDivElement> {
   value: string;
   /**
    * Icon displayed before the label. Rendered in a `<span>` hidden from assistive technology
-   * (`aria-hidden`); pass a slot object (`{ className, children, … }`) to customise it.
+   * (`aria-hidden`); pass a slot object (`{ className, children, … }`) to customise it. A falsy
+   * icon (`''`, `0`) or a list of nothing renders no span.
    */
   icon?: Slot<'span'>;
   /**
@@ -343,6 +344,13 @@ const TreeItem = ({
     }
   });
 
+  // A falsy icon (`icon={name && <Icon />}` with `name` '' or a count of 0) is no icon, as in 0.4
+  // and as in Avatar, and so is a collection whose items render nothing: no empty span adds a gap
+  // to the row. The check does not consume a generator: renderSlot still renders its items.
+  const iconNode =
+    icon && slotRendersContent(icon)
+      ? renderSlot(icon, 'span', 'inline-flex shrink-0', { 'aria-hidden': true })
+      : null;
   const hasChildren = nestedItems.length > 0 && !leaf;
   const isSelected = ctx.selected !== undefined ? ctx.selected === value : undefined;
   const isCurrent = ctx.current !== undefined && ctx.current !== null && ctx.current === value;
@@ -449,7 +457,7 @@ const TreeItem = ({
         ) : (
           <span className="w-3 shrink-0" aria-hidden="true" />
         )}
-        {renderSlot(icon, 'span', 'inline-flex shrink-0', { 'aria-hidden': true })}
+        {iconNode}
         <span id={labelId} data-tree-label="" data-roving-text={typeaheadText} className="truncate">
           {labelContent}
         </span>

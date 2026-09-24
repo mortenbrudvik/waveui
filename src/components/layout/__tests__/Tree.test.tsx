@@ -3,6 +3,7 @@ import { describe, it, expect, expectTypeOf, vi, afterEach } from 'vitest';
 import { act, render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { Tree, TreeItem, type TreeProps, type TreeItemProps } from '../Tree';
+import type { Slot } from '../../../lib/types';
 import {
   renderWithProviders,
   testSystemProps,
@@ -39,6 +40,24 @@ const fileTree = (
 
 /** A treeitem by its exact accessible name (its own label, without its icon or nested items). */
 const item = (name: string) => screen.getByRole('treeitem', { name });
+
+/**
+ * Icons that render nothing: `icon={name && <Icon />}` with `name` '' or a count of 0, and a list
+ * mapped to nothing (F2 `slotRendersContent`). A factory each, since a generator is one-shot.
+ */
+const EMPTY_ICONS = [
+  ["''", () => ''],
+  ['0', () => 0],
+  ['an empty array', () => []],
+  ['an array of empty items', () => [null, false, '', [undefined]]],
+  [
+    'a generator of empty items',
+    function* emptyItems() {
+      yield null;
+      yield '';
+    },
+  ],
+] as Array<[string, () => Slot<'span'>]>;
 
 afterEach(() => {
   vi.restoreAllMocks();
@@ -139,6 +158,43 @@ describe('Tree', () => {
   it('types ref on the Props interfaces (C-REF)', () => {
     expectTypeOf<TreeProps['ref']>().toEqualTypeOf<React.Ref<HTMLDivElement> | undefined>();
     expectTypeOf<TreeItemProps['ref']>().toEqualTypeOf<React.Ref<HTMLDivElement> | undefined>();
+  });
+
+  it('re-rendering the Tree with unchanged state and inline callbacks does not re-render memoized items (table-core#25)', () => {
+    const onRender = vi.fn();
+    const Items = React.memo(function Items() {
+      return (
+        <React.Profiler id="items" onRender={onRender}>
+          <Tree.Item value="docs">
+            Documents
+            <Tree.Item value="work">Work</Tree.Item>
+          </Tree.Item>
+          <Tree.Item value="readme">README.md</Tree.Item>
+        </React.Profiler>
+      );
+    });
+    function Host({ tick }: { tick: number }) {
+      return (
+        <Tree
+          aria-label="Files"
+          data-tick={tick}
+          defaultExpandedItems={['docs']}
+          selected="readme"
+          current="readme"
+          onItemSelect={() => {}}
+          onExpandedItemsChange={() => {}}
+        >
+          <Items />
+        </Tree>
+      );
+    }
+    const { rerender } = render(<Host tick={0} />);
+    expect(screen.getByRole('treeitem', { name: 'Work' })).toBeInTheDocument();
+    const initial = onRender.mock.calls.length;
+    rerender(<Host tick={1} />);
+    rerender(<Host tick={2} />);
+    expect(screen.getByRole('tree')).toHaveAttribute('data-tick', '2');
+    expect(onRender.mock.calls.length).toBe(initial);
   });
 });
 
@@ -349,6 +405,37 @@ describe('Tree.Item - treeitem element (layout#30)', () => {
     expect(objectIcon).toHaveAttribute('aria-hidden', 'true');
     expect(item('Item')).toHaveAccessibleName('Item');
     expect(item('Object slot')).toHaveAccessibleName('Object slot');
+  });
+
+  // An icon that renders nothing is no icon, as in 0.4 (`{icon && …}`) and as in Avatar: no empty
+  // span, so the row has no extra gap.
+  it.each(EMPTY_ICONS)('renders no icon span for an icon set to %s', (_kind, makeIcon) => {
+    render(
+      <Tree aria-label="Files">
+        <Tree.Item value="plain">Plain</Tree.Item>
+        <Tree.Item value="empty" icon={makeIcon()}>
+          Empty
+        </Tree.Item>
+      </Tree>,
+    );
+    const row = (name: string) => item(name).querySelector('[data-tree-label]')!.parentElement!;
+    expect(row('Empty').children).toHaveLength(row('Plain').children.length);
+    expect(row('Empty').textContent).toBe('Empty');
+  });
+
+  it('renders the items of a generator icon that has content (the check does not consume it)', () => {
+    function* glyphs() {
+      yield null;
+      yield <svg key="glyph" data-testid="glyph" />;
+    }
+    render(
+      <Tree aria-label="Files">
+        <Tree.Item value="a" icon={glyphs()}>
+          Item
+        </Tree.Item>
+      </Tree>,
+    );
+    expect(screen.getByTestId('glyph').parentElement).toHaveAttribute('aria-hidden', 'true');
   });
 });
 
