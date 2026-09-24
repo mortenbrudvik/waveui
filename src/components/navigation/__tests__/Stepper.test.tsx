@@ -97,6 +97,10 @@ describe('Stepper', () => {
       expect(root).toHaveAccessibleName('Progress');
       const list = within(root).getByRole('list');
       expect(list.tagName).toBe('OL');
+      // Explicit role: WebKit/VoiceOver drops list semantics from a `list-style: none` list
+      // outside a <nav> unless role="list" is set.
+      expect(list).toHaveClass('list-none');
+      expect(list).toHaveAttribute('role', 'list');
       expect(within(list).getAllByRole('listitem')).toHaveLength(2);
     });
 

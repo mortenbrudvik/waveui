@@ -492,8 +492,11 @@ const StepperRoot = ({
         {...rest}
         className={cn('flex', horizontal ? 'flex-row items-start' : 'flex-col', className)}
       >
+        {/* role="list" is not redundant: WebKit/VoiceOver drops list semantics from a
+            `list-style: none` list outside a <nav> unless the role is explicit. */}
         <ol
           ref={listRef}
+          role="list"
           className={cn(
             'm-0 flex list-none p-0',
             horizontal ? 'flex-1 flex-row items-start' : 'flex-col',
