@@ -2,14 +2,20 @@ import * as React from 'react';
 import { describe, it, expect, vi } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
+import { renderToString } from 'react-dom/server';
 import { Option, OptionGroup } from '../Option';
-import { Option as ComboboxReexport, OptionGroup as GroupReexport } from '../Combobox';
+import { Combobox, Option as ComboboxReexport, OptionGroup as GroupReexport } from '../Combobox';
 import { Dropdown } from '../Dropdown';
 import { collectOptionLabels } from '../../../hooks/useListbox';
-import { testDisplayName } from '../../../test-utils';
+import { asClientReference, testDisplayName } from '../../../test-utils';
 
 function combobox() {
   return screen.getByRole('combobox', { name: 'Fruit' });
+}
+
+function activeOption(): HTMLElement | null {
+  const id = combobox().getAttribute('aria-activedescendant');
+  return id ? document.getElementById(id) : null;
 }
 
 describe('Option / OptionGroup (input-pickers#1, #6, #20)', () => {
@@ -95,10 +101,11 @@ describe('Option / OptionGroup (input-pickers#1, #6, #20)', () => {
     const group = screen.getByRole('group', { name: 'Citrus', hidden: true }).parentElement;
     expect(group).toHaveAttribute('hidden');
     expect(group).toHaveClass('flex', '[&[hidden]]:hidden');
-    const lemon = screen.getByRole('option', { name: 'Lemon', hidden: true });
+    // (a hidden element has no accessible name: query its text)
+    const lemon = screen.getByText('Lemon').closest('li');
+    expect(lemon).toHaveAttribute('role', 'option');
     expect(lemon).toHaveClass('grid', '[&[hidden]]:hidden');
     expect(lemon).not.toHaveClass('flex');
-    // (a hidden element has no accessible name: query its text)
     const apple = screen.getByText('Apple').closest('li');
     expect(apple).toHaveAttribute('role', 'option');
     expect(apple).toHaveClass('grid', '[&[hidden]]:hidden');
@@ -158,6 +165,36 @@ describe('Option / OptionGroup (input-pickers#1, #6, #20)', () => {
     expect(selected).not.toHaveClass('forced-colors:forced-color-adjust-none');
   });
 
+  it('Option and OptionGroup written in a Server Component (lazy types) render the same server HTML and behave the same', async () => {
+    const user = userEvent.setup();
+    const LazyOption = asClientReference(Option);
+    const LazyGroup = asClientReference(OptionGroup);
+    const plain = renderToString(
+      <Dropdown aria-label="Fruit" defaultValue="l">
+        <OptionGroup label="Citrus">
+          <Option value="l">Lemon</Option>
+        </OptionGroup>
+        <Option value="a">Apple</Option>
+      </Dropdown>,
+    );
+    expect(plain).toMatch(/role="combobox"[^>]*>(<[^>]*>)*Lemon</); // the trigger shows the label
+    const lazy = (
+      <Dropdown aria-label="Fruit" defaultValue="l">
+        <LazyGroup label="Citrus">
+          <LazyOption value="l">Lemon</LazyOption>
+        </LazyGroup>
+        <LazyOption value="a">Apple</LazyOption>
+      </Dropdown>
+    );
+    expect(renderToString(lazy)).toBe(plain);
+
+    render(lazy);
+    expect(combobox()).toHaveTextContent('Lemon');
+    combobox().focus();
+    await user.keyboard('{ArrowDown}{ArrowDown}{Enter}');
+    expect(combobox()).toHaveTextContent('Apple');
+  });
+
   it('throws in development outside a listbox (C-CONTEXT)', () => {
     const error = vi.spyOn(console, 'error').mockImplementation(() => {});
     expect(() =>
@@ -168,5 +205,122 @@ describe('Option / OptionGroup (input-pickers#1, #6, #20)', () => {
       ),
     ).toThrow('[WaveUI] Option must be used within a listbox');
     error.mockRestore();
+  });
+});
+
+describe('Option / OptionGroup hidden by the consumer (listbox-hook-code-1)', () => {
+  it('a hidden option is never highlighted or committed with the keyboard, like a native <option hidden>', async () => {
+    const user = userEvent.setup();
+    const onValueChange = vi.fn();
+    render(
+      <Dropdown aria-label="Fruit" onValueChange={onValueChange}>
+        <Option value="placeholder" hidden>
+          Choose…
+        </Option>
+        <Option value="a">Apple</Option>
+        <Option value="b" hidden>
+          Banana
+        </Option>
+        <Option value="c">Cherry</Option>
+      </Dropdown>,
+    );
+    combobox().focus();
+    await user.keyboard('{ArrowDown}');
+    expect(activeOption()).toBe(screen.getByRole('option', { name: 'Apple' }));
+    await user.keyboard('{ArrowDown}');
+    expect(activeOption()).toBe(screen.getByRole('option', { name: 'Cherry' }));
+    await user.keyboard('{ArrowUp}{Enter}');
+    expect(onValueChange.mock.calls).toEqual([['a']]);
+    // Typeahead does not find the hidden Banana either.
+    await user.keyboard('b');
+    expect(activeOption()).toBe(screen.getByRole('option', { name: 'Apple' }));
+    await user.keyboard('{Enter}');
+    expect(onValueChange.mock.calls).toEqual([['a']]);
+    const hidden = screen.getAllByRole('option', { hidden: true }).filter((o) => o.hidden);
+    expect(hidden.map((o) => o.textContent)).toEqual(['Choose…', 'Banana']);
+  });
+
+  it('a selected hidden option (a placeholder) shows its label; opening starts at the first visible option', async () => {
+    const user = userEvent.setup();
+    render(
+      <Dropdown aria-label="Fruit" defaultValue="placeholder">
+        <Option value="placeholder" hidden>
+          Choose…
+        </Option>
+        <Option value="a">Apple</Option>
+      </Dropdown>,
+    );
+    expect(combobox()).toHaveTextContent('Choose…');
+    combobox().focus();
+    await user.keyboard('{ArrowDown}');
+    expect(activeOption()).toBe(screen.getByRole('option', { name: 'Apple' }));
+  });
+
+  it('the options of a hidden OptionGroup are never highlighted or committed', async () => {
+    const user = userEvent.setup();
+    const onValueChange = vi.fn();
+    render(
+      <Dropdown aria-label="Fruit" onValueChange={onValueChange}>
+        <OptionGroup label="Citrus" hidden>
+          <Option value="l">Lemon</Option>
+          <OptionGroup label="Limes">
+            <Option value="k">Key lime</Option>
+          </OptionGroup>
+        </OptionGroup>
+        <Option value="a">Apple</Option>
+      </Dropdown>,
+    );
+    combobox().focus();
+    await user.keyboard('{ArrowDown}');
+    expect(activeOption()).toBe(screen.getByRole('option', { name: 'Apple' }));
+    await user.keyboard('{ArrowUp}{Home}');
+    expect(activeOption()).toBe(screen.getByRole('option', { name: 'Apple' }));
+    await user.keyboard('k');
+    expect(activeOption()).toBe(screen.getByRole('option', { name: 'Apple' }));
+    await user.keyboard('{Enter}');
+    expect(onValueChange.mock.calls).toEqual([['a']]);
+  });
+
+  it('a group whose options are all hidden is hidden; a listbox with only hidden options does not expand', async () => {
+    const user = userEvent.setup();
+    render(
+      <Dropdown aria-label="Fruit">
+        <OptionGroup label="Citrus">
+          <Option value="l" hidden>
+            Lemon
+          </Option>
+        </OptionGroup>
+        <Option value="a" hidden>
+          Apple
+        </Option>
+      </Dropdown>,
+    );
+    expect(
+      screen.getByRole('group', { name: 'Citrus', hidden: true }).parentElement,
+    ).toHaveAttribute('hidden');
+    combobox().focus();
+    await user.keyboard('{ArrowDown}');
+    expect(combobox()).toHaveAttribute('aria-expanded', 'false');
+    expect(screen.queryByRole('listbox')).toBeNull();
+  });
+
+  it('Combobox: a hidden option is not listed or committed, and filtering matches textValue', async () => {
+    const user = userEvent.setup();
+    const onValueChange = vi.fn();
+    render(
+      <Combobox aria-label="Fruit" onValueChange={onValueChange}>
+        <Option value="us" label="USA" textValue="United States">
+          USA
+        </Option>
+        <Option value="x" hidden>
+          United Kingdom
+        </Option>
+        <Option value="no">Norway</Option>
+      </Combobox>,
+    );
+    await user.type(combobox(), 'united');
+    expect(screen.getAllByRole('option').map((o) => o.textContent)).toEqual(['USA']);
+    await user.keyboard('{ArrowDown}{ArrowDown}{Enter}');
+    expect(onValueChange.mock.calls).toEqual([['us']]);
   });
 });

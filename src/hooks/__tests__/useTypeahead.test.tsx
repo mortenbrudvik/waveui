@@ -123,6 +123,17 @@ describe('useTypeahead', () => {
     expect(onMatch).not.toHaveBeenCalled();
   });
 
+  it('accepts a character typed with AltGr (reported as Ctrl+Alt on Windows)', () => {
+    const { onMatch, type } = setup([
+      { value: 'warszawa', text: 'Warszawa' },
+      { value: 'lodz', text: 'Łódź' },
+    ]);
+    expect(type(key('ł', { ctrlKey: true, altKey: true }), null)).toBe(true);
+    expect(onMatch).toHaveBeenLastCalledWith('lodz');
+    expect(type(key('ł', { ctrlKey: true, altKey: true, metaKey: true }), null)).toBe(false);
+    expect(onMatch).toHaveBeenCalledTimes(1);
+  });
+
   it('returns false and does not call onMatch when nothing matches', () => {
     const { onMatch, type } = setup();
     expect(type(key('z'), null)).toBe(false);

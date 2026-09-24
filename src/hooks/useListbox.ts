@@ -9,7 +9,8 @@ import {
   useState,
   useSyncExternalStore,
 } from 'react';
-import { isDev, warnOnce } from '../lib/dev';
+import { getElementType } from '../lib/children';
+import { isDev, reportMissingContext, warnOnce } from '../lib/dev';
 import { useEventCallback } from './useEventCallback';
 import { useId } from './useId';
 import { useMergedRefs } from './useMergedRefs';
@@ -29,6 +30,13 @@ export interface ListboxItem {
   textValue?: string;
   /** Disabled options are rendered but skipped by navigation and never committed. */
   disabled?: boolean;
+  /**
+   * Hidden options (the consumer's `hidden` attribute) are left out of navigation and rendering
+   * like filtered-out ones: never highlighted, reached by typeahead or committed with the keyboard
+   * (registered options render `hidden`). Their label stays known
+   * ({@link UseListboxResult.getItem}).
+   */
+  hidden?: boolean;
 }
 
 /** Why {@link UseListboxOptions.onOpenChange} was called. */
@@ -49,7 +57,10 @@ export interface UseListboxOptions {
   multiple?: boolean;
   /** The selected values (`[]` when nothing is selected). */
   selectedValues: readonly string[];
-  /** Called when an option is committed (click, Enter/Space, Tab/Alt+ArrowUp in select-only). */
+  /**
+   * Called when an option is committed: click, Enter/Space, and in single-select select-only mode
+   * also Tab and Alt+ArrowUp (with `multiple` they close without committing).
+   */
   onSelect: (value: string, item: ListboxItem) => void;
   /**
    * Data mode: the options. Omitted ⇒ registration mode — the `Option` children register
@@ -64,9 +75,10 @@ export interface UseListboxOptions {
   typeahead?: boolean;
   /**
    * The option that is active while no option is highlighted: `'selected'` — the first selected
-   * navigable option, else the first option; `'first'` — the first option; `false` — none. A
-   * highlighted option that leaves the navigable set is dropped (the fallback takes over, also
-   * when the option returns); in editable mode a text-editing key clears the highlight.
+   * navigable option in list order (not in `selectedValues` order), else the first option;
+   * `'first'` — the first option; `false` — none. A highlighted option that leaves the navigable
+   * set is dropped (the fallback takes over, also when the option returns); in editable mode a
+   * text-editing key clears the highlight.
    * @default 'selected'
    */
   autoHighlight?: 'selected' | 'first' | false;
@@ -114,7 +126,10 @@ export interface UseListboxResult {
   activeValue: string | null;
   /** `getOptionId(activeValue)` while open and an option is active. */
   activeDescendantId: string | undefined;
-  /** The navigable items in DOM/data order: filtered, disabled ones included (they are skipped). */
+  /**
+   * The navigable items in DOM/data order: without filtered-out and hidden items; disabled ones
+   * are included (navigation skips them).
+   */
   items: ListboxItem[];
   /** Unfiltered lookup (registered options or `items`), e.g. for the selected option's label. */
   getItem(value: string): ListboxItem | undefined;
@@ -182,6 +197,12 @@ export interface UseListboxOptionProps {
   label?: string;
   textValue?: string;
   disabled?: boolean;
+  /**
+   * The consumer hid the option (its own `hidden` attribute, or a hidden group around it): it
+   * registers as a hidden item ({@link ListboxItem.hidden}), so it is not navigable, and
+   * `optionProps.hidden` is set from the first render (server included).
+   */
+  hidden?: boolean;
 }
 
 /** Props for an option element (spread them onto the `<li>`; compose `onClick` with yours). */
@@ -205,6 +226,7 @@ export interface UseListboxOptionResult<E extends HTMLElement = HTMLElement> {
   selected: boolean;
   active: boolean;
   disabled: boolean;
+  /** Filtered out, or hidden by the consumer ({@link UseListboxOptionProps.hidden}). */
   hidden: boolean;
   optionProps: ListboxOptionProps<E>;
 }
@@ -238,7 +260,8 @@ function sameItem(a: ListboxItem, b: ListboxItem): boolean {
     a.value === b.value &&
     a.label === b.label &&
     a.textValue === b.textValue &&
-    !!a.disabled === !!b.disabled
+    !!a.disabled === !!b.disabled &&
+    !!a.hidden === !!b.hidden
   );
 }
 
@@ -543,8 +566,6 @@ function warnIfPageWide(ancestor: Node): void {
   );
 }
 
-const useIsomorphicLayoutEffect = typeof document !== 'undefined' ? useLayoutEffect : useEffect;
-
 /* ------------------------------------------------------------------ */
 /*  Context                                                            */
 /* ------------------------------------------------------------------ */
@@ -569,9 +590,7 @@ function getInertContext(): ListboxContextValue {
 function useListboxContext(componentName: string): ListboxContextValue {
   const context = useContext(ListboxContext);
   if (context) return context;
-  const message = `[WaveUI] ${componentName} must be used within a listbox (Combobox or Dropdown).`;
-  if (isDev) throw new Error(message);
-  console.error(message);
+  reportMissingContext(componentName, 'a listbox (Combobox or Dropdown)');
   return getInertContext();
 }
 
@@ -643,11 +662,13 @@ function optionLabel(props: OptionElementProps, value: string): string | undefin
 function walkOptions(children: React.ReactNode, labels: Map<string, string>): void {
   React.Children.forEach(children, (child) => {
     if (!React.isValidElement<OptionElementProps>(child)) return;
-    if (child.type === React.Fragment) {
+    // An Option or OptionGroup written in a Server Component arrives as a lazy type: unwrap it.
+    const type = getElementType(child);
+    if (type === React.Fragment) {
       walkOptions(child.props.children, labels);
       return;
     }
-    const kind = kindOf(child.type);
+    const kind = kindOf(type);
     if (kind === 'group') {
       walkOptions(child.props.children, labels);
       return;
@@ -667,7 +688,8 @@ function walkOptions(children: React.ReactNode, labels: Map<string, string>): vo
  * {@link markListboxElement}: `'option'` elements give `value → label` (`label` prop →
  * `textValue` → the text of their string/number children and host elements → `value` when they
  * have no children); `'group'` elements and Fragments are walked into. Other components are
- * opaque (their options resolve after registration). The first option of a value wins.
+ * opaque (their options resolve after registration). The first option of a value wins. A lazy
+ * element type (an option or group written in a React Server Component) is unwrapped first.
  *
  * Display text = `listbox.getItem(value)?.label ?? collectOptionLabels(children).get(value)`
  * (`?? value` for freeform input only).
@@ -709,6 +731,14 @@ function hasText(element: EventTarget): boolean {
   );
 }
 
+/**
+ * A character typed with AltGr, which Windows reports as Ctrl+Alt (Polish `ł`, Romanian `ș`): text
+ * input for typeahead, not a shortcut. Ctrl+Alt with a named key (Ctrl+Alt+ArrowDown) is not.
+ */
+function isAltGraphCharacter(event: React.KeyboardEvent): boolean {
+  return event.ctrlKey && event.altKey && event.key.length === 1;
+}
+
 /** Ctrl/Cmd shortcuts that change the text: cut, paste, undo, redo. */
 const TEXT_SHORTCUTS: ReadonlySet<string> = new Set(['x', 'v', 'z', 'y']);
 
@@ -731,7 +761,7 @@ function editsText(event: React.KeyboardEvent): boolean {
     return true;
   }
   if (key.length !== 1) return false;
-  const shortcut = event.metaKey || (event.ctrlKey && !event.altKey);
+  const shortcut = event.metaKey || (event.ctrlKey && !isAltGraphCharacter(event));
   return !shortcut || TEXT_SHORTCUTS.has(key.toLowerCase());
 }
 
@@ -753,16 +783,16 @@ function preventMouseDown(event: React.MouseEvent): void {
  *   and, while it is mounted, whenever option elements move (a `MutationObserver` on their
  *   common ancestor) — so memoized options or hoisted elements that a wrapper component inside
  *   the listbox reorders are re-sorted too, although neither the options nor this component
- *   render. Options register even when filtered out (they render `hidden`), so labels are always
- *   known — use {@link collectOptionLabels} for the display text before registration (SSR/first
- *   render).
+ *   render. Options register even when filtered out or hidden by the consumer (they render
+ *   `hidden` and are not navigable), so labels are always known — use {@link collectOptionLabels}
+ *   for the display text before registration (SSR/first render).
  * - **Active option** is derived during render: the highlighted value, else the `autoHighlight`
  *   fallback. The highlight is reset on close and after a single-select commit, and dropped once
- *   it is not navigable and enabled any more (filtered out, removed by an update, disabled), so it
- *   does not come back without a user action when the option returns. Editable: a text-editing
- *   key (printable characters, Backspace/Delete, cut/paste/undo/redo) clears it — visual focus
- *   returns to the textbox (APG) — so Enter after typing never commits an option highlighted
- *   before the edit.
+ *   it is not navigable and enabled any more (filtered out, hidden, removed by an update,
+ *   disabled), so it does not come back without a user action when the option returns. Editable:
+ *   a text-editing key (printable characters, Backspace/Delete, cut/paste/undo/redo) clears it —
+ *   visual focus returns to the textbox (APG) — so Enter after typing never commits an option
+ *   highlighted before the edit.
  * - **Ids** `${listboxId}-opt-${n}` are stable per value (across filtering and remounts between
  *   an inline closed list and a portaled open list).
  * - **Store.** Options read their active/selected/hidden flags through a store, so moving the
@@ -772,11 +802,14 @@ function preventMouseDown(event: React.MouseEvent): void {
  *   the listbox closed Enter is not prevented, so forms submit); Escape closes (closed + text:
  *   `onClearDraft`); Tab closes; Home/End/printable keys stay with the input (text-editing keys
  *   clear the highlight, see above). Select-only:
- *   ArrowDown/ArrowUp/Home/End/typeahead open and position; PageUp/PageDown jump 10; Enter/Space
- *   open or commit (always prevented on keydown, Space also on keyup, so a `<button>` combobox is
- *   not clicked again; a Space typed within 500 ms of a typeahead character continues the search
- *   instead); Alt+ArrowUp and Tab commit and close (Tab is not prevented); Escape closes.
- *   Disabled options are skipped and never committed.
+ *   ArrowDown/ArrowUp/Home/End/typeahead open and position (a closed typeahead starts from the
+ *   selected option; characters typed with AltGr, i.e. Ctrl+Alt on Windows, count); PageUp/PageDown
+ *   jump 10; Enter/Space open or commit (always prevented on keydown, Space also on keyup, so a
+ *   `<button>` combobox is not clicked again; a Space typed within 500 ms of a typeahead character
+ *   continues the search instead); Alt+ArrowUp and Tab commit and close in single-select mode
+ *   (with `multiple` they only close; Tab is not prevented); Escape closes.
+ *   "Selected" means the first selected navigable option in list order. Disabled options are
+ *   skipped and never committed; hidden options are not navigable at all.
  * - The active option is scrolled into view (`{ block: 'nearest' }`) in a layout effect, except
  *   after a pointer highlight (the list would scroll under the pointer).
  *
@@ -825,7 +858,7 @@ export function useListbox(options: UseListboxOptions): UseListboxResult {
   const allItems: readonly ListboxItem[] = dataItems ?? registered;
 
   const navigable = useMemo(
-    () => (filter ? allItems.filter(filter) : allItems.slice()),
+    () => allItems.filter((item) => !item.hidden && (!filter || filter(item))),
     [allItems, filter],
   );
   const enabledValues = useMemo(
@@ -838,21 +871,23 @@ export function useListbox(options: UseListboxOptions): UseListboxResult {
     for (const item of allItems) if (!map.has(item.value)) map.set(item.value, item);
     return map;
   }, [allItems]);
+  // Filtered-out and hidden items: registered options read it to render `hidden`.
   const hiddenSet = useMemo(() => {
-    if (!filter) return EMPTY_SET;
+    if (navigable.length === allItems.length) return EMPTY_SET;
     const visible = new Set(navigable.map((item) => item.value));
     const hidden = new Set<string>();
     for (const item of allItems) if (!visible.has(item.value)) hidden.add(item.value);
     return hidden;
-  }, [allItems, navigable, filter]);
+  }, [allItems, navigable]);
   const selectedSet = new Set(selectedValues);
 
   // The highlighted value (keyboard, pointer, typeahead, setActiveValue), adjusted during render
   // (C-HOOKS: no effect) and stored once:
   // - reset on close (also a highlight set while closed);
   // - highlightOnFilter: moved to the first option when the navigable set changes (below);
-  // - dropped once it is not navigable and enabled any more (filtered out, removed by an update,
-  //   disabled), so the option is not highlighted again without a user action when it returns.
+  // - dropped once it is not navigable and enabled any more (filtered out, hidden, removed by an
+  //   update, disabled), so the option is not highlighted again without a user action when it
+  //   returns.
   const [activeRaw, setActiveRaw] = useState<string | null>(null);
   let highlighted = open ? activeRaw : null;
 
@@ -872,7 +907,8 @@ export function useListbox(options: UseListboxOptions): UseListboxResult {
   if (highlighted !== null && !enabledSet.has(highlighted)) highlighted = null;
   if (highlighted !== activeRaw) setActiveRaw(highlighted);
 
-  const firstSelected = selectedValues.find((value) => enabledSet.has(value)) ?? null;
+  // In list order (APG), not in the order the values were selected.
+  const firstSelected = enabledValues.find((value) => selectedSet.has(value)) ?? null;
   let fallback: string | null = null;
   if (autoHighlight === 'selected') fallback = firstSelected ?? enabledValues[0] ?? null;
   else if (autoHighlight === 'first') fallback = enabledValues[0] ?? null;
@@ -939,7 +975,8 @@ export function useListbox(options: UseListboxOptions): UseListboxResult {
     if (mode === 'editable' && open && editsText(event)) {
       setActive(highlightOnFilter ? (enabledValues[0] ?? null) : null);
     }
-    if (event.ctrlKey || event.metaKey) return;
+    const altGraph = isAltGraphCharacter(event);
+    if ((event.ctrlKey && !altGraph) || event.metaKey) return;
     const { key, altKey } = event;
     const selectOnly = mode === 'select-only';
     const first = enabledValues[0] ?? null;
@@ -1022,7 +1059,7 @@ export function useListbox(options: UseListboxOptions): UseListboxResult {
     }
 
     if (key === ' ' && !selectOnly) return;
-    if (!typeahead || altKey || key.length !== 1) {
+    if (!typeahead || (altKey && !altGraph) || key.length !== 1) {
       if (key === ' ' && selectOnly) {
         event.preventDefault();
         if (!open) onOpenChange(true, 'keyboard');
@@ -1056,7 +1093,7 @@ export function useListbox(options: UseListboxOptions): UseListboxResult {
   // Publish the registrations of this commit once, re-check the DOM order when this commit moved
   // options (a keyed reorder moves them without registering them again; a highlight move does not
   // move any), then sync the option selectors.
-  useIsomorphicLayoutEffect(() => {
+  useLayoutEffect(() => {
     store.setRegistrationMode(!dataMode);
     store.flush();
     store.checkOrderAfterCommit();
@@ -1065,7 +1102,7 @@ export function useListbox(options: UseListboxOptions): UseListboxResult {
 
   // While mounted, option moves that render neither this root nor the options (memoized options
   // reordered by a wrapper component) re-check the order through a MutationObserver.
-  useIsomorphicLayoutEffect(() => {
+  useLayoutEffect(() => {
     store.connect();
     return () => store.disconnect();
   }, [store]);
@@ -1073,7 +1110,7 @@ export function useListbox(options: UseListboxOptions): UseListboxResult {
   // Keep the active option visible in the scrollable listbox — not after a pointer highlight: the
   // option under the pointer is already (at least partly) visible, and scrolling would move the
   // list under the pointer.
-  useIsomorphicLayoutEffect(() => {
+  useLayoutEffect(() => {
     const fromPointer = activeValue !== null && activeValue === pointerHighlightRef.current;
     pointerHighlightRef.current = null;
     if (activeValue === null || fromPointer) return;
@@ -1162,7 +1199,8 @@ function optionFlags(store: ListboxStore, value: string): number {
  * `role="option"`, `aria-selected`, `aria-disabled`, `hidden`, `data-active`/`data-selected`/
  * `data-disabled` for styling, C-CLASS) and compose its `onClick` with the consumer's.
  *
- * Throws in development when used outside a listbox (C-CONTEXT).
+ * Throws in development when used outside a listbox; in production it logs the error once and
+ * renders an inert option (C-CONTEXT).
  *
  * @typeParam E The option element type (`HTMLLIElement` for an `<li>`), so `ref` needs no cast.
  */
@@ -1172,7 +1210,7 @@ export function useListboxOption<E extends HTMLElement = HTMLElement>(
 ): UseListboxOptionResult<E> {
   const context = useListboxContext('Option');
   const { store, listboxId, select, highlight } = context;
-  const { value, label, textValue, disabled = false } = props;
+  const { value, label, textValue, disabled = false, hidden: hiddenByConsumer = false } = props;
 
   const id = `${listboxId}-opt-${store.getIndex(value)}`;
   const flags = useSyncExternalStore(
@@ -1182,7 +1220,7 @@ export function useListboxOption<E extends HTMLElement = HTMLElement>(
   );
   const active = (flags & FLAG_ACTIVE) !== 0;
   const selected = (flags & FLAG_SELECTED) !== 0;
-  const hidden = (flags & FLAG_HIDDEN) !== 0;
+  const hidden = hiddenByConsumer || (flags & FLAG_HIDDEN) !== 0;
 
   const elementRef = useRef<E | null>(null);
   const setElement = useCallback((element: E | null) => {
@@ -1194,7 +1232,7 @@ export function useListboxOption<E extends HTMLElement = HTMLElement>(
   // After every commit of this option: (re-)register when the item changed — including a label
   // read from the element's text, which any re-render can change. A move (keyed reorder) does not
   // register again; the listbox root sees it through its root commit or its MutationObserver.
-  useIsomorphicLayoutEffect(() => {
+  useLayoutEffect(() => {
     const text =
       label === undefined && textValue === undefined
         ? elementRef.current?.textContent?.trim()
@@ -1202,12 +1240,13 @@ export function useListboxOption<E extends HTMLElement = HTMLElement>(
     const item: ListboxItem = { value, label: label ?? textValue ?? (text || value) };
     if (textValue !== undefined) item.textValue = textValue;
     if (disabled) item.disabled = true;
+    if (hiddenByConsumer) item.hidden = true;
     const current = registrationRef.current;
     if (current && current.store === store && sameItem(current.item, item)) return;
     current?.unregister();
     registrationRef.current = { store, item, unregister: store.register(item, elementRef) };
   });
-  useIsomorphicLayoutEffect(
+  useLayoutEffect(
     () => () => {
       registrationRef.current?.unregister();
       registrationRef.current = null;

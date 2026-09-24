@@ -42,8 +42,10 @@ export interface UseTypeaheadResult {
 }
 
 function isTypeaheadKey(event: KeyboardEvent | React.KeyboardEvent, searching: boolean): boolean {
-  if (event.ctrlKey || event.metaKey || event.altKey) return false;
-  if (event.key.length !== 1) return false;
+  if (event.key.length !== 1 || event.metaKey) return false;
+  // Ctrl or Alt alone is a shortcut. Both together is AltGr as Windows reports it: a typed
+  // character (Polish `ł`, Romanian `ș`).
+  if (event.ctrlKey !== event.altKey) return false;
   // Space activates the focused item unless a search is in progress.
   return event.key !== ' ' || searching;
 }
@@ -51,7 +53,8 @@ function isTypeaheadKey(event: KeyboardEvent | React.KeyboardEvent, searching: b
 /**
  * Typeahead for lists, menus and trees (APG): printable characters typed within `timeout` build a
  * prefix; the next enabled item whose text starts with it (wrapping around from the current item)
- * is matched. Repeating one character cycles through the items that start with it.
+ * is matched. Repeating one character cycles through the items that start with it. Characters
+ * typed with AltGr (Ctrl+Alt on Windows) count; Ctrl, Alt or Meta shortcuts do not.
  *
  * @example
  * const { onTypeahead } = useTypeahead({ getItems, onMatch: focusValue });

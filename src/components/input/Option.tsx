@@ -39,6 +39,14 @@ export interface OptionProps extends Omit<React.LiHTMLAttributes<HTMLLIElement>,
    * @default false
    */
   disabled?: boolean;
+  /**
+   * Hides the option, like a native `<option hidden>`: it is not shown, keyboard navigation and
+   * typeahead skip it, and it never becomes the active option. Its label stays known, so a
+   * selected hidden option (a placeholder) still shows in the combobox. The options of a hidden
+   * `OptionGroup` are hidden the same way.
+   * @default false
+   */
+  hidden?: boolean;
   /** Ref to the option `<li>` element. */
   ref?: React.Ref<HTMLLIElement>;
 }
@@ -103,7 +111,7 @@ class OptionGroupMembers {
     };
   }
 
-  /** At least one option, and a filter hides every one of them. */
+  /** At least one option, and every one of them is hidden (filtered out, or by the consumer). */
   allHidden(store: ListboxStore | undefined): boolean {
     if (store === undefined || this.counts.size === 0) return false;
     for (const value of this.counts.keys()) if (!store.isHidden(value)) return false;
@@ -119,13 +127,14 @@ class OptionGroupMembers {
 const OptionGroupContext = React.createContext<readonly OptionGroupMembers[]>([]);
 OptionGroupContext.displayName = 'OptionGroupContext';
 
-const useIsomorphicLayoutEffect =
-  typeof document !== 'undefined' ? React.useLayoutEffect : React.useEffect;
+/** A group around the option has the consumer's `hidden` attribute (P05-internal). */
+const OptionGroupHiddenContext = React.createContext(false);
+OptionGroupHiddenContext.displayName = 'OptionGroupHiddenContext';
 
 /** Adds an option's value to every group around it while the option is mounted. */
 function useOptionGroupMembership(value: string): void {
   const groups = React.useContext(OptionGroupContext);
-  useIsomorphicLayoutEffect(() => {
+  React.useLayoutEffect(() => {
     if (groups.length === 0) return;
     const removes = groups.map((group) => group.add(value));
     return () => {
@@ -140,6 +149,7 @@ function OptionImpl(props: OptionProps) {
     label,
     textValue,
     disabled = false,
+    hidden = false,
     className,
     children,
     onClick,
@@ -148,8 +158,10 @@ function OptionImpl(props: OptionProps) {
     ...rest
   } = props;
   const showCheck = React.useContext(OptionCheckContext);
+  const groupHidden = React.useContext(OptionGroupHiddenContext);
+  // A consumer-hidden option is not navigable (listbox-hook-code-1); optionProps renders `hidden`.
   const { selected, optionProps } = useListboxOption<HTMLLIElement>(
-    { value, label, textValue, disabled },
+    { value, label, textValue, disabled, hidden: hidden || groupHidden },
     ref,
   );
   useOptionGroupMembership(value);
@@ -209,6 +221,12 @@ export const Option: React.NamedExoticComponent<OptionProps> = /* @__PURE__ */ m
 export interface OptionGroupProps extends React.LiHTMLAttributes<HTMLLIElement> {
   /** Heading label for the option group (names the group). */
   label: string;
+  /**
+   * Hides the group and every option in it (see `Option`'s `hidden`): keyboard navigation and
+   * typeahead skip its options.
+   * @default false
+   */
+  hidden?: boolean;
   /** Ref to the group's `<li role="presentation">` element. */
   ref?: React.Ref<HTMLLIElement>;
 }
@@ -217,6 +235,7 @@ function OptionGroupImpl({ label, className, children, hidden, ref, ...rest }: O
   const labelId = useId('option-group');
   const store = React.useContext(ListboxContext)?.store;
   const parentGroups = React.useContext(OptionGroupContext);
+  const hiddenByConsumer = React.useContext(OptionGroupHiddenContext) || !!hidden;
   const [members] = React.useState(() => new OptionGroupMembers());
   const groups = React.useMemo(() => [...parentGroups, members], [parentGroups, members]);
   const subscribe = React.useCallback(
@@ -230,8 +249,9 @@ function OptionGroupImpl({ label, className, children, hidden, ref, ...rest }: O
     },
     [members, store],
   );
-  // Hidden while a filter hides every option inside it, also options wrapped in a component (the
-  // options register with the group; re-read when they do and when the listbox state changes).
+  // Hidden while every option inside it is filtered out or hidden, also options wrapped in a
+  // component (the options register with the group; re-read when they do and when the listbox
+  // state changes).
   // The server render and the first client render show the group: no option has registered yet.
   const empty = React.useSyncExternalStore(
     subscribe,
@@ -255,7 +275,9 @@ function OptionGroupImpl({ label, className, children, hidden, ref, ...rest }: O
         {label}
       </div>
       <ul role="group" aria-labelledby={labelId}>
-        <OptionGroupContext.Provider value={groups}>{children}</OptionGroupContext.Provider>
+        <OptionGroupHiddenContext.Provider value={hiddenByConsumer}>
+          <OptionGroupContext.Provider value={groups}>{children}</OptionGroupContext.Provider>
+        </OptionGroupHiddenContext.Provider>
       </ul>
     </li>
   );
@@ -264,8 +286,8 @@ OptionGroupImpl.displayName = 'OptionGroup';
 
 /**
  * Groups options under a heading: `<li role="presentation">` with the heading and a
- * `<ul role="group" aria-labelledby>` of the options. Hidden while a filter hides all its options,
- * also options wrapped in a component or in nested groups.
+ * `<ul role="group" aria-labelledby>` of the options. Hidden while a filter (or their own `hidden`)
+ * hides all its options, also options wrapped in a component or in nested groups.
  */
 export const OptionGroup: React.FC<OptionGroupProps> = /* @__PURE__ */ markListboxElement(
   OptionGroupImpl,

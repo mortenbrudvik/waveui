@@ -15,6 +15,7 @@ import {
   type UseListboxOptions,
   type UseListboxResult,
 } from '../useListbox';
+import { asClientReference } from '../../test-utils';
 
 /* ------------------------------------------------------------------ */
 /*  Stand-ins for P05's Option / OptionGroup                           */
@@ -30,7 +31,8 @@ interface TestOptionProps extends Omit<React.LiHTMLAttributes<HTMLLIElement>, 'v
 }
 
 function TestOptionImpl(props: TestOptionProps) {
-  const { value, label, textValue, disabled, onRender, children, onClick, ref, ...rest } = props;
+  const { value, label, textValue, disabled, hidden, onRender, children, onClick, ref, ...rest } =
+    props;
   onRender?.(value);
   const { optionProps } = useListboxOption(
     {
@@ -38,6 +40,7 @@ function TestOptionImpl(props: TestOptionProps) {
       label: label ?? (typeof children === 'string' ? children : undefined),
       textValue,
       disabled,
+      hidden,
     },
     ref,
   );
@@ -358,6 +361,20 @@ describe('collectOptionLabels', () => {
       return <span>flag</span>;
     }
     expect(collectOptionLabels(<Opt value="x">{<Flag />}</Opt>).has('x')).toBe(false);
+  });
+
+  it('recognises options and groups written in a Server Component (lazy client references)', () => {
+    const LazyOpt = asClientReference(Opt);
+    const LazyGroup = asClientReference(Group);
+    const labels = collectOptionLabels(
+      <>
+        <LazyOpt value="no">Norway</LazyOpt>
+        <LazyGroup label="Americas">
+          <LazyOpt value="us">United States</LazyOpt>
+        </LazyGroup>
+      </>,
+    );
+    expect(Object.fromEntries(labels)).toEqual({ no: 'Norway', us: 'United States' });
   });
 });
 
@@ -1460,6 +1477,51 @@ describe('useListbox — select-only keys (APG)', () => {
     }
   });
 
+  it('closed typeahead starts from the selected option: its own letter moves on to the next match', () => {
+    render(
+      <Picker defaultValue="b">
+        <Opt value="a">Apple</Opt>
+        <Opt value="b">Banana</Opt>
+        <Opt value="bl">Blueberry</Opt>
+        <Opt value="c">Cherry</Opt>
+      </Picker>,
+    );
+    key('b');
+    expect(expanded()).toBe(true);
+    expect(activeText()).toBe('Blueberry');
+  });
+
+  it('typeahead matches textValue instead of the label', () => {
+    render(
+      <Picker>
+        <Opt value="ug">Uganda</Opt>
+        <Opt value="us" label="USA" textValue="United States">
+          USA
+        </Opt>
+        <Opt value="uk">UK</Opt>
+      </Picker>,
+    );
+    key('u');
+    expect(activeText()).toBe('Uganda');
+    key('n'); // "un" matches "United States" only
+    expect(activeText()).toBe('USA');
+  });
+
+  it('typeahead accepts a letter typed with AltGr (Ctrl+Alt on Windows); other Ctrl+Alt chords stay ignored', () => {
+    render(
+      <Picker>
+        <Opt value="waw">Warszawa</Opt>
+        <Opt value="lodz">Łódź</Opt>
+      </Picker>,
+    );
+    expect(key('ArrowDown', { ctrlKey: true, altKey: true }).defaultPrevented).toBe(false);
+    expect(expanded()).toBe(false);
+    // Polish (programmer) layout: AltGr+L types "ł".
+    expect(key('ł', { ctrlKey: true, altKey: true }).defaultPrevented).toBe(true);
+    expect(expanded()).toBe(true);
+    expect(activeText()).toBe('Łódź');
+  });
+
   it('Space during a typeahead search is part of the search, not a commit', () => {
     const onSelect = vi.fn();
     render(
@@ -1565,6 +1627,35 @@ describe('useListbox — select-only keys (APG)', () => {
     expect(onOpenChange).toHaveBeenLastCalledWith(false, 'tab');
   });
 
+  it('multiple: opens on the first selected option in list order; Tab and Alt+ArrowUp close without committing', () => {
+    const onSelect = vi.fn();
+    const onOpenChange = vi.fn();
+    render(
+      <Picker
+        multiple
+        defaultValues={['c', 'a']}
+        onSelectSpy={onSelect}
+        onOpenChangeSpy={onOpenChange}
+      >
+        {FRUITS}
+      </Picker>,
+    );
+    key('ArrowDown');
+    expect(activeText()).toBe('Apple');
+    key('ArrowDown');
+    key('Tab');
+    expect(expanded()).toBe(false);
+    expect(onOpenChange).toHaveBeenLastCalledWith(false, 'tab');
+    key('ArrowUp');
+    expect(activeText()).toBe('Apple');
+    key('ArrowDown');
+    key('ArrowUp', { altKey: true });
+    expect(expanded()).toBe(false);
+    expect(onOpenChange).toHaveBeenLastCalledWith(false, 'keyboard');
+    expect(onSelect).not.toHaveBeenCalled();
+    expect(screen.getByTestId('value')).toHaveTextContent(/^c,a$/);
+  });
+
   it('Escape closes (prevented); with the listbox closed it is left alone', () => {
     const onOpenChange = vi.fn();
     render(<Picker onOpenChangeSpy={onOpenChange}>{FRUITS}</Picker>);
@@ -1625,6 +1716,74 @@ describe('useListbox — editable keys (APG)', () => {
     key('ArrowDown', { altKey: true });
     expect(expanded()).toBe(true);
     expect(activeOption()).toBeNull();
+  });
+
+  it('Alt+ArrowUp closes without committing; with the listbox closed it does nothing', () => {
+    const onSelect = vi.fn();
+    const onOpenChange = vi.fn();
+    render(
+      <Picker mode="editable" onSelectSpy={onSelect} onOpenChangeSpy={onOpenChange}>
+        {FRUITS}
+      </Picker>,
+    );
+    key('ArrowDown');
+    key('ArrowDown');
+    expect(activeText()).toBe('Banana');
+    expect(key('ArrowUp', { altKey: true }).defaultPrevented).toBe(true);
+    expect(expanded()).toBe(false);
+    expect(onOpenChange).toHaveBeenLastCalledWith(false, 'keyboard');
+    expect(onSelect).not.toHaveBeenCalled();
+    expect(screen.getByTestId('value')).toBeEmptyDOMElement();
+
+    onOpenChange.mockClear();
+    key('ArrowUp', { altKey: true });
+    expect(expanded()).toBe(false);
+    expect(onOpenChange).not.toHaveBeenCalled();
+  });
+
+  it('a registered option’s textValue is what a filter reads', async () => {
+    const user = userEvent.setup();
+    function TextValuePicker({ children }: { children: React.ReactNode }) {
+      const [open, setOpen] = React.useState(false);
+      const [query, setQuery] = React.useState('');
+      const lb = useListbox({
+        open,
+        onOpenChange: setOpen,
+        mode: 'editable',
+        selectedValues: [],
+        onSelect: () => {},
+        filter: query
+          ? (item) => (item.textValue ?? item.label).toLowerCase().includes(query)
+          : undefined,
+      });
+      return (
+        <ListboxContext.Provider value={lb.context}>
+          <input
+            {...lb.getComboboxProps()}
+            aria-label="Fruit"
+            value={query}
+            onChange={(e) => {
+              setQuery(e.target.value);
+              setOpen(true);
+            }}
+            onKeyDown={lb.onKeyDown}
+          />
+          <ul {...lb.getListboxProps()} aria-label="Countries" hidden={!open}>
+            {children}
+          </ul>
+        </ListboxContext.Provider>
+      );
+    }
+    render(
+      <TextValuePicker>
+        <Opt value="us" label="USA" textValue="United States">
+          USA
+        </Opt>
+        <Opt value="uk">UK</Opt>
+      </TextValuePicker>,
+    );
+    await user.type(combobox(), 'united');
+    expect(screen.getAllByRole('option').map((option) => option.textContent)).toEqual(['USA']);
   });
 
   it('Home/End/PageUp and printable keys are left to the text input', () => {
@@ -1907,6 +2066,153 @@ describe('useListbox — disabled options (input-pickers#28)', () => {
     key(' ');
     expect(onSelect).not.toHaveBeenCalled();
   });
+
+  it('an option disabled while open (registration mode) is dropped and skipped; enabled again it is reachable', async () => {
+    const onSelect = vi.fn();
+    function Toggle({ off }: { off: boolean }) {
+      return (
+        <Picker defaultOpen autoHighlight={false} onSelectSpy={onSelect}>
+          <Opt value="a">Apple</Opt>
+          <Opt value="b" disabled={off}>
+            Banana
+          </Opt>
+          <Opt value="c">Cherry</Opt>
+        </Picker>
+      );
+    }
+    const { rerender } = render(<Toggle off={false} />);
+    key('ArrowDown');
+    key('ArrowDown');
+    expect(activeText()).toBe('Banana');
+    rerender(<Toggle off />);
+    await act(async () => {});
+    expect(activeText()).not.toBe('Banana');
+    key('ArrowDown'); // Apple
+    key('ArrowDown'); // skips Banana
+    expect(activeText()).toBe('Cherry');
+    key('ArrowUp');
+    expect(activeText()).toBe('Apple');
+    key('Enter');
+    expect(onSelect.mock.calls.map(([value]) => value)).toEqual(['a']);
+
+    rerender(<Toggle off={false} />);
+    await act(async () => {});
+    key('ArrowDown'); // reopens on the selected Apple
+    key('ArrowDown');
+    expect(activeText()).toBe('Banana');
+  });
+});
+
+/* ------------------------------------------------------------------ */
+/*  Hidden options (listbox-hook-code-1)                               */
+/* ------------------------------------------------------------------ */
+
+describe('useListbox — hidden options (listbox-hook-code-1)', () => {
+  it('leaves hidden options out of navigation, typeahead and Tab; a selected hidden label still shows', () => {
+    const onSelect = vi.fn();
+    const ref = React.createRef<UseListboxResult>();
+    render(
+      <Picker defaultValue="p" onSelectSpy={onSelect} resultRef={ref}>
+        <Opt value="p" hidden>
+          Choose
+        </Opt>
+        <Opt value="a">Apple</Opt>
+        <Opt value="b" hidden>
+          Banana
+        </Opt>
+        <Opt value="c">Cherry</Opt>
+      </Picker>,
+    );
+    // The label of the selected hidden option (a placeholder) is still known.
+    expect(combobox()).toHaveTextContent('Choose');
+    expect(ref.current?.getItem('p')?.label).toBe('Choose');
+    expect(ref.current?.items.map((item) => item.value)).toEqual(['a', 'c']);
+
+    key('ArrowDown'); // the selected option is hidden: opens on the first visible option
+    expect(activeText()).toBe('Apple');
+    key('ArrowDown'); // skips the hidden Banana
+    expect(activeText()).toBe('Cherry');
+    key('ArrowUp');
+    expect(activeText()).toBe('Apple');
+    act(() => ref.current?.setActiveValue('b'));
+    expect(activeText()).toBe('Apple');
+    key('b'); // typeahead: no visible option starts with "b"
+    expect(activeText()).toBe('Apple');
+    expect(document.querySelectorAll('[role="option"][hidden]')).toHaveLength(2);
+    key('Tab');
+    expect(onSelect.mock.calls.map(([value]) => value)).toEqual(['a']);
+  });
+
+  it('an option hidden while open is dropped; shown again it is reachable', async () => {
+    function Toggle({ off }: { off: boolean }) {
+      return (
+        <Picker defaultOpen autoHighlight={false}>
+          <Opt value="a">Apple</Opt>
+          <Opt value="b" hidden={off}>
+            Banana
+          </Opt>
+          <Opt value="c">Cherry</Opt>
+        </Picker>
+      );
+    }
+    const { rerender } = render(<Toggle off={false} />);
+    key('ArrowDown');
+    key('ArrowDown');
+    expect(activeText()).toBe('Banana');
+    rerender(<Toggle off />);
+    await act(async () => {});
+    expect(activeOption()).toBeNull();
+    expect(screen.getByTestId('items')).toHaveTextContent(/^a,c$/);
+    key('ArrowDown');
+    key('ArrowDown');
+    expect(activeText()).toBe('Cherry');
+    rerender(<Toggle off={false} />);
+    await act(async () => {});
+    expect(screen.getByTestId('items')).toHaveTextContent(/^a,b,c$/);
+    key('ArrowUp');
+    expect(activeText()).toBe('Banana');
+  });
+
+  it('data mode: an item with hidden: true is left out of the items, like a filtered-out one', () => {
+    const ref = React.createRef<UseListboxResult>();
+    function HiddenBanana() {
+      const [open, setOpen] = React.useState(true);
+      const lb = useListbox({
+        open,
+        onOpenChange: setOpen,
+        mode: 'select-only',
+        selectedValues: [],
+        onSelect: () => {},
+        items: ITEMS.map((item) => (item.value === 'b' ? { ...item, hidden: true } : item)),
+      });
+      React.useImperativeHandle(ref, () => lb);
+      return (
+        <ListboxContext.Provider value={lb.context}>
+          <button
+            type="button"
+            {...lb.getComboboxProps()}
+            aria-label="Fruit"
+            onKeyDown={lb.onKeyDown}
+          >
+            Fruit
+          </button>
+          {/* Every item rendered (not just `lb.items`): the hidden one renders `hidden`. */}
+          <ul {...lb.getListboxProps()} aria-label="Fruits">
+            {ITEMS.map((item) => (
+              <Row key={item.value} item={item} />
+            ))}
+          </ul>
+        </ListboxContext.Provider>
+      );
+    }
+    render(<HiddenBanana />);
+    expect(ref.current?.items.map((item) => item.value)).toEqual(['a', 'c', 'd']);
+    expect(ref.current?.getItem('b')?.label).toBe('Banana');
+    expect(screen.getByText('Banana')).toHaveAttribute('hidden');
+    expect(activeText()).toBe('Apple');
+    key('ArrowDown');
+    expect(activeText()).toBe('Cherry');
+  });
 });
 
 /* ------------------------------------------------------------------ */
@@ -2035,6 +2341,34 @@ describe('useListboxOption — context guard (C-CONTEXT)', () => {
     );
     error.mockRestore();
   });
+
+  it('logs the error once in production and renders an inert option', () => {
+    vi.stubEnv('NODE_ENV', 'production');
+    const error = vi.spyOn(console, 'error').mockImplementation(() => {});
+    try {
+      const { rerender } = render(
+        <ul aria-label="Fruits">
+          <Opt value="a">Apple</Opt>
+        </ul>,
+      );
+      rerender(
+        <ul aria-label="Fruits">
+          <Opt value="a">Apple</Opt>
+          <Opt value="b">Banana</Opt>
+        </ul>,
+      );
+      expect(screen.getAllByRole('option').map((option) => option.textContent)).toEqual([
+        'Apple',
+        'Banana',
+      ]);
+      expect(error.mock.calls).toEqual([
+        ['[WaveUI] Option must be used within a listbox (Combobox or Dropdown)'],
+      ]);
+    } finally {
+      error.mockRestore();
+      vi.unstubAllEnvs();
+    }
+  });
 });
 
 describe('useListbox — SSR and first render (input-pickers#6)', () => {
@@ -2051,6 +2385,22 @@ describe('useListbox — SSR and first render (input-pickers#6)', () => {
     const html = renderToString(<Picker defaultValue="us">{COUNTRIES}</Picker>);
     expect(html).toContain('United States');
     expect(html).toMatch(/role="option"[^>]*aria-selected="true"/);
+  });
+
+  it('options and groups written in a Server Component (lazy types) render the same server HTML', () => {
+    const LazyOpt = asClientReference(Opt);
+    const LazyGroup = asClientReference(Group);
+    const lazyCountries = (
+      <>
+        <LazyOpt value="no">Norway</LazyOpt>
+        <LazyGroup label="Americas">
+          <LazyOpt value="us">United States</LazyOpt>
+        </LazyGroup>
+      </>
+    );
+    const plain = renderToString(<Picker defaultValue="us">{COUNTRIES}</Picker>);
+    expect(plain).toMatch(/<button[^>]*>United States<\/button>/);
+    expect(renderToString(<Picker defaultValue="us">{lazyCountries}</Picker>)).toBe(plain);
   });
 
   it('the editable variant shows the label as the input value on the server', () => {
