@@ -126,6 +126,28 @@ describe('Select', () => {
       expect(screen.queryByRole('alert')).not.toBeInTheDocument();
     });
 
+    it('lets the consumer aria-invalid={false} win: no error border and no message', () => {
+      render(
+        <>
+          <Select aria-label="Letter" error="Checking" aria-invalid={false}>
+            {options}
+          </Select>
+          <Select aria-label="Digit" error aria-invalid="false">
+            {options}
+          </Select>
+        </>,
+      );
+      for (const name of ['Letter', 'Digit']) {
+        const select = screen.getByRole('combobox', { name });
+        expect(select).toHaveAttribute('aria-invalid', 'false');
+        expect(select).not.toHaveClass('border-destructive');
+        expect(select).not.toHaveAttribute('aria-describedby');
+        expect(select).not.toHaveAttribute('aria-errormessage');
+      }
+      expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+      expect(screen.queryByText('Checking')).not.toBeInTheDocument();
+    });
+
     it('does not set aria-invalid without an error', () => {
       render(<Select aria-label="Letter">{options}</Select>);
       expect(screen.getByRole('combobox', { name: 'Letter' })).not.toHaveAttribute('aria-invalid');

@@ -17,6 +17,8 @@ export interface SelectProps extends React.SelectHTMLAttributes<HTMLSelectElemen
    *
    * The error border also shows whenever the select ends up `aria-invalid="true"` without this
    * prop (an `error` on the surrounding `Field`, or your own `aria-invalid`).
+   * Your own `aria-invalid={false}` (or `"false"`) wins over this prop: the select is reported
+   * valid and shows neither the error border nor the message.
    */
   error?: string | boolean;
   /** Props of the error message element (`id`, `className`, …) rendered for a string `error`. */
@@ -55,7 +57,11 @@ export const Select = ({
   required,
   ...props
 }: SelectProps) => {
-  const { invalid, messageId, message } = useControlErrorMessage(error, errorMessageProps);
+  const { invalid, messageId, message } = useControlErrorMessage(
+    error,
+    errorMessageProps,
+    ariaInvalid,
+  );
   const fieldProps = useFieldControl(
     {
       id,

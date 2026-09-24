@@ -219,12 +219,41 @@ describe('Input', () => {
       );
     });
 
-    it('lets the consumer aria-invalid win', () => {
-      render(<Input aria-label="Email" error="Checking" aria-invalid={false} />);
-      expect(screen.getByRole('textbox', { name: 'Email' })).toHaveAttribute(
-        'aria-invalid',
-        'false',
+    it('lets the consumer aria-invalid={false} win: no error border and no message', () => {
+      render(
+        <>
+          <Input aria-label="Email" error="Checking" aria-invalid={false} />
+          <Input aria-label="Price" error="Too high" aria-invalid="false" contentAfter="kg" />
+          <Input aria-label="Name" error aria-invalid={false} />
+        </>,
       );
+      const email = screen.getByRole('textbox', { name: 'Email' });
+      const price = screen.getByRole('textbox', { name: 'Price' });
+      const name = screen.getByRole('textbox', { name: 'Name' });
+      expect(email).toHaveAttribute('aria-invalid', 'false');
+      expect(price).toHaveAttribute('aria-invalid', 'false');
+      expect(name).toHaveAttribute('aria-invalid', 'false');
+      // The look matches the state assistive technology reports (valid).
+      expect(email).not.toHaveClass('border-destructive');
+      expect(price.parentElement).not.toHaveClass('border-destructive');
+      expect(name).not.toHaveClass('border-destructive');
+      // No error message is rendered, announced or referenced for a valid control.
+      expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+      expect(screen.queryByText('Checking')).not.toBeInTheDocument();
+      expect(screen.queryByText('Too high')).not.toBeInTheDocument();
+      for (const control of [email, price, name]) {
+        expect(control).not.toHaveAttribute('aria-describedby');
+        expect(control).not.toHaveAttribute('aria-errormessage');
+      }
+    });
+
+    it('keeps the error border and message with a consumer aria-invalid="spelling"', () => {
+      render(<Input aria-label="Title" error="Check the spelling" aria-invalid="spelling" />);
+      const input = screen.getByRole('textbox', { name: 'Title' });
+      expect(input).toHaveAttribute('aria-invalid', 'spelling');
+      expect(input).toHaveClass('border-destructive');
+      expect(input).toHaveAccessibleDescription('Check the spelling');
+      expect(input).toHaveAttribute('aria-errormessage', screen.getByRole('alert').id);
     });
 
     it('passes axe with a string error', async () => {

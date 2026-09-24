@@ -24,7 +24,10 @@ export interface InputErrorMessageProps extends React.HTMLAttributes<HTMLSpanEle
  * @internal Not exported from the package.
  */
 export interface ControlErrorMessage {
-  /** Whether `error` marks the control invalid (a non-empty string or `true`). */
+  /**
+   * Whether `error` marks the control invalid (a non-empty string or `true`), unless the consumer
+   * set `aria-invalid` to `false`/`"false"`.
+   */
   invalid: boolean;
   /** The id of the rendered message, joined into `aria-describedby`/`aria-errormessage`. */
   messageId: string | undefined;
@@ -32,21 +35,32 @@ export interface ControlErrorMessage {
   message: React.ReactElement | null;
 }
 
+/** Whether an `aria-invalid` value explicitly reports the control as valid. */
+function isAriaValid(ariaInvalid: React.AriaAttributes['aria-invalid']): boolean {
+  return ariaInvalid === false || ariaInvalid === 'false';
+}
+
 /**
  * Shared by Input, Select and Textarea (internal): a non-empty string `error` renders a sibling
  * `<span role="alert">` message, unless the surrounding `Field` already renders its own error
- * (`FieldContext.hasErrorMessage`); `true` only marks the control invalid.
+ * (`FieldContext.hasErrorMessage`); `true` only marks the control invalid. The consumer's
+ * `aria-invalid` of `false`/`"false"` wins over `error`: the control is valid, so nothing is
+ * marked invalid and no message is rendered or referenced (ARIA: an error message of a valid
+ * control is hidden).
  *
  * @internal Not exported from the package.
  */
 export function useControlErrorMessage(
   error: string | boolean | undefined,
   errorMessageProps: InputErrorMessageProps | undefined,
+  consumerAriaInvalid?: React.AriaAttributes['aria-invalid'],
 ): ControlErrorMessage {
   const field = useFieldContext();
   const generatedId = useId('error');
-  const invalid = error === true || (typeof error === 'string' && error !== '');
-  const showMessage = typeof error === 'string' && error !== '' && !field?.hasErrorMessage;
+  const invalid =
+    !isAriaValid(consumerAriaInvalid) &&
+    (error === true || (typeof error === 'string' && error !== ''));
+  const showMessage = invalid && typeof error === 'string' && !field?.hasErrorMessage;
   if (!showMessage) return { invalid, messageId: undefined, message: null };
 
   const { id: ownId, className: messageClassName, ...messageRest } = errorMessageProps ?? {};
@@ -68,7 +82,9 @@ export function useControlErrorMessage(
  * Whether a text control shows the invalid look (error border), shared by Input, Select, Textarea
  * and SearchBox (internal): its own `error`, or a resolved `aria-invalid` of `true`/`"true"` —
  * from the consumer or from the surrounding `Field` (`useFieldControl`) — so the look always
- * matches the state assistive technology reports. `"grammar"`/`"spelling"` do not count.
+ * matches the state assistive technology reports. A resolved `false`/`"false"` (the consumer's
+ * override) never shows it, even with an own `error`. `"grammar"`/`"spelling"` alone do not
+ * count; with an own `error` they keep the look (the control is reported invalid).
  *
  * @internal Not exported from the package.
  */
@@ -76,6 +92,7 @@ export function isInvalidLook(
   ownError: boolean,
   ariaInvalid: React.AriaAttributes['aria-invalid'],
 ): boolean {
+  if (isAriaValid(ariaInvalid)) return false;
   return ownError || ariaInvalid === true || ariaInvalid === 'true';
 }
 
@@ -91,6 +108,8 @@ export interface InputProps extends React.InputHTMLAttributes<HTMLInputElement> 
    *
    * The error border also shows whenever the input ends up `aria-invalid="true"` without this
    * prop (an `error` on the surrounding `Field`, or your own `aria-invalid`).
+   * Your own `aria-invalid={false}` (or `"false"`) wins over this prop: the input is reported
+   * valid and shows neither the error border nor the message.
    * Use `Field` (`label`, `hint`, `error`) for a complete field layout.
    */
   error?: string | boolean;
@@ -139,7 +158,11 @@ export const Input = ({
   required,
   ...props
 }: InputProps) => {
-  const { invalid, messageId, message } = useControlErrorMessage(error, errorMessageProps);
+  const { invalid, messageId, message } = useControlErrorMessage(
+    error,
+    errorMessageProps,
+    ariaInvalid,
+  );
   const fieldProps = useFieldControl(
     {
       id,

@@ -18,7 +18,7 @@ import { isInvalidLook } from './Input';
  * Props that SearchBox routes to its `<input>` (C-ROUTING): the id, the ARIA naming/validation
  * attributes, native text-input attributes and the focus/keyboard handlers.
  */
-type SearchBoxInputProps = Pick<
+export type SearchBoxInputProps = Pick<
   React.InputHTMLAttributes<HTMLInputElement>,
   | 'id'
   | 'aria-label'

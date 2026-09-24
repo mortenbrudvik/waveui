@@ -93,6 +93,24 @@ describe('Textarea', () => {
       expect(screen.queryByRole('alert')).not.toBeInTheDocument();
     });
 
+    it('lets the consumer aria-invalid={false} win: no error border and no message', () => {
+      render(
+        <>
+          <Textarea aria-label="Message" error="Checking" aria-invalid={false} />
+          <Textarea aria-label="Notes" error aria-invalid="false" />
+        </>,
+      );
+      for (const name of ['Message', 'Notes']) {
+        const textarea = screen.getByRole('textbox', { name });
+        expect(textarea).toHaveAttribute('aria-invalid', 'false');
+        expect(textarea).not.toHaveClass('border-destructive');
+        expect(textarea).not.toHaveAttribute('aria-describedby');
+        expect(textarea).not.toHaveAttribute('aria-errormessage');
+      }
+      expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+      expect(screen.queryByText('Checking')).not.toBeInTheDocument();
+    });
+
     it('does not set aria-invalid without an error', () => {
       render(<Textarea aria-label="Message" />);
       expect(screen.getByRole('textbox', { name: 'Message' })).not.toHaveAttribute('aria-invalid');

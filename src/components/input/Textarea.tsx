@@ -17,6 +17,8 @@ export interface TextareaProps extends React.TextareaHTMLAttributes<HTMLTextArea
    *
    * The error border also shows whenever the textarea ends up `aria-invalid="true"` without this
    * prop (an `error` on the surrounding `Field`, or your own `aria-invalid`).
+   * Your own `aria-invalid={false}` (or `"false"`) wins over this prop: the textarea is reported
+   * valid and shows neither the error border nor the message.
    */
   error?: string | boolean;
   /** Props of the error message element (`id`, `className`, …) rendered for a string `error`. */
@@ -50,7 +52,11 @@ export const Textarea = ({
   required,
   ...props
 }: TextareaProps) => {
-  const { invalid, messageId, message } = useControlErrorMessage(error, errorMessageProps);
+  const { invalid, messageId, message } = useControlErrorMessage(
+    error,
+    errorMessageProps,
+    ariaInvalid,
+  );
   const fieldProps = useFieldControl(
     {
       id,
