@@ -6,10 +6,11 @@
  * suite; `npm run test:pack` is part of `prepublishOnly` and of the final gate. Here every
  * assertion function is exercised on inputs that reproduce the defects it guards against.
  */
-import { readFileSync } from 'node:fs';
+import { existsSync, mkdtempSync, readFileSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
   checkPackedFiles,
   checkPlainCss,
@@ -18,6 +19,7 @@ import {
   checkTypeProgram,
   EXPORTED_SUBPATHS,
   fixtureManifest,
+  pack,
   parseArgs,
 } from '../pack-smoke.mjs';
 
@@ -78,6 +80,15 @@ describe('package.json (spec §3.2)', () => {
     );
   });
 
+  it('checks the types of a tarball it packs itself (tooling-code-1)', () => {
+    // `attw --pack` would run a nested `npm pack`, which writes nothing under
+    // `npm publish --dry-run`; scripts/attw-pack.mjs packs without the dry run.
+    expect(pkg.scripts['check:package']).toBe(
+      'publint && node scripts/attw-pack.mjs --profile node16 --exclude-entrypoints styles ' +
+        'styles.css preflight.css tailwind tailwind.css tokens tokens.css legacy-tokens.css',
+    );
+  });
+
   it('verifies the Storybook build right after building it', () => {
     expect(pkg.scripts['build-storybook']).toBe(
       'storybook build && node scripts/verify-storybook.mjs',
@@ -121,6 +132,7 @@ describe('checkPackedFiles', () => {
     'src/styles/tailwind.css',
     'src/styles/tokens.css',
     'src/styles/base.css',
+    'src/styles/variants.css',
     'src/styles/legacy-tokens.css',
     'src/styles/styles.css',
   ];
@@ -164,6 +176,15 @@ describe('checkPackedFiles', () => {
       pkg,
     );
     expect(errors).toEqual([expect.stringContaining('src/styles/base.css')]);
+    // tailwind.css imports variants.css, which defines the wave-rtl variant (R4).
+    expect(
+      checkPackedFiles(
+        good.filter((path) => path !== 'src/styles/variants.css'),
+        pkg,
+      ),
+    ).toEqual([
+      'src/styles/tailwind.css @imports src/styles/variants.css, which is not in the tarball',
+    ]);
   });
 });
 
@@ -237,6 +258,25 @@ describe('checkTailwindCss (repo-level#1)', () => {
 
   it("reports a missing consumer utility (the fixture's own sources were not scanned)", () => {
     expect(checkTailwindCss(good.replace('.p-4{padding:1rem}', '')).join('\n')).toMatch(/\.p-4/);
+  });
+
+  describe("the wave-rtl classes of the package's dist (R4)", () => {
+    const directionClasses = ['wave-rtl:-scale-x-100'];
+    // Unminified, as the fixture compiles it: nested rules inside the utilities layer.
+    const compiled = String.raw`@layer utilities{.wave-rtl\:-scale-x-100{
+      @supports selector(:dir(rtl)){&:where(:dir(rtl)){scale:-1 1}}
+      @supports not selector(:dir(rtl)){&:where([dir="rtl"], [dir="rtl"] *){scale:-1 1}}}}`;
+
+    it('passes when each is compiled with the variant of @mortenbrudvik/waveui/tailwind', () => {
+      expect(checkTailwindCss(good + compiled, { directionClasses })).toEqual([]);
+    });
+
+    it('reports one that was not compiled (the entry does not define wave-rtl)', () => {
+      expect(checkTailwindCss(good, { directionClasses })).toEqual([
+        "the dist classes wave-rtl:-scale-x-100 were not compiled with Wave's wave-rtl variant " +
+          '(does @mortenbrudvik/waveui/tailwind import variants.css?)',
+      ]);
+    });
   });
 });
 
@@ -386,4 +426,24 @@ describe('parseArgs', () => {
     });
     expect(() => parseArgs(['--fixture', 'other'])).toThrow(/other/);
   });
+});
+
+describe('pack (tooling-code-1)', () => {
+  afterEach(() => {
+    vi.unstubAllEnvs();
+  });
+
+  it('writes the tarball under npm publish --dry-run', () => {
+    // npm exports its CLI config to the prepublishOnly scripts: a nested `npm pack` that
+    // inherits npm_config_dry_run prints a tarball name but writes no file.
+    vi.stubEnv('npm_config_dry_run', 'true');
+    const dir = mkdtempSync(join(tmpdir(), 'wave-pack-test-'));
+    try {
+      const { tarball, files } = pack(dir);
+      expect(existsSync(tarball)).toBe(true);
+      expect(files).toContain('package.json');
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  }, 60_000);
 });

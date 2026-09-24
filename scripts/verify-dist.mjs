@@ -53,7 +53,7 @@ import {
 } from 'node:fs';
 import { createRequire, isBuiltin } from 'node:module';
 import { tmpdir } from 'node:os';
-import { dirname, join, relative, resolve, sep } from 'node:path';
+import { basename, dirname, join, relative, resolve, sep } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..');
@@ -100,17 +100,55 @@ function canonicalPath(path) {
   return process.platform === 'win32' ? real.toLowerCase() : real;
 }
 
+/** A script's file name without its extension, case-folded. */
+function scriptName(path) {
+  return basename(path)
+    .replace(/\.[cm]?js$/i, '')
+    .toLowerCase();
+}
+
 /**
- * Whether the module at `metaUrl` is the script Node was started with (`argv1`), compared by
- * real path so a symlink, junction or drive-letter case difference still matches.
+ * How the module at `metaUrl` was loaded, given the script path Node was started with (`argv1`):
+ *   - `main`: it is that script (compared by real path, so a symlink, junction or drive-letter
+ *     case difference still matches);
+ *   - `mismatch`: a script with this module's name that could not be matched to it;
+ *   - `imported`: anything else (a test or another script imported the module).
  */
-export function isMainModule(metaUrl, argv1 = process.argv[1]) {
-  if (!argv1) return false;
+export function entryStatus(metaUrl, argv1 = process.argv[1]) {
+  if (!argv1) return 'imported';
+  const self = fileURLToPath(metaUrl);
   try {
-    return canonicalPath(fileURLToPath(metaUrl)) === canonicalPath(resolve(argv1));
+    if (canonicalPath(self) === canonicalPath(resolve(argv1))) return 'main';
   } catch {
-    return false;
+    // An unresolvable path is not this module; the name check below decides.
   }
+  return scriptName(argv1) === scriptName(self) ? 'mismatch' : 'imported';
+}
+
+/** Whether the module at `metaUrl` is the script Node was started with (see entryStatus). */
+export function isMainModule(metaUrl, argv1 = process.argv[1]) {
+  return entryStatus(metaUrl, argv1) === 'main';
+}
+
+/**
+ * The entry point of a gate script (tooling-tests-1): runs `main` and sets the exit code to its
+ * result when Node was started with the module at `metaUrl`. A script of the module's name that
+ * cannot be matched to it never passes silently: it reports that nothing was checked and sets
+ * exit code 1. Returns the exit code it set (undefined when the module was imported).
+ */
+export async function runScript(metaUrl, main, { argv1 = process.argv[1], io = console } = {}) {
+  const status = entryStatus(metaUrl, argv1);
+  if (status === 'imported') return undefined;
+  if (status === 'main') {
+    process.exitCode = await main();
+  } else {
+    io.error(
+      `${scriptName(fileURLToPath(metaUrl))}: cannot confirm that ${argv1} is ` +
+        `${fileURLToPath(metaUrl)}; nothing was checked`,
+    );
+    process.exitCode = 1;
+  }
+  return process.exitCode;
 }
 
 /** Index just past the comment or whitespace run at `i` (or `i` itself). */
@@ -184,10 +222,15 @@ export function expectsUseClient(path) {
   return !/^index\.(mjs|cjs|js)$/.test(segments[segments.length - 1]);
 }
 
-/** The module specifiers a built file imports (static, dynamic and `require`). */
+/**
+ * The module specifiers a built file imports (static, dynamic and `require`), also from
+ * whitespace-minified code: a static `import`/`export … from` starts the file or follows a line
+ * break, `;`, `}` or a comment (`import{a}from"x"`, `export*from"./y.mjs"`).
+ */
 export function importSpecifiers(code) {
   const specifiers = new Set();
-  const statics = /^[ \t]*(?:import|export)\s*(?:[^'"`;]*?\sfrom\s*)?(["'])([^"'\n]+)\1/gm;
+  const statics =
+    /(?:^|[;}\n]|\*\/)\s*(?:import|export)\s*(?:[^'"`;]*?\bfrom\s*)?(["'])([^"'\n]+)\1/g;
   const calls = /\b(?:import|require)\(\s*(["'`])([^"'`\n]+)\1\s*\)/g;
   for (const pattern of [statics, calls]) {
     for (const match of code.matchAll(pattern)) specifiers.add(match[2]);
@@ -906,6 +949,4 @@ export async function main(argv = process.argv.slice(2), io = console) {
   return 0;
 }
 
-if (isMainModule(import.meta.url)) {
-  process.exitCode = await main();
-}
+await runScript(import.meta.url, main);

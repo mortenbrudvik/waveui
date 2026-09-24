@@ -10,11 +10,18 @@
  * - Utilities come last so they beat the equal-specificity root rules of base.css.
  * - The `animate-wave-*` utilities are always emitted, so the keyframes they reference are
  *   always part of the precompiled CSS.
+ * - Tailwind reads every word of the sources, comments and non-class strings included. The
+ *   `@source not inline()` list holds such words that name a Tailwind utility no component uses
+ *   as a class (`visibility === 'collapse'`, `addEventListener('blur', …)`, JSDoc prose), so
+ *   the unlayered file never restyles an app's own `.collapse`, `.container` or `.table`.
+ *   `scripts/build-css.mjs` fails on any class that no class string of the library uses: add
+ *   such a word here (or rephrase the comment).
  */
 
 @import 'tailwindcss/theme.css' theme(inline);
 @import './tokens.css';
 @import './base.css';
+@import './variants.css';
 @import 'tailwindcss/utilities.css' source(none);
 
 @source '../components';
@@ -22,3 +29,4 @@
 @source not '../components/**/__tests__';
 @source not '../lib/**/__tests__';
 @source inline('animate-wave-spin animate-wave-spin-slow animate-wave-pulse animate-wave-indeterminate animate-wave-indeterminate-rtl');
+@source not inline('blur collapse container end filter hover:bg-error! inline list-item lowercase not-disabled:not-aria-disabled:hover:bg-error outline resize ring select-all shadow sm:inline start static table text-input transform visible');

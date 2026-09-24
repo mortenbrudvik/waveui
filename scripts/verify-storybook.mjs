@@ -40,7 +40,7 @@ import { tmpdir } from 'node:os';
 import { dirname, join, relative, resolve, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { collectStorySources, selectorClasses, storyOnlyClasses } from './build-css.mjs';
-import { isMainModule } from './verify-dist.mjs';
+import { runScript } from './verify-dist.mjs';
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const require = createRequire(import.meta.url);
@@ -211,6 +211,4 @@ export function main(argv = process.argv.slice(2), io = console, expected = unde
   return 0;
 }
 
-if (isMainModule(import.meta.url)) {
-  process.exitCode = main();
-}
+await runScript(import.meta.url, main);

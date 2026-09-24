@@ -25,7 +25,17 @@
  *     the way the CLI build scans its sources, by Tailwind's scanner with scanner sources (every
  *     text file whatever its extension; binary and lock files are skipped, CSS files yield no
  *     candidates): the library side is the style entries' `@source` directives (src/components
- *     and src/lib without their tests), the story side is stories/.
+ *     and src/lib without their tests), the story side is stories/;
+ *   - no class that no class string of the library uses (x-styling-1): every class of the file
+ *     is a whitespace-separated word of a string literal of a library script, a class of the
+ *     style entries (safelist, selectors) or story-only (reported above). Tailwind reads every
+ *     word of its sources, so a word of a comment or an identifier (`container`, `.filter(`)
+ *     would otherwise ship as a global, unlayered utility; styles.css excludes such words with
+ *     `@source not inline()`, and also the words of non-class strings, which this check cannot
+ *     tell from classes;
+ *   - every `wave-rtl:` class of a library class string is compiled with Wave's direction
+ *     variant (src/styles/variants.css, R4): `:where(:dir(rtl))` under
+ *     `@supports selector(:dir(rtl))` and the `[dir=rtl]` fallback under its negation.
  *
  * Usage: node scripts/build-css.mjs [--out-dir <dir>] [--check-only]
  *   --out-dir     output directory (default: dist)
@@ -38,7 +48,7 @@
 import { spawnSync } from 'node:child_process';
 import { existsSync, mkdirSync, readFileSync, realpathSync, statSync } from 'node:fs';
 import { createRequire } from 'node:module';
-import { basename, dirname, join, relative, resolve } from 'node:path';
+import { basename, dirname, extname, join, relative, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..');
@@ -213,6 +223,13 @@ function isKeyframes(node) {
   return /^@(?:-[a-z]+-)?keyframes\b/.test(node.prelude);
 }
 
+/** Class names (unescaped) of a selector; quoted strings (`[href$='.pdf']`) contribute none. */
+function classesOf(selector) {
+  return [...emptyStrings(selector).matchAll(/\.((?:\\[0-9a-fA-F]{1,6}\s?|\\[\s\S]|[\w-])+)/g)].map(
+    (match) => unescapeIdent(match[1]),
+  );
+}
+
 /**
  * Class names used in the selectors of a stylesheet (unescaped). Quoted strings
  * (`[href$='.pdf']`) and keyframe selectors (`33.3%`) contribute none.
@@ -221,10 +238,7 @@ export function selectorClasses(css) {
   const classes = new Set();
   walk(parseCss(css), (node, parents) => {
     if (!isStyleRule(node) || parents.some(isKeyframes)) return;
-    const prelude = emptyStrings(node.prelude);
-    for (const match of prelude.matchAll(/\.((?:\\[0-9a-fA-F]{1,6}\s?|\\[\s\S]|[\w-])+)/g)) {
-      classes.add(unescapeIdent(match[1]));
-    }
+    for (const name of classesOf(node.prelude)) classes.add(name);
   });
   return classes;
 }
@@ -441,6 +455,143 @@ export function storyOnlyClasses(css, { stories, library, libraryClasses = [] })
     .sort();
 }
 
+let typescript;
+
+/** The TypeScript compiler (a devDependency), loaded on first use. */
+function ts() {
+  typescript ??= require('typescript');
+  return typescript;
+}
+
+const SCRIPT_KINDS = {
+  ts: 'TS',
+  mts: 'TS',
+  cts: 'TS',
+  tsx: 'TSX',
+  js: 'JS',
+  mjs: 'JS',
+  cjs: 'JS',
+  jsx: 'JSX',
+};
+
+/** The script kind TypeScript parses a file extension as; undefined when it is no script. */
+function scriptKind(extension) {
+  const kind = SCRIPT_KINDS[extension.toLowerCase()];
+  return kind && ts().ScriptKind[kind];
+}
+
+/** Adds the whitespace-separated words of every string literal of a script to `tokens`. */
+function addStringTokens(content, extension, tokens) {
+  const kind = scriptKind(extension);
+  if (kind === undefined) return;
+  const { SyntaxKind, ScriptTarget, createSourceFile, forEachChild } = ts();
+  const literal = new Set([
+    SyntaxKind.StringLiteral,
+    SyntaxKind.NoSubstitutionTemplateLiteral,
+    SyntaxKind.TemplateHead,
+    SyntaxKind.TemplateMiddle,
+    SyntaxKind.TemplateTail,
+  ]);
+  const visit = (node) => {
+    if (literal.has(node.kind)) {
+      for (const word of node.text.split(/\s+/)) if (word) tokens.add(word);
+    }
+    forEachChild(node, visit);
+  };
+  visit(createSourceFile(`source.${extension}`, content, ScriptTarget.Latest, false, kind));
+}
+
+/**
+ * The words of the class strings of the given sources (texts or scanner sources, as for
+ * `candidates`): the whitespace-separated words of every string literal — quoted, JSX attribute
+ * value or template literal chunk — of each JavaScript or TypeScript file. Comments, identifiers,
+ * JSX text and files of other types contribute none.
+ */
+export function classStringTokens(sources) {
+  const tokens = new Set();
+  const scannerSources = sources.filter((source) => !('content' in source));
+  for (const { content, extension } of sources.filter((source) => 'content' in source)) {
+    addStringTokens(content, extension, tokens);
+  }
+  if (scannerSources.some((source) => !source.negated)) {
+    const scanner = tailwindScanner(scannerSources);
+    scanner.scan();
+    for (const file of scanner.files) {
+      addStringTokens(readFileSync(file, 'utf8'), extname(file).slice(1), tokens);
+    }
+  }
+  return tokens;
+}
+
+/**
+ * Classes of the stylesheet that no class string of the `library` sources uses (see
+ * `classStringTokens`) and that are not `libraryClasses` (the style entries' own classes):
+ * utilities Tailwind generated from words of comments, identifiers or non-script files. A word of
+ * a non-class string (`addEventListener('blur', …)`) counts as used: styles.css excludes those.
+ * `tokens` takes the library's class-string words when the caller already has them.
+ */
+export function strayClasses(
+  css,
+  { library, libraryClasses = [], tokens = classStringTokens(library) },
+) {
+  const used = new Set([...tokens, ...libraryClasses]);
+  return [...selectorClasses(css)].filter((name) => !used.has(name)).sort();
+}
+
+/** Whether a class name carries Wave's direction variant (`wave-rtl:`, maybe after others). */
+export function hasDirectionVariant(name) {
+  return /(?:^|:)wave-rtl:/.test(name);
+}
+
+const DIR_SUPPORTED = /^@supports\s+selector\(\s*:dir\(rtl\)\s*\)$/;
+const DIR_UNSUPPORTED = /^@supports\s+not\s+selector\(\s*:dir\(rtl\)\s*\)$/;
+
+/**
+ * The selectors a (possibly nested) style rule applies to: `&` in a nested rule stands for the
+ * enclosing rule's selector, and a nested selector without `&` is its descendant.
+ */
+function resolvedSelectors(node, parents) {
+  let resolved;
+  for (const rule of [...parents.filter(isStyleRule), node]) {
+    const own = selectorList(rule.prelude);
+    resolved = resolved
+      ? resolved.flatMap((outer) =>
+          own.map((inner) =>
+            /(?<!\\)&/.test(inner) ? inner.replace(/(?<!\\)&/g, () => outer) : `${outer} ${inner}`,
+          ),
+        )
+      : own;
+  }
+  return resolved;
+}
+
+/**
+ * The given `wave-rtl:` classes that the stylesheet does not compile with Wave's direction
+ * variant (src/styles/variants.css): a rule for the class with `:where(:dir(rtl))` under
+ * `@supports selector(:dir(rtl))`, and one with `:where([dir=rtl],[dir=rtl] *)` under
+ * `@supports not selector(:dir(rtl))`. Minified (flat) and unminified (nested) output are read.
+ */
+export function missingDirectionVariant(css, classes) {
+  const native = new Set();
+  const fallback = new Set();
+  walk(parseCss(css), (node, parents) => {
+    if (!isStyleRule(node)) return;
+    const supported = parents.some((parent) => DIR_SUPPORTED.test(parent.prelude));
+    const unsupported = parents.some((parent) => DIR_UNSUPPORTED.test(parent.prelude));
+    if (!supported && !unsupported) return;
+    for (const selector of resolvedSelectors(node, parents)) {
+      const names = classesOf(selector);
+      if (supported && selector.includes(':where(:dir(rtl))')) {
+        for (const name of names) native.add(name);
+      }
+      if (unsupported && selector.includes(':where([dir=rtl],[dir=rtl] *)')) {
+        for (const name of names) fallback.add(name);
+      }
+    }
+  });
+  return [...new Set(classes)].filter((name) => !native.has(name) || !fallback.has(name)).sort();
+}
+
 export function assertStylesCss(css, { tokensCss, baseCss, storySources }) {
   const errors = [];
   const nodes = parseCss(css);
@@ -488,11 +639,36 @@ export function assertStylesCss(css, { tokensCss, baseCss, storySources }) {
     if (css.includes(needle)) errors.push(`styles.css: contains "${needle}"`);
   }
 
-  // No story-only classes.
   if (storySources) {
+    // No story-only classes.
     const leaked = storyOnlyClasses(css, storySources);
     if (leaked.length > 0) {
       errors.push(`styles.css: contains story-only classes: ${leaked.slice(0, 20).join(' ')}`);
+    }
+
+    // No class that only a comment, an identifier or a non-script file names (a story-only
+    // class is reported once, above).
+    const tokens = classStringTokens(storySources.library);
+    const stray = strayClasses(css, {
+      tokens,
+      libraryClasses: [...(storySources.libraryClasses ?? []), ...leaked],
+    });
+    if (stray.length > 0) {
+      errors.push(
+        'styles.css: contains classes that no class string of src/components or src/lib uses ' +
+          '(words of comments, identifiers or other files; exclude them in ' +
+          `src/styles/styles.css with @source not inline()): ${stray.slice(0, 20).join(' ')}`,
+      );
+    }
+
+    // Every wave-rtl: class of the library compiled with Wave's direction variant (R4).
+    const uncompiled = missingDirectionVariant(css, [...tokens].filter(hasDirectionVariant));
+    if (uncompiled.length > 0) {
+      errors.push(
+        "styles.css: not compiled with Wave's wave-rtl variant (:where(:dir(rtl)) under " +
+          '@supports selector(:dir(rtl)) and the [dir=rtl] fallback; is ' +
+          `src/styles/variants.css imported?): ${uncompiled.slice(0, 20).join(' ')}`,
+      );
     }
   }
   return errors;

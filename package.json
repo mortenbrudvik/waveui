@@ -65,11 +65,11 @@
     "storybook": "storybook dev -p 6006",
     "build-storybook": "storybook build && node scripts/verify-storybook.mjs",
     "typecheck": "tsc -p tsconfig.json --noEmit && tsc -p tsconfig.dev.json --noEmit && tsc -p tsconfig.node.json --noEmit && node scripts/check-ts-coverage.mjs",
-    "lint": "eslint src/ stories/ .storybook/ scripts/",
+    "lint": "eslint --max-warnings 0 src/ stories/ .storybook/ scripts/",
     "lint:fix": "eslint src/ stories/ .storybook/ scripts/ --fix",
     "format": "prettier --write \"src/**/*.{ts,tsx}\" \"stories/**/*.{ts,tsx}\" \".storybook/**/*.{ts,tsx,css}\" \"scripts/**/*.{js,mjs,cjs,ts,mts,cts,tsx,css,json}\"",
     "format:check": "prettier --check \"src/**/*.{ts,tsx}\" \"stories/**/*.{ts,tsx}\" \".storybook/**/*.{ts,tsx,css}\" \"scripts/**/*.{js,mjs,cjs,ts,mts,cts,tsx,css,json}\"",
-    "check:package": "publint && attw --pack . --profile node16 --exclude-entrypoints styles styles.css preflight.css tailwind tailwind.css tokens tokens.css legacy-tokens.css",
+    "check:package": "publint && node scripts/attw-pack.mjs --profile node16 --exclude-entrypoints styles styles.css preflight.css tailwind tailwind.css tokens tokens.css legacy-tokens.css",
     "test:pack": "node scripts/pack-smoke.mjs",
     "prepublishOnly": "npm run typecheck && npm run build && node scripts/verify-dist.mjs --final && npm test && npm run check:package && npm run test:pack"
   },

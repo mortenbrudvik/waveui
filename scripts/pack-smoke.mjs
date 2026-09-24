@@ -20,9 +20,10 @@
  *                 `dist/index.d.cts` (no TS1479).
  *   tailwind  a Tailwind 4 app (scripts/fixtures/tailwind) compiling
  *             `@import 'tailwindcss'; @import '@mortenbrudvik/waveui/tailwind';` with
- *             @tailwindcss/cli: the component classes are generated from the package's `dist`,
- *             Wave's tokens sit in `@layer theme` and its base rules in `@layer base`, and the
- *             app's own utilities are still generated.
+ *             @tailwindcss/cli: the component classes are generated from the package's `dist`
+ *             (its `wave-rtl:` classes with the direction variant the entry defines), Wave's
+ *             tokens sit in `@layer theme` and its base rules in `@layer base`, and the app's own
+ *             utilities are still generated.
  *
  * The fixture dependencies (`smokeDependencies` in each fixture's package.json) are pinned to
  * the versions installed in this repository, so `npm install` is served from the npm cache when
@@ -41,8 +42,16 @@ import { createRequire } from 'node:module';
 import { tmpdir } from 'node:os';
 import { dirname, join, posix, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { assertPreflightCss, parseCss, selectorClasses, selectorList } from './build-css.mjs';
-import { isMainModule } from './verify-dist.mjs';
+import {
+  assertPreflightCss,
+  classStringTokens,
+  hasDirectionVariant,
+  missingDirectionVariant,
+  parseCss,
+  selectorClasses,
+  selectorList,
+} from './build-css.mjs';
+import { runScript } from './verify-dist.mjs';
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const require = createRequire(import.meta.url);
@@ -198,9 +207,10 @@ export function checkPlainCss(css) {
 /**
  * The Tailwind consumer build of `./tailwind` (repo-level#1): Wave's tokens in `@layer theme`,
  * its base rules in `@layer base`, the component classes generated from the package's `dist`,
- * and the consumer's own utilities.
+ * each of `directionClasses` (the `wave-rtl:` classes of the dist's class strings) compiled with
+ * the `wave-rtl` variant the entry defines (R4), and the consumer's own utilities.
  */
-export function checkTailwindCss(css) {
+export function checkTailwindCss(css, { directionClasses = [] } = {}) {
   const errors = [];
   const tokenLayers = new Set();
   const baseLayers = new Set();
@@ -229,6 +239,13 @@ export function checkTailwindCss(css) {
         `the component class .${name} was not generated (the package's dist was not scanned)`,
       );
     }
+  }
+  const uncompiled = missingDirectionVariant(css, directionClasses);
+  if (uncompiled.length > 0) {
+    errors.push(
+      `the dist classes ${uncompiled.slice(0, 10).join(' ')} were not compiled with Wave's ` +
+        'wave-rtl variant (does @mortenbrudvik/waveui/tailwind import variants.css?)',
+    );
   }
   if (!classes.has('p-4')) {
     errors.push(
@@ -361,14 +378,17 @@ function npmCommand() {
 }
 
 /**
- * The environment for npm in a fixture: without the `npm_*` variables of an enclosing
- * `npm run` (package and lifecycle data, prefixes), which describe this repository.
+ * The environment for a nested npm command (the pack and the fixture installs): without the
+ * `npm_*` variables of an enclosing `npm run` (package and lifecycle data, prefixes), which
+ * describe this repository, and without its dry run. `npm publish --dry-run` exports
+ * `npm_config_dry_run=true` to prepublishOnly, and a nested `npm pack` would then write no
+ * tarball (tooling-code-1).
  */
-function fixtureEnv() {
+function npmEnv() {
   const env = {};
   for (const [key, value] of Object.entries(process.env)) {
     if (/^npm_(package_|lifecycle_)/i.test(key)) continue;
-    if (/^npm_config_(local_prefix|prefix|global|workspaces?)$/i.test(key)) continue;
+    if (/^npm_config_(local_prefix|prefix|global|workspaces?|dry_run)$/i.test(key)) continue;
     env[key] = value;
   }
   return env;
@@ -397,9 +417,15 @@ function npm(label, args, options = {}) {
   return runOrThrow(label, command, [...prefix, ...args], { shell, ...options });
 }
 
-/** Packs the package into `dir`; returns the tarball path and its file list. */
-function pack(dir) {
-  const { stdout } = npm('npm pack', ['pack', '--json', '--pack-destination', dir], { cwd: root });
+/**
+ * Packs the package into `dir` (also under `npm publish --dry-run`, see npmEnv); returns the
+ * tarball path and its file list.
+ */
+export function pack(dir) {
+  const { stdout } = npm('npm pack', ['pack', '--json', '--pack-destination', dir], {
+    cwd: root,
+    env: npmEnv(),
+  });
   const [info] = JSON.parse(stdout.slice(stdout.indexOf('[')));
   return { tarball: join(dir, info.filename), files: info.files.map((file) => file.path) };
 }
@@ -423,7 +449,7 @@ function installFixture(name, work, tarball) {
       '--prefer-offline',
       '--loglevel=error',
     ],
-    { cwd: dir, env: fixtureEnv() },
+    { cwd: dir, env: npmEnv() },
   );
   return dir;
 }
@@ -478,7 +504,13 @@ function runTailwind(dir) {
   if (result.status !== 0) {
     return [`@tailwindcss/cli failed (exit ${result.status}): ${result.stderr.trim()}`];
   }
-  return checkTailwindCss(readFileSync(join(dir, 'out.css'), 'utf8'));
+  const dist = {
+    base: join(dir, 'node_modules', pkg.name, 'dist'),
+    pattern: '**/*',
+    negated: false,
+  };
+  const directionClasses = [...classStringTokens([dist])].filter(hasDirectionVariant);
+  return checkTailwindCss(readFileSync(join(dir, 'out.css'), 'utf8'), { directionClasses });
 }
 
 /** CLI entry; returns the exit code. `io` receives the report (default: the console). */
@@ -517,6 +549,4 @@ export async function main(argv = process.argv.slice(2), io = console) {
   return 0;
 }
 
-if (isMainModule(import.meta.url)) {
-  process.exitCode = await main();
-}
+await runScript(import.meta.url, main);

@@ -1138,27 +1138,61 @@ function statements(name: string): string[] {
     .map((node) => node.prelude.replace(/\s+/g, ' ').replace(/"/g, "'"));
 }
 
+/**
+ * Tailwind utilities that no component uses as a class, but whose names occur in the library
+ * sources as words of comments, identifiers or non-class strings (x-styling-1). styles.css
+ * excludes them, so the unlayered precompiled file never restyles an app's own `.collapse`,
+ * `.container` or `.table`.
+ */
+const EXCLUDED_WORDS = [
+  'blur',
+  'collapse',
+  'container',
+  'end',
+  'filter',
+  'hover:bg-error!',
+  'inline',
+  'list-item',
+  'lowercase',
+  'not-disabled:not-aria-disabled:hover:bg-error',
+  'outline',
+  'resize',
+  'ring',
+  'select-all',
+  'shadow',
+  'sm:inline',
+  'start',
+  'static',
+  'table',
+  'text-input',
+  'transform',
+  'visible',
+];
+
 describe('style entries (repo-level#1)', () => {
   it('styles.css builds the unlayered precompiled CSS with pinned sources, utilities last', () => {
     expect(statements('styles.css')).toEqual([
       "@import 'tailwindcss/theme.css' theme(inline)",
       "@import './tokens.css'",
       "@import './base.css'",
+      "@import './variants.css'",
       "@import 'tailwindcss/utilities.css' source(none)",
       "@source '../components'",
       "@source '../lib'",
       "@source not '../components/**/__tests__'",
       "@source not '../lib/**/__tests__'",
       "@source inline('animate-wave-spin animate-wave-spin-slow animate-wave-pulse animate-wave-indeterminate animate-wave-indeterminate-rtl')",
+      `@source not inline('${EXCLUDED_WORDS.join(' ')}')`,
     ]);
     expect(parseFile('styles.css').filter((node) => node.children !== null)).toEqual([]);
     expect(readCss('styles.css')).not.toMatch(/layer\(/);
   });
 
-  it('tailwind.css joins the consumer layer order and scans dist', () => {
+  it('tailwind.css joins the consumer layer order, defines wave-rtl and scans dist', () => {
     expect(statements('tailwind.css')).toEqual([
       "@import './tokens.css' layer(theme)",
       "@import './base.css' layer(base)",
+      "@import './variants.css'",
       "@source '../../dist'",
     ]);
   });
@@ -1172,8 +1206,40 @@ describe('style entries (repo-level#1)', () => {
       "@import 'tailwindcss'",
       "@import './tokens.css' layer(theme)",
       "@import './base.css' layer(base)",
+      "@import './variants.css'",
     ]);
     expect(parseFile('globals.css').filter((node) => node.children !== null)).toEqual([]);
+  });
+
+  it('variants.css defines wave-rtl by the element direction, with the [dir] fallback (R4)', () => {
+    // `:dir(rtl)` follows the element's own direction, so an LTR subtree of an RTL page is not
+    // mirrored; browsers without `:dir()` (Chrome and Edge before 120) get Tailwind's attribute
+    // match. Tailwind's own `rtl` variant is never redefined.
+    expect(parseFile('variants.css')).toEqual([
+      {
+        prelude: '@custom-variant wave-rtl',
+        children: [
+          {
+            prelude: '@supports selector(:dir(rtl))',
+            children: [
+              {
+                prelude: '&:where(:dir(rtl))',
+                children: [{ prelude: '@slot', children: null }],
+              },
+            ],
+          },
+          {
+            prelude: '@supports not selector(:dir(rtl))',
+            children: [
+              {
+                prelude: "&:where([dir='rtl'], [dir='rtl'] *)",
+                children: [{ prelude: '@slot', children: null }],
+              },
+            ],
+          },
+        ],
+      },
+    ]);
   });
 });
 
@@ -1323,6 +1389,9 @@ interface BuildCss {
   styleEntryClasses(entries: StyleEntries): Set<string>;
   sourceEntries(css: string, base: string): SourceEntry[];
   storyOnlyClasses(css: string, sources: StorySources): string[];
+  classStringTokens(sources: (SourceText | SourceEntry)[]): Set<string>;
+  strayClasses(css: string, sources: Omit<StorySources, 'stories'>): string[];
+  missingDirectionVariant(css: string, classes: Iterable<string>): string[];
   collectStorySources(projectRoot: string): Required<StorySources>;
   main(argv: string[], options?: { projectRoot?: string }): number;
   entryStatus(argv1: string | undefined): 'main' | 'mismatch' | 'imported';
@@ -1537,9 +1606,12 @@ describe('scripts/build-css.mjs — gate assertions (repo-level#1)', () => {
     });
 
     it('fails the gate when a story-only class shipped', async () => {
+      const { selectorClasses } = await loadBuildCss();
       const css = `${GATE_CSS}.w-1{width:4px}.w-10{width:40px}`;
       const stories: SourceText[] = [{ content: '<i className="w-1 w-10" />', extension: 'tsx' }];
-      expect(await gate(css, { stories, library })).toEqual([
+      // Every class of the passing stylesheet counts as a library class here.
+      const libraryClasses = selectorClasses(GATE_CSS);
+      expect(await gate(css, { stories, library, libraryClasses })).toEqual([
         'styles.css: contains story-only classes: w-1',
       ]);
     });
@@ -1568,9 +1640,132 @@ describe('scripts/build-css.mjs — gate assertions (repo-level#1)', () => {
       const stories: SourceText[] = [
         { content: '<i className="motion-reduce:animate-none wave-dark" />', extension: 'tsx' },
       ];
-      expect(await gate(css, { stories, library: [], libraryClasses })).toEqual([
+      const utilities: SourceText[] = [
+        { content: "cn('bg-primary text-body-1')", extension: 'ts' },
+      ];
+      expect(await gate(css, { stories, library: utilities, libraryClasses })).toEqual([
         'styles.css: contains story-only classes: motion-reduce:animate-none',
       ]);
+    });
+  });
+
+  describe('classes that no library class string uses (x-styling-1)', () => {
+    const COMPONENT = [
+      '/** Keeps its container; mirror the chevron with `rtl:-scale-x-100`. */',
+      "const visible = items.filter((item) => item.visibility !== 'collapse');",
+      "window.addEventListener('blur', onBlur);",
+      "export const box = cn('flex p-4', open && `bg-primary ${tone}`);",
+      'export const el = <i className="w-10 hover:bg-primary" data-x={`size-4 ${a} h-2`}>shadow</i>;',
+    ].join('\n');
+    const TOKENS = [
+      'bg-primary',
+      'blur',
+      'collapse',
+      'flex',
+      'h-2',
+      'hover:bg-primary',
+      'p-4',
+      'size-4',
+      'w-10',
+    ];
+
+    it('takes the words of string literals, never of comments, identifiers or JSX text', async () => {
+      const { classStringTokens } = await loadBuildCss();
+      expect([...classStringTokens([{ content: COMPONENT, extension: 'tsx' }])].sort()).toEqual(
+        TOKENS,
+      );
+    });
+
+    it('reads no class string out of a file that is not JavaScript or TypeScript', async () => {
+      const { classStringTokens } = await loadBuildCss();
+      const notes: SourceText = { content: "Pads a card with 'w-96'.", extension: 'md' };
+      expect([...classStringTokens([notes])]).toEqual([]);
+    });
+
+    it('reports shipped classes that only comments, identifiers or other files name', async () => {
+      const { strayClasses } = await loadBuildCss();
+      const css =
+        '.flex{display:flex}.p-4{padding:1rem}.container{width:100%}.visible{visibility:visible}' +
+        '.shadow{box-shadow:0 0 1px}.w-96{width:24rem}.wave-dark{color-scheme:dark}' +
+        // A word of a non-class string cannot be told apart from a class: styles.css excludes
+        // such words (`@source not inline()`), this check does not catch them.
+        '.collapse{visibility:collapse}';
+      const library: SourceText[] = [
+        { content: COMPONENT, extension: 'tsx' },
+        { content: 'Pads a card with `w-96`.', extension: 'md' },
+      ];
+      expect(strayClasses(css, { library, libraryClasses: ['wave-dark'] })).toEqual([
+        'container',
+        'shadow',
+        'visible',
+        'w-96',
+      ]);
+    });
+
+    it('fails the gate on a shipped class that only a comment names', async () => {
+      const { selectorClasses } = await loadBuildCss();
+      const css = `${GATE_CSS}.container{width:100%}.w-10{width:40px}`;
+      const library: SourceText[] = [
+        { content: "/* keeps its container */ cn('w-10')", extension: 'ts' },
+      ];
+      expect(
+        await gate(css, { stories: [], library, libraryClasses: selectorClasses(GATE_CSS) }),
+      ).toEqual([
+        'styles.css: contains classes that no class string of src/components or src/lib uses ' +
+          '(words of comments, identifiers or other files; exclude them in src/styles/styles.css ' +
+          'with @source not inline()): container',
+      ]);
+    });
+  });
+
+  describe('the wave-rtl direction variant (R4)', () => {
+    const NATIVE = String.raw`@supports selector(:dir(rtl)){.wave-rtl\:-scale-x-100:where(:dir(rtl)){scale:-1 1}}`;
+    const FALLBACK = String.raw`@supports not selector(:dir(rtl)){.wave-rtl\:-scale-x-100:where([dir=rtl],[dir=rtl] *){scale:-1 1}}`;
+
+    it('accepts a class compiled for :dir(rtl) and for the [dir=rtl] fallback', async () => {
+      const { missingDirectionVariant } = await loadBuildCss();
+      expect(missingDirectionVariant(NATIVE + FALLBACK, ['wave-rtl:-scale-x-100'])).toEqual([]);
+    });
+
+    it('reads the nested rules of an unminified build', async () => {
+      const { missingDirectionVariant } = await loadBuildCss();
+      const nested = String.raw`
+        .group-hover\:wave-rtl\:ms-3 {
+          &:is(:where(.group):hover *) {
+            @supports selector(:dir(rtl)) { &:where(:dir(rtl)) { margin-inline-start: .75rem; } }
+            @supports not selector(:dir(rtl)) {
+              &:where([dir="rtl"], [dir="rtl"] *) { margin-inline-start: .75rem; }
+            }
+          }
+        }`;
+      expect(missingDirectionVariant(nested, ['group-hover:wave-rtl:ms-3'])).toEqual([]);
+    });
+
+    it('reports a class without either form, and one compiled like Tailwind rtl:', async () => {
+      const { missingDirectionVariant } = await loadBuildCss();
+      const name = 'wave-rtl:-scale-x-100';
+      expect(missingDirectionVariant(NATIVE, [name])).toEqual([name]);
+      expect(missingDirectionVariant(FALLBACK, [name])).toEqual([name]);
+      expect(missingDirectionVariant('', [name])).toEqual([name]);
+      const tailwindRtl = String.raw`.wave-rtl\:-scale-x-100:where(:dir(rtl),[dir=rtl],[dir=rtl] *){scale:-1 1}`;
+      expect(missingDirectionVariant(tailwindRtl, [name])).toEqual([name]);
+    });
+
+    it('fails the gate for a wave-rtl class of a library class string that did not compile', async () => {
+      const { selectorClasses } = await loadBuildCss();
+      const library: SourceText[] = [
+        { content: "cn('wave-rtl:-scale-x-100', 'hover:wave-rtl:ps-2')", extension: 'ts' },
+      ];
+      const sources = { stories: [], library, libraryClasses: selectorClasses(GATE_CSS) };
+      expect(await gate(GATE_CSS + NATIVE, sources)).toEqual([
+        "styles.css: not compiled with Wave's wave-rtl variant (:where(:dir(rtl)) under " +
+          '@supports selector(:dir(rtl)) and the [dir=rtl] fallback; is src/styles/variants.css ' +
+          'imported?): hover:wave-rtl:ps-2 wave-rtl:-scale-x-100',
+      ]);
+      const compiled: SourceText[] = [{ content: "cn('wave-rtl:-scale-x-100')", extension: 'ts' }];
+      expect(await gate(GATE_CSS + NATIVE + FALLBACK, { ...sources, library: compiled })).toEqual(
+        [],
+      );
     });
   });
 
@@ -1750,7 +1945,11 @@ describe('scripts/build-css.mjs — gate assertions (repo-level#1)', () => {
       for (const name of ['styles.css', 'tokens.css', 'base.css']) {
         write(`src/styles/${name}`, readCss(name));
       }
-      write('src/components/Box.tsx', "export const box = cn('bg-primary text-body-1');\n");
+      write(
+        'src/components/Box.tsx',
+        "/** Keeps its container. */\nexport const box = cn('bg-primary text-body-1');\n" +
+          "export const wide = cn('w-20');\n",
+      );
       // Excluded by `@source not '../components/**/__tests__'`.
       write('src/components/__tests__/Box.test.tsx', 'render(<i className="w-7" />);\n');
       // Tailwind scans every text file of a source directory, not only TypeScript…
@@ -1765,16 +1964,32 @@ describe('scripts/build-css.mjs — gate assertions (repo-level#1)', () => {
     });
 
     it('passes when every story class of dist comes from the library or the style entries', async () => {
-      // w-96: a library class from a Markdown file; wave-dark: a selector class of tokens.css;
-      // h-96: a story-only class that did not ship.
-      write('stories/Box.stories.tsx', '<i className="bg-primary w-96 wave-dark" />;\n');
+      // w-20: a library class string; wave-dark: a selector class of tokens.css; h-96: a
+      // story-only class that did not ship.
+      write('stories/Box.stories.tsx', '<i className="bg-primary w-20 wave-dark" />;\n');
       write('stories/Notes.mdx', '<i className="h-96" />\n');
-      write('dist/styles.css', shippedCss('.w-96{width:24rem}'));
+      write('dist/styles.css', shippedCss('.w-20{width:5rem}'));
       const { code, output } = await run(['--check-only']);
       expect(output).toMatch(
         /^build-css: dist\/styles\.css \([\d.]+ kB\) and dist\/preflight\.css \([\d.]+ kB\) OK$/,
       );
       expect(code).toBe(0);
+    });
+
+    it('fails on classes that only a comment or a non-TypeScript library file names', async () => {
+      // w-96: a word of src/lib/classes.md (a library candidate, so no story-only class);
+      // container: a word of a comment in Box.tsx.
+      write('stories/Box.stories.tsx', '<i className="bg-primary w-96" />;\n');
+      write('stories/Notes.mdx', '\n');
+      write('dist/styles.css', shippedCss('.w-96{width:24rem}.container{width:100%}'));
+      const { code, output } = await run(['--check-only']);
+      expect(output.split('\n')).toEqual([
+        'build-css: 1 problem(s) in dist:',
+        '  - styles.css: contains classes that no class string of src/components or src/lib ' +
+          'uses (words of comments, identifiers or other files; exclude them in ' +
+          'src/styles/styles.css with @source not inline()): container w-96',
+      ]);
+      expect(code).toBe(1);
     });
 
     it('fails on story-only classes: named in a style entry comment, used by tests, in a non-TS story', async () => {
@@ -1800,6 +2015,139 @@ describe('scripts/build-css.mjs — gate assertions (repo-level#1)', () => {
       expect(code).toBe(1);
     });
   });
+
+  describe('main() compiling the real style entries (x-styling-1, R4)', () => {
+    /**
+     * A project with copies of the real style entries, compiled by the Tailwind CLI. It lives
+     * under the repository's node_modules/.cache, so `tailwindcss/*.css` resolves as it does here.
+     */
+    const REPO_ROOT = join(import.meta.dirname, '..', '..', '..');
+    const COMPONENT = [
+      '/** A box that keeps its container in view; the chevron mirrors in RTL. */',
+      'export function Box({ open, el }: { open: boolean; el: Element }) {',
+      "  window.addEventListener('blur', close);",
+      "  if (getComputedStyle(el).visibility === 'collapse') return null;",
+      "  return <i className={cn('bg-primary text-body-1 wave-rtl:-scale-x-100', open && 'grid')} />;",
+      '}',
+      '',
+    ].join('\n');
+    let project = '';
+
+    function write(path: string, content: string) {
+      mkdirSync(dirname(join(project, path)), { recursive: true });
+      writeFileSync(join(project, path), content);
+    }
+
+    /** Runs main() (a full build) and returns its exit code, its output and the stylesheet. */
+    async function build(): Promise<{ code: number; output: string; css: string }> {
+      const { main } = await loadBuildCss();
+      const printed: unknown[][] = [];
+      const error = vi.spyOn(console, 'error').mockImplementation((...args) => printed.push(args));
+      const log = vi.spyOn(console, 'log').mockImplementation((...args) => printed.push(args));
+      try {
+        const code = main([], { projectRoot: project });
+        const css = readFileSync(join(project, 'dist', 'styles.css'), 'utf8');
+        return { code, output: printed.map((args) => args.join(' ')).join('\n'), css };
+      } finally {
+        error.mockRestore();
+        log.mockRestore();
+      }
+    }
+
+    beforeAll(() => {
+      const cache = join(REPO_ROOT, 'node_modules', '.cache');
+      mkdirSync(cache, { recursive: true });
+      project = mkdtempSync(join(cache, 'wave-build-css-compile-'));
+      for (const name of [
+        'styles.css',
+        'tokens.css',
+        'base.css',
+        'variants.css',
+        'preflight.css',
+      ]) {
+        write(`src/styles/${name}`, readCss(name));
+      }
+      write('src/components/Box.tsx', COMPONENT);
+      write('stories/Box.stories.tsx', '<Box open />;\n');
+    });
+
+    afterAll(() => {
+      rmSync(project, { recursive: true, force: true });
+    });
+
+    it('ships no class for the words of comments and non-class strings, and passes', async () => {
+      const { code, output, css } = await build();
+      const { selectorClasses, missingDirectionVariant } = await loadBuildCss();
+      const classes = selectorClasses(css);
+      for (const word of ['container', 'blur', 'collapse', 'visible']) {
+        expect(classes, word).not.toContain(word);
+      }
+      for (const name of ['bg-primary', 'text-body-1', 'grid', 'wave-rtl:-scale-x-100']) {
+        expect(classes, name).toContain(name);
+      }
+      expect(missingDirectionVariant(css, ['wave-rtl:-scale-x-100'])).toEqual([]);
+      expect(output).toMatch(/^build-css: dist\/styles\.css \([\d.]+ kB\) and .* OK$/);
+      expect(code).toBe(0);
+    }, 60_000);
+
+    it('fails on a comment word that styles.css does not exclude', async () => {
+      write(
+        'src/styles/styles.css',
+        readCss('styles.css').replace(/@source not inline\([^)]*\);/, ''),
+      );
+      try {
+        const { code, output, css } = await build();
+        const { selectorClasses } = await loadBuildCss();
+        expect(selectorClasses(css)).toContain('container');
+        expect(output.split('\n')).toContain(
+          '  - styles.css: contains classes that no class string of src/components or src/lib ' +
+            'uses (words of comments, identifiers or other files; exclude them in ' +
+            'src/styles/styles.css with @source not inline()): container',
+        );
+        expect(code).toBe(1);
+      } finally {
+        write('src/styles/styles.css', readCss('styles.css'));
+      }
+    }, 60_000);
+
+    it('fails on a wave-rtl class when styles.css does not define the variant', async () => {
+      write(
+        'src/styles/styles.css',
+        readCss('styles.css').replace("@import './variants.css';", ''),
+      );
+      try {
+        const { code, output } = await build();
+        expect(output).toContain(
+          "styles.css: not compiled with Wave's wave-rtl variant (:where(:dir(rtl)) under " +
+            '@supports selector(:dir(rtl)) and the [dir=rtl] fallback; is ' +
+            'src/styles/variants.css imported?): wave-rtl:-scale-x-100',
+        );
+        expect(code).toBe(1);
+      } finally {
+        write('src/styles/styles.css', readCss('styles.css'));
+      }
+    }, 60_000);
+  });
+
+  it('ships none of the excluded words from the real sources (x-styling-1)', async () => {
+    // Compiles the real styles.css over the real src/components and src/lib. Only the shipped
+    // classes are asserted: the other assertions of the gate belong to `npm run build`.
+    const { main, selectorClasses } = await loadBuildCss();
+    const out = mkdtempSync(join(tmpdir(), 'wave-build-css-real-'));
+    const quiet = [
+      vi.spyOn(console, 'error').mockImplementation(() => {}),
+      vi.spyOn(console, 'log').mockImplementation(() => {}),
+    ];
+    try {
+      main(['--out-dir', out]);
+      const classes = selectorClasses(readFileSync(join(out, 'styles.css'), 'utf8'));
+      expect(classes).toContain('bg-primary');
+      expect(EXCLUDED_WORDS.filter((word) => classes.has(word))).toEqual([]);
+    } finally {
+      for (const spy of quiet) spy.mockRestore();
+      rmSync(out, { recursive: true, force: true });
+    }
+  }, 60_000);
 
   it('checks preflight.css: unlayered Preflight without Wave tokens', async () => {
     const { assertPreflightCss } = await loadBuildCss();

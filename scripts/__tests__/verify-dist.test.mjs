@@ -8,19 +8,22 @@
  * The fixtures live under the repository's `node_modules/.cache`, so `react` resolves from them
  * exactly as it does from the real `dist/` (the react-server check needs it).
  */
-import { spawn } from 'node:child_process';
+import { spawn, spawnSync } from 'node:child_process';
 import {
   existsSync,
+  lstatSync,
   mkdirSync,
   mkdtempSync,
   readdirSync,
+  rmSync,
   symlinkSync,
   unlinkSync,
   writeFileSync,
 } from 'node:fs';
+import { tmpdir } from 'node:os';
 import { basename, dirname, join, resolve } from 'node:path';
-import { fileURLToPath } from 'node:url';
-import { afterAll, describe, expect, it } from 'vitest';
+import { fileURLToPath, pathToFileURL } from 'node:url';
+import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import {
   checkCjsParity,
   checkDeclarations,
@@ -31,11 +34,15 @@ import {
   clientReferenceStub,
   createWorkDir,
   directivePrologue,
+  entryStatus,
   expectsUseClient,
+  importSpecifiers,
+  isMainModule,
   main,
   PENDING_FLAT_EXPORTS,
   probeTreeShaking,
   removeWorkDir,
+  runScript,
   verifyDist,
 } from '../verify-dist.mjs';
 
@@ -160,6 +167,43 @@ describe('directivePrologue', () => {
     '',
   ])('finds no directive in %j', (code) => {
     expect(directivePrologue(code)).toEqual([]);
+  });
+});
+
+describe('importSpecifiers (tooling-code-4)', () => {
+  it.each([
+    ['import { a } from "left-pad";', ['left-pad']],
+    ["import x, { y } from './z.mjs';\nexport * from './w.mjs';", ['./z.mjs', './w.mjs']],
+    ['import "./side.mjs";\nexport { a as b } from "./q.mjs";', ['./side.mjs', './q.mjs']],
+    ['export * as ns from "./ns.mjs";', ['./ns.mjs']],
+    // Whitespace-minified ES output.
+    ['import{a as b}from"left-pad";', ['left-pad']],
+    ['export*from"./y.mjs";', ['./y.mjs']],
+    ['export{a as b}from"./q.mjs"', ['./q.mjs']],
+    ['const x=1;import{a}from"./m.mjs"', ['./m.mjs']],
+    [
+      '"use client";import{jsx as e}from"react/jsx-runtime";import"./s.mjs";',
+      ['react/jsx-runtime', './s.mjs'],
+    ],
+    ['function f(){}import{c}from"./c.mjs";', ['./c.mjs']],
+    ['/*! banner */import{d}from"./d.mjs";', ['./d.mjs']],
+    // Dynamic imports and CommonJS requires, minified.
+    ['const m=await import("./lazy.mjs")', ['./lazy.mjs']],
+    [
+      '"use client";const e=require(`../../_virtual/runtime.cjs`),t=require("react");',
+      ['../../_virtual/runtime.cjs', 'react'],
+    ],
+  ])('finds the specifiers of %j', (code, expected) => {
+    expect(importSpecifiers(code)).toEqual(expected);
+  });
+
+  it.each([
+    'const important = fromValue("x");',
+    'export const from = "./not-an-import.mjs";',
+    'export default fromX("y");',
+    'exports.a = "./not-an-import.cjs";',
+  ])('finds no specifier in %j', (code) => {
+    expect(importSpecifiers(code)).toEqual([]);
   });
 });
 
@@ -755,4 +799,119 @@ describe('verifyDist and main', () => {
     expect(await main(['--dist', dist, '--no-pending'], io)).toBe(1);
     expect(lines.join('\n')).toMatch(/CardHeader is not exported/);
   });
+});
+
+describe('the entry guard of the gate scripts (tooling-tests-1)', () => {
+  // verify-dist, verify-storybook, pack-smoke and attw-pack run their checks only when Node was
+  // started with them. A guard that stopped recognising its own script would make the publish
+  // gate exit 0 without checking anything, so it is tested like build-css's entryStatus.
+  const scripts = dirname(fileURLToPath(new URL('../verify-dist.mjs', import.meta.url)));
+  const script = join(scripts, 'verify-dist.mjs');
+  const url = pathToFileURL(script).href;
+  let scratch = '';
+  /** A junction (a symlink off Windows) to the repo's real scripts/ directory. */
+  let link = '';
+
+  const isLink = (path) => lstatSync(path, { throwIfNoEntry: false })?.isSymbolicLink() === true;
+
+  /** Removes the link itself (never its target); `unlink` refuses a real directory. */
+  function removeLink() {
+    if (isLink(link)) unlinkSync(link);
+    if (existsSync(link) || isLink(link)) throw new Error(`could not remove ${link}`);
+  }
+
+  /** Runs a script of scripts/ (or of `dir`) as Node's entry script. */
+  function runNode(file, args) {
+    const result = spawnSync(process.execPath, [file, ...args], { encoding: 'utf8' });
+    if (result.error) throw result.error;
+    return result;
+  }
+
+  beforeAll(() => {
+    scratch = mkdtempSync(join(tmpdir(), 'wave-entry-guard-'));
+    link = join(scratch, 'scripts-link');
+    symlinkSync(scripts, link, 'junction');
+  });
+
+  afterAll(() => {
+    // The link goes first, so the recursive removal never depends on how rmSync treats a link
+    // to the real scripts/ directory.
+    removeLink();
+    rmSync(scratch, { recursive: true, force: true });
+  });
+
+  it('matches its own script, and neither another script nor a missing one', () => {
+    expect(entryStatus(url, script)).toBe('main');
+    expect(isMainModule(url, script)).toBe(true);
+    expect(entryStatus(url, join(scripts, 'build-css.mjs'))).toBe('imported');
+    expect(isMainModule(url, join(scripts, 'build-css.mjs'))).toBe(false);
+    expect(entryStatus(url, undefined)).toBe('imported');
+    expect(isMainModule(url, undefined)).toBe(false);
+  });
+
+  it.runIf(process.platform === 'win32')('compares paths case-insensitively on Windows', () => {
+    expect(isMainModule(url, script.toUpperCase())).toBe(true);
+  });
+
+  it('matches its script invoked through a symlink or junction', () => {
+    expect(isLink(link)).toBe(true);
+    expect(isMainModule(url, join(link, 'verify-dist.mjs'))).toBe(true);
+  });
+
+  it('reports a script of its name that it cannot match as a mismatch', () => {
+    const impostor = join(scratch, 'verify-dist.mjs');
+    writeFileSync(impostor, '// not the real script\n');
+    expect(entryStatus(url, impostor)).toBe('mismatch');
+    expect(entryStatus(url, join(scratch, 'missing', 'VERIFY-DIST.MJS'))).toBe('mismatch');
+  });
+
+  it('runScript runs main for its own script, fails closed on a mismatch, else does nothing', async () => {
+    const saved = process.exitCode;
+    const lines = [];
+    const io = { error: (line) => lines.push(line) };
+    const main = vi.fn(async () => 3);
+    try {
+      expect(await runScript(url, main, { argv1: script, io })).toBe(3);
+      expect(process.exitCode).toBe(3);
+      expect(main).toHaveBeenCalledTimes(1);
+
+      process.exitCode = saved;
+      const impostor = join(scratch, 'verify-dist.mjs');
+      expect(await runScript(url, main, { argv1: impostor, io })).toBe(1);
+      expect(process.exitCode).toBe(1);
+      expect(lines).toEqual([
+        `verify-dist: cannot confirm that ${impostor} is ${script}; nothing was checked`,
+      ]);
+
+      process.exitCode = saved;
+      expect(await runScript(url, main, { argv1: join(scripts, 'pack-smoke.mjs'), io })).toBe(
+        undefined,
+      );
+      expect(process.exitCode).toBe(saved);
+      expect(main).toHaveBeenCalledTimes(1);
+    } finally {
+      process.exitCode = saved;
+    }
+  });
+
+  it('verify-dist.mjs fails on a missing dist, run directly or through the junction', () => {
+    const missing = join(scratch, 'no-dist');
+    for (const file of [script, join(link, 'verify-dist.mjs')]) {
+      const result = runNode(file, ['--dist', missing]);
+      expect(result.stderr).toContain('does not exist (run vite build first)');
+      expect(result.status).toBe(1);
+    }
+  }, 60_000);
+
+  it('verify-storybook.mjs fails on a missing build directory', () => {
+    const result = runNode(join(link, 'verify-storybook.mjs'), ['--dir', join(scratch, 'none')]);
+    expect(result.stderr).toContain('does not exist (run storybook build first)');
+    expect(result.status).toBe(1);
+  }, 60_000);
+
+  it('pack-smoke.mjs checks its arguments before packing anything', () => {
+    const result = runNode(join(link, 'pack-smoke.mjs'), ['--fixture', 'nope']);
+    expect(result.stderr).toContain('unknown fixture: nope');
+    expect(result.status).toBe(1);
+  }, 60_000);
 });

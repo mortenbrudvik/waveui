@@ -1,0 +1,22 @@
+/*
+ * Wave's direction variant `wave-rtl:`, imported by every entry that compiles Wave's classes
+ * (styles.css, tailwind.css, globals.css).
+ *
+ * Tailwind's `rtl:` also matches `[dir=rtl] *`, so it applies inside an LTR subtree of an RTL
+ * page. `wave-rtl:` follows the element's own direction with `:dir(rtl)`; browsers without
+ * `:dir()` (Chrome and Edge before 120) get Tailwind's attribute match instead. Tailwind's own
+ * `rtl:` variant is left as it is.
+ */
+
+@custom-variant wave-rtl {
+  @supports selector(:dir(rtl)) {
+    &:where(:dir(rtl)) {
+      @slot;
+    }
+  }
+  @supports not selector(:dir(rtl)) {
+    &:where([dir='rtl'], [dir='rtl'] *) {
+      @slot;
+    }
+  }
+}

@@ -1,9 +1,10 @@
 /*
  * Development entry (not exported). Mirrors the Tailwind consumer path of
  * `@mortenbrudvik/waveui/tailwind`: Tailwind with its own sources, Wave tokens in the `theme`
- * layer and Wave's scoped base in the `base` layer.
+ * layer, Wave's scoped base in the `base` layer and the `wave-rtl:` variant.
  */
 
 @import 'tailwindcss';
 @import './tokens.css' layer(theme);
 @import './base.css' layer(base);
+@import './variants.css';

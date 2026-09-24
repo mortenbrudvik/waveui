@@ -99,8 +99,10 @@ export default tseslint.config(
   {
     plugins: { 'react-hooks': reactHooks },
     rules: {
-      // react-hooks v7 recommended rules stay at their recommended severity (errors); spec C-HOOKS
-      // lists the lint-compatible patterns and the only sites allowed to disable a rule.
+      // react-hooks v7 recommended rules at their recommended severity: errors, except
+      // exhaustive-deps, incompatible-library and unsupported-syntax, which are warnings. `npm run
+      // lint` fails on any warning (--max-warnings 0), so a missing dependency fails it too. Spec
+      // C-HOOKS lists the lint-compatible patterns and the only sites allowed to disable a rule.
       ...reactHooks.configs.recommended.rules,
       '@typescript-eslint/no-explicit-any': 'error',
       '@typescript-eslint/no-unused-vars': [
