@@ -1,4 +1,5 @@
 import * as React from 'react';
+import { preventIfDisabled } from '../../lib/aria';
 import { cn } from '../../lib/cn';
 import type { Slot } from '../../lib/types';
 import { renderSlot, slotRendersContent } from '../../lib/slot';
@@ -31,7 +32,10 @@ export interface BreadcrumbItemOwnProps {
    * Merge the item's props (classes, `aria-current`, handlers, ref) onto its single child element
    * instead of rendering an element — for router links:
    * `<Breadcrumb.Item asChild><RouterLink to="/docs">Docs</RouterLink></Breadcrumb.Item>`.
-   * The icon is rendered inside the child.
+   * The icon is rendered inside the child. `disabled` or `aria-disabled="true"`, on the item or on
+   * the element, makes it an unavailable link: `aria-disabled`, out of the tab order, its own
+   * `onClick` dropped and the click cancelled (a router link does not navigate); an `<a>` also
+   * loses its `href`.
    * @default false
    */
   asChild?: boolean;
@@ -63,6 +67,13 @@ export interface BreadcrumbItemAnchorProps
    * handlers.
    */
   href: string;
+  /**
+   * Makes the link unavailable, as Link's `disabled` does: no `href`, `role="link"`,
+   * `aria-disabled="true"`, out of the tab order, and the click is cancelled (`onClick` is not
+   * called). `aria-disabled="true"` does the same.
+   * @default false
+   */
+  disabled?: boolean;
   /** Ref to the rendered element (`<a>`, or `<span>` for the current item). */
   ref?: React.Ref<HTMLAnchorElement | HTMLSpanElement>;
 }
@@ -105,6 +116,13 @@ export interface BreadcrumbItemDynamicProps
     Omit<React.HTMLAttributes<HTMLElement>, keyof BreadcrumbItemOwnProps> {
   /** URL the breadcrumb item links to when defined. */
   href?: string;
+  /**
+   * Makes a link or button item unavailable (see {@link BreadcrumbItemAnchorProps} and
+   * {@link BreadcrumbItemButtonProps}); ignored, with a development warning, on a text or current
+   * item.
+   * @default false
+   */
+  disabled?: boolean;
   /** Ref to the rendered element. */
   ref?: React.Ref<HTMLElement>;
 }
@@ -218,6 +236,24 @@ interface BreadcrumbItemChildProps extends React.HTMLAttributes<HTMLElement> {
 }
 
 /**
+ * Link's disabled contract for an `asChild` element: an `<a>` drops its `href` (it is still
+ * announced as a link); any element gets `aria-disabled`, leaves the tab order and loses its own
+ * `onClick`. The item's click handler cancels the click, so a router link does not navigate.
+ */
+function disableLinkChild(
+  child: React.ReactElement<{ children?: React.ReactNode }>,
+): React.ReactElement<{ children?: React.ReactNode }> {
+  const anchor =
+    child.type === 'a' ? { href: undefined, role: 'link', disabled: undefined } : undefined;
+  return React.cloneElement(child as React.ReactElement<Record<string, unknown>>, {
+    ...anchor,
+    'aria-disabled': true,
+    tabIndex: -1,
+    onClick: undefined,
+  }) as React.ReactElement<{ children?: React.ReactNode }>;
+}
+
+/**
  * `asChild` rendering: the item's props are merged onto the consumer's element with F3
  * `useTriggerElement` (the element's own handlers run first and its classes win conflicts; its
  * ref and the item's ref are both attached). The icon is placed inside the element.
@@ -281,6 +317,17 @@ function BreadcrumbItem(
 
   const invalidAsChild = asChild && child === null;
   const ignoredDisabled = rest.disabled === true && (kind === 'text' || kind === 'current');
+  // Link and asChild items follow Link's disabled contract. `<a disabled>` does not block
+  // navigation, and an `aria-disabled` link only looks disabled unless the click is cancelled.
+  // With asChild the element is the link, so its own `disabled`/`aria-disabled` count too.
+  const ariaDisabled = rest['aria-disabled'];
+  const childProps = (child?.props ?? {}) as Record<string, unknown>;
+  const linkDisabled = [
+    rest.disabled,
+    ariaDisabled,
+    childProps.disabled,
+    childProps['aria-disabled'],
+  ].some((value) => value === true || value === 'true');
   React.useEffect(() => {
     if (invalidAsChild) {
       warnOnce(
@@ -297,21 +344,22 @@ function BreadcrumbItem(
     if (ignoredDisabled) {
       warnOnce(
         'Breadcrumb.Item:disabled',
-        'Breadcrumb.Item: `disabled` only applies to a button item (no `href`, with `onClick`); it is ignored on a text or current item.',
+        'Breadcrumb.Item: `disabled` applies to link, button and asChild items; it is ignored on a text or current item.',
       );
     }
   }, [invalidAsChild, kind, ignoredDisabled]);
 
   if (child) {
+    const { disabled: _disabled, ...childRest } = rest;
     return (
       <BreadcrumbItemChild
-        {...(rest as React.HTMLAttributes<HTMLElement>)}
+        {...(childRest as React.HTMLAttributes<HTMLElement>)}
         ref={ref}
-        onClick={onClick}
+        onClick={preventIfDisabled(linkDisabled, onClick)}
         aria-current={current ? 'page' : undefined}
         className={cn(current ? currentClasses : linkClasses, className)}
         icon={renderedIcon}
-        child={child}
+        child={linkDisabled ? disableLinkChild(child) : child}
       />
     );
   }
@@ -332,11 +380,7 @@ function BreadcrumbItem(
   }
 
   if (kind === 'link') {
-    // `<a disabled>` does not block navigation, and an `aria-disabled` link only looks disabled
-    // unless the click is cancelled. Same contract as Link and Nav: no href, not in the tab order.
-    const { disabled: disabledAttr, ...anchorRest } = rest;
-    const ariaDisabled = anchorRest['aria-disabled'];
-    const linkDisabled = disabledAttr === true || ariaDisabled === true || ariaDisabled === 'true';
+    const { disabled: _disabled, ...anchorRest } = rest;
     return (
       <a
         {...(anchorRest as React.AnchorHTMLAttributes<HTMLAnchorElement>)}
@@ -345,13 +389,7 @@ function BreadcrumbItem(
         role={linkDisabled ? 'link' : anchorRest.role}
         aria-disabled={linkDisabled ? true : ariaDisabled}
         tabIndex={linkDisabled ? -1 : anchorRest.tabIndex}
-        onClick={
-          linkDisabled
-            ? (event) => {
-                event.preventDefault();
-              }
-            : onClick
-        }
+        onClick={preventIfDisabled(linkDisabled, onClick)}
         className={cn(linkClasses, className)}
       >
         {renderedIcon}

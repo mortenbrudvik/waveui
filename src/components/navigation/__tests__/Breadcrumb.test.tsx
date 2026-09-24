@@ -7,6 +7,7 @@ import type { BreadcrumbItemProps } from '../Breadcrumb';
 import type { Slot } from '../../../lib/types';
 import {
   createOverlayTestWrapper,
+  expectNoA11yViolations,
   renderWithProviders,
   testCompoundExposure,
   testNoImplicitSubmit,
@@ -227,7 +228,7 @@ describe('Breadcrumb', () => {
       expect(span).toHaveAttribute('title', 'Text item');
       expect(warn).toHaveBeenCalledWith(
         expect.stringContaining(
-          '[WaveUI] Breadcrumb.Item: `disabled` only applies to a button item',
+          '[WaveUI] Breadcrumb.Item: `disabled` applies to link, button and asChild items',
         ),
       );
     });
@@ -263,7 +264,7 @@ describe('Breadcrumb', () => {
       expect(span).not.toHaveAttribute('disabled');
       const disabledWarnings = warn.mock.calls.filter(([message]) =>
         String(message).includes(
-          '[WaveUI] Breadcrumb.Item: `disabled` only applies to a button item',
+          '[WaveUI] Breadcrumb.Item: `disabled` applies to link, button and asChild items',
         ),
       );
       expect(disabledWarnings).toHaveLength(1);
@@ -546,6 +547,107 @@ describe('Breadcrumb', () => {
       expect(link).toHaveAttribute('tabindex', '-1');
       fireEvent.click(link);
       expect(onClick).not.toHaveBeenCalled();
+    });
+
+    it('a link item takes disabled, like Link', async () => {
+      const onClick = vi.fn();
+      render(
+        <Breadcrumb>
+          <Breadcrumb.Item href="/docs" disabled onClick={onClick}>
+            Docs
+          </Breadcrumb.Item>
+        </Breadcrumb>,
+      );
+      const link = screen.getByRole('link', { name: 'Docs' });
+      expect(link).toHaveAttribute('aria-disabled', 'true');
+      expect(link).not.toHaveAttribute('href');
+      expect(link).not.toHaveAttribute('disabled');
+      expect(link).toHaveAttribute('tabindex', '-1');
+      expect(fireEvent.click(link)).toBe(false);
+      expect(onClick).not.toHaveBeenCalled();
+      await expectNoA11yViolations(document.body);
+    });
+
+    it('an aria-disabled asChild link does not navigate or run either onClick', () => {
+      const onItemClick = vi.fn();
+      const onChildClick = vi.fn();
+      render(
+        <Breadcrumb>
+          <Breadcrumb.Item asChild aria-disabled="true" onClick={onItemClick}>
+            <a href="#docs" onClick={onChildClick}>
+              Docs
+            </a>
+          </Breadcrumb.Item>
+        </Breadcrumb>,
+      );
+      const link = screen.getByRole('link', { name: 'Docs' });
+      expect(link).toHaveAttribute('aria-disabled', 'true');
+      expect(link).not.toHaveAttribute('href');
+      expect(link).toHaveAttribute('tabindex', '-1');
+      expect(fireEvent.click(link)).toBe(false);
+      expect(onItemClick).not.toHaveBeenCalled();
+      expect(onChildClick).not.toHaveBeenCalled();
+    });
+
+    it('an asChild link whose own element is aria-disabled does not navigate', () => {
+      const onChildClick = vi.fn();
+      render(
+        <Breadcrumb>
+          <Breadcrumb.Item asChild>
+            <a href="#docs" aria-disabled="true" onClick={onChildClick}>
+              Docs
+            </a>
+          </Breadcrumb.Item>
+        </Breadcrumb>,
+      );
+      const link = screen.getByRole('link', { name: 'Docs' });
+      expect(link).not.toHaveAttribute('href');
+      expect(link).toHaveAttribute('tabindex', '-1');
+      expect(fireEvent.click(link)).toBe(false);
+      expect(onChildClick).not.toHaveBeenCalled();
+    });
+
+    it('an item whose href is known only at run time takes disabled', () => {
+      const maybeHref = '/docs' as string | undefined;
+      render(
+        <Breadcrumb>
+          <Breadcrumb.Item href={maybeHref} disabled>
+            Docs
+          </Breadcrumb.Item>
+        </Breadcrumb>,
+      );
+      const link = screen.getByRole('link', { name: 'Docs' });
+      expect(link).toHaveAttribute('aria-disabled', 'true');
+      expect(link).not.toHaveAttribute('href');
+    });
+
+    it('a disabled asChild router link cancels the click, so the router does not navigate', () => {
+      const navigate = vi.fn();
+      function RouterLink({ to, onClick, ...props }: { to: string } & React.ComponentProps<'a'>) {
+        return (
+          <a
+            href={to}
+            {...props}
+            onClick={(event) => {
+              onClick?.(event);
+              if (!event.defaultPrevented) navigate(to);
+            }}
+          />
+        );
+      }
+      render(
+        <Breadcrumb>
+          <Breadcrumb.Item asChild disabled>
+            <RouterLink to="/docs">Docs</RouterLink>
+          </Breadcrumb.Item>
+        </Breadcrumb>,
+      );
+      const link = screen.getByRole('link', { name: 'Docs' });
+      expect(link).toHaveAttribute('aria-disabled', 'true');
+      expect(link).toHaveAttribute('tabindex', '-1');
+      expect(link).not.toHaveAttribute('disabled');
+      fireEvent.click(link);
+      expect(navigate).not.toHaveBeenCalled();
     });
 
     it('links gate the hover underline, so an aria-disabled link does not react to hover', () => {
