@@ -3,8 +3,9 @@ import { act, cleanup, render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import * as React from 'react';
 import { useRestoreFocus, type UseRestoreFocusOptions } from '../useRestoreFocus';
-import { DismissLayerProvider } from '../useDismiss';
+import { DismissLayerProvider, useDismiss } from '../useDismiss';
 import { getTopmostLayer, registerLayer, type LayerRecord } from '../../lib/layers';
+import { Portal } from '../../components/portal/Portal';
 
 afterEach(() => {
   cleanup();
@@ -301,6 +302,248 @@ describe('useRestoreFocus — validated targets', () => {
     expect(screen.getByRole('heading', { name: 'Rows' })).toHaveFocus();
   });
 
+  /** The finding's delete-row code: rows in a list, a controlled surface without a trigger. */
+  function DeleteRows({ initialRows = ['a', 'b', 'c'] }: { initialRows?: string[] }) {
+    const [rows, setRows] = React.useState(initialRows);
+    const [pending, setPending] = React.useState<string | null>(null);
+    return (
+      <>
+        <button type="button">Before</button>
+        <ul aria-label="Rows">
+          {rows.map((row) => (
+            <li key={row}>
+              {row}{' '}
+              <button type="button" onClick={() => setPending(row)}>
+                {`Delete ${row}`}
+              </button>
+            </li>
+          ))}
+        </ul>
+        <Surface open={pending !== null}>
+          <button
+            type="button"
+            onClick={() => {
+              setRows((r) => r.filter((x) => x !== pending));
+              setPending(null);
+            }}
+          >
+            Confirm
+          </button>
+          <button type="button" onClick={() => setPending(null)}>
+            Cancel
+          </button>
+        </Surface>
+        <button type="button">After</button>
+      </>
+    );
+  }
+
+  it('moves focus to the next row’s action when the opener’s row was removed (no fallback)', async () => {
+    const user = userEvent.setup();
+    render(<DeleteRows />);
+    act(() => button('Delete b').focus());
+    await user.keyboard('{Enter}');
+    act(() => button('Confirm').focus());
+    await user.keyboard('{Enter}');
+    expect(screen.queryByRole('button', { name: 'Delete b' })).toBeNull();
+    expect(button('Delete c')).toHaveFocus();
+  });
+
+  it('moves focus to the previous row’s action when the last row was removed', async () => {
+    const user = userEvent.setup();
+    render(<DeleteRows />);
+    await user.click(button('Delete c'));
+    await user.click(button('Confirm'));
+    expect(button('Delete b')).toHaveFocus();
+  });
+
+  it('moves focus next to the removed position when the list became empty', async () => {
+    const user = userEvent.setup();
+    render(<DeleteRows initialRows={['a']} />);
+    await user.click(button('Delete a'));
+    await user.click(button('Confirm'));
+    expect(screen.queryByRole('listitem')).toBeNull();
+    expect(button('After')).toHaveFocus();
+  });
+
+  it('still restores to the opener when it was not removed', async () => {
+    const user = userEvent.setup();
+    render(<DeleteRows />);
+    await user.click(button('Delete b'));
+    await user.click(button('Cancel'));
+    expect(button('Delete b')).toHaveFocus();
+  });
+
+  it('moves focus next to a row that was removed together with the open surface', async () => {
+    const user = userEvent.setup();
+    function RowsWithSurfaces() {
+      const [rows, setRows] = React.useState(['a', 'b', 'c']);
+      const [pending, setPending] = React.useState<string | null>(null);
+      return (
+        <ul aria-label="Rows">
+          {rows.map((row) => (
+            <li key={row}>
+              <button type="button" onClick={() => setPending(row)}>
+                {`Delete ${row}`}
+              </button>
+              {pending === row && (
+                <Surface open>
+                  <button type="button" onClick={() => setRows((r) => r.filter((x) => x !== row))}>
+                    Confirm
+                  </button>
+                </Surface>
+              )}
+            </li>
+          ))}
+        </ul>
+      );
+    }
+    render(<RowsWithSurfaces />);
+    await user.click(button('Delete b'));
+    await user.click(button('Confirm'));
+    await flushMicrotasks();
+    expect(button('Delete c')).toHaveFocus();
+  });
+
+  it('moves focus past a disabled opener to the next tabbable element', async () => {
+    const user = userEvent.setup();
+    function App() {
+      const [open, setOpen] = React.useState(false);
+      const [used, setUsed] = React.useState(false);
+      return (
+        <>
+          <button type="button">Previous</button>
+          <button type="button" disabled={used} onClick={() => setOpen(true)}>
+            Claim
+          </button>
+          <button type="button">Next</button>
+          <Surface open={open}>
+            <button
+              type="button"
+              onClick={() => {
+                setUsed(true);
+                setOpen(false);
+              }}
+            >
+              Confirm
+            </button>
+          </Surface>
+        </>
+      );
+    }
+    render(<App />);
+    await user.click(button('Claim'));
+    await user.click(button('Confirm'));
+    expect(button('Next')).toHaveFocus();
+  });
+
+  /** A stand-in menu: a portaled popover layer anchored to its trigger, with one menu item. */
+  function MenuPopover({
+    label = 'More actions',
+    item = 'Rename',
+    onPick,
+  }: {
+    label?: string;
+    item?: string;
+    onPick: () => void;
+  }) {
+    const [open, setOpen] = React.useState(false);
+    const surfaceRef = React.useRef<HTMLDivElement>(null);
+    const triggerRef = React.useRef<HTMLButtonElement>(null);
+    const { layerId } = useDismiss({
+      open,
+      onDismiss: () => setOpen(false),
+      refs: [surfaceRef, triggerRef],
+      anchorRef: triggerRef,
+    });
+    return (
+      <>
+        <button type="button" ref={triggerRef} onClick={() => setOpen((o) => !o)}>
+          {label}
+        </button>
+        {open && (
+          <Portal layerId={layerId}>
+            <div ref={surfaceRef} role="menu" aria-label={label}>
+              <button type="button" role="menuitem" onClick={onPick}>
+                {item}
+              </button>
+            </div>
+          </Portal>
+        )}
+      </>
+    );
+  }
+
+  it('restores to the trigger of the closed popover that held the opener', async () => {
+    const user = userEvent.setup();
+    function App() {
+      const [open, setOpen] = React.useState(false);
+      return (
+        <>
+          <button type="button">Before</button>
+          <MenuPopover onPick={() => setOpen(true)} />
+          <button type="button">After</button>
+          {/* A sibling of the popover, not rendered inside it. */}
+          <Surface open={open}>
+            <input aria-label="New name" />
+            <button type="button" onClick={() => setOpen(false)}>
+              Cancel
+            </button>
+          </Surface>
+        </>
+      );
+    }
+    render(<App />);
+    await user.click(button('More actions'));
+    await user.click(screen.getByRole('menuitem', { name: 'Rename' }));
+    // Pressing into the surface is outside the popover: it closes and its menu item is removed.
+    await user.click(screen.getByRole('textbox', { name: 'New name' }));
+    expect(screen.queryByRole('menu')).toBeNull();
+    await user.click(button('Cancel'));
+    expect(button('More actions')).toHaveFocus();
+  });
+
+  it('moves focus next to the menu button when a menu item deleted the menu button’s row', async () => {
+    const user = userEvent.setup();
+    function App() {
+      const [rows, setRows] = React.useState(['a', 'b', 'c']);
+      const [pending, setPending] = React.useState<string | null>(null);
+      return (
+        <>
+          <ul aria-label="Rows">
+            {rows.map((row) => (
+              <li key={row}>
+                <MenuPopover
+                  label={`Actions ${row}`}
+                  item={`Delete ${row}`}
+                  onPick={() => setPending(row)}
+                />
+              </li>
+            ))}
+          </ul>
+          <Surface open={pending !== null}>
+            <button
+              type="button"
+              onClick={() => {
+                setRows((r) => r.filter((x) => x !== pending));
+                setPending(null);
+              }}
+            >
+              Confirm
+            </button>
+          </Surface>
+        </>
+      );
+    }
+    render(<App />);
+    await user.click(button('Actions b'));
+    await user.click(screen.getByRole('menuitem', { name: 'Delete b' }));
+    await user.click(button('Confirm'));
+    // The menu item, its menu and the menu button are all gone: the next row's menu button.
+    expect(screen.queryByRole('button', { name: 'Actions b' })).toBeNull();
+    expect(button('Actions c')).toHaveFocus();
+  });
+
   it('skips disabled, inert and aria-hidden targets', async () => {
     const user = userEvent.setup();
     function App() {
@@ -378,6 +621,85 @@ describe('useRestoreFocus — validated targets', () => {
     }
   });
 
+  it('moves focus into the modal that stays open when the opener sits behind it (no fallback)', async () => {
+    const user = userEvent.setup();
+    const drawerSurface = document.createElement('div');
+    drawerSurface.tabIndex = -1;
+    drawerSurface.setAttribute('aria-label', 'Drawer');
+    const inDrawer = document.createElement('button');
+    inDrawer.textContent = 'In drawer';
+    drawerSurface.appendChild(inDrawer);
+    document.body.appendChild(drawerSurface);
+    function App() {
+      const [open, setOpen] = React.useState(false);
+      return (
+        <>
+          <button type="button" onClick={() => setOpen(true)}>
+            Open both
+          </button>
+          <Surface open={open}>
+            <button type="button" onClick={() => setOpen(false)}>
+              Close dialog
+            </button>
+          </Surface>
+        </>
+      );
+    }
+    render(<App />);
+    await user.click(button('Open both'));
+    const unregister = registerLayer(makeLayer('drawer', { getElements: () => [drawerSurface] }));
+    try {
+      await user.click(button('Close dialog'));
+      expect(drawerSurface).toHaveFocus();
+    } finally {
+      unregister();
+      drawerSurface.remove();
+    }
+  });
+
+  it('never moves focus to an element behind the modal that stays open', async () => {
+    const user = userEvent.setup();
+    // The remaining modal has nothing focusable: focus stays where it is rather than going behind.
+    const drawerSurface = document.createElement('div');
+    document.body.appendChild(drawerSurface);
+    function App() {
+      const [open, setOpen] = React.useState(false);
+      const [showOpener, setShowOpener] = React.useState(true);
+      return (
+        <>
+          <button type="button">Page button</button>
+          {showOpener && (
+            <button type="button" onClick={() => setOpen(true)}>
+              Opener
+            </button>
+          )}
+          <Surface open={open}>
+            <button
+              type="button"
+              onClick={() => {
+                setShowOpener(false);
+                setOpen(false);
+              }}
+            >
+              Close dialog
+            </button>
+          </Surface>
+        </>
+      );
+    }
+    render(<App />);
+    await user.click(button('Opener'));
+    const unregister = registerLayer(makeLayer('drawer', { getElements: () => [drawerSurface] }));
+    try {
+      await user.click(button('Close dialog'));
+      expect(button('Page button')).not.toHaveFocus();
+      expect(document.activeElement).toBe(document.body);
+    } finally {
+      unregister();
+      drawerSurface.remove();
+    }
+  });
+
   it('falls back to the parent layer’s container', async () => {
     const user = userEvent.setup();
     const parentSurface = document.createElement('div');
@@ -420,6 +742,219 @@ describe('useRestoreFocus — validated targets', () => {
       cleanup();
       unregister();
       parentSurface.remove();
+    }
+  });
+});
+
+describe('useRestoreFocus — opener removed in the commit that opens the surface', () => {
+  /**
+   * A stand-in controlled popover: a portaled popover layer anchored to its trigger. React deletes
+   * its content in the same commit that opens a surface rendered after it, before that surface's
+   * insertion effect runs, so focus is already on `<body>` when the opener is captured.
+   */
+  function ControlledPopover({
+    open,
+    onOpenChange,
+    children,
+  }: {
+    open: boolean;
+    onOpenChange: (open: boolean) => void;
+    children: React.ReactNode;
+  }) {
+    const surfaceRef = React.useRef<HTMLDivElement>(null);
+    const triggerRef = React.useRef<HTMLButtonElement>(null);
+    const { layerId } = useDismiss({
+      open,
+      onDismiss: () => onOpenChange(false),
+      refs: [surfaceRef, triggerRef],
+      anchorRef: triggerRef,
+    });
+    return (
+      <>
+        <button type="button" ref={triggerRef} onClick={() => onOpenChange(!open)}>
+          More
+        </button>
+        {open && (
+          <Portal layerId={layerId}>
+            <div ref={surfaceRef} role="menu" aria-label="More">
+              {children}
+            </div>
+          </Portal>
+        )}
+      </>
+    );
+  }
+
+  /** Menu item → closes the popover and opens a sibling surface, in one handler (one commit). */
+  function App({
+    surfaceFirst = false,
+    autoFocusItem = false,
+  }: {
+    surfaceFirst?: boolean;
+    autoFocusItem?: boolean;
+  }) {
+    const [popover, setPopover] = React.useState(false);
+    const [open, setOpen] = React.useState(false);
+    const surface = (
+      <Surface open={open}>
+        <input aria-label="New name" autoFocus />
+        <button type="button" onClick={() => setOpen(false)}>
+          Cancel
+        </button>
+      </Surface>
+    );
+    return (
+      <>
+        <button type="button">Before</button>
+        {surfaceFirst && surface}
+        <ControlledPopover open={popover} onOpenChange={setPopover}>
+          <button
+            type="button"
+            role="menuitem"
+            autoFocus={autoFocusItem}
+            onClick={() => {
+              setPopover(false);
+              setOpen(true);
+            }}
+          >
+            Rename
+          </button>
+        </ControlledPopover>
+        {!surfaceFirst && surface}
+        <button type="button">After</button>
+      </>
+    );
+  }
+
+  it.each([
+    ['after', false],
+    ['before', true],
+  ])(
+    'restores to the trigger of a popover that closed as the surface opened (surface %s it)',
+    async (_placement, surfaceFirst) => {
+      const user = userEvent.setup();
+      render(<App surfaceFirst={surfaceFirst} />);
+      await user.click(button('More'));
+      act(() => screen.getByRole('menuitem', { name: 'Rename' }).focus());
+      await user.keyboard('{Enter}');
+      expect(screen.queryByRole('menu')).toBeNull();
+      expect(screen.getByRole('textbox', { name: 'New name' })).toHaveFocus();
+      await user.click(button('Cancel'));
+      expect(button('More')).toHaveFocus();
+    },
+  );
+
+  it('knows the popover of an item that was focused before the popover’s layer registered', async () => {
+    const user = userEvent.setup();
+    render(<App autoFocusItem />);
+    // The item auto-focuses in the commit that opens the popover, before its layer registers.
+    await user.click(button('More'));
+    expect(screen.getByRole('menuitem', { name: 'Rename' })).toHaveFocus();
+    await user.keyboard('{Enter}');
+    await user.click(button('Cancel'));
+    expect(button('More')).toHaveFocus();
+  });
+
+  it('moves focus next to a removed opener that was not in a popover', async () => {
+    const user = userEvent.setup();
+    function Rows() {
+      const [rows, setRows] = React.useState(['a', 'b', 'c']);
+      const [pending, setPending] = React.useState<string | null>(null);
+      return (
+        <>
+          <ul aria-label="Rows">
+            {rows.map((row) => (
+              <li key={row}>
+                <button
+                  type="button"
+                  onClick={() => {
+                    // Archive now, confirm later: the row goes away as the surface opens.
+                    setRows((r) => r.filter((x) => x !== row));
+                    setPending(row);
+                  }}
+                >
+                  {`Archive ${row}`}
+                </button>
+              </li>
+            ))}
+          </ul>
+          <Surface open={pending !== null}>
+            <button type="button" onClick={() => setPending(null)}>
+              OK
+            </button>
+          </Surface>
+        </>
+      );
+    }
+    render(<Rows />);
+    act(() => button('Archive b').focus());
+    await user.keyboard('{Enter}');
+    expect(screen.queryByRole('button', { name: 'Archive b' })).toBeNull();
+    await user.click(button('OK'));
+    expect(button('Archive c')).toHaveFocus();
+  });
+
+  it('does not restore to an element that was blurred before the surface opened', () => {
+    function Page({ open }: { open: boolean }) {
+      return (
+        <>
+          <input aria-label="Search" />
+          <Surface open={open} />
+        </>
+      );
+    }
+    const { rerender } = render(<Page open={false} />);
+    const search = screen.getByRole('textbox', { name: 'Search' });
+    act(() => search.focus());
+    act(() => search.blur());
+    rerender(<Page open />);
+    act(() => button('Inside').focus());
+    rerender(<Page open={false} />);
+    expect(document.activeElement).toBe(document.body);
+  });
+
+  it('forgets an element the user moved focus away from before it was removed', async () => {
+    function Page({ popover, open }: { popover: boolean; open: boolean }) {
+      return (
+        <>
+          <ControlledPopover open={popover} onOpenChange={() => {}}>
+            <button type="button" role="menuitem">
+              Rename
+            </button>
+          </ControlledPopover>
+          <Surface open={open} />
+        </>
+      );
+    }
+    const { rerender } = render(<Page popover open={false} />);
+    const item = screen.getByRole('menuitem', { name: 'Rename' });
+    act(() => item.focus());
+    // A press on a non-focusable part of the page moves focus to <body>.
+    act(() => item.blur());
+    await flushMicrotasks();
+    rerender(<Page popover={false} open />);
+    act(() => button('Inside').focus());
+    rerender(<Page popover={false} open={false} />);
+    expect(button('More')).not.toHaveFocus();
+    expect(document.activeElement).toBe(document.body);
+  });
+
+  it('removes its document listeners when no surface is mounted', () => {
+    const added = vi.spyOn(document, 'addEventListener');
+    const removed = vi.spyOn(document, 'removeEventListener');
+    try {
+      const { unmount } = render(<Surface open={false} />);
+      const focusListeners = added.mock.calls.filter(
+        ([type]) => type === 'focusin' || type === 'focusout',
+      );
+      expect(focusListeners.length).toBeGreaterThan(0);
+      unmount();
+      for (const [type, listener, options] of focusListeners) {
+        expect(removed).toHaveBeenCalledWith(type, listener, options);
+      }
+    } finally {
+      added.mockRestore();
+      removed.mockRestore();
     }
   });
 });

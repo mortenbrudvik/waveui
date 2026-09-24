@@ -204,6 +204,167 @@ describe('useModalLayer', () => {
     expect(button('Return here')).toHaveFocus();
   });
 
+  it('moves focus to the next row when the opener’s row is removed on Confirm (no trigger, no finalFocusRef)', async () => {
+    const user = userEvent.setup();
+    function Rows() {
+      const [rows, setRows] = React.useState(['a', 'b', 'c']);
+      const [pending, setPending] = React.useState<string | null>(null);
+      return (
+        <>
+          <ul aria-label="Rows">
+            {rows.map((row) => (
+              <li key={row}>
+                {row}{' '}
+                <button type="button" onClick={() => setPending(row)}>
+                  {`Delete ${row}`}
+                </button>
+              </li>
+            ))}
+          </ul>
+          <Dialog open={pending !== null} onOpenChange={(open) => !open && setPending(null)}>
+            <button
+              type="button"
+              onClick={() => {
+                setRows((r) => r.filter((x) => x !== pending));
+                setPending(null);
+              }}
+            >
+              Confirm
+            </button>
+          </Dialog>
+        </>
+      );
+    }
+    render(<Rows />);
+    act(() => button('Delete b').focus());
+    await user.keyboard('{Enter}');
+    expect(button('Confirm')).toHaveFocus();
+    await user.keyboard('{Enter}');
+    expect(screen.queryByRole('dialog')).toBeNull();
+    expect(button('Delete c')).toHaveFocus();
+  });
+
+  it.each([
+    ['after', false],
+    ['before', true],
+  ])(
+    'restores to the trigger of a popover whose item opened the modal as the popover closed (modal %s it)',
+    async (_placement, modalFirst) => {
+      const user = userEvent.setup();
+      /** A stand-in controlled popover (portaled layer anchored to its trigger). */
+      function Popover({
+        open,
+        onOpenChange,
+        children,
+      }: {
+        open: boolean;
+        onOpenChange: (open: boolean) => void;
+        children: React.ReactNode;
+      }) {
+        const surfaceRef = React.useRef<HTMLDivElement>(null);
+        const triggerRef = React.useRef<HTMLButtonElement>(null);
+        const { layerId } = useDismiss({
+          open,
+          onDismiss: () => onOpenChange(false),
+          refs: [surfaceRef, triggerRef],
+          anchorRef: triggerRef,
+          kind: 'popover',
+        });
+        return (
+          <>
+            <button type="button" ref={triggerRef} onClick={() => onOpenChange(!open)}>
+              More
+            </button>
+            {open && (
+              <Portal layerId={layerId}>
+                <div ref={surfaceRef} role="menu" aria-label="More">
+                  {children}
+                </div>
+              </Portal>
+            )}
+          </>
+        );
+      }
+      function Page() {
+        const [popover, setPopover] = React.useState(false);
+        const [open, setOpen] = React.useState(false);
+        // No trigger and no finalFocusRef: the modal is opened from the popover's menu item.
+        const modal = (
+          <Dialog open={open} onOpenChange={setOpen} label="Rename">
+            <input aria-label="New name" />
+          </Dialog>
+        );
+        return (
+          <>
+            {modalFirst && modal}
+            <Popover open={popover} onOpenChange={setPopover}>
+              <button
+                type="button"
+                role="menuitem"
+                onClick={() => {
+                  setPopover(false);
+                  setOpen(true);
+                }}
+              >
+                Rename
+              </button>
+            </Popover>
+            {!modalFirst && modal}
+          </>
+        );
+      }
+      render(<Page />);
+      await user.click(button('More'));
+      act(() => screen.getByRole('menuitem', { name: 'Rename' }).focus());
+      await user.keyboard('{Enter}');
+      expect(screen.queryByRole('menu')).toBeNull();
+      expect(screen.getByRole('textbox', { name: 'New name' })).toHaveFocus();
+      await user.keyboard('{Escape}');
+      expect(screen.queryByRole('dialog')).toBeNull();
+      expect(button('More')).toHaveFocus();
+    },
+  );
+
+  it('moves focus into the sibling modal that stays open when both were opened by one click', async () => {
+    const user = userEvent.setup();
+    function Both() {
+      const [drawer, setDrawer] = React.useState(false);
+      const [dialog, setDialog] = React.useState(false);
+      return (
+        <>
+          <button
+            type="button"
+            onClick={() => {
+              setDrawer(true);
+              setDialog(true);
+            }}
+          >
+            Open both
+          </button>
+          <Dialog open={drawer} onOpenChange={setDrawer} label="Drawer">
+            <button type="button">Drawer action</button>
+          </Dialog>
+          <Dialog open={dialog} onOpenChange={setDialog} label="Dialog">
+            <button type="button">Dialog action</button>
+          </Dialog>
+        </>
+      );
+    }
+    render(<Both />);
+    await user.click(button('Open both'));
+    await flushMicrotasks();
+    expect(button('Dialog action')).toHaveFocus();
+    await user.keyboard('{Escape}');
+    expect(screen.queryByRole('dialog', { name: 'Dialog' })).toBeNull();
+    const drawer = screen.getByRole('dialog', { name: 'Drawer' });
+    // The opener is behind the Drawer (inert): focus goes to the Drawer, never to <body>.
+    expect(button('Open both').closest('[inert]')).not.toBeNull();
+    expect(drawer).toHaveFocus();
+    // The Drawer's trap keeps working from there.
+    await user.tab();
+    expect(button('Drawer action')).toHaveFocus();
+  });
+
   it('lets a nested raw child layer take Escape first', async () => {
     const user = userEvent.setup();
     const onDialogChange = vi.fn();

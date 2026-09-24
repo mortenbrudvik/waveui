@@ -31,6 +31,12 @@ function boxOf(el: Element): Box | undefined {
 
 const html = document.documentElement;
 
+/** The surface's `translate(x, y)` position (floating-ui's default transform styles). */
+function translateOf(el: HTMLElement): { x: number; y: number } {
+  const match = /translate\(\s*(-?[\d.]+)px,\s*(-?[\d.]+)px/.exec(el.style.transform);
+  return match ? { x: Number(match[1]), y: Number(match[2]) } : { x: Number.NaN, y: Number.NaN };
+}
+
 beforeEach(() => {
   boxes = {
     reference: { x: 500, y: 100, width: 200, height: 20 },
@@ -145,10 +151,7 @@ describe('usePopupPosition', () => {
 
   it('aligns start/end with the direction: bottom-start hugs the anchor’s right edge in RTL', async () => {
     // Anchor spans x 500–700; the 100px wide surface below it.
-    const translateX = (el: HTMLElement) => {
-      const match = /translate\(\s*(-?[\d.]+)px/.exec(el.style.transform);
-      return match ? Number(match[1]) : Number.NaN;
-    };
+    const translateX = (el: HTMLElement) => translateOf(el).x;
     let last: UsePopupPositionResult | null = null;
     const { unmount } = render(<Popup side="bottom" align="start" onResult={(r) => (last = r)} />);
     await waitFor(() => expect(last!.isPositioned).toBe(true));
@@ -170,6 +173,68 @@ describe('usePopupPosition', () => {
     expect(translateX(floating) + boxes.floating.width).toBe(
       boxes.reference.x + boxes.reference.width,
     );
+  });
+
+  it('keeps a surface near the right edge inside the viewport', async () => {
+    // A Popover-sized (256px) surface below an anchor near the right edge of a 1024px viewport:
+    // start-aligned and unshifted it would span x 940–1196.
+    boxes.reference = { x: 940, y: 100, width: 60, height: 20 };
+    boxes.floating = { x: 0, y: 0, width: 256, height: 100 };
+    let last: UsePopupPositionResult | null = null;
+    render(<Popup onResult={(r) => (last = r)} />);
+    await waitFor(() => expect(last!.isPositioned).toBe(true));
+    const floating = screen.getByTestId('floating');
+    expect(floating).toHaveAttribute('data-side', 'bottom');
+    const x = translateOf(floating).x;
+    expect(x).toBeGreaterThanOrEqual(8);
+    expect(x + boxes.floating.width).toBeLessThanOrEqual(1024 - 8);
+  });
+
+  it('shifts a surface that would cross the right edge back inside the viewport', async () => {
+    // Flip disabled, so the start alignment is kept and only shift can move the surface.
+    boxes.reference = { x: 940, y: 100, width: 60, height: 20 };
+    boxes.floating = { x: 0, y: 0, width: 256, height: 100 };
+    let last: UsePopupPositionResult | null = null;
+    render(<Popup flip={false} onResult={(r) => (last = r)} />);
+    await waitFor(() => expect(last!.isPositioned).toBe(true));
+    const floating = screen.getByTestId('floating');
+    expect(floating).toHaveAttribute('data-align', 'start');
+    // Clamped to the 8px viewport padding: right edge at 1016, not pushed further than needed.
+    expect(translateOf(floating).x).toBe(1024 - 8 - boxes.floating.width);
+  });
+
+  it('shifts a centred surface that would spill past the left edge', async () => {
+    // A tooltip-like surface centred above an anchor at the left edge: unshifted x = 20 - 100.
+    boxes.reference = { x: 0, y: 300, width: 40, height: 20 };
+    boxes.floating = { x: 0, y: 0, width: 200, height: 40 };
+    let last: UsePopupPositionResult | null = null;
+    render(<Popup side="top" align="center" offset={8} onResult={(r) => (last = r)} />);
+    await waitFor(() => expect(last!.isPositioned).toBe(true));
+    const floating = screen.getByTestId('floating');
+    expect(floating).toHaveAttribute('data-side', 'top');
+    expect(translateOf(floating).x).toBe(8);
+  });
+
+  it('flips and shifts together at a corner', async () => {
+    // Bottom-right corner: no room below and past the right edge.
+    boxes.reference = { x: 980, y: 740, width: 40, height: 20 };
+    boxes.floating = { x: 0, y: 0, width: 256, height: 200 };
+    let last: UsePopupPositionResult | null = null;
+    render(<Popup onResult={(r) => (last = r)} />);
+    await waitFor(() => expect(screen.getByTestId('floating')).toHaveAttribute('data-side', 'top'));
+    await waitFor(() => expect(last!.isPositioned).toBe(true));
+    const { x, y } = translateOf(screen.getByTestId('floating'));
+    expect(x + boxes.floating.width).toBeLessThanOrEqual(1024 - 8);
+    expect(y + boxes.floating.height).toBeLessThanOrEqual(boxes.reference.y);
+  });
+
+  it('does not shift when shift is disabled', async () => {
+    boxes.reference = { x: 940, y: 100, width: 60, height: 20 };
+    boxes.floating = { x: 0, y: 0, width: 256, height: 100 };
+    let last: UsePopupPositionResult | null = null;
+    render(<Popup shift={false} flip={false} onResult={(r) => (last = r)} />);
+    await waitFor(() => expect(last!.isPositioned).toBe(true));
+    expect(translateOf(screen.getByTestId('floating')).x).toBe(940);
   });
 
   it('uses the requested alignment', async () => {
