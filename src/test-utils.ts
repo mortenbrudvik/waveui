@@ -4,8 +4,9 @@
  * Test-only: `tsconfig.json` (the library program) excludes `src/test-utils*`, and nothing in
  * `src/index.ts` exports this module. It is type-checked by `tsconfig.dev.json`.
  *
- * **This JSDoc is the source of truth for the helper signatures.** `docs/testing-best-practices.md`
- * is pre-0.4 research; DOCS updates it to point here. Where the two disagree, this JSDoc wins.
+ * **This JSDoc is the source of truth for the helper signatures and defaults.** The testing guide,
+ * `docs/testing-best-practices.md`, shows how the tests in this repository use these helpers, with
+ * condensed examples. Where the two disagree, this JSDoc wins.
  *
  * ## Accessibility audits
  * {@link axe} is the one axe-core instance used by {@link testA11y}, the `a11yVariants` loop of
