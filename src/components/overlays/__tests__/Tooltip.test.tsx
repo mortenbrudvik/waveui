@@ -3,6 +3,7 @@ import { afterEach, describe, it, expect, vi } from 'vitest';
 import { act, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { Tooltip } from '../Tooltip';
+import { Popover } from '../Popover';
 import { Button } from '../../button/Button';
 import { Portal } from '../../portal/Portal';
 import { useDismiss } from '../../../hooks/useDismiss';
@@ -120,10 +121,12 @@ function ParentLayer({ children }: { children: React.ReactNode }) {
 // ---------------------------------------------------------------------------
 
 describe('Tooltip', () => {
+  // `data-testid`, `className` and `ref` stay on the wrapper span; `aria-*` reach the child.
   testSystemProps(Tooltip, {
     expectedTag: 'span',
     displayName: 'Tooltip',
-    defaultProps: { content: 'tip', children: <span>target</span> },
+    defaultProps: { content: 'tip', children: <button type="button">target</button> },
+    control: { role: 'button' },
   });
 
   describe('hidden description (overlays#14, overlays#18)', () => {
@@ -568,6 +571,300 @@ describe('Tooltip', () => {
         <Tooltip content="Help">{children as unknown as React.ReactElement}</Tooltip>,
       );
       expect(container.querySelector('[aria-describedby]')).toHaveTextContent('AB');
+    });
+
+    it('describes the element of a single-element Fragment, without a wrapper or a warning', () => {
+      const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+      const { container } = render(
+        <Tooltip content="Explains">
+          <>
+            <Button>Help</Button>
+          </>
+        </Tooltip>,
+      );
+      const button = screen.getByRole('button', { name: 'Help' });
+      expect(button).toHaveAccessibleDescription('Explains');
+      // The Button is the Tooltip wrapper's own child: no fallback span in between.
+      expect(button.parentElement).toBe(container.firstElementChild);
+      expect(warn).not.toHaveBeenCalled();
+    });
+
+    it('describes the first focusable element among children rendered in the fallback span', () => {
+      const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+      render(
+        <Tooltip content="Explains">
+          <>
+            <span>Need a hand?</span>
+            <Button>Help</Button>
+            <Button>More</Button>
+          </>
+        </Tooltip>,
+      );
+      expect(screen.getByRole('button', { name: 'Help' })).toHaveAccessibleDescription('Explains');
+      expect(screen.getByRole('button', { name: 'More' })).not.toHaveAttribute('aria-describedby');
+      // Only the children-shape warning: the fallback itself is expected.
+      expect(warn).toHaveBeenCalledTimes(1);
+      expect(warn).toHaveBeenCalledWith(expect.stringContaining('single React element child'));
+    });
+
+    it('names the first focusable element in the fallback span with relationship="label"', () => {
+      vi.spyOn(console, 'warn').mockImplementation(() => {});
+      render(
+        <Tooltip content="Save" relationship="label">
+          <>
+            <button type="button">
+              <svg aria-hidden="true" viewBox="0 0 16 16" />
+            </button>
+            <span>draft</span>
+          </>
+        </Tooltip>,
+      );
+      expect(screen.getByRole('button', { name: 'Save' })).not.toHaveAttribute('aria-describedby');
+    });
+  });
+
+  describe('a child that does not pass the relationship on (overlays#5)', () => {
+    /** Renders its children but drops every other prop (like a Popover or Dialog root). */
+    function DropsProps({ children }: { children?: React.ReactNode }) {
+      return <div>{children}</div>;
+    }
+
+    it('describes the focusable element inside a Popover root and warns', () => {
+      const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+      render(
+        <Tooltip content="Narrow the list">
+          <Popover>
+            <Popover.Trigger>
+              <Button>Filters</Button>
+            </Popover.Trigger>
+            <Popover.Content>Body</Popover.Content>
+          </Popover>
+        </Tooltip>,
+      );
+      expect(screen.getByRole('button', { name: 'Filters' })).toHaveAccessibleDescription(
+        'Narrow the list',
+      );
+      expect(warn).toHaveBeenCalledTimes(1);
+      expect(warn).toHaveBeenCalledWith(expect.stringMatching(/^\[WaveUI\] Tooltip: .*Trigger/));
+    });
+
+    it('describes the focusable element inside a non-focusable child element and warns', () => {
+      const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+      render(
+        <Tooltip content="Formatting">
+          <div>
+            <Button>Bold</Button>
+          </div>
+        </Tooltip>,
+      );
+      expect(screen.getByRole('button', { name: 'Bold' })).toHaveAccessibleDescription(
+        'Formatting',
+      );
+      expect(warn).toHaveBeenCalledWith(expect.stringContaining('Tooltip'));
+    });
+
+    it('keeps the focusable element’s own description ids', () => {
+      vi.spyOn(console, 'warn').mockImplementation(() => {});
+      render(
+        <>
+          <span id="own-hint">Ctrl+S</span>
+          <Tooltip content="Saves the draft">
+            <DropsProps>
+              <button type="button" aria-describedby="own-hint">
+                Save
+              </button>
+            </DropsProps>
+          </Tooltip>
+        </>,
+      );
+      expect(screen.getByRole('button', { name: 'Save' })).toHaveAccessibleDescription(
+        'Ctrl+S Saves the draft',
+      );
+    });
+
+    it('describes a focusable element the child replaces without re-rendering the Tooltip', async () => {
+      vi.spyOn(console, 'warn').mockImplementation(() => {});
+      const user = userEvent.setup();
+      function Swap() {
+        const [count, setCount] = React.useState(0);
+        return (
+          <button key={count} type="button" onClick={() => setCount((c) => c + 1)}>
+            {`Swap ${count}`}
+          </button>
+        );
+      }
+      render(
+        <Tooltip content="Replaces the button">
+          <DropsProps>
+            <Swap />
+          </DropsProps>
+        </Tooltip>,
+      );
+      expect(screen.getByRole('button', { name: 'Swap 0' })).toHaveAccessibleDescription(
+        'Replaces the button',
+      );
+      await user.click(screen.getByRole('button', { name: 'Swap 0' }));
+      await waitFor(() =>
+        expect(screen.getByRole('button', { name: 'Swap 1' })).toHaveAccessibleDescription(
+          'Replaces the button',
+        ),
+      );
+    });
+
+    it('does not warn for a child without focusable content (text, a disabled button)', () => {
+      const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+      render(
+        <>
+          <Tooltip content="Full name">
+            <span>Ada L.</span>
+          </Tooltip>
+          <Tooltip content="Unavailable">
+            <Button disabled>Delete</Button>
+          </Tooltip>
+        </>,
+      );
+      expect(screen.getByText('Ada L.')).toHaveAccessibleDescription('Full name');
+      expect(screen.getByRole('button', { name: 'Delete' })).toHaveAccessibleDescription(
+        'Unavailable',
+      );
+      expect(warn).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('inside a trigger: props for the child (overlays#5)', () => {
+    /**
+     * Stand-in for a trigger that clones its child (Menu.Trigger, Dialog.Trigger): it merges an
+     * `id`, state ARIA, a click handler and a ref onto the Tooltip.
+     */
+    function TriggerStandIn({ children }: { children: React.ReactElement }) {
+      const [open, setOpen] = React.useState(false);
+      const ref = React.useRef<HTMLElement | null>(null);
+      return (
+        <>
+          {React.cloneElement(children as React.ReactElement<Record<string, unknown>>, {
+            id: 'menu-trigger',
+            'aria-haspopup': 'menu',
+            'aria-expanded': open,
+            'aria-controls': open ? 'menu-list' : undefined,
+            onClick: () => setOpen((o) => !o),
+            ref,
+          })}
+          {open && (
+            <ul id="menu-list" role="menu" aria-labelledby="menu-trigger">
+              <li role="menuitem" tabIndex={-1}>
+                Edit
+              </li>
+            </ul>
+          )}
+        </>
+      );
+    }
+
+    it('puts the id and ARIA it receives on its child, not on the wrapper span', async () => {
+      const user = userEvent.setup();
+      const { container } = render(
+        <TriggerStandIn>
+          <Tooltip content="More actions" delay={0}>
+            <Button>Actions</Button>
+          </Tooltip>
+        </TriggerStandIn>,
+      );
+      const wrapper = container.firstElementChild as HTMLElement;
+      const button = screen.getByRole('button', { name: 'Actions' });
+      expect(button).toHaveAttribute('id', 'menu-trigger');
+      expect(button).toHaveAttribute('aria-haspopup', 'menu');
+      expect(button).toHaveAttribute('aria-expanded', 'false');
+      expect(button).toHaveAccessibleDescription('More actions');
+      for (const attr of ['id', 'aria-haspopup', 'aria-expanded', 'aria-controls']) {
+        expect(wrapper).not.toHaveAttribute(attr);
+      }
+      await user.click(button);
+      expect(button).toHaveAttribute('aria-expanded', 'true');
+      expect(button).toHaveAttribute('aria-controls', 'menu-list');
+      expect(screen.getByRole('menu', { name: 'Actions' })).toBeInTheDocument();
+      await expectNoA11yViolations();
+    });
+
+    it('merges them with the child’s own: its id wins, id lists join, state ARIA wins', () => {
+      render(
+        <>
+          <span id="outer-hint">Outer</span>
+          <span id="own-hint">Own</span>
+          <Tooltip
+            content="Tip"
+            id="from-parent"
+            aria-describedby="outer-hint"
+            aria-expanded={false}
+            data-testid="wrapper"
+            className="wrapper-class"
+          >
+            <button
+              type="button"
+              id="own-id"
+              aria-describedby="own-hint"
+              aria-expanded="true"
+              className="child-class"
+            >
+              Target
+            </button>
+          </Tooltip>
+        </>,
+      );
+      const button = screen.getByRole('button', { name: 'Target' });
+      const wrapper = screen.getByTestId('wrapper');
+      expect(button).toHaveAttribute('id', 'own-id');
+      expect(button).toHaveAttribute('aria-expanded', 'false');
+      expect(button).toHaveAccessibleDescription('Own Outer Tip');
+      expect(button).toHaveClass('child-class');
+      expect(button).not.toHaveClass('wrapper-class');
+      expect(wrapper).toHaveClass('wrapper-class');
+      expect(wrapper).not.toHaveAttribute('id');
+      expect(wrapper).not.toHaveAttribute('aria-describedby');
+      expect(wrapper).not.toHaveAttribute('aria-expanded');
+    });
+
+    it('nested Tooltips describe the same element with both texts', () => {
+      render(
+        <Tooltip content="Outer tip">
+          <Tooltip content="Inner tip">
+            <button type="button">Target</button>
+          </Tooltip>
+        </Tooltip>,
+      );
+      expect(screen.getByRole('button', { name: 'Target' })).toHaveAccessibleDescription(
+        'Outer tip Inner tip',
+      );
+    });
+
+    it('keeps state ARIA from a parent off the fallback span', () => {
+      vi.spyOn(console, 'warn').mockImplementation(() => {});
+      const { container } = render(
+        <Tooltip content="Tip" aria-haspopup="menu" aria-expanded={false}>
+          <>
+            <button type="button">A</button>
+            <button type="button">B</button>
+          </>
+        </Tooltip>,
+      );
+      expect(container.querySelector('[aria-expanded]')).toBeNull();
+      expect(container.querySelector('[aria-haspopup]')).toBeNull();
+    });
+
+    it('a click on the portaled tooltip surface does not reach the handlers it was given', async () => {
+      const user = userEvent.setup();
+      const onClick = vi.fn();
+      render(
+        <Tooltip content="Tip" delay={0} onClick={onClick}>
+          <button type="button">Target</button>
+        </Tooltip>,
+      );
+      const target = screen.getByRole('button', { name: 'Target' });
+      await user.hover(target);
+      await waitFor(() => expect(surface()).not.toBeNull());
+      await user.click(surface() as HTMLElement);
+      expect(onClick).not.toHaveBeenCalled();
+      await user.click(target);
+      expect(onClick).toHaveBeenCalledTimes(1);
     });
   });
 

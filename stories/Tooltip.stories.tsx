@@ -1,5 +1,5 @@
 import type { Meta, StoryObj } from '@storybook/react';
-import { Tooltip, Button } from '../src';
+import { Tooltip, Button, Popover } from '../src';
 
 /** Decorative inline icon (the Button hides its icon slot from assistive technology). */
 const SaveIcon = () => (
@@ -74,4 +74,23 @@ export const LongContent: Story = {
       'Tooltips wrap long text instead of running off the screen, and flip to the other side near the viewport edge.',
     children: <Button>Long tooltip</Button>,
   },
+};
+
+/**
+ * Inside a trigger (`Popover.Trigger`, `Menu.Trigger`, `Dialog.Trigger`, `Drawer.Trigger`): the
+ * Tooltip passes the trigger's id and ARIA on to the button, which it also describes.
+ */
+export const InsideATrigger: Story = {
+  args: {
+    content: 'Narrow the list',
+    children: <Button>Filters</Button>,
+  },
+  render: (args) => (
+    <Popover>
+      <Popover.Trigger>
+        <Tooltip {...args} />
+      </Popover.Trigger>
+      <Popover.Content title="Filters">Choose which items to show.</Popover.Content>
+    </Popover>
+  ),
 };

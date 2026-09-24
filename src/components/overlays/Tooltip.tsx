@@ -1,8 +1,10 @@
 import * as React from 'react';
 import { cn } from '../../lib/cn';
-import { resolveDeprecatedProp } from '../../lib/dev';
+import { joinIds } from '../../lib/aria';
+import { resolveDeprecatedProp, warnOnce } from '../../lib/dev';
 import { composeEventHandlers } from '../../lib/composeEventHandlers';
-import { renderTrigger } from '../../lib/renderTrigger';
+import { FOCUSABLE_SELECTOR, getFirstTabbable } from '../../lib/focus';
+import { renderTrigger, STATE_ARIA } from '../../lib/renderTrigger';
 import type { PopupAlign, PopupSide } from '../../lib/types';
 import { useId } from '../../hooks/useId';
 import { useDismiss } from '../../hooks/useDismiss';
@@ -11,8 +13,8 @@ import { useMergedRefs } from '../../hooks/useMergedRefs';
 import { useEventCallback } from '../../hooks/useEventCallback';
 import { Portal } from '../portal/Portal';
 
-/** Color treatment of a tooltip. */
-type TooltipAppearance = 'inverted' | 'normal';
+/** Color treatment of a tooltip (`TooltipProps.appearance`). */
+export type TooltipAppearance = 'inverted' | 'normal';
 
 /** Properties for the Tooltip component. */
 export interface TooltipProps extends Omit<React.HTMLAttributes<HTMLSpanElement>, 'content'> {
@@ -50,9 +52,11 @@ export interface TooltipProps extends Omit<React.HTMLAttributes<HTMLSpanElement>
    */
   align?: PopupAlign;
   /**
-   * A single element that triggers the tooltip on hover and focus (it receives the
-   * `aria-describedby`/`aria-labelledby`). Other children are wrapped in a described `<span>`
-   * with a development warning.
+   * A single element that triggers the tooltip on hover and focus: it receives the
+   * `aria-describedby`/`aria-labelledby`, plus any `id` and `aria-*` props given to the Tooltip
+   * (a Fragment around one element counts as that element). Other children are wrapped in a
+   * described `<span>` with a development warning, and their first focusable element gets the
+   * relationship.
    */
   children: React.ReactElement;
   /** Ref to the wrapper `<span>` (the positioning anchor). */
@@ -95,6 +99,131 @@ const surfaceClasses = `max-w-60 whitespace-normal break-words rounded px-3 py-1
 /** Grace period before hiding after the pointer leaves, so it can move onto the tooltip. */
 const HIDE_DELAY_MS = 100;
 
+const useIsomorphicLayoutEffect =
+  typeof document !== 'undefined' ? React.useLayoutEffect : React.useEffect;
+
+type UnknownProps = Record<string, unknown>;
+type Relationship = NonNullable<TooltipProps['relationship']>;
+
+const HANDLER_KEY = /^on[A-Z]/;
+
+/** Naming attributes a generic element such as the fallback `<span>` must not carry. */
+const NAMING_ARIA = ['aria-label', 'aria-labelledby'] as const;
+
+function isCloneableElement(node: unknown): node is React.ReactElement {
+  return React.isValidElement(node) && node.type !== React.Fragment;
+}
+
+/** The element of a single-element Fragment (`<><Button /></>`); other children as given. */
+function unwrapFragment(children: React.ReactNode): React.ReactNode {
+  if (!React.isValidElement(children) || children.type !== React.Fragment) return children;
+  const inner = (children.props as { children?: React.ReactNode }).children;
+  return React.isValidElement(inner) ? unwrapFragment(inner) : children;
+}
+
+/**
+ * Splits the props the Tooltip receives, from its consumer or from a parent that clones its child
+ * (Menu.Trigger, Popover.Trigger, Dialog.Trigger, Field): `id` and `aria-*` describe the element
+ * the Tooltip is attached to, so they go to the child; the rest stays on the wrapper `<span>`.
+ */
+function splitProps(props: UnknownProps): { childProps: UnknownProps; wrapperProps: UnknownProps } {
+  const childProps: UnknownProps = {};
+  const wrapperProps: UnknownProps = {};
+  for (const [key, value] of Object.entries(props)) {
+    if (key === 'id' || key.startsWith('aria-')) childProps[key] = value;
+    else if (HANDLER_KEY.test(key) && typeof value === 'function') {
+      // The wrapper sees the child's events as they bubble, but not those that reach it through
+      // a portal, such as a click on the tooltip surface (it would toggle a parent trigger).
+      const handler = value as (event: React.SyntheticEvent) => void;
+      wrapperProps[key] = (event: React.SyntheticEvent) => {
+        if (!(event.currentTarget as Node).contains(event.target as Node)) return;
+        handler(event);
+      };
+    } else wrapperProps[key] = value;
+  }
+  return { childProps, wrapperProps };
+}
+
+function omit(props: UnknownProps, keys: readonly string[]): UnknownProps {
+  const result = { ...props };
+  for (const key of keys) delete result[key];
+  return result;
+}
+
+function hasIdRef(el: Element, attribute: string, id: string): boolean {
+  return (el.getAttribute(attribute) ?? '').split(/\s+/).includes(id);
+}
+
+function removeIdRef(el: Element, attribute: string, id: string): void {
+  const rest = (el.getAttribute(attribute) ?? '')
+    .split(/\s+/)
+    .filter((value) => value && value !== id);
+  if (rest.length > 0) el.setAttribute(attribute, rest.join(' '));
+  else el.removeAttribute(attribute);
+}
+
+/**
+ * Makes sure the element people focus carries the tooltip relationship. After each commit, when no
+ * focusable element inside the wrapper references `tooltipId` through `attribute` — children in the
+ * fallback span, a non-focusable child element, or a child component that drops the prop (a
+ * Popover or Dialog root) — the id is added to the first tabbable element inside the wrapper and
+ * kept there while the subtree changes; a development warning explains the nesting, except for
+ * the fallback span, whose children shape `renderTrigger` already warned about.
+ */
+function useRelationshipTarget(
+  wrapperRef: React.RefObject<HTMLSpanElement | null>,
+  tooltipId: string,
+  relationship: Relationship,
+  childIsFallback: boolean,
+): void {
+  const appliedRef = React.useRef<{ element: Element; attribute: string } | null>(null);
+  const attribute = relationship === 'label' ? 'aria-labelledby' : 'aria-describedby';
+
+  useIsomorphicLayoutEffect(() => {
+    const wrapper = wrapperRef.current;
+    if (!wrapper) return;
+
+    const update = () => {
+      const applied = appliedRef.current;
+      const carriers = Array.from(wrapper.querySelectorAll(`[${attribute}]`)).filter(
+        (el) =>
+          !(applied && applied.element === el && applied.attribute === attribute) &&
+          hasIdRef(el, attribute, tooltipId),
+      );
+      const reached = carriers.some((el) => el.matches(FOCUSABLE_SELECTOR));
+      const target = reached ? null : getFirstTabbable(wrapper);
+      if (applied && (applied.element !== target || applied.attribute !== attribute)) {
+        removeIdRef(applied.element, applied.attribute, tooltipId);
+        appliedRef.current = null;
+      }
+      if (!target) return;
+      if (!hasIdRef(target, attribute, tooltipId)) {
+        target.setAttribute(attribute, joinIds(target.getAttribute(attribute), tooltipId) ?? '');
+      }
+      appliedRef.current = { element: target, attribute };
+      if (!childIsFallback) {
+        warnOnce(
+          'Tooltip:focus-target',
+          `Tooltip: the element that takes focus inside it did not get \`${attribute}\` (the child is not focusable, or is a component, such as a Popover or Dialog root, that does not pass the prop on), so it was added to the first focusable element inside. Put the Tooltip directly around the focusable element, e.g. <Popover.Trigger><Tooltip content="…"><Button /></Tooltip></Popover.Trigger>.`,
+        );
+      }
+    };
+
+    update();
+    if (!appliedRef.current || typeof MutationObserver === 'undefined') return;
+    // Keep it on the focusable element when the child replaces it or rewrites the attribute
+    // without the Tooltip re-rendering.
+    const observer = new MutationObserver(update);
+    observer.observe(wrapper, {
+      subtree: true,
+      childList: true,
+      attributes: true,
+      attributeFilter: [attribute],
+    });
+    return () => observer.disconnect();
+  });
+}
+
 /**
  * Shows a short text label or description for its child on hover and keyboard focus.
  *
@@ -105,6 +234,28 @@ const HIDE_DELAY_MS = 100;
  *   the description), positioned on `side`/`align` with flipping and shifting to stay in view.
  * - It stays visible while the pointer moves onto it, hides shortly after the pointer leaves or
  *   immediately on blur, and Escape hides it without closing an enclosing dialog or popover.
+ * - `id` and `aria-*` props given to the Tooltip go to its child, merged with the child's own (the
+ *   child's `id` wins, id lists are joined, `aria-expanded`/`aria-controls`/`aria-haspopup` from
+ *   the Tooltip win). `className`, `style`, `ref`, `data-*` and event handlers stay on the wrapper
+ *   `<span>`; the handlers see the child's events as they bubble, not events from portaled
+ *   content such as the tooltip surface. So the Tooltip can sit inside a trigger, and the trigger's
+ *   id and state reach the button: `<Menu.Trigger><Tooltip content="…"><Button /></Tooltip>
+ *   </Menu.Trigger>` (also `Popover.Trigger`, `Dialog.Trigger`, `Drawer.Trigger`). Around a
+ *   trigger works too, since triggers pass `aria-describedby` on to their child.
+ * - Wrap the focusable element itself. When the element that takes focus does not get the
+ *   relationship (a Popover or Dialog root, a component that drops props, a non-focusable
+ *   wrapper element), it is added to the first focusable element inside, with a development
+ *   warning.
+ *
+ * @example
+ * <Menu>
+ *   <Menu.Trigger>
+ *     <Tooltip content="Edit, duplicate or delete the item">
+ *       <Button>Actions</Button>
+ *     </Tooltip>
+ *   </Menu.Trigger>
+ *   <Menu.Popover>…</Menu.Popover>
+ * </Menu>
  */
 export const Tooltip = ({
   content,
@@ -197,14 +348,26 @@ export const Tooltip = ({
     return () => clearTimeout(timer.current);
   }, []);
 
-  const triggerProps =
-    relationship === 'label' ? { 'aria-labelledby': tooltipId } : { 'aria-describedby': tooltipId };
-  const child = renderTrigger(children, triggerProps, { componentName: 'Tooltip' });
+  const { childProps, wrapperProps } = splitProps(rest);
+  const target = unwrapFragment(children);
+  const childIsFallback = !isCloneableElement(target);
+  const attribute = relationship === 'label' ? 'aria-labelledby' : 'aria-describedby';
+  // Props given to the Tooltip come first, as if the child had them; then the tooltip's own id.
+  // The fallback span is a generic element: no state ARIA and no naming on it (the relationship
+  // then reaches its first focusable element through useRelationshipTarget).
+  const triggerProps: UnknownProps = childIsFallback
+    ? omit(childProps, [...STATE_ARIA, ...NAMING_ARIA])
+    : { ...childProps };
+  if (!childIsFallback || relationship === 'description') {
+    triggerProps[attribute] = joinIds(childProps[attribute] as string | undefined, tooltipId);
+  }
+  const child = renderTrigger(target, triggerProps, { componentName: 'Tooltip' });
+  useRelationshipTarget(wrapperRef, tooltipId, relationship, childIsFallback);
 
   return (
     <span
       ref={wrapperElementRef}
-      {...rest}
+      {...wrapperProps}
       className={cn('inline-block', className)}
       onMouseEnter={composeEventHandlers(onMouseEnter, show)}
       onMouseLeave={composeEventHandlers(onMouseLeave, scheduleHide)}

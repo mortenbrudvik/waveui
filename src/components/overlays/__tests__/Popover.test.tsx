@@ -3,6 +3,7 @@ import { afterEach, describe, it, expect, vi } from 'vitest';
 import { act, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { Popover, PopoverContent, PopoverTrigger, type PopoverTriggerChildProps } from '../Popover';
+import { Tooltip } from '../Tooltip';
 import { Portal } from '../../portal/Portal';
 import { useDismiss } from '../../../hooks/useDismiss';
 import {
@@ -244,7 +245,7 @@ describe('Popover', () => {
       expect(container.firstElementChild).toBe(screen.getByRole('button', { name: 'Toggle' }));
     });
 
-    it('asChild={false} renders the 0.4 wrapper span', async () => {
+    it('asChild={false} renders the 0.4 wrapper span, without state ARIA on it', async () => {
       const user = userEvent.setup();
       render(
         <Popover>
@@ -256,10 +257,31 @@ describe('Popover', () => {
       );
       const wrapper = screen.getByTestId('wrapper');
       expect(wrapper.tagName).toBe('SPAN');
-      expect(wrapper).toHaveAttribute('aria-expanded', 'false');
+      // A generic span cannot carry state ARIA (axe aria-allowed-attr).
+      const stateAria = ['aria-haspopup', 'aria-expanded', 'aria-controls'];
+      for (const attr of stateAria) expect(wrapper).not.toHaveAttribute(attr);
       await user.click(screen.getByRole('button', { name: 'Toggle' }));
-      expect(wrapper).toHaveAttribute('aria-expanded', 'true');
-      expect(screen.getByRole('dialog')).toBeInTheDocument();
+      expect(screen.getByRole('dialog', { name: 'Toggle' })).toBeInTheDocument();
+      for (const attr of stateAria) expect(wrapper).not.toHaveAttribute(attr);
+      await expectNoA11yViolations();
+    });
+
+    it('a render-prop child keeps the state ARIA with asChild={false}', () => {
+      render(
+        <Popover>
+          <Popover.Trigger asChild={false}>
+            {(props) => (
+              <button type="button" {...props}>
+                Render prop
+              </button>
+            )}
+          </Popover.Trigger>
+          <Popover.Content>Body</Popover.Content>
+        </Popover>,
+      );
+      const trigger = screen.getByRole('button', { name: 'Render prop' });
+      expect(trigger).toHaveAttribute('aria-haspopup', 'dialog');
+      expect(trigger).toHaveAttribute('aria-expanded', 'false');
     });
 
     it('a non-forwarding custom child still opens the popover (wrapper fallback + warning)', async () => {
@@ -369,6 +391,66 @@ describe('Popover', () => {
       );
       expect(ref.current).toBe(screen.getByRole('button', { name: 'Toggle' }));
     });
+
+    describe('with a Tooltip between the trigger and the button', () => {
+      function WithTooltip({ buttonId }: { buttonId?: string }) {
+        return (
+          <Popover>
+            <Popover.Trigger>
+              <Tooltip content="Narrow the list" delay={0}>
+                <button type="button" id={buttonId}>
+                  Filters
+                </button>
+              </Tooltip>
+            </Popover.Trigger>
+            <Popover.Content>
+              <button type="button">Apply</button>
+            </Popover.Content>
+          </Popover>
+        );
+      }
+
+      it('the button carries the trigger ARIA, the id and the description', async () => {
+        const user = userEvent.setup();
+        render(<WithTooltip />);
+        const trigger = screen.getByRole('button', { name: 'Filters' });
+        const tooltipWrapper = trigger.parentElement as HTMLElement;
+        expect(trigger).toHaveAttribute('aria-haspopup', 'dialog');
+        expect(trigger).toHaveAttribute('aria-expanded', 'false');
+        expect(trigger).toHaveAccessibleDescription('Narrow the list');
+        await user.click(trigger);
+        const dialog = screen.getByRole('dialog', { name: 'Filters' });
+        expect(dialog).toHaveAttribute('aria-labelledby', trigger.id);
+        expect(trigger).toHaveAttribute('aria-expanded', 'true');
+        expect(trigger).toHaveAttribute('aria-controls', dialog.id);
+        for (const attr of ['id', 'aria-haspopup', 'aria-expanded', 'aria-controls']) {
+          expect(tooltipWrapper).not.toHaveAttribute(attr);
+        }
+        await expectNoA11yViolations();
+      });
+
+      it('is labelled by the button’s own id', async () => {
+        const user = userEvent.setup();
+        render(<WithTooltip buttonId="filters-button" />);
+        await user.click(screen.getByRole('button', { name: 'Filters' }));
+        expect(screen.getByRole('dialog', { name: 'Filters' })).toHaveAttribute(
+          'aria-labelledby',
+          'filters-button',
+        );
+      });
+
+      it('Escape from inside the content returns focus to the button', async () => {
+        const user = userEvent.setup();
+        render(<WithTooltip />);
+        const trigger = screen.getByRole('button', { name: 'Filters' });
+        await user.click(trigger);
+        await user.tab();
+        expect(screen.getByRole('button', { name: 'Apply' })).toHaveFocus();
+        await user.keyboard('{Escape}');
+        expect(dialog()).not.toBeInTheDocument();
+        expect(trigger).toHaveFocus();
+      });
+    });
   });
 
   describe('accessible name (overlays#12)', () => {
@@ -449,6 +531,36 @@ describe('Popover', () => {
       const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
       render(<Basic defaultOpen />);
       expect(warn).not.toHaveBeenCalled();
+    });
+
+    it('never points aria-labelledby at a trigger id that is not in the document, and warns', async () => {
+      const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+      const user = userEvent.setup();
+      render(
+        <Popover>
+          <Popover.Trigger>
+            {/* A render-prop child that does not spread the `id` it receives. */}
+            {({ onClick, ref, ...stateAria }) => (
+              <button
+                type="button"
+                ref={ref}
+                onClick={onClick}
+                aria-haspopup={stateAria['aria-haspopup']}
+                aria-expanded={stateAria['aria-expanded']}
+              >
+                Filters
+              </button>
+            )}
+          </Popover.Trigger>
+          <Popover.Content>Body</Popover.Content>
+        </Popover>,
+      );
+      await user.click(screen.getByRole('button', { name: 'Filters' }));
+      expect(screen.getByRole('dialog')).not.toHaveAttribute('aria-labelledby');
+      expect(warn).toHaveBeenCalledTimes(1);
+      expect(warn).toHaveBeenCalledWith(
+        expect.stringMatching(/^\[WaveUI\] Popover\.Content: .*`id`/),
+      );
     });
 
     it('has no accessibility violations when open (table-core#20)', async () => {
