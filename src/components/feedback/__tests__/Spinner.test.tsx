@@ -32,6 +32,8 @@ describe('Spinner', () => {
       ['default label', {}],
       ['visible label', { label: 'Loading data', labelVisible: true }],
       ['role override', { role: 'progressbar', 'aria-label': 'Loading data' }],
+      ['progressbar named by the default label', { role: 'progressbar' }],
+      ['progressbar named by label', { role: 'progressbar', label: 'Fetching results' }],
     ];
 
     it.each(cases)('has no accessibility violations once announced (%s)', async (_, props) => {
@@ -69,6 +71,62 @@ describe('Spinner', () => {
     render(<Spinner role="none" data-testid="sp" />);
     expect(screen.getByTestId('sp')).toHaveAttribute('role', 'none');
     expect(screen.queryByRole('status')).toBeNull();
+  });
+
+  it('keeps role="status" when a wrapper forwards role as undefined', async () => {
+    const Wrapper = (props: SpinnerProps) => (
+      <Spinner role={props.role} aria-label={props['aria-label']} data-testid="sp" />
+    );
+    render(<Wrapper />);
+    const root = screen.getByTestId('sp');
+    expect(root).toHaveAttribute('role', 'status');
+    expect(root).not.toHaveAttribute('aria-label');
+    await React.act(nextFrame);
+    expect(screen.getByRole('status')).toHaveTextContent('Loading');
+  });
+
+  it('adds no aria-label to the default status region (its content is announced)', () => {
+    render(<Spinner label="Saving" data-testid="sp" />);
+    expect(screen.getByTestId('sp')).not.toHaveAttribute('aria-label');
+  });
+
+  describe('role="progressbar" naming', () => {
+    it('is named by the default label', () => {
+      render(<Spinner role="progressbar" />);
+      expect(screen.getByRole('progressbar', { name: 'Loading' })).toBeInTheDocument();
+    });
+
+    it('is named by label', () => {
+      render(<Spinner role="progressbar" label="Fetching results" labelVisible />);
+      expect(screen.getByRole('progressbar', { name: 'Fetching results' })).toBeInTheDocument();
+    });
+
+    it('is named by label when a wrapper forwards aria-label as undefined', () => {
+      const Wrapper = (props: SpinnerProps) => (
+        <Spinner role="progressbar" label="Saving" aria-label={props['aria-label']} />
+      );
+      render(<Wrapper />);
+      expect(screen.getByRole('progressbar', { name: 'Saving' })).toBeInTheDocument();
+    });
+
+    it('lets a consumer aria-label or aria-labelledby win over label', () => {
+      render(
+        <>
+          <span id="upload-heading">Uploading photos</span>
+          <Spinner role="progressbar" label="Loading" aria-label="Loading data" />
+          <Spinner
+            role="progressbar"
+            label="Loading"
+            aria-labelledby="upload-heading"
+            data-testid="labelled"
+          />
+        </>,
+      );
+      expect(screen.getByRole('progressbar', { name: 'Loading data' })).toBeInTheDocument();
+      const labelled = screen.getByRole('progressbar', { name: 'Uploading photos' });
+      expect(labelled).toBe(screen.getByTestId('labelled'));
+      expect(labelled).not.toHaveAttribute('aria-label');
+    });
   });
 
   describe('announcement (feedback-navigation#20)', () => {

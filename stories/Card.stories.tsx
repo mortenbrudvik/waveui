@@ -67,7 +67,9 @@ export const Selected: Story = {
 
 /**
  * A selectable card **without** interactive content is itself the control: a `role="button"` tab
- * stop that toggles with a click, Enter or Space and exposes `aria-pressed`.
+ * stop that toggles with a click, Enter or Space and exposes `aria-pressed`. Its content becomes
+ * the button's name (headings inside it are flattened), so keep it short; a card whose headings
+ * must stay navigable uses `selectionControl="checkbox"`.
  */
 export const Clickable: Story = {
   args: {

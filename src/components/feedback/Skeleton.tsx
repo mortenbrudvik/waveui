@@ -3,8 +3,8 @@ import { cn } from '../../lib/cn';
 import { resolveDeprecatedProp } from '../../lib/dev';
 import type { Shape } from '../../lib/types';
 
-/** The 0.4 `variant` values (deprecated) and the shape each one renders. */
-type SkeletonVariant = 'text' | 'circular' | 'rectangular';
+/** The 0.4 `variant` values (deprecated; written out in {@link SkeletonProps}, not a public name). */
+type SkeletonVariant = NonNullable<SkeletonProps['variant']>;
 
 /** `rectangular` rendered with the default 4px radius in 0.4, so it maps to `rounded`. */
 const variantShapes: Record<SkeletonVariant, Shape> = {
@@ -34,7 +34,7 @@ export interface SkeletonProps extends React.HTMLAttributes<HTMLDivElement> {
    * @deprecated Use `shape`: `text` and `rectangular` → `rounded` (their 0.4 look), `circular` →
    * `circular`. Still works, warns once in development, and `shape` wins when both are given.
    */
-  variant?: SkeletonVariant;
+  variant?: 'text' | 'circular' | 'rectangular';
   ref?: React.Ref<HTMLDivElement>;
 }
 
@@ -98,21 +98,28 @@ export interface SkeletonGroupProps extends React.HTMLAttributes<HTMLDivElement>
 /**
  * Container for the Skeletons of a loading region: `aria-busy="true"` plus a visually hidden
  * `label` ("Loading"), while the placeholders stay decorative. It uses no live-region role, so it
- * does not interrupt; announce completion separately if needed. Remove it (or pass
- * `aria-busy={false}`) when the content arrives. Flat export for React Server Components
- * (`Skeleton.Group` in client files).
+ * does not interrupt; announce completion separately if needed. When the content arrives, remove
+ * the group or pass `aria-busy={false}`, which also drops the hidden label (no stale "Loading" is
+ * read before the content). A forwarded `aria-busy={undefined}` keeps the busy default. Flat
+ * export for React Server Components (`Skeleton.Group` in client files).
  */
 export const SkeletonGroup = ({
   label = 'Loading',
+  // Destructured with a default rather than set before `{...rest}`: a wrapper that forwards
+  // `aria-busy={props['aria-busy']}` passes `undefined`, which must not strip the busy state.
+  'aria-busy': busy = true,
   children,
   ref,
   ...rest
-}: SkeletonGroupProps) => (
-  <div aria-busy="true" {...rest} ref={ref}>
-    <span className="sr-only">{label}</span>
-    {children}
-  </div>
-);
+}: SkeletonGroupProps) => {
+  const loading = busy !== false && busy !== 'false';
+  return (
+    <div {...rest} aria-busy={busy} ref={ref}>
+      {loading && <span className="sr-only">{label}</span>}
+      {children}
+    </div>
+  );
+};
 SkeletonGroup.displayName = 'SkeletonGroup';
 
 /**

@@ -766,6 +766,28 @@ describe('Card', () => {
       await expectNoA11yViolations();
     });
 
+    it('keeps a heading header outside any button (card mode puts it inside role="button")', async () => {
+      const heading = (
+        <CardHeader as="h3" title="Pro plan" subtitle="Billed monthly" data-testid="header" />
+      );
+      const { unmount } = render(
+        <Card onSelect={() => {}} selectionControl="checkbox">
+          {heading}
+        </Card>,
+      );
+      const header = screen.getByTestId('header');
+      expect(header.tagName).toBe('H3');
+      // Not inside a button, whose children are presentational: heading navigation still finds it.
+      expect(header.closest('[role="button"], button')).toBeNull();
+      expect(screen.getByRole('checkbox', { name: 'Pro plan' })).toBeInTheDocument();
+      await expectNoA11yViolations();
+      unmount();
+
+      // The documented trade-off of the default mode: the heading is content of the button.
+      render(<Card onSelect={() => {}}>{heading}</Card>);
+      expect(screen.getByTestId('header').closest('[role="button"]')).not.toBeNull();
+    });
+
     it('the card mode with a footer Button is what the checkbox mode fixes (nested-interactive)', async () => {
       vi.spyOn(console, 'warn').mockImplementation(() => {});
       render(<Card onSelect={() => {}}>{cardWithAction}</Card>);

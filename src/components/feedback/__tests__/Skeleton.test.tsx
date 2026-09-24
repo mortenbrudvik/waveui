@@ -180,8 +180,57 @@ describe('Skeleton.Group (feedback-navigation#6)', () => {
     expect(screen.queryByText('Loading')).toBeNull();
   });
 
-  it('lets the consumer turn the busy state off', () => {
-    render(<Skeleton.Group aria-busy={false} data-testid="group" />);
-    expect(screen.getByTestId('group')).toHaveAttribute('aria-busy', 'false');
+  describe('busy state', () => {
+    it.each([
+      ['boolean', false],
+      ['string', 'false'],
+    ] as const)(
+      'drops the hidden label once aria-busy is false (%s), so no stale "Loading" is read',
+      (_, busy) => {
+        render(
+          <Skeleton.Group aria-busy={busy} data-testid="group">
+            <p>Loaded content</p>
+          </Skeleton.Group>,
+        );
+        const group = screen.getByTestId('group');
+        expect(group).toHaveAttribute('aria-busy', 'false');
+        expect(group.textContent).toBe('Loaded content');
+        expect(screen.queryByText('Loading')).toBeNull();
+      },
+    );
+
+    it('removes the label when a mounted group stops being busy', () => {
+      const { rerender } = render(
+        <Skeleton.Group label="Loading comments" data-testid="group">
+          <Skeleton />
+        </Skeleton.Group>,
+      );
+      expect(screen.getByText('Loading comments')).toHaveClass('sr-only');
+      rerender(
+        <Skeleton.Group label="Loading comments" aria-busy={false} data-testid="group">
+          <p>Two comments</p>
+        </Skeleton.Group>,
+      );
+      expect(screen.queryByText('Loading comments')).toBeNull();
+      expect(screen.getByTestId('group').textContent).toBe('Two comments');
+    });
+
+    it('stays busy with its label when a wrapper forwards aria-busy as undefined', () => {
+      const Wrapper = (props: SkeletonGroupProps) => (
+        <Skeleton.Group aria-busy={props['aria-busy']} data-testid="group">
+          <Skeleton />
+        </Skeleton.Group>
+      );
+      render(<Wrapper />);
+      const group = screen.getByTestId('group');
+      expect(group).toHaveAttribute('aria-busy', 'true');
+      expect(screen.getByText('Loading')).toHaveClass('sr-only');
+    });
+
+    it('keeps the label for an explicit aria-busy={true}', () => {
+      render(<Skeleton.Group aria-busy data-testid="group" />);
+      expect(screen.getByTestId('group')).toHaveAttribute('aria-busy', 'true');
+      expect(screen.getByText('Loading')).toHaveClass('sr-only');
+    });
   });
 });

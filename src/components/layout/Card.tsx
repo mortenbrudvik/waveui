@@ -84,10 +84,14 @@ export interface CardOwnProps {
    * - `'card'` (default): the card itself is the control — `role="button"`, a tab stop, Enter and
    *   Space activation and `aria-pressed={selected}` when `selected` is defined. Use it only for
    *   cards **without** interactive content: a button inside a `role="button"` card is invalid
-   *   (axe `nested-interactive`), and a development warning points here.
+   *   (axe `nested-interactive`), and a development warning points here. A button's children are
+   *   presentational, so the card's content is flattened into its name: a heading (e.g.
+   *   `<Card.Header as="h3">`), list or other structure inside it is not exposed and cannot be
+   *   reached by heading navigation (no warning covers this). Keep such cards short.
    * - `'checkbox'`: the card is not a widget; a built-in native checkbox (top end corner) carries
    *   `selected` and is named by the `Card.Header` title (or `selectLabel`). Pointer clicks on
-   *   non-interactive card areas still toggle it. Use it for cards with actions.
+   *   non-interactive card areas still toggle it. Use it for cards with actions, and for cards
+   *   whose headings or other structure must stay navigable.
    * @default 'card'
    */
   selectionControl?: 'card' | 'checkbox';
@@ -118,9 +122,11 @@ type CardImplProps = CardOwnProps &
  * **Selectable cards** (`onSelect`) come in two patterns:
  * - A card without interactive content is itself the control (`selectionControl="card"`, the
  *   default): it is a `role="button"` tab stop activated by click, Enter (key down) or Space (key
- *   up, cancelled by moving focus away first), with `aria-pressed` reflecting `selected`.
- * - A card that contains buttons or links uses `selectionControl="checkbox"`: a built-in checkbox
- *   named by the header title carries the selection, and the card's actions stay separate controls.
+ *   up, cancelled by moving focus away first), with `aria-pressed` reflecting `selected`. Its
+ *   content becomes the button's name, so headings and other structure inside it are flattened.
+ * - A card that contains buttons or links, or headings that must stay navigable, uses
+ *   `selectionControl="checkbox"`: a built-in checkbox named by the header title carries the
+ *   selection, and the card's actions and structure stay separate from it.
  *
  * In both modes events that start inside a nested interactive element, or in content portaled out
  * of the card, are ignored. `onClick`, `onKeyDown` and `onKeyUp` are composed with the built-in
