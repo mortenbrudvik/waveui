@@ -152,12 +152,16 @@ describe('Spinner', () => {
       expect(screen.getByRole('status')).toHaveTextContent('Saving');
     });
 
-    it('does not update after unmounting before the frame', async () => {
-      const error = vi.spyOn(console, 'error').mockImplementation(() => {});
+    it('cancels its pending frame when it unmounts before the frame', () => {
+      const request = vi.spyOn(window, 'requestAnimationFrame');
+      const cancel = vi.spyOn(window, 'cancelAnimationFrame');
       const { unmount } = render(<Spinner />);
+      expect(request).toHaveBeenCalledTimes(1);
+      const handle = request.mock.results[0]?.value as number;
+      expect(cancel).not.toHaveBeenCalled();
       unmount();
-      await nextFrame();
-      expect(error).not.toHaveBeenCalled();
+      expect(cancel).toHaveBeenCalledTimes(1);
+      expect(cancel).toHaveBeenCalledWith(handle);
     });
   });
 
@@ -201,6 +205,17 @@ describe('Spinner', () => {
       'motion-reduce:animate-wave-spin-slow',
     );
     expect(ring?.className).not.toMatch(/\[#|animate-\[/);
+  });
+
+  it('keeps the arc visible in forced colors (forcedColors.ringArc)', () => {
+    render(<Spinner data-testid="sp" />);
+    const ring = screen.getByTestId('sp').querySelector('[data-wave-spinner-ring]');
+    // Forced colors would paint all four borders alike: the track takes Canvas, the arc Highlight.
+    expect(ring).toHaveClass(
+      'forced-colors:forced-color-adjust-none',
+      'forced-colors:border-[Canvas]',
+      'forced-colors:border-t-[Highlight]',
+    );
   });
 
   it('applies size classes', () => {

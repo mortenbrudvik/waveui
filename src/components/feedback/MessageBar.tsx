@@ -1,10 +1,11 @@
 import * as React from 'react';
+import { isElementOfType } from '../../lib/children';
 import { cn } from '../../lib/cn';
 import { warnOnce } from '../../lib/dev';
 import { DismissIcon } from '../../lib/icons';
 import { hasRenderedTextLabel, hasTextLabel, observeTextLabel } from '../../lib/labelInName';
 import { mergeProps } from '../../lib/mergeProps';
-import { VOID_ELEMENTS, renderSlot, resolveSlot } from '../../lib/slot';
+import { VOID_ELEMENTS, renderSlot, resolveSlot, slotRendersContent } from '../../lib/slot';
 import { focusRing } from '../../lib/styles';
 import type { Status, Slot, SlotObject } from '../../lib/types';
 import { useMergedRefs } from '../../hooks/useMergedRefs';
@@ -31,7 +32,10 @@ export interface MessageBarProps extends React.HTMLAttributes<HTMLDivElement> {
    * languages, or `''` when the message text already states the severity.
    */
   statusLabel?: string;
-  /** Called when the dismiss button is activated. Passing it renders the dismiss button. */
+  /**
+   * Called when the dismiss button is activated. Passing it renders the dismiss button (unless
+   * `dismiss` is `null`).
+   */
   onDismiss?: () => void;
   /**
    * Custom status icon, rendered decoratively (`aria-hidden="true"`, a slot object can override
@@ -40,8 +44,13 @@ export interface MessageBarProps extends React.HTMLAttributes<HTMLDivElement> {
   icon?: Slot<'span'>;
   /**
    * Content of the dismiss button (replaces the default dismiss icon). It always renders **inside**
-   * the built-in `<button type="button" aria-label="Dismiss">`, which calls `onDismiss`; passing it
-   * shows the dismiss button even without `onDismiss`, and `null` hides the button. The content is
+   * the built-in `<button type="button" aria-label="Dismiss">`, which calls `onDismiss`; passing
+   * content shows the dismiss button even without `onDismiss`. `null` is the only value that hides
+   * the button. A boolean counts as no slot, so the conditional idiom
+   * `dismiss={useBrandIcon && <BrandCloseIcon />}` keeps the default button: the default icon with
+   * `onDismiss`, no button without it. Content that renders nothing (`''`, or an array or Fragment
+   * of only `null`, `false`, `true` and `''`, also as the children of a slot object or a merged
+   * button) keeps the default icon, so the button is never empty. The content is
    * decorative (`aria-hidden`), so the button keeps the name "Dismiss": when the content is
    * visible text, pass a slot object whose `aria-label` matches it
    * (`{ children: 'Close', 'aria-label': 'Close' }`) so the name contains the visible label. An
@@ -146,39 +155,78 @@ function isButtonType(type: unknown): boolean {
   return type === 'button' || type === Button;
 }
 
+/** A one-shot iterator (a generator): its iterator is itself, so reading it consumes it. */
+function isOneShotIterator(value: unknown): boolean {
+  if (typeof value !== 'object' || value === null || Array.isArray(value)) return false;
+  if (!(Symbol.iterator in value)) return false;
+  const iterable = value as Iterable<unknown>;
+  return (iterable[Symbol.iterator]() as unknown) === iterable;
+}
+
+/**
+ * Whether dismiss content renders nothing ({@link slotRendersContent}), also through Fragments and
+ * arrays of Fragments. The dismiss button then shows the default icon instead of rendering empty.
+ * A one-shot iterator (a generator) that React renders as is counts as content: reading it here
+ * would consume it before React renders it.
+ */
+function rendersNothing(content: unknown, visiting: Set<object> = new Set()): boolean {
+  const node = content as React.ReactNode;
+  if (isElementOfType<{ children?: React.ReactNode }>(node, React.Fragment)) {
+    return rendersNothing(node.props.children, visiting);
+  }
+  if (Array.isArray(content)) {
+    // An array that contains itself adds nothing beyond what is already being checked.
+    if (visiting.has(content)) return true;
+    visiting.add(content);
+    try {
+      return content.every((item) => rendersNothing(item, visiting));
+    } finally {
+      visiting.delete(content);
+    }
+  }
+  if (isOneShotIterator(content)) return false;
+  return !slotRendersContent(content);
+}
+
+/** The dismiss button without a slot: the default icon and name. */
+function defaultDismiss(): DismissParts {
+  return {
+    buttonProps: {},
+    content: defaultDismissContent(),
+    contentMayName: false,
+    literalTextLabel: false,
+    warning: null,
+  };
+}
+
 /**
  * Splits the `dismiss` slot into props for the wired dismiss button and the content rendered
- * inside it (C-SLOTS dismiss semantics). `null` means: no dismiss button.
+ * inside it (C-SLOTS dismiss semantics). `null` means: no dismiss button. A boolean is no slot
+ * (the default dismiss button), and content that renders nothing keeps the default icon.
  */
 function resolveDismiss(dismiss: MessageBarProps['dismiss']): DismissParts | null {
-  if (dismiss === undefined) {
-    return {
-      buttonProps: {},
-      content: defaultDismissContent(),
-      contentMayName: false,
-      literalTextLabel: false,
-      warning: null,
-    };
-  }
-  if (dismiss === null || typeof dismiss === 'boolean') return null;
+  if (dismiss === null) return null;
+  if (dismiss === undefined || typeof dismiss === 'boolean') return defaultDismiss();
 
   // A merged `<button>`/`Button` keeps its content accessible (as in 0.4): a text label names the
   // button, anything else (an icon, a lone character such as `X` or `×`) gets the default name.
-  if (React.isValidElement<UnknownProps>(dismiss) && isButtonType(dismiss.type)) {
+  // The type is compared through `isElementOfType`, so a Button written in a Server Component
+  // (a lazy client reference) is merged too.
+  const element = dismiss as React.ReactNode;
+  if (isElementOfType<UnknownProps>(element, 'button', Button)) {
     const buttonProps: UnknownProps = {};
-    for (const [key, value] of Object.entries(dismiss.props)) {
+    for (const [key, value] of Object.entries(element.props)) {
       if (key !== 'children' && !BUTTON_COMPONENT_KEYS.has(key)) buttonProps[key] = value;
     }
-    const children = dismiss.props.children as React.ReactNode;
+    const children = element.props.children as React.ReactNode;
     // Wave Button's icon becomes decorative content in front of its children.
+    const icon = element.props.icon as Slot<'span'>;
     const iconNode =
-      dismiss.type === Button
-        ? renderSlot(dismiss.props.icon as Slot<'span'>, 'span', dismissContentClassName, {
-            'aria-hidden': true,
-          })
+      isElementOfType(element, Button) && !rendersNothing(icon)
+        ? renderSlot(icon, 'span', dismissContentClassName, { 'aria-hidden': true })
         : null;
     const content =
-      iconNode || children != null ? (
+      iconNode || !rendersNothing(children) ? (
         <>
           {iconNode}
           {children}
@@ -198,7 +246,7 @@ function resolveDismiss(dismiss: MessageBarProps['dismiss']): DismissParts | nul
   // Everything else is classified by the slot system (F2): shorthand content resolves to the
   // default `span` with no attributes; a slot object resolves to its element and attributes.
   const resolved = resolveSlot(dismiss as Slot<'span'>, 'span');
-  if (!resolved) return null;
+  if (!resolved) return defaultDismiss();
   const { Component, props, children } = resolved;
   const asButton = isButtonType(Component);
   const isButtonObject =
@@ -209,7 +257,7 @@ function resolveDismiss(dismiss: MessageBarProps['dismiss']): DismissParts | nul
   let iconNode: React.ReactNode = null;
   for (const [key, value] of Object.entries(props)) {
     if (Component === Button && BUTTON_COMPONENT_KEYS.has(key)) {
-      if (key === 'icon') {
+      if (key === 'icon' && !rendersNothing(value)) {
         iconNode = renderSlot(value as Slot<'span'>, 'span', dismissContentClassName, {
           'aria-hidden': true,
         });
@@ -228,7 +276,8 @@ function resolveDismiss(dismiss: MessageBarProps['dismiss']): DismissParts | nul
   }
 
   // The content element: the object's own element, or a span for the button-object form. An
-  // object without children styles the default icon (e.g. `{ className: 'text-error' }`).
+  // object whose children render nothing styles the default icon
+  // (e.g. `{ className: 'text-error' }`).
   const ContentTag: React.ElementType = asButton ? 'span' : Component;
   const elementProps = {
     'aria-hidden': true,
@@ -237,7 +286,7 @@ function resolveDismiss(dismiss: MessageBarProps['dismiss']): DismissParts | nul
   };
   const isVoid = typeof ContentTag === 'string' && VOID_ELEMENTS.has(ContentTag);
   const inner =
-    iconNode || children != null ? (
+    iconNode || !rendersNothing(children) ? (
       <>
         {iconNode}
         {children}
@@ -292,7 +341,9 @@ export const MessageBar = ({
       </span>
     );
 
-  const showDismiss = dismiss !== undefined || onDismiss !== undefined;
+  // A boolean `dismiss` is no slot (`dismiss={cond && <CloseIcon />}`): only `onDismiss` shows it.
+  const showDismiss =
+    onDismiss !== undefined || (dismiss !== undefined && typeof dismiss !== 'boolean');
   const dismissParts = showDismiss ? resolveDismiss(dismiss) : null;
   const dismissWarning = dismissParts?.warning ?? null;
   React.useEffect(() => {

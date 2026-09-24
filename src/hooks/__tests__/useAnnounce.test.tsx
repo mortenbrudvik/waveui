@@ -92,6 +92,40 @@ describe('useAnnounce / announce', () => {
     expect(__getAnnouncerText('polite')).toBe('Saved');
   });
 
+  it('keeps a newer message sent in the same frame as a pending repeat', async () => {
+    announce('Searching…');
+    await nextFrame();
+    expect(__getAnnouncerText('polite')).toBe('Searching…');
+
+    announce('Searching…');
+    announce('3 results');
+    await nextFrame();
+    expect(__getAnnouncerText('polite')).toBe('3 results');
+  });
+
+  it('keeps the region cleared until the next frame when a pending repeat is repeated again', async () => {
+    announce('Saved');
+    await nextFrame();
+
+    announce('Saved');
+    announce('Saved');
+    expect(__getAnnouncerText('polite')).toBe('');
+    await nextFrame();
+    expect(__getAnnouncerText('polite')).toBe('Saved');
+  });
+
+  it('keeps a pending repeat on the other politeness when a newer message is written', async () => {
+    announce('Saved');
+    announce('Error', 'assertive');
+    await nextFrame();
+
+    announce('Saved');
+    announce('Retrying', 'assertive');
+    await nextFrame();
+    expect(__getAnnouncerText('polite')).toBe('Saved');
+    expect(__getAnnouncerText('assertive')).toBe('Retrying');
+  });
+
   it('keeps a single container for every caller', () => {
     renderHook(() => useAnnounce());
     renderHook(() => useAnnounce());

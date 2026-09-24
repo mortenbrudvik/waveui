@@ -13,6 +13,13 @@ const variantShapes: Record<SkeletonVariant, Shape> = {
   rectangular: 'rounded',
 };
 
+/**
+ * Forced colors replace the author fill with the page color, so the placeholder would vanish: it
+ * is painted `GrayText` instead (a leaf element, so opting out of forced colors reaches nothing
+ * else).
+ */
+const forcedColorsFill = 'forced-colors:bg-[GrayText] forced-colors:forced-color-adjust-none';
+
 const shapeClasses: Record<Shape, string> = {
   rounded: 'rounded',
   circular: 'rounded-full',
@@ -38,18 +45,7 @@ export interface SkeletonProps extends React.HTMLAttributes<HTMLDivElement> {
   ref?: React.Ref<HTMLDivElement>;
 }
 
-/**
- * A decorative loading placeholder. Each Skeleton is `aria-hidden` (a consumer `aria-hidden`
- * overrides it); wrap the placeholders of a loading region in {@link SkeletonGroup}
- * (`Skeleton.Group`), which marks it busy and gives it a visually hidden "Loading" label.
- * The pulse animation stops for reduced motion.
- *
- * @example
- * <Skeleton.Group label="Loading profile">
- *   <Skeleton shape="circular" width={32} height={32} />
- *   <Skeleton width={160} height={12} />
- * </Skeleton.Group>
- */
+// The component-level JSDoc sits on the exported `Skeleton` below (it reaches index.d.ts).
 const SkeletonRoot = ({
   width,
   height,
@@ -76,6 +72,7 @@ const SkeletonRoot = ({
       ref={ref}
       className={cn(
         'bg-skeleton animate-wave-pulse motion-reduce:animate-none',
+        forcedColorsFill,
         shapeClasses[shape],
         className,
       )}
@@ -123,7 +120,17 @@ export const SkeletonGroup = ({
 SkeletonGroup.displayName = 'SkeletonGroup';
 
 /**
- * Skeleton with the `Skeleton.Group` sub-component. In React Server Components use the flat
- * export `SkeletonGroup` instead of `Skeleton.Group`.
+ * A decorative loading placeholder. Each Skeleton is `aria-hidden` (a consumer `aria-hidden`
+ * overrides it); wrap the placeholders of a loading region in {@link SkeletonGroup}
+ * (`Skeleton.Group`), which marks it busy and gives it a visually hidden "Loading" label.
+ * The pulse animation stops for reduced motion; in forced-colors mode the placeholders are
+ * painted `GrayText`. In React Server Components use the flat export `SkeletonGroup` instead of
+ * `Skeleton.Group`.
+ *
+ * @example
+ * <Skeleton.Group label="Loading profile">
+ *   <Skeleton shape="circular" width={32} height={32} />
+ *   <Skeleton width={160} height={12} />
+ * </Skeleton.Group>
  */
 export const Skeleton = /* @__PURE__ */ Object.assign(SkeletonRoot, { Group: SkeletonGroup });

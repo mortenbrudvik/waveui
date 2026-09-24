@@ -147,7 +147,7 @@ export const ProgressBar = ({
           'h-full rounded-full bg-primary',
           forcedColors.selectedLeaf,
           isIndeterminate &&
-            'w-2/5 animate-wave-indeterminate rtl:animate-wave-indeterminate-rtl motion-reduce:w-full motion-reduce:translate-x-0 motion-reduce:animate-wave-pulse rtl:motion-reduce:animate-wave-pulse',
+            'w-2/5 animate-wave-indeterminate wave-rtl:animate-wave-indeterminate-rtl motion-reduce:w-full motion-reduce:translate-x-0 motion-reduce:animate-wave-pulse wave-rtl:motion-reduce:animate-wave-pulse',
         )}
         style={isIndeterminate ? undefined : { width: `${percentage}%` }}
       />

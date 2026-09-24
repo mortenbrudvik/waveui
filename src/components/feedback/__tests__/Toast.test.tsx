@@ -2,6 +2,7 @@ import * as React from 'react';
 import { describe, it, expect, vi, afterEach, beforeEach, expectTypeOf } from 'vitest';
 import { act, fireEvent, render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
+import { renderToString } from 'react-dom/server';
 import { Toast, Toaster, useToastController } from '../Toast';
 import type { ToastController, ToastOptions, ToastProps, ToasterProps } from '../Toast';
 import { useDismiss } from '../../../hooks/useDismiss';
@@ -62,6 +63,9 @@ const getToasts = () =>
 /** How long an announcement stays in the Toaster's live region. */
 const ANNOUNCEMENT_DURATION = 2000;
 
+const MISSING_TOASTER_MESSAGE =
+  '[WaveUI] useToastController must be used within <Toaster>. Wrap your app (or the part of it that shows toasts) in <Toaster>: it provides the controller to its children.';
+
 const advance = (ms: number) => {
   act(() => {
     vi.advanceTimersByTime(ms);
@@ -105,6 +109,21 @@ describe('Toast', () => {
   it('renders no dismiss button without onDismiss', () => {
     render(<Toast title="Saved" />);
     expect(screen.queryByRole('button')).not.toBeInTheDocument();
+  });
+
+  it('dismissLabel names the dismiss button (i18n)', () => {
+    render(<Toast title="Gespeichert" dismissLabel="Schließen" onDismiss={() => {}} />);
+    expect(screen.getByRole('button', { name: 'Schließen' })).toHaveAttribute(
+      'aria-label',
+      'Schließen',
+    );
+    expect(screen.queryByRole('button', { name: 'Dismiss' })).not.toBeInTheDocument();
+  });
+
+  it('does not forward dismissLabel to the root element', () => {
+    render(<Toast title="Saved" dismissLabel="Close" data-testid="toast" />);
+    expect(screen.getByTestId('toast')).not.toHaveAttribute('dismissLabel');
+    expect(screen.getByTestId('toast')).not.toHaveAttribute('dismisslabel');
   });
 
   describe('forms (button-provider#1)', () => {
@@ -202,6 +221,21 @@ describe('Toaster', () => {
       </Toaster>,
     );
     expect(screen.getByText('App content')).toBeInTheDocument();
+  });
+
+  it('renders the app content on the server without errors (layout effects never run there)', () => {
+    const error = vi.spyOn(console, 'error');
+    try {
+      const html = renderToString(
+        <Toaster>
+          <p>App content</p>
+        </Toaster>,
+      );
+      expect(html).toContain('<p>App content</p>');
+      expect(error).not.toHaveBeenCalled();
+    } finally {
+      error.mockRestore();
+    }
   });
 
   it('portals a labelled, allow-listed toast region (feedback-navigation#12, #50)', () => {
@@ -302,21 +336,22 @@ describe('useToastController', () => {
     expect(() => render(<DispatchButton />)).toThrow(
       '[WaveUI] useToastController must be used within <Toaster>',
     );
+    expect(error.mock.calls).toEqual([]);
     error.mockRestore();
   });
 
-  it('logs and returns an inert controller outside <Toaster> in production', async () => {
-    vi.resetModules();
-    vi.doMock('../../../lib/dev', async (importOriginal) => ({
-      ...(await importOriginal<typeof import('../../../lib/dev')>()),
-      isDev: false,
-    }));
-    const error = vi.spyOn(console, 'error').mockImplementation(() => {});
-    try {
-      const { useToastController: useProdController } = await import('../Toast');
+  describe('in production', () => {
+    afterEach(() => {
+      vi.unstubAllEnvs();
+      vi.restoreAllMocks();
+    });
+
+    it('logs once and returns an inert controller outside <Toaster>', () => {
+      vi.stubEnv('NODE_ENV', 'production');
+      const error = vi.spyOn(console, 'error').mockImplementation(() => {});
       let result = 'unset';
       function Probe() {
-        const { dispatchToast, dismissToast } = useProdController();
+        const { dispatchToast, dismissToast } = useToastController();
         return (
           <button
             type="button"
@@ -329,22 +364,20 @@ describe('useToastController', () => {
           </button>
         );
       }
-      const { rerender } = render(<Probe />);
+      const { rerender } = render(
+        <>
+          <Probe />
+          <Probe />
+        </>,
+      );
       rerender(<Probe />);
       rerender(<Probe />);
       fireEvent.click(screen.getByRole('button', { name: 'Go' }));
       expect(result).toBe('lost');
-      // Logged once, not on every render of the calling component.
-      const reports = error.mock.calls.filter(([message]) =>
-        String(message).includes('[WaveUI] useToastController must be used within <Toaster>'),
-      );
-      expect(reports).toHaveLength(1);
+      // Logged once, not on every render of every calling component.
+      expect(error.mock.calls).toEqual([[MISSING_TOASTER_MESSAGE]]);
       expect(screen.queryByText('Lost')).not.toBeInTheDocument();
-    } finally {
-      error.mockRestore();
-      vi.doUnmock('../../../lib/dev');
-      vi.resetModules();
-    }
+    });
   });
 
   it('exposes a stable, memoized controller (table-core#25)', () => {
@@ -374,6 +407,8 @@ describe('useToastController', () => {
     expectTypeOf<ToastController['dispatchToast']>().returns.toEqualTypeOf<string>();
     expectTypeOf<ToastController['dismissToast']>().parameters.toEqualTypeOf<[id: string]>();
     expectTypeOf<ToastOptions>().toHaveProperty('toastId').toEqualTypeOf<string | undefined>();
+    expectTypeOf<ToastOptions>().toHaveProperty('dismissLabel').toEqualTypeOf<string | undefined>();
+    expectTypeOf<ToastProps>().toHaveProperty('dismissLabel').toEqualTypeOf<string | undefined>();
     expectTypeOf<ToastProps['ref']>().toEqualTypeOf<React.Ref<HTMLDivElement> | undefined>();
     expectTypeOf<ToasterProps['ref']>().toEqualTypeOf<React.Ref<HTMLDivElement> | undefined>();
   });
@@ -473,6 +508,17 @@ describe('Toaster: announcements (feedback-navigation#11, #14)', () => {
     expect(getToasts()[0]).toHaveTextContent(/^Fehler:\s*Upload/);
   });
 
+  it('uses the dismissLabel option for the dismiss button name (i18n)', () => {
+    const { dispatch } = renderToaster();
+    dispatch({ title: 'Gespeichert', dismissLabel: 'Schließen', timeout: 0 });
+    dispatch({ title: 'Default', timeout: 0 });
+    const [translated, fallback] = getToasts();
+    expect(within(translated).getByRole('button')).toHaveAccessibleName('Schließen');
+    expect(within(fallback).getByRole('button')).toHaveAccessibleName('Dismiss');
+    // The name of the button is not part of the announcement.
+    expect(getLiveRegion('polite')).not.toHaveTextContent('Schließen');
+  });
+
   describe('clearing after the announcement', () => {
     beforeEach(() => {
       vi.useFakeTimers();
@@ -557,15 +603,18 @@ describe('Toaster: timers (feedback-navigation#13)', () => {
     expect(screen.queryByText('Quick')).not.toBeInTheDocument();
   });
 
-  it('keeps a timeout: 0 toast (no dismiss timer)', () => {
-    const { dispatch } = renderToaster();
-    dispatch({ title: 'Sticky', timeout: 0 });
-    // Only the timer that clears the announcement.
-    expect(vi.getTimerCount()).toBe(1);
-    advance(60_000);
-    expect(screen.getByText('Sticky')).toBeInTheDocument();
-    expect(vi.getTimerCount()).toBe(0);
-  });
+  it.each([0, -1, NaN, Infinity, -Infinity])(
+    'keeps a toast whose timeout is %s (not a positive finite number: no dismiss timer)',
+    (timeout) => {
+      const { dispatch } = renderToaster();
+      dispatch({ title: 'Sticky', timeout });
+      // Only the timer that clears the announcement.
+      expect(vi.getTimerCount()).toBe(1);
+      advance(60_000);
+      expect(screen.getByText('Sticky')).toBeInTheDocument();
+      expect(vi.getTimerCount()).toBe(0);
+    },
+  );
 
   it('dismisses one of two toasts with its Dismiss button', () => {
     const { dispatch } = renderToaster();
@@ -687,6 +736,115 @@ describe('Toaster: pausing (feedback-navigation#12)', () => {
     expect(screen.getByText('Away')).toBeInTheDocument();
     advance(2000);
     expect(getToasts()).toHaveLength(0);
+  });
+
+  describe('page visibility', () => {
+    let visibility: 'visible' | 'hidden' = 'visible';
+    beforeEach(() => {
+      visibility = 'visible';
+      vi.spyOn(document, 'visibilityState', 'get').mockImplementation(() => visibility);
+    });
+    afterEach(() => {
+      vi.restoreAllMocks();
+    });
+
+    const setVisibility = (next: 'visible' | 'hidden') => {
+      visibility = next;
+      act(() => {
+        document.dispatchEvent(new Event('visibilitychange'));
+      });
+    };
+
+    it('waits while the page is hidden when the Toaster mounts (a background tab)', () => {
+      visibility = 'hidden';
+      const { dispatch } = renderToaster();
+      dispatch({ title: 'Welcome back' });
+      advance(60_000);
+      expect(screen.getByText('Welcome back')).toBeInTheDocument();
+
+      // The user switches to the tab: the countdown starts from the full timeout.
+      setVisibility('visible');
+      advance(4999);
+      expect(screen.getByText('Welcome back')).toBeInTheDocument();
+      advance(1);
+      expect(getToasts()).toHaveLength(0);
+    });
+
+    it('pauses while the page is hidden and resumes with the remaining time', () => {
+      const { dispatch } = renderToaster();
+      dispatch({ title: 'Hidden tab' });
+      advance(2000);
+      setVisibility('hidden');
+      advance(60_000);
+      expect(screen.getByText('Hidden tab')).toBeInTheDocument();
+      setVisibility('visible');
+      advance(2999);
+      expect(screen.getByText('Hidden tab')).toBeInTheDocument();
+      advance(1);
+      expect(getToasts()).toHaveLength(0);
+    });
+
+    it('stays paused while the window is blurred, even when the page is shown again', () => {
+      const { dispatch } = renderToaster();
+      dispatch({ title: 'Away' });
+      act(() => {
+        window.dispatchEvent(new FocusEvent('blur'));
+      });
+      setVisibility('hidden');
+      setVisibility('visible');
+      advance(60_000);
+      expect(screen.getByText('Away')).toBeInTheDocument();
+      act(() => {
+        window.dispatchEvent(new FocusEvent('focus'));
+      });
+      advance(5000);
+      expect(getToasts()).toHaveLength(0);
+    });
+
+    it('removes the visibility listener on unmount', () => {
+      const remove = vi.spyOn(document, 'removeEventListener');
+      const { unmount } = renderToaster();
+      unmount();
+      expect(remove).toHaveBeenCalledWith('visibilitychange', expect.any(Function));
+    });
+  });
+
+  describe('a replaced toast keeps its pause (WCAG 2.2.1)', () => {
+    it('stays while focus is inside it after it is replaced, and expires after focus leaves', () => {
+      const { dispatch } = renderToaster();
+      dispatch({ toastId: 'save', title: 'Saving…', timeout: 0 });
+      const button = within(getToasts()[0]).getByRole('button', { name: 'Dismiss' });
+      act(() => button.focus());
+
+      dispatch({ toastId: 'save', status: 'success', title: 'Saved' });
+      advance(60_000);
+      expect(screen.getByText('Saved')).toBeInTheDocument();
+      // The same node: no new focus event arrives to pause the new timer.
+      expect(button).toHaveFocus();
+
+      act(() => button.blur());
+      advance(4999);
+      expect(screen.getByText('Saved')).toBeInTheDocument();
+      advance(1);
+      expect(getToasts()).toHaveLength(0);
+    });
+
+    it('stays while the pointer is over it after it is replaced, and expires after it leaves', () => {
+      const { dispatch } = renderToaster();
+      dispatch({ toastId: 'save', title: 'Saving…', timeout: 0 });
+      const [toast] = getToasts();
+      fireEvent.pointerOver(toast);
+
+      dispatch({ toastId: 'save', status: 'success', title: 'Saved' });
+      advance(60_000);
+      expect(screen.getByText('Saved')).toBeInTheDocument();
+
+      fireEvent.pointerOut(toast, { relatedTarget: document.body });
+      advance(4999);
+      expect(screen.getByText('Saved')).toBeInTheDocument();
+      advance(1);
+      expect(getToasts()).toHaveLength(0);
+    });
   });
 });
 

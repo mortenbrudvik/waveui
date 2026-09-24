@@ -1,8 +1,6 @@
-import { useEffect, useLayoutEffect, useRef } from 'react';
+import { useLayoutEffect, useRef } from 'react';
 import type * as React from 'react';
 import { useEventCallback } from './useEventCallback';
-
-const useIsomorphicLayoutEffect = typeof document !== 'undefined' ? useLayoutEffect : useEffect;
 
 /** Options of {@link usePreserveFocus}. */
 export interface UsePreserveFocusOptions {
@@ -66,14 +64,14 @@ export function usePreserveFocus(
   // Token of the unmount move scheduled by the cleanup; a remount of this instance clears it.
   const scheduledMoveRef = useRef<object | null>(null);
 
-  useIsomorphicLayoutEffect(() => {
+  useLayoutEffect(() => {
     stateRef.current = { node: ref.current, enabled };
   });
 
   // `enabled` true -> false: move focus in the layout phase. (A move inside a cleanup would be
   // undone: React refocuses the previously focused element after the mutation phase when it is
   // still in the document.)
-  useIsomorphicLayoutEffect(() => {
+  useLayoutEffect(() => {
     const wasEnabled = previousEnabledRef.current;
     previousEnabledRef.current = enabled;
     if (wasEnabled && !enabled) moveFocusOut(ref.current, resolveFallback);
@@ -81,7 +79,7 @@ export function usePreserveFocus(
 
   // Unmount: the cleanup runs before the node is removed, while it still contains focus; the move
   // is deferred to a microtask and cancelled by a remount of this instance (StrictMode).
-  useIsomorphicLayoutEffect(() => {
+  useLayoutEffect(() => {
     const state = stateRef;
     const scheduled = scheduledMoveRef;
     scheduled.current = null;

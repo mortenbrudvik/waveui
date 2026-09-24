@@ -1,5 +1,5 @@
 import * as React from 'react';
-import { describe, it, expect, vi, expectTypeOf } from 'vitest';
+import { describe, it, expect, vi, expectTypeOf, afterEach } from 'vitest';
 import { createPortal } from 'react-dom';
 import { renderToString } from 'react-dom/server';
 import { act, render, screen, waitFor, within } from '@testing-library/react';
@@ -10,6 +10,7 @@ import { StatusIcon, StatusText } from '../MessageBar.status';
 import { Button } from '../../button/Button';
 import type { Slot } from '../../../lib/types';
 import {
+  asClientReference,
   renderWithProviders,
   testDisplayName,
   testNoImplicitSubmit,
@@ -18,7 +19,22 @@ import {
 
 const statuses = ['info', 'success', 'warning', 'error'] as const;
 
+/** The development warning for a `<button>` or Wave `Button` element passed as `dismiss`. */
+const BUTTON_ELEMENT_WARNING =
+  '[WaveUI] MessageBar: `dismiss` received a button element; its props were merged into the built-in dismiss button (buttons cannot be nested). Pass icon content instead, e.g. `dismiss={<CloseIcon />}`, and use `onDismiss`.';
+
+/** The deprecation warning for the 0.4 button-object form of `dismiss`. */
+const BUTTON_OBJECT_WARNING =
+  '[WaveUI] MessageBar: the button-object form of `dismiss` is deprecated and will be removed in 1.0; its button props were merged into the built-in dismiss button. Pass icon content instead, e.g. `dismiss={<CloseIcon />}`, and use `onDismiss`.';
+
+/** Records `console.warn` for one test (restored after each test); assert what it recorded. */
+const spyOnWarn = () => vi.spyOn(console, 'warn').mockImplementation(() => {});
+
 describe('MessageBar', () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
   testSystemProps(MessageBar, {
     expectedTag: 'div',
     displayName: 'MessageBar',
@@ -199,6 +215,194 @@ describe('MessageBar', () => {
       expect(screen.queryByRole('button')).not.toBeInTheDocument();
     });
 
+    describe('content that renders nothing keeps the default icon (only null hides the button)', () => {
+      const expectDefaultDismiss = () => {
+        expect(screen.getAllByRole('button')).toHaveLength(1);
+        const button = screen.getByRole('button', { name: 'Dismiss' });
+        const icon = button.querySelector('[data-wave-icon="dismiss"]');
+        expect(icon).not.toBeNull();
+        expect(icon?.closest('[aria-hidden="true"]')).not.toBeNull();
+        return button;
+      };
+
+      it.each([
+        ['false', false],
+        ['true', true],
+      ] as const)(
+        'dismiss={%s} with onDismiss renders the default dismiss button',
+        async (_, value) => {
+          const user = userEvent.setup();
+          const onDismiss = vi.fn();
+          render(
+            <MessageBar onDismiss={onDismiss} dismiss={value}>
+              Msg
+            </MessageBar>,
+          );
+          await user.click(expectDefaultDismiss());
+          expect(onDismiss).toHaveBeenCalledTimes(1);
+        },
+      );
+
+      it.each([
+        ['false', false],
+        ['true', true],
+      ] as const)('dismiss={%s} without onDismiss renders no button (like no slot)', (_, value) => {
+        render(<MessageBar dismiss={value}>Msg</MessageBar>);
+        expect(screen.queryByRole('button')).not.toBeInTheDocument();
+      });
+
+      it.each([
+        ["''", ''],
+        ['[]', []],
+        ['an array of empty values', [null, false, '']],
+        ['an empty Fragment', <React.Fragment key="f" />],
+        ['a Fragment of empty values', <React.Fragment key="f">{false}</React.Fragment>],
+        ['a slot object whose children render nothing', { children: false }],
+      ] as const)(
+        'dismiss content %s renders the default icon, not an empty button',
+        (_, dismiss) => {
+          render(
+            <MessageBar onDismiss={() => {}} dismiss={dismiss as MessageBarProps['dismiss']}>
+              Msg
+            </MessageBar>,
+          );
+          expectDefaultDismiss();
+        },
+      );
+
+      it('a slot object with empty children styles the default icon', () => {
+        render(
+          <MessageBar onDismiss={() => {}} dismiss={{ children: '', className: 'text-error' }}>
+            Msg
+          </MessageBar>,
+        );
+        const icon = expectDefaultDismiss().querySelector('[data-wave-icon="dismiss"]');
+        expect(icon?.parentElement).toHaveClass('text-error');
+      });
+
+      it.each([
+        [
+          '<button>',
+          <button key="b" type="button">
+            {''}
+          </button>,
+        ],
+        ['Wave Button', <Button key="w" icon={false} />],
+      ])('a %s slot whose content renders nothing shows the default icon', (_, dismiss) => {
+        const warn = spyOnWarn();
+        render(
+          <MessageBar onDismiss={() => {}} dismiss={dismiss}>
+            Msg
+          </MessageBar>,
+        );
+        expectDefaultDismiss();
+        expect(warn.mock.calls).toEqual([[BUTTON_ELEMENT_WARNING]]);
+      });
+
+      it('0 is content, not nothing', () => {
+        render(
+          <MessageBar onDismiss={() => {}} dismiss={0}>
+            Msg
+          </MessageBar>,
+        );
+        const button = screen.getByRole('button', { name: 'Dismiss' });
+        expect(button).toHaveTextContent('0');
+        expect(button.querySelector('[data-wave-icon="dismiss"]')).toBeNull();
+      });
+    });
+
+    describe('a ref on the dismiss slot reaches the wired button (0.4 compatibility)', () => {
+      it.each([
+        [
+          'a <button> element',
+          (ref: React.Ref<HTMLButtonElement>) => (
+            <button type="button" ref={ref}>
+              Close
+            </button>
+          ),
+          'Close',
+          BUTTON_ELEMENT_WARNING,
+        ],
+        [
+          'a Wave Button',
+          (ref: React.Ref<HTMLButtonElement>) => (
+            <Button appearance="subtle" ref={ref}>
+              Close
+            </Button>
+          ),
+          'Close',
+          BUTTON_ELEMENT_WARNING,
+        ],
+        [
+          'the deprecated button-object form',
+          (ref: React.Ref<HTMLButtonElement>): MessageBarProps['dismiss'] => ({
+            as: 'button',
+            ref,
+            children: 'x',
+          }),
+          'Dismiss',
+          BUTTON_OBJECT_WARNING,
+        ],
+      ])('%s', (_, dismiss, name, warning) => {
+        const warn = spyOnWarn();
+        const ref = React.createRef<HTMLButtonElement>();
+        render(
+          <MessageBar onDismiss={() => {}} dismiss={dismiss(ref)}>
+            Msg
+          </MessageBar>,
+        );
+        expect(screen.getAllByRole('button')).toHaveLength(1);
+        expect(ref.current).toBe(screen.getByRole('button', { name }));
+        expect(warn.mock.calls).toEqual([[warning]]);
+      });
+    });
+
+    describe('a Wave Button written in a Server Component (lazy client reference, R1)', () => {
+      const ClientButton = asClientReference(Button);
+
+      it('is merged into the wired button like the plain Button, on the server too', () => {
+        const warn = spyOnWarn();
+        const ui = (Part: typeof Button) => (
+          <MessageBar
+            onDismiss={() => {}}
+            dismiss={
+              <Part appearance="subtle" icon={<svg data-testid="button-icon" />}>
+                Close
+              </Part>
+            }
+          >
+            Msg
+          </MessageBar>
+        );
+        expect(renderToString(ui(ClientButton))).toBe(renderToString(ui(Button)));
+        expect(warn).not.toHaveBeenCalled();
+      });
+
+      it('renders one wired button that calls both handlers', async () => {
+        const warn = spyOnWarn();
+        const user = userEvent.setup();
+        const onDismiss = vi.fn();
+        const onSlotClick = vi.fn();
+        render(
+          <MessageBar
+            onDismiss={onDismiss}
+            dismiss={
+              <ClientButton appearance="subtle" onClick={onSlotClick}>
+                Close
+              </ClientButton>
+            }
+          >
+            Msg
+          </MessageBar>,
+        );
+        expect(screen.getAllByRole('button')).toHaveLength(1);
+        await user.click(screen.getByRole('button', { name: 'Close' }));
+        expect(onSlotClick).toHaveBeenCalledTimes(1);
+        expect(onDismiss).toHaveBeenCalledTimes(1);
+        expect(warn.mock.calls).toEqual([[BUTTON_ELEMENT_WARNING]]);
+      });
+    });
+
     it('renders custom slot content inside the wired dismiss button', async () => {
       const user = userEvent.setup();
       const onDismiss = vi.fn();
@@ -235,7 +439,7 @@ describe('MessageBar', () => {
     });
 
     it('merges a <button> slot into the wired button: one button, both handlers run', async () => {
-      const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+      const warn = spyOnWarn();
       const user = userEvent.setup();
       const onDismiss = vi.fn();
       const onSlotClick = vi.fn();
@@ -261,14 +465,11 @@ describe('MessageBar', () => {
       await user.click(buttons[0]);
       expect(onSlotClick).toHaveBeenCalledTimes(1);
       expect(onDismiss).toHaveBeenCalledTimes(1);
-      expect(warn).toHaveBeenCalledWith(
-        expect.stringContaining('[WaveUI] MessageBar: `dismiss` received a button element'),
-      );
-      warn.mockRestore();
+      expect(warn.mock.calls).toEqual([[BUTTON_ELEMENT_WARNING]]);
     });
 
     it('merges a Wave Button slot into the wired button', async () => {
-      const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+      const warn = spyOnWarn();
       const user = userEvent.setup();
       const onDismiss = vi.fn();
       const onSlotClick = vi.fn();
@@ -293,7 +494,7 @@ describe('MessageBar', () => {
       await user.click(button);
       expect(onSlotClick).toHaveBeenCalledTimes(1);
       expect(onDismiss).toHaveBeenCalledTimes(1);
-      warn.mockRestore();
+      expect(warn.mock.calls).toEqual([[BUTTON_ELEMENT_WARNING]]);
     });
 
     it.each([
@@ -322,7 +523,7 @@ describe('MessageBar', () => {
         </svg>,
       ],
     ])('a <button> slot whose content is %s keeps the "Dismiss" name', (_, children) => {
-      const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+      const warn = spyOnWarn();
       render(
         <MessageBar onDismiss={() => {}} dismiss={<button type="button">{children}</button>}>
           Msg
@@ -330,7 +531,7 @@ describe('MessageBar', () => {
       );
       expect(screen.getAllByRole('button')).toHaveLength(1);
       expect(screen.getByRole('button')).toHaveAccessibleName('Dismiss');
-      warn.mockRestore();
+      expect(warn.mock.calls).toEqual([[BUTTON_ELEMENT_WARNING]]);
     });
 
     it.each([
@@ -340,7 +541,7 @@ describe('MessageBar', () => {
       ['text in an element', <b key="b">Close</b>, 'Close'],
       ['a letter beside an icon', [<svg key="i" aria-hidden="true" />, 'Go'], 'Go'],
     ])('a <button> slot whose content is %s is named by that text', (_, children, name) => {
-      const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+      const warn = spyOnWarn();
       render(
         <MessageBar onDismiss={() => {}} dismiss={<button type="button">{children}</button>}>
           Msg
@@ -349,11 +550,12 @@ describe('MessageBar', () => {
       const button = screen.getByRole('button');
       expect(button).toHaveAccessibleName(name);
       expect(button).not.toHaveAttribute('aria-label');
-      warn.mockRestore();
+      expect(warn.mock.calls).toEqual([[BUTTON_ELEMENT_WARNING]]);
     });
 
     it('decides the server-rendered name from the literal children', () => {
-      const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+      // The button-element warning is emitted from an effect, so the server render logs nothing.
+      const warn = spyOnWarn();
       const host = document.createElement('div');
       document.body.appendChild(host);
       try {
@@ -371,14 +573,14 @@ describe('MessageBar', () => {
         expect(named).not.toHaveAttribute('aria-label');
         expect(named).toHaveAccessibleName('Close');
         expect(glyph).toHaveAttribute('aria-label', 'Dismiss');
+        expect(warn).not.toHaveBeenCalled();
       } finally {
         host.remove();
-        warn.mockRestore();
       }
     });
 
     it('does not consume a one-shot iterator of children while checking for a text label', () => {
-      const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+      const warn = spyOnWarn();
       const error = vi.spyOn(console, 'error').mockImplementation(() => {});
       function* closeText(): Generator<React.ReactNode> {
         yield 'Close';
@@ -392,12 +594,15 @@ describe('MessageBar', () => {
       // The literal check skips the generator; the rendered text names the button after mount.
       expect(button).toHaveTextContent('Close');
       expect(button).toHaveAccessibleName('Close');
-      warn.mockRestore();
-      error.mockRestore();
+      expect(warn.mock.calls).toEqual([[BUTTON_ELEMENT_WARNING]]);
+      // React's own development warning about rendering a generator (the consumer's markup).
+      expect(error.mock.calls).toEqual([
+        [expect.stringContaining('Using Iterators as children is unsupported')],
+      ]);
     });
 
     it('a <button> slot with text and its own aria-label is named by the aria-label', () => {
-      const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+      const warn = spyOnWarn();
       render(
         <MessageBar
           onDismiss={() => {}}
@@ -411,11 +616,11 @@ describe('MessageBar', () => {
         </MessageBar>,
       );
       expect(screen.getByRole('button')).toHaveAccessibleName('Close the message');
-      warn.mockRestore();
+      expect(warn.mock.calls).toEqual([[BUTTON_ELEMENT_WARNING]]);
     });
 
     it('a Wave Button slot with a text label is named by that label', async () => {
-      const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+      const warn = spyOnWarn();
       const user = userEvent.setup();
       const onDismiss = vi.fn();
       render(
@@ -426,7 +631,7 @@ describe('MessageBar', () => {
       expect(screen.getAllByRole('button')).toHaveLength(1);
       await user.click(screen.getByRole('button', { name: 'Close' }));
       expect(onDismiss).toHaveBeenCalledTimes(1);
-      warn.mockRestore();
+      expect(warn.mock.calls).toEqual([[BUTTON_ELEMENT_WARNING]]);
     });
 
     describe('text rendered by a child component (i18n, WCAG 2.5.3)', () => {
@@ -436,7 +641,7 @@ describe('MessageBar', () => {
       }
 
       it('a <button> slot is named by the text its child component renders', () => {
-        const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+        const warn = spyOnWarn();
         render(
           <MessageBar
             onDismiss={() => {}}
@@ -452,11 +657,11 @@ describe('MessageBar', () => {
         const button = screen.getByRole('button');
         expect(button).toHaveAccessibleName('Close');
         expect(button).not.toHaveAttribute('aria-label');
-        warn.mockRestore();
+        expect(warn.mock.calls).toEqual([[BUTTON_ELEMENT_WARNING]]);
       });
 
       it('a Wave Button slot is named by the text its child component renders', () => {
-        const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+        const warn = spyOnWarn();
         render(
           <MessageBar
             onDismiss={() => {}}
@@ -470,11 +675,11 @@ describe('MessageBar', () => {
           </MessageBar>,
         );
         expect(screen.getByRole('button')).toHaveAccessibleName('Schließen');
-        warn.mockRestore();
+        expect(warn.mock.calls).toEqual([[BUTTON_ELEMENT_WARNING]]);
       });
 
       it('counts letters across the text of several child components', () => {
-        const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+        const warn = spyOnWarn();
         render(
           <>
             <MessageBar
@@ -506,11 +711,11 @@ describe('MessageBar', () => {
         // A lone character rendered by a component is a glyph too: the DOM check agrees with the
         // literal check.
         expect(glyph).toHaveAccessibleName('Dismiss');
-        warn.mockRestore();
+        expect(warn.mock.calls).toEqual([[BUTTON_ELEMENT_WARNING]]);
       });
 
       it('an icon component keeps the "Dismiss" name', () => {
-        const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+        const warn = spyOnWarn();
         function CloseIcon() {
           return <svg data-testid="close-svg" />;
         }
@@ -527,11 +732,11 @@ describe('MessageBar', () => {
           </MessageBar>,
         );
         expect(screen.getByRole('button')).toHaveAccessibleName('Dismiss');
-        warn.mockRestore();
+        expect(warn.mock.calls).toEqual([[BUTTON_ELEMENT_WARNING]]);
       });
 
       it('follows text that a child component renders or removes later', async () => {
-        const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+        const warn = spyOnWarn();
         const setTextRef = React.createRef<(text: string) => void>();
         function LateText({ ref }: { ref: React.Ref<(text: string) => void> }) {
           const [text, setText] = React.useState('');
@@ -566,11 +771,11 @@ describe('MessageBar', () => {
 
         act(() => setTextRef.current?.(''));
         await waitFor(() => expect(button).toHaveAccessibleName('Dismiss'));
-        warn.mockRestore();
+        expect(warn.mock.calls).toEqual([[BUTTON_ELEMENT_WARNING]]);
       });
 
       it('counts text hidden only by CSS as the label; an explicit aria-label names such a button', () => {
-        const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+        const warn = spyOnWarn();
         // A responsive label: the text is `display: none` below the breakpoint.
         const responsive = (props: React.ComponentPropsWithoutRef<'button'>) => (
           <button type="button" {...props}>
@@ -594,7 +799,7 @@ describe('MessageBar', () => {
         const button = screen.getByRole('button');
         expect(button).toHaveAttribute('aria-label', 'Close');
         expect(button).toHaveAccessibleName('Close');
-        warn.mockRestore();
+        expect(warn.mock.calls).toEqual([[BUTTON_ELEMENT_WARNING]]);
       });
     });
 
@@ -604,33 +809,43 @@ describe('MessageBar', () => {
       }
 
       it.each([
-        ['a <button> with title', <button key="t" type="button" title="Close" />, 'Close'],
+        [
+          'a <button> with title',
+          <button key="t" type="button" title="Close" />,
+          'Close',
+          [[BUTTON_ELEMENT_WARNING]],
+        ],
         [
           'a <button> with aria-labelledby',
           <button key="l" type="button" aria-labelledby="dismiss-label" />,
           'Close message',
+          [[BUTTON_ELEMENT_WARNING]],
         ],
-        ['a slot object with title', { title: 'Close' }, 'Close'],
+        ['a slot object with title', { title: 'Close' }, 'Close', []],
         [
           'a slot object with aria-labelledby',
           { 'aria-labelledby': 'dismiss-label' },
           'Close message',
+          [],
         ],
-      ] as const)('%s is not overridden by the default aria-label', (_, dismiss, name) => {
-        const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
-        render(
-          <>
-            <Labels />
-            <MessageBar onDismiss={() => {}} dismiss={dismiss}>
-              Msg
-            </MessageBar>
-          </>,
-        );
-        const button = screen.getByRole('button');
-        expect(button).toHaveAccessibleName(name);
-        expect(button).not.toHaveAttribute('aria-label');
-        warn.mockRestore();
-      });
+      ] as const)(
+        '%s is not overridden by the default aria-label',
+        (_, dismiss, name, warnings) => {
+          const warn = spyOnWarn();
+          render(
+            <>
+              <Labels />
+              <MessageBar onDismiss={() => {}} dismiss={dismiss}>
+                Msg
+              </MessageBar>
+            </>,
+          );
+          const button = screen.getByRole('button');
+          expect(button).toHaveAccessibleName(name);
+          expect(button).not.toHaveAttribute('aria-label');
+          expect(warn.mock.calls).toEqual(warnings);
+        },
+      );
     });
 
     it('renders a portal passed as content (F2 slot classification)', () => {
@@ -655,7 +870,7 @@ describe('MessageBar', () => {
     });
 
     it('a slot onClick that calls preventDefault() cancels onDismiss', async () => {
-      const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+      const warn = spyOnWarn();
       const user = userEvent.setup();
       const onDismiss = vi.fn();
       render(
@@ -672,11 +887,11 @@ describe('MessageBar', () => {
       );
       await user.click(screen.getByRole('button'));
       expect(onDismiss).not.toHaveBeenCalled();
-      warn.mockRestore();
+      expect(warn.mock.calls).toEqual([[BUTTON_ELEMENT_WARNING]]);
     });
 
     it('merges the deprecated button-object form and warns once', async () => {
-      const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+      const warn = spyOnWarn();
       const user = userEvent.setup();
       const onDismiss = vi.fn();
       const onSlotClick = vi.fn();
@@ -704,11 +919,7 @@ describe('MessageBar', () => {
       await user.click(button);
       expect(onSlotClick).toHaveBeenCalledTimes(1);
       expect(onDismiss).toHaveBeenCalledTimes(1);
-      const deprecations = warn.mock.calls.filter(([message]) =>
-        String(message).includes('button-object form of `dismiss` is deprecated'),
-      );
-      expect(deprecations).toHaveLength(1);
-      warn.mockRestore();
+      expect(warn.mock.calls).toEqual([[BUTTON_OBJECT_WARNING]]);
     });
 
     it('an object slot without children styles the default icon', () => {
@@ -755,45 +966,49 @@ describe('MessageBar', () => {
     });
 
     it.each([
-      ['a <button> element slot', <button key="el" type="submit" />],
-      ['the deprecated button-object form', { type: 'submit' as const }],
-    ])('an explicit type from %s overrides the type="button" default', (_, dismiss) => {
-      const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+      ['a <button> element slot', <button key="el" type="submit" />, BUTTON_ELEMENT_WARNING],
+      ['the deprecated button-object form', { type: 'submit' as const }, BUTTON_OBJECT_WARNING],
+    ])('an explicit type from %s overrides the type="button" default', (_, dismiss, warning) => {
+      const warn = spyOnWarn();
       render(
         <MessageBar onDismiss={() => {}} dismiss={dismiss}>
           Msg
         </MessageBar>,
       );
       expect(screen.getByRole('button', { name: 'Dismiss' })).toHaveAttribute('type', 'submit');
-      warn.mockRestore();
+      expect(warn.mock.calls).toEqual([[warning]]);
     });
 
     it.each([
       // `null` reaches the component from JavaScript callers or casts; it means "the default".
-      ['a <button> element slot', <button key="el" type={null as never} />],
+      ['a <button> element slot', <button key="el" type={null as never} />, BUTTON_ELEMENT_WARNING],
       [
         'the deprecated button-object form',
         { type: null } as unknown as MessageBarProps['dismiss'],
+        BUTTON_OBJECT_WARNING,
       ],
-    ])('a null type from %s keeps type="button" and does not submit', async (_, dismiss) => {
-      const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
-      const user = userEvent.setup();
-      const onSubmit = vi.fn((event: React.FormEvent) => event.preventDefault());
-      const onDismiss = vi.fn();
-      render(
-        <form onSubmit={onSubmit}>
-          <MessageBar onDismiss={onDismiss} dismiss={dismiss}>
-            Msg
-          </MessageBar>
-        </form>,
-      );
-      const button = screen.getByRole('button', { name: 'Dismiss' });
-      expect(button).toHaveAttribute('type', 'button');
-      await user.click(button);
-      expect(onDismiss).toHaveBeenCalledTimes(1);
-      expect(onSubmit).not.toHaveBeenCalled();
-      warn.mockRestore();
-    });
+    ])(
+      'a null type from %s keeps type="button" and does not submit',
+      async (_, dismiss, warning) => {
+        const warn = spyOnWarn();
+        const user = userEvent.setup();
+        const onSubmit = vi.fn((event: React.FormEvent) => event.preventDefault());
+        const onDismiss = vi.fn();
+        render(
+          <form onSubmit={onSubmit}>
+            <MessageBar onDismiss={onDismiss} dismiss={dismiss}>
+              Msg
+            </MessageBar>
+          </form>,
+        );
+        const button = screen.getByRole('button', { name: 'Dismiss' });
+        expect(button).toHaveAttribute('type', 'button');
+        await user.click(button);
+        expect(onDismiss).toHaveBeenCalledTimes(1);
+        expect(onSubmit).not.toHaveBeenCalled();
+        expect(warn.mock.calls).toEqual([[warning]]);
+      },
+    );
   });
 
   describe('internal status building blocks (feedback-navigation#4)', () => {

@@ -6,6 +6,9 @@ import type { SkeletonGroupProps, SkeletonProps } from '../Skeleton';
 import type { Shape } from '../../../lib/types';
 import { testCompoundExposure, testSystemProps } from '../../../test-utils';
 
+const VARIANT_DEPRECATION =
+  '[WaveUI] Skeleton: `variant` is deprecated and will be removed in 1.0. Use `shape` instead.';
+
 describe('Skeleton', () => {
   afterEach(() => {
     vi.restoreAllMocks();
@@ -52,6 +55,15 @@ describe('Skeleton', () => {
     expect(el.className).not.toMatch(/\[#|animate-\[/);
   });
 
+  it('stays visible in forced colors with a GrayText fill', () => {
+    render(<Skeleton data-testid="skel" />);
+    // Forced colors replace the author fill with Canvas, which would make the placeholder vanish.
+    expect(screen.getByTestId('skel')).toHaveClass(
+      'forced-colors:bg-[GrayText]',
+      'forced-colors:forced-color-adjust-none',
+    );
+  });
+
   describe('shape (layout#16)', () => {
     it('defaults to the rounded shape (exact token, feedback-navigation#21)', () => {
       render(<Skeleton data-testid="skel" />);
@@ -88,34 +100,34 @@ describe('Skeleton', () => {
       const el = screen.getByTestId('skel');
       expect(el).toHaveClass('rounded-full');
       expect(el).not.toHaveClass('rounded');
-      expect(warn).toHaveBeenCalledTimes(1);
-      expect(warn).toHaveBeenCalledWith(
-        '[WaveUI] Skeleton: `variant` is deprecated and will be removed in 1.0. Use `shape` instead.',
-      );
+      expect(warn.mock.calls).toEqual([[VARIANT_DEPRECATION]]);
     });
 
     it('applies text variant class (the 0.4 look: rounded)', () => {
-      vi.spyOn(console, 'warn').mockImplementation(() => {});
+      const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
       render(<Skeleton variant="text" data-testid="skel" />);
       const el = screen.getByTestId('skel');
       expect(el).toHaveClass('rounded');
       expect(el).not.toHaveClass('rounded-full');
+      expect(warn.mock.calls).toEqual([[VARIANT_DEPRECATION]]);
     });
 
     it('applies rectangular variant class (the 0.4 look: rounded)', () => {
-      vi.spyOn(console, 'warn').mockImplementation(() => {});
+      const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
       render(<Skeleton variant="rectangular" data-testid="skel" />);
       const el = screen.getByTestId('skel');
       expect(el).toHaveClass('rounded');
       expect(el).not.toHaveClass('rounded-full');
+      expect(warn.mock.calls).toEqual([[VARIANT_DEPRECATION]]);
     });
 
-    it('lets shape win when both are given', () => {
-      vi.spyOn(console, 'warn').mockImplementation(() => {});
+    it('lets shape win when both are given, and still warns about variant', () => {
+      const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
       render(<Skeleton shape="square" variant="circular" data-testid="skel" />);
       const el = screen.getByTestId('skel');
       expect(el).toHaveClass('rounded-none');
       expect(el).not.toHaveClass('rounded-full');
+      expect(warn.mock.calls).toEqual([[VARIANT_DEPRECATION]]);
     });
 
     it('does not warn for shape alone', () => {

@@ -115,7 +115,8 @@ function ensureRegions(state: AnnouncerState): Record<Politeness, HTMLElement> {
  * The regions are created on first use — the first `useAnnounce` mount or the first `announce()`
  * call. A message sent while they are being created is written on the next animation frame, so it
  * is not lost; repeating the current message clears the region and writes it again on the next
- * frame, so it is read again. No-op on the server.
+ * frame, so it is read again. A message sent while one is waiting for that frame replaces it (the
+ * last call wins). No-op on the server.
  *
  * @param message    The text to read.
  * @param politeness `'polite'` (default, `role="status"`) or `'assertive'`.
@@ -126,7 +127,9 @@ export function announce(message: string, politeness: Politeness = 'polite'): vo
   const regions = ensureRegions(state);
   const region = regions[politeness];
 
-  if (!state.settled) {
+  // A message still waiting for the next frame (regions being created, or a repeat whose region
+  // was cleared) is replaced, so the last call wins and the flush never writes an older message.
+  if (!state.settled || state.queued[politeness] !== undefined) {
     state.queued[politeness] = message;
     return;
   }

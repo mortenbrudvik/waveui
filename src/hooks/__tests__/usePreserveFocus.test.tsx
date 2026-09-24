@@ -1,6 +1,7 @@
 import { describe, it, expect, vi } from 'vitest';
 import { act, render, screen } from '@testing-library/react';
 import * as React from 'react';
+import { renderToString } from 'react-dom/server';
 import { usePreserveFocus } from '../usePreserveFocus';
 
 /** Runs the microtask in which the unmount move happens. */
@@ -178,5 +179,16 @@ describe('usePreserveFocus', () => {
       await flushMicrotasks();
       expect(screen.getByRole('button', { name: 'Restored' })).toHaveFocus();
     });
+  });
+
+  it('renders on the server without errors (layout effects never run there)', () => {
+    const error = vi.spyOn(console, 'error');
+    try {
+      const html = renderToString(<Toast getFallback={queryFallback} />);
+      expect(html).toContain('data-testid="toast"');
+      expect(error).not.toHaveBeenCalled();
+    } finally {
+      error.mockRestore();
+    }
   });
 });

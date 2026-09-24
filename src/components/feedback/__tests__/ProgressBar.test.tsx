@@ -15,6 +15,15 @@ const fillOf = (bar: HTMLElement) => bar.firstElementChild as HTMLElement;
 const warnings = (warn: { mock: { calls: unknown[][] } }) =>
   warn.mock.calls.map((call) => String(call[0]));
 
+const NAME_WARNING =
+  '[WaveUI] ProgressBar: a progress bar needs an accessible name. Pass `label` (add `showLabel` to show it), `aria-label` or `aria-labelledby`.';
+const SHOW_LABEL_WARNING =
+  '[WaveUI] ProgressBar: `showLabel` renders the `label` prop, which is empty.';
+const maxWarning = (max: number) =>
+  `[WaveUI] ProgressBar: \`max\` must be a finite number greater than 0 (got ${max}); the bar renders 0%.`;
+const valueWarning = (value: number) =>
+  `[WaveUI] ProgressBar: \`value\` must be a finite number (got ${value}); the bar renders 0%.`;
+
 describe('ProgressBar', () => {
   afterEach(() => {
     vi.restoreAllMocks();
@@ -34,9 +43,10 @@ describe('ProgressBar', () => {
   });
 
   it('renders with role="progressbar"', () => {
-    vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
     render(<ProgressBar data-testid="pb" />);
     expect(screen.getByTestId('pb')).toHaveAttribute('role', 'progressbar');
+    expect(warnings(warn)).toEqual([NAME_WARNING]);
   });
 
   it('sets aria-valuenow and aria-valuemax for determinate bar', () => {
@@ -97,26 +107,21 @@ describe('ProgressBar', () => {
       expect(fillOf(el).style.width).toBe('0%');
       expect(el).toHaveAttribute('aria-valuenow', '0');
       expect(el).toHaveAttribute('aria-valuemax', '100');
-      const messages = warnings(warn).filter((m) => m.includes('`max`'));
-      expect(messages).toHaveLength(1);
-      expect(messages[0]).toMatch(/^\[WaveUI\] ProgressBar:/);
+      expect(warnings(warn)).toEqual([maxWarning(0)]);
     });
 
     it('has no accessibility violations for max 0, with its one development warning', async () => {
       const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
       render(<ProgressBar value={0} max={0} label="Loading" />);
-      expect(warnings(warn)).toEqual([
-        expect.stringMatching(
-          /^\[WaveUI\] ProgressBar: `max` must be a finite number greater than 0/,
-        ),
-      ]);
+      expect(warnings(warn)).toEqual([maxWarning(0)]);
       await expectNoA11yViolations();
     });
 
     it('renders 0% for a negative max', () => {
-      vi.spyOn(console, 'warn').mockImplementation(() => {});
+      const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
       render(<ProgressBar value={5} max={-10} label="Upload" />);
       expect(fillOf(screen.getByRole('progressbar')).style.width).toBe('0%');
+      expect(warnings(warn)).toEqual([maxWarning(-10)]);
     });
 
     it('renders 0% for a NaN value and warns in development', () => {
@@ -125,15 +130,16 @@ describe('ProgressBar', () => {
       const el = screen.getByRole('progressbar', { name: 'Upload' });
       expect(fillOf(el).style.width).toBe('0%');
       expect(el).toHaveAttribute('aria-valuenow', '0');
-      expect(warnings(warn).some((m) => m.includes('`value`'))).toBe(true);
+      expect(warnings(warn)).toEqual([valueWarning(NaN)]);
     });
 
     it('renders 0% for a NaN max', () => {
-      vi.spyOn(console, 'warn').mockImplementation(() => {});
+      const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
       render(<ProgressBar value={5} max={NaN} label="Upload" />);
       const el = screen.getByRole('progressbar', { name: 'Upload' });
       expect(fillOf(el).style.width).toBe('0%');
       expect(el).toHaveAttribute('aria-valuemax', '100');
+      expect(warnings(warn)).toEqual([maxWarning(NaN)]);
     });
 
     it('does not warn for valid values', () => {
@@ -242,9 +248,7 @@ describe('ProgressBar', () => {
       const bar = screen.getByTestId('pb');
       expect(bar).not.toHaveAttribute('aria-label');
       expect(bar).not.toHaveAttribute('aria-labelledby');
-      const messages = warnings(warn).filter((m) => m.includes('accessible name'));
-      expect(messages).toHaveLength(1);
-      expect(messages[0]).toMatch(/^\[WaveUI\] ProgressBar:/);
+      expect(warnings(warn)).toEqual([NAME_WARNING]);
     });
 
     it('keeps its role and values when a wrapper forwards them as undefined', () => {
@@ -290,9 +294,7 @@ describe('ProgressBar', () => {
       async (_, props) => {
         const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
         render(<ProgressBar {...props} />);
-        const messages = warnings(warn).filter((m) => m.includes('accessible name'));
-        expect(messages).toHaveLength(1);
-        expect(messages[0]).toMatch(/^\[WaveUI\] ProgressBar:/);
+        expect(warnings(warn)).toEqual([NAME_WARNING]);
         const results = await axe(document.body);
         expect(results.violations.map((violation) => violation.id)).toContain(
           'aria-progressbar-name',
@@ -303,7 +305,7 @@ describe('ProgressBar', () => {
     it('warns when showLabel is set without a label', () => {
       const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
       render(<ProgressBar value={5} showLabel aria-label="Upload" />);
-      expect(warnings(warn).some((m) => m.includes('showLabel'))).toBe(true);
+      expect(warnings(warn)).toEqual([SHOW_LABEL_WARNING]);
     });
   });
 
@@ -335,12 +337,14 @@ describe('ProgressBar', () => {
       expect(fill).toHaveClass(
         'w-2/5',
         'animate-wave-indeterminate',
-        'rtl:animate-wave-indeterminate-rtl',
+        'wave-rtl:animate-wave-indeterminate-rtl',
         'motion-reduce:w-full',
         'motion-reduce:translate-x-0',
         'motion-reduce:animate-wave-pulse',
-        'rtl:motion-reduce:animate-wave-pulse',
+        'wave-rtl:motion-reduce:animate-wave-pulse',
       );
+      // Tailwind's `rtl:` also matches inside an LTR subtree of an RTL page (R4).
+      expect(fill.className).not.toMatch(/(^|\s)rtl:/);
       expect(fill.className).not.toMatch(/animate-\[/);
       expect(fill.style.width).toBe('');
     });
@@ -354,7 +358,24 @@ describe('ProgressBar', () => {
       renderWithProviders(<ProgressBar label="Syncing" />, { dir: 'rtl' });
       const bar = screen.getByRole('progressbar', { name: 'Syncing' });
       expect(bar.closest('[dir="rtl"]')).not.toBeNull();
-      expect(fillOf(bar)).toHaveClass('rtl:animate-wave-indeterminate-rtl');
+      expect(fillOf(bar)).toHaveClass('wave-rtl:animate-wave-indeterminate-rtl');
+    });
+
+    it('keys the RTL keyframes on its own direction, so an LTR subtree of an RTL page runs LTR', () => {
+      renderWithProviders(
+        <div dir="ltr">
+          <ProgressBar label="Syncing" />
+        </div>,
+        { dir: 'rtl' },
+      );
+      const bar = screen.getByRole('progressbar', { name: 'Syncing' });
+      expect(bar.closest('[dir]')).toHaveAttribute('dir', 'ltr');
+      expect(bar.parentElement?.closest('[dir="rtl"]')).not.toBeNull();
+      // `wave-rtl:` compiles to `:dir(rtl)`, which the nearest `dir` decides (checked by the styles
+      // build); Tailwind's `rtl:` would match the RTL ancestor.
+      const fill = fillOf(bar);
+      expect(fill).toHaveClass('wave-rtl:animate-wave-indeterminate-rtl');
+      expect(fill.className).not.toMatch(/(^|\s)rtl:/);
     });
   });
 

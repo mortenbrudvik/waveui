@@ -1,6 +1,6 @@
 import * as React from 'react';
 import { cn } from '../../lib/cn';
-import { isDev } from '../../lib/dev';
+import { reportMissingContext } from '../../lib/dev';
 import { getDirection } from '../../lib/direction';
 import { getFirstTabbable } from '../../lib/focus';
 import { DismissIcon } from '../../lib/icons';
@@ -37,8 +37,9 @@ export interface ToastOptions {
   body?: string;
   /**
    * Auto-dismiss timeout in milliseconds. The countdown pauses while the pointer is over the toast,
-   * while focus is inside it and while the browser window is in the background. `0` (or any value
-   * that is not a positive finite number) keeps the toast until it is dismissed.
+   * while focus is inside it and while the browser window is in the background (it has lost focus,
+   * or the page is not shown, as in a background tab, also when the Toaster mounts there). `0` (or
+   * any value that is not a positive finite number) keeps the toast until it is dismissed.
    * @default 5000
    */
   timeout?: number;
@@ -52,6 +53,11 @@ export interface ToastOptions {
    * `'Error:'` by default). Pass a translation for other languages, or `''` to omit it.
    */
   statusLabel?: string;
+  /**
+   * Accessible name of the toast's dismiss button. Pass a translation for other languages.
+   * @default 'Dismiss'
+   */
+  dismissLabel?: string;
 }
 
 /** The toast API returned by {@link useToastController}. */
@@ -91,20 +97,9 @@ const INERT_CONTROLLER: ToastController = {
   dismissToast: () => {},
 };
 
+/** The C-CONTEXT message without the `[WaveUI] ` prefix, which `reportMissingContext` adds. */
 const MISSING_TOASTER_MESSAGE =
-  '[WaveUI] useToastController must be used within <Toaster>. Wrap your app (or the part of it that shows toasts) in <Toaster>: it provides the controller to its children.';
-
-let missingToasterReported = false;
-
-/**
- * Production fallback: logs the missing `<Toaster>` once per page rather than on every render of
- * the calling component (`warnOnce` is a no-op in production).
- */
-function reportMissingToaster(): void {
-  if (missingToasterReported) return;
-  missingToasterReported = true;
-  console.error(MISSING_TOASTER_MESSAGE);
-}
+  'useToastController must be used within <Toaster>. Wrap your app (or the part of it that shows toasts) in <Toaster>: it provides the controller to its children.';
 
 /**
  * Returns the {@link ToastController} of the enclosing `<Toaster>`: `dispatchToast(options)` shows
@@ -125,8 +120,7 @@ function reportMissingToaster(): void {
 export function useToastController(): ToastController {
   const controller = React.useContext(ToasterContext);
   if (controller) return controller;
-  if (isDev) throw new Error(MISSING_TOASTER_MESSAGE);
-  reportMissingToaster();
+  reportMissingContext('useToastController', '<Toaster>', MISSING_TOASTER_MESSAGE);
   return INERT_CONTROLLER;
 }
 
@@ -149,6 +143,11 @@ export interface ToastProps extends React.HTMLAttributes<HTMLDivElement> {
   statusLabel?: string;
   /** Called when the dismiss button is activated. Passing it renders the dismiss button. */
   onDismiss?: () => void;
+  /**
+   * Accessible name of the dismiss button. Pass a translation for other languages.
+   * @default 'Dismiss'
+   */
+  dismissLabel?: string;
   /** Ref to the root `<div>`. */
   ref?: React.Ref<HTMLDivElement>;
 }
@@ -170,6 +169,7 @@ export const Toast = ({
   title,
   statusLabel,
   onDismiss,
+  dismissLabel = 'Dismiss',
   className,
   children,
   ref,
@@ -216,7 +216,7 @@ export const Toast = ({
             'not-disabled:not-aria-disabled:active:bg-subtle-pressed',
             focusRing,
           )}
-          aria-label="Dismiss"
+          aria-label={dismissLabel}
         >
           <DismissIcon />
         </button>
@@ -242,17 +242,22 @@ interface RunningTimer {
 
 /**
  * Auto-dismiss timers of one Toaster. A timer runs only while its toast is neither hovered nor
- * focused, the window has focus and the Toaster is mounted; otherwise it is suspended and keeps its
- * remaining time. Every method is called from event handlers or effects, never during render.
+ * focused, the window is in the foreground and the Toaster is mounted; otherwise it is suspended
+ * and keeps its remaining time. Every method is called from event handlers or effects, never
+ * during render.
  */
 interface ToastTimers {
-  /** (Re)starts the timer of `id`; a timeout that is not a positive finite number means none. */
+  /**
+   * (Re)starts the timer of `id`; a timeout that is not a positive finite number means none. The
+   * pause state of `id` is kept: a replaced toast that is hovered or focused stays paused.
+   */
   start(id: string, timeout: number): void;
   /** Cancels the timer of `id` and forgets its pause state. */
   remove(id: string): void;
   pause(id: string, reason: PauseReason): void;
   resume(id: string, reason: PauseReason): void;
-  setWindowBlurred(blurred: boolean): void;
+  /** `true` while the window has lost focus or the page is not shown (a background tab). */
+  setInBackground(inBackground: boolean): void;
   /** `true` while the Toaster is unmounted (including StrictMode's simulated unmount). */
   setSuspended(suspended: boolean): void;
 }
@@ -260,13 +265,13 @@ interface ToastTimers {
 function createToastTimers(onExpire: (id: string) => void): ToastTimers {
   const timers = new Map<string, RunningTimer>();
   const pauses = new Map<string, Set<PauseReason>>();
-  let windowBlurred = false;
+  let inBackground = false;
   let suspended = false;
 
   const sync = (id: string) => {
     const timer = timers.get(id);
     if (!timer) return;
-    const canRun = !suspended && !windowBlurred && !(pauses.get(id)?.size ?? 0);
+    const canRun = !suspended && !inBackground && !(pauses.get(id)?.size ?? 0);
     if (canRun && timer.handle === null) {
       timer.startedAt = Date.now();
       timer.handle = setTimeout(() => {
@@ -313,8 +318,8 @@ function createToastTimers(onExpire: (id: string) => void): ToastTimers {
       pauses.get(id)?.delete(reason);
       sync(id);
     },
-    setWindowBlurred(blurred) {
-      windowBlurred = blurred;
+    setInBackground(value) {
+      inBackground = value;
       syncAll();
     },
     setSuspended(value) {
@@ -371,9 +376,6 @@ const positionClasses: Record<ToastPosition, string> = {
 
 /** The toasts' distance from the window edges (`*-4`), also the tolerance for "at the edge". */
 const EDGE_GAP = 16;
-
-const useIsomorphicLayoutEffect =
-  typeof document !== 'undefined' ? React.useLayoutEffect : React.useEffect;
 
 /** Whether the toasts sit at the right edge of the window (`end` is the right in LTR). */
 function isOnRightSide(position: ToastPosition, viewport: HTMLElement): boolean {
@@ -465,6 +467,7 @@ function ToasterItem({ entry, index, timers, onDismiss, getFocusFallback }: Toas
       status={options.status}
       statusLabel={options.statusLabel}
       title={options.title}
+      dismissLabel={options.dismissLabel}
       onDismiss={() => onDismiss(id)}
       onPointerEnter={() => timers.pause(id, 'hover')}
       onPointerLeave={() => timers.resume(id, 'hover')}
@@ -495,11 +498,15 @@ ToasterItem.displayName = 'ToasterItem';
  * - While an open modal panel covers the toasts' corner (a Drawer on the same side), the toasts
  *   move beside it, so they never hide its focused controls (WCAG 2.4.11). Without room beside it
  *   (a full-width panel on a narrow screen) they keep their corner.
- * - Timers pause while a toast is hovered or focused and while the window is in the background.
- *   When a toast that contains focus goes away, focus moves to the next toast, or back to the
- *   element that was focused before focus entered the toasts (kept across the moves between
- *   toasts and while another window is active; forgotten once focus has returned to it, and when
- *   focus leaves the toasts for another element or for the page body).
+ * - Timers pause while a toast is hovered or focused and while the window is in the background
+ *   (it has lost focus, or the page is not shown, as in a background tab).
+ *   When a toast that contains focus goes away, focus moves to the next toast (or the previous one
+ *   when the last toast goes), or back to the element that was focused before focus entered the
+ *   toasts once no toast is left (kept across the moves between toasts and while another window
+ *   is active; forgotten once focus has returned to it, and when focus leaves the toasts for
+ *   another element or for the page body).
+ * - Each toast's dismiss button is named "Dismiss"; pass `dismissLabel` to `dispatchToast` for
+ *   other languages.
  *
  * @example
  * <Toaster position="bottom-end">
@@ -528,7 +535,7 @@ export const Toaster = ({
   // a layer opens or closes (synchronously in its layout effect, before paint), on resize, and
   // after a transition or animation (a panel that slides in reaches its place only then).
   const [sideOffset, setSideOffset] = React.useState(0);
-  useIsomorphicLayoutEffect(() => {
+  React.useLayoutEffect(() => {
     const update = () => {
       const viewport = viewportRef.current;
       setSideOffset(viewport ? getSidePanelOffset(viewport, position) : 0);
@@ -553,22 +560,35 @@ export const Toaster = ({
   );
 
   // Timers run only while mounted (StrictMode's simulated unmount suspends and resumes them) and
-  // pause while the window is in the background.
+  // pause while the window is in the background: after the window loses focus, and while the page
+  // is not shown. The page visibility is read at mount too, so a Toaster that mounts in a
+  // background tab waits until the tab is shown. (Focus is not read at mount: `hasFocus()` is also
+  // false in an embedded frame nobody clicked yet and in test DOMs.)
   React.useEffect(() => {
-    timers.setSuspended(false);
+    const doc = document;
+    let blurred = false;
+    const update = () => timers.setInBackground(blurred || doc.visibilityState === 'hidden');
     // Only the window's own blur/focus (element focus events do not bubble to a bubble-phase
     // window listener; anything targeted at a node is ignored).
     const handleBlur = (event: FocusEvent) => {
-      if (!(event.target instanceof Node)) timers.setWindowBlurred(true);
+      if (event.target instanceof Node) return;
+      blurred = true;
+      update();
     };
     const handleFocus = (event: FocusEvent) => {
-      if (!(event.target instanceof Node)) timers.setWindowBlurred(false);
+      if (event.target instanceof Node) return;
+      blurred = false;
+      update();
     };
+    update();
+    timers.setSuspended(false);
     window.addEventListener('blur', handleBlur);
     window.addEventListener('focus', handleFocus);
+    doc.addEventListener('visibilitychange', update);
     return () => {
       window.removeEventListener('blur', handleBlur);
       window.removeEventListener('focus', handleFocus);
+      doc.removeEventListener('visibilitychange', update);
       timers.setSuspended(true);
     };
   }, [timers]);

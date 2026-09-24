@@ -1,5 +1,6 @@
 import * as React from 'react';
 import { cn } from '../../lib/cn';
+import { forcedColors } from '../../lib/styles';
 import type { Size } from '../../lib/types';
 
 /** Properties for the Spinner component. */
@@ -48,7 +49,8 @@ const sizeClasses: Record<Size, string> = {
  * - The region mounts **empty** and receives its `label` (default "Loading") one animation frame
  *   later, so screen readers announce it (a live region that mounts with its content is often not
  *   announced). With `labelVisible` the label also shows next to the ring from that frame on.
- * - The ring is decorative (`aria-hidden`) and spins slower for reduced motion.
+ * - The ring is decorative (`aria-hidden`) and spins slower for reduced motion. In forced-colors
+ *   mode its arc is drawn in `Highlight` on a `Canvas` track, so the rotation stays perceivable.
  *
  * @example
  * <Spinner label="Loading results" />
@@ -90,6 +92,7 @@ export const Spinner = ({
         data-wave-spinner-ring=""
         className={cn(
           'rounded-full border-2 border-track border-t-primary animate-wave-spin motion-reduce:animate-wave-spin-slow',
+          forcedColors.ringArc,
           sizeClasses[size],
         )}
       />
