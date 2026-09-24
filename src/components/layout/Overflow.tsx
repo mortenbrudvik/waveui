@@ -87,14 +87,16 @@ function readContainer(container: HTMLElement): { available: number; gap: number
 
 /**
  * Tracks the container, the items and the overflow button of one `Overflow` and publishes the ids
- * of the hidden items (DOM order) to `useSyncExternalStore`.
+ * of the hidden items (DOM order), and whether the button covers the first item, to
+ * `useSyncExternalStore`.
  *
  * - **Measurement never writes styles.** An item's width is read (`offsetWidth`) only while it is
  *   visible and cached; a hidden item (`data-overflow-hidden` and an inline `display: none`, both
  *   rendered by React) keeps its last visible width. All reads happen before React applies the
  *   result.
- * - **Membership-only updates.** A new snapshot is published only when the hidden set changes, so
- *   a resize that hides the same items renders nothing.
+ * - **Membership-only updates.** A new snapshot is published only when the hidden set (or whether
+ *   the button covers the first item) changes, so a resize that hides the same items renders
+ *   nothing.
  * - **One observer.** A single `ResizeObserver` (created when the root mounts) watches the
  *   container, every item and the overflow button. Without `ResizeObserver` the store measures
  *   whenever something registers and on window `resize`.
@@ -112,6 +114,8 @@ class OverflowStore {
   private readonly widths = new WeakMap<HTMLElement, number>();
   private readonly listeners = new Set<() => void>();
   private hidden: string[] = NO_IDS;
+  /** The first item is wider than the room beside the button, so the button covers its end. */
+  private pinned = false;
   /** The item elements of the last measurement, in the DOM order they had then. */
   private order: HTMLElement[] = [];
   private connected = false;
@@ -129,6 +133,10 @@ class OverflowStore {
   getSnapshot = (): string[] => this.hidden;
 
   getServerSnapshot = (): string[] => NO_IDS;
+
+  getPinned = (): boolean => this.pinned;
+
+  getServerPinned = (): boolean => false;
 
   /** Starts observing (root layout effect); returns the teardown. */
   connect = (): (() => void) => {
@@ -232,6 +240,7 @@ class OverflowStore {
     const total = widths.reduce((sum, width, i) => sum + width + (i > 0 ? gap : 0), 0);
 
     let next: string[] = NO_IDS;
+    let pinned = false;
     if (total > available) {
       // Items that fit next to the overflow button stay; the first item always stays.
       const limit = available - (this.buttonWidth > 0 ? this.buttonWidth + gap : 0);
@@ -246,10 +255,16 @@ class OverflowStore {
         used = end;
       }
       next = entries.slice(cut).map(([, id]) => id);
+      // The sticky button eats the gap before it first; it covers the first item only when the
+      // two do not fit side by side.
+      pinned = next.length > 0 && widths[0] + this.buttonWidth > available;
     }
 
-    if (sameIds(next, this.hidden)) return;
-    this.hidden = next.length > 0 ? next : NO_IDS;
+    const hiddenChanged = !sameIds(next, this.hidden);
+    if (!hiddenChanged && pinned === this.pinned) return;
+    // The same hidden set keeps its array, so the items and useOverflowMenu() do not update.
+    if (hiddenChanged) this.hidden = next.length > 0 ? next : NO_IDS;
+    this.pinned = pinned;
     for (const listener of Array.from(this.listeners)) listener();
   }
 }
@@ -461,12 +476,14 @@ export function useIsOverflowing(
  * Wrap each entry in {@link OverflowItem} with a unique `itemId`; the row holds only items (other
  * content is not measured, see `children`). Items are measured while visible, hidden from the end
  * (in DOM order; the first item always stays) and hidden items get `data-overflow-hidden`, an
- * inline `display: none`, `aria-hidden` and `inert`. The overflow button is pinned to the inline
- * end of the row, so it stays reachable when that first item is wider than the row. Reordered items
- * (for example a keyed sort) are re-measured in their new order. `overflowButton(count, hiddenIds)`
- * renders the button (its
- * measured width is reserved); components inside it can use {@link useOverflowMenu} to list the
- * hidden items (e.g. in a Menu), and {@link useIsOverflowItemVisible} reports a single item.
+ * inline `display: none`, `aria-hidden` and `inert`. Reordered items (for example a keyed sort) are
+ * re-measured in their new order. `overflowButton(count, hiddenIds)` renders the button after the
+ * visible items (its measured width is reserved); components inside it can use
+ * {@link useOverflowMenu} to list the hidden items (e.g. in a Menu), and
+ * {@link useIsOverflowItemVisible} reports a single item. The button sticks to the inline end of
+ * the row, so a first item wider than the room beside it cannot push it out of view: it then covers
+ * the end of that item and gets `data-overflow-pinned`, with the `background` token behind it. (In
+ * a right-to-left row, WebKit stops the pinned button short of the end, still inside the row.)
  *
  * Works without `ResizeObserver` (jsdom, old browsers): it then re-measures on window resize and
  * when items mount, unmount or move.
@@ -477,6 +494,11 @@ const OverflowRoot = ({ overflowButton, children, className, ref, ...rest }: Ove
     store.subscribe,
     store.getSnapshot,
     store.getServerSnapshot,
+  );
+  const pinned = React.useSyncExternalStore(
+    store.subscribe,
+    store.getPinned,
+    store.getServerPinned,
   );
   const setContainer = React.useCallback(
     (node: HTMLDivElement | null) => store.setContainer(node),
@@ -519,15 +541,19 @@ const OverflowRoot = ({ overflowButton, children, className, ref, ...rest }: Ove
     <OverflowContext.Provider value={ctx}>
       <div
         ref={containerRef}
-        className={cn('relative flex items-center overflow-hidden', className)}
+        className={cn('flex items-center overflow-hidden', className)}
         {...rest}
       >
         {children}
         {hiddenCount > 0 && overflowButton && (
+          // In the row's flow (it adds to the row height and follows justify-*), sticking to the
+          // inline end when the first item is wider than the room beside it. (WebKit stops a
+          // sticky element short of the inline end of a right-to-left row; it stays in the row.)
           <div
             ref={setButton}
             data-overflow-button=""
-            className="absolute end-0 flex items-center bg-background ps-1"
+            data-overflow-pinned={pinned ? '' : undefined}
+            className="sticky end-0 flex shrink-0 items-center self-stretch ps-1 data-[overflow-pinned]:bg-background"
           >
             {overflowButton(hiddenCount, buttonIds)}
           </div>

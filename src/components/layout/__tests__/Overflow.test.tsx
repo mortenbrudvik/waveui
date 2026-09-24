@@ -204,11 +204,91 @@ describe('Overflow', () => {
     render(<ThreeItems overflowButton={moreButton} />);
 
     expect(hiddenItems()).toEqual(['b', 'c']);
-    const row = screen.getByTestId('overflow');
-    expect(row).toHaveClass('relative', 'overflow-hidden');
-    const button = screen.getByRole('button', { name: '+2' });
-    expect(button.parentElement).toHaveAttribute('data-overflow-button');
-    expect(button.parentElement).toHaveClass('absolute', 'end-0');
+    // jsdom has no layout: the classes are the contract. The button stays in the row's flow (it
+    // adds to the row height and follows justify-*) and sticks to the inline end, so the wide first
+    // item cannot push it out of the clipped row. It covers the end of that item, so it is marked
+    // (C-CLASS) and gets a backing.
+    const wrapper = screen.getByRole('button', { name: '+2' }).parentElement!;
+    expect(wrapper).toHaveAttribute('data-overflow-button');
+    expect(wrapper).toHaveClass(
+      'sticky',
+      'end-0',
+      'shrink-0',
+      'data-[overflow-pinned]:bg-background',
+    );
+    expect(wrapper).not.toHaveClass('absolute');
+    expect(wrapper).toHaveAttribute('data-overflow-pinned');
+  });
+
+  it('marks the button pinned only while the first item is wider than the room beside it', () => {
+    const resize = withResizeObserver();
+    const stub = layoutWith({
+      overflow: 100,
+      'item-a': 40,
+      'item-b': 40,
+      'item-c': 40,
+      button: 30,
+    });
+    render(<ThreeItems overflowButton={moreButton} />);
+    const wrapper = () => screen.getByRole('button', { name: '+2' }).parentElement!;
+    // A (40) fits in the 70 left beside the 30px button: the button covers nothing.
+    expect(hiddenItems()).toEqual(['b', 'c']);
+    expect(wrapper()).not.toHaveAttribute('data-overflow-pinned');
+
+    // Same hidden items, but A (90) no longer fits beside the button.
+    stub.widths['item-a'] = 90;
+    resize.trigger(screen.getByTestId('item-a'));
+    expect(hiddenItems()).toEqual(['b', 'c']);
+    expect(wrapper()).toHaveAttribute('data-overflow-pinned');
+
+    stub.widths['item-a'] = 40;
+    resize.trigger(screen.getByTestId('item-a'));
+    expect(wrapper()).not.toHaveAttribute('data-overflow-pinned');
+  });
+
+  it('keeps the hidden ids (same array) when only the pinned state changes', () => {
+    const resize = withResizeObserver();
+    const stub = layoutWith({
+      overflow: 100,
+      'item-a': 40,
+      'item-b': 40,
+      'item-c': 40,
+      button: 30,
+    });
+    const seen: string[][] = [];
+    render(
+      <ThreeItems
+        overflowButton={(count, hiddenIds) => {
+          seen.push(hiddenIds);
+          return moreButton(count);
+        }}
+      />,
+    );
+    const before = seen[seen.length - 1];
+    stub.widths['item-a'] = 90;
+    resize.trigger(screen.getByTestId('item-a'));
+    expect(screen.getByRole('button', { name: '+2' }).parentElement).toHaveAttribute(
+      'data-overflow-pinned',
+    );
+    expect(seen[seen.length - 1]).toBe(before);
+  });
+
+  it('does not mark the button pinned when only the gap before it has to shrink', () => {
+    layoutWith({ overflow: 100, 'item-a': 60, 'item-b': 40, button: 40 });
+    render(
+      <Overflow data-testid="overflow" overflowButton={moreButton} style={{ columnGap: '10px' }}>
+        <OverflowItem itemId="a" data-testid="item-a">
+          A
+        </OverflowItem>
+        <OverflowItem itemId="b" data-testid="item-b">
+          B
+        </OverflowItem>
+      </Overflow>,
+    );
+    // A (60) and the button (40) fill the 100 exactly: the sticky button only eats the 10px gap.
+    expect(hiddenItems()).toEqual(['b']);
+    const wrapper = screen.getByRole('button', { name: '+1' }).parentElement!;
+    expect(wrapper).not.toHaveAttribute('data-overflow-pinned');
   });
 
   it('counts the flex gap between items and before the button', () => {

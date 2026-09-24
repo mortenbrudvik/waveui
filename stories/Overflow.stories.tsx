@@ -1,5 +1,5 @@
 import type { Meta, StoryObj } from '@storybook/react';
-import { Button, Menu, MenuButton, Overflow, OverflowItem, useOverflowMenu } from '../src';
+import { Badge, Button, Menu, MenuButton, Overflow, OverflowItem, useOverflowMenu } from '../src';
 
 const pages = ['Home', 'Products', 'Services', 'About', 'Blog', 'Contact', 'Careers'];
 
@@ -53,6 +53,53 @@ export const Default: Story = {
 export const NarrowContainer: Story = {
   render: (args) => (
     <div className="w-[200px]">
+      <Overflow {...args} />
+    </div>
+  ),
+};
+
+/**
+ * A first item wider than the room beside the button: the first item always stays, and the button
+ * sticks to the end of the row, covering the end of that item (`data-overflow-pinned`).
+ */
+export const FirstItemWiderThanRow: Story = {
+  args: {
+    children: ['Quarterly planning overview', ...pages].map((page) => (
+      <OverflowItem key={page} itemId={page}>
+        <Button appearance="subtle" className="whitespace-nowrap">
+          {page}
+        </Button>
+      </OverflowItem>
+    )),
+  },
+  render: (args) => (
+    <div className="w-[220px]">
+      <Overflow {...args} />
+    </div>
+  ),
+};
+
+/** Items packed at the end of the row: the button follows the last visible item. */
+export const EndAligned: Story = {
+  args: { className: 'gap-1 justify-end' },
+  render: (args) => (
+    <div className="w-[400px] max-w-full">
+      <Overflow {...args} />
+    </div>
+  ),
+};
+
+/** Items shorter than the overflow button: the row takes the height of the button. */
+export const ShortItems: Story = {
+  args: {
+    children: pages.map((page) => (
+      <OverflowItem key={page} itemId={page}>
+        <Badge appearance="tint">{page}</Badge>
+      </OverflowItem>
+    )),
+  },
+  render: (args) => (
+    <div className="w-[300px] max-w-full">
       <Overflow {...args} />
     </div>
   ),
