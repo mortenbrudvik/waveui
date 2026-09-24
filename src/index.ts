@@ -30,6 +30,7 @@ export { useIsClient } from './hooks/useIsClient';
 export { useFieldControl } from './hooks/useFieldControl';
 export type {
   FieldContextValue,
+  FieldControlIdClaim,
   FieldControlProps,
   UseFieldControlOptions,
 } from './hooks/useFieldControl';

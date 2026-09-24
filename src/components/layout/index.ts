@@ -13,6 +13,7 @@ export type {
 export { Accordion, AccordionItem, AccordionTrigger, AccordionPanel } from './Accordion';
 export type {
   AccordionProps,
+  AccordionBaseProps,
   AccordionSingleProps,
   AccordionMultipleProps,
   AccordionHeadingLevel,

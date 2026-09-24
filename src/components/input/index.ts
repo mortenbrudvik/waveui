@@ -12,9 +12,9 @@ export {
 } from './RadioGroup';
 export { Switch, type SwitchProps } from './Switch';
 export { Select, type SelectProps } from './Select';
-export { SearchBox, type SearchBoxProps } from './SearchBox';
+export { SearchBox, type SearchBoxProps, type SearchBoxInputProps } from './SearchBox';
 export { Slider, type SliderProps } from './Slider';
-export { SpinButton, type SpinButtonProps } from './SpinButton';
+export { SpinButton, type SpinButtonProps, type SpinButtonInputProps } from './SpinButton';
 export { Label, type LabelProps } from './Label';
 export {
   Combobox,

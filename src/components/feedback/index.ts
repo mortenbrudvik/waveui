@@ -11,4 +11,10 @@ export { Skeleton, SkeletonGroup } from './Skeleton';
 export type { SkeletonProps, SkeletonGroupProps } from './Skeleton';
 
 export { Toast, Toaster, useToastController } from './Toast';
-export type { ToastProps, ToasterProps, ToastOptions, ToastController } from './Toast';
+export type {
+  ToastProps,
+  ToasterProps,
+  ToastOptions,
+  ToastController,
+  ToastPosition,
+} from './Toast';
