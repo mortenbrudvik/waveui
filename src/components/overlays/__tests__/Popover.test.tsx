@@ -871,6 +871,99 @@ describe('Popover', () => {
         },
       );
     });
+
+    describe('with a wrapper span the consumer configured (tabIndex, role)', () => {
+      /** An `asChild={false}` span given `spanProps`; Close in the content closes the popover. */
+      function ConfiguredSpan({
+        spanProps,
+        children,
+      }: {
+        spanProps: React.HTMLAttributes<HTMLElement>;
+        children: React.ReactNode;
+      }) {
+        const [open, setOpen] = React.useState(false);
+        return (
+          <>
+            <Popover open={open} onOpenChange={setOpen}>
+              <Popover.Trigger asChild={false} data-testid="wrap" {...spanProps}>
+                {children}
+              </Popover.Trigger>
+              <Popover.Content aria-label="Options">
+                <button type="button">First</button>
+                <button type="button" onClick={() => setOpen(false)}>
+                  Close
+                </button>
+              </Popover.Content>
+            </Popover>
+            <button type="button">After</button>
+          </>
+        );
+      }
+
+      const renderOutOfTabOrder = () =>
+        render(
+          <ConfiguredSpan spanProps={{ tabIndex: -1 }}>
+            <button type="button">Toggle</button>
+          </ConfiguredSpan>,
+        );
+
+      it('tabIndex={-1}: Escape, Close and an outside press return focus to the button inside, not the span', async () => {
+        const user = userEvent.setup();
+        renderOutOfTabOrder();
+        const toggle = screen.getByRole('button', { name: 'Toggle' });
+        expect(screen.getByTestId('wrap')).not.toHaveAttribute('aria-expanded');
+        expect(toggle).toHaveAttribute('aria-expanded', 'false');
+
+        await user.click(toggle);
+        screen.getByRole('button', { name: 'First' }).focus();
+        await user.keyboard('{Escape}');
+        expect(dialog()).not.toBeInTheDocument();
+        expect(toggle).toHaveFocus();
+
+        // A press on the span itself focuses it (Safari does this for a click on the button too).
+        await user.click(screen.getByTestId('wrap'));
+        await user.click(screen.getByRole('button', { name: 'Close' }));
+        expect(dialog()).not.toBeInTheDocument();
+        expect(toggle).toHaveFocus();
+
+        await user.click(toggle);
+        screen.getByRole('button', { name: 'First' }).focus();
+        await user.click(document.body);
+        expect(dialog()).not.toBeInTheDocument();
+        expect(toggle).toHaveFocus();
+      });
+
+      it('tabIndex={-1}: Shift+Tab from the first element returns to the button inside, not the span', async () => {
+        const user = userEvent.setup();
+        renderOutOfTabOrder();
+        const toggle = screen.getByRole('button', { name: 'Toggle' });
+        await user.click(toggle);
+        await user.tab();
+        expect(screen.getByRole('button', { name: 'First' })).toHaveFocus();
+        await user.tab({ shift: true });
+        expect(toggle).toHaveFocus();
+      });
+
+      it('role="button" and tabIndex={0}: the span stays the trigger and takes focus back', async () => {
+        const user = userEvent.setup();
+        render(<ConfiguredSpan spanProps={{ role: 'button', tabIndex: 0 }}>Toggle</ConfiguredSpan>);
+        const span = screen.getByRole('button', { name: 'Toggle' });
+        expect(span).toBe(screen.getByTestId('wrap'));
+        expect(span).toHaveAttribute('aria-expanded', 'false');
+
+        await user.click(span);
+        screen.getByRole('button', { name: 'First' }).focus();
+        await user.keyboard('{Escape}');
+        expect(dialog()).not.toBeInTheDocument();
+        expect(span).toHaveFocus();
+
+        await user.click(span);
+        await user.tab();
+        expect(screen.getByRole('button', { name: 'First' })).toHaveFocus();
+        await user.tab({ shift: true });
+        expect(span).toHaveFocus();
+      });
+    });
   });
 
   describe('keyboard order of the portaled content (overlays#36)', () => {

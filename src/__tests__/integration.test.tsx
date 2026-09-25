@@ -1139,6 +1139,70 @@ describe('Dialog opened from Popover.Content (overlays#41)', () => {
 });
 
 // ---------------------------------------------------------------------------
+// A Dialog opened as its Popover or Menu closes, from a tabIndex={-1} trigger span
+// ---------------------------------------------------------------------------
+
+describe('a Dialog opened as its Popover or Menu closes, with a tabIndex={-1} trigger span', () => {
+  /** An item of the popup closes it and opens the Dialog (rendered after it) in one update. */
+  function RenameFlow({ popup }: { popup: 'popover' | 'menu' }) {
+    const [popupOpen, setPopupOpen] = React.useState(false);
+    const [renaming, setRenaming] = React.useState(false);
+    const startRename = () => {
+      setPopupOpen(false);
+      setRenaming(true);
+    };
+    return (
+      <>
+        {popup === 'popover' ? (
+          <Popover open={popupOpen} onOpenChange={setPopupOpen}>
+            <Popover.Trigger asChild={false} tabIndex={-1}>
+              <Button>Actions</Button>
+            </Popover.Trigger>
+            <Popover.Content aria-label="More actions">
+              <Button onClick={startRename}>Rename</Button>
+            </Popover.Content>
+          </Popover>
+        ) : (
+          <Menu open={popupOpen} onOpenChange={setPopupOpen}>
+            <Menu.Trigger asChild={false} tabIndex={-1}>
+              <Button>Actions</Button>
+            </Menu.Trigger>
+            <Menu.Popover>
+              {/* persistOnClick: the item does not move focus to the trigger before it goes. */}
+              <Menu.Item persistOnClick onClick={startRename}>
+                Rename
+              </Menu.Item>
+            </Menu.Popover>
+          </Menu>
+        )}
+        <Dialog open={renaming} onOpenChange={setRenaming}>
+          <Dialog.Content title="Rename">
+            <Dialog.Close>
+              <Button>Cancel</Button>
+            </Dialog.Close>
+          </Dialog.Content>
+        </Dialog>
+      </>
+    );
+  }
+
+  it.each(['popover', 'menu'] as const)(
+    '%s: closing the Dialog returns focus to the button inside the span, not the span',
+    async (popup) => {
+      const user = userEvent.setup();
+      render(<RenameFlow popup={popup} />);
+      await user.click(button('Actions'));
+      // Rename goes away with the popup, so the Dialog restores to the popup's trigger.
+      await user.click(popup === 'menu' ? menuitem('Rename') : button('Rename'));
+      expect(screen.getByRole('dialog', { name: 'Rename' })).toBeInTheDocument();
+      await user.click(button('Cancel'));
+      expect(screen.queryByRole('dialog', { name: 'Rename' })).not.toBeInTheDocument();
+      expect(button('Actions')).toHaveFocus();
+    },
+  );
+});
+
+// ---------------------------------------------------------------------------
 // Confirm Dialog that deletes a row inside a Drawer (overlays#10)
 // ---------------------------------------------------------------------------
 

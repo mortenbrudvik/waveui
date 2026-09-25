@@ -2,7 +2,7 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import * as React from 'react';
-import { getTriggerTarget, useTriggerElement } from '../useTriggerElement';
+import { getTriggerFocusTarget, getTriggerTarget, useTriggerElement } from '../useTriggerElement';
 import { __resetWarnings } from '../../lib/dev';
 import { mergeRefs } from '../../lib/mergeRefs';
 import { expectNoA11yViolations } from '../../test-utils';
@@ -758,14 +758,15 @@ describe('useTriggerElement', () => {
   });
 });
 
-describe('getTriggerTarget', () => {
-  function host(html: string): HTMLElement {
-    const div = document.createElement('div');
-    div.innerHTML = html;
-    document.body.append(div);
-    return div.firstElementChild as HTMLElement;
-  }
+/** Adds `html` to the document and returns its first element (removed after each test). */
+function host(html: string): HTMLElement {
+  const div = document.createElement('div');
+  div.innerHTML = html;
+  document.body.append(div);
+  return div.firstElementChild as HTMLElement;
+}
 
+describe('getTriggerTarget', () => {
   afterEach(() => {
     document.body.replaceChildren();
   });
@@ -790,5 +791,36 @@ describe('getTriggerTarget', () => {
   it('reads the markup, so an inert page (an open modal) does not change it', () => {
     const wrapper = host('<span inert><button type="button">Open</button></span>');
     expect(getTriggerTarget(wrapper)).toBe(wrapper.querySelector('button'));
+  });
+});
+
+describe('getTriggerFocusTarget', () => {
+  afterEach(() => {
+    document.body.replaceChildren();
+  });
+
+  it('is the element getTriggerTarget names: the span out of the tab order gives way to its button', () => {
+    const wrapper = host('<span tabindex="-1"><button type="button">Open</button></span>');
+    expect(getTriggerFocusTarget(wrapper)).toBe(wrapper.querySelector('button'));
+    const trigger = host(
+      '<span role="button" tabindex="0"><button type="button">Inner</button></span>',
+    );
+    expect(getTriggerFocusTarget(trigger)).toBe(trigger);
+    const button = host('<button type="button">Open</button>');
+    expect(getTriggerFocusTarget(button)).toBe(button);
+  });
+
+  it('falls back to the first tabbable element inside, then to the element itself when it can take focus', () => {
+    const roleOnly = host(
+      '<span role="button"><button type="button" tabindex="-1">Skipped</button><a href="#x">Link</a></span>',
+    );
+    expect(getTriggerFocusTarget(roleOnly)).toBe(roleOnly.querySelector('a'));
+    const textSpan = host('<span tabindex="-1">Text</span>');
+    expect(getTriggerFocusTarget(textSpan)).toBe(textSpan);
+    const outOfOrder = host('<button type="button" tabindex="-1">Open</button>');
+    expect(getTriggerFocusTarget(outOfOrder)).toBe(outOfOrder);
+    expect(getTriggerFocusTarget(host('<span>Text</span>'))).toBeNull();
+    expect(getTriggerFocusTarget(host('<button type="button" disabled>Off</button>'))).toBeNull();
+    expect(getTriggerFocusTarget(null)).toBeNull();
   });
 });

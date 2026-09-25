@@ -7,7 +7,7 @@ import { reportMissingContext, warnOnce } from '../../lib/dev';
 import { flattenChildren, isElementOfType } from '../../lib/children';
 import { mergeProps } from '../../lib/mergeProps';
 import { STATE_ARIA } from '../../lib/renderTrigger';
-import { getFirstTabbable, isFocusable } from '../../lib/focus';
+import { getFirstTabbable } from '../../lib/focus';
 import { disabledStyles, focusRing, focusRingInset } from '../../lib/styles';
 import { useControllable } from '../../hooks/useControllable';
 import { useDismiss } from '../../hooks/useDismiss';
@@ -16,7 +16,11 @@ import { useMergedRefs } from '../../hooks/useMergedRefs';
 import { usePopupPosition } from '../../hooks/usePopupPosition';
 import { useRestoreFocus } from '../../hooks/useRestoreFocus';
 import { useRovingTabIndex } from '../../hooks/useRovingTabIndex';
-import { getTriggerTarget, useTriggerElement } from '../../hooks/useTriggerElement';
+import {
+  getTriggerFocusTarget,
+  useTriggerElement,
+  useTriggerFocusRef,
+} from '../../hooks/useTriggerElement';
 import { Portal } from '../portal/Portal';
 
 // ---------------------------------------------------------------------------
@@ -275,19 +279,6 @@ function isOwnEvent(event: React.SyntheticEvent<HTMLElement>): boolean {
   );
 }
 
-/**
- * The element that takes focus for the trigger: the element that acts as the trigger and carries
- * its state ARIA (`getTriggerTarget`: the trigger itself, or, for the wrapper span of
- * `asChild={false}` and of the automatic fallback, the first element inside it in the tab order).
- * That rule reads the markup, so when its element cannot take focus now (a span with only a
- * `role`), the first tabbable element inside the trigger takes it.
- */
-function getTriggerFocusTarget(trigger: HTMLElement | null): HTMLElement | null {
-  if (!trigger) return null;
-  const target = getTriggerTarget(trigger);
-  return target && isFocusable(target) ? target : getFirstTabbable(trigger);
-}
-
 const menuSurfaceClasses =
   'min-w-[180px] rounded-md border border-border bg-background py-1 shadow-4';
 
@@ -517,7 +508,8 @@ MenuTrigger.displayName = 'MenuTrigger';
  * the menu or lost to the page). Tab closes it and moves focus to the trigger without preventing
  * the default, so tabbing continues from the trigger (inside a Dialog, the focus trap moves on
  * from there). The trigger here is the element that takes its focus: for a wrapper span, the
- * first tabbable element inside it. Keys from a portal opened inside the menu (a Popover of an
+ * element inside it that carries the state ARIA (the span itself when you made it the trigger with
+ * `tabIndex={0}` or a `role`). Keys from a portal opened inside the menu (a Popover of an
  * item) are left to that portal: Tab there moves on inside it and keeps the menu open.
  *
  * Also exported as `MenuPopover` (import the flat name from React Server Components).
@@ -584,25 +576,23 @@ const MenuPopover = ({
     setOpen(false);
   }, [setOpen, triggerRef]);
 
+  // Focus returns to the element that takes focus for the trigger (for a wrapper span, the element
+  // inside it that carries the state ARIA), as on item activation and Tab: here, and as the
+  // layer's anchor when a surface opened from an item that is gone by then restores focus.
+  const triggerFocusRef = useTriggerFocusRef(triggerRef);
   const { layerId } = useDismiss({
     open,
     onDismiss: close,
     refs: [surfaceRef, triggerRef],
-    anchorRef: triggerRef,
+    anchorRef: triggerFocusRef,
     kind: 'menu',
     focusOutside: true,
   });
 
-  // A wrapper-span trigger cannot take focus itself: fall back to the element inside it.
-  const getRestoreFallback = React.useCallback(
-    () => getTriggerFocusTarget(triggerRef.current),
-    [triggerRef],
-  );
   useRestoreFocus({
     enabled: open,
     container: surface,
-    triggerRef,
-    fallback: getRestoreFallback,
+    triggerRef: triggerFocusRef,
     onlyIfFocusInside: true,
   });
 

@@ -3,7 +3,7 @@ import { cn } from '../../lib/cn';
 import { isDev, reportMissingContext, warnOnce } from '../../lib/dev';
 import { slotRendersContent } from '../../lib/slot';
 import { composeEventHandlers } from '../../lib/composeEventHandlers';
-import { getFirstTabbable, isFocusable } from '../../lib/focus';
+import { getFirstTabbable } from '../../lib/focus';
 import type { PopupAlign, PopupSide } from '../../lib/types';
 import { useId } from '../../hooks/useId';
 import { useControllable, type SetValue } from '../../hooks/useControllable';
@@ -12,7 +12,11 @@ import { useRestoreFocus } from '../../hooks/useRestoreFocus';
 import { usePopupPosition } from '../../hooks/usePopupPosition';
 import { useMergedRefs } from '../../hooks/useMergedRefs';
 import { useEventCallback } from '../../hooks/useEventCallback';
-import { useTriggerElement } from '../../hooks/useTriggerElement';
+import {
+  getTriggerFocusTarget,
+  useTriggerElement,
+  useTriggerFocusRef,
+} from '../../hooks/useTriggerElement';
 import { Portal } from '../portal/Portal';
 import { PopoverBeak, usePopoverTabOrder, type PopoverPhysicalSide } from './Popover.shared';
 
@@ -164,15 +168,6 @@ function usePopoverContext(componentName: string): PopoverContextValue {
   return getInertContext();
 }
 
-/**
- * The element that takes focus for the trigger: the trigger itself, or — for the wrapper `<span>`
- * of `asChild={false}` and of the automatic fallback — the first tabbable element inside it.
- */
-function getTriggerFocusTarget(trigger: HTMLElement | null): HTMLElement | null {
-  if (!trigger) return null;
-  return isFocusable(trigger) ? trigger : getFirstTabbable(trigger);
-}
-
 /** The ids of an id list that exist in `doc`, joined; `undefined` when none does. */
 function presentIds(doc: Document, ids: string | null): string | undefined {
   const present = (ids ?? '').split(/\s+/).filter((id) => id && doc.getElementById(id));
@@ -258,21 +253,22 @@ const PopoverRoot = ({
     side: placedSide,
   } = usePopupPosition({ open, side, align, offset: 8, arrowRef });
 
+  // Focus returns to the element that takes focus for the trigger (for a wrapper span, the element
+  // inside it that carries the state ARIA), as Shift+Tab from the content does: here, and as the
+  // layer's anchor when a surface opened from the content that is gone by then restores focus.
+  const triggerFocusRef = useTriggerFocusRef(triggerRef);
   const { layerId } = useDismiss({
     open,
     onDismiss: () => setOpen(false),
     refs: [surfaceRef, triggerRef, ...(ignoreOutsideRefs ?? [])],
-    anchorRef: triggerRef,
+    anchorRef: triggerFocusRef,
     kind: 'popover',
   });
 
-  // A wrapper-span trigger cannot take focus itself: fall back to the element inside it.
-  const getRestoreFallback = React.useCallback(() => getTriggerFocusTarget(triggerRef.current), []);
   useRestoreFocus({
     enabled: open,
     container: surface,
-    triggerRef,
-    fallback: getRestoreFallback,
+    triggerRef: triggerFocusRef,
     onlyIfFocusInside: true,
   });
 
@@ -355,7 +351,9 @@ PopoverRoot.displayName = 'Popover';
  * A render function receives the props instead (spread all of them, `id` included: the content is
  * named by it); `asChild={false}` renders the 0.4 wrapper span, and a custom child that neither
  * forwards `ref` nor spreads its props falls back to that span automatically (with a development
- * warning). On the span, the state ARIA goes to the first element in the tab order inside it.
+ * warning). On the span, the state ARIA goes to the first element in the tab order inside it, and
+ * focus returns to that element (to the span only when you made it the trigger with `tabIndex={0}`
+ * or a `role`).
  *
  * A Tooltip goes between the trigger and the button: it passes the trigger's `id` and ARIA on to
  * the button, which the Tooltip also describes.

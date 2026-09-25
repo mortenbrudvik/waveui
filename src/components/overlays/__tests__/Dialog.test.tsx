@@ -1167,6 +1167,75 @@ describe('Dialog', () => {
       expect(button('Open')).toHaveFocus();
     });
 
+    describe('a wrapper span the consumer configured (tabIndex, role)', () => {
+      function ConfiguredSpan({
+        spanProps,
+        children,
+      }: {
+        spanProps: React.HTMLAttributes<HTMLElement>;
+        children: React.ReactNode;
+      }) {
+        return (
+          <Dialog>
+            <Dialog.Trigger asChild={false} data-testid="wrap" {...spanProps}>
+              {children}
+            </Dialog.Trigger>
+            <Dialog.Content title="Wrapped">
+              <Dialog.Close>
+                <button type="button">Done</button>
+              </Dialog.Close>
+            </Dialog.Content>
+          </Dialog>
+        );
+      }
+
+      it('tabIndex={-1}: Escape and Dialog.Close return focus to the button inside, not the span', async () => {
+        const user = userEvent.setup();
+        render(
+          <ConfiguredSpan spanProps={{ tabIndex: -1 }}>
+            <button type="button">Open</button>
+          </ConfiguredSpan>,
+        );
+        expect(screen.getByTestId('wrap')).not.toHaveAttribute('aria-expanded');
+        expect(button('Open')).toHaveAttribute('aria-expanded', 'false');
+
+        // Opened while nothing has focus (a click that does not focus the button).
+        fireEvent.click(button('Open'));
+        expect(screen.getByRole('dialog', { name: 'Wrapped' })).toBeInTheDocument();
+        await user.keyboard('{Escape}');
+        expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+        expect(button('Open')).toHaveFocus();
+
+        // A press on the span itself focuses it (Safari does this for a click on the button too).
+        const wrap = screen.getByTestId('wrap');
+        const spanFocus = vi.fn();
+        wrap.addEventListener('focus', spanFocus);
+        await user.click(wrap);
+        expect(spanFocus).toHaveBeenCalledTimes(1);
+        await user.click(button('Done'));
+        expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+        expect(button('Open')).toHaveFocus();
+      });
+
+      it('role="button" and tabIndex={0}: the span stays the trigger and takes focus back', async () => {
+        const user = userEvent.setup();
+        render(<ConfiguredSpan spanProps={{ role: 'button', tabIndex: 0 }}>Open</ConfiguredSpan>);
+        const span = button('Open');
+        expect(span).toBe(screen.getByTestId('wrap'));
+        expect(span).toHaveAttribute('aria-expanded', 'false');
+
+        fireEvent.click(span);
+        expect(screen.getByRole('dialog', { name: 'Wrapped' })).toBeInTheDocument();
+        await user.keyboard('{Escape}');
+        expect(span).toHaveFocus();
+
+        await user.click(span);
+        await user.click(button('Done'));
+        expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+        expect(span).toHaveFocus();
+      });
+    });
+
     it('returns focus to a trigger that was disabled when it mounted (Safari)', async () => {
       const user = userEvent.setup();
       function LateEnabled({ disabled }: { disabled: boolean }) {

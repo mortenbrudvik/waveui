@@ -8,7 +8,7 @@ import {
   type TriggerChildren,
 } from '../lib/renderTrigger';
 import { warnOnce } from '../lib/dev';
-import { FOCUSABLE_SELECTOR, isHiddenInput } from '../lib/focus';
+import { FOCUSABLE_SELECTOR, getFirstTabbable, isFocusable, isHiddenInput } from '../lib/focus';
 import { useMergedRefs } from './useMergedRefs';
 import { useEventCallback } from './useEventCallback';
 
@@ -55,7 +55,7 @@ function isInTabOrder(tabIndex: unknown): boolean {
  * interactive — in the tab order by markup (`tabIndex >= 0`: a button, or a span the consumer
  * gave `tabIndex={0}`) or given a role other than a generic one (`role="button"`) — else the
  * first element inside it in the tab order by markup, else `null`. The trigger's state ARIA
- * belongs on it, and it is the element that takes focus for the trigger. Read from the markup, not
+ * belongs on it, and focus returns to it ({@link getTriggerFocusTarget}). Read from the markup, not
  * `getFirstTabbable`: that skips an `inert` subtree, and the page around a trigger is inert while
  * its modal dialog is open. Internal (not exported from the package entry).
  */
@@ -65,6 +65,47 @@ export function getTriggerTarget(el: HTMLElement): HTMLElement | null {
     if (!isHiddenInput(candidate) && candidate.tabIndex >= 0) return candidate;
   }
   return null;
+}
+
+/**
+ * The element that takes focus for the trigger rendered as `trigger`: the one rule of every focus
+ * return of Menu, Popover, Dialog and Drawer (Escape, outside press, item activation, Tab and
+ * Shift+Tab, the Close part). It is the {@link getTriggerTarget} element, which carries the state
+ * ARIA, when that can take focus now, so a `tabIndex={-1}` wrapper span gives way to the button
+ * inside it; else the first tabbable element inside `trigger` (a span given only a `role`); else
+ * `trigger` itself when it can take focus (a `<button tabIndex={-1}>` child, a `tabIndex={-1}`
+ * span holding only text); else `null`. Internal (not exported from the package entry).
+ */
+export function getTriggerFocusTarget(trigger: HTMLElement | null): HTMLElement | null {
+  if (!trigger) return null;
+  const target = getTriggerTarget(trigger);
+  if (target && isFocusable(target)) return target;
+  return getFirstTabbable(trigger) ?? (isFocusable(trigger) ? trigger : null);
+}
+
+/**
+ * A read-only ref for `useRestoreFocus`'s `triggerRef` and `useDismiss`'s `anchorRef` (Menu,
+ * Popover; the anchor is where a surface opened from the popup restores focus once its opener is
+ * gone): resolved when it is read, to {@link getTriggerFocusTarget} of the element in
+ * `triggerRef`, or to that element itself when nothing in it can take focus (the restore then goes
+ * to the element next to where it is, as for any opener that cannot take focus). Stable while
+ * `triggerRef` is.
+ */
+export function useTriggerFocusRef(
+  triggerRef: React.RefObject<HTMLElement | null>,
+): React.RefObject<HTMLElement | null> {
+  return React.useMemo(() => createTriggerFocusRef(triggerRef), [triggerRef]);
+}
+
+function createTriggerFocusRef(
+  triggerRef: React.RefObject<HTMLElement | null>,
+): React.RefObject<HTMLElement | null> {
+  return {
+    get current() {
+      const trigger = triggerRef.current;
+      return trigger && (getTriggerFocusTarget(trigger) ?? trigger);
+    },
+  };
 }
 
 function isElementNode(value: unknown): value is Element {

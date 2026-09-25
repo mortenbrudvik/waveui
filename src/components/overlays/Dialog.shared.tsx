@@ -1,12 +1,11 @@
 import * as React from 'react';
 import { reportMissingContext, warnOnce } from '../../lib/dev';
-import { getFirstTabbable, isFocusable } from '../../lib/focus';
 import { mergeProps } from '../../lib/mergeProps';
 import { STATE_ARIA } from '../../lib/renderTrigger';
 import type { SetValue } from '../../hooks/useControllable';
 import { useId } from '../../hooks/useId';
 import { useMergedRefs } from '../../hooks/useMergedRefs';
-import { useTriggerElement } from '../../hooks/useTriggerElement';
+import { getTriggerFocusTarget, useTriggerElement } from '../../hooks/useTriggerElement';
 
 /*
  * Internal helpers shared by Dialog and Drawer (P15). Not exported from the package.
@@ -49,13 +48,17 @@ export interface ModalTrigger {
    *
    * 1. `null` while an element other than `<body>` has focus: that element opened the modal (the
    *    clicked trigger, the button inside a trigger's wrapper span, or the parent's own button of
-   *    a controlled modal), and the restore captures it.
+   *    a controlled modal), and the restore captures it. A trigger element itself with focus (a
+   *    `tabIndex={-1}` wrapper span that a press focused, as Safari does for a click on the button
+   *    inside it) resolves like any trigger instead.
    * 2. Otherwise (Safari does not focus a clicked button; a modal opened from code), the trigger
    *    activated in this open session while it is still in the document.
    * 3. Otherwise the first mounted trigger that can take focus.
    *
-   * A trigger resolves to itself when it can take focus, else to the first tabbable element inside
-   * it, else `null`. Read-only.
+   * A trigger resolves with `getTriggerFocusTarget`, the rule of every trigger's focus return: the
+   * element that carries the state ARIA (the button inside a wrapper span, the span when you made
+   * it the trigger), else the first tabbable element inside it, else itself when it can take
+   * focus, else `null`. Read-only.
    */
   focusRef: React.RefObject<HTMLElement | null>;
 }
@@ -79,11 +82,6 @@ function getFocusedElement(): HTMLElement | null {
   const active = document.activeElement;
   if (!active || active === document.body || active === document.documentElement) return null;
   return active.isConnected ? (active as HTMLElement) : null;
-}
-
-/** The element focus returns to for a trigger element (see {@link ModalTrigger.focusRef}). */
-function resolveTriggerFocusTarget(node: HTMLElement): HTMLElement | null {
-  return isFocusable(node) ? node : getFirstTabbable(node);
 }
 
 function createModalTrigger(): ModalTrigger {
@@ -124,13 +122,15 @@ function createModalTrigger(): ModalTrigger {
     },
     focusRef: {
       get current() {
-        // A focused element is the opener: the restore captures it (see ModalTrigger.focusRef).
-        if (getFocusedElement()) return null;
+        // A focused element is the opener: the restore captures it (see ModalTrigger.focusRef),
+        // unless it is a trigger element, which resolves like any trigger.
+        const focused = getFocusedElement();
+        if (focused) return attached.has(focused) ? getTriggerFocusTarget(focused) : null;
         // The trigger that opened the modal decides, also when it cannot take focus any more.
-        if (activated?.isConnected) return resolveTriggerFocusTarget(activated);
+        if (activated?.isConnected) return getTriggerFocusTarget(activated);
         for (const element of attached) {
           if (!element.isConnected) continue;
-          const target = resolveTriggerFocusTarget(element);
+          const target = getTriggerFocusTarget(element);
           if (target) return target;
         }
         return null;
@@ -145,8 +145,8 @@ function createModalTrigger(): ModalTrigger {
  * {@link useModalTriggerPart}; the root passes `focusRef` to `useModalLayer` as its
  * `triggerRef` and scopes the activation to one open session with {@link useModalTriggerSession}.
  * Focus returns to the element that had focus when the modal opened; when nothing had focus, to
- * the trigger that opened it, else to the first mounted trigger. A wrapper `<span>` is not
- * focusable, so the restore target is the element inside it that is. Resolving when the ref is
+ * the trigger that opened it, else to the first mounted trigger. For a wrapper `<span>`, the
+ * restore target is the element inside it that carries the state ARIA. Resolving when the ref is
  * read, not when it attaches, keeps a trigger that was disabled at mount (or whose content
  * changed) a valid target.
  */

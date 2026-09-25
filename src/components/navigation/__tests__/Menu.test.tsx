@@ -1805,6 +1805,66 @@ describe('Menu.Trigger rendered as a wrapper span', () => {
     expect(trigger()).toHaveFocus();
   });
 
+  it('asChild={false} with tabIndex={-1} on the wrapper: Escape and an outside press return focus to the button inside, not the span', async () => {
+    const user = userEvent.setup();
+    render(
+      <Menu>
+        <Menu.Trigger asChild={false} tabIndex={-1} data-testid="wrap">
+          <button type="button">Actions</button>
+        </Menu.Trigger>
+        <Menu.Popover>
+          <Menu.Item>Edit</Menu.Item>
+        </Menu.Popover>
+      </Menu>,
+    );
+    await user.click(trigger());
+    expect(item('Edit')).toHaveFocus();
+    await user.keyboard('{Escape}');
+    expect(queryMenu()).not.toBeInTheDocument();
+    expect(trigger()).toHaveFocus();
+
+    // A press on the span itself focuses it (tabIndex -1; Safari does this for a click on the
+    // button too): focus still returns to the button, the element that carries the state ARIA.
+    await user.click(screen.getByTestId('wrap'));
+    expect(item('Edit')).toHaveFocus();
+    await user.keyboard('{Escape}');
+    expect(queryMenu()).not.toBeInTheDocument();
+    expect(trigger()).toHaveFocus();
+
+    // An outside press that leaves focus on the page returns it to the button as well.
+    await user.click(trigger());
+    await user.click(document.body);
+    expect(queryMenu()).not.toBeInTheDocument();
+    expect(trigger()).toHaveFocus();
+  });
+
+  it('asChild={false} with role="button" and tabIndex={0}: the span stays the trigger and takes focus back', async () => {
+    const user = userEvent.setup();
+    render(
+      <Menu>
+        <Menu.Trigger asChild={false} role="button" tabIndex={0}>
+          Actions
+        </Menu.Trigger>
+        <Menu.Popover>
+          <Menu.Item>Edit</Menu.Item>
+        </Menu.Popover>
+      </Menu>,
+    );
+    const span = trigger();
+    expect(span.tagName).toBe('SPAN');
+    expect(span).toHaveAttribute('aria-expanded', 'false');
+    await user.click(span);
+    expect(item('Edit')).toHaveFocus();
+    await user.keyboard('{Escape}');
+    expect(queryMenu()).not.toBeInTheDocument();
+    expect(span).toHaveFocus();
+
+    await user.click(span);
+    await user.click(item('Edit'));
+    expect(queryMenu()).not.toBeInTheDocument();
+    expect(span).toHaveFocus();
+  });
+
   it.each(WRAPPER_TRIGGERS)(
     '%s: the button inside the wrapper carries the state ARIA, the span none (axe)',
     async (_name, automatic) => {
