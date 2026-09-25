@@ -126,11 +126,15 @@ export const Spinner = ({
   // with `label` unless the consumer does. Also applies to a forwarded `aria-label={undefined}`.
   const nameFromLabel =
     role === 'progressbar' && !isName(rest['aria-label']) && !isName(rest['aria-labelledby']);
-  const colors = appearanceClasses[appearance];
+  // An appearance outside the union (from untyped code) renders as primary instead of throwing.
+  const resolvedAppearance: SpinnerAppearance = Object.hasOwn(appearanceClasses, appearance ?? '')
+    ? appearance
+    : 'primary';
+  const colors = appearanceClasses[resolvedAppearance];
 
   return (
     <span
-      data-appearance={appearance}
+      data-appearance={resolvedAppearance}
       data-state={shown ? 'shown' : 'delayed'}
       {...rest}
       role={role}

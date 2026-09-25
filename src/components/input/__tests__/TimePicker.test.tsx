@@ -1237,6 +1237,34 @@ describe('TimePicker', () => {
       expect(onInvalidInput).toHaveBeenLastCalledWith('sooner', 'unparseable');
     });
 
+    it.each([
+      ['text that still matches options', { maxTime: '13:00' }, '2:00 PM', ['12:00 PM']],
+      ['text that matches nothing', {}, 'soon', []],
+    ])(
+      'closes the list when Enter rejects %s, so the popup does not cover the error message',
+      async (_label, props, text, matches) => {
+        const user = userEvent.setup();
+        const onOpenChange = vi.fn();
+        render(<TimePicker aria-label="Time" {...props} onOpenChange={onOpenChange} />);
+        await user.type(combobox('Time'), text);
+        const popup = () => document.querySelector('[data-wave-portal]');
+        expect(popup()).not.toBeNull();
+        expect(optionNames()).toEqual(matches);
+        await user.keyboard('{Enter}');
+        expect(combobox('Time')).toHaveValue(text);
+        expect(combobox('Time')).toHaveAttribute('aria-invalid', 'true');
+        expect(combobox('Time')).toHaveAttribute('aria-expanded', 'false');
+        expect(popup()).toBeNull();
+        expect(screen.getByRole('alert')).toBeVisible();
+        expect(onOpenChange).toHaveBeenLastCalledWith(false);
+        expect(combobox('Time')).toHaveFocus();
+        // Editing the text reopens the list (and clears the error).
+        await user.type(combobox('Time'), '{Backspace}');
+        expect(popup()).not.toBeNull();
+        expect(combobox('Time')).not.toHaveAttribute('aria-invalid');
+      },
+    );
+
     it('flags a time outside minTime/maxTime as out of range', async () => {
       const user = userEvent.setup();
       const onValueChange = vi.fn();
@@ -1354,8 +1382,10 @@ describe('TimePicker', () => {
       it('selecting an option clears it', async () => {
         const user = userEvent.setup();
         render(<TimePicker aria-label="Time" maxTime="13:00" />);
-        // Out of range, but '12:00 PM' still matches the text and stays listed.
+        // Out of range, but '12:00 PM' still matches the text and is listed when the list, which
+        // the rejected Enter closed, opens again.
         await reject(user, '2:00 PM');
+        await user.click(combobox('Time'));
         await user.click(screen.getByRole('option', { name: '12:00 PM' }));
         expectValid('12:00 PM');
       });

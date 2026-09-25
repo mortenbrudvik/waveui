@@ -1,19 +1,6 @@
-import type { ArgTypes, Meta, StoryObj } from '@storybook/react';
+import type { Meta, StoryObj } from '@storybook/react';
 import { Checkbox, Field, Input, Select, Slider, Switch, Textarea } from '../src';
-import type { ValidationState } from '../src';
-import { orientationArgType } from './_helpers';
-
-const validationStates = [
-  'none',
-  'error',
-  'warning',
-  'success',
-] as const satisfies readonly ValidationState[];
-
-/** Field `validationState` (`ValidationState`). */
-const validationStateArgType = {
-  validationState: { control: 'inline-radio', options: validationStates },
-} satisfies ArgTypes;
+import { orientationArgType, validationStateArgType } from './_helpers';
 
 const meta = {
   title: 'Components/Input/Field',

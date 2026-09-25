@@ -1,8 +1,8 @@
-import type { ArgTypes, Meta, StoryObj } from '@storybook/react';
+import type { Meta, StoryObj } from '@storybook/react';
 import { fn } from 'storybook/test';
 import { CompoundButton } from '../src';
-import type { CompoundButtonProps, IconPosition, Size } from '../src';
-import { appearanceArgType, sizeArgType } from './_helpers';
+import type { CompoundButtonProps, Size } from '../src';
+import { appearanceArgType, iconPositionArgType, sizeArgType } from './_helpers';
 
 /** Decorative calendar glyph; the CompoundButton sizes its icon box and the SVG fills it. */
 const CalendarIcon = () => (
@@ -11,14 +11,6 @@ const CalendarIcon = () => (
     <path d="M3.5 9.5h17M8 3v4M16 3v4" strokeWidth="1.5" strokeLinecap="round" />
   </svg>
 );
-
-/** `iconPosition` (`IconPosition`): before or after the text. */
-const iconPositionArgType = {
-  iconPosition: {
-    control: 'inline-radio',
-    options: ['before', 'after'] as const satisfies readonly IconPosition[],
-  },
-} satisfies ArgTypes;
 
 const meta = {
   title: 'Components/Button/CompoundButton',

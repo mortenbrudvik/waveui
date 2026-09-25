@@ -8,6 +8,9 @@ export {
 } from './Dialog';
 export type {
   DialogProps,
+  DialogModalType,
+  DialogOpenChangeReason,
+  DialogOpenChangeDetails,
   DialogContentProps,
   DialogFooterProps,
   DialogTitleProps,
@@ -32,6 +35,8 @@ export { Drawer, DrawerTrigger, DrawerClose, DrawerTitle } from './Drawer';
 export type {
   DrawerProps,
   DrawerPosition,
+  DrawerOpenChangeReason,
+  DrawerOpenChangeDetails,
   DrawerTriggerProps,
   DrawerTriggerRenderProps,
   DrawerCloseProps,

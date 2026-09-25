@@ -692,6 +692,9 @@ describe('renderWithFieldContext', () => {
       `${FIELD_TEST_TEXT.message} ${FIELD_TEST_TEXT.hint}`,
     );
     expect(control).not.toHaveAttribute('aria-invalid');
+    // The message renders before the hint, as Field renders them.
+    const hint = document.getElementById(FIELD_TEST_IDS.hintId)!;
+    expect(message!.compareDocumentPosition(hint) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
   });
 
   it('a success or neutral message renders without a role', () => {

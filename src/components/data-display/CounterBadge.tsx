@@ -79,7 +79,7 @@ export const CounterBadge = ({
           color === 'brand' ? 'text-primary' : 'text-foreground',
         );
 
-  // A name on a role-less <span> is not announced (and fails axe): name it as an image.
+  // A name on a role-less <span> is not announced by screen readers: name it as an image.
   const named = Boolean(props['aria-label'] || props['aria-labelledby']);
 
   return (

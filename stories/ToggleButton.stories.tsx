@@ -1,9 +1,8 @@
-import type { ArgTypes, Meta, StoryObj } from '@storybook/react';
+import type { Meta, StoryObj } from '@storybook/react';
 import { useState } from 'react';
 import { fn } from 'storybook/test';
 import { ToggleButton, Text } from '../src';
-import type { IconPosition } from '../src';
-import { appearanceArgType, sizeArgType } from './_helpers';
+import { appearanceArgType, iconPositionArgType, sizeArgType } from './_helpers';
 
 /** Decorative bold glyph (the ToggleButton hides its icon slot from assistive technology). */
 const BoldIcon = () => (
@@ -11,14 +10,6 @@ const BoldIcon = () => (
     <path d="M4.5 2.5h4a3 3 0 0 1 2.1 5.1A3.25 3.25 0 0 1 9 13.5H4.5zm1.5 1.5v3h2.5a1.5 1.5 0 0 0 0-3zm0 4.5v3.5h3a1.75 1.75 0 0 0 0-3.5z" />
   </svg>
 );
-
-/** `iconPosition` (`IconPosition`): before or after the label. */
-const iconPositionArgType = {
-  iconPosition: {
-    control: 'inline-radio',
-    options: ['before', 'after'] as const satisfies readonly IconPosition[],
-  },
-} satisfies ArgTypes;
 
 const meta = {
   title: 'Components/Button/ToggleButton',
@@ -47,12 +38,12 @@ export const Pressed: Story = {
 
 /**
  * The icon is decorative: the label "Bold" is the accessible name. `iconPosition` puts it before
- * or after the label.
+ * the label (the default) or, as here, after it.
  */
 export const WithIcon: Story = {
   args: {
     icon: <BoldIcon />,
-    iconPosition: 'before',
+    iconPosition: 'after',
   },
 };
 

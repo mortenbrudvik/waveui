@@ -1,6 +1,7 @@
 /**
  * Shared Storybook `argTypes` for the Wave prop vocabulary (C-NAMING): `size`, `appearance`,
- * `orientation` and the Badge `appearance`/`color` values.
+ * `orientation`, `iconPosition`, the Field `validationState` and the Badge `appearance`/`color`
+ * values.
  *
  * Each entry is checked with `satisfies ArgTypes`, and each `options` list with `satisfies` against
  * the library type it documents, so a value that is not part of the vocabulary fails the dev type
@@ -14,7 +15,15 @@
  * } satisfies Meta<typeof Button>;
  */
 import type { ArgTypes } from '@storybook/react';
-import type { Appearance, BadgeAppearance, BadgeColor, Orientation, Size } from '../src';
+import type {
+  Appearance,
+  BadgeAppearance,
+  BadgeColor,
+  IconPosition,
+  Orientation,
+  Size,
+  ValidationState,
+} from '../src';
 
 const sizes = [
   'extra-small',
@@ -30,6 +39,13 @@ const appearances = [
   'transparent',
 ] as const satisfies readonly Appearance[];
 const orientations = ['horizontal', 'vertical'] as const satisfies readonly Orientation[];
+const iconPositions = ['before', 'after'] as const satisfies readonly IconPosition[];
+const validationStates = [
+  'none',
+  'error',
+  'warning',
+  'success',
+] as const satisfies readonly ValidationState[];
 const badgeAppearances = [
   'filled',
   'tint',
@@ -59,6 +75,19 @@ export const appearanceArgType = {
 /** `orientation` (`Orientation`): horizontal or vertical (Divider, RadioGroup, Stack, Stepper, TabList, Toolbar, …). */
 export const orientationArgType = {
   orientation: { control: 'inline-radio', options: orientations },
+} satisfies ArgTypes;
+
+/**
+ * `iconPosition` (`IconPosition`) of the button family: before or after the label (SplitButton:
+ * of the primary action).
+ */
+export const iconPositionArgType = {
+  iconPosition: { control: 'inline-radio', options: iconPositions },
+} satisfies ArgTypes;
+
+/** Field `validationState` (`ValidationState`): none, error, warning, success. */
+export const validationStateArgType = {
+  validationState: { control: 'inline-radio', options: validationStates },
 } satisfies ArgTypes;
 
 /** Badge `appearance` (`BadgeAppearance`): filled, tint, outline. */

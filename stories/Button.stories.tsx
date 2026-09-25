@@ -1,8 +1,8 @@
-import type { ArgTypes, Meta, StoryObj } from '@storybook/react';
+import type { Meta, StoryObj } from '@storybook/react';
 import { fn } from 'storybook/test';
 import { Button, Tooltip } from '../src';
-import type { ButtonProps, IconPosition, Size } from '../src';
-import { appearanceArgType, sizeArgType } from './_helpers';
+import type { ButtonProps, Size } from '../src';
+import { appearanceArgType, iconPositionArgType, sizeArgType } from './_helpers';
 
 /** Decorative inline icon (the Button hides its icon slot from assistive technology). */
 const PaperclipIcon = () => (
@@ -34,14 +34,6 @@ const OpenIcon = () => (
     />
   </svg>
 );
-
-/** `iconPosition` (`IconPosition`): before or after the label. */
-const iconPositionArgType = {
-  iconPosition: {
-    control: 'inline-radio',
-    options: ['before', 'after'] as const satisfies readonly IconPosition[],
-  },
-} satisfies ArgTypes;
 
 const meta = {
   title: 'Components/Button/Button',

@@ -1,8 +1,7 @@
 import * as React from 'react';
 import type { Meta, StoryObj } from '@storybook/react';
 import { Button, Spinner } from '../src';
-import type { Size, SpinnerProps } from '../src';
-import type { SpinnerAppearance } from '../src/components/feedback/Spinner';
+import type { Size, SpinnerAppearance, SpinnerProps } from '../src';
 import { sizeArgType } from './_helpers';
 
 const appearances: SpinnerAppearance[] = ['primary', 'inverted'];

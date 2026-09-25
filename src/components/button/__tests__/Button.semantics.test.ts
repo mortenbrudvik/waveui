@@ -294,7 +294,7 @@ describe('Button semantics', () => {
     );
 
     it.each(BLOCKED)(
-      '%s (%s): Enter and Space are prevented and not forwarded; other keys are forwarded',
+      '%s (%s): Enter and Space keydowns and the Space keyup are prevented and not forwarded; other keys are forwarded',
       (_name, tag, href, state) => {
         const onKeyDown = vi.fn();
         const onKeyUp = vi.fn();
@@ -306,12 +306,20 @@ describe('Button semantics', () => {
           const down = fakeEvent(key, element);
           handlers.onKeyDown?.(asKey(down));
           expect(down.preventDefault).toHaveBeenCalled();
-          const up = fakeEvent(key, element);
-          handlers.onKeyUp?.(asKey(up));
-          expect(up.preventDefault).toHaveBeenCalled();
         }
+        const spaceUp = fakeEvent(' ', element);
+        handlers.onKeyUp?.(asKey(spaceUp));
+        expect(spaceUp.preventDefault).toHaveBeenCalled();
         expect(onKeyDown).not.toHaveBeenCalled();
         expect(onKeyUp).not.toHaveBeenCalled();
+
+        // Enter activates on keydown, so its keyup activates nothing: a focusable disabled control
+        // forwards it like any other key; a disabled non-native element blocks it (as in 0.5).
+        const focusable = state.includes('disabledFocusable');
+        const enterUp = fakeEvent('Enter', element);
+        handlers.onKeyUp?.(asKey(enterUp));
+        expect(enterUp.preventDefault).toHaveBeenCalledTimes(focusable ? 0 : 1);
+        expect(onKeyUp).toHaveBeenCalledTimes(focusable ? 1 : 0);
         expect(click).not.toHaveBeenCalled();
 
         const arrow = fakeEvent('ArrowDown', element);
@@ -319,7 +327,7 @@ describe('Button semantics', () => {
         handlers.onKeyUp?.(asKey(arrow));
         expect(arrow.preventDefault).not.toHaveBeenCalled();
         expect(onKeyDown).toHaveBeenCalledTimes(1);
-        expect(onKeyUp).toHaveBeenCalledTimes(1);
+        expect(onKeyUp).toHaveBeenCalledTimes(focusable ? 2 : 1);
       },
     );
 

@@ -1,6 +1,6 @@
 import type { Meta, StoryObj } from '@storybook/react';
 import { Field, ProgressBar } from '../src';
-import type { ProgressBarColor } from '../src/components/feedback/ProgressBar';
+import type { ProgressBarColor } from '../src';
 
 const colors: Array<[ProgressBarColor, string]> = [
   ['brand', 'Brand'],
@@ -65,9 +65,9 @@ export const Colors: Story = {
 };
 
 /**
- * Inside a `Field`, the Field's label names the bar, its hint and message describe it, and its
- * validation state colors the fill (here the error state that `error` sets) unless `color` is
- * set.
+ * Inside a `Field`, the Field's label names the bar, its message and hint describe it, and its
+ * validation state colors the fill (here `validationState="warning"` and the error state that
+ * `error` sets) unless `color` is set. The bar is never marked invalid or required.
  */
 export const InField: Story = {
   args: {
@@ -77,6 +77,14 @@ export const InField: Story = {
     <div className="flex w-80 flex-col gap-6">
       <Field label="Uploading photos" hint="3 of 12 files uploaded.">
         <ProgressBar {...args} />
+      </Field>
+      <Field
+        label="Storage"
+        hint="Your plan includes 10 GB."
+        validationState="warning"
+        validationMessage="Almost full: 9.2 GB used."
+      >
+        <ProgressBar {...args} value={92} />
       </Field>
       <Field
         label="Backing up"

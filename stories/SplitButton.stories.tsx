@@ -1,8 +1,7 @@
-import type { ArgTypes, Meta, StoryObj } from '@storybook/react';
+import type { Meta, StoryObj } from '@storybook/react';
 import { fn } from 'storybook/test';
 import { Menu, SplitButton } from '../src';
-import type { IconPosition } from '../src';
-import { appearanceArgType, sizeArgType } from './_helpers';
+import { appearanceArgType, iconPositionArgType, sizeArgType } from './_helpers';
 
 /** Decorative save glyph for the primary action. */
 const SaveIcon = () => (
@@ -23,14 +22,6 @@ const MoreIcon = () => (
     <circle cx="12.5" cy="8" r="1.25" />
   </svg>
 );
-
-/** `iconPosition` (`IconPosition`) of the primary action: before or after its label. */
-const iconPositionArgType = {
-  iconPosition: {
-    control: 'inline-radio',
-    options: ['before', 'after'] as const satisfies readonly IconPosition[],
-  },
-} satisfies ArgTypes;
 
 const meta = {
   title: 'Components/Button/SplitButton',

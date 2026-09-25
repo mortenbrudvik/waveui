@@ -1,7 +1,7 @@
 import * as React from 'react';
 import type { Meta, StoryObj } from '@storybook/react';
 import { fn } from 'storybook/test';
-import { Dialog, Button, Input, Label } from '../src';
+import { Dialog, Button, Field, Input } from '../src';
 import type { DialogProps } from '../src';
 
 /** Stories that render the dialog open show it in an iframe, so the docs page stays usable. */
@@ -211,20 +211,16 @@ export const UnsavedChanges: Story = {
           <Button appearance="primary">Rename project</Button>
         </Dialog.Trigger>
         <Dialog.Content title="Rename project">
-          <div className="flex flex-col gap-1">
-            <Label htmlFor="unsaved-changes-name">New name</Label>
-            <Input
-              id="unsaved-changes-name"
-              value={name}
-              onValueChange={setName}
-              aria-describedby="unsaved-changes-hint"
-            />
-            <p id="unsaved-changes-hint" className="text-caption-1">
-              {dirty
+          <Field
+            label="New name"
+            hint={
+              dirty
                 ? 'Unsaved changes: a click outside the dialog keeps it open.'
-                : 'Type a name, then click outside the dialog.'}
-            </p>
-          </div>
+                : 'Type a name, then click outside the dialog.'
+            }
+          >
+            <Input value={name} onValueChange={setName} />
+          </Field>
           <Dialog.Footer>
             <Dialog.Close>
               <Button appearance="subtle">Cancel</Button>
@@ -255,11 +251,10 @@ export const LongContent: Story = {
           className="flex flex-col gap-3"
           onSubmit={(event) => event.preventDefault()}
         >
-          {shippingFields.map((field, index) => (
-            <div key={field} className="flex flex-col gap-1">
-              <Label htmlFor={`shipping-field-${index}`}>{field}</Label>
-              <Input id={`shipping-field-${index}`} />
-            </div>
+          {shippingFields.map((field) => (
+            <Field key={field} label={field}>
+              <Input />
+            </Field>
           ))}
           <Dialog.Footer>
             <Dialog.Close>

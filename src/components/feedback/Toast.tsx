@@ -819,7 +819,10 @@ export const Toaster = ({
             {assertive}
           </div>
           <ToasterRegionContext.Provider value={true}>
-            {/* The index within the rendered (shown) toasts, which getFocusFallback walks. */}
+            {/* The index within the rendered (shown) toasts, which getFocusFallback walks. Today the
+                shown toasts are a prefix of the entries (appended, promoted oldest first, replaced
+                in place, removed in order), so it equals the entry index; the shown list stays the
+                source so that a change to that order cannot break focus movement. */}
             {shownToasts.map((toast, index) => (
               <ToasterItem
                 key={toast.id}

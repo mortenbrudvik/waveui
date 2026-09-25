@@ -29,8 +29,11 @@ type NavValueKind = 'item' | 'category';
  * contains the current page.
  */
 interface NavCategoryStore {
-  /** Records the category a mounted sub-item renders in. */
-  record: (value: string, category: string) => void;
+  /**
+   * Records the category a mounted item renders in; `null` (an item outside any category) forgets
+   * an earlier entry, so a value moved out of a category no longer marks it.
+   */
+  record: (value: string, category: string | null) => void;
   /** The category last recorded for a sub-item value. */
   get: (value: string) => string | undefined;
   subscribe: (listener: () => void) => () => void;
@@ -41,8 +44,9 @@ function createCategoryStore(): NavCategoryStore {
   const listeners = new Set<() => void>();
   return {
     record(value, category) {
-      if (categories.get(value) === category) return;
-      categories.set(value, category);
+      if ((categories.get(value) ?? null) === category) return;
+      if (category === null) categories.delete(value);
+      else categories.set(value, category);
       listeners.forEach((listener) => listener());
     },
     get: (value) => categories.get(value),
@@ -113,12 +117,15 @@ function useNavValue(context: NavContextValue, kind: NavValueKind, value: string
   React.useEffect(() => registerValue(kind, value), [registerValue, kind, value]);
 }
 
-/** Records the category a mounted sub-item renders in, which the category reads once closed. */
+/**
+ * Records the category a mounted item renders in, which the category reads once closed (`null`
+ * outside a category, which forgets a stale entry for the value).
+ */
 function useRecordCategory(context: NavContextValue, value: string): void {
   const category = React.useContext(NavCategoryValueContext);
   const { categoryStore } = context;
   React.useLayoutEffect(() => {
-    if (category !== null) categoryStore.record(value, category);
+    categoryStore.record(value, category);
   }, [categoryStore, value, category]);
 }
 
@@ -704,6 +711,7 @@ function NavItem(props: NavItemDynamicProps): React.ReactElement;
 function NavItem(props: NavItemProps | NavItemDynamicProps): React.ReactElement {
   const context = useNavContext('Nav.Item');
   useNavValue(context, 'item', props.value);
+  useRecordCategory(context, props.value);
   return renderNavEntry(props as NavEntryProps, context, itemClasses, true);
 }
 NavItem.displayName = 'NavItem';

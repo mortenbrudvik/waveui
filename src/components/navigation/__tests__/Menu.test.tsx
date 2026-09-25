@@ -1712,6 +1712,14 @@ describe('Menu.Popover taller than the viewport', () => {
     await waitFor(() => expect(scrolled.mock.contexts).toContain(item('Command 40')));
     const call = scrolled.mock.contexts.indexOf(item('Command 40'));
     expect(scrolled.mock.calls[call]).toEqual([{ block: 'nearest' }]);
+
+    // Reopening scrolls again: the positioned state is reset while the menu is closed.
+    await user.keyboard('{Escape}');
+    expect(trigger()).toHaveFocus();
+    scrolled.mockClear();
+    await user.keyboard('{ArrowUp}');
+    expect(item('Command 40')).toHaveFocus();
+    await waitFor(() => expect(scrolled.mock.contexts).toContain(item('Command 40')));
   });
 
   it('ArrowUp on the trigger focuses the last of 40 items; End and Home move to the ends', async () => {
@@ -1853,6 +1861,26 @@ describe('Menu.Trigger around an aria-disabled element', () => {
     rerender(<AriaDisabledTriggerMenu asChild ariaDisabled="false" />);
     await user.click(trigger());
     expect(screen.getByRole('menu')).toBeInTheDocument();
+  });
+
+  // As in Fluent, the trigger ignores every click while aria-disabled, the closing one included;
+  // the other ways of closing still work.
+  it('a trigger that becomes aria-disabled while its menu is open ignores a click; Escape closes the menu', async () => {
+    const user = userEvent.setup();
+    const onOpenChange = vi.fn();
+    const { rerender } = render(
+      <AriaDisabledTriggerMenu asChild ariaDisabled="false" onOpenChange={onOpenChange} />,
+    );
+    await user.click(trigger());
+    expect(screen.getByRole('menu')).toBeInTheDocument();
+    rerender(<AriaDisabledTriggerMenu asChild ariaDisabled="true" onOpenChange={onOpenChange} />);
+    await user.click(trigger());
+    expect(screen.getByRole('menu')).toBeInTheDocument();
+    expect(onOpenChange.mock.calls).toEqual([[true]]);
+    await user.keyboard('{Escape}');
+    expect(queryMenu()).not.toBeInTheDocument();
+    expect(trigger()).toHaveFocus();
+    expect(onOpenChange.mock.calls).toEqual([[true], [false]]);
   });
 });
 

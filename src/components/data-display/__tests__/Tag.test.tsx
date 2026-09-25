@@ -175,7 +175,8 @@ describe('Tag', () => {
   describe('focus after a keyboard dismiss (the recipe of the "Focus after dismissal" docs)', () => {
     /**
      * A filter bar that follows the documented recipe: when a dismissal removes a tag, focus the
-     * next tag's dismiss button, else the previous one, else a button next to the group.
+     * next tag's dismiss button, else the previous one, else a button next to the group. The
+     * `FilterBar` of `stories/Tag.stories.tsx` implements the same recipe: keep the two in sync.
      */
     function FilterTags({ initial }: { initial: readonly string[] }) {
       const [filters, setFilters] = React.useState(initial);
@@ -1106,6 +1107,10 @@ describe('Tag stories', () => {
   it('FilterGroup focuses the next filter after a dismiss, else the previous one, else "Reset filters"', async () => {
     const user = userEvent.setup();
     render(<FilterGroup />);
+    // Nothing to reset yet: the button is unavailable but focusable.
+    const reset = screen.getByRole('button', { name: 'Reset filters' });
+    expect(reset).toHaveAttribute('aria-disabled', 'true');
+    expect(reset).not.toBeDisabled();
     await user.tab();
     await user.tab();
     expect(screen.getByRole('button', { name: 'Remove Blue' })).toHaveFocus();
@@ -1118,9 +1123,11 @@ describe('Tag stories', () => {
     expect(screen.getByRole('button', { name: 'Remove Red' })).toHaveFocus();
 
     await user.keyboard('{Enter}');
-    expect(screen.getByRole('button', { name: 'Reset filters' })).toHaveFocus();
+    expect(reset).toHaveFocus();
+    expect(reset).not.toHaveAttribute('aria-disabled');
 
     await user.keyboard('{Enter}');
+    expect(reset).toHaveAttribute('aria-disabled', 'true');
     for (const filter of ['Red', 'Blue', 'Large']) {
       expect(screen.getByRole('button', { name: `Remove ${filter}` })).toBeInTheDocument();
     }
@@ -1129,12 +1136,19 @@ describe('Tag stories', () => {
   it('Dismissible focuses a separate Restore button after a dismiss; it brings the tag back', async () => {
     const user = userEvent.setup();
     render(<Dismissible />);
-    await user.tab();
+    // While the tag is shown, Restore is unavailable but focusable, and pressing it does nothing.
+    const restore = screen.getByRole('button', { name: 'Restore' });
+    expect(restore).toHaveAttribute('aria-disabled', 'true');
+    expect(restore).not.toBeDisabled();
+    await user.click(restore);
+    expect(screen.getByText('Dismissible tag')).toBeInTheDocument();
+    await user.tab({ shift: true });
     expect(screen.getByRole('button', { name: 'Dismiss Dismissible tag' })).toHaveFocus();
 
     await user.keyboard('{Enter}');
     expect(screen.queryByText('Dismissible tag')).toBeNull();
-    expect(screen.getByRole('button', { name: 'Restore' })).toHaveFocus();
+    expect(restore).toHaveFocus();
+    expect(restore).not.toHaveAttribute('aria-disabled');
 
     await user.keyboard('{Enter}');
     expect(screen.getByRole('button', { name: 'Dismiss Dismissible tag' })).toBeInTheDocument();

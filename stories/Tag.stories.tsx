@@ -22,7 +22,8 @@ type AnchorStory = StoryObj<TagProps<'a'>>;
 /**
  * Keeps the tag's visibility in local state so dismissing it actually removes it. A tag cannot
  * keep focus once it is removed, so the dismissal moves focus to the "Restore" button next to it,
- * which brings the tag back.
+ * which brings the tag back. While the tag is shown, Restore is unavailable but stays focusable
+ * (`disabledFocusable`), so it can take focus before the tag goes.
  */
 function DismissibleTag(props: TagStoryProps) {
   const { onDismiss, ...rest } = props;
@@ -41,7 +42,13 @@ function DismissibleTag(props: TagStoryProps) {
           }}
         />
       )}
-      <Button ref={restore} appearance="subtle" size="small" onClick={() => setVisible(true)}>
+      <Button
+        ref={restore}
+        appearance="subtle"
+        size="small"
+        disabledFocusable={visible}
+        onClick={() => setVisible(true)}
+      >
         Restore
       </Button>
     </div>
@@ -53,6 +60,8 @@ const FILTERS = ['Red', 'Blue', 'Large'];
 /**
  * A filter bar that keeps its filters in state. Removing a tag moves focus to the next tag's
  * dismiss button, else the previous one, else "Reset filters", so keyboard focus is never lost.
+ * "Reset filters" is unavailable but focusable (`disabledFocusable`) while every filter is set.
+ * `Tag.test.tsx` implements the same recipe (its `FilterTags` component): keep the two in sync.
  */
 function FilterBar(props: TagStoryProps) {
   const { onDismiss, ...rest } = props;
@@ -93,7 +102,13 @@ function FilterBar(props: TagStoryProps) {
           </Tag>
         ))}
       </div>
-      <Button ref={reset} appearance="subtle" size="small" onClick={() => setFilters(FILTERS)}>
+      <Button
+        ref={reset}
+        appearance="subtle"
+        size="small"
+        disabledFocusable={filters.length === FILTERS.length}
+        onClick={() => setFilters(FILTERS)}
+      >
         Reset filters
       </Button>
     </div>

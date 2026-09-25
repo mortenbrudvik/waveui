@@ -102,6 +102,11 @@ const EXPAND_ICON_BUTTON =
   'glyph of the built-in expand button and its props were dropped (buttons cannot be nested). ' +
   'Pass icon content instead, e.g. `expandIcon={<MyIcon />}`.';
 
+const EXPAND_ICON_BUTTON_SLOT =
+  '[WaveUI] Combobox: `expandIcon` received a slot object that renders a button; its children ' +
+  'render as the glyph of the built-in expand button and its props were dropped (buttons cannot ' +
+  'be nested). Pass icon content instead, e.g. `expandIcon={<MyIcon />}`.';
+
 afterEach(() => {
   vi.restoreAllMocks();
 });
@@ -1577,6 +1582,21 @@ describe('Combobox', () => {
         await user.click(expandButton());
         expect(screen.getByRole('listbox')).toBeInTheDocument();
         expect(warn.mock.calls).toEqual([[EXPAND_ICON_BUTTON]]);
+      },
+    );
+
+    it.each([
+      ["{ as: 'button' }", 'button'],
+      ['{ as: Button }', Button],
+    ] as const)(
+      'does not nest a slot object %s passed as expandIcon: its children become the glyph (warns once)',
+      (_label, as) => {
+        const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+        renderCombobox({ expandIcon: { as, children: '▾', className: 'text-error' } });
+        expect(document.querySelectorAll('button')).toHaveLength(1);
+        expect(expandButton()).toHaveTextContent('▾');
+        expect(expandButton().querySelector('.text-error')).toBeNull();
+        expect(warn.mock.calls).toEqual([[EXPAND_ICON_BUTTON_SLOT]]);
       },
     );
 

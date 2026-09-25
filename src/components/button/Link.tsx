@@ -44,8 +44,9 @@ export interface LinkOwnProps {
   /**
    * Marks the link unavailable but keeps it focusable and in the tab order: for a toolbar item or
    * a disabled link that needs a Tooltip. Renders `aria-disabled="true"`, `data-disabled` and
-   * `data-disabled-focusable`; an `<a>` drops its `href` (it keeps `role="link"` and gets
-   * `tabIndex={0}`), and `as="button"` gets these attributes instead of the native `disabled`.
+   * `data-disabled-focusable`; an `<a>` drops its `href`, keeps `role="link"` (`role="button"`
+   * when it had no `href`) and gets `tabIndex={0}`, and `as="button"` gets these attributes
+   * instead of the native `disabled`.
    * Clicks, Enter and Space are prevented; your `onClick` is not called and the click does not
    * reach ancestor click handlers. Wins over `disabled` when both are set. In a `Toolbar` it stays
    * in the arrow-key order.

@@ -215,7 +215,8 @@ export interface TimePickerProps extends Omit<
    * Called when edited text is not accepted on Enter or blur (once per edit): it is not a time
    * (`'unparseable'`) or lies outside `minTime`/`maxTime` (`'out-of-range'`). The text stays in the
    * input, which is marked `aria-invalid` and described by an error message (left to the
-   * surrounding `Field` when it shows an error). Enter reports it again when pressed again.
+   * surrounding `Field` when it shows an error); Enter also closes the list, so it does not cover
+   * the message. Enter reports it again when pressed again.
    */
   onInvalidInput?: (text: string, reason: TimePickerInvalidReason) => void;
   /**
@@ -275,11 +276,11 @@ function startsWithQuery(item: ListboxItem, text: string): boolean {
  *   else the first one that contains it; Enter commits the active option. Enter or leaving the
  *   field also commits a complete typed time that is not in the list (`9:15 AM`, `14:45`) when it
  *   lies within `minTime`/`maxTime`, and erased text clears the value (as the clear button does);
- *   Enter never submits the form with edited text. Other typed text is kept: the input is marked
- *   invalid and an error message describes it (`onInvalidInput`, reported once per edit) until the
- *   text is edited or replaced (an option, the clear button, Escape, a form reset, a new value
- *   from the parent). Escape on a closed list reverts any edit, erased text included, to the
- *   selected time.
+ *   Enter never submits the form with edited text. Other typed text is kept (Enter closes the
+ *   list): the input is marked invalid and an error message describes it (`onInvalidInput`,
+ *   reported once per edit) until the text is edited or replaced (an option, the clear button,
+ *   Escape, a form reset, a new value from the parent). Escape on a closed list reverts any edit,
+ *   erased text included, to the selected time.
  * - Click the input or the expand button at its end (a chevron, see `expandIcon`; not a tab stop,
  *   and it leaves focus in the input), press ArrowDown/ArrowUp or type to open; the list opens
  *   with every option and the selected one (when it is in the list) active and scrolled into
@@ -667,11 +668,11 @@ export const TimePicker = (props: TimePickerProps) => {
       if (event.key === 'Enter' && draft !== null) {
         // Edited text is committed (a complete time within the bounds; erased text clears) or kept
         // and flagged (reported on every Enter), never submitted with the form; untouched text
-        // lets Enter submit.
+        // lets Enter submit. The list closes either way, so it does not cover the error message.
         event.preventDefault();
         const reason = commitDraft(draft);
-        if (reason === null) closeList();
-        else rejectDraft(draft, reason);
+        closeList();
+        if (reason !== null) rejectDraft(draft, reason);
       }
     },
   );

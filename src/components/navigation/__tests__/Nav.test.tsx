@@ -746,6 +746,28 @@ describe('Nav', () => {
       expectMarked(guides());
     });
 
+    it('forgets the remembered category of a value that moves out of it', async () => {
+      const user = userEvent.setup();
+      /** `moved`: the current page becomes a top-level item instead of a Guides sub-item. */
+      function Restructured({ moved }: { moved: boolean }) {
+        return (
+          <Nav value="deploy" defaultOpenCategories={['guides']}>
+            {moved && <Nav.Item value="deploy">Deploy</Nav.Item>}
+            <Nav.Category value="guides" label="Guides">
+              {moved ? <Nav.SubItem value="setup">Setup</Nav.SubItem> : <GuideLinks />}
+            </Nav.Category>
+          </Nav>
+        );
+      }
+      const { rerender } = render(<Restructured moved={false} />);
+      expect(button('Deploy')).toHaveAttribute('aria-current', 'page');
+      rerender(<Restructured moved />);
+      await user.click(guides());
+      expect(guides()).toHaveAttribute('aria-expanded', 'false');
+      expectUnmarked(guides());
+      expect(button('Deploy')).toHaveAttribute('aria-current', 'page');
+    });
+
     it('has no axe violations with a marked category', async () => {
       render(<GuidesNav defaultValue="intro" defaultOpenCategories={[]} currentCategory="docs" />);
       expectMarked(toggle());

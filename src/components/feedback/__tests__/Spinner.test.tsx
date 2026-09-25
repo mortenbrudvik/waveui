@@ -268,6 +268,25 @@ describe('Spinner', () => {
       expect(label).not.toHaveClass('text-muted-foreground');
     });
 
+    it.each([
+      ['an unknown string', 'pink'],
+      ['null', null],
+    ])(
+      'falls back to primary for %s from untyped code instead of failing to render',
+      (_label, appearance) => {
+        render(
+          <Spinner
+            appearance={appearance as unknown as SpinnerAppearance}
+            label="Loading"
+            data-testid="sp"
+          />,
+        );
+        const root = screen.getByTestId('sp');
+        expect(root).toHaveAttribute('data-appearance', 'primary');
+        expect(ringOf(root)).toHaveClass('border-track', 'border-t-primary');
+      },
+    );
+
     it('keeps an inverted label that is not visible screen-reader only', async () => {
       render(<Spinner appearance="inverted" label="Saving" />);
       await React.act(nextFrame);
@@ -275,16 +294,20 @@ describe('Spinner', () => {
     });
 
     it('has no accessibility violations inside a primary button (inverted)', async () => {
-      // A stand-in with the primary Button's colors: the real Button is covered by the stories gate.
+      // A stand-in with the primary Button's colors and the recommended pattern (the Spinner in a
+      // decorative icon box, the text names the button); the real Button is covered by the stories
+      // gate and the integration suite.
       render(
         <button type="button" className="bg-primary text-primary-foreground">
+          <span aria-hidden="true">
+            <Spinner appearance="inverted" size="extra-small" label="Saving changes" />
+          </span>
           Saving
-          <Spinner appearance="inverted" size="extra-small" label="Saving changes" />
         </button>,
       );
       await React.act(nextFrame);
-      expect(screen.getByRole('button')).toHaveTextContent('Saving');
-      expect(ringOf(screen.getByRole('status'))).toHaveClass('border-t-current');
+      expect(screen.getByRole('button', { name: 'Saving' })).toBeInTheDocument();
+      expect(ringOf(screen.getByRole('status', { hidden: true }))).toHaveClass('border-t-current');
       await expectNoA11yViolations();
     });
 

@@ -73,8 +73,9 @@ export interface DialogProps {
   /**
    * `modal`: a backdrop press, Escape, the Close button and `Dialog.Close` close it. `alert`: a
    * confirmation that needs an answer — `role="alertdialog"`, and a backdrop press does not close
-   * it (Escape still does). Put the least destructive action first or give it `autoFocus`.
-   * (`'non-modal'` is planned.)
+   * it (Escape still does). Initial focus goes to the first focusable element, the built-in Close
+   * button; give the least destructive action `autoFocus` to focus it instead. (`'non-modal'` is
+   * planned.)
    * @default 'modal'
    */
   modalType?: DialogModalType;
@@ -439,7 +440,9 @@ DialogTitle.displayName = 'DialogTitle';
  * reserves its height as scroll padding, so a focused field is never hidden behind it. Inside a
  * `<form>` that wraps the fields and the footer it sticks too: make it the form's last child.
  * Render it inside `Dialog.Content`: outside it, it would stay on the page while the dialog is
- * closed (a development warning says so).
+ * closed (a development warning says so). Render one `Dialog.Footer` per `Dialog.Content`: with
+ * two at once, the body reserves the height of the one measured last, and unmounting either
+ * clears it until the other resizes (swapping one footer for another is fine).
  */
 export const DialogFooter = ({ children, className, ref, ...rest }: DialogFooterProps) => {
   const surfaceContext = React.useContext(ModalSurfaceContext);

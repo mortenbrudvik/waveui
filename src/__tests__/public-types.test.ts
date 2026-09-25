@@ -13,32 +13,79 @@
  */
 import { isAbsolute, relative, resolve, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import type { ReactNode } from 'react';
 import ts from 'typescript';
 import { describe, expect, expectTypeOf, it } from 'vitest';
 import type {
   AccordionBaseProps,
   AccordionMultipleProps,
   AccordionSingleProps,
+  BadgeColor,
   BreadcrumbItemAnchorProps,
   BreadcrumbItemButtonProps,
   BreadcrumbItemOwnProps,
+  ButtonProps,
+  CheckboxLabelPosition,
+  CheckboxProps,
+  ComboboxLabels,
+  ComboboxProps,
+  CompoundButtonProps,
+  CounterBadgeProps,
+  DialogModalType,
+  DialogOpenChangeDetails,
+  DialogOpenChangeReason,
+  DialogProps,
+  DrawerOpenChangeDetails,
+  DrawerOpenChangeReason,
+  DrawerProps,
+  DropdownLabels,
+  DropdownProps,
   FieldContextValue,
   FieldControlIdClaim,
+  FieldProps,
+  IconPosition,
+  LabelPosition,
+  LinkProps,
+  MenuButtonProps,
+  ModalOpenChangeReason,
+  ModalType,
   NavItemAnchorProps,
   NavItemButtonProps,
   NavItemOwnProps,
+  NavProps,
   NavSubItemAnchorProps,
   NavSubItemButtonProps,
   NavSubItemOwnProps,
+  OpenChangeDetails,
+  Orientation,
+  ProgressBarColor,
+  ProgressBarProps,
+  RadioItemProps,
+  RatingDisplayLabels,
+  RatingDisplayProps,
   SearchBoxInputProps,
   SearchBoxProps,
+  Slot,
   SpinButtonInputProps,
   SpinButtonProps,
+  SpinnerAppearance,
+  SpinnerProps,
+  SplitButtonMenuButtonProps,
+  SplitButtonProps,
+  SwitchLabelPosition,
+  SwitchProps,
+  TabListProps,
+  TimePickerInvalidReason,
+  TimePickerLabels,
+  TimePickerProps,
+  ToastController,
   ToasterProps,
   ToastPosition,
+  ToggleButtonProps,
   TooltipAppearance,
   TooltipProps,
   UseRovingTabIndexOptions,
+  ValidationState,
   WaveDir,
 } from '../index';
 
@@ -335,5 +382,137 @@ describe('public type surface (src/index.ts)', () => {
     expectTypeOf<NavItemButtonProps>().toExtend<NavItemOwnProps>();
     expectTypeOf<NavSubItemAnchorProps>().toExtend<NavSubItemOwnProps>();
     expectTypeOf<NavSubItemButtonProps>().toExtend<NavSubItemOwnProps>();
+  });
+});
+
+// The 0.6 additions, imported from the package entry (compile-time, `tsconfig.dev.json`).
+describe('0.6 props and unions from the package entry', () => {
+  it('buttons: iconPosition, disabledFocusable, the CompoundButton icon and the SplitButton glyphs', () => {
+    expectTypeOf<ButtonProps['iconPosition']>().toEqualTypeOf<IconPosition | undefined>();
+    expectTypeOf<ButtonProps<'a'>['disabledFocusable']>().toEqualTypeOf<boolean | undefined>();
+    expectTypeOf<ToggleButtonProps['disabledFocusable']>().toEqualTypeOf<boolean | undefined>();
+    expectTypeOf<ToggleButtonProps['iconPosition']>().toEqualTypeOf<IconPosition | undefined>();
+    expectTypeOf<MenuButtonProps['disabledFocusable']>().toEqualTypeOf<boolean | undefined>();
+    expectTypeOf<LinkProps['disabledFocusable']>().toEqualTypeOf<boolean | undefined>();
+    expectTypeOf<CompoundButtonProps['icon']>().toEqualTypeOf<Slot<'span'> | undefined>();
+    expectTypeOf<CompoundButtonProps['iconPosition']>().toEqualTypeOf<IconPosition | undefined>();
+    expectTypeOf<SplitButtonProps['icon']>().toEqualTypeOf<Slot<'span'> | undefined>();
+    expectTypeOf<SplitButtonProps['menuIcon']>().toEqualTypeOf<Slot<'span'> | undefined>();
+    expectTypeOf<SplitButtonProps['disabledFocusable']>().toEqualTypeOf<boolean | undefined>();
+    expectTypeOf<SplitButtonMenuButtonProps['disabledFocusable']>().toEqualTypeOf<
+      boolean | undefined
+    >();
+    expectTypeOf<IconPosition>().toEqualTypeOf<'before' | 'after'>();
+
+    // @ts-expect-error iconPosition is 'before' | 'after'
+    const iconPosition: ButtonProps['iconPosition'] = 'end';
+    expect(iconPosition).toBe('end');
+  });
+
+  it('forms: Field validation and orientation, rich choice labels and labelPosition', () => {
+    expectTypeOf<FieldProps['validationState']>().toEqualTypeOf<ValidationState | undefined>();
+    expectTypeOf<FieldProps['validationMessageIcon']>().toEqualTypeOf<Slot<'span'> | undefined>();
+    expectTypeOf<FieldProps['orientation']>().toEqualTypeOf<Orientation | undefined>();
+    expectTypeOf<ValidationState>().toEqualTypeOf<'none' | 'error' | 'warning' | 'success'>();
+    expectTypeOf<FieldContextValue['validationState']>().toEqualTypeOf<
+      ValidationState | undefined
+    >();
+
+    expectTypeOf<ReactNode>().toExtend<CheckboxProps['label']>();
+    expectTypeOf<ReactNode>().toExtend<SwitchProps['label']>();
+    expectTypeOf<ReactNode>().toExtend<RadioItemProps['label']>();
+    expectTypeOf<CheckboxLabelPosition>().toEqualTypeOf<'before' | 'after'>();
+    expectTypeOf<SwitchLabelPosition>().toEqualTypeOf<'before' | 'after' | 'above'>();
+    expectTypeOf<CheckboxLabelPosition>().toExtend<LabelPosition>();
+    expectTypeOf<CheckboxProps['labelPosition']>().toEqualTypeOf<
+      CheckboxLabelPosition | undefined
+    >();
+    expectTypeOf<SwitchProps['labelPosition']>().toEqualTypeOf<SwitchLabelPosition | undefined>();
+    expectTypeOf<CheckboxProps['disabledFocusable']>().toEqualTypeOf<boolean | undefined>();
+    expectTypeOf<SwitchProps['disabledFocusable']>().toEqualTypeOf<boolean | undefined>();
+
+    expectTypeOf<RatingDisplayProps['labels']>().toEqualTypeOf<RatingDisplayLabels | undefined>();
+    expectTypeOf<RatingDisplayProps['count']>().toEqualTypeOf<number | undefined>();
+    expectTypeOf<NonNullable<RatingDisplayLabels['rating']>>().toEqualTypeOf<
+      (value: number, max: number, formattedValue: string) => string
+    >();
+
+    // @ts-expect-error a Checkbox label is before or after its box
+    const checkboxAbove: CheckboxProps['labelPosition'] = 'above';
+    // @ts-expect-error a Switch label is never below it
+    const switchBelow: SwitchProps['labelPosition'] = 'below';
+    expect([checkboxAbove, switchBelow]).toEqual(['above', 'below']);
+  });
+
+  it('pickers: clearable, expandIcon, Dropdown labels and TimePicker invalid input', () => {
+    expectTypeOf<ComboboxProps['clearable']>().toEqualTypeOf<boolean | undefined>();
+    expectTypeOf<ComboboxProps['expandIcon']>().toEqualTypeOf<Slot<'span'> | undefined>();
+    expectTypeOf<ComboboxLabels['clear']>().toEqualTypeOf<string | undefined>();
+    expectTypeOf<ComboboxLabels['expand']>().toEqualTypeOf<string | undefined>();
+    expectTypeOf<DropdownProps['clearable']>().toEqualTypeOf<boolean | undefined>();
+    expectTypeOf<DropdownProps['labels']>().toEqualTypeOf<DropdownLabels | undefined>();
+    expectTypeOf<TimePickerProps['expandIcon']>().toEqualTypeOf<Slot<'span'> | undefined>();
+    expectTypeOf<TimePickerInvalidReason>().toEqualTypeOf<'unparseable' | 'out-of-range'>();
+    expectTypeOf<NonNullable<TimePickerProps['onInvalidInput']>>().toEqualTypeOf<
+      (text: string, reason: TimePickerInvalidReason) => void
+    >();
+    expectTypeOf<NonNullable<TimePickerLabels['outOfRange']>>().toEqualTypeOf<
+      (min: string | undefined, max: string | undefined) => string
+    >();
+  });
+
+  it('display and feedback: CounterBadge, Spinner, ProgressBar and the Toaster', () => {
+    expectTypeOf<CounterBadgeProps['count']>().toEqualTypeOf<number | undefined>();
+    expectTypeOf<CounterBadgeProps['color']>().toEqualTypeOf<BadgeColor | undefined>();
+    expectTypeOf<CounterBadgeProps['dot']>().toEqualTypeOf<boolean | undefined>();
+    expectTypeOf<CounterBadgeProps['showZero']>().toEqualTypeOf<boolean | undefined>();
+    expectTypeOf<'severe' | 'subtle'>().toExtend<BadgeColor>();
+
+    expectTypeOf<SpinnerAppearance>().toEqualTypeOf<'primary' | 'inverted'>();
+    expectTypeOf<SpinnerProps['appearance']>().toEqualTypeOf<SpinnerAppearance | undefined>();
+    expectTypeOf<SpinnerProps['delay']>().toEqualTypeOf<number | undefined>();
+    expectTypeOf<ProgressBarColor>().toEqualTypeOf<'brand' | 'success' | 'warning' | 'error'>();
+    expectTypeOf<ProgressBarProps['color']>().toEqualTypeOf<ProgressBarColor | undefined>();
+
+    expectTypeOf<ToastController['dismissAllToasts']>().toEqualTypeOf<() => void>();
+    expectTypeOf<ToasterProps['limit']>().toEqualTypeOf<number | undefined>();
+  });
+
+  it('overlays: modalType, onOpenChange details and the controlled Tooltip', () => {
+    expectTypeOf<DialogModalType>().toEqualTypeOf<ModalType>();
+    expectTypeOf<ModalType>().toEqualTypeOf<'modal' | 'alert'>();
+    expectTypeOf<DialogProps['modalType']>().toEqualTypeOf<DialogModalType | undefined>();
+    expectTypeOf<DialogOpenChangeReason>().toEqualTypeOf<ModalOpenChangeReason>();
+    expectTypeOf<DialogOpenChangeDetails['reason']>().toEqualTypeOf<ModalOpenChangeReason>();
+    expectTypeOf<DialogOpenChangeDetails>().toEqualTypeOf<
+      OpenChangeDetails<ModalOpenChangeReason>
+    >();
+    expectTypeOf<DrawerOpenChangeReason>().toEqualTypeOf<ModalOpenChangeReason>();
+    expectTypeOf<DrawerOpenChangeDetails>().toEqualTypeOf<DialogOpenChangeDetails>();
+
+    // A 0.5 handler still fits, and code that calls the prop may pass the value only.
+    const handler = (open: boolean) => void open;
+    expectTypeOf(handler).toExtend<NonNullable<DialogProps['onOpenChange']>>();
+    expectTypeOf(handler).toExtend<NonNullable<DrawerProps['onOpenChange']>>();
+    expectTypeOf<NonNullable<DialogProps['onOpenChange']>>().toBeCallableWith(false);
+    expectTypeOf<NonNullable<DrawerProps['onOpenChange']>>().toBeCallableWith(false);
+    expectTypeOf<NonNullable<DialogProps['onOpenChange']>>()
+      .parameter(1)
+      .toEqualTypeOf<DialogOpenChangeDetails | undefined>();
+
+    expectTypeOf<TooltipProps['open']>().toEqualTypeOf<boolean | undefined>();
+    expectTypeOf<TooltipProps['defaultOpen']>().toEqualTypeOf<boolean | undefined>();
+    expectTypeOf<NonNullable<TooltipProps['onOpenChange']>>().toEqualTypeOf<
+      (open: boolean) => void
+    >();
+
+    // @ts-expect-error non-modal dialogs are planned, not available yet
+    const nonModal: DialogProps['modalType'] = 'non-modal';
+    expect(nonModal).toBe('non-modal');
+  });
+
+  it('navigation: Nav currentCategory and TabList selectTabOnFocus', () => {
+    expectTypeOf<NavProps['currentCategory']>().toEqualTypeOf<string | undefined>();
+    expectTypeOf<TabListProps['selectTabOnFocus']>().toEqualTypeOf<boolean | undefined>();
   });
 });

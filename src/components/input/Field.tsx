@@ -63,7 +63,10 @@ export interface FieldProps extends React.HTMLAttributes<HTMLDivElement> {
   validationMessageIcon?: Slot<'span'>;
   /**
    * `vertical`: the label above the control. `horizontal`: the label in a start column (a third
-   * of the width) beside the control; the message and the hint stay below the control.
+   * of the width) beside the control; the message and the hint stay below the control. The
+   * horizontal layout wraps the control in a column, so changing `orientation` on a mounted Field
+   * remounts the control: an uncontrolled control loses its state and focus (control it, or keep
+   * one orientation while the Field is mounted).
    * @default 'vertical'
    */
   orientation?: Orientation;

@@ -10,6 +10,13 @@ export interface BadgeColorClasses {
   border: string;
 }
 
+/** The dark orange `severe` colors, which `important` also renders through 0.x. */
+const severeClasses: BadgeColorClasses = {
+  filled: 'bg-severe text-severe-foreground',
+  tint: 'bg-severe-tint text-severe-tint-foreground',
+  border: 'border-severe',
+};
+
 /**
  * Theme-token classes per color, shared by Badge and CounterBadge so a color means the same in
  * both. The foreground tokens keep text readable in every theme; each pair is asserted in
@@ -36,21 +43,14 @@ export const badgeColorClasses: Record<BadgeColor, BadgeColorClasses> = {
     tint: 'bg-error-tint text-error-tint-foreground',
     border: 'border-destructive',
   },
-  important: {
-    filled: 'bg-severe text-severe-foreground',
-    tint: 'bg-severe-tint text-severe-tint-foreground',
-    border: 'border-severe',
-  },
+  // `important` gets its own (neutral) entry in 1.0; until then it is the severe look.
+  important: severeClasses,
   informative: {
     filled: 'bg-muted text-foreground',
     tint: 'bg-muted text-foreground',
     border: 'border-border',
   },
-  severe: {
-    filled: 'bg-severe text-severe-foreground',
-    tint: 'bg-severe-tint text-severe-tint-foreground',
-    border: 'border-severe',
-  },
+  severe: severeClasses,
   subtle: {
     filled: 'bg-background text-foreground',
     tint: 'bg-background text-muted-foreground border border-border',

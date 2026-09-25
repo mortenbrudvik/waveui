@@ -98,7 +98,8 @@ export interface ButtonSemantics {
  *   `<a>` drops its `href` and gets `tabIndex={0}` as a default).
  * - Every disabled state renders `data-disabled`. While disabled without the native attribute, a
  *   click is prevented and stopped (a natively disabled button dispatches no click to ancestors),
- *   Enter and Space are prevented and not forwarded, and other keys reach the consumer.
+ *   Enter and Space are prevented and not forwarded, and other keys reach the consumer. Under
+ *   `disabledFocusable` the Enter keyup (which activates nothing) reaches the consumer too.
  */
 export function useButtonSemantics(options: ButtonSemanticsOptions): ButtonSemantics {
   const { tag, href, disabled, disabledFocusable, onClick, onKeyDown, onKeyUp, onBlur } = options;
@@ -173,8 +174,10 @@ export function useButtonSemantics(options: ButtonSemanticsOptions): ButtonSeman
       }
       onKeyDown?.(event);
     };
+    // Space activates on keyup and is blocked. Enter activates on keydown, so a focusable disabled
+    // control forwards its keyup like any other key; a disabled non-native element blocks both.
     handleKeyUp = (event) => {
-      if (isActivationKey(event.key)) {
+      if (event.key === ' ' || (event.key === 'Enter' && !disabledFocusable)) {
         setSpaceArmed(false);
         event.preventDefault();
         return;

@@ -333,7 +333,7 @@ describe('Field', () => {
       expect(input).toHaveAttribute('aria-invalid', 'true');
     });
 
-    it('inserts a new alert element when an error appears, and keeps the hint (input-basic#17)', () => {
+    it('inserts a new alert element when an error appears, and keeps the hint', () => {
       const { rerender } = render(
         <Field label="Name" hint="Enter your full name">
           <input />

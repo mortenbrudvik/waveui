@@ -187,6 +187,7 @@ describe('Badge', () => {
           Inbox <Badge aria-label="3 unread messages">3</Badge>
         </p>,
       );
+      expect(screen.getByRole('img', { name: '3 unread messages' })).toHaveTextContent('3');
       await expectNoA11yViolations();
     });
   });

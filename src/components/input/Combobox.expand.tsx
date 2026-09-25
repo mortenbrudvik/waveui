@@ -37,12 +37,22 @@ export interface PickerExpandButtonProps {
 }
 
 /**
+ * Whether `value` is a slot object (`{ as, children, … }`) that renders a `<button>` or `Button`.
+ */
+function isButtonSlotObject(value: unknown): value is { children?: React.ReactNode } {
+  if (typeof value !== 'object' || value === null || React.isValidElement(value)) return false;
+  if (Symbol.iterator in value || !('as' in value)) return false;
+  const { as } = value as { as?: unknown };
+  return as === 'button' || as === Button;
+}
+
+/**
  * The expand button of an editable combobox (Combobox, TimePicker): the APG "open" button at the
  * end of the input. It is not a tab stop (Alt+ArrowDown opens the list from the keyboard) and a
  * press keeps focus in the input. Its glyph is decorative (`aria-hidden`) and turns while the list
- * is expanded. A `<button>` or `Button` element passed as `expandIcon` is not nested: its children
- * become the glyph (the chevron when they render nothing), its props are dropped and a one-time
- * development warning names the slot.
+ * is expanded. A `<button>` or `Button` element passed as `expandIcon`, or a slot object whose
+ * `as` is one, is not nested: its children become the glyph (the chevron when they render
+ * nothing), its props are dropped and a one-time development warning names the slot.
  */
 export const PickerExpandButton = ({
   component,
@@ -58,21 +68,24 @@ export const PickerExpandButton = ({
   // node.
   const node = expandIcon as React.ReactNode;
   let content: Slot<'span'> | undefined = expandIcon;
-  let buttonElement = false;
+  let button: 'a button element' | 'a slot object that renders a button' | null = null;
   if (isElementOfType<{ children?: React.ReactNode }>(node, 'button', Button)) {
-    buttonElement = true;
+    button = 'a button element';
     content = node.props.children;
+  } else if (isButtonSlotObject(expandIcon)) {
+    button = 'a slot object that renders a button';
+    content = expandIcon.children;
   }
   React.useEffect(() => {
-    if (buttonElement) {
+    if (button) {
       warnOnce(
         `${component}:expandIcon-button`,
-        `${component}: \`expandIcon\` received a button element; its children render as the ` +
-          'glyph of the built-in expand button and its props were dropped (buttons cannot be ' +
-          'nested). Pass icon content instead, e.g. `expandIcon={<MyIcon />}`.',
+        `${component}: \`expandIcon\` received ${button}; its children render as the glyph of ` +
+          'the built-in expand button and its props were dropped (buttons cannot be nested). ' +
+          'Pass icon content instead, e.g. `expandIcon={<MyIcon />}`.',
       );
     }
-  }, [buttonElement, component]);
+  }, [button, component]);
 
   const glyph = content != null && slotRendersContent(content) ? content : <ChevronDownIcon />;
 

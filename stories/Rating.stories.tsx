@@ -61,6 +61,9 @@ export const Labelled: Story = {
   },
 };
 
+// The RatingDisplay stories below compare several displays side by side, so each sets its props
+// in `render`: the controls of this file's meta belong to Rating, not to RatingDisplay.
+
 /** A fractional value (an average) is drawn with a partly filled star. */
 export const ReadOnly: StoryObj<typeof RatingDisplay> = {
   render: () => (

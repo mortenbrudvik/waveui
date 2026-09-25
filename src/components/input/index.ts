@@ -1,7 +1,7 @@
 export { Input, type InputProps, type InputErrorMessageProps } from './Input';
 export { Textarea, type TextareaProps } from './Textarea';
 export { Field, type FieldProps } from './Field';
-export { Checkbox, type CheckboxProps } from './Checkbox';
+export { Checkbox, type CheckboxProps, type CheckboxLabelPosition } from './Checkbox';
 export {
   RadioGroup,
   RadioGroupItem,
@@ -10,7 +10,7 @@ export {
   type RadioGroupItemProps,
   type RadioItemProps,
 } from './RadioGroup';
-export { Switch, type SwitchProps } from './Switch';
+export { Switch, type SwitchProps, type SwitchLabelPosition } from './Switch';
 export { Select, type SelectProps } from './Select';
 export { SearchBox, type SearchBoxProps, type SearchBoxInputProps } from './SearchBox';
 export { Slider, type SliderProps } from './Slider';
@@ -32,7 +32,13 @@ export {
   OptionGroup,
   type OptionGroupProps,
 } from './Combobox';
-export { Dropdown, DropdownOption, DropdownOptionGroup, type DropdownProps } from './Dropdown';
+export {
+  Dropdown,
+  DropdownOption,
+  DropdownOptionGroup,
+  type DropdownProps,
+  type DropdownLabels,
+} from './Dropdown';
 export {
   SwatchPicker,
   type SwatchPickerProps,
@@ -57,9 +63,15 @@ export {
   RatingDisplay,
   type RatingProps,
   type RatingDisplayProps,
+  type RatingDisplayLabels,
   type RatingLabels,
 } from './Rating';
-export { TimePicker, type TimePickerProps, type TimePickerLabels } from './TimePicker';
+export {
+  TimePicker,
+  type TimePickerProps,
+  type TimePickerInvalidReason,
+  type TimePickerLabels,
+} from './TimePicker';
 export {
   DatePicker,
   type DatePickerProps,
