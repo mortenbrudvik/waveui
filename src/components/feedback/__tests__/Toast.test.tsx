@@ -25,13 +25,13 @@ function ControllerProbe({ ref }: { ref: React.Ref<ToastController> }) {
 
 function renderToaster(props: Partial<ToasterProps> = {}, options: { app?: React.ReactNode } = {}) {
   const controllerRef = React.createRef<ToastController>();
-  const ui = (
-    <Toaster {...props}>
+  const ui = (toasterProps: Partial<ToasterProps>) => (
+    <Toaster {...toasterProps}>
       <ControllerProbe ref={controllerRef} />
       {options.app}
     </Toaster>
   );
-  const utils = render(ui);
+  const utils = render(ui(props));
   const controller = (): ToastController => {
     if (!controllerRef.current) throw new Error('the Toaster controller is not available');
     return controllerRef.current;
@@ -46,7 +46,12 @@ function renderToaster(props: Partial<ToasterProps> = {}, options: { app?: React
   const dismiss = (id: string) => {
     act(() => controller().dismissToast(id));
   };
-  return { ...utils, controller, dispatch, dismiss };
+  const dismissAll = () => {
+    act(() => controller().dismissAllToasts());
+  };
+  /** Re-renders the Toaster with new props (the same app content). */
+  const setProps = (next: Partial<ToasterProps>) => utils.rerender(ui(next));
+  return { ...utils, controller, dispatch, dismiss, dismissAll, setProps };
 }
 
 const getViewport = () => screen.getByRole('region', { name: 'Notifications' });
@@ -409,6 +414,22 @@ describe('useToastController', () => {
     });
   });
 
+  it('returns an inert controller whose dismissAllToasts does nothing in production', () => {
+    vi.stubEnv('NODE_ENV', 'production');
+    const error = vi.spyOn(console, 'error').mockImplementation(() => {});
+    try {
+      const controllerRef = React.createRef<ToastController>();
+      render(<ControllerProbe ref={controllerRef} />);
+      const controller = controllerRef.current;
+      if (!controller) throw new Error('the inert controller is not available');
+      expect(() => controller.dismissAllToasts()).not.toThrow();
+      expect(error.mock.calls).toEqual([[MISSING_TOASTER_MESSAGE]]);
+    } finally {
+      vi.unstubAllEnvs();
+      error.mockRestore();
+    }
+  });
+
   it('exposes a stable, memoized controller (table-core#25)', () => {
     const seen = new Set<ToastController>();
     function Collector() {
@@ -435,6 +456,8 @@ describe('useToastController', () => {
     expectTypeOf(useToastController).returns.toEqualTypeOf<ToastController>();
     expectTypeOf<ToastController['dispatchToast']>().returns.toEqualTypeOf<string>();
     expectTypeOf<ToastController['dismissToast']>().parameters.toEqualTypeOf<[id: string]>();
+    expectTypeOf<ToastController['dismissAllToasts']>().toEqualTypeOf<() => void>();
+    expectTypeOf<ToasterProps['limit']>().toEqualTypeOf<number | undefined>();
     expectTypeOf<ToastOptions>().toHaveProperty('toastId').toEqualTypeOf<string | undefined>();
     expectTypeOf<ToastOptions>().toHaveProperty('dismissLabel').toEqualTypeOf<string | undefined>();
     expectTypeOf<ToastProps>().toHaveProperty('dismissLabel').toEqualTypeOf<string | undefined>();
@@ -699,6 +722,271 @@ describe('Toaster: timers (feedback-navigation#13)', () => {
   });
 });
 
+describe('Toaster: limit (a queue of waiting toasts)', () => {
+  beforeEach(() => {
+    vi.useFakeTimers();
+  });
+  afterEach(() => {
+    vi.useRealTimers();
+    vi.restoreAllMocks();
+  });
+
+  const warnings = (warn: { mock: { calls: unknown[][] } }) =>
+    warn.mock.calls.map((call) => String(call[0]));
+  const limitWarning = (limit: number) =>
+    `[WaveUI] Toaster: \`limit\` must be 1 or more (got ${limit}); it counts as 1.`;
+
+  it('shows at most `limit` toasts and announces only those', () => {
+    const { dispatch } = renderToaster({ limit: 2 });
+    dispatch({ title: 'One' });
+    dispatch({ title: 'Two' });
+    dispatch({ title: 'Three' });
+    expect(getToasts()).toHaveLength(2);
+    expect(screen.getByText('One')).toBeInTheDocument();
+    expect(screen.getByText('Two')).toBeInTheDocument();
+    expect(screen.queryByText('Three')).not.toBeInTheDocument();
+    const polite = getLiveRegion('polite');
+    expect(polite).toHaveTextContent('Info: One');
+    expect(polite).toHaveTextContent('Info: Two');
+    expect(polite).not.toHaveTextContent('Three');
+    // The dismiss and announcement timers of the two shown toasts; none for the waiting one.
+    expect(vi.getTimerCount()).toBe(4);
+  });
+
+  it('shows and announces a waiting toast when a shown one goes, and starts its timer then', () => {
+    const { dispatch, dismiss } = renderToaster({ limit: 2 });
+    const one = dispatch({ title: 'One', timeout: 0 });
+    dispatch({ title: 'Two', timeout: 0 });
+    dispatch({ title: 'Three', timeout: 3000 });
+    // Far past Three's timeout: it does not count down while it waits.
+    advance(10_000);
+    expect(screen.queryByText('Three')).not.toBeInTheDocument();
+    expect(getLiveRegion('polite')).toBeEmptyDOMElement();
+
+    dismiss(one);
+    expect(getToasts()).toHaveLength(2);
+    expect(screen.getByText('Three')).toBeInTheDocument();
+    expect(getLiveRegion('polite')).toHaveTextContent(/^Info: Three$/);
+    advance(2999);
+    expect(screen.getByText('Three')).toBeInTheDocument();
+    advance(1);
+    expect(screen.queryByText('Three')).not.toBeInTheDocument();
+    expect(screen.getByText('Two')).toBeInTheDocument();
+  });
+
+  it('starts the timer of a waiting toast only when it is shown (after a timeout frees a place)', () => {
+    const { dispatch } = renderToaster({ limit: 1 });
+    dispatch({ title: 'First', timeout: 1000 });
+    dispatch({ title: 'Second', timeout: 1000 });
+    advance(999);
+    expect(screen.getByText('First')).toBeInTheDocument();
+    expect(screen.queryByText('Second')).not.toBeInTheDocument();
+    advance(1);
+    expect(screen.queryByText('First')).not.toBeInTheDocument();
+    expect(screen.getByText('Second')).toBeInTheDocument();
+    expect(getLiveRegion('polite')).toHaveTextContent(/^Info: Second$/);
+    advance(999);
+    expect(screen.getByText('Second')).toBeInTheDocument();
+    advance(1);
+    expect(getToasts()).toHaveLength(0);
+  });
+
+  it('without a limit shows every toast at once, each expiring after exactly its timeout', () => {
+    const { dispatch } = renderToaster();
+    for (const title of ['One', 'Two', 'Three', 'Four', 'Five']) dispatch({ title, timeout: 3000 });
+    expect(getToasts()).toHaveLength(5);
+    advance(2999);
+    expect(getToasts()).toHaveLength(5);
+    advance(1);
+    expect(getToasts()).toHaveLength(0);
+    expect(vi.getTimerCount()).toBe(0);
+  });
+
+  it('treats Infinity as no limit', () => {
+    const { dispatch } = renderToaster({ limit: Infinity });
+    for (const title of ['One', 'Two', 'Three']) dispatch({ title, timeout: 0 });
+    expect(getToasts()).toHaveLength(3);
+  });
+
+  it('lowering the limit never hides a shown toast; new toasts wait until there is room', () => {
+    const { dispatch, dismiss, setProps } = renderToaster({ limit: 3 });
+    const one = dispatch({ title: 'One', timeout: 0 });
+    const two = dispatch({ title: 'Two', timeout: 0 });
+    const three = dispatch({ title: 'Three', timeout: 0 });
+    setProps({ limit: 1 });
+    expect(getToasts()).toHaveLength(3);
+
+    dispatch({ title: 'Four', timeout: 0 });
+    expect(screen.queryByText('Four')).not.toBeInTheDocument();
+    dismiss(one);
+    dismiss(two);
+    expect(getToasts()).toHaveLength(1);
+    expect(screen.queryByText('Four')).not.toBeInTheDocument();
+    dismiss(three);
+    expect(getToasts()).toHaveLength(1);
+    expect(screen.getByText('Four')).toBeInTheDocument();
+  });
+
+  it('raising the limit shows waiting toasts in dispatch order, with a stable controller', () => {
+    const { controller, dispatch, setProps } = renderToaster({ limit: 1 });
+    const before = controller();
+    for (const title of ['One', 'Two', 'Three', 'Four']) dispatch({ title, timeout: 0 });
+    expect(getToasts()).toHaveLength(1);
+
+    setProps({ limit: 2 });
+    expect(getToasts()).toHaveLength(2);
+    expect(screen.getByText('Two')).toBeInTheDocument();
+    expect(getLiveRegion('polite')).toHaveTextContent('Info: Two');
+    expect(screen.queryByText('Three')).not.toBeInTheDocument();
+
+    setProps({});
+    expect(getToasts()).toHaveLength(4);
+    expect(getToasts().map((toast) => toast.textContent)).toEqual([
+      'Info: One',
+      'Info: Two',
+      'Info: Three',
+      'Info: Four',
+    ]);
+    expect(controller()).toBe(before);
+  });
+
+  it('re-dispatching a waiting id replaces its options in place; it keeps waiting', () => {
+    const { dispatch, dismiss } = renderToaster({ limit: 1 });
+    const first = dispatch({ title: 'First', timeout: 0 });
+    dispatch({ toastId: 'upload', title: 'Uploading…', timeout: 0 });
+    const third = dispatch({ title: 'Third', timeout: 0 });
+    expect(
+      dispatch({ toastId: 'upload', status: 'success', title: 'Upload complete', timeout: 1000 }),
+    ).toBe('upload');
+    expect(getToasts()).toHaveLength(1);
+    expect(getLiveRegion('polite')).not.toHaveTextContent('Upload');
+
+    // It kept its place before Third, with the options of the last dispatch.
+    dismiss(first);
+    expect(screen.getByText('Upload complete')).toBeInTheDocument();
+    expect(screen.queryByText('Uploading…')).not.toBeInTheDocument();
+    expect(screen.queryByText('Third')).not.toBeInTheDocument();
+    expect(getLiveRegion('polite')).toHaveTextContent(/^Success: Upload complete$/);
+    // Its own timeout, counted from when it was shown.
+    advance(999);
+    expect(screen.getByText('Upload complete')).toBeInTheDocument();
+    advance(1);
+    expect(screen.queryByText('Upload complete')).not.toBeInTheDocument();
+    expect(screen.getByText('Third')).toBeInTheDocument();
+    dismiss(third);
+  });
+
+  it('dismissToast removes a waiting toast silently', () => {
+    const { dispatch, dismiss } = renderToaster({ limit: 1 });
+    const shown = dispatch({ title: 'Shown', timeout: 0 });
+    const waiting = dispatch({ title: 'Waiting', timeout: 0 });
+    expect(getToasts()).toHaveLength(1);
+    dismiss(waiting);
+    expect(getToasts()).toHaveLength(1);
+    // Freeing the place does not bring it back.
+    dismiss(shown);
+    expect(getToasts()).toHaveLength(0);
+    expect(screen.queryByText('Waiting')).not.toBeInTheDocument();
+    expect(getLiveRegion('polite')).not.toHaveTextContent('Waiting');
+    expect(vi.getTimerCount()).toBe(0);
+  });
+
+  it('has no accessibility violations while toasts wait', async () => {
+    vi.useRealTimers();
+    const { dispatch } = renderToaster({ limit: 1 });
+    dispatch({ status: 'error', title: 'Upload failed', timeout: 0 });
+    dispatch({ status: 'success', title: 'Saved', timeout: 0 });
+    expect(getToasts()).toHaveLength(1);
+    expect(getLiveRegion('polite')).toBeEmptyDOMElement();
+    await expectNoA11yViolations(document.body);
+  });
+
+  it('keeps the queue and its timers under StrictMode (effects re-run)', () => {
+    function Welcome() {
+      const { dispatchToast } = useToastController();
+      React.useEffect(() => {
+        dispatchToast({ toastId: 'welcome', title: 'Welcome', timeout: 1000 });
+        dispatchToast({ toastId: 'tips', title: 'Tips', timeout: 1000 });
+      }, [dispatchToast]);
+      return null;
+    }
+    render(
+      <React.StrictMode>
+        <Toaster limit={1}>
+          <Welcome />
+        </Toaster>
+      </React.StrictMode>,
+    );
+    expect(getToasts()).toHaveLength(1);
+    expect(screen.getByText('Welcome')).toBeInTheDocument();
+    advance(1000);
+    expect(screen.queryByText('Welcome')).not.toBeInTheDocument();
+    expect(screen.getByText('Tips')).toBeInTheDocument();
+    advance(1000);
+    expect(getToasts()).toHaveLength(0);
+    expect(vi.getTimerCount()).toBe(0);
+  });
+
+  it.each([0, -1, 0.5, NaN])('counts a limit of %s as 1, with a development warning', (limit) => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const { dispatch } = renderToaster({ limit });
+    dispatch({ title: 'One', timeout: 0 });
+    dispatch({ title: 'Two', timeout: 0 });
+    expect(getToasts()).toHaveLength(1);
+    expect(warnings(warn)).toEqual([limitWarning(limit)]);
+  });
+
+  it('rounds a fractional limit down (most toasts shown at once), without a warning', () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const { dispatch } = renderToaster({ limit: 2.5 });
+    for (const title of ['One', 'Two', 'Three']) dispatch({ title, timeout: 0 });
+    expect(getToasts()).toHaveLength(2);
+    expect(warn).not.toHaveBeenCalled();
+  });
+
+  it('does not forward limit to the toast region', () => {
+    renderToaster({ limit: 2 });
+    expect(getViewport()).not.toHaveAttribute('limit');
+  });
+});
+
+describe('Toaster: dismissAllToasts', () => {
+  beforeEach(() => {
+    vi.useFakeTimers();
+  });
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it('removes every shown and waiting toast, their announcements and their timers', () => {
+    const { dispatch, dismissAll } = renderToaster({ limit: 2 });
+    dispatch({ title: 'One' });
+    dispatch({ title: 'Two', timeout: 0 });
+    dispatch({ title: 'Three' });
+    expect(getToasts()).toHaveLength(2);
+
+    dismissAll();
+    expect(getToasts()).toHaveLength(0);
+    expect(getLiveRegion('polite')).toBeEmptyDOMElement();
+    expect(vi.getTimerCount()).toBe(0);
+    // The waiting toast does not come back.
+    advance(10_000);
+    expect(getToasts()).toHaveLength(0);
+
+    // The Toaster keeps working afterwards.
+    dispatch({ title: 'Four', timeout: 1000 });
+    expect(screen.getByText('Four')).toBeInTheDocument();
+    advance(1000);
+    expect(getToasts()).toHaveLength(0);
+  });
+
+  it('does nothing without toasts', () => {
+    const { dismissAll } = renderToaster();
+    dismissAll();
+    expect(getToasts()).toHaveLength(0);
+  });
+});
+
 describe('Toaster: pausing (feedback-navigation#12)', () => {
   beforeEach(() => {
     vi.useFakeTimers();
@@ -948,6 +1236,57 @@ describe('Toaster: focus (feedback-navigation#12)', () => {
     await user.click(within(third).getByRole('button', { name: 'Dismiss' }));
     const [first] = getToasts();
     expect(within(first).getByRole('button', { name: 'Dismiss' })).toHaveFocus();
+  });
+
+  it('moves focus to the right neighbour when a focused toast goes while others wait', async () => {
+    const user = userEvent.setup();
+    const { dispatch } = renderToaster({ limit: 2 });
+    dispatch({ title: 'First', timeout: 0 });
+    dispatch({ title: 'Second', timeout: 0 });
+    dispatch({ title: 'Third', timeout: 0 });
+    dispatch({ title: 'Fourth', timeout: 0 });
+    const [, second] = getToasts();
+    await user.click(within(second).getByRole('button', { name: 'Dismiss' }));
+    expect(screen.queryByText('Second')).not.toBeInTheDocument();
+    // Third takes the freed place and receives focus; Fourth still waits.
+    const [first, third] = getToasts();
+    expect(first).toHaveTextContent('First');
+    expect(third).toHaveTextContent('Third');
+    expect(getToasts()).toHaveLength(2);
+    expect(within(third).getByRole('button', { name: 'Dismiss' })).toHaveFocus();
+
+    await user.click(within(first).getByRole('button', { name: 'Dismiss' }));
+    const [nowFirst, nowSecond] = getToasts();
+    expect(nowFirst).toHaveTextContent('Third');
+    expect(nowSecond).toHaveTextContent('Fourth');
+    expect(within(nowFirst).getByRole('button', { name: 'Dismiss' })).toHaveFocus();
+  });
+
+  it('dismissAllToasts returns focus to the element focused before the toasts', async () => {
+    function SaveThree() {
+      const { dispatchToast } = useToastController();
+      return (
+        <button
+          type="button"
+          onClick={() => {
+            for (const title of ['First', 'Second', 'Third']) dispatchToast({ title, timeout: 0 });
+          }}
+        >
+          Save
+        </button>
+      );
+    }
+    const user = userEvent.setup();
+    const { dismissAll } = renderToaster({ limit: 2 }, { app: <SaveThree /> });
+    const save = screen.getByRole('button', { name: 'Save' });
+    await user.click(save);
+    await user.tab();
+    expect(within(getToasts()[0]).getByRole('button', { name: 'Dismiss' })).toHaveFocus();
+
+    dismissAll();
+    await act(async () => {});
+    expect(getToasts()).toHaveLength(0);
+    expect(save).toHaveFocus();
   });
 
   it('keeps the return target while focus moves from a dismissed toast to the next one', async () => {

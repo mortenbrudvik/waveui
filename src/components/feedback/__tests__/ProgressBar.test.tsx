@@ -2,13 +2,14 @@ import { describe, it, expect, expectTypeOf, vi, afterEach } from 'vitest';
 import * as React from 'react';
 import { render, screen } from '@testing-library/react';
 import { ProgressBar } from '../ProgressBar';
-import type { ProgressBarProps } from '../ProgressBar';
+import type { ProgressBarColor, ProgressBarProps } from '../ProgressBar';
 import {
   axe,
   expectNoA11yViolations,
   renderWithProviders,
   testSystemProps,
 } from '../../../test-utils';
+import { FIELD_TEST_IDS, FIELD_TEST_TEXT, renderWithFieldContext } from '../../../test-utils-field';
 
 const fillOf = (bar: HTMLElement) => bar.firstElementChild as HTMLElement;
 
@@ -377,6 +378,240 @@ describe('ProgressBar', () => {
       expect(fill).toHaveClass('wave-rtl:animate-wave-indeterminate-rtl');
       expect(fill.className).not.toMatch(/(^|\s)rtl:/);
     });
+  });
+
+  describe('color', () => {
+    it.each([
+      ['brand', 'bg-primary'],
+      ['success', 'bg-success'],
+      // The yellow warning token would be 1.02:1 on the light track: the severe orange passes 3:1.
+      ['warning', 'bg-severe'],
+      ['error', 'bg-error'],
+    ] as const)('color="%s" fills with %s and sets data-color', (color, fillClass) => {
+      render(<ProgressBar value={40} label="Upload" color={color} />);
+      const bar = screen.getByRole('progressbar', { name: 'Upload' });
+      expect(bar).toHaveAttribute('data-color', color);
+      const fill = fillOf(bar);
+      expect(fill).toHaveClass(fillClass, 'forced-colors:bg-[Highlight]');
+      const others = ['bg-primary', 'bg-success', 'bg-severe', 'bg-error', 'bg-warning'].filter(
+        (cls) => cls !== fillClass,
+      );
+      for (const other of others) expect(fill).not.toHaveClass(other);
+    });
+
+    it('defaults to brand: data-color="brand" and the primary fill', () => {
+      render(<ProgressBar value={40} label="Upload" />);
+      const bar = screen.getByRole('progressbar', { name: 'Upload' });
+      expect(bar).toHaveAttribute('data-color', 'brand');
+      expect(fillOf(bar)).toHaveClass('bg-primary');
+    });
+
+    it('colors the indeterminate fill too', () => {
+      render(<ProgressBar label="Syncing" color="error" />);
+      const fill = fillOf(screen.getByRole('progressbar', { name: 'Syncing' }));
+      expect(fill).toHaveClass('bg-error', 'animate-wave-indeterminate');
+      expect(fill).not.toHaveClass('bg-primary');
+    });
+
+    it.each(['brand', 'success', 'warning', 'error'] as const)(
+      'has no accessibility violations (color %s)',
+      async (color) => {
+        render(<ProgressBar value={40} label="Upload" color={color} />);
+        await expectNoA11yViolations();
+      },
+    );
+
+    it('types color as the four fill colors', () => {
+      expectTypeOf<ProgressBarColor>().toEqualTypeOf<'brand' | 'success' | 'warning' | 'error'>();
+      expectTypeOf<ProgressBarProps['color']>().toEqualTypeOf<ProgressBarColor | undefined>();
+    });
+  });
+
+  describe('inside a Field', () => {
+    /** A Field in the warning state with a message and a hint, as Field renders it. */
+    const WARNING_FIELD = {
+      validationState: 'warning',
+      validationMessageId: FIELD_TEST_IDS.messageId,
+      hintId: FIELD_TEST_IDS.hintId,
+    } as const;
+    const MESSAGE_AND_HINT = `${FIELD_TEST_TEXT.message} ${FIELD_TEST_TEXT.hint}`;
+
+    describe('naming (the Field label never joins or overrides a name of its own)', () => {
+      it('a consumer aria-label keeps its name', () => {
+        renderWithFieldContext(<ProgressBar value={40} aria-label="Photo upload" />, WARNING_FIELD);
+        const bar = screen.getByRole('progressbar', { name: 'Photo upload' });
+        expect(bar).toHaveAttribute('aria-label', 'Photo upload');
+        expect(bar).not.toHaveAttribute('aria-labelledby');
+      });
+
+      it('a consumer aria-labelledby keeps its name, without the Field label id', () => {
+        renderWithFieldContext(
+          <>
+            <span id="upload-heading">Photos</span>
+            <ProgressBar value={40} label="Upload" showLabel aria-labelledby="upload-heading" />
+          </>,
+          WARNING_FIELD,
+        );
+        const bar = screen.getByRole('progressbar', { name: 'Photos' });
+        expect(bar).toHaveAttribute('aria-labelledby', 'upload-heading');
+        expect(bar).not.toHaveAttribute('aria-label');
+      });
+
+      it('label without showLabel names the bar with aria-label', () => {
+        renderWithFieldContext(<ProgressBar value={40} label="Upload" />, WARNING_FIELD);
+        const bar = screen.getByRole('progressbar', { name: 'Upload' });
+        expect(bar).toHaveAttribute('aria-label', 'Upload');
+        expect(bar).not.toHaveAttribute('aria-labelledby');
+      });
+
+      it('label with showLabel names the bar with its own visible label only', () => {
+        renderWithFieldContext(<ProgressBar value={40} label="Upload" showLabel />, WARNING_FIELD);
+        const bar = screen.getByRole('progressbar', { name: 'Upload' });
+        expect(bar).toHaveAttribute('aria-labelledby', screen.getByText('Upload').id);
+        expect(bar).not.toHaveAttribute('aria-label');
+      });
+
+      it('without a name of its own, the Field label names the bar (no warning)', () => {
+        const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+        renderWithFieldContext(<ProgressBar value={40} />, WARNING_FIELD);
+        const bar = screen.getByRole('progressbar', { name: FIELD_TEST_TEXT.label });
+        expect(bar).toHaveAttribute('aria-labelledby', FIELD_TEST_IDS.labelId);
+        expect(bar).not.toHaveAttribute('aria-label');
+        expect(warn).not.toHaveBeenCalled();
+      });
+
+      it('a Field without a label names nothing: the name warning fires', () => {
+        const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+        renderWithFieldContext(<ProgressBar value={40} data-testid="pb" />, {
+          ...WARNING_FIELD,
+          labelId: undefined,
+        });
+        const bar = screen.getByTestId('pb');
+        expect(bar).not.toHaveAttribute('aria-label');
+        expect(bar).not.toHaveAttribute('aria-labelledby');
+        expect(warnings(warn)).toEqual([NAME_WARNING]);
+      });
+    });
+
+    it('is described by the message and the hint, after its own description', () => {
+      renderWithFieldContext(
+        <>
+          <span id="upload-note">Large files take longer.</span>
+          <ProgressBar value={40} aria-describedby="upload-note" />
+        </>,
+        WARNING_FIELD,
+      );
+      const bar = screen.getByRole('progressbar', { name: FIELD_TEST_TEXT.label });
+      expect(bar).toHaveAttribute(
+        'aria-describedby',
+        `upload-note ${FIELD_TEST_IDS.messageId} ${FIELD_TEST_IDS.hintId}`,
+      );
+      expect(bar).toHaveAccessibleDescription(`Large files take longer. ${MESSAGE_AND_HINT}`);
+    });
+
+    it('takes the Field control id unless it has an id of its own', () => {
+      const { rerender } = renderWithFieldContext(<ProgressBar value={40} />, WARNING_FIELD);
+      expect(screen.getByRole('progressbar')).toHaveAttribute('id', FIELD_TEST_IDS.controlId);
+      rerender(<ProgressBar value={40} id="upload-progress" />);
+      expect(screen.getByRole('progressbar')).toHaveAttribute('id', 'upload-progress');
+    });
+
+    it('in the warning state: warning fill, described, never invalid or required, no warning', () => {
+      const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+      renderWithFieldContext(<ProgressBar value={40} />, { ...WARNING_FIELD, required: true });
+      const bar = screen.getByRole('progressbar', { name: FIELD_TEST_TEXT.label });
+      expect(bar).toHaveAccessibleDescription(MESSAGE_AND_HINT);
+      expect(bar).toHaveAttribute('data-color', 'warning');
+      expect(fillOf(bar)).toHaveClass('bg-severe');
+      expect(bar).not.toHaveAttribute('aria-invalid');
+      expect(bar).not.toHaveAttribute('aria-required');
+      expect(warn).not.toHaveBeenCalled();
+    });
+
+    it.each([
+      [
+        'error',
+        {
+          validationState: 'error',
+          errorId: FIELD_TEST_IDS.errorId,
+          validationMessageId: FIELD_TEST_IDS.errorId,
+        },
+        'bg-error',
+        FIELD_TEST_TEXT.error,
+      ],
+      [
+        'success',
+        { validationState: 'success', validationMessageId: FIELD_TEST_IDS.messageId },
+        'bg-success',
+        FIELD_TEST_TEXT.message,
+      ],
+      [
+        'none',
+        { validationState: 'none', validationMessageId: FIELD_TEST_IDS.messageId },
+        'bg-primary',
+        FIELD_TEST_TEXT.message,
+      ],
+    ] as const)('follows the Field validation state %s', (_, field, fillClass, description) => {
+      renderWithFieldContext(<ProgressBar value={40} />, field);
+      const bar = screen.getByRole('progressbar', { name: FIELD_TEST_TEXT.label });
+      expect(fillOf(bar)).toHaveClass(fillClass);
+      expect(bar).toHaveAccessibleDescription(description);
+      expect(bar).not.toHaveAttribute('aria-invalid');
+    });
+
+    it('reads a context without a validation state (built before 0.6) from invalid', () => {
+      renderWithFieldContext(<ProgressBar value={40} />, { errorId: FIELD_TEST_IDS.errorId });
+      const bar = screen.getByRole('progressbar', { name: FIELD_TEST_TEXT.label });
+      expect(bar).toHaveAttribute('data-color', 'error');
+      expect(bar).toHaveAccessibleDescription(FIELD_TEST_TEXT.error);
+    });
+
+    it('drops the aria-invalid and aria-required that Field merges into its first child', () => {
+      renderWithFieldContext(<ProgressBar value={40} aria-invalid aria-required />, {
+        validationState: 'error',
+        errorId: FIELD_TEST_IDS.errorId,
+        validationMessageId: FIELD_TEST_IDS.errorId,
+        required: true,
+      });
+      const bar = screen.getByRole('progressbar', { name: FIELD_TEST_TEXT.label });
+      expect(bar).not.toHaveAttribute('aria-invalid');
+      expect(bar).not.toHaveAttribute('aria-required');
+    });
+
+    it('lets an explicit color win over the Field validation state', () => {
+      renderWithFieldContext(<ProgressBar value={40} color="brand" />, WARNING_FIELD);
+      const bar = screen.getByRole('progressbar', { name: FIELD_TEST_TEXT.label });
+      expect(bar).toHaveAttribute('data-color', 'brand');
+      expect(fillOf(bar)).toHaveClass('bg-primary');
+      expect(fillOf(bar)).not.toHaveClass('bg-severe');
+    });
+
+    it.each([
+      ['warning', WARNING_FIELD],
+      [
+        'error',
+        {
+          validationState: 'error',
+          errorId: FIELD_TEST_IDS.errorId,
+          validationMessageId: FIELD_TEST_IDS.errorId,
+          hintId: FIELD_TEST_IDS.hintId,
+          required: true,
+        },
+      ],
+      ['success', { validationState: 'success', validationMessageId: FIELD_TEST_IDS.messageId }],
+      ['none', { validationState: 'none', hintId: FIELD_TEST_IDS.hintId }],
+    ] as const)('has no accessibility violations in the %s state', async (_, field) => {
+      renderWithFieldContext(<ProgressBar value={40} />, field);
+      expect(screen.getByRole('progressbar', { name: FIELD_TEST_TEXT.label })).toBeInTheDocument();
+      await expectNoA11yViolations();
+    });
+  });
+
+  it('drops aria-invalid and aria-required outside a Field (not allowed on a progress bar)', () => {
+    render(<ProgressBar value={40} label="Upload" aria-invalid aria-required />);
+    const bar = screen.getByRole('progressbar', { name: 'Upload' });
+    expect(bar).not.toHaveAttribute('aria-invalid');
+    expect(bar).not.toHaveAttribute('aria-required');
   });
 
   it('ProgressBarProps carries ref (C-REF)', () => {

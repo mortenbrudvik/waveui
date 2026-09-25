@@ -1,8 +1,10 @@
-import { describe, it, expect, expectTypeOf, vi, afterEach } from 'vitest';
+import { describe, it, expect, expectTypeOf, vi, afterEach, beforeEach } from 'vitest';
 import * as React from 'react';
 import { render, screen, waitFor } from '@testing-library/react';
+import { renderToString } from 'react-dom/server';
+import { hydrateRoot } from 'react-dom/client';
 import { Spinner } from '../Spinner';
-import type { SpinnerProps } from '../Spinner';
+import type { SpinnerAppearance, SpinnerProps } from '../Spinner';
 import { expectNoA11yViolations, testSystemProps } from '../../../test-utils';
 
 /** Resolves after the next animation frame has run (and React has committed its update). */
@@ -10,6 +12,9 @@ const nextFrame = () =>
   new Promise<void>((resolve) => {
     requestAnimationFrame(() => resolve());
   });
+
+/** The decorative ring of a Spinner root (`null` while a delayed spinner waits). */
+const ringOf = (root: HTMLElement) => root.querySelector<HTMLElement>('[data-wave-spinner-ring]');
 
 describe('Spinner', () => {
   afterEach(() => {
@@ -228,6 +233,193 @@ describe('Spinner', () => {
     render(<Spinner data-testid="sp" />);
     const ring = screen.getByTestId('sp').querySelector('[data-wave-spinner-ring]');
     expect(ring).toHaveClass('w-6', 'h-6');
+  });
+
+  describe('appearance', () => {
+    it('defaults to primary: a primary arc on the track, data-appearance="primary"', async () => {
+      render(<Spinner label="Loading" labelVisible data-testid="sp" />);
+      const root = screen.getByTestId('sp');
+      expect(root).toHaveAttribute('data-appearance', 'primary');
+      expect(ringOf(root)).toHaveClass('border-track', 'border-t-primary');
+      await React.act(nextFrame);
+      expect(screen.getByText('Loading')).toHaveClass('text-muted-foreground');
+    });
+
+    it('inverted draws the arc, a 30% track and the visible label in the current text color', async () => {
+      render(<Spinner appearance="inverted" label="Saving" labelVisible data-testid="sp" />);
+      const root = screen.getByTestId('sp');
+      expect(root).toHaveAttribute('data-appearance', 'inverted');
+      const ring = ringOf(root);
+      expect(ring).toHaveClass(
+        'border-current/30',
+        'border-t-current',
+        'animate-wave-spin',
+        'motion-reduce:animate-wave-spin-slow',
+        // Forced colors keep the Highlight arc on a Canvas track.
+        'forced-colors:forced-color-adjust-none',
+        'forced-colors:border-[Canvas]',
+        'forced-colors:border-t-[Highlight]',
+      );
+      expect(ring).not.toHaveClass('border-track');
+      expect(ring).not.toHaveClass('border-t-primary');
+      await React.act(nextFrame);
+      const label = screen.getByText('Saving');
+      expect(label).toHaveClass('text-body-1', 'text-current');
+      expect(label).not.toHaveClass('text-muted-foreground');
+    });
+
+    it('keeps an inverted label that is not visible screen-reader only', async () => {
+      render(<Spinner appearance="inverted" label="Saving" />);
+      await React.act(nextFrame);
+      expect(screen.getByText('Saving')).toHaveClass('sr-only');
+    });
+
+    it('has no accessibility violations inside a primary button (inverted)', async () => {
+      // A stand-in with the primary Button's colors: the real Button is covered by the stories gate.
+      render(
+        <button type="button" className="bg-primary text-primary-foreground">
+          Saving
+          <Spinner appearance="inverted" size="extra-small" label="Saving changes" />
+        </button>,
+      );
+      await React.act(nextFrame);
+      expect(screen.getByRole('button')).toHaveTextContent('Saving');
+      expect(ringOf(screen.getByRole('status'))).toHaveClass('border-t-current');
+      await expectNoA11yViolations();
+    });
+
+    it('types appearance', () => {
+      expectTypeOf<SpinnerAppearance>().toEqualTypeOf<'primary' | 'inverted'>();
+      expectTypeOf<SpinnerProps['appearance']>().toEqualTypeOf<SpinnerAppearance | undefined>();
+      expectTypeOf<SpinnerProps['delay']>().toEqualTypeOf<number | undefined>();
+    });
+  });
+
+  describe('delay', () => {
+    beforeEach(() => {
+      vi.useFakeTimers({ shouldAdvanceTime: true });
+    });
+    afterEach(() => {
+      vi.useRealTimers();
+    });
+
+    const advance = (ms: number) => {
+      React.act(() => {
+        vi.advanceTimersByTime(ms);
+      });
+    };
+
+    it('is shown at once without a delay: data-state="shown"', () => {
+      render(<Spinner data-testid="sp" />);
+      const root = screen.getByTestId('sp');
+      expect(root).toHaveAttribute('data-state', 'shown');
+      expect(ringOf(root)).not.toBeNull();
+    });
+
+    it('renders the empty status region at once, then the ring after the delay, then the label a frame later', () => {
+      render(<Spinner delay={800} label="Loading results" data-testid="sp" />);
+      const root = screen.getByTestId('sp');
+      expect(screen.getByRole('status')).toBe(root);
+      expect(root).toHaveAttribute('data-state', 'delayed');
+      expect(ringOf(root)).toBeNull();
+      expect(root).toHaveTextContent('');
+
+      advance(799);
+      expect(root).toHaveAttribute('data-state', 'delayed');
+      expect(ringOf(root)).toBeNull();
+      expect(root).toHaveTextContent('');
+
+      advance(1);
+      expect(root).toHaveAttribute('data-state', 'shown');
+      expect(ringOf(root)).not.toBeNull();
+      // The announcement is still deferred by one frame from when the spinner is shown.
+      expect(root).toHaveTextContent('');
+      React.act(() => {
+        vi.advanceTimersToNextFrame();
+      });
+      expect(screen.getByRole('status')).toHaveTextContent('Loading results');
+      expect(vi.getTimerCount()).toBe(0);
+    });
+
+    it('requests no frame while delayed', () => {
+      const request = vi.spyOn(window, 'requestAnimationFrame');
+      render(<Spinner delay={300} />);
+      expect(request).not.toHaveBeenCalled();
+      advance(300);
+      expect(request).toHaveBeenCalledTimes(1);
+    });
+
+    it('leaves no timer when it unmounts during the delay', () => {
+      const { unmount } = render(<Spinner delay={500} />);
+      expect(vi.getTimerCount()).toBe(1);
+      unmount();
+      expect(vi.getTimerCount()).toBe(0);
+    });
+
+    it('restarts the wait with a delay that changes while delayed, and stays shown once shown', () => {
+      const { rerender } = render(<Spinner delay={500} data-testid="sp" />);
+      const root = screen.getByTestId('sp');
+      advance(300);
+      rerender(<Spinner delay={1000} data-testid="sp" />);
+      advance(999);
+      expect(root).toHaveAttribute('data-state', 'delayed');
+      advance(1);
+      expect(root).toHaveAttribute('data-state', 'shown');
+      rerender(<Spinner delay={2000} data-testid="sp" />);
+      expect(root).toHaveAttribute('data-state', 'shown');
+      expect(ringOf(root)).not.toBeNull();
+    });
+
+    it.each([-100, NaN, Infinity])('treats a delay of %s as 0 (shown at once)', (delay) => {
+      render(<Spinner delay={delay} data-testid="sp" />);
+      const root = screen.getByTestId('sp');
+      expect(root).toHaveAttribute('data-state', 'shown');
+      expect(ringOf(root)).not.toBeNull();
+    });
+
+    it('shows once under StrictMode (effects re-run)', () => {
+      render(
+        <React.StrictMode>
+          <Spinner delay={400} label="Loading" data-testid="sp" />
+        </React.StrictMode>,
+      );
+      const root = screen.getByTestId('sp');
+      expect(ringOf(root)).toBeNull();
+      advance(400);
+      expect(ringOf(root)).not.toBeNull();
+      React.act(() => {
+        vi.advanceTimersToNextFrame();
+      });
+      expect(root).toHaveTextContent(/^Loading$/);
+      expect(vi.getTimerCount()).toBe(0);
+    });
+
+    it('renders the empty region without a ring on the server, and hydrates without a mismatch', () => {
+      const html = renderToString(<Spinner delay={200} label="Loading" />);
+      expect(html).toContain('role="status"');
+      expect(html).toContain('data-state="delayed"');
+      expect(html).not.toContain('data-wave-spinner-ring');
+      expect(html).not.toContain('Loading');
+      expect(renderToString(<Spinner label="Loading" />)).toContain('data-wave-spinner-ring');
+
+      const container = document.createElement('div');
+      container.innerHTML = html;
+      document.body.appendChild(container);
+      const error = vi.spyOn(console, 'error');
+      let root: ReturnType<typeof hydrateRoot> | undefined;
+      try {
+        React.act(() => {
+          root = hydrateRoot(container, <Spinner delay={200} label="Loading" />);
+        });
+        expect(error).not.toHaveBeenCalled();
+        advance(200);
+        expect(container.querySelector('[data-wave-spinner-ring]')).not.toBeNull();
+      } finally {
+        React.act(() => root?.unmount());
+        container.remove();
+        error.mockRestore();
+      }
+    });
   });
 
   it('SpinnerProps carries ref (C-REF)', () => {
