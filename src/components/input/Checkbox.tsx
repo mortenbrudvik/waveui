@@ -234,7 +234,11 @@ export const Checkbox = ({
         // items-start: the box lines up with the first line of a label that wraps or has a second
         // line, not with its middle.
         'relative inline-flex items-start gap-2 select-none',
-        unavailable ? 'cursor-not-allowed opacity-50' : 'cursor-pointer',
+        // The dimmed look lifts while a focus ring shows inside the root (the control's, under
+        // disabledFocusable, or a link's in the label): opacity would dim the ring below 3:1.
+        unavailable
+          ? 'cursor-not-allowed opacity-50 has-focus-visible:opacity-100'
+          : 'cursor-pointer',
         className,
       )}
       {...rest}

@@ -1,4 +1,5 @@
 import * as React from 'react';
+import { flushSync } from 'react-dom';
 import { cn } from '../../lib/cn';
 import { joinIds } from '../../lib/aria';
 import { composeEventHandlers } from '../../lib/composeEventHandlers';
@@ -183,7 +184,8 @@ export interface TimePickerProps extends Omit<
   readOnly?: boolean;
   /**
    * Whether to show a clear button when a time is selected (not shown while `readOnly`; shown
-   * disabled while `disabled`). It is a tab stop after the input.
+   * disabled while `disabled`). It is a tab stop after the input. Tab from erased text clears the
+   * value before focus moves, so focus goes on past the clear button that disappears with it.
    * @default false
    */
   clearable?: boolean;
@@ -293,7 +295,8 @@ function startsWithQuery(item: ListboxItem, text: string): boolean {
  *   and the text typed until then is dropped.
  * - Keys of an IME composition (its confirming Enter included) are left to the IME.
  * - `clearable` shows a clear button while a time is selected (not while read-only), a tab stop
- *   after the input.
+ *   after the input. Tab from erased text clears the value first, so focus moves on past the
+ *   picker instead of to the clear button that disappears.
  * - The value is `HH:mm` (24-hour) whatever the display `format`; values off the `step` grid or
  *   outside the bounds are still displayed in `format`.
  * - The input (`controlRef`) receives `id`, `aria-label`, `aria-labelledby`, `aria-describedby`,
@@ -569,6 +572,8 @@ export const TimePicker = (props: TimePickerProps) => {
   const displayLabel = selectedValue
     ? (lb.getItem(selectedValue)?.label ?? displayTime(selectedValue, format))
     : '';
+  // Read-only pickers offer no clear action (the value cannot change).
+  const showClear = clearable && !readOnly && selectedValue !== '';
   const statusMessage =
     open && !hasMatches
       ? allOptions.length === 0
@@ -674,6 +679,13 @@ export const TimePicker = (props: TimePickerProps) => {
         closeList();
         if (reason !== null) rejectDraft(draft, reason);
       }
+      if (event.key === 'Tab' && !event.shiftKey && showClear && draft !== null && !draft.trim()) {
+        // Erased text clears the value, and with it the clear button, the next tab stop. It is
+        // settled before Tab moves focus (the blur would settle it while focus moves to that
+        // button), so focus moves on to the tab stop after the picker instead of dropping to
+        // <body> with the button (C-DISABLED).
+        flushSync(() => commitDraft(draft));
+      }
       if (event.key === 'Tab' && open && !expanded) {
         // useListbox closes the list on Tab only while it shows options. The status text shown
         // instead ('No matching times', 'No times available') closes too: the clear button, the
@@ -734,8 +746,6 @@ export const TimePicker = (props: TimePickerProps) => {
     </ul>
   );
 
-  // Read-only pickers offer no clear action (the value cannot change).
-  const showClear = clearable && !readOnly && selectedValue !== '';
   const showExpand = showsExpandButton(expandIcon);
 
   let errorMessage = '';

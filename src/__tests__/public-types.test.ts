@@ -396,7 +396,9 @@ describe('0.6 props and unions from the package entry', () => {
     expectTypeOf<LinkProps['disabledFocusable']>().toEqualTypeOf<boolean | undefined>();
     expectTypeOf<CompoundButtonProps['icon']>().toEqualTypeOf<Slot<'span'> | undefined>();
     expectTypeOf<CompoundButtonProps['iconPosition']>().toEqualTypeOf<IconPosition | undefined>();
+    expectTypeOf<CompoundButtonProps['disabledFocusable']>().toEqualTypeOf<boolean | undefined>();
     expectTypeOf<SplitButtonProps['icon']>().toEqualTypeOf<Slot<'span'> | undefined>();
+    expectTypeOf<SplitButtonProps['iconPosition']>().toEqualTypeOf<IconPosition | undefined>();
     expectTypeOf<SplitButtonProps['menuIcon']>().toEqualTypeOf<Slot<'span'> | undefined>();
     expectTypeOf<SplitButtonProps['disabledFocusable']>().toEqualTypeOf<boolean | undefined>();
     expectTypeOf<SplitButtonMenuButtonProps['disabledFocusable']>().toEqualTypeOf<
@@ -411,12 +413,14 @@ describe('0.6 props and unions from the package entry', () => {
 
   it('forms: Field validation and orientation, rich choice labels and labelPosition', () => {
     expectTypeOf<FieldProps['validationState']>().toEqualTypeOf<ValidationState | undefined>();
+    expectTypeOf<FieldProps['validationMessage']>().toEqualTypeOf<ReactNode>();
     expectTypeOf<FieldProps['validationMessageIcon']>().toEqualTypeOf<Slot<'span'> | undefined>();
     expectTypeOf<FieldProps['orientation']>().toEqualTypeOf<Orientation | undefined>();
     expectTypeOf<ValidationState>().toEqualTypeOf<'none' | 'error' | 'warning' | 'success'>();
     expectTypeOf<FieldContextValue['validationState']>().toEqualTypeOf<
       ValidationState | undefined
     >();
+    expectTypeOf<FieldContextValue['validationMessageId']>().toEqualTypeOf<string | undefined>();
 
     expectTypeOf<ReactNode>().toExtend<CheckboxProps['label']>();
     expectTypeOf<ReactNode>().toExtend<SwitchProps['label']>();
@@ -424,6 +428,7 @@ describe('0.6 props and unions from the package entry', () => {
     expectTypeOf<CheckboxLabelPosition>().toEqualTypeOf<'before' | 'after'>();
     expectTypeOf<SwitchLabelPosition>().toEqualTypeOf<'before' | 'after' | 'above'>();
     expectTypeOf<CheckboxLabelPosition>().toExtend<LabelPosition>();
+    expectTypeOf<LabelPosition>().toEqualTypeOf<'before' | 'after' | 'above' | 'below'>();
     expectTypeOf<CheckboxProps['labelPosition']>().toEqualTypeOf<
       CheckboxLabelPosition | undefined
     >();
@@ -433,8 +438,14 @@ describe('0.6 props and unions from the package entry', () => {
 
     expectTypeOf<RatingDisplayProps['labels']>().toEqualTypeOf<RatingDisplayLabels | undefined>();
     expectTypeOf<RatingDisplayProps['count']>().toEqualTypeOf<number | undefined>();
+    expectTypeOf<RatingDisplayProps['showValue']>().toEqualTypeOf<boolean | undefined>();
+    expectTypeOf<RatingDisplayProps['compact']>().toEqualTypeOf<boolean | undefined>();
+    expectTypeOf<RatingDisplayProps['locale']>().toEqualTypeOf<string | undefined>();
     expectTypeOf<NonNullable<RatingDisplayLabels['rating']>>().toEqualTypeOf<
       (value: number, max: number, formattedValue: string) => string
+    >();
+    expectTypeOf<NonNullable<RatingDisplayLabels['count']>>().toEqualTypeOf<
+      (count: number, formattedCount: string) => string
     >();
 
     // @ts-expect-error a Checkbox label is before or after its box
@@ -451,6 +462,7 @@ describe('0.6 props and unions from the package entry', () => {
     expectTypeOf<ComboboxLabels['expand']>().toEqualTypeOf<string | undefined>();
     expectTypeOf<DropdownProps['clearable']>().toEqualTypeOf<boolean | undefined>();
     expectTypeOf<DropdownProps['labels']>().toEqualTypeOf<DropdownLabels | undefined>();
+    expectTypeOf<DropdownLabels['clear']>().toEqualTypeOf<string | undefined>();
     expectTypeOf<TimePickerProps['expandIcon']>().toEqualTypeOf<Slot<'span'> | undefined>();
     expectTypeOf<TimePickerInvalidReason>().toEqualTypeOf<'unparseable' | 'out-of-range'>();
     expectTypeOf<NonNullable<TimePickerProps['onInvalidInput']>>().toEqualTypeOf<
@@ -458,6 +470,10 @@ describe('0.6 props and unions from the package entry', () => {
     >();
     expectTypeOf<NonNullable<TimePickerLabels['outOfRange']>>().toEqualTypeOf<
       (min: string | undefined, max: string | undefined) => string
+    >();
+    expectTypeOf<TimePickerLabels['expand']>().toEqualTypeOf<string | undefined>();
+    expectTypeOf<NonNullable<TimePickerLabels['invalidTime']>>().toEqualTypeOf<
+      (format: string) => string
     >();
   });
 
@@ -483,6 +499,9 @@ describe('0.6 props and unions from the package entry', () => {
     expectTypeOf<ModalType>().toEqualTypeOf<'modal' | 'alert'>();
     expectTypeOf<DialogProps['modalType']>().toEqualTypeOf<DialogModalType | undefined>();
     expectTypeOf<DialogOpenChangeReason>().toEqualTypeOf<ModalOpenChangeReason>();
+    expectTypeOf<ModalOpenChangeReason>().toEqualTypeOf<
+      'trigger' | 'close' | 'close-button' | 'escape' | 'outside-press'
+    >();
     expectTypeOf<DialogOpenChangeDetails['reason']>().toEqualTypeOf<ModalOpenChangeReason>();
     expectTypeOf<DialogOpenChangeDetails>().toEqualTypeOf<
       OpenChangeDetails<ModalOpenChangeReason>

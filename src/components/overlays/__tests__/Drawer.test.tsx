@@ -19,7 +19,6 @@ import {
 } from '../Drawer';
 import { Dialog } from '../Dialog';
 import { useDismiss } from '../../../hooks/useDismiss';
-import { SpinButton } from '../../input/SpinButton';
 import { Portal } from '../../portal/Portal';
 import { getTopmostLayer } from '../../../lib/layers';
 import type { ModalOpenChangeReason, OpenChangeDetails } from '../../../lib/types';
@@ -27,6 +26,8 @@ import {
   asClientReference,
   expectNoA11yViolations,
   findDanglingIdRefsInHtml,
+  installResizeObserverMock,
+  mockRect,
   renderWithProviders,
   testCompoundExposure,
   testDisplayName,
@@ -1583,25 +1584,8 @@ describe('Drawer', () => {
   });
 
   describe('backdrop press and the focused field', () => {
-    /** A drawer with a SpinButton, which commits its typed text on blur. */
-    function PageSize({
-      onValueChange,
-      ...props
-    }: Partial<DrawerProps> & { onValueChange: (value: number) => void }) {
-      return (
-        <Drawer title="Page size" {...props}>
-          <SpinButton aria-label="Rows" defaultValue={10} onValueChange={onValueChange} />
-        </Drawer>
-      );
-    }
-
-    async function typeRows(user: UserEvent, text: string) {
-      const rows = screen.getByRole('spinbutton', { name: 'Rows' });
-      await user.clear(rows);
-      await user.type(rows, text);
-      return rows;
-    }
-
+    // A SpinButton or picker in the drawer commits its typed value on this blur: the composition
+    // tests are in src/__tests__/integration.test.tsx.
     it('blurs the focused field before a backdrop press closes the drawer', async () => {
       const user = userEvent.setup();
       const onBlur = vi.fn();
@@ -1616,64 +1600,63 @@ describe('Drawer', () => {
       expect(onBlur).toHaveBeenCalledTimes(1);
     });
 
-    it.each(['backdrop', 'Close button'] as const)(
-      'commits a typed SpinButton value when the %s closes the drawer',
-      async (path) => {
-        const user = userEvent.setup();
-        const onValueChange = vi.fn();
-        render(<PageSize defaultOpen onValueChange={onValueChange} />);
-        await typeRows(user, '50');
-        await user.click(path === 'backdrop' ? backdrop() : button('Close'));
-        expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
-        expect(onValueChange.mock.calls).toEqual([[50]]);
-      },
-    );
-
-    it('commits the typed value on a refused backdrop press and gives focus back to the field', async () => {
+    it('blurs the field on a refused backdrop press and gives focus back to it', async () => {
       const user = userEvent.setup();
-      const onValueChange = vi.fn();
+      const onBlur = vi.fn();
       function RefusesBackdrop() {
         const [open, setOpen] = React.useState(true);
         return (
-          <PageSize
+          <Drawer
+            title="Filters"
             open={open}
             onOpenChange={(next, details) => {
               if (details?.reason !== 'outside-press') setOpen(next);
             }}
-            onValueChange={onValueChange}
-          />
+          >
+            <input aria-label="Name" onBlur={onBlur} />
+          </Drawer>
         );
       }
       render(<RefusesBackdrop />);
-      const rows = await typeRows(user, '50');
+      const name = screen.getByRole('textbox', { name: 'Name' });
+      act(() => name.focus());
       await user.click(backdrop());
-      expect(screen.getByRole('dialog', { name: 'Page size' })).toBeInTheDocument();
-      expect(onValueChange.mock.calls).toEqual([[50]]);
-      expect(rows).toHaveFocus();
-      expect(rows).toHaveValue('50');
+      expect(screen.getByRole('dialog', { name: 'Filters' })).toBeInTheDocument();
+      // The blur-time work of the field ran, and focus came back to it.
+      expect(onBlur).toHaveBeenCalledTimes(1);
+      expect(name).toHaveFocus();
     });
   });
 
   describe('Dialog.Footer inside a Drawer', () => {
     it('is a plain action row at the end of the body: it does not stick, and nothing warns', () => {
+      // With a ResizeObserver and a footer height, a footer inside Dialog.Content reports its
+      // height to the body's scroll padding; inside a Drawer nothing measures it.
+      const resizeObserver = installResizeObserverMock();
       const warn = vi.spyOn(console, 'warn');
-      render(
-        <Drawer title="Filters" defaultOpen>
-          <p>Fields</p>
-          <Dialog.Footer data-testid="footer">
-            <button type="button">Apply</button>
-          </Dialog.Footer>
-        </Drawer>,
-      );
-      const footer = screen.getByTestId('footer');
-      // The 0.5 action row: the sticky classes are tuned for the Dialog body, whose scroll padding
-      // reserves the footer's height; the drawer body has neither.
-      expect(footer).toHaveAttribute('class', 'mt-6 flex justify-end gap-2');
-      const body = footer.parentElement as HTMLElement;
-      expect(body).toHaveClass('overflow-y-auto');
-      expect(body.getAttribute('style')).toBeNull();
-      expect(warn).not.toHaveBeenCalled();
-      warn.mockRestore();
+      try {
+        render(
+          <Drawer title="Filters" defaultOpen>
+            <p>Fields</p>
+            <Dialog.Footer data-testid="footer">
+              <button type="button">Apply</button>
+            </Dialog.Footer>
+          </Drawer>,
+        );
+        const footer = screen.getByTestId('footer');
+        // The 0.5 action row: the sticky classes are tuned for the Dialog body, whose scroll
+        // padding reserves the footer's height; the drawer body has neither.
+        expect(footer).toHaveAttribute('class', 'mt-6 flex justify-end gap-2');
+        const body = footer.parentElement as HTMLElement;
+        expect(body).toHaveClass('overflow-y-auto');
+        mockRect(footer, { height: 64 });
+        resizeObserver.trigger(footer);
+        expect(body.getAttribute('style')).toBeNull();
+        expect(warn).not.toHaveBeenCalled();
+      } finally {
+        warn.mockRestore();
+        resizeObserver.restore();
+      }
     });
   });
 

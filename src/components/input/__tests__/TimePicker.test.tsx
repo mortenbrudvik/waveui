@@ -1040,6 +1040,46 @@ describe('TimePicker', () => {
       await user.click(screen.getByRole('button', { name: 'Clear time' }));
       expect(combobox('Time')).toHaveValue('9:00 AM');
     });
+
+    it('Tab from erased text clears the value and moves on past the picker: focus never drops to <body>', async () => {
+      const user = userEvent.setup();
+      const onValueChange = vi.fn();
+      render(
+        <React.StrictMode>
+          <TimePicker
+            aria-label="Time"
+            defaultValue="09:00"
+            clearable
+            onValueChange={onValueChange}
+          />
+          <button type="button">Next</button>
+        </React.StrictMode>,
+      );
+      await user.clear(combobox('Time'));
+      await user.tab();
+      // The erased text clears the value before Tab moves focus, so the clear button it removes is
+      // skipped: focus goes where Tab goes without it (the expand button is not a tab stop).
+      expect(onValueChange.mock.calls).toEqual([['']]);
+      expect(screen.queryByRole('button', { name: 'Clear time' })).not.toBeInTheDocument();
+      expect(screen.getByRole('button', { name: 'Next' })).toHaveFocus();
+      expect(combobox('Time')).toHaveValue('');
+    });
+
+    it('Tab from erased text reaches the clear button when a controlled parent keeps the value', async () => {
+      const user = userEvent.setup();
+      const onValueChange = vi.fn();
+      render(
+        <>
+          <TimePicker aria-label="Time" value="09:00" clearable onValueChange={onValueChange} />
+          <button type="button">Next</button>
+        </>,
+      );
+      await user.clear(combobox('Time'));
+      await user.tab();
+      expect(onValueChange.mock.calls).toEqual([['']]);
+      expect(combobox('Time')).toHaveValue('9:00 AM');
+      expect(screen.getByRole('button', { name: 'Clear time' })).toHaveFocus();
+    });
   });
 
   describe('expand button', () => {

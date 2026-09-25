@@ -48,9 +48,14 @@ export const inputInvalid = 'border-destructive focus:border-b-destructive';
  */
 export const inputInvalidWithin = 'border-destructive focus-within:border-b-destructive';
 
-/** Disabled look for native `disabled` and `aria-disabled` (C-DISABLED) controls. */
+/**
+ * Disabled look for native `disabled` and `aria-disabled` (C-DISABLED) controls. An
+ * `aria-disabled` control that keeps keyboard focus (a self-disabling Pagination or Carousel
+ * button) goes back to full opacity while it shows its focus ring, which `opacity` would dim below
+ * 3:1, as a `disabledFocusable` button does.
+ */
 export const disabledStyles =
-  'disabled:cursor-not-allowed disabled:opacity-50 aria-disabled:cursor-not-allowed aria-disabled:opacity-50';
+  'disabled:cursor-not-allowed disabled:opacity-50 aria-disabled:cursor-not-allowed aria-disabled:opacity-50 aria-disabled:focus-visible:opacity-100';
 
 /** Colour-transition recipe that is switched off for reduced motion (C-MOTION). */
 export const motionSafeTransition = 'transition motion-reduce:transition-none';

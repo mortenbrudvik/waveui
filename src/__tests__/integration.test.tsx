@@ -85,6 +85,7 @@ import {
   TreeItem,
   useOverflowMenu,
   useToastController,
+  type DialogProps,
 } from '../index';
 import {
   asClientReference,
@@ -2381,10 +2382,105 @@ describe('a Dialog with a long form of Fields and a Dialog.Footer', () => {
     await user.tab();
     expect(button('Cancel')).toHaveFocus();
     await user.tab();
+    expect(button('Save')).toHaveFocus();
     await user.keyboard('{Enter}');
     expect(onSubmit).toHaveBeenCalledTimes(1);
     expect(duplicateIds()).toEqual([]);
     await expectNoA11yViolations(document.body);
+  });
+});
+
+describe('a SpinButton in a Dialog or Drawer: a backdrop press commits its typed value', () => {
+  type Surface = 'Dialog' | 'Drawer';
+  type SurfaceProps = Pick<DialogProps, 'open' | 'defaultOpen' | 'onOpenChange' | 'modalType'>;
+
+  /** A dialog or drawer titled "Page size" around a SpinButton, which commits typed text on blur. */
+  function PageSize({
+    surface,
+    onValueChange,
+    ...props
+  }: SurfaceProps & { surface: Surface; onValueChange: (value: number) => void }) {
+    const rows = <SpinButton aria-label="Rows" defaultValue={10} onValueChange={onValueChange} />;
+    if (surface === 'Drawer') {
+      const { open, defaultOpen, onOpenChange } = props;
+      return (
+        <Drawer title="Page size" open={open} defaultOpen={defaultOpen} onOpenChange={onOpenChange}>
+          {rows}
+        </Drawer>
+      );
+    }
+    return (
+      <Dialog {...props}>
+        <Dialog.Content title="Page size">{rows}</Dialog.Content>
+      </Dialog>
+    );
+  }
+
+  /** The backdrop behind the open surface (its parent element). */
+  const backdropOf = (role: 'dialog' | 'alertdialog') => screen.getByRole(role).parentElement!;
+
+  async function typeRows(user: ReturnType<typeof userEvent.setup>, text: string) {
+    const rows = screen.getByRole('spinbutton', { name: 'Rows' });
+    await user.clear(rows);
+    await user.type(rows, text);
+    return rows;
+  }
+
+  it.each([
+    ['Dialog', 'backdrop'],
+    ['Dialog', 'Close button'],
+    ['Drawer', 'backdrop'],
+    ['Drawer', 'Close button'],
+  ] as const)('%s: the %s closes it and the typed value is committed', async (surface, path) => {
+    const user = userEvent.setup();
+    const onValueChange = vi.fn();
+    render(<PageSize surface={surface} defaultOpen onValueChange={onValueChange} />);
+    await typeRows(user, '50');
+    await user.click(path === 'backdrop' ? backdropOf('dialog') : button('Close'));
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+    expect(onValueChange.mock.calls).toEqual([[50]]);
+  });
+
+  it.each(['Dialog', 'Drawer'] as const)(
+    '%s: a refused backdrop press commits the typed value and gives focus back to the SpinButton',
+    async (surface) => {
+      const user = userEvent.setup();
+      const onValueChange = vi.fn();
+      function RefusesBackdrop() {
+        const [open, setOpen] = React.useState(true);
+        return (
+          <PageSize
+            surface={surface}
+            open={open}
+            onOpenChange={(next, details) => {
+              if (details?.reason !== 'outside-press') setOpen(next);
+            }}
+            onValueChange={onValueChange}
+          />
+        );
+      }
+      render(<RefusesBackdrop />);
+      const rows = await typeRows(user, '50');
+      await user.click(backdropOf('dialog'));
+      expect(screen.getByRole('dialog', { name: 'Page size' })).toBeInTheDocument();
+      expect(onValueChange.mock.calls).toEqual([[50]]);
+      expect(rows).toHaveFocus();
+      expect(rows).toHaveValue('50');
+    },
+  );
+
+  it('an alert Dialog: the press neither closes it nor blurs the SpinButton, whose text stays a draft', async () => {
+    const user = userEvent.setup();
+    const onValueChange = vi.fn();
+    render(
+      <PageSize surface="Dialog" defaultOpen modalType="alert" onValueChange={onValueChange} />,
+    );
+    const rows = await typeRows(user, '50');
+    await user.click(backdropOf('alertdialog'));
+    expect(screen.getByRole('alertdialog', { name: 'Page size' })).toBeInTheDocument();
+    expect(rows).toHaveFocus();
+    expect(onValueChange).not.toHaveBeenCalled();
+    expect(rows).toHaveValue('50');
   });
 });
 

@@ -6,8 +6,8 @@
  *   it into their own wired `<button>`. {@link BUTTON_OWN_PROP_KEYS} lists the Button props that
  *   must not reach that element; {@link placeButtonIcon} and {@link MERGED_DISABLED_FOCUSABLE_PROPS}
  *   give it what the Button would have done with `icon`, `iconPosition` and `disabledFocusable`.
- * - Glyph slots inside a wired button (SplitButton and MenuButton `menuIcon`) unwrap it:
- *   {@link unwrapButtonGlyph}.
+ * - Glyph slots inside a wired button (SplitButton and MenuButton `menuIcon`, Combobox and
+ *   TimePicker `expandIcon`) unwrap it: {@link unwrapButtonGlyph}.
  */
 import * as React from 'react';
 import { focusableDisabledProps } from '../../lib/aria';

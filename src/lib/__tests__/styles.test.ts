@@ -141,6 +141,19 @@ describe('disabledStyles', () => {
     expect(disabledStyles).toContain('disabled:opacity-50');
     expect(disabledStyles).toContain('aria-disabled:opacity-50');
   });
+
+  it('lifts the dimmed look of a focusable aria-disabled control while it shows its focus ring', () => {
+    // `opacity` dims the element's own outline too, which would put the ring below 3:1. The
+    // variant's higher specificity wins over `aria-disabled:opacity-50` while it matches; a
+    // natively disabled control never takes focus.
+    expect(tokens(disabledStyles)).toEqual([
+      'disabled:cursor-not-allowed',
+      'disabled:opacity-50',
+      'aria-disabled:cursor-not-allowed',
+      'aria-disabled:opacity-50',
+      'aria-disabled:focus-visible:opacity-100',
+    ]);
+  });
 });
 
 describe('forcedColors recipes (input-basic#9)', () => {

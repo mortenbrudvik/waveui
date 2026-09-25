@@ -846,6 +846,22 @@ describe('Switch — disabledFocusable', () => {
     expect(getThumb(control)).toHaveClass('forced-colors:bg-[GrayText]');
   });
 
+  it('keeps its focus ring at full strength: the dimmed look lifts while a focus ring shows inside it', () => {
+    render(
+      <>
+        <Switch label="Dark mode" disabledFocusable data-testid="focusable" />
+        <Switch label="Compact" data-testid="available" />
+      </>,
+    );
+    // The root's opacity dims the switch's outline too, which would put the ring below 3:1.
+    // tailwind-merge keeps both classes (different variants); the variant wins while it matches.
+    expect(screen.getByTestId('focusable')).toHaveClass(
+      'opacity-50',
+      'has-focus-visible:opacity-100',
+    );
+    expect(screen.getByTestId('available').className).not.toMatch(/opacity/);
+  });
+
   it('is neither submitted nor validated with its form', () => {
     render(
       <form aria-label="Form">

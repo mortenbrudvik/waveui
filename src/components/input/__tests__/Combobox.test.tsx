@@ -1725,6 +1725,28 @@ describe('Combobox', () => {
       expect(combobox()).toHaveFocus();
     });
 
+    it.each([
+      [
+        'erased filter text keeps the value, so Tab reaches the clear button',
+        false,
+        'Clear selection',
+      ],
+      ['erased freeform text clears the value as it is erased, so Tab moves on', true, 'Next'],
+    ])('Tab from erased text never drops focus to <body>: %s', async (_label, freeform, name) => {
+      const user = userEvent.setup();
+      render(
+        <>
+          <Combobox aria-label="Fruit" defaultValue="a" clearable freeform={freeform}>
+            {FRUITS}
+          </Combobox>
+          <button type="button">Next</button>
+        </>,
+      );
+      await user.clear(combobox());
+      await user.tab();
+      expect(screen.getByRole('button', { name })).toHaveFocus();
+    });
+
     it('localizes the names of both buttons with labels', () => {
       const labels: ComboboxLabels = { clear: 'Auswahl löschen', expand: 'Optionen anzeigen' };
       renderCombobox({ defaultValue: 'a', clearable: true, labels });

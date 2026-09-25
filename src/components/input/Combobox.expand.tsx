@@ -1,12 +1,11 @@
 import * as React from 'react';
-import { isElementOfType } from '../../lib/children';
 import { cn } from '../../lib/cn';
 import { warnOnce } from '../../lib/dev';
 import { ChevronDownIcon } from '../../lib/icons';
 import { renderSlot, slotRendersContent } from '../../lib/slot';
 import type { Slot } from '../../lib/slot';
 import { disabledStyles, focusRing } from '../../lib/styles';
-import { Button } from '../button/Button';
+import { unwrapButtonGlyph } from '../button/Button.slots';
 import { PICKER_ICON_BUTTON_CLASSES } from './pickerStyles';
 
 /**
@@ -37,16 +36,6 @@ export interface PickerExpandButtonProps {
 }
 
 /**
- * Whether `value` is a slot object (`{ as, children, … }`) that renders a `<button>` or `Button`.
- */
-function isButtonSlotObject(value: unknown): value is { children?: React.ReactNode } {
-  if (typeof value !== 'object' || value === null || React.isValidElement(value)) return false;
-  if (Symbol.iterator in value || !('as' in value)) return false;
-  const { as } = value as { as?: unknown };
-  return as === 'button' || as === Button;
-}
-
-/**
  * The expand button of an editable combobox (Combobox, TimePicker): the APG "open" button at the
  * end of the input. It is not a tab stop (Alt+ArrowDown opens the list from the keyboard) and a
  * press keeps focus in the input. Its glyph is decorative (`aria-hidden`) and turns while the list
@@ -63,19 +52,8 @@ export const PickerExpandButton = ({
   disabled,
   onToggle,
 }: PickerExpandButtonProps) => {
-  // The type is unwrapped (C-COMPOUND): a Button written in a Server Component arrives as a lazy
-  // client reference. A slot object is never an element, so any slot value can be checked as a
-  // node.
-  const node = expandIcon as React.ReactNode;
-  let content: Slot<'span'> | undefined = expandIcon;
-  let button: 'a button element' | 'a slot object that renders a button' | null = null;
-  if (isElementOfType<{ children?: React.ReactNode }>(node, 'button', Button)) {
-    button = 'a button element';
-    content = node.props.children;
-  } else if (isButtonSlotObject(expandIcon)) {
-    button = 'a slot object that renders a button';
-    content = expandIcon.children;
-  }
+  // The glyph slot rule shared with SplitButton and MenuButton `menuIcon` (C-SLOTS).
+  const { glyph: content, button } = unwrapButtonGlyph(expandIcon);
   React.useEffect(() => {
     if (button) {
       warnOnce(
