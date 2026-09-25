@@ -22,6 +22,39 @@ import { useId } from '../../hooks/useId';
 /** The two value namespaces of a Nav: items (Nav.Item and Nav.SubItem) and categories. */
 type NavValueKind = 'item' | 'category';
 
+/**
+ * The category each sub-item was last shown in, by sub-item value: written by the mounted
+ * sub-items from a layout effect, read by the categories with `useSyncExternalStore`. An entry
+ * outlives its sub-item, so a category closed after its current sub-item was shown still knows it
+ * contains the current page.
+ */
+interface NavCategoryStore {
+  /** Records the category a mounted sub-item renders in. */
+  record: (value: string, category: string) => void;
+  /** The category last recorded for a sub-item value. */
+  get: (value: string) => string | undefined;
+  subscribe: (listener: () => void) => () => void;
+}
+
+function createCategoryStore(): NavCategoryStore {
+  const categories = new Map<string, string>();
+  const listeners = new Set<() => void>();
+  return {
+    record(value, category) {
+      if (categories.get(value) === category) return;
+      categories.set(value, category);
+      listeners.forEach((listener) => listener());
+    },
+    get: (value) => categories.get(value),
+    subscribe(listener) {
+      listeners.add(listener);
+      return () => {
+        listeners.delete(listener);
+      };
+    },
+  };
+}
+
 interface NavContextValue {
   /** The selected item value (`''` when nothing is selected). */
   value: string;
@@ -31,6 +64,9 @@ interface NavContextValue {
   toggleCategory: (value: string) => void;
   /** Registers a mounted item or category value (duplicate warning); returns the cleanup. */
   registerValue: (kind: NavValueKind, value: string) => () => void;
+  /** The `currentCategory` hint of the Nav. */
+  currentCategory: string | undefined;
+  categoryStore: NavCategoryStore;
 }
 
 const NavContext = React.createContext<NavContextValue | null>(null);
@@ -43,7 +79,16 @@ const INERT_NAV_CONTEXT: NavContextValue = {
   openCategories: [],
   toggleCategory: noop,
   registerValue: () => noop,
+  currentCategory: undefined,
+  categoryStore: { record: noop, get: () => undefined, subscribe: () => noop },
 };
+
+/**
+ * The value of the Nav.Category a sub-item renders in (`null` outside a category). It renders no
+ * element; a sub-item outside a category is valid, so there is no missing-context error.
+ */
+const NavCategoryValueContext = React.createContext<string | null>(null);
+NavCategoryValueContext.displayName = 'NavCategoryValueContext';
 
 /** C-CONTEXT: throws in development, logs once and returns an inert value in production. */
 function useNavContext(componentName: string): NavContextValue {
@@ -66,6 +111,15 @@ function warnDuplicateValue(kind: NavValueKind, value: string): void {
 function useNavValue(context: NavContextValue, kind: NavValueKind, value: string): void {
   const { registerValue } = context;
   React.useEffect(() => registerValue(kind, value), [registerValue, kind, value]);
+}
+
+/** Records the category a mounted sub-item renders in, which the category reads once closed. */
+function useRecordCategory(context: NavContextValue, value: string): void {
+  const category = React.useContext(NavCategoryValueContext);
+  const { categoryStore } = context;
+  React.useLayoutEffect(() => {
+    if (category !== null) categoryStore.record(value, category);
+  }, [categoryStore, value, category]);
 }
 
 // ---------------------------------------------------------------------------
@@ -102,6 +156,14 @@ export interface NavProps extends Omit<React.HTMLAttributes<HTMLElement>, 'defau
   defaultOpenCategories?: readonly string[];
   /** Called with the new list of open category values (a new array) when a category is toggled. */
   onOpenCategoriesChange?: (openCategories: string[]) => void;
+  /**
+   * The `value` of the category that contains the current item, for sub-items Nav cannot find by
+   * itself (rendered by your own component inside a closed category). Usually not needed: Nav
+   * finds sub-items among a category's children (through Fragments and wrapper elements) and
+   * remembers the category of the current sub-item once it has been shown. A hint, not state:
+   * unlike Fluent's `selectedCategoryValue` it has no default or change callback.
+   */
+  currentCategory?: string;
   /** Ref to the `<nav>` element. */
   ref?: React.Ref<HTMLElement>;
 }
@@ -335,6 +397,8 @@ const subItemClasses = {
 
 const categoryButtonClasses = cn(
   'flex w-full items-center gap-2 px-4 py-2 text-body-1 font-semibold text-foreground not-disabled:not-aria-disabled:hover:bg-subtle-hover transition-colors motion-reduce:transition-none',
+  // A closed category that contains the current page shows the selected look of an item.
+  'data-[contains-current]:bg-subtle-selected data-[contains-current]:text-primary data-[contains-current]:border-s-2 data-[contains-current]:border-s-primary',
   focusRingInset,
 );
 
@@ -522,6 +586,14 @@ function renderNavEntry(
  * (and `aria-controls` while open); the sub-items render in a nested list while it is open.
  * Open state lives on `Nav` (`openCategories`/`defaultOpenCategories`).
  *
+ * A closed category that contains the current item marks its toggle button with
+ * `aria-current="true"` (the button is not the page's link, so not `"page"`),
+ * `data-contains-current` and the selected look of `Nav.Item`. It contains the current item when
+ * a `Nav.SubItem` with the current value is among its children (through Fragments and wrapper
+ * elements, also in the server HTML), when the current sub-item was last shown in it, or when it
+ * is the Nav's `currentCategory`. An open category is not marked: its sub-item shows the current
+ * page.
+ *
  * Also exported as `NavCategory` (import the flat name from React Server Components).
  */
 const NavCategory = ({
@@ -534,10 +606,28 @@ const NavCategory = ({
   ...rest
 }: NavCategoryProps) => {
   const context = useNavContext('Nav.Category');
-  const { openCategories, toggleCategory } = context;
+  const {
+    value: currentValue,
+    openCategories,
+    toggleCategory,
+    currentCategory,
+    categoryStore,
+  } = context;
   useNavValue(context, 'category', value);
   const listId = useId('wave-nav-category');
   const isOpen = openCategories.includes(value);
+
+  // The current sub-item was last shown in this category (none on the server).
+  const holdsShownCurrent = React.useSyncExternalStore(
+    categoryStore.subscribe,
+    () => currentValue !== '' && categoryStore.get(currentValue) === value,
+    () => false,
+  );
+  const containsCurrent =
+    !isOpen &&
+    (currentCategory === value ||
+      holdsShownCurrent ||
+      (currentValue !== '' && containsValue(children, currentValue)));
 
   let buttonLabel: React.ReactNode = label;
   let items: React.ReactNode = children;
@@ -561,6 +651,8 @@ const NavCategory = ({
         type="button"
         aria-expanded={isOpen}
         aria-controls={isOpen ? listId : undefined}
+        aria-current={containsCurrent ? true : undefined}
+        data-contains-current={containsCurrent ? '' : undefined}
         onClick={() => toggleCategory(value)}
         className={categoryButtonClasses}
       >
@@ -574,9 +666,11 @@ const NavCategory = ({
         />
       </button>
       {isOpen && (
-        <ul id={listId} className="m-0 list-none p-0">
-          {items}
-        </ul>
+        <NavCategoryValueContext.Provider value={value}>
+          <ul id={listId} className="m-0 list-none p-0">
+            {items}
+          </ul>
+        </NavCategoryValueContext.Provider>
       )}
     </li>
   );
@@ -628,6 +722,7 @@ function NavSubItem(props: NavSubItemDynamicProps): React.ReactElement;
 function NavSubItem(props: NavSubItemProps | NavSubItemDynamicProps): React.ReactElement {
   const context = useNavContext('Nav.SubItem');
   useNavValue(context, 'item', props.value);
+  useRecordCategory(context, props.value);
   return renderNavEntry(props as NavEntryProps, context, subItemClasses, false);
 }
 NavSubItem.displayName = 'NavSubItem';
@@ -646,6 +741,7 @@ const NavRoot = ({
   openCategories: openCategoriesProp,
   defaultOpenCategories,
   onOpenCategoriesChange,
+  currentCategory,
   className,
   children,
   ref,
@@ -715,9 +811,19 @@ const NavRoot = ({
     };
   }, []);
 
+  const [categoryStore] = React.useState(createCategoryStore);
+
   const contextValue = React.useMemo<NavContextValue>(
-    () => ({ value, select, openCategories, toggleCategory, registerValue }),
-    [value, select, openCategories, toggleCategory, registerValue],
+    () => ({
+      value,
+      select,
+      openCategories,
+      toggleCategory,
+      registerValue,
+      currentCategory,
+      categoryStore,
+    }),
+    [value, select, openCategories, toggleCategory, registerValue, currentCategory, categoryStore],
   );
 
   return (
@@ -746,7 +852,9 @@ NavRoot.displayName = 'Nav';
  *   `onClick` prevents the default (client-side routing: then nothing opens elsewhere).
  * - **Categories**: `openCategories`/`defaultOpenCategories`/`onOpenCategoriesChange`. Without
  *   `defaultOpenCategories`, the categories containing the selected item (`value` or
- *   `defaultValue`) start open.
+ *   `defaultValue`) start open. A closed category that contains the selected item marks its toggle
+ *   (`aria-current="true"`, `data-contains-current`, the selected look); pass `currentCategory`
+ *   for sub-items your own component renders inside a closed category.
  * - **Values** are unique: among the items and sub-items, and among the categories (a duplicate
  *   warns in development).
  *

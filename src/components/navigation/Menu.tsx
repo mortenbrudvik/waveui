@@ -105,9 +105,16 @@ export type MenuTriggerProps = {
   'aria-expanded': boolean;
   /** The menu's id, only while the menu is open. */
   'aria-controls'?: string;
-  /** Toggles the menu (opening focuses the first enabled item). */
+  /**
+   * Toggles the menu (opening focuses the first enabled item). Ignored when the click comes from an
+   * `aria-disabled="true"` element at or inside the element that carries it.
+   */
   onClick: React.MouseEventHandler<HTMLElement>;
-  /** Enter/Space/ArrowDown open and focus the first item; ArrowUp opens and focuses the last. */
+  /**
+   * Enter/Space/ArrowDown open and focus the first item; ArrowUp opens and focuses the last.
+   * Ignored, without `preventDefault()`, when the key comes from an `aria-disabled="true"` element
+   * at or inside the element that carries it.
+   */
   onKeyDown: React.KeyboardEventHandler<HTMLElement>;
   /** Anchor for positioning and focus-restore target. */
   ref: React.RefCallback<HTMLElement>;
@@ -283,8 +290,24 @@ function isOwnEvent(event: React.SyntheticEvent<HTMLElement>): boolean {
   );
 }
 
+/**
+ * Whether an event comes from an `aria-disabled="true"` element at or inside the element that
+ * handles it (`currentTarget`): the trigger element itself, or the focusable element inside a
+ * wrapper span, where `currentTarget` is the span. An `aria-disabled` ancestor outside the trigger
+ * does not count.
+ */
+function isDisabledTrigger(event: React.SyntheticEvent<HTMLElement>): boolean {
+  const target = event.target as Partial<Element> | null;
+  const disabled =
+    typeof target?.closest === 'function' ? target.closest('[aria-disabled="true"]') : null;
+  return disabled !== null && event.currentTarget.contains(disabled);
+}
+
 const menuSurfaceClasses =
   'min-w-[180px] rounded-md border border-border bg-background py-1 shadow-4';
+
+/** The popup surface also scrolls when it is taller than the space the viewport leaves it. */
+const menuPopoverClasses = cn(menuSurfaceClasses, 'overflow-y-auto overscroll-contain');
 
 const menuItemClasses = cn(
   'flex cursor-pointer select-none items-center gap-2 px-3 py-1.5 text-body-1 text-foreground',
@@ -435,6 +458,11 @@ MenuDivider.displayName = 'MenuDivider';
  * Other props passed to `Menu.Trigger` are forwarded to the child, so
  * `<Tooltip><Menu.Trigger><MenuButton /></Menu.Trigger></Tooltip>` describes the MenuButton.
  *
+ * A trigger with `aria-disabled="true"` (a `disabledFocusable` MenuButton or SplitButton) stays
+ * focusable but never opens the menu: its click, Enter, Space, ArrowDown and ArrowUp are ignored
+ * and keep their default. This holds for the child itself and for an element inside the wrapper
+ * span; an `aria-disabled` ancestor outside the trigger does not count.
+ *
  * With `asChild={false}` (and for a child that does not attach the ref, automatically) the props
  * go on a wrapper span instead; the state ARIA then goes to the first element in the tab order
  * inside it, and focus returns to that element.
@@ -453,14 +481,18 @@ const MenuTrigger = ({ children, asChild, ref, ...rest }: MenuTriggerComponentPr
   useStaticMenuPartWarning('Menu.Trigger', popup);
   const elementRef = useMergedRefs<HTMLElement>(setTriggerElement, ref);
 
+  // An `aria-disabled` trigger (a focusable disabled button) never opens the menu: the event is
+  // left alone, default included, so the element keeps its own handling of the key.
   const handleClick = (event: React.MouseEvent<HTMLElement>) => {
-    if (event.defaultPrevented) return;
+    if (event.defaultPrevented || isDisabledTrigger(event)) return;
     if (open) setOpen(false);
     else openWithFocus('first');
   };
 
   const handleKeyDown = (event: React.KeyboardEvent<HTMLElement>) => {
-    if (event.defaultPrevented || event.ctrlKey || event.metaKey) return;
+    if (event.defaultPrevented || event.ctrlKey || event.metaKey || isDisabledTrigger(event)) {
+      return;
+    }
     switch (event.key) {
       case 'ArrowDown':
         event.preventDefault();
@@ -509,17 +541,19 @@ MenuTrigger.displayName = 'MenuTrigger';
 // ---------------------------------------------------------------------------
 
 /**
- * The portaled `role="menu"` surface of a popup menu, positioned next to `Menu.Trigger`. Focus
- * moves to the first (ArrowUp: last) enabled item when it opens; arrows, Home/End and typeahead
- * move between enabled items. Escape closes it and returns focus to the trigger. An outside press
- * closes it and leaves focus where the press put it (on the trigger only when focus was still in
- * the menu or lost to the page). Tab closes it and moves focus to the trigger without preventing
- * the default, so tabbing continues from the trigger (inside a Dialog, the focus trap moves on
- * from there). The trigger here is the element that takes its focus: for a wrapper span, the
- * element inside it that carries the state ARIA (the span itself when you made it the trigger with
- * a `role` such as `button` and `tabIndex={0}`, or when nothing inside it can take focus). Keys
- * from a portal opened inside the menu (a Popover of an item) are left to that portal: Tab there
- * moves on inside it and keeps the menu open.
+ * The portaled `role="menu"` surface of a popup menu, positioned next to `Menu.Trigger`. A menu
+ * taller than the space available scrolls inside the viewport: the surface is limited to the space
+ * next to the trigger (`max-height`/`max-width`) and scrolls, and an item that receives focus is
+ * scrolled into view. Focus moves to the first (ArrowUp: last) enabled item when it opens;
+ * arrows, Home/End and typeahead move between enabled items. Escape closes it and returns focus to
+ * the trigger. An outside press closes it and leaves focus where the press put it (on the trigger
+ * only when focus was still in the menu or lost to the page). Tab closes it and moves focus to the
+ * trigger without preventing the default, so tabbing continues from the trigger (inside a Dialog,
+ * the focus trap moves on from there). The trigger here is the element that takes its focus: for
+ * a wrapper span, the element inside it that carries the state ARIA (the span itself when you made
+ * it the trigger with a `role` such as `button` and `tabIndex={0}`, or when nothing inside it can
+ * take focus). Keys from a portal opened inside the menu (a Popover of an item) are left to that
+ * portal: Tab there moves on inside it and keeps the menu open.
  *
  * Also exported as `MenuPopover` (import the flat name from React Server Components).
  */
@@ -556,11 +590,12 @@ const MenuPopover = ({
     setSurface(element);
   }, []);
 
-  const { setReference, setFloating, floatingProps } = usePopupPosition({
+  const { setReference, setFloating, floatingProps, isPositioned } = usePopupPosition({
     open,
     side,
     align,
     offset,
+    fitViewport: true,
   });
   React.useLayoutEffect(() => {
     setReference(triggerElement);
@@ -637,6 +672,17 @@ const MenuPopover = ({
     else focusFirst();
   }, [open, surface, takeInitialFocus, focusFirst, focusLast]);
 
+  // The initial focus lands before the surface is limited to the available height (floating-ui
+  // measures after mount), so it scrolls nothing: once positioned, the focused item (the last one
+  // after ArrowUp) is scrolled into view. Later focus moves scroll through the native focus().
+  React.useLayoutEffect(() => {
+    if (!isPositioned || !surface) return;
+    const active = surface.ownerDocument.activeElement as HTMLElement | null;
+    if (active && active !== surface && surface.contains(active)) {
+      active.scrollIntoView?.({ block: 'nearest' });
+    }
+  }, [isPositioned, surface]);
+
   const surfaceContext = React.useMemo<MenuSurfaceContextValue>(
     () => ({ close: closeFromItem }),
     [closeFromItem],
@@ -680,7 +726,7 @@ const MenuPopover = ({
             composeEventHandlers(onKeyDownCapture, rovingKeyDownCapture),
           )}
           onFocus={composeEventHandlers(onFocus, rovingFocus, { checkDefaultPrevented: false })}
-          className={cn(menuSurfaceClasses, className)}
+          className={cn(menuPopoverClasses, className)}
         >
           {children}
         </div>

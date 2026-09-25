@@ -1,6 +1,6 @@
 import * as React from 'react';
 import { describe, it, expect, vi, afterEach } from 'vitest';
-import { act, fireEvent, render, screen, within } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { hydrateRoot } from 'react-dom/client';
 import { renderToString } from 'react-dom/server';
@@ -1647,6 +1647,212 @@ describe('Menu popup (Menu.Trigger + Menu.Popover)', () => {
       expect(item('Edit')).toHaveFocus();
       expect(warn).not.toHaveBeenCalled();
     });
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Long menus: the surface fits the viewport and scrolls
+// ---------------------------------------------------------------------------
+
+describe('Menu.Popover taller than the viewport', () => {
+  const LONG_MENU_ITEMS = Array.from({ length: 40 }, (_, index) => `Command ${index + 1}`);
+
+  function LongMenu() {
+    return (
+      <Menu>
+        <Menu.Trigger>
+          <button type="button">Actions</button>
+        </Menu.Trigger>
+        <Menu.Popover>
+          {LONG_MENU_ITEMS.map((label) => (
+            <Menu.Item key={label}>{label}</Menu.Item>
+          ))}
+        </Menu.Popover>
+      </Menu>
+    );
+  }
+
+  it('limits the open surface to the available height and scrolls inside it', async () => {
+    const user = userEvent.setup();
+    render(<LongMenu />);
+    await user.click(trigger());
+    const menu = screen.getByRole('menu', { name: 'Actions' });
+    expect(menu).toHaveClass('overflow-y-auto', 'overscroll-contain');
+    expect(menu.style.maxHeight).toBe('var(--wave-popup-available-height)');
+    expect(menu.style.maxWidth).toBe('var(--wave-popup-available-width)');
+  });
+
+  it('keeps a consumer style next to the size limit', async () => {
+    const user = userEvent.setup();
+    render(
+      <Menu>
+        <Menu.Trigger>
+          <button type="button">Actions</button>
+        </Menu.Trigger>
+        <Menu.Popover style={{ minWidth: 240 }}>
+          <Menu.Item>Edit</Menu.Item>
+        </Menu.Popover>
+      </Menu>,
+    );
+    await user.click(trigger());
+    const menu = screen.getByRole('menu');
+    expect(menu.style.minWidth).toBe('240px');
+    expect(menu.style.maxHeight).toBe('var(--wave-popup-available-height)');
+  });
+
+  // The first focus lands before floating-ui has limited the surface's height (it measures after
+  // mount), so that focus scrolls nothing: the item is scrolled into view once positioned.
+  it('scrolls the item focused on opening into view once the surface is positioned', async () => {
+    const user = userEvent.setup();
+    const scrolled = vi.mocked(Element.prototype.scrollIntoView);
+    render(<LongMenu />);
+    act(() => trigger().focus());
+    await user.keyboard('{ArrowUp}');
+    expect(item('Command 40')).toHaveFocus();
+    await waitFor(() => expect(scrolled.mock.contexts).toContain(item('Command 40')));
+    const call = scrolled.mock.contexts.indexOf(item('Command 40'));
+    expect(scrolled.mock.calls[call]).toEqual([{ block: 'nearest' }]);
+  });
+
+  it('ArrowUp on the trigger focuses the last of 40 items; End and Home move to the ends', async () => {
+    const user = userEvent.setup();
+    render(<LongMenu />);
+    act(() => trigger().focus());
+    await user.keyboard('{ArrowUp}');
+    expect(item('Command 40')).toHaveFocus();
+    await user.keyboard('{Home}');
+    expect(item('Command 1')).toHaveFocus();
+    await user.keyboard('{End}');
+    expect(item('Command 40')).toHaveFocus();
+  });
+
+  it('has no axe violations with 40 items open', async () => {
+    const user = userEvent.setup();
+    render(<LongMenu />);
+    await user.click(trigger());
+    expect(screen.getAllByRole('menuitem')).toHaveLength(40);
+    await expectNoA11yViolations();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Triggers with aria-disabled="true" (a focusable disabled MenuButton or SplitButton half)
+// ---------------------------------------------------------------------------
+
+describe('Menu.Trigger around an aria-disabled element', () => {
+  /** What a focusable disabled button renders: `aria-disabled`, still focusable. */
+  function AriaDisabledTriggerMenu({
+    asChild,
+    ariaDisabled = 'true',
+    onOpenChange,
+  }: {
+    asChild: boolean;
+    ariaDisabled?: 'true' | 'false';
+    onOpenChange?: (open: boolean) => void;
+  }) {
+    return (
+      <Menu onOpenChange={onOpenChange}>
+        <Menu.Trigger asChild={asChild}>
+          <button type="button" aria-disabled={ariaDisabled}>
+            Actions
+          </button>
+        </Menu.Trigger>
+        <Menu.Popover>
+          <Menu.Item>Edit</Menu.Item>
+          <Menu.Item>Delete</Menu.Item>
+        </Menu.Popover>
+      </Menu>
+    );
+  }
+
+  const TRIGGER_FORMS = [
+    ['as the child', true],
+    ['inside the asChild={false} wrapper span', false],
+  ] as const;
+
+  /** The keys that open an enabled trigger: `KeyboardEvent.key`, then the user-event notation. */
+  const OPENING_KEYS = [
+    ['Enter', '{Enter}'],
+    [' ', ' '],
+    ['ArrowDown', '{ArrowDown}'],
+    ['ArrowUp', '{ArrowUp}'],
+  ] as const;
+
+  it.each(TRIGGER_FORMS)('%s: a click does not open the menu', async (_form, asChild) => {
+    const user = userEvent.setup();
+    const onOpenChange = vi.fn();
+    render(<AriaDisabledTriggerMenu asChild={asChild} onOpenChange={onOpenChange} />);
+    await user.click(trigger());
+    expect(queryMenu()).not.toBeInTheDocument();
+    expect(trigger()).toHaveAttribute('aria-expanded', 'false');
+    expect(trigger()).toHaveFocus();
+    expect(onOpenChange).not.toHaveBeenCalled();
+  });
+
+  it.each(TRIGGER_FORMS)(
+    '%s: Enter, Space, ArrowDown and ArrowUp do not open the menu and focus stays on the trigger',
+    async (_form, asChild) => {
+      const user = userEvent.setup();
+      const onOpenChange = vi.fn();
+      render(<AriaDisabledTriggerMenu asChild={asChild} onOpenChange={onOpenChange} />);
+      act(() => trigger().focus());
+      for (const [, key] of OPENING_KEYS) {
+        await user.keyboard(key);
+        expect(queryMenu()).not.toBeInTheDocument();
+        expect(trigger()).toHaveFocus();
+      }
+      expect(trigger()).toHaveAttribute('aria-expanded', 'false');
+      expect(onOpenChange).not.toHaveBeenCalled();
+    },
+  );
+
+  it.each(TRIGGER_FORMS)(
+    '%s: the ignored keys and click keep their default (nothing is prevented)',
+    (_form, asChild) => {
+      render(<AriaDisabledTriggerMenu asChild={asChild} />);
+      for (const [key] of OPENING_KEYS) {
+        expect(fireEvent.keyDown(trigger(), { key })).toBe(true);
+      }
+      expect(fireEvent.click(trigger())).toBe(true);
+      expect(queryMenu()).not.toBeInTheDocument();
+    },
+  );
+
+  it.each(TRIGGER_FORMS)(
+    '%s: aria-disabled="false" opens the menu as before',
+    async (_form, asChild) => {
+      const user = userEvent.setup();
+      render(<AriaDisabledTriggerMenu asChild={asChild} ariaDisabled="false" />);
+      await user.click(trigger());
+      expect(item('Edit')).toHaveFocus();
+      await user.keyboard('{Escape}');
+      expect(queryMenu()).not.toBeInTheDocument();
+      await user.keyboard('{ArrowUp}');
+      expect(item('Delete')).toHaveFocus();
+    },
+  );
+
+  it('an aria-disabled ancestor outside the trigger does not block it', async () => {
+    const user = userEvent.setup();
+    render(
+      <div aria-disabled="true">
+        <PopupMenu />
+      </div>,
+    );
+    await user.click(trigger());
+    expect(screen.getByRole('menu', { name: 'Actions' })).toBeInTheDocument();
+    expect(item('Edit')).toHaveFocus();
+  });
+
+  it('a trigger that becomes aria-disabled stops opening; enabled again, it opens', async () => {
+    const user = userEvent.setup();
+    const { rerender } = render(<AriaDisabledTriggerMenu asChild ariaDisabled="false" />);
+    rerender(<AriaDisabledTriggerMenu asChild ariaDisabled="true" />);
+    await user.click(trigger());
+    expect(queryMenu()).not.toBeInTheDocument();
+    rerender(<AriaDisabledTriggerMenu asChild ariaDisabled="false" />);
+    await user.click(trigger());
+    expect(screen.getByRole('menu')).toBeInTheDocument();
   });
 });
 
