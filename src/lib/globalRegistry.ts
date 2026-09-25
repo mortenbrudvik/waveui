@@ -17,6 +17,8 @@ type GlobalStore = Record<symbol, unknown>;
  * - `'inert'` — the elements made inert behind a modal (`useModalIsolation`);
  * - `'restoreFocusTracker'` — the pointer/focus tracker of `useRestoreFocus`;
  * - `'announcer'` — the live-region announcer (`useAnnounce`);
+ * - `'orderedSurfaces'` — the open surfaces whose keyboard order `usePopoverTabOrder` manages
+ *   (`Popover.shared.tsx`);
  * - `'warnings'` and `'missing-context'` — the warn-once keys and the logged missing-context
  *   texts (`dev.ts`).
  *

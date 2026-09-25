@@ -1,6 +1,7 @@
 import * as React from 'react';
 import { cn } from '../../lib/cn';
 import { focusElement, getLastTabbable, getTabbableElements } from '../../lib/focus';
+import { getGlobalRegistry } from '../../lib/globalRegistry';
 import type { UsePopupPositionResult } from '../../hooks/usePopupPosition';
 import { useEventCallback } from '../../hooks/useEventCallback';
 
@@ -172,6 +173,12 @@ interface FocusOrigin {
   uninstall: (() => void) | null;
 }
 
+/**
+ * One per copy of the library, not in the global registry: every field is derived from document
+ * and window events, and only this copy's hooks read it, each of which keeps this copy's
+ * listeners installed from its mount on. A second copy (ESM and CJS side by side) installs its own
+ * listeners and derives the same state; `epoch` is compared only within the copy that set it.
+ */
 const focusOrigin: FocusOrigin = {
   users: 0,
   pressed: false,
@@ -184,9 +191,12 @@ const focusOrigin: FocusOrigin = {
 /**
  * The surfaces whose keyboard order a {@link usePopoverTabOrder} manages right now. Their content
  * takes its place after its anchor, not at the end of the document where its portal is, so none
- * of it is "the last element of the page".
+ * of it is "the last element of the page". Kept in `getGlobalRegistry('orderedSurfaces')`, so an
+ * app that loads both the ESM and the CJS copy of the library excludes the surfaces of both.
  */
-const orderedSurfaces = new Set<HTMLElement>();
+function getOrderedSurfaces(): Set<HTMLElement> {
+  return getGlobalRegistry('orderedSurfaces', () => new Set<HTMLElement>());
+}
 
 function retainFocusOrigin(): () => void {
   if (typeof document === 'undefined') return () => {};
@@ -392,13 +402,14 @@ export function usePopoverTabOrder({
       const anchor = anchorRef.current;
       if (!anchor || entered !== getLastTabbable(surface)) return;
       const order = getTabbableElements(doc.body);
-      const surfaces = [...orderedSurfaces];
+      const surfaces = [...getOrderedSurfaces()];
       const outside = order.filter((el) => !surfaces.some((open) => open.contains(el)));
       const pageEnd = outside[outside.length - 1];
       // The surface ends the order when the previous stop is the page's last element.
       if (!pageEnd || pageEnd === getPrevious(anchor, surface, order)) return;
       if (!focusElement(pageEnd)) entryRef.current = 'page';
     };
+    const orderedSurfaces = getOrderedSurfaces();
     orderedSurfaces.add(surface);
     surface.addEventListener('focusin', onFocusIn);
     doc.addEventListener('keydown', onDocumentKeyDown);

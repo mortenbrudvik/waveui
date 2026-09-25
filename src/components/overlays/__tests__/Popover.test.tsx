@@ -1025,21 +1025,29 @@ describe('Popover', () => {
       ]);
     });
 
-    /** Two popovers open at once; B's content is portaled after A's. */
-    function TwoPopovers() {
+    /**
+     * Two popovers open at once; B's content is portaled after A's. `PopoverB` renders B (another
+     * copy of the library's Popover, for example).
+     */
+    function TwoPopovers({ PopoverB = Popover }: { PopoverB?: typeof Popover }) {
       return (
         <>
           <button type="button">Before</button>
-          {(['A', 'B'] as const).map((name) => (
-            <Popover key={name} defaultOpen>
-              <Popover.Trigger>
+          {(
+            [
+              ['A', Popover],
+              ['B', PopoverB],
+            ] as const
+          ).map(([name, P]) => (
+            <P key={name} defaultOpen>
+              <P.Trigger>
                 <button type="button">{`Toggle ${name}`}</button>
-              </Popover.Trigger>
-              <Popover.Content aria-label={name}>
+              </P.Trigger>
+              <P.Content aria-label={name}>
                 <button type="button">{`${name} first`}</button>
                 <button type="button">{`${name} last`}</button>
-              </Popover.Content>
-            </Popover>
+              </P.Content>
+            </P>
           ))}
           <button type="button">After</button>
         </>
@@ -1068,6 +1076,28 @@ describe('Popover', () => {
       render(<TwoPopovers />);
       // Shift+Tab from nothing reaches the last element of the document, B's content: focus goes to
       // the last element of the page, never into A's content (portaled before B's).
+      expect(await tabs(user, 9, true)).toEqual([
+        'After',
+        'B last',
+        'B first',
+        'Toggle B',
+        'A last',
+        'A first',
+        'Toggle A',
+        'Before',
+        'body',
+      ]);
+    });
+
+    it('with popovers of two copies of the library open, Shift+Tab from outside the page reaches the page (global registry)', async () => {
+      // A second evaluation of the module, as when an app loads both the ESM and the CJS build.
+      vi.resetModules();
+      const copy = await import('../Popover');
+      expect(copy.Popover).not.toBe(Popover);
+      const user = userEvent.setup();
+      render(<TwoPopovers PopoverB={copy.Popover} />);
+      // B's copy redirects the entry to the last element of the page, which lies outside A's
+      // content too although another copy manages A.
       expect(await tabs(user, 9, true)).toEqual([
         'After',
         'B last',
