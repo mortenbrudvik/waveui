@@ -4,6 +4,7 @@ import { composeEventHandlers } from '../../lib/composeEventHandlers';
 import { hasWarned, isDev, warnOnce } from '../../lib/dev';
 import { getTabbableElements } from '../../lib/focus';
 import { CheckIcon } from '../../lib/icons';
+import { materialiseSlotContent, slotRendersContent } from '../../lib/slot';
 import { focusRing, forcedColors } from '../../lib/styles';
 import type { PolymorphicComponent, PolymorphicProps } from '../../lib/polymorphic';
 import { useEventCallback } from '../../hooks/useEventCallback';
@@ -294,10 +295,11 @@ CardRoot.displayName = 'Card';
 export interface CardHeaderOwnProps {
   /**
    * Title content displayed in the card header. It also names a selectable card's built-in
-   * checkbox (`selectionControl="checkbox"`).
+   * checkbox (`selectionControl="checkbox"`). Content that renders nothing (`''`, `[]`, a list of
+   * nothing) renders no title element; `0` is content.
    */
   title?: React.ReactNode;
-  /** Subtitle content displayed below the title. */
+  /** Subtitle content displayed below the title (none when it renders nothing, as `title`). */
   subtitle?: React.ReactNode;
 }
 
@@ -322,15 +324,23 @@ export const CardHeader: PolymorphicComponent<'div', CardHeaderOwnProps> = (prop
   const Component: React.ElementType = as ?? 'div';
   /** Set only inside a `selectionControl="checkbox"` card: the title names its checkbox. */
   const titleId = React.useContext(CardTitleIdContext);
+  // A title or subtitle that renders nothing (`''`, `[]`, a list of nothing) gets no element, so a
+  // checkbox card with such a title warns about its missing name; `0` is content.
+  const hasTitle = slotRendersContent(title);
+  const hasSubtitle = slotRendersContent(subtitle);
   return (
     // In a checkbox card the header keeps clear of the checkbox in the top end corner.
     <Component ref={ref} className={cn('p-4', titleId && 'pe-10', className)} {...rest}>
-      {title && (
+      {hasTitle && (
         <div id={titleId ?? undefined} className="text-subtitle-1">
-          {title}
+          {materialiseSlotContent(title)}
         </div>
       )}
-      {subtitle && <div className="text-caption-1 text-muted-foreground">{subtitle}</div>}
+      {hasSubtitle && (
+        <div className="text-caption-1 text-muted-foreground">
+          {materialiseSlotContent(subtitle)}
+        </div>
+      )}
       {children}
     </Component>
   );

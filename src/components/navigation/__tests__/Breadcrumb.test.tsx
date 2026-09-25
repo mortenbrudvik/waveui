@@ -299,6 +299,13 @@ describe('Breadcrumb', () => {
       expect(onClick).toHaveBeenCalledTimes(2);
     });
 
+    const NO_HREF_WARNING =
+      '[WaveUI] Breadcrumb.Item: a non-current item without `href` or `onClick` renders as plain ' +
+      'text, not a link. Pass `href` (or `onClick`, which renders a button) to make it navigable.';
+    const DISABLED_IGNORED_WARNING =
+      '[WaveUI] Breadcrumb.Item: `disabled` applies to link, button and asChild items; it is ' +
+      'ignored on a text or current item.';
+
     it('renders plain text (a <span>) without href or onClick, with a dev warning', () => {
       const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
       render(
@@ -309,13 +316,11 @@ describe('Breadcrumb', () => {
       );
       expect(screen.getByText('Home').tagName).toBe('SPAN');
       expect(screen.queryByRole('link')).not.toBeInTheDocument();
-      expect(warn).toHaveBeenCalledWith(
-        expect.stringContaining('[WaveUI] Breadcrumb.Item: a non-current item without `href`'),
-      );
+      expect(warn.mock.calls).toEqual([[NO_HREF_WARNING]]);
     });
 
     it('does not warn for the current item', () => {
-      const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+      const warn = vi.spyOn(console, 'warn');
       render(
         <Breadcrumb>
           <Breadcrumb.Item current>Page</Breadcrumb.Item>
@@ -348,15 +353,11 @@ describe('Breadcrumb', () => {
         expect(span).not.toHaveAttribute(attribute);
       }
       expect(span).toHaveAttribute('title', 'Text item');
-      expect(warn).toHaveBeenCalledWith(
-        expect.stringContaining(
-          '[WaveUI] Breadcrumb.Item: `disabled` applies to link, button and asChild items',
-        ),
-      );
+      expect(warn.mock.calls).toEqual([[NO_HREF_WARNING], [DISABLED_IGNORED_WARNING]]);
     });
 
     it('does not warn about disabled on a button item', () => {
-      const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+      const warn = vi.spyOn(console, 'warn');
       render(
         <Breadcrumb>
           <Breadcrumb.Item disabled onClick={() => {}}>
@@ -384,12 +385,7 @@ describe('Breadcrumb', () => {
       expect(span.tagName).toBe('SPAN');
       expect(span).toHaveAttribute('aria-current', 'page');
       expect(span).not.toHaveAttribute('disabled');
-      const disabledWarnings = warn.mock.calls.filter(([message]) =>
-        String(message).includes(
-          '[WaveUI] Breadcrumb.Item: `disabled` applies to link, button and asChild items',
-        ),
-      );
-      expect(disabledWarnings).toHaveLength(1);
+      expect(warn.mock.calls).toEqual([[DISABLED_IGNORED_WARNING]]);
     });
 
     it('a button item does not render rel (it only belongs on a link)', () => {

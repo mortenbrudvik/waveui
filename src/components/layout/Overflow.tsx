@@ -1,6 +1,6 @@
 import * as React from 'react';
 import { cn } from '../../lib/cn';
-import { reportMissingContext } from '../../lib/dev';
+import { isDev, reportMissingContext, warnOnce } from '../../lib/dev';
 import { useMergedRefs } from '../../hooks/useMergedRefs';
 
 /** Properties for the Overflow component. */
@@ -26,7 +26,10 @@ export interface OverflowProps extends React.HTMLAttributes<HTMLDivElement> {
 
 /** Properties for the OverflowItem sub-component. */
 export interface OverflowItemProps extends React.HTMLAttributes<HTMLDivElement> {
-  /** Unique identifier for tracking this item's overflow visibility. */
+  /**
+   * Identifier for tracking this item's overflow visibility, unique within the Overflow (a
+   * duplicate warns in development: items that share one are hidden and shown together).
+   */
   itemId: string;
   /** Content of the overflow item. */
   children: React.ReactNode;
@@ -72,6 +75,16 @@ function sameIds(a: readonly string[], b: readonly string[]): boolean {
   return a.length === b.length && a.every((id, i) => id === b[i]);
 }
 
+function warnDuplicateItemId(itemId: string): void {
+  warnOnce(
+    `Overflow:duplicate:${itemId}`,
+    `Overflow: several items share the itemId "${itemId}". Item ids must be unique within an ` +
+      'Overflow; items with the same itemId are hidden and shown together.',
+  );
+}
+
+const noop = () => {};
+
 /** Width available to items: the content box of the container, and the flex gap between items. */
 function readContainer(container: HTMLElement): { available: number; gap: number } {
   let paddingInline = 0;
@@ -111,6 +124,8 @@ class OverflowStore {
   private button: HTMLElement | null = null;
   private buttonWidth = 0;
   private readonly items = new Map<HTMLElement, string>();
+  /** How many mounted items use each `itemId` (development only: a repeated one warns). */
+  private readonly itemIdCounts = new Map<string, number>();
   private readonly widths = new WeakMap<HTMLElement, number>();
   private readonly listeners = new Set<() => void>();
   private hidden: string[] = NO_IDS;
@@ -213,6 +228,23 @@ class OverflowStore {
       this.measure();
     };
   }
+
+  /**
+   * Counts the `itemId` of a mounted item (called from the item's effect, C-DEV); a second item
+   * with an id already in use warns once per id. Returns the cleanup.
+   */
+  registerItemId = (itemId: string): (() => void) => {
+    if (!isDev) return noop;
+    const counts = this.itemIdCounts;
+    const count = (counts.get(itemId) ?? 0) + 1;
+    counts.set(itemId, count);
+    if (count > 1) warnDuplicateItemId(itemId);
+    return () => {
+      const remaining = (counts.get(itemId) ?? 1) - 1;
+      if (remaining > 0) counts.set(itemId, remaining);
+      else counts.delete(itemId);
+    };
+  };
 
   private observedElements(): HTMLElement[] {
     const elements = Array.from(this.items.keys());
@@ -518,10 +550,12 @@ const OverflowRoot = ({ overflowButton, children, className, ref, ...rest }: Ove
     <OverflowContext.Provider value={ctx}>
       <div
         ref={containerRef}
-        // The row clips its content at its padding edge: the 4px padding (offset by the -4px
-        // margin, so the items keep their place) leaves room for the focus indicator a focused
-        // item draws 4px around itself. The store measures the room without the padding.
-        className={cn('-m-1 flex items-center overflow-hidden p-1', className)}
+        // The row clips its content at its padding edge: the 4px padding leaves room for the focus
+        // indicator a focused item draws 4px around itself. No negative margin offsets it: the
+        // row's box would then reach past its container, which a scroll container around an
+        // edge-to-edge row (or the page) counts as overflow. The store measures the room without
+        // the padding.
+        className={cn('flex items-center overflow-hidden p-1', className)}
         {...rest}
       >
         {children}
@@ -566,6 +600,7 @@ export const OverflowItem = ({
 }: OverflowItemProps) => {
   const { store, hiddenSet } = useOverflowContext('OverflowItem');
   const isHidden = hiddenSet.has(itemId);
+  React.useEffect(() => store.registerItemId(itemId), [store, itemId]);
 
   const registerRef = React.useCallback(
     (node: HTMLDivElement | null) => (node ? store.registerItem(node, itemId) : undefined),
@@ -605,8 +640,13 @@ OverflowItem.displayName = 'OverflowItem';
  * a right-to-left row, WebKit stops the pinned button short of the end, still inside the row.)
  *
  * The row clips what does not fit. So that the focus indicators of its items are not cut off, it
- * has a 4px padding offset by a -4px margin: the items sit where they would without it, and the
- * row's box reaches 4px beyond them. Override both together if you change either.
+ * has a 4px padding: the items sit 4px in from its edges, and the row is 8px taller than they are.
+ * An explicit width (such as `w-full` or a style width) includes that padding. The row never
+ * reaches past its own box, so an edge-to-edge row adds no scrollbar to the page or to a scroll
+ * container around it. A negative margin of 4px lines the items up with the content around the
+ * row; add it only where nothing within 4px of the row scrolls (the row's box then reaches 4px past
+ * its container on every side). `p-0` removes the room (focus indicators at the row's edges are
+ * then clipped).
  *
  * Works without `ResizeObserver` (jsdom, old browsers): it then re-measures on window resize and
  * when items mount, unmount or move.

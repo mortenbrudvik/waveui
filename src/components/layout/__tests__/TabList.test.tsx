@@ -53,6 +53,25 @@ afterEach(() => {
 const warnings = (warn: { mock: { calls: unknown[][] } }) =>
   warn.mock.calls.map(([message]) => String(message));
 
+/** A TabList deprecation warning (asserted exactly, R14). */
+const deprecated = (oldName: string, newName: string, extra = '') =>
+  `[WaveUI] TabList: \`${oldName}\` is deprecated and will be removed in 1.0. Use \`${newName}\` instead.${extra}`;
+
+/** useControllable's warning when a value switches between controlled and uncontrolled. */
+const modeSwitch = (from: string, to: string) =>
+  `[WaveUI] A component is changing from ${from} to ${to}. Components should not switch ` +
+  'between controlled and uncontrolled: pass `undefined` only when the component is ' +
+  'uncontrolled, and the empty value (for example `[]`, `null` or `""`) to clear a controlled ' +
+  'value.';
+
+/** A development throw is the whole report: nothing is logged besides it (R14). */
+const expectThrows = (ui: React.ReactElement, text: string) => {
+  const error = vi.spyOn(console, 'error');
+  expect(() => render(ui)).toThrow(new Error(text));
+  expect(error).not.toHaveBeenCalled();
+  error.mockRestore();
+};
+
 describe('TabList', () => {
   testSystemProps(TabList, {
     expectedTag: 'div',
@@ -137,11 +156,12 @@ describe('TabList', () => {
   });
 
   it('throws when a Tab is used outside a TabList (C-CONTEXT)', () => {
-    vi.spyOn(console, 'error').mockImplementation(() => {});
-    expect(() => render(<TabList.Tab value="a">Orphan</TabList.Tab>)).toThrow(
+    expectThrows(
+      <TabList.Tab value="a">Orphan</TabList.Tab>,
       '[WaveUI] TabList.Tab must be used within <TabList>',
     );
-    expect(() => render(<TabList.Panel value="a">Orphan</TabList.Panel>)).toThrow(
+    expectThrows(
+      <TabList.Panel value="a">Orphan</TabList.Panel>,
       '[WaveUI] TabList.Panel must be used within <TabList>',
     );
   });
@@ -167,7 +187,7 @@ describe('TabList', () => {
 
   it('parts written in a Server Component (lazy types) render the same server HTML and behave the same (R1)', async () => {
     const user = userEvent.setup();
-    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const warn = vi.spyOn(console, 'warn');
     const sections = (
       Tab: typeof TabList.Tab,
       Panel: typeof TabList.Panel,
@@ -221,12 +241,13 @@ describe('TabList', () => {
     const { rerender } = render(duplicated);
     rerender(duplicated);
     expect(warnings(warn)).toEqual([
-      expect.stringMatching(/^\[WaveUI\] TabList: several tabs share the value "a"\. /),
+      '[WaveUI] TabList: several tabs share the value "a". Tab values must be unique within a ' +
+        'TabList; tabs with the same value share one id and are selected (and tab stops) together.',
     ]);
   });
 
   it('does not warn about tab values in StrictMode, when keyed tabs are reordered or when a tab is replaced (R12)', async () => {
-    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const warn = vi.spyOn(console, 'warn');
     const renderTabs = (keys: string[]) => (
       <React.StrictMode>
         <TabList aria-label="Sections" defaultValue="a">
@@ -498,11 +519,7 @@ describe('TabList - controlled', () => {
     await user.click(tab('Tab B'));
     expect(onValueChange.mock.calls).toEqual([['b']]);
     expect(screen.queryByRole('tab', { selected: true })).not.toBeInTheDocument();
-    expect(warnings(warn)).toEqual([
-      expect.stringMatching(
-        /^\[WaveUI\] A component is changing from controlled to uncontrolled\./,
-      ),
-    ]);
+    expect(warnings(warn)).toEqual([modeSwitch('controlled', 'uncontrolled')]);
   });
 });
 
@@ -581,6 +598,12 @@ describe('TabList - parts that unmount (layout-b-tests-3)', () => {
 });
 
 describe('TabList - deprecated aliases (feedback-navigation#46, layout#16)', () => {
+  const ON_TAB_SELECT_DEPRECATED = deprecated(
+    'onTabSelect',
+    'onValueChange',
+    ' `onValueChange` is called only when the selected tab changes.',
+  );
+
   it('selectedValue, defaultSelectedValue, onTabSelect and vertical still work and warn once', async () => {
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
     const user = userEvent.setup();
@@ -602,22 +625,18 @@ describe('TabList - deprecated aliases (feedback-navigation#46, layout#16)', () 
     );
     expect(tab('Tab A')).toHaveAttribute('aria-selected', 'true');
 
-    const messages = warn.mock.calls.map(([message]) => String(message));
-    for (const [oldName, newName] of [
-      ['defaultSelectedValue', 'defaultValue'],
-      ['selectedValue', 'value'],
-      ['onTabSelect', 'onValueChange'],
-      ['vertical', 'orientation'],
-    ]) {
-      const matching = messages.filter((m) => m.includes(`\`${oldName}\` is deprecated`));
-      expect(matching, oldName).toHaveLength(1);
-      expect(matching[0]).toContain(`Use \`${newName}\` instead.`);
-      expect(matching[0].startsWith('[WaveUI] TabList: ')).toBe(true);
-    }
+    expect(warnings(warn)).toEqual([
+      deprecated('defaultSelectedValue', 'defaultValue'),
+      deprecated('vertical', 'orientation'),
+      ON_TAB_SELECT_DEPRECATED,
+      deprecated('selectedValue', 'value'),
+      // The rerender passes a value where the first render had none.
+      modeSwitch('uncontrolled', 'controlled'),
+    ]);
   });
 
   it('the new names win over the deprecated ones', () => {
-    vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
     render(
       <TabList value="c" selectedValue="a" orientation="horizontal" vertical>
         {threeTabs}
@@ -625,10 +644,14 @@ describe('TabList - deprecated aliases (feedback-navigation#46, layout#16)', () 
     );
     expect(tab('Tab C')).toHaveAttribute('aria-selected', 'true');
     expect(screen.getByRole('tablist')).toHaveAttribute('aria-orientation', 'horizontal');
+    expect(warnings(warn)).toEqual([
+      deprecated('selectedValue', 'value'),
+      deprecated('vertical', 'orientation'),
+    ]);
   });
 
   it('onTabSelect fires when the selected tab is activated again; onValueChange does not', async () => {
-    vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
     const user = userEvent.setup();
     const onTabSelect = vi.fn();
     const onValueChange = vi.fn();
@@ -645,10 +668,11 @@ describe('TabList - deprecated aliases (feedback-navigation#46, layout#16)', () 
     expect(onTabSelect).toHaveBeenLastCalledWith('b');
     expect(onValueChange).toHaveBeenCalledTimes(1);
     expect(onValueChange).toHaveBeenCalledWith('b');
+    expect(warnings(warn)).toEqual([ON_TAB_SELECT_DEPRECATED]);
   });
 
   it('onTabSelect does not fire when a disabled tab is clicked (layout#13)', async () => {
-    vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
     const user = userEvent.setup();
     const onTabSelect = vi.fn();
     render(
@@ -666,6 +690,7 @@ describe('TabList - deprecated aliases (feedback-navigation#46, layout#16)', () 
     await user.click(tab('Tab C'));
     expect(onTabSelect).not.toHaveBeenCalled();
     expect(tab('Tab A')).toHaveAttribute('aria-selected', 'true');
+    expect(warnings(warn)).toEqual([ON_TAB_SELECT_DEPRECATED]);
   });
 });
 
@@ -956,7 +981,7 @@ describe('TabList - registration and structure (layout#12)', () => {
       ),
     ],
   ])('renders a Panel wrapped in %s after the tablist, not inside it', async (_name, wrap) => {
-    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const warn = vi.spyOn(console, 'warn');
     render(
       <TabList aria-label="Sections" defaultValue="a">
         {threeTabs}
@@ -997,16 +1022,18 @@ describe('TabList - registration and structure (layout#12)', () => {
     );
     const { rerender } = render(renderTabList());
     rerender(renderTabList());
-    const messages = warn.mock.calls
-      .map(([message]) => String(message))
-      .filter((message) => message.includes('TabList.Panel'));
-    expect(messages).toHaveLength(1);
-    expect(messages[0]).toMatch(/^\[WaveUI\] TabList\.Panel .*role="tablist".*TabList\.Panels/);
+    expect(warnings(warn)).toEqual([
+      '[WaveUI] TabList.Panel was rendered inside the role="tablist" element, where only tabs ' +
+        'belong (axe aria-required-children). The TabList moves a Panel after the tablist when it ' +
+        'is its child, or in a wrapper that holds no Tab, but it cannot see a Panel that a ' +
+        "component renders itself, or separate a wrapper's Panels from its Tabs. Place such " +
+        'panels inside TabList.Panels, which renders after the tablist.',
+    ]);
   });
 
   it('Panels in TabList.Panels or after the tablist never warn, also when they show later', async () => {
     const user = userEvent.setup();
-    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const warn = vi.spyOn(console, 'warn');
     function LaterPanel() {
       return <TabList.Panel value="c">Panel C</TabList.Panel>;
     }
@@ -1333,5 +1360,68 @@ describe('TabList - RTL layout (feedback-navigation#34)', () => {
     expect(tablist.className).not.toMatch(/border-(r|l)\b/);
     expect(tab('Tab A')).toHaveClass('text-start', 'border-s-2', 'border-s-primary');
     expect(tab('Tab A').className).not.toMatch(/text-left|border-l/);
+  });
+});
+
+// The TabList looks for its tabs and panels through wrapper elements, `<Suspense>` included.
+// Panels still loading inside the consumer's own <Suspense> (the documented TabList.Panels
+// pattern, code-split) suspend that boundary only, never the TabList.
+describe('TabList - panels still loading inside their own Suspense', () => {
+  type PanelsModule = { default: React.ComponentType };
+
+  function LoadedPanels() {
+    return (
+      <>
+        <TabList.Panel value="a">Panel A</TabList.Panel>
+        <TabList.Panel value="b">Panel B</TabList.Panel>
+      </>
+    );
+  }
+
+  /** A `React.lazy` of the panels whose chunk loads only when `load()` is called. */
+  function pendingPanels() {
+    let resolveModule: (module: PanelsModule) => void = () => {};
+    const loading = new Promise<PanelsModule>((resolve) => {
+      resolveModule = resolve;
+    });
+    const LazyPanels = React.lazy(() => loading);
+    return { LazyPanels, load: () => resolveModule({ default: LoadedPanels }) };
+  }
+
+  const sections = (LazyPanels: React.ComponentType) => (
+    <TabList aria-label="Sections">
+      <TabList.Tab value="a">Tab A</TabList.Tab>
+      <TabList.Tab value="b">Tab B</TabList.Tab>
+      <TabList.Panels>
+        <React.Suspense fallback="Loading panels">
+          <LazyPanels />
+        </React.Suspense>
+      </TabList.Panels>
+    </TabList>
+  );
+
+  it('shows the tabs and the consumer fallback, not an outer fallback instead of the TabList', async () => {
+    const user = userEvent.setup();
+    const { LazyPanels, load } = pendingPanels();
+    render(<React.Suspense fallback="Loading page">{sections(LazyPanels)}</React.Suspense>);
+    expect(screen.queryByText('Loading page')).not.toBeInTheDocument();
+    expect(tab('Tab A')).toHaveAttribute('aria-selected', 'true');
+    expect(screen.getByText('Loading panels')).toBeInTheDocument();
+    expect(screen.getByRole('tablist')).not.toHaveTextContent('Loading panels');
+
+    await act(async () => load());
+    const panel = screen.getByRole('tabpanel', { name: 'Tab A' });
+    expect(panel).toHaveTextContent('Panel A');
+    expect(tab('Tab A')).toHaveAttribute('aria-controls', panel.id);
+    await user.click(tab('Tab B'));
+    expect(screen.getByRole('tabpanel', { name: 'Tab B' })).toHaveTextContent('Panel B');
+  });
+
+  it('server-renders the TabList around the consumer fallback', () => {
+    const { LazyPanels } = pendingPanels();
+    const html = renderToString(sections(LazyPanels));
+    expect(html).toContain('role="tablist"');
+    expect(html).toMatch(/aria-selected="true"[^>]*>Tab A</);
+    expect(html).toContain('Loading panels');
   });
 });

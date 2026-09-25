@@ -159,10 +159,12 @@ describe('Tree', () => {
   });
 
   it('throws when Tree.Item is used outside a Tree (C-CONTEXT)', () => {
-    vi.spyOn(console, 'error').mockImplementation(() => {});
+    // The development throw is the whole report: nothing is logged besides it (R14).
+    const error = vi.spyOn(console, 'error');
     expect(() => render(<Tree.Item value="a">Orphan</Tree.Item>)).toThrow(
-      '[WaveUI] Tree.Item must be used within <Tree>',
+      new Error('[WaveUI] Tree.Item must be used within <Tree>'),
     );
+    expect(error).not.toHaveBeenCalled();
   });
 
   it('in production, a Tree.Item outside a Tree logs once and renders inertly (C-CONTEXT, R3)', () => {
@@ -248,6 +250,34 @@ describe('Tree', () => {
     expect(docs).toHaveAttribute('aria-expanded', 'false');
   });
 
+  it('a nested Tree written in a Server Component (a lazy type) forms the child group of its item', async () => {
+    const LazyTree = asClientReference(Tree);
+    const files = (NestedTree: typeof Tree) => (
+      <Tree aria-label="Files" defaultExpandedItems={['docs']}>
+        <Tree.Item value="docs">
+          Documents
+          <NestedTree aria-label="Documents">
+            <Tree.Item value="work">Work</Tree.Item>
+          </NestedTree>
+        </Tree.Item>
+        <Tree.Item value="readme">Readme.md</Tree.Item>
+      </Tree>
+    );
+    const plain = renderToString(files(Tree));
+    expect(plain).toMatch(/role="group"/);
+    expect(renderToString(files(LazyTree))).toBe(plain);
+
+    render(files(LazyTree));
+    // The roving stores observe the mounted items (a MutationObserver): let them settle.
+    await act(async () => {});
+    // The nested Tree is the item's child group, not part of its label (its name stays
+    // "Documents").
+    const docs = item('Documents');
+    expect(docs).toHaveAttribute('aria-expanded', 'true');
+    const group = within(docs).getByRole('group');
+    expect(within(group).getByRole('tree', { name: 'Documents' })).toContainElement(item('Work'));
+  });
+
   it('warns once per value shared by several items (R12)', () => {
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
     const duplicated = (
@@ -260,14 +290,14 @@ describe('Tree', () => {
     );
     const { rerender } = render(duplicated);
     rerender(duplicated);
-    expect(warnings(warn)).toEqual([
-      expect.stringMatching(/^\[WaveUI\] Tree: several items share the value "a"\. /),
-      expect.stringMatching(/^\[WaveUI\] Tree: several items share the value "b"\. /),
-    ]);
+    const duplicate = (value: string) =>
+      `[WaveUI] Tree: several items share the value "${value}". Item values must be unique ` +
+      'within a Tree; items with the same value share their expanded, selected and focus state.';
+    expect(warnings(warn)).toEqual([duplicate('a'), duplicate('b')]);
   });
 
   it('does not warn about values in StrictMode, when keyed items are reordered or when an item is replaced (R12)', async () => {
-    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const warn = vi.spyOn(console, 'warn');
     const renderItems = (values: string[]) => (
       <React.StrictMode>
         <Tree aria-label="Files">
@@ -701,14 +731,18 @@ describe('Tree.Item - nested items rendered by a component (layout-b-code-1)', (
     const { rerender } = render(files);
     rerender(files);
     expect(warnings(warn)).toEqual([
-      expect.stringMatching(
-        /^\[WaveUI\] Tree\.Item was rendered inside the label of another Tree\.Item.*render function/,
-      ),
+      '[WaveUI] Tree.Item was rendered inside the label of another Tree.Item, so it is not part ' +
+        "of that item's child group: the parent cannot expand, its name includes the nested " +
+        'text, and a treeitem sits inside a label (axe aria-required-parent). A Tree.Item finds ' +
+        'its nested items among its own children (written directly, in Fragments, or returned ' +
+        'by a render function such as `children.map(renderNode)`), but not inside a component ' +
+        'that renders Tree.Item itself. Build a data-driven tree with a render function instead ' +
+        'of a recursive component.',
     ]);
   });
 
   it('a separate Tree portaled out of an item label (a popup) does not warn', () => {
-    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const warn = vi.spyOn(console, 'warn');
     function Preview() {
       return createPortal(
         <Tree aria-label="Preview">
@@ -731,7 +765,7 @@ describe('Tree.Item - nested items rendered by a component (layout-b-code-1)', (
 
   it('items returned by a render function (children.map(renderNode)) form the child group, without a warning', async () => {
     const user = userEvent.setup();
-    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const warn = vi.spyOn(console, 'warn');
     const renderNode = (node: FileNode): React.ReactNode => (
       <Tree.Item key={node.id} value={node.id}>
         {node.name}

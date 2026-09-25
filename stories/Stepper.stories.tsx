@@ -57,10 +57,15 @@ export const WithErrorAndDisabled: Story = {
   ),
 };
 
-/** Localized status text with `statusLabels`, and the group name with `aria-label`. */
+/**
+ * Localized status text with `statusLabels`, and the group name with `aria-label`. Localized
+ * labels need the language of the page or of the region around them: `lang` marks this Stepper as
+ * Norwegian Bokmål, so screen readers pronounce its labels as Norwegian.
+ */
 export const Localized: Story = {
   args: {
     'aria-label': 'Fremdrift',
+    lang: 'nb',
     defaultActiveStep: 2,
     statusLabels: { completed: 'Fullført:', error: 'Feil:' },
   },

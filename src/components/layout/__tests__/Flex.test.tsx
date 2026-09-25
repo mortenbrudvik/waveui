@@ -216,7 +216,7 @@ describe('Flex', () => {
     });
 
     it('does not warn for reversed static content', () => {
-      const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+      const warn = vi.spyOn(console, 'warn');
       render(
         <Flex direction="row-reverse">
           <span>First</span>
@@ -227,7 +227,7 @@ describe('Flex', () => {
     });
 
     it('does not warn for a forward direction with focusable content', () => {
-      const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+      const warn = vi.spyOn(console, 'warn');
       render(
         <Flex direction="column" wrap="wrap">
           <button type="button">First</button>

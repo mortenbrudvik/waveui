@@ -1,5 +1,5 @@
 import * as React from 'react';
-import { flattenChildren, getElementType, isElementOfType } from '../../lib/children';
+import { flattenChildren, getElementType } from '../../lib/children';
 import { cn } from '../../lib/cn';
 import { composeEventHandlers } from '../../lib/composeEventHandlers';
 import { reportMissingContext, warnDeprecated, warnOnce } from '../../lib/dev';
@@ -343,7 +343,8 @@ interface PartProps {
  * and the `children` of wrapper elements (a Tooltip around a Trigger). The search does not enter
  * `barrier` elements or a nested Accordion/Item, and cannot see what a component renders itself.
  * Parts are identified by their unwrapped element type, so parts written in a Server Component
- * (lazy client references) are found too.
+ * (lazy client references) are found too. A `React.lazy` still loading (content inside the
+ * consumer's own `<Suspense>`) is no part and never suspends the Item: its children are searched.
  */
 function findPart(
   node: unknown,
@@ -358,7 +359,7 @@ function findPart(
     return undefined;
   }
   if (!React.isValidElement<PartProps>(node)) return undefined;
-  const type = getElementType(node);
+  const type = getElementType(node, { suspend: false });
   if (type === part) return node;
   if (type === barrier || type === AccordionRoot || type === AccordionItem) return undefined;
   return findPart(node.props.children, part, barrier);
@@ -381,7 +382,7 @@ function idOf(element: React.ReactElement<PartProps> | undefined): string | unde
  */
 function wrapsTriggerOnly(node: unknown): boolean {
   if (!React.isValidElement<PartProps>(node)) return false;
-  const type = getElementType(node);
+  const type = getElementType(node, { suspend: false });
   if (
     typeof type === 'string' ||
     type === AccordionTrigger ||
@@ -392,7 +393,7 @@ function wrapsTriggerOnly(node: unknown): boolean {
     return false;
   }
   const child = node.props.children as React.ReactNode;
-  return isElementOfType(child, AccordionTrigger) || wrapsTriggerOnly(child);
+  return getElementType(child, { suspend: false }) === AccordionTrigger || wrapsTriggerOnly(child);
 }
 
 function misplacedMessage(component: 'Accordion.Trigger' | 'Accordion.Panel'): string {

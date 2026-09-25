@@ -71,10 +71,14 @@ const norwegianLabels = (type: PaginationItemType, page: number, selected: boole
   }
 };
 
-/** Localized button names with `getItemAriaLabel`, and the landmark name with `aria-label`. */
+/**
+ * Localized button names with `getItemAriaLabel`, and the landmark name with `aria-label`. `lang`
+ * marks the pagination as Norwegian Bokmål, so screen readers pronounce its names as Norwegian.
+ */
 export const Localized: Story = {
   args: {
     'aria-label': 'Sidenavigasjon',
+    lang: 'nb',
     showFirstLast: true,
     getItemAriaLabel: norwegianLabels,
   },

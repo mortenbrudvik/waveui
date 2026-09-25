@@ -60,10 +60,11 @@ describe('Stack', () => {
         </>,
       );
       expect(screen.getByTestId('stack')).toHaveClass('flex-row');
-      expect(warn).toHaveBeenCalledTimes(1);
-      expect(warn).toHaveBeenCalledWith(
-        '[WaveUI] Stack: `direction` is deprecated and will be removed in 1.0. Use `orientation` instead.',
-      );
+      expect(warn.mock.calls).toEqual([
+        [
+          '[WaveUI] Stack: `direction` is deprecated and will be removed in 1.0. Use `orientation` instead.',
+        ],
+      ]);
     });
 
     it('lets orientation win when both are given, and still warns about direction', () => {
@@ -84,7 +85,7 @@ describe('Stack', () => {
     });
 
     it('does not warn for orientation alone', () => {
-      const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+      const warn = vi.spyOn(console, 'warn');
       render(<Stack orientation="horizontal">Content</Stack>);
       expect(warn).not.toHaveBeenCalled();
     });

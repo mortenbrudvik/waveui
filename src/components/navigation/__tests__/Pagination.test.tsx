@@ -1,5 +1,5 @@
 import * as React from 'react';
-import { describe, it, expect, vi, expectTypeOf } from 'vitest';
+import { describe, it, expect, vi, expectTypeOf, afterEach } from 'vitest';
 import { act, render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { Pagination, getPaginationRange } from '../Pagination';
@@ -17,6 +17,23 @@ function renderedSequence(): Array<number | 'ellipsis'> {
 }
 
 const page = (n: number) => screen.getByRole('button', { name: `Page ${n}` });
+
+/** useControllable's warning when a value switches between controlled and uncontrolled. */
+const modeSwitch = (from: string, to: string) =>
+  `[WaveUI] A component is changing from ${from} to ${to}. Components should not switch ` +
+  'between controlled and uncontrolled: pass `undefined` only when the component is ' +
+  'uncontrolled, and the empty value (for example `[]`, `null` or `""`) to clear a controlled ' +
+  'value.';
+
+/** The development warning for a `totalPages` that is not an integer. */
+const totalPagesWarning = (received: string) =>
+  `[WaveUI] Pagination: \`totalPages\` must be an integer, received ${received}. Fractional ` +
+  'values are rounded down; NaN and infinite values render nothing.';
+
+// Console spies are restored after every test, so none carries calls into the next one.
+afterEach(() => {
+  vi.restoreAllMocks();
+});
 
 describe('Pagination', () => {
   testSystemProps(Pagination, {
@@ -468,9 +485,7 @@ describe('Pagination', () => {
         // Misuse: useControllable stays controlled (and warns) and reports `defaultCurrentPage`.
         rerender(pager(5, undefined));
         await act(async () => {});
-        expect(warn).toHaveBeenCalledWith(
-          expect.stringContaining('changing from controlled to uncontrolled'),
-        );
+        expect(warn.mock.calls).toEqual([[modeSwitch('controlled', 'uncontrolled')]]);
         expect(page(5)).toHaveAttribute('aria-current', 'page');
         expect(onPageChange.mock.calls).toEqual([[5]]);
 
@@ -480,6 +495,7 @@ describe('Pagination', () => {
         expect(page(9)).toHaveAttribute('aria-current', 'page');
         expect(screen.getAllByRole('button', { current: 'page' })).toEqual([page(9)]);
         expect(onPageChange.mock.calls).toEqual([[5]]);
+        expect(warn.mock.calls).toEqual([[modeSwitch('controlled', 'uncontrolled')]]);
       } finally {
         warn.mockRestore();
       }
@@ -506,16 +522,20 @@ describe('Pagination', () => {
         // stored uncontrolled clamp, and nothing is clamped or announced.
         rerender(pager(10, 7));
         await act(async () => {});
-        expect(warn).toHaveBeenCalledWith(
-          expect.stringContaining('changing from uncontrolled to controlled'),
-        );
+        expect(warn.mock.calls).toEqual([[modeSwitch('uncontrolled', 'controlled')]]);
         expect(screen.getAllByRole('button', { current: 'page' })).toEqual([page(7)]);
         expect(onPageChange.mock.calls).toEqual([[4]]);
 
         // Withdrawing it keeps the pager controlled: `defaultCurrentPage`, not the stored clamp.
         rerender(pager(10, undefined));
+        await act(async () => {});
         expect(screen.getAllByRole('button', { current: 'page' })).toEqual([page(9)]);
         expect(onPageChange.mock.calls).toEqual([[4]]);
+        // The controlled mode is sticky: withdrawing the value warns once more.
+        expect(warn.mock.calls).toEqual([
+          [modeSwitch('uncontrolled', 'controlled')],
+          [modeSwitch('controlled', 'uncontrolled')],
+        ]);
       } finally {
         warn.mockRestore();
       }
@@ -537,9 +557,7 @@ describe('Pagination', () => {
       const { container } = render(<Pagination totalPages={Number.NaN} />);
       await act(async () => {});
       expect(container).toBeEmptyDOMElement();
-      expect(warn).toHaveBeenCalledWith(expect.stringContaining('[WaveUI] Pagination'));
-      expect(warn).toHaveBeenCalledWith(expect.stringContaining('totalPages'));
-      warn.mockRestore();
+      expect(warn.mock.calls).toEqual([[totalPagesWarning('NaN')]]);
     });
 
     it('treats a fractional totalPages as its floor and warns in development', async () => {
@@ -548,8 +566,7 @@ describe('Pagination', () => {
       await act(async () => {});
       expect(renderedSequence()).toEqual([1, 2, 3, 4]);
       expect(page(4)).toHaveAttribute('aria-current', 'page');
-      expect(warn).toHaveBeenCalledWith(expect.stringContaining('totalPages'));
-      warn.mockRestore();
+      expect(warn.mock.calls).toEqual([[totalPagesWarning('4.7')]]);
     });
   });
 

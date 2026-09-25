@@ -1476,21 +1476,19 @@ describe('Menu popup (Menu.Trigger + Menu.Popover)', () => {
       rerender(
         <PopupMenu className="root-class" aria-label="Actions menu" data-testid="root" ref={ref} />,
       );
-      const messages = warn.mock.calls.map(([message]) => String(message));
-      const ignored = messages.filter((message) => message.includes('popup menu'));
-      expect(ignored).toHaveLength(1);
-      expect(messages).toEqual(ignored); // nothing else is logged (R14)
-      expect(ignored[0]).toContain('[WaveUI] Menu:');
-      for (const name of ['className', 'aria-label', 'data-testid', 'ref']) {
-        expect(ignored[0]).toContain(`\`${name}\``);
-      }
-      expect(ignored[0]).toContain('Menu.Popover');
+      expect(warn.mock.calls).toEqual([
+        [
+          '[WaveUI] Menu: a popup menu (Menu.Trigger + Menu.Popover) renders no element of its ' +
+            'own, so `className`, `aria-label`, `data-testid`, `ref` on Menu are ignored. Pass ' +
+            "them to Menu.Popover (the menu surface) or to the trigger's child instead.",
+        ],
+      ]);
       expect(screen.queryByTestId('root')).not.toBeInTheDocument();
       expect(ref.current).toBeNull();
     });
 
     it('does not warn for a popup menu without root DOM props (undefined values included)', () => {
-      const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+      const warn = vi.spyOn(console, 'warn');
       render(<PopupMenu aria-label={undefined} onOpenChange={() => {}} />);
       expect(warn).not.toHaveBeenCalled();
     });
@@ -1509,19 +1507,21 @@ describe('Menu popup (Menu.Trigger + Menu.Popover)', () => {
           </div>
         </Menu>,
       );
-      const messages = warn.mock.calls.map(([message]) => String(message));
-      const fallback = messages.filter((message) => message.includes('static menu'));
-      expect(fallback).toHaveLength(1);
-      expect(messages).toEqual(fallback); // nothing else is logged (R14)
-      expect(fallback[0]).toContain('[WaveUI] Menu.Trigger:');
-      for (const name of ['open', 'defaultOpen', 'onOpenChange']) {
-        expect(fallback[0]).toContain(`\`${name}\``);
-      }
+      // One warning for both parts (the first to mount names itself).
+      expect(warn.mock.calls).toEqual([
+        [
+          '[WaveUI] Menu.Trigger: rendered inside a static menu. Menu switches to a popup menu ' +
+            'only when Menu.Trigger or Menu.Popover is a direct child (Fragments included); ' +
+            'wrapped in another element or component, they are rendered inside the static ' +
+            '`role="menu"` element. Make them direct children of Menu, or pass `open`, ' +
+            '`defaultOpen` or `onOpenChange` to Menu to force popup mode.',
+        ],
+      ]);
     });
 
     it('wrapped Trigger/Popover work as a popup menu when popup mode is forced (defaultOpen)', async () => {
       const user = userEvent.setup();
-      const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+      const warn = vi.spyOn(console, 'warn');
       render(
         <Menu defaultOpen={false}>
           <div>
@@ -1562,7 +1562,7 @@ describe('Menu popup (Menu.Trigger + Menu.Popover)', () => {
 
     it('does not warn for the items of Menu.Popover or of a static menu', async () => {
       const user = userEvent.setup();
-      const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+      const warn = vi.spyOn(console, 'warn');
       render(
         <>
           <PopupMenu defaultOpen={false} />
@@ -1575,6 +1575,100 @@ describe('Menu popup (Menu.Trigger + Menu.Popover)', () => {
       expect(item('Edit')).toHaveFocus();
       expect(warn).not.toHaveBeenCalled();
     });
+  });
+});
+
+// React bubbles the events of a portal (a Popover or Dialog opened from an item) through the item
+// and the menu surface, although their target lives elsewhere in the document. They reach the
+// consumer's handlers, but never activate the item, close the menu or move focus.
+describe('Menu events from a portal opened inside an item', () => {
+  function MenuWithNestedPortal({
+    persistOnClick = true,
+    onRenameClick,
+    onRenameKeyDown,
+  }: {
+    persistOnClick?: boolean;
+    onRenameClick?: React.MouseEventHandler<HTMLDivElement>;
+    onRenameKeyDown?: React.KeyboardEventHandler<HTMLDivElement>;
+  }) {
+    return (
+      <Menu defaultOpen>
+        <Menu.Trigger>
+          <button type="button">Actions</button>
+        </Menu.Trigger>
+        <Menu.Popover>
+          <Menu.Item
+            persistOnClick={persistOnClick}
+            onClick={onRenameClick}
+            onKeyDown={onRenameKeyDown}
+          >
+            Rename…
+            <Portal>
+              <div role="dialog" aria-label="Rename">
+                <input aria-label="New name" />
+                <button type="button">Save</button>
+              </div>
+            </Portal>
+          </Menu.Item>
+          <Menu.Item>Delete</Menu.Item>
+        </Menu.Popover>
+      </Menu>
+    );
+  }
+
+  const input = () => screen.getByRole('textbox', { name: 'New name' });
+
+  it('Space types into a field of the portal: the item is not activated', async () => {
+    const user = userEvent.setup();
+    const onRenameClick = vi.fn();
+    const onRenameKeyDown = vi.fn();
+    render(
+      <MenuWithNestedPortal onRenameClick={onRenameClick} onRenameKeyDown={onRenameKeyDown} />,
+    );
+    await user.click(input());
+    onRenameClick.mockClear();
+    await user.keyboard('a b{Enter}');
+    expect(input()).toHaveValue('a b');
+    expect(input()).toHaveFocus();
+    expect(onRenameClick).not.toHaveBeenCalled();
+    // The consumer's handler still receives the bubbled keys (React semantics).
+    expect(onRenameKeyDown.mock.calls.map(([event]) => event.key)).toEqual([
+      'a',
+      ' ',
+      'b',
+      'Enter',
+    ]);
+    expect(queryMenu()).toBeInTheDocument();
+  });
+
+  it('Tab moves on inside the portal: the menu stays open and focus stays out of the trigger', async () => {
+    const user = userEvent.setup();
+    render(<MenuWithNestedPortal />);
+    await user.click(input());
+    await user.tab();
+    expect(screen.getByRole('button', { name: 'Save' })).toHaveFocus();
+    expect(queryMenu()).toBeInTheDocument();
+    expect(trigger()).toHaveAttribute('aria-expanded', 'true');
+  });
+
+  it('a click inside the portal neither closes the menu nor activates the item', async () => {
+    const user = userEvent.setup();
+    const onRenameClick = vi.fn();
+    render(<MenuWithNestedPortal persistOnClick={false} onRenameClick={onRenameClick} />);
+    await user.click(screen.getByRole('button', { name: 'Save' }));
+    expect(queryMenu()).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Save' })).toHaveFocus();
+    // The consumer's onClick receives the bubbled click (React semantics); its target is the
+    // portal's button, not the item.
+    expect(onRenameClick).toHaveBeenCalledTimes(1);
+    expect(onRenameClick.mock.calls[0]![0].target).toBe(
+      screen.getByRole('button', { name: 'Save' }),
+    );
+
+    // The item's own click still activates it and closes the menu.
+    await user.click(item('Rename…'));
+    expect(queryMenu()).not.toBeInTheDocument();
+    expect(trigger()).toHaveFocus();
   });
 });
 
@@ -1625,6 +1719,12 @@ const WRAPPER_TRIGGERS = [
   ['the automatic fallback', true],
 ] as const;
 
+/** The one warning of the automatic fallback (asserted exactly, R14). */
+const TRIGGER_REF_FALLBACK_WARNING =
+  '[WaveUI] Menu.Trigger: its child did not attach the trigger ref (a component that neither ' +
+  'forwards `ref` nor spreads its props). It is rendered inside a <span> wrapper instead; ' +
+  'forward `ref` and spread props onto the element, or pass asChild={false}.';
+
 describe('Menu.Trigger rendered as a wrapper span', () => {
   /** Renders the menu; only the automatic fallback warns (once). */
   function renderWrapperMenu(automatic: boolean) {
@@ -1632,13 +1732,7 @@ describe('Menu.Trigger rendered as a wrapper span', () => {
     render(<WrapperTriggerMenu automatic={automatic} />);
     return () =>
       expect(warn.mock.calls.map(([message]) => String(message))).toEqual(
-        automatic
-          ? [
-              expect.stringContaining(
-                '[WaveUI] Menu.Trigger: its child did not attach the trigger ref',
-              ),
-            ]
-          : [],
+        automatic ? [TRIGGER_REF_FALLBACK_WARNING] : [],
       );
   }
 
@@ -1757,13 +1851,7 @@ describe('Menu.Trigger rendered as a wrapper span', () => {
       expect(trigger()).toHaveAttribute('aria-expanded', 'true');
       expect(screen.getByTestId('skipped')).not.toHaveAttribute('aria-expanded');
       expect(warn.mock.calls.map(([message]) => String(message))).toEqual(
-        automatic
-          ? [
-              expect.stringContaining(
-                '[WaveUI] Menu.Trigger: its child did not attach the trigger ref',
-              ),
-            ]
-          : [],
+        automatic ? [TRIGGER_REF_FALLBACK_WARNING] : [],
       );
     },
   );
@@ -1837,26 +1925,29 @@ describe('Menu parts as client references (lazy element types)', () => {
 });
 
 describe('Menu context (C-CONTEXT)', () => {
+  /** The development throw is the whole report: nothing is logged besides it (R14). */
+  const expectThrows = (ui: React.ReactElement, text: string) => {
+    const error = vi.spyOn(console, 'error');
+    expect(() => render(ui)).toThrow(new Error(text));
+    expect(error).not.toHaveBeenCalled();
+  };
+
   it('Menu.Trigger outside a Menu throws in development', () => {
-    vi.spyOn(console, 'error').mockImplementation(() => {});
-    expect(() =>
-      render(
-        <Menu.Trigger>
-          <button type="button">Orphan</button>
-        </Menu.Trigger>,
-      ),
-    ).toThrow('[WaveUI] Menu.Trigger must be used within Menu');
+    expectThrows(
+      <Menu.Trigger>
+        <button type="button">Orphan</button>
+      </Menu.Trigger>,
+      '[WaveUI] Menu.Trigger must be used within Menu',
+    );
   });
 
   it('Menu.Popover outside a Menu throws in development', () => {
-    vi.spyOn(console, 'error').mockImplementation(() => {});
-    expect(() =>
-      render(
-        <Menu.Popover>
-          <Menu.Item>Orphan</Menu.Item>
-        </Menu.Popover>,
-      ),
-    ).toThrow('[WaveUI] Menu.Popover must be used within Menu');
+    expectThrows(
+      <Menu.Popover>
+        <Menu.Item>Orphan</Menu.Item>
+      </Menu.Popover>,
+      '[WaveUI] Menu.Popover must be used within Menu',
+    );
   });
 
   it('logs each misplaced part once in production and renders it inert', () => {

@@ -262,6 +262,20 @@ function withTypeaheadText(
 }
 
 /**
+ * Whether an event started in the element that handles it (`currentTarget`) or inside its DOM.
+ * React bubbles the events of a portal (a Popover or Dialog opened from an item) through the item
+ * and the menu surface although their target lives elsewhere in the document: those are not the
+ * menu's to handle. The target is duck typed, so a menu rendered into another realm's document
+ * (an iframe) still handles its own events.
+ */
+function isOwnEvent(event: React.SyntheticEvent<HTMLElement>): boolean {
+  const target = event.target as Partial<Node> | null;
+  return (
+    !!target && typeof target.nodeType === 'number' && event.currentTarget.contains(target as Node)
+  );
+}
+
+/**
  * The element that takes focus for the trigger: the trigger itself, or, for the wrapper span of
  * `asChild={false}` and of the automatic fallback, the first tabbable element inside it.
  */
@@ -294,7 +308,9 @@ const menuItemClasses = cn(
  * never activated. A consumer `aria-disabled` without `disabled` only changes the look and
  * keyboard navigation: activation still runs `onClick` (guard it yourself), as on Button. The
  * item's tab index is managed by the menu. Typeahead matches the label (`children`), not the icon
- * or the shortcut; a `data-roving-text` you pass replaces the label's text.
+ * or the shortcut; a `data-roving-text` you pass replaces the label's text. Clicks and keys from a
+ * portal opened inside the item (a Popover, a Dialog) still reach your `onClick`/`onKeyDown`, as
+ * React bubbles them, but never activate the item or close the menu.
  *
  * Also exported as `MenuItem` (import the flat name from React Server Components).
  */
@@ -341,18 +357,23 @@ const MenuItem = ({
       : null;
 
   const handleClick = (event: React.MouseEvent<HTMLDivElement>) => {
-    if (disabled) {
+    // A click inside a portal opened from the item reaches the consumer's onClick (React bubbles
+    // it), but is not a click on the item: it never activates the item or closes the menu.
+    const own = isOwnEvent(event);
+    if (disabled && own) {
       event.preventDefault();
       return;
     }
     onClick?.(event);
-    if (event.defaultPrevented || persistOnClick) return;
+    if (!own || event.defaultPrevented || persistOnClick) return;
     surface?.close();
   };
 
   const handleKeyDown = composeEventHandlers(
     onKeyDown,
     (event: React.KeyboardEvent<HTMLDivElement>) => {
+      // Enter and Space typed in a portal opened from the item belong to that portal.
+      if (!isOwnEvent(event)) return;
       if (event.key !== 'Enter' && event.key !== ' ') return;
       // Menu items consume Enter/Space (no page scroll), whether or not they can be activated.
       event.preventDefault();
@@ -492,7 +513,8 @@ MenuTrigger.displayName = 'MenuTrigger';
  * the menu or lost to the page). Tab closes it and moves focus to the trigger without preventing
  * the default, so tabbing continues from the trigger (inside a Dialog, the focus trap moves on
  * from there). The trigger here is the element that takes its focus: for a wrapper span, the
- * first tabbable element inside it.
+ * first tabbable element inside it. Keys from a portal opened inside the menu (a Popover of an
+ * item) are left to that portal: Tab there moves on inside it and keeps the menu open.
  *
  * Also exported as `MenuPopover` (import the flat name from React Server Components).
  */
@@ -617,10 +639,12 @@ const MenuPopover = ({
     [closeFromItem],
   );
 
-  // C-COMPOSE: the consumer's onKeyDown runs first; preventDefault() skips the built-in keys.
+  // C-COMPOSE: the consumer's onKeyDown runs first; preventDefault() skips the built-in keys. A key
+  // from a portal opened inside the menu (a Popover of an item) is that portal's: Tab moves on
+  // inside it and never closes the menu.
   const handleKeyDown = (event: React.KeyboardEvent<HTMLDivElement>) => {
     onKeyDown?.(event);
-    if (event.defaultPrevented) return;
+    if (event.defaultPrevented || !isOwnEvent(event)) return;
     if (event.key === 'Tab') {
       // Close and put focus on the trigger; the default Tab action then continues from there.
       getTriggerFocusTarget(triggerRef.current)?.focus();

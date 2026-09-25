@@ -227,14 +227,17 @@ describe('Overflow', () => {
     expect(wrapper).toHaveAttribute('data-overflow-pinned');
   });
 
-  it('leaves room inside its clipping for the focus indicators of its items (x-styling-5)', () => {
+  it('leaves room inside its clipping for the focus indicators of its items, within its own box', () => {
     layoutWith({ overflow: 100, 'item-a': 40, 'item-b': 40, 'item-c': 40, button: 30 });
     render(<ThreeItems overflowButton={moreButton} className="gap-1" />);
-    // jsdom has no layout: the classes are the contract. A 4px padding inside the clipping edge,
-    // offset by a -4px margin, so the items keep their place and a ring drawn 4px outside an item
-    // (focusRing: 2px offset + 2px width) stays inside the clipped box on every side.
+    // jsdom has no layout: the classes are the contract. A 4px padding inside the clipping edge, so
+    // a ring drawn 4px outside an item (focusRing: 2px offset + 2px width) stays inside the clipped
+    // box on every side.
     const row = screen.getByTestId('overflow');
-    expect(row).toHaveClass('flex', 'overflow-hidden', 'p-1', '-m-1', 'gap-1');
+    expect(row).toHaveClass('flex', 'overflow-hidden', 'p-1', 'gap-1');
+    // No negative margin: it would make the row's box reach past its container, which a scroll
+    // container around an edge-to-edge row (or the page) counts as overflow and scrolls by 4px.
+    expect(row.className).not.toMatch(/(^|\s)-m[xysetblr]?-/);
   });
 
   it('measures the room for the items without the row padding', () => {
@@ -935,13 +938,66 @@ describe('Overflow', () => {
     });
   });
 
+  describe('duplicated itemIds', () => {
+    const duplicate = (itemId: string) =>
+      `[WaveUI] Overflow: several items share the itemId "${itemId}". Item ids must be unique ` +
+      'within an Overflow; items with the same itemId are hidden and shown together.';
+
+    it('warns once per itemId that several items share', () => {
+      const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+      const row = (
+        <Overflow>
+          <OverflowItem itemId="a">A</OverflowItem>
+          <OverflowItem itemId="a">A again</OverflowItem>
+          <OverflowItem itemId="b">B</OverflowItem>
+          <OverflowItem itemId="b">B again</OverflowItem>
+          <OverflowItem itemId="b">B a third time</OverflowItem>
+        </Overflow>
+      );
+      const { rerender } = render(row);
+      rerender(row);
+      expect(warn.mock.calls).toEqual([[duplicate('a')], [duplicate('b')]]);
+    });
+
+    it('does not warn in StrictMode, when keyed items are reordered or replaced, or across rows', async () => {
+      const warn = vi.spyOn(console, 'warn');
+      const rows = (ids: string[]) => (
+        <React.StrictMode>
+          <Overflow>
+            {ids.map((id) => (
+              <OverflowItem key={id} itemId={id.replace('-new', '')}>
+                {id}
+              </OverflowItem>
+            ))}
+          </Overflow>
+          <Overflow>
+            <OverflowItem itemId="a">Another row</OverflowItem>
+          </Overflow>
+        </React.StrictMode>
+      );
+      const { rerender } = render(rows(['a', 'b', 'c']));
+      await act(async () => rerender(rows(['c', 'a', 'b'])));
+      // A new element (another key) takes over the itemId of the one it replaces.
+      await act(async () => rerender(rows(['c', 'a-new', 'b'])));
+      expect(screen.getByText('a-new')).toBeInTheDocument();
+      expect(warn).not.toHaveBeenCalled();
+    });
+  });
+
   describe('context (overlays#34)', () => {
+    // The development throw is the whole report: nothing is logged besides it (R14).
+    const expectThrows = (ui: React.ReactElement, text: string) => {
+      const error = vi.spyOn(console, 'error');
+      expect(() => render(ui)).toThrow(new Error(text));
+      expect(error).not.toHaveBeenCalled();
+      error.mockRestore();
+    };
+
     it('throws when OverflowItem is rendered outside Overflow', () => {
-      const spy = vi.spyOn(console, 'error').mockImplementation(() => {});
-      expect(() => render(<OverflowItem itemId="a">A</OverflowItem>)).toThrow(
+      expectThrows(
+        <OverflowItem itemId="a">A</OverflowItem>,
         '[WaveUI] OverflowItem must be used within Overflow',
       );
-      spy.mockRestore();
     });
 
     it('in production, logs once per part outside Overflow and renders inertly (R3)', () => {
@@ -973,7 +1029,6 @@ describe('Overflow', () => {
     });
 
     it('throws when the overflow hooks are used outside Overflow', () => {
-      const spy = vi.spyOn(console, 'error').mockImplementation(() => {});
       function Menu() {
         useOverflowMenu();
         return null;
@@ -982,13 +1037,8 @@ describe('Overflow', () => {
         useIsOverflowItemVisible('a');
         return null;
       }
-      expect(() => render(<Menu />)).toThrow(
-        '[WaveUI] useOverflowMenu must be used within Overflow',
-      );
-      expect(() => render(<Visible />)).toThrow(
-        '[WaveUI] useIsOverflowItemVisible must be used within Overflow',
-      );
-      spy.mockRestore();
+      expectThrows(<Menu />, '[WaveUI] useOverflowMenu must be used within Overflow');
+      expectThrows(<Visible />, '[WaveUI] useIsOverflowItemVisible must be used within Overflow');
     });
   });
 });
@@ -1034,7 +1084,7 @@ describe('Overflow - server rendering (layout-b-tests-6)', () => {
       { overflow: 100, 'item-a': 40, 'item-b': 40, 'item-c': 40, button: 30, box: 100 },
       { box: 180 },
     );
-    const error = vi.spyOn(console, 'error').mockImplementation(() => {});
+    const error = vi.spyOn(console, 'error');
     const onRecoverableError = vi.fn();
     const hydrated: { root?: Root } = {};
     try {

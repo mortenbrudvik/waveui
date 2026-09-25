@@ -527,7 +527,7 @@ describe('Card', () => {
     });
 
     it('does not warn when the card has no tabbable content', () => {
-      const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+      const warn = vi.spyOn(console, 'warn');
       render(
         <Card onSelect={() => {}}>
           <CardHeader title="Pro plan" />
@@ -749,7 +749,7 @@ describe('Card', () => {
     });
 
     it('does not warn about tabbable content', () => {
-      const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+      const warn = vi.spyOn(console, 'warn');
       render(
         <Card onSelect={() => {}} selectionControl="checkbox">
           {cardWithAction}
@@ -766,6 +766,31 @@ describe('Card', () => {
         </Card>,
       );
       expect(messagesOf(warn)).toEqual([CHECKBOX_NAME_WARNING]);
+    });
+
+    it('a title and subtitle that render nothing get no element, so the missing name warns', () => {
+      const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+      render(
+        <Card onSelect={() => {}} selectionControl="checkbox">
+          <CardHeader title={[]} subtitle={[null, [false]]} data-testid="header" />
+        </Card>,
+      );
+      expect(screen.getByTestId('header')).toBeEmptyDOMElement();
+      expect(messagesOf(warn)).toEqual([CHECKBOX_NAME_WARNING]);
+    });
+
+    it('a title and subtitle of 0 are content: the title element names the checkbox', () => {
+      const warn = vi.spyOn(console, 'warn');
+      render(
+        <Card onSelect={() => {}} selectionControl="checkbox">
+          <CardHeader title={0} subtitle={0} data-testid="header" />
+        </Card>,
+      );
+      const checkbox = screen.getByRole('checkbox', { name: '0' });
+      const title = document.getElementById(checkbox.getAttribute('aria-labelledby')!);
+      expect(title).toHaveClass('text-subtitle-1');
+      expect(screen.getByTestId('header').children).toHaveLength(2);
+      expect(warn).not.toHaveBeenCalled();
     });
 
     it('passes axe with a footer Button (no nested-interactive)', async () => {

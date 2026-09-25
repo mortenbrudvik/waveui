@@ -1531,10 +1531,14 @@ describe('Carousel', () => {
       expect(screen.getByTestId('wrapped')).toBeEmptyDOMElement();
       expect(screen.queryByText('Stray paragraph')).toBeNull();
       expect(screen.getByRole('region', { name: 'Mixed' })).toHaveTextContent('Kept');
-      expect(warn).toHaveBeenCalledTimes(1);
-      expect(String(warn.mock.calls[0][0])).toMatch(
-        /^\[WaveUI\] Carousel: only `Carousel\.Item` \(`CarouselItem`\) children are slides/,
-      );
+      expect(warn.mock.calls).toEqual([
+        [
+          '[WaveUI] Carousel: only `Carousel.Item` (`CarouselItem`) children are slides, directly ' +
+            'or in Fragments; other children are not rendered. A component that renders ' +
+            '`Carousel.Item` itself is not recognised: render the `Carousel.Item` in the Carousel ' +
+            'and put the component inside it.',
+        ],
+      ]);
     });
 
     it('does not warn for Carousel.Item children with nullish, boolean and empty-string children', () => {

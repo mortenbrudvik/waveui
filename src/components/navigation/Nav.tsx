@@ -8,7 +8,7 @@ import {
   warnDeprecated,
   warnOnce,
 } from '../../lib/dev';
-import { isElementOfType } from '../../lib/children';
+import { getElementType } from '../../lib/children';
 import { ChevronDownIcon } from '../../lib/icons';
 import { disabledStyles, focusRingInset } from '../../lib/styles';
 import { useControllable } from '../../hooks/useControllable';
@@ -383,14 +383,9 @@ function forEachElement(nodes: React.ReactNode, visit: (child: ElementWithChildr
   }
 }
 
-/** `isElementOfType` that is false, instead of suspending, for a lazy type still loading. */
+/** Whether `element` is one of `types`; a lazy type still loading is none (it never suspends). */
 function isPart(element: ElementWithChildren, ...types: unknown[]): boolean {
-  try {
-    return isElementOfType(element, ...types);
-  } catch (error) {
-    if (!isThenable(error)) throw error;
-    return false;
-  }
+  return types.includes(getElementType(element, { suspend: false }));
 }
 
 /**
@@ -434,7 +429,8 @@ function findCategoriesContaining(nodes: React.ReactNode, selected: string): str
 /**
  * Whether a click on a link opens it somewhere other than the current page, checked as routers
  * do: a modifier key (a new tab or window, a download), a mouse button other than the main one, a
- * `target` other than `_self`, or a `download` link.
+ * `target` other than `_self`, or a `download` link. Only when the default is not prevented does
+ * the browser actually open it there.
  */
 function opensElsewhere(event: React.MouseEvent<HTMLElement>): boolean {
   if (event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) {
@@ -463,9 +459,10 @@ function renderNavEntry(
     }
     onClick?.(event);
     // A link is still selected when the consumer prevents its default (client-side routing:
-    // `preventDefault()` + `router.push(href)`), but not when the click opens it elsewhere (the
-    // current page does not change); a button honours `preventDefault()` (C-COMPOSE).
-    if (isLink ? opensElsewhere(event) : event.defaultPrevented) return;
+    // `preventDefault()` + `router.push(href)`, whatever the modifier keys: the browser then opens
+    // nothing elsewhere), but not when the browser opens it elsewhere (the current page does not
+    // change); a button honours `preventDefault()` (C-COMPOSE).
+    if (isLink ? !event.defaultPrevented && opensElsewhere(event) : event.defaultPrevented) return;
     context.select(value);
   };
 
@@ -597,7 +594,9 @@ NavCategory.displayName = 'NavCategory';
  *
  * A click that opens a link somewhere other than the current page selects nothing (the consumer's
  * `onClick` still runs, and the browser opens the link): Ctrl/Cmd/Shift/Alt-click, a mouse button
- * other than the main one, a `target` other than `_self`, or a `download` link.
+ * other than the main one, a `target` other than `_self`, or a `download` link. When the consumer's
+ * `onClick` calls `preventDefault()` (client-side routing), the browser opens nothing, so the item
+ * is selected whatever the keys, button or `target`.
  *
  * Typed by overloads, resolved in order: without `href` (button props, button events), with a
  * string `href` (anchor props, anchor events), then an `href` that may be `undefined` at run time
@@ -617,8 +616,9 @@ NavItem.displayName = 'NavItem';
 
 /**
  * An indented entry inside a `Nav.Category`: a link when `href` is given, a button otherwise.
- * Selected like `Nav.Item` (a click that opens a link somewhere else selects nothing), and typed
- * by overloads like `Nav.Item` (button, link, then {@link NavSubItemDynamicProps}).
+ * Selected like `Nav.Item` (a click that the browser opens somewhere else selects nothing; one
+ * whose default your `onClick` prevents is selected), and typed by overloads like `Nav.Item`
+ * (button, link, then {@link NavSubItemDynamicProps}).
  *
  * Also exported as `NavSubItem` (import the flat name from React Server Components).
  */
@@ -742,7 +742,8 @@ NavRoot.displayName = 'Nav';
  * - **Selection**: `value`/`defaultValue`/`onValueChange` (`onValueChange` fires only when the
  *   value changes). The deprecated `selectedValue`/`defaultSelectedValue`/`onNavItemSelect` still
  *   work; `onNavItemSelect` keeps firing on every activation, re-selection included. A click that
- *   opens a link in another tab or window (or downloads it) selects nothing.
+ *   opens a link in another tab or window (or downloads it) selects nothing, unless the item's
+ *   `onClick` prevents the default (client-side routing: then nothing opens elsewhere).
  * - **Categories**: `openCategories`/`defaultOpenCategories`/`onOpenCategoriesChange`. Without
  *   `defaultOpenCategories`, the categories containing the selected item (`value` or
  *   `defaultValue`) start open.

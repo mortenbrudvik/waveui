@@ -467,15 +467,15 @@ describe('Nav', () => {
         </Nav>,
       );
       const categoryButton = screen.getByRole('button', { name: 'Inbox (3)' });
+      await user.click(categoryButton);
+      const list = button('Unread').closest('ul') as HTMLElement;
+      expect(within(list).getAllByRole('listitem')).toHaveLength(1);
+      expect(list.textContent).toBe('Unread');
       expect(warn.mock.calls).toEqual([
         [
           '[WaveUI] Nav.Category: `text children as the label` is deprecated and will be removed in 1.0. Use `label` instead. Pass the category label in `label` and only the sub-items as children.',
         ],
       ]);
-      await user.click(categoryButton);
-      const list = button('Unread').closest('ul') as HTMLElement;
-      expect(within(list).getAllByRole('listitem')).toHaveLength(1);
-      expect(list.textContent).toBe('Unread');
     });
 
     it('defaultOpenCategories opens categories initially', () => {
@@ -713,6 +713,39 @@ describe('Nav', () => {
           await user.click(link('Reports'));
           expect(onValueChange).toHaveBeenCalledWith('reports');
           expect(link('Reports')).toHaveAttribute('aria-current', 'page');
+        },
+      );
+
+      // The consumer's onClick routes in place (`preventDefault()` + a router push): the browser
+      // opens nothing elsewhere, the current page changes, so the link is selected.
+      it.each([
+        ['Ctrl+click', { ctrlKey: true }, {}],
+        ['Shift+click', { shiftKey: true }, {}],
+        ['a click with another mouse button', { button: 1 }, {}],
+        ['a plain click on a target="_blank" link', {}, { target: '_blank' }],
+        ['a plain click on a download link', {}, { download: true }],
+      ])(
+        '%s whose default the consumer prevents selects the link',
+        (_name, init, linkProps: { target?: string; download?: boolean }) => {
+          const onValueChange = vi.fn();
+          const navigate = vi.fn();
+          const onReportsClick = vi.fn((e: React.MouseEvent<HTMLAnchorElement>) => {
+            e.preventDefault();
+            navigate('/reports');
+          });
+          render(
+            <ReportsNav
+              {...linkProps}
+              onValueChange={onValueChange}
+              onReportsClick={onReportsClick}
+            />,
+          );
+          const notPrevented = fireEvent.click(link('Reports'), init);
+          expect(notPrevented).toBe(false);
+          expect(navigate).toHaveBeenCalledTimes(1);
+          expect(onValueChange.mock.calls).toEqual([['reports']]);
+          expect(link('Reports')).toHaveAttribute('aria-current', 'page');
+          expect(link('Home')).not.toHaveAttribute('aria-current');
         },
       );
 
@@ -1270,8 +1303,12 @@ describe('Nav', () => {
         ),
       ],
     ])('%s outside a Nav throws in development', (name, renderOrphan) => {
-      vi.spyOn(console, 'error').mockImplementation(() => {});
-      expect(() => render(renderOrphan())).toThrow(`[WaveUI] ${name} must be used within Nav`);
+      // The development throw is the whole report: nothing is logged besides it (R14).
+      const error = vi.spyOn(console, 'error');
+      expect(() => render(renderOrphan())).toThrow(
+        new Error(`[WaveUI] ${name} must be used within Nav`),
+      );
+      expect(error).not.toHaveBeenCalled();
     });
 
     it('logs each misplaced part once in production and renders it inert', async () => {
@@ -1340,7 +1377,7 @@ describe('Nav', () => {
     });
 
     it('does not warn for unique values, in StrictMode or when an item replaces another', () => {
-      const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+      const warn = vi.spyOn(console, 'warn');
       const tree = (swap: boolean) => (
         <React.StrictMode>
           <Nav>

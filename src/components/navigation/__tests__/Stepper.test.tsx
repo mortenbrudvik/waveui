@@ -7,7 +7,7 @@ import { composeStories } from '@storybook/react';
 import * as stories from '../../../../stories/Stepper.stories';
 import { Stepper, StepperStep } from '../Stepper';
 import type { StepProps, StepperProps } from '../Stepper';
-import type { Orientation } from '../../../lib/types';
+import type { Orientation, Slot } from '../../../lib/types';
 import {
   asClientReference,
   renderWithProviders,
@@ -79,10 +79,12 @@ describe('Stepper', () => {
   });
 
   it('throws when a Step is rendered outside a Stepper (C-CONTEXT)', () => {
-    const error = vi.spyOn(console, 'error').mockImplementation(() => {});
+    // The development throw is the whole report: nothing is logged besides it (R14).
+    const error = vi.spyOn(console, 'error');
     expect(() => render(<Stepper.Step label="Orphan" />)).toThrow(
-      '[WaveUI] Stepper.Step must be used within Stepper',
+      new Error('[WaveUI] Stepper.Step must be used within Stepper'),
     );
+    expect(error).not.toHaveBeenCalled();
     error.mockRestore();
   });
 
@@ -877,6 +879,47 @@ describe('Stepper', () => {
       expect(screen.getByTestId('custom').querySelector('svg[data-wave-icon="check"]')).toBeNull();
       expect(within(screen.getByTestId('custom')).getByText('*')).toBeInTheDocument();
     });
+
+    // `icon={name && <Icon />}` with `name` '' or a count of 0, or a list mapped to nothing: no
+    // icon, as in Menu, Nav, Tree and Avatar. A factory each, since a generator is one-shot.
+    it.each([
+      ["''", () => ''],
+      ['0', () => 0],
+      ['an empty array', () => []],
+      ['an array of empty items', () => [null, false, '', [undefined]]],
+      [
+        'a generator of empty items',
+        function* emptyItems() {
+          yield null;
+          yield '';
+        },
+      ],
+    ] as Array<[string, () => Slot<'span'>]>)(
+      'an icon that renders nothing (%s) keeps the check mark and the step number',
+      (_name, makeIcon) => {
+        render(
+          <Stepper defaultActiveStep={1}>
+            <Stepper.Step label="Account" data-testid="done" icon={makeIcon()} />
+            <Stepper.Step label="Pay" data-testid="current" icon={makeIcon()} />
+          </Stepper>,
+        );
+        expect(
+          screen.getByTestId('done').querySelector('svg[data-wave-icon="check"]'),
+        ).not.toBeNull();
+        const current = screen.getByTestId('current');
+        // The visible number (the name's "2." stays too), and no empty indicator box.
+        expect(within(current).getByText('2')).toBeInTheDocument();
+        expect(current.querySelector('span[aria-hidden="true"]:empty')).toBeNull();
+      },
+    );
+  });
+
+  it('the Localized story marks the language of its Norwegian labels (WCAG 3.1.2)', () => {
+    const { Localized } = composeStories(stories);
+    render(<Localized />);
+    const group = screen.getByRole('group', { name: 'Fremdrift' });
+    expect(group).toHaveAttribute('lang', 'nb');
+    expect(within(group).getByRole('button', { name: 'Fullført: 1. Konto' })).toBeInTheDocument();
   });
 
   describe('Linear story (nav-other-code-4)', () => {

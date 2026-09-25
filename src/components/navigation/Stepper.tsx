@@ -3,7 +3,7 @@ import { flattenChildren } from '../../lib/children';
 import { cn } from '../../lib/cn';
 import { reportMissingContext } from '../../lib/dev';
 import { CheckIcon, DismissIcon } from '../../lib/icons';
-import { renderSlot } from '../../lib/slot';
+import { renderSlot, slotRendersContent } from '../../lib/slot';
 import type { Slot } from '../../lib/slot';
 import { focusRing, forcedColors } from '../../lib/styles';
 import type { Orientation } from '../../lib/types';
@@ -56,7 +56,9 @@ export interface StepProps extends React.HTMLAttributes<HTMLDivElement> {
   description?: string;
   /**
    * Custom icon to display in the step indicator (`Slot<'span'>`: a node, or a slot object for full
-   * control). Decorative: rendered with `aria-hidden="true"`; the step number stays in the name.
+   * control). Decorative: rendered with `aria-hidden="true"`; the step number stays in the name. A
+   * falsy icon (`''`, `0`) or a list of nothing is no icon: the step shows its number (or its check
+   * mark when completed).
    */
   icon?: Slot<'span'>;
   /**
@@ -349,12 +351,16 @@ const StepperStep = ({
   const status = error ? errorLabel : isCompleted ? completedLabel : '';
   const statusText = status ? `${status} ${index + 1}.` : `${index + 1}.`;
 
+  // A falsy icon (`icon={name && <Icon />}` with `name` '' or a count of 0) is no icon, as in Menu,
+  // Nav, Tree and Avatar, and so is a collection whose items render nothing: the step keeps its
+  // number or check mark. The check does not consume a generator: renderSlot still renders it.
+  const hasIcon = !!icon && slotRendersContent(icon);
   let indicator: React.ReactNode;
   if (error) {
     indicator = <DismissIcon />;
-  } else if (isCompleted && !icon) {
+  } else if (isCompleted && !hasIcon) {
     indicator = <CheckIcon />;
-  } else if (icon) {
+  } else if (hasIcon) {
     indicator = renderSlot(icon, 'span', indicatorSlotClasses, { 'aria-hidden': true });
   } else {
     indicator = <span className="text-caption-1 font-semibold">{index + 1}</span>;

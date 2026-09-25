@@ -1,7 +1,7 @@
 import * as React from 'react';
 import { renderToString } from 'react-dom/server';
 import { describe, it, expect, expectTypeOf, vi, afterEach } from 'vitest';
-import { render, screen, within } from '@testing-library/react';
+import { act, render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import {
   Accordion,
@@ -488,14 +488,16 @@ describe('Accordion.Trigger and Accordion.Panel (layout#17)', () => {
     );
     expect(screen.getAllByRole('region')).toHaveLength(1);
     expectUniqueIds();
-    const messages = warn.mock.calls.map(([message]) => String(message));
-    expect(messages).toHaveLength(2);
-    expect(
-      messages.filter((m) => m.startsWith('[WaveUI] Accordion.Trigger was rendered inside')),
-    ).toHaveLength(1);
-    expect(
-      messages.filter((m) => m.startsWith('[WaveUI] Accordion.Panel was rendered inside')),
-    ).toHaveLength(1);
+    const misplaced = (part: 'Trigger' | 'Panel') =>
+      `[WaveUI] Accordion.${part} was rendered inside the panel of an Accordion.Item, so it is ` +
+      `not the item's ${part === 'Trigger' ? 'header' : 'panel'}. Place Accordion.Trigger and ` +
+      'Accordion.Panel directly in Accordion.Item, in a Fragment, or in an element that wraps ' +
+      'them as `children` (such as a Tooltip). The Item cannot see inside a component that ' +
+      'renders them itself and treats that component as panel content.';
+    expect(warn.mock.calls.map(([message]) => String(message))).toEqual([
+      misplaced('Trigger'),
+      misplaced('Panel'),
+    ]);
   });
 
   it('extra Item content does not re-render the Trigger when only that content changes (table-core#25)', () => {
@@ -825,7 +827,7 @@ describe('Accordion - single and multiple APIs (layout#19)', () => {
   });
 
   it('multiple: openItems is not deprecated', async () => {
-    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const warn = vi.spyOn(console, 'warn');
     const user = userEvent.setup();
     const onOpenItemsChange = vi.fn();
     render(
@@ -1104,5 +1106,63 @@ describe('Accordion - parts written in a Server Component (x-ssr-1)', () => {
     );
     expectUniqueIds();
     await expectNoA11yViolations();
+  });
+});
+
+// The Item looks for its Trigger and Panel through wrapper elements, `<Suspense>` included. Content
+// still loading inside the consumer's own <Suspense> suspends that boundary only, never the
+// Accordion (a React.lazy there must not be read as a part while its chunk loads).
+describe('Accordion - content still loading inside its own Suspense', () => {
+  type AnswerModule = { default: React.ComponentType };
+
+  /** A `React.lazy` answer whose chunk loads only when `load()` is called. */
+  function pendingAnswer() {
+    let resolveModule: (module: AnswerModule) => void = () => {};
+    const loading = new Promise<AnswerModule>((resolve) => {
+      resolveModule = resolve;
+    });
+    const LazyAnswer = React.lazy(() => loading);
+    return { LazyAnswer, load: () => resolveModule({ default: () => <p>Answer one.</p> }) };
+  }
+
+  const faq = (LazyAnswer: React.ComponentType) => (
+    <Accordion defaultOpenItem="q1">
+      <Accordion.Item value="q1">
+        <Accordion.Trigger>Question one?</Accordion.Trigger>
+        <React.Suspense fallback="Loading answer">
+          <LazyAnswer />
+        </React.Suspense>
+      </Accordion.Item>
+      <Accordion.Item value="q2">
+        <Accordion.Trigger>Question two?</Accordion.Trigger>
+        <Accordion.Panel>Answer two.</Accordion.Panel>
+      </Accordion.Item>
+    </Accordion>
+  );
+
+  it('shows the consumer fallback in the panel, not an outer fallback instead of the Accordion', async () => {
+    const { LazyAnswer, load } = pendingAnswer();
+    render(<React.Suspense fallback="Loading page">{faq(LazyAnswer)}</React.Suspense>);
+    expect(screen.queryByText('Loading page')).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Question one?' })).toHaveAttribute(
+      'aria-expanded',
+      'true',
+    );
+    expect(screen.getByRole('region', { name: 'Question one?' })).toHaveTextContent(
+      'Loading answer',
+    );
+    expect(screen.getByRole('button', { name: 'Question two?' })).toBeInTheDocument();
+
+    await act(async () => load());
+    expect(screen.getByRole('region', { name: 'Question one?' })).toHaveTextContent('Answer one.');
+    expectUniqueIds();
+  });
+
+  it('server-renders the Accordion around the consumer fallback', () => {
+    const { LazyAnswer } = pendingAnswer();
+    const html = renderToString(faq(LazyAnswer));
+    expect(html).toContain('Question one?');
+    expect(html).toContain('Loading answer');
+    expect(html).toContain('Question two?');
   });
 });

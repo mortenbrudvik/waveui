@@ -181,7 +181,9 @@ function consumerId(id: unknown): string | null {
 /**
  * Walks the element tree of the TabList's children (see {@link TabListStructure}). Parts are
  * identified through their element type, so parts written in a Server Component (lazy
- * references) count too. Runs during render only.
+ * references) count too. A `React.lazy` still loading (inside the consumer's own `<Suspense>`,
+ * such as code-split panels in `TabList.Panels`) is no part and never suspends the TabList: its
+ * children are walked instead. Runs during render only.
  */
 function collectStructure(node: unknown, into: TabListStructure): TabListStructure {
   if (Array.isArray(node)) {
@@ -190,7 +192,7 @@ function collectStructure(node: unknown, into: TabListStructure): TabListStructu
   }
   if (!React.isValidElement<StructureProps>(node)) return into;
   const { props } = node;
-  const type = getElementType(node);
+  const type = getElementType(node, { suspend: false });
   const value = typeof props.value === 'string' ? props.value : undefined;
   if (type === Tab) {
     if (value !== undefined) {
@@ -216,7 +218,7 @@ function collectStructure(node: unknown, into: TabListStructure): TabListStructu
 function containsPart(node: unknown, part: TabListPart): boolean {
   if (Array.isArray(node)) return node.some((child) => containsPart(child, part));
   if (!React.isValidElement<StructureProps>(node)) return false;
-  const type = getElementType(node);
+  const type = getElementType(node, { suspend: false });
   if (type === Tab) return part === 'tab';
   if (type === TabPanel || type === TabPanels) return part === 'panel';
   if (type === TabListRoot) return false;
