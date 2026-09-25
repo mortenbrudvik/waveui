@@ -1,7 +1,36 @@
-import type { Meta, StoryObj } from '@storybook/react';
+import type { ArgTypes, Meta, StoryObj } from '@storybook/react';
 import { fn } from 'storybook/test';
 import { Menu, SplitButton } from '../src';
+import type { IconPosition } from '../src';
 import { appearanceArgType, sizeArgType } from './_helpers';
+
+/** Decorative save glyph for the primary action. */
+const SaveIcon = () => (
+  <svg viewBox="0 0 16 16" width="16" height="16" fill="none" stroke="currentColor">
+    <path
+      d="M3 2.5h8l2.5 2.5v8.5h-11zM5.5 2.5v3h5v-3M5 13.5v-4h6v4"
+      strokeWidth="1.2"
+      strokeLinejoin="round"
+    />
+  </svg>
+);
+
+/** Decorative "more" glyph (three dots) for the menu half. */
+const MoreIcon = () => (
+  <svg viewBox="0 0 16 16" width="16" height="16" fill="currentColor">
+    <circle cx="3.5" cy="8" r="1.25" />
+    <circle cx="8" cy="8" r="1.25" />
+    <circle cx="12.5" cy="8" r="1.25" />
+  </svg>
+);
+
+/** `iconPosition` (`IconPosition`) of the primary action: before or after its label. */
+const iconPositionArgType = {
+  iconPosition: {
+    control: 'inline-radio',
+    options: ['before', 'after'] as const satisfies readonly IconPosition[],
+  },
+} satisfies ArgTypes;
 
 const meta = {
   title: 'Components/Button/SplitButton',
@@ -9,6 +38,7 @@ const meta = {
   argTypes: {
     ...appearanceArgType,
     ...sizeArgType,
+    ...iconPositionArgType,
   },
   args: {
     children: 'Save',
@@ -32,6 +62,23 @@ export const Primary: Story = {
 export const Disabled: Story = {
   args: {
     disabled: true,
+  },
+};
+
+/** `icon` decorates the primary action (`iconPosition` moves it after the label). */
+export const WithIcon: Story = {
+  args: {
+    icon: <SaveIcon />,
+  },
+};
+
+/**
+ * `menuIcon` replaces the chevron of the menu half. The menu half always shows an indicator:
+ * unlike `MenuButton`, a `menuIcon` that renders nothing keeps the chevron (and warns).
+ */
+export const CustomMenuIcon: Story = {
+  args: {
+    menuIcon: <MoreIcon />,
   },
 };
 

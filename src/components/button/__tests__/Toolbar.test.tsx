@@ -255,6 +255,97 @@ describe('Toolbar', () => {
       expect(button('Underline')).toHaveFocus();
     });
 
+    describe('disabledFocusable controls stay reachable', () => {
+      /** Copy, a focusable-disabled Paste, a natively disabled Cut and Delete. */
+      const EditActions = () => (
+        <>
+          <Button appearance="subtle">Copy</Button>
+          <Button appearance="subtle" disabledFocusable>
+            Paste
+          </Button>
+          <Button appearance="subtle" disabled>
+            Cut
+          </Button>
+          <Button appearance="subtle">Delete</Button>
+        </>
+      );
+
+      it('the arrows land on a disabledFocusable button and still skip a natively disabled one', async () => {
+        const user = userEvent.setup();
+        render(
+          <Toolbar aria-label="Edit">
+            <EditActions />
+          </Toolbar>,
+        );
+        expect(button('Paste')).toHaveAttribute('aria-disabled', 'true');
+        expect(button('Paste')).toHaveAttribute('data-disabled-focusable', '');
+        await user.tab();
+        expect(button('Copy')).toHaveFocus();
+        await user.keyboard('{ArrowRight}');
+        expect(button('Paste')).toHaveFocus();
+        expect(button('Paste')).toHaveAttribute('tabindex', '0');
+        await user.keyboard('{ArrowRight}');
+        expect(button('Delete')).toHaveFocus();
+        await user.keyboard('{ArrowLeft}');
+        expect(button('Paste')).toHaveFocus();
+        // Enter does nothing on it, and the arrows keep working from it.
+        await user.keyboard('{Enter}');
+        await user.keyboard('{ArrowLeft}');
+        expect(button('Copy')).toHaveFocus();
+      });
+
+      it('Home and End include it, and it can hold the Tab stop', async () => {
+        const user = userEvent.setup();
+        render(
+          <>
+            <Toolbar aria-label="Edit">
+              <Button appearance="subtle" disabledFocusable>
+                Undo
+              </Button>
+              <Button appearance="subtle">Copy</Button>
+              <Button appearance="subtle" disabledFocusable>
+                Redo
+              </Button>
+            </Toolbar>
+            <button type="button">After</button>
+          </>,
+        );
+        expect(button('Undo')).toHaveAttribute('aria-disabled', 'true');
+        expect(button('Redo')).toHaveAttribute('aria-disabled', 'true');
+        expect(tabStops()).toEqual([button('Undo')]);
+        await user.tab();
+        expect(button('Undo')).toHaveFocus();
+        await user.keyboard('{End}');
+        expect(button('Redo')).toHaveFocus();
+        await user.keyboard('{Home}');
+        expect(button('Undo')).toHaveFocus();
+        await user.keyboard('{End}');
+        await user.tab();
+        expect(button('After')).toHaveFocus();
+        await user.tab({ shift: true });
+        expect(button('Redo')).toHaveFocus();
+      });
+
+      it('mirrors Left/Right in RTL', async () => {
+        const user = userEvent.setup();
+        renderWithProviders(
+          <Toolbar aria-label="Edit">
+            <EditActions />
+          </Toolbar>,
+          { dir: 'rtl' },
+        );
+        expect(button('Paste')).toHaveAttribute('data-disabled-focusable', '');
+        await user.tab();
+        expect(button('Copy')).toHaveFocus();
+        await user.keyboard('{ArrowLeft}');
+        expect(button('Paste')).toHaveFocus();
+        await user.keyboard('{ArrowLeft}');
+        expect(button('Delete')).toHaveFocus();
+        await user.keyboard('{ArrowRight}');
+        expect(button('Paste')).toHaveFocus();
+      });
+    });
+
     it('skips a child that disables itself without a Toolbar re-render, then includes it again', async () => {
       const user = userEvent.setup();
       // The Toolbar receives no new props: only the child's own state toggles `disabled`.

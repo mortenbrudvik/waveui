@@ -1,7 +1,7 @@
-import type { Meta, StoryObj } from '@storybook/react';
+import type { ArgTypes, Meta, StoryObj } from '@storybook/react';
 import { fn } from 'storybook/test';
-import { Button } from '../src';
-import type { ButtonProps, Size } from '../src';
+import { Button, Tooltip } from '../src';
+import type { ButtonProps, IconPosition, Size } from '../src';
 import { appearanceArgType, sizeArgType } from './_helpers';
 
 /** Decorative inline icon (the Button hides its icon slot from assistive technology). */
@@ -16,12 +16,40 @@ const PaperclipIcon = () => (
   </svg>
 );
 
+/** Decorative "open in new window" glyph, shown after the label (mirrored in RTL). */
+const OpenIcon = () => (
+  <svg
+    viewBox="0 0 16 16"
+    width="16"
+    height="16"
+    fill="none"
+    stroke="currentColor"
+    className="wave-rtl:-scale-x-100"
+  >
+    <path
+      d="M9.5 2.5h4v4M13.5 2.5 7.5 8.5M12 9.5v3a1 1 0 0 1-1 1H3.5a1 1 0 0 1-1-1V5a1 1 0 0 1 1-1h3"
+      strokeWidth="1.2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    />
+  </svg>
+);
+
+/** `iconPosition` (`IconPosition`): before or after the label. */
+const iconPositionArgType = {
+  iconPosition: {
+    control: 'inline-radio',
+    options: ['before', 'after'] as const satisfies readonly IconPosition[],
+  },
+} satisfies ArgTypes;
+
 const meta = {
   title: 'Components/Button/Button',
   component: Button,
   argTypes: {
     ...appearanceArgType,
     ...sizeArgType,
+    ...iconPositionArgType,
   },
   args: {
     onClick: fn(),
@@ -74,6 +102,18 @@ export const WithIcon: Story = {
   },
 };
 
+/**
+ * `iconPosition="after"` puts the icon at the inline end of the label (it mirrors in RTL), e.g. a
+ * glyph that says the action opens a new window.
+ */
+export const IconAfter: Story = {
+  args: {
+    children: 'Open in new window',
+    icon: <OpenIcon />,
+    iconPosition: 'after',
+  },
+};
+
 /** An icon-only button has no visible label, so it needs an `aria-label`. */
 export const IconOnly: Story = {
   args: {
@@ -105,6 +145,22 @@ export const Disabled: Story = {
     children: 'Disabled',
     disabled: true,
   },
+};
+
+/**
+ * `disabledFocusable` keeps an unavailable button focusable, so a Tooltip can explain why it is
+ * unavailable: Tab to it to read the reason. Its click, Enter and Space do nothing.
+ */
+export const DisabledFocusable: Story = {
+  args: {
+    children: 'Save',
+    disabledFocusable: true,
+  },
+  render: (args) => (
+    <Tooltip content="Make a change before you save">
+      <Button {...args} />
+    </Tooltip>
+  ),
 };
 
 /** `as="a"` renders a link styled as a button; the props are typed for the anchor. */

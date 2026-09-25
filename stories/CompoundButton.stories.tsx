@@ -1,8 +1,24 @@
-import type { Meta, StoryObj } from '@storybook/react';
+import type { ArgTypes, Meta, StoryObj } from '@storybook/react';
 import { fn } from 'storybook/test';
 import { CompoundButton } from '../src';
-import type { CompoundButtonProps, Size } from '../src';
+import type { CompoundButtonProps, IconPosition, Size } from '../src';
 import { appearanceArgType, sizeArgType } from './_helpers';
+
+/** Decorative calendar glyph; the CompoundButton sizes its icon box and the SVG fills it. */
+const CalendarIcon = () => (
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor">
+    <rect x="3.5" y="5" width="17" height="15" rx="2" strokeWidth="1.5" />
+    <path d="M3.5 9.5h17M8 3v4M16 3v4" strokeWidth="1.5" strokeLinecap="round" />
+  </svg>
+);
+
+/** `iconPosition` (`IconPosition`): before or after the text. */
+const iconPositionArgType = {
+  iconPosition: {
+    control: 'inline-radio',
+    options: ['before', 'after'] as const satisfies readonly IconPosition[],
+  },
+} satisfies ArgTypes;
 
 const meta = {
   title: 'Components/Button/CompoundButton',
@@ -10,6 +26,7 @@ const meta = {
   argTypes: {
     ...appearanceArgType,
     ...sizeArgType,
+    ...iconPositionArgType,
   },
   args: {
     children: 'Send mail',
@@ -37,6 +54,25 @@ export const Primary: Story = {
     appearance: 'primary',
     children: 'Create account',
     secondaryText: 'Free for 30 days',
+  },
+};
+
+/** The icon sits beside both lines of text in a 40px box (decorative, `aria-hidden`). */
+export const WithIcon: Story = {
+  args: {
+    children: 'Schedule meeting',
+    secondaryText: 'Next Monday at 9:00',
+    icon: <CalendarIcon />,
+  },
+};
+
+/** `iconPosition="after"` puts the icon at the inline end of the text (it mirrors in RTL). */
+export const IconAfter: Story = {
+  args: {
+    children: 'Schedule meeting',
+    secondaryText: 'Next Monday at 9:00',
+    icon: <CalendarIcon />,
+    iconPosition: 'after',
   },
 };
 

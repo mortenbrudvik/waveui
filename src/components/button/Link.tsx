@@ -3,6 +3,7 @@ import { cn } from '../../lib/cn';
 import { resolveDeprecatedProp } from '../../lib/dev';
 import { focusRing } from '../../lib/styles';
 import type { PolymorphicComponent, PolymorphicProps } from '../../lib/polymorphic';
+import { useButtonSemantics } from './Button.semantics';
 
 /**
  * Color treatment of a {@link Link}.
@@ -32,12 +33,25 @@ export interface LinkOwnProps {
   variant?: LinkVariant;
   /**
    * Makes the link unavailable. An `<a>` drops its `href` (no navigation by middle-click, the
-   * context menu or drag), keeps `role="link"`, and gets `aria-disabled="true"` and
-   * `tabIndex={-1}` (neither can be overridden); a custom `as` (router link) gets the same ARIA
-   * and tab index and its click is prevented. `as="button"` uses the native `disabled` attribute.
+   * context menu or drag), keeps `role="link"` (`role="button"` when it had no `href`), and gets
+   * `aria-disabled="true"`, `data-disabled` and `tabIndex={-1}` (none can be overridden); a custom
+   * `as` (router link) gets the same attributes. Clicks, Enter and Space are prevented: your
+   * `onClick` is not called and the click does not reach ancestor click handlers. `as="button"`
+   * uses the native `disabled` attribute.
    * @default false
    */
   disabled?: boolean;
+  /**
+   * Marks the link unavailable but keeps it focusable and in the tab order: for a toolbar item or
+   * a disabled link that needs a Tooltip. Renders `aria-disabled="true"`, `data-disabled` and
+   * `data-disabled-focusable`; an `<a>` drops its `href` (it keeps `role="link"` and gets
+   * `tabIndex={0}`), and `as="button"` gets these attributes instead of the native `disabled`.
+   * Clicks, Enter and Space are prevented; your `onClick` is not called and the click does not
+   * reach ancestor click handlers. Wins over `disabled` when both are set. In a `Toolbar` it stays
+   * in the arrow-key order.
+   * @default false
+   */
+  disabledFocusable?: boolean;
 }
 
 /**
@@ -48,19 +62,15 @@ export type LinkProps<C extends React.ElementType = 'a'> = PolymorphicProps<C, L
 
 /** The props the implementation reads, for any `as`. */
 type LinkImplProps = LinkOwnProps &
-  Omit<React.HTMLAttributes<HTMLElement>, 'onClick'> & {
+  Omit<React.HTMLAttributes<HTMLElement>, 'onClick' | 'onKeyDown' | 'onKeyUp'> & {
     as?: React.ElementType;
     ref?: React.Ref<HTMLElement>;
+    /** The destination: without one, the anchor gets button semantics. */
+    href?: string;
     onClick?: React.MouseEventHandler<HTMLElement>;
+    onKeyDown?: React.KeyboardEventHandler<HTMLElement>;
+    onKeyUp?: React.KeyboardEventHandler<HTMLElement>;
   };
-
-/** Intrinsic elements whose native `disabled` attribute makes them unavailable. */
-const NATIVE_DISABLED_ELEMENTS: ReadonlySet<string> = new Set([
-  'button',
-  'input',
-  'select',
-  'textarea',
-]);
 
 const appearanceClasses: Record<LinkAppearance, string> = {
   inline:
@@ -75,9 +85,15 @@ const appearanceClasses: Record<LinkAppearance, string> = {
  * A hyperlink with Fluent link styling. Renders an `<a>` by default; `as` renders a router link
  * (`<Link as={RouterLink} to="/">`) or a `<button>` styled as a link (`type="button"` by default).
  *
+ * - Without `href`, the `<a>` runs an action instead of navigating ("Show more"): it keeps its
+ *   element and gets `role="button"`, a tab stop and Enter/Space activation (the consumer's
+ *   `role` and `tabIndex` win). A non-interactive `as` (`span`, `div`) is treated the same way;
+ *   any `href` string, `''` included, keeps the link semantics.
+ *
  * @example
  * <p>Read the <Link href="/docs">documentation</Link> first.</p>
  * <Link appearance="standalone" href="/pricing">See pricing</Link>
+ * <Link onClick={showMore}>Show more</Link>
  */
 export const Link: PolymorphicComponent<'a', LinkOwnProps> = (props) => {
   const {
@@ -85,8 +101,12 @@ export const Link: PolymorphicComponent<'a', LinkOwnProps> = (props) => {
     appearance: appearanceProp,
     variant,
     disabled = false,
+    disabledFocusable = false,
     className,
     onClick,
+    onKeyDown,
+    onKeyUp,
+    onBlur,
     ref,
     ...rest
   } = props as LinkImplProps;
@@ -96,43 +116,33 @@ export const Link: PolymorphicComponent<'a', LinkOwnProps> = (props) => {
 
   const Component: React.ElementType = as ?? 'a';
   const tag = typeof Component === 'string' ? Component : null;
+  // The activation semantics of Button: an `<a>` without `href` or a `span` is a button, and a
+  // disabled link blocks its click (ancestors included), Enter and Space.
+  const { defaults, enforced, handlers } = useButtonSemantics({
+    tag,
+    href: rest.href,
+    disabled,
+    disabledFocusable,
+    onClick,
+    onKeyDown,
+    onKeyUp,
+    onBlur,
+  });
 
-  /** Defaults the consumer may override (C-COMPOSE: before the rest props). */
-  const defaults: Record<string, unknown> = {};
-  /** Attributes the consumer must not override (C-COMPOSE: after the rest props). */
-  const enforced: Record<string, unknown> = {};
-  let handleClick: React.MouseEventHandler<HTMLElement> | undefined = onClick;
-
-  if (tag === 'button') defaults.type = 'button';
-
-  if (tag !== null && NATIVE_DISABLED_ELEMENTS.has(tag)) {
-    enforced.disabled = disabled || undefined;
-  } else if (disabled) {
-    if (tag === 'a') {
-      // No destination at all, but still announced as a (disabled) link.
-      defaults.role = 'link';
-      enforced.href = undefined;
-    }
-    enforced['aria-disabled'] = true;
-    enforced.tabIndex = -1;
-    handleClick = (event) => {
-      event.preventDefault();
-    };
-  }
-
+  // Defaults apply wherever the consumer's value is `undefined` or `null` (C-COMPOSE).
   const elementProps: Record<string, unknown> = { ...rest };
   for (const [key, value] of Object.entries(defaults)) elementProps[key] ??= value;
 
   return (
     <Component
       {...elementProps}
-      onClick={handleClick}
+      {...handlers}
       ref={ref}
       className={cn(
         'cursor-pointer transition-colors motion-reduce:transition-none',
         focusRing,
         appearanceClasses[appearance],
-        disabled && 'cursor-not-allowed opacity-50',
+        (disabled || disabledFocusable) && 'cursor-not-allowed opacity-50',
         className,
       )}
       {...enforced}

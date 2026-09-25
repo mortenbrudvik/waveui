@@ -2,7 +2,7 @@ import * as React from 'react';
 import { cn } from '../../lib/cn';
 import { composeEventHandlers } from '../../lib/composeEventHandlers';
 import { useControllable } from '../../hooks/useControllable';
-import type { Size, Appearance, Slot } from '../../lib/types';
+import type { Size, Appearance, IconPosition, Slot } from '../../lib/types';
 import { Button } from './Button';
 import { buttonClassName } from './buttonStyles';
 
@@ -32,10 +32,27 @@ export interface ToggleButtonProps extends Omit<
    */
   size?: Size;
   /**
-   * Icon slot rendered before the label. Decorative: it renders with `aria-hidden="true"` (a slot
-   * object can override it). An icon-only toggle needs `aria-label`, `aria-labelledby` or `title`.
+   * Icon slot rendered before the label (after it with `iconPosition="after"`). Decorative: it
+   * renders with `aria-hidden="true"` (a slot object can override it). An icon-only toggle needs
+   * `aria-label`, `aria-labelledby` or `title`.
    */
   icon?: Slot<'span'>;
+  /**
+   * Where the icon renders: before the label (the inline start) or after it (the inline end).
+   * Follows the writing direction through DOM order. Has no effect on an icon-only toggle.
+   * @default 'before'
+   */
+  iconPosition?: IconPosition;
+  /**
+   * Marks the toggle unavailable but keeps it focusable and in the tab order (see
+   * `Button.disabledFocusable`): `aria-disabled="true"`, `data-disabled` and
+   * `data-disabled-focusable` instead of the native `disabled` attribute. Clicks, Enter and Space
+   * neither toggle it nor call `onClick` or `onPressedChange`; a pressed toggle shows the pressed
+   * and disabled look. Wins over `disabled` when both are set. In a `Toolbar` it stays in the
+   * arrow-key order.
+   * @default false
+   */
+  disabledFocusable?: boolean;
   /** Ref to the rendered `<button>`. */
   ref?: React.Ref<HTMLButtonElement>;
 }
@@ -81,17 +98,21 @@ export const ToggleButton = ({
   appearance = 'outline',
   size = 'medium',
   disabled = false,
+  disabledFocusable = false,
   className,
   onClick,
   ...props
 }: ToggleButtonProps) => {
   const [isPressed, setPressed] = useControllable(pressed, defaultPressed, onPressedChange);
 
+  // With `disabledFocusable`, Button replaces this handler, so the toggle never runs.
   const handleClick = composeEventHandlers(onClick, () => setPressed((current) => !current));
 
-  // Button shows the disabled look for `disabled` and for a consumer `aria-disabled` alike.
+  // Button shows the disabled look for `disabled`, `disabledFocusable` and a consumer
+  // `aria-disabled` alike.
   const ariaDisabled = props['aria-disabled'];
-  const disabledLook = disabled || ariaDisabled === true || ariaDisabled === 'true';
+  const disabledLook =
+    disabled || disabledFocusable || ariaDisabled === true || ariaDisabled === 'true';
 
   return (
     <Button
@@ -99,6 +120,7 @@ export const ToggleButton = ({
       appearance={appearance}
       size={size}
       disabled={disabled}
+      disabledFocusable={disabledFocusable}
       aria-pressed={isPressed}
       onClick={handleClick}
       className={cn(isPressed && getPressedLayer(appearance, disabledLook), className)}

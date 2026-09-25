@@ -34,6 +34,16 @@ export interface MenuButtonProps extends React.ButtonHTMLAttributes<HTMLButtonEl
    * wrapped in `Menu.Trigger`, which supplies `aria-expanded` itself.
    */
   expanded?: boolean;
+  /**
+   * Marks the menu button unavailable but keeps it focusable and in the tab order (see
+   * `Button.disabledFocusable`): `aria-disabled="true"`, `data-disabled` and
+   * `data-disabled-focusable` instead of the native `disabled` attribute. Clicks, Enter and Space
+   * are prevented and do not call `onClick`; other keys still reach `onKeyDown`, and
+   * `Menu.Trigger` does not open its menu from an `aria-disabled` trigger. Wins over `disabled`
+   * when both are set. In a `Toolbar` it stays in the arrow-key order.
+   * @default false
+   */
+  disabledFocusable?: boolean;
   /** Ref to the rendered `<button>`. */
   ref?: React.Ref<HTMLButtonElement>;
 }

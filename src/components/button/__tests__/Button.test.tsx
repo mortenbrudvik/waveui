@@ -4,13 +4,14 @@ import { render, screen, fireEvent } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { Button } from '../Button';
 import type { ButtonOwnProps, ButtonProps } from '../Button';
+import { Tooltip } from '../../overlays/Tooltip';
 import {
   testSystemProps,
   testFocusEvents,
   testNoImplicitSubmit,
   renderWithProviders,
 } from '../../../test-utils';
-import type { Appearance, Size, Slot } from '../../../lib/types';
+import type { Appearance, IconPosition, Size, Slot } from '../../../lib/types';
 
 const HOVER_GATE = 'not-disabled:not-aria-disabled:hover:';
 const ACTIVE_GATE = 'not-disabled:not-aria-disabled:active:';
@@ -57,8 +58,15 @@ describe('Button', () => {
       },
       { name: 'as anchor', props: { as: 'a', href: '/docs' } },
       { name: 'as anchor, disabled', props: { as: 'a', href: '/docs', disabled: true } },
+      { name: 'as anchor without href', props: { as: 'a' } },
+      { name: 'as anchor without href, disabled', props: { as: 'a', disabled: true } },
       { name: 'as div', props: { as: 'div' } },
       { name: 'as div, disabled', props: { as: 'div', disabled: true } },
+      { name: 'disabledFocusable', props: { disabledFocusable: true } },
+      {
+        name: 'as anchor, disabledFocusable',
+        props: { as: 'a', href: '/docs', disabledFocusable: true },
+      },
     ],
   });
 
@@ -353,6 +361,49 @@ describe('Button', () => {
         </Button>,
       );
       expect(screen.getByRole('link', { name: 'Checkout' })).toHaveAttribute('tabindex', '-1');
+    });
+
+    it('as="a" without href is a button: role="button", a tab stop and Enter/Space activation', async () => {
+      const user = userEvent.setup();
+      const onClick = vi.fn();
+      render(
+        <React.StrictMode>
+          <Button as="a" onClick={onClick}>
+            Show more
+          </Button>
+        </React.StrictMode>,
+      );
+      const action = screen.getByRole('button', { name: 'Show more' });
+      expect(action.tagName).toBe('A');
+      expect(action).toHaveAttribute('tabindex', '0');
+      expect(action).not.toHaveAttribute('type');
+
+      await user.tab();
+      expect(action).toHaveFocus();
+      await user.keyboard('{Enter}');
+      expect(onClick).toHaveBeenCalledTimes(1);
+      await user.keyboard(' ');
+      expect(onClick).toHaveBeenCalledTimes(2);
+      expect(fireEvent.keyDown(action, { key: ' ' })).toBe(false);
+      fireEvent.keyUp(action, { key: ' ' });
+      expect(onClick).toHaveBeenCalledTimes(3);
+    });
+
+    it('as="a" disabled without href has role="button", aria-disabled and no tab stop', () => {
+      const onParentClick = vi.fn();
+      render(
+        <div onClick={onParentClick}>
+          <Button as="a" disabled>
+            Show more
+          </Button>
+        </div>,
+      );
+      const action = screen.getByRole('button', { name: 'Show more' });
+      expect(action).toHaveAttribute('aria-disabled', 'true');
+      expect(action).toHaveAttribute('data-disabled', '');
+      expect(action).toHaveAttribute('tabindex', '-1');
+      expect(fireEvent.click(action)).toBe(false);
+      expect(onParentClick).not.toHaveBeenCalled();
     });
 
     it('as="a" restores href and focusability when re-enabled', () => {
@@ -738,6 +789,65 @@ describe('Button', () => {
       expect(button).not.toHaveClass('min-w-24');
     });
 
+    describe('iconPosition', () => {
+      it.each([
+        ['by default', undefined],
+        ['with iconPosition="before"', 'before'],
+      ] as const)('renders the icon before the label %s', (_name, iconPosition) => {
+        render(
+          <Button icon={<PaperclipIcon />} iconPosition={iconPosition}>
+            Attach
+          </Button>,
+        );
+        const button = screen.getByRole('button', { name: 'Attach' });
+        expect(button.childNodes).toHaveLength(2);
+        expect(button.firstChild).toBe(screen.getByTestId('paperclip').parentElement);
+        expect(button.firstChild).toHaveAttribute('aria-hidden', 'true');
+        expect(button.lastChild?.textContent).toBe('Attach');
+      });
+
+      it('renders the icon after the label with iconPosition="after", keeping the gap', () => {
+        render(
+          <Button icon={<PaperclipIcon />} iconPosition="after">
+            Open in new window
+          </Button>,
+        );
+        const button = screen.getByRole('button', { name: 'Open in new window' });
+        expect(button.childNodes).toHaveLength(2);
+        expect(button.firstChild?.textContent).toBe('Open in new window');
+        expect(button.lastChild).toBe(screen.getByTestId('paperclip').parentElement);
+        expect(button.lastChild).toHaveAttribute('aria-hidden', 'true');
+        expect(button).toHaveClass('gap-1.5');
+      });
+
+      it('has no effect on an icon-only button: one child, square sizing', () => {
+        render(
+          <Button icon={<PaperclipIcon />} iconPosition="after" aria-label="Attach" size="large" />,
+        );
+        const button = screen.getByRole('button', { name: 'Attach' });
+        expect(button.childNodes).toHaveLength(1);
+        expect(button).toHaveClass('h-10', 'w-10');
+        expect(button).not.toHaveClass('min-w-24');
+      });
+
+      it('keeps the DOM order in RTL (the writing direction mirrors it)', () => {
+        renderWithProviders(
+          <>
+            <Button icon={<PaperclipIcon />}>Before</Button>
+            <Button icon={<PaperclipIcon />} iconPosition="after">
+              After
+            </Button>
+          </>,
+          { dir: 'rtl' },
+        );
+        const before = screen.getByRole('button', { name: 'Before' });
+        const after = screen.getByRole('button', { name: 'After' });
+        expect(before.closest('[dir]')).toHaveAttribute('dir', 'rtl');
+        expect(before.firstChild).toHaveAttribute('aria-hidden', 'true');
+        expect(after.lastChild).toHaveAttribute('aria-hidden', 'true');
+      });
+    });
+
     it('warns once in development when icon-only buttons have no accessible name', () => {
       const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
 
@@ -989,6 +1099,217 @@ describe('Button', () => {
       await user.click(screen.getByRole('button', { name: 'Disabled' }));
       expect(onClick).not.toHaveBeenCalled();
     });
+
+    it('renders data-disabled on a disabled Button, native or not, and not on an enabled one', () => {
+      render(
+        <>
+          <Button disabled>Native</Button>
+          <Button as="div" disabled>
+            Generic
+          </Button>
+          <Button>Enabled</Button>
+        </>,
+      );
+      expect(screen.getByRole('button', { name: 'Native' })).toHaveAttribute('data-disabled', '');
+      expect(screen.getByRole('button', { name: 'Generic' })).toHaveAttribute('data-disabled', '');
+      expect(screen.getByRole('button', { name: 'Enabled' })).not.toHaveAttribute('data-disabled');
+      for (const button of screen.getAllByRole('button')) {
+        expect(button).not.toHaveAttribute('data-disabled-focusable');
+      }
+    });
+  });
+
+  describe('disabledFocusable', () => {
+    it('stays in the tab order with aria-disabled, data-disabled and data-disabled-focusable instead of disabled', async () => {
+      const user = userEvent.setup();
+      render(
+        <>
+          <button type="button">Before</button>
+          <Button disabledFocusable>Save</Button>
+        </>,
+      );
+      const button = screen.getByRole('button', { name: 'Save' });
+      expect(button).not.toBeDisabled();
+      expect(button).not.toHaveAttribute('disabled');
+      expect(button).not.toHaveAttribute('tabindex');
+      expect(button).toHaveAttribute('aria-disabled', 'true');
+      expect(button).toHaveAttribute('data-disabled', '');
+      expect(button).toHaveAttribute('data-disabled-focusable', '');
+      expect(button).toHaveClass('opacity-50', 'cursor-not-allowed');
+
+      screen.getByRole('button', { name: 'Before' }).focus();
+      await user.tab();
+      expect(button).toHaveFocus();
+    });
+
+    it('click, Enter and Space neither call onClick nor reach a parent onClick', async () => {
+      const user = userEvent.setup();
+      const onClick = vi.fn();
+      const onParentClick = vi.fn();
+      render(
+        <div onClick={onParentClick}>
+          <Button disabledFocusable onClick={onClick}>
+            Save
+          </Button>
+        </div>,
+      );
+      const button = screen.getByRole('button', { name: 'Save' });
+      await user.click(button);
+      expect(button).toHaveFocus();
+      await user.keyboard('{Enter}');
+      await user.keyboard(' ');
+      expect(onClick).not.toHaveBeenCalled();
+      expect(onParentClick).not.toHaveBeenCalled();
+      // fireEvent returns false when the default action was prevented.
+      expect(fireEvent.click(button)).toBe(false);
+      expect(fireEvent.keyDown(button, { key: 'Enter' })).toBe(false);
+      expect(fireEvent.keyUp(button, { key: ' ' })).toBe(false);
+      expect(onClick).not.toHaveBeenCalled();
+      expect(onParentClick).not.toHaveBeenCalled();
+    });
+
+    it('forwards keys other than Enter and Space to the consumer onKeyDown', () => {
+      const onKeyDown = vi.fn();
+      render(
+        <Button disabledFocusable onKeyDown={onKeyDown}>
+          Actions
+        </Button>,
+      );
+      const button = screen.getByRole('button', { name: 'Actions' });
+      fireEvent.keyDown(button, { key: 'Enter' });
+      fireEvent.keyDown(button, { key: ' ' });
+      expect(onKeyDown).not.toHaveBeenCalled();
+      expect(fireEvent.keyDown(button, { key: 'ArrowDown' })).toBe(true);
+      expect(onKeyDown).toHaveBeenCalledTimes(1);
+    });
+
+    it('a type="submit" button submits neither on click nor by implicit submission', async () => {
+      const user = userEvent.setup();
+      const onSubmit = vi.fn((event: React.FormEvent) => event.preventDefault());
+      render(
+        <form onSubmit={onSubmit} aria-label="Profile">
+          <input aria-label="Name" />
+          <Button type="submit" disabledFocusable>
+            Save
+          </Button>
+        </form>,
+      );
+      await user.click(screen.getByRole('button', { name: 'Save' }));
+      await user.type(screen.getByRole('textbox', { name: 'Name' }), 'Ada{Enter}');
+      expect(onSubmit).not.toHaveBeenCalled();
+    });
+
+    it('gates its hover and pressed colors (aria-disabled switches them off)', () => {
+      render(
+        <Button appearance="primary" disabledFocusable>
+          Save
+        </Button>,
+      );
+      const button = screen.getByRole('button', { name: 'Save' });
+      expect(button).toHaveClass(
+        `${HOVER_GATE}bg-primary-hover`,
+        `${ACTIVE_GATE}bg-primary-pressed`,
+      );
+      for (const cls of Array.from(button.classList)) {
+        if (/(^|:)hover:/.test(cls)) expect(cls.startsWith(HOVER_GATE), cls).toBe(true);
+        if (/(^|:)active:/.test(cls)) expect(cls.startsWith(ACTIVE_GATE), cls).toBe(true);
+      }
+      expect(button).toHaveAttribute('aria-disabled', 'true');
+    });
+
+    it('wins over disabled: the button stays focusable', async () => {
+      const user = userEvent.setup();
+      render(
+        <Button disabled disabledFocusable>
+          Save
+        </Button>,
+      );
+      const button = screen.getByRole('button', { name: 'Save' });
+      expect(button).not.toBeDisabled();
+      expect(button).toHaveAttribute('data-disabled-focusable', '');
+      await user.tab();
+      expect(button).toHaveFocus();
+    });
+
+    it('as="a" drops href, keeps role="link" and stays focusable', async () => {
+      const user = userEvent.setup();
+      const onClick = vi.fn();
+      render(
+        <Button as="a" href="/checkout" disabledFocusable onClick={onClick}>
+          Checkout
+        </Button>,
+      );
+      const link = screen.getByRole('link', { name: 'Checkout' });
+      expect(link).not.toHaveAttribute('href');
+      expect(link).toHaveAttribute('tabindex', '0');
+      expect(link).toHaveAttribute('aria-disabled', 'true');
+      expect(link).toHaveAttribute('data-disabled-focusable', '');
+      await user.tab();
+      expect(link).toHaveFocus();
+      await user.keyboard('{Enter}');
+      expect(fireEvent.click(link)).toBe(false);
+      expect(onClick).not.toHaveBeenCalled();
+    });
+
+    it('as="div" keeps role="button" and its tab stop, and blocks activation', async () => {
+      const user = userEvent.setup();
+      const onClick = vi.fn();
+      render(
+        <Button as="div" disabledFocusable onClick={onClick}>
+          Open
+        </Button>,
+      );
+      const button = screen.getByRole('button', { name: 'Open' });
+      expect(button).toHaveAttribute('tabindex', '0');
+      expect(button).toHaveAttribute('aria-disabled', 'true');
+      expect(button).toHaveAttribute('data-disabled-focusable', '');
+      await user.tab();
+      expect(button).toHaveFocus();
+      await user.keyboard('{Enter}');
+      await user.keyboard(' ');
+      await user.click(button);
+      expect(onClick).not.toHaveBeenCalled();
+    });
+
+    it('a custom component `as` receives the attributes, but no disabled and no tabIndex', () => {
+      const received: Array<Record<string, unknown>> = [];
+      const StyledButton = (props: React.ButtonHTMLAttributes<HTMLButtonElement>) => {
+        received.push({ ...props });
+        return <button type="button" {...props} />;
+      };
+      const onClick = vi.fn();
+      render(
+        <Button as={StyledButton} disabledFocusable onClick={onClick}>
+          Save
+        </Button>,
+      );
+      const props = received.at(-1);
+      expect(props).toMatchObject({
+        'aria-disabled': true,
+        'data-disabled': '',
+        'data-disabled-focusable': '',
+      });
+      expect(props).not.toHaveProperty('disabled');
+      expect(props).not.toHaveProperty('tabIndex');
+      expect(fireEvent.click(screen.getByRole('button', { name: 'Save' }))).toBe(false);
+      expect(onClick).not.toHaveBeenCalled();
+    });
+
+    it('a Tooltip around it opens on keyboard focus and describes it', async () => {
+      const user = userEvent.setup();
+      render(
+        <Tooltip content="Make a change first" delay={0}>
+          <Button disabledFocusable>Save</Button>
+        </Tooltip>,
+      );
+      await user.tab();
+      const button = screen.getByRole('button', { name: 'Save' });
+      expect(button).toHaveFocus();
+      expect(button).toHaveAccessibleDescription('Make a change first');
+      expect(document.querySelector('[data-wave-tooltip-surface]')).toHaveTextContent(
+        'Make a change first',
+      );
+    });
   });
 
   it('calls onClick handler', async () => {
@@ -1073,10 +1394,20 @@ describe('Button', () => {
 
     it('ButtonOwnProps holds only the component-specific props', () => {
       expectTypeOf<keyof ButtonOwnProps>().toEqualTypeOf<
-        'appearance' | 'size' | 'icon' | 'disabled'
+        'appearance' | 'size' | 'icon' | 'iconPosition' | 'disabled' | 'disabledFocusable'
       >();
+      expectTypeOf<ButtonProps['disabledFocusable']>().toEqualTypeOf<boolean | undefined>();
+      expectTypeOf<ButtonProps<'a'>['disabledFocusable']>().toEqualTypeOf<boolean | undefined>();
       expectTypeOf<ButtonOwnProps['appearance']>().toEqualTypeOf<Appearance | undefined>();
       expectTypeOf<ButtonOwnProps['size']>().toEqualTypeOf<Size | undefined>();
+    });
+
+    it('iconPosition is an IconPosition on every rendered element', () => {
+      expectTypeOf<ButtonProps['iconPosition']>().toEqualTypeOf<IconPosition | undefined>();
+      expectTypeOf<ButtonProps<'a'>['iconPosition']>().toEqualTypeOf<IconPosition | undefined>();
+      // @ts-expect-error iconPosition is 'before' | 'after'
+      const element = <Button iconPosition="end">Open</Button>;
+      expect(element).toBeTruthy();
     });
   });
 });

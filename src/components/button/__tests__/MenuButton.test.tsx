@@ -70,6 +70,7 @@ describe('MenuButton', () => {
     defaultProps: { children: 'Actions' },
     a11yVariants: [
       { name: 'disabled', props: { disabled: true } },
+      { name: 'disabledFocusable', props: { disabledFocusable: true } },
       { name: 'expanded', props: { expanded: true } },
       { name: 'collapsed', props: { expanded: false } },
       { name: 'with icon', props: { icon: <GearIcon /> } },
@@ -558,6 +559,35 @@ describe('MenuButton', () => {
       });
     });
 
+    it('disabledFocusable: focusable, the three attributes, and activation prevented', async () => {
+      const user = userEvent.setup();
+      const onClick = vi.fn();
+      const onKeyDown = vi.fn();
+      render(
+        <MenuButton disabledFocusable onClick={onClick} onKeyDown={onKeyDown}>
+          Actions
+        </MenuButton>,
+      );
+      const button = screen.getByRole('button', { name: 'Actions' });
+      expect(button).not.toBeDisabled();
+      expect(button).toHaveAttribute('aria-disabled', 'true');
+      expect(button).toHaveAttribute('data-disabled', '');
+      expect(button).toHaveAttribute('data-disabled-focusable', '');
+      expect(button).toHaveAttribute('aria-haspopup', 'menu');
+      expect(button).toHaveClass('opacity-50', 'cursor-not-allowed');
+
+      await user.tab();
+      expect(button).toHaveFocus();
+      await user.keyboard('{Enter}');
+      await user.keyboard(' ');
+      await user.click(button);
+      expect(onClick).not.toHaveBeenCalled();
+      expect(onKeyDown).not.toHaveBeenCalled();
+      // The arrow keys still reach the handler (Menu.Trigger decides what they do).
+      fireEvent.keyDown(button, { key: 'ArrowDown' });
+      expect(onKeyDown).toHaveBeenCalledTimes(1);
+    });
+
     it('disabled: native disabled and the disabled look', async () => {
       const user = userEvent.setup();
       const onClick = vi.fn();
@@ -587,6 +617,7 @@ describe('MenuButton', () => {
       expectTypeOf<MenuButtonProps['ref']>().toEqualTypeOf<
         React.Ref<HTMLButtonElement> | undefined
       >();
+      expectTypeOf<MenuButtonProps['disabledFocusable']>().toEqualTypeOf<boolean | undefined>();
       const ref = React.createRef<HTMLButtonElement>();
       render(<MenuButton ref={ref}>Actions</MenuButton>);
       expect(ref.current).toBe(screen.getByRole('button', { name: 'Actions' }));
