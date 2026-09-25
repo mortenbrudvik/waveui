@@ -13,7 +13,22 @@ async function nextEvent() {
 }
 
 describe('useControllable', () => {
+  // Warnings are silenced, and a test that expects some takes them (takeWarnings): the afterEach
+  // allows no other.
   let warnSpy: ReturnType<typeof vi.spyOn>;
+
+  /** The warnings logged so far, removed from the spy (the test asserts them). */
+  function takeWarnings(): unknown[] {
+    const messages = warnSpy.mock.calls.map((call: unknown[]) => call[0]);
+    warnSpy.mockClear();
+    return messages;
+  }
+
+  const GUIDANCE =
+    'Components should not switch between controlled and uncontrolled: pass `undefined` only when the component is uncontrolled, and the empty value (for example `[]`, `null` or `""`) to clear a controlled value.';
+  // One string through src/lib/dev.ts warnOnce (C-DEV), directions in the right order.
+  const TO_UNCONTROLLED = `[WaveUI] A component is changing from controlled to uncontrolled. ${GUIDANCE}`;
+  const TO_CONTROLLED = `[WaveUI] A component is changing from uncontrolled to controlled. ${GUIDANCE}`;
 
   beforeEach(() => {
     __resetWarnings();
@@ -21,8 +36,12 @@ describe('useControllable', () => {
   });
 
   afterEach(() => {
-    warnSpy.mockRestore();
-    __resetWarnings();
+    try {
+      expect(warnSpy).not.toHaveBeenCalled();
+    } finally {
+      warnSpy.mockRestore();
+      __resetWarnings();
+    }
   });
 
   describe('basics', () => {
@@ -90,6 +109,8 @@ describe('useControllable', () => {
       rerender({ value: undefined });
       expect(result.current[2]).toBe(true); // sticky: stays controlled
       expect(result.current[0]).toBe(1); // and reports the defaultValue argument
+      // The mode switch warns (see the mode-switch warnings below).
+      expect(takeWarnings()).toEqual([TO_CONTROLLED, TO_UNCONTROLLED]);
     });
 
     it('is true from the first render when mounted controlled', () => {
@@ -118,6 +139,8 @@ describe('useControllable', () => {
       // Every render that shows the controlled value also reports controlled mode.
       expect(seen.length).toBeGreaterThan(0);
       expect(seen.every(([value, controlled]) => value === 3 && controlled)).toBe(true);
+      // The mode switch warns (see the mode-switch warnings below).
+      expect(takeWarnings()).toEqual([TO_CONTROLLED]);
     });
 
     it('keeps the [value, setValue] destructuring working', () => {
@@ -169,7 +192,7 @@ describe('useControllable', () => {
     });
 
     it('never calls onChange during render when a parent sets state in it', () => {
-      const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+      const errorSpy = vi.spyOn(console, 'error');
       try {
         const log: string[] = [];
         function useHarness() {
@@ -488,6 +511,8 @@ describe('useControllable', () => {
 
       // Controlled from this commit on: the updater starts from 5, not from the internal 0.
       expect(onChange.mock.calls).toEqual([[6]]);
+      // The mode switch warns (see the mode-switch warnings below).
+      expect(takeWarnings()).toEqual([TO_CONTROLLED]);
     });
   });
 
@@ -714,6 +739,8 @@ describe('useControllable', () => {
         result.current[1]((prev) => [...prev, 'c']);
       });
       expect(onChange).toHaveBeenCalledWith(['a', 'b', 'c']);
+      // The mode switch warns (see the mode-switch warnings below).
+      expect(takeWarnings()).toEqual([TO_CONTROLLED]);
     });
 
     it('returns the defaultValue argument when a controlled value becomes undefined', () => {
@@ -726,6 +753,8 @@ describe('useControllable', () => {
       rerender({ value: undefined });
       expect(result.current[0]).toEqual([]);
       expect(result.current[0]).not.toBeUndefined();
+      // The mode switch warns (see the mode-switch warnings below).
+      expect(takeWarnings()).toEqual([TO_UNCONTROLLED]);
     });
 
     it('returns the current defaultValue argument (the empty value), never the stale value', () => {
@@ -735,6 +764,8 @@ describe('useControllable', () => {
       );
       rerender({ value: undefined, empty: null });
       expect(result.current[0]).toBeNull();
+      // The mode switch warns (see the mode-switch warnings below).
+      expect(takeWarnings()).toEqual([TO_UNCONTROLLED]);
     });
 
     it('stays controlled after the value becomes undefined: setValue calls onChange without internal state', () => {
@@ -751,13 +782,12 @@ describe('useControllable', () => {
 
       expect(onChange).toHaveBeenCalledWith('b');
       expect(result.current[0]).toBe('');
+      // The mode switch warns (see the mode-switch warnings below).
+      expect(takeWarnings()).toEqual([TO_UNCONTROLLED]);
     });
   });
 
   describe('mode-switch warnings (table-core#28)', () => {
-    const TO_UNCONTROLLED = 'A component is changing from controlled to uncontrolled.';
-    const TO_CONTROLLED = 'A component is changing from uncontrolled to controlled.';
-
     it('warns "from controlled to uncontrolled" when switching from controlled to uncontrolled', () => {
       const { rerender } = renderHook(({ value }) => useControllable(value, 'default'), {
         initialProps: { value: 'controlled' as string | undefined },
@@ -766,11 +796,7 @@ describe('useControllable', () => {
 
       rerender({ value: undefined });
 
-      expect(warnSpy).toHaveBeenCalledTimes(1);
-      // One string through src/lib/dev.ts warnOnce (C-DEV), directions in the right order.
-      expect(warnSpy).toHaveBeenCalledWith(expect.stringMatching(/^\[WaveUI\] /));
-      expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining(TO_UNCONTROLLED));
-      expect(warnSpy).not.toHaveBeenCalledWith(expect.stringContaining(TO_CONTROLLED));
+      expect(takeWarnings()).toEqual([TO_UNCONTROLLED]);
     });
 
     it('warns "from uncontrolled to controlled" when switching from uncontrolled to controlled', () => {
@@ -781,9 +807,7 @@ describe('useControllable', () => {
 
       rerender({ value: 'controlled' });
 
-      expect(warnSpy).toHaveBeenCalledTimes(1);
-      expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining(TO_CONTROLLED));
-      expect(warnSpy).not.toHaveBeenCalledWith(expect.stringContaining(TO_UNCONTROLLED));
+      expect(takeWarnings()).toEqual([TO_CONTROLLED]);
     });
 
     it('warns once per direction', () => {
@@ -795,8 +819,8 @@ describe('useControllable', () => {
       rerender({ value: undefined });
       rerender({ value: 'c' });
 
-      const messages = warnSpy.mock.calls.map((call: unknown[]) => String(call[0]));
-      expect(messages.filter((m: string) => m.includes(TO_UNCONTROLLED))).toHaveLength(1);
+      // The controlled mode is sticky: only the first switch warns, once.
+      expect(takeWarnings()).toEqual([TO_UNCONTROLLED]);
     });
 
     it('does not warn in production', () => {

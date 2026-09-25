@@ -1,5 +1,8 @@
+// @vitest-environment node
 /**
- * Contract tests for the style entries in `src/styles` (spec §2.1).
+ * Contract tests for the style entries in `src/styles` (spec §2.1). They need no DOM, and they
+ * load the build scripts (scripts/build-css.mjs and the entry guard it shares with
+ * scripts/verify-dist.mjs), which run in Node: the file runs in the node environment.
  *
  * The CSS files are read as raw text and parsed with the small parser below. That parser is not a
  * general CSS parser: it covers what these files use (rules, at-rules, nested `@theme`/`@keyframes`
@@ -26,8 +29,7 @@ import { dirname, join } from 'node:path';
 import { pathToFileURL } from 'node:url';
 
 // Vitest runs with CSS processing disabled, which empties every `*.css?raw` import, so the files
-// are read from disk. (`import.meta.url` is rewritten to the jsdom location inside `new URL(…)`;
-// `import.meta.dirname` is not.)
+// are read from disk.
 const STYLES_DIR = join(import.meta.dirname, '..');
 const CSS_FILE_NAMES = readdirSync(STYLES_DIR).filter((name) => name.endsWith('.css'));
 
@@ -1394,7 +1396,11 @@ interface BuildCss {
   missingDirectionVariant(css: string, classes: Iterable<string>): string[];
   collectStorySources(projectRoot: string): Required<StorySources>;
   main(argv: string[], options?: { projectRoot?: string }): number;
-  entryStatus(argv1: string | undefined): 'main' | 'mismatch' | 'imported';
+}
+
+/** The entry-script guard every gate script starts through (scripts/verify-dist.mjs). */
+interface EntryGuard {
+  entryStatus(metaUrl: string, argv1: string | undefined): 'main' | 'mismatch' | 'imported';
 }
 
 const BUILD_CSS_PATH = join(import.meta.dirname, '..', '..', '..', 'scripts', 'build-css.mjs');
@@ -1402,6 +1408,12 @@ const BUILD_CSS_PATH = join(import.meta.dirname, '..', '..', '..', 'scripts', 'b
 async function loadBuildCss(): Promise<BuildCss> {
   // A computed specifier: the module has no type declarations, the interface above types it.
   return (await import(/* @vite-ignore */ pathToFileURL(BUILD_CSS_PATH).href)) as BuildCss;
+}
+
+const VERIFY_DIST_PATH = join(dirname(BUILD_CSS_PATH), 'verify-dist.mjs');
+
+async function loadEntryGuard(): Promise<EntryGuard> {
+  return (await import(/* @vite-ignore */ pathToFileURL(VERIFY_DIST_PATH).href)) as EntryGuard;
 }
 
 describe('scripts/build-css.mjs — gate assertions (repo-level#1)', () => {
@@ -2143,17 +2155,24 @@ describe('scripts/build-css.mjs — gate assertions (repo-level#1)', () => {
     // classes are asserted: the other assertions of the gate belong to `npm run build`.
     const { main, selectorClasses } = await loadBuildCss();
     const out = mkdtempSync(join(tmpdir(), 'wave-build-css-real-'));
-    const quiet = [
-      vi.spyOn(console, 'error').mockImplementation(() => {}),
-      vi.spyOn(console, 'log').mockImplementation(() => {}),
+    // The report is captured and asserted: the whole gate passes on the real sources.
+    const printed: unknown[][] = [];
+    const spies = [
+      vi.spyOn(console, 'error').mockImplementation((...args) => printed.push(args)),
+      vi.spyOn(console, 'log').mockImplementation((...args) => printed.push(args)),
     ];
     try {
-      main(['--out-dir', out]);
+      const code = main(['--out-dir', out]);
+      const output = printed.map((args) => args.join(' ')).join('\n');
+      expect(output).toMatch(
+        /^build-css: \S+\/styles\.css \([\d.]+ kB\) and \S+\/preflight\.css \([\d.]+ kB\) OK$/,
+      );
+      expect(code).toBe(0);
       const classes = selectorClasses(readFileSync(join(out, 'styles.css'), 'utf8'));
       expect(classes).toContain('bg-primary');
       expect(EXCLUDED_WORDS.filter((word) => classes.has(word))).toEqual([]);
     } finally {
-      for (const spy of quiet) spy.mockRestore();
+      for (const spy of spies) spy.mockRestore();
       rmSync(out, { recursive: true, force: true });
     }
   }, 60_000);
@@ -2198,27 +2217,34 @@ describe('scripts/build-css.mjs — gate assertions (repo-level#1)', () => {
       rmSync(scratch, { recursive: true, force: true });
     });
 
+    // build-css starts through the shared guard of scripts/verify-dist.mjs (runScript), asked
+    // here about build-css's own module URL.
+    const BUILD_CSS_URL = pathToFileURL(BUILD_CSS_PATH).href;
+
     it('runs when invoked directly and stays inert when imported', async () => {
-      const { entryStatus } = await loadBuildCss();
-      expect(entryStatus(BUILD_CSS_PATH)).toBe('main');
-      expect(entryStatus(undefined)).toBe('imported');
-      expect(entryStatus(join(scratch, 'other.mjs'))).toBe('imported');
+      const { entryStatus } = await loadEntryGuard();
+      expect(entryStatus(BUILD_CSS_URL, BUILD_CSS_PATH)).toBe('main');
+      expect(entryStatus(BUILD_CSS_URL, undefined)).toBe('imported');
+      expect(entryStatus(BUILD_CSS_URL, join(scratch, 'other.mjs'))).toBe('imported');
+      // Importing the script does not build anything.
+      const buildCss = await loadBuildCss();
+      expect(typeof buildCss.main).toBe('function');
     });
 
     it.runIf(process.platform === 'win32')(
       'compares paths case-insensitively on Windows',
       async () => {
-        const { entryStatus } = await loadBuildCss();
-        expect(entryStatus(BUILD_CSS_PATH.toUpperCase())).toBe('main');
+        const { entryStatus } = await loadEntryGuard();
+        expect(entryStatus(BUILD_CSS_URL, BUILD_CSS_PATH.toUpperCase())).toBe('main');
       },
     );
 
     it('runs when invoked through a symlink or junction', async () => {
-      const { entryStatus } = await loadBuildCss();
+      const { entryStatus } = await loadEntryGuard();
       symlinkSync(dirname(BUILD_CSS_PATH), link, 'junction');
       try {
         expect(isLink(link)).toBe(true);
-        expect(entryStatus(join(link, 'build-css.mjs'))).toBe('main');
+        expect(entryStatus(BUILD_CSS_URL, join(link, 'build-css.mjs'))).toBe('main');
 
         // End to end: through the link, --check-only must run and fail on an empty output
         // directory instead of exiting 0 without checking anything.
@@ -2239,10 +2265,15 @@ describe('scripts/build-css.mjs — gate assertions (repo-level#1)', () => {
     });
 
     it('fails closed when invoked as build-css.mjs but not recognised as this script', async () => {
-      const { entryStatus } = await loadBuildCss();
+      const { entryStatus } = await loadEntryGuard();
+      // Another file of the same name that loads the real script: nothing is built or checked,
+      // and the run fails instead of exiting 0.
       const impostor = join(scratch, 'build-css.mjs');
-      writeFileSync(impostor, '// not the real script\n');
-      expect(entryStatus(impostor)).toBe('mismatch');
+      writeFileSync(impostor, `import ${JSON.stringify(BUILD_CSS_URL)};\n`);
+      expect(entryStatus(BUILD_CSS_URL, impostor)).toBe('mismatch');
+      const result = spawnSync(process.execPath, [impostor, '--check-only'], { encoding: 'utf8' });
+      expect(result.stderr).toMatch(/^build-css: cannot confirm that .*; nothing was checked/);
+      expect(result.status).toBe(1);
     });
   });
 });

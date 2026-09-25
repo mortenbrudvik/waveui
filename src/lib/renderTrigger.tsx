@@ -20,8 +20,23 @@ export interface RenderTriggerOptions {
 
 type UnknownProps = Record<string, unknown>;
 
-function isCloneableElement(node: unknown): node is React.ReactElement<UnknownProps> {
+/**
+ * Whether a trigger's child can take the trigger props by cloning: a valid element other than a
+ * Fragment. Internal (shared by `renderTrigger`, `useTriggerElement` and Tooltip).
+ */
+export function isCloneableElement(node: unknown): node is React.ReactElement<UnknownProps> {
   return React.isValidElement(node) && node.type !== React.Fragment;
+}
+
+/**
+ * The element of a single-element Fragment (`<><Button /></>`, children of a conditional
+ * expression), unwrapped at any depth; other children as given. Internal (shared by
+ * `useTriggerElement` and Tooltip).
+ */
+export function unwrapFragment(children: React.ReactNode): React.ReactNode {
+  if (!React.isValidElement(children) || children.type !== React.Fragment) return children;
+  const inner = (children.props as { children?: React.ReactNode }).children;
+  return React.isValidElement(inner) ? unwrapFragment(inner) : children;
 }
 
 /**

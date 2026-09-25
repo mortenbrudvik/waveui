@@ -1190,6 +1190,13 @@ describe('useRovingTabIndex', () => {
           <button type="button">Italic</button>
         </span>,
       ],
+      [
+        'inside a closed <details>',
+        <details key="i">
+          <summary>More</summary>
+          <button type="button">Italic</button>
+        </details>,
+      ],
     ])('manageTabIndex: arrows skip a control hidden by CSS (%s)', async (_name, italic) => {
       const user = userEvent.setup();
       render(
@@ -1283,6 +1290,41 @@ describe('useRovingTabIndex', () => {
       await user.keyboard('{ArrowLeft}');
       expect(button('a')).toHaveFocus();
       expect(onFocusMove).toHaveBeenLastCalledWith('a', expect.anything());
+      refuse.mockRestore();
+    });
+
+    it('typeahead continues past a match whose focus() does not move focus', async () => {
+      const user = userEvent.setup();
+      const onFocusMove = vi.fn();
+      render(
+        <DomGroup
+          items={[
+            { value: 'apple', label: 'Apple' },
+            { value: 'avocado', label: 'Avocado' },
+            { value: 'apricot', label: 'Apricot' },
+            { value: 'banana', label: 'Banana' },
+          ]}
+          orientation="vertical"
+          typeahead
+          onFocusMove={onFocusMove}
+        />,
+      );
+      const refuse = vi.spyOn(button('Avocado'), 'focus').mockImplementation(() => {});
+      focus(button('Apple'));
+      await user.keyboard('a');
+      expect(button('Apricot')).toHaveFocus();
+      expect(onFocusMove).toHaveBeenCalledTimes(1);
+      expect(onFocusMove).toHaveBeenCalledWith('apricot', expect.objectContaining({ key: 'a' }));
+      // Repeating the letter cycles on from Apricot, past the refused match again.
+      await user.keyboard('a');
+      expect(button('Apple')).toHaveFocus();
+      await user.keyboard('a');
+      expect(button('Apricot')).toHaveFocus();
+      expect(onFocusMove.mock.calls.map(([value]) => value)).toEqual([
+        'apricot',
+        'apple',
+        'apricot',
+      ]);
       refuse.mockRestore();
     });
 
@@ -1719,6 +1761,17 @@ describe('useRovingTabIndex', () => {
         expect(fireEvent.keyDown(button('Łódź'), { key, ctrlKey: true, altKey: true })).toBe(true);
         expect(button('Łódź')).toHaveFocus();
       }
+    });
+
+    it('leaves Ctrl+Alt+Space alone, also during a search (AltGr types no space)', () => {
+      render(<DomGroup items={CITIES} orientation="vertical" typeahead />);
+      focus(button('Kraków'));
+      fireEvent.keyDown(button('Kraków'), { key: 'o' });
+      expect(button('Olsztyn')).toHaveFocus();
+      expect(fireEvent.keyDown(button('Olsztyn'), { key: ' ', ctrlKey: true, altKey: true })).toBe(
+        true,
+      );
+      expect(button('Olsztyn')).toHaveFocus();
     });
 
     it('ignores AltGr characters when typeahead is off', () => {

@@ -443,7 +443,13 @@ describe('useDismiss — outside press', () => {
 });
 
 describe('useDismiss — focus outside', () => {
-  it('dismisses a focusOutside layer when focus moves outside its tree', () => {
+  /** Moves focus, then runs the microtask in which focus-outside dismissal is decided. */
+  async function focusAndSettle(element: HTMLElement) {
+    act(() => element.focus());
+    await act(async () => {});
+  }
+
+  it('dismisses a focusOutside layer when focus moves outside its tree', async () => {
     const onDismiss = vi.fn();
     render(
       <>
@@ -452,15 +458,16 @@ describe('useDismiss — focus outside', () => {
       </>,
     );
     // The trigger and the portaled surface both belong to the layer.
-    act(() => screen.getByRole('button', { name: 'Listbox' }).focus());
-    act(() => screen.getByRole('button', { name: 'Listbox action' }).focus());
+    await focusAndSettle(screen.getByRole('button', { name: 'Listbox' }));
+    await focusAndSettle(screen.getByRole('button', { name: 'Listbox action' }));
     expect(onDismiss).not.toHaveBeenCalled();
-    act(() => screen.getByRole('button', { name: 'Next field' }).focus());
+    await focusAndSettle(screen.getByRole('button', { name: 'Next field' }));
+    expect(onDismiss).toHaveBeenCalledTimes(1);
     expect(onDismiss).toHaveBeenCalledWith('focus-outside');
     expect(isOpen('Listbox')).toBe(false);
   });
 
-  it('keeps the layer open when focus moves into a descendant layer or the allow-list', () => {
+  it('keeps the layer open when focus moves into a descendant layer or the allow-list', async () => {
     const onDismiss = vi.fn();
     render(
       <>
@@ -472,12 +479,12 @@ describe('useDismiss — focus outside', () => {
         </Popup>
       </>,
     );
-    act(() => screen.getByRole('button', { name: 'Child action' }).focus());
-    act(() => screen.getByRole('button', { name: 'Toast action' }).focus());
+    await focusAndSettle(screen.getByRole('button', { name: 'Child action' }));
+    await focusAndSettle(screen.getByRole('button', { name: 'Toast action' }));
     expect(onDismiss).not.toHaveBeenCalled();
   });
 
-  it('does nothing without focusOutside', () => {
+  it('does nothing without focusOutside', async () => {
     const onDismiss = vi.fn();
     render(
       <>
@@ -485,8 +492,85 @@ describe('useDismiss — focus outside', () => {
         <button type="button">Elsewhere</button>
       </>,
     );
-    act(() => screen.getByRole('button', { name: 'Elsewhere' }).focus());
+    await focusAndSettle(screen.getByRole('button', { name: 'Elsewhere' }));
     expect(onDismiss).not.toHaveBeenCalled();
+  });
+
+  it('keeps the layer open when a portal opened inside it focuses an autoFocus field', async () => {
+    const user = userEvent.setup();
+    const onDismiss = vi.fn();
+    function Composer() {
+      const [shown, setShown] = React.useState(false);
+      return (
+        <>
+          <button type="button" onClick={() => setShown(true)}>
+            Write
+          </button>
+          {shown && (
+            <Portal>
+              <input aria-label="Message" autoFocus />
+            </Portal>
+          )}
+        </>
+      );
+    }
+    render(
+      <Popup label="People" defaultOpen focusOutside onDismiss={onDismiss}>
+        <Composer />
+      </Popup>,
+    );
+    await user.click(screen.getByRole('button', { name: 'Write' }));
+    expect(screen.getByRole('textbox', { name: 'Message' })).toHaveFocus();
+    expect(onDismiss).not.toHaveBeenCalled();
+    expect(isOpen('People')).toBe(true);
+  });
+
+  it('keeps the layer open when a layer opened inside it focuses an autoFocus field', async () => {
+    const user = userEvent.setup();
+    const onDismiss = vi.fn();
+    render(
+      <Popup label="People" defaultOpen focusOutside onDismiss={onDismiss}>
+        <Popup label="Card">
+          <input aria-label="Message" autoFocus />
+        </Popup>
+      </Popup>,
+    );
+    await user.click(screen.getByRole('button', { name: 'Card' }));
+    expect(screen.getByRole('textbox', { name: 'Message' })).toHaveFocus();
+    expect(onDismiss).not.toHaveBeenCalled();
+    expect(isOpen('People')).toBe(true);
+    expect(isOpen('Card')).toBe(true);
+  });
+
+  it('keeps the layer open when focus returns inside before the decision', async () => {
+    const onDismiss = vi.fn();
+    render(
+      <>
+        <Popup label="Listbox" defaultOpen focusOutside onDismiss={onDismiss} />
+        <button type="button">Next field</button>
+      </>,
+    );
+    act(() => {
+      screen.getByRole('button', { name: 'Next field' }).focus();
+      screen.getByRole('button', { name: 'Listbox action' }).focus();
+    });
+    await act(async () => {});
+    expect(onDismiss).not.toHaveBeenCalled();
+    expect(isOpen('Listbox')).toBe(true);
+  });
+
+  it('dismisses when focus moved outside and was then lost (the element removed)', async () => {
+    const onDismiss = vi.fn();
+    render(<Popup label="Listbox" defaultOpen focusOutside onDismiss={onDismiss} />);
+    const outside = document.createElement('button');
+    document.body.append(outside);
+    act(() => {
+      outside.focus();
+      outside.remove();
+    });
+    await act(async () => {});
+    expect(onDismiss).toHaveBeenCalledTimes(1);
+    expect(onDismiss).toHaveBeenCalledWith('focus-outside');
   });
 });
 

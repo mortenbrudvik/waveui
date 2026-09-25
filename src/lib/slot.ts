@@ -1,4 +1,5 @@
 import * as React from 'react';
+import { isElementOfType } from './children';
 import { cn } from './cn';
 import { warnOnce } from './dev';
 
@@ -106,24 +107,39 @@ function isVoidTag(tag: React.ElementType): boolean {
  */
 const materialisedIterators = new WeakMap<object, React.ReactNode[]>();
 
+/** Whether `value` is a one-shot iterator (a generator): iterating it returns itself. */
+function isOneShotIterator(value: object): boolean {
+  if (Array.isArray(value) || !(Symbol.iterator in value)) return false;
+  const iterable = value as Iterable<unknown>;
+  return (iterable[Symbol.iterator]() as unknown) === iterable;
+}
+
 /**
  * Whether React would render anything for `node`: `null`, `undefined`, booleans and `''` render
- * nothing, and so does an array or other iterable (Set, generator) whose items, at any depth, are
- * all of those. Dropping such content from a void element is silent (a conditional
- * `children: cond && x`, or a list mapped to nothing). Iterables are read through
- * {@link normaliseContent}, so checking a generator does not consume it.
+ * nothing, and so does a Fragment, array or other iterable (Set, generator) whose content, at any
+ * depth, is all of those. Dropping such content from a void element is silent (a conditional
+ * `children: cond && x`, or a list mapped to nothing). A top-level generator is read through
+ * {@link normaliseContent} (materialised once, so checking it does not consume it); a generator
+ * nested in a collection or a Fragment is rendered by React as it is, so it is not read and counts
+ * as content.
  */
-function rendersContent(node: unknown, visiting: Set<object> = new Set()): boolean {
+function rendersContent(node: unknown, visiting: Set<object>, nested: boolean): boolean {
   if (node === undefined || node === null || typeof node === 'boolean' || node === '') {
     return false;
   }
-  if (typeof node !== 'object' || !(Symbol.iterator in node)) return true;
+  if (typeof node !== 'object') return true;
+  if (React.isValidElement(node)) {
+    if (!isElementOfType<{ children?: React.ReactNode }>(node, React.Fragment)) return true;
+    return rendersContent(node.props.children, visiting, true);
+  }
+  if (!(Symbol.iterator in node)) return true;
+  if (nested && isOneShotIterator(node)) return true;
   // A collection that contains itself adds nothing beyond what is already being checked.
   if (visiting.has(node)) return false;
   visiting.add(node);
   try {
     for (const item of normaliseContent(node) as Iterable<unknown>) {
-      if (rendersContent(item, visiting)) return true;
+      if (rendersContent(item, visiting, true)) return true;
     }
     return false;
   } finally {
@@ -132,14 +148,21 @@ function rendersContent(node: unknown, visiting: Set<object> = new Set()): boole
 }
 
 /**
- * Whether a slot value renders any content — the "renders nothing" rule of the slot helpers.
+ * Whether a slot value renders any content — the one "renders nothing" rule of the library, for
+ * slots and any other content a component shows or leaves out (labels, titles, dismiss content).
  *
- * `false` for `null`, `undefined`, booleans and `''`, and for an array, `Set`, generator or other
- * iterable whose items, at any depth, are only those. `true` for everything else: text, numbers
- * (including `0`), React elements (the helper cannot know what a component renders) and slot
- * objects (they always render their element). Generators are materialised once and cached, so
- * checking one does not consume it: a later `renderSlot` of the same generator renders its items.
- * Never warns.
+ * `false` for `null`, `undefined`, booleans and `''`, and for a Fragment, array, `Set`, generator
+ * or other iterable whose content, at any depth, is only those (`<></>`, `[null, '']`,
+ * `<>{false}</>`); a Fragment is recognised by its unwrapped type, also when it is a client
+ * reference written in a Server Component. `true` for everything else: text, numbers (including
+ * `0`), other React elements (the helper cannot know what a component renders), slot objects
+ * (they always render their element), promises, and a generator nested in a collection or a
+ * Fragment (not read, so React still renders its items).
+ *
+ * A top-level generator is materialised once and cached, so checking it does not consume it:
+ * render the checked value through `renderSlot`/`resolveSlot`, or, when you render it yourself,
+ * through {@link materialiseSlotContent}. Never warns. Call it during render: a client reference
+ * whose code is still loading suspends the caller, as rendering it would.
  *
  * Components use it to fall back when a slot is effectively empty, e.g. Avatar shows the initials
  * unless `icon && slotRendersContent(icon)`.
@@ -147,26 +170,34 @@ function rendersContent(node: unknown, visiting: Set<object> = new Set()): boole
  * @param slot A slot value or any React node.
  */
 export function slotRendersContent(slot: unknown): boolean {
-  return rendersContent(slot);
+  return rendersContent(slot, new Set(), false);
+}
+
+/**
+ * The content to render for a value that {@link slotRendersContent} checked, for a component that
+ * renders it itself rather than through `renderSlot`/`resolveSlot`: a top-level generator is
+ * replaced by its materialised items (the same array on every call, so a second render sees the
+ * same items and React never enumerates the generator); every other value is returned as given.
+ *
+ * @example
+ * const hasAction = slotRendersContent(action);
+ * return hasAction ? <span className="ms-auto">{materialiseSlotContent(action)}</span> : null;
+ *
+ * @param content A slot value or any React node.
+ */
+export function materialiseSlotContent(content: unknown): React.ReactNode {
+  return normaliseContent(content);
 }
 
 function normaliseContent(slot: unknown): React.ReactNode {
-  if (
-    typeof slot === 'object' &&
-    slot !== null &&
-    !Array.isArray(slot) &&
-    Symbol.iterator in slot
-  ) {
+  if (typeof slot === 'object' && slot !== null && isOneShotIterator(slot)) {
     const iterable = slot as Iterable<React.ReactNode>;
-    const iterator = iterable[Symbol.iterator]();
-    if ((iterator as unknown) === iterable) {
-      let cached = materialisedIterators.get(iterable);
-      if (!cached) {
-        cached = Array.from({ [Symbol.iterator]: () => iterator });
-        materialisedIterators.set(iterable, cached);
-      }
-      return cached;
+    let cached = materialisedIterators.get(iterable);
+    if (!cached) {
+      cached = Array.from(iterable);
+      materialisedIterators.set(iterable, cached);
     }
+    return cached;
   }
   return slot as React.ReactNode;
 }
@@ -186,14 +217,15 @@ function mergeClassName(baseClassName: string | undefined, className: unknown): 
  * - `null`, `undefined`, `false` and `true` resolve to `null` (render nothing).
  * - A slot object resolves to `Component = as ?? defaultAs`,
  *   `props = { ...defaultProps, ...attributes, className: cn(baseClassName, className) }` and its
- *   `children`. When the element is void its `children` are always dropped, with a development
- *   warning only if they would have rendered (not for `null`, `undefined`, `false`, `true` or
- *   `''`, nor for an array, Set or generator made only of those, at any depth).
- * - With a **void** default tag (`img`, `input`, `hr`, …, see {@link VOID_ELEMENTS}) a ReactElement
- *   slot resolves to the element itself (its type and props, `defaultProps` underneath, className
- *   merged). A Fragment and shorthand content resolve to `null` with a development warning (none
- *   for content that renders nothing: `''`, or an iterable made only of empty values) — the
- *   component decides what a string means (Avatar treats it as `src`).
+ *   `children` (a generator materialised into an array once, as for shorthand content). When the
+ *   element is void its `children` are always dropped, with a development warning only if they
+ *   would have rendered (not for `null`, `undefined`, booleans or `''`, nor for a Fragment,
+ *   array, Set or generator made only of those, at any depth).
+ * - With a **void** default tag (`area`, `base`, `br`, `col`, `embed`, `hr`, `img`, `input`,
+ *   `link`, `meta`, `param`, `source`, `track`, `wbr`) a ReactElement slot resolves to the
+ *   element itself (its type and props, `defaultProps` underneath, className merged). A Fragment
+ *   and shorthand content resolve to `null` with a development warning (none for content that
+ *   renders nothing) — the component decides what a string means (Avatar treats it as `src`).
  * - Any other value (string, number, element, array, Set, generator, promise) becomes the children
  *   of `defaultAs` with `{ ...defaultProps, className: baseClassName }`.
  * - `props.className` is `undefined` (never `''`) when there are no classes, so no empty `class`
@@ -221,11 +253,11 @@ export function resolveSlot<T extends React.ElementType = 'span'>(
   if (isSlotObject(slot)) {
     const { as: slotAs, children, className, ...rest } = slot;
     const Component = (slotAs as React.ElementType | undefined) ?? tag;
-    let content = children as React.ReactNode;
+    let content = normaliseContent(children);
     if (isVoidTag(Component)) {
       // A void element never receives children (React throws for any non-null value, even
       // `false` or `[]`); warn only when the dropped children would have rendered something.
-      if (rendersContent(content)) {
+      if (slotRendersContent(content)) {
         warnOnce(
           `slot:void-children:${String(Component)}`,
           `A slot rendered as ${describeTag(Component)} cannot have children; its \`children\` were ignored.`,
@@ -264,7 +296,7 @@ export function resolveSlot<T extends React.ElementType = 'span'>(
       );
       return null;
     }
-    if (rendersContent(slot)) {
+    if (slotRendersContent(slot)) {
       warnOnce(
         `slot:void-content:${String(tag)}`,
         `Slot content cannot be rendered inside ${describeTag(tag)} (a void element). Pass an element or an object slot instead; the slot was not rendered.`,

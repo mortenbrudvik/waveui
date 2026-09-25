@@ -12,10 +12,10 @@
  *   `cleanup()`, `__resetWarnings()`, {@link resetMatchMediaMock} (the {@link mockMatchMedia}
  *   answer table is empty again, so a forgotten `restore()` cannot leak into the next test), then
  *   the overlay-state release assertion {@link assertOverlayStateReleased} (open dismiss layers,
- *   focus traps, scroll locks, modal isolation, restore-focus tracker users, inline `overflow` on
- *   `<html>`/`<body>`) and the body-cleanup assertion {@link assertEmptyBody} (leftover
- *   `document.body` children). Both always run: what they find is released or removed, and the
- *   test fails with one error naming all of it.
+ *   focus traps, scroll locks, modal isolation, restore-focus tracker users, the inline styles of
+ *   a scroll lock on `<html>`/`<body>`) and the body-cleanup assertion {@link assertEmptyBody}
+ *   (leftover `document.body` children). Both always run: what they find is released or removed,
+ *   and the test fails with one error naming all of it.
  *
  * The DOM parts are skipped for test files that opt into `// @vitest-environment node`
  * (`scripts/__tests__`).
@@ -234,17 +234,28 @@ const OVERLAY_REGISTRIES: RegistryCheck[] = [
 const OVERFLOW_PROPERTIES = ['overflow', 'overflow-x', 'overflow-y'];
 
 /**
+ * The inline styles `useScrollLock` sets on `<html>` and `<body>`: `overflow` on the document
+ * scroller, and the scrollbar compensation (`scrollbar-gutter` on `<html>` where supported, else
+ * `padding-inline-end` on `<body>`).
+ */
+const LOCK_STYLES = [
+  ['html', '<html>', [...OVERFLOW_PROPERTIES, 'scrollbar-gutter']],
+  ['body', '<body>', [...OVERFLOW_PROPERTIES, 'padding-inline-end']],
+] as const;
+
+/**
  * The overlay-state release assertion that this file runs after every test (after RTL
  * `cleanup()`, before {@link assertEmptyBody}). Once every tree is unmounted, nothing may still
  * hold:
  * - an open dismiss layer (`useDismiss`, `registerLayer`), the layer stack's document listeners,
  *   an isolating modal, portal elements registered with a layer or a layer-stack subscriber;
  * - a focus trap (`useFocusTrap`) or the trap stack's document listeners;
- * - a scroll lock (`useScrollLock`), or an inline `overflow` on `<html>`/`<body>`;
+ * - a scroll lock (`useScrollLock`), or an inline style it sets: `overflow` on `<html>`/`<body>`,
+ *   `scrollbar-gutter` on `<html>` or `padding-inline-end` on `<body>`;
  * - an element made inert by modal isolation (`useModalIsolation`), or any `inert` attribute;
  * - a `useRestoreFocus` user of the shared focus tracker.
  *
- * Leaks are released — document listeners removed, `inert` attributes and inline overflow
+ * Leaks are released — document listeners removed, `inert` attributes and those inline styles
  * removed, and each leaked registry dropped from `globalThis` so its owner creates a fresh one —
  * and then the assertion throws an error naming them. So a component that skips an overlay hook's
  * cleanup fails the test that leaked it, and later tests start clean. Registries nothing created
@@ -265,14 +276,13 @@ export function assertOverlayStateReleased(): void {
     leaks.push(`inert attribute on ${describeElement(el)}`);
     el.removeAttribute('inert');
   }
-  for (const [el, name] of [
-    [document.documentElement, '<html>'],
-    [document.body, '<body>'],
-  ] as const) {
-    for (const property of OVERFLOW_PROPERTIES) {
+  for (const [tag, name, properties] of LOCK_STYLES) {
+    const el = tag === 'html' ? document.documentElement : document.body;
+    for (const property of properties) {
       const value = el.style.getPropertyValue(property);
       if (!value) continue;
-      leaks.push(`inline overflow on ${name} (${property}: ${value})`);
+      const what = property.startsWith('overflow') ? 'overflow' : property;
+      leaks.push(`inline ${what} on ${name} (${property}: ${value})`);
       el.style.removeProperty(property);
     }
   }

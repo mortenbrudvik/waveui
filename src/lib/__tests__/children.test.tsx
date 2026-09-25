@@ -107,6 +107,22 @@ describe('getElementType', () => {
     const Broken = rejectedLazy(new Error('chunk failed'));
     expect(getElementType(<Broken />)).toBe(Broken);
   });
+
+  it('with `suspend: false`, returns the lazy object of a type still loading instead of suspending', () => {
+    const { Lazy, load } = pendingLazy(Item);
+    expect(getElementType(<Lazy />, { suspend: false })).toBe(Lazy);
+    load();
+    expect(getElementType(<Lazy />, { suspend: false })).toBe(Item);
+  });
+
+  it('with `suspend: false`, unwraps loaded lazy types and keeps the other results', () => {
+    const LazyItem = preResolvedLazy(Item);
+    const Broken = rejectedLazy(new Error('chunk failed'));
+    expect(getElementType(<LazyItem />, { suspend: false })).toBe(Item);
+    expect(getElementType(<Broken />, { suspend: false })).toBe(Broken);
+    expect(getElementType(<li />, { suspend: false })).toBe('li');
+    expect(getElementType('text', { suspend: false })).toBeUndefined();
+  });
 });
 
 describe('isElementOfType', () => {

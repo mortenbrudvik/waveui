@@ -280,7 +280,7 @@ describe('Portal', () => {
     const host = document.createElement('div');
     host.innerHTML = html;
     document.body.appendChild(host);
-    const errors = vi.spyOn(console, 'error').mockImplementation(() => {});
+    const errors = vi.spyOn(console, 'error');
     const root = await act(async () => hydrateRoot(host, <App />));
     try {
       expect(errors).not.toHaveBeenCalled();

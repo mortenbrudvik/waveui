@@ -6,7 +6,8 @@ import type { UserEvent } from '@testing-library/user-event';
 import { axe as defaultVitestAxe, configureAxe } from 'vitest-axe';
 import { Button } from '../components/button/Button';
 import { useWaveTheme } from '../components/provider/WaveProvider';
-import { useDismiss } from '../hooks/useDismiss';
+import { Portal } from '../components/portal/Portal';
+import { DismissLayerProvider, useDismiss } from '../hooks/useDismiss';
 import { useFocusTrap } from '../hooks/useFocusTrap';
 import { useModalIsolation } from '../hooks/useModalIsolation';
 import { useRestoreFocus } from '../hooks/useRestoreFocus';
@@ -218,17 +219,16 @@ const DeferredUpdates = ({ breaksLater = false }: { breaksLater?: boolean }) => 
 DeferredUpdates.displayName = 'DeferredUpdates';
 
 /**
- * Runs `audit` and returns the "not wrapped in act(...)" warnings React logged during it and in
- * the moment after (an update still pending when the audit returns would land then).
+ * Runs `audit` and returns every console.error message logged during it and in the moment after
+ * (an update still pending when the audit returns would land then, with React's "not wrapped in
+ * act(...)" warning).
  */
-async function actWarningsDuring(audit: () => Promise<unknown>): Promise<string[]> {
+async function consoleErrorsDuring(audit: () => Promise<unknown>): Promise<string[]> {
   const error = vi.spyOn(console, 'error');
   try {
     await audit();
     await new Promise((resolve) => setTimeout(resolve, 50));
-    return error.mock.calls
-      .map(([message]) => String(message))
-      .filter((message) => message.includes('not wrapped in act'));
+    return error.mock.calls.map(([message]) => String(message));
   } finally {
     error.mockRestore();
   }
@@ -566,7 +566,7 @@ describe('dangling ARIA id references', () => {
 describe('audits settle pending updates first', () => {
   it('expectNoA11yViolations lets microtask, macrotask and animation-frame updates land inside act()', async () => {
     render(<DeferredUpdates />);
-    const warnings = await actWarningsDuring(async () => {
+    const warnings = await consoleErrorsDuring(async () => {
       await expectNoA11yViolations();
       expect(screen.getByText('Settled: microtask macrotask frame')).toBeInTheDocument();
     });
@@ -592,7 +592,7 @@ describe('audits settle pending updates first', () => {
 
   it('testA11y audits after the pending updates landed inside act()', async () => {
     const [test] = collect(() => testA11y(DeferredUpdates));
-    expect(await actWarningsDuring(() => run(test))).toEqual([]);
+    expect(await consoleErrorsDuring(() => run(test))).toEqual([]);
   });
 
   it('testA11y audits the settled DOM', async () => {
@@ -615,7 +615,7 @@ describe('audits settle pending updates first', () => {
 
     it('audits after the pending updates landed inside act()', async () => {
       const variant = pick(tests(), 'has no accessibility violations (quiet)');
-      expect(await actWarningsDuring(() => run(variant))).toEqual([]);
+      expect(await consoleErrorsDuring(() => run(variant))).toEqual([]);
     });
 
     it('audits the settled DOM', async () => {
@@ -710,9 +710,10 @@ describe('testSystemProps', () => {
     const tests = collect(() =>
       testSystemProps(Chip, { expectedTag: 'span', displayName: 'Chip', a11y: false }),
     );
-    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {});
+    const consoleError = vi.spyOn(console, 'error');
     try {
       await expect(run(pick(tests, 'forwards ref to DOM element'))).rejects.toThrow(/ChipContext/);
+      expect(consoleError).not.toHaveBeenCalled();
     } finally {
       consoleError.mockRestore();
     }
@@ -1413,7 +1414,7 @@ describe('test-setup', () => {
         const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
         try {
           warnOnce('f6t:reset-probe', 'probe');
-          expect(warn).toHaveBeenCalledTimes(1);
+          expect(warn.mock.calls).toEqual([['[WaveUI] probe']]);
         } finally {
           warn.mockRestore();
         }
@@ -1472,6 +1473,12 @@ describe('test-setup', () => {
       return (
         <div ref={setRefs} role="dialog" aria-label="Trapped">
           <button type="button">Inside</button>
+          {/* A portal inside the surface registers its wrapper with the layer. */}
+          <DismissLayerProvider layerId={layerId}>
+            <Portal>
+              <span>Portaled</span>
+            </Portal>
+          </DismissLayerProvider>
         </div>
       );
     }
@@ -1505,6 +1512,8 @@ describe('test-setup', () => {
       expect(message).toMatch(/1 isolating modal\b/);
       expect(message).toMatch(/1 focus trap\b/);
       expect(message).toMatch(/1 scroll lock\b/);
+      expect(message).toMatch(/portal elements registered with 1 layer\b/);
+      expect(message).toMatch(/1 layer-stack subscriber\b/);
       expect(message).toMatch(/1 element made inert by modal isolation \(div#outside\)/);
       expect(message).toMatch(/inline overflow on <html> \(overflow: hidden\)/);
 
@@ -1519,6 +1528,71 @@ describe('test-setup', () => {
       unregister();
       unmount();
       expect(() => assertOverlayStateReleased()).not.toThrow();
+    });
+
+    describe('the scrollbar compensation of a leaked scroll lock', () => {
+      function Locked() {
+        useScrollLock(true);
+        return null;
+      }
+
+      /** A classic 15px scrollbar, and CSS.supports answering `gutter` for scrollbar-gutter. */
+      function mockScrollbar(gutter: boolean): () => void {
+        const html = document.documentElement;
+        const previousCss = Object.getOwnPropertyDescriptor(globalThis, 'CSS');
+        Object.defineProperty(html, 'clientWidth', {
+          configurable: true,
+          value: window.innerWidth - 15,
+        });
+        Object.defineProperty(globalThis, 'CSS', {
+          configurable: true,
+          writable: true,
+          value: { supports: (property: string) => gutter && property === 'scrollbar-gutter' },
+        });
+        return () => {
+          Reflect.deleteProperty(html, 'clientWidth');
+          if (previousCss) Object.defineProperty(globalThis, 'CSS', previousCss);
+          else Reflect.deleteProperty(globalThis, 'CSS');
+        };
+      }
+
+      it.each([
+        [
+          'scrollbar-gutter on <html>',
+          true,
+          /inline scrollbar-gutter on <html> \(scrollbar-gutter: stable\)/,
+        ],
+        [
+          'padding-inline-end on <body>',
+          false,
+          /inline padding-inline-end on <body> \(padding-inline-end: 15px\)/,
+        ],
+      ])('reports and removes %s', (_label, gutter, fragment) => {
+        const restore = mockScrollbar(gutter);
+        try {
+          const { unmount } = render(<Locked />);
+          const html = document.documentElement;
+          const body = document.body;
+          expect(
+            gutter ? html.style.getPropertyValue('scrollbar-gutter') : body.style.paddingInlineEnd,
+          ).not.toBe('');
+          let message = '';
+          try {
+            assertOverlayStateReleased();
+          } catch (error) {
+            message = (error as Error).message;
+          }
+          expect(message).toMatch(/1 scroll lock\b/);
+          expect(message).toMatch(fragment);
+          expect(html.style.getPropertyValue('scrollbar-gutter')).toBe('');
+          expect(body.style.paddingInlineEnd).toBe('');
+          expect(html.style.overflow).toBe('');
+          unmount();
+          expect(() => assertOverlayStateReleased()).not.toThrow();
+        } finally {
+          restore();
+        }
+      });
     });
 
     it('reports and removes an inert attribute or inline overflow the test left itself', () => {

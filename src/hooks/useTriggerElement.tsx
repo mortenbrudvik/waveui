@@ -1,8 +1,14 @@
 import * as React from 'react';
 import { mergeProps } from '../lib/mergeProps';
-import { renderTrigger, STATE_ARIA, type TriggerChildren } from '../lib/renderTrigger';
+import {
+  isCloneableElement,
+  renderTrigger,
+  STATE_ARIA,
+  unwrapFragment,
+  type TriggerChildren,
+} from '../lib/renderTrigger';
 import { warnOnce } from '../lib/dev';
-import { FOCUSABLE_SELECTOR } from '../lib/focus';
+import { FOCUSABLE_SELECTOR, isHiddenInput } from '../lib/focus';
 import { useMergedRefs } from './useMergedRefs';
 import { useEventCallback } from './useEventCallback';
 
@@ -27,15 +33,38 @@ export interface UseTriggerElementOptions {
 
 type UnknownProps = Record<string, unknown>;
 
-function isCloneableElement(node: unknown): node is React.ReactElement<UnknownProps> {
-  return React.isValidElement(node) && node.type !== React.Fragment;
+/** Roles that make an element no widget of its own. */
+const GENERIC_ROLES: ReadonlySet<string> = new Set(['generic', 'none', 'presentation']);
+
+/** Whether a `role` value (attribute or prop) names a role other than a generic one. */
+function isNonGenericRole(role: unknown): boolean {
+  if (typeof role !== 'string') return false;
+  const first = role.trim().split(/\s+/)[0];
+  return first !== '' && !GENERIC_ROLES.has(first);
 }
 
-/** The element of a single-element Fragment (`<><Button /></>`); other children as given. */
-function unwrapFragment(children: React.ReactNode): React.ReactNode {
-  if (!React.isValidElement(children) || children.type !== React.Fragment) return children;
-  const inner = (children.props as { children?: React.ReactNode }).children;
-  return React.isValidElement(inner) ? unwrapFragment(inner) : children;
+/** Whether a `tabIndex` prop puts its element in the tab order. */
+function isInTabOrder(tabIndex: unknown): boolean {
+  if (typeof tabIndex === 'number') return tabIndex >= 0;
+  return typeof tabIndex === 'string' && tabIndex.trim() !== '' && Number(tabIndex) >= 0;
+}
+
+/**
+ * The element that acts as the trigger rendered as `el` (a cloned child, or the wrapper `<span>`
+ * of `asChild={false}`, of text children and of the automatic fallback): `el` itself when it is
+ * interactive — in the tab order by markup (`tabIndex >= 0`: a button, or a span the consumer
+ * gave `tabIndex={0}`) or given a role other than a generic one (`role="button"`) — else the
+ * first element inside it in the tab order by markup, else `null`. The trigger's state ARIA
+ * belongs on it, and it is the element that takes focus for the trigger. Read from the markup, not
+ * `getFirstTabbable`: that skips an `inert` subtree, and the page around a trigger is inert while
+ * its modal dialog is open. Internal (not exported from the package entry).
+ */
+export function getTriggerTarget(el: HTMLElement): HTMLElement | null {
+  if (el.tabIndex >= 0 || isNonGenericRole(el.getAttribute('role'))) return el;
+  for (const candidate of el.querySelectorAll<HTMLElement>(FOCUSABLE_SELECTOR)) {
+    if (!isHiddenInput(candidate) && candidate.tabIndex >= 0) return candidate;
+  }
+  return null;
 }
 
 function isElementNode(value: unknown): value is Element {
@@ -51,19 +80,6 @@ function pickStateAria(props: UnknownProps): StateAriaValues {
     if (key in props) values[key] = props[key];
   }
   return values;
-}
-
-/**
- * The element that receives the state ARIA inside a wrapper span: its first element in the tab
- * order by markup (`tabIndex >= 0`). Not `getFirstTabbable`: that skips an `inert` subtree, and
- * the page around a trigger is inert while its modal dialog is open.
- */
-function findStateAriaTarget(wrapper: Element): Element | null {
-  for (const el of wrapper.querySelectorAll<HTMLElement>(FOCUSABLE_SELECTOR)) {
-    const hiddenInput = el.localName === 'input' && (el as HTMLInputElement).type === 'hidden';
-    if (!hiddenInput && el.tabIndex >= 0) return el;
-  }
-  return null;
 }
 
 /** Writes `values` onto `target` and returns a cleanup that restores its own attributes. */
@@ -104,6 +120,10 @@ function moveStateAria(target: Element, values: StateAriaValues): () => void {
  * - **Text, a Fragment of several elements, several children**: a wrapper `<span>` (with a
  *   development warning from `renderTrigger`) carrying the trigger props except the state ARIA,
  *   which moves as in the automatic fallback below.
+ * - **A wrapper span the consumer made the trigger** (`tabIndex={0}` or a `role` such as
+ *   `"button"` passed to the trigger, e.g. `<Menu.Trigger asChild={false} role="button"
+ *   tabIndex={0}>Actions</Menu.Trigger>`): the span keeps the state ARIA, as the element that
+ *   takes focus and is announced ({@link getTriggerTarget}).
  * - **Automatic fallback**: when the cloned child has not attached its ref by the end of the mount
  *   layout effect (a custom component that neither forwards `ref` nor spreads props), the hook
  *   switches once to the wrapper span — whose click handler catches the bubbling click, so the
@@ -158,17 +178,20 @@ export function useTriggerElement<P>(
   // A wrapper span: the explicit one of `asChild={false}`, the automatic fallback of a single
   // element child, or children that cannot be cloned (text, several elements). The trigger is the
   // element inside, so the state ARIA, which a generic span cannot carry, goes to the first element
-  // it rendered in the tab order.
+  // it rendered in the tab order — unless the consumer made the span itself the trigger
+  // (`tabIndex`, `role`, see getTriggerTarget): then the span keeps it.
   const autoWrapper = asChild && wrapperFallback && singleElement;
   const wrapper = !isRenderProp && !cloneable;
-  const movedAria = wrapper ? pickStateAria(ourProps) : null;
+  const wrapperIsTrigger =
+    wrapper && (isInTabOrder(ourProps.tabIndex) || isNonGenericRole(ourProps.role));
+  const movedAria = wrapper && !wrapperIsTrigger ? pickStateAria(ourProps) : null;
   // No deps: runs after every commit of the trigger (which re-renders on every state change), so
   // the attributes follow the live state and the child's current first tabbable element. A new
   // target rendered by the child without a trigger commit is picked up at the next one.
   React.useLayoutEffect(() => {
     const span = attachedRef.current;
     if (!movedAria || !span) return undefined;
-    const target = findStateAriaTarget(span);
+    const target = getTriggerTarget(span as HTMLElement);
     return target ? moveStateAria(target, movedAria) : undefined;
   });
 
@@ -191,7 +214,7 @@ export function useTriggerElement<P>(
   if (wrapper) {
     const { ref: _ourRef, ...ourRest } = ourProps;
     const wrapperProps: UnknownProps = { ...ourRest, ref: mergedRef };
-    for (const key of STATE_ARIA) delete wrapperProps[key];
+    if (!wrapperIsTrigger) for (const key of STATE_ARIA) delete wrapperProps[key];
     // The explicit 0.4 span renders the children as given. Otherwise `asChild` lets renderTrigger
     // warn about children it cannot clone; the automatic fallback (a single element, never cloned
     // again) warned above.

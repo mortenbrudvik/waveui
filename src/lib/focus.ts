@@ -51,7 +51,8 @@ function isDisabled(el: Element): boolean {
   }
 }
 
-function isHiddenInput(el: Element): boolean {
+/** Whether `el` is an `<input type="hidden">` (a form value, never focusable). */
+export function isHiddenInput(el: Element): boolean {
   return el.localName === 'input' && (el as HTMLInputElement).type === 'hidden';
 }
 

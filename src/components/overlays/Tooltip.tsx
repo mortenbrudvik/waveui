@@ -4,7 +4,12 @@ import { joinIds } from '../../lib/aria';
 import { resolveDeprecatedProp, warnOnce } from '../../lib/dev';
 import { composeEventHandlers } from '../../lib/composeEventHandlers';
 import { FOCUSABLE_SELECTOR, getFirstTabbable } from '../../lib/focus';
-import { renderTrigger, STATE_ARIA } from '../../lib/renderTrigger';
+import {
+  isCloneableElement,
+  renderTrigger,
+  STATE_ARIA,
+  unwrapFragment,
+} from '../../lib/renderTrigger';
 import type { PopupAlign, PopupSide } from '../../lib/types';
 import { useId } from '../../hooks/useId';
 import { useDismiss } from '../../hooks/useDismiss';
@@ -123,17 +128,6 @@ function ownEventsOnly<E extends React.SyntheticEvent>(
   return (event) => {
     if (isOwnEvent(event)) handler(event);
   };
-}
-
-function isCloneableElement(node: unknown): node is React.ReactElement {
-  return React.isValidElement(node) && node.type !== React.Fragment;
-}
-
-/** The element of a single-element Fragment (`<><Button /></>`); other children as given. */
-function unwrapFragment(children: React.ReactNode): React.ReactNode {
-  if (!React.isValidElement(children) || children.type !== React.Fragment) return children;
-  const inner = (children.props as { children?: React.ReactNode }).children;
-  return React.isValidElement(inner) ? unwrapFragment(inner) : children;
 }
 
 /**
@@ -350,11 +344,14 @@ export const Tooltip = ({
     }, HIDE_DELAY_MS);
   });
 
-  // An Escape-only layer while visible: Escape hides the tooltip before any enclosing overlay.
+  // An Escape-only layer while visible: Escape hides the tooltip before any enclosing overlay. The
+  // wrapper is its anchor (its trigger, not its surface): Tab from the child inside a focus trap
+  // moves on from the popover, portal or dialog around the wrapper.
   useDismiss({
     open: visible,
     onDismiss: hide,
     refs: [wrapperRef, surfaceRef],
+    anchorRef: wrapperRef,
     kind: 'tooltip',
     outsidePress: false,
   });

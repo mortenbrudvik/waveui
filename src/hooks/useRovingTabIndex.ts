@@ -2,7 +2,7 @@ import * as React from 'react';
 import type { WaveDir } from '../components/provider/WaveProvider';
 import { isDev, warnOnce } from '../lib/dev';
 import { getArrowIntent, getDirection } from '../lib/direction';
-import { getFirstTabbable } from '../lib/focus';
+import { getFirstTabbable, isHiddenInput } from '../lib/focus';
 import { setRef } from '../lib/mergeRefs';
 import { useEventCallback } from './useEventCallback';
 import { isAltGraphCharacter, useTypeahead, type TypeaheadItem } from './useTypeahead';
@@ -45,7 +45,10 @@ export interface UseRovingTabIndexOptions {
    * the search instead of activating the focused item: `containerProps.onKeyDownCapture` calls
    * `preventDefault()` on it before an item's own keydown handler runs, so that handler must skip
    * default-prevented events (`composeEventHandlers` does). Keys typed in content nested inside an
-   * item (a row's action button) are not typeahead.
+   * item (a row's action button) are not typeahead. A character typed with AltGr (which Windows
+   * reports as Ctrl+Alt, e.g. Polish `ł`) is typeahead text; other Ctrl, Alt or Meta
+   * combinations, Ctrl+Alt+Space included, are shortcuts and ignored. A match whose `focus()`
+   * leaves focus where it was is passed over for the next item that matches.
    * @default false
    */
   typeahead?: boolean;
@@ -241,10 +244,6 @@ function ownsArrowKeys(target: EventTarget | null): boolean {
  */
 function canHoldTabStop(item: ResolvedItem): boolean {
   return !item.nested && !ownsArrowKeys(item.element);
-}
-
-function isHiddenInput(el: Element): boolean {
-  return el.localName === 'input' && (el as HTMLInputElement).type === 'hidden';
 }
 
 /**
@@ -612,13 +611,15 @@ function startsOnItem(item: ResolvedItem | null, target: EventTarget | null, con
  * - **Tab stop** (`tabStop`): `'active'` — the enabled `activeValue` item, else the first enabled
  *   item; `'last-focused'` — the last focused enabled item, else the `'active'` rule. A nested
  *   composite or a control that uses the arrow keys itself holds it only when no other item can.
- * - **Keys** are ignored when another handler already called `preventDefault()`, with Alt/Ctrl/Meta,
- *   and when they start in a text field, select, contenteditable, slider, spinbutton or editable
- *   combobox (Left/Right keep moving the caret; a select-only combobox such as Dropdown's button
- *   does not keep them). Left/Right are mirrored in RTL (`dir`, else the direction of
- *   the container at key time). Arrows and typeahead move from the item the key started in — the
- *   innermost one when items nest, as treeitems do inside their parent's group; when it started on
- *   no item (focus on the container itself) next goes to the first enabled item and prev to the last.
+ * - **Keys** are ignored when another handler already called `preventDefault()`; with Meta; with
+ *   Alt or Ctrl, except a single character typed with AltGr (Ctrl+Alt on Windows), which is
+ *   typeahead text (arrows, Home, End and Space with Ctrl+Alt stay ignored); and when they start
+ *   in a text field, select, contenteditable, slider, spinbutton or editable combobox (Left/Right
+ *   keep moving the caret; a select-only combobox such as Dropdown's button does not keep them).
+ *   Left/Right are mirrored in RTL (`dir`, else the direction of the container at key time).
+ *   Arrows and typeahead move from the item the key started in — the innermost one when items
+ *   nest, as treeitems do inside their parent's group; when it started on no item (focus on the
+ *   container itself) next goes to the first enabled item and prev to the last.
  *   An item whose `focus()` leaves focus where it was (the browser ignores it on an element CSS
  *   hides) is passed over for the next one, and is never recorded or reported to `onFocusMove`.
  *   Handled keys call `preventDefault()`. Keys and focus from outside the container's DOM — a
@@ -730,11 +731,12 @@ export function useRovingTabIndex(
   );
 
   const typeaheadItemsRef = React.useRef<TypeaheadItem[]>([]);
-  const typeaheadMatchRef = React.useRef<string | null>(null);
+  // Every item matching the typed characters, in search order (the first is the match).
+  const typeaheadMatchesRef = React.useRef<readonly string[]>([]);
   const { onTypeahead, isSearching } = useTypeahead({
     getItems: () => typeaheadItemsRef.current,
-    onMatch: (value) => {
-      typeaheadMatchRef.current = value;
+    onMatch: (_value, matches) => {
+      typeaheadMatchesRef.current = matches;
     },
   });
 
@@ -760,7 +762,8 @@ export function useRovingTabIndex(
   // `spaceOnly` (the capture phase) handles nothing but a Space that continues a typeahead search.
   const handleKeys = useEventCallback((e: React.KeyboardEvent, spaceOnly: boolean) => {
     // Ctrl, Alt and Meta combinations are shortcuts, except a single character typed with AltGr
-    // (Ctrl+Alt on Windows), which is typeahead text: arrows, Home and End with it stay shortcuts.
+    // (Ctrl+Alt on Windows), which is typeahead text: arrows, Home, End and Space with it stay
+    // shortcuts.
     const shortcut = e.metaKey || ((e.altKey || e.ctrlKey) && !isAltGraphCharacter(e));
     if (e.defaultPrevented || shortcut) return;
     if (ownsArrowKeys(e.target)) return;
@@ -811,11 +814,13 @@ export function useRovingTabIndex(
         text: textOf(item.element),
         disabled: item.disabled,
       }));
-      typeaheadMatchRef.current = null;
+      typeaheadMatchesRef.current = [];
       if (onTypeahead(e, current?.value ?? null)) {
         handled = true;
-        const match = enabled.find((item) => item.value === typeaheadMatchRef.current);
-        if (match) targets = [match];
+        // The match first, then the next ones, for a match that does not take focus.
+        targets = typeaheadMatchesRef.current.flatMap((value) =>
+          enabled.filter((item) => item.value === value),
+        );
       }
     }
 

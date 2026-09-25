@@ -12,6 +12,7 @@ import {
   __resetWarnings,
 } from '../dev';
 
+// The helpers under test write to the console: every test asserts the exact calls (none included).
 let warnSpy: MockInstance<typeof console.warn>;
 
 beforeEach(() => {
@@ -28,6 +29,7 @@ afterEach(() => {
 describe('isDev', () => {
   it('is true outside production (vitest runs with NODE_ENV=test)', () => {
     expect(isDev).toBe(true);
+    expect(warnSpy).not.toHaveBeenCalled();
   });
 
   it('is false when the module is evaluated with NODE_ENV=production', async () => {
@@ -35,20 +37,20 @@ describe('isDev', () => {
     vi.resetModules();
     const prod = await import('../dev');
     expect(prod.isDev).toBe(false);
+    expect(warnSpy).not.toHaveBeenCalled();
   });
 });
 
 describe('devWarn', () => {
   it('prefixes the message with [WaveUI]', () => {
     devWarn('Something is off.');
-    expect(warnSpy).toHaveBeenCalledTimes(1);
-    expect(warnSpy).toHaveBeenCalledWith('[WaveUI] Something is off.');
+    expect(warnSpy.mock.calls).toEqual([['[WaveUI] Something is off.']]);
   });
 
   it('does not deduplicate', () => {
     devWarn('again');
     devWarn('again');
-    expect(warnSpy).toHaveBeenCalledTimes(2);
+    expect(warnSpy.mock.calls).toEqual([['[WaveUI] again'], ['[WaveUI] again']]);
   });
 
   it('is a no-op in production', () => {
@@ -63,16 +65,14 @@ describe('warnOnce', () => {
     warnOnce('key-a', 'first');
     warnOnce('key-a', 'first');
     warnOnce('key-b', 'second');
-    expect(warnSpy).toHaveBeenCalledTimes(2);
-    expect(warnSpy).toHaveBeenNthCalledWith(1, '[WaveUI] first');
-    expect(warnSpy).toHaveBeenNthCalledWith(2, '[WaveUI] second');
+    expect(warnSpy.mock.calls).toEqual([['[WaveUI] first'], ['[WaveUI] second']]);
   });
 
   it('warns again after __resetWarnings()', () => {
     warnOnce('key-a', 'first');
     __resetWarnings();
     warnOnce('key-a', 'first');
-    expect(warnSpy).toHaveBeenCalledTimes(2);
+    expect(warnSpy.mock.calls).toEqual([['[WaveUI] first'], ['[WaveUI] first']]);
   });
 
   it('keeps the warn-once set in the global registry so every library copy shares it', async () => {
@@ -80,7 +80,7 @@ describe('warnOnce', () => {
     vi.resetModules();
     const otherCopy = await import('../dev');
     otherCopy.warnOnce('shared-key', 'from copy two');
-    expect(warnSpy).toHaveBeenCalledTimes(1);
+    expect(warnSpy.mock.calls).toEqual([['[WaveUI] from copy one']]);
     const registry = (globalThis as unknown as Record<symbol, unknown>)[
       Symbol.for('@mortenbrudvik/waveui/warnings')
     ];
@@ -94,7 +94,7 @@ describe('warnOnce', () => {
     expect(warnSpy).not.toHaveBeenCalled();
     vi.unstubAllEnvs();
     warnOnce('key-p', 'shown');
-    expect(warnSpy).toHaveBeenCalledWith('[WaveUI] shown');
+    expect(warnSpy.mock.calls).toEqual([['[WaveUI] shown']]);
   });
 });
 
@@ -104,7 +104,7 @@ describe('hasWarned', () => {
     expect(hasWarned('X:k')).toBe(false);
     warnOnce('X:k', 'msg');
     expect(hasWarned('X:k')).toBe(true);
-    expect(warnSpy).toHaveBeenCalledTimes(1);
+    expect(warnSpy.mock.calls).toEqual([['[WaveUI] msg']]);
     __resetWarnings();
     expect(hasWarned('X:k')).toBe(false);
   });
@@ -112,13 +112,18 @@ describe('hasWarned', () => {
   it('does not consume the key, so a later warnOnce still warns', () => {
     expect(hasWarned('X:later')).toBe(false);
     warnOnce('X:later', 'still shown');
-    expect(warnSpy).toHaveBeenCalledWith('[WaveUI] still shown');
+    expect(warnSpy.mock.calls).toEqual([['[WaveUI] still shown']]);
   });
 
   it('sees keys emitted through warnDeprecated', () => {
     warnDeprecated('TabList', 'vertical', 'orientation');
     expect(hasWarned('deprecated:TabList:vertical')).toBe(true);
     expect(hasWarned('deprecated:TabList:onTabSelect')).toBe(false);
+    expect(warnSpy.mock.calls).toEqual([
+      [
+        '[WaveUI] TabList: `vertical` is deprecated and will be removed in 1.0. Use `orientation` instead.',
+      ],
+    ]);
   });
 
   it('reads the shared global registry, so another library copy sees the key', async () => {
@@ -126,21 +131,25 @@ describe('hasWarned', () => {
     vi.resetModules();
     const otherCopy = await import('../dev');
     expect(otherCopy.hasWarned('shared-has-key')).toBe(true);
+    expect(warnSpy.mock.calls).toEqual([['[WaveUI] from copy one']]);
   });
 
   it('reports false in production, where warnOnce consumes no key', () => {
     vi.stubEnv('NODE_ENV', 'production');
     warnOnce('key-hp', 'hidden');
     expect(hasWarned('key-hp')).toBe(false);
+    expect(warnSpy).not.toHaveBeenCalled();
   });
 });
 
 describe('warnDeprecated', () => {
   it('uses the §5.10 message format', () => {
     warnDeprecated('TabList', 'selectedValue', 'value');
-    expect(warnSpy).toHaveBeenCalledWith(
-      '[WaveUI] TabList: `selectedValue` is deprecated and will be removed in 1.0. Use `value` instead.',
-    );
+    expect(warnSpy.mock.calls).toEqual([
+      [
+        '[WaveUI] TabList: `selectedValue` is deprecated and will be removed in 1.0. Use `value` instead.',
+      ],
+    ]);
   });
 
   it('appends extra guidance', () => {
@@ -150,9 +159,11 @@ describe('warnDeprecated', () => {
       'onValueChange',
       'It still fires on every option activation.',
     );
-    expect(warnSpy).toHaveBeenCalledWith(
-      '[WaveUI] Combobox: `onOptionSelect` is deprecated and will be removed in 1.0. Use `onValueChange` instead. It still fires on every option activation.',
-    );
+    expect(warnSpy.mock.calls).toEqual([
+      [
+        '[WaveUI] Combobox: `onOptionSelect` is deprecated and will be removed in 1.0. Use `onValueChange` instead. It still fires on every option activation.',
+      ],
+    ]);
   });
 
   it('warns once per (component, prop)', () => {
@@ -160,11 +171,18 @@ describe('warnDeprecated', () => {
     warnDeprecated('TabList', 'vertical', 'orientation');
     warnDeprecated('Stack', 'direction', 'orientation');
     warnDeprecated('TabList', 'onTabSelect', 'onValueChange');
-    expect(warnSpy).toHaveBeenCalledTimes(3);
+    expect(warnSpy.mock.calls.map(([message]) => message)).toEqual([
+      '[WaveUI] TabList: `vertical` is deprecated and will be removed in 1.0. Use `orientation` instead.',
+      '[WaveUI] Stack: `direction` is deprecated and will be removed in 1.0. Use `orientation` instead.',
+      '[WaveUI] TabList: `onTabSelect` is deprecated and will be removed in 1.0. Use `onValueChange` instead.',
+    ]);
   });
 });
 
 describe('resolveDeprecatedProp', () => {
+  const directionDeprecated =
+    '[WaveUI] Stack: `direction` is deprecated and will be removed in 1.0. Use `orientation` instead.';
+
   it('returns the new value without warning when only the new prop is used', () => {
     expect(resolveDeprecatedProp('Stack', 'vertical', undefined, 'direction', 'orientation')).toBe(
       'vertical',
@@ -177,17 +195,18 @@ describe('resolveDeprecatedProp', () => {
       resolveDeprecatedProp('Stack', undefined, 'horizontal', 'direction', 'orientation'),
     ).toBe('horizontal');
     resolveDeprecatedProp('Stack', undefined, 'horizontal', 'direction', 'orientation');
-    expect(warnSpy).toHaveBeenCalledTimes(1);
-    expect(warnSpy).toHaveBeenCalledWith(
-      '[WaveUI] Stack: `direction` is deprecated and will be removed in 1.0. Use `orientation` instead.',
-    );
+    expect(warnSpy.mock.calls).toEqual([[directionDeprecated]]);
   });
 
   it('lets the new value win when both are given (and still warns about the old one)', () => {
     expect(resolveDeprecatedProp('Skeleton', 'circular', 'rectangular', 'variant', 'shape')).toBe(
       'circular',
     );
-    expect(warnSpy).toHaveBeenCalledTimes(1);
+    expect(warnSpy.mock.calls).toEqual([
+      [
+        '[WaveUI] Skeleton: `variant` is deprecated and will be removed in 1.0. Use `shape` instead.',
+      ],
+    ]);
   });
 
   it('returns undefined when neither is given', () => {
@@ -200,6 +219,11 @@ describe('resolveDeprecatedProp', () => {
   it('treats false and 0 as given values', () => {
     expect(resolveDeprecatedProp('X', false, true, 'old', 'new')).toBe(false);
     expect(resolveDeprecatedProp('Y', undefined, 0, 'old', 'new')).toBe(0);
+    // Both pass the deprecated prop, so both warn.
+    expect(warnSpy.mock.calls).toEqual([
+      ['[WaveUI] X: `old` is deprecated and will be removed in 1.0. Use `new` instead.'],
+      ['[WaveUI] Y: `old` is deprecated and will be removed in 1.0. Use `new` instead.'],
+    ]);
   });
 
   it('is safe to call during render: StrictMode double renders and re-renders warn once', () => {
@@ -221,7 +245,7 @@ describe('resolveDeprecatedProp', () => {
     const { rerender } = render(ui('horizontal'));
     rerender(ui('vertical'));
     expect(screen.getByTestId('stack')).toHaveAttribute('data-orientation', 'vertical');
-    expect(warnSpy).toHaveBeenCalledTimes(1);
+    expect(warnSpy.mock.calls).toEqual([[directionDeprecated]]);
   });
 });
 
@@ -233,6 +257,8 @@ describe('reportMissingContext', () => {
   });
 
   afterEach(() => {
+    // It reports through console.error only: never a warning.
+    expect(warnSpy).not.toHaveBeenCalled();
     errorSpy.mockRestore();
   });
 
@@ -255,12 +281,14 @@ describe('reportMissingContext', () => {
         '[WaveUI] useToastController must be used within <Toaster>. Wrap your app in <Toaster>.',
       ),
     );
+    expect(errorSpy).not.toHaveBeenCalled();
   });
 
   it('throws on every call in development', () => {
     const message = '[WaveUI] Menu.Item must be used within <Menu>';
     expect(() => reportMissingContext('Menu.Item', '<Menu>')).toThrow(message);
     expect(() => reportMissingContext('Menu.Item', '<Menu>')).toThrow(message);
+    expect(errorSpy).not.toHaveBeenCalled();
   });
 
   it('logs the message with console.error once per text in production, without throwing', () => {
@@ -268,8 +296,7 @@ describe('reportMissingContext', () => {
     expect(() => reportMissingContext('TabList.Tab', '<TabList>')).not.toThrow();
     reportMissingContext('TabList.Tab', '<TabList>');
     reportMissingContext('TabList.Tab', '<TabList>');
-    expect(errorSpy).toHaveBeenCalledTimes(1);
-    expect(errorSpy).toHaveBeenCalledWith('[WaveUI] TabList.Tab must be used within <TabList>');
+    expect(errorSpy.mock.calls).toEqual([['[WaveUI] TabList.Tab must be used within <TabList>']]);
   });
 
   it('logs each different text once in production (other component, other parent, custom message)', () => {
@@ -293,7 +320,10 @@ describe('reportMissingContext', () => {
     reportMissingContext('Tree.Item', '<Tree>');
     __resetWarnings();
     reportMissingContext('Tree.Item', '<Tree>');
-    expect(errorSpy).toHaveBeenCalledTimes(2);
+    expect(errorSpy.mock.calls).toEqual([
+      ['[WaveUI] Tree.Item must be used within <Tree>'],
+      ['[WaveUI] Tree.Item must be used within <Tree>'],
+    ]);
   });
 
   it('does not record the text in development, so production still logs it', () => {
@@ -302,7 +332,7 @@ describe('reportMissingContext', () => {
     );
     vi.stubEnv('NODE_ENV', 'production');
     reportMissingContext('Nav.Item', '<Nav>');
-    expect(errorSpy).toHaveBeenCalledWith('[WaveUI] Nav.Item must be used within <Nav>');
+    expect(errorSpy.mock.calls).toEqual([['[WaveUI] Nav.Item must be used within <Nav>']]);
   });
 
   it('keeps the logged set in the global registry so every library copy shares it', async () => {
@@ -311,7 +341,9 @@ describe('reportMissingContext', () => {
     vi.resetModules();
     const otherCopy = await import('../dev');
     otherCopy.reportMissingContext('Accordion.Item', '<Accordion>');
-    expect(errorSpy).toHaveBeenCalledTimes(1);
+    expect(errorSpy.mock.calls).toEqual([
+      ['[WaveUI] Accordion.Item must be used within <Accordion>'],
+    ]);
     const registry = (globalThis as unknown as Record<symbol, unknown>)[
       Symbol.for('@mortenbrudvik/waveui/missing-context')
     ];
@@ -347,9 +379,17 @@ describe('without a `process` global (lib-provider-tests-2)', () => {
   });
 
   it('reportMissingContext still throws', () => {
-    expect(() => withoutProcess(() => reportMissingContext('Tree.Item', '<Tree>'))).toThrow(
-      new Error('[WaveUI] Tree.Item must be used within <Tree>'),
-    );
+    // Not silenced: an unexpected console.error would print and fail the assertion below.
+    const errorSpy = vi.spyOn(console, 'error');
+    try {
+      expect(() => withoutProcess(() => reportMissingContext('Tree.Item', '<Tree>'))).toThrow(
+        new Error('[WaveUI] Tree.Item must be used within <Tree>'),
+      );
+      expect(errorSpy).not.toHaveBeenCalled();
+      expect(warnSpy).not.toHaveBeenCalled();
+    } finally {
+      errorSpy.mockRestore();
+    }
   });
 
   it('isDev is true when the module is evaluated without it', async () => {
@@ -361,5 +401,6 @@ describe('without a `process` global (lib-provider-tests-2)', () => {
     } finally {
       vi.unstubAllGlobals();
     }
+    expect(warnSpy).not.toHaveBeenCalled();
   });
 });

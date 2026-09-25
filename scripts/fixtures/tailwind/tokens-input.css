@@ -1,0 +1,10 @@
+/*
+ * A custom Tailwind 4 setup on Wave's token entry, as documented: Tailwind first, Wave's tokens in
+ * the theme layer, Wave's direction variant (the components' `wave-rtl:` classes need it) and an
+ * `@source` for the compiled components; the app brings its own base styles. Compiled by
+ * scripts/pack-smoke.mjs with @tailwindcss/cli inside an installed copy of this fixture.
+ */
+@import 'tailwindcss';
+@import '@mortenbrudvik/waveui/tokens' layer(theme);
+@import '@mortenbrudvik/waveui/variants.css';
+@source './node_modules/@mortenbrudvik/waveui/dist';

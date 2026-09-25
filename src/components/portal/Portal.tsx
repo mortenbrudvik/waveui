@@ -49,8 +49,9 @@ PortalDepthContext.displayName = 'PortalDepthContext';
  * - **Client only, first commit**: nothing is rendered on the server or during hydration (no
  *   mismatch); in every other client render the portal exists in the first commit, so layout
  *   effects and ref callbacks of the content see connected elements.
- * - **Stacking**: `z-index: calc(<layer variable> + depth)` with the depth from
- *   {@link PortalDepthContext}.
+ * - **Stacking**: `z-index: calc(<layer variable> + depth)`, where depth is the number of portals
+ *   it is rendered in, so a surface opened from inside another overlay always stacks above it,
+ *   also when both mount in the same commit.
  * - **Layers**: the wrapper is registered with the enclosing dismiss layer (the parent), so presses
  *   and focus inside the portal count as inside that layer; `layerId` is provided only to the
  *   children.

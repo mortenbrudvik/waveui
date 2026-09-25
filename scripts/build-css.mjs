@@ -45,13 +45,15 @@
  *
  * The helpers are exported and tested by src/styles/__tests__/tokens.test.ts; importing the
  * module does not run the build. `main()` also takes the project root, so the tests run it end
- * to end on a fixture project.
+ * to end on a fixture project. The script starts through verify-dist's `runScript`, so a file of
+ * its name that cannot be matched to this module fails instead of passing without a check.
  */
 import { spawnSync } from 'node:child_process';
-import { existsSync, mkdirSync, readFileSync, realpathSync, statSync } from 'node:fs';
+import { existsSync, mkdirSync, readFileSync, statSync } from 'node:fs';
 import { createRequire } from 'node:module';
-import { basename, dirname, extname, join, relative, resolve } from 'node:path';
+import { dirname, extname, join, relative, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { runScript } from './verify-dist.mjs';
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const require = createRequire(import.meta.url);
@@ -790,39 +792,4 @@ export function main(argv = process.argv.slice(2), { projectRoot = root } = {}) 
   return 0;
 }
 
-/** Real path of a file; case-folded on Windows, where paths are case-insensitive. */
-function canonicalPath(path) {
-  const real = realpathSync(path);
-  return process.platform === 'win32' ? real.toLowerCase() : real;
-}
-
-/**
- * How this module was loaded, given the script path Node was started with (`process.argv[1]`):
- *   - `main`: it is this file (compared by real path, so a symlink or junction in the invoked
- *     path, which Node resolves for `import.meta.url` but not for `argv[1]`, still matches);
- *   - `mismatch`: a file named build-css.(m)js that could not be matched to this module;
- *   - `imported`: anything else (the module was imported, e.g. by the tests).
- */
-export function entryStatus(argv1 = process.argv[1]) {
-  if (!argv1) return 'imported';
-  try {
-    if (canonicalPath(fileURLToPath(import.meta.url)) === canonicalPath(resolve(argv1))) {
-      return 'main';
-    }
-  } catch {
-    // An unresolvable path is not this module; the name check below decides.
-  }
-  return /^build-css\.m?js$/i.test(basename(argv1)) ? 'mismatch' : 'imported';
-}
-
-const status = entryStatus();
-if (status === 'main') {
-  process.exitCode = main();
-} else if (status === 'mismatch') {
-  // Invoked as the build script but not recognised as this module: never pass silently.
-  console.error(
-    `build-css: cannot confirm that ${process.argv[1]} is ${fileURLToPath(import.meta.url)}; ` +
-      'nothing was built or checked',
-  );
-  process.exitCode = 1;
-}
+await runScript(import.meta.url, main);

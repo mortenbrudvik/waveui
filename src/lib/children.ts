@@ -28,6 +28,20 @@ function isThenable(value: unknown): boolean {
   );
 }
 
+/** Options of {@link getElementType}. */
+export interface GetElementTypeOptions {
+  /**
+   * Whether a lazy type whose chunk is still loading suspends the caller. `false` returns the lazy
+   * object itself instead (it matches no part). Pass `false` in walks that reach deeper than the
+   * direct children: there the lazy can sit inside the consumer's own `<Suspense>`, the only
+   * boundary that rendering it suspends, and the compound must not suspend in its place (on the
+   * server, `renderToString` would throw). Such a walk goes on into the lazy element's
+   * `props.children`, so a part written inside it is still found.
+   * @default true
+   */
+  suspend?: boolean;
+}
+
 /**
  * The component (or tag) an element renders, with a lazy type unwrapped. A client component
  * written in a React Server Component reaches the client as a lazy reference
@@ -37,18 +51,26 @@ function isThenable(value: unknown): boolean {
  * - Not an element: `undefined`.
  * - A lazy type: its resolved value (`_init(_payload)`); a loaded client reference resolves to the
  *   component. While the chunk is still loading, `_init` throws a thenable, which is rethrown so
- *   the calling component suspends exactly as rendering that lazy would. Any other error from
+ *   the calling component suspends exactly as rendering that lazy would (with
+ *   `{ suspend: false }`, the lazy object itself is returned instead). Any other error from
  *   `_init` returns the lazy object itself (it matches no part; rendering it reports the error).
  * - Anything else: `element.type` (a component, an intrinsic tag string, `React.Fragment`, …).
+ *
+ * @example
+ * getElementType(child) === Tab; // a direct child: a loading part suspends, as React would
+ * getElementType(nested, { suspend: false }) === Tab; // deep in consumer content
  */
-export function getElementType(node: React.ReactNode): unknown {
+export function getElementType(
+  node: React.ReactNode,
+  { suspend = true }: GetElementTypeOptions = {},
+): unknown {
   if (!React.isValidElement(node)) return undefined;
   const type: unknown = node.type;
   if (!isLazyElementType(type)) return type;
   try {
     return type._init(type._payload);
   } catch (error) {
-    if (isThenable(error)) throw error;
+    if (suspend && isThenable(error)) throw error;
     return type;
   }
 }

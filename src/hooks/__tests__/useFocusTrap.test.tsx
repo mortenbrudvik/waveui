@@ -365,6 +365,52 @@ describe('useFocusTrap — focus leaving', () => {
     expect(button('Second')).toHaveFocus();
   });
 
+  it.each([
+    ['removed', (el: HTMLElement) => el.remove()],
+    ['blurred', (el: HTMLElement) => el.blur()],
+  ])(
+    'returns focus inside when the outside element it went to is %s before the check',
+    async (_label, lose) => {
+      render(
+        <Page>
+          <Trap>
+            <button type="button">First</button>
+            <button type="button">Second</button>
+          </Trap>
+        </Page>,
+      );
+      act(() => button('Second').focus());
+      const outside = document.createElement('button');
+      outside.textContent = 'Outside';
+      document.body.append(outside);
+      act(() => {
+        outside.focus();
+        lose(outside);
+      });
+      expect(document.activeElement).toBe(document.body);
+      await flushMicrotasks();
+      expect(button('Second')).toHaveFocus();
+      outside.remove();
+    },
+  );
+
+  it('leaves focus that moved on to another element outside to that element’s own check', async () => {
+    render(
+      <Page>
+        <Trap>
+          <button type="button">Inside</button>
+        </Trap>
+      </Page>,
+    );
+    // Focus passes through "Before" to "After" in one task: only the last one is returned from.
+    act(() => {
+      button('Before').focus();
+      button('After').focus();
+    });
+    await flushMicrotasks();
+    expect(button('Inside')).toHaveFocus();
+  });
+
   it('stops trapping when disabled or unmounted', async () => {
     const user = userEvent.setup();
     const { rerender } = render(
@@ -410,9 +456,11 @@ describe('useFocusTrap — focus leaving', () => {
       act(() => button('Before').focus());
       await flushMicrotasks();
       await flushMicrotasks();
-      // The trap gave up: the other script keeps focus, and the fight ended before its cap.
+      // The trap gave up: the other script keeps focus. The trap tried each of its candidates
+      // once — the last focused element (Inside), the first tabbable (Inside again) and the
+      // container — and each attempt was pulled back once.
       expect(button('Before')).toHaveFocus();
-      expect(pulls).toBeLessThan(20);
+      expect(pulls).toBe(3);
     } finally {
       document.removeEventListener('focusin', rival, true);
     }
@@ -556,6 +604,200 @@ describe('useFocusTrap — descendant layers', () => {
     expect(button('P1')).toHaveFocus();
     await user.tab({ shift: true });
     expect(button('Last in dialog')).toHaveFocus();
+  });
+});
+
+describe('useFocusTrap — the trigger of a descendant layer outside the container', () => {
+  /** A stand-in dialog: a trap with its own dismiss layer, the test's content in the middle. */
+  function DialogTrap({ children }: { children: React.ReactNode }) {
+    const [surface, setSurface] = React.useState<HTMLDivElement | null>(null);
+    const dialogRef = React.useRef<HTMLDivElement | null>(null);
+    const dialog = useDismiss({
+      open: true,
+      onDismiss: () => {},
+      refs: [dialogRef],
+      kind: 'modal',
+    });
+    useFocusTrap(surface, { enabled: true, layerId: dialog.layerId });
+    return (
+      <Portal layerId={dialog.layerId}>
+        <div
+          ref={(el) => {
+            dialogRef.current = el;
+            setSurface(el);
+          }}
+          role="dialog"
+          aria-label="Dialog"
+          tabIndex={-1}
+        >
+          <button type="button">In dialog</button>
+          {children}
+          <button type="button">Last in dialog</button>
+        </div>
+      </Portal>
+    );
+  }
+
+  /** A popover-like descendant layer, open from the start, with the test's content inside. */
+  function OpenPopover({ children }: { children: React.ReactNode }) {
+    const triggerRef = React.useRef<HTMLButtonElement>(null);
+    const surfaceRef = React.useRef<HTMLDivElement>(null);
+    const { layerId } = useDismiss({
+      open: true,
+      onDismiss: () => {},
+      refs: [surfaceRef, triggerRef],
+      anchorRef: triggerRef,
+    });
+    return (
+      <>
+        <button type="button" ref={triggerRef}>
+          Format
+        </button>
+        <Portal layerId={layerId}>
+          <div ref={surfaceRef} role="group" aria-label="Popover">
+            {children}
+          </div>
+        </Portal>
+      </>
+    );
+  }
+
+  /**
+   * An info-button-like layer (InfoLabel): its trigger is one of its elements and its anchor, and
+   * focus leaving its tree closes it. The trigger toggles it.
+   */
+  function InfoButton({ children }: { children?: React.ReactNode }) {
+    const [open, setOpen] = React.useState(false);
+    const triggerRef = React.useRef<HTMLButtonElement>(null);
+    const surfaceRef = React.useRef<HTMLDivElement>(null);
+    const { layerId } = useDismiss({
+      open,
+      onDismiss: () => setOpen(false),
+      refs: [triggerRef, surfaceRef],
+      anchorRef: triggerRef,
+      focusOutside: true,
+    });
+    return (
+      <>
+        <button
+          type="button"
+          ref={triggerRef}
+          aria-expanded={open}
+          onClick={() => setOpen((o) => !o)}
+        >
+          Information
+        </button>
+        {open && (
+          <Portal layerId={layerId}>
+            <div ref={surfaceRef} role="note">
+              Details {children}
+            </div>
+          </Portal>
+        )}
+      </>
+    );
+  }
+
+  /** A tooltip-like layer: its wrapper around the child is one of its elements and its anchor. */
+  function TooltipLike({ children }: { children: React.ReactNode }) {
+    const wrapperRef = React.useRef<HTMLSpanElement>(null);
+    const surfaceRef = React.useRef<HTMLSpanElement>(null);
+    useDismiss({
+      open: true,
+      onDismiss: () => {},
+      refs: [wrapperRef, surfaceRef],
+      anchorRef: wrapperRef,
+      kind: 'tooltip',
+      outsidePress: false,
+    });
+    return (
+      <span ref={wrapperRef}>
+        {children}
+        <Portal layer="tooltip">
+          <span ref={surfaceRef} aria-hidden="true">
+            Tip
+          </span>
+        </Portal>
+      </span>
+    );
+  }
+
+  it('moves Tab and Shift+Tab from the trigger inside a raw Portal to its neighbours', async () => {
+    const user = userEvent.setup();
+    render(
+      <DialogTrap>
+        <Portal>
+          <button type="button">P1</button>
+          <InfoButton />
+          <button type="button">P2</button>
+        </Portal>
+      </DialogTrap>,
+    );
+    await user.click(button('Information'));
+    expect(button('Information')).toHaveAttribute('aria-expanded', 'true');
+    await user.tab();
+    expect(button('P2')).toHaveFocus();
+    // Focus left its tree, so it closed: open it again from the trigger.
+    await user.click(button('Information'));
+    expect(button('Information')).toHaveAttribute('aria-expanded', 'true');
+    await user.tab({ shift: true });
+    expect(button('P1')).toHaveFocus();
+  });
+
+  it('moves Tab and Shift+Tab from the trigger inside a descendant layer to its neighbours', async () => {
+    const user = userEvent.setup();
+    render(
+      <DialogTrap>
+        <OpenPopover>
+          <button type="button">Bold</button>
+          <InfoButton />
+          <button type="button">Italic</button>
+        </OpenPopover>
+      </DialogTrap>,
+    );
+    await user.click(button('Information'));
+    expect(button('Information')).toHaveAttribute('aria-expanded', 'true');
+    await user.tab();
+    expect(button('Italic')).toHaveFocus();
+    await user.click(button('Information'));
+    await user.tab({ shift: true });
+    expect(button('Bold')).toHaveFocus();
+  });
+
+  it('moves Tab from an element whose tooltip-like layer is anchored at its wrapper', async () => {
+    const user = userEvent.setup();
+    render(
+      <DialogTrap>
+        <OpenPopover>
+          <TooltipLike>
+            <button type="button">Bold</button>
+          </TooltipLike>
+          <button type="button">Italic</button>
+        </OpenPopover>
+      </DialogTrap>,
+    );
+    act(() => button('Bold').focus());
+    await user.tab();
+    expect(button('Italic')).toHaveFocus();
+  });
+
+  it('leaves a layer whose trigger is inside a raw Portal for the element after the trigger', async () => {
+    const user = userEvent.setup();
+    render(
+      <DialogTrap>
+        <Portal>
+          <button type="button">P1</button>
+          <InfoButton>
+            <a href="#more">More</a>
+          </InfoButton>
+          <button type="button">P2</button>
+        </Portal>
+      </DialogTrap>,
+    );
+    await user.click(button('Information'));
+    act(() => screen.getByRole('link', { name: 'More' }).focus());
+    await user.tab();
+    expect(button('P2')).toHaveFocus();
   });
 });
 

@@ -18,12 +18,15 @@
  *               - TypeScript (node16) type-checks an ES module and a CommonJS file importing the
  *                 package: the ESM file gets `dist/index.d.ts`, the CommonJS file
  *                 `dist/index.d.cts` (no TS1479).
- *   tailwind  a Tailwind 4 app (scripts/fixtures/tailwind) compiling
- *             `@import 'tailwindcss'; @import '@mortenbrudvik/waveui/tailwind';` with
- *             @tailwindcss/cli: the component classes are generated from the package's `dist`
- *             (its `wave-rtl:` classes with the direction variant the entry defines), Wave's
- *             tokens sit in `@layer theme` and its base rules in `@layer base`, and the app's own
- *             utilities are still generated.
+ *   tailwind  a Tailwind 4 app (scripts/fixtures/tailwind) compiling, with @tailwindcss/cli,
+ *               - `input.css`: `@import 'tailwindcss'; @import '@mortenbrudvik/waveui/tailwind';`.
+ *                 The component classes are generated from the package's `dist` (its `wave-rtl:`
+ *                 classes with the direction variant the entry defines), Wave's tokens sit in
+ *                 `@layer theme` and its base rules in `@layer base`, and the app's own utilities
+ *                 are still generated;
+ *               - `tokens-input.css`: a custom setup on `./tokens` (in `layer(theme)`) with
+ *                 `./variants.css` and its own `@source` for the package's `dist`, without Wave's
+ *                 base: the same checks except the base rules.
  *
  * The fixture dependencies (`smokeDependencies` in each fixture's package.json) are pinned to
  * the versions installed in this repository, so `npm install` is served from the npm cache when
@@ -66,6 +69,8 @@ export const EXPORTED_SUBPATHS = [
   './tailwind.css',
   './tokens',
   './tokens.css',
+  './variants',
+  './variants.css',
   './legacy-tokens.css',
   './package.json',
 ];
@@ -75,6 +80,7 @@ const ALIASES = [
   ['./styles', './styles.css'],
   ['./tailwind', './tailwind.css'],
   ['./tokens', './tokens.css'],
+  ['./variants', './variants.css'],
 ];
 
 const FIXTURES = ['plain', 'tailwind'];
@@ -205,12 +211,14 @@ export function checkPlainCss(css) {
 }
 
 /**
- * The Tailwind consumer build of `./tailwind` (repo-level#1): Wave's tokens in `@layer theme`,
- * its base rules in `@layer base`, the component classes generated from the package's `dist`,
- * each of `directionClasses` (the `wave-rtl:` classes of the dist's class strings) compiled with
- * the `wave-rtl` variant the entry defines (R4), and the consumer's own utilities.
+ * A Tailwind consumer build (repo-level#1): Wave's tokens in `@layer theme`, the component classes
+ * generated from the package's `dist`, each of `directionClasses` (the `wave-rtl:` classes of the
+ * dist's class strings) compiled with Wave's `wave-rtl` variant, and the consumer's own
+ * utilities. `setup` names the build: `'tailwind'` (default) imports the complete
+ * `./tailwind` entry, which also puts Wave's base rules in `@layer base`; `'tokens'` is a custom
+ * setup on `./tokens` with `./variants.css` and its own `@source`, which brings its own base.
  */
-export function checkTailwindCss(css, { directionClasses = [] } = {}) {
+export function checkTailwindCss(css, { directionClasses = [], setup = 'tailwind' } = {}) {
   const errors = [];
   const tokenLayers = new Set();
   const baseLayers = new Set();
@@ -226,7 +234,9 @@ export function checkTailwindCss(css, { directionClasses = [] } = {}) {
       `Wave tokens (--wave-primary) must sit in @layer theme, found in ${[...tokenLayers].join(', ')}`,
     );
   }
-  if (baseLayers.size === 0) errors.push('missing the Wave base rules (.wave-root)');
+  if (setup !== 'tailwind') {
+    // A custom setup brings its own base styles.
+  } else if (baseLayers.size === 0) errors.push('missing the Wave base rules (.wave-root)');
   else if ([...baseLayers].some((layer) => layer !== 'base')) {
     errors.push(
       `Wave base rules (.wave-root) must sit in @layer base, found in ${[...baseLayers].join(', ')}`,
@@ -242,9 +252,13 @@ export function checkTailwindCss(css, { directionClasses = [] } = {}) {
   }
   const uncompiled = missingDirectionVariant(css, directionClasses);
   if (uncompiled.length > 0) {
+    const hint =
+      setup === 'tailwind'
+        ? 'does @mortenbrudvik/waveui/tailwind import variants.css?'
+        : 'does the setup import @mortenbrudvik/waveui/variants.css?';
     errors.push(
       `the dist classes ${uncompiled.slice(0, 10).join(' ')} were not compiled with Wave's ` +
-        'wave-rtl variant (does @mortenbrudvik/waveui/tailwind import variants.css?)',
+        `wave-rtl variant (${hint})`,
     );
   }
   if (!classes.has('p-4')) {
@@ -492,25 +506,41 @@ function runPlain(dir) {
   return errors;
 }
 
+/** The fixture's Tailwind builds: the input file, its output file and its `setup`. */
+const TAILWIND_BUILDS = [
+  { input: 'input.css', output: 'out.css', setup: 'tailwind' },
+  { input: 'tokens-input.css', output: 'tokens-out.css', setup: 'tokens' },
+];
+
 function runTailwind(dir) {
   const manifestPath = require.resolve('@tailwindcss/cli/package.json');
   const manifest = JSON.parse(readFileSync(manifestPath, 'utf8'));
   const bin = typeof manifest.bin === 'string' ? manifest.bin : manifest.bin.tailwindcss;
-  const result = run(
-    process.execPath,
-    [join(dirname(manifestPath), bin), '--input', 'input.css', '--output', 'out.css'],
-    { cwd: dir },
-  );
-  if (result.status !== 0) {
-    return [`@tailwindcss/cli failed (exit ${result.status}): ${result.stderr.trim()}`];
-  }
   const dist = {
     base: join(dir, 'node_modules', pkg.name, 'dist'),
     pattern: '**/*',
     negated: false,
   };
   const directionClasses = [...classStringTokens([dist])].filter(hasDirectionVariant);
-  return checkTailwindCss(readFileSync(join(dir, 'out.css'), 'utf8'), { directionClasses });
+  const errors = [];
+  for (const { input, output, setup } of TAILWIND_BUILDS) {
+    const result = run(
+      process.execPath,
+      [join(dirname(manifestPath), bin), '--input', input, '--output', output],
+      { cwd: dir },
+    );
+    if (result.status !== 0) {
+      errors.push(
+        `${input}: @tailwindcss/cli failed (exit ${result.status}): ${result.stderr.trim()}`,
+      );
+      continue;
+    }
+    const css = readFileSync(join(dir, output), 'utf8');
+    errors.push(
+      ...checkTailwindCss(css, { directionClasses, setup }).map((error) => `${input}: ${error}`),
+    );
+  }
+  return errors;
 }
 
 /** CLI entry; returns the exit code. `io` receives the report (default: the console). */

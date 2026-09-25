@@ -168,7 +168,10 @@ function isInsideTrap(trap: TrapEntry, node: Node): boolean {
 
 /**
  * The open descendant layer of the trap's layer that `node` is in (the topmost when several
- * contain it), with the element of that layer containing `node` (its portaled surface).
+ * contain it), with the element of that layer containing `node` (its portaled surface). A layer's
+ * trigger is not its surface: an element that is, or contains, the layer's anchor (an info
+ * button, a tooltip's wrapper) belongs to the region around it — the container, the surface of
+ * an enclosing descendant layer or a plain portal.
  */
 function findDescendantLayer(
   trap: TrapEntry,
@@ -179,9 +182,16 @@ function findDescendantLayer(
   let found: { layer: LayerRecord; region: HTMLElement } | null = null;
   for (const layer of getOpenLayers()) {
     if (layer.id === layerId || !isDescendantLayer(layer.id, layerId)) continue;
+    const anchor = layer.getAnchor();
     const region = layer
       .getElements()
-      .find((el): el is HTMLElement => !!el && el.contains(node) && !trap.container.contains(el));
+      .find(
+        (el): el is HTMLElement =>
+          !!el &&
+          el.contains(node) &&
+          !trap.container.contains(el) &&
+          !(anchor && el.contains(anchor)),
+      );
     if (region && (!found || compareLayers(layer, found.layer) > 0)) found = { layer, region };
   }
   return found;
@@ -290,13 +300,19 @@ function handleDescendantLayerTab(
     // The anchor lives in another descendant layer: continue from there.
     const outer = findDescendantLayer(trap, anchor);
     if (!outer) {
-      focusFirstPossible([anchor, trap.container]);
+      // Or in a plain portal of the trap's tree: the element next to it there, else the edge of
+      // the Tab cycle (as when Tab leaves that portal).
+      const wrapper = findPortalWrapper(trap, anchor);
+      if (!wrapper) {
+        focusFirstPossible([anchor, trap.container]);
+        return true;
+      }
+      const next = findNextTo(getTabbableElements(wrapper), anchor, backward);
+      if (next) focusElement(next);
+      else focusCycleEdge(trap, regions, backward);
       return true;
     }
-    const outerTabbables = getTabbableElements(outer.region);
-    const next = backward
-      ? [...outerTabbables].reverse().find((el) => precedes(anchor, el))
-      : outerTabbables.find((el) => follows(anchor, el));
+    const next = findNextTo(getTabbableElements(outer.region), anchor, backward);
     if (next) {
       focusElement(next);
       return true;
@@ -304,6 +320,17 @@ function handleDescendantLayerTab(
     from = anchor;
   }
   return true;
+}
+
+/** The tabbable after `anchor` (backward: before it) in `tabbables`, never one inside it. */
+function findNextTo(
+  tabbables: HTMLElement[],
+  anchor: HTMLElement,
+  backward: boolean,
+): HTMLElement | undefined {
+  return backward
+    ? [...tabbables].reverse().find((el) => precedes(anchor, el))
+    : tabbables.find((el) => follows(anchor, el) && !anchor.contains(el));
 }
 
 function neighbour(cycle: CycleEntry[], el: HTMLElement, backward: boolean): HTMLElement {
@@ -400,12 +427,25 @@ function handleFocusIn(event: FocusEvent): void {
 /** Whether {@link reclaimFocus} is moving focus (its `focusin` events are dispatched meanwhile). */
 let reclaiming = false;
 
-/** Returns focus that landed on `el`, outside the trap, to the last focused element inside. */
+/** Whether focus is on no element: `<body>`, the document element or nothing. */
+function isFocusLost(doc: Document): boolean {
+  const active = doc.activeElement;
+  return !active || active === doc.body || active === doc.documentElement;
+}
+
+/**
+ * Returns focus that landed on `el`, outside the trap, to the last focused element inside — also
+ * when `el` lost it again before this ran (removed or blurred: focus is on `<body>` then, and no
+ * later `focusin` would bring it back). Focus that moved on to another element is left to that
+ * element's own check.
+ */
 function reclaimFocus(el: HTMLElement): void {
-  if (el.ownerDocument.activeElement !== el) return; // focus has moved on since
+  const doc = el.ownerDocument;
+  const lost = doc.activeElement !== el;
+  if (lost && !isFocusLost(doc)) return; // focus has moved on since
   const trap = getActiveTrap(getState());
-  if (!trap) return;
-  if (isInsideTrap(trap, el)) {
+  if (!trap || !trap.container.isConnected) return;
+  if (!lost && isInsideTrap(trap, el)) {
     trap.lastFocused = el;
     return;
   }
@@ -478,10 +518,14 @@ function resolveInitialFocus(
  * - **Descendant layers** (a popover or menu opened from inside, identified through `layerId`):
  *   Tab moves natively inside them; leaving one moves focus to the element after its anchor
  *   (Shift+Tab: the anchor itself). Inside a plain `<Portal>` rendered in the surface (no layer,
- *   no anchor) Tab is native too; leaving it wraps to the first (Shift+Tab: last) element.
+ *   no anchor) Tab is native too; leaving it wraps to the first (Shift+Tab: last) element. A
+ *   layer's trigger (its anchor, or an element around it such as a tooltip's wrapper) belongs to
+ *   the region it sits in, so Tab from an open info button or a button showing its tooltip moves
+ *   on as from any other element of that portal or popover.
  * - Focus that lands outside (not in the container, an allowed region or a descendant layer)
- *   returns to the last focused element inside. That is decided in a microtask, once the current
- *   commit has run: an `autoFocus` element of a surface opened above the trap (a nested or
+ *   returns to the last focused element inside, also when that outside element loses it again
+ *   (removed or blurred, leaving focus on `<body>`). That is decided in a microtask, once the
+ *   current commit has run: an `autoFocus` element of a surface opened above the trap (a nested or
  *   stacked dialog, a popover opened from the surface) gets focus before that surface's layer and
  *   trap exist, and keeps it. The layer's own `refs` (its trigger, outside the container) are
  *   outside: opening from the focused trigger still moves focus in, and focus moving back onto

@@ -47,18 +47,35 @@ function Trigger({
   );
 }
 
+const WRAPPED_WARNING =
+  '[WaveUI] Popover.Trigger: expected a single React element child (not text, a Fragment or several elements); the children are rendered inside a <span> wrapper instead.';
+
+// Warnings are silenced, and each test takes the ones it expects (takeWarnings): the afterEach
+// allows no other. console.error is only watched: nothing may be logged there.
 let warnSpy: MockInstance<typeof console.warn>;
 let errorSpy: MockInstance<typeof console.error>;
+
+/** The warnings logged so far, removed from the spy (the test asserts them). */
+function takeWarnings(): unknown[] {
+  const messages = warnSpy.mock.calls.map(([message]) => message);
+  warnSpy.mockClear();
+  return messages;
+}
 
 beforeEach(() => {
   __resetWarnings();
   warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
-  errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+  errorSpy = vi.spyOn(console, 'error');
 });
 
 afterEach(() => {
-  warnSpy.mockRestore();
-  errorSpy.mockRestore();
+  try {
+    expect(warnSpy).not.toHaveBeenCalled();
+    expect(errorSpy).not.toHaveBeenCalled();
+  } finally {
+    warnSpy.mockRestore();
+    errorSpy.mockRestore();
+  }
 });
 
 describe('renderTrigger (overlays#5, overlays#21, feedback-navigation#51)', () => {
@@ -214,8 +231,7 @@ describe('renderTrigger (overlays#5, overlays#21, feedback-navigation#51)', () =
     expect(wrapper).toHaveTextContent('Hover me');
     expect(wrapper).toHaveAttribute('aria-haspopup', 'dialog');
     rerender(<Trigger triggerProps={triggerProps}>Hover me</Trigger>);
-    expect(warnSpy).toHaveBeenCalledTimes(1);
-    expect(warnSpy.mock.calls[0][0]).toMatch(/^\[WaveUI\] Popover\.Trigger: /);
+    expect(takeWarnings()).toEqual([WRAPPED_WARNING]);
   });
 
   it('never clones a Fragment: wraps it and puts the props on the wrapper', () => {
@@ -229,19 +245,25 @@ describe('renderTrigger (overlays#5, overlays#21, feedback-navigation#51)', () =
     const wrapper = container.firstElementChild as HTMLElement;
     expect(wrapper.tagName).toBe('SPAN');
     expect(wrapper).toHaveAttribute('aria-expanded', 'true');
-    expect(warnSpy).toHaveBeenCalledTimes(1);
-    expect(errorSpy).not.toHaveBeenCalled();
+    expect(takeWarnings()).toEqual([WRAPPED_WARNING]);
   });
 
   it('wraps multiple children and warns', () => {
     const { container } = render(
       <Trigger triggerProps={makeTriggerProps()}>
-        {[<button key="a">A</button>, <button key="b">B</button>]}
+        {[
+          <button key="a" type="button">
+            A
+          </button>,
+          <button key="b" type="button">
+            B
+          </button>,
+        ]}
       </Trigger>,
     );
     expect(container.firstElementChild!.tagName).toBe('SPAN');
     expect(screen.getAllByRole('button')).toHaveLength(2);
-    expect(warnSpy).toHaveBeenCalledTimes(1);
+    expect(takeWarnings()).toEqual([WRAPPED_WARNING]);
   });
 
   it('renders an empty wrapper without warning for conditional (null/false) children', () => {

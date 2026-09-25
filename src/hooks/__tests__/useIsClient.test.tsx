@@ -26,7 +26,7 @@ describe('useIsClient', () => {
     const container = document.createElement('div');
     container.innerHTML = renderToString(<Probe />);
     document.body.appendChild(container);
-    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+    const errorSpy = vi.spyOn(console, 'error');
     const seen: boolean[] = [];
     let root: ReturnType<typeof hydrateRoot> | undefined;
     try {

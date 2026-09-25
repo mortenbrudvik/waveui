@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { renderHook } from '@testing-library/react';
-import { useTypeahead, type TypeaheadItem } from '../useTypeahead';
+import { isAltGraphCharacter, useTypeahead, type TypeaheadItem } from '../useTypeahead';
 
 const FRUITS: TypeaheadItem[] = [
   { value: 'apple', text: 'Apple' },
@@ -15,10 +15,21 @@ function key(k: string, init: Partial<KeyboardEventInit> = {}): KeyboardEvent {
   return new KeyboardEvent('keydown', { key: k, ...init });
 }
 
+/** `onMatch` records the matched value; `matches` the full match list of each call. */
 function setup(items: TypeaheadItem[] = FRUITS, timeout?: number) {
-  const onMatch = vi.fn();
-  const hook = renderHook(() => useTypeahead({ getItems: () => items, onMatch, timeout }));
-  return { onMatch, type: hook.result.current.onTypeahead, hook };
+  const onMatch = vi.fn<(value: string) => void>();
+  const matches = vi.fn<(values: readonly string[]) => void>();
+  const hook = renderHook(() =>
+    useTypeahead({
+      getItems: () => items,
+      onMatch: (value, all) => {
+        onMatch(value);
+        matches(all);
+      },
+      timeout,
+    }),
+  );
+  return { onMatch, matches, type: hook.result.current.onTypeahead, hook };
 }
 
 describe('useTypeahead', () => {
@@ -80,6 +91,22 @@ describe('useTypeahead', () => {
     expect(onMatch).toHaveBeenLastCalledWith('coconut');
   });
 
+  it('reports every match in search order, the match first', () => {
+    const { onMatch, matches, type } = setup();
+    type(key('b'), 'blueberry');
+    expect(onMatch).toHaveBeenLastCalledWith('banana');
+    expect(matches).toHaveBeenLastCalledWith(['banana']);
+    type(key('b'), 'apple');
+    // "bb" cycles on from the current item; a disabled item never matches.
+    expect(matches).toHaveBeenLastCalledWith(['banana', 'blueberry']);
+    const { matches: prefixed, type: typePrefix } = setup();
+    typePrefix(key('c'), null);
+    expect(prefixed).toHaveBeenLastCalledWith(['coconut']);
+    typePrefix(key('o'), 'coconut');
+    // A longer prefix may keep the current item: it comes first.
+    expect(prefixed).toHaveBeenLastCalledWith(['coconut']);
+  });
+
   it('skips disabled items', () => {
     const { onMatch, type } = setup();
     type(key('c'), 'apple');
@@ -134,6 +161,22 @@ describe('useTypeahead', () => {
     expect(onMatch).toHaveBeenCalledTimes(1);
   });
 
+  it('never takes Ctrl+Alt+Space as a typed character, even during a search', () => {
+    const { onMatch, type, hook } = setup([
+      { value: 'new-jersey', text: 'New Jersey' },
+      { value: 'new-york', text: 'New York' },
+    ]);
+    type(key('n'), null);
+    expect(hook.result.current.isSearching()).toBe(true);
+    expect(type(key(' ', { ctrlKey: true, altKey: true }), 'new-jersey')).toBe(false);
+    // The search goes on without the space.
+    type(key('e'), 'new-jersey');
+    type(key('w'), 'new-jersey');
+    type(key(' '), 'new-jersey');
+    type(key('y'), 'new-jersey');
+    expect(onMatch).toHaveBeenLastCalledWith('new-york');
+  });
+
   it('returns false and does not call onMatch when nothing matches', () => {
     const { onMatch, type } = setup();
     expect(type(key('z'), null)).toBe(false);
@@ -167,15 +210,20 @@ describe('useTypeahead', () => {
     const first = vi.fn();
     const second = vi.fn();
     const { result, rerender } = renderHook(
-      ({ items, onMatch }: { items: TypeaheadItem[]; onMatch: (v: string) => void }) =>
-        useTypeahead({ getItems: () => items, onMatch }),
+      ({
+        items,
+        onMatch,
+      }: {
+        items: TypeaheadItem[];
+        onMatch: (v: string, all: readonly string[]) => void;
+      }) => useTypeahead({ getItems: () => items, onMatch }),
       { initialProps: { items: FRUITS.slice(0, 2), onMatch: first } },
     );
     const handler = result.current.onTypeahead;
     rerender({ items: [{ value: 'zebra', text: 'Zebra' }], onMatch: second });
     expect(result.current.onTypeahead).toBe(handler);
     result.current.onTypeahead(key('z'), null);
-    expect(second).toHaveBeenCalledWith('zebra');
+    expect(second).toHaveBeenCalledWith('zebra', ['zebra']);
     expect(first).not.toHaveBeenCalled();
   });
 
@@ -184,5 +232,17 @@ describe('useTypeahead', () => {
     type(key('b'), null);
     hook.unmount();
     expect(vi.getTimerCount()).toBe(0);
+  });
+});
+
+describe('isAltGraphCharacter', () => {
+  it('is a single character typed with Ctrl+Alt (AltGr on Windows), never a named key or Space', () => {
+    expect(isAltGraphCharacter(key('ł', { ctrlKey: true, altKey: true }))).toBe(true);
+    expect(isAltGraphCharacter(key('@', { ctrlKey: true, altKey: true }))).toBe(true);
+    expect(isAltGraphCharacter(key(' ', { ctrlKey: true, altKey: true }))).toBe(false);
+    expect(isAltGraphCharacter(key('ArrowDown', { ctrlKey: true, altKey: true }))).toBe(false);
+    expect(isAltGraphCharacter(key('ł', { ctrlKey: true }))).toBe(false);
+    expect(isAltGraphCharacter(key('ł', { altKey: true }))).toBe(false);
+    expect(isAltGraphCharacter(key('ł'))).toBe(false);
   });
 });

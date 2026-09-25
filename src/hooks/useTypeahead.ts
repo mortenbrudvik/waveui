@@ -15,8 +15,12 @@ export interface TypeaheadItem {
 export interface UseTypeaheadOptions {
   /** Returns the items in navigation order, read at key time. */
   getItems: () => TypeaheadItem[];
-  /** Called with the value of the matched item. */
-  onMatch: (value: string) => void;
+  /**
+   * Called with the value of the matched item, and with every item that matches the typed
+   * characters in search order (`value` first), for a caller that passes over an item it cannot
+   * move to.
+   */
+  onMatch: (value: string, matches: readonly string[]) => void;
   /** Milliseconds after the last key press before the typed prefix resets. @default 500 */
   timeout?: number;
 }
@@ -43,18 +47,17 @@ export interface UseTypeaheadResult {
 
 /**
  * A character typed with AltGr, which Windows reports as Ctrl+Alt (Polish `ł`, Romanian `ș`): text
- * input for typeahead, not a shortcut. Ctrl+Alt with a named key (Ctrl+Alt+ArrowDown) is not.
- * Internal (not exported from the package entry).
+ * input for typeahead, not a shortcut. Ctrl+Alt with a named key (Ctrl+Alt+ArrowDown) or with
+ * Space (AltGr types no plain space) is a shortcut. Internal (not exported from the package entry).
  */
 export function isAltGraphCharacter(event: KeyboardEvent | React.KeyboardEvent): boolean {
-  return event.ctrlKey && event.altKey && event.key.length === 1;
+  return event.ctrlKey && event.altKey && event.key.length === 1 && event.key !== ' ';
 }
 
 function isTypeaheadKey(event: KeyboardEvent | React.KeyboardEvent, searching: boolean): boolean {
   if (event.key.length !== 1 || event.metaKey) return false;
-  // Ctrl or Alt alone is a shortcut. Both together is AltGr as Windows reports it: a typed
-  // character (Polish `ł`, Romanian `ș`).
-  if (event.ctrlKey !== event.altKey) return false;
+  // Ctrl or Alt is a shortcut, except a character typed with AltGr.
+  if ((event.ctrlKey || event.altKey) && !isAltGraphCharacter(event)) return false;
   // Space activates the focused item unless a search is in progress.
   return event.key !== ' ' || searching;
 }
@@ -116,9 +119,11 @@ export function useTypeahead(options: UseTypeaheadOptions): UseTypeaheadResult {
       if (prefix.length === 1 && currentIndex !== -1) {
         candidates = candidates.filter((item) => item.value !== currentValue);
       }
-      const match = candidates.find((item) => item.text.trim().toLowerCase().startsWith(prefix));
-      if (!match) return searching;
-      onMatch(match.value);
+      const matches = candidates
+        .filter((item) => item.text.trim().toLowerCase().startsWith(prefix))
+        .map((item) => item.value);
+      if (matches.length === 0) return searching;
+      onMatch(matches[0], matches);
       return true;
     },
     [getItems, onMatch],

@@ -53,8 +53,9 @@
  *   whose errors are reported together:
  *   - the **overlay-state release assertion** {@link assertOverlayStateReleased}: if an open
  *     dismiss layer, a focus trap, a scroll lock, modal isolation (`inert`), a `useRestoreFocus`
- *     tracker user or an inline `overflow` on `<html>`/`<body>` outlived the unmounted trees, it
- *     is released and the test **fails** naming it;
+ *     tracker user or an inline style of a scroll lock on `<html>`/`<body>` (`overflow`,
+ *     `scrollbar-gutter`, `padding-inline-end`) outlived the unmounted trees, it is released and
+ *     the test **fails** naming it;
  *   - the **body-cleanup assertion** {@link assertEmptyBody}: if `document.body` still has
  *     children (a leaked portal, announcer, toast region or a node a test appended itself), they
  *     are removed and the test **fails** with an error naming them.

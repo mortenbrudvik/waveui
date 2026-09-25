@@ -96,6 +96,10 @@ export function DismissLayerProvider(props: {
  *   same task; touch and pen presses are kept until their click, which the browser dispatches
  *   from a separate tap gesture.
  * - **Focus outside** (`focusOutside: true`): dismisses when focus moves outside the layer's tree.
+ *   That is decided in a microtask, once the current commit has run: an `autoFocus` field of a
+ *   popover, dialog or plain portal opened inside the layer gets focus before that surface's
+ *   portal and layer register, and keeps the layer open. Focus that is back inside the tree by
+ *   then keeps it open too.
  *
  * A layer's tree is its `refs`, the portal wrappers rendered inside it, its descendant layers and
  * the `[data-wave-focus-trap-allow]` regions (toasts). Parentage comes from

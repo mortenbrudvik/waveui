@@ -50,10 +50,22 @@ describe('package.json (spec §3.2)', () => {
       './tailwind.css': './src/styles/tailwind.css',
       './tokens': './src/styles/tokens.css',
       './tokens.css': './src/styles/tokens.css',
+      './variants': './src/styles/variants.css',
+      './variants.css': './src/styles/variants.css',
       './legacy-tokens.css': './src/styles/legacy-tokens.css',
       './package.json': './package.json',
     });
     expect(Object.keys(pkg.exports)).toEqual(['.', ...EXPORTED_SUBPATHS]);
+  });
+
+  it('exports the wave-rtl variant for custom Tailwind setups built on ./tokens', () => {
+    // The dist class strings use `wave-rtl:`; a setup that imports ./tokens instead of ./tailwind
+    // must be able to import the variant, or Tailwind silently drops every such class.
+    expect(pkg.exports['./variants']).toBe('./src/styles/variants.css');
+    expect(pkg.exports['./variants.css']).toBe('./src/styles/variants.css');
+    expect(readFileSync(join(root, 'src/styles/variants.css'), 'utf8')).toMatch(
+      /@custom-variant wave-rtl\b/,
+    );
   });
 
   it('publishes dist and the style sources without their tests', () => {
@@ -85,7 +97,8 @@ describe('package.json (spec §3.2)', () => {
     // `npm publish --dry-run`; scripts/attw-pack.mjs packs without the dry run.
     expect(pkg.scripts['check:package']).toBe(
       'publint && node scripts/attw-pack.mjs --profile node16 --exclude-entrypoints styles ' +
-        'styles.css preflight.css tailwind tailwind.css tokens tokens.css legacy-tokens.css',
+        'styles.css preflight.css tailwind tailwind.css tokens tokens.css variants variants.css ' +
+        'legacy-tokens.css',
     );
   });
 
@@ -176,13 +189,14 @@ describe('checkPackedFiles', () => {
       pkg,
     );
     expect(errors).toEqual([expect.stringContaining('src/styles/base.css')]);
-    // tailwind.css imports variants.css, which defines the wave-rtl variant (R4).
+    // variants.css defines the wave-rtl variant: an export target that tailwind.css imports.
     expect(
       checkPackedFiles(
         good.filter((path) => path !== 'src/styles/variants.css'),
         pkg,
       ),
     ).toEqual([
+      'export target ./src/styles/variants.css is not in the tarball',
       'src/styles/tailwind.css @imports src/styles/variants.css, which is not in the tarball',
     ]);
   });
@@ -278,6 +292,56 @@ describe('checkTailwindCss (repo-level#1)', () => {
       ]);
     });
   });
+
+  describe('a custom setup on ./tokens (setup: "tokens")', () => {
+    const directionClasses = ['wave-rtl:-scale-x-100'];
+    const compiled = String.raw`@layer utilities{.wave-rtl\:-scale-x-100{
+      @supports selector(:dir(rtl)){&:where(:dir(rtl)){scale:-1 1}}
+      @supports not selector(:dir(rtl)){&:where([dir="rtl"], [dir="rtl"] *){scale:-1 1}}}}`;
+    // The setup brings its own base styles: no Wave base rules.
+    const withoutBase = good.replace(
+      '.wave-root,.wave-portal{font-family:var(--wave-font-family)}',
+      '',
+    );
+
+    it('passes tokens in theme and the compiled dist classes, without Wave base rules', () => {
+      expect(
+        checkTailwindCss(withoutBase + compiled, { directionClasses, setup: 'tokens' }),
+      ).toEqual([]);
+    });
+
+    it('reports wave-rtl classes that were not compiled (./variants.css not imported)', () => {
+      expect(checkTailwindCss(withoutBase, { directionClasses, setup: 'tokens' })).toEqual([
+        "the dist classes wave-rtl:-scale-x-100 were not compiled with Wave's wave-rtl variant " +
+          '(does the setup import @mortenbrudvik/waveui/variants.css?)',
+      ]);
+    });
+
+    it('still reports Wave tokens outside @layer theme', () => {
+      const css =
+        withoutBase.replace(':root,.wave-light{--wave-primary:#0f6cbd}', '') +
+        ':root,.wave-light{--wave-primary:#0f6cbd}';
+      expect(checkTailwindCss(css, { setup: 'tokens' }).join('\n')).toMatch(/@layer theme/);
+    });
+  });
+});
+
+describe('the Tailwind fixture', () => {
+  const fixture = join(root, 'scripts/fixtures/tailwind');
+
+  it('compiles the documented ./tailwind entry', () => {
+    const css = readFileSync(join(fixture, 'input.css'), 'utf8');
+    expect(css).toMatch(/@import 'tailwindcss';\s*@import '@mortenbrudvik\/waveui\/tailwind';/);
+  });
+
+  it('compiles a custom setup on ./tokens with ./variants.css and its own @source', () => {
+    const css = readFileSync(join(fixture, 'tokens-input.css'), 'utf8');
+    expect(css).toMatch(/@import 'tailwindcss';/);
+    expect(css).toMatch(/@import '@mortenbrudvik\/waveui\/tokens' layer\(theme\);/);
+    expect(css).toMatch(/@import '@mortenbrudvik\/waveui\/variants\.css';/);
+    expect(css).toMatch(/@source '\.\/node_modules\/@mortenbrudvik\/waveui\/dist';/);
+    expect(css).not.toMatch(/waveui\/tailwind/);
+  });
 });
 
 describe('checkPlainSmoke', () => {
@@ -323,6 +387,14 @@ describe('checkPlainSmoke', () => {
     });
     expect(errors.join('\n')).toMatch(/\.\/tailwind does not resolve/);
     expect(errors.join('\n')).toMatch(/\.\/styles and \.\/styles\.css/);
+  });
+
+  it('reports ./variants and ./variants.css resolving to different files', () => {
+    const errors = checkPlainSmoke({
+      ...good,
+      cjs: { ...side, resolved: { ...resolved, './variants.css': '/elsewhere/variants.css' } },
+    });
+    expect(errors).toEqual(['require: ./variants and ./variants.css resolve to different files']);
   });
 });
 

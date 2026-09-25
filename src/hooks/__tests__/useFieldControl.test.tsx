@@ -504,7 +504,7 @@ describe('useFieldControl — one control takes the controlId (controlIdClaim)',
       </ClaimingField>
     );
     const container = document.createElement('div');
-    const error = vi.spyOn(console, 'error').mockImplementation(() => {});
+    const error = vi.spyOn(console, 'error');
     let root: ReturnType<typeof hydrateRoot> | undefined;
     try {
       // The claim's layout effects run through React.useLayoutEffect directly (R5): the server

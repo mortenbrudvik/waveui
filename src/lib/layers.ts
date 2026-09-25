@@ -519,13 +519,34 @@ function handleClick(event: MouseEvent): void {
 }
 
 function handleFocusIn(event: FocusEvent): void {
-  const state = getState();
   const target = getEventTargetNode(event);
   if (!target) return;
-  const toDismiss = state.stack.filter(
+  const candidates = getState().stack.filter(
     (layer) => layer.focusOutside && !isInsideLayerTree(layer.id, target),
   );
+  if (candidates.length === 0) return;
+  // Not in this dispatch: React applies `autoFocus` in the layout phase of the commit that mounts
+  // a surface, before that surface's portal wrapper and dismiss layer register. A field focused
+  // as a popover or dialog opens inside the layer is inside its tree once that commit has run.
+  queueMicrotask(() => dismissFocusOutside(candidates, target, event));
+}
+
+/**
+ * Dismisses each of `candidates` that is still open and whose tree still contains neither the
+ * focusin `target` nor the element focused now (focus that came back inside keeps it open; focus
+ * lost to `<body>` after leaving does not).
+ */
+function dismissFocusOutside(candidates: LayerRecord[], target: Node, event: FocusEvent): void {
+  const state = getState();
+  const active = (target.ownerDocument ?? document).activeElement;
+  const toDismiss = candidates.filter(
+    (layer) =>
+      state.stack.includes(layer) &&
+      !isInsideLayerTree(layer.id, target) &&
+      !(active && isInsideLayerTree(layer.id, active)),
+  );
   for (const layer of sortTopmostFirst(toDismiss)) {
+    // An earlier layer's onDismiss may already have unregistered this one.
     if (state.stack.includes(layer)) layer.onDismiss('focus-outside', event);
   }
 }

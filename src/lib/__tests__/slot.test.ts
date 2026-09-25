@@ -1,15 +1,29 @@
 import { describe, it, expect, expectTypeOf, vi, afterEach } from 'vitest';
 import * as React from 'react';
 import { render, screen } from '@testing-library/react';
-import { resolveSlot, renderSlot, slotRendersContent, VOID_ELEMENTS } from '../slot';
+import {
+  materialiseSlotContent,
+  resolveSlot,
+  renderSlot,
+  slotRendersContent,
+  VOID_ELEMENTS,
+} from '../slot';
 import type { ResolvedSlot, Slot, SlotObject } from '../slot';
 import type * as Types from '../types';
 import { __resetWarnings } from '../dev';
+import { asClientReference } from '../../test-utils';
 
 afterEach(() => {
   vi.restoreAllMocks();
   __resetWarnings();
 });
+
+const IMG_CHILDREN_IGNORED =
+  '[WaveUI] A slot rendered as <img> cannot have children; its `children` were ignored.';
+const IMG_CONTENT_NOT_RENDERED =
+  '[WaveUI] Slot content cannot be rendered inside <img> (a void element). Pass an element or an object slot instead; the slot was not rendered.';
+const IMG_FRAGMENT_NOT_RENDERED =
+  "[WaveUI] A Fragment cannot stand in for <img> (a void element): it cannot take the slot's className or attributes. Pass the element itself or an object slot instead; the slot was not rendered.";
 
 describe('resolveSlot', () => {
   it('returns null for null', () => {
@@ -152,6 +166,18 @@ describe('resolveSlot', () => {
       expect(second!.children).toEqual(['x', 'y']);
     });
 
+    it('materialises a generator given as slot-object children, so a check does not empty it', () => {
+      function* items() {
+        yield 'x';
+        yield 'y';
+      }
+      const slot = { className: 'px-1', children: items() };
+      expect(slotRendersContent(slot.children)).toBe(true);
+      expect(resolveSlot(slot, 'span')!.children).toEqual(['x', 'y']);
+      render(renderSlot(slot, 'span')!);
+      expect(screen.getByText('xy')).toHaveClass('px-1');
+    });
+
     it('passes a thenable through as a node instead of reading it as a slot object', () => {
       const promise = Promise.resolve('later');
       const result = resolveSlot(promise as unknown as Slot, 'span');
@@ -208,15 +234,13 @@ describe('resolveSlot', () => {
     it('returns null and warns for a primitive with a void default tag', () => {
       const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
       expect(resolveSlot('a.png', 'img')).toBeNull();
-      expect(warn).toHaveBeenCalledTimes(1);
-      expect(warn.mock.calls[0][0]).toMatch(/^\[WaveUI\] .*<img>/);
+      expect(warn.mock.calls).toEqual([[IMG_CONTENT_NOT_RENDERED]]);
     });
 
     it('returns null and warns for an iterable with a void default tag', () => {
       const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
       expect(resolveSlot(['a'], 'input')).toBeNull();
-      expect(warn).toHaveBeenCalledTimes(1);
-      expect(warn.mock.calls[0][0]).toMatch(/^\[WaveUI\] .*<input>/);
+      expect(warn.mock.calls).toEqual([[IMG_CONTENT_NOT_RENDERED.replace('<img>', '<input>')]]);
     });
 
     it('drops children of a void slot object and warns', () => {
@@ -224,7 +248,7 @@ describe('resolveSlot', () => {
       const result = resolveSlot({ src: 'a.png', alt: 'A', children: 'oops' }, 'img');
       expect(result!.Component).toBe('img');
       expect(result!.children).toBeUndefined();
-      expect(warn).toHaveBeenCalledTimes(1);
+      expect(warn.mock.calls).toEqual([[IMG_CHILDREN_IGNORED]]);
     });
 
     it.each([
@@ -235,7 +259,7 @@ describe('resolveSlot', () => {
     ])(
       'drops `children: %s` of a void slot object without a warning (React renders nothing for it)',
       (_label, children) => {
-        const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+        const warn = vi.spyOn(console, 'warn');
         const result = resolveSlot({ src: 'a.png', alt: 'A', children }, 'img');
         expect(result!.Component).toBe('img');
         expect(result!.children).toBeUndefined();
@@ -250,7 +274,7 @@ describe('resolveSlot', () => {
     it('still warns for void slot object children that would render (0)', () => {
       const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
       expect(resolveSlot({ src: 'a.png', alt: 'A', children: 0 }, 'img')!.children).toBeUndefined();
-      expect(warn).toHaveBeenCalledTimes(1);
+      expect(warn.mock.calls).toEqual([[IMG_CHILDREN_IGNORED]]);
     });
 
     // Collections React renders nothing for: every item (at any depth) is null, a boolean or ''.
@@ -274,7 +298,7 @@ describe('resolveSlot', () => {
     it.each(emptyCollections)(
       'drops `children: %s` of a void slot object without a warning',
       (_label, make) => {
-        const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+        const warn = vi.spyOn(console, 'warn');
         const result = resolveSlot({ src: 'a.png', alt: 'A', children: make() }, 'img');
         expect(result!.Component).toBe('img');
         expect(result!.children).toBeUndefined();
@@ -288,7 +312,7 @@ describe('resolveSlot', () => {
     it.each(emptyCollections)(
       'returns null without a warning for a `%s` slot with a void default tag',
       (_label, make) => {
-        const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+        const warn = vi.spyOn(console, 'warn');
         expect(resolveSlot(make(), 'img')).toBeNull();
         expect(warn).not.toHaveBeenCalled();
       },
@@ -312,18 +336,14 @@ describe('resolveSlot', () => {
       expect(
         resolveSlot({ src: 'a.png', alt: 'A', children: make() }, 'img')!.children,
       ).toBeUndefined();
-      expect(warn).toHaveBeenCalledTimes(1);
-      expect(warn.mock.calls[0][0]).toMatch(/^\[WaveUI\] .*<img> cannot have children/);
+      expect(warn.mock.calls).toEqual([[IMG_CHILDREN_IGNORED]]);
       __resetWarnings();
       expect(resolveSlot(make(), 'img')).toBeNull();
-      expect(warn).toHaveBeenCalledTimes(2);
-      expect(warn.mock.calls[1][0]).toMatch(
-        /^\[WaveUI\] Slot content cannot be rendered inside <img>/,
-      );
+      expect(warn.mock.calls).toEqual([[IMG_CHILDREN_IGNORED], [IMG_CONTENT_NOT_RENDERED]]);
     });
 
     it('does not loop on a self-containing array', () => {
-      const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+      const warn = vi.spyOn(console, 'warn');
       const cyclic: unknown[] = [null];
       cyclic.push(cyclic);
       expect(
@@ -334,7 +354,7 @@ describe('resolveSlot', () => {
     });
 
     it('returns null without a warning for an empty-string slot with a void default tag', () => {
-      const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+      const warn = vi.spyOn(console, 'warn');
       expect(resolveSlot('', 'img')).toBeNull();
       expect(warn).not.toHaveBeenCalled();
     });
@@ -356,8 +376,7 @@ describe('resolveSlot', () => {
         React.createElement('img', { src: 'a.png', alt: 'A' }),
       );
       expect(resolveSlot(fragment, 'img', 'w-full')).toBeNull();
-      expect(warn).toHaveBeenCalledTimes(1);
-      expect(warn.mock.calls[0][0]).toMatch(/^\[WaveUI\] .*Fragment.*<img>/);
+      expect(warn.mock.calls).toEqual([[IMG_FRAGMENT_NOT_RENDERED]]);
     });
   });
 
@@ -455,7 +474,7 @@ describe('renderSlot', () => {
   });
 
   it('renders a generator slot as children without a React iterator warning', () => {
-    const error = vi.spyOn(console, 'error').mockImplementation(() => {});
+    const error = vi.spyOn(console, 'error');
     function* parts() {
       yield 'one';
       yield 'two';
@@ -474,7 +493,7 @@ describe('renderSlot', () => {
 
   describe('void default tags (data-display#3)', () => {
     it('renders an <img> element slot without nesting (className merged)', () => {
-      const error = vi.spyOn(console, 'error').mockImplementation(() => {});
+      const error = vi.spyOn(console, 'error');
       const { container } = render(
         renderSlot(
           React.createElement('img', { src: 'a.png', alt: 'Ada', className: 'rounded-sm' }),
@@ -497,8 +516,8 @@ describe('renderSlot', () => {
     });
 
     it('renders a void object slot with a conditional `children: false` without warnings or React errors', () => {
-      const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
-      const error = vi.spyOn(console, 'error').mockImplementation(() => {});
+      const warn = vi.spyOn(console, 'warn');
+      const error = vi.spyOn(console, 'error');
       const showCaption = false;
       render(
         renderSlot<'img'>({ src: 'c.png', alt: 'Cy', children: showCaption && 'caption' }, 'img')!,
@@ -509,8 +528,8 @@ describe('renderSlot', () => {
     });
 
     it('renders a void object slot with mapped-to-nothing `children: [null, false]` without warnings or React errors', () => {
-      const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
-      const error = vi.spyOn(console, 'error').mockImplementation(() => {});
+      const warn = vi.spyOn(console, 'warn');
+      const error = vi.spyOn(console, 'error');
       const captions: string[] = [];
       render(
         renderSlot<'img'>(
@@ -524,8 +543,9 @@ describe('renderSlot', () => {
     });
 
     it('renders nothing (and does not throw) for a string with a void default tag', () => {
-      vi.spyOn(console, 'warn').mockImplementation(() => {});
+      const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
       expect(renderSlot('a.png', 'img')).toBeNull();
+      expect(warn.mock.calls).toEqual([[IMG_CONTENT_NOT_RENDERED]]);
     });
 
     it('forwards the element slot ref', () => {
@@ -540,8 +560,8 @@ describe('renderSlot', () => {
     });
 
     it('renders nothing for a Fragment slot, without a React Fragment-prop error', () => {
-      const error = vi.spyOn(console, 'error').mockImplementation(() => {});
-      vi.spyOn(console, 'warn').mockImplementation(() => {});
+      const error = vi.spyOn(console, 'error');
+      const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
       const fragment = React.createElement(
         React.Fragment,
         null,
@@ -552,6 +572,7 @@ describe('renderSlot', () => {
       );
       expect(container.querySelector('img')).toBeNull();
       expect(error).not.toHaveBeenCalled();
+      expect(warn.mock.calls).toEqual([[IMG_FRAGMENT_NOT_RENDERED]]);
     });
   });
 
@@ -579,6 +600,17 @@ describe('slotRendersContent (data-display#31)', () => {
           yield '';
         })(),
     ],
+    ['an empty Fragment element', () => React.createElement(React.Fragment)],
+    [
+      "a Fragment of null, '' and an empty Fragment",
+      () =>
+        React.createElement(React.Fragment, null, null, '', React.createElement(React.Fragment)),
+    ],
+    ['[<></>, null]', () => [React.createElement(React.Fragment), null]],
+    [
+      'a Fragment given as a client reference (a lazy type)',
+      () => React.createElement(asClientReference(React.Fragment), null, false),
+    ],
   ])('is false for %s (React renders nothing for it)', (_label, make) => {
     expect(slotRendersContent(make())).toBe(false);
   });
@@ -589,7 +621,11 @@ describe('slotRendersContent (data-display#31)', () => {
     ['0n', () => BigInt(0)],
     ["[null, 'x']", () => [null, 'x']],
     ['<b />', () => React.createElement('b')],
-    ['an empty Fragment element', () => React.createElement(React.Fragment)],
+    ['a Fragment of 0', () => React.createElement(React.Fragment, null, 0)],
+    [
+      'a Fragment around an element, in an array',
+      () => [null, React.createElement(React.Fragment, null, React.createElement('b'))],
+    ],
     ["a Set with 'x'", () => new Set([null, 'x'])],
     ['a slot object without children (it renders its element)', () => ({ className: 'px-1' })],
   ])('is true for %s', (_label, make) => {
@@ -615,8 +651,22 @@ describe('slotRendersContent (data-display#31)', () => {
     expect(slotRendersContent(cyclic)).toBe(false);
   });
 
+  it('counts a generator inside an array or a Fragment as content without reading it', () => {
+    let reads = 0;
+    function* parts() {
+      reads += 1;
+      yield 'one';
+    }
+    const inArray = [null, parts()];
+    const inFragment = React.createElement(React.Fragment, null, parts());
+    expect(slotRendersContent(inArray)).toBe(true);
+    expect(slotRendersContent(inFragment)).toBe(true);
+    // Neither generator was started: React still renders their items.
+    expect(reads).toBe(0);
+  });
+
   it('does not warn', () => {
-    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const warn = vi.spyOn(console, 'warn');
     slotRendersContent([null]);
     slotRendersContent('x');
     expect(warn).not.toHaveBeenCalled();
@@ -633,6 +683,47 @@ describe('slotRendersContent (data-display#31)', () => {
     expect(pick(0)).toBe('JD');
     const { container } = render(React.createElement('div', null, pick(['*'])));
     expect(container.querySelector('span[aria-hidden="true"]')).toHaveTextContent('*');
+  });
+});
+
+describe('materialiseSlotContent', () => {
+  function* parts() {
+    yield 'one';
+    yield 'two';
+  }
+
+  it('gives the items of a generator that slotRendersContent read, for a caller rendering it', () => {
+    const gen = parts();
+    expect(slotRendersContent(gen)).toBe(true);
+    const error = vi.spyOn(console, 'error');
+    render(
+      React.createElement(
+        React.StrictMode,
+        null,
+        React.createElement('span', { 'data-testid': 'own' }, materialiseSlotContent(gen)),
+      ),
+    );
+    expect(screen.getByTestId('own')).toHaveTextContent('onetwo');
+    // React never enumerated the generator itself (it warns when it does).
+    expect(error).not.toHaveBeenCalled();
+  });
+
+  it('gives the same items every time (a second render, StrictMode)', () => {
+    const gen = parts();
+    const first = materialiseSlotContent(gen);
+    expect(first).toEqual(['one', 'two']);
+    expect(materialiseSlotContent(gen)).toBe(first);
+    expect(slotRendersContent(gen)).toBe(true);
+  });
+
+  it('returns every other value as given', () => {
+    const list = ['a', 'b'];
+    const set = new Set(['a']);
+    const element = React.createElement('b');
+    const fragment = React.createElement(React.Fragment, null, 'x');
+    for (const value of [list, set, element, fragment, 'text', 0, null, undefined, false]) {
+      expect(materialiseSlotContent(value)).toBe(value);
+    }
   });
 });
 

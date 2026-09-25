@@ -718,6 +718,11 @@ describe('useListbox — registration mode (input-pickers#1)', () => {
     }
   });
 
+  const SPLIT_WARNING =
+    '[WaveUI] Listbox: the options of one listbox are rendered in more than one container (for example an inline list kept mounted next to a portaled one). All options must live in a single container at a time: render the list inline only while closed and in the portal only while open.';
+  const duplicateWarning = (value: string) =>
+    `[WaveUI] Listbox: several options share the value "${value}". Option values must be unique within a listbox; only the first one can be highlighted and selected.`;
+
   it('warns once when the options of one listbox are split over two containers', () => {
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
     // Breaks the consumer contract (§5.5): the inline list stays mounted next to the portal.
@@ -748,17 +753,19 @@ describe('useListbox — registration mode (input-pickers#1)', () => {
     try {
       const { rerender } = render(<SplitPicker />);
       rerender(<SplitPicker />);
-      const messages = warn.mock.calls.map((c) => String(c[0]));
-      const split = messages.filter((m) => m.includes('single container'));
-      expect(split).toHaveLength(1);
-      expect(split[0]).toMatch(/^\[WaveUI\] /);
+      // The same values in both containers are also duplicates of each other.
+      expect(warn.mock.calls).toEqual([
+        [duplicateWarning('split-x')],
+        [duplicateWarning('split-y')],
+        [SPLIT_WARNING],
+      ]);
     } finally {
       warn.mockRestore();
     }
   });
 
   it('does not warn about containers when the list moves between inline and portal', async () => {
-    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const warn = vi.spyOn(console, 'warn');
     const user = userEvent.setup();
     try {
       render(<Picker portal>{FRUITS}</Picker>);
@@ -766,7 +773,7 @@ describe('useListbox — registration mode (input-pickers#1)', () => {
       await user.keyboard('{Escape}');
       await user.click(combobox());
       await act(async () => {});
-      expect(warn.mock.calls.map((c) => String(c[0])).join('\n')).not.toMatch(/container/);
+      expect(warn).not.toHaveBeenCalled();
     } finally {
       warn.mockRestore();
     }
@@ -780,9 +787,7 @@ describe('useListbox — registration mode (input-pickers#1)', () => {
         <Opt value="a">Apricot</Opt>
       </Picker>,
     );
-    const messages = warn.mock.calls.map((c) => String(c[0]));
-    expect(messages.filter((m) => m.includes('"a"'))).toHaveLength(1);
-    expect(messages[0]).toMatch(/^\[WaveUI\] /);
+    expect(warn.mock.calls).toEqual([[duplicateWarning('a')]]);
     expect(screen.getByTestId('items')).toHaveTextContent(/^a$/);
     warn.mockRestore();
   });
@@ -1339,7 +1344,11 @@ describe('useListbox — data mode', () => {
           rowKey={(item, index) => `${index}:${item.value}`}
         />,
       );
-      expect(warn.mock.calls.filter((c) => String(c[0]).includes('"a"'))).toHaveLength(1);
+      expect(warn.mock.calls).toEqual([
+        [
+          '[WaveUI] Listbox: several options share the value "a". Option values must be unique within a listbox; only the first one can be highlighted and selected.',
+        ],
+      ]);
       expect(error).not.toHaveBeenCalled();
     } finally {
       warn.mockRestore();
@@ -1520,6 +1529,23 @@ describe('useListbox — select-only keys (APG)', () => {
     expect(key('ł', { ctrlKey: true, altKey: true }).defaultPrevented).toBe(true);
     expect(expanded()).toBe(true);
     expect(activeText()).toBe('Łódź');
+  });
+
+  it('leaves Ctrl+Alt+Space to the page: it neither opens the list nor commits (AltGr types no space)', () => {
+    const onSelect = vi.fn();
+    render(
+      <Picker onSelectSpy={onSelect}>
+        <Opt value="waw">Warszawa</Opt>
+        <Opt value="lodz">Łódź</Opt>
+      </Picker>,
+    );
+    expect(key(' ', { ctrlKey: true, altKey: true }).defaultPrevented).toBe(false);
+    expect(expanded()).toBe(false);
+    key('ArrowDown');
+    expect(expanded()).toBe(true);
+    expect(key(' ', { ctrlKey: true, altKey: true }).defaultPrevented).toBe(false);
+    expect(expanded()).toBe(true);
+    expect(onSelect).not.toHaveBeenCalled();
   });
 
   it('Space during a typeahead search is part of the search, not a commit', () => {
@@ -2335,11 +2361,15 @@ describe('useListbox — StrictMode', () => {
 
 describe('useListboxOption — context guard (C-CONTEXT)', () => {
   it('throws a [WaveUI] error in development outside a listbox', () => {
-    const error = vi.spyOn(console, 'error').mockImplementation(() => {});
-    expect(() => render(<Opt value="a">Apple</Opt>)).toThrow(
-      '[WaveUI] Option must be used within a listbox',
-    );
-    error.mockRestore();
+    const error = vi.spyOn(console, 'error');
+    try {
+      expect(() => render(<Opt value="a">Apple</Opt>)).toThrow(
+        new Error('[WaveUI] Option must be used within a listbox (Combobox or Dropdown)'),
+      );
+      expect(error).not.toHaveBeenCalled();
+    } finally {
+      error.mockRestore();
+    }
   });
 
   it('logs the error once in production and renders an inert option', () => {
@@ -2416,7 +2446,7 @@ describe('useListbox — SSR and first render (input-pickers#6)', () => {
     const container = document.createElement('div');
     container.innerHTML = renderToString(<Picker defaultValue="us">{COUNTRIES}</Picker>);
     document.body.appendChild(container);
-    const error = vi.spyOn(console, 'error').mockImplementation(() => {});
+    const error = vi.spyOn(console, 'error');
     let root: ReturnType<typeof hydrateRoot> | undefined;
     try {
       await act(async () => {

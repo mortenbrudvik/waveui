@@ -2,7 +2,7 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import * as React from 'react';
-import { useTriggerElement } from '../useTriggerElement';
+import { getTriggerTarget, useTriggerElement } from '../useTriggerElement';
 import { __resetWarnings } from '../../lib/dev';
 import { mergeRefs } from '../../lib/mergeRefs';
 import { expectNoA11yViolations } from '../../test-utils';
@@ -23,6 +23,7 @@ function Trigger({
   triggerRef,
   asChild,
   onResolvedId,
+  extraProps,
 }: {
   children: React.ReactElement | ((props: TestTriggerProps) => React.ReactNode) | React.ReactNode;
   open?: boolean;
@@ -30,8 +31,11 @@ function Trigger({
   triggerRef?: React.Ref<HTMLElement>;
   asChild?: boolean;
   onResolvedId?: (id: string) => void;
+  /** Props a consumer passes to the trigger (`role`, `tabIndex`, …), merged into the trigger props. */
+  extraProps?: Record<string, unknown>;
 }) {
   const triggerProps: TestTriggerProps = {
+    ...extraProps,
     id: 'generated-trigger',
     'aria-haspopup': 'dialog',
     'aria-expanded': open,
@@ -56,11 +60,13 @@ function Harness({
   asChild,
   onResolvedId,
   triggerRef,
+  extraProps,
 }: {
   children: React.ReactElement | ((props: TestTriggerProps) => React.ReactNode) | React.ReactNode;
   asChild?: boolean;
   onResolvedId?: (id: string) => void;
   triggerRef?: React.Ref<HTMLElement>;
+  extraProps?: Record<string, unknown>;
 }) {
   const [open, setOpen] = React.useState(false);
   return (
@@ -71,6 +77,7 @@ function Harness({
         asChild={asChild}
         onResolvedId={onResolvedId}
         triggerRef={triggerRef}
+        extraProps={extraProps}
       >
         {children}
       </Trigger>
@@ -90,7 +97,19 @@ function Forwarding({ ref, ...props }: React.ComponentProps<'button'>) {
 }
 
 describe('useTriggerElement', () => {
+  // Warnings are silenced, and a test that expects some takes them (takeWarnings): the afterEach
+  // allows no other.
   let warnSpy: ReturnType<typeof vi.spyOn>;
+
+  /** The warnings logged so far, removed from the spy (the test asserts them). */
+  function takeWarnings(): unknown[] {
+    const messages = warnSpy.mock.calls.map((call: unknown[]) => call[0]);
+    warnSpy.mockClear();
+    return messages;
+  }
+
+  const FALLBACK_WARNING =
+    '[WaveUI] Test.Trigger: its child did not attach the trigger ref (a component that neither forwards `ref` nor spreads its props). It is rendered inside a <span> wrapper instead; forward `ref` and spread props onto the element, or pass asChild={false}.';
 
   beforeEach(() => {
     __resetWarnings();
@@ -98,8 +117,12 @@ describe('useTriggerElement', () => {
   });
 
   afterEach(() => {
-    warnSpy.mockRestore();
-    __resetWarnings();
+    try {
+      expect(warnSpy).not.toHaveBeenCalled();
+    } finally {
+      warnSpy.mockRestore();
+      __resetWarnings();
+    }
   });
 
   describe('single element child (asChild by default)', () => {
@@ -367,8 +390,7 @@ describe('useTriggerElement', () => {
           <NonForwarding label="Fancy" />
         </Harness>,
       );
-      expect(warnSpy).toHaveBeenCalledTimes(1);
-      expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining('Test.Trigger'));
+      expect(takeWarnings()).toEqual([FALLBACK_WARNING]);
     });
 
     it('moves the state ARIA from the generic span onto the button inside it', async () => {
@@ -397,6 +419,8 @@ describe('useTriggerElement', () => {
       await user.click(button);
       expect(button).toHaveAttribute('aria-expanded', 'false');
       expect(button).not.toHaveAttribute('aria-controls');
+      // The child does not forward its ref: the automatic fallback warns.
+      expect(takeWarnings()).toEqual([FALLBACK_WARNING]);
     });
 
     it("lets the live state win over the inner element's own attributes", async () => {
@@ -419,6 +443,8 @@ describe('useTriggerElement', () => {
       expect(button).not.toHaveAttribute('aria-controls');
       await user.click(button);
       expect(button).toHaveAttribute('aria-controls', 'panel');
+      // The child does not forward its ref: the automatic fallback warns.
+      expect(takeWarnings()).toEqual([FALLBACK_WARNING]);
     });
 
     it('follows the first tabbable element and restores the one it leaves', () => {
@@ -453,6 +479,8 @@ describe('useTriggerElement', () => {
       // The element left behind gets its own attributes back.
       expect(one).not.toHaveAttribute('aria-haspopup');
       expect(one).toHaveAttribute('aria-expanded', 'true');
+      // The child does not forward its ref: the automatic fallback warns.
+      expect(takeWarnings()).toEqual([FALLBACK_WARNING]);
     });
 
     it('keeps the state on the inner button while the page around it is inert (open modal)', () => {
@@ -466,6 +494,8 @@ describe('useTriggerElement', () => {
       const button = screen.getByText('Fancy');
       expect(button).toHaveAttribute('aria-expanded', 'true');
       expect(button).toHaveAttribute('aria-controls', 'panel');
+      // The child does not forward its ref: the automatic fallback warns.
+      expect(takeWarnings()).toEqual([FALLBACK_WARNING]);
     });
 
     it('drops the state ARIA when the child renders nothing tabbable', async () => {
@@ -481,6 +511,8 @@ describe('useTriggerElement', () => {
       expect(wrapper).toContainElement(screen.getByText('Fancy'));
       expect(container.querySelector('[aria-expanded], [aria-haspopup]')).toBeNull();
       await expectNoA11yViolations(container);
+      // The child does not forward its ref: the automatic fallback warns.
+      expect(takeWarnings()).toEqual([FALLBACK_WARNING]);
     });
   });
 
@@ -551,6 +583,61 @@ describe('useTriggerElement', () => {
       expect(warnSpy).not.toHaveBeenCalled();
     });
 
+    it.each([
+      ['text', 'Actions'],
+      ['a non-focusable element', <b key="b">Actions</b>],
+    ])(
+      'keeps the state ARIA on a span the consumer made the trigger (role and tabIndex) around %s',
+      async (_label, children) => {
+        const user = userEvent.setup();
+        const { container } = render(
+          <Harness asChild={false} extraProps={{ role: 'button', tabIndex: 0 }}>
+            {children}
+          </Harness>,
+        );
+        const span = screen.getByRole('button', { name: 'Actions' });
+        expect(span.localName).toBe('span');
+        expect(span).toHaveAttribute('aria-haspopup', 'dialog');
+        expect(span).toHaveAttribute('aria-expanded', 'false');
+        await expectNoA11yViolations(container);
+        await user.click(span);
+        expect(span).toHaveAttribute('aria-expanded', 'true');
+        expect(span).toHaveAttribute('aria-controls', 'panel');
+        await expectNoA11yViolations(container);
+        expect(warnSpy).not.toHaveBeenCalled();
+      },
+    );
+
+    it('keeps the state ARIA on a span given only tabIndex, or only a widget role', () => {
+      const { unmount } = render(
+        <Trigger asChild={false} open extraProps={{ tabIndex: 0 }}>
+          Actions
+        </Trigger>,
+      );
+      expect(screen.getByText('Actions')).toHaveAttribute('aria-expanded', 'true');
+      unmount();
+      render(
+        <Trigger asChild={false} open extraProps={{ role: 'button' }}>
+          Actions
+        </Trigger>,
+      );
+      expect(screen.getByRole('button', { name: 'Actions' })).toHaveAttribute(
+        'aria-controls',
+        'panel',
+      );
+    });
+
+    it('still moves the state ARIA inside a span given a generic role or tabIndex={-1}', () => {
+      render(
+        <Trigger asChild={false} open extraProps={{ role: 'presentation', tabIndex: -1 }}>
+          <button type="button">Open</button>
+        </Trigger>,
+      );
+      const button = screen.getByRole('button', { name: 'Open' });
+      expect(button).toHaveAttribute('aria-expanded', 'true');
+      expect(button.parentElement).not.toHaveAttribute('aria-expanded');
+    });
+
     it('gives a render-prop child every prop, the state ARIA included', () => {
       render(
         <Harness asChild={false}>
@@ -602,8 +689,19 @@ describe('useTriggerElement', () => {
         expect(wrapper).not.toHaveAttribute(name);
       }
       await expectNoA11yViolations(container);
-      expect(warnSpy).toHaveBeenCalledTimes(1);
-      expect(warnSpy).toHaveBeenCalledWith(WRAPPED_WARNING);
+      expect(takeWarnings()).toEqual([WRAPPED_WARNING]);
+    });
+
+    it('keeps the state ARIA on the wrapper of text the consumer made the trigger, and warns', async () => {
+      const user = userEvent.setup();
+      render(<Harness extraProps={{ role: 'button', tabIndex: 0 }}>Filters</Harness>);
+      const span = screen.getByRole('button', { name: 'Filters' });
+      expect(span).toHaveAttribute('id', 'generated-trigger');
+      expect(span).toHaveAttribute('aria-haspopup', 'dialog');
+      await user.click(span);
+      expect(span).toHaveAttribute('aria-expanded', 'true');
+      expect(document.querySelectorAll('[aria-expanded]')).toHaveLength(1);
+      expect(takeWarnings()).toEqual([WRAPPED_WARNING]);
     });
 
     it('clones the element of a single-element Fragment, without a wrapper or a warning', async () => {
@@ -655,8 +753,42 @@ describe('useTriggerElement', () => {
       expect(open).toHaveAttribute('aria-controls', 'panel');
       expect(wrapper).not.toHaveAttribute('aria-expanded');
       await expectNoA11yViolations(container);
-      expect(warnSpy).toHaveBeenCalledTimes(1);
-      expect(warnSpy).toHaveBeenCalledWith(WRAPPED_WARNING);
+      expect(takeWarnings()).toEqual([WRAPPED_WARNING]);
     });
+  });
+});
+
+describe('getTriggerTarget', () => {
+  function host(html: string): HTMLElement {
+    const div = document.createElement('div');
+    div.innerHTML = html;
+    document.body.append(div);
+    return div.firstElementChild as HTMLElement;
+  }
+
+  afterEach(() => {
+    document.body.replaceChildren();
+  });
+
+  it('is the element itself when it is in the tab order or has a widget role', () => {
+    const button = host('<button type="button">Open</button>');
+    expect(getTriggerTarget(button)).toBe(button);
+    const focusableSpan = host('<span tabindex="0"><button type="button">Inner</button></span>');
+    expect(getTriggerTarget(focusableSpan)).toBe(focusableSpan);
+    const roleSpan = host('<span role="button">Open</span>');
+    expect(getTriggerTarget(roleSpan)).toBe(roleSpan);
+  });
+
+  it('is the first element inside in the tab order for a generic wrapper, else null', () => {
+    const wrapper = host(
+      '<span role="presentation"><input type="hidden" /><button type="button" tabindex="-1">Skipped</button><a href="#x">Link</a></span>',
+    );
+    expect(getTriggerTarget(wrapper)).toBe(wrapper.querySelector('a'));
+    expect(getTriggerTarget(host('<span><b>Text</b></span>'))).toBeNull();
+  });
+
+  it('reads the markup, so an inert page (an open modal) does not change it', () => {
+    const wrapper = host('<span inert><button type="button">Open</button></span>');
+    expect(getTriggerTarget(wrapper)).toBe(wrapper.querySelector('button'));
   });
 });
