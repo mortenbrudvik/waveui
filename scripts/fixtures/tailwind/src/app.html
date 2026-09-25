@@ -2,10 +2,11 @@
 <!--
   The consumer's own source. Its utility (p-4) proves Tailwind's automatic source detection ran;
   Wave's component classes (bg-primary, text-body-1) appear only in the package's dist, so they
-  prove the @source of @mortenbrudvik/waveui/tailwind scanned it.
+  prove the @source of @mortenbrudvik/waveui/tailwind scanned it. The motion utilities
+  (duration-wave-normal, ease-wave-decelerate-mid) prove the Wave theme exposes the motion tokens.
 -->
 <html lang="en">
   <body>
-    <main class="p-4">Consumer content</main>
+    <main class="p-4 duration-wave-normal ease-wave-decelerate-mid">Consumer content</main>
   </body>
 </html>

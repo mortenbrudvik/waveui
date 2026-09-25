@@ -1,5 +1,5 @@
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { render, screen, waitFor } from '@testing-library/react';
+import { afterEach, beforeEach, describe, expect, expectTypeOf, it, vi } from 'vitest';
+import { act, render, screen, waitFor } from '@testing-library/react';
 import * as React from 'react';
 import {
   usePopupPosition,
@@ -7,6 +7,7 @@ import {
   type UsePopupPositionResult,
 } from '../usePopupPosition';
 import { WaveProvider } from '../../components/provider/WaveProvider';
+import type { VirtualElement } from '../../lib/types';
 import { installResizeObserverMock } from '../../test-utils';
 
 interface Box {
@@ -299,5 +300,186 @@ describe('usePopupPosition', () => {
     render(<Popup open={false} onResult={(r) => (last = r)} />);
     expect(last!.isPositioned).toBe(false);
     expect(last!.floatingProps['data-side']).toBe('bottom');
+  });
+});
+
+/** A zero-size point as a VirtualElement, as a context menu anchors to the pointer. */
+function point(x: number, y: number): VirtualElement {
+  const rect = rectFor({ x, y, width: 0, height: 0 });
+  return { getBoundingClientRect: () => rect };
+}
+
+/**
+ * A surface anchored to `anchor`, set from a layout effect as the components do: a VirtualElement,
+ * `'button'` (the harness's own button) or `null`.
+ */
+function AnchoredPopup({
+  anchor,
+  open = true,
+  onResult,
+  ...options
+}: Partial<UsePopupPositionOptions> & {
+  anchor: VirtualElement | 'button' | null;
+  onResult?: (result: UsePopupPositionResult) => void;
+}) {
+  const [button, setButton] = React.useState<HTMLButtonElement | null>(null);
+  const result = usePopupPosition({ open, ...options });
+  const { setReference, setFloating, floatingProps } = result;
+  React.useLayoutEffect(() => {
+    setReference(anchor === 'button' ? button : anchor);
+  }, [anchor, button, setReference]);
+  React.useEffect(() => {
+    onResult?.(result);
+  });
+  return (
+    <>
+      <button type="button" ref={setButton} data-testid="reference">
+        Anchor
+      </button>
+      {open && (
+        <div ref={setFloating} data-testid="floating" {...floatingProps}>
+          Popup
+        </div>
+      )}
+    </>
+  );
+}
+
+/** Lets pending position updates (and any render they would cause) happen. */
+async function settle() {
+  await act(async () => {
+    await new Promise((resolve) => setTimeout(resolve, 20));
+  });
+}
+
+describe('usePopupPosition — virtual anchors', () => {
+  it('places a bottom-start surface at a zero-size point', async () => {
+    let last: UsePopupPositionResult | null = null;
+    render(<AnchoredPopup anchor={point(100, 200)} onResult={(r) => (last = r)} />);
+    await waitFor(() => expect(last!.isPositioned).toBe(true));
+    const floating = screen.getByTestId('floating');
+    expect(floating).toHaveAttribute('data-side', 'bottom');
+    expect(floating).toHaveAttribute('data-align', 'start');
+    // The default offset of 4 px below the point.
+    expect(translateOf(floating)).toEqual({ x: 100, y: 204 });
+  });
+
+  it('repositions when the virtual element is replaced', async () => {
+    const { rerender } = render(<AnchoredPopup anchor={point(100, 200)} />);
+    const floating = screen.getByTestId('floating');
+    await waitFor(() => expect(translateOf(floating)).toEqual({ x: 100, y: 204 }));
+    rerender(<AnchoredPopup anchor={point(300, 400)} />);
+    await waitFor(() => expect(translateOf(floating)).toEqual({ x: 300, y: 404 }));
+  });
+
+  it('takes a new inline VirtualElement on every render without a render loop, following its rect', async () => {
+    let rect = rectFor({ x: 100, y: 200, width: 0, height: 0 });
+    const onRender = vi.fn();
+    /** The hook's owner creates the anchor inline and sets it after every commit. */
+    function InlineAnchored({ tick }: { tick: number }) {
+      onRender(tick);
+      const { setReference, setFloating, floatingProps } = usePopupPosition({ open: true });
+      // A new object on every render, as an inline `target={{ getBoundingClientRect }}` is.
+      const anchor: VirtualElement = { getBoundingClientRect: () => rect };
+      React.useLayoutEffect(() => {
+        setReference(anchor);
+      });
+      return (
+        <div ref={setFloating} data-testid="floating" {...floatingProps}>
+          Popup
+        </div>
+      );
+    }
+    const { rerender } = render(<InlineAnchored tick={0} />);
+    const floating = screen.getByTestId('floating');
+    await waitFor(() => expect(translateOf(floating)).toEqual({ x: 100, y: 204 }));
+    await settle();
+    const settled = onRender.mock.calls.length;
+    expect(settled).toBeLessThan(6);
+
+    rect = rectFor({ x: 150, y: 250, width: 0, height: 0 });
+    rerender(<InlineAnchored tick={1} />);
+    await waitFor(() => expect(translateOf(floating)).toEqual({ x: 150, y: 254 }));
+    await settle();
+    expect(onRender.mock.calls.length - settled).toBeLessThan(6);
+  });
+
+  it('follows the scroll containers of the contextElement, and re-subscribes when it changes', async () => {
+    const containerA = document.createElement('div');
+    const containerB = document.createElement('div');
+    containerA.style.overflow = 'auto';
+    containerB.style.overflow = 'auto';
+    const inA = document.createElement('span');
+    const inB = document.createElement('span');
+    containerA.append(inA);
+    containerB.append(inB);
+    document.body.append(containerA, containerB);
+    try {
+      let y = 200;
+      const anchorIn = (contextElement: Element): VirtualElement => ({
+        getBoundingClientRect: () => rectFor({ x: 100, y, width: 0, height: 0 }),
+        contextElement,
+      });
+      const { rerender } = render(<AnchoredPopup anchor={anchorIn(inA)} />);
+      const floating = screen.getByTestId('floating');
+      await waitFor(() => expect(translateOf(floating).y).toBe(204));
+
+      // Scrolling A moves the point, and the surface follows.
+      y = 150;
+      containerA.dispatchEvent(new Event('scroll'));
+      await waitFor(() => expect(translateOf(floating).y).toBe(154));
+
+      // A new contextElement: B's scrolls update the position, A's no longer do.
+      rerender(<AnchoredPopup anchor={anchorIn(inB)} />);
+      await settle();
+      y = 120;
+      containerA.dispatchEvent(new Event('scroll'));
+      await settle();
+      expect(translateOf(floating).y).toBe(154);
+      containerB.dispatchEvent(new Event('scroll'));
+      await waitFor(() => expect(translateOf(floating).y).toBe(124));
+    } finally {
+      containerA.remove();
+      containerB.remove();
+    }
+  });
+
+  it('switches from a virtual anchor to an element and back', async () => {
+    const { rerender } = render(<AnchoredPopup anchor={point(100, 200)} />);
+    const floating = screen.getByTestId('floating');
+    await waitFor(() => expect(translateOf(floating)).toEqual({ x: 100, y: 204 }));
+    // The button's box is x 500, y 100, 200 × 20: the surface goes below it.
+    rerender(<AnchoredPopup anchor="button" />);
+    await waitFor(() => expect(translateOf(floating)).toEqual({ x: 500, y: 124 }));
+    rerender(<AnchoredPopup anchor={point(300, 400)} />);
+    await waitFor(() => expect(translateOf(floating)).toEqual({ x: 300, y: 404 }));
+  });
+
+  it("resolves side 'end' against a point in RTL", async () => {
+    render(
+      <WaveProvider dir="rtl">
+        <AnchoredPopup anchor={point(400, 300)} side="end" align="center" />
+      </WaveProvider>,
+    );
+    const floating = screen.getByTestId('floating');
+    await waitFor(() => expect(floating).toHaveAttribute('data-side', 'left'));
+    // The 100 × 100 surface ends 4 px before the point, centred on it.
+    await waitFor(() => expect(translateOf(floating)).toEqual({ x: 296, y: 250 }));
+  });
+
+  it('writes the available-size variables for a point (fitViewport)', async () => {
+    render(<AnchoredPopup anchor={point(100, 200)} fitViewport />);
+    const floating = screen.getByTestId('floating');
+    // Below the point: 768 - 204 - 8 px of the viewport.
+    await waitFor(() =>
+      expect(floating.style.getPropertyValue('--wave-popup-available-height')).toBe('556px'),
+    );
+    expect(floating.style.maxHeight).toBe('var(--wave-popup-available-height)');
+  });
+
+  it('types setReference for an element, a VirtualElement or null', () => {
+    expectTypeOf<Parameters<UsePopupPositionResult['setReference']>[0]>().toEqualTypeOf<
+      HTMLElement | VirtualElement | null
+    >();
   });
 });

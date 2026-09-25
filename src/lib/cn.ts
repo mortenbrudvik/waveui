@@ -4,11 +4,39 @@ import { extendTailwindMerge } from 'tailwind-merge';
 /**
  * tailwind-merge configured with the Wave theme scales, so custom utilities are grouped
  * correctly: `text-body-1` is a font size (not a text colour), `shadow-4` is a shadow size (not a
- * shadow colour), `font-wave` is a font family and `animate-wave-*` are animations.
+ * shadow colour), `font-wave` is a font family, `animate-wave-*` are animations, and the motion
+ * tokens `duration-wave-*` and `ease-wave-*` are transition durations and timing functions.
  */
 export const twMerge = extendTailwindMerge({
   extend: {
+    classGroups: {
+      duration: [
+        {
+          duration: [
+            'wave-ultra-fast',
+            'wave-faster',
+            'wave-fast',
+            'wave-normal',
+            'wave-gentle',
+            'wave-slow',
+            'wave-slower',
+            'wave-ultra-slow',
+          ],
+        },
+      ],
+    },
     theme: {
+      ease: [
+        'wave-accelerate-max',
+        'wave-accelerate-mid',
+        'wave-accelerate-min',
+        'wave-decelerate-max',
+        'wave-decelerate-mid',
+        'wave-decelerate-min',
+        'wave-easy-ease-max',
+        'wave-easy-ease',
+        'wave-linear',
+      ],
       text: [
         'caption-2',
         'caption-1',

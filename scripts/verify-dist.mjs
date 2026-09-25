@@ -29,8 +29,13 @@
  *   - CommonJS parity: `dist/index.cjs` exports the same names as `dist/index.mjs`;
  *   - tree-shaking: a probe entry importing only `Button` from `dist/index.mjs`, bundled with
  *     Vite's own `build()` API, contains only Button's module and its static imports — no
- *     Dialog code (repo-level#3). The probe honours package.json `sideEffects` exactly as a
- *     consumer's bundler does.
+ *     Dialog code (repo-level#3), and neither the presence core (`hooks/usePresence`) nor
+ *     `Presence`. The probe honours package.json `sideEffects` exactly as a consumer's bundler
+ *     does;
+ *   - presence core: an import of only `Presence` contains `hooks/usePresence` (the probe finds
+ *     the core where it is used), and the closure of `usePresence` + `Presence`, minified with
+ *     bare imports external, stays within {@link PRESENCE_BUDGET} and imports nothing but
+ *     `react` and `react/jsx-runtime`. The CLI prints the measured sizes.
  *
  * Usage: node scripts/verify-dist.mjs [--dist <dir>] [--no-pending | --final]
  *   --dist        the dist directory (default: dist); its parent holds the package.json
@@ -57,6 +62,7 @@ import {
 } from 'node:fs';
 import { createRequire, isBuiltin } from 'node:module';
 import { tmpdir } from 'node:os';
+import { gzipSync } from 'node:zlib';
 import { basename, dirname, join, relative, resolve, sep } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 
@@ -65,8 +71,10 @@ const require = createRequire(import.meta.url);
 
 /**
  * A temporary bridge: components whose flat sub-component names (`<Parent><Member>`,
- * C-COMPOUND) are not exported from `dist/index.mjs` yet. It is empty since INTEGRATION
- * re-exported every flat name from the barrels (wave E1), and it must stay empty:
+ * C-COMPOUND) are not exported from `dist/index.mjs` yet. Fluent parity phase 2 (0.7) lists
+ * `Toolbar`: it becomes a compound (`Toolbar.Button`, …) before the button barrel exports the
+ * flat names of its parts, so it is reported as planned (not a compound yet), then as pending,
+ * until the barrels export the flat names and the list is emptied again. The rules:
  *   - an entry whose flat names all exist fails the check ("remove it"), and so does an entry
  *     that is not an exported component, so the list only shrinks;
  *   - an entry that is exported but not a compound yet is tolerated;
@@ -75,7 +83,22 @@ const require = createRequire(import.meta.url);
  * A compound that is not listed must export every flat name. A flat name that is exported must
  * equal its dotted member, listed or not.
  */
-export const PENDING_FLAT_EXPORTS = [];
+export const PENDING_FLAT_EXPORTS = ['Toolbar'];
+
+/**
+ * The presence core's probes: an import of only `Button` drops it, an import of only
+ * `PRESENCE_INCLUDE_KEEP` holds it, and the closure of the two names fits the budget. The budget
+ * is the first measured size plus 25 % (5,443 and 2,341 bytes in 0.7.0, against the 5 KiB and
+ * 2 KiB of the phase 2 design, adjusted once as its open question 8 allows).
+ */
+const PRESENCE_MODULE = 'hooks/usePresence.mjs';
+const PRESENCE_INCLUDE_KEEP = 'Presence';
+const PRESENCE_BUDGET = {
+  names: ['usePresence', 'Presence'],
+  maxMinifiedBytes: 6804,
+  maxGzipBytes: 2927,
+  allowedExternals: ['react', 'react/jsx-runtime'],
+};
 
 const JS_FILE = /\.(mjs|cjs|js)$/;
 
@@ -865,35 +888,26 @@ function fold(path) {
   return process.platform === 'win32' ? path.toLowerCase() : path;
 }
 
-/**
- * Tree-shaking probe (repo-level#3): bundles an entry that imports only `keep` from
- * `dist/index.mjs` with Vite's `build()` API (no write, no minification, bare imports external)
- * and asserts that the bundle holds `keep`'s module, only it and its static imports, and no code
- * of `drop` (its module or its `displayName`).
- *
- * The bundler reports module ids as real paths, so the probe imports and matches them through
- * the real path of `dist`: a dist reached through a symlink or a junction (a linked checkout or
- * `node_modules`) is checked module by module, not silently passed with no module matched.
- */
-export async function probeTreeShaking(dist, { keep = 'Button', drop = 'Dialog' } = {}) {
-  const errors = [];
-  const distRoot = realpathSync(resolve(dist));
-  const components = listFiles(distRoot).filter((path) => path.startsWith('components/'));
-  const keepModules = components.filter((path) => path.endsWith(`/${keep}.mjs`));
-  const dropModules = components.filter((path) => path.endsWith(`/${drop}.mjs`));
-  if (keepModules.length === 0) {
-    errors.push(`no dist module for ${keep} (components/**/${keep}.mjs): dist is not per module`);
-  }
+/** Whether a module id is a bare import (a package), which the probes keep external. */
+function isBareImport(id) {
+  return /^[^./\0]/.test(id) && !/^[a-zA-Z]:/.test(id);
+}
 
+/**
+ * Bundles an entry that imports `names` from `dist/index.mjs` with Vite's `build()` API (no
+ * write, bare imports external) and returns the output chunks. `minify` builds as a consumer's
+ * production bundle does.
+ */
+async function bundleImport(distRoot, names, { minify = false } = {}) {
   const { build } = await import('vite');
   const probeDir = mkdtempSync(join(tmpdir(), 'wave-treeshake-'));
-  let chunks;
   try {
     const entry = join(probeDir, 'probe.mjs');
     const index = toPosix(join(distRoot, 'index.mjs'));
+    const list = names.join(', ');
     writeFileSync(
       entry,
-      `import { ${keep} } from ${JSON.stringify(index)};\nexport { ${keep} };\n`,
+      `import { ${list} } from ${JSON.stringify(index)};\nexport { ${list} };\n`,
     );
     const result = await build({
       configFile: false,
@@ -902,26 +916,27 @@ export async function probeTreeShaking(dist, { keep = 'Button', drop = 'Dialog' 
       publicDir: false,
       build: {
         write: false,
-        minify: false,
+        minify,
         emptyOutDir: false,
         copyPublicDir: false,
         rolldownOptions: {
           input: entry,
           preserveEntrySignatures: 'exports-only',
-          external: (id) => /^[^./\0]/.test(id) && !/^[a-zA-Z]:/.test(id),
+          external: isBareImport,
           output: { format: 'es' },
           onLog: () => {},
         },
       },
     });
     const outputs = Array.isArray(result) ? result : [result];
-    chunks = outputs.flatMap((output) => output.output).filter((item) => item.type === 'chunk');
+    return outputs.flatMap((output) => output.output).filter((item) => item.type === 'chunk');
   } finally {
     rmSync(probeDir, { recursive: true, force: true });
   }
+}
 
-  const code = chunks.map((chunk) => chunk.code).join('\n');
-  // Bundled dist modules, as paths relative to dist (original case).
+/** The dist modules in `chunks`, as paths relative to `distRoot` (original case). */
+function bundledModules(distRoot, chunks) {
   const byFolded = new Map(listFiles(distRoot).map((path) => [fold(path), path]));
   const distPrefix = `${fold(toPosix(distRoot))}/`;
   const included = new Set();
@@ -931,11 +946,54 @@ export async function probeTreeShaking(dist, { keep = 'Button', drop = 'Dialog' 
     const path = folded.slice(distPrefix.length);
     included.add(byFolded.get(path) ?? path);
   }
+  return included;
+}
+
+/**
+ * Tree-shaking probe (repo-level#3): bundles an entry that imports only `keep` from
+ * `dist/index.mjs` with Vite's `build()` API (no write, no minification, bare imports external)
+ * and asserts that the bundle holds `keep`'s module, only it and its static imports, no code of
+ * `drop` (its module or its `displayName`) and none of `dropModules` (dist-relative module paths,
+ * such as `hooks/usePresence.mjs`; a listed module that does not exist in `dist` is an error, since
+ * the probe would pass vacuously).
+ *
+ * The bundler reports module ids as real paths, so the probe imports and matches them through
+ * the real path of `dist`: a dist reached through a symlink or a junction (a linked checkout or
+ * `node_modules`) is checked module by module, not silently passed with no module matched.
+ */
+export async function probeTreeShaking(
+  dist,
+  { keep = 'Button', drop = 'Dialog', dropModules = [] } = {},
+) {
+  const errors = [];
+  const distRoot = realpathSync(resolve(dist));
+  const files = listFiles(distRoot);
+  const components = files.filter((path) => path.startsWith('components/'));
+  const keepModules = components.filter((path) => path.endsWith(`/${keep}.mjs`));
+  const listedModules = new Set(dropModules.map(fold));
+  const existing = new Set(files.map(fold));
+  for (const path of dropModules) {
+    if (!existing.has(fold(path))) {
+      errors.push(
+        `${path}, listed to be dropped from the bundle of an import of only ${keep}, does not exist in dist`,
+      );
+    }
+  }
+  const dropped = new Set([
+    ...components.filter((path) => path.endsWith(`/${drop}.mjs`)).map(fold),
+    ...listedModules,
+  ]);
+  if (keepModules.length === 0) {
+    errors.push(`no dist module for ${keep} (components/**/${keep}.mjs): dist is not per module`);
+  }
+
+  const chunks = await bundleImport(distRoot, [keep]);
+  const code = chunks.map((chunk) => chunk.code).join('\n');
+  const included = bundledModules(distRoot, chunks);
   const allowed = new Set();
   for (const path of keepModules) {
     for (const module of importClosure(distRoot, path)) allowed.add(fold(module));
   }
-  const dropped = new Set(dropModules.map(fold));
   for (const path of keepModules) {
     if (!included.has(path)) {
       errors.push(`${path} is not in the bundle of an import of only ${keep}`);
@@ -963,9 +1021,68 @@ export async function probeTreeShaking(dist, { keep = 'Button', drop = 'Dialog' 
 }
 
 /**
+ * Inclusion probe: bundles an entry that imports only `keep` from `dist/index.mjs`, as the
+ * tree-shaking probe does, and reports each of `modules` (dist-relative module paths) that is not
+ * in the bundle — a probe that detects a module where it is used, so a check that it is dropped
+ * elsewhere cannot pass because the module is missing.
+ */
+export async function probeIncludes(dist, { keep, modules }) {
+  const distRoot = realpathSync(resolve(dist));
+  const included = new Set(
+    [...bundledModules(distRoot, await bundleImport(distRoot, [keep]))].map(fold),
+  );
+  return modules
+    .filter((path) => !included.has(fold(path)))
+    .map((path) => `${path} is not in the bundle of an import of only ${keep}`);
+}
+
+/**
+ * Size budget probe: a minified Vite build of an entry that imports `names` from
+ * `dist/index.mjs`, bare imports external. Returns the minified and gzip (`node:zlib`) sizes in
+ * bytes, the external ids the closure imports (sorted), an error for each budget exceeded, and an
+ * error for each external id not in `allowedExternals` (a dependency outside the measurement,
+ * such as tailwind-merge through `cn`, would hide its size).
+ */
+export async function probeSizeBudget(
+  dist,
+  { names, maxMinifiedBytes, maxGzipBytes, allowedExternals },
+) {
+  const distRoot = realpathSync(resolve(dist));
+  const chunks = await bundleImport(distRoot, names, { minify: true });
+  const code = chunks.map((chunk) => chunk.code).join('\n');
+  const chunkNames = new Set(chunks.map((chunk) => chunk.fileName));
+  const externals = [
+    ...new Set(
+      chunks
+        .flatMap((chunk) => [...chunk.imports, ...chunk.dynamicImports])
+        .filter((id) => !chunkNames.has(id)),
+    ),
+  ].sort();
+  const minified = Buffer.byteLength(code);
+  const gzip = gzipSync(code).length;
+  const label = names.join(' + ');
+  const errors = [];
+  if (minified > maxMinifiedBytes) {
+    errors.push(`${label}: ${minified} bytes minified, over the budget of ${maxMinifiedBytes}`);
+  }
+  if (gzip > maxGzipBytes) {
+    errors.push(`${label}: ${gzip} bytes gzip, over the budget of ${maxGzipBytes}`);
+  }
+  for (const id of externals) {
+    if (!allowedExternals.includes(id)) {
+      errors.push(
+        `${label} imports ${id}, outside the measured closure (allowed: ${allowedExternals.join(', ')})`,
+      );
+    }
+  }
+  return { minified, gzip, externals, errors };
+}
+
+/**
  * Runs every check on `dist` (its parent directory holds the package.json). Returns the errors,
  * the flat names still pending and the listed components that are no compound yet (see
- * {@link PENDING_FLAT_EXPORTS}); `final` closes the pending bridge.
+ * {@link PENDING_FLAT_EXPORTS}), and the measured size of the presence core (`budget`: minified
+ * and gzip bytes, `null` when the probe failed); `final` closes the pending bridge.
  */
 export async function verifyDist(
   dist,
@@ -973,7 +1090,12 @@ export async function verifyDist(
 ) {
   const distRoot = resolve(dist);
   if (!existsSync(distRoot) || !statSync(distRoot).isDirectory()) {
-    return { errors: [`${dist} does not exist (run vite build first)`], pending: [], planned: [] };
+    return {
+      errors: [`${dist} does not exist (run vite build first)`],
+      pending: [],
+      planned: [],
+      budget: null,
+    };
   }
   const pkg = readJson(join(distRoot, '..', 'package.json'));
   const errors = [
@@ -1001,10 +1123,39 @@ export async function verifyDist(
   }
   try {
     errors.push(...(await probeTreeShaking(distRoot)));
+    errors.push(
+      ...(await probeTreeShaking(distRoot, {
+        keep: 'Button',
+        drop: 'Presence',
+        dropModules: [PRESENCE_MODULE],
+      })),
+    );
   } catch (error) {
     errors.push(`tree-shaking probe failed: ${error.message}`);
   }
-  return { errors, pending, planned };
+  try {
+    errors.push(
+      ...(await probeIncludes(distRoot, {
+        keep: PRESENCE_INCLUDE_KEEP,
+        modules: [PRESENCE_MODULE],
+      })),
+    );
+  } catch (error) {
+    errors.push(`presence include probe failed: ${error.message}`);
+  }
+  let budget = null;
+  try {
+    const {
+      minified,
+      gzip,
+      errors: budgetErrors,
+    } = await probeSizeBudget(distRoot, PRESENCE_BUDGET);
+    errors.push(...budgetErrors);
+    budget = { minified, gzip };
+  } catch (error) {
+    errors.push(`presence size budget probe failed: ${error.message}`);
+  }
+  return { errors, pending, planned, budget };
 }
 
 function parseArgs(argv) {
@@ -1025,8 +1176,18 @@ function parseArgs(argv) {
 /** CLI entry; returns the exit code. `io` receives the report (default: the console). */
 export async function main(argv = process.argv.slice(2), io = console) {
   const { dist, pendingFlatExports, final } = parseArgs(argv);
-  const { errors, pending, planned } = await verifyDist(dist, { pendingFlatExports, final });
+  const { errors, pending, planned, budget } = await verifyDist(dist, {
+    pendingFlatExports,
+    final,
+  });
   const where = toPosix(relative(process.cwd(), dist) || dist);
+  if (budget) {
+    io.log(
+      `verify-dist: presence core (${PRESENCE_BUDGET.names.join(' + ')}): ` +
+        `${budget.minified} B minified (budget ${PRESENCE_BUDGET.maxMinifiedBytes}), ` +
+        `${budget.gzip} B gzip (budget ${PRESENCE_BUDGET.maxGzipBytes})`,
+    );
+  }
   if (errors.length > 0) {
     io.error(`verify-dist: ${errors.length} problem(s) in ${where}:`);
     for (const error of errors) io.error(`  - ${error}`);

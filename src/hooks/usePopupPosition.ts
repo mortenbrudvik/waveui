@@ -1,4 +1,4 @@
-import { useMemo } from 'react';
+import { useCallback, useMemo, useRef } from 'react';
 import type * as React from 'react';
 import {
   arrow as arrowMiddleware,
@@ -15,9 +15,10 @@ import {
   type ReferenceType,
   type SizeOptions,
 } from '@floating-ui/react-dom';
-import type { PopupAlign, PopupSide } from '../lib/types';
+import type { PopupAlign, PopupRect, PopupSide, VirtualElement } from '../lib/types';
 import type { Direction } from '../lib/direction';
 import { useDirection } from './useDirection';
+import { useEventCallback } from './useEventCallback';
 
 /** Options of {@link usePopupPosition}. */
 export interface UsePopupPositionOptions {
@@ -50,8 +51,13 @@ export interface UsePopupPositionOptions {
 
 /** Returned by {@link usePopupPosition}. */
 export interface UsePopupPositionResult {
-  /** Ref callback for the anchor (trigger) element. */
-  setReference(el: HTMLElement | null): void;
+  /**
+   * Sets the anchor: a ref callback for the anchor (trigger) element, or a call from a layout
+   * effect or an event. The anchor is an element or a `VirtualElement` (a rectangle such as the
+   * pointer position; a new object on every render is fine); give it a `contextElement` so
+   * scrolling its containers updates the position.
+   */
+  setReference(el: HTMLElement | VirtualElement | null): void;
   /** Ref callback for the popup surface. */
   setFloating(el: HTMLElement | null): void;
   /** Position styles for the surface (also in `floatingProps.style`). */
@@ -84,6 +90,42 @@ function resolveSide(side: PopupSide, dir: Direction): PhysicalSide {
   if (side === 'start') return dir === 'rtl' ? 'right' : 'left';
   if (side === 'end') return dir === 'rtl' ? 'left' : 'right';
   return side;
+}
+
+/** The rectangle of a virtual anchor that is not set (never reached while one is the reference). */
+const EMPTY_RECT: PopupRect = {
+  x: 0,
+  y: 0,
+  width: 0,
+  height: 0,
+  top: 0,
+  right: 0,
+  bottom: 0,
+  left: 0,
+};
+
+/** Whether an anchor is a DOM element (duck typed, so an element of another realm counts). */
+function isElementAnchor(anchor: HTMLElement | VirtualElement): anchor is HTMLElement {
+  return typeof (anchor as Partial<Node>).nodeType === 'number';
+}
+
+/**
+ * The stable stand-in floating-ui gets for virtual anchors: it reads the latest `VirtualElement`
+ * from `latest`, so a new virtual object sets no floating-ui state. One proxy per
+ * `contextElement`, so `autoUpdate` observes the scroll containers of the current one.
+ */
+interface VirtualProxy extends VirtualElement {
+  contextElement: Element | undefined;
+}
+
+function createVirtualProxy(
+  latest: React.RefObject<VirtualElement | null>,
+  contextElement: Element | undefined,
+): VirtualProxy {
+  return {
+    getBoundingClientRect: () => latest.current?.getBoundingClientRect() ?? EMPTY_RECT,
+    contextElement,
+  };
 }
 
 /** Keeps the position updated while mounted; observers are used only where they exist. */
@@ -130,6 +172,12 @@ const sizeApply: NonNullable<SizeOptions['apply']> = ({
  * shifts only where `ResizeObserver`/`IntersectionObserver` exist). Spread `floatingProps` onto the
  * surface: `data-side`/`data-align` expose the final placement for styling (C-CLASS).
  *
+ * The anchor is an element or a `VirtualElement` (a rectangle such as the pointer position; a new
+ * object on every render is fine); give it a `contextElement` so scrolling its containers updates
+ * the position. A virtual anchor reaches floating-ui through one stable proxy that reads the latest
+ * object: a new object only recomputes the position (which renders only when the position
+ * changes), and a new proxy is made only when the `contextElement` changes.
+ *
  * Destructure the result: `eslint-plugin-react-hooks` (`react-hooks/refs`) treats an object
  * whose member is passed to a `ref` prop as a ref, and then rejects reading its other members
  * during render.
@@ -173,7 +221,7 @@ export function usePopupPosition(options: UsePopupPositionOptions): UsePopupPosi
     [dir],
   );
 
-  const { refs, floatingStyles, placement, middlewareData, isPositioned } = useFloating({
+  const { refs, floatingStyles, placement, middlewareData, isPositioned, update } = useFloating({
     open,
     placement: requestedPlacement,
     strategy,
@@ -181,6 +229,31 @@ export function usePopupPosition(options: UsePopupPositionOptions): UsePopupPosi
     platform: directionalPlatform,
     whileElementsMounted: open ? whileElementsMounted : undefined,
   });
+
+  // Virtual anchors: the latest object (written in setReference, never during render) and the
+  // proxy floating-ui holds for it.
+  const virtualRef = useRef<VirtualElement | null>(null);
+  const proxyRef = useRef<VirtualProxy | null>(null);
+  const updatePosition = useEventCallback(update);
+  const { setReference: setFloatingReference, reference: floatingReference } = refs;
+  const setReference = useCallback(
+    (anchor: HTMLElement | VirtualElement | null) => {
+      if (anchor === null || isElementAnchor(anchor)) {
+        virtualRef.current = null;
+        setFloatingReference(anchor);
+        return;
+      }
+      virtualRef.current = anchor;
+      let proxy = proxyRef.current;
+      if (!proxy || proxy.contextElement !== anchor.contextElement) {
+        proxy = createVirtualProxy(virtualRef, anchor.contextElement);
+        proxyRef.current = proxy;
+      }
+      if (floatingReference.current === proxy) updatePosition();
+      else setFloatingReference(proxy);
+    },
+    [setFloatingReference, floatingReference, updatePosition],
+  );
 
   const [finalSide, finalAlign = 'center'] = placement.split('-') as [PhysicalSide, string?];
 
@@ -212,7 +285,7 @@ export function usePopupPosition(options: UsePopupPositionOptions): UsePopupPosi
   );
 
   return {
-    setReference: refs.setReference,
+    setReference,
     setFloating: refs.setFloating,
     floatingStyles: style,
     arrowStyles,

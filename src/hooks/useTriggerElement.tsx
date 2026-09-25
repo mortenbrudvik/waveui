@@ -29,6 +29,16 @@ export interface UseTriggerElementOptions {
    * it has one, otherwise `triggerProps.id`. Roots store it for `aria-labelledby`.
    */
   onResolvedId?: (id: string) => void;
+  /**
+   * Context-menu mode (`openOnContext`): the trigger is a region, not a menu button, so its
+   * element carries no `aria-haspopup`, `aria-expanded` or `aria-controls`. A cloned child and a
+   * wrapper span do not receive them from `triggerProps` (the state-ARIA move of the wrapper span
+   * is skipped too). A render-prop child still receives every trigger prop; when its element
+   * carries them after a commit, they are removed from it and a development warning is logged
+   * once (`<componentName>:context-state-aria`).
+   * @default false
+   */
+  omitStateAria?: boolean;
 }
 
 type UnknownProps = Record<string, unknown>;
@@ -132,6 +142,13 @@ function isElementNode(value: unknown): value is Element {
 
 type StateAriaValues = Partial<Record<(typeof STATE_ARIA)[number], unknown>>;
 
+/** `props` without the state ARIA keys (context-menu mode). */
+function withoutStateAria(props: UnknownProps): UnknownProps {
+  const rest = { ...props };
+  for (const key of STATE_ARIA) delete rest[key];
+  return rest;
+}
+
 /** The state ARIA keys present in `props` (a key given as `undefined` removes the attribute). */
 function pickStateAria(props: UnknownProps): StateAriaValues {
   const values: StateAriaValues = {};
@@ -193,6 +210,10 @@ function moveStateAria(target: Element, values: StateAriaValues): () => void {
  *   a generic span cannot carry, moves after each commit onto the first element inside it in the
  *   tab order (the child's own values restored when it stops being that element), or is dropped
  *   when there is none. A component that forwards `ref` but drops `onClick` cannot be detected.
+ * - **Context-menu mode** (`omitStateAria`): a cloned child and a wrapper span get no
+ *   `aria-haspopup`, `aria-expanded` or `aria-controls` (nothing moves inside the span either); a
+ *   render-prop child receives them with the other props, and the ones it spreads are removed from
+ *   its element after each commit, with a one-time development warning.
  *
  * @param children      The trigger's children.
  * @param triggerProps  Props for the trigger element (`id`, state ARIA, handlers, `ref`; the ref may
@@ -204,7 +225,7 @@ export function useTriggerElement<P>(
   triggerProps: P,
   options: UseTriggerElementOptions,
 ): React.ReactNode {
-  const { componentName, asChild = true, onResolvedId } = options;
+  const { componentName, asChild = true, onResolvedId, omitStateAria = false } = options;
   const [wrapperFallback, setWrapperFallback] = React.useState(false);
 
   const isRenderProp = typeof children === 'function';
@@ -213,8 +234,10 @@ export function useTriggerElement<P>(
   const singleElement = isCloneableElement(content);
   const cloneable = asChild && !wrapperFallback && singleElement;
   const cloneTarget = cloneable ? (content as React.ReactElement<UnknownProps>) : null;
-  const ourProps = triggerProps as UnknownProps;
-  const ourRef = ourProps.ref as React.Ref<Element> | undefined;
+  const allProps = triggerProps as UnknownProps;
+  const ourRef = allProps.ref as React.Ref<Element> | undefined;
+  // The props this hook puts on an element itself (a render-prop child receives `triggerProps`).
+  const ourProps = omitStateAria ? withoutStateAria(allProps) : allProps;
   // The cloned child's own `ref` prop is read to merge it (React 19 keeps `ref` in props).
   const childRef = cloneTarget
     ? (cloneTarget.props.ref as React.Ref<Element> | undefined)
@@ -246,7 +269,7 @@ export function useTriggerElement<P>(
   const wrapper = !isRenderProp && !cloneable;
   const wrapperIsTrigger =
     wrapper && isNonGenericRole(ourProps.role) && isInTabOrder(ourProps.tabIndex);
-  const movedAria = wrapper && !wrapperIsTrigger ? pickStateAria(ourProps) : null;
+  const movedAria = wrapper && !wrapperIsTrigger && !omitStateAria ? pickStateAria(ourProps) : null;
   // No deps: runs after every commit of the trigger (which re-renders on every state change), so
   // the attributes follow the live state and the child's current first tabbable element. A new
   // target rendered by the child without a trigger commit is picked up at the next one.
@@ -255,6 +278,20 @@ export function useTriggerElement<P>(
     if (!movedAria || !span) return undefined;
     const target = getTriggerTarget(span as HTMLElement);
     return target ? moveStateAria(target, movedAria) : undefined;
+  });
+
+  // Context-menu mode: the state ARIA a render-prop child spread onto its element is removed after
+  // each commit (React writes it again only when a value changes). No deps: every commit.
+  React.useLayoutEffect(() => {
+    const el = attachedRef.current;
+    if (!omitStateAria || !isRenderProp || !el) return;
+    const spread = STATE_ARIA.filter((name) => el.hasAttribute(name));
+    if (spread.length === 0) return;
+    for (const name of spread) el.removeAttribute(name);
+    warnOnce(
+      `${componentName}:context-state-aria`,
+      `${componentName}: the trigger element is a context-menu region (openOnContext), which is not a menu button: do not spread aria-haspopup, aria-expanded and aria-controls onto it.`,
+    );
   });
 
   const ourId = typeof ourProps.id === 'string' ? ourProps.id : undefined;
@@ -276,7 +313,7 @@ export function useTriggerElement<P>(
   if (wrapper) {
     const { ref: _ourRef, ...ourRest } = ourProps;
     const wrapperProps: UnknownProps = { ...ourRest, ref: mergedRef };
-    if (!wrapperIsTrigger) for (const key of STATE_ARIA) delete wrapperProps[key];
+    if (!wrapperIsTrigger || omitStateAria) for (const key of STATE_ARIA) delete wrapperProps[key];
     // The explicit 0.4 span renders the children as given. Otherwise `asChild` lets renderTrigger
     // warn about children it cannot clone; the automatic fallback (a single element, never cloned
     // again) warned above.
@@ -285,6 +322,8 @@ export function useTriggerElement<P>(
       : renderTrigger(children, wrapperProps, { componentName, asChild: false });
   }
 
-  // A render-prop child.
-  return renderTrigger(children, triggerProps, { componentName, asChild: false });
+  // A render-prop child. In context-menu mode its element is found through the merged ref, so the
+  // state ARIA it spreads can be removed.
+  const renderProps = omitStateAria ? ({ ...allProps, ref: mergedRef } as P) : triggerProps;
+  return renderTrigger(children, renderProps, { componentName, asChild: false });
 }

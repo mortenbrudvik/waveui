@@ -412,6 +412,10 @@ const CONTRAST_PAIRS: Array<[string, string, number]> = [
   ['muted-foreground', 'card', 4.5],
   ['muted-foreground', 'muted', 4.5],
   ['muted-foreground', 'subtle-hover', 4.5],
+  // ToggleButton `isAccessible` (0.7) draws the pressed state as a brand fill with on-brand text,
+  // on `primary` with an inset `primary-foreground` stroke, on the page and on cards. Its pairs
+  // are the three `primary-foreground` fills below and `primary` on `background` and `card`; they
+  // need no new entry.
   ['primary-foreground', 'primary', 4.5],
   ['primary-foreground', 'primary-hover', 4.5],
   ['primary-foreground', 'primary-pressed', 4.5],
@@ -670,7 +674,7 @@ function themeDecls(theme: ThemeName): Decls {
   return declarations(themeRule(theme).children ?? []);
 }
 
-/** Theme-independent constants (ramps, font family, z-index) on the bare `:root` rule. */
+/** Theme-independent constants (ramps, font family, z-index, motion) on the bare `:root` rule. */
 function rootConstants(): Decls {
   const rule = ruleWithSelectors(tokensNodes(), [':root']);
   if (!rule) throw new Error('tokens.css has no bare `:root` rule for the constants');
@@ -829,6 +833,62 @@ describe('tokens.css — ramps, font and z-index (repo-level#7, repo-level#15)',
     expect(constants.get('--wave-z-overlay')).toBe('1000');
     expect(constants.get('--wave-z-toast')).toBe('1100');
     expect(constants.get('--wave-z-tooltip')).toBe('1200');
+  });
+});
+
+/** Fluent's motion tokens (react-motion 9.16.4): name → value, declared on the bare `:root`. */
+const MOTION_TOKENS: Record<string, string> = {
+  '--wave-duration-ultra-fast': '50ms',
+  '--wave-duration-faster': '100ms',
+  '--wave-duration-fast': '150ms',
+  '--wave-duration-normal': '200ms',
+  '--wave-duration-gentle': '250ms',
+  '--wave-duration-slow': '300ms',
+  '--wave-duration-slower': '400ms',
+  '--wave-duration-ultra-slow': '500ms',
+  '--wave-curve-accelerate-max': 'cubic-bezier(0.9, 0.1, 1, 0.2)',
+  '--wave-curve-accelerate-mid': 'cubic-bezier(1, 0, 1, 1)',
+  '--wave-curve-accelerate-min': 'cubic-bezier(0.8, 0, 0.78, 1)',
+  '--wave-curve-decelerate-max': 'cubic-bezier(0.1, 0.9, 0.2, 1)',
+  '--wave-curve-decelerate-mid': 'cubic-bezier(0, 0, 0, 1)',
+  '--wave-curve-decelerate-min': 'cubic-bezier(0.33, 0, 0.1, 1)',
+  '--wave-curve-easy-ease-max': 'cubic-bezier(0.8, 0, 0.2, 1)',
+  '--wave-curve-easy-ease': 'cubic-bezier(0.33, 0, 0.67, 1)',
+  '--wave-curve-linear': 'cubic-bezier(0, 0, 1, 1)',
+};
+
+describe('motion tokens', () => {
+  it("declares the 8 durations and 9 curves with Fluent's values on the :root constants", () => {
+    expect(Object.keys(MOTION_TOKENS)).toHaveLength(17);
+    const constants = rootConstants();
+    const actual = Object.fromEntries(
+      Object.keys(MOTION_TOKENS).map((name) => [name, constants.get(name)]),
+    );
+    expect(actual).toEqual(MOTION_TOKENS);
+  });
+
+  it('declares each variable once, never in a theme group (theme-independent)', () => {
+    const source = stripComments(readCss('tokens.css'));
+    for (const name of Object.keys(MOTION_TOKENS)) {
+      // A declaration is the name followed by a colon (a `var(--name)` read is not one).
+      expect(source.match(new RegExp(`${name}\\s*:`, 'g')), name).toHaveLength(1);
+    }
+    for (const theme of THEMES) {
+      const motion = [...themeDecls(theme).keys()].filter((name) => name in MOTION_TOKENS);
+      expect(motion).toEqual([]);
+    }
+  });
+
+  it('maps each to its Tailwind utility (duration-wave-*, ease-wave-*) in @theme inline', () => {
+    const decls = declarations(themeBlock().children ?? []);
+    for (const name of Object.keys(MOTION_TOKENS)) {
+      const duration = /^--wave-duration-(.+)$/.exec(name);
+      const curve = /^--wave-curve-(.+)$/.exec(name);
+      const themeName = duration
+        ? `--transition-duration-wave-${duration[1]}`
+        : `--ease-wave-${curve![1]}`;
+      expect(decls.get(themeName), themeName).toBe(`var(${name})`);
+    }
   });
 });
 

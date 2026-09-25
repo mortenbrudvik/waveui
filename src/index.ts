@@ -36,6 +36,13 @@ export type {
 } from './hooks/useFieldControl';
 export { useAnnounce, announce } from './hooks/useAnnounce';
 export type { Politeness } from './hooks/useAnnounce';
+export { usePresence } from './hooks/usePresence';
+export type {
+  PresencePhase,
+  PresenceAttributes,
+  UsePresenceOptions,
+  UsePresenceResult,
+} from './hooks/usePresence';
 
 // Provider
 export { WaveProvider, useWaveTheme, getThemeClassName } from './components/provider/WaveProvider';
@@ -60,3 +67,4 @@ export * from './components/navigation';
 export * from './components/feedback';
 export * from './components/overlays';
 export * from './components/table';
+export * from './components/motion';

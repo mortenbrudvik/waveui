@@ -58,6 +58,8 @@ import type {
   NavSubItemOwnProps,
   OpenChangeDetails,
   Orientation,
+  PresencePhase,
+  PresenceProps,
   ProgressBarColor,
   ProgressBarProps,
   RadioItemProps,
@@ -84,6 +86,7 @@ import type {
   ToggleButtonProps,
   TooltipAppearance,
   TooltipProps,
+  UsePresenceOptions,
   UseRovingTabIndexOptions,
   ValidationState,
   WaveDir,
@@ -533,5 +536,18 @@ describe('0.6 props and unions from the package entry', () => {
   it('navigation: Nav currentCategory and TabList selectTabOnFocus', () => {
     expectTypeOf<NavProps['currentCategory']>().toEqualTypeOf<string | undefined>();
     expectTypeOf<TabListProps['selectTabOnFocus']>().toEqualTypeOf<boolean | undefined>();
+  });
+});
+
+// The 0.7 presence core, imported from the package entry (compile-time, `tsconfig.dev.json`).
+describe('0.7 presence core from the package entry', () => {
+  it('PresencePhase, the Presence visible prop and the unmountOnExit option', () => {
+    expectTypeOf<PresencePhase>().toEqualTypeOf<'entering' | 'entered' | 'exiting' | 'exited'>();
+    expectTypeOf<PresenceProps['visible']>().toEqualTypeOf<boolean>();
+    expectTypeOf<UsePresenceOptions['unmountOnExit']>().toEqualTypeOf<boolean | undefined>();
+
+    // @ts-expect-error `visible` is required
+    const props: PresenceProps = { children: null as unknown as PresenceProps['children'] };
+    expect(props).toBeDefined();
   });
 });

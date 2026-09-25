@@ -149,3 +149,32 @@ describe('twMerge', () => {
     expect(twMerge('shadow-4 shadow-lg')).toBe('shadow-lg');
   });
 });
+
+describe('cn — Wave motion tokens', () => {
+  it('duration-wave-* are transition durations (a later Tailwind duration replaces them)', () => {
+    expect(cn('duration-wave-fast', 'duration-200')).toBe('duration-200');
+    expect(cn('duration-200', 'duration-wave-ultra-slow')).toBe('duration-wave-ultra-slow');
+    expect(cn('duration-wave-fast', 'duration-wave-normal')).toBe('duration-wave-normal');
+  });
+
+  it('ease-wave-* are timing functions (a later Tailwind ease replaces them)', () => {
+    expect(cn('ease-wave-linear', 'ease-in')).toBe('ease-in');
+    expect(cn('ease-in-out', 'ease-wave-decelerate-mid')).toBe('ease-wave-decelerate-mid');
+    expect(cn('ease-wave-accelerate-max', 'ease-wave-easy-ease')).toBe('ease-wave-easy-ease');
+  });
+
+  it('keeps a duration and a curve together, and variant-scoped ones apart', () => {
+    expect(cn('duration-wave-fast', 'ease-wave-linear')).toBe(
+      'duration-wave-fast ease-wave-linear',
+    );
+    expect(
+      cn(
+        'duration-wave-normal',
+        'data-[presence=exiting]:duration-wave-fast',
+        'motion-reduce:duration-0',
+      ),
+    ).toBe(
+      'duration-wave-normal data-[presence=exiting]:duration-wave-fast motion-reduce:duration-0',
+    );
+  });
+});

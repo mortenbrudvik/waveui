@@ -14,7 +14,8 @@
  */
 
 /* ---------------------------------------------------------------------------------------------
- * Theme-independent constants: ramps (read the 0.4 names as fallbacks), font family, z-index.
+ * Theme-independent constants: ramps (read the 0.4 names as fallbacks), font family, z-index,
+ * motion.
  * ------------------------------------------------------------------------------------------- */
 :root {
   --wave-font-family:
@@ -24,6 +25,26 @@
   --wave-z-overlay: 1000;
   --wave-z-toast: 1100;
   --wave-z-tooltip: 1200;
+
+  /* Motion: Fluent's motionTokens (react-motion 9.16.4). Theme-independent; components pair their
+     motion with motion-reduce: variants (C-MOTION), the tokens are never zeroed. */
+  --wave-duration-ultra-fast: 50ms;
+  --wave-duration-faster: 100ms;
+  --wave-duration-fast: 150ms;
+  --wave-duration-normal: 200ms;
+  --wave-duration-gentle: 250ms;
+  --wave-duration-slow: 300ms;
+  --wave-duration-slower: 400ms;
+  --wave-duration-ultra-slow: 500ms;
+  --wave-curve-accelerate-max: cubic-bezier(0.9, 0.1, 1, 0.2);
+  --wave-curve-accelerate-mid: cubic-bezier(1, 0, 1, 1);
+  --wave-curve-accelerate-min: cubic-bezier(0.8, 0, 0.78, 1);
+  --wave-curve-decelerate-max: cubic-bezier(0.1, 0.9, 0.2, 1);
+  --wave-curve-decelerate-mid: cubic-bezier(0, 0, 0, 1);
+  --wave-curve-decelerate-min: cubic-bezier(0.33, 0, 0.1, 1);
+  --wave-curve-easy-ease-max: cubic-bezier(0.8, 0, 0.2, 1);
+  --wave-curve-easy-ease: cubic-bezier(0.33, 0, 0.67, 1);
+  --wave-curve-linear: cubic-bezier(0, 0, 1, 1);
 
   /* Brand ramp */
   --wave-brand-10: var(--brand-10, #061724);
@@ -475,6 +496,25 @@
   --shadow-16: 0 0 2px rgba(0, 0, 0, 0.12), 0 8px 16px rgba(0, 0, 0, 0.14);
   --shadow-28: 0 0 8px rgba(0, 0, 0, 0.12), 0 14px 28px rgba(0, 0, 0, 0.14);
   --shadow-64: 0 0 8px rgba(0, 0, 0, 0.12), 0 32px 64px rgba(0, 0, 0, 0.14);
+
+  /* Motion durations and curves (utilities `duration-wave-*`, `ease-wave-*`). No keyframes. */
+  --transition-duration-wave-ultra-fast: var(--wave-duration-ultra-fast);
+  --transition-duration-wave-faster: var(--wave-duration-faster);
+  --transition-duration-wave-fast: var(--wave-duration-fast);
+  --transition-duration-wave-normal: var(--wave-duration-normal);
+  --transition-duration-wave-gentle: var(--wave-duration-gentle);
+  --transition-duration-wave-slow: var(--wave-duration-slow);
+  --transition-duration-wave-slower: var(--wave-duration-slower);
+  --transition-duration-wave-ultra-slow: var(--wave-duration-ultra-slow);
+  --ease-wave-accelerate-max: var(--wave-curve-accelerate-max);
+  --ease-wave-accelerate-mid: var(--wave-curve-accelerate-mid);
+  --ease-wave-accelerate-min: var(--wave-curve-accelerate-min);
+  --ease-wave-decelerate-max: var(--wave-curve-decelerate-max);
+  --ease-wave-decelerate-mid: var(--wave-curve-decelerate-mid);
+  --ease-wave-decelerate-min: var(--wave-curve-decelerate-min);
+  --ease-wave-easy-ease-max: var(--wave-curve-easy-ease-max);
+  --ease-wave-easy-ease: var(--wave-curve-easy-ease);
+  --ease-wave-linear: var(--wave-curve-linear);
 
   /* Animations. Reduced-motion alternates are applied per component (C-MOTION):
      Spinner `motion-reduce:animate-wave-spin-slow`, indeterminate ProgressBar

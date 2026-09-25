@@ -1,3 +1,4 @@
+import type * as React from 'react';
 import { describe, it, expect, expectTypeOf } from 'vitest';
 import type {
   Orientation,
@@ -15,7 +16,14 @@ import type {
   OpenChangeDetails,
   ModalOpenChangeReason,
   ModalType,
+  CheckedValues,
+  CheckedValuesChangeDetails,
+  CheckedValuesChangeHandler,
+  PopupRect,
+  VirtualElement,
+  PopupTarget,
 } from '../types';
+import type { VirtualElement as FloatingVirtualElement } from '@floating-ui/react-dom';
 import type { DismissReason } from '../layers';
 import * as TypesModule from '../types';
 import { resolveSlot, renderSlot } from '../slot';
@@ -99,5 +107,69 @@ describe('open-change vocabulary', () => {
   it('ModalType is modal or alert', () => {
     expectTypeOf<ModalType>().toEqualTypeOf<'modal' | 'alert'>();
     expectTypeOf<'non-modal'>().not.toMatchTypeOf<ModalType>();
+  });
+});
+
+describe('checked-values vocabulary (Menu, Toolbar)', () => {
+  it('CheckedValues maps group names to readonly value lists', () => {
+    expectTypeOf<CheckedValues>().toEqualTypeOf<Readonly<Record<string, readonly string[]>>>();
+    expectTypeOf<Record<string, string[]>>().toExtend<CheckedValues>();
+    const literal = { view: ['grid'] } as const;
+    expectTypeOf(literal).toExtend<CheckedValues>();
+    // @ts-expect-error the values are lists of strings
+    const numbers: CheckedValues = { view: [1] };
+    expect(numbers).toEqual({ view: [1] });
+  });
+
+  it('CheckedValuesChangeDetails carries the group name, its new items and the event', () => {
+    expectTypeOf<CheckedValuesChangeDetails>().toEqualTypeOf<{
+      name: string;
+      checkedItems: string[];
+      event: Event;
+    }>();
+  });
+
+  it('CheckedValuesChangeHandler takes the values first and optional details', () => {
+    expectTypeOf<CheckedValuesChangeHandler>().toEqualTypeOf<
+      (checkedValues: Record<string, string[]>, details?: CheckedValuesChangeDetails) => void
+    >();
+    // A handler that reads only the values, and a state setter, are handlers.
+    expectTypeOf<
+      (values: Record<string, string[]>) => void
+    >().toExtend<CheckedValuesChangeHandler>();
+    expectTypeOf<
+      React.Dispatch<React.SetStateAction<Record<string, string[]>>>
+    >().toExtend<CheckedValuesChangeHandler>();
+  });
+});
+
+describe('popup anchors (Menu.Popover and Popover target)', () => {
+  it('PopupRect is a viewport rectangle; a DOMRect is one', () => {
+    expectTypeOf<PopupRect>().toEqualTypeOf<{
+      x: number;
+      y: number;
+      width: number;
+      height: number;
+      top: number;
+      right: number;
+      bottom: number;
+      left: number;
+    }>();
+    expectTypeOf<DOMRect>().toExtend<PopupRect>();
+  });
+
+  it('VirtualElement reads its rectangle on demand, with an optional context element', () => {
+    expectTypeOf<VirtualElement['getBoundingClientRect']>().toEqualTypeOf<() => PopupRect>();
+    expectTypeOf<VirtualElement['contextElement']>().toEqualTypeOf<Element | undefined>();
+    // An element is a VirtualElement too, and floating-ui takes one without a cast.
+    expectTypeOf<HTMLElement>().toExtend<VirtualElement>();
+    expectTypeOf<VirtualElement>().toExtend<FloatingVirtualElement>();
+    // @ts-expect-error a VirtualElement needs getBoundingClientRect
+    const noRect: VirtualElement = { contextElement: document.body };
+    expect(noRect).toBeDefined();
+  });
+
+  it('PopupTarget is an element, a VirtualElement or null', () => {
+    expectTypeOf<PopupTarget>().toEqualTypeOf<HTMLElement | VirtualElement | null>();
   });
 });

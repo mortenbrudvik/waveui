@@ -98,6 +98,63 @@ export type ModalOpenChangeReason =
 /** How a modal surface blocks the page (`'non-modal'` joins in a later release). */
 export type ModalType = 'modal' | 'alert';
 
+/**
+ * Checked items of a menu or toolbar, per group `name`: `{ sort: ['date'], view: ['ruler', 'grid'] }`.
+ * A checkbox or switch item (or a toolbar toggle) is checked while its `value` is in
+ * `checkedValues[name]`; a radio item while its `value` is the group's only value.
+ */
+export type CheckedValues = Readonly<Record<string, readonly string[]>>;
+
+/** Second argument of `onCheckedValuesChange`: the group that changed, its new items and the event. */
+export interface CheckedValuesChangeDetails {
+  /** The `name` of the group that changed. */
+  name: string;
+  /** The checked values of that group after the change (a new array). */
+  checkedItems: string[];
+  /** The DOM event behind the change (the item's click). */
+  event: Event;
+}
+
+/**
+ * Signature of `onCheckedValuesChange` (Menu, Toolbar): the new checked values first, then the
+ * details. WaveUI always passes `details`; it is typed optional until 1.0 (read it as
+ * `details?.name`), like `onOpenChange`'s.
+ */
+export type CheckedValuesChangeHandler = (
+  checkedValues: Record<string, string[]>,
+  details?: CheckedValuesChangeDetails,
+) => void;
+
+/** A rectangle in viewport coordinates, as `getBoundingClientRect()` returns it (a `DOMRect` is one). */
+export interface PopupRect {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+  top: number;
+  right: number;
+  bottom: number;
+  left: number;
+}
+
+/**
+ * A positioning anchor that is not an element: a rectangle read on demand, such as the pointer
+ * position of a context menu or a text selection. `contextElement` is the element whose scroll
+ * containers move the anchor (the surface follows them); without it only window scroll and resize
+ * reposition the surface.
+ */
+export interface VirtualElement {
+  getBoundingClientRect(): PopupRect;
+  contextElement?: Element;
+}
+
+/**
+ * Where a popup is placed instead of next to its trigger (`Menu.Popover` and `Popover` `target`):
+ * an element held in state, or a `VirtualElement`. TeachingPopover's `target` (0.6) also takes a
+ * ref and no `VirtualElement`; ROADMAP P7-01 unifies them.
+ */
+export type PopupTarget = HTMLElement | VirtualElement | null;
+
 // Re-export slot and polymorphic types for convenience
 export type { Slot, SlotObject, ResolvedSlot } from './slot';
 export type { PolymorphicProps, PolymorphicComponent } from './polymorphic';

@@ -41,6 +41,8 @@ import {
   isMainModule,
   main,
   PENDING_FLAT_EXPORTS,
+  probeIncludes,
+  probeSizeBudget,
   probeTreeShaking,
   removeWorkDir,
   runScript,
@@ -89,6 +91,27 @@ function goodFiles() {
   const button = component('Button');
   const card = component('Card', ['Header']);
   const dialog = component('Dialog', ['Trigger', 'Content']);
+  // The presence core (0.7): a hook and a component on it, with React external.
+  const usePresence = {
+    esm:
+      `${DIRECTIVE}import { useState } from 'react';\n` +
+      "export function usePresence(visible) { const [phase] = useState(visible ? 'entered' : 'exited'); return { isMounted: visible, phase }; }\n",
+    cjs:
+      `${DIRECTIVE}const react = require('react');\n` +
+      "exports.usePresence = function usePresence(visible) { const [phase] = react.useState(visible ? 'entered' : 'exited'); return { isMounted: visible, phase }; };\n",
+  };
+  const presence = {
+    esm:
+      `${DIRECTIVE}import { jsx } from 'react/jsx-runtime';\n` +
+      "import { usePresence } from '../../hooks/usePresence.mjs';\n" +
+      "function Presence(props) { const { isMounted, phase } = usePresence(props.visible); return isMounted ? jsx('div', { 'data-presence': phase, children: props.children }) : null; }\n" +
+      "Presence.displayName = 'Presence';\nexport { Presence };\n",
+    cjs:
+      `${DIRECTIVE}const jsxRuntime = require('react/jsx-runtime');\n` +
+      "const hook = require('../../hooks/usePresence.cjs');\n" +
+      "function Presence(props) { const { isMounted, phase } = hook.usePresence(props.visible); return isMounted ? jsxRuntime.jsx('div', { 'data-presence': phase, children: props.children }) : null; }\n" +
+      "Presence.displayName = 'Presence';\nexports.Presence = Presence;\n",
+  };
   const dts =
     'export declare function cn(...inputs: unknown[]): string;\n' +
     '/** A button. */\nexport declare const Button: (props: object) => null;\n';
@@ -117,12 +140,18 @@ function goodFiles() {
     'dist/components/layout/Card.cjs': card.cjs,
     'dist/components/overlays/Dialog.mjs': dialog.esm,
     'dist/components/overlays/Dialog.cjs': dialog.cjs,
+    'dist/hooks/usePresence.mjs': usePresence.esm,
+    'dist/hooks/usePresence.cjs': usePresence.cjs,
+    'dist/components/motion/Presence.mjs': presence.esm,
+    'dist/components/motion/Presence.cjs': presence.cjs,
     'dist/index.mjs':
       "export { cn } from './lib/cn.mjs';\n" +
       "export { useThing } from './hooks/useThing.mjs';\n" +
       "export { Button } from './components/button/Button.mjs';\n" +
       "export { Card, CardHeader } from './components/layout/Card.mjs';\n" +
-      "export { Dialog, DialogTrigger, DialogContent } from './components/overlays/Dialog.mjs';\n",
+      "export { Dialog, DialogTrigger, DialogContent } from './components/overlays/Dialog.mjs';\n" +
+      "export { usePresence } from './hooks/usePresence.mjs';\n" +
+      "export { Presence } from './components/motion/Presence.mjs';\n",
     'dist/index.cjs':
       "Object.defineProperty(exports, '__esModule', { value: true });\n" +
       "const cn = require('./lib/cn.cjs');\n" +
@@ -130,10 +159,13 @@ function goodFiles() {
       "const button = require('./components/button/Button.cjs');\n" +
       "const card = require('./components/layout/Card.cjs');\n" +
       "const dialog = require('./components/overlays/Dialog.cjs');\n" +
+      "const presenceHook = require('./hooks/usePresence.cjs');\n" +
+      "const presence = require('./components/motion/Presence.cjs');\n" +
       'exports.cn = cn.cn;\nexports.useThing = hook.useThing;\nexports.Button = button.Button;\n' +
       'exports.Card = card.Card;\nexports.CardHeader = card.CardHeader;\n' +
       'exports.Dialog = dialog.Dialog;\nexports.DialogTrigger = dialog.DialogTrigger;\n' +
-      'exports.DialogContent = dialog.DialogContent;\n',
+      'exports.DialogContent = dialog.DialogContent;\n' +
+      'exports.usePresence = presenceHook.usePresence;\nexports.Presence = presence.Presence;\n',
     'dist/index.d.ts': dts,
     'dist/index.d.cts': dts,
   };
@@ -822,6 +854,131 @@ describe('probeTreeShaking (repo-level#3)', () => {
   });
 });
 
+describe('probeTreeShaking: modules that must be dropped', () => {
+  const presenceDrop = { keep: 'Button', drop: 'Presence', dropModules: ['hooks/usePresence.mjs'] };
+
+  it('passes when neither the drop component nor the listed modules are in the bundle', async () => {
+    expect(await probeTreeShaking(fixture().dist, presenceDrop)).toEqual([]);
+  });
+
+  it('reports a listed module that is in the bundle', async () => {
+    const files = goodFiles();
+    const { dist } = fixture({
+      // Button now uses the presence hook, so its bundle holds the hook's module.
+      'dist/components/button/Button.mjs': files['dist/components/button/Button.mjs']
+        .replace(
+          "import { cn } from '../../lib/cn.mjs';\n",
+          "import { cn } from '../../lib/cn.mjs';\nimport { usePresence } from '../../hooks/usePresence.mjs';\n",
+        )
+        .replace('return cn(', 'usePresence(true); return cn('),
+    });
+    expect(await probeTreeShaking(dist, presenceDrop)).toEqual([
+      'hooks/usePresence.mjs is in the bundle of an import of only Button (Presence must be dropped)',
+    ]);
+  });
+
+  it('reports a listed module that does not exist in dist (the probe would pass vacuously)', async () => {
+    const errors = await probeTreeShaking(fixture().dist, {
+      ...presenceDrop,
+      dropModules: ['hooks/useGone.mjs'],
+    });
+    expect(errors).toEqual([
+      'hooks/useGone.mjs, listed to be dropped from the bundle of an import of only Button, does not exist in dist',
+    ]);
+  });
+});
+
+describe('probeIncludes', () => {
+  it('passes when every listed module is in the bundle of an import of only `keep`', async () => {
+    expect(
+      await probeIncludes(fixture().dist, { keep: 'Presence', modules: ['hooks/usePresence.mjs'] }),
+    ).toEqual([]);
+  });
+
+  it('reports a listed module that is not in the bundle', async () => {
+    expect(
+      await probeIncludes(fixture().dist, { keep: 'Button', modules: ['hooks/usePresence.mjs'] }),
+    ).toEqual(['hooks/usePresence.mjs is not in the bundle of an import of only Button']);
+  });
+});
+
+describe('probeSizeBudget', () => {
+  const presenceBudget = {
+    names: ['usePresence', 'Presence'],
+    maxMinifiedBytes: 5120,
+    maxGzipBytes: 2048,
+    allowedExternals: ['react', 'react/jsx-runtime'],
+  };
+
+  /** A string that gzip cannot shrink much: `length` pseudo-random letters and digits. */
+  function noise(length) {
+    const alphabet = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
+    let seed = 42;
+    let text = '';
+    for (let i = 0; i < length; i++) {
+      seed = (seed * 1103515245 + 12345) % 2147483648;
+      text += alphabet[seed % alphabet.length];
+    }
+    return text;
+  }
+
+  it('measures a small closure and passes it', async () => {
+    const result = await probeSizeBudget(fixture().dist, presenceBudget);
+    expect(result.errors).toEqual([]);
+    expect(result.externals).toEqual(['react', 'react/jsx-runtime']);
+    expect(result.minified).toBeGreaterThan(0);
+    expect(result.gzip).toBeGreaterThan(0);
+    expect(result.gzip).toBeLessThan(result.minified);
+  });
+
+  it('reports a closure over the minified and the gzip budget', async () => {
+    const { dist } = fixture({
+      'dist/hooks/usePresence.mjs':
+        `${DIRECTIVE}import { useState } from 'react';\n` +
+        `const TABLE = ${JSON.stringify(noise(8000))};\n` +
+        'export function usePresence(visible) { useState(TABLE); return { isMounted: visible, phase: TABLE }; }\n',
+    });
+    const result = await probeSizeBudget(dist, presenceBudget);
+    expect(result.minified).toBeGreaterThan(5120);
+    expect(result.gzip).toBeGreaterThan(2048);
+    expect(result.errors).toEqual([
+      `usePresence + Presence: ${result.minified} bytes minified, over the budget of 5120`,
+      `usePresence + Presence: ${result.gzip} bytes gzip, over the budget of 2048`,
+    ]);
+  });
+
+  it('reports an external import outside allowedExternals (its size would hide outside the measure)', async () => {
+    const { dist } = fixture({
+      'dist/hooks/usePresence.mjs':
+        `${DIRECTIVE}import { useState } from 'react';\nimport { clsx } from 'clsx';\n` +
+        "export function usePresence(visible) { useState(0); return { isMounted: visible, phase: clsx('entered') }; }\n",
+    });
+    const result = await probeSizeBudget(dist, presenceBudget);
+    expect(result.externals).toEqual(['clsx', 'react', 'react/jsx-runtime']);
+    expect(result.errors).toEqual([
+      'usePresence + Presence imports clsx, outside the measured closure (allowed: react, react/jsx-runtime)',
+    ]);
+  });
+});
+
+describe('the flat-name bridge (PENDING_FLAT_EXPORTS)', () => {
+  it('lists Toolbar, which the real exports report as planned until it is a compound, then as pending', async () => {
+    expect(PENDING_FLAT_EXPORTS).toEqual(['Toolbar']);
+    const mod = await import('../../src/index.ts');
+    const members = Object.keys(mod.Toolbar).filter((key) => /^[A-Z]/.test(key));
+    const result = checkFlatExports(mod);
+    expect(result.errors).toEqual([]);
+    if (members.length === 0) {
+      // 0.6: Toolbar is no compound yet.
+      expect(result).toEqual({ errors: [], pending: [], planned: ['Toolbar'] });
+    } else {
+      // Toolbar has parts whose flat names the barrels do not export yet.
+      expect(result.planned).toEqual([]);
+      expect(result.pending.every((name) => name.startsWith('Toolbar'))).toBe(true);
+    }
+  }, 60_000);
+});
+
 describe('verifyDist and main', () => {
   it('passes a correct dist', async () => {
     const { dist } = fixture();
@@ -845,10 +1002,54 @@ describe('verifyDist and main', () => {
     );
   });
 
+  it('runs the presence probes: a Button bundle with the presence core fails', async () => {
+    const files = goodFiles();
+    const { dist } = fixture({
+      'dist/components/button/Button.mjs': files['dist/components/button/Button.mjs']
+        .replace(
+          "import { cn } from '../../lib/cn.mjs';\n",
+          "import { cn } from '../../lib/cn.mjs';\nimport { usePresence } from '../../hooks/usePresence.mjs';\n",
+        )
+        .replace('return cn(', 'usePresence(true); return cn('),
+    });
+    const { errors } = await verifyDist(dist, noPending);
+    expect(errors).toEqual([
+      'hooks/usePresence.mjs is in the bundle of an import of only Button (Presence must be dropped)',
+    ]);
+  });
+
+  it('reports a dist without the presence core module (the include probe)', async () => {
+    const files = goodFiles();
+    const { dist } = fixture({
+      // Presence no longer uses the hook module: an import of only Presence lacks it.
+      'dist/components/motion/Presence.mjs': files['dist/components/motion/Presence.mjs']
+        .replace("import { usePresence } from '../../hooks/usePresence.mjs';\n", '')
+        .replace(
+          'const { isMounted, phase } = usePresence(props.visible);',
+          "const isMounted = props.visible; const phase = 'entered';",
+        ),
+    });
+    const { errors } = await verifyDist(dist, noPending);
+    expect(errors).toEqual([
+      'hooks/usePresence.mjs is not in the bundle of an import of only Presence',
+    ]);
+  });
+
+  it('prints the measured presence budget', async () => {
+    const lines = [];
+    const io = { log: (line) => lines.push(line), error: (line) => lines.push(line) };
+    expect(await main(['--dist', fixture().dist, '--no-pending'], io)).toBe(0);
+    expect(lines.join('\n')).toMatch(
+      /verify-dist: presence core \(usePresence \+ Presence\): \d+ B minified \(budget 6804\), \d+ B gzip \(budget 2927\)/,
+    );
+  });
+
   it('exits 0 for a correct dist and 1 otherwise', async () => {
     const quiet = { log: () => {}, error: () => {} };
     expect(await main(['--dist', fixture().dist, '--no-pending'], quiet)).toBe(0);
-    expect(await main(['--dist', fixture({ 'dist/index.d.cts': null }).dist], quiet)).toBe(1);
+    expect(
+      await main(['--dist', fixture({ 'dist/index.d.cts': null }).dist, '--no-pending'], quiet),
+    ).toBe(1);
     expect(await main(['--dist', join(fixtureRoot, 'missing')], quiet)).toBe(1);
   });
 
@@ -881,6 +1082,7 @@ describe('verifyDist and main', () => {
       errors: [],
       pending: ['CardHeader'],
       planned: [],
+      budget: { minified: expect.any(Number), gzip: expect.any(Number) },
     });
     expect((await verifyDist(dist, { pendingFlatExports: ['Card'], final: true })).errors).toEqual([
       expect.stringMatching(/CardHeader is not exported/),

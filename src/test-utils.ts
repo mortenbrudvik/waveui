@@ -88,7 +88,10 @@
  * - {@link expectThrows}: rendering throws exactly one error and logs nothing (the development
  *   throw of a part outside its root, C-CONTEXT).
  * - Browser API mocks: {@link installResizeObserverMock}, {@link mockMatchMedia} (its answers
- *   last one test — call it inside the test or in `beforeEach`, never `beforeAll`), {@link mockRect}.
+ *   last one test — call it inside the test or in `beforeEach`, never `beforeAll`),
+ *   {@link mockRect}, {@link mockAnimations} (`getAnimations()` for the waiting phases of the
+ *   presence core; it removes itself after the test — call it inside the test or in
+ *   `beforeEach`).
  * - The environment machinery {@link mockMatchMedia}, {@link resetMatchMediaMock},
  *   {@link assertEmptyBody}, {@link assertOverlayStateReleased} and {@link describeElement} is
  *   **defined in `src/test-setup.ts`** and re-exported here — one instance, the one the setup
@@ -114,6 +117,7 @@ import { act, render, screen } from '@testing-library/react';
 import type { RenderOptions, RenderResult } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import type { UserEvent } from '@testing-library/user-event';
+import { onTestFinished } from 'vitest';
 import { configureAxe } from 'vitest-axe';
 import { WaveProvider } from './components/provider/WaveProvider';
 import type { WaveDir, WaveTheme } from './components/provider/WaveProvider';
@@ -1149,4 +1153,136 @@ export function mockRect(el: Element, rect: Partial<DOMRect>): void {
   define('clientWidth', width);
   define('offsetHeight', height);
   define('clientHeight', height);
+}
+
+/** Options of {@link mockAnimations}. */
+export interface MockAnimationsOptions {
+  /**
+   * Which elements report one running finite animation from `getAnimations()`.
+   * @default elements carrying `data-test-motion` whose `data-presence` is `entering` or `exiting`
+   */
+  animated?: (el: Element) => boolean;
+}
+
+/** Returned by {@link mockAnimations}. */
+export interface MockAnimations {
+  /** Resolves the `finished` promise of every animation handed out so far (call inside `act`). */
+  finishAll(): Promise<void>;
+  /** Rejects them, as a cancelled animation does (call inside `act`). */
+  cancelAll(): Promise<void>;
+  /** How many running animations `getAnimations()` has handed out. */
+  readonly started: number;
+}
+
+/** The default of {@link MockAnimationsOptions.animated}: a marked element in a moving phase. */
+function isMovingTestElement(el: Element): boolean {
+  if (!el.hasAttribute('data-test-motion')) return false;
+  const phase = el.getAttribute('data-presence');
+  return phase === 'entering' || phase === 'exiting';
+}
+
+interface MockAnimationEntry {
+  animation: Animation;
+  settle(outcome: 'finished' | 'cancelled'): void;
+}
+
+/** A running animation of 200 ms whose `finished` promise settles only through `settle`. */
+function createMockAnimation(): MockAnimationEntry {
+  let resolve!: (animation: Animation) => void;
+  let reject!: (reason: unknown) => void;
+  const finished = new Promise<Animation>((onResolve, onReject) => {
+    resolve = onResolve;
+    reject = onReject;
+  });
+  // A cancelled animation's rejection is expected; nothing has to handle it.
+  finished.catch(() => {});
+  let playState: AnimationPlayState = 'running';
+  const timing = { delay: 0, duration: 200, endTime: 200, iterations: 1 };
+  const animation = {
+    get playState() {
+      return playState;
+    },
+    finished,
+    effect: { getComputedTiming: () => timing },
+  } as unknown as Animation;
+  return {
+    animation,
+    settle(outcome) {
+      if (playState !== 'running') return;
+      if (outcome === 'finished') {
+        playState = 'finished';
+        resolve(animation);
+      } else {
+        playState = 'idle';
+        reject(new DOMException('The animation was aborted.', 'AbortError'));
+      }
+    },
+  };
+}
+
+/** Microtask turns {@link MockAnimations} waits after settling, so promise chains on them run. */
+const SETTLE_TURNS = 10;
+
+/**
+ * Installs `Element.prototype.getAnimations` for the current test (jsdom has none) and removes it
+ * after the test, to test the waiting phases of the presence core. Call it inside a test or a
+ * `beforeEach` (it registers its cleanup with Vitest's `onTestFinished`, which a `beforeAll`
+ * cannot use).
+ *
+ * - An element that `animated` accepts reports one running finite animation (200 ms, `playState`
+ *   `'running'`): the same one on every call until it settles, then a new one (a settled animation
+ *   is not running any more).
+ * - `finishAll()` resolves the `finished` promise of every animation handed out so far and
+ *   `cancelAll()` rejects it with an `AbortError` (as a cancelled animation does); both then wait
+ *   a few microtask turns, so the reactions to those promises (the presence core's phase end) run
+ *   before they return. Call them inside `act`:
+ *   `await act(async () => { await motion.finishAll(); })`.
+ * - An animation settles once; later calls leave it alone.
+ * - The cleanup restores the previous `getAnimations` (normally none) after the test.
+ *
+ * @example
+ * const motion = mockAnimations();
+ * render(<Presence visible={open}><div data-test-motion="" /></Presence>);
+ * // … hide it: the element stays, `data-presence="exiting"`, until
+ * await act(async () => { await motion.finishAll(); });
+ */
+export function mockAnimations(options: MockAnimationsOptions = {}): MockAnimations {
+  const animated = options.animated ?? isMovingTestElement;
+  const proto = Element.prototype;
+  const previous = Object.getOwnPropertyDescriptor(proto, 'getAnimations');
+  const current = new Map<Element, MockAnimationEntry>();
+  const handedOut: MockAnimationEntry[] = [];
+
+  Object.defineProperty(proto, 'getAnimations', {
+    configurable: true,
+    writable: true,
+    value: function getAnimations(this: Element): Animation[] {
+      if (!animated(this)) return [];
+      let entry = current.get(this);
+      if (!entry || entry.animation.playState !== 'running') {
+        entry = createMockAnimation();
+        current.set(this, entry);
+        handedOut.push(entry);
+      }
+      return [entry.animation];
+    },
+  });
+
+  onTestFinished(() => {
+    if (previous) Object.defineProperty(proto, 'getAnimations', previous);
+    else Reflect.deleteProperty(proto, 'getAnimations');
+  });
+
+  async function settleAll(outcome: 'finished' | 'cancelled'): Promise<void> {
+    for (const entry of handedOut) entry.settle(outcome);
+    for (let turn = 0; turn < SETTLE_TURNS; turn++) await Promise.resolve();
+  }
+
+  return {
+    finishAll: () => settleAll('finished'),
+    cancelAll: () => settleAll('cancelled'),
+    get started() {
+      return handedOut.length;
+    },
+  };
 }
