@@ -178,6 +178,7 @@ describe('Drawer', () => {
         } finally {
           act(() => root?.unmount());
           container.remove();
+          error.mockRestore();
         }
       },
     );
@@ -1561,19 +1562,24 @@ describe('Drawer', () => {
       const error = vi.spyOn(console, 'error');
       // A lazy component whose chunk never loads (the panel is closed, so it never renders).
       const Loading = React.lazy(() => new Promise<{ default: React.ComponentType }>(() => {}));
-      render(
-        <Drawer title="Filters">
-          <Drawer.Trigger>
-            <button type="button">Open filters</button>
-          </Drawer.Trigger>
-          <div>
-            <Loading />
-          </div>
-        </Drawer>,
-      );
-      expect(button('Open filters')).toBeInTheDocument();
-      expect(warn).not.toHaveBeenCalled();
-      expect(error).not.toHaveBeenCalled();
+      try {
+        render(
+          <Drawer title="Filters">
+            <Drawer.Trigger>
+              <button type="button">Open filters</button>
+            </Drawer.Trigger>
+            <div>
+              <Loading />
+            </div>
+          </Drawer>,
+        );
+        expect(button('Open filters')).toBeInTheDocument();
+        expect(warn).not.toHaveBeenCalled();
+        expect(error).not.toHaveBeenCalled();
+      } finally {
+        warn.mockRestore();
+        error.mockRestore();
+      }
     });
   });
 });

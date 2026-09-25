@@ -990,33 +990,39 @@ describe('Combobox', () => {
       expect(parsed.querySelector('[role="listbox"]')).toHaveAttribute('hidden');
     });
 
-    it('opens a defaultOpen list once hydrated, without a mismatch or an onOpenChange call', async () => {
-      const onOpenChange = vi.fn();
-      const element = (
-        <Combobox aria-label="Fruit" defaultValue="a" defaultOpen onOpenChange={onOpenChange}>
-          {FRUITS}
-        </Combobox>
-      );
-      const container = document.createElement('div');
-      container.innerHTML = renderToString(element);
-      document.body.appendChild(container);
-      const error = vi.spyOn(console, 'error');
-      let root: ReturnType<typeof hydrateRoot> | undefined;
-      try {
-        await act(async () => {
-          root = hydrateRoot(container, element);
-        });
-        expect(error).not.toHaveBeenCalled();
-        const listbox = screen.getByRole('listbox');
-        expect(combobox()).toHaveAttribute('aria-expanded', 'true');
-        expect(combobox()).toHaveAttribute('aria-controls', listbox.id);
-        expect(within(listbox).getAllByRole('option')).toHaveLength(FRUITS.length);
-        expect(onOpenChange).not.toHaveBeenCalled();
-      } finally {
-        act(() => root?.unmount());
-        container.remove();
-      }
-    });
+    it.each([
+      ['defaultOpen', { defaultOpen: true }],
+      ['open', { open: true }],
+    ])(
+      'opens once hydrated (%s), without a mismatch or an onOpenChange call',
+      async (_l, props) => {
+        const onOpenChange = vi.fn();
+        const element = (
+          <Combobox aria-label="Fruit" defaultValue="a" {...props} onOpenChange={onOpenChange}>
+            {FRUITS}
+          </Combobox>
+        );
+        const container = document.createElement('div');
+        container.innerHTML = renderToString(element);
+        document.body.appendChild(container);
+        const error = vi.spyOn(console, 'error');
+        let root: ReturnType<typeof hydrateRoot> | undefined;
+        try {
+          await act(async () => {
+            root = hydrateRoot(container, element);
+          });
+          expect(error).not.toHaveBeenCalled();
+          const listbox = screen.getByRole('listbox');
+          expect(combobox()).toHaveAttribute('aria-expanded', 'true');
+          expect(combobox()).toHaveAttribute('aria-controls', listbox.id);
+          expect(within(listbox).getAllByRole('option')).toHaveLength(FRUITS.length);
+          expect(onOpenChange).not.toHaveBeenCalled();
+        } finally {
+          act(() => root?.unmount());
+          container.remove();
+        }
+      },
+    );
 
     it('closes on a press outside and when focus leaves', async () => {
       const user = userEvent.setup();

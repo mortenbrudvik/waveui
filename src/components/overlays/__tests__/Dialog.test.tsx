@@ -239,6 +239,7 @@ describe('Dialog', () => {
         } finally {
           act(() => root?.unmount());
           container.remove();
+          error.mockRestore();
         }
       },
     );

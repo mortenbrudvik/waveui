@@ -37,7 +37,10 @@ export interface DropdownProps extends Omit<
    * @deprecated Use `onValueChange`.
    */
   onOptionSelect?: (value: string) => void;
-  /** Controlled open state of the listbox. */
+  /**
+   * Controlled open state of the listbox. The list renders only in the browser: an open dropdown
+   * is closed in the server HTML and opens once it has hydrated.
+   */
   open?: boolean;
   /**
    * Initial open state for uncontrolled usage. A dropdown that starts disabled starts closed. The
