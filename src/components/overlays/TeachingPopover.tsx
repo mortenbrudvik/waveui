@@ -171,6 +171,9 @@ function clampStep(step: number, count: number): number {
  *   from the control after the target enters it at its last button. Tab from the last control of
  *   the page moves past the popover (it was visited after the target), and Shift+Tab from outside
  *   the page reaches the page's last control first, so a lap visits it once and Tab never cycles.
+ *   With no control at or before the target, the popover is reached where it is portaled, at the
+ *   end of the page: Tab from the page's last control and Shift+Tab from outside the page enter
+ *   it.
  */
 export const TeachingPopover = ({
   steps,

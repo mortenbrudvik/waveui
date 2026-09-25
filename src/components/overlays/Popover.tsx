@@ -18,7 +18,12 @@ import {
   useTriggerFocusRef,
 } from '../../hooks/useTriggerElement';
 import { Portal } from '../portal/Portal';
-import { PopoverBeak, usePopoverTabOrder, type PopoverPhysicalSide } from './Popover.shared';
+import {
+  getTabbableThrough,
+  PopoverBeak,
+  usePopoverTabOrder,
+  type PopoverPhysicalSide,
+} from './Popover.shared';
 
 /** Properties for the Popover component. */
 export interface PopoverProps {
@@ -220,6 +225,15 @@ function referencesText(doc: Document, ids: string): boolean {
 
 const subscribeNothing = (): (() => void) => () => {};
 
+/** The content's previous stop: the trigger's focus target, else the tab stop before it. */
+function getPopoverPreviousStop(
+  trigger: HTMLElement,
+  surface: HTMLElement,
+  order?: readonly HTMLElement[],
+): HTMLElement | null {
+  return getTriggerFocusTarget(trigger) ?? getTabbableThrough(trigger, surface, order);
+}
+
 // A const arrow (like DialogRoot and DrawerRoot): its type can be named in consumers' declaration
 // files, e.g. a story's `satisfies Meta<typeof Popover>` (a function declaration's `typeof` cannot,
 // TS4023).
@@ -295,8 +309,9 @@ const PopoverRoot = ({
     enabled: open,
     surface,
     anchorRef: triggerRef,
-    // Shift+Tab from the content's first element returns to the trigger (the element in a span).
-    getPreviousStop: getTriggerFocusTarget,
+    // Shift+Tab from the content's first element returns to the trigger (the element in a span),
+    // or, when nothing in the trigger can take focus, to the tab stop before it.
+    getPreviousStop: getPopoverPreviousStop,
   });
 
   const context = React.useMemo<PopoverContextValue>(
@@ -418,7 +433,10 @@ PopoverTrigger.displayName = 'PopoverTrigger';
  * enters it, Tab past its last element continues after the trigger, and Shift+Tab from the element
  * after the trigger enters it at its last element. Tab from the last element of the page moves
  * past it, and Shift+Tab from outside the page reaches the page's last element first, so a lap
- * visits it once.
+ * visits it once. For a trigger outside the tab order (nothing in it can take focus, or
+ * `tabIndex={-1}`), Tab from the tab stop before the trigger enters it, and Shift+Tab from its
+ * first element returns to the trigger, or to that tab stop when nothing in the trigger can take
+ * focus. With no tab stop before the trigger, the content is reached at the end of the page.
  * Named by `title`, `aria-label`/`aria-labelledby`, or else by its trigger: `aria-labelledby`
  * points at the id the trigger element carries in the document, or at the trigger's own label
  * elements when the trigger is named through `aria-labelledby` (an icon-only Button inside

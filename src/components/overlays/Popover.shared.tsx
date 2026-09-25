@@ -98,6 +98,21 @@ export function getTabbableThrough(
   return through[through.length - 1] ?? null;
 }
 
+/**
+ * The tab stop that a surface placed right after `anchor` follows, given its previous stop: that
+ * stop, or the tab stop at or before the anchor when the previous stop is outside the tab order
+ * (a trigger with `tabIndex={-1}`). `null` when nothing in the tab order comes before the place.
+ */
+function getEntryStop(
+  previous: HTMLElement | null,
+  anchor: HTMLElement,
+  surface: HTMLElement,
+  order: readonly HTMLElement[],
+): HTMLElement | null {
+  if (!previous || order.includes(previous)) return previous;
+  return getTabbableThrough(anchor, surface, order);
+}
+
 function focusInstead(event: { preventDefault(): void }, target: HTMLElement | null): void {
   if (!target) return;
   event.preventDefault();
@@ -139,8 +154,9 @@ function hideForNativeTab(surface: HTMLElement): void {
 
 /**
  * What the document knows about focus that arrives from nothing (the body): whether it can come
- * from the browser's own controls. The listeners are installed while a {@link usePopoverTabOrder}
- * is mounted, open or not, so the press that opened a surface counts too.
+ * from the browser's own controls, and where the browser starts Tab and Shift+Tab from nothing.
+ * The listeners are installed while a {@link usePopoverTabOrder} is mounted, open or not, so the
+ * press that opened a surface counts too.
  */
 interface FocusOrigin {
   /** Mounted `usePopoverTabOrder` instances. */
@@ -156,6 +172,11 @@ interface FocusOrigin {
    * nothing, when the window gets focus back. Cleared by the next `focusin`.
    */
   refocus: EventTarget | null;
+  /**
+   * The element that took focus last. When focus has gone from it to nothing (it was removed,
+   * hidden or blurred), the browser starts sequential navigation where it is, or where it was.
+   */
+  lastFocused: Element | null;
   /**
    * The window has just got focus back: no element took focus since, and no key or pointer press
    * reached the page. Sequential navigation from the browser's own controls gives the window focus
@@ -183,10 +204,24 @@ const focusOrigin: FocusOrigin = {
   users: 0,
   pressed: false,
   refocus: null,
+  lastFocused: null,
   windowFocused: false,
   epoch: 0,
   uninstall: null,
 };
+
+/**
+ * Whether sequential navigation from nothing starts after `el`: at the element that took focus
+ * last, when that comes after `el` in the document or has been removed (it may have been anywhere,
+ * after `el` too).
+ */
+function startsAfter(el: HTMLElement): boolean {
+  const start = focusOrigin.lastFocused;
+  if (!start) return false;
+  return (
+    !start.isConnected || !!(el.compareDocumentPosition(start) & Node.DOCUMENT_POSITION_FOLLOWING)
+  );
+}
 
 /**
  * The surfaces whose keyboard order a {@link usePopoverTabOrder} manages right now. Their content
@@ -227,9 +262,10 @@ function retainFocusOrigin(): () => void {
       focusOrigin.windowFocused = true;
     };
     // Bubbling to the document, after the surfaces' own `focusin` listeners have read the state.
-    const onFocusIn = () => {
+    const onFocusIn = (event: FocusEvent) => {
       focusOrigin.epoch += 1;
       focusOrigin.refocus = null;
+      focusOrigin.lastFocused = event.target as Element | null;
       focusOrigin.windowFocused = false;
     };
     // Capture: a handler that stops a press or a key from propagating must not hide it.
@@ -250,6 +286,7 @@ function retainFocusOrigin(): () => void {
       win?.removeEventListener('focus', onWindowFocus);
       focusOrigin.pressed = false;
       focusOrigin.refocus = null;
+      focusOrigin.lastFocused = null;
       focusOrigin.windowFocused = false;
     };
   }
@@ -273,9 +310,10 @@ export interface PopoverTabOrderOptions {
   /** The anchor: the surface takes its place in the keyboard order right after it. */
   anchorRef: React.RefObject<HTMLElement | null>;
   /**
-   * The tab stop before the surface's place: Tab from it enters the surface, and Shift+Tab from
-   * the surface's first element returns to it. `order`, when given, is the document's tabbable
-   * elements.
+   * The element before the surface's place: Tab from it enters the surface, and Shift+Tab from
+   * the surface's first element returns to it. When it is outside the tab order (a trigger with
+   * `tabIndex={-1}`), Tab from the tab stop at or before the anchor enters the surface too; `null`
+   * when nothing comes before the place. `order`, when given, is the document's tabbable elements.
    */
   getPreviousStop: (
     anchor: HTMLElement,
@@ -287,12 +325,13 @@ export interface PopoverTabOrderOptions {
 /**
  * Keyboard order of a surface portaled to the end of the document, as if it were rendered right
  * after its anchor (the order of 0.4's inline content). Returns the surface's `onKeyDown`; while
- * `enabled`, a document `keydown` listener and a `focusin` listener on the surface do the rest.
- * While mounted, shared document listeners record pointer presses, key presses and the window's
- * blur and focus.
+ * `enabled`, a document `keydown` listener and `focusin` listeners on the surface and the window
+ * do the rest. While mounted, shared document listeners record pointer presses, key presses, the
+ * element that took focus last and the window's blur and focus.
  *
- * - Tab from the previous stop enters the surface at its first tabbable element, and Shift+Tab
- *   from the tab stop after the anchor enters it at its last one.
+ * - Tab from the previous stop enters the surface at its first tabbable element (so does Tab
+ *   from the tab stop at or before the anchor when the previous stop is outside the tab order),
+ *   and Shift+Tab from the tab stop after the anchor enters it at its last one.
  * - Tab past the surface's last element continues after the anchor; Shift+Tab from its first
  *   element (or from the surface itself) returns to the previous stop.
  * - The surface is not visited a second time where its portal is. Tab from the element before
@@ -301,8 +340,17 @@ export interface PopoverTabOrderOptions {
  *   it), or from nothing without a pointer press, lands on the surface's last element as the
  *   document's last one: focus goes to the last element of the page instead (outside every open
  *   surface: another open popover's content has its own place after its anchor), unless that is
- *   the previous stop (the surface then ends the order). A lap in either direction visits every
- *   element once, and there is no Tab cycle.
+ *   the tab stop before the surface's place (the surface then ends the order). Focus moves there
+ *   once the entry's `focusin` has reached the window, so the entered element's focus handlers
+ *   run before its blur handlers. Shift+Tab from nothing does not start at the document's end
+ *   when the element that had focus comes after the surface's last element or has been removed (a
+ *   control of the surface that hid or removed itself): the browser starts where it is, or was. A
+ *   lap in either direction visits every element once, and there is no Tab cycle.
+ * - With no tab stop before its place (nothing in the tab order at or before the anchor), Tab
+ *   reaches the surface where its portal is, from the element before the portal, and it follows
+ *   the document order from there. When the previous stop is missing too, Shift+Tab reaches it
+ *   there as well: its first element leads to the element before the portal, so neither Shift+Tab
+ *   from the tab stop after the anchor nor from outside the page is moved to its place.
  * - Every other entry keeps the place after the anchor: a click, Shift+Tab from a pressed point,
  *   focus restored from nothing (a layer opened from the surface's last element closed), a
  *   script, focus that returns to an element as the window gets focus back, and focus the content
@@ -350,26 +398,38 @@ export function usePopoverTabOrder({
     if (!first || !last) return;
     if (!active || isNothing(doc, active)) {
       // With no pointer press to start from, Shift+Tab from nothing reaches the document's last
-      // element.
-      if (event.shiftKey && !focusOrigin.pressed && order[order.length - 1] === last) {
+      // element, unless the browser starts after it: where the element that had focus is, or was
+      // (a control of the surface that removed or hid itself).
+      if (
+        event.shiftKey &&
+        !focusOrigin.pressed &&
+        order[order.length - 1] === last &&
+        !startsAfter(last)
+      ) {
         pendingRef.current = { element: last, from: 'far-end', epoch: focusOrigin.epoch };
       }
       return;
     }
+    const previous = getPrevious(anchor, surface, order);
     if (event.shiftKey) {
-      if (active === getTabbableAfter(anchor, surface, order)) focusInstead(event, last);
+      // Without a previous stop, Shift+Tab from the surface's first element follows the document
+      // order: entering the surface here would form a cycle.
+      if (previous && active === getTabbableAfter(anchor, surface, order)) {
+        focusInstead(event, last);
+      }
       return;
     }
-    if (active === getPrevious(anchor, surface, order)) {
+    const entry = getEntryStop(previous, anchor, surface, order);
+    if (active === previous || active === entry) {
       focusInstead(event, first);
       return;
     }
     const index = order.indexOf(active);
     if (index === -1 || order[index + 1] !== first) return;
-    // The browser would enter the surface where its portal is: the surface was visited after the
-    // anchor, so move past it.
     pendingRef.current = { element: first, from: 'page', epoch: focusOrigin.epoch };
-    hideForNativeTab(surface);
+    // The browser would enter the surface where its portal is. When a tab stop comes before its
+    // place, the surface was visited after the anchor: move past it. Otherwise this is its entry.
+    if (entry) hideForNativeTab(surface);
   });
 
   // Installed while mounted, not only while enabled: the press that opens the surface counts.
@@ -378,10 +438,20 @@ export function usePopoverTabOrder({
   React.useEffect(() => {
     if (!enabled || !surface) return;
     const doc = surface.ownerDocument;
+    const win = doc.defaultView;
     // A new surface, or one shown again: focus it took as it mounted (before this listener) was
     // not a native entry from the page, and an earlier entry no longer applies.
     entryRef.current = 'anchor';
+    /**
+     * An entry that goes on to the last element of the page. Focus moves there once the entry's
+     * `focusin` has reached the window, after React (which listens where the portal is, above the
+     * surface) has handled it: the entered element's focus handlers run before its blur handlers,
+     * so a Tooltip on it does not stay open. Not in a microtask: a browser runs microtasks between
+     * the listeners of its own events.
+     */
+    let redirect: { event: FocusEvent; pageEnd: HTMLElement } | null = null;
     const onFocusIn = (event: FocusEvent) => {
+      redirect = null;
       const pending = pendingRef.current;
       pendingRef.current = null;
       const from = event.relatedTarget as Node | null;
@@ -405,17 +475,30 @@ export function usePopoverTabOrder({
       const surfaces = [...getOrderedSurfaces()];
       const outside = order.filter((el) => !surfaces.some((open) => open.contains(el)));
       const pageEnd = outside[outside.length - 1];
-      // The surface ends the order when the previous stop is the page's last element.
-      if (!pageEnd || pageEnd === getPrevious(anchor, surface, order)) return;
-      if (!focusElement(pageEnd)) entryRef.current = 'page';
+      const previous = getPrevious(anchor, surface, order);
+      // The surface ends the order when the tab stop before its place is the page's last element.
+      // Without a previous stop it keeps the place of its portal, as Shift+Tab from it does.
+      if (!previous || !pageEnd || pageEnd === getEntryStop(previous, anchor, surface, order)) {
+        return;
+      }
+      redirect = { event, pageEnd };
+    };
+    const onWindowFocusIn = (event: FocusEvent) => {
+      const pending = redirect;
+      redirect = null;
+      // Left alone when a handler of the entry has moved focus already.
+      if (pending?.event !== event || doc.activeElement !== event.target) return;
+      if (!focusElement(pending.pageEnd)) entryRef.current = 'page';
     };
     const orderedSurfaces = getOrderedSurfaces();
     orderedSurfaces.add(surface);
     surface.addEventListener('focusin', onFocusIn);
+    win?.addEventListener('focusin', onWindowFocusIn);
     doc.addEventListener('keydown', onDocumentKeyDown);
     return () => {
       orderedSurfaces.delete(surface);
       surface.removeEventListener('focusin', onFocusIn);
+      win?.removeEventListener('focusin', onWindowFocusIn);
       doc.removeEventListener('keydown', onDocumentKeyDown);
     };
   }, [enabled, surface, anchorRef, getPrevious, onDocumentKeyDown]);

@@ -748,6 +748,48 @@ describe('TeachingPopover', () => {
         screen.getByRole('button', { name: 'Next' }).focus();
         expect(await tabs(user, 1)).toEqual(['After']);
       });
+
+      it('a target with no tab stop at or before it: the popover is reached again where its portal is, and no Tab cycle forms', async () => {
+        const user = userEvent.setup();
+        function TopOfPage() {
+          const targetRef = React.useRef<HTMLHeadingElement>(null);
+          return (
+            <>
+              <h2 ref={targetRef}>Reports</h2>
+              <button type="button">After</button>
+              <TeachingPopover steps={steps} defaultActiveStep={1} target={targetRef} />
+              <button type="button">End</button>
+            </>
+          );
+        }
+        render(<TopOfPage />);
+        const dialog = await screen.findByRole('dialog');
+        await waitFor(() => expect(dialog).toHaveFocus());
+        // Tab past its last button continues after the target. Its place comes before every
+        // element of the page, so Tab from the end of the page reaches it where its portal is.
+        expect(await tabs(user, 9)).toEqual([
+          'Close',
+          'Back',
+          'Next',
+          'After',
+          'End',
+          'Close',
+          'Back',
+          'Next',
+          'body',
+        ]);
+        expect(await tabs(user, 6)).toEqual(['After', 'End', 'Close', 'Back', 'Next', 'body']);
+        // Shift+Tab visits every element once per lap in the same order, reversed.
+        expect(await tabs(user, 7, true)).toEqual([
+          'Next',
+          'Back',
+          'Close',
+          'End',
+          'After',
+          'body',
+          'Next',
+        ]);
+      });
     });
 
     it('renders inline without a target (no portal, no beak)', () => {

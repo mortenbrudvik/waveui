@@ -944,6 +944,31 @@ describe('Popover', () => {
         expect(toggle).toHaveFocus();
       });
 
+      it('only tabIndex={0}: the button inside carries the state ARIA, not the generic span (axe), and takes focus back', async () => {
+        const user = userEvent.setup();
+        render(
+          <ConfiguredSpan spanProps={{ tabIndex: 0 }}>
+            <button type="button">Toggle</button>
+          </ConfiguredSpan>,
+        );
+        const toggle = screen.getByRole('button', { name: 'Toggle' });
+        const wrap = screen.getByTestId('wrap');
+        expect(toggle).toHaveAttribute('aria-expanded', 'false');
+        expect(wrap).not.toHaveAttribute('aria-haspopup');
+
+        await user.click(toggle);
+        expect(toggle).toHaveAttribute('aria-expanded', 'true');
+        expect(toggle).toHaveAttribute('aria-controls', dialog()!.id);
+        for (const name of ['aria-haspopup', 'aria-expanded', 'aria-controls']) {
+          expect(wrap).not.toHaveAttribute(name);
+        }
+        await expectNoA11yViolations();
+        screen.getByRole('button', { name: 'First' }).focus();
+        await user.keyboard('{Escape}');
+        expect(dialog()).not.toBeInTheDocument();
+        expect(toggle).toHaveFocus();
+      });
+
       it('role="button" and tabIndex={0}: the span stays the trigger and takes focus back', async () => {
         const user = userEvent.setup();
         render(<ConfiguredSpan spanProps={{ role: 'button', tabIndex: 0 }}>Toggle</ConfiguredSpan>);
@@ -1224,6 +1249,85 @@ describe('Popover', () => {
       expect(await tabs(user, 5)).toEqual(['Before', 'Toggle', 'First', 'Last', 'body']);
     });
 
+    /** Before, a controlled open popover whose `trigger` is not a tab stop, After. */
+    function UnfocusableTrigger({
+      trigger,
+      before = true,
+      after = true,
+    }: {
+      trigger: React.ReactElement;
+      before?: boolean;
+      after?: boolean;
+    }) {
+      return (
+        <>
+          {before && <button type="button">Before</button>}
+          <Popover open onOpenChange={() => {}}>
+            <Popover.Trigger>{trigger}</Popover.Trigger>
+            <Popover.Content aria-label="Details">
+              <button type="button">First</button>
+              <button type="button">Last</button>
+            </Popover.Content>
+          </Popover>
+          {after && <button type="button">After</button>}
+        </>
+      );
+    }
+
+    const outOfOrderTrigger = (
+      <button type="button" tabIndex={-1}>
+        Toggle
+      </button>
+    );
+
+    it('a trigger with nothing to focus: the content follows the tab stop before the trigger', async () => {
+      const user = userEvent.setup();
+      render(<UnfocusableTrigger trigger={<span>Data point</span>} />);
+      expect(await tabs(user, 6)).toEqual(['Before', 'First', 'Last', 'After', 'body', 'Before']);
+      expect(await tabs(user, 1, true)).toEqual(['body']);
+      expect(await tabs(user, 6, true)).toEqual([
+        'After',
+        'Last',
+        'First',
+        'Before',
+        'body',
+        'After',
+      ]);
+    });
+
+    it('a trigger outside the tab order (tabIndex={-1}): the content follows the tab stop before it, and Shift+Tab returns to the trigger', async () => {
+      const user = userEvent.setup();
+      render(<UnfocusableTrigger trigger={outOfOrderTrigger} />);
+      expect(await tabs(user, 6)).toEqual(['Before', 'First', 'Last', 'After', 'body', 'Before']);
+      expect(await tabs(user, 1, true)).toEqual(['body']);
+      expect(await tabs(user, 7, true)).toEqual([
+        'After',
+        'Last',
+        'First',
+        'Toggle',
+        'Before',
+        'body',
+        'After',
+      ]);
+    });
+
+    it('a trigger outside the tab order at the end of the page: the content ends the order', async () => {
+      const user = userEvent.setup();
+      render(<UnfocusableTrigger trigger={outOfOrderTrigger} after={false} />);
+      expect(await tabs(user, 4)).toEqual(['Before', 'First', 'Last', 'body']);
+      expect(await tabs(user, 5, true)).toEqual(['Last', 'First', 'Toggle', 'Before', 'body']);
+    });
+
+    it('a trigger with no tab stop at or before it: the content keeps the place of its portal, and no Tab cycle forms', async () => {
+      const user = userEvent.setup();
+      render(<UnfocusableTrigger trigger={<span>Data point</span>} before={false} />);
+      // Its place would come before every element of the page: Tab reaches it at the end of the
+      // page instead, and a lap in either direction visits every element once.
+      expect(await tabs(user, 5)).toEqual(['After', 'First', 'Last', 'body', 'After']);
+      expect(await tabs(user, 1, true)).toEqual(['body']);
+      expect(await tabs(user, 5, true)).toEqual(['Last', 'First', 'After', 'body', 'Last']);
+    });
+
     it.each([
       ['Tab', false, ['After']],
       ['Shift+Tab', true, ['First', 'Toggle', 'Before']],
@@ -1305,6 +1409,109 @@ describe('Popover', () => {
         expect(await tabs(user, 1)).toEqual([next]);
       },
     );
+
+    it.each([
+      ['Shift+Tab from nothing', 'keyboard'],
+      ['Shift+Tab from the browser controls', 'browser'],
+    ] as const)(
+      'an entry at the content’s last element that goes to the page’s last element instead (%s) reaches the element’s handlers in order',
+      async (_how, how) => {
+        const user = userEvent.setup();
+        const events: string[] = [];
+        render(
+          <>
+            <button type="button">Before</button>
+            <Popover defaultOpen>
+              <Popover.Trigger>
+                <button type="button">Toggle</button>
+              </Popover.Trigger>
+              <Popover.Content aria-label="Options">
+                <button type="button">First</button>
+                <Tooltip content="Last tip" delay={0}>
+                  <button
+                    type="button"
+                    onFocus={() => events.push('focus')}
+                    onBlur={() => events.push('blur')}
+                  >
+                    Last
+                  </button>
+                </Tooltip>
+              </Popover.Content>
+            </Popover>
+            <button type="button">After</button>
+          </>,
+        );
+        if (how === 'keyboard') {
+          await user.tab({ shift: true });
+        } else {
+          let focusedAfterEntry: Element | null = null;
+          act(() => {
+            window.dispatchEvent(new FocusEvent('blur'));
+            window.dispatchEvent(new FocusEvent('focus'));
+            screen.getByRole('button', { name: 'Last' }).focus();
+            // Moved on before the entering focus event is over, not in a later microtask: a
+            // browser runs microtasks between the listeners of its own events, before React's.
+            focusedAfterEntry = document.activeElement;
+          });
+          expect(focusedAfterEntry).toBe(screen.getByRole('button', { name: 'After' }));
+        }
+        expect(focused()).toBe('After');
+        // The element's focus is handled before its blur, so its Tooltip is not left open.
+        expect(events).toEqual(['focus', 'blur']);
+        expect(document.querySelector('[data-wave-tooltip-surface]')).toBeNull();
+      },
+    );
+
+    /** Before, a popover whose last element (Clear) removes or hides itself when pressed, After. */
+    function SelfRemovingLast({ hide = false }: { hide?: boolean }) {
+      const [shown, setShown] = React.useState(true);
+      return (
+        <>
+          <button type="button">Before</button>
+          <Popover>
+            <Popover.Trigger>
+              <button type="button">Toggle</button>
+            </Popover.Trigger>
+            <Popover.Content aria-label="Filters">
+              <button type="button">First</button>
+              {(shown || hide) && (
+                <button type="button" hidden={!shown} onClick={() => setShown(false)}>
+                  Clear
+                </button>
+              )}
+            </Popover.Content>
+          </Popover>
+          <button type="button">After</button>
+        </>
+      );
+    }
+
+    it('keyboard only: Shift+Tab after the focused last element of the content removed itself continues before it', async () => {
+      const user = userEvent.setup();
+      render(<SelfRemovingLast />);
+      expect(await tabs(user, 2)).toEqual(['Before', 'Toggle']);
+      await user.keyboard('{Enter}');
+      expect(await tabs(user, 2)).toEqual(['First', 'Clear']);
+      await user.keyboard('{Enter}');
+      // Clear is gone and focus with it. The browser starts sequential navigation where it was.
+      expect(focused()).toBe('body');
+      expect(await tabs(user, 2, true)).toEqual(['First', 'Toggle']);
+      expect(screen.getByRole('dialog', { name: 'Filters' })).toBeInTheDocument();
+    });
+
+    it('keyboard only: Shift+Tab after the focused last element of the content hid itself continues before it', async () => {
+      const user = userEvent.setup();
+      render(<SelfRemovingLast hide />);
+      expect(await tabs(user, 2)).toEqual(['Before', 'Toggle']);
+      await user.keyboard('{Enter}');
+      expect(await tabs(user, 2)).toEqual(['First', 'Clear']);
+      await user.keyboard('{Enter}');
+      // A browser moves focus to nothing when the focused element is hidden; jsdom does not.
+      const clear = screen.getByText('Clear');
+      expect(clear).not.toBeVisible();
+      act(() => clear.blur());
+      expect(await tabs(user, 2, true)).toEqual(['First', 'Toggle']);
+    });
 
     it.each([
       [
