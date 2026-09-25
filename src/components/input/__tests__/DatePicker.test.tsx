@@ -189,17 +189,23 @@ describe('DatePicker', () => {
       expect(textbox()).toHaveClass('focus:outline-hidden');
     });
 
-    it('renders on the server with the formatted value and no calendar', () => {
+    it.each([
+      ['defaultOpen', { defaultOpen: true }],
+      ['open', { open: true }],
+    ])('renders on the server with the formatted value and no calendar (%s)', (_label, props) => {
       const html = renderToString(
-        <DatePicker aria-label="Date" locale="en-US" defaultValue={JUNE_15} defaultOpen />,
+        <DatePicker aria-label="Date" locale="en-US" defaultValue={JUNE_15} {...props} />,
       );
       expect(html).toContain('value="06/15/2025"');
       expect(html).not.toContain('role="dialog"');
     });
 
-    it('reports the calendar closed on the server with defaultOpen, so no reference dangles', () => {
+    it.each([
+      ['a defaultOpen', { defaultOpen: true }],
+      ['an open', { open: true }],
+    ])('reports %s calendar closed on the server, so no reference dangles', (_label, props) => {
       const serverHtml = renderToString(
-        <DatePicker aria-label="Date" locale="en-US" defaultValue={JUNE_15} defaultOpen />,
+        <DatePicker aria-label="Date" locale="en-US" defaultValue={JUNE_15} {...props} />,
       );
       expect(findDanglingIdRefsInHtml(serverHtml)).toEqual([]);
       const host = document.createElement('div'); // detached: nothing reaches document.body
@@ -208,9 +214,12 @@ describe('DatePicker', () => {
       expect(toggleButton).toHaveAttribute('aria-expanded', 'false');
     });
 
-    it('opens a defaultOpen calendar once hydrated, without a hydration mismatch', async () => {
+    it.each([
+      ['defaultOpen', { defaultOpen: true }],
+      ['open', { open: true }],
+    ])('opens once hydrated (%s), without a hydration mismatch', async (_label, props) => {
       const element = (
-        <DatePicker aria-label="Date" locale="en-US" defaultValue={JUNE_15} defaultOpen />
+        <DatePicker aria-label="Date" locale="en-US" defaultValue={JUNE_15} {...props} />
       );
       const container = document.createElement('div');
       container.innerHTML = renderToString(element);

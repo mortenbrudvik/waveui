@@ -175,11 +175,15 @@ export interface DatePickerProps extends Omit<
    * @default 0
    */
   firstDayOfWeek?: 0 | 1 | 2 | 3 | 4 | 5 | 6;
-  /** Controlled open state of the calendar. */
+  /**
+   * Controlled open state of the calendar. The calendar renders only in the browser: an open
+   * picker is closed in the server HTML and opens once it has hydrated.
+   */
   open?: boolean;
   /**
    * Initial open state for uncontrolled usage. A picker that starts disabled or read-only starts
-   * closed.
+   * closed. The calendar renders only in the browser: it is closed in the server HTML and opens
+   * once the picker has hydrated.
    * @default false
    */
   defaultOpen?: boolean;

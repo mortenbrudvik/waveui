@@ -89,7 +89,10 @@ export interface TagPickerProps extends Omit<
    * @deprecated Use `onValueChange`.
    */
   onChange?: (value: string[]) => void;
-  /** Controlled open state of the option list. */
+  /**
+   * Controlled open state of the option list. The list renders only in the browser: an open
+   * picker is closed in the server HTML and opens once it has hydrated.
+   */
   open?: boolean;
   /**
    * Initial open state for uncontrolled usage. A picker that starts disabled or read-only starts

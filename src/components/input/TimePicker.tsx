@@ -154,11 +154,16 @@ export interface TimePickerProps extends Omit<
    * @default false
    */
   clearable?: boolean;
-  /** Controlled open state of the list (never shown while `disabled` or `readOnly`). */
+  /**
+   * Controlled open state of the list (never shown while `disabled` or `readOnly`). The list
+   * renders only in the browser: an open picker is closed in the server HTML and opens once it has
+   * hydrated.
+   */
   open?: boolean;
   /**
    * Initial open state of the list for uncontrolled usage. A picker that starts disabled or
-   * read-only starts closed.
+   * read-only starts closed. The list renders only in the browser: it is closed in the server HTML
+   * and opens once the picker has hydrated.
    * @default false
    */
   defaultOpen?: boolean;

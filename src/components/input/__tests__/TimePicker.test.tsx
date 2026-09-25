@@ -129,9 +129,12 @@ describe('TimePicker', () => {
       expect(listbox?.querySelectorAll('[role="option"]')).toHaveLength(24);
     });
 
-    it('renders a defaultOpen list closed on the server, so every referenced id exists', () => {
+    it.each([
+      ['a defaultOpen', { defaultOpen: true }],
+      ['an open', { open: true }],
+    ])('renders %s list closed on the server, so every referenced id exists', (_label, props) => {
       const serverHtml = renderToString(
-        <TimePicker aria-label="Time" defaultValue="09:00" step={60} defaultOpen />,
+        <TimePicker aria-label="Time" defaultValue="09:00" step={60} {...props} />,
       );
       expect(findDanglingIdRefsInHtml(serverHtml)).toEqual([]);
       const parsed = document.createElement('div'); // detached: nothing reaches document.body
@@ -142,8 +145,11 @@ describe('TimePicker', () => {
       expect(parsed.querySelector('[role="listbox"]')).toHaveAttribute('hidden');
     });
 
-    it('opens a defaultOpen list once hydrated, without a hydration mismatch', async () => {
-      const element = <TimePicker aria-label="Time" defaultValue="09:00" step={60} defaultOpen />;
+    it.each([
+      ['defaultOpen', { defaultOpen: true }],
+      ['open', { open: true }],
+    ])('opens once hydrated (%s), without a hydration mismatch', async (_label, props) => {
+      const element = <TimePicker aria-label="Time" defaultValue="09:00" step={60} {...props} />;
       const container = document.createElement('div');
       container.innerHTML = renderToString(element);
       document.body.appendChild(container);

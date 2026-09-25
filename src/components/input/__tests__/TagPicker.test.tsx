@@ -320,8 +320,11 @@ describe('TagPicker', () => {
       expect(parsed.querySelector('[role="listbox"]')).toHaveAttribute('hidden');
     });
 
-    it('opens a defaultOpen list once hydrated, without a hydration mismatch', async () => {
-      const element = <TagPicker aria-label="Fruits" options={options} defaultOpen />;
+    it.each([
+      ['defaultOpen', { defaultOpen: true }],
+      ['open', { open: true }],
+    ])('opens once hydrated (%s), without a hydration mismatch', async (_label, props) => {
+      const element = <TagPicker aria-label="Fruits" options={options} {...props} />;
       const container = document.createElement('div');
       container.innerHTML = renderToString(element);
       document.body.appendChild(container);
