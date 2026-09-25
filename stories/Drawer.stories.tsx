@@ -2,7 +2,7 @@ import * as React from 'react';
 import type { Meta, StoryObj } from '@storybook/react';
 import { fn } from 'storybook/test';
 import { Drawer, Button, Tooltip } from '../src';
-import type { DrawerPosition } from '../src';
+import type { DrawerPosition, DrawerProps } from '../src';
 
 const positions = ['start', 'end', 'left', 'right'] as const satisfies readonly DrawerPosition[];
 
@@ -79,16 +79,17 @@ export const TriggerWithTooltip: Story = {
 
 /**
  * The parent owns `open`: its own button opens the drawer, and the drawer asks to close through
- * `onOpenChange` (Escape, the backdrop, the Close button, or the Done button inside the drawer).
- * The page outside is inert while the drawer is open, so the close action lives inside it.
+ * `onOpenChange` (Escape, the backdrop, the Close button, or the Done button inside the drawer),
+ * with the reason in its second argument (`details.reason`). The page outside is inert while the
+ * drawer is open, so the close action lives inside it.
  */
 export const Controlled: Story = {
   args: { position: 'start', title: 'Start drawer' },
   render: function ControlledDrawer({ children, ...args }) {
     const [open, setOpen] = React.useState(false);
-    const handleOpenChange = (next: boolean) => {
+    const handleOpenChange: NonNullable<DrawerProps['onOpenChange']> = (next, details) => {
       setOpen(next);
-      args.onOpenChange?.(next);
+      args.onOpenChange?.(next, details);
     };
     return (
       <>

@@ -1,4 +1,6 @@
+import * as React from 'react';
 import type { Meta, StoryObj } from '@storybook/react';
+import { fn } from 'storybook/test';
 import { Tooltip, Button, Popover } from '../src';
 
 /** Decorative inline icon (the Button hides its icon slot from assistive technology). */
@@ -40,6 +42,8 @@ const meta = {
     side: 'top',
     align: 'center',
     delay: 200,
+    defaultOpen: false,
+    onOpenChange: fn(),
     children: <Button>Hover me</Button>,
   },
 } satisfies Meta<typeof Tooltip>;
@@ -73,6 +77,35 @@ export const LongContent: Story = {
     content:
       'Tooltips wrap long text instead of running off the screen, and flip to the other side near the viewport edge.',
     children: <Button>Long tooltip</Button>,
+  },
+};
+
+/**
+ * The parent owns `open` (Fluent's `visible`). The tooltip still asks to open on hover and focus
+ * and to close on leave, blur and Escape through `onOpenChange`; the parent decides. Here "Pin
+ * tooltip" keeps it open and ignores the requests to close until it is unpinned.
+ */
+export const Controlled: Story = {
+  args: {
+    content: 'Pinned while the toggle is on',
+    children: <Button>Hover or focus me</Button>,
+  },
+  render: function ControlledTooltip(args) {
+    const [open, setOpen] = React.useState(false);
+    const [pinned, setPinned] = React.useState(false);
+    const handleOpenChange = (next: boolean) => {
+      args.onOpenChange?.(next);
+      if (!pinned) setOpen(next);
+    };
+    return (
+      <div className="flex items-center gap-4">
+        <Button aria-pressed={pinned} onClick={() => setPinned((value) => !value)}>
+          Pin tooltip
+        </Button>
+        {/* The story owns the controlled pair; every other arg is forwarded. */}
+        <Tooltip {...args} open={pinned || open} onOpenChange={handleOpenChange} />
+      </div>
+    );
   },
 };
 
