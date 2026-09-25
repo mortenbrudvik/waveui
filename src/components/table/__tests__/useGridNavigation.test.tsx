@@ -6,6 +6,7 @@ import { isTextEntryElement, useGridNavigation } from '../useGridNavigation';
 import { useRovingTabIndex } from '../../../hooks/useRovingTabIndex';
 import { getTabbableElements } from '../../../lib/focus';
 import { renderWithProviders } from '../../../test-utils';
+import { countTabIndexWrites, flushObservers } from './tabIndexWrites';
 
 const COLUMNS = ['A', 'B', 'C'];
 
@@ -159,31 +160,6 @@ function LargeHarness({ rows }: { rows: number }) {
       </tbody>
     </table>
   );
-}
-
-/**
- * Counts `tabindex` writes. The guard stops writing after 500, so an endless write loop between
- * two MutationObservers ends instead of starving the test of macrotasks.
- */
-function countTabIndexWrites(): { count: () => number } {
-  const original = Element.prototype.setAttribute;
-  let writes = 0;
-  vi.spyOn(Element.prototype, 'setAttribute').mockImplementation(function (
-    this: Element,
-    name: string,
-    value: string,
-  ) {
-    if (name === 'tabindex') {
-      writes += 1;
-      if (writes > 500) return;
-    }
-    original.call(this, name, value);
-  });
-  return { count: () => writes };
-}
-
-async function flushObservers() {
-  for (let index = 0; index < 10; index += 1) await act(async () => {});
 }
 
 const cell = (id: string) => screen.getByTestId(id);

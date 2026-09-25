@@ -36,6 +36,23 @@ export interface DataGridColumn {
   sortable?: boolean;
 }
 
+/** The built-in text of a DataGrid, for localization (see `DataGridBaseProps.labels`). */
+export interface DataGridLabels {
+  /** Accessible name of the select-all checkbox in the header (`selectionMode="multiple"`).
+   * @default 'Select all rows'
+   */
+  selectAll?: string;
+  /**
+   * Visually hidden text of the selection column's header cell (`selectionMode="single"`), which
+   * names that column.
+   * @default 'Selection'
+   */
+  selectionHeader?: string;
+}
+
+const DEFAULT_SELECT_ALL_LABEL = 'Select all rows';
+const DEFAULT_SELECTION_HEADER_LABEL = 'Selection';
+
 /** Props of every DataGrid, whatever sort API it uses. */
 export interface DataGridBaseProps extends React.HTMLAttributes<HTMLTableElement> {
   /**
@@ -46,10 +63,17 @@ export interface DataGridBaseProps extends React.HTMLAttributes<HTMLTableElement
   columns?: readonly DataGridColumn[];
   /**
    * Row selection mode. `'multiple'` adds a checkbox column with a "Select all rows" header
-   * checkbox; `'single'` adds a radio column.
+   * checkbox; `'single'` adds a radio column (its header reads "Selection" to assistive
+   * technology). `labels` localizes both texts.
    * @default 'none'
    */
   selectionMode?: 'none' | SelectionMode;
+  /**
+   * The name of the select-all checkbox and the header text of the selection column, for
+   * localization. Unset members keep their English defaults. Rows are named with their own
+   * `selectionLabel`.
+   */
+  labels?: DataGridLabels;
   /**
    * Controlled selected row ids (`DataGrid.Row` `rowId`). In single mode pass at most one id: with
    * several, only the first one whose row is rendered is selected (a development warning says so).
@@ -200,8 +224,9 @@ export interface DataGridBodyProps extends React.HTMLAttributes<HTMLTableSection
 /** Properties for the DataGridRow sub-component. */
 export interface DataGridRowProps extends React.HTMLAttributes<HTMLTableRowElement> {
   /**
-   * Unique identifier for this row, used for selection. A selectable grid renders no selection
-   * control (and warns in development) for a row without it.
+   * Unique identifier for this row, used for selection (rows that share one are selected together;
+   * a duplicate warns in development). A selectable grid renders no selection control (and warns
+   * in development) for a row without it.
    */
   rowId?: string;
   /**
@@ -253,6 +278,8 @@ export interface SelectionStore {
   subscribeSelectAll(listener: () => void): () => void;
   /** Registers a rendered row id; returns the unregister function. */
   register(rowId: string): () => void;
+  /** How many rendered rows are registered with `rowId` (more than one: a duplicate). */
+  countRegistrations(rowId: string): number;
   /** Sets the committed selection (layout effect of the root). */
   setSelected(items: readonly string[]): void;
   /**
@@ -380,6 +407,9 @@ export function createSelectionStore(
     isSelected(rowId, single = false) {
       return single ? getSingleId() === rowId : selected.has(rowId);
     },
+    countRegistrations(rowId) {
+      return registered.get(rowId) ?? 0;
+    },
     getSelectAllState() {
       return selectAll;
     },
@@ -472,6 +502,10 @@ interface DataGridContextValue {
   toggleAll: () => void;
   /** Shared `name` of the single-mode radios (they are kept out of any form with `form=""`). */
   radioName: string;
+  /** Name of the select-all checkbox (multiple mode). */
+  selectAllLabel: string;
+  /** Hidden header text of the selection column (single mode). */
+  selectionHeaderLabel: string;
 }
 
 interface DataGridSortContextValue {
@@ -500,6 +534,8 @@ const INERT_CONTEXT: DataGridContextValue = {
   toggleRow: () => {},
   toggleAll: () => {},
   radioName: '',
+  selectAllLabel: DEFAULT_SELECT_ALL_LABEL,
+  selectionHeaderLabel: DEFAULT_SELECTION_HEADER_LABEL,
 };
 const INERT_SORT_CONTEXT: DataGridSortContextValue = { sort: null, requestSort: () => {} };
 
@@ -538,6 +574,14 @@ function renderFlatChild({ key, node }: { key: string; node: React.ReactNode }):
   return <React.Fragment key={key}>{node}</React.Fragment>;
 }
 
+function warnDuplicateRowId(rowId: string): void {
+  warnOnce(
+    `DataGrid:duplicate-rowId:${rowId}`,
+    `DataGrid: several rows share the rowId "${rowId}". Row ids must be unique within a ` +
+      'DataGrid; rows with the same rowId are selected and deselected together.',
+  );
+}
+
 const cellBase = 'px-4 py-3 border-b border-border';
 const selectionCell = 'w-10 px-3 py-3 border-b border-border';
 const nativeControl = 'accent-primary cursor-pointer';
@@ -563,6 +607,7 @@ const DataGridRoot = (props: DataGridProps) => {
     selectedKeys,
     defaultSelectedKeys,
     onSelectionChange,
+    labels,
     columns,
     containerProps,
     children,
@@ -780,10 +825,20 @@ const DataGridRoot = (props: DataGridProps) => {
   }, [setSelected, store]);
 
   const radioName = useId('wave-datagrid-selection');
+  const selectAllLabel = labels?.selectAll ?? DEFAULT_SELECT_ALL_LABEL;
+  const selectionHeaderLabel = labels?.selectionHeader ?? DEFAULT_SELECTION_HEADER_LABEL;
 
   const context = React.useMemo<DataGridContextValue>(
-    () => ({ selectionMode, store, toggleRow, toggleAll, radioName }),
-    [selectionMode, store, toggleRow, toggleAll, radioName],
+    () => ({
+      selectionMode,
+      store,
+      toggleRow,
+      toggleAll,
+      radioName,
+      selectAllLabel,
+      selectionHeaderLabel,
+    }),
+    [selectionMode, store, toggleRow, toggleAll, radioName, selectAllLabel, selectionHeaderLabel],
   );
 
   // --- keyboard -------------------------------------------------------------
@@ -879,7 +934,8 @@ function DataGridSelectionHeaderCell({
   selectionMode: SelectionMode;
   ref?: React.Ref<HTMLTableCellElement>;
 }) {
-  const { store, toggleAll } = useDataGridContext('DataGrid.Header');
+  const { store, toggleAll, selectAllLabel, selectionHeaderLabel } =
+    useDataGridContext('DataGrid.Header');
   const state = React.useSyncExternalStore(
     store.subscribeSelectAll,
     store.getSelectAllState,
@@ -906,7 +962,7 @@ function DataGridSelectionHeaderCell({
         <input
           ref={inputRef}
           type="checkbox"
-          aria-label="Select all rows"
+          aria-label={selectAllLabel}
           checked={state === 'all'}
           onChange={() => {
             setClicks((count) => count + 1);
@@ -915,7 +971,7 @@ function DataGridSelectionHeaderCell({
           className={cn(nativeControl, focusRingInset)}
         />
       ) : (
-        <span className="sr-only">Selection</span>
+        <span className="sr-only">{selectionHeaderLabel}</span>
       )}
     </th>
   );
@@ -1002,9 +1058,10 @@ function withSelectionHeaderSlots(
 /**
  * The grid's `<thead>`. When the grid is selectable, it prepends the selection column's header
  * cell to each `<tr>` child, also inside a Fragment: the first header row gets the "Select all
- * rows" checkbox (multiple mode) or the "Selection" header (single mode), later rows of a grouped
- * header an empty cell. A header row rendered by another component cannot get it (a development
- * warning says so): use `DataGrid.Row` for such a row, which adds the cell itself.
+ * rows" checkbox (multiple mode) or the "Selection" header (single mode; DataGrid's `labels`
+ * localizes both), later rows of a grouped header an empty cell. A header row rendered by another
+ * component cannot get it (a development warning says so): use `DataGrid.Row` for such a row,
+ * which adds the cell itself.
  */
 const DataGridHeader = ({ children, className, ref, ...rest }: DataGridHeaderProps) => {
   const { selectionMode } = useDataGridContext('DataGrid.Header');
@@ -1179,7 +1236,9 @@ const DataGridRow = ({
 
   React.useLayoutEffect(() => {
     if (rowId === undefined || inHeader) return;
-    return store.register(rowId);
+    const unregister = store.register(rowId);
+    if (isDev && store.countRegistrations(rowId) > 1) warnDuplicateRowId(rowId);
+    return unregister;
   }, [store, rowId, inHeader]);
 
   React.useEffect(() => {

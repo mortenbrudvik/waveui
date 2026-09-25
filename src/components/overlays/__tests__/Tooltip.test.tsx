@@ -4,6 +4,7 @@ import { act, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { Tooltip } from '../Tooltip';
 import { Popover } from '../Popover';
+import { Dialog } from '../Dialog';
 import { Button } from '../../button/Button';
 import { Portal } from '../../portal/Portal';
 import { useDismiss } from '../../../hooks/useDismiss';
@@ -504,9 +505,10 @@ describe('Tooltip', () => {
           </Tooltip>,
         );
         expect(el).toHaveClass(expected);
-        const messages = warn.mock.calls.map((call) => String(call[0]));
-        expect(messages.filter((m) => m.includes('`variant` is deprecated'))).toEqual([
-          '[WaveUI] Tooltip: `variant` is deprecated and will be removed in 1.0. Use `appearance` instead.',
+        expect(warn.mock.calls).toEqual([
+          [
+            '[WaveUI] Tooltip: `variant` is deprecated and will be removed in 1.0. Use `appearance` instead.',
+          ],
         ]);
       },
     );
@@ -541,7 +543,7 @@ describe('Tooltip', () => {
     });
 
     it('relationship="label" names an icon-only Button without its missing-name warning', () => {
-      const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+      const warn = vi.spyOn(console, 'warn');
       render(
         <Tooltip content="Save" relationship="label">
           <Button icon={<svg viewBox="0 0 16 16" />} />
@@ -594,7 +596,7 @@ describe('Tooltip', () => {
     });
 
     it('describes the element of a single-element Fragment, without a wrapper or a warning', () => {
-      const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+      const warn = vi.spyOn(console, 'warn');
       const { container } = render(
         <Tooltip content="Explains">
           <>
@@ -737,7 +739,7 @@ describe('Tooltip', () => {
     });
 
     it('does not warn for a child without focusable content (text, a disabled button)', () => {
-      const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+      const warn = vi.spyOn(console, 'warn');
       render(
         <>
           <Tooltip content="Full name">
@@ -982,6 +984,55 @@ describe('Tooltip', () => {
       await waitFor(() => expect(surface()).not.toBeNull());
       await user.hover(surface()!);
       expect(surface()).not.toBeNull();
+    });
+  });
+
+  describe('a shown tooltip on a control outside a dialog’s container', () => {
+    it('in Popover.Content opened from the dialog: Tab reaches the next button', async () => {
+      const user = userEvent.setup();
+      render(
+        <Dialog open onOpenChange={() => {}}>
+          <Dialog.Content title="Edit">
+            <Popover>
+              <Popover.Trigger>
+                <Button>Format</Button>
+              </Popover.Trigger>
+              <Popover.Content title="Format">
+                <Tooltip content="Bold text" delay={0}>
+                  <Button>Bold</Button>
+                </Tooltip>
+                <Button>Italic</Button>
+              </Popover.Content>
+            </Popover>
+          </Dialog.Content>
+        </Dialog>,
+      );
+      await user.click(screen.getByRole('button', { name: 'Format' }));
+      await user.click(screen.getByRole('button', { name: 'Bold' }));
+      expect(surface()).toHaveTextContent('Bold text');
+      await user.tab();
+      expect(screen.getByRole('button', { name: 'Italic' })).toHaveFocus();
+    });
+
+    it('in a consumer Portal inside the dialog: Tab reaches the next button', async () => {
+      const user = userEvent.setup();
+      render(
+        <Dialog open onOpenChange={() => {}}>
+          <Dialog.Content title="Edit">
+            <Button>In dialog</Button>
+            <Portal>
+              <Tooltip content="First" delay={0}>
+                <Button>P1</Button>
+              </Tooltip>
+              <Button>P2</Button>
+            </Portal>
+          </Dialog.Content>
+        </Dialog>,
+      );
+      await user.click(screen.getByRole('button', { name: 'P1' }));
+      expect(surface()).toHaveTextContent('First');
+      await user.tab();
+      expect(screen.getByRole('button', { name: 'P2' })).toHaveFocus();
     });
   });
 

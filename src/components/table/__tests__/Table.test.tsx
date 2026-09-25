@@ -138,14 +138,18 @@ describe('Table', () => {
       expect(screen.getByTestId('thead').tagName.toLowerCase()).toBe('thead');
       expect(screen.getAllByRole('columnheader')).toHaveLength(2);
       expect(screen.getAllByRole('columnheader')[0]).toHaveAttribute('scope', 'col');
-      const messages = warn.mock.calls.map(([message]) => String(message));
-      expect(messages.filter((m) => m.includes('`Table.Head` is deprecated'))).toHaveLength(1);
-      expect(messages.filter((m) => m.includes('`Table.HeadCell` is deprecated'))).toHaveLength(1);
-      expect(messages.some((m) => m.includes('Use `Table.Header` instead.'))).toBe(true);
+      expect(warn.mock.calls).toEqual([
+        [
+          '[WaveUI] Table: `Table.Head` is deprecated and will be removed in 1.0. Use `Table.Header` instead.',
+        ],
+        [
+          '[WaveUI] Table: `Table.HeadCell` is deprecated and will be removed in 1.0. Use `Table.HeaderCell` instead.',
+        ],
+      ]);
     });
 
     it('Table.Header does not warn', () => {
-      const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+      const warn = vi.spyOn(console, 'warn');
       renderFullTable();
       expect(warn).not.toHaveBeenCalled();
     });
@@ -354,7 +358,11 @@ describe('Table', () => {
         resize.trigger(wrapper);
         expect(wrapper).toHaveAttribute('tabindex', '0');
         expect(wrapper).not.toHaveAttribute('role');
-        expect(warn).toHaveBeenCalledWith(expect.stringContaining('[WaveUI] Table'));
+        expect(warn.mock.calls).toEqual([
+          [
+            '[WaveUI] Table: the table scrolls horizontally but its scroll region has no name. Add a <caption> or containerProps["aria-label"].',
+          ],
+        ]);
       } finally {
         resize.restore();
       }

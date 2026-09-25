@@ -3,6 +3,7 @@ import { afterEach, describe, it, expect, expectTypeOf, vi } from 'vitest';
 import { act, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { Popover, PopoverContent, PopoverTrigger, type PopoverTriggerChildProps } from '../Popover';
+import { Dialog } from '../Dialog';
 import { Tooltip } from '../Tooltip';
 import { Button } from '../../button/Button';
 import { Portal } from '../../portal/Portal';
@@ -576,7 +577,7 @@ describe('Popover', () => {
     });
 
     it('does not warn when named by the trigger', () => {
-      const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+      const warn = vi.spyOn(console, 'warn');
       render(<Basic defaultOpen />);
       expect(warn).not.toHaveBeenCalled();
     });
@@ -953,44 +954,94 @@ describe('Popover', () => {
       return visited;
     }
 
-    it('Tab from the last element of the page leaves the page after the content: no Tab cycle (overlays-anchored-code-2)', async () => {
+    it('a Tab lap visits the content once, after the trigger, and leaves the page after its last element', async () => {
       const user = userEvent.setup();
       render(<TabOrder />);
       screen.getByRole('button', { name: 'Toggle' }).focus();
-      // The portaled content sits at the end of the document: the last element of the page reaches
-      // it natively, and from there Tab continues in the document order instead of jumping back
-      // to the element after the trigger.
+      // The portaled content sits at the end of the document. Tab from the last element of the page
+      // moves past it (it was visited after the trigger) and leaves the page: no Tab cycle, and no
+      // second visit.
       expect(await tabs(user, 7)).toEqual([
         'First',
         'Last',
         'After',
-        'First',
-        'Last',
         'body',
         'Before',
+        'Toggle',
+        'First',
       ]);
       expect(screen.getByRole('dialog', { name: 'Options' })).toBeInTheDocument();
     });
 
-    it('Shift+Tab from the element after the trigger enters the content at its last element (overlays-anchored-code-2)', async () => {
+    it('hides the content only while the Tab from the page end moves past it', async () => {
+      const user = userEvent.setup();
+      render(<TabOrder />);
+      const content = screen.getByRole('dialog', { name: 'Options' });
+      const after = screen.getByRole('button', { name: 'After' });
+      after.focus();
+      // Read after the popover's own `keydown` listener, then as focus leaves After (the browser
+      // has picked the next element by then).
+      const seen: string[] = [];
+      const record = () => seen.push(content.style.visibility);
+      document.addEventListener('keydown', record);
+      after.addEventListener('focusout', record);
+      try {
+        await user.tab();
+      } finally {
+        document.removeEventListener('keydown', record);
+      }
+      expect(document.body).toHaveFocus();
+      expect(seen).toEqual(['hidden', '']);
+    });
+
+    it('Shift+Tab from the element after the trigger enters the content at its last element', async () => {
       const user = userEvent.setup();
       render(<TabOrder />);
       screen.getByRole('button', { name: 'After' }).focus();
-      expect(await tabs(user, 4, true)).toEqual(['Last', 'First', 'Toggle', 'Before']);
-    });
-
-    it('Shift+Tab from outside the page reaches the content in the document order, then continues backwards', async () => {
-      const user = userEvent.setup();
-      render(<TabOrder />);
-      // Shift+Tab from the browser UI lands on the last element of the document: the content.
       expect(await tabs(user, 6, true)).toEqual([
         'Last',
         'First',
+        'Toggle',
+        'Before',
+        'body',
+        'After',
+      ]);
+    });
+
+    it('a Shift+Tab lap from outside the page visits the content once, after the trigger', async () => {
+      const user = userEvent.setup();
+      render(<TabOrder />);
+      // Shift+Tab from nothing reaches the last element of the document, the content: focus goes
+      // to the last element of the page instead, as if the content followed the trigger.
+      expect(await tabs(user, 7, true)).toEqual([
         'After',
         'Last',
         'First',
         'Toggle',
+        'Before',
+        'body',
+        'After',
       ]);
+    });
+
+    it('the content ends the order when the trigger is the last element of the page', async () => {
+      const user = userEvent.setup();
+      render(
+        <>
+          <button type="button">Before</button>
+          <Popover defaultOpen>
+            <Popover.Trigger>
+              <button type="button">Toggle</button>
+            </Popover.Trigger>
+            <Popover.Content aria-label="Options">
+              <button type="button">First</button>
+              <button type="button">Last</button>
+            </Popover.Content>
+          </Popover>
+        </>,
+      );
+      expect(await tabs(user, 5, true)).toEqual(['Last', 'First', 'Toggle', 'Before', 'body']);
+      expect(await tabs(user, 5)).toEqual(['Before', 'Toggle', 'First', 'Last', 'body']);
     });
 
     it.each([
@@ -1048,25 +1099,151 @@ describe('Popover', () => {
     });
 
     it.each([
-      ['a script after a click', false, 'After'],
-      ['Shift+Tab from the browser controls', true, 'body'],
+      ['a script after a click', 'none', 'Last', 'After'],
+      ['a script after the window got focus back and a key was pressed', 'key', 'Last', 'After'],
+      ['Shift+Tab from the browser controls', 'browser', 'After', 'body'],
     ] as const)(
-      'focus that reaches the last element from nothing by %s: the order it entered by',
-      async (_how, windowBlur, expected) => {
+      'focus that reaches the last element from nothing by %s',
+      async (_how, before, landsOn, next) => {
         const user = userEvent.setup();
         render(<TabOrder />);
         // A press where nothing takes focus: focus stays on the body.
         await user.click(screen.getByRole('dialog', { name: 'Options' }));
         expect(document.body).toHaveFocus();
-        // Leaving for the browser's own controls blurs the window; no key press reaches the page
-        // when Shift+Tab there brings focus back to the document's last element.
-        if (windowBlur) act(() => void window.dispatchEvent(new FocusEvent('blur')));
+        // Leaving for the browser's own controls blurs the window, and Shift+Tab there gives the
+        // window focus back just before the document's last element takes focus; no key press
+        // reaches the page. Such an entry goes to the last element of the page instead.
+        if (before !== 'none') {
+          act(() => {
+            window.dispatchEvent(new FocusEvent('blur'));
+            window.dispatchEvent(new FocusEvent('focus'));
+          });
+        }
+        if (before === 'key') await user.keyboard('{Shift}');
         act(() => screen.getByRole('button', { name: 'Last' }).focus());
-        expect(await tabs(user, 1)).toEqual([expected]);
+        expect(focused()).toBe(landsOn);
+        expect(await tabs(user, 1)).toEqual([next]);
       },
     );
 
-    it('a reopened popover whose content takes focus as it mounts keeps the order after the trigger (R1-1)', async () => {
+    it.each([
+      [
+        'a Dialog',
+        'Delete',
+        <Dialog key="dialog">
+          <Dialog.Trigger>
+            <button type="button">Delete</button>
+          </Dialog.Trigger>
+          <Dialog.Content title="Confirm">
+            <button type="button">Ok</button>
+          </Dialog.Content>
+        </Dialog>,
+      ],
+      [
+        'a nested Popover',
+        'Details',
+        <Popover key="popover">
+          <Popover.Trigger>
+            <button type="button">Details</button>
+          </Popover.Trigger>
+          <Popover.Content aria-label="More details">
+            <button type="button">Inner action</button>
+          </Popover.Content>
+        </Popover>,
+      ],
+    ] as const)(
+      'keyboard only: after %s opened from the content’s last element closes, Tab from there continues after the trigger',
+      async (_layer, opener, layer) => {
+        const user = userEvent.setup();
+        render(
+          <>
+            <button type="button">Before</button>
+            <Popover>
+              <Popover.Trigger>
+                <button type="button">Toggle</button>
+              </Popover.Trigger>
+              <Popover.Content aria-label="Options">
+                <button type="button">First</button>
+                {layer}
+              </Popover.Content>
+            </Popover>
+            <button type="button">After</button>
+          </>,
+        );
+        expect(await tabs(user, 2)).toEqual(['Before', 'Toggle']);
+        await user.keyboard('{Enter}');
+        expect(await tabs(user, 2)).toEqual(['First', opener]);
+        await user.keyboard('{Enter}');
+        // Into the layer (the Dialog moves focus itself; the nested Popover is entered with Tab).
+        if (opener === 'Details') await user.tab();
+        expect(screen.getAllByRole('dialog')).toHaveLength(2);
+        // Escape closes the layer only. Its elements are removed before focus comes back, so the
+        // restored focus arrives from nothing, although it does not come from the browser's controls.
+        await user.keyboard('{Escape}');
+        expect(screen.getAllByRole('dialog')).toHaveLength(1);
+        expect(screen.getByRole('button', { name: opener })).toHaveFocus();
+        expect(await tabs(user, 1)).toEqual(['After']);
+      },
+    );
+
+    /**
+     * Shows the content again after the popover moved past it, before the browser moves focus (a
+     * later `keydown` listener), so the Tab from the last element of the page still reaches it.
+     */
+    function revealContentOnKeyDown(name: string): () => void {
+      const content = screen.getByRole('dialog', { name });
+      const reveal = () => content.style.removeProperty('visibility');
+      document.addEventListener('keydown', reveal);
+      return () => document.removeEventListener('keydown', reveal);
+    }
+
+    it('content that the Tab from the page end still reaches follows the document order from there: no Tab cycle', async () => {
+      const user = userEvent.setup();
+      render(<TabOrder />);
+      const stop = revealContentOnKeyDown('Options');
+      try {
+        screen.getByRole('button', { name: 'After' }).focus();
+        expect(await tabs(user, 4)).toEqual(['First', 'Last', 'body', 'Before']);
+      } finally {
+        stop();
+      }
+    });
+
+    it.each([
+      ['a click', 'click'],
+      ['a script', 'script'],
+    ] as const)(
+      'focus that enters the content by %s after the Tab from the page end moved past it keeps the order after the trigger',
+      async (_how, how) => {
+        const user = userEvent.setup();
+        render(<TabOrder />);
+        screen.getByRole('button', { name: 'After' }).focus();
+        expect(await tabs(user, 1)).toEqual(['body']);
+        const first = screen.getByRole('button', { name: 'First' });
+        if (how === 'click') await user.click(first);
+        else act(() => first.focus());
+        expect(await tabs(user, 2)).toEqual(['Last', 'After']);
+      },
+    );
+
+    it('shows the content again when the Tab from the page end moves nothing', async () => {
+      const user = userEvent.setup();
+      render(<TabOrder />);
+      const content = screen.getByRole('dialog', { name: 'Options' });
+      // A later listener takes the Tab (no focus moves).
+      const cancel = (event: KeyboardEvent) => event.preventDefault();
+      document.addEventListener('keydown', cancel);
+      try {
+        screen.getByRole('button', { name: 'After' }).focus();
+        await user.tab();
+      } finally {
+        document.removeEventListener('keydown', cancel);
+      }
+      expect(screen.getByRole('button', { name: 'After' })).toHaveFocus();
+      await waitFor(() => expect(content.style.visibility).toBe(''));
+    });
+
+    it('a reopened popover whose content takes focus as it mounts keeps the order after the trigger', async () => {
       const user = userEvent.setup();
       render(
         <>
@@ -1083,12 +1260,19 @@ describe('Popover', () => {
         </>,
       );
       const query = () => screen.getByRole('textbox', { name: 'Query' });
-      // Mounted open, the field took focus. From nothing, Shift+Tab from the browser controls
-      // enters the content (the document's last element) in the document order ...
-      act(() => query().blur());
-      await user.tab({ shift: true });
+      // Mounted open, the field took focus: Tab continues after the trigger.
       expect(query()).toHaveFocus();
-      // ... and Escape closes it with focus back on the trigger.
+      expect(await tabs(user, 1)).toEqual(['After']);
+      // Reached natively from the last element of the page, the content follows the document
+      // order ...
+      const stop = revealContentOnKeyDown('Search');
+      try {
+        await user.tab();
+      } finally {
+        stop();
+      }
+      expect(query()).toHaveFocus();
+      // ... until Escape closes it with focus back on the trigger.
       await user.keyboard('{Escape}');
       expect(screen.getByRole('button', { name: 'Toggle' })).toHaveFocus();
       // Reopened from the trigger, the content's field takes focus as it mounts: after the trigger.
@@ -1402,7 +1586,7 @@ describe('Popover', () => {
         ),
       ],
     ])('%s outside Popover throws in development', (name, Misplaced) => {
-      const error = vi.spyOn(console, 'error').mockImplementation(() => {});
+      const error = vi.spyOn(console, 'error');
       expect(() => render(<Misplaced />)).toThrow(
         new Error(`[WaveUI] ${name} must be used within Popover`),
       );

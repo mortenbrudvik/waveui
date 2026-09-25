@@ -18,6 +18,7 @@ import type {
   DataGridCellProps,
   DataGridColumn,
   DataGridHeaderCellProps,
+  DataGridLabels,
   DataGridProps,
   DataGridRowProps,
   DataGridSort,
@@ -30,6 +31,7 @@ import { MenuButton } from '../../button/MenuButton';
 import { Toolbar } from '../../button/Toolbar';
 import { RadioGroup } from '../../input/RadioGroup';
 import { Menu } from '../../navigation/Menu';
+import { countTabIndexWrites, flushObservers } from './tabIndexWrites';
 import {
   asClientReference,
   expectNoA11yViolations,
@@ -132,6 +134,20 @@ function cell(text: string, index?: number): HTMLElement {
   expect(el).toHaveAttribute('role', 'gridcell');
   return el;
 }
+
+/** DataGrid's deprecation warning for the prop `name`, replaced by `replacement`. */
+const deprecated = (name: string, replacement: string) =>
+  `[WaveUI] DataGrid: \`${name}\` is deprecated and will be removed in 1.0. Use \`${replacement}\` instead.`;
+
+const MIXED_SORT_COLUMN =
+  '[WaveUI] DataGrid: `sortColumn` is controlled but `sortDirection` is not (mixed control). The direction is kept internally and toggles on repeated clicks, as in 0.4. Pass `sort` (`{ columnId, direction }`) to control both.';
+
+const MIXED_SORT_DIRECTION =
+  '[WaveUI] DataGrid: `sortDirection` is controlled but `sortColumn` is not (mixed control). The column is kept internally and follows the clicked header, as in 0.4. Pass `sort` (`{ columnId, direction }`) to control both.';
+
+/** useControllable's warning when a value switches between controlled and uncontrolled. */
+const switchWarning = (from: string, to: string) =>
+  `[WaveUI] A component is changing from ${from} to ${to}. Components should not switch between controlled and uncontrolled: pass \`undefined\` only when the component is uncontrolled, and the empty value (for example \`[]\`, \`null\` or \`""\`) to clear a controlled value.`;
 
 afterEach(() => {
   vi.restoreAllMocks();
@@ -262,8 +278,11 @@ describe('DataGrid', () => {
       const wrapper = screen.getByTestId('wrapper');
       expect(wrapper).not.toHaveAttribute('aria-label');
       expect(wrapper).not.toHaveAttribute('role');
-      expect(warn).toHaveBeenCalledWith(expect.stringContaining('[WaveUI] DataGrid'));
-      expect(warn).toHaveBeenCalledWith(expect.stringContaining('role'));
+      expect(warn.mock.calls).toEqual([
+        [
+          '[WaveUI] DataGrid: `containerProps["aria-label"]`/`["aria-labelledby"]` is ignored because the wrapper has no role. Name the grid itself (`aria-label` on DataGrid), or pass a `role` (e.g. "region") in `containerProps` too.',
+        ],
+      ]);
     });
   });
 
@@ -273,7 +292,7 @@ describe('DataGrid', () => {
       ['DataGrid.Header', <DataGrid.Header key="h">{null}</DataGrid.Header>],
       ['DataGrid.HeaderCell', <DataGrid.HeaderCell key="hc">Name</DataGrid.HeaderCell>],
     ])('%s used outside a DataGrid throws in development', (name, element) => {
-      vi.spyOn(console, 'error').mockImplementation(() => {});
+      const error = vi.spyOn(console, 'error');
       expect(() =>
         render(
           <table>
@@ -282,7 +301,9 @@ describe('DataGrid', () => {
             </tbody>
           </table>,
         ),
-      ).toThrow(`[WaveUI] ${name} must be used within DataGrid`);
+      ).toThrow(new Error(`[WaveUI] ${name} must be used within DataGrid`));
+      // Thrown, not logged.
+      expect(error).not.toHaveBeenCalled();
     });
 
     describe('in production', () => {
@@ -431,8 +452,11 @@ describe('DataGrid sorting', () => {
     expect(th).not.toHaveAttribute('aria-sort');
     await user.click(th);
     expect(onSortChange).not.toHaveBeenCalled();
-    expect(warn).toHaveBeenCalledWith(expect.stringContaining('[WaveUI] DataGrid.HeaderCell'));
-    expect(warn).toHaveBeenCalledWith(expect.stringContaining('columnId'));
+    expect(warn.mock.calls).toEqual([
+      [
+        '[WaveUI] DataGrid.HeaderCell: `sortable` needs a `columnId`; the header is rendered as not sortable.',
+      ],
+    ]);
   });
 
   it('applies aria-sort from defaultSort', () => {
@@ -445,9 +469,10 @@ describe('DataGrid sorting', () => {
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
     renderGrid({ defaultSortColumn: 'name', defaultSortDirection: 'ascending' });
     expect(header('Name')).toHaveAttribute('aria-sort', 'ascending');
-    expect(warn).toHaveBeenCalledWith(
-      expect.stringContaining('`defaultSortColumn` is deprecated and will be removed in 1.0'),
-    );
+    expect(warn.mock.calls).toEqual([
+      [deprecated('defaultSortColumn', 'defaultSort')],
+      [deprecated('defaultSortDirection', 'defaultSort')],
+    ]);
   });
 
   it('calls onSortChange with the 0.4 arguments (columnId, direction) without sort/defaultSort', async () => {
@@ -567,9 +592,11 @@ describe('DataGrid sorting', () => {
       </DataGrid>,
     );
     expect(header('Name')).toHaveAttribute('aria-sort', 'none');
-    expect(warn).toHaveBeenCalledWith(
-      expect.stringContaining('changing from controlled to uncontrolled'),
-    );
+    expect(warn.mock.calls).toEqual([
+      [deprecated('sortColumn', 'sort')],
+      [deprecated('sortDirection', 'sort')],
+      [switchWarning('controlled', 'uncontrolled')],
+    ]);
   });
 
   it('honours a controlled sort that arrives after mount', () => {
@@ -583,10 +610,7 @@ describe('DataGrid sorting', () => {
       </DataGrid>,
     );
     expect(header('Role')).toHaveAttribute('aria-sort', 'ascending');
-    expect(warn).toHaveBeenCalledTimes(1);
-    expect(warn).toHaveBeenCalledWith(
-      expect.stringContaining('changing from uncontrolled to controlled'),
-    );
+    expect(warn.mock.calls).toEqual([[switchWarning('uncontrolled', 'controlled')]]);
   });
 
   describe('deprecated sortColumn/sortDirection controlled one at a time (0.4 mixed control)', () => {
@@ -629,11 +653,7 @@ describe('DataGrid sorting', () => {
         ['name', 'descending'],
         ['role', 'ascending'],
       ]);
-      expect(warn).toHaveBeenCalledWith(
-        expect.stringContaining(
-          '[WaveUI] DataGrid: `sortColumn` is controlled but `sortDirection` is not (mixed control)',
-        ),
-      );
+      expect(warn.mock.calls).toEqual([[deprecated('sortColumn', 'sort')], [MIXED_SORT_COLUMN]]);
     });
 
     it('keeps the column internal when only sortDirection is controlled, and warns', async () => {
@@ -671,11 +691,10 @@ describe('DataGrid sorting', () => {
         ['name', 'descending'],
         ['role', 'ascending'],
       ]);
-      expect(warn).toHaveBeenCalledWith(
-        expect.stringContaining(
-          '[WaveUI] DataGrid: `sortDirection` is controlled but `sortColumn` is not (mixed control)',
-        ),
-      );
+      expect(warn.mock.calls).toEqual([
+        [deprecated('sortDirection', 'sort')],
+        [MIXED_SORT_DIRECTION],
+      ]);
     });
 
     it('starts the internal column from defaultSortColumn and follows a direction the parent keeps', async () => {
@@ -683,12 +702,10 @@ describe('DataGrid sorting', () => {
       const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
       const onSortChange = vi.fn();
       renderGrid({ sortDirection: 'descending', defaultSortColumn: 'role', onSortChange });
-      expect(warn.mock.calls.map(([message]) => message)).toEqual([
-        '[WaveUI] DataGrid: `sortDirection` is deprecated and will be removed in 1.0. Use `sort` instead.',
-        '[WaveUI] DataGrid: `defaultSortColumn` is deprecated and will be removed in 1.0. Use `defaultSort` instead.',
-        expect.stringContaining(
-          '[WaveUI] DataGrid: `sortDirection` is controlled but `sortColumn` is not (mixed control)',
-        ),
+      expect(warn.mock.calls).toEqual([
+        [deprecated('sortDirection', 'sort')],
+        [deprecated('defaultSortColumn', 'defaultSort')],
+        [MIXED_SORT_DIRECTION],
       ]);
       expect(header('Role')).toHaveAttribute('aria-sort', 'descending');
       // The parent does not accept the new direction: the controlled half stays.
@@ -717,19 +734,19 @@ describe('DataGrid sorting', () => {
       expect(onSortChange).toHaveBeenCalledTimes(1);
       expect(onSortChange).toHaveBeenCalledWith('name', 'descending');
       expect(header('Name')).toHaveAttribute('aria-sort', 'descending');
-      expect(warn.mock.calls.map(([message]) => message)).toEqual([
-        '[WaveUI] DataGrid: `sortColumn` is deprecated and will be removed in 1.0. Use `sort` instead.',
-        expect.stringContaining(
-          '[WaveUI] DataGrid: `sortColumn` is controlled but `sortDirection` is not (mixed control)',
-        ),
-      ]);
+      expect(warn.mock.calls).toEqual([[deprecated('sortColumn', 'sort')], [MIXED_SORT_COLUMN]]);
     });
 
     it('does not warn about mixed control when both or neither are controlled', () => {
       const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
       renderGrid({ sortColumn: 'name', sortDirection: 'descending' });
       renderGrid({ defaultSortColumn: 'name' });
-      expect(warn).not.toHaveBeenCalledWith(expect.stringContaining('mixed control'));
+      // Only the deprecations: no mixed-control warning.
+      expect(warn.mock.calls).toEqual([
+        [deprecated('sortColumn', 'sort')],
+        [deprecated('sortDirection', 'sort')],
+        [deprecated('defaultSortColumn', 'defaultSort')],
+      ]);
     });
   });
 
@@ -737,7 +754,12 @@ describe('DataGrid sorting', () => {
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
     renderGrid({ sort: { columnId: 'name', direction: 'ascending' }, sortColumn: 'role' });
     expect(header('Name')).toHaveAttribute('aria-sort', 'ascending');
-    expect(warn).toHaveBeenCalledWith(expect.stringContaining('mix'));
+    expect(warn.mock.calls).toEqual([
+      [deprecated('sortColumn', 'sort')],
+      [
+        '[WaveUI] DataGrid: do not mix `sort`/`defaultSort` with the deprecated `sortColumn`/`sortDirection`/`defaultSortColumn`/`defaultSortDirection`. `sort`/`defaultSort` win.',
+      ],
+    ]);
   });
 
   it('calls onSortChange once per click in StrictMode', async () => {
@@ -942,6 +964,77 @@ describe('DataGrid selection', () => {
     expect(screen.getByRole('checkbox', { name: 'Select all rows' })).toBeVisible();
   });
 
+  describe('built-in text', () => {
+    const labels: DataGridLabels = { selectAll: 'Velg alle rader', selectionHeader: 'Utvalg' };
+
+    it('labels names the select-all checkbox (multiple mode)', () => {
+      renderGrid({ selectionMode: 'multiple', labels });
+      expect(screen.getByRole('checkbox', { name: 'Velg alle rader' })).toBeInTheDocument();
+      expect(screen.queryByRole('checkbox', { name: 'Select all rows' })).toBeNull();
+    });
+
+    it('labels names the selection column header (single mode)', () => {
+      renderGrid({ selectionMode: 'single', labels });
+      const [selectionHeader] = screen.getAllByRole('columnheader');
+      expect(selectionHeader).toHaveAccessibleName('Utvalg');
+      expect(within(selectionHeader).getByText('Utvalg')).toHaveClass('sr-only');
+    });
+
+    it('keeps the English text for the members labels leaves out', () => {
+      const { rerender } = render(
+        <DataGrid
+          aria-label="People"
+          selectionMode="multiple"
+          labels={{ selectionHeader: 'Utvalg' }}
+        >
+          {gridContent()}
+        </DataGrid>,
+      );
+      expect(screen.getByRole('checkbox', { name: 'Select all rows' })).toBeInTheDocument();
+      rerender(
+        <DataGrid aria-label="People" selectionMode="single" labels={{ selectAll: 'Alle' }}>
+          {gridContent()}
+        </DataGrid>,
+      );
+      expect(screen.getAllByRole('columnheader')[0]).toHaveAccessibleName('Selection');
+    });
+  });
+
+  describe('duplicate row ids', () => {
+    const duplicateMessage = (rowId: string) =>
+      `[WaveUI] DataGrid: several rows share the rowId "${rowId}". Row ids must be unique within a DataGrid; rows with the same rowId are selected and deselected together.`;
+
+    function Rows({ ids }: { ids: readonly string[] }) {
+      return (
+        <DataGrid aria-label="People" selectionMode="multiple">
+          <DataGrid.Body>
+            {ids.map((id, index) => (
+              <DataGrid.Row key={index} rowId={id}>
+                <DataGrid.Cell>{`Row ${index + 1}`}</DataGrid.Cell>
+              </DataGrid.Row>
+            ))}
+          </DataGrid.Body>
+        </DataGrid>
+      );
+    }
+
+    it('warns once per duplicated rowId', () => {
+      const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+      const { rerender } = render(<Rows ids={['a', 'a', 'b', 'a', 'b', 'c']} />);
+      rerender(<Rows ids={['a', 'a', 'b', 'a', 'b', 'c']} />);
+      expect(warn.mock.calls).toEqual([[duplicateMessage('a')], [duplicateMessage('b')]]);
+    });
+
+    it('does not warn when rows swap their ids or a new row takes the id of a removed one', () => {
+      const warn = vi.spyOn(console, 'warn');
+      const { rerender } = render(<Rows ids={['a', 'b', 'c']} />);
+      rerender(<Rows ids={['b', 'a', 'c']} />);
+      rerender(<Rows ids={['b', 'c']} />);
+      rerender(<Rows ids={['b', 'c', 'a']} />);
+      expect(warn).not.toHaveBeenCalled();
+    });
+  });
+
   describe('several header rows (grouped header)', () => {
     function body() {
       return (
@@ -1001,7 +1094,7 @@ describe('DataGrid selection', () => {
     }
 
     it('renders one "Select all rows" control, in the first header row', () => {
-      const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+      const warn = vi.spyOn(console, 'warn');
       render(<GroupedGrid />);
       const selectAll = screen.getAllByRole('checkbox', { name: 'Select all rows' });
       expect(selectAll).toHaveLength(1);
@@ -1129,7 +1222,7 @@ describe('DataGrid selection', () => {
     });
 
     it('renders one control for header rows that other components render as DataGrid.Row', () => {
-      const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+      const warn = vi.spyOn(console, 'warn');
       function GroupHeaderRow() {
         return <DataGrid.Row>{groupRow()}</DataGrid.Row>;
       }
@@ -1188,12 +1281,15 @@ describe('DataGrid selection', () => {
         </DataGrid.Body>
       </DataGrid>,
     );
-    expect(warn).toHaveBeenCalledWith(expect.stringContaining('[WaveUI] DataGrid.Header'));
-    expect(warn).toHaveBeenCalledWith(expect.stringContaining('DataGrid.Row'));
+    expect(warn.mock.calls).toEqual([
+      [
+        '[WaveUI] DataGrid.Header: a header row has no selection column header cell, so the header has one column fewer than the selectable rows. Render header rows as `<tr>` children of DataGrid.Header (a Fragment is fine), or use `DataGrid.Row` for a header row that another component renders.',
+      ],
+    ]);
   });
 
   it('does not warn about the selection header cell for the supported header rows', () => {
-    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const warn = vi.spyOn(console, 'warn');
     renderGrid({ selectionMode: 'single' });
     render(
       <DataGrid aria-label="Built from rows" selectionMode="multiple">
@@ -1449,7 +1545,11 @@ describe('DataGrid selection', () => {
     const row = bodyRows()[0];
     expect(within(row).queryByRole('checkbox', { name: /Alice|undefined/ })).toBeNull();
     expect(within(row).getAllByRole('gridcell')).toHaveLength(2);
-    expect(warn).toHaveBeenCalledWith(expect.stringContaining('rowId'));
+    expect(warn.mock.calls).toEqual([
+      [
+        '[WaveUI] DataGrid.Row: a selectable grid needs a `rowId` on every row; this row has no selection control.',
+      ],
+    ]);
   });
 
   it('uses the theme accent color for the native controls', () => {
@@ -1481,7 +1581,7 @@ describe('DataGrid selection', () => {
     expect(onSelectedItemsChange).toHaveBeenCalledWith(['2']);
     expect(onSelectionChange).toHaveBeenCalledTimes(1);
     expect(onSelectionChange.mock.calls[0][0]).toEqual(new Set(['2']));
-    expect(warn).toHaveBeenCalledWith(expect.stringContaining('`onSelectionChange` is deprecated'));
+    expect(warn.mock.calls).toEqual([[deprecated('onSelectionChange', 'onSelectedItemsChange')]]);
   });
 
   it.each([
@@ -1503,11 +1603,7 @@ describe('DataGrid selection', () => {
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
     renderGrid({ selectionMode: 'multiple', defaultSelectedKeys: new Set(['3']) });
     expect(bodyRows()[2]).toHaveAttribute('aria-selected', 'true');
-    expect(warn).toHaveBeenCalledWith(
-      expect.stringContaining(
-        'DataGrid: `defaultSelectedKeys` is deprecated and will be removed in 1.0. Use `defaultSelectedItems` instead.',
-      ),
-    );
+    expect(warn.mock.calls).toEqual([[deprecated('defaultSelectedKeys', 'defaultSelectedItems')]]);
   });
 
   it('marks the selected row with data-selected and the selected token', () => {
@@ -1840,9 +1936,7 @@ describe('DataGrid selection', () => {
     );
     expect(screen.getByRole('checkbox', { name: 'Alice' })).not.toBeChecked();
     expect(screen.getByRole('checkbox', { name: 'Select all rows' })).not.toBeChecked();
-    expect(warn).toHaveBeenCalledWith(
-      expect.stringContaining('changing from controlled to uncontrolled'),
-    );
+    expect(warn.mock.calls).toEqual([[switchWarning('controlled', 'uncontrolled')]]);
   });
 
   it('honours a controlled selection that arrives after mount', () => {
@@ -1854,9 +1948,7 @@ describe('DataGrid selection', () => {
       </DataGrid>,
     );
     expect(screen.getByRole('checkbox', { name: 'Bob' })).toBeChecked();
-    expect(warn).toHaveBeenCalledWith(
-      expect.stringContaining('changing from uncontrolled to controlled'),
-    );
+    expect(warn.mock.calls).toEqual([[switchWarning('uncontrolled', 'controlled')]]);
   });
 
   it('calls onSelectedItemsChange once per click in StrictMode', async () => {
@@ -2326,16 +2418,7 @@ describe('DataGrid grid keyboard model', () => {
 
   it('leaves a nested roving composite’s tab indexes alone (stand-in with manageTabIndex)', async () => {
     const user = userEvent.setup();
-    const original = Element.prototype.setAttribute;
-    let writes = 0;
-    vi.spyOn(Element.prototype, 'setAttribute').mockImplementation(function (
-      this: Element,
-      name: string,
-      value: string,
-    ) {
-      if (name === 'tabindex' && ++writes > 500) return;
-      original.call(this, name, value);
-    });
+    const writes = countTabIndexWrites();
     function RowActions() {
       const { containerProps } = useRovingTabIndex({
         itemSelector: 'button, [href], input, select, textarea, [role="button"], [tabindex]',
@@ -2361,8 +2444,8 @@ describe('DataGrid grid keyboard model', () => {
         </DataGrid.Body>
       </DataGrid>,
     );
-    for (let index = 0; index < 10; index += 1) await act(async () => {});
-    expect(writes).toBeLessThan(50);
+    await flushObservers();
+    expect(writes.count()).toBeLessThan(50);
     const toolbar = screen.getByRole('toolbar');
     expect(toolbar.querySelectorAll('[tabindex="0"]')).toHaveLength(1);
 
@@ -2373,32 +2456,13 @@ describe('DataGrid grid keyboard model', () => {
     expect(screen.getByRole('button', { name: 'Delete' })).toHaveFocus();
     await user.keyboard('{Escape}');
     expect(toolbar.parentElement).toHaveFocus();
-    for (let index = 0; index < 10; index += 1) await act(async () => {});
-    expect(writes).toBeLessThan(80);
+    await flushObservers();
+    expect(writes.count()).toBeLessThan(80);
     expect(toolbar.querySelectorAll('[tabindex="0"]')).toHaveLength(1);
   });
 });
 
 describe('DataGrid with the library’s composite widgets in its cells', () => {
-  /** Counts `tabindex` writes; stops writing after 500, so a write loop ends instead of hanging. */
-  function countTabIndexWrites(): { count: () => number } {
-    const original = Element.prototype.setAttribute;
-    let writes = 0;
-    vi.spyOn(Element.prototype, 'setAttribute').mockImplementation(function (
-      this: Element,
-      name: string,
-      value: string,
-    ) {
-      if (name === 'tabindex' && ++writes > 500) return;
-      original.call(this, name, value);
-    });
-    return { count: () => writes };
-  }
-
-  async function flushObservers() {
-    for (let index = 0; index < 10; index += 1) await act(async () => {});
-  }
-
   const TASKS = ['Write', 'Review'];
 
   /** The `[tabindex="0"]` elements of the grid outside its composites (the grid's own tab stop). */

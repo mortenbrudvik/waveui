@@ -25,6 +25,34 @@ export interface TeachingPopoverStep {
   body: React.ReactNode;
 }
 
+/** The built-in text of a TeachingPopover, for localization (see `TeachingPopoverProps.labels`). */
+export interface TeachingPopoverLabels {
+  /** Text of the Back button.
+   * @default 'Back'
+   */
+  back?: string;
+  /** Text of the Next button.
+   * @default 'Next'
+   */
+  next?: string;
+  /** Text of the button that replaces Next on the last step.
+   * @default 'Done'
+   */
+  done?: string;
+  /**
+   * The position of the step at `index` (zero-based, like `activeStep`) out of `count` steps. It
+   * follows the step title, after a comma, in the visually hidden part of the heading and in the
+   * announcement of a step change.
+   * @default (index, count) => `step ${index + 1} of ${count}`
+   */
+  step?: (index: number, count: number) => string;
+}
+
+const DEFAULT_BACK_LABEL = 'Back';
+const DEFAULT_NEXT_LABEL = 'Next';
+const DEFAULT_DONE_LABEL = 'Done';
+const defaultStepLabel = (index: number, count: number) => `step ${index + 1} of ${count}`;
+
 /** Properties for the TeachingPopover component. */
 export interface TeachingPopoverProps extends React.HTMLAttributes<HTMLDivElement> {
   /** Steps to display in the teaching popover (a readonly array is accepted). */
@@ -60,6 +88,11 @@ export interface TeachingPopoverProps extends React.HTMLAttributes<HTMLDivElemen
    * @default 'Close'
    */
   closeLabel?: string;
+  /**
+   * Text of the Back, Next and Done buttons and the wording of the step position (“step 2 of 3”),
+   * for localization. Unset members keep their English defaults.
+   */
+  labels?: TeachingPopoverLabels;
   /**
    * The element the popover points at (a ref or the element). When given, the popover is
    * rendered in a portal, positioned next to it with a beak, and flips or shifts to stay in view;
@@ -124,6 +157,8 @@ function clampStep(step: number, count: number): number {
  * - The step is controllable with `activeStep`/`defaultActiveStep`/`onStepChange` and clamped to
  *   the available steps. The heading carries a visually hidden “step n of m”, the new step is
  *   announced politely, and Back stays focusable (`aria-disabled`) on the first step.
+ * - The built-in text is English: `labels` localizes Back, Next, Done and the step position, and
+ *   `closeLabel` the Close button.
  * - Focus moves to the popover when it opens and returns to the element that had it when it
  *   closes (with `target`, to the target when nothing had focus, e.g. a tour opened on page load).
  * - With `target`, the popover is portaled and positioned next to that element with a beak (it
@@ -133,8 +168,9 @@ function clampStep(step: number, count: number): number {
  *   its last button continues after the target, Shift+Tab from its first button (or from the
  *   popover itself) returns to the target (for a target outside the Tab order, to the last control
  *   inside it, else to the control before it), Tab from there enters the popover, and Shift+Tab
- *   from the control after the target enters it at its last button. Reached natively from the far
- *   end of the page, it follows the document order, so Tab never cycles.
+ *   from the control after the target enters it at its last button. Tab from the last control of
+ *   the page moves past the popover (it was visited after the target), and Shift+Tab from outside
+ *   the page reaches the page's last control first, so a lap visits it once and Tab never cycles.
  */
 export const TeachingPopover = ({
   steps,
@@ -148,6 +184,7 @@ export const TeachingPopover = ({
   defaultOpen,
   onOpenChange,
   closeLabel = 'Close',
+  labels,
   target,
   side = 'bottom',
   align = 'center',
@@ -186,6 +223,7 @@ export const TeachingPopover = ({
   const isFirst = index === 0;
   const isLast = index === count - 1;
   const hasTarget = target !== undefined;
+  const stepPosition = count > 0 ? (labels?.step ?? defaultStepLabel)(index, count) : '';
 
   const [surface, setSurface] = React.useState<HTMLDivElement | null>(null);
   // Whether `target` pointed at an element when it was last read. An element (or `null`) is known
@@ -291,9 +329,9 @@ export const TeachingPopover = ({
     if (announcedIndexRef.current === index) return;
     announcedIndexRef.current = index;
     if (visible && stepTitle !== undefined) {
-      announce(`${stepTitle}, step ${index + 1} of ${count}`);
+      announce(`${stepTitle}, ${stepPosition}`);
     }
-  }, [index, visible, stepTitle, count, announce]);
+  }, [index, visible, stepTitle, stepPosition, announce]);
 
   React.useEffect(() => {
     if (!outOfRange) return;
@@ -357,7 +395,7 @@ export const TeachingPopover = ({
 
         <h3 id={titleId} className="mb-2 pe-8 text-subtitle-1 font-semibold text-foreground">
           {step.title}
-          <span className="sr-only">{`, step ${index + 1} of ${count}`}</span>
+          <span className="sr-only">{`, ${stepPosition}`}</span>
         </h3>
 
         <div className="mb-4 text-body-1 text-muted-foreground">{step.body}</div>
@@ -385,11 +423,11 @@ export const TeachingPopover = ({
                 {...focusableDisabledProps(isFirst)}
                 onClick={preventIfDisabled(isFirst, handleBack)}
               >
-                Back
+                {labels?.back ?? DEFAULT_BACK_LABEL}
               </Button>
             )}
             <Button appearance="primary" onClick={handleNext}>
-              {isLast ? 'Done' : 'Next'}
+              {isLast ? (labels?.done ?? DEFAULT_DONE_LABEL) : (labels?.next ?? DEFAULT_NEXT_LABEL)}
             </Button>
           </div>
         </div>

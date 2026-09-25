@@ -1,10 +1,15 @@
 import * as React from 'react';
 import { afterEach, describe, it, expect, expectTypeOf, vi } from 'vitest';
-import { act, render, screen, waitFor, within } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { TeachingPopover, type TeachingPopoverProps } from '../TeachingPopover';
+import {
+  TeachingPopover,
+  type TeachingPopoverLabels,
+  type TeachingPopoverProps,
+} from '../TeachingPopover';
 import { __getAnnouncerText } from '../../../hooks/useAnnounce';
 import { getOpenLayers, subscribeLayers } from '../../../lib/layers';
+import { FOCUSABLE_SELECTOR } from '../../../lib/focus';
 import {
   renderWithProviders,
   testComposedHandler,
@@ -365,6 +370,38 @@ describe('TeachingPopover', () => {
     });
   });
 
+  describe('built-in text', () => {
+    const labels: TeachingPopoverLabels = {
+      back: 'Tilbake',
+      next: 'Neste',
+      done: 'Ferdig',
+      step: (index, count) => `steg ${index + 1} av ${count}`,
+    };
+
+    it('labels names the navigation buttons and words the step position', async () => {
+      const user = userEvent.setup();
+      render(<TeachingPopover steps={steps} labels={labels} closeLabel="Lukk" />);
+      expect(heading()).toHaveTextContent('Welcome, steg 1 av 3');
+      expect(within(heading()).getByText(', steg 1 av 3')).toHaveClass('sr-only');
+      expect(screen.getByRole('button', { name: 'Tilbake' })).toHaveAttribute(
+        'aria-disabled',
+        'true',
+      );
+      await user.click(screen.getByRole('button', { name: 'Neste' }));
+      await waitFor(() => expect(__getAnnouncerText('polite')).toBe('Features, steg 2 av 3'));
+      await user.click(screen.getByRole('button', { name: 'Neste' }));
+      expect(screen.getByRole('button', { name: 'Ferdig' })).toBeInTheDocument();
+      expect(screen.queryByRole('button', { name: /^(Back|Next|Done|Close)$/ })).toBeNull();
+    });
+
+    it('keeps the English text for the members labels leaves out', () => {
+      render(<TeachingPopover steps={steps} activeStep={2} labels={{ back: 'Tilbake' }} />);
+      expect(heading()).toHaveTextContent('Done, step 3 of 3');
+      expect(screen.getByRole('button', { name: 'Tilbake' })).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: 'Done' })).toBeInTheDocument();
+    });
+  });
+
   describe('deprecated aliases (feedback-navigation#46)', () => {
     it('currentStep still selects the step and warns once', () => {
       const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
@@ -607,12 +644,75 @@ describe('TeachingPopover', () => {
         expect(await tabs(user, 3)).toEqual(['New feature', 'Close', 'Back']);
       });
 
-      it('Tab from the last element of the page reaches the popover natively, then leaves the page: no Tab cycle', async () => {
+      it('Tab from the last element of the page moves past the popover and leaves the page: one visit per lap, no Tab cycle', async () => {
         const user = await renderPage();
         screen.getByRole('button', { name: 'End' }).focus();
-        expect(await tabs(user, 5)).toEqual(['Close', 'Back', 'Next', 'body', 'Before']);
+        expect(await tabs(user, 6)).toEqual([
+          'body',
+          'Before',
+          'New feature',
+          'Close',
+          'Back',
+          'Next',
+        ]);
+        expect(await tabs(user, 3)).toEqual(['After', 'End', 'body']);
         expect(screen.getByRole('dialog')).toBeInTheDocument();
+        expect(screen.getByRole('dialog').style.visibility).toBe('');
       });
+
+      it.each([
+        ['Tab', false],
+        ['Shift+Tab', true],
+      ] as const)(
+        'scans the document for tabbable elements once per %s outside the popover',
+        async (_key, shiftKey) => {
+          await renderPage();
+          const before = screen.getByRole('button', { name: 'Before' });
+          act(() => before.focus());
+          const scans = vi.spyOn(document.body, 'querySelectorAll');
+          fireEvent.keyDown(before, { key: 'Tab', shiftKey });
+          expect(
+            scans.mock.calls.filter(([selector]) => selector === FOCUSABLE_SELECTOR),
+          ).toHaveLength(1);
+        },
+      );
+
+      it('a Shift+Tab lap from outside the page visits the popover once, after the target', async () => {
+        const user = await renderPage();
+        act(() => screen.getByRole('dialog').blur());
+        expect(await tabs(user, 8, true)).toEqual([
+          'End',
+          'After',
+          'Next',
+          'Back',
+          'Close',
+          'New feature',
+          'Before',
+          'body',
+        ]);
+      });
+
+      it.each([
+        ['a script', false, 'Next', 'After'],
+        ['Shift+Tab from the browser controls', true, 'End', 'body'],
+      ] as const)(
+        'keyboard only: focus that reaches the last button from nothing by %s',
+        async (_how, fromBrowser, landsOn, next) => {
+          const user = await renderPage();
+          act(() => screen.getByRole('dialog').blur());
+          // The window gets focus back just before the browser's own Shift+Tab focuses the
+          // document's last element; a script (a focus restore after a removed layer) does not.
+          if (fromBrowser) {
+            act(() => {
+              window.dispatchEvent(new FocusEvent('blur'));
+              window.dispatchEvent(new FocusEvent('focus'));
+            });
+          }
+          act(() => screen.getByRole('button', { name: 'Next' }).focus());
+          expect(focused()).toBe(landsOn);
+          expect(await tabs(user, 1)).toEqual([next]);
+        },
+      );
 
       it.each([
         ['Tab', false, ['After']],

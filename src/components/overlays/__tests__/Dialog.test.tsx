@@ -18,6 +18,8 @@ import {
   type DialogTriggerProps,
 } from '../Dialog';
 import { Drawer } from '../Drawer';
+import { Popover } from '../Popover';
+import { InfoLabel } from '../../data-display/InfoLabel';
 import { useDismiss } from '../../../hooks/useDismiss';
 import { Portal } from '../../portal/Portal';
 import { getTopmostLayer } from '../../../lib/layers';
@@ -31,6 +33,10 @@ import {
   testNoImplicitSubmit,
   testSystemProps,
 } from '../../../test-utils';
+
+/** The fallback warning of a Dialog.Trigger child that neither forwards `ref` nor spreads props. */
+const UNATTACHED_REF_WARNING =
+  '[WaveUI] Dialog.Trigger: its child did not attach the trigger ref (a component that neither forwards `ref` nor spreads its props). It is rendered inside a <span> wrapper instead; forward `ref` and spread props onto the element, or pass asChild={false}.';
 
 afterEach(() => {
   cleanup();
@@ -432,9 +438,11 @@ describe('Dialog', () => {
           <Dialog.Content>Unnamed</Dialog.Content>
         </Dialog>,
       );
-      expect(warn).toHaveBeenCalledWith(
-        expect.stringContaining('[WaveUI] Dialog.Content has no accessible name'),
-      );
+      expect(warn.mock.calls).toEqual([
+        [
+          '[WaveUI] Dialog.Content has no accessible name. Pass `title`, render a Dialog.Title inside it, or give it `aria-label` or `aria-labelledby`.',
+        ],
+      ]);
       warn.mockRestore();
     });
 
@@ -443,7 +451,7 @@ describe('Dialog', () => {
       ['aria-label', { 'aria-label': 'Named' }],
       ['aria-labelledby', { 'aria-labelledby': 'external-title' }],
     ] as const)('does not warn when named by %s', (_, props) => {
-      const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+      const warn = vi.spyOn(console, 'warn');
       render(
         <>
           <h2 id="external-title">External</h2>
@@ -458,7 +466,7 @@ describe('Dialog', () => {
     });
 
     it('names the dialog with Dialog.Title under StrictMode (ref callbacks run twice)', () => {
-      const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+      const warn = vi.spyOn(console, 'warn');
       render(
         <React.StrictMode>
           <Dialog defaultOpen>
@@ -539,7 +547,7 @@ describe('Dialog', () => {
     });
 
     it('does not warn when named by Dialog.Title', () => {
-      const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+      const warn = vi.spyOn(console, 'warn');
       render(
         <Dialog defaultOpen>
           <Dialog.Content>
@@ -655,7 +663,7 @@ describe('Dialog', () => {
       );
       await user.click(button('Fancy'));
       expect(screen.getByRole('dialog', { name: 'Fallback' })).toBeInTheDocument();
-      expect(warn).toHaveBeenCalledWith(expect.stringContaining('Dialog.Trigger'));
+      expect(warn.mock.calls).toEqual([[UNATTACHED_REF_WARNING]]);
       warn.mockRestore();
     });
 
@@ -796,14 +804,16 @@ describe('Dialog', () => {
           </Dialog.Footer>
         </Dialog>,
       );
-      expect(warn).toHaveBeenCalledWith(
-        expect.stringContaining('[WaveUI] Dialog.Footer must be rendered inside Dialog.Content'),
-      );
+      expect(warn.mock.calls).toEqual([
+        [
+          '[WaveUI] Dialog.Footer must be rendered inside Dialog.Content. Outside it, the footer stays on the page while the dialog is closed.',
+        ],
+      ]);
       warn.mockRestore();
     });
 
     it('does not warn inside Dialog.Content', () => {
-      const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+      const warn = vi.spyOn(console, 'warn');
       render(
         <Basic dialogProps={{ defaultOpen: true }}>
           <Dialog.Footer>
@@ -847,8 +857,12 @@ describe('Dialog', () => {
         </Dialog>,
       ],
     ])('%s outside %s throws in development', (name, parent, element) => {
-      const error = vi.spyOn(console, 'error').mockImplementation(() => {});
-      expect(() => render(element)).toThrow(`[WaveUI] ${name} must be used within ${parent}`);
+      const error = vi.spyOn(console, 'error');
+      expect(() => render(element)).toThrow(
+        new Error(`[WaveUI] ${name} must be used within ${parent}`),
+      );
+      // Thrown, not logged.
+      expect(error).not.toHaveBeenCalled();
       error.mockRestore();
     });
 
@@ -1140,6 +1154,7 @@ describe('Dialog', () => {
       expect(screen.getByRole('dialog', { name: 'Fallback' })).toBeInTheDocument();
       await user.keyboard('{Escape}');
       expect(button('Fancy')).toHaveFocus();
+      expect(warn.mock.calls).toEqual([[UNATTACHED_REF_WARNING]]);
       warn.mockRestore();
     });
 
@@ -1472,6 +1487,56 @@ describe('Dialog', () => {
       await user.click(toastButton);
       expect(onToast).toHaveBeenCalledTimes(1);
       expect(screen.getByRole('dialog')).toBeInTheDocument();
+    });
+  });
+
+  describe('Tab from an open info button that sits outside the dialog container', () => {
+    it('in a consumer Portal: Tab and Shift+Tab move to the elements around it', async () => {
+      const user = userEvent.setup();
+      render(
+        <Dialog open onOpenChange={() => {}}>
+          <Dialog.Content title="Edit">
+            <button type="button">In dialog</button>
+            <Portal>
+              <button type="button">P1</button>
+              <InfoLabel label="Password" info="Use 8 characters." />
+              <button type="button">P2</button>
+            </Portal>
+          </Dialog.Content>
+        </Dialog>,
+      );
+      await user.click(button('Information'));
+      expect(button('Information')).toHaveAttribute('aria-expanded', 'true');
+      await user.tab();
+      expect(button('P2')).toHaveFocus();
+      await user.click(button('Information'));
+      expect(button('Information')).toHaveAttribute('aria-expanded', 'true');
+      await user.tab({ shift: true });
+      expect(button('P1')).toHaveFocus();
+    });
+
+    it('in Popover.Content opened from the dialog: Tab moves on', async () => {
+      const user = userEvent.setup();
+      render(
+        <Dialog open onOpenChange={() => {}}>
+          <Dialog.Content title="Edit">
+            <Popover>
+              <Popover.Trigger>
+                <button type="button">Options</button>
+              </Popover.Trigger>
+              <Popover.Content title="Options">
+                <InfoLabel label="Password" info="Use 8 characters." />
+                <button type="button">Next</button>
+              </Popover.Content>
+            </Popover>
+          </Dialog.Content>
+        </Dialog>,
+      );
+      await user.click(button('Options'));
+      await user.click(button('Information'));
+      expect(button('Information')).toHaveAttribute('aria-expanded', 'true');
+      await user.tab();
+      expect(button('Next')).toHaveFocus();
     });
   });
 

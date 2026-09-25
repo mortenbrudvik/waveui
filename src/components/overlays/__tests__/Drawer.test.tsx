@@ -40,6 +40,10 @@ async function flushMicrotasks() {
   });
 }
 
+/** The fallback warning of a Drawer.Trigger child that neither forwards `ref` nor spreads props. */
+const UNATTACHED_REF_WARNING =
+  '[WaveUI] Drawer.Trigger: its child did not attach the trigger ref (a component that neither forwards `ref` nor spreads its props). It is rendered inside a <span> wrapper instead; forward `ref` and spread props onto the element, or pass asChild={false}.';
+
 function button(name: string | RegExp) {
   return screen.getByRole('button', { name });
 }
@@ -449,7 +453,7 @@ describe('Drawer', () => {
       );
       await user.click(button('Fancy'));
       expect(screen.getByRole('dialog', { name: 'Fallback' })).toBeInTheDocument();
-      expect(warn).toHaveBeenCalledWith(expect.stringContaining('Drawer.Trigger'));
+      expect(warn.mock.calls).toEqual([[UNATTACHED_REF_WARNING]]);
       warn.mockRestore();
     });
 
@@ -488,6 +492,7 @@ describe('Drawer', () => {
       expect(screen.getByRole('dialog', { name: 'Fallback' })).toBeInTheDocument();
       await user.keyboard('{Escape}');
       expect(button('Fancy')).toHaveFocus();
+      expect(warn.mock.calls).toEqual([[UNATTACHED_REF_WARNING]]);
       warn.mockRestore();
     });
 
@@ -647,7 +652,7 @@ describe('Drawer', () => {
 
       it('renders a Drawer.Trigger inside a (conditional) Fragment in place, and the rest of the Fragment in the panel', async () => {
         const user = userEvent.setup();
-        const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+        const warn = vi.spyOn(console, 'warn');
         const { rerender } = render(<ConditionalTrigger />);
         // Closed: the trigger is on the page, the Fragment's other children are panel content.
         expect(button('Open')).toBeInTheDocument();
@@ -674,7 +679,7 @@ describe('Drawer', () => {
       it('does not warn that the drawer cannot open when its Fragment trigger appears after mount (overlays-modal-code-4)', async () => {
         vi.useFakeTimers({ shouldAdvanceTime: true });
         const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
-        const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+        const warn = vi.spyOn(console, 'warn');
         try {
           // `{isMobile && <>…</>}` with an SSR-safe media query: false in the first render.
           const { rerender } = render(<ConditionalTrigger showTrigger={false} />);
@@ -694,7 +699,7 @@ describe('Drawer', () => {
 
       it('finds a trigger in nested and keyed Fragments', async () => {
         const user = userEvent.setup();
-        const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+        const warn = vi.spyOn(console, 'warn');
         render(
           <Drawer title="Nested fragments">
             <React.Fragment key="outer">
@@ -715,7 +720,7 @@ describe('Drawer', () => {
 
       it('gives flattened Fragment children unique keys and keeps panel state when a sibling Fragment toggles', async () => {
         const user = userEvent.setup();
-        const error = vi.spyOn(console, 'error').mockImplementation(() => {});
+        const error = vi.spyOn(console, 'error');
         function Toggling({ extra }: { extra: boolean }) {
           return (
             <Drawer title="Keys" defaultOpen>
@@ -806,7 +811,7 @@ describe('Drawer', () => {
     });
 
     it('does not warn for a direct Drawer.Trigger or for the trigger of a Drawer nested in the panel', () => {
-      const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+      const warn = vi.spyOn(console, 'warn');
       render(
         <Drawer defaultOpen title="Outer">
           <Drawer.Trigger>
@@ -829,7 +834,7 @@ describe('Drawer', () => {
 
     it('does not warn for the trigger of a wrapper component that renders its own Drawer', async () => {
       const user = userEvent.setup();
-      const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+      const warn = vi.spyOn(console, 'warn');
       function SubDrawer({ children }: { children: React.ReactNode }) {
         return <Drawer title="Sub">{children}</Drawer>;
       }
@@ -908,7 +913,7 @@ describe('Drawer', () => {
       ],
     ] as const)('does not warn that the drawer cannot open when %s', (_, props, trigger) => {
       vi.useFakeTimers({ shouldAdvanceTime: true });
-      const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+      const warn = vi.spyOn(console, 'warn');
       try {
         render(
           <React.StrictMode>
@@ -1060,9 +1065,11 @@ describe('Drawer', () => {
     it('warns in development when the drawer has no accessible name', () => {
       const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
       render(<Drawer defaultOpen>Unnamed</Drawer>);
-      expect(warn).toHaveBeenCalledWith(
-        expect.stringContaining('[WaveUI] Drawer has no accessible name'),
-      );
+      expect(warn.mock.calls).toEqual([
+        [
+          '[WaveUI] Drawer has no accessible name. Pass `title`, render a Drawer.Title inside it, or give it `aria-label` or `aria-labelledby`.',
+        ],
+      ]);
       warn.mockRestore();
     });
 
@@ -1070,7 +1077,7 @@ describe('Drawer', () => {
       ['title', { title: 'Named' }],
       ['aria-label', { 'aria-label': 'Named' }],
     ] as const)('does not warn when named by %s', (_, props) => {
-      const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+      const warn = vi.spyOn(console, 'warn');
       render(
         <Drawer defaultOpen {...props}>
           Content
@@ -1098,8 +1105,12 @@ describe('Drawer', () => {
       ],
       ['Drawer.Title', <Drawer.Title key="title">Orphan</Drawer.Title>],
     ])('%s outside Drawer throws in development', (name, element) => {
-      const error = vi.spyOn(console, 'error').mockImplementation(() => {});
-      expect(() => render(element)).toThrow(`[WaveUI] ${name} must be used within Drawer`);
+      const error = vi.spyOn(console, 'error');
+      expect(() => render(element)).toThrow(
+        new Error(`[WaveUI] ${name} must be used within Drawer`),
+      );
+      // Thrown, not logged.
+      expect(error).not.toHaveBeenCalled();
       error.mockRestore();
     });
   });
@@ -1402,7 +1413,7 @@ describe('Drawer', () => {
 
     it('renders the trigger in place, opens from it and closes like the plain parts', async () => {
       const user = userEvent.setup();
-      const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+      const warn = vi.spyOn(console, 'warn');
       const { container } = render(<Filters parts={lazyParts} />);
       const trigger = button('Open filters');
       expect(container).toContainElement(trigger);

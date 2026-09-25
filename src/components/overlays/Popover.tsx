@@ -284,8 +284,8 @@ const PopoverRoot = ({
   // the trigger's own `onKeyDown`, which runs before a dialog's focus trap), Tab past its last
   // element continues after the trigger, Shift+Tab from its first element returns to the trigger
   // (the element inside a wrapper span), and Shift+Tab from the element after the trigger enters
-  // it at its last element. Focus that reaches it natively from the end of the page follows the
-  // document order, so no Tab cycle forms (see usePopoverTabOrder).
+  // it at its last element. The end of the page does not visit it a second time where its portal
+  // is, and no Tab cycle forms (see usePopoverTabOrder).
   const onTriggerKeyDown = useEventCallback((event: React.KeyboardEvent<HTMLElement>) => {
     if (event.key !== 'Tab' || event.shiftKey || !open) return;
     const surfaceElement = surfaceRef.current;
@@ -418,7 +418,9 @@ PopoverTrigger.displayName = 'PopoverTrigger';
  * from it count as inside), and focus returns to the trigger when it closes while focus was inside.
  * In the keyboard order it follows the trigger, like inline content: Tab from the open trigger
  * enters it, Tab past its last element continues after the trigger, and Shift+Tab from the element
- * after the trigger enters it at its last element.
+ * after the trigger enters it at its last element. Tab from the last element of the page moves
+ * past it, and Shift+Tab from outside the page reaches the page's last element first, so a lap
+ * visits it once.
  * Named by `title`, `aria-label`/`aria-labelledby`, or else by its trigger: `aria-labelledby`
  * points at the id the trigger element carries in the document, or at the trigger's own label
  * elements when the trigger is named through `aria-labelledby` (an icon-only Button inside
