@@ -17,7 +17,12 @@
  *                 Preflight;
  *               - TypeScript (node16) type-checks an ES module and a CommonJS file importing the
  *                 package: the ESM file gets `dist/index.d.ts`, the CommonJS file
- *                 `dist/index.d.cts` (no TS1479).
+ *                 `dist/index.d.cts` (no TS1479);
+ *               - an app importing `./styles` (`vite-entry.js`) built with Vite's defaults: the
+ *                 emitted CSS passes the `./styles` checks, and every `wave-rtl:` class of the
+ *                 dist keeps Wave's direction variant. Vite minifies CSS with Lightning CSS for
+ *                 its default target (Chrome 111), which rewrites a bare `:dir(rtl)` to a
+ *                 `:lang()` list that a page setting only `dir` never matches.
  *   tailwind  a Tailwind 4 app (scripts/fixtures/tailwind) compiling, with @tailwindcss/cli,
  *               - `input.css`: `@import 'tailwindcss'; @import '@mortenbrudvik/waveui/tailwind';`.
  *                 The component classes are generated from the package's `dist` (its `wave-rtl:`
@@ -26,11 +31,13 @@
  *                 are still generated;
  *               - `tokens-input.css`: a custom setup on `./tokens` (in `layer(theme)`) with
  *                 `./variants.css` and its own `@source` for the package's `dist`, without Wave's
- *                 base: the same checks except the base rules.
+ *                 base: the same checks except the base rules;
+ *               - `input.css` built by an app with Vite's defaults and @tailwindcss/vite: the
+ *                 checks of `input.css`, and the `wave-rtl:` classes as for the plain fixture.
  *
  * The fixture dependencies (`smokeDependencies` in each fixture's package.json) are pinned to
  * the versions installed in this repository, so `npm install` is served from the npm cache when
- * it can be. TypeScript and @tailwindcss/cli run from this repository.
+ * it can be. TypeScript, @tailwindcss/cli, Vite and @tailwindcss/vite run from this repository.
  *
  * Usage: node scripts/pack-smoke.mjs [--fixture plain|tailwind]... [--keep]
  *   --fixture  run only this fixture (repeatable; default: both)
@@ -40,7 +47,15 @@
  * the module does not run anything.
  */
 import { spawnSync } from 'node:child_process';
-import { cpSync, existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import {
+  cpSync,
+  existsSync,
+  mkdtempSync,
+  readdirSync,
+  readFileSync,
+  rmSync,
+  writeFileSync,
+} from 'node:fs';
 import { createRequire } from 'node:module';
 import { tmpdir } from 'node:os';
 import { dirname, join, posix, resolve } from 'node:path';
@@ -48,7 +63,9 @@ import { fileURLToPath } from 'node:url';
 import {
   assertPreflightCss,
   classStringTokens,
+  DIRECTION_VARIANT_FORM,
   hasDirectionVariant,
+  loweredDirectionClasses,
   missingDirectionVariant,
   parseCss,
   selectorClasses,
@@ -277,6 +294,59 @@ export function checkTailwindCss(css, { directionClasses = [], setup = 'tailwind
 }
 
 /**
+ * The CSS of an app's Vite build (see {@link viteBuildCss}): each of `directionClasses` (the
+ * `wave-rtl:` classes of the dist's class strings) keeps Wave's direction variant, and none is
+ * selected by `:lang()`. Vite minifies CSS with Lightning CSS for its default `build.cssTarget`
+ * (Chrome 111), which rewrites a bare `:dir(rtl)` to a `:lang()` list; the class then never
+ * matches a page that sets `dir` without a right-to-left `lang`.
+ */
+export function checkViteCss(css, { directionClasses = [] } = {}) {
+  const errors = [];
+  const lowered = loweredDirectionClasses(css);
+  if (lowered.length > 0) {
+    errors.push(
+      "the CSS minifier rewrote :dir(rtl) of Wave's wave-rtl variant to :lang(), so these " +
+        'classes never match a page that sets dir without a right-to-left lang: ' +
+        lowered.slice(0, 10).join(' '),
+    );
+  }
+  const uncompiled = missingDirectionVariant(css, directionClasses).filter(
+    (name) => !lowered.includes(name),
+  );
+  if (uncompiled.length > 0) {
+    errors.push(
+      `the classes ${uncompiled.slice(0, 10).join(' ')} lost Wave's wave-rtl variant ` +
+        `(${DIRECTION_VARIANT_FORM})`,
+    );
+  }
+  return errors;
+}
+
+/**
+ * Builds `entry` (a CSS or JavaScript file of `dir`) the way an app's `vite build` does with
+ * Vite's defaults, through the Vite of this repository; `tailwind` adds @tailwindcss/vite, as a
+ * Tailwind app's config does. Returns the CSS the build emitted (under `dir/vite-out`).
+ */
+export async function viteBuildCss(dir, entry, { tailwind = false } = {}) {
+  const { build } = await import('vite');
+  const plugins = tailwind ? [(await import('@tailwindcss/vite')).default()] : [];
+  const outDir = join(dir, 'vite-out');
+  await build({
+    root: dir,
+    configFile: false,
+    logLevel: 'silent',
+    plugins,
+    build: { outDir, emptyOutDir: true, rollupOptions: { input: join(dir, entry) } },
+  });
+  return readdirSync(outDir, { recursive: true })
+    .map(String)
+    .filter((file) => file.endsWith('.css'))
+    .sort()
+    .map((file) => readFileSync(join(outDir, file), 'utf8'))
+    .join('\n');
+}
+
+/**
  * What the plain fixture's ESM (`esm`) and CommonJS (`cjs`) smoke scripts observed: each loads
  * the package (`names`, `cn` result) and resolves every subpath (`resolved`).
  */
@@ -489,7 +559,33 @@ function smoke(dir, script) {
   }
 }
 
-function runPlain(dir) {
+/** The `wave-rtl:` classes of the class strings of the installed package's `dist`. */
+function distDirectionClasses(dir) {
+  const dist = {
+    base: join(dir, 'node_modules', pkg.name, 'dist'),
+    pattern: '**/*',
+    negated: false,
+  };
+  return [...classStringTokens([dist])].filter(hasDirectionVariant);
+}
+
+/**
+ * The fixture's Vite build of `entry` (see {@link viteBuildCss}), checked by `check` (the
+ * checks of the fixture's own CSS) and {@link checkViteCss}; errors are labelled with `label`.
+ */
+async function checkViteBuild(dir, entry, { tailwind = false, label, check }) {
+  let css;
+  try {
+    css = await viteBuildCss(dir, entry, { tailwind });
+  } catch (error) {
+    return [`${label}: vite build failed: ${error.message}`];
+  }
+  return [...check(css), ...checkViteCss(css, { directionClasses: distDirectionClasses(dir) })].map(
+    (error) => `${label}: ${error}`,
+  );
+}
+
+async function runPlain(dir) {
   const esm = smoke(dir, 'smoke.mjs');
   const cjs = smoke(dir, 'smoke.cjs');
   const errors = checkPlainSmoke({ esm, cjs });
@@ -510,6 +606,14 @@ function runPlain(dir) {
   errors.push(
     ...checkTypeProgram({ status: types.status, output: `${types.stdout}${types.stderr}` }),
   );
+
+  // An app that imports ./styles and builds with Vite's defaults.
+  errors.push(
+    ...(await checkViteBuild(dir, 'vite-entry.js', {
+      label: './styles (vite build)',
+      check: checkPlainCss,
+    })),
+  );
   return errors;
 }
 
@@ -519,16 +623,11 @@ const TAILWIND_BUILDS = [
   { input: 'tokens-input.css', output: 'tokens-out.css', setup: 'tokens' },
 ];
 
-function runTailwind(dir) {
+async function runTailwind(dir) {
   const manifestPath = require.resolve('@tailwindcss/cli/package.json');
   const manifest = JSON.parse(readFileSync(manifestPath, 'utf8'));
   const bin = typeof manifest.bin === 'string' ? manifest.bin : manifest.bin.tailwindcss;
-  const dist = {
-    base: join(dir, 'node_modules', pkg.name, 'dist'),
-    pattern: '**/*',
-    negated: false,
-  };
-  const directionClasses = [...classStringTokens([dist])].filter(hasDirectionVariant);
+  const directionClasses = distDirectionClasses(dir);
   const errors = [];
   for (const { input, output, setup } of TAILWIND_BUILDS) {
     const result = run(
@@ -547,6 +646,16 @@ function runTailwind(dir) {
       ...checkTailwindCss(css, { directionClasses, setup }).map((error) => `${input}: ${error}`),
     );
   }
+
+  // The documented entry in an app built with Vite's defaults and @tailwindcss/vite; the
+  // direction classes are checkViteCss's part.
+  errors.push(
+    ...(await checkViteBuild(dir, 'input.css', {
+      tailwind: true,
+      label: 'input.css (vite build)',
+      check: (css) => checkTailwindCss(css),
+    })),
+  );
   return errors;
 }
 
@@ -567,7 +676,7 @@ export async function main(argv = process.argv.slice(2), io = console) {
     failures.push(...checkPackedFiles(files).map((error) => `tarball: ${error}`));
     for (const name of fixtures) {
       const dir = installFixture(name, work, tarball);
-      const errors = name === 'plain' ? runPlain(dir) : runTailwind(dir);
+      const errors = await (name === 'plain' ? runPlain(dir) : runTailwind(dir));
       failures.push(...errors.map((error) => `${name}: ${error}`));
       io.log(`pack-smoke: ${name} fixture ${errors.length === 0 ? 'OK' : 'FAILED'}`);
     }

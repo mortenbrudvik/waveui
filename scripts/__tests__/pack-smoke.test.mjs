@@ -6,22 +6,27 @@
  * suite; `npm run test:pack` is part of `prepublishOnly` and of the final gate. Here every
  * assertion function is exercised on inputs that reproduce the defects it guards against.
  */
-import { existsSync, mkdtempSync, readFileSync, rmSync } from 'node:fs';
+import { spawnSync } from 'node:child_process';
+import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { createRequire } from 'node:module';
 import { tmpdir } from 'node:os';
-import { join, resolve } from 'node:path';
+import { dirname, join, relative, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterAll, afterEach, describe, expect, it, vi } from 'vitest';
 import {
   checkPackedFiles,
   checkPlainCss,
   checkPlainSmoke,
   checkTailwindCss,
   checkTypeProgram,
+  checkViteCss,
   EXPORTED_SUBPATHS,
   fixtureManifest,
   pack,
   parseArgs,
+  viteBuildCss,
 } from '../pack-smoke.mjs';
+import { createWorkDir, removeWorkDir } from '../verify-dist.mjs';
 
 const root = resolve(fileURLToPath(new URL('.', import.meta.url)), '../..');
 const pkg = JSON.parse(readFileSync(join(root, 'package.json'), 'utf8'));
@@ -278,8 +283,8 @@ describe('checkTailwindCss (repo-level#1)', () => {
     const directionClasses = ['wave-rtl:-scale-x-100'];
     // Unminified, as the fixture compiles it: nested rules inside the utilities layer.
     const compiled = String.raw`@layer utilities{.wave-rtl\:-scale-x-100{
-      @supports selector(:dir(rtl)){&:where(:dir(rtl)){scale:-1 1}}
-      @supports not selector(:dir(rtl)){&:where([dir="rtl"], [dir="rtl"] *){scale:-1 1}}}}`;
+      @supports selector(:nth-child(n of :dir(rtl))){&:where(:nth-child(n of :dir(rtl))){scale:-1 1}}
+      @supports not selector(:nth-child(n of :dir(rtl))){&:where([dir="rtl"], [dir="rtl"] *){scale:-1 1}}}}`;
 
     it('passes when each is compiled with the variant of @mortenbrudvik/waveui/tailwind', () => {
       expect(checkTailwindCss(good + compiled, { directionClasses })).toEqual([]);
@@ -296,8 +301,8 @@ describe('checkTailwindCss (repo-level#1)', () => {
   describe('a custom setup on ./tokens (setup: "tokens")', () => {
     const directionClasses = ['wave-rtl:-scale-x-100'];
     const compiled = String.raw`@layer utilities{.wave-rtl\:-scale-x-100{
-      @supports selector(:dir(rtl)){&:where(:dir(rtl)){scale:-1 1}}
-      @supports not selector(:dir(rtl)){&:where([dir="rtl"], [dir="rtl"] *){scale:-1 1}}}}`;
+      @supports selector(:nth-child(n of :dir(rtl))){&:where(:nth-child(n of :dir(rtl))){scale:-1 1}}
+      @supports not selector(:nth-child(n of :dir(rtl))){&:where([dir="rtl"], [dir="rtl"] *){scale:-1 1}}}}`;
     // The setup brings its own base styles: no Wave base rules.
     const withoutBase = good.replace(
       '.wave-root,.wave-portal{font-family:var(--wave-font-family)}',
@@ -348,6 +353,108 @@ describe('the Tailwind fixture', () => {
     expect(css).toMatch(/@source '\.\/node_modules\/@mortenbrudvik\/waveui\/dist';/);
     expect(css).not.toMatch(/waveui\/tailwind/);
   });
+});
+
+describe('the plain fixture', () => {
+  it('has a Vite entry that imports the precompiled stylesheet as documented', () => {
+    const entry = readFileSync(join(root, 'scripts/fixtures/plain/vite-entry.js'), 'utf8');
+    expect(entry).toMatch(/^import '@mortenbrudvik\/waveui\/styles';$/m);
+  });
+});
+
+describe('checkViteCss (an app built with the Vite defaults; C-LOGICAL)', () => {
+  const directionClasses = ['wave-rtl:-scale-x-100', 'wave-rtl:-translate-x-[22px]'];
+  const native = String.raw`@supports selector(:nth-child(n of :dir(rtl))){.wave-rtl\:-scale-x-100:where(:nth-child(n of :dir(rtl))){scale:-1 1}.wave-rtl\:-translate-x-\[22px\]:where(:nth-child(n of :dir(rtl))){--tw-translate-x:-22px}}`;
+  const fallback = String.raw`@supports not selector(:nth-child(n of :dir(rtl))){.wave-rtl\:-scale-x-100:where([dir=rtl],[dir=rtl] *){scale:-1 1}.wave-rtl\:-translate-x-\[22px\]:where([dir=rtl],[dir=rtl] *){--tw-translate-x:-22px}}`;
+  /**
+   * What an app's Vite 8 build emitted for the 0.5 variant (`:where(:dir(rtl))`): Lightning CSS
+   * rewrote `:dir(rtl)` to a `:lang()` list for Vite's default CSS target (list shortened).
+   */
+  const lowered =
+    String.raw`@supports selector(:dir(rtl)){.wave-rtl\:-scale-x-100:where(:is(:lang(ae),:lang(ar),:lang(he),:lang(yi))){scale:-1 1}.wave-rtl\:-translate-x-\[22px\]:where(:is(:lang(ae),:lang(ar),:lang(he),:lang(yi))){--tw-translate-x:-22px}}` +
+    String.raw`@supports not selector(:dir(rtl)){.wave-rtl\:-scale-x-100:where([dir=rtl],[dir=rtl] *){scale:-1 1}.wave-rtl\:-translate-x-\[22px\]:where([dir=rtl],[dir=rtl] *){--tw-translate-x:-22px}}`;
+
+  it('passes when each class keeps the variant', () => {
+    expect(checkViteCss(native + fallback, { directionClasses })).toEqual([]);
+  });
+
+  it('reports the classes whose :dir(rtl) the CSS minifier rewrote to :lang()', () => {
+    expect(checkViteCss(lowered, { directionClasses })).toEqual([
+      "the CSS minifier rewrote :dir(rtl) of Wave's wave-rtl variant to :lang(), so these " +
+        'classes never match a page that sets dir without a right-to-left lang: ' +
+        'wave-rtl:-scale-x-100 wave-rtl:-translate-x-[22px]',
+    ]);
+  });
+
+  it('reports the classes the build emitted without the variant', () => {
+    expect(
+      checkViteCss(native.replace('.wave-rtl\\:-scale-x-100', '.x'), { directionClasses }),
+    ).toEqual([
+      "the classes wave-rtl:-scale-x-100 wave-rtl:-translate-x-[22px] lost Wave's wave-rtl " +
+        'variant (:where(:nth-child(n of :dir(rtl))) under @supports selector(:nth-child(n of ' +
+        ':dir(rtl))) and the [dir=rtl] fallback)',
+    ]);
+  });
+});
+
+describe('viteBuildCss (consumer builds with the Vite defaults; C-LOGICAL)', () => {
+  // Under the repository's node_modules/.cache, so `tailwindcss` resolves as it does here;
+  // removed with its parent once no other run uses the parent (no empty directory is left).
+  const run = createWorkDir(join(root, 'node_modules', '.cache', 'wave-pack-smoke-test'), 'run-');
+  afterAll(() => removeWorkDir(run));
+  const variants = join(root, 'src', 'styles', 'variants.css');
+  const directionClasses = ['wave-rtl:-scale-x-100', 'wave-rtl:-translate-x-[22px]'];
+
+  /** A project directory with the given files; `variants` is the path of variants.css from it. */
+  function project(files) {
+    const dir = mkdtempSync(join(run.work, 'p-'));
+    const from = relative(dir, variants).split('\\').join('/');
+    for (const [path, content] of Object.entries(files)) {
+      writeFileSync(join(dir, path), content.replace('<variants>', from));
+    }
+    return dir;
+  }
+
+  it('keeps the ./tailwind variant on the element direction through Vite and Lightning CSS', async () => {
+    const dir = project({
+      'app.css':
+        "@import 'tailwindcss';\n@import '<variants>';\n" +
+        `@source inline('${directionClasses.join(' ')}');\n` +
+        // A plain `:dir()` rule, which the build rewrites: the defaults lower `:dir()`.
+        '.probe:dir(rtl) { color: red; }\n',
+    });
+    const css = await viteBuildCss(dir, 'app.css', { tailwind: true });
+    expect(css).toMatch(/\.probe:is\(:lang\(ae\),:lang\(ar\)/);
+    expect(checkViteCss(css, { directionClasses })).toEqual([]);
+  }, 60_000);
+
+  it('keeps the variant of the precompiled ./styles through an app build', async () => {
+    // Compiled the way scripts/build-css.mjs compiles dist/styles.css: the Tailwind CLI, minified.
+    const dir = project({
+      'input.css':
+        "@import 'tailwindcss/theme.css' theme(inline);\n@import '<variants>';\n" +
+        "@import 'tailwindcss/utilities.css' source(none);\n" +
+        `@source inline('${directionClasses.join(' ')}');\n`,
+      'entry.js': "import './styles.css';\n",
+    });
+    const cli = createRequire(import.meta.url).resolve('@tailwindcss/cli/package.json');
+    const { bin } = JSON.parse(readFileSync(cli, 'utf8'));
+    const compiled = spawnSync(
+      process.execPath,
+      [
+        join(dirname(cli), typeof bin === 'string' ? bin : bin.tailwindcss),
+        '--input',
+        'input.css',
+        '--output',
+        'styles.css',
+        '--minify',
+      ],
+      { cwd: dir, encoding: 'utf8' },
+    );
+    expect(compiled.status, compiled.stderr).toBe(0);
+    const css = await viteBuildCss(dir, 'entry.js');
+    expect(checkViteCss(css, { directionClasses })).toEqual([]);
+  }, 60_000);
 });
 
 describe('checkPlainSmoke', () => {

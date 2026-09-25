@@ -6,15 +6,22 @@
  * page. `wave-rtl:` follows the element's own direction with `:dir(rtl)`; browsers without
  * `:dir()` (Chrome and Edge before 120) get Tailwind's attribute match instead. Tailwind's own
  * `rtl:` variant is left as it is.
+ *
+ * `:dir(rtl)` sits inside `:nth-child(n of …)`, which matches exactly the elements its selector
+ * matches. An app's CSS minifier keeps it there: Lightning CSS (Vite's default) rewrites a bare
+ * `:dir(rtl)` to a `:lang(ar)`-style list for targets below Chrome 120, which never matches a page
+ * that sets `dir` without such a `lang`, but leaves it alone inside `:nth-child()`. The supported
+ * browsers with `:dir()` (Chrome and Edge 120+, Firefox 128+, Safari 16.4+) all have
+ * `:nth-child(n of …)`; the `@supports` tests both.
  */
 
 @custom-variant wave-rtl {
-  @supports selector(:dir(rtl)) {
-    &:where(:dir(rtl)) {
+  @supports selector(:nth-child(n of :dir(rtl))) {
+    &:where(:nth-child(n of :dir(rtl))) {
       @slot;
     }
   }
-  @supports not selector(:dir(rtl)) {
+  @supports not selector(:nth-child(n of :dir(rtl))) {
     &:where([dir='rtl'], [dir='rtl'] *) {
       @slot;
     }

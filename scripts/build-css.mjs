@@ -35,8 +35,9 @@
  *     `@source not inline()`, and also the words of non-class strings, which this check cannot
  *     tell from classes;
  *   - every `wave-rtl:` class of a library class string is compiled with Wave's direction
- *     variant (src/styles/variants.css, C-LOGICAL): `:where(:dir(rtl))` under
- *     `@supports selector(:dir(rtl))` and the `[dir=rtl]` fallback under its negation;
+ *     variant (src/styles/variants.css, C-LOGICAL): `:where(:nth-child(n of :dir(rtl)))` under
+ *     `@supports selector(:nth-child(n of :dir(rtl)))` and the `[dir=rtl]` fallback under its
+ *     negation (a bare `:dir(rtl)` does not count: an app's CSS minifier may rewrite it);
  *   - no class with Tailwind's bare `rtl:`/`ltr:` variant ships (C-LOGICAL): they also match inside
  *     a subtree of the opposite direction.
  *
@@ -577,8 +578,21 @@ export function bareDirectionClasses(css) {
     .sort();
 }
 
-const DIR_SUPPORTED = /^@supports\s+selector\(\s*:dir\(rtl\)\s*\)$/;
-const DIR_UNSUPPORTED = /^@supports\s+not\s+selector\(\s*:dir\(rtl\)\s*\)$/;
+/**
+ * Wave's direction variant (src/styles/variants.css) selects by `:nth-child(n of :dir(rtl))`,
+ * which matches exactly the elements `:dir(rtl)` matches. Lightning CSS keeps that form, whereas
+ * it rewrites a bare `:dir(rtl)` to a `:lang()` list for targets below Chrome 120 (Vite's default
+ * CSS minifier and target). esbuild and cssnano print it without the space before `:dir`.
+ */
+const DIR_NATIVE = String.raw`:nth-child\(\s*n\s+of\s*:dir\(rtl\)\s*\)`;
+const DIR_SUPPORTED = new RegExp(String.raw`^@supports\s+selector\(\s*${DIR_NATIVE}\s*\)$`);
+const DIR_UNSUPPORTED = new RegExp(String.raw`^@supports\s+not\s+selector\(\s*${DIR_NATIVE}\s*\)$`);
+const DIR_NATIVE_SELECTOR = new RegExp(String.raw`:where\(${DIR_NATIVE}\)`);
+
+/** How Wave's direction variant compiles, for the messages of the gates. */
+export const DIRECTION_VARIANT_FORM =
+  ':where(:nth-child(n of :dir(rtl))) under @supports selector(:nth-child(n of :dir(rtl))) ' +
+  'and the [dir=rtl] fallback';
 
 /**
  * The selectors a (possibly nested) style rule applies to: `&` in a nested rule stands for the
@@ -601,9 +615,11 @@ function resolvedSelectors(node, parents) {
 
 /**
  * The given `wave-rtl:` classes that the stylesheet does not compile with Wave's direction
- * variant (src/styles/variants.css): a rule for the class with `:where(:dir(rtl))` under
- * `@supports selector(:dir(rtl))`, and one with `:where([dir=rtl],[dir=rtl] *)` under
- * `@supports not selector(:dir(rtl))`. Minified (flat) and unminified (nested) output are read.
+ * variant (src/styles/variants.css): a rule for the class with
+ * `:where(:nth-child(n of :dir(rtl)))` under `@supports selector(:nth-child(n of :dir(rtl)))`,
+ * and one with `:where([dir=rtl],[dir=rtl] *)` under the negation. A bare `:where(:dir(rtl))`
+ * does not count: CSS minifiers rewrite it to `:lang()`. Minified (flat) and unminified (nested)
+ * output are read.
  */
 export function missingDirectionVariant(css, classes) {
   const native = new Set();
@@ -615,7 +631,7 @@ export function missingDirectionVariant(css, classes) {
     if (!supported && !unsupported) return;
     for (const selector of resolvedSelectors(node, parents)) {
       const names = classesOf(selector);
-      if (supported && selector.includes(':where(:dir(rtl))')) {
+      if (supported && DIR_NATIVE_SELECTOR.test(selector)) {
         for (const name of names) native.add(name);
       }
       if (unsupported && selector.includes(':where([dir=rtl],[dir=rtl] *)')) {
@@ -624,6 +640,25 @@ export function missingDirectionVariant(css, classes) {
     }
   });
   return [...new Set(classes)].filter((name) => !native.has(name) || !fallback.has(name)).sort();
+}
+
+/**
+ * The `wave-rtl:` classes of the stylesheet that a rule selects by `:lang()`: a CSS minifier
+ * rewrote the variant's `:dir(rtl)` (Lightning CSS, Vite's default, does so for targets below
+ * Chrome 120), so they never match a page that sets `dir` without a right-to-left `lang`.
+ */
+export function loweredDirectionClasses(css) {
+  const lowered = new Set();
+  walk(parseCss(css), (node, parents) => {
+    if (!isStyleRule(node) || parents.some(isKeyframes)) return;
+    for (const selector of resolvedSelectors(node, parents)) {
+      if (!selector.includes(':lang(')) continue;
+      for (const name of classesOf(selector)) {
+        if (hasDirectionVariant(name)) lowered.add(name);
+      }
+    }
+  });
+  return [...lowered].sort();
 }
 
 export function assertStylesCss(css, { tokensCss, baseCss, storySources }) {
@@ -708,8 +743,7 @@ export function assertStylesCss(css, { tokensCss, baseCss, storySources }) {
     const uncompiled = missingDirectionVariant(css, [...tokens].filter(hasDirectionVariant));
     if (uncompiled.length > 0) {
       errors.push(
-        "styles.css: not compiled with Wave's wave-rtl variant (:where(:dir(rtl)) under " +
-          '@supports selector(:dir(rtl)) and the [dir=rtl] fallback; is ' +
+        `styles.css: not compiled with Wave's wave-rtl variant (${DIRECTION_VARIANT_FORM}; is ` +
           `src/styles/variants.css imported?): ${uncompiled.slice(0, 20).join(' ')}`,
       );
     }

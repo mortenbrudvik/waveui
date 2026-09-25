@@ -436,6 +436,11 @@ const CONTRAST_PAIRS: Array<[string, string, number]> = [
   ['success', 'track', 3],
   ['error', 'track', 3],
   ['severe', 'track', 3],
+  // CounterBadge dot fills on the page (a dot has no text). The primary, muted-foreground
+  // (informative) and warning-tint-foreground (warning) dots are asserted at 4.5 in this list.
+  ['success', 'background', 3],
+  ['destructive', 'background', 3],
+  ['severe', 'background', 3],
   ['error', 'background', 4.5],
   ['error', 'card', 4.5],
   // Field warning and success messages, on the page and on cards.
@@ -1243,22 +1248,25 @@ describe('style entries (repo-level#1)', () => {
   it('variants.css defines wave-rtl by the element direction, with the [dir] fallback (C-LOGICAL)', () => {
     // `:dir(rtl)` follows the element's own direction, so an LTR subtree of an RTL page is not
     // mirrored; browsers without `:dir()` (Chrome and Edge before 120) get Tailwind's attribute
-    // match. Tailwind's own `rtl` variant is never redefined.
+    // match. `:nth-child(n of S)` matches exactly the elements S matches; there, Lightning CSS
+    // (Vite's default CSS minifier) keeps `:dir(rtl)` instead of rewriting it to a `:lang()` list
+    // for targets below Chrome 120 (scripts/__tests__/pack-smoke.test.mjs builds it with Vite).
+    // Tailwind's own `rtl` variant is never redefined.
     expect(parseFile('variants.css')).toEqual([
       {
         prelude: '@custom-variant wave-rtl',
         children: [
           {
-            prelude: '@supports selector(:dir(rtl))',
+            prelude: '@supports selector(:nth-child(n of :dir(rtl)))',
             children: [
               {
-                prelude: '&:where(:dir(rtl))',
+                prelude: '&:where(:nth-child(n of :dir(rtl)))',
                 children: [{ prelude: '@slot', children: null }],
               },
             ],
           },
           {
-            prelude: '@supports not selector(:dir(rtl))',
+            prelude: '@supports not selector(:nth-child(n of :dir(rtl)))',
             children: [
               {
                 prelude: "&:where([dir='rtl'], [dir='rtl'] *)",
@@ -1421,6 +1429,7 @@ interface BuildCss {
   classStringTokens(sources: (SourceText | SourceEntry)[]): Set<string>;
   strayClasses(css: string, sources: Omit<StorySources, 'stories'>): string[];
   missingDirectionVariant(css: string, classes: Iterable<string>): string[];
+  loweredDirectionClasses(css: string): string[];
   collectStorySources(projectRoot: string): Required<StorySources>;
   main(argv: string[], options?: { projectRoot?: string }): number;
 }
@@ -1764,12 +1773,21 @@ describe('scripts/build-css.mjs — gate assertions (repo-level#1)', () => {
   });
 
   describe('the wave-rtl direction variant (C-LOGICAL)', () => {
-    const NATIVE = String.raw`@supports selector(:dir(rtl)){.wave-rtl\:-scale-x-100:where(:dir(rtl)){scale:-1 1}}`;
-    const FALLBACK = String.raw`@supports not selector(:dir(rtl)){.wave-rtl\:-scale-x-100:where([dir=rtl],[dir=rtl] *){scale:-1 1}}`;
+    const NATIVE = String.raw`@supports selector(:nth-child(n of :dir(rtl))){.wave-rtl\:-scale-x-100:where(:nth-child(n of :dir(rtl))){scale:-1 1}}`;
+    const FALLBACK = String.raw`@supports not selector(:nth-child(n of :dir(rtl))){.wave-rtl\:-scale-x-100:where([dir=rtl],[dir=rtl] *){scale:-1 1}}`;
+    /** The same class as Lightning CSS rewrites `:dir(rtl)` for targets below Chrome 120. */
+    const LOWERED = String.raw`@supports selector(:dir(rtl)){.wave-rtl\:-scale-x-100:where(:is(:lang(ae),:lang(ar),:lang(he),:lang(yi))){scale:-1 1}}`;
 
     it('accepts a class compiled for :dir(rtl) and for the [dir=rtl] fallback', async () => {
       const { missingDirectionVariant } = await loadBuildCss();
       expect(missingDirectionVariant(NATIVE + FALLBACK, ['wave-rtl:-scale-x-100'])).toEqual([]);
+    });
+
+    it('accepts the variant as esbuild and cssnano print it (no space before :dir)', async () => {
+      const { missingDirectionVariant } = await loadBuildCss();
+      const minified = (NATIVE + FALLBACK).replaceAll('n of :dir', 'n of:dir');
+      expect(minified).not.toContain('n of :dir');
+      expect(missingDirectionVariant(minified, ['wave-rtl:-scale-x-100'])).toEqual([]);
     });
 
     it('reads the nested rules of an unminified build', async () => {
@@ -1777,8 +1795,10 @@ describe('scripts/build-css.mjs — gate assertions (repo-level#1)', () => {
       const nested = String.raw`
         .group-hover\:wave-rtl\:ms-3 {
           &:is(:where(.group):hover *) {
-            @supports selector(:dir(rtl)) { &:where(:dir(rtl)) { margin-inline-start: .75rem; } }
-            @supports not selector(:dir(rtl)) {
+            @supports selector(:nth-child(n of :dir(rtl))) {
+              &:where(:nth-child(n of :dir(rtl))) { margin-inline-start: .75rem; }
+            }
+            @supports not selector(:nth-child(n of :dir(rtl))) {
               &:where([dir="rtl"], [dir="rtl"] *) { margin-inline-start: .75rem; }
             }
           }
@@ -1796,6 +1816,26 @@ describe('scripts/build-css.mjs — gate assertions (repo-level#1)', () => {
       expect(missingDirectionVariant(tailwindRtl, [name])).toEqual([name]);
     });
 
+    it('reports a bare :where(:dir(rtl)) branch, which CSS minifiers rewrite to :lang()', async () => {
+      const { missingDirectionVariant } = await loadBuildCss();
+      const name = 'wave-rtl:-scale-x-100';
+      const bare = String.raw`@supports selector(:dir(rtl)){.wave-rtl\:-scale-x-100:where(:dir(rtl)){scale:-1 1}}@supports not selector(:dir(rtl)){.wave-rtl\:-scale-x-100:where([dir=rtl],[dir=rtl] *){scale:-1 1}}`;
+      expect(missingDirectionVariant(bare, [name])).toEqual([name]);
+      expect(missingDirectionVariant(LOWERED + FALLBACK, [name])).toEqual([name]);
+    });
+
+    it('lists the wave-rtl classes whose direction a CSS minifier rewrote to :lang()', async () => {
+      const { loweredDirectionClasses } = await loadBuildCss();
+      expect(loweredDirectionClasses(NATIVE + FALLBACK)).toEqual([]);
+      const nested = String.raw`.hover\:wave-rtl\:ps-2{&:hover{@supports selector(:dir(rtl)){&:where(:is(:lang(ar),:lang(he))){padding-inline-start:.5rem}}}}`;
+      // A rule of the app that selects by language is not a rewritten wave-rtl class.
+      const own = String.raw`.quote:lang(ar){font-style:normal}`;
+      expect(loweredDirectionClasses(LOWERED + nested + own + FALLBACK)).toEqual([
+        'hover:wave-rtl:ps-2',
+        'wave-rtl:-scale-x-100',
+      ]);
+    });
+
     it('fails the gate for a wave-rtl class of a library class string that did not compile', async () => {
       const { selectorClasses } = await loadBuildCss();
       const library: SourceText[] = [
@@ -1803,9 +1843,10 @@ describe('scripts/build-css.mjs — gate assertions (repo-level#1)', () => {
       ];
       const sources = { stories: [], library, libraryClasses: selectorClasses(GATE_CSS) };
       expect(await gate(GATE_CSS + NATIVE, sources)).toEqual([
-        "styles.css: not compiled with Wave's wave-rtl variant (:where(:dir(rtl)) under " +
-          '@supports selector(:dir(rtl)) and the [dir=rtl] fallback; is src/styles/variants.css ' +
-          'imported?): hover:wave-rtl:ps-2 wave-rtl:-scale-x-100',
+        "styles.css: not compiled with Wave's wave-rtl variant " +
+          '(:where(:nth-child(n of :dir(rtl))) under @supports selector(:nth-child(n of ' +
+          ':dir(rtl))) and the [dir=rtl] fallback; is src/styles/variants.css imported?): ' +
+          'hover:wave-rtl:ps-2 wave-rtl:-scale-x-100',
       ]);
       const compiled: SourceText[] = [{ content: "cn('wave-rtl:-scale-x-100')", extension: 'ts' }];
       expect(await gate(GATE_CSS + NATIVE + FALLBACK, { ...sources, library: compiled })).toEqual(
@@ -2172,9 +2213,10 @@ describe('scripts/build-css.mjs — gate assertions (repo-level#1)', () => {
       try {
         const { code, output } = await build();
         expect(output).toContain(
-          "styles.css: not compiled with Wave's wave-rtl variant (:where(:dir(rtl)) under " +
-            '@supports selector(:dir(rtl)) and the [dir=rtl] fallback; is ' +
-            'src/styles/variants.css imported?): wave-rtl:-scale-x-100',
+          "styles.css: not compiled with Wave's wave-rtl variant " +
+            '(:where(:nth-child(n of :dir(rtl))) under @supports selector(:nth-child(n of ' +
+            ':dir(rtl))) and the [dir=rtl] fallback; is src/styles/variants.css imported?): ' +
+            'wave-rtl:-scale-x-100',
         );
         expect(code).toBe(1);
       } finally {

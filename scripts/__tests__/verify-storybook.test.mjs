@@ -8,7 +8,7 @@
  */
 import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { join, resolve } from 'node:path';
+import { join, relative, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { afterAll, describe, expect, it } from 'vitest';
 import { STORYBOOK_DOCGEN_PLUGIN } from '../../.storybook/exportDocblocks.ts';
@@ -17,10 +17,14 @@ import viteConfig from '../../vite.config.ts';
 import { createWorkDir, removeWorkDir } from '../verify-dist.mjs';
 import {
   checkStorybookCss,
+  expectedDirectionClasses,
   expectedStoryOnly,
   main,
   verifyStorybook,
 } from '../verify-storybook.mjs';
+
+/** A `wave-rtl:` class compiled with Wave's direction variant (src/styles/variants.css). */
+const DIRECTION = String.raw`@supports selector(:nth-child(n of :dir(rtl))){.wave-rtl\:-scale-x-100:where(:nth-child(n of :dir(rtl))){scale:-1 1}}@supports not selector(:nth-child(n of :dir(rtl))){.wave-rtl\:-scale-x-100:where([dir=rtl],[dir=rtl] *){scale:-1 1}}`;
 
 const root = resolve(fileURLToPath(new URL('.', import.meta.url)), '../..');
 
@@ -138,6 +142,38 @@ describe('checkStorybookCss', () => {
   it('passes when the stories use no utility the library lacks (nothing to require)', () => {
     expect(checkStorybookCss(styled, [])).toEqual({ errors: [], storyOnly: [] });
   });
+
+  describe("the library's wave-rtl classes (C-LOGICAL)", () => {
+    const directionClasses = ['wave-rtl:-scale-x-100'];
+
+    it('passes when each is compiled with the direction variant', () => {
+      expect(checkStorybookCss(styled + DIRECTION, [], directionClasses)).toEqual({
+        errors: [],
+        storyOnly: [],
+      });
+    });
+
+    it('reports classes whose :dir(rtl) the build rewrote to :lang()', () => {
+      // What `storybook build` emitted for the 0.5 variant: Vite's CSS minifier (Lightning CSS,
+      // Chrome 111 target) rewrote `:where(:dir(rtl))` to a `:lang()` list (shortened here).
+      const lowered = String.raw`@supports selector(:dir(rtl)){.wave-rtl\:-scale-x-100:where(:is(:lang(ae),:lang(ar),:lang(he),:lang(yi))){scale:-1 1}}@supports not selector(:dir(rtl)){.wave-rtl\:-scale-x-100:where([dir=rtl],[dir=rtl] *){scale:-1 1}}`;
+      expect(checkStorybookCss(styled + lowered, [], directionClasses).errors).toEqual([
+        'the Storybook CSS selects 1 wave-rtl class by :lang() (wave-rtl:-scale-x-100): the ' +
+          "CSS minifier rewrote :dir(rtl) of Wave's direction variant, so the class never " +
+          'matches a story that sets dir without a right-to-left lang',
+      ]);
+    });
+
+    it('reports classes compiled without the direction variant', () => {
+      const tailwindRtl = String.raw`.wave-rtl\:-scale-x-100:where(:dir(rtl),[dir=rtl],[dir=rtl] *){scale:-1 1}`;
+      expect(checkStorybookCss(styled + tailwindRtl, [], directionClasses).errors).toEqual([
+        "the Storybook CSS lacks Wave's direction variant for 1 of the 1 wave-rtl classes of " +
+          'the library (wave-rtl:-scale-x-100): expected :where(:nth-child(n of :dir(rtl))) ' +
+          'under @supports selector(:nth-child(n of :dir(rtl))) and the [dir=rtl] fallback ' +
+          '(src/styles/variants.css)',
+      ]);
+    });
+  });
 });
 
 describe('expectedStoryOnly (reference compile)', () => {
@@ -151,7 +187,7 @@ describe('expectedStoryOnly (reference compile)', () => {
   afterAll(() => removeWorkDir(run));
 
   /** A project laid out like this repository, without any .storybook folder. */
-  function project(storySource) {
+  function project(storySource, component = "export const box = cn('flex p-4');\n") {
     const dir = mkdtempSync(join(projects, 'p-'));
     const files = {
       'src/styles/styles.css':
@@ -160,7 +196,7 @@ describe('expectedStoryOnly (reference compile)', () => {
         "@source '../components';\n",
       'src/styles/tokens.css': '.wave-dark { color-scheme: dark; }\n',
       'src/styles/base.css': '.wave-root { margin: 0; }\n',
-      'src/components/Box.tsx': "export const box = cn('flex p-4');\n",
+      'src/components/Box.tsx': component,
       'stories/Box.stories.tsx': storySource,
     };
     for (const [path, content] of Object.entries(files)) {
@@ -178,6 +214,15 @@ describe('expectedStoryOnly (reference compile)', () => {
   it('is empty when the stories use only library utilities', () => {
     const dir = project('<Box className="flex p-4" />;\n');
     expect(expectedStoryOnly(dir)).toEqual([]);
+  });
+
+  it('expectedDirectionClasses lists the wave-rtl classes of library class strings only', () => {
+    const dir = project(
+      '<Box className="wave-rtl:ms-2" />;\n',
+      '// wave-rtl:pe-2 in a comment is no class\n' +
+        "export const box = cn('flex wave-rtl:-scale-x-100', 'hover:wave-rtl:ps-1');\n",
+    );
+    expect(expectedDirectionClasses(dir)).toEqual(['hover:wave-rtl:ps-1', 'wave-rtl:-scale-x-100']);
   });
 });
 
@@ -227,11 +272,39 @@ describe('verifyStorybook and main', () => {
   it('exits 0 for a verified build and 1 otherwise', () => {
     const lines = [];
     const io = { log: (line) => lines.push(line), error: (line) => lines.push(line) };
-    const good = staticDir({ 'assets/iframe.css': '.bg-primary{color:red}.m-6{margin:1.5rem}' });
-    expect(main(['--dir', good], io, expected)).toBe(0);
-    expect(lines.pop()).toMatch(/OK \(\.bg-primary and all 1 story-only utilities, e\.g\. m-6\)/);
-    expect(main(['--dir', good], io, [])).toBe(0);
-    expect(lines.pop()).toMatch(/OK \(\.bg-primary; the stories use no utility the library lacks/);
-    expect(main(['--dir', join(work, 'missing')], io, expected)).toBe(1);
+    const good = staticDir({
+      'assets/iframe.css': `.bg-primary{color:red}.m-6{margin:1.5rem}${DIRECTION}`,
+    });
+    const direction = ['wave-rtl:-scale-x-100'];
+    expect(main(['--dir', good], io, expected, direction)).toBe(0);
+    expect(lines.pop()).toMatch(
+      /OK \(\.bg-primary and all 1 story-only utilities, e\.g\. m-6; all 1 wave-rtl classes of the library with Wave's direction variant\)$/,
+    );
+    expect(main(['--dir', good], io, [], direction)).toBe(0);
+    expect(lines.pop()).toMatch(
+      /OK \(\.bg-primary; the stories use no utility the library lacks, so there is no story-only utility to check; all 1 wave-rtl classes of the library with Wave's direction variant\)$/,
+    );
+    expect(main(['--dir', join(work, 'missing')], io, expected, direction)).toBe(1);
+    expect(lines.splice(0)).toEqual([
+      `verify-storybook: 1 problem(s) in ${relative(process.cwd(), join(work, 'missing'))}:`,
+      `  - ${join(work, 'missing')} does not exist (run storybook build first)`,
+    ]);
+  });
+
+  it('exits 1 for a build whose wave-rtl classes select by :lang()', () => {
+    const lines = [];
+    const io = { log: (line) => lines.push(line), error: (line) => lines.push(line) };
+    const lowered = staticDir({
+      'assets/iframe.css':
+        '.bg-primary{color:red}' +
+        String.raw`@supports selector(:dir(rtl)){.wave-rtl\:-scale-x-100:where(:is(:lang(ae),:lang(ar))){scale:-1 1}}`,
+    });
+    expect(main(['--dir', lowered], io, [], ['wave-rtl:-scale-x-100'])).toBe(1);
+    expect(lines).toEqual([
+      `verify-storybook: 1 problem(s) in ${relative(process.cwd(), lowered)}/assets/iframe.css:`,
+      '  - the Storybook CSS selects 1 wave-rtl class by :lang() (wave-rtl:-scale-x-100): the ' +
+        "CSS minifier rewrote :dir(rtl) of Wave's direction variant, so the class never " +
+        'matches a story that sets dir without a right-to-left lang',
+    ]);
   });
 });
