@@ -28,6 +28,7 @@ import {
   expectNoA11yViolations,
   expectThrows,
   findDanglingIdRefs,
+  findDanglingIdRefsInHtml,
   installResizeObserverMock,
   mockMatchMedia,
   mockRect,
@@ -556,6 +557,65 @@ describe('dangling ARIA id references', () => {
     it('ignores empty and whitespace-only values', () => {
       render(<input aria-label="Email" aria-describedby=" " aria-labelledby="" />);
       expect(findDanglingIdRefs()).toEqual([]);
+    });
+  });
+
+  describe('findDanglingIdRefsInHtml', () => {
+    it('lists every id of an ARIA reference that the HTML does not contain, aria-controls and aria-owns included', () => {
+      const html = [
+        '<button type="button" aria-expanded="true" aria-controls="menu">Actions</button>',
+        '<input aria-label="Fruit" aria-activedescendant="option" aria-describedby="hint gone" aria-owns="popup">',
+        '<p id="hint">Hint</p>',
+        '<div role="group" aria-labelledby="«r1»" aria-errormessage="error"><span id="«r1»">Group</span></div>',
+      ].join('');
+      expect(findDanglingIdRefsInHtml(html)).toEqual([
+        'button "Actions": aria-controls="menu" (no element with id "menu")',
+        'input "Fruit": aria-activedescendant="option" (no element with id "option")',
+        'input "Fruit": aria-describedby="hint gone" (no element with id "gone")',
+        'input "Fruit": aria-owns="popup" (no element with id "popup")',
+        'div[role="group"] "Group": aria-errormessage="error" (no element with id "error")',
+      ]);
+    });
+
+    it('checks only the given attributes', () => {
+      const html = '<button type="button" aria-controls="menu" aria-describedby="tip">Go</button>';
+      expect(findDanglingIdRefsInHtml(html, ['aria-describedby'])).toEqual([
+        'button "Go": aria-describedby="tip" (no element with id "tip")',
+      ]);
+      expect(findDanglingIdRefsInHtml(html, [])).toEqual([]);
+    });
+
+    it('resolves ids in the HTML only, never in the document, and leaves the document untouched', () => {
+      render(<p id="elsewhere">Rendered in the document</p>);
+      const bodyBefore = document.body.innerHTML;
+      expect(
+        findDanglingIdRefsInHtml('<div role="note" aria-labelledby="elsewhere">Note</div>'),
+      ).toEqual([
+        'div[role="note"] "Note": aria-labelledby="elsewhere" (no element with id "elsewhere")',
+      ]);
+      expect(document.body.innerHTML).toBe(bodyBefore);
+    });
+
+    it('ignores empty and whitespace-only values', () => {
+      const html = '<input aria-describedby=" " aria-labelledby="">';
+      expect(findDanglingIdRefsInHtml(html)).toEqual([]);
+    });
+
+    it('resolves the React useId ids of renderToString output', () => {
+      function Group({ labelled }: { labelled: boolean }) {
+        const id = React.useId();
+        return (
+          <div role="group" aria-labelledby={id}>
+            {labelled && <span id={id}>Group</span>}
+          </div>
+        );
+      }
+      expect(findDanglingIdRefsInHtml(renderToString(<Group labelled />))).toEqual([]);
+      const dangling = findDanglingIdRefsInHtml(renderToString(<Group labelled={false} />));
+      expect(dangling).toHaveLength(1);
+      expect(dangling[0]).toMatch(
+        /^div\[role="group"\]: aria-labelledby="(.+)" \(no element with id "\1"\)$/,
+      );
     });
   });
 });

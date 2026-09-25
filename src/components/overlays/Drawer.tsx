@@ -6,6 +6,7 @@ import { DismissIcon } from '../../lib/icons';
 import { slotRendersContent } from '../../lib/slot';
 import { useControllable, type SetValue } from '../../hooks/useControllable';
 import { useId } from '../../hooks/useId';
+import { useIsClient } from '../../hooks/useIsClient';
 import { useMergedRefs } from '../../hooks/useMergedRefs';
 import { useModalLayer } from '../../hooks/useModalLayer';
 import { Button } from '../button/Button';
@@ -32,9 +33,14 @@ export type DrawerPosition = 'start' | 'end' | 'left' | 'right';
 
 /** Properties for the Drawer component. */
 export interface DrawerProps extends Omit<React.HTMLAttributes<HTMLDivElement>, 'title'> {
-  /** Controlled open state of the drawer. */
+  /**
+   * Controlled open state of the drawer. The panel renders only in the browser: an open drawer
+   * is closed in the server HTML and opens once it has hydrated.
+   */
   open?: boolean;
-  /** Default open state for uncontrolled usage.
+  /**
+   * Default open state for uncontrolled usage. The panel renders only in the browser: a drawer
+   * open by default is closed in the server HTML and opens once it has hydrated.
    * @default false
    */
   defaultOpen?: boolean;
@@ -334,7 +340,12 @@ const DrawerRoot = ({
   ref,
   ...rest
 }: DrawerProps) => {
-  const [open, setOpen] = useControllable(openProp, defaultOpen ?? false, onOpenChange);
+  const [openState, setOpen] = useControllable(openProp, defaultOpen ?? false, onOpenChange);
+  // The panel lives in a portal, which renders only in the browser: until then (the server HTML,
+  // hydration) the drawer reports itself closed, so the trigger's aria-expanded and aria-controls
+  // never describe a panel that is not there.
+  const isClient = useIsClient();
+  const open = openState && isClient;
   const trigger = useModalTrigger();
   const generatedId = useId('wave-drawer');
   const panelId = id ?? generatedId;

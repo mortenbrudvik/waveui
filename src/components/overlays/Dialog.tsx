@@ -5,6 +5,7 @@ import { DismissIcon } from '../../lib/icons';
 import { slotRendersContent } from '../../lib/slot';
 import { useControllable, type SetValue } from '../../hooks/useControllable';
 import { useId } from '../../hooks/useId';
+import { useIsClient } from '../../hooks/useIsClient';
 import { useMergedRefs } from '../../hooks/useMergedRefs';
 import { useModalLayer } from '../../hooks/useModalLayer';
 import { Button } from '../button/Button';
@@ -25,9 +26,14 @@ import {
 
 /** Properties for the Dialog component. */
 export interface DialogProps {
-  /** Controlled open state of the dialog. */
+  /**
+   * Controlled open state of the dialog. The surface renders only in the browser: an open dialog
+   * is closed in the server HTML and opens once it has hydrated.
+   */
   open?: boolean;
-  /** Default open state for uncontrolled usage.
+  /**
+   * Default open state for uncontrolled usage. The surface renders only in the browser: a dialog
+   * open by default is closed in the server HTML and opens once it has hydrated.
    * @default false
    */
   defaultOpen?: boolean;
@@ -170,7 +176,12 @@ function useDialogContext(componentName: string): DialogContextValue {
 // can be named in consumers' declaration files, e.g. a story's `satisfies Meta<typeof Dialog>` (a
 // function declaration's `typeof` cannot, TS4023).
 const DialogRoot = ({ open, defaultOpen, onOpenChange, finalFocusRef, children }: DialogProps) => {
-  const [isOpen, setOpen] = useControllable(open, defaultOpen ?? false, onOpenChange);
+  const [openState, setOpen] = useControllable(open, defaultOpen ?? false, onOpenChange);
+  // The surface lives in a portal, which renders only in the browser: until then (the server
+  // HTML, hydration) the dialog reports itself closed, so the trigger's aria-expanded never
+  // describes a dialog that is not there.
+  const isClient = useIsClient();
+  const isOpen = openState && isClient;
   const trigger = useModalTrigger();
   // After Dialog.Content's focus restore (a child's layout effects run first), start the trigger
   // session, or end it and forget the trigger that opened it.

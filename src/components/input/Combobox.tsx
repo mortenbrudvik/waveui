@@ -58,7 +58,8 @@ export interface ComboboxProps extends Omit<
   open?: boolean;
   /**
    * Initial open state for uncontrolled usage. A combobox that starts disabled or read-only
-   * starts closed.
+   * starts closed. The list renders only in the browser: it is closed in the server HTML and opens
+   * once the combobox has hydrated.
    * @default false
    */
   defaultOpen?: boolean;

@@ -1,6 +1,7 @@
 import { afterEach, describe, it, expect, expectTypeOf, vi } from 'vitest';
 import * as React from 'react';
 import { createPortal } from 'react-dom';
+import { hydrateRoot } from 'react-dom/client';
 import { renderToString } from 'react-dom/server';
 import { act, cleanup, fireEvent, render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
@@ -20,6 +21,7 @@ import { getTopmostLayer } from '../../../lib/layers';
 import {
   asClientReference,
   expectNoA11yViolations,
+  findDanglingIdRefsInHtml,
   renderWithProviders,
   testCompoundExposure,
   testDisplayName,
@@ -136,6 +138,49 @@ describe('Drawer', () => {
       expect(html).toContain('Open filters');
       expect(html).not.toContain('role="dialog"');
     });
+
+    it.each([
+      ['a defaultOpen', { defaultOpen: true }],
+      ['an open', { open: true }],
+    ])('renders %s drawer closed on the server, so every referenced id exists', (_l, props) => {
+      const serverHtml = renderToString(<WithTrigger {...props} />);
+      expect(findDanglingIdRefsInHtml(serverHtml)).toEqual([]);
+      const parsed = document.createElement('div'); // detached: nothing reaches document.body
+      parsed.innerHTML = serverHtml;
+      const trigger = parsed.querySelector('button');
+      expect(trigger).toHaveAttribute('aria-expanded', 'false');
+      expect(trigger).not.toHaveAttribute('aria-controls');
+    });
+
+    it.each([
+      ['defaultOpen', { defaultOpen: true }],
+      ['open', { open: true }],
+    ])(
+      'opens once hydrated (%s), without a mismatch or an onOpenChange call',
+      async (_l, props) => {
+        const onOpenChange = vi.fn();
+        const element = <WithTrigger {...props} onOpenChange={onOpenChange} />;
+        const container = document.createElement('div');
+        container.innerHTML = renderToString(element);
+        document.body.appendChild(container);
+        const error = vi.spyOn(console, 'error');
+        let root: ReturnType<typeof hydrateRoot> | undefined;
+        try {
+          await act(async () => {
+            root = hydrateRoot(container, element);
+          });
+          expect(error).not.toHaveBeenCalled();
+          const panel = screen.getByRole('dialog', { name: 'Filters' });
+          expect(button('Open filters')).toHaveAttribute('aria-expanded', 'true');
+          expect(button('Open filters')).toHaveAttribute('aria-controls', panel.id);
+          expect(panel).toContainElement(document.activeElement as HTMLElement);
+          expect(onOpenChange).not.toHaveBeenCalled();
+        } finally {
+          act(() => root?.unmount());
+          container.remove();
+        }
+      },
+    );
 
     it('renders when defaultOpen is true', () => {
       render(

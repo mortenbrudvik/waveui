@@ -10,6 +10,7 @@ import { DatePicker, type DatePickerLabels, type DatePickerProps } from '../Date
 import { formatDate } from '../dateUtils';
 import {
   axe,
+  findDanglingIdRefsInHtml,
   renderWithProviders,
   testNoImplicitSubmit,
   testSystemProps,
@@ -197,17 +198,14 @@ describe('DatePicker', () => {
     });
 
     it('reports the calendar closed on the server with defaultOpen, so no reference dangles', () => {
-      const host = document.createElement('div');
-      host.innerHTML = renderToString(
+      const serverHtml = renderToString(
         <DatePicker aria-label="Date" locale="en-US" defaultValue={JUNE_15} defaultOpen />,
       );
+      expect(findDanglingIdRefsInHtml(serverHtml)).toEqual([]);
+      const host = document.createElement('div'); // detached: nothing reaches document.body
+      host.innerHTML = serverHtml;
       const toggleButton = host.querySelector('button[aria-haspopup="dialog"]');
       expect(toggleButton).toHaveAttribute('aria-expanded', 'false');
-      for (const element of host.querySelectorAll('[aria-controls]')) {
-        for (const id of element.getAttribute('aria-controls')!.split(' ')) {
-          expect(host.querySelector(`[id="${id}"]`)).not.toBeNull();
-        }
-      }
     });
 
     it('opens a defaultOpen calendar once hydrated, without a hydration mismatch', async () => {

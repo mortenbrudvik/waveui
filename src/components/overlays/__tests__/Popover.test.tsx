@@ -2,6 +2,8 @@ import * as React from 'react';
 import { afterEach, describe, it, expect, expectTypeOf, vi } from 'vitest';
 import { act, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
+import { hydrateRoot } from 'react-dom/client';
+import { renderToString } from 'react-dom/server';
 import { Popover, PopoverContent, PopoverTrigger, type PopoverTriggerChildProps } from '../Popover';
 import { Dialog } from '../Dialog';
 import { Tooltip } from '../Tooltip';
@@ -11,6 +13,7 @@ import { useDismiss } from '../../../hooks/useDismiss';
 import {
   createOverlayTestWrapper,
   expectNoA11yViolations,
+  findDanglingIdRefsInHtml,
   renderWithProviders,
   testCompoundExposure,
   testDisplayName,
@@ -1820,6 +1823,51 @@ describe('Popover', () => {
       expect(onOpenChange).toHaveBeenCalledTimes(1);
       expect(screen.getByRole('dialog')).toBeInTheDocument();
     });
+  });
+
+  describe('server rendering', () => {
+    it.each([
+      ['a defaultOpen', { defaultOpen: true }],
+      ['an open', { open: true }],
+    ])('renders %s popover closed on the server, so every referenced id exists', (_l, props) => {
+      const serverHtml = renderToString(<Basic {...props} />);
+      expect(findDanglingIdRefsInHtml(serverHtml)).toEqual([]);
+      const parsed = document.createElement('div'); // detached: nothing reaches document.body
+      parsed.innerHTML = serverHtml;
+      const toggle = parsed.querySelector('button');
+      expect(toggle).toHaveAttribute('aria-expanded', 'false');
+      expect(toggle).not.toHaveAttribute('aria-controls');
+    });
+
+    it.each([
+      ['defaultOpen', { defaultOpen: true }],
+      ['open', { open: true }],
+    ])(
+      'opens once hydrated (%s), without a mismatch or an onOpenChange call',
+      async (_l, props) => {
+        const onOpenChange = vi.fn();
+        const element = <Basic {...props} onOpenChange={onOpenChange} />;
+        const container = document.createElement('div');
+        container.innerHTML = renderToString(element);
+        document.body.appendChild(container);
+        const error = vi.spyOn(console, 'error');
+        let root: ReturnType<typeof hydrateRoot> | undefined;
+        try {
+          await act(async () => {
+            root = hydrateRoot(container, element);
+          });
+          expect(error).not.toHaveBeenCalled();
+          const surface = screen.getByRole('dialog', { name: 'Toggle' });
+          const toggle = screen.getByRole('button', { name: 'Toggle' });
+          expect(toggle).toHaveAttribute('aria-expanded', 'true');
+          expect(toggle).toHaveAttribute('aria-controls', surface.id);
+          expect(onOpenChange).not.toHaveBeenCalled();
+        } finally {
+          act(() => root?.unmount());
+          container.remove();
+        }
+      },
+    );
   });
 
   describe('layers (overlays#1, overlays#41)', () => {

@@ -10,7 +10,12 @@ import {
   type TagPickerOption,
   type TagPickerProps,
 } from '../TagPicker';
-import { renderWithProviders, testNoImplicitSubmit, testSystemProps } from '../../../test-utils';
+import {
+  findDanglingIdRefsInHtml,
+  renderWithProviders,
+  testNoImplicitSubmit,
+  testSystemProps,
+} from '../../../test-utils';
 import { FIELD_TEST_IDS, FIELD_TEST_TEXT, renderWithFieldContext } from '../../../test-utils-field';
 import { DismissLayerProvider, useDismiss } from '../../../hooks/useDismiss';
 import { __getAnnouncerText } from '../../../hooks/useAnnounce';
@@ -303,20 +308,15 @@ describe('TagPicker', () => {
       ['a defaultOpen', { defaultOpen: true }],
       ['an open', { open: true }],
     ])('renders %s list closed on the server, so every referenced id exists', (_label, props) => {
-      const parsed = document.createElement('div'); // detached: nothing reaches document.body
-      parsed.innerHTML = renderToString(
+      const serverHtml = renderToString(
         <TagPicker aria-label="Fruits" options={options} {...props} />,
       );
+      expect(findDanglingIdRefsInHtml(serverHtml)).toEqual([]);
+      const parsed = document.createElement('div'); // detached: nothing reaches document.body
+      parsed.innerHTML = serverHtml;
       const input = parsed.querySelector('input[role="combobox"]');
       expect(input).toHaveAttribute('aria-expanded', 'false');
       expect(input).not.toHaveAttribute('aria-activedescendant');
-      for (const attribute of ['aria-controls', 'aria-activedescendant']) {
-        for (const element of parsed.querySelectorAll(`[${attribute}]`)) {
-          for (const id of element.getAttribute(attribute)!.split(' ')) {
-            expect(parsed.querySelector(`[id="${id}"]`)).not.toBeNull();
-          }
-        }
-      }
       expect(parsed.querySelector('[role="listbox"]')).toHaveAttribute('hidden');
     });
 

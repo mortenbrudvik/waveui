@@ -2,6 +2,7 @@ import * as React from 'react';
 import { describe, it, expect, vi, afterEach } from 'vitest';
 import { act, fireEvent, render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
+import { hydrateRoot } from 'react-dom/client';
 import { renderToString } from 'react-dom/server';
 import { Menu, MenuDivider, MenuItem, MenuPopover, MenuTrigger } from '../Menu';
 import type { MenuItemProps, MenuProps, MenuTriggerProps } from '../Menu';
@@ -13,6 +14,7 @@ import {
   createOverlayTestWrapper,
   expectNoA11yViolations,
   findDanglingIdRefs,
+  findDanglingIdRefsInHtml,
   renderWithProviders,
   testCompoundExposure,
   testComposedHandler,
@@ -1068,6 +1070,46 @@ describe('Menu popup (Menu.Trigger + Menu.Popover)', () => {
     render(<PopupMenu defaultOpen />);
     expect(screen.getByRole('menu')).toBeInTheDocument();
     expect(item('Edit')).toHaveFocus();
+  });
+
+  it.each([
+    ['a defaultOpen', { defaultOpen: true }],
+    ['an open', { open: true }],
+  ])('renders %s menu closed on the server, so every referenced id exists', (_label, props) => {
+    const serverHtml = renderToString(<PopupMenu {...props} />);
+    expect(findDanglingIdRefsInHtml(serverHtml)).toEqual([]);
+    const parsed = document.createElement('div'); // detached: nothing reaches document.body
+    parsed.innerHTML = serverHtml;
+    const button = parsed.querySelector('button');
+    expect(button).toHaveAttribute('aria-expanded', 'false');
+    expect(button).not.toHaveAttribute('aria-controls');
+  });
+
+  it.each([
+    ['defaultOpen', { defaultOpen: true }],
+    ['open', { open: true }],
+  ])('opens once hydrated (%s), without a mismatch or an onOpenChange call', async (_l, props) => {
+    const onOpenChange = vi.fn();
+    const element = <PopupMenu {...props} onOpenChange={onOpenChange} />;
+    const container = document.createElement('div');
+    container.innerHTML = renderToString(element);
+    document.body.appendChild(container);
+    const error = vi.spyOn(console, 'error');
+    let root: ReturnType<typeof hydrateRoot> | undefined;
+    try {
+      await act(async () => {
+        root = hydrateRoot(container, element);
+      });
+      expect(error).not.toHaveBeenCalled();
+      const menu = screen.getByRole('menu', { name: 'Actions' });
+      expect(trigger()).toHaveAttribute('aria-expanded', 'true');
+      expect(trigger()).toHaveAttribute('aria-controls', menu.id);
+      expect(item('Edit')).toHaveFocus();
+      expect(onOpenChange).not.toHaveBeenCalled();
+    } finally {
+      act(() => root?.unmount());
+      container.remove();
+    }
   });
 
   it('controlled: follows `open` and reports onOpenChange without changing itself', async () => {

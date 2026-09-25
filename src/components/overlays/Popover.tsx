@@ -12,6 +12,7 @@ import { useRestoreFocus } from '../../hooks/useRestoreFocus';
 import { usePopupPosition } from '../../hooks/usePopupPosition';
 import { useMergedRefs } from '../../hooks/useMergedRefs';
 import { useEventCallback } from '../../hooks/useEventCallback';
+import { useIsClient } from '../../hooks/useIsClient';
 import {
   getTriggerFocusTarget,
   useTriggerElement,
@@ -27,9 +28,14 @@ import {
 
 /** Properties for the Popover component. */
 export interface PopoverProps {
-  /** Controlled open state of the popover. */
+  /**
+   * Controlled open state of the popover. The content renders only in the browser: an open
+   * popover is closed in the server HTML and opens once it has hydrated.
+   */
   open?: boolean;
-  /** Default open state for uncontrolled usage.
+  /**
+   * Default open state for uncontrolled usage. The content renders only in the browser: a
+   * popover open by default is closed in the server HTML and opens once it has hydrated.
    * @default false
    */
   defaultOpen?: boolean;
@@ -246,7 +252,12 @@ const PopoverRoot = ({
   ignoreOutsideRefs,
   children,
 }: PopoverProps) => {
-  const [open, setOpen] = useControllable(openProp, defaultOpen ?? false, onOpenChange);
+  const [openState, setOpen] = useControllable(openProp, defaultOpen ?? false, onOpenChange);
+  // The content lives in a portal, which renders only in the browser: until then (the server
+  // HTML, hydration) the popover reports itself closed, so the trigger's aria-expanded and
+  // aria-controls never describe content that is not there.
+  const isClient = useIsClient();
+  const open = openState && isClient;
   const generatedContentId = useId('popover-content');
   const [customContentId, setCustomContentId] = React.useState<string | undefined>(undefined);
   const contentId = customContentId ?? generatedContentId;

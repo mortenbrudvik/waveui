@@ -40,7 +40,9 @@ export interface DropdownProps extends Omit<
   /** Controlled open state of the listbox. */
   open?: boolean;
   /**
-   * Initial open state for uncontrolled usage. A dropdown that starts disabled starts closed.
+   * Initial open state for uncontrolled usage. A dropdown that starts disabled starts closed. The
+   * list renders only in the browser: it is closed in the server HTML and opens once the dropdown
+   * has hydrated.
    * @default false
    */
   defaultOpen?: boolean;

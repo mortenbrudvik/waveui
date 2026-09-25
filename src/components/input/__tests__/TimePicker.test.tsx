@@ -7,6 +7,7 @@ import userEvent from '@testing-library/user-event';
 import { TimePicker, type TimePickerLabels, type TimePickerProps } from '../TimePicker';
 import {
   axe,
+  findDanglingIdRefsInHtml,
   renderWithProviders,
   testNoImplicitSubmit,
   testSystemProps,
@@ -129,20 +130,15 @@ describe('TimePicker', () => {
     });
 
     it('renders a defaultOpen list closed on the server, so every referenced id exists', () => {
-      const parsed = document.createElement('div'); // detached: nothing reaches document.body
-      parsed.innerHTML = renderToString(
+      const serverHtml = renderToString(
         <TimePicker aria-label="Time" defaultValue="09:00" step={60} defaultOpen />,
       );
+      expect(findDanglingIdRefsInHtml(serverHtml)).toEqual([]);
+      const parsed = document.createElement('div'); // detached: nothing reaches document.body
+      parsed.innerHTML = serverHtml;
       const input = parsed.querySelector('input[role="combobox"]');
       expect(input).toHaveAttribute('aria-expanded', 'false');
       expect(input).not.toHaveAttribute('aria-activedescendant');
-      for (const attribute of ['aria-controls', 'aria-activedescendant']) {
-        for (const element of parsed.querySelectorAll(`[${attribute}]`)) {
-          for (const id of element.getAttribute(attribute)!.split(' ')) {
-            expect(parsed.querySelector(`[id="${id}"]`)).not.toBeNull();
-          }
-        }
-      }
       expect(parsed.querySelector('[role="listbox"]')).toHaveAttribute('hidden');
     });
 

@@ -8,6 +8,7 @@ import { Dropdown, DropdownOption, DropdownOptionGroup } from '../Dropdown';
 import { Option, OptionGroup } from '../Combobox';
 import {
   asClientReference,
+  findDanglingIdRefsInHtml,
   renderWithProviders,
   testCompoundExposure,
   testNoImplicitSubmit,
@@ -268,6 +269,51 @@ describe('Dropdown', () => {
           'aria-selected',
           'true',
         );
+      } finally {
+        act(() => root?.unmount());
+        container.remove();
+      }
+    });
+
+    it.each([
+      ['a defaultOpen', { defaultOpen: true }],
+      ['an open', { open: true }],
+    ])('renders %s list closed on the server, so every referenced id exists', (_label, props) => {
+      const serverHtml = renderToString(
+        <Dropdown aria-label="Fruit" defaultValue="a" {...props}>
+          {FRUITS}
+        </Dropdown>,
+      );
+      expect(findDanglingIdRefsInHtml(serverHtml)).toEqual([]);
+      const parsed = document.createElement('div'); // detached: nothing reaches document.body
+      parsed.innerHTML = serverHtml;
+      const control = parsed.querySelector('[role="combobox"]');
+      expect(control).toHaveAttribute('aria-expanded', 'false');
+      expect(control).not.toHaveAttribute('aria-activedescendant');
+      expect(parsed.querySelector('[role="listbox"]')).toHaveAttribute('hidden');
+    });
+
+    it('opens a defaultOpen list once hydrated, without a mismatch or an onOpenChange call', async () => {
+      const onOpenChange = vi.fn();
+      const element = (
+        <Dropdown aria-label="Fruit" defaultValue="a" defaultOpen onOpenChange={onOpenChange}>
+          {FRUITS}
+        </Dropdown>
+      );
+      const container = document.createElement('div');
+      container.innerHTML = renderToString(element);
+      document.body.appendChild(container);
+      const error = vi.spyOn(console, 'error');
+      let root: ReturnType<typeof hydrateRoot> | undefined;
+      try {
+        await act(async () => {
+          root = hydrateRoot(container, element);
+        });
+        expect(error).not.toHaveBeenCalled();
+        expect(combobox()).toHaveAttribute('aria-expanded', 'true');
+        expect(combobox()).toHaveAttribute('aria-controls', listbox().id);
+        expect(within(listbox()).getAllByRole('option')).toHaveLength(FRUITS.length);
+        expect(onOpenChange).not.toHaveBeenCalled();
       } finally {
         act(() => root?.unmount());
         container.remove();

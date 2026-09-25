@@ -96,6 +96,9 @@
  *   not fail every test file).
  * - {@link findDanglingIdRefs}: the ARIA id references that point at no element (part of every
  *   audit).
+ * - {@link findDanglingIdRefsInHtml}: the ARIA id references of an HTML string (`renderToString`
+ *   output) that point at no element of that HTML, `aria-controls` included (a component
+ *   rendered open on the server must not reference its portaled surface).
  * - `vi.mock()` in a test file works as usual, also for the modules the setup imports
  *   (`src/lib/dev`, RTL): the mock applies to the test file's imports and to every module it
  *   loads afterwards; only the setup's own bindings (its after-each `cleanup()` and
@@ -242,6 +245,44 @@ const ID_REFERENCE_ATTRIBUTES = [
 
 const ID_REFERENCE_SELECTOR = ID_REFERENCE_ATTRIBUTES.map((attr) => `[${attr}]`).join(',');
 
+/** The ARIA attributes whose every id {@link findDanglingIdRefsInHtml} requires by default. */
+const HTML_ID_REFERENCE_ATTRIBUTES = [
+  'aria-activedescendant',
+  'aria-controls',
+  'aria-describedby',
+  'aria-details',
+  'aria-errormessage',
+  'aria-flowto',
+  'aria-labelledby',
+  'aria-owns',
+] as const;
+
+/**
+ * The shared loop of {@link findDanglingIdRefs} and {@link findDanglingIdRefsInHtml}: one line
+ * per attribute of `elements` that holds an id `resolverFor(element)` does not find. An element
+ * whose resolver is `null` is skipped.
+ */
+function listDanglingIdRefs(
+  elements: Iterable<Element>,
+  attributes: readonly string[],
+  resolverFor: (element: Element) => ((id: string) => boolean) | null,
+): string[] {
+  const found: string[] = [];
+  for (const el of elements) {
+    const exists = resolverFor(el);
+    if (!exists) continue;
+    for (const attr of attributes) {
+      const value = el.getAttribute(attr);
+      if (value === null) continue;
+      const missing = value.split(/\s+/).filter((id) => id !== '' && !exists(id));
+      if (missing.length === 0) continue;
+      const ids = missing.map((id) => `"${id}"`).join(', ');
+      found.push(`${describeElement(el)}: ${attr}="${value}" (no element with id ${ids})`);
+    }
+  }
+  return found;
+}
+
 /**
  * The dangling ARIA id references of `root` and its descendants: every id in `aria-describedby`,
  * `aria-labelledby`, `aria-errormessage` or `aria-activedescendant` that no element in the
@@ -261,22 +302,52 @@ const ID_REFERENCE_SELECTOR = ID_REFERENCE_ATTRIBUTES.map((attr) => `[${attr}]`)
  */
 export function findDanglingIdRefs(root: Element = document.body): string[] {
   const elements = [root, ...Array.from(root.querySelectorAll(ID_REFERENCE_SELECTOR))];
-  const found: string[] = [];
-  for (const el of elements) {
+  return listDanglingIdRefs(elements, ID_REFERENCE_ATTRIBUTES, (el) => {
     const scope = el.getRootNode();
-    if (!(scope instanceof Document || scope instanceof ShadowRoot)) continue; // detached
-    for (const attr of ID_REFERENCE_ATTRIBUTES) {
-      const value = el.getAttribute(attr);
-      if (value === null) continue;
-      const missing = value
-        .split(/\s+/)
-        .filter((id) => id !== '' && scope.getElementById(id) === null);
-      if (missing.length === 0) continue;
-      const ids = missing.map((id) => `"${id}"`).join(', ');
-      found.push(`${describeElement(el)}: ${attr}="${value}" (no element with id ${ids})`);
-    }
-  }
-  return found;
+    if (!(scope instanceof Document || scope instanceof ShadowRoot)) return null; // detached
+    return (id) => scope.getElementById(id) !== null;
+  });
+}
+
+/**
+ * The dangling ARIA id references of an HTML string, typically `renderToString` output: every id
+ * in one of `attributes` that no element **in that HTML** carries. The HTML is parsed into an
+ * inert `<template>`, so nothing reaches `document` (no script runs, `document.body` stays as it
+ * is) and an element with that id elsewhere in the document does not count. Empty values are
+ * ignored.
+ *
+ * Unlike {@link findDanglingIdRefs}, the default `attributes` are every ARIA id reference,
+ * `aria-controls` and `aria-owns` included: a `Portal` renders nothing on the server, so the
+ * server HTML of a component rendered open has no portaled surface, and a trigger that reports
+ * one through `aria-controls` points at nothing. A closed inline listbox is in the HTML
+ * (`hidden`), so references to it resolve.
+ *
+ * @param html       The HTML to check.
+ * @param attributes The attributes to check. Defaults to every ARIA id-reference attribute:
+ *   `aria-activedescendant`, `aria-controls`, `aria-describedby`, `aria-details`,
+ *   `aria-errormessage`, `aria-flowto`, `aria-labelledby` and `aria-owns`.
+ * @returns One line per attribute, as {@link findDanglingIdRefs} reports them, e.g.
+ *   `button "Actions": aria-controls="menu" (no element with id "menu")`.
+ *
+ * @example
+ * const html = renderToString(<Popover defaultOpen>…</Popover>);
+ * expect(findDanglingIdRefsInHtml(html)).toEqual([]);
+ */
+export function findDanglingIdRefsInHtml(
+  html: string,
+  attributes: readonly string[] = HTML_ID_REFERENCE_ATTRIBUTES,
+): string[] {
+  if (attributes.length === 0) return [];
+  const template = document.createElement('template');
+  template.innerHTML = html;
+  const parsed = template.content;
+  const ids = new Set(Array.from(parsed.querySelectorAll('[id]'), (el) => el.id));
+  const selector = attributes.map((attr) => `[${attr}]`).join(',');
+  return listDanglingIdRefs(
+    parsed.querySelectorAll(selector),
+    attributes,
+    () => (id) => ids.has(id),
+  );
 }
 
 /**

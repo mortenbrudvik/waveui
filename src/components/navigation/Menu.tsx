@@ -12,6 +12,7 @@ import { disabledStyles, focusRing, focusRingInset } from '../../lib/styles';
 import { useControllable } from '../../hooks/useControllable';
 import { useDismiss } from '../../hooks/useDismiss';
 import { useId } from '../../hooks/useId';
+import { useIsClient } from '../../hooks/useIsClient';
 import { useMergedRefs } from '../../hooks/useMergedRefs';
 import { usePopupPosition } from '../../hooks/usePopupPosition';
 import { useRestoreFocus } from '../../hooks/useRestoreFocus';
@@ -38,13 +39,16 @@ export interface MenuProps extends React.HTMLAttributes<HTMLDivElement> {
    * `false` (like passing `defaultOpen` or `onOpenChange`), makes Menu a popup menu that renders no
    * element of its own: use it only with `Menu.Trigger`/`Menu.Popover`. Items outside
    * `Menu.Popover` then have no `role="menu"` parent (development warning). Leave all three out
-   * for a static menu.
+   * for a static menu. The popup renders only in the browser: an open menu is closed in the
+   * server HTML and opens once it has hydrated.
    */
   open?: boolean;
   /**
    * Initial open state of an uncontrolled popup menu; a popup menu starts closed without it.
    * Passing it, even `false`, makes Menu a popup menu (see `open`), so for a Menu without
-   * `Menu.Trigger`/`Menu.Popover` children, leaving it out is not the same as `false`.
+   * `Menu.Trigger`/`Menu.Popover` children, leaving it out is not the same as `false`. The popup
+   * renders only in the browser: a menu open by default is closed in the server HTML and opens
+   * once it has hydrated.
    */
   defaultOpen?: boolean;
   /**
@@ -713,7 +717,12 @@ const MenuRoot = ({
   ref,
   ...rest
 }: MenuProps) => {
-  const [open, setOpen] = useControllable(openProp, defaultOpen ?? false, onOpenChange);
+  const [openState, setOpen] = useControllable(openProp, defaultOpen ?? false, onOpenChange);
+  // The popup menu lives in a portal, which renders only in the browser: until then (the server
+  // HTML, hydration) the menu reports itself closed, so the trigger's aria-expanded and
+  // aria-controls never describe a menu that is not there.
+  const isClient = useIsClient();
+  const open = openState && isClient;
 
   const triggerId = useId('wave-menu-trigger');
   const menuId = useId('wave-menu');
