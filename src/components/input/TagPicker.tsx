@@ -27,6 +27,42 @@ export interface TagPickerOption {
   label: string;
 }
 
+/**
+ * The TagPicker's built-in names, descriptions and announcements, for localization. Each member is
+ * optional and falls back to its English default.
+ */
+export interface TagPickerLabels {
+  /** Name of a tag's remove button.
+   * @default (label) => `Remove ${label}`
+   */
+  remove?: (label: string) => string;
+  /** Name of the list of selected tags.
+   * @default 'Selected'
+   */
+  selected?: string;
+  /** Description of the input that sums up the selected tags (their labels, in order).
+   * @default (labels) => `Selected: ${labels.join(', ')}`
+   */
+  summary?: (labels: string[]) => string;
+  /** Announcement when a tag is added; `count` is the number of tags after the change.
+   * @default (label, count) => `${label} added, ${count} selected`
+   */
+  added?: (label: string, count: number) => string;
+  /** Announcement when a tag is removed; `count` is the number of tags after the change.
+   * @default (label, count) => `${label} removed, ${count} selected`
+   */
+  removed?: (label: string, count: number) => string;
+  /** Status text (announced, and shown in the popup) when the typed text matches no option.
+   * @default 'No matches'
+   */
+  noMatches?: string;
+}
+
+const defaultRemoveLabel = (label: string) => `Remove ${label}`;
+const defaultSummaryLabel = (labels: string[]) => `Selected: ${labels.join(', ')}`;
+const defaultAddedLabel = (label: string, count: number) => `${label} added, ${count} selected`;
+const defaultRemovedLabel = (label: string, count: number) => `${label} removed, ${count} selected`;
+
 /** Properties for the TagPicker component. */
 export interface TagPickerProps extends Omit<
   React.HTMLAttributes<HTMLDivElement>,
@@ -55,7 +91,8 @@ export interface TagPickerProps extends Omit<
   /** Controlled open state of the option list. */
   open?: boolean;
   /**
-   * Initial open state for uncontrolled usage.
+   * Initial open state for uncontrolled usage. A picker that starts disabled or read-only starts
+   * closed.
    * @default false
    */
   defaultOpen?: boolean;
@@ -96,6 +133,12 @@ export interface TagPickerProps extends Omit<
    * (`onOpenChange(false)`); a focused remove button hands focus to the input.
    */
   readOnly?: boolean;
+  /**
+   * Names of the remove buttons and the tag list, the summary that describes the input, the
+   * announcements and the "No matches" text, for localization. Unset members keep their English
+   * defaults.
+   */
+  labels?: TagPickerLabels;
   /** Called when the `<input role="combobox">` receives focus (the root keeps other handlers). */
   onFocus?: React.FocusEventHandler<HTMLInputElement>;
   /** Called when the `<input role="combobox">` loses focus. */
@@ -121,6 +164,7 @@ function sameTags(a: readonly string[], b: readonly string[]): boolean {
 }
 
 interface TagRemoveButtonProps {
+  /** The accessible name of the button. */
   label: string;
   disabled: boolean;
   onClick: () => void;
@@ -148,9 +192,10 @@ function TagRemoveButton({
       type="button"
       data-wave-tagpicker-remove=""
       disabled={disabled}
-      aria-label={`Remove ${label}`}
+      aria-label={label}
       className={cn(
-        'ms-0.5 inline-flex rounded-sm text-muted-foreground not-disabled:not-aria-disabled:hover:text-foreground disabled:cursor-not-allowed',
+        // Padding and background set here (C-NATIVE), not left to an app-wide rule.
+        'ms-0.5 inline-flex rounded-sm bg-transparent p-0 text-muted-foreground not-disabled:not-aria-disabled:hover:text-foreground disabled:cursor-not-allowed',
         focusRing,
       )}
       onClick={onClick}
@@ -164,20 +209,21 @@ function TagRemoveButton({
 /**
  * A multi-select combobox that shows the selected values as removable tags. Typing filters the
  * options and makes the first match active; ArrowDown/ArrowUp move the highlight
- * (`aria-activedescendant`), Enter adds the highlighted option and keeps the list open (with no
- * typed text and nothing highlighted, Enter is left to the surrounding form), Escape closes the
- * list (and then clears the typed text). Backspace in the empty input moves focus to the last tag;
- * Backspace or Delete there removes it. Additions and removals are announced ("Cherry removed, 2
- * selected"), and so is "No matches" for text that matches no option.
+ * (`aria-activedescendant`), Enter adds the highlighted option and keeps the list open (with
+ * nothing highlighted — no typed text, or text that matches no option — Enter is left to the
+ * surrounding form), Escape closes the list (and then clears the typed text). Backspace in the
+ * empty input moves focus to the last tag; Backspace or Delete there removes it. Additions and
+ * removals are announced ("Cherry removed, 2 selected"), and so is "No matches" for text that
+ * matches no option.
  *
  * The tags form a list named "Selected"; the input is described by a summary of the selected
- * labels ("Selected: Apple, Banana"). The `<input>` receives `id`, `aria-label`,
- * `aria-labelledby`, `aria-describedby`, `aria-invalid`, `aria-required`, `aria-errormessage`,
- * `aria-details`, `tabIndex`, `autoFocus`, `onFocus`/`onBlur`/`onKeyDown`/`onKeyUp` and the text
- * input attributes `autoComplete`, `autoCapitalize`, `autoCorrect`, `maxLength`, `inputMode`,
- * `spellCheck` and `enterKeyHint`. `ref`, `className`, `style`, other `aria-*` attributes and the
- * remaining props stay on the root `<div>`. Inside a `Field` the input is labelled and described
- * by it. The tag area shows the error look whenever the input ends up `aria-invalid` (its own
+ * labels ("Selected: Apple, Banana"). These built-in texts are English; `labels` localizes them.
+ * The `<input>` receives `id`, `aria-label`, `aria-labelledby`, `aria-describedby`,
+ * `aria-invalid`, `aria-required`, `aria-errormessage`, `aria-details`, `tabIndex`, `autoFocus`,
+ * `onFocus`/`onBlur`/`onKeyDown`/`onKeyUp` and the text input attributes `autoComplete`,
+ * `autoCapitalize`, `autoCorrect`, `maxLength`, `inputMode`, `spellCheck` and `enterKeyHint`.
+ * `ref`, `className`, `style`, other `aria-*` attributes and the remaining props stay on the root
+ * `<div>`. Inside a `Field` the input is labelled and described by it. The tag area shows the error look whenever the input ends up `aria-invalid` (its own
  * `aria-invalid` or a `Field` error). With `name`/`required` the values take part in form
  * submission, validation and reset. Selected values without a matching option are shown with
  * their raw value.
@@ -202,6 +248,7 @@ export const TagPicker = (props: TagPickerProps) => {
     autoCorrect,
     maxLength,
     readOnly,
+    labels,
     inputMode,
     spellCheck,
     enterKeyHint,
@@ -255,8 +302,14 @@ export const TagPicker = (props: TagPickerProps) => {
       onChange?.(list);
     },
   );
-  const [openState, setOpen] = useControllable(openProp, defaultOpen ?? false, onOpenChange);
   const interactive = !disabled && !readOnly;
+  // A picker that starts disabled or read-only never shows its list, so it starts closed (no close
+  // to report later).
+  const [openState, setOpen] = useControllable(
+    openProp,
+    (defaultOpen ?? false) && interactive,
+    onOpenChange,
+  );
   const open = openState && interactive;
   const [query, setQuery] = React.useState('');
   // Locking the control (readOnly/disabled) while typing drops the typed text (adjust-during-render
@@ -321,14 +374,14 @@ export const TagPicker = (props: TagPickerProps) => {
     const next = [...selected, value];
     setSelected(next);
     setQuery('');
-    announce(`${labelOf(value)} added, ${next.length} selected`);
+    announce((labels?.added ?? defaultAddedLabel)(labelOf(value), next.length));
   };
 
   const removeTag = (value: string) => {
     if (!interactive) return;
     const next = selected.filter((v) => v !== value);
     setSelected(next);
-    announce(`${labelOf(value)} removed, ${next.length} selected`);
+    announce((labels?.removed ?? defaultRemovedLabel)(labelOf(value), next.length));
     focusInput();
   };
 
@@ -350,6 +403,7 @@ export const TagPicker = (props: TagPickerProps) => {
 
   // aria-expanded only while a listbox with options is shown (input-pickers#21).
   const expanded = open && listbox.items.length > 0;
+  const noMatchesText = labels?.noMatches ?? 'No matches';
   // The popup shows the options, or "No matches" for a query.
   const surfaceOpen = open && (expanded || query !== '');
   const noMatches = surfaceOpen && !expanded;
@@ -456,7 +510,11 @@ export const TagPicker = (props: TagPickerProps) => {
         }}
       >
         {selected.length > 0 && (
-          <div role="list" aria-label="Selected" className="flex flex-wrap items-center gap-1">
+          <div
+            role="list"
+            aria-label={labels?.selected ?? 'Selected'}
+            className="flex flex-wrap items-center gap-1"
+          >
             {selected.map((value) => {
               const label = labelOf(value);
               return (
@@ -468,7 +526,7 @@ export const TagPicker = (props: TagPickerProps) => {
                   {label}
                   {!readOnly && (
                     <TagRemoveButton
-                      label={label}
+                      label={(labels?.remove ?? defaultRemoveLabel)(label)}
                       disabled={disabled}
                       onClick={() => removeTag(value)}
                       onKeyDown={(event) => handleTagKeyDown(event, value)}
@@ -483,7 +541,7 @@ export const TagPicker = (props: TagPickerProps) => {
         {selected.length > 0 && (
           // Describes the input. The list itself would read every "Remove …" button name too.
           <span id={summaryId} hidden>
-            {`Selected: ${selected.map(labelOf).join(', ')}`}
+            {(labels?.summary ?? defaultSummaryLabel)(selected.map(labelOf))}
           </span>
         )}
         <input
@@ -526,7 +584,7 @@ export const TagPicker = (props: TagPickerProps) => {
       {/* Mounted before its text: a live region added together with its text is not announced by
           every screen reader. The row in the popup is the visible copy. */}
       <span role="status" className="sr-only">
-        {noMatches && 'No matches'}
+        {noMatches && noMatchesText}
       </span>
       <ListboxSurface
         listbox={listbox}
@@ -539,7 +597,7 @@ export const TagPicker = (props: TagPickerProps) => {
         emptyContent={
           query !== '' ? (
             <div aria-hidden="true" className="px-3 py-1.5 text-body-1 text-muted-foreground">
-              No matches
+              {noMatchesText}
             </div>
           ) : undefined
         }

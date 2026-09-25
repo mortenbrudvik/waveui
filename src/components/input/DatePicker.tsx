@@ -20,6 +20,7 @@ import { useFieldContext, useFieldControl } from '../../hooks/useFieldControl';
 import { useFocusTrap } from '../../hooks/useFocusTrap';
 import { useFormReset } from '../../hooks/useFormReset';
 import { useId } from '../../hooks/useId';
+import { useIsClient } from '../../hooks/useIsClient';
 import { useMergedRefs } from '../../hooks/useMergedRefs';
 import { usePopupPosition } from '../../hooks/usePopupPosition';
 import { useRestoreFocus } from '../../hooks/useRestoreFocus';
@@ -50,6 +51,57 @@ import type { RoutedHandlers } from './routedHandlers';
 
 /** Why typed text was not accepted (see {@link DatePickerProps.onInvalidInput}). */
 export type DatePickerInvalidReason = 'unparseable' | 'out-of-range' | 'disabled';
+
+/**
+ * The DatePicker's built-in button names and error texts, for localization. Each member is
+ * optional and falls back to its English default. Month and weekday names and the day labels
+ * follow `locale`.
+ */
+export interface DatePickerLabels {
+  /** Name of the clear button.
+   * @default 'Clear date'
+   */
+  clear?: string;
+  /** Name of the button that opens the calendar.
+   * @default 'Open calendar'
+   */
+  openCalendar?: string;
+  /** Name of the calendar's previous-month button.
+   * @default 'Previous month'
+   */
+  previousMonth?: string;
+  /** Name of the calendar's next-month button.
+   * @default 'Next month'
+   */
+  nextMonth?: string;
+  /**
+   * Error text for typed text that is not a date. `pattern` is the default format of `locale`
+   * written with English field letters (`'MM/DD/YYYY'`, `'DD.MM.YYYY'`), or `undefined` with a
+   * custom `parseDate` (its format is unknown to the picker).
+   * @default (pattern) => pattern ? `Enter a date in the format ${pattern}.` : 'Enter a valid date.'
+   */
+  invalidDate?: (pattern: string | undefined) => string;
+  /**
+   * Error text for a typed date outside `minDate`/`maxDate`. The bounds are passed as the input
+   * shows dates (`formatDate`); a bound that is not set is `undefined`.
+   * @default (min, max) => `Enter a date between ${min} and ${max}.` (only `min`: `Enter a date on
+   * or after ${min}.`; only `max`: `Enter a date on or before ${max}.`)
+   */
+  outOfRange?: (min: string | undefined, max: string | undefined) => string;
+  /** Error text for a typed date that `disabledDates` excludes.
+   * @default 'This date is not available.'
+   */
+  unavailableDate?: string;
+}
+
+const defaultInvalidDateLabel = (pattern: string | undefined) =>
+  pattern ? `Enter a date in the format ${pattern}.` : 'Enter a valid date.';
+
+const defaultOutOfRangeLabel = (min: string | undefined, max: string | undefined) => {
+  if (min !== undefined && max !== undefined) return `Enter a date between ${min} and ${max}.`;
+  if (min !== undefined) return `Enter a date on or after ${min}.`;
+  return `Enter a date on or before ${max}.`;
+};
 
 /** Properties for the DatePicker component. */
 export interface DatePickerProps extends Omit<
@@ -126,7 +178,8 @@ export interface DatePickerProps extends Omit<
   /** Controlled open state of the calendar. */
   open?: boolean;
   /**
-   * Initial open state for uncontrolled usage.
+   * Initial open state for uncontrolled usage. A picker that starts disabled or read-only starts
+   * closed.
    * @default false
    */
   defaultOpen?: boolean;
@@ -140,6 +193,11 @@ export interface DatePickerProps extends Omit<
    * shows an error). Enter reports it again when pressed again.
    */
   onInvalidInput?: (text: string, reason: DatePickerInvalidReason) => void;
+  /**
+   * Names of the clear, calendar and month buttons and the error texts of rejected typed text, for
+   * localization. Unset members keep their English defaults.
+   */
+  labels?: DatePickerLabels;
   /** Form field name: the date is submitted as ISO `yyyy-mm-dd` (hidden input). */
   name?: string;
   /** Id of the `<form>` the value belongs to, when the picker is outside it. */
@@ -165,14 +223,16 @@ export interface DatePickerProps extends Omit<
   ref?: React.Ref<HTMLDivElement>;
 }
 
+// Every button sets its own padding and background (C-NATIVE): an app-wide `button` rule would
+// otherwise pad and fill them.
 const ICON_BUTTON_CLASSES =
-  'absolute flex h-6 w-6 items-center justify-center rounded text-muted-foreground not-disabled:not-aria-disabled:hover:bg-subtle-hover not-disabled:not-aria-disabled:hover:text-foreground';
+  'absolute flex h-6 w-6 items-center justify-center rounded bg-transparent p-0 text-muted-foreground not-disabled:not-aria-disabled:hover:bg-subtle-hover not-disabled:not-aria-disabled:hover:text-foreground';
 
 const NAV_BUTTON_CLASSES =
-  'flex h-8 w-8 items-center justify-center rounded text-foreground not-disabled:not-aria-disabled:hover:bg-subtle-hover';
+  'flex h-8 w-8 items-center justify-center rounded bg-transparent p-0 text-foreground not-disabled:not-aria-disabled:hover:bg-subtle-hover';
 
 const DAY_CLASSES =
-  'flex h-8 w-8 items-center justify-center rounded text-caption-1 text-foreground not-disabled:not-aria-disabled:hover:bg-subtle-hover data-[outside]:text-muted-foreground data-[today]:border data-[today]:border-primary data-[today]:font-semibold data-[selected]:bg-primary data-[selected]:font-semibold data-[selected]:text-primary-foreground not-disabled:not-aria-disabled:data-[selected]:hover:bg-primary-hover aria-disabled:cursor-not-allowed aria-disabled:line-through aria-disabled:opacity-50';
+  'flex h-8 w-8 items-center justify-center rounded bg-transparent p-0 text-caption-1 text-foreground not-disabled:not-aria-disabled:hover:bg-subtle-hover data-[outside]:text-muted-foreground data-[today]:border data-[today]:border-primary data-[today]:font-semibold data-[selected]:bg-primary data-[selected]:font-semibold data-[selected]:text-primary-foreground not-disabled:not-aria-disabled:data-[selected]:hover:bg-primary-hover aria-disabled:cursor-not-allowed aria-disabled:line-through aria-disabled:opacity-50';
 
 /** The 42 grid days as 6 weeks. */
 function toWeeks(days: Date[]): Date[][] {
@@ -206,12 +266,18 @@ function toWeeks(days: Date[]): Date[][] {
  * - `clearable` shows a clear button while a date is selected (not while read-only).
  * - Every emitted date is local midnight. The calendar opens on the month of the selected date or
  *   today, clamped into `minDate`/`maxDate`.
- * - Labelling props (`id`, `aria-*`), focus/key handlers and native input attributes go to the
- *   input (`controlRef`); `ref`, `className`, `style` and other props stay on the root. Inside a
- *   `Field`, the input is labelled and described by it.
+ * - The input (`controlRef`) receives `id`, `aria-label`, `aria-labelledby`, `aria-describedby`,
+ *   `aria-invalid`, `aria-required`, `aria-errormessage`, `aria-details`, `tabIndex`,
+ *   `autoFocus`, `onFocus`/`onBlur`/`onKeyDown`/`onKeyUp` and the text input attributes
+ *   `autoComplete`, `autoCapitalize`, `autoCorrect`, `inputMode`, `spellCheck` and
+ *   `enterKeyHint`. `ref`, `className`, `style`, other `aria-*` attributes and the remaining props
+ *   stay on the root `<div>`. Inside a `Field`, the input is labelled and described by it.
  * - `name`/`required` add a hidden input for native forms (ISO `yyyy-mm-dd`); the value resets
  *   with its form.
- * - Pass `locale` explicitly when rendering on the server (see `locale`).
+ * - The built-in button names and error texts are English; `labels` localizes them.
+ * - Pass `locale` explicitly when rendering on the server (see `locale`). The calendar renders only
+ *   in the browser: an open calendar (`defaultOpen`, `open`) is closed in the server HTML and opens
+ *   once the picker has hydrated.
  */
 export const DatePicker = (props: DatePickerProps) => {
   const {
@@ -234,10 +300,13 @@ export const DatePicker = (props: DatePickerProps) => {
     defaultOpen,
     onOpenChange,
     onInvalidInput,
+    labels,
     name,
     form,
     required,
     autoComplete = 'off',
+    autoCapitalize,
+    autoCorrect,
     enterKeyHint,
     inputMode,
     spellCheck,
@@ -294,13 +363,18 @@ export const DatePicker = (props: DatePickerProps) => {
       onChange?.(next);
     },
   );
+  const interactive = !disabled && !readOnly;
   const [openState, setOpen] = useControllable<boolean>(
     openProp,
-    defaultOpen ?? false,
+    // A picker that starts disabled or read-only never shows its calendar, so it starts closed
+    // (no close to report later).
+    (defaultOpen ?? false) && interactive,
     onOpenChange,
   );
-  const interactive = !disabled && !readOnly;
-  const isOpen = openState && interactive;
+  // The calendar lives in a portal, which renders only in the browser: until then (the server
+  // HTML, hydration) the picker reports it closed, so no reference names a missing element.
+  const isClient = useIsClient();
+  const isOpen = openState && interactive && isClient;
   const openControlled = openProp !== undefined;
 
   // A calendar hidden because the picker became disabled or read-only is closed for good
@@ -664,19 +738,16 @@ export const DatePicker = (props: DatePickerProps) => {
 
   let errorMessage = '';
   if (invalid === 'unparseable') {
-    errorMessage = hasCustomParse
-      ? 'Enter a valid date.'
-      : `Enter a date in the format ${getLocaleDateFormat(locale).pattern}.`;
-  } else if (invalid === 'out-of-range') {
-    if (minDate && maxDate) {
-      errorMessage = `Enter a date between ${format(startOfDay(minDate))} and ${format(startOfDay(maxDate))}.`;
-    } else if (minDate) {
-      errorMessage = `Enter a date on or after ${format(startOfDay(minDate))}.`;
-    } else if (maxDate) {
-      errorMessage = `Enter a date on or before ${format(startOfDay(maxDate))}.`;
-    }
+    errorMessage = (labels?.invalidDate ?? defaultInvalidDateLabel)(
+      hasCustomParse ? undefined : getLocaleDateFormat(locale).pattern,
+    );
+  } else if (invalid === 'out-of-range' && (minDate || maxDate)) {
+    errorMessage = (labels?.outOfRange ?? defaultOutOfRangeLabel)(
+      minDate ? format(startOfDay(minDate)) : undefined,
+      maxDate ? format(startOfDay(maxDate)) : undefined,
+    );
   } else if (invalid === 'disabled') {
-    errorMessage = 'This date is not available.';
+    errorMessage = labels?.unavailableDate ?? 'This date is not available.';
   }
 
   return (
@@ -698,6 +769,8 @@ export const DatePicker = (props: DatePickerProps) => {
           disabled={disabled}
           readOnly={readOnly}
           autoComplete={autoComplete}
+          autoCapitalize={autoCapitalize}
+          autoCorrect={autoCorrect}
           enterKeyHint={enterKeyHint}
           inputMode={inputMode}
           spellCheck={spellCheck}
@@ -715,7 +788,7 @@ export const DatePicker = (props: DatePickerProps) => {
         {showClear && (
           <button
             type="button"
-            aria-label="Clear date"
+            aria-label={labels?.clear ?? 'Clear date'}
             disabled={disabled}
             onMouseDown={handleClearMouseDown}
             onClick={handleClear}
@@ -727,7 +800,7 @@ export const DatePicker = (props: DatePickerProps) => {
         <button
           ref={toggleRef}
           type="button"
-          aria-label="Open calendar"
+          aria-label={labels?.openCalendar ?? 'Open calendar'}
           aria-haspopup="dialog"
           aria-expanded={isOpen}
           aria-controls={isOpen ? dialogId : undefined}
@@ -768,7 +841,7 @@ export const DatePicker = (props: DatePickerProps) => {
             <div className="mb-2 flex items-center justify-between gap-2">
               <button
                 type="button"
-                aria-label="Previous month"
+                aria-label={labels?.previousMonth ?? 'Previous month'}
                 aria-controls={gridId}
                 {...focusableDisabledProps(previousDisabled)}
                 onClick={preventIfDisabled(previousDisabled, () => navigateMonth(-1))}
@@ -781,7 +854,7 @@ export const DatePicker = (props: DatePickerProps) => {
               </h2>
               <button
                 type="button"
-                aria-label="Next month"
+                aria-label={labels?.nextMonth ?? 'Next month'}
                 aria-controls={gridId}
                 {...focusableDisabledProps(nextDisabled)}
                 onClick={preventIfDisabled(nextDisabled, () => navigateMonth(1))}

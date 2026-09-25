@@ -73,6 +73,16 @@ function ParentLayer({
   );
 }
 
+const CONTROLLED_TO_UNCONTROLLED =
+  '[WaveUI] A component is changing from controlled to uncontrolled. Components should not ' +
+  'switch between controlled and uncontrolled: pass `undefined` only when the component is ' +
+  'uncontrolled, and the empty value (for example `[]`, `null` or `""`) to clear a controlled ' +
+  'value.';
+
+const DEPRECATED_ON_OPTION_SELECT =
+  '[WaveUI] Dropdown: `onOptionSelect` is deprecated and will be removed in 1.0. Use ' +
+  '`onValueChange` instead.';
+
 afterEach(() => {
   vi.restoreAllMocks();
 });
@@ -243,7 +253,7 @@ describe('Dropdown', () => {
       const container = document.createElement('div');
       container.innerHTML = renderToString(element);
       document.body.appendChild(container);
-      const error = vi.spyOn(console, 'error').mockImplementation(() => {});
+      const error = vi.spyOn(console, 'error');
       let root: ReturnType<typeof hydrateRoot> | undefined;
       try {
         await act(async () => {
@@ -569,10 +579,7 @@ describe('Dropdown', () => {
       expect(onValueChange).toHaveBeenCalledTimes(1);
       expect(onValueChange).toHaveBeenCalledWith('b');
       expect(onOptionSelect).toHaveBeenCalledTimes(2);
-      expect(warn).toHaveBeenCalledTimes(1);
-      expect(String(warn.mock.calls[0][0])).toContain(
-        '[WaveUI] Dropdown: `onOptionSelect` is deprecated',
-      );
+      expect(warn.mock.calls).toEqual([[DEPRECATED_ON_OPTION_SELECT]]);
     });
 
     it('warns once that onOptionSelect is deprecated', () => {
@@ -583,9 +590,7 @@ describe('Dropdown', () => {
           {FRUITS}
         </Dropdown>,
       );
-      const calls = warn.mock.calls.filter(([m]) => String(m).includes('onOptionSelect'));
-      expect(calls).toHaveLength(1);
-      expect(String(calls[0][0])).toContain('[WaveUI] Dropdown: `onOptionSelect` is deprecated');
+      expect(warn.mock.calls).toEqual([[DEPRECATED_ON_OPTION_SELECT]]);
     });
 
     it('fires the value callback exactly once per selection in StrictMode', async () => {
@@ -636,12 +641,7 @@ describe('Dropdown', () => {
         </Dropdown>,
       );
       expect(combobox()).toHaveTextContent('Pick');
-      expect(warn).toHaveBeenCalledTimes(1);
-      expect(warn).toHaveBeenCalledWith(
-        expect.stringContaining(
-          '[WaveUI] A component is changing from controlled to uncontrolled.',
-        ),
-      );
+      expect(warn.mock.calls).toEqual([[CONTROLLED_TO_UNCONTROLLED]]);
     });
   });
 
@@ -681,7 +681,7 @@ describe('Dropdown', () => {
         </>,
       );
       await user.click(combobox());
-      act(() => screen.getByRole('button', { name: 'Elsewhere' }).focus());
+      await act(async () => screen.getByRole('button', { name: 'Elsewhere' }).focus());
       expect(combobox()).toHaveAttribute('aria-expanded', 'false');
     });
 
@@ -970,11 +970,13 @@ describe('Dropdown', () => {
       const control = screen.getByRole('combobox');
       expect(control).toHaveAttribute('aria-invalid', 'true');
       expect(control).toHaveClass('border', 'border-destructive', 'focus:border-b-destructive');
-      expect(control).not.toHaveClass(
+      for (const replaced of [
         'border-input',
         'border-b-stroke-accessible',
         'focus:border-b-primary',
-      );
+      ]) {
+        expect(control).not.toHaveClass(replaced);
+      }
     });
 
     it('keeps the valid look when its own aria-invalid={false} overrides an invalid Field', () => {
@@ -1095,6 +1097,13 @@ describe('Dropdown', () => {
     expect([...renders.keys()].sort()).toEqual(['a', 'b']);
   });
 
+  it('sets the vertical padding of its button, so an app-wide button rule cannot pad it (C-NATIVE)', () => {
+    renderDropdown();
+    expect(combobox()).toHaveClass('px-3');
+    expect(combobox()).toHaveClass('py-0');
+    expect(combobox()).toHaveClass('bg-background');
+  });
+
   it('is disabled', () => {
     renderDropdown({ disabled: true });
     expect(combobox()).toBeDisabled();
@@ -1122,6 +1131,19 @@ describe('Dropdown', () => {
     expect(combobox()).toHaveAttribute('aria-expanded', 'false');
     expect(screen.queryByRole('listbox')).toBeNull();
     expect(onOpenChange).toHaveBeenCalledTimes(openChangeCalls);
+  });
+
+  it('reports no close for a defaultOpen list that starts disabled (it was never shown)', () => {
+    const onOpenChange = vi.fn();
+    const { rerender } = renderDropdown({ defaultOpen: true, disabled: true, onOpenChange });
+    expect(combobox()).toHaveAttribute('aria-expanded', 'false');
+    rerender(
+      <Dropdown aria-label="Fruit" defaultOpen onOpenChange={onOpenChange}>
+        {FRUITS}
+      </Dropdown>,
+    );
+    expect(combobox()).toHaveAttribute('aria-expanded', 'false');
+    expect(onOpenChange).not.toHaveBeenCalled();
   });
 
   it('shows the grouped options inside the portal surface', async () => {

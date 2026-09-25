@@ -2,7 +2,12 @@ import * as React from 'react';
 import { afterEach, describe, it, expect, expectTypeOf, vi } from 'vitest';
 import { act, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { TagPicker, type TagPickerOption, type TagPickerProps } from '../TagPicker';
+import {
+  TagPicker,
+  type TagPickerLabels,
+  type TagPickerOption,
+  type TagPickerProps,
+} from '../TagPicker';
 import { renderWithProviders, testNoImplicitSubmit, testSystemProps } from '../../../test-utils';
 import { FIELD_TEST_IDS, FIELD_TEST_TEXT, renderWithFieldContext } from '../../../test-utils-field';
 import { DismissLayerProvider, useDismiss } from '../../../hooks/useDismiss';
@@ -205,6 +210,17 @@ describe('TagPicker', () => {
       expect(onSubmit).toHaveBeenCalledTimes(1);
       expect(onValueChange).not.toHaveBeenCalled();
     });
+
+    it('Enter with typed text that matches no option (nothing highlighted) submits the surrounding form', async () => {
+      const user = userEvent.setup();
+      const onValueChange = vi.fn();
+      const onSubmit = renderInForm(onValueChange);
+      await user.type(combobox(), 'zzz');
+      expect(activeOption()).toBeNull();
+      await user.keyboard('{Enter}');
+      expect(onSubmit).toHaveBeenCalledTimes(1);
+      expect(onValueChange).not.toHaveBeenCalled();
+    });
   });
 
   it('does not list already-selected options', async () => {
@@ -309,6 +325,14 @@ describe('TagPicker', () => {
       expect(onValueChange).toHaveBeenCalledWith(['apple', 'cherry']);
     });
 
+    it('gives the remove buttons their own padding and background (C-NATIVE)', () => {
+      renderPicker({ defaultValue: ['apple', 'banana'] });
+      for (const remove of screen.getAllByRole('button', { name: /^Remove/ })) {
+        expect(remove).toHaveClass('p-0');
+        expect(remove).toHaveClass('bg-transparent');
+      }
+    });
+
     it('mirrors the tag arrow keys in RTL', async () => {
       const user = userEvent.setup();
       renderWithProviders(
@@ -345,6 +369,32 @@ describe('TagPicker', () => {
       await waitFor(() => expect(__getAnnouncerText()).toBe('Cherry added, 2 selected'));
       await user.click(screen.getByRole('button', { name: 'Remove Apple' }));
       await waitFor(() => expect(__getAnnouncerText()).toBe('Apple removed, 1 selected'));
+    });
+
+    it('localises the remove names, the tag list, the summary, the announcements and "No matches" with labels', async () => {
+      const user = userEvent.setup();
+      const labels: TagPickerLabels = {
+        remove: (label) => `Fjern ${label}`,
+        selected: 'Valgt',
+        summary: (selectedLabels) => `Valgt: ${selectedLabels.join(' og ')}`,
+        added: (label, count) => `${label} lagt til, ${count} valgt`,
+        removed: (label, count) => `${label} fjernet, ${count} valgt`,
+        noMatches: 'Ingen treff',
+      };
+      const { container } = renderPicker({ defaultValue: ['apple'], labels });
+      expect(screen.getByRole('list', { name: 'Valgt' })).toBeInTheDocument();
+      expect(combobox()).toHaveAccessibleDescription('Valgt: Apple');
+      await user.click(combobox());
+      await user.click(screen.getByRole('option', { name: 'Cherry' }));
+      await waitFor(() => expect(__getAnnouncerText()).toBe('Cherry lagt til, 2 valgt'));
+      expect(combobox()).toHaveAccessibleDescription('Valgt: Apple og Cherry');
+      await user.click(screen.getByRole('button', { name: 'Fjern Apple' }));
+      await waitFor(() => expect(__getAnnouncerText()).toBe('Apple fjernet, 1 valgt'));
+      await user.type(combobox(), 'zzz');
+      expect(within(container).getByRole('status')).toHaveTextContent('Ingen treff');
+      const surface = document.querySelector<HTMLElement>('[data-wave-listbox-surface]')!;
+      expect(within(surface).getByText('Ingen treff')).toHaveAttribute('aria-hidden', 'true');
+      expect(screen.queryByText('No matches')).toBeNull();
     });
 
     it('Escape closes the list, then clears the typed text', async () => {
@@ -433,6 +483,28 @@ describe('TagPicker', () => {
       expect(tags()).toEqual(['Apple', 'Banana']);
       expect(onValueChange).not.toHaveBeenCalled();
     });
+
+    it.each([
+      ['readOnly', { readOnly: true }],
+      ['disabled', { disabled: true }],
+    ] as const)(
+      'reports no close for a defaultOpen list that starts %s (it was never shown)',
+      (_, lock) => {
+        const onOpenChange = vi.fn();
+        const { rerender } = renderPicker({ defaultOpen: true, onOpenChange, ...lock });
+        expect(combobox()).toHaveAttribute('aria-expanded', 'false');
+        rerender(
+          <TagPicker
+            aria-label="Fruits"
+            options={options}
+            defaultOpen
+            onOpenChange={onOpenChange}
+          />,
+        );
+        expect(combobox()).toHaveAttribute('aria-expanded', 'false');
+        expect(onOpenChange).not.toHaveBeenCalled();
+      },
+    );
 
     it('does not show a controlled open list and leaves Escape to the parent layer', async () => {
       const user = userEvent.setup();
@@ -571,9 +643,12 @@ describe('TagPicker', () => {
       const { rerender } = renderPicker({ value: ['apple', 'kiwi'] });
       rerender(<TagPicker aria-label="Fruits" options={options} value={['apple', 'kiwi']} />);
       expect(tags()).toEqual(['Apple', 'kiwi']);
-      const calls = warn.mock.calls.filter(([m]) => String(m).includes('kiwi'));
-      expect(calls).toHaveLength(1);
-      expect(String(calls[0][0])).toContain('[WaveUI] TagPicker');
+      expect(warn.mock.calls).toEqual([
+        [
+          '[WaveUI] TagPicker: the selected value(s) "kiwi" match no option; the raw value is ' +
+            'shown as the tag label.',
+        ],
+      ]);
     });
 
     it('Backspace targets the last rendered tag', async () => {
@@ -587,10 +662,12 @@ describe('TagPicker', () => {
       await user.keyboard('{Backspace}');
       expect(onValueChange).toHaveBeenCalledWith(['apple']);
       expect(tags()).toEqual(['Apple']);
-      expect(warn).toHaveBeenCalledTimes(1);
-      expect(warn).toHaveBeenCalledWith(
-        '[WaveUI] TagPicker: the selected value(s) "kiwi" match no option; the raw value is shown as the tag label.',
-      );
+      expect(warn.mock.calls).toEqual([
+        [
+          '[WaveUI] TagPicker: the selected value(s) "kiwi" match no option; the raw value is ' +
+            'shown as the tag label.',
+        ],
+      ]);
     });
   });
 
@@ -725,9 +802,12 @@ describe('TagPicker', () => {
       await user.click(screen.getByRole('option', { name: 'Apple' }));
       await user.click(screen.getByRole('option', { name: 'Date' }));
       expect(onChange.mock.calls).toEqual([[['apple']], [['apple', 'date']]]);
-      const calls = warn.mock.calls.filter(([m]) => String(m).includes('`onChange`'));
-      expect(calls).toHaveLength(1);
-      expect(String(calls[0][0])).toContain('[WaveUI] TagPicker: `onChange` is deprecated');
+      expect(warn.mock.calls).toEqual([
+        [
+          '[WaveUI] TagPicker: `onChange` is deprecated and will be removed in 1.0. Use ' +
+            '`onValueChange` instead.',
+        ],
+      ]);
     });
 
     it('fires the value callback exactly once per addition in StrictMode', async () => {
@@ -751,17 +831,14 @@ describe('TagPicker', () => {
       expect(tags()).toEqual(['Date']);
       rerender(<TagPicker aria-label="Fruits" options={options} value={undefined} />);
       expect(tags()).toEqual([]);
+      const modeSwitch = (from: string, to: string) =>
+        `[WaveUI] A component is changing from ${from} to ${to}. Components should not switch ` +
+        'between controlled and uncontrolled: pass `undefined` only when the component is ' +
+        'uncontrolled, and the empty value (for example `[]`, `null` or `""`) to clear a ' +
+        'controlled value.';
       expect(warn.mock.calls).toEqual([
-        [
-          expect.stringContaining(
-            '[WaveUI] A component is changing from uncontrolled to controlled.',
-          ),
-        ],
-        [
-          expect.stringContaining(
-            '[WaveUI] A component is changing from controlled to uncontrolled.',
-          ),
-        ],
+        [modeSwitch('uncontrolled', 'controlled')],
+        [modeSwitch('controlled', 'uncontrolled')],
       ]);
     });
 
@@ -999,7 +1076,8 @@ describe('TagPicker', () => {
         'border-b-stroke-accessible',
         'focus-within:border-b-primary',
       );
-      expect(control).not.toHaveClass('border-border', 'border-destructive');
+      expect(control).not.toHaveClass('border-border');
+      expect(control).not.toHaveClass('border-destructive');
     });
 
     it.each([
@@ -1020,11 +1098,13 @@ describe('TagPicker', () => {
         'border-destructive',
         'focus-within:border-b-destructive',
       );
-      expect(control).not.toHaveClass(
+      for (const replaced of [
         'border-input',
         'border-b-stroke-accessible',
         'focus-within:border-b-primary',
-      );
+      ]) {
+        expect(control).not.toHaveClass(replaced);
+      }
     });
 
     it('keeps the valid look when its own aria-invalid={false} overrides an invalid Field', () => {

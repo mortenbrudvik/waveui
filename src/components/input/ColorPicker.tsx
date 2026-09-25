@@ -9,6 +9,7 @@ import { useFormReset } from '../../hooks/useFormReset';
 import { useId } from '../../hooks/useId';
 import { useMergedRefs } from '../../hooks/useMergedRefs';
 import { HiddenInput } from '../internal/HiddenInput';
+import { isInvalidLook } from './Input';
 import { SwatchPicker } from './SwatchPicker';
 import type { SwatchItem } from './SwatchPicker';
 import {
@@ -24,9 +25,9 @@ import {
 /** A named preset color. */
 export interface ColorPickerPreset {
   /**
-   * Hex color (`#rrggbb`; `#rgb` is expanded). A preset has no opacity of its own: alpha digits
-   * (`#rgba`, `#rrggbbaa`) are ignored with a development warning, and picking the preset keeps
-   * the current opacity.
+   * Hex color (`#rrggbb`; `#rgb` is expanded). A preset has no opacity of its own: picking it keeps
+   * the current opacity, so its alpha digits (`#rgba`, `#rrggbbaa`) are ignored. An alpha below
+   * `f`/`ff` logs a development warning; an opaque one (`#rgbf`, `#rrggbbff`) changes nothing.
    */
   color: string;
   /** Accessible name of the preset swatch, e.g. `'Cranberry'`. */
@@ -91,9 +92,10 @@ export interface ColorPickerProps extends Omit<
   /**
    * Preset colors shown as quick-select swatches. Pass `{ color, label }` objects so screen reader
    * users hear a name; a plain hex string is announced by its hex code. Non-hex presets are
-   * skipped (development warning). Picking a preset keeps the current opacity: a preset's alpha
-   * digits are ignored (development warning), and a string preset that carries them is announced
-   * by the `#rrggbb` color it applies.
+   * skipped (development warning). Picking a preset keeps the current opacity, so a preset's alpha
+   * digits are ignored. With an alpha below `f`/`ff` (`#rgba`, `#rrggbbaa`) there is a development
+   * warning, and a string preset is announced by the `#rrggbb` color it applies; an opaque alpha
+   * (`#rgbf`, `#rrggbbff`) changes nothing, and the string stays the name as written.
    * @default Blue, Red, Green, Yellow, Purple, Teal, Pink and Black (Fluent brand colors)
    */
   presets?: ReadonlyArray<string | ColorPickerPreset>;
@@ -341,6 +343,8 @@ export const ColorPicker = ({
     required: _required,
     ...groupProps
   } = fieldProps;
+  // Any invalid state from outside (the prop or the Field, `grammar`/`spelling` included) is set on
+  // the hex field as is; only `true` shows the error look.
   const fieldInvalid =
     groupInvalid !== undefined && groupInvalid !== false && groupInvalid !== 'false';
   // A consumer aria-required is not supported on the group either: it requires the hidden input.
@@ -363,7 +367,8 @@ export const ColorPicker = ({
 
   const errorId = useId('wave-color-picker-error');
   // The hex field carries the picker's invalid state: its own flagged text, or the Field's/prop's.
-  const hexInvalid = draftInvalid || fieldInvalid;
+  const hexAriaInvalid = draftInvalid ? true : fieldInvalid ? groupInvalid : undefined;
+  const hexInvalidLook = isInvalidLook(false, hexAriaInvalid);
 
   const handleHexChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     // Surrounding whitespace (a pasted `'#abcdef '`) is dropped, so the text that is checked,
@@ -445,7 +450,7 @@ export const ColorPicker = ({
             onKeyDown={handleHexKeyDown}
             onBlur={finishHexDraft}
             aria-label={strings.hexInput}
-            aria-invalid={hexInvalid || undefined}
+            aria-invalid={hexAriaInvalid}
             aria-errormessage={errorMessageId}
             aria-describedby={joinIds(
               draftInvalid && errorId,
@@ -458,7 +463,7 @@ export const ColorPicker = ({
             className={cn(
               'w-24 rounded border border-input border-b-stroke-accessible bg-background px-2 py-1 text-body-1 text-foreground',
               inputFocus,
-              hexInvalid && inputInvalid,
+              hexInvalidLook && inputInvalid,
             )}
           />
         </label>

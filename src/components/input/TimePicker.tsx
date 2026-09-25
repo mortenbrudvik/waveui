@@ -16,6 +16,7 @@ import { useControllable } from '../../hooks/useControllable';
 import { useDismiss } from '../../hooks/useDismiss';
 import { useFieldContext, useFieldControl } from '../../hooks/useFieldControl';
 import { useFormReset } from '../../hooks/useFormReset';
+import { useIsClient } from '../../hooks/useIsClient';
 import { ListboxContext, useListbox, useListboxOption } from '../../hooks/useListbox';
 import type { ListboxItem } from '../../hooks/useListbox';
 import { useMergedRefs } from '../../hooks/useMergedRefs';
@@ -69,6 +70,30 @@ TimePickerOption.displayName = 'TimePickerOption';
 /*  TimePicker                                                         */
 /* ------------------------------------------------------------------ */
 
+/**
+ * The TimePicker's built-in texts, for localization. Each member is optional and falls back to its
+ * English default. The times themselves follow `format`.
+ */
+export interface TimePickerLabels {
+  /** Name of the clear button.
+   * @default 'Clear time'
+   */
+  clear?: string;
+  /** Name of the list of times when the picker has no `aria-label`, `aria-labelledby` or Field
+   * label to lend it.
+   * @default 'Times'
+   */
+  list?: string;
+  /** Status text (announced and shown in the open list) when `minTime`/`maxTime` leave no times.
+   * @default 'No times available'
+   */
+  noTimes?: string;
+  /** Status text (announced and shown in the open list) when the typed text matches no time.
+   * @default 'No matching times'
+   */
+  noMatches?: string;
+}
+
 /** Properties for the TimePicker component. */
 export interface TimePickerProps extends Omit<
   React.HTMLAttributes<HTMLDivElement>,
@@ -105,7 +130,7 @@ export interface TimePickerProps extends Omit<
   minTime?: string;
   /**
    * Latest time (inclusive): `HH:mm`, `HH:mm:ss` or `h:mm AM`. Invalid or reversed bounds give no
-   * options (development warning, "No times available").
+   * options (development warning, "No times available", see `labels`).
    * @default '23:59'
    */
   maxTime?: string;
@@ -132,12 +157,18 @@ export interface TimePickerProps extends Omit<
   /** Controlled open state of the list (never shown while `disabled` or `readOnly`). */
   open?: boolean;
   /**
-   * Initial open state of the list for uncontrolled usage.
+   * Initial open state of the list for uncontrolled usage. A picker that starts disabled or
+   * read-only starts closed.
    * @default false
    */
   defaultOpen?: boolean;
   /** Called when the list opens or closes (only when the state changes). */
   onOpenChange?: (open: boolean) => void;
+  /**
+   * Names of the clear button and the list and the status texts of an empty list, for
+   * localization. Unset members keep their English defaults.
+   */
+  labels?: TimePickerLabels;
   /** Form field name: the `HH:mm` value is submitted under it (hidden input). */
   name?: string;
   /** Id of the `<form>` the value belongs to, when the picker is outside it. */
@@ -204,10 +235,16 @@ function startsWithQuery(item: ListboxItem, text: string): boolean {
  * - `clearable` shows a clear button while a time is selected (not while read-only).
  * - The value is `HH:mm` (24-hour) whatever the display `format`; values off the `step` grid or
  *   outside the bounds are still displayed in `format`.
- * - Labelling props (`id`, `aria-*`), focus/key handlers and native input attributes go to the
- *   input (`controlRef`); `ref`, `className`, `style` and other props stay on the root. Inside a
- *   `Field`, the input is labelled and described by it.
+ * - The input (`controlRef`) receives `id`, `aria-label`, `aria-labelledby`, `aria-describedby`,
+ *   `aria-invalid`, `aria-required`, `aria-errormessage`, `aria-details`, `tabIndex`,
+ *   `autoFocus`, `onFocus`/`onBlur`/`onKeyDown`/`onKeyUp` and the text input attributes
+ *   `autoComplete`, `autoCapitalize`, `autoCorrect`, `maxLength`, `inputMode`, `spellCheck` and
+ *   `enterKeyHint`. `ref`, `className`, `style`, other `aria-*` attributes and the remaining props
+ *   stay on the root `<div>`. Inside a `Field`, the input is labelled and described by it.
  * - `name`/`required` add a hidden input for native forms (`HH:mm`); the value resets with its form.
+ * - The built-in names and status texts are English; `labels` localizes them.
+ * - The open list renders only in the browser: an open list (`defaultOpen`, `open`) is closed in
+ *   the server HTML and opens once the picker has hydrated.
  */
 export const TimePicker = (props: TimePickerProps) => {
   const {
@@ -226,10 +263,13 @@ export const TimePicker = (props: TimePickerProps) => {
     open: openProp,
     defaultOpen,
     onOpenChange,
+    labels,
     name,
     form,
     required,
     autoComplete = 'off',
+    autoCapitalize,
+    autoCorrect,
     maxLength,
     enterKeyHint,
     inputMode,
@@ -303,10 +343,16 @@ export const TimePicker = (props: TimePickerProps) => {
   const interactive = !disabled && !readOnly;
   const [openState, setOpen, openControlled] = useControllable<boolean>(
     openProp,
-    defaultOpen ?? false,
+    // A picker that starts disabled or read-only never shows its list, so it starts closed (no
+    // close to report later).
+    (defaultOpen ?? false) && interactive,
     onOpenChange,
   );
-  const open = openState && interactive;
+  // The open list lives in a portal, which renders only in the browser: until then (the server
+  // HTML, hydration) the picker shows the closed inline list and reports it closed, so
+  // aria-controls and aria-activedescendant never name a missing element.
+  const isClient = useIsClient();
+  const open = openState && interactive && isClient;
   // A list hidden because the picker became disabled or read-only is closed for good
   // (uncontrolled), so enabling the picker again does not bring it back; onOpenChange(false)
   // reports it (a consumer callback, so from an effect). A controlled `open` stays the parent's.
@@ -438,8 +484,8 @@ export const TimePicker = (props: TimePickerProps) => {
   const statusMessage =
     open && !hasMatches
       ? allOptions.length === 0
-        ? 'No times available'
-        : 'No matching times'
+        ? (labels?.noTimes ?? 'No times available')
+        : (labels?.noMatches ?? 'No matching times')
       : '';
 
   /* ---- elements, dismissal, positioning --------------------------- */
@@ -562,7 +608,7 @@ export const TimePicker = (props: TimePickerProps) => {
     <ul
       {...lb.getListboxProps()}
       aria-labelledby={listboxLabelledBy}
-      aria-label={listboxLabelledBy ? undefined : (ariaLabel ?? 'Times')}
+      aria-label={listboxLabelledBy ? undefined : (ariaLabel ?? labels?.list ?? 'Times')}
       hidden={hidden || undefined}
       className="max-h-60 min-h-0 overflow-auto py-1 focus:outline-hidden"
     >
@@ -601,6 +647,8 @@ export const TimePicker = (props: TimePickerProps) => {
             disabled={disabled}
             readOnly={readOnly}
             autoComplete={autoComplete}
+            autoCapitalize={autoCapitalize}
+            autoCorrect={autoCorrect}
             maxLength={maxLength}
             enterKeyHint={enterKeyHint}
             inputMode={inputMode}
@@ -619,13 +667,14 @@ export const TimePicker = (props: TimePickerProps) => {
           {showClear && (
             <button
               type="button"
-              aria-label="Clear time"
+              aria-label={labels?.clear ?? 'Clear time'}
               disabled={disabled}
               // Keeps focus (and an open list) on the input while the pointer clears it.
               onMouseDown={(event) => event.preventDefault()}
               onClick={handleClear}
               className={cn(
-                'absolute end-1 flex h-6 w-6 items-center justify-center rounded text-muted-foreground',
+                // Padding and background set here (C-NATIVE), not left to an app-wide rule.
+                'absolute end-1 flex h-6 w-6 items-center justify-center rounded bg-transparent p-0 text-muted-foreground',
                 'not-disabled:not-aria-disabled:hover:bg-subtle-hover not-disabled:not-aria-disabled:hover:text-foreground',
                 focusRing,
                 disabledStyles,

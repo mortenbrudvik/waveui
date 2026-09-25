@@ -2,7 +2,7 @@ import * as React from 'react';
 import { describe, it, expect, vi } from 'vitest';
 import { act, render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { SpinButton } from '../SpinButton';
+import { SpinButton, type SpinButtonLabels } from '../SpinButton';
 import { inputInvalidWithin } from '../../../lib/styles';
 import { testFocusEvents, testSystemProps } from '../../../test-utils';
 import { renderWithFieldContext, FIELD_TEST_IDS, FIELD_TEST_TEXT } from '../../../test-utils-field';
@@ -15,9 +15,9 @@ function spyWarn() {
   return vi.spyOn(console, 'warn').mockImplementation(() => {});
 }
 
-function warnings(spy: ReturnType<typeof spyWarn>, text: string) {
-  return spy.mock.calls.filter(([msg]) => String(msg).includes(text));
-}
+const UNNAMED_WARNING =
+  '[WaveUI] SpinButton: the spinbutton has no accessible name. Pass `aria-label` or ' +
+  '`aria-labelledby`, use a <label htmlFor>, or render it inside a Field.';
 
 describe('SpinButton', () => {
   testSystemProps(SpinButton, {
@@ -145,9 +145,12 @@ describe('SpinButton', () => {
       rerender(<SpinButton aria-label="Quantity" onChange={onChange} />);
       await user.click(incrementButton());
       expect(onChange).toHaveBeenCalledWith(1);
-      const deprecations = warnings(warn, 'SpinButton: `onChange` is deprecated');
-      expect(deprecations).toHaveLength(1);
-      expect(String(deprecations[0][0])).toContain('Use `onValueChange` instead.');
+      expect(warn.mock.calls).toEqual([
+        [
+          '[WaveUI] SpinButton: `onChange` is deprecated and will be removed in 1.0. Use ' +
+            '`onValueChange` instead.',
+        ],
+      ]);
     } finally {
       warn.mockRestore();
     }
@@ -485,7 +488,7 @@ describe('SpinButton — naming, routing and styling', () => {
       render(<SpinButton />);
       const input = screen.getByRole('spinbutton');
       expect(input).not.toHaveAttribute('aria-label');
-      expect(warnings(warn, 'SpinButton: the spinbutton has no accessible name')).toHaveLength(1);
+      expect(warn.mock.calls).toEqual([[UNNAMED_WARNING]]);
     } finally {
       warn.mockRestore();
     }
@@ -501,7 +504,7 @@ describe('SpinButton — naming, routing and styling', () => {
         </>,
       );
       expect(spin()).toHaveAttribute('id', 'qty');
-      expect(warnings(warn, 'SpinButton')).toHaveLength(0);
+      expect(warn).not.toHaveBeenCalled();
     } finally {
       warn.mockRestore();
     }
@@ -608,7 +611,62 @@ describe('SpinButton — naming, routing and styling', () => {
     expect(spin()).toHaveAttribute('aria-invalid', 'true');
     const root = screen.getByTestId('root');
     expect(root).toHaveClass(...inputInvalidWithin.split(' '));
-    expect(root).not.toHaveClass('border-input', 'focus-within:border-b-primary');
+    for (const replaced of [
+      'border-input',
+      'border-b-stroke-accessible',
+      'focus-within:border-b-primary',
+    ]) {
+      expect(root).not.toHaveClass(replaced);
+    }
+  });
+
+  it.each([['grammar'], ['spelling']] as const)(
+    'passes aria-invalid="%s" through unchanged, without the error look',
+    (token) => {
+      render(<SpinButton aria-label="Quantity" aria-invalid={token} data-testid="root" />);
+      expect(spin()).toHaveAttribute('aria-invalid', token);
+      const root = screen.getByTestId('root');
+      expect(root).not.toHaveClass('border-destructive');
+      expect(root).toHaveClass('border-input');
+    },
+  );
+
+  it('flags typed text that is not a number although the consumer passes aria-invalid={false}', async () => {
+    const user = userEvent.setup();
+    render(<SpinButton aria-label="Quantity" aria-invalid={false} data-testid="root" />);
+    expect(spin()).toHaveAttribute('aria-invalid', 'false');
+    await user.clear(spin());
+    await user.type(spin(), 'abc');
+    expect(spin()).toHaveAttribute('aria-invalid', 'true');
+    expect(screen.getByTestId('root')).toHaveClass('border-destructive');
+  });
+
+  it('gives the step buttons their own padding and background, so an app-wide button rule cannot fill them (C-NATIVE)', () => {
+    render(<SpinButton aria-label="Quantity" />);
+    for (const button of [incrementButton(), decrementButton()]) {
+      expect(button).toHaveClass('p-0');
+      expect(button).toHaveClass('bg-transparent');
+    }
+  });
+
+  it('honours hidden on the root, whose display utility would otherwise beat it', () => {
+    render(<SpinButton aria-label="Quantity" hidden data-testid="root" />);
+    const root = screen.getByTestId('root');
+    expect(root).toHaveAttribute('hidden');
+    expect(root).toHaveClass('hidden');
+    expect(root).not.toHaveClass('inline-flex');
+  });
+
+  it('names the step buttons with labels', async () => {
+    const user = userEvent.setup();
+    const labels: SpinButtonLabels = { increment: 'Augmenter', decrement: 'Diminuer' };
+    render(<SpinButton aria-label="Quantité" defaultValue={2} labels={labels} />);
+    await user.click(screen.getByRole('button', { name: 'Augmenter' }));
+    expect(spin('Quantité')).toHaveValue('3');
+    await user.click(screen.getByRole('button', { name: 'Diminuer' }));
+    await user.click(screen.getByRole('button', { name: 'Diminuer' }));
+    expect(spin('Quantité')).toHaveValue('1');
+    expect(screen.queryByRole('button', { name: 'Increment' })).toBeNull();
   });
 
   it.each([

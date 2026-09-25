@@ -1,9 +1,10 @@
 import * as React from 'react';
 import { afterEach, describe, it, expect, expectTypeOf, vi } from 'vitest';
 import { act, fireEvent, render, screen, within } from '@testing-library/react';
+import { hydrateRoot } from 'react-dom/client';
 import { renderToString } from 'react-dom/server';
 import userEvent from '@testing-library/user-event';
-import { TimePicker, type TimePickerProps } from '../TimePicker';
+import { TimePicker, type TimePickerLabels, type TimePickerProps } from '../TimePicker';
 import {
   axe,
   renderWithProviders,
@@ -95,6 +96,13 @@ describe('TimePicker', () => {
       expect(combobox('Time')).toHaveClass('pe-8');
     });
 
+    it('gives the clear button its own padding and background (C-NATIVE)', () => {
+      render(<TimePicker aria-label="Time" defaultValue="09:00" clearable />);
+      const clear = screen.getByRole('button', { name: 'Clear time' });
+      expect(clear).toHaveClass('p-0');
+      expect(clear).toHaveClass('bg-transparent');
+    });
+
     it('uses theme tokens and gates hover on the clear button (button-provider#3)', async () => {
       const user = userEvent.setup();
       render(<TimePicker aria-label="Time" defaultValue="09:00" clearable step={60} />);
@@ -121,21 +129,64 @@ describe('TimePicker', () => {
       expect(listbox?.querySelectorAll('[role="option"]')).toHaveLength(24);
     });
 
+    it('renders a defaultOpen list closed on the server, so every referenced id exists', () => {
+      const parsed = document.createElement('div'); // detached: nothing reaches document.body
+      parsed.innerHTML = renderToString(
+        <TimePicker aria-label="Time" defaultValue="09:00" step={60} defaultOpen />,
+      );
+      const input = parsed.querySelector('input[role="combobox"]');
+      expect(input).toHaveAttribute('aria-expanded', 'false');
+      expect(input).not.toHaveAttribute('aria-activedescendant');
+      for (const attribute of ['aria-controls', 'aria-activedescendant']) {
+        for (const element of parsed.querySelectorAll(`[${attribute}]`)) {
+          for (const id of element.getAttribute(attribute)!.split(' ')) {
+            expect(parsed.querySelector(`[id="${id}"]`)).not.toBeNull();
+          }
+        }
+      }
+      expect(parsed.querySelector('[role="listbox"]')).toHaveAttribute('hidden');
+    });
+
+    it('opens a defaultOpen list once hydrated, without a hydration mismatch', async () => {
+      const element = <TimePicker aria-label="Time" defaultValue="09:00" step={60} defaultOpen />;
+      const container = document.createElement('div');
+      container.innerHTML = renderToString(element);
+      document.body.appendChild(container);
+      const error = vi.spyOn(console, 'error');
+      let root: ReturnType<typeof hydrateRoot> | undefined;
+      try {
+        await act(async () => {
+          root = hydrateRoot(container, element);
+        });
+        expect(error).not.toHaveBeenCalled();
+        const listbox = screen.getByRole('listbox');
+        expect(combobox('Time')).toHaveAttribute('aria-expanded', 'true');
+        expect(combobox('Time')).toHaveAttribute('aria-controls', listbox.id);
+        expect(combobox('Time')).toHaveAttribute(
+          'aria-activedescendant',
+          screen.getByRole('option', { name: '9:00 AM' }).id,
+        );
+      } finally {
+        act(() => root?.unmount());
+        container.remove();
+      }
+    });
+
     it('draws the destructive border while the input is invalid (x-api-3, R8)', () => {
       const invalidClasses = ['border-destructive', 'focus:border-b-destructive'];
       const { unmount } = render(<TimePicker aria-label="Time" />);
       expect(combobox('Time')).toHaveClass('border-input', 'border-b-stroke-accessible');
-      expect(combobox('Time')).not.toHaveClass(...invalidClasses);
+      for (const name of invalidClasses) expect(combobox('Time')).not.toHaveClass(name);
       unmount();
 
       const field = renderWithFieldContext(<TimePicker />, { errorId: FIELD_TEST_IDS.errorId });
       expect(combobox(FIELD_TEST_TEXT.label)).toHaveClass(...invalidClasses);
-      expect(combobox(FIELD_TEST_TEXT.label)).not.toHaveClass(
-        'border-input',
-        'border-b-stroke-accessible',
-      );
+      expect(combobox(FIELD_TEST_TEXT.label)).not.toHaveClass('border-input');
+      expect(combobox(FIELD_TEST_TEXT.label)).not.toHaveClass('border-b-stroke-accessible');
       field.rerender(<TimePicker aria-invalid={false} />);
-      expect(combobox(FIELD_TEST_TEXT.label)).not.toHaveClass(...invalidClasses);
+      for (const name of invalidClasses) {
+        expect(combobox(FIELD_TEST_TEXT.label)).not.toHaveClass(name);
+      }
       field.unmount();
 
       render(<TimePicker aria-label="Time" aria-invalid="true" />);
@@ -372,6 +423,19 @@ describe('TimePicker', () => {
       expect(onOpenChange.mock.calls).toEqual([[false]]);
       rerender(<TimePicker {...props} />);
       expect(screen.queryByRole('listbox')).not.toBeInTheDocument();
+    });
+
+    it.each([
+      ['disabled', { disabled: true }],
+      ['read-only', { readOnly: true }],
+    ])('reports no close for a defaultOpen list that starts %s (it was never shown)', (_, lock) => {
+      const onOpenChange = vi.fn();
+      const props = { 'aria-label': 'Time', step: 60, defaultOpen: true, onOpenChange };
+      const { rerender } = render(<TimePicker {...props} {...lock} />);
+      expect(screen.queryByRole('listbox')).not.toBeInTheDocument();
+      rerender(<TimePicker {...props} />);
+      expect(screen.queryByRole('listbox')).not.toBeInTheDocument();
+      expect(onOpenChange).not.toHaveBeenCalled();
     });
 
     it('fires onOpenChange once per opening and closing in StrictMode', async () => {
@@ -837,7 +901,7 @@ describe('TimePicker', () => {
   describe('step and bounds (input-datetime#25)', () => {
     it('falls back to 30 minutes and warns once per invalid step in development (x-errors-components-7)', () => {
       const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
-      const error = vi.spyOn(console, 'error').mockImplementation(() => {});
+      const error = vi.spyOn(console, 'error');
       render(
         <React.StrictMode>
           <TimePicker aria-label="Time" step={0} data-testid="tp" />
@@ -877,7 +941,7 @@ describe('TimePicker', () => {
 
     it('warns once about invalid bounds and shows "No times available" instead of a list', async () => {
       const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
-      const error = vi.spyOn(console, 'error').mockImplementation(() => {});
+      const error = vi.spyOn(console, 'error');
       const user = userEvent.setup();
       render(
         <React.StrictMode>
@@ -943,6 +1007,68 @@ describe('TimePicker', () => {
       render(<TimePicker aria-label="Time" value="09:00" clearable onValueChange={() => {}} />);
       await user.click(screen.getByRole('button', { name: 'Clear time' }));
       expect(combobox('Time')).toHaveValue('9:00 AM');
+    });
+  });
+
+  describe('localised built-in texts', () => {
+    const labels: TimePickerLabels = {
+      clear: 'Uhrzeit löschen',
+      list: 'Uhrzeiten',
+      noTimes: 'Keine Uhrzeiten verfügbar',
+      noMatches: 'Keine passenden Uhrzeiten',
+    };
+
+    it('names the clear button with labels.clear', async () => {
+      const user = userEvent.setup();
+      const onValueChange = vi.fn();
+      render(
+        <TimePicker
+          aria-label="Zeit"
+          defaultValue="09:00"
+          clearable
+          labels={labels}
+          onValueChange={onValueChange}
+        />,
+      );
+      await user.click(screen.getByRole('button', { name: 'Uhrzeit löschen' }));
+      expect(onValueChange.mock.calls).toEqual([['']]);
+    });
+
+    it('names the list with labels.list when the picker lends it no label', async () => {
+      const user = userEvent.setup();
+      render(
+        <>
+          <label htmlFor="start">Beginn</label>
+          <TimePicker id="start" step={60} labels={labels} />
+        </>,
+      );
+      await user.click(combobox('Beginn'));
+      expect(screen.getByRole('listbox', { name: 'Uhrzeiten' })).toBeInTheDocument();
+    });
+
+    it('announces and shows labels.noMatches for text that matches no time', async () => {
+      const user = userEvent.setup();
+      render(<TimePicker aria-label="Zeit" step={60} labels={labels} />);
+      await user.type(combobox('Zeit'), 'zz');
+      expect(screen.getByRole('status')).toHaveTextContent('Keine passenden Uhrzeiten');
+      const visible = screen
+        .getAllByText('Keine passenden Uhrzeiten')
+        .filter((element) => element.getAttribute('aria-hidden') === 'true');
+      expect(visible).toHaveLength(1);
+    });
+
+    it('announces labels.noTimes when the bounds leave no times', async () => {
+      const user = userEvent.setup();
+      const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+      render(<TimePicker aria-label="Zeit" minTime="17:00" maxTime="09:00" labels={labels} />);
+      await user.click(combobox('Zeit'));
+      expect(screen.getByRole('status')).toHaveTextContent('Keine Uhrzeiten verfügbar');
+      expect(warn.mock.calls).toEqual([
+        [
+          '[WaveUI] TimePicker: `minTime`/`maxTime` must be times such as "09:00", "09:00:00" or ' +
+            '"9:00 AM" with minTime <= maxTime (received "17:00" / "09:00"); no times are available.',
+        ],
+      ]);
     });
   });
 
@@ -1128,6 +1254,16 @@ describe('TimePicker', () => {
       await user.tab();
       expect(onFocus).toHaveBeenCalledTimes(1);
       expect(onBlur).toHaveBeenCalledTimes(1);
+    });
+
+    it('routes the text input attributes autoCapitalize and autoCorrect to the input', () => {
+      render(
+        <TimePicker aria-label="Time" autoCapitalize="none" autoCorrect="off" data-testid="root" />,
+      );
+      expect(combobox('Time')).toHaveAttribute('autocapitalize', 'none');
+      expect(combobox('Time')).toHaveAttribute('autocorrect', 'off');
+      expect(screen.getByTestId('root')).not.toHaveAttribute('autocapitalize');
+      expect(screen.getByTestId('root')).not.toHaveAttribute('autocorrect');
     });
 
     it('composes a consumer onKeyDown; preventDefault suppresses the built-in keys', async () => {
@@ -1344,10 +1480,12 @@ describe('TimePicker', () => {
       await user.click(screen.getByRole('option', { name: '3:00 AM' }));
       expect(onChange).toHaveBeenCalledWith('03:00');
       expect(onValueChange).toHaveBeenCalledWith('03:00');
-      const deprecations = warn.mock.calls.filter(([message]) =>
-        String(message).includes('TimePicker: `onChange` is deprecated'),
-      );
-      expect(deprecations).toHaveLength(1);
+      expect(warn.mock.calls).toEqual([
+        [
+          '[WaveUI] TimePicker: `onChange` is deprecated and will be removed in 1.0. Use ' +
+            '`onValueChange` instead.',
+        ],
+      ]);
     });
   });
 

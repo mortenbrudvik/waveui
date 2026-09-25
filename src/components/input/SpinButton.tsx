@@ -9,6 +9,7 @@ import { useFieldControl } from '../../hooks/useFieldControl';
 import { useFormReset } from '../../hooks/useFormReset';
 import { useMergedRefs } from '../../hooks/useMergedRefs';
 import { HiddenInput } from '../internal/HiddenInput';
+import { isInvalidLook } from './Input';
 
 /**
  * Props that SpinButton routes to its `<input role="spinbutton">` (C-ROUTING): the id, the ARIA
@@ -40,6 +41,21 @@ export type SpinButtonInputProps = Pick<
   | 'onKeyDown'
   | 'onKeyUp'
 >;
+
+/**
+ * Names of the SpinButton's step buttons, for localization. Each member is optional and falls back
+ * to its English default.
+ */
+export interface SpinButtonLabels {
+  /** Name of the button that steps up.
+   * @default 'Increment'
+   */
+  increment?: string;
+  /** Name of the button that steps down.
+   * @default 'Decrement'
+   */
+  decrement?: string;
+}
 
 /** Properties for the SpinButton component. */
 export interface SpinButtonProps
@@ -88,6 +104,11 @@ export interface SpinButtonProps
   name?: string;
   /** Id of the form the spin button belongs to, when it is rendered outside that form. */
   form?: string;
+  /**
+   * Names of the −/+ step buttons (not tab stops, but in the accessibility tree), for
+   * localization. Unset members keep their English defaults.
+   */
+  labels?: SpinButtonLabels;
   /** Ref to the root `<div>`. */
   ref?: React.Ref<HTMLDivElement>;
   /** Ref to the `<input role="spinbutton">` (the focusable control). */
@@ -119,7 +140,8 @@ function roundTo(n: number, decimals: number): number {
 }
 
 const stepButtonClass = cn(
-  'flex h-8 w-8 shrink-0 items-center justify-center border-input text-foreground',
+  // Padding and background set here (C-NATIVE): an app-wide `button` rule cannot fill them.
+  'flex h-8 w-8 shrink-0 items-center justify-center border-input bg-transparent p-0 text-foreground',
   'not-disabled:not-aria-disabled:hover:bg-subtle-hover not-disabled:not-aria-disabled:active:bg-subtle-pressed',
   'disabled:pointer-events-none',
 );
@@ -143,6 +165,7 @@ const stepButtonClass = cn(
  *   or use a label (development warning otherwise).
  * - **Forms**: with `name` the committed value is submitted; `required` makes the input natively
  *   required; a form reset restores `defaultValue`.
+ * - The −/+ buttons are named "Decrement"/"Increment"; `labels` localizes the names.
  *
  * @example
  * <SpinButton aria-label="Quantity" min={1} max={10} value={qty} onValueChange={setQty} />
@@ -159,7 +182,9 @@ export const SpinButton = ({
   disabled,
   name,
   form,
+  labels,
   className,
+  hidden,
   ref,
   controlRef,
   // Routed to the input (C-ROUTING)
@@ -249,9 +274,11 @@ export const SpinButton = ({
     },
     { nativeRequired: true },
   );
-  const resolvedInvalid = draftInvalid || fieldProps['aria-invalid'];
-  const invalid =
-    resolvedInvalid !== undefined && resolvedInvalid !== false && resolvedInvalid !== 'false';
+  // Typed text that is not a number is invalid whatever the consumer says; otherwise the
+  // consumer's or the Field's `aria-invalid` is passed through as is (`grammar` included), and the
+  // error look follows the shared rule of the text controls.
+  const ariaInvalidValue = draftInvalid ? true : fieldProps['aria-invalid'];
+  const invalidLook = isInvalidLook(false, ariaInvalidValue);
 
   useFormReset(
     inputRef,
@@ -330,10 +357,13 @@ export const SpinButton = ({
       className={cn(
         'relative inline-flex items-center rounded border border-input border-b-stroke-accessible bg-background',
         inputFocusWithin,
-        invalid && inputInvalidWithin,
+        invalidLook && inputInvalidWithin,
         disabled && 'cursor-not-allowed opacity-50',
+        // The display utility above would beat the `hidden` attribute's own display rule.
+        hidden && 'hidden',
         className,
       )}
+      hidden={hidden}
       {...rest}
     >
       <button
@@ -342,7 +372,7 @@ export const SpinButton = ({
         onMouseDown={keepFocus}
         onClick={() => stepBy(-step)}
         disabled={!interactive || current <= min}
-        aria-label="Decrement"
+        aria-label={labels?.decrement ?? 'Decrement'}
         className={cn(stepButtonClass, 'border-e', !disabled && 'disabled:opacity-50')}
       >
         <SubtractIcon size={12} />
@@ -363,7 +393,7 @@ export const SpinButton = ({
         readOnly={readOnly}
         form={form}
         {...fieldProps}
-        aria-invalid={invalid || undefined}
+        aria-invalid={ariaInvalidValue}
         aria-errormessage={ariaErrorMessage}
         aria-details={ariaDetails}
         aria-valuenow={value}
@@ -386,7 +416,7 @@ export const SpinButton = ({
         onMouseDown={keepFocus}
         onClick={() => stepBy(step)}
         disabled={!interactive || current >= max}
-        aria-label="Increment"
+        aria-label={labels?.increment ?? 'Increment'}
         className={cn(stepButtonClass, 'border-s', !disabled && 'disabled:opacity-50')}
       >
         <AddIcon size={12} />

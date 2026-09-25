@@ -196,15 +196,20 @@ describe('Option / OptionGroup (input-pickers#1, #6, #20)', () => {
   });
 
   it('throws in development outside a listbox (C-CONTEXT)', () => {
-    const error = vi.spyOn(console, 'error').mockImplementation(() => {});
-    expect(() =>
-      render(
-        <ul>
-          <Option value="a">Apple</Option>
-        </ul>,
-      ),
-    ).toThrow('[WaveUI] Option must be used within a listbox');
-    error.mockRestore();
+    // A render error in a test is thrown by render(); nothing is logged (asserted).
+    const error = vi.spyOn(console, 'error');
+    try {
+      expect(() =>
+        render(
+          <ul>
+            <Option value="a">Apple</Option>
+          </ul>,
+        ),
+      ).toThrow(new Error('[WaveUI] Option must be used within a listbox (Combobox or Dropdown)'));
+      expect(error).not.toHaveBeenCalled();
+    } finally {
+      error.mockRestore();
+    }
   });
 });
 

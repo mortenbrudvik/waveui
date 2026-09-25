@@ -242,7 +242,8 @@ export const SwatchPicker = ({
             className={cn(
               sizeMap[size],
               shapeMap[shape],
-              'relative flex shrink-0 items-center justify-center border-2 border-transparent',
+              // The padding is set here (C-NATIVE); the swatch color is its background.
+              'relative flex shrink-0 items-center justify-center border-2 border-transparent p-0',
               motionSafeTransition,
               // User colors are the content: keep them (and the check glyph) in forced colors.
               'forced-colors:forced-color-adjust-none',

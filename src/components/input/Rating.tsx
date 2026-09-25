@@ -13,6 +13,20 @@ import { useMergedRefs } from '../../hooks/useMergedRefs';
 import { useRovingTabIndex } from '../../hooks/useRovingTabIndex';
 import { HiddenInput } from '../internal/HiddenInput';
 
+/**
+ * The Rating's built-in star names, for localization. Each member is optional and falls back to
+ * its English default.
+ */
+export interface RatingLabels {
+  /**
+   * Accessible name of the star that chooses `value` (1 to `max`).
+   * @default (value) => value === 1 ? '1 star' : `${value} stars`
+   */
+  star?: (value: number, max: number) => string;
+}
+
+const defaultStarLabel = (value: number) => `${value} star${value !== 1 ? 's' : ''}`;
+
 /** Properties for the Rating component. */
 export interface RatingProps extends Omit<
   React.HTMLAttributes<HTMLDivElement>,
@@ -53,6 +67,11 @@ export interface RatingProps extends Omit<
   required?: boolean;
   /** Id of the form the rating belongs to, when it is rendered outside that form. */
   form?: string;
+  /**
+   * Names of the stars ("1 star", "2 stars", …), for localization. The group's own name is
+   * `aria-label` (default "Rating"). Unset members keep their English defaults.
+   */
+  labels?: RatingLabels;
   /** Ref to the `role="radiogroup"` element. */
   ref?: React.Ref<HTMLDivElement>;
 }
@@ -115,7 +134,8 @@ function Star({ filled, className }: { filled: boolean; className: string }) {
  *   choosing the current star again calls neither.
  * - Hovering previews a value; the preview never outlives the hover or a disabled state.
  * - Inside a `Field` it is named by the Field label (instead of the default "Rating") and
- *   described by its hint and error.
+ *   described by its hint and error. The stars are named "1 star", "2 stars", …; `labels`
+ *   localizes these names.
  * - With `name` (or `required`) it takes part in native forms; a form reset restores
  *   `defaultValue`.
  */
@@ -130,6 +150,7 @@ export const Rating = ({
   name,
   required,
   form,
+  labels,
   className,
   id,
   'aria-label': ariaLabel,
@@ -219,6 +240,7 @@ export const Rating = ({
   };
 
   const starSize = sizeMap[size];
+  const starLabel = labels?.star ?? defaultStarLabel;
 
   return (
     <div
@@ -252,7 +274,7 @@ export const Rating = ({
             type="button"
             role="radio"
             aria-checked={value === starValue}
-            aria-label={`${starValue} star${starValue !== 1 ? 's' : ''}`}
+            aria-label={starLabel(starValue, max)}
             data-roving-value={key}
             tabIndex={disabled ? -1 : getTabIndex(key)}
             disabled={disabled}

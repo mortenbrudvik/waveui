@@ -17,8 +17,24 @@ function spyWarn() {
   return vi.spyOn(console, 'warn').mockImplementation(() => {});
 }
 
-function warnings(spy: ReturnType<typeof spyWarn>, text: string) {
-  return spy.mock.calls.filter(([msg]) => String(msg).includes(text));
+const DEPRECATED_ON_CHANGE =
+  '[WaveUI] ColorPicker: `onChange` is deprecated and will be removed in 1.0. Use ' +
+  '`onValueChange` instead.';
+
+/** The development warning for a `value`/`defaultValue` that is not a hex color. */
+function invalidValueWarning(value: string) {
+  return (
+    `[WaveUI] ColorPicker: "${value}" is not a hex color (#rrggbb or #rrggbbaa). Pass a hex ` +
+    'value; the opacity slider is disabled until then.'
+  );
+}
+
+/** The development warning for a preset with an alpha byte below ff. */
+function alphaPresetWarning(preset: string) {
+  return (
+    `[WaveUI] ColorPicker: preset "${preset}" has an alpha byte, which is ignored: picking a ` +
+    'preset keeps the current opacity. Pass the color as #rgb or #rrggbb.'
+  );
 }
 
 describe('ColorPicker', () => {
@@ -123,9 +139,7 @@ describe('ColorPicker', () => {
       rerender(<ColorPicker presets={['#ff0000']} onChange={onChange} />);
       await user.click(preset('#ff0000'));
       expect(onChange).toHaveBeenCalledWith('#ff0000');
-      const deprecations = warnings(warn, 'ColorPicker: `onChange` is deprecated');
-      expect(deprecations).toHaveLength(1);
-      expect(String(deprecations[0][0])).toContain('Use `onValueChange` instead.');
+      expect(warn.mock.calls).toEqual([[DEPRECATED_ON_CHANGE]]);
     } finally {
       warn.mockRestore();
     }
@@ -364,7 +378,8 @@ describe('ColorPicker — hex input (input-basic#41, input-pickers#24, #25)', ()
   it('draws the hex field boundary like Input: border-input plus the accessible bottom stroke (R9)', () => {
     render(<ColorPicker />);
     expect(hexInput()).toHaveClass('border', 'border-input', 'border-b-stroke-accessible');
-    expect(hexInput()).not.toHaveClass('border-border', 'border-destructive');
+    expect(hexInput()).not.toHaveClass('border-border');
+    expect(hexInput()).not.toHaveClass('border-destructive');
   });
 
   it('shows the shared invalid look while the hex text is flagged or the picker is invalid (R8)', async () => {
@@ -381,7 +396,13 @@ describe('ColorPicker — hex input (input-basic#41, input-pickers#24, #25)', ()
     await user.tripleClick(typed);
     await user.keyboard('#zzz');
     expect(typed).toHaveClass(...inputInvalid.split(' '));
-    expect(typed).not.toHaveClass('border-input', 'focus:border-b-primary');
+    for (const replaced of [
+      'border-input',
+      'border-b-stroke-accessible',
+      'focus:border-b-primary',
+    ]) {
+      expect(typed).not.toHaveClass(replaced);
+    }
     for (const input of [typed, consumer]) {
       expect(input.className).not.toMatch(/aria-invalid:|border-error/);
     }
@@ -391,6 +412,16 @@ describe('ColorPicker — hex input (input-basic#41, input-pickers#24, #25)', ()
     renderWithFieldContext(<ColorPicker />, { errorId: FIELD_TEST_IDS.errorId });
     expect(hexInput()).toHaveClass(...inputInvalid.split(' '));
   });
+
+  it.each([['grammar'], ['spelling']] as const)(
+    'passes aria-invalid="%s" to the hex field unchanged, without the error look',
+    (token) => {
+      render(<ColorPicker aria-label="Accent" aria-invalid={token} />);
+      expect(hexInput()).toHaveAttribute('aria-invalid', token);
+      expect(hexInput()).not.toHaveClass('border-destructive');
+      expect(hexInput()).toHaveClass('border-input');
+    },
+  );
 
   it('uses the shared input focus indicator (focus:outline-hidden, never outline-none)', () => {
     render(<ColorPicker />);
@@ -403,7 +434,8 @@ describe('ColorPicker — opacity (input-pickers#15, input-basic#30)', () => {
   it('shows the shared focus ring on the opacity slider (C-FOCUS)', () => {
     render(<ColorPicker showOpacity />);
     expect(opacitySlider()).toHaveClass(...focusRing.split(' '));
-    expect(opacitySlider()).not.toHaveClass('outline-none', 'focus:outline-none');
+    expect(opacitySlider()).not.toHaveClass('outline-none');
+    expect(opacitySlider()).not.toHaveClass('focus:outline-none');
   });
 
   it('renders the opacity slider only with showOpacity', () => {
@@ -490,7 +522,7 @@ describe('ColorPicker — opacity (input-pickers#15, input-basic#30)', () => {
       expect(opacitySlider()).toBeDisabled();
       fireEvent.change(opacitySlider(), { target: { value: '40' } });
       expect(onValueChange).not.toHaveBeenCalled();
-      expect(warnings(warn, 'ColorPicker: "red" is not a hex color')).toHaveLength(1);
+      expect(warn.mock.calls).toEqual([[invalidValueWarning('red')]]);
     } finally {
       warn.mockRestore();
     }
@@ -564,8 +596,8 @@ describe('ColorPicker — presets (input-pickers#16, #17, #23)', () => {
       // An opaque alpha byte changes nothing: no warning, and the name stays as written.
       expect(preset('#107c10ff')).toBeInTheDocument();
       expect(warn.mock.calls).toEqual([
-        [expect.stringContaining('ColorPicker: preset "#0f6cbd80" has an alpha byte')],
-        [expect.stringContaining('ColorPicker: preset "#abc8" has an alpha byte')],
+        [alphaPresetWarning('#0f6cbd80')],
+        [alphaPresetWarning('#abc8')],
       ]);
     } finally {
       warn.mockRestore();
@@ -577,7 +609,11 @@ describe('ColorPicker — presets (input-pickers#16, #17, #23)', () => {
     try {
       render(<ColorPicker presets={['#ff0000', 'teal']} />);
       expect(screen.getAllByRole('radio')).toHaveLength(1);
-      expect(warnings(warn, 'ColorPicker: preset "teal" is not a hex color')).toHaveLength(1);
+      expect(warn.mock.calls).toEqual([
+        [
+          '[WaveUI] ColorPicker: preset "teal" is not a hex color (#rgb or #rrggbb) and is not shown.',
+        ],
+      ]);
     } finally {
       warn.mockRestore();
     }
@@ -634,6 +670,7 @@ describe('ColorPicker — Field integration (FieldContext)', () => {
       expect((screen.getByRole('form', { name: 'Form' }) as HTMLFormElement).checkValidity()).toBe(
         true,
       );
+      expect(warn.mock.calls).toEqual([[invalidValueWarning('red')]]);
     } finally {
       warn.mockRestore();
     }
@@ -878,7 +915,7 @@ describe('ColorPicker — native forms (C-FORMS)', () => {
       act(() => getForm().reset());
       expect(onChange.mock.calls).toEqual([['#d1343880'], ['#0f6cbd80']]);
       expect(untouched).not.toHaveBeenCalled();
-      expect(warnings(warn, 'ColorPicker: `onChange` is deprecated')).toHaveLength(1);
+      expect(warn.mock.calls).toEqual([[DEPRECATED_ON_CHANGE]]);
     } finally {
       warn.mockRestore();
     }

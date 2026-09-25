@@ -5,6 +5,7 @@ import userEvent from '@testing-library/user-event';
 import { renderToString } from 'react-dom/server';
 import { SearchBox, type SearchBoxProps } from '../SearchBox';
 import { Button } from '../../button/Button';
+import { Portal } from '../../portal/Portal';
 import type { Slot, SlotObject } from '../../../lib/types';
 import { inputInvalidWithin } from '../../../lib/styles';
 import {
@@ -131,6 +132,58 @@ describe('SearchBox', () => {
           Node.DOCUMENT_POSITION_FOLLOWING,
       ).toBeTruthy();
     });
+
+    const RENDERS_NOTHING: Array<[string, Slot<'span'>]> = [
+      ['false', false],
+      ['an empty string', ''],
+      ['an empty array', []],
+      ['an empty Fragment', <></>],
+      ['null', null],
+    ];
+
+    it.each(RENDERS_NOTHING)(
+      'renders no slot box for a contentAfter of %s, as Input does',
+      (_, contentAfter) => {
+        render(
+          <SearchBox
+            data-testid="root"
+            aria-label="Search"
+            defaultValue="abc"
+            contentAfter={contentAfter}
+          />,
+        );
+        const root = screen.getByTestId('root');
+        const input = screen.getByRole('searchbox', { name: 'Search' });
+        const clear = screen.getByRole('button', { name: 'Clear search' });
+        // The icon box, the input and the clear button: no empty padded box between them.
+        expect(Array.from(root.children).slice(1)).toEqual([input, clear]);
+      },
+    );
+
+    it.each(RENDERS_NOTHING)(
+      'keeps the default search icon for a contentBefore of %s, in a single icon box',
+      (_, contentBefore) => {
+        const { container } = render(
+          <SearchBox data-testid="root" aria-label="Search" contentBefore={contentBefore} />,
+        );
+        const root = screen.getByTestId('root');
+        const icon = container.querySelector('[data-wave-icon="search"]');
+        expect(icon).not.toBeNull();
+        expect(Array.from(root.children)).toEqual([
+          icon!.parentElement,
+          screen.getByRole('searchbox', { name: 'Search' }),
+        ]);
+      },
+    );
+
+    it('renders the items of a generator given as contentAfter', () => {
+      function* shortcut(): Generator<React.ReactNode> {
+        yield '⌘';
+        yield 'K';
+      }
+      render(<SearchBox data-testid="root" aria-label="Search" contentAfter={shortcut()} />);
+      expect(screen.getByTestId('root')).toHaveTextContent('⌘K');
+    });
   });
 
   describe('layout (input-other-code-2)', () => {
@@ -177,7 +230,9 @@ describe('SearchBox', () => {
         'opacity-50',
       );
       expect(input).toHaveClass('border-none', 'bg-transparent', 'focus:outline-hidden');
-      expect(input).not.toHaveClass('outline-none', 'outline-hidden', 'border-input');
+      for (const absent of ['outline-none', 'outline-hidden', 'border-input']) {
+        expect(input).not.toHaveClass(absent);
+      }
     });
 
     it('pressing the icon, a slot or the padding focuses the input', () => {
@@ -211,6 +266,33 @@ describe('SearchBox', () => {
       rerender(<SearchBox aria-label="Search" disabled />);
       expect(fireEvent.mouseDown(icon())).toBe(true);
       expect(input).not.toHaveFocus();
+    });
+
+    it('leaves a press inside a portal opened from a slot alone (it bubbles through React only)', () => {
+      render(
+        <SearchBox
+          aria-label="Search"
+          contentAfter={
+            <Portal>
+              <span data-testid="menu-item">Recent searches</span>
+            </Portal>
+          }
+        />,
+      );
+      const item = screen.getByTestId('menu-item');
+      expect(screen.getByRole('searchbox', { name: 'Search' }).parentElement).not.toContainElement(
+        item,
+      );
+      expect(fireEvent.mouseDown(item)).toBe(true);
+      expect(screen.getByRole('searchbox', { name: 'Search' })).not.toHaveFocus();
+    });
+
+    it('honours hidden on the root, whose display utility would otherwise beat it', () => {
+      render(<SearchBox data-testid="root" aria-label="Search" hidden />);
+      const root = screen.getByTestId('root');
+      expect(root).toHaveAttribute('hidden');
+      expect(root).toHaveClass('hidden');
+      expect(root).not.toHaveClass('inline-flex');
     });
 
     it('runs a consumer onMouseDown first; its preventDefault keeps focus where it is', () => {
@@ -304,6 +386,13 @@ describe('SearchBox', () => {
       expect(clear).toHaveClass('h-6', 'w-6', 'shrink-0');
       expect(clear).not.toHaveClass('absolute');
       expect(clear.previousElementSibling).toBe(screen.getByRole('searchbox', { name: 'Search' }));
+    });
+
+    it('sets its own padding and background, so an app-wide button rule cannot fill it (C-NATIVE)', () => {
+      render(<SearchBox aria-label="Search" defaultValue="abc" />);
+      const clear = screen.getByRole('button', { name: 'Clear search' });
+      expect(clear).toHaveClass('p-0');
+      expect(clear).toHaveClass('bg-transparent');
     });
 
     it('is disabled with the SearchBox', () => {
@@ -535,7 +624,7 @@ describe('SearchBox', () => {
     });
 
     it('keeps the default icon for empty shorthand (booleans, empty string, empty iterables and Fragments) (table-core#18)', () => {
-      const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+      const warn = vi.spyOn(console, 'warn');
       function* nothing(): Generator<React.ReactNode> {
         yield null;
         yield false;
@@ -620,6 +709,75 @@ describe('SearchBox', () => {
       const secondIcon = second.querySelector('[data-wave-icon="dismiss"]');
       expect(secondIcon?.parentElement?.tagName).toBe('I');
       expect(secondIcon?.parentElement).toHaveClass('icon-box');
+    });
+
+    it('renders the markup of a slot object with dangerouslySetInnerHTML instead of the default icon', () => {
+      const markup = { __html: '<svg data-testid="markup-icon"></svg>' };
+      render(
+        <>
+          <SearchBox
+            aria-label="First"
+            defaultValue="a"
+            dismiss={{ dangerouslySetInnerHTML: markup } as Slot<'span'>}
+          />
+          <SearchBox
+            aria-label="Second"
+            defaultValue="b"
+            dismiss={{ className: 'tone', dangerouslySetInnerHTML: markup } as Slot<'span'>}
+          />
+        </>,
+      );
+      const clears = screen.getAllByRole('button', { name: 'Clear search' });
+      expect(clears).toHaveLength(2);
+      const icons = screen.getAllByTestId('markup-icon');
+      clears.forEach((clear, index) => {
+        expect(clear).toContainElement(icons[index]);
+        expect(clear.querySelector('[data-wave-icon="dismiss"]')).toBeNull();
+        expect(icons[index].parentElement).toHaveAttribute('aria-hidden', 'true');
+      });
+      expect(icons[1].parentElement).toHaveClass('tone');
+    });
+
+    it('renders the markup of a merged <button> with dangerouslySetInnerHTML instead of the default icon', () => {
+      const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+      render(
+        <SearchBox
+          aria-label="Search"
+          defaultValue="a"
+          dismiss={
+            <button
+              type="button"
+              dangerouslySetInnerHTML={{ __html: '<svg data-testid="markup-icon"></svg>' }}
+            />
+          }
+        />,
+      );
+      const clear = screen.getByRole('button', { name: 'Clear search' });
+      expect(clear).toContainElement(screen.getByTestId('markup-icon'));
+      expect(clear.querySelector('[data-wave-icon="dismiss"]')).toBeNull();
+      expectWarnings(warn, [ELEMENT_WARNING]);
+      warn.mockRestore();
+    });
+
+    it('renders the items of a generator inside a merged <button> without a React warning', () => {
+      const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+      const error = vi.spyOn(console, 'error');
+      function* reset(): Generator<React.ReactNode> {
+        yield 'Re';
+        yield 'set';
+      }
+      render(
+        <SearchBox
+          aria-label="Search"
+          defaultValue="a"
+          dismiss={<button type="button">{reset()}</button>}
+        />,
+      );
+      expect(screen.getByRole('button', { name: 'Reset' })).toHaveTextContent('Reset');
+      expect(error).not.toHaveBeenCalled();
+      expectWarnings(warn, [ELEMENT_WARNING]);
+      warn.mockRestore();
+      error.mockRestore();
     });
 
     it('renders a void or component SlotObject as it is (it has content of its own)', () => {
@@ -852,7 +1010,7 @@ describe('SearchBox', () => {
     });
 
     it('moves naming attributes of a content slot object to the button without the deprecation warning', () => {
-      const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+      const warn = vi.spyOn(console, 'warn');
       render(
         <SearchBox
           aria-label="Search"
@@ -871,7 +1029,7 @@ describe('SearchBox', () => {
     });
 
     it('decides the server-rendered name from the literal children', () => {
-      const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+      const warn = vi.spyOn(console, 'warn');
       const named = renderToString(
         <SearchBox
           aria-label="Search"
@@ -1022,11 +1180,12 @@ describe('SearchBox', () => {
       expect(onChange).toHaveBeenCalledTimes(2);
       expect(onChange).toHaveBeenLastCalledWith('ab');
       expect(onValueChange).toHaveBeenLastCalledWith('ab');
-      const deprecations = warn.mock.calls.filter(([message]) =>
-        String(message).includes('SearchBox: `onChange` is deprecated'),
-      );
-      expect(deprecations).toHaveLength(1);
-      expect(warn).toHaveBeenCalledOnce();
+      expect(warn.mock.calls).toEqual([
+        [
+          '[WaveUI] SearchBox: `onChange` is deprecated and will be removed in 1.0. Use ' +
+            '`onValueChange` instead.',
+        ],
+      ]);
       warn.mockRestore();
     });
 
@@ -1238,7 +1397,13 @@ describe('SearchBox', () => {
       const invalid = screen.getByTestId('invalid');
       expect(invalid).toHaveClass(...inputInvalidWithin.split(' '));
       expect(invalid).toHaveClass('border-destructive', 'focus-within:border-b-destructive');
-      expect(invalid).not.toHaveClass('border-input', 'focus-within:border-b-primary');
+      for (const replaced of [
+        'border-input',
+        'border-b-stroke-accessible',
+        'focus-within:border-b-primary',
+      ]) {
+        expect(invalid).not.toHaveClass(replaced);
+      }
       expect(screen.getByTestId('valid')).not.toHaveClass('border-destructive');
     });
 

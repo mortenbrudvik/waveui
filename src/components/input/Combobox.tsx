@@ -20,6 +20,17 @@ export type { OptionProps, OptionGroupProps } from './Option';
 /*  Combobox                                                          */
 /* ------------------------------------------------------------------ */
 
+/**
+ * The Combobox's built-in texts, for localization. Each member is optional and falls back to its
+ * English default.
+ */
+export interface ComboboxLabels {
+  /** Status text (announced, and shown in the popup) when the typed text matches no option.
+   * @default 'No matches'
+   */
+  noMatches?: string;
+}
+
 /** Properties for the Combobox component. */
 export interface ComboboxProps extends Omit<
   React.HTMLAttributes<HTMLDivElement>,
@@ -46,7 +57,8 @@ export interface ComboboxProps extends Omit<
   /** Controlled open state of the listbox. */
   open?: boolean;
   /**
-   * Initial open state for uncontrolled usage.
+   * Initial open state for uncontrolled usage. A combobox that starts disabled or read-only
+   * starts closed.
    * @default false
    */
   defaultOpen?: boolean;
@@ -91,6 +103,8 @@ export interface ComboboxProps extends Omit<
    * `disabled`) on while the listbox is open closes it (`onOpenChange(false)`).
    */
   readOnly?: boolean;
+  /** The built-in "No matches" text, for localization. Unset members keep their English defaults. */
+  labels?: ComboboxLabels;
   /** Called when the `<input role="combobox">` receives focus (the root keeps other handlers). */
   onFocus?: React.FocusEventHandler<HTMLInputElement>;
   /** Called when the `<input role="combobox">` loses focus. */
@@ -132,6 +146,7 @@ const ComboboxRoot = (props: ComboboxProps) => {
     autoCorrect,
     maxLength,
     readOnly,
+    labels,
     inputMode,
     spellCheck,
     enterKeyHint,
@@ -175,8 +190,14 @@ const ComboboxRoot = (props: ComboboxProps) => {
   const invalidLook = isInvalidLook(false, fieldProps['aria-invalid']);
 
   const [value, setValue] = useControllable(valueProp, defaultValue ?? '', onValueChange);
-  const [openState, setOpen] = useControllable(openProp, defaultOpen ?? false, onOpenChange);
   const interactive = !disabled && !readOnly;
+  // A combobox that starts disabled or read-only never shows its list, so it starts closed (no
+  // close to report later).
+  const [openState, setOpen] = useControllable(
+    openProp,
+    (defaultOpen ?? false) && interactive,
+    onOpenChange,
+  );
   const open = openState && interactive;
   // Text typed since the last commit, the filter; `null` shows the committed value's label
   // (input-pickers#7). Freeform: the input shows the value, and the draft follows that text.
@@ -203,7 +224,7 @@ const ComboboxRoot = (props: ComboboxProps) => {
   const rootRef = React.useRef<HTMLDivElement | null>(null);
   const inputRef = React.useRef<HTMLInputElement | null>(null);
 
-  const labels = React.useMemo(() => collectOptionLabels(children), [children]);
+  const optionLabels = React.useMemo(() => collectOptionLabels(children), [children]);
   const filter = React.useMemo(
     () => (draft ? (item: ListboxItem) => matchesText(item, draft) : undefined),
     [draft],
@@ -261,7 +282,9 @@ const ComboboxRoot = (props: ComboboxProps) => {
   // the label of the option with that value, else the value itself — so the text follows a
   // controlled parent that normalizes or rejects what was typed while the input still has focus.
   // Otherwise: the typed filter, else the selected option's label.
-  const optionLabel = value ? (listbox.getItem(value)?.label ?? labels.get(value)) : undefined;
+  const optionLabel = value
+    ? (listbox.getItem(value)?.label ?? optionLabels.get(value))
+    : undefined;
   let inputText: string;
   if (freeform) inputText = value === typedValue ? value : (optionLabel ?? value);
   else inputText = draft ?? optionLabel ?? '';
@@ -270,6 +293,7 @@ const ComboboxRoot = (props: ComboboxProps) => {
   if (freeform && draft !== null && draft !== inputText) setDraft(inputText);
 
   const expanded = open && listbox.items.length > 0;
+  const noMatchesText = labels?.noMatches ?? 'No matches';
   // The popup shows the list, or "No matches" for a draft.
   const surfaceOpen = open && (expanded || !!draft);
   const noMatches = surfaceOpen && !expanded;
@@ -365,7 +389,7 @@ const ComboboxRoot = (props: ComboboxProps) => {
       {/* Mounted before its text: a live region added together with its text is not announced by
           every screen reader. The row in the popup is the visible copy. */}
       <span role="status" className="sr-only">
-        {noMatches && 'No matches'}
+        {noMatches && noMatchesText}
       </span>
       <ListboxSurface
         listbox={listbox}
@@ -377,7 +401,7 @@ const ComboboxRoot = (props: ComboboxProps) => {
         emptyContent={
           draft ? (
             <div aria-hidden="true" className="px-3 py-1.5 text-body-1 text-muted-foreground">
-              No matches
+              {noMatchesText}
             </div>
           ) : undefined
         }
@@ -413,7 +437,7 @@ export const ComboboxOptionGroup = OptionGroup;
  * (`aria-activedescendant`), Enter selects, Escape closes. Without `freeform` the text is only a
  * filter: its first match becomes active while typing, and the input shows the selected option's
  * label again when the listbox closes. With `freeform` the text itself is the value. Text that
- * matches no option shows "No matches", announced through a status region.
+ * matches no option shows "No matches" (`labels.noMatches`), announced through a status region.
  *
  * The `<input>` receives `id`, `aria-label`, `aria-labelledby`, `aria-describedby`,
  * `aria-invalid`, `aria-required`, `aria-errormessage`, `aria-details`, `tabIndex`, `autoFocus`,

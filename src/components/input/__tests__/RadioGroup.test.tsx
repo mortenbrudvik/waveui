@@ -163,12 +163,7 @@ describe('RadioGroup', () => {
       await user.click(radio('Beta'));
       expect(onChange).toHaveBeenCalledWith('b');
       expect(onValueChange).toHaveBeenCalledWith('b');
-      const deprecations = warn.mock.calls.filter(([msg]) =>
-        String(msg).includes('RadioGroup: `onChange` is deprecated'),
-      );
-      expect(deprecations).toHaveLength(1);
-      expect(String(deprecations[0][0])).toContain('Use `onValueChange` instead.');
-      expect(warn).toHaveBeenCalledTimes(1);
+      expect(warn.mock.calls).toEqual([[ONCHANGE_DEPRECATION]]);
     } finally {
       warn.mockRestore();
     }
@@ -309,11 +304,13 @@ describe('RadioGroup', () => {
   });
 
   it('throws when RadioItem is used outside RadioGroup', () => {
-    const error = vi.spyOn(console, 'error').mockImplementation(() => {});
+    // A render error in a test is thrown by render(); nothing is logged (asserted).
+    const error = vi.spyOn(console, 'error');
     try {
       expect(() => render(<RadioItem value="a" label="Orphan" />)).toThrow(
-        '[WaveUI] RadioItem must be used within a RadioGroup',
+        new Error('[WaveUI] RadioItem must be used within a RadioGroup'),
       );
+      expect(error).not.toHaveBeenCalled();
     } finally {
       error.mockRestore();
     }
@@ -377,6 +374,45 @@ describe('RadioGroup', () => {
               'within a RadioGroup; items that share a value are checked together.',
           ],
         ]);
+      } finally {
+        warn.mockRestore();
+      }
+    });
+
+    it('still finds its own items when the consumer overrides the role', () => {
+      const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+      try {
+        render(
+          <RadioGroup aria-label="Options" role="group">
+            <RadioItem value="a" label="Alpha" />
+            <RadioItem value="a" label="Alpha again" />
+          </RadioGroup>,
+        );
+        expect(warn.mock.calls).toEqual([
+          [
+            '[WaveUI] RadioGroup: several items share the value "a". Item values must be unique ' +
+              'within a RadioGroup; items that share a value are checked together.',
+          ],
+        ]);
+      } finally {
+        warn.mockRestore();
+      }
+    });
+
+    it('does not count the items of a nested group as its own', async () => {
+      const warn = vi.spyOn(console, 'warn');
+      try {
+        render(
+          <RadioGroup aria-label="Outer">
+            <RadioItem value="a" label="Alpha" />
+            <RadioGroup aria-label="Inner">
+              <RadioItem value="a" label="Inner alpha" />
+            </RadioGroup>
+          </RadioGroup>,
+        );
+        // The roving tab stops settle after the nested group registers its items.
+        await act(async () => {});
+        expect(warn).not.toHaveBeenCalled();
       } finally {
         warn.mockRestore();
       }

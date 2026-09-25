@@ -123,12 +123,12 @@ describe('Switch', () => {
       rerender(<Switch label="Dark mode" onChange={onChange} />);
       await user.click(screen.getByRole('switch', { name: 'Dark mode' }));
       expect(onChange).toHaveBeenCalledWith(true);
-      const deprecations = warn.mock.calls.filter(([msg]) =>
-        String(msg).includes('Switch: `onChange` is deprecated'),
-      );
-      expect(deprecations).toHaveLength(1);
-      expect(String(deprecations[0][0])).toContain('Use `onCheckedChange` instead.');
-      expect(warn).toHaveBeenCalledTimes(1);
+      expect(warn.mock.calls).toEqual([
+        [
+          '[WaveUI] Switch: `onChange` is deprecated and will be removed in 1.0. Use ' +
+            '`onCheckedChange` instead.',
+        ],
+      ]);
     } finally {
       warn.mockRestore();
     }

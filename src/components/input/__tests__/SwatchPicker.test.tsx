@@ -20,10 +20,6 @@ function spyWarn() {
   return vi.spyOn(console, 'warn').mockImplementation(() => {});
 }
 
-function warnings(spy: ReturnType<typeof spyWarn>, text: string) {
-  return spy.mock.calls.filter(([msg]) => String(msg).includes(text));
-}
-
 describe('SwatchPicker', () => {
   testSystemProps(SwatchPicker, {
     expectedTag: 'div',
@@ -146,9 +142,12 @@ describe('SwatchPicker', () => {
       rerender(<SwatchPicker items={defaultItems} aria-label="Brand colors" onChange={onChange} />);
       await user.click(swatch('Green'));
       expect(onChange).toHaveBeenCalledWith('green');
-      const deprecations = warnings(warn, 'SwatchPicker: `onChange` is deprecated');
-      expect(deprecations).toHaveLength(1);
-      expect(String(deprecations[0][0])).toContain('Use `onValueChange` instead.');
+      expect(warn.mock.calls).toEqual([
+        [
+          '[WaveUI] SwatchPicker: `onChange` is deprecated and will be removed in 1.0. Use ' +
+            '`onValueChange` instead.',
+        ],
+      ]);
     } finally {
       warn.mockRestore();
     }
@@ -156,6 +155,11 @@ describe('SwatchPicker', () => {
 });
 
 describe('SwatchPicker — shape and size', () => {
+  it('gives the swatches their own padding, so an app-wide button rule cannot shift the check (C-NATIVE)', () => {
+    render(<SwatchPicker items={defaultItems} aria-label="Brand colors" />);
+    for (const radio of screen.getAllByRole('radio')) expect(radio).toHaveClass('p-0');
+  });
+
   it('uses rounded-full for the default circular shape', () => {
     render(<SwatchPicker items={defaultItems} aria-label="Brand colors" />);
     for (const radio of screen.getAllByRole('radio')) expect(radio).toHaveClass('rounded-full');
@@ -336,7 +340,12 @@ describe('SwatchPicker — accessible names (input-pickers#23)', () => {
       const group = screen.getByRole('radiogroup');
       expect(group).not.toHaveAttribute('aria-label');
       expect(group).toHaveAccessibleName('');
-      expect(warnings(warn, 'SwatchPicker: the radiogroup has no accessible name')).toHaveLength(1);
+      expect(warn.mock.calls).toEqual([
+        [
+          '[WaveUI] SwatchPicker: the radiogroup has no accessible name. Pass `aria-label` or ' +
+            '`aria-labelledby`, or render it inside a Field.',
+        ],
+      ]);
     } finally {
       warn.mockRestore();
     }
@@ -366,7 +375,12 @@ describe('SwatchPicker — accessible names (input-pickers#23)', () => {
       );
       expect(swatch('Cranberry')).toBeInTheDocument();
       expect(swatch('#107c10')).toBeInTheDocument();
-      expect(warnings(warn, 'SwatchPicker: swatch "b" has no `label`')).toHaveLength(1);
+      expect(warn.mock.calls).toEqual([
+        [
+          '[WaveUI] SwatchPicker: swatch "b" has no `label`, so it is announced by its color ' +
+            'value. Give every item a `label`.',
+        ],
+      ]);
     } finally {
       warn.mockRestore();
     }
@@ -376,7 +390,7 @@ describe('SwatchPicker — accessible names (input-pickers#23)', () => {
     const warn = spyWarn();
     try {
       render(<SwatchPicker items={defaultItems} aria-label="Brand colors" />);
-      expect(warnings(warn, 'SwatchPicker')).toHaveLength(0);
+      expect(warn).not.toHaveBeenCalled();
     } finally {
       warn.mockRestore();
     }

@@ -6,7 +6,13 @@ import { warnDeprecated, warnOnce } from '../../lib/dev';
 import { DismissIcon, SearchIcon } from '../../lib/icons';
 import { hasRenderedTextLabel, hasTextLabel, observeTextLabel } from '../../lib/labelInName';
 import { mergeProps } from '../../lib/mergeProps';
-import { renderSlot, resolveSlot, VOID_ELEMENTS } from '../../lib/slot';
+import {
+  materialiseSlotContent,
+  renderSlot,
+  resolveSlot,
+  slotRendersContent,
+  VOID_ELEMENTS,
+} from '../../lib/slot';
 import { focusRing, inputFocusWithin, inputInvalidWithin } from '../../lib/styles';
 import type { Slot, SlotObject } from '../../lib/types';
 import { useControllable } from '../../hooks/useControllable';
@@ -85,12 +91,14 @@ export interface SearchBoxProps
   disabled?: boolean;
   /**
    * Slot rendered before the text (replaces the default search icon). It takes the room it needs;
-   * the text starts after it.
+   * the text starts after it. A value that renders nothing (`null`, `false`, `''`, an empty array
+   * or Fragment) keeps the default icon.
    */
   contentBefore?: Slot<'span'>;
   /**
    * Slot rendered after the text, before the clear button. It takes the room it needs; the text
-   * ends before it.
+   * ends before it. A value that renders nothing (`false`, `''`, an empty array or Fragment) is no
+   * slot: nothing takes room.
    */
   contentAfter?: Slot<'span'>;
   /**
@@ -99,7 +107,8 @@ export interface SearchBoxProps
    * `onClear` and moves focus back to the input. The slot cannot hide the clear button or leave
    * it empty: content that renders nothing (`null`, `false`, `true`, `''`, or an array, `Set`,
    * generator or Fragment of only those) keeps the default icon, and a slot object without
-   * children (`{ className: 'text-error' }`) wraps the default icon in its element.
+   * children (`{ className: 'text-error' }`) wraps the default icon in its element (not when it
+   * brings markup of its own through `dangerouslySetInnerHTML`, or is a void or component element).
    *
    * A `<button>` element or a Wave `Button` passed here is not nested: its props are merged into
    * the built-in button (its `onClick` runs first; `preventDefault()` cancels the clear) and its
@@ -184,45 +193,6 @@ const noop = () => {};
 const INTERACTIVE_CONTENT =
   'a[href], button, input, select, textarea, [tabindex], [contenteditable]:not([contenteditable="false"])';
 
-/** Whether React renders nothing for `node` (`null`, `undefined`, booleans, `''`). */
-function rendersNothing(node: React.ReactNode): boolean {
-  return node === undefined || node === null || typeof node === 'boolean' || node === '';
-}
-
-/**
- * Whether `content` renders nothing: `null`, `undefined`, booleans, `''`, or a Fragment, array,
- * `Set` or other re-iterable collection made only of those (at any depth). The clear button then
- * keeps the default icon, so it is never an empty, invisible button. A one-shot iterator (a
- * generator) is not read here, because reading would consume it; `resolveSlot` materialises a
- * top-level generator into an array before this check.
- */
-function isEmptyContent(content: unknown, visiting: Set<object> = new Set()): boolean {
-  if (rendersNothing(content as React.ReactNode)) return true;
-  if (typeof content !== 'object' || content === null) return false;
-  if (React.isValidElement(content)) {
-    return (
-      isElementOfType<{ children?: React.ReactNode }>(content, React.Fragment) &&
-      isEmptyContent(content.props.children, visiting)
-    );
-  }
-  if (!(Symbol.iterator in content)) return false;
-  const iterable = content as Iterable<unknown>;
-  if (!Array.isArray(iterable) && (iterable[Symbol.iterator]() as unknown) === iterable) {
-    return false;
-  }
-  // A collection that contains itself adds nothing beyond what is already being checked.
-  if (visiting.has(iterable)) return true;
-  visiting.add(iterable);
-  try {
-    for (const item of iterable) {
-      if (!isEmptyContent(item, visiting)) return false;
-    }
-    return true;
-  } finally {
-    visiting.delete(iterable);
-  }
-}
-
 /** Whether `type` is an intrinsic element that can hold the default icon (not a void element). */
 function canHoldIcon(type: React.ElementType): boolean {
   return typeof type === 'string' && !VOID_ELEMENTS.has(type);
@@ -242,30 +212,33 @@ function isButtonType(type: unknown): boolean {
 
 /**
  * Splits the props of a button-like element or object into button props and content. The content
- * is rendered as is, so a text label in it names the button (C-SLOTS naming).
+ * is rendered as is, so a text label in it names the button (C-SLOTS naming). Content that renders
+ * nothing is `null` (the default icon); a generator is read once and rendered as its items.
  */
 function splitButtonLike(type: unknown, props: UnknownProps, children: React.ReactNode) {
-  const literalTextLabel = hasTextLabel(children);
+  const hasChildren = slotRendersContent(children);
+  const content = materialiseSlotContent(children);
+  const literalTextLabel = hasTextLabel(content);
   if (type === Button) {
     // Wave Button's own props do not belong on a native <button>; its icon becomes content.
     const { appearance, size, icon, as, children: _children, ...buttonProps } = props;
     const iconNode = renderSlot(icon as Slot<'span'>, 'span', 'inline-flex', {
       'aria-hidden': true,
     });
-    const content =
-      iconNode || !isEmptyContent(children) ? (
+    const buttonContent =
+      iconNode || hasChildren ? (
         <>
           {iconNode}
-          {children}
+          {content}
         </>
       ) : null;
-    return { buttonProps, content, contentMayName: true, literalTextLabel };
+    return { buttonProps, content: buttonContent, contentMayName: true, literalTextLabel };
   }
   const { as, children: _children, ...buttonProps } = props;
   // `null` content falls back to the default icon.
   return {
     buttonProps,
-    content: isEmptyContent(children) ? null : children,
+    content: hasChildren ? content : null,
     contentMayName: true,
     literalTextLabel,
   };
@@ -273,8 +246,8 @@ function splitButtonLike(type: unknown, props: UnknownProps, children: React.Rea
 
 /**
  * Splits `dismiss` into the props merged onto the built-in clear button and its content. Content
- * that renders nothing (see {@link isEmptyContent}) never leaves the button empty: without other
- * props it is the default icon; a slot object with its own content props (`className`, `style`, …)
+ * that renders nothing (`slotRendersContent`) never leaves the button empty: without other props
+ * it is the default icon; a slot object with its own content props (`className`, `style`, …)
  * wraps the default icon in its element.
  */
 function resolveDismiss(dismiss: SearchBoxProps['dismiss']): DismissParts {
@@ -314,15 +287,18 @@ function resolveDismiss(dismiss: SearchBoxProps['dismiss']): DismissParts {
       contentProps[key] = value;
     }
   }
-  // A void (`img`) or component (`{ as: MyIcon }`) slot renders content of its own.
-  const empty = canHoldIcon(Component) && isEmptyContent(children);
+  // A void (`img`), component (`{ as: MyIcon }`) or markup (`dangerouslySetInnerHTML`) slot
+  // renders content of its own.
+  const hasChildren = slotRendersContent(children);
+  const ownMarkup = contentProps.dangerouslySetInnerHTML != null;
+  const empty = !hasChildren && canHoldIcon(Component) && !ownMarkup;
   if (empty && Object.keys(buttonProps).length === 0 && Object.keys(contentProps).length === 0) {
     return DEFAULT_DISMISS;
   }
   // A button object without content (`{ onClick }`, `{ type: 'button' }`) or a content object
   // without children (`{ className }`) keeps the default icon inside the object's own element (its
-  // className/style/attributes still apply).
-  const contentChildren = empty ? <DismissIcon /> : children;
+  // className/style/attributes still apply). Markup of its own takes no children at all.
+  const contentChildren = empty ? <DismissIcon /> : hasChildren ? children : undefined;
   const content =
     contentChildren === undefined
       ? React.createElement(Component, { 'aria-hidden': true, ...contentProps })
@@ -399,6 +375,7 @@ export const SearchBox = ({
   onKeyDown,
   onKeyUp,
   onMouseDown,
+  hidden,
   ...rest
 }: SearchBoxProps) => {
   if (onChange !== undefined) warnDeprecated('SearchBox', 'onChange', 'onValueChange');
@@ -518,7 +495,8 @@ export const SearchBox = ({
       disabled,
       'aria-label': hasOwnName || namedByContent ? undefined : DEFAULT_CLEAR_LABEL,
       className: cn(
-        'me-1 flex h-6 w-6 shrink-0 items-center justify-center rounded text-muted-foreground',
+        // Padding and background set here (C-NATIVE): an app-wide `button` rule cannot fill it.
+        'me-1 flex h-6 w-6 shrink-0 items-center justify-center rounded bg-transparent p-0 text-muted-foreground',
         'not-disabled:not-aria-disabled:hover:text-foreground',
         focusRing,
         'disabled:cursor-not-allowed',
@@ -527,8 +505,16 @@ export const SearchBox = ({
     slotButtonProps,
   ) as React.ComponentPropsWithoutRef<'button'>;
 
+  // A merged button with markup of its own (`dangerouslySetInnerHTML`) takes no children.
   const clearContent =
-    dismissKind === 'content' ? dismissParts.content : (dismissParts.content ?? <DismissIcon />);
+    clearButtonProps.dangerouslySetInnerHTML != null
+      ? undefined
+      : dismissKind === 'content'
+        ? dismissParts.content
+        : (dismissParts.content ?? <DismissIcon />);
+  // A slot value that renders nothing is no slot (the default icon before the text, no box after).
+  const hasBefore = slotRendersContent(contentBefore);
+  const hasAfter = slotRendersContent(contentAfter);
 
   return (
     <div
@@ -540,14 +526,17 @@ export const SearchBox = ({
         inputFocusWithin,
         invalidLook && inputInvalidWithin,
         disabled && 'cursor-not-allowed opacity-50',
+        // The display utility above would beat the `hidden` attribute's own display rule.
+        hidden && 'hidden',
         className,
       )}
+      hidden={hidden}
       {...rest}
       // Composed at press time, like the clear button's click: the handler reads the input ref.
       onMouseDown={(event) => composeEventHandlers(onMouseDown, handleRootMouseDown)(event)}
     >
       <span className="flex shrink-0 items-center ps-2">
-        {contentBefore != null ? (
+        {hasBefore ? (
           renderSlot(contentBefore, 'span', 'shrink-0')
         ) : (
           <SearchIcon className="text-muted-foreground" />
@@ -591,7 +580,7 @@ export const SearchBox = ({
         {...fieldProps}
       />
 
-      {contentAfter != null && (
+      {hasAfter && (
         <span className="flex shrink-0 items-center pe-2">
           {renderSlot(contentAfter, 'span', 'shrink-0')}
         </span>

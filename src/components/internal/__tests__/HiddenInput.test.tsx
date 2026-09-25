@@ -239,7 +239,7 @@ describe('HiddenInput — required (native validation)', () => {
   });
 
   it('does not warn about a controlled input without onChange', () => {
-    const spy = vi.spyOn(console, 'error').mockImplementation(() => {});
+    const spy = vi.spyOn(console, 'error');
     render(
       <>
         <Control required value="x" />

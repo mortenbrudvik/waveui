@@ -120,12 +120,12 @@ describe('Checkbox', () => {
       await user.click(screen.getByRole('checkbox', { name: 'Accept' }));
       expect(onChange).toHaveBeenCalledWith(true);
       expect(onCheckedChange).toHaveBeenCalledWith(true);
-      const deprecations = warn.mock.calls.filter(([msg]) =>
-        String(msg).includes('Checkbox: `onChange` is deprecated'),
-      );
-      expect(deprecations).toHaveLength(1);
-      expect(String(deprecations[0][0])).toContain('Use `onCheckedChange` instead.');
-      expect(warn).toHaveBeenCalledTimes(1);
+      expect(warn.mock.calls).toEqual([
+        [
+          '[WaveUI] Checkbox: `onChange` is deprecated and will be removed in 1.0. Use ' +
+            '`onCheckedChange` instead.',
+        ],
+      ]);
     } finally {
       warn.mockRestore();
     }

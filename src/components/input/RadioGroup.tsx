@@ -168,7 +168,8 @@ const RadioGroupRoot = ({
     if (!isDev || !root) return;
     const seen = new Set<string>();
     for (const item of root.querySelectorAll<HTMLElement>('[role="radio"][data-roving-value]')) {
-      if (item.closest('[role="radiogroup"]') !== root) continue;
+      // Its own items only: the roving marker cannot be overridden by the consumer (`role` can).
+      if (item.closest('[data-roving-container]') !== root) continue;
       const itemValue = item.getAttribute('data-roving-value') ?? '';
       if (seen.has(itemValue)) warnDuplicateValue(itemValue);
       seen.add(itemValue);

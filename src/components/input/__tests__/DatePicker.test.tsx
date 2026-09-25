@@ -1,11 +1,12 @@
 import * as React from 'react';
 import { afterEach, beforeEach, describe, it, expect, expectTypeOf, vi } from 'vitest';
 import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import { hydrateRoot } from 'react-dom/client';
 import { renderToString } from 'react-dom/server';
 import userEvent from '@testing-library/user-event';
 import { composeStories } from '@storybook/react';
 import * as stories from '../../../../stories/DatePicker.stories';
-import { DatePicker, type DatePickerProps } from '../DatePicker';
+import { DatePicker, type DatePickerLabels, type DatePickerProps } from '../DatePicker';
 import { formatDate } from '../dateUtils';
 import {
   axe,
@@ -156,6 +157,26 @@ describe('DatePicker', () => {
       expect(textbox()).toHaveClass('pe-14');
     });
 
+    it('gives every button its own padding and background, so an app-wide button rule cannot fill them (C-NATIVE)', () => {
+      render(
+        <DatePicker
+          aria-label="Date"
+          locale="en-US"
+          defaultValue={JUNE_15}
+          clearable
+          defaultOpen
+        />,
+      );
+      const buttons = screen.getAllByRole('button');
+      expect(buttons.length).toBeGreaterThan(40); // toggle, clear, month buttons and 42 days
+      for (const button of buttons) {
+        expect(button).toHaveClass('p-0');
+        expect(button).toHaveClass('bg-transparent');
+      }
+      // The selected day keeps its own fill.
+      expect(dayButton('Sunday, June 15, 2025')).toHaveClass('data-[selected]:bg-primary');
+    });
+
     it('uses theme tokens and gates hover on every button (button-provider#3)', () => {
       render(<DatePicker aria-label="Date" defaultValue={JUNE_15} clearable defaultOpen />);
       const buttons = screen.getAllByRole('button');
@@ -173,6 +194,42 @@ describe('DatePicker', () => {
       );
       expect(html).toContain('value="06/15/2025"');
       expect(html).not.toContain('role="dialog"');
+    });
+
+    it('reports the calendar closed on the server with defaultOpen, so no reference dangles', () => {
+      const host = document.createElement('div');
+      host.innerHTML = renderToString(
+        <DatePicker aria-label="Date" locale="en-US" defaultValue={JUNE_15} defaultOpen />,
+      );
+      const toggleButton = host.querySelector('button[aria-haspopup="dialog"]');
+      expect(toggleButton).toHaveAttribute('aria-expanded', 'false');
+      for (const element of host.querySelectorAll('[aria-controls]')) {
+        for (const id of element.getAttribute('aria-controls')!.split(' ')) {
+          expect(host.querySelector(`[id="${id}"]`)).not.toBeNull();
+        }
+      }
+    });
+
+    it('opens a defaultOpen calendar once hydrated, without a hydration mismatch', async () => {
+      const element = (
+        <DatePicker aria-label="Date" locale="en-US" defaultValue={JUNE_15} defaultOpen />
+      );
+      const container = document.createElement('div');
+      container.innerHTML = renderToString(element);
+      document.body.appendChild(container);
+      const error = vi.spyOn(console, 'error');
+      let root: ReturnType<typeof hydrateRoot> | undefined;
+      try {
+        await act(async () => {
+          root = hydrateRoot(container, element);
+        });
+        expect(error).not.toHaveBeenCalled();
+        expect(toggle()).toHaveAttribute('aria-expanded', 'true');
+        expect(toggle()).toHaveAttribute('aria-controls', dialog().id);
+      } finally {
+        act(() => root?.unmount());
+        container.remove();
+      }
     });
 
     it('uses logical positions and mirrored chevrons in RTL (feedback-navigation#34, input-datetime#17)', () => {
@@ -199,21 +256,24 @@ describe('DatePicker', () => {
       const invalidClasses = ['border-destructive', 'focus:border-b-destructive'];
       const { unmount } = render(<DatePicker aria-label="Date" locale="en-US" />);
       expect(textbox()).toHaveClass('border-input', 'border-b-stroke-accessible');
-      expect(textbox()).not.toHaveClass(...invalidClasses);
+      for (const name of invalidClasses) expect(textbox()).not.toHaveClass(name);
       // Its own rejected text.
       await user.type(textbox(), 'soon{Enter}');
       expect(textbox()).toHaveAttribute('aria-invalid', 'true');
       expect(textbox()).toHaveClass(...invalidClasses);
-      expect(textbox()).not.toHaveClass('border-input', 'border-b-stroke-accessible');
+      expect(textbox()).not.toHaveClass('border-input');
+      expect(textbox()).not.toHaveClass('border-b-stroke-accessible');
       await user.clear(textbox());
-      expect(textbox()).not.toHaveClass(...invalidClasses);
+      for (const name of invalidClasses) expect(textbox()).not.toHaveClass(name);
       unmount();
 
       // The surrounding Field's error, unless the consumer overrides aria-invalid.
       const field = renderWithFieldContext(<DatePicker />, { errorId: FIELD_TEST_IDS.errorId });
       expect(textbox(FIELD_TEST_TEXT.label)).toHaveClass(...invalidClasses);
       field.rerender(<DatePicker aria-invalid={false} />);
-      expect(textbox(FIELD_TEST_TEXT.label)).not.toHaveClass(...invalidClasses);
+      for (const name of invalidClasses) {
+        expect(textbox(FIELD_TEST_TEXT.label)).not.toHaveClass(name);
+      }
       field.unmount();
 
       render(<DatePicker aria-label="Date" aria-invalid />);
@@ -325,9 +385,13 @@ describe('DatePicker', () => {
           onValueChange={onValueChange}
         />,
       );
-      expect(warn).toHaveBeenCalledWith(
-        expect.stringContaining('[WaveUI] DatePicker: `formatDate` is set without `parseDate`'),
-      );
+      expect(warn.mock.calls).toEqual([
+        [
+          '[WaveUI] DatePicker: `formatDate` is set without `parseDate`. Typed dates are parsed ' +
+            'with the default parser for `locale` (its numeric format or yyyy-mm-dd), which may ' +
+            'not read your format; pass `parseDate` as the inverse of `formatDate`.',
+        ],
+      ]);
       await user.type(textbox(), '03/04/2025{Enter}');
       expect(fields(onValueChange.mock.calls[0][0] as Date)).toEqual([2025, 4, 3]);
       expect(textbox()).toHaveValue(new Date(2025, 3, 3).toDateString());
@@ -1398,6 +1462,70 @@ describe('DatePicker', () => {
       );
       expect(screen.getByRole('heading', { name: heading })).toBeInTheDocument();
     });
+
+    it('localises the built-in button names and error texts with labels', async () => {
+      const user = userEvent.setup();
+      const labels: DatePickerLabels = {
+        clear: 'Tøm dato',
+        openCalendar: 'Åpne kalender',
+        previousMonth: 'Forrige måned',
+        nextMonth: 'Neste måned',
+        invalidDate: (pattern) => `Skriv en dato som ${pattern ?? '?'}.`,
+        outOfRange: (min, max) => `Velg mellom ${min ?? '-'} og ${max ?? '-'}.`,
+        unavailableDate: 'Datoen er ikke ledig.',
+      };
+      render(
+        <DatePicker
+          aria-label="Dato"
+          locale="nb-NO"
+          defaultValue={JUNE_15}
+          clearable
+          minDate={new Date(2025, 5, 1)}
+          maxDate={new Date(2025, 5, 30)}
+          disabledDates={(date) => date.getDate() === 20}
+          labels={labels}
+        />,
+      );
+      expect(screen.getByRole('button', { name: 'Tøm dato' })).toBeInTheDocument();
+      await user.click(screen.getByRole('button', { name: 'Åpne kalender' }));
+      expect(screen.getByRole('button', { name: 'Forrige måned' })).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: 'Neste måned' })).toBeInTheDocument();
+      await user.keyboard('{Escape}');
+
+      const input = textbox('Dato');
+      await user.clear(input);
+      await user.type(input, 'snart{Enter}');
+      expect(input).toHaveAccessibleDescription('Skriv en dato som DD.MM.YYYY.');
+      await user.clear(input);
+      await user.type(input, '01.07.2025{Enter}');
+      expect(input).toHaveAccessibleDescription('Velg mellom 01.06.2025 og 30.06.2025.');
+      await user.clear(input);
+      await user.type(input, '20.06.2025{Enter}');
+      expect(input).toHaveAccessibleDescription('Datoen er ikke ledig.');
+    });
+
+    it('passes no pattern to invalidDate with a custom parseDate, and only the set bound to outOfRange', async () => {
+      const user = userEvent.setup();
+      const invalidDate = vi.fn((_pattern: string | undefined) => 'Ugyldig.');
+      const outOfRange = vi.fn((_min: string | undefined, _max: string | undefined) => 'Utenfor.');
+      render(
+        <DatePicker
+          aria-label="Date"
+          locale="en-US"
+          formatDate={(date) => formatDate(date, 'en-US')}
+          parseDate={(text) => (text === '07/01/2025' ? new Date(2025, 6, 1) : null)}
+          maxDate={new Date(2025, 5, 30)}
+          labels={{ invalidDate, outOfRange }}
+        />,
+      );
+      await user.type(textbox(), 'soon{Enter}');
+      expect(textbox()).toHaveAccessibleDescription('Ugyldig.');
+      expect(invalidDate).toHaveBeenLastCalledWith(undefined);
+      await user.clear(textbox());
+      await user.type(textbox(), '07/01/2025{Enter}');
+      expect(textbox()).toHaveAccessibleDescription('Utenfor.');
+      expect(outOfRange).toHaveBeenLastCalledWith(undefined, '06/30/2025');
+    });
   });
 
   describe('disabled and bounds (input-basic#32, repo-level#39)', () => {
@@ -1440,6 +1568,23 @@ describe('DatePicker', () => {
       rerender(<DatePicker aria-label="Date" defaultOpen />);
       expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
     });
+
+    it.each([
+      ['disabled', { disabled: true }],
+      ['read-only', { readOnly: true }],
+    ])(
+      'reports no close for a defaultOpen calendar that starts %s (it was never shown)',
+      (_, lock) => {
+        const onOpenChange = vi.fn();
+        const { rerender } = render(
+          <DatePicker aria-label="Date" defaultOpen onOpenChange={onOpenChange} {...lock} />,
+        );
+        expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+        rerender(<DatePicker aria-label="Date" defaultOpen onOpenChange={onOpenChange} />);
+        expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+        expect(onOpenChange).not.toHaveBeenCalled();
+      },
+    );
 
     it.each([
       ['read-only', { readOnly: true }],
@@ -1627,6 +1772,16 @@ describe('DatePicker', () => {
       await user.tab();
       expect(onFocus).toHaveBeenCalledTimes(1);
       expect(onBlur).toHaveBeenCalledTimes(1);
+    });
+
+    it('routes the text input attributes autoCapitalize and autoCorrect to the input', () => {
+      render(
+        <DatePicker aria-label="Date" autoCapitalize="none" autoCorrect="off" data-testid="root" />,
+      );
+      expect(textbox()).toHaveAttribute('autocapitalize', 'none');
+      expect(textbox()).toHaveAttribute('autocorrect', 'off');
+      expect(screen.getByTestId('root')).not.toHaveAttribute('autocapitalize');
+      expect(screen.getByTestId('root')).not.toHaveAttribute('autocorrect');
     });
 
     it('composes a consumer onKeyDown; preventDefault suppresses the Enter commit', async () => {
@@ -1882,10 +2037,12 @@ describe('DatePicker', () => {
       await openCalendar(user);
       await user.click(dayButton('Friday, June 20, 2025'));
       expect(fields(onChange.mock.calls[0][0] as Date)).toEqual([2025, 6, 20]);
-      const deprecations = warn.mock.calls.filter(([message]) =>
-        String(message).includes('DatePicker: `onChange` is deprecated'),
-      );
-      expect(deprecations).toHaveLength(1);
+      expect(warn.mock.calls).toEqual([
+        [
+          '[WaveUI] DatePicker: `onChange` is deprecated and will be removed in 1.0. Use ' +
+            '`onValueChange` instead.',
+        ],
+      ]);
     });
   });
 

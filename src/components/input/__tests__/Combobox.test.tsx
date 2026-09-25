@@ -4,7 +4,14 @@ import { act, render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { hydrateRoot } from 'react-dom/client';
 import { renderToString } from 'react-dom/server';
-import { Combobox, ComboboxOption, ComboboxOptionGroup, Option, OptionGroup } from '../Combobox';
+import {
+  Combobox,
+  ComboboxOption,
+  ComboboxOptionGroup,
+  Option,
+  OptionGroup,
+  type ComboboxLabels,
+} from '../Combobox';
 import { asClientReference, testCompoundExposure, testSystemProps } from '../../../test-utils';
 import { FIELD_TEST_IDS, FIELD_TEST_TEXT, renderWithFieldContext } from '../../../test-utils-field';
 import { DismissLayerProvider, useDismiss } from '../../../hooks/useDismiss';
@@ -71,6 +78,16 @@ function ParentLayer({
     </DismissLayerProvider>
   );
 }
+
+const CONTROLLED_TO_UNCONTROLLED =
+  '[WaveUI] A component is changing from controlled to uncontrolled. Components should not ' +
+  'switch between controlled and uncontrolled: pass `undefined` only when the component is ' +
+  'uncontrolled, and the empty value (for example `[]`, `null` or `""`) to clear a controlled ' +
+  'value.';
+
+const DEPRECATED_ON_OPTION_SELECT =
+  '[WaveUI] Combobox: `onOptionSelect` is deprecated and will be removed in 1.0. Use ' +
+  '`onValueChange` instead.';
 
 afterEach(() => {
   vi.restoreAllMocks();
@@ -320,6 +337,17 @@ describe('Combobox', () => {
       expect(status).toHaveTextContent('No matches');
       await user.keyboard('{Escape}');
       expect(status).toBeEmptyDOMElement();
+    });
+
+    it('announces and shows labels.noMatches instead of the English text', async () => {
+      const user = userEvent.setup();
+      const labels: ComboboxLabels = { noMatches: 'Ingen treff' };
+      const { container } = renderCombobox({ labels });
+      await user.type(combobox(), 'zzz');
+      expect(within(container).getByRole('status')).toHaveTextContent('Ingen treff');
+      const surface = document.querySelector<HTMLElement>('[data-wave-listbox-surface]')!;
+      expect(within(surface).getByText('Ingen treff')).toHaveAttribute('aria-hidden', 'true');
+      expect(screen.queryByText('No matches')).toBeNull();
     });
 
     it('shows no "No matches" surface while a controlled parent keeps the list closed (input-pickers#21)', async () => {
@@ -736,7 +764,7 @@ describe('Combobox', () => {
       const container = document.createElement('div');
       container.innerHTML = renderToString(element);
       document.body.appendChild(container);
-      const error = vi.spyOn(console, 'error').mockImplementation(() => {});
+      const error = vi.spyOn(console, 'error');
       let root: ReturnType<typeof hydrateRoot> | undefined;
       try {
         await act(async () => {
@@ -794,12 +822,7 @@ describe('Combobox', () => {
         </Combobox>,
       );
       expect(combobox()).toHaveValue('');
-      expect(warn).toHaveBeenCalledTimes(1);
-      expect(warn).toHaveBeenCalledWith(
-        expect.stringContaining(
-          '[WaveUI] A component is changing from controlled to uncontrolled.',
-        ),
-      );
+      expect(warn.mock.calls).toEqual([[CONTROLLED_TO_UNCONTROLLED]]);
     });
   });
 
@@ -904,10 +927,7 @@ describe('Combobox', () => {
       await user.click(option('Beta'));
       expect(onValueChange).toHaveBeenCalledWith('b');
       expect(onOptionSelect).toHaveBeenCalledTimes(2);
-      expect(warn).toHaveBeenCalledTimes(1);
-      expect(String(warn.mock.calls[0][0])).toContain(
-        '[WaveUI] Combobox: `onOptionSelect` is deprecated',
-      );
+      expect(warn.mock.calls).toEqual([[DEPRECATED_ON_OPTION_SELECT]]);
     });
 
     it('warns once that onOptionSelect is deprecated', () => {
@@ -918,9 +938,7 @@ describe('Combobox', () => {
           {FRUITS}
         </Combobox>,
       );
-      const calls = warn.mock.calls.filter(([m]) => String(m).includes('onOptionSelect'));
-      expect(calls).toHaveLength(1);
-      expect(String(calls[0][0])).toContain('[WaveUI] Combobox: `onOptionSelect` is deprecated');
+      expect(warn.mock.calls).toEqual([[DEPRECATED_ON_OPTION_SELECT]]);
     });
 
     it('fires the value callback exactly once per selection in StrictMode', async () => {
@@ -963,7 +981,7 @@ describe('Combobox', () => {
       await user.click(screen.getByText('Outside'));
       expect(combobox()).toHaveAttribute('aria-expanded', 'false');
       await user.click(combobox());
-      act(() => screen.getByRole('button', { name: 'Elsewhere' }).focus());
+      await act(async () => screen.getByRole('button', { name: 'Elsewhere' }).focus());
       expect(combobox()).toHaveAttribute('aria-expanded', 'false');
     });
 
@@ -1079,6 +1097,25 @@ describe('Combobox', () => {
       expect(combobox()).toHaveAttribute('aria-expanded', 'false');
       expect(screen.queryByRole('listbox')).toBeNull();
     });
+
+    it.each([
+      ['readOnly', { readOnly: true }],
+      ['disabled', { disabled: true }],
+    ] as const)(
+      'reports no close for a defaultOpen list that starts %s (it was never shown)',
+      (_, lock) => {
+        const onOpenChange = vi.fn();
+        const { rerender } = renderCombobox({ defaultOpen: true, onOpenChange, ...lock });
+        expect(combobox()).toHaveAttribute('aria-expanded', 'false');
+        rerender(
+          <Combobox aria-label="Fruit" defaultOpen onOpenChange={onOpenChange}>
+            {FRUITS}
+          </Combobox>,
+        );
+        expect(combobox()).toHaveAttribute('aria-expanded', 'false');
+        expect(onOpenChange).not.toHaveBeenCalled();
+      },
+    );
 
     it.each([
       ['readOnly', { readOnly: true }],
@@ -1346,11 +1383,13 @@ describe('Combobox', () => {
       const control = screen.getByRole('combobox');
       expect(control).toHaveAttribute('aria-invalid', 'true');
       expect(control).toHaveClass('border', 'border-destructive', 'focus:border-b-destructive');
-      expect(control).not.toHaveClass(
+      for (const replaced of [
         'border-input',
         'border-b-stroke-accessible',
         'focus:border-b-primary',
-      );
+      ]) {
+        expect(control).not.toHaveClass(replaced);
+      }
     });
 
     it('keeps the valid look when its own aria-invalid={false} overrides an invalid Field', () => {

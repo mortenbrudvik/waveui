@@ -3,7 +3,7 @@ import { describe, it, expect, expectTypeOf, vi } from 'vitest';
 import { act, fireEvent, render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { Rating, RatingDisplay } from '../Rating';
-import type { RatingDisplayProps, RatingProps } from '../Rating';
+import type { RatingDisplayProps, RatingLabels, RatingProps } from '../Rating';
 import {
   renderWithProviders,
   testComposedHandler,
@@ -15,6 +15,10 @@ import { renderWithFieldContext, FIELD_TEST_IDS, FIELD_TEST_TEXT } from '../../.
 function star(n: number): HTMLElement {
   return screen.getByRole('radio', { name: n === 1 ? '1 star' : `${n} stars` });
 }
+
+const DEPRECATED_ON_CHANGE =
+  '[WaveUI] Rating: `onChange` is deprecated and will be removed in 1.0. Use `onValueChange` ' +
+  'instead.';
 
 /** Number of stars drawn filled (the rating color). */
 function filledCount(): number {
@@ -119,11 +123,7 @@ describe('Rating', () => {
       rerender(<Rating onChange={onChange} />);
       await user.click(star(2));
       expect(onChange).toHaveBeenCalledWith(2);
-      const deprecations = warn.mock.calls.filter(([msg]) =>
-        String(msg).includes('Rating: `onChange` is deprecated'),
-      );
-      expect(deprecations).toHaveLength(1);
-      expect(String(deprecations[0][0])).toContain('Use `onValueChange` instead.');
+      expect(warn.mock.calls).toEqual([[DEPRECATED_ON_CHANGE]]);
     } finally {
       warn.mockRestore();
     }
@@ -142,9 +142,26 @@ describe('Rating', () => {
       await user.click(star(4));
       expect(onChange.mock.calls).toEqual([[4]]);
       expect(onValueChange.mock.calls).toEqual([[4]]);
+      expect(warn.mock.calls).toEqual([[DEPRECATED_ON_CHANGE]]);
     } finally {
       warn.mockRestore();
     }
+  });
+
+  it('names the stars with labels.star (value and max)', async () => {
+    const user = userEvent.setup();
+    const labels: RatingLabels = {
+      star: (value, max) => `${value} étoile${value > 1 ? 's' : ''} sur ${max}`,
+    };
+    const onValueChange = vi.fn();
+    render(<Rating aria-label="Note" max={3} labels={labels} onValueChange={onValueChange} />);
+    expect(screen.getAllByRole('radio').map((radio) => radio.getAttribute('aria-label'))).toEqual([
+      '1 étoile sur 3',
+      '2 étoiles sur 3',
+      '3 étoiles sur 3',
+    ]);
+    await user.click(screen.getByRole('radio', { name: '2 étoiles sur 3' }));
+    expect(onValueChange.mock.calls).toEqual([[2]]);
   });
 
   it('supports controlled value', () => {
@@ -264,6 +281,7 @@ describe('Rating — roving focus between the stars', () => {
       expect(onChange).not.toHaveBeenCalled();
       expect(star(5)).toHaveFocus();
       expect(star(5)).toHaveAttribute('aria-checked', 'true');
+      expect(warn.mock.calls).toEqual([[DEPRECATED_ON_CHANGE]]);
     } finally {
       warn.mockRestore();
     }
@@ -283,6 +301,7 @@ describe('Rating — roving focus between the stars', () => {
       expect(onChange).not.toHaveBeenCalled();
       expect(star(1)).toHaveFocus();
       expect(star(1)).toHaveAttribute('aria-checked', 'true');
+      expect(warn.mock.calls).toEqual([[DEPRECATED_ON_CHANGE]]);
     } finally {
       warn.mockRestore();
     }

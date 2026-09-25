@@ -10,6 +10,15 @@ import { SearchBox } from '../SearchBox';
 import { useFieldContext, type FieldContextValue } from '../../../hooks/useFieldControl';
 import { testSystemProps, expectNoA11yViolations } from '../../../test-utils';
 
+/** The development warning of a Field with more than one element child. */
+function multipleChildrenWarning(extra: number) {
+  return (
+    "[WaveUI] Field: only the first element child receives the Field's id and ARIA attributes; " +
+    `the other ${extra} element child(ren) are rendered unchanged. Wrap each control in its own ` +
+    'Field.'
+  );
+}
+
 describe('Field', () => {
   testSystemProps(Field, {
     expectedTag: 'div',
@@ -508,10 +517,7 @@ describe('Field', () => {
         );
         expect(screen.getByTestId('first')).toHaveAccessibleName('First');
         expect(screen.getByTestId('second')).not.toHaveAttribute('id');
-        expect(warn).toHaveBeenCalledTimes(1);
-        expect(warn.mock.calls[0][0]).toMatch(
-          /^\[WaveUI\] Field: only the first element child receives the Field's id and ARIA attributes; the other 1 element child\(ren\) are rendered unchanged\./,
-        );
+        expect(warn.mock.calls).toEqual([[multipleChildrenWarning(1)]]);
       } finally {
         warn.mockRestore();
       }
@@ -693,7 +699,7 @@ describe('Field', () => {
 
   describe('FieldContext (input-basic#1)', () => {
     it('provides ids and state to the controls inside', () => {
-      const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+      const warn = vi.spyOn(console, 'warn');
       let context: FieldContextValue | null = null;
       function ProbeInput(props: React.InputHTMLAttributes<HTMLInputElement>) {
         context = useFieldContext();
@@ -869,10 +875,7 @@ describe('Field', () => {
           expect(document.querySelectorAll(`[id="${element.id}"]`), element.id).toHaveLength(1);
         }
         // Still one control per Field: the multiple-children warning stays.
-        expect(warn).toHaveBeenCalledTimes(1);
-        expect(warn.mock.calls[0][0]).toMatch(
-          /^\[WaveUI\] Field: only the first element child receives the Field's id/,
-        );
+        expect(warn.mock.calls).toEqual([[multipleChildrenWarning(1)]]);
       } finally {
         warn.mockRestore();
       }
@@ -999,10 +1002,7 @@ describe('Field', () => {
           group: false,
         });
         // Only the "Input" Field has two element children.
-        expect(warn).toHaveBeenCalledTimes(1);
-        expect(warn.mock.calls[0][0]).toMatch(
-          /^\[WaveUI\] Field: only the first element child receives the Field's id/,
-        );
+        expect(warn.mock.calls).toEqual([[multipleChildrenWarning(1)]]);
       } finally {
         warn.mockRestore();
       }

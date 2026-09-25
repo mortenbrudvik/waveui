@@ -40,7 +40,7 @@ export interface DropdownProps extends Omit<
   /** Controlled open state of the listbox. */
   open?: boolean;
   /**
-   * Initial open state for uncontrolled usage.
+   * Initial open state for uncontrolled usage. A dropdown that starts disabled starts closed.
    * @default false
    */
   defaultOpen?: boolean;
@@ -134,7 +134,13 @@ const DropdownRoot = (props: DropdownProps) => {
   const invalidLook = isInvalidLook(false, fieldProps['aria-invalid']);
 
   const [value, setValue] = useControllable(valueProp, defaultValue ?? '', onValueChange);
-  const [openState, setOpen] = useControllable(openProp, defaultOpen ?? false, onOpenChange);
+  // A dropdown that starts disabled never shows its list, so it starts closed (no close to report
+  // later).
+  const [openState, setOpen] = useControllable(
+    openProp,
+    (defaultOpen ?? false) && !disabled,
+    onOpenChange,
+  );
   const open = openState && !disabled;
   // Disabling also closes the list itself, not only the derived `open`, so enabling it again does
   // not reopen it without a user action. The close is reported through onOpenChange (a consumer
@@ -211,7 +217,8 @@ const DropdownRoot = (props: DropdownProps) => {
         onFocus={onFocus}
         onBlur={onBlur}
         className={cn(
-          'flex h-8 w-full items-center justify-between rounded border border-input border-b-stroke-accessible bg-background px-3 text-start text-body-1 text-foreground',
+          // Every padding is set here (C-NATIVE), not left to an app-wide `button` rule.
+          'flex h-8 w-full items-center justify-between rounded border border-input border-b-stroke-accessible bg-background px-3 py-0 text-start text-body-1 text-foreground',
           inputFocus,
           disabledStyles,
           invalidLook && inputInvalid,
