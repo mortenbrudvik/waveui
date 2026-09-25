@@ -29,7 +29,11 @@ Evaluated before every test file:
 - `Element.prototype.scrollIntoView` is a `vi.fn()` when jsdom lacks it (calls cleared after every test).
 - `window.matchMedia` answers `false` for every query when jsdom lacks it; `mockMatchMedia()` changes the answers.
 - **No global `ResizeObserver`**, as in a consumer's jsdom; call `installResizeObserverMock()` when a test needs one.
-- After every test: RTL `cleanup()`, the warn-once registry is reset (so every test sees first-time development warnings), the `mockMatchMedia` answers are reset, and then the **body-cleanup assertion**: if `document.body` still has children (a leaked portal, live region or toast, or a node the test appended itself), they are removed and **the test fails** naming them. Tests that append nodes themselves remove them in their own `afterEach` (it runs first).
+- After every test: RTL `cleanup()`, the warn-once registry is reset (so every test sees first-time development warnings and missing-context errors), the `mockMatchMedia` answers are reset, and then two assertions, reported together:
+  - the **overlay-state release assertion** (`assertOverlayStateReleased`): if an open dismiss layer, a focus trap, a scroll lock, modal isolation (`inert`), a `useRestoreFocus` tracker user or an inline `overflow` on `<html>`/`<body>` outlived the unmounted trees, it is released and **the test fails** naming it;
+  - the **body-cleanup assertion**: if `document.body` still has children (a leaked portal, live region or toast, or a node the test appended itself), they are removed and **the test fails** naming them.
+
+  Tests that append nodes, register layers directly or set such styles themselves undo that in their own `afterEach` (it runs first).
 
 `vi.mock()` works as usual. Do not call `vi.resetModules()` at the top of a test file: importing `src/test-utils.ts` afterwards would evaluate the setup a second time.
 
@@ -87,7 +91,8 @@ The helpers named `test*` register tests through the Vitest globals: call them a
 
 ## 4. Accessibility audits
 
-- One shared axe instance, `axe` from `src/test-utils.ts`: `configureAxe({ rules: { region: { enabled: false } } })`. Components are audited in isolation, so the page-level landmark rule `region` is off; every other rule runs. The stories gate uses the same instance.
+- One shared axe instance, `axe` from `src/test-utils.ts`: `configureAxe({ rules: { region: { enabled: false }, 'color-contrast': { enabled: false } } })`. Components are audited in isolation, so the page-level landmark rule `region` is off, and jsdom cannot compute color contrast, so `color-contrast` is off too; every other rule runs. The stories gate uses the same instance.
+- `expectNoA11yViolations` (and so `testA11y`, `a11yVariants` and the stories gate) also fails on **dangling ARIA id references**: an id in `aria-describedby`, `aria-labelledby`, `aria-errormessage` or `aria-activedescendant` that no element carries (`aria-controls` is not checked, since a closed popup need not be rendered). axe misses most of them. `findDanglingIdRefs(root)` lists them for a direct assertion. A component that drops a hint or error element drops its id from `aria-describedby`/`aria-errormessage` in the same render, and a test that passes `aria-describedby="x"` only to check routing renders an element with that id before it audits.
 - Audits scan **`document.body`**, so portaled content (Dialog, Drawer, Popover, listboxes, Tooltip) is audited too. `scope: 'container'` / `a11yScope: 'container'` audits only the render container.
 - `expectNoA11yViolations(root = document.body)` first lets pending updates land inside `act()` (one macrotask and one animation frame: popup positioning, listbox registration, Spinner's announcement), so the audit sees the settled DOM and React logs no act() warning. Calling `axe(el)` directly settles nothing.
 - axe-core waits on the global `setTimeout`: audit with real timers or with `vi.useFakeTimers({ shouldAdvanceTime: true })`.
@@ -112,7 +117,7 @@ it('has no accessibility violations while open', async () => {
 });
 ```
 
-jsdom cannot compute color contrast: contrast is asserted per theme by `src/styles/__tests__/tokens.test.ts`, and component colors stay on those token pairs by using theme tokens only.
+Color contrast is asserted per theme by `src/styles/__tests__/tokens.test.ts` instead, and component colors stay on those token pairs by using theme tokens only.
 
 ## 5. Other helpers
 
@@ -186,6 +191,34 @@ describe('Card', () => {
   });
 });
 ```
+
+### `asClientReference(Part)`: parts written in a Server Component
+
+A client component written in a React Server Component reaches the client as a lazy reference, so `element.type` is not the part. `asClientReference(Part)` returns the part the way Flight delivers it (a pre-resolved `React.lazy` with the part's own type, so JSX props stay checked). Render a compound once with the plain parts and once with the lazy ones, and assert the same server HTML and the same behaviour:
+
+```tsx
+// src/components/layout/__tests__/TabList.test.tsx
+import { render, screen } from '@testing-library/react';
+import { renderToString } from 'react-dom/server';
+import { TabList } from '../TabList';
+import { asClientReference } from '../../../test-utils';
+
+it('recognises parts written in a Server Component', () => {
+  const tree = (Tab: typeof TabList.Tab, Panel: typeof TabList.Panel) => (
+    <TabList aria-label="Sections" defaultValue="b">
+      <Tab value="a">A</Tab>
+      <Tab value="b">B</Tab>
+      <Panel value="b">Panel B</Panel>
+    </TabList>
+  );
+  const lazy = tree(asClientReference(TabList.Tab), asClientReference(TabList.Panel));
+  expect(renderToString(lazy)).toBe(renderToString(tree(TabList.Tab, TabList.Panel)));
+  render(lazy);
+  expect(screen.getByRole('tab', { name: 'B' })).toHaveAttribute('aria-selected', 'true');
+});
+```
+
+`src/__tests__/integration.test.tsx` also guards every compound end to end ("compounds composed in a React Server Component"): `renderToString` is identical with the lazy parts, and `hydrateRoot` of that HTML reports no recoverable error and no `console.error` before the key interaction runs. Add a case there for a new compound.
 
 ### `testFocusEvents(Component, defaultProps?, selector?, options?)`
 
@@ -395,12 +428,12 @@ describe('Tooltip delay', () => {
 ```
 
 - Wrap direct `vi.advanceTimersByTime(…)` calls in `act()`: timers that set state outside `act()` log warnings.
-- `queueMicrotask` stays real (never add it to `toFake`). Focus moves that run in a microtask (a removed toast moving focus on) are asserted after `await act(async () => {})` or a `userEvent` action.
+- `queueMicrotask` stays real (never add it to `toFake`). Focus moves that run in a microtask (a removed toast moving focus on, a focus trap returning focus that landed outside it) are asserted after `await act(async () => {})` or a `userEvent` action: after `act(() => el.focus())` on an element outside an open Dialog, Drawer or DatePicker calendar, flush before asserting where focus ended up.
 - Switch back to real timers (or keep `shouldAdvanceTime`) before an axe audit.
 
 ## 8. Development warnings
 
-Warnings go through `src/lib/dev.ts` as `console.warn('[WaveUI] …')` and are deduplicated per test (the registry is reset after every test). Assert the ones a test provokes, and restore the spy:
+Warnings go through `src/lib/dev.ts` as `console.warn('[WaveUI] …')` and are deduplicated per test (the registry is reset after every test). A test that spies on `console.warn` or `console.error` asserts the message(s) it provokes and that nothing else was logged (the exact call count or call list), never only silences them, and restores the spy:
 
 ```tsx
 // src/components/input/__tests__/Switch.test.tsx
@@ -424,9 +457,32 @@ it('still calls the deprecated onChange and warns once', async () => {
 });
 ```
 
+### Production mode
+
+A compound part outside its root throws in development and logs its `console.error` once per message in production (`reportMissingContext`). It reads `process.env.NODE_ENV` when it is called, so a module mock of `isDev` does not reach it: stub the environment with `vi.stubEnv('NODE_ENV', 'production')` and undo it with `vi.unstubAllEnvs()` in `afterEach`, then render the part several times and assert the exact `console.error` calls. The dev helpers' own tests stub a missing `process` with `vi.stubGlobal('process', undefined)` and restore it with `vi.unstubAllGlobals()`.
+
+```tsx
+// src/components/layout/__tests__/TabList.test.tsx
+import { render } from '@testing-library/react';
+import { TabList } from '../TabList';
+
+afterEach(() => {
+  vi.unstubAllEnvs();
+});
+
+it('logs a part outside a TabList once in production', () => {
+  vi.stubEnv('NODE_ENV', 'production');
+  const error = vi.spyOn(console, 'error').mockImplementation(() => {});
+  const orphan = <TabList.Tab value="a">Orphan</TabList.Tab>;
+  const { rerender } = render(orphan);
+  rerender(orphan);
+  expect(error.mock.calls).toEqual([['[WaveUI] TabList.Tab must be used within <TabList>']]);
+});
+```
+
 ## 9. Keep the output clean
 
-A passing test prints nothing, apart from two harmless jsdom notices that axe-core audits trigger: `Not implemented: HTMLCanvasElement's getContext()` (its color checks) and `Not implemented: Window's getComputedStyle() method: with pseudo-elements`. Component test files with audits print some of them, and the stories gate (`src/__tests__/stories.a11y.test.tsx`), which audits every story, prints hundreds. Check with `--reporter=default`, and fix the cause of anything else:
+A passing test prints nothing, the stories gate (`src/__tests__/stories.a11y.test.tsx`) included. Check with `--reporter=default`, and fix the cause of anything printed:
 
 - **act() warnings**: a bare `element.focus()` or `form.checkValidity()` that makes a component update state belongs in `act(() => …)`, or use `userEvent` (`await user.tab()`, `await user.click(…)`). Timer advances go in `act()` too.
 - **Unasserted `[WaveUI]` warnings**: spy on `console.warn` and assert the message (section 8), or change the test so it no longer provokes the warning.
@@ -456,9 +512,10 @@ it('types anchor props when rendered as a link', () => {
 
 ## 11. Repo-level suites
 
-- `src/__tests__/conventions.test.ts` — the conventions gate: one test per source file of `src/components` (raw colors also in `stories/`), reporting `file:line [rule]` for raw colors, physical utilities, unmirrored `translate-x`, `focus:outline-none`, arbitrary animations, `forwardRef`, `enabled:` variants, `<button>` without `type`, and transitions or animations without a `motion-reduce:` variant. Filter with `-t "<path>"`.
+- `src/__tests__/conventions.test.ts` — the conventions gate: one test per source file of `src/components` (raw colors also in `stories/`), reporting `file:line [rule]` for raw colors, physical utilities, `translate-x` without a `wave-rtl:` counterpart, Tailwind's bare `rtl:`/`ltr:` variants (use `wave-rtl:`), `focus:outline-none`, arbitrary animations, `forwardRef`, `enabled:` variants, `<button>` without `type`, and transitions or animations without a `motion-reduce:` variant. `src/hooks` and `src/lib` are not scanned. Filter with `-t "<path>"`.
 - `src/__tests__/stories.a11y.test.tsx` — renders every story with the Storybook preview (WaveProvider, light theme) and audits it with the shared axe instance. Opt-out only with `parameters: { a11y: { test: 'todo' } }` and a comment explaining why.
-- `src/__tests__/integration.test.tsx` — compositions across components with the real public API (Menu + MenuButton/SplitButton, Tooltip on triggers, Field around every control, toasts over modals, pickers inside dialogs).
+- `src/__tests__/integration.test.tsx` — compositions across components with the real public API (Menu + MenuButton/SplitButton, Tooltip on triggers, Field around every control, toasts over modals, pickers inside dialogs, stacked dialogs with `autoFocus`), and the Server Component regression suite (see [`asClientReference`](#asclientreferencepart-parts-written-in-a-server-component)).
+- `src/__tests__/public-types.test.ts` — every named type that a public declaration refers to (a prop type, an `extends` base, a parameter or return type) is exported from `src/index.ts`. Export a new component's prop types from the entry; only the structural helpers in its `INTERNAL_HELPERS` list may stay internal, and that list must stay current.
 - `src/__tests__/test-utils.test.tsx` — tests of the helpers themselves.
 - `src/styles/__tests__/tokens.test.ts` — every theme declares every token, and every contrast pair meets its WCAG threshold (unrounded).
 

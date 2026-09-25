@@ -68,7 +68,7 @@ Wrap the app in `WaveProvider` here too. It selects the theme and direction, pai
 | Import                                                  | What it is                                                                                                                                                                                                                                                                                                                  |
 | ------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `@mortenbrudvik/waveui/styles` (also `/styles.css`)     | Precompiled, **unlayered** CSS: tokens, the provider-scoped base styles and every utility the components use (the only layered block is Tailwind's `--tw-*` fallback, see [Global effects](#global-effects)). No Preflight. For apps without Tailwind, and, imported into a layer, for apps with a prefixed Tailwind build. |
-| `@mortenbrudvik/waveui/tailwind` (also `/tailwind.css`) | Tailwind 4 source entry: tokens in `layer(theme)`, base in `layer(base)`, `@source` for the components. Import it after `@import 'tailwindcss'`.                                                                                                                                                                            |
+| `@mortenbrudvik/waveui/tailwind` (also `/tailwind.css`) | Tailwind 4 source entry: tokens in `layer(theme)`, base in `layer(base)`, `@source` for the components, the `wave-rtl:` variant. Import it after `@import 'tailwindcss'`.                                                                                                                                                   |
 | `@mortenbrudvik/waveui/tokens` (also `/tokens.css`)     | The token source alone (`--wave-*` variables, theme classes and the `@theme inline` mapping), without base styles or `@source`. For custom Tailwind setups; `./tailwind` is the complete Tailwind entry.                                                                                                                    |
 | `@mortenbrudvik/waveui/preflight.css`                   | Opt-in Tailwind Preflight for the **whole page** (unlayered). Wave does not need it.                                                                                                                                                                                                                                        |
 | `@mortenbrudvik/waveui/legacy-tokens.css`               | Deprecated 0.4 compatibility layer (see [Theming](#theming)).                                                                                                                                                                                                                                                               |
@@ -107,6 +107,7 @@ export function Shell({ children }: { children: React.ReactNode }) {
 ```
 
 - `theme`: `'light'` (default), `'dark'` or `'high-contrast'`. `dir`: `'ltr'` (default) or `'rtl'`. `portalContainer`: where overlays render (default `document.body`).
+- A nested provider inherits every prop it omits (`theme`, `dir`, `portalContainer`) from the enclosing provider, so the light panel above stays right-to-left. `portalContainer={null}` sends a nested subtree's overlays to `document.body`.
 - The provider renders `<div class="wave-root wave-<theme>" dir data-wave-theme>` with `bg-background text-foreground font-wave text-body-1`; a `className` you pass wins.
 - Portaled overlays (Dialog, Drawer, Popover, Menu, listboxes, Tooltip, Toaster) render in a `wave-portal` wrapper that carries the provider's theme classes, direction and font.
 - `useWaveTheme()` returns `{ theme, dir, themeClassName, portalContainer, hasProvider }`.
@@ -245,8 +246,8 @@ What adding Wave changes outside its own components:
 
   There are no `html` or `body` rules, no global reduced-motion override (each component handles reduced motion itself), and no Preflight unless you import it. The only global rule is Tailwind's `@layer properties` fallback in `./styles`: in browsers without `@property` support (detected by an `@supports` query) it sets the initial values of Tailwind's `--tw-*` custom properties on `*`, `::before`, `::after` and `::backdrop`, and nothing else. It is also the only layered block in that otherwise unlayered file.
 
-- **Utility classes (`./styles`).** The precompiled stylesheet contains the Tailwind utilities the components use (`.flex`, `.p-4`, `.bg-primary`, …) as ordinary class selectors, unlayered, plus Tailwind's `@property --tw-*` registrations. An element of yours with the same class name gets the same style.
-- **Theme (`./tailwind`).** Wave adds its color names, `font-wave`, the type ramp, the shadow scale and the `animate-wave-*` animations to your Tailwind theme.
+- **Utility classes (`./styles`).** The precompiled stylesheet contains the Tailwind utilities the components use (`.flex`, `.p-4`, `.bg-primary`, …) as ordinary class selectors, unlayered, plus Tailwind's `@property --tw-*` registrations. An element of yours with the same class name gets the same style. It contains no other utility: generic names that Tailwind would generate from words in Wave's comments and strings (`.container`, `.collapse`, `.table`, `.shadow`, `.ring`, …) are excluded, so they never restyle your own markup.
+- **Theme and variant (`./tailwind`).** Wave adds its color names, `font-wave`, the type ramp, the shadow scale and the `animate-wave-*` animations to your Tailwind theme, and defines the `wave-rtl:` variant the components use to mirror glyphs. It matches by the element's own direction (`:dir(rtl)`, with a `[dir=rtl]` fallback for browsers without `:dir()`), so unlike Tailwind's `rtl:` it does not apply inside an LTR subtree of an RTL page; your build can use it too. Tailwind's `rtl:` is unchanged.
 
 **Colliding utility names.** Wave's Tailwind color names are unprefixed, because they are the utility vocabulary 0.4 documented and that consumer code uses in `className` overrides. In a shared Tailwind build, or next to another stylesheet that defines the same class names, each of the following names resolves to a single definition in every utility that takes a color (`bg-`, `text-`, `border-`, `ring-`, `outline-`, `fill-`, `stroke-`, `accent-`, `caret-`, `decoration-`, `divide-`, `placeholder-`, `shadow-`, `from-`/`via-`/`to-`, …):
 
@@ -274,6 +275,7 @@ Namespaced Wave utilities are being considered for 1.0.
 
 - Every component and hook module of the package starts with `"use client"`. The entry point, `cn`, the slot helpers and the types are server-safe, so a Server Component can import from `@mortenbrudvik/waveui` and render Wave components with serializable props.
 - A Server Component **cannot dot into a client component**: `Card.Header` throws "Cannot access Header on the server". Every sub-component is therefore also exported under a flat name. Use the flat names in Server Components and either form in client components.
+- Every compound can be composed in a Server Component. Parts written there reach the client as lazy references, and the compounds recognise them, so the server HTML and the client behaviour are the same as in a client file: Accordion items, Carousel slides, the options of Combobox and Dropdown, DataGrid parts, Drawer and Menu triggers, List, Nav, TabList and Tree items, and a `Button` passed as a MessageBar, SearchBox or Tag dismiss slot.
 - Event handlers and other functions cannot be passed from a Server Component; put interactive parts in a `'use client'` component.
 
 ```tsx
@@ -373,55 +375,55 @@ Your `className` is merged last with `cn()`, so it replaces a conflicting class 
 
 ### Buttons and actions
 
-| Component        | Description                                                                                                                                                                                          |
-| ---------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `Button`         | `appearance` `primary`, `outline` (default), `subtle`, `transparent`; five sizes; decorative `icon` slot; `as` renders a link or router link with correctly typed props. `type="button"` by default. |
-| `CompoundButton` | Button with a `secondaryText` line.                                                                                                                                                                  |
-| `ToggleButton`   | Pressed/unpressed button (`pressed`, `defaultPressed`, `onPressedChange`; `aria-pressed`).                                                                                                           |
-| `SplitButton`    | Primary action joined to a menu chevron; `menuButtonProps` takes `Menu.Trigger`'s render props; `menuButtonLabel` names the chevron.                                                                 |
-| `MenuButton`     | Button with a chevron and `aria-haspopup="menu"`, for use inside `Menu.Trigger`.                                                                                                                     |
-| `Link`           | `appearance` `inline` (always underlined), `standalone` or `subtle`; `disabled` removes the `href`; `as` renders router links.                                                                       |
-| `Toolbar`        | `role="toolbar"` with one Tab stop and arrow-key navigation over any child controls; `orientation`.                                                                                                  |
+| Component        | Description                                                                                                                                                                                                                            |
+| ---------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `Button`         | `appearance` `primary`, `outline` (default), `subtle`, `transparent`; five sizes; decorative `icon` slot; `as` renders a link or router link with correctly typed props. `type="button"` by default.                                   |
+| `CompoundButton` | Button with a `secondaryText` line.                                                                                                                                                                                                    |
+| `ToggleButton`   | Pressed/unpressed button (`pressed`, `defaultPressed`, `onPressedChange`; `aria-pressed`).                                                                                                                                             |
+| `SplitButton`    | Primary action joined to a menu chevron; `menuButtonProps` takes `Menu.Trigger`'s render props; `menuButtonLabel` names the chevron.                                                                                                   |
+| `MenuButton`     | Button with a chevron and `aria-haspopup="menu"`, for use inside `Menu.Trigger`. Without a label (an icon and/or the chevron) it is compact and needs `aria-label`, `aria-labelledby` or `title` (a development warning asks for one). |
+| `Link`           | `appearance` `inline` (always underlined), `standalone` or `subtle`; `disabled` removes the `href`; `as` renders router links.                                                                                                         |
+| `Toolbar`        | `role="toolbar"` with one Tab stop and arrow-key navigation over any child controls; `orientation`.                                                                                                                                    |
 
 ### Inputs and forms
 
-| Component      | Description                                                                                                                                                                                                             |
-| -------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `Field`        | Label, hint, error and required indicator, wired to the control inside it (library controls read the Field context wherever they are in it).                                                                            |
-| `Label`        | Form label with a decorative required asterisk, `size` and `weight`.                                                                                                                                                    |
-| `Input`        | Text input with `contentBefore`/`contentAfter` slots, `onValueChange(value)` next to the native `onChange`, and an `error` message.                                                                                     |
-| `Textarea`     | Multi-line text input with an `error` message.                                                                                                                                                                          |
-| `Select`       | Styled native `<select>` with an `error` message.                                                                                                                                                                       |
-| `Checkbox`     | `checked`/`defaultChecked`/`onCheckedChange`, `indeterminate`, native form support.                                                                                                                                     |
-| `Switch`       | On/off toggle (`role="switch"`), `onCheckedChange`, native form support.                                                                                                                                                |
-| `RadioGroup`   | Single choice with `RadioGroup.Item` items; `orientation`, `disabled`, `onValueChange`, native form support.                                                                                                            |
-| `SearchBox`    | Search input with a clear button; `onValueChange`; input attributes go to the `<input>`.                                                                                                                                |
-| `Slider`       | Styled native range input; `onValueChange(number)`.                                                                                                                                                                     |
-| `SpinButton`   | Numeric input with step buttons; typed text is a draft committed on blur or Enter; `min`, `max`, `step`, `largeStep`.                                                                                                   |
-| `Combobox`     | Editable combobox: typing filters the options; `freeform` makes the typed text the value. `Combobox.Option`, `Combobox.OptionGroup`.                                                                                    |
-| `Dropdown`     | Select-only combobox (a button) with typeahead. `Dropdown.Option`, `Dropdown.OptionGroup`.                                                                                                                              |
-| `TagPicker`    | Multi-select combobox that shows the selection as removable tags (a list named "Selected"); the input is described by a summary of the selection ("Selected: Apple, Banana"), and additions and removals are announced. |
-| `DatePicker`   | Date input with a calendar dialog; locale-aware format and parse, `minDate`, `maxDate`, `disabledDates`, `onInvalidInput`.                                                                                              |
-| `TimePicker`   | Time combobox (`12h`/`24h`, `step`, `minTime`, `maxTime`); value is `HH:mm`.                                                                                                                                            |
-| `ColorPicker`  | Hex field, preset swatches and an optional opacity slider; value `#rrggbb` or `#rrggbbaa`.                                                                                                                              |
-| `SwatchPicker` | Radio group of color swatches (`items` with a `label` each).                                                                                                                                                            |
-| `Rating`       | Star rating (`role="radiogroup"`); `RatingDisplay` is the read-only version.                                                                                                                                            |
+| Component      | Description                                                                                                                                                                                                                                                               |
+| -------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `Field`        | Label, hint, error and required indicator, wired to the control inside it (library controls read the Field context wherever they are in it).                                                                                                                              |
+| `Label`        | Form label with a decorative required asterisk, `size` and `weight`.                                                                                                                                                                                                      |
+| `Input`        | Text input with `contentBefore`/`contentAfter` slots, `onValueChange(value)` next to the native `onChange`, and an `error` message.                                                                                                                                       |
+| `Textarea`     | Multi-line text input with an `error` message.                                                                                                                                                                                                                            |
+| `Select`       | Styled native `<select>` with an `error` message.                                                                                                                                                                                                                         |
+| `Checkbox`     | `checked`/`defaultChecked`/`onCheckedChange`, `indeterminate`, native form support.                                                                                                                                                                                       |
+| `Switch`       | On/off toggle (`role="switch"`), `onCheckedChange`, native form support.                                                                                                                                                                                                  |
+| `RadioGroup`   | Single choice with `RadioGroup.Item` items; `orientation`, `disabled`, `onValueChange`, native form support.                                                                                                                                                              |
+| `SearchBox`    | Search input with a clear button; `onValueChange`; input attributes go to the `<input>`. The root draws the field, so `className` and `style` style the field box, and `contentBefore`/`contentAfter` sit beside the text.                                                |
+| `Slider`       | Styled native range input; `onValueChange(number)`.                                                                                                                                                                                                                       |
+| `SpinButton`   | Numeric input with step buttons; typed text is a draft committed on blur or Enter; `min`, `max`, `step`, `largeStep`.                                                                                                                                                     |
+| `Combobox`     | Editable combobox: typing filters the options; `freeform` makes the typed text the value. `Combobox.Option`, `Combobox.OptionGroup`.                                                                                                                                      |
+| `Dropdown`     | Select-only combobox (a button) with typeahead. `Dropdown.Option`, `Dropdown.OptionGroup`.                                                                                                                                                                                |
+| `TagPicker`    | Multi-select combobox that shows the selection as removable tags (a list named "Selected"); the input is described by a summary of the selection ("Selected: Apple, Banana"), and additions and removals are announced.                                                   |
+| `DatePicker`   | Date input with a calendar dialog; locale-aware format and parse, `minDate`, `maxDate`, `disabledDates`, `onInvalidInput`.                                                                                                                                                |
+| `TimePicker`   | Time combobox (`12h`/`24h`, `step`, `minTime`, `maxTime`); value is `HH:mm`; `open`/`defaultOpen`/`onOpenChange` control the list.                                                                                                                                        |
+| `ColorPicker`  | Hex field, preset swatches and an optional opacity slider; value (`defaultValue` included) reported as lowercase `#rrggbb`, or `#rrggbbaa` when not opaque. Picking a preset keeps the current opacity (a preset's alpha digits are ignored, with a development warning). |
+| `SwatchPicker` | Radio group of color swatches (`items` with a `label` each).                                                                                                                                                                                                              |
+| `Rating`       | Star rating (`role="radiogroup"`); `RatingDisplay` is the read-only version (a fractional value draws a partly filled star).                                                                                                                                              |
 
 ### Data display
 
-| Component       | Description                                                                                    |
-| --------------- | ---------------------------------------------------------------------------------------------- |
-| `Avatar`        | Image, initials or icon, with an image-failure fallback and an optional `badge`.               |
-| `AvatarGroup`   | Overlapping avatars; `max` adds an overflow button that lists the hidden members.              |
-| `Badge`         | Status or category label: `appearance` `filled`, `tint`, `outline`; semantic `color`.          |
-| `CounterBadge`  | Count pill (`99+` above `overflowCount`).                                                      |
-| `PresenceBadge` | Availability badge with a distinct shape per status.                                           |
-| `Tag`           | Chip with an optional dismiss button (`dismissible`, `onDismiss`, `dismissLabel`).             |
-| `InfoLabel`     | Label with an info button that shows extra text (a toggletip).                                 |
-| `Persona`       | Avatar with name, secondary text and presence.                                                 |
-| `Divider`       | Horizontal or vertical separator, optionally labelled.                                         |
-| `Image`         | `<img>` with `fit`, `shape`, `shadow`, `bordered`; warns in development when `alt` is missing. |
-| `List`          | Plain list, selectable listbox (single or multiple) or, with item `action`s, a grid.           |
+| Component       | Description                                                                                                                                                                                                                                             |
+| --------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `Avatar`        | Image, initials or icon, with an image-failure fallback and an optional `badge`.                                                                                                                                                                        |
+| `AvatarGroup`   | Overlapping avatars; `max` adds an overflow button that lists the hidden members.                                                                                                                                                                       |
+| `Badge`         | Status or category label: `appearance` `filled`, `tint`, `outline`; semantic `color`.                                                                                                                                                                   |
+| `CounterBadge`  | Count pill (`99+` above `overflowCount`).                                                                                                                                                                                                               |
+| `PresenceBadge` | Availability badge with a distinct shape per status.                                                                                                                                                                                                    |
+| `Tag`           | Chip with an optional dismiss button (`dismissible`, `onDismiss`, `dismissLabel`); `onDismiss` and `dismissIcon` need `dismissible` (a development warning says so).                                                                                    |
+| `InfoLabel`     | Label with an info button that shows extra text (a toggletip).                                                                                                                                                                                          |
+| `Persona`       | Avatar with name, secondary text and presence.                                                                                                                                                                                                          |
+| `Divider`       | Horizontal or vertical separator, optionally labelled.                                                                                                                                                                                                  |
+| `Image`         | `<img>` with `fit`, `shape`, `shadow`, `bordered`; warns in development when `alt` is missing. Never wider than its parent; with the default `fit` its height follows its width. `fit="none"` keeps the top-left corner in view, `"center"` the middle. |
+| `List`          | Plain list, selectable listbox (single or multiple) or, with item `action`s, a grid.                                                                                                                                                                    |
 
 ### Typography
 
@@ -431,17 +433,17 @@ Your `className` is merged last with `cn()`, so it replaces a conflicting class 
 
 ### Layout
 
-| Component   | Description                                                                                                                 |
-| ----------- | --------------------------------------------------------------------------------------------------------------------------- |
-| `Card`      | Surface with `Card.Header`, `Card.Body`, `Card.Footer`; optionally selectable (`onSelect`, `selected`, `selectionControl`). |
-| `Accordion` | Disclosure sections (`Accordion.Item`, `.Trigger`, `.Panel`); single (default) or `type="multiple"`; `headingLevel`.        |
-| `TabList`   | Tabs with automatic activation (`TabList.Tab`, `.Panel`, `.Panels`); `orientation`.                                         |
-| `Tree`      | Hierarchical tree (`Tree.Item`) with expand/collapse, selection and typeahead.                                              |
-| `Carousel`  | One slide at a time with previous/next, a slide picker and optional auto-rotation with a pause control.                     |
-| `Overflow`  | Hides items that do not fit in one row and renders an overflow button (`useOverflowMenu` lists the hidden items).           |
-| `Grid`      | CSS grid with a column count and token gaps.                                                                                |
-| `Stack`     | Vertical or horizontal stack (`orientation`, `gap`).                                                                        |
-| `Flex`      | Flexbox container (`direction`, `wrap`, `align`, `justify`, `gap`).                                                         |
+| Component   | Description                                                                                                                                                                                                                                                   |
+| ----------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `Card`      | Surface with `Card.Header`, `Card.Body`, `Card.Footer`; optionally selectable (`onSelect`, `selected`, `selectionControl`).                                                                                                                                   |
+| `Accordion` | Disclosure sections (`Accordion.Item`, `.Trigger`, `.Panel`); single (default) or `type="multiple"`; `headingLevel`; item values are unique (development warning).                                                                                            |
+| `TabList`   | Tabs with automatic activation (`TabList.Tab`, `.Panel`, `.Panels`); `orientation`; tab values are unique (development warning).                                                                                                                              |
+| `Tree`      | Hierarchical tree (`Tree.Item`) with expand/collapse, selection and typeahead. Nested items are `Tree.Item` elements in their parent's children (directly, in Fragments or from a render function), not rendered by a recursive component; values are unique. |
+| `Carousel`  | One slide at a time with previous/next, a slide picker and optional auto-rotation with a pause control. Slides are `Carousel.Item` children, directly or in Fragments (a component that renders `Carousel.Item` is not a slide).                              |
+| `Overflow`  | Hides items that do not fit in one row and renders an overflow button (`useOverflowMenu` lists the hidden items).                                                                                                                                             |
+| `Grid`      | CSS grid with a column count and token gaps.                                                                                                                                                                                                                  |
+| `Stack`     | Vertical or horizontal stack (`orientation`, `gap`).                                                                                                                                                                                                          |
+| `Flex`      | Flexbox container (`direction`, `wrap`, `align`, `justify`, `gap`).                                                                                                                                                                                           |
 
 ### Feedback
 
@@ -465,13 +467,13 @@ Your `className` is merged last with `cn()`, so it replaces a conflicting class 
 
 ### Overlays
 
-| Component         | Description                                                                                                      |
-| ----------------- | ---------------------------------------------------------------------------------------------------------------- |
-| `Dialog`          | Modal dialog: `Dialog.Trigger`, `Dialog.Content`, `Dialog.Title`, `Dialog.Footer`, `Dialog.Close`.               |
-| `Drawer`          | Modal side panel (`position` `start`, `end`, `left`, `right`); `Drawer.Trigger`, `Drawer.Title`, `Drawer.Close`. |
-| `Popover`         | Non-modal popup anchored to `Popover.Trigger`; `side`, `align`.                                                  |
-| `Tooltip`         | Hover and focus text for its child, as a description or (`relationship="label"`) a name.                         |
-| `TeachingPopover` | Step-by-step onboarding popover, optionally pointing at a `target`.                                              |
+| Component         | Description                                                                                                                              |
+| ----------------- | ---------------------------------------------------------------------------------------------------------------------------------------- |
+| `Dialog`          | Modal dialog: `Dialog.Trigger`, `Dialog.Content` (`closeLabel` names its Close button), `Dialog.Title`, `Dialog.Footer`, `Dialog.Close`. |
+| `Drawer`          | Modal side panel (`position` `start`, `end`, `left`, `right`; `closeLabel`); `Drawer.Trigger`, `Drawer.Title`, `Drawer.Close`.           |
+| `Popover`         | Non-modal popup anchored to `Popover.Trigger`; `side`, `align`.                                                                          |
+| `Tooltip`         | Hover and focus text for its child, as a description or (`relationship="label"`) a name.                                                 |
+| `TeachingPopover` | Step-by-step onboarding popover, optionally pointing at a `target`.                                                                      |
 
 ### Tables
 
@@ -512,6 +514,7 @@ export const DeleteButton = () => (
 - **`disabled` with a non-native `as`.** Only `button` (the default), `input`, `select` and `textarea` receive the native `disabled` attribute. Every other `as` gets `aria-disabled="true"` and `tabIndex={-1}` instead, which your props cannot override. That covers `a`, `div`, `span` and any custom component, including router links and styled or motion components that render a native `<button>`. Its clicks, Enter and Space are prevented, the click does not reach ancestor `onClick` handlers, and an `<a>` drops its `href` and keeps `role="link"`. Such an element has no native `:disabled` state, so a component's own `:disabled` styling no longer applies: style it on `[aria-disabled="true"]` (the `aria-disabled:` variant). It leaves the tab order but can still take focus from a mouse click.
 - An `aria-disabled="true"` of yours on an enabled Button shows the disabled look but keeps the Button focusable and its handlers running: guard them yourself.
 - The `icon` slot is decorative (`aria-hidden`). Give an icon-only Button an `aria-label`, `aria-labelledby` or `title`; it warns in development without one.
+- **Types.** `ButtonProps` and `React.ComponentProps<typeof Button>` are the props of a Button rendered as `<button>`. For another element use `ButtonProps<'a'>` (a Storybook story with `as` args: `StoryObj<ButtonProps<'a'>>`). The other polymorphic components (CompoundButton, Link, Text, Toolbar, Card and its parts, Stack, Flex, Grid, Tag, Divider) work the same way.
 
 ### Forms and `Field`
 
@@ -542,10 +545,11 @@ export function SignupForm() {
 }
 ```
 
-- Library controls inside a `Field` are named by its label, described by its hint and error, and marked `aria-invalid`/`aria-required`. With `required`, native inputs (`Input`, `Select`, `Textarea`, `Slider`, `SpinButton`, `SearchBox`) also get the native `required` attribute, so the browser blocks an empty submit. The choice and picker controls (`Checkbox`, `Switch`, `RadioGroup`, `Rating`, `SwatchPicker`, `ColorPicker`, `Combobox`, `Dropdown`, `TagPicker`, `DatePicker`, `TimePicker`) are required too, also without `name`: the browser blocks the submit until the control is checked, switched on or has a value, so `<Field required><Switch /></Field>` means "must be on". Add `noValidate` to a `<form>` that validates in its submit handler.
+- Library controls inside a `Field` are named by its label, described by its hint and error, and marked `aria-invalid`/`aria-required`. With `required`, native inputs (`Input`, `Select`, `Textarea`, `Slider`, `SpinButton`, `SearchBox`) also get the native `required` attribute, so the browser blocks an empty submit. The choice and picker controls (`Checkbox`, `Switch`, `RadioGroup`, `Rating`, `SwatchPicker`, `ColorPicker`, `Combobox`, `Dropdown`, `TagPicker`, `DatePicker`, `TimePicker`) are required too, also without `name`: the browser blocks the submit until the control is checked, switched on or has a value, so `<Field required><Switch /></Field>` means "must be on". Like a native read-only input, a `readOnly` Combobox, TagPicker, DatePicker or TimePicker does not block the submit (it keeps `aria-required`). Add `noValidate` to a `<form>` that validates in its submit handler.
+- A `label`, `hint` or `error` that renders nothing (`[]`, such as an empty `errors.map(…)`) counts as absent: the control stays valid and the hint shows. A control's own `aria-invalid={false}` wins over the Field's error, which still describes it.
 - One control per Field. Put wrapper or layout components (a `Tooltip`, your own row) **inside a plain `<div>`** in the Field; the library control inside is then labelled correctly.
 - `error` on `Input`, `Select` and `Textarea`: a string renders the message after the control in a `role="alert"` element linked with `aria-describedby`/`aria-errormessage`; `error={true}` only marks the control invalid. Inside a Field that shows its own error, the message is not repeated.
-- Value controls take part in native forms when you pass `name`, or when they are required (their own `required`, or a required `Field`): `Checkbox`, `Switch`, `RadioGroup`, `Rating`, `SpinButton`, `SwatchPicker`, `ColorPicker`, `Combobox`, `Dropdown`, `TagPicker`, `DatePicker` (ISO `yyyy-mm-dd`) and `TimePicker` (`HH:mm`) render a hidden input, honour `required` and `form`, and reset with their form. No name is generated for you.
+- Value controls take part in native forms when you pass `name`, or when they are required (their own `required`, or a required `Field`): `Checkbox`, `Switch`, `RadioGroup`, `Rating`, `SpinButton`, `SwatchPicker`, `ColorPicker`, `Combobox`, `Dropdown`, `TagPicker`, `DatePicker` (ISO `yyyy-mm-dd`) and `TimePicker` (`HH:mm`) render a hidden input, honour `required` and `form`, and reset with their form. `SearchBox` submits through its own `<input name>` and resets with its form too. No name is generated for you.
 
 ### Value callbacks
 
@@ -557,11 +561,13 @@ export function SignupForm() {
 | checked      | `checked` / `defaultChecked` / `onCheckedChange(checked)` |
 | open         | `open` / `defaultOpen` / `onOpenChange(open)`             |
 
-These fire only when the value changes. Event callbacks such as `onPageChange`, `onStepChange` and `Tree`'s `onItemSelect` fire on every activation, also when the current item is activated again. The 0.4 names still work as deprecated aliases that warn once in development; see the [CHANGELOG](CHANGELOG.md) for the full table.
+These fire only when the value changes. Event callbacks such as `onPageChange`, `onStepChange` and `Tree`'s `onItemSelect` fire on every activation, also when the current item is activated again. Array props that Wave only reads (`openItems`, `expandedItems`, `selectedItems`, `columns`, `options`, `items`, `steps`, …) accept readonly arrays such as `as const` values; the callbacks receive a new, mutable array. The 0.4 names still work as deprecated aliases that warn once in development; see the [CHANGELOG](CHANGELOG.md) for the full table.
 
 ### Composite controls
 
-Checkbox, Switch, SearchBox, SpinButton, Combobox, Dropdown, TagPicker, DatePicker and TimePicker render a wrapper around their focusable element. `id`, `aria-*`, `tabIndex`, `autoFocus`, focus and key handlers (and native input attributes for text fields) go to the focusable element; `className`, `style`, `data-*` and `ref` stay on the wrapper. `controlRef` gives you the focusable element.
+Checkbox, Switch, SearchBox, SpinButton, Combobox, Dropdown, TagPicker, DatePicker and TimePicker render a wrapper around their focusable element. `id`, the naming and validation ARIA attributes (`aria-label`, `aria-labelledby`, `aria-describedby`, `aria-invalid`, `aria-required`, `aria-errormessage`, `aria-details`), `tabIndex`, `autoFocus`, focus and key handlers (and native input attributes for text fields) go to the focusable element; `className`, `style`, `data-*`, other `aria-*` attributes and `ref` stay on the wrapper. `controlRef` gives you the focusable element.
+
+`Input` with `contentBefore`/`contentAfter` content also renders a bordered wrapper `<span>`, which receives `className`, `style` and `hidden` (so they size and hide the visible field); unlike the controls above, `ref`, `id`, `aria-*` and `data-*` stay on the `<input>`.
 
 ### Menus
 
@@ -599,7 +605,7 @@ export function Actions({ onEdit, onSave }: { onEdit: () => void; onSave: () => 
 }
 ```
 
-Use `Menu.Trigger`/`Menu.Popover` for menu buttons; `Popover` has no menu semantics.
+Use `Menu.Trigger`/`Menu.Popover` for menu buttons; `Popover` has no menu semantics. A Menu with `open`, `defaultOpen` or `onOpenChange` (even `false`) is a popup menu, which renders no element of its own: put its items in `Menu.Popover`. Without them and without Trigger/Popover parts it is a static `role="menu"`. A MenuButton without a label needs `aria-label`, `aria-labelledby` or `title`.
 
 ### Dialogs and triggers
 
@@ -630,10 +636,11 @@ export function DeleteDialog({ onDelete }: { onDelete: () => void }) {
 }
 ```
 
-- `Dialog.Trigger`, `Drawer.Trigger`, `Popover.Trigger` and `Menu.Trigger` merge their props onto their single child (no wrapper element) or pass them to a render-prop child. `asChild={false}` renders the 0.4 wrapper `<span>`; a custom child that neither forwards `ref` nor spreads its props falls back to that span automatically, with a development warning.
+- `Dialog.Trigger`, `Drawer.Trigger`, `Popover.Trigger` and `Menu.Trigger` merge their props onto their single child (no wrapper element; a Fragment around one element counts as that element) or pass them to a render-prop child. `asChild={false}` renders the 0.4 wrapper `<span>`; a custom child that neither forwards `ref` nor spreads its props, and text or several children, fall back to that span automatically, with a development warning. The span keeps the trigger's other props, but `aria-haspopup`, `aria-expanded` and `aria-controls` go to the first element in the tab order inside it (after mount), so a button there is announced as opening the popup; Menu returns focus to that element.
 - Render `Dialog.Footer` **inside** `Dialog.Content`.
 - Dialog and Drawer trap focus, close on Escape and backdrop click, lock page scroll and make the rest of the page `inert` while open (toasts and live regions stay available).
-- On close, focus goes to `finalFocusRef` when you pass one. Otherwise it returns to the element that had focus when the modal opened: the trigger for a trigger click, but also the parent's own button of a controlled Dialog, or a text field that had focus when a keyboard shortcut opened it. When nothing had focus (a modal opened from code, or a click in Safari, which does not focus the clicked button), it goes to the trigger that opened the modal, else the first mounted trigger. When that element is gone, focus falls back to a mounted trigger or the overlay below.
+- On close, focus goes to `finalFocusRef` when you pass one. Otherwise it returns to the element that had focus when the modal opened: the trigger for a trigger click, but also the parent's own button of a controlled Dialog, or a text field that had focus when a keyboard shortcut opened it. When nothing had focus (a modal opened from code, or a click in Safari, which does not focus the clicked button), it goes to the trigger that opened the modal, else the first mounted trigger. When that element is gone, focus falls back to a mounted trigger, then to an element next to where the opener was (the next row's action after a delete), then to the overlay below.
+- An `autoFocus` element inside a Dialog or Drawer keeps focus, also in a dialog opened over another one or nested in its content, and in a `Popover.Content` opened from a dialog. `Dialog.Content` and `Drawer` take `closeLabel` (default `'Close'`) to localize the Close button's name.
 
 ### Toasts
 
@@ -664,9 +671,9 @@ export function App() {
 }
 ```
 
-`dispatchToast` returns the toast id; `dismissToast(id)` removes it. Toasts pause while hovered or focused, stay reachable by Tab over an open Dialog, and are announced through permanent live regions.
+`dispatchToast` returns the toast id; `dismissToast(id)` removes it. Toast timers pause while a toast is hovered or focused and while the page is in the background (the window has lost focus, or the tab is hidden, also when the Toaster mounted there). Toasts stay reachable by Tab over an open Dialog and are announced through permanent live regions. `statusLabel` and `dismissLabel` (options of `dispatchToast`, and props of `<Toast>`) translate the hidden status text and the dismiss button's name.
 
-### Sorting a DataGrid
+### Sorting and selecting in a DataGrid
 
 Sorting is controlled: the grid reports the requested sort and **you reorder the rows**.
 
@@ -715,6 +722,8 @@ export function People({ people }: { people: Person[] }) {
 }
 ```
 
+Row selection: with `selectionMode="single"`, pass at most one id in `selectedItems`/`defaultSelectedItems` (with several, the first one whose row is rendered is selected, with a development warning). Each row's selection control is named after the row's first `DataGrid.Cell`, `<td>` or `<th>` child (Fragments are looked into); a cell rendered by another component is not seen, so pass `selectionLabel` to `DataGrid.Row` then.
+
 ### Slots
 
 Props such as `icon`, `contentBefore` and `dismiss` are slots. A slot accepts content (rendered inside the slot's element) or an object with `as`, `className`, `children` and any attribute of the slot's element:
@@ -731,34 +740,59 @@ export const Price = () => (
 );
 ```
 
-Icon slots are decorative (`aria-hidden`). The dismiss and clear slots of `MessageBar`, `SearchBox` and `Tag` render their content inside the component's own button; the 0.4 form that passed a button object is deprecated.
+A slot takes any `React.ReactNode`. Spread an attributes object typed by an interface into a new object (`image={{ ...imgProps }}` for a `React.ImgHTMLAttributes<HTMLImageElement>`).
+
+Icon slots are decorative (`aria-hidden`). The dismiss and clear slots of `MessageBar`, `SearchBox` and `Tag` render their content inside the component's own button; the 0.4 form that passed a button object is deprecated. Content that renders nothing (`''`, `[]`) keeps the default icon; on `MessageBar`, `dismiss={null}` is the only value that hides the dismiss button (a boolean counts as no slot).
+
+### Built-in text
+
+The names and hidden texts that components render themselves are English by default. These props translate them:
+
+| Component                   | Props                                                                                                                                                       |
+| --------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `Dialog.Content`, `Drawer`  | `closeLabel` (the Close button)                                                                                                                             |
+| `TeachingPopover`           | `closeLabel` (the Close button)                                                                                                                             |
+| `MessageBar`, `Toast`       | `statusLabel` (the hidden severity text); `Toast` also `dismissLabel` (also options of `dispatchToast`)                                                     |
+| `Tag`                       | `dismissLabel`                                                                                                                                              |
+| `Carousel`                  | `labels` (`previous`, `next`, `picker`, `slide(index, total)` with a zero-based index, `carouselRoleDescription`, `slideRoleDescription`), `autoPlayLabels` |
+| `Stepper`                   | `statusLabels` (`completed`, `error`; `''` omits the text)                                                                                                  |
+| `Pagination`                | `getItemAriaLabel(type, page, selected)`                                                                                                                    |
+| `ColorPicker`               | `labels`                                                                                                                                                    |
+| `AvatarGroup`               | `overflowLabel`, `unnamedMemberLabel`                                                                                                                       |
+| `InfoLabel`, `SplitButton`  | `infoButtonLabel`, `menuButtonLabel`                                                                                                                        |
+| `Spinner`, `Skeleton.Group` | `label`                                                                                                                                                     |
+
+Still English only: TeachingPopover's Back, Next and Done, DataGrid's "Select all rows", and the picker texts (Combobox and TagPicker "No matches", TimePicker "No matching times", the DatePicker buttons, TagPicker's "Selected" list name and announcements).
 
 ## Keyboard support
 
 As implemented in 0.5. Buttons, links, checkboxes, switches and the trigger buttons of Accordion, Carousel, Nav, Breadcrumb and Pagination are native elements: Tab to reach them, Enter or Space to activate.
 
-| Component                       | Keys                                                                                                                                                                                                                                                                                  |
-| ------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Toolbar                         | One Tab stop (the last focused control). Left/Right (Up/Down when vertical) move and wrap, Home/End jump; mirrored in RTL. Text fields, selects, sliders and spin buttons keep their own arrow keys.                                                                                  |
-| RadioGroup, SwatchPicker        | One Tab stop. All four arrows move and select (wrapping), Home/End jump; Left/Right mirrored in RTL.                                                                                                                                                                                  |
-| Rating                          | Right/Up one star more, Left/Down one fewer (never below 1), Home/End first/last; mirrored in RTL.                                                                                                                                                                                    |
-| TabList                         | One Tab stop. Left/Right (Up/Down when vertical) move and select, Home/End; disabled tabs skipped; mirrored in RTL.                                                                                                                                                                   |
-| Tree                            | One Tab stop. Up/Down, Home/End; Right expands or moves to the first child, Left collapses or moves to the parent (mirrored in RTL); Enter/Space activate; `*` expands siblings; type to jump (a Space within 500 ms of a letter continues the search).                               |
-| List (selectable)               | One Tab stop. Up/Down (wrapping), Home/End, Enter/Space toggle, typeahead above 7 items (a Space within 500 ms of a letter continues the search). With item actions (grid): Up/Down between rows, Left/Right into the actions, Enter/F2 into a text field, Escape back.               |
-| DataGrid                        | One Tab stop. Arrows between cells (mirrored in RTL), Home/End row start/end, Ctrl+Home/Ctrl+End grid start/end, PageUp/PageDown 10 rows; Enter/F2 into a cell's widgets, Escape back; Space on a cell toggles its row's selection.                                                   |
-| Menu                            | Trigger: Enter/Space/Down open and focus the first item, Up opens on the last. Menu: Up/Down (wrapping), Home/End, typeahead, Enter/Space activate (a Space within 500 ms of a letter continues the search), Escape closes and returns focus, Tab closes.                             |
-| Combobox, TagPicker, TimePicker | Down/Up open and move, Alt+Down opens, Enter commits the active option (with nothing to commit, Enter submits the form), Alt+Up and Tab close, Escape closes and then discards typed text. TagPicker: Backspace in the empty input focuses the last tag, Backspace/Delete removes it. |
-| Dropdown                        | Down/Up/Home/End and typing open and move, PageUp/PageDown move by 10, Enter/Space commit (a Space within 500 ms of a letter continues the search), Alt+Up and Tab commit and close, Escape closes.                                                                                   |
-| SpinButton                      | Up/Down step, PageUp/PageDown large step, Home/End jump to a finite min/max (otherwise they move the caret); Enter commits typed text, Escape reverts it.                                                                                                                             |
-| DatePicker                      | Alt+Down opens the calendar. Calendar: arrows by day/week (mirrored in RTL), PageUp/PageDown by month, Shift+PageUp/PageDown by year, Home/End week start/end, Enter/Space select, Escape closes; Tab stays inside.                                                                   |
-| Dialog, Drawer                  | Focus is trapped; Escape closes; focus returns to the first of these that can take focus: `finalFocusRef`, the element that had focus when the modal opened, the trigger, an element next to where that opener was.                                                                   |
-| Popover, TeachingPopover        | Escape closes. When focus was inside (or lost to `<body>`), Popover returns it to its trigger, TeachingPopover to where focus was before it opened.                                                                                                                                   |
-| Tooltip, InfoLabel              | Open on keyboard focus; Escape closes. InfoLabel: click pins it.                                                                                                                                                                                                                      |
-| Card (selectable)               | With the default `selectionControl="card"`: Enter (key down) or Space (key up) selects. With `"checkbox"`: the built-in checkbox.                                                                                                                                                     |
-| Stepper                         | Each reachable step is a Tab stop; Enter/Space activate.                                                                                                                                                                                                                              |
-| Slider                          | Native range keys.                                                                                                                                                                                                                                                                    |
+| Component                       | Keys                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              |
+| ------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Toolbar                         | One Tab stop (the last focused control; focusing a nested composite, such as a radio group or tab list, or a text field, select, slider or spin button keeps it where it was). Left/Right (Up/Down when vertical) move and wrap, Home/End jump; mirrored in RTL; controls hidden with CSS are skipped. Text fields, selects, sliders, spin buttons and editable comboboxes keep their own arrow keys; a Dropdown keeps Up/Down, Home and End for its list, but Left/Right move past it. A nested composite keeps its own Tab stop and arrow keys. |
+| RadioGroup, SwatchPicker        | One Tab stop. All four arrows move and select (wrapping), Home/End jump; Left/Right mirrored in RTL.                                                                                                                                                                                                                                                                                                                                                                                                                                              |
+| Rating                          | Right/Up one star more, Left/Down one fewer (never below 1), Home/End first/last; mirrored in RTL.                                                                                                                                                                                                                                                                                                                                                                                                                                                |
+| TabList                         | One Tab stop. Left/Right (Up/Down when vertical) move and select, Home/End; disabled tabs skipped; mirrored in RTL.                                                                                                                                                                                                                                                                                                                                                                                                                               |
+| Tree                            | One Tab stop. Up/Down, Home/End; Right expands or moves to the first child, Left collapses or moves to the parent (mirrored in RTL); Enter/Space activate; `*` expands siblings; type to jump (a Space within 500 ms of a letter continues the search).                                                                                                                                                                                                                                                                                           |
+| List (selectable)               | One Tab stop. Up/Down (wrapping), Home/End, Enter/Space toggle, typeahead above 7 items (a Space within 500 ms of a letter continues the search). With item actions (grid): Up/Down between rows, Left/Right into the actions, Enter/F2 into a text field, Escape back.                                                                                                                                                                                                                                                                           |
+| DataGrid                        | One Tab stop. Arrows between cells (Left/Right to the previous/next cell of the row, mirrored in RTL; Up/Down and PageUp/PageDown keep the visual column across `colSpan`/`rowSpan` cells of grouped headers), Home/End row start/end, Ctrl+Home/Ctrl+End grid start/end, PageUp/PageDown 10 rows; Enter/F2 into a cell's widgets, Escape back; Space on a cell toggles its row's selection.                                                                                                                                                      |
+| Menu                            | Trigger: Enter/Space/Down open and focus the first item, Up opens on the last. Menu: Up/Down (wrapping), Home/End, typeahead, Enter/Space activate (a Space within 500 ms of a letter continues the search), Escape closes and returns focus, Tab closes.                                                                                                                                                                                                                                                                                         |
+| Combobox, TagPicker, TimePicker | Down/Up open and move, Alt+Down opens, typing makes the first match active (not in a `freeform` Combobox), Enter commits the active option (with no active option, Enter submits the form; TimePicker instead never submits while its text is edited: a complete time within the bounds is committed, erased text clears the value, other text is kept), Alt+Up and Tab close, Escape closes and then discards typed text. TagPicker: Backspace in the empty input focuses the last tag, Backspace/Delete removes it.                             |
+| Dropdown                        | Down/Up/Home/End and typing open and move, PageUp/PageDown move by 10, Enter/Space commit (a Space within 500 ms of a letter continues the search), Alt+Up and Tab commit and close, Escape closes.                                                                                                                                                                                                                                                                                                                                               |
+| SpinButton                      | Up/Down step, PageUp/PageDown large step, Home/End jump to a finite min/max (otherwise they move the caret); Enter commits typed text, Escape reverts it.                                                                                                                                                                                                                                                                                                                                                                                         |
+| SearchBox                       | Escape clears the text and keeps focus (the key is consumed, so an enclosing Dialog, Drawer or Popover stays open); in an empty field Escape reaches the enclosing overlay.                                                                                                                                                                                                                                                                                                                                                                       |
+| DatePicker                      | Alt+Down opens the calendar. Calendar: arrows by day/week (mirrored in RTL), PageUp/PageDown by month, Shift+PageUp/PageDown by year, Home/End week start/end, Enter/Space select, Escape closes; Tab stays inside.                                                                                                                                                                                                                                                                                                                               |
+| Dialog, Drawer                  | Focus is trapped; Escape closes; focus returns to the first of these that can take focus: `finalFocusRef`, the element that had focus when the modal opened, the trigger, an element next to where that opener was.                                                                                                                                                                                                                                                                                                                               |
+| Popover, TeachingPopover        | Escape closes. When focus was inside (or lost to `<body>`), Popover returns it to its trigger, TeachingPopover to where focus was before it opened. In the Tab order the content follows its trigger (TeachingPopover with `target`: the target): Tab from the trigger enters it, Tab past its end continues after the trigger, Shift+Tab from the element after the trigger enters it at its last element. Reached from the end of the page, it follows the document order. Focus leaving it does not close it.                                  |
+| Tooltip, InfoLabel              | Open on keyboard focus; Escape closes. InfoLabel: click pins it.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  |
+| Card (selectable)               | With the default `selectionControl="card"`: Enter (key down) or Space (key up) selects. With `"checkbox"`: the built-in checkbox.                                                                                                                                                                                                                                                                                                                                                                                                                 |
+| Stepper                         | Each reachable step is a Tab stop; Enter/Space activate.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          |
+| Slider                          | Native range keys.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                |
 
 Accordion and Carousel have no arrow-key navigation: their triggers and controls are Tab stops.
+
+Typeahead (Menu, selectable List, Tree, Dropdown) accepts characters typed with AltGr, which Windows reports as Ctrl+Alt (Polish `ł`, Romanian `ș`); Ctrl+Alt with an arrow, Home or End is left to the browser. Menu typeahead matches the item labels, not icons or shortcuts. Options and option groups with `hidden` are skipped like a native `<option hidden>`.
 
 ## Hooks and utilities
 
@@ -775,7 +809,7 @@ Accordion and Carousel have no arrow-key navigation: their triggers and controls
 | `useWaveTheme()`                                                                | Current theme, direction and portal container.                                                                                              |
 | `useToastController()`                                                          | `dispatchToast` / `dismissToast` inside `<Toaster>`.                                                                                        |
 | `useIsOverflowing(target)`, `useOverflowMenu()`, `useIsOverflowItemVisible(id)` | Overflow detection.                                                                                                                         |
-| `cn(...classes)`                                                                | clsx + tailwind-merge that knows Wave's type ramp and shadows; the last class wins.                                                         |
+| `cn(...classes)`                                                                | clsx + tailwind-merge that knows Wave's type ramp and shadows; the last class wins over a conflicting class of the same variant.            |
 | `composeEventHandlers(theirs, ours)`                                            | Run a consumer handler, then yours unless it called `preventDefault()`.                                                                     |
 | `mergeRefs(...refs)`                                                            | Merge refs outside components.                                                                                                              |
 | `resolveSlot`, `renderSlot`                                                     | The slot helpers the components use.                                                                                                        |
@@ -798,9 +832,9 @@ npm install
 npm run dev              # Storybook on http://localhost:6006 (theme and direction toolbars)
 npm test                 # unit, integration, conventions and stories accessibility tests (Vitest)
 npm run typecheck        # library, dev (tests + stories) and node TypeScript programs
-npm run lint             # ESLint
+npm run lint             # ESLint (fails on any warning)
 npm run build            # type-check, library build, CSS build, dist verification
-npm run check:package    # publint + are-the-types-wrong
+npm run check:package    # publint + are-the-types-wrong on a packed tarball
 npm run test:pack        # pack the tarball and smoke-test it in plain and Tailwind fixtures
 ```
 
