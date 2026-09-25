@@ -204,8 +204,9 @@ DialogRoot.displayName = 'Dialog';
  * does not is wrapped in a `<span>` automatically (with a development warning), the span that
  * `asChild={false}` renders. Focus returns to the trigger when the dialog closes (with several
  * triggers, to the one that opened it). On the span, the state ARIA goes to the first element in
- * the tab order inside it, and focus returns to that element (to the span only when you made it
- * the trigger with `tabIndex={0}` or a `role`).
+ * the tab order inside it, and focus returns to that element (to the span when you made it the
+ * trigger with a `role` such as `button` and `tabIndex={0}`, or when nothing inside it can take
+ * focus).
  */
 export const DialogTrigger = (props: DialogTriggerProps) => {
   const { open, setOpen, trigger, contentId } = useDialogContext('Dialog.Trigger');

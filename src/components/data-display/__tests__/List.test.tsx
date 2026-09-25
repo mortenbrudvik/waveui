@@ -942,6 +942,50 @@ describe('List', () => {
       expect(onChange).not.toHaveBeenCalled();
     });
 
+    it.each([
+      ['Ctrl+Alt', { ctrlKey: true, altKey: true }],
+      ['Ctrl', { ctrlKey: true }],
+      ['Alt', { altKey: true }],
+      ['Meta', { metaKey: true }],
+    ])(
+      'leaves %s with Space or Enter to the page, also during a typeahead search: nothing toggles',
+      async (_label, modifiers) => {
+        const user = userEvent.setup();
+        const onChange = vi.fn();
+        const names = [
+          'Apple',
+          'Banana',
+          'Cherry',
+          'Date',
+          'Elderberry',
+          'Fig',
+          'Grape',
+          'Honeydew',
+        ];
+        render(
+          <List selectable aria-label="Fruits" onSelectionChange={onChange}>
+            {names.map((name) => (
+              <List.Item key={name} value={name}>
+                {name}
+              </List.Item>
+            ))}
+          </List>,
+        );
+        act(() => option('Apple').focus());
+        for (const key of [' ', 'Enter']) {
+          expect(fireEvent.keyDown(option('Apple'), { key, ...modifiers })).toBe(true);
+        }
+        // Also during a search: the chord is no typed character (AltGr types no space).
+        await user.keyboard('g');
+        expect(option('Grape')).toHaveFocus();
+        for (const key of [' ', 'Enter']) {
+          expect(fireEvent.keyDown(option('Grape'), { key, ...modifiers })).toBe(true);
+        }
+        expect(onChange).not.toHaveBeenCalled();
+        expect(option('Grape')).toHaveAttribute('aria-selected', 'false');
+      },
+    );
+
     it('Enter and Space toggle selection without calling the item onClick (pointer clicks only)', async () => {
       const user = userEvent.setup();
       const onClick = vi.fn();
@@ -1222,6 +1266,24 @@ describe('List', () => {
       expect(row(/Beta/)).toHaveAttribute('aria-selected', 'true');
       await user.keyboard(' ');
       expect(onChange).toHaveBeenLastCalledWith([]);
+      expect(row(/Beta/)).toHaveAttribute('aria-selected', 'false');
+    });
+
+    it('leaves Enter and Space with Ctrl, Alt or Meta on a focused row to the page', () => {
+      const onChange = vi.fn();
+      render(<DocumentList onSelectionChange={onChange} />);
+      act(() => row(/Beta/).focus());
+      for (const modifiers of [
+        { ctrlKey: true, altKey: true },
+        { ctrlKey: true },
+        { altKey: true },
+        { metaKey: true },
+      ]) {
+        for (const key of [' ', 'Enter']) {
+          expect(fireEvent.keyDown(row(/Beta/), { key, ...modifiers })).toBe(true);
+        }
+      }
+      expect(onChange).not.toHaveBeenCalled();
       expect(row(/Beta/)).toHaveAttribute('aria-selected', 'false');
     });
 

@@ -311,10 +311,13 @@ export function resolveSlot<T extends React.ElementType = 'span'>(
       };
     }
     if (React.isValidElement(slot)) {
-      warnOnce(
-        `slot:void-fragment:${String(tag)}`,
-        `A Fragment cannot stand in for ${describeTag(tag)} (a void element): it cannot take the slot's className or attributes. Pass the element itself or an object slot instead; the slot was not rendered.`,
-      );
+      // An empty Fragment (`<></>`) renders nothing: an empty slot, no warning.
+      if (slotRendersContent(slot)) {
+        warnOnce(
+          `slot:void-fragment:${String(tag)}`,
+          `A Fragment cannot stand in for ${describeTag(tag)} (a void element): it cannot take the slot's className or attributes. Pass the element itself or an object slot instead; the slot was not rendered.`,
+        );
+      }
       return null;
     }
     if (slotRendersContent(slot)) {

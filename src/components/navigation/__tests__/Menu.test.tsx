@@ -855,6 +855,35 @@ describe('Menu popup (Menu.Trigger + Menu.Popover)', () => {
     expect(item('Delete')).toHaveFocus();
   });
 
+  it.each([
+    ['Ctrl+Alt', { ctrlKey: true, altKey: true }],
+    ['Ctrl', { ctrlKey: true }],
+    ['Alt', { altKey: true }],
+    ['Meta', { metaKey: true }],
+  ])(
+    'leaves %s with Space or Enter to the page, also during a typeahead search: no item activates',
+    async (_label, modifiers) => {
+      const user = userEvent.setup();
+      const onEdit = vi.fn();
+      const onDelete = vi.fn();
+      render(<PopupMenu onEdit={onEdit} onDelete={onDelete} />);
+      await user.click(trigger());
+      for (const key of [' ', 'Enter']) {
+        expect(fireEvent.keyDown(item('Edit'), { key, ...modifiers })).toBe(true);
+      }
+      // Also during a search: the chord is no typed character (AltGr types no space).
+      await user.keyboard('d');
+      expect(item('Delete')).toHaveFocus();
+      for (const key of [' ', 'Enter']) {
+        expect(fireEvent.keyDown(item('Delete'), { key, ...modifiers })).toBe(true);
+      }
+      expect(onEdit).not.toHaveBeenCalled();
+      expect(onDelete).not.toHaveBeenCalled();
+      expect(item('Delete')).toHaveFocus();
+      expect(screen.getByRole('menu')).toBeInTheDocument();
+    },
+  );
+
   it('persistOnClick keeps the menu open after selection', async () => {
     const user = userEvent.setup();
     const onDelete = vi.fn();
@@ -1585,10 +1614,12 @@ describe('Menu popup (Menu.Trigger + Menu.Popover)', () => {
 describe('Menu events from a portal opened inside an item', () => {
   function MenuWithNestedPortal({
     persistOnClick = true,
+    disabled = false,
     onRenameClick,
     onRenameKeyDown,
   }: {
     persistOnClick?: boolean;
+    disabled?: boolean;
     onRenameClick?: React.MouseEventHandler<HTMLDivElement>;
     onRenameKeyDown?: React.KeyboardEventHandler<HTMLDivElement>;
   }) {
@@ -1600,6 +1631,7 @@ describe('Menu events from a portal opened inside an item', () => {
         <Menu.Popover>
           <Menu.Item
             persistOnClick={persistOnClick}
+            disabled={disabled}
             onClick={onRenameClick}
             onKeyDown={onRenameKeyDown}
           >
@@ -1670,6 +1702,22 @@ describe('Menu events from a portal opened inside an item', () => {
     await user.click(item('Rename…'));
     expect(queryMenu()).not.toBeInTheDocument();
     expect(trigger()).toHaveFocus();
+  });
+
+  it('a disabled item never calls onClick, not even for a click inside its portal, which it leaves alone', async () => {
+    const user = userEvent.setup();
+    const onRenameClick = vi.fn();
+    render(<MenuWithNestedPortal disabled persistOnClick={false} onRenameClick={onRenameClick} />);
+    const save = screen.getByRole('button', { name: 'Save' });
+    expect(fireEvent.click(save)).toBe(true);
+    await user.click(save);
+    expect(onRenameClick).not.toHaveBeenCalled();
+    expect(queryMenu()).toBeInTheDocument();
+
+    // A click on the disabled item itself is prevented and runs nothing.
+    expect(fireEvent.click(item('Rename…'))).toBe(false);
+    expect(onRenameClick).not.toHaveBeenCalled();
+    expect(queryMenu()).toBeInTheDocument();
   });
 });
 
@@ -1861,6 +1909,35 @@ describe('Menu.Trigger rendered as a wrapper span', () => {
 
     await user.click(span);
     await user.click(item('Edit'));
+    expect(queryMenu()).not.toBeInTheDocument();
+    expect(span).toHaveFocus();
+  });
+
+  it('asChild={false} with only tabIndex={0} around text: the generic span carries no state ARIA (axe) and takes focus back', async () => {
+    const user = userEvent.setup();
+    render(
+      <Menu>
+        <Menu.Trigger asChild={false} tabIndex={0} data-testid="wrap">
+          Actions
+        </Menu.Trigger>
+        <Menu.Popover>
+          <Menu.Item>Edit</Menu.Item>
+        </Menu.Popover>
+      </Menu>,
+    );
+    const span = screen.getByTestId('wrap');
+    const expectNoStateAria = () => {
+      for (const name of ['aria-haspopup', 'aria-expanded', 'aria-controls']) {
+        expect(span).not.toHaveAttribute(name);
+      }
+    };
+    expectNoStateAria();
+    await expectNoA11yViolations();
+    await user.click(span);
+    expect(item('Edit')).toHaveFocus();
+    expectNoStateAria();
+    await expectNoA11yViolations();
+    await user.keyboard('{Escape}');
     expect(queryMenu()).not.toBeInTheDocument();
     expect(span).toHaveFocus();
   });

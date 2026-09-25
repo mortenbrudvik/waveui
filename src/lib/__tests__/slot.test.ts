@@ -360,6 +360,20 @@ describe('resolveSlot', () => {
       expect(warn).not.toHaveBeenCalled();
     });
 
+    it.each<[label: string, make: () => React.ReactElement]>([
+      ['<></>', () => React.createElement(React.Fragment)],
+      ['<>{null}{false}</>', () => React.createElement(React.Fragment, null, null, false)],
+      ["<>{['']}</>", () => React.createElement(React.Fragment, null, [''])],
+    ])(
+      'returns null without a warning for an empty Fragment slot `%s` with a void default tag',
+      (_label, make) => {
+        const warn = vi.spyOn(console, 'warn');
+        expect(resolveSlot(make(), 'img')).toBeNull();
+        expect(resolveSlot(make(), 'input', 'w-full')).toBeNull();
+        expect(warn).not.toHaveBeenCalled();
+      },
+    );
+
     it('keeps object slots with src/alt (typed, no cast)', () => {
       const result = resolveSlot({ src: 'a.png', alt: 'A' }, 'img', 'object-cover');
       expect(result).toEqual({

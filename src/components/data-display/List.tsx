@@ -187,6 +187,15 @@ function isForeignEvent(event: React.SyntheticEvent<HTMLElement>): boolean {
   return false;
 }
 
+/**
+ * Enter or Space without Ctrl, Alt or Meta: the keys that toggle an item. With a modifier (Ctrl+Alt
+ * with Space included) the key is a shortcut, left to the page.
+ */
+function isActivationKey(event: React.KeyboardEvent): boolean {
+  if (event.ctrlKey || event.altKey || event.metaKey) return false;
+  return event.key === 'Enter' || event.key === ' ';
+}
+
 const TEXT_ENTRY_ROLES: ReadonlySet<string> = new Set([
   'textbox',
   'searchbox',
@@ -548,7 +557,7 @@ export const ListItem = ({
 
   const handleOptionKeyDown = (event: React.KeyboardEvent<HTMLElement>) => {
     if (isForeignEvent(event)) return;
-    if (event.key === 'Enter' || event.key === ' ') {
+    if (isActivationKey(event)) {
       event.preventDefault();
       activate();
     }
@@ -561,7 +570,7 @@ export const ListItem = ({
 
     if (!cell || !cell.contains(target)) {
       if (target !== rowElement) return;
-      if (event.key === 'Enter' || event.key === ' ') {
+      if (isActivationKey(event)) {
         event.preventDefault();
         activate();
         return;
@@ -816,7 +825,8 @@ ListActionCell.displayName = 'ListActionCell';
  * - **Selectable** (APG Listbox): `role="listbox"` with `option`s and one Tab stop (the first
  *   selected option, else the first option). ArrowUp/Down move focus (wrapping), Home/End jump to
  *   the ends, typeahead is on for more than 7 items, Enter/Space and clicks toggle selection (a
- *   Space typed within 500 ms of a typeahead character continues the search instead).
+ *   Space typed within 500 ms of a typeahead character continues the search instead; with Ctrl,
+ *   Alt or Meta, Enter and Space are left to the page).
  * - **Selectable with item actions** (APG Grid): `role="grid"` with `row`s (carrying
  *   `aria-selected`) and `gridcell`s for the content and the action. One Tab stop; Up/Down move
  *   between rows, Right/Left (mirrored in RTL) move into and out of the actions. A cell that holds

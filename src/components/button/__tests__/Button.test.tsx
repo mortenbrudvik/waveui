@@ -803,7 +803,8 @@ describe('Button', () => {
       );
       const button = screen.getByRole('button');
       expect(button).toHaveClass('h-10', 'w-10');
-      expect(button).not.toHaveClass('min-w-24', 'gap-1.5');
+      expect(button).not.toHaveClass('min-w-24');
+      expect(button).not.toHaveClass('gap-1.5');
       expect(warn.mock.calls).toEqual([[ICON_ONLY_WARNING]]);
     });
 

@@ -49,22 +49,39 @@ function isInTabOrder(tabIndex: unknown): boolean {
   return typeof tabIndex === 'string' && tabIndex.trim() !== '' && Number(tabIndex) >= 0;
 }
 
+/** Native controls, whose own role can carry the state ARIA. */
+const NATIVE_CONTROL_SELECTOR = 'a[href], button, input, select, summary, textarea';
+
+/**
+ * Whether `el` can carry the state ARIA: its `role` names a role other than a generic one, or it
+ * has none and is a native control. A `<span>` or `<div>` without a role is generic, whatever its
+ * `tabIndex` (axe `aria-allowed-attr`).
+ */
+function isWidgetElement(el: Element): boolean {
+  const role = el.getAttribute('role');
+  if (role !== null && role.trim() !== '') return isNonGenericRole(role);
+  return el.matches(NATIVE_CONTROL_SELECTOR);
+}
+
 /**
  * The element that acts as the trigger rendered as `el` (a cloned child, or the wrapper `<span>`
- * of `asChild={false}`, of text children and of the automatic fallback): `el` itself when it is
- * interactive — in the tab order by markup (`tabIndex >= 0`: a button, or a span the consumer
- * gave `tabIndex={0}`) or given a role other than a generic one (`role="button"`) — else the
- * first element inside it in the tab order by markup, else `null`. The trigger's state ARIA
- * belongs on it, and focus returns to it ({@link getTriggerFocusTarget}). Read from the markup, not
- * `getFirstTabbable`: that skips an `inert` subtree, and the page around a trigger is inert while
- * its modal dialog is open. Internal (not exported from the package entry).
+ * of `asChild={false}`, of text children and of the automatic fallback): `el` itself when it is a
+ * widget (a native control, or an element given a role other than a generic one) in the tab order
+ * by markup (`tabIndex >= 0`: a button, a span given `role="button"` and `tabIndex={0}`); else the
+ * first element inside it in the tab order by markup; else `el` when it is a widget out of the tab
+ * order (a span given only `role="button"`, a `<button tabIndex={-1}>`); else `null`. `tabIndex`
+ * alone never makes a generic element the trigger: it cannot carry the state ARIA. The trigger's
+ * state ARIA belongs on it, and focus returns to it ({@link getTriggerFocusTarget}). Read from the
+ * markup, not `getFirstTabbable`: that skips an `inert` subtree, and the page around a trigger is
+ * inert while its modal dialog is open. Internal (not exported from the package entry).
  */
 export function getTriggerTarget(el: HTMLElement): HTMLElement | null {
-  if (el.tabIndex >= 0 || isNonGenericRole(el.getAttribute('role'))) return el;
+  const widget = isWidgetElement(el);
+  if (widget && el.tabIndex >= 0) return el;
   for (const candidate of el.querySelectorAll<HTMLElement>(FOCUSABLE_SELECTOR)) {
     if (!isHiddenInput(candidate) && candidate.tabIndex >= 0) return candidate;
   }
-  return null;
+  return widget ? el : null;
 }
 
 /**
@@ -161,10 +178,12 @@ function moveStateAria(target: Element, values: StateAriaValues): () => void {
  * - **Text, a Fragment of several elements, several children**: a wrapper `<span>` (with a
  *   development warning from `renderTrigger`) carrying the trigger props except the state ARIA,
  *   which moves as in the automatic fallback below.
- * - **A wrapper span the consumer made the trigger** (`tabIndex={0}` or a `role` such as
- *   `"button"` passed to the trigger, e.g. `<Menu.Trigger asChild={false} role="button"
+ * - **A wrapper span the consumer made the trigger** (a `role` such as `"button"` and
+ *   `tabIndex={0}` passed to the trigger, e.g. `<Menu.Trigger asChild={false} role="button"
  *   tabIndex={0}>Actions</Menu.Trigger>`): the span keeps the state ARIA, as the element that
- *   takes focus and is announced ({@link getTriggerTarget}).
+ *   takes focus and is announced ({@link getTriggerTarget}). A span given only such a role gets
+ *   it too (after mount) when nothing inside it is in the tab order; `tabIndex` alone leaves the
+ *   span generic, so the state ARIA moves as below.
  * - **Automatic fallback**: when the cloned child has not attached its ref by the end of the mount
  *   layout effect (a custom component that neither forwards `ref` nor spreads props), the hook
  *   switches once to the wrapper span — whose click handler catches the bubbling click, so the
@@ -219,12 +238,13 @@ export function useTriggerElement<P>(
   // A wrapper span: the explicit one of `asChild={false}`, the automatic fallback of a single
   // element child, or children that cannot be cloned (text, several elements). The trigger is the
   // element inside, so the state ARIA, which a generic span cannot carry, goes to the first element
-  // it rendered in the tab order — unless the consumer made the span itself the trigger
-  // (`tabIndex`, `role`, see getTriggerTarget): then the span keeps it.
+  // it rendered in the tab order — unless the consumer made the span itself the trigger (a widget
+  // `role` and `tabIndex={0}`, see getTriggerTarget): then the span keeps it from the first render.
+  // A span given only such a role gets it after mount when nothing inside it is in the tab order.
   const autoWrapper = asChild && wrapperFallback && singleElement;
   const wrapper = !isRenderProp && !cloneable;
   const wrapperIsTrigger =
-    wrapper && (isInTabOrder(ourProps.tabIndex) || isNonGenericRole(ourProps.role));
+    wrapper && isNonGenericRole(ourProps.role) && isInTabOrder(ourProps.tabIndex);
   const movedAria = wrapper && !wrapperIsTrigger ? pickStateAria(ourProps) : null;
   // No deps: runs after every commit of the trigger (which re-renders on every state change), so
   // the attributes follow the live state and the child's current first tabbable element. A new

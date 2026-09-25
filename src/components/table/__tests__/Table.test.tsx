@@ -218,7 +218,8 @@ describe('Table', () => {
       renderFullTable();
       const wrapper = screen.getByRole('table').parentElement!;
       expect(wrapper).toHaveClass('overflow-x-auto', 'rounded-md', 'border', 'border-border');
-      expect(wrapper).not.toHaveClass('overflow-hidden', 'rounded-lg');
+      expect(wrapper).not.toHaveClass('overflow-hidden');
+      expect(wrapper).not.toHaveClass('rounded-lg');
       expect(wrapper).not.toHaveAttribute('tabindex');
       expect(wrapper).not.toHaveAttribute('role');
     });

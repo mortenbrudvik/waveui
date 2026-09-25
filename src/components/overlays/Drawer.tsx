@@ -202,8 +202,8 @@ const REACHABILITY_CHECK_DELAY = 1000;
  * forward `ref` and spread its props; one that does not is wrapped in a `<span>` automatically
  * (with a development warning), the span that `asChild={false}` renders. Focus returns to the
  * trigger when the drawer closes. On the span, the state ARIA goes to the first element in the tab
- * order inside it, and focus returns to that element (to the span only when you made it the
- * trigger with `tabIndex={0}` or a `role`).
+ * order inside it, and focus returns to that element (to the span when you made it the trigger
+ * with a `role` such as `button` and `tabIndex={0}`, or when nothing inside it can take focus).
  *
  * A Tooltip (or any other wrapper) goes inside the trigger, not around it. Use a render-prop child
  * so the trigger props land on the button and the Tooltip describes that same button:

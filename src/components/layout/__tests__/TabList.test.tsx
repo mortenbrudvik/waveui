@@ -1417,4 +1417,32 @@ describe('TabList - panels still loading inside their own Suspense', () => {
     expect(html).toMatch(/aria-selected="true"[^>]*>Tab A</);
     expect(html).toContain('Loading panels');
   });
+
+  // A `<Suspense>` child of the TabList itself, without TabList.Panels: the TabList asks whether
+  // it holds panels, which must not suspend it either.
+  const directSuspense = (LazyPanels: React.ComponentType) => (
+    <TabList aria-label="Sections">
+      <TabList.Tab value="a">Tab A</TabList.Tab>
+      <TabList.Tab value="b">Tab B</TabList.Tab>
+      <React.Suspense fallback="Loading panels">
+        <LazyPanels />
+      </React.Suspense>
+    </TabList>
+  );
+
+  it('keeps the TabList for panels loading in a Suspense child of its own, not an outer fallback', () => {
+    const { LazyPanels } = pendingPanels();
+    render(<React.Suspense fallback="Loading page">{directSuspense(LazyPanels)}</React.Suspense>);
+    expect(screen.queryByText('Loading page')).not.toBeInTheDocument();
+    expect(tab('Tab A')).toHaveAttribute('aria-selected', 'true');
+    expect(screen.getByText('Loading panels')).toBeInTheDocument();
+  });
+
+  it('server-renders the TabList for panels loading in a Suspense child of its own', () => {
+    const { LazyPanels } = pendingPanels();
+    const html = renderToString(directSuspense(LazyPanels));
+    expect(html).toContain('role="tablist"');
+    expect(html).toMatch(/aria-selected="true"[^>]*>Tab A</);
+    expect(html).toContain('Loading panels');
+  });
 });

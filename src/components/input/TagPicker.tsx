@@ -11,6 +11,7 @@ import { useControllable } from '../../hooks/useControllable';
 import { useFieldContext, useFieldControl } from '../../hooks/useFieldControl';
 import { useFormReset } from '../../hooks/useFormReset';
 import { useId } from '../../hooks/useId';
+import { useIsClient } from '../../hooks/useIsClient';
 import { useListbox, type ListboxItem } from '../../hooks/useListbox';
 import { useMergedRefs } from '../../hooks/useMergedRefs';
 import { usePreserveFocus } from '../../hooks/usePreserveFocus';
@@ -92,7 +93,8 @@ export interface TagPickerProps extends Omit<
   open?: boolean;
   /**
    * Initial open state for uncontrolled usage. A picker that starts disabled or read-only starts
-   * closed.
+   * closed. The list renders only in the browser: it is closed in the server HTML and opens once
+   * the picker has hydrated.
    * @default false
    */
   defaultOpen?: boolean;
@@ -226,7 +228,9 @@ function TagRemoveButton({
  * `<div>`. Inside a `Field` the input is labelled and described by it. The tag area shows the
  * error look whenever the input ends up `aria-invalid` (its own `aria-invalid` or a `Field`
  * error). With `name`/`required` the values take part in form submission, validation and reset.
- * Selected values without a matching option are shown with their raw value.
+ * Selected values without a matching option are shown with their raw value. The open list renders
+ * only in the browser: an open list (`defaultOpen`, `open`) is closed in the server HTML and opens
+ * once the picker has hydrated.
  */
 export const TagPicker = (props: TagPickerProps) => {
   const {
@@ -310,7 +314,11 @@ export const TagPicker = (props: TagPickerProps) => {
     (defaultOpen ?? false) && interactive,
     onOpenChange,
   );
-  const open = openState && interactive;
+  // The open list lives in a portal, which renders only in the browser: until then (the server
+  // HTML, hydration) the picker shows the closed inline list and reports it closed, so
+  // aria-controls and aria-activedescendant never name a missing element.
+  const isClient = useIsClient();
+  const open = openState && interactive && isClient;
   const [query, setQuery] = React.useState('');
   // Locking the control (readOnly/disabled) while typing drops the typed text (adjust-during-render
   // pattern, C-HOOKS).

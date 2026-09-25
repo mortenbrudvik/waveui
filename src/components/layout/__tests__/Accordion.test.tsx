@@ -1159,4 +1159,53 @@ describe('Accordion - content still loading inside its own Suspense', () => {
     expect(html).toContain('Loading answer');
     expect(html).toContain('Question two?');
   });
+
+  // A wrapper still loading around the Trigger (a code-split Tooltip): the Item asks whether the
+  // child only wraps the Trigger, to put the heading around it, which must not suspend it either.
+  function pendingWrapper() {
+    let resolveModule: (module: { default: typeof WrapperStandIn }) => void = () => {};
+    const loading = new Promise<{ default: typeof WrapperStandIn }>((resolve) => {
+      resolveModule = resolve;
+    });
+    const LazyWrapper = React.lazy(() => loading);
+    return { LazyWrapper, load: () => resolveModule({ default: WrapperStandIn }) };
+  }
+
+  const wrappedTrigger = (LazyWrapper: React.ComponentType<{ children: React.ReactNode }>) => (
+    <Accordion defaultOpenItem="q1">
+      <Accordion.Item value="q1">
+        <React.Suspense fallback="Loading question">
+          <LazyWrapper>
+            <Accordion.Trigger>Question one?</Accordion.Trigger>
+          </LazyWrapper>
+        </React.Suspense>
+        <Accordion.Panel>Answer one.</Accordion.Panel>
+      </Accordion.Item>
+      <Accordion.Item value="q2">
+        <Accordion.Trigger>Question two?</Accordion.Trigger>
+        <Accordion.Panel>Answer two.</Accordion.Panel>
+      </Accordion.Item>
+    </Accordion>
+  );
+
+  it('keeps the Accordion for a wrapper around the Trigger still loading, not an outer fallback', async () => {
+    const { LazyWrapper, load } = pendingWrapper();
+    render(<React.Suspense fallback="Loading page">{wrappedTrigger(LazyWrapper)}</React.Suspense>);
+    expect(screen.queryByText('Loading page')).not.toBeInTheDocument();
+    expect(screen.getByText('Loading question')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Question two?' })).toBeInTheDocument();
+
+    await act(async () => load());
+    const trigger = screen.getByRole('button', { name: 'Question one?' });
+    expect(trigger).toHaveAttribute('aria-expanded', 'true');
+    expect(screen.getByRole('region', { name: 'Question one?' })).toHaveTextContent('Answer one.');
+    expectUniqueIds();
+  });
+
+  it('server-renders the Accordion for a wrapper around the Trigger still loading', () => {
+    const { LazyWrapper } = pendingWrapper();
+    const html = renderToString(wrappedTrigger(LazyWrapper));
+    expect(html).toContain('Loading question');
+    expect(html).toContain('Question two?');
+  });
 });

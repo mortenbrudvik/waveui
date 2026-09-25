@@ -1,6 +1,8 @@
 import * as React from 'react';
 import { afterEach, describe, it, expect, expectTypeOf, vi } from 'vitest';
 import { act, render, screen, waitFor, within } from '@testing-library/react';
+import { hydrateRoot } from 'react-dom/client';
+import { renderToString } from 'react-dom/server';
 import userEvent from '@testing-library/user-event';
 import {
   TagPicker,
@@ -295,6 +297,49 @@ describe('TagPicker', () => {
       renderPicker();
       await user.click(combobox());
       expect(screen.getByRole('listbox')).toHaveAttribute('aria-multiselectable', 'true');
+    });
+
+    it.each([
+      ['a defaultOpen', { defaultOpen: true }],
+      ['an open', { open: true }],
+    ])('renders %s list closed on the server, so every referenced id exists', (_label, props) => {
+      const parsed = document.createElement('div'); // detached: nothing reaches document.body
+      parsed.innerHTML = renderToString(
+        <TagPicker aria-label="Fruits" options={options} {...props} />,
+      );
+      const input = parsed.querySelector('input[role="combobox"]');
+      expect(input).toHaveAttribute('aria-expanded', 'false');
+      expect(input).not.toHaveAttribute('aria-activedescendant');
+      for (const attribute of ['aria-controls', 'aria-activedescendant']) {
+        for (const element of parsed.querySelectorAll(`[${attribute}]`)) {
+          for (const id of element.getAttribute(attribute)!.split(' ')) {
+            expect(parsed.querySelector(`[id="${id}"]`)).not.toBeNull();
+          }
+        }
+      }
+      expect(parsed.querySelector('[role="listbox"]')).toHaveAttribute('hidden');
+    });
+
+    it('opens a defaultOpen list once hydrated, without a hydration mismatch', async () => {
+      const element = <TagPicker aria-label="Fruits" options={options} defaultOpen />;
+      const container = document.createElement('div');
+      container.innerHTML = renderToString(element);
+      document.body.appendChild(container);
+      const error = vi.spyOn(console, 'error');
+      let root: ReturnType<typeof hydrateRoot> | undefined;
+      try {
+        await act(async () => {
+          root = hydrateRoot(container, element);
+        });
+        expect(error).not.toHaveBeenCalled();
+        const listbox = screen.getByRole('listbox');
+        expect(combobox()).toHaveAttribute('aria-expanded', 'true');
+        expect(combobox()).toHaveAttribute('aria-controls', listbox.id);
+        expect(within(listbox).getAllByRole('option')).toHaveLength(options.length);
+      } finally {
+        act(() => root?.unmount());
+        container.remove();
+      }
     });
   });
 

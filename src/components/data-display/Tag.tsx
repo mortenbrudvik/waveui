@@ -41,9 +41,11 @@ export interface TagOwnProps {
    * button): its props are merged into the dismiss button (its `onClick` runs first and can call
    * `preventDefault()` to skip `onDismiss`) and a development warning recommends icon content.
    * A slot object with button props (`type`, `disabled`, event handlers, `as: 'button'` or
-   * `as: Button`) is the deprecated 0.4 button-object form: all its props except `children`
-   * (`className`, `id`, `aria-*`, handlers, …) are merged onto the dismiss button, and a Wave
-   * Button's `icon` becomes decorative content — pass icon content and use `onDismiss` instead.
+   * `as: Button`) is the deprecated 0.4 button-object form: its props (`className`, `id`,
+   * `aria-*`, handlers, …) are merged onto the dismiss button, except its content (`children`,
+   * `dangerouslySetInnerHTML`, rendered inside the button) and the naming attributes (see below);
+   * for `as: Button`, `appearance` and `size` are dropped and `icon` becomes decorative content —
+   * pass icon content and use `onDismiss` instead.
    * The `aria-*` attributes of an icon slot object also go to the dismiss button, because the icon
    * is `aria-hidden`.
    *

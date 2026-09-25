@@ -80,7 +80,8 @@ describe('CompoundButton', () => {
     render(<CompoundButton secondaryText="Details">Main</CompoundButton>);
     const button = screen.getByRole('button', { name: /Main/ });
     expect(button).toHaveClass('flex-col', 'items-start', 'h-auto');
-    expect(button).not.toHaveClass('h-8', 'items-center');
+    expect(button).not.toHaveClass('h-8');
+    expect(button).not.toHaveClass('items-center');
   });
 
   describe('secondary text (button-provider#11, table-core#1)', () => {

@@ -190,7 +190,7 @@ Toggle.displayName = 'Toggle';
 - Repeated interactions on a controlled component whose parent ignores the callback must be separate tasks: use `userEvent`, or `await act(async () => {})` between `fireEvent` calls (back-to-back `fireEvent` calls chain in one task).
 - Timers: `vi.useFakeTimers({ shouldAdvanceTime: true })` + `userEvent.setup({ advanceTimers: vi.advanceTimersByTime })`; wrap direct `vi.advanceTimersByTime` calls in `act()`.
 - A focus trap returns outside focus, and a focus-outside dismissal decides, in a microtask: after `act(() => el.focus())`, `await act(async () => {})` before asserting.
-- Keep test output clean: no act() warnings and no unasserted `[WaveUI]` warnings. A test that spies on `console.warn`/`console.error` asserts the exact expected message(s) and that nothing else was logged; never silence them. Check with `--reporter=default`.
+- Keep test output clean: no act() warnings and no unasserted `[WaveUI]` warnings. A test that spies on `console.warn`/`console.error` asserts the exact expected message(s) and that nothing else was logged; never only silence them (a silenced spy is fine when every call is asserted). Check with `--reporter=default`.
 - Production-mode checks stub `NODE_ENV` with `vi.stubEnv` (a module mock of `isDev` does not reach `reportMissingContext`; docs/testing-best-practices.md §8).
 - Cross-component compositions (Menu + MenuButton, Field around every control, Toast over Dialog, …) live in `src/__tests__/integration.test.tsx`, together with the Server Component regression suite (add every new compound there; docs/testing-best-practices.md §5).
 

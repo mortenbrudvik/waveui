@@ -608,23 +608,55 @@ describe('useTriggerElement', () => {
       },
     );
 
-    it('keeps the state ARIA on a span given only tabIndex, or only a widget role', () => {
-      const { unmount } = render(
+    it('moves the state ARIA inside a span given only tabIndex={0}: a generic span cannot carry it (axe)', async () => {
+      const { container, unmount } = render(
+        <Trigger asChild={false} open extraProps={{ tabIndex: 0 }}>
+          <button type="button">Open</button>
+        </Trigger>,
+      );
+      const button = screen.getByRole('button', { name: 'Open' });
+      expect(button).toHaveAttribute('aria-expanded', 'true');
+      expect(button).toHaveAttribute('aria-controls', 'panel');
+      for (const name of ['aria-haspopup', 'aria-expanded', 'aria-controls']) {
+        expect(button.parentElement).not.toHaveAttribute(name);
+      }
+      await expectNoA11yViolations(container);
+      unmount();
+
+      // Around text there is no element to take it: it is dropped.
+      const text = render(
         <Trigger asChild={false} open extraProps={{ tabIndex: 0 }}>
           Actions
         </Trigger>,
       );
-      expect(screen.getByText('Actions')).toHaveAttribute('aria-expanded', 'true');
-      unmount();
-      render(
+      expect(screen.getByText('Actions')).toHaveAttribute('tabindex', '0');
+      expect(text.container.querySelector('[aria-expanded], [aria-haspopup]')).toBeNull();
+      await expectNoA11yViolations(text.container);
+    });
+
+    it('gives the state ARIA to a span given only a widget role unless an element inside it is in the tab order', () => {
+      const { unmount } = render(
         <Trigger asChild={false} open extraProps={{ role: 'button' }}>
           Actions
         </Trigger>,
       );
-      expect(screen.getByRole('button', { name: 'Actions' })).toHaveAttribute(
-        'aria-controls',
-        'panel',
+      const span = screen.getByRole('button', { name: 'Actions' });
+      expect(span).toHaveAttribute('aria-haspopup', 'dialog');
+      expect(span).toHaveAttribute('aria-controls', 'panel');
+      unmount();
+
+      const { container } = render(
+        <Trigger asChild={false} open extraProps={{ role: 'button' }}>
+          <button type="button">Open</button>
+        </Trigger>,
       );
+      const wrapper = container.querySelector('span')!;
+      const button = container.querySelector('button')!;
+      expect(button).toHaveAttribute('aria-expanded', 'true');
+      expect(button).toHaveAttribute('aria-controls', 'panel');
+      for (const name of ['aria-haspopup', 'aria-expanded', 'aria-controls']) {
+        expect(wrapper).not.toHaveAttribute(name);
+      }
     });
 
     it('still moves the state ARIA inside a span given a generic role or tabIndex={-1}', () => {
@@ -771,13 +803,31 @@ describe('getTriggerTarget', () => {
     document.body.replaceChildren();
   });
 
-  it('is the element itself when it is in the tab order or has a widget role', () => {
+  it('is the element itself when it is a widget in the tab order: a native control or a widget role', () => {
     const button = host('<button type="button">Open</button>');
     expect(getTriggerTarget(button)).toBe(button);
+    const link = host('<a href="#x">Open</a>');
+    expect(getTriggerTarget(link)).toBe(link);
+    const widgetSpan = host(
+      '<span role="button" tabindex="0"><button type="button">Inner</button></span>',
+    );
+    expect(getTriggerTarget(widgetSpan)).toBe(widgetSpan);
+  });
+
+  it('never is a generic element: tabIndex alone does not make a span the trigger', () => {
     const focusableSpan = host('<span tabindex="0"><button type="button">Inner</button></span>');
-    expect(getTriggerTarget(focusableSpan)).toBe(focusableSpan);
-    const roleSpan = host('<span role="button">Open</span>');
-    expect(getTriggerTarget(roleSpan)).toBe(roleSpan);
+    expect(getTriggerTarget(focusableSpan)).toBe(focusableSpan.querySelector('button'));
+    expect(getTriggerTarget(host('<span tabindex="0">Text</span>'))).toBeNull();
+    expect(getTriggerTarget(host('<div tabindex="0">Text</div>'))).toBeNull();
+  });
+
+  it('prefers an element inside in the tab order to a widget role out of the tab order', () => {
+    const roleSpan = host('<span role="button"><button type="button">Inner</button></span>');
+    expect(getTriggerTarget(roleSpan)).toBe(roleSpan.querySelector('button'));
+    const textRoleSpan = host('<span role="button">Open</span>');
+    expect(getTriggerTarget(textRoleSpan)).toBe(textRoleSpan);
+    const outOfOrder = host('<button type="button" tabindex="-1">Open</button>');
+    expect(getTriggerTarget(outOfOrder)).toBe(outOfOrder);
   });
 
   it('is the first element inside in the tab order for a generic wrapper, else null', () => {

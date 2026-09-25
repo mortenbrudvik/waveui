@@ -297,15 +297,16 @@ const menuItemClasses = cn(
 
 /**
  * An action in a menu (`role="menuitem"`). Enter and Space activate it (a Space typed within 500 ms
- * of a typeahead character continues the search instead); in a popup menu, activation closes the
- * menu and returns focus to the trigger unless `persistOnClick` is set or the consumer's `onClick`
- * calls `preventDefault()`. Disabled items are `aria-disabled`, skipped by keyboard navigation and
- * never activated. A consumer `aria-disabled` without `disabled` only changes the look and
- * keyboard navigation: activation still runs `onClick` (guard it yourself), as on Button. The
- * item's tab index is managed by the menu. Typeahead matches the label (`children`), not the icon
- * or the shortcut; a `data-roving-text` you pass replaces the label's text. Clicks and keys from a
- * portal opened inside the item (a Popover, a Dialog) still reach your `onClick`/`onKeyDown`, as
- * React bubbles them, but never activate the item or close the menu.
+ * of a typeahead character continues the search instead; with Ctrl, Alt or Meta they are left to
+ * the page); in a popup menu, activation closes the menu and returns focus to the trigger unless
+ * `persistOnClick` is set or the consumer's `onClick` calls `preventDefault()`. Disabled items are
+ * `aria-disabled`, skipped by keyboard navigation and never activated: their `onClick` is not
+ * called. A consumer `aria-disabled` without `disabled` only changes the look and keyboard
+ * navigation: activation still runs `onClick` (guard it yourself), as on Button. The item's tab
+ * index is managed by the menu. Typeahead matches the label (`children`), not the icon or the
+ * shortcut; a `data-roving-text` you pass replaces the label's text. Clicks and keys from a portal
+ * opened inside the item (a Popover, a Dialog) still reach your `onClick` (on an enabled item) and
+ * `onKeyDown`, as React bubbles them, but never activate the item or close the menu.
  *
  * Also exported as `MenuItem` (import the flat name from React Server Components).
  */
@@ -353,10 +354,11 @@ const MenuItem = ({
 
   const handleClick = (event: React.MouseEvent<HTMLDivElement>) => {
     // A click inside a portal opened from the item reaches the consumer's onClick (React bubbles
-    // it), but is not a click on the item: it never activates the item or closes the menu.
+    // it), but is not a click on the item: it never activates the item or closes the menu. A
+    // disabled item calls no onClick, as a disabled button; a portal's click keeps its default.
     const own = isOwnEvent(event);
-    if (disabled && own) {
-      event.preventDefault();
+    if (disabled) {
+      if (own) event.preventDefault();
       return;
     }
     onClick?.(event);
@@ -370,6 +372,8 @@ const MenuItem = ({
       // Enter and Space typed in a portal opened from the item belong to that portal.
       if (!isOwnEvent(event)) return;
       if (event.key !== 'Enter' && event.key !== ' ') return;
+      // With Ctrl, Alt or Meta (Ctrl+Alt+Space included) the key is a shortcut, left to the page.
+      if (event.ctrlKey || event.altKey || event.metaKey) return;
       // Menu items consume Enter/Space (no page scroll), whether or not they can be activated.
       event.preventDefault();
       if (!disabled) event.currentTarget.click();
@@ -509,8 +513,9 @@ MenuTrigger.displayName = 'MenuTrigger';
  * the default, so tabbing continues from the trigger (inside a Dialog, the focus trap moves on
  * from there). The trigger here is the element that takes its focus: for a wrapper span, the
  * element inside it that carries the state ARIA (the span itself when you made it the trigger with
- * `tabIndex={0}` or a `role`). Keys from a portal opened inside the menu (a Popover of an
- * item) are left to that portal: Tab there moves on inside it and keeps the menu open.
+ * a `role` such as `button` and `tabIndex={0}`, or when nothing inside it can take focus). Keys
+ * from a portal opened inside the menu (a Popover of an item) are left to that portal: Tab there
+ * moves on inside it and keeps the menu open.
  *
  * Also exported as `MenuPopover` (import the flat name from React Server Components).
  */

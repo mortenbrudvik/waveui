@@ -218,7 +218,7 @@ it('recognises parts written in a Server Component', () => {
 });
 ```
 
-`src/__tests__/integration.test.tsx` also guards every compound end to end ("compounds composed in a React Server Component"): `renderToString` is identical with the lazy parts, and `hydrateRoot` of that HTML reports no recoverable error and no `console.error` before the key interaction runs. Add a case there for a new compound.
+`src/__tests__/integration.test.tsx` also guards Accordion, Carousel, Combobox, DataGrid, Drawer, Dropdown, Menu, Nav, TabList and Tree end to end ("compounds composed in a React Server Component"): `renderToString` is identical with the lazy parts, and `hydrateRoot` of that HTML reports no recoverable error and no `console.error` before the key interaction runs. Other compounds that classify their parts (List, Breadcrumb, Stepper, AvatarGroup, the dismiss slots of Tag, MessageBar and SearchBox) are covered only by `asClientReference` tests in their own unit files. Add a case to the integration suite for a new compound.
 
 ### `expectThrows(ui, message)`
 

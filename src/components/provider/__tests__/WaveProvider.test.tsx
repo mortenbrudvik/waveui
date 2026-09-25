@@ -62,7 +62,7 @@ describe('WaveProvider', () => {
       const { container } = render(<WaveProvider theme="high-contrast">Content</WaveProvider>);
       const el = root(container);
       expect(el).toHaveClass('wave-root', 'wave-high-contrast', 'high-contrast');
-      expect(el).not.toHaveClass('dark', 'wave-dark', 'wave-light');
+      for (const name of ['dark', 'wave-dark', 'wave-light']) expect(el).not.toHaveClass(name);
       expect(el).toHaveAttribute('data-wave-theme', 'high-contrast');
     });
 
@@ -97,7 +97,8 @@ describe('WaveProvider', () => {
       );
       const inner = screen.getByTestId('inner');
       expect(inner).toHaveClass('wave-root', 'wave-light', 'bg-background', 'text-foreground');
-      expect(inner).not.toHaveClass('dark', 'wave-dark');
+      expect(inner).not.toHaveClass('dark');
+      expect(inner).not.toHaveClass('wave-dark');
       expect(inner.parentElement).toBe(screen.getByTestId('outer'));
     });
 
