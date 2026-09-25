@@ -1,6 +1,7 @@
 import * as React from 'react';
 import { cn } from '../../lib/cn';
 import { composeEventHandlers } from '../../lib/composeEventHandlers';
+import { warnOnce } from '../../lib/dev';
 import { useControllable } from '../../hooks/useControllable';
 import type { Size, Appearance, IconPosition, Slot } from '../../lib/types';
 import { Button } from './Button';
@@ -53,23 +54,31 @@ export interface ToggleButtonProps extends Omit<
    * @default false
    */
   disabledFocusable?: boolean;
+  /**
+   * Draws the pressed state as a brand fill with on-brand text (on `primary`, the pressed fill with
+   * an inset on-brand stroke), so the state never depends on a light tint (Fluent's
+   * `isAccessible`). Recommended for icon-only toggles in toolbars. Forced colors are unchanged.
+   * @default false
+   */
+  isAccessible?: boolean;
   /** Ref to the rendered `<button>`. */
   ref?: React.Ref<HTMLButtonElement>;
 }
 
 /**
- * The classes `buttonClassName({ pressed: true })` adds on top of the unpressed button, per
- * appearance and disabled state. Derived from the shared maps (never re-typed), so ToggleButton's
- * pressed look is exactly the button family's: `Button` merges them after its own classes with
- * `cn()`, which replaces the conflicting unpressed colors. Size classes are not involved.
+ * The classes `buttonClassName({ pressed: true, accessible })` adds on top of the unpressed button,
+ * per appearance, disabled state and `isAccessible`. Derived from the shared maps (never re-typed),
+ * so ToggleButton's pressed look is exactly the button family's: `Button` merges them after its own
+ * classes with `cn()`, which replaces the conflicting unpressed colors. Size classes are not
+ * involved.
  */
 const pressedLayerCache = new Map<string, string>();
-function getPressedLayer(appearance: Appearance, disabled: boolean): string {
-  const key = `${appearance}:${String(disabled)}`;
+function getPressedLayer(appearance: Appearance, disabled: boolean, accessible: boolean): string {
+  const key = `${appearance}:${String(disabled)}:${String(accessible)}`;
   let layer = pressedLayerCache.get(key);
   if (layer === undefined) {
     const unpressed = new Set(buttonClassName({ appearance, disabled }).split(/\s+/));
-    layer = buttonClassName({ appearance, disabled, pressed: true })
+    layer = buttonClassName({ appearance, disabled, pressed: true, accessible })
       .split(/\s+/)
       .filter((cls) => cls !== '' && !unpressed.has(cls))
       .join(' ');
@@ -79,17 +88,47 @@ function getPressedLayer(appearance: Appearance, disabled: boolean): string {
 }
 
 /**
- * A button that switches between pressed and unpressed (`aria-pressed`), e.g. Bold in a text
- * toolbar. Built on {@link Button}: same appearances, sizes, `type="button"` default, decorative
- * icon slot and icon-only warning. The pressed look uses the shared pressed colors (selected
- * tokens; a Highlight outline in forced colors).
+ * The roles that report a toggle's state with `aria-checked` (`aria-pressed` is allowed only on
+ * `button`).
+ */
+const CHECKED_ROLES: ReadonlySet<string> = new Set([
+  'checkbox',
+  'radio',
+  'switch',
+  'menuitemcheckbox',
+  'menuitemradio',
+  'option',
+  'treeitem',
+]);
+
+/**
+ * Which attribute reports the pressed state for `role` (its first token, ASCII case-insensitive):
+ * `'pressed'` (no role or `button`), `'checked'` (a checked role) or `'none'` (any other role).
+ */
+function stateAttributeFor(role: string | undefined): 'pressed' | 'checked' | 'none' {
+  const token = role?.trim().split(/\s+/)[0]?.toLowerCase() ?? '';
+  if (token === '' || token === 'button') return 'pressed';
+  return CHECKED_ROLES.has(token) ? 'checked' : 'none';
+}
+
+/**
+ * A button that switches between pressed and unpressed, e.g. Bold in a text toolbar. Built on
+ * {@link Button}: same appearances, sizes, `type="button"` default, decorative icon slot and
+ * icon-only warning. The pressed look uses the shared pressed colors (selected tokens; a Highlight
+ * outline in forced colors), or a brand fill with `isAccessible`.
  *
  * - Uncontrolled: `defaultPressed`; controlled: `pressed` + `onPressedChange`.
  * - A consumer `onClick` runs first; calling `event.preventDefault()` in it cancels the toggle.
+ * - It reports its state with `aria-pressed` without a `role` or with `role="button"`. With `role`
+ *   `checkbox`, `radio`, `switch`, `menuitemcheckbox`, `menuitemradio`, `option` or `treeitem` it
+ *   reports it with `aria-checked` (and `data-checked` while pressed) instead; with any other role
+ *   it renders neither (development warning), because `aria-pressed` is allowed only on buttons.
+ *   `data-pressed` is present while pressed in every case.
  *
  * @example
  * <ToggleButton icon={<BoldIcon />} aria-label="Bold" />
  * <ToggleButton pressed={bold} onPressedChange={setBold}>Bold</ToggleButton>
+ * <ToggleButton role="checkbox" isAccessible icon={<GridIcon />} aria-label="Grid" />
  */
 export const ToggleButton = ({
   pressed,
@@ -99,6 +138,7 @@ export const ToggleButton = ({
   size = 'medium',
   disabled = false,
   disabledFocusable = false,
+  isAccessible = false,
   className,
   onClick,
   ...props
@@ -114,6 +154,16 @@ export const ToggleButton = ({
   const disabledLook =
     disabled || disabledFocusable || ariaDisabled === true || ariaDisabled === 'true';
 
+  const role = props.role;
+  const stateAttribute = stateAttributeFor(role);
+  React.useEffect(() => {
+    if (stateAttribute !== 'none') return;
+    warnOnce(
+      'ToggleButton:role-state',
+      `ToggleButton: \`role="${String(role).trim()}"\` allows neither \`aria-pressed\` nor \`aria-checked\`, so the pressed state is not exposed to assistive technology. Leave the role out (or use \`button\`), or use a role that has a checked state: \`checkbox\`, \`radio\`, \`switch\`, \`menuitemcheckbox\`, \`menuitemradio\`, \`option\` or \`treeitem\`.`,
+    );
+  }, [stateAttribute, role]);
+
   return (
     <Button
       {...props}
@@ -121,9 +171,19 @@ export const ToggleButton = ({
       size={size}
       disabled={disabled}
       disabledFocusable={disabledFocusable}
-      aria-pressed={isPressed}
+      // After the consumer's props: the attribute the role allows reports the state, and a
+      // consumer `aria-pressed` never survives where it is not allowed.
+      aria-pressed={stateAttribute === 'pressed' ? isPressed : undefined}
+      {...(stateAttribute === 'checked' && {
+        'aria-checked': isPressed,
+        'data-checked': isPressed ? '' : undefined,
+      })}
+      data-pressed={isPressed ? '' : undefined}
       onClick={handleClick}
-      className={cn(isPressed && getPressedLayer(appearance, disabledLook), className)}
+      className={cn(
+        isPressed && getPressedLayer(appearance, disabledLook, isAccessible),
+        className,
+      )}
     />
   );
 };

@@ -83,6 +83,24 @@ export const buttonPressedClasses: Record<Appearance, string> = {
 };
 
 /**
+ * The accessible pressed colors per appearance (ToggleButton `isAccessible`): a brand fill with
+ * on-brand text, so the state never depends on a light tint; `primary`, already a brand fill,
+ * keeps its pressed fill and adds an inset on-brand stroke. Layer them after the appearance
+ * classes, in place of {@link buttonPressedClasses} (`buttonClassName({ pressed: true,
+ * accessible: true })`). The forced-colors treatment is the same as without them.
+ */
+export const buttonPressedAccessibleClasses: Record<Appearance, string> = {
+  primary:
+    'bg-primary-pressed text-primary-foreground inset-ring-2 inset-ring-primary-foreground not-disabled:not-aria-disabled:hover:bg-primary-pressed',
+  outline:
+    'border-primary bg-primary text-primary-foreground not-disabled:not-aria-disabled:hover:border-primary-hover not-disabled:not-aria-disabled:hover:bg-primary-hover not-disabled:not-aria-disabled:active:bg-primary-pressed',
+  subtle:
+    'bg-primary text-primary-foreground not-disabled:not-aria-disabled:hover:bg-primary-hover not-disabled:not-aria-disabled:active:bg-primary-pressed',
+  transparent:
+    'bg-primary text-primary-foreground not-disabled:not-aria-disabled:hover:bg-primary-hover not-disabled:not-aria-disabled:active:bg-primary-pressed',
+};
+
+/**
  * Forced-colors treatment of a pressed button: the **container** recipe, a Highlight outline inside
  * a Highlight border. Never `forcedColors.selectedLeaf`: a button is a container, and the
  * inherited `forced-color-adjust: none` would take its label, icons, child content and focus ring
@@ -116,6 +134,11 @@ export interface ButtonClassNameOptions {
   iconOnly?: boolean;
   /** Adds the pressed/checked colors (ToggleButton). @default false */
   pressed?: boolean;
+  /**
+   * With `pressed`: the accessible pressed colors ({@link buttonPressedAccessibleClasses}) instead
+   * of the selected tint. No effect on an unpressed button. @default false
+   */
+  accessible?: boolean;
 }
 
 /**
@@ -131,12 +154,13 @@ export function buttonClassName({
   disabled = false,
   iconOnly = false,
   pressed = false,
+  accessible = false,
 }: ButtonClassNameOptions = {}): string {
   return cn(
     buttonBaseClasses,
     iconOnly ? buttonIconOnlySizeClasses[size] : buttonSizeClasses[size],
     buttonAppearanceClasses[appearance],
-    pressed && buttonPressedClasses[appearance],
+    pressed && (accessible ? buttonPressedAccessibleClasses : buttonPressedClasses)[appearance],
     pressed && buttonPressedForcedColors,
     disabled && buttonDisabledClasses,
     pressed && disabled && buttonPressedDisabledForcedColors,

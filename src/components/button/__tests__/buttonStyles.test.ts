@@ -7,6 +7,7 @@ import {
   buttonIconOnlySizeClasses,
   buttonAppearanceClasses,
   buttonPressedClasses,
+  buttonPressedAccessibleClasses,
   buttonDisabledClasses,
   buttonClassName,
 } from '../buttonStyles';
@@ -35,6 +36,10 @@ const allClassStrings: Array<[string, string]> = [
   ...appearances.map((a): [string, string] => [
     `buttonPressedClasses.${a}`,
     buttonPressedClasses[a],
+  ]),
+  ...appearances.map((a): [string, string] => [
+    `buttonPressedAccessibleClasses.${a}`,
+    buttonPressedAccessibleClasses[a],
   ]),
 ];
 
@@ -98,6 +103,7 @@ describe('buttonStyles', () => {
     it('defines every appearance and size', () => {
       expect(Object.keys(buttonAppearanceClasses).sort()).toEqual([...appearances].sort());
       expect(Object.keys(buttonPressedClasses).sort()).toEqual([...appearances].sort());
+      expect(Object.keys(buttonPressedAccessibleClasses).sort()).toEqual([...appearances].sort());
       expect(Object.keys(buttonSizeClasses).sort()).toEqual([...sizes].sort());
       expect(Object.keys(buttonIconOnlySizeClasses).sort()).toEqual([...sizes].sort());
     });
@@ -387,5 +393,134 @@ describe('buttonStyles', () => {
         'forced-colors:outline-[GrayText]',
       );
     });
+  });
+
+  describe('accessible pressed colors (ToggleButton isAccessible)', () => {
+    it('draws the pressed state as a brand fill with on-brand text, per appearance', () => {
+      expect(classesOf(buttonPressedAccessibleClasses.primary)).toEqual([
+        'bg-primary-pressed',
+        'text-primary-foreground',
+        'inset-ring-2',
+        'inset-ring-primary-foreground',
+        `${HOVER_GATE}bg-primary-pressed`,
+      ]);
+      expect(classesOf(buttonPressedAccessibleClasses.outline)).toEqual([
+        'border-primary',
+        'bg-primary',
+        'text-primary-foreground',
+        `${HOVER_GATE}border-primary-hover`,
+        `${HOVER_GATE}bg-primary-hover`,
+        `${ACTIVE_GATE}bg-primary-pressed`,
+      ]);
+      for (const appearance of ['subtle', 'transparent'] as const) {
+        expect(classesOf(buttonPressedAccessibleClasses[appearance]), appearance).toEqual([
+          'bg-primary',
+          'text-primary-foreground',
+          `${HOVER_GATE}bg-primary-hover`,
+          `${ACTIVE_GATE}bg-primary-pressed`,
+        ]);
+      }
+    });
+
+    it('buttonClassName({ pressed: true, accessible: true }) layers them over the appearance', () => {
+      const outline = classesOf(buttonClassName({ pressed: true, accessible: true }));
+      expect(outline).toEqual(
+        expect.arrayContaining([
+          'border-primary',
+          'bg-primary',
+          'text-primary-foreground',
+          `${HOVER_GATE}border-primary-hover`,
+          `${HOVER_GATE}bg-primary-hover`,
+          `${ACTIVE_GATE}bg-primary-pressed`,
+        ]),
+      );
+      for (const replaced of [
+        'bg-background',
+        'text-foreground',
+        'border-stroke',
+        'bg-selected',
+        'text-selected-foreground',
+        `${HOVER_GATE}bg-subtle-hover`,
+        `${ACTIVE_GATE}bg-subtle-pressed`,
+      ]) {
+        expect(outline, replaced).not.toContain(replaced);
+      }
+
+      const primary = classesOf(
+        buttonClassName({ appearance: 'primary', pressed: true, accessible: true }),
+      );
+      expect(primary).toEqual(
+        expect.arrayContaining([
+          'bg-primary-pressed',
+          'text-primary-foreground',
+          'inset-ring-2',
+          'inset-ring-primary-foreground',
+          `${HOVER_GATE}bg-primary-pressed`,
+        ]),
+      );
+      expect(primary).not.toContain('bg-primary');
+      expect(primary).not.toContain(`${HOVER_GATE}bg-primary-hover`);
+
+      const subtle = classesOf(
+        buttonClassName({ appearance: 'subtle', pressed: true, accessible: true }),
+      );
+      expect(subtle).toEqual(expect.arrayContaining(['bg-primary', 'text-primary-foreground']));
+      expect(subtle).not.toContain('bg-transparent');
+      expect(subtle).not.toContain('text-foreground');
+
+      const transparent = classesOf(
+        buttonClassName({ appearance: 'transparent', pressed: true, accessible: true }),
+      );
+      expect(transparent).toEqual(
+        expect.arrayContaining(['bg-primary', 'text-primary-foreground']),
+      );
+      expect(transparent).not.toContain('text-primary');
+    });
+
+    it.each(appearances)('accessible changes nothing on an unpressed %s button', (appearance) => {
+      expect(buttonClassName({ appearance, accessible: true })).toBe(
+        buttonClassName({ appearance }),
+      );
+      expect(buttonClassName({ appearance, accessible: true, disabled: true })).toBe(
+        buttonClassName({ appearance, disabled: true }),
+      );
+    });
+
+    it.each(appearances)(
+      'pressed %s: the forced-colors classes are the same with and without accessible',
+      (appearance) => {
+        const forced = (value: string) =>
+          classesOf(value)
+            .filter((c) => c.startsWith('forced-colors:'))
+            .sort();
+        for (const disabled of [false, true]) {
+          expect(
+            forced(buttonClassName({ appearance, pressed: true, disabled, accessible: true })),
+            `disabled: ${String(disabled)}`,
+          ).toEqual(forced(buttonClassName({ appearance, pressed: true, disabled })));
+        }
+      },
+    );
+
+    it.each(appearances)(
+      'pressed and disabled %s keeps the disabled look and the GrayText outline',
+      (appearance) => {
+        const cls = classesOf(
+          buttonClassName({ appearance, pressed: true, disabled: true, accessible: true }),
+        );
+        expect(cls).toEqual(
+          expect.arrayContaining([
+            'opacity-50',
+            'cursor-not-allowed',
+            'forced-colors:text-[GrayText]',
+            'forced-colors:border-[GrayText]',
+            'forced-colors:outline-[GrayText]',
+          ]),
+        );
+        expect(
+          cls.filter((c) => c.startsWith('forced-colors:') && c.includes('Highlight')),
+        ).toEqual([]);
+      },
+    );
   });
 });

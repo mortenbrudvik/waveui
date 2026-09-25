@@ -2,17 +2,31 @@ import * as React from 'react';
 import { describe, it, expect, expectTypeOf, vi } from 'vitest';
 import { act, render, screen, fireEvent } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { Toolbar } from '../Toolbar';
+import { hydrateRoot } from 'react-dom/client';
+import { renderToString } from 'react-dom/server';
+import {
+  Toolbar,
+  ToolbarButton,
+  ToolbarDivider,
+  ToolbarGroup,
+  ToolbarRadioButton,
+  ToolbarRadioGroup,
+  ToolbarToggleButton,
+} from '../Toolbar';
 import type { ToolbarOwnProps, ToolbarProps } from '../Toolbar';
 import { Button } from '../Button';
 import { Link } from '../Link';
 import { MenuButton } from '../MenuButton';
+import { buttonClassName } from '../buttonStyles';
 import { Checkbox } from '../../input/Checkbox';
+import { Combobox } from '../../input/Combobox';
 import { Dropdown } from '../../input/Dropdown';
+import { Input } from '../../input/Input';
 import { RadioGroup } from '../../input/RadioGroup';
 import { Menu } from '../../navigation/Menu';
 import { Popover } from '../../overlays/Popover';
-import { testSystemProps, renderWithProviders } from '../../../test-utils';
+import type { CheckedValues, CheckedValuesChangeHandler, Size } from '../../../lib/types';
+import { testSystemProps, testCompoundExposure, renderWithProviders } from '../../../test-utils';
 
 /** Three formatting buttons, the usual toolbar content. */
 const FormattingButtons = () => (
@@ -36,6 +50,42 @@ const SizeDropdown = (props: { name?: string }) => (
     <Dropdown.Option value="m">Medium</Dropdown.Option>
   </Dropdown>
 );
+
+/** The class list of an element as a sorted array (order-independent comparison). */
+const classesOf = (el: Element) => Array.from(el.classList).sort();
+/** The classes of a `buttonClassName()` result as a sorted array. */
+const classesFrom = (value: string) => value.split(/\s+/).filter(Boolean).sort();
+
+const SIZES: Size[] = ['extra-small', 'small', 'medium', 'large', 'extra-large'];
+
+/** A formatting toolbar bound to `checkedValues`: two toggles and an alignment radio group. */
+function Formatting(props: {
+  checkedValues?: CheckedValues;
+  defaultCheckedValues?: CheckedValues;
+  onCheckedValuesChange?: CheckedValuesChangeHandler;
+}) {
+  return (
+    <Toolbar aria-label="Formatting" {...props}>
+      <Toolbar.ToggleButton name="format" value="bold">
+        Bold
+      </Toolbar.ToggleButton>
+      <Toolbar.ToggleButton name="format" value="italic">
+        Italic
+      </Toolbar.ToggleButton>
+      <Toolbar.Divider />
+      <Toolbar.RadioGroup aria-label="Alignment">
+        <Toolbar.RadioButton name="align" value="left">
+          Left
+        </Toolbar.RadioButton>
+        <Toolbar.RadioButton name="align" value="center">
+          Center
+        </Toolbar.RadioButton>
+      </Toolbar.RadioGroup>
+    </Toolbar>
+  );
+}
+
+const radio = (name: string) => screen.getByRole('radio', { name });
 
 /** A child that disables one of its own buttons without the Toolbar re-rendering. */
 const SelfDisablingGroup = () => {
@@ -739,19 +789,353 @@ describe('Toolbar', () => {
     expect(screen.getByRole('toolbar')).toHaveClass('border', 'border-border', 'rounded');
   });
 
+  describe('size and state attributes', () => {
+    it('always renders data-size and data-orientation (medium and horizontal by default)', () => {
+      const { rerender } = render(<Toolbar aria-label="Formatting">Content</Toolbar>);
+      const toolbar = screen.getByRole('toolbar', { name: 'Formatting' });
+      expect(toolbar).toHaveAttribute('data-size', 'medium');
+      expect(toolbar).toHaveAttribute('data-orientation', 'horizontal');
+      expect(toolbar.getAttributeNames().sort()).toEqual([
+        'aria-label',
+        'aria-orientation',
+        'class',
+        'data-orientation',
+        'data-roving-container',
+        'data-size',
+        'role',
+      ]);
+      rerender(
+        <Toolbar aria-label="Formatting" orientation="vertical" size="large">
+          Content
+        </Toolbar>,
+      );
+      expect(toolbar).toHaveAttribute('data-size', 'large');
+      expect(toolbar).toHaveAttribute('data-orientation', 'vertical');
+    });
+
+    it.each([
+      ['extra-small', 'p-0.5'],
+      ['small', 'p-0.5'],
+      ['medium', 'p-1'],
+      ['large', 'p-1.5'],
+      ['extra-large', 'p-2'],
+    ] as const)('size="%s" sets data-size and the padding %s', (size, padding) => {
+      render(
+        <Toolbar aria-label="Formatting" size={size}>
+          Content
+        </Toolbar>,
+      );
+      const toolbar = screen.getByRole('toolbar', { name: 'Formatting' });
+      expect(toolbar).toHaveAttribute('data-size', size);
+      expect(toolbar).toHaveClass(padding);
+      const paddings = classesOf(toolbar).filter((cls) => /^p-/.test(cls));
+      expect(paddings).toEqual([padding]);
+    });
+
+    it.each(SIZES)(
+      'size="%s" is the parts\' size (Button\'s size classes); a plain Button keeps medium',
+      (size) => {
+        render(
+          <Toolbar aria-label="Formatting" size={size}>
+            <Toolbar.Button>Cut</Toolbar.Button>
+            <Toolbar.ToggleButton name="format" value="bold">
+              Bold
+            </Toolbar.ToggleButton>
+            <Toolbar.RadioGroup aria-label="Alignment">
+              <Toolbar.RadioButton name="align" value="left">
+                Left
+              </Toolbar.RadioButton>
+            </Toolbar.RadioGroup>
+            <Button>Plain</Button>
+          </Toolbar>,
+        );
+        const partClasses = classesFrom(buttonClassName({ appearance: 'subtle', size }));
+        expect(classesOf(button('Cut'))).toEqual(partClasses);
+        expect(classesOf(button('Bold'))).toEqual(partClasses);
+        expect(classesOf(radio('Left'))).toEqual(partClasses);
+        expect(classesOf(button('Plain'))).toEqual(classesFrom(buttonClassName()));
+      },
+    );
+
+    it("a part's own size and appearance win over the toolbar's", () => {
+      render(
+        <Toolbar aria-label="Formatting" size="small">
+          <Toolbar.Button size="large" appearance="primary">
+            Cut
+          </Toolbar.Button>
+          <Toolbar.ToggleButton name="format" value="bold" size="extra-large">
+            Bold
+          </Toolbar.ToggleButton>
+          <Toolbar.RadioGroup aria-label="Alignment">
+            <Toolbar.RadioButton name="align" value="left" size="large" appearance="outline">
+              Left
+            </Toolbar.RadioButton>
+          </Toolbar.RadioGroup>
+        </Toolbar>,
+      );
+      expect(classesOf(button('Cut'))).toEqual(
+        classesFrom(buttonClassName({ appearance: 'primary', size: 'large' })),
+      );
+      expect(classesOf(button('Bold'))).toEqual(
+        classesFrom(buttonClassName({ appearance: 'subtle', size: 'extra-large' })),
+      );
+      expect(classesOf(radio('Left'))).toEqual(
+        classesFrom(buttonClassName({ appearance: 'outline', size: 'large' })),
+      );
+    });
+  });
+
+  describe('checkedValues', () => {
+    it('uncontrolled: starts from defaultCheckedValues and reports each change with its details', async () => {
+      const user = userEvent.setup();
+      const onCheckedValuesChange = vi.fn<CheckedValuesChangeHandler>();
+      render(
+        <Formatting
+          defaultCheckedValues={{ format: ['bold'], align: ['left'] }}
+          onCheckedValuesChange={onCheckedValuesChange}
+        />,
+      );
+      expect(button('Bold')).toHaveAttribute('aria-pressed', 'true');
+      expect(button('Italic')).toHaveAttribute('aria-pressed', 'false');
+      expect(radio('Left')).toHaveAttribute('aria-checked', 'true');
+
+      await user.click(button('Italic'));
+      expect(button('Italic')).toHaveAttribute('aria-pressed', 'true');
+      await user.click(radio('Center'));
+      expect(radio('Center')).toHaveAttribute('aria-checked', 'true');
+      expect(radio('Left')).toHaveAttribute('aria-checked', 'false');
+      await user.click(button('Bold'));
+      expect(button('Bold')).toHaveAttribute('aria-pressed', 'false');
+
+      expect(onCheckedValuesChange.mock.calls).toEqual([
+        [
+          { format: ['bold', 'italic'], align: ['left'] },
+          { name: 'format', checkedItems: ['bold', 'italic'], event: expect.any(MouseEvent) },
+        ],
+        [
+          { format: ['bold', 'italic'], align: ['center'] },
+          { name: 'align', checkedItems: ['center'], event: expect.any(MouseEvent) },
+        ],
+        [
+          { format: ['italic'], align: ['center'] },
+          { name: 'format', checkedItems: ['italic'], event: expect.any(MouseEvent) },
+        ],
+      ]);
+      const [values, details] = onCheckedValuesChange.mock.calls[0];
+      expect(details?.event.type).toBe('click');
+      expect(details?.checkedItems).toBe(values.format);
+    });
+
+    it('controlled: follows the prop, and a parent that ignores the callback keeps its value', async () => {
+      const user = userEvent.setup();
+      const onCheckedValuesChange = vi.fn<CheckedValuesChangeHandler>();
+      const { rerender } = render(
+        <Formatting
+          checkedValues={{ format: ['italic'] }}
+          onCheckedValuesChange={onCheckedValuesChange}
+        />,
+      );
+      expect(button('Italic')).toHaveAttribute('aria-pressed', 'true');
+      await user.click(button('Bold'));
+      await user.click(radio('Left'));
+      expect(onCheckedValuesChange.mock.calls.map(([values]) => values)).toEqual([
+        { format: ['italic', 'bold'] },
+        { format: ['italic'], align: ['left'] },
+      ]);
+      expect(button('Bold')).toHaveAttribute('aria-pressed', 'false');
+      expect(radio('Left')).toHaveAttribute('aria-checked', 'false');
+
+      rerender(
+        <Formatting
+          checkedValues={{ format: ['bold'], align: ['center'] }}
+          onCheckedValuesChange={onCheckedValuesChange}
+        />,
+      );
+      expect(button('Bold')).toHaveAttribute('aria-pressed', 'true');
+      expect(button('Italic')).toHaveAttribute('aria-pressed', 'false');
+      expect(radio('Center')).toHaveAttribute('aria-checked', 'true');
+    });
+
+    it('controlled: a parent that stores the values with setState toggles on every click', async () => {
+      const user = userEvent.setup();
+      const Parent = () => {
+        const [values, setValues] = React.useState<CheckedValues>({});
+        return <Formatting checkedValues={values} onCheckedValuesChange={setValues} />;
+      };
+      render(<Parent />);
+      await user.click(button('Bold'));
+      await user.click(radio('Center'));
+      expect(button('Bold')).toHaveAttribute('aria-pressed', 'true');
+      expect(radio('Center')).toHaveAttribute('aria-checked', 'true');
+      await user.click(button('Bold'));
+      expect(button('Bold')).toHaveAttribute('aria-pressed', 'false');
+    });
+
+    it.each([
+      ['uncontrolled', undefined],
+      ['controlled', {}],
+    ])('StrictMode: the callback fires once per change (%s)', async (_mode, checkedValues) => {
+      const user = userEvent.setup();
+      const onCheckedValuesChange = vi.fn<CheckedValuesChangeHandler>();
+      render(
+        <React.StrictMode>
+          <Formatting checkedValues={checkedValues} onCheckedValuesChange={onCheckedValuesChange} />
+        </React.StrictMode>,
+      );
+      await user.click(button('Bold'));
+      await user.click(radio('Left'));
+      expect(onCheckedValuesChange.mock.calls.map(([values]) => values)).toEqual([
+        { format: ['bold'] },
+        checkedValues === undefined ? { format: ['bold'], align: ['left'] } : { align: ['left'] },
+      ]);
+    });
+
+    it('renders the pressed and checked states in the server HTML and hydrates without warnings', async () => {
+      const tree = <Formatting defaultCheckedValues={{ format: ['italic'], align: ['center'] }} />;
+      const html = renderToString(tree);
+      expect(html).toMatch(/aria-pressed="true"[^>]*>Italic</);
+      expect(html).toMatch(/aria-checked="true"[^>]*>Center</);
+      expect(html).toContain('data-size="medium"');
+      expect(html).toContain('data-orientation="horizontal"');
+
+      const container = document.createElement('div');
+      container.innerHTML = html;
+      document.body.appendChild(container);
+      const error = vi.spyOn(console, 'error');
+      const warn = vi.spyOn(console, 'warn');
+      let root: ReturnType<typeof hydrateRoot> | undefined;
+      try {
+        await act(async () => {
+          root = hydrateRoot(container, tree);
+        });
+        expect(error).not.toHaveBeenCalled();
+        expect(warn).not.toHaveBeenCalled();
+        expect(button('Italic')).toHaveAttribute('aria-pressed', 'true');
+        expect(radio('Center')).toHaveAttribute('aria-checked', 'true');
+      } finally {
+        act(() => root?.unmount());
+        container.remove();
+        error.mockRestore();
+        warn.mockRestore();
+      }
+    });
+  });
+
+  describe('parts (C-COMPOUND)', () => {
+    testCompoundExposure(Toolbar, [
+      'Button',
+      'ToggleButton',
+      'RadioGroup',
+      'RadioButton',
+      'Group',
+      'Divider',
+    ]);
+
+    it('exports every part under its flat name as well', () => {
+      const pairs = [
+        [ToolbarButton, Toolbar.Button],
+        [ToolbarToggleButton, Toolbar.ToggleButton],
+        [ToolbarRadioGroup, Toolbar.RadioGroup],
+        [ToolbarRadioButton, Toolbar.RadioButton],
+        [ToolbarGroup, Toolbar.Group],
+        [ToolbarDivider, Toolbar.Divider],
+      ] as const;
+      for (const [flat, member] of pairs) {
+        expect(typeof flat).toBe('function');
+        expect(flat).toBe(member);
+      }
+    });
+  });
+
+  describe('works over any focusable descendant', () => {
+    it('an Input, a Combobox and a radio group in one toolbar: arrows reach them all, the Input keeps its caret keys, one tab stop', async () => {
+      const user = userEvent.setup();
+      render(
+        <>
+          <button type="button">Before</button>
+          <Toolbar aria-label="Editor">
+            <Toolbar.Button>Cut</Toolbar.Button>
+            <Toolbar.RadioGroup aria-label="Alignment">
+              <Toolbar.RadioButton name="align" value="left">
+                Left
+              </Toolbar.RadioButton>
+              <Toolbar.RadioButton name="align" value="right">
+                Right
+              </Toolbar.RadioButton>
+            </Toolbar.RadioGroup>
+            <Input aria-label="Find" defaultValue="wave" />
+            <Combobox aria-label="Font">
+              <Combobox.Option value="sans">Sans</Combobox.Option>
+              <Combobox.Option value="serif">Serif</Combobox.Option>
+            </Combobox>
+            <Toolbar.Button>Help</Toolbar.Button>
+          </Toolbar>
+          <button type="button">After</button>
+        </>,
+      );
+      const find = screen.getByRole('textbox', { name: 'Find' });
+      const font = screen.getByRole('combobox', { name: 'Font' });
+
+      button('Before').focus();
+      await user.tab();
+      expect(button('Cut')).toHaveFocus();
+      await user.keyboard('{ArrowRight}');
+      expect(radio('Left')).toHaveFocus();
+      await user.keyboard('{ArrowRight}');
+      expect(radio('Right')).toHaveFocus();
+      // The arrows only moved focus: no radio is checked.
+      expect(radio('Left')).toHaveAttribute('aria-checked', 'false');
+      expect(radio('Right')).toHaveAttribute('aria-checked', 'false');
+      await user.keyboard('{ArrowRight}');
+      expect(find).toHaveFocus();
+      // The Input keeps Left/Right for its caret.
+      expect(fireEvent.keyDown(find, { key: 'ArrowLeft' })).toBe(true);
+      await user.keyboard('{ArrowRight}');
+      expect(find).toHaveFocus();
+      expect(tabStops()).toEqual([radio('Right')]);
+
+      await user.keyboard('{End}');
+      expect(find).toHaveFocus();
+      act(() => button('Help').focus());
+      await user.keyboard('{ArrowLeft}');
+      expect(font).toHaveFocus();
+      expect(tabStops()).toEqual([button('Help')]);
+
+      // Tab into the toolbar reaches its one stop; the arrows go on from there.
+      act(() => button('Before').focus());
+      await user.tab();
+      expect(button('Help')).toHaveFocus();
+      await user.keyboard('{Home}');
+      expect(button('Cut')).toHaveFocus();
+      expect(tabStops()).toEqual([button('Cut')]);
+      await user.tab();
+      expect(button('After')).toHaveFocus();
+    });
+  });
+
   describe('types (button-provider#8, #27)', () => {
     it('is polymorphic and keeps the 0.4 ToolbarProps name', () => {
       expectTypeOf<ToolbarProps>().toEqualTypeOf<ToolbarProps<'div'>>();
       expectTypeOf<ToolbarProps['ref']>().toEqualTypeOf<React.Ref<HTMLDivElement> | undefined>();
-      expectTypeOf<keyof ToolbarOwnProps>().toEqualTypeOf<'orientation'>();
+      expectTypeOf<keyof ToolbarOwnProps>().toEqualTypeOf<
+        'orientation' | 'size' | 'checkedValues' | 'defaultCheckedValues' | 'onCheckedValuesChange'
+      >();
+      expectTypeOf<ToolbarProps['size']>().toEqualTypeOf<Size | undefined>();
+      expectTypeOf<ToolbarProps['checkedValues']>().toEqualTypeOf<CheckedValues | undefined>();
+      expectTypeOf<ToolbarProps['onCheckedValuesChange']>().toEqualTypeOf<
+        CheckedValuesChangeHandler | undefined
+      >();
       const elements = [
         <Toolbar key="1" as="nav" aria-label="Nav" />,
         // @ts-expect-error orientation is 'horizontal' | 'vertical'
         <Toolbar key="2" orientation="diagonal" />,
         // @ts-expect-error href does not exist on <div>
         <Toolbar key="3" href="/nope" />,
+        // @ts-expect-error size is a Size
+        <Toolbar key="4" size="huge" />,
+        <Toolbar key="5" onCheckedValuesChange={(values: Record<string, string[]>) => values} />,
       ];
-      expect(elements).toHaveLength(3);
+      expect(elements).toHaveLength(5);
     });
 
     it('ToolbarProps (0.4 name) stays extendable by interfaces', () => {

@@ -2,6 +2,7 @@ import type { Meta, StoryObj } from '@storybook/react';
 import { useState } from 'react';
 import { fn } from 'storybook/test';
 import { ToggleButton, Text } from '../src';
+import type { Appearance } from '../src';
 import { appearanceArgType, iconPositionArgType, sizeArgType } from './_helpers';
 
 /** Decorative bold glyph (the ToggleButton hides its icon slot from assistive technology). */
@@ -66,6 +67,49 @@ export const DisabledPressed: Story = {
   args: {
     disabled: true,
     defaultPressed: true,
+  },
+};
+
+const appearances: Appearance[] = ['primary', 'outline', 'subtle', 'transparent'];
+
+/**
+ * `isAccessible` draws the pressed state as a brand fill with on-brand text (on `primary`, the
+ * pressed fill with an inset on-brand stroke), so the state never depends on a light tint. Each
+ * appearance, unpressed and pressed (the appearance control is off here: each toggle sets its own).
+ */
+export const Accessible: Story = {
+  args: {
+    isAccessible: true,
+  },
+  argTypes: {
+    appearance: { control: false },
+  },
+  render: (args) => (
+    <div className="grid grid-cols-2 items-center justify-items-start gap-2">
+      {appearances.map((appearance) => (
+        <div key={appearance} className="contents">
+          <ToggleButton {...args} appearance={appearance}>
+            {`${appearance} (off)`}
+          </ToggleButton>
+          <ToggleButton {...args} appearance={appearance} defaultPressed>
+            {`${appearance} (on)`}
+          </ToggleButton>
+        </div>
+      ))}
+    </div>
+  ),
+};
+
+/**
+ * With `role="checkbox"` the toggle reports its state with `aria-checked` (and `data-checked`)
+ * instead of `aria-pressed`, as `radio`, `switch`, `menuitemcheckbox`, `menuitemradio`, `option`
+ * and `treeitem` do: `aria-pressed` is allowed only on buttons.
+ */
+export const AsCheckbox: Story = {
+  args: {
+    role: 'checkbox',
+    children: 'Show grid',
+    isAccessible: true,
   },
 };
 
