@@ -92,7 +92,7 @@ describe('package.json (spec §3.2)', () => {
     );
   });
 
-  it('checks the types of a tarball it packs itself (tooling-code-1)', () => {
+  it('checks the types of a tarball it packs itself', () => {
     // `attw --pack` would run a nested `npm pack`, which writes nothing under
     // `npm publish --dry-run`; scripts/attw-pack.mjs packs without the dry run.
     expect(pkg.scripts['check:package']).toBe(
@@ -274,7 +274,7 @@ describe('checkTailwindCss (repo-level#1)', () => {
     expect(checkTailwindCss(good.replace('.p-4{padding:1rem}', '')).join('\n')).toMatch(/\.p-4/);
   });
 
-  describe("the wave-rtl classes of the package's dist (R4)", () => {
+  describe("the wave-rtl classes of the package's dist (C-LOGICAL)", () => {
     const directionClasses = ['wave-rtl:-scale-x-100'];
     // Unminified, as the fixture compiles it: nested rules inside the utilities layer.
     const compiled = String.raw`@layer utilities{.wave-rtl\:-scale-x-100{
@@ -323,6 +323,12 @@ describe('checkTailwindCss (repo-level#1)', () => {
         ':root,.wave-light{--wave-primary:#0f6cbd}';
       expect(checkTailwindCss(css, { setup: 'tokens' }).join('\n')).toMatch(/@layer theme/);
     });
+  });
+
+  it('rejects an unknown setup instead of checking it as the tokens setup', () => {
+    expect(() => checkTailwindCss(good, { setup: 'custom' })).toThrow(
+      new TypeError(`checkTailwindCss: unknown setup "custom" (expected 'tailwind' or 'tokens')`),
+    );
   });
 });
 
@@ -500,7 +506,7 @@ describe('parseArgs', () => {
   });
 });
 
-describe('pack (tooling-code-1)', () => {
+describe('pack', () => {
   afterEach(() => {
     vi.unstubAllEnvs();
   });

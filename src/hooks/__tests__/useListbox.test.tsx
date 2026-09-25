@@ -15,7 +15,7 @@ import {
   type UseListboxOptions,
   type UseListboxResult,
 } from '../useListbox';
-import { asClientReference } from '../../test-utils';
+import { asClientReference, expectThrows } from '../../test-utils';
 
 /* ------------------------------------------------------------------ */
 /*  Stand-ins for P05's Option / OptionGroup                           */
@@ -2130,10 +2130,10 @@ describe('useListbox — disabled options (input-pickers#28)', () => {
 });
 
 /* ------------------------------------------------------------------ */
-/*  Hidden options (listbox-hook-code-1)                               */
+/*  Hidden options                                                    */
 /* ------------------------------------------------------------------ */
 
-describe('useListbox — hidden options (listbox-hook-code-1)', () => {
+describe('useListbox — hidden options', () => {
   it('leaves hidden options out of navigation, typeahead and Tab; a selected hidden label still shows', () => {
     const onSelect = vi.fn();
     const ref = React.createRef<UseListboxResult>();
@@ -2361,15 +2361,10 @@ describe('useListbox — StrictMode', () => {
 
 describe('useListboxOption — context guard (C-CONTEXT)', () => {
   it('throws a [WaveUI] error in development outside a listbox', () => {
-    const error = vi.spyOn(console, 'error');
-    try {
-      expect(() => render(<Opt value="a">Apple</Opt>)).toThrow(
-        new Error('[WaveUI] Option must be used within a listbox (Combobox or Dropdown)'),
-      );
-      expect(error).not.toHaveBeenCalled();
-    } finally {
-      error.mockRestore();
-    }
+    expectThrows(
+      <Opt value="a">Apple</Opt>,
+      '[WaveUI] Option must be used within a listbox (Combobox or Dropdown)',
+    );
   });
 
   it('logs the error once in production and renders an inert option', () => {

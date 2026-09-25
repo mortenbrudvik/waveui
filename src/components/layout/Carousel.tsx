@@ -197,7 +197,7 @@ const CarouselRoot = ({
   const [startedFromControl, setStartedFromControl] = React.useState(false);
 
   // Slides are the `CarouselItem` children, Fragments flattened; the element type is unwrapped, so
-  // slides written in a Server Component (lazy client references) count too (R1, R2).
+  // slides written in a Server Component (lazy client references) count too (C-COMPOUND).
   const items: Array<{ key: string; node: React.ReactNode }> = [];
   let droppedChildren = false;
   for (const child of flattenChildren(children)) {

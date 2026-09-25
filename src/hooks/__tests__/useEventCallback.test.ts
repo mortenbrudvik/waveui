@@ -35,7 +35,7 @@ describe('useEventCallback', () => {
     expect(fn2).toHaveBeenCalledTimes(1);
   });
 
-  it('is current for the layout effects of the commit that passed a new fn (hooks-core-tests-1)', () => {
+  it('is current for the layout effects of the commit that passed a new fn', () => {
     const log: string[] = [];
     function Child({ tick, callback }: { tick: number; callback: () => void }) {
       // Child layout effects run before the parent's: the callback must already be the new one.

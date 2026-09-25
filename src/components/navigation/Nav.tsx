@@ -62,7 +62,7 @@ function warnDuplicateValue(kind: NavValueKind, value: string): void {
   );
 }
 
-/** R12: registers the value of a mounted item or category, so Nav can warn about duplicates. */
+/** Registers the value of a mounted item or category, so Nav can warn about duplicates. */
 function useNavValue(context: NavContextValue, kind: NavValueKind, value: string): void {
   const { registerValue } = context;
   React.useEffect(() => registerValue(kind, value), [registerValue, kind, value]);
@@ -699,8 +699,8 @@ const NavRoot = ({
     [setOpenCategories],
   );
 
-  // R12: the mounted items and categories per value (written from their effects only); a second
-  // one with a value already in use warns once per value.
+  // Duplicate values (C-DEV): the mounted items and categories per value (written from their
+  // effects only); a second one with a value already in use warns once per value.
   const valueCountsRef = React.useRef<Map<string, number> | null>(null);
   const registerValue = React.useCallback((kind: NavValueKind, entry: string) => {
     const counts = (valueCountsRef.current ??= new Map<string, number>());

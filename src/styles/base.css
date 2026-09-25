@@ -7,7 +7,8 @@
  * class selectors (0,1,0). Every other selector is inside `:where()` (zero specificity), except
  * the descendant `::before`/`::after` selectors of the box-sizing rule: pseudo-elements cannot sit
  * inside `:where()` (the selector would be dropped), so those two are (0,0,1). An author
- * `::before`/`::after` of the same specificity wins or loses by source order.
+ * `::before`/`::after` of the same specificity wins or loses by source order. The only
+ * `!important` declaration is the `hidden` rule at the end.
  */
 
 .wave-root,
@@ -91,4 +92,12 @@
 
 :where(.wave-root, .wave-portal) :where(img, svg, video) {
   vertical-align: middle;
+}
+
+/* Preflight's `hidden` rule. Without Preflight, a display utility on an element (a component
+   root's `inline-flex`, an option's `flex`) beats the user-agent `[hidden] { display: none }`
+   rule and `hidden` does nothing. `!important` wins over every utility, unlayered or in a later
+   layer; `hidden="until-found"` keeps the browser's own behaviour. */
+:where(.wave-root, .wave-portal) :where([hidden]:not([hidden='until-found'])) {
+  display: none !important;
 }

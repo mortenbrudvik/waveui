@@ -7,7 +7,7 @@ import { Option, OptionGroup } from '../Option';
 import { Combobox, Option as ComboboxReexport, OptionGroup as GroupReexport } from '../Combobox';
 import { Dropdown } from '../Dropdown';
 import { collectOptionLabels } from '../../../hooks/useListbox';
-import { asClientReference, testDisplayName } from '../../../test-utils';
+import { asClientReference, testDisplayName, expectThrows } from '../../../test-utils';
 
 function combobox() {
   return screen.getByRole('combobox', { name: 'Fruit' });
@@ -85,7 +85,7 @@ describe('Option / OptionGroup (input-pickers#1, #6, #20)', () => {
     expect(group.parentElement?.tagName).toBe('LI');
   });
 
-  it('lets the hidden attribute win over a consumer display class (no Preflight)', () => {
+  it('puts the hidden attribute on a hidden group and option, next to a consumer display class', () => {
     render(
       <Dropdown aria-label="Fruit" defaultOpen>
         <OptionGroup label="Citrus" className="flex" hidden>
@@ -99,16 +99,18 @@ describe('Option / OptionGroup (input-pickers#1, #6, #20)', () => {
       </Dropdown>,
     );
     const group = screen.getByRole('group', { name: 'Citrus', hidden: true }).parentElement;
+    // base.css's scoped `[hidden]` rule hides them over any display class.
     expect(group).toHaveAttribute('hidden');
-    expect(group).toHaveClass('flex', '[&[hidden]]:hidden');
+    expect(group).toHaveClass('flex');
     // (a hidden element has no accessible name: query its text)
     const lemon = screen.getByText('Lemon').closest('li');
     expect(lemon).toHaveAttribute('role', 'option');
-    expect(lemon).toHaveClass('grid', '[&[hidden]]:hidden');
+    expect(lemon).toHaveClass('grid');
     expect(lemon).not.toHaveClass('flex');
     const apple = screen.getByText('Apple').closest('li');
     expect(apple).toHaveAttribute('role', 'option');
-    expect(apple).toHaveClass('grid', '[&[hidden]]:hidden');
+    expect(apple).toHaveAttribute('hidden');
+    expect(apple).toHaveClass('grid');
   });
 
   it('keeps the 0.4 data-value attribute', () => {
@@ -196,24 +198,16 @@ describe('Option / OptionGroup (input-pickers#1, #6, #20)', () => {
   });
 
   it('throws in development outside a listbox (C-CONTEXT)', () => {
-    // A render error in a test is thrown by render(); nothing is logged (asserted).
-    const error = vi.spyOn(console, 'error');
-    try {
-      expect(() =>
-        render(
-          <ul>
-            <Option value="a">Apple</Option>
-          </ul>,
-        ),
-      ).toThrow(new Error('[WaveUI] Option must be used within a listbox (Combobox or Dropdown)'));
-      expect(error).not.toHaveBeenCalled();
-    } finally {
-      error.mockRestore();
-    }
+    expectThrows(
+      <ul>
+        <Option value="a">Apple</Option>
+      </ul>,
+      '[WaveUI] Option must be used within a listbox (Combobox or Dropdown)',
+    );
   });
 });
 
-describe('Option / OptionGroup hidden by the consumer (listbox-hook-code-1)', () => {
+describe('Option / OptionGroup hidden by the consumer', () => {
   it('a hidden option is never highlighted or committed with the keyboard, like a native <option hidden>', async () => {
     const user = userEvent.setup();
     const onValueChange = vi.fn();

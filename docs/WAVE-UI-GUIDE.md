@@ -129,7 +129,7 @@ Wave uses Tailwind's default breakpoints (it does not redefine them):
 - Navigation rail: 48px collapsed, 280px expanded
 - Keep consistent gutter widths within a layout (typically 16px or 24px)
 - `Flex` `direction="row-reverse"`/`"column-reverse"` changes only the visual order; reorder the DOM for focusable content
-- `Overflow` pads its row by 4px and pulls it back with a negative margin (`p-1 -m-1`), so its items' focus rings are not clipped: a background or border on its root reaches 4px beyond the items, and a `className` that sets padding or margin on the root should set both
+- `Overflow` pads its row by 4px (`p-1`), so its items' focus rings are not clipped. There is no negative margin: the items sit 4px in from the row's edges, the row is 8px taller than its items, and an explicit width on the root includes the padding. A consumer margin of −4px (`-m-1`) is fine only where nothing within 4px of the row scrolls: an edge-to-edge row would otherwise reach past its container and add a horizontal scrollbar. `p-0` removes the ring room
 
 ---
 
@@ -550,8 +550,8 @@ export const Panel = /* @__PURE__ */ Object.assign(PanelRoot, { Header: PanelHea
 
 **Usage**: `<Card><Card.Header title="…" /></Card>` in client components, `<Card><CardHeader title="…" /></Card>` anywhere.
 
-- **Parts from Server Components.** A part written in a Server Component reaches the client as a lazy reference, so compounds identify their parts with `isElementOfType(child, Part)` / `getElementType(child)` from `src/lib/children.ts`, and count, slice or classify their children with `flattenChildren` (Fragments flattened, keys kept). Every compound therefore works when composed in a Server Component with the flat names, with the same server HTML and behaviour as in a client file. Test this with `asClientReference(Part)` (see the [testing guide](testing-best-practices.md)).
-- **Component JSDoc** sits only on the exported `Object.assign(…)` const, so it reaches `index.d.ts`; Storybook autodocs read it from there (`.storybook/exportDocblocks.ts`).
+- **Parts from Server Components.** A part written in a Server Component reaches the client as a lazy reference, so compounds identify their parts with `isElementOfType(child, Part)` / `getElementType(child)` from `src/lib/children.ts`, and count, slice or classify their children with `flattenChildren` (Fragments flattened, keys kept). Every compound therefore works when composed in a Server Component with the flat names, with the same server HTML and behaviour as in a client file. Test this with `asClientReference(Part)` (see the [testing guide](testing-best-practices.md)). A walk deeper than the direct children (a part inside the consumer's markup) uses `getElementType(node, { suspend: false })`: a lazy chunk still loading inside the consumer's own `<Suspense>` then suspends only that boundary, not the whole compound (and `renderToString` does not throw).
+- **Component JSDoc** sits only on the exported `Object.assign(…)` const (the root gets none; likewise on a wrapper-call export and on the first overload), so it reaches `index.d.ts`, and it names no internal symbol (`XRoot`) or spec label. Storybook autodocs read it from there (`.storybook/exportDocblocks.ts`), so stories never repeat it (no meta JSDoc, no `docs.description.component` for a compound): `.storybook/__tests__/exportDocblocks.test.ts` gates this, and verify-dist fails on an undocumented exported component.
 - A part rendered outside its root throws `[WaveUI] <Part> must be used within <Root>` in development; in production it logs that once per message and renders inert (`reportMissingContext` from `src/lib/dev.ts`).
 
 Compound components: `Accordion`, `Breadcrumb`, `Card`, `Carousel`, `Combobox`, `DataGrid`, `Dialog`, `Drawer`, `Dropdown`, `List`, `Menu`, `Nav`, `Overflow`, `Popover`, `RadioGroup`, `Skeleton`, `Stepper`, `TabList`, `Table`, `Tree`. The README lists every flat name. Fragments are looked into (each element of a Fragment is a Breadcrumb item, an AvatarGroup member or a Carousel slide), but a component that renders a part itself is not recognised where a compound classifies its children: write `Carousel.Item`s, and nested `Tree.Item`s, in the compound itself (directly, in Fragments, or for Tree from a render function such as `children.map(renderNode)`).
@@ -584,7 +584,8 @@ export const StatusLabel = ({ icon, children, ...rest }: StatusLabelProps) => (
 - A slot object `{ as?, className?, children?, style?, ...attributes }` gives full control: `as` renders any element or component, every attribute of the default element is accepted (`{ src, alt }` for an image slot), and `className` is merged after the base classes (yours wins).
 - `null`, `undefined`, `false` and `true` render nothing.
 - `Slot<T>` is `SlotObject<T> | React.ReactNode`, so any `ReactNode` (a promise included) type-checks. An attributes object typed by an interface (`React.ImgHTMLAttributes<HTMLImageElement>`) must be spread into a new object: `image={{ ...imgProps }}`.
-- `slotRendersContent(value)` (`src/lib/slot.ts`) is the one "renders anything" check: `''`, and an array, `Set` or generator of only nullish, boolean or `''` items, render nothing; `0` is content. Components use it to fall back when a slot is effectively empty (a Field `error={[]}` is no error, a dismiss slot that renders nothing keeps the default icon).
+- `slotRendersContent(value)` (`src/lib/slot.ts`) is the one "renders anything" check: `''`, and an array, `Set`, generator or Fragment of only nullish, boolean or `''` items (`[]`, `<></>`, `<>{false}</>`, at any depth), render nothing; `0` is content. Components use it to fall back when a slot is effectively empty (a Field `error={[]}` is no error, a dismiss slot that renders nothing keeps the default icon). It reads a top-level generator once and caches its items: a value you check and then render yourself (not through `renderSlot`/`resolveSlot`) goes through `materialiseSlotContent(value)`, so React never enumerates the generator.
+- Dismiss and clear slots (Tag, MessageBar, SearchBox) share one rule, `slotWrapsDefaultContent(type, props)`: a slot object wraps the default icon only when its element is an intrinsic, non-void tag without `dangerouslySetInnerHTML` whose children render nothing (`{ className: 'text-error' }` styles the default icon). A component `as` (`{ as: CloseIcon }`), a void tag (`{ as: 'img', src, alt: '' }`) and markup of its own are the icon itself. A `<button>`/`Button` passed there, or a slot object whose `as` is one, is merged into the built-in button; its markup (`dangerouslySetInnerHTML`) renders inside that button.
 - The last argument of `renderSlot`/`resolveSlot` holds defaults the slot's own props override; icon slots pass `{ 'aria-hidden': true }`.
 
 ### Pattern 4: Controlled / Uncontrolled (useControllable)
@@ -632,6 +633,10 @@ cn('bg-card data-[selected]:bg-selected', 'bg-muted'); // the selected state sti
 ```
 
 So the gated hover and pressed classes (`not-disabled:not-aria-disabled:hover:` / `…:active:`) and the state classes (`data-[…]:`, `aria-disabled:`) are not replaced by a bare class of yours: they are more specific and win while their state applies. Override them with the same prefix (`not-disabled:not-aria-disabled:hover:bg-error`, `data-[selected]:bg-muted`) or the important modifier (`hover:bg-error!`).
+
+**Words that name a utility (library sources).** Tailwind reads every word of `src/components` and `src/lib`, comments, identifiers and non-class strings included, and would ship a matching utility (`.container`, `.shadow`, `.filter`) as a global, unlayered class of `./styles`. The CSS build (`scripts/build-css.mjs`) therefore fails on a class that no library class string uses. Do not write a utility name as a bare word there (not `container`, `shadow`, `.filter(`, or a quoted `` `hover:bg-error!` `` in a comment): rephrase it, or, when the word must stay, add it to `@source not inline()` in `src/styles/styles.css` and to `EXCLUDED_WORDS` in `src/styles/__tests__/tokens.test.ts`.
+
+**`hidden`.** Inside `.wave-root` and `.wave-portal`, `base.css` gives `[hidden]` (not `hidden="until-found"`) `display: none !important`, as Preflight does, so a component's display utility never keeps a hidden root visible. Pass `hidden` through to the element that draws the component (the root, or the visible field of a composite control); no `hidden && 'hidden'` class is needed.
 
 ### Pattern 6: useId
 
@@ -682,7 +687,7 @@ export interface TrackedButtonProps extends ButtonProps {
 
 Each component declares `XOwnProps` with its own props only (never the default element's HTML attributes) and `type XProps<C extends React.ElementType = '<default element>'> = PolymorphicProps<C, XOwnProps>`, where the default is the component's own element: `'button'` for Button and CompoundButton, `'a'` for Link, `'span'` for Text and Tag, `'hr'` for Divider, and `'div'` for Toolbar, Card and its parts, Stack, Flex and Grid. `<Button as="a" formAction>` is a type error.
 
-`React.ComponentProps<typeof Button>`, `React.memo(Button)` and Storybook's `Meta<typeof Button>` see the default element's props (`ButtonProps`). For another element, name it: `ButtonProps<'a'>`, and `StoryObj<ButtonProps<'a'>>` for stories whose args use `as`.
+`React.ComponentProps<typeof Button>`, `React.memo(Button)` and Storybook's `Meta<typeof Button>` see the default element's props (`ButtonProps`): `PolymorphicComponent` ends with a default-element call signature. For another element, name it: `ButtonProps<'a'>`, and `StoryObj<ButtonProps<'a'>>` for stories whose args use `as`. In tests, a `testSystemProps` call whose `a11yVariants` use `as` names the widened type: `testSystemProps<ButtonProps<React.ElementType>>(Button, …)`.
 
 **Button with `as`**:
 
@@ -692,7 +697,7 @@ Each component declares `XOwnProps` with its own props only (never the default e
 
 ### Pattern 8: Composite Controls and Field
 
-Controls whose root wraps a focusable element (Checkbox, Switch, SearchBox, SpinButton, Combobox, Dropdown, TagPicker, DatePicker, TimePicker) route `id`, the naming and validation ARIA attributes (`aria-label`, `aria-labelledby`, `aria-describedby`, `aria-invalid`, `aria-required`, `aria-errormessage`, `aria-details`), `tabIndex`, `autoFocus`, focus/key handlers and native input attributes to the focusable element; `className`, `style`, `data-*`, other `aria-*` attributes and `ref` stay on the root, and `controlRef` reaches the focusable element. `Input` with `contentBefore`/`contentAfter` content is the exception: its bordered wrapper receives only `className`, `style` and `hidden`, and everything else stays on the `<input>`.
+Controls whose root wraps a focusable element (Checkbox, Switch, SearchBox, SpinButton, Combobox, Dropdown, TagPicker, DatePicker, TimePicker) route `id`, the naming and validation ARIA attributes (`aria-label`, `aria-labelledby`, `aria-describedby`, `aria-invalid`, `aria-required`, `aria-errormessage`, `aria-details`), `tabIndex`, `autoFocus`, focus/key handlers and native input attributes to the focusable element; `className`, `style`, `data-*`, other `aria-*` attributes and `ref` stay on the root, and `controlRef` reaches the focusable element. SearchBox and SpinButton draw their field (border, background, focus and invalid look) on that root, so `className`, `style` and `hidden` reach the visible field. `Input` with `contentBefore`/`contentAfter` content is the exception: its bordered wrapper receives only `className`, `style` and `hidden`, and everything else stays on the `<input>`.
 
 Every library control reads the surrounding `Field` through `useFieldControl`, which merges the control's own labelling props with the Field's label, hint, error and required state. Your own controls can do the same:
 
@@ -715,9 +720,10 @@ export const Theme = () => (
 ### Pattern 9: Overlays and Triggers
 
 - `Dialog.Trigger`, `Drawer.Trigger`, `Popover.Trigger` and `Menu.Trigger` merge their props (`aria-haspopup`, `aria-expanded`, `aria-controls`, a composed `onClick`, a ref) onto their single child, or pass them to a render-prop child. The trigger's live state always wins over the child's own ARIA props; the child's own `id` and handlers are kept. A Fragment around one element counts as that element.
-- With `asChild={false}`, or when the child is text, several elements or a component that neither forwards `ref` nor spreads its props, the trigger renders a wrapper `<span>` (the automatic cases warn in development). A generic span cannot carry the state ARIA, so `aria-haspopup`, `aria-expanded` and `aria-controls` go to the first element in the tab order inside it (after mount); Menu returns focus to that element.
+- With `asChild={false}`, or when the child is text, several elements or a component that neither forwards `ref` nor spreads its props, the trigger renders a wrapper `<span>` (the automatic cases warn in development). A generic span cannot carry the state ARIA, so `aria-haspopup`, `aria-expanded` and `aria-controls` go to the first element in the tab order inside it (after mount), unless the consumer made the span the trigger (`tabIndex={0}` or a non-generic `role`: it keeps them); Menu returns focus to that element.
 - Overlay surfaces render through `Portal` into `document.body` (or `WaveProvider`'s `portalContainer`) inside a `wave-portal` wrapper that carries the theme, direction and font.
-- Escape and outside presses close only the topmost layer; presses inside overlays opened from a surface count as inside it.
+- Escape and outside presses close only the topmost layer; presses inside overlays opened from a surface count as inside it. A surface that closes when focus leaves it (Menu, listbox popups, the AvatarGroup and InfoLabel popups) decides in a microtask after the focus change, so an `autoFocus` field of a popover, dialog or portal opened from inside it keeps it open.
+- Clicks and keys from a portal opened inside an item (a Popover in a `Menu.Item`, a popup from a List action) bubble through the React tree; the item's own handling ignores events whose target is outside it in the DOM (C-COMPOSE), while the consumer's handlers still receive them.
 
 ### Props Interface Conventions
 
@@ -773,7 +779,7 @@ In a Toolbar, a nested composite (a RadioGroup, a TabList) keeps its own Tab sto
 | List (selectable) | Up/Down, wrapping; typeahead above 7 items; Enter/Space toggle selection |
 | Tree | see below |
 
-Wherever there is typeahead (Menu, selectable List, Tree, Dropdown), a Space typed within 500 ms of a character continues the search instead of activating or committing, so "new y" reaches "New York". Characters typed with AltGr, which Windows reports as Ctrl+Alt (Polish `ł`, Romanian `ș`), count; Ctrl+Alt with an arrow, Home or End is left to the browser. Keys typed in content inside an item, such as a List row's action button, are not typeahead. Menu matches item labels only, never an icon's text or a shortcut.
+Wherever there is typeahead (Menu, selectable List, Tree, Dropdown), a Space typed within 500 ms of a character continues the search instead of activating or committing, so "new y" reaches "New York". Characters typed with AltGr, which Windows reports as Ctrl+Alt (Polish `ł`, Romanian `ș`), count; Ctrl+Alt with an arrow, Home, End or Space is left to the browser. An item that refuses focus (hidden by CSS) is passed over for the next match. Keys typed in content inside an item, such as a List row's action button, are not typeahead. Menu matches item labels only, never an icon's text or a shortcut.
 
 #### Combobox, TagPicker, TimePicker (editable combobox)
 
@@ -874,7 +880,7 @@ Typed text in the DatePicker input is kept and marked invalid when it is not an 
 - **Card** (selectable, `selectionControl="card"`): Enter (key down) or Space (key up).
 - **Stepper**: every reachable step is a Tab stop; Enter/Space activate.
 - **Tooltip, InfoLabel**: open on keyboard focus; Escape closes. Focus, blur and pointer entry inside a popup that the Tooltip's child renders in a portal (a DatePicker calendar, a listbox) do not show or hide the tooltip or reach its `onFocus`/`onBlur`; `onMouseEnter`/`onMouseLeave` follow React's tree. An icon-only trigger named by `Tooltip relationship="label"` also names a Popover it opens.
-- **Popover, TeachingPopover**: Escape closes. When focus was inside (or lost to `<body>`), Popover returns it to its trigger, TeachingPopover to where focus was before it opened (with `target`, to the target when nothing had focus, such as a tour opened on page load; see [Focus Management](#focus-management)). In the Tab order the portaled content follows its trigger (TeachingPopover with `target`: the target), like inline content: Tab from the trigger enters it, Tab past its last element continues after the trigger, Shift+Tab from its first element returns to the trigger, and Shift+Tab from the element after the trigger enters it at its last element. Reached natively from the end of the page it follows the document order, so Tab never cycles. Focus leaving it does not close it (Escape or an outside press does).
+- **Popover, TeachingPopover**: Escape closes. When focus was inside (or lost to `<body>`), Popover returns it to its trigger, TeachingPopover to where focus was before it opened (with `target`, to the target when nothing had focus, such as a tour opened on page load; see [Focus Management](#focus-management)). In the Tab order the portaled content follows its trigger (TeachingPopover with `target`: the target), like inline content: Tab from the trigger enters it, Tab past its last element continues after the trigger, Shift+Tab from its first element returns to the trigger, and Shift+Tab from the element after the trigger enters it at its last element. A Tab lap visits the content once: Tab from the last element of the page moves past the portaled content (it is hidden for that one Tab) and leaves the page, and Shift+Tab from the browser's own controls reaches the page's last element (outside every open popover) instead of the content. Content that the Tab from the page end still reaches follows the document order, so Tab never cycles. Focus leaving it does not close it (Escape or an outside press does).
 - **Accordion, Carousel, Nav, Breadcrumb, Pagination**: native buttons and links (Tab, Enter, Space); no arrow-key navigation.
 
 ### ARIA Patterns
@@ -976,7 +982,7 @@ The **high-contrast theme** (`WaveProvider theme="high-contrast"`) is a separate
 - Validation errors: `Field`'s `error`, or `error="…"` on Input/Select/Textarea, render a `role="alert"` message linked with `aria-describedby`
 - Hide decorative elements with `aria-hidden="true"` (Wave's icon slots do it for you)
 - Name progress indicators and landmarks: `ProgressBar` `label`, `Spinner` `label` (default "Loading"), `Toolbar` and `Nav` `aria-label`
-- Translate the names and hidden texts components render themselves: `closeLabel` (Dialog.Content, Drawer, TeachingPopover), `statusLabel` (MessageBar, Toast), `dismissLabel` (Toast, `dispatchToast` options, Tag), Carousel `labels` and `autoPlayLabels`, Stepper `statusLabels`, Pagination `getItemAriaLabel`, ColorPicker `labels` (the README's "Built-in text" lists every one)
+- Translate the names and hidden texts components render themselves: `closeLabel` (Dialog.Content, Drawer, TeachingPopover), `statusLabel` (MessageBar, Toast), `dismissLabel` (Toast, `dispatchToast` options, Tag), Carousel `labels` and `autoPlayLabels`, Stepper `statusLabels`, Pagination `getItemAriaLabel`, and the `labels` objects of ColorPicker, Combobox, DataGrid, DatePicker, Rating, SpinButton, TagPicker, TeachingPopover and TimePicker (the README's "Built-in text" lists every one)
 
 ---
 
@@ -1207,7 +1213,7 @@ export function Sidebar() {
 }
 ```
 
-The category that contains the selected item (`value` or `defaultValue`) starts open; `defaultOpenCategories` (even `[]`) replaces that, and `openCategories`/`onOpenCategoriesChange` control it. A click that opens a link elsewhere (Ctrl/Cmd/Shift/Alt-click, a mouse button other than the main one, a `target` other than `_self`, a `download` link) selects nothing. Item values (items and sub-items share them) and category values are unique; a duplicate warns in development.
+The category that contains the selected item (`value` or `defaultValue`) starts open; `defaultOpenCategories` (even `[]`) replaces that, and `openCategories`/`onOpenCategoriesChange` control it. A click that opens a link elsewhere (Ctrl/Cmd/Shift/Alt-click, a mouse button other than the main one, a `target` other than `_self`, a `download` link) selects nothing, unless the item's `onClick` calls `preventDefault()` (client-side routing): the browser then opens nothing elsewhere, and the item is selected. Item values (items and sub-items share them) and category values are unique; a duplicate warns in development.
 
 **Breadcrumb**:
 
@@ -1320,6 +1326,8 @@ export function FruitPicker() {
   );
 }
 ```
+
+`rowId`s of a DataGrid, `value`s of a selectable List and `itemId`s of an Overflow are unique: items that share one are selected (or hidden) together, and a development warning names the duplicate.
 
 ### Feedback Patterns
 
@@ -1543,8 +1551,8 @@ not-disabled:not-aria-disabled:active:bg-subtle-pressed
 | `src/styles/legacy-tokens.css` | Deprecated 0.4 variable names (`./legacy-tokens.css`) |
 | `src/lib/cn.ts` | Class name merge utility |
 | `src/lib/types.ts` | Shared types (`Size`, `Appearance`, `Status`, `Orientation`, …) |
-| `src/lib/slot.ts` | Slot system for customizable sub-elements (`slotRendersContent`) |
-| `src/lib/children.ts` | `getElementType`, `isElementOfType`, `flattenChildren` for compound parts (Server Component references, Fragments) |
+| `src/lib/slot.ts` | Slot system for customizable sub-elements (`slotRendersContent`, `materialiseSlotContent`, `slotWrapsDefaultContent`) |
+| `src/lib/children.ts` | `getElementType` (`{ suspend: false }` for walks deeper than the direct children), `isElementOfType`, `flattenChildren` for compound parts (Server Component references, Fragments) |
 | `src/lib/styles.ts` | Focus rings, input focus and forced-colors recipes |
 | `src/lib/composeEventHandlers.ts` | Consumer + internal handler composition |
 | `src/hooks/useControllable.ts` | Controlled/uncontrolled state hook |

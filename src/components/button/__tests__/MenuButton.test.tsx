@@ -295,7 +295,7 @@ describe('MenuButton', () => {
       ['an empty array', []],
       ['an empty Fragment', <></>],
     ])(
-      'treats %s icon like no icon, as Button does: no icon span, and the chevron-only button without a name warns once (button-docs-1)',
+      'treats %s icon like no icon, as Button does: no icon span, and the chevron-only button without a name warns once',
       (_name, icon) => {
         const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
         render(<MenuButton icon={icon} />);
@@ -311,7 +311,7 @@ describe('MenuButton', () => {
       },
     );
 
-    it('warns once when a chevron-only menu button has no accessible name (button-docs-1)', () => {
+    it('warns once when a chevron-only menu button has no accessible name', () => {
       const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
       render(
         <>
@@ -497,7 +497,7 @@ describe('MenuButton', () => {
       expect(xl).not.toHaveClass('text-sm');
     });
 
-    describe('without a label (button-code-1)', () => {
+    describe('without a label', () => {
       /** The padding of a menu button without a label: that of SplitButton's menu half. */
       const compactPadding: Record<Size, string> = {
         'extra-small': 'px-1.5',

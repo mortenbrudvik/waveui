@@ -189,6 +189,27 @@ export function materialiseSlotContent(content: unknown): React.ReactNode {
   return normaliseContent(content);
 }
 
+/**
+ * Whether a slot object's element wraps the component's default content, the rule of the dismiss
+ * and clear slots (Tag `dismissIcon`, MessageBar `dismiss`, SearchBox `dismiss`): a slot object
+ * without content of its own (`{ className: 'text-error' }`) styles the default icon.
+ *
+ * `true` when the element is an intrinsic tag that can hold children (not a void tag such as
+ * `img`), it sets no `dangerouslySetInnerHTML` and its `children` render nothing
+ * ({@link slotRendersContent}). A component (an icon that draws its own glyph), a void tag and
+ * markup of its own are the content themselves: `false`.
+ *
+ * @param type  The element type the slot object renders (its `as`, else the slot's default tag).
+ * @param props The slot object's props; `children` and `dangerouslySetInnerHTML` are read.
+ */
+export function slotWrapsDefaultContent(
+  type: unknown,
+  props: { children?: unknown; dangerouslySetInnerHTML?: unknown },
+): boolean {
+  if (typeof type !== 'string' || VOID_ELEMENTS.has(type)) return false;
+  return props.dangerouslySetInnerHTML == null && !slotRendersContent(props.children);
+}
+
 function normaliseContent(slot: unknown): React.ReactNode {
   if (typeof slot === 'object' && slot !== null && isOneShotIterator(slot)) {
     const iterable = slot as Iterable<React.ReactNode>;

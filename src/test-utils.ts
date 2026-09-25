@@ -84,7 +84,9 @@
  * - {@link testCompoundExposure} (members are components with a `displayName`),
  *   {@link testFocusEvents}, {@link createOverlayTestWrapper}.
  * - {@link asClientReference}: a component as a Server Component delivers it to the client (a
- *   pre-resolved `React.lazy` type), for testing how a compound identifies its parts (R1).
+ *   pre-resolved `React.lazy` type), for testing how a compound identifies its parts (C-COMPOUND).
+ * - {@link expectThrows}: rendering throws exactly one error and logs nothing (the development
+ *   throw of a part outside its root, C-CONTEXT).
  * - Browser API mocks: {@link installResizeObserverMock}, {@link mockMatchMedia} (its answers
  *   last one test — call it inside the test or in `beforeEach`, never `beforeAll`), {@link mockRect}.
  * - The environment machinery {@link mockMatchMedia}, {@link resetMatchMediaMock},
@@ -885,9 +887,10 @@ export function renderWithProviders(
  * component (props and `ref` included) without suspending, and `getElementType` from
  * `src/lib/children.ts` unwraps it to `component`.
  *
- * Use it to test a compound that identifies its parts (R1): render the tree once with the plain
- * part types and once with `asClientReference(Part)`, and assert the same `renderToString` output
- * and the same behaviour. The return type is the component's own type, so JSX props stay checked.
+ * Use it to test a compound that identifies its parts (C-COMPOUND): render the tree once with the
+ * plain part types and once with `asClientReference(Part)`, and assert the same `renderToString`
+ * output and the same behaviour. The return type is the component's own type, so JSX props stay
+ * checked.
  *
  * @example
  * const Tab = asClientReference(TabList.Tab);
@@ -902,6 +905,29 @@ export function asClientReference<T extends React.JSXElementConstructor<never>>(
     },
   };
   return React.lazy(() => loaded as unknown as Promise<LoadedModule>) as unknown as T;
+}
+
+/**
+ * Asserts that rendering `ui` throws `new Error(message)` (for example the C-CONTEXT development
+ * error of a part rendered outside its root) and that nothing reached `console.error` on the way:
+ * the throw is the whole report. `console.error` is spied on without silencing it, so an
+ * unexpected message still shows in the test output, and the spy is restored afterwards, also
+ * when an assertion fails.
+ *
+ * @example
+ * expectThrows(
+ *   <Tree.Item value="a">A</Tree.Item>,
+ *   '[WaveUI] Tree.Item must be used within <Tree>',
+ * );
+ */
+export function expectThrows(ui: React.ReactElement, message: string): void {
+  const error = vi.spyOn(console, 'error');
+  try {
+    expect(() => render(ui)).toThrow(new Error(message));
+    expect(error).not.toHaveBeenCalled();
+  } finally {
+    error.mockRestore();
+  }
 }
 
 /**

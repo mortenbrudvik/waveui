@@ -507,7 +507,7 @@ describe('useFieldControl — one control takes the controlId (controlIdClaim)',
     const error = vi.spyOn(console, 'error');
     let root: ReturnType<typeof hydrateRoot> | undefined;
     try {
-      // The claim's layout effects run through React.useLayoutEffect directly (R5): the server
+      // The claim's layout effects run through React.useLayoutEffect directly (C-HOOKS): the server
       // render logs nothing.
       container.innerHTML = renderToString(ui);
       expect(error).not.toHaveBeenCalled();

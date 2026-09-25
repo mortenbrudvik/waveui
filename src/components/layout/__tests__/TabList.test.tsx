@@ -21,6 +21,7 @@ import {
   testSystemProps,
   testCompoundExposure,
   testComposedHandler,
+  expectThrows,
 } from '../../../test-utils';
 
 const tabsWithPanels = (
@@ -49,11 +50,11 @@ afterEach(() => {
   vi.unstubAllEnvs();
 });
 
-/** The `[WaveUI]` warnings logged so far (R14: asserted, never silenced). */
+/** The `[WaveUI]` warnings logged so far (asserted, never silenced). */
 const warnings = (warn: { mock: { calls: unknown[][] } }) =>
   warn.mock.calls.map(([message]) => String(message));
 
-/** A TabList deprecation warning (asserted exactly, R14). */
+/** A TabList deprecation warning (asserted exactly). */
 const deprecated = (oldName: string, newName: string, extra = '') =>
   `[WaveUI] TabList: \`${oldName}\` is deprecated and will be removed in 1.0. Use \`${newName}\` instead.${extra}`;
 
@@ -63,14 +64,6 @@ const modeSwitch = (from: string, to: string) =>
   'between controlled and uncontrolled: pass `undefined` only when the component is ' +
   'uncontrolled, and the empty value (for example `[]`, `null` or `""`) to clear a controlled ' +
   'value.';
-
-/** A development throw is the whole report: nothing is logged besides it (R14). */
-const expectThrows = (ui: React.ReactElement, text: string) => {
-  const error = vi.spyOn(console, 'error');
-  expect(() => render(ui)).toThrow(new Error(text));
-  expect(error).not.toHaveBeenCalled();
-  error.mockRestore();
-};
 
 describe('TabList', () => {
   testSystemProps(TabList, {
@@ -166,7 +159,7 @@ describe('TabList', () => {
     );
   });
 
-  it('in production, parts outside a TabList log once each and render inertly (C-CONTEXT, R3)', () => {
+  it('in production, parts outside a TabList log once each and render inertly (C-CONTEXT)', () => {
     vi.stubEnv('NODE_ENV', 'production');
     const error = vi.spyOn(console, 'error').mockImplementation(() => {});
     const orphans = (
@@ -185,7 +178,7 @@ describe('TabList', () => {
     ]);
   });
 
-  it('parts written in a Server Component (lazy types) render the same server HTML and behave the same (R1)', async () => {
+  it('parts written in a Server Component (lazy types) render the same server HTML and behave the same (C-COMPOUND)', async () => {
     const user = userEvent.setup();
     const warn = vi.spyOn(console, 'warn');
     const sections = (
@@ -229,7 +222,7 @@ describe('TabList', () => {
     await expectNoA11yViolations();
   });
 
-  it('warns once per value shared by several tabs (R12, x-errors-components-2)', () => {
+  it('warns once per value shared by several tabs (C-DEV)', () => {
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
     const duplicated = (
       <TabList aria-label="Sections" defaultValue="a">
@@ -246,7 +239,7 @@ describe('TabList', () => {
     ]);
   });
 
-  it('does not warn about tab values in StrictMode, when keyed tabs are reordered or when a tab is replaced (R12)', async () => {
+  it('does not warn about tab values in StrictMode, when keyed tabs are reordered or when a tab is replaced (C-DEV)', async () => {
     const warn = vi.spyOn(console, 'warn');
     const renderTabs = (keys: string[]) => (
       <React.StrictMode>
@@ -496,7 +489,7 @@ describe('TabList - controlled', () => {
     expect(tab('Tab A')).toHaveAttribute('tabindex', '0');
   });
 
-  it('a controlled value that becomes undefined clears the selection and stays controlled (layout-b-code-2)', async () => {
+  it('a controlled value that becomes undefined clears the selection and stays controlled', async () => {
     const user = userEvent.setup();
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
     const onValueChange = vi.fn();
@@ -523,7 +516,7 @@ describe('TabList - controlled', () => {
   });
 });
 
-describe('TabList - parts that unmount (layout-b-tests-3)', () => {
+describe('TabList - parts that unmount', () => {
   type Toggle = (show: boolean) => void;
 
   /** Renders its children until told otherwise, without rendering the TabList again. */
@@ -1187,7 +1180,7 @@ describe('TabList - keyboard', () => {
     },
   });
 
-  it('a consumer onFocus runs for every tab that receives focus, also when it calls preventDefault(), and the keys still work (layout-b-tests-7)', async () => {
+  it('a consumer onFocus runs for every tab that receives focus, also when it calls preventDefault(), and the keys still work', async () => {
     const user = userEvent.setup();
     const onFocus = vi.fn((event: React.FocusEvent) => event.preventDefault());
     const onValueChange = vi.fn();

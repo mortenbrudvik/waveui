@@ -436,7 +436,7 @@ describe('Toolbar', () => {
       expect(onFocus).toHaveBeenCalled();
     });
 
-    it('a link and a Button as="div" are controls: one tab stop, reached by the arrows (button-tests-1)', async () => {
+    it('a link and a Button as="div" are controls: one tab stop, reached by the arrows', async () => {
       const user = userEvent.setup();
       render(
         <>
@@ -473,7 +473,7 @@ describe('Toolbar', () => {
     });
   });
 
-  describe('value controls with a hidden form input (x-keyboard-1)', () => {
+  describe('value controls with a hidden form input', () => {
     it.each([
       [
         'a named Checkbox',
@@ -533,7 +533,7 @@ describe('Toolbar', () => {
     );
   });
 
-  describe('nested widgets keep every control reachable (x-keyboard-2)', () => {
+  describe('nested widgets keep every control reachable', () => {
     it('a RadioGroup child keeps its own keys, and the toolbar keeps its Tab stop on the control focused last', async () => {
       const user = userEvent.setup();
       render(

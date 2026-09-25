@@ -12,6 +12,7 @@ import {
   testDisplayName,
   testNoImplicitSubmit,
   testSystemProps,
+  expectThrows,
 } from '../../../test-utils';
 import { renderWithFieldContext, FIELD_TEST_IDS, FIELD_TEST_TEXT } from '../../../test-utils-field';
 
@@ -304,19 +305,13 @@ describe('RadioGroup', () => {
   });
 
   it('throws when RadioItem is used outside RadioGroup', () => {
-    // A render error in a test is thrown by render(); nothing is logged (asserted).
-    const error = vi.spyOn(console, 'error');
-    try {
-      expect(() => render(<RadioItem value="a" label="Orphan" />)).toThrow(
-        new Error('[WaveUI] RadioItem must be used within a RadioGroup'),
-      );
-      expect(error).not.toHaveBeenCalled();
-    } finally {
-      error.mockRestore();
-    }
+    expectThrows(
+      <RadioItem value="a" label="Orphan" />,
+      '[WaveUI] RadioItem must be used within a RadioGroup',
+    );
   });
 
-  describe('in production (R3)', () => {
+  describe('in production (C-CONTEXT)', () => {
     afterEach(() => {
       vi.unstubAllEnvs();
     });
@@ -346,7 +341,7 @@ describe('RadioGroup', () => {
     });
   });
 
-  describe('duplicate item values (R12)', () => {
+  describe('duplicate item values (C-DEV)', () => {
     it('warns once per value that several items share', () => {
       const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
       try {

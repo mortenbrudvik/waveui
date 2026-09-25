@@ -186,7 +186,7 @@ const ComboboxRoot = (props: ComboboxProps) => {
     // `isRequired`.
     'aria-required': ariaRequired ?? required,
   });
-  // The error look follows the resolved state: the consumer's `aria-invalid` or the Field's (R8).
+  // The error look follows the resolved state: the consumer's `aria-invalid` or the Field's.
   const invalidLook = isInvalidLook(false, fieldProps['aria-invalid']);
 
   const [value, setValue] = useControllable(valueProp, defaultValue ?? '', onValueChange);

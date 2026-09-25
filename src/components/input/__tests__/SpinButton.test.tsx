@@ -606,7 +606,7 @@ describe('SpinButton — naming, routing and styling', () => {
     }
   });
 
-  it('marks an invalid state on the wrapper with the shared recipe (R8)', () => {
+  it('marks an invalid state on the wrapper with the shared recipe', () => {
     render(<SpinButton aria-label="Quantity" aria-invalid data-testid="root" />);
     expect(spin()).toHaveAttribute('aria-invalid', 'true');
     const root = screen.getByTestId('root');
@@ -649,12 +649,11 @@ describe('SpinButton — naming, routing and styling', () => {
     }
   });
 
-  it('honours hidden on the root, whose display utility would otherwise beat it', () => {
+  it('puts hidden on the root, the visible field (not on the input)', () => {
     render(<SpinButton aria-label="Quantity" hidden data-testid="root" />);
-    const root = screen.getByTestId('root');
-    expect(root).toHaveAttribute('hidden');
-    expect(root).toHaveClass('hidden');
-    expect(root).not.toHaveClass('inline-flex');
+    // base.css's scoped `[hidden]` rule hides it over its `inline-flex`.
+    expect(screen.getByTestId('root')).toHaveAttribute('hidden');
+    expect(screen.getByRole('spinbutton', { hidden: true })).not.toHaveAttribute('hidden');
   });
 
   it('names the step buttons with labels', async () => {

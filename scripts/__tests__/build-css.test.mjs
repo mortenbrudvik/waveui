@@ -7,7 +7,7 @@
 import { describe, expect, it } from 'vitest';
 import { bareDirectionClasses } from '../build-css.mjs';
 
-describe('bareDirectionClasses (R4)', () => {
+describe('bareDirectionClasses (C-LOGICAL)', () => {
   it("lists the classes with Tailwind's rtl:/ltr: variant, compound and negated forms included", () => {
     const css = [
       String.raw`.rtl\:ms-2:where(:dir(rtl),[dir=rtl],[dir=rtl] *){margin-inline-start:.5rem}`,

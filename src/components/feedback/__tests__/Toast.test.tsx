@@ -13,6 +13,7 @@ import {
   renderWithProviders,
   testNoImplicitSubmit,
   testSystemProps,
+  expectThrows,
 } from '../../../test-utils';
 
 /** Exposes the controller of the enclosing Toaster to the test. */
@@ -365,11 +366,7 @@ describe('useToastController', () => {
   });
 
   it('throws a descriptive error outside <Toaster> in development (feedback-navigation#8)', () => {
-    // A render error is thrown, not logged: nothing may reach console.error.
-    const error = vi.spyOn(console, 'error');
-    expect(() => render(<DispatchButton />)).toThrow(new Error(MISSING_TOASTER_MESSAGE));
-    expect(error).not.toHaveBeenCalled();
-    error.mockRestore();
+    expectThrows(<DispatchButton />, MISSING_TOASTER_MESSAGE);
   });
 
   describe('in production', () => {

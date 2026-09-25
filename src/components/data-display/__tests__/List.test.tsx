@@ -16,6 +16,7 @@ import {
   testComposedHandler,
   testCompoundExposure,
   testSystemProps,
+  expectThrows,
 } from '../../../test-utils';
 
 const fruits = [
@@ -146,15 +147,10 @@ describe('List', () => {
     });
 
     it('throws outside a List in development (C-CONTEXT)', () => {
-      // A render error is thrown, not logged: nothing may reach console.error.
-      const error = vi.spyOn(console, 'error');
-      expect(() => render(<ListItem>Orphan</ListItem>)).toThrow(
-        new Error('[WaveUI] ListItem must be used within a List'),
-      );
-      expect(error).not.toHaveBeenCalled();
+      expectThrows(<ListItem>Orphan</ListItem>, '[WaveUI] ListItem must be used within a List');
     });
 
-    it('in production, an item outside a List logs once and renders a plain list item (C-CONTEXT, R3)', () => {
+    it('in production, an item outside a List logs once and renders a plain list item (C-CONTEXT)', () => {
       vi.stubEnv('NODE_ENV', 'production');
       const error = vi.spyOn(console, 'error').mockImplementation(() => {});
       const { rerender } = render(<ListItem value="a">Orphan</ListItem>);
@@ -165,7 +161,7 @@ describe('List', () => {
       expect(error.mock.calls).toEqual([['[WaveUI] ListItem must be used within a List']]);
     });
 
-    it('items written in a Server Component (lazy types) render the same server HTML and behave the same (R1)', async () => {
+    it('items written in a Server Component (lazy types) render the same server HTML and behave the same (C-COMPOUND)', async () => {
       const user = userEvent.setup();
       const LazyItem = asClientReference(ListItem);
       const docs = (Item: typeof ListItem) => (
@@ -720,7 +716,7 @@ describe('List', () => {
       >();
     });
 
-    it('accepts readonly selection arrays and reports mutable ones (R6)', () => {
+    it('accepts readonly selection arrays and reports mutable ones (C-NAMING)', () => {
       const selected = ['apple'] as const;
       const elements = [
         <List key="1" selectable selectedItems={selected} />,
@@ -1487,7 +1483,7 @@ describe('List', () => {
       expect(reapplied).toBe(1);
     });
 
-    it('ignores clicks inside a popup portaled from an action (React portal bubbling, x-keyboard-3)', async () => {
+    it('ignores clicks inside a popup portaled from an action (React portal bubbling)', async () => {
       const user = userEvent.setup();
       const onChange = vi.fn();
       render(
@@ -1552,7 +1548,7 @@ describe('List', () => {
       ['an empty array', []],
       ['an array of empty values', [null, false, '']],
       ['an empty string', ''],
-    ])('an action that renders nothing (%s) is no action (R11)', (_, action) => {
+    ])('an action that renders nothing (%s) is no action (C-SLOTS)', (_, action) => {
       const docs = (
         <List selectable aria-label="Documents">
           <List.Item value="a" action={action}>
@@ -1566,7 +1562,7 @@ describe('List', () => {
       expect(option('Document A').querySelector('[data-list-action]')).toBeNull();
     });
 
-    it('an action of 0 renders (0 is content, R11)', () => {
+    it('an action of 0 renders (0 is content, C-SLOTS)', () => {
       render(
         <List selectable aria-label="Documents">
           <List.Item value="a" action={0}>

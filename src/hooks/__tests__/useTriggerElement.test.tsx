@@ -676,7 +676,7 @@ describe('useTriggerElement', () => {
     });
   });
 
-  describe('non-element children (overlays-anchored-code-4, overlays-anchored-docs-1)', () => {
+  describe('non-element children', () => {
     const WRAPPED_WARNING =
       '[WaveUI] Test.Trigger: expected a single React element child (not text, a Fragment or several elements); the children are rendered inside a <span> wrapper instead.';
 

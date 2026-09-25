@@ -109,9 +109,9 @@ describe('PresenceBadge', () => {
     expect(screen.getByRole('img', { name: 'Busy until 3 PM' })).toBeInTheDocument();
   });
 
-  // R4: Wave's `wave-rtl:` follows the element's own direction, so an LTR subtree of an RTL page
-  // keeps the arrow unmirrored (Tailwind's `rtl:` also matches `[dir=rtl] *`). The variant's CSS
-  // is checked by the styles build; jsdom asserts the class.
+  // C-LOGICAL: Wave's `wave-rtl:` follows the element's own direction, so an LTR subtree of an RTL
+  // page keeps the arrow unmirrored (Tailwind's `rtl:` also matches `[dir=rtl] *`). The variant's
+  // CSS is checked by the styles build; jsdom asserts the class.
   it('mirrors the out-of-office arrow in right-to-left layouts with the wave-rtl variant', () => {
     renderWithProviders(
       <div dir="ltr">

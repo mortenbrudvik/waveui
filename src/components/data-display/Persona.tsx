@@ -63,7 +63,7 @@ export const Persona = ({
   ...props
 }: PersonaProps) => {
   // A slot that renders nothing (`badge={count && …}` with count 0, an empty `.map()` result) is
-  // not given (R11), so the status badge and the built-in avatar apply.
+  // not given (C-SLOTS), so the status badge and the built-in avatar apply.
   const badgeNode =
     badge && slotRendersContent(badge) ? (
       renderSlot(badge, 'span')

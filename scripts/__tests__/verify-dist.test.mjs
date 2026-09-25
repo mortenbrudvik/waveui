@@ -92,7 +92,7 @@ function goodFiles() {
   const dts =
     'export declare function cn(...inputs: unknown[]): string;\n' +
     '/** A button. */\nexport declare const Button: (props: object) => null;\n';
-  // src/lib/dev.ts reads the bundler-injected mode at call time (f-lib T6).
+  // src/lib/dev.ts reads the bundler-injected mode at call time.
   const dev = (exportSyntax) =>
     `function isDevEnvironment() {\n  try {\n    return process.env.NODE_ENV !== "production";\n  } catch {\n    return true;\n  }\n}\n${exportSyntax}`;
   return {
@@ -179,7 +179,7 @@ describe('directivePrologue', () => {
   });
 });
 
-describe('importSpecifiers (tooling-code-4)', () => {
+describe('importSpecifiers', () => {
   it.each([
     ['import { a } from "left-pad";', ['left-pad']],
     ["import x, { y } from './z.mjs';\nexport * from './w.mjs';", ['./z.mjs', './w.mjs']],
@@ -306,7 +306,7 @@ describe('checkDeclarations (repo-level#5)', () => {
     ).toEqual([expect.stringMatching(/index\.d\.cts differs/)]);
   });
 
-  it('reports an exported component without a JSDoc (C-DOCS, x-types-components-6)', () => {
+  it('reports an exported component without a JSDoc (C-DOCS)', () => {
     const dts = 'export declare const Card: () => null;\n';
     expect(
       checkDeclarations(fixture({ 'dist/index.d.ts': dts, 'dist/index.d.cts': dts }).dist),
@@ -316,7 +316,7 @@ describe('checkDeclarations (repo-level#5)', () => {
   });
 });
 
-describe('undocumentedComponents (C-DOCS, x-types-components-6)', () => {
+describe('undocumentedComponents (C-DOCS)', () => {
   it('accepts the declaration shapes of the rolled-up index.d.ts when they are documented', () => {
     const dts = [
       '/** A compound. */',
@@ -371,7 +371,7 @@ describe('undocumentedComponents (C-DOCS, x-types-components-6)', () => {
   });
 });
 
-describe('checkDevEnvironment (f-lib T6)', () => {
+describe('checkDevEnvironment', () => {
   it('passes when dist/lib/dev.* read process.env.NODE_ENV at run time', () => {
     expect(checkDevEnvironment(fixture().dist)).toEqual([]);
   });
@@ -893,7 +893,7 @@ describe('verifyDist and main', () => {
   });
 });
 
-describe('the entry guard of the gate scripts (tooling-tests-1)', () => {
+describe('the entry guard of the gate scripts', () => {
   // verify-dist, verify-storybook, pack-smoke and attw-pack run their checks only when Node was
   // started with them. A guard that stopped recognising its own script would make the publish
   // gate exit 0 without checking anything, so it is tested like build-css's entryStatus.

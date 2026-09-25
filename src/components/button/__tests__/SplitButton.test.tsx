@@ -139,7 +139,7 @@ describe('SplitButton', () => {
     expect(onMenuClick).not.toHaveBeenCalled();
   });
 
-  describe('per-half disabled and className (button-tests-2)', () => {
+  describe('per-half disabled and className', () => {
     it('menuButtonProps.disabled disables only the menu button; its className is merged', async () => {
       const user = userEvent.setup();
       const onClick = vi.fn();

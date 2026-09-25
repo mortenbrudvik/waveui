@@ -68,7 +68,7 @@ describe('TeachingPopover', () => {
     expect(screen.getByText('This is step one.')).toBeInTheDocument();
   });
 
-  it('accepts readonly steps (R6)', () => {
+  it('accepts readonly steps (C-NAMING)', () => {
     const readonlySteps = [
       { title: 'Tip', body: 'Press Ctrl+K.' },
       { title: 'Search', body: 'Type to filter.' },
@@ -214,7 +214,7 @@ describe('TeachingPopover', () => {
       expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
     });
 
-    it('names the Close button with closeLabel (R7), "Close" by default, and keeps it off the surface', async () => {
+    it('names the Close button with closeLabel (C-NAMING), "Close" by default, and keeps it off the surface', async () => {
       const user = userEvent.setup();
       const onDismiss = vi.fn();
       const { rerender } = render(<TeachingPopover steps={steps} onDismiss={onDismiss} />);
@@ -342,7 +342,7 @@ describe('TeachingPopover', () => {
       await waitFor(() => expect(__getAnnouncerText('polite')).toBe('Features, step 2 of 3'));
     });
 
-    it('keeps the dots visible in forced-colors mode, the current one in Highlight (x-styling-4)', () => {
+    it('keeps the dots visible in forced-colors mode, the current one in Highlight', () => {
       render(<TeachingPopover steps={steps} activeStep={1} />);
       const [first, second, third] = dots();
       expect(second).toHaveClass(
@@ -543,7 +543,7 @@ describe('TeachingPopover', () => {
         },
       ],
     ])(
-      'returns focus to the target when a tour opened on page load is dismissed with %s (overlays-anchored-tests-3)',
+      'returns focus to the target when a tour opened on page load is dismissed with %s',
       async (_how, dismissWith) => {
         const user = userEvent.setup();
         const onDismiss = vi.fn();
@@ -574,7 +574,7 @@ describe('TeachingPopover', () => {
       },
     );
 
-    describe('keyboard order next to the target (x-keyboard-4)', () => {
+    describe('keyboard order next to the target', () => {
       /** The focused element's name, `dialog` for the surface, or `body` when focus left the page. */
       const focused = () => {
         const el = document.activeElement;
@@ -718,7 +718,7 @@ describe('TeachingPopover', () => {
         ['Tab', false, ['After']],
         ['Shift+Tab', true, ['Back', 'Close', 'New feature']],
       ] as const)(
-        'a click on the last button with nothing focused keeps the order after the target: %s (R1-1)',
+        'a click on the last button with nothing focused keeps the order after the target: %s',
         async (_key, shift, expected) => {
           const user = await renderPage();
           // A press where nothing takes focus (the tour stays open): focus moves to the body.

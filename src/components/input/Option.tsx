@@ -67,16 +67,11 @@ OptionCheckContext.displayName = 'OptionCheckContext';
  * `data-[active]:bg-…` / `data-[selected]:bg-…` restyles a single state (it out-specifies the
  * unconditional reader). The active outline is the focus indicator and stays a state variant.
  *
- * `[&[hidden]]:hidden`: a filtered-out option carries the `hidden` attribute, but without Preflight
- * (Wave ships none) the author `display: flex` would override the user-agent
- * `[hidden] { display: none }` rule and leave it visible. The attribute variant (class + attribute
- * specificity) wins over any display utility, a consumer's included.
+ * A filtered-out option carries the `hidden` attribute; base.css's scoped `[hidden]` rule hides
+ * it over `flex` and over a consumer's display class.
  */
-const HIDDEN_WINS = '[&[hidden]]:hidden';
-
 const OPTION_CLASSES = cn(
   'flex cursor-pointer select-none items-center gap-2 px-3 py-1.5 text-body-1 text-foreground',
-  HIDDEN_WINS,
   'bg-(--option-bg) [--option-bg:transparent]',
   'not-disabled:not-aria-disabled:hover:[--option-bg:var(--wave-subtle-hover)]',
   'data-[selected]:[--option-bg:var(--wave-subtle-selected)]',
@@ -159,7 +154,7 @@ function OptionImpl(props: OptionProps) {
   } = props;
   const showCheck = React.useContext(OptionCheckContext);
   const groupHidden = React.useContext(OptionGroupHiddenContext);
-  // A consumer-hidden option is not navigable (listbox-hook-code-1); optionProps renders `hidden`.
+  // A consumer-hidden option is not navigable; optionProps renders `hidden`.
   const { selected, optionProps } = useListboxOption<HTMLLIElement>(
     { value, label, textValue, disabled, hidden: hidden || groupHidden },
     ref,
@@ -265,7 +260,7 @@ function OptionGroupImpl({ label, className, children, hidden, ref, ...rest }: O
       ref={ref}
       role="presentation"
       hidden={hidden || empty || undefined}
-      className={cn(HIDDEN_WINS, className)}
+      className={className}
     >
       <div
         id={labelId}

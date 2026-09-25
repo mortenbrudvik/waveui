@@ -223,10 +223,10 @@ function TagRemoveButton({
  * `onFocus`/`onBlur`/`onKeyDown`/`onKeyUp` and the text input attributes `autoComplete`,
  * `autoCapitalize`, `autoCorrect`, `maxLength`, `inputMode`, `spellCheck` and `enterKeyHint`.
  * `ref`, `className`, `style`, other `aria-*` attributes and the remaining props stay on the root
- * `<div>`. Inside a `Field` the input is labelled and described by it. The tag area shows the error look whenever the input ends up `aria-invalid` (its own
- * `aria-invalid` or a `Field` error). With `name`/`required` the values take part in form
- * submission, validation and reset. Selected values without a matching option are shown with
- * their raw value.
+ * `<div>`. Inside a `Field` the input is labelled and described by it. The tag area shows the
+ * error look whenever the input ends up `aria-invalid` (its own `aria-invalid` or a `Field`
+ * error). With `name`/`required` the values take part in form submission, validation and reset.
+ * Selected values without a matching option are shown with their raw value.
  */
 export const TagPicker = (props: TagPickerProps) => {
   const {
@@ -289,7 +289,7 @@ export const TagPicker = (props: TagPickerProps) => {
     // `isRequired`.
     'aria-required': ariaRequired ?? required,
   });
-  // The error look follows the resolved state: the consumer's `aria-invalid` or the Field's (R8).
+  // The error look follows the resolved state: the consumer's `aria-invalid` or the Field's.
   const invalidLook = isInvalidLook(false, fieldProps['aria-invalid']);
 
   const [selected, setSelected] = useControllable<readonly string[]>(
@@ -421,8 +421,8 @@ export const TagPicker = (props: TagPickerProps) => {
   useFormReset(
     inputRef,
     () => {
-      // Compared by content (R10): an inline default is a new array on every render, and a reset
-      // that keeps the same tags reports nothing.
+      // Compared by content (C-FORMS): an inline default is a new array on every render, and a
+      // reset that keeps the same tags reports nothing.
       const initial = defaultValue ?? EMPTY;
       setSelected((current) => (sameTags(current, initial) ? current : [...initial]));
       setQuery('');

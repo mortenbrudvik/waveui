@@ -132,7 +132,7 @@ describe('PolymorphicProps / PolymorphicComponent', () => {
     expect(element.props.href).toBe('/x');
   });
 
-  it('React.ComponentProps<typeof X> is the checked default-tag props type (x-types-core-1)', () => {
+  it('React.ComponentProps<typeof X> is the checked default-tag props type', () => {
     // Conditional-type inference (`ComponentProps`, `Parameters`, `memo`, Storybook `Meta<typeof X>`)
     // reads the last call signature; a generic one would be read with C = React.ElementType, whose
     // props collapse to a string index signature that accepts any key.

@@ -591,7 +591,7 @@ describe('RatingDisplay', () => {
     expect(el.children).toHaveLength(7);
   });
 
-  it('draws a fraction as a partly filled star, so the stars show the value the name reports (input-other-docs-5)', () => {
+  it('draws a fraction as a partly filled star, so the stars show the value the name reports', () => {
     render(<RatingDisplay value={4.6} />);
     const stars = Array.from(screen.getByRole('img', { name: 'Rating: 4.6 out of 5' }).children);
     expect(stars).toHaveLength(5);

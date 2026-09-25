@@ -86,7 +86,7 @@ describe('input recipes (input-basic#9)', () => {
   });
 });
 
-describe('invalid recipes (R8)', () => {
+describe('invalid recipes', () => {
   it('inputInvalid is the destructive border, kept on the focused bottom stroke', () => {
     expect(tokens(inputInvalid)).toEqual(['border-destructive', 'focus:border-b-destructive']);
   });
@@ -169,7 +169,7 @@ describe('forcedColors recipes (input-basic#9)', () => {
     );
   });
 
-  it('fill keeps a visible Highlight fill: the leaf opts out of forced colors (x-styling-4)', () => {
+  it('fill keeps a visible Highlight fill: the leaf opts out of forced colors', () => {
     // Without the opt-out the browser replaces the author background with Canvas and the dot or
     // segment disappears.
     expect(tokens(forcedColors.fill)).toEqual([
@@ -181,7 +181,7 @@ describe('forcedColors recipes (input-basic#9)', () => {
     );
   });
 
-  describe('rangeInput: a native range input drawn by its pseudo-elements (x-styling-4, R1-1)', () => {
+  describe('rangeInput: a native range input drawn by its pseudo-elements', () => {
     it('opts the input out and gives every part it paints a system color, in both engines', () => {
       expect(tokens(forcedColors.rangeInput)).toEqual([
         'forced-colors:forced-color-adjust-none',
@@ -237,7 +237,7 @@ describe('forcedColors recipes (input-basic#9)', () => {
     });
   });
 
-  describe('ringArc: a ring drawn with borders whose top side is the arc (x-styling-4, R1-1)', () => {
+  describe('ringArc: a ring drawn with borders whose top side is the arc', () => {
     it('opts the ring out and draws a Highlight arc on a Canvas track', () => {
       // Forced colors would give all four sides one system color, so the arc would vanish into
       // the track. The track color comes first: `border-t-*` must follow `border-*`.

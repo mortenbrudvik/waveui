@@ -40,6 +40,7 @@ import {
   testComposedHandler,
   testNoImplicitSubmit,
   testSystemProps,
+  expectThrows,
 } from '../../../test-utils';
 
 interface Person {
@@ -292,18 +293,14 @@ describe('DataGrid', () => {
       ['DataGrid.Header', <DataGrid.Header key="h">{null}</DataGrid.Header>],
       ['DataGrid.HeaderCell', <DataGrid.HeaderCell key="hc">Name</DataGrid.HeaderCell>],
     ])('%s used outside a DataGrid throws in development', (name, element) => {
-      const error = vi.spyOn(console, 'error');
-      expect(() =>
-        render(
-          <table>
-            <tbody>
-              <tr>{element}</tr>
-            </tbody>
-          </table>,
-        ),
-      ).toThrow(new Error(`[WaveUI] ${name} must be used within DataGrid`));
-      // Thrown, not logged.
-      expect(error).not.toHaveBeenCalled();
+      expectThrows(
+        <table>
+          <tbody>
+            <tr>{element}</tr>
+          </tbody>
+        </table>,
+        `[WaveUI] ${name} must be used within DataGrid`,
+      );
     });
 
     describe('in production', () => {

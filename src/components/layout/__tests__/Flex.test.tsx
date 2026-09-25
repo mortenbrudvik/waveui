@@ -196,7 +196,7 @@ describe('Flex', () => {
   describe('reverse order with focusable content (layout#40)', () => {
     const REVERSE_WARNING =
       '[WaveUI] Flex: a reversed direction or wrap (`row-reverse`, `column-reverse`, `wrap-reverse`) changes the visual order only, so keyboard and screen-reader order run opposite to what users see. Reorder the DOM for focusable content instead.';
-    /** Every message the `console.warn` spy received (nothing else may be logged, R14). */
+    /** Every message the `console.warn` spy received (nothing else may be logged). */
     const reverseMessages = (warn: { mock: { calls: unknown[][] } }) =>
       warn.mock.calls.map((call) => String(call[0]));
 

@@ -6,6 +6,7 @@ import {
   resolveSlot,
   renderSlot,
   slotRendersContent,
+  slotWrapsDefaultContent,
   VOID_ELEMENTS,
 } from '../slot';
 import type { ResolvedSlot, Slot, SlotObject } from '../slot';
@@ -727,6 +728,50 @@ describe('materialiseSlotContent', () => {
   });
 });
 
+describe('slotWrapsDefaultContent (the default icon of a dismiss slot object)', () => {
+  const markup = { __html: '<svg></svg>' };
+  function DrawnIcon() {
+    return null;
+  }
+
+  it.each<[label: string, type: unknown, props: Record<string, unknown>]>([
+    ['a span without children', 'span', {}],
+    ['a span whose children render nothing', 'span', { children: [null, ''] }],
+    [
+      'a span whose children are an empty Fragment',
+      'span',
+      { children: React.createElement(React.Fragment) },
+    ],
+    ['an intrinsic tag other than span', 'i', { className: 'text-error' }],
+  ])('is true for %s (it styles the default icon)', (_label, type, props) => {
+    expect(slotWrapsDefaultContent(type, props)).toBe(true);
+  });
+
+  it.each<[label: string, type: unknown, props: Record<string, unknown>]>([
+    ['a span with children that render something', 'span', { children: 'x' }],
+    ['a span with children of 0', 'span', { children: 0 }],
+    [
+      'a span with dangerouslySetInnerHTML (markup of its own)',
+      'span',
+      { dangerouslySetInnerHTML: markup },
+    ],
+    ['a void tag (img)', 'img', { src: 'close.svg', alt: '' }],
+    ['a void tag (input)', 'input', {}],
+    ['a component (it draws its own glyph)', DrawnIcon, {}],
+  ])('is false for %s (it is the content itself)', (_label, type, props) => {
+    expect(slotWrapsDefaultContent(type, props)).toBe(false);
+  });
+
+  it('does not consume a generator given as children', () => {
+    function* nothing(): Generator<React.ReactNode> {
+      yield null;
+    }
+    const gen = nothing();
+    expect(slotWrapsDefaultContent('span', { children: gen })).toBe(true);
+    expect(materialiseSlotContent(gen)).toEqual([null]);
+  });
+});
+
 describe('Slot types (table-core#18)', () => {
   it('SlotObject accepts the default element props', () => {
     expectTypeOf<{ src: string; alt: string }>().toMatchTypeOf<SlotObject<'img'>>();
@@ -752,7 +797,7 @@ describe('Slot types (table-core#18)', () => {
     expectTypeOf<bigint>().toMatchTypeOf<Slot>();
   });
 
-  it('accepts any React.ReactNode, promises included (x-types-core-2)', () => {
+  it('accepts any React.ReactNode, promises included', () => {
     expectTypeOf<React.ReactNode>().toMatchTypeOf<Slot>();
     expectTypeOf<React.ReactNode>().toMatchTypeOf<Slot<'img'>>();
     expectTypeOf<Promise<string>>().toMatchTypeOf<Slot>();

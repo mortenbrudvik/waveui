@@ -216,9 +216,15 @@ export function checkPlainCss(css) {
  * dist's class strings) compiled with Wave's `wave-rtl` variant, and the consumer's own
  * utilities. `setup` names the build: `'tailwind'` (default) imports the complete
  * `./tailwind` entry, which also puts Wave's base rules in `@layer base`; `'tokens'` is a custom
- * setup on `./tokens` with `./variants.css` and its own `@source`, which brings its own base.
+ * setup on `./tokens` with `./variants.css` and its own `@source`, which brings its own base. Any
+ * other `setup` throws a `TypeError`.
  */
 export function checkTailwindCss(css, { directionClasses = [], setup = 'tailwind' } = {}) {
+  if (setup !== 'tailwind' && setup !== 'tokens') {
+    throw new TypeError(
+      `checkTailwindCss: unknown setup ${JSON.stringify(setup)} (expected 'tailwind' or 'tokens')`,
+    );
+  }
   const errors = [];
   const tokenLayers = new Set();
   const baseLayers = new Set();
@@ -234,13 +240,14 @@ export function checkTailwindCss(css, { directionClasses = [], setup = 'tailwind
       `Wave tokens (--wave-primary) must sit in @layer theme, found in ${[...tokenLayers].join(', ')}`,
     );
   }
-  if (setup !== 'tailwind') {
-    // A custom setup brings its own base styles.
-  } else if (baseLayers.size === 0) errors.push('missing the Wave base rules (.wave-root)');
-  else if ([...baseLayers].some((layer) => layer !== 'base')) {
-    errors.push(
-      `Wave base rules (.wave-root) must sit in @layer base, found in ${[...baseLayers].join(', ')}`,
-    );
+  // The custom setup on ./tokens brings its own base styles; the ./tailwind entry brings Wave's.
+  if (setup === 'tailwind') {
+    if (baseLayers.size === 0) errors.push('missing the Wave base rules (.wave-root)');
+    else if ([...baseLayers].some((layer) => layer !== 'base')) {
+      errors.push(
+        `Wave base rules (.wave-root) must sit in @layer base, found in ${[...baseLayers].join(', ')}`,
+      );
+    }
   }
   const classes = selectorClasses(css);
   for (const name of ['bg-primary', 'text-body-1']) {
@@ -396,7 +403,7 @@ function npmCommand() {
  * `npm_*` variables of an enclosing `npm run` (package and lifecycle data, prefixes), which
  * describe this repository, and without its dry run. `npm publish --dry-run` exports
  * `npm_config_dry_run=true` to prepublishOnly, and a nested `npm pack` would then write no
- * tarball (tooling-code-1).
+ * tarball.
  */
 function npmEnv() {
   const env = {};

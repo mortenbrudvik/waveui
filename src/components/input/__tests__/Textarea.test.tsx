@@ -112,7 +112,7 @@ describe('Textarea', () => {
       expect(screen.queryByText('Checking')).not.toBeInTheDocument();
     });
 
-    it('draws the invalid look with the shared inputInvalid recipe (R8)', () => {
+    it('draws the invalid look with the shared inputInvalid recipe', () => {
       render(
         <>
           <Textarea aria-label="Message" error />

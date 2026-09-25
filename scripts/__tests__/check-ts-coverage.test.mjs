@@ -161,7 +161,7 @@ describe('check-ts-coverage.mjs as a script', () => {
 
   it('fails closed when it cannot confirm that it is the script Node was started with', () => {
     // A script of its name that is not the real file (a wrapper that imports it): the entry guard
-    // must report that nothing was checked instead of exiting 0 (tooling-tests-1, as verify-dist).
+    // must report that nothing was checked instead of exiting 0 (as verify-dist).
     const impostor = join(dir, 'check-ts-coverage.mjs');
     writeFileSync(impostor, `import ${JSON.stringify(pathToFileURL(script).href)};\n`);
     const result = spawnSync(process.execPath, [impostor], { encoding: 'utf8' });

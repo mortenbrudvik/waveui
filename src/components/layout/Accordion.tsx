@@ -280,7 +280,7 @@ const AccordionRoot = (props: AccordionProps) => {
     [multiple, setOpenItems],
   );
 
-  // How many mounted Items hold each value, to warn about a repeated value (R12). Only the Items'
+  // How many mounted Items hold each value, to warn about a repeated value (C-DEV). Only the Items'
   // effects touch it (through `registerItem`), never render.
   const itemCountsRef = React.useRef<Map<string, number>>(null);
   const registerItem = React.useCallback((value: string) => {

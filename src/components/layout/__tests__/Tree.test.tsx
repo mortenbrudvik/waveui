@@ -14,6 +14,7 @@ import {
   testCompoundExposure,
   testComposedHandler,
   testDisplayName,
+  expectThrows,
 } from '../../../test-utils';
 
 /**
@@ -69,7 +70,7 @@ afterEach(() => {
   vi.unstubAllEnvs();
 });
 
-/** The `[WaveUI]` warnings logged so far (R14: asserted, never silenced). */
+/** The `[WaveUI]` warnings logged so far (asserted, never silenced). */
 const warnings = (warn: { mock: { calls: unknown[][] } }) =>
   warn.mock.calls.map(([message]) => String(message));
 
@@ -159,15 +160,13 @@ describe('Tree', () => {
   });
 
   it('throws when Tree.Item is used outside a Tree (C-CONTEXT)', () => {
-    // The development throw is the whole report: nothing is logged besides it (R14).
-    const error = vi.spyOn(console, 'error');
-    expect(() => render(<Tree.Item value="a">Orphan</Tree.Item>)).toThrow(
-      new Error('[WaveUI] Tree.Item must be used within <Tree>'),
+    expectThrows(
+      <Tree.Item value="a">Orphan</Tree.Item>,
+      '[WaveUI] Tree.Item must be used within <Tree>',
     );
-    expect(error).not.toHaveBeenCalled();
   });
 
-  it('in production, a Tree.Item outside a Tree logs once and renders inertly (C-CONTEXT, R3)', () => {
+  it('in production, a Tree.Item outside a Tree logs once and renders inertly (C-CONTEXT)', () => {
     vi.stubEnv('NODE_ENV', 'production');
     const error = vi.spyOn(console, 'error').mockImplementation(() => {});
     const { rerender } = render(<Tree.Item value="a">Orphan</Tree.Item>);
@@ -186,7 +185,7 @@ describe('Tree', () => {
     expectTypeOf<TreeItemProps['ref']>().toEqualTypeOf<React.Ref<HTMLDivElement> | undefined>();
   });
 
-  it('accepts readonly expanded lists and emits a mutable one (R6)', async () => {
+  it('accepts readonly expanded lists and emits a mutable one (C-NAMING)', async () => {
     expectTypeOf<TreeProps['expandedItems']>().toEqualTypeOf<readonly string[] | undefined>();
     expectTypeOf<TreeProps['defaultExpandedItems']>().toEqualTypeOf<
       readonly string[] | undefined
@@ -219,7 +218,7 @@ describe('Tree', () => {
     expect(item('Images')).toHaveAttribute('aria-expanded', 'true');
   });
 
-  it('Tree.Item written in a Server Component (a lazy type) renders the same server HTML and behaves the same (R1)', async () => {
+  it('Tree.Item written in a Server Component (a lazy type) renders the same server HTML and behaves the same (C-COMPOUND)', async () => {
     const user = userEvent.setup();
     const LazyItem = asClientReference(Tree.Item);
     const files = (Item: typeof Tree.Item) => (
@@ -278,7 +277,7 @@ describe('Tree', () => {
     expect(within(group).getByRole('tree', { name: 'Documents' })).toContainElement(item('Work'));
   });
 
-  it('warns once per value shared by several items (R12)', () => {
+  it('warns once per value shared by several items (C-DEV)', () => {
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
     const duplicated = (
       <Tree aria-label="Files">
@@ -296,7 +295,7 @@ describe('Tree', () => {
     expect(warnings(warn)).toEqual([duplicate('a'), duplicate('b')]);
   });
 
-  it('does not warn about values in StrictMode, when keyed items are reordered or when an item is replaced (R12)', async () => {
+  it('does not warn about values in StrictMode, when keyed items are reordered or when an item is replaced (C-DEV)', async () => {
     const warn = vi.spyOn(console, 'warn');
     const renderItems = (values: string[]) => (
       <React.StrictMode>
@@ -470,7 +469,7 @@ describe('Tree.Item - treeitem element (layout#30)', () => {
     expect(onParentClick).toHaveBeenCalledTimes(1);
   });
 
-  describe('consumer onKeyDown (layout-b-tests-1)', () => {
+  describe('consumer onKeyDown', () => {
     it('receives the keys pressed on its item, and the built-in behaviour still runs', async () => {
       const user = userEvent.setup();
       const onKeyDown = vi.fn();
@@ -696,7 +695,7 @@ describe('Tree.Item - treeitem element (layout#30)', () => {
   });
 });
 
-describe('Tree.Item - nested items rendered by a component (layout-b-code-1)', () => {
+describe('Tree.Item - nested items rendered by a component', () => {
   interface FileNode {
     id: string;
     name: string;
@@ -1091,7 +1090,7 @@ describe('Tree - keyboard (layout#31, feedback-navigation#47)', () => {
   });
 });
 
-describe('Tree - composed root handlers (layout-b-tests-2)', () => {
+describe('Tree - composed root handlers', () => {
   testComposedHandler(Tree, {
     handler: 'onKeyDown',
     defaultProps: { 'aria-label': 'Files', children: fileTree },
@@ -1203,7 +1202,7 @@ describe('Tree - RTL (layout#32)', () => {
     expect(expandedChevron).not.toHaveClass('wave-rtl:-scale-x-100');
   });
 
-  it('inside a left-to-right subtree of a right-to-left page: LTR keys, and the chevron flips only through wave-rtl: (R4)', async () => {
+  it('inside a left-to-right subtree of a right-to-left page: LTR keys, and the chevron flips only through wave-rtl: (C-LOGICAL)', async () => {
     const user = userEvent.setup();
     renderWithProviders(
       <div dir="ltr">

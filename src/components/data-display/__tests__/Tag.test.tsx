@@ -499,6 +499,101 @@ describe('Tag', () => {
       });
     });
 
+    describe('markup of a merged button (dangerouslySetInnerHTML)', () => {
+      const HTML_ICON = '<svg data-testid="html-icon" viewBox="0 0 12 12"></svg>';
+
+      it('renders the markup of a merged <button> inside the wired button instead of throwing', async () => {
+        const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+        const error = vi.spyOn(console, 'error');
+        const user = userEvent.setup();
+        const onDismiss = vi.fn();
+        render(
+          <Tag
+            dismissible
+            onDismiss={onDismiss}
+            dismissIcon={
+              <button
+                type="button"
+                className="text-error"
+                dangerouslySetInnerHTML={{ __html: HTML_ICON }}
+              />
+            }
+          >
+            Cherry
+          </Tag>,
+        );
+        const buttons = screen.getAllByRole('button');
+        expect(buttons).toHaveLength(1);
+        expect(buttons[0]).toHaveAccessibleName('Dismiss Cherry');
+        expect(buttons[0]).toHaveClass('text-error');
+        expect(buttons[0]).toContainElement(screen.getByTestId('html-icon'));
+        expect(buttons[0].querySelector('[data-wave-icon="dismiss"]')).toBeNull();
+        await user.click(buttons[0]);
+        expect(onDismiss).toHaveBeenCalledTimes(1);
+        expect(warn.mock.calls).toEqual([[expect.stringContaining(BUTTON_SLOT_WARNING)]]);
+        expect(error).not.toHaveBeenCalled();
+      });
+
+      it('names the button by a text label in the markup, as it does for children', async () => {
+        const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+        render(
+          <Tag
+            dismissible
+            dismissIcon={<button type="button" dangerouslySetInnerHTML={{ __html: 'Remove' }} />}
+          >
+            Cherry
+          </Tag>,
+        );
+        await waitFor(() =>
+          expect(screen.getByRole('button')).toHaveAccessibleName('Remove Cherry'),
+        );
+        expect(warn.mock.calls).toEqual([[expect.stringContaining(BUTTON_SLOT_WARNING)]]);
+      });
+    });
+
+    it('merges a slot object whose `as` is a Wave Button instead of nesting it (deprecated form)', () => {
+      const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+      render(
+        <Tag
+          dismissible
+          dismissIcon={
+            // Wave Button props are not part of the slot type: a JavaScript caller's 0.4 form.
+            {
+              as: Button,
+              appearance: 'subtle',
+              className: 'text-error',
+              icon: <CustomIcon />,
+            } as Slot<'span'>
+          }
+        >
+          Cherry
+        </Tag>,
+      );
+      const buttons = screen.getAllByRole('button');
+      expect(buttons).toHaveLength(1);
+      expect(buttons[0]).toHaveAccessibleName('Dismiss Cherry');
+      expect(buttons[0]).toHaveClass('text-error');
+      expect(buttons[0]).not.toHaveAttribute('appearance');
+      const icon = within(buttons[0]).getByTestId('custom-icon');
+      expect(icon.closest('[aria-hidden="true"]')).not.toBeNull();
+      expect(buttons[0].querySelector('[data-wave-icon="dismiss"]')).toBeNull();
+      expect(warn.mock.calls).toEqual([[expect.stringContaining(BUTTON_OBJECT_WARNING)]]);
+    });
+
+    it('shows the default icon for a slot object whose `as` is a childless Wave Button', () => {
+      const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+      render(
+        <Tag dismissible dismissIcon={{ as: Button, className: 'text-error' }}>
+          Cherry
+        </Tag>,
+      );
+      const buttons = screen.getAllByRole('button');
+      expect(buttons).toHaveLength(1);
+      expect(buttons[0]).toHaveClass('text-error');
+      expect(buttons[0].querySelector('[data-wave-icon="dismiss"]')).not.toBeNull();
+      expect(warn.mock.calls).toEqual([[expect.stringContaining(BUTTON_OBJECT_WARNING)]]);
+    });
+
     // A generator is read once to decide whether it renders anything; its items are what renders.
     describe('generator content', () => {
       function* items(...values: React.ReactNode[]): Generator<React.ReactNode> {

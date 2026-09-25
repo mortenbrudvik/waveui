@@ -343,7 +343,7 @@ describe('ProgressBar', () => {
         'motion-reduce:animate-wave-pulse',
         'wave-rtl:motion-reduce:animate-wave-pulse',
       );
-      // Tailwind's `rtl:` also matches inside an LTR subtree of an RTL page (R4).
+      // Tailwind's `rtl:` also matches inside an LTR subtree of an RTL page (C-LOGICAL).
       expect(fill.className).not.toMatch(/(^|\s)rtl:/);
       expect(fill.className).not.toMatch(/animate-\[/);
       expect(fill.style.width).toBe('');

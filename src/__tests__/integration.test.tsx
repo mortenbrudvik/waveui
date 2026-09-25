@@ -42,6 +42,7 @@ import {
   Dropdown,
   DropdownOption,
   Field,
+  InfoLabel,
   Input,
   Menu,
   MenuButton,
@@ -1338,7 +1339,7 @@ describe('Overflow hidden items in a Menu (layout#4)', () => {
 });
 
 // ---------------------------------------------------------------------------
-// autoFocus and consumer portals in stacked overlays (f-overlay)
+// autoFocus and consumer portals in stacked overlays
 // ---------------------------------------------------------------------------
 
 describe('autoFocus and consumer portals in stacked overlays', () => {
@@ -1441,7 +1442,176 @@ describe('autoFocus and consumer portals in stacked overlays', () => {
 });
 
 // ---------------------------------------------------------------------------
-// Toolbar in an anchored TeachingPopover (f-hooks)
+// The trigger of a descendant layer outside a Dialog's container (focus trap)
+// ---------------------------------------------------------------------------
+
+// The focus trap never takes an open layer's trigger for that layer's surface: Tab from a control
+// whose Tooltip is showing, or from an open InfoLabel button, moves on in the order around it.
+describe('Tab from the trigger of an open layer that sits outside the dialog container', () => {
+  it('a shown Tooltip in Popover.Content opened from the dialog: Tab reaches the next button', async () => {
+    const user = userEvent.setup();
+    render(
+      <Dialog open onOpenChange={() => {}}>
+        <Dialog.Content title="Edit">
+          <Popover>
+            <Popover.Trigger>
+              <Button>Format</Button>
+            </Popover.Trigger>
+            <Popover.Content title="Format">
+              <Tooltip content="Bold text" delay={0}>
+                <Button>Bold</Button>
+              </Tooltip>
+              <Button>Italic</Button>
+            </Popover.Content>
+          </Popover>
+        </Dialog.Content>
+      </Dialog>,
+    );
+    await user.click(button('Format'));
+    await user.click(button('Bold'));
+    expect(tooltipSurface()).toHaveTextContent('Bold text');
+    await user.tab();
+    expect(button('Italic')).toHaveFocus();
+  });
+
+  it('a shown Tooltip in a consumer Portal inside the dialog: Tab reaches the next button', async () => {
+    const user = userEvent.setup();
+    render(
+      <Dialog open onOpenChange={() => {}}>
+        <Dialog.Content title="Edit">
+          <Button>In dialog</Button>
+          <Portal>
+            <Tooltip content="First" delay={0}>
+              <Button>P1</Button>
+            </Tooltip>
+            <Button>P2</Button>
+          </Portal>
+        </Dialog.Content>
+      </Dialog>,
+    );
+    await user.click(button('P1'));
+    expect(tooltipSurface()).toHaveTextContent('First');
+    await user.tab();
+    expect(button('P2')).toHaveFocus();
+  });
+
+  it('an open InfoLabel in a consumer Portal: Tab and Shift+Tab move to the elements around it', async () => {
+    const user = userEvent.setup();
+    render(
+      <Dialog open onOpenChange={() => {}}>
+        <Dialog.Content title="Edit">
+          <button type="button">In dialog</button>
+          <Portal>
+            <button type="button">P1</button>
+            <InfoLabel label="Password" info="Use 8 characters." />
+            <button type="button">P2</button>
+          </Portal>
+        </Dialog.Content>
+      </Dialog>,
+    );
+    await user.click(button('Information'));
+    expect(button('Information')).toHaveAttribute('aria-expanded', 'true');
+    await user.tab();
+    expect(button('P2')).toHaveFocus();
+    await user.click(button('Information'));
+    expect(button('Information')).toHaveAttribute('aria-expanded', 'true');
+    await user.tab({ shift: true });
+    expect(button('P1')).toHaveFocus();
+  });
+
+  it('an open InfoLabel in Popover.Content opened from the dialog: Tab moves on', async () => {
+    const user = userEvent.setup();
+    render(
+      <Dialog open onOpenChange={() => {}}>
+        <Dialog.Content title="Edit">
+          <Popover>
+            <Popover.Trigger>
+              <button type="button">Options</button>
+            </Popover.Trigger>
+            <Popover.Content title="Options">
+              <InfoLabel label="Password" info="Use 8 characters." />
+              <button type="button">Next</button>
+            </Popover.Content>
+          </Popover>
+        </Dialog.Content>
+      </Dialog>,
+    );
+    await user.click(button('Options'));
+    await user.click(button('Information'));
+    expect(button('Information')).toHaveAttribute('aria-expanded', 'true');
+    await user.tab();
+    expect(button('Next')).toHaveFocus();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// A Popover opened inside a Menu.Item (portal events bubbling through the menu)
+// ---------------------------------------------------------------------------
+
+// React bubbles the events of the portaled Popover.Content through the Menu.Item and the menu
+// surface. The menu leaves them alone: no activation, no typeahead, no close, no focus move.
+describe('a Popover inside a persistOnClick Menu.Item', () => {
+  function RenameMenu({ onRename }: { onRename?: () => void }) {
+    return (
+      <Menu defaultOpen>
+        <Menu.Trigger>
+          <Button>Actions</Button>
+        </Menu.Trigger>
+        <Menu.Popover>
+          <Menu.Item persistOnClick onClick={onRename}>
+            <Popover defaultOpen>
+              <Popover.Trigger asChild={false}>Rename…</Popover.Trigger>
+              <Popover.Content title="Rename">
+                <Input aria-label="New name" />
+                <Button>Save</Button>
+              </Popover.Content>
+            </Popover>
+          </Menu.Item>
+          <Menu.Item>Delete</Menu.Item>
+        </Menu.Popover>
+      </Menu>
+    );
+  }
+
+  const nameInput = () => screen.getByRole('textbox', { name: 'New name' });
+
+  it('typing, Space and Enter go to the field: the menu neither activates nor searches', async () => {
+    const user = userEvent.setup();
+    const onRename = vi.fn();
+    render(<RenameMenu onRename={onRename} />);
+    await user.click(nameInput());
+    onRename.mockClear();
+    // "d" would move the menu's typeahead to Delete, Space and Enter would activate the item.
+    await user.keyboard('del me{Enter}');
+    expect(nameInput()).toHaveValue('del me');
+    expect(nameInput()).toHaveFocus();
+    expect(onRename).not.toHaveBeenCalled();
+    expect(screen.getByRole('menu', { name: 'Actions' })).toBeInTheDocument();
+    expect(screen.getByRole('dialog', { name: 'Rename' })).toBeInTheDocument();
+  });
+
+  it('Tab moves on inside the popover: the menu stays open and focus stays out of the trigger', async () => {
+    const user = userEvent.setup();
+    render(<RenameMenu />);
+    await user.click(nameInput());
+    await user.tab();
+    expect(button('Save')).toHaveFocus();
+    expect(screen.getByRole('menu', { name: 'Actions' })).toBeInTheDocument();
+    expect(button('Actions')).toHaveAttribute('aria-expanded', 'true');
+  });
+
+  it('a click inside the popover keeps the menu and the popover open', async () => {
+    const user = userEvent.setup();
+    render(<RenameMenu />);
+    await user.click(button('Save'));
+    expect(button('Save')).toHaveFocus();
+    expect(screen.getByRole('menu', { name: 'Actions' })).toBeInTheDocument();
+    expect(screen.getByRole('dialog', { name: 'Rename' })).toBeInTheDocument();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Toolbar in an anchored TeachingPopover
 // ---------------------------------------------------------------------------
 
 describe('a Toolbar inside an anchored TeachingPopover', () => {
@@ -1481,7 +1651,7 @@ describe('a Toolbar inside an anchored TeachingPopover', () => {
 });
 
 // ---------------------------------------------------------------------------
-// Inner widgets that consume Escape inside a Dialog (input-other, C-POPUPS)
+// Inner widgets that consume Escape inside a Dialog (C-POPUPS)
 // ---------------------------------------------------------------------------
 
 describe('inner widgets that consume Escape inside a real Dialog', () => {
@@ -1545,7 +1715,7 @@ describe('inner widgets that consume Escape inside a real Dialog', () => {
 });
 
 // ---------------------------------------------------------------------------
-// Compounds written in a React Server Component (x-ssr-1)
+// Compounds written in a React Server Component
 // ---------------------------------------------------------------------------
 
 /**
@@ -1555,7 +1725,7 @@ describe('inner widgets that consume Escape inside a real Dialog', () => {
  * the whole contract: the same server HTML, and the lazy tree hydrating that HTML without a
  * mismatch and working.
  */
-describe('compounds composed in a React Server Component (x-ssr-1)', () => {
+describe('compounds composed in a React Server Component', () => {
   type Parts = Record<string, React.JSXElementConstructor<never>>;
   /** The parts as the client receives them from a Server Component. */
   const asClientReferences = <P extends Parts>(parts: P): P =>

@@ -118,7 +118,7 @@ describe('Breadcrumb', () => {
     expect(separatorsIn(items[1])).toHaveLength(1);
   });
 
-  describe('Fragments (nav-other-code-1, R2)', () => {
+  describe('Fragments (C-COMPOUND)', () => {
     /** Each list item's link or text, and whether it starts with a separator. */
     const trail = () =>
       screen.getAllByRole('listitem').map((item) => ({
@@ -195,7 +195,7 @@ describe('Breadcrumb', () => {
       expect(error).not.toHaveBeenCalled();
     });
 
-    it('renders items written in a Server Component (lazy client references) the same way (R1)', () => {
+    it('renders items written in a Server Component (lazy client references) the same way (C-COMPOUND)', () => {
       const Item = asClientReference(Breadcrumb.Item);
       const plain = renderToString(
         <Breadcrumb>
@@ -233,7 +233,7 @@ describe('Breadcrumb', () => {
     expect(separator).toHaveClass('wave-rtl:-scale-x-100');
   });
 
-  it("mirrors by the separator's own direction, not by any RTL ancestor (R4)", () => {
+  it("mirrors by the separator's own direction, not by any RTL ancestor (C-LOGICAL)", () => {
     // Tailwind's `rtl:` also matches inside an LTR subtree of an RTL page; `wave-rtl:` follows
     // the element's own direction (`:dir(rtl)`), so the chevron keeps pointing forward here.
     renderWithProviders(
@@ -501,7 +501,7 @@ describe('Breadcrumb', () => {
       expect(screen.getByRole('link', { name: 'Here' })).toHaveAttribute('aria-current', 'page');
     });
 
-    it('renders the item normally and warns once when asChild has no element child (nav-other-tests-4)', () => {
+    it('renders the item normally and warns once when asChild has no element child', () => {
       const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
       render(
         <Breadcrumb>
@@ -522,7 +522,7 @@ describe('Breadcrumb', () => {
       ]);
     });
 
-    it('makes an element that is itself disabled an unavailable link (nav-other-tests-4)', () => {
+    it('makes an element that is itself disabled an unavailable link', () => {
       const navigate = vi.fn();
       const onChildClick = vi.fn();
       /** A router link with its own `disabled` prop, which it does not render. */
@@ -560,7 +560,7 @@ describe('Breadcrumb', () => {
       expect(navigate).not.toHaveBeenCalled();
     });
 
-    it("passes the item's href to the element as a default; the element's own href wins (nav-other-docs-2)", () => {
+    it("passes the item's href to the element as a default; the element's own href wins", () => {
       render(
         <Breadcrumb>
           <Breadcrumb.Item asChild href="/docs">
@@ -582,7 +582,7 @@ describe('Breadcrumb', () => {
       expect(api).not.toHaveAttribute('href');
     });
 
-    it('gives a current router link the shared focus ring and the disabled look (C-FOCUS, nav-other-code-2)', () => {
+    it('gives a current router link the shared focus ring and the disabled look (C-FOCUS)', () => {
       render(
         <Breadcrumb>
           <Breadcrumb.Item asChild current>

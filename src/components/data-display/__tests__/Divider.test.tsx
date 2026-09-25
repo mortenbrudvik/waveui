@@ -109,7 +109,7 @@ describe('Divider', () => {
     });
   });
 
-  // data-display-a-tests-3: a consumer aria-labelledby names the unlabelled separators too.
+  // A consumer aria-labelledby names the unlabelled separators too.
   it.each([
     ['plain', {}, 'HR'],
     ['vertical', { orientation: 'vertical' }, 'DIV'],
@@ -126,7 +126,7 @@ describe('Divider', () => {
     },
   );
 
-  // data-display-a-docs-3 / x-types-components-3 (R11): children that render nothing (an empty
+  // C-SLOTS: children that render nothing (an empty
   // `.map()` result) are no label: the divider stays a plain, unnamed separator.
   describe.each([
     ['an empty array', () => []],

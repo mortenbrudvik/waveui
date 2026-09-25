@@ -1,6 +1,6 @@
 // @vitest-environment node
 /**
- * The lint gate (`npm run lint`, eslint.config.mjs; tooling-code-2). react-hooks' recommended
+ * The lint gate (`npm run lint`, eslint.config.mjs). react-hooks' recommended
  * preset reports `exhaustive-deps` as a warning, so a hook whose effect misses a dependency (a
  * stale closure) must still fail the `lint` script: it runs ESLint with its own options on a
  * source that is never written to disk.
@@ -46,7 +46,7 @@ const hook = (deps) =>
     '',
   ].join('\n');
 
-describe('npm run lint (tooling-code-2)', () => {
+describe('npm run lint', () => {
   it('passes a hook whose effect lists its dependencies', () => {
     expect(lintAs('src/hooks/useProbe.ts', hook('a, v'))).toEqual({ status: 0, report: '' });
   }, 60_000);

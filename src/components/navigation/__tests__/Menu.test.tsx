@@ -17,6 +17,7 @@ import {
   testCompoundExposure,
   testComposedHandler,
   testSystemProps,
+  expectThrows,
 } from '../../../test-utils';
 
 afterEach(() => {
@@ -227,7 +228,7 @@ describe('Menu', () => {
       expect(item('Clear')).toHaveFocus();
     });
 
-    // nav-menu-code-5: an element label (an i18n component) is matched by its own text, not by
+    // An element label (an i18n component) is matched by its own text, not by
     // the item's whole text, which starts with the icon's text (an icon-font ligature, an emoji).
     it('typeahead matches an element label, not the text of the icon before it', async () => {
       const user = userEvent.setup();
@@ -1327,7 +1328,7 @@ describe('Menu popup (Menu.Trigger + Menu.Popover)', () => {
     expect(item('Delete')).toHaveFocus();
   });
 
-  // nav-menu-tests-4 (C-COMPOSE): preventDefault() in the consumer's handler skips ours.
+  // C-COMPOSE: preventDefault() in the consumer's handler skips ours.
   it('a Menu.Popover onKeyDown that prevents default skips roving and the Tab close', async () => {
     const user = userEvent.setup();
     render(
@@ -1350,7 +1351,7 @@ describe('Menu popup (Menu.Trigger + Menu.Popover)', () => {
     expect(item('Edit')).toHaveFocus();
   });
 
-  // nav-menu-tests-3: the already-open branch of the trigger keys (the registered surface).
+  // The already-open branch of the trigger keys (the registered surface).
   it('ArrowUp/ArrowDown on the trigger of an open menu focus its last/first enabled item', async () => {
     const user = userEvent.setup();
     const onOpenChange = vi.fn();
@@ -1367,7 +1368,7 @@ describe('Menu popup (Menu.Trigger + Menu.Popover)', () => {
     expect(onOpenChange).not.toHaveBeenCalled();
   });
 
-  // nav-menu-tests-2: `aria-label` replaces the default name from the trigger.
+  // `aria-label` replaces the default name from the trigger.
   it('Menu.Popover aria-label names the menu instead of the trigger', async () => {
     const user = userEvent.setup();
     render(
@@ -1398,7 +1399,7 @@ describe('Menu popup (Menu.Trigger + Menu.Popover)', () => {
     expect(findDanglingIdRefs()).toEqual([]);
   });
 
-  // nav-menu-code-5: the label's current text, read when the key is pressed.
+  // The label's current text, read when the key is pressed.
   it('typeahead in the popover matches an element label by its current text', async () => {
     const user = userEvent.setup();
     let label = 'Paste';
@@ -1541,7 +1542,7 @@ describe('Menu popup (Menu.Trigger + Menu.Popover)', () => {
       expect(warn).not.toHaveBeenCalled();
     });
 
-    // nav-menu-code-4: `open` is not ignored by a menu of items; it makes Menu a popup menu.
+    // `open` is not ignored by a menu of items; it makes Menu a popup menu.
     it('warns once when open state turns a menu of items into a popup menu without Menu.Popover', () => {
       const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
       const items = (
@@ -1673,7 +1674,7 @@ describe('Menu events from a portal opened inside an item', () => {
 });
 
 // ---------------------------------------------------------------------------
-// Wrapper-span triggers: asChild={false} and the automatic fallback (nav-menu-code-1/2)
+// Wrapper-span triggers: asChild={false} and the automatic fallback
 // ---------------------------------------------------------------------------
 
 /** A trigger child that neither forwards `ref` nor spreads its props (the automatic fallback). */
@@ -1719,7 +1720,7 @@ const WRAPPER_TRIGGERS = [
   ['the automatic fallback', true],
 ] as const;
 
-/** The one warning of the automatic fallback (asserted exactly, R14). */
+/** The one warning of the automatic fallback (asserted exactly). */
 const TRIGGER_REF_FALLBACK_WARNING =
   '[WaveUI] Menu.Trigger: its child did not attach the trigger ref (a component that neither ' +
   'forwards `ref` nor spreads its props). It is rendered inside a <span> wrapper instead; ' +
@@ -1776,6 +1777,33 @@ describe('Menu.Trigger rendered as a wrapper span', () => {
       expectWarnings();
     },
   );
+
+  it('asChild={false} with tabIndex={-1} on the wrapper: focus returns to the element that carries the state ARIA', async () => {
+    const user = userEvent.setup();
+    render(
+      <Menu>
+        <Menu.Trigger asChild={false} tabIndex={-1} data-testid="wrap">
+          <button type="button">Actions</button>
+        </Menu.Trigger>
+        <Menu.Popover>
+          <Menu.Item>Edit</Menu.Item>
+          <Menu.Item>Delete</Menu.Item>
+        </Menu.Popover>
+      </Menu>,
+    );
+    // A wrapper out of the tab order is not the trigger: the button inside is (state ARIA).
+    expect(screen.getByTestId('wrap')).not.toHaveAttribute('aria-expanded');
+    expect(trigger()).toHaveAttribute('aria-expanded', 'false');
+    await user.click(trigger());
+    await user.click(item('Edit'));
+    expect(queryMenu()).not.toBeInTheDocument();
+    expect(trigger()).toHaveFocus();
+
+    await user.click(trigger());
+    fireEvent.keyDown(item('Edit'), { key: 'Tab' });
+    expect(queryMenu()).not.toBeInTheDocument();
+    expect(trigger()).toHaveFocus();
+  });
 
   it.each(WRAPPER_TRIGGERS)(
     '%s: the button inside the wrapper carries the state ARIA, the span none (axe)',
@@ -1876,7 +1904,7 @@ describe('Menu.Trigger rendered as a wrapper span', () => {
 });
 
 // ---------------------------------------------------------------------------
-// Parts written in a React Server Component: lazy element types (R1, x-ssr-1)
+// Parts written in a React Server Component: lazy element types (C-COMPOUND)
 // ---------------------------------------------------------------------------
 
 describe('Menu parts as client references (lazy element types)', () => {
@@ -1925,13 +1953,6 @@ describe('Menu parts as client references (lazy element types)', () => {
 });
 
 describe('Menu context (C-CONTEXT)', () => {
-  /** The development throw is the whole report: nothing is logged besides it (R14). */
-  const expectThrows = (ui: React.ReactElement, text: string) => {
-    const error = vi.spyOn(console, 'error');
-    expect(() => render(ui)).toThrow(new Error(text));
-    expect(error).not.toHaveBeenCalled();
-  };
-
   it('Menu.Trigger outside a Menu throws in development', () => {
     expectThrows(
       <Menu.Trigger>

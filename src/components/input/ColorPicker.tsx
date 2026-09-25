@@ -251,8 +251,9 @@ export const ColorPicker = ({
   ...rest
 }: ColorPickerProps) => {
   if (onChange !== undefined) warnDeprecated('ColorPicker', 'onChange', 'onValueChange');
-  // The default is written like every edit (R10): the picker shows, submits and restores it as a
-  // lowercase `#rrggbb`/`#rrggbbaa`. A value that is not a hex color stays as given (warning below).
+  // The default is written like every edit (C-FORMS): the picker shows, submits and restores it as
+  // a lowercase `#rrggbb`/`#rrggbbaa`. A value that is not a hex color stays as given (warning
+  // below).
   const rawDefault = defaultValue ?? DEFAULT_COLOR;
   const initialValue = normalizeHexColor(rawDefault) ?? rawDefault;
   const strings = { ...DEFAULT_LABELS, ...labels };

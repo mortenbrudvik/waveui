@@ -181,6 +181,13 @@ const focusOrigin: FocusOrigin = {
   uninstall: null,
 };
 
+/**
+ * The surfaces whose keyboard order a {@link usePopoverTabOrder} manages right now. Their content
+ * takes its place after its anchor, not at the end of the document where its portal is, so none
+ * of it is "the last element of the page".
+ */
+const orderedSurfaces = new Set<HTMLElement>();
+
 function retainFocusOrigin(): () => void {
   if (typeof document === 'undefined') return () => {};
   focusOrigin.users += 1;
@@ -282,8 +289,9 @@ export interface PopoverTabOrderOptions {
  *   the portal moves past the surface (it is hidden for that one Tab), to what follows it or out
  *   of the page. Shift+Tab from the browser's own controls (the window gets focus back just before
  *   it), or from nothing without a pointer press, lands on the surface's last element as the
- *   document's last one: focus goes to the last element of the page instead, unless that is the
- *   previous stop (the surface then ends the order). A lap in either direction visits every
+ *   document's last one: focus goes to the last element of the page instead (outside every open
+ *   surface: another open popover's content has its own place after its anchor), unless that is
+ *   the previous stop (the surface then ends the order). A lap in either direction visits every
  *   element once, and there is no Tab cycle.
  * - Every other entry keeps the place after the anchor: a click, Shift+Tab from a pressed point,
  *   focus restored from nothing (a layer opened from the surface's last element closed), a
@@ -384,15 +392,18 @@ export function usePopoverTabOrder({
       const anchor = anchorRef.current;
       if (!anchor || entered !== getLastTabbable(surface)) return;
       const order = getTabbableElements(doc.body);
-      const outside = order.filter((el) => !surface.contains(el));
+      const surfaces = [...orderedSurfaces];
+      const outside = order.filter((el) => !surfaces.some((open) => open.contains(el)));
       const pageEnd = outside[outside.length - 1];
       // The surface ends the order when the previous stop is the page's last element.
       if (!pageEnd || pageEnd === getPrevious(anchor, surface, order)) return;
       if (!focusElement(pageEnd)) entryRef.current = 'page';
     };
+    orderedSurfaces.add(surface);
     surface.addEventListener('focusin', onFocusIn);
     doc.addEventListener('keydown', onDocumentKeyDown);
     return () => {
+      orderedSurfaces.delete(surface);
       surface.removeEventListener('focusin', onFocusIn);
       doc.removeEventListener('keydown', onDocumentKeyDown);
     };

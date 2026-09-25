@@ -217,7 +217,7 @@ describe('Dropdown', () => {
       expect(host.querySelector('[role="combobox"]')).toHaveTextContent('United States');
     });
 
-    it('renders the selected label of options written in a Server Component (R1)', () => {
+    it('renders the selected label of options written in a Server Component (C-COMPOUND)', () => {
       // React Flight delivers Option/OptionGroup written in a Server Component as lazy types.
       const ClientOption = asClientReference(DropdownOption);
       const ClientOptionGroup = asClientReference(DropdownOptionGroup);
@@ -821,7 +821,7 @@ describe('Dropdown', () => {
       expect(form.checkValidity()).toBe(true);
     });
 
-    it('blocks submission inside a required Field until an option is chosen (listbox-consumers-tests-1)', async () => {
+    it('blocks submission inside a required Field until an option is chosen', async () => {
       const user = userEvent.setup();
       renderWithFieldContext(
         <form aria-label="Form">
@@ -925,7 +925,7 @@ describe('Dropdown', () => {
       expect(combobox()).toHaveAttribute('aria-required', 'true');
     });
 
-    it('is neither validated nor submitted while disabled, like a native select (listbox-consumers-tests-2)', () => {
+    it('is neither validated nor submitted while disabled, like a native select', () => {
       render(
         <form aria-label="Order">
           <Dropdown aria-label="Fruit" name="fruit" required disabled>
@@ -944,7 +944,7 @@ describe('Dropdown', () => {
     });
   });
 
-  describe('field look (x-api-4, x-api-3)', () => {
+  describe('field look', () => {
     it('draws the field boundary with the accessible bottom stroke (WCAG 1.4.11)', () => {
       renderDropdown();
       expect(combobox()).toHaveClass(
@@ -965,7 +965,7 @@ describe('Dropdown', () => {
             errorId: FIELD_TEST_IDS.errorId,
           }),
       ],
-    ])('shows the destructive border while invalid through %s (R8)', (_, renderInvalid) => {
+    ])('shows the destructive border while invalid through %s', (_, renderInvalid) => {
       renderInvalid();
       const control = screen.getByRole('combobox');
       expect(control).toHaveAttribute('aria-invalid', 'true');

@@ -123,7 +123,7 @@ export const AvatarGroup = ({
   'aria-labelledby': ariaLabelledBy,
   ...props
 }: AvatarGroupProps) => {
-  // Fragments are flattened, so each member counts, overlaps and is listed on its own (R2).
+  // Fragments are flattened, so each member counts, overlaps and is listed on its own (C-COMPOUND).
   const items = flattenChildren(children);
   const limit = max === undefined || Number.isNaN(max) ? Infinity : Math.max(0, Math.floor(max));
   const visible = items.slice(0, limit);

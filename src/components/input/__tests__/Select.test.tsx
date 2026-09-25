@@ -79,7 +79,7 @@ describe('Select', () => {
       expect(select.className).not.toMatch(/%23|#[0-9a-f]{3,8}|outline-none/i);
     });
 
-    it('places the chevron at the inline end in RTL (C-LOGICAL, wave-rtl: variant R4)', () => {
+    it('places the chevron at the inline end in RTL (C-LOGICAL, wave-rtl: variant)', () => {
       renderWithProviders(<Select aria-label="Letter">{options}</Select>, { dir: 'rtl' });
       const select = screen.getByRole('combobox', { name: 'Letter' });
       expect(select).toHaveClass(
@@ -91,7 +91,7 @@ describe('Select', () => {
       expect(select.className).not.toMatch(/\b(pl|pr)-/);
     });
 
-    it('places the chevron by its own direction, not by an RTL ancestor (R4)', () => {
+    it('places the chevron by its own direction, not by an RTL ancestor (C-LOGICAL)', () => {
       // Tailwind's `rtl:` also matches `[dir=rtl] *`: the chevron of a select in an LTR subtree of
       // an RTL page would sit at the left, over the option text, with `pe-8` reserving the right.
       renderWithProviders(
@@ -167,7 +167,7 @@ describe('Select', () => {
       expect(screen.queryByText('Checking')).not.toBeInTheDocument();
     });
 
-    it('draws the invalid look with the shared inputInvalid recipe (R8)', () => {
+    it('draws the invalid look with the shared inputInvalid recipe', () => {
       render(
         <>
           <Select aria-label="Letter" error>

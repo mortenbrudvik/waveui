@@ -1100,7 +1100,7 @@ describe('useRovingTabIndex', () => {
     });
 
     it.each(['checkbox', 'radio', 'button'])(
-      'moves on with the arrow keys from a native <input type="%s"> (hooks-core-tests-3)',
+      'moves on with the arrow keys from a native <input type="%s">',
       (type) => {
         render(
           <Managed>
@@ -1120,7 +1120,7 @@ describe('useRovingTabIndex', () => {
       },
     );
 
-    it('skips a nested composite with nothing focusable in it (hooks-core-tests-2)', async () => {
+    it('skips a nested composite with nothing focusable in it', async () => {
       const user = userEvent.setup();
       render(
         <Managed typeahead>
@@ -1164,7 +1164,7 @@ describe('useRovingTabIndex', () => {
     });
   });
 
-  describe('controls that cannot take focus (hooks-core-code-2, x-keyboard-1)', () => {
+  describe('controls that cannot take focus', () => {
     it.each([
       [
         'display: none',
@@ -1365,7 +1365,7 @@ describe('useRovingTabIndex', () => {
     });
   });
 
-  describe('the tab stop stays where arrows work (x-keyboard-2)', () => {
+  describe('the tab stop stays where arrows work', () => {
     /** A radio group with its own roving hook, like RadioGroup: it handles all four arrows. */
     function AlignGroup() {
       const [value, setValue] = React.useState('left');
@@ -1549,7 +1549,7 @@ describe('useRovingTabIndex', () => {
     });
   });
 
-  describe('explicit items: only rendered, visible items hold the tab stop (hooks-core-code-1)', () => {
+  describe('explicit items: only rendered, visible items hold the tab stop', () => {
     function LegacyItems({
       activeValue,
       hidden = [],
@@ -1634,7 +1634,7 @@ describe('useRovingTabIndex', () => {
       expect(button('y')).toHaveAttribute('tabindex', '-1');
     });
 
-    it('accepts a readonly items array (x-types-core-3)', () => {
+    it('accepts a readonly items array', () => {
       const TABS = ['general', 'billing'] as const;
       expectTypeOf(TABS).toExtend<NonNullable<UseRovingTabIndexOptions['items']>>();
       function Tabs() {
@@ -1655,7 +1655,7 @@ describe('useRovingTabIndex', () => {
     });
   });
 
-  describe('invalid itemSelector (x-errors-components-6)', () => {
+  describe('invalid itemSelector', () => {
     it('warns once in development that no item is navigable', () => {
       const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
       const { rerender } = render(

@@ -3,7 +3,7 @@ import { render, screen } from '@testing-library/react';
 import { Portal } from '../../portal/Portal';
 import { getTabbableAfter, getTabbableThrough, PopoverBeak } from '../Popover.shared';
 
-describe('PopoverBeak (overlays-anchored-docs-4)', () => {
+describe('PopoverBeak', () => {
   it.each([
     ['top', ['border-b', 'border-r']],
     ['bottom', ['border-t', 'border-l']],

@@ -143,7 +143,7 @@ describe('TagPicker', () => {
     await user.click(screen.getByRole('button', { name: 'Remove Apple' }));
     expect(onValueChange).toHaveBeenCalledWith(['banana']);
     expect(combobox()).toHaveFocus();
-    // The click does not reach the group's open-on-click (listbox-consumers-tests-5).
+    // The click does not reach the group's open-on-click.
     expect(combobox()).toHaveAttribute('aria-expanded', 'false');
     expect(screen.queryByRole('listbox')).toBeNull();
     expect(onOpenChange).not.toHaveBeenCalled();
@@ -159,7 +159,7 @@ describe('TagPicker', () => {
     expect(onValueChange).toHaveBeenCalledWith(['apple']);
   });
 
-  describe('Enter and the surrounding form (listbox-consumers-code-2)', () => {
+  describe('Enter and the surrounding form', () => {
     function renderInForm(onValueChange = vi.fn()) {
       const onSubmit = vi.fn((e: React.FormEvent) => e.preventDefault());
       render(
@@ -267,7 +267,7 @@ describe('TagPicker', () => {
       expect(within(surface).getByText('No matches')).toBeVisible();
     });
 
-    it('announces "No matches" through a status region mounted before the text (x-lifecycle-3)', async () => {
+    it('announces "No matches" through a status region mounted before the text', async () => {
       const user = userEvent.setup();
       const { container } = renderPicker();
       // A live region added together with its text is not announced by every screen reader.
@@ -842,7 +842,7 @@ describe('TagPicker', () => {
       ]);
     });
 
-    it('accepts readonly arrays and emits mutable copies (R6)', async () => {
+    it('accepts readonly arrays and emits mutable copies (C-NAMING)', async () => {
       expectTypeOf<readonly TagPickerOption[]>().toExtend<TagPickerProps['options']>();
       expectTypeOf<readonly string[]>().toExtend<NonNullable<TagPickerProps['value']>>();
       expectTypeOf<readonly string[]>().toExtend<NonNullable<TagPickerProps['defaultValue']>>();
@@ -907,7 +907,7 @@ describe('TagPicker', () => {
       expect(form.checkValidity()).toBe(true);
     });
 
-    it('blocks submission inside a required Field until a tag is added (listbox-consumers-tests-1)', async () => {
+    it('blocks submission inside a required Field until a tag is added', async () => {
       const user = userEvent.setup();
       renderWithFieldContext(
         <form aria-label="Form">
@@ -923,14 +923,14 @@ describe('TagPicker', () => {
       expect(form.checkValidity()).toBe(true);
     });
 
-    it('names its open listbox after the Field label (listbox-consumers-tests-4)', async () => {
+    it('names its open listbox after the Field label', async () => {
       const user = userEvent.setup();
       renderWithFieldContext(<TagPicker options={options} />);
       await user.click(combobox(FIELD_TEST_TEXT.label));
       expect(screen.getByRole('listbox', { name: FIELD_TEST_TEXT.label })).toBeInTheDocument();
     });
 
-    it('routes the text input attributes to the input (listbox-consumers-docs-2)', () => {
+    it('routes the text input attributes to the input', () => {
       render(
         <TagPicker
           aria-label="Fruits"
@@ -987,7 +987,7 @@ describe('TagPicker', () => {
       expect(tags()).toEqual(['Apple']);
     });
 
-    it('reports a reset only when it changes the tags (x-api-5, R10)', async () => {
+    it('reports a reset only when it changes the tags (C-FORMS)', async () => {
       const user = userEvent.setup();
       const onValueChange = vi.fn();
       function Parent() {
@@ -1036,7 +1036,7 @@ describe('TagPicker', () => {
       expect(form.checkValidity()).toBe(false);
     });
 
-    it('is neither validated nor submitted while disabled (listbox-consumers-tests-2)', () => {
+    it('is neither validated nor submitted while disabled', () => {
       render(
         <form aria-label="Order">
           <TagPicker aria-label="Fruits" options={options} name="fruit" required disabled />
@@ -1058,7 +1058,7 @@ describe('TagPicker', () => {
     });
   });
 
-  describe('field look (x-api-4, x-api-3)', () => {
+  describe('field look', () => {
     it('uses the input focus recipe instead of a ring (input-basic#9)', () => {
       renderPicker();
       expect(combobox()).toHaveClass('focus:outline-hidden');
@@ -1089,7 +1089,7 @@ describe('TagPicker', () => {
             errorId: FIELD_TEST_IDS.errorId,
           }),
       ],
-    ])('shows the destructive border while invalid through %s (R8)', (_, renderInvalid) => {
+    ])('shows the destructive border while invalid through %s', (_, renderInvalid) => {
       renderInvalid();
       expect(screen.getByRole('combobox')).toHaveAttribute('aria-invalid', 'true');
       const control = screen.getByRole('group');

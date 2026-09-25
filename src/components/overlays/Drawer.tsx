@@ -267,19 +267,6 @@ DrawerTitle.displayName = 'DrawerTitle';
 const NESTED_TRIGGER_MAX_DEPTH = 32;
 
 /**
- * The element type for the development walk below, which runs in effects, outside render: a lazy
- * part that is still loading cannot be unwrapped there (`getElementType` would rethrow its
- * thenable), so it counts as no trigger.
- */
-function peekElementType(node: React.ReactNode): unknown {
-  try {
-    return getElementType(node);
-  } catch {
-    return undefined;
-  }
-}
-
-/**
  * Development check: whether the Drawer's children hold a `Drawer.Trigger` inside a host element
  * (at any depth, also through Fragments), which would become panel content; a trigger inside
  * Fragments only is direct (see `splitChildren`). Walks the element tree the consumer wrote, not
@@ -295,8 +282,10 @@ function hasNestedTrigger(children: React.ReactNode): boolean {
     if (level > NESTED_TRIGGER_MAX_DEPTH || typeof node !== 'object' || node === null) return false;
     if (Array.isArray(node)) return node.some((item) => visit(item, depth, level));
     if (!React.isValidElement(node)) return false;
-    // A part written in a Server Component has a lazy type (x-ssr-1).
-    const type = peekElementType(node);
+    // A part written in a Server Component has a lazy type. The walk runs in effects, outside
+    // render: a lazy part that is still loading must not throw its thenable there, so it counts
+    // as no trigger (`suspend: false` returns the lazy itself, which matches nothing).
+    const type = getElementType(node, { suspend: false });
     if (type === DrawerTrigger) return depth > 0;
     const isFragment = type === React.Fragment;
     if (typeof type !== 'string' && !isFragment) return false;
@@ -312,7 +301,7 @@ function hasNestedTrigger(children: React.ReactNode): boolean {
  * `{isMobile && <><Drawer.Trigger>…</Drawer.Trigger><Filters /></>}` — counts as a direct child.
  * Every element keeps the key `flattenChildren` gives it: unique across Fragments and stable when a
  * sibling Fragment toggles, so panel content keeps its state. A trigger is recognised also when it
- * was written in a Server Component (a lazy type, x-ssr-1).
+ * was written in a Server Component (a lazy type).
  */
 function splitChildren(children: React.ReactNode): {
   triggers: React.ReactNode[];

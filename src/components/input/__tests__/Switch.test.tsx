@@ -592,7 +592,7 @@ describe('Switch — styling tokens', () => {
     expect(getThumb(sw)).toHaveClass('motion-reduce:transition-none');
   });
 
-  it('mirrors the thumb position under dir="rtl" (wave-rtl: variant, R4)', () => {
+  it('mirrors the thumb position under dir="rtl" (wave-rtl: variant, C-LOGICAL)', () => {
     renderWithProviders(
       <>
         <Switch label="Off" />
@@ -610,7 +610,7 @@ describe('Switch — styling tokens', () => {
     );
   });
 
-  it('mirrors by its own direction, not by an RTL ancestor: no bare rtl: class inside an LTR subtree (R4)', () => {
+  it('mirrors by its own direction, not by an RTL ancestor: no bare rtl: class inside an LTR subtree (C-LOGICAL)', () => {
     // Tailwind's `rtl:` also matches `[dir=rtl] *`, so it would push the thumb of a switch in an LTR
     // subtree of an RTL page out of its track; `wave-rtl:` uses the element's own direction.
     renderWithProviders(

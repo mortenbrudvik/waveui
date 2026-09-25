@@ -245,13 +245,14 @@ describe('DatePicker', () => {
       const next = screen.getByRole('button', { name: 'Next month' });
       for (const button of [previous, next]) {
         const icon = button.querySelector('svg');
-        // Wave's own direction variant: Tailwind's `rtl:` also matches inside an LTR subtree (R4).
+        // Wave's own direction variant: Tailwind's `rtl:` also matches inside an LTR subtree
+        // (C-LOGICAL).
         expect(icon).toHaveClass('wave-rtl:-scale-x-100');
         expect(icon?.getAttribute('class')).not.toMatch(/(^|\s)rtl:/);
       }
     });
 
-    it('draws the destructive border while the input is invalid (x-api-3, R8)', async () => {
+    it('draws the destructive border while the input is invalid', async () => {
       const user = userEvent.setup();
       const invalidClasses = ['border-destructive', 'focus:border-b-destructive'];
       const { unmount } = render(<DatePicker aria-label="Date" locale="en-US" />);
@@ -494,16 +495,13 @@ describe('DatePicker', () => {
         'Jun 20',
         'Enter a valid date.',
       ],
-    ])(
-      'describes %s with its own message (input-datetime-tests-8)',
-      async (_, props, text, message) => {
-        const user = userEvent.setup();
-        render(<DatePicker aria-label="Date" locale="en-US" {...props} />);
-        await user.type(textbox(), `${text}{Enter}`);
-        expect(textbox()).toHaveAttribute('aria-invalid', 'true');
-        expect(textbox()).toHaveAccessibleDescription(message);
-      },
-    );
+    ])('describes %s with its own message', async (_, props, text, message) => {
+      const user = userEvent.setup();
+      render(<DatePicker aria-label="Date" locale="en-US" {...props} />);
+      await user.type(textbox(), `${text}{Enter}`);
+      expect(textbox()).toHaveAttribute('aria-invalid', 'true');
+      expect(textbox()).toHaveAccessibleDescription(message);
+    });
 
     it('shows the controlled value again when the parent rejects a typed commit or a clear', async () => {
       const user = userEvent.setup();
@@ -527,7 +525,7 @@ describe('DatePicker', () => {
       expect(textbox()).toHaveValue('06/15/2025');
     });
 
-    it('a parent value change replaces rejected text and its error (input-datetime-code-2)', async () => {
+    it('a parent value change replaces rejected text and its error', async () => {
       const user = userEvent.setup();
       function Parent() {
         const [value, setValue] = React.useState<Date | null>(null);
@@ -768,7 +766,7 @@ describe('DatePicker', () => {
       expect(screen.getByRole('textbox', { name: 'Other' })).toHaveFocus();
     });
 
-    it('returns focus to the input after an outside press on a calendar opened from it (input-datetime-tests-6)', async () => {
+    it('returns focus to the input after an outside press on a calendar opened from it', async () => {
       const user = userEvent.setup();
       render(
         <>
@@ -1428,7 +1426,7 @@ describe('DatePicker', () => {
       expect(textbox()).not.toHaveAttribute('aria-invalid');
     });
 
-    it('warns once in development about a malformed locale tag and uses the runtime default (x-errors-components-5)', () => {
+    it('warns once in development about a malformed locale tag and uses the runtime default', () => {
       const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
       const { rerender } = render(
         <React.StrictMode>
@@ -1589,38 +1587,35 @@ describe('DatePicker', () => {
     it.each([
       ['read-only', { readOnly: true }],
       ['disabled', { disabled: true }],
-    ])(
-      'drops typed text when it becomes %s, so no later blur commits it (input-datetime-code-1)',
-      async (_, lock) => {
-        const user = userEvent.setup();
-        const onValueChange = vi.fn();
-        const props = {
-          'aria-label': 'Date',
-          locale: 'en-US',
-          defaultValue: JUNE_15,
-          onValueChange,
-        };
-        const ui = (extra: object) => (
-          <>
-            <DatePicker {...props} {...extra} />
-            <button type="button">After</button>
-          </>
-        );
-        const { rerender } = render(ui({}));
-        await user.clear(textbox());
-        await user.type(textbox(), '07/01/2025');
-        rerender(ui(lock));
-        expect(textbox()).toHaveValue('06/15/2025');
-        await user.tab();
-        // Enabled again: focusing and leaving the field commits nothing either.
-        rerender(ui({}));
-        expect(textbox()).toHaveValue('06/15/2025');
-        await user.click(textbox());
-        await user.tab();
-        expect(onValueChange).not.toHaveBeenCalled();
-        expect(textbox()).toHaveValue('06/15/2025');
-      },
-    );
+    ])('drops typed text when it becomes %s, so no later blur commits it', async (_, lock) => {
+      const user = userEvent.setup();
+      const onValueChange = vi.fn();
+      const props = {
+        'aria-label': 'Date',
+        locale: 'en-US',
+        defaultValue: JUNE_15,
+        onValueChange,
+      };
+      const ui = (extra: object) => (
+        <>
+          <DatePicker {...props} {...extra} />
+          <button type="button">After</button>
+        </>
+      );
+      const { rerender } = render(ui({}));
+      await user.clear(textbox());
+      await user.type(textbox(), '07/01/2025');
+      rerender(ui(lock));
+      expect(textbox()).toHaveValue('06/15/2025');
+      await user.tab();
+      // Enabled again: focusing and leaving the field commits nothing either.
+      rerender(ui({}));
+      expect(textbox()).toHaveValue('06/15/2025');
+      await user.click(textbox());
+      await user.tab();
+      expect(onValueChange).not.toHaveBeenCalled();
+      expect(textbox()).toHaveValue('06/15/2025');
+    });
 
     it('drops rejected text and its error when it becomes read-only', async () => {
       const user = userEvent.setup();
@@ -1658,7 +1653,7 @@ describe('DatePicker', () => {
       ['Next month', { maxDate: new Date(2025, 11, 31) }, new Date(2025, 11, 10), 'December 2025'],
       ['Previous month', { minDate: new Date(2025, 0, 1) }, new Date(2025, 0, 10), 'January 2025'],
     ])(
-      'an aria-disabled %s button ignores clicks and Enter and keeps focus (input-datetime-tests-2)',
+      'an aria-disabled %s button ignores clicks and Enter and keeps focus',
       async (name, bounds, value, heading) => {
         const user = userEvent.setup();
         render(<DatePicker aria-label="Date" locale="en-US" defaultValue={value} {...bounds} />);
@@ -1675,7 +1670,7 @@ describe('DatePicker', () => {
       },
     );
 
-    it('keeps focus on an activated month button, so a second Enter moves on again (input-datetime-tests-3)', async () => {
+    it('keeps focus on an activated month button, so a second Enter moves on again', async () => {
       const user = userEvent.setup();
       const onValueChange = vi.fn();
       render(
@@ -1803,7 +1798,7 @@ describe('DatePicker', () => {
       expect(onValueChange).not.toHaveBeenCalled();
     });
 
-    it('types the routed focus and key handlers as input handlers (input-datetime-docs-1)', async () => {
+    it('types the routed focus and key handlers as input handlers', async () => {
       expectTypeOf<DatePickerProps['onFocus']>().toEqualTypeOf<
         React.FocusEventHandler<HTMLInputElement> | undefined
       >();
@@ -1875,7 +1870,7 @@ describe('DatePicker', () => {
       expect(new FormData(form).get('due')).toBe('2025-06-15');
     });
 
-    it('a reset emits the default as local midnight, and nothing when the day is unchanged (x-api-5, R10)', async () => {
+    it('a reset emits the default as local midnight, and nothing when the day is unchanged (C-FORMS)', async () => {
       const user = userEvent.setup();
       const onValueChange = vi.fn();
       function Parent() {
@@ -1914,7 +1909,7 @@ describe('DatePicker', () => {
     it.each([
       ['rejected text', 'soon{Tab}'],
       ['uncommitted text', '07/0'],
-    ])('a reset drops %s and its error (input-datetime-tests-4)', async (_, keys) => {
+    ])('a reset drops %s and its error', async (_, keys) => {
       const user = userEvent.setup();
       render(
         <form aria-label="Form">
@@ -1943,7 +1938,7 @@ describe('DatePicker', () => {
       expect(textbox()).toHaveAttribute('aria-required', 'true');
     });
 
-    it('focuses the input when the form reports it missing (input-datetime-tests-5)', () => {
+    it('focuses the input when the form reports it missing', () => {
       render(
         <form aria-label="Form">
           <DatePicker aria-label="Date" name="due" required />
@@ -1957,7 +1952,7 @@ describe('DatePicker', () => {
       expect(textbox()).toHaveFocus();
     });
 
-    it('a disabled picker is not submitted and does not block submission (input-datetime-tests-5)', () => {
+    it('a disabled picker is not submitted and does not block submission', () => {
       render(
         <form aria-label="Form">
           <DatePicker aria-label="Date" name="due" defaultValue={JUNE_15} disabled />
@@ -1972,7 +1967,7 @@ describe('DatePicker', () => {
     it.each([
       ['its own required', { required: true, 'aria-label': 'Due' }, undefined],
       ['a required Field', {}, { required: true }],
-    ])('does not block submission while read-only with %s (x-api-2)', (_, props, fieldValue) => {
+    ])('does not block submission while read-only with %s', (_, props, fieldValue) => {
       const ui = (
         <form aria-label="Form">
           <DatePicker name="due" readOnly {...props} />
@@ -2046,7 +2041,7 @@ describe('DatePicker', () => {
     });
   });
 
-  describe('CustomFormat story (input-datetime-docs-4)', () => {
+  describe('CustomFormat story', () => {
     const { CustomFormat } = composeStories(stories);
 
     it('its parseDate rejects impossible days instead of rolling them over', async () => {

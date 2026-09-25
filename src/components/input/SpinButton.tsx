@@ -359,8 +359,6 @@ export const SpinButton = ({
         inputFocusWithin,
         invalidLook && inputInvalidWithin,
         disabled && 'cursor-not-allowed opacity-50',
-        // The display utility above would beat the `hidden` attribute's own display rule.
-        hidden && 'hidden',
         className,
       )}
       hidden={hidden}

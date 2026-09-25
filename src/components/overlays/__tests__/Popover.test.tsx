@@ -15,6 +15,7 @@ import {
   testCompoundExposure,
   testDisplayName,
   testSystemProps,
+  expectThrows,
 } from '../../../test-utils';
 
 // ---------------------------------------------------------------------------
@@ -317,7 +318,7 @@ describe('Popover', () => {
       expect(warn.mock.calls).toEqual([[expect.stringMatching(/^\[WaveUI\] Popover\.Trigger: /)]]);
     });
 
-    it('a render-prop child receives onKeyDown, declared like onClick and ref (overlays-anchored-docs-3)', async () => {
+    it('a render-prop child receives onKeyDown, declared like onClick and ref', async () => {
       // Tab from the open trigger into the portaled content goes through it.
       expectTypeOf<PopoverTriggerChildProps['onKeyDown']>().toEqualTypeOf<
         React.KeyboardEventHandler<HTMLElement>
@@ -612,7 +613,7 @@ describe('Popover', () => {
       );
     });
 
-    describe('a trigger named through aria-labelledby (overlays-anchored-code-1)', () => {
+    describe('a trigger named through aria-labelledby', () => {
       it('an icon-only Button named by Tooltip relationship="label" names the popover', async () => {
         const warn = vi.spyOn(console, 'warn');
         const user = userEvent.setup();
@@ -798,7 +799,7 @@ describe('Popover', () => {
 
       /**
        * `asChild={false}` asks for the span and must not warn; the automatic fallback warns once
-       * that the child did not attach the trigger ref (overlays-anchored-tests-5).
+       * that the child did not attach the trigger ref.
        */
       function expectSpanWarnings(warn: { mock: { calls: unknown[][] } }, mode: Mode) {
         expect(warn.mock.calls).toEqual(
@@ -823,7 +824,7 @@ describe('Popover', () => {
       );
 
       it.each(modes)(
-        'Tab past the last element continues after the span, not back to its button (%s, overlays-anchored-tests-2)',
+        'Tab past the last element continues after the span, not back to its button (%s)',
         async (mode) => {
           const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
           const user = userEvent.setup();
@@ -1024,6 +1025,62 @@ describe('Popover', () => {
       ]);
     });
 
+    /** Two popovers open at once; B's content is portaled after A's. */
+    function TwoPopovers() {
+      return (
+        <>
+          <button type="button">Before</button>
+          {(['A', 'B'] as const).map((name) => (
+            <Popover key={name} defaultOpen>
+              <Popover.Trigger>
+                <button type="button">{`Toggle ${name}`}</button>
+              </Popover.Trigger>
+              <Popover.Content aria-label={name}>
+                <button type="button">{`${name} first`}</button>
+                <button type="button">{`${name} last`}</button>
+              </Popover.Content>
+            </Popover>
+          ))}
+          <button type="button">After</button>
+        </>
+      );
+    }
+
+    it('with two popovers open, a Tab lap visits each content once, after its trigger', async () => {
+      const user = userEvent.setup();
+      render(<TwoPopovers />);
+      // Tab from the page end moves past both portaled contents and leaves the page.
+      expect(await tabs(user, 9)).toEqual([
+        'Before',
+        'Toggle A',
+        'A first',
+        'A last',
+        'Toggle B',
+        'B first',
+        'B last',
+        'After',
+        'body',
+      ]);
+    });
+
+    it('with two popovers open, Shift+Tab from outside the page reaches the page, not the other content', async () => {
+      const user = userEvent.setup();
+      render(<TwoPopovers />);
+      // Shift+Tab from nothing reaches the last element of the document, B's content: focus goes to
+      // the last element of the page, never into A's content (portaled before B's).
+      expect(await tabs(user, 9, true)).toEqual([
+        'After',
+        'B last',
+        'B first',
+        'Toggle B',
+        'A last',
+        'A first',
+        'Toggle A',
+        'Before',
+        'body',
+      ]);
+    });
+
     it('the content ends the order when the trigger is the last element of the page', async () => {
       const user = userEvent.setup();
       render(
@@ -1048,7 +1105,7 @@ describe('Popover', () => {
       ['Tab', false, ['After']],
       ['Shift+Tab', true, ['First', 'Toggle', 'Before']],
     ] as const)(
-      'a click on the last element with nothing focused keeps the order after the trigger: %s (R1-1)',
+      'a click on the last element with nothing focused keeps the order after the trigger: %s',
       async (_key, shift, expected) => {
         const user = userEvent.setup();
         render(<TabOrder defaultOpen={false} clickFocusesTrigger={false} />);
@@ -1063,7 +1120,7 @@ describe('Popover', () => {
       },
     );
 
-    it('a click on the content where nothing takes focus, then on its last element, keeps the order after the trigger (R1-1)', async () => {
+    it('a click on the content where nothing takes focus, then on its last element, keeps the order after the trigger', async () => {
       const user = userEvent.setup();
       render(<TabOrder />);
       await user.click(screen.getByRole('button', { name: 'First' }));
@@ -1074,7 +1131,7 @@ describe('Popover', () => {
       expect(await tabs(user, 1)).toEqual(['After']);
     });
 
-    it('a press inside the content, then Shift+Tab from the pressed point onto its last element, keeps the order after the trigger (R1-1)', async () => {
+    it('a press inside the content, then Shift+Tab from the pressed point onto its last element, keeps the order after the trigger', async () => {
       const user = userEvent.setup();
       render(<TabOrder />);
       // A press below the last button: focus moves to the body, and the browser starts sequential
@@ -1084,7 +1141,7 @@ describe('Popover', () => {
       expect(await tabs(user, 3, true)).toEqual(['Last', 'First', 'Toggle']);
     });
 
-    it('focus that returns to the last element as the window gets focus back keeps its order (R1-1)', async () => {
+    it('focus that returns to the last element as the window gets focus back keeps its order', async () => {
       const user = userEvent.setup();
       render(<TabOrder />);
       const last = screen.getByRole('button', { name: 'Last' });
@@ -1475,7 +1532,7 @@ describe('Popover', () => {
       );
       const surface = screen.getByRole('dialog');
       // data-side/data-align start as the requested placement: wait for the computed position,
-      // centred above the trigger 8px away (overlays-anchored-tests-4).
+      // centred above the trigger 8px away.
       // x = 400 + 80 / 2 - 256 / 2 = 312, y = 300 - 120 - 8 = 172.
       await waitFor(() => expect(surface.style.transform).toBe('translate(312px, 172px)'));
       expect(surface).toHaveAttribute('data-side', 'top');
@@ -1586,12 +1643,7 @@ describe('Popover', () => {
         ),
       ],
     ])('%s outside Popover throws in development', (name, Misplaced) => {
-      const error = vi.spyOn(console, 'error');
-      expect(() => render(<Misplaced />)).toThrow(
-        new Error(`[WaveUI] ${name} must be used within Popover`),
-      );
-      // Thrown, not logged: the guard reports through the error only.
-      expect(error).not.toHaveBeenCalled();
+      expectThrows(<Misplaced />, `[WaveUI] ${name} must be used within Popover`);
     });
 
     describe('in production', () => {
@@ -1599,7 +1651,7 @@ describe('Popover', () => {
         vi.unstubAllEnvs();
       });
 
-      it('logs the missing Popover once and renders the parts inert (R3)', async () => {
+      it('logs the missing Popover once and renders the parts inert (C-CONTEXT)', async () => {
         vi.stubEnv('NODE_ENV', 'production');
         const error = vi.spyOn(console, 'error').mockImplementation(() => {});
         const user = userEvent.setup();

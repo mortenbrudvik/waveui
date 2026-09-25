@@ -1,7 +1,9 @@
 import * as React from 'react';
 import { describe, it, expect, vi, expectTypeOf, afterEach } from 'vitest';
-import { act, render, screen } from '@testing-library/react';
+import { act, render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
+import { composeStories } from '@storybook/react';
+import * as stories from '../../../../stories/Pagination.stories';
 import { Pagination, getPaginationRange } from '../Pagination';
 import type { PaginationItemType, PaginationProps } from '../Pagination';
 import { renderWithProviders, testSystemProps } from '../../../test-utils';
@@ -256,7 +258,7 @@ describe('Pagination', () => {
       expect(page(1)).toHaveFocus();
     });
 
-    it('keeps focus on the activated page button when the visible range changes (nav-other-tests-3)', async () => {
+    it('keeps focus on the activated page button when the visible range changes', async () => {
       const user = userEvent.setup();
       render(<Pagination totalPages={20} defaultCurrentPage={10} />);
       // [1, …, 9, 10, 11, …, 20] → [1, …, 8, 9, 10, …, 20]: page 9 moves one slot on.
@@ -664,7 +666,7 @@ describe('Pagination', () => {
       }
     });
 
-    it('mirrors the chevrons by their own direction, not by any RTL ancestor (R4)', () => {
+    it('mirrors the chevrons by their own direction, not by any RTL ancestor (C-LOGICAL)', () => {
       // Tailwind's `rtl:` also matches inside an LTR subtree of an RTL page; `wave-rtl:` follows
       // the element's own direction (`:dir(rtl)`), so these chevrons keep their LTR direction.
       renderWithProviders(
@@ -735,7 +737,7 @@ describe('Pagination', () => {
       { name: 'current page below 1 is clamped', args: [20, -3], expected: [1, 2, 'ellipsis', 20] },
       { name: 'no pages', args: [0, 1], expected: [] },
       // boundaryCount 0 pins no page at either end, so a gap before the first or after the last
-      // shown page is marked too (nav-other-tests-1); a single missing end page is shown instead.
+      // shown page is marked too; a single missing end page is shown instead.
       {
         name: 'boundaryCount 0: ellipses at both ends',
         args: [20, 10, 1, 0],
@@ -814,5 +816,15 @@ describe('Pagination', () => {
       );
       expect(renderedSequence()).toEqual([1, 2, 'ellipsis', 8, 9, 10, 11, 12, 'ellipsis', 19, 20]);
     });
+  });
+});
+
+describe('Pagination stories', () => {
+  it('the Localized story marks the language of its Norwegian names on the landmark (WCAG 3.1.2)', () => {
+    const { Localized } = composeStories(stories);
+    render(<Localized />);
+    const nav = screen.getByRole('navigation', { name: 'Sidenavigasjon' });
+    expect(nav).toHaveAttribute('lang', 'nb');
+    expect(within(nav).getByRole('button', { name: 'Neste side' })).toBeInTheDocument();
   });
 });

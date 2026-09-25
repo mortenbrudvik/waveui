@@ -33,7 +33,7 @@ describe('Image', () => {
     try {
       render(<Image src="photo.jpg" data-testid="img" />);
       expect(screen.getByTestId('img')).not.toHaveAttribute('alt');
-      // data-display-a-tests-7: the expected warning, and nothing else.
+      // The expected warning, and nothing else.
       expect(warn.mock.calls.map(([message]) => String(message))).toEqual([
         expect.stringMatching(/^\[WaveUI\] Image: `alt` is missing/),
       ]);
@@ -89,7 +89,7 @@ describe('Image', () => {
     expectTypeOf<ImageProps['shape']>().toEqualTypeOf<Shape | undefined>();
   });
 
-  // data-display#16; data-display-a-code-5 / docs-2: `none` keeps the image's top-left corner in
+  // data-display#16: `none` keeps the image's top-left corner in
   // view, `center` its middle (the initial object-position), so the two values differ.
   it.each([
     ['none', ['object-none', 'object-left-top']],
@@ -137,7 +137,7 @@ describe('Image', () => {
     expect(screen.getByTestId('img')).not.toHaveClass('border');
   });
 
-  // data-display-a-code-3 (C-NATIVE): Preflight is opt-in, so the image sets the sizing it relies
+  // C-NATIVE: Preflight is opt-in, so the image sets the sizing it relies
   // on. It never grows past its container, and with the default fit (the image fills its box) the
   // height follows the width, so `width`/`height` attributes keep the aspect ratio instead of
   // distorting it. Another fit fits the image into the box, whose height is then kept.

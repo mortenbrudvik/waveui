@@ -810,7 +810,7 @@ describe('useControllable', () => {
       expect(takeWarnings()).toEqual([TO_CONTROLLED]);
     });
 
-    it('warns once per direction', () => {
+    it('warns once, on the first switch: the mode stays fixed, so later switches add no warning', () => {
       const { rerender } = renderHook(({ value }) => useControllable(value, 'default'), {
         initialProps: { value: 'a' as string | undefined },
       });

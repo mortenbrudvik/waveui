@@ -375,14 +375,14 @@ describe('ColorPicker — hex input (input-basic#41, input-pickers#24, #25)', ()
     expect(preset('Green')).toHaveAttribute('aria-checked', 'true');
   });
 
-  it('draws the hex field boundary like Input: border-input plus the accessible bottom stroke (R9)', () => {
+  it('draws the hex field boundary like Input: border-input plus the accessible bottom stroke', () => {
     render(<ColorPicker />);
     expect(hexInput()).toHaveClass('border', 'border-input', 'border-b-stroke-accessible');
     expect(hexInput()).not.toHaveClass('border-border');
     expect(hexInput()).not.toHaveClass('border-destructive');
   });
 
-  it('shows the shared invalid look while the hex text is flagged or the picker is invalid (R8)', async () => {
+  it('shows the shared invalid look while the hex text is flagged or the picker is invalid', async () => {
     const user = userEvent.setup();
     render(
       <>
@@ -408,7 +408,7 @@ describe('ColorPicker — hex input (input-basic#41, input-pickers#24, #25)', ()
     }
   });
 
-  it('shows the invalid look for the invalid state of a surrounding Field (R8)', () => {
+  it('shows the invalid look for the invalid state of a surrounding Field', () => {
     renderWithFieldContext(<ColorPicker />, { errorId: FIELD_TEST_IDS.errorId });
     expect(hexInput()).toHaveClass(...inputInvalid.split(' '));
   });
@@ -573,7 +573,7 @@ describe('ColorPicker — presets (input-pickers#16, #17, #23)', () => {
     expect(hexInput()).toHaveValue('#0000ff');
   });
 
-  it('applies an alpha preset at the current opacity, names a string one by that color and warns (input-other-docs-4)', async () => {
+  it('applies an alpha preset at the current opacity, names a string one by that color and warns', async () => {
     const warn = spyWarn();
     try {
       const user = userEvent.setup();
@@ -964,7 +964,7 @@ describe('ColorPicker — native forms (C-FORMS)', () => {
     );
   });
 
-  it('form reset reports defaultValue as a lowercase #rrggbb, like every edit (R10, x-api-5)', async () => {
+  it('form reset reports defaultValue as a lowercase #rrggbb, like every edit (C-FORMS)', async () => {
     const user = userEvent.setup();
     const onValueChange = vi.fn();
     render(
@@ -989,7 +989,7 @@ describe('ColorPicker — native forms (C-FORMS)', () => {
     ['an opaque #rrggbbff', '#0F6CBDFF', '#0f6cbd'],
     ['a #rgba', '#abc8', '#aabbcc88'],
   ])(
-    'shows and submits %s defaultValue in the emitted form, so a reset of an untouched picker emits nothing (R10)',
+    'shows and submits %s defaultValue in the emitted form, so a reset of an untouched picker emits nothing (C-FORMS)',
     (_, defaultValue, normalised) => {
       const onValueChange = vi.fn();
       render(
@@ -1010,7 +1010,7 @@ describe('ColorPicker — native forms (C-FORMS)', () => {
     },
   );
 
-  it('controlled: a form reset to the color already shown, spelled differently, emits nothing (R10)', () => {
+  it('controlled: a form reset to the color already shown, spelled differently, emits nothing (C-FORMS)', () => {
     const onValueChange = vi.fn();
     render(
       <form aria-label="Form">

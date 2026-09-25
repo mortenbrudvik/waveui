@@ -1,6 +1,6 @@
 // @vitest-environment node
 /**
- * `scripts/attw-pack.mjs` (`npm run check:package`, tooling-code-1): are-the-types-wrong runs on
+ * `scripts/attw-pack.mjs` (`npm run check:package`): are-the-types-wrong runs on
  * a tarball the script packs itself, so `npm publish --dry-run` (which exports
  * `npm_config_dry_run=true` to prepublishOnly) no longer makes the nested pack write nothing.
  * attw itself is replaced by a stub; `npm run check:package` runs the real one.

@@ -22,6 +22,7 @@ import {
   testSystemProps,
   testCompoundExposure,
   testComposedHandler,
+  expectThrows,
 } from '../../../test-utils';
 
 /** Stand-in for a Tooltip (P16): a wrapper component that renders its `children` (§5.9). */
@@ -746,7 +747,7 @@ describe('Accordion - single and multiple APIs (layout#19)', () => {
     expect(screen.queryByRole('region')).not.toBeInTheDocument();
   });
 
-  it('multiple: accepts readonly arrays and still reports a mutable array (R6)', async () => {
+  it('multiple: accepts readonly arrays and still reports a mutable array (C-NAMING)', async () => {
     const user = userEvent.setup();
     const openItems = ['1'] as const;
     const onOpenItemsChange = vi.fn();
@@ -876,13 +877,6 @@ describe('Accordion - single and multiple APIs (layout#19)', () => {
 });
 
 describe('Accordion - context guards (overlays#34)', () => {
-  // A render error in a test is thrown by render(); nothing is logged (asserted, R14).
-  const expectThrows = (ui: React.ReactElement, text: string) => {
-    const error = vi.spyOn(console, 'error');
-    expect(() => render(ui)).toThrow(new Error(text));
-    expect(error).not.toHaveBeenCalled();
-  };
-
   it('throws when Accordion.Item is used outside an Accordion', () => {
     expectThrows(
       <Accordion.Item value="1">Orphan</Accordion.Item>,
@@ -923,7 +917,7 @@ describe('Accordion - context guards (overlays#34)', () => {
   });
 });
 
-describe('Accordion - context guards in production (R3)', () => {
+describe('Accordion - context guards in production (C-CONTEXT)', () => {
   afterEach(() => {
     vi.unstubAllEnvs();
   });
@@ -957,7 +951,7 @@ describe('Accordion - context guards in production (R3)', () => {
   });
 });
 
-describe('Accordion - duplicate item values (R12)', () => {
+describe('Accordion - duplicate item values (C-DEV)', () => {
   const duplicateMessage = (value: string) =>
     `[WaveUI] Accordion: several items share the value "${value}". Item values must be unique ` +
     'within an Accordion; items with the same value open and close together and share their ' +
@@ -1042,7 +1036,7 @@ describe('Accordion - duplicate item values (R12)', () => {
   });
 });
 
-describe('Accordion - parts written in a Server Component (x-ssr-1)', () => {
+describe('Accordion - parts written in a Server Component', () => {
   // A client component written in a Server Component reaches the client as a lazy reference.
   const Item = asClientReference(AccordionItem);
   const Trigger = asClientReference(AccordionTrigger);

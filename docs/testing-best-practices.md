@@ -30,7 +30,7 @@ Evaluated before every test file:
 - `window.matchMedia` answers `false` for every query when jsdom lacks it; `mockMatchMedia()` changes the answers.
 - **No global `ResizeObserver`**, as in a consumer's jsdom; call `installResizeObserverMock()` when a test needs one.
 - After every test: RTL `cleanup()`, the warn-once registry is reset (so every test sees first-time development warnings and missing-context errors), the `mockMatchMedia` answers are reset, and then two assertions, reported together:
-  - the **overlay-state release assertion** (`assertOverlayStateReleased`): if an open dismiss layer, a focus trap, a scroll lock, modal isolation (`inert`), a `useRestoreFocus` tracker user or an inline `overflow` on `<html>`/`<body>` outlived the unmounted trees, it is released and **the test fails** naming it;
+  - the **overlay-state release assertion** (`assertOverlayStateReleased`): if an open dismiss layer, a focus trap, a scroll lock, modal isolation (`inert`), a `useRestoreFocus` tracker user or an inline style of a scroll lock (`overflow`, `scrollbar-gutter` on `<html>`, `padding-inline-end` on `<body>`) outlived the unmounted trees, it is released and **the test fails** naming it;
   - the **body-cleanup assertion**: if `document.body` still has children (a leaked portal, live region or toast, or a node the test appended itself), they are removed and **the test fails** naming them.
 
   Tests that append nodes, register layers directly or set such styles themselves undo that in their own `afterEach` (it runs first).
@@ -219,6 +219,22 @@ it('recognises parts written in a Server Component', () => {
 ```
 
 `src/__tests__/integration.test.tsx` also guards every compound end to end ("compounds composed in a React Server Component"): `renderToString` is identical with the lazy parts, and `hydrateRoot` of that HTML reports no recoverable error and no `console.error` before the key interaction runs. Add a case there for a new compound.
+
+### `expectThrows(ui, message)`
+
+Asserts that rendering `ui` throws exactly `new Error(message)` and that nothing reached `console.error` on the way: the throw is the whole report. It spies on `console.error` without silencing it (an unexpected message still shows) and restores the spy, also when an assertion fails. Use it for the development throw of a part outside its root (C-CONTEXT):
+
+```tsx
+// src/components/layout/__tests__/Tree.test.tsx
+import { expectThrows } from '../../../test-utils';
+
+it('throws when Tree.Item is used outside a Tree (C-CONTEXT)', () => {
+  expectThrows(
+    <Tree.Item value="a">Orphan</Tree.Item>,
+    '[WaveUI] Tree.Item must be used within <Tree>',
+  );
+});
+```
 
 ### `testFocusEvents(Component, defaultProps?, selector?, options?)`
 
@@ -428,7 +444,7 @@ describe('Tooltip delay', () => {
 ```
 
 - Wrap direct `vi.advanceTimersByTime(…)` calls in `act()`: timers that set state outside `act()` log warnings.
-- `queueMicrotask` stays real (never add it to `toFake`). Focus moves that run in a microtask (a removed toast moving focus on, a focus trap returning focus that landed outside it) are asserted after `await act(async () => {})` or a `userEvent` action: after `act(() => el.focus())` on an element outside an open Dialog, Drawer or DatePicker calendar, flush before asserting where focus ended up.
+- `queueMicrotask` stays real (never add it to `toFake`). Focus moves that run in a microtask (a removed toast moving focus on, a focus trap returning focus that landed outside it) are asserted after `await act(async () => {})` or a `userEvent` action: after `act(() => el.focus())` on an element outside an open Dialog, Drawer or DatePicker calendar, flush before asserting where focus ended up. Focus-outside dismissal is decided in a microtask too: after focusing an element outside an open Menu, listbox popup, AvatarGroup popup or InfoLabel popup with a synchronous `act(() => el.focus())`, flush (or write `await act(async () => el.focus())`) before asserting that it closed.
 - Switch back to real timers (or keep `shouldAdvanceTime`) before an axe audit.
 
 ## 8. Development warnings
@@ -456,6 +472,8 @@ it('still calls the deprecated onChange and warns once', async () => {
   }
 });
 ```
+
+Assert the exact messages (`expect(warn.mock.calls).toEqual([[message]])`), not a filtered subset: a filter hides a second, unexpected warning. A file whose tests provoke warnings in many places can keep one silenced spy for the whole file, provided nothing goes unasserted: a `takeWarnings()` helper returns the calls so far and clears them, each test asserts what it took, and an `afterEach` asserts, inside `try`/`finally`, that the spy was not called since (see `src/hooks/__tests__/useControllable.test.ts`). Otherwise restore spies in an `afterEach` (`vi.restoreAllMocks()`), so a test that fails midway does not leave its spy on. A spy that only asserts "not called" does not silence. Throw tests use [`expectThrows`](#expectthrowsui-message).
 
 ### Production mode
 
@@ -495,6 +513,7 @@ A passing test prints nothing, the stories gate (`src/__tests__/stories.a11y.tes
 - No hex-color class assertions; components use tokens (`toHaveClass('bg-primary')` when a class is the contract).
 - Never write expectations against a literal React id: ids from `useId` are opaque.
 - Popups: open-state axe, dismissal (Escape, outside press) and focus-return tests. Portaled content is not in `container`: query it with `screen`.
+- Shift+Tab from the browser's own controls (the Popover and TeachingPopover keyboard order): dispatch the window's `blur` and `focus` events before focusing the element (`window.dispatchEvent(new FocusEvent('blur'))`, then `'focus'`); a focus from nothing without that window focus counts as a focus restore in the page and keeps the order after the trigger.
 - Type-level contracts go in `__tests__` too; `tsconfig.dev.json` type-checks them:
 
 ```tsx
@@ -514,10 +533,10 @@ it('types anchor props when rendered as a link', () => {
 
 - `src/__tests__/conventions.test.ts` — the conventions gate: one test per source file of `src/components` (raw colors also in `stories/`), reporting `file:line [rule]` for raw colors, physical utilities, `translate-x` without a `wave-rtl:` counterpart, Tailwind's bare `rtl:`/`ltr:` variants (use `wave-rtl:`), `focus:outline-none`, arbitrary animations, `forwardRef`, `enabled:` variants, `<button>` without `type`, and transitions or animations without a `motion-reduce:` variant. `src/hooks` and `src/lib` are not scanned. Filter with `-t "<path>"`.
 - `src/__tests__/stories.a11y.test.tsx` — renders every story with the Storybook preview (WaveProvider, light theme) and audits it with the shared axe instance. Opt-out only with `parameters: { a11y: { test: 'todo' } }` and a comment explaining why.
-- `src/__tests__/integration.test.tsx` — compositions across components with the real public API (Menu + MenuButton/SplitButton, Tooltip on triggers, Field around every control, toasts over modals, pickers inside dialogs, stacked dialogs with `autoFocus`), and the Server Component regression suite (see [`asClientReference`](#asclientreferencepart-parts-written-in-a-server-component)).
+- `src/__tests__/integration.test.tsx` — compositions across components with the real public API (Menu + MenuButton/SplitButton, Tooltip on triggers, Field around every control, toasts over modals, pickers inside dialogs, stacked dialogs with `autoFocus`, Tab from a shown Tooltip or open InfoLabel inside a dialog's focus trap, a Popover inside a `Menu.Item`), and the Server Component regression suite (see [`asClientReference`](#asclientreferencepart-parts-written-in-a-server-component)).
 - `src/__tests__/public-types.test.ts` — every named type that a public declaration refers to (a prop type, an `extends` base, a parameter or return type) is exported from `src/index.ts`. Export a new component's prop types from the entry; only the structural helpers in its `INTERNAL_HELPERS` list may stay internal, and that list must stay current.
 - `src/__tests__/test-utils.test.tsx` — tests of the helpers themselves.
-- `src/styles/__tests__/tokens.test.ts` — every theme declares every token, and every contrast pair meets its WCAG threshold (unrounded).
+- `src/styles/__tests__/tokens.test.ts` — every theme declares every token, and every contrast pair meets its WCAG threshold (unrounded); it also pins `base.css` and the style entries and tests `scripts/build-css.mjs`. It runs in the node environment (`// @vitest-environment node`): it needs no DOM, and under jsdom Vite's client transform could not load the gate scripts.
 
 ## 12. What to avoid
 

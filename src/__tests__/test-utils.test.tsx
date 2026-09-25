@@ -26,6 +26,7 @@ import {
   axe,
   createOverlayTestWrapper,
   expectNoA11yViolations,
+  expectThrows,
   findDanglingIdRefs,
   installResizeObserverMock,
   mockMatchMedia,
@@ -1283,7 +1284,7 @@ describe('mockRect', () => {
 });
 
 // ---------------------------------------------------------------------------
-// asClientReference (R1: element types from Server Components)
+// asClientReference (element types from Server Components, C-COMPOUND)
 // ---------------------------------------------------------------------------
 
 describe('asClientReference', () => {
@@ -1334,6 +1335,59 @@ describe('asClientReference', () => {
   it('keeps the component type, so JSX props stay checked', () => {
     expectTypeOf(asClientReference(Badge)).toEqualTypeOf<typeof Badge>();
     expectTypeOf(asClientReference(Button)).toEqualTypeOf<typeof Button>();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// expectThrows (the development throw of a part outside its root, C-CONTEXT)
+// ---------------------------------------------------------------------------
+
+describe('expectThrows', () => {
+  const MESSAGE = '[WaveUI] Part must be used within <Root>';
+  function Throws({ message = MESSAGE }: { message?: string }): React.ReactNode {
+    throw new Error(message);
+  }
+  function LogsThenThrows(): React.ReactNode {
+    console.error('[WaveUI] something else went wrong');
+    throw new Error(MESSAGE);
+  }
+
+  it('passes when rendering throws exactly that error and nothing is logged', () => {
+    expectThrows(<Throws />, MESSAGE);
+  });
+
+  it('fails when the message differs', () => {
+    expect(() => expectThrows(<Throws message="[WaveUI] Other" />, MESSAGE)).toThrow(
+      /expected a thrown error to be Error/,
+    );
+  });
+
+  it('fails when rendering does not throw', () => {
+    expect(() => expectThrows(<p>Fine</p>, MESSAGE)).toThrow(/to throw/);
+    cleanup();
+  });
+
+  it('fails when something was logged to console.error, and does not silence it', () => {
+    const logged: unknown[][] = [];
+    const original = console.error;
+    console.error = (...args: unknown[]) => logged.push(args);
+    try {
+      expect(() => expectThrows(<LogsThenThrows />, MESSAGE)).toThrow(/to not be called/);
+    } finally {
+      console.error = original;
+    }
+    // The spy called through: the unexpected message still reached the console (once per render
+    // attempt: React retries a render that threw).
+    expect(logged.length).toBeGreaterThan(0);
+    for (const call of logged) expect(call).toEqual(['[WaveUI] something else went wrong']);
+  });
+
+  it('restores console.error afterwards, also when the assertion fails', () => {
+    const original = console.error;
+    expectThrows(<Throws />, MESSAGE);
+    expect(console.error).toBe(original);
+    expect(() => expectThrows(<Throws message="[WaveUI] Other" />, MESSAGE)).toThrow();
+    expect(console.error).toBe(original);
   });
 });
 

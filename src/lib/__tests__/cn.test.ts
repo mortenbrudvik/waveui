@@ -28,7 +28,7 @@ describe('cn', () => {
     expect(cn(['a', { b: true, c: false }], 'd')).toBe('a b d');
   });
 
-  it('accepts readonly arrays at any depth (R6)', () => {
+  it('accepts readonly arrays at any depth (C-NAMING)', () => {
     const base = ['px-3', ['text-body-1', 'text-foreground']] as const;
     const extra: readonly string[] = ['px-2'];
     expect(cn(base, extra)).toBe('text-body-1 text-foreground px-2');
@@ -123,7 +123,7 @@ describe('cn — token colours merge as colours', () => {
     expect(cn('hover:bg-subtle-hover', 'hover:bg-error')).toBe('hover:bg-error');
   });
 
-  it('keeps gated hover and state classes next to a bare user class (C-CLASS, lib-provider-docs-1)', () => {
+  it('keeps gated hover and state classes next to a bare user class (C-CLASS)', () => {
     // Both stay; the gated (0,4,0) and data/aria (0,2,0)+ selectors win by specificity in the CSS.
     const gatedHover = 'not-disabled:not-aria-disabled:hover:bg-primary-hover';
     expect(cn(gatedHover, 'hover:bg-error')).toBe(`${gatedHover} hover:bg-error`);

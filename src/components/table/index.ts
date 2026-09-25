@@ -41,4 +41,5 @@ export type {
   DataGridSort,
   SortDirection,
   DataGridColumn,
+  DataGridLabels,
 } from './DataGrid';

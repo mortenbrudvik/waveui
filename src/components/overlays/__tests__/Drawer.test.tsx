@@ -25,6 +25,7 @@ import {
   testDisplayName,
   testNoImplicitSubmit,
   testSystemProps,
+  expectThrows,
 } from '../../../test-utils';
 
 afterEach(() => {
@@ -252,7 +253,7 @@ describe('Drawer', () => {
       expect(icon).toHaveAttribute('aria-hidden', 'true');
     });
 
-    it('names the Close button with closeLabel (overlays-modal-code-2)', async () => {
+    it('names the Close button with closeLabel', async () => {
       const user = userEvent.setup();
       const onOpenChange = vi.fn();
       render(
@@ -292,25 +293,22 @@ describe('Drawer', () => {
       ['start', 'border-e'],
       ['left', 'border-r'],
       ['right', 'border-l'],
-    ] as const)(
-      'position %s draws a border on the inner edge only, %s (overlays-modal-code-1)',
-      (position, expected) => {
-        // High contrast paints the page, the backdrop and the panel black and the shadow is black
-        // too (forced colors drop it): only the border marks the edge facing the page.
-        renderWithProviders(
-          <Drawer defaultOpen position={position} title="Drawer">
-            Content
-          </Drawer>,
-          { theme: 'high-contrast' },
-        );
-        const dialog = screen.getByRole('dialog');
-        expect(dialog).toHaveClass(expected, 'border-border');
-        for (const other of edgeClasses.filter((edge) => edge !== expected)) {
-          expect(dialog).not.toHaveClass(other);
-        }
-        expect(dialog).not.toHaveClass('border');
-      },
-    );
+    ] as const)('position %s draws a border on the inner edge only, %s', (position, expected) => {
+      // High contrast paints the page, the backdrop and the panel black and the shadow is black
+      // too (forced colors drop it): only the border marks the edge facing the page.
+      renderWithProviders(
+        <Drawer defaultOpen position={position} title="Drawer">
+          Content
+        </Drawer>,
+        { theme: 'high-contrast' },
+      );
+      const dialog = screen.getByRole('dialog');
+      expect(dialog).toHaveClass(expected, 'border-border');
+      for (const other of edgeClasses.filter((edge) => edge !== expected)) {
+        expect(dialog).not.toHaveClass(other);
+      }
+      expect(dialog).not.toHaveClass('border');
+    });
 
     it('places a start drawer with logical utilities under rtl', () => {
       renderWithProviders(
@@ -676,7 +674,7 @@ describe('Drawer', () => {
         warn.mockRestore();
       });
 
-      it('does not warn that the drawer cannot open when its Fragment trigger appears after mount (overlays-modal-code-4)', async () => {
+      it('does not warn that the drawer cannot open when its Fragment trigger appears after mount', async () => {
         vi.useFakeTimers({ shouldAdvanceTime: true });
         const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
         const warn = vi.spyOn(console, 'warn');
@@ -1041,7 +1039,7 @@ describe('Drawer', () => {
       expect(screen.getByRole('dialog', { name: 'Notifications' })).toBeInTheDocument();
     });
 
-    it('follows a Drawer.Title that replaces another while open (overlays-modal-tests-3)', () => {
+    it('follows a Drawer.Title that replaces another while open', () => {
       function Steps({ step }: { step: 'loading' | 'edit' }) {
         return (
           <Drawer defaultOpen>
@@ -1105,13 +1103,7 @@ describe('Drawer', () => {
       ],
       ['Drawer.Title', <Drawer.Title key="title">Orphan</Drawer.Title>],
     ])('%s outside Drawer throws in development', (name, element) => {
-      const error = vi.spyOn(console, 'error');
-      expect(() => render(element)).toThrow(
-        new Error(`[WaveUI] ${name} must be used within Drawer`),
-      );
-      // Thrown, not logged.
-      expect(error).not.toHaveBeenCalled();
-      error.mockRestore();
+      expectThrows(element, `[WaveUI] ${name} must be used within Drawer`);
     });
   });
 
@@ -1381,7 +1373,7 @@ describe('Drawer', () => {
     });
   });
 
-  describe('parts written in a Server Component (x-ssr-1)', () => {
+  describe('parts written in a Server Component', () => {
     // A client component written in a Server Component reaches the client as a lazy reference.
     const lazyParts = {
       Trigger: asClientReference(DrawerTrigger),
@@ -1450,6 +1442,26 @@ describe('Drawer', () => {
         expect.stringContaining('[WaveUI] Drawer.Trigger must be a direct child of Drawer'),
       );
       warn.mockRestore();
+    });
+
+    it('the nested-trigger check passes over content whose code is still loading', () => {
+      const warn = vi.spyOn(console, 'warn');
+      const error = vi.spyOn(console, 'error');
+      // A lazy component whose chunk never loads (the panel is closed, so it never renders).
+      const Loading = React.lazy(() => new Promise<{ default: React.ComponentType }>(() => {}));
+      render(
+        <Drawer title="Filters">
+          <Drawer.Trigger>
+            <button type="button">Open filters</button>
+          </Drawer.Trigger>
+          <div>
+            <Loading />
+          </div>
+        </Drawer>,
+      );
+      expect(button('Open filters')).toBeInTheDocument();
+      expect(warn).not.toHaveBeenCalled();
+      expect(error).not.toHaveBeenCalled();
     });
   });
 });

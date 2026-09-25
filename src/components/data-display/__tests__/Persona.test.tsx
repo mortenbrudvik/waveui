@@ -81,7 +81,7 @@ describe('Persona', () => {
     expect(screen.queryByRole('img', { name: 'Busy' })).toBeNull();
   });
 
-  // data-display#29: presence size mapping; data-display-a-tests-5: the size reaches the avatar.
+  // data-display#29: presence size mapping; the size reaches the avatar.
   it.each([
     ['extra-small', 'size-2.5', 'w-6'],
     ['small', 'size-2.5', 'w-8'],
@@ -100,8 +100,8 @@ describe('Persona', () => {
     },
   );
 
-  // R11: a badge or avatar slot that renders nothing (`badge={count && …}` with count 0, an empty
-  // `.map()` result) is not given: the status badge and the built-in avatar are shown.
+  // C-SLOTS: a badge or avatar slot that renders nothing (`badge={count && …}` with count 0, an
+  // empty `.map()` result) is not given: the status badge and the built-in avatar are shown.
   it.each([
     ['0', () => 0],
     ['an empty array', () => []],

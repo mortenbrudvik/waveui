@@ -338,7 +338,7 @@ describe('Field', () => {
       expect(screen.getByRole('textbox', { name: 'Name' })).not.toHaveAttribute('aria-invalid');
     });
 
-    it('treats an error list that renders nothing as no error: the control stays valid and the hint shows (R11)', () => {
+    it('treats an error list that renders nothing as no error: the control stays valid and the hint shows (C-SLOTS)', () => {
       const errors: string[] = [];
       render(
         <>
@@ -367,7 +367,7 @@ describe('Field', () => {
       expect(screen.queryByRole('alert')).not.toBeInTheDocument();
     });
 
-    it('renders no label or hint element for values that render nothing (R11)', () => {
+    it('renders no label or hint element for values that render nothing (C-SLOTS)', () => {
       render(
         <Field label={[]} hint={[undefined, true]}>
           <input aria-label="Code" />

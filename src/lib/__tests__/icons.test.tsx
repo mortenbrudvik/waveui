@@ -180,7 +180,7 @@ describe('icons (input-datetime#22, button-provider#20)', () => {
     );
   }, 30_000);
 
-  it('tells directional uses to mirror with the wave-rtl variant, never the bare rtl one (R4)', () => {
+  it('tells directional uses to mirror with the wave-rtl variant, never the bare rtl one (C-LOGICAL)', () => {
     // Tailwind's `rtl:` also matches inside an LTR subtree of an RTL page; `wave-rtl:` follows the
     // element's own direction. The styles build compiles this class from these comments.
     expect(iconsSource.match(/wave-rtl:-scale-x-100/g)).toHaveLength(3);

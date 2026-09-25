@@ -11,7 +11,7 @@ import {
   renderSlot,
   resolveSlot,
   slotRendersContent,
-  VOID_ELEMENTS,
+  slotWrapsDefaultContent,
 } from '../../lib/slot';
 import { focusRing, inputFocusWithin, inputInvalidWithin } from '../../lib/styles';
 import type { Slot, SlotObject } from '../../lib/types';
@@ -193,11 +193,6 @@ const noop = () => {};
 const INTERACTIVE_CONTENT =
   'a[href], button, input, select, textarea, [tabindex], [contenteditable]:not([contenteditable="false"])';
 
-/** Whether `type` is an intrinsic element that can hold the default icon (not a void element). */
-function canHoldIcon(type: React.ElementType): boolean {
-  return typeof type === 'string' && !VOID_ELEMENTS.has(type);
-}
-
 const DEFAULT_DISMISS: DismissParts = {
   kind: 'default',
   buttonProps: {},
@@ -251,9 +246,9 @@ function splitButtonLike(type: unknown, props: UnknownProps, children: React.Rea
  * wraps the default icon in its element.
  */
 function resolveDismiss(dismiss: SearchBoxProps['dismiss']): DismissParts {
-  // The type is unwrapped (R1): a Button written in a Server Component arrives as a lazy client
-  // reference, and must be merged like a plain one rather than nested inside the clear button.
-  // A slot object is never an element, so the check can take any slot value as a node.
+  // The type is unwrapped (C-COMPOUND): a Button written in a Server Component arrives as a lazy
+  // client reference, and must be merged like a plain one rather than nested inside the clear
+  // button. A slot object is never an element, so the check can take any slot value as a node.
   const node = dismiss as React.ReactNode;
   if (isElementOfType<UnknownProps>(node, 'button', Button)) {
     const children = node.props.children as React.ReactNode;
@@ -290,8 +285,7 @@ function resolveDismiss(dismiss: SearchBoxProps['dismiss']): DismissParts {
   // A void (`img`), component (`{ as: MyIcon }`) or markup (`dangerouslySetInnerHTML`) slot
   // renders content of its own.
   const hasChildren = slotRendersContent(children);
-  const ownMarkup = contentProps.dangerouslySetInnerHTML != null;
-  const empty = !hasChildren && canHoldIcon(Component) && !ownMarkup;
+  const empty = slotWrapsDefaultContent(Component, { ...contentProps, children });
   if (empty && Object.keys(buttonProps).length === 0 && Object.keys(contentProps).length === 0) {
     return DEFAULT_DISMISS;
   }
@@ -444,7 +438,7 @@ export const SearchBox = ({
     const root = event.currentTarget;
     const target = event.target;
     if (!input || disabled || event.button !== 0 || target === input) return;
-    // Events that bubble through React portals from outside this box are not ours (R15).
+    // Events that bubble through React portals from outside this box are not ours (C-COMPOSE).
     if (!(target instanceof Element) || !root.contains(target)) return;
     const control = target.closest(INTERACTIVE_CONTENT);
     if (control && root.contains(control)) return;
@@ -521,13 +515,11 @@ export const SearchBox = ({
       ref={ref}
       className={cn(
         // The root draws the field; the slots, the text and the clear button are laid out side by
-        // side inside it, so a slot never covers the text (input-other-code-2).
+        // side inside it, so a slot never covers the text.
         'relative inline-flex h-8 w-full items-center rounded border border-input border-b-stroke-accessible bg-background text-body-1 text-foreground',
         inputFocusWithin,
         invalidLook && inputInvalidWithin,
         disabled && 'cursor-not-allowed opacity-50',
-        // The display utility above would beat the `hidden` attribute's own display rule.
-        hidden && 'hidden',
         className,
       )}
       hidden={hidden}

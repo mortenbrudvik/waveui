@@ -1,5 +1,5 @@
 import * as React from 'react';
-import { describe, it, expect, vi, expectTypeOf } from 'vitest';
+import { afterEach, describe, it, expect, vi, expectTypeOf } from 'vitest';
 import { render, screen, fireEvent, act, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { renderToString } from 'react-dom/server';
@@ -32,6 +32,11 @@ function expectWarnings(warn: { mock: { calls: unknown[][] } }, patterns: RegExp
 }
 
 describe('SearchBox', () => {
+  // Restores every console spy after each test, also one whose assertion failed midway.
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
   testSystemProps(SearchBox, {
     expectedTag: 'div',
     displayName: 'SearchBox',
@@ -186,7 +191,7 @@ describe('SearchBox', () => {
     });
   });
 
-  describe('layout (input-other-code-2)', () => {
+  describe('layout', () => {
     it('lays the slots, the text and the clear button out side by side, so no slot covers the text', () => {
       render(
         <SearchBox
@@ -287,12 +292,11 @@ describe('SearchBox', () => {
       expect(screen.getByRole('searchbox', { name: 'Search' })).not.toHaveFocus();
     });
 
-    it('honours hidden on the root, whose display utility would otherwise beat it', () => {
+    it('puts hidden on the root, the visible field (not on the input)', () => {
       render(<SearchBox data-testid="root" aria-label="Search" hidden />);
-      const root = screen.getByTestId('root');
-      expect(root).toHaveAttribute('hidden');
-      expect(root).toHaveClass('hidden');
-      expect(root).not.toHaveClass('inline-flex');
+      // base.css's scoped `[hidden]` rule hides it over its `inline-flex`.
+      expect(screen.getByTestId('root')).toHaveAttribute('hidden');
+      expect(screen.getByRole('searchbox', { hidden: true })).not.toHaveAttribute('hidden');
     });
 
     it('runs a consumer onMouseDown first; its preventDefault keeps focus where it is', () => {
@@ -482,7 +486,6 @@ describe('SearchBox', () => {
       expect(onClear).toHaveBeenCalledOnce();
       expect(screen.getByRole('searchbox', { name: 'Search' })).toHaveValue('');
       expectWarnings(warn, [ELEMENT_WARNING]);
-      warn.mockRestore();
     });
 
     it('merges a Wave Button slot into the wired button', async () => {
@@ -507,7 +510,6 @@ describe('SearchBox', () => {
       expect(onClick).toHaveBeenCalledOnce();
       expect(screen.getByRole('searchbox', { name: 'Search' })).toHaveValue('');
       expectWarnings(warn, [ELEMENT_WARNING]);
-      warn.mockRestore();
     });
 
     it('keeps type="button" when a typeless <button> slot is merged (C-BUTTON-TYPE)', () => {
@@ -523,7 +525,6 @@ describe('SearchBox', () => {
       fireEvent.click(clear);
       expect(onSubmit).not.toHaveBeenCalled();
       expectWarnings(warn, [ELEMENT_WARNING]);
-      warn.mockRestore();
     });
 
     it('keeps type="button" when a merged slot passes type null (C-BUTTON-TYPE, P12 change request)', async () => {
@@ -548,7 +549,6 @@ describe('SearchBox', () => {
       }
       expect(onSubmit).not.toHaveBeenCalled();
       expectWarnings(warn, [OBJECT_WARNING, ELEMENT_WARNING]);
-      warn.mockRestore();
     });
 
     it('lets a consumer slot handler cancel the clear with preventDefault', async () => {
@@ -564,7 +564,6 @@ describe('SearchBox', () => {
       await user.click(screen.getByRole('button', { name: 'Clear search' }));
       expect(screen.getByRole('searchbox', { name: 'Search' })).toHaveValue('keep');
       expectWarnings(warn, [ELEMENT_WARNING]);
-      warn.mockRestore();
     });
 
     it('merges the deprecated button-object form onto the wired button with a warning', async () => {
@@ -587,7 +586,6 @@ describe('SearchBox', () => {
       expect(onClick).toHaveBeenCalledOnce();
       expect(onClear).toHaveBeenCalledOnce();
       expectWarnings(warn, [OBJECT_WARNING]);
-      warn.mockRestore();
     });
 
     it('falls back to the default icon for a button object without children (table-core#18)', async () => {
@@ -620,7 +618,6 @@ describe('SearchBox', () => {
       expect(onClick).toHaveBeenCalledOnce();
       expect(screen.getByRole('searchbox', { name: 'First' })).toHaveValue('');
       expectWarnings(warn, [OBJECT_WARNING]);
-      warn.mockRestore();
     });
 
     it('keeps the default icon for empty shorthand (booleans, empty string, empty iterables and Fragments) (table-core#18)', () => {
@@ -662,7 +659,6 @@ describe('SearchBox', () => {
         expect(icon, empties[index][0]).toHaveAttribute('aria-hidden', 'true');
       });
       expect(warn).not.toHaveBeenCalled();
-      warn.mockRestore();
     });
 
     it('renders non-empty iterables and Fragments as the clear button content', () => {
@@ -756,7 +752,6 @@ describe('SearchBox', () => {
       expect(clear).toContainElement(screen.getByTestId('markup-icon'));
       expect(clear.querySelector('[data-wave-icon="dismiss"]')).toBeNull();
       expectWarnings(warn, [ELEMENT_WARNING]);
-      warn.mockRestore();
     });
 
     it('renders the items of a generator inside a merged <button> without a React warning', () => {
@@ -776,8 +771,6 @@ describe('SearchBox', () => {
       expect(screen.getByRole('button', { name: 'Reset' })).toHaveTextContent('Reset');
       expect(error).not.toHaveBeenCalled();
       expectWarnings(warn, [ELEMENT_WARNING]);
-      warn.mockRestore();
-      error.mockRestore();
     });
 
     it('renders a void or component SlotObject as it is (it has content of its own)', () => {
@@ -808,40 +801,36 @@ describe('SearchBox', () => {
       expect(second.querySelector('[data-wave-icon="dismiss"]')).toBeNull();
     });
 
-    it('merges a Wave Button written in a Server Component (a lazy client reference) like a plain one (R1)', async () => {
+    it('merges a Wave Button written in a Server Component (a lazy client reference) like a plain one (C-COMPOUND)', async () => {
       const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
-      try {
-        const user = userEvent.setup();
-        const ClientButton = asClientReference(Button);
-        const onClick = vi.fn();
-        const plain = renderToString(
-          <SearchBox aria-label="Search" defaultValue="a" dismiss={<Button>Reset</Button>} />,
-        );
-        const fromServer = renderToString(
-          <SearchBox
-            aria-label="Search"
-            defaultValue="a"
-            dismiss={<ClientButton>Reset</ClientButton>}
-          />,
-        );
-        expect(fromServer).toBe(plain);
+      const user = userEvent.setup();
+      const ClientButton = asClientReference(Button);
+      const onClick = vi.fn();
+      const plain = renderToString(
+        <SearchBox aria-label="Search" defaultValue="a" dismiss={<Button>Reset</Button>} />,
+      );
+      const fromServer = renderToString(
+        <SearchBox
+          aria-label="Search"
+          defaultValue="a"
+          dismiss={<ClientButton>Reset</ClientButton>}
+        />,
+      );
+      expect(fromServer).toBe(plain);
 
-        render(
-          <SearchBox
-            aria-label="Search"
-            defaultValue="a"
-            dismiss={<ClientButton onClick={onClick}>Reset</ClientButton>}
-          />,
-        );
-        // Merged into the built-in clear button, not nested inside it.
-        expect(screen.getAllByRole('button')).toHaveLength(1);
-        await user.click(screen.getByRole('button', { name: 'Reset' }));
-        expect(onClick).toHaveBeenCalledOnce();
-        expect(screen.getByRole('searchbox', { name: 'Search' })).toHaveValue('');
-        expectWarnings(warn, [ELEMENT_WARNING]);
-      } finally {
-        warn.mockRestore();
-      }
+      render(
+        <SearchBox
+          aria-label="Search"
+          defaultValue="a"
+          dismiss={<ClientButton onClick={onClick}>Reset</ClientButton>}
+        />,
+      );
+      // Merged into the built-in clear button, not nested inside it.
+      expect(screen.getAllByRole('button')).toHaveLength(1);
+      await user.click(screen.getByRole('button', { name: 'Reset' }));
+      expect(onClick).toHaveBeenCalledOnce();
+      expect(screen.getByRole('searchbox', { name: 'Search' })).toHaveValue('');
+      expectWarnings(warn, [ELEMENT_WARNING]);
     });
 
     it("renders { as: 'button' } without nesting buttons", () => {
@@ -856,7 +845,6 @@ describe('SearchBox', () => {
       expect(screen.getAllByRole('button')).toHaveLength(1);
       expect(screen.getByRole('button', { name: 'Clear search' })).toHaveClass('obj-button');
       expectWarnings(warn, [OBJECT_WARNING]);
-      warn.mockRestore();
     });
   });
 
@@ -885,7 +873,6 @@ describe('SearchBox', () => {
       expect(onClear).toHaveBeenCalledOnce();
       expect(screen.getByRole('searchbox', { name: 'Search' })).toHaveValue('');
       expectWarnings(warn, [ELEMENT_WARNING]);
-      warn.mockRestore();
     });
 
     it.each([
@@ -903,7 +890,6 @@ describe('SearchBox', () => {
       expect(screen.getAllByRole('button')).toHaveLength(1);
       expect(screen.getByRole('button')).toHaveAccessibleName('Reset');
       expectWarnings(warn, [React.isValidElement(dismiss) ? ELEMENT_WARNING : OBJECT_WARNING]);
-      warn.mockRestore();
     });
 
     it.each([
@@ -933,7 +919,6 @@ describe('SearchBox', () => {
       );
       expect(screen.getByRole('button')).toHaveAccessibleName('Clear search');
       expectWarnings(warn, [ELEMENT_WARNING]);
-      warn.mockRestore();
     });
 
     it('icon content keeps "Clear search" even with text (slot content is decorative)', () => {
@@ -971,7 +956,6 @@ describe('SearchBox', () => {
       act(() => setTextRef.current?.(''));
       await waitFor(() => expect(clear).toHaveAccessibleName('Clear search'));
       expectWarnings(warn, [ELEMENT_WARNING]);
-      warn.mockRestore();
     });
 
     it.each([
@@ -1006,7 +990,6 @@ describe('SearchBox', () => {
       expect(clear).toHaveAccessibleName(name);
       expect(clear).not.toHaveAttribute('aria-label', 'Clear search');
       expectWarnings(warn, React.isValidElement(dismiss) ? [ELEMENT_WARNING] : []);
-      warn.mockRestore();
     });
 
     it('moves naming attributes of a content slot object to the button without the deprecation warning', () => {
@@ -1025,7 +1008,6 @@ describe('SearchBox', () => {
       expect(content).not.toHaveAttribute('aria-label');
       expect(clear).toContainElement(content);
       expect(warn).not.toHaveBeenCalled();
-      warn.mockRestore();
     });
 
     it('decides the server-rendered name from the literal children', () => {
@@ -1047,11 +1029,10 @@ describe('SearchBox', () => {
       );
       expect(glyph).toContain('aria-label="Clear search"');
       expect(warn).not.toHaveBeenCalled();
-      warn.mockRestore();
     });
   });
 
-  describe('Escape (x-keyboard-5)', () => {
+  describe('Escape', () => {
     /**
      * Records whether each Escape keydown reached the document already prevented. Wave's layer
      * stack (Dialog, Drawer, Popover) listens there and ignores prevented events.
@@ -1186,7 +1167,6 @@ describe('SearchBox', () => {
             '`onValueChange` instead.',
         ],
       ]);
-      warn.mockRestore();
     });
 
     it('fires onValueChange once per interaction in StrictMode', async () => {
@@ -1382,7 +1362,7 @@ describe('SearchBox', () => {
       expect(container.innerHTML).not.toMatch(/#[0-9a-f]{3,8}|outline-none|enabled:/i);
     });
 
-    it('shows the shared error border when the input is invalid (input-basic#1, R8)', () => {
+    it('shows the shared error border when the input is invalid (input-basic#1)', () => {
       render(
         <>
           <SearchBox data-testid="invalid" aria-label="Invalid" aria-invalid />

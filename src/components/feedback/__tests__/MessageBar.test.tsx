@@ -2,7 +2,7 @@ import * as React from 'react';
 import { describe, it, expect, vi, expectTypeOf, afterEach } from 'vitest';
 import { createPortal } from 'react-dom';
 import { renderToString } from 'react-dom/server';
-import { act, render, screen, waitFor, within } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MessageBar } from '../MessageBar';
 import type { MessageBarProps } from '../MessageBar';
@@ -398,6 +398,83 @@ describe('MessageBar', () => {
       });
     });
 
+    describe('markup of a merged button (dangerouslySetInnerHTML)', () => {
+      const HTML_ICON = '<svg data-testid="html-icon" viewBox="0 0 16 16"></svg>';
+
+      it('renders the markup of a merged <button> inside the wired button instead of throwing', () => {
+        const warn = spyOnWarn();
+        const error = vi.spyOn(console, 'error');
+        const onDismiss = vi.fn();
+        render(
+          <MessageBar
+            onDismiss={onDismiss}
+            dismiss={
+              <button
+                type="button"
+                className="text-error"
+                dangerouslySetInnerHTML={{ __html: HTML_ICON }}
+              />
+            }
+          >
+            Msg
+          </MessageBar>,
+        );
+        const buttons = screen.getAllByRole('button');
+        expect(buttons).toHaveLength(1);
+        expect(buttons[0]).toHaveAccessibleName('Dismiss');
+        expect(buttons[0]).toHaveClass('text-error');
+        expect(buttons[0]).toContainElement(screen.getByTestId('html-icon'));
+        expect(buttons[0].querySelector('[data-wave-icon="dismiss"]')).toBeNull();
+        fireEvent.click(buttons[0]);
+        expect(onDismiss).toHaveBeenCalledTimes(1);
+        expect(warn.mock.calls).toEqual([[BUTTON_ELEMENT_WARNING]]);
+        expect(error).not.toHaveBeenCalled();
+      });
+
+      it('names the button by a text label in the markup, as it does for children', async () => {
+        const warn = spyOnWarn();
+        render(
+          <MessageBar
+            onDismiss={() => {}}
+            dismiss={<button type="button" dangerouslySetInnerHTML={{ __html: 'Close' }} />}
+          >
+            Msg
+          </MessageBar>,
+        );
+        await waitFor(() => expect(screen.getByRole('button')).toHaveAccessibleName('Close'));
+        expect(warn.mock.calls).toEqual([[BUTTON_ELEMENT_WARNING]]);
+      });
+    });
+
+    it('merges a slot object whose `as` is a Wave Button instead of nesting it (deprecated form)', () => {
+      const warn = spyOnWarn();
+      render(
+        <MessageBar
+          onDismiss={() => {}}
+          dismiss={
+            // Wave Button props are not part of the slot type: a JavaScript caller's 0.4 form.
+            {
+              as: Button,
+              appearance: 'subtle',
+              className: 'text-error',
+              icon: <svg data-testid="button-icon" />,
+            } as Slot<'span'>
+          }
+        >
+          Msg
+        </MessageBar>,
+      );
+      const buttons = screen.getAllByRole('button');
+      expect(buttons).toHaveLength(1);
+      expect(buttons[0]).toHaveAccessibleName('Dismiss');
+      expect(buttons[0]).toHaveClass('text-error');
+      expect(buttons[0]).not.toHaveAttribute('appearance');
+      expect(
+        within(buttons[0]).getByTestId('button-icon').closest('[aria-hidden="true"]'),
+      ).not.toBeNull();
+      expect(warn.mock.calls).toEqual([[BUTTON_OBJECT_WARNING]]);
+    });
+
     describe('a ref on the dismiss slot reaches the wired button (0.4 compatibility)', () => {
       it.each([
         [
@@ -444,7 +521,7 @@ describe('MessageBar', () => {
       });
     });
 
-    describe('a Wave Button written in a Server Component (lazy client reference, R1)', () => {
+    describe('a Wave Button written in a Server Component (lazy client reference, C-COMPOUND)', () => {
       const ClientButton = asClientReference(Button);
 
       it('is merged into the wired button like the plain Button, on the server too', () => {

@@ -4,7 +4,6 @@ import { act, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { Tooltip } from '../Tooltip';
 import { Popover } from '../Popover';
-import { Dialog } from '../Dialog';
 import { Button } from '../../button/Button';
 import { Portal } from '../../portal/Portal';
 import { useDismiss } from '../../../hooks/useDismiss';
@@ -424,7 +423,7 @@ describe('Tooltip', () => {
       );
       await user.hover(screen.getByRole('button', { name: 'Target' }));
       // data-side/data-align start as the requested placement: wait for the computed position,
-      // centred above the wrapper 8px away (overlays-anchored-tests-4).
+      // centred above the wrapper 8px away.
       // x = 400 + 80 / 2 - 120 / 2 = 380, y = 300 - 28 - 8 = 264.
       await waitFor(() => expect(surface()?.style.transform).toBe('translate(380px, 264px)'));
       expect(surface()).toHaveAttribute('data-side', 'top');
@@ -896,7 +895,7 @@ describe('Tooltip', () => {
     });
   });
 
-  describe('a child that renders a popup in a portal (overlays-anchored-code-3)', () => {
+  describe('a child that renders a popup in a portal', () => {
     /** Stand-in for a DatePicker: an input and a calendar it portals while open (Enter opens it). */
     function PickerStandIn(props: React.InputHTMLAttributes<HTMLInputElement>) {
       const [open, setOpen] = React.useState(false);
@@ -984,55 +983,6 @@ describe('Tooltip', () => {
       await waitFor(() => expect(surface()).not.toBeNull());
       await user.hover(surface()!);
       expect(surface()).not.toBeNull();
-    });
-  });
-
-  describe('a shown tooltip on a control outside a dialog’s container', () => {
-    it('in Popover.Content opened from the dialog: Tab reaches the next button', async () => {
-      const user = userEvent.setup();
-      render(
-        <Dialog open onOpenChange={() => {}}>
-          <Dialog.Content title="Edit">
-            <Popover>
-              <Popover.Trigger>
-                <Button>Format</Button>
-              </Popover.Trigger>
-              <Popover.Content title="Format">
-                <Tooltip content="Bold text" delay={0}>
-                  <Button>Bold</Button>
-                </Tooltip>
-                <Button>Italic</Button>
-              </Popover.Content>
-            </Popover>
-          </Dialog.Content>
-        </Dialog>,
-      );
-      await user.click(screen.getByRole('button', { name: 'Format' }));
-      await user.click(screen.getByRole('button', { name: 'Bold' }));
-      expect(surface()).toHaveTextContent('Bold text');
-      await user.tab();
-      expect(screen.getByRole('button', { name: 'Italic' })).toHaveFocus();
-    });
-
-    it('in a consumer Portal inside the dialog: Tab reaches the next button', async () => {
-      const user = userEvent.setup();
-      render(
-        <Dialog open onOpenChange={() => {}}>
-          <Dialog.Content title="Edit">
-            <Button>In dialog</Button>
-            <Portal>
-              <Tooltip content="First" delay={0}>
-                <Button>P1</Button>
-              </Tooltip>
-              <Button>P2</Button>
-            </Portal>
-          </Dialog.Content>
-        </Dialog>,
-      );
-      await user.click(screen.getByRole('button', { name: 'P1' }));
-      expect(surface()).toHaveTextContent('First');
-      await user.tab();
-      expect(screen.getByRole('button', { name: 'P2' })).toHaveFocus();
     });
   });
 

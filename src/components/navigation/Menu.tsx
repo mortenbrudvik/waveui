@@ -16,7 +16,7 @@ import { useMergedRefs } from '../../hooks/useMergedRefs';
 import { usePopupPosition } from '../../hooks/usePopupPosition';
 import { useRestoreFocus } from '../../hooks/useRestoreFocus';
 import { useRovingTabIndex } from '../../hooks/useRovingTabIndex';
-import { useTriggerElement } from '../../hooks/useTriggerElement';
+import { getTriggerTarget, useTriggerElement } from '../../hooks/useTriggerElement';
 import { Portal } from '../portal/Portal';
 
 // ---------------------------------------------------------------------------
@@ -276,12 +276,16 @@ function isOwnEvent(event: React.SyntheticEvent<HTMLElement>): boolean {
 }
 
 /**
- * The element that takes focus for the trigger: the trigger itself, or, for the wrapper span of
- * `asChild={false}` and of the automatic fallback, the first tabbable element inside it.
+ * The element that takes focus for the trigger: the element that acts as the trigger and carries
+ * its state ARIA (`getTriggerTarget`: the trigger itself, or, for the wrapper span of
+ * `asChild={false}` and of the automatic fallback, the first element inside it in the tab order).
+ * That rule reads the markup, so when its element cannot take focus now (a span with only a
+ * `role`), the first tabbable element inside the trigger takes it.
  */
 function getTriggerFocusTarget(trigger: HTMLElement | null): HTMLElement | null {
   if (!trigger) return null;
-  return isFocusable(trigger) ? trigger : getFirstTabbable(trigger);
+  const target = getTriggerTarget(trigger);
+  return target && isFocusable(target) ? target : getFirstTabbable(trigger);
 }
 
 const menuSurfaceClasses =

@@ -110,7 +110,7 @@ function createModalTrigger(): ModalTrigger {
       activated = target;
       if (sessionOpen) return;
       // An accepted open commits before the next task starts; a rejected click leaves the modal
-      // closed, and its activation must not outlive the task (overlays-modal-tests-2).
+      // closed, and its activation must not outlive the task.
       setTimeout(() => {
         if (!sessionOpen && activated === target) activated = null;
       }, 0);

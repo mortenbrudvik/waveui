@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 /**
  * Runs are-the-types-wrong on the tarball `npm publish` would upload (`npm run check:package`,
- * after publint; tooling-code-1): packs the package into a temporary directory with pack-smoke's
+ * after publint): packs the package into a temporary directory with pack-smoke's
  * `pack()` and passes the tarball and every argument to `attw`.
  *
  * `attw --pack .` would run `npm pack` itself with the environment of the enclosing npm command.

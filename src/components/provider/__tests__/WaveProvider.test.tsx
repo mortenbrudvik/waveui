@@ -147,7 +147,7 @@ describe('WaveProvider', () => {
     });
   });
 
-  describe('nested providers inherit the props they omit (lib-provider-code-1)', () => {
+  describe('nested providers inherit the props they omit', () => {
     function Capture({ onValue }: { onValue: (value: WaveContextValue) => void }) {
       onValue(useWaveTheme());
       return null;

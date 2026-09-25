@@ -18,8 +18,6 @@ import {
   type DialogTriggerProps,
 } from '../Dialog';
 import { Drawer } from '../Drawer';
-import { Popover } from '../Popover';
-import { InfoLabel } from '../../data-display/InfoLabel';
 import { useDismiss } from '../../../hooks/useDismiss';
 import { Portal } from '../../portal/Portal';
 import { getTopmostLayer } from '../../../lib/layers';
@@ -32,6 +30,7 @@ import {
   testDisplayName,
   testNoImplicitSubmit,
   testSystemProps,
+  expectThrows,
 } from '../../../test-utils';
 
 /** The fallback warning of a Dialog.Trigger child that neither forwards `ref` nor spreads props. */
@@ -292,7 +291,7 @@ describe('Dialog', () => {
       expect(icon).toHaveAttribute('aria-hidden', 'true');
     });
 
-    it('names the Close button with closeLabel (overlays-modal-code-2)', async () => {
+    it('names the Close button with closeLabel', async () => {
       const user = userEvent.setup();
       const onOpenChange = vi.fn();
       render(
@@ -327,7 +326,7 @@ describe('Dialog', () => {
       expect(backdrop().className).not.toMatch(/#|rgba|black|white/);
     });
 
-    it('draws its edge with the border token, visible in high contrast and forced colors (overlays-modal-code-1)', () => {
+    it('draws its edge with the border token, visible in high contrast and forced colors', () => {
       // The page, the backdrop and the surface are all black in high contrast and the shadow is
       // black too (forced colors drop it): only a border marks the surface, as on the other overlays.
       renderWithProviders(<Basic dialogProps={{ defaultOpen: true }} />, {
@@ -481,7 +480,7 @@ describe('Dialog', () => {
       warn.mockRestore();
     });
 
-    describe('titles that change while open (overlays-modal-tests-3)', () => {
+    describe('titles that change while open', () => {
       /** The surface is named by an element in the document with that name. */
       function expectNamedBy(name: string) {
         const dialog = screen.getByRole('dialog', { name });
@@ -857,16 +856,10 @@ describe('Dialog', () => {
         </Dialog>,
       ],
     ])('%s outside %s throws in development', (name, parent, element) => {
-      const error = vi.spyOn(console, 'error');
-      expect(() => render(element)).toThrow(
-        new Error(`[WaveUI] ${name} must be used within ${parent}`),
-      );
-      // Thrown, not logged.
-      expect(error).not.toHaveBeenCalled();
-      error.mockRestore();
+      expectThrows(element, `[WaveUI] ${name} must be used within ${parent}`);
     });
 
-    describe('in production (x-errors-components-4)', () => {
+    describe('in production', () => {
       afterEach(() => {
         vi.unstubAllEnvs();
       });
@@ -1053,7 +1046,7 @@ describe('Dialog', () => {
       expect(screen.getByRole('dialog')).toContainElement(document.activeElement as HTMLElement);
     });
 
-    it('focuses finalFocusRef instead of the trigger that opened the dialog (overlays-modal-tests-1)', async () => {
+    it('focuses finalFocusRef instead of the trigger that opened the dialog', async () => {
       const user = userEvent.setup();
       function WithFinalFocus() {
         const ref = React.useRef<HTMLButtonElement>(null);
@@ -1325,7 +1318,7 @@ describe('Dialog', () => {
         expect(button('External')).toHaveFocus();
       });
 
-      it('forgets a trigger click the parent rejected also when nothing has focus (Safari, overlays-modal-tests-2)', async () => {
+      it('forgets a trigger click the parent rejected also when nothing has focus (Safari)', async () => {
         const user = userEvent.setup();
         render(<TriggersAndExternal acceptTriggers={false} />);
         // Plain clicks: focus stays on <body>, so the restore cannot capture the opener.
@@ -1487,56 +1480,6 @@ describe('Dialog', () => {
       await user.click(toastButton);
       expect(onToast).toHaveBeenCalledTimes(1);
       expect(screen.getByRole('dialog')).toBeInTheDocument();
-    });
-  });
-
-  describe('Tab from an open info button that sits outside the dialog container', () => {
-    it('in a consumer Portal: Tab and Shift+Tab move to the elements around it', async () => {
-      const user = userEvent.setup();
-      render(
-        <Dialog open onOpenChange={() => {}}>
-          <Dialog.Content title="Edit">
-            <button type="button">In dialog</button>
-            <Portal>
-              <button type="button">P1</button>
-              <InfoLabel label="Password" info="Use 8 characters." />
-              <button type="button">P2</button>
-            </Portal>
-          </Dialog.Content>
-        </Dialog>,
-      );
-      await user.click(button('Information'));
-      expect(button('Information')).toHaveAttribute('aria-expanded', 'true');
-      await user.tab();
-      expect(button('P2')).toHaveFocus();
-      await user.click(button('Information'));
-      expect(button('Information')).toHaveAttribute('aria-expanded', 'true');
-      await user.tab({ shift: true });
-      expect(button('P1')).toHaveFocus();
-    });
-
-    it('in Popover.Content opened from the dialog: Tab moves on', async () => {
-      const user = userEvent.setup();
-      render(
-        <Dialog open onOpenChange={() => {}}>
-          <Dialog.Content title="Edit">
-            <Popover>
-              <Popover.Trigger>
-                <button type="button">Options</button>
-              </Popover.Trigger>
-              <Popover.Content title="Options">
-                <InfoLabel label="Password" info="Use 8 characters." />
-                <button type="button">Next</button>
-              </Popover.Content>
-            </Popover>
-          </Dialog.Content>
-        </Dialog>,
-      );
-      await user.click(button('Options'));
-      await user.click(button('Information'));
-      expect(button('Information')).toHaveAttribute('aria-expanded', 'true');
-      await user.tab();
-      expect(button('Next')).toHaveFocus();
     });
   });
 

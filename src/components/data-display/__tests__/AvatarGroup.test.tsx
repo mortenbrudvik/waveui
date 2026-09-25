@@ -103,7 +103,7 @@ describe('AvatarGroup', () => {
       }
     });
 
-    // data-display-a-tests-2: the name given by aria-labelledby reaches the group (the warning is
+    // The name given by aria-labelledby reaches the group (the warning is
     // computed from the props, so it stays silent even when the attribute is lost).
     it('is a group named by aria-labelledby', () => {
       render(
@@ -173,7 +173,7 @@ describe('AvatarGroup', () => {
       expect(screen.getByRole('button', { name: '4 more' })).toHaveTextContent('+4');
     });
 
-    // data-display-a-tests-6: a computed max is sanitised. A negative value shows only the
+    // A computed max is sanitised. A negative value shows only the
     // overflow button (never `slice(0, -1)`), a fraction is rounded down and NaN is no limit.
     it.each([
       ['a negative max', -1, [], '4 more'],
@@ -197,7 +197,7 @@ describe('AvatarGroup', () => {
       },
     );
 
-    // x-errors-components-3 (R2): the members of a Fragment count one by one.
+    // C-COMPOUND: the members of a Fragment count one by one.
     it('counts, slices and overlaps the members of a Fragment one by one', () => {
       render(
         <AvatarGroup aria-label="Team" max={2}>
@@ -223,7 +223,7 @@ describe('AvatarGroup', () => {
     });
   });
 
-  // x-ssr-1 (R1): a member written in a Server Component reaches the client as a lazy reference
+  // C-COMPOUND: a member written in a Server Component reaches the client as a lazy reference
   // (`element.type` is not `Avatar`); it is still listed by its name.
   describe('members written in a Server Component', () => {
     const ClientAvatar = asClientReference(Avatar);
@@ -755,7 +755,7 @@ describe('AvatarGroup', () => {
       },
     );
 
-    // data-display-a-code-1: a member named only by its image alt keeps that name when the image
+    // A member named only by its image alt keeps that name when the image
     // fails in the popup, so its list item is never empty for assistive technology.
     it.each([
       [
@@ -803,7 +803,7 @@ describe('AvatarGroup', () => {
     );
     const button = screen.getByRole('button');
     expect(button).toHaveClass(width, width.replace('w-', 'h-'));
-    // data-display-a-docs-4: the button takes the same-size avatars' own size classes.
+    // The button takes the same-size avatars' own size classes.
     const sizeClasses = (el: Element) =>
       Array.from(el.classList).filter((cls) => /^(w-|h-|text-(\[|xs$|sm$|base$|lg$))/.test(cls));
     expect(sizeClasses(button)).toHaveLength(3);

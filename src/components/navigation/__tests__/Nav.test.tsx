@@ -14,6 +14,7 @@ import {
   testComposedHandler,
   testNoImplicitSubmit,
   testSystemProps,
+  expectThrows,
 } from '../../../test-utils';
 
 afterEach(() => {
@@ -38,7 +39,7 @@ function SampleNav(props: Partial<NavProps>) {
 const button = (name: string) => screen.getByRole('button', { name });
 const toggle = () => screen.getByRole('button', { name: 'Docs' });
 
-/** The deprecation warning of a renamed Nav prop (R14: asserted, never silenced). */
+/** The deprecation warning of a renamed Nav prop (asserted, never silenced). */
 const deprecated = (oldName: string, newName: string) =>
   `[WaveUI] Nav: \`${oldName}\` is deprecated and will be removed in 1.0. Use \`${newName}\` instead.`;
 
@@ -103,7 +104,7 @@ describe('Nav', () => {
     expect(NavSubItem).toBe(Nav.SubItem);
   });
 
-  // R1 (x-ssr-1): parts written in a Server Component reach the client as lazy references.
+  // C-COMPOUND: parts written in a Server Component reach the client as lazy references.
   it.each([
     ['uncontrolled', { defaultValue: 'api' }],
     ['controlled', { value: 'api' }],
@@ -490,7 +491,7 @@ describe('Nav', () => {
       expect(button('API')).toHaveAttribute('aria-current', 'page');
     });
 
-    // nav-menu-tests-1: the router pattern, `<Nav value={pathname}>`.
+    // The router pattern, `<Nav value={pathname}>`.
     it('controlled: opens the category that contains the controlled value', () => {
       render(<SampleNav value="api" />);
       expect(toggle()).toHaveAttribute('aria-expanded', 'true');
@@ -511,7 +512,7 @@ describe('Nav', () => {
       expect(screen.queryByRole('button', { name: 'API' })).not.toBeInTheDocument();
     });
 
-    it('accepts readonly category lists and reports a mutable copy (R6)', async () => {
+    it('accepts readonly category lists and reports a mutable copy (C-NAMING)', async () => {
       const user = userEvent.setup();
       const onOpenCategoriesChange = vi.fn();
       const open = ['docs'] as const;
@@ -618,7 +619,7 @@ describe('Nav', () => {
       expect(screen.getByRole('link', { name: 'Home' })).toHaveAttribute('aria-current', 'page');
     });
 
-    // nav-menu-code-3: a click that opens the link elsewhere leaves the current page current.
+    // A click that opens the link elsewhere leaves the current page current.
     describe('a click that opens the link somewhere else', () => {
       function ReportsNav({
         onValueChange,
@@ -1303,12 +1304,7 @@ describe('Nav', () => {
         ),
       ],
     ])('%s outside a Nav throws in development', (name, renderOrphan) => {
-      // The development throw is the whole report: nothing is logged besides it (R14).
-      const error = vi.spyOn(console, 'error');
-      expect(() => render(renderOrphan())).toThrow(
-        new Error(`[WaveUI] ${name} must be used within Nav`),
-      );
-      expect(error).not.toHaveBeenCalled();
+      expectThrows(renderOrphan(), `[WaveUI] ${name} must be used within Nav`);
     });
 
     it('logs each misplaced part once in production and renders it inert', async () => {
@@ -1348,7 +1344,7 @@ describe('Nav', () => {
       }
     });
 
-    // R12: one value per item (Nav.Item and Nav.SubItem share them) and one per category.
+    // C-DEV: one value per item (Nav.Item and Nav.SubItem share them) and one per category.
     it('warns once per value that several items or several categories share', () => {
       const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
       // Sub-items register while their category is open (they are rendered only then).

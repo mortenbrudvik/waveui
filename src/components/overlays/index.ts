@@ -40,4 +40,8 @@ export type {
 } from './Drawer';
 
 export { TeachingPopover } from './TeachingPopover';
-export type { TeachingPopoverProps, TeachingPopoverStep } from './TeachingPopover';
+export type {
+  TeachingPopoverProps,
+  TeachingPopoverStep,
+  TeachingPopoverLabels,
+} from './TeachingPopover';

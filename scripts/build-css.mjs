@@ -11,7 +11,8 @@
  *     with the same properties, so every `--wave-*` variable ships;
  *   - every scoped base / native-reset rule of base.css is present with the same properties
  *     (property names only: the minifier rewrites values; the declared values of both source
- *     files are asserted by src/styles/__tests__/tokens.test.ts);
+ *     files are asserted by src/styles/__tests__/tokens.test.ts), and a declaration that is
+ *     `!important` in the source (the `hidden` rule) is `!important` in the output too;
  *   - the `@keyframes wave-*` rules and the `animate-wave-*`, `bg-primary` and `text-body-1`
  *     utilities are present (the sources were scanned);
  *   - no top-level `@layer` other than Tailwind's `properties` fallback (the output is
@@ -26,7 +27,7 @@
  *     text file whatever its extension; binary and lock files are skipped, CSS files yield no
  *     candidates): the library side is the style entries' `@source` directives (src/components
  *     and src/lib without their tests), the story side is stories/;
- *   - no class that no class string of the library uses (x-styling-1): every class of the file
+ *   - no class that no class string of the library uses: every class of the file
  *     is a whitespace-separated word of a string literal of a library script, a class of the
  *     style entries (safelist, selectors) or story-only (reported above). Tailwind reads every
  *     word of its sources, so a word of a comment or an identifier (`container`, `.filter(`)
@@ -34,10 +35,10 @@
  *     `@source not inline()`, and also the words of non-class strings, which this check cannot
  *     tell from classes;
  *   - every `wave-rtl:` class of a library class string is compiled with Wave's direction
- *     variant (src/styles/variants.css, R4): `:where(:dir(rtl))` under
+ *     variant (src/styles/variants.css, C-LOGICAL): `:where(:dir(rtl))` under
  *     `@supports selector(:dir(rtl))` and the `[dir=rtl]` fallback under its negation;
- *   - no class with Tailwind's bare `rtl:`/`ltr:` variant ships (R4): they also match inside a
- *     subtree of the opposite direction.
+ *   - no class with Tailwind's bare `rtl:`/`ltr:` variant ships (C-LOGICAL): they also match inside
+ *     a subtree of the opposite direction.
  *
  * Usage: node scripts/build-css.mjs [--out-dir <dir>] [--check-only]
  *   --out-dir     output directory (default: dist)
@@ -194,6 +195,13 @@ function propertyNames(node) {
     .map((child) => child.prelude.slice(0, child.prelude.indexOf(':')).trim());
 }
 
+/** Property names of a rule's `!important` declarations. */
+function importantPropertyNames(node) {
+  return (node.children ?? [])
+    .filter((child) => child.children === null && /!\s*important\s*$/i.test(child.prelude))
+    .map((child) => child.prelude.slice(0, child.prelude.indexOf(':')).trim());
+}
+
 /**
  * Normalises one selector so authored and minified forms compare equal: whitespace, commas,
  * legacy single-colon `:before`/`:after`, and unquoted attribute values.
@@ -344,15 +352,17 @@ function assertUnlayered(nodes, label, errors) {
 /**
  * Each style rule of `sourceCss` must reappear in `nodes`: every selector of the source rule is
  * present in some top-level rule of the output, and those rules together declare every property
- * the source rule declares.
+ * the source rule declares, `!important` where the source declares it so.
  */
 function assertRulesShipped(nodes, sourceCss, sourceLabel, errors) {
   const outputRules = nodes.filter(isStyleRule).map((node) => ({
     selectors: selectorList(node.prelude),
     properties: propertyNames(node),
+    important: importantPropertyNames(node),
   }));
   for (const rule of parseCss(sourceCss).filter(isStyleRule)) {
     const wanted = propertyNames(rule);
+    const wantedImportant = importantPropertyNames(rule);
     for (const selector of selectorList(rule.prelude)) {
       const matching = outputRules.filter((output) => output.selectors.includes(selector));
       if (matching.length === 0) {
@@ -365,6 +375,15 @@ function assertRulesShipped(nodes, sourceCss, sourceLabel, errors) {
         errors.push(
           `styles.css: "${selector}" (${sourceLabel}) lacks ${missing.slice(0, 8).join(', ')}` +
             (missing.length > 8 ? ` and ${missing.length - 8} more` : ''),
+        );
+      }
+      const shippedImportant = new Set(matching.flatMap((output) => output.important));
+      const notImportant = wantedImportant.filter(
+        (property) => shipped.has(property) && !shippedImportant.has(property),
+      );
+      if (notImportant.length > 0) {
+        errors.push(
+          `styles.css: "${selector}" (${sourceLabel}) lacks !important on ${notImportant.join(', ')}`,
         );
       }
     }
@@ -550,7 +569,7 @@ export function hasDirectionVariant(name) {
 /**
  * The classes of the stylesheet with Tailwind's bare `rtl:`/`ltr:` variant (`not-rtl:`/`not-ltr:`
  * included). Tailwind compiles them with `[dir=rtl] *` / `[dir=ltr] *`, which also match inside a
- * subtree of the opposite direction, so Wave uses its own `wave-rtl:` only (R4).
+ * subtree of the opposite direction, so Wave uses its own `wave-rtl:` only (C-LOGICAL).
  */
 export function bareDirectionClasses(css) {
   return [...selectorClasses(css)]
@@ -654,12 +673,12 @@ export function assertStylesCss(css, { tokensCss, baseCss, storySources }) {
     if (css.includes(needle)) errors.push(`styles.css: contains "${needle}"`);
   }
 
-  // No class with Tailwind's bare direction variants (R4).
+  // No class with Tailwind's bare direction variants (C-LOGICAL).
   const bareDirection = bareDirectionClasses(css);
   if (bareDirection.length > 0) {
     errors.push(
       "styles.css: contains classes with Tailwind's bare rtl:/ltr: variant, which also matches " +
-        `inside a subtree of the opposite direction (use wave-rtl:, R4): ${bareDirection.slice(0, 20).join(' ')}`,
+        `inside a subtree of the opposite direction (use Wave's wave-rtl: variant): ${bareDirection.slice(0, 20).join(' ')}`,
     );
   }
 
@@ -685,7 +704,7 @@ export function assertStylesCss(css, { tokensCss, baseCss, storySources }) {
       );
     }
 
-    // Every wave-rtl: class of the library compiled with Wave's direction variant (R4).
+    // Every wave-rtl: class of the library compiled with Wave's direction variant (C-LOGICAL).
     const uncompiled = missingDirectionVariant(css, [...tokens].filter(hasDirectionVariant));
     if (uncompiled.length > 0) {
       errors.push(

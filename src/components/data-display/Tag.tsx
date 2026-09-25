@@ -4,10 +4,10 @@ import { warnDeprecated, warnOnce } from '../../lib/dev';
 import { mergeProps } from '../../lib/mergeProps';
 import { getElementType } from '../../lib/children';
 import {
-  VOID_ELEMENTS,
   materialiseSlotContent,
   renderSlot,
   slotRendersContent,
+  slotWrapsDefaultContent,
 } from '../../lib/slot';
 import { focusRing } from '../../lib/styles';
 import { DismissIcon } from '../../lib/icons';
@@ -40,19 +40,21 @@ export interface TagOwnProps {
    * A `<button>` element or a Wave `Button` passed here is not nested (a button cannot contain a
    * button): its props are merged into the dismiss button (its `onClick` runs first and can call
    * `preventDefault()` to skip `onDismiss`) and a development warning recommends icon content.
-   * A slot object with button props (`type`, `disabled`, event handlers, `as: 'button'`) is the
-   * deprecated 0.4 button-object form: all its props except `children` (`className`, `id`,
-   * `aria-*`, handlers, …) are merged onto the dismiss button — pass icon content and use
-   * `onDismiss` instead. The `aria-*` attributes of an icon slot object also go to the dismiss
-   * button, because the icon is `aria-hidden`.
+   * A slot object with button props (`type`, `disabled`, event handlers, `as: 'button'` or
+   * `as: Button`) is the deprecated 0.4 button-object form: all its props except `children`
+   * (`className`, `id`, `aria-*`, handlers, …) are merged onto the dismiss button, and a Wave
+   * Button's `icon` becomes decorative content — pass icon content and use `onDismiss` instead.
+   * The `aria-*` attributes of an icon slot object also go to the dismiss button, because the icon
+   * is `aria-hidden`.
    *
    * The dismiss button's name is `dismissLabel` plus the tag content ("Dismiss Cherry"):
    * `aria-label` and `aria-labelledby` on the slot are ignored (development warning). Icon
-   * content is decorative (`aria-hidden`). The children of a merged `<button>`/`Button` are
-   * rendered as is, after the decorative `icon` of a Wave `Button`: when they render a text label
-   * (at least two letters or digits outside `aria-hidden`/`hidden` content, text from components
-   * such as translations included), that text replaces `dismissLabel` in the name, so the name
-   * contains the visible label (WCAG 2.5.3): `<button>Remove</button>` or
+   * content is decorative (`aria-hidden`). The children of a merged `<button>`/`Button` (or its
+   * `dangerouslySetInnerHTML` markup) are rendered as is inside the dismiss button, after the
+   * decorative `icon` of a Wave `Button`: when they render a text label (at least two letters or
+   * digits outside `aria-hidden`/`hidden` content, text from components such as translations
+   * included), that text replaces `dismissLabel` in the name, so the name contains the visible
+   * label (WCAG 2.5.3): `<button>Remove</button>` or
    * `<Button icon={<CloseIcon />}>Remove</Button>` on "Cherry" is named "Remove Cherry". An icon or
    * a lone character (`x`, `×`) keeps "Dismiss Cherry". Text hidden only with CSS still counts as
    * the label.
@@ -118,7 +120,11 @@ interface WaveButtonSlotProps extends UnknownProps {
   size?: unknown;
   icon?: Slot<'span'>;
   children?: React.ReactNode;
+  dangerouslySetInnerHTML?: React.HTMLAttributes<HTMLElement>['dangerouslySetInnerHTML'];
 }
+
+/** Wave `Button` props of a `{ as: Button, … }` slot object that are not DOM attributes. */
+const WAVE_BUTTON_KEYS: ReadonlySet<string> = new Set(['appearance', 'size', 'icon']);
 
 interface ResolvedDismissSlot {
   /** Props merged onto the wired dismiss button (`null`: none). */
@@ -173,17 +179,6 @@ function defaultDismissContent(): React.ReactNode {
 }
 
 /**
- * Whether a slot object's element shows the default dismiss icon inside it: when its children
- * render nothing and its element can hold children, so `{ className: 'text-error' }` styles the
- * default icon. A void tag (`img`) or a component (an icon that draws its own glyph) is the icon
- * itself, and `dangerouslySetInnerHTML` is content of its own.
- */
-function wrapsDefaultIcon(tag: unknown, props: UnknownProps): boolean {
-  if (typeof tag !== 'string' || VOID_ELEMENTS.has(tag)) return false;
-  return props.dangerouslySetInnerHTML == null && !slotRendersContent(props.children);
-}
-
-/**
  * Splits the dismissIcon slot into dismiss-button props and icon content (C-SLOTS). The icon
  * content is `aria-hidden`, so no attribute that means something to assistive technology stays on
  * it: button-form props go to the dismiss button, and so do the `aria-*` attributes of an icon slot
@@ -212,7 +207,7 @@ function resolveDismissSlot(slot: TagOwnProps['dismissIcon']): ResolvedDismissSl
     React.isValidElement<WaveButtonSlotProps>(slot) &&
     (elementType === 'button' || elementType === Button)
   ) {
-    const { children, ...elementProps } = slot.props;
+    const { children, dangerouslySetInnerHTML: markup, ...elementProps } = slot.props;
     let icon: Slot<'span'> | undefined;
     let slotProps: UnknownProps = elementProps;
     if (elementType === Button) {
@@ -231,7 +226,14 @@ function resolveDismissSlot(slot: TagOwnProps['dismissIcon']): ResolvedDismissSl
       ? renderSlot(icon, 'span', iconClassName, { 'aria-hidden': true })
       : null;
     // A generator is read once by the check; its items are what renders (and names the button).
-    const ownContent = materialiseSlotContent(children);
+    // Markup of the merged button (`dangerouslySetInnerHTML`) is its content as well: the dismiss
+    // button holds its own name text, so the markup renders in a span inside it.
+    const ownContent =
+      markup != null ? (
+        <span className={iconClassName} dangerouslySetInnerHTML={markup} />
+      ) : (
+        materialiseSlotContent(children)
+      );
     return {
       buttonProps,
       content:
@@ -252,16 +254,22 @@ function resolveDismissSlot(slot: TagOwnProps['dismissIcon']): ResolvedDismissSl
 
   if (isPlainObject(slot)) {
     // 0.4 rendered the whole object as the dismiss element, so an object with button props
-    // describes the button: everything but its content goes to the dismiss button.
+    // describes the button: everything but its content goes to the dismiss button. `as: Button`
+    // is that form too (a button cannot contain a button); its icon becomes decorative content.
+    const asWaveButton = slot.as === Button;
     const isButtonObject =
       slot.as === 'button' ||
+      asWaveButton ||
       Object.keys(slot).some((key) => BUTTON_ONLY_KEYS.has(key) || HANDLER_KEY.test(key));
     const buttonProps: UnknownProps = {};
     const contentProps: UnknownProps = {};
     let ignoredName = false;
+    let buttonIcon: unknown;
     for (const [key, value] of Object.entries(slot)) {
       if (key === 'as') {
-        if (value !== 'button') contentProps.as = value;
+        if (value !== 'button' && !asWaveButton) contentProps.as = value;
+      } else if (asWaveButton && WAVE_BUTTON_KEYS.has(key)) {
+        if (key === 'icon') buttonIcon = value;
       } else if (NAME_KEYS.has(key)) {
         if (value !== undefined) ignoredName = true;
       } else if (key === 'children' || key === 'dangerouslySetInnerHTML') {
@@ -274,8 +282,15 @@ function resolveDismissSlot(slot: TagOwnProps['dismissIcon']): ResolvedDismissSl
       }
     }
     // An object without content styles the default icon, e.g. `{ className: 'text-error' }` (as in
-    // MessageBar and SearchBox).
-    if (wrapsDefaultIcon(contentProps.as ?? 'span', contentProps)) {
+    // MessageBar and SearchBox); a Wave Button's icon comes first, in front of the content.
+    if (slotRendersContent(buttonIcon)) {
+      contentProps.children = (
+        <>
+          {renderSlot(buttonIcon as Slot<'span'>, 'span', iconClassName)}
+          {materialiseSlotContent(contentProps.children)}
+        </>
+      );
+    } else if (slotWrapsDefaultContent(contentProps.as ?? 'span', contentProps)) {
       contentProps.children = defaultDismissContent();
     }
     return {

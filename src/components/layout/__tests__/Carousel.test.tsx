@@ -1246,7 +1246,7 @@ describe('Carousel', () => {
     });
   });
 
-  describe('without slides (layout-a-docs-1)', () => {
+  describe('without slides', () => {
     it('calls the consumer pointer and focus handlers on the empty root (C-COMPOSE)', () => {
       const onMouseEnter = vi.fn();
       const onMouseLeave = vi.fn();
@@ -1309,14 +1309,14 @@ describe('Carousel', () => {
     });
   });
 
-  it('isolates its stacking context, so the controls stay under page headers (x-styling-6)', () => {
+  it('isolates its stacking context, so the controls stay under page headers', () => {
     render(<Carousel aria-label="Featured">{threeSlides}</Carousel>);
     expect(region()).toHaveClass('relative', 'isolate', 'overflow-hidden');
     // The controls' z-index is local to the carousel.
     expect(nextButton()).toHaveClass('z-10');
   });
 
-  describe('localizable names (layout-a-code-1, R7)', () => {
+  describe('localizable names (C-NAMING)', () => {
     const german: CarouselLabels = {
       previous: 'Vorherige Folie',
       next: 'Nächste Folie',
@@ -1432,7 +1432,7 @@ describe('Carousel', () => {
     expect(screen.getByTestId('empty')).toBeEmptyDOMElement();
   });
 
-  describe('slides written in a Server Component (x-ssr-1)', () => {
+  describe('slides written in a Server Component', () => {
     // A client component written in a Server Component reaches the client as a lazy reference.
     const Item = asClientReference(CarouselItem);
     const plainSlides = ['First', 'Second', 'Third'].map((name) => (
@@ -1465,7 +1465,7 @@ describe('Carousel', () => {
     });
   });
 
-  describe('children that are not slides (x-errors-components-1)', () => {
+  describe('children that are not slides', () => {
     it('finds slides inside Fragments, nested ones included', () => {
       const warn = vi.spyOn(console, 'warn');
       render(

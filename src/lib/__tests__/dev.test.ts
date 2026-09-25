@@ -354,7 +354,7 @@ describe('reportMissingContext', () => {
   });
 });
 
-describe('without a `process` global (lib-provider-tests-2)', () => {
+describe('without a `process` global', () => {
   // An unbundled ESM import in the browser: no bundler replaced `process.env.NODE_ENV` and there is
   // no `process`. Development mode is assumed, so the diagnostics stay on.
   function withoutProcess<T>(run: () => T): T {

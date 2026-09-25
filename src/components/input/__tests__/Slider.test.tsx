@@ -125,7 +125,7 @@ describe('Slider', () => {
       expect(slider.className).not.toMatch(/#[0-9a-f]{3,8}|border-white|bg-white/i);
     });
 
-    it('keeps the rail, the thumb and the focus outline visible in forced colors (x-styling-4)', () => {
+    it('keeps the rail, the thumb and the focus outline visible in forced colors', () => {
       // The rail and thumb are author backgrounds of pseudo-elements, which forced colors replace
       // with Canvas: without the recipe only a hollow thumb outline would remain.
       render(
@@ -141,7 +141,7 @@ describe('Slider', () => {
       }
     });
 
-    it('centres the thumb on the rail with a margin derived from both sizes, not a px offset (x-styling-3)', () => {
+    it('centres the thumb on the rail with a margin derived from both sizes, not a px offset', () => {
       render(<Slider aria-label="Volume" />);
       const className = screen.getByRole('slider', { name: 'Volume' }).className;
       /** The spacing-scale number of a `<part>:<utility>-<n>` class. */

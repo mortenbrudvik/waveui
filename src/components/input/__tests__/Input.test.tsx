@@ -113,14 +113,12 @@ describe('Input', () => {
     it('hides the whole field with hidden, not only the inner input', () => {
       const { container } = render(<Input aria-label="Price" contentAfter="kg" hidden />);
       const wrapper = container.firstElementChild as HTMLElement;
+      // base.css's scoped `[hidden]` rule hides it over its `inline-flex`.
       expect(wrapper).toHaveAttribute('hidden');
-      // The wrapper's display utility would beat the hidden attribute's UA display rule.
-      expect(wrapper).toHaveClass('hidden');
-      expect(wrapper).not.toHaveClass('inline-flex');
       expect(wrapper.querySelector('input')).not.toHaveAttribute('hidden');
     });
 
-    it('renders a plain input for slot values that render nothing (R11)', () => {
+    it('renders a plain input for slot values that render nothing (C-SLOTS)', () => {
       const showIcon = false;
       const { container } = render(
         <>

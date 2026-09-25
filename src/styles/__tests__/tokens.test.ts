@@ -1088,6 +1088,9 @@ describe('base.css — scoped base (button-provider#2, repo-level#7)', () => {
       { height: '0', border: '0 solid', 'border-top-width': '1px', color: 'inherit', margin: '0' },
     ],
     [[`${SCOPE} :where(img, svg, video)`], { 'vertical-align': 'middle' }],
+    // Preflight's `hidden` rule: without it a component's display utility (`inline-flex`) beats
+    // the user-agent `[hidden] { display: none }` rule, and `hidden` does nothing.
+    [[`${SCOPE} :where([hidden]:not([hidden='until-found']))`], { display: 'none !important' }],
   ];
 
   it.each(
@@ -1112,7 +1115,17 @@ describe('base.css — scoped base (button-provider#2, repo-level#7)', () => {
     const source = stripComments(readCss('base.css'));
     expect(source).not.toMatch(/@layer/);
     expect(source).not.toMatch(/prefers-reduced-motion/);
-    expect(source).not.toMatch(/!important/);
+  });
+
+  it('uses !important only to let the hidden attribute beat display utilities', () => {
+    const important = styleRules(baseNodes()).flatMap((rule) =>
+      [...declarations(rule.children ?? [])]
+        .filter(([, value]) => value.includes('!important'))
+        .map(([name]) => `${selectorList(rule.prelude).join(', ')} { ${name} }`),
+    );
+    expect(important).toEqual([
+      ":where(.wave-root, .wave-portal) :where([hidden]:not([hidden='until-found'])) { display }",
+    ]);
   });
 });
 
@@ -1142,7 +1155,7 @@ function statements(name: string): string[] {
 
 /**
  * Tailwind utilities that no component uses as a class, but whose names occur in the library
- * sources as words of comments, identifiers or non-class strings (x-styling-1). styles.css
+ * sources as words of comments, identifiers or non-class strings. styles.css
  * excludes them, so the unlayered precompiled file never restyles an app's own `.collapse`,
  * `.container` or `.table`.
  */
@@ -1213,7 +1226,7 @@ describe('style entries (repo-level#1)', () => {
     expect(parseFile('globals.css').filter((node) => node.children !== null)).toEqual([]);
   });
 
-  it('variants.css defines wave-rtl by the element direction, with the [dir] fallback (R4)', () => {
+  it('variants.css defines wave-rtl by the element direction, with the [dir] fallback (C-LOGICAL)', () => {
     // `:dir(rtl)` follows the element's own direction, so an LTR subtree of an RTL page is not
     // mirrored; browsers without `:dir()` (Chrome and Edge before 120) get Tailwind's attribute
     // match. Tailwind's own `rtl` variant is never redefined.
@@ -1427,6 +1440,7 @@ describe('scripts/build-css.mjs — gate assertions (repo-level#1)', () => {
     '.wave-root { background-color: var(--wave-background); }',
     ":where(.wave-root, .wave-portal) :where(button, [role='button']) { cursor: pointer; }",
     ':where(.wave-root, .wave-portal) :where(ul, ol) { list-style: none; margin: 0; }',
+    ":where(.wave-root, .wave-portal) :where([hidden]:not([hidden='until-found'])) { display: none !important; }",
   ].join('\n');
   const UTILITIES = [
     '.bg-primary{background-color:var(--wave-primary)}',
@@ -1447,6 +1461,7 @@ describe('scripts/build-css.mjs — gate assertions (repo-level#1)', () => {
     '.wave-root{background-color:var(--wave-background)}',
     ':where(.wave-root,.wave-portal) :where(button,[role=button]){cursor:pointer}',
     ':where(.wave-root,.wave-portal) :where(ul,ol){list-style:none;margin:0}',
+    ':where(.wave-root,.wave-portal) :where([hidden]:not([hidden=until-found])){display:none!important}',
     ...UTILITIES,
     ...KEYFRAMES,
   ].join('');
@@ -1561,7 +1576,7 @@ describe('scripts/build-css.mjs — gate assertions (repo-level#1)', () => {
     expect(await gate(`${leak}${GATE_CSS}`)).toEqual([`styles.css: contains "${needle}"`]);
   });
 
-  it('rejects a missing base rule, a missing property and a missing --wave-* variable', async () => {
+  it('rejects a missing base rule, a missing property, a lost !important and a missing --wave-* variable', async () => {
     const withoutRule = GATE_CSS.replace(
       ':where(.wave-root,.wave-portal) :where(ul,ol){list-style:none;margin:0}',
       '',
@@ -1572,6 +1587,10 @@ describe('scripts/build-css.mjs — gate assertions (repo-level#1)', () => {
     const withoutProperty = GATE_CSS.replace('{list-style:none;margin:0}', '{margin:0}');
     expect(await gate(withoutProperty)).toEqual([
       'styles.css: ":where(.wave-root,.wave-portal) :where(ul,ol)" (base.css) lacks list-style',
+    ]);
+    const withoutImportant = GATE_CSS.replace('{display:none!important}', '{display:none}');
+    expect(await gate(withoutImportant)).toEqual([
+      'styles.css: ":where(.wave-root,.wave-portal) :where([hidden]:not([hidden=until-found]))" (base.css) lacks !important on display',
     ]);
     const withoutVar = GATE_CSS.replace(';--wave-foreground:#242424', '');
     expect(await gate(withoutVar)).toEqual([
@@ -1661,7 +1680,7 @@ describe('scripts/build-css.mjs — gate assertions (repo-level#1)', () => {
     });
   });
 
-  describe('classes that no library class string uses (x-styling-1)', () => {
+  describe('classes that no library class string uses', () => {
     const COMPONENT = [
       '/** Keeps its container; mirror the chevron with `rtl:-scale-x-100`. */',
       "const visible = items.filter((item) => item.visibility !== 'collapse');",
@@ -1730,7 +1749,7 @@ describe('scripts/build-css.mjs — gate assertions (repo-level#1)', () => {
     });
   });
 
-  describe('the wave-rtl direction variant (R4)', () => {
+  describe('the wave-rtl direction variant (C-LOGICAL)', () => {
     const NATIVE = String.raw`@supports selector(:dir(rtl)){.wave-rtl\:-scale-x-100:where(:dir(rtl)){scale:-1 1}}`;
     const FALLBACK = String.raw`@supports not selector(:dir(rtl)){.wave-rtl\:-scale-x-100:where([dir=rtl],[dir=rtl] *){scale:-1 1}}`;
 
@@ -1784,7 +1803,7 @@ describe('scripts/build-css.mjs — gate assertions (repo-level#1)', () => {
       const bare = String.raw`.rtl\:-scale-x-100:where(:dir(rtl),[dir=rtl],[dir=rtl] *){scale:-1 1}.hover\:ltr\:ms-2:hover:where(:dir(ltr),[dir=ltr],[dir=ltr] *){margin-inline-start:.5rem}.not-rtl\:pe-2:not(:where(:dir(rtl),[dir=rtl],[dir=rtl] *)){padding-inline-end:.5rem}`;
       expect(await gate(GATE_CSS + NATIVE + FALLBACK + bare)).toEqual([
         "styles.css: contains classes with Tailwind's bare rtl:/ltr: variant, which also " +
-          'matches inside a subtree of the opposite direction (use wave-rtl:, R4): ' +
+          "matches inside a subtree of the opposite direction (use Wave's wave-rtl: variant): " +
           'hover:ltr:ms-2 not-rtl:pe-2 rtl:-scale-x-100',
       ]);
     });
@@ -2037,7 +2056,7 @@ describe('scripts/build-css.mjs — gate assertions (repo-level#1)', () => {
     });
   });
 
-  describe('main() compiling the real style entries (x-styling-1, R4)', () => {
+  describe('main() compiling the real style entries (C-LOGICAL)', () => {
     /**
      * A project with copies of the real style entries, compiled by the Tailwind CLI. It lives
      * under the repository's node_modules/.cache, so `tailwindcss/*.css` resolves as it does here.
@@ -2150,7 +2169,7 @@ describe('scripts/build-css.mjs — gate assertions (repo-level#1)', () => {
     }, 60_000);
   });
 
-  it('ships none of the excluded words from the real sources (x-styling-1)', async () => {
+  it('ships none of the excluded words from the real sources', async () => {
     // Compiles the real styles.css over the real src/components and src/lib. Only the shipped
     // classes are asserted: the other assertions of the gate belong to `npm run build`.
     const { main, selectorClasses } = await loadBuildCss();
@@ -2226,7 +2245,20 @@ describe('scripts/build-css.mjs — gate assertions (repo-level#1)', () => {
       expect(entryStatus(BUILD_CSS_URL, BUILD_CSS_PATH)).toBe('main');
       expect(entryStatus(BUILD_CSS_URL, undefined)).toBe('imported');
       expect(entryStatus(BUILD_CSS_URL, join(scratch, 'other.mjs'))).toBe('imported');
-      // Importing the script does not build anything.
+      // Importing the script builds and checks nothing: a Node process that only imports it prints
+      // nothing (a build or check prints its report) and exits 0.
+      const imported = spawnSync(
+        process.execPath,
+        ['--input-type=module', '-e', `await import(${JSON.stringify(BUILD_CSS_URL)});`],
+        { encoding: 'utf8' },
+      );
+      expect({ status: imported.status, stdout: imported.stdout, stderr: imported.stderr }).toEqual(
+        {
+          status: 0,
+          stdout: '',
+          stderr: '',
+        },
+      );
       const buildCss = await loadBuildCss();
       expect(typeof buildCss.main).toBe('function');
     });

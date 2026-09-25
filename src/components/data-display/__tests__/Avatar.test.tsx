@@ -100,7 +100,7 @@ describe('Avatar', () => {
       expect(root).not.toHaveAttribute('aria-details');
     });
 
-    // data-display-a-code-4 / data-display-a-tests-1: a falsy badge (`badge={count && <CounterBadge
+    // A falsy badge (`badge={count && <CounterBadge
     // … />}` with count 0) is no badge, as in 0.4 and like `icon`, and so is a collection whose
     // items render nothing: no stray "0" in the corner, and the root props stay on the avatar.
     describe.each([
@@ -490,7 +490,7 @@ describe('Avatar', () => {
       expect(screen.getByRole('img')).toHaveAttribute('src', 'https://example.com/slot.jpg');
     });
 
-    // data-display-a-code-2: an undefined slot alt (an optional `alt: user.photoAlt`, or a wrapper
+    // An undefined slot alt (an optional `alt: user.photoAlt`, or a wrapper
     // forwarding `alt={alt}`) is no alt of its own, so the image alt still defaults to `name`.
     describe.each([
       ['object', () => ({ src: PHOTO, alt: undefined })],
@@ -548,7 +548,7 @@ describe('Avatar', () => {
       expect(avatar).toHaveClass('bg-primary', 'text-primary-foreground');
     });
 
-    // data-display-a-code-1: an image slot's own alt names the avatar (the avatar has no `name`).
+    // An image slot's own alt names the avatar (the avatar has no `name`).
     // That name survives a load failure: the fallback visual carries it instead of turning
     // aria-hidden. The alt describes the image, so no initials are made from it.
     it.each([

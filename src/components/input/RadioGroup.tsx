@@ -161,7 +161,7 @@ const RadioGroupRoot = ({
 
   useFormReset(rootRef, () => setValue(initialValue), form);
 
-  // Development diagnostic (R12): the items may sit anywhere inside the group (Fragments, wrapper
+  // Development diagnostic (C-DEV): the items may sit anywhere inside the group (Fragments, wrapper
   // elements), so they are read from the DOM after each commit.
   React.useEffect(() => {
     const root = rootRef.current;

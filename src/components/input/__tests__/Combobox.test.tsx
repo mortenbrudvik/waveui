@@ -294,17 +294,16 @@ describe('Combobox', () => {
       expect(onValueChange).not.toHaveBeenCalled();
     });
 
-    it('hides filtered-out options over their display utility (no Preflight)', async () => {
+    it('hides filtered-out options with the hidden attribute', async () => {
       const user = userEvent.setup();
       renderCombobox();
       await user.type(combobox(), 'ch');
       const filteredOut = screen
         .getAllByRole('option', { hidden: true })
         .filter((element) => element.hidden);
+      // base.css's scoped `[hidden]` rule hides them over their `flex`.
       expect(filteredOut.map((element) => element.textContent)).toEqual(['Apple', 'Beta']);
-      // `flex` would override the UA `[hidden] { display: none }` rule without Preflight.
-      for (const element of filteredOut) expect(element).toHaveClass('[&[hidden]]:hidden');
-      expect(option('Cherry')).toHaveClass('flex');
+      expect(option('Cherry')).not.toHaveAttribute('hidden');
     });
 
     it('shows "No matches" when the text matches no option', async () => {
@@ -316,7 +315,7 @@ describe('Combobox', () => {
       expect(screen.queryByRole('listbox')).toBeNull();
     });
 
-    it('announces "No matches" through a status region mounted before the text (x-lifecycle-3)', async () => {
+    it('announces "No matches" through a status region mounted before the text', async () => {
       const user = userEvent.setup();
       const { container } = renderCombobox();
       // A live region added together with its text is not announced by every screen reader.
@@ -783,7 +782,7 @@ describe('Combobox', () => {
       }
     });
 
-    it('renders the selected label of options written in a Server Component (R1)', () => {
+    it('renders the selected label of options written in a Server Component (C-COMPOUND)', () => {
       // React Flight delivers Option/OptionGroup written in a Server Component as lazy types.
       const ClientOption = asClientReference(Option);
       const ClientOptionGroup = asClientReference(OptionGroup);
@@ -1208,7 +1207,7 @@ describe('Combobox', () => {
       expect(form.checkValidity()).toBe(true);
     });
 
-    it('blocks submission inside a required Field until an option is chosen (listbox-consumers-tests-1)', async () => {
+    it('blocks submission inside a required Field until an option is chosen', async () => {
       const user = userEvent.setup();
       renderWithFieldContext(
         <form aria-label="Form">
@@ -1224,7 +1223,7 @@ describe('Combobox', () => {
       expect(form.checkValidity()).toBe(true);
     });
 
-    it('names its open listbox after the Field label (listbox-consumers-tests-4)', async () => {
+    it('names its open listbox after the Field label', async () => {
       const user = userEvent.setup();
       renderWithFieldContext(<Combobox>{FRUITS}</Combobox>);
       await user.click(combobox(FIELD_TEST_TEXT.label));
@@ -1266,7 +1265,7 @@ describe('Combobox', () => {
       expect(onFocus).toHaveBeenCalled();
     });
 
-    it('routes the text input attributes autoCapitalize and autoCorrect to the input (listbox-consumers-docs-2)', () => {
+    it('routes the text input attributes autoCapitalize and autoCorrect to the input', () => {
       render(
         <Combobox aria-label="Fruit" autoCapitalize="none" autoCorrect="off" data-testid="root">
           {FRUITS}
@@ -1338,7 +1337,7 @@ describe('Combobox', () => {
       expect(combobox()).toHaveAttribute('aria-required', 'true');
     });
 
-    it('is neither validated nor submitted while disabled, like a native control (listbox-consumers-tests-2)', () => {
+    it('is neither validated nor submitted while disabled, like a native control', () => {
       render(
         <form aria-label="Order">
           <Combobox aria-label="Fruit" name="fruit" required disabled>
@@ -1357,7 +1356,7 @@ describe('Combobox', () => {
     });
   });
 
-  describe('field look (x-api-4, x-api-3)', () => {
+  describe('field look', () => {
     it('draws the field boundary with the accessible bottom stroke (WCAG 1.4.11)', () => {
       renderCombobox();
       expect(combobox()).toHaveClass(
@@ -1378,7 +1377,7 @@ describe('Combobox', () => {
             errorId: FIELD_TEST_IDS.errorId,
           }),
       ],
-    ])('shows the destructive border while invalid through %s (R8)', (_, renderInvalid) => {
+    ])('shows the destructive border while invalid through %s', (_, renderInvalid) => {
       renderInvalid();
       const control = screen.getByRole('combobox');
       expect(control).toHaveAttribute('aria-invalid', 'true');

@@ -15,6 +15,7 @@ import {
   installResizeObserverMock,
   testCompoundExposure,
   testSystemProps,
+  expectThrows,
 } from '../../../test-utils';
 import type { ResizeObserverMock } from '../../../test-utils';
 
@@ -682,7 +683,7 @@ describe('Overflow', () => {
     expect(hiddenItems()).toEqual(['b', 'c']);
   });
 
-  describe('item removal (layout-b-tests-4)', () => {
+  describe('item removal', () => {
     // Removing an item changes no size a ResizeObserver watches (the container keeps its width):
     // only the unregistration re-measures.
     const row = (ids: string[], renderButton: OverflowProps['overflowButton']) => (
@@ -985,14 +986,6 @@ describe('Overflow', () => {
   });
 
   describe('context (overlays#34)', () => {
-    // The development throw is the whole report: nothing is logged besides it (R14).
-    const expectThrows = (ui: React.ReactElement, text: string) => {
-      const error = vi.spyOn(console, 'error');
-      expect(() => render(ui)).toThrow(new Error(text));
-      expect(error).not.toHaveBeenCalled();
-      error.mockRestore();
-    };
-
     it('throws when OverflowItem is rendered outside Overflow', () => {
       expectThrows(
         <OverflowItem itemId="a">A</OverflowItem>,
@@ -1000,7 +993,7 @@ describe('Overflow', () => {
       );
     });
 
-    it('in production, logs once per part outside Overflow and renders inertly (R3)', () => {
+    it('in production, logs once per part outside Overflow and renders inertly (C-CONTEXT)', () => {
       vi.stubEnv('NODE_ENV', 'production');
       const error = vi.spyOn(console, 'error').mockImplementation(() => {});
       function Menu() {
@@ -1043,7 +1036,7 @@ describe('Overflow', () => {
   });
 });
 
-describe('Overflow - server rendering (layout-b-tests-6)', () => {
+describe('Overflow - server rendering', () => {
   function Probe() {
     const ref = React.useRef<HTMLDivElement>(null);
     const isOverflowing = useIsOverflowing(ref);

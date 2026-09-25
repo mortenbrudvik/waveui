@@ -17,6 +17,7 @@ import {
   testForwardRef,
   testRestSpread,
   testSystemProps,
+  expectThrows,
 } from '../../../test-utils';
 
 // Direct children (an array), not a Fragment: the root audits and ref tests run on real steps.
@@ -79,16 +80,13 @@ describe('Stepper', () => {
   });
 
   it('throws when a Step is rendered outside a Stepper (C-CONTEXT)', () => {
-    // The development throw is the whole report: nothing is logged besides it (R14).
-    const error = vi.spyOn(console, 'error');
-    expect(() => render(<Stepper.Step label="Orphan" />)).toThrow(
-      new Error('[WaveUI] Stepper.Step must be used within Stepper'),
+    expectThrows(
+      <Stepper.Step label="Orphan" />,
+      '[WaveUI] Stepper.Step must be used within Stepper',
     );
-    expect(error).not.toHaveBeenCalled();
-    error.mockRestore();
   });
 
-  describe('context guard in production (R3)', () => {
+  describe('context guard in production (C-CONTEXT)', () => {
     afterEach(() => {
       vi.unstubAllEnvs();
       vi.restoreAllMocks();
@@ -185,7 +183,7 @@ describe('Stepper', () => {
       expect(within(items[1]).getByText('Error:', { exact: false })).toHaveClass('sr-only');
     });
 
-    describe('statusLabels (nav-other-code-3, R7)', () => {
+    describe('statusLabels (C-NAMING)', () => {
       const renderSteps = (statusLabels: StepperProps['statusLabels']) =>
         render(
           <Stepper defaultActiveStep={2} aria-label="Fremdrift" statusLabels={statusLabels}>
@@ -496,7 +494,7 @@ describe('Stepper', () => {
       }
     });
 
-    it('numbers steps written in a Server Component (lazy client references) the same way (R1)', () => {
+    it('numbers steps written in a Server Component (lazy client references) the same way (C-COMPOUND)', () => {
       const Step = asClientReference(Stepper.Step);
       const plain = renderToString(
         <Stepper defaultActiveStep={1}>
@@ -572,7 +570,7 @@ describe('Stepper', () => {
       expect(onStepChange).toHaveBeenCalledTimes(3);
     });
 
-    it('stops the page from scrolling on Space keydown and activates only on keyup (nav-other-tests-2)', () => {
+    it('stops the page from scrolling on Space keydown and activates only on keyup', () => {
       const onStepChange = vi.fn();
       renderSteps({ onStepChange });
       const profile = stepButton('Profile');
@@ -799,7 +797,7 @@ describe('Stepper', () => {
       expect(connector?.className).not.toMatch(/\bml-/);
     });
 
-    it('centres the vertical connector under the circle in the same unit as the circle (x-styling-3)', () => {
+    it('centres the vertical connector under the circle in the same unit as the circle', () => {
       render(
         <Stepper orientation="vertical">
           <Stepper.Step label="Account" data-testid="step" />
@@ -816,7 +814,7 @@ describe('Stepper', () => {
       expect(connector?.className).not.toMatch(/\d+px/);
     });
 
-    it('keeps the connectors visible in forced-colors mode (x-styling-4)', () => {
+    it('keeps the connectors visible in forced-colors mode', () => {
       render(
         <Stepper defaultActiveStep={1}>
           <Stepper.Step label="Account" data-testid="done" />
@@ -922,7 +920,7 @@ describe('Stepper', () => {
     expect(within(group).getByRole('button', { name: 'Fullført: 1. Konto' })).toBeInTheDocument();
   });
 
-  describe('Linear story (nav-other-code-4)', () => {
+  describe('Linear story', () => {
     const { Linear } = composeStories(stories);
 
     it('keeps focus on Back and Next at the boundaries they reach (C-DISABLED)', async () => {

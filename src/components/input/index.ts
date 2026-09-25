@@ -14,13 +14,19 @@ export { Switch, type SwitchProps } from './Switch';
 export { Select, type SelectProps } from './Select';
 export { SearchBox, type SearchBoxProps, type SearchBoxInputProps } from './SearchBox';
 export { Slider, type SliderProps } from './Slider';
-export { SpinButton, type SpinButtonProps, type SpinButtonInputProps } from './SpinButton';
+export {
+  SpinButton,
+  type SpinButtonProps,
+  type SpinButtonInputProps,
+  type SpinButtonLabels,
+} from './SpinButton';
 export { Label, type LabelProps } from './Label';
 export {
   Combobox,
   ComboboxOption,
   ComboboxOptionGroup,
   type ComboboxProps,
+  type ComboboxLabels,
   Option,
   type OptionProps,
   OptionGroup,
@@ -40,7 +46,23 @@ export {
   type ColorPickerLabels,
 } from './ColorPicker';
 
-export { TagPicker, type TagPickerProps, type TagPickerOption } from './TagPicker';
-export { Rating, RatingDisplay, type RatingProps, type RatingDisplayProps } from './Rating';
-export { TimePicker, type TimePickerProps } from './TimePicker';
-export { DatePicker, type DatePickerProps, type DatePickerInvalidReason } from './DatePicker';
+export {
+  TagPicker,
+  type TagPickerProps,
+  type TagPickerOption,
+  type TagPickerLabels,
+} from './TagPicker';
+export {
+  Rating,
+  RatingDisplay,
+  type RatingProps,
+  type RatingDisplayProps,
+  type RatingLabels,
+} from './Rating';
+export { TimePicker, type TimePickerProps, type TimePickerLabels } from './TimePicker';
+export {
+  DatePicker,
+  type DatePickerProps,
+  type DatePickerInvalidReason,
+  type DatePickerLabels,
+} from './DatePicker';

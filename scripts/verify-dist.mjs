@@ -135,7 +135,7 @@ export function isMainModule(metaUrl, argv1 = process.argv[1]) {
 }
 
 /**
- * The entry point of a gate script (tooling-tests-1): runs `main` and sets the exit code to its
+ * The entry point of a gate script: runs `main` and sets the exit code to its
  * result when Node was started with the module at `metaUrl`. A script of the module's name that
  * cannot be matched to it never passes silently: it reports that nothing was checked and sets
  * exit code 1. Returns the exit code it set (undefined when the module was imported).
@@ -283,7 +283,7 @@ const COMPONENT_NAME = /^[A-Z](?=[A-Za-z0-9]*[a-z])[A-Za-z0-9]*$/;
 
 /**
  * The components a rolled-up declaration file (`dist/index.d.ts`) exports without a JSDoc, in
- * declaration order (C-DOCS, x-types-components-6). A component is an exported value (`declare
+ * declaration order (C-DOCS). A component is an exported value (`declare
  * const` or `declare function`) with a PascalCase name, exported directly or renamed by the roll-up
  * (`declare const Image_2` + `export { Image_2 as Image }`). Its JSDoc is the `/** … *\/` block
  * right before its first declaration (for overloads, the first signature).
@@ -367,8 +367,8 @@ export function checkDeclarations(dist) {
 }
 
 /**
- * `dist/lib/dev.mjs` and `dist/lib/dev.cjs` keep the literal `process.env.NODE_ENV` expression
- * (f-lib T6): the consumer's bundler replaces it, so development warnings follow the consumer's
+ * `dist/lib/dev.mjs` and `dist/lib/dev.cjs` keep the literal `process.env.NODE_ENV` expression:
+ * the consumer's bundler replaces it, so development warnings follow the consumer's
  * build mode. A `define` in vite.config.ts would inline the library's own mode instead.
  */
 export function checkDevEnvironment(dist) {
