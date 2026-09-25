@@ -29,7 +29,8 @@ export interface TagOwnProps {
   dismissible?: boolean;
   /**
    * Called when the dismiss button is activated (click, Enter or Space). Passing it does not render
-   * the dismiss button: set `dismissible` too.
+   * the dismiss button: set `dismissible` too. When it removes the tag, move focus yourself (see
+   * "Focus after dismissal" on {@link Tag}).
    */
   onDismiss?: () => void;
   /**
@@ -325,6 +326,11 @@ function resolveDismissSlot(slot: TagOwnProps['dismissIcon']): ResolvedDismissSl
  *   distinguishable dismiss buttons.
  * - `dismissIcon` replaces only the icon inside that button (see {@link TagOwnProps.dismissIcon}).
  * - Polymorphic: `as="a"` renders a link chip with anchor props type-checked.
+ *
+ * **Focus after dismissal.** A tag cannot keep focus once you remove it. When `onDismiss` removes
+ * the tag, move focus to the next tag's dismiss button (else the previous one, else a sensible
+ * element nearby); TagGroup (planned) will do this for you. The neighbour stays mounted, so you
+ * can focus it in `onDismiss` before removing the tag.
  *
  * @example
  * <Tag>React</Tag>

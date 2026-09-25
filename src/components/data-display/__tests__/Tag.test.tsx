@@ -3,6 +3,8 @@ import * as React from 'react';
 import { act, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { renderToString } from 'react-dom/server';
+import { composeStories } from '@storybook/react';
+import * as stories from '../../../../stories/Tag.stories';
 import { Tag } from '../Tag';
 import type { TagOwnProps, TagProps } from '../Tag';
 import { Button } from '../../button/Button';
@@ -168,6 +170,110 @@ describe('Tag', () => {
     expect(screen.getByRole('button', { name: 'Dismiss Label' })).toHaveFocus();
     await user.keyboard('{Enter}');
     expect(onDismiss).toHaveBeenCalledTimes(1);
+  });
+
+  describe('focus after a keyboard dismiss (the recipe of the "Focus after dismissal" docs)', () => {
+    /**
+     * A filter bar that follows the documented recipe: when a dismissal removes a tag, focus the
+     * next tag's dismiss button, else the previous one, else a button next to the group.
+     */
+    function FilterTags({ initial }: { initial: readonly string[] }) {
+      const [filters, setFilters] = React.useState(initial);
+      // Each rendered tag by filter, to reach its dismiss button (the tag's only button).
+      const tags = React.useRef(new Map<string, HTMLElement>());
+      const reset = React.useRef<HTMLButtonElement>(null);
+
+      const dismiss = (filter: string) => {
+        const index = filters.indexOf(filter);
+        const neighbour = filters[index + 1] ?? filters[index - 1];
+        const target =
+          neighbour === undefined
+            ? reset.current
+            : (tags.current.get(neighbour)?.querySelector('button') ?? null);
+        // The neighbour stays mounted, so it can take focus before the tag is removed.
+        target?.focus();
+        setFilters((current) => current.filter((f) => f !== filter));
+      };
+
+      return (
+        <>
+          <div role="group" aria-label="Filters">
+            {filters.map((filter) => (
+              <Tag
+                key={filter}
+                ref={(element) => {
+                  if (element) tags.current.set(filter, element);
+                  return () => {
+                    tags.current.delete(filter);
+                  };
+                }}
+                dismissible
+                onDismiss={() => dismiss(filter)}
+              >
+                {filter}
+              </Tag>
+            ))}
+          </div>
+          <button type="button" ref={reset} onClick={() => setFilters(initial)}>
+            Reset filters
+          </button>
+        </>
+      );
+    }
+
+    /** Tabs to the dismiss button named `name` and presses `key` on it. */
+    async function dismissWithKey(
+      user: ReturnType<typeof userEvent.setup>,
+      name: string,
+      key: '{Enter}' | ' ' = '{Enter}',
+    ) {
+      const button = screen.getByRole('button', { name });
+      for (let i = 0; i < 10 && document.activeElement !== button; i++) await user.tab();
+      expect(button).toHaveFocus();
+      await user.keyboard(key);
+      expect(screen.queryByRole('button', { name })).toBeNull();
+    }
+
+    it('dismissing the middle tag with Enter focuses the next dismiss button', async () => {
+      const user = userEvent.setup();
+      render(<FilterTags initial={['Red', 'Blue', 'Large']} />);
+      await dismissWithKey(user, 'Dismiss Blue');
+      expect(screen.getByRole('button', { name: 'Dismiss Large' })).toHaveFocus();
+    });
+
+    it('dismissing the last tag focuses the previous dismiss button', async () => {
+      const user = userEvent.setup();
+      render(<FilterTags initial={['Red', 'Blue', 'Large']} />);
+      await dismissWithKey(user, 'Dismiss Large');
+      expect(screen.getByRole('button', { name: 'Dismiss Blue' })).toHaveFocus();
+    });
+
+    it('dismissing the only tag focuses the fallback next to the group', async () => {
+      const user = userEvent.setup();
+      render(<FilterTags initial={['Red']} />);
+      await dismissWithKey(user, 'Dismiss Red');
+      expect(screen.getByRole('button', { name: 'Reset filters' })).toHaveFocus();
+    });
+
+    it('focus never ends on <body> while every tag is dismissed in turn (Enter and Space)', async () => {
+      const user = userEvent.setup();
+      render(<FilterTags initial={['Red', 'Blue', 'Large', 'Round']} />);
+      const steps: Array<[string, '{Enter}' | ' ', string]> = [
+        ['Dismiss Blue', '{Enter}', 'Dismiss Large'],
+        ['Dismiss Large', ' ', 'Dismiss Round'],
+        ['Dismiss Round', '{Enter}', 'Dismiss Red'],
+        ['Dismiss Red', ' ', 'Reset filters'],
+      ];
+      for (const [name, key, next] of steps) {
+        await dismissWithKey(user, name, key);
+        // Let anything scheduled after the removal (frames, effects) run before checking.
+        await act(async () => {
+          await new Promise((resolve) => requestAnimationFrame(resolve));
+        });
+        expect(document.activeElement).not.toBe(document.body);
+        expect(screen.getByRole('button', { name: next })).toHaveFocus();
+      }
+    });
   });
 
   describe('dismissIcon slot (data-display#1, feedback-navigation#1)', () => {
@@ -991,5 +1097,46 @@ describe('Tag', () => {
       }
       expectTypeOf<FilterTagProps>().toHaveProperty('dismissible');
     });
+  });
+});
+
+describe('Tag stories', () => {
+  const { Dismissible, FilterGroup } = composeStories(stories);
+
+  it('FilterGroup focuses the next filter after a dismiss, else the previous one, else "Reset filters"', async () => {
+    const user = userEvent.setup();
+    render(<FilterGroup />);
+    await user.tab();
+    await user.tab();
+    expect(screen.getByRole('button', { name: 'Remove Blue' })).toHaveFocus();
+
+    await user.keyboard('{Enter}');
+    expect(screen.queryByRole('button', { name: 'Remove Blue' })).toBeNull();
+    expect(screen.getByRole('button', { name: 'Remove Large' })).toHaveFocus();
+
+    await user.keyboard('{Enter}');
+    expect(screen.getByRole('button', { name: 'Remove Red' })).toHaveFocus();
+
+    await user.keyboard('{Enter}');
+    expect(screen.getByRole('button', { name: 'Reset filters' })).toHaveFocus();
+
+    await user.keyboard('{Enter}');
+    for (const filter of ['Red', 'Blue', 'Large']) {
+      expect(screen.getByRole('button', { name: `Remove ${filter}` })).toBeInTheDocument();
+    }
+  });
+
+  it('Dismissible focuses a separate Restore button after a dismiss; it brings the tag back', async () => {
+    const user = userEvent.setup();
+    render(<Dismissible />);
+    await user.tab();
+    expect(screen.getByRole('button', { name: 'Dismiss Dismissible tag' })).toHaveFocus();
+
+    await user.keyboard('{Enter}');
+    expect(screen.queryByText('Dismissible tag')).toBeNull();
+    expect(screen.getByRole('button', { name: 'Restore' })).toHaveFocus();
+
+    await user.keyboard('{Enter}');
+    expect(screen.getByRole('button', { name: 'Dismiss Dismissible tag' })).toBeInTheDocument();
   });
 });

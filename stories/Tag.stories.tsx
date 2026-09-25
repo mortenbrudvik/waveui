@@ -19,31 +19,93 @@ type Story = StoryObj<typeof meta>;
 /** A story that renders the tag as an anchor takes the anchor's props. */
 type AnchorStory = StoryObj<TagProps<'a'>>;
 
-/** Keeps the tag's visibility in local state so dismissing it actually removes it. */
+/**
+ * Keeps the tag's visibility in local state so dismissing it actually removes it. A tag cannot
+ * keep focus once it is removed, so the dismissal moves focus to the "Restore" button next to it,
+ * which brings the tag back.
+ */
 function DismissibleTag(props: TagStoryProps) {
   const { onDismiss, ...rest } = props;
   const [visible, setVisible] = React.useState(true);
-  if (!visible) {
-    return (
-      <Button appearance="subtle" size="small" onClick={() => setVisible(true)}>
-        Restore tag
-      </Button>
-    );
-  }
+  const restore = React.useRef<HTMLButtonElement>(null);
   return (
-    <Tag
-      {...rest}
-      onDismiss={() => {
-        onDismiss?.();
-        setVisible(false);
-      }}
-    />
+    <div className="flex items-center gap-2">
+      {visible && (
+        <Tag
+          {...rest}
+          onDismiss={() => {
+            onDismiss?.();
+            // The Restore button stays mounted, so it can take focus before the tag goes.
+            restore.current?.focus();
+            setVisible(false);
+          }}
+        />
+      )}
+      <Button ref={restore} appearance="subtle" size="small" onClick={() => setVisible(true)}>
+        Restore
+      </Button>
+    </div>
+  );
+}
+
+const FILTERS = ['Red', 'Blue', 'Large'];
+
+/**
+ * A filter bar that keeps its filters in state. Removing a tag moves focus to the next tag's
+ * dismiss button, else the previous one, else "Reset filters", so keyboard focus is never lost.
+ */
+function FilterBar(props: TagStoryProps) {
+  const { onDismiss, ...rest } = props;
+  const [filters, setFilters] = React.useState(FILTERS);
+  // Each rendered tag by filter, to reach its dismiss button (the tag's only button).
+  const tags = React.useRef(new Map<string, HTMLElement>());
+  const reset = React.useRef<HTMLButtonElement>(null);
+
+  const dismiss = (filter: string) => {
+    onDismiss?.();
+    const index = filters.indexOf(filter);
+    const neighbour = filters[index + 1] ?? filters[index - 1];
+    const target =
+      neighbour === undefined
+        ? reset.current
+        : (tags.current.get(neighbour)?.querySelector('button') ?? null);
+    // The neighbour stays mounted, so it can take focus before the tag is removed.
+    target?.focus();
+    setFilters((current) => current.filter((f) => f !== filter));
+  };
+
+  return (
+    <div className="flex flex-wrap items-center gap-2">
+      <div role="group" aria-label="Active filters" className="flex flex-wrap gap-2">
+        {filters.map((filter) => (
+          <Tag
+            key={filter}
+            {...rest}
+            ref={(element) => {
+              if (element) tags.current.set(filter, element);
+              return () => {
+                tags.current.delete(filter);
+              };
+            }}
+            onDismiss={() => dismiss(filter)}
+          >
+            {filter}
+          </Tag>
+        ))}
+      </div>
+      <Button ref={reset} appearance="subtle" size="small" onClick={() => setFilters(FILTERS)}>
+        Reset filters
+      </Button>
+    </div>
   );
 }
 
 export const Default: Story = {};
 
-/** The dismiss button is named "Dismiss" plus the tag content ("Dismiss Dismissible tag"). */
+/**
+ * The dismiss button is named "Dismiss" plus the tag content ("Dismiss Dismissible tag").
+ * Dismissing moves focus to the separate "Restore" button.
+ */
 export const Dismissible: Story = {
   args: {
     children: 'Dismissible tag',
@@ -53,22 +115,18 @@ export const Dismissible: Story = {
   render: (args) => <DismissibleTag {...args} />,
 };
 
-/** Every dismiss button of a filter bar has its own name ("Remove Red", "Remove Blue", …). */
+/**
+ * Every dismiss button of a filter bar has its own name ("Remove Red", "Remove Blue", …).
+ * Removing a filter moves focus to the next filter's dismiss button, else the previous one, else
+ * "Reset filters": the focus recipe of Tag's "Focus after dismissal" docs.
+ */
 export const FilterGroup: Story = {
   args: {
     dismissible: true,
     dismissLabel: 'Remove',
     onDismiss: fn(),
   },
-  render: (args) => (
-    <div className="flex flex-wrap gap-2">
-      {['Red', 'Blue', 'Large'].map((filter) => (
-        <DismissibleTag key={filter} {...args}>
-          {filter}
-        </DismissibleTag>
-      ))}
-    </div>
-  ),
+  render: (args) => <FilterBar {...args} />,
 };
 
 /** `dismissIcon` replaces only the icon inside the built-in dismiss button. */
