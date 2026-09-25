@@ -12,8 +12,8 @@ import { Button } from '../button/Button';
 import { Portal } from '../portal/Portal';
 import {
   inertModalTrigger,
-  keepFocusOnBackdropPress,
   ModalSurfaceContext,
+  useBackdropPress,
   useModalClosePart,
   useModalDismiss,
   useModalOpenState,
@@ -333,13 +333,15 @@ export const DialogContent = ({
   );
   const mergedRef = useMergedRefs<HTMLDivElement>(ref, attachSurface, registerId);
 
-  const onDismiss = useModalDismiss(requestOpen, 'Dialog');
+  // An alert dialog needs an answer: a backdrop press does not close it (Escape still does).
+  const closesOnBackdropPress = modalType !== 'alert';
+  const backdropPress = useBackdropPress(surfaceRef, closesOnBackdropPress);
+  const onDismiss = useModalDismiss(requestOpen, 'Dialog', backdropPress.afterOutsidePress);
   const layer = useModalLayer({
     open,
     onDismiss,
     refs: [surfaceRef],
-    // An alert dialog needs an answer: a backdrop press does not close it (Escape still does).
-    outsidePress: modalType !== 'alert',
+    outsidePress: closesOnBackdropPress,
     container: surface,
     triggerRef: trigger.focusRef,
     finalFocusRef,
@@ -361,7 +363,7 @@ export const DialogContent = ({
     <Portal layerId={layer.layerId}>
       <div
         className="fixed inset-0 flex items-center justify-center bg-backdrop p-4"
-        onMouseDown={keepFocusOnBackdropPress}
+        onMouseDown={backdropPress.onMouseDown}
       >
         <div
           ref={mergedRef}
@@ -435,14 +437,29 @@ export const DialogTitle = ({ id, className, children, ref, ...rest }: DialogTit
 DialogTitle.displayName = 'DialogTitle';
 
 /**
+ * `Dialog.Footer` inside `Dialog.Content`. The body is `p-1`, and sticky positioning stops at its
+ * padding edge: `-bottom-1` with `-mb-1 pb-2` covers the body's bottom padding, `-mx-1 px-1` its
+ * focus-ring inset, and `pt-3` separates the actions from the content scrolling under them.
+ */
+const stickyFooterClasses =
+  'sticky -bottom-1 z-10 -mx-1 -mb-1 mt-6 flex justify-end gap-2 bg-background px-1 pb-2 pt-3';
+
+/**
+ * `Dialog.Footer` where no body reserves its height as scroll padding (a Drawer's body): a plain
+ * action row, which never covers a focused field.
+ */
+const footerRowClasses = 'mt-6 flex justify-end gap-2';
+
+/**
  * Action row at the end of the dialog body. It stays where you render it in the DOM and sticks to
  * the bottom of the body while long content scrolls under it (with an opaque background); the body
  * reserves its height as scroll padding, so a focused field is never hidden behind it. Inside a
  * `<form>` that wraps the fields and the footer it sticks too: make it the form's last child.
  * Render it inside `Dialog.Content`: outside it, it would stay on the page while the dialog is
- * closed (a development warning says so). Render one `Dialog.Footer` per `Dialog.Content`: with
- * two at once, the body reserves the height of the one measured last, and unmounting either
- * clears it until the other resizes (swapping one footer for another is fine).
+ * closed (a development warning says so). Inside a `Drawer`, whose body reserves no footer height,
+ * it does not stick: it is an action row at the end of the content. Render one `Dialog.Footer` per
+ * `Dialog.Content`: with two at once, the body reserves the height of the one measured last, and
+ * unmounting either clears it until the other resizes (swapping one footer for another is fine).
  */
 export const DialogFooter = ({ children, className, ref, ...rest }: DialogFooterProps) => {
   const surfaceContext = React.useContext(ModalSurfaceContext);
@@ -480,13 +497,8 @@ export const DialogFooter = ({ children, className, ref, ...rest }: DialogFooter
     <div
       ref={mergedRef}
       {...rest}
-      className={cn(
-        // The body is `p-1`, and sticky positioning stops at its padding edge: `-bottom-1` with
-        // `-mb-1 pb-2` covers the body's bottom padding, `-mx-1 px-1` its focus-ring inset, and
-        // `pt-3` separates the actions from the content scrolling under them.
-        'sticky -bottom-1 z-10 -mx-1 -mb-1 mt-6 flex justify-end gap-2 bg-background px-1 pb-2 pt-3',
-        className,
-      )}
+      // Sticky only where the surface reserves the footer's height (Dialog.Content).
+      className={cn(setFooterHeight ? stickyFooterClasses : footerRowClasses, className)}
     >
       {children}
     </div>
@@ -504,10 +516,11 @@ DialogFooter.displayName = 'DialogFooter';
  * - **Closing**: Escape (only the topmost layer: a popup opened inside closes first), a click on
  *   the backdrop (a drag that starts inside does not close it), the Close button and `Dialog.Close`.
  *   `onOpenChange` gets the reason as its second argument (`details.reason`), so a controlled
- *   dialog can refuse some of them. A backdrop press that does not close the dialog leaves focus
- *   where it was. Focus returns to the first of these that can take focus: `finalFocusRef`, the
- *   element that had focus when the dialog opened, the trigger, an element next to where that
- *   opener was.
+ *   dialog can refuse some of them. A backdrop press blurs the focused field before the dialog
+ *   closes, so a typed value is committed as with the Close button; when a controlled dialog
+ *   refuses the press, the field gets focus back (an alert dialog's press leaves focus where it
+ *   was). Focus returns to the first of these that can take focus: `finalFocusRef`, the element
+ *   that had focus when the dialog opened, the trigger, an element next to where that opener was.
  * - **Alert dialogs**: `modalType="alert"` renders `role="alertdialog"` for a confirmation that
  *   needs an answer; a backdrop press does not close it.
  * - **Footer**: `Dialog.Footer` sticks to the bottom of the scrolling body, and the body keeps a

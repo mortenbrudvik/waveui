@@ -1,5 +1,6 @@
 import * as React from 'react';
 import { reportMissingContext, warnOnce } from '../../lib/dev';
+import { focusElement } from '../../lib/focus';
 import type { DismissReason } from '../../lib/layers';
 import { mergeProps } from '../../lib/mergeProps';
 import { STATE_ARIA } from '../../lib/renderTrigger';
@@ -56,19 +57,25 @@ export function useModalOpenState(
  * root to close, with their reason and event. `focus-outside` never reaches a modal layer (only a
  * layer registered with `focusOutside: true` gets it), so it is ignored with a development warning.
  *
- * @param requestOpen   The root's request function, from {@link useModalOpenState}.
- * @param componentName The public name for the warning, e.g. `'Dialog'`.
+ * @param requestOpen       The root's request function, from {@link useModalOpenState}.
+ * @param componentName     The public name for the warning, e.g. `'Dialog'`.
+ * @param afterOutsidePress Called right after an `outside-press` request (see
+ *                          {@link useBackdropPress}).
  */
 export function useModalDismiss(
   requestOpen: ModalRequestOpen,
   componentName: string,
+  afterOutsidePress?: () => void,
 ): (reason: DismissReason, event: Event) => void {
   return React.useCallback(
     (reason: DismissReason, event: Event) => {
       switch (reason) {
         case 'escape':
+          requestOpen(false, { reason, event });
+          break;
         case 'outside-press':
           requestOpen(false, { reason, event });
+          afterOutsidePress?.();
           break;
         case 'focus-outside':
           warnOnce(
@@ -83,18 +90,69 @@ export function useModalDismiss(
         }
       }
     },
-    [requestOpen, componentName],
+    [requestOpen, componentName, afterOutsidePress],
   );
 }
 
+/** Returned by {@link useBackdropPress}. */
+export interface BackdropPress {
+  /** `onMouseDown` of the backdrop element. Stable while `closesOnPress` stays the same. */
+  onMouseDown: (event: React.MouseEvent<HTMLElement>) => void;
+  /** Pass it to {@link useModalDismiss}, which calls it after an `outside-press` request. Stable. */
+  afterOutsidePress: () => void;
+}
+
 /**
- * `onMouseDown` of a modal's backdrop: a press on the backdrop itself does not move focus out of
- * the surface (the browser would move it to `<body>`), so a modal that stays open after the press
- * (an alert dialog, a controlled modal that refuses `outside-press`) keeps focus where it was.
- * Presses that start inside the surface bubble through unchanged.
+ * What a press on a modal's backdrop does to focus (`Dialog.Content`, the Drawer panel). Presses
+ * that start inside the surface bubble through unchanged.
+ *
+ * - When the press closes the modal (`closesOnPress`), the browser moves focus to `<body>` as
+ *   usual, so the focused control blurs while it is still mounted and its blur-time commit runs
+ *   (the typed text of a SpinButton or a picker, a consumer's `onBlur` autosave or validation)
+ *   before the click closes the surface. The element inside the surface that had focus is
+ *   remembered: when the surface is still open after the `outside-press` request (a controlled
+ *   modal refused it), it gets focus back, in a microtask that runs after React has committed the
+ *   request, and only while focus is still on `<body>` (a confirm dialog the refusal opened keeps
+ *   its focus).
+ * - When the press never closes the modal (an alert dialog), the press does not move focus at all
+ *   (`preventDefault()`), so nothing blurs.
+ *
+ * @param surfaceRef    The surface element (the dialog or the drawer panel).
+ * @param closesOnPress Whether a backdrop press asks the modal to close (its layer's `outsidePress`).
  */
-export function keepFocusOnBackdropPress(event: React.MouseEvent<HTMLElement>): void {
-  if (event.target === event.currentTarget) event.preventDefault();
+export function useBackdropPress(
+  surfaceRef: React.RefObject<HTMLElement | null>,
+  closesOnPress: boolean,
+): BackdropPress {
+  // The element inside the surface that had focus when the last backdrop press started.
+  const pressFocusRef = React.useRef<HTMLElement | null>(null);
+
+  const onMouseDown = React.useCallback(
+    (event: React.MouseEvent<HTMLElement>) => {
+      if (event.target !== event.currentTarget) return;
+      if (!closesOnPress) {
+        event.preventDefault();
+        return;
+      }
+      const focused = getFocusedElement();
+      pressFocusRef.current = focused && surfaceRef.current?.contains(focused) ? focused : null;
+    },
+    [closesOnPress, surfaceRef],
+  );
+
+  const afterOutsidePress = React.useCallback(() => {
+    const element = pressFocusRef.current;
+    pressFocusRef.current = null;
+    if (!element) return;
+    // A close requested from the click is committed first (React flushes the update in a
+    // microtask queued before this one), so a closed surface no longer contains the element.
+    queueMicrotask(() => {
+      if (getFocusedElement() !== null || !surfaceRef.current?.contains(element)) return;
+      focusElement(element, { preventScroll: true });
+    });
+  }, [surfaceRef]);
+
+  return { onMouseDown, afterOutsidePress };
 }
 
 /** Whether `value` is a DOM event (duck-typed, so an event from another window counts too). */

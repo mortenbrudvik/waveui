@@ -24,6 +24,7 @@ import {
 } from '../Dialog';
 import { Drawer } from '../Drawer';
 import { useDismiss } from '../../../hooks/useDismiss';
+import { SpinButton } from '../../input/SpinButton';
 import { Portal } from '../../portal/Portal';
 import { getTopmostLayer } from '../../../lib/layers';
 import type { ModalOpenChangeReason, ModalType, OpenChangeDetails } from '../../../lib/types';
@@ -1875,7 +1876,7 @@ describe('Dialog', () => {
       act(() => name.focus());
       await user.click(backdrop());
       expect(screen.getByRole('dialog', { name: 'Unsaved changes' })).toBeInTheDocument();
-      // The refused press does not move focus out of the dialog.
+      // Focus is back on the field the refused press blurred.
       expect(name).toHaveFocus();
       await user.keyboard('{Escape}');
       expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
@@ -2108,6 +2109,169 @@ describe('Dialog', () => {
       // @ts-expect-error non-modal dialogs are planned, not available yet
       const nonModal: DialogProps['modalType'] = 'non-modal';
       expect(nonModal).toBe('non-modal');
+    });
+  });
+
+  describe('backdrop press and the focused field', () => {
+    /** A dialog with a SpinButton, which commits its typed text on blur. */
+    function PageSize({
+      onValueChange,
+      dialogProps,
+    }: {
+      onValueChange: (value: number) => void;
+      dialogProps?: Partial<DialogProps>;
+    }) {
+      return (
+        <Dialog {...dialogProps}>
+          <Dialog.Content title="Page size">
+            <SpinButton aria-label="Rows" defaultValue={10} onValueChange={onValueChange} />
+          </Dialog.Content>
+        </Dialog>
+      );
+    }
+
+    /** A controlled dialog that refuses `outside-press` and follows every other request. */
+    function RefusesBackdrop(props: { onValueChange: (value: number) => void }) {
+      const [open, setOpen] = React.useState(true);
+      return (
+        <PageSize
+          {...props}
+          dialogProps={{
+            open,
+            onOpenChange: (next, details) => {
+              if (details?.reason !== 'outside-press') setOpen(next);
+            },
+          }}
+        />
+      );
+    }
+
+    async function typeRows(user: UserEvent, text: string) {
+      const rows = screen.getByRole('spinbutton', { name: 'Rows' });
+      await user.clear(rows);
+      await user.type(rows, text);
+      return rows;
+    }
+
+    it('blurs the focused field before a backdrop press closes the dialog', async () => {
+      const user = userEvent.setup();
+      const onBlur = vi.fn();
+      render(
+        <Basic dialogProps={{ defaultOpen: true }}>
+          <input aria-label="Name" onBlur={onBlur} />
+        </Basic>,
+      );
+      act(() => screen.getByRole('textbox', { name: 'Name' }).focus());
+      await user.click(backdrop());
+      expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+      expect(onBlur).toHaveBeenCalledTimes(1);
+    });
+
+    it.each(['backdrop', 'Close button'] as const)(
+      'commits a typed SpinButton value when the %s closes the dialog',
+      async (path) => {
+        const user = userEvent.setup();
+        const onValueChange = vi.fn();
+        render(<PageSize onValueChange={onValueChange} dialogProps={{ defaultOpen: true }} />);
+        await typeRows(user, '50');
+        await user.click(path === 'backdrop' ? backdrop() : button('Close'));
+        expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+        expect(onValueChange.mock.calls).toEqual([[50]]);
+      },
+    );
+
+    it('commits the typed value on a refused backdrop press and gives focus back to the field', async () => {
+      const user = userEvent.setup();
+      const onValueChange = vi.fn();
+      render(<RefusesBackdrop onValueChange={onValueChange} />);
+      const rows = await typeRows(user, '50');
+      await user.click(backdrop());
+      expect(screen.getByRole('dialog', { name: 'Page size' })).toBeInTheDocument();
+      expect(onValueChange.mock.calls).toEqual([[50]]);
+      expect(rows).toHaveFocus();
+      expect(rows).toHaveValue('50');
+    });
+
+    it('leaves focus where the parent moved it when refusing the press', async () => {
+      const user = userEvent.setup();
+      function FocusSaveOnBackdrop() {
+        const [open, setOpen] = React.useState(true);
+        const saveRef = React.useRef<HTMLButtonElement>(null);
+        return (
+          <Dialog
+            open={open}
+            onOpenChange={(next, details) => {
+              if (details?.reason === 'outside-press') saveRef.current?.focus();
+              else setOpen(next);
+            }}
+          >
+            <Dialog.Content title="Rename">
+              <input aria-label="Name" />
+              <button type="button" ref={saveRef}>
+                Save
+              </button>
+            </Dialog.Content>
+          </Dialog>
+        );
+      }
+      render(<FocusSaveOnBackdrop />);
+      act(() => screen.getByRole('textbox', { name: 'Name' }).focus());
+      await user.click(backdrop());
+      expect(screen.getByRole('dialog', { name: 'Rename' })).toBeInTheDocument();
+      expect(button('Save')).toHaveFocus();
+    });
+
+    it('leaves focus with a dialog the refusal opens', async () => {
+      const user = userEvent.setup();
+      function ConfirmOnBackdrop() {
+        const [open, setOpen] = React.useState(true);
+        const [confirming, setConfirming] = React.useState(false);
+        return (
+          <Dialog
+            open={open}
+            onOpenChange={(next, details) => {
+              if (details?.reason === 'outside-press') setConfirming(true);
+              else setOpen(next);
+            }}
+          >
+            <Dialog.Content title="Rename">
+              <input aria-label="Name" />
+              <Dialog modalType="alert" open={confirming} onOpenChange={setConfirming}>
+                <Dialog.Content title="Discard changes?">
+                  <Dialog.Footer>
+                    <button type="button" autoFocus>
+                      Keep editing
+                    </button>
+                  </Dialog.Footer>
+                </Dialog.Content>
+              </Dialog>
+            </Dialog.Content>
+          </Dialog>
+        );
+      }
+      render(<ConfirmOnBackdrop />);
+      act(() => screen.getByRole('textbox', { name: 'Name' }).focus());
+      await user.click(backdrop());
+      expect(screen.getByRole('alertdialog', { name: 'Discard changes?' })).toBeInTheDocument();
+      expect(button('Keep editing')).toHaveFocus();
+    });
+
+    it('keeps focus on the field of an alert dialog: the press does not blur it', async () => {
+      const user = userEvent.setup();
+      const onValueChange = vi.fn();
+      render(
+        <PageSize
+          onValueChange={onValueChange}
+          dialogProps={{ defaultOpen: true, modalType: 'alert' }}
+        />,
+      );
+      const rows = await typeRows(user, '50');
+      await user.click(screen.getByRole('alertdialog').parentElement!);
+      expect(screen.getByRole('alertdialog', { name: 'Page size' })).toBeInTheDocument();
+      expect(rows).toHaveFocus();
+      // Still a draft: nothing blurred it.
+      expect(onValueChange).not.toHaveBeenCalled();
+      expect(rows).toHaveValue('50');
     });
   });
 

@@ -1,7 +1,7 @@
 import * as React from 'react';
 import type { Meta, StoryObj } from '@storybook/react';
 import { fn } from 'storybook/test';
-import { Tooltip, Button, Popover } from '../src';
+import { Tooltip, Button, Popover, ToggleButton } from '../src';
 
 /** Decorative inline icon (the Button hides its icon slot from assistive technology). */
 const SaveIcon = () => (
@@ -99,9 +99,9 @@ export const Controlled: Story = {
     };
     return (
       <div className="flex items-center gap-4">
-        <Button aria-pressed={pinned} onClick={() => setPinned((value) => !value)}>
+        <ToggleButton pressed={pinned} onPressedChange={setPinned}>
           Pin tooltip
-        </Button>
+        </ToggleButton>
         {/* The story owns the controlled pair; every other arg is forwarded. */}
         <Tooltip {...args} open={pinned || open} onOpenChange={handleOpenChange} />
       </div>

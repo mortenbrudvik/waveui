@@ -13,8 +13,8 @@ import { Button } from '../button/Button';
 import { Portal } from '../portal/Portal';
 import {
   inertModalTrigger,
-  keepFocusOnBackdropPress,
   ModalSurfaceContext,
+  useBackdropPress,
   useModalClosePart,
   useModalDismiss,
   useModalOpenState,
@@ -381,7 +381,9 @@ const DrawerRoot = ({
   }, []);
   const mergedRef = useMergedRefs<HTMLDivElement>(ref, attachPanel);
 
-  const onDismiss = useModalDismiss(requestOpen, 'Drawer');
+  // Every backdrop press asks the drawer to close.
+  const backdropPress = useBackdropPress(panelRef, true);
+  const onDismiss = useModalDismiss(requestOpen, 'Drawer', backdropPress.afterOutsidePress);
   const layer = useModalLayer({
     open,
     onDismiss,
@@ -443,7 +445,7 @@ const DrawerRoot = ({
       {triggers}
       {open && (
         <Portal layerId={layer.layerId}>
-          <div className="fixed inset-0 bg-backdrop" onMouseDown={keepFocusOnBackdropPress}>
+          <div className="fixed inset-0 bg-backdrop" onMouseDown={backdropPress.onMouseDown}>
             <div
               ref={mergedRef}
               role="dialog"
@@ -499,10 +501,11 @@ DrawerRoot.displayName = 'Drawer';
  * - **Closing**: Escape (only the topmost layer: a popup opened inside closes first), a click on the
  *   backdrop (a drag that starts inside does not close it), the Close button and `Drawer.Close`.
  *   `onOpenChange` gets the reason as its second argument (`details.reason`), so a controlled
- *   drawer can refuse some of them. A backdrop press that does not close the drawer leaves focus
- *   where it was. Focus returns to the first of these that can take focus: `finalFocusRef`, the
- *   element that had focus when the drawer opened, the trigger, an element next to where that
- *   opener was.
+ *   drawer can refuse some of them. A backdrop press blurs the focused field before the drawer
+ *   closes, so a typed value is committed as with the Close button; when a controlled drawer
+ *   refuses the press, the field gets focus back. Focus returns to the first of these that can
+ *   take focus: `finalFocusRef`, the element that had focus when the drawer opened, the trigger,
+ *   an element next to where that opener was.
  * - **Position**: `end` (default) and `start` follow the text direction.
  *
  * The sub-components are also exported under flat names (`DrawerTrigger`, `DrawerClose`,
