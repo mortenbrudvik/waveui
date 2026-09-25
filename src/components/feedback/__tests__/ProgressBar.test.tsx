@@ -1,7 +1,11 @@
 import { describe, it, expect, expectTypeOf, vi, afterEach } from 'vitest';
 import * as React from 'react';
 import { render, screen } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import { ProgressBar } from '../ProgressBar';
+import { Field } from '../../input/Field';
+import { Input } from '../../input/Input';
+import { createFieldControlIdClaim } from '../../../hooks/useFieldControl';
 import type { ProgressBarColor, ProgressBarProps } from '../ProgressBar';
 import {
   axe,
@@ -509,11 +513,52 @@ describe('ProgressBar', () => {
       expect(bar).toHaveAccessibleDescription(`Large files take longer. ${MESSAGE_AND_HINT}`);
     });
 
-    it('takes the Field control id unless it has an id of its own', () => {
+    // A <label htmlFor> cannot name a progress bar, so the bar never takes the Field's control id
+    // from the context: it is left to the control the label can name.
+    it('keeps an id of its own: the control id only when Field passes it, as to its first child', () => {
       const { rerender } = renderWithFieldContext(<ProgressBar value={40} />, WARNING_FIELD);
-      expect(screen.getByRole('progressbar')).toHaveAttribute('id', FIELD_TEST_IDS.controlId);
+      const bar = () => screen.getByRole('progressbar', { name: FIELD_TEST_TEXT.label });
+      expect(bar().id).toMatch(/^progress-/);
+      expect(bar()).toHaveAttribute('aria-labelledby', FIELD_TEST_IDS.labelId);
+      rerender(<ProgressBar value={40} id={FIELD_TEST_IDS.controlId} />);
+      expect(bar()).toHaveAttribute('id', FIELD_TEST_IDS.controlId);
       rerender(<ProgressBar value={40} id="upload-progress" />);
-      expect(screen.getByRole('progressbar')).toHaveAttribute('id', 'upload-progress');
+      expect(bar()).toHaveAttribute('id', 'upload-progress');
+    });
+
+    it('does not claim the control id before the control of a Field that wraps both', () => {
+      renderWithFieldContext(
+        <>
+          <ProgressBar value={40} label="Uploading" />
+          <Input />
+        </>,
+        { controlIdClaim: createFieldControlIdClaim() },
+      );
+      expect(screen.getByRole('progressbar', { name: 'Uploading' }).id).toMatch(/^progress-/);
+      expect(screen.getByRole('textbox', { name: FIELD_TEST_TEXT.label })).toHaveAttribute(
+        'id',
+        FIELD_TEST_IDS.controlId,
+      );
+    });
+
+    it('in a Field around a wrapper, leaves the label for the Input that follows it', async () => {
+      const user = userEvent.setup();
+      render(
+        <Field label="Attachment" hint="Max 5 MB">
+          <div>
+            <ProgressBar value={40} label="Uploading" />
+            <Input />
+          </div>
+        </Field>,
+      );
+      const input = screen.getByRole('textbox', { name: 'Attachment' });
+      const label = screen.getByText('Attachment');
+      expect(label).toHaveAttribute('for', input.id);
+      expect(input).not.toHaveAttribute('aria-labelledby');
+      expect(screen.getByRole('progressbar', { name: 'Uploading' }).id).toMatch(/^progress-/);
+      await user.click(label);
+      expect(input).toHaveFocus();
+      await expectNoA11yViolations();
     });
 
     it('in the warning state: warning fill, described, never invalid or required, no warning', () => {
@@ -605,6 +650,11 @@ describe('ProgressBar', () => {
       expect(screen.getByRole('progressbar', { name: FIELD_TEST_TEXT.label })).toBeInTheDocument();
       await expectNoA11yViolations();
     });
+  });
+
+  it('renders no id of its own outside a Field', () => {
+    render(<ProgressBar value={40} label="Upload" />);
+    expect(screen.getByRole('progressbar', { name: 'Upload' })).not.toHaveAttribute('id');
   });
 
   it('drops aria-invalid and aria-required outside a Field (not allowed on a progress bar)', () => {

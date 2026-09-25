@@ -768,6 +768,59 @@ describe('Nav', () => {
       expect(button('Deploy')).toHaveAttribute('aria-current', 'page');
     });
 
+    it('a value moved into another closed category marks only that category', async () => {
+      const user = userEvent.setup();
+      /** `moved`: the current page moves from the Guides category into the closed Docs category. */
+      function Restructured({ moved }: { moved: boolean }) {
+        return (
+          <Nav value="deploy" defaultOpenCategories={['guides']}>
+            <Nav.Category value="guides" label="Guides">
+              {moved ? <Nav.SubItem value="setup">Setup</Nav.SubItem> : <GuideLinks />}
+            </Nav.Category>
+            <Nav.Category value="docs" label="Docs">
+              <Nav.SubItem value="intro">Introduction</Nav.SubItem>
+              {moved && <Nav.SubItem value="deploy">Deploy</Nav.SubItem>}
+            </Nav.Category>
+          </Nav>
+        );
+      }
+      const { rerender } = render(<Restructured moved={false} />, { wrapper: React.StrictMode });
+      expect(button('Deploy')).toHaveAttribute('aria-current', 'page');
+      await user.click(guides());
+      expectMarked(guides());
+      expectUnmarked(toggle());
+
+      rerender(<Restructured moved />);
+      expect(toggle()).toHaveAttribute('aria-expanded', 'false');
+      expectMarked(toggle());
+      expectUnmarked(guides());
+      // Opening and closing the old category does not bring its mark back.
+      await user.click(guides());
+      await user.click(guides());
+      expectUnmarked(guides());
+      expectMarked(toggle());
+    });
+
+    it('stops marking a closed category once its children no longer hold the current value', () => {
+      /** `listed`: whether the current page is still one of the Docs sub-items. */
+      function Pruned({ listed }: { listed: boolean }) {
+        return (
+          <Nav value="api" defaultOpenCategories={[]}>
+            <Nav.Category value="docs" label="Docs">
+              <Nav.SubItem value="intro">Introduction</Nav.SubItem>
+              {listed && <Nav.SubItem value="api">API</Nav.SubItem>}
+            </Nav.Category>
+          </Nav>
+        );
+      }
+      const { rerender } = render(<Pruned listed />, { wrapper: React.StrictMode });
+      expectMarked(toggle());
+      rerender(<Pruned listed={false} />);
+      expectUnmarked(toggle());
+      rerender(<Pruned listed />);
+      expectMarked(toggle());
+    });
+
     it('has no axe violations with a marked category', async () => {
       render(<GuidesNav defaultValue="intro" defaultOpenCategories={[]} currentCategory="docs" />);
       expectMarked(toggle());

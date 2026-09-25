@@ -306,8 +306,15 @@ function isDisabledTrigger(event: React.SyntheticEvent<HTMLElement>): boolean {
 const menuSurfaceClasses =
   'min-w-[180px] rounded-md border border-border bg-background py-1 shadow-4';
 
-/** The popup surface also scrolls when it is taller than the space the viewport leaves it. */
-const menuPopoverClasses = cn(menuSurfaceClasses, 'overflow-y-auto overscroll-contain');
+/**
+ * The popup surface is limited to the space the viewport leaves it next to the trigger (the CSS
+ * variables usePopupPosition's `fitViewport` writes) and scrolls when it is taller. The limits are
+ * classes, not inline styles, so a consumer `max-h-*`/`max-w-*` class replaces them (C-COMPOSE).
+ */
+const menuPopoverClasses = cn(
+  menuSurfaceClasses,
+  'max-h-(--wave-popup-available-height) max-w-(--wave-popup-available-width) overflow-y-auto overscroll-contain',
+);
 
 const menuItemClasses = cn(
   'flex cursor-pointer select-none items-center gap-2 px-3 py-1.5 text-body-1 text-foreground',
@@ -543,17 +550,18 @@ MenuTrigger.displayName = 'MenuTrigger';
 /**
  * The portaled `role="menu"` surface of a popup menu, positioned next to `Menu.Trigger`. A menu
  * taller than the space available scrolls inside the viewport: the surface is limited to the space
- * next to the trigger (`max-height`/`max-width`) and scrolls, and an item that receives focus is
- * scrolled into view. Focus moves to the first (ArrowUp: last) enabled item when it opens;
- * arrows, Home/End and typeahead move between enabled items. Escape closes it and returns focus to
- * the trigger. An outside press closes it and leaves focus where the press put it (on the trigger
- * only when focus was still in the menu or lost to the page). Tab closes it and moves focus to the
- * trigger without preventing the default, so tabbing continues from the trigger (inside a Dialog,
- * the focus trap moves on from there). The trigger here is the element that takes its focus: for
- * a wrapper span, the element inside it that carries the state ARIA (the span itself when you made
- * it the trigger with a `role` such as `button` and `tabIndex={0}`, or when nothing inside it can
- * take focus). Keys from a portal opened inside the menu (a Popover of an item) are left to that
- * portal: Tab there moves on inside it and keeps the menu open.
+ * next to the trigger (`max-height`/`max-width` classes, which a `max-h-*`/`max-w-*` class in
+ * `className` or a `style` replaces) and scrolls, and an item that receives focus is scrolled into
+ * view. Focus moves to the first (ArrowUp: last) enabled item when it opens; arrows, Home/End and
+ * typeahead move between enabled items. Escape closes it and returns focus to the trigger. An
+ * outside press closes it and leaves focus where the press put it (on the trigger only when focus
+ * was still in the menu or lost to the page). Tab closes it and moves focus to the trigger without
+ * preventing the default, so tabbing continues from the trigger (inside a Dialog, the focus trap
+ * moves on from there). The trigger here is the element that takes its focus: for a wrapper span,
+ * the element inside it that carries the state ARIA (the span itself when you made it the trigger
+ * with a `role` such as `button` and `tabIndex={0}`, or when nothing inside it can take focus).
+ * Keys from a portal opened inside the menu (a Popover of an item) are left to that portal: Tab
+ * there moves on inside it and keeps the menu open.
  *
  * Also exported as `MenuPopover` (import the flat name from React Server Components).
  */
@@ -597,6 +605,9 @@ const MenuPopover = ({
     offset,
     fitViewport: true,
   });
+  // The size limits come from menuPopoverClasses, which a consumer class can replace; an inline
+  // max-height/max-width would beat every class.
+  const { maxHeight: _maxHeight, maxWidth: _maxWidth, ...positionStyle } = floatingProps.style;
   React.useLayoutEffect(() => {
     setReference(triggerElement);
   }, [setReference, triggerElement]);
@@ -720,7 +731,7 @@ const MenuPopover = ({
           data-side={floatingProps['data-side']}
           data-align={floatingProps['data-align']}
           data-roving-container=""
-          style={{ ...floatingProps.style, ...style }}
+          style={{ ...positionStyle, ...style }}
           onKeyDown={handleKeyDown}
           onKeyDownCapture={withTypeaheadText(
             composeEventHandlers(onKeyDownCapture, rovingKeyDownCapture),

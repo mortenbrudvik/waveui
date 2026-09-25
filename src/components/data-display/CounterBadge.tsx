@@ -22,13 +22,17 @@ export interface CounterBadgeProps extends React.HTMLAttributes<HTMLSpanElement>
   /**
    * Semantic color, from Badge's palette: `brand`, `danger`, `important`, `informative`, `severe`,
    * `subtle`, `success`, `warning`. `important` follows Badge (see `BadgeProps.color`): it renders
-   * the severe (orange) colors in 0.x and becomes a neutral high-emphasis color in 1.0.
+   * the severe (orange) colors in 0.x and becomes a neutral high-emphasis color in 1.0. A value
+   * outside the palette (from untyped code) renders as `brand`.
    * @default 'brand'
    */
   color?: BadgeColor;
   /**
    * A 6px dot without a number (an "unread" indicator); `count`, `overflowCount` and `showZero`
-   * are ignored. Name it with `aria-label` when nothing else conveys its meaning.
+   * are ignored. Name it with `aria-label` when nothing else conveys its meaning. Its color keeps
+   * 3:1 against the page background in every theme, so `informative` (gray) and `warning` (dark
+   * yellow in the light theme) dots are darker than those counts; `subtle` is the page color, for
+   * dots on colored surfaces.
    * @default false
    */
   dot?: boolean;
@@ -40,6 +44,11 @@ export interface CounterBadgeProps extends React.HTMLAttributes<HTMLSpanElement>
   ref?: React.Ref<HTMLSpanElement>;
 }
 
+/** Whether a naming attribute holds more than whitespace (an empty one names nothing). */
+function isName(value: unknown): value is string {
+  return typeof value === 'string' && value.trim() !== '';
+}
+
 /**
  * A small pill showing a count (unread messages, notifications), or with `dot` a small dot
  * without a number. Renders nothing for a count of 0 (unless `showZero`) or less, and
@@ -49,7 +58,7 @@ export interface CounterBadgeProps extends React.HTMLAttributes<HTMLSpanElement>
  *
  * A count or dot whose meaning is not in the surrounding text can be named with `aria-label` or
  * `aria-labelledby`: it then gets `role="img"` (unless you pass a `role`), so the name is
- * announced.
+ * announced. An empty or whitespace-only name counts as absent and adds no role.
  *
  * @example
  * <CounterBadge count={12} />
@@ -69,24 +78,33 @@ export const CounterBadge = ({
 }: CounterBadgeProps) => {
   if (!dot && (count < 0 || (count === 0 && !showZero))) return null;
 
-  const c = badgeColorClasses[color];
-  const appearanceClasses =
-    appearance === 'filled'
+  // Before 0.6 `color` was the span's HTML attribute (any string): a value outside the palette
+  // (untyped code, a wrapper forwarding span attributes) renders as brand instead of throwing.
+  const resolvedColor: BadgeColor = Object.hasOwn(badgeColorClasses, color ?? '') ? color : 'brand';
+  const c = badgeColorClasses[resolvedColor];
+  // A dot has no text to carry the contrast: it takes the dot colors, which stand out from the
+  // page on their own.
+  const appearanceClasses = dot
+    ? appearance === 'filled'
+      ? c.dot
+      : cn('bg-transparent border', c.dotBorder)
+    : appearance === 'filled'
       ? c.filled
       : cn(
           'bg-transparent border',
           c.border,
-          color === 'brand' ? 'text-primary' : 'text-foreground',
+          resolvedColor === 'brand' ? 'text-primary' : 'text-foreground',
         );
 
-  // A name on a role-less <span> is not announced by screen readers: name it as an image.
-  const named = Boolean(props['aria-label'] || props['aria-labelledby']);
+  // A name on a role-less <span> is not announced by screen readers: name it as an image. An empty
+  // or whitespace-only name adds no role (an unnamed role="img" fails axe).
+  const named = isName(props['aria-label']) || isName(props['aria-labelledby']);
 
   return (
     <span
       ref={ref}
       role={named ? 'img' : undefined}
-      data-color={color}
+      data-color={resolvedColor}
       data-appearance={appearance}
       data-dot={dot ? '' : undefined}
       className={cn(

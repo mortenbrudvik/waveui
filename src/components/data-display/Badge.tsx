@@ -26,6 +26,11 @@ export interface BadgeProps extends React.HTMLAttributes<HTMLSpanElement> {
   ref?: React.Ref<HTMLSpanElement>;
 }
 
+/** Whether a naming attribute holds more than whitespace (an empty one names nothing). */
+function isName(value: unknown): value is string {
+  return typeof value === 'string' && value.trim() !== '';
+}
+
 const sizeClasses: Record<Size, string> = {
   'extra-small': 'text-[10px] leading-[14px] px-1',
   small: 'text-[10px] leading-[14px] px-1',
@@ -42,7 +47,7 @@ const sizeClasses: Record<Size, string> = {
  *
  * A badge whose text alone does not say what it means ("3") can be named with `aria-label` or
  * `aria-labelledby`: it then gets `role="img"` (unless you pass a `role`), so the name is
- * announced.
+ * announced. An empty or whitespace-only name counts as absent and adds no role.
  *
  * @example
  * <Badge appearance="tint" color="success">Passed</Badge>
@@ -66,8 +71,9 @@ export const Badge = ({
         ? c.tint
         : cn('bg-transparent border text-foreground', c.border);
 
-  // A name on a role-less <span> is not announced by screen readers: name it as an image.
-  const named = Boolean(props['aria-label'] || props['aria-labelledby']);
+  // A name on a role-less <span> is not announced by screen readers: name it as an image. An empty
+  // or whitespace-only name adds no role (an unnamed role="img" fails axe).
+  const named = isName(props['aria-label']) || isName(props['aria-labelledby']);
 
   return (
     <span

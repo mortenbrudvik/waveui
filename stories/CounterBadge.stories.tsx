@@ -84,23 +84,38 @@ export const Dot: Story = {
   ),
 };
 
+/** Every color, filled (first row) and outline (second row), each above its name. */
+const renderColorRows: Story['render'] = (args) => (
+  <div className="flex flex-col gap-3">
+    {APPEARANCES.map((appearance) => (
+      <div key={appearance} className="flex flex-wrap gap-4">
+        {COLORS.map((color) => (
+          <span
+            key={color}
+            className="inline-flex flex-col items-center gap-1 text-caption-1 text-muted-foreground"
+          >
+            <CounterBadge {...args} appearance={appearance} color={color} />
+            {color}
+          </span>
+        ))}
+      </div>
+    ))}
+  </div>
+);
+
 /** Every color of Badge's palette, filled (first row) and outline (second row). */
 export const Colors: Story = {
-  render: (args) => (
-    <div className="flex flex-col gap-3">
-      {APPEARANCES.map((appearance) => (
-        <div key={appearance} className="flex flex-wrap gap-4">
-          {COLORS.map((color) => (
-            <span
-              key={color}
-              className="inline-flex flex-col items-center gap-1 text-caption-1 text-muted-foreground"
-            >
-              <CounterBadge {...args} appearance={appearance} color={color} />
-              {color}
-            </span>
-          ))}
-        </div>
-      ))}
-    </div>
-  ),
+  render: renderColorRows,
+};
+
+/**
+ * Every color as a dot, filled (first row) and outline (second row). A dot has no text, so its
+ * color keeps 3:1 against the page: the `informative` and `warning` dots are darker than those
+ * counts. `subtle` is the page color, for dots on colored surfaces.
+ */
+export const DotColors: Story = {
+  args: {
+    dot: true,
+  },
+  render: renderColorRows,
 };

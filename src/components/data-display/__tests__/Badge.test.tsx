@@ -171,6 +171,30 @@ describe('Badge', () => {
       expect(screen.queryByRole('img')).toBeNull();
     });
 
+    it.each([
+      ['an empty aria-label', { 'aria-label': '' }],
+      ['a whitespace-only aria-label', { 'aria-label': ' ' }],
+      ['a whitespace-only aria-labelledby', { 'aria-labelledby': ' \t' }],
+    ])('%s names nothing, so no role is added', (_label, name) => {
+      render(
+        <Badge {...name} data-testid="badge">
+          3
+        </Badge>,
+      );
+      expect(screen.getByTestId('badge')).not.toHaveAttribute('role');
+      expect(screen.queryByRole('img')).toBeNull();
+    });
+
+    it('a whitespace-only aria-label (a missing translation) has no axe violations', async () => {
+      render(
+        <p>
+          Inbox <Badge aria-label=" ">3</Badge>
+        </p>,
+      );
+      await expectNoA11yViolations();
+      expect(screen.queryByRole('img')).toBeNull();
+    });
+
     it('a consumer role wins', () => {
       render(
         <Badge role="status" aria-label="Build passed">

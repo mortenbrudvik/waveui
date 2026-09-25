@@ -79,7 +79,9 @@ function isName(value: unknown): value is string {
  * - Inside a `Field`, the Field's label names a bar that has no name of its own, its validation
  *   message and hint describe the bar, and its validation state (error, warning, success) colors
  *   the fill unless `color` is set. A progress bar is never invalid or required: the
- *   `aria-invalid` and `aria-required` a Field adds are not rendered.
+ *   `aria-invalid` and `aria-required` a Field adds are not rendered. Next to another control in
+ *   a Field's wrapper element, the bar gets an id of its own and leaves the Field's
+ *   `<label htmlFor>` to that control.
  * - The indeterminate animation follows the writing direction and becomes a full-width pulse for
  *   reduced motion. In forced-colors mode the fill uses `Highlight` and the track gets a border.
  *
@@ -107,11 +109,16 @@ export const ProgressBar = ({
   ...rest
 }: ProgressBarProps) => {
   const labelId = useId('progress-label');
+  const ownId = useId('progress');
   const field = useFieldContext();
-  // No name props are passed, so with `labelable: false` the merged `aria-labelledby` is exactly
-  // the Field's label id (or absent); it is used only when the bar has no name of its own.
+  // A <label htmlFor> cannot name a progress bar, so inside a Field a bar without an id (Field
+  // passes its control id to a first child as `id`) takes its own instead of claiming the
+  // control id: that stays with the control the label names (an Input next to the bar in a
+  // wrapper). No name props are passed, so with `labelable: false` the merged `aria-labelledby`
+  // is exactly the Field's label id (or absent); it is used only when the bar has no name of its
+  // own.
   const fieldProps = useFieldControl(
-    { id, 'aria-describedby': ariaDescribedBy },
+    { id: id ?? (field ? ownId : undefined), 'aria-describedby': ariaDescribedBy },
     { labelable: false },
   );
   // A context built before 0.6 has no validation state: read it from `invalid`.
@@ -188,8 +195,8 @@ export const ProgressBar = ({
     'aria-valuemax': validMax ? max : 100,
     'data-color': resolvedColor,
   };
-  // The consumer's id, else the Field's control id; the consumer's description, then the Field's
-  // validation message and hint.
+  // The consumer's id (or the control id Field passes to its first child), else its own id inside
+  // a Field; the consumer's description, then the Field's validation message and hint.
   if (fieldProps.id !== undefined) barProps.id = fieldProps.id;
   if (fieldProps['aria-describedby'] !== undefined) {
     barProps['aria-describedby'] = fieldProps['aria-describedby'];

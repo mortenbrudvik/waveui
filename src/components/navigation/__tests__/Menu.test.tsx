@@ -1656,6 +1656,9 @@ describe('Menu popup (Menu.Trigger + Menu.Popover)', () => {
 
 describe('Menu.Popover taller than the viewport', () => {
   const LONG_MENU_ITEMS = Array.from({ length: 40 }, (_, index) => `Command ${index + 1}`);
+  /** The size limits, from the available space floating-ui writes as CSS variables. */
+  const SIZE_LIMIT_HEIGHT = 'max-h-(--wave-popup-available-height)';
+  const SIZE_LIMIT_WIDTH = 'max-w-(--wave-popup-available-width)';
 
   function LongMenu() {
     return (
@@ -1677,19 +1680,48 @@ describe('Menu.Popover taller than the viewport', () => {
     render(<LongMenu />);
     await user.click(trigger());
     const menu = screen.getByRole('menu', { name: 'Actions' });
-    expect(menu).toHaveClass('overflow-y-auto', 'overscroll-contain');
-    expect(menu.style.maxHeight).toBe('var(--wave-popup-available-height)');
-    expect(menu.style.maxWidth).toBe('var(--wave-popup-available-width)');
+    expect(menu).toHaveClass(
+      'overflow-y-auto',
+      'overscroll-contain',
+      SIZE_LIMIT_HEIGHT,
+      SIZE_LIMIT_WIDTH,
+    );
+    // Classes, not inline styles: a consumer class can replace them (C-COMPOSE).
+    expect(menu.style.maxHeight).toBe('');
+    expect(menu.style.maxWidth).toBe('');
   });
 
-  it('keeps a consumer style next to the size limit', async () => {
+  it('lets a consumer max-h-* or max-w-* class replace the size limit', async () => {
     const user = userEvent.setup();
     render(
       <Menu>
         <Menu.Trigger>
           <button type="button">Actions</button>
         </Menu.Trigger>
-        <Menu.Popover style={{ minWidth: 240 }}>
+        <Menu.Popover className="max-h-64 max-w-xs">
+          {LONG_MENU_ITEMS.map((label) => (
+            <Menu.Item key={label}>{label}</Menu.Item>
+          ))}
+        </Menu.Popover>
+      </Menu>,
+    );
+    await user.click(trigger());
+    const menu = screen.getByRole('menu', { name: 'Actions' });
+    expect(menu).toHaveClass('max-h-64', 'max-w-xs', 'overflow-y-auto');
+    expect(menu).not.toHaveClass(SIZE_LIMIT_HEIGHT);
+    expect(menu).not.toHaveClass(SIZE_LIMIT_WIDTH);
+    expect(menu.style.maxHeight).toBe('');
+    expect(menu.style.maxWidth).toBe('');
+  });
+
+  it('keeps a consumer style next to the size limit, and a consumer max-height style wins', async () => {
+    const user = userEvent.setup();
+    render(
+      <Menu>
+        <Menu.Trigger>
+          <button type="button">Actions</button>
+        </Menu.Trigger>
+        <Menu.Popover style={{ minWidth: 240, maxHeight: 200 }}>
           <Menu.Item>Edit</Menu.Item>
         </Menu.Popover>
       </Menu>,
@@ -1697,7 +1729,9 @@ describe('Menu.Popover taller than the viewport', () => {
     await user.click(trigger());
     const menu = screen.getByRole('menu');
     expect(menu.style.minWidth).toBe('240px');
-    expect(menu.style.maxHeight).toBe('var(--wave-popup-available-height)');
+    expect(menu).toHaveClass(SIZE_LIMIT_HEIGHT, SIZE_LIMIT_WIDTH);
+    // An inline style beats the class.
+    expect(menu.style.maxHeight).toBe('200px');
   });
 
   // The first focus lands before floating-ui has limited the surface's height (it measures after

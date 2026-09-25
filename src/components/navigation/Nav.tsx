@@ -23,17 +23,20 @@ import { useId } from '../../hooks/useId';
 type NavValueKind = 'item' | 'category';
 
 /**
- * The category each sub-item was last shown in, by sub-item value: written by the mounted
- * sub-items from a layout effect, read by the categories with `useSyncExternalStore`. An entry
- * outlives its sub-item, so a category closed after its current sub-item was shown still knows it
- * contains the current page.
+ * The category each sub-item was last shown in, by sub-item value: written from layout effects by
+ * the mounted sub-items and by a closed category whose children hold the current value, read by
+ * the categories with `useSyncExternalStore`. An entry outlives its sub-item, so a category closed
+ * after its current sub-item was shown still knows it contains the current page.
  */
 interface NavCategoryStore {
   /**
-   * Records the category a mounted item renders in; `null` (an item outside any category) forgets
-   * an earlier entry, so a value moved out of a category no longer marks it.
+   * Records the category a mounted item renders in, or a closed category whose children hold the
+   * value; `null` (an item outside any category) forgets an earlier entry, so a value moved out of
+   * a category no longer marks it.
    */
   record: (value: string, category: string | null) => void;
+  /** Forgets the entry of `value` while it is still `category`. */
+  forget: (value: string, category: string) => void;
   /** The category last recorded for a sub-item value. */
   get: (value: string) => string | undefined;
   subscribe: (listener: () => void) => () => void;
@@ -42,12 +45,18 @@ interface NavCategoryStore {
 function createCategoryStore(): NavCategoryStore {
   const categories = new Map<string, string>();
   const listeners = new Set<() => void>();
+  const notify = () => listeners.forEach((listener) => listener());
   return {
     record(value, category) {
       if ((categories.get(value) ?? null) === category) return;
       if (category === null) categories.delete(value);
       else categories.set(value, category);
-      listeners.forEach((listener) => listener());
+      notify();
+    },
+    forget(value, category) {
+      if (categories.get(value) !== category) return;
+      categories.delete(value);
+      notify();
     },
     get: (value) => categories.get(value),
     subscribe(listener) {
@@ -84,7 +93,7 @@ const INERT_NAV_CONTEXT: NavContextValue = {
   toggleCategory: noop,
   registerValue: () => noop,
   currentCategory: undefined,
-  categoryStore: { record: noop, get: () => undefined, subscribe: () => noop },
+  categoryStore: { record: noop, forget: noop, get: () => undefined, subscribe: () => noop },
 };
 
 /**
@@ -597,9 +606,9 @@ function renderNavEntry(
  * `aria-current="true"` (the button is not the page's link, so not `"page"`),
  * `data-contains-current` and the selected look of `Nav.Item`. It contains the current item when
  * a `Nav.SubItem` with the current value is among its children (through Fragments and wrapper
- * elements, also in the server HTML), when the current sub-item was last shown in it, or when it
- * is the Nav's `currentCategory`. An open category is not marked: its sub-item shows the current
- * page.
+ * elements, also in the server HTML), when the current sub-item was last shown in it (and has not
+ * moved among another category's children since), or when it is the Nav's `currentCategory`. An
+ * open category is not marked: its sub-item shows the current page.
  *
  * Also exported as `NavCategory` (import the flat name from React Server Components).
  */
@@ -624,17 +633,24 @@ const NavCategory = ({
   const listId = useId('wave-nav-category');
   const isOpen = openCategories.includes(value);
 
+  // The current sub-item is among the children of this closed category (also on the server).
+  const holdsCurrentChild = !isOpen && currentValue !== '' && containsValue(children, currentValue);
   // The current sub-item was last shown in this category (none on the server).
   const holdsShownCurrent = React.useSyncExternalStore(
     categoryStore.subscribe,
     () => currentValue !== '' && categoryStore.get(currentValue) === value,
     () => false,
   );
+  // Children that hold the current sub-item make this the category the Nav remembers for it, so a
+  // category it was shown in before it moved here is no longer marked. The entry is forgotten when
+  // they stop holding it (an open category records through its mounted sub-item instead).
+  React.useLayoutEffect(() => {
+    if (!holdsCurrentChild) return;
+    categoryStore.record(currentValue, value);
+    return () => categoryStore.forget(currentValue, value);
+  }, [categoryStore, holdsCurrentChild, currentValue, value]);
   const containsCurrent =
-    !isOpen &&
-    (currentCategory === value ||
-      holdsShownCurrent ||
-      (currentValue !== '' && containsValue(children, currentValue)));
+    !isOpen && (currentCategory === value || holdsShownCurrent || holdsCurrentChild);
 
   let buttonLabel: React.ReactNode = label;
   let items: React.ReactNode = children;

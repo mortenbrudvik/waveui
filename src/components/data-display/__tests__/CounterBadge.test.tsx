@@ -44,6 +44,22 @@ const COLOR_CLASSES: Array<[CounterBadgeAppearance, BadgeColor, string[]]> = [
   ['outline', 'subtle', ['bg-transparent', 'border', 'border-border', 'text-foreground']],
 ];
 
+/**
+ * A dot has no text, so its own color must stand out from the page (3:1, WCAG 1.4.11; each token
+ * is asserted against `background` in tokens.test.ts): informative and warning take darker tokens
+ * than their count badges. `subtle` keeps the page color, for dots on colored surfaces.
+ */
+const DOT_COLOR_CLASSES: Array<[BadgeColor, fill: string, ring: string]> = [
+  ['brand', 'bg-primary', 'border-primary'],
+  ['success', 'bg-success', 'border-success'],
+  ['warning', 'bg-warning-tint-foreground', 'border-warning-tint-foreground'],
+  ['danger', 'bg-destructive', 'border-destructive'],
+  ['important', 'bg-severe', 'border-severe'],
+  ['informative', 'bg-muted-foreground', 'border-muted-foreground'],
+  ['severe', 'bg-severe', 'border-severe'],
+  ['subtle', 'bg-background', 'border-border'],
+];
+
 const DOT_CLASSES = ['h-1.5', 'w-1.5', 'min-w-0', 'p-0'];
 const DOT_FORCED_COLORS = [
   'forced-colors:forced-color-adjust-none',
@@ -175,20 +191,43 @@ describe('CounterBadge', () => {
       expect(screen.getByTestId('count')).not.toHaveAttribute('data-dot');
     });
 
-    it('takes the color classes of its color and appearance', () => {
-      render(
-        <>
-          <CounterBadge dot color="danger" data-testid="filled" />
-          <CounterBadge dot appearance="outline" color="success" data-testid="outline" />
-        </>,
-      );
-      expect(screen.getByTestId('filled')).toHaveClass('bg-destructive');
-      expect(screen.getByTestId('outline')).toHaveClass(
-        'bg-transparent',
-        'border',
-        'border-success',
-      );
+    it('lists a dot fill and ring for every color', () => {
+      expect(DOT_COLOR_CLASSES.map(([color]) => color)).toEqual(COLORS);
     });
+
+    it.each(DOT_COLOR_CLASSES)(
+      'takes the dot color of %s: filled %s, outline ring %s',
+      (color, fill, ring) => {
+        render(
+          <>
+            <CounterBadge dot color={color} data-testid="filled" />
+            <CounterBadge dot appearance="outline" color={color} data-testid="outline" />
+          </>,
+        );
+        expect(screen.getByTestId('filled')).toHaveClass(fill);
+        expect(screen.getByTestId('outline')).toHaveClass('bg-transparent', 'border', ring);
+      },
+    );
+
+    it.each([
+      ['informative', 'bg-muted', 'border-border'],
+      ['warning', 'bg-warning', 'border-warning'],
+    ] as const)(
+      'the %s dot does not use %s or %s, which are faint on the page background',
+      (color, countFill, countRing) => {
+        render(
+          <>
+            <CounterBadge dot color={color} data-testid="filled" />
+            <CounterBadge dot appearance="outline" color={color} data-testid="outline" />
+            <CounterBadge count={3} color={color} data-testid="count" />
+          </>,
+        );
+        expect(screen.getByTestId('filled')).not.toHaveClass(countFill);
+        expect(screen.getByTestId('outline')).not.toHaveClass(countRing);
+        // The count keeps Badge's colors: its text carries the contrast.
+        expect(screen.getByTestId('count')).toHaveClass(countFill);
+      },
+    );
 
     it('opts out of forced colors and fills with CanvasText, so it stays visible', () => {
       render(
@@ -225,6 +264,26 @@ describe('CounterBadge', () => {
     it.each(COLORS)('filled %s uses the same classes as a Badge of that color', (color) => {
       render(<CounterBadge count={5} color={color} data-testid="cb" />);
       expect(screen.getByTestId('cb')).toHaveClass(...badgeColorClasses[color].filled.split(' '));
+    });
+
+    // Before 0.6 CounterBadge had no `color` prop: the span's HTML `color?: string` attribute applied.
+    it.each([
+      ['an unknown string', 'red'],
+      ['null', null],
+    ])('falls back to brand for %s from untyped code instead of failing to render', (_, color) => {
+      render(
+        <>
+          <CounterBadge count={3} {...({ color } as object)} data-testid="count" />
+          <CounterBadge dot {...({ color } as object)} data-testid="dot" />
+        </>,
+      );
+      const count = screen.getByTestId('count');
+      expect(count).toHaveTextContent(/^3$/);
+      expect(count).toHaveAttribute('data-color', 'brand');
+      expect(count).toHaveClass('bg-primary', 'text-primary-foreground');
+      expect(count).not.toHaveAttribute('color');
+      expect(screen.getByTestId('dot')).toHaveAttribute('data-color', 'brand');
+      expect(screen.getByTestId('dot')).toHaveClass('bg-primary');
     });
 
     it.each(COLORS.filter((color) => color !== 'brand'))(
@@ -328,9 +387,24 @@ describe('CounterBadge', () => {
       expect(screen.queryByRole('img')).toBeNull();
     });
 
-    it('an empty aria-label names nothing, so no role is added', () => {
-      render(<CounterBadge count={3} aria-label="" data-testid="cb" />);
+    it.each([
+      ['an empty aria-label', { 'aria-label': '' }],
+      ['a whitespace-only aria-label', { 'aria-label': ' ' }],
+      ['a whitespace-only aria-labelledby', { 'aria-labelledby': ' \t' }],
+    ])('%s names nothing, so no role is added', (_label, name) => {
+      render(<CounterBadge count={3} {...name} data-testid="cb" />);
       expect(screen.getByTestId('cb')).not.toHaveAttribute('role');
+      expect(screen.queryByRole('img')).toBeNull();
+    });
+
+    it('a whitespace-only aria-label (a missing translation) has no axe violations', async () => {
+      render(
+        <p>
+          Inbox <CounterBadge count={2} aria-label=" " /> <CounterBadge dot aria-label=" " />
+        </p>,
+      );
+      await expectNoA11yViolations();
+      expect(screen.queryByRole('img')).toBeNull();
     });
 
     it('a consumer role wins', () => {
