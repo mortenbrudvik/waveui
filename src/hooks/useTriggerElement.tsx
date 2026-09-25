@@ -88,10 +88,11 @@ export function getTriggerTarget(el: HTMLElement): HTMLElement | null {
  * The element that takes focus for the trigger rendered as `trigger`: the one rule of every focus
  * return of Menu, Popover, Dialog and Drawer (Escape, outside press, item activation, Tab and
  * Shift+Tab, the Close part). It is the {@link getTriggerTarget} element, which carries the state
- * ARIA, when that can take focus now, so a `tabIndex={-1}` wrapper span gives way to the button
- * inside it; else the first tabbable element inside `trigger` (a span given only a `role`); else
- * `trigger` itself when it can take focus (a `<button tabIndex={-1}>` child, a `tabIndex={-1}`
- * span holding only text); else `null`. Internal (not exported from the package entry).
+ * ARIA, when that can take focus now (a `<button tabIndex={-1}>` child; the button inside a
+ * `tabIndex={-1}` wrapper span, or inside a span given only a `role`); else the first tabbable
+ * element inside `trigger` (a wrapper span whose first control is disabled or hidden, with another
+ * one after it); else `trigger` itself when it can take focus (a span holding only text, given a
+ * `tabIndex` but no widget role); else `null`. Internal (not exported from the package entry).
  */
 export function getTriggerFocusTarget(trigger: HTMLElement | null): HTMLElement | null {
   if (!trigger) return null;

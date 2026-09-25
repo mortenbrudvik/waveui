@@ -156,7 +156,8 @@ function hideForNativeTab(surface: HTMLElement): void {
  * What the document knows about focus that arrives from nothing (the body): whether it can come
  * from the browser's own controls, and where the browser starts Tab and Shift+Tab from nothing.
  * The listeners are installed while a {@link usePopoverTabOrder} is mounted, open or not, so the
- * press that opened a surface counts too.
+ * press that opened a surface counts too. Elements are held through a `WeakRef`, so a removed
+ * subtree is not kept alive while a popover is mounted: an element that is gone was removed.
  */
 interface FocusOrigin {
   /** Mounted `usePopoverTabOrder` instances. */
@@ -171,12 +172,17 @@ interface FocusOrigin {
    * The element that had focus when the window lost it: the browser focuses it again, from
    * nothing, when the window gets focus back. Cleared by the next `focusin`.
    */
-  refocus: EventTarget | null;
+  refocus: WeakRef<Element> | null;
   /**
-   * The element that took focus last. When focus has gone from it to nothing (it was removed,
-   * hidden or blurred), the browser starts sequential navigation where it is, or where it was.
+   * The element that took focus last, and the ordered surface ({@link getOrderedSurfaces}) that
+   * contained it then. When focus has gone from it to nothing (it was removed, hidden or blurred),
+   * the browser starts sequential navigation where it is, or where it was. Recorded in the capture
+   * phase, so a handler that stops a `focusin` from propagating does not hide it.
    */
-  lastFocused: Element | null;
+  lastFocused: {
+    element: WeakRef<Element>;
+    surface: WeakRef<HTMLElement> | null;
+  } | null;
   /**
    * The window has just got focus back: no element took focus since, and no key or pointer press
    * reached the page. Sequential navigation from the browser's own controls gives the window focus
@@ -211,16 +217,21 @@ const focusOrigin: FocusOrigin = {
 };
 
 /**
- * Whether sequential navigation from nothing starts after `el`: at the element that took focus
- * last, when that comes after `el` in the document or has been removed (it may have been anywhere,
- * after `el` too).
+ * Whether sequential navigation from nothing starts after `el`, the last tabbable element of
+ * `surface`: at the element that took focus last, when that comes after `el` in the document or
+ * was removed from `surface` (it may have been anywhere in it, after `el` too). An element removed
+ * elsewhere does not count: from a place after the surface (a dismissed toast in a later portal),
+ * Shift+Tab lands on `el` just as from the document's end, and from a place before it, it does not
+ * land on `el`.
  */
-function startsAfter(el: HTMLElement): boolean {
-  const start = focusOrigin.lastFocused;
-  if (!start) return false;
-  return (
-    !start.isConnected || !!(el.compareDocumentPosition(start) & Node.DOCUMENT_POSITION_FOLLOWING)
-  );
+function startsAfter(el: HTMLElement, surface: HTMLElement): boolean {
+  const last = focusOrigin.lastFocused;
+  if (!last) return false;
+  const start = last.element.deref();
+  if (start?.isConnected) {
+    return !!(el.compareDocumentPosition(start) & Node.DOCUMENT_POSITION_FOLLOWING);
+  }
+  return last.surface?.deref() === surface;
 }
 
 /**
@@ -255,17 +266,27 @@ function retainFocusOrigin(): () => void {
       focusOrigin.pressed = false;
       focusOrigin.windowFocused = false;
       const active = doc.activeElement;
-      focusOrigin.refocus = isNothing(doc, active) ? null : active;
+      focusOrigin.refocus = !active || isNothing(doc, active) ? null : new WeakRef(active);
     };
     const onWindowFocus = () => {
       focusOrigin.epoch += 1;
       focusOrigin.windowFocused = true;
     };
+    // Capture, like the presses and keys, so a handler that stops a `focusin` from propagating
+    // does not hide where focus went. Only the `keydown` of a later Tab reads it: recording it
+    // before the surfaces' own `focusin` listeners run changes nothing for them.
+    const onFocusCapture = (event: FocusEvent) => {
+      const target = event.target as Element | null;
+      const surface = target && [...getOrderedSurfaces()].find((open) => open.contains(target));
+      focusOrigin.lastFocused = target && {
+        element: new WeakRef(target),
+        surface: surface ? new WeakRef(surface) : null,
+      };
+    };
     // Bubbling to the document, after the surfaces' own `focusin` listeners have read the state.
-    const onFocusIn = (event: FocusEvent) => {
+    const onFocusIn = () => {
       focusOrigin.epoch += 1;
       focusOrigin.refocus = null;
-      focusOrigin.lastFocused = event.target as Element | null;
       focusOrigin.windowFocused = false;
     };
     // Capture: a handler that stops a press or a key from propagating must not hide it.
@@ -273,6 +294,7 @@ function retainFocusOrigin(): () => void {
     doc.addEventListener('mousedown', onPress, true);
     doc.addEventListener('keydown', onKey, true);
     doc.addEventListener('keyup', onKey, true);
+    doc.addEventListener('focusin', onFocusCapture, true);
     doc.addEventListener('focusin', onFocusIn);
     win?.addEventListener('blur', onWindowBlur);
     win?.addEventListener('focus', onWindowFocus);
@@ -281,6 +303,7 @@ function retainFocusOrigin(): () => void {
       doc.removeEventListener('mousedown', onPress, true);
       doc.removeEventListener('keydown', onKey, true);
       doc.removeEventListener('keyup', onKey, true);
+      doc.removeEventListener('focusin', onFocusCapture, true);
       doc.removeEventListener('focusin', onFocusIn);
       win?.removeEventListener('blur', onWindowBlur);
       win?.removeEventListener('focus', onWindowFocus);
@@ -342,10 +365,15 @@ export interface PopoverTabOrderOptions {
  *   surface: another open popover's content has its own place after its anchor), unless that is
  *   the tab stop before the surface's place (the surface then ends the order). Focus moves there
  *   once the entry's `focusin` has reached the window, so the entered element's focus handlers
- *   run before its blur handlers. Shift+Tab from nothing does not start at the document's end
- *   when the element that had focus comes after the surface's last element or has been removed (a
- *   control of the surface that hid or removed itself): the browser starts where it is, or was. A
- *   lap in either direction visits every element once, and there is no Tab cycle.
+ *   run before its blur handlers; a handler that stops that `focusin` from propagating (an
+ *   `onFocus` in the content that calls `stopPropagation()`) leaves focus on the surface's last
+ *   element, as an entry at its place after the anchor, with no trap and no Tab cycle. Shift+Tab
+ *   from nothing does not start at the document's end when the element that had focus comes after
+ *   the surface's last element or was removed from the surface (a control of the surface that hid
+ *   or removed itself): the browser starts where it is, or was. An element removed elsewhere (a
+ *   dismissed toast portaled after the surface) keeps the rule: from its place, too, Shift+Tab
+ *   lands on the surface's last element. A lap in either direction visits every element once, and
+ *   there is no Tab cycle.
  * - With no tab stop before its place (nothing in the tab order at or before the anchor), Tab
  *   reaches the surface where its portal is, from the element before the portal, and it follows
  *   the document order from there. When the previous stop is missing too, Shift+Tab reaches it
@@ -404,7 +432,7 @@ export function usePopoverTabOrder({
         event.shiftKey &&
         !focusOrigin.pressed &&
         order[order.length - 1] === last &&
-        !startsAfter(last)
+        !startsAfter(last, surface)
       ) {
         pendingRef.current = { element: last, from: 'far-end', epoch: focusOrigin.epoch };
       }
@@ -458,7 +486,7 @@ export function usePopoverTabOrder({
       if (from && surface.contains(from)) return;
       const entered = event.target;
       // The window got focus back: focus returns to where it was, in the order it had there.
-      if (!from && entered === focusOrigin.refocus) return;
+      if (!from && entered === focusOrigin.refocus?.deref()) return;
       const expected =
         pending && pending.epoch === focusOrigin.epoch && pending.element === entered
           ? pending.from

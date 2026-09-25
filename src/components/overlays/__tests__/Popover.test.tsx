@@ -1513,6 +1513,109 @@ describe('Popover', () => {
       expect(await tabs(user, 2, true)).toEqual(['First', 'Toggle']);
     });
 
+    /** Before, an open popover, After, and (with `toast`) a Dismiss button in a portal of its own. */
+    function LaterToast({ toast }: { toast: boolean }) {
+      const [dismissed, setDismissed] = React.useState(false);
+      return (
+        <>
+          <button type="button">Before</button>
+          <Popover defaultOpen>
+            <Popover.Trigger>
+              <button type="button">Toggle</button>
+            </Popover.Trigger>
+            <Popover.Content aria-label="Options">
+              <button type="button">First</button>
+              <button type="button">Last</button>
+            </Popover.Content>
+          </Popover>
+          <button type="button">After</button>
+          {toast && !dismissed && (
+            <Portal>
+              <button type="button" onClick={() => setDismissed(true)}>
+                Dismiss
+              </button>
+            </Portal>
+          )}
+        </>
+      );
+    }
+
+    it('keyboard only: Shift+Tab after a control in a later, unrelated portal removed itself reaches the last element of the page', async () => {
+      const user = userEvent.setup();
+      const { rerender } = render(<LaterToast toast={false} />);
+      // Shown once the content is portaled, so its portal comes after the content's.
+      rerender(<LaterToast toast />);
+      const dismiss = screen.getByRole('button', { name: 'Dismiss' });
+      const content = screen.getByRole('dialog', { name: 'Options' });
+      expect(content.compareDocumentPosition(dismiss) & Node.DOCUMENT_POSITION_FOLLOWING).toBe(
+        Node.DOCUMENT_POSITION_FOLLOWING,
+      );
+      screen.getByRole('button', { name: 'After' }).focus();
+      expect(await tabs(user, 1)).toEqual(['Dismiss']);
+      await user.keyboard('{Enter}');
+      // The toast is gone and focus with it. The browser starts where it was, after the content, so
+      // Shift+Tab reaches the content's last element as from the end of the document: focus goes to
+      // the last element of the page instead, and the lap visits the content once.
+      expect(focused()).toBe('body');
+      expect(await tabs(user, 6, true)).toEqual([
+        'After',
+        'Last',
+        'First',
+        'Toggle',
+        'Before',
+        'body',
+      ]);
+    });
+
+    /** An open popover whose last element stops its focus event and removes itself when pressed. */
+    function StoppedFocus() {
+      const [shown, setShown] = React.useState(true);
+      return (
+        <>
+          <button type="button">Before</button>
+          <Popover defaultOpen>
+            <Popover.Trigger>
+              <button type="button">Toggle</button>
+            </Popover.Trigger>
+            <Popover.Content aria-label="Options">
+              <button type="button">First</button>
+              {shown && (
+                <button
+                  type="button"
+                  onFocus={(event) => event.stopPropagation()}
+                  onClick={() => setShown(false)}
+                >
+                  Last
+                </button>
+              )}
+            </Popover.Content>
+          </Popover>
+          <button type="button">After</button>
+        </>
+      );
+    }
+
+    it('a consumer onFocus that stops the propagation of the entry at the content’s last element keeps focus there: no trap and no Tab cycle', async () => {
+      const user = userEvent.setup();
+      render(<StoppedFocus />);
+      // Shift+Tab from nothing lands on the content's last element. Its focus event never reaches
+      // the window, so focus is not moved on to the last element of the page: it stays there, as an
+      // entry at the content's place after the trigger, and both directions leave the page.
+      expect(await tabs(user, 5, true)).toEqual(['Last', 'First', 'Toggle', 'Before', 'body']);
+      expect(await tabs(user, 1, true)).toEqual(['Last']);
+      expect(await tabs(user, 2)).toEqual(['After', 'body']);
+      expect(screen.getByRole('dialog', { name: 'Options' })).toBeInTheDocument();
+    });
+
+    it('a consumer onFocus that stops the propagation of the entry still records where focus was: Shift+Tab after that element removed itself continues before it', async () => {
+      const user = userEvent.setup();
+      render(<StoppedFocus />);
+      expect(await tabs(user, 1, true)).toEqual(['Last']);
+      await user.keyboard('{Enter}');
+      expect(focused()).toBe('body');
+      expect(await tabs(user, 2, true)).toEqual(['First', 'Toggle']);
+    });
+
     it.each([
       [
         'a Dialog',

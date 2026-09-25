@@ -367,8 +367,8 @@ PopoverRoot.displayName = 'Popover';
  * named by it); `asChild={false}` renders the 0.4 wrapper span, and a custom child that neither
  * forwards `ref` nor spreads its props falls back to that span automatically (with a development
  * warning). On the span, the state ARIA goes to the first element in the tab order inside it, and
- * focus returns to that element (to the span only when you made it the trigger with `tabIndex={0}`
- * or a `role`).
+ * focus returns to that element (to the span when you made it the trigger with a `role` such as
+ * `button` and `tabIndex={0}`, or when nothing inside it can take focus).
  *
  * A Tooltip goes between the trigger and the button: it passes the trigger's `id` and ARIA on to
  * the button, which the Tooltip also describes.

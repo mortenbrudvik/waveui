@@ -858,17 +858,31 @@ describe('getTriggerFocusTarget', () => {
     expect(getTriggerFocusTarget(trigger)).toBe(trigger);
     const button = host('<button type="button">Open</button>');
     expect(getTriggerFocusTarget(button)).toBe(button);
-  });
-
-  it('falls back to the first tabbable element inside, then to the element itself when it can take focus', () => {
     const roleOnly = host(
       '<span role="button"><button type="button" tabindex="-1">Skipped</button><a href="#x">Link</a></span>',
     );
     expect(getTriggerFocusTarget(roleOnly)).toBe(roleOnly.querySelector('a'));
-    const textSpan = host('<span tabindex="-1">Text</span>');
-    expect(getTriggerFocusTarget(textSpan)).toBe(textSpan);
     const outOfOrder = host('<button type="button" tabindex="-1">Open</button>');
     expect(getTriggerFocusTarget(outOfOrder)).toBe(outOfOrder);
+  });
+
+  it('falls back to the first tabbable element inside, then to the element itself when it can take focus', () => {
+    // The first control by markup is the getTriggerTarget element, but it cannot take focus now.
+    const disabledFirst = host(
+      '<span><button type="button" disabled>Off</button><a href="#x">Link</a></span>',
+    );
+    expect(getTriggerTarget(disabledFirst)).toBe(disabledFirst.querySelector('button'));
+    expect(getTriggerFocusTarget(disabledFirst)).toBe(disabledFirst.querySelector('a'));
+    const hiddenFirst = host(
+      '<span><button type="button" hidden>Gone</button><a href="#x">Link</a></span>',
+    );
+    expect(getTriggerTarget(hiddenFirst)).toBe(hiddenFirst.querySelector('button'));
+    expect(getTriggerFocusTarget(hiddenFirst)).toBe(hiddenFirst.querySelector('a'));
+    // Nothing inside, and no widget role: the span itself.
+    const textSpan = host('<span tabindex="-1">Text</span>');
+    expect(getTriggerFocusTarget(textSpan)).toBe(textSpan);
+    const tabbableTextSpan = host('<span tabindex="0">Text</span>');
+    expect(getTriggerFocusTarget(tabbableTextSpan)).toBe(tabbableTextSpan);
     expect(getTriggerFocusTarget(host('<span>Text</span>'))).toBeNull();
     expect(getTriggerFocusTarget(host('<button type="button" disabled>Off</button>'))).toBeNull();
     expect(getTriggerFocusTarget(null)).toBeNull();

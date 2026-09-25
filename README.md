@@ -288,7 +288,7 @@ Namespaced Wave utilities are being considered for 1.0.
 - A Server Component **cannot dot into a client component**: `Card.Header` throws "Cannot access Header on the server". Every sub-component is therefore also exported under a flat name. Use the flat names in Server Components and either form in client components.
 - Every compound can be composed in a Server Component. Parts written there reach the client as lazy references, and the compounds recognise them, so the server HTML and the client behaviour are the same as in a client file: Accordion items, Carousel slides, the options of Combobox and Dropdown, DataGrid parts, Drawer and Menu triggers, List, Nav, TabList and Tree items, and a `Button` passed as a MessageBar, SearchBox or Tag dismiss slot.
 - Event handlers and other functions cannot be passed from a Server Component; put interactive parts in a `'use client'` component.
-- A `DatePicker` or `TimePicker` rendered on the server with `defaultOpen` (or `open`) is closed in the server HTML and opens once hydrated, so no ARIA reference points at a popup that is not there.
+- A `DatePicker`, `TimePicker` or `TagPicker` rendered on the server with `defaultOpen` (or `open`) is closed in the server HTML and opens once hydrated, so no ARIA reference points at a popup that is not there.
 
 ```tsx
 // app/layout.tsx (Server Component)
