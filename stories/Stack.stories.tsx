@@ -1,30 +1,34 @@
+import type * as React from 'react';
 import type { Meta, StoryObj } from '@storybook/react';
 import { Stack } from '../src';
+import { orientationArgType } from './_helpers';
 
 const meta = {
-  title: 'Layout/Stack',
+  title: 'Components/Layout/Stack',
   component: Stack,
+  argTypes: {
+    ...orientationArgType,
+  },
+  args: {
+    orientation: 'vertical',
+    gap: 'md',
+  },
 } satisfies Meta<typeof Stack>;
 
 export default meta;
 type Story = StoryObj<typeof meta>;
 
+/** Demo item drawn with theme tokens. */
 const Box = ({ children }: { children: React.ReactNode }) => (
-  <div
-    style={{
-      padding: '12px 16px',
-      background: '#f0f0f0',
-      border: '1px solid #d1d1d1',
-      borderRadius: 4,
-    }}
-  >
-    {children}
-  </div>
+  <div className="rounded border border-border bg-muted px-4 py-3">{children}</div>
 );
 
 export const Default: Story = {
+  args: {
+    style: { width: 300 },
+  },
   render: (args) => (
-    <Stack {...args} style={{ width: 300 }}>
+    <Stack {...args}>
       <Box>Item 1</Box>
       <Box>Item 2</Box>
       <Box>Item 3</Box>
@@ -33,8 +37,11 @@ export const Default: Story = {
 };
 
 export const Horizontal: Story = {
-  render: () => (
-    <Stack direction="horizontal">
+  args: {
+    orientation: 'horizontal',
+  },
+  render: (args) => (
+    <Stack {...args}>
       <Box>Item 1</Box>
       <Box>Item 2</Box>
       <Box>Item 3</Box>
@@ -42,72 +49,53 @@ export const Horizontal: Story = {
   ),
 };
 
+const gaps = ['none', 'xs', 'sm', 'md', 'lg', 'xl'] as const;
+
 export const GapSizes: Story = {
-  render: () => (
-    <Stack gap="lg">
-      <div>
-        <p style={{ marginBottom: 4, fontWeight: 600 }}>gap="none"</p>
-        <Stack direction="horizontal" gap="none">
-          <Box>A</Box>
-          <Box>B</Box>
-          <Box>C</Box>
-        </Stack>
-      </div>
-      <div>
-        <p style={{ marginBottom: 4, fontWeight: 600 }}>gap="xs"</p>
-        <Stack direction="horizontal" gap="xs">
-          <Box>A</Box>
-          <Box>B</Box>
-          <Box>C</Box>
-        </Stack>
-      </div>
-      <div>
-        <p style={{ marginBottom: 4, fontWeight: 600 }}>gap="sm"</p>
-        <Stack direction="horizontal" gap="sm">
-          <Box>A</Box>
-          <Box>B</Box>
-          <Box>C</Box>
-        </Stack>
-      </div>
-      <div>
-        <p style={{ marginBottom: 4, fontWeight: 600 }}>gap="md" (default)</p>
-        <Stack direction="horizontal" gap="md">
-          <Box>A</Box>
-          <Box>B</Box>
-          <Box>C</Box>
-        </Stack>
-      </div>
-      <div>
-        <p style={{ marginBottom: 4, fontWeight: 600 }}>gap="lg"</p>
-        <Stack direction="horizontal" gap="lg">
-          <Box>A</Box>
-          <Box>B</Box>
-          <Box>C</Box>
-        </Stack>
-      </div>
-      <div>
-        <p style={{ marginBottom: 4, fontWeight: 600 }}>gap="xl"</p>
-        <Stack direction="horizontal" gap="xl">
-          <Box>A</Box>
-          <Box>B</Box>
-          <Box>C</Box>
-        </Stack>
-      </div>
+  args: {
+    gap: 'lg',
+  },
+  render: (args) => (
+    <Stack {...args}>
+      {gaps.map((gap) => (
+        <div key={gap}>
+          <p className="mb-1 font-semibold">
+            gap=&quot;{gap}&quot;{gap === 'md' ? ' (default)' : ''}
+          </p>
+          <Stack orientation="horizontal" gap={gap}>
+            <Box>A</Box>
+            <Box>B</Box>
+            <Box>C</Box>
+          </Stack>
+        </div>
+      ))}
     </Stack>
   ),
 };
 
 export const Centered: Story = {
-  render: () => (
-    <Stack align="center" justify="center" style={{ height: 200, border: '1px dashed #d1d1d1' }}>
+  args: {
+    align: 'center',
+    justify: 'center',
+    className: 'border border-dashed border-border',
+    style: { height: 200 },
+  },
+  render: (args) => (
+    <Stack {...args}>
       <Box>Centered content</Box>
     </Stack>
   ),
 };
 
 export const Wrapped: Story = {
-  render: () => (
-    <Stack direction="horizontal" wrap gap="sm" style={{ width: 300 }}>
+  args: {
+    orientation: 'horizontal',
+    wrap: true,
+    gap: 'sm',
+    style: { width: 300 },
+  },
+  render: (args) => (
+    <Stack {...args}>
       <Box>Item 1</Box>
       <Box>Item 2</Box>
       <Box>Item 3</Box>

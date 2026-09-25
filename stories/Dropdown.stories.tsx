@@ -1,11 +1,18 @@
 import type { Meta, StoryObj } from '@storybook/react';
-import { Dropdown } from '../src';
+import { fn } from 'storybook/test';
+import { Dropdown, Field } from '../src';
 
 const meta = {
-  title: 'Input/Dropdown',
+  title: 'Components/Input/Dropdown',
   component: Dropdown,
   argTypes: {
     disabled: { control: 'boolean' },
+  },
+  args: {
+    'aria-label': 'Pet',
+    onValueChange: fn(),
+    onOpenChange: fn(),
+    style: { width: 250 },
   },
 } satisfies Meta<typeof Dropdown>;
 
@@ -15,7 +22,6 @@ type Story = StoryObj<typeof meta>;
 export const Default: Story = {
   args: {
     placeholder: 'Select an option',
-    style: { width: 250 },
   },
   render: (args) => (
     <Dropdown {...args}>
@@ -30,7 +36,6 @@ export const Default: Story = {
 export const WithDefaultValue: Story = {
   args: {
     defaultValue: 'dog',
-    style: { width: 250 },
   },
   render: (args) => (
     <Dropdown {...args}>
@@ -41,15 +46,51 @@ export const WithDefaultValue: Story = {
   ),
 };
 
+export const Grouped: Story = {
+  args: {
+    'aria-label': 'Animal',
+    placeholder: 'Select an animal',
+  },
+  render: (args) => (
+    <Dropdown {...args}>
+      <Dropdown.OptionGroup label="Mammals">
+        <Dropdown.Option value="cat">Cat</Dropdown.Option>
+        <Dropdown.Option value="dog">Dog</Dropdown.Option>
+      </Dropdown.OptionGroup>
+      <Dropdown.OptionGroup label="Fish">
+        <Dropdown.Option value="goldfish">Goldfish</Dropdown.Option>
+        <Dropdown.Option value="shark" disabled>
+          Shark (not available)
+        </Dropdown.Option>
+      </Dropdown.OptionGroup>
+    </Dropdown>
+  ),
+};
+
 export const Disabled: Story = {
   args: {
     disabled: true,
     placeholder: 'Disabled',
-    style: { width: 250 },
   },
   render: (args) => (
     <Dropdown {...args}>
       <Dropdown.Option value="a">Alpha</Dropdown.Option>
     </Dropdown>
+  ),
+};
+
+/** Invalid state through a Field error (the Field labels and describes the button). */
+export const Invalid: Story = {
+  args: {
+    'aria-label': undefined,
+    placeholder: 'Select a pet',
+  },
+  render: (args) => (
+    <Field label="Pet" error="Choose a pet." required>
+      <Dropdown {...args}>
+        <Dropdown.Option value="cat">Cat</Dropdown.Option>
+        <Dropdown.Option value="dog">Dog</Dropdown.Option>
+      </Dropdown>
+    </Field>
   ),
 };

@@ -1,5 +1,6 @@
 import type { Meta, StoryObj } from '@storybook/react';
 import { Spinner } from '../src';
+import type { Size } from '../src';
 import { sizeArgType } from './_helpers';
 
 const meta = {
@@ -8,25 +9,30 @@ const meta = {
   argTypes: {
     ...sizeArgType,
   },
+  args: {
+    label: 'Loading',
+  },
 } satisfies Meta<typeof Spinner>;
 
 export default meta;
 type Story = StoryObj<typeof meta>;
 
-export const Default: Story = {
-  args: {
-    label: 'Loading',
-  },
-};
+export const Default: Story = {};
+
+const sizes: Array<[Size, string]> = [
+  ['extra-small', 'Extra Small'],
+  ['small', 'Small'],
+  ['medium', 'Medium'],
+  ['large', 'Large'],
+  ['extra-large', 'Extra Large'],
+];
 
 export const Sizes: Story = {
-  render: () => (
-    <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
-      <Spinner size="extra-small" label="Extra Small" />
-      <Spinner size="small" label="Small" />
-      <Spinner size="medium" label="Medium" />
-      <Spinner size="large" label="Large" />
-      <Spinner size="extra-large" label="Extra Large" />
+  render: ({ size: _size, label: _label, ...args }) => (
+    <div className="flex items-center gap-4">
+      {sizes.map(([size, label]) => (
+        <Spinner key={size} size={size} label={label} {...args} />
+      ))}
     </div>
   ),
 };

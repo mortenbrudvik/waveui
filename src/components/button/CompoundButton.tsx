@@ -1,14 +1,19 @@
 import * as React from 'react';
 import { cn } from '../../lib/cn';
+import { materialiseSlotContent, slotRendersContent } from '../../lib/slot';
+import type { PolymorphicComponent, PolymorphicProps } from '../../lib/polymorphic';
 import type { Size, Appearance } from '../../lib/types';
+import { Button } from './Button';
 
-/** Properties for the CompoundButton component. */
-export interface CompoundButtonProps extends React.ButtonHTMLAttributes<HTMLButtonElement> {
-  /** Custom element type to render as.
-   * @default 'button'
+/**
+ * The CompoundButton's own props (the XOwnProps rule of `PolymorphicProps`: component-specific
+ * props only). Every other prop comes from the rendered element (`as`).
+ */
+export interface CompoundButtonOwnProps {
+  /**
+   * Secondary descriptive text displayed below the main label (part of the accessible name).
+   * Content that renders nothing (`''`, `[]`, `<></>`) renders no second line.
    */
-  as?: React.ElementType;
-  /** Secondary descriptive text displayed below the main label. */
   secondaryText?: React.ReactNode;
   /** Visual style variant.
    * @default 'outline'
@@ -18,61 +23,92 @@ export interface CompoundButtonProps extends React.ButtonHTMLAttributes<HTMLButt
    * @default 'medium'
    */
   size?: Size;
+  /**
+   * Disables the button. As with {@link Button}: a native `disabled` attribute for form controls
+   * (the default `button`); every other `as` gets `aria-disabled="true"` and `tabIndex={-1}`, its
+   * activation is prevented and an `<a>` drops its `href`.
+   * @default false
+   */
+  disabled?: boolean;
 }
 
-const sizeClasses: Record<Size, string> = {
-  'extra-small': 'px-1.5 py-0.5 text-[10px]',
-  small: 'px-2 py-1 text-xs',
-  medium: 'px-3 py-2 text-sm',
-  large: 'px-4 py-3 text-base',
-  'extra-large': 'px-5 py-4 text-sm',
+/**
+ * Props of {@link CompoundButton} rendered as `C` (default `'button'`). `CompoundButtonProps`
+ * without a type argument is the 0.4 name: the props of a CompoundButton rendered as a
+ * `<button>`, including `ref`.
+ */
+export type CompoundButtonProps<C extends React.ElementType = 'button'> = PolymorphicProps<
+  C,
+  CompoundButtonOwnProps
+>;
+
+/**
+ * Vertical padding per size. The height is content-sized (`h-auto` replaces Button's fixed
+ * height); horizontal padding and font size come from Button.
+ */
+const paddingClasses: Record<Size, string> = {
+  'extra-small': 'py-0.5',
+  small: 'py-1',
+  medium: 'py-2',
+  large: 'py-3',
+  'extra-large': 'py-4',
 };
 
-const appearanceClasses: Record<Appearance, string> = {
-  primary: 'bg-primary text-primary-foreground hover:bg-[#115ea3] active:bg-[#0c3b5e]',
-  outline:
-    'border border-[#d1d1d1] bg-background text-foreground hover:bg-[#f5f5f5] active:bg-[#e0e0e0]',
-  subtle: 'bg-transparent text-foreground hover:bg-[#f5f5f5] active:bg-[#e0e0e0]',
-  transparent: 'bg-transparent text-primary hover:underline',
+/** The props the implementation reads, for any `as`. */
+type CompoundButtonImplProps = CompoundButtonOwnProps & {
+  as?: React.ElementType;
+  className?: string;
+  children?: React.ReactNode;
 };
 
-export const CompoundButton = (
-    {
-      as,
-      secondaryText,
-      appearance = 'outline',
-      size = 'medium',
-      disabled,
-      className,
-      children, ref, ...props }: CompoundButtonProps & { ref?: React.Ref<HTMLElement> }) => {
-    const Component = as || 'button';
-    return (
-      <Component
-        ref={ref}
-        disabled={disabled}
-        className={cn(
-          'rounded font-semibold inline-flex flex-col items-start justify-center min-w-[96px] transition-colors',
-          'focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring',
-          sizeClasses[size],
-          appearanceClasses[appearance],
-          disabled && 'opacity-50 cursor-not-allowed',
-          className,
-        )}
-        {...props}
-      >
-        <span className="font-bold">{children}</span>
-        {secondaryText && (
-          <span
-            className={cn(
-              'text-caption-1 font-normal',
-              appearance === 'primary' ? 'text-primary-foreground/80' : 'text-muted-foreground',
-            )}
-          >
-            {secondaryText}
-          </span>
-        )}
-      </Component>
-    );
-  };
+/** `Button` widened to any element props, so `as` and the rest props pass through untyped. */
+const BaseButton = Button as React.ElementType;
+
+/**
+ * A button with a main label and a secondary line of text below it. Built on {@link Button}:
+ * same appearances, sizes, token colors, `type="button"` default and polymorphic `as` behaviour
+ * (`as="a"` renders a link; a non-interactive `as` gets `role="button"`, a tab stop and
+ * Enter/Space activation; `disabled` becomes `aria-disabled` on non-form-control elements).
+ *
+ * @example
+ * <CompoundButton secondaryText="Opens your email client">Send mail</CompoundButton>
+ * <CompoundButton as="a" href="/signup" appearance="primary" secondaryText="Free for 30 days">
+ *   Create account
+ * </CompoundButton>
+ */
+export const CompoundButton: PolymorphicComponent<'button', CompoundButtonOwnProps> = (props) => {
+  const {
+    secondaryText,
+    appearance = 'outline',
+    size = 'medium',
+    className,
+    children,
+    ...rest
+  } = props as CompoundButtonImplProps;
+  // Content that renders nothing (`''`, `[]`, `<></>`) gets no secondary line; a generator is read
+  // once by the check and its items render.
+  const secondary = materialiseSlotContent(secondaryText);
+
+  return (
+    <BaseButton
+      {...rest}
+      appearance={appearance}
+      size={size}
+      className={cn('h-auto flex-col items-start text-start', paddingClasses[size], className)}
+    >
+      <span className="font-bold">{children}</span>
+      {slotRendersContent(secondary) && (
+        <span
+          className={cn(
+            'text-caption-1 font-normal',
+            appearance === 'primary' ? 'text-primary-foreground' : 'text-muted-foreground',
+          )}
+        >
+          {secondary}
+        </span>
+      )}
+    </BaseButton>
+  );
+};
 
 CompoundButton.displayName = 'CompoundButton';

@@ -1,0 +1,11 @@
+{
+  "name": "wave-pack-smoke-plain",
+  "private": true,
+  "description": "Packaging smoke fixture (scripts/pack-smoke.mjs): an app without Tailwind that installs the packed tarball.",
+  "type": "module",
+  "smokeDependencies": [
+    "react",
+    "react-dom",
+    "@types/react"
+  ]
+}

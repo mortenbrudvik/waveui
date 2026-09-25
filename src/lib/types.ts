@@ -30,7 +30,28 @@ export type TypographyVariant =
   | 'large-title'
   | 'display';
 
-// Re-export slot types for convenience
-export type { Slot, SlotObject } from './slot';
-export { resolveSlot, renderSlot } from './slot';
+/** Layout axis of a component (Divider, RadioGroup, Stepper, TabList, Stack, …). */
+export type Orientation = 'horizontal' | 'vertical';
 
+/** How many items a selectable collection allows (List, DataGrid, Accordion, …). */
+export type SelectionMode = 'single' | 'multiple';
+
+/** Font weight vocabulary shared by Text and Label (400 / 600 / 700). */
+export type TextWeight = 'regular' | 'semibold' | 'bold';
+
+/** Geometry of a surface (Image, Skeleton, SwatchPicker, …). */
+export type Shape = 'circular' | 'square' | 'rounded';
+
+/**
+ * Side of the anchor a popup is placed on. `start`/`end` follow the writing direction;
+ * `left`/`right` are physical.
+ */
+export type PopupSide = 'top' | 'bottom' | 'start' | 'end' | 'left' | 'right';
+
+/** Alignment of a popup along the anchor's edge. */
+export type PopupAlign = 'start' | 'center' | 'end';
+
+// Re-export slot and polymorphic types for convenience
+export type { Slot, SlotObject, ResolvedSlot } from './slot';
+export type { PolymorphicProps, PolymorphicComponent } from './polymorphic';
+export { resolveSlot, renderSlot } from './slot';

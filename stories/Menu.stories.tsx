@@ -1,66 +1,110 @@
 import type { Meta, StoryObj } from '@storybook/react';
-import { Menu } from '../src';
+import { fn } from 'storybook/test';
+import { Button, Menu } from '../src';
 
 const meta = {
   title: 'Components/Navigation/Menu',
   component: Menu,
+  args: {
+    'aria-label': 'File',
+    children: (
+      <>
+        <Menu.Item>New File</Menu.Item>
+        <Menu.Item>Open File</Menu.Item>
+        <Menu.Item>Save</Menu.Item>
+      </>
+    ),
+  },
 } satisfies Meta<typeof Menu>;
 
 export default meta;
 type Story = StoryObj<typeof meta>;
 
-export const Default: Story = {
-  render: () => (
-    <Menu>
-      <Menu.Item>New File</Menu.Item>
-      <Menu.Item>Open File</Menu.Item>
-      <Menu.Item>Save</Menu.Item>
-    </Menu>
-  ),
-};
+/** A static menu: one item is the tab stop; arrows, Home/End and typeahead move between items. */
+export const Default: Story = {};
 
+/** Icons are decorative (`aria-hidden`), so they are not part of the item names. */
 export const WithIcons: Story = {
-  render: () => (
-    <Menu>
-      <Menu.Item icon={{ children: '\u2702\uFE0F' }}>Cut</Menu.Item>
-      <Menu.Item icon={{ children: '\uD83D\uDCCB' }}>Copy</Menu.Item>
-      <Menu.Item icon={{ children: '\uD83D\uDCCC' }}>Paste</Menu.Item>
-    </Menu>
-  ),
+  args: {
+    'aria-label': 'Edit',
+    children: (
+      <>
+        <Menu.Item icon={{ children: '✂️' }}>Cut</Menu.Item>
+        <Menu.Item icon={{ children: '📋' }}>Copy</Menu.Item>
+        <Menu.Item icon={{ children: '📌' }}>Paste</Menu.Item>
+      </>
+    ),
+  },
 };
 
+/** Disabled items are announced as unavailable and skipped by keyboard navigation. */
 export const WithDisabled: Story = {
-  render: () => (
-    <Menu>
-      <Menu.Item>Undo</Menu.Item>
-      <Menu.Item>Redo</Menu.Item>
-      <Menu.Item disabled>Paste (empty clipboard)</Menu.Item>
-    </Menu>
-  ),
+  args: {
+    'aria-label': 'Edit',
+    children: (
+      <>
+        <Menu.Item>Undo</Menu.Item>
+        <Menu.Item>Redo</Menu.Item>
+        <Menu.Item disabled>Paste (empty clipboard)</Menu.Item>
+      </>
+    ),
+  },
 };
 
 export const WithDivider: Story = {
-  render: () => (
-    <Menu>
-      <Menu.Item>New File</Menu.Item>
-      <Menu.Item>Open File</Menu.Item>
-      <Menu.Divider />
-      <Menu.Item>Save</Menu.Item>
-      <Menu.Item>Save As</Menu.Item>
-      <Menu.Divider />
-      <Menu.Item>Exit</Menu.Item>
-    </Menu>
-  ),
+  args: {
+    children: (
+      <>
+        <Menu.Item>New File</Menu.Item>
+        <Menu.Item>Open File</Menu.Item>
+        <Menu.Divider />
+        <Menu.Item>Save</Menu.Item>
+        <Menu.Item>Save As</Menu.Item>
+        <Menu.Divider />
+        <Menu.Item>Exit</Menu.Item>
+      </>
+    ),
+  },
 };
 
 export const WithShortcuts: Story = {
-  render: () => (
-    <Menu>
-      <Menu.Item shortcut="Ctrl+N">New File</Menu.Item>
-      <Menu.Item shortcut="Ctrl+O">Open File</Menu.Item>
-      <Menu.Divider />
-      <Menu.Item shortcut="Ctrl+S">Save</Menu.Item>
-      <Menu.Item shortcut="Ctrl+Shift+S">Save As</Menu.Item>
-    </Menu>
-  ),
+  args: {
+    children: (
+      <>
+        <Menu.Item shortcut="Ctrl+N">New File</Menu.Item>
+        <Menu.Item shortcut="Ctrl+O">Open File</Menu.Item>
+        <Menu.Divider />
+        <Menu.Item shortcut="Ctrl+S">Save</Menu.Item>
+        <Menu.Item shortcut="Ctrl+Shift+S">Save As</Menu.Item>
+      </>
+    ),
+  },
+};
+
+/**
+ * A menu button: `Menu.Trigger` merges `aria-haspopup`, `aria-expanded` and the open handlers
+ * onto its child, and `Menu.Popover` renders the menu in a portal next to it. Selecting an item
+ * closes the menu and returns focus to the trigger; Escape and outside clicks close it too.
+ */
+export const WithTrigger: Story = {
+  args: {
+    'aria-label': undefined,
+    onOpenChange: fn(),
+    children: (
+      <>
+        <Menu.Trigger>
+          <Button>Actions</Button>
+        </Menu.Trigger>
+        <Menu.Popover>
+          <Menu.Item onClick={fn()} shortcut="Ctrl+E">
+            Edit
+          </Menu.Item>
+          <Menu.Item onClick={fn()}>Duplicate</Menu.Item>
+          <Menu.Divider />
+          <Menu.Item disabled>Archive</Menu.Item>
+          <Menu.Item onClick={fn()}>Delete</Menu.Item>
+        </Menu.Popover>
+      </>
+    ),
+  },
 };

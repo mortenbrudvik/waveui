@@ -1,0 +1,16 @@
+# Line endings: the repository stores LF and every checkout gets LF, on every
+# platform. This overrides a machine-level `core.autocrlf=true` (Git for Windows
+# default), which would otherwise check text files out as CRLF and make
+# Prettier's `endOfLine: "lf"` (its default) fail on Windows.
+* text=auto eol=lf
+
+# Binary files are never converted (text=auto already detects them; listed for clarity).
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.ico binary
+*.webp binary
+*.woff binary
+*.woff2 binary
+*.tgz binary

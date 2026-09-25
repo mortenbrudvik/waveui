@@ -1,170 +1,443 @@
+/*
+ * Wave design tokens.
+ *
+ * - Runtime variables are prefixed `--wave-*`. Tailwind utilities keep their names
+ *   (`bg-primary` -> `--color-primary: var(--wave-primary)`, see the `@theme inline` block).
+ * - Theme classes: `.wave-light` (also `:root`), `.wave-dark`, `.wave-high-contrast`.
+ *   `.dark` and `.high-contrast` are deprecated aliases; they set only `--wave-*` variables.
+ * - Every theme group declares every token, including the derived ones, so a nested theme
+ *   re-resolves all of them.
+ * - To override a semantic token, target the theme selector: `:root, .wave-light { --wave-primary: … }`.
+ *   To re-brand, override the ramp on `:root` (`--wave-brand-80`, or the 0.4 name `--brand-80`).
+ * - Contrast ratios of every pair, and of every text token on every surface it can sit on (4.5:1,
+ *   unrounded), are asserted by `src/styles/__tests__/tokens.test.ts`.
+ */
+
+/* ---------------------------------------------------------------------------------------------
+ * Theme-independent constants: ramps (read the 0.4 names as fallbacks), font family, z-index.
+ * ------------------------------------------------------------------------------------------- */
 :root {
-  /* Light theme colors */
-  --background: #ffffff;
-  --foreground: #242424;
-  --card: #fafafa;
-  --primary: #0f6cbd;
-  --secondary: #f5f5f5;
-  --muted: #f0f0f0;
-  --muted-foreground: #707070;
-  --accent: #0f6cbd;
-  --destructive: #c50f1f;
-  --subtle: transparent;
-  --border: #e0e0e0;
-  --input: #d1d1d1;
-  --ring: #0f6cbd;
+  --wave-font-family:
+    'Segoe UI', 'Segoe UI Web (West European)', -apple-system, BlinkMacSystemFont, Roboto,
+    'Helvetica Neue', sans-serif;
 
-  /* Foreground on colored backgrounds */
-  --primary-foreground: #ffffff;
-  --destructive-foreground: #ffffff;
-  --accent-foreground: #ffffff;
-  --card-foreground: var(--foreground);
-  --secondary-foreground: var(--foreground);
-
-  /* Semantic / status colors */
-  --success: #107c10;
-  --warning: #fde300;
-  --error: #c50f1f;
-  --info: #0f6cbd;
-  --severe: #da3b01;
+  --wave-z-overlay: 1000;
+  --wave-z-toast: 1100;
+  --wave-z-tooltip: 1200;
 
   /* Brand ramp */
-  --brand-10: #061724;
-  --brand-20: #082338;
-  --brand-30: #0a2e4a;
-  --brand-40: #0c3b5e;
-  --brand-50: #0e4775;
-  --brand-60: #0f548c;
-  --brand-70: #115ea3;
-  --brand-80: #0f6cbd;
-  --brand-90: #2886de;
-  --brand-100: #479ef5;
-  --brand-110: #62abf5;
-  --brand-120: #77b7f7;
-  --brand-130: #96c6fa;
-  --brand-140: #b4d6fa;
-  --brand-150: #cfe4fa;
-  --brand-160: #ebf3fc;
+  --wave-brand-10: var(--brand-10, #061724);
+  --wave-brand-20: var(--brand-20, #082338);
+  --wave-brand-30: var(--brand-30, #0a2e4a);
+  --wave-brand-40: var(--brand-40, #0c3b5e);
+  --wave-brand-50: var(--brand-50, #0e4775);
+  --wave-brand-60: var(--brand-60, #0f548c);
+  --wave-brand-70: var(--brand-70, #115ea3);
+  --wave-brand-80: var(--brand-80, #0f6cbd);
+  --wave-brand-90: var(--brand-90, #2886de);
+  --wave-brand-100: var(--brand-100, #479ef5);
+  --wave-brand-110: var(--brand-110, #62abf5);
+  --wave-brand-120: var(--brand-120, #77b7f7);
+  --wave-brand-130: var(--brand-130, #96c6fa);
+  --wave-brand-140: var(--brand-140, #b4d6fa);
+  --wave-brand-150: var(--brand-150, #cfe4fa);
+  --wave-brand-160: var(--brand-160, #ebf3fc);
 
-  /* Neutral grey palette */
-  --grey-2: #050505;
-  --grey-4: #0a0a0a;
-  --grey-6: #0f0f0f;
-  --grey-8: #141414;
-  --grey-10: #1a1a1a;
-  --grey-12: #1f1f1f;
-  --grey-14: #242424;
-  --grey-16: #292929;
-  --grey-20: #333333;
-  --grey-24: #3d3d3d;
-  --grey-26: #424242;
-  --grey-30: #4d4d4d;
-  --grey-34: #575757;
-  --grey-38: #616161;
-  --grey-40: #666666;
-  --grey-44: #707070;
-  --grey-50: #808080;
-  --grey-60: #999999;
-  --grey-68: #adadad;
-  --grey-74: #bdbdbd;
-  --grey-78: #c7c7c7;
-  --grey-82: #d1d1d1;
-  --grey-86: #dbdbdb;
-  --grey-88: #e0e0e0;
-  --grey-90: #e6e6e6;
-  --grey-92: #ebebeb;
-  --grey-94: #f0f0f0;
-  --grey-96: #f5f5f5;
-  --grey-98: #fafafa;
+  /* Neutral grey ramp */
+  --wave-grey-2: var(--grey-2, #050505);
+  --wave-grey-4: var(--grey-4, #0a0a0a);
+  --wave-grey-6: var(--grey-6, #0f0f0f);
+  --wave-grey-8: var(--grey-8, #141414);
+  --wave-grey-10: var(--grey-10, #1a1a1a);
+  --wave-grey-12: var(--grey-12, #1f1f1f);
+  --wave-grey-14: var(--grey-14, #242424);
+  --wave-grey-16: var(--grey-16, #292929);
+  --wave-grey-20: var(--grey-20, #333333);
+  --wave-grey-24: var(--grey-24, #3d3d3d);
+  --wave-grey-26: var(--grey-26, #424242);
+  --wave-grey-30: var(--grey-30, #4d4d4d);
+  --wave-grey-34: var(--grey-34, #575757);
+  --wave-grey-38: var(--grey-38, #616161);
+  --wave-grey-40: var(--grey-40, #666666);
+  --wave-grey-44: var(--grey-44, #707070);
+  --wave-grey-50: var(--grey-50, #808080);
+  --wave-grey-60: var(--grey-60, #999999);
+  --wave-grey-68: var(--grey-68, #adadad);
+  --wave-grey-74: var(--grey-74, #bdbdbd);
+  --wave-grey-78: var(--grey-78, #c7c7c7);
+  --wave-grey-82: var(--grey-82, #d1d1d1);
+  --wave-grey-86: var(--grey-86, #dbdbdb);
+  --wave-grey-88: var(--grey-88, #e0e0e0);
+  --wave-grey-90: var(--grey-90, #e6e6e6);
+  --wave-grey-92: var(--grey-92, #ebebeb);
+  --wave-grey-94: var(--grey-94, #f0f0f0);
+  --wave-grey-96: var(--grey-96, #f5f5f5);
+  --wave-grey-98: var(--grey-98, #fafafa);
 }
 
-/* Dark theme */
+/* ---------------------------------------------------------------------------------------------
+ * Light theme
+ * ------------------------------------------------------------------------------------------- */
+:root,
+.wave-light {
+  /* Surfaces and text */
+  --wave-background: #ffffff;
+  --wave-foreground: #242424;
+  --wave-card: #fafafa;
+  --wave-secondary: #f5f5f5;
+  --wave-muted: #f0f0f0;
+  --wave-muted-foreground: #616161;
+
+  /* Primary (brand) */
+  --wave-primary: var(--wave-brand-80);
+  --wave-primary-foreground: #ffffff;
+  --wave-primary-hover: var(--wave-brand-70);
+  --wave-primary-pressed: var(--wave-brand-40);
+
+  /* Destructive / error */
+  --wave-destructive: #c50f1f;
+  --wave-destructive-foreground: #ffffff;
+  --wave-error: #c50f1f;
+  --wave-error-foreground: #ffffff;
+
+  /* Subtle (transparent) controls and selection. Pressed is grey-92 like selected, not Fluent's
+     grey-88 #e0e0e0 (primary text 4.08:1, success 4.07): primary 4.52, success 4.50 */
+  --wave-subtle: transparent;
+  --wave-subtle-hover: #f5f5f5;
+  --wave-subtle-pressed: #ebebeb;
+  --wave-subtle-selected: #ebebeb;
+  --wave-selected: var(--wave-brand-160);
+  --wave-selected-foreground: var(--wave-brand-60);
+
+  /* Strokes */
+  --wave-border: #e0e0e0;
+  --wave-stroke: #d1d1d1;
+  --wave-stroke-hover: #c7c7c7;
+  --wave-stroke-accessible: #616161;
+  --wave-input: #d1d1d1;
+  --wave-ring: var(--wave-brand-80);
+
+  /* Status */
+  --wave-success: #107c10;
+  --wave-success-foreground: #ffffff;
+  --wave-success-tint: #f1faf1;
+  --wave-success-tint-foreground: #0e700e;
+  --wave-warning: #fde300;
+  --wave-warning-foreground: #242424;
+  --wave-warning-tint: #fffbe6;
+  --wave-warning-tint-foreground: #6d5b00;
+  --wave-error-tint: #fdf3f4;
+  --wave-error-tint-foreground: #b10e1c;
+  --wave-severe: #da3b01;
+  --wave-severe-foreground: #ffffff;
+  --wave-severe-tint: #fdf6f3;
+  --wave-severe-tint-foreground: #a52c00;
+  --wave-info: #0f6cbd;
+  --wave-info-foreground: #ffffff;
+  --wave-info-tint: #ebf3fc;
+  --wave-info-tint-foreground: #0f548c;
+
+  /* Inverted surfaces (tooltips) */
+  --wave-inverted: #292929;
+  --wave-inverted-foreground: #ffffff;
+  --wave-inverted-border: transparent;
+
+  /* Tracks, placeholders, rating, presence, backdrop */
+  --wave-track: #e0e0e0;
+  --wave-skeleton: #e0e0e0;
+  --wave-rating: #b86e00;
+  --wave-presence-available: #107c10;
+  --wave-presence-busy: #c50f1f;
+  --wave-presence-away: #a67c00;
+  --wave-presence-offline: #616161;
+  --wave-presence-oof: #b4009e;
+  --wave-presence-glyph: #ffffff;
+  --wave-backdrop: rgb(0 0 0 / 0.4);
+
+  /* Derived (re-declared per theme so nested themes re-resolve them) */
+  --wave-card-foreground: var(--wave-foreground);
+  --wave-secondary-foreground: var(--wave-foreground);
+  --wave-accent: var(--wave-primary);
+  --wave-accent-foreground: var(--wave-primary-foreground);
+}
+
+/* ---------------------------------------------------------------------------------------------
+ * Dark theme (`.dark` is a deprecated alias)
+ * ------------------------------------------------------------------------------------------- */
+.wave-dark,
 .dark {
-  --background: #292929;
-  --foreground: #ffffff;
-  --primary: #479ef5;
-  --secondary: #333333;
-  --muted: #383838;
-  --muted-foreground: #adadad;
-  --accent: #479ef5;
-  --card: #333333;
-  --destructive: #dc626d;
-  --border: #666666;
-  --input: #666666;
-  --ring: #479ef5;
-  --subtle: transparent;
-  --primary-foreground: #ffffff;
-  --destructive-foreground: #ffffff;
-  --accent-foreground: #ffffff;
-  --card-foreground: var(--foreground);
-  --secondary-foreground: var(--foreground);
-  --success: #54b054;
-  --warning: #fde300;
-  --error: #dc626d;
-  --info: #479ef5;
-  --severe: #e97548;
+  /* Surfaces and text */
+  --wave-background: #292929;
+  --wave-foreground: #ffffff;
+  --wave-card: #333333;
+  --wave-secondary: #333333;
+  --wave-muted: #383838;
+  --wave-muted-foreground: #adadad;
+
+  /* Primary (brand): brand-110 fill with black text (8.66:1) */
+  --wave-primary: var(--wave-brand-110);
+  --wave-primary-foreground: #000000;
+  --wave-primary-hover: var(--wave-brand-120);
+  --wave-primary-pressed: var(--wave-brand-90);
+
+  /* Destructive / error */
+  --wave-destructive: #f48a94;
+  --wave-destructive-foreground: #000000;
+  --wave-error: #f48a94;
+  --wave-error-foreground: #000000;
+
+  /* Subtle (transparent) controls and selection */
+  --wave-subtle: transparent;
+  --wave-subtle-hover: #333333;
+  --wave-subtle-pressed: #2e2e2e;
+  --wave-subtle-selected: #383838;
+  --wave-selected: var(--wave-brand-20);
+  --wave-selected-foreground: var(--wave-brand-110);
+
+  /* Strokes */
+  --wave-border: #666666;
+  --wave-stroke: #666666;
+  --wave-stroke-hover: #757575;
+  --wave-stroke-accessible: #adadad;
+  --wave-input: #666666;
+  --wave-ring: var(--wave-brand-100);
+
+  /* Status. success is text too (4.60:1 on muted and subtle-selected #383838, where Fluent's
+     green tint30 #54b054 reaches 4.31); info text uses info-tint-foreground, brand-110 like
+     primary (4.84 on #383838; #479ef5 was 4.499 on card). */
+  --wave-success: #5db55d;
+  --wave-success-foreground: #000000;
+  --wave-success-tint: #052505;
+  --wave-success-tint-foreground: #54b054;
+  --wave-warning: #fde300;
+  --wave-warning-foreground: #000000;
+  --wave-warning-tint: #463100;
+  --wave-warning-tint-foreground: #fde300;
+  --wave-error-tint: #3b0509;
+  --wave-error-tint-foreground: #f48a94;
+  --wave-severe: #e97548;
+  --wave-severe-foreground: #000000;
+  --wave-severe-tint: #411200;
+  --wave-severe-tint-foreground: #e97548;
+  --wave-info: #479ef5;
+  --wave-info-foreground: #000000;
+  --wave-info-tint: #082338;
+  --wave-info-tint-foreground: #62abf5;
+
+  /* Inverted surfaces (tooltips) */
+  --wave-inverted: #ffffff;
+  --wave-inverted-foreground: #242424;
+  --wave-inverted-border: transparent;
+
+  /* Tracks, placeholders, rating, presence, backdrop */
+  --wave-track: #3d3d3d;
+  --wave-skeleton: #3d3d3d;
+  --wave-rating: #f7b538;
+  --wave-presence-available: #54b054;
+  --wave-presence-busy: #f48a94;
+  --wave-presence-away: #f7b538;
+  --wave-presence-offline: #adadad;
+  --wave-presence-oof: #d696c8;
+  --wave-presence-glyph: #000000;
+  --wave-backdrop: rgb(0 0 0 / 0.5);
+
+  /* Derived (re-declared per theme so nested themes re-resolve them) */
+  --wave-card-foreground: var(--wave-foreground);
+  --wave-secondary-foreground: var(--wave-foreground);
+  --wave-accent: var(--wave-primary);
+  --wave-accent-foreground: var(--wave-primary-foreground);
 }
 
-/* High-contrast theme — WCAG AAA compliant */
+/* ---------------------------------------------------------------------------------------------
+ * High-contrast theme (`.high-contrast` is a deprecated alias)
+ * ------------------------------------------------------------------------------------------- */
+.wave-high-contrast,
 .high-contrast {
-  --background: #000000;
-  --foreground: #ffffff;
-  --primary: #1aebff;
-  --secondary: #000000;
-  --muted: #1a1a1a;
-  --muted-foreground: #ffffff;
-  --accent: #1aebff;
-  --card: #000000;
-  --destructive: #ff6060;
-  --border: #ffffff;
-  --input: #ffffff;
-  --ring: #ffff00;
-  --subtle: transparent;
-  --success: #3ff23f;
-  --warning: #ffff00;
-  --error: #ff6060;
-  --info: #1aebff;
-  --severe: #ff8c00;
+  /* Surfaces and text */
+  --wave-background: #000000;
+  --wave-foreground: #ffffff;
+  --wave-card: #000000;
+  --wave-secondary: #000000;
+  --wave-muted: #1a1a1a;
+  --wave-muted-foreground: #ffffff;
 
-  /* Primary foreground needs to be black for contrast on cyan background */
-  --primary-foreground: #000000;
-  --destructive-foreground: #000000;
-  --accent-foreground: #000000;
-  --card-foreground: var(--foreground);
-  --secondary-foreground: var(--foreground);
+  /* Primary */
+  --wave-primary: #1aebff;
+  --wave-primary-foreground: #000000;
+  --wave-primary-hover: #6ef3ff;
+  --wave-primary-pressed: #00c4d6;
+
+  /* Destructive / error: error text stays 4.5:1 on the grey subtle states and the cyan selection
+     (4.64 on #333333, 4.59 on #003a40; #ff6060 was 4.27 and 4.22) */
+  --wave-destructive: #ff6e6e;
+  --wave-destructive-foreground: #000000;
+  --wave-error: #ff6e6e;
+  --wave-error-foreground: #000000;
+
+  /* Subtle (transparent) controls and selection: a dark cyan tint keeps white text,
+     cyan primary text, error text and the yellow ring readable on selected items */
+  --wave-subtle: transparent;
+  --wave-subtle-hover: #1f1f1f;
+  --wave-subtle-pressed: #333333;
+  --wave-subtle-selected: #333333;
+  --wave-selected: #003a40;
+  --wave-selected-foreground: #ffffff;
+
+  /* Strokes */
+  --wave-border: #ffffff;
+  --wave-stroke: #ffffff;
+  --wave-stroke-hover: #ffffff;
+  --wave-stroke-accessible: #ffffff;
+  --wave-input: #ffffff;
+  --wave-ring: #ffff00;
+
+  /* Status */
+  --wave-success: #3ff23f;
+  --wave-success-foreground: #000000;
+  --wave-success-tint: #000000;
+  --wave-success-tint-foreground: #3ff23f;
+  --wave-warning: #ffff00;
+  --wave-warning-foreground: #000000;
+  --wave-warning-tint: #000000;
+  --wave-warning-tint-foreground: #ffff00;
+  --wave-error-tint: #000000;
+  --wave-error-tint-foreground: #ff6060;
+  --wave-severe: #ff8c00;
+  --wave-severe-foreground: #000000;
+  --wave-severe-tint: #000000;
+  --wave-severe-tint-foreground: #ff8c00;
+  --wave-info: #1aebff;
+  --wave-info-foreground: #000000;
+  --wave-info-tint: #000000;
+  --wave-info-tint-foreground: #1aebff;
+
+  /* Inverted surfaces (tooltips) */
+  --wave-inverted: #000000;
+  --wave-inverted-foreground: #ffffff;
+  --wave-inverted-border: #ffffff;
+
+  /* Tracks, placeholders, rating, presence, backdrop */
+  --wave-track: #4d4d4d;
+  --wave-skeleton: #333333;
+  --wave-rating: #ffff00;
+  --wave-presence-available: #3ff23f;
+  --wave-presence-busy: #ff6060;
+  --wave-presence-away: #ffff00;
+  --wave-presence-offline: #ffffff;
+  --wave-presence-oof: #ff80ff;
+  --wave-presence-glyph: #000000;
+  --wave-backdrop: rgb(0 0 0 / 0.8);
+
+  /* Derived (re-declared per theme so nested themes re-resolve them) */
+  --wave-card-foreground: var(--wave-foreground);
+  --wave-secondary-foreground: var(--wave-foreground);
+  --wave-accent: var(--wave-primary);
+  --wave-accent-foreground: var(--wave-primary-foreground);
 }
 
-/* --- Tailwind 4 theme (replaces tailwind.config.ts) --- */
+/* ---------------------------------------------------------------------------------------------
+ * color-scheme only on the theme classes (never on :root), so a page without WaveProvider keeps
+ * its own scrollbars and native-control scheme.
+ * ------------------------------------------------------------------------------------------- */
+.wave-light {
+  color-scheme: light;
+}
+
+.wave-dark,
+.wave-high-contrast {
+  color-scheme: dark;
+}
+
+/* ---------------------------------------------------------------------------------------------
+ * Tailwind 4 mapping. No overrides of Tailwind defaults (radius, font-sans): Wave uses Tailwind's
+ * default radius names and its own `font-wave` family.
+ * ------------------------------------------------------------------------------------------- */
 @theme inline {
   /* Colors */
-  --color-border: var(--border);
-  --color-input: var(--input);
-  --color-ring: var(--ring);
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --color-primary: var(--primary);
-  --color-primary-foreground: var(--primary-foreground);
-  --color-secondary: var(--secondary);
-  --color-secondary-foreground: var(--secondary-foreground);
-  --color-destructive: var(--destructive);
-  --color-destructive-foreground: var(--destructive-foreground);
-  --color-muted: var(--muted);
-  --color-muted-foreground: var(--muted-foreground);
-  --color-accent: var(--accent);
-  --color-accent-foreground: var(--accent-foreground);
-  --color-card: var(--card);
-  --color-card-foreground: var(--card-foreground);
-  --color-subtle: var(--subtle);
-  --color-success: var(--success);
-  --color-warning: var(--warning);
-  --color-error: var(--error);
-  --color-info: var(--info);
-  --color-severe: var(--severe);
+  --color-background: var(--wave-background);
+  --color-foreground: var(--wave-foreground);
+  --color-card: var(--wave-card);
+  --color-card-foreground: var(--wave-card-foreground);
+  --color-secondary: var(--wave-secondary);
+  --color-secondary-foreground: var(--wave-secondary-foreground);
+  --color-muted: var(--wave-muted);
+  --color-muted-foreground: var(--wave-muted-foreground);
+  --color-primary: var(--wave-primary);
+  --color-primary-foreground: var(--wave-primary-foreground);
+  --color-primary-hover: var(--wave-primary-hover);
+  --color-primary-pressed: var(--wave-primary-pressed);
+  --color-accent: var(--wave-accent);
+  --color-accent-foreground: var(--wave-accent-foreground);
+  --color-destructive: var(--wave-destructive);
+  --color-destructive-foreground: var(--wave-destructive-foreground);
+  --color-error: var(--wave-error);
+  --color-error-foreground: var(--wave-error-foreground);
+  --color-subtle: var(--wave-subtle);
+  --color-subtle-hover: var(--wave-subtle-hover);
+  --color-subtle-pressed: var(--wave-subtle-pressed);
+  --color-subtle-selected: var(--wave-subtle-selected);
+  --color-selected: var(--wave-selected);
+  --color-selected-foreground: var(--wave-selected-foreground);
+  --color-border: var(--wave-border);
+  --color-stroke: var(--wave-stroke);
+  --color-stroke-hover: var(--wave-stroke-hover);
+  --color-stroke-accessible: var(--wave-stroke-accessible);
+  --color-input: var(--wave-input);
+  --color-ring: var(--wave-ring);
+  --color-success: var(--wave-success);
+  --color-success-foreground: var(--wave-success-foreground);
+  --color-success-tint: var(--wave-success-tint);
+  --color-success-tint-foreground: var(--wave-success-tint-foreground);
+  --color-warning: var(--wave-warning);
+  --color-warning-foreground: var(--wave-warning-foreground);
+  --color-warning-tint: var(--wave-warning-tint);
+  --color-warning-tint-foreground: var(--wave-warning-tint-foreground);
+  --color-error-tint: var(--wave-error-tint);
+  --color-error-tint-foreground: var(--wave-error-tint-foreground);
+  --color-severe: var(--wave-severe);
+  --color-severe-foreground: var(--wave-severe-foreground);
+  --color-severe-tint: var(--wave-severe-tint);
+  --color-severe-tint-foreground: var(--wave-severe-tint-foreground);
+  --color-info: var(--wave-info);
+  --color-info-foreground: var(--wave-info-foreground);
+  --color-info-tint: var(--wave-info-tint);
+  --color-info-tint-foreground: var(--wave-info-tint-foreground);
+  --color-inverted: var(--wave-inverted);
+  --color-inverted-foreground: var(--wave-inverted-foreground);
+  --color-inverted-border: var(--wave-inverted-border);
+  --color-track: var(--wave-track);
+  --color-skeleton: var(--wave-skeleton);
+  --color-rating: var(--wave-rating);
+  --color-presence-available: var(--wave-presence-available);
+  --color-presence-busy: var(--wave-presence-busy);
+  --color-presence-away: var(--wave-presence-away);
+  --color-presence-offline: var(--wave-presence-offline);
+  --color-presence-oof: var(--wave-presence-oof);
+  --color-presence-glyph: var(--wave-presence-glyph);
+  --color-backdrop: var(--wave-backdrop);
 
-  /* Font family */
-  --font-sans: 'Segoe UI', 'Segoe UI Web (West European)', -apple-system, BlinkMacSystemFont, Roboto, 'Helvetica Neue', sans-serif;
+  /* Brand ramp (for designers; components use the semantic colors) */
+  --color-brand-10: var(--wave-brand-10);
+  --color-brand-20: var(--wave-brand-20);
+  --color-brand-30: var(--wave-brand-30);
+  --color-brand-40: var(--wave-brand-40);
+  --color-brand-50: var(--wave-brand-50);
+  --color-brand-60: var(--wave-brand-60);
+  --color-brand-70: var(--wave-brand-70);
+  --color-brand-80: var(--wave-brand-80);
+  --color-brand-90: var(--wave-brand-90);
+  --color-brand-100: var(--wave-brand-100);
+  --color-brand-110: var(--wave-brand-110);
+  --color-brand-120: var(--wave-brand-120);
+  --color-brand-130: var(--wave-brand-130);
+  --color-brand-140: var(--wave-brand-140);
+  --color-brand-150: var(--wave-brand-150);
+  --color-brand-160: var(--wave-brand-160);
 
-  /* Font sizes */
+  /* Font family (utility `font-wave`) */
+  --font-wave: var(--wave-font-family);
+
+  /* Type ramp */
   --text-caption-2: 10px;
   --text-caption-2--line-height: 14px;
   --text-caption-1: 12px;
@@ -195,27 +468,54 @@
   --text-display--line-height: 92px;
   --text-display--font-weight: 600;
 
-  /* Border radius */
-  --radius-none: 0;
-  --radius-sm: 2px;
-  --radius-DEFAULT: 4px;
-  --radius-md: 4px;
-  --radius-lg: 6px;
-  --radius-xl: 8px;
-  --radius-2xl: 12px;
-  --radius-3xl: 16px;
-  --radius-full: 10000px;
-
   /* Box shadows */
-  --shadow-2: 0 0 2px rgba(0,0,0,0.12), 0 1px 2px rgba(0,0,0,0.14);
-  --shadow-4: 0 0 2px rgba(0,0,0,0.12), 0 2px 4px rgba(0,0,0,0.14);
-  --shadow-8: 0 0 2px rgba(0,0,0,0.12), 0 4px 8px rgba(0,0,0,0.14);
-  --shadow-16: 0 0 2px rgba(0,0,0,0.12), 0 8px 16px rgba(0,0,0,0.14);
-  --shadow-28: 0 0 8px rgba(0,0,0,0.12), 0 14px 28px rgba(0,0,0,0.14);
-  --shadow-64: 0 0 8px rgba(0,0,0,0.12), 0 32px 64px rgba(0,0,0,0.14);
+  --shadow-2: 0 0 2px rgba(0, 0, 0, 0.12), 0 1px 2px rgba(0, 0, 0, 0.14);
+  --shadow-4: 0 0 2px rgba(0, 0, 0, 0.12), 0 2px 4px rgba(0, 0, 0, 0.14);
+  --shadow-8: 0 0 2px rgba(0, 0, 0, 0.12), 0 4px 8px rgba(0, 0, 0, 0.14);
+  --shadow-16: 0 0 2px rgba(0, 0, 0, 0.12), 0 8px 16px rgba(0, 0, 0, 0.14);
+  --shadow-28: 0 0 8px rgba(0, 0, 0, 0.12), 0 14px 28px rgba(0, 0, 0, 0.14);
+  --shadow-64: 0 0 8px rgba(0, 0, 0, 0.12), 0 32px 64px rgba(0, 0, 0, 0.14);
 
-  /* Animations */
+  /* Animations. Reduced-motion alternates are applied per component (C-MOTION):
+     Spinner `motion-reduce:animate-wave-spin-slow`, indeterminate ProgressBar
+     `motion-reduce:animate-wave-pulse` at full width, Skeleton `motion-reduce:animate-none`. */
   --animate-wave-spin: wave-spin 0.8s linear infinite;
+  --animate-wave-spin-slow: wave-spin 2.4s linear infinite;
   --animate-wave-pulse: wave-pulse 1.5s ease-in-out infinite;
   --animate-wave-indeterminate: wave-indeterminate 1.5s ease-in-out infinite;
+  --animate-wave-indeterminate-rtl: wave-indeterminate-rtl 1.5s ease-in-out infinite;
+
+  @keyframes wave-spin {
+    to {
+      transform: rotate(360deg);
+    }
+  }
+
+  @keyframes wave-pulse {
+    0%,
+    100% {
+      opacity: 1;
+    }
+    50% {
+      opacity: 0.4;
+    }
+  }
+
+  @keyframes wave-indeterminate {
+    0% {
+      transform: translateX(-100%);
+    }
+    100% {
+      transform: translateX(350%);
+    }
+  }
+
+  @keyframes wave-indeterminate-rtl {
+    0% {
+      transform: translateX(100%);
+    }
+    100% {
+      transform: translateX(-350%);
+    }
+  }
 }

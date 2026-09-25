@@ -1,8 +1,22 @@
 import type { Meta, StoryObj } from '@storybook/react';
 import { Image } from '../src';
 
+// Placeholder image data, not UI colors: an SVG data URI cannot read the theme variables, so the
+// neutral fills are literal. `#` is written literally and encoded exactly once below.
+// wave-allow-color: fixture
+const PLACEHOLDER_FILL = '#e0e0e0';
+// wave-allow-color: fixture
+const PLACEHOLDER_TEXT = '#424242';
+
+/** Self-contained SVG data URI placeholder (no external dependency). */
+const placeholder = (w: number, h: number, label = `${w}x${h}`) =>
+  `data:image/svg+xml,${encodeURIComponent(
+    // wave-allow-color: fixture (placeholder image paint, see PLACEHOLDER_FILL)
+    `<svg xmlns="http://www.w3.org/2000/svg" width="${w}" height="${h}"><rect fill="${PLACEHOLDER_FILL}" width="${w}" height="${h}"/><text x="50%" y="50%" dominant-baseline="middle" text-anchor="middle" fill="${PLACEHOLDER_TEXT}" font-family="sans-serif" font-size="14">${label}</text></svg>`,
+  )}`;
+
 const meta = {
-  title: 'Data Display/Image',
+  title: 'Components/Data Display/Image',
   component: Image,
   argTypes: {
     fit: {
@@ -17,14 +31,16 @@ const meta = {
     block: { control: 'boolean' },
     bordered: { control: 'boolean' },
   },
+  args: {
+    src: placeholder(200, 200),
+    alt: 'Placeholder image',
+    width: 200,
+    height: 200,
+  },
 } satisfies Meta<typeof Image>;
 
 export default meta;
 type Story = StoryObj<typeof meta>;
-
-// Self-contained data URI placeholder (no external dependency)
-const placeholder = (w: number, h: number, label = `${w}x${h}`) =>
-  `data:image/svg+xml,${encodeURIComponent(`<svg xmlns="http://www.w3.org/2000/svg" width="${w}" height="${h}"><rect fill="%23e0e0e0" width="${w}" height="${h}"/><text x="50%" y="50%" dominant-baseline="middle" text-anchor="middle" fill="%23666" font-family="sans-serif" font-size="14">${label}</text></svg>`)}`;
 
 export const Default: Story = {
   args: {
@@ -47,40 +63,66 @@ export const Circular: Story = {
 
 export const Rounded: Story = {
   args: {
-    src: placeholder(200, 200),
     alt: 'Rounded image',
     shape: 'rounded',
-    width: 200,
-    height: 200,
   },
 };
 
 export const WithShadow: Story = {
   args: {
-    src: placeholder(200, 200),
     alt: 'Image with shadow',
     shadow: true,
-    width: 200,
-    height: 200,
   },
 };
 
+export const Bordered: Story = {
+  args: {
+    alt: 'Image with border',
+    bordered: true,
+  },
+};
+
+/** An image that only decorates adjacent content takes `alt=""`. */
+export const Decorative: Story = {
+  args: {
+    alt: '',
+  },
+};
+
+/**
+ * A block image fills the width of its parent. With the default fit its `width` and `height`
+ * attributes keep the aspect ratio (and reserve the space before it loads).
+ */
 export const Block: Story = {
   args: {
     src: placeholder(600, 200),
     alt: 'Block image',
     block: true,
+    width: 600,
+    height: 200,
   },
 };
 
+/**
+ * A 200×100 image in a 100×100 box: `none` keeps its top-left corner in view and `center` its
+ * middle (both unscaled), `contain` and `cover` scale it, and the default fit keeps its aspect
+ * ratio.
+ */
 export const FitModes: Story = {
-  render: () => (
-    <div style={{ display: 'flex', gap: 16 }}>
+  args: {
+    src: placeholder(200, 100),
+    width: 100,
+    height: 100,
+  },
+  render: (args) => (
+    <div className="flex gap-4">
       {(['none', 'center', 'contain', 'cover', 'default'] as const).map((fit) => (
-        <div key={fit} style={{ width: 100, height: 100, border: '1px solid #e0e0e0' }}>
-          <Image src={placeholder(200, 100)} alt={fit} fit={fit} width={100} height={100} />
-          <div style={{ textAlign: 'center', fontSize: 12 }}>{fit}</div>
-        </div>
+        <figure key={fit} className="m-0 flex flex-col items-center gap-1">
+          <div className="size-[100px] border border-border">
+            <Image {...args} alt={`Fit ${fit}`} fit={fit} />
+          </div>
+          <figcaption className="text-caption-1 text-foreground">{fit}</figcaption>
+        </figure>
       ))}
     </div>
   ),

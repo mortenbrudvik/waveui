@@ -1,18 +1,29 @@
 import * as React from 'react';
 import type { Meta, StoryObj } from '@storybook/react';
-import { Stepper } from '../src';
+import { fn } from 'storybook/test';
+import { Button, Stepper } from '../src';
+import { orientationArgType } from './_helpers';
 
 const meta = {
   title: 'Components/Navigation/Stepper',
   component: Stepper,
+  args: {
+    defaultActiveStep: 1,
+    orientation: 'horizontal',
+    linear: false,
+    onStepChange: fn(),
+  },
+  argTypes: {
+    ...orientationArgType,
+  },
 } satisfies Meta<typeof Stepper>;
 
 export default meta;
 type Story = StoryObj<typeof meta>;
 
 export const Default: Story = {
-  render: () => (
-    <Stepper defaultActiveStep={1}>
+  render: (args) => (
+    <Stepper {...args}>
       <Stepper.Step label="Account" description="Create your account" />
       <Stepper.Step label="Profile" description="Set up your profile" />
       <Stepper.Step label="Review" description="Review and submit" />
@@ -21,8 +32,11 @@ export const Default: Story = {
 };
 
 export const Vertical: Story = {
-  render: () => (
-    <Stepper orientation="vertical" defaultActiveStep={1}>
+  args: {
+    orientation: 'vertical',
+  },
+  render: (args) => (
+    <Stepper {...args}>
       <Stepper.Step label="Select plan" description="Choose a subscription plan" />
       <Stepper.Step label="Payment" description="Enter payment details" />
       <Stepper.Step label="Confirmation" description="Review your order" />
@@ -31,19 +45,42 @@ export const Vertical: Story = {
   ),
 };
 
-export const WithError: Story = {
-  render: () => (
-    <Stepper defaultActiveStep={1}>
+/** An error step announces "Error:" before its number; a disabled step cannot be activated. */
+export const WithErrorAndDisabled: Story = {
+  render: (args) => (
+    <Stepper {...args}>
       <Stepper.Step label="Details" />
       <Stepper.Step label="Verification" error />
+      <Stepper.Step label="Extras" disabled />
       <Stepper.Step label="Complete" />
     </Stepper>
   ),
 };
 
+/**
+ * Localized status text with `statusLabels`, and the group name with `aria-label`. Localized
+ * labels need the language of the page or of the region around them: `lang` marks this Stepper as
+ * Norwegian Bokmål, so screen readers pronounce its labels as Norwegian.
+ */
+export const Localized: Story = {
+  args: {
+    'aria-label': 'Fremdrift',
+    lang: 'nb',
+    defaultActiveStep: 2,
+    statusLabels: { completed: 'Fullført:', error: 'Feil:' },
+  },
+  render: (args) => (
+    <Stepper {...args}>
+      <Stepper.Step label="Konto" />
+      <Stepper.Step label="Betaling" error />
+      <Stepper.Step label="Bekreft" />
+    </Stepper>
+  ),
+};
+
 export const WithIcons: Story = {
-  render: () => (
-    <Stepper defaultActiveStep={1}>
+  render: (args) => (
+    <Stepper {...args}>
       <Stepper.Step
         label="Cart"
         icon={
@@ -82,34 +119,50 @@ export const WithIcons: Story = {
   ),
 };
 
+/**
+ * Controlled and linear: only the step after the active one can be reached. Back and Next use
+ * `aria-disabled` at the first and last step and ignore activation there, so the focused button
+ * keeps focus when it becomes unavailable (a natively `disabled` button would drop it to the page).
+ */
 export const Linear: Story = {
-  render: () => {
+  args: {
+    linear: true,
+  },
+  render: ({ onStepChange, ...args }) => {
+    const lastStep = 3;
     const [step, setStep] = React.useState(0);
+    const changeStep = (next: number) => {
+      setStep(next);
+      onStepChange?.(next);
+    };
+    const atStart = step === 0;
+    const atEnd = step === lastStep;
     return (
       <div className="flex flex-col gap-6">
-        <Stepper activeStep={step} onStepChange={setStep} linear>
+        <Stepper activeStep={step} onStepChange={changeStep} {...args}>
           <Stepper.Step label="Personal Info" />
           <Stepper.Step label="Address" />
           <Stepper.Step label="Payment" />
           <Stepper.Step label="Confirm" />
         </Stepper>
         <div className="flex gap-2">
-          <button
-            type="button"
-            className="px-4 py-2 border border-border rounded text-body-1"
-            disabled={step === 0}
-            onClick={() => setStep(step - 1)}
+          <Button
+            aria-disabled={atStart || undefined}
+            onClick={() => {
+              if (!atStart) changeStep(step - 1);
+            }}
           >
             Back
-          </button>
-          <button
-            type="button"
-            className="px-4 py-2 bg-primary text-white rounded text-body-1"
-            disabled={step === 3}
-            onClick={() => setStep(step + 1)}
+          </Button>
+          <Button
+            appearance="primary"
+            aria-disabled={atEnd || undefined}
+            onClick={() => {
+              if (!atEnd) changeStep(step + 1);
+            }}
           >
             Next
-          </button>
+          </Button>
         </div>
       </div>
     );

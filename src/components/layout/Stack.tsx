@@ -1,5 +1,8 @@
 import * as React from 'react';
 import { cn } from '../../lib/cn';
+import { resolveDeprecatedProp } from '../../lib/dev';
+import type { PolymorphicComponent, PolymorphicProps } from '../../lib/polymorphic';
+import type { Orientation } from '../../lib/types';
 
 const gapMap = {
   none: 'gap-0',
@@ -26,17 +29,23 @@ const justifyMap = {
   evenly: 'justify-evenly',
 } as const;
 
-/** Properties for the Stack component. */
-export interface StackProps extends React.HTMLAttributes<HTMLDivElement> {
-  /** Element type to render as.
-   * @default 'div'
-   */
-  as?: React.ElementType;
-  /** Layout direction of the stack.
+/**
+ * The Stack's own props (the XOwnProps rule of `PolymorphicProps`: component-specific props only).
+ * Every other prop comes from the rendered element (`as`).
+ */
+export interface StackOwnProps {
+  /**
+   * Layout axis of the stack.
    * @default 'vertical'
    */
-  direction?: 'vertical' | 'horizontal';
-  /** Gap size between stack items.
+  orientation?: Orientation;
+  /**
+   * @deprecated Use `orientation` (same values). Still works, warns once in development, and
+   * `orientation` wins when both are given.
+   */
+  direction?: Orientation;
+  /**
+   * Gap size between stack items.
    * @default 'md'
    */
   gap?: 'none' | 'xs' | 'sm' | 'md' | 'lg' | 'xl';
@@ -50,35 +59,63 @@ export interface StackProps extends React.HTMLAttributes<HTMLDivElement> {
   inline?: boolean;
 }
 
-const StackRoot = (
-    {
-      as: Component = 'div',
-      direction = 'vertical',
-      gap = 'md',
-      align,
-      justify,
-      wrap,
-      inline,
-      className,
-      children, ref, ...props }: StackProps & { ref?: React.Ref<HTMLElement> }) => {
-    return (
-      <Component
-        ref={ref}
-        className={cn(
-          inline ? 'inline-flex' : 'flex',
-          direction === 'horizontal' ? 'flex-row' : 'flex-col',
-          gapMap[gap],
-          align && alignMap[align],
-          justify && justifyMap[justify],
-          wrap && 'flex-wrap',
-          className,
-        )}
-        {...props}
-      >
-        {children}
-      </Component>
-    );
-  };
-StackRoot.displayName = 'Stack';
+/**
+ * Props of {@link Stack} rendered as `C` (default `'div'`). `StackProps` without a type argument
+ * is the 0.4 name: the props of a Stack rendered as a `<div>`, including `ref`.
+ */
+export type StackProps<C extends React.ElementType = 'div'> = PolymorphicProps<C, StackOwnProps>;
 
-export const Stack = StackRoot;
+type StackImplProps = StackOwnProps &
+  React.HTMLAttributes<HTMLElement> & {
+    as?: React.ElementType;
+    ref?: React.Ref<HTMLElement>;
+  };
+
+/**
+ * A one-dimensional layout: items stacked vertically (default) or horizontally with a token gap.
+ *
+ * @example
+ * <Stack orientation="horizontal" gap="sm" align="center">
+ *   <Avatar name="Ada" />
+ *   <Text>Ada Lovelace</Text>
+ * </Stack>
+ */
+export const Stack: PolymorphicComponent<'div', StackOwnProps> = (props) => {
+  const {
+    as,
+    orientation: orientationProp,
+    direction,
+    gap = 'md',
+    align,
+    justify,
+    wrap,
+    inline,
+    className,
+    children,
+    ref,
+    ...rest
+  } = props as StackImplProps;
+  const Component: React.ElementType = as ?? 'div';
+  const orientation =
+    resolveDeprecatedProp('Stack', orientationProp, direction, 'direction', 'orientation') ??
+    'vertical';
+
+  return (
+    <Component
+      ref={ref}
+      className={cn(
+        inline ? 'inline-flex' : 'flex',
+        orientation === 'horizontal' ? 'flex-row' : 'flex-col',
+        gapMap[gap],
+        align && alignMap[align],
+        justify && justifyMap[justify],
+        wrap && 'flex-wrap',
+        className,
+      )}
+      {...rest}
+    >
+      {children}
+    </Component>
+  );
+};
+Stack.displayName = 'Stack';

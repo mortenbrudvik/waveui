@@ -1,0 +1,9 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "noEmit": true,
+    "types": ["vitest/globals", "vite/client"]
+  },
+  "include": ["src", "stories", ".storybook/**/*"],
+  "exclude": ["node_modules", "dist", "storybook-static", "coverage"]
+}

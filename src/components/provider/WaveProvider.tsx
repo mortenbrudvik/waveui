@@ -1,8 +1,12 @@
 import * as React from 'react';
 import { cn } from '../../lib/cn';
+import { warnOnce } from '../../lib/dev';
+import { getThemeClassName, isWaveTheme, WAVE_THEMES, type WaveTheme } from '../../lib/theme';
 
-/** Supported visual themes for the Wave design system. */
-export type WaveTheme = 'light' | 'dark' | 'high-contrast';
+// The theme helper lives in server-safe src/lib (no "use client"), so React Server Components can
+// call it; it stays exported from here too.
+export { getThemeClassName } from '../../lib/theme';
+export type { WaveTheme } from '../../lib/theme';
 
 /** Text direction for bidirectional layout support. */
 export type WaveDir = 'ltr' | 'rtl';
@@ -10,72 +14,136 @@ export type WaveDir = 'ltr' | 'rtl';
 /** Props accepted by {@link WaveProvider}. */
 export interface WaveProviderProps extends React.HTMLAttributes<HTMLDivElement> {
   /**
-   * Visual theme applied to the subtree.
-   * @default 'light'
+   * Visual theme applied to the subtree. Providers can be nested in any order: each root declares
+   * its theme's tokens, so a light panel inside a dark app (and the reverse) renders correctly.
+   * @default the enclosing WaveProvider's theme, else 'light'
    */
   theme?: WaveTheme;
   /**
-   * Text direction for the subtree.
-   * @default 'ltr'
+   * Text direction for the subtree (also read by portaled overlays and keyboard navigation).
+   * @default the enclosing WaveProvider's direction, else 'ltr'
    */
   dir?: WaveDir;
+  /**
+   * Element that portaled overlays (dialogs, popovers, menus, toasts) render into. `null` renders
+   * them into `document.body`, also inside a provider that sets a container.
+   * @default the enclosing WaveProvider's container, else document.body
+   */
+  portalContainer?: HTMLElement | null;
   /** Content rendered inside the themed container. */
   children: React.ReactNode;
+  /** Ref to the themed root `<div>`. */
+  ref?: React.Ref<HTMLDivElement>;
 }
 
-/** Internal context value shape for theme and direction. */
-interface WaveContextValue {
+/** Value provided by {@link WaveProvider} and returned by {@link useWaveTheme}. */
+export interface WaveContextValue {
   /** The active theme. */
   theme: WaveTheme;
   /** The active text direction. */
   dir: WaveDir;
+  /**
+   * Theme classes of the nearest provider (see {@link getThemeClassName}); portals put them on
+   * their wrapper so overlays inherit the theme. `''` outside a provider (the page's own theme).
+   */
+  themeClassName: string;
+  /** Element portaled overlays render into; `null` means `document.body`. */
+  portalContainer: HTMLElement | null;
+  /** `false` when no {@link WaveProvider} is above the caller (the defaults are returned). */
+  hasProvider: boolean;
 }
 
-const WaveContext = React.createContext<WaveContextValue>({
+const DEFAULT_CONTEXT: WaveContextValue = {
   theme: 'light',
   dir: 'ltr',
-});
+  themeClassName: '',
+  portalContainer: null,
+  hasProvider: false,
+};
+
+const WaveContext = React.createContext<WaveContextValue>(DEFAULT_CONTEXT);
 
 /**
- * Hook to read the current Wave theme and direction from context.
+ * Reads the theme, direction, theme classes and portal container of the nearest
+ * {@link WaveProvider}. Outside a provider it returns light/ltr defaults with `hasProvider: false`.
  *
- * @returns The current {@link WaveTheme} and {@link WaveDir} from the nearest {@link WaveProvider}.
+ * @returns The {@link WaveContextValue} of the nearest provider.
  */
 export function useWaveTheme(): WaveContextValue {
   return React.useContext(WaveContext);
 }
 
-const themeClassMap: Record<WaveTheme, string> = {
-  light: '',
-  dark: 'dark',
-  'high-contrast': 'high-contrast',
-};
-
 /**
- * WaveProvider wraps an application (or subtree) to apply Wave UI theming.
+ * Applies Wave theming to an application or subtree.
  *
- * - Sets the appropriate CSS class (`dark`, `high-contrast`, or none for light)
- *   on a wrapper `<div>` so that CSS custom properties from `tokens.css` take effect.
- * - Provides theme and dir values via React context for components that need them.
+ * - Renders a `<div class="wave-root wave-<theme>">` that declares the theme's tokens and paints
+ *   the themed background, text colour and font (`bg-background text-foreground font-wave
+ *   text-body-1`; a `className` passed by you wins). The precompiled `./styles` entry scopes its base
+ *   styles and native-element reset to this root, so it is required there.
+ * - Sets `dir` and `data-wave-theme` on the root. An unknown `theme` value (from untyped code)
+ *   falls back to `'light'` — classes, `data-wave-theme` and the context value — and warns once in
+ *   development.
+ * - Provides theme, direction, theme classes and the portal container through context, so
+ *   portaled overlays render with the same theme and direction.
+ * - Nests: a provider inherits every prop it omits (`theme`, `dir`, `portalContainer`) from the
+ *   enclosing provider, so `<WaveProvider theme="light">` inside an RTL app is a light panel that
+ *   stays right-to-left and keeps the app's portal container. At the top level the defaults are
+ *   `'light'`, `'ltr'` and `document.body`.
  */
-export const WaveProvider = ({ theme = 'light', dir = 'ltr', children, className, ref, ...rest }: WaveProviderProps & { ref?: React.Ref<HTMLDivElement> }) => {
-    if (process.env.NODE_ENV !== 'production') {
-      if (theme && !themeClassMap[theme as keyof typeof themeClassMap]) {
-        console.warn(
-          `WaveProvider: unknown theme "${theme}". Valid themes: ${Object.keys(themeClassMap).join(', ')}`,
-        );
-      }
+export const WaveProvider = ({
+  theme: themeProp,
+  dir: dirProp,
+  portalContainer: portalContainerProp,
+  children,
+  className,
+  ref,
+  ...rest
+}: WaveProviderProps) => {
+  // Omitted props come from the enclosing provider; outside one, DEFAULT_CONTEXT supplies the
+  // top-level defaults. An explicit `portalContainer={null}` means document.body, so only
+  // `undefined` inherits.
+  const parent = React.useContext(WaveContext);
+  const theme = themeProp ?? parent.theme;
+  const dir = dirProp ?? parent.dir;
+  const portalContainer =
+    portalContainerProp === undefined ? parent.portalContainer : portalContainerProp;
+
+  // An unknown value (untyped callers) renders, and is reported, as the light theme.
+  const resolvedTheme: WaveTheme = isWaveTheme(theme) ? theme : 'light';
+  const themeClassName = getThemeClassName(resolvedTheme);
+
+  React.useEffect(() => {
+    if (!isWaveTheme(theme)) {
+      warnOnce(
+        `WaveProvider:theme:${String(theme)}`,
+        `WaveProvider: unknown theme "${String(theme)}". Valid themes: ${WAVE_THEMES.join(', ')}. Using "light".`,
+      );
     }
+  }, [theme]);
 
-    const value = React.useMemo(() => ({ theme, dir }), [theme, dir]);
+  const value = React.useMemo<WaveContextValue>(
+    () => ({ theme: resolvedTheme, dir, themeClassName, portalContainer, hasProvider: true }),
+    [resolvedTheme, dir, themeClassName, portalContainer],
+  );
 
-    return (
-      <WaveContext.Provider value={value}>
-        <div ref={ref} dir={dir} className={cn(themeClassMap[theme], className)} {...rest}>
-          {children}
-        </div>
-      </WaveContext.Provider>
-    );
-  };
+  return (
+    <WaveContext.Provider value={value}>
+      <div
+        {...rest}
+        ref={ref}
+        dir={dir}
+        data-wave-theme={resolvedTheme}
+        className={cn(
+          'wave-root',
+          themeClassName,
+          'bg-background text-foreground font-wave text-body-1',
+          className,
+        )}
+      >
+        {children}
+      </div>
+    </WaveContext.Provider>
+  );
+};
 
 WaveProvider.displayName = 'WaveProvider';
