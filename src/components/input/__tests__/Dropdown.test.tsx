@@ -15,8 +15,6 @@ import {
 } from '../../../test-utils';
 import { FIELD_TEST_IDS, FIELD_TEST_TEXT, renderWithFieldContext } from '../../../test-utils-field';
 import { DismissLayerProvider, useDismiss } from '../../../hooks/useDismiss';
-import dropdownSource from '../Dropdown.tsx?raw';
-import dropdownStoriesSource from '../../../../stories/Dropdown.stories.tsx?raw';
 
 const FRUITS = [
   <Option key="a" value="a">
@@ -1139,34 +1137,5 @@ describe('Dropdown', () => {
     const group = screen.getByRole('group', { name: 'Fruit' });
     expect(group.closest('[data-wave-listbox-surface]')).not.toBeNull();
     expect(within(group).getByRole('option', { name: 'Apple' })).toBeInTheDocument();
-  });
-});
-
-/**
- * The text of the JSDoc block right before `marker` in `source`, with the comment syntax
- * stripped the way Storybook's CSF enrichment strips it; `null` when no JSDoc precedes it.
- */
-function jsdocBefore(source: string, marker: string): string | null {
-  const at = source.indexOf(marker);
-  if (at === -1) return null;
-  const before = source.slice(0, at).trimEnd();
-  if (!before.endsWith('*/')) return null;
-  return before
-    .slice(before.lastIndexOf('/**') + 3, -2)
-    .split(/\r?\n/)
-    .map((line) => line.replace(/^(\s+)?(\*+)?(\s)?/, ''))
-    .join('\n')
-    .trim();
-}
-
-describe('Dropdown docs (C-DOCS, R13)', () => {
-  // react-docgen takes a component's description from the function it resolves the export to,
-  // not from the exported `Object.assign` const that carries the JSDoc (R13). The autodocs page
-  // therefore reads it from the JSDoc on the stories' meta, which Storybook's CSF enrichment
-  // turns into `parameters.docs.description.component`.
-  it('gives the Storybook autodocs page the component JSDoc', () => {
-    const description = jsdocBefore(dropdownSource, 'export const Dropdown =');
-    expect(description).toMatch(/^A select-only combobox \(APG\): /);
-    expect(jsdocBefore(dropdownStoriesSource, 'const meta =')).toBe(description);
   });
 });

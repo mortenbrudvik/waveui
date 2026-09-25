@@ -108,7 +108,8 @@ export interface DialogTriggerProps extends Omit<React.HTMLAttributes<HTMLElemen
   children: React.ReactNode | ((props: DialogTriggerRenderProps) => React.ReactNode);
   /**
    * `false` renders the 0.4 wrapper `<span>` around the children instead of merging the trigger
-   * props onto the child (the span carries the click handler only, no ARIA state).
+   * props onto the child. The span carries the click handler; `aria-haspopup`, `aria-expanded`
+   * and `aria-controls` go to the first element in the tab order inside it.
    * @default true
    */
   asChild?: boolean;

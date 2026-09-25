@@ -194,14 +194,10 @@ function findUnexportedPublicTypes(program: ts.Program, entry: string, ownDir: s
 const INTERNAL_HELPERS: Record<string, string> = {
   'components/input/Checkbox.tsx#CheckboxControlHandlers':
     'handler keys omitted from the root props (routed to the checkbox control)',
-  'components/input/Combobox.tsx#RoutedHandlers':
-    'handler keys omitted from the root props (routed to the combobox input)',
-  'components/input/Dropdown.tsx#RoutedHandlers':
-    'handler keys omitted from the root props (routed to the combobox button)',
+  'components/input/routedHandlers.ts#RoutedHandlers':
+    'handler keys omitted from the root props of Combobox, Dropdown, TagPicker, DatePicker and TimePicker (routed to their focusable control)',
   'components/input/Switch.tsx#SwitchControlHandlers':
     'handler keys omitted from the root props (routed to the switch control)',
-  'components/input/TagPicker.tsx#RoutedHandlers':
-    'handler keys omitted from the root props (routed to the combobox input)',
   'components/navigation/Breadcrumb.tsx#NoAnchorOnlyAttributes':
     'mask: link-only attributes are a type error on items without `href`',
   'components/navigation/Nav.tsx#NoAnchorOnlyAttributes':

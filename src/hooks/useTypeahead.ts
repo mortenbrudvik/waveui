@@ -41,6 +41,15 @@ export interface UseTypeaheadResult {
   isSearching: () => boolean;
 }
 
+/**
+ * A character typed with AltGr, which Windows reports as Ctrl+Alt (Polish `ł`, Romanian `ș`): text
+ * input for typeahead, not a shortcut. Ctrl+Alt with a named key (Ctrl+Alt+ArrowDown) is not.
+ * Internal (not exported from the package entry).
+ */
+export function isAltGraphCharacter(event: KeyboardEvent | React.KeyboardEvent): boolean {
+  return event.ctrlKey && event.altKey && event.key.length === 1;
+}
+
 function isTypeaheadKey(event: KeyboardEvent | React.KeyboardEvent, searching: boolean): boolean {
   if (event.key.length !== 1 || event.metaKey) return false;
   // Ctrl or Alt alone is a shortcut. Both together is AltGr as Windows reports it: a typed

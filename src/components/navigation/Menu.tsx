@@ -7,7 +7,7 @@ import { reportMissingContext, warnOnce } from '../../lib/dev';
 import { flattenChildren, isElementOfType } from '../../lib/children';
 import { mergeProps } from '../../lib/mergeProps';
 import { STATE_ARIA } from '../../lib/renderTrigger';
-import { FOCUSABLE_SELECTOR, getFirstTabbable, isFocusable } from '../../lib/focus';
+import { getFirstTabbable, isFocusable } from '../../lib/focus';
 import { disabledStyles, focusRing, focusRingInset } from '../../lib/styles';
 import { useControllable } from '../../hooks/useControllable';
 import { useDismiss } from '../../hooks/useDismiss';
@@ -270,26 +270,6 @@ function getTriggerFocusTarget(trigger: HTMLElement | null): HTMLElement | null 
   return isFocusable(trigger) ? trigger : getFirstTabbable(trigger);
 }
 
-/**
- * The element inside the `asChild={false}` wrapper span that carries the state ARIA: the first one
- * in the tab order by markup (`tabIndex >= 0`), the rule of the automatic fallback in
- * `useTriggerElement` (not `getFirstTabbable`, which skips the page while a modal Dialog makes it
- * inert).
- *
- * A copy of that hook's private `findStateAriaTarget` (and, in `MenuTrigger`'s layout effect, of
- * its `moveStateAria`): the hook moves the state ARIA for its implicit wrappers only and exports
- * neither. The "wrapper span" tests run both copies through the same cases. Replace both with the
- * hook's mover once it exposes one.
- */
-function findStateAriaTarget(wrapper: Element): Element | null {
-  for (const element of wrapper.querySelectorAll<HTMLElement>(FOCUSABLE_SELECTOR)) {
-    const hiddenInput =
-      element.localName === 'input' && (element as HTMLInputElement).type === 'hidden';
-    if (!hiddenInput && element.tabIndex >= 0) return element;
-  }
-  return null;
-}
-
 const menuSurfaceClasses =
   'min-w-[180px] rounded-md border border-border bg-background py-1 shadow-4';
 
@@ -444,50 +424,10 @@ MenuDivider.displayName = 'MenuDivider';
  * </Menu>
  */
 const MenuTrigger = ({ children, asChild, ref, ...rest }: MenuTriggerComponentProps) => {
-  const {
-    popup,
-    open,
-    setOpen,
-    openWithFocus,
-    triggerId,
-    menuId,
-    onTriggerId,
-    triggerRef,
-    setTriggerElement,
-  } = useMenuContext('Menu.Trigger');
+  const { popup, open, setOpen, openWithFocus, triggerId, menuId, onTriggerId, setTriggerElement } =
+    useMenuContext('Menu.Trigger');
   useStaticMenuPartWarning('Menu.Trigger', popup);
   const elementRef = useMergedRefs<HTMLElement>(setTriggerElement, ref);
-
-  // The explicit wrapper span (0.4 markup) cannot carry the state ARIA (a generic span: axe
-  // aria-allowed-attr). It goes to the first element in the tab order inside the span, like the
-  // automatic fallback of useTriggerElement does, so the button there is announced as a menu
-  // button. A render-prop child still receives it.
-  const explicitWrapper = asChild === false && typeof children !== 'function';
-  // No deps: runs after every commit of the trigger (it re-renders on every open change), so the
-  // attributes follow the state and the current element inside the span. The cleanup restores
-  // that element's own attributes.
-  React.useLayoutEffect(() => {
-    const wrapper = triggerRef.current;
-    const target = explicitWrapper && wrapper ? findStateAriaTarget(wrapper) : null;
-    if (!target) return undefined;
-    const values: Record<(typeof STATE_ARIA)[number], string | null> = {
-      'aria-haspopup': 'menu',
-      'aria-expanded': String(open),
-      'aria-controls': open ? menuId : null,
-    };
-    const previous = STATE_ARIA.map((name) => [name, target.getAttribute(name)] as const);
-    for (const name of STATE_ARIA) {
-      const value = values[name];
-      if (value === null) target.removeAttribute(name);
-      else target.setAttribute(name, value);
-    }
-    return () => {
-      for (const [name, value] of previous) {
-        if (value === null) target.removeAttribute(name);
-        else target.setAttribute(name, value);
-      }
-    };
-  });
 
   const handleClick = (event: React.MouseEvent<HTMLElement>) => {
     if (event.defaultPrevented) return;
@@ -528,11 +468,9 @@ const MenuTrigger = ({ children, asChild, ref, ...rest }: MenuTriggerComponentPr
     ref: elementRef,
   };
   // §5.3: forwarded props merge in (a consumer `id` wins, handlers compose consumer-first), but the
-  // live state ARIA always wins. The explicit wrapper span carries none (moved above).
+  // live state ARIA always wins. On a wrapper span (`asChild={false}`, the automatic fallback)
+  // useTriggerElement moves the state ARIA onto the first element in the tab order inside it.
   const triggerProps = mergeProps(ownProps, rest, { oursWin: STATE_ARIA });
-  if (explicitWrapper) {
-    for (const name of STATE_ARIA) delete (triggerProps as Record<string, unknown>)[name];
-  }
 
   return useTriggerElement(children, triggerProps, {
     componentName: 'Menu.Trigger',

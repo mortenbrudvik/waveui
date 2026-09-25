@@ -1367,6 +1367,33 @@ describe('Carousel', () => {
         'Slide 3 of 3',
       ]);
       expect(liveRegion()).toHaveTextContent('Slide 1 of 3');
+      expect(region()).toHaveAttribute('aria-roledescription', 'carousel');
+      expect(slideGroups()).toHaveLength(3);
+    });
+
+    it('uses custom role descriptions for the carousel and its slides', async () => {
+      render(
+        <Carousel
+          aria-label="Angebote"
+          labels={{ carouselRoleDescription: 'Karussell', slideRoleDescription: 'Folie' }}
+        >
+          {threeSlides}
+        </Carousel>,
+      );
+      expect(region()).toHaveAttribute('aria-roledescription', 'Karussell');
+      // The slides are the only elements inside the region with a role description.
+      const described = Array.from(region().querySelectorAll('[aria-roledescription]'));
+      expect(
+        described.map((slide) => [
+          slide.getAttribute('aria-label'),
+          slide.getAttribute('aria-roledescription'),
+        ]),
+      ).toEqual([
+        ['Slide 1 of 3', 'Folie'],
+        ['Slide 2 of 3', 'Folie'],
+        ['Slide 3 of 3', 'Folie'],
+      ]);
+      await expectNoA11yViolations();
     });
 
     it('types labels as optional members next to autoPlayLabels', () => {
@@ -1374,6 +1401,8 @@ describe('Carousel', () => {
       expectTypeOf<CarouselLabels['slide']>().toEqualTypeOf<
         ((index: number, total: number) => string) | undefined
       >();
+      expectTypeOf<CarouselLabels['carouselRoleDescription']>().toEqualTypeOf<string | undefined>();
+      expectTypeOf<CarouselLabels['slideRoleDescription']>().toEqualTypeOf<string | undefined>();
       const partial: CarouselLabels = { previous: 'Zurück' };
       // @ts-expect-error slide is a function of the index and the total
       const wrong: CarouselLabels = { slide: 'Folie' };

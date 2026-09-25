@@ -12,12 +12,11 @@ import { useMergedRefs } from '../../hooks/useMergedRefs';
 import { HiddenInput } from '../internal/HiddenInput';
 import { isInvalidLook } from './Input';
 import { ListboxSurface, Option, OptionGroup, useListboxPopup } from './Option';
+import type { RoutedHandlers } from './routedHandlers';
 
 /* ------------------------------------------------------------------ */
 /*  Dropdown                                                          */
 /* ------------------------------------------------------------------ */
-
-type RoutedHandlers = 'onFocus' | 'onBlur' | 'onKeyDown' | 'onKeyUp';
 
 /** Properties for the Dropdown component. */
 export interface DropdownProps extends Omit<

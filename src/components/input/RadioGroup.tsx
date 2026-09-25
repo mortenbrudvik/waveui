@@ -101,7 +101,7 @@ export interface RadioGroupProps extends Omit<
   ref?: React.Ref<HTMLDivElement>;
 }
 
-/** The `role="radiogroup"` root of {@link RadioGroup} (documented there). */
+// The `role="radiogroup"` root, documented on the exported `RadioGroup` const.
 const RadioGroupRoot = ({
   value: valueProp,
   defaultValue,

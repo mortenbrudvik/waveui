@@ -1682,6 +1682,54 @@ describe('useRovingTabIndex', () => {
       expect(button('a')).toHaveFocus();
     });
 
+    const CITIES = [
+      { value: 'krakow', label: 'Kraków' },
+      { value: 'lodz', label: 'Łódź' },
+      { value: 'olsztyn', label: 'Olsztyn' },
+    ];
+
+    it('accepts a character typed with AltGr (Ctrl+Alt on Windows)', () => {
+      render(<DomGroup items={CITIES} orientation="vertical" typeahead />);
+      focus(button('Kraków'));
+      // Polish (programmer) layout: AltGr+L types "ł".
+      expect(fireEvent.keyDown(button('Kraków'), { key: 'ł', ctrlKey: true, altKey: true })).toBe(
+        false,
+      );
+      expect(button('Łódź')).toHaveFocus();
+    });
+
+    it('ignores a character typed with Ctrl, Alt or Meta alone, or with Meta and AltGr', () => {
+      render(<DomGroup items={CITIES} orientation="vertical" typeahead />);
+      focus(button('Kraków'));
+      for (const init of [
+        { key: 'o', ctrlKey: true },
+        { key: 'o', altKey: true },
+        { key: 'o', metaKey: true },
+        { key: 'o', ctrlKey: true, altKey: true, metaKey: true },
+      ]) {
+        expect(fireEvent.keyDown(button('Kraków'), init)).toBe(true);
+        expect(button('Kraków')).toHaveFocus();
+      }
+    });
+
+    it('lets AltGr through to the typeahead only: Ctrl+Alt with arrows, Home or End moves nothing', () => {
+      render(<DomGroup items={CITIES} orientation="vertical" typeahead />);
+      focus(button('Łódź'));
+      for (const key of ['ArrowDown', 'ArrowUp', 'Home', 'End']) {
+        expect(fireEvent.keyDown(button('Łódź'), { key, ctrlKey: true, altKey: true })).toBe(true);
+        expect(button('Łódź')).toHaveFocus();
+      }
+    });
+
+    it('ignores AltGr characters when typeahead is off', () => {
+      render(<DomGroup items={CITIES} orientation="vertical" />);
+      focus(button('Kraków'));
+      expect(fireEvent.keyDown(button('Kraków'), { key: 'ł', ctrlKey: true, altKey: true })).toBe(
+        true,
+      );
+      expect(button('Kraków')).toHaveFocus();
+    });
+
     /** Items that activate on Enter/Space in their own keydown handler, as Menu, List and Tree items do. */
     function ActivatingItems({ onActivate }: { onActivate: (value: string) => void }) {
       const { containerProps, getTabIndex } = useRovingTabIndex({

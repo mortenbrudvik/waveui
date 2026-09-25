@@ -209,6 +209,20 @@ describe('TeachingPopover', () => {
       expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
     });
 
+    it('names the Close button with closeLabel (R7), "Close" by default, and keeps it off the surface', async () => {
+      const user = userEvent.setup();
+      const onDismiss = vi.fn();
+      const { rerender } = render(<TeachingPopover steps={steps} onDismiss={onDismiss} />);
+      expect(screen.getByRole('button', { name: 'Close' })).toBeInTheDocument();
+      rerender(<TeachingPopover steps={steps} onDismiss={onDismiss} closeLabel="Lukk" />);
+      expect(screen.queryByRole('button', { name: 'Close' })).not.toBeInTheDocument();
+      expect(screen.getByRole('dialog')).not.toHaveAttribute('closeLabel');
+      expect(screen.getByRole('dialog')).not.toHaveAttribute('closelabel');
+      await user.click(screen.getByRole('button', { name: 'Lukk' }));
+      expect(onDismiss).toHaveBeenCalledTimes(1);
+      expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+    });
+
     it('Escape dismisses without focusing the dialog manually', async () => {
       const user = userEvent.setup();
       const onDismiss = vi.fn();

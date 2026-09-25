@@ -1039,11 +1039,9 @@ describe('Tree - keyboard (layout#31, feedback-navigation#47)', () => {
     expect(item('Photo.jpg')).toHaveFocus();
   });
 
-  // Expected to fail until useRovingTabIndex lets a character typed with AltGr (Ctrl+Alt on
-  // Windows) reach its typeahead: Tree's typeahead is the roving hook's, and the hook's modifier
-  // guard returns first (the Tree.Item keydown handler neither prevents nor stops the key). Change
-  // `it.fails` to `it` together with that hook fix.
-  it.fails('typeahead accepts a letter typed with AltGr (Ctrl+Alt on Windows)', () => {
+  // Tree's typeahead is the roving hook's: the Tree.Item keydown handler leaves Ctrl+Alt keys
+  // alone (neither prevents nor stops them), and the hook takes a character typed with AltGr.
+  it('typeahead accepts a letter typed with AltGr (Ctrl+Alt on Windows)', () => {
     render(
       <Tree aria-label="Cities">
         <Tree.Item value="krakow">Kraków</Tree.Item>

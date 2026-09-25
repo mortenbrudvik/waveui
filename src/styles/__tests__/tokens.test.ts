@@ -1767,6 +1767,15 @@ describe('scripts/build-css.mjs — gate assertions (repo-level#1)', () => {
         [],
       );
     });
+
+    it("fails the gate for a shipped class with Tailwind's bare rtl: or ltr: variant", async () => {
+      const bare = String.raw`.rtl\:-scale-x-100:where(:dir(rtl),[dir=rtl],[dir=rtl] *){scale:-1 1}.hover\:ltr\:ms-2:hover:where(:dir(ltr),[dir=ltr],[dir=ltr] *){margin-inline-start:.5rem}.not-rtl\:pe-2:not(:where(:dir(rtl),[dir=rtl],[dir=rtl] *)){padding-inline-end:.5rem}`;
+      expect(await gate(GATE_CSS + NATIVE + FALLBACK + bare)).toEqual([
+        "styles.css: contains classes with Tailwind's bare rtl:/ltr: variant, which also " +
+          'matches inside a subtree of the opposite direction (use wave-rtl:, R4): ' +
+          'hover:ltr:ms-2 not-rtl:pe-2 rtl:-scale-x-100',
+      ]);
+    });
   });
 
   describe('library classes of the style entries', () => {

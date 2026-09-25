@@ -141,9 +141,11 @@ type KnownKeys<P> = {
 };
 
 /**
- * The props type the helpers check against. Normally `P` itself. Props inferred from a
- * polymorphic component (F2 `PolymorphicComponent`) carry a string index signature (the generic
- * `as` element's props), which would accept any key; for those, the own props plus every HTML
+ * The props type the helpers check against. Normally `P` itself, also for a polymorphic
+ * component passed as `testSystemProps(X, …)`: `P` is then inferred as its default element's
+ * props. A call that widens `P` to every element for its `as` variants
+ * (`testSystemProps<XProps<React.ElementType>>(X, …)`) gets a string index signature (the
+ * generic `as` element's props), which would accept any key; there the own props plus every HTML
  * attribute are used instead, so typos are still rejected.
  */
 export type ComponentTestProps<P> = string extends keyof P

@@ -6,6 +6,7 @@ import { renderToString } from 'react-dom/server';
 import { AvatarGroup } from '../AvatarGroup';
 import type { AvatarGroupProps } from '../AvatarGroup';
 import { Avatar } from '../Avatar';
+import { Portal } from '../../portal/Portal';
 import { DismissLayerProvider, useDismiss } from '../../../hooks/useDismiss';
 import { useFocusTrap } from '../../../hooks/useFocusTrap';
 import {
@@ -512,6 +513,47 @@ describe('AvatarGroup', () => {
         await user.tab({ shift: true });
         expect(screen.queryByRole('dialog')).toBeNull();
         expect(button).toHaveFocus();
+      });
+
+      // A member can open a portal of its own (a card, a menu). Its keys bubble through the
+      // React tree to the popup, but its content is not in the popup's DOM: its Tab is its own.
+      it.each([
+        ['Tab', false],
+        ['Shift+Tab', true],
+      ])('ignores a %s that bubbles from a portal a member opened', async (_name, shiftKey) => {
+        const user = userEvent.setup();
+        function MemberWithCard() {
+          return (
+            <span>
+              Dana
+              <Portal>
+                <button type="button">Dana's card</button>
+                <button type="button">Message Dana</button>
+              </Portal>
+            </span>
+          );
+        }
+        render(
+          <>
+            <AvatarGroup aria-label="Team" max={1}>
+              <Avatar name="Alice" />
+              <a href="#bob">
+                <Avatar name="Bob" />
+              </a>
+              <MemberWithCard />
+            </AvatarGroup>
+            <button type="button">Next</button>
+          </>,
+        );
+        await user.click(screen.getByRole('button', { name: '2 more' }));
+        const popup = screen.getByRole('dialog', { name: '2 more' });
+        const card = screen.getByRole('button', { name: "Dana's card" });
+        expect(popup).not.toContainElement(card);
+        act(() => card.focus());
+
+        expect(fireEvent.keyDown(card, { key: 'Tab', shiftKey })).toBe(true);
+        expect(card).toHaveFocus();
+        expect(screen.getByRole('dialog', { name: '2 more' })).toBe(popup);
       });
 
       it('returns focus to the button on Escape from a link', async () => {

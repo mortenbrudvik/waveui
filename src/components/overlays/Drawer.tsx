@@ -103,7 +103,8 @@ export interface DrawerTriggerProps extends Omit<React.HTMLAttributes<HTMLElemen
   children: React.ReactNode | ((props: DrawerTriggerRenderProps) => React.ReactNode);
   /**
    * `false` renders a wrapper `<span>` around the children instead of merging the trigger props
-   * onto the child (the span carries the click handler only, no ARIA state).
+   * onto the child. The span carries the click handler; `aria-haspopup`, `aria-expanded` and
+   * `aria-controls` go to the first element in the tab order inside it.
    * @default true
    */
   asChild?: boolean;

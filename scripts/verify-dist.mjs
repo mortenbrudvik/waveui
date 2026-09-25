@@ -8,7 +8,11 @@
  *     formats) starts with `"use client"`; no other file does — not `dist/lib/cn.*`, not
  *     `dist/index.*`, not any `index.*` barrel, not the bundler runtime (repo-level#2);
  *   - declarations: `dist/index.d.ts` and its `dist/index.d.cts` copy for the `require`
- *     condition (repo-level#5);
+ *     condition (repo-level#5); every component it exports carries a JSDoc (C-DOCS: a compound
+ *     is documented on its `Object.assign` export, which is what the roll-up keeps);
+ *   - development mode: `dist/lib/dev.mjs` and `dist/lib/dev.cjs` still read
+ *     `process.env.NODE_ENV` at run time, so a consumer's bundler decides between development and
+ *     production (a `define` in vite.config.ts would inline the library's own build mode);
  *   - imports: every bare import is a dependency or peer dependency of package.json (or a
  *     subpath of one), relative imports resolve inside `dist/`, no Node.js builtin is imported
  *     and no dependency was bundled into `dist/` (repo-level#4);
@@ -274,7 +278,73 @@ export function checkDirectives(dist) {
   return errors;
 }
 
-/** `index.d.ts` and its `index.d.cts` copy for the `require` condition (repo-level#5). */
+/** A component name: PascalCase with a lower-case letter (not a `Z_INDEX` constant). */
+const COMPONENT_NAME = /^[A-Z](?=[A-Za-z0-9]*[a-z])[A-Za-z0-9]*$/;
+
+/**
+ * The components a rolled-up declaration file (`dist/index.d.ts`) exports without a JSDoc, in
+ * declaration order (C-DOCS, x-types-components-6). A component is an exported value (`declare
+ * const` or `declare function`) with a PascalCase name, exported directly or renamed by the roll-up
+ * (`declare const Image_2` + `export { Image_2 as Image }`). Its JSDoc is the `/** … *\/` block
+ * right before its first declaration (for overloads, the first signature).
+ */
+export function undocumentedComponents(dts) {
+  const ts = require('typescript');
+  const file = ts.createSourceFile(
+    'index.d.ts',
+    dts,
+    ts.ScriptTarget.Latest,
+    true,
+    ts.ScriptKind.TS,
+  );
+  const isExported = (statement) =>
+    (ts.canHaveModifiers(statement) ? (ts.getModifiers(statement) ?? []) : []).some(
+      (modifier) => modifier.kind === ts.SyntaxKind.ExportKeyword,
+    );
+  const hasJsDoc = (statement) =>
+    (ts.getLeadingCommentRanges(dts, statement.getFullStart()) ?? []).some((range) =>
+      /^\/\*\*\s/.test(dts.slice(range.pos, range.end)),
+    );
+  const valueNames = (statement) => {
+    if (ts.isVariableStatement(statement)) {
+      return statement.declarationList.declarations
+        .filter((declaration) => ts.isIdentifier(declaration.name))
+        .map((declaration) => declaration.name.text);
+    }
+    return ts.isFunctionDeclaration(statement) && statement.name ? [statement.name.text] : [];
+  };
+
+  // The first declaration of every value, and the exported names (exported name → local name).
+  const declarations = new Map();
+  const exported = new Map();
+  for (const statement of file.statements) {
+    for (const name of valueNames(statement)) {
+      if (!declarations.has(name)) declarations.set(name, statement);
+      if (isExported(statement)) exported.set(name, name);
+    }
+    if (
+      ts.isExportDeclaration(statement) &&
+      !statement.moduleSpecifier &&
+      statement.exportClause &&
+      ts.isNamedExports(statement.exportClause)
+    ) {
+      for (const element of statement.exportClause.elements) {
+        exported.set(element.name.text, (element.propertyName ?? element.name).text);
+      }
+    }
+  }
+  return [...exported]
+    .filter(([name, local]) => COMPONENT_NAME.test(name) && declarations.has(local))
+    .map(([name, local]) => ({ name, statement: declarations.get(local) }))
+    .filter(({ statement }) => !hasJsDoc(statement))
+    .sort((a, b) => a.statement.pos - b.statement.pos)
+    .map(({ name }) => name);
+}
+
+/**
+ * `index.d.ts` and its `index.d.cts` copy for the `require` condition (repo-level#5); every
+ * component the declarations export has a JSDoc (C-DOCS).
+ */
 export function checkDeclarations(dist) {
   const errors = [];
   const dts = join(dist, 'index.d.ts');
@@ -287,6 +357,31 @@ export function checkDeclarations(dist) {
     errors.push('index.d.cts is missing (CommonJS consumers would get ESM-typed declarations)');
   } else if (esm !== undefined && cjs !== esm) {
     errors.push('index.d.cts differs from index.d.ts (it must be a copy of the rolled-up file)');
+  }
+  for (const name of esm ? undocumentedComponents(esm) : []) {
+    errors.push(
+      `index.d.ts: the exported component ${name} has no JSDoc (document it on its export, C-DOCS)`,
+    );
+  }
+  return errors;
+}
+
+/**
+ * `dist/lib/dev.mjs` and `dist/lib/dev.cjs` keep the literal `process.env.NODE_ENV` expression
+ * (f-lib T6): the consumer's bundler replaces it, so development warnings follow the consumer's
+ * build mode. A `define` in vite.config.ts would inline the library's own mode instead.
+ */
+export function checkDevEnvironment(dist) {
+  const errors = [];
+  for (const path of ['lib/dev.mjs', 'lib/dev.cjs']) {
+    const file = join(dist, path);
+    if (!existsSync(file)) errors.push(`${path} is missing`);
+    else if (!readFileSync(file, 'utf8').includes('process.env.NODE_ENV')) {
+      errors.push(
+        `${path} does not read process.env.NODE_ENV: the build inlined the mode (a \`define\` in ` +
+          "vite.config.ts?), so the consumer's bundler can no longer choose development or production",
+      );
+    }
   }
   return errors;
 }
@@ -883,6 +978,7 @@ export async function verifyDist(
   const pkg = readJson(join(distRoot, '..', 'package.json'));
   const errors = [
     ...checkDeclarations(distRoot),
+    ...checkDevEnvironment(distRoot),
     ...checkDirectives(distRoot),
     ...checkImports(distRoot, pkg),
   ];

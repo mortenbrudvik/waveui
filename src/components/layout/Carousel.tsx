@@ -27,9 +27,10 @@ export interface CarouselAutoPlayLabels {
 }
 
 /**
- * Accessible names of the Carousel's built-in controls and slides, for localization. Each member
- * is optional and falls back to its English default. The rotation control has its own
- * `autoPlayLabels`; the region's name comes from `aria-label` or `aria-labelledby`.
+ * Accessible names of the Carousel's built-in controls and slides, and the role descriptions of
+ * the carousel and its slides, for localization. Each member is optional and falls back to its
+ * English default. The rotation control has its own `autoPlayLabels`; the region's name comes
+ * from `aria-label` or `aria-labelledby`.
  */
 export interface CarouselLabels {
   /** Name of the Previous button.
@@ -51,6 +52,14 @@ export interface CarouselLabels {
    * @default (index, total) => `Slide ${index + 1} of ${total}`
    */
   slide?: (index: number, total: number) => string;
+  /** How assistive technology announces the carousel region (`aria-roledescription`).
+   * @default 'carousel'
+   */
+  carouselRoleDescription?: string;
+  /** How assistive technology announces each slide (`aria-roledescription`).
+   * @default 'slide'
+   */
+  slideRoleDescription?: string;
 }
 
 /** Properties for the Carousel component. */
@@ -86,7 +95,8 @@ export interface CarouselProps extends React.HTMLAttributes<HTMLDivElement> {
   autoPlayLabels?: CarouselAutoPlayLabels;
   /**
    * Accessible names of the Previous and Next buttons, the slide picker and the slides (also
-   * announced by the live region), for localization. Unset members keep their English defaults.
+   * announced by the live region), and the role descriptions of the carousel and its slides, for
+   * localization. Unset members keep their English defaults.
    */
   labels?: CarouselLabels;
   /** Whether the carousel loops back to the first slide after the last.
@@ -107,6 +117,8 @@ const DEFAULT_PREVIOUS_LABEL = 'Previous slide';
 const DEFAULT_NEXT_LABEL = 'Next slide';
 const DEFAULT_PICKER_LABEL = 'Choose slide';
 const defaultSlideLabel = (index: number, total: number) => `Slide ${index + 1} of ${total}`;
+const DEFAULT_CAROUSEL_ROLE_DESCRIPTION = 'carousel';
+const DEFAULT_SLIDE_ROLE_DESCRIPTION = 'slide';
 
 function clampIndex(index: number, total: number): number {
   if (total <= 0 || !Number.isFinite(index)) return 0;
@@ -137,36 +149,7 @@ const PlayGlyph = () => (
   </svg>
 );
 
-/**
- * A slideshow that shows one slide at a time (WAI-ARIA APG carousel with previous/next buttons
- * and a slide picker).
- *
- * - Slides are the `Carousel.Item` (`CarouselItem`) children, written directly in the Carousel or
- *   in Fragments. Other children are not rendered (a development warning says so). A component
- *   that renders `Carousel.Item` itself is not recognised: write the `Carousel.Item` in the
- *   Carousel and put the component inside it.
- * - Previous/Next stay focusable at the ends (`aria-disabled`), so keyboard focus is not lost.
- * - The slide picker is a group of buttons named "Slide n of m"; the active one has
- *   `aria-current="true"`.
- * - Inactive slides are `aria-hidden` and `inert`, so neither Tab nor a screen reader reaches
- *   their content.
- * - With `autoPlay`, a Pause/Start control comes first (WAI-ARIA APG): rotation pauses while
- *   focus is inside the carousel (in most browsers also after a click on one of its controls) or
- *   the pointer is over its content, activating Start rotates at once, and the live region is
- *   silent (`aria-live="off"`) while slides rotate. Without `loop` rotation ends at the last slide
- *   and stays stopped until the control's Start is activated (or the number of slides changes, or
- *   `loop` is turned on).
- * - Right-to-left layouts slide the other way and mirror the Previous/Next chevrons: the direction
- *   is read from the rendered element (its `dir` prop, the nearest ancestor's `dir`, WaveProvider
- *   `dir` or the document's), so an LTR section inside an RTL page stays LTR throughout.
- * - Name the carousel with `aria-label` or `aria-labelledby` (the fallback name is "Carousel").
- *   The built-in names are English: `labels` and `autoPlayLabels` translate them.
- * - The controls are layered over the slides inside the carousel's own stacking context, so they
- *   never paint over page headers that stay in view while the page scrolls.
- *
- * Compound access (`Carousel.Item`) needs a client module; React Server Components import the
- * flat name `CarouselItem` instead.
- */
+// The Carousel root, documented on the exported `Carousel` const.
 const CarouselRoot = ({
   value: controlledValue,
   defaultValue = 0,
@@ -328,12 +311,15 @@ const CarouselRoot = ({
   const nextLabel = labels?.next ?? DEFAULT_NEXT_LABEL;
   const pickerLabel = labels?.picker ?? DEFAULT_PICKER_LABEL;
   const slideLabel = labels?.slide ?? defaultSlideLabel;
+  const carouselRoleDescription =
+    labels?.carouselRoleDescription ?? DEFAULT_CAROUSEL_ROLE_DESCRIPTION;
+  const slideRoleDescription = labels?.slideRoleDescription ?? DEFAULT_SLIDE_ROLE_DESCRIPTION;
 
   return (
     <div
       ref={rootRef}
       role="region"
-      aria-roledescription="carousel"
+      aria-roledescription={carouselRoleDescription}
       aria-label="Carousel"
       // A stacking context of its own: the controls' z-index cannot lift them over page headers.
       className={cn('relative isolate overflow-hidden', className)}
@@ -366,7 +352,7 @@ const CarouselRoot = ({
             <div
               key={key}
               role="group"
-              aria-roledescription="slide"
+              aria-roledescription={slideRoleDescription}
               aria-label={slideLabel(i, total)}
               aria-hidden={active ? undefined : true}
               inert={!active}
@@ -450,15 +436,35 @@ export const CarouselItem = ({ className, children, ref, ...rest }: CarouselItem
 CarouselItem.displayName = 'CarouselItem';
 
 /**
- * A slideshow that shows one slide at a time (WAI-ARIA APG carousel with previous/next buttons, a
- * slide picker and an optional `autoPlay` rotation with a Pause/Start control).
+ * A slideshow that shows one slide at a time (WAI-ARIA APG carousel with previous/next buttons
+ * and a slide picker).
  *
- * Slides are the `Carousel.Item` children, written directly in the Carousel or in Fragments; other
- * children are not rendered (a development warning says so). Name the carousel with `aria-label`
- * or `aria-labelledby`; `labels` and `autoPlayLabels` translate the built-in English names.
+ * - Slides are the `Carousel.Item` (`CarouselItem`) children, written directly in the Carousel or
+ *   in Fragments. Other children are not rendered (a development warning says so). A component
+ *   that renders `Carousel.Item` itself is not recognised: write the `Carousel.Item` in the
+ *   Carousel and put the component inside it.
+ * - Previous/Next stay focusable at the ends (`aria-disabled`), so keyboard focus is not lost.
+ * - The slide picker is a group of buttons named "Slide n of m"; the active one has
+ *   `aria-current="true"`.
+ * - Inactive slides are `aria-hidden` and `inert`, so neither Tab nor a screen reader reaches
+ *   their content.
+ * - With `autoPlay`, a Pause/Start control comes first (WAI-ARIA APG): rotation pauses while
+ *   focus is inside the carousel (in most browsers also after a click on one of its controls) or
+ *   the pointer is over its content, activating Start rotates at once, and the live region is
+ *   silent (`aria-live="off"`) while slides rotate. Without `loop` rotation ends at the last slide
+ *   and stays stopped until the control's Start is activated (or the number of slides changes, or
+ *   `loop` is turned on).
+ * - Right-to-left layouts slide the other way and mirror the Previous/Next chevrons: the direction
+ *   is read from the rendered element (its `dir` prop, the nearest ancestor's `dir`, WaveProvider
+ *   `dir` or the document's), so an LTR section inside an RTL page stays LTR throughout.
+ * - Name the carousel with `aria-label` or `aria-labelledby` (the fallback name is "Carousel").
+ *   The built-in names and role descriptions are English: `labels` and `autoPlayLabels`
+ *   translate them.
+ * - The controls are layered over the slides inside the carousel's own stacking context, so they
+ *   never paint over page headers that stay in view while the page scrolls.
  *
- * The slide is also exported as `CarouselItem`: React Server Components import that flat name
- * (dotted access needs a client file).
+ * Compound access (`Carousel.Item`) needs a client module; React Server Components import the
+ * flat name `CarouselItem` instead.
  */
 export const Carousel = /* @__PURE__ */ Object.assign(CarouselRoot, {
   Item: CarouselItem,

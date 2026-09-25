@@ -11,6 +11,7 @@ import { useMergedRefs } from '../../hooks/useMergedRefs';
 import { HiddenInput } from '../internal/HiddenInput';
 import { isInvalidLook } from './Input';
 import { ListboxSurface, Option, OptionGroup, useListboxPopup } from './Option';
+import type { RoutedHandlers } from './routedHandlers';
 
 export { Option, OptionGroup } from './Option';
 export type { OptionProps, OptionGroupProps } from './Option';
@@ -18,8 +19,6 @@ export type { OptionProps, OptionGroupProps } from './Option';
 /* ------------------------------------------------------------------ */
 /*  Combobox                                                          */
 /* ------------------------------------------------------------------ */
-
-type RoutedHandlers = 'onFocus' | 'onBlur' | 'onKeyDown' | 'onKeyUp';
 
 /** Properties for the Combobox component. */
 export interface ComboboxProps extends Omit<

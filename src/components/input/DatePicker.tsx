@@ -46,12 +46,10 @@ import {
   startOfMonth,
 } from './dateUtils';
 import { isInvalidLook } from './Input';
+import type { RoutedHandlers } from './routedHandlers';
 
 /** Why typed text was not accepted (see {@link DatePickerProps.onInvalidInput}). */
 export type DatePickerInvalidReason = 'unparseable' | 'out-of-range' | 'disabled';
-
-/** Focus and key handlers the picker routes to its text input (C-ROUTING). */
-type RoutedHandlers = 'onFocus' | 'onBlur' | 'onKeyDown' | 'onKeyUp';
 
 /** Properties for the DatePicker component. */
 export interface DatePickerProps extends Omit<

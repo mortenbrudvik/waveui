@@ -2,14 +2,16 @@
 /**
  * Storybook build configuration (spec §3.3; repo-level#1, #36): `.storybook/main.ts` registers
  * the a11y and docs addons and turns the library's Vite plugins into a Storybook app build
- * (Tailwind added, `vite:dts` removed); `.storybook/preview.css` compiles the library styles
- * with the stories as an extra source; `scripts/verify-storybook.mjs` asserts the emitted CSS.
+ * (Tailwind added, `vite:dts` removed, the export-docblock plugin placed after Storybook's docgen);
+ * `.storybook/preview.css` compiles the library styles with the stories as an extra source;
+ * `scripts/verify-storybook.mjs` asserts the emitted CSS.
  */
 import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { afterAll, describe, expect, it } from 'vitest';
+import { STORYBOOK_DOCGEN_PLUGIN } from '../../.storybook/exportDocblocks.ts';
 import storybookMain from '../../.storybook/main.ts';
 import viteConfig from '../../vite.config.ts';
 import { createWorkDir, removeWorkDir } from '../verify-dist.mjs';
@@ -67,7 +69,23 @@ describe('.storybook/main.ts', () => {
       'keep-a',
       'keep-b',
       'keep-c',
+      'wave:export-docblocks',
     ]);
+  });
+
+  it("runs the export-docblock plugin right after Storybook's docgen plugin (C-DOCS)", async () => {
+    const config = await storybookMain.viteFinal(
+      { plugins: [{ name: 'first' }, { name: STORYBOOK_DOCGEN_PLUGIN }, { name: 'other' }] },
+      {},
+    );
+    const names = await pluginNames(config.plugins);
+    expect(names.slice(0, 4)).toEqual([
+      'first',
+      STORYBOOK_DOCGEN_PLUGIN,
+      'wave:export-docblocks',
+      'other',
+    ]);
+    expect(names.filter((name) => name === 'wave:export-docblocks')).toHaveLength(1);
   });
 
   it('adds the Tailwind plugin once', async () => {

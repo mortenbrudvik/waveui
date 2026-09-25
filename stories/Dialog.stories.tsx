@@ -8,29 +8,9 @@ const openStoryParameters = {
   docs: { story: { inline: false, iframeHeight: 480 } },
 };
 
-/**
- * The description of the autodocs page: the JSDoc of the exported `Dialog` const in
- * src/components/overlays/Dialog.tsx, repeated here. Storybook's docgen (react-docgen) reads the
- * docblock of the function passed to `Object.assign`, not the one on the export, where the JSDoc
- * has to sit to reach the published declarations. Remove this (and the `docs.description`
- * parameter) once the Storybook docgen falls back to the docblock of the export.
- */
-const componentDescription = [
-  'A modal dialog (Fluent UI v2 style): `Dialog` holds the open state; `Dialog.Trigger` opens it and `Dialog.Content` renders the surface in a portal while open.',
-  '',
-  '- **Modal**: focus moves into the dialog and Tab stays inside it (toasts included), the rest of the page is `inert` (instead of `aria-modal`, so toasts and live regions stay announced), and the page does not scroll.',
-  '- **Closing**: Escape (only the topmost layer: a popup opened inside closes first), a click on the backdrop (a drag that starts inside does not close it), the Close button and `Dialog.Close`. Focus returns to the first of these that can take focus: `finalFocusRef`, the element that had focus when the dialog opened, the trigger, an element next to where that opener was.',
-  '- **Naming**: give `Dialog.Content` a `title`, a `Dialog.Title`, or `aria-label`.',
-  '',
-  'The sub-components are also exported under flat names (`DialogTrigger`, `DialogContent`, `DialogFooter`, `DialogTitle`, `DialogClose`) for React Server Components, which cannot use the dotted form; dotted access (`Dialog.Content`) needs a client file.',
-].join('\n');
-
 const meta = {
   title: 'Components/Overlays/Dialog',
   component: Dialog,
-  parameters: {
-    docs: { description: { component: componentDescription } },
-  },
   args: {
     defaultOpen: false,
     onOpenChange: fn(),

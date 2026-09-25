@@ -116,36 +116,7 @@ type CardImplProps = CardOwnProps &
     type?: string;
   };
 
-/**
- * A surface that groups related content, with `Card.Header`, `Card.Body` and `Card.Footer`.
- *
- * **Selectable cards** (`onSelect`) come in two patterns:
- * - A card without interactive content is itself the control (`selectionControl="card"`, the
- *   default): it is a `role="button"` tab stop activated by click, Enter (key down) or Space (key
- *   up, cancelled by moving focus away first), with `aria-pressed` reflecting `selected`. Its
- *   content becomes the button's name, so headings and other structure inside it are flattened.
- * - A card that contains buttons or links, or headings that must stay navigable, uses
- *   `selectionControl="checkbox"`: a built-in checkbox named by the header title carries the
- *   selection, and the card's actions and structure stay separate from it.
- *
- * In both modes events that start inside a nested interactive element, or in content portaled out
- * of the card, are ignored. `onClick`, `onKeyDown` and `onKeyUp` are composed with the built-in
- * selection (call `event.preventDefault()` to skip it). A `selected` card without `onSelect` shows
- * the selected look only; its state is not exposed to assistive technology.
- *
- * React Server Components cannot dot into a client module: import the flat names `CardHeader`,
- * `CardBody` and `CardFooter` there; `Card.Header` etc. work in client files.
- *
- * @example
- * <Card onSelect={toggle} selected={selected}>
- *   <Card.Header title="Pro plan" subtitle="Billed monthly" />
- * </Card>
- *
- * <Card onSelect={toggle} selected={selected} selectionControl="checkbox">
- *   <Card.Header title="Pro plan" />
- *   <Card.Footer><Button>Details</Button></Card.Footer>
- * </Card>
- */
+// The Card root, documented on the exported `Card` const.
 const CardRoot: PolymorphicComponent<'div', CardOwnProps> = (props) => {
   const {
     as,
@@ -415,8 +386,34 @@ export const CardFooter: PolymorphicComponent<'div', CardFooterOwnProps> = (prop
 CardFooter.displayName = 'CardFooter';
 
 /**
- * Card with dotted sub-components (`Card.Header`, `Card.Body`, `Card.Footer`). In React Server
- * Components use the flat exports `CardHeader`, `CardBody` and `CardFooter` instead.
+ * A surface that groups related content, with `Card.Header`, `Card.Body` and `Card.Footer`.
+ *
+ * **Selectable cards** (`onSelect`) come in two patterns:
+ * - A card without interactive content is itself the control (`selectionControl="card"`, the
+ *   default): it is a `role="button"` tab stop activated by click, Enter (key down) or Space (key
+ *   up, cancelled by moving focus away first), with `aria-pressed` reflecting `selected`. Its
+ *   content becomes the button's name, so headings and other structure inside it are flattened.
+ * - A card that contains buttons or links, or headings that must stay navigable, uses
+ *   `selectionControl="checkbox"`: a built-in checkbox named by the header title carries the
+ *   selection, and the card's actions and structure stay separate from it.
+ *
+ * In both modes events that start inside a nested interactive element, or in content portaled out
+ * of the card, are ignored. `onClick`, `onKeyDown` and `onKeyUp` are composed with the built-in
+ * selection (call `event.preventDefault()` to skip it). A `selected` card without `onSelect` shows
+ * the selected look only; its state is not exposed to assistive technology.
+ *
+ * React Server Components cannot dot into a client module: import the flat names `CardHeader`,
+ * `CardBody` and `CardFooter` there; `Card.Header` etc. work in client files.
+ *
+ * @example
+ * <Card onSelect={toggle} selected={selected}>
+ *   <Card.Header title="Pro plan" subtitle="Billed monthly" />
+ * </Card>
+ *
+ * <Card onSelect={toggle} selected={selected} selectionControl="checkbox">
+ *   <Card.Header title="Pro plan" />
+ *   <Card.Footer><Button>Details</Button></Card.Footer>
+ * </Card>
  */
 export const Card = /* @__PURE__ */ Object.assign(CardRoot, {
   Header: CardHeader,

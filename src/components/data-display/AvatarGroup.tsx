@@ -186,11 +186,13 @@ export const AvatarGroup = ({
   // Inside a parent layer (a dialog, a popover), a tab stop after the button that lies outside that
   // layer is treated the same way: a focus trap that leaves the page outside it interactive would
   // pull focus back from there, while its descendant-layer rule (§2.4) wraps from the button.
-  // Tab stops are computed at keydown time, never cached (§2.2 focus utilities).
+  // Tab stops are computed at keydown time, never cached (§2.2 focus utilities). A key that
+  // bubbles through React from a portal a member opened is not the popup's: it is ignored.
   const handleSurfaceKeyDown = (event: React.KeyboardEvent<HTMLDivElement>) => {
     const trigger = triggerRef.current;
     if (event.key !== 'Tab' || event.defaultPrevented || !trigger) return;
     const popup = event.currentTarget;
+    if (!(event.target instanceof Node) || !popup.contains(event.target)) return;
     const inner = getTabbableElements(popup);
     // -1 while focus is on the popup itself (or on something that is not a tab stop).
     const current = inner.findIndex((el) => el.contains(event.target as Node));

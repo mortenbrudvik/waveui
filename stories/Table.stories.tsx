@@ -38,10 +38,6 @@ function header(labels: string[]) {
   );
 }
 
-/**
- * A non-interactive data table. `striped` shades odd body rows. The table sits in a horizontally
- * scrollable wrapper that becomes a focusable, named region while it scrolls.
- */
 const meta = {
   title: 'Components/Table/Table',
   component: Table,

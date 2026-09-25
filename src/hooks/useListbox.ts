@@ -14,7 +14,7 @@ import { isDev, reportMissingContext, warnOnce } from '../lib/dev';
 import { useEventCallback } from './useEventCallback';
 import { useId } from './useId';
 import { useMergedRefs } from './useMergedRefs';
-import { useTypeahead } from './useTypeahead';
+import { isAltGraphCharacter, useTypeahead } from './useTypeahead';
 
 /* ------------------------------------------------------------------ */
 /*  Public types                                                       */
@@ -729,14 +729,6 @@ function hasText(element: EventTarget): boolean {
     (element instanceof HTMLInputElement || element instanceof HTMLTextAreaElement) &&
     element.value !== ''
   );
-}
-
-/**
- * A character typed with AltGr, which Windows reports as Ctrl+Alt (Polish `ł`, Romanian `ș`): text
- * input for typeahead, not a shortcut. Ctrl+Alt with a named key (Ctrl+Alt+ArrowDown) is not.
- */
-function isAltGraphCharacter(event: React.KeyboardEvent): boolean {
-  return event.ctrlKey && event.altKey && event.key.length === 1;
 }
 
 /** Ctrl/Cmd shortcuts that change the text: cut, paste, undo, redo. */

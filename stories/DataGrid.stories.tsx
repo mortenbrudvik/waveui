@@ -105,11 +105,7 @@ function ColumnsGrid({ onSortChange, ...args }: DataGridStoryArgs) {
  */
 const DataGridWithStoryArgs = DataGrid as unknown as React.ComponentType<DataGridStoryArgs>;
 
-/**
- * An APG grid: one Tab stop, arrow keys move between cells (Home/End, Ctrl+Home/Ctrl+End,
- * PageUp/PageDown). Sortable headers are buttons; sorting is controlled, so the story reorders its
- * rows in `onSortChange`.
- */
+// Sorting is controlled, so the stories reorder their rows in `onSortChange`.
 const meta = {
   title: 'Components/Table/DataGrid',
   component: DataGridWithStoryArgs,

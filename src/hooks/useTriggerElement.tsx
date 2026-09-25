@@ -13,7 +13,10 @@ import { useEventCallback } from './useEventCallback';
 export interface UseTriggerElementOptions {
   /** Public name used in development warnings, e.g. `'Dialog.Trigger'`. */
   componentName: string;
-  /** `false` renders the 0.4 wrapper `<span>` around the children instead of cloning. @default true */
+  /**
+   * `false` renders the 0.4 wrapper `<span>` around the children instead of cloning; the state
+   * ARIA moves onto the element inside it, as for the automatic fallback. @default true
+   */
   asChild?: boolean;
   /**
    * Called (from an effect) with the id the trigger element ends up with: the child's own `id` when
@@ -51,9 +54,9 @@ function pickStateAria(props: UnknownProps): StateAriaValues {
 }
 
 /**
- * The element that receives the state ARIA inside the fallback wrapper: its first element in the
- * tab order by markup (`tabIndex >= 0`). Not `getFirstTabbable`: that skips an `inert` subtree,
- * and the page around a trigger is inert while its modal dialog is open.
+ * The element that receives the state ARIA inside a wrapper span: its first element in the tab
+ * order by markup (`tabIndex >= 0`). Not `getFirstTabbable`: that skips an `inert` subtree, and
+ * the page around a trigger is inert while its modal dialog is open.
  */
 function findStateAriaTarget(wrapper: Element): Element | null {
   for (const el of wrapper.querySelectorAll<HTMLElement>(FOCUSABLE_SELECTOR)) {
@@ -94,8 +97,10 @@ function moveStateAria(target: Element, values: StateAriaValues): () => void {
  *   result is detached and re-attached after each commit (as React does for an inline ref), and a
  *   state-setting ref (`ref: setAnchor`) never loops. Pass a stable ref (an object ref, a
  *   `useCallback` or a state setter) so floating-ui's reference and restore targets are set once.
- * - **Render-prop child**: called with `triggerProps`.
- * - **`asChild={false}`**: the 0.4 wrapper `<span>` carrying the trigger props (`renderTrigger`).
+ * - **Render-prop child**: called with `triggerProps` (all of them, whatever `asChild` says).
+ * - **`asChild={false}`**: the 0.4 wrapper `<span>` carrying the trigger props except the state
+ *   ARIA, which moves as in the automatic fallback below (so a button inside is announced as
+ *   opening the popup).
  * - **Text, a Fragment of several elements, several children**: a wrapper `<span>` (with a
  *   development warning from `renderTrigger`) carrying the trigger props except the state ARIA,
  *   which moves as in the automatic fallback below.
@@ -150,20 +155,20 @@ export function useTriggerElement<P>(
     setWrapperFallback(true);
   }, [cloneable, componentName]);
 
-  // A wrapper span the consumer did not ask for (`asChild` is not false): the automatic fallback of
-  // a single element child, or children that cannot be cloned (text, several elements). The
-  // trigger is the element inside, so the state ARIA, which a generic span cannot carry, goes to
-  // the first element it rendered in the tab order.
+  // A wrapper span: the explicit one of `asChild={false}`, the automatic fallback of a single
+  // element child, or children that cannot be cloned (text, several elements). The trigger is the
+  // element inside, so the state ARIA, which a generic span cannot carry, goes to the first element
+  // it rendered in the tab order.
   const autoWrapper = asChild && wrapperFallback && singleElement;
-  const implicitWrapper = asChild && !isRenderProp && !cloneable;
-  const movedAria = implicitWrapper ? pickStateAria(ourProps) : null;
+  const wrapper = !isRenderProp && !cloneable;
+  const movedAria = wrapper ? pickStateAria(ourProps) : null;
   // No deps: runs after every commit of the trigger (which re-renders on every state change), so
   // the attributes follow the live state and the child's current first tabbable element. A new
   // target rendered by the child without a trigger commit is picked up at the next one.
   React.useLayoutEffect(() => {
-    const wrapper = attachedRef.current;
-    if (!movedAria || !wrapper) return undefined;
-    const target = findStateAriaTarget(wrapper);
+    const span = attachedRef.current;
+    if (!movedAria || !span) return undefined;
+    const target = findStateAriaTarget(span);
     return target ? moveStateAria(target, movedAria) : undefined;
   });
 
@@ -183,15 +188,18 @@ export function useTriggerElement<P>(
     return React.cloneElement(cloneTarget, { ...merged, ref: mergedRef });
   }
 
-  if (implicitWrapper) {
+  if (wrapper) {
     const { ref: _ourRef, ...ourRest } = ourProps;
     const wrapperProps: UnknownProps = { ...ourRest, ref: mergedRef };
     for (const key of STATE_ARIA) delete wrapperProps[key];
-    // `asChild` lets renderTrigger warn about children it cannot clone; the automatic fallback
-    // (a single element, never cloned again) warned above.
-    return renderTrigger(content, wrapperProps, { componentName, asChild: !autoWrapper });
+    // The explicit 0.4 span renders the children as given. Otherwise `asChild` lets renderTrigger
+    // warn about children it cannot clone; the automatic fallback (a single element, never cloned
+    // again) warned above.
+    return asChild
+      ? renderTrigger(content, wrapperProps, { componentName, asChild: !autoWrapper })
+      : renderTrigger(children, wrapperProps, { componentName, asChild: false });
   }
 
-  // A render-prop child, or the explicit 0.4 wrapper span (`asChild={false}`).
+  // A render-prop child.
   return renderTrigger(children, triggerProps, { componentName, asChild: false });
 }

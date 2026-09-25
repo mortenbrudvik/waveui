@@ -27,6 +27,7 @@ import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import {
   checkCjsParity,
   checkDeclarations,
+  checkDevEnvironment,
   checkDirectives,
   checkFlatExports,
   checkImports,
@@ -43,6 +44,7 @@ import {
   probeTreeShaking,
   removeWorkDir,
   runScript,
+  undocumentedComponents,
   verifyDist,
 } from '../verify-dist.mjs';
 
@@ -87,7 +89,12 @@ function goodFiles() {
   const button = component('Button');
   const card = component('Card', ['Header']);
   const dialog = component('Dialog', ['Trigger', 'Content']);
-  const dts = 'export declare function cn(...inputs: unknown[]): string;\n';
+  const dts =
+    'export declare function cn(...inputs: unknown[]): string;\n' +
+    '/** A button. */\nexport declare const Button: (props: object) => null;\n';
+  // src/lib/dev.ts reads the bundler-injected mode at call time (f-lib T6).
+  const dev = (exportSyntax) =>
+    `function isDevEnvironment() {\n  try {\n    return process.env.NODE_ENV !== "production";\n  } catch {\n    return true;\n  }\n}\n${exportSyntax}`;
   return {
     'package.json': JSON.stringify({
       name: 'wave-fixture',
@@ -100,6 +107,8 @@ function goodFiles() {
       "export function cn(...inputs) { return inputs.filter(Boolean).join(' '); }\n",
     'dist/lib/cn.cjs':
       "exports.cn = function cn(...inputs) { return inputs.filter(Boolean).join(' '); };\n",
+    'dist/lib/dev.mjs': dev('export const isDev = isDevEnvironment();\n'),
+    'dist/lib/dev.cjs': dev('exports.isDev = isDevEnvironment();\n'),
     'dist/hooks/useThing.mjs': `${DIRECTIVE}import { useState } from 'react';\nexport function useThing() { return useState(0); }\n`,
     'dist/hooks/useThing.cjs': `${DIRECTIVE}const react = require('react');\nexports.useThing = function useThing() { return react.useState(0); };\n`,
     'dist/components/button/Button.mjs': button.esm,
@@ -295,6 +304,87 @@ describe('checkDeclarations (repo-level#5)', () => {
     expect(
       checkDeclarations(fixture({ 'dist/index.d.cts': 'export declare const x: 1;\n' }).dist),
     ).toEqual([expect.stringMatching(/index\.d\.cts differs/)]);
+  });
+
+  it('reports an exported component without a JSDoc (C-DOCS, x-types-components-6)', () => {
+    const dts = 'export declare const Card: () => null;\n';
+    expect(
+      checkDeclarations(fixture({ 'dist/index.d.ts': dts, 'dist/index.d.cts': dts }).dist),
+    ).toEqual([
+      'index.d.ts: the exported component Card has no JSDoc (document it on its export, C-DOCS)',
+    ]);
+  });
+});
+
+describe('undocumentedComponents (C-DOCS, x-types-components-6)', () => {
+  it('accepts the declaration shapes of the rolled-up index.d.ts when they are documented', () => {
+    const dts = [
+      '/** A compound. */',
+      'export declare const Card: {',
+      '    (props: CardProps): JSX.Element;',
+      '    Header: typeof CardHeader;',
+      '};',
+      '/** A polymorphic one. */',
+      "export declare const Text: PolymorphicComponent<'span', TextOwnProps>;",
+      '/** Documented on the first overload. */',
+      'export declare function BreadcrumbItem(props: A): React_2.ReactElement;',
+      '',
+      'export declare function BreadcrumbItem(props: B): React_2.ReactElement;',
+      '/** Renamed by the roll-up (a name the DOM lib also declares). */',
+      'declare const Image_2: {',
+      '    (props: ImageProps): JSX.Element;',
+      '};',
+      'export { Image_2 as Image }',
+      '/** A namespace merged with a function. */',
+      'export declare function RadioItem(props: RadioItemProps): JSX.Element;',
+      'export declare namespace RadioItem {',
+      '    var displayName: string;',
+      '}',
+    ].join('\n');
+    expect(undocumentedComponents(dts)).toEqual([]);
+  });
+
+  it('names every exported component without a JSDoc, in declaration order', () => {
+    const dts = [
+      '/* A plain comment is no JSDoc. */',
+      'export declare const Card: () => null;',
+      '// Neither is a line comment.',
+      'export declare function Item(props: A): R;',
+      '/** Only the first overload counts. */',
+      'export declare function Item(props: B): R;',
+      'declare const Image_2: () => null;',
+      'export { Image_2 as Image }',
+    ].join('\n');
+    expect(undocumentedComponents(dts)).toEqual(['Card', 'Item', 'Image']);
+  });
+
+  it('asks nothing of hooks, utilities, constants, types and unexported declarations', () => {
+    const dts = [
+      'export declare function useThing(): number;',
+      'export declare function cn(...inputs: unknown[]): string;',
+      'export declare const Z_INDEX: { dialog: number };',
+      'export declare interface CardProps { title?: string }',
+      "export declare type Size = 'small' | 'large';",
+      'declare const Internal: () => null;',
+    ].join('\n');
+    expect(undocumentedComponents(dts)).toEqual([]);
+  });
+});
+
+describe('checkDevEnvironment (f-lib T6)', () => {
+  it('passes when dist/lib/dev.* read process.env.NODE_ENV at run time', () => {
+    expect(checkDevEnvironment(fixture().dist)).toEqual([]);
+  });
+
+  it('reports a mode inlined at build time (a `define` in vite.config.ts) or a missing module', () => {
+    const inlined = goodFiles()['dist/lib/dev.mjs'].replace('process.env.NODE_ENV', '"production"');
+    expect(
+      checkDevEnvironment(fixture({ 'dist/lib/dev.mjs': inlined, 'dist/lib/dev.cjs': null }).dist),
+    ).toEqual([
+      'lib/dev.mjs does not read process.env.NODE_ENV: the build inlined the mode (a `define` in ' +
+        "vite.config.ts?), so the consumer's bundler can no longer choose development or production",
+      'lib/dev.cjs is missing',
+    ]);
   });
 });
 
@@ -743,12 +833,14 @@ describe('verifyDist and main', () => {
     const { dist } = fixture({
       'dist/index.d.cts': null,
       'dist/lib/cn.mjs': DIRECTIVE + goodFiles()['dist/lib/cn.mjs'],
+      'dist/lib/dev.cjs': null,
     });
     const { errors } = await verifyDist(dist, noPending);
     expect(errors).toEqual(
       expect.arrayContaining([
         expect.stringContaining('index.d.cts'),
         expect.stringContaining('lib/cn.mjs'),
+        'lib/dev.cjs is missing',
       ]),
     );
   });

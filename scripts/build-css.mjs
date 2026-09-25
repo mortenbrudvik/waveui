@@ -35,7 +35,9 @@
  *     tell from classes;
  *   - every `wave-rtl:` class of a library class string is compiled with Wave's direction
  *     variant (src/styles/variants.css, R4): `:where(:dir(rtl))` under
- *     `@supports selector(:dir(rtl))` and the `[dir=rtl]` fallback under its negation.
+ *     `@supports selector(:dir(rtl))` and the `[dir=rtl]` fallback under its negation;
+ *   - no class with Tailwind's bare `rtl:`/`ltr:` variant ships (R4): they also match inside a
+ *     subtree of the opposite direction.
  *
  * Usage: node scripts/build-css.mjs [--out-dir <dir>] [--check-only]
  *   --out-dir     output directory (default: dist)
@@ -543,6 +545,17 @@ export function hasDirectionVariant(name) {
   return /(?:^|:)wave-rtl:/.test(name);
 }
 
+/**
+ * The classes of the stylesheet with Tailwind's bare `rtl:`/`ltr:` variant (`not-rtl:`/`not-ltr:`
+ * included). Tailwind compiles them with `[dir=rtl] *` / `[dir=ltr] *`, which also match inside a
+ * subtree of the opposite direction, so Wave uses its own `wave-rtl:` only (R4).
+ */
+export function bareDirectionClasses(css) {
+  return [...selectorClasses(css)]
+    .filter((name) => /(?:^|:)(?:not-)?(?:rtl|ltr):/.test(name))
+    .sort();
+}
+
 const DIR_SUPPORTED = /^@supports\s+selector\(\s*:dir\(rtl\)\s*\)$/;
 const DIR_UNSUPPORTED = /^@supports\s+not\s+selector\(\s*:dir\(rtl\)\s*\)$/;
 
@@ -637,6 +650,15 @@ export function assertStylesCss(css, { tokensCss, baseCss, storySources }) {
   // No foreign theme variables.
   for (const needle of FORBIDDEN) {
     if (css.includes(needle)) errors.push(`styles.css: contains "${needle}"`);
+  }
+
+  // No class with Tailwind's bare direction variants (R4).
+  const bareDirection = bareDirectionClasses(css);
+  if (bareDirection.length > 0) {
+    errors.push(
+      "styles.css: contains classes with Tailwind's bare rtl:/ltr: variant, which also matches " +
+        `inside a subtree of the opposite direction (use wave-rtl:, R4): ${bareDirection.slice(0, 20).join(' ')}`,
+    );
   }
 
   if (storySources) {

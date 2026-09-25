@@ -487,19 +487,84 @@ describe('useTriggerElement', () => {
   describe('asChild={false}', () => {
     it('renders the 0.4 wrapper span carrying the trigger props', async () => {
       const user = userEvent.setup();
+      const triggerRef = React.createRef<HTMLElement>();
       const { container } = render(
-        <Harness asChild={false}>
+        <Harness asChild={false} triggerRef={triggerRef}>
           <button type="button">Open</button>
         </Harness>,
       );
       const wrapper = container.querySelector('span')!;
       const button = screen.getByRole('button', { name: 'Open' });
       expect(wrapper).toContainElement(button);
-      expect(wrapper).toHaveAttribute('aria-haspopup', 'dialog');
-      expect(button).not.toHaveAttribute('aria-expanded');
+      expect(wrapper).toHaveAttribute('id', 'generated-trigger');
+      expect(button).not.toHaveAttribute('id');
+      expect(triggerRef.current).toBe(wrapper);
       await user.click(button);
       expect(screen.getByText('Panel')).toBeInTheDocument();
       expect(warnSpy).not.toHaveBeenCalled();
+    });
+
+    it('moves the state ARIA from the generic span onto the element inside it, like the automatic fallback', async () => {
+      const user = userEvent.setup();
+      const { container, unmount } = render(
+        <Harness asChild={false}>
+          <button type="button" aria-haspopup="menu">
+            Open
+          </button>
+        </Harness>,
+      );
+      const wrapper = container.querySelector('span')!;
+      const button = screen.getByRole('button', { name: 'Open' });
+      for (const name of ['aria-haspopup', 'aria-expanded', 'aria-controls']) {
+        expect(wrapper).not.toHaveAttribute(name);
+      }
+      expect(button).toHaveAttribute('aria-haspopup', 'dialog');
+      expect(button).toHaveAttribute('aria-expanded', 'false');
+      expect(button).not.toHaveAttribute('aria-controls');
+      await expectNoA11yViolations(container);
+
+      await user.click(button);
+      expect(button).toHaveAttribute('aria-expanded', 'true');
+      expect(button).toHaveAttribute('aria-controls', 'panel');
+      expect(wrapper).not.toHaveAttribute('aria-expanded');
+      await expectNoA11yViolations(container);
+
+      await user.click(button);
+      expect(button).toHaveAttribute('aria-expanded', 'false');
+      expect(button).not.toHaveAttribute('aria-controls');
+
+      // The cleanup gives the element its own attributes back.
+      const detached = button;
+      unmount();
+      expect(detached).toHaveAttribute('aria-haspopup', 'menu');
+      expect(detached).not.toHaveAttribute('aria-expanded');
+      expect(warnSpy).not.toHaveBeenCalled();
+    });
+
+    it('drops the state ARIA around text, without a warning', async () => {
+      const { container } = render(<Harness asChild={false}>Open</Harness>);
+      const wrapper = container.querySelector('span')!;
+      expect(wrapper).toHaveTextContent('Open');
+      expect(wrapper).toHaveAttribute('id', 'generated-trigger');
+      expect(container.querySelector('[aria-expanded], [aria-haspopup]')).toBeNull();
+      await expectNoA11yViolations(container);
+      expect(warnSpy).not.toHaveBeenCalled();
+    });
+
+    it('gives a render-prop child every prop, the state ARIA included', () => {
+      render(
+        <Harness asChild={false}>
+          {({ ref, ...props }: TestTriggerProps) => (
+            <button type="button" ref={ref as React.Ref<HTMLButtonElement>} {...props}>
+              Open
+            </button>
+          )}
+        </Harness>,
+      );
+      const button = screen.getByRole('button', { name: 'Open' });
+      expect(button).toHaveAttribute('id', 'generated-trigger');
+      expect(button).toHaveAttribute('aria-haspopup', 'dialog');
+      expect(button).toHaveAttribute('aria-expanded', 'false');
     });
   });
 

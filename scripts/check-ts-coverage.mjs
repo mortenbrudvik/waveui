@@ -22,13 +22,15 @@
  *   [--package <package.json>]
  *
  * `lowestMajor` and `checkTypesNode` are exported for scripts/__tests__/check-ts-coverage.test.mjs;
- * importing the module does not run the checks.
+ * importing the module does not run the checks. It starts through verify-dist's `runScript`, so a
+ * script of its name that cannot be matched to this file fails instead of passing unchecked.
  */
 import { spawnSync } from 'node:child_process';
-import { readFileSync, realpathSync } from 'node:fs';
+import { readFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import { dirname, relative, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { runScript } from './verify-dist.mjs';
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const require = createRequire(import.meta.url);
@@ -150,6 +152,7 @@ function listProgramFiles(project) {
     .filter((file) => !file.startsWith('..') && !file.includes('node_modules/'));
 }
 
+/** CLI entry; returns the exit code. */
 function main() {
   const devProject = option('--dev', 'tsconfig.dev.json');
   const libProject = option('--lib', 'tsconfig.json');
@@ -189,7 +192,7 @@ function main() {
   if (failures.length > 0) {
     console.error('check-ts-coverage: TypeScript program setup is wrong:');
     for (const failure of failures) console.error(`  - ${failure}`);
-    process.exit(1);
+    return 1;
   }
 
   const count = (matches) => devFiles.filter(matches).length;
@@ -198,20 +201,7 @@ function main() {
       `${count(required[1][1])} story files and .storybook; ${libProject} has no tests or stories; ` +
       `@types/node ${typesNode.installed} matches engines.node ${pkg.engines.node}.`,
   );
+  return 0;
 }
 
-/** True when Node runs this file as the entry script (not when a test imports it). */
-function isEntryScript() {
-  if (!process.argv[1]) return false;
-  try {
-    const self = realpathSync(fileURLToPath(import.meta.url));
-    const entry = realpathSync(resolve(process.argv[1]));
-    return process.platform === 'win32'
-      ? self.toLowerCase() === entry.toLowerCase()
-      : self === entry;
-  } catch {
-    return false;
-  }
-}
-
-if (isEntryScript()) main();
+await runScript(import.meta.url, main);

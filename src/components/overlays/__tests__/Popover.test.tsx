@@ -246,7 +246,7 @@ describe('Popover', () => {
       expect(container.firstElementChild).toBe(screen.getByRole('button', { name: 'Toggle' }));
     });
 
-    it('asChild={false} renders the 0.4 wrapper span, without state ARIA on it', async () => {
+    it('asChild={false} renders the 0.4 wrapper span; the button inside carries the state ARIA', async () => {
       const user = userEvent.setup();
       render(
         <Popover>
@@ -257,14 +257,26 @@ describe('Popover', () => {
         </Popover>,
       );
       const wrapper = screen.getByTestId('wrapper');
+      const toggle = screen.getByRole('button', { name: 'Toggle' });
       expect(wrapper.tagName).toBe('SPAN');
-      // A generic span cannot carry state ARIA (axe aria-allowed-attr).
+      // A generic span cannot carry state ARIA (axe aria-allowed-attr): the button inside does.
       const stateAria = ['aria-haspopup', 'aria-expanded', 'aria-controls'];
       for (const attr of stateAria) expect(wrapper).not.toHaveAttribute(attr);
-      await user.click(screen.getByRole('button', { name: 'Toggle' }));
-      expect(screen.getByRole('dialog', { name: 'Toggle' })).toBeInTheDocument();
-      for (const attr of stateAria) expect(wrapper).not.toHaveAttribute(attr);
+      expect(toggle).toHaveAttribute('aria-haspopup', 'dialog');
+      expect(toggle).toHaveAttribute('aria-expanded', 'false');
+      expect(toggle).not.toHaveAttribute('aria-controls');
       await expectNoA11yViolations();
+
+      await user.click(toggle);
+      const popover = screen.getByRole('dialog', { name: 'Toggle' });
+      for (const attr of stateAria) expect(wrapper).not.toHaveAttribute(attr);
+      expect(toggle).toHaveAttribute('aria-expanded', 'true');
+      expect(toggle).toHaveAttribute('aria-controls', popover.id);
+      await expectNoA11yViolations();
+
+      await user.click(toggle);
+      expect(toggle).toHaveAttribute('aria-expanded', 'false');
+      expect(toggle).not.toHaveAttribute('aria-controls');
     });
 
     it('a render-prop child keeps the state ARIA with asChild={false}', () => {

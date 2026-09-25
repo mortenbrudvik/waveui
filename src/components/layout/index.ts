@@ -29,7 +29,12 @@ export { Tree, TreeItem } from './Tree';
 export type { TreeProps, TreeItemProps } from './Tree';
 
 export { Carousel, CarouselItem } from './Carousel';
-export type { CarouselProps, CarouselItemProps, CarouselAutoPlayLabels } from './Carousel';
+export type {
+  CarouselProps,
+  CarouselItemProps,
+  CarouselAutoPlayLabels,
+  CarouselLabels,
+} from './Carousel';
 
 export {
   Overflow,

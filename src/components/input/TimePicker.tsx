@@ -31,6 +31,7 @@ import {
   timeToMinutes,
 } from './dateUtils';
 import { isInvalidLook } from './Input';
+import type { RoutedHandlers } from './routedHandlers';
 
 /* ------------------------------------------------------------------ */
 /*  Option                                                             */
@@ -67,9 +68,6 @@ TimePickerOption.displayName = 'TimePickerOption';
 /* ------------------------------------------------------------------ */
 /*  TimePicker                                                         */
 /* ------------------------------------------------------------------ */
-
-/** Focus and key handlers the picker routes to its text input (C-ROUTING). */
-type RoutedHandlers = 'onFocus' | 'onBlur' | 'onKeyDown' | 'onKeyUp';
 
 /** Properties for the TimePicker component. */
 export interface TimePickerProps extends Omit<

@@ -3,7 +3,7 @@ import { spawnSync } from 'node:child_process';
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { checkTypesNode, lowestMajor } from '../check-ts-coverage.mjs';
 
@@ -157,5 +157,17 @@ describe('check-ts-coverage.mjs as a script', () => {
     expect(result.stderr).toContain('does not type-check .storybook/preview.tsx');
     expect(result.stderr).not.toContain('@types/node');
     expect(result.stderr).not.toMatch(/\n\s+at /);
+  }, 60_000);
+
+  it('fails closed when it cannot confirm that it is the script Node was started with', () => {
+    // A script of its name that is not the real file (a wrapper that imports it): the entry guard
+    // must report that nothing was checked instead of exiting 0 (tooling-tests-1, as verify-dist).
+    const impostor = join(dir, 'check-ts-coverage.mjs');
+    writeFileSync(impostor, `import ${JSON.stringify(pathToFileURL(script).href)};\n`);
+    const result = spawnSync(process.execPath, [impostor], { encoding: 'utf8' });
+    expect(result.stderr).toContain(
+      `check-ts-coverage: cannot confirm that ${impostor} is ${script}; nothing was checked`,
+    );
+    expect(result.status).toBe(1);
   }, 60_000);
 });

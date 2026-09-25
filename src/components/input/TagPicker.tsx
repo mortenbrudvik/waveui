@@ -17,6 +17,7 @@ import { usePreserveFocus } from '../../hooks/usePreserveFocus';
 import { HiddenInput } from '../internal/HiddenInput';
 import { isInvalidLook } from './Input';
 import { ListboxSurface, Option, useListboxPopup } from './Option';
+import type { RoutedHandlers } from './routedHandlers';
 
 /** Represents a single selectable tag option. */
 export interface TagPickerOption {
@@ -25,8 +26,6 @@ export interface TagPickerOption {
   /** Display label for the option. */
   label: string;
 }
-
-type RoutedHandlers = 'onFocus' | 'onBlur' | 'onKeyDown' | 'onKeyUp';
 
 /** Properties for the TagPicker component. */
 export interface TagPickerProps extends Omit<

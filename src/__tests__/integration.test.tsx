@@ -7,28 +7,55 @@
  * `document.body` (portals included).
  */
 import * as React from 'react';
+import { hydrateRoot, type Root } from 'react-dom/client';
+import { renderToString } from 'react-dom/server';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { act, render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import * as ImageStories from '../../stories/Image.stories';
 import * as Wave from '../index';
 import {
+  Accordion,
+  AccordionItem,
+  AccordionPanel,
+  AccordionTrigger,
   Button,
   Card,
+  Carousel,
+  CarouselItem,
   Checkbox,
   ColorPicker,
   Combobox,
+  ComboboxOption,
+  DataGrid,
+  DataGridBody,
+  DataGridCell,
+  DataGridHeader,
+  DataGridHeaderCell,
+  DataGridRow,
   DatePicker,
   Dialog,
   Drawer,
+  DrawerClose,
+  DrawerTitle,
+  DrawerTrigger,
   Dropdown,
+  DropdownOption,
   Field,
   Input,
   Menu,
   MenuButton,
+  MenuItem,
+  MenuPopover,
+  MenuTrigger,
+  Nav,
+  NavCategory,
+  NavItem,
+  NavSubItem,
   Overflow,
   OverflowItem,
   Popover,
+  Portal,
   RadioGroup,
   Rating,
   SearchBox,
@@ -40,15 +67,22 @@ import {
   SwatchPicker,
   Switch,
   Table,
+  TabList,
+  TabListPanel,
+  TabListTab,
   TagPicker,
+  TeachingPopover,
   Textarea,
   TimePicker,
   Toaster,
+  Toolbar,
   Tooltip,
+  Tree,
+  TreeItem,
   useOverflowMenu,
   useToastController,
 } from '../index';
-import { expectNoA11yViolations } from '../test-utils';
+import { asClientReference, expectNoA11yViolations } from '../test-utils';
 
 afterEach(() => {
   vi.restoreAllMocks();
@@ -151,6 +185,7 @@ describe('public barrel (spec §5.11, C-COMPOUND)', () => {
       'parseHexColor',
       'formatDate',
       'parseDate',
+      'isValidLocaleTag',
       'generateTimeOptions',
       'PortalDepthContext',
       'FieldContext',
@@ -858,9 +893,9 @@ describe('Field with a wrapper component around the control (input-basic#1, inpu
     await expectNoA11yViolations(document.body);
   });
 
-  // Known defect (re-dispatched to F5-listbox-field + P02-field-text): Field leaves a plain <div>
-  // alone and does not set `controlIdAssigned`, so every library control inside the div resolves
-  // to the Field's `controlId` — two elements share the id and the second control is unnamed.
+  // Field leaves a plain <div> alone and hands its `controlId` to the first control inside only
+  // (`controlIdClaim`), which its `<label htmlFor>` names; the second control takes an id of its
+  // own and is named through `aria-labelledby`, so no id is duplicated.
   it('(f) names two library controls inside a plain <div> and keeps their ids unique', async () => {
     render(
       <Field label="Price range" hint="In euros">
@@ -1300,6 +1335,518 @@ describe('Overflow hidden items in a Menu (layout#4)', () => {
     await user.keyboard('{Escape}');
     expect(more).toHaveFocus();
   });
+});
+
+// ---------------------------------------------------------------------------
+// autoFocus and consumer portals in stacked overlays (f-overlay)
+// ---------------------------------------------------------------------------
+
+describe('autoFocus and consumer portals in stacked overlays', () => {
+  /** The modal focus trap reclaims focus in a microtask: let it run before asserting. */
+  const flushMicrotasks = () => act(async () => {});
+
+  it('a confirm Dialog opened from inside an open Drawer keeps focus on its autoFocus Cancel', async () => {
+    const user = userEvent.setup();
+    function FilesDrawer() {
+      const [confirm, setConfirm] = React.useState(false);
+      return (
+        <Drawer defaultOpen title="Files">
+          <Button onClick={() => setConfirm(true)}>Delete</Button>
+          <Dialog open={confirm} onOpenChange={setConfirm}>
+            <Dialog.Content title="Delete file?">
+              <Button>OK</Button>
+              <Dialog.Close>
+                <Button autoFocus>Cancel</Button>
+              </Dialog.Close>
+            </Dialog.Content>
+          </Dialog>
+        </Drawer>
+      );
+    }
+    render(<FilesDrawer />);
+    await user.click(button('Delete'));
+    await flushMicrotasks();
+    const dialog = screen.getByRole('dialog', { name: 'Delete file?' });
+    expect(within(dialog).getByRole('button', { name: 'Cancel' })).toHaveFocus();
+    await user.click(button('Cancel'));
+    expect(button('Delete')).toHaveFocus();
+  });
+
+  it('a Dialog nested in another Dialog focuses its autoFocus input', async () => {
+    const user = userEvent.setup();
+    render(
+      <Dialog defaultOpen>
+        <Dialog.Content title="Outer">
+          <Dialog>
+            <Dialog.Trigger>
+              <Button>Open inner</Button>
+            </Dialog.Trigger>
+            <Dialog.Content title="Inner">
+              <Button>Inner first</Button>
+              <Input aria-label="Inner name" autoFocus />
+            </Dialog.Content>
+          </Dialog>
+        </Dialog.Content>
+      </Dialog>,
+    );
+    await user.click(button('Open inner'));
+    await flushMicrotasks();
+    expect(screen.getByRole('textbox', { name: 'Inner name' })).toHaveFocus();
+  });
+
+  it('Popover.Content opened inside a Dialog focuses its autoFocus input', async () => {
+    const user = userEvent.setup();
+    render(
+      <Dialog defaultOpen>
+        <Dialog.Content title="Report">
+          <Popover>
+            <Popover.Trigger>
+              <Button>Filter</Button>
+            </Popover.Trigger>
+            <Popover.Content title="Filter options">
+              <Button>Clear</Button>
+              <Input aria-label="Filter text" autoFocus />
+            </Popover.Content>
+          </Popover>
+        </Dialog.Content>
+      </Dialog>,
+    );
+    await user.click(button('Filter'));
+    await flushMicrotasks();
+    const popover = screen.getByRole('dialog', { name: 'Filter options' });
+    expect(within(popover).getByRole('textbox', { name: 'Filter text' })).toHaveFocus();
+  });
+
+  it('Tab and Shift+Tab move between the buttons of a consumer Portal inside Dialog.Content', async () => {
+    const user = userEvent.setup();
+    render(
+      <Dialog defaultOpen>
+        <Dialog.Content title="Quiz">
+          <Portal>
+            <button type="button">Question 1</button>
+            <button type="button">Question 2</button>
+          </Portal>
+        </Dialog.Content>
+      </Dialog>,
+    );
+    const dialog = screen.getByRole('dialog', { name: 'Quiz' });
+    const first = button('Question 1');
+    expect(dialog).not.toContainElement(first);
+    act(() => first.focus());
+    await user.tab();
+    expect(button('Question 2')).toHaveFocus();
+    await user.tab({ shift: true });
+    expect(first).toHaveFocus();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Toolbar in an anchored TeachingPopover (f-hooks)
+// ---------------------------------------------------------------------------
+
+describe('a Toolbar inside an anchored TeachingPopover', () => {
+  it('keeps its first control as the Tab stop once the popover is shown', async () => {
+    function Tour() {
+      const [target, setTarget] = React.useState<HTMLButtonElement | null>(null);
+      return (
+        <>
+          <Button ref={setTarget}>New feature</Button>
+          <TeachingPopover
+            target={target}
+            steps={[
+              {
+                title: 'Format your text',
+                body: (
+                  <Toolbar aria-label="Formatting">
+                    <Button>Bold</Button>
+                    <Button>Italic</Button>
+                  </Toolbar>
+                ),
+              },
+            ]}
+          />
+        </>
+      );
+    }
+    render(<Tour />);
+    // The popover is hidden (visibility) until it is positioned against the target.
+    const popover = await screen.findByRole('dialog', { name: /Format your text/ });
+    const toolbar = within(popover).getByRole('toolbar', { name: 'Formatting' });
+    expect(within(toolbar).getByRole('button', { name: 'Bold' })).toHaveAttribute('tabindex', '0');
+    expect(within(toolbar).getByRole('button', { name: 'Italic' })).toHaveAttribute(
+      'tabindex',
+      '-1',
+    );
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Inner widgets that consume Escape inside a Dialog (input-other, C-POPUPS)
+// ---------------------------------------------------------------------------
+
+describe('inner widgets that consume Escape inside a real Dialog', () => {
+  function InDialog({
+    children,
+    onOpenChange,
+  }: {
+    children: React.ReactNode;
+    onOpenChange: (open: boolean) => void;
+  }) {
+    return (
+      <Dialog open onOpenChange={onOpenChange}>
+        <Dialog.Content title="Find">{children}</Dialog.Content>
+      </Dialog>
+    );
+  }
+
+  it('SearchBox: the first Escape clears the text, the second closes the Dialog', async () => {
+    const user = userEvent.setup();
+    const onOpenChange = vi.fn();
+    render(
+      <InDialog onOpenChange={onOpenChange}>
+        <SearchBox aria-label="Search" />
+      </InDialog>,
+    );
+    const search = screen.getByRole('searchbox', { name: 'Search' });
+    await user.type(search, 'wave');
+    await user.keyboard('{Escape}');
+    expect(search).toHaveValue('');
+    expect(search).toHaveFocus();
+    expect(screen.getByRole('dialog', { name: 'Find' })).toBeInTheDocument();
+    expect(onOpenChange).not.toHaveBeenCalled();
+
+    await user.keyboard('{Escape}');
+    expect(onOpenChange).toHaveBeenCalledTimes(1);
+    expect(onOpenChange).toHaveBeenCalledWith(false);
+  });
+
+  it('SpinButton: the first Escape reverts the draft, the second closes the Dialog', async () => {
+    const user = userEvent.setup();
+    const onOpenChange = vi.fn();
+    render(
+      <InDialog onOpenChange={onOpenChange}>
+        <SpinButton aria-label="Quantity" defaultValue={4} />
+      </InDialog>,
+    );
+    const spin = screen.getByRole('spinbutton', { name: 'Quantity' });
+    await user.clear(spin);
+    await user.type(spin, '9');
+    expect(spin).toHaveValue('9');
+    await user.keyboard('{Escape}');
+    expect(spin).toHaveValue('4');
+    expect(spin).toHaveFocus();
+    expect(screen.getByRole('dialog', { name: 'Find' })).toBeInTheDocument();
+    expect(onOpenChange).not.toHaveBeenCalled();
+
+    await user.keyboard('{Escape}');
+    expect(onOpenChange).toHaveBeenCalledTimes(1);
+    expect(onOpenChange).toHaveBeenCalledWith(false);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Compounds written in a React Server Component (x-ssr-1)
+// ---------------------------------------------------------------------------
+
+/**
+ * A client component written in a React Server Component reaches the client as a lazy reference
+ * (React Flight), so a compound composed there with the flat names sees lazy part types. Each case
+ * renders one tree twice, with the plain parts and with {@link asClientReference} parts, and checks
+ * the whole contract: the same server HTML, and the lazy tree hydrating that HTML without a
+ * mismatch and working.
+ */
+describe('compounds composed in a React Server Component (x-ssr-1)', () => {
+  type Parts = Record<string, React.JSXElementConstructor<never>>;
+  /** The parts as the client receives them from a Server Component. */
+  const asClientReferences = <P extends Parts>(parts: P): P =>
+    Object.fromEntries(
+      Object.entries(parts).map(([name, part]) => [name, asClientReference(part)]),
+    ) as P;
+
+  interface SsrCase<P extends Parts = Parts> {
+    name: string;
+    parts: P;
+    tree: (parts: P) => React.ReactElement;
+    /** Text the server HTML must contain, so an empty render cannot pass. */
+    serverText: string;
+    /** The key interaction, run on the hydrated lazy tree. */
+    interact: (user: ReturnType<typeof userEvent.setup>) => Promise<void>;
+  }
+  const ssrCase = <P extends Parts>(c: SsrCase<P>) => c as unknown as SsrCase;
+
+  const cases: SsrCase[] = [
+    ssrCase({
+      name: 'Carousel',
+      parts: { Item: CarouselItem },
+      tree: ({ Item }) => (
+        <Carousel aria-label="Promo">
+          <Item>First slide</Item>
+          <Item>Second slide</Item>
+          <Item>Third slide</Item>
+        </Carousel>
+      ),
+      serverText: 'First slide',
+      interact: async (user) => {
+        const region = screen.getByRole('region', { name: 'Promo' });
+        const slides = region.querySelectorAll('[aria-roledescription="slide"]');
+        expect(Array.from(slides, (slide) => slide.textContent)).toEqual([
+          'First slide',
+          'Second slide',
+          'Third slide',
+        ]);
+        await user.click(button('Next slide'));
+        expect(region.querySelector('[aria-live]')).toHaveTextContent('Slide 2 of 3');
+      },
+    }),
+    ssrCase({
+      name: 'Drawer',
+      parts: { Trigger: DrawerTrigger, Title: DrawerTitle, Close: DrawerClose },
+      tree: ({ Trigger, Title, Close }) => (
+        <Drawer>
+          <Trigger>
+            <Button>Open filters</Button>
+          </Trigger>
+          <Title>Filters</Title>
+          <p>Body</p>
+          <Close>
+            <Button>Apply</Button>
+          </Close>
+        </Drawer>
+      ),
+      serverText: 'Open filters',
+      interact: async (user) => {
+        await user.click(button('Open filters'));
+        expect(screen.getByRole('dialog', { name: 'Filters' })).toHaveTextContent('Body');
+        await user.click(button('Apply'));
+        expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+        expect(button('Open filters')).toHaveFocus();
+      },
+    }),
+    ssrCase({
+      name: 'Accordion',
+      parts: { Item: AccordionItem, Trigger: AccordionTrigger, Panel: AccordionPanel },
+      tree: ({ Item, Trigger, Panel }) => (
+        <Accordion>
+          <Item value="q1">
+            <Trigger>Question one?</Trigger>
+            <Panel>Answer one.</Panel>
+          </Item>
+        </Accordion>
+      ),
+      serverText: 'Question one?',
+      interact: async (user) => {
+        const trigger = button('Question one?');
+        expect(trigger).toHaveAttribute('aria-expanded', 'false');
+        await user.click(trigger);
+        expect(trigger).toHaveAttribute('aria-expanded', 'true');
+        expect(screen.getByRole('region', { name: 'Question one?' })).toHaveTextContent(
+          'Answer one.',
+        );
+      },
+    }),
+    ssrCase({
+      name: 'Menu (trigger and popover)',
+      parts: { Trigger: MenuTrigger, Popover: MenuPopover, Item: MenuItem },
+      tree: ({ Trigger, Popover: MenuSurface, Item }) => (
+        <Menu>
+          <Trigger>
+            <MenuButton>Actions</MenuButton>
+          </Trigger>
+          <MenuSurface>
+            <Item>Edit</Item>
+          </MenuSurface>
+        </Menu>
+      ),
+      serverText: 'Actions',
+      interact: async (user) => {
+        expect(screen.queryByRole('menu')).not.toBeInTheDocument();
+        await user.click(button('Actions'));
+        expect(screen.getByRole('menu', { name: 'Actions' })).toBeInTheDocument();
+        expect(menuitem('Edit')).toHaveFocus();
+        await user.keyboard('{Escape}');
+        expect(screen.queryByRole('menu')).not.toBeInTheDocument();
+        expect(button('Actions')).toHaveFocus();
+      },
+    }),
+    ssrCase({
+      name: 'TabList',
+      parts: { Tab: TabListTab, Panel: TabListPanel },
+      tree: ({ Tab, Panel }) => (
+        <TabList aria-label="Sections">
+          <Tab value="a">Tab A</Tab>
+          <Tab value="b">Tab B</Tab>
+          <Panel value="a">Panel A</Panel>
+          <Panel value="b">Panel B</Panel>
+        </TabList>
+      ),
+      serverText: 'Panel A',
+      interact: async (user) => {
+        const tablist = screen.getByRole('tablist', { name: 'Sections' });
+        expect(screen.getByRole('tab', { name: 'Tab A' })).toHaveAttribute('aria-selected', 'true');
+        expect(tablist).not.toContainElement(screen.getByRole('tabpanel', { name: 'Tab A' }));
+        await user.click(screen.getByRole('tab', { name: 'Tab B' }));
+        expect(screen.getByRole('tabpanel', { name: 'Tab B' })).toHaveTextContent('Panel B');
+      },
+    }),
+    ssrCase({
+      name: 'Tree',
+      parts: { Item: TreeItem },
+      tree: ({ Item }) => (
+        <Tree aria-label="Files" defaultExpandedItems={['docs']}>
+          <Item value="docs">
+            Documents
+            <Item value="work">Work</Item>
+          </Item>
+          <Item value="readme">Readme.md</Item>
+        </Tree>
+      ),
+      serverText: 'Readme.md',
+      interact: async (user) => {
+        const docs = screen.getByRole('treeitem', { name: 'Documents' });
+        expect(docs).toHaveAttribute('aria-expanded', 'true');
+        expect(within(within(docs).getByRole('group')).getByRole('treeitem')).toHaveTextContent(
+          'Work',
+        );
+        await user.click(within(docs).getByText('Documents'));
+        expect(docs).toHaveAttribute('aria-expanded', 'false');
+      },
+    }),
+    ssrCase({
+      name: 'Nav (sub-item defaultValue)',
+      parts: { Item: NavItem, Category: NavCategory, SubItem: NavSubItem },
+      tree: ({ Item, Category, SubItem }) => (
+        <Nav aria-label="Main" defaultValue="api">
+          <Item value="home">Home</Item>
+          <Category value="docs" label="Docs">
+            <SubItem value="intro">Introduction</SubItem>
+            <SubItem value="api">API</SubItem>
+          </Category>
+        </Nav>
+      ),
+      serverText: 'aria-current="page"',
+      interact: async (user) => {
+        const docs = button('Docs');
+        expect(docs).toHaveAttribute('aria-expanded', 'true');
+        expect(button('API')).toHaveAttribute('aria-current', 'page');
+        await user.click(button('Introduction'));
+        expect(button('Introduction')).toHaveAttribute('aria-current', 'page');
+        expect(button('API')).not.toHaveAttribute('aria-current');
+      },
+    }),
+    ssrCase({
+      name: 'Dropdown (defaultValue)',
+      parts: { Option: DropdownOption },
+      tree: ({ Option }) => (
+        <Dropdown aria-label="Country" defaultValue="no">
+          <Option value="se">Sweden</Option>
+          <Option value="no">Norway</Option>
+        </Dropdown>
+      ),
+      serverText: 'Norway',
+      interact: async (user) => {
+        const dropdown = screen.getByRole('combobox', { name: 'Country' });
+        expect(dropdown).toHaveTextContent('Norway');
+        await user.click(dropdown);
+        await user.click(screen.getByRole('option', { name: 'Sweden' }));
+        expect(dropdown).toHaveTextContent('Sweden');
+      },
+    }),
+    ssrCase({
+      name: 'Combobox (defaultValue)',
+      parts: { Option: ComboboxOption },
+      tree: ({ Option }) => (
+        <Combobox aria-label="Country" defaultValue="no">
+          <Option value="se">Sweden</Option>
+          <Option value="no">Norway</Option>
+        </Combobox>
+      ),
+      serverText: 'value="Norway"',
+      interact: async (user) => {
+        const combobox = screen.getByRole('combobox', { name: 'Country' });
+        expect(combobox).toHaveValue('Norway');
+        await user.clear(combobox);
+        await user.type(combobox, 'swe');
+        await user.click(screen.getByRole('option', { name: 'Sweden' }));
+        expect(combobox).toHaveValue('Sweden');
+      },
+    }),
+    ssrCase({
+      name: 'DataGrid (row selection)',
+      parts: {
+        Header: DataGridHeader,
+        HeaderCell: DataGridHeaderCell,
+        Body: DataGridBody,
+        Row: DataGridRow,
+        Cell: DataGridCell,
+      },
+      tree: ({ Header, HeaderCell, Body, Row, Cell }) => (
+        <DataGrid aria-label="People" selectionMode="multiple" defaultSelectedItems={['2']}>
+          <Header>
+            <tr>
+              <HeaderCell>Name</HeaderCell>
+              <HeaderCell>Role</HeaderCell>
+            </tr>
+          </Header>
+          <Body>
+            <Row rowId="1">
+              <Cell>Alice</Cell>
+              <Cell>Engineer</Cell>
+            </Row>
+            <Row rowId="2">
+              <Cell>Bob</Cell>
+              <Cell>Designer</Cell>
+            </Row>
+          </Body>
+        </DataGrid>
+      ),
+      serverText: 'Alice',
+      interact: async (user) => {
+        expect(screen.getByRole('checkbox', { name: 'Bob' })).toBeChecked();
+        const alice = screen.getByRole('checkbox', { name: 'Alice' });
+        expect(alice).not.toBeChecked();
+        await user.click(alice);
+        expect(alice).toBeChecked();
+        expect(screen.getByRole('row', { name: /Alice/ })).toHaveAttribute('aria-selected', 'true');
+      },
+    }),
+  ];
+
+  const hydrated: Array<{ root: Root; container: HTMLElement }> = [];
+  afterEach(() => {
+    for (const { root, container } of hydrated.splice(0)) {
+      act(() => root.unmount());
+      container.remove();
+    }
+  });
+
+  it.each(cases)('$name: the server HTML is the same with lazy part types', (c) => {
+    const plain = renderToString(c.tree(c.parts));
+    expect(plain).toContain(c.serverText);
+    expect(renderToString(c.tree(asClientReferences(c.parts)))).toBe(plain);
+  });
+
+  it.each(cases)(
+    '$name: the lazy tree hydrates the server HTML without a mismatch and works',
+    async (c) => {
+      const tree = c.tree(asClientReferences(c.parts));
+      const container = document.createElement('div');
+      container.innerHTML = renderToString(tree);
+      document.body.appendChild(container);
+      const error = vi.spyOn(console, 'error').mockImplementation(() => {});
+      const recoverable: unknown[] = [];
+      await act(async () => {
+        const root = hydrateRoot(container, tree, {
+          onRecoverableError: (reason) => recoverable.push(reason),
+        });
+        hydrated.push({ root, container });
+      });
+      expect(recoverable).toEqual([]);
+      expect(error).not.toHaveBeenCalled();
+
+      await c.interact(userEvent.setup());
+      expect(error).not.toHaveBeenCalled();
+    },
+  );
 });
 
 // ---------------------------------------------------------------------------

@@ -2,27 +2,6 @@ import type { Meta, StoryObj } from '@storybook/react';
 import { fn } from 'storybook/test';
 import { Dropdown, Field } from '../src';
 
-// The component JSDoc of src/components/input/Dropdown.tsx (the one on the exported `Dropdown`
-// const). react-docgen does not read a JSDoc off an `Object.assign` compound, so the autodocs page
-// takes the description from the meta JSDoc below; Dropdown.test.tsx keeps the two identical.
-/**
- * A select-only combobox (APG): a button that opens a listbox of `Option`s. Enter, Space,
- * ArrowDown/ArrowUp, Home/End and typing a character open it and move the highlight
- * (`aria-activedescendant`); Enter/Space select, Tab selects the highlighted option and moves on,
- * Escape closes.
- *
- * The `<button>` receives `id`, `aria-label`, `aria-labelledby`, `aria-describedby`,
- * `aria-invalid`, `aria-required`, `aria-errormessage`, `aria-details`, `tabIndex`, `autoFocus`
- * and `onFocus`/`onBlur`/`onKeyDown`/`onKeyUp`. `ref`, `className`, `style`, other `aria-*`
- * attributes and the remaining props stay on the root `<div>`. Inside a `Field` the button is
- * labelled and described by it — otherwise give it an `aria-label`. It shows the error look
- * whenever it ends up `aria-invalid` (its own `aria-invalid` or a `Field` error). With
- * `name`/`required` the value takes part in form submission, validation and reset. The open
- * listbox renders in a portal; while closed it stays in the DOM, hidden.
- *
- * Sub-components: `Dropdown.Option`, `Dropdown.OptionGroup`. React Server Components import the
- * flat names `DropdownOption` / `DropdownOptionGroup` (dotted access needs a client file).
- */
 const meta = {
   title: 'Components/Input/Dropdown',
   component: Dropdown,

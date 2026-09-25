@@ -194,21 +194,7 @@ function toItems(value: string | null | undefined): readonly string[] | undefine
   return value === null ? EMPTY : [value];
 }
 
-// The component-level JSDoc is written twice, here and on the exported `Accordion` const: Storybook
-// autodocs reads it from this function, the published declarations from the export (R13).
-/**
- * A vertically stacked set of disclosure sections (WAI-ARIA Accordion pattern). Each
- * `Accordion.Item` renders an `Accordion.Trigger` button inside a heading (`headingLevel`) and an
- * `Accordion.Panel` region that is shown while the item is open.
- *
- * Single mode (the default) keeps at most one item open (`openItem`, `defaultOpenItem`,
- * `onOpenItemChange`); `type="multiple"` lets any number of items open (`openItems`,
- * `defaultOpenItems`, `onOpenItemsChange`). Each Item's `value` must be unique within its
- * Accordion: a development warning names a repeated value.
- *
- * Sub-components are also exported under flat names (`AccordionItem`, `AccordionTrigger`,
- * `AccordionPanel`) for React Server Components, which cannot use the dotted form.
- */
+// The Accordion root, documented on the exported `Accordion` const.
 const AccordionRoot = (props: AccordionProps) => {
   const {
     type,

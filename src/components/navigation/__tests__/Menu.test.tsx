@@ -1716,9 +1716,8 @@ describe('Menu.Trigger rendered as a wrapper span', () => {
     },
   );
 
-  // Menu.Trigger (explicit span) and useTriggerElement (automatic span) each pick the element that
-  // takes the state ARIA; both must apply the same rule (the first element in the tab order by
-  // markup: hidden inputs and tabIndex -1 skipped), so one of these cases fails if they drift.
+  // useTriggerElement moves the state ARIA off both spans (explicit and automatic) with one rule:
+  // the first element in the tab order by markup, hidden inputs and tabIndex -1 skipped.
   it.each(WRAPPER_TRIGGERS)(
     '%s: the state ARIA skips hidden inputs and elements out of the tab order',
     async (_name, automatic) => {

@@ -24,10 +24,12 @@
  *   exception for user swatches), never a color utility class.
  * - `physical` (C-LOGICAL): `ml-/mr-/pl-/pr-/left-/right-`, `scroll-m|p` l/r, `border-l/r`,
  *   `rounded-l/r/tl/tr/bl/br`, `text-/float-/clear-left|right`, `origin-*left|right`,
- *   `bg-linear-to-l/r` — unless scoped with a direction variant (`wave-rtl:`, or Tailwind's
- *   `rtl:`/`ltr:`) or the line carries `wave-allow-physical: <reason>`.
+ *   `bg-linear-to-l/r` — unless scoped with the `wave-rtl:` variant or the line carries
+ *   `wave-allow-physical: <reason>`.
  * - `translate-x` (C-LOGICAL): a `translate-x-*` class (other than `translate-x-0`) on a line
- *   without a `wave-rtl:` (or `rtl:`) `translate-x-*` counterpart (or `wave-allow-physical`).
+ *   without a `wave-rtl:` `translate-x-*` counterpart (or `wave-allow-physical`).
+ * - `direction-variant` (C-LOGICAL, R4): any class with Tailwind's bare `rtl:`/`ltr:` variant
+ *   (`not-rtl:`/`not-ltr:` included), whatever the utility.
  * - `focus-outline-none` (C-FOCUS): `focus:`/`focus-visible:`/`focus-within:outline-none`.
  * - `arbitrary-animate` (C-MOTION): `animate-[…]` — use the `animate-wave-*` tokens.
  * - `forward-ref` (C-REF): `forwardRef(` — React 19 ref-as-prop.
@@ -46,8 +48,10 @@
  *   a failure of its own rather than a silently disabled gate.
  *
  * Direction variants (R4): Wave's own `wave-rtl:` (defined in its CSS entries with `:dir(rtl)`) is
- * the one to use, because Tailwind's `rtl:` also matches inside an LTR subtree of an RTL ancestor.
- * Bare `rtl:`/`ltr:` are still accepted while the component packages migrate.
+ * the only one, because Tailwind's `rtl:` also matches inside an LTR subtree of an RTL ancestor
+ * (and `ltr:` inside an RTL subtree of an LTR one). Write the left-to-right value as the base class
+ * and override it with `wave-rtl:`; `node scripts/build-css.mjs` also fails when a bare `rtl:`/`ltr:`
+ * class ships in `dist/styles.css`.
  *
  * An allow marker counts on the offending line or on the comment-only line directly above it
  * (`// …`, `/* … *\/` or a JSX comment `{/* … *\/}`). Comments are ignored by every rule. The gate
@@ -85,6 +89,7 @@ type RuleId =
   | 'enabled-variant'
   | 'button-type'
   | 'motion'
+  | 'direction-variant'
   | 'lexer';
 
 interface Violation {
@@ -106,6 +111,8 @@ const HINTS: Record<RuleId, string> = {
   'enabled-variant':
     'gate with `not-disabled:not-aria-disabled:hover:` / `…:active:` (C-TOKENS state gating)',
   'button-type': 'add `type="button"` before `{...rest}` (C-BUTTON-TYPE)',
+  'direction-variant':
+    "use Wave's `wave-rtl:` variant: Tailwind's `rtl:`/`ltr:` also match inside a subtree of the opposite direction. Write the left-to-right value as the base class and override it with `wave-rtl:` (C-LOGICAL, R4)",
   motion:
     'add a `motion-reduce:` variant of the same kind (`motion-reduce:transition-none` for a transition, `motion-reduce:animate-*` for an animation) to the same class string, or `// wave-allow-motion: <reason>` (C-MOTION)',
   lexer:
@@ -696,11 +703,11 @@ const MARKERS = {
 
 type MotionKind = 'transition' | 'animate';
 
-/** Direction variants: Wave's `wave-rtl:` (R4) and, while components migrate, `rtl:`/`ltr:`. */
-const RTL_VARIANTS = new Set(['wave-rtl', 'rtl']);
-const DIRECTION_VARIANTS = new Set([...RTL_VARIANTS, 'ltr']);
-
-const isDirectional = (t: ClassToken) => t.variants.some((v) => DIRECTION_VARIANTS.has(v));
+/** Scoped to right-to-left with Wave's own direction variant (R4). */
+const isDirectional = (t: ClassToken) => t.variants.includes('wave-rtl');
+/** Tailwind's `rtl:`/`ltr:` (and `not-rtl:`/`not-ltr:`), which Wave does not use (R4). */
+const hasBareDirectionVariant = (t: ClassToken) =>
+  t.variants.some((v) => /^(?:not-)?(?:rtl|ltr)$/.test(v));
 const isMotionScoped = (t: ClassToken) =>
   t.variants.some((v) => v === 'motion-reduce' || v === 'motion-safe');
 /** The motion a utility adds (`transition-none`/`animate-none` add none). */
@@ -955,13 +962,15 @@ function scanSource(source: string, kind: SourceKind, jsx = true): Violation[] {
 
   if (kind === 'story') return dedupe(violations);
 
-  // physical and translate-x
+  // bare direction variants, physical and translate-x
   const rtlTranslateLines = new Set(
-    tokens
-      .filter((t) => t.variants.some((v) => RTL_VARIANTS.has(v)) && TRANSLATE_X.test(t.utility))
-      .map((t) => t.line),
+    tokens.filter((t) => isDirectional(t) && TRANSLATE_X.test(t.utility)).map((t) => t.line),
   );
   for (const t of tokens) {
+    if (hasBareDirectionVariant(t)) {
+      addToken(t, 'direction-variant');
+      continue;
+    }
     if (isDirectional(t)) continue;
     if (PHYSICAL_UTILITIES.some((re) => re.test(t.utility))) {
       if (!physicalAllowed(t.line)) addToken(t, 'physical');
@@ -1345,10 +1354,29 @@ describe('conventions gate rules', () => {
       const source = [
         `const a = 'ms-2 me-2 ps-3 pe-3 start-0 end-0 border-s border-e rounded-s rounded-e';`,
         `const b = 'text-start float-start origin-center rounded-lg inset-x-0 px-2 mx-auto space-x-2 border-x';`,
-        `const c = 'rtl:ml-2 ltr:left-0 ltr:rounded-l';`,
+        `const c = 'wave-rtl:ml-2 wave-rtl:-scale-x-100';`,
         `const placement = side === 'left' ? 'left-start' : 'right-end';`,
       ].join('\n');
       expect(rules(source)).toEqual([]);
+    });
+
+    it("flags Tailwind's bare rtl: and ltr: variants, whatever the utility (R4)", () => {
+      const source = [
+        `const a = 'rtl:ml-2 ltr:left-0 ltr:rounded-l';`,
+        `const b = 'rtl:ms-2 rtl:-scale-x-100 hover:rtl:pe-2 rtl:hover:rotate-180';`,
+        `const c = 'not-rtl:ms-2 not-ltr:me-2 wave-rtl:ms-2 wave-rtl:hover:pe-2';`,
+      ].join('\n');
+      expect(rules(source)).toEqual([
+        '1:direction-variant:rtl:ml-2',
+        '1:direction-variant:ltr:left-0',
+        '1:direction-variant:ltr:rounded-l',
+        '2:direction-variant:rtl:ms-2',
+        '2:direction-variant:rtl:-scale-x-100',
+        '2:direction-variant:hover:rtl:pe-2',
+        '2:direction-variant:rtl:hover:rotate-180',
+        '3:direction-variant:not-rtl:ms-2',
+        '3:direction-variant:not-ltr:me-2',
+      ]);
     });
 
     it('allows physical utilities scoped with the wave-rtl: variant (R4)', () => {
@@ -1385,7 +1413,7 @@ describe('conventions gate rules', () => {
   });
 
   describe('translate-x', () => {
-    it('requires an rtl: counterpart on the same line', () => {
+    it('requires a wave-rtl: counterpart on the same line; a bare rtl:/ltr: one is an error (R4)', () => {
       const source = [
         `const a = 'translate-x-4';`,
         `const b = 'data-[state=checked]:translate-x-5';`,
@@ -1397,10 +1425,15 @@ describe('conventions gate rules', () => {
       expect(rules(source)).toEqual([
         '1:translate-x:translate-x-4',
         '2:translate-x:data-[state=checked]:translate-x-5',
+        '3:translate-x:translate-x-4',
+        '3:direction-variant:rtl:-translate-x-4',
+        '4:translate-x:translate-x-5',
+        '4:direction-variant:rtl:-translate-x-5',
+        '5:direction-variant:ltr:translate-x-4',
       ]);
     });
 
-    it('accepts a wave-rtl: counterpart (R4) like an rtl: one', () => {
+    it('accepts a wave-rtl: counterpart (R4)', () => {
       const source = [
         `const a = 'translate-x-4 wave-rtl:-translate-x-4';`,
         `cn(checked && 'translate-x-[22px]', checked && 'wave-rtl:-translate-x-[22px]');`,

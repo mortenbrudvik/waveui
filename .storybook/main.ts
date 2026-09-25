@@ -1,6 +1,7 @@
 import type { StorybookConfig } from '@storybook/react-vite';
 import tailwindcss from '@tailwindcss/vite';
 import type { PluginOption } from 'vite';
+import { exportDocblockPlugin, STORYBOOK_DOCGEN_PLUGIN } from './exportDocblocks';
 
 /**
  * Removes the `vite:dts` plugin from a (nested, possibly promised) Vite plugin list. Storybook's
@@ -14,6 +15,23 @@ async function withoutDts(plugins: PluginOption[]): Promise<PluginOption[]> {
     else if (plugin && plugin.name !== 'vite:dts') kept.push(plugin);
   }
   return kept;
+}
+
+/**
+ * Adds the export-docblock plugin (`./exportDocblocks.ts`) right after Storybook's docgen plugin,
+ * whose `__docgenInfo` output it completes: compounds and other components documented on their
+ * export get that JSDoc as their autodocs description. Without a react-docgen plugin it goes last.
+ */
+function withExportDocblocks(plugins: PluginOption[]): PluginOption[] {
+  const docgen = plugins.findIndex(
+    (plugin) =>
+      typeof plugin === 'object' &&
+      plugin !== null &&
+      'name' in plugin &&
+      plugin.name === STORYBOOK_DOCGEN_PLUGIN,
+  );
+  const at = docgen === -1 ? plugins.length : docgen + 1;
+  return [...plugins.slice(0, at), exportDocblockPlugin(), ...plugins.slice(at)];
 }
 
 function hasTailwind(plugins: PluginOption[]): boolean {
@@ -38,12 +56,13 @@ const config: StorybookConfig = {
   /**
    * The library build compiles no CSS (scripts/build-css.mjs does), so Storybook adds the
    * Tailwind plugin itself: it compiles `.storybook/preview.css`, the library stylesheet plus
-   * the stories as a source (scripts/verify-storybook.mjs checks the result).
+   * the stories as a source (scripts/verify-storybook.mjs checks the result). The autodocs
+   * description of a component documented on its export comes from `withExportDocblocks`.
    */
   async viteFinal(viteConfig) {
     const plugins = await withoutDts(viteConfig.plugins ?? []);
     if (!hasTailwind(plugins)) plugins.push(tailwindcss());
-    return { ...viteConfig, plugins };
+    return { ...viteConfig, plugins: withExportDocblocks(plugins) };
   },
 };
 

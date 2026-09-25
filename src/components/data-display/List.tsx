@@ -276,7 +276,7 @@ function getActionStops(cell: HTMLElement): HTMLElement[] {
 /*  List                                                               */
 /* ------------------------------------------------------------------ */
 
-/** The List root (see the component documentation on {@link List}). */
+// The List root, documented on the exported `List` const.
 const ListRoot = <M extends ListSelectionMode = 'single'>(props: ListProps<M>): React.ReactNode => {
   const {
     selectable = false,

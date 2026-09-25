@@ -606,7 +606,7 @@ describe('Dialog', () => {
       expect(screen.getByRole('dialog', { name: 'Render prop' })).toBeInTheDocument();
     });
 
-    it('renders the 0.4 wrapper span with asChild={false}', async () => {
+    it('renders the 0.4 wrapper span with asChild={false}; the button inside carries the state ARIA', async () => {
       const user = userEvent.setup();
       render(
         <Dialog>
@@ -616,11 +616,27 @@ describe('Dialog', () => {
           <Dialog.Content title="Wrapped">Body</Dialog.Content>
         </Dialog>,
       );
-      const wrapper = button('Open').parentElement;
+      const trigger = button('Open');
+      const wrapper = trigger.parentElement;
+      const stateAria = ['aria-haspopup', 'aria-expanded', 'aria-controls'];
       expect(wrapper?.tagName).toBe('SPAN');
-      expect(wrapper).not.toHaveAttribute('aria-expanded');
-      await user.click(button('Open'));
-      expect(screen.getByRole('dialog', { name: 'Wrapped' })).toBeInTheDocument();
+      for (const attr of stateAria) expect(wrapper).not.toHaveAttribute(attr);
+      expect(trigger).toHaveAttribute('aria-haspopup', 'dialog');
+      expect(trigger).toHaveAttribute('aria-expanded', 'false');
+      expect(trigger).not.toHaveAttribute('aria-controls');
+      await expectNoA11yViolations();
+
+      await user.click(trigger);
+      const dialog = screen.getByRole('dialog', { name: 'Wrapped' });
+      for (const attr of stateAria) expect(wrapper).not.toHaveAttribute(attr);
+      expect(trigger).toHaveAttribute('aria-expanded', 'true');
+      expect(trigger).toHaveAttribute('aria-controls', dialog.id);
+      await expectNoA11yViolations();
+
+      await user.keyboard('{Escape}');
+      expect(trigger).toHaveFocus();
+      expect(trigger).toHaveAttribute('aria-expanded', 'false');
+      expect(trigger).not.toHaveAttribute('aria-controls');
     });
 
     it('still opens from a custom child that does not forward its ref (wrapper fallback + warning)', async () => {

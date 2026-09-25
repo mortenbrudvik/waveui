@@ -5,7 +5,7 @@ import { getArrowIntent, getDirection } from '../lib/direction';
 import { getFirstTabbable } from '../lib/focus';
 import { setRef } from '../lib/mergeRefs';
 import { useEventCallback } from './useEventCallback';
-import { useTypeahead, type TypeaheadItem } from './useTypeahead';
+import { isAltGraphCharacter, useTypeahead, type TypeaheadItem } from './useTypeahead';
 
 /** Configuration options for the {@link useRovingTabIndex} hook. */
 export interface UseRovingTabIndexOptions {
@@ -759,7 +759,10 @@ export function useRovingTabIndex(
 
   // `spaceOnly` (the capture phase) handles nothing but a Space that continues a typeahead search.
   const handleKeys = useEventCallback((e: React.KeyboardEvent, spaceOnly: boolean) => {
-    if (e.defaultPrevented || e.altKey || e.ctrlKey || e.metaKey) return;
+    // Ctrl, Alt and Meta combinations are shortcuts, except a single character typed with AltGr
+    // (Ctrl+Alt on Windows), which is typeahead text: arrows, Home and End with it stay shortcuts.
+    const shortcut = e.metaKey || ((e.altKey || e.ctrlKey) && !isAltGraphCharacter(e));
+    if (e.defaultPrevented || shortcut) return;
     if (ownsArrowKeys(e.target)) return;
     const container = store.container ?? (e.currentTarget as HTMLElement);
     // A key from a portaled popup is the popup's: never pull focus back out of it.

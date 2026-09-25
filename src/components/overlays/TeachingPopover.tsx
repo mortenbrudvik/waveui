@@ -55,6 +55,12 @@ export interface TeachingPopoverProps extends React.HTMLAttributes<HTMLDivElemen
   /** Called with `false` when Close, Done or Escape dismisses the popover. */
   onOpenChange?: (open: boolean) => void;
   /**
+   * Accessible name of the built-in Close button (an icon-only button). Localize it with the
+   * page's language.
+   * @default 'Close'
+   */
+  closeLabel?: string;
+  /**
    * The element the popover points at (a ref or the element). When given, the popover is
    * rendered in a portal, positioned next to it with a beak, and flips or shifts to stay in view;
    * without it (`undefined`) the popover renders inline where it is placed (0.4 behaviour).
@@ -141,6 +147,7 @@ export const TeachingPopover = ({
   open: openProp,
   defaultOpen,
   onOpenChange,
+  closeLabel = 'Close',
   target,
   side = 'bottom',
   align = 'center',
@@ -343,7 +350,7 @@ export const TeachingPopover = ({
           appearance="subtle"
           size="small"
           icon={<DismissIcon />}
-          aria-label="Close"
+          aria-label={closeLabel}
           className="absolute end-3 top-3"
           onClick={dismiss}
         />

@@ -73,9 +73,9 @@ export interface PopoverTriggerProps extends Omit<React.HTMLAttributes<HTMLEleme
   children: React.ReactNode | ((props: PopoverTriggerChildProps) => React.ReactNode);
   /**
    * `false` renders the 0.4 wrapper `<span>` carrying the trigger props around the children
-   * instead of merging them onto the child. The span gets no `aria-haspopup`, `aria-expanded` or
-   * `aria-controls` (a generic element cannot carry them), so prefer the default, which puts them
-   * on the child. A render-prop child ignores `asChild` and receives every prop.
+   * instead of merging them onto the child. `aria-haspopup`, `aria-expanded` and `aria-controls`,
+   * which a generic element cannot carry, go to the first element in the tab order inside the
+   * span. A render-prop child ignores `asChild` and receives every prop.
    * @default true
    */
   asChild?: boolean;
@@ -353,9 +353,9 @@ PopoverRoot.displayName = 'Popover';
  * labels the content, a composed `onClick` and the ref used as positioning anchor and focus-return
  * target. The child's own `id`, handlers and classes are kept; the live state ARIA always wins.
  * A render function receives the props instead (spread all of them, `id` included: the content is
- * named by it); `asChild={false}` renders the 0.4 wrapper span (without the state ARIA), and a
- * custom child that neither forwards `ref` nor spreads its props falls back to that span
- * automatically (with a development warning).
+ * named by it); `asChild={false}` renders the 0.4 wrapper span, and a custom child that neither
+ * forwards `ref` nor spreads its props falls back to that span automatically (with a development
+ * warning). On the span, the state ARIA goes to the first element in the tab order inside it.
  *
  * A Tooltip goes between the trigger and the button: it passes the trigger's `id` and ARIA on to
  * the button, which the Tooltip also describes.
@@ -390,20 +390,14 @@ export const PopoverTrigger = ({
   } = usePopoverContext('Popover.Trigger');
   const elementRef = useMergedRefs<HTMLElement>(ref, triggerElementRef);
 
-  // The explicit wrapper span (0.4 markup) carries no state ARIA: a generic span cannot (axe
-  // aria-allowed-attr). A render-prop child still receives it.
-  const stateAria =
-    asChild === false && typeof children !== 'function'
-      ? {}
-      : {
-          'aria-haspopup': 'dialog' as const,
-          'aria-expanded': open,
-          'aria-controls': open ? contentId : undefined,
-        };
+  // On a wrapper span (`asChild={false}`, the automatic fallback) useTriggerElement moves the
+  // state ARIA onto the first element in the tab order inside it.
   const triggerProps = {
     ...rest,
     id: idProp ?? triggerId,
-    ...stateAria,
+    'aria-haspopup': 'dialog' as const,
+    'aria-expanded': open,
+    'aria-controls': open ? contentId : undefined,
     onClick: composeEventHandlers(onClick, () => setOpen((current) => !current)),
     onKeyDown: composeEventHandlers(onKeyDown, onTriggerKeyDown),
     ref: elementRef,

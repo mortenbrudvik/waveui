@@ -8,8 +8,6 @@ import { Combobox, ComboboxOption, ComboboxOptionGroup, Option, OptionGroup } fr
 import { asClientReference, testCompoundExposure, testSystemProps } from '../../../test-utils';
 import { FIELD_TEST_IDS, FIELD_TEST_TEXT, renderWithFieldContext } from '../../../test-utils-field';
 import { DismissLayerProvider, useDismiss } from '../../../hooks/useDismiss';
-import comboboxSource from '../Combobox.tsx?raw';
-import comboboxStoriesSource from '../../../../stories/Combobox.stories.tsx?raw';
 
 const FRUITS = [
   <Option key="a" value="a">
@@ -1406,34 +1404,5 @@ describe('Combobox', () => {
     // consumer's plain class is the option's only background.
     const backgrounds = [...apple.classList].filter((c) => /(?:^|:)bg-/.test(c));
     expect(backgrounds).toEqual(['bg-primary']);
-  });
-});
-
-/**
- * The text of the JSDoc block right before `marker` in `source`, with the comment syntax
- * stripped the way Storybook's CSF enrichment strips it; `null` when no JSDoc precedes it.
- */
-function jsdocBefore(source: string, marker: string): string | null {
-  const at = source.indexOf(marker);
-  if (at === -1) return null;
-  const before = source.slice(0, at).trimEnd();
-  if (!before.endsWith('*/')) return null;
-  return before
-    .slice(before.lastIndexOf('/**') + 3, -2)
-    .split(/\r?\n/)
-    .map((line) => line.replace(/^(\s+)?(\*+)?(\s)?/, ''))
-    .join('\n')
-    .trim();
-}
-
-describe('Combobox docs (C-DOCS, R13)', () => {
-  // react-docgen takes a component's description from the function it resolves the export to,
-  // not from the exported `Object.assign` const that carries the JSDoc (R13). The autodocs page
-  // therefore reads it from the JSDoc on the stories' meta, which Storybook's CSF enrichment
-  // turns into `parameters.docs.description.component`.
-  it('gives the Storybook autodocs page the component JSDoc', () => {
-    const description = jsdocBefore(comboboxSource, 'export const Combobox =');
-    expect(description).toMatch(/^An editable combobox: /);
-    expect(jsdocBefore(comboboxStoriesSource, 'const meta =')).toBe(description);
   });
 });

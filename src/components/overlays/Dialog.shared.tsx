@@ -229,8 +229,8 @@ export interface ModalTriggerState {
  * Renders a `Dialog.Trigger`/`Drawer.Trigger`: its element gets `aria-haspopup="dialog"`,
  * `aria-expanded`, `aria-controls` (while open; these always win over the child's own), a click
  * handler that records the trigger (overlays#9) and opens the modal, and a ref that registers it
- * with the root's triggers. The explicit wrapper span (`asChild={false}` with element children)
- * carries no state ARIA: a generic span cannot.
+ * with the root's triggers. On a wrapper span (`asChild={false}`, the automatic fallback), the
+ * state ARIA goes to the first element in the tab order inside it (`useTriggerElement`).
  *
  * @param modal         The root's state, from its context.
  * @param props         The part's props.
@@ -254,14 +254,11 @@ export function useModalTriggerPart<RenderProps>(
     [activate, setOpen],
   );
 
-  const stateAria =
-    asChild === false && typeof children !== 'function'
-      ? {}
-      : {
-          'aria-haspopup': 'dialog' as const,
-          'aria-expanded': open,
-          'aria-controls': open ? controlsId : undefined,
-        };
+  const stateAria = {
+    'aria-haspopup': 'dialog' as const,
+    'aria-expanded': open,
+    'aria-controls': open ? controlsId : undefined,
+  };
   const triggerProps = mergeProps({ ...stateAria, onClick: openModal, ref: mergedRef }, rest, {
     oursWin: STATE_ARIA,
   });
