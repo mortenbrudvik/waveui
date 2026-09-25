@@ -6,6 +6,8 @@ import { hydrateRoot } from 'react-dom/client';
 import { renderToString } from 'react-dom/server';
 import { Menu, MenuDivider, MenuItem, MenuPopover, MenuTrigger } from '../Menu';
 import type { MenuItemProps, MenuProps, MenuTriggerProps } from '../Menu';
+import { INERT_MENU_CONTEXT, MenuContext } from '../Menu.context';
+import type { MenuContextValue, MenuSurfaceApi } from '../Menu.context';
 import type { Slot } from '../../../lib/types';
 import { useModalLayer } from '../../../hooks/useModalLayer';
 import { Portal } from '../../portal/Portal';
@@ -111,6 +113,11 @@ describe('Menu', () => {
     const menu = screen.getByTestId('menu');
     expect(menu).toHaveClass('rounded-md');
     expect(menu).not.toHaveClass('rounded-lg');
+  });
+
+  it('the static menu element is the group/menu its items align their columns to', () => {
+    renderStaticMenu({ className: 'consumer-class' });
+    expect(screen.getByTestId('menu')).toHaveClass('group/menu', 'consumer-class');
   });
 
   describe('roving focus (static menu)', () => {
@@ -570,15 +577,22 @@ describe('Menu', () => {
     });
 
     // An icon that renders nothing is no icon, as in Nav, Tree and Avatar: no empty 20px
-    // aria-hidden box before the label.
+    // aria-hidden box before the label. The item keeps only the hidden column placeholders, which
+    // show when another item of the menu has an icon (or a check).
     it.each(EMPTY_ICONS)('renders no icon box for an icon set to %s', (_kind, makeIcon) => {
       render(
         <Menu>
           <Menu.Item icon={makeIcon()}>Item</Menu.Item>
         </Menu>,
       );
-      expect(screen.getByRole('menuitem').querySelector('[aria-hidden="true"]')).toBeNull();
-      expect(screen.getByRole('menuitem').textContent).toBe('Item');
+      const menuItem = screen.getByRole('menuitem');
+      expect(menuItem.querySelector('[data-menu-icon]')).toBeNull();
+      expect(
+        Array.from(menuItem.querySelectorAll('[aria-hidden="true"]'), (hidden) =>
+          hidden.getAttribute('data-menu-column-space'),
+        ),
+      ).toEqual(['checkmark', 'icon']);
+      expect(menuItem.textContent).toBe('Item');
     });
 
     it('renders the items of a generator icon that has content (the check does not consume it)', () => {
@@ -1356,6 +1370,16 @@ describe('Menu popup (Menu.Trigger + Menu.Popover)', () => {
     expect(screen.getByRole('menu')).toBeInTheDocument();
     expect(wrapper).not.toHaveAttribute('aria-expanded');
     expect(wrapper).not.toHaveAttribute('aria-controls');
+  });
+
+  it('Menu.Popover is the group/menu its items align their columns to', async () => {
+    const user = userEvent.setup();
+    render(<PopupMenu popoverClassName="popover-class" />);
+    await user.click(trigger());
+    expect(screen.getByRole('menu', { name: 'Actions' })).toHaveClass(
+      'group/menu',
+      'popover-class',
+    );
   });
 
   it('forwards className, ref and rest props of Menu.Popover to the menu surface', async () => {
@@ -2353,6 +2377,59 @@ describe('Menu.Trigger rendered as a wrapper span', () => {
 // ---------------------------------------------------------------------------
 // Parts written in a React Server Component: lazy element types (C-COMPOUND)
 // ---------------------------------------------------------------------------
+
+describe('Menu.Popover surface registration', () => {
+  /**
+   * A Menu context whose open state the test sets, with a `registerSurface` that logs, and a probe
+   * that logs each commit of a new open state (its layout effect runs after Menu.Popover's).
+   */
+  function RegistrationHarness({ open, log }: { open: boolean; log: string[] }) {
+    // Stable, as the Menu root's is.
+    const registerSurface = React.useCallback(
+      (api: MenuSurfaceApi | null) => {
+        log.push(api ? 'register' : 'unregister');
+      },
+      [log],
+    );
+    const value = React.useMemo<MenuContextValue>(
+      () => ({ ...INERT_MENU_CONTEXT, popup: true, open, registerSurface }),
+      [open, registerSurface],
+    );
+    return (
+      <MenuContext.Provider value={value}>
+        <MenuPopover aria-label="Actions">
+          <MenuItem>Edit</MenuItem>
+        </MenuPopover>
+        <CommitProbe open={open} log={log} />
+      </MenuContext.Provider>
+    );
+  }
+
+  function CommitProbe({ open, log }: { open: boolean; log: string[] }) {
+    React.useLayoutEffect(() => {
+      log.push(`commit open=${open}`);
+    }, [open, log]);
+    return null;
+  }
+
+  it('registers the open surface and unregisters it in the commit that closes the menu', () => {
+    const log: string[] = [];
+    const { rerender } = render(<RegistrationHarness open log={log} />);
+    expect(log.filter((entry) => entry !== 'commit open=true')).toEqual(['register']);
+    log.length = 0;
+    rerender(<RegistrationHarness open={false} log={log} />);
+    // No closed surface stays registered, not even until the surface element is gone: from 0.7 a
+    // surface can stay mounted while it exits, and a registered one would take the next opening.
+    expect(log).toEqual(['unregister', 'commit open=false']);
+    expect(queryMenu()).not.toBeInTheDocument();
+  });
+
+  it('registers no closed surface', () => {
+    const log: string[] = [];
+    render(<RegistrationHarness open={false} log={log} />);
+    expect(log).toEqual(['commit open=false']);
+  });
+});
 
 describe('Menu parts as client references (lazy element types)', () => {
   it('a popup menu of lazy parts renders the same server HTML and works the same', async () => {

@@ -1,6 +1,9 @@
+import * as React from 'react';
 import type { Meta, StoryObj } from '@storybook/react';
 import { fn } from 'storybook/test';
-import { Button, Menu } from '../src';
+import { Button, Menu, MenuButton } from '../src';
+import type { MenuProps } from '../src';
+import { MenuSplitGroup } from '../src/components/navigation/Menu.splitGroup';
 
 const meta = {
   title: 'Components/Navigation/Menu',
@@ -23,7 +26,10 @@ type Story = StoryObj<typeof meta>;
 /** A static menu: one item is the tab stop; arrows, Home/End and typeahead move between items. */
 export const Default: Story = {};
 
-/** Icons are decorative (`aria-hidden`), so they are not part of the item names. */
+/**
+ * Icons are decorative (`aria-hidden`), so they are not part of the item names. Once any item of a
+ * menu shows an icon, every item keeps an icon column of the same width, so the labels line up.
+ */
 export const WithIcons: Story = {
   args: {
     'aria-label': 'Edit',
@@ -160,4 +166,263 @@ export const LongMenuMaxHeight: Story = {
       </>
     ),
   },
+};
+
+/**
+ * Submenus are nested `<Menu>`s: a `Menu.Trigger` around a `Menu.Item` opens one. ArrowRight
+ * (ArrowLeft in RTL), Enter, Space, a click, or resting the mouse on the item opens it; ArrowLeft
+ * and Escape close it and return to the item. Activating an item or Tab closes every level and
+ * returns focus to "File". A triangle between an item and its open submenu keeps the submenu open
+ * while the mouse moves diagonally across the other items, and while focus is in the menu the item
+ * under the mouse takes focus.
+ */
+export const Submenus: Story = {
+  args: {
+    'aria-label': undefined,
+    onOpenChange: fn(),
+    children: (
+      <>
+        <Menu.Trigger>
+          <MenuButton>File</MenuButton>
+        </Menu.Trigger>
+        <Menu.Popover>
+          <Menu.Item shortcut="Ctrl+N">New</Menu.Item>
+          <Menu>
+            <Menu.Trigger>
+              <Menu.Item>Open recent</Menu.Item>
+            </Menu.Trigger>
+            <Menu.Popover>
+              <Menu.Item onClick={fn()}>report.docx</Menu.Item>
+              <Menu.Item onClick={fn()}>notes.txt</Menu.Item>
+              <Menu>
+                <Menu.Trigger>
+                  <Menu.Item>Older</Menu.Item>
+                </Menu.Trigger>
+                <Menu.Popover>
+                  <Menu.Item onClick={fn()}>archive-2025.zip</Menu.Item>
+                  <Menu.Item onClick={fn()}>archive-2024.zip</Menu.Item>
+                </Menu.Popover>
+              </Menu>
+            </Menu.Popover>
+          </Menu>
+          <Menu>
+            <Menu.Trigger>
+              <Menu.Item>Share</Menu.Item>
+            </Menu.Trigger>
+            <Menu.Popover>
+              <Menu.Item onClick={fn()}>Email</Menu.Item>
+              <Menu.Item onClick={fn()}>Copy link</Menu.Item>
+            </Menu.Popover>
+          </Menu>
+          <Menu.Divider />
+          <Menu.Item>Exit</Menu.Item>
+        </Menu.Popover>
+      </>
+    ),
+  },
+};
+
+/**
+ * Submenus work in a static menu too, and so does a split row (`MenuSplitGroup`): activating an
+ * item in a submenu closes it and returns focus to its trigger item.
+ */
+export const StaticWithSubmenu: Story = {
+  args: {
+    'aria-label': 'Edit',
+    children: (
+      <>
+        <Menu.Item shortcut="Ctrl+X">Cut</Menu.Item>
+        <Menu.Item shortcut="Ctrl+C">Copy</Menu.Item>
+        <Menu>
+          <Menu.Trigger>
+            <Menu.Item>Paste special</Menu.Item>
+          </Menu.Trigger>
+          <Menu.Popover>
+            <Menu.Item onClick={fn()}>Text only</Menu.Item>
+            <Menu.Item onClick={fn()}>Keep formatting</Menu.Item>
+          </Menu.Popover>
+        </Menu>
+        <MenuSplitGroup>
+          <Menu.Item onClick={fn()}>Find</Menu.Item>
+          <Menu>
+            <Menu.Trigger>
+              <Menu.Item aria-label="More find options" />
+            </Menu.Trigger>
+            <Menu.Popover>
+              <Menu.Item onClick={fn()}>Find next</Menu.Item>
+              <Menu.Item onClick={fn()}>Replace…</Menu.Item>
+            </Menu.Popover>
+          </Menu>
+        </MenuSplitGroup>
+      </>
+    ),
+  },
+};
+
+/**
+ * A split row: "Save" is the action, the chevron half (named by its `aria-label`) opens more save
+ * options. ArrowDown and ArrowUp visit both halves; ArrowRight moves from "Save" to the chevron
+ * and, there, opens the submenu; ArrowLeft moves back.
+ */
+export const SplitGroup: Story = {
+  args: {
+    'aria-label': undefined,
+    onOpenChange: fn(),
+    children: (
+      <>
+        <Menu.Trigger>
+          <MenuButton>File</MenuButton>
+        </Menu.Trigger>
+        <Menu.Popover>
+          <Menu.Item>New</Menu.Item>
+          <MenuSplitGroup>
+            <Menu.Item onClick={fn()} shortcut="Ctrl+S">
+              Save
+            </Menu.Item>
+            <Menu>
+              <Menu.Trigger>
+                <Menu.Item aria-label="More save options" />
+              </Menu.Trigger>
+              <Menu.Popover>
+                <Menu.Item onClick={fn()}>Save as…</Menu.Item>
+                <Menu.Item onClick={fn()}>Save a copy</Menu.Item>
+              </Menu.Popover>
+            </Menu>
+          </MenuSplitGroup>
+          <Menu.Item>Close</Menu.Item>
+        </Menu.Popover>
+      </>
+    ),
+  },
+};
+
+/**
+ * Menu surfaces mount through the presence core: while a menu closes, its surface carries
+ * `data-presence="exiting"` (and `inert`), so classes on that phase fade it out before it
+ * unmounts. Focus is back on the trigger at once. The fade is off under reduced motion.
+ */
+export const ExitMotion: Story = {
+  args: {
+    'aria-label': undefined,
+    onOpenChange: fn(),
+    children: (
+      <>
+        <Menu.Trigger>
+          <Button>Actions</Button>
+        </Menu.Trigger>
+        <Menu.Popover className="transition-opacity duration-wave-fast data-[presence=exiting]:opacity-0 motion-reduce:transition-none">
+          <Menu.Item onClick={fn()}>Edit</Menu.Item>
+          <Menu.Item onClick={fn()}>Duplicate</Menu.Item>
+          <Menu.Item onClick={fn()}>Delete</Menu.Item>
+        </Menu.Popover>
+      </>
+    ),
+  },
+};
+
+/**
+ * `openOnHover`: resting the mouse on the trigger opens the menu without moving focus, and it
+ * closes once the mouse has left the trigger and the menu. A click (or Enter, Space, ArrowDown)
+ * on the trigger keeps it open and moves focus into it. Touch never opens it by hover.
+ */
+export const HoverMenu: Story = {
+  args: {
+    'aria-label': undefined,
+    openOnHover: true,
+    onOpenChange: fn(),
+    children: (
+      <>
+        <Menu.Trigger>
+          <MenuButton>View</MenuButton>
+        </Menu.Trigger>
+        <Menu.Popover>
+          <Menu.Item onClick={fn()}>Zoom in</Menu.Item>
+          <Menu.Item onClick={fn()}>Zoom out</Menu.Item>
+          <Menu.Item onClick={fn()}>Actual size</Menu.Item>
+        </Menu.Popover>
+      </>
+    ),
+  },
+};
+
+const FILES = ['report.docx', 'notes.txt', 'budget.xlsx', 'photo.png'];
+
+/**
+ * `openOnContext`: the file list is a context-menu region. A right click opens the menu at the
+ * pointer; Shift+F10 or the ContextMenu key opens it at the focused file (the region announces the
+ * shortcut with `aria-keyshortcuts`). Escape, Tab and choosing an action return focus to that
+ * file. The menu is named by its `aria-label`; the region gets no menu-button state.
+ */
+export const ContextMenu: Story = {
+  args: {
+    'aria-label': undefined,
+    openOnContext: true,
+    onOpenChange: fn(),
+    children: (
+      <>
+        <Menu.Trigger>
+          <div
+            aria-keyshortcuts="Shift+F10"
+            className="flex w-72 flex-col items-stretch gap-1 rounded-md border border-border p-2"
+          >
+            <p className="px-2 text-caption-1 text-muted-foreground">
+              Right-click a file, or press Shift+F10 on it.
+            </p>
+            {FILES.map((file) => (
+              <Button key={file} appearance="subtle" className="justify-start">
+                {file}
+              </Button>
+            ))}
+          </div>
+        </Menu.Trigger>
+        <Menu.Popover aria-label="File actions">
+          <Menu.Item onClick={fn()}>Open</Menu.Item>
+          <Menu.Item onClick={fn()}>Rename</Menu.Item>
+          <Menu.Divider />
+          <Menu.Item onClick={fn()}>Delete</Menu.Item>
+        </Menu.Popover>
+      </>
+    ),
+  },
+};
+
+/** A controlled menu placed at a toggle button outside it (`Menu.Popover target`). */
+function CustomTargetMenu({ onOpenChange, ...args }: MenuProps) {
+  const [open, setOpen] = React.useState(false);
+  const [toggle, setToggle] = React.useState<HTMLButtonElement | null>(null);
+  const changeOpen = (next: boolean) => {
+    setOpen(next);
+    onOpenChange?.(next);
+  };
+  return (
+    <div className="flex items-center gap-2">
+      <span className="text-body-1 text-foreground">Layout</span>
+      <Button
+        ref={setToggle}
+        aria-haspopup="menu"
+        aria-expanded={open}
+        onClick={() => changeOpen(!open)}
+      >
+        Options
+      </Button>
+      <Menu {...args} open={open} onOpenChange={changeOpen}>
+        <Menu.Popover target={toggle} aria-label="Layout options">
+          <Menu.Item onClick={fn()}>Grid</Menu.Item>
+          <Menu.Item onClick={fn()}>List</Menu.Item>
+          <Menu.Item onClick={fn()}>Columns</Menu.Item>
+        </Menu.Popover>
+      </Menu>
+    </div>
+  );
+}
+
+/**
+ * `Menu.Popover target`: a controlled menu without `Menu.Trigger`, placed at a toggle button that
+ * carries its own menu-button state (`aria-haspopup`, `aria-expanded`). A press on the target does
+ * not close the menu through its outside-press rule, so the toggle closes it with one click. The
+ * menu is named by its `aria-label`.
+ */
+export const CustomTarget: Story = {
+  args: { 'aria-label': undefined, onOpenChange: fn() },
+  render: (args) => <CustomTargetMenu {...args} />,
 };
