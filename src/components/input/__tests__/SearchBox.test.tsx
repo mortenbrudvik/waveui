@@ -617,6 +617,34 @@ describe('SearchBox', () => {
       expectWarnings(warn, [ELEMENT_WARNING]);
     });
 
+    it('a disabled SearchBox keeps a focus ring inside it at full strength', async () => {
+      const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+      const user = userEvent.setup();
+      render(
+        <>
+          <SearchBox
+            data-testid="disabled"
+            aria-label="Search"
+            defaultValue="test"
+            disabled
+            dismiss={<Button disabledFocusable>Reset</Button>}
+          />
+          <SearchBox data-testid="enabled" aria-label="Filter" />
+        </>,
+      );
+      await user.tab();
+      expect(screen.getByRole('button', { name: 'Reset' })).toHaveFocus();
+      // The root's opacity dims the focused clear button's outline too, which would put the ring
+      // below 3:1. tailwind-merge keeps both classes (different variants); the variant wins while
+      // it matches.
+      expect(screen.getByTestId('disabled')).toHaveClass(
+        'opacity-50',
+        'has-focus-visible:opacity-100',
+      );
+      expect(screen.getByTestId('enabled').className).not.toMatch(/opacity/);
+      expectWarnings(warn, [ELEMENT_WARNING]);
+    });
+
     it('keeps type="button" when a typeless <button> slot is merged (C-BUTTON-TYPE)', () => {
       const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
       const onSubmit = vi.fn((event: React.FormEvent) => event.preventDefault());

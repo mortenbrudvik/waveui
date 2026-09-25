@@ -1270,3 +1270,9 @@ Each keeps an APG-aligned or already-documented WaveUI behaviour; revisit only o
 - `foundation-47` — headless components (preview, "not production-ready").
 - `foundation-2` — `targetDocument` for iframes and child windows.
 - `foundation-43` — ShadowRoot mount nodes.
+
+### 8.5 Follow-ups outside the gap list
+
+Small fixes found while shipping a phase that close no Fluent gap. Any package that touches the component may pick one up; its CHANGELOG entry describes the fix.
+
+- **Focus after a value is cleared from outside the clear button.** Combobox, Dropdown, DatePicker, TimePicker and SearchBox keep focus in the control when the user clears it through the clear button, but when a parent, a programmatic form reset or a timer clears the value while the clear button has keyboard focus, the button unmounts and focus drops to `<body>`. Fix: one shared clear-button part for the five controls that moves focus to the control's input or button (`usePreserveFocus`) when it unmounts while focused. **Size:** M.

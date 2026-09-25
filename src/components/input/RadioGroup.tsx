@@ -318,7 +318,11 @@ export function RadioItem({
         // items-start: the radio lines up with the first line of a label that wraps or has a
         // second line, not with its middle.
         'inline-flex items-start gap-2 select-none',
-        isDisabled ? 'cursor-not-allowed opacity-50' : 'cursor-pointer',
+        // The dimmed look lifts while a focus ring shows inside the root (a link's in the label; a
+        // disabled radio never takes focus): opacity would dim the ring below 3:1.
+        isDisabled
+          ? 'cursor-not-allowed opacity-50 has-focus-visible:opacity-100'
+          : 'cursor-pointer',
         className,
       )}
     >

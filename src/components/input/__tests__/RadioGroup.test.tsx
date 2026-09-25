@@ -837,6 +837,41 @@ describe('RadioItem — rich label', () => {
     expect(onValueChange.mock.calls).toEqual([['pro']]);
   });
 
+  it.each([
+    ['the item', { group: {}, item: { disabled: true } }],
+    ['the group', { group: { disabled: true }, item: {} }],
+  ])(
+    'a focused link in the label keeps its focus ring at full strength when %s is disabled',
+    (_, { group, item }) => {
+      render(
+        <>
+          <RadioGroup aria-label="Plan" {...group}>
+            <RadioItem
+              value="pro"
+              {...item}
+              label={
+                <>
+                  Pro (<a href="#pricing">see pricing</a>)
+                </>
+              }
+            />
+          </RadioGroup>
+          <RadioGroup aria-label="Size">
+            <RadioItem value="small" label="Small" />
+          </RadioGroup>
+        </>,
+      );
+      // The root's opacity dims the link's outline too, which would put the ring below 3:1 (the
+      // disabled radio itself never takes focus). tailwind-merge keeps both classes (different
+      // variants); the variant wins while it matches.
+      expect(radio('Pro (see pricing)').closest('label')).toHaveClass(
+        'opacity-50',
+        'has-focus-visible:opacity-100',
+      );
+      expect(radio('Small').closest('label')?.className).not.toMatch(/opacity/);
+    },
+  );
+
   it('renders label={0} as content', () => {
     render(
       <RadioGroup aria-label="Count">

@@ -110,6 +110,32 @@ describe('Input', () => {
       expect(screen.getByTestId('price')).toBe(input);
     });
 
+    it('a disabled field with slots keeps a focus ring inside it at full strength', async () => {
+      const user = userEvent.setup();
+      render(
+        <>
+          <Input
+            aria-label="Price"
+            disabled
+            contentAfter={<button type="button">Currency help</button>}
+          />
+          <Input aria-label="Weight" contentAfter="kg" />
+        </>,
+      );
+      await user.tab();
+      expect(screen.getByRole('button', { name: 'Currency help' })).toHaveFocus();
+      // The wrapper's opacity dims the outline of focusable slot content too, which would put the
+      // ring below 3:1 (the disabled input never takes focus). tailwind-merge keeps both classes
+      // (different variants); the variant wins while it matches.
+      expect(screen.getByRole('textbox', { name: 'Price' }).parentElement).toHaveClass(
+        'opacity-50',
+        'has-focus-visible:opacity-100',
+      );
+      expect(screen.getByRole('textbox', { name: 'Weight' }).parentElement?.className).not.toMatch(
+        /opacity/,
+      );
+    });
+
     it('hides the whole field with hidden, not only the inner input', () => {
       const { container } = render(<Input aria-label="Price" contentAfter="kg" hidden />);
       const wrapper = container.firstElementChild as HTMLElement;

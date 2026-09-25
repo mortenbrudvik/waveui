@@ -1330,6 +1330,21 @@ describe('DatePicker', () => {
       expect(focusedLabel()).toBe('Monday, June 30, 2025');
     });
 
+    it('an unavailable day that has keyboard focus shows its focus ring at full strength', async () => {
+      const { user } = await openOn(JUNE_15, { disabledDates: (d) => d.getDate() === 16 });
+      await user.keyboard('{ArrowRight}');
+      const day16 = dayButton('Monday, June 16, 2025');
+      expect(day16).toHaveFocus();
+      expect(day16).toHaveAttribute('aria-disabled', 'true');
+      // Dimmed, except while its ring shows: `opacity` would dim the ring below 3:1. The variant's
+      // higher specificity wins over `aria-disabled:opacity-50` while it matches.
+      expect(day16).toHaveClass(
+        'aria-disabled:line-through',
+        'aria-disabled:opacity-50',
+        'aria-disabled:focus-visible:opacity-100',
+      );
+    });
+
     it('keyboard focus stays within minDate/maxDate', async () => {
       const { user } = await openOn(new Date(2025, 5, 19), {
         minDate: new Date(2025, 5, 10),

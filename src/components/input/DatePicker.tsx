@@ -238,8 +238,10 @@ const ICON_BUTTON_CLASSES =
 const NAV_BUTTON_CLASSES =
   'flex h-8 w-8 items-center justify-center rounded bg-transparent p-0 text-foreground not-disabled:not-aria-disabled:hover:bg-subtle-hover';
 
+// An unavailable day stays focusable in the roving grid (`aria-disabled`); the day button adds
+// `disabledStyles`, whose dimmed look lifts while the focus ring shows (opacity would dim the ring).
 const DAY_CLASSES =
-  'flex h-8 w-8 items-center justify-center rounded bg-transparent p-0 text-caption-1 text-foreground not-disabled:not-aria-disabled:hover:bg-subtle-hover data-[outside]:text-muted-foreground data-[today]:border data-[today]:border-primary data-[today]:font-semibold data-[selected]:bg-primary data-[selected]:font-semibold data-[selected]:text-primary-foreground not-disabled:not-aria-disabled:data-[selected]:hover:bg-primary-hover aria-disabled:cursor-not-allowed aria-disabled:line-through aria-disabled:opacity-50';
+  'flex h-8 w-8 items-center justify-center rounded bg-transparent p-0 text-caption-1 text-foreground not-disabled:not-aria-disabled:hover:bg-subtle-hover data-[outside]:text-muted-foreground data-[today]:border data-[today]:border-primary data-[today]:font-semibold data-[selected]:bg-primary data-[selected]:font-semibold data-[selected]:text-primary-foreground not-disabled:not-aria-disabled:data-[selected]:hover:bg-primary-hover aria-disabled:line-through';
 
 /** The 42 grid days as 6 weeks. */
 function toWeeks(days: Date[]): Date[][] {
@@ -941,6 +943,7 @@ export const DatePicker = (props: DatePickerProps) => {
                             className={cn(
                               DAY_CLASSES,
                               focusRing,
+                              disabledStyles,
                               isSelected && forcedColors.selectedLeaf,
                             )}
                           >
