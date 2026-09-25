@@ -15,11 +15,14 @@ import {
 import {
   asClientReference,
   findDanglingIdRefsInHtml,
+  renderWithProviders,
   testCompoundExposure,
+  testNoImplicitSubmit,
   testSystemProps,
 } from '../../../test-utils';
 import { FIELD_TEST_IDS, FIELD_TEST_TEXT, renderWithFieldContext } from '../../../test-utils-field';
 import { DismissLayerProvider, useDismiss } from '../../../hooks/useDismiss';
+import { Button } from '../../button/Button';
 
 const FRUITS = [
   <Option key="a" value="a">
@@ -94,6 +97,11 @@ const DEPRECATED_ON_OPTION_SELECT =
   '[WaveUI] Combobox: `onOptionSelect` is deprecated and will be removed in 1.0. Use ' +
   '`onValueChange` instead.';
 
+const EXPAND_ICON_BUTTON =
+  '[WaveUI] Combobox: `expandIcon` received a button element; its children render as the ' +
+  'glyph of the built-in expand button and its props were dropped (buttons cannot be nested). ' +
+  'Pass icon content instead, e.g. `expandIcon={<MyIcon />}`.';
+
 afterEach(() => {
   vi.restoreAllMocks();
 });
@@ -130,7 +138,20 @@ describe('Combobox', () => {
         },
       },
       { name: 'disabled', props: { disabled: true } },
+      { name: 'with clear and expand buttons', props: { defaultValue: 'b', clearable: true } },
+      {
+        name: 'open with clear and expand buttons',
+        props: { defaultOpen: true, defaultValue: 'b', clearable: true },
+      },
+      {
+        name: 'disabled with clear and expand buttons',
+        props: { disabled: true, defaultValue: 'b', clearable: true },
+      },
     ],
+  });
+
+  testNoImplicitSubmit(Combobox, {
+    defaultProps: { 'aria-label': 'Fruit', defaultValue: 'a', clearable: true, children: FRUITS },
   });
 
   it('exports flat sub-component names equal to the dotted members (repo-level#2)', () => {
@@ -1410,6 +1431,328 @@ describe('Combobox', () => {
       const data = new FormData(form);
       expect(data.get('fruit')).toBeNull();
       expect(data.get('snack')).toBeNull();
+    });
+  });
+
+  describe('expand button', () => {
+    function expandButton(name = 'Show options') {
+      return screen.getByRole('button', { name });
+    }
+
+    it('wraps the input with its buttons; the root keeps the status region and the hidden input', () => {
+      const { container } = render(
+        <Combobox aria-label="Fruit" name="fruit" defaultValue="a" clearable data-testid="root">
+          {FRUITS}
+        </Combobox>,
+      );
+      const root = screen.getByTestId('root');
+      const wrapper = combobox().parentElement as HTMLElement;
+      expect(wrapper.parentElement).toBe(root);
+      expect(wrapper.tagName).toBe('DIV');
+      expect(wrapper).toHaveClass('relative', 'flex', 'items-center');
+      expect(
+        within(wrapper)
+          .getAllByRole('button')
+          .map((b) => b.getAttribute('aria-label')),
+      ).toEqual(['Clear selection', 'Show options']);
+      expect(screen.getByRole('status').parentElement).toBe(root);
+      expect(container.querySelector('input[name="fruit"]')?.parentElement).toBe(root);
+    });
+
+    it('toggles the list and keeps focus in the input', async () => {
+      const user = userEvent.setup();
+      const onOpenChange = vi.fn();
+      renderCombobox({ onOpenChange });
+      await user.click(expandButton());
+      expect(screen.getByRole('listbox')).toBeInTheDocument();
+      expect(combobox()).toHaveAttribute('aria-expanded', 'true');
+      expect(combobox()).toHaveFocus();
+      await user.click(expandButton());
+      expect(screen.queryByRole('listbox')).not.toBeInTheDocument();
+      expect(combobox()).toHaveFocus();
+      expect(onOpenChange.mock.calls).toEqual([[true], [false]]);
+    });
+
+    it('follows the list with aria-expanded and aria-controls', async () => {
+      const user = userEvent.setup();
+      renderCombobox();
+      expect(expandButton()).toHaveAttribute('aria-expanded', 'false');
+      expect(expandButton()).not.toHaveAttribute('aria-controls');
+      await user.click(expandButton());
+      expect(expandButton()).toHaveAttribute('aria-expanded', 'true');
+      expect(expandButton()).toHaveAttribute('aria-controls', screen.getByRole('listbox').id);
+      // A filter that matches nothing shows no list.
+      await user.type(combobox(), 'zz');
+      expect(expandButton()).toHaveAttribute('aria-expanded', 'false');
+      expect(expandButton()).not.toHaveAttribute('aria-controls');
+    });
+
+    it('is not a tab stop (Alt+ArrowDown opens the list from the keyboard)', async () => {
+      const user = userEvent.setup();
+      render(
+        <>
+          <Combobox aria-label="Fruit">{FRUITS}</Combobox>
+          <button type="button">Next</button>
+        </>,
+      );
+      expect(expandButton()).toHaveAttribute('tabindex', '-1');
+      await user.tab();
+      expect(combobox()).toHaveFocus();
+      await user.tab();
+      expect(screen.getByRole('button', { name: 'Next' })).toHaveFocus();
+      await user.tab({ shift: true });
+      expect(combobox()).toHaveFocus();
+      await user.keyboard('{Alt>}{ArrowDown}{/Alt}');
+      expect(screen.getByRole('listbox')).toBeInTheDocument();
+    });
+
+    it('is disabled while the combobox is disabled or read-only', () => {
+      const { rerender } = renderCombobox({ disabled: true });
+      expect(expandButton()).toBeDisabled();
+      rerender(
+        <Combobox aria-label="Fruit" readOnly>
+          {FRUITS}
+        </Combobox>,
+      );
+      expect(expandButton()).toBeDisabled();
+    });
+
+    it('turns its glyph while the list is open, without motion when reduced', async () => {
+      const user = userEvent.setup();
+      renderCombobox();
+      const glyph = () => expandButton().firstElementChild;
+      expect(glyph()).toHaveAttribute('aria-hidden', 'true');
+      expect(glyph()).toHaveClass('transition-transform', 'motion-reduce:transition-none');
+      expect(glyph()).not.toHaveClass('rotate-180');
+      expect(glyph()?.querySelector('svg')).toHaveAttribute('data-wave-icon', 'chevron-down');
+      await user.click(expandButton());
+      expect(glyph()).toHaveClass('rotate-180');
+    });
+
+    it.each([
+      ['null', null],
+      ['undefined', undefined],
+    ])('keeps the chevron with expandIcon %s', (_label, expandIcon) => {
+      renderCombobox({ expandIcon });
+      expect(expandButton().querySelector('svg')).toHaveAttribute('data-wave-icon', 'chevron-down');
+    });
+
+    it.each([
+      ['false', false],
+      ['true', true],
+      ['an empty string', ''],
+      ['an empty array', []],
+      ['an empty Fragment', <></>],
+    ])('hides the button with expandIcon %s (renders nothing)', (_label, expandIcon) => {
+      renderCombobox({ expandIcon });
+      expect(screen.queryByRole('button')).not.toBeInTheDocument();
+      expect(combobox().className).not.toMatch(/\bpe-/);
+    });
+
+    it('renders custom content as the decorative glyph of the built-in button', () => {
+      renderCombobox({ expandIcon: <svg data-testid="caret" /> });
+      const caret = screen.getByTestId('caret');
+      expect(caret.closest('button')).toBe(expandButton());
+      expect(caret.parentElement).toHaveAttribute('aria-hidden', 'true');
+      expect(expandButton()).toHaveAccessibleName('Show options');
+    });
+
+    it.each([
+      [
+        'a <button>',
+        <button key="native" type="button" aria-label="Open">
+          ▾
+        </button>,
+      ],
+      ['a Button', <Button key="wave">▾</Button>],
+    ])(
+      'does not nest %s passed as expandIcon: its children become the glyph (warns once)',
+      async (_label, expandIcon) => {
+        const user = userEvent.setup();
+        const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+        renderCombobox({ expandIcon });
+        expect(document.querySelectorAll('button')).toHaveLength(1);
+        expect(expandButton()).toHaveTextContent('▾');
+        expect(expandButton()).toHaveAttribute('tabindex', '-1');
+        await user.click(expandButton());
+        expect(screen.getByRole('listbox')).toBeInTheDocument();
+        expect(warn.mock.calls).toEqual([[EXPAND_ICON_BUTTON]]);
+      },
+    );
+
+    it('keeps the chevron for a button element without content (warns once)', () => {
+      const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+      renderCombobox({ expandIcon: <button type="button" /> });
+      expect(document.querySelectorAll('button')).toHaveLength(1);
+      expect(expandButton().querySelector('svg')).toHaveAttribute('data-wave-icon', 'chevron-down');
+      expect(warn.mock.calls).toEqual([[EXPAND_ICON_BUTTON]]);
+    });
+  });
+
+  describe('clear button', () => {
+    function clearButton(name = 'Clear selection') {
+      return screen.getByRole('button', { name });
+    }
+
+    it('shows only while a value is selected', async () => {
+      const user = userEvent.setup();
+      renderCombobox({ clearable: true });
+      expect(screen.queryByRole('button', { name: 'Clear selection' })).not.toBeInTheDocument();
+      await user.click(combobox());
+      await user.click(option('Beta'));
+      expect(clearButton()).toBeInTheDocument();
+    });
+
+    it('needs clearable, is not shown while read-only and is disabled while disabled', () => {
+      const { rerender } = renderCombobox({ defaultValue: 'a' });
+      expect(screen.queryByRole('button', { name: 'Clear selection' })).not.toBeInTheDocument();
+      rerender(
+        <Combobox aria-label="Fruit" defaultValue="a" clearable readOnly>
+          {FRUITS}
+        </Combobox>,
+      );
+      expect(screen.queryByRole('button', { name: 'Clear selection' })).not.toBeInTheDocument();
+      rerender(
+        <Combobox aria-label="Fruit" defaultValue="a" clearable disabled>
+          {FRUITS}
+        </Combobox>,
+      );
+      expect(clearButton()).toBeDisabled();
+    });
+
+    it('clears once in StrictMode, closes the list, focuses the input and empties the hidden input', async () => {
+      const user = userEvent.setup();
+      const onValueChange = vi.fn();
+      const onOpenChange = vi.fn();
+      render(
+        <React.StrictMode>
+          <form aria-label="Order">
+            <Combobox
+              aria-label="Fruit"
+              name="fruit"
+              defaultValue="b"
+              clearable
+              onValueChange={onValueChange}
+              onOpenChange={onOpenChange}
+            >
+              {FRUITS}
+            </Combobox>
+          </form>
+        </React.StrictMode>,
+      );
+      await user.click(combobox());
+      expect(screen.getByRole('listbox')).toBeInTheDocument();
+      await user.click(clearButton());
+      expect(onValueChange.mock.calls).toEqual([['']]);
+      expect(onOpenChange.mock.calls).toEqual([[true], [false]]);
+      expect(combobox()).toHaveValue('');
+      expect(combobox()).toHaveFocus();
+      expect(screen.queryByRole('listbox')).not.toBeInTheDocument();
+      expect(screen.queryByRole('button', { name: 'Clear selection' })).not.toBeInTheDocument();
+      const form = screen.getByRole('form', { name: 'Order' }) as HTMLFormElement;
+      expect(new FormData(form).get('fruit')).toBe('');
+    });
+
+    it('drops a typed filter when it clears', async () => {
+      const user = userEvent.setup();
+      renderCombobox({ defaultValue: 'a', clearable: true });
+      await user.clear(combobox());
+      await user.type(combobox(), 'ch');
+      await user.click(clearButton());
+      expect(combobox()).toHaveValue('');
+      await user.click(combobox());
+      expect(visibleOptions()).toEqual(['Apple', 'Beta', 'Cherry']);
+    });
+
+    it('freeform: clears the typed text without calling the deprecated onOptionSelect', async () => {
+      const user = userEvent.setup();
+      const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+      const onValueChange = vi.fn();
+      const onOptionSelect = vi.fn();
+      renderCombobox({ freeform: true, clearable: true, onValueChange, onOptionSelect });
+      await user.type(combobox(), 'kiwi');
+      onValueChange.mockClear();
+      onOptionSelect.mockClear();
+      await user.click(clearButton());
+      expect(onValueChange.mock.calls).toEqual([['']]);
+      expect(onOptionSelect).not.toHaveBeenCalled();
+      expect(combobox()).toHaveValue('');
+      expect(combobox()).toHaveFocus();
+      expect(warn.mock.calls).toEqual([[DEPRECATED_ON_OPTION_SELECT]]);
+    });
+
+    it('is a tab stop after the input and clears from the keyboard', async () => {
+      const user = userEvent.setup();
+      const onValueChange = vi.fn();
+      render(
+        <>
+          <Combobox aria-label="Fruit" defaultValue="a" clearable onValueChange={onValueChange}>
+            {FRUITS}
+          </Combobox>
+          <button type="button">Next</button>
+        </>,
+      );
+      await user.tab();
+      expect(combobox()).toHaveFocus();
+      await user.tab();
+      expect(clearButton()).toHaveFocus();
+      await user.tab();
+      expect(screen.getByRole('button', { name: 'Next' })).toHaveFocus();
+      await user.tab({ shift: true });
+      expect(clearButton()).toHaveFocus();
+      await user.keyboard('{Enter}');
+      expect(onValueChange.mock.calls).toEqual([['']]);
+      expect(combobox()).toHaveFocus();
+    });
+
+    it('localizes the names of both buttons with labels', () => {
+      const labels: ComboboxLabels = { clear: 'Auswahl löschen', expand: 'Optionen anzeigen' };
+      renderCombobox({ defaultValue: 'a', clearable: true, labels });
+      expect(screen.getByRole('button', { name: 'Auswahl löschen' })).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: 'Optionen anzeigen' })).toBeInTheDocument();
+    });
+
+    it.each([
+      ['the chevron', {}, 'pe-8'],
+      ['the chevron and the clear button', { clearable: true }, 'pe-14'],
+      ['only the clear button', { clearable: true, expandIcon: false }, 'pe-8'],
+    ])('pads the input for %s', (_label, props, padding) => {
+      renderCombobox({ defaultValue: 'a', ...props });
+      expect(combobox()).toHaveClass(padding);
+    });
+
+    it('places both buttons with logical classes in RTL', () => {
+      renderWithProviders(
+        <Combobox aria-label="Fruit" defaultValue="a" clearable>
+          {FRUITS}
+        </Combobox>,
+        { dir: 'rtl' },
+      );
+      expect(clearButton()).toHaveClass('absolute', 'end-7', 'h-6', 'w-6');
+      expect(screen.getByRole('button', { name: 'Show options' })).toHaveClass('absolute', 'end-1');
+      for (const element of [clearButton(), screen.getByRole('button', { name: 'Show options' })]) {
+        expect(element.className).not.toMatch(/\b(left|right)-/);
+      }
+      expect(combobox().className).not.toMatch(/\bp[lr]-/);
+      renderWithProviders(
+        <Combobox aria-label="Snack" defaultValue="a" clearable expandIcon={false}>
+          {FRUITS}
+        </Combobox>,
+        { dir: 'rtl' },
+      );
+      expect(screen.getAllByRole('button', { name: 'Clear selection' })[1]).toHaveClass('end-1');
+    });
+
+    it('gives both buttons their own padding, background and focus ring (C-NATIVE, C-FOCUS)', () => {
+      renderCombobox({ defaultValue: 'a', clearable: true });
+      for (const element of [clearButton(), screen.getByRole('button', { name: 'Show options' })]) {
+        expect(element).toHaveClass(
+          'p-0',
+          'bg-transparent',
+          'focus-visible:outline-2',
+          'not-disabled:not-aria-disabled:hover:bg-subtle-hover',
+        );
+      }
     });
   });
 

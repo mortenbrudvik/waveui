@@ -4,6 +4,7 @@ import { joinIds } from '../../lib/aria';
 import { composeEventHandlers } from '../../lib/composeEventHandlers';
 import { warnDeprecated, warnOnce } from '../../lib/dev';
 import { CheckIcon, DismissIcon } from '../../lib/icons';
+import type { Slot } from '../../lib/slot';
 import {
   disabledStyles,
   focusRing,
@@ -16,6 +17,7 @@ import { useControllable } from '../../hooks/useControllable';
 import { useDismiss } from '../../hooks/useDismiss';
 import { useFieldContext, useFieldControl } from '../../hooks/useFieldControl';
 import { useFormReset } from '../../hooks/useFormReset';
+import { useId } from '../../hooks/useId';
 import { useIsClient } from '../../hooks/useIsClient';
 import { ListboxContext, useListbox, useListboxOption } from '../../hooks/useListbox';
 import type { ListboxItem } from '../../hooks/useListbox';
@@ -23,6 +25,7 @@ import { useMergedRefs } from '../../hooks/useMergedRefs';
 import { usePopupPosition } from '../../hooks/usePopupPosition';
 import { HiddenInput } from '../internal/HiddenInput';
 import { Portal } from '../portal/Portal';
+import { PickerExpandButton, showsExpandButton } from './Combobox.expand';
 import {
   DEFAULT_TIME_STEP,
   generateTimeOptions,
@@ -32,6 +35,7 @@ import {
   timeToMinutes,
 } from './dateUtils';
 import { isInvalidLook } from './Input';
+import { PICKER_ICON_BUTTON_CLASSES, pickerEndPadding } from './pickerStyles';
 import type { RoutedHandlers } from './routedHandlers';
 
 /* ------------------------------------------------------------------ */
@@ -70,6 +74,9 @@ TimePickerOption.displayName = 'TimePickerOption';
 /*  TimePicker                                                         */
 /* ------------------------------------------------------------------ */
 
+/** Why typed text was not accepted (see {@link TimePickerProps.onInvalidInput}). */
+export type TimePickerInvalidReason = 'unparseable' | 'out-of-range';
+
 /**
  * The TimePicker's built-in texts, for localization. Each member is optional and falls back to its
  * English default. The times themselves follow `format`.
@@ -79,6 +86,10 @@ export interface TimePickerLabels {
    * @default 'Clear time'
    */
   clear?: string;
+  /** Name of the expand button at the end of the input.
+   * @default 'Show times'
+   */
+  expand?: string;
   /** Name of the list of times when the picker has no `aria-label`, `aria-labelledby` or Field
    * label to lend it.
    * @default 'Times'
@@ -92,7 +103,28 @@ export interface TimePickerLabels {
    * @default 'No matching times'
    */
   noMatches?: string;
+  /**
+   * Message for text that is not a time. `format` is the display pattern (`'HH:mm'` or
+   * `'h:mm AM'`).
+   * @default (format) => `Enter a time in the format ${format}.`
+   */
+  invalidTime?: (format: string) => string;
+  /**
+   * Message for a time outside `minTime`/`maxTime`. The bounds are passed as the input shows times
+   * (`format`); a bound that is not set is `undefined`.
+   * @default (min, max) => `Enter a time between ${min} and ${max}.` (only `min`: `Enter a time on
+   * or after ${min}.`; only `max`: `Enter a time on or before ${max}.`)
+   */
+  outOfRange?: (min: string | undefined, max: string | undefined) => string;
 }
+
+const defaultInvalidTimeLabel = (format: string) => `Enter a time in the format ${format}.`;
+
+const defaultOutOfRangeLabel = (min: string | undefined, max: string | undefined) => {
+  if (min !== undefined && max !== undefined) return `Enter a time between ${min} and ${max}.`;
+  if (min !== undefined) return `Enter a time on or after ${min}.`;
+  return `Enter a time on or before ${max}.`;
+};
 
 /** Properties for the TimePicker component. */
 export interface TimePickerProps extends Omit<
@@ -150,10 +182,20 @@ export interface TimePickerProps extends Omit<
    */
   readOnly?: boolean;
   /**
-   * Whether to show a clear button when a time is selected (not shown while `readOnly`).
+   * Whether to show a clear button when a time is selected (not shown while `readOnly`; shown
+   * disabled while `disabled`). It is a tab stop after the input.
    * @default false
    */
   clearable?: boolean;
+  /**
+   * The glyph of the expand button at the end of the input (default: a chevron). The button
+   * opens and closes the list without moving focus out of the input and is not a tab stop
+   * (Alt+ArrowDown opens the list from the keyboard). `null` or `undefined` keep the chevron;
+   * `false`, or a value that renders nothing, hides the button. Decorative content rendered
+   * inside the built-in button: a `<button>` or `Button` passed here is not nested (its children
+   * become the glyph, with a development warning).
+   */
+  expandIcon?: Slot<'span'>;
   /**
    * Controlled open state of the list (never shown while `disabled` or `readOnly`). The list
    * renders only in the browser: an open picker is closed in the server HTML and opens once it has
@@ -170,8 +212,16 @@ export interface TimePickerProps extends Omit<
   /** Called when the list opens or closes (only when the state changes). */
   onOpenChange?: (open: boolean) => void;
   /**
-   * Names of the clear button and the list and the status texts of an empty list, for
-   * localization. Unset members keep their English defaults.
+   * Called when edited text is not accepted on Enter or blur (once per edit): it is not a time
+   * (`'unparseable'`) or lies outside `minTime`/`maxTime` (`'out-of-range'`). The text stays in the
+   * input, which is marked `aria-invalid` and described by an error message (left to the
+   * surrounding `Field` when it shows an error). Enter reports it again when pressed again.
+   */
+  onInvalidInput?: (text: string, reason: TimePickerInvalidReason) => void;
+  /**
+   * Names of the clear and expand buttons and of the list, the status texts of an empty list and
+   * the error messages of rejected text, for localization. Unset members keep their English
+   * defaults.
    */
   labels?: TimePickerLabels;
   /** Form field name: the `HH:mm` value is submitted under it (hidden input). */
@@ -225,19 +275,24 @@ function startsWithQuery(item: ListboxItem, text: string): boolean {
  *   else the first one that contains it; Enter commits the active option. Enter or leaving the
  *   field also commits a complete typed time that is not in the list (`9:15 AM`, `14:45`) when it
  *   lies within `minTime`/`maxTime`, and erased text clears the value (as the clear button does);
- *   Enter never submits the form with edited text. Other typed text is reverted on blur. Escape on
- *   a closed list reverts any edit, erased text included, to the selected time.
- * - Click the input, ArrowDown/ArrowUp or type to open; the list opens with every option and the
- *   selected one (when it is in the list) active and scrolled into view. Without one, no option is
- *   active until ArrowDown/ArrowUp or typing, so Enter lets the surrounding form submit. Escape,
- *   Tab, an outside press or focus leaving closes it. Typed text kept after Escape closed the list
- *   still filters it when it reopens: a click resumes the option typing made active,
- *   ArrowDown/ArrowUp start at the first/last match.
+ *   Enter never submits the form with edited text. Other typed text is kept: the input is marked
+ *   invalid and an error message describes it (`onInvalidInput`, reported once per edit) until the
+ *   text is edited or replaced (an option, the clear button, Escape, a form reset, a new value
+ *   from the parent). Escape on a closed list reverts any edit, erased text included, to the
+ *   selected time.
+ * - Click the input or the expand button at its end (a chevron, see `expandIcon`; not a tab stop,
+ *   and it leaves focus in the input), press ArrowDown/ArrowUp or type to open; the list opens
+ *   with every option and the selected one (when it is in the list) active and scrolled into
+ *   view. Without one, no option is active until ArrowDown/ArrowUp or typing, so Enter lets the
+ *   surrounding form submit. Escape, Tab, an outside press or focus leaving closes it. Typed text
+ *   kept after Escape closed the list still filters it when it reopens: a click resumes the option
+ *   typing made active, ArrowDown/ArrowUp start at the first/last match.
  * - `open`/`defaultOpen`/`onOpenChange` control the list. It closes when the picker becomes
  *   disabled or read-only (uncontrolled `open`: it stays closed when the picker is enabled again),
  *   and the text typed until then is dropped.
  * - Keys of an IME composition (its confirming Enter included) are left to the IME.
- * - `clearable` shows a clear button while a time is selected (not while read-only).
+ * - `clearable` shows a clear button while a time is selected (not while read-only), a tab stop
+ *   after the input.
  * - The value is `HH:mm` (24-hour) whatever the display `format`; values off the `step` grid or
  *   outside the bounds are still displayed in `format`.
  * - The input (`controlRef`) receives `id`, `aria-label`, `aria-labelledby`, `aria-describedby`,
@@ -247,7 +302,7 @@ function startsWithQuery(item: ListboxItem, text: string): boolean {
  *   `enterKeyHint`. `ref`, `className`, `style`, other `aria-*` attributes and the remaining props
  *   stay on the root `<div>`. Inside a `Field`, the input is labelled and described by it.
  * - `name`/`required` add a hidden input for native forms (`HH:mm`); the value resets with its form.
- * - The built-in names and status texts are English; `labels` localizes them.
+ * - The built-in names, status texts and error messages are English; `labels` localizes them.
  * - The open list renders only in the browser: an open list (`defaultOpen`, `open`) is closed in
  *   the server HTML and opens once the picker has hydrated.
  */
@@ -265,9 +320,11 @@ export const TimePicker = (props: TimePickerProps) => {
     disabled = false,
     readOnly,
     clearable = false,
+    expandIcon,
     open: openProp,
     defaultOpen,
     onOpenChange,
+    onInvalidInput,
     labels,
     name,
     form,
@@ -366,12 +423,28 @@ export const TimePicker = (props: TimePickerProps) => {
   }, [interactive, openState, openControlled, setOpen]);
   /** Typed text; `null` shows the selected time's label (draft model). */
   const [draft, setDraft] = React.useState<string | null>(null);
-  // Locking the picker while the user types drops the typed text, so no later blur commits it
-  // (adjusted during render, C-HOOKS).
+  /** Why the typed text was rejected (it is kept and flagged); `null` while it is not. */
+  const [invalid, setInvalid] = React.useState<TimePickerInvalidReason | null>(null);
+  // Locking the picker while the user types drops the typed text and its error, so no later blur
+  // commits it (adjusted during render, C-HOOKS).
   const [wasInteractive, setWasInteractive] = React.useState(interactive);
   if (wasInteractive !== interactive) {
     setWasInteractive(interactive);
-    if (!interactive) setDraft(null);
+    if (!interactive) {
+      setDraft(null);
+      setInvalid(null);
+    }
+  }
+  // A new value from the parent replaces rejected text (the picker's own commits clear it
+  // themselves), so the input never shows an error next to a valid value. Text the user is still
+  // typing stays.
+  const [seenValue, setSeenValue] = React.useState(selectedValue);
+  if (seenValue !== selectedValue) {
+    setSeenValue(selectedValue);
+    if (invalid !== null) {
+      setDraft(null);
+      setInvalid(null);
+    }
   }
   /**
    * Filter text: the typed text only, never the selected time's label, so opening without an edit
@@ -431,26 +504,35 @@ export const TimePicker = (props: TimePickerProps) => {
   const commitValue = (next: string) => {
     setSelectedValue(next);
     setDraft(null);
+    setInvalid(null);
   };
 
   /**
    * Commits the typed text: erased text clears the value, a complete time within the bounds selects
-   * it; `false` for any other text (it is kept).
+   * it. Returns why any other text is not accepted (it is kept), else `null`.
    */
-  const commitDraft = (text: string): boolean => {
+  const commitDraft = (text: string): TimePickerInvalidReason | null => {
     if (!text.trim()) {
       commitValue('');
-      return true;
+      return null;
     }
     const minutes = timeToMinutes(text);
-    if (Number.isNaN(minutes) || !boundsValid || minutes < minMinutes || minutes > maxMinutes) {
-      return false;
-    }
+    if (Number.isNaN(minutes)) return 'unparseable';
+    if (!boundsValid || minutes < minMinutes || minutes > maxMinutes) return 'out-of-range';
     commitValue(minutesToValue(minutes));
-    return true;
+    return null;
   };
 
-  const clearDraft = () => setDraft(null);
+  /** Keeps rejected text, flags it and reports it. */
+  const rejectDraft = (text: string, reason: TimePickerInvalidReason) => {
+    setInvalid(reason);
+    onInvalidInput?.(text, reason);
+  };
+
+  const clearDraft = () => {
+    setDraft(null);
+    setInvalid(null);
+  };
 
   // The listbox counts as open only while it shows options: with no match nothing is displayed,
   // so `aria-expanded` is false and Escape reverts the typed text instead of closing an empty list.
@@ -526,12 +608,15 @@ export const TimePicker = (props: TimePickerProps) => {
   // Like a native readonly input, a read-only picker is barred from constraint validation (the
   // user could not fix it); its value is still submitted.
   const validates = isRequired && !readOnly;
+  const errorId = useId('timepicker-error');
+  // A Field that shows an error describes the input itself (its message is not repeated).
+  const showOwnError = invalid !== null && !field?.hasErrorMessage;
   const fieldProps = useFieldControl({
     id,
     'aria-label': ariaLabel,
     'aria-labelledby': ariaLabelledBy,
-    'aria-describedby': ariaDescribedBy,
-    'aria-invalid': ariaInvalid,
+    'aria-describedby': joinIds(ariaDescribedBy, showOwnError ? errorId : undefined),
+    'aria-invalid': invalid !== null ? true : ariaInvalid,
     // An explicit `required={false}` wins over a required Field, so aria-required matches
     // `isRequired`.
     'aria-required': ariaRequired ?? required,
@@ -554,6 +639,7 @@ export const TimePicker = (props: TimePickerProps) => {
     if (!interactive) return;
     const text = event.target.value;
     setDraft(text);
+    setInvalid(null);
     if (!open) setOpen(true);
     // Every edit re-ranks the highlight (it opens the list in the same update when closed).
     lb.setActiveValue(getTypedActiveValue(text));
@@ -579,10 +665,13 @@ export const TimePicker = (props: TimePickerProps) => {
         return;
       }
       if (event.key === 'Enter' && draft !== null) {
-        // Edited text is committed (a complete time within the bounds; erased text clears) or kept,
-        // never submitted with the form; untouched text lets Enter submit.
+        // Edited text is committed (a complete time within the bounds; erased text clears) or kept
+        // and flagged (reported on every Enter), never submitted with the form; untouched text
+        // lets Enter submit.
         event.preventDefault();
-        if (commitDraft(draft)) closeList();
+        const reason = commitDraft(draft);
+        if (reason === null) closeList();
+        else rejectDraft(draft, reason);
       }
     },
   );
@@ -597,8 +686,20 @@ export const TimePicker = (props: TimePickerProps) => {
   };
 
   const handleBlur = composeEventHandlers(onBlur, () => {
-    if (interactive && draft !== null && !commitDraft(draft)) clearDraft();
+    // Rejected text is kept; text that Enter already rejected is not reported again.
+    if (!interactive || draft === null || invalid !== null) return;
+    const reason = commitDraft(draft);
+    if (reason !== null) rejectDraft(draft, reason);
   });
+
+  // The expand button opens the list as a click in the input does (typed text kept after Escape
+  // resumes its matches) and closes it; focus stays in (or returns to) the input.
+  const handleExpandClick = () => {
+    if (!interactive) return;
+    if (open) closeList();
+    else handleInputClick();
+    inputRef.current?.focus();
+  };
 
   const handleClear = () => {
     if (!interactive) return;
@@ -625,6 +726,20 @@ export const TimePicker = (props: TimePickerProps) => {
 
   // Read-only pickers offer no clear action (the value cannot change).
   const showClear = clearable && !readOnly && selectedValue !== '';
+  const showExpand = showsExpandButton(expandIcon);
+
+  let errorMessage = '';
+  if (showOwnError && invalid === 'unparseable') {
+    errorMessage = (labels?.invalidTime ?? defaultInvalidTimeLabel)(
+      format === '24h' ? 'HH:mm' : 'h:mm AM',
+    );
+  } else if (showOwnError) {
+    // Bounds the consumer did not set are `undefined`, not the defaults.
+    errorMessage = (labels?.outOfRange ?? defaultOutOfRangeLabel)(
+      props.minTime === undefined ? undefined : displayTime(minTime, format),
+      props.maxTime === undefined ? undefined : displayTime(maxTime, format),
+    );
+  }
   // aria-controls must name a listbox that is actually mounted. The closed list is inline only
   // while options exist; the open list is mounted only while something matches.
   const listboxMounted = open ? hasMatches : allOptions.length > 0;
@@ -666,7 +781,7 @@ export const TimePicker = (props: TimePickerProps) => {
               inputFocus,
               disabledStyles,
               invalidLook && inputInvalid,
-              showClear && 'pe-8',
+              pickerEndPadding(Number(showClear) + Number(showExpand)),
             )}
           />
           {showClear && (
@@ -678,9 +793,8 @@ export const TimePicker = (props: TimePickerProps) => {
               onMouseDown={(event) => event.preventDefault()}
               onClick={handleClear}
               className={cn(
-                // Padding and background set here (C-NATIVE), not left to an app-wide rule.
-                'absolute end-1 flex h-6 w-6 items-center justify-center rounded bg-transparent p-0 text-muted-foreground',
-                'not-disabled:not-aria-disabled:hover:bg-subtle-hover not-disabled:not-aria-disabled:hover:text-foreground',
+                PICKER_ICON_BUTTON_CLASSES,
+                showExpand ? 'end-7' : 'end-1',
                 focusRing,
                 disabledStyles,
               )}
@@ -688,7 +802,23 @@ export const TimePicker = (props: TimePickerProps) => {
               <DismissIcon />
             </button>
           )}
+          {showExpand && (
+            <PickerExpandButton
+              component="TimePicker"
+              expandIcon={expandIcon}
+              label={labels?.expand ?? 'Show times'}
+              expanded={expanded}
+              listboxId={lb.listboxId}
+              disabled={disabled || !!readOnly}
+              onToggle={handleExpandClick}
+            />
+          )}
         </div>
+        {showOwnError && (
+          <p id={errorId} role="alert" className="mt-1 text-caption-1 text-error">
+            {errorMessage}
+          </p>
+        )}
         {!open && allOptions.length > 0 && renderListbox(true)}
         <span role="status" className="sr-only">
           {statusMessage}
