@@ -4,10 +4,12 @@ import { render, screen } from '@testing-library/react';
 import { Field, type FieldProps } from '../Field';
 import { Checkbox } from '../Checkbox';
 import { Input } from '../Input';
+import { RadioGroup, RadioItem } from '../RadioGroup';
 import { Select } from '../Select';
 import { Textarea } from '../Textarea';
 import { Slider } from '../Slider';
 import { SearchBox } from '../SearchBox';
+import { Switch } from '../Switch';
 import {
   useFieldContext,
   useFieldControl,
@@ -31,6 +33,18 @@ function multipleChildrenWarning(extra: number) {
 const ERROR_AND_VALIDATION_WARNING =
   '[WaveUI] Field: `error` and `validationMessage`/`validationState` are both set; `error` wins. ' +
   'Use one of them.';
+
+/**
+ * The first child of a horizontal Field's control column that the column's first-row rule pads,
+ * or `null`. jsdom applies no Tailwind CSS, so the selector of the rule's arbitrary variant is
+ * matched instead.
+ */
+function paddedFirstChild(column: Element): Element | null {
+  const selector = [...column.classList]
+    .map((name) => /^\[&>(:first-child:has\(.+\))\]:py-1\.5$/.exec(name)?.[1])
+    .find((match) => match !== undefined);
+  return selector === undefined ? null : column.querySelector(`:scope > ${selector}`);
+}
 
 /** The `<p>` that renders a Field message, found by its text. */
 function messageElement(text: string): HTMLElement {
@@ -906,6 +920,61 @@ describe('Field', () => {
       expect(root.lastElementChild).toContainElement(input);
       expect(root.className).not.toMatch(/\b(?:ml|mr|pl|pr|left|right)-/);
     });
+
+    it.each(['ltr', 'rtl'] as const)(
+      'horizontal (%s): a Switch, Checkbox or RadioGroup gets a 32px first row, so its first line lines up with the label',
+      (dir) => {
+        renderWithProviders(
+          <>
+            <Field label="Display name" orientation="horizontal">
+              <Input />
+            </Field>
+            <Field label="Notifications" orientation="horizontal">
+              <Switch label="Email me about replies" />
+            </Field>
+            <Field label="Newsletter" orientation="horizontal">
+              <Checkbox label="Send me the monthly newsletter" />
+            </Field>
+            <Field label="Theme" orientation="horizontal">
+              <RadioGroup>
+                <RadioItem value="light" label="Light" />
+                <RadioItem value="dark" label="Dark" />
+              </RadioGroup>
+            </Field>
+            <Field label="Alerts" orientation="horizontal">
+              <div className="flex flex-col gap-2">
+                <Checkbox label="Email" />
+                <Checkbox label="Push" />
+              </div>
+            </Field>
+          </>,
+          { dir },
+        );
+        const column = (control: HTMLElement) => {
+          const root = control.closest('[data-orientation="horizontal"]');
+          if (!root?.lastElementChild) throw new Error('no horizontal Field around the control');
+          return root.lastElementChild;
+        };
+        // The label is centred on a 32px row (6px above its 20px line)...
+        for (const name of ['Display name', 'Notifications', 'Newsletter', 'Theme', 'Alerts']) {
+          expect(screen.getByText(name).closest('label')).toHaveClass('pt-1.5');
+        }
+        // ...a 32px control fills that row as it is...
+        const input = screen.getByRole('textbox', { name: 'Display name' });
+        expect(paddedFirstChild(column(input))).toBeNull();
+        // ...and a control of 20px rows gets 6px above and below its first row.
+        const toggle = screen.getByRole('switch', { name: 'Notifications Email me about replies' });
+        expect(paddedFirstChild(column(toggle))).toBe(toggle.closest('label'));
+        const box = screen.getByRole('checkbox', {
+          name: 'Newsletter Send me the monthly newsletter',
+        });
+        expect(paddedFirstChild(column(box))).toBe(box.closest('label'));
+        const group = screen.getByRole('radiogroup', { name: 'Theme' });
+        expect(paddedFirstChild(column(group))).toBe(group);
+        const email = screen.getByRole('checkbox', { name: 'Alerts Email' });
+        expect(paddedFirstChild(column(email))).toBe(email.closest('label')?.parentElement);
+      },
+    );
 
     it('horizontal without a label: the column takes the full width', () => {
       render(

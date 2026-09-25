@@ -116,8 +116,9 @@ export interface SwitchProps extends Omit<
  * - The thumb position mirrors when the switch itself is right-to-left (its nearest `dir`), so a
  *   switch in an LTR subtree of an RTL page keeps the LTR layout.
  * - `label` takes rich content (a link) and renders after the switch, or before or above it with
- *   `labelPosition` (the root carries `data-label-position`). `children` are not rendered (a
- *   development warning says so).
+ *   `labelPosition` (the root carries `data-label-position`). Beside the label, the switch lines
+ *   up with the first line of a label that wraps or has a second line. `children` are not
+ *   rendered (a development warning says so).
  */
 export const Switch = ({
   checked: checkedProp,
@@ -215,8 +216,10 @@ export const Switch = ({
       ref={ref}
       data-label-position={labelPosition}
       className={cn(
-        'relative inline-flex items-center gap-2 select-none',
-        labelPosition === 'above' && 'flex-col items-start gap-1',
+        // items-start: the 20px track lines up with the 20px first line of a label that wraps or
+        // has a second line, not with its middle.
+        'relative inline-flex items-start gap-2 select-none',
+        labelPosition === 'above' && 'flex-col gap-1',
         unavailable ? 'cursor-not-allowed opacity-50' : 'cursor-pointer',
         className,
       )}

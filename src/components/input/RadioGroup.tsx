@@ -181,6 +181,17 @@ const RadioGroupRoot = ({
     rootRef.current?.querySelector<HTMLElement>('[data-roving-value][tabindex="0"]')?.focus();
   };
 
+  // Arrow keys, Home and End move between the radios (and select) only when they are pressed on a
+  // radio or on the group itself. A key pressed on other focusable content inside the group (a
+  // link in an item's label) keeps its own meaning, such as scrolling the page.
+  const handleKeyDown = (event: React.KeyboardEvent<HTMLDivElement>) => {
+    const target = event.target as Element;
+    const item = target.closest('[data-roving-value]');
+    const fromOwnItem =
+      item !== null && item.closest('[data-roving-container]') === event.currentTarget;
+    if (target === event.currentTarget || fromOwnItem) containerProps.onKeyDown(event);
+  };
+
   const contextValue = React.useMemo<RadioGroupContextValue>(
     () => ({ value, disabled, select: setValue, getTabIndex }),
     [value, disabled, setValue, getTabIndex],
@@ -201,7 +212,7 @@ const RadioGroupRoot = ({
         {...rest}
         ref={mergedRef}
         data-roving-container=""
-        onKeyDown={composeEventHandlers(onKeyDown, containerProps.onKeyDown)}
+        onKeyDown={composeEventHandlers(onKeyDown, handleKeyDown)}
         onFocus={composeEventHandlers(onFocus, containerProps.onFocus, {
           checkDefaultPrevented: false,
         })}
@@ -238,7 +249,9 @@ export interface RadioItemProps extends Omit<
    * Label next to the radio indicator (any phrasing content, links included, but no other form
    * controls). It names the radio through `aria-labelledby`, after a consumer `aria-labelledby`;
    * a consumer `aria-label` names it instead. Clicking its text selects the radio; clicking a link
-   * inside it follows the link. `children` are not rendered: pass the label here.
+   * inside it follows the link, and arrow keys on that link do not move between the radios. The
+   * radio lines up with the first line of the label. `children` are not rendered: pass the label
+   * here.
    */
   label?: React.ReactNode;
   /** Whether the radio item is disabled and non-interactive (also when the group is disabled). */
@@ -302,7 +315,9 @@ export function RadioItem({
   return (
     <label
       className={cn(
-        'inline-flex items-center gap-2 select-none',
+        // items-start: the radio lines up with the first line of a label that wraps or has a
+        // second line, not with its middle.
+        'inline-flex items-start gap-2 select-none',
         isDisabled ? 'cursor-not-allowed opacity-50' : 'cursor-pointer',
         className,
       )}
@@ -323,6 +338,8 @@ export function RadioItem({
           // p-0 and bg-transparent are set here, not left to the native reset, which any app button
           // style overrides (C-NATIVE).
           'flex h-[18px] w-[18px] shrink-0 items-center justify-center rounded-full border bg-transparent p-0 transition-colors motion-reduce:transition-none',
+          // Centred on the 20px first line of the label text.
+          hasLabel && 'mt-px',
           focusRing,
           selected ? 'border-2 border-primary' : 'border-stroke-accessible',
           // Forced colors: the focusable circle keeps system colors (its focus outline stays
@@ -368,9 +385,10 @@ export type RadioGroupItemProps = RadioItemProps;
  * A single-choice group of {@link RadioItem}s (`role="radiogroup"`).
  *
  * - One tab stop (the selected item, else the first enabled one); arrow keys move focus and select
- *   (APG radio group), Home/End jump to the ends, disabled items are skipped. Items may sit inside
- *   Fragments or wrapper elements. Every item needs its own `value` (a development warning names
- *   a value that several items share).
+ *   (APG radio group), Home/End jump to the ends, disabled items are skipped. A key pressed on a
+ *   link inside an item's label stays the link's: it neither moves focus nor selects. Items may
+ *   sit inside Fragments or wrapper elements. Every item needs its own `value` (a development
+ *   warning names a value that several items share).
  * - Inside a `Field` it is named by the Field label (`aria-labelledby`) and described by its hint
  *   and error.
  * - With `name` (or `required`) it takes part in native forms; a form reset restores

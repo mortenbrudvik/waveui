@@ -752,6 +752,36 @@ describe('Checkbox — rich label and labelPosition', () => {
     expect(screen.getByTestId('root').firstElementChild).toBe(screen.getByText('Accept'));
   });
 
+  it.each(['after', 'before'] as const)(
+    'labelPosition=%s: the box lines up with the first line of a two-line label, not its middle',
+    (position) => {
+      render(
+        <Checkbox
+          labelPosition={position}
+          data-testid="root"
+          label={
+            <span className="flex flex-col">
+              <span>Newsletter</span>{' '}
+              <span className="text-caption-1 text-muted-foreground">Once a month</span>
+            </span>
+          }
+        />,
+      );
+      const root = screen.getByTestId('root');
+      expect(root).toHaveClass('items-start');
+      expect(root).not.toHaveClass('items-center');
+      // The 18px box sits 1px down, centred on the 20px first line of `text-body-1`.
+      expect(screen.getByRole('checkbox', { name: 'Newsletter Once a month' })).toHaveClass(
+        'mt-px',
+      );
+    },
+  );
+
+  it('a checkbox without a label text gets no first-line offset', () => {
+    render(<Checkbox aria-label="Select row" />);
+    expect(screen.getByRole('checkbox', { name: 'Select row' })).not.toHaveClass('mt-px');
+  });
+
   it('renders label={0} as content', () => {
     render(<Checkbox label={0} />);
     expect(screen.getByRole('checkbox', { name: '0' })).toHaveAttribute(

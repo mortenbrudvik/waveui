@@ -1,5 +1,5 @@
 import type { Meta, StoryObj } from '@storybook/react';
-import { Checkbox, Field, Input, Select, Slider, Switch, Textarea } from '../src';
+import { Checkbox, Field, Input, RadioGroup, Select, Slider, Switch, Textarea } from '../src';
 import { orientationArgType, validationStateArgType } from './_helpers';
 
 const meta = {
@@ -168,7 +168,9 @@ export const HintWithMessage: Story = {
 
 /**
  * `orientation="horizontal"` puts each label in a start column beside its control: a compact
- * settings form. Messages and hints stay below the control.
+ * settings form. Messages and hints stay below the control. Each label lines up with the first
+ * line of its control: an Input, and also a Switch, a Checkbox (whose label may wrap) and a
+ * RadioGroup.
  */
 export const Horizontal: Story = {
   args: {
@@ -192,6 +194,13 @@ export const Horizontal: Story = {
       </Field>
       <Field {...args} label="Newsletter">
         <Checkbox label="Send me the monthly newsletter" />
+      </Field>
+      <Field {...args} label="Theme">
+        <RadioGroup defaultValue="system">
+          <RadioGroup.Item value="light" label="Light" />
+          <RadioGroup.Item value="dark" label="Dark" />
+          <RadioGroup.Item value="system" label="Same as the system" />
+        </RadioGroup>
       </Field>
     </form>
   ),

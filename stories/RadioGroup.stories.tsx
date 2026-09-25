@@ -137,7 +137,8 @@ export const InForm: Story = {
 };
 
 /**
- * `label` takes rich content: here a second line of subtext. The whole text names each radio.
+ * `label` takes rich content: here a second line of subtext. The whole text names each radio, and
+ * the radio lines up with the first line.
  */
 export const LabelWithSubtext: Story = {
   args: {
@@ -154,12 +155,10 @@ export const LabelWithSubtext: Story = {
       <RadioGroup {...args}>
         <RadioItem
           value="standard"
-          className="items-start"
           label={option('Standard', 'Arrives in 3 to 5 business days.')}
         />
         <RadioItem
           value="express"
-          className="items-start"
           label={option('Express', 'Arrives tomorrow when ordered before 14:00.')}
         />
       </RadioGroup>

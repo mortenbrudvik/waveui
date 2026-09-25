@@ -710,6 +710,29 @@ describe('Switch — rich label and labelPosition', () => {
     expect(screen.getByTestId('root').firstElementChild).toBe(screen.getByText('Dark mode'));
   });
 
+  it.each(['after', 'before'] as const)(
+    'labelPosition=%s: the track lines up with the first line of a two-line label, not its middle',
+    (position) => {
+      render(
+        <Switch
+          labelPosition={position}
+          data-testid="root"
+          label={
+            <span className="flex flex-col">
+              <span>Dark mode</span>{' '}
+              <span className="text-caption-1 text-muted-foreground">Easier on the eyes</span>
+            </span>
+          }
+        />,
+      );
+      const root = screen.getByTestId('root');
+      // The 20px track is as tall as the first line of `text-body-1`: both start at the top.
+      expect(root).toHaveClass('items-start');
+      expect(root).not.toHaveClass('items-center');
+      expect(root).not.toHaveClass('flex-col');
+    },
+  );
+
   it('renders label={0} as content', () => {
     render(<Switch label={0} />);
     expect(screen.getByRole('switch', { name: '0' })).toHaveAttribute(

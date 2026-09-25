@@ -64,6 +64,8 @@ export interface FieldProps extends React.HTMLAttributes<HTMLDivElement> {
   /**
    * `vertical`: the label above the control. `horizontal`: the label in a start column (a third
    * of the width) beside the control; the message and the hint stay below the control. The
+   * label's first line lines up with a 32px control (Input, Select, …) and with the first line of
+   * a Checkbox, Switch or RadioGroup, which gets 6px of padding above and below for it. The
    * horizontal layout wraps the control in a column, so changing `orientation` on a mounted Field
    * remounts the control: an uncontrolled control loses its state and focus (control it, or keep
    * one orientation while the Field is mounted).
@@ -319,6 +321,16 @@ const MESSAGE_COLORS: Readonly<Record<ValidationState, string>> = {
   none: 'text-muted-foreground',
 };
 
+/**
+ * Horizontal layout: the label's first line is centred on a 32px row, the height of an Input, a
+ * Select and the other text controls. Checkbox, Switch and RadioGroup rows are one 20px line, so a
+ * first child that holds one (also a wrapper of several) gets 6px above and below: its first line
+ * then lines up with the label's, also when its label wraps or a group lists its items one below
+ * the other.
+ */
+const SHORT_ROW_FIRST_CHILD =
+  '[&>:first-child:has([role=checkbox],[role=switch],label>[role=radio])]:py-1.5';
+
 /** The icon box before a message: 12px glyphs line up with the first line of caption text. */
 const MESSAGE_ICON_CLASSES = 'mt-0.5 inline-flex shrink-0';
 
@@ -351,7 +363,8 @@ function renderMessageIcon(state: ValidationState, icon: Slot<'span'> | undefine
  *   `warning` messages are announced (`role="alert"`). The root carries `data-validation-state`
  *   and `data-orientation`.
  * - `orientation="horizontal"` puts the label in a start column beside the control, with the
- *   message and the hint below the control.
+ *   message and the hint below the control. The label lines up with the first line of the
+ *   control (a Checkbox, Switch or RadioGroup gets 6px of padding above and below for it).
  * - Provides `FieldContext`: the library's inputs (Input, Select, Textarea, Slider, SearchBox,
  *   Checkbox, Switch, RadioGroup, Rating, SpinButton, pickers, …) read it wherever they are inside
  *   the Field and are named by the label, described by the message and the hint and marked
@@ -566,7 +579,7 @@ export const Field = ({
           htmlFor={controlId}
           className={cn(
             'mb-1 text-body-1 font-semibold text-foreground',
-            // Beside the control: a third of the width, aligned with the text of a 32px control.
+            // Beside the control: a third of the width, its first line centred on a 32px row.
             horizontal && 'mb-0 shrink-0 basis-1/3 pt-1.5',
           )}
         >
@@ -578,7 +591,11 @@ export const Field = ({
           )}
         </label>
       ) : null}
-      {horizontal ? <div className="flex min-w-0 flex-1 flex-col">{control}</div> : control}
+      {horizontal ? (
+        <div className={cn('flex min-w-0 flex-1 flex-col', SHORT_ROW_FIRST_CHILD)}>{control}</div>
+      ) : (
+        control
+      )}
     </div>
   );
 };

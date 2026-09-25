@@ -125,8 +125,9 @@ export interface CheckboxProps extends Omit<
  * - With `name` (or `required`) it takes part in native forms like `<input type="checkbox">`, and
  *   a form reset restores `defaultChecked`.
  * - `label` takes rich content (a link to the terms) and renders after the box, or before it with
- *   `labelPosition="before"` (the root carries `data-label-position`). `children` are not
- *   rendered (a development warning says so).
+ *   `labelPosition="before"` (the root carries `data-label-position`). The box lines up with the
+ *   first line of a label that wraps or has a second line. `children` are not rendered (a
+ *   development warning says so).
  */
 export const Checkbox = ({
   checked: checkedProp,
@@ -230,7 +231,9 @@ export const Checkbox = ({
       ref={ref}
       data-label-position={labelPosition}
       className={cn(
-        'relative inline-flex items-center gap-2 select-none',
+        // items-start: the box lines up with the first line of a label that wraps or has a second
+        // line, not with its middle.
+        'relative inline-flex items-start gap-2 select-none',
         unavailable ? 'cursor-not-allowed opacity-50' : 'cursor-pointer',
         className,
       )}
@@ -270,6 +273,8 @@ export const Checkbox = ({
           // p-0 and the unchecked bg-transparent are set here, not left to the native reset, which
           // any app button style overrides (C-NATIVE).
           'flex h-[18px] w-[18px] shrink-0 items-center justify-center rounded-xs border p-0 transition-colors motion-reduce:transition-none',
+          // Centred on the 20px first line of the label text.
+          hasLabel && 'mt-px',
           focusRing,
           on
             ? cn(

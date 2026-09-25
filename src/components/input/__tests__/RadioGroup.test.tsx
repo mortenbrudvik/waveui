@@ -739,6 +739,31 @@ describe('RadioItem — rich label', () => {
     await expectNoA11yViolations();
   });
 
+  it('the radio lines up with the first line of a two-line label, not its middle', () => {
+    render(
+      <RadioGroup aria-label="Plan">
+        <RadioItem
+          value="pro"
+          label={
+            <span className="flex flex-col">
+              <span>Pro</span>{' '}
+              <span className="text-caption-1 text-muted-foreground">For growing teams</span>
+            </span>
+          }
+        />
+        <RadioItem value="free" aria-label="Free" />
+      </RadioGroup>,
+    );
+    const pro = radio('Pro For growing teams');
+    const root = pro.closest('label');
+    expect(root).toHaveClass('items-start');
+    expect(root).not.toHaveClass('items-center');
+    // The 18px circle sits 1px down, centred on the 20px first line of `text-body-1`.
+    expect(pro).toHaveClass('mt-px');
+    // Without a label text there is no line to line up with.
+    expect(radio('Free')).not.toHaveClass('mt-px');
+  });
+
   it('clicking the label text selects; clicking a link inside it does not', async () => {
     const user = userEvent.setup();
     const onValueChange = vi.fn();
@@ -764,6 +789,51 @@ describe('RadioItem — rich label', () => {
     expect(pro).toHaveAttribute('aria-checked', 'false');
     await user.click(screen.getByText(/^Pro \(/));
     expect(pro).toHaveAttribute('aria-checked', 'true');
+    expect(onValueChange.mock.calls).toEqual([['pro']]);
+  });
+
+  it('arrow keys, Home and End on a link inside a label neither move focus nor select', async () => {
+    const user = userEvent.setup();
+    const onValueChange = vi.fn();
+    render(
+      <RadioGroup aria-label="Plan" defaultValue="team" onValueChange={onValueChange}>
+        <RadioItem value="free" label="Free" />
+        <RadioItem value="team" label="Team" />
+        <RadioItem
+          value="pro"
+          label={
+            <>
+              Pro (<a href="#pricing">see pricing</a>)
+            </>
+          }
+        />
+      </RadioGroup>,
+    );
+    const link = screen.getByRole('link', { name: 'see pricing' });
+    act(() => link.focus());
+    for (const key of [
+      '{ArrowDown}',
+      '{ArrowUp}',
+      '{ArrowLeft}',
+      '{ArrowRight}',
+      '{Home}',
+      '{End}',
+    ]) {
+      await user.keyboard(key);
+      expect(link).toHaveFocus();
+    }
+    // The key keeps its default action (the page scrolls).
+    expect(fireEvent.keyDown(link, { key: 'ArrowDown' })).toBe(true);
+    expect(onValueChange).not.toHaveBeenCalled();
+    expect(screen.getAllByRole('radio').map((item) => item.getAttribute('aria-checked'))).toEqual([
+      'false',
+      'true',
+      'false',
+    ]);
+    // The radios still move and select with the arrow keys.
+    act(() => radio('Team').focus());
+    await user.keyboard('{ArrowDown}');
+    expect(radio('Pro (see pricing)')).toHaveFocus();
     expect(onValueChange.mock.calls).toEqual([['pro']]);
   });
 
