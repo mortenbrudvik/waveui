@@ -201,9 +201,11 @@ DialogRoot.displayName = 'Dialog';
  * Opens the dialog. Puts `aria-haspopup="dialog"`, `aria-expanded`, `aria-controls` (while open), a
  * click handler and a ref on its single child (no wrapper element), or passes them to a
  * render-prop child. A custom child component must forward `ref` and spread its props; one that
- * does not is wrapped in a `<span>` automatically (with a development warning). Focus returns to
- * the trigger when the dialog closes (with several triggers, to the one that opened it); with a
- * wrapper span, to the first focusable element in it.
+ * does not is wrapped in a `<span>` automatically (with a development warning), the span that
+ * `asChild={false}` renders. Focus returns to the trigger when the dialog closes (with several
+ * triggers, to the one that opened it). On the span, the state ARIA goes to the first element in
+ * the tab order inside it, and focus returns to that element (to the span only when you made it
+ * the trigger with `tabIndex={0}` or a `role`).
  */
 export const DialogTrigger = (props: DialogTriggerProps) => {
   const { open, setOpen, trigger, contentId } = useDialogContext('Dialog.Trigger');

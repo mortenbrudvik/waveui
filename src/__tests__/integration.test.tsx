@@ -10,7 +10,7 @@ import * as React from 'react';
 import { hydrateRoot, type Root } from 'react-dom/client';
 import { renderToString } from 'react-dom/server';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { act, render, screen, within } from '@testing-library/react';
+import { act, fireEvent, render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import * as ImageStories from '../../stories/Image.stories';
 import * as Wave from '../index';
@@ -1606,6 +1606,131 @@ describe('Tab from the trigger of an open layer that sits outside the dialog con
     await user.tab();
     expect(button('Next')).toHaveFocus();
   });
+});
+
+// ---------------------------------------------------------------------------
+// Tab out of a Popover or Menu opened from a wrapper-span trigger inside a Dialog
+// ---------------------------------------------------------------------------
+
+// The trigger of a wrapper span is the button inside it (the element that carries the state
+// ARIA): Tab leaves the popup after that button and Shift+Tab returns to it, never to the span.
+describe('Tab out of a Popover or Menu with a wrapper-span trigger inside a Dialog', () => {
+  const SPANS = [
+    ['asChild={false}', undefined],
+    ['asChild={false} tabIndex={-1}', -1],
+  ] as const;
+
+  function PopoverInDialog({ spanTabIndex, last }: { spanTabIndex?: number; last?: boolean }) {
+    return (
+      <Dialog open onOpenChange={() => {}}>
+        <Dialog.Content title="Edit">
+          <Button>Before</Button>
+          <Popover>
+            <Popover.Trigger asChild={false} tabIndex={spanTabIndex}>
+              <Button>Format</Button>
+            </Popover.Trigger>
+            <Popover.Content title="Format options">
+              <Button>Bold</Button>
+              <Button>Italic</Button>
+            </Popover.Content>
+          </Popover>
+          {!last && <Button>After</Button>}
+        </Dialog.Content>
+      </Dialog>
+    );
+  }
+
+  it.each(SPANS)(
+    'Popover, %s: Tab past the content reaches the element after the trigger; Shift+Tab from its first element, the button inside the span',
+    async (_name, spanTabIndex) => {
+      const user = userEvent.setup();
+      render(<PopoverInDialog spanTabIndex={spanTabIndex} />);
+      await user.click(button('Format'));
+      const popover = screen.getByRole('dialog', { name: 'Format options' });
+      await expectNoA11yViolations(document.body);
+      await user.tab();
+      expect(within(popover).getByRole('button', { name: 'Bold' })).toHaveFocus();
+      await user.tab();
+      expect(button('Italic')).toHaveFocus();
+      await user.tab();
+      expect(button('After')).toHaveFocus();
+      await user.tab({ shift: true });
+      expect(button('Italic')).toHaveFocus();
+      await user.tab({ shift: true });
+      expect(button('Bold')).toHaveFocus();
+      await user.tab({ shift: true });
+      expect(button('Format')).toHaveFocus();
+    },
+  );
+
+  it.each(SPANS)(
+    'Popover, %s, as the last element of the dialog: the focus trap leaves the content after the button inside the span, not back on it',
+    async (_name, spanTabIndex) => {
+      const user = userEvent.setup();
+      render(<PopoverInDialog spanTabIndex={spanTabIndex} last />);
+      const dialog = screen.getByRole('dialog', { name: 'Edit' });
+      await user.click(button('Format'));
+      await user.tab();
+      await user.tab();
+      expect(button('Italic')).toHaveFocus();
+      // Nothing follows the trigger in the dialog, so the popover leaves Tab to the focus trap,
+      // which continues after the popover's layer anchor: around the cycle, to the dialog's first
+      // element (with the span as the anchor, Tab went back to the button inside it).
+      await user.tab();
+      expect(within(dialog).getByRole('button', { name: 'Close' })).toHaveFocus();
+    },
+  );
+
+  function MenuInDialog({ spanTabIndex }: { spanTabIndex?: number }) {
+    return (
+      <Dialog open onOpenChange={() => {}}>
+        <Dialog.Content title="Edit">
+          <Button>Before</Button>
+          <Menu>
+            <Menu.Trigger asChild={false} tabIndex={spanTabIndex}>
+              <Button>Actions</Button>
+            </Menu.Trigger>
+            <Menu.Popover>
+              <Menu.Item>Rename</Menu.Item>
+              <Menu.Item>Delete</Menu.Item>
+            </Menu.Popover>
+          </Menu>
+          <Button>After</Button>
+        </Dialog.Content>
+      </Dialog>
+    );
+  }
+
+  // The menu closes on Tab and Shift+Tab, puts focus on the button inside the span and lets the
+  // browser move on from there (APG menu button), so Shift+Tab reaches the element before the
+  // trigger. user-event computes Tab's default action from the key's target, which is gone once
+  // the menu closed: the key goes through fireEvent, and a Tab from the button stands for the
+  // browser's continuation.
+  it.each(SPANS)(
+    'Menu, %s: Tab and Shift+Tab close the menu on the button inside the span, and tabbing continues from that button',
+    async (_name, spanTabIndex) => {
+      const user = userEvent.setup();
+      render(<MenuInDialog spanTabIndex={spanTabIndex} />);
+      await user.click(button('Actions'));
+      await expectNoA11yViolations(document.body);
+      await user.keyboard('{End}');
+      expect(menuitem('Delete')).toHaveFocus();
+      // Not prevented: the focus trap leaves a Tab from the button inside the dialog to the browser.
+      expect(fireEvent.keyDown(menuitem('Delete'), { key: 'Tab' })).toBe(true);
+      expect(screen.queryByRole('menu')).not.toBeInTheDocument();
+      expect(button('Actions')).toHaveFocus();
+      await user.tab();
+      expect(button('After')).toHaveFocus();
+
+      await user.click(button('Actions'));
+      expect(menuitem('Rename')).toHaveFocus();
+      expect(fireEvent.keyDown(menuitem('Rename'), { key: 'Tab', shiftKey: true })).toBe(true);
+      expect(screen.queryByRole('menu')).not.toBeInTheDocument();
+      expect(button('Actions')).toHaveFocus();
+      await user.tab({ shift: true });
+      expect(button('Before')).toHaveFocus();
+    },
+  );
 });
 
 // ---------------------------------------------------------------------------
