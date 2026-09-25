@@ -6,6 +6,7 @@ import { renderToString } from 'react-dom/server';
 import { Tag } from '../Tag';
 import type { TagOwnProps, TagProps } from '../Tag';
 import { Button } from '../../button/Button';
+import type { Slot } from '../../../lib/slot';
 import {
   asClientReference,
   renderWithProviders,
@@ -354,7 +355,32 @@ describe('Tag', () => {
         'button',
         BUTTON_SLOT_WARNING,
       ],
+      [
+        'a <button> whose children are an empty Fragment',
+        <button key="f" type="button" className="text-error">
+          <></>
+        </button>,
+        'button',
+        BUTTON_SLOT_WARNING,
+      ],
+      [
+        'a Wave Button whose icon and children are empty Fragments',
+        <Button key="wf" className="text-error" icon={<></>}>
+          <></>
+        </Button>,
+        'button',
+        BUTTON_SLOT_WARNING,
+      ],
+      [
+        'a slot object whose children are an empty Fragment',
+        { className: 'text-error', children: <></> },
+        'content',
+        null,
+      ],
       ['content that renders nothing', [], null, null],
+      ['an empty Fragment', <React.Fragment key="f" />, null, null],
+      ['a Fragment whose content renders nothing', <>{[false, '']}</>, null, null],
+      ['a Set of empty Fragments', new Set([<React.Fragment key="f" />]), null, null],
     ];
 
     it.each(emptyContentCases)(
@@ -381,6 +407,161 @@ describe('Tag', () => {
         expect(warn.mock.calls).toEqual(warning ? [[expect.stringContaining(warning)]] : []);
       },
     );
+
+    describe('a slot object that brings its own content keeps it (no default icon is added)', () => {
+      const HTML_ICON = '<svg data-testid="html-icon" viewBox="0 0 12 12"></svg>';
+
+      /** An icon component that also renders its children, like icons that accept extra paths. */
+      function DrawnIcon({
+        className,
+        children,
+      }: {
+        className?: string;
+        children?: React.ReactNode;
+      }) {
+        return (
+          <svg data-testid="drawn-icon" className={className} viewBox="0 0 12 12">
+            {children}
+          </svg>
+        );
+      }
+
+      it('renders dangerouslySetInnerHTML content in the slot element', () => {
+        const error = vi.spyOn(console, 'error');
+        render(
+          <Tag
+            dismissible
+            dismissIcon={{
+              className: 'text-error',
+              dangerouslySetInnerHTML: { __html: HTML_ICON },
+            }}
+          >
+            Cherry
+          </Tag>,
+        );
+        const button = screen.getByRole('button', { name: 'Dismiss Cherry' });
+        const icon = within(button).getByTestId('html-icon');
+        expect(icon.parentElement).toHaveClass('text-error');
+        expect(icon.parentElement).toHaveAttribute('aria-hidden', 'true');
+        expect(button.querySelector('[data-wave-icon="dismiss"]')).toBeNull();
+        expect(error).not.toHaveBeenCalled();
+      });
+
+      it('renders dangerouslySetInnerHTML of the deprecated button-object form inside the button', () => {
+        const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+        const error = vi.spyOn(console, 'error');
+        render(
+          <Tag
+            dismissible
+            dismissIcon={{ as: 'button', dangerouslySetInnerHTML: { __html: HTML_ICON } }}
+          >
+            Cherry
+          </Tag>,
+        );
+        const button = screen.getByRole('button', { name: 'Dismiss Cherry' });
+        const icon = within(button).getByTestId('html-icon');
+        expect(icon.parentElement).toHaveAttribute('aria-hidden', 'true');
+        expect(button.querySelector('[data-wave-icon="dismiss"]')).toBeNull();
+        expect(warn.mock.calls).toEqual([[expect.stringContaining(BUTTON_OBJECT_WARNING)]]);
+        expect(error).not.toHaveBeenCalled();
+      });
+
+      it('renders a component `as` as the icon, without the default icon inside it', () => {
+        render(
+          <Tag dismissible dismissIcon={{ as: DrawnIcon, className: 'text-error' }}>
+            Cherry
+          </Tag>,
+        );
+        const button = screen.getByRole('button', { name: 'Dismiss Cherry' });
+        expect(within(button).getByTestId('drawn-icon')).toHaveClass('text-error');
+        expect(button.querySelector('[data-wave-icon="dismiss"]')).toBeNull();
+      });
+
+      it('renders a void `as` (an img) as the icon, without the default icon or a warning', () => {
+        const warn = vi.spyOn(console, 'warn');
+        render(
+          <Tag
+            dismissible
+            dismissIcon={
+              { as: 'img', src: 'close.svg', alt: '', className: 'size-3' } as Slot<'span'>
+            }
+          >
+            Cherry
+          </Tag>,
+        );
+        const button = screen.getByRole('button', { name: 'Dismiss Cherry' });
+        const image = button.querySelector('img');
+        expect(image).toHaveAttribute('src', 'close.svg');
+        expect(image).toHaveClass('size-3');
+        expect(image).toHaveAttribute('aria-hidden', 'true');
+        expect(button.querySelector('[data-wave-icon="dismiss"]')).toBeNull();
+        expect(warn).not.toHaveBeenCalled();
+      });
+    });
+
+    // A generator is read once to decide whether it renders anything; its items are what renders.
+    describe('generator content', () => {
+      function* items(...values: React.ReactNode[]): Generator<React.ReactNode> {
+        yield* values;
+      }
+
+      it('renders the text of a merged <button> given as a generator, which names the button', () => {
+        const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+        const error = vi.spyOn(console, 'error');
+        render(
+          <Tag dismissible dismissIcon={<button type="button">{items('Remove')}</button>}>
+            Cherry
+          </Tag>,
+        );
+        const button = screen.getByRole('button');
+        expect(within(button).getByText('Remove')).toBeInTheDocument();
+        expect(button).toHaveAccessibleName('Remove Cherry');
+        expect(warn.mock.calls).toEqual([[expect.stringContaining(BUTTON_SLOT_WARNING)]]);
+        expect(error).not.toHaveBeenCalled();
+      });
+
+      it('names a merged <button> by the text of a generator on the server too', () => {
+        const host = document.createElement('div');
+        document.body.appendChild(host);
+        try {
+          host.innerHTML = renderToString(
+            <Tag dismissible dismissIcon={<button type="button">{items('Remove')}</button>}>
+              Cherry
+            </Tag>,
+          );
+          expect(within(host).getByRole('button')).toHaveAccessibleName('Remove Cherry');
+        } finally {
+          host.remove();
+        }
+      });
+
+      it.each([
+        ['as the slot', () => items(<CustomIcon key="icon" />)],
+        [
+          'as the children of a slot object',
+          () => ({ className: 'text-error', children: items(<CustomIcon key="icon" />) }),
+        ],
+        [
+          'as the children of a merged <button>',
+          () => <button type="button">{items(<CustomIcon key="icon" />)}</button>,
+        ],
+      ])('renders an icon given by a generator %s', (name, makeIcon) => {
+        const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+        const error = vi.spyOn(console, 'error');
+        render(
+          <Tag dismissible dismissIcon={makeIcon() as TagOwnProps['dismissIcon']}>
+            Cherry
+          </Tag>,
+        );
+        const button = screen.getByRole('button', { name: 'Dismiss Cherry' });
+        expect(button).toContainElement(screen.getByTestId('custom-icon'));
+        expect(button.querySelector('[data-wave-icon="dismiss"]')).toBeNull();
+        expect(warn.mock.calls).toEqual(
+          name.includes('<button>') ? [[expect.stringContaining(BUTTON_SLOT_WARNING)]] : [],
+        );
+        expect(error).not.toHaveBeenCalled();
+      });
+    });
 
     it('merges the deprecated button-object form onto the wired button with a warning', async () => {
       const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});

@@ -10,10 +10,14 @@ import {
   testNoImplicitSubmit,
   renderWithProviders,
 } from '../../../test-utils';
-import type { Appearance, Size } from '../../../lib/types';
+import type { Appearance, Size, Slot } from '../../../lib/types';
 
 const HOVER_GATE = 'not-disabled:not-aria-disabled:hover:';
 const ACTIVE_GATE = 'not-disabled:not-aria-disabled:active:';
+
+/** The development warning of an icon-only button without an accessible name. */
+const ICON_ONLY_WARNING =
+  '[WaveUI] Button: an icon-only button has no accessible name. Pass `aria-label`, `aria-labelledby` or `title` (the icon is decorative and hidden from assistive technology).';
 
 /** A router-link stand-in: a custom component that renders an anchor and spreads its props. */
 interface FakeRouterLinkProps extends Omit<React.AnchorHTMLAttributes<HTMLAnchorElement>, 'href'> {
@@ -736,10 +740,6 @@ describe('Button', () => {
 
     it('warns once in development when icon-only buttons have no accessible name', () => {
       const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
-      const nameWarnings = () =>
-        warn.mock.calls
-          .map((call) => String(call[0]))
-          .filter((m) => m.includes('Button') && m.includes('aria-label'));
 
       // Two separate nameless icon-only buttons: each runs the effect, one warning in total.
       const { rerender } = render(
@@ -748,8 +748,7 @@ describe('Button', () => {
           <Button icon={<PaperclipIcon />} appearance="primary" />
         </>,
       );
-      expect(nameWarnings()).toHaveLength(1);
-      expect(nameWarnings()[0].startsWith('[WaveUI] ')).toBe(true);
+      expect(warn.mock.calls).toEqual([[ICON_ONLY_WARNING]]);
 
       // Changing an effect dependency re-runs the check (named, then nameless again): still one.
       rerender(
@@ -764,7 +763,7 @@ describe('Button', () => {
           <Button icon={<PaperclipIcon />} appearance="primary" />
         </>,
       );
-      expect(nameWarnings()).toHaveLength(1);
+      expect(warn.mock.calls).toEqual([[ICON_ONLY_WARNING]]);
     });
 
     it('treats an empty-string icon (icon={name && <Icon />}) as no icon (button-provider#21)', () => {
@@ -805,11 +804,7 @@ describe('Button', () => {
       const button = screen.getByRole('button');
       expect(button).toHaveClass('h-10', 'w-10');
       expect(button).not.toHaveClass('min-w-24', 'gap-1.5');
-      expect(
-        warn.mock.calls.some((call) =>
-          String(call[0]).includes('icon-only button has no accessible name'),
-        ),
-      ).toBe(true);
+      expect(warn.mock.calls).toEqual([[ICON_ONLY_WARNING]]);
     });
 
     it('counts a Fragment with text as a label', () => {
@@ -820,6 +815,105 @@ describe('Button', () => {
       );
       const button = screen.getByRole('button', { name: 'Attach' });
       expect(button).toHaveClass('gap-1.5', 'min-w-24');
+    });
+
+    // The icon and the label follow the library's one renders-nothing rule. A generator is read
+    // once by the check; its items are what renders.
+    describe('icon and label content that renders nothing', () => {
+      function* items(...values: React.ReactNode[]): Generator<React.ReactNode> {
+        yield* values;
+      }
+
+      const ICON_CASES: ReadonlyArray<readonly [string, boolean, () => Slot<'span'> | undefined]> =
+        [
+          ['undefined', false, () => undefined],
+          ['null', false, () => null],
+          ['false', false, () => false],
+          ['true', false, () => true],
+          ['an empty string', false, () => ''],
+          ['an empty array', false, () => []],
+          ['an empty Fragment', false, () => <></>],
+          ['an array of empty values', false, () => [<React.Fragment key="a" />, '', null, false]],
+          ['a Fragment of empty values', false, () => <>{['', null]}</>],
+          ['an empty Set', false, () => new Set()],
+          ['a Set of empty values', false, () => new Set(['', <React.Fragment key="f" />])],
+          ['a generator of empty values', false, () => items('', null)],
+          ['an element', true, () => <PaperclipIcon />],
+          ['a string', true, () => '⚙'],
+          ['zero', true, () => 0],
+          ['an array with an element', true, () => ['', <PaperclipIcon key="clip" />]],
+          [
+            'a Fragment with an element',
+            true,
+            () => (
+              <>
+                <PaperclipIcon />
+              </>
+            ),
+          ],
+          ['a slot object', true, () => ({ children: <PaperclipIcon /> })],
+          ['an empty slot object', true, () => ({})],
+          ['a Set with an element', true, () => new Set([<PaperclipIcon key="clip" />])],
+          ['a generator with an element', true, () => items(<PaperclipIcon key="clip" />)],
+        ];
+
+      it.each(ICON_CASES)(
+        'an icon of %s renders an icon element: %s',
+        (_name, renders, makeIcon) => {
+          const error = vi.spyOn(console, 'error');
+          render(<Button icon={makeIcon()} aria-label="Attach" />);
+          const button = screen.getByRole('button', { name: 'Attach' });
+          expect(button.childNodes).toHaveLength(renders ? 1 : 0);
+          expect(button.querySelector('[aria-hidden="true"]') !== null).toBe(renders);
+          expect(error).not.toHaveBeenCalled();
+        },
+      );
+
+      /** Rows: the label, the text it renders (`null`: no label), a factory for a fresh value. */
+      const LABEL_CASES: ReadonlyArray<readonly [string, string | null, () => React.ReactNode]> = [
+        ['undefined', null, () => undefined],
+        ['null', null, () => null],
+        ['false', null, () => false],
+        ['an empty string', null, () => ''],
+        ['an empty array', null, () => []],
+        ['an empty Fragment', null, () => <></>],
+        ['nested empty values', null, () => [<React.Fragment key="a">{''}</React.Fragment>, null]],
+        ['a Set of empty values', null, () => new Set(['', null])],
+        ['a generator of empty values', null, () => items('', false)],
+        ['text', 'Attach', () => 'Attach'],
+        ['zero', '0', () => 0],
+        ['an element', 'Attach', () => <span>Attach</span>],
+        ['a Fragment with text', 'Attach', () => <>Attach</>],
+        ['a generator with text', 'Attach', () => items('Attach')],
+      ];
+
+      it.each(LABEL_CASES)('a label of %s renders %s', (_name, text, makeLabel) => {
+        const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+        const error = vi.spyOn(console, 'error');
+        render(
+          <Button icon={<PaperclipIcon />} size="large">
+            {makeLabel()}
+          </Button>,
+        );
+        const button = screen.getByRole('button');
+        if (text === null) {
+          expect(button).toHaveClass('h-10', 'w-10');
+          expect(button).toHaveTextContent(/^$/);
+          expect(warn.mock.calls).toEqual([[ICON_ONLY_WARNING]]);
+        } else {
+          expect(button).toHaveClass('gap-1.5', 'min-w-24');
+          expect(button).toHaveTextContent(new RegExp(`^${text}$`));
+          expect(warn).not.toHaveBeenCalled();
+        }
+        expect(error).not.toHaveBeenCalled();
+      });
+
+      it('renders the items of a label given as a generator', () => {
+        const error = vi.spyOn(console, 'error');
+        render(<Button>{items('Save ', <b key="draft">draft</b>)}</Button>);
+        expect(screen.getByRole('button', { name: 'Save draft' })).toBeVisible();
+        expect(error).not.toHaveBeenCalled();
+      });
     });
 
     it.each([

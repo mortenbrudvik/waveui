@@ -49,9 +49,11 @@ describe('Image', () => {
       try {
         render(<Image src="a.png" />);
         render(<Image src="b.png" />);
-        const calls = warn.mock.calls.filter(([message]) => String(message).includes('Image'));
-        expect(calls).toHaveLength(1);
-        expect(String(calls[0]![0])).toMatch(/^\[WaveUI\] Image: .*alt=""/);
+        expect(warn.mock.calls).toEqual([
+          [
+            '[WaveUI] Image: `alt` is missing. Describe the image, or pass alt="" when it is decorative.',
+          ],
+        ]);
       } finally {
         warn.mockRestore();
       }

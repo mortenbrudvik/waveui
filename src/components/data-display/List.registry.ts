@@ -5,6 +5,8 @@
  * (C-HOOKS: an external store instead of setState in an effect).
  */
 
+const NO_VALUES: readonly string[] = [];
+
 /** What one mounted item registered. */
 export interface ListItemRecord {
   /** The item's explicit `value` (`undefined`: the item cannot be selected). */
@@ -19,6 +21,8 @@ export interface ListItemRecord {
 export interface ListRegistryData {
   values: readonly string[];
   valueSet: ReadonlySet<string>;
+  /** Values that more than one item holds, each listed once. */
+  duplicates: readonly string[];
   count: number;
   hasActions: boolean;
 }
@@ -46,6 +50,11 @@ export class ListRegistrySnapshot {
     return this.read().valueSet;
   }
 
+  /** Values that more than one mounted item holds (each listed once). */
+  get duplicates(): readonly string[] {
+    return this.read().duplicates;
+  }
+
   /** Number of mounted items (with or without a value). */
   get count(): number {
     return this.read().count;
@@ -60,15 +69,20 @@ export class ListRegistrySnapshot {
   build(): ListRegistryData {
     const values: string[] = [];
     const valueSet = new Set<string>();
+    const duplicateSet = new Set<string>();
     let hasActions = false;
     for (const record of this.records.values()) {
       if (record.hasAction) hasActions = true;
-      if (record.value !== undefined && !valueSet.has(record.value)) {
+      if (record.value === undefined) continue;
+      if (valueSet.has(record.value)) {
+        duplicateSet.add(record.value);
+      } else {
         valueSet.add(record.value);
         values.push(record.value);
       }
     }
-    return { values, valueSet, count: this.records.size, hasActions };
+    const duplicates = duplicateSet.size > 0 ? Array.from(duplicateSet) : NO_VALUES;
+    return { values, valueSet, duplicates, count: this.records.size, hasActions };
   }
 
   private read(): ListRegistryData {

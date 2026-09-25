@@ -45,6 +45,37 @@ describe('CompoundButton', () => {
     expect(button.querySelectorAll('span')).toHaveLength(1);
   });
 
+  it.each([
+    ['an empty string', ''],
+    ['true', true],
+    ['an empty array', []],
+    ['an empty Fragment', <></>],
+    ['a Set of empty values', new Set([null, '', <React.Fragment key="f" />])],
+  ])('renders no secondary line for secondaryText that renders nothing (%s)', (_, text) => {
+    render(<CompoundButton secondaryText={text as React.ReactNode}>Send mail</CompoundButton>);
+    const button = screen.getByRole('button', { name: 'Send mail' });
+    expect(button.querySelectorAll('span')).toHaveLength(1);
+  });
+
+  it('renders a secondary line of 0 (a number is content)', () => {
+    render(<CompoundButton secondaryText={0}>Items</CompoundButton>);
+    expect(
+      screen.getByRole('button', { name: /^Items\s*0$/ }).querySelectorAll('span'),
+    ).toHaveLength(2);
+  });
+
+  it('renders the items of secondaryText given as a generator', () => {
+    const error = vi.spyOn(console, 'error');
+    function* details(): Generator<React.ReactNode> {
+      yield 'Opens ';
+      yield 'your mail';
+    }
+    render(<CompoundButton secondaryText={details()}>Send mail</CompoundButton>);
+    expect(screen.getByRole('button', { name: /^Send mail\s*Opens your mail$/ })).toBeVisible();
+    expect(error).not.toHaveBeenCalled();
+    error.mockRestore();
+  });
+
   it('stacks the label above the secondary text', () => {
     render(<CompoundButton secondaryText="Details">Main</CompoundButton>);
     const button = screen.getByRole('button', { name: /Main/ });

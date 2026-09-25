@@ -3,11 +3,15 @@ import { cn } from '../../lib/cn';
 import { warnOnce } from '../../lib/dev';
 import { composeEventHandlers } from '../../lib/composeEventHandlers';
 import { useEventCallback } from '../../hooks/useEventCallback';
-import { renderSlot, VOID_ELEMENTS } from '../../lib/slot';
+import {
+  materialiseSlotContent,
+  renderSlot,
+  slotRendersContent,
+  VOID_ELEMENTS,
+} from '../../lib/slot';
 import type { PolymorphicComponent, PolymorphicProps } from '../../lib/polymorphic';
 import type { Size, Appearance, Slot } from '../../lib/types';
 import { buttonClassName } from './buttonStyles';
-import { buttonIconRenders, rendersContent } from './Button.utils';
 
 /**
  * The Button's own props (the XOwnProps rule of `PolymorphicProps`: component-specific props only).
@@ -155,18 +159,20 @@ export const Button: PolymorphicComponent<'button', ButtonOwnProps> = (props) =>
   const isVoid = tag !== null && VOID_ELEMENTS.has(tag);
   const ariaDisabled = rest['aria-disabled'];
   /**
-   * An `icon` that renders nothing (`''` from `icon={name && <Icon />}`, an empty array or
+   * An `icon` that renders nothing (`''` from `icon={name && <Icon />}`, an empty array, Set or
    * Fragment) is treated like no icon: no empty `aria-hidden` span, no gap, no icon-only sizing.
    */
   const iconElement = renderSlot(
-    buttonIconRenders(icon) ? icon : undefined,
+    slotRendersContent(icon) ? icon : undefined,
     'span',
     'inline-flex shrink-0 items-center',
     { 'aria-hidden': true },
   );
   /** Derived from what renders, so an icon that renders nothing never counts. */
   const hasIcon = iconElement !== null;
-  const hasLabel = rendersContent(children);
+  // A generator label is read once by the check; its items are what renders.
+  const label = materialiseSlotContent(children);
+  const hasLabel = slotRendersContent(label);
   const iconOnly = hasIcon && !hasLabel;
 
   const ariaLabel = rest['aria-label'];
@@ -266,13 +272,13 @@ export const Button: PolymorphicComponent<'button', ButtonOwnProps> = (props) =>
   for (const [key, value] of Object.entries(defaults)) elementProps[key] ??= value;
 
   const showDisabledLook = disabled || ariaDisabled === true || ariaDisabled === 'true';
-  let content: React.ReactNode = children;
+  let content: React.ReactNode = label;
   if (isVoid) content = undefined;
   else if (iconElement) {
     content = (
       <>
         {iconElement}
-        {children}
+        {label}
       </>
     );
   }

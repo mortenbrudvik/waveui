@@ -84,10 +84,11 @@ describe('ToggleButton', () => {
     it('warns once in development when an icon-only toggle has no accessible name', () => {
       const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
       render(<ToggleButton icon={<BoldIcon />} />);
-      const messages = warn.mock.calls.map((call) => String(call[0]));
-      expect(messages.filter((m) => m.includes('icon-only button has no accessible name'))).toEqual(
-        [expect.stringMatching(/^\[WaveUI\] /)],
-      );
+      expect(warn.mock.calls).toEqual([
+        [
+          '[WaveUI] Button: an icon-only button has no accessible name. Pass `aria-label`, `aria-labelledby` or `title` (the icon is decorative and hidden from assistive technology).',
+        ],
+      ]);
     });
 
     it('does not warn for an icon-only toggle with an aria-label', () => {

@@ -25,6 +25,13 @@ function expandedWithoutMenu(): HTMLElement[] {
 
 const APPEARANCES: Appearance[] = ['primary', 'outline', 'subtle', 'transparent'];
 
+/** The warning of an unnamed menu button whose only content is decorative (icon, indicator). */
+const MENU_ICON_ONLY_WARNING =
+  '[WaveUI] MenuButton: an icon-only menu button has no accessible name. Pass `aria-label`, `aria-labelledby` or `title` (the icon and the menu indicator are decorative and hidden from assistive technology).';
+/** Button's own warning, which applies when no indicator renders. */
+const BUTTON_ICON_ONLY_WARNING =
+  '[WaveUI] Button: an icon-only button has no accessible name. Pass `aria-label`, `aria-labelledby` or `title` (the icon is decorative and hidden from assistive technology).';
+
 const GearIcon = () => (
   <svg data-testid="gear-icon" viewBox="0 0 16 16" width="16" height="16">
     <circle cx="8" cy="8" r="5" fill="currentColor" />
@@ -164,6 +171,8 @@ describe('MenuButton', () => {
       ['an empty array', []],
       ['an empty Fragment', <></>],
       ['a nested empty Fragment', <>{''}</>],
+      ['an empty Set', new Set<React.ReactNode>()],
+      ['a Set of empty values', new Set(['', <React.Fragment key="f" />])],
     ])(
       'menuIcon that renders nothing (%s) hides the indicator: no chevron, no empty span',
       (_name, menuIcon) => {
@@ -188,10 +197,8 @@ describe('MenuButton', () => {
         const button = screen.getByRole('button');
         expect(button.querySelector('[data-wave-icon]')).toBeNull();
         expect(button.querySelectorAll('[aria-hidden="true"]')).toHaveLength(1);
-        const messages = warn.mock.calls
-          .map((call) => String(call[0]))
-          .filter((m) => m.includes('no accessible name'));
-        expect(messages).toHaveLength(1);
+        // Without an indicator, Button's own check reports it (MenuButton stays silent).
+        expect(warn.mock.calls).toEqual([[BUTTON_ICON_ONLY_WARNING]]);
       },
     );
   });
@@ -238,11 +245,7 @@ describe('MenuButton', () => {
           <MenuButton icon={<GearIcon />} appearance="primary" />
         </>,
       );
-      const messages = warn.mock.calls
-        .map((call) => String(call[0]))
-        .filter((m) => m.includes('MenuButton') && m.includes('no accessible name'));
-      expect(messages).toHaveLength(1);
-      expect(messages[0].startsWith('[WaveUI] ')).toBe(true);
+      expect(warn.mock.calls).toEqual([[MENU_ICON_ONLY_WARNING]]);
     });
 
     it('renders a one-shot generator icon: the icon-only check never iterates it (C-SLOTS)', () => {
@@ -265,21 +268,26 @@ describe('MenuButton', () => {
       }
       render(<MenuButton icon={gearIcons()} />);
       expect(screen.getByTestId('gear-icon')).toBeInTheDocument();
-      const messages = warn.mock.calls
-        .map((call) => String(call[0]))
-        .filter((m) => m.includes('no accessible name'));
-      expect(messages).toHaveLength(1);
-      expect(messages[0]).toContain('MenuButton');
+      expect(warn.mock.calls).toEqual([[MENU_ICON_ONLY_WARNING]]);
     });
 
     it('menuIcon={false}: an icon-only menu button without a name logs exactly one warning', () => {
       const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
       render(<MenuButton icon={<GearIcon />} menuIcon={false} />);
-      const messages = warn.mock.calls
-        .map((call) => String(call[0]))
-        .filter((m) => m.includes('no accessible name'));
-      expect(messages).toHaveLength(1);
-      expect(messages[0].startsWith('[WaveUI] ')).toBe(true);
+      expect(warn.mock.calls).toEqual([[BUTTON_ICON_ONLY_WARNING]]);
+    });
+
+    it('renders the items of a label given as a generator (read once by the name check)', () => {
+      const warn = vi.spyOn(console, 'warn');
+      const error = vi.spyOn(console, 'error');
+      function* label(): Generator<React.ReactNode> {
+        yield 'More ';
+        yield <b key="actions">actions</b>;
+      }
+      render(<MenuButton icon={<GearIcon />}>{label()}</MenuButton>);
+      expect(screen.getByRole('button', { name: 'More actions' })).toHaveClass('gap-1.5');
+      expect(warn).not.toHaveBeenCalled();
+      expect(error).not.toHaveBeenCalled();
     });
 
     it.each([

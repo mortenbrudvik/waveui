@@ -192,10 +192,13 @@ export const AvatarGroup = ({
     const trigger = triggerRef.current;
     if (event.key !== 'Tab' || event.defaultPrevented || !trigger) return;
     const popup = event.currentTarget;
-    if (!(event.target instanceof Node) || !popup.contains(event.target)) return;
+    // Duck typed (`nodeType`), not `instanceof Node`: a popup portaled into another document (an
+    // iframe, a popout window) holds nodes of that realm.
+    const origin = event.target as Partial<Node> | null;
+    if (!origin || typeof origin.nodeType !== 'number' || !popup.contains(origin as Node)) return;
     const inner = getTabbableElements(popup);
     // -1 while focus is on the popup itself (or on something that is not a tab stop).
-    const current = inner.findIndex((el) => el.contains(event.target as Node));
+    const current = inner.findIndex((el) => el.contains(origin as Node));
     const next = current + (event.shiftKey ? -1 : 1);
     if (next >= 0 && next < inner.length) {
       event.preventDefault();

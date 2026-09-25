@@ -257,7 +257,9 @@ describe('MessageBar', () => {
         ['an array of empty values', [null, false, '']],
         ['an empty Fragment', <React.Fragment key="f" />],
         ['a Fragment of empty values', <React.Fragment key="f">{false}</React.Fragment>],
+        ['a Set of empty Fragments', new Set([<React.Fragment key="f" />])],
         ['a slot object whose children render nothing', { children: false }],
+        ['a slot object whose children are an empty Fragment', { children: <></> }],
       ] as const)(
         'dismiss content %s renders the default icon, not an empty button',
         (_, dismiss) => {
@@ -308,6 +310,91 @@ describe('MessageBar', () => {
         const button = screen.getByRole('button', { name: 'Dismiss' });
         expect(button).toHaveTextContent('0');
         expect(button.querySelector('[data-wave-icon="dismiss"]')).toBeNull();
+      });
+    });
+
+    describe('a slot object that brings its own content keeps it (no default icon is added)', () => {
+      const HTML_ICON = '<svg data-testid="html-icon" viewBox="0 0 16 16"></svg>';
+
+      /** An icon component that also renders its children, like icons that accept extra paths. */
+      function DrawnIcon({
+        className,
+        children,
+      }: {
+        className?: string;
+        children?: React.ReactNode;
+      }) {
+        return (
+          <svg data-testid="drawn-icon" className={className} viewBox="0 0 16 16">
+            {children}
+          </svg>
+        );
+      }
+
+      const expectOwnContent = (testId: string) => {
+        const button = screen.getByRole('button', { name: 'Dismiss' });
+        const content = within(button).getByTestId(testId);
+        expect(button.querySelector('[data-wave-icon="dismiss"]')).toBeNull();
+        return content;
+      };
+
+      it('renders dangerouslySetInnerHTML content in the slot element', () => {
+        const error = vi.spyOn(console, 'error');
+        render(
+          <MessageBar
+            onDismiss={() => {}}
+            dismiss={{ className: 'text-error', dangerouslySetInnerHTML: { __html: HTML_ICON } }}
+          >
+            Msg
+          </MessageBar>,
+        );
+        const content = expectOwnContent('html-icon');
+        expect(content.parentElement).toHaveClass('text-error');
+        expect(content.parentElement).toHaveAttribute('aria-hidden', 'true');
+        expect(error).not.toHaveBeenCalled();
+      });
+
+      it('renders dangerouslySetInnerHTML of the deprecated button-object form inside the button', () => {
+        const warn = spyOnWarn();
+        const error = vi.spyOn(console, 'error');
+        render(
+          <MessageBar
+            onDismiss={() => {}}
+            dismiss={{ as: 'button', dangerouslySetInnerHTML: { __html: HTML_ICON } }}
+          >
+            Msg
+          </MessageBar>,
+        );
+        expect(expectOwnContent('html-icon').parentElement).toHaveAttribute('aria-hidden', 'true');
+        expect(warn.mock.calls).toEqual([[BUTTON_OBJECT_WARNING]]);
+        expect(error).not.toHaveBeenCalled();
+      });
+
+      it('renders a component `as` as the icon, without the default icon inside it', () => {
+        render(
+          <MessageBar onDismiss={() => {}} dismiss={{ as: DrawnIcon, className: 'text-error' }}>
+            Msg
+          </MessageBar>,
+        );
+        expect(expectOwnContent('drawn-icon')).toHaveClass('text-error');
+      });
+
+      it('renders a void `as` (an img) as the icon, without the default icon or a warning', () => {
+        const warn = vi.spyOn(console, 'warn');
+        render(
+          <MessageBar
+            onDismiss={() => {}}
+            dismiss={
+              { as: 'img', src: 'close.svg', alt: '', 'data-testid': 'img-icon' } as Slot<'span'>
+            }
+          >
+            Msg
+          </MessageBar>,
+        );
+        const image = expectOwnContent('img-icon');
+        expect(image).toHaveAttribute('src', 'close.svg');
+        expect(image).toHaveAttribute('aria-hidden', 'true');
+        expect(warn).not.toHaveBeenCalled();
       });
     });
 
@@ -579,26 +666,82 @@ describe('MessageBar', () => {
       }
     });
 
-    it('does not consume a one-shot iterator of children while checking for a text label', () => {
-      const warn = spyOnWarn();
-      const error = vi.spyOn(console, 'error').mockImplementation(() => {});
-      function* closeText(): Generator<React.ReactNode> {
-        yield 'Close';
+    // A generator is read once to decide whether it renders anything; its items are what renders.
+    describe('generator content', () => {
+      function* items(...values: React.ReactNode[]): Generator<React.ReactNode> {
+        yield* values;
       }
-      render(
-        <MessageBar onDismiss={() => {}} dismiss={<button type="button">{closeText()}</button>}>
-          Msg
-        </MessageBar>,
-      );
-      const button = screen.getByRole('button');
-      // The literal check skips the generator; the rendered text names the button after mount.
-      expect(button).toHaveTextContent('Close');
-      expect(button).toHaveAccessibleName('Close');
-      expect(warn.mock.calls).toEqual([[BUTTON_ELEMENT_WARNING]]);
-      // React's own development warning about rendering a generator (the consumer's markup).
-      expect(error.mock.calls).toEqual([
-        [expect.stringContaining('Using Iterators as children is unsupported')],
-      ]);
+
+      it('renders the children of a merged <button> given as a generator, named by their text', () => {
+        const warn = spyOnWarn();
+        const error = vi.spyOn(console, 'error');
+        render(
+          <MessageBar
+            onDismiss={() => {}}
+            dismiss={<button type="button">{items('Close')}</button>}
+          >
+            Msg
+          </MessageBar>,
+        );
+        const button = screen.getByRole('button');
+        expect(button).toHaveTextContent('Close');
+        expect(button).toHaveAccessibleName('Close');
+        expect(warn.mock.calls).toEqual([[BUTTON_ELEMENT_WARNING]]);
+        // The items render, never the generator itself (React warns about rendering one).
+        expect(error).not.toHaveBeenCalled();
+      });
+
+      it('names a merged <button> by the text of a generator on the server too', () => {
+        const host = document.createElement('div');
+        document.body.appendChild(host);
+        try {
+          host.innerHTML = renderToString(
+            <MessageBar
+              onDismiss={() => {}}
+              dismiss={<button type="button">{items('Close')}</button>}
+            >
+              Msg
+            </MessageBar>,
+          );
+          const button = within(host).getByRole('button');
+          expect(button).not.toHaveAttribute('aria-label');
+          expect(button).toHaveAccessibleName('Close');
+        } finally {
+          host.remove();
+        }
+      });
+
+      it.each([
+        ['as the slot', () => items(<svg key="icon" data-testid="slot-icon" />)],
+        [
+          'as the children of a slot object',
+          () => ({
+            className: 'text-error',
+            children: items(<svg key="icon" data-testid="slot-icon" />),
+          }),
+        ],
+        [
+          'as the children of a merged <button>',
+          () => <button type="button">{items(<svg key="icon" data-testid="slot-icon" />)}</button>,
+        ],
+        [
+          'as the icon of a merged Wave Button',
+          () => <Button icon={items(<svg key="icon" data-testid="slot-icon" />)} />,
+        ],
+      ])('renders an icon given by a generator %s', (name, makeDismiss) => {
+        const warn = spyOnWarn();
+        const error = vi.spyOn(console, 'error');
+        render(
+          <MessageBar onDismiss={() => {}} dismiss={makeDismiss() as MessageBarProps['dismiss']}>
+            Msg
+          </MessageBar>,
+        );
+        const button = screen.getByRole('button', { name: 'Dismiss' });
+        expect(button).toContainElement(screen.getByTestId('slot-icon'));
+        expect(button.querySelector('[data-wave-icon="dismiss"]')).toBeNull();
+        expect(warn.mock.calls).toEqual(name.includes('merged') ? [[BUTTON_ELEMENT_WARNING]] : []);
+        expect(error).not.toHaveBeenCalled();
+      });
     });
 
     it('a <button> slot with text and its own aria-label is named by the aria-label', () => {

@@ -123,7 +123,7 @@ describe('Link', () => {
     });
 
     it('appearance wins over the deprecated variant', () => {
-      vi.spyOn(console, 'warn').mockImplementation(() => {});
+      const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
       render(
         <Link href="/docs" appearance="subtle" variant="standalone">
           Documentation
@@ -132,6 +132,11 @@ describe('Link', () => {
       const link = screen.getByRole('link', { name: 'Documentation' });
       expect(link).toHaveClass('text-foreground');
       expect(link).not.toHaveClass('font-semibold');
+      expect(warn.mock.calls).toEqual([
+        [
+          '[WaveUI] Link: `variant` is deprecated and will be removed in 1.0. Use `appearance` instead.',
+        ],
+      ]);
     });
 
     it('does not warn without the deprecated prop', () => {

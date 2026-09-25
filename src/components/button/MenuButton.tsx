@@ -2,10 +2,9 @@ import * as React from 'react';
 import { cn } from '../../lib/cn';
 import { warnOnce } from '../../lib/dev';
 import { ChevronDownIcon } from '../../lib/icons';
-import { renderSlot } from '../../lib/slot';
+import { materialiseSlotContent, renderSlot, slotRendersContent } from '../../lib/slot';
 import type { Size, Appearance, Slot } from '../../lib/types';
 import { Button } from './Button';
-import { buttonIconRenders, rendersContent } from './Button.utils';
 
 /** Properties for the MenuButton component. */
 export interface MenuButtonProps extends React.ButtonHTMLAttributes<HTMLButtonElement> {
@@ -81,13 +80,13 @@ export const MenuButton = ({
   'aria-expanded': ariaExpanded,
   ...props
 }: MenuButtonProps) => {
-  // `menuIcon` follows the `icon` slot rule (`buttonIconRenders`): unset keeps the chevron, a value
-  // that renders nothing (`false`, `true`, `''`, an empty array or Fragment) hides the indicator
-  // without leaving an empty `aria-hidden` span behind.
+  // `menuIcon` follows the `icon` slot rule: unset keeps the chevron, a value that renders nothing
+  // (`false`, `true`, `''`, an empty array, Set or Fragment) hides the indicator without leaving an
+  // empty `aria-hidden` span behind.
   const indicator =
     menuIcon == null ? (
       <ChevronDownIcon className="shrink-0" />
-    ) : buttonIconRenders(menuIcon) ? (
+    ) : slotRendersContent(menuIcon) ? (
       renderSlot(menuIcon, 'span', 'inline-flex shrink-0 items-center', { 'aria-hidden': true })
     ) : null;
 
@@ -96,7 +95,9 @@ export const MenuButton = ({
   // indicator or both) is therefore sized and checked here. Without an indicator
   // (`menuIcon={false}`, `''`, …) Button handles both by itself: checking here too would log the
   // same problem twice.
-  const unlabelled = indicator !== null && !rendersContent(children);
+  // A generator label is read once by the check; its items are what renders.
+  const label = materialiseSlotContent(children);
+  const unlabelled = indicator !== null && !slotRendersContent(label);
   const ariaLabel = props['aria-label'];
   const ariaLabelledBy = props['aria-labelledby'];
   const title = props.title;
@@ -121,7 +122,7 @@ export const MenuButton = ({
       icon={icon}
       className={cn('gap-1.5', unlabelled && unlabelledSizeClasses[size], className)}
     >
-      {children}
+      {label}
       {indicator}
     </Button>
   );

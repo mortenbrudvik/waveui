@@ -5,6 +5,7 @@ import { getDirection } from '../../lib/direction';
 import { getFirstTabbable } from '../../lib/focus';
 import { DismissIcon } from '../../lib/icons';
 import { getOpenLayers, subscribeLayers } from '../../lib/layers';
+import { materialiseSlotContent, slotRendersContent } from '../../lib/slot';
 import { focusRing } from '../../lib/styles';
 import type { Status } from '../../lib/types';
 import { useDirection } from '../../hooks/useDirection';
@@ -176,7 +177,10 @@ export const Toast = ({
   ...rest
 }: ToastProps) => {
   const inToasterRegion = React.useContext(ToasterRegionContext);
-  const hasBody = children !== undefined && children !== null && children !== false;
+  // Content that renders nothing (`''`, `[]`, `<></>`) gets no body element; a generator is read
+  // once by the check and its items render.
+  const body = materialiseSlotContent(children);
+  const hasBody = slotRendersContent(body);
   const liveRegion: React.HTMLAttributes<HTMLDivElement> = inToasterRegion
     ? {}
     : status === 'error'
@@ -202,9 +206,7 @@ export const Toast = ({
       <div className="min-w-0 flex-1">
         <StatusText label={getStatusLabel(status, statusLabel)} />
         {title ? <div className="text-body-2 font-semibold text-foreground">{title}</div> : null}
-        {hasBody ? (
-          <div className="mt-0.5 text-body-1 text-muted-foreground">{children}</div>
-        ) : null}
+        {hasBody ? <div className="mt-0.5 text-body-1 text-muted-foreground">{body}</div> : null}
       </div>
       {onDismiss ? (
         <button

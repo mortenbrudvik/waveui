@@ -146,10 +146,12 @@ describe('List', () => {
     });
 
     it('throws outside a List in development (C-CONTEXT)', () => {
-      vi.spyOn(console, 'error').mockImplementation(() => {});
+      // A render error is thrown, not logged: nothing may reach console.error.
+      const error = vi.spyOn(console, 'error');
       expect(() => render(<ListItem>Orphan</ListItem>)).toThrow(
-        '[WaveUI] ListItem must be used within a List',
+        new Error('[WaveUI] ListItem must be used within a List'),
       );
+      expect(error).not.toHaveBeenCalled();
     });
 
     it('in production, an item outside a List logs once and renders a plain list item (C-CONTEXT, R3)', () => {
@@ -732,6 +734,58 @@ describe('List', () => {
       expectTypeOf<NonNullable<ListProps['onSelectionChange']>>().toEqualTypeOf<
         (selected: string[]) => void
       >();
+    });
+  });
+
+  describe('duplicate item values', () => {
+    const duplicateWarning = (value: string) =>
+      `[WaveUI] List: several items share the value "${value}". Item values must be unique ` +
+      'within a List; items with the same value are selected (and tab stops) together.';
+    const items = (values: string[]) =>
+      values.map((value, index) => (
+        <List.Item key={index} value={value}>
+          {`${value} ${index}`}
+        </List.Item>
+      ));
+
+    it('warns once per duplicated value in a selectable list', async () => {
+      const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+      const error = vi.spyOn(console, 'error');
+      const { rerender } = render(
+        <List selectable aria-label="Fruits">
+          {items(['a', 'b', 'a', 'c', 'b', 'a'])}
+        </List>,
+      );
+      rerender(
+        <List selectable aria-label="Fruits">
+          {items(['a', 'b', 'a', 'c', 'b', 'a', 'c'])}
+        </List>,
+      );
+      await flushItemObserver();
+      expect(warn.mock.calls).toEqual([
+        [duplicateWarning('a')],
+        [duplicateWarning('b')],
+        [duplicateWarning('c')],
+      ]);
+      expect(error).not.toHaveBeenCalled();
+    });
+
+    it('does not warn for unique values or for items without a value', () => {
+      const warn = vi.spyOn(console, 'warn');
+      render(
+        <List selectable aria-label="Fruits">
+          {fruits}
+          <List.Item>Not selectable</List.Item>
+          <List.Item>Not selectable either</List.Item>
+        </List>,
+      );
+      expect(warn).not.toHaveBeenCalled();
+    });
+
+    it('does not warn in a plain list, where values select nothing', () => {
+      const warn = vi.spyOn(console, 'warn');
+      render(<List>{items(['a', 'a'])}</List>);
+      expect(warn).not.toHaveBeenCalled();
     });
   });
 
@@ -1522,6 +1576,32 @@ describe('List', () => {
       );
       expect(screen.getByRole('grid', { name: 'Documents' })).toBeInTheDocument();
       expect(document.querySelector('[data-list-action]')).toHaveTextContent('0');
+    });
+
+    // A generator is read once to decide whether it renders anything; its items are what renders.
+    it.each([
+      ['a selectable list (grid)', true],
+      ['a plain list', false],
+    ])('renders an action given as a generator in %s', (_, selectable) => {
+      const error = vi.spyOn(console, 'error');
+      function* actions(): Generator<React.ReactNode> {
+        yield (
+          <button key="delete" type="button">
+            Delete A
+          </button>
+        );
+      }
+      render(
+        <List selectable={selectable} aria-label="Documents">
+          <List.Item value="a" action={actions()}>
+            Document A
+          </List.Item>
+        </List>,
+      );
+      expect(screen.getByRole(selectable ? 'grid' : 'list', { name: 'Documents' })).toBeVisible();
+      const cell = document.querySelector('[data-list-action]');
+      expect(cell).toContainElement(screen.getByRole('button', { name: 'Delete A' }));
+      expect(error).not.toHaveBeenCalled();
     });
 
     it('keeps a non-selectable list with actions a plain list', () => {

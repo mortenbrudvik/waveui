@@ -5,7 +5,7 @@ import { composeEventHandlers } from '../../lib/composeEventHandlers';
 import { reportMissingContext, warnDeprecated, warnOnce } from '../../lib/dev';
 import { getArrowIntent, getDirection } from '../../lib/direction';
 import { FOCUSABLE_SELECTOR, isFocusable } from '../../lib/focus';
-import { slotRendersContent } from '../../lib/slot';
+import { materialiseSlotContent, slotRendersContent } from '../../lib/slot';
 import { focusRingInset, forcedColors } from '../../lib/styles';
 import type { SelectionMode } from '../../lib/types';
 import { useControllable } from '../../hooks/useControllable';
@@ -66,17 +66,19 @@ export interface ListProps<
 export interface ListItemProps extends React.HTMLAttributes<HTMLLIElement> {
   /**
    * Unique value identifying this item for selection tracking. An item without a value cannot be
-   * selected (its `onClick` still runs).
+   * selected (its `onClick` still runs). Items of a selectable list that share a value are
+   * selected together (a development warning names the value).
    */
   value?: string;
   /**
    * Action element rendered at the end of the list item (e.g. a Delete button). Clicks and keys
    * that start inside it, or inside a popup it opens, never toggle the item's selection. An
-   * action that renders nothing (`[]`, `null`, `false`, `''`) is no action. In a selectable list,
-   * items with actions switch the list to grid semantics: the actions are reached with the arrow
-   * keys, and their focusable elements (also ones added later) get `tabindex="-1"`, except inside
-   * a nested composite widget such as a Toolbar, which keeps its own Tab stop. When the first
-   * action appears or the last one disappears, the items remount (see {@link List}).
+   * action that renders nothing (`[]`, `null`, `false`, `''`, `<></>`) is no action. In a
+   * selectable list, items with actions switch the list to grid semantics: the actions are reached
+   * with the arrow keys, and their focusable elements (also ones added later) get
+   * `tabindex="-1"`, except inside a nested composite widget such as a Toolbar, which keeps its own
+   * Tab stop. When the first action appears or the last one disappears, the items remount (see
+   * {@link List}).
    */
   action?: React.ReactNode;
   /** Ref to the item element: an `<li>`, or a `<div role="row">` in grid mode. */
@@ -126,6 +128,15 @@ function useListContext(componentName: string): ListContextValue {
 /* ------------------------------------------------------------------ */
 
 const EMPTY: readonly string[] = [];
+
+/** Items that share a value are selected together and share their roving value. */
+function warnDuplicateValue(value: string): void {
+  warnOnce(
+    `List:duplicate:${value}`,
+    `List: several items share the value "${value}". Item values must be unique within a ` +
+      'List; items with the same value are selected (and tab stops) together.',
+  );
+}
 
 /**
  * Static look-ahead for the server and the first render: a direct `List.Item` (Fragments
@@ -410,6 +421,12 @@ const ListRoot = <M extends ListSelectionMode = 'single'>(props: ListProps<M>): 
     [multiple, registry, setSelected],
   );
 
+  // Registered values of a selectable list that more than one item holds (development warning).
+  const duplicates = registered?.duplicates ?? EMPTY;
+  React.useEffect(() => {
+    for (const value of duplicates) warnDuplicateValue(value);
+  }, [duplicates]);
+
   const selectedCount = effective.length;
   React.useEffect(() => {
     if (selectable && !multiple && selectedCount > 1) {
@@ -637,7 +654,8 @@ export const ListItem = ({
       </ContentCell>
       {hasAction && (
         <ListActionCell grid={mode === 'grid'} onRemovedWithFocus={recordActionFocusLoss}>
-          {action}
+          {/* A generator was read once by the check above: render its items. */}
+          {materialiseSlotContent(action)}
         </ListActionCell>
       )}
     </Element>

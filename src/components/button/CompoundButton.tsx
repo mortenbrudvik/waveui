@@ -1,5 +1,6 @@
 import * as React from 'react';
 import { cn } from '../../lib/cn';
+import { materialiseSlotContent, slotRendersContent } from '../../lib/slot';
 import type { PolymorphicComponent, PolymorphicProps } from '../../lib/polymorphic';
 import type { Size, Appearance } from '../../lib/types';
 import { Button } from './Button';
@@ -9,7 +10,10 @@ import { Button } from './Button';
  * props only). Every other prop comes from the rendered element (`as`).
  */
 export interface CompoundButtonOwnProps {
-  /** Secondary descriptive text displayed below the main label (part of the accessible name). */
+  /**
+   * Secondary descriptive text displayed below the main label (part of the accessible name).
+   * Content that renders nothing (`''`, `[]`, `<></>`) renders no second line.
+   */
   secondaryText?: React.ReactNode;
   /** Visual style variant.
    * @default 'outline'
@@ -81,6 +85,9 @@ export const CompoundButton: PolymorphicComponent<'button', CompoundButtonOwnPro
     children,
     ...rest
   } = props as CompoundButtonImplProps;
+  // Content that renders nothing (`''`, `[]`, `<></>`) gets no secondary line; a generator is read
+  // once by the check and its items render.
+  const secondary = materialiseSlotContent(secondaryText);
 
   return (
     <BaseButton
@@ -90,14 +97,14 @@ export const CompoundButton: PolymorphicComponent<'button', CompoundButtonOwnPro
       className={cn('h-auto flex-col items-start text-start', paddingClasses[size], className)}
     >
       <span className="font-bold">{children}</span>
-      {secondaryText != null && secondaryText !== false && secondaryText !== '' && (
+      {slotRendersContent(secondary) && (
         <span
           className={cn(
             'text-caption-1 font-normal',
             appearance === 'primary' ? 'text-primary-foreground' : 'text-muted-foreground',
           )}
         >
-          {secondaryText}
+          {secondary}
         </span>
       )}
     </BaseButton>

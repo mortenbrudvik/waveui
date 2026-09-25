@@ -7,6 +7,7 @@ import { AvatarGroup } from '../AvatarGroup';
 import type { AvatarGroupProps } from '../AvatarGroup';
 import { Avatar } from '../Avatar';
 import { Portal } from '../../portal/Portal';
+import { WaveProvider } from '../../provider/WaveProvider';
 import { DismissLayerProvider, useDismiss } from '../../../hooks/useDismiss';
 import { useFocusTrap } from '../../../hooks/useFocusTrap';
 import {
@@ -21,6 +22,11 @@ import type { Size } from '../../../lib/types';
 const NAMES = ['Alice', 'Bob', 'Charlie', 'Diana'];
 const PHOTO = 'https://example.com/photo.jpg';
 const members = (names: string[] = NAMES) => names.map((n) => <Avatar key={n} name={n} />);
+
+const UNNAMED_GROUP_WARNING =
+  '[WaveUI] AvatarGroup: the group has no accessible name. Pass `aria-label` (or `aria-labelledby`) describing the people it shows.';
+const unnamedMemberWarning = (label: string) =>
+  `[WaveUI] AvatarGroup: a hidden member has no accessible name and is listed as "${label}". Give each member a \`name\` or \`aria-label\`.`;
 
 /**
  * Stand-in for a modal surface (§5.9: raw F4 hooks, no Dialog): a focus trap on its own dismiss
@@ -91,11 +97,7 @@ describe('AvatarGroup', () => {
       try {
         render(<AvatarGroup>{members()}</AvatarGroup>);
         render(<AvatarGroup>{members()}</AvatarGroup>);
-        const calls = warn.mock.calls.filter(([message]) =>
-          String(message).includes('AvatarGroup'),
-        );
-        expect(calls).toHaveLength(1);
-        expect(String(calls[0]![0])).toMatch(/^\[WaveUI\] .*aria-label/);
+        expect(warn.mock.calls).toEqual([[UNNAMED_GROUP_WARNING]]);
       } finally {
         warn.mockRestore();
       }
@@ -556,6 +558,49 @@ describe('AvatarGroup', () => {
         expect(screen.getByRole('dialog', { name: '2 more' })).toBe(popup);
       });
 
+      // The popup can be portaled into another document (an iframe or a popout window), whose
+      // nodes are not instances of this realm's `Node`: Tab is still the popup's.
+      it('handles Tab in a popup portaled into another document realm (an iframe)', async () => {
+        const iframe = document.createElement('iframe');
+        document.body.appendChild(iframe);
+        let unmount: (() => void) | undefined;
+        try {
+          const frameBody = iframe.contentDocument!.body;
+          ({ unmount } = render(
+            <WaveProvider portalContainer={frameBody}>
+              <AvatarGroup aria-label="Team" max={1}>
+                <Avatar name="Alice" />
+                <a href="#bob">
+                  <Avatar name="Bob" />
+                </a>
+                <a href="#carol">
+                  <Avatar name="Carol" />
+                </a>
+              </AvatarGroup>
+              <button type="button">Next</button>
+            </WaveProvider>,
+          ));
+          fireEvent.click(screen.getByRole('button', { name: '2 more' }));
+          await act(async () => {});
+          const popup = within(frameBody).getByRole('dialog', { name: '2 more' });
+          const bob = within(popup).getByRole('link', { name: 'Bob' });
+          const carol = within(popup).getByRole('link', { name: 'Carol' });
+          expect(bob).not.toBeInstanceOf(Node);
+
+          act(() => bob.focus());
+          expect(fireEvent.keyDown(bob, { key: 'Tab' })).toBe(false);
+          expect(carol).toHaveFocus();
+
+          expect(fireEvent.keyDown(carol, { key: 'Tab' })).toBe(false);
+          await act(async () => {});
+          expect(within(frameBody).queryByRole('dialog')).toBeNull();
+          expect(screen.getByRole('button', { name: 'Next' })).toHaveFocus();
+        } finally {
+          unmount?.();
+          iframe.remove();
+        }
+      });
+
       it('returns focus to the button on Escape from a link', async () => {
         const user = userEvent.setup();
         renderLinked();
@@ -656,11 +701,7 @@ describe('AvatarGroup', () => {
           expect(items.map((item) => item.textContent)).toEqual(['Unnamed member']);
           await user.click(screen.getByRole('button', { name: '1 more' }));
           await user.click(screen.getByRole('button', { name: '1 more' }));
-          const calls = warn.mock.calls.filter(([message]) =>
-            String(message).includes('AvatarGroup'),
-          );
-          expect(calls).toHaveLength(1);
-          expect(String(calls[0]![0])).toMatch(/^\[WaveUI\] AvatarGroup: .*`name` or `aria-label`/);
+          expect(warn.mock.calls).toEqual([[unnamedMemberWarning('Unnamed member')]]);
         } finally {
           warn.mockRestore();
         }
@@ -680,7 +721,7 @@ describe('AvatarGroup', () => {
         await user.click(screen.getByRole('button', { name: '1 more' }));
         const items = within(screen.getByRole('dialog')).getAllByRole('listitem');
         expect(items.map((item) => item.textContent)).toEqual(['Unbenanntes Mitglied']);
-        expect(String(warn.mock.calls[0]?.[0])).toContain('"Unbenanntes Mitglied"');
+        expect(warn.mock.calls).toEqual([[unnamedMemberWarning('Unbenanntes Mitglied')]]);
       } finally {
         warn.mockRestore();
       }

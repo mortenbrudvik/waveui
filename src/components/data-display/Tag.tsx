@@ -3,7 +3,12 @@ import { cn } from '../../lib/cn';
 import { warnDeprecated, warnOnce } from '../../lib/dev';
 import { mergeProps } from '../../lib/mergeProps';
 import { getElementType } from '../../lib/children';
-import { VOID_ELEMENTS, renderSlot, slotRendersContent } from '../../lib/slot';
+import {
+  VOID_ELEMENTS,
+  materialiseSlotContent,
+  renderSlot,
+  slotRendersContent,
+} from '../../lib/slot';
 import { focusRing } from '../../lib/styles';
 import { DismissIcon } from '../../lib/icons';
 import { hasRenderedTextLabel, hasTextLabel, observeTextLabel } from '../../lib/labelInName';
@@ -52,9 +57,11 @@ export interface TagOwnProps {
    * a lone character (`x`, `×`) keeps "Dismiss Cherry". Text hidden only with CSS still counts as
    * the label.
    *
-   * When the slot renders no content (`[]`, a childless merged button, a slot object without
-   * `children`), the default dismiss icon is shown; a slot object then styles it, e.g.
-   * `{ className: 'text-error' }`. Only takes effect with `dismissible`.
+   * When the slot renders no content (`[]`, `<></>`, a childless merged button, a slot object
+   * without `children`), the default dismiss icon is shown; a slot object then styles it, e.g.
+   * `{ className: 'text-error' }`. A slot object that renders a component or a void element
+   * (`{ as: CloseIcon }`, `{ as: 'img', src, alt: '' }`) or sets `dangerouslySetInnerHTML` is the
+   * icon itself: no default icon is added. Only takes effect with `dismissible`.
    */
   dismissIcon?: Slot<'span'> | SlotObject<'button'>;
   /**
@@ -166,13 +173,24 @@ function defaultDismissContent(): React.ReactNode {
 }
 
 /**
+ * Whether a slot object's element shows the default dismiss icon inside it: when its children
+ * render nothing and its element can hold children, so `{ className: 'text-error' }` styles the
+ * default icon. A void tag (`img`) or a component (an icon that draws its own glyph) is the icon
+ * itself, and `dangerouslySetInnerHTML` is content of its own.
+ */
+function wrapsDefaultIcon(tag: unknown, props: UnknownProps): boolean {
+  if (typeof tag !== 'string' || VOID_ELEMENTS.has(tag)) return false;
+  return props.dangerouslySetInnerHTML == null && !slotRendersContent(props.children);
+}
+
+/**
  * Splits the dismissIcon slot into dismiss-button props and icon content (C-SLOTS). The icon
  * content is `aria-hidden`, so no attribute that means something to assistive technology stays on
  * it: button-form props go to the dismiss button, and so do the `aria-*` attributes of an icon slot
  * object; the naming attributes are dropped (see {@link NAME_KEYS}).
  *
- * Content that renders nothing (`[]`, a childless merged button, a slot object without `children`)
- * shows the default icon, so the dismiss button is never an empty, invisible Tab stop.
+ * Content that renders nothing (`[]`, `<></>`, a childless merged button, a slot object without
+ * `children`) shows the default icon, so the dismiss button is never an empty, invisible Tab stop.
  */
 function resolveDismissSlot(slot: TagOwnProps['dismissIcon']): ResolvedDismissSlot {
   if (!slotRendersContent(slot)) {
@@ -212,13 +230,15 @@ function resolveDismissSlot(slot: TagOwnProps['dismissIcon']): ResolvedDismissSl
     const iconNode = slotRendersContent(icon)
       ? renderSlot(icon, 'span', iconClassName, { 'aria-hidden': true })
       : null;
+    // A generator is read once by the check; its items are what renders (and names the button).
+    const ownContent = materialiseSlotContent(children);
     return {
       buttonProps,
       content:
-        iconNode || slotRendersContent(children) ? (
+        iconNode || slotRendersContent(ownContent) ? (
           <>
             {iconNode}
-            {children}
+            {ownContent}
           </>
         ) : (
           defaultDismissContent()
@@ -226,7 +246,7 @@ function resolveDismissSlot(slot: TagOwnProps['dismissIcon']): ResolvedDismissSl
       warning: 'button-element',
       ignoredName,
       contentMayName: true,
-      literalTextLabel: hasTextLabel(children),
+      literalTextLabel: hasTextLabel(ownContent),
     };
   }
 
@@ -244,8 +264,9 @@ function resolveDismissSlot(slot: TagOwnProps['dismissIcon']): ResolvedDismissSl
         if (value !== 'button') contentProps.as = value;
       } else if (NAME_KEYS.has(key)) {
         if (value !== undefined) ignoredName = true;
-      } else if (key === 'children') {
-        contentProps.children = value;
+      } else if (key === 'children' || key === 'dangerouslySetInnerHTML') {
+        // Content, also in the button-object form: the dismiss button holds its own name text.
+        contentProps[key] = value;
       } else if (isButtonObject || (key.startsWith('aria-') && key !== 'aria-hidden')) {
         buttonProps[key] = value;
       } else {
@@ -253,10 +274,8 @@ function resolveDismissSlot(slot: TagOwnProps['dismissIcon']): ResolvedDismissSl
       }
     }
     // An object without content styles the default icon, e.g. `{ className: 'text-error' }` (as in
-    // MessageBar). A void element (an `img`) is content itself.
-    const contentAs = contentProps.as;
-    const isVoid = typeof contentAs === 'string' && VOID_ELEMENTS.has(contentAs);
-    if (!isVoid && !slotRendersContent(contentProps.children)) {
+    // MessageBar and SearchBox).
+    if (wrapsDefaultIcon(contentProps.as ?? 'span', contentProps)) {
       contentProps.children = defaultDismissContent();
     }
     return {

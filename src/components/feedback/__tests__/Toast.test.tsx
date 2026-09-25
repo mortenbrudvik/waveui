@@ -92,6 +92,39 @@ describe('Toast', () => {
     expect(screen.getByText('Body text')).toBeInTheDocument();
   });
 
+  describe('body content', () => {
+    /** The element after the title: the body, or `null` when none renders. */
+    const bodyAfter = (title: string) => screen.getByText(title).nextElementSibling;
+
+    it.each([
+      ['an empty string', ''],
+      ['true', true],
+      ['an empty array', []],
+      ['an empty Fragment', <></>],
+      ['a Set of empty values', new Set([null, '', <React.Fragment key="f" />])],
+    ])('renders no body element for content that renders nothing (%s)', (_, body) => {
+      render(<Toast title="Saved">{body as React.ReactNode}</Toast>);
+      expect(bodyAfter('Saved')).toBeNull();
+    });
+
+    it('renders a body of 0 (a number is content)', () => {
+      render(<Toast title="Items left">{0}</Toast>);
+      expect(bodyAfter('Items left')).toHaveTextContent(/^0$/);
+    });
+
+    it('renders the items of a body given as a generator', () => {
+      const error = vi.spyOn(console, 'error');
+      function* lines(): Generator<React.ReactNode> {
+        yield 'Saved to ';
+        yield <b key="folder">Documents</b>;
+      }
+      render(<Toast title="Saved">{lines()}</Toast>);
+      expect(bodyAfter('Saved')).toHaveTextContent(/^Saved to Documents$/);
+      expect(error).not.toHaveBeenCalled();
+      error.mockRestore();
+    });
+  });
+
   it('calls onDismiss from a typed dismiss button', async () => {
     const user = userEvent.setup();
     const onDismiss = vi.fn();
@@ -332,11 +365,10 @@ describe('useToastController', () => {
   });
 
   it('throws a descriptive error outside <Toaster> in development (feedback-navigation#8)', () => {
-    const error = vi.spyOn(console, 'error').mockImplementation(() => {});
-    expect(() => render(<DispatchButton />)).toThrow(
-      '[WaveUI] useToastController must be used within <Toaster>',
-    );
-    expect(error.mock.calls).toEqual([]);
+    // A render error is thrown, not logged: nothing may reach console.error.
+    const error = vi.spyOn(console, 'error');
+    expect(() => render(<DispatchButton />)).toThrow(new Error(MISSING_TOASTER_MESSAGE));
+    expect(error).not.toHaveBeenCalled();
     error.mockRestore();
   });
 
@@ -801,11 +833,28 @@ describe('Toaster: pausing (feedback-navigation#12)', () => {
       expect(getToasts()).toHaveLength(0);
     });
 
-    it('removes the visibility listener on unmount', () => {
-      const remove = vi.spyOn(document, 'removeEventListener');
+    it('removes the same visibility, blur and focus listeners it added when it unmounts', () => {
+      const listeners = (spy: { mock: { calls: unknown[][] } }, type: string) =>
+        spy.mock.calls.filter(([eventType]) => eventType === type).map(([, listener]) => listener);
+      const documentAdd = vi.spyOn(document, 'addEventListener');
+      const documentRemove = vi.spyOn(document, 'removeEventListener');
+      const windowAdd = vi.spyOn(window, 'addEventListener');
+      const windowRemove = vi.spyOn(window, 'removeEventListener');
       const { unmount } = renderToaster();
+      const added = {
+        visibilitychange: listeners(documentAdd, 'visibilitychange'),
+        blur: listeners(windowAdd, 'blur'),
+        focus: listeners(windowAdd, 'focus'),
+      };
+      expect(added.visibilitychange).toHaveLength(1);
+      expect(added.blur).toHaveLength(1);
+      expect(added.focus).toHaveLength(1);
+      expect(listeners(documentRemove, 'visibilitychange')).toEqual([]);
+
       unmount();
-      expect(remove).toHaveBeenCalledWith('visibilitychange', expect.any(Function));
+      expect(listeners(documentRemove, 'visibilitychange')).toEqual(added.visibilitychange);
+      expect(listeners(windowRemove, 'blur')).toEqual(added.blur);
+      expect(listeners(windowRemove, 'focus')).toEqual(added.focus);
     });
   });
 
