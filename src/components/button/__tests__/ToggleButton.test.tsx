@@ -109,6 +109,36 @@ describe('ToggleButton', () => {
       expect(italic.lastChild).toHaveAttribute('aria-hidden', 'true');
     });
 
+    it('iconPosition="after" has no effect on an icon-only toggle: one child, square sizing', () => {
+      render(
+        <ToggleButton icon={<BoldIcon />} iconPosition="after" aria-label="Bold" size="large" />,
+      );
+      const button = screen.getByRole('button', { name: 'Bold' });
+      expect(button.childNodes).toHaveLength(1);
+      expect(button.firstChild).toHaveAttribute('aria-hidden', 'true');
+      expect(button).toHaveClass('h-10', 'w-10');
+      expect(button).not.toHaveClass('min-w-24');
+    });
+
+    it('iconPosition keeps the DOM order in RTL (the writing direction mirrors it)', () => {
+      renderWithProviders(
+        <>
+          <ToggleButton icon={<BoldIcon />}>Bold</ToggleButton>
+          <ToggleButton icon={<BoldIcon />} iconPosition="after">
+            Italic
+          </ToggleButton>
+        </>,
+        { dir: 'rtl' },
+      );
+      const bold = screen.getByRole('button', { name: 'Bold' });
+      const italic = screen.getByRole('button', { name: 'Italic' });
+      expect(bold.closest('[dir]')).toHaveAttribute('dir', 'rtl');
+      expect(bold.firstChild).toHaveAttribute('aria-hidden', 'true');
+      expect(bold.lastChild?.textContent).toBe('Bold');
+      expect(italic.firstChild?.textContent).toBe('Italic');
+      expect(italic.lastChild).toHaveAttribute('aria-hidden', 'true');
+    });
+
     it('does not warn for an icon-only toggle with an aria-label', () => {
       const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
       render(<ToggleButton icon={<BoldIcon />} aria-label="Bold" />);

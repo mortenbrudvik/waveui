@@ -16,6 +16,12 @@ import type { Slot, SlotObject } from '../../lib/slot';
 import type { PolymorphicComponent, PolymorphicProps } from '../../lib/polymorphic';
 import { useId } from '../../hooks/useId';
 import { Button } from '../button/Button';
+import {
+  BUTTON_OWN_PROP_KEYS,
+  MERGED_DISABLED_FOCUSABLE_PROPS,
+  mergedAriaDisabledClasses,
+  placeButtonIcon,
+} from '../button/Button.slots';
 
 /**
  * The Tag's own props (the XOwnProps rule of `PolymorphicProps`: component-specific props only).
@@ -41,19 +47,23 @@ export interface TagOwnProps {
    * A `<button>` element or a Wave `Button` passed here is not nested (a button cannot contain a
    * button): its props are merged into the dismiss button (its `onClick` runs first and can call
    * `preventDefault()` to skip `onDismiss`) and a development warning recommends icon content.
+   * A Wave `Button`'s own props are not attributes: its `icon` becomes decorative content before
+   * its children (after them with `iconPosition="after"`), `disabledFocusable` makes the dismiss
+   * button unavailable but focusable as on the Button (`onDismiss` is not called), and
+   * `appearance` and `size` are ignored.
    * A slot object with button props (`type`, `disabled`, event handlers, `as: 'button'` or
    * `as: Button`) is the deprecated 0.4 button-object form: its props (`className`, `id`,
    * `aria-*`, handlers, …) are merged onto the dismiss button, except its content (`children`,
    * `dangerouslySetInnerHTML`, rendered inside the button) and the naming attributes (see below);
-   * for `as: Button`, `appearance` and `size` are dropped and `icon` becomes decorative content —
-   * pass icon content and use `onDismiss` instead.
+   * for `as: Button`, the Button's own props apply as for a `Button` element — pass icon content
+   * and use `onDismiss` instead.
    * The `aria-*` attributes of an icon slot object also go to the dismiss button, because the icon
    * is `aria-hidden`.
    *
    * The dismiss button's name is `dismissLabel` plus the tag content ("Dismiss Cherry"):
    * `aria-label` and `aria-labelledby` on the slot are ignored (development warning). Icon
    * content is decorative (`aria-hidden`). The children of a merged `<button>`/`Button` (or its
-   * `dangerouslySetInnerHTML` markup) are rendered as is inside the dismiss button, after the
+   * `dangerouslySetInnerHTML` markup) are rendered as is inside the dismiss button, next to the
    * decorative `icon` of a Wave `Button`: when they render a text label (at least two letters or
    * digits outside `aria-hidden`/`hidden` content, text from components such as translations
    * included), that text replaces `dismissLabel` in the name, so the name contains the visible
@@ -116,18 +126,14 @@ const HANDLER_KEY = /^on[A-Z]/;
  */
 const NAME_KEYS: ReadonlySet<string> = new Set(['aria-label', 'aria-labelledby']);
 
-/** Wave Button props that are not DOM attributes (the rest are merged onto the dismiss button). */
+/** The props of a merged `<button>` or Wave `Button` that the Tag reads itself. */
 interface WaveButtonSlotProps extends UnknownProps {
-  as?: unknown;
-  appearance?: unknown;
-  size?: unknown;
   icon?: Slot<'span'>;
+  iconPosition?: unknown;
+  disabledFocusable?: unknown;
   children?: React.ReactNode;
   dangerouslySetInnerHTML?: React.HTMLAttributes<HTMLElement>['dangerouslySetInnerHTML'];
 }
-
-/** Wave `Button` props of a `{ as: Button, … }` slot object that are not DOM attributes. */
-const WAVE_BUTTON_KEYS: ReadonlySet<string> = new Set(['appearance', 'size', 'icon']);
 
 interface ResolvedDismissSlot {
   /** Props merged onto the wired dismiss button (`null`: none). */
@@ -149,6 +155,11 @@ interface ResolvedDismissSlot {
    * first client render. After mount the rendered content decides.
    */
   literalTextLabel: boolean;
+  /**
+   * Whether a merged Wave `Button` set `disabledFocusable`: the dismiss button is then unavailable
+   * but focusable, as the Button would be.
+   */
+  disabledFocusable: boolean;
 }
 
 const noop = () => {};
@@ -199,6 +210,7 @@ function resolveDismissSlot(slot: TagOwnProps['dismissIcon']): ResolvedDismissSl
       ignoredName: false,
       contentMayName: false,
       literalTextLabel: false,
+      disabledFocusable: false,
     };
   }
 
@@ -211,19 +223,17 @@ function resolveDismissSlot(slot: TagOwnProps['dismissIcon']): ResolvedDismissSl
     (elementType === 'button' || elementType === Button)
   ) {
     const { children, dangerouslySetInnerHTML: markup, ...elementProps } = slot.props;
-    let icon: Slot<'span'> | undefined;
+    const isWaveButton = elementType === Button;
     let slotProps: UnknownProps = elementProps;
-    if (elementType === Button) {
-      const {
-        as: _as,
-        appearance: _appearance,
-        size: _size,
-        icon: buttonIcon,
-        ...rest
-      } = elementProps;
-      icon = buttonIcon;
-      slotProps = rest;
+    if (isWaveButton) {
+      // Wave Button's own props are not attributes: `icon`, `iconPosition` and
+      // `disabledFocusable` are applied here, the others (`appearance`, `size`) are dropped.
+      slotProps = {};
+      for (const [key, value] of Object.entries(elementProps)) {
+        if (!BUTTON_OWN_PROP_KEYS.has(key)) slotProps[key] = value;
+      }
     }
+    const icon = isWaveButton ? elementProps.icon : undefined;
     const { props: buttonProps, ignoredName } = withoutName(slotProps);
     const iconNode = slotRendersContent(icon)
       ? renderSlot(icon, 'span', iconClassName, { 'aria-hidden': true })
@@ -240,18 +250,14 @@ function resolveDismissSlot(slot: TagOwnProps['dismissIcon']): ResolvedDismissSl
     return {
       buttonProps,
       content:
-        iconNode || slotRendersContent(ownContent) ? (
-          <>
-            {iconNode}
-            {ownContent}
-          </>
-        ) : (
-          defaultDismissContent()
-        ),
+        iconNode || slotRendersContent(ownContent)
+          ? placeButtonIcon(iconNode, ownContent, isWaveButton && elementProps.iconPosition)
+          : defaultDismissContent(),
       warning: 'button-element',
       ignoredName,
       contentMayName: true,
       literalTextLabel: hasTextLabel(ownContent),
+      disabledFocusable: isWaveButton && Boolean(elementProps.disabledFocusable),
     };
   }
 
@@ -266,13 +272,15 @@ function resolveDismissSlot(slot: TagOwnProps['dismissIcon']): ResolvedDismissSl
       Object.keys(slot).some((key) => BUTTON_ONLY_KEYS.has(key) || HANDLER_KEY.test(key));
     const buttonProps: UnknownProps = {};
     const contentProps: UnknownProps = {};
+    // Wave Button's own props are not attributes: `icon`, `iconPosition` and `disabledFocusable`
+    // are applied below, the others (`appearance`, `size`) are dropped.
+    const ownProps: UnknownProps = {};
     let ignoredName = false;
-    let buttonIcon: unknown;
     for (const [key, value] of Object.entries(slot)) {
       if (key === 'as') {
         if (value !== 'button' && !asWaveButton) contentProps.as = value;
-      } else if (asWaveButton && WAVE_BUTTON_KEYS.has(key)) {
-        if (key === 'icon') buttonIcon = value;
+      } else if (asWaveButton && BUTTON_OWN_PROP_KEYS.has(key)) {
+        ownProps[key] = value;
       } else if (NAME_KEYS.has(key)) {
         if (value !== undefined) ignoredName = true;
       } else if (key === 'children' || key === 'dangerouslySetInnerHTML') {
@@ -285,13 +293,13 @@ function resolveDismissSlot(slot: TagOwnProps['dismissIcon']): ResolvedDismissSl
       }
     }
     // An object without content styles the default icon, e.g. `{ className: 'text-error' }` (as in
-    // MessageBar and SearchBox); a Wave Button's icon comes first, in front of the content.
-    if (slotRendersContent(buttonIcon)) {
-      contentProps.children = (
-        <>
-          {renderSlot(buttonIcon as Slot<'span'>, 'span', iconClassName)}
-          {materialiseSlotContent(contentProps.children)}
-        </>
+    // MessageBar and SearchBox); a Wave Button's icon comes before the content (after it with
+    // `iconPosition="after"`).
+    if (slotRendersContent(ownProps.icon)) {
+      contentProps.children = placeButtonIcon(
+        renderSlot(ownProps.icon as Slot<'span'>, 'span', iconClassName),
+        materialiseSlotContent(contentProps.children),
+        ownProps.iconPosition,
       );
     } else if (slotWrapsDefaultContent(contentProps.as ?? 'span', contentProps)) {
       contentProps.children = defaultDismissContent();
@@ -305,6 +313,7 @@ function resolveDismissSlot(slot: TagOwnProps['dismissIcon']): ResolvedDismissSl
       ignoredName,
       contentMayName: false,
       literalTextLabel: false,
+      disabledFocusable: Boolean(ownProps.disabledFocusable),
     };
   }
 
@@ -315,6 +324,7 @@ function resolveDismissSlot(slot: TagOwnProps['dismissIcon']): ResolvedDismissSl
     ignoredName: false,
     contentMayName: false,
     literalTextLabel: false,
+    disabledFocusable: false,
   };
 }
 
@@ -361,6 +371,7 @@ export const Tag: PolymorphicComponent<'span', TagOwnProps> = (props) => {
     ignoredName,
     contentMayName,
     literalTextLabel,
+    disabledFocusable,
   } = resolveDismissSlot(dismissible ? dismissIcon : undefined);
 
   // C-SLOTS naming (WCAG 2.5.3 Label in Name): the rendered text label of a merged button replaces
@@ -422,6 +433,7 @@ export const Tag: PolymorphicComponent<'span', TagOwnProps> = (props) => {
       'inline-flex size-5 shrink-0 items-center justify-center rounded-full border-0 bg-transparent p-0 text-foreground',
       'not-disabled:not-aria-disabled:hover:bg-subtle-pressed',
       'disabled:cursor-not-allowed disabled:opacity-50',
+      mergedAriaDisabledClasses,
       focusRing,
     ),
     'aria-labelledby': `${namedByContent ? dismissTextId : dismissLabelId} ${contentId}`,
@@ -448,6 +460,9 @@ export const Tag: PolymorphicComponent<'span', TagOwnProps> = (props) => {
         <button
           {...dismissButtonProps}
           type={(dismissButtonProps.type as 'button' | 'submit' | 'reset' | undefined) ?? 'button'}
+          // A merged `disabledFocusable` Button makes the dismiss button unavailable but focusable
+          // (spread last: it wins over `disabled` and `onDismiss`).
+          {...(disabledFocusable ? MERGED_DISABLED_FOCUSABLE_PROPS : undefined)}
         >
           <span id={dismissLabelId} className="sr-only">
             {dismissLabel}

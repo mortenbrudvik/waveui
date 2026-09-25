@@ -1120,6 +1120,22 @@ describe('Button', () => {
   });
 
   describe('disabledFocusable', () => {
+    it('keeps its focus ring at full strength: the dimmed look lifts while it shows the ring', () => {
+      render(
+        <>
+          <Button disabledFocusable>Save</Button>
+          <Button aria-disabled="true">Not yet</Button>
+        </>,
+      );
+      // CSS opacity dims the element's own outline too, which would put the ring below 3:1.
+      for (const name of ['Save', 'Not yet']) {
+        expect(screen.getByRole('button', { name })).toHaveClass(
+          'opacity-50',
+          'aria-disabled:focus-visible:opacity-100',
+        );
+      }
+    });
+
     it('stays in the tab order with aria-disabled, data-disabled and data-disabled-focusable instead of disabled', async () => {
       const user = userEvent.setup();
       render(

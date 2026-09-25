@@ -376,6 +376,19 @@ describe('Link', () => {
   });
 
   describe('disabledFocusable', () => {
+    it('keeps its focus ring at full strength: the dimmed look lifts while it shows the ring', () => {
+      render(
+        <Link href="/docs" disabledFocusable>
+          Documentation
+        </Link>,
+      );
+      // CSS opacity dims the element's own outline too, which would put the ring below 3:1.
+      expect(screen.getByRole('link', { name: 'Documentation' })).toHaveClass(
+        'opacity-50',
+        'aria-disabled:focus-visible:opacity-100',
+      );
+    });
+
     it('drops href, keeps role="link", stays in the tab order and blocks activation', async () => {
       const user = userEvent.setup();
       const onClick = vi.fn();

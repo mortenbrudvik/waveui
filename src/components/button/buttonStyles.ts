@@ -96,8 +96,13 @@ const buttonPressedForcedColors = `${forcedColors.selectedContainer} forced-colo
  */
 const buttonPressedDisabledForcedColors = 'forced-colors:outline-[GrayText]';
 
-/** Disabled look (native `disabled`, `aria-disabled` or a non-button `as`), incl. forced colors. */
-export const buttonDisabledClasses = `cursor-not-allowed opacity-50 ${forcedColors.disabled}`;
+/**
+ * Disabled look (native `disabled`, `aria-disabled` or a non-button `as`), incl. forced colors.
+ * `opacity` dims the element's own focus ring too, so a focusable disabled button
+ * (`disabledFocusable`, a consumer `aria-disabled`) shows at full opacity while its ring is
+ * visible: the ring keeps its 3:1 contrast, and `aria-disabled` still reports the state.
+ */
+export const buttonDisabledClasses = `cursor-not-allowed opacity-50 aria-disabled:focus-visible:opacity-100 ${forcedColors.disabled}`;
 
 /** Options of {@link buttonClassName}. */
 export interface ButtonClassNameOptions {

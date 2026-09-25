@@ -406,6 +406,91 @@ describe('Tag', () => {
       expect(warn.mock.calls).toEqual([[expect.stringContaining(BUTTON_SLOT_WARNING)]]);
     });
 
+    it.each([
+      [
+        'a Wave Button element',
+        (onClick: () => void): TagOwnProps['dismissIcon'] => (
+          <Button
+            icon={<CustomIcon />}
+            iconPosition="after"
+            disabled
+            disabledFocusable
+            onClick={onClick}
+          >
+            Remove
+          </Button>
+        ),
+        'Remove Cherry',
+        BUTTON_SLOT_WARNING,
+      ],
+      [
+        'a slot object whose `as` is a Wave Button (deprecated form)',
+        (onClick: () => void) =>
+          // Wave Button props are not part of the slot type: a JavaScript caller's 0.4 form.
+          ({
+            as: Button,
+            icon: <CustomIcon />,
+            iconPosition: 'after',
+            disabled: true,
+            disabledFocusable: true,
+            onClick,
+            children: 'Remove',
+          }) as Slot<'span'>,
+        'Dismiss Cherry',
+        BUTTON_OBJECT_WARNING,
+      ],
+    ])(
+      '%s: iconPosition and disabledFocusable take effect on the dismiss button and never reach the DOM',
+      async (_, dismissIcon, name, warning) => {
+        const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+        const error = vi.spyOn(console, 'error').mockImplementation(() => {});
+        const user = userEvent.setup();
+        const onSlotClick = vi.fn();
+        const onDismiss = vi.fn();
+        const onParentClick = vi.fn();
+        render(
+          <div onClick={onParentClick}>
+            <Tag dismissible onDismiss={onDismiss} dismissIcon={dismissIcon(onSlotClick)}>
+              Cherry
+            </Tag>
+          </div>,
+        );
+        const buttons = screen.getAllByRole('button');
+        expect(buttons).toHaveLength(1);
+        const button = buttons[0];
+        expect(button).toHaveAccessibleName(name);
+        // Neither prop lands on the button or its content as an unknown attribute.
+        expect(button.outerHTML).not.toMatch(/iconposition|disabledfocusable/i);
+        // iconPosition="after": the decorative icon follows the text, as in Button (the object
+        // form's content is hidden as a whole).
+        const icon = screen.getByTestId('custom-icon').parentElement as HTMLElement;
+        expect(icon.closest('[aria-hidden="true"]')).not.toBeNull();
+        expect(icon.previousSibling?.textContent).toBe('Remove');
+        expect(icon.nextSibling).toBeNull();
+        // disabledFocusable wins over disabled: unavailable, but focusable and in the tab order.
+        expect(button).not.toBeDisabled();
+        expect(button).toHaveAttribute('aria-disabled', 'true');
+        expect(button).toHaveAttribute('data-disabled', '');
+        expect(button).toHaveAttribute('data-disabled-focusable', '');
+        expect(button).toHaveClass(
+          'aria-disabled:cursor-not-allowed',
+          'aria-disabled:opacity-50',
+          // The dimmed look lifts while the focus ring shows (opacity would dim the ring too).
+          'aria-disabled:focus-visible:opacity-100',
+        );
+        await user.tab();
+        expect(button).toHaveFocus();
+        await user.keyboard('{Enter}');
+        await user.keyboard(' ');
+        await user.click(button);
+        expect(onSlotClick).not.toHaveBeenCalled();
+        expect(onDismiss).not.toHaveBeenCalled();
+        expect(onParentClick).not.toHaveBeenCalled();
+        expect(warn.mock.calls).toEqual([[expect.stringContaining(warning)]]);
+        expect(error).not.toHaveBeenCalled();
+      },
+    );
+
     it('merges a Wave Button written in a Server Component (lazy type) instead of nesting it', async () => {
       const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
       const user = userEvent.setup();

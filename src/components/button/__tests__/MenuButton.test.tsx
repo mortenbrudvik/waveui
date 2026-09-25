@@ -1,12 +1,13 @@
 import * as React from 'react';
 import { describe, it, expect, expectTypeOf, vi, afterEach } from 'vitest';
-import { render, screen, fireEvent } from '@testing-library/react';
+import { render, screen, fireEvent, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
+import { Button } from '../Button';
 import { MenuButton } from '../MenuButton';
 import type { MenuButtonProps } from '../MenuButton';
 import { buttonClassName, buttonSizeClasses } from '../buttonStyles';
 import { testSystemProps, testFocusEvents, testNoImplicitSubmit } from '../../../test-utils';
-import type { Appearance, Size } from '../../../lib/types';
+import type { Appearance, Size, Slot } from '../../../lib/types';
 import { composeStories } from '@storybook/react';
 import * as stories from '../../../../stories/MenuButton.stories';
 
@@ -31,6 +32,9 @@ const MENU_ICON_ONLY_WARNING =
 /** Button's own warning, which applies when no indicator renders. */
 const BUTTON_ICON_ONLY_WARNING =
   '[WaveUI] Button: an icon-only button has no accessible name. Pass `aria-label`, `aria-labelledby` or `title` (the icon is decorative and hidden from assistive technology).';
+/** The development warning of a button passed as `menuIcon` (`kind` says which form). */
+const menuIconButtonWarning = (kind: string) =>
+  `[WaveUI] MenuButton: \`menuIcon\` received ${kind}; its children render as the menu indicator and its props were dropped (buttons cannot be nested). Pass icon content instead, e.g. \`menuIcon={<MyIcon />}\`.`;
 
 const GearIcon = () => (
   <svg data-testid="gear-icon" viewBox="0 0 16 16" width="16" height="16">
@@ -202,6 +206,74 @@ describe('MenuButton', () => {
         expect(warn.mock.calls).toEqual([[BUTTON_ICON_ONLY_WARNING]]);
       },
     );
+
+    describe('a button passed as menuIcon is unwrapped, never nested (C-SLOTS)', () => {
+      it.each([
+        [
+          'a Wave Button element',
+          <Button key="b" aria-label="Open" onClick={() => {}}>
+            <svg data-testid="glyph" />
+          </Button>,
+          'a button element',
+        ],
+        [
+          'a <button> element',
+          <button key="n" type="button" aria-label="Open">
+            <svg data-testid="glyph" />
+          </button>,
+          'a button element',
+        ],
+        [
+          'a slot object whose `as` is a Wave Button',
+          {
+            as: Button,
+            'aria-label': 'Open',
+            children: <svg data-testid="glyph" />,
+          } as Slot<'span'>,
+          'a slot object that renders a button',
+        ],
+      ])(
+        '%s: its children are the decorative indicator, its props are dropped, one warning',
+        (_name, menuIcon, kind) => {
+          const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+          const error = vi.spyOn(console, 'error').mockImplementation(() => {});
+          render(
+            <>
+              <MenuButton menuIcon={menuIcon}>Actions</MenuButton>
+              <MenuButton menuIcon={menuIcon}>More</MenuButton>
+            </>,
+          );
+          expect(screen.getAllByRole('button')).toHaveLength(2);
+          for (const name of ['Actions', 'More']) {
+            const button = screen.getByRole('button', { name });
+            expect(button.querySelector('button')).toBeNull();
+            const glyph = within(button).getByTestId('glyph');
+            expect(glyph.parentElement).toHaveAttribute('aria-hidden', 'true');
+            expect(button.querySelector('[data-wave-icon="chevron-down"]')).toBeNull();
+          }
+          expect(warn.mock.calls).toEqual([[menuIconButtonWarning(kind)]]);
+          expect(error).not.toHaveBeenCalled();
+        },
+      );
+
+      it('a button whose children render nothing keeps the chevron (its icon prop is dropped); only the button warning', () => {
+        const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+        const error = vi.spyOn(console, 'error').mockImplementation(() => {});
+        render(
+          <MenuButton
+            menuIcon={<Button icon={<svg data-testid="button-icon" />} aria-label="Open" />}
+          >
+            Actions
+          </MenuButton>,
+        );
+        const button = screen.getByRole('button', { name: 'Actions' });
+        expect(button.querySelector('button')).toBeNull();
+        expect(button.querySelector('svg')).toHaveAttribute('data-wave-icon', 'chevron-down');
+        expect(screen.queryByTestId('button-icon')).toBeNull();
+        expect(warn.mock.calls).toEqual([[menuIconButtonWarning('a button element')]]);
+        expect(error).not.toHaveBeenCalled();
+      });
+    });
   });
 
   describe('icon slot (button-provider#21, data-display#31)', () => {

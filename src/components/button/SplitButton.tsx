@@ -6,6 +6,7 @@ import { mergeProps } from '../../lib/mergeProps';
 import { slotRendersContent } from '../../lib/slot';
 import type { Size, Appearance, IconPosition, Slot } from '../../lib/types';
 import { Button } from './Button';
+import { unwrapButtonGlyph } from './Button.slots';
 
 /**
  * Props for one half of a SplitButton (`menuButtonProps`, `primaryActionButtonProps`): native
@@ -63,7 +64,10 @@ export interface SplitButtonProps extends Omit<React.HTMLAttributes<HTMLDivEleme
    * Replaces the chevron of the menu half (decorative, `aria-hidden`). The menu half always shows
    * an indicator: `null` and `undefined` keep the default chevron, and so does a value that renders
    * nothing (`false`, `''`, an empty array), which also logs a development warning. Unlike
-   * `MenuButton.menuIcon`, a value that renders nothing does not hide the indicator.
+   * `MenuButton.menuIcon`, a value that renders nothing does not hide the indicator. A `<button>`
+   * or `Button` element, or a slot object whose `as` is one, is not nested inside the menu half:
+   * its children become the glyph (the chevron when they render nothing), its props (`icon`
+   * included) are dropped, and a development warning says so.
    */
   menuIcon?: Slot<'span'>;
   /** Visual style variant.
@@ -184,9 +188,13 @@ export const SplitButton = ({
   const primaryFocusable = disabledFocusable || Boolean(primary.disabledFocusable);
   const menuFocusable = disabledFocusable || Boolean(menu.disabledFocusable);
 
+  // The glyph sits inside the menu half's button: a button passed as `menuIcon` is unwrapped (its
+  // children are the glyph), never nested (C-SLOTS).
+  const { glyph: menuGlyph, button: menuIconButton } = unwrapButtonGlyph(menuIcon);
   // The menu half always shows an indicator: a `menuIcon` that renders nothing keeps the chevron.
-  const menuIconRenders = slotRendersContent(menuIcon);
-  const menuIconEmpty = menuIcon != null && !menuIconRenders;
+  const menuIconRenders = slotRendersContent(menuGlyph);
+  // An unwrapped button reports its own warning only.
+  const menuIconEmpty = menuIconButton === null && menuIcon != null && !menuIconRenders;
   React.useEffect(() => {
     if (menuIconEmpty) {
       warnOnce(
@@ -195,6 +203,14 @@ export const SplitButton = ({
       );
     }
   }, [menuIconEmpty]);
+  React.useEffect(() => {
+    if (menuIconButton) {
+      warnOnce(
+        'SplitButton:menuIcon-button',
+        `SplitButton: \`menuIcon\` received ${menuIconButton}; its children render as the glyph of the menu button and its props were dropped (buttons cannot be nested). Pass icon content instead, e.g. \`menuIcon={<MyIcon />}\`.`,
+      );
+    }
+  }, [menuIconButton]);
 
   // `role="group"` applies wherever the consumer's role is `undefined` or `null` (as in Button).
   return (
@@ -222,7 +238,7 @@ export const SplitButton = ({
         size={size}
         disabled={!menuFocusable && (disabled || Boolean(menu.disabled))}
         disabledFocusable={menuFocusable}
-        icon={menuIconRenders ? menuIcon : <ChevronDownIcon />}
+        icon={menuIconRenders ? menuGlyph : <ChevronDownIcon />}
         className={cn(
           halfClasses,
           menuButtonSizeClasses[size],

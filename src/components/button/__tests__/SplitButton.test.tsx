@@ -1,11 +1,13 @@
 import * as React from 'react';
 import { describe, it, expect, expectTypeOf, vi, afterEach } from 'vitest';
-import { render, screen, fireEvent } from '@testing-library/react';
+import { render, screen, fireEvent, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { SplitButton } from '../SplitButton';
 import type { SplitButtonMenuButtonProps, SplitButtonProps } from '../SplitButton';
+import { Button } from '../Button';
 import { MenuButton } from '../MenuButton';
 import {
+  asClientReference,
   testSystemProps,
   testFocusEvents,
   testNoImplicitSubmit,
@@ -54,6 +56,13 @@ const PHYSICAL = /(^|:)-?(ml|mr|pl|pr|left|right)-|(^|:)(border|rounded)-(l|r|tl
 /** The development warning of a `menuIcon` that renders nothing. */
 const MENU_ICON_EMPTY_WARNING =
   '[WaveUI] SplitButton: `menuIcon` renders nothing, so the menu button shows the default chevron. Unlike `MenuButton`, a SplitButton always shows a menu indicator: pass an icon, or leave `menuIcon` unset.';
+
+/** The development warning of a button passed as `menuIcon` (`kind` says which form). */
+const menuIconButtonWarning = (kind: string) =>
+  `[WaveUI] SplitButton: \`menuIcon\` received ${kind}; its children render as the glyph of the menu button and its props were dropped (buttons cannot be nested). Pass icon content instead, e.g. \`menuIcon={<MyIcon />}\`.`;
+
+/** A Wave Button written in a Server Component: a lazy client reference (C-COMPOUND). */
+const ClientButton = asClientReference(Button);
 
 const SaveIcon = () => (
   <svg data-testid="save-icon" viewBox="0 0 16 16" width="16" height="16">
@@ -334,6 +343,90 @@ describe('SplitButton', () => {
       // One decorative icon span (the chevron), no empty span next to it.
       expect(menu.childNodes).toHaveLength(1);
       expect(warn.mock.calls).toEqual([[MENU_ICON_EMPTY_WARNING]]);
+    });
+
+    describe('a button passed as menuIcon is unwrapped, never nested (C-SLOTS)', () => {
+      it.each([
+        [
+          'a Wave Button element',
+          <Button key="b" aria-label="Open" onClick={() => {}}>
+            <svg data-testid="glyph" />
+          </Button>,
+          'a button element',
+        ],
+        [
+          'a <button> element',
+          <button key="n" type="button" aria-label="Open">
+            <svg data-testid="glyph" />
+          </button>,
+          'a button element',
+        ],
+        [
+          'a Wave Button written in a Server Component',
+          <ClientButton key="c" aria-label="Open">
+            <svg data-testid="glyph" />
+          </ClientButton>,
+          'a button element',
+        ],
+        [
+          'a slot object whose `as` is a Wave Button',
+          {
+            as: Button,
+            'aria-label': 'Open',
+            children: <svg data-testid="glyph" />,
+          } as Slot<'span'>,
+          'a slot object that renders a button',
+        ],
+        [
+          'a slot object whose `as` is "button"',
+          {
+            as: 'button',
+            'aria-label': 'Open',
+            children: <svg data-testid="glyph" />,
+          } as Slot<'span'>,
+          'a slot object that renders a button',
+        ],
+      ])(
+        '%s: its children are the decorative glyph, its props are dropped, one warning',
+        (_name, menuIcon, kind) => {
+          const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+          const error = vi.spyOn(console, 'error').mockImplementation(() => {});
+          render(
+            <>
+              <SplitButton menuIcon={menuIcon}>Save</SplitButton>
+              <SplitButton menuIcon={menuIcon}>Share</SplitButton>
+            </>,
+          );
+          expect(screen.getAllByRole('button')).toHaveLength(4);
+          for (const menu of screen.getAllByRole('button', { name: 'More options' })) {
+            expect(menu.querySelector('button')).toBeNull();
+            const glyph = within(menu).getByTestId('glyph');
+            expect(glyph.parentElement).toHaveAttribute('aria-hidden', 'true');
+            expect(menu.querySelector('[data-wave-icon="chevron-down"]')).toBeNull();
+          }
+          expect(screen.queryByRole('button', { name: 'Open' })).toBeNull();
+          expect(warn.mock.calls).toEqual([[menuIconButtonWarning(kind)]]);
+          expect(error).not.toHaveBeenCalled();
+        },
+      );
+
+      it('a button whose children render nothing keeps the chevron (its icon prop is dropped); only the button warning', () => {
+        const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+        const error = vi.spyOn(console, 'error').mockImplementation(() => {});
+        render(
+          <SplitButton
+            menuIcon={<Button icon={<svg data-testid="button-icon" />} aria-label="Open" />}
+          >
+            Save
+          </SplitButton>,
+        );
+        const menu = screen.getByRole('button', { name: 'More options' });
+        expect(menu.querySelector('button')).toBeNull();
+        expect(menu.querySelector('svg')).toHaveAttribute('data-wave-icon', 'chevron-down');
+        expect(screen.queryByTestId('button-icon')).toBeNull();
+        expect(warn.mock.calls).toEqual([[menuIconButtonWarning('a button element')]]);
+        expect(error).not.toHaveBeenCalled();
+      });
     });
   });
 

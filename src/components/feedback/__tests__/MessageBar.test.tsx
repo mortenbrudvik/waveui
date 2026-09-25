@@ -662,6 +662,90 @@ describe('MessageBar', () => {
     });
 
     it.each([
+      [
+        'a Wave Button element',
+        (onClick: () => void): MessageBarProps['dismiss'] => (
+          <Button
+            icon={<svg data-testid="button-icon" />}
+            iconPosition="after"
+            disabled
+            disabledFocusable
+            onClick={onClick}
+          >
+            Close
+          </Button>
+        ),
+        'Close',
+        BUTTON_ELEMENT_WARNING,
+      ],
+      [
+        'a slot object whose `as` is a Wave Button (deprecated form)',
+        (onClick: () => void) =>
+          // Wave Button props are not part of the slot type: a JavaScript caller's 0.4 form.
+          ({
+            as: Button,
+            icon: <svg data-testid="button-icon" />,
+            iconPosition: 'after',
+            disabled: true,
+            disabledFocusable: true,
+            onClick,
+            children: 'Close',
+          }) as Slot<'span'>,
+        'Dismiss',
+        BUTTON_OBJECT_WARNING,
+      ],
+    ])(
+      '%s: iconPosition and disabledFocusable take effect on the wired button and never reach the DOM',
+      async (_, dismiss, name, warning) => {
+        const warn = spyOnWarn();
+        const error = vi.spyOn(console, 'error').mockImplementation(() => {});
+        const user = userEvent.setup();
+        const onDismiss = vi.fn();
+        const onSlotClick = vi.fn();
+        const onParentClick = vi.fn();
+        render(
+          <div onClick={onParentClick}>
+            <MessageBar onDismiss={onDismiss} dismiss={dismiss(onSlotClick)}>
+              Msg
+            </MessageBar>
+          </div>,
+        );
+        const buttons = screen.getAllByRole('button');
+        expect(buttons).toHaveLength(1);
+        const button = buttons[0];
+        expect(button).toHaveAccessibleName(name);
+        // Neither prop lands on the button or its content as an unknown attribute.
+        expect(button.outerHTML).not.toMatch(/iconposition|disabledfocusable/i);
+        // iconPosition="after": the decorative icon follows the text, as in Button.
+        const icon = screen.getByTestId('button-icon').parentElement as HTMLElement;
+        expect(icon).toHaveAttribute('aria-hidden', 'true');
+        expect(icon.previousSibling?.textContent).toBe('Close');
+        expect(icon.nextSibling).toBeNull();
+        // disabledFocusable wins over disabled: unavailable, but focusable and in the tab order.
+        expect(button).not.toBeDisabled();
+        expect(button).toHaveAttribute('aria-disabled', 'true');
+        expect(button).toHaveAttribute('data-disabled', '');
+        expect(button).toHaveAttribute('data-disabled-focusable', '');
+        expect(button).toHaveClass(
+          'aria-disabled:cursor-not-allowed',
+          'aria-disabled:opacity-50',
+          // The dimmed look lifts while the focus ring shows (opacity would dim the ring too).
+          'aria-disabled:focus-visible:opacity-100',
+        );
+        await user.tab();
+        expect(button).toHaveFocus();
+        await user.keyboard('{Enter}');
+        await user.keyboard(' ');
+        await user.click(button);
+        expect(onSlotClick).not.toHaveBeenCalled();
+        expect(onDismiss).not.toHaveBeenCalled();
+        expect(onParentClick).not.toHaveBeenCalled();
+        expect(warn.mock.calls).toEqual([[warning]]);
+        expect(error).not.toHaveBeenCalled();
+      },
+    );
+
+    it.each([
       ['an icon', <svg key="icon" data-testid="slot-icon" />],
       ['a symbol', '×'],
       // A lone character is a symbolic glyph, not a text label (C-SLOTS naming, WCAG 2.5.3).

@@ -143,7 +143,10 @@ export const Link: PolymorphicComponent<'a', LinkOwnProps> = (props) => {
         'cursor-pointer transition-colors motion-reduce:transition-none',
         focusRing,
         appearanceClasses[appearance],
-        (disabled || disabledFocusable) && 'cursor-not-allowed opacity-50',
+        // Full opacity while a focusable disabled link shows its focus ring, which `opacity`
+        // would dim below 3:1 (as for buttons).
+        (disabled || disabledFocusable) &&
+          'cursor-not-allowed opacity-50 aria-disabled:focus-visible:opacity-100',
         className,
       )}
       {...enforced}

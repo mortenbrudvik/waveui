@@ -5,6 +5,7 @@ import { ChevronDownIcon } from '../../lib/icons';
 import { materialiseSlotContent, renderSlot, slotRendersContent } from '../../lib/slot';
 import type { Size, Appearance, Slot } from '../../lib/types';
 import { Button } from './Button';
+import { unwrapButtonGlyph } from './Button.slots';
 
 /** Properties for the MenuButton component. */
 export interface MenuButtonProps extends React.ButtonHTMLAttributes<HTMLButtonElement> {
@@ -26,7 +27,10 @@ export interface MenuButtonProps extends React.ButtonHTMLAttributes<HTMLButtonEl
    * Custom menu indicator rendered after the label, in place of the default chevron. Decorative
    * (`aria-hidden="true"` unless a slot object overrides it). `false` hides the indicator, as does
    * any value that renders nothing (`true`, `''`, an empty array or Fragment, e.g. from
-   * `menuIcon={cond && <X />}`); `null`/`undefined` keep the default chevron.
+   * `menuIcon={cond && <X />}`); `null`/`undefined` keep the default chevron. A `<button>` or
+   * `Button` element, or a slot object whose `as` is one, is not nested inside the menu button:
+   * its children become the indicator (the chevron when they render nothing), its props (`icon`
+   * included) are dropped, and a development warning says so.
    */
   menuIcon?: Slot<'span'>;
   /**
@@ -90,14 +94,27 @@ export const MenuButton = ({
   'aria-expanded': ariaExpanded,
   ...props
 }: MenuButtonProps) => {
+  // The indicator sits inside the button: a button passed as `menuIcon` is unwrapped (its children
+  // are the indicator), never nested (C-SLOTS).
+  const { glyph, button: menuIconButton } = unwrapButtonGlyph(menuIcon);
+  React.useEffect(() => {
+    if (menuIconButton) {
+      warnOnce(
+        'MenuButton:menuIcon-button',
+        `MenuButton: \`menuIcon\` received ${menuIconButton}; its children render as the menu indicator and its props were dropped (buttons cannot be nested). Pass icon content instead, e.g. \`menuIcon={<MyIcon />}\`.`,
+      );
+    }
+  }, [menuIconButton]);
+
   // `menuIcon` follows the `icon` slot rule: unset keeps the chevron, a value that renders nothing
   // (`false`, `true`, `''`, an empty array, Set or Fragment) hides the indicator without leaving an
-  // empty `aria-hidden` span behind.
+  // empty `aria-hidden` span behind. An unwrapped button whose children render nothing keeps the
+  // chevron, as for a picker's `expandIcon`.
   const indicator =
-    menuIcon == null ? (
+    menuIcon == null || (menuIconButton !== null && !slotRendersContent(glyph)) ? (
       <ChevronDownIcon className="shrink-0" />
-    ) : slotRendersContent(menuIcon) ? (
-      renderSlot(menuIcon, 'span', 'inline-flex shrink-0 items-center', { 'aria-hidden': true })
+    ) : slotRendersContent(glyph) ? (
+      renderSlot(glyph, 'span', 'inline-flex shrink-0 items-center', { 'aria-hidden': true })
     ) : null;
 
   // While the indicator renders, Button counts it as content: it sizes the button as labelled and

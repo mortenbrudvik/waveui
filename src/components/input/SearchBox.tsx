@@ -20,6 +20,12 @@ import { useFieldControl } from '../../hooks/useFieldControl';
 import { useFormReset } from '../../hooks/useFormReset';
 import { useMergedRefs } from '../../hooks/useMergedRefs';
 import { Button } from '../button/Button';
+import {
+  BUTTON_OWN_PROP_KEYS,
+  MERGED_DISABLED_FOCUSABLE_PROPS,
+  mergedAriaDisabledClasses,
+  placeButtonIcon,
+} from '../button/Button.slots';
 import { isInvalidLook } from './Input';
 
 /**
@@ -112,9 +118,12 @@ export interface SearchBoxProps
    *
    * A `<button>` element or a Wave `Button` passed here is not nested: its props are merged into
    * the built-in button (its `onClick` runs first; `preventDefault()` cancels the clear) and its
-   * children become the content, with a development warning. The 0.4 button-object form
-   * (`{ as: 'button', onClick, … }` or an object with button props) is **deprecated**: its button
-   * props are merged the same way. Pass icon content instead.
+   * children become the content, with a development warning. A Wave `Button`'s own props are not
+   * attributes: its `icon` becomes decorative content before its children (after them with
+   * `iconPosition="after"`), `disabledFocusable` makes the clear button unavailable but focusable
+   * as on the Button (nothing is cleared), and `appearance` and `size` are ignored. The 0.4
+   * button-object form (`{ as: 'button', onClick, … }` or an object with button props) is
+   * **deprecated**: its button props are merged the same way. Pass icon content instead.
    *
    * Name (WCAG 2.5.3 Label in Name): content is decorative (`aria-hidden`), so the button keeps
    * the name "Clear search". An `aria-label`, `aria-labelledby` or `title` on the merged button or
@@ -182,6 +191,11 @@ interface DismissParts {
    * first client render. After mount the rendered button's text decides.
    */
   literalTextLabel: boolean;
+  /**
+   * Whether a merged Wave `Button` set `disabledFocusable`: the clear button is then unavailable
+   * but focusable, as the Button would be.
+   */
+  disabledFocusable: boolean;
 }
 
 const noop = () => {};
@@ -199,6 +213,7 @@ const DEFAULT_DISMISS: DismissParts = {
   content: null,
   contentMayName: false,
   literalTextLabel: false,
+  disabledFocusable: false,
 };
 
 function isButtonType(type: unknown): boolean {
@@ -215,19 +230,24 @@ function splitButtonLike(type: unknown, props: UnknownProps, children: React.Rea
   const content = materialiseSlotContent(children);
   const literalTextLabel = hasTextLabel(content);
   if (type === Button) {
-    // Wave Button's own props do not belong on a native <button>; its icon becomes content.
-    const { appearance, size, icon, as, children: _children, ...buttonProps } = props;
-    const iconNode = renderSlot(icon as Slot<'span'>, 'span', 'inline-flex', {
+    // Wave Button's own props do not belong on a native <button>: its icon becomes content (after
+    // the children with `iconPosition="after"`) and `disabledFocusable` is applied by the caller.
+    const buttonProps: UnknownProps = {};
+    for (const [key, value] of Object.entries(props)) {
+      if (key !== 'children' && !BUTTON_OWN_PROP_KEYS.has(key)) buttonProps[key] = value;
+    }
+    const iconNode = renderSlot(props.icon as Slot<'span'>, 'span', 'inline-flex', {
       'aria-hidden': true,
     });
     const buttonContent =
-      iconNode || hasChildren ? (
-        <>
-          {iconNode}
-          {content}
-        </>
-      ) : null;
-    return { buttonProps, content: buttonContent, contentMayName: true, literalTextLabel };
+      iconNode || hasChildren ? placeButtonIcon(iconNode, content, props.iconPosition) : null;
+    return {
+      buttonProps,
+      content: buttonContent,
+      contentMayName: true,
+      literalTextLabel,
+      disabledFocusable: Boolean(props.disabledFocusable),
+    };
   }
   const { as, children: _children, ...buttonProps } = props;
   // `null` content falls back to the default icon.
@@ -236,6 +256,7 @@ function splitButtonLike(type: unknown, props: UnknownProps, children: React.Rea
     content: hasChildren ? content : null,
     contentMayName: true,
     literalTextLabel,
+    disabledFocusable: false,
   };
 }
 
@@ -303,6 +324,7 @@ function resolveDismiss(dismiss: SearchBoxProps['dismiss']): DismissParts {
     content,
     contentMayName: false,
     literalTextLabel: false,
+    disabledFocusable: false,
   };
 }
 
@@ -494,6 +516,7 @@ export const SearchBox = ({
         'not-disabled:not-aria-disabled:hover:text-foreground',
         focusRing,
         'disabled:cursor-not-allowed',
+        mergedAriaDisabledClasses,
       ),
     },
     slotButtonProps,
@@ -588,6 +611,9 @@ export const SearchBox = ({
           type={clearButtonProps.type ?? 'button'}
           disabled={disabled || clearButtonProps.disabled}
           onClick={(event) => composeEventHandlers(slotOnClick, handleClear)(event)}
+          // A merged `disabledFocusable` Button makes the clear button unavailable but focusable
+          // (spread last: it wins over `disabled` and the clear handler).
+          {...(dismissParts.disabledFocusable ? MERGED_DISABLED_FOCUSABLE_PROPS : undefined)}
         >
           {clearContent}
         </button>
