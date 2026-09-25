@@ -287,7 +287,22 @@ it('mirrors ArrowLeft in RTL', async () => {
 
 ### `renderWithFieldContext(ui, value?, options?)` (`src/test-utils-field.tsx`)
 
-Renders the control inside a `FieldContext` provider with a real `<label>`, hint and error, the way `Field` does, so a control's Field integration is tested without depending on `Field` itself. `FIELD_TEST_IDS` and `FIELD_TEST_TEXT` hold the default ids and texts; `value` is a partial `FieldContextValue` (`hintId`, `errorId`, `required`, `invalid`, …).
+Renders the control inside a `FieldContext` provider with what `Field` renders around it, in Field's order: a real `<label>` before it; after it the error (`<p id={errorId} role="alert">`), a validation message in any other state (`<p id={validationMessageId}>`, `role="alert"` for `error` and `warning`) and the hint. A control's Field integration is thus tested without depending on `Field` itself. `FIELD_TEST_IDS` and `FIELD_TEST_TEXT` hold the default ids and texts (`labelId`, `hintId`, `errorId`, `messageId`, `controlId`; `label`, `hint`, `error`, `message`); `value` is a partial `FieldContextValue` (`hintId`, `errorId`, `validationState`, `validationMessageId`, `required`, `invalid`, …), and `options` holds the RTL render options plus the `label`, `hint`, `error` and `message` contents.
+
+How the context is resolved (`resolveFieldTestContext`; its JSDoc in `src/test-utils-field.tsx` is the reference):
+
+- `validationState` is passed through when given, else `'error'` when an `errorId` is given, else absent. `validationMessageId` is passed through only when given, so a context with only an `errorId` keeps the shape of a Field before 0.6.
+- `invalid` defaults to "the state is `'error'`", so a `'warning'` context is not invalid.
+- `hasErrorMessage` defaults to "the state is `'error'` **and** a message renders" (an `errorId` or a `validationMessageId`), as Field sets it: `{ validationState: 'error' }` alone gives `invalid: true` but `hasErrorMessage: false` (Field's error state without a message has nothing a control would repeat). Pass `invalid` or `hasErrorMessage` explicitly to override either.
+
+Field sets `validationMessageId` for a message in every state and `errorId` to the same id only in the error state. The recipes:
+
+| Field state | `value` |
+|---|---|
+| Error with a message (the 0.5 shape) | `{ errorId: FIELD_TEST_IDS.errorId }` |
+| Error, as Field renders it from 0.6 | `{ validationState: 'error', errorId: FIELD_TEST_IDS.errorId, validationMessageId: FIELD_TEST_IDS.errorId }` |
+| Warning (announced, not invalid) | `{ validationState: 'warning', validationMessageId: FIELD_TEST_IDS.messageId }` |
+| Success or neutral (not announced) | `{ validationState: 'success' \| 'none', validationMessageId: FIELD_TEST_IDS.messageId }` |
 
 ```tsx
 // src/components/input/__tests__/Checkbox.test.tsx
@@ -301,6 +316,17 @@ it('is named and described by the surrounding Field', () => {
   expect(box).toHaveAccessibleDescription(FIELD_TEST_TEXT.hint);
   expect(box).toHaveAttribute('aria-required', 'true');
 });
+
+it('is described by a Field warning without becoming invalid', () => {
+  renderWithFieldContext(<Checkbox />, {
+    validationState: 'warning',
+    validationMessageId: FIELD_TEST_IDS.messageId,
+    hintId: FIELD_TEST_IDS.hintId,
+  });
+  const box = screen.getByRole('checkbox', { name: FIELD_TEST_TEXT.label });
+  expect(box).toHaveAccessibleDescription(`${FIELD_TEST_TEXT.message} ${FIELD_TEST_TEXT.hint}`);
+  expect(box).not.toHaveAttribute('aria-invalid');
+});
 ```
 
 The real `Field` around every control is covered by `src/__tests__/integration.test.tsx`.
@@ -310,6 +336,7 @@ The real `Field` around every control is covered by `src/__tests__/integration.t
 - `installResizeObserverMock()` installs a controllable `ResizeObserver` and returns `{ trigger(target?), restore() }`; `trigger` calls the observers inside `act()`.
 - `mockRect(el, { x, y, width, height })` gives an element a layout box (`getBoundingClientRect`, `offsetWidth`/`clientWidth`, `offsetHeight`/`clientHeight`); stub `scrollWidth`/`scrollHeight` yourself to simulate overflowing content.
 - `mockMatchMedia({ query: boolean })` answers `matchMedia` queries and notifies mounted listeners. The answers last one test: call it in the test or in `beforeEach`, never in `beforeAll`.
+- A measured size reaches a component through its `ResizeObserver` callback: give the element a box with `mockRect`, then call `trigger(element)`. `Dialog.Footer` reports its height this way, and the test reads `body.style.getPropertyValue('--wave-dialog-footer-height')` on the dialog body.
 
 ```tsx
 // src/components/layout/__tests__/Overflow.test.tsx
@@ -372,6 +399,7 @@ it('starts auto-rotation stopped for reduced motion', () => {
 - **One call per interaction.** Every stateful component has a StrictMode test that its value callback fires exactly once per interaction.
 - **Separate interactions.** When a controlled component's parent ignores the callback, repeated interactions must be separate tasks: use `userEvent`, or `await act(async () => {})` between `fireEvent` calls. Back-to-back `fireEvent` calls run in one task and chain like uncontrolled updates (two clicks on `<ToggleButton pressed={false}>` would emit `true`, then `false`).
 - **Change-only vs every activation.** Value callbacks (`onValueChange`, `onCheckedChange`, `onOpenChange`) fire only on change; event callbacks (`onPageChange`, `onStepChange`, `Tree` `onItemSelect`, the deprecated `onTabSelect`/`onNavItemSelect`/`onOptionSelect`) fire on every activation. Test re-selection for both kinds.
+- **A second `details` argument.** Dialog and Drawer call `onOpenChange(open, details)` with `{ reason, event }`, so `toHaveBeenCalledWith(false)` no longer matches. When the reason is not the point of the test, write `toHaveBeenCalledWith(false, expect.anything())`; when it is, `toHaveBeenCalledWith(false, expect.objectContaining({ reason: 'escape' }))`, or the exact object in the component's own tests: `{ reason: 'outside-press', event: expect.any(Event) }`. A controlled dialog that refuses a reason is tested by asserting that it stays open after that interaction and closes after another (Escape).
 
 ```tsx
 // src/components/button/__tests__/ToggleButton.test.tsx
@@ -514,6 +542,7 @@ A passing test prints nothing, the stories gate (`src/__tests__/stories.a11y.tes
 - No hex-color class assertions; components use tokens (`toHaveClass('bg-primary')` when a class is the contract).
 - Never write expectations against a literal React id: ids from `useId` are opaque.
 - Popups: open-state axe, dismissal (Escape, outside press) and focus-return tests. Portaled content is not in `container`: query it with `screen`.
+- A click on a link inside a `<label>` (a rich Checkbox, Switch or Radio `label`): user-event forwards every click inside a label to the label's control, which browsers do not do for interactive content. Test "clicking the link does not toggle" with `fireEvent.click(link)` (jsdom's own label activation skips interactive descendants, as browsers do) and say why in a comment; click the label text with `userEvent`.
 - Shift+Tab from the browser's own controls (the Popover and TeachingPopover keyboard order): dispatch the window's `blur` and `focus` events before focusing the element (`window.dispatchEvent(new FocusEvent('blur'))`, then `'focus'`); a focus from nothing without that window focus counts as a focus restore in the page and keeps the order after the trigger.
 - Type-level contracts go in `__tests__` too; `tsconfig.dev.json` type-checks them:
 
@@ -534,7 +563,7 @@ it('types anchor props when rendered as a link', () => {
 
 - `src/__tests__/conventions.test.ts` — the conventions gate: one test per source file of `src/components` (raw colors also in `stories/`), reporting `file:line [rule]` for raw colors, physical utilities, `translate-x` without a `wave-rtl:` counterpart, Tailwind's bare `rtl:`/`ltr:` variants (use `wave-rtl:`), `focus:outline-none`, arbitrary animations, `forwardRef`, `enabled:` variants, `<button>` without `type`, and transitions or animations without a `motion-reduce:` variant. `src/hooks` and `src/lib` are not scanned. Filter with `-t "<path>"`.
 - `src/__tests__/stories.a11y.test.tsx` — renders every story with the Storybook preview (WaveProvider, light theme) and audits it with the shared axe instance. Opt-out only with `parameters: { a11y: { test: 'todo' } }` and a comment explaining why.
-- `src/__tests__/integration.test.tsx` — compositions across components with the real public API (Menu + MenuButton/SplitButton, Tooltip on triggers, Field around every control, toasts over modals, pickers inside dialogs, stacked dialogs with `autoFocus`, Tab from a shown Tooltip or open InfoLabel inside a dialog's focus trap, a Popover inside a `Menu.Item`), and the Server Component regression suite (see [`asClientReference`](#asclientreferencepart-parts-written-in-a-server-component)).
+- `src/__tests__/integration.test.tsx` — compositions across components with the real public API (Menu + MenuButton/SplitButton, Tooltip on triggers, Field around every control, toasts over modals, pickers inside dialogs, stacked dialogs with `autoFocus`, Tab from a shown Tooltip or open InfoLabel inside a dialog's focus trap, a Popover inside a `Menu.Item`), and the Server Component regression suite (see [`asClientReference`](#asclientreferencepart-parts-written-in-a-server-component)). When a release is built in parallel work packages with disjoint files (see `docs/ROADMAP.md`, "Process per release"), a component's own tests use only the shared foundation and its own files: a stand-in with the same attributes (`renderWithFieldContext` for a Field state, a plain `<button aria-disabled="true">` for a focusable disabled button inside `Menu.Trigger`). Every case that needs the real components of two packages at once goes here, once both have landed: in 0.6, a Toolbar with a `disabledFocusable` Button and its Tooltip, `Menu.Trigger` around a `disabledFocusable` MenuButton and SplitButton, a Field warning around Input, Checkbox, Combobox, ColorPicker and a native `<input>`, ProgressBar in a Field, an alert Dialog with a Toaster, and a long form with a sticky `Dialog.Footer`.
 - `src/__tests__/public-types.test.ts` — every named type that a public declaration refers to (a prop type, an `extends` base, a parameter or return type) is exported from `src/index.ts`. Export a new component's prop types from the entry; only the structural helpers in its `INTERNAL_HELPERS` list may stay internal, and that list must stay current.
 - `src/__tests__/test-utils.test.tsx` — tests of the helpers themselves.
 - `src/styles/__tests__/tokens.test.ts` — every theme declares every token, and every contrast pair meets its WCAG threshold (unrounded); it also pins `base.css` and the style entries and tests `scripts/build-css.mjs`. It runs in the node environment (`// @vitest-environment node`): it needs no DOM, and under jsdom Vite's client transform could not load the gate scripts.

@@ -1,9 +1,9 @@
 # WaveUI roadmap: Fluent UI v9 parity
 
-- **Status:** plan of record from 0.6.0 to 1.0.0. Written 2026-09-25 on `feat/fluent-parity`; revised the same day after three reviews (conventions, sequencing, Phase 1 against the code). Review points that were not applied are listed with reasons in the Phase 1 spec, §8.
+- **Status:** plan of record from 0.6.0 to 1.0.0. Written 2026-09-25 on `feat/fluent-parity`; revised the same day after three reviews (conventions, sequencing, Phase 1 against the code). Review points that were not applied are listed with reasons in the Phase 1 spec, §8. **Phase 1 (0.6.0) is implemented** on `feat/fluent-parity` and unreleased (CHANGELOG `## [0.6.0] - Unreleased`); this line marks it released when 0.6.0 ships.
 - **Baseline:** `@mortenbrudvik/waveui` 0.5.0 (merged to `main`, unreleased) against `@fluentui/react-components` 9.74.9.
 - **Inputs:** the verified comparison report [`docs/research/fluent-ui-v9-comparison.md`](research/fluent-ui-v9-comparison.md) and its gap list (475 gaps: 7 high, 135 medium, 333 low). Every gap id below (`buttons-3`, `menu-10`, …) is an id of that list.
-- **Phase 1 design:** [`docs/superpowers/specs/2026-09-25-fluent-parity-phase-1-design.md`](superpowers/specs/2026-09-25-fluent-parity-phase-1-design.md) (0.6.0, ready for implementation). Every later phase gets its own design spec before work starts (see [Process](#3-process-per-release)).
+- **Phase 1 design:** [`docs/superpowers/specs/2026-09-25-fluent-parity-phase-1-design.md`](superpowers/specs/2026-09-25-fluent-parity-phase-1-design.md) (0.6.0, implemented; unreleased). Every later phase gets its own design spec before work starts (see [Process](#3-process-per-release)).
 
 How to read this document:
 - **Phases** are releases (minor versions after 0.5.0, then 1.0.0). A phase has a theme, epics, entry and exit criteria.
