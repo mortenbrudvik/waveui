@@ -512,6 +512,139 @@ describe('SearchBox', () => {
       expectWarnings(warn, [ELEMENT_WARNING]);
     });
 
+    it.each([
+      [
+        'a Wave Button element',
+        (onClick: () => void): SearchBoxProps['dismiss'] => (
+          <Button
+            icon={<svg data-testid="button-icon" />}
+            iconPosition="after"
+            disabled
+            disabledFocusable
+            onClick={onClick}
+          >
+            Reset
+          </Button>
+        ),
+        ELEMENT_WARNING,
+      ],
+      [
+        'a slot object whose `as` is a Wave Button (deprecated form)',
+        (onClick: () => void) =>
+          // Wave Button props are not part of the slot type: a JavaScript caller's 0.4 form.
+          ({
+            as: Button,
+            icon: <svg data-testid="button-icon" />,
+            iconPosition: 'after',
+            disabled: true,
+            disabledFocusable: true,
+            onClick,
+            children: 'Reset',
+          }) as Slot<'span'>,
+        OBJECT_WARNING,
+      ],
+    ])(
+      '%s: iconPosition and disabledFocusable take effect on the clear button and never reach the DOM',
+      async (_, dismiss, warning) => {
+        const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+        const error = vi.spyOn(console, 'error').mockImplementation(() => {});
+        const user = userEvent.setup();
+        const onSlotClick = vi.fn();
+        const onClear = vi.fn();
+        const onValueChange = vi.fn();
+        const onParentClick = vi.fn();
+        render(
+          <div onClick={onParentClick}>
+            <SearchBox
+              aria-label="Search"
+              defaultValue="test"
+              onClear={onClear}
+              onValueChange={onValueChange}
+              dismiss={dismiss(onSlotClick)}
+            />
+          </div>,
+        );
+        expect(screen.getAllByRole('button')).toHaveLength(1);
+        const clear = screen.getByRole('button', { name: 'Reset' });
+        // Neither prop lands on the button or its content as an unknown attribute.
+        expect(clear.outerHTML).not.toMatch(/iconposition|disabledfocusable/i);
+        // iconPosition="after": the decorative icon follows the text, as in Button.
+        const icon = screen.getByTestId('button-icon').parentElement as HTMLElement;
+        expect(icon).toHaveAttribute('aria-hidden', 'true');
+        expect(icon.previousSibling?.textContent).toBe('Reset');
+        expect(icon.nextSibling).toBeNull();
+        // disabledFocusable wins over disabled: unavailable, but focusable and in the tab order.
+        expect(clear).not.toBeDisabled();
+        expect(clear).toHaveAttribute('aria-disabled', 'true');
+        expect(clear).toHaveAttribute('data-disabled', '');
+        expect(clear).toHaveAttribute('data-disabled-focusable', '');
+        expect(clear).toHaveClass(
+          'aria-disabled:cursor-not-allowed',
+          'aria-disabled:opacity-50',
+          // The dimmed look lifts while the focus ring shows (opacity would dim the ring too).
+          'aria-disabled:focus-visible:opacity-100',
+        );
+        await user.tab();
+        await user.tab();
+        expect(clear).toHaveFocus();
+        await user.keyboard('{Enter}');
+        await user.keyboard(' ');
+        await user.click(clear);
+        expect(onSlotClick).not.toHaveBeenCalled();
+        expect(onClear).not.toHaveBeenCalled();
+        expect(onValueChange).not.toHaveBeenCalled();
+        expect(onParentClick).not.toHaveBeenCalled();
+        expect(screen.getByRole('searchbox', { name: 'Search' })).toHaveValue('test');
+        expectWarnings(warn, [warning]);
+        expect(error).not.toHaveBeenCalled();
+      },
+    );
+
+    it("a merged disabledFocusable Button wins over the SearchBox's own disabled, as a SplitButton half's does", () => {
+      const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+      render(
+        <SearchBox
+          aria-label="Search"
+          defaultValue="test"
+          disabled
+          dismiss={<Button disabledFocusable>Reset</Button>}
+        />,
+      );
+      const clear = screen.getByRole('button', { name: 'Reset' });
+      expect(clear).not.toBeDisabled();
+      expect(clear).toHaveAttribute('aria-disabled', 'true');
+      expect(clear).toHaveAttribute('data-disabled-focusable', '');
+      expectWarnings(warn, [ELEMENT_WARNING]);
+    });
+
+    it('a disabled SearchBox keeps a focus ring inside it at full strength', async () => {
+      const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+      const user = userEvent.setup();
+      render(
+        <>
+          <SearchBox
+            data-testid="disabled"
+            aria-label="Search"
+            defaultValue="test"
+            disabled
+            dismiss={<Button disabledFocusable>Reset</Button>}
+          />
+          <SearchBox data-testid="enabled" aria-label="Filter" />
+        </>,
+      );
+      await user.tab();
+      expect(screen.getByRole('button', { name: 'Reset' })).toHaveFocus();
+      // The root's opacity dims the focused clear button's outline too, which would put the ring
+      // below 3:1. tailwind-merge keeps both classes (different variants); the variant wins while
+      // it matches.
+      expect(screen.getByTestId('disabled')).toHaveClass(
+        'opacity-50',
+        'has-focus-visible:opacity-100',
+      );
+      expect(screen.getByTestId('enabled').className).not.toMatch(/opacity/);
+      expectWarnings(warn, [ELEMENT_WARNING]);
+    });
+
     it('keeps type="button" when a typeless <button> slot is merged (C-BUTTON-TYPE)', () => {
       const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
       const onSubmit = vi.fn((event: React.FormEvent) => event.preventDefault());

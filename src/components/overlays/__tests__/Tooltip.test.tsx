@@ -1,12 +1,15 @@
 import * as React from 'react';
-import { afterEach, describe, it, expect, vi } from 'vitest';
+import { hydrateRoot } from 'react-dom/client';
+import { renderToString } from 'react-dom/server';
+import { afterEach, describe, it, expect, expectTypeOf, vi } from 'vitest';
 import { act, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { Tooltip } from '../Tooltip';
+import { Tooltip, type TooltipProps } from '../Tooltip';
 import { Popover } from '../Popover';
 import { Button } from '../../button/Button';
 import { Portal } from '../../portal/Portal';
 import { useDismiss } from '../../../hooks/useDismiss';
+import { getTopmostLayer } from '../../../lib/layers';
 import {
   expectNoA11yViolations,
   renderWithProviders,
@@ -1032,5 +1035,170 @@ describe('Tooltip', () => {
     await user.hover(screen.getByRole('button', { name: 'Save' }));
     await waitFor(() => expect(surface()).not.toBeNull());
     await expectNoA11yViolations();
+  });
+
+  describe('open state (open, defaultOpen, onOpenChange)', () => {
+    const target = () => screen.getByRole('button', { name: 'Target' });
+
+    it('shows the surface without hover while open, and asks to close on Escape', async () => {
+      const user = setupTimers();
+      const onOpenChange = vi.fn();
+      render(
+        <Tooltip content="Tooltip text" open onOpenChange={onOpenChange}>
+          <button type="button">Target</button>
+        </Tooltip>,
+      );
+      expect(surface()).toHaveTextContent('Tooltip text');
+      focus(target());
+      await user.keyboard('{Escape}');
+      expect(onOpenChange.mock.calls).toEqual([[false]]);
+      // Controlled: it stays until the parent updates `open`.
+      expect(surface()).not.toBeNull();
+    });
+
+    it('asks to close after the grace period when the pointer leaves a controlled open tooltip', async () => {
+      const user = setupTimers();
+      const onOpenChange = vi.fn();
+      render(
+        <Tooltip content="Tooltip text" open onOpenChange={onOpenChange}>
+          <button type="button">Target</button>
+        </Tooltip>,
+      );
+      await user.hover(target());
+      await user.unhover(target());
+      advance(150);
+      expect(onOpenChange.mock.calls).toEqual([[false]]);
+      expect(surface()).not.toBeNull();
+    });
+
+    it('follows the open prop and releases its Escape layer when it closes', () => {
+      const { rerender } = render(
+        <Tooltip content="Tooltip text" open onOpenChange={() => {}}>
+          <button type="button">Target</button>
+        </Tooltip>,
+      );
+      expect(surface()).not.toBeNull();
+      expect(getTopmostLayer()?.kind).toBe('tooltip');
+      rerender(
+        <Tooltip content="Tooltip text" open={false} onOpenChange={() => {}}>
+          <button type="button">Target</button>
+        </Tooltip>,
+      );
+      expect(surface()).toBeNull();
+      expect(getTopmostLayer()).toBeNull();
+    });
+
+    it('asks to open once, after the delay, on hover (StrictMode); a controlled false keeps it hidden', async () => {
+      const user = setupTimers();
+      const onOpenChange = vi.fn();
+      // The consumer handler runs just before the built-in one schedules the show timer.
+      let enteredAt = 0;
+      render(
+        <React.StrictMode>
+          <Tooltip
+            content="Tooltip text"
+            delay={300}
+            open={false}
+            onOpenChange={onOpenChange}
+            onMouseEnter={() => (enteredAt = Date.now())}
+          >
+            <button type="button">Target</button>
+          </Tooltip>
+        </React.StrictMode>,
+      );
+      await user.hover(target());
+      advanceTo(enteredAt + 299);
+      expect(onOpenChange).not.toHaveBeenCalled();
+      advance(1);
+      expect(onOpenChange.mock.calls).toEqual([[true]]);
+      expect(surface()).toBeNull();
+      // Leaving a tooltip that never showed asks nothing.
+      await user.unhover(target());
+      advance(1000);
+      expect(onOpenChange.mock.calls).toEqual([[true]]);
+    });
+
+    it('asks to open on focus while controlled closed, and never shows', async () => {
+      setupTimers();
+      const onOpenChange = vi.fn();
+      render(
+        <Tooltip content="Tooltip text" delay={0} open={false} onOpenChange={onOpenChange}>
+          <button type="button">Target</button>
+        </Tooltip>,
+      );
+      focus(target());
+      expect(onOpenChange.mock.calls).toEqual([[true]]);
+      expect(surface()).toBeNull();
+    });
+
+    it('reports every change of an uncontrolled tooltip exactly once (StrictMode)', async () => {
+      const user = setupTimers();
+      const onOpenChange = vi.fn();
+      render(
+        <React.StrictMode>
+          <Tooltip content="Tooltip text" delay={0} onOpenChange={onOpenChange}>
+            <button type="button">Target</button>
+          </Tooltip>
+        </React.StrictMode>,
+      );
+      await user.hover(target());
+      await waitFor(() => expect(surface()).not.toBeNull());
+      expect(onOpenChange.mock.calls).toEqual([[true]]);
+      await user.unhover(target());
+      advance(150);
+      await waitFor(() => expect(surface()).toBeNull());
+      expect(onOpenChange.mock.calls).toEqual([[true], [false]]);
+    });
+
+    it('renders defaultOpen closed on the server and opens once hydrated, without a mismatch', async () => {
+      const element = (
+        <Tooltip content="Saves the draft" defaultOpen>
+          <button type="button">Save</button>
+        </Tooltip>
+      );
+      const serverHtml = renderToString(element);
+      expect(serverHtml).not.toContain('data-wave-tooltip-surface');
+      const container = document.createElement('div');
+      container.innerHTML = serverHtml;
+      // The description is in the server HTML, hidden, and describes the button.
+      const description = container.querySelector('[role="tooltip"]');
+      expect(description).toHaveAttribute('hidden');
+      expect(description).toHaveTextContent('Saves the draft');
+      document.body.appendChild(container);
+      const error = vi.spyOn(console, 'error');
+      let root: ReturnType<typeof hydrateRoot> | undefined;
+      try {
+        await act(async () => {
+          root = hydrateRoot(container, element);
+        });
+        expect(error).not.toHaveBeenCalled();
+        expect(surface()).toHaveTextContent('Saves the draft');
+        expect(screen.getByRole('button', { name: 'Save' })).toHaveAccessibleDescription(
+          'Saves the draft',
+        );
+      } finally {
+        act(() => root?.unmount());
+        container.remove();
+        error.mockRestore();
+      }
+    });
+
+    it('has no accessibility violations while controlled open', async () => {
+      render(
+        <Tooltip content="Saves the draft" open onOpenChange={() => {}}>
+          <button type="button">Save</button>
+        </Tooltip>,
+      );
+      expect(surface()).not.toBeNull();
+      await expectNoA11yViolations();
+    });
+
+    it('types the open state with C-NAMING names', () => {
+      expectTypeOf<TooltipProps['open']>().toEqualTypeOf<boolean | undefined>();
+      expectTypeOf<TooltipProps['defaultOpen']>().toEqualTypeOf<boolean | undefined>();
+      expectTypeOf<TooltipProps['onOpenChange']>().toEqualTypeOf<
+        ((open: boolean) => void) | undefined
+      >();
+    });
   });
 });

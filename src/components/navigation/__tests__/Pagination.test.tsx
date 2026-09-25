@@ -289,6 +289,21 @@ describe('Pagination', () => {
       );
       expect(previous.className).not.toMatch(/(^|\s)hover:/);
     });
+
+    it('shows the focus ring of a boundary button that disabled itself at full strength', async () => {
+      const user = userEvent.setup();
+      render(<Pagination totalPages={5} defaultCurrentPage={2} />);
+      const previous = screen.getByRole('button', { name: 'Previous page' });
+      previous.focus();
+      await user.keyboard('{Enter}');
+      expect(previous).toHaveAttribute('aria-disabled', 'true');
+      expect(previous).toHaveFocus();
+      // Dimmed, except while its ring shows: `opacity` would dim the ring below 3:1.
+      expect(previous).toHaveClass(
+        'aria-disabled:opacity-50',
+        'aria-disabled:focus-visible:opacity-100',
+      );
+    });
   });
 
   describe('First/Last (feedback-navigation#44)', () => {

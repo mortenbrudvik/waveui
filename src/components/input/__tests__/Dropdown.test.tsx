@@ -4,7 +4,7 @@ import { act, fireEvent, render, screen, waitFor, within } from '@testing-librar
 import userEvent from '@testing-library/user-event';
 import { renderToString } from 'react-dom/server';
 import { hydrateRoot } from 'react-dom/client';
-import { Dropdown, DropdownOption, DropdownOptionGroup } from '../Dropdown';
+import { Dropdown, DropdownOption, DropdownOptionGroup, type DropdownLabels } from '../Dropdown';
 import { Option, OptionGroup } from '../Combobox';
 import {
   asClientReference,
@@ -118,6 +118,15 @@ describe('Dropdown', () => {
         },
       },
       { name: 'disabled', props: { disabled: true } },
+      { name: 'with a clear button', props: { defaultValue: 'b', clearable: true } },
+      {
+        name: 'open with a clear button',
+        props: { defaultOpen: true, defaultValue: 'b', clearable: true },
+      },
+      {
+        name: 'disabled with a clear button',
+        props: { disabled: true, defaultValue: 'b', clearable: true },
+      },
     ],
   });
 
@@ -1119,9 +1128,11 @@ describe('Dropdown', () => {
 
     it('uses logical classes in RTL', () => {
       renderWithProviders(<Dropdown aria-label="Fruit">{FRUITS}</Dropdown>, { dir: 'rtl' });
-      expect(combobox()).toHaveClass('text-start');
+      expect(combobox()).toHaveClass('text-start', 'pe-8');
+      // The chevron sits at the end of the button, in the room its end padding keeps free.
       const chevron = combobox().querySelector('svg');
-      expect(chevron).toHaveClass('ms-2');
+      expect(chevron).toHaveClass('absolute', 'end-3');
+      expect(chevron?.getAttribute('class')).not.toMatch(/\b(left|right)-/);
       expect(combobox().closest('[dir]')).toHaveAttribute('dir', 'rtl');
     });
   });
@@ -1147,6 +1158,136 @@ describe('Dropdown', () => {
     await user.keyboard('{ArrowDown}');
     expect(activeOption()).toHaveTextContent('B');
     expect([...renders.keys()].sort()).toEqual(['a', 'b']);
+  });
+
+  describe('clear button', () => {
+    function clearButton(name = 'Clear selection') {
+      return screen.getByRole('button', { name });
+    }
+
+    testNoImplicitSubmit(Dropdown, {
+      defaultProps: { 'aria-label': 'Fruit', defaultValue: 'a', clearable: true, children: FRUITS },
+    });
+
+    it('wraps the combobox button; the clear button follows it and the root keeps the rest', () => {
+      const { container } = render(
+        <Dropdown aria-label="Fruit" name="fruit" defaultValue="a" clearable data-testid="root">
+          {FRUITS}
+        </Dropdown>,
+      );
+      const root = screen.getByTestId('root');
+      const wrapper = combobox().parentElement as HTMLElement;
+      expect(wrapper.parentElement).toBe(root);
+      expect(wrapper.tagName).toBe('DIV');
+      expect(wrapper).toHaveClass('relative', 'flex', 'items-center');
+      expect(combobox().nextElementSibling).toBe(clearButton());
+      expect(container.querySelector('input[name="fruit"]')?.parentElement).toBe(root);
+    });
+
+    it('shows only while a value is selected', async () => {
+      const user = userEvent.setup();
+      renderDropdown({ clearable: true });
+      expect(screen.queryByRole('button', { name: 'Clear selection' })).not.toBeInTheDocument();
+      await user.click(combobox());
+      await user.click(option('Banana'));
+      expect(clearButton()).toBeInTheDocument();
+    });
+
+    it('needs clearable and is disabled while the dropdown is disabled', () => {
+      const { rerender } = renderDropdown({ defaultValue: 'a' });
+      expect(screen.queryByRole('button', { name: 'Clear selection' })).not.toBeInTheDocument();
+      rerender(
+        <Dropdown aria-label="Fruit" defaultValue="a" clearable disabled>
+          {FRUITS}
+        </Dropdown>,
+      );
+      expect(clearButton()).toBeDisabled();
+    });
+
+    it('clears once in StrictMode, closes the list, focuses the combobox and empties the hidden input', async () => {
+      const user = userEvent.setup();
+      const onValueChange = vi.fn();
+      const onOpenChange = vi.fn();
+      render(
+        <React.StrictMode>
+          <form aria-label="Order">
+            <Dropdown
+              aria-label="Fruit"
+              name="fruit"
+              defaultValue="b"
+              clearable
+              onValueChange={onValueChange}
+              onOpenChange={onOpenChange}
+            >
+              {FRUITS}
+            </Dropdown>
+          </form>
+        </React.StrictMode>,
+      );
+      await user.click(combobox());
+      expect(listbox()).toBeInTheDocument();
+      await user.click(clearButton());
+      expect(onValueChange.mock.calls).toEqual([['']]);
+      expect(onOpenChange.mock.calls).toEqual([[true], [false]]);
+      expect(combobox()).toHaveTextContent('Select an option');
+      expect(combobox()).toHaveFocus();
+      expect(screen.queryByRole('listbox')).not.toBeInTheDocument();
+      expect(screen.queryByRole('button', { name: 'Clear selection' })).not.toBeInTheDocument();
+      const form = screen.getByRole('form', { name: 'Order' }) as HTMLFormElement;
+      expect(new FormData(form).get('fruit')).toBe('');
+    });
+
+    it('is a tab stop after the combobox and clears from the keyboard', async () => {
+      const user = userEvent.setup();
+      const onValueChange = vi.fn();
+      render(
+        <>
+          <Dropdown aria-label="Fruit" defaultValue="a" clearable onValueChange={onValueChange}>
+            {FRUITS}
+          </Dropdown>
+          <button type="button">Next</button>
+        </>,
+      );
+      await user.tab();
+      expect(combobox()).toHaveFocus();
+      await user.tab();
+      expect(clearButton()).toHaveFocus();
+      await user.tab();
+      expect(screen.getByRole('button', { name: 'Next' })).toHaveFocus();
+      await user.tab({ shift: true });
+      await user.keyboard('{Enter}');
+      expect(onValueChange.mock.calls).toEqual([['']]);
+      expect(combobox()).toHaveFocus();
+    });
+
+    it('localizes its name with labels.clear', () => {
+      const labels: DropdownLabels = { clear: 'Auswahl löschen' };
+      renderDropdown({ defaultValue: 'a', clearable: true, labels });
+      expect(screen.getByRole('button', { name: 'Auswahl löschen' })).toBeInTheDocument();
+    });
+
+    it('keeps the text clear of the button with logical classes in RTL', () => {
+      renderWithProviders(
+        <Dropdown aria-label="Fruit" defaultValue="a" clearable>
+          {FRUITS}
+        </Dropdown>,
+        { dir: 'rtl' },
+      );
+      expect(combobox()).toHaveClass('pe-14');
+      expect(clearButton()).toHaveClass('absolute', 'end-7', 'h-6', 'w-6');
+      expect(clearButton().className).not.toMatch(/\b(left|right)-/);
+      expect(combobox().className).not.toMatch(/\bp[lr]-/);
+    });
+
+    it('gives the clear button its own padding, background and focus ring (C-NATIVE, C-FOCUS)', () => {
+      renderDropdown({ defaultValue: 'a', clearable: true });
+      expect(clearButton()).toHaveClass(
+        'p-0',
+        'bg-transparent',
+        'focus-visible:outline-2',
+        'not-disabled:not-aria-disabled:hover:bg-subtle-hover',
+      );
+    });
   });
 
   it('sets the vertical padding of its button, so an app-wide button rule cannot pad it (C-NATIVE)', () => {

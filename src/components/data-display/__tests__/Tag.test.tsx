@@ -3,6 +3,8 @@ import * as React from 'react';
 import { act, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { renderToString } from 'react-dom/server';
+import { composeStories } from '@storybook/react';
+import * as stories from '../../../../stories/Tag.stories';
 import { Tag } from '../Tag';
 import type { TagOwnProps, TagProps } from '../Tag';
 import { Button } from '../../button/Button';
@@ -170,6 +172,111 @@ describe('Tag', () => {
     expect(onDismiss).toHaveBeenCalledTimes(1);
   });
 
+  describe('focus after a keyboard dismiss (the recipe of the "Focus after dismissal" docs)', () => {
+    /**
+     * A filter bar that follows the documented recipe: when a dismissal removes a tag, focus the
+     * next tag's dismiss button, else the previous one, else a button next to the group. The
+     * `FilterBar` of `stories/Tag.stories.tsx` implements the same recipe: keep the two in sync.
+     */
+    function FilterTags({ initial }: { initial: readonly string[] }) {
+      const [filters, setFilters] = React.useState(initial);
+      // Each rendered tag by filter, to reach its dismiss button (the tag's only button).
+      const tags = React.useRef(new Map<string, HTMLElement>());
+      const reset = React.useRef<HTMLButtonElement>(null);
+
+      const dismiss = (filter: string) => {
+        const index = filters.indexOf(filter);
+        const neighbour = filters[index + 1] ?? filters[index - 1];
+        const target =
+          neighbour === undefined
+            ? reset.current
+            : (tags.current.get(neighbour)?.querySelector('button') ?? null);
+        // The neighbour stays mounted, so it can take focus before the tag is removed.
+        target?.focus();
+        setFilters((current) => current.filter((f) => f !== filter));
+      };
+
+      return (
+        <>
+          <div role="group" aria-label="Filters">
+            {filters.map((filter) => (
+              <Tag
+                key={filter}
+                ref={(element) => {
+                  if (element) tags.current.set(filter, element);
+                  return () => {
+                    tags.current.delete(filter);
+                  };
+                }}
+                dismissible
+                onDismiss={() => dismiss(filter)}
+              >
+                {filter}
+              </Tag>
+            ))}
+          </div>
+          <button type="button" ref={reset} onClick={() => setFilters(initial)}>
+            Reset filters
+          </button>
+        </>
+      );
+    }
+
+    /** Tabs to the dismiss button named `name` and presses `key` on it. */
+    async function dismissWithKey(
+      user: ReturnType<typeof userEvent.setup>,
+      name: string,
+      key: '{Enter}' | ' ' = '{Enter}',
+    ) {
+      const button = screen.getByRole('button', { name });
+      for (let i = 0; i < 10 && document.activeElement !== button; i++) await user.tab();
+      expect(button).toHaveFocus();
+      await user.keyboard(key);
+      expect(screen.queryByRole('button', { name })).toBeNull();
+    }
+
+    it('dismissing the middle tag with Enter focuses the next dismiss button', async () => {
+      const user = userEvent.setup();
+      render(<FilterTags initial={['Red', 'Blue', 'Large']} />);
+      await dismissWithKey(user, 'Dismiss Blue');
+      expect(screen.getByRole('button', { name: 'Dismiss Large' })).toHaveFocus();
+    });
+
+    it('dismissing the last tag focuses the previous dismiss button', async () => {
+      const user = userEvent.setup();
+      render(<FilterTags initial={['Red', 'Blue', 'Large']} />);
+      await dismissWithKey(user, 'Dismiss Large');
+      expect(screen.getByRole('button', { name: 'Dismiss Blue' })).toHaveFocus();
+    });
+
+    it('dismissing the only tag focuses the fallback next to the group', async () => {
+      const user = userEvent.setup();
+      render(<FilterTags initial={['Red']} />);
+      await dismissWithKey(user, 'Dismiss Red');
+      expect(screen.getByRole('button', { name: 'Reset filters' })).toHaveFocus();
+    });
+
+    it('focus never ends on <body> while every tag is dismissed in turn (Enter and Space)', async () => {
+      const user = userEvent.setup();
+      render(<FilterTags initial={['Red', 'Blue', 'Large', 'Round']} />);
+      const steps: Array<[string, '{Enter}' | ' ', string]> = [
+        ['Dismiss Blue', '{Enter}', 'Dismiss Large'],
+        ['Dismiss Large', ' ', 'Dismiss Round'],
+        ['Dismiss Round', '{Enter}', 'Dismiss Red'],
+        ['Dismiss Red', ' ', 'Reset filters'],
+      ];
+      for (const [name, key, next] of steps) {
+        await dismissWithKey(user, name, key);
+        // Let anything scheduled after the removal (frames, effects) run before checking.
+        await act(async () => {
+          await new Promise((resolve) => requestAnimationFrame(resolve));
+        });
+        expect(document.activeElement).not.toBe(document.body);
+        expect(screen.getByRole('button', { name: next })).toHaveFocus();
+      }
+    });
+  });
+
   describe('dismissIcon slot (data-display#1, feedback-navigation#1)', () => {
     it('renders a custom icon inside the wired dismiss button', async () => {
       const user = userEvent.setup();
@@ -298,6 +405,91 @@ describe('Tag', () => {
       expect(iconSpan.nextSibling?.textContent).toBe('Remove');
       expect(warn.mock.calls).toEqual([[expect.stringContaining(BUTTON_SLOT_WARNING)]]);
     });
+
+    it.each([
+      [
+        'a Wave Button element',
+        (onClick: () => void): TagOwnProps['dismissIcon'] => (
+          <Button
+            icon={<CustomIcon />}
+            iconPosition="after"
+            disabled
+            disabledFocusable
+            onClick={onClick}
+          >
+            Remove
+          </Button>
+        ),
+        'Remove Cherry',
+        BUTTON_SLOT_WARNING,
+      ],
+      [
+        'a slot object whose `as` is a Wave Button (deprecated form)',
+        (onClick: () => void) =>
+          // Wave Button props are not part of the slot type: a JavaScript caller's 0.4 form.
+          ({
+            as: Button,
+            icon: <CustomIcon />,
+            iconPosition: 'after',
+            disabled: true,
+            disabledFocusable: true,
+            onClick,
+            children: 'Remove',
+          }) as Slot<'span'>,
+        'Dismiss Cherry',
+        BUTTON_OBJECT_WARNING,
+      ],
+    ])(
+      '%s: iconPosition and disabledFocusable take effect on the dismiss button and never reach the DOM',
+      async (_, dismissIcon, name, warning) => {
+        const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+        const error = vi.spyOn(console, 'error').mockImplementation(() => {});
+        const user = userEvent.setup();
+        const onSlotClick = vi.fn();
+        const onDismiss = vi.fn();
+        const onParentClick = vi.fn();
+        render(
+          <div onClick={onParentClick}>
+            <Tag dismissible onDismiss={onDismiss} dismissIcon={dismissIcon(onSlotClick)}>
+              Cherry
+            </Tag>
+          </div>,
+        );
+        const buttons = screen.getAllByRole('button');
+        expect(buttons).toHaveLength(1);
+        const button = buttons[0];
+        expect(button).toHaveAccessibleName(name);
+        // Neither prop lands on the button or its content as an unknown attribute.
+        expect(button.outerHTML).not.toMatch(/iconposition|disabledfocusable/i);
+        // iconPosition="after": the decorative icon follows the text, as in Button (the object
+        // form's content is hidden as a whole).
+        const icon = screen.getByTestId('custom-icon').parentElement as HTMLElement;
+        expect(icon.closest('[aria-hidden="true"]')).not.toBeNull();
+        expect(icon.previousSibling?.textContent).toBe('Remove');
+        expect(icon.nextSibling).toBeNull();
+        // disabledFocusable wins over disabled: unavailable, but focusable and in the tab order.
+        expect(button).not.toBeDisabled();
+        expect(button).toHaveAttribute('aria-disabled', 'true');
+        expect(button).toHaveAttribute('data-disabled', '');
+        expect(button).toHaveAttribute('data-disabled-focusable', '');
+        expect(button).toHaveClass(
+          'aria-disabled:cursor-not-allowed',
+          'aria-disabled:opacity-50',
+          // The dimmed look lifts while the focus ring shows (opacity would dim the ring too).
+          'aria-disabled:focus-visible:opacity-100',
+        );
+        await user.tab();
+        expect(button).toHaveFocus();
+        await user.keyboard('{Enter}');
+        await user.keyboard(' ');
+        await user.click(button);
+        expect(onSlotClick).not.toHaveBeenCalled();
+        expect(onDismiss).not.toHaveBeenCalled();
+        expect(onParentClick).not.toHaveBeenCalled();
+        expect(warn.mock.calls).toEqual([[expect.stringContaining(warning)]]);
+        expect(error).not.toHaveBeenCalled();
+      },
+    );
 
     it('merges a Wave Button written in a Server Component (lazy type) instead of nesting it', async () => {
       const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
@@ -991,5 +1183,59 @@ describe('Tag', () => {
       }
       expectTypeOf<FilterTagProps>().toHaveProperty('dismissible');
     });
+  });
+});
+
+describe('Tag stories', () => {
+  const { Dismissible, FilterGroup } = composeStories(stories);
+
+  it('FilterGroup focuses the next filter after a dismiss, else the previous one, else "Reset filters"', async () => {
+    const user = userEvent.setup();
+    render(<FilterGroup />);
+    // Nothing to reset yet: the button is unavailable but focusable.
+    const reset = screen.getByRole('button', { name: 'Reset filters' });
+    expect(reset).toHaveAttribute('aria-disabled', 'true');
+    expect(reset).not.toBeDisabled();
+    await user.tab();
+    await user.tab();
+    expect(screen.getByRole('button', { name: 'Remove Blue' })).toHaveFocus();
+
+    await user.keyboard('{Enter}');
+    expect(screen.queryByRole('button', { name: 'Remove Blue' })).toBeNull();
+    expect(screen.getByRole('button', { name: 'Remove Large' })).toHaveFocus();
+
+    await user.keyboard('{Enter}');
+    expect(screen.getByRole('button', { name: 'Remove Red' })).toHaveFocus();
+
+    await user.keyboard('{Enter}');
+    expect(reset).toHaveFocus();
+    expect(reset).not.toHaveAttribute('aria-disabled');
+
+    await user.keyboard('{Enter}');
+    expect(reset).toHaveAttribute('aria-disabled', 'true');
+    for (const filter of ['Red', 'Blue', 'Large']) {
+      expect(screen.getByRole('button', { name: `Remove ${filter}` })).toBeInTheDocument();
+    }
+  });
+
+  it('Dismissible focuses a separate Restore button after a dismiss; it brings the tag back', async () => {
+    const user = userEvent.setup();
+    render(<Dismissible />);
+    // While the tag is shown, Restore is unavailable but focusable, and pressing it does nothing.
+    const restore = screen.getByRole('button', { name: 'Restore' });
+    expect(restore).toHaveAttribute('aria-disabled', 'true');
+    expect(restore).not.toBeDisabled();
+    await user.click(restore);
+    expect(screen.getByText('Dismissible tag')).toBeInTheDocument();
+    await user.tab({ shift: true });
+    expect(screen.getByRole('button', { name: 'Dismiss Dismissible tag' })).toHaveFocus();
+
+    await user.keyboard('{Enter}');
+    expect(screen.queryByText('Dismissible tag')).toBeNull();
+    expect(restore).toHaveFocus();
+    expect(restore).not.toHaveAttribute('aria-disabled');
+
+    await user.keyboard('{Enter}');
+    expect(screen.getByRole('button', { name: 'Dismiss Dismissible tag' })).toBeInTheDocument();
   });
 });

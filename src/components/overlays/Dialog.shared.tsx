@@ -1,8 +1,11 @@
 import * as React from 'react';
 import { reportMissingContext, warnOnce } from '../../lib/dev';
+import { focusElement } from '../../lib/focus';
+import type { DismissReason } from '../../lib/layers';
 import { mergeProps } from '../../lib/mergeProps';
 import { STATE_ARIA } from '../../lib/renderTrigger';
-import type { SetValue } from '../../hooks/useControllable';
+import type { ModalOpenChangeReason, OpenChangeDetails } from '../../lib/types';
+import { useControllable } from '../../hooks/useControllable';
 import { useId } from '../../hooks/useId';
 import { useMergedRefs } from '../../hooks/useMergedRefs';
 import { getTriggerFocusTarget, useTriggerElement } from '../../hooks/useTriggerElement';
@@ -10,6 +13,173 @@ import { getTriggerFocusTarget, useTriggerElement } from '../../hooks/useTrigger
 /*
  * Internal helpers shared by Dialog and Drawer (P15). Not exported from the package.
  */
+
+/** Why a modal root asks to open or close, and the event (`DialogOpenChangeDetails`). */
+export type ModalOpenChangeDetails = OpenChangeDetails<ModalOpenChangeReason>;
+
+/** Asks a modal root to open or close; see {@link useModalOpenState}. */
+export type ModalRequestOpen = (open: boolean, details: ModalOpenChangeDetails) => void;
+
+/**
+ * The open state of a modal root (`Dialog`, `Drawer`): `useControllable`, plus the details of the
+ * request behind each change. Every internal path asks through `requestOpen(next, details)`, which
+ * writes `details` to a ref, calls the setter and clears the ref once the setter returns.
+ * `useControllable` calls its `onChange` synchronously inside the setter, only when the value
+ * changes, and that `onChange` passes the ref's details on as `onOpenChange(next, details)`.
+ * Clearing the ref afterwards means a change that no request caused can never report a stale
+ * reason.
+ */
+export function useModalOpenState(
+  open: boolean | undefined,
+  defaultOpen: boolean | undefined,
+  onOpenChange: ((open: boolean, details?: ModalOpenChangeDetails) => void) | undefined,
+): [open: boolean, requestOpen: ModalRequestOpen] {
+  const detailsRef = React.useRef<ModalOpenChangeDetails | undefined>(undefined);
+  const [value, setOpen] = useControllable(open, defaultOpen ?? false, (next: boolean) =>
+    onOpenChange?.(next, detailsRef.current),
+  );
+  const requestOpen = React.useCallback<ModalRequestOpen>(
+    (next, details) => {
+      detailsRef.current = details;
+      try {
+        setOpen(next);
+      } finally {
+        detailsRef.current = undefined;
+      }
+    },
+    [setOpen],
+  );
+  return [value, requestOpen];
+}
+
+/**
+ * The `onDismiss` of a modal root's layer (`useModalLayer`): Escape and a backdrop press ask the
+ * root to close, with their reason and event. `focus-outside` never reaches a modal layer (only a
+ * layer registered with `focusOutside: true` gets it), so it is ignored with a development warning.
+ *
+ * @param requestOpen       The root's request function, from {@link useModalOpenState}.
+ * @param componentName     The public name for the warning, e.g. `'Dialog'`.
+ * @param afterOutsidePress Called right after an `outside-press` request (see
+ *                          {@link useBackdropPress}).
+ */
+export function useModalDismiss(
+  requestOpen: ModalRequestOpen,
+  componentName: string,
+  afterOutsidePress?: () => void,
+): (reason: DismissReason, event: Event) => void {
+  return React.useCallback(
+    (reason: DismissReason, event: Event) => {
+      switch (reason) {
+        case 'escape':
+          requestOpen(false, { reason, event });
+          break;
+        case 'outside-press':
+          requestOpen(false, { reason, event });
+          afterOutsidePress?.();
+          break;
+        case 'focus-outside':
+          warnOnce(
+            `${componentName}:focus-outside`,
+            `${componentName} ignored a focus-outside dismissal: a modal surface does not close when focus leaves it.`,
+          );
+          break;
+        default: {
+          // Exhaustive: a new DismissReason does not compile here until it is mapped.
+          const unmapped: never = reason;
+          return unmapped;
+        }
+      }
+    },
+    [requestOpen, componentName, afterOutsidePress],
+  );
+}
+
+/** Returned by {@link useBackdropPress}. */
+export interface BackdropPress {
+  /** `onMouseDown` of the backdrop element. Stable while `closesOnPress` stays the same. */
+  onMouseDown: (event: React.MouseEvent<HTMLElement>) => void;
+  /** Pass it to {@link useModalDismiss}, which calls it after an `outside-press` request. Stable. */
+  afterOutsidePress: () => void;
+}
+
+/**
+ * What a press on a modal's backdrop does to focus (`Dialog.Content`, the Drawer panel). Presses
+ * that start inside the surface bubble through unchanged.
+ *
+ * - When the press closes the modal (`closesOnPress`), the browser moves focus to `<body>` as
+ *   usual, so the focused control blurs while it is still mounted and its blur-time commit runs
+ *   (the typed text of a SpinButton or a picker, a consumer's `onBlur` autosave or validation)
+ *   before the click closes the surface. The element inside the surface that had focus is
+ *   remembered: when the surface is still open after the `outside-press` request (a controlled
+ *   modal refused it), it gets focus back, in a microtask that runs after React has committed the
+ *   request, and only while focus is still on `<body>` (a confirm dialog the refusal opened keeps
+ *   its focus).
+ * - When the press never closes the modal (an alert dialog), the press does not move focus at all
+ *   (`preventDefault()`), so nothing blurs.
+ *
+ * @param surfaceRef    The surface element (the dialog or the drawer panel).
+ * @param closesOnPress Whether a backdrop press asks the modal to close (its layer's `outsidePress`).
+ */
+export function useBackdropPress(
+  surfaceRef: React.RefObject<HTMLElement | null>,
+  closesOnPress: boolean,
+): BackdropPress {
+  // The element inside the surface that had focus when the last backdrop press started.
+  const pressFocusRef = React.useRef<HTMLElement | null>(null);
+
+  const onMouseDown = React.useCallback(
+    (event: React.MouseEvent<HTMLElement>) => {
+      if (event.target !== event.currentTarget) return;
+      if (!closesOnPress) {
+        event.preventDefault();
+        return;
+      }
+      const focused = getFocusedElement();
+      pressFocusRef.current = focused && surfaceRef.current?.contains(focused) ? focused : null;
+    },
+    [closesOnPress, surfaceRef],
+  );
+
+  const afterOutsidePress = React.useCallback(() => {
+    const element = pressFocusRef.current;
+    pressFocusRef.current = null;
+    if (!element) return;
+    // A close requested from the click is committed first (React flushes the update in a
+    // microtask queued before this one), so a closed surface no longer contains the element.
+    queueMicrotask(() => {
+      if (getFocusedElement() !== null || !surfaceRef.current?.contains(element)) return;
+      focusElement(element, { preventScroll: true });
+    });
+  }, [surfaceRef]);
+
+  return { onMouseDown, afterOutsidePress };
+}
+
+/** Whether `value` is a DOM event (duck-typed, so an event from another window counts too). */
+function isDomEvent(value: unknown): value is Event {
+  return (
+    typeof value === 'object' &&
+    value !== null &&
+    typeof (value as Partial<Event>).type === 'string' &&
+    typeof (value as Partial<Event>).stopPropagation === 'function' &&
+    !('nativeEvent' in value)
+  );
+}
+
+/**
+ * The DOM event behind a part's click handler call: a React event's `nativeEvent`, or a DOM event
+ * passed as is. A render-prop child that calls the handler without its event (or with another
+ * value) gets a new `click` event, so `details.event` is always an event.
+ */
+export function getNativeEvent(value: unknown): Event {
+  const native =
+    typeof value === 'object' && value !== null
+      ? (value as { nativeEvent?: unknown }).nativeEvent
+      : undefined;
+  if (isDomEvent(native)) return native;
+  if (isDomEvent(value)) return value;
+  return new Event('click');
+}
 
 /** Returned by {@link useModalTrigger}. */
 export interface ModalTrigger {
@@ -219,7 +389,8 @@ export interface ModalPartProps<RenderProps> extends Omit<
 /** What {@link useModalTriggerPart} reads from the modal root. */
 export interface ModalTriggerState {
   open: boolean;
-  setOpen: SetValue<boolean>;
+  /** Asks the root to open (reason `trigger`). */
+  requestOpen: ModalRequestOpen;
   trigger: ModalTrigger;
   /** The surface's id for `aria-controls` while the modal is open. */
   controlsId: string | undefined;
@@ -228,9 +399,10 @@ export interface ModalTriggerState {
 /**
  * Renders a `Dialog.Trigger`/`Drawer.Trigger`: its element gets `aria-haspopup="dialog"`,
  * `aria-expanded`, `aria-controls` (while open; these always win over the child's own), a click
- * handler that records the trigger (overlays#9) and opens the modal, and a ref that registers it
- * with the root's triggers. On a wrapper span (`asChild={false}`, the automatic fallback), the
- * state ARIA goes to the first element in the tab order inside it (`useTriggerElement`).
+ * handler that records the trigger (for the focus return) and asks the root to open (reason
+ * `trigger`, with the click event), and a ref that registers it with the root's triggers. On a
+ * wrapper span (`asChild={false}`, the automatic fallback), the state ARIA goes to the first
+ * element in the tab order inside it (`useTriggerElement`).
  *
  * @param modal         The root's state, from its context.
  * @param props         The part's props.
@@ -241,7 +413,7 @@ export function useModalTriggerPart<RenderProps>(
   { children, asChild, ref, ...rest }: ModalPartProps<RenderProps>,
   componentName: string,
 ): React.ReactNode {
-  const { open, setOpen, trigger, controlsId } = modal;
+  const { open, requestOpen, trigger, controlsId } = modal;
   const { attach, activate } = useModalTriggerElement(trigger);
   const mergedRef = useMergedRefs<HTMLElement>(attach, ref);
   const openModal = React.useCallback(
@@ -249,9 +421,9 @@ export function useModalTriggerPart<RenderProps>(
       // Focus returns to this trigger, also when the root has several (overlays#9), and also when
       // a render-prop child calls `onClick()` without the event.
       activate(event);
-      setOpen(true);
+      requestOpen(true, { reason: 'trigger', event: getNativeEvent(event) });
     },
-    [activate, setOpen],
+    [activate, requestOpen],
   );
 
   const stateAria = {
@@ -267,20 +439,25 @@ export function useModalTriggerPart<RenderProps>(
 }
 
 /**
- * Renders a `Dialog.Close`/`Drawer.Close`: composes a click handler that closes the modal onto its
- * element (the child's own `onClick` runs first; `preventDefault()` there keeps the modal open).
+ * Renders a `Dialog.Close`/`Drawer.Close`: composes a click handler that asks the root to close
+ * (reason `close`, with the click event) onto its element (the child's own `onClick` runs first;
+ * `preventDefault()` there keeps the modal open).
  *
- * @param setOpen       The root's setter, from its context.
+ * @param requestOpen   The root's request function, from its context.
  * @param props         The part's props.
  * @param componentName The public name for development warnings, e.g. `'Dialog.Close'`.
  */
 export function useModalClosePart<RenderProps>(
-  setOpen: SetValue<boolean>,
+  requestOpen: ModalRequestOpen,
   { children, asChild, ref, ...rest }: ModalPartProps<RenderProps>,
   componentName: string,
 ): React.ReactNode {
   const mergedRef = useMergedRefs<HTMLElement>(ref);
-  const close = React.useCallback(() => setOpen(false), [setOpen]);
+  const close = React.useCallback(
+    (event?: React.MouseEvent<HTMLElement>) =>
+      requestOpen(false, { reason: 'close', event: getNativeEvent(event) }),
+    [requestOpen],
+  );
   const closeProps = mergeProps({ onClick: close, ref: mergedRef }, rest);
   return useTriggerElement(children, closeProps as RenderProps, { componentName, asChild });
 }
@@ -326,11 +503,18 @@ export interface ModalSurfaceContextValue {
    * `aria-labelledby`. Returns the unregister function.
    */
   registerTitle: (id: string) => () => void;
+  /**
+   * Receives the measured border-box height of the surface's sticky footer (`Dialog.Footer`) in
+   * px, or `null` once it unmounts; the surface reserves it as the scroll padding of its body.
+   * Absent on a surface without a footer part (the Drawer panel).
+   */
+  setFooterHeight?: (px: number | null) => void;
 }
 
 /**
  * Provided by every modal surface; `null` outside one. Titles register with it, and
- * `Dialog.Footer` reads it to warn when it is rendered outside `Dialog.Content`.
+ * `Dialog.Footer` reads it to report its height and to warn when it is rendered outside
+ * `Dialog.Content`.
  */
 export const ModalSurfaceContext = React.createContext<ModalSurfaceContextValue | null>(null);
 ModalSurfaceContext.displayName = 'ModalSurfaceContext';

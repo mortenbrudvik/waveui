@@ -11,7 +11,7 @@ import {
   testNoImplicitSubmit,
   renderWithProviders,
 } from '../../../test-utils';
-import type { Appearance } from '../../../lib/types';
+import type { Appearance, IconPosition } from '../../../lib/types';
 
 const APPEARANCES: Appearance[] = ['primary', 'outline', 'subtle', 'transparent'];
 
@@ -40,6 +40,7 @@ describe('ToggleButton', () => {
       { name: 'disabled', props: { disabled: true } },
       { name: 'pressed', props: { pressed: true } },
       { name: 'pressed and disabled', props: { pressed: true, disabled: true } },
+      { name: 'pressed and disabledFocusable', props: { pressed: true, disabledFocusable: true } },
       { name: 'icon only with aria-label', props: { icon: <BoldIcon />, 'aria-label': 'Bold' } },
     ],
   });
@@ -89,6 +90,53 @@ describe('ToggleButton', () => {
           '[WaveUI] Button: an icon-only button has no accessible name. Pass `aria-label`, `aria-labelledby` or `title` (the icon is decorative and hidden from assistive technology).',
         ],
       ]);
+    });
+
+    it('iconPosition="after" renders the icon after the label; the default is before', () => {
+      render(
+        <>
+          <ToggleButton icon={<BoldIcon />}>Bold</ToggleButton>
+          <ToggleButton icon={{ children: <BoldIcon /> }} iconPosition="after">
+            Italic
+          </ToggleButton>
+        </>,
+      );
+      const bold = screen.getByRole('button', { name: 'Bold' });
+      const italic = screen.getByRole('button', { name: 'Italic' });
+      expect(bold.firstChild).toHaveAttribute('aria-hidden', 'true');
+      expect(bold.lastChild?.textContent).toBe('Bold');
+      expect(italic.firstChild?.textContent).toBe('Italic');
+      expect(italic.lastChild).toHaveAttribute('aria-hidden', 'true');
+    });
+
+    it('iconPosition="after" has no effect on an icon-only toggle: one child, square sizing', () => {
+      render(
+        <ToggleButton icon={<BoldIcon />} iconPosition="after" aria-label="Bold" size="large" />,
+      );
+      const button = screen.getByRole('button', { name: 'Bold' });
+      expect(button.childNodes).toHaveLength(1);
+      expect(button.firstChild).toHaveAttribute('aria-hidden', 'true');
+      expect(button).toHaveClass('h-10', 'w-10');
+      expect(button).not.toHaveClass('min-w-24');
+    });
+
+    it('iconPosition keeps the DOM order in RTL (the writing direction mirrors it)', () => {
+      renderWithProviders(
+        <>
+          <ToggleButton icon={<BoldIcon />}>Bold</ToggleButton>
+          <ToggleButton icon={<BoldIcon />} iconPosition="after">
+            Italic
+          </ToggleButton>
+        </>,
+        { dir: 'rtl' },
+      );
+      const bold = screen.getByRole('button', { name: 'Bold' });
+      const italic = screen.getByRole('button', { name: 'Italic' });
+      expect(bold.closest('[dir]')).toHaveAttribute('dir', 'rtl');
+      expect(bold.firstChild).toHaveAttribute('aria-hidden', 'true');
+      expect(bold.lastChild?.textContent).toBe('Bold');
+      expect(italic.firstChild?.textContent).toBe('Italic');
+      expect(italic.lastChild).toHaveAttribute('aria-hidden', 'true');
     });
 
     it('does not warn for an icon-only toggle with an aria-label', () => {
@@ -256,6 +304,31 @@ describe('ToggleButton', () => {
       expect(btn).toHaveAttribute('aria-pressed', 'false');
     });
 
+    it('a disabledFocusable toggle stays focusable but never toggles (StrictMode)', async () => {
+      const user = userEvent.setup();
+      const onPressedChange = vi.fn();
+      const onClick = vi.fn();
+      render(
+        <React.StrictMode>
+          <ToggleButton disabledFocusable onPressedChange={onPressedChange} onClick={onClick}>
+            Toggle
+          </ToggleButton>
+        </React.StrictMode>,
+      );
+      const btn = screen.getByRole('button', { name: 'Toggle' });
+      expect(btn).not.toBeDisabled();
+      expect(btn).toHaveAttribute('aria-disabled', 'true');
+      expect(btn).toHaveAttribute('data-disabled-focusable', '');
+      await user.tab();
+      expect(btn).toHaveFocus();
+      await user.keyboard('{Enter}');
+      await user.keyboard(' ');
+      await user.click(btn);
+      expect(onPressedChange).not.toHaveBeenCalled();
+      expect(onClick).not.toHaveBeenCalled();
+      expect(btn).toHaveAttribute('aria-pressed', 'false');
+    });
+
     it.each([
       ['uncontrolled', undefined],
       ['controlled', false],
@@ -341,6 +414,22 @@ describe('ToggleButton', () => {
         classesFrom(buttonClassName({ appearance, pressed: true, disabled: true })),
       );
     });
+
+    it.each(APPEARANCES)(
+      'pressed and disabledFocusable %s uses the pressed-and-disabled classes',
+      (appearance) => {
+        render(
+          <ToggleButton appearance={appearance} pressed disabledFocusable>
+            Toggle
+          </ToggleButton>,
+        );
+        const btn = screen.getByRole('button', { name: 'Toggle' });
+        expect(btn).not.toBeDisabled();
+        expect(classesOf(btn)).toEqual(
+          classesFrom(buttonClassName({ appearance, pressed: true, disabled: true })),
+        );
+      },
+    );
 
     it('a pressed toggle with a consumer aria-disabled uses the pressed-and-disabled classes', () => {
       render(
@@ -430,6 +519,14 @@ describe('ToggleButton', () => {
       const ref = React.createRef<HTMLButtonElement>();
       render(<ToggleButton ref={ref}>Toggle</ToggleButton>);
       expect(ref.current).toBe(screen.getByRole('button', { name: 'Toggle' }));
+    });
+
+    it('iconPosition is an IconPosition; disabledFocusable is a boolean', () => {
+      expectTypeOf<ToggleButtonProps['iconPosition']>().toEqualTypeOf<IconPosition | undefined>();
+      expectTypeOf<ToggleButtonProps['disabledFocusable']>().toEqualTypeOf<boolean | undefined>();
+      // @ts-expect-error iconPosition is 'before' | 'after'
+      const element = <ToggleButton iconPosition="end">Bold</ToggleButton>;
+      expect(element).toBeTruthy();
     });
   });
 });

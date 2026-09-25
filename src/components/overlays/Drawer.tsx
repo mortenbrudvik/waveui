@@ -4,7 +4,7 @@ import { cn } from '../../lib/cn';
 import { isDev, warnOnce } from '../../lib/dev';
 import { DismissIcon } from '../../lib/icons';
 import { slotRendersContent } from '../../lib/slot';
-import { useControllable, type SetValue } from '../../hooks/useControllable';
+import type { ModalOpenChangeReason, OpenChangeDetails } from '../../lib/types';
 import { useId } from '../../hooks/useId';
 import { useIsClient } from '../../hooks/useIsClient';
 import { useMergedRefs } from '../../hooks/useMergedRefs';
@@ -14,7 +14,10 @@ import { Portal } from '../portal/Portal';
 import {
   inertModalTrigger,
   ModalSurfaceContext,
+  useBackdropPress,
   useModalClosePart,
+  useModalDismiss,
+  useModalOpenState,
   useModalTitle,
   useModalTrigger,
   useModalTriggerPart,
@@ -22,6 +25,7 @@ import {
   useRequiredContext,
   useTitleRegistry,
   useUnnamedModalWarning,
+  type ModalRequestOpen,
   type ModalTrigger,
 } from './Dialog.shared';
 
@@ -30,6 +34,16 @@ import {
  * right-to-left layout `end` is the left edge); `left`/`right` are physical sides.
  */
 export type DrawerPosition = 'start' | 'end' | 'left' | 'right';
+
+/**
+ * Why a {@link Drawer} asks to open or close: `trigger` (`Drawer.Trigger`), `close`
+ * (`Drawer.Close`), `close-button` (the built-in Close button), `escape`, `outside-press` (the
+ * backdrop). The shared `ModalOpenChangeReason`, as for Dialog.
+ */
+export type DrawerOpenChangeReason = ModalOpenChangeReason;
+
+/** The second argument of a {@link Drawer}'s `onOpenChange`: the reason and the DOM event. */
+export type DrawerOpenChangeDetails = OpenChangeDetails<DrawerOpenChangeReason>;
 
 /** Properties for the Drawer component. */
 export interface DrawerProps extends Omit<React.HTMLAttributes<HTMLDivElement>, 'title'> {
@@ -45,11 +59,17 @@ export interface DrawerProps extends Omit<React.HTMLAttributes<HTMLDivElement>, 
    */
   defaultOpen?: boolean;
   /**
-   * Called when the drawer asks to open or close: `Drawer.Trigger`, Escape, a backdrop click, the
-   * Close button or `Drawer.Close`. Fires only when the value changes; a controlled drawer stays as
-   * it is until the parent updates `open`.
+   * Called with the new open state when it changes. `details.reason` tells how — `trigger`,
+   * `close` (a `.Close` part), `close-button` (the built-in Close button), `escape` or
+   * `outside-press` (the backdrop) — so a controlled drawer can refuse only some ways of closing
+   * (for example keep a form with unsaved changes open on `outside-press`); `details.event` is the
+   * DOM event behind the request. WaveUI always passes `details`; it is typed optional until 1.0
+   * so that code which calls this prop itself keeps compiling.
+   *
+   * Fires only when the value changes; a controlled drawer stays as it is until the parent updates
+   * `open`.
    */
-  onOpenChange?: (open: boolean) => void;
+  onOpenChange?: (open: boolean, details?: DrawerOpenChangeDetails) => void;
   /**
    * Side of the screen the drawer is attached to. `start`/`end` follow the text direction;
    * `left`/`right` are physical sides.
@@ -149,7 +169,8 @@ export interface DrawerTitleProps extends React.HTMLAttributes<HTMLHeadingElemen
 
 interface DrawerContextValue {
   open: boolean;
-  setOpen: SetValue<boolean>;
+  /** Asks the root to open or close, with the reason and event for `onOpenChange`. */
+  requestOpen: ModalRequestOpen;
   /** The trigger element (`attach`) and the focus-restore target resolved from it (`focusRef`). */
   trigger: ModalTrigger;
   /** The panel's id (for the trigger's `aria-controls`). */
@@ -163,7 +184,7 @@ DrawerContext.displayName = 'DrawerContext';
 
 const inertDrawerContext: DrawerContextValue = {
   open: false,
-  setOpen: () => {},
+  requestOpen: () => {},
   trigger: inertModalTrigger,
   panelId: '',
   inPanel: false,
@@ -227,7 +248,7 @@ const REACHABILITY_CHECK_DELAY = 1000;
  * </Drawer>
  */
 export const DrawerTrigger = (props: DrawerTriggerProps) => {
-  const { open, setOpen, trigger, panelId, inPanel } = useDrawerContext('Drawer.Trigger');
+  const { open, requestOpen, trigger, panelId, inPanel } = useDrawerContext('Drawer.Trigger');
 
   // Rendered inside its own drawer's panel (e.g. by a component): it only exists while open.
   React.useEffect(() => {
@@ -235,7 +256,7 @@ export const DrawerTrigger = (props: DrawerTriggerProps) => {
   }, [inPanel]);
 
   return useModalTriggerPart<DrawerTriggerRenderProps>(
-    { open, setOpen, trigger, controlsId: panelId },
+    { open, requestOpen, trigger, controlsId: panelId },
     props,
     'Drawer.Trigger',
   );
@@ -247,8 +268,8 @@ DrawerTrigger.displayName = 'DrawerTrigger';
  * calling `preventDefault()` there keeps the drawer open), or passes it to a render-prop child.
  */
 export const DrawerClose = (props: DrawerCloseProps) => {
-  const { setOpen } = useDrawerContext('Drawer.Close');
-  return useModalClosePart<DrawerCloseRenderProps>(setOpen, props, 'Drawer.Close');
+  const { requestOpen } = useDrawerContext('Drawer.Close');
+  return useModalClosePart<DrawerCloseRenderProps>(requestOpen, props, 'Drawer.Close');
 };
 DrawerClose.displayName = 'DrawerClose';
 
@@ -340,7 +361,7 @@ const DrawerRoot = ({
   ref,
   ...rest
 }: DrawerProps) => {
-  const [openState, setOpen] = useControllable(openProp, defaultOpen ?? false, onOpenChange);
+  const [openState, requestOpen] = useModalOpenState(openProp, defaultOpen, onOpenChange);
   // The panel lives in a portal, which renders only in the browser: until then (the server HTML,
   // hydration) the drawer reports itself closed, so the trigger's aria-expanded and aria-controls
   // never describe a panel that is not there.
@@ -360,10 +381,12 @@ const DrawerRoot = ({
   }, []);
   const mergedRef = useMergedRefs<HTMLDivElement>(ref, attachPanel);
 
-  const close = React.useCallback(() => setOpen(false), [setOpen]);
+  // Every backdrop press asks the drawer to close.
+  const backdropPress = useBackdropPress(panelRef, true);
+  const onDismiss = useModalDismiss(requestOpen, 'Drawer', backdropPress.afterOutsidePress);
   const layer = useModalLayer({
     open,
-    onDismiss: close,
+    onDismiss,
     refs: [panelRef],
     container: panel,
     triggerRef: trigger.focusRef,
@@ -407,8 +430,8 @@ const DrawerRoot = ({
   }, []);
 
   const context = React.useMemo<DrawerContextValue>(
-    () => ({ open, setOpen, trigger, panelId, inPanel: false }),
-    [open, setOpen, trigger, panelId],
+    () => ({ open, requestOpen, trigger, panelId, inPanel: false }),
+    [open, requestOpen, trigger, panelId],
   );
   const panelContext = React.useMemo<DrawerContextValue>(
     () => ({ ...context, inPanel: true }),
@@ -422,7 +445,7 @@ const DrawerRoot = ({
       {triggers}
       {open && (
         <Portal layerId={layer.layerId}>
-          <div className="fixed inset-0 bg-backdrop">
+          <div className="fixed inset-0 bg-backdrop" onMouseDown={backdropPress.onMouseDown}>
             <div
               ref={mergedRef}
               role="dialog"
@@ -449,7 +472,9 @@ const DrawerRoot = ({
                       size="small"
                       icon={<DismissIcon />}
                       aria-label={closeLabel}
-                      onClick={close}
+                      onClick={(event) =>
+                        requestOpen(false, { reason: 'close-button', event: event.nativeEvent })
+                      }
                       className="ms-auto text-muted-foreground"
                     />
                   </div>
@@ -475,8 +500,12 @@ DrawerRoot.displayName = 'Drawer';
  *   page is `inert` (instead of `aria-modal`), and the page does not scroll.
  * - **Closing**: Escape (only the topmost layer: a popup opened inside closes first), a click on the
  *   backdrop (a drag that starts inside does not close it), the Close button and `Drawer.Close`.
- *   Focus returns to the first of these that can take focus: `finalFocusRef`, the element that had
- *   focus when the drawer opened, the trigger, an element next to where that opener was.
+ *   `onOpenChange` gets the reason as its second argument (`details.reason`), so a controlled
+ *   drawer can refuse some of them. A backdrop press blurs the focused field before the drawer
+ *   closes, so a typed value is committed as with the Close button; when a controlled drawer
+ *   refuses the press, the field gets focus back. Focus returns to the first of these that can
+ *   take focus: `finalFocusRef`, the element that had focus when the drawer opened, the trigger,
+ *   an element next to where that opener was.
  * - **Position**: `end` (default) and `start` follow the text direction.
  *
  * The sub-components are also exported under flat names (`DrawerTrigger`, `DrawerClose`,

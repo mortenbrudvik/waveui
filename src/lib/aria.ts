@@ -20,16 +20,40 @@ export function joinIds(...ids: Array<string | null | undefined | false>): strin
 export interface FocusableDisabledProps {
   'aria-disabled'?: true;
   'data-disabled'?: '';
+  /** Only with `reachable: true`. */
+  'data-disabled-focusable'?: '';
+}
+
+/** Options of {@link focusableDisabledProps}. */
+export interface FocusableDisabledOptions {
+  /**
+   * Also renders `data-disabled-focusable`, which keeps the control in a roving container's
+   * arrow-key order (`useRovingTabIndex`): for the `disabledFocusable` prop of buttons, links and
+   * choice controls. Leave it off for controls that disable themselves through their own
+   * activation (C-DISABLED), which a composite must skip.
+   * @default false
+   */
+  reachable?: boolean;
 }
 
 /**
- * For controls that become unavailable as a result of their own activation (Pagination
- * First/Prev/Next/Last, Carousel Prev/Next, TeachingPopover Back): `aria-disabled="true"` plus
- * `data-disabled` instead of native `disabled`, so focus is not lost to `<body>`. Guard the
- * handlers with {@link preventIfDisabled}. Returns `{}` when enabled.
+ * `aria-disabled` and `data-disabled` for a focusable disabled control, plus
+ * `data-disabled-focusable` with `{ reachable: true }`. Returns `{}` when `disabled` is falsy.
+ * Guard handlers with {@link preventIfDisabled}.
+ *
+ * Without the option it serves controls that become unavailable as a result of their own
+ * activation (Pagination First/Prev/Next/Last, Carousel Prev/Next, TeachingPopover Back): they use
+ * it instead of native `disabled`, so focus is not lost to `<body>`, and roving containers skip
+ * them.
  */
-export function focusableDisabledProps(disabled?: boolean): FocusableDisabledProps {
-  return disabled ? { 'aria-disabled': true, 'data-disabled': '' } : {};
+export function focusableDisabledProps(
+  disabled?: boolean,
+  options?: FocusableDisabledOptions,
+): FocusableDisabledProps {
+  if (!disabled) return {};
+  return options?.reachable
+    ? { 'aria-disabled': true, 'data-disabled': '', 'data-disabled-focusable': '' }
+    : { 'aria-disabled': true, 'data-disabled': '' };
 }
 
 /**

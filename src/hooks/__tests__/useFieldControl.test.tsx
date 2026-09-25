@@ -125,6 +125,54 @@ describe('useFieldControl — merge rules', () => {
     );
   });
 
+  it('a warning message describes the control without aria-invalid', () => {
+    const field: FieldContextValue = {
+      ...FIELD,
+      validationState: 'warning',
+      validationMessageId: 'msg',
+    };
+    const result = merge({ 'aria-describedby': 'mine' }, field);
+    expect(result['aria-describedby']).toBe('mine msg hint');
+    expect('aria-invalid' in result).toBe(false);
+  });
+
+  it('success and neutral messages describe the control too', () => {
+    for (const validationState of ['success', 'none'] as const) {
+      const field: FieldContextValue = { ...FIELD, validationState, validationMessageId: 'msg' };
+      expect(merge({}, field)).toEqual({ id: 'ctl', 'aria-describedby': 'msg hint' });
+    }
+  });
+
+  it('an error message is described once when its id is both the message and the error id', () => {
+    const field: FieldContextValue = {
+      ...FIELD,
+      errorId: 'err',
+      invalid: true,
+      validationState: 'error',
+      validationMessageId: 'err',
+    };
+    expect(merge({}, field)).toMatchObject({
+      'aria-describedby': 'err hint',
+      'aria-invalid': true,
+    });
+  });
+
+  it('the validation message id wins over the error id', () => {
+    const field: FieldContextValue = { ...FIELD, errorId: 'err', validationMessageId: 'msg' };
+    expect(merge({}, field)['aria-describedby']).toBe('msg hint');
+  });
+
+  it('a context without the validation members (0.5 shape) describes with the error id', () => {
+    const field: FieldContextValue = { ...FIELD, errorId: 'err', invalid: true };
+    expect('validationState' in field).toBe(false);
+    expect('validationMessageId' in field).toBe(false);
+    expect(merge({}, field)).toEqual({
+      id: 'ctl',
+      'aria-describedby': 'err hint',
+      'aria-invalid': true,
+    });
+  });
+
   it('aria-invalid / aria-required come from the field; consumer values win', () => {
     const field = { ...FIELD, invalid: true, required: true };
     expect(merge({}, field)).toMatchObject({ 'aria-invalid': true, 'aria-required': true });
@@ -603,6 +651,125 @@ describe('renderWithFieldContext', () => {
     expect(container.querySelector('label')).not.toBeNull();
     unmount();
     container.remove();
+  });
+
+  it('exports the id and text of the validation message', () => {
+    expect(FIELD_TEST_IDS.messageId).toBe('wave-test-field-message');
+    expect(FIELD_TEST_TEXT.message).toBe('Field message');
+  });
+
+  it('an errorId-only call resolves as before: an error state that is invalid, no message id', () => {
+    const { field } = renderWithFieldContext(<span />, { errorId: FIELD_TEST_IDS.errorId });
+    expect(field).toMatchObject({
+      errorId: FIELD_TEST_IDS.errorId,
+      invalid: true,
+      hasErrorMessage: true,
+      validationState: 'error',
+    });
+    expect(field.validationMessageId).toBeUndefined();
+    expect(screen.getByRole('alert')).toHaveTextContent(FIELD_TEST_TEXT.error);
+    expect(screen.queryByText(FIELD_TEST_TEXT.message)).toBeNull();
+  });
+
+  it('a context without validation props has no validation state', () => {
+    const { field } = renderWithFieldContext(<span />);
+    expect(field.validationState).toBeUndefined();
+    expect(field.validationMessageId).toBeUndefined();
+  });
+
+  it('a warning renders the message as an alert and describes the control without aria-invalid', () => {
+    const { field } = renderWithFieldContext(<ButtonControl />, {
+      validationState: 'warning',
+      validationMessageId: FIELD_TEST_IDS.messageId,
+      hintId: FIELD_TEST_IDS.hintId,
+    });
+    expect(field).toMatchObject({ invalid: false, hasErrorMessage: false });
+    const message = document.getElementById(FIELD_TEST_IDS.messageId);
+    expect(message).toHaveTextContent(FIELD_TEST_TEXT.message);
+    expect(message).toHaveAttribute('role', 'alert');
+    const control = screen.getByRole('checkbox', { name: FIELD_TEST_TEXT.label });
+    expect(control).toHaveAccessibleDescription(
+      `${FIELD_TEST_TEXT.message} ${FIELD_TEST_TEXT.hint}`,
+    );
+    expect(control).not.toHaveAttribute('aria-invalid');
+    // The message renders before the hint, as Field renders them.
+    const hint = document.getElementById(FIELD_TEST_IDS.hintId)!;
+    expect(message!.compareDocumentPosition(hint) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  });
+
+  it('a success or neutral message renders without a role', () => {
+    for (const validationState of ['success', 'none'] as const) {
+      const { unmount } = renderWithFieldContext(
+        <ButtonControl />,
+        { validationState, validationMessageId: FIELD_TEST_IDS.messageId },
+        { message: `Message ${validationState}` },
+      );
+      const message = document.getElementById(FIELD_TEST_IDS.messageId);
+      expect(message).toHaveTextContent(`Message ${validationState}`);
+      expect(message).not.toHaveAttribute('role');
+      expect(screen.queryByRole('alert')).toBeNull();
+      expect(screen.getByRole('checkbox', { name: FIELD_TEST_TEXT.label })).not.toHaveAttribute(
+        'aria-invalid',
+      );
+      unmount();
+    }
+  });
+
+  it('an error message whose id is the error id renders once, as the error', () => {
+    renderWithFieldContext(<ButtonControl />, {
+      validationState: 'error',
+      errorId: FIELD_TEST_IDS.errorId,
+      validationMessageId: FIELD_TEST_IDS.errorId,
+    });
+    expect(screen.getAllByRole('alert')).toHaveLength(1);
+    const control = screen.getByRole('checkbox', { name: FIELD_TEST_TEXT.label });
+    expect(control).toHaveAccessibleDescription(FIELD_TEST_TEXT.error);
+    expect(control).toHaveAttribute('aria-invalid', 'true');
+  });
+
+  it('an error message with its own id renders as an alert and marks the control invalid', () => {
+    const { field } = renderWithFieldContext(<ButtonControl />, {
+      validationState: 'error',
+      validationMessageId: FIELD_TEST_IDS.messageId,
+    });
+    expect(field.invalid).toBe(true);
+    expect(document.getElementById(FIELD_TEST_IDS.messageId)).toHaveAttribute('role', 'alert');
+    expect(screen.getByRole('checkbox', { name: FIELD_TEST_TEXT.label })).toHaveAttribute(
+      'aria-invalid',
+      'true',
+    );
+  });
+
+  it('the error state without a message is invalid but has no error message', () => {
+    const { field } = renderWithFieldContext(<span />, { validationState: 'error' });
+    expect(field).toMatchObject({ invalid: true, hasErrorMessage: false });
+    expect(screen.queryByRole('alert')).toBeNull();
+  });
+
+  it('renders the error, then the message, then the hint (the order Field renders them)', () => {
+    renderWithFieldContext(<ButtonControl />, {
+      errorId: FIELD_TEST_IDS.errorId,
+      validationMessageId: FIELD_TEST_IDS.messageId,
+      hintId: FIELD_TEST_IDS.hintId,
+    });
+    const control = screen.getByRole('checkbox');
+    const error = document.getElementById(FIELD_TEST_IDS.errorId)!;
+    const message = document.getElementById(FIELD_TEST_IDS.messageId)!;
+    const hint = document.getElementById(FIELD_TEST_IDS.hintId)!;
+    const follows = (a: Node, b: Node) =>
+      Boolean(a.compareDocumentPosition(b) & Node.DOCUMENT_POSITION_FOLLOWING);
+    expect(follows(control, error)).toBe(true);
+    expect(follows(error, message)).toBe(true);
+    expect(follows(message, hint)).toBe(true);
+  });
+
+  it('explicit invalid and hasErrorMessage win over the derived values', () => {
+    const { field } = renderWithFieldContext(<span />, {
+      validationState: 'warning',
+      invalid: true,
+      hasErrorMessage: true,
+    });
+    expect(field).toMatchObject({ invalid: true, hasErrorMessage: true });
   });
 });
 

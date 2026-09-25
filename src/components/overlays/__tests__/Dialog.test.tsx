@@ -4,7 +4,7 @@ import { createPortal } from 'react-dom';
 import { hydrateRoot } from 'react-dom/client';
 import { renderToString } from 'react-dom/server';
 import { act, cleanup, fireEvent, render, screen } from '@testing-library/react';
-import userEvent from '@testing-library/user-event';
+import userEvent, { type UserEvent } from '@testing-library/user-event';
 import {
   Dialog,
   DialogClose,
@@ -15,6 +15,10 @@ import {
   type DialogCloseProps,
   type DialogContentProps,
   type DialogFooterProps,
+  type DialogModalType,
+  type DialogOpenChangeDetails,
+  type DialogOpenChangeReason,
+  type DialogProps,
   type DialogTitleProps,
   type DialogTriggerProps,
 } from '../Dialog';
@@ -22,10 +26,13 @@ import { Drawer } from '../Drawer';
 import { useDismiss } from '../../../hooks/useDismiss';
 import { Portal } from '../../portal/Portal';
 import { getTopmostLayer } from '../../../lib/layers';
+import type { ModalOpenChangeReason, ModalType, OpenChangeDetails } from '../../../lib/types';
 import {
   createOverlayTestWrapper,
   expectNoA11yViolations,
   findDanglingIdRefsInHtml,
+  installResizeObserverMock,
+  mockRect,
   renderWithProviders,
   testCompoundExposure,
   testComposedHandler,
@@ -324,9 +331,9 @@ describe('Dialog', () => {
       const onOpenChange = vi.fn();
       render(<Basic dialogProps={{ onOpenChange }} />);
       await user.click(button('Open'));
-      expect(onOpenChange).toHaveBeenLastCalledWith(true);
+      expect(onOpenChange).toHaveBeenLastCalledWith(true, expect.anything());
       await user.keyboard('{Escape}');
-      expect(onOpenChange).toHaveBeenLastCalledWith(false);
+      expect(onOpenChange).toHaveBeenLastCalledWith(false, expect.anything());
       expect(onOpenChange).toHaveBeenCalledTimes(2);
     });
 
@@ -351,7 +358,7 @@ describe('Dialog', () => {
       expect(dialog).not.toHaveAttribute('closeLabel');
       expect(dialog).not.toHaveAttribute('closelabel');
       await user.click(button('Lukk'));
-      expect(onOpenChange).toHaveBeenCalledWith(false);
+      expect(onOpenChange).toHaveBeenCalledWith(false, expect.anything());
       expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
     });
   });
@@ -781,7 +788,7 @@ describe('Dialog', () => {
       render(<Basic dialogProps={{ open: false, onOpenChange }} />);
       await user.click(button('Open'));
       expect(onOpenChange).toHaveBeenCalledTimes(1);
-      expect(onOpenChange).toHaveBeenCalledWith(true);
+      expect(onOpenChange).toHaveBeenCalledWith(true, expect.anything());
       expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
     });
   });
@@ -868,6 +875,159 @@ describe('Dialog', () => {
       );
       expect(warn).not.toHaveBeenCalled();
       warn.mockRestore();
+    });
+  });
+
+  describe('Dialog.Footer stays in view while the body scrolls', () => {
+    const FOOTER_HEIGHT = '--wave-dialog-footer-height';
+
+    let resizeObserver: ReturnType<typeof installResizeObserverMock> | undefined;
+    afterEach(() => {
+      resizeObserver?.restore();
+      resizeObserver = undefined;
+    });
+
+    /** The scrolling body of the open dialog (the element that scrolls its content). */
+    function scrollingBody() {
+      const body = screen.getByRole('dialog').querySelector<HTMLElement>('.overflow-y-auto');
+      if (!body) throw new Error('the dialog has no scrolling body');
+      return body;
+    }
+
+    /** A dialog whose content is a form of `count` fields followed by its footer. */
+    function FormDialog({ count = 3, footer = true }: { count?: number; footer?: boolean }) {
+      return (
+        <Dialog defaultOpen>
+          <Dialog.Content title="Profile">
+            <form aria-label="Profile" onSubmit={(event) => event.preventDefault()}>
+              {Array.from({ length: count }, (_, index) => (
+                <input key={index} aria-label={`Field ${index + 1}`} />
+              ))}
+              {footer && (
+                <Dialog.Footer data-testid="footer">
+                  <Dialog.Close>
+                    <button type="button">Cancel</button>
+                  </Dialog.Close>
+                  <button type="submit">Save</button>
+                </Dialog.Footer>
+              )}
+            </form>
+          </Dialog.Content>
+        </Dialog>
+      );
+    }
+
+    it('sticks to the bottom of the scroll area with an opaque background, covering the body padding', () => {
+      render(
+        <Basic dialogProps={{ defaultOpen: true }}>
+          <p>Body</p>
+          <Dialog.Footer data-testid="footer">
+            <button type="button">OK</button>
+          </Dialog.Footer>
+        </Basic>,
+      );
+      expect(screen.getByTestId('footer')).toHaveClass(
+        'sticky',
+        '-bottom-1',
+        'z-10',
+        '-mx-1',
+        '-mb-1',
+        'mt-6',
+        'bg-background',
+        'px-1',
+        'pb-2',
+        'pt-3',
+        'flex',
+        'justify-end',
+        'gap-2',
+      );
+      // The body reserves the footer's height as scroll padding, so a focused field is never
+      // hidden behind it.
+      expect(scrollingBody()).toHaveClass(`scroll-pb-(${FOOTER_HEIGHT})`);
+    });
+
+    it('keeps its place in the DOM: last in the body, after the content', () => {
+      render(
+        <Basic dialogProps={{ defaultOpen: true }}>
+          <p>Body</p>
+          <Dialog.Footer data-testid="footer">
+            <button type="button">OK</button>
+          </Dialog.Footer>
+        </Basic>,
+      );
+      const body = scrollingBody();
+      expect(screen.getByTestId('footer').parentElement).toBe(body);
+      expect(body.lastElementChild).toBe(screen.getByTestId('footer'));
+      expect(body.firstElementChild).toBe(screen.getByText('Body'));
+    });
+
+    it('reports its measured height to the body’s scroll padding as it changes', () => {
+      resizeObserver = installResizeObserverMock();
+      render(<FormDialog />);
+      const footer = screen.getByTestId('footer');
+      const body = scrollingBody();
+      // Nothing measured yet: the variable is unset and the scroll padding falls back to auto.
+      expect(body.style.getPropertyValue(FOOTER_HEIGHT)).toBe('');
+      mockRect(footer, { height: 60 });
+      resizeObserver.trigger(footer);
+      expect(body.style.getPropertyValue(FOOTER_HEIGHT)).toBe('60px');
+      mockRect(footer, { height: 96 });
+      resizeObserver.trigger(footer);
+      expect(body.style.getPropertyValue(FOOTER_HEIGHT)).toBe('96px');
+    });
+
+    it('clears the variable when the footer unmounts', () => {
+      resizeObserver = installResizeObserverMock();
+      const { rerender } = render(<FormDialog />);
+      mockRect(screen.getByTestId('footer'), { height: 60 });
+      resizeObserver.trigger(screen.getByTestId('footer'));
+      expect(scrollingBody().style.getPropertyValue(FOOTER_HEIGHT)).toBe('60px');
+      rerender(<FormDialog footer={false} />);
+      expect(scrollingBody().style.getPropertyValue(FOOTER_HEIGHT)).toBe('');
+    });
+
+    it('measures under StrictMode (effects run twice)', () => {
+      resizeObserver = installResizeObserverMock();
+      render(
+        <React.StrictMode>
+          <FormDialog />
+        </React.StrictMode>,
+      );
+      mockRect(screen.getByTestId('footer'), { height: 72 });
+      resizeObserver.trigger(screen.getByTestId('footer'));
+      expect(scrollingBody().style.getPropertyValue(FOOTER_HEIGHT)).toBe('72px');
+    });
+
+    it('sticks inside a <form> that wraps the fields and the footer, which stays the form’s last child', async () => {
+      resizeObserver = installResizeObserverMock();
+      const user = userEvent.setup();
+      render(<FormDialog count={20} />);
+      const form = screen.getByRole('form', { name: 'Profile' });
+      const footer = screen.getByTestId('footer');
+      expect(form.parentElement).toBe(scrollingBody());
+      expect(footer.parentElement).toBe(form);
+      expect(form.lastElementChild).toBe(footer);
+      expect(footer).toHaveClass('sticky', '-bottom-1');
+      mockRect(footer, { height: 64 });
+      resizeObserver.trigger(footer);
+      expect(scrollingBody().style.getPropertyValue(FOOTER_HEIGHT)).toBe('64px');
+      // The footer's buttons still act on the form and the dialog.
+      await user.click(button('Cancel'));
+      expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+    });
+
+    it('works without ResizeObserver: no variable, no error', () => {
+      render(<FormDialog />);
+      expect(screen.getByTestId('footer')).toHaveClass('sticky');
+      expect(scrollingBody().style.getPropertyValue(FOOTER_HEIGHT)).toBe('');
+    });
+
+    it('has no accessibility violations with a long form and a sticky footer', async () => {
+      resizeObserver = installResizeObserverMock();
+      render(<FormDialog count={20} />);
+      mockRect(screen.getByTestId('footer'), { height: 64 });
+      resizeObserver.trigger(screen.getByTestId('footer'));
+      await expectNoA11yViolations();
     });
   });
 
@@ -1619,7 +1779,12 @@ describe('Dialog', () => {
       await user.click(button('Close'));
       expect(onOpenChange).toHaveBeenCalledTimes(3);
       await user.click(button('Cancel'));
-      expect(onOpenChange.mock.calls).toEqual([[false], [false], [false], [false]]);
+      expect(onOpenChange.mock.calls).toEqual([
+        [false, { reason: 'escape', event: expect.any(Event) }],
+        [false, { reason: 'outside-press', event: expect.any(Event) }],
+        [false, { reason: 'close-button', event: expect.any(Event) }],
+        [false, { reason: 'close', event: expect.any(Event) }],
+      ]);
       expect(screen.getByRole('dialog')).toBeInTheDocument();
     });
 
@@ -1633,10 +1798,444 @@ describe('Dialog', () => {
       );
       await user.click(button('Open'));
       expect(onOpenChange).toHaveBeenCalledTimes(1);
-      expect(onOpenChange).toHaveBeenLastCalledWith(true);
+      expect(onOpenChange).toHaveBeenLastCalledWith(true, {
+        reason: 'trigger',
+        event: expect.any(Event),
+      });
       await user.keyboard('{Escape}');
       expect(onOpenChange).toHaveBeenCalledTimes(2);
-      expect(onOpenChange).toHaveBeenLastCalledWith(false);
+      expect(onOpenChange).toHaveBeenLastCalledWith(false, {
+        reason: 'escape',
+        event: expect.any(Event),
+      });
+    });
+  });
+
+  describe('onOpenChange details', () => {
+    /** `[open, reason, event type]` of every onOpenChange call. */
+    function calls(onOpenChange: ReturnType<typeof vi.fn>) {
+      return onOpenChange.mock.calls.map(([open, details]) => {
+        const { reason, event } = details as DialogOpenChangeDetails;
+        return [open, reason, event.type];
+      });
+    }
+
+    it('reports the trigger and its click event when the dialog opens', async () => {
+      const user = userEvent.setup();
+      const onOpenChange = vi.fn();
+      render(<Basic dialogProps={{ onOpenChange }} />);
+      await user.click(button('Open'));
+      expect(onOpenChange).toHaveBeenCalledWith(true, {
+        reason: 'trigger',
+        event: expect.any(Event),
+      });
+      expect(calls(onOpenChange)).toEqual([[true, 'trigger', 'click']]);
+    });
+
+    it.each([
+      ['escape', 'keydown', (user: UserEvent) => user.keyboard('{Escape}')],
+      ['outside-press', 'click', (user: UserEvent) => user.click(backdrop())],
+      ['close-button', 'click', (user: UserEvent) => user.click(button('Close'))],
+      ['close', 'click', (user: UserEvent) => user.click(button('Cancel'))],
+    ] as const)('reports %s with the %s event that closed it', async (reason, type, close) => {
+      const user = userEvent.setup();
+      const onOpenChange = vi.fn();
+      render(
+        <Basic dialogProps={{ defaultOpen: true, onOpenChange }}>
+          <Dialog.Close>
+            <button type="button">Cancel</button>
+          </Dialog.Close>
+        </Basic>,
+      );
+      await close(user);
+      expect(onOpenChange).toHaveBeenCalledWith(false, { reason, event: expect.any(Event) });
+      expect(calls(onOpenChange)).toEqual([[false, reason, type]]);
+      expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+    });
+
+    it('lets a controlled dialog refuse one way of closing: a backdrop press is ignored, Escape closes', async () => {
+      const user = userEvent.setup();
+      function KeepOnBackdrop() {
+        const [open, setOpen] = React.useState(true);
+        return (
+          <Dialog
+            open={open}
+            onOpenChange={(next, details) => {
+              if (details?.reason !== 'outside-press') setOpen(next);
+            }}
+          >
+            <Dialog.Content title="Unsaved changes">
+              <input aria-label="Name" />
+            </Dialog.Content>
+          </Dialog>
+        );
+      }
+      render(<KeepOnBackdrop />);
+      const name = screen.getByRole('textbox', { name: 'Name' });
+      act(() => name.focus());
+      await user.click(backdrop());
+      expect(screen.getByRole('dialog', { name: 'Unsaved changes' })).toBeInTheDocument();
+      // Focus is back on the field the refused press blurred.
+      expect(name).toHaveFocus();
+      await user.keyboard('{Escape}');
+      expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+    });
+
+    it('lets a press that starts on the surface move focus as usual', async () => {
+      const user = userEvent.setup();
+      render(
+        <Basic dialogProps={{ defaultOpen: true }}>
+          <input aria-label="Name" />
+        </Basic>,
+      );
+      await user.click(screen.getByRole('textbox', { name: 'Name' }));
+      expect(screen.getByRole('textbox', { name: 'Name' })).toHaveFocus();
+    });
+
+    it('never reports a stale reason: a trigger click, then Escape, reports escape', async () => {
+      const user = userEvent.setup();
+      const onOpenChange = vi.fn();
+      render(<Basic dialogProps={{ onOpenChange }} />);
+      await user.click(button('Open'));
+      await user.keyboard('{Escape}');
+      await user.click(button('Open'));
+      await user.click(backdrop());
+      expect(calls(onOpenChange)).toEqual([
+        [true, 'trigger', 'click'],
+        [false, 'escape', 'keydown'],
+        [true, 'trigger', 'click'],
+        [false, 'outside-press', 'click'],
+      ]);
+    });
+
+    it('reports the trigger again for each request a controlled parent rejects', async () => {
+      const user = userEvent.setup();
+      const onOpenChange = vi.fn();
+      render(<Basic dialogProps={{ open: false, onOpenChange }} />);
+      await user.click(button('Open'));
+      await user.click(button('Open'));
+      expect(calls(onOpenChange)).toEqual([
+        [true, 'trigger', 'click'],
+        [true, 'trigger', 'click'],
+      ]);
+    });
+
+    it('passes an event also when a render-prop part calls onClick without one', async () => {
+      const user = userEvent.setup();
+      const onOpenChange = vi.fn();
+      render(
+        <Dialog onOpenChange={onOpenChange}>
+          <Dialog.Trigger>
+            {({ onClick, ...props }) => (
+              <button type="button" {...props} onClick={() => (onClick as () => void)()}>
+                Open
+              </button>
+            )}
+          </Dialog.Trigger>
+          <Dialog.Content title="Render props">
+            <Dialog.Close>
+              {({ onClick, ...props }) => (
+                <button type="button" {...props} onClick={() => (onClick as () => void)()}>
+                  Done
+                </button>
+              )}
+            </Dialog.Close>
+          </Dialog.Content>
+        </Dialog>,
+      );
+      await user.click(button('Open'));
+      await user.click(button('Done'));
+      expect(onOpenChange.mock.calls).toEqual([
+        [true, { reason: 'trigger', event: expect.any(Event) }],
+        [false, { reason: 'close', event: expect.any(Event) }],
+      ]);
+      expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+    });
+
+    it('ignores a focus-outside dismissal, which a modal layer never receives, with a development warning', () => {
+      const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+      const onOpenChange = vi.fn();
+      render(<Basic dialogProps={{ defaultOpen: true, onOpenChange }} />);
+      const layer = getTopmostLayer();
+      act(() => layer?.onDismiss('focus-outside', new FocusEvent('focusin')));
+      expect(onOpenChange).not.toHaveBeenCalled();
+      expect(screen.getByRole('dialog')).toBeInTheDocument();
+      expect(warn.mock.calls).toEqual([
+        [
+          '[WaveUI] Dialog ignored a focus-outside dismissal: a modal surface does not close when focus leaves it.',
+        ],
+      ]);
+      warn.mockRestore();
+    });
+
+    it('types details as an optional second argument with the shared reason union', () => {
+      expectTypeOf<DialogOpenChangeReason>().toEqualTypeOf<ModalOpenChangeReason>();
+      expectTypeOf<DialogOpenChangeDetails>().toEqualTypeOf<
+        OpenChangeDetails<ModalOpenChangeReason>
+      >();
+      expectTypeOf<DialogOpenChangeDetails['reason']>().toEqualTypeOf<
+        'trigger' | 'close' | 'close-button' | 'escape' | 'outside-press'
+      >();
+      type Handler = NonNullable<DialogProps['onOpenChange']>;
+      expectTypeOf<Parameters<Handler>[1]>().toEqualTypeOf<DialogOpenChangeDetails | undefined>();
+      // A 0.5 handler that takes only the value still fits.
+      expectTypeOf<(open: boolean) => void>().toExtend<Handler>();
+      // Code that calls the prop itself (a wrapper, a custom Cancel button) keeps compiling.
+      const forward = (props: DialogProps) => props.onOpenChange?.(false);
+      expectTypeOf(forward).parameter(0).toEqualTypeOf<DialogProps>();
+    });
+  });
+
+  describe('alert dialogs (modalType="alert")', () => {
+    /** A delete confirmation: an alert dialog with a Cancel and a destructive action. */
+    function Confirm({
+      dialogProps,
+      contentProps,
+    }: {
+      dialogProps?: Partial<DialogProps>;
+      contentProps?: Partial<DialogContentProps>;
+    }) {
+      return (
+        <Dialog modalType="alert" {...dialogProps}>
+          <Dialog.Trigger>
+            <button type="button">Delete file</button>
+          </Dialog.Trigger>
+          <Dialog.Content title="Delete report.pdf?" {...contentProps}>
+            <p>This cannot be undone.</p>
+            <Dialog.Footer>
+              <Dialog.Close>
+                <button type="button">Cancel</button>
+              </Dialog.Close>
+              <Dialog.Close>
+                <button type="button">Remove</button>
+              </Dialog.Close>
+            </Dialog.Footer>
+          </Dialog.Content>
+        </Dialog>
+      );
+    }
+
+    /** The element around the surface (the backdrop). */
+    function backdropOf(surface: HTMLElement) {
+      const parent = surface.parentElement;
+      if (!parent) throw new Error('the dialog surface has no parent');
+      return parent;
+    }
+
+    it('renders role="alertdialog", named by its title, with data-modal-type="alert"', async () => {
+      const user = userEvent.setup();
+      render(<Confirm />);
+      await user.click(button('Delete file'));
+      const alert = screen.getByRole('alertdialog', { name: 'Delete report.pdf?' });
+      expect(alert).toHaveAttribute('data-modal-type', 'alert');
+      expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+      expect(button('Delete file')).toHaveAttribute('aria-controls', alert.id);
+    });
+
+    it('renders role="dialog" and data-modal-type="modal" by default', () => {
+      render(<Basic dialogProps={{ defaultOpen: true }} />);
+      expect(screen.getByRole('dialog', { name: 'Test Dialog' })).toHaveAttribute(
+        'data-modal-type',
+        'modal',
+      );
+      expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument();
+    });
+
+    it('does not close on a backdrop press: no onOpenChange call, and focus stays inside', async () => {
+      const user = userEvent.setup();
+      const onOpenChange = vi.fn();
+      render(<Confirm dialogProps={{ defaultOpen: true, onOpenChange }} />);
+      const alert = screen.getByRole('alertdialog');
+      act(() => button('Cancel').focus());
+      await user.click(backdropOf(alert));
+      expect(onOpenChange).not.toHaveBeenCalled();
+      expect(screen.getByRole('alertdialog')).toBeInTheDocument();
+      expect(button('Cancel')).toHaveFocus();
+    });
+
+    it('closes on Escape (reason escape) and returns focus to the trigger', async () => {
+      const user = userEvent.setup();
+      const onOpenChange = vi.fn();
+      render(<Confirm dialogProps={{ onOpenChange }} />);
+      await user.click(button('Delete file'));
+      await user.keyboard('{Escape}');
+      expect(onOpenChange).toHaveBeenLastCalledWith(false, {
+        reason: 'escape',
+        event: expect.any(Event),
+      });
+      expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument();
+      expect(button('Delete file')).toHaveFocus();
+    });
+
+    it.each([
+      ['close-button', 'Close'],
+      ['close', 'Cancel'],
+    ] as const)('closes with %s, as a modal dialog does', async (reason, name) => {
+      const user = userEvent.setup();
+      const onOpenChange = vi.fn();
+      render(<Confirm dialogProps={{ defaultOpen: true, onOpenChange }} />);
+      await user.click(button(name));
+      expect(onOpenChange).toHaveBeenCalledWith(false, { reason, event: expect.any(Event) });
+      expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument();
+    });
+
+    it('keeps a consumer role', () => {
+      render(<Confirm dialogProps={{ defaultOpen: true }} contentProps={{ role: 'dialog' }} />);
+      const surface = screen.getByRole('dialog', { name: 'Delete report.pdf?' });
+      expect(surface).toHaveAttribute('data-modal-type', 'alert');
+      expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument();
+    });
+
+    it('isolates the page and traps focus as a modal dialog does', async () => {
+      const user = userEvent.setup();
+      const { container } = render(<Confirm dialogProps={{ defaultOpen: true }} />);
+      expect(container).toHaveAttribute('inert');
+      act(() => button('Remove').focus());
+      await user.tab();
+      expect(button('Close')).toHaveFocus();
+    });
+
+    it('has no accessibility violations while open', async () => {
+      const user = userEvent.setup();
+      render(<Confirm />);
+      await user.click(button('Delete file'));
+      await expectNoA11yViolations();
+    });
+
+    it('types modalType with the shared ModalType', () => {
+      expectTypeOf<DialogModalType>().toEqualTypeOf<ModalType>();
+      expectTypeOf<DialogProps['modalType']>().toEqualTypeOf<ModalType | undefined>();
+      // @ts-expect-error non-modal dialogs are planned, not available yet
+      const nonModal: DialogProps['modalType'] = 'non-modal';
+      expect(nonModal).toBe('non-modal');
+    });
+  });
+
+  describe('backdrop press and the focused field', () => {
+    // A SpinButton or picker in the dialog commits its typed value on this blur: the composition
+    // tests are in src/__tests__/integration.test.tsx.
+    it('blurs the focused field before a backdrop press closes the dialog', async () => {
+      const user = userEvent.setup();
+      const onBlur = vi.fn();
+      render(
+        <Basic dialogProps={{ defaultOpen: true }}>
+          <input aria-label="Name" onBlur={onBlur} />
+        </Basic>,
+      );
+      act(() => screen.getByRole('textbox', { name: 'Name' }).focus());
+      await user.click(backdrop());
+      expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+      expect(onBlur).toHaveBeenCalledTimes(1);
+    });
+
+    it('blurs the field on a refused backdrop press and gives focus back to it', async () => {
+      const user = userEvent.setup();
+      const onBlur = vi.fn();
+      function RefusesBackdrop() {
+        const [open, setOpen] = React.useState(true);
+        return (
+          <Dialog
+            open={open}
+            onOpenChange={(next, details) => {
+              if (details?.reason !== 'outside-press') setOpen(next);
+            }}
+          >
+            <Dialog.Content title="Rename">
+              <input aria-label="Name" onBlur={onBlur} />
+            </Dialog.Content>
+          </Dialog>
+        );
+      }
+      render(<RefusesBackdrop />);
+      const name = screen.getByRole('textbox', { name: 'Name' });
+      act(() => name.focus());
+      await user.click(backdrop());
+      expect(screen.getByRole('dialog', { name: 'Rename' })).toBeInTheDocument();
+      // The blur-time work of the field ran, and focus came back to it.
+      expect(onBlur).toHaveBeenCalledTimes(1);
+      expect(name).toHaveFocus();
+    });
+
+    it('leaves focus where the parent moved it when refusing the press', async () => {
+      const user = userEvent.setup();
+      function FocusSaveOnBackdrop() {
+        const [open, setOpen] = React.useState(true);
+        const saveRef = React.useRef<HTMLButtonElement>(null);
+        return (
+          <Dialog
+            open={open}
+            onOpenChange={(next, details) => {
+              if (details?.reason === 'outside-press') saveRef.current?.focus();
+              else setOpen(next);
+            }}
+          >
+            <Dialog.Content title="Rename">
+              <input aria-label="Name" />
+              <button type="button" ref={saveRef}>
+                Save
+              </button>
+            </Dialog.Content>
+          </Dialog>
+        );
+      }
+      render(<FocusSaveOnBackdrop />);
+      act(() => screen.getByRole('textbox', { name: 'Name' }).focus());
+      await user.click(backdrop());
+      expect(screen.getByRole('dialog', { name: 'Rename' })).toBeInTheDocument();
+      expect(button('Save')).toHaveFocus();
+    });
+
+    it('leaves focus with a dialog the refusal opens', async () => {
+      const user = userEvent.setup();
+      function ConfirmOnBackdrop() {
+        const [open, setOpen] = React.useState(true);
+        const [confirming, setConfirming] = React.useState(false);
+        return (
+          <Dialog
+            open={open}
+            onOpenChange={(next, details) => {
+              if (details?.reason === 'outside-press') setConfirming(true);
+              else setOpen(next);
+            }}
+          >
+            <Dialog.Content title="Rename">
+              <input aria-label="Name" />
+              <Dialog modalType="alert" open={confirming} onOpenChange={setConfirming}>
+                <Dialog.Content title="Discard changes?">
+                  <Dialog.Footer>
+                    <button type="button" autoFocus>
+                      Keep editing
+                    </button>
+                  </Dialog.Footer>
+                </Dialog.Content>
+              </Dialog>
+            </Dialog.Content>
+          </Dialog>
+        );
+      }
+      render(<ConfirmOnBackdrop />);
+      act(() => screen.getByRole('textbox', { name: 'Name' }).focus());
+      await user.click(backdrop());
+      expect(screen.getByRole('alertdialog', { name: 'Discard changes?' })).toBeInTheDocument();
+      expect(button('Keep editing')).toHaveFocus();
+    });
+
+    it('keeps focus on the field of an alert dialog: the press does not blur it', async () => {
+      const user = userEvent.setup();
+      const onBlur = vi.fn();
+      render(
+        <Dialog defaultOpen modalType="alert">
+          <Dialog.Content title="Rename">
+            <input aria-label="Name" onBlur={onBlur} />
+          </Dialog.Content>
+        </Dialog>,
+      );
+      const name = screen.getByRole('textbox', { name: 'Name' });
+      act(() => name.focus());
+      await user.click(screen.getByRole('alertdialog').parentElement!);
+      expect(screen.getByRole('alertdialog', { name: 'Rename' })).toBeInTheDocument();
+      expect(name).toHaveFocus();
+      expect(onBlur).not.toHaveBeenCalled();
     });
   });
 

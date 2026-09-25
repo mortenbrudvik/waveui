@@ -11,6 +11,7 @@ const meta = {
     clearable: { control: 'boolean' },
     format: { control: 'select', options: ['12h', '24h'] },
     step: { control: { type: 'number', min: 1 } },
+    expandIcon: { control: false },
   },
   args: {
     'aria-label': 'Time',
@@ -23,6 +24,10 @@ const meta = {
 export default meta;
 type Story = StoryObj<typeof meta>;
 
+/**
+ * The expand button at the end of the input (a chevron) opens and closes the list without taking
+ * focus from the input; it is not a tab stop.
+ */
 export const Default: Story = {};
 
 export const Format24h: Story = {
@@ -46,6 +51,21 @@ export const WithMinMax: Story = {
     maxTime: '17:00',
     step: 30,
     placeholder: 'Business hours',
+  },
+};
+
+/**
+ * Text that is not a time, or a time outside `minTime`/`maxTime`, stays in the input: it is marked
+ * invalid and an error message describes it (`onInvalidInput` reports it). Type `7:00 PM` or
+ * `soon` and press Enter.
+ */
+export const ValidationFeedback: Story = {
+  args: {
+    'aria-label': 'Meeting time',
+    minTime: '09:00',
+    maxTime: '17:00',
+    placeholder: 'Business hours',
+    onInvalidInput: fn(),
   },
 };
 

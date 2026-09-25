@@ -2,6 +2,7 @@ import * as React from 'react';
 import { describe, it, expect, vi, afterEach, expectTypeOf } from 'vitest';
 import { act, fireEvent, render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
+import { hydrateRoot } from 'react-dom/client';
 import { renderToString } from 'react-dom/server';
 import { Nav, NavCategory, NavItem, NavSubItem } from '../Nav';
 import type { NavItemProps, NavProps, NavSubItemProps } from '../Nav';
@@ -9,6 +10,7 @@ import type { Slot } from '../../../lib/types';
 import {
   asClientReference,
   createOverlayTestWrapper,
+  expectNoA11yViolations,
   renderWithProviders,
   testCompoundExposure,
   testComposedHandler,
@@ -78,6 +80,10 @@ describe('Nav', () => {
     a11yVariants: [
       { name: 'category expanded', props: { defaultOpenCategories: ['docs'] } },
       { name: 'item selected', props: { defaultValue: 'home' } },
+      {
+        name: 'closed category holding the current page',
+        props: { defaultValue: 'intro', defaultOpenCategories: [] },
+      },
     ],
     conflictingClass: { className: 'w-72', overrides: 'w-60' },
   });
@@ -553,6 +559,276 @@ describe('Nav', () => {
       await user.click(toggle());
       expect(onOpenCategoriesChange).toHaveBeenCalledWith(['docs']);
       expect(toggle()).toHaveAttribute('aria-expanded', 'true');
+    });
+  });
+
+  describe('a closed category that contains the current page', () => {
+    /** A toggle whose category contains the current page (the look follows these attributes). */
+    const expectMarked = (categoryToggle: HTMLElement) => {
+      expect(categoryToggle).toHaveAttribute('aria-current', 'true');
+      expect(categoryToggle).toHaveAttribute('data-contains-current', '');
+    };
+    const expectUnmarked = (categoryToggle: HTMLElement) => {
+      expect(categoryToggle).not.toHaveAttribute('aria-current');
+      expect(categoryToggle).not.toHaveAttribute('data-contains-current');
+    };
+
+    /** Renders its sub-items itself, so Nav cannot find them among the category's children. */
+    function GuideLinks() {
+      return (
+        <>
+          <Nav.SubItem value="setup">Setup</Nav.SubItem>
+          <Nav.SubItem value="deploy">Deploy</Nav.SubItem>
+        </>
+      );
+    }
+
+    function GuidesNav(props: Partial<NavProps>) {
+      return (
+        <Nav {...props}>
+          <Nav.Item value="home">Home</Nav.Item>
+          <Nav.Category value="guides" label="Guides">
+            <GuideLinks />
+          </Nav.Category>
+          <Nav.Category value="docs" label="Docs">
+            <Nav.SubItem value="intro">Introduction</Nav.SubItem>
+          </Nav.Category>
+        </Nav>
+      );
+    }
+
+    const guides = () => screen.getByRole('button', { name: 'Guides' });
+
+    it('marks the toggle of a closed category that holds the current sub-item', () => {
+      render(
+        <Nav defaultValue="api" defaultOpenCategories={[]}>
+          <Nav.Item value="home">Home</Nav.Item>
+          <Nav.Category value="docs" label="Docs">
+            <Nav.SubItem value="intro">Introduction</Nav.SubItem>
+            <Nav.SubItem value="api">API</Nav.SubItem>
+          </Nav.Category>
+          <Nav.Category value="blog" label="Blog">
+            <Nav.SubItem value="news">News</Nav.SubItem>
+          </Nav.Category>
+        </Nav>,
+      );
+      expect(toggle()).toHaveAttribute('aria-expanded', 'false');
+      expectMarked(toggle());
+      expectUnmarked(button('Blog'));
+      expectUnmarked(button('Home'));
+    });
+
+    it('finds the current sub-item through Fragments and wrapper elements', () => {
+      render(
+        <Nav value="api" defaultOpenCategories={[]}>
+          <Nav.Category value="docs" label="Docs">
+            <>
+              <div>
+                <Nav.SubItem value="api">API</Nav.SubItem>
+              </div>
+            </>
+          </Nav.Category>
+        </Nav>,
+      );
+      expectMarked(toggle());
+    });
+
+    it('gives the marked toggle the selected look of an item, with logical classes', () => {
+      render(<SampleNav defaultValue="api" defaultOpenCategories={[]} />);
+      expect(toggle()).toHaveClass(
+        'data-[contains-current]:bg-subtle-selected',
+        'data-[contains-current]:text-primary',
+        'data-[contains-current]:border-s-2',
+        'data-[contains-current]:border-s-primary',
+      );
+      expect(toggle().className).not.toMatch(/border-(l|r)\b|border-(l|r)-/);
+    });
+
+    it('marks it in the server HTML (the children are scanned during render)', () => {
+      const html = renderToString(<SampleNav value="api" defaultOpenCategories={[]} />);
+      const parsed = document.createElement('div'); // detached: nothing reaches document.body
+      parsed.innerHTML = html;
+      const docs = within(parsed).getByRole('button', { name: 'Docs' });
+      expect(docs).toHaveAttribute('aria-expanded', 'false');
+      expectMarked(docs);
+    });
+
+    it('hydrates the server HTML of a marked category without a mismatch', async () => {
+      const element = <SampleNav value="api" defaultOpenCategories={[]} />;
+      const container = document.createElement('div');
+      container.innerHTML = renderToString(element);
+      document.body.appendChild(container);
+      const error = vi.spyOn(console, 'error');
+      let root: ReturnType<typeof hydrateRoot> | undefined;
+      try {
+        await act(async () => {
+          root = hydrateRoot(container, element);
+        });
+        expect(error).not.toHaveBeenCalled();
+        expectMarked(toggle());
+      } finally {
+        act(() => root?.unmount());
+        container.remove();
+      }
+    });
+
+    it('an open category is not marked: its sub-item shows the current page', async () => {
+      const user = userEvent.setup();
+      render(<SampleNav defaultValue="api" />);
+      expect(toggle()).toHaveAttribute('aria-expanded', 'true');
+      expectUnmarked(toggle());
+      expect(button('API')).toHaveAttribute('aria-current', 'page');
+      await user.click(toggle());
+      expectMarked(toggle());
+      await user.click(toggle());
+      expectUnmarked(toggle());
+    });
+
+    it('selecting a sub-item and then closing its category marks it', async () => {
+      const user = userEvent.setup();
+      render(<SampleNav defaultValue="home" />);
+      expectUnmarked(toggle());
+      await user.click(toggle());
+      await user.click(button('Introduction'));
+      await user.click(toggle());
+      expect(toggle()).toHaveAttribute('aria-expanded', 'false');
+      expectMarked(toggle());
+    });
+
+    it('remembers the category of a sub-item a component renders once it has been shown', async () => {
+      const user = userEvent.setup();
+      render(
+        <React.StrictMode>
+          <GuidesNav defaultValue="home" />
+        </React.StrictMode>,
+      );
+      await user.click(guides());
+      await user.click(button('Deploy'));
+      expect(button('Deploy')).toHaveAttribute('aria-current', 'page');
+      await user.click(guides());
+      expectMarked(guides());
+      expectUnmarked(toggle());
+    });
+
+    it('a sub-item a component renders, never shown, is marked only through currentCategory', () => {
+      const { rerender } = render(<GuidesNav value="deploy" />);
+      expect(guides()).toHaveAttribute('aria-expanded', 'false');
+      expectUnmarked(guides());
+      rerender(<GuidesNav value="deploy" currentCategory="guides" />);
+      expectMarked(guides());
+      expectUnmarked(toggle());
+    });
+
+    it('currentCategory marks its category only while it is closed', async () => {
+      const user = userEvent.setup();
+      render(<GuidesNav defaultValue="deploy" currentCategory="guides" />);
+      expectMarked(guides());
+      await user.click(guides());
+      expectUnmarked(guides());
+      expect(button('Deploy')).toHaveAttribute('aria-current', 'page');
+    });
+
+    it('changing the current value to a top-level item clears the mark', async () => {
+      const user = userEvent.setup();
+      const { rerender } = render(<GuidesNav value="intro" defaultOpenCategories={[]} />);
+      expectMarked(toggle());
+      rerender(<GuidesNav value="home" defaultOpenCategories={[]} />);
+      expectUnmarked(toggle());
+
+      // A remembered sub-item counts only while its value is current.
+      await user.click(guides());
+      rerender(<GuidesNav value="setup" defaultOpenCategories={[]} />);
+      await user.click(guides());
+      expectMarked(guides());
+      rerender(<GuidesNav value="home" defaultOpenCategories={[]} />);
+      expectUnmarked(guides());
+      rerender(<GuidesNav value="setup" defaultOpenCategories={[]} />);
+      expectMarked(guides());
+    });
+
+    it('forgets the remembered category of a value that moves out of it', async () => {
+      const user = userEvent.setup();
+      /** `moved`: the current page becomes a top-level item instead of a Guides sub-item. */
+      function Restructured({ moved }: { moved: boolean }) {
+        return (
+          <Nav value="deploy" defaultOpenCategories={['guides']}>
+            {moved && <Nav.Item value="deploy">Deploy</Nav.Item>}
+            <Nav.Category value="guides" label="Guides">
+              {moved ? <Nav.SubItem value="setup">Setup</Nav.SubItem> : <GuideLinks />}
+            </Nav.Category>
+          </Nav>
+        );
+      }
+      const { rerender } = render(<Restructured moved={false} />);
+      expect(button('Deploy')).toHaveAttribute('aria-current', 'page');
+      rerender(<Restructured moved />);
+      await user.click(guides());
+      expect(guides()).toHaveAttribute('aria-expanded', 'false');
+      expectUnmarked(guides());
+      expect(button('Deploy')).toHaveAttribute('aria-current', 'page');
+    });
+
+    it('a value moved into another closed category marks only that category', async () => {
+      const user = userEvent.setup();
+      /** `moved`: the current page moves from the Guides category into the closed Docs category. */
+      function Restructured({ moved }: { moved: boolean }) {
+        return (
+          <Nav value="deploy" defaultOpenCategories={['guides']}>
+            <Nav.Category value="guides" label="Guides">
+              {moved ? <Nav.SubItem value="setup">Setup</Nav.SubItem> : <GuideLinks />}
+            </Nav.Category>
+            <Nav.Category value="docs" label="Docs">
+              <Nav.SubItem value="intro">Introduction</Nav.SubItem>
+              {moved && <Nav.SubItem value="deploy">Deploy</Nav.SubItem>}
+            </Nav.Category>
+          </Nav>
+        );
+      }
+      const { rerender } = render(<Restructured moved={false} />, { wrapper: React.StrictMode });
+      expect(button('Deploy')).toHaveAttribute('aria-current', 'page');
+      await user.click(guides());
+      expectMarked(guides());
+      expectUnmarked(toggle());
+
+      rerender(<Restructured moved />);
+      expect(toggle()).toHaveAttribute('aria-expanded', 'false');
+      expectMarked(toggle());
+      expectUnmarked(guides());
+      // Opening and closing the old category does not bring its mark back.
+      await user.click(guides());
+      await user.click(guides());
+      expectUnmarked(guides());
+      expectMarked(toggle());
+    });
+
+    it('stops marking a closed category once its children no longer hold the current value', () => {
+      /** `listed`: whether the current page is still one of the Docs sub-items. */
+      function Pruned({ listed }: { listed: boolean }) {
+        return (
+          <Nav value="api" defaultOpenCategories={[]}>
+            <Nav.Category value="docs" label="Docs">
+              <Nav.SubItem value="intro">Introduction</Nav.SubItem>
+              {listed && <Nav.SubItem value="api">API</Nav.SubItem>}
+            </Nav.Category>
+          </Nav>
+        );
+      }
+      const { rerender } = render(<Pruned listed />, { wrapper: React.StrictMode });
+      expectMarked(toggle());
+      rerender(<Pruned listed={false} />);
+      expectUnmarked(toggle());
+      rerender(<Pruned listed />);
+      expectMarked(toggle());
+    });
+
+    it('has no axe violations with a marked category', async () => {
+      render(<GuidesNav defaultValue="intro" defaultOpenCategories={[]} currentCategory="docs" />);
+      expectMarked(toggle());
+      await expectNoA11yViolations();
+    });
+
+    it('types currentCategory as an optional string', () => {
+      expectTypeOf<NavProps['currentCategory']>().toEqualTypeOf<string | undefined>();
     });
   });
 

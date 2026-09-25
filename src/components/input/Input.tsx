@@ -216,7 +216,9 @@ export const Input = ({
           'inline-flex h-8 w-full items-center rounded border border-input border-b-stroke-accessible bg-background text-body-1 text-foreground',
           inputFocusWithin,
           invalidLook && inputInvalidWithin,
-          props.disabled && 'cursor-not-allowed opacity-50',
+          // The dimmed look lifts while a focus ring shows inside the wrapper (focusable slot
+          // content; the disabled input never takes focus): opacity would dim the ring below 3:1.
+          props.disabled && 'cursor-not-allowed opacity-50 has-focus-visible:opacity-100',
           className,
         )}
       >

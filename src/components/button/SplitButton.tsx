@@ -1,9 +1,12 @@
 import * as React from 'react';
 import { cn } from '../../lib/cn';
+import { warnOnce } from '../../lib/dev';
 import { ChevronDownIcon } from '../../lib/icons';
 import { mergeProps } from '../../lib/mergeProps';
-import type { Size, Appearance } from '../../lib/types';
+import { slotRendersContent } from '../../lib/slot';
+import type { Size, Appearance, IconPosition, Slot } from '../../lib/types';
 import { Button } from './Button';
+import { unwrapButtonGlyph } from './Button.slots';
 
 /**
  * Props for one half of a SplitButton (`menuButtonProps`, `primaryActionButtonProps`): native
@@ -12,6 +15,12 @@ import { Button } from './Button';
  * joined and any other value you pass wins.
  */
 export interface SplitButtonMenuButtonProps extends React.ButtonHTMLAttributes<HTMLButtonElement> {
+  /**
+   * Makes only this half unavailable but focusable (see `SplitButton.disabledFocusable`, which
+   * affects both halves). For each half, focusable-disabled wins over natively disabled.
+   * @default false
+   */
+  disabledFocusable?: boolean;
   /** Ref to the `<button>` element of this half. */
   ref?: React.Ref<HTMLButtonElement>;
   /** Any `data-*` attribute. */
@@ -29,6 +38,38 @@ export interface SplitButtonProps extends Omit<React.HTMLAttributes<HTMLDivEleme
    * @default false
    */
   disabled?: boolean;
+  /**
+   * Makes both halves unavailable but focusable (see `Button.disabledFocusable`): each half
+   * renders `aria-disabled="true"`, `data-disabled` and `data-disabled-focusable`, stays in the tab
+   * order, and neither `onClick` nor the menu opens. A half's own `disabledFocusable` (in
+   * `primaryActionButtonProps`/`menuButtonProps`) affects only that half. For each half,
+   * focusable-disabled wins over natively disabled: the half is focusable-disabled when the root's
+   * or its own `disabledFocusable` is set; otherwise it is natively disabled when the root's or its
+   * own `disabled` is set.
+   * @default false
+   */
+  disabledFocusable?: boolean;
+  /**
+   * Icon of the primary action, decorative (`aria-hidden`). For an icon-only primary action pass
+   * `primaryActionButtonProps={{ 'aria-label': '…' }}`.
+   */
+  icon?: Slot<'span'>;
+  /**
+   * Where the primary action's icon renders: before its label (the inline start) or after it.
+   * Has no effect on an icon-only primary action. The menu half is not affected.
+   * @default 'before'
+   */
+  iconPosition?: IconPosition;
+  /**
+   * Replaces the chevron of the menu half (decorative, `aria-hidden`). The menu half always shows
+   * an indicator: `null` and `undefined` keep the default chevron, and so does a value that renders
+   * nothing (`false`, `''`, an empty array), which also logs a development warning. Unlike
+   * `MenuButton.menuIcon`, a value that renders nothing does not hide the indicator. A `<button>`
+   * or `Button` element, or a slot object whose `as` is one, is not nested inside the menu half:
+   * its children become the glyph (the chevron when they render nothing), its props (`icon`
+   * included) are dropped, and a development warning says so.
+   */
+  menuIcon?: Slot<'span'>;
   /** Visual style variant.
    * @default 'outline'
    */
@@ -95,6 +136,10 @@ const halfClasses = 'relative min-h-6 focus-visible:z-10';
  * - `primaryActionButtonProps` / `menuButtonProps` reach the two buttons; the menu button is
  *   named by `menuButtonLabel` (default `'More options'`).
  * - The menu button is at least 24×24 px at every size, so an extra-small SplitButton is 24px tall.
+ * - `icon`/`iconPosition` belong to the primary action; `menuIcon` replaces the chevron, which the
+ *   menu half always shows (a `menuIcon` that renders nothing keeps it).
+ * - `disabledFocusable` keeps both halves focusable while unavailable; `Menu.Trigger` does not open
+ *   its menu from an `aria-disabled` menu half.
  *
  * @example
  * <Menu>
@@ -110,6 +155,10 @@ export const SplitButton = ({
   appearance = 'outline',
   size = 'medium',
   disabled = false,
+  disabledFocusable = false,
+  icon,
+  iconPosition,
+  menuIcon,
   className,
   children,
   onClick,
@@ -135,6 +184,34 @@ export const SplitButton = ({
     menuButtonProps,
   );
 
+  // Per half: focusable-disabled (the root's or its own) wins over natively disabled.
+  const primaryFocusable = disabledFocusable || Boolean(primary.disabledFocusable);
+  const menuFocusable = disabledFocusable || Boolean(menu.disabledFocusable);
+
+  // The glyph sits inside the menu half's button: a button passed as `menuIcon` is unwrapped (its
+  // children are the glyph), never nested (C-SLOTS).
+  const { glyph: menuGlyph, button: menuIconButton } = unwrapButtonGlyph(menuIcon);
+  // The menu half always shows an indicator: a `menuIcon` that renders nothing keeps the chevron.
+  const menuIconRenders = slotRendersContent(menuGlyph);
+  // An unwrapped button reports its own warning only.
+  const menuIconEmpty = menuIconButton === null && menuIcon != null && !menuIconRenders;
+  React.useEffect(() => {
+    if (menuIconEmpty) {
+      warnOnce(
+        'SplitButton:menuIcon-empty',
+        'SplitButton: `menuIcon` renders nothing, so the menu button shows the default chevron. Unlike `MenuButton`, a SplitButton always shows a menu indicator: pass an icon, or leave `menuIcon` unset.',
+      );
+    }
+  }, [menuIconEmpty]);
+  React.useEffect(() => {
+    if (menuIconButton) {
+      warnOnce(
+        'SplitButton:menuIcon-button',
+        `SplitButton: \`menuIcon\` received ${menuIconButton}; its children render as the glyph of the menu button and its props were dropped (buttons cannot be nested). Pass icon content instead, e.g. \`menuIcon={<MyIcon />}\`.`,
+      );
+    }
+  }, [menuIconButton]);
+
   // `role="group"` applies wherever the consumer's role is `undefined` or `null` (as in Button).
   return (
     <div
@@ -147,7 +224,10 @@ export const SplitButton = ({
         {...primary}
         appearance={appearance}
         size={size}
-        disabled={disabled || primary.disabled}
+        disabled={!primaryFocusable && (disabled || Boolean(primary.disabled))}
+        disabledFocusable={primaryFocusable}
+        icon={icon}
+        iconPosition={iconPosition}
         className={cn(halfClasses, 'rounded-e-none border-e-0', primary.className)}
       >
         {children}
@@ -156,8 +236,9 @@ export const SplitButton = ({
         {...menu}
         appearance={appearance}
         size={size}
-        disabled={disabled || menu.disabled}
-        icon={<ChevronDownIcon />}
+        disabled={!menuFocusable && (disabled || Boolean(menu.disabled))}
+        disabledFocusable={menuFocusable}
+        icon={menuIconRenders ? menuGlyph : <ChevronDownIcon />}
         className={cn(
           halfClasses,
           menuButtonSizeClasses[size],

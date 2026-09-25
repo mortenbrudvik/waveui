@@ -2,15 +2,19 @@ import * as React from 'react';
 import { cn } from '../../lib/cn';
 import { composeEventHandlers } from '../../lib/composeEventHandlers';
 import { warnDeprecated } from '../../lib/dev';
-import { disabledStyles, inputBase, inputFocus, inputInvalid } from '../../lib/styles';
+import { DismissIcon } from '../../lib/icons';
+import type { Slot } from '../../lib/slot';
+import { disabledStyles, focusRing, inputBase, inputFocus, inputInvalid } from '../../lib/styles';
 import { useControllable } from '../../hooks/useControllable';
 import { useFieldContext, useFieldControl } from '../../hooks/useFieldControl';
 import { useFormReset } from '../../hooks/useFormReset';
 import { collectOptionLabels, useListbox, type ListboxItem } from '../../hooks/useListbox';
 import { useMergedRefs } from '../../hooks/useMergedRefs';
 import { HiddenInput } from '../internal/HiddenInput';
+import { PickerExpandButton, showsExpandButton } from './Combobox.expand';
 import { isInvalidLook } from './Input';
 import { ListboxSurface, Option, OptionGroup, useListboxPopup } from './Option';
+import { PICKER_ICON_BUTTON_CLASSES, pickerEndPadding } from './pickerStyles';
 import type { RoutedHandlers } from './routedHandlers';
 
 export { Option, OptionGroup } from './Option';
@@ -29,6 +33,14 @@ export interface ComboboxLabels {
    * @default 'No matches'
    */
   noMatches?: string;
+  /** Name of the clear button (`clearable`).
+   * @default 'Clear selection'
+   */
+  clear?: string;
+  /** Name of the expand button at the end of the input.
+   * @default 'Show options'
+   */
+  expand?: string;
 }
 
 /** Properties for the Combobox component. */
@@ -107,7 +119,27 @@ export interface ComboboxProps extends Omit<
    * `disabled`) on while the listbox is open closes it (`onOpenChange(false)`).
    */
   readOnly?: boolean;
-  /** The built-in "No matches" text, for localization. Unset members keep their English defaults. */
+  /**
+   * Shows a clear button while a value is selected (not while `readOnly`; while `disabled` it is
+   * shown disabled, as in DatePicker and TimePicker). It clears the value
+   * (`onValueChange('')`), drops typed text, closes the list and moves focus to the input. It is
+   * a tab stop after the input.
+   * @default false
+   */
+  clearable?: boolean;
+  /**
+   * The glyph of the expand button at the end of the input (default: a chevron). The button
+   * opens and closes the list without moving focus out of the input and is not a tab stop
+   * (Alt+ArrowDown opens the list from the keyboard). `null` or `undefined` keep the chevron;
+   * `false`, or a value that renders nothing, hides the button. Decorative content rendered
+   * inside the built-in button: a `<button>` or `Button` passed here is not nested (its children
+   * become the glyph, with a development warning).
+   */
+  expandIcon?: Slot<'span'>;
+  /**
+   * The built-in texts (the "No matches" status and the names of the clear and expand buttons),
+   * for localization. Unset members keep their English defaults.
+   */
   labels?: ComboboxLabels;
   /** Called when the `<input role="combobox">` receives focus (the root keeps other handlers). */
   onFocus?: React.FocusEventHandler<HTMLInputElement>;
@@ -150,6 +182,8 @@ const ComboboxRoot = (props: ComboboxProps) => {
     autoCorrect,
     maxLength,
     readOnly,
+    clearable = false,
+    expandIcon,
     labels,
     inputMode,
     spellCheck,
@@ -343,6 +377,30 @@ const ComboboxRoot = (props: ComboboxProps) => {
     if (freeform) commitText(text);
   };
 
+  // The expand button opens and closes the list like the input's own keys; focus stays in (or
+  // returns to) the input.
+  const handleExpandClick = () => {
+    if (!interactive) return;
+    if (open) close();
+    else setOpen(true);
+    inputRef.current?.focus();
+  };
+
+  // Clearing is not an option activation: the state is set directly, not through `commitText`
+  // (which calls the deprecated `onOptionSelect` in freeform mode). The button disappears with the
+  // value, so focus moves to the input explicitly (C-DISABLED).
+  const handleClear = () => {
+    setValue('');
+    setTypedValue(null);
+    setDraft(null);
+    setOpen(false);
+    inputRef.current?.focus();
+  };
+
+  const showExpand = showsExpandButton(expandIcon);
+  // Read-only comboboxes offer no clear action (the value cannot change).
+  const showClear = clearable && value !== '' && !readOnly;
+
   const listLabelledBy =
     fieldProps['aria-label'] === undefined
       ? (fieldProps['aria-labelledby'] ?? field?.labelId)
@@ -350,46 +408,78 @@ const ComboboxRoot = (props: ComboboxProps) => {
 
   return (
     <div {...rest} ref={rootMergedRef} className={cn('relative inline-flex flex-col', className)}>
-      <input
-        type="text"
-        autoComplete={autoComplete}
-        {...fieldProps}
-        {...listbox.getComboboxProps()}
-        aria-expanded={expanded}
-        aria-errormessage={ariaErrorMessage}
-        aria-details={ariaDetails}
-        ref={inputMergedRef}
-        disabled={disabled}
-        readOnly={readOnly}
-        placeholder={placeholder}
-        autoCapitalize={autoCapitalize}
-        autoCorrect={autoCorrect}
-        maxLength={maxLength}
-        inputMode={inputMode}
-        spellCheck={spellCheck}
-        enterKeyHint={enterKeyHint}
-        autoFocus={autoFocus}
-        tabIndex={tabIndex}
-        value={inputText}
-        onChange={handleChange}
-        onClick={() => {
-          if (!open && interactive) setOpen(true);
-        }}
-        // Read-only: no listbox keys at all (they would open, commit or clear the value).
-        onKeyDown={composeEventHandlers(onKeyDown, readOnly ? undefined : handleKeyDown)}
-        onKeyUp={composeEventHandlers(onKeyUp, listbox.onKeyUp)}
-        onFocus={onFocus}
-        onBlur={composeEventHandlers(onBlur, () => setDraft(null), {
-          checkDefaultPrevented: false,
-        })}
-        className={cn(
-          inputBase,
-          'border-b-stroke-accessible',
-          inputFocus,
-          disabledStyles,
-          invalidLook && inputInvalid,
+      <div className="relative flex items-center">
+        <input
+          type="text"
+          autoComplete={autoComplete}
+          {...fieldProps}
+          {...listbox.getComboboxProps()}
+          aria-expanded={expanded}
+          aria-errormessage={ariaErrorMessage}
+          aria-details={ariaDetails}
+          ref={inputMergedRef}
+          disabled={disabled}
+          readOnly={readOnly}
+          placeholder={placeholder}
+          autoCapitalize={autoCapitalize}
+          autoCorrect={autoCorrect}
+          maxLength={maxLength}
+          inputMode={inputMode}
+          spellCheck={spellCheck}
+          enterKeyHint={enterKeyHint}
+          autoFocus={autoFocus}
+          tabIndex={tabIndex}
+          value={inputText}
+          onChange={handleChange}
+          onClick={() => {
+            if (!open && interactive) setOpen(true);
+          }}
+          // Read-only: no listbox keys at all (they would open, commit or clear the value).
+          onKeyDown={composeEventHandlers(onKeyDown, readOnly ? undefined : handleKeyDown)}
+          onKeyUp={composeEventHandlers(onKeyUp, listbox.onKeyUp)}
+          onFocus={onFocus}
+          onBlur={composeEventHandlers(onBlur, () => setDraft(null), {
+            checkDefaultPrevented: false,
+          })}
+          className={cn(
+            inputBase,
+            'border-b-stroke-accessible',
+            inputFocus,
+            disabledStyles,
+            invalidLook && inputInvalid,
+            pickerEndPadding(Number(showClear) + Number(showExpand)),
+          )}
+        />
+        {showClear && (
+          <button
+            type="button"
+            aria-label={labels?.clear ?? 'Clear selection'}
+            disabled={disabled}
+            // Keeps focus in the input, so its blur does not act on a draft before the clear.
+            onMouseDown={(event) => event.preventDefault()}
+            onClick={handleClear}
+            className={cn(
+              PICKER_ICON_BUTTON_CLASSES,
+              showExpand ? 'end-7' : 'end-1',
+              focusRing,
+              disabledStyles,
+            )}
+          >
+            <DismissIcon />
+          </button>
         )}
-      />
+        {showExpand && (
+          <PickerExpandButton
+            component="Combobox"
+            expandIcon={expandIcon}
+            label={labels?.expand ?? 'Show options'}
+            expanded={expanded}
+            listboxId={listbox.listboxId}
+            disabled={disabled || !!readOnly}
+            onToggle={handleExpandClick}
+          />
+        )}
+      </div>
       {/* Mounted before its text: a live region added together with its text is not announced by
           every screen reader. The row in the popup is the visible copy. */}
       <span role="status" className="sr-only">
@@ -442,6 +532,9 @@ export const ComboboxOptionGroup = OptionGroup;
  * filter: its first match becomes active while typing, and the input shows the selected option's
  * label again when the listbox closes. With `freeform` the text itself is the value. Text that
  * matches no option shows "No matches" (`labels.noMatches`), announced through a status region.
+ * The expand button at the end of the input (a chevron, see `expandIcon`) opens and closes the
+ * list without taking focus from the input and is not a tab stop; `clearable` adds a clear button,
+ * a tab stop after the input. Both sit with the input in a wrapper `<div>` inside the root.
  *
  * The `<input>` receives `id`, `aria-label`, `aria-labelledby`, `aria-describedby`,
  * `aria-invalid`, `aria-required`, `aria-errormessage`, `aria-details`, `tabIndex`, `autoFocus`,

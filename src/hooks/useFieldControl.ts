@@ -1,11 +1,12 @@
 import * as React from 'react';
 import { joinIds } from '../lib/aria';
+import type { ValidationState } from '../lib/types';
 import { useId } from './useId';
 
 /**
- * What a `Field` tells the controls inside it: the ids of its label, hint and error, and its
- * invalid and required state. `Field` provides it; every library input reads it through
- * {@link useFieldControl}, and so can your own control.
+ * What a `Field` tells the controls inside it: the ids of its label, hint and validation message,
+ * and its validation, invalid and required state. `Field` provides it; every library input reads
+ * it through {@link useFieldControl}, and so can your own control.
  */
 export interface FieldContextValue {
   /** The id the Field's `<label htmlFor>` points at. */
@@ -14,9 +15,12 @@ export interface FieldContextValue {
   labelId: string | undefined;
   /** The id of the rendered hint, if any. */
   hintId: string | undefined;
-  /** The id of the rendered error message, if any. */
+  /**
+   * The id of the rendered error message, if any: set only while the validation message is an
+   * error (see `validationMessageId` for every state).
+   */
   errorId: string | undefined;
-  /** Whether the Field is in an error state. */
+  /** Whether the Field is in an error state (only the `error` validation state is invalid). */
   invalid: boolean;
   /** Whether the Field is required. */
   required: boolean;
@@ -40,6 +44,16 @@ export interface FieldContextValue {
    * Field. Absent: every control without an `id` uses `controlId`.
    */
   controlIdClaim?: FieldControlIdClaim;
+  /**
+   * The Field's validation state (`validationState`, or `'error'` from `error`). Absent in
+   * contexts built before 0.6: read it as `invalid ? 'error' : 'none'`.
+   */
+  validationState?: ValidationState;
+  /**
+   * The id of the rendered validation message in any state (error, warning, success, neutral).
+   * `errorId` is set only while that message is an error.
+   */
+  validationMessageId?: string;
 }
 
 /**
@@ -204,9 +218,12 @@ export interface UseFieldControlOptions {
  *   `aria-labelledby`; otherwise, when the control is not labelable **or** its id is not the
  *   Field's `controlId` (it carries its own id, or is not the Field's first child, so
  *   `<label htmlFor>` does not reach it), the consumer's ids plus the Field's `labelId`.
- * - `aria-describedby`: the consumer's ids, then the Field's error and hint ids (deduplicated).
+ * - `aria-describedby`: the consumer's ids, then the Field's validation message
+ *   (`validationMessageId`, else `errorId`), then its hint (deduplicated). A warning, success or
+ *   neutral message describes the control too.
  * - `aria-invalid` / `aria-required`: the consumer's value, else `true` when the Field is
- *   invalid/required (`aria-required`: not when the consumer passes `required={false}`).
+ *   invalid/required (`aria-required`: not when the consumer passes `required={false}`). Only the
+ *   `error` validation state makes the Field invalid.
  * - `required`: only with `nativeRequired` — the consumer's value, else the Field's `required`.
  * - `aria-label`: passed through.
  *
@@ -255,8 +272,9 @@ export function useFieldControl(
     labelledBy = joinIds(labelledBy, field.labelId);
   }
 
+  // The message in any validation state (a context built before 0.6 has only `errorId`).
   const describedBy = field
-    ? joinIds(props['aria-describedby'], field.errorId, field.hintId)
+    ? joinIds(props['aria-describedby'], field.validationMessageId ?? field.errorId, field.hintId)
     : props['aria-describedby'];
   const invalid = props['aria-invalid'] ?? (field?.invalid || undefined);
   // A consumer `required={false}` (native controls pass `required`) also keeps the Field's

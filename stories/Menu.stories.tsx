@@ -108,3 +108,56 @@ export const WithTrigger: Story = {
     ),
   },
 };
+
+const LONG_MENU_ITEMS = Array.from({ length: 40 }, (_, index) => `Command ${index + 1}`);
+
+/**
+ * A menu taller than the space next to its trigger: `Menu.Popover` is limited to the available
+ * height and scrolls inside the viewport. Moving focus with the arrow keys, Home, End or typeahead
+ * scrolls the focused item into view.
+ */
+export const LongMenu: Story = {
+  args: {
+    'aria-label': undefined,
+    onOpenChange: fn(),
+    children: (
+      <>
+        <Menu.Trigger>
+          <Button>Commands</Button>
+        </Menu.Trigger>
+        <Menu.Popover>
+          {LONG_MENU_ITEMS.map((label) => (
+            <Menu.Item key={label} onClick={fn()}>
+              {label}
+            </Menu.Item>
+          ))}
+        </Menu.Popover>
+      </>
+    ),
+  },
+};
+
+/**
+ * A `max-h-*` class on `Menu.Popover` replaces the limit to the available height: this menu stops
+ * at 256px (`max-h-64`) and scrolls, also where the viewport leaves it more room.
+ */
+export const LongMenuMaxHeight: Story = {
+  args: {
+    'aria-label': undefined,
+    onOpenChange: fn(),
+    children: (
+      <>
+        <Menu.Trigger>
+          <Button>Commands</Button>
+        </Menu.Trigger>
+        <Menu.Popover className="max-h-64">
+          {LONG_MENU_ITEMS.map((label) => (
+            <Menu.Item key={label} onClick={fn()}>
+              {label}
+            </Menu.Item>
+          ))}
+        </Menu.Popover>
+      </>
+    ),
+  },
+};

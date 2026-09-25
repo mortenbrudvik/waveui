@@ -52,8 +52,9 @@ const TOOLBAR_ITEM_SELECTOR =
  *   `tabIndex` itself (one `0`, the rest `-1`). The `type="hidden"` input that a named value
  *   control renders never counts as a control, and controls that CSS hides are skipped.
  * - Left/Right (Up/Down when `orientation="vertical"`) move focus and wrap; Home/End jump to the
- *   first/last control; Left/Right are mirrored in RTL. Disabled controls are skipped, also when
- *   a child disables them on its own.
+ *   first/last control; Left/Right are mirrored in RTL. Natively disabled controls are skipped,
+ *   also when a child disables them on its own; `disabledFocusable` ones stay in the arrow-key
+ *   order (APG), so a Tooltip can explain why they are unavailable.
  * - Tab returns to the last focused control. Focusing a nested composite (radio group, tab list)
  *   or a text field, select, slider or spin button keeps the Tab stop where it was.
  * - Text fields, selects, sliders, spin buttons and editable comboboxes keep their own arrow keys

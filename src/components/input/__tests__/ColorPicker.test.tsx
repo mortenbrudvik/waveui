@@ -3,6 +3,7 @@ import { describe, it, expect, vi } from 'vitest';
 import { act, fireEvent, render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { ColorPicker } from '../ColorPicker';
+import { Field } from '../Field';
 import { focusRing, inputInvalid } from '../../../lib/styles';
 import { expectNoA11yViolations, testSystemProps } from '../../../test-utils';
 import { renderWithFieldContext, FIELD_TEST_IDS, FIELD_TEST_TEXT } from '../../../test-utils-field';
@@ -694,6 +695,30 @@ describe('ColorPicker — Field integration (FieldContext)', () => {
     expect(hexInput()).toHaveAccessibleDescription(
       `Enter a hex color such as #0f6cbd. ${FIELD_TEST_TEXT.error}`,
     );
+  });
+
+  it('describes the hex textbox with a Field warning message, without marking it invalid', () => {
+    renderWithFieldContext(<ColorPicker />, {
+      validationState: 'warning',
+      validationMessageId: FIELD_TEST_IDS.messageId,
+      hintId: FIELD_TEST_IDS.hintId,
+    });
+    expect(hexInput()).toHaveAccessibleDescription(FIELD_TEST_TEXT.message);
+    expect(hexInput()).not.toHaveAttribute('aria-invalid');
+    expect(screen.getByRole('group', { name: FIELD_TEST_TEXT.label })).toHaveAccessibleDescription(
+      `${FIELD_TEST_TEXT.message} ${FIELD_TEST_TEXT.hint}`,
+    );
+  });
+
+  it('inside a Field with a warning message, the hex textbox is described by it', async () => {
+    render(
+      <Field label="Accent" validationState="warning" validationMessage="Low contrast on white">
+        <ColorPicker />
+      </Field>,
+    );
+    expect(hexInput()).toHaveAccessibleDescription('Low contrast on white');
+    expect(hexInput()).not.toHaveAttribute('aria-invalid');
+    await expectNoA11yViolations();
   });
 
   it('routes a consumer aria-invalid to the hex textbox', () => {

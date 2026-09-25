@@ -1,18 +1,48 @@
 import * as React from 'react';
 import type { Meta, StoryObj } from '@storybook/react';
 import { fn } from 'storybook/test';
-import { Dialog, Button } from '../src';
+import { Dialog, Button, Field, Input } from '../src';
+import type { DialogProps } from '../src';
 
 /** Stories that render the dialog open show it in an iframe, so the docs page stays usable. */
 const openStoryParameters = {
   docs: { story: { inline: false, iframeHeight: 480 } },
 };
 
+const modalTypes = ['modal', 'alert'] as const satisfies readonly NonNullable<
+  DialogProps['modalType']
+>[];
+
+/** The fields of the LongContent form. */
+const shippingFields = [
+  'Full name',
+  'Company',
+  'Email',
+  'Phone',
+  'Address line 1',
+  'Address line 2',
+  'City',
+  'State or region',
+  'Postal code',
+  'Country',
+  'Delivery contact',
+  'Contact phone',
+  'Gate code',
+  'Floor',
+  'Building',
+  'Preferred day',
+  'Preferred time',
+  'Order reference',
+  'Cost centre',
+  'Notes for the driver',
+];
+
 const meta = {
   title: 'Components/Overlays/Dialog',
   component: Dialog,
   args: {
     defaultOpen: false,
+    modalType: 'modal',
     onOpenChange: fn(),
     children: (
       <>
@@ -35,6 +65,7 @@ const meta = {
   },
   argTypes: {
     children: { control: false },
+    modalType: { control: 'select', options: modalTypes },
   },
 } satisfies Meta<typeof Dialog>;
 
@@ -127,13 +158,126 @@ export const NarrowViewport: Story = {
   parameters: openStoryParameters,
 };
 
+/**
+ * `modalType="alert"`: a confirmation that needs an answer. The surface is `role="alertdialog"`,
+ * and a backdrop press does not close it (Escape, the Close button and `Dialog.Close` still do).
+ * The least destructive action comes first.
+ */
+export const AlertDialog: Story = {
+  args: {
+    modalType: 'alert',
+    children: (
+      <>
+        <Dialog.Trigger>
+          <Button>Delete file</Button>
+        </Dialog.Trigger>
+        <Dialog.Content title="Delete report.pdf?" size="small">
+          <p>The file is deleted permanently. This cannot be undone.</p>
+          <Dialog.Footer>
+            <Dialog.Close>
+              <Button appearance="subtle">Cancel</Button>
+            </Dialog.Close>
+            <Dialog.Close>
+              <Button appearance="primary">Delete</Button>
+            </Dialog.Close>
+          </Dialog.Footer>
+        </Dialog.Content>
+      </>
+    ),
+  },
+};
+
+/**
+ * `onOpenChange` receives the reason of each request as its second argument (`details.reason`,
+ * with the DOM event as `details.event`). This controlled dialog ignores a backdrop press
+ * (`outside-press`) while the form has unsaved changes, so a stray click does not lose them;
+ * Escape, the Close button and Cancel still close it.
+ */
+export const UnsavedChanges: Story = {
+  render: function UnsavedChangesDialog(args) {
+    const [open, setOpen] = React.useState(false);
+    const [name, setName] = React.useState('');
+    const dirty = name !== '';
+    const handleOpenChange: NonNullable<DialogProps['onOpenChange']> = (next, details) => {
+      args.onOpenChange?.(next, details);
+      if (!next && dirty && details?.reason === 'outside-press') return;
+      setOpen(next);
+      if (!next) setName('');
+    };
+    return (
+      // The story owns the controlled pair; every other arg is forwarded.
+      <Dialog {...args} open={open} onOpenChange={handleOpenChange}>
+        <Dialog.Trigger>
+          <Button appearance="primary">Rename project</Button>
+        </Dialog.Trigger>
+        <Dialog.Content title="Rename project">
+          <Field
+            label="New name"
+            hint={
+              dirty
+                ? 'Unsaved changes: a click outside the dialog keeps it open.'
+                : 'Type a name, then click outside the dialog.'
+            }
+          >
+            <Input value={name} onValueChange={setName} />
+          </Field>
+          <Dialog.Footer>
+            <Dialog.Close>
+              <Button appearance="subtle">Cancel</Button>
+            </Dialog.Close>
+            <Dialog.Close>
+              <Button appearance="primary">Save</Button>
+            </Dialog.Close>
+          </Dialog.Footer>
+        </Dialog.Content>
+      </Dialog>
+    );
+  },
+};
+
+/**
+ * A form taller than the viewport inside the dialog: the body scrolls and `Dialog.Footer`, the
+ * form's last child, sticks to its bottom with an opaque background. The body reserves the
+ * footer's height as scroll padding, so tabbing to a field under the footer scrolls it into view
+ * above the footer.
+ */
+export const LongContent: Story = {
+  args: {
+    defaultOpen: true,
+    children: (
+      <Dialog.Content title="Shipping details">
+        <form
+          aria-label="Shipping details"
+          className="flex flex-col gap-3"
+          onSubmit={(event) => event.preventDefault()}
+        >
+          {shippingFields.map((field) => (
+            <Field key={field} label={field}>
+              <Input />
+            </Field>
+          ))}
+          <Dialog.Footer>
+            <Dialog.Close>
+              <Button appearance="subtle">Cancel</Button>
+            </Dialog.Close>
+            <Button appearance="primary" type="submit">
+              Save
+            </Button>
+          </Dialog.Footer>
+        </form>
+      </Dialog.Content>
+    ),
+  },
+  parameters: openStoryParameters,
+};
+
 /** The parent owns `open`; the dialog asks to close through `onOpenChange`. */
 export const Controlled: Story = {
   render: function ControlledDialog(args) {
     const [open, setOpen] = React.useState(false);
-    const handleOpenChange = (next: boolean) => {
+    const handleOpenChange: NonNullable<DialogProps['onOpenChange']> = (next, details) => {
       setOpen(next);
-      args.onOpenChange?.(next);
+      args.onOpenChange?.(next, details);
     };
     return (
       <>

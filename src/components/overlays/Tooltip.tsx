@@ -11,7 +11,9 @@ import {
   unwrapFragment,
 } from '../../lib/renderTrigger';
 import type { PopupAlign, PopupSide } from '../../lib/types';
+import { useControllable } from '../../hooks/useControllable';
 import { useId } from '../../hooks/useId';
+import { useIsClient } from '../../hooks/useIsClient';
 import { useDismiss } from '../../hooks/useDismiss';
 import { usePopupPosition } from '../../hooks/usePopupPosition';
 import { useMergedRefs } from '../../hooks/useMergedRefs';
@@ -39,6 +41,23 @@ export interface TooltipProps extends Omit<React.HTMLAttributes<HTMLSpanElement>
    * @default 200
    */
   delay?: number;
+  /**
+   * Controlled open state (Fluent's `visible`). The tooltip still asks to open on hover and focus
+   * (after `delay`) and to close on leave, blur and Escape through `onOpenChange`. The surface
+   * renders only in the browser: an open tooltip is closed in the server HTML and opens once it
+   * has hydrated.
+   */
+  open?: boolean;
+  /**
+   * Initial open state for uncontrolled usage.
+   * @default false
+   */
+  defaultOpen?: boolean;
+  /**
+   * Called with the new open state when it changes (Fluent's `onVisibleChange`). It has no
+   * `details` argument yet.
+   */
+  onOpenChange?: (open: boolean) => void;
   /**
    * How the tooltip relates to its child: `description` adds it to the child's
    * `aria-describedby`; `label` adds it to the child's `aria-labelledby`, naming an icon-only
@@ -241,6 +260,9 @@ function useRelationshipTarget(
  *   immediately on blur, and Escape hides it without closing an enclosing dialog or popover. Focus
  *   and hover inside a popup the child renders in a portal (a DatePicker calendar, a listbox) do
  *   not show it, and the pointer moving onto such a popup hides it.
+ * - The open state is uncontrolled by default (`defaultOpen`). With `open` and `onOpenChange`
+ *   (Fluent's `visible` and `onVisibleChange`) the parent owns it: hover, focus, leave, blur and
+ *   Escape then only ask for a change, and `open` alone shows the surface.
  * - `id` and `aria-*` props given to the Tooltip go to its child, merged with the child's own (the
  *   child's `id` wins, id lists are joined, `aria-expanded`/`aria-controls`/`aria-haspopup` from
  *   the Tooltip win). `className`, `style`, `ref`, `data-*` and event handlers stay on the wrapper
@@ -272,6 +294,9 @@ export const Tooltip = ({
   appearance: appearanceProp,
   variant,
   delay = 200,
+  open: openProp,
+  defaultOpen,
+  onOpenChange,
   relationship = 'description',
   side = 'top',
   align = 'center',
@@ -292,7 +317,11 @@ export const Tooltip = ({
       'variant',
       'appearance',
     ) ?? 'inverted';
-  const [visible, setVisible] = React.useState(false);
+  const [open, setOpen] = useControllable(openProp, defaultOpen ?? false, onOpenChange);
+  // The surface lives in a portal, which renders only in the browser: until then (the server HTML,
+  // hydration) the tooltip is closed; the hidden description is rendered either way.
+  const isClient = useIsClient();
+  const visible = open && isClient;
   const timerRef = React.useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   const wrapperRef = React.useRef<HTMLSpanElement | null>(null);
   const surfaceRef = React.useRef<HTMLSpanElement | null>(null);
@@ -317,22 +346,24 @@ export const Tooltip = ({
     }
   });
 
+  // show, hide and scheduleHide ask for the new state; a controlled tooltip changes only when the
+  // parent updates `open`.
   const show = useEventCallback(() => {
     clearTimer();
     if (visible) return;
     if (delay <= 0) {
-      setVisible(true);
+      setOpen(true);
       return;
     }
     timerRef.current = setTimeout(() => {
       timerRef.current = undefined;
-      setVisible(true);
+      setOpen(true);
     }, delay);
   });
 
   const hide = useEventCallback(() => {
     clearTimer();
-    setVisible(false);
+    setOpen(false);
   });
 
   const scheduleHide = useEventCallback(() => {
@@ -340,7 +371,7 @@ export const Tooltip = ({
     if (!visible) return;
     timerRef.current = setTimeout(() => {
       timerRef.current = undefined;
-      setVisible(false);
+      setOpen(false);
     }, HIDE_DELAY_MS);
   });
 

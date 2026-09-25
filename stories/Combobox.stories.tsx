@@ -8,6 +8,8 @@ const meta = {
   argTypes: {
     disabled: { control: 'boolean' },
     freeform: { control: 'boolean' },
+    clearable: { control: 'boolean' },
+    expandIcon: { control: false },
   },
   args: {
     'aria-label': 'Fruit',
@@ -20,6 +22,7 @@ const meta = {
 export default meta;
 type Story = StoryObj<typeof meta>;
 
+/** The expand button at the end of the input opens and closes the list; it is not a tab stop. */
 export const Default: Story = {
   args: {
     placeholder: 'Select a fruit...',
@@ -67,6 +70,40 @@ export const Grouped: Story = {
           Pea (out of stock)
         </Option>
       </OptionGroup>
+    </Combobox>
+  ),
+};
+
+/** `clearable` adds a clear button while a value is selected, a tab stop after the input. */
+export const Clearable: Story = {
+  args: {
+    defaultValue: 'banana',
+    clearable: true,
+    placeholder: 'Select a fruit...',
+  },
+  render: (args) => (
+    <Combobox {...args}>
+      <Option value="apple">Apple</Option>
+      <Option value="banana">Banana</Option>
+      <Option value="cherry">Cherry</Option>
+    </Combobox>
+  ),
+};
+
+/**
+ * `expandIcon={false}` hides the expand button; typing, a click or Alt+ArrowDown still open the
+ * list.
+ */
+export const WithoutExpandIcon: Story = {
+  args: {
+    expandIcon: false,
+    placeholder: 'Type to search...',
+  },
+  render: (args) => (
+    <Combobox {...args}>
+      <Option value="apple">Apple</Option>
+      <Option value="banana">Banana</Option>
+      <Option value="cherry">Cherry</Option>
     </Combobox>
   ),
 };

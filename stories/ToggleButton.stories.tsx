@@ -2,7 +2,7 @@ import type { Meta, StoryObj } from '@storybook/react';
 import { useState } from 'react';
 import { fn } from 'storybook/test';
 import { ToggleButton, Text } from '../src';
-import { appearanceArgType, sizeArgType } from './_helpers';
+import { appearanceArgType, iconPositionArgType, sizeArgType } from './_helpers';
 
 /** Decorative bold glyph (the ToggleButton hides its icon slot from assistive technology). */
 const BoldIcon = () => (
@@ -17,6 +17,7 @@ const meta = {
   argTypes: {
     ...appearanceArgType,
     ...sizeArgType,
+    ...iconPositionArgType,
   },
   args: {
     children: 'Bold',
@@ -35,10 +36,14 @@ export const Pressed: Story = {
   },
 };
 
-/** The icon is decorative: the label "Bold" is the accessible name. */
+/**
+ * The icon is decorative: the label "Bold" is the accessible name. `iconPosition` puts it before
+ * the label (the default) or, as here, after it.
+ */
 export const WithIcon: Story = {
   args: {
     icon: <BoldIcon />,
+    iconPosition: 'after',
   },
 };
 

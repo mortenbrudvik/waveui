@@ -140,6 +140,84 @@ export const ToasterTopStart: Story = {
   ),
 };
 
+/** Dispatches a burst of five toasts built from the story args. */
+function BurstDemo({ status, title, children }: ToastProps) {
+  const { dispatchToast } = useToastController();
+  const body = typeof children === 'string' ? children : undefined;
+  return (
+    <Button
+      appearance="primary"
+      onClick={() => {
+        for (let count = 1; count <= 5; count += 1) {
+          dispatchToast({ status, title: `${title ?? 'Notification'} (${count} of 5)`, body });
+        }
+      }}
+    >
+      Show five toasts
+    </Button>
+  );
+}
+
+/**
+ * `limit={3}` shows at most three toasts at once. A burst of five shows three; the other two wait
+ * in dispatch order, unannounced and without a running timer, and appear as shown toasts go.
+ */
+export const Limit: Story = {
+  args: {
+    title: 'File uploaded',
+    status: 'success',
+    children: 'The file is ready to share.',
+  },
+  render: (args) => (
+    <Toaster limit={3}>
+      <BurstDemo {...args} />
+    </Toaster>
+  ),
+};
+
+/** Shows three persistent toasts, and removes every toast with `dismissAllToasts()`. */
+function DismissAllDemo({ status, title, children }: ToastProps) {
+  const { dispatchToast, dismissAllToasts } = useToastController();
+  const body = typeof children === 'string' ? children : undefined;
+  return (
+    <div className="flex flex-wrap gap-2">
+      <Button
+        appearance="primary"
+        onClick={() => {
+          for (let count = 1; count <= 3; count += 1) {
+            dispatchToast({
+              status,
+              title: `${title ?? 'Notification'} (${count} of 3)`,
+              body,
+              timeout: 0,
+            });
+          }
+        }}
+      >
+        Show three toasts
+      </Button>
+      <Button onClick={() => dismissAllToasts()}>Dismiss all</Button>
+    </div>
+  );
+}
+
+/**
+ * `dismissAllToasts()` from `useToastController()` removes every toast, shown and queued, and
+ * cancels their timers (for example when the user signs out or leaves the page's context).
+ */
+export const DismissAll: Story = {
+  args: {
+    title: 'Sync conflict',
+    status: 'warning',
+    children: 'Review the changed files.',
+  },
+  render: (args) => (
+    <Toaster>
+      <DismissAllDemo {...args} />
+    </Toaster>
+  ),
+};
+
 /** A Drawer whose Notify button shows a persistent toast while the drawer is open. */
 function DrawerWithToasts({ status, title, children }: ToastProps) {
   const { dispatchToast } = useToastController();

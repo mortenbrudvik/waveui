@@ -1,10 +1,11 @@
 import * as React from 'react';
 import { describe, it, expect, expectTypeOf, vi } from 'vitest';
-import { act, render, screen } from '@testing-library/react';
+import { act, fireEvent, render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { Switch } from '../Switch';
-import type { SwitchProps } from '../Switch';
+import type { SwitchLabelPosition, SwitchProps } from '../Switch';
 import {
+  expectNoA11yViolations,
   renderWithProviders,
   testComposedHandler,
   testFocusEvents,
@@ -12,6 +13,9 @@ import {
   testSystemProps,
 } from '../../../test-utils';
 import { renderWithFieldContext, FIELD_TEST_IDS, FIELD_TEST_TEXT } from '../../../test-utils-field';
+
+/** The development warning of a Switch with children. */
+const CHILDREN_WARNING = '[WaveUI] Switch: children are not rendered. Pass the label in `label`.';
 
 function getThumb(control: HTMLElement): HTMLElement {
   const thumb = control.querySelector('span');
@@ -29,6 +33,8 @@ describe('Switch', () => {
       { name: 'checked', props: { defaultChecked: true } },
       { name: 'disabled', props: { disabled: true } },
       { name: 'required with a name', props: { name: 'dark', required: true } },
+      { name: 'label before', props: { labelPosition: 'before' } },
+      { name: 'label above', props: { labelPosition: 'above' } },
     ],
   });
 
@@ -632,7 +638,278 @@ describe('Switch — styling tokens', () => {
   });
 });
 
+describe('Switch — rich label and labelPosition', () => {
+  const richLabel = (
+    <>
+      Share my <a href="#usage">usage data</a>
+    </>
+  );
+
+  it('a label with a link names the switch with its whole text', async () => {
+    render(<Switch label={richLabel} />);
+    expect(screen.getByRole('switch', { name: 'Share my usage data' })).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'usage data' })).toBeInTheDocument();
+    await expectNoA11yViolations();
+  });
+
+  it('clicking the label text toggles; clicking the link inside it does not', async () => {
+    const user = userEvent.setup();
+    const onCheckedChange = vi.fn();
+    render(
+      <React.StrictMode>
+        <Switch label={richLabel} onCheckedChange={onCheckedChange} />
+      </React.StrictMode>,
+    );
+    const control = screen.getByRole('switch', { name: 'Share my usage data' });
+    await user.click(screen.getByText(/Share my/));
+    expect(control).toHaveAttribute('aria-checked', 'true');
+    // fireEvent, not userEvent: user-event forwards every click inside a <label> to its control,
+    // while browsers (and jsdom) skip the forwarding for a click on interactive content.
+    fireEvent.click(screen.getByRole('link', { name: 'usage data' }));
+    expect(control).toHaveAttribute('aria-checked', 'true');
+    expect(onCheckedChange.mock.calls).toEqual([[true]]);
+  });
+
+  it('renders the label after the control by default, with data-label-position="after"', () => {
+    render(<Switch label="Dark mode" data-testid="root" />);
+    const root = screen.getByTestId('root');
+    expect(root).toHaveAttribute('data-label-position', 'after');
+    const control = screen.getByRole('switch', { name: 'Dark mode' });
+    expect(
+      control.compareDocumentPosition(screen.getByText('Dark mode')) &
+        Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
+    expect(root).not.toHaveClass('flex-col');
+  });
+
+  it.each([
+    { position: 'before', column: false },
+    { position: 'above', column: true },
+  ] as const)(
+    'labelPosition=$position renders the label first and keeps the name',
+    async ({ position, column }) => {
+      const user = userEvent.setup();
+      render(<Switch label="Dark mode" labelPosition={position} data-testid="root" />);
+      const root = screen.getByTestId('root');
+      expect(root).toHaveAttribute('data-label-position', position);
+      const text = screen.getByText('Dark mode');
+      expect(root.firstElementChild).toBe(text);
+      if (column) expect(root).toHaveClass('flex-col', 'items-start', 'gap-1');
+      else expect(root).not.toHaveClass('flex-col');
+      const control = screen.getByRole('switch', { name: 'Dark mode' });
+      await user.click(text);
+      expect(control).toHaveAttribute('aria-checked', 'true');
+      await expectNoA11yViolations();
+    },
+  );
+
+  it('keeps the DOM order of labelPosition="before" under dir="rtl"', () => {
+    renderWithProviders(<Switch label="Dark mode" labelPosition="before" data-testid="root" />, {
+      dir: 'rtl',
+    });
+    expect(screen.getByTestId('root').firstElementChild).toBe(screen.getByText('Dark mode'));
+  });
+
+  it.each(['after', 'before'] as const)(
+    'labelPosition=%s: the track lines up with the first line of a two-line label, not its middle',
+    (position) => {
+      render(
+        <Switch
+          labelPosition={position}
+          data-testid="root"
+          label={
+            <span className="flex flex-col">
+              <span>Dark mode</span>{' '}
+              <span className="text-caption-1 text-muted-foreground">Easier on the eyes</span>
+            </span>
+          }
+        />,
+      );
+      const root = screen.getByTestId('root');
+      // The 20px track is as tall as the first line of `text-body-1`: both start at the top.
+      expect(root).toHaveClass('items-start');
+      expect(root).not.toHaveClass('items-center');
+      expect(root).not.toHaveClass('flex-col');
+    },
+  );
+
+  it('renders label={0} as content', () => {
+    render(<Switch label={0} />);
+    expect(screen.getByRole('switch', { name: '0' })).toHaveAttribute(
+      'aria-labelledby',
+      screen.getByText('0').id,
+    );
+  });
+
+  it('does not render children and warns once that the label goes in `label`', () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    try {
+      const { rerender } = render(
+        <React.StrictMode>
+          <Switch label="Dark mode">Ignored text</Switch>
+        </React.StrictMode>,
+      );
+      rerender(
+        <React.StrictMode>
+          <Switch label="Dark mode">Ignored text</Switch>
+        </React.StrictMode>,
+      );
+      expect(screen.queryByText('Ignored text')).not.toBeInTheDocument();
+      expect(screen.getByRole('switch')).toHaveAccessibleName('Dark mode');
+      expect(warn.mock.calls).toEqual([[CHILDREN_WARNING]]);
+    } finally {
+      warn.mockRestore();
+    }
+  });
+});
+
+describe('Switch — disabledFocusable', () => {
+  it('stays in the tab order with aria-disabled and the data attributes instead of disabled', async () => {
+    const user = userEvent.setup();
+    render(<Switch label="Dark mode" disabledFocusable data-testid="root" />);
+    const control = screen.getByRole('switch', { name: 'Dark mode' });
+    await user.tab();
+    expect(control).toHaveFocus();
+    expect(control).not.toBeDisabled();
+    expect(control).toHaveAttribute('aria-disabled', 'true');
+    expect(control).toHaveAttribute('data-disabled', '');
+    expect(control).toHaveAttribute('data-disabled-focusable', '');
+    expect(screen.getByTestId('root')).not.toHaveAttribute('aria-disabled');
+    await expectNoA11yViolations();
+  });
+
+  it('is not toggled by a click, the label text, Space or Enter, and calls no handler (StrictMode)', async () => {
+    const user = userEvent.setup();
+    const onCheckedChange = vi.fn();
+    const onClick = vi.fn();
+    render(
+      <React.StrictMode>
+        <Switch
+          label="Dark mode"
+          disabledFocusable
+          onCheckedChange={onCheckedChange}
+          onClick={onClick}
+        />
+      </React.StrictMode>,
+    );
+    const control = screen.getByRole('switch', { name: 'Dark mode' });
+    await user.click(control);
+    await user.click(screen.getByText('Dark mode'));
+    act(() => control.focus());
+    await user.keyboard(' ');
+    await user.keyboard('{Enter}');
+    expect(control).toHaveAttribute('aria-checked', 'false');
+    expect(onCheckedChange).not.toHaveBeenCalled();
+    expect(onClick).not.toHaveBeenCalled();
+  });
+
+  it('keeps a click, Space and Enter on the switch from reaching ancestor onClick handlers (like a natively disabled control)', async () => {
+    const user = userEvent.setup();
+    const onAncestorClick = vi.fn();
+    const { rerender } = render(
+      <div onClick={onAncestorClick}>
+        <Switch label="Dark mode" disabledFocusable />
+      </div>,
+    );
+    const control = screen.getByRole('switch', { name: 'Dark mode' });
+    await user.click(control);
+    act(() => control.focus());
+    await user.keyboard(' ');
+    await user.keyboard('{Enter}');
+    expect(onAncestorClick).not.toHaveBeenCalled();
+    expect(control).toHaveAttribute('aria-checked', 'false');
+
+    // The same three activations of an available switch do reach the ancestor, once each.
+    rerender(
+      <div onClick={onAncestorClick}>
+        <Switch label="Dark mode" />
+      </div>,
+    );
+    await user.click(control);
+    await user.keyboard(' ');
+    await user.keyboard('{Enter}');
+    expect(onAncestorClick).toHaveBeenCalledTimes(3);
+  });
+
+  it('wins over disabled: the switch stays focusable', () => {
+    render(<Switch label="Dark mode" disabled disabledFocusable />);
+    const control = screen.getByRole('switch', { name: 'Dark mode' });
+    expect(control).not.toBeDisabled();
+    expect(control).toHaveAttribute('aria-disabled', 'true');
+  });
+
+  it('has the disabled look, forced colors included', () => {
+    render(<Switch label="Dark mode" disabledFocusable defaultChecked data-testid="root" />);
+    expect(screen.getByTestId('root')).toHaveClass('cursor-not-allowed', 'opacity-50');
+    const control = screen.getByRole('switch', { name: 'Dark mode' });
+    expect(control).toHaveClass('forced-colors:border-[GrayText]', 'forced-colors:bg-[Canvas]');
+    expect(getThumb(control)).toHaveClass('forced-colors:bg-[GrayText]');
+  });
+
+  it('keeps its focus ring at full strength: the dimmed look lifts while a focus ring shows inside it', () => {
+    render(
+      <>
+        <Switch label="Dark mode" disabledFocusable data-testid="focusable" />
+        <Switch label="Compact" data-testid="available" />
+      </>,
+    );
+    // The root's opacity dims the switch's outline too, which would put the ring below 3:1.
+    // tailwind-merge keeps both classes (different variants); the variant wins while it matches.
+    expect(screen.getByTestId('focusable')).toHaveClass(
+      'opacity-50',
+      'has-focus-visible:opacity-100',
+    );
+    expect(screen.getByTestId('available').className).not.toMatch(/opacity/);
+  });
+
+  it('is neither submitted nor validated with its form', () => {
+    render(
+      <form aria-label="Form">
+        <Switch name="dark" label="Dark mode" required defaultChecked disabledFocusable />
+      </form>,
+    );
+    const form = screen.getByRole('form', { name: 'Form' }) as HTMLFormElement;
+    expect(Array.from(new FormData(form).keys())).toEqual([]);
+    expect(form.checkValidity()).toBe(true);
+  });
+
+  it('does not block the submission of a required Field', () => {
+    renderWithFieldContext(
+      <form aria-label="Form">
+        <Switch label="Dark mode" disabledFocusable />
+      </form>,
+      { required: true },
+    );
+    const form = screen.getByRole('form', { name: 'Form' }) as HTMLFormElement;
+    expect(form.checkValidity()).toBe(true);
+  });
+
+  it('routes a consumer aria-disabled to the switch, which then only carries the attribute', async () => {
+    const user = userEvent.setup();
+    render(<Switch label="Dark mode" aria-disabled data-testid="root" />);
+    const control = screen.getByRole('switch', { name: 'Dark mode' });
+    expect(control).toHaveAttribute('aria-disabled', 'true');
+    expect(screen.getByTestId('root')).not.toHaveAttribute('aria-disabled');
+    expect(control).not.toHaveAttribute('data-disabled-focusable');
+    // Without disabledFocusable, aria-disabled keeps its 0.5 meaning: the look and handlers stay.
+    await user.click(control);
+    expect(control).toHaveAttribute('aria-checked', 'true');
+  });
+});
+
 describe('Switch — types', () => {
+  it('types disabledFocusable as an optional boolean', () => {
+    expectTypeOf<SwitchProps['disabledFocusable']>().toEqualTypeOf<boolean | undefined>();
+  });
+
+  it('types label as ReactNode and labelPosition as before/after/above', () => {
+    expectTypeOf<SwitchProps['label']>().toEqualTypeOf<React.ReactNode>();
+    expectTypeOf<SwitchLabelPosition>().toEqualTypeOf<'before' | 'after' | 'above'>();
+    expectTypeOf<SwitchProps['labelPosition']>().toEqualTypeOf<SwitchLabelPosition | undefined>();
+    // @ts-expect-error -- Switch labels do not go below the track
+    void (<Switch labelPosition="below" />);
+  });
+
   it('declares ref, controlRef and the routed handlers in SwitchProps (C-REF, C-ROUTING)', () => {
     expectTypeOf<SwitchProps['ref']>().toEqualTypeOf<React.Ref<HTMLLabelElement> | undefined>();
     expectTypeOf<SwitchProps['controlRef']>().toEqualTypeOf<

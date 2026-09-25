@@ -54,7 +54,10 @@ export const Subtle: Story = {
   },
 };
 
-/** A disabled link drops its `href`, keeps `role="link"` and gets `aria-disabled`. */
+/**
+ * A disabled link drops its `href`, keeps `role="link"` and gets `aria-disabled`; its click,
+ * Enter and Space do nothing.
+ */
 export const Disabled: Story = {
   args: {
     children: 'Disabled link',
@@ -62,10 +65,32 @@ export const Disabled: Story = {
   },
 };
 
+/**
+ * `disabledFocusable` keeps an unavailable link in the tab order (with `aria-disabled`), so a
+ * keyboard user can still reach it; its click, Enter and Space do nothing.
+ */
+export const DisabledFocusable: Story = {
+  args: {
+    children: 'Download the report',
+    disabledFocusable: true,
+  },
+};
+
 /** `as="button"` renders a `<button type="button">` styled as a link. */
 export const AsButton: ButtonStory = {
   args: {
     as: 'button',
+    href: undefined,
+    children: 'Show more',
+  },
+};
+
+/**
+ * A link without `href` runs an action instead of navigating: it keeps its `<a>` element and link
+ * styling, and gets `role="button"`, a tab stop and Enter/Space activation.
+ */
+export const WithoutHref: Story = {
+  args: {
     href: undefined,
     children: 'Show more',
   },

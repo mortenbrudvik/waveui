@@ -4,7 +4,12 @@ import { act, fireEvent, render, screen, within } from '@testing-library/react';
 import { hydrateRoot } from 'react-dom/client';
 import { renderToString } from 'react-dom/server';
 import userEvent from '@testing-library/user-event';
-import { TimePicker, type TimePickerLabels, type TimePickerProps } from '../TimePicker';
+import {
+  TimePicker,
+  type TimePickerInvalidReason,
+  type TimePickerLabels,
+  type TimePickerProps,
+} from '../TimePicker';
 import {
   axe,
   findDanglingIdRefsInHtml,
@@ -15,6 +20,7 @@ import {
 import { FIELD_TEST_IDS, FIELD_TEST_TEXT, renderWithFieldContext } from '../../../test-utils-field';
 import { DismissLayerProvider, useDismiss, type DismissReason } from '../../../hooks/useDismiss';
 import { useListboxOption } from '../../../hooks/useListbox';
+import { Button } from '../../button/Button';
 
 // Pass-through spy on the option hook: every option render calls it once (render-count test).
 vi.mock('../../../hooks/useListbox', async (importOriginal) => {
@@ -35,6 +41,22 @@ function optionNames() {
   return screen.queryAllByRole('option').map((option) => option.textContent);
 }
 
+function expandButton(name = 'Show times') {
+  return screen.getByRole('button', { name });
+}
+
+/** The portaled surface of the open list (its options or its status text); `null` while closed. */
+function listSurface() {
+  return document.querySelector('[data-wave-portal]');
+}
+
+const EXPAND_ICON_BUTTON =
+  '[WaveUI] TimePicker: `expandIcon` received a button element; its children render as the ' +
+  'glyph of the built-in expand button and its props were dropped (buttons cannot be nested). ' +
+  'Pass icon content instead, e.g. `expandIcon={<MyIcon />}`.';
+
+const INVALID_12H = 'Enter a time in the format h:mm AM.';
+
 afterEach(() => {
   vi.restoreAllMocks();
 });
@@ -48,6 +70,8 @@ describe('TimePicker', () => {
     a11yVariants: [
       { name: 'with value and clear button', props: { defaultValue: '09:00', clearable: true } },
       { name: 'disabled', props: { disabled: true, defaultValue: '09:00' } },
+      { name: 'read-only', props: { readOnly: true, defaultValue: '09:00', clearable: true } },
+      { name: 'open', props: { defaultOpen: true, defaultValue: '09:00', clearable: true } },
     ],
   });
 
@@ -92,7 +116,13 @@ describe('TimePicker', () => {
     });
 
     it('gives the clear button a 24px target and pads the input logically (input-datetime#15)', () => {
-      render(<TimePicker aria-label="Time" defaultValue="09:00" clearable />);
+      const { unmount } = render(<TimePicker aria-label="Time" defaultValue="09:00" clearable />);
+      // Next to the expand button at the end.
+      expect(screen.getByRole('button', { name: 'Clear time' })).toHaveClass('h-6', 'w-6', 'end-7');
+      expect(expandButton()).toHaveClass('h-6', 'w-6', 'end-1');
+      expect(combobox('Time')).toHaveClass('pe-14');
+      unmount();
+      render(<TimePicker aria-label="Time" defaultValue="09:00" clearable expandIcon={false} />);
       expect(screen.getByRole('button', { name: 'Clear time' })).toHaveClass('h-6', 'w-6', 'end-1');
       expect(combobox('Time')).toHaveClass('pe-8');
     });
@@ -199,8 +229,11 @@ describe('TimePicker', () => {
         dir: 'rtl',
       });
       const clear = screen.getByRole('button', { name: 'Clear time' });
-      expect(clear).toHaveClass('end-1');
-      expect(clear.className).not.toMatch(/\b(left|right)-/);
+      expect(clear).toHaveClass('end-7');
+      expect(expandButton()).toHaveClass('end-1');
+      for (const button of [clear, expandButton()]) {
+        expect(button.className).not.toMatch(/\b(left|right)-/);
+      }
       expect(combobox('Time').className).not.toMatch(/\bp[lr]-/);
     });
   });
@@ -697,7 +730,7 @@ describe('TimePicker', () => {
       expect(combobox('Time')).toHaveValue('9:15 AM');
     });
 
-    it('blur commits a valid exact typed time and reverts anything else', async () => {
+    it('blur commits a valid exact typed time and keeps anything else, flagged', async () => {
       const user = userEvent.setup();
       const onValueChange = vi.fn();
       render(
@@ -716,7 +749,9 @@ describe('TimePicker', () => {
       await user.type(combobox('Time'), '14:');
       await user.click(screen.getByRole('button', { name: 'Next' }));
       expect(onValueChange).toHaveBeenCalledTimes(1);
-      expect(combobox('Time')).toHaveValue('2:45 PM');
+      // The rejected text stays (it was reverted to the selected time before 0.6), flagged.
+      expect(combobox('Time')).toHaveValue('14:');
+      expect(combobox('Time')).toHaveAttribute('aria-invalid', 'true');
     });
 
     it('does not commit a typed time outside minTime/maxTime', async () => {
@@ -994,7 +1029,9 @@ describe('TimePicker', () => {
     it('renders no clear button while read-only', () => {
       render(<TimePicker aria-label="Time" defaultValue="09:00" clearable readOnly />);
       expect(screen.queryByRole('button', { name: 'Clear time' })).not.toBeInTheDocument();
-      expect(combobox('Time')).not.toHaveClass('pe-8');
+      // Room for the (disabled) expand button only.
+      expect(combobox('Time')).not.toHaveClass('pe-14');
+      expect(combobox('Time')).toHaveClass('pe-8');
     });
 
     it('shows the controlled value again when the parent rejects the clear', async () => {
@@ -1002,6 +1039,541 @@ describe('TimePicker', () => {
       render(<TimePicker aria-label="Time" value="09:00" clearable onValueChange={() => {}} />);
       await user.click(screen.getByRole('button', { name: 'Clear time' }));
       expect(combobox('Time')).toHaveValue('9:00 AM');
+    });
+
+    it('Tab from erased text clears the value and moves on past the picker: focus never drops to <body>', async () => {
+      const user = userEvent.setup();
+      const onValueChange = vi.fn();
+      render(
+        <React.StrictMode>
+          <TimePicker
+            aria-label="Time"
+            defaultValue="09:00"
+            clearable
+            onValueChange={onValueChange}
+          />
+          <button type="button">Next</button>
+        </React.StrictMode>,
+      );
+      await user.clear(combobox('Time'));
+      await user.tab();
+      // The erased text clears the value before Tab moves focus, so the clear button it removes is
+      // skipped: focus goes where Tab goes without it (the expand button is not a tab stop).
+      expect(onValueChange.mock.calls).toEqual([['']]);
+      expect(screen.queryByRole('button', { name: 'Clear time' })).not.toBeInTheDocument();
+      expect(screen.getByRole('button', { name: 'Next' })).toHaveFocus();
+      expect(combobox('Time')).toHaveValue('');
+    });
+
+    it('Tab from erased text reaches the clear button when a controlled parent keeps the value', async () => {
+      const user = userEvent.setup();
+      const onValueChange = vi.fn();
+      render(
+        <>
+          <TimePicker aria-label="Time" value="09:00" clearable onValueChange={onValueChange} />
+          <button type="button">Next</button>
+        </>,
+      );
+      await user.clear(combobox('Time'));
+      await user.tab();
+      expect(onValueChange.mock.calls).toEqual([['']]);
+      expect(combobox('Time')).toHaveValue('9:00 AM');
+      expect(screen.getByRole('button', { name: 'Clear time' })).toHaveFocus();
+    });
+  });
+
+  describe('expand button', () => {
+    it('toggles the list and keeps focus in the input', async () => {
+      const user = userEvent.setup();
+      const onOpenChange = vi.fn();
+      render(<TimePicker aria-label="Time" step={60} onOpenChange={onOpenChange} />);
+      await user.click(expandButton());
+      expect(screen.getByRole('listbox')).toBeInTheDocument();
+      expect(combobox('Time')).toHaveAttribute('aria-expanded', 'true');
+      expect(combobox('Time')).toHaveFocus();
+      await user.click(expandButton());
+      expect(screen.queryByRole('listbox')).not.toBeInTheDocument();
+      expect(combobox('Time')).toHaveFocus();
+      expect(onOpenChange.mock.calls).toEqual([[true], [false]]);
+    });
+
+    it('follows the list with aria-expanded and aria-controls', async () => {
+      const user = userEvent.setup();
+      render(<TimePicker aria-label="Time" step={60} />);
+      expect(expandButton()).toHaveAttribute('aria-expanded', 'false');
+      expect(expandButton()).not.toHaveAttribute('aria-controls');
+      await user.click(expandButton());
+      expect(expandButton()).toHaveAttribute('aria-expanded', 'true');
+      expect(expandButton()).toHaveAttribute('aria-controls', screen.getByRole('listbox').id);
+      // Text that matches no time shows no list.
+      await user.type(combobox('Time'), 'zz');
+      expect(expandButton()).toHaveAttribute('aria-expanded', 'false');
+      expect(expandButton()).not.toHaveAttribute('aria-controls');
+    });
+
+    it('reopens kept typed text with its matches and the option typing made active', async () => {
+      const user = userEvent.setup();
+      render(<TimePicker aria-label="Time" step={60} />);
+      await user.type(combobox('Time'), '10{Escape}');
+      expect(screen.queryByRole('listbox')).not.toBeInTheDocument();
+      await user.click(expandButton());
+      expect(optionNames()).toEqual(['10:00 AM', '10:00 PM']);
+      expect(combobox('Time')).toHaveAttribute(
+        'aria-activedescendant',
+        screen.getByRole('option', { name: '10:00 AM' }).id,
+      );
+    });
+
+    it('is not a tab stop; the clear button is', async () => {
+      const user = userEvent.setup();
+      render(
+        <>
+          <TimePicker aria-label="Time" defaultValue="09:00" clearable />
+          <button type="button">Next</button>
+        </>,
+      );
+      expect(expandButton()).toHaveAttribute('tabindex', '-1');
+      await user.tab();
+      expect(combobox('Time')).toHaveFocus();
+      await user.tab();
+      expect(screen.getByRole('button', { name: 'Clear time' })).toHaveFocus();
+      await user.tab();
+      expect(screen.getByRole('button', { name: 'Next' })).toHaveFocus();
+    });
+
+    it('is disabled while the picker is disabled or read-only', () => {
+      const { rerender } = render(<TimePicker aria-label="Time" disabled />);
+      expect(expandButton()).toBeDisabled();
+      rerender(<TimePicker aria-label="Time" readOnly />);
+      expect(expandButton()).toBeDisabled();
+    });
+
+    it('turns its glyph while the list is open, without motion when reduced', async () => {
+      const user = userEvent.setup();
+      render(<TimePicker aria-label="Time" step={60} />);
+      const glyph = () => expandButton().firstElementChild;
+      expect(glyph()).toHaveAttribute('aria-hidden', 'true');
+      expect(glyph()).toHaveClass('transition-transform', 'motion-reduce:transition-none');
+      expect(glyph()?.querySelector('svg')).toHaveAttribute('data-wave-icon', 'chevron-down');
+      await user.click(expandButton());
+      expect(glyph()).toHaveClass('rotate-180');
+    });
+
+    it('keeps the chevron with expandIcon null and hides the button with false', () => {
+      const { rerender } = render(<TimePicker aria-label="Time" expandIcon={null} />);
+      expect(expandButton().querySelector('svg')).toHaveAttribute('data-wave-icon', 'chevron-down');
+      rerender(<TimePicker aria-label="Time" expandIcon={false} />);
+      expect(screen.queryByRole('button')).not.toBeInTheDocument();
+      expect(combobox('Time').className).not.toMatch(/\bpe-/);
+      rerender(<TimePicker aria-label="Time" expandIcon={<></>} />);
+      expect(screen.queryByRole('button')).not.toBeInTheDocument();
+    });
+
+    it('renders custom content as the decorative glyph of the built-in button', () => {
+      render(<TimePicker aria-label="Time" expandIcon={<svg data-testid="clock" />} />);
+      const clock = screen.getByTestId('clock');
+      expect(clock.closest('button')).toBe(expandButton());
+      expect(clock.parentElement).toHaveAttribute('aria-hidden', 'true');
+      expect(expandButton()).toHaveAccessibleName('Show times');
+    });
+
+    it.each([
+      [
+        'a <button>',
+        <button key="native" type="button">
+          ▾
+        </button>,
+      ],
+      ['a Button', <Button key="wave">▾</Button>],
+    ])(
+      'does not nest %s passed as expandIcon: its children become the glyph (warns once)',
+      (_label, expandIcon) => {
+        const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+        render(<TimePicker aria-label="Time" expandIcon={expandIcon} />);
+        expect(document.querySelectorAll('button')).toHaveLength(1);
+        expect(expandButton()).toHaveTextContent('▾');
+        expect(warn.mock.calls).toEqual([[EXPAND_ICON_BUTTON]]);
+      },
+    );
+
+    it('is named by labels.expand', () => {
+      render(<TimePicker aria-label="Zeit" labels={{ expand: 'Uhrzeiten anzeigen' }} />);
+      expect(expandButton('Uhrzeiten anzeigen')).toBeInTheDocument();
+    });
+  });
+
+  describe('rejected text', () => {
+    it('keeps text that is not a time on Enter, flags it and describes the error', async () => {
+      const user = userEvent.setup();
+      const onValueChange = vi.fn();
+      const onInvalidInput = vi.fn();
+      const onSubmit = vi.fn((event: React.FormEvent) => event.preventDefault());
+      render(
+        <form onSubmit={onSubmit} aria-label="Form">
+          <TimePicker
+            aria-label="Time"
+            defaultValue="09:00"
+            onValueChange={onValueChange}
+            onInvalidInput={onInvalidInput}
+          />
+          <button type="submit">Save</button>
+        </form>,
+      );
+      await user.clear(combobox('Time'));
+      await user.type(combobox('Time'), 'soon{Enter}');
+      expect(combobox('Time')).toHaveValue('soon');
+      expect(combobox('Time')).toHaveAttribute('aria-invalid', 'true');
+      expect(combobox('Time')).toHaveAccessibleDescription(INVALID_12H);
+      expect(screen.getByRole('alert')).toHaveTextContent(INVALID_12H);
+      expect(screen.getByRole('alert')).toHaveClass('mt-1', 'text-caption-1', 'text-error');
+      expect(onInvalidInput.mock.calls).toEqual([['soon', 'unparseable']]);
+      expect(onValueChange).not.toHaveBeenCalled();
+      expect(onSubmit).not.toHaveBeenCalled();
+    });
+
+    it('keeps rejected text on blur and flags it instead of reverting it', async () => {
+      const user = userEvent.setup();
+      const onValueChange = vi.fn();
+      const onInvalidInput = vi.fn();
+      render(
+        <>
+          <TimePicker
+            aria-label="Time"
+            defaultValue="08:00"
+            format="24h"
+            onValueChange={onValueChange}
+            onInvalidInput={onInvalidInput}
+          />
+          <button type="button">Next</button>
+        </>,
+      );
+      await user.clear(combobox('Time'));
+      await user.type(combobox('Time'), '25:00');
+      await user.tab();
+      expect(combobox('Time')).toHaveValue('25:00');
+      expect(combobox('Time')).toHaveAttribute('aria-invalid', 'true');
+      expect(combobox('Time')).toHaveAccessibleDescription('Enter a time in the format HH:mm.');
+      expect(onInvalidInput.mock.calls).toEqual([['25:00', 'unparseable']]);
+      expect(onValueChange).not.toHaveBeenCalled();
+    });
+
+    it('reports an edit once in StrictMode: blur after Enter stays quiet, Enter again reports', async () => {
+      const user = userEvent.setup();
+      const onInvalidInput = vi.fn<(text: string, reason: TimePickerInvalidReason) => void>();
+      render(
+        <React.StrictMode>
+          <TimePicker aria-label="Time" onInvalidInput={onInvalidInput} />
+          <button type="button">Next</button>
+        </React.StrictMode>,
+      );
+      await user.type(combobox('Time'), 'soon{Enter}');
+      await user.tab();
+      expect(onInvalidInput.mock.calls).toEqual([['soon', 'unparseable']]);
+      await user.click(combobox('Time'));
+      await user.keyboard('{Enter}');
+      expect(onInvalidInput.mock.calls).toEqual([
+        ['soon', 'unparseable'],
+        ['soon', 'unparseable'],
+      ]);
+      // A new edit is reported again, here by the blur.
+      await user.type(combobox('Time'), 'er');
+      await user.tab();
+      expect(onInvalidInput.mock.calls).toHaveLength(3);
+      expect(onInvalidInput).toHaveBeenLastCalledWith('sooner', 'unparseable');
+    });
+
+    it.each([
+      ['text that still matches options', { maxTime: '13:00' }, '2:00 PM', ['12:00 PM']],
+      ['text that matches nothing', {}, 'soon', []],
+    ])(
+      'closes the list when Enter rejects %s, so the popup does not cover the error message',
+      async (_label, props, text, matches) => {
+        const user = userEvent.setup();
+        const onOpenChange = vi.fn();
+        render(<TimePicker aria-label="Time" {...props} onOpenChange={onOpenChange} />);
+        await user.type(combobox('Time'), text);
+        const popup = () => document.querySelector('[data-wave-portal]');
+        expect(popup()).not.toBeNull();
+        expect(optionNames()).toEqual(matches);
+        await user.keyboard('{Enter}');
+        expect(combobox('Time')).toHaveValue(text);
+        expect(combobox('Time')).toHaveAttribute('aria-invalid', 'true');
+        expect(combobox('Time')).toHaveAttribute('aria-expanded', 'false');
+        expect(popup()).toBeNull();
+        expect(screen.getByRole('alert')).toBeVisible();
+        expect(onOpenChange).toHaveBeenLastCalledWith(false);
+        expect(combobox('Time')).toHaveFocus();
+        // Editing the text reopens the list (and clears the error).
+        await user.type(combobox('Time'), '{Backspace}');
+        expect(popup()).not.toBeNull();
+        expect(combobox('Time')).not.toHaveAttribute('aria-invalid');
+      },
+    );
+
+    it('closes the list when Tab to the clear button rejects text, so the popup does not cover the error message', async () => {
+      const user = userEvent.setup();
+      const onOpenChange = vi.fn();
+      const onInvalidInput = vi.fn();
+      render(
+        <TimePicker
+          aria-label="Time"
+          defaultValue="09:00"
+          clearable
+          onOpenChange={onOpenChange}
+          onInvalidInput={onInvalidInput}
+        />,
+      );
+      await user.clear(combobox('Time'));
+      await user.type(combobox('Time'), 'zz');
+      expect(listSurface()).toHaveTextContent('No matching times');
+      await user.tab();
+      expect(screen.getByRole('button', { name: 'Clear time' })).toHaveFocus();
+      expect(combobox('Time')).toHaveValue('zz');
+      expect(combobox('Time')).toHaveAttribute('aria-invalid', 'true');
+      expect(screen.getByRole('alert')).toHaveTextContent(INVALID_12H);
+      expect(listSurface()).toBeNull();
+      expect(onOpenChange.mock.calls).toEqual([[true], [false]]);
+      expect(onInvalidInput.mock.calls).toEqual([['zz', 'unparseable']]);
+    });
+
+    it('closes the list when a press on its status text takes focus from the input and rejects the text', async () => {
+      const user = userEvent.setup();
+      const onOpenChange = vi.fn();
+      render(<TimePicker aria-label="Time" onOpenChange={onOpenChange} />);
+      await user.type(combobox('Time'), 'zz');
+      await user.click(screen.getByText('No matching times', { selector: 'div' }));
+      expect(combobox('Time')).not.toHaveFocus();
+      expect(combobox('Time')).toHaveAttribute('aria-invalid', 'true');
+      expect(screen.getByRole('alert')).toHaveTextContent(INVALID_12H);
+      expect(listSurface()).toBeNull();
+      expect(onOpenChange.mock.calls).toEqual([[true], [false]]);
+    });
+
+    it('flags a time outside minTime/maxTime as out of range', async () => {
+      const user = userEvent.setup();
+      const onValueChange = vi.fn();
+      const onInvalidInput = vi.fn();
+      render(
+        <TimePicker
+          aria-label="Time"
+          minTime="09:00"
+          maxTime="17:00"
+          onValueChange={onValueChange}
+          onInvalidInput={onInvalidInput}
+        />,
+      );
+      await user.type(combobox('Time'), '18:15{Enter}');
+      expect(onInvalidInput.mock.calls).toEqual([['18:15', 'out-of-range']]);
+      expect(combobox('Time')).toHaveValue('18:15');
+      expect(combobox('Time')).toHaveAccessibleDescription(
+        'Enter a time between 9:00 AM and 5:00 PM.',
+      );
+      expect(onValueChange).not.toHaveBeenCalled();
+    });
+
+    it('flags any time while the bounds are invalid as out of range', async () => {
+      const user = userEvent.setup();
+      const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+      const onInvalidInput = vi.fn();
+      render(
+        <TimePicker
+          aria-label="Time"
+          minTime="17:00"
+          maxTime="09:00"
+          onInvalidInput={onInvalidInput}
+        />,
+      );
+      await user.type(combobox('Time'), '12:00{Enter}');
+      expect(onInvalidInput.mock.calls).toEqual([['12:00', 'out-of-range']]);
+      expect(warn.mock.calls).toEqual([
+        [
+          '[WaveUI] TimePicker: `minTime`/`maxTime` must be times such as "09:00", "09:00:00" or ' +
+            '"9:00 AM" with minTime <= maxTime (received "17:00" / "09:00"); no times are available.',
+        ],
+      ]);
+    });
+
+    it.each([
+      ['12h', '12h', 'Enter a time between 9:00 AM and 5:30 PM.'],
+      ['24h', '24h', 'Enter a time between 09:00 and 17:30.'],
+    ] as const)('shows the bounds in the %s format', async (_label, format, message) => {
+      const user = userEvent.setup();
+      render(<TimePicker aria-label="Time" format={format} minTime="9:00 AM" maxTime="17:30" />);
+      await user.type(combobox('Time'), '18:00{Enter}');
+      expect(combobox('Time')).toHaveAccessibleDescription(message);
+    });
+
+    it.each([
+      ['an earlier time with only minTime', { minTime: '09:00' }, '8:00 AM', 'on or after 9:00 AM'],
+      ['a later time with only maxTime', { maxTime: '17:00' }, '6:00 PM', 'on or before 5:00 PM'],
+    ])('describes %s with its own message', async (_label, props, text, range) => {
+      const user = userEvent.setup();
+      render(<TimePicker aria-label="Time" {...props} />);
+      await user.type(combobox('Time'), `${text}{Enter}`);
+      expect(combobox('Time')).toHaveAccessibleDescription(`Enter a time ${range}.`);
+    });
+
+    it('localizes the messages: invalidTime gets the display pattern, outOfRange undefined for a missing bound', async () => {
+      const user = userEvent.setup();
+      const invalidTime = vi.fn((format: string) => `Ungültig (${format})`);
+      const outOfRange = vi.fn(
+        (min: string | undefined, max: string | undefined) =>
+          `Zwischen ${min ?? '-'} und ${max ?? '-'}`,
+      );
+      const labels: TimePickerLabels = { invalidTime, outOfRange };
+      const { unmount } = render(
+        <TimePicker aria-label="Zeit" format="24h" maxTime="17:00" labels={labels} />,
+      );
+      await user.type(combobox('Zeit'), 'bald{Enter}');
+      expect(invalidTime).toHaveBeenLastCalledWith('HH:mm');
+      expect(combobox('Zeit')).toHaveAccessibleDescription('Ungültig (HH:mm)');
+      await user.clear(combobox('Zeit'));
+      await user.type(combobox('Zeit'), '18:00{Enter}');
+      expect(outOfRange).toHaveBeenLastCalledWith(undefined, '17:00');
+      expect(combobox('Zeit')).toHaveAccessibleDescription('Zwischen - und 17:00');
+      unmount();
+
+      render(<TimePicker aria-label="Zeit" minTime="09:00" labels={labels} />);
+      await user.type(combobox('Zeit'), 'bald{Enter}');
+      expect(invalidTime).toHaveBeenLastCalledWith('h:mm AM');
+      await user.clear(combobox('Zeit'));
+      await user.type(combobox('Zeit'), '8:00 AM{Enter}');
+      expect(outOfRange).toHaveBeenLastCalledWith('9:00 AM', undefined);
+    });
+
+    describe('clearing the error', () => {
+      async function reject(user: ReturnType<typeof userEvent.setup>, text = 'soon') {
+        await user.clear(combobox('Time'));
+        await user.type(combobox('Time'), `${text}{Enter}`);
+        expect(combobox('Time')).toHaveAttribute('aria-invalid', 'true');
+      }
+
+      function expectValid(value: string) {
+        expect(combobox('Time')).toHaveValue(value);
+        expect(combobox('Time')).not.toHaveAttribute('aria-invalid');
+        expect(combobox('Time')).not.toHaveAccessibleDescription();
+        expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+      }
+
+      it('editing the text clears it', async () => {
+        const user = userEvent.setup();
+        render(<TimePicker aria-label="Time" />);
+        await reject(user);
+        await user.type(combobox('Time'), 'x');
+        expectValid('soonx');
+      });
+
+      it('selecting an option clears it', async () => {
+        const user = userEvent.setup();
+        render(<TimePicker aria-label="Time" maxTime="13:00" />);
+        // Out of range, but '12:00 PM' still matches the text and is listed when the list, which
+        // the rejected Enter closed, opens again.
+        await reject(user, '2:00 PM');
+        await user.click(combobox('Time'));
+        await user.click(screen.getByRole('option', { name: '12:00 PM' }));
+        expectValid('12:00 PM');
+      });
+
+      it('the clear button clears it', async () => {
+        const user = userEvent.setup();
+        const onValueChange = vi.fn();
+        const onInvalidInput = vi.fn();
+        render(
+          <TimePicker
+            aria-label="Time"
+            defaultValue="09:00"
+            clearable
+            onValueChange={onValueChange}
+            onInvalidInput={onInvalidInput}
+          />,
+        );
+        await reject(user);
+        await user.click(screen.getByRole('button', { name: 'Clear time' }));
+        expectValid('');
+        expect(onValueChange.mock.calls).toEqual([['']]);
+        expect(onInvalidInput).toHaveBeenCalledTimes(1);
+      });
+
+      it('Escape reverting the text clears it', async () => {
+        const user = userEvent.setup();
+        render(<TimePicker aria-label="Time" defaultValue="09:00" />);
+        await reject(user);
+        await user.keyboard('{Escape}');
+        expectValid('9:00 AM');
+      });
+
+      it('a new value from the parent replaces the rejected text', async () => {
+        const user = userEvent.setup();
+        function Parent() {
+          const [value, setValue] = React.useState('');
+          return (
+            <>
+              <TimePicker aria-label="Time" value={value} onValueChange={setValue} />
+              <button type="button" onClick={() => setValue('10:00')}>
+                Ten
+              </button>
+            </>
+          );
+        }
+        render(<Parent />);
+        await reject(user);
+        await user.click(screen.getByRole('button', { name: 'Ten' }));
+        expectValid('10:00 AM');
+      });
+
+      it('a form reset clears it', async () => {
+        const user = userEvent.setup();
+        render(
+          <form aria-label="Form">
+            <TimePicker aria-label="Time" defaultValue="09:00" />
+          </form>,
+        );
+        await reject(user);
+        const form = screen.getByRole('form', { name: 'Form' }) as HTMLFormElement;
+        act(() => form.reset());
+        expectValid('9:00 AM');
+      });
+
+      it.each([
+        ['disabled', { disabled: true }],
+        ['read-only', { readOnly: true }],
+      ])('becoming %s drops the rejected text and clears it', async (_label, props) => {
+        const user = userEvent.setup();
+        const { rerender } = render(<TimePicker aria-label="Time" defaultValue="09:00" />);
+        await reject(user);
+        rerender(<TimePicker aria-label="Time" defaultValue="09:00" {...props} />);
+        expectValid('9:00 AM');
+      });
+    });
+
+    it('leaves the error text to a Field that shows an error', async () => {
+      const user = userEvent.setup();
+      renderWithFieldContext(<TimePicker />, { errorId: FIELD_TEST_IDS.errorId });
+      await user.type(combobox(FIELD_TEST_TEXT.label), 'soon{Enter}');
+      expect(combobox(FIELD_TEST_TEXT.label)).toHaveAttribute('aria-invalid', 'true');
+      expect(combobox(FIELD_TEST_TEXT.label)).toHaveAccessibleDescription(FIELD_TEST_TEXT.error);
+      expect(screen.queryByText(INVALID_12H)).not.toBeInTheDocument();
+    });
+
+    it('shows its own error next to a Field warning', async () => {
+      const user = userEvent.setup();
+      renderWithFieldContext(<TimePicker />, {
+        validationState: 'warning',
+        validationMessageId: FIELD_TEST_IDS.messageId,
+      });
+      await user.type(combobox(FIELD_TEST_TEXT.label), 'soon{Enter}');
+      expect(combobox(FIELD_TEST_TEXT.label)).toHaveAccessibleDescription(
+        `${INVALID_12H} ${FIELD_TEST_TEXT.message}`,
+      );
+    });
+
+    it('has no accessibility violations while invalid', async () => {
+      const user = userEvent.setup();
+      render(<TimePicker aria-label="Time" defaultValue="09:00" clearable />);
+      await user.clear(combobox('Time'));
+      await user.type(combobox('Time'), 'soon{Enter}');
+      expect(combobox('Time')).toHaveAttribute('aria-invalid', 'true');
+      expect(await axe(document.body)).toHaveNoViolations();
     });
   });
 
@@ -1093,6 +1665,68 @@ describe('TimePicker', () => {
       await user.tab();
       expect(screen.queryByRole('listbox')).not.toBeInTheDocument();
       expect(screen.getByRole('button', { name: 'After' })).toHaveFocus();
+    });
+
+    it('Tab to the clear button closes the status text shown instead of options (text rejected by Enter, reopened)', async () => {
+      const user = userEvent.setup();
+      render(<TimePicker aria-label="Time" defaultValue="09:00" clearable />);
+      await user.clear(combobox('Time'));
+      await user.type(combobox('Time'), 'zz{Enter}');
+      await user.click(combobox('Time'));
+      expect(listSurface()).toHaveTextContent('No matching times');
+      await user.tab();
+      expect(screen.getByRole('button', { name: 'Clear time' })).toHaveFocus();
+      expect(listSurface()).toBeNull();
+      expect(screen.getByRole('alert')).toHaveTextContent(INVALID_12H);
+    });
+
+    it('Tab to the clear button closes the status text shown instead of options (bounds that leave no times)', async () => {
+      const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+      const user = userEvent.setup();
+      render(
+        <TimePicker
+          aria-label="Time"
+          defaultValue="09:00"
+          clearable
+          minTime="17:00"
+          maxTime="09:00"
+        />,
+      );
+      await user.click(combobox('Time'));
+      expect(listSurface()).toHaveTextContent('No times available');
+      await user.tab();
+      expect(screen.getByRole('button', { name: 'Clear time' })).toHaveFocus();
+      expect(listSurface()).toBeNull();
+      expect(warn.mock.calls).toEqual([
+        [
+          '[WaveUI] TimePicker: `minTime`/`maxTime` must be times such as "09:00", "09:00:00" or ' +
+            '"9:00 AM" with minTime <= maxTime (received "17:00" / "09:00"); no times are available.',
+        ],
+      ]);
+    });
+
+    it('Tab to the clear button commits a typed time that is not in the list and leaves the list closed', async () => {
+      const user = userEvent.setup();
+      const onValueChange = vi.fn();
+      const onOpenChange = vi.fn();
+      render(
+        <TimePicker
+          aria-label="Time"
+          defaultValue="09:00"
+          clearable
+          onValueChange={onValueChange}
+          onOpenChange={onOpenChange}
+        />,
+      );
+      await user.clear(combobox('Time'));
+      await user.type(combobox('Time'), '9:15 AM');
+      await user.tab();
+      expect(screen.getByRole('button', { name: 'Clear time' })).toHaveFocus();
+      expect(combobox('Time')).toHaveValue('9:15 AM');
+      expect(onValueChange.mock.calls).toEqual([['09:15']]);
+      expect(combobox('Time')).toHaveAttribute('aria-expanded', 'false');
+      expect(listSurface()).toBeNull();
+      expect(onOpenChange.mock.calls).toEqual([[true], [false]]);
     });
 
     it('Escape closes only the listbox inside a parent layer; a second Escape reaches the parent', async () => {

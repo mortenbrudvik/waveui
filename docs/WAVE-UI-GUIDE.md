@@ -123,7 +123,7 @@ Wave uses Tailwind's default breakpoints (it does not redefine them):
 
 - Use CSS Grid or Flexbox (`Grid`, `Stack`, `Flex`); avoid absolute positioning for layout
 - Use logical properties (`ms-*`, `pe-*`, `start-*`, `border-s`, `text-start`) so layouts mirror in RTL
-- Mirror direction-dependent glyphs and offsets with Wave's `wave-rtl:` variant (`wave-rtl:-scale-x-100`; write the LTR value as the base class). It follows the element's own direction (`:dir(rtl)`), while Tailwind's `rtl:` also matches inside an LTR subtree of an RTL page; the library's conventions gate rejects bare `rtl:`/`ltr:` in components
+- Mirror direction-dependent glyphs and offsets with Wave's `wave-rtl:` variant (`wave-rtl:-scale-x-100`; write the LTR value as the base class). It follows the element's own direction (`:dir(rtl)`, compiled as `:nth-child(n of :dir(rtl))`, which CSS minifiers keep), while Tailwind's `rtl:` also matches inside an LTR subtree of an RTL page; the library's conventions gate rejects bare `rtl:`/`ltr:` in components
 - Main content areas should not exceed 1200px width (readability)
 - Side panels: 320px default width
 - Navigation rail: 48px collapsed, 280px expanded
@@ -585,7 +585,8 @@ export const StatusLabel = ({ icon, children, ...rest }: StatusLabelProps) => (
 - `null`, `undefined`, `false` and `true` render nothing.
 - `Slot<T>` is `SlotObject<T> | React.ReactNode`, so any `ReactNode` (a promise included) type-checks. An attributes object typed by an interface (`React.ImgHTMLAttributes<HTMLImageElement>`) must be spread into a new object: `image={{ ...imgProps }}`.
 - `slotRendersContent(value)` (`src/lib/slot.ts`) is the one "renders anything" check: `''`, and an array, `Set`, generator or Fragment of only nullish, boolean or `''` items (`[]`, `<></>`, `<>{false}</>`, at any depth), render nothing; `0` is content. Components use it to fall back when a slot is effectively empty (a Field `error={[]}` is no error, a dismiss slot that renders nothing keeps the default icon). It reads a top-level generator once and caches its items: a value you check and then render yourself (not through `renderSlot`/`resolveSlot`) goes through `materialiseSlotContent(value)`, so React never enumerates the generator.
-- Dismiss and clear slots (Tag, MessageBar, SearchBox) share one rule, `slotWrapsDefaultContent(type, props)`: a slot object wraps the default icon only when its element is an intrinsic, non-void tag without `dangerouslySetInnerHTML` whose children render nothing (`{ className: 'text-error' }` styles the default icon). A component `as` (`{ as: CloseIcon }`), a void tag (`{ as: 'img', src, alt: '' }`) and markup of its own are the icon itself. A `<button>`/`Button` passed there, or a slot object whose `as` is one, is merged into the built-in button; its markup (`dangerouslySetInnerHTML`) renders inside that button.
+- Dismiss and clear slots (Tag, MessageBar, SearchBox) share one rule, `slotWrapsDefaultContent(type, props)`: a slot object wraps the default icon only when its element is an intrinsic, non-void tag without `dangerouslySetInnerHTML` whose children render nothing (`{ className: 'text-error' }` styles the default icon). A component `as` (`{ as: CloseIcon }`), a void tag (`{ as: 'img', src, alt: '' }`) and markup of its own are the icon itself. A `<button>`/`Button` passed there, or a slot object whose `as` is one, is merged into the built-in button; its markup (`dangerouslySetInnerHTML`) renders inside that button. A merged Wave `Button` keeps its own props off the DOM (`BUTTON_OWN_PROP_KEYS` in `src/components/button/Button.slots.tsx`): its `icon` and `iconPosition` place the icon in the built-in button's content, and its `disabledFocusable` makes the built-in button unavailable but focusable.
+- Glyph slots inside a built-in button (Combobox and TimePicker `expandIcon`, SplitButton and MenuButton `menuIcon`) never nest a button: a `<button>`/`Button`, or a slot object whose `as` is one, is unwrapped by `unwrapButtonGlyph` (the same module): its children become the glyph, its props are dropped, and a one-time development warning names the slot.
 - The last argument of `renderSlot`/`resolveSlot` holds defaults the slot's own props override; icon slots pass `{ 'aria-hidden': true }`.
 
 ### Pattern 4: Controlled / Uncontrolled (useControllable)
@@ -691,15 +692,16 @@ Each component declares `XOwnProps` with its own props only (never the default e
 
 **Button with `as`**:
 
-- **Non-interactive elements.** `as="div"`, `as="span"` and other elements that are not interactive by themselves get `role="button"`, `tabIndex={0}` and Enter (key down) / Space (key up) activation, like a native button; a consumer `role` or `tabIndex` wins. `as="a"` shows no link underline. A native `<button>` gets `type="button"` by default (also when a wrapper forwards `type={undefined}`); a custom `as` component gets no `type` default, so pass `type` yourself inside a form.
-- **`disabled`.** Only `button` (the default), `input`, `select` and `textarea` receive the native `disabled` attribute. Every other `as` gets `aria-disabled="true"` and `tabIndex={-1}`, placed after the rest props so a consumer value cannot re-enable it. That covers `a`, `div`, `span` and any custom component, including router links and styled or motion components that render a native `<button>`. Clicks, Enter and Space are prevented (the click does not reach ancestor `onClick` handlers), and an `<a>` drops its `href` and keeps `role="link"`. Such an element has no native `:disabled` state, so its own `:disabled` styling does not apply: style it on `[aria-disabled="true"]`. It leaves the tab order but can still take focus from a mouse click.
+- **Non-interactive elements.** `as="div"`, `as="span"` and other elements that are not interactive by themselves get `role="button"`, `tabIndex={0}` and Enter (key down) / Space (key up) activation, like a native button; a consumer `role` or `tabIndex` wins. So does `as="a"` without `href` (and a `Link` without `href`): it keeps its `<a>` element, and any `href`, `''` included, keeps it a link. `as="a"` shows no link underline. Button and Link share this logic (`Button.semantics.ts`). A native `<button>` gets `type="button"` by default (also when a wrapper forwards `type={undefined}`); a custom `as` component gets no `type` default, so pass `type` yourself inside a form.
+- **`disabled`.** Only `button` (the default), `input`, `select` and `textarea` receive the native `disabled` attribute. Every other `as` gets `aria-disabled="true"` and `tabIndex={-1}`, placed after the rest props so a consumer value cannot re-enable it. That covers `a`, `div`, `span` and any custom component, including router links and styled or motion components that render a native `<button>`. Clicks, Enter and Space are prevented (the click does not reach ancestor `onClick` handlers), and an `<a>` drops its `href` and keeps `role="link"` (`role="button"` when it had no `href`). Every disabled Button renders `data-disabled`. Such an element has no native `:disabled` state, so its own `:disabled` styling does not apply: style it on `[aria-disabled="true"]`. It leaves the tab order but can still take focus from a mouse click.
+- **`disabledFocusable`** keeps an unavailable button in the tab order: `aria-disabled="true"`, `data-disabled` and `data-disabled-focusable` on any element (a native `<button>` gets no `disabled` attribute), a click, Enter, Space and implicit form submission blocked (the click does not reach ancestors), other keys forwarded, and it wins over `disabled`. An `<a>` drops its `href` but keeps `tabIndex={0}`. Toolbars keep it in their arrow-key order and `Menu.Trigger` never opens from it. While it shows its focus ring it is drawn at full opacity (`aria-disabled:focus-visible:opacity-100`), because the disabled look's opacity would dim the ring below 3:1.
 - **Hover and pressed colors** are gated (`not-disabled:not-aria-disabled:hover:` / `…:active:`), so they never apply while disabled or `aria-disabled` and they work for `as="a"`. A bare `className="hover:bg-error"` does not override them (see [Pattern 5](#pattern-5-cn-utility)): use `not-disabled:not-aria-disabled:hover:bg-error` or `hover:bg-error!`. CompoundButton, ToggleButton, MenuButton and SplitButton behave the same.
 
 ### Pattern 8: Composite Controls and Field
 
-Controls whose root wraps a focusable element (Checkbox, Switch, SearchBox, SpinButton, Combobox, Dropdown, TagPicker, DatePicker, TimePicker) route `id`, the naming and validation ARIA attributes (`aria-label`, `aria-labelledby`, `aria-describedby`, `aria-invalid`, `aria-required`, `aria-errormessage`, `aria-details`), `tabIndex`, `autoFocus`, focus/key handlers and native input attributes to the focusable element; `className`, `style`, `data-*`, other `aria-*` attributes and `ref` stay on the root, and `controlRef` reaches the focusable element. SearchBox and SpinButton draw their field (border, background, focus and invalid look) on that root, so `className`, `style` and `hidden` reach the visible field. `Input` with `contentBefore`/`contentAfter` content is the exception: its bordered wrapper receives only `className`, `style` and `hidden`, and everything else stays on the `<input>`.
+Controls whose root wraps a focusable element (Checkbox, Switch, SearchBox, SpinButton, Combobox, Dropdown, TagPicker, DatePicker, TimePicker) route `id`, the naming and validation ARIA attributes (`aria-label`, `aria-labelledby`, `aria-describedby`, `aria-invalid`, `aria-required`, `aria-errormessage`, `aria-details`; on Checkbox and Switch also `aria-disabled`), `tabIndex`, `autoFocus`, focus/key handlers and native input attributes to the focusable element; `className`, `style`, `data-*`, other `aria-*` attributes and `ref` stay on the root, and `controlRef` reaches the focusable element. SearchBox and SpinButton draw their field (border, background, focus and invalid look) on that root, so `className`, `style` and `hidden` reach the visible field. `Input` with `contentBefore`/`contentAfter` content is the exception: its bordered wrapper receives only `className`, `style` and `hidden`, and everything else stays on the `<input>`.
 
-Every library control reads the surrounding `Field` through `useFieldControl`, which merges the control's own labelling props with the Field's label, hint, error and required state. Your own controls can do the same:
+Every library control reads the surrounding `Field` through `useFieldControl`, which merges the control's own labelling props with the Field's label, validation message (in any state), hint, invalid state (error only) and required state. Your own controls can do the same:
 
 ```tsx
 import * as React from 'react';
@@ -717,6 +719,30 @@ export const Theme = () => (
 );
 ```
 
+**Validation states.** A Field shows one validation message below the control, styled and announced by `validationState`:
+
+| State | Look | Control | Announced |
+|---|---|---|---|
+| `error` (the default when `validationMessage` is set) | error icon, `text-error` | `aria-invalid="true"` | yes (`role="alert"`) |
+| `warning` | warning icon, `text-warning-tint-foreground` | not invalid | yes (`role="alert"`) |
+| `success` | success icon, `text-success-tint-foreground` | not invalid | no |
+| `none` | no icon, `text-muted-foreground` | not invalid | no |
+
+`error` is the shorthand for an error message (`error="…"`, or `error={true}` to mark the control invalid without one) and wins over `validationMessage` and `validationState`, with a development warning when both are set. The hint stays visible after the message, and the control is described by the message, then the hint. `validationMessageIcon` replaces the icon (`null` removes it), and `orientation="horizontal"` puts the label in a start column beside the control, its first line level with the control's first line (a Checkbox, Switch or RadioGroup as the first child gets 6px of padding above and below its 20px first row, as tall as an Input). The root carries `data-validation-state` and `data-orientation`.
+
+```tsx
+<Field
+  label="Username"
+  hint="Letters and digits only"
+  validationState="success"
+  validationMessage="The name is available"
+>
+  <Input />
+</Field>
+```
+
+For custom controls, `FieldContextValue` carries the state: `validationState` and `validationMessageId`, the message's id in every state (`errorId` is set only in the error state, and so is `invalid`). `useFieldControl` describes the control with `validationMessageId ?? errorId`, then the hint, so the `ColorWell` above is described by a warning or success message too. `hasErrorMessage` is `true` only for an error message, so a control that shows its own error (Input `error`, DatePicker's rejected text) keeps it next to a Field warning. ProgressBar reads `validationState` to color its fill.
+
 ### Pattern 9: Overlays and Triggers
 
 - `Dialog.Trigger`, `Drawer.Trigger`, `Popover.Trigger` and `Menu.Trigger` merge their props (`aria-haspopup`, `aria-expanded`, `aria-controls`, a composed `onClick`, a ref) onto their single child, or pass them to a render-prop child. The trigger's live state always wins over the child's own ARIA props; the child's own `id` and handlers are kept. A Fragment around one element counts as that element.
@@ -732,7 +758,8 @@ export const Theme = () => (
 - Omit conflicting native props: `Omit<React.HTMLAttributes<HTMLDivElement>, 'onChange' | 'defaultValue'>`
 - Name value callbacks after the state (`onValueChange`, `onCheckedChange`, `onOpenChange`); `onChange` is only the native change event
 - Declare `ref` in the interface; export the props type with the component (`CardHeaderProps`, `DataGridRowProps`)
-- Use shared types from `src/lib/types.ts`: `Size`, `Appearance`, `Status`, `Orientation`, `SelectionMode`, `TextWeight`, `Shape`, `PopupSide`, `PopupAlign`
+- Use shared types from `src/lib/types.ts`: `Size`, `Appearance`, `Status`, `Orientation`, `SelectionMode`, `TextWeight`, `Shape`, `PopupSide`, `PopupAlign`, `BadgeColor`, `IconPosition`, `ValidationState`, `LabelPosition` (take a subset with `Extract<LabelPosition, …>`), `ModalType`, `OpenChangeDetails<R>`
+- Prefer Fluent's prop name when it fits the conventions (`disabledFocusable`, `iconPosition`, `validationState`, `modalType`, `selectTabOnFocus`); open state stays `open`/`defaultOpen`/`onOpenChange`, and extra callback data goes in a second, optional `details` argument (`onOpenChange(open, details?)`)
 
 ---
 
@@ -767,18 +794,41 @@ Home / End   → first / last enabled item
 Tab          → leaves the group
 ```
 
-Only one item holds `tabIndex={0}`. Disabled items are skipped, and so are controls hidden with CSS (`display: none` or `visibility: hidden` inside the container, a closed `<details>`) and the `type="hidden"` input of a named value control. Left/Right are mirrored in RTL. Arrows that start in a text field, select, slider, spin button or editable combobox inside the group are left to that control (a SearchBox in a Toolbar keeps its caret keys). A Dropdown (select-only combobox) keeps Up/Down, Home and End for its list, but Left/Right move past it, so in a vertical Toolbar the arrows cannot leave it.
+Only one item holds `tabIndex={0}`. Disabled items are skipped (natively disabled or `aria-disabled`, except the focusable disabled ones below), and so are controls hidden with CSS (`display: none` or `visibility: hidden` inside the container, a closed `<details>`) and the `type="hidden"` input of a named value control. Left/Right are mirrored in RTL. Arrows that start in a text field, select, slider, spin button or editable combobox inside the group are left to that control (a SearchBox in a Toolbar keeps its caret keys). A Dropdown (select-only combobox) keeps Up/Down, Home and End for its list, but Left/Right move past it, so in a vertical Toolbar the arrows cannot leave it.
 
 In a Toolbar, a nested composite (a RadioGroup, a TabList) keeps its own Tab stop and arrow keys, and focusing it or a text field, select, slider or spin button keeps the toolbar's Tab stop on the last focused other control, so Tab and Shift+Tab can return to the toolbar; such a control holds the stop only when nothing else can. These rules live in `useRovingTabIndex` (the CSS-hidden check in its `manageTabIndex` mode, which Toolbar and Menu use); an `itemSelector` the browser rejects logs a development warning.
+
+**Focusable disabled items.** A control with `disabledFocusable` (Button, CompoundButton, ToggleButton, MenuButton, a SplitButton half, Link, Checkbox, Switch) carries `aria-disabled="true"` and `data-disabled-focusable`, and `useRovingTabIndex` keeps such an item: the arrow keys, Home/End and typeahead reach it, and it may hold the Tab stop (APG allows focusable disabled items in toolbars). Enter, Space and clicks on it do nothing, and a Tooltip on it opens on focus to say why it is unavailable. Natively disabled items and a composite's own `data-roving-disabled` items are still skipped.
+
+```tsx
+<Toolbar aria-label="Formatting">
+  <Button>Bold</Button>
+  <Tooltip content="Copy something first">
+    <Button disabledFocusable>Paste</Button>
+  </Tooltip>
+  <Button disabled>Cut</Button> {/* skipped */}
+</Toolbar>
+```
 
 | Component | Arrow keys |
 |---|---|
 | Toolbar | Left/Right (Up/Down when `orientation="vertical"`), wrapping |
 | RadioGroup, SwatchPicker | all four arrows, wrapping; moving selects |
-| TabList | Left/Right (Up/Down when vertical), wrapping; moving selects (automatic activation) |
+| TabList | Left/Right (Up/Down when vertical), wrapping; moving selects (automatic activation), or with `selectTabOnFocus={false}` only moves focus (manual activation: Enter or Space selects) |
 | Menu | Up/Down, wrapping; typeahead |
 | List (selectable) | Up/Down, wrapping; typeahead above 7 items; Enter/Space toggle selection |
 | Tree | see below |
+
+**Manual tab activation.** By default TabList selects the tab that focus moves to (automatic activation, as APG recommends when a panel shows at once). For panels that are slow to show, `selectTabOnFocus={false}` switches to manual activation: the arrow keys, Home and End only move focus, Enter, Space or a click selects the focused tab, and the Tab stop stays on the selected tab, so Tab away and Shift+Tab back return to it. The shown panel follows the selected tab, not the focused one. (Fluent's default is `false`; Wave keeps `true`, the 0.5 behaviour.)
+
+```tsx
+<TabList aria-label="Reports" selectTabOnFocus={false}>
+  <TabList.Tab value="sales">Sales</TabList.Tab>
+  <TabList.Tab value="traffic">Traffic</TabList.Tab>
+  <TabList.Panel value="sales">…</TabList.Panel>
+  <TabList.Panel value="traffic">…</TabList.Panel>
+</TabList>
+```
 
 Wherever there is typeahead (Menu, selectable List, Tree, Dropdown), a Space typed within 500 ms of a character continues the search instead of activating or committing, so "new y" reaches "New York". Characters typed with AltGr, which Windows reports as Ctrl+Alt (Polish `ł`, Romanian `ș`), count; Ctrl+Alt with an arrow, Home, End or Space is left to the browser. An item that refuses focus (hidden by CSS) is passed over for the next match. Keys typed in content inside an item, such as a List row's action button, are not typeahead. Menu matches item labels only, never an icon's text or a shortcut.
 
@@ -795,7 +845,9 @@ Escape              → close; on a closed list, discard the typed text
 Home / End          → move the text caret
 ```
 
-Focus stays on the input. Typing filters the options (Combobox in both modes; with `freeform` the typed text is the value). In Combobox and TagPicker, Enter with no active option submits the form, also after typing text that matches no option. TimePicker's Enter on edited text commits a complete time within the bounds, clears the value when the text was erased, and otherwise keeps the text. TagPicker: Backspace in the empty input focuses the last tag, Backspace or Delete removes it.
+Focus stays on the input. Typing filters the options (Combobox in both modes; with `freeform` the typed text is the value). In Combobox and TagPicker, Enter with no active option submits the form, also after typing text that matches no option. TimePicker's Enter on edited text commits a complete time within the bounds, clears the value when the text was erased, and otherwise keeps the text, flags it (`aria-invalid` and an error message) and closes the list; leaving the input settles edited text the same way and closes the list too. TagPicker: Backspace in the empty input focuses the last tag, Backspace or Delete removes it.
+
+The chevron button at the end of a Combobox or TimePicker (APG's "open" button) is not a Tab stop and keeps focus in the input; Alt+ArrowDown does the same from the keyboard. The clear button (`clearable` on Combobox, Dropdown, DatePicker and TimePicker) is a Tab stop after the input, or after the Dropdown's combobox button, and moves focus back to it after clearing. Tab from erased TimePicker or DatePicker text clears the value before focus moves, so focus goes on past the clear button that disappears with the value (to DatePicker's calendar button, or the tab stop after the TimePicker).
 
 #### Dropdown (select-only combobox)
 
@@ -848,6 +900,8 @@ Menu:    ArrowDown / ArrowUp        → next / previous item (wrapping); Home / 
          Escape                     → close and return focus to the trigger
          Tab                        → close; focus continues from the trigger
 ```
+
+A trigger with `aria-disabled="true"` (a `disabledFocusable` MenuButton or SplitButton menu half, also inside the trigger's wrapper span) stays focusable, but its click, Enter, Space, ArrowDown and ArrowUp never open the menu. A menu taller than the space next to its trigger scrolls inside the viewport, and the focused item is scrolled into view.
 
 #### Dialog and Drawer
 
@@ -912,7 +966,7 @@ Option ids stay stable while the list is filtered. `aria-activedescendant` is se
 </div>
 ```
 
-Dialog and Drawer do **not** set `aria-modal`. While they are open, everything else on the page is made `inert` except the Toaster region and the announcement live regions, so the background is neither focusable, clickable nor readable while toasts stay available. The DatePicker calendar is a transient dialog that keeps `aria-modal="true"`. Name a dialog with `title`, `Dialog.Title`/`Drawer.Title`, `aria-label` or `aria-labelledby` (unnamed dialogs warn in development).
+With `modalType="alert"`, `Dialog.Content` is `role="alertdialog"` instead, for a confirmation that needs an answer (a backdrop press does not close it). Dialog and Drawer do **not** set `aria-modal`. While they are open, everything else on the page is made `inert` except the Toaster region and the announcement live regions, so the background is neither focusable, clickable nor readable while toasts stay available. The DatePicker calendar is a transient dialog that keeps `aria-modal="true"`. Name a dialog with `title`, `Dialog.Title`/`Drawer.Title`, `aria-label` or `aria-labelledby` (unnamed dialogs warn in development).
 
 #### Navigation
 
@@ -924,6 +978,8 @@ Dialog and Drawer do **not** set `aria-modal`. While they are open, everything e
   </ul>
 </nav>
 ```
+
+A collapsed `Nav.Category` that contains the current page marks its toggle button with `aria-current="true"` (not `"page"`: the button is not the page's link) and the selected look. A category whose children hold the current item takes it over from the category Nav remembered, so an item moved into another category marks only that one.
 
 > Do not use `role="menubar"` / `role="menuitem"` for site navigation. Those roles are for application menus; site navigation needs only the `<nav>` landmark with plain links (`Nav`, `Breadcrumb`).
 
@@ -956,9 +1012,9 @@ Live regions must exist before their content changes. `Toaster` keeps two perman
 
 ### Focus Management
 
-1. **Focus rings**: focusable controls use `focusRing` (`focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring`), cells and rows `focusRingInset`; text inputs show a primary bottom border (`inputFocus`) with `focus:outline-hidden`, which keeps an outline in forced-colors mode. Never use `focus:outline-none`.
+1. **Focus rings**: focusable controls use `focusRing` (`focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring`), cells and rows `focusRingInset`; text inputs show a primary bottom border (`inputFocus`) with `focus:outline-hidden`, which keeps an outline in forced-colors mode. Never use `focus:outline-none`. A focusable control with the disabled look (`disabledFocusable`, a self-disabling boundary button) goes back to full opacity while its ring shows, so the ring keeps its contrast.
 2. **Moving focus into overlays**: Dialog and Drawer focus their first focusable element (or keep an `autoFocus` element, also when stacked over or nested in another dialog, and in a popover opened from one), Menu focuses its first item, the DatePicker calendar its focused day. Build custom overlays on these components rather than re-implementing traps.
-3. **Focus restoration**: when an overlay closes, focus returns to where it came from. Dialog and Drawer use `finalFocusRef` when given, else the element that was focused when they opened (the trigger, for a trigger click; a trigger's wrapper span resolves to the element inside it), or a trigger when nothing had focus. When that element is gone, focus goes to a mounted trigger, then to the element next to where the opener was (the next row's action after a delete), then to the overlay below. Popovers and menus return focus to their trigger (TeachingPopover: to where focus was) when focus was inside them (or lost to `<body>`) at close. When a focused element disappears (a SearchBox clear button, a removed toast, a boundary button), the component moves focus somewhere sensible instead of dropping it to `<body>`.
+3. **Focus restoration**: when an overlay closes, focus returns to where it came from. Dialog and Drawer use `finalFocusRef` when given, else the element that was focused when they opened (the trigger, for a trigger click; a trigger's wrapper span resolves to the element inside it), or a trigger when nothing had focus. When that element is gone, focus goes to a mounted trigger, then to the element next to where the opener was (the next row's action after a delete), then to the overlay below. Popovers and menus return focus to their trigger (TeachingPopover: to where focus was) when focus was inside them (or lost to `<body>`) at close. When a focused element disappears (a SearchBox clear button, a removed toast, a boundary button), the component moves focus somewhere sensible instead of dropping it to `<body>`; TimePicker and DatePicker settle erased text on Tab before focus moves, so Tab never lands on the clear button that the commit removes.
 4. **Focus trapping**: Dialog and Drawer trap Tab, including the Toaster region and overlays opened from them. Tab inside a plain `<Portal>` rendered in a dialog is native and wraps to the dialog's first or last element at the portal's edges. Focus that lands outside the trap is returned in a microtask after the `focusin`.
 5. **Skip links**: for content-heavy pages, provide a "Skip to main content" link.
 
@@ -980,10 +1036,10 @@ The **high-contrast theme** (`WaveProvider theme="high-contrast"`) is a separate
 - Every image needs `alt` text (`alt=""` for decorative images); `Image` warns in development without `alt`, and `StrictImageProps` requires it at compile time
 - Form controls need a label: wrap them in `Field`, or pass `aria-label`/`aria-labelledby`
 - Group related controls with `<fieldset>` + `<legend>` (or `role="group"` + `aria-label`)
-- Validation errors: `Field`'s `error`, or `error="…"` on Input/Select/Textarea, render a `role="alert"` message linked with `aria-describedby`
+- Validation errors: `Field`'s `error`, or `error="…"` on Input/Select/Textarea, render a `role="alert"` message linked with `aria-describedby`; a Field `validationState="warning"` message is announced too, without marking the control invalid
 - Hide decorative elements with `aria-hidden="true"` (Wave's icon slots do it for you)
 - Name progress indicators and landmarks: `ProgressBar` `label`, `Spinner` `label` (default "Loading"), `Toolbar` and `Nav` `aria-label`
-- Translate the names and hidden texts components render themselves: `closeLabel` (Dialog.Content, Drawer, TeachingPopover), `statusLabel` (MessageBar, Toast), `dismissLabel` (Toast, `dispatchToast` options, Tag), Carousel `labels` and `autoPlayLabels`, Stepper `statusLabels`, Pagination `getItemAriaLabel`, and the `labels` objects of ColorPicker, Combobox, DataGrid, DatePicker, Rating, SpinButton, TagPicker, TeachingPopover and TimePicker (the README's "Built-in text" lists every one)
+- Translate the names and hidden texts components render themselves: `closeLabel` (Dialog.Content, Drawer, TeachingPopover), `statusLabel` (MessageBar, Toast), `dismissLabel` (Toast, `dispatchToast` options, Tag), Carousel `labels` and `autoPlayLabels`, Stepper `statusLabels`, Pagination `getItemAriaLabel`, and the `labels` objects of ColorPicker, Combobox, DataGrid, DatePicker, Dropdown, Rating, RatingDisplay, SpinButton, TagPicker, TeachingPopover and TimePicker (the README's "Built-in text" lists every one)
 
 ---
 
@@ -1179,10 +1235,12 @@ export function ProfileForm() {
 **Guidelines**:
 
 - Stack fields vertically with `gap="lg"` (16px)
-- Labels above controls (not inline, unless it is a horizontal form)
+- Labels above controls (not inline, unless it is a horizontal form: `orientation="horizontal"`)
 - `required` on the Field shows a decorative `*`, sets `aria-required` and turns on the browser's constraint validation: native inputs get the native `required` attribute, and choice and picker controls (Checkbox, Switch, RadioGroup, Dropdown, DatePicker, …) render a required hidden input, so the form does not submit while the control is empty, unchecked or off. A form that shows its own errors on submit, like the one above, sets `noValidate`
 - A `readOnly` Combobox, TagPicker, DatePicker or TimePicker does not block the submit, like a native read-only input (it keeps `aria-required`)
-- Field's `error` renders the message below the control in a `role="alert"` element and marks the control invalid (a control's own `aria-invalid={false}` wins, and the error still describes it); `hint` describes it. A `label`, `hint` or `error` that renders nothing (an empty `errors.map(…)`) counts as absent
+- Field's `error` renders the message below the control in a `role="alert"` element and marks the control invalid (a control's own `aria-invalid={false}` wins, and the error still describes it); `hint` describes it and stays visible after the message. A `label`, `hint` or `error` that renders nothing (an empty `errors.map(…)`) counts as absent
+- For advice that is not an error, use `validationMessage` with `validationState="warning"` (announced, the control stays valid), `"success"` or `"none"` (shown, not announced); see [Pattern 8](#pattern-8-composite-controls-and-field)
+- A settings form can put labels beside the controls with `orientation="horizontal"` on each Field
 - One control per Field; wrap layout or wrapper components (a Tooltip) in a plain `<div>` inside the Field
 - Primary action button end-aligned, or full-width on mobile
 
@@ -1214,7 +1272,7 @@ export function Sidebar() {
 }
 ```
 
-The category that contains the selected item (`value` or `defaultValue`) starts open; `defaultOpenCategories` (even `[]`) replaces that, and `openCategories`/`onOpenCategoriesChange` control it. A click that opens a link elsewhere (Ctrl/Cmd/Shift/Alt-click, a mouse button other than the main one, a `target` other than `_self`, a `download` link) selects nothing, unless the item's `onClick` calls `preventDefault()` (client-side routing): the browser then opens nothing elsewhere, and the item is selected. Item values (items and sub-items share them) and category values are unique; a duplicate warns in development.
+The category that contains the selected item (`value` or `defaultValue`) starts open; `defaultOpenCategories` (even `[]`) replaces that, and `openCategories`/`onOpenCategoriesChange` control it. A click that opens a link elsewhere (Ctrl/Cmd/Shift/Alt-click, a mouse button other than the main one, a `target` other than `_self`, a `download` link) selects nothing, unless the item's `onClick` calls `preventDefault()` (client-side routing): the browser then opens nothing elsewhere, and the item is selected. Item values (items and sub-items share them) and category values are unique; a duplicate warns in development. A closed category that contains the current page marks its toggle (`aria-current="true"`, the selected look); for sub-items that your own component renders inside a category, pass the category's value as `currentCategory`.
 
 **Breadcrumb**:
 
@@ -1247,6 +1305,8 @@ export function ProductTabs() {
 }
 ```
 
+Moving focus with the arrow keys selects the tab; pass `selectTabOnFocus={false}` when a panel is slow to show, so the keys only move focus and Enter or Space selects (see [Keyboard Navigation Patterns](#keyboard-navigation-patterns)).
+
 **Menu button**:
 
 ```tsx
@@ -1263,7 +1323,7 @@ export function ProductTabs() {
 </Menu>
 ```
 
-Use `Menu.Trigger` + `Menu.Popover` for menu buttons (not `Popover`, which has no menu semantics). For a `SplitButton`, pass the render-prop props of `Menu.Trigger` to `menuButtonProps`.
+Use `Menu.Trigger` + `Menu.Popover` for menu buttons (not `Popover`, which has no menu semantics). For a `SplitButton`, pass the render-prop props of `Menu.Trigger` to `menuButtonProps`. A `disabledFocusable` MenuButton or SplitButton stays focusable (a Tooltip can say why) but never opens its menu.
 
 ### Data Display Patterns
 
@@ -1364,9 +1424,9 @@ export function App() {
 }
 ```
 
-A sibling `<Toaster />` does not work: `useToastController()` outside a Toaster throws in development. Toast timers pause while a toast is hovered or focused and while the page is in the background (the window has lost focus, or the tab is hidden, also when the Toaster mounted there). `dismissLabel` and `statusLabel` in the `dispatchToast` options translate the dismiss button's name and the hidden status text.
+A sibling `<Toaster />` does not work: `useToastController()` outside a Toaster throws in development. Toast timers pause while a toast is hovered or focused and while the page is in the background (the window has lost focus, or the tab is hidden, also when the Toaster mounted there). `dismissLabel` and `statusLabel` in the `dispatchToast` options translate the dismiss button's name and the hidden status text. `<Toaster limit={3}>` shows at most three toasts and queues the rest (a queued toast is not announced and does not count down until it shows); `dismissAllToasts()` from the controller removes every toast.
 
-**Dialog confirmation** — `Dialog.Footer` goes inside `Dialog.Content`:
+**Dialog confirmation** — `modalType="alert"` for a question that needs an answer (a backdrop press does not close it), `autoFocus` on the least destructive action, and `Dialog.Footer` inside `Dialog.Content`:
 
 ```tsx
 import * as React from 'react';
@@ -1375,7 +1435,7 @@ import { Button, Dialog } from '@mortenbrudvik/waveui';
 export function ConfirmDelete({ onDelete }: { onDelete: () => void }) {
   const [open, setOpen] = React.useState(false);
   return (
-    <Dialog open={open} onOpenChange={setOpen}>
+    <Dialog modalType="alert" open={open} onOpenChange={setOpen}>
       <Dialog.Trigger>
         <Button>Delete</Button>
       </Dialog.Trigger>
@@ -1383,7 +1443,7 @@ export function ConfirmDelete({ onDelete }: { onDelete: () => void }) {
         <p>This action cannot be undone.</p>
         <Dialog.Footer>
           <Dialog.Close>
-            <Button>Cancel</Button>
+            <Button autoFocus>Cancel</Button>
           </Dialog.Close>
           <Button
             appearance="primary"
@@ -1401,6 +1461,8 @@ export function ConfirmDelete({ onDelete }: { onDelete: () => void }) {
 }
 ```
 
+`onOpenChange` receives the reason as a second argument (`details.reason`: `trigger`, `close`, `close-button`, `escape`, `outside-press`), so a controlled dialog can refuse some ways of closing, such as a backdrop press while a form has unsaved changes. `Dialog.Footer` sticks to the bottom of the scrolling body (inside `Dialog.Content`; in a Drawer it is a plain action row), and the body reserves its height, so a focused field is never hidden behind it; inside a `<form>` that wraps the fields and the footer, make the footer the form's last child.
+
 **Loading states**:
 
 ```tsx
@@ -1416,8 +1478,15 @@ export function ConfirmDelete({ onDelete }: { onDelete: () => void }) {
 
   {/* Progress bar for measured progress (value out of max, default 100) */}
   <ProgressBar value={60} label="Uploading" showLabel />
+
+  {/* A busy primary Button: the spinner is decorative, the label names the state */}
+  <Button appearance="primary" icon={<Spinner appearance="inverted" size="extra-small" />}>
+    Saving
+  </Button>
 </>
 ```
+
+`Spinner` `delay` (milliseconds) holds back the ring and the label, so a load that finishes quickly shows no spinner at all; its status region is mounted at once and announces the label when it shows. `appearance="inverted"` draws it in the current text color, for a primary Button or an inverted surface. ProgressBar `color` (`success`, `warning`, `error`) shows the outcome, and inside a `Field` the bar follows the Field's validation state.
 
 ### Component Selection Guide
 
@@ -1570,9 +1639,9 @@ not-disabled:not-aria-disabled:active:bg-subtle-pressed
 | Widget | Enter group | Navigate | Activate | Leave |
 |--------|------------|----------|----------|-------|
 | Button | Tab | – | Enter/Space | Tab |
-| Toolbar | Tab (last focused control) | Left/Right (Up/Down vertical), Home/End | Enter/Space | Tab |
+| Toolbar | Tab (last focused control) | Left/Right (Up/Down vertical), Home/End; `disabledFocusable` controls included | Enter/Space | Tab |
 | RadioGroup, SwatchPicker | Tab (selected item) | All arrows, Home/End | Selects on move | Tab |
-| Tabs | Tab (selected tab) | Left/Right (Up/Down vertical), Home/End | Selects on move | Tab |
+| Tabs | Tab (selected tab) | Left/Right (Up/Down vertical), Home/End | Selects on move (with `selectTabOnFocus={false}`: Enter/Space) | Tab |
 | Combobox, TagPicker, TimePicker | Tab | Down/Up (open and move) | Enter | Escape / Tab |
 | Dropdown | Tab | Down/Up/Home/End, typeahead, PageUp/PageDown | Enter/Space | Escape / Tab (commits) |
 | Menu | Enter/Space/Down on the trigger | Up/Down, Home/End, typeahead | Enter/Space | Escape / Tab |
@@ -1582,13 +1651,13 @@ not-disabled:not-aria-disabled:active:bg-subtle-pressed
 | DatePicker calendar | Alt+Down on the input, or the toggle | Arrows, PageUp/PageDown, Shift+PageUp/PageDown, Home/End | Enter/Space | Escape |
 | Dialog / Drawer | Auto-focus | Tab (trapped) | Enter | Escape |
 
-*RadioGroup, SwatchPicker and Tabs use automatic activation: moving focus selects. Accordion, Carousel, Nav, Breadcrumb and Pagination use plain Tab navigation between native buttons and links.*
+*RadioGroup, SwatchPicker and Tabs use automatic activation: moving focus selects (Tabs with `selectTabOnFocus={false}` use manual activation). Accordion, Carousel, Nav, Breadcrumb and Pagination use plain Tab navigation between native buttons and links.*
 
 ---
 
 ## 13. Deprecated APIs
 
-Deprecated names still work in 0.5, warn once in development and will be removed in 1.0. The CHANGELOG has the full table with callback semantics.
+Deprecated names still work through 0.x, warn once in development and will be removed in 1.0. The CHANGELOG has the full table with callback semantics.
 
 | Deprecated | Use instead |
 |---|---|
@@ -1612,6 +1681,11 @@ Deprecated names still work in 0.5, warn once in development and will be removed
 | Theme classes `dark`, `high-contrast` | `wave-dark`, `wave-high-contrast` |
 | `@mortenbrudvik/waveui/legacy-tokens.css` (0.4 variable names) | `--wave-*` variables |
 | Button objects in `MessageBar.dismiss`, `SearchBox.dismiss`, `Tag.dismissIcon` | Icon content, plus `onDismiss` / `onClear` |
+
+**Announced for 1.0 (no warning in 0.6):**
+
+- Badge and CounterBadge `color="important"` renders the orange severe colors through 0.x and becomes Fluent's neutral high-emphasis color (near black in the light theme) in 1.0: use `color="severe"` to keep the orange look.
+- The `details` parameter of Dialog and Drawer `onOpenChange` becomes required: read it as `details?.reason`.
 
 ---
 

@@ -1,6 +1,6 @@
 import * as React from 'react';
 import { cn } from '../../lib/cn';
-import { reportMissingContext } from '../../lib/dev';
+import { reportMissingContext, warnOnce } from '../../lib/dev';
 import { getDirection } from '../../lib/direction';
 import { getFirstTabbable } from '../../lib/focus';
 import { DismissIcon } from '../../lib/icons';
@@ -37,16 +37,20 @@ export interface ToastOptions {
   /** Optional body text displayed below the title. */
   body?: string;
   /**
-   * Auto-dismiss timeout in milliseconds. The countdown pauses while the pointer is over the toast,
-   * while focus is inside it and while the browser window is in the background (it has lost focus,
-   * or the page is not shown, as in a background tab, also when the Toaster mounts there). `0` (or
-   * any value that is not a positive finite number) keeps the toast until it is dismissed.
+   * Auto-dismiss timeout in milliseconds. The countdown starts when the toast is shown (a toast
+   * waiting beyond the Toaster's `limit` does not count down) and pauses while the pointer is over
+   * the toast, while focus is inside it and while the browser window is in the background (it has
+   * lost focus, or the page is not shown, as in a background tab, also when the Toaster mounts
+   * there). `0` (or any value that is not a positive finite number) keeps the toast until it is
+   * dismissed.
    * @default 5000
    */
   timeout?: number;
   /**
    * Identifier of the toast. `dispatchToast` returns it (a generated one when omitted). Dispatching
-   * again with the id of a toast that is still shown replaces that toast (content and timer).
+   * again with the id of a toast that is still shown replaces that toast (content and timer); with
+   * the id of a toast that waits beyond the Toaster's `limit`, it replaces its options and the toast
+   * keeps its place in the queue.
    */
   toastId?: string;
   /**
@@ -65,11 +69,16 @@ export interface ToastOptions {
 export interface ToastController {
   /**
    * Shows a toast and returns its id (`options.toastId`, or a generated one). A toast with the same
-   * id is replaced.
+   * id is replaced. Beyond the Toaster's `limit`, the toast waits in a queue until it can be shown.
    */
   dispatchToast: (options: ToastOptions) => string;
-  /** Removes the toast with this id and cancels its timer. Unknown ids are ignored. */
+  /**
+   * Removes the toast with this id (shown or waiting) and cancels its timer. Unknown ids are
+   * ignored.
+   */
   dismissToast: (id: string) => void;
+  /** Removes every toast, shown and queued, and cancels their timers. */
+  dismissAllToasts: () => void;
 }
 
 interface ToastEntry {
@@ -77,6 +86,32 @@ interface ToastEntry {
   options: ToastOptions;
   /** Increases with every dispatch, so a replaced toast is announced again. */
   seq: number;
+  /**
+   * Whether the toast is shown (rendered, announced, its timer running) or still waits beyond the
+   * Toaster's `limit`. Only {@link promoteQueued} sets it; it never goes back to `false`.
+   */
+  shown: boolean;
+}
+
+/**
+ * Flags the oldest waiting toasts as shown while fewer than `limit` are shown. Returns `toasts`
+ * itself when nothing changes, so the Toaster's render-time update settles.
+ */
+function promoteQueued(toasts: ToastEntry[], limit: number): ToastEntry[] {
+  let shownCount = 0;
+  for (const toast of toasts) if (toast.shown) shownCount += 1;
+  if (shownCount >= limit || shownCount === toasts.length) return toasts;
+  return toasts.map((toast) => {
+    if (toast.shown || shownCount >= limit) return toast;
+    shownCount += 1;
+    return { ...toast, shown: true };
+  });
+}
+
+/** `limit` as the Toaster applies it: whole toasts, at least 1; `undefined` means no limit. */
+function resolveLimit(limit: number | undefined): number {
+  if (limit === undefined) return Infinity;
+  return limit >= 1 ? Math.floor(limit) : 1;
 }
 
 /* ------------------------------------------------------------------ */
@@ -96,6 +131,7 @@ ToasterRegionContext.displayName = 'ToasterRegionContext';
 const INERT_CONTROLLER: ToastController = {
   dispatchToast: (options) => options.toastId ?? '',
   dismissToast: () => {},
+  dismissAllToasts: () => {},
 };
 
 /** The C-CONTEXT message without the `[WaveUI] ` prefix, which `reportMissingContext` adds. */
@@ -104,7 +140,8 @@ const MISSING_TOASTER_MESSAGE =
 
 /**
  * Returns the {@link ToastController} of the enclosing `<Toaster>`: `dispatchToast(options)` shows
- * a toast and returns its id, `dismissToast(id)` removes it.
+ * a toast and returns its id, `dismissToast(id)` removes it, `dismissAllToasts()` removes every
+ * toast.
  *
  * Must be called inside `<Toaster>`, which provides the controller to its children — wrap the app
  * (or the part of it that shows toasts) in `<Toaster>`; a sibling `<Toaster />` does not work.
@@ -250,12 +287,16 @@ interface RunningTimer {
  */
 interface ToastTimers {
   /**
-   * (Re)starts the timer of `id`; a timeout that is not a positive finite number means none. The
-   * pause state of `id` is kept: a replaced toast that is hovered or focused stays paused.
+   * Starts the timer of the shown toast `id` for its dispatch `seq`, once: a call with the `seq`
+   * already started does nothing, a new `seq` (the toast was replaced) restarts it. A timeout that
+   * is not a positive finite number means none. The pause state of `id` is kept: a replaced toast
+   * that is hovered or focused stays paused.
    */
-  start(id: string, timeout: number): void;
+  start(id: string, seq: number, timeout: number): void;
   /** Cancels the timer of `id` and forgets its pause state. */
   remove(id: string): void;
+  /** Cancels every timer and forgets every pause state. */
+  clear(): void;
   pause(id: string, reason: PauseReason): void;
   resume(id: string, reason: PauseReason): void;
   /** `true` while the window has lost focus or the page is not shown (a background tab). */
@@ -267,6 +308,8 @@ interface ToastTimers {
 function createToastTimers(onExpire: (id: string) => void): ToastTimers {
   const timers = new Map<string, RunningTimer>();
   const pauses = new Map<string, Set<PauseReason>>();
+  /** The dispatch (`seq`) whose timer was started last, per toast. */
+  const started = new Map<string, number>();
   let inBackground = false;
   let suspended = false;
 
@@ -279,6 +322,7 @@ function createToastTimers(onExpire: (id: string) => void): ToastTimers {
       timer.handle = setTimeout(() => {
         timers.delete(id);
         pauses.delete(id);
+        started.delete(id);
         onExpire(id);
       }, timer.remaining);
     } else if (!canRun && timer.handle !== null) {
@@ -297,7 +341,9 @@ function createToastTimers(onExpire: (id: string) => void): ToastTimers {
   };
 
   return {
-    start(id, timeout) {
+    start(id, seq, timeout) {
+      if (started.get(id) === seq) return;
+      started.set(id, seq);
       stop(id);
       if (!(timeout > 0) || !Number.isFinite(timeout)) return;
       timers.set(id, { handle: null, remaining: timeout, startedAt: 0 });
@@ -306,6 +352,12 @@ function createToastTimers(onExpire: (id: string) => void): ToastTimers {
     remove(id) {
       stop(id);
       pauses.delete(id);
+      started.delete(id);
+    },
+    clear() {
+      for (const id of Array.from(timers.keys())) stop(id);
+      pauses.clear();
+      started.clear();
     },
     pause(id, reason) {
       let reasons = pauses.get(id);
@@ -357,6 +409,14 @@ export interface ToasterProps extends React.HTMLAttributes<HTMLDivElement> {
    * @default 'bottom-end'
    */
   position?: ToastPosition;
+  /**
+   * Most toasts shown at once. Further toasts wait in a queue (in dispatch order) and appear when
+   * a shown toast goes; a queued toast is not announced and its timer does not run until then.
+   * Lowering it never hides a toast that is already shown. A value below 1 counts as 1
+   * (development warning); `Infinity` means no limit.
+   * @default Infinity
+   */
+  limit?: number;
   /** Ref to the toast region (the portaled `<div role="region">`). */
   ref?: React.Ref<HTMLDivElement>;
 }
@@ -435,9 +495,10 @@ function getAnnouncement({ status = 'info', statusLabel, title, body }: ToastOpt
 const ANNOUNCEMENT_DURATION = 2000;
 
 /**
- * One toast's message in a live region. It is added when the toast is dispatched (a replacement
- * remounts it, so it is read again) and removed after {@link ANNOUNCEMENT_DURATION} or with the
- * toast. Removal is not announced (`aria-relevant` stays at its default, additions and text).
+ * One toast's message in a live region. It is added when the toast is shown (at dispatch, or when
+ * a waiting toast appears; a replacement remounts it, so it is read again) and removed after
+ * {@link ANNOUNCEMENT_DURATION} or with the toast. Removal is not announced (`aria-relevant` stays
+ * at its default, additions and text).
  */
 function LiveMessage({ text }: { text: string }) {
   const [present, setPresent] = React.useState(true);
@@ -509,14 +570,18 @@ ToasterItem.displayName = 'ToasterItem';
  *   another element or for the page body).
  * - Each toast's dismiss button is named "Dismiss"; pass `dismissLabel` to `dispatchToast` for
  *   other languages.
+ * - `limit` caps how many toasts show at once: the others wait in a queue, in dispatch order,
+ *   unannounced and without a running timer, and appear as shown toasts go.
+ *   `dismissAllToasts()` removes every toast, shown and queued.
  *
  * @example
- * <Toaster position="bottom-end">
+ * <Toaster position="bottom-end" limit={3}>
  *   <App />
  * </Toaster>
  */
 export const Toaster = ({
   position = 'bottom-end',
+  limit: limitProp,
   className,
   style,
   children,
@@ -526,6 +591,23 @@ export const Toaster = ({
   ...rest
 }: ToasterProps) => {
   const [toasts, setToasts] = React.useState<ToastEntry[]>([]);
+  const limit = resolveLimit(limitProp);
+  // Waiting toasts are shown here, during render, with the current limit (adjust state while
+  // rendering, C-HOOKS): every path that frees a place or raises the limit promotes them, and a
+  // lowered limit never hides a shown toast. `promoteQueued` returns the same array once settled.
+  const settled = promoteQueued(toasts, limit);
+  if (settled !== toasts) setToasts(settled);
+  const shownToasts = settled.filter((toast) => toast.shown);
+
+  // Development diagnostics (C-DEV): emitted from an effect, once per page.
+  React.useEffect(() => {
+    if (limitProp !== undefined && !(limitProp >= 1)) {
+      warnOnce(
+        'Toaster:limit',
+        `Toaster: \`limit\` must be 1 or more (got ${String(limitProp)}); it counts as 1.`,
+      );
+    }
+  }, [limitProp]);
   const prefix = useId('toast');
   const counterRef = React.useRef(0);
   const viewportRef = React.useRef<HTMLDivElement | null>(null);
@@ -595,23 +677,31 @@ export const Toaster = ({
     };
   }, [timers]);
 
+  // Starts the timer of every newly shown toast, and restarts it for a shown toast dispatched again
+  // (a new `seq`); `timers.start` ignores a dispatch it has already started.
+  React.useEffect(() => {
+    for (const toast of toasts) {
+      if (toast.shown) timers.start(toast.id, toast.seq, toast.options.timeout ?? DEFAULT_TIMEOUT);
+    }
+  }, [toasts, timers]);
+
+  // A new toast waits until the render promotes it; a replaced one keeps its place and whether it
+  // is shown (a waiting toast keeps waiting with the new options).
   const dispatchToast = React.useCallback(
     (options: ToastOptions): string => {
       counterRef.current += 1;
       const seq = counterRef.current;
       const id = options.toastId ?? `${prefix}-${seq}`;
-      const entry: ToastEntry = { id, options, seq };
       setToasts((prev) => {
         const index = prev.findIndex((t) => t.id === id);
-        if (index === -1) return [...prev, entry];
+        if (index === -1) return [...prev, { id, options, seq, shown: false }];
         const next = prev.slice();
-        next[index] = entry;
+        next[index] = { id, options, seq, shown: prev[index].shown };
         return next;
       });
-      timers.start(id, options.timeout ?? DEFAULT_TIMEOUT);
       return id;
     },
-    [prefix, timers],
+    [prefix],
   );
 
   const dismissToast = React.useCallback(
@@ -622,9 +712,14 @@ export const Toaster = ({
     [timers],
   );
 
+  const dismissAllToasts = React.useCallback(() => {
+    timers.clear();
+    setToasts((prev) => (prev.length === 0 ? prev : []));
+  }, [timers]);
+
   const controller = React.useMemo<ToastController>(
-    () => ({ dispatchToast, dismissToast }),
-    [dispatchToast, dismissToast],
+    () => ({ dispatchToast, dismissToast, dismissAllToasts }),
+    [dispatchToast, dismissToast, dismissAllToasts],
   );
 
   // Runs after the removed toast is gone (possibly after the whole Toaster): never throws.
@@ -676,9 +771,10 @@ export const Toaster = ({
     previousFocusRef.current = null;
   };
 
+  // Only shown toasts are announced: a waiting toast is announced when it appears.
   const polite: React.ReactNode[] = [];
   const assertive: React.ReactNode[] = [];
-  for (const toast of toasts) {
+  for (const toast of shownToasts) {
     const message = <LiveMessage key={toast.seq} text={getAnnouncement(toast.options)} />;
     (toast.options.status === 'error' ? assertive : polite).push(message);
   }
@@ -723,7 +819,11 @@ export const Toaster = ({
             {assertive}
           </div>
           <ToasterRegionContext.Provider value={true}>
-            {toasts.map((toast, index) => (
+            {/* The index within the rendered (shown) toasts, which getFocusFallback walks. Today the
+                shown toasts are a prefix of the entries (appended, promoted oldest first, replaced
+                in place, removed in order), so it equals the entry index; the shown list stays the
+                source so that a change to that order cannot break focus movement. */}
+            {shownToasts.map((toast, index) => (
               <ToasterItem
                 key={toast.id}
                 entry={toast}

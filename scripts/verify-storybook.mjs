@@ -17,6 +17,12 @@
  * (and fails again as soon as a story adds a story-only utility that the build lacks). So no
  * story has to keep a story-only class alive for the build to pass.
  *
+ * The stylesheet also keeps Wave's direction variant (src/styles/variants.css, C-LOGICAL) for
+ * every `wave-rtl:` class of the library, as scripts/build-css.mjs asserts for dist, and selects
+ * none of them by `:lang()`. `storybook build` minifies the CSS with Vite's defaults (Lightning
+ * CSS, Chrome 111 target), which rewrite a bare `:dir(rtl)` to a `:lang()` list that no story
+ * matches (they set `dir`, not `lang`); an app built with Vite gets the same CSS.
+ *
  * Both sides are scanned with Tailwind's own scanner (the helpers of scripts/build-css.mjs), the
  * way the builds scan their sources.
  *
@@ -39,7 +45,16 @@ import { createRequire } from 'node:module';
 import { tmpdir } from 'node:os';
 import { dirname, join, relative, resolve, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { collectStorySources, selectorClasses, storyOnlyClasses } from './build-css.mjs';
+import {
+  classStringTokens,
+  collectStorySources,
+  DIRECTION_VARIANT_FORM,
+  hasDirectionVariant,
+  loweredDirectionClasses,
+  missingDirectionVariant,
+  selectorClasses,
+  storyOnlyClasses,
+} from './build-css.mjs';
 import { runScript } from './verify-dist.mjs';
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..');
@@ -106,11 +121,24 @@ export function expectedStoryOnly(projectRoot = root, sources = collectStorySour
 }
 
 /**
- * Checks one stylesheet: `.bg-primary` is present, and so is every story-only utility of
- * `expected` (see {@link expectedStoryOnly}). Returns the errors and the story-only classes
- * found.
+ * The `wave-rtl:` classes of the library class strings of the project at `projectRoot` (the
+ * sources of its style entries, read as scripts/build-css.mjs reads them), sorted.
  */
-export function checkStorybookCss(css, expected) {
+export function expectedDirectionClasses(projectRoot = root) {
+  return [...classStringTokens(collectStorySources(projectRoot).library)]
+    .filter(hasDirectionVariant)
+    .sort();
+}
+
+/**
+ * Checks one stylesheet: `.bg-primary` is present, and so is every story-only utility of
+ * `expected` (see {@link expectedStoryOnly}); every class of `directionClasses` (see
+ * {@link expectedDirectionClasses}) is compiled with Wave's direction variant, and none is
+ * selected by `:lang()`: Vite's CSS minifier (Lightning CSS) rewrites a bare `:dir(rtl)` to a
+ * `:lang()` list for its default target, and the class then never matches a story, which sets
+ * `dir` but no `lang`. Returns the errors and the story-only classes found.
+ */
+export function checkStorybookCss(css, expected, directionClasses = []) {
   const errors = [];
   const classes = selectorClasses(css);
   if (!classes.has('bg-primary')) {
@@ -130,15 +158,36 @@ export function checkStorybookCss(css, expected) {
         'or the build is older than the stories',
     );
   }
+  const lowered = loweredDirectionClasses(css);
+  if (lowered.length > 0) {
+    errors.push(
+      `the Storybook CSS selects ${lowered.length} wave-rtl ` +
+        `${lowered.length === 1 ? 'class' : 'classes'} by :lang() ` +
+        `(${lowered.slice(0, 10).join(' ')}${lowered.length > 10 ? ' …' : ''}): the CSS ` +
+        "minifier rewrote :dir(rtl) of Wave's direction variant, so the class never matches a " +
+        'story that sets dir without a right-to-left lang',
+    );
+  }
+  const uncompiled = missingDirectionVariant(css, directionClasses).filter(
+    (name) => !lowered.includes(name),
+  );
+  if (uncompiled.length > 0) {
+    errors.push(
+      `the Storybook CSS lacks Wave's direction variant for ${uncompiled.length} of the ` +
+        `${directionClasses.length} wave-rtl classes of the library ` +
+        `(${uncompiled.slice(0, 10).join(' ')}${uncompiled.length > 10 ? ' …' : ''}): expected ` +
+        `${DIRECTION_VARIANT_FORM} (src/styles/variants.css)`,
+    );
+  }
   return { errors, storyOnly };
 }
 
 /**
  * Finds the preview stylesheet of a static Storybook build in `dir` and checks it against the
- * `expected` story-only utilities. Returns the errors, the stylesheet checked (`file`, relative
- * to `dir`) and its story-only classes.
+ * `expected` story-only utilities and the library's `directionClasses`. Returns the errors, the
+ * stylesheet checked (`file`, relative to `dir`) and its story-only classes.
  */
-export function verifyStorybook(dir, expected) {
+export function verifyStorybook(dir, expected, directionClasses = []) {
   if (!existsSync(dir) || !statSync(dir).isDirectory()) {
     return {
       errors: [`${dir} does not exist (run storybook build first)`],
@@ -159,7 +208,7 @@ export function verifyStorybook(dir, expected) {
   let candidateStyled = false;
   for (const file of files) {
     const css = readFileSync(join(dir, file), 'utf8');
-    const result = { ...checkStorybookCss(css, expected), file };
+    const result = { ...checkStorybookCss(css, expected, directionClasses), file };
     if (result.errors.length === 0) return result;
     const styled = selectorClasses(css).has('bg-primary');
     if (!candidate || (styled && !candidateStyled)) {
@@ -181,32 +230,41 @@ function parseArgs(argv) {
 
 /**
  * CLI entry; returns the exit code. `io` receives the report; `expected` (the story-only
- * utilities) defaults to {@link expectedStoryOnly} of this repository.
+ * utilities) defaults to {@link expectedStoryOnly} and `directionClasses` (the library's
+ * `wave-rtl:` classes) to {@link expectedDirectionClasses}, both of this repository.
  */
-export function main(argv = process.argv.slice(2), io = console, expected = undefined) {
+export function main(
+  argv = process.argv.slice(2),
+  io = console,
+  expected = undefined,
+  directionClasses = undefined,
+) {
   const { dir } = parseArgs(argv);
   const where = relative(process.cwd(), dir) || dir;
   let wanted = expected;
-  if (!wanted) {
-    try {
-      wanted = expectedStoryOnly();
-    } catch (error) {
-      io.error(`verify-storybook: ${error.message}`);
-      return 1;
-    }
+  let direction = directionClasses;
+  try {
+    wanted ??= expectedStoryOnly();
+    direction ??= expectedDirectionClasses();
+  } catch (error) {
+    io.error(`verify-storybook: ${error.message}`);
+    return 1;
   }
-  const { errors, file, storyOnly } = verifyStorybook(dir, wanted);
+  const { errors, file, storyOnly } = verifyStorybook(dir, wanted, direction);
   if (errors.length > 0) {
     io.error(`verify-storybook: ${errors.length} problem(s) in ${where}${file ? `/${file}` : ''}:`);
     for (const error of errors) io.error(`  - ${error}`);
     return 1;
   }
-  io.log(
+  const utilities =
     storyOnly.length > 0
-      ? `verify-storybook: ${where}/${file} OK (.bg-primary and all ${storyOnly.length} ` +
-          `story-only utilities, e.g. ${storyOnly.slice(0, 5).join(' ')})`
-      : `verify-storybook: ${where}/${file} OK (.bg-primary; the stories use no utility the ` +
-          'library lacks, so there is no story-only utility to check)',
+      ? `.bg-primary and all ${storyOnly.length} story-only utilities, e.g. ` +
+        storyOnly.slice(0, 5).join(' ')
+      : '.bg-primary; the stories use no utility the library lacks, so there is no story-only ' +
+        'utility to check';
+  io.log(
+    `verify-storybook: ${where}/${file} OK (${utilities}; all ${direction.length} wave-rtl ` +
+      "classes of the library with Wave's direction variant)",
   );
   return 0;
 }

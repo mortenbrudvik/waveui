@@ -1,16 +1,46 @@
 import * as React from 'react';
-import { describe, it, expect, expectTypeOf, vi } from 'vitest';
+import { describe, it, expect, expectTypeOf, vi, afterEach } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { CompoundButton } from '../CompoundButton';
 import type { CompoundButtonOwnProps, CompoundButtonProps } from '../CompoundButton';
-import { testSystemProps, testFocusEvents, testNoImplicitSubmit } from '../../../test-utils';
-import type { Appearance, Size } from '../../../lib/types';
+import { Button } from '../Button';
+import {
+  testSystemProps,
+  testFocusEvents,
+  testNoImplicitSubmit,
+  renderWithProviders,
+} from '../../../test-utils';
+import type { Appearance, IconPosition, Size, Slot } from '../../../lib/types';
 
 const HOVER_GATE = 'not-disabled:not-aria-disabled:hover:';
 const ACTIVE_GATE = 'not-disabled:not-aria-disabled:active:';
 
+/** The development warning of an icon-only button without an accessible name (from Button). */
+const ICON_ONLY_WARNING =
+  '[WaveUI] Button: an icon-only button has no accessible name. Pass `aria-label`, `aria-labelledby` or `title` (the icon is decorative and hidden from assistive technology).';
+
+const MailIcon = () => (
+  <svg data-testid="mail-icon" viewBox="0 0 16 16" width="16" height="16">
+    <path d="M2 4h12v8H2z" fill="currentColor" />
+  </svg>
+);
+
+/** The wrapper of the text lines (`span[data-wave-compound-content]`). */
+function contentWrapper(button: HTMLElement): HTMLElement {
+  const wrapper = button.querySelector<HTMLElement>(':scope > [data-wave-compound-content]');
+  if (!wrapper) throw new Error('no text wrapper');
+  return wrapper;
+}
+
+/** The text lines: the main label and, when it renders, the secondary text. */
+const textLines = (button: HTMLElement) => Array.from(contentWrapper(button).children);
+
 describe('CompoundButton', () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
   // The `as` variants render other elements, so the props are typed for any element.
   testSystemProps<CompoundButtonProps<React.ElementType>>(CompoundButton, {
     expectedTag: 'button',
@@ -24,6 +54,17 @@ describe('CompoundButton', () => {
       { name: 'as anchor', props: { as: 'a', href: '/mail' } },
       { name: 'as anchor, disabled', props: { as: 'a', href: '/mail', disabled: true } },
       { name: 'as div', props: { as: 'div' } },
+      { name: 'with icon', props: { icon: <MailIcon /> } },
+      {
+        name: 'icon only with aria-label',
+        props: {
+          icon: <MailIcon />,
+          children: undefined,
+          secondaryText: undefined,
+          'aria-label': 'Send mail',
+        },
+      },
+      { name: 'disabledFocusable', props: { disabledFocusable: true } },
     ],
   });
 
@@ -42,7 +83,7 @@ describe('CompoundButton', () => {
   it('does not render secondaryText when not provided', () => {
     render(<CompoundButton>Send mail</CompoundButton>);
     const button = screen.getByRole('button', { name: 'Send mail' });
-    expect(button.querySelectorAll('span')).toHaveLength(1);
+    expect(textLines(button)).toHaveLength(1);
   });
 
   it.each([
@@ -54,14 +95,12 @@ describe('CompoundButton', () => {
   ])('renders no secondary line for secondaryText that renders nothing (%s)', (_, text) => {
     render(<CompoundButton secondaryText={text as React.ReactNode}>Send mail</CompoundButton>);
     const button = screen.getByRole('button', { name: 'Send mail' });
-    expect(button.querySelectorAll('span')).toHaveLength(1);
+    expect(textLines(button)).toHaveLength(1);
   });
 
   it('renders a secondary line of 0 (a number is content)', () => {
     render(<CompoundButton secondaryText={0}>Items</CompoundButton>);
-    expect(
-      screen.getByRole('button', { name: /^Items\s*0$/ }).querySelectorAll('span'),
-    ).toHaveLength(2);
+    expect(textLines(screen.getByRole('button', { name: /^Items\s*0$/ }))).toHaveLength(2);
   });
 
   it('renders the items of secondaryText given as a generator', () => {
@@ -76,12 +115,144 @@ describe('CompoundButton', () => {
     error.mockRestore();
   });
 
-  it('stacks the label above the secondary text', () => {
+  it('stacks the label above the secondary text in a text wrapper', () => {
     render(<CompoundButton secondaryText="Details">Main</CompoundButton>);
     const button = screen.getByRole('button', { name: /Main/ });
-    expect(button).toHaveClass('flex-col', 'items-start', 'h-auto');
+    // The text lines sit in one column wrapper; the root is a start-aligned row (room for an icon).
+    expect(button).toHaveClass('h-auto', 'items-center', 'justify-start', 'gap-3', 'text-start');
     expect(button).not.toHaveClass('h-8');
-    expect(button).not.toHaveClass('items-center');
+    expect(button).not.toHaveClass('flex-col');
+    expect(button).not.toHaveClass('justify-center');
+    const wrapper = contentWrapper(button);
+    expect(Array.from(button.children)).toEqual([wrapper]);
+    expect(wrapper).toHaveClass('flex', 'min-w-0', 'flex-col', 'items-start');
+    expect(textLines(button).map((line) => line.textContent)).toEqual(['Main', 'Details']);
+  });
+
+  describe('icon', () => {
+    const SIZES: Size[] = ['extra-small', 'small', 'medium', 'large', 'extra-large'];
+    const iconBox: Record<Size, string> = {
+      'extra-small': 'size-6',
+      small: 'size-8',
+      medium: 'size-10',
+      large: 'size-10',
+      'extra-large': 'size-10',
+    };
+
+    it.each([
+      ['by default', undefined],
+      ['with iconPosition="before"', 'before'],
+    ] as const)('renders the icon before the text wrapper %s', (_name, iconPosition) => {
+      render(
+        <CompoundButton
+          icon={<MailIcon />}
+          iconPosition={iconPosition}
+          secondaryText="Opens your email client"
+        >
+          Send mail
+        </CompoundButton>,
+      );
+      const button = screen.getByRole('button', { name: /^Send mail/ });
+      const icon = screen.getByTestId('mail-icon').parentElement;
+      expect(Array.from(button.children)).toEqual([icon, contentWrapper(button)]);
+      expect(icon).toHaveAttribute('aria-hidden', 'true');
+    });
+
+    it('renders the icon after the text wrapper with iconPosition="after"', () => {
+      render(
+        <CompoundButton icon={<MailIcon />} iconPosition="after" secondaryText="Opens a new window">
+          Compose
+        </CompoundButton>,
+      );
+      const button = screen.getByRole('button', { name: /^Compose/ });
+      const icon = screen.getByTestId('mail-icon').parentElement;
+      expect(Array.from(button.children)).toEqual([contentWrapper(button), icon]);
+    });
+
+    it('keeps the icon out of the accessible name: main text plus secondary text', () => {
+      render(
+        <CompoundButton icon={{ children: '✉' }} secondaryText="Opens your email client">
+          Send mail
+        </CompoundButton>,
+      );
+      expect(
+        screen.getByRole('button', { name: /^Send mail\s*Opens your email client$/ }),
+      ).toBeInTheDocument();
+    });
+
+    it.each(SIZES)('the %s icon box fills its SVG', (size) => {
+      render(
+        <CompoundButton size={size} icon={<MailIcon />}>
+          Send mail
+        </CompoundButton>,
+      );
+      expect(screen.getByTestId('mail-icon').parentElement).toHaveClass(
+        iconBox[size],
+        '[&>svg]:size-full',
+        'shrink-0',
+      );
+    });
+
+    it('an icon that renders nothing renders no icon box', () => {
+      render(<CompoundButton icon="">Send mail</CompoundButton>);
+      const button = screen.getByRole('button', { name: 'Send mail' });
+      expect(button.querySelector('[aria-hidden]')).toBeNull();
+      expect(Array.from(button.children)).toEqual([contentWrapper(button)]);
+    });
+
+    it('keeps the DOM order in RTL', () => {
+      renderWithProviders(
+        <CompoundButton icon={<MailIcon />} secondaryText="Details">
+          Send mail
+        </CompoundButton>,
+        { dir: 'rtl' },
+      );
+      const button = screen.getByRole('button', { name: /^Send mail/ });
+      expect(button.closest('[dir]')).toHaveAttribute('dir', 'rtl');
+      expect(button.firstElementChild).toBe(screen.getByTestId('mail-icon').parentElement);
+    });
+
+    describe('icon only (no label and no secondary text)', () => {
+      it.each(SIZES)(
+        'renders no wrapper and has the size classes of an icon-only Button (%s)',
+        (size) => {
+          render(
+            <>
+              <CompoundButton size={size} icon={<MailIcon />} aria-label="Send mail" />
+              <Button size={size} icon={<MailIcon />} aria-label="Send" />
+            </>,
+          );
+          const compound = screen.getByRole('button', { name: 'Send mail' });
+          const button = screen.getByRole('button', { name: 'Send' });
+          expect(compound.querySelector('[data-wave-compound-content]')).toBeNull();
+          expect(compound.childNodes).toHaveLength(1);
+          expect(Array.from(compound.classList).sort()).toEqual(
+            Array.from(button.classList).sort(),
+          );
+          for (const cls of ['h-auto', 'gap-3', 'justify-start', 'py-2']) {
+            expect(compound).not.toHaveClass(cls);
+          }
+        },
+      );
+
+      it('iconPosition has no effect on it', () => {
+        render(<CompoundButton icon={<MailIcon />} iconPosition="after" aria-label="Send mail" />);
+        expect(screen.getByRole('button', { name: 'Send mail' }).childNodes).toHaveLength(1);
+      });
+
+      it('warns once without an accessible name, like an icon-only Button', () => {
+        const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+        render(<CompoundButton icon={<MailIcon />} secondaryText="" />);
+        expect(warn.mock.calls).toEqual([[ICON_ONLY_WARNING]]);
+      });
+
+      it('does not warn when named with aria-label', () => {
+        const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+        render(<CompoundButton icon={<MailIcon />} aria-label="Send mail" />);
+        expect(screen.getByRole('button', { name: 'Send mail' })).toBeInTheDocument();
+        expect(warn).not.toHaveBeenCalled();
+      });
+    });
   });
 
   describe('secondary text (button-provider#11, table-core#1)', () => {
@@ -289,6 +460,33 @@ describe('CompoundButton', () => {
     expect(button).toHaveClass('opacity-50', 'cursor-not-allowed');
   });
 
+  it('disabledFocusable: focusable, the three attributes, and activation prevented', async () => {
+    const user = userEvent.setup();
+    const onClick = vi.fn();
+    const onParentClick = vi.fn();
+    render(
+      <div onClick={onParentClick}>
+        <CompoundButton disabledFocusable secondaryText="Opens your email client" onClick={onClick}>
+          Send mail
+        </CompoundButton>
+      </div>,
+    );
+    const button = screen.getByRole('button', { name: /^Send mail/ });
+    expect(button).not.toBeDisabled();
+    expect(button).toHaveAttribute('aria-disabled', 'true');
+    expect(button).toHaveAttribute('data-disabled', '');
+    expect(button).toHaveAttribute('data-disabled-focusable', '');
+    expect(button).toHaveClass('opacity-50', 'cursor-not-allowed');
+
+    await user.tab();
+    expect(button).toHaveFocus();
+    await user.keyboard('{Enter}');
+    await user.keyboard(' ');
+    await user.click(button);
+    expect(onClick).not.toHaveBeenCalled();
+    expect(onParentClick).not.toHaveBeenCalled();
+  });
+
   it('calls onClick handler', async () => {
     const user = userEvent.setup();
     const onClick = vi.fn();
@@ -332,7 +530,17 @@ describe('CompoundButton', () => {
       >();
       expectTypeOf<CompoundButtonProps<'a'>>().toHaveProperty('href');
       expectTypeOf<keyof CompoundButtonOwnProps>().toEqualTypeOf<
-        'secondaryText' | 'appearance' | 'size' | 'disabled'
+        | 'secondaryText'
+        | 'appearance'
+        | 'size'
+        | 'disabled'
+        | 'disabledFocusable'
+        | 'icon'
+        | 'iconPosition'
+      >();
+      expectTypeOf<CompoundButtonProps['icon']>().toEqualTypeOf<Slot<'span'> | undefined>();
+      expectTypeOf<CompoundButtonProps<'a'>['iconPosition']>().toEqualTypeOf<
+        IconPosition | undefined
       >();
     });
   });

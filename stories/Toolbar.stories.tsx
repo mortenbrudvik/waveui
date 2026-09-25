@@ -39,7 +39,10 @@ export const Vertical: Story = {
   },
 };
 
-/** Disabled controls are skipped by the arrow keys. */
+/**
+ * Natively disabled controls (Cut) are skipped by the arrow keys; `disabledFocusable` ones (Paste)
+ * stay in the arrow-key order but do nothing when activated.
+ */
 export const WithDisabledControl: Story = {
   args: {
     'aria-label': 'Document actions',
@@ -48,8 +51,11 @@ export const WithDisabledControl: Story = {
         <Button appearance="subtle" size="small">
           Copy
         </Button>
-        <Button appearance="subtle" size="small" disabled>
+        <Button appearance="subtle" size="small" disabledFocusable>
           Paste
+        </Button>
+        <Button appearance="subtle" size="small" disabled>
+          Cut
         </Button>
         <Button appearance="subtle" size="small">
           Delete

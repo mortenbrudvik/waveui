@@ -1110,6 +1110,41 @@ describe('DatePicker', () => {
       expect(textbox()).toHaveValue('');
       expect(textbox()).not.toHaveAttribute('aria-invalid');
     });
+
+    it('Tab from erased text clears the value and moves on to the calendar button: focus never drops to <body>', async () => {
+      const user = userEvent.setup();
+      const onValueChange = vi.fn();
+      render(
+        <React.StrictMode>
+          <DatePicker
+            aria-label="Date"
+            defaultValue={JUNE_15}
+            clearable
+            onValueChange={onValueChange}
+          />
+        </React.StrictMode>,
+      );
+      await user.clear(textbox());
+      await user.tab();
+      // The erased text clears the value before Tab moves focus, so the clear button it removes is
+      // skipped: focus goes where Tab goes without it.
+      expect(onValueChange.mock.calls).toEqual([[null]]);
+      expect(screen.queryByRole('button', { name: 'Clear date' })).not.toBeInTheDocument();
+      expect(toggle()).toHaveFocus();
+      expect(textbox()).toHaveValue('');
+    });
+
+    it('Tab from erased text reaches the clear button when a controlled parent keeps the value', async () => {
+      const user = userEvent.setup();
+      const onValueChange = vi.fn();
+      render(
+        <DatePicker aria-label="Date" value={JUNE_15} clearable onValueChange={onValueChange} />,
+      );
+      await user.clear(textbox());
+      await user.tab();
+      expect(onValueChange.mock.calls).toEqual([[null]]);
+      expect(screen.getByRole('button', { name: 'Clear date' })).toHaveFocus();
+    });
   });
 
   describe('grid keyboard (input-basic#31, input-datetime#4, #5, #12, #17, #18)', () => {
@@ -1293,6 +1328,21 @@ describe('DatePicker', () => {
       // Focus stays inside the range: back to the last available day.
       await user.keyboard('{ArrowLeft}');
       expect(focusedLabel()).toBe('Monday, June 30, 2025');
+    });
+
+    it('an unavailable day that has keyboard focus shows its focus ring at full strength', async () => {
+      const { user } = await openOn(JUNE_15, { disabledDates: (d) => d.getDate() === 16 });
+      await user.keyboard('{ArrowRight}');
+      const day16 = dayButton('Monday, June 16, 2025');
+      expect(day16).toHaveFocus();
+      expect(day16).toHaveAttribute('aria-disabled', 'true');
+      // Dimmed, except while its ring shows: `opacity` would dim the ring below 3:1. The variant's
+      // higher specificity wins over `aria-disabled:opacity-50` while it matches.
+      expect(day16).toHaveClass(
+        'aria-disabled:line-through',
+        'aria-disabled:opacity-50',
+        'aria-disabled:focus-visible:opacity-100',
+      );
     });
 
     it('keyboard focus stays within minDate/maxDate', async () => {

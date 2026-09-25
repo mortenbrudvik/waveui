@@ -319,6 +319,15 @@ describe('buttonStyles', () => {
       expect(classesOf(buttonClassName())).not.toContain('opacity-50');
     });
 
+    it('the disabled look lifts its opacity while a focusable disabled button shows its focus ring', () => {
+      // `opacity` dims the element's own outline too: a `disabledFocusable` or consumer
+      // `aria-disabled` button keeps a full-strength ring. tailwind-merge keeps both classes
+      // (different variants), and the variant's higher specificity wins while focused.
+      expect(classesOf(buttonClassName({ disabled: true }))).toEqual(
+        expect.arrayContaining(['opacity-50', 'aria-disabled:focus-visible:opacity-100']),
+      );
+    });
+
     it('pressed layers the pressed tokens over the appearance (tailwind-merge resolves conflicts)', () => {
       const cls = classesOf(buttonClassName({ appearance: 'outline', pressed: true }));
       expect(cls).toEqual(

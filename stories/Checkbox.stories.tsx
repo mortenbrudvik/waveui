@@ -1,7 +1,7 @@
 import type { Meta, StoryObj } from '@storybook/react';
 import { useState } from 'react';
 import { fn } from 'storybook/test';
-import { Button, Checkbox } from '../src';
+import { Button, Checkbox, Link } from '../src';
 
 const meta = {
   title: 'Components/Input/Checkbox',
@@ -100,5 +100,48 @@ export const InForm: Story = {
         Submit
       </Button>
     </form>
+  ),
+};
+
+/**
+ * `label` takes rich content, such as a link to the terms. Clicking the text toggles the
+ * checkbox; clicking the link follows it. The whole text names the checkbox.
+ */
+export const RichLabel: Story = {
+  args: {
+    label: (
+      <>
+        I agree to the <Link href="#terms">terms and conditions</Link>
+      </>
+    ),
+  },
+};
+
+/** `labelPosition="before"` renders the label before the box (the DOM order follows). */
+export const LabelBefore: Story = {
+  args: {
+    label: 'Remember me',
+    labelPosition: 'before',
+  },
+};
+
+/**
+ * `disabledFocusable` keeps the checkbox in the tab order while it cannot be changed, so keyboard
+ * and screen-reader users reach it and hear why (here through `aria-describedby`). It is not
+ * submitted with its form.
+ */
+export const DisabledFocusable: Story = {
+  args: {
+    label: 'Share with the whole organization',
+    disabledFocusable: true,
+    'aria-describedby': 'share-reason',
+  },
+  render: (args) => (
+    <div className="flex flex-col items-start gap-1">
+      <Checkbox {...args} />
+      <p id="share-reason" className="text-caption-1 text-muted-foreground">
+        Only administrators can share with the organization.
+      </p>
+    </div>
   ),
 };

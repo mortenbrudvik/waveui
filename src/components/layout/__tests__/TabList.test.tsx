@@ -58,6 +58,13 @@ const warnings = (warn: { mock: { calls: unknown[][] } }) =>
 const deprecated = (oldName: string, newName: string, extra = '') =>
   `[WaveUI] TabList: \`${oldName}\` is deprecated and will be removed in 1.0. Use \`${newName}\` instead.${extra}`;
 
+/** The deprecation warning of `onTabSelect` (asserted exactly). */
+const ON_TAB_SELECT_DEPRECATED = deprecated(
+  'onTabSelect',
+  'onValueChange',
+  ' `onValueChange` is called only when the selected tab changes.',
+);
+
 /** useControllable's warning when a value switches between controlled and uncontrolled. */
 const modeSwitch = (from: string, to: string) =>
   `[WaveUI] A component is changing from ${from} to ${to}. Components should not switch ` +
@@ -591,12 +598,6 @@ describe('TabList - parts that unmount', () => {
 });
 
 describe('TabList - deprecated aliases (feedback-navigation#46, layout#16)', () => {
-  const ON_TAB_SELECT_DEPRECATED = deprecated(
-    'onTabSelect',
-    'onValueChange',
-    ' `onValueChange` is called only when the selected tab changes.',
-  );
-
   it('selectedValue, defaultSelectedValue, onTabSelect and vertical still work and warn once', async () => {
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
     const user = userEvent.setup();
@@ -1224,6 +1225,223 @@ describe('TabList - keyboard', () => {
     assertInternalSuppressed: () => {
       expect(tab('Composed')).toHaveAttribute('aria-selected', 'false');
     },
+  });
+});
+
+describe('TabList - manual activation (selectTabOnFocus={false})', () => {
+  const selected = () => screen.getByRole('tab', { selected: true });
+
+  it('types selectTabOnFocus as an optional boolean', () => {
+    expectTypeOf<TabListProps['selectTabOnFocus']>().toEqualTypeOf<boolean | undefined>();
+  });
+
+  it('ArrowRight moves focus without selecting the tab or calling onValueChange', async () => {
+    const user = userEvent.setup();
+    const onValueChange = vi.fn();
+    render(
+      <TabList defaultValue="a" selectTabOnFocus={false} onValueChange={onValueChange}>
+        {tabsWithPanels}
+      </TabList>,
+    );
+    act(() => tab('Tab A').focus());
+    await user.keyboard('{ArrowRight}');
+    expect(tab('Tab B')).toHaveFocus();
+    expect(tab('Tab B')).toHaveAttribute('aria-selected', 'false');
+    expect(selected()).toBe(tab('Tab A'));
+    // The shown panel follows the selected tab, not the focused one.
+    expect(screen.getByRole('tabpanel')).toHaveTextContent('Panel A');
+    expect(onValueChange).not.toHaveBeenCalled();
+  });
+
+  it('Home, End and wrapping arrows only move focus', async () => {
+    const user = userEvent.setup();
+    const onValueChange = vi.fn();
+    render(
+      <TabList defaultValue="b" selectTabOnFocus={false} onValueChange={onValueChange}>
+        {threeTabs}
+      </TabList>,
+    );
+    act(() => tab('Tab B').focus());
+    await user.keyboard('{End}');
+    expect(tab('Tab C')).toHaveFocus();
+    await user.keyboard('{ArrowRight}');
+    expect(tab('Tab A')).toHaveFocus();
+    await user.keyboard('{End}{Home}');
+    expect(tab('Tab A')).toHaveFocus();
+    expect(selected()).toBe(tab('Tab B'));
+    expect(onValueChange).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    ['Enter', '{Enter}'],
+    ['Space', ' '],
+  ])('%s selects the focused tab, once in StrictMode', async (_name, key) => {
+    const user = userEvent.setup();
+    const onValueChange = vi.fn();
+    render(
+      <React.StrictMode>
+        <TabList defaultValue="a" selectTabOnFocus={false} onValueChange={onValueChange}>
+          {tabsWithPanels}
+        </TabList>
+      </React.StrictMode>,
+    );
+    act(() => tab('Tab A').focus());
+    await user.keyboard('{ArrowRight}');
+    await user.keyboard(key);
+    expect(onValueChange.mock.calls).toEqual([['b']]);
+    expect(selected()).toBe(tab('Tab B'));
+    expect(tab('Tab B')).toHaveFocus();
+    expect(screen.getByRole('tabpanel')).toHaveTextContent('Panel B');
+  });
+
+  it('a click selects the tab', async () => {
+    const user = userEvent.setup();
+    const onValueChange = vi.fn();
+    render(
+      <TabList defaultValue="a" selectTabOnFocus={false} onValueChange={onValueChange}>
+        {threeTabs}
+      </TabList>,
+    );
+    await user.click(tab('Tab C'));
+    expect(onValueChange.mock.calls).toEqual([['c']]);
+    expect(selected()).toBe(tab('Tab C'));
+  });
+
+  it('the selected tab keeps the tab stop: Tab out and Shift+Tab back lands on it', async () => {
+    const user = userEvent.setup();
+    render(
+      <>
+        <TabList defaultValue="a" selectTabOnFocus={false}>
+          {threeTabs}
+        </TabList>
+        <button type="button">After</button>
+      </>,
+    );
+    await user.tab();
+    expect(tab('Tab A')).toHaveFocus();
+    await user.keyboard('{ArrowRight}');
+    expect(tab('Tab B')).toHaveFocus();
+    expect(tab('Tab A')).toHaveAttribute('tabindex', '0');
+    expect(tab('Tab B')).toHaveAttribute('tabindex', '-1');
+    await user.tab();
+    expect(screen.getByRole('button', { name: 'After' })).toHaveFocus();
+    await user.tab({ shift: true });
+    expect(tab('Tab A')).toHaveFocus();
+  });
+
+  it('without a default, arrows keep the first tab selected', async () => {
+    const user = userEvent.setup();
+    render(<TabList selectTabOnFocus={false}>{tabsWithPanels}</TabList>);
+    expect(selected()).toBe(tab('Tab A'));
+    act(() => tab('Tab A').focus());
+    await user.keyboard('{ArrowRight}');
+    expect(tab('Tab B')).toHaveFocus();
+    expect(selected()).toBe(tab('Tab A'));
+    expect(tab('Tab A')).toHaveAttribute('tabindex', '0');
+    await user.keyboard('{Enter}');
+    expect(selected()).toBe(tab('Tab B'));
+    expect(screen.getByRole('tabpanel')).toHaveTextContent('Panel B');
+  });
+
+  it('controlled: arrows leave value alone; Enter reports the focused tab', async () => {
+    const user = userEvent.setup();
+    const onValueChange = vi.fn();
+    render(
+      <TabList value="a" selectTabOnFocus={false} onValueChange={onValueChange}>
+        {threeTabs}
+      </TabList>,
+    );
+    act(() => tab('Tab A').focus());
+    await user.keyboard('{ArrowRight}{ArrowRight}');
+    expect(tab('Tab C')).toHaveFocus();
+    expect(onValueChange).not.toHaveBeenCalled();
+    await user.keyboard('{Enter}');
+    expect(onValueChange.mock.calls).toEqual([['c']]);
+    // The parent ignored the change: the selection stays.
+    expect(selected()).toBe(tab('Tab A'));
+  });
+
+  it('RTL: ArrowLeft moves focus to the next tab and ArrowRight to the previous, without selecting', async () => {
+    const user = userEvent.setup();
+    renderWithProviders(
+      <TabList defaultValue="b" selectTabOnFocus={false}>
+        {threeTabs}
+      </TabList>,
+      { dir: 'rtl' },
+    );
+    act(() => tab('Tab B').focus());
+    await user.keyboard('{ArrowLeft}');
+    expect(tab('Tab C')).toHaveFocus();
+    await user.keyboard('{ArrowRight}{ArrowRight}');
+    expect(tab('Tab A')).toHaveFocus();
+    expect(selected()).toBe(tab('Tab B'));
+  });
+
+  it('vertical: ArrowDown and ArrowUp move focus without selecting; Space selects', async () => {
+    const user = userEvent.setup();
+    const onValueChange = vi.fn();
+    render(
+      <TabList
+        orientation="vertical"
+        defaultValue="a"
+        selectTabOnFocus={false}
+        onValueChange={onValueChange}
+      >
+        {threeTabs}
+      </TabList>,
+    );
+    act(() => tab('Tab A').focus());
+    await user.keyboard('{ArrowDown}{ArrowDown}');
+    expect(tab('Tab C')).toHaveFocus();
+    await user.keyboard('{ArrowUp}');
+    expect(tab('Tab B')).toHaveFocus();
+    expect(selected()).toBe(tab('Tab A'));
+    await user.keyboard(' ');
+    expect(onValueChange.mock.calls).toEqual([['b']]);
+    expect(selected()).toBe(tab('Tab B'));
+  });
+
+  it('the deprecated onTabSelect fires on activation only, not on focus moves', async () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const user = userEvent.setup();
+    const onTabSelect = vi.fn();
+    render(
+      <TabList defaultValue="a" selectTabOnFocus={false} onTabSelect={onTabSelect}>
+        {threeTabs}
+      </TabList>,
+    );
+    act(() => tab('Tab A').focus());
+    await user.keyboard('{ArrowRight}');
+    expect(onTabSelect).not.toHaveBeenCalled();
+    await user.keyboard('{Enter}');
+    expect(onTabSelect.mock.calls).toEqual([['b']]);
+    expect(warnings(warn)).toEqual([ON_TAB_SELECT_DEPRECATED]);
+  });
+
+  it('selectTabOnFocus={true} (the default) selects the tab focus moves to', async () => {
+    const user = userEvent.setup();
+    const onValueChange = vi.fn();
+    render(
+      <TabList defaultValue="a" selectTabOnFocus onValueChange={onValueChange}>
+        {threeTabs}
+      </TabList>,
+    );
+    act(() => tab('Tab A').focus());
+    await user.keyboard('{ArrowRight}');
+    expect(selected()).toBe(tab('Tab B'));
+    expect(onValueChange.mock.calls).toEqual([['b']]);
+  });
+
+  it('has no axe violations while focus is on a tab that is not selected', async () => {
+    const user = userEvent.setup();
+    render(
+      <TabList aria-label="Sections" defaultValue="a" selectTabOnFocus={false}>
+        {tabsWithPanels}
+      </TabList>,
+    );
+    act(() => tab('Tab A').focus());
+    await user.keyboard('{ArrowRight}');
+    await expectNoA11yViolations();
   });
 });
 

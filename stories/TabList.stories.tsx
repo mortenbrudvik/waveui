@@ -77,6 +77,29 @@ export const Controlled: Story = {
   },
 };
 
+/**
+ * Manual activation (`selectTabOnFocus={false}`): the arrow keys, Home and End only move focus;
+ * Enter, Space or a click selects the focused tab and shows its panel. Use it for panels that are
+ * slow to show. The selected tab stays the tab stop, so Tab away and back returns to it.
+ */
+export const ManualActivation: Story = {
+  args: {
+    'aria-label': 'Reports',
+    defaultValue: 'tab1',
+    selectTabOnFocus: false,
+  },
+  render: (args) => (
+    <TabList {...args}>
+      <TabList.Tab value="tab1">Daily</TabList.Tab>
+      <TabList.Tab value="tab2">Weekly</TabList.Tab>
+      <TabList.Tab value="tab3">Monthly</TabList.Tab>
+      <TabList.Panel value="tab1">Daily report.</TabList.Panel>
+      <TabList.Panel value="tab2">Weekly report.</TabList.Panel>
+      <TabList.Panel value="tab3">Monthly report.</TabList.Panel>
+    </TabList>
+  ),
+};
+
 /** Disabled tabs are skipped by the arrow keys and cannot be selected. */
 export const WithDisabledTab: Story = {
   args: {

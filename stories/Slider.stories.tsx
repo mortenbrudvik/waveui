@@ -42,3 +42,18 @@ export const Disabled: Story = {
     disabled: true,
   },
 };
+
+/**
+ * Under `dir="rtl"` the minimum is on the right, so the rail fills from the right up to the
+ * thumb.
+ */
+export const RightToLeft: Story = {
+  args: {
+    defaultValue: 30,
+  },
+  render: (args) => (
+    <div dir="rtl" className="w-64">
+      <Slider {...args} />
+    </div>
+  ),
+};

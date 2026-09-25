@@ -42,6 +42,19 @@ export const SelectedSubItem: Story = {
   },
 };
 
+/**
+ * A closed category that contains the current page marks its toggle with `aria-current="true"`,
+ * `data-contains-current` and the selected look of an item, so the current page is still visible
+ * while its category is collapsed. Open "Documentation" and the mark moves to "API Reference".
+ * For sub-items your own component renders, pass `currentCategory`.
+ */
+export const CollapsedCurrent: Story = {
+  args: {
+    defaultValue: 'api',
+    defaultOpenCategories: [],
+  },
+};
+
 /** Items with `href` render as links; `aria-current="page"` marks the selected one. */
 export const WithLinks: Story = {
   args: {

@@ -32,6 +32,45 @@ describe('focusableDisabledProps', () => {
     expect(focusableDisabledProps()).toEqual({});
   });
 
+  it('adds data-disabled-focusable with reachable, so roving containers keep the control', () => {
+    expect(focusableDisabledProps(true, { reachable: true })).toEqual({
+      'aria-disabled': true,
+      'data-disabled': '',
+      'data-disabled-focusable': '',
+    });
+  });
+
+  it('leaves data-disabled-focusable off by default and when reachable is false', () => {
+    expect(focusableDisabledProps(true, {})).toEqual({
+      'aria-disabled': true,
+      'data-disabled': '',
+    });
+    expect(focusableDisabledProps(true, { reachable: false })).toEqual({
+      'aria-disabled': true,
+      'data-disabled': '',
+    });
+  });
+
+  it('adds nothing when enabled, reachable or not', () => {
+    expect(focusableDisabledProps(false, { reachable: true })).toEqual({});
+    expect(focusableDisabledProps(undefined, { reachable: true })).toEqual({});
+  });
+
+  it('renders the three attributes of a reachable disabled control', () => {
+    render(
+      React.createElement(
+        'button',
+        { type: 'button', ...focusableDisabledProps(true, { reachable: true }) },
+        'Bold',
+      ),
+    );
+    const button = screen.getByRole('button', { name: 'Bold' });
+    expect(button).toHaveAttribute('aria-disabled', 'true');
+    expect(button).toHaveAttribute('data-disabled', '');
+    expect(button).toHaveAttribute('data-disabled-focusable', '');
+    expect(button).not.toBeDisabled();
+  });
+
   it('renders aria-disabled + data-disabled and no native disabled attribute', () => {
     render(
       React.createElement('button', { type: 'button', ...focusableDisabledProps(true) }, 'Next'),

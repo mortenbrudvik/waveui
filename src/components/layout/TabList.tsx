@@ -120,7 +120,10 @@ interface TabListContextValue {
   orientation: Orientation;
   /** Whether the tab with this value is the selected one (explicit value, else the tab stop). */
   isSelected: (value: string) => boolean;
-  /** Activates a tab (click, or focus moved by the arrow keys). */
+  /**
+   * Activates a tab: a click (Enter and Space click the tab button), or with automatic activation
+   * focus moved by the keys.
+   */
   select: (value: string) => void;
   getTabIndex: (value: string) => 0 | -1;
   /** The generated id of a Tab or Panel (used when it has no consumer `id`). */
@@ -276,6 +279,14 @@ export interface TabListProps extends Omit<React.HTMLAttributes<HTMLDivElement>,
    * @default 'horizontal'
    */
   orientation?: Orientation;
+  /**
+   * Whether moving focus with the arrow keys, Home and End also selects the tab (automatic
+   * activation, as in 0.5). With `false`, the keys only move focus and Enter, Space or a click
+   * selects the focused tab (manual activation, for panels that are slow to show). Fluent's
+   * default is `false`.
+   * @default true
+   */
+  selectTabOnFocus?: boolean;
   /** @deprecated Use `value`. */
   selectedValue?: string;
   /** @deprecated Use `defaultValue`. */
@@ -296,6 +307,7 @@ const TabListRoot = ({
   defaultValue: defaultValueProp,
   onValueChange,
   orientation: orientationProp,
+  selectTabOnFocus = true,
   selectedValue,
   defaultSelectedValue,
   onTabSelect,
@@ -368,8 +380,10 @@ const TabListRoot = ({
     activeValue: derivesSelection ? (structure.firstEnabled ?? null) : selected,
     orientation,
     loop: true,
-    // Automatic activation (APG Tabs): moving focus selects the tab.
-    onFocusMove: (next) => select(next),
+    // Automatic activation (APG Tabs): moving focus selects the tab. With manual activation the
+    // keys only move focus; the tab stop stays on the selected tab (`tabStop: 'active'`), and Enter
+    // or Space selects the focused tab through its native click.
+    onFocusMove: selectTabOnFocus ? (next) => select(next) : undefined,
   });
 
   const isSelected = React.useCallback(
@@ -598,10 +612,12 @@ TabPanels.displayName = 'TabPanels';
 /* ------------------------------------------------------------------ */
 
 /**
- * A set of tabs with their panels (WAI-ARIA Tabs pattern, automatic activation): the arrow keys
- * (Left/Right, mirrored in RTL; Up/Down when vertical), Home and End move focus and select; the
- * selected tab is the only tab stop; disabled tabs are skipped. Every tab needs a `value` that is
- * unique within the TabList (a development warning names a value that several tabs share).
+ * A set of tabs with their panels (WAI-ARIA Tabs pattern): the arrow keys (Left/Right, mirrored
+ * in RTL; Up/Down when vertical), Home and End move focus and select (automatic activation); with
+ * `selectTabOnFocus={false}` they only move focus, and Enter, Space or a click selects the focused
+ * tab (manual activation). The selected tab is the only tab stop; disabled tabs are skipped. Every
+ * tab needs a `value` that is unique within the TabList (a development warning names a value that
+ * several tabs share).
  *
  * Tabs register through context and are found in DOM order, so they may be wrapped (a Fragment,
  * a Tooltip). The children render inside the `role="tablist"` element, except panels, which render

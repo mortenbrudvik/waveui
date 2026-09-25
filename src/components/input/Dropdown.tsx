@@ -2,8 +2,8 @@ import * as React from 'react';
 import { cn } from '../../lib/cn';
 import { composeEventHandlers } from '../../lib/composeEventHandlers';
 import { warnDeprecated } from '../../lib/dev';
-import { ChevronDownIcon } from '../../lib/icons';
-import { disabledStyles, inputFocus, inputInvalid } from '../../lib/styles';
+import { ChevronDownIcon, DismissIcon } from '../../lib/icons';
+import { disabledStyles, focusRing, inputFocus, inputInvalid } from '../../lib/styles';
 import { useControllable } from '../../hooks/useControllable';
 import { useFieldContext, useFieldControl } from '../../hooks/useFieldControl';
 import { useFormReset } from '../../hooks/useFormReset';
@@ -12,11 +12,23 @@ import { useMergedRefs } from '../../hooks/useMergedRefs';
 import { HiddenInput } from '../internal/HiddenInput';
 import { isInvalidLook } from './Input';
 import { ListboxSurface, Option, OptionGroup, useListboxPopup } from './Option';
+import { PICKER_ICON_BUTTON_CLASSES, pickerEndPadding } from './pickerStyles';
 import type { RoutedHandlers } from './routedHandlers';
 
 /* ------------------------------------------------------------------ */
 /*  Dropdown                                                          */
 /* ------------------------------------------------------------------ */
+
+/**
+ * The Dropdown's built-in texts, for localization. Each member is optional and falls back to its
+ * English default.
+ */
+export interface DropdownLabels {
+  /** Name of the clear button (`clearable`).
+   * @default 'Clear selection'
+   */
+  clear?: string;
+}
 
 /** Properties for the Dropdown component. */
 export interface DropdownProps extends Omit<
@@ -69,6 +81,14 @@ export interface DropdownProps extends Omit<
   form?: string;
   /** A value is required to submit the form (native constraint validation). */
   required?: boolean;
+  /**
+   * Shows a clear button while a value is selected (shown disabled while `disabled`). It clears
+   * the value, closes the list and moves focus to the combobox button. It is a tab stop after it.
+   * @default false
+   */
+  clearable?: boolean;
+  /** The name of the clear button, for localization. Unset members keep their English defaults. */
+  labels?: DropdownLabels;
   /** Called when the `<button role="combobox">` receives focus (the root keeps other handlers). */
   onFocus?: React.FocusEventHandler<HTMLButtonElement>;
   /** Called when the `<button role="combobox">` loses focus. */
@@ -100,6 +120,8 @@ const DropdownRoot = (props: DropdownProps) => {
     name,
     form,
     required,
+    clearable = false,
+    labels,
     autoFocus,
     tabIndex,
     id,
@@ -158,7 +180,7 @@ const DropdownRoot = (props: DropdownProps) => {
   const rootRef = React.useRef<HTMLDivElement | null>(null);
   const buttonRef = React.useRef<HTMLButtonElement | null>(null);
 
-  const labels = React.useMemo(() => collectOptionLabels(children), [children]);
+  const optionLabels = React.useMemo(() => collectOptionLabels(children), [children]);
 
   const listbox = useListbox({
     open,
@@ -186,7 +208,7 @@ const DropdownRoot = (props: DropdownProps) => {
 
   useFormReset(buttonRef, () => setValue(defaultValue ?? ''), form);
 
-  const displayText = value ? (listbox.getItem(value)?.label ?? labels.get(value) ?? '') : '';
+  const displayText = value ? (listbox.getItem(value)?.label ?? optionLabels.get(value) ?? '') : '';
 
   const handleKeyDown = (event: React.KeyboardEvent<HTMLButtonElement>) => {
     if (event.key === 'Escape' && open && !expanded && !event.nativeEvent.isComposing) {
@@ -198,6 +220,15 @@ const DropdownRoot = (props: DropdownProps) => {
     listbox.onKeyDown(event);
   };
 
+  // The button disappears with the value, so focus moves to the combobox explicitly (C-DISABLED).
+  const handleClear = () => {
+    setValue('');
+    setOpen(false);
+    buttonRef.current?.focus();
+  };
+
+  const showClear = clearable && value !== '';
+
   const listLabelledBy =
     fieldProps['aria-label'] === undefined
       ? (fieldProps['aria-labelledby'] ?? field?.labelId)
@@ -205,40 +236,57 @@ const DropdownRoot = (props: DropdownProps) => {
 
   return (
     <div {...rest} ref={rootMergedRef} className={cn('relative inline-flex flex-col', className)}>
-      <button
-        type="button"
-        {...fieldProps}
-        {...listbox.getComboboxProps()}
-        aria-expanded={expanded}
-        aria-errormessage={ariaErrorMessage}
-        aria-details={ariaDetails}
-        ref={buttonMergedRef}
-        disabled={disabled}
-        autoFocus={autoFocus}
-        tabIndex={tabIndex}
-        onClick={() => setOpen((current) => !current)}
-        onKeyDown={composeEventHandlers(onKeyDown, handleKeyDown)}
-        onKeyUp={composeEventHandlers(onKeyUp, listbox.onKeyUp)}
-        onFocus={onFocus}
-        onBlur={onBlur}
-        className={cn(
-          // Every padding is set here (C-NATIVE), not left to an app-wide `button` rule.
-          'flex h-8 w-full items-center justify-between rounded border border-input border-b-stroke-accessible bg-background px-3 py-0 text-start text-body-1 text-foreground',
-          inputFocus,
-          disabledStyles,
-          invalidLook && inputInvalid,
-        )}
-      >
-        <span className={cn('truncate', !displayText && 'text-muted-foreground')}>
-          {displayText || placeholder}
-        </span>
-        <ChevronDownIcon
+      <div className="relative flex items-center">
+        <button
+          type="button"
+          {...fieldProps}
+          {...listbox.getComboboxProps()}
+          aria-expanded={expanded}
+          aria-errormessage={ariaErrorMessage}
+          aria-details={ariaDetails}
+          ref={buttonMergedRef}
+          disabled={disabled}
+          autoFocus={autoFocus}
+          tabIndex={tabIndex}
+          onClick={() => setOpen((current) => !current)}
+          onKeyDown={composeEventHandlers(onKeyDown, handleKeyDown)}
+          onKeyUp={composeEventHandlers(onKeyUp, listbox.onKeyUp)}
+          onFocus={onFocus}
+          onBlur={onBlur}
           className={cn(
-            'ms-2 shrink-0 transition-transform motion-reduce:transition-none',
-            expanded && 'rotate-180',
+            // Every padding is set here (C-NATIVE), not left to an app-wide `button` rule. The end
+            // padding keeps the text clear of the chevron (and of the clear button while it shows).
+            'relative flex h-8 w-full items-center justify-between rounded border border-input border-b-stroke-accessible bg-background px-3 py-0 text-start text-body-1 text-foreground',
+            pickerEndPadding(showClear ? 2 : 1),
+            inputFocus,
+            disabledStyles,
+            invalidLook && inputInvalid,
           )}
-        />
-      </button>
+        >
+          <span className={cn('truncate', !displayText && 'text-muted-foreground')}>
+            {displayText || placeholder}
+          </span>
+          <ChevronDownIcon
+            className={cn(
+              'absolute end-3 transition-transform motion-reduce:transition-none',
+              expanded && 'rotate-180',
+            )}
+          />
+        </button>
+        {showClear && (
+          <button
+            type="button"
+            aria-label={labels?.clear ?? 'Clear selection'}
+            disabled={disabled}
+            // Keeps focus on the combobox while the pointer clears it.
+            onMouseDown={(event) => event.preventDefault()}
+            onClick={handleClear}
+            className={cn(PICKER_ICON_BUTTON_CLASSES, 'end-7', focusRing, disabledStyles)}
+          >
+            <DismissIcon />
+          </button>
+        )}
+      </div>
       <ListboxSurface
         listbox={listbox}
         layerId={layerId}
@@ -274,7 +322,8 @@ export const DropdownOptionGroup = OptionGroup;
  * A select-only combobox (APG): a button that opens a listbox of `Option`s. Enter, Space,
  * ArrowDown/ArrowUp, Home/End and typing a character open it and move the highlight
  * (`aria-activedescendant`); Enter/Space select, Tab selects the highlighted option and moves on,
- * Escape closes.
+ * Escape closes. `clearable` adds a clear button, a tab stop after the combobox button; both sit
+ * in a wrapper `<div>` inside the root.
  *
  * The `<button>` receives `id`, `aria-label`, `aria-labelledby`, `aria-describedby`,
  * `aria-invalid`, `aria-required`, `aria-errormessage`, `aria-details`, `tabIndex`, `autoFocus`

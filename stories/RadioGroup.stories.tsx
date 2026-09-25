@@ -135,3 +135,33 @@ export const InForm: Story = {
     </form>
   ),
 };
+
+/**
+ * `label` takes rich content: here a second line of subtext. The whole text names each radio, and
+ * the radio lines up with the first line.
+ */
+export const LabelWithSubtext: Story = {
+  args: {
+    'aria-label': 'Delivery speed',
+    defaultValue: 'standard',
+  },
+  render: (args) => {
+    const option = (title: string, detail: string) => (
+      <span className="flex flex-col">
+        <span>{title}</span> <span className="text-caption-1 text-muted-foreground">{detail}</span>
+      </span>
+    );
+    return (
+      <RadioGroup {...args}>
+        <RadioItem
+          value="standard"
+          label={option('Standard', 'Arrives in 3 to 5 business days.')}
+        />
+        <RadioItem
+          value="express"
+          label={option('Express', 'Arrives tomorrow when ordered before 14:00.')}
+        />
+      </RadioGroup>
+    );
+  },
+};

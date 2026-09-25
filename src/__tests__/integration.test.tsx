@@ -57,12 +57,14 @@ import {
   OverflowItem,
   Popover,
   Portal,
+  ProgressBar,
   RadioGroup,
   Rating,
   SearchBox,
   Select,
   Slider,
   SpinButton,
+  Spinner,
   SplitButton,
   Stack,
   SwatchPicker,
@@ -76,14 +78,21 @@ import {
   Textarea,
   TimePicker,
   Toaster,
+  ToggleButton,
   Toolbar,
   Tooltip,
   Tree,
   TreeItem,
   useOverflowMenu,
   useToastController,
+  type DialogProps,
 } from '../index';
-import { asClientReference, expectNoA11yViolations } from '../test-utils';
+import {
+  asClientReference,
+  expectNoA11yViolations,
+  installResizeObserverMock,
+  mockRect,
+} from '../test-utils';
 
 afterEach(() => {
   vi.restoreAllMocks();
@@ -606,7 +615,7 @@ describe('Tooltip inside clipping containers (overlays#36)', () => {
     expect(tooltipSurface()).toBeNull();
     expect(onOpenChange).not.toHaveBeenCalled();
     await user.keyboard('{Escape}');
-    expect(onOpenChange).toHaveBeenCalledWith(false);
+    expect(onOpenChange).toHaveBeenCalledWith(false, expect.objectContaining({ reason: 'escape' }));
   });
 });
 
@@ -1044,7 +1053,7 @@ describe('pickers inside a Dialog: Escape closes only the popup (overlays#1)', (
 
     await user.keyboard('{Escape}');
     expect(onOpenChange).toHaveBeenCalledTimes(1);
-    expect(onOpenChange).toHaveBeenCalledWith(false);
+    expect(onOpenChange).toHaveBeenCalledWith(false, expect.objectContaining({ reason: 'escape' }));
   });
 
   it('DatePicker: the first Escape closes the calendar, the second the Dialog', async () => {
@@ -1071,7 +1080,7 @@ describe('pickers inside a Dialog: Escape closes only the popup (overlays#1)', (
 
     await user.keyboard('{Escape}');
     expect(onOpenChange).toHaveBeenCalledTimes(1);
-    expect(onOpenChange).toHaveBeenCalledWith(false);
+    expect(onOpenChange).toHaveBeenCalledWith(false, expect.objectContaining({ reason: 'escape' }));
   });
 });
 
@@ -1876,7 +1885,7 @@ describe('inner widgets that consume Escape inside a real Dialog', () => {
 
     await user.keyboard('{Escape}');
     expect(onOpenChange).toHaveBeenCalledTimes(1);
-    expect(onOpenChange).toHaveBeenCalledWith(false);
+    expect(onOpenChange).toHaveBeenCalledWith(false, expect.objectContaining({ reason: 'escape' }));
   });
 
   it('SpinButton: the first Escape reverts the draft, the second closes the Dialog', async () => {
@@ -1899,7 +1908,579 @@ describe('inner widgets that consume Escape inside a real Dialog', () => {
 
     await user.keyboard('{Escape}');
     expect(onOpenChange).toHaveBeenCalledTimes(1);
-    expect(onOpenChange).toHaveBeenCalledWith(false);
+    expect(onOpenChange).toHaveBeenCalledWith(false, expect.objectContaining({ reason: 'escape' }));
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Focusable disabled buttons in a Toolbar and as menu triggers
+// ---------------------------------------------------------------------------
+
+describe('a Toolbar with a focusable disabled Button', () => {
+  function Formatting({ onPaste, onBold }: { onPaste?: () => void; onBold?: () => void }) {
+    return (
+      <Toolbar aria-label="Formatting">
+        <Button onClick={onBold}>Bold</Button>
+        <Tooltip content="Copy something first" delay={0}>
+          <Button disabledFocusable onClick={onPaste}>
+            Paste
+          </Button>
+        </Tooltip>
+        <ToggleButton>Italic</ToggleButton>
+      </Toolbar>
+    );
+  }
+
+  it('the arrow keys, Home and End reach it, and it can hold the tab stop', async () => {
+    const user = userEvent.setup();
+    render(
+      <>
+        <Formatting />
+        <button type="button">After</button>
+      </>,
+    );
+    const paste = button('Paste');
+    expect(paste).toHaveAttribute('aria-disabled', 'true');
+    expect(paste).toHaveAttribute('data-disabled-focusable', '');
+    expect(paste).not.toBeDisabled();
+    await user.tab();
+    expect(button('Bold')).toHaveFocus();
+    await user.keyboard('{ArrowRight}');
+    expect(paste).toHaveFocus();
+    await user.keyboard('{ArrowRight}');
+    expect(button('Italic')).toHaveFocus();
+    await user.keyboard('{ArrowLeft}');
+    expect(paste).toHaveFocus();
+    await user.keyboard('{End}');
+    expect(button('Italic')).toHaveFocus();
+    await user.keyboard('{Home}{ArrowRight}');
+    expect(paste).toHaveFocus();
+    // Tab leaves the toolbar; Shift+Tab comes back to the focusable disabled button.
+    await user.tab();
+    expect(button('After')).toHaveFocus();
+    await user.tab({ shift: true });
+    expect(paste).toHaveFocus();
+    await expectNoA11yViolations(document.body);
+  });
+
+  it('Enter, Space and a click do nothing, and the click does not reach the toolbar', async () => {
+    const user = userEvent.setup();
+    const onPaste = vi.fn();
+    const onBold = vi.fn();
+    const onToolbarClick = vi.fn();
+    render(
+      <div onClick={onToolbarClick}>
+        <Formatting onPaste={onPaste} onBold={onBold} />
+      </div>,
+    );
+    await user.tab();
+    await user.keyboard('{ArrowRight}');
+    expect(button('Paste')).toHaveFocus();
+    await user.keyboard('{Enter}');
+    await user.keyboard(' ');
+    await user.click(button('Paste'));
+    expect(onPaste).not.toHaveBeenCalled();
+    expect(onToolbarClick).not.toHaveBeenCalled();
+    expect(button('Paste')).toHaveFocus();
+    // The enabled neighbours still act, and their clicks reach the toolbar.
+    await user.keyboard('{ArrowLeft}{Enter}');
+    expect(onBold).toHaveBeenCalledTimes(1);
+    await user.keyboard('{End} ');
+    expect(button('Italic')).toHaveAttribute('aria-pressed', 'true');
+    expect(onToolbarClick).toHaveBeenCalledTimes(2);
+  });
+
+  it('its Tooltip opens when the arrow keys focus it and describes it', async () => {
+    const user = userEvent.setup();
+    render(<Formatting />);
+    expect(button('Paste')).toHaveAccessibleDescription('Copy something first');
+    await user.tab();
+    expect(tooltipSurface()).toBeNull();
+    await user.keyboard('{ArrowRight}');
+    expect(button('Paste')).toHaveFocus();
+    expect(tooltipSurface()).toHaveTextContent('Copy something first');
+    await expectNoA11yViolations(document.body);
+    await user.keyboard('{ArrowRight}');
+    expect(tooltipSurface()).toBeNull();
+  });
+});
+
+describe('Menu.Trigger around a focusable disabled MenuButton or SplitButton', () => {
+  type Variant =
+    | 'MenuButton as the child'
+    | 'MenuButton inside the wrapper span'
+    | 'SplitButton menu half (render prop)'
+    | 'SplitButton inside the wrapper span';
+
+  function Trigger({
+    variant,
+    disabledFocusable,
+  }: {
+    variant: Variant;
+    disabledFocusable: boolean;
+  }) {
+    let trigger: React.ReactNode;
+    if (variant === 'MenuButton as the child') {
+      trigger = (
+        <Menu.Trigger>
+          <MenuButton disabledFocusable={disabledFocusable}>Actions</MenuButton>
+        </Menu.Trigger>
+      );
+    } else if (variant === 'MenuButton inside the wrapper span') {
+      trigger = (
+        <Menu.Trigger asChild={false}>
+          <MenuButton disabledFocusable={disabledFocusable}>Actions</MenuButton>
+        </Menu.Trigger>
+      );
+    } else if (variant === 'SplitButton menu half (render prop)') {
+      trigger = (
+        <Menu.Trigger>
+          {(triggerProps) => (
+            <SplitButton disabledFocusable={disabledFocusable} menuButtonProps={triggerProps}>
+              Save
+            </SplitButton>
+          )}
+        </Menu.Trigger>
+      );
+    } else {
+      trigger = (
+        <Menu.Trigger asChild={false}>
+          <SplitButton disabledFocusable={disabledFocusable}>Save</SplitButton>
+        </Menu.Trigger>
+      );
+    }
+    return (
+      <Menu>
+        {trigger}
+        <Menu.Popover>
+          <Menu.Item>First</Menu.Item>
+          <Menu.Item>Last</Menu.Item>
+        </Menu.Popover>
+      </Menu>
+    );
+  }
+
+  const variants: Array<[Variant, string]> = [
+    ['MenuButton as the child', 'Actions'],
+    ['MenuButton inside the wrapper span', 'Actions'],
+    ['SplitButton menu half (render prop)', 'More options'],
+    ['SplitButton inside the wrapper span', 'More options'],
+  ];
+  const activations = [
+    ['a click', null],
+    ['Enter', '{Enter}'],
+    ['Space', ' '],
+    ['ArrowDown', '{ArrowDown}'],
+    ['ArrowUp', '{ArrowUp}'],
+  ] as const;
+  const cases = variants.flatMap(([variant, name]) =>
+    activations.map(([how, keys]) => [variant, how, name, keys] as const),
+  );
+
+  async function activate(
+    user: ReturnType<typeof userEvent.setup>,
+    target: HTMLElement,
+    keys: string | null,
+  ) {
+    if (keys === null) {
+      await user.click(target);
+    } else {
+      act(() => target.focus());
+      await user.keyboard(keys);
+    }
+  }
+
+  it.each(cases)('%s: %s does not open the menu', async (variant, _how, name, keys) => {
+    const user = userEvent.setup();
+    render(<Trigger variant={variant} disabledFocusable />);
+    const target = button(name);
+    // The aria-disabled element is the trigger element or inside it, where Menu.Trigger looks.
+    expect(target).toHaveAttribute('aria-disabled', 'true');
+    expect(target).toHaveAttribute('data-disabled-focusable', '');
+    expect(target).not.toBeDisabled();
+    await activate(user, target, keys);
+    expect(screen.queryByRole('menu')).not.toBeInTheDocument();
+    expect(target).toHaveFocus();
+    expect(document.querySelector('[aria-haspopup="menu"]')).toHaveAttribute(
+      'aria-expanded',
+      'false',
+    );
+  });
+
+  // The same interactions open the menu without disabledFocusable, so each one reaches the trigger.
+  it.each(cases)(
+    '%s: %s opens the menu without disabledFocusable',
+    async (variant, _how, name, keys) => {
+      const user = userEvent.setup();
+      render(<Trigger variant={variant} disabledFocusable={false} />);
+      await activate(user, button(name), keys);
+      expect(screen.getByRole('menu')).toBeInTheDocument();
+      expect(menuitem(keys === '{ArrowUp}' ? 'Last' : 'First')).toHaveFocus();
+    },
+  );
+
+  it('SplitButton puts aria-disabled on the menu half that carries the trigger props', () => {
+    render(<Trigger variant="SplitButton menu half (render prop)" disabledFocusable />);
+    const more = button('More options');
+    expect(more).toHaveAttribute('aria-haspopup', 'menu');
+    expect(more).toHaveAttribute('aria-disabled', 'true');
+    expect(button('Save')).toHaveAttribute('aria-disabled', 'true');
+    expect(screen.getByRole('group')).not.toHaveAttribute('aria-disabled');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Field validation states around the controls of other packages
+// ---------------------------------------------------------------------------
+
+describe('a Field validation message around Input, Checkbox, Combobox, ColorPicker and <input>', () => {
+  const controls: Array<{
+    name: string;
+    role: string;
+    control: () => React.ReactElement;
+    /**
+     * The focusable element inside a composite, which carries `aria-invalid` and is described by
+     * the message (ColorPicker's hex input; the group itself is described by message and hint).
+     */
+    inner?: () => HTMLElement;
+  }> = [
+    { name: 'Input', role: 'textbox', control: () => <Input /> },
+    { name: 'Checkbox', role: 'checkbox', control: () => <Checkbox /> },
+    { name: 'Combobox', role: 'combobox', control: () => <Combobox>{fruitOptions}</Combobox> },
+    {
+      name: 'ColorPicker',
+      role: 'group',
+      control: () => <ColorPicker />,
+      inner: () => screen.getByRole('textbox', { name: 'Hex color value' }),
+    },
+    { name: 'a native <input>', role: 'textbox', control: () => <input /> },
+  ];
+
+  describe.each(controls)('$name', ({ role, control, inner }) => {
+    it('a warning describes it (message, then hint) and never marks it invalid', async () => {
+      render(
+        <Field
+          label="Preference"
+          hint="Pick one"
+          validationState="warning"
+          validationMessage="Check this choice"
+        >
+          {control()}
+        </Field>,
+      );
+      const named = screen.getByRole(role, { name: 'Preference' });
+      expect(screen.getByRole('alert')).toHaveTextContent('Check this choice');
+      expect(named).toHaveAccessibleDescription(/Check this choice.*Pick one/);
+      if (inner) expect(inner()).toHaveAccessibleDescription(/Check this choice/);
+      expect(document.querySelector('[aria-invalid]')).toBeNull();
+      expect(duplicateIds()).toEqual([]);
+      await expectNoA11yViolations(document.body);
+    });
+
+    it('an error marks it invalid and describes it (message, then hint)', async () => {
+      render(
+        <Field label="Preference" hint="Pick one" error="Choose a value">
+          {control()}
+        </Field>,
+      );
+      const named = screen.getByRole(role, { name: 'Preference' });
+      expect(screen.getByRole('alert')).toHaveTextContent('Choose a value');
+      expect(named).toHaveAccessibleDescription(/Choose a value.*Pick one/);
+      if (inner) expect(inner()).toHaveAccessibleDescription(/Choose a value/);
+      expect(inner ? inner() : named).toHaveAttribute('aria-invalid', 'true');
+      expect(duplicateIds()).toEqual([]);
+      await expectNoA11yViolations(document.body);
+    });
+
+    it('validationState="error" with a validationMessage marks it invalid as error does', () => {
+      render(
+        <Field
+          label="Preference"
+          hint="Pick one"
+          validationState="error"
+          validationMessage="Choose a value"
+        >
+          {control()}
+        </Field>,
+      );
+      const named = screen.getByRole(role, { name: 'Preference' });
+      expect(named).toHaveAccessibleDescription(/Choose a value.*Pick one/);
+      expect(inner ? inner() : named).toHaveAttribute('aria-invalid', 'true');
+    });
+  });
+});
+
+describe('a Field validation state around a ProgressBar', () => {
+  it.each([
+    ['warning', 'bg-severe'],
+    ['error', 'bg-error'],
+  ] as const)(
+    '%s: named by the label, described by the message and hint, colored, never invalid or required',
+    async (state, fill) => {
+      const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+      render(
+        <Field
+          label="Upload"
+          hint="Up to 10 MB"
+          required
+          validationState={state}
+          validationMessage="The file is large"
+        >
+          <ProgressBar value={40} />
+        </Field>,
+      );
+      const bar = screen.getByRole('progressbar', { name: 'Upload' });
+      expect(bar).toHaveAccessibleDescription('The file is large Up to 10 MB');
+      expect(bar).toHaveAttribute('data-color', state);
+      expect(bar.querySelector(`.${fill}`)).not.toBeNull();
+      expect(bar).not.toHaveAttribute('aria-invalid');
+      expect(bar).not.toHaveAttribute('aria-required');
+      expect(bar).toHaveAttribute('aria-valuenow', '40');
+      await expectNoA11yViolations(document.body);
+      expect(warn).not.toHaveBeenCalled();
+    },
+  );
+
+  it('an explicit color wins over the Field state', () => {
+    render(
+      <Field label="Upload" validationState="error" validationMessage="Failed">
+        <ProgressBar value={40} color="brand" />
+      </Field>,
+    );
+    expect(screen.getByRole('progressbar', { name: 'Upload' })).toHaveAttribute(
+      'data-color',
+      'brand',
+    );
+  });
+});
+
+// ---------------------------------------------------------------------------
+// An inverted Spinner in a primary Button
+// ---------------------------------------------------------------------------
+
+describe('an inverted Spinner in the icon slot of a primary Button', () => {
+  it('keeps the Button named by its text and passes axe', async () => {
+    render(
+      <Button appearance="primary" icon={<Spinner appearance="inverted" size="extra-small" />}>
+        Saving
+      </Button>,
+    );
+    const saving = button('Saving');
+    expect(saving).toHaveAccessibleName('Saving');
+    expect(saving.querySelector('[data-appearance="inverted"]')).not.toBeNull();
+    await expectNoA11yViolations(document.body);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Alert dialogs and long forms
+// ---------------------------------------------------------------------------
+
+describe('a Toast over an alert Dialog', () => {
+  function setup() {
+    const onOpenChange = vi.fn();
+    render(
+      <Toaster>
+        <Dialog open modalType="alert" onOpenChange={onOpenChange}>
+          <Dialog.Content title="Delete report.pdf?">
+            <NotifyButton />
+          </Dialog.Content>
+        </Dialog>
+      </Toaster>,
+    );
+    return { onOpenChange, user: userEvent.setup() };
+  }
+
+  const region = () => screen.getByRole('region', { name: 'Notifications' });
+  const alertDialog = () => screen.getByRole('alertdialog', { name: 'Delete report.pdf?' });
+
+  it('stays announced and reachable by Tab while the alert is open', async () => {
+    const { user, onOpenChange } = setup();
+    await user.click(button('Notify'));
+    expect(region().closest('[inert]')).toBeNull();
+    expect(region().closest('[aria-hidden="true"]')).toBeNull();
+    expect(within(region()).getByRole('status')).toHaveTextContent('Saved');
+    await expectNoA11yViolations(document.body);
+    await user.tab();
+    const dismiss = within(region()).getByRole('button', { name: 'Dismiss' });
+    expect(dismiss).toHaveFocus();
+    await user.keyboard('{Enter}');
+    await act(async () => {});
+    expect(within(region()).queryByRole('button', { name: 'Dismiss' })).toBeNull();
+    expect(alertDialog()).toBeInTheDocument();
+    expect(onOpenChange).not.toHaveBeenCalled();
+    expect(button('Notify')).toHaveFocus();
+  });
+
+  it('a backdrop press does not close the alert or move focus; Escape does close it', async () => {
+    const { user, onOpenChange } = setup();
+    await user.click(button('Notify'));
+    const backdrop = alertDialog().parentElement!;
+    await user.click(backdrop);
+    expect(onOpenChange).not.toHaveBeenCalled();
+    expect(alertDialog()).toBeInTheDocument();
+    expect(within(region()).getByText('Saved')).toBeInTheDocument();
+    expect(button('Notify')).toHaveFocus();
+    await user.keyboard('{Escape}');
+    expect(onOpenChange).toHaveBeenCalledTimes(1);
+    expect(onOpenChange).toHaveBeenCalledWith(false, expect.objectContaining({ reason: 'escape' }));
+  });
+});
+
+describe('a Dialog with a long form of Fields and a Dialog.Footer', () => {
+  const FOOTER_HEIGHT = '--wave-dialog-footer-height';
+  let resizeObserver: ReturnType<typeof installResizeObserverMock> | undefined;
+  afterEach(() => {
+    resizeObserver?.restore();
+    resizeObserver = undefined;
+  });
+
+  function ProfileDialog({ onSubmit }: { onSubmit: (event: React.FormEvent) => void }) {
+    return (
+      <Dialog defaultOpen>
+        <Dialog.Content title="Profile">
+          <form aria-label="Profile" onSubmit={onSubmit}>
+            {Array.from({ length: 20 }, (_, index) => (
+              <Field key={index} label={`Field ${index + 1}`}>
+                <Input />
+              </Field>
+            ))}
+            <Dialog.Footer data-testid="footer">
+              <Dialog.Close>
+                <Button>Cancel</Button>
+              </Dialog.Close>
+              <Button type="submit" appearance="primary">
+                Save
+              </Button>
+            </Dialog.Footer>
+          </form>
+        </Dialog.Content>
+      </Dialog>
+    );
+  }
+
+  it('reserves the footer height as the body scroll padding, so the focused last field stays above it', async () => {
+    resizeObserver = installResizeObserverMock();
+    const user = userEvent.setup();
+    const onSubmit = vi.fn((event: React.FormEvent) => event.preventDefault());
+    render(<ProfileDialog onSubmit={onSubmit} />);
+    const form = screen.getByRole('form', { name: 'Profile' });
+    const footer = screen.getByTestId('footer');
+    const body = form.parentElement!;
+    expect(body).toHaveClass('overflow-y-auto', `scroll-pb-(${FOOTER_HEIGHT})`);
+    expect(form.lastElementChild).toBe(footer);
+    expect(footer).toHaveClass('sticky', '-bottom-1', 'bg-background');
+
+    mockRect(footer, { height: 64 });
+    resizeObserver.trigger(footer);
+    expect(body.style.getPropertyValue(FOOTER_HEIGHT)).toBe('64px');
+
+    const last = screen.getByRole('textbox', { name: 'Field 20' });
+    await user.click(last);
+    expect(last).toHaveFocus();
+    expect(last.compareDocumentPosition(footer) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    await user.tab();
+    expect(button('Cancel')).toHaveFocus();
+    await user.tab();
+    expect(button('Save')).toHaveFocus();
+    await user.keyboard('{Enter}');
+    expect(onSubmit).toHaveBeenCalledTimes(1);
+    expect(duplicateIds()).toEqual([]);
+    await expectNoA11yViolations(document.body);
+  });
+});
+
+describe('a SpinButton in a Dialog or Drawer: a backdrop press commits its typed value', () => {
+  type Surface = 'Dialog' | 'Drawer';
+  type SurfaceProps = Pick<DialogProps, 'open' | 'defaultOpen' | 'onOpenChange' | 'modalType'>;
+
+  /** A dialog or drawer titled "Page size" around a SpinButton, which commits typed text on blur. */
+  function PageSize({
+    surface,
+    onValueChange,
+    ...props
+  }: SurfaceProps & { surface: Surface; onValueChange: (value: number) => void }) {
+    const rows = <SpinButton aria-label="Rows" defaultValue={10} onValueChange={onValueChange} />;
+    if (surface === 'Drawer') {
+      const { open, defaultOpen, onOpenChange } = props;
+      return (
+        <Drawer title="Page size" open={open} defaultOpen={defaultOpen} onOpenChange={onOpenChange}>
+          {rows}
+        </Drawer>
+      );
+    }
+    return (
+      <Dialog {...props}>
+        <Dialog.Content title="Page size">{rows}</Dialog.Content>
+      </Dialog>
+    );
+  }
+
+  /** The backdrop behind the open surface (its parent element). */
+  const backdropOf = (role: 'dialog' | 'alertdialog') => screen.getByRole(role).parentElement!;
+
+  async function typeRows(user: ReturnType<typeof userEvent.setup>, text: string) {
+    const rows = screen.getByRole('spinbutton', { name: 'Rows' });
+    await user.clear(rows);
+    await user.type(rows, text);
+    return rows;
+  }
+
+  it.each([
+    ['Dialog', 'backdrop'],
+    ['Dialog', 'Close button'],
+    ['Drawer', 'backdrop'],
+    ['Drawer', 'Close button'],
+  ] as const)('%s: the %s closes it and the typed value is committed', async (surface, path) => {
+    const user = userEvent.setup();
+    const onValueChange = vi.fn();
+    render(<PageSize surface={surface} defaultOpen onValueChange={onValueChange} />);
+    await typeRows(user, '50');
+    await user.click(path === 'backdrop' ? backdropOf('dialog') : button('Close'));
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+    expect(onValueChange.mock.calls).toEqual([[50]]);
+  });
+
+  it.each(['Dialog', 'Drawer'] as const)(
+    '%s: a refused backdrop press commits the typed value and gives focus back to the SpinButton',
+    async (surface) => {
+      const user = userEvent.setup();
+      const onValueChange = vi.fn();
+      function RefusesBackdrop() {
+        const [open, setOpen] = React.useState(true);
+        return (
+          <PageSize
+            surface={surface}
+            open={open}
+            onOpenChange={(next, details) => {
+              if (details?.reason !== 'outside-press') setOpen(next);
+            }}
+            onValueChange={onValueChange}
+          />
+        );
+      }
+      render(<RefusesBackdrop />);
+      const rows = await typeRows(user, '50');
+      await user.click(backdropOf('dialog'));
+      expect(screen.getByRole('dialog', { name: 'Page size' })).toBeInTheDocument();
+      expect(onValueChange.mock.calls).toEqual([[50]]);
+      expect(rows).toHaveFocus();
+      expect(rows).toHaveValue('50');
+    },
+  );
+
+  it('an alert Dialog: the press neither closes it nor blurs the SpinButton, whose text stays a draft', async () => {
+    const user = userEvent.setup();
+    const onValueChange = vi.fn();
+    render(
+      <PageSize surface="Dialog" defaultOpen modalType="alert" onValueChange={onValueChange} />,
+    );
+    const rows = await typeRows(user, '50');
+    await user.click(backdropOf('alertdialog'));
+    expect(screen.getByRole('alertdialog', { name: 'Page size' })).toBeInTheDocument();
+    expect(rows).toHaveFocus();
+    expect(onValueChange).not.toHaveBeenCalled();
+    expect(rows).toHaveValue('50');
   });
 });
 

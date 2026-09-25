@@ -2,10 +2,10 @@ export { MessageBar } from './MessageBar';
 export type { MessageBarProps } from './MessageBar';
 
 export { ProgressBar } from './ProgressBar';
-export type { ProgressBarProps } from './ProgressBar';
+export type { ProgressBarProps, ProgressBarColor } from './ProgressBar';
 
 export { Spinner } from './Spinner';
-export type { SpinnerProps } from './Spinner';
+export type { SpinnerProps, SpinnerAppearance } from './Spinner';
 
 export { Skeleton, SkeletonGroup } from './Skeleton';
 export type { SkeletonProps, SkeletonGroupProps } from './Skeleton';

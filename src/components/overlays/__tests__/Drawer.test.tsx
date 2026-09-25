@@ -4,24 +4,30 @@ import { createPortal } from 'react-dom';
 import { hydrateRoot } from 'react-dom/client';
 import { renderToString } from 'react-dom/server';
 import { act, cleanup, fireEvent, render, screen } from '@testing-library/react';
-import userEvent from '@testing-library/user-event';
+import userEvent, { type UserEvent } from '@testing-library/user-event';
 import {
   Drawer,
   DrawerClose,
   DrawerTitle,
   DrawerTrigger,
   type DrawerCloseProps,
+  type DrawerOpenChangeDetails,
+  type DrawerOpenChangeReason,
   type DrawerProps,
   type DrawerTitleProps,
   type DrawerTriggerProps,
 } from '../Drawer';
+import { Dialog } from '../Dialog';
 import { useDismiss } from '../../../hooks/useDismiss';
 import { Portal } from '../../portal/Portal';
 import { getTopmostLayer } from '../../../lib/layers';
+import type { ModalOpenChangeReason, OpenChangeDetails } from '../../../lib/types';
 import {
   asClientReference,
   expectNoA11yViolations,
   findDanglingIdRefsInHtml,
+  installResizeObserverMock,
+  mockRect,
   renderWithProviders,
   testCompoundExposure,
   testDisplayName,
@@ -285,7 +291,7 @@ describe('Drawer', () => {
       );
       await user.keyboard('{Escape}');
       expect(onOpenChange).toHaveBeenCalledTimes(1);
-      expect(onOpenChange).toHaveBeenCalledWith(false);
+      expect(onOpenChange).toHaveBeenCalledWith(false, expect.anything());
     });
 
     it('renders the shared decorative dismiss icon in the Close button (input-datetime#22)', () => {
@@ -311,7 +317,7 @@ describe('Drawer', () => {
       expect(screen.queryByRole('button', { name: 'Close' })).not.toBeInTheDocument();
       expect(panel).not.toHaveAttribute('closelabel');
       await user.click(button('Lukk'));
-      expect(onOpenChange).toHaveBeenCalledWith(false);
+      expect(onOpenChange).toHaveBeenCalledWith(false, expect.anything());
       expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
     });
   });
@@ -1405,7 +1411,12 @@ describe('Drawer', () => {
       await user.click(button('Close'));
       expect(onOpenChange).toHaveBeenCalledTimes(3);
       await user.click(button('Apply'));
-      expect(onOpenChange.mock.calls).toEqual([[false], [false], [false], [false]]);
+      expect(onOpenChange.mock.calls).toEqual([
+        [false, { reason: 'escape', event: expect.any(Event) }],
+        [false, { reason: 'outside-press', event: expect.any(Event) }],
+        [false, { reason: 'close-button', event: expect.any(Event) }],
+        [false, { reason: 'close', event: expect.any(Event) }],
+      ]);
       expect(screen.getByRole('dialog')).toBeInTheDocument();
     });
 
@@ -1419,10 +1430,233 @@ describe('Drawer', () => {
       );
       await user.click(button('Open filters'));
       expect(onOpenChange).toHaveBeenCalledTimes(1);
-      expect(onOpenChange).toHaveBeenLastCalledWith(true);
+      expect(onOpenChange).toHaveBeenLastCalledWith(true, {
+        reason: 'trigger',
+        event: expect.any(Event),
+      });
       await user.keyboard('{Escape}');
       expect(onOpenChange).toHaveBeenCalledTimes(2);
-      expect(onOpenChange).toHaveBeenLastCalledWith(false);
+      expect(onOpenChange).toHaveBeenLastCalledWith(false, {
+        reason: 'escape',
+        event: expect.any(Event),
+      });
+    });
+  });
+
+  describe('onOpenChange details', () => {
+    /** `[open, reason, event type]` of every onOpenChange call. */
+    function calls(onOpenChange: ReturnType<typeof vi.fn>) {
+      return onOpenChange.mock.calls.map(([open, details]) => {
+        const { reason, event } = details as DrawerOpenChangeDetails;
+        return [open, reason, event.type];
+      });
+    }
+
+    it('reports the trigger and its click event when the drawer opens', async () => {
+      const user = userEvent.setup();
+      const onOpenChange = vi.fn();
+      render(<WithTrigger onOpenChange={onOpenChange} />);
+      await user.click(button('Open filters'));
+      expect(onOpenChange).toHaveBeenCalledWith(true, {
+        reason: 'trigger',
+        event: expect.any(Event),
+      });
+      expect(calls(onOpenChange)).toEqual([[true, 'trigger', 'click']]);
+    });
+
+    it.each([
+      ['escape', 'keydown', (user: UserEvent) => user.keyboard('{Escape}')],
+      ['outside-press', 'click', (user: UserEvent) => user.click(backdrop())],
+      ['close-button', 'click', (user: UserEvent) => user.click(button('Close'))],
+      ['close', 'click', (user: UserEvent) => user.click(button('Apply'))],
+    ] as const)('reports %s with the %s event that closed it', async (reason, type, close) => {
+      const user = userEvent.setup();
+      const onOpenChange = vi.fn();
+      render(<WithTrigger defaultOpen onOpenChange={onOpenChange} />);
+      await close(user);
+      expect(onOpenChange).toHaveBeenCalledWith(false, { reason, event: expect.any(Event) });
+      expect(calls(onOpenChange)).toEqual([[false, reason, type]]);
+      expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+    });
+
+    it('lets a controlled drawer refuse one way of closing: a backdrop press is ignored, Escape closes', async () => {
+      const user = userEvent.setup();
+      function KeepOnBackdrop() {
+        const [open, setOpen] = React.useState(true);
+        return (
+          <Drawer
+            title="Unsaved filters"
+            open={open}
+            onOpenChange={(next, details) => {
+              if (details?.reason !== 'outside-press') setOpen(next);
+            }}
+          >
+            <input aria-label="Name" />
+          </Drawer>
+        );
+      }
+      render(<KeepOnBackdrop />);
+      const name = screen.getByRole('textbox', { name: 'Name' });
+      act(() => name.focus());
+      await user.click(backdrop());
+      expect(screen.getByRole('dialog', { name: 'Unsaved filters' })).toBeInTheDocument();
+      // Focus is back on the field the refused press blurred.
+      expect(name).toHaveFocus();
+      await user.keyboard('{Escape}');
+      expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+    });
+
+    it('never reports a stale reason: a trigger click, then Escape, reports escape', async () => {
+      const user = userEvent.setup();
+      const onOpenChange = vi.fn();
+      render(<WithTrigger onOpenChange={onOpenChange} />);
+      await user.click(button('Open filters'));
+      await user.keyboard('{Escape}');
+      await user.click(button('Open filters'));
+      await user.click(backdrop());
+      expect(calls(onOpenChange)).toEqual([
+        [true, 'trigger', 'click'],
+        [false, 'escape', 'keydown'],
+        [true, 'trigger', 'click'],
+        [false, 'outside-press', 'click'],
+      ]);
+    });
+
+    it('passes an event also when a render-prop part calls onClick without one', async () => {
+      const user = userEvent.setup();
+      const onOpenChange = vi.fn();
+      render(
+        <Drawer title="Render props" onOpenChange={onOpenChange}>
+          <Drawer.Trigger>
+            {({ onClick, ...props }) => (
+              <button type="button" {...props} onClick={() => (onClick as () => void)()}>
+                Open
+              </button>
+            )}
+          </Drawer.Trigger>
+          <Drawer.Close>
+            {({ onClick, ...props }) => (
+              <button type="button" {...props} onClick={() => (onClick as () => void)()}>
+                Done
+              </button>
+            )}
+          </Drawer.Close>
+        </Drawer>,
+      );
+      await user.click(button('Open'));
+      await user.click(button('Done'));
+      expect(onOpenChange.mock.calls).toEqual([
+        [true, { reason: 'trigger', event: expect.any(Event) }],
+        [false, { reason: 'close', event: expect.any(Event) }],
+      ]);
+      expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+    });
+
+    it('ignores a focus-outside dismissal, which a modal layer never receives, with a development warning', () => {
+      const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+      const onOpenChange = vi.fn();
+      render(<WithTrigger defaultOpen onOpenChange={onOpenChange} />);
+      const layer = getTopmostLayer();
+      act(() => layer?.onDismiss('focus-outside', new FocusEvent('focusin')));
+      expect(onOpenChange).not.toHaveBeenCalled();
+      expect(screen.getByRole('dialog')).toBeInTheDocument();
+      expect(warn.mock.calls).toEqual([
+        [
+          '[WaveUI] Drawer ignored a focus-outside dismissal: a modal surface does not close when focus leaves it.',
+        ],
+      ]);
+      warn.mockRestore();
+    });
+
+    it('types details as an optional second argument with the shared reason union', () => {
+      expectTypeOf<DrawerOpenChangeReason>().toEqualTypeOf<ModalOpenChangeReason>();
+      expectTypeOf<DrawerOpenChangeDetails>().toEqualTypeOf<
+        OpenChangeDetails<ModalOpenChangeReason>
+      >();
+      type Handler = NonNullable<DrawerProps['onOpenChange']>;
+      expectTypeOf<Parameters<Handler>[1]>().toEqualTypeOf<DrawerOpenChangeDetails | undefined>();
+      // A 0.5 handler that takes only the value still fits.
+      expectTypeOf<(open: boolean) => void>().toExtend<Handler>();
+      // Code that calls the prop itself (a wrapper, a custom Cancel button) keeps compiling.
+      const forward = (props: DrawerProps) => props.onOpenChange?.(false);
+      expectTypeOf(forward).parameter(0).toEqualTypeOf<DrawerProps>();
+    });
+  });
+
+  describe('backdrop press and the focused field', () => {
+    // A SpinButton or picker in the drawer commits its typed value on this blur: the composition
+    // tests are in src/__tests__/integration.test.tsx.
+    it('blurs the focused field before a backdrop press closes the drawer', async () => {
+      const user = userEvent.setup();
+      const onBlur = vi.fn();
+      render(
+        <Drawer title="Filters" defaultOpen>
+          <input aria-label="Name" onBlur={onBlur} />
+        </Drawer>,
+      );
+      act(() => screen.getByRole('textbox', { name: 'Name' }).focus());
+      await user.click(backdrop());
+      expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+      expect(onBlur).toHaveBeenCalledTimes(1);
+    });
+
+    it('blurs the field on a refused backdrop press and gives focus back to it', async () => {
+      const user = userEvent.setup();
+      const onBlur = vi.fn();
+      function RefusesBackdrop() {
+        const [open, setOpen] = React.useState(true);
+        return (
+          <Drawer
+            title="Filters"
+            open={open}
+            onOpenChange={(next, details) => {
+              if (details?.reason !== 'outside-press') setOpen(next);
+            }}
+          >
+            <input aria-label="Name" onBlur={onBlur} />
+          </Drawer>
+        );
+      }
+      render(<RefusesBackdrop />);
+      const name = screen.getByRole('textbox', { name: 'Name' });
+      act(() => name.focus());
+      await user.click(backdrop());
+      expect(screen.getByRole('dialog', { name: 'Filters' })).toBeInTheDocument();
+      // The blur-time work of the field ran, and focus came back to it.
+      expect(onBlur).toHaveBeenCalledTimes(1);
+      expect(name).toHaveFocus();
+    });
+  });
+
+  describe('Dialog.Footer inside a Drawer', () => {
+    it('is a plain action row at the end of the body: it does not stick, and nothing warns', () => {
+      // With a ResizeObserver and a footer height, a footer inside Dialog.Content reports its
+      // height to the body's scroll padding; inside a Drawer nothing measures it.
+      const resizeObserver = installResizeObserverMock();
+      const warn = vi.spyOn(console, 'warn');
+      try {
+        render(
+          <Drawer title="Filters" defaultOpen>
+            <p>Fields</p>
+            <Dialog.Footer data-testid="footer">
+              <button type="button">Apply</button>
+            </Dialog.Footer>
+          </Drawer>,
+        );
+        const footer = screen.getByTestId('footer');
+        // The 0.5 action row: the sticky classes are tuned for the Dialog body, whose scroll
+        // padding reserves the footer's height; the drawer body has neither.
+        expect(footer).toHaveAttribute('class', 'mt-6 flex justify-end gap-2');
+        const body = footer.parentElement as HTMLElement;
+        expect(body).toHaveClass('overflow-y-auto');
+        mockRect(footer, { height: 64 });
+        resizeObserver.trigger(footer);
+        expect(body.getAttribute('style')).toBeNull();
+        expect(warn).not.toHaveBeenCalled();
+      } finally {
+        warn.mockRestore();
+        resizeObserver.restore();
+      }
     });
   });
 

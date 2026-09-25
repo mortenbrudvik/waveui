@@ -2,7 +2,9 @@ import * as React from 'react';
 import { cn } from '../../lib/cn';
 import { joinIds } from '../../lib/aria';
 import { warnOnce } from '../../lib/dev';
-import { slotRendersContent } from '../../lib/slot';
+import { ErrorIcon, SuccessIcon, WarningIcon, type IconComponent } from '../../lib/icons';
+import { materialiseSlotContent, renderSlot, slotRendersContent, type Slot } from '../../lib/slot';
+import type { Orientation, ValidationState } from '../../lib/types';
 import { useId } from '../../hooks/useId';
 import {
   FieldContext,
@@ -25,17 +27,51 @@ interface InjectedFieldProps {
 
 /** Properties for the Field component. */
 export interface FieldProps extends React.HTMLAttributes<HTMLDivElement> {
-  /** Label displayed above the control; names the control. */
+  /**
+   * Label displayed above the control (beside it with `orientation="horizontal"`); names the
+   * control.
+   */
   label?: React.ReactNode;
-  /** Hint displayed below the control (when no error message is shown); describes the control. */
+  /** Hint shown below the control, after any validation message; describes the control. */
   hint?: React.ReactNode;
   /**
    * Validation error. Content is rendered below the control in a `role="alert"` element that
    * describes the control, and the control is marked `aria-invalid`. `true` marks the control
    * invalid without a message. A value that renders nothing (`null`, `false`, `''`, or an array of
    * only those, such as an empty `errors.map(…)`) is no error; `0` is content.
+   *
+   * Shorthand for `validationState="error"` with this message; wins over `validationMessage` and
+   * `validationState` (development warning when both are set).
    */
   error?: React.ReactNode;
+  /**
+   * Validation state of `validationMessage`: `error` marks the control invalid (`aria-invalid`) and
+   * announces the message (`role="alert"`); `warning` announces it without marking the control
+   * invalid; `success` and `none` show it without announcing. Default: `'error'` when
+   * `validationMessage` renders content, else `'none'`. Ignored while `error` is set.
+   */
+  validationState?: ValidationState;
+  /**
+   * Message below the control, styled and announced by `validationState`; it describes the control
+   * (`aria-describedby`). `error` is the shorthand for an error message and wins over this prop.
+   */
+  validationMessage?: React.ReactNode;
+  /**
+   * Icon before the message. Default: an error, warning or success glyph per state; none for
+   * `'none'`. `null` (or content that renders nothing) shows no icon. Decorative (`aria-hidden`).
+   */
+  validationMessageIcon?: Slot<'span'>;
+  /**
+   * `vertical`: the label above the control. `horizontal`: the label in a start column (a third
+   * of the width) beside the control; the message and the hint stay below the control. The
+   * label's first line lines up with a 32px control (Input, Select, …) and with the first line of
+   * a Checkbox, Switch or RadioGroup, which gets 6px of padding above and below for it. The
+   * horizontal layout wraps the control in a column, so changing `orientation` on a mounted Field
+   * remounts the control: an uncontrolled control loses its state and focus (control it, or keep
+   * one orientation while the Field is mounted).
+   * @default 'vertical'
+   */
+  orientation?: Orientation;
   /**
    * Whether the field is required: shows a decorative asterisk next to the label, sets
    * `aria-required`, and turns on native constraint validation. `<input>`, `<select>`,
@@ -192,8 +228,10 @@ function inspectChildren(children: React.ReactNode): FieldChildren {
 interface FieldMergeState {
   controlId: string;
   labelId: string | undefined;
-  errorId: string | undefined;
+  /** The id of the rendered validation message, in any state. */
+  messageId: string | undefined;
   hintId: string | undefined;
+  /** Only the `error` validation state is invalid. */
   invalid: boolean;
   required: boolean;
 }
@@ -201,7 +239,7 @@ interface FieldMergeState {
 /**
  * Returns `children` with Field's props merged into the merge target (only defined keys; the
  * child's own `id`, `aria-label`, `aria-invalid`, `aria-required` and `required` are kept, its
- * `aria-labelledby` and `aria-describedby` are joined).
+ * `aria-labelledby` and `aria-describedby` are joined with the message and the hint).
  */
 function mergeIntoFirstChild(children: React.ReactNode, state: FieldMergeState): React.ReactNode {
   const { target, mode } = inspectChildren(children);
@@ -217,10 +255,10 @@ function mergeIntoFirstChild(children: React.ReactNode, state: FieldMergeState):
   } else if (state.labelId !== undefined && childProps['aria-label'] === undefined) {
     injected['aria-labelledby'] = joinIds(childProps['aria-labelledby'], state.labelId);
   }
-  if (state.errorId || state.hintId) {
+  if (state.messageId || state.hintId) {
     injected['aria-describedby'] = joinIds(
       childProps['aria-describedby'],
-      state.errorId,
+      state.messageId,
       state.hintId,
     );
   }
@@ -267,18 +305,74 @@ function getChildInfo(children: React.ReactNode): {
   };
 }
 
+/** The default glyph of each message state (`none` has none). */
+const MESSAGE_ICONS: Readonly<Record<ValidationState, IconComponent | null>> = {
+  error: ErrorIcon,
+  warning: WarningIcon,
+  success: SuccessIcon,
+  none: null,
+};
+
+/** Text color of each message state (the `*-tint-foreground` tokens keep 4.5:1 on page and card). */
+const MESSAGE_COLORS: Readonly<Record<ValidationState, string>> = {
+  error: 'text-error',
+  warning: 'text-warning-tint-foreground',
+  success: 'text-success-tint-foreground',
+  none: 'text-muted-foreground',
+};
+
 /**
- * Lays out a form control with a label, a hint or an error message, and a required indicator,
+ * Horizontal layout: the label's first line is centred on a 32px row, the height of an Input, a
+ * Select and the other text controls. Checkbox, Switch and RadioGroup rows are one 20px line, so a
+ * first child that holds one (also a wrapper of several) gets 6px above and below: its first line
+ * then lines up with the label's, also when its label wraps or a group lists its items one below
+ * the other.
+ */
+const SHORT_ROW_FIRST_CHILD =
+  '[&>:first-child:has([role=checkbox],[role=switch],label>[role=radio])]:py-1.5';
+
+/** The icon box before a message: 12px glyphs line up with the first line of caption text. */
+const MESSAGE_ICON_CLASSES = 'mt-0.5 inline-flex shrink-0';
+
+/**
+ * The icon before a message: the state's glyph while `icon` is `undefined`, else the consumer's
+ * slot (`null` or content that renders nothing shows none).
+ */
+function renderMessageIcon(state: ValidationState, icon: Slot<'span'> | undefined) {
+  if (icon !== undefined) {
+    return slotRendersContent(icon)
+      ? renderSlot(icon, 'span', MESSAGE_ICON_CLASSES, { 'aria-hidden': true })
+      : null;
+  }
+  const Icon = MESSAGE_ICONS[state];
+  return Icon ? (
+    <span aria-hidden="true" className={MESSAGE_ICON_CLASSES}>
+      <Icon size={12} />
+    </span>
+  ) : null;
+}
+
+/**
+ * Lays out a form control with a label, a validation message, a hint and a required indicator,
  * and wires them to the control.
  *
+ * - Validation: `validationMessage` with a `validationState` (`error`, `warning`, `success`,
+ *   `none`), or `error`, the shorthand for an error message. The message renders below the
+ *   control with the state's icon and color, followed by the hint (which stays visible); both
+ *   describe the control. Only the `error` state marks the control `aria-invalid`; `error` and
+ *   `warning` messages are announced (`role="alert"`). The root carries `data-validation-state`
+ *   and `data-orientation`.
+ * - `orientation="horizontal"` puts the label in a start column beside the control, with the
+ *   message and the hint below the control. The label lines up with the first line of the
+ *   control (a Checkbox, Switch or RadioGroup gets 6px of padding above and below for it).
  * - Provides `FieldContext`: the library's inputs (Input, Select, Textarea, Slider, SearchBox,
  *   Checkbox, Switch, RadioGroup, Rating, SpinButton, pickers, …) read it wherever they are inside
- *   the Field and are named by the label, described by the hint/error and marked
+ *   the Field and are named by the label, described by the message and the hint and marked
  *   invalid/required.
  * - Merges into its **first** element child (a native `<input>`/`<select>`/`<textarea>`, a
  *   library control or your own component): `id` (unless the child has one — the label then
  *   points at the child's id), `aria-describedby` (joined with the child's own ids),
- *   `aria-invalid` (with an error), `aria-required` and, for native form controls that take a
+ *   `aria-invalid` (in the error state), `aria-required` and, for native form controls that take a
  *   value, `required`. Only defined values are merged; the child's own values are kept, so a
  *   child's `aria-invalid={false}` stays valid while the Field error still describes it (as for a
  *   library control nested deeper). Further element children are rendered as they are.
@@ -325,6 +419,12 @@ function getChildInfo(children: React.ReactNode): {
  * </Field>
  *
  * @example
+ * <Field label="Password" hint="At least 12 characters" validationState="warning"
+ *   validationMessage="This password is common">
+ *   <Input type="password" />
+ * </Field>
+ *
+ * @example
  * // A wrapper component goes inside a plain element.
  * <Field label="Name" required>
  *   <div>
@@ -338,6 +438,10 @@ export const Field = ({
   label,
   hint,
   error,
+  validationState,
+  validationMessage,
+  validationMessageIcon,
+  orientation = 'vertical',
   required = false,
   htmlFor,
   className,
@@ -351,15 +455,30 @@ export const Field = ({
   const { elementCount, targetId, controlIdAssigned } = getChildInfo(children);
 
   // The library's "renders nothing" rule: nullish, booleans, '' and collections of only those (an
-  // empty `errors.map(…)`) are no label, hint or error; `0` is content.
-  const hasErrorMessage = slotRendersContent(error);
-  const hasError = error === true || hasErrorMessage;
-  const hasHint = !hasErrorMessage && slotRendersContent(hint);
+  // empty `errors.map(…)`) are no label, hint or message; `0` is content.
+  const errorRendersContent = slotRendersContent(error);
+  const usesError = error === true || errorRendersContent;
+  const validationMessageRendersContent = slotRendersContent(validationMessage);
+  // `error` is the shorthand for an error message and wins over the validation props.
+  const state: ValidationState = usesError
+    ? 'error'
+    : (validationState ?? (validationMessageRendersContent ? 'error' : 'none'));
+  const message = usesError ? (errorRendersContent ? error : undefined) : validationMessage;
+  const hasMessage = usesError ? errorRendersContent : validationMessageRendersContent;
+  const invalid = state === 'error';
+  const hasHint = slotRendersContent(hint);
+  const errorAndValidation =
+    usesError &&
+    (validationMessageRendersContent ||
+      (validationState !== undefined && validationState !== 'error'));
 
   const controlId = targetId ?? htmlFor ?? fieldId;
   const hasLabel = slotRendersContent(label);
   const labelId = hasLabel ? `${fieldId}-label` : undefined;
-  const errorId = hasErrorMessage ? `${fieldId}-error` : undefined;
+  // The error message keeps its 0.5 id; the other states get their own.
+  const messageId = hasMessage ? `${fieldId}-${invalid ? 'error' : 'message'}` : undefined;
+  const errorId = invalid ? messageId : undefined;
+  const hasErrorMessage = invalid && hasMessage;
   const hintId = hasHint ? `${fieldId}-hint` : undefined;
 
   React.useEffect(() => {
@@ -372,49 +491,99 @@ export const Field = ({
     }
   }, [elementCount]);
 
+  React.useEffect(() => {
+    if (errorAndValidation) {
+      warnOnce(
+        'Field:error-and-validation',
+        'Field: `error` and `validationMessage`/`validationState` are both set; `error` wins. Use one of them.',
+      );
+    }
+  }, [errorAndValidation]);
+
   const context = React.useMemo<FieldContextValue>(
     () => ({
       controlId,
       labelId,
       hintId,
       errorId,
-      invalid: hasError,
+      invalid,
       required,
       hasErrorMessage,
       controlIdAssigned,
       controlIdClaim,
+      validationState: state,
+      validationMessageId: messageId,
     }),
     [
       controlId,
       labelId,
       hintId,
       errorId,
-      hasError,
+      invalid,
       required,
       hasErrorMessage,
       controlIdAssigned,
       controlIdClaim,
+      state,
+      messageId,
     ],
   );
 
   const content = mergeIntoFirstChild(children, {
     controlId,
     labelId,
-    errorId,
+    messageId,
     hintId,
-    invalid: hasError,
+    invalid,
     required,
   });
 
+  const horizontal = orientation === 'horizontal';
+  const control = (
+    <>
+      <FieldContext.Provider value={context}>{content}</FieldContext.Provider>
+      {/* Keyed by state: a message whose state changes (a hint-only Field that gets an error, a
+          warning that becomes an error) is a newly inserted element, which screen readers
+          announce reliably as an alert, not an existing node with a new role. */}
+      {hasMessage ? (
+        <p
+          key={`message-${state}`}
+          id={messageId}
+          role={state === 'error' || state === 'warning' ? 'alert' : undefined}
+          data-validation-state={state}
+          className={cn('mt-1 flex items-start gap-1 text-caption-1', MESSAGE_COLORS[state])}
+        >
+          {renderMessageIcon(state, validationMessageIcon)}
+          <span>{materialiseSlotContent(message)}</span>
+        </p>
+      ) : null}
+      {hasHint ? (
+        <p key="hint" id={hintId} className="mt-1 text-caption-1 text-muted-foreground">
+          {materialiseSlotContent(hint)}
+        </p>
+      ) : null}
+    </>
+  );
+
   return (
-    <div ref={ref} className={cn('flex flex-col', className)} {...rest}>
+    <div
+      ref={ref}
+      data-orientation={orientation}
+      data-validation-state={state}
+      className={cn('flex', horizontal ? 'flex-row items-start gap-x-3' : 'flex-col', className)}
+      {...rest}
+    >
       {hasLabel ? (
         <label
           id={labelId}
           htmlFor={controlId}
-          className="mb-1 text-body-1 font-semibold text-foreground"
+          className={cn(
+            'mb-1 text-body-1 font-semibold text-foreground',
+            // Beside the control: a third of the width, its first line centred on a 32px row.
+            horizontal && 'mb-0 shrink-0 basis-1/3 pt-1.5',
+          )}
         >
-          {label}
+          {materialiseSlotContent(label)}
           {required && (
             <span aria-hidden="true" className="ms-0.5 text-error">
               *
@@ -422,18 +591,11 @@ export const Field = ({
           )}
         </label>
       ) : null}
-      <FieldContext.Provider value={context}>{content}</FieldContext.Provider>
-      {/* Distinct keys: an error that replaces the hint is a newly inserted alert element (which
-          screen readers announce reliably), not the hint's node with role="alert" added. */}
-      {hasErrorMessage ? (
-        <p key="error" id={errorId} role="alert" className="mt-1 text-caption-1 text-error">
-          {error}
-        </p>
-      ) : hasHint ? (
-        <p key="hint" id={hintId} className="mt-1 text-caption-1 text-muted-foreground">
-          {hint}
-        </p>
-      ) : null}
+      {horizontal ? (
+        <div className={cn('flex min-w-0 flex-1 flex-col', SHORT_ROW_FIRST_CHILD)}>{control}</div>
+      ) : (
+        control
+      )}
     </div>
   );
 };

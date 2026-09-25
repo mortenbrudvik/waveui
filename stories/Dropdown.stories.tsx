@@ -7,6 +7,7 @@ const meta = {
   component: Dropdown,
   argTypes: {
     disabled: { control: 'boolean' },
+    clearable: { control: 'boolean' },
   },
   args: {
     'aria-label': 'Pet',
@@ -36,6 +37,21 @@ export const Default: Story = {
 export const WithDefaultValue: Story = {
   args: {
     defaultValue: 'dog',
+  },
+  render: (args) => (
+    <Dropdown {...args}>
+      <Dropdown.Option value="cat">Cat</Dropdown.Option>
+      <Dropdown.Option value="dog">Dog</Dropdown.Option>
+      <Dropdown.Option value="fish">Fish</Dropdown.Option>
+    </Dropdown>
+  ),
+};
+
+/** `clearable` adds a clear button while a value is selected, a tab stop after the combobox. */
+export const Clearable: Story = {
+  args: {
+    defaultValue: 'dog',
+    clearable: true,
   },
   render: (args) => (
     <Dropdown {...args}>

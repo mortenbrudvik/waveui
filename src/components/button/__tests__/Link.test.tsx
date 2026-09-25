@@ -35,6 +35,9 @@ describe('Link', () => {
       { name: 'disabled', props: { disabled: true } },
       { name: 'standalone', props: { appearance: 'standalone' } },
       { name: 'subtle', props: { appearance: 'subtle' } },
+      { name: 'without href', props: { href: undefined } },
+      { name: 'without href, disabled', props: { href: undefined, disabled: true } },
+      { name: 'disabledFocusable', props: { disabledFocusable: true } },
     ],
   });
 
@@ -52,6 +55,93 @@ describe('Link', () => {
     expect(link).not.toHaveAttribute('role');
     expect(link).not.toHaveAttribute('tabindex');
     expect(link).not.toHaveAttribute('aria-disabled');
+  });
+
+  describe('without href (an action styled as a link)', () => {
+    it('is a button: role="button", a tab stop, and Enter/Space call onClick once each', async () => {
+      const user = userEvent.setup();
+      const onClick = vi.fn();
+      render(
+        <React.StrictMode>
+          <button type="button">Before</button>
+          <Link onClick={onClick}>Show more</Link>
+        </React.StrictMode>,
+      );
+      const link = screen.getByRole('button', { name: 'Show more' });
+      expect(link.tagName).toBe('A');
+      expect(link).toHaveAttribute('role', 'button');
+      expect(link).toHaveAttribute('tabindex', '0');
+      expect(link).not.toHaveAttribute('href');
+
+      screen.getByRole('button', { name: 'Before' }).focus();
+      await user.tab();
+      expect(link).toHaveFocus();
+      await user.keyboard('{Enter}');
+      expect(onClick).toHaveBeenCalledTimes(1);
+      await user.keyboard(' ');
+      expect(onClick).toHaveBeenCalledTimes(2);
+      await user.click(link);
+      expect(onClick).toHaveBeenCalledTimes(3);
+    });
+
+    it('Space activates on keyup and does not scroll the page (the keydown is prevented)', () => {
+      const onClick = vi.fn();
+      render(<Link onClick={onClick}>Show more</Link>);
+      const link = screen.getByRole('button', { name: 'Show more' });
+      // fireEvent returns false when the default action was prevented.
+      expect(fireEvent.keyDown(link, { key: ' ' })).toBe(false);
+      expect(onClick).not.toHaveBeenCalled();
+      fireEvent.keyUp(link, { key: ' ' });
+      expect(onClick).toHaveBeenCalledTimes(1);
+    });
+
+    it('a consumer role and tabIndex win over the defaults', () => {
+      render(
+        <Link role="link" tabIndex={-1}>
+          Show more
+        </Link>,
+      );
+      expect(screen.getByRole('link', { name: 'Show more' })).toHaveAttribute('tabindex', '-1');
+    });
+
+    it('an empty href keeps the anchor a link: no role or tab index is added', () => {
+      const error = vi.spyOn(console, 'error');
+      render(<Link href="">Reload</Link>);
+      const link = screen.getByText('Reload');
+      expect(link).toHaveAttribute('href', '');
+      expect(link).not.toHaveAttribute('role');
+      expect(link).not.toHaveAttribute('tabindex');
+      expect(error).not.toHaveBeenCalled();
+    });
+
+    it('as="span" gets button semantics', async () => {
+      const user = userEvent.setup();
+      const onClick = vi.fn();
+      render(
+        <Link as="span" onClick={onClick}>
+          Details
+        </Link>,
+      );
+      const span = screen.getByRole('button', { name: 'Details' });
+      expect(span.tagName).toBe('SPAN');
+      expect(span).toHaveAttribute('tabindex', '0');
+      await user.tab();
+      expect(span).toHaveFocus();
+      await user.keyboard('{Enter}');
+      await user.keyboard(' ');
+      expect(onClick).toHaveBeenCalledTimes(2);
+    });
+
+    it('a custom component `as` gets no role or tab stop', () => {
+      render(
+        <Link as={FakeRouterLink} to="/home">
+          Home
+        </Link>,
+      );
+      const link = screen.getByRole('link', { name: 'Home' });
+      expect(link).not.toHaveAttribute('role');
+      expect(link).not.toHaveAttribute('tabindex');
+    });
   });
 
   it('renders as a button via as="button" with type="button"', () => {
@@ -177,6 +267,51 @@ describe('Link', () => {
       expect(onClick).not.toHaveBeenCalled();
     });
 
+    it.each([
+      ['with href', '/docs'],
+      ['without href', undefined],
+    ])(
+      '%s: the click does not reach ancestor onClick handlers and Enter/Space call nothing',
+      (_name, href) => {
+        const onParentClick = vi.fn();
+        const onClick = vi.fn();
+        const onKeyDown = vi.fn();
+        render(
+          <div onClick={onParentClick}>
+            <Link href={href} disabled onClick={onClick} onKeyDown={onKeyDown}>
+              Documentation
+            </Link>
+          </div>,
+        );
+        const link = screen.getByText('Documentation');
+        expect(fireEvent.click(link)).toBe(false);
+        expect(fireEvent.keyDown(link, { key: 'Enter' })).toBe(false);
+        expect(fireEvent.keyDown(link, { key: ' ' })).toBe(false);
+        expect(fireEvent.keyUp(link, { key: ' ' })).toBe(false);
+        expect(onClick).not.toHaveBeenCalled();
+        expect(onKeyDown).not.toHaveBeenCalled();
+        expect(onParentClick).not.toHaveBeenCalled();
+      },
+    );
+
+    it('has role="link" with an href and role="button" without one, and data-disabled', () => {
+      render(
+        <>
+          <Link href="/docs" disabled>
+            Documentation
+          </Link>
+          <Link disabled>Show more</Link>
+        </>,
+      );
+      const link = screen.getByRole('link', { name: 'Documentation' });
+      const action = screen.getByRole('button', { name: 'Show more' });
+      for (const element of [link, action]) {
+        expect(element).toHaveAttribute('aria-disabled', 'true');
+        expect(element).toHaveAttribute('data-disabled', '');
+        expect(element).toHaveAttribute('tabindex', '-1');
+      }
+    });
+
     it('a consumer tabIndex or aria-disabled cannot re-enable a disabled link', async () => {
       const user = userEvent.setup();
       render(
@@ -240,6 +375,80 @@ describe('Link', () => {
     });
   });
 
+  describe('disabledFocusable', () => {
+    it('keeps its focus ring at full strength: the dimmed look lifts while it shows the ring', () => {
+      render(
+        <Link href="/docs" disabledFocusable>
+          Documentation
+        </Link>,
+      );
+      // CSS opacity dims the element's own outline too, which would put the ring below 3:1.
+      expect(screen.getByRole('link', { name: 'Documentation' })).toHaveClass(
+        'opacity-50',
+        'aria-disabled:focus-visible:opacity-100',
+      );
+    });
+
+    it('drops href, keeps role="link", stays in the tab order and blocks activation', async () => {
+      const user = userEvent.setup();
+      const onClick = vi.fn();
+      const onParentClick = vi.fn();
+      render(
+        <div onClick={onParentClick}>
+          <Link href="/docs" disabledFocusable onClick={onClick}>
+            Documentation
+          </Link>
+        </div>,
+      );
+      const link = screen.getByRole('link', { name: 'Documentation' });
+      expect(link).not.toHaveAttribute('href');
+      expect(link).toHaveAttribute('tabindex', '0');
+      expect(link).toHaveAttribute('aria-disabled', 'true');
+      expect(link).toHaveAttribute('data-disabled', '');
+      expect(link).toHaveAttribute('data-disabled-focusable', '');
+      expect(link).toHaveClass('opacity-50', 'cursor-not-allowed');
+
+      await user.tab();
+      expect(link).toHaveFocus();
+      await user.keyboard('{Enter}');
+      await user.keyboard(' ');
+      await user.click(link);
+      expect(fireEvent.keyDown(link, { key: 'Enter' })).toBe(false);
+      expect(onClick).not.toHaveBeenCalled();
+      expect(onParentClick).not.toHaveBeenCalled();
+    });
+
+    it('without href it is a focusable disabled button; it wins over disabled', () => {
+      render(
+        <Link disabled disabledFocusable>
+          Show more
+        </Link>,
+      );
+      const action = screen.getByRole('button', { name: 'Show more' });
+      expect(action).toHaveAttribute('tabindex', '0');
+      expect(action).toHaveAttribute('aria-disabled', 'true');
+      expect(action).toHaveAttribute('data-disabled-focusable', '');
+    });
+
+    it('as="button" is focusable-disabled instead of natively disabled', async () => {
+      const user = userEvent.setup();
+      const onClick = vi.fn();
+      render(
+        <Link as="button" disabledFocusable onClick={onClick}>
+          Show more
+        </Link>,
+      );
+      const button = screen.getByRole('button', { name: 'Show more' });
+      expect(button).not.toBeDisabled();
+      expect(button).toHaveAttribute('aria-disabled', 'true');
+      expect(button).toHaveAttribute('data-disabled-focusable', '');
+      await user.tab();
+      expect(button).toHaveFocus();
+      await user.click(button);
+      expect(onClick).not.toHaveBeenCalled();
+    });
+  });
+
   it('calls onClick when not disabled', async () => {
     const user = userEvent.setup();
     const onClick = vi.fn((event: React.MouseEvent<HTMLAnchorElement>) => event.preventDefault());
@@ -283,7 +492,10 @@ describe('Link', () => {
       expectTypeOf<LinkProps>().toEqualTypeOf<LinkProps<'a'>>();
       expectTypeOf<LinkProps['ref']>().toEqualTypeOf<React.Ref<HTMLAnchorElement> | undefined>();
       expectTypeOf<LinkVariant>().toEqualTypeOf<LinkAppearance>();
-      expectTypeOf<keyof LinkOwnProps>().toEqualTypeOf<'appearance' | 'variant' | 'disabled'>();
+      expectTypeOf<keyof LinkOwnProps>().toEqualTypeOf<
+        'appearance' | 'variant' | 'disabled' | 'disabledFocusable'
+      >();
+      expectTypeOf<LinkProps<'button'>['disabledFocusable']>().toEqualTypeOf<boolean | undefined>();
       interface MyLinkProps extends LinkProps {
         tracking?: string;
       }

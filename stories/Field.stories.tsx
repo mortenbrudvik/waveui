@@ -1,9 +1,14 @@
 import type { Meta, StoryObj } from '@storybook/react';
-import { Field, Input, Select, Slider, Textarea } from '../src';
+import { Checkbox, Field, Input, RadioGroup, Select, Slider, Switch, Textarea } from '../src';
+import { orientationArgType, validationStateArgType } from './_helpers';
 
 const meta = {
   title: 'Components/Input/Field',
   component: Field,
+  argTypes: {
+    ...validationStateArgType,
+    ...orientationArgType,
+  },
   args: {
     label: 'Name',
   },
@@ -97,5 +102,137 @@ export const WithSlider: Story = {
     <Field {...args}>
       <Slider min={0} max={100} defaultValue={40} />
     </Field>
+  ),
+};
+
+/**
+ * `validationMessage` in each `validationState`: `error` marks the control invalid and is
+ * announced, `warning` is announced without marking it invalid, `success` and `none` are shown
+ * only. Each state has its own icon and color (`none` has no icon).
+ */
+export const ValidationStates: Story = {
+  render: (args) => (
+    <div className="flex flex-col gap-4">
+      <Field
+        {...args}
+        label="Username"
+        validationState="error"
+        validationMessage="This username is taken."
+      >
+        <Input defaultValue="wave" />
+      </Field>
+      <Field
+        {...args}
+        label="Password"
+        validationState="warning"
+        validationMessage="This password is used often."
+      >
+        <Input type="password" defaultValue="password1" />
+      </Field>
+      <Field
+        {...args}
+        label="Display name"
+        validationState="success"
+        validationMessage="This name is available."
+      >
+        <Input defaultValue="Wave Rider" />
+      </Field>
+      <Field
+        {...args}
+        label="Nickname"
+        validationState="none"
+        validationMessage="Shown next to your comments."
+      >
+        <Input />
+      </Field>
+    </div>
+  ),
+};
+
+/**
+ * The hint stays visible below a validation message, so the rule the message refers to is still
+ * on screen. Both describe the control, the message first.
+ */
+export const HintWithMessage: Story = {
+  args: {
+    label: 'Password',
+    hint: 'At least 12 characters, with a number and a symbol.',
+    error: 'The password is too short.',
+  },
+  render: (args) => (
+    <Field {...args}>
+      <Input type="password" defaultValue="short" />
+    </Field>
+  ),
+};
+
+/**
+ * `orientation="horizontal"` puts each label in a start column beside its control: a compact
+ * settings form. Messages and hints stay below the control. Each label lines up with the first
+ * line of its control: an Input, and also a Switch, a Checkbox (whose label may wrap) and a
+ * RadioGroup.
+ */
+export const Horizontal: Story = {
+  args: {
+    orientation: 'horizontal',
+  },
+  render: (args) => (
+    <form className="flex max-w-xl flex-col gap-4" onSubmit={(e) => e.preventDefault()}>
+      <Field {...args} label="Display name" hint="Shown to other people.">
+        <Input defaultValue="Wave Rider" />
+      </Field>
+      <Field
+        {...args}
+        label="Email"
+        validationState="warning"
+        validationMessage="Not verified yet."
+      >
+        <Input type="email" defaultValue="wave@example.com" />
+      </Field>
+      <Field {...args} label="Notifications">
+        <Switch label="Email me about replies" defaultChecked />
+      </Field>
+      <Field {...args} label="Newsletter">
+        <Checkbox label="Send me the monthly newsletter" />
+      </Field>
+      <Field {...args} label="Theme">
+        <RadioGroup defaultValue="system">
+          <RadioGroup.Item value="light" label="Light" />
+          <RadioGroup.Item value="dark" label="Dark" />
+          <RadioGroup.Item value="system" label="Same as the system" />
+        </RadioGroup>
+      </Field>
+    </form>
+  ),
+};
+
+/**
+ * `validationMessageIcon` replaces the state icon (decorative); `null` shows no icon.
+ */
+export const CustomMessageIcon: Story = {
+  render: (args) => (
+    <div className="flex flex-col gap-4">
+      <Field
+        {...args}
+        label="Workspace"
+        validationState="success"
+        validationMessage="Saved to the cloud."
+        validationMessageIcon={
+          <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor">
+            <path d="M3 9h6a2 2 0 0 0 0-4 3 3 0 0 0-6 1 1.5 1.5 0 0 0 0 3Z" />
+          </svg>
+        }
+      >
+        <Input defaultValue="Design team" />
+      </Field>
+      <Field
+        {...args}
+        label="Project"
+        validationMessage="A project name is required."
+        validationMessageIcon={null}
+      >
+        <Input />
+      </Field>
+    </div>
   ),
 };

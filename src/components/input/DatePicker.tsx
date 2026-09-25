@@ -1,4 +1,5 @@
 import * as React from 'react';
+import { flushSync } from 'react-dom';
 import { cn } from '../../lib/cn';
 import { focusableDisabledProps, joinIds, preventIfDisabled } from '../../lib/aria';
 import { composeEventHandlers } from '../../lib/composeEventHandlers';
@@ -166,7 +167,9 @@ export interface DatePickerProps extends Omit<
    */
   readOnly?: boolean;
   /**
-   * Whether to show a clear button when a date is selected (not shown while `readOnly`).
+   * Whether to show a clear button when a date is selected (not shown while `readOnly`). Tab from
+   * erased text clears the value before focus moves, so focus goes on to the calendar button, past
+   * the clear button that disappears with it.
    * @default false
    */
   clearable?: boolean;
@@ -235,8 +238,10 @@ const ICON_BUTTON_CLASSES =
 const NAV_BUTTON_CLASSES =
   'flex h-8 w-8 items-center justify-center rounded bg-transparent p-0 text-foreground not-disabled:not-aria-disabled:hover:bg-subtle-hover';
 
+// An unavailable day stays focusable in the roving grid (`aria-disabled`); the day button adds
+// `disabledStyles`, whose dimmed look lifts while the focus ring shows (opacity would dim the ring).
 const DAY_CLASSES =
-  'flex h-8 w-8 items-center justify-center rounded bg-transparent p-0 text-caption-1 text-foreground not-disabled:not-aria-disabled:hover:bg-subtle-hover data-[outside]:text-muted-foreground data-[today]:border data-[today]:border-primary data-[today]:font-semibold data-[selected]:bg-primary data-[selected]:font-semibold data-[selected]:text-primary-foreground not-disabled:not-aria-disabled:data-[selected]:hover:bg-primary-hover aria-disabled:cursor-not-allowed aria-disabled:line-through aria-disabled:opacity-50';
+  'flex h-8 w-8 items-center justify-center rounded bg-transparent p-0 text-caption-1 text-foreground not-disabled:not-aria-disabled:hover:bg-subtle-hover data-[outside]:text-muted-foreground data-[today]:border data-[today]:border-primary data-[today]:font-semibold data-[selected]:bg-primary data-[selected]:font-semibold data-[selected]:text-primary-foreground not-disabled:not-aria-disabled:data-[selected]:hover:bg-primary-hover aria-disabled:line-through';
 
 /** The 42 grid days as 6 weeks. */
 function toWeeks(days: Date[]): Date[][] {
@@ -267,7 +272,9 @@ function toWeeks(days: Date[]): Date[][] {
  *   the state is announced when focus lands on it; today is `aria-current="date"`.
  * - The calendar closes when the picker becomes disabled or read-only (uncontrolled `open`: it
  *   stays closed when the picker is enabled again), and the text typed until then is dropped.
- * - `clearable` shows a clear button while a date is selected (not while read-only).
+ * - `clearable` shows a clear button while a date is selected (not while read-only). Tab from
+ *   erased text clears the value first, so focus moves on to the calendar button instead of to the
+ *   clear button that disappears.
  * - Every emitted date is local midnight. The calendar opens on the month of the selected date or
  *   today, clamped into `minDate`/`maxDate`.
  * - The input (`controlRef`) receives `id`, `aria-label`, `aria-labelledby`, `aria-describedby`,
@@ -629,6 +636,9 @@ export const DatePicker = (props: DatePickerProps) => {
   // another day; the typed text and its error are dropped.
   useFormReset(inputRef, () => commitDate(defaultValue ?? null), form);
 
+  // Read-only pickers offer no clear action (the value cannot change).
+  const showClear = clearable && !readOnly && selectedDate !== null;
+
   /* ---- handlers ---------------------------------------------------- */
 
   const handleInputChange = (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -646,6 +656,18 @@ export const DatePicker = (props: DatePickerProps) => {
         // An edit is committed instead of submitting the form; untouched text lets Enter submit.
         event.preventDefault();
         commitDraft(draft);
+      } else if (
+        event.key === 'Tab' &&
+        !event.shiftKey &&
+        showClear &&
+        draft !== null &&
+        !draft.trim()
+      ) {
+        // Erased text clears the value, and with it the clear button, the next tab stop. It is
+        // settled before Tab moves focus (the blur would settle it while focus moves to that
+        // button), so focus moves on to the calendar button instead of dropping to <body> with
+        // the clear button (C-DISABLED).
+        flushSync(() => commitDraft(draft));
       } else if (event.key === 'ArrowDown' && event.altKey && !isOpen) {
         event.preventDefault();
         // The edit is committed first, so the calendar opens on the typed month; rejected text is
@@ -737,8 +759,6 @@ export const DatePicker = (props: DatePickerProps) => {
   /* ---- render ------------------------------------------------------ */
 
   const inputText = draft ?? (selectedDate ? format(selectedDate) : '');
-  // Read-only pickers offer no clear action (the value cannot change).
-  const showClear = clearable && !readOnly && selectedDate !== null;
 
   let errorMessage = '';
   if (invalid === 'unparseable') {
@@ -923,6 +943,7 @@ export const DatePicker = (props: DatePickerProps) => {
                             className={cn(
                               DAY_CLASSES,
                               focusRing,
+                              disabledStyles,
                               isSelected && forcedColors.selectedLeaf,
                             )}
                           >

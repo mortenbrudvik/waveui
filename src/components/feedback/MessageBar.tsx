@@ -17,6 +17,12 @@ import type { Status, Slot, SlotObject } from '../../lib/types';
 import { useMergedRefs } from '../../hooks/useMergedRefs';
 import { Button } from '../button/Button';
 import {
+  BUTTON_OWN_PROP_KEYS,
+  MERGED_DISABLED_FOCUSABLE_PROPS,
+  mergedAriaDisabledClasses,
+  placeButtonIcon,
+} from '../button/Button.slots';
+import {
   STATUS_BORDER,
   STATUS_ICON_COLOR,
   StatusIcon,
@@ -69,6 +75,10 @@ export interface MessageBarProps extends React.HTMLAttributes<HTMLDivElement> {
    * the built-in button (its `onClick` runs first and can call `preventDefault()` to cancel
    * `onDismiss`; its `aria-label` and an explicit `type` win over the defaults) and its content
    * (children, or `dangerouslySetInnerHTML` markup) is used as is, with a development warning.
+   * A Wave `Button`'s own props are not attributes: its `icon` becomes decorative content before
+   * its children (after them with `iconPosition="after"`), `disabledFocusable` makes the dismiss
+   * button unavailable but focusable as on the Button (`onDismiss` is not called), and
+   * `appearance` and `size` are ignored.
    * When the rendered content has a text label (at least two letters or digits:
    * `<button>Close</button>`, or text rendered by a component such as a translation), that text
    * names the button, as in 0.4. An icon, a lone character (`X`, `×`,
@@ -81,8 +91,8 @@ export interface MessageBarProps extends React.HTMLAttributes<HTMLDivElement> {
    *
    * The 0.4 button-object form (`{ as: 'button', onClick, … }`, `{ as: Button, … }` or an object
    * with button props) is **deprecated**: its button props (`type` included), `className` and
-   * `style` are merged the same way, and a Wave Button's `icon` becomes decorative content. Pass
-   * icon content instead, e.g. `dismiss={<CloseIcon />}`.
+   * `style` are merged the same way, and a Wave Button's own props apply as for the element form.
+   * Pass icon content instead, e.g. `dismiss={<CloseIcon />}`.
    */
   dismiss?: Slot<'span'> | SlotObject<'button'>;
   /** Message content to display. */
@@ -128,9 +138,6 @@ const NAMING_KEYS: ReadonlySet<string> = new Set(['aria-label', 'aria-labelledby
 
 const HANDLER_KEY = /^on[A-Z]/;
 
-/** Wave `Button` props that do not belong on a native `<button>` (its `icon` becomes content). */
-const BUTTON_COMPONENT_KEYS: ReadonlySet<string> = new Set(['as', 'appearance', 'size', 'icon']);
-
 const dismissContentClassName = 'inline-flex items-center justify-center';
 
 interface DismissParts {
@@ -150,6 +157,11 @@ interface DismissParts {
    * {@link hasRenderedTextLabel}).
    */
   literalTextLabel: boolean;
+  /**
+   * Whether a merged Wave `Button` set `disabledFocusable`: the dismiss button is then unavailable
+   * but focusable, as the Button would be.
+   */
+  disabledFocusable: boolean;
   /** Which development warning the slot needs. */
   warning: 'button-element' | 'button-object' | null;
 }
@@ -172,6 +184,7 @@ function defaultDismiss(): DismissParts {
     content: defaultDismissContent(),
     contentMayName: false,
     literalTextLabel: false,
+    disabledFocusable: false,
     warning: null,
   };
 }
@@ -196,11 +209,12 @@ function resolveDismiss(dismiss: MessageBarProps['dismiss']): DismissParts | nul
       if (
         key !== 'children' &&
         key !== 'dangerouslySetInnerHTML' &&
-        !BUTTON_COMPONENT_KEYS.has(key)
+        !BUTTON_OWN_PROP_KEYS.has(key)
       ) {
         buttonProps[key] = value;
       }
     }
+    const isWaveButton = isElementOfType(element, Button);
     // A generator is read once by the check; its items are what renders (and names the button).
     // Markup of the merged button (`dangerouslySetInnerHTML`) is its content as well, rendered in
     // a span inside the dismiss button (the button itself also holds the icon).
@@ -213,26 +227,23 @@ function resolveDismiss(dismiss: MessageBarProps['dismiss']): DismissParts | nul
       ) : (
         materialiseSlotContent(element.props.children)
       );
-    // Wave Button's icon becomes decorative content in front of its children.
+    // Wave Button's icon becomes decorative content before its children (after them with
+    // `iconPosition="after"`).
     const icon = element.props.icon as Slot<'span'>;
     const iconNode =
-      isElementOfType(element, Button) && slotRendersContent(icon)
+      isWaveButton && slotRendersContent(icon)
         ? renderSlot(icon, 'span', dismissContentClassName, { 'aria-hidden': true })
         : null;
     const content =
-      iconNode || slotRendersContent(children) ? (
-        <>
-          {iconNode}
-          {children}
-        </>
-      ) : (
-        defaultDismissContent()
-      );
+      iconNode || slotRendersContent(children)
+        ? placeButtonIcon(iconNode, children, element.props.iconPosition)
+        : defaultDismissContent();
     return {
       buttonProps,
       content,
       contentMayName: true,
       literalTextLabel: hasTextLabel(children),
+      disabledFocusable: isWaveButton && Boolean(element.props.disabledFocusable),
       warning: 'button-element',
     };
   }
@@ -250,7 +261,9 @@ function resolveDismiss(dismiss: MessageBarProps['dismiss']): DismissParts | nul
   const contentProps: UnknownProps = {};
   let iconNode: React.ReactNode = null;
   for (const [key, value] of Object.entries(props)) {
-    if (Component === Button && BUTTON_COMPONENT_KEYS.has(key)) {
+    if (Component === Button && BUTTON_OWN_PROP_KEYS.has(key)) {
+      // Wave Button's own props are not attributes: `icon`, `iconPosition` and
+      // `disabledFocusable` are applied below, the others (`appearance`, `size`) are dropped.
       if (key === 'icon' && slotRendersContent(value)) {
         iconNode = renderSlot(value as Slot<'span'>, 'span', dismissContentClassName, {
           'aria-hidden': true,
@@ -280,12 +293,7 @@ function resolveDismiss(dismiss: MessageBarProps['dismiss']): DismissParts | nul
   };
   let inner: React.ReactNode = null;
   if (iconNode || slotRendersContent(children)) {
-    inner = (
-      <>
-        {iconNode}
-        {children}
-      </>
-    );
+    inner = placeButtonIcon(iconNode, children, Component === Button && props.iconPosition);
   } else if (slotWrapsDefaultContent(ContentTag, { ...contentProps, children })) {
     inner = defaultDismissContent();
   }
@@ -297,6 +305,7 @@ function resolveDismiss(dismiss: MessageBarProps['dismiss']): DismissParts | nul
         : React.createElement(ContentTag, elementProps, inner),
     contentMayName: false,
     literalTextLabel: false,
+    disabledFocusable: Component === Button && Boolean(props.disabledFocusable),
     warning: isButtonObject ? 'button-object' : null,
   };
 }
@@ -397,14 +406,21 @@ export const MessageBar = ({
           'not-disabled:not-aria-disabled:active:bg-subtle-pressed',
           focusRing,
           'disabled:cursor-not-allowed disabled:opacity-50',
+          mergedAriaDisabledClasses,
         ),
       },
       slotButtonProps,
     ) as React.ComponentPropsWithoutRef<'button'>;
     renderedDismiss = (
       // `type` is "button" unless the slot sets one (`null`, from JavaScript callers, means the
-      // default too, so the button never submits an enclosing form by accident).
-      <button {...buttonProps} ref={dismissRef} type={buttonProps.type ?? 'button'}>
+      // default too, so the button never submits an enclosing form by accident). A merged
+      // `disabledFocusable` Button makes it unavailable but focusable (spread last: it wins).
+      <button
+        {...buttonProps}
+        ref={dismissRef}
+        type={buttonProps.type ?? 'button'}
+        {...(dismissParts.disabledFocusable ? MERGED_DISABLED_FOCUSABLE_PROPS : undefined)}
+      >
         {dismissParts.content}
       </button>
     );

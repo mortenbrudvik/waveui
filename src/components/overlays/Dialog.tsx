@@ -3,7 +3,7 @@ import { cn } from '../../lib/cn';
 import { warnOnce } from '../../lib/dev';
 import { DismissIcon } from '../../lib/icons';
 import { slotRendersContent } from '../../lib/slot';
-import { useControllable, type SetValue } from '../../hooks/useControllable';
+import type { ModalOpenChangeReason, ModalType, OpenChangeDetails } from '../../lib/types';
 import { useId } from '../../hooks/useId';
 import { useIsClient } from '../../hooks/useIsClient';
 import { useMergedRefs } from '../../hooks/useMergedRefs';
@@ -13,7 +13,10 @@ import { Portal } from '../portal/Portal';
 import {
   inertModalTrigger,
   ModalSurfaceContext,
+  useBackdropPress,
   useModalClosePart,
+  useModalDismiss,
+  useModalOpenState,
   useModalTitle,
   useModalTrigger,
   useModalTriggerPart,
@@ -21,8 +24,26 @@ import {
   useRequiredContext,
   useTitleRegistry,
   useUnnamedModalWarning,
+  type ModalRequestOpen,
+  type ModalSurfaceContextValue,
   type ModalTrigger,
 } from './Dialog.shared';
+
+/**
+ * Why a {@link Dialog} asks to open or close: `trigger` (`Dialog.Trigger`), `close`
+ * (`Dialog.Close`), `close-button` (the built-in Close button), `escape`, `outside-press` (the
+ * backdrop). The shared `ModalOpenChangeReason`.
+ */
+export type DialogOpenChangeReason = ModalOpenChangeReason;
+
+/** The second argument of a {@link Dialog}'s `onOpenChange`: the reason and the DOM event. */
+export type DialogOpenChangeDetails = OpenChangeDetails<DialogOpenChangeReason>;
+
+/**
+ * How a {@link Dialog} blocks the page (the shared `ModalType`; Drawer reuses it when it gains
+ * `modalType`).
+ */
+export type DialogModalType = ModalType;
 
 /** Properties for the Dialog component. */
 export interface DialogProps {
@@ -38,11 +59,26 @@ export interface DialogProps {
    */
   defaultOpen?: boolean;
   /**
-   * Called when the dialog asks to open or close: its trigger, Escape, a backdrop click, the Close
-   * button or `Dialog.Close`. Fires only when the value changes; a controlled dialog stays as it is
-   * until the parent updates `open`.
+   * Called with the new open state when it changes. `details.reason` tells how — `trigger`,
+   * `close` (a `.Close` part), `close-button` (the built-in Close button), `escape` or
+   * `outside-press` (the backdrop) — so a controlled dialog can refuse only some ways of closing
+   * (for example keep a form with unsaved changes open on `outside-press`); `details.event` is the
+   * DOM event behind the request. WaveUI always passes `details`; it is typed optional until 1.0
+   * so that code which calls this prop itself keeps compiling.
+   *
+   * Fires only when the value changes; a controlled dialog stays as it is until the parent updates
+   * `open`.
    */
-  onOpenChange?: (open: boolean) => void;
+  onOpenChange?: (open: boolean, details?: DialogOpenChangeDetails) => void;
+  /**
+   * `modal`: a backdrop press, Escape, the Close button and `Dialog.Close` close it. `alert`: a
+   * confirmation that needs an answer — `role="alertdialog"`, and a backdrop press does not close
+   * it (Escape still does). Initial focus goes to the first focusable element, the built-in Close
+   * button; give the least destructive action `autoFocus` to focus it instead. (`'non-modal'` is
+   * planned.)
+   * @default 'modal'
+   */
+  modalType?: DialogModalType;
   /**
    * Where focus goes when the dialog closes, if it can take focus. Otherwise focus returns to the
    * element that had focus when the dialog opened, then to the trigger, then to an element next to
@@ -74,7 +110,7 @@ export interface DialogContentProps extends Omit<React.HTMLAttributes<HTMLDivEle
   closeLabel?: string;
   /** Content rendered inside the dialog body (put `Dialog.Footer` here as well). */
   children: React.ReactNode;
-  /** Ref to the dialog surface (`role="dialog"`). */
+  /** Ref to the dialog surface (`role="dialog"`, or `alertdialog` with `modalType="alert"`). */
   ref?: React.Ref<HTMLDivElement>;
 }
 
@@ -146,7 +182,10 @@ export interface DialogCloseProps extends Omit<React.HTMLAttributes<HTMLElement>
 
 interface DialogContextValue {
   open: boolean;
-  setOpen: SetValue<boolean>;
+  /** Asks the root to open or close, with the reason and event for `onOpenChange`. */
+  requestOpen: ModalRequestOpen;
+  /** The resolved `modalType`. */
+  modalType: DialogModalType;
   /** The trigger element (`attach`) and the focus-restore target resolved from it (`focusRef`). */
   trigger: ModalTrigger;
   finalFocusRef: React.RefObject<HTMLElement | null> | undefined;
@@ -161,7 +200,8 @@ DialogContext.displayName = 'DialogContext';
 
 const inertDialogContext: DialogContextValue = {
   open: false,
-  setOpen: () => {},
+  requestOpen: () => {},
+  modalType: 'modal',
   trigger: inertModalTrigger,
   finalFocusRef: undefined,
   contentId: undefined,
@@ -175,8 +215,15 @@ function useDialogContext(componentName: string): DialogContextValue {
 // The root of `Dialog` (documented on the export below). A const arrow (like DrawerRoot): its type
 // can be named in consumers' declaration files, e.g. a story's `satisfies Meta<typeof Dialog>` (a
 // function declaration's `typeof` cannot, TS4023).
-const DialogRoot = ({ open, defaultOpen, onOpenChange, finalFocusRef, children }: DialogProps) => {
-  const [openState, setOpen] = useControllable(open, defaultOpen ?? false, onOpenChange);
+const DialogRoot = ({
+  open,
+  defaultOpen,
+  onOpenChange,
+  modalType = 'modal',
+  finalFocusRef,
+  children,
+}: DialogProps) => {
+  const [openState, requestOpen] = useModalOpenState(open, defaultOpen, onOpenChange);
   // The surface lives in a portal, which renders only in the browser: until then (the server
   // HTML, hydration) the dialog reports itself closed, so the trigger's aria-expanded never
   // describes a dialog that is not there.
@@ -195,13 +242,14 @@ const DialogRoot = ({ open, defaultOpen, onOpenChange, finalFocusRef, children }
   const context = React.useMemo<DialogContextValue>(
     () => ({
       open: isOpen,
-      setOpen,
+      requestOpen,
+      modalType,
       trigger,
       finalFocusRef,
       contentId,
       registerContentId,
     }),
-    [isOpen, setOpen, trigger, finalFocusRef, contentId, registerContentId],
+    [isOpen, requestOpen, modalType, trigger, finalFocusRef, contentId, registerContentId],
   );
 
   return <DialogContext.Provider value={context}>{children}</DialogContext.Provider>;
@@ -220,9 +268,9 @@ DialogRoot.displayName = 'Dialog';
  * focus).
  */
 export const DialogTrigger = (props: DialogTriggerProps) => {
-  const { open, setOpen, trigger, contentId } = useDialogContext('Dialog.Trigger');
+  const { open, requestOpen, trigger, contentId } = useDialogContext('Dialog.Trigger');
   return useModalTriggerPart<DialogTriggerRenderProps>(
-    { open, setOpen, trigger, controlsId: contentId },
+    { open, requestOpen, trigger, controlsId: contentId },
     props,
     'Dialog.Trigger',
   );
@@ -237,8 +285,8 @@ DialogTrigger.displayName = 'DialogTrigger';
  * <Dialog.Close><Button appearance="subtle">Cancel</Button></Dialog.Close>
  */
 export const DialogClose = (props: DialogCloseProps) => {
-  const { setOpen } = useDialogContext('Dialog.Close');
-  return useModalClosePart<DialogCloseRenderProps>(setOpen, props, 'Dialog.Close');
+  const { requestOpen } = useDialogContext('Dialog.Close');
+  return useModalClosePart<DialogCloseRenderProps>(requestOpen, props, 'Dialog.Close');
 };
 DialogClose.displayName = 'DialogClose';
 
@@ -250,7 +298,9 @@ const sizeClasses: Record<'small' | 'medium', string> = {
 /**
  * The dialog surface, rendered in a portal (inheriting the WaveProvider theme) while the dialog is
  * open: backdrop, title, Close button and a scrolling body. It takes the full width up to its
- * `size` and never exceeds the viewport (the body scrolls).
+ * `size` and never exceeds the viewport (the body scrolls). It is `role="dialog"`, or
+ * `role="alertdialog"` when the Dialog has `modalType="alert"` (a `role` you pass wins), and
+ * carries `data-modal-type` with the resolved type.
  */
 export const DialogContent = ({
   title,
@@ -262,7 +312,7 @@ export const DialogContent = ({
   ref,
   ...rest
 }: DialogContentProps) => {
-  const { open, setOpen, trigger, finalFocusRef, registerContentId } =
+  const { open, requestOpen, modalType, trigger, finalFocusRef, registerContentId } =
     useDialogContext('Dialog.Content');
   const generatedId = useId('wave-dialog');
   const contentId = id ?? generatedId;
@@ -283,16 +333,27 @@ export const DialogContent = ({
   );
   const mergedRef = useMergedRefs<HTMLDivElement>(ref, attachSurface, registerId);
 
-  const close = React.useCallback(() => setOpen(false), [setOpen]);
+  // An alert dialog needs an answer: a backdrop press does not close it (Escape still does).
+  const closesOnBackdropPress = modalType !== 'alert';
+  const backdropPress = useBackdropPress(surfaceRef, closesOnBackdropPress);
+  const onDismiss = useModalDismiss(requestOpen, 'Dialog', backdropPress.afterOutsidePress);
   const layer = useModalLayer({
     open,
-    onDismiss: close,
+    onDismiss,
     refs: [surfaceRef],
+    outsidePress: closesOnBackdropPress,
     container: surface,
     triggerRef: trigger.focusRef,
     finalFocusRef,
   });
   useUnnamedModalWarning(open ? surface : null, titles.hasTitle, 'Dialog.Content', 'Dialog.Title');
+
+  // The height of the sticky Dialog.Footer, reserved as the body's scroll padding.
+  const [footerHeight, setFooterHeight] = React.useState<number | null>(null);
+  const surfaceContext = React.useMemo<ModalSurfaceContextValue>(
+    () => ({ ...titles.context, setFooterHeight }),
+    [titles.context],
+  );
 
   if (!open) return null;
 
@@ -300,13 +361,17 @@ export const DialogContent = ({
 
   return (
     <Portal layerId={layer.layerId}>
-      <div className="fixed inset-0 flex items-center justify-center bg-backdrop p-4">
+      <div
+        className="fixed inset-0 flex items-center justify-center bg-backdrop p-4"
+        onMouseDown={backdropPress.onMouseDown}
+      >
         <div
           ref={mergedRef}
-          role="dialog"
+          role={modalType === 'alert' ? 'alertdialog' : 'dialog'}
           id={contentId}
           aria-labelledby={hasTitle ? propTitleId : titles.titleId}
           tabIndex={-1}
+          data-modal-type={modalType}
           {...rest}
           className={cn(
             // The border marks the surface where the shadow cannot: in high contrast the page,
@@ -316,7 +381,7 @@ export const DialogContent = ({
             className,
           )}
         >
-          <ModalSurfaceContext.Provider value={titles.context}>
+          <ModalSurfaceContext.Provider value={surfaceContext}>
             {hasTitle && (
               <h2 id={propTitleId} className="pe-8 text-subtitle-1 font-semibold">
                 {title}
@@ -327,10 +392,20 @@ export const DialogContent = ({
               size="small"
               icon={<DismissIcon />}
               aria-label={closeLabel}
-              onClick={close}
+              onClick={(event) =>
+                requestOpen(false, { reason: 'close-button', event: event.nativeEvent })
+              }
               className="absolute end-4 top-4 text-muted-foreground"
             />
-            <div className="-mx-1 mt-1 min-h-0 flex-1 overflow-y-auto p-1 text-body-1 text-muted-foreground">
+            <div
+              // The scroll padding keeps a focused field above the sticky footer (WCAG 2.4.11).
+              className="-mx-1 mt-1 min-h-0 flex-1 overflow-y-auto scroll-pb-(--wave-dialog-footer-height) p-1 text-body-1 text-muted-foreground"
+              style={
+                footerHeight === null
+                  ? undefined
+                  : ({ '--wave-dialog-footer-height': `${footerHeight}px` } as React.CSSProperties)
+              }
+            >
               {children}
             </div>
           </ModalSurfaceContext.Provider>
@@ -362,11 +437,36 @@ export const DialogTitle = ({ id, className, children, ref, ...rest }: DialogTit
 DialogTitle.displayName = 'DialogTitle';
 
 /**
- * Action row at the end of the dialog body. Render it inside `Dialog.Content`: outside it, it would
- * stay on the page while the dialog is closed (a development warning says so).
+ * `Dialog.Footer` inside `Dialog.Content`. The body is `p-1`, and sticky positioning stops at its
+ * padding edge: `-bottom-1` with `-mb-1 pb-2` covers the body's bottom padding, `-mx-1 px-1` its
+ * focus-ring inset, and `pt-3` separates the actions from the content scrolling under them.
+ */
+const stickyFooterClasses =
+  'sticky -bottom-1 z-10 -mx-1 -mb-1 mt-6 flex justify-end gap-2 bg-background px-1 pb-2 pt-3';
+
+/**
+ * `Dialog.Footer` where no body reserves its height as scroll padding (a Drawer's body): a plain
+ * action row, which never covers a focused field.
+ */
+const footerRowClasses = 'mt-6 flex justify-end gap-2';
+
+/**
+ * Action row at the end of the dialog body. It stays where you render it in the DOM and sticks to
+ * the bottom of the body while long content scrolls under it (with an opaque background); the body
+ * reserves its height as scroll padding, so a focused field is never hidden behind it. Inside a
+ * `<form>` that wraps the fields and the footer it sticks too: make it the form's last child.
+ * Render it inside `Dialog.Content`: outside it, it would stay on the page while the dialog is
+ * closed (a development warning says so). Inside a `Drawer`, whose body reserves no footer height,
+ * it does not stick: it is an action row at the end of the content. Render one `Dialog.Footer` per
+ * `Dialog.Content`: with two at once, the body reserves the height of the one measured last, and
+ * unmounting either clears it until the other resizes (swapping one footer for another is fine).
  */
 export const DialogFooter = ({ children, className, ref, ...rest }: DialogFooterProps) => {
-  const outsideContent = React.useContext(ModalSurfaceContext) === null;
+  const surfaceContext = React.useContext(ModalSurfaceContext);
+  const outsideContent = surfaceContext === null;
+  const setFooterHeight = surfaceContext?.setFooterHeight;
+  const [footer, setFooter] = React.useState<HTMLDivElement | null>(null);
+  const mergedRef = useMergedRefs<HTMLDivElement>(ref, setFooter);
 
   React.useEffect(() => {
     if (!outsideContent) return;
@@ -376,8 +476,30 @@ export const DialogFooter = ({ children, className, ref, ...rest }: DialogFooter
     );
   }, [outsideContent]);
 
+  // Reports the footer's border-box height to Dialog.Content. The observer's first callback,
+  // delivered before the next paint, supplies the first value; without ResizeObserver the body
+  // keeps its default scroll padding.
+  React.useLayoutEffect(() => {
+    if (!footer || !setFooterHeight || typeof ResizeObserver === 'undefined') return;
+    const observer = new ResizeObserver((entries) => {
+      const entry = entries[entries.length - 1];
+      if (!entry) return;
+      setFooterHeight(entry.borderBoxSize?.[0]?.blockSize ?? footer.offsetHeight);
+    });
+    observer.observe(footer, { box: 'border-box' });
+    return () => {
+      observer.disconnect();
+      setFooterHeight(null);
+    };
+  }, [footer, setFooterHeight]);
+
   return (
-    <div ref={ref} {...rest} className={cn('mt-6 flex justify-end gap-2', className)}>
+    <div
+      ref={mergedRef}
+      {...rest}
+      // Sticky only where the surface reserves the footer's height (Dialog.Content).
+      className={cn(setFooterHeight ? stickyFooterClasses : footerRowClasses, className)}
+    >
       {children}
     </div>
   );
@@ -393,8 +515,16 @@ DialogFooter.displayName = 'DialogFooter';
  *   the page does not scroll.
  * - **Closing**: Escape (only the topmost layer: a popup opened inside closes first), a click on
  *   the backdrop (a drag that starts inside does not close it), the Close button and `Dialog.Close`.
- *   Focus returns to the first of these that can take focus: `finalFocusRef`, the element that had
- *   focus when the dialog opened, the trigger, an element next to where that opener was.
+ *   `onOpenChange` gets the reason as its second argument (`details.reason`), so a controlled
+ *   dialog can refuse some of them. A backdrop press blurs the focused field before the dialog
+ *   closes, so a typed value is committed as with the Close button; when a controlled dialog
+ *   refuses the press, the field gets focus back (an alert dialog's press leaves focus where it
+ *   was). Focus returns to the first of these that can take focus: `finalFocusRef`, the element
+ *   that had focus when the dialog opened, the trigger, an element next to where that opener was.
+ * - **Alert dialogs**: `modalType="alert"` renders `role="alertdialog"` for a confirmation that
+ *   needs an answer; a backdrop press does not close it.
+ * - **Footer**: `Dialog.Footer` sticks to the bottom of the scrolling body, and the body keeps a
+ *   focused field above it.
  * - **Naming**: give `Dialog.Content` a `title`, a `Dialog.Title`, or `aria-label`.
  *
  * The sub-components are also exported under flat names (`DialogTrigger`, `DialogContent`,

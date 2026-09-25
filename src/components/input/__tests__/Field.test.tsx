@@ -2,13 +2,23 @@ import * as React from 'react';
 import { describe, it, expect, vi, expectTypeOf } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import { Field, type FieldProps } from '../Field';
+import { Checkbox } from '../Checkbox';
 import { Input } from '../Input';
+import { RadioGroup, RadioItem } from '../RadioGroup';
 import { Select } from '../Select';
 import { Textarea } from '../Textarea';
 import { Slider } from '../Slider';
 import { SearchBox } from '../SearchBox';
-import { useFieldContext, type FieldContextValue } from '../../../hooks/useFieldControl';
-import { testSystemProps, expectNoA11yViolations } from '../../../test-utils';
+import { Switch } from '../Switch';
+import {
+  useFieldContext,
+  useFieldControl,
+  type FieldContextValue,
+  type FieldControlProps,
+} from '../../../hooks/useFieldControl';
+import type { Orientation, Slot, ValidationState } from '../../../lib/types';
+import { testSystemProps, expectNoA11yViolations, renderWithProviders } from '../../../test-utils';
+import { renderWithFieldContext, FIELD_TEST_IDS, FIELD_TEST_TEXT } from '../../../test-utils-field';
 
 /** The development warning of a Field with more than one element child. */
 function multipleChildrenWarning(extra: number) {
@@ -17,6 +27,30 @@ function multipleChildrenWarning(extra: number) {
     `the other ${extra} element child(ren) are rendered unchanged. Wrap each control in its own ` +
     'Field.'
   );
+}
+
+/** The development warning of a Field whose `error` hides a validation message or state. */
+const ERROR_AND_VALIDATION_WARNING =
+  '[WaveUI] Field: `error` and `validationMessage`/`validationState` are both set; `error` wins. ' +
+  'Use one of them.';
+
+/**
+ * The first child of a horizontal Field's control column that the column's first-row rule pads,
+ * or `null`. jsdom applies no Tailwind CSS, so the selector of the rule's arbitrary variant is
+ * matched instead.
+ */
+function paddedFirstChild(column: Element): Element | null {
+  const selector = [...column.classList]
+    .map((name) => /^\[&>(:first-child:has\(.+\))\]:py-1\.5$/.exec(name)?.[1])
+    .find((match) => match !== undefined);
+  return selector === undefined ? null : column.querySelector(`:scope > ${selector}`);
+}
+
+/** The `<p>` that renders a Field message, found by its text. */
+function messageElement(text: string): HTMLElement {
+  const element = screen.getByText(text).closest('p');
+  if (!element) throw new Error(`no <p> around "${text}"`);
+  return element;
 }
 
 describe('Field', () => {
@@ -28,12 +62,30 @@ describe('Field', () => {
       { name: 'hint', props: { hint: 'Your full name' } },
       { name: 'error', props: { error: 'Name is required' } },
       { name: 'required', props: { required: true } },
+      {
+        name: 'warning message and hint',
+        props: { validationState: 'warning', validationMessage: 'Looks unusual', hint: 'Hint' },
+      },
+      {
+        name: 'success message',
+        props: { validationState: 'success', validationMessage: 'Available' },
+      },
+      { name: 'horizontal', props: { orientation: 'horizontal', hint: 'Hint' } },
     ],
     conflictingClass: { className: 'flex-row', overrides: 'flex-col' },
   });
 
   it('declares ref in FieldProps (C-REF)', () => {
     expectTypeOf<FieldProps['ref']>().toEqualTypeOf<React.Ref<HTMLDivElement> | undefined>();
+  });
+
+  it('types the validation and orientation props', () => {
+    expectTypeOf<FieldProps['validationState']>().toEqualTypeOf<ValidationState | undefined>();
+    expectTypeOf<FieldProps['validationMessage']>().toEqualTypeOf<React.ReactNode>();
+    expectTypeOf<FieldProps['validationMessageIcon']>().toEqualTypeOf<Slot<'span'> | undefined>();
+    expectTypeOf<FieldProps['orientation']>().toEqualTypeOf<Orientation | undefined>();
+    // @ts-expect-error -- not a validation state
+    void (<Field validationState="info" />);
   });
 
   it('renders the child control inside the root with only a generated id (no label, hint or error)', () => {
@@ -295,7 +347,7 @@ describe('Field', () => {
       expect(input).toHaveAttribute('aria-invalid', 'true');
     });
 
-    it('inserts a new alert element when an error replaces the hint (input-basic#17)', () => {
+    it('inserts a new alert element when an error appears, and keeps the hint', () => {
       const { rerender } = render(
         <Field label="Name" hint="Enter your full name">
           <input />
@@ -309,24 +361,30 @@ describe('Field', () => {
       );
       const alert = screen.getByRole('alert');
       // A new node, not the hint's <p> with role="alert" added: insertion is what screen readers
-      // announce reliably.
+      // announce reliably. The hint stays below the error.
       expect(alert).not.toBe(hint);
-      expect(hint).not.toBeInTheDocument();
+      expect(hint).toBeInTheDocument();
+      expect(hint.closest('p')).not.toHaveAttribute('role');
       expect(alert).toHaveTextContent('Name is required');
       expect(screen.getByRole('textbox', { name: 'Name' })).toHaveAccessibleDescription(
-        'Name is required',
+        'Name is required Enter your full name',
       );
     });
 
-    it('shows the error instead of the hint when both are provided', () => {
+    it('shows the hint after the error when both are provided (the hint stays visible)', () => {
       render(
         <Field label="Name" error="Error!" hint="Hint">
           <input />
         </Field>,
       );
-      expect(screen.getByRole('alert')).toHaveTextContent('Error!');
-      expect(screen.queryByText('Hint')).not.toBeInTheDocument();
-      expect(screen.getByRole('textbox', { name: 'Name' })).toHaveAccessibleDescription('Error!');
+      const alert = screen.getByRole('alert');
+      expect(alert).toHaveTextContent('Error!');
+      const hint = messageElement('Hint');
+      // Document order: the message, then the hint.
+      expect(alert.compareDocumentPosition(hint) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+      const input = screen.getByRole('textbox', { name: 'Name' });
+      expect(input).toHaveAttribute('aria-describedby', `${alert.id} ${hint.id}`);
+      expect(input).toHaveAccessibleDescription('Error! Hint');
     });
 
     it('does not set aria-invalid when there is no error', () => {
@@ -416,6 +474,541 @@ describe('Field', () => {
       expect(input).toHaveAttribute('aria-invalid', 'true');
       expect(screen.queryByRole('alert')).not.toBeInTheDocument();
       expect(input).toHaveAccessibleDescription('Hint');
+    });
+  });
+
+  describe('validation state (validationState, validationMessage, validationMessageIcon)', () => {
+    /** A custom control built on `useFieldControl`, with the role of a combobox. */
+    function ComboboxLike(props: FieldControlProps) {
+      const fieldProps = useFieldControl(props);
+      return <input role="combobox" aria-expanded="false" {...fieldProps} />;
+    }
+
+    const STATES = [
+      { state: 'error', role: 'alert', invalid: true, icon: 'error', idSuffix: '-error' },
+      { state: 'warning', role: 'alert', invalid: false, icon: 'warning', idSuffix: '-message' },
+      { state: 'success', role: null, invalid: false, icon: 'success', idSuffix: '-message' },
+      { state: 'none', role: null, invalid: false, icon: null, idSuffix: '-message' },
+    ] as const;
+
+    it.each(STATES)(
+      'renders a $state message before the hint, with its role, icon and id',
+      async ({ state, role, invalid, icon, idSuffix }) => {
+        render(
+          <Field
+            label="Name"
+            hint="Hint"
+            validationState={state}
+            validationMessage="Message"
+            data-testid="root"
+          >
+            <input />
+          </Field>,
+        );
+        const message = messageElement('Message');
+        const hint = messageElement('Hint');
+        const input = screen.getByRole('textbox', { name: 'Name' });
+        expect(screen.getByTestId('root')).toHaveAttribute('data-validation-state', state);
+        expect(message).toHaveAttribute('data-validation-state', state);
+        expect(message.id).toMatch(new RegExp(`${idSuffix}$`));
+        if (role) expect(message).toHaveAttribute('role', role);
+        else expect(message).not.toHaveAttribute('role');
+        expect(hint).not.toHaveAttribute('role');
+        expect(input).toHaveAttribute('aria-describedby', `${message.id} ${hint.id}`);
+        expect(input).toHaveAccessibleDescription('Message Hint');
+        if (invalid) expect(input).toHaveAttribute('aria-invalid', 'true');
+        else expect(input).not.toHaveAttribute('aria-invalid');
+        const glyph = message.querySelector('svg');
+        if (icon) {
+          expect(glyph).toHaveAttribute('data-wave-icon', icon);
+          expect(glyph?.closest('[aria-hidden="true"]')).not.toBeNull();
+          expect(glyph).toHaveAttribute('fill', 'currentColor');
+        } else {
+          expect(glyph).toBeNull();
+        }
+        await expectNoA11yViolations();
+      },
+    );
+
+    it('colors each message with its token', () => {
+      render(
+        <>
+          {STATES.map(({ state }) => (
+            <Field
+              key={state}
+              label={`${state} field`}
+              validationState={state}
+              validationMessage={`${state} message`}
+            >
+              <input />
+            </Field>
+          ))}
+        </>,
+      );
+      expect(messageElement('error message')).toHaveClass('text-error');
+      expect(messageElement('warning message')).toHaveClass('text-warning-tint-foreground');
+      expect(messageElement('success message')).toHaveClass('text-success-tint-foreground');
+      expect(messageElement('none message')).toHaveClass('text-muted-foreground');
+    });
+
+    it.each(STATES)(
+      'marks an Input, a Checkbox, a combobox and a native input invalid only in the error state ($state)',
+      ({ state, invalid }) => {
+        render(
+          <>
+            <Field label="Input" hint="Hint" validationState={state} validationMessage="Input msg">
+              <Input />
+            </Field>
+            <Field label="Box" hint="Hint" validationState={state} validationMessage="Box msg">
+              <Checkbox />
+            </Field>
+            <Field label="Combo" hint="Hint" validationState={state} validationMessage="Combo msg">
+              <ComboboxLike />
+            </Field>
+            <Field
+              label="Native"
+              hint="Hint"
+              validationState={state}
+              validationMessage="Native msg"
+            >
+              <input />
+            </Field>
+          </>,
+        );
+        const controls = [
+          [screen.getByRole('textbox', { name: 'Input' }), 'Input msg'],
+          [screen.getByRole('checkbox', { name: 'Box' }), 'Box msg'],
+          [screen.getByRole('combobox', { name: 'Combo' }), 'Combo msg'],
+          [screen.getByRole('textbox', { name: 'Native' }), 'Native msg'],
+        ] as const;
+        for (const [control, text] of controls) {
+          expect(control, text).toHaveAccessibleDescription(`${text} Hint`);
+          if (invalid) expect(control, text).toHaveAttribute('aria-invalid', 'true');
+          else expect(control, text).not.toHaveAttribute('aria-invalid');
+        }
+      },
+    );
+
+    it('treats a validationMessage without a validationState as an error', () => {
+      render(
+        <Field label="Name" validationMessage="Required">
+          <input />
+        </Field>,
+      );
+      const alert = screen.getByRole('alert');
+      expect(alert).toHaveTextContent('Required');
+      expect(alert).toHaveAttribute('data-validation-state', 'error');
+      const input = screen.getByRole('textbox', { name: 'Name' });
+      expect(input).toHaveAttribute('aria-invalid', 'true');
+      expect(input).toHaveAccessibleDescription('Required');
+    });
+
+    it('validationState="error" without a message marks the control invalid and renders no message', () => {
+      render(
+        <Field label="Name" hint="Hint" validationState="error" data-testid="root">
+          <input />
+        </Field>,
+      );
+      const input = screen.getByRole('textbox', { name: 'Name' });
+      expect(input).toHaveAttribute('aria-invalid', 'true');
+      expect(input).toHaveAccessibleDescription('Hint');
+      expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+      expect(screen.getByTestId('root').querySelectorAll('p')).toHaveLength(1);
+      expect(screen.getByTestId('root')).toHaveAttribute('data-validation-state', 'error');
+    });
+
+    it('renders a label, message and hint given as generators (checked without being consumed)', () => {
+      function* text(value: string) {
+        yield value;
+      }
+      render(
+        <Field label={text('Name')} validationMessage={text('Too short')} hint={text('Hint')}>
+          <input />
+        </Field>,
+      );
+      const input = screen.getByRole('textbox', { name: 'Name' });
+      expect(input).toHaveAccessibleDescription('Too short Hint');
+    });
+
+    it('renders no message element and no state for a message that renders nothing', () => {
+      render(
+        <Field label="Name" hint="Hint" validationMessage={[null, '']} data-testid="root">
+          <input />
+        </Field>,
+      );
+      const input = screen.getByRole('textbox', { name: 'Name' });
+      expect(input).not.toHaveAttribute('aria-invalid');
+      expect(input).toHaveAccessibleDescription('Hint');
+      expect(screen.getByTestId('root')).toHaveAttribute('data-validation-state', 'none');
+      expect(screen.getByTestId('root').querySelectorAll('p')).toHaveLength(1);
+    });
+
+    it('keeps the 0.5 error behaviour: `error` renders the message in the error state', () => {
+      render(
+        <Field label="Name" error="Required" data-testid="root">
+          <input />
+        </Field>,
+      );
+      const alert = screen.getByRole('alert');
+      expect(alert).toHaveAttribute('data-validation-state', 'error');
+      expect(alert.id).toMatch(/-error$/);
+      expect(alert.querySelector('[data-wave-icon="error"]')).not.toBeNull();
+      expect(screen.getByTestId('root')).toHaveAttribute('data-validation-state', 'error');
+    });
+
+    it('error wins over validationMessage and validationState, with a development warning', () => {
+      const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+      try {
+        render(
+          <Field
+            label="Name"
+            error="Required"
+            validationState="warning"
+            validationMessage="Looks unusual"
+          >
+            <input />
+          </Field>,
+        );
+        expect(screen.getByRole('alert')).toHaveTextContent('Required');
+        expect(screen.queryByText('Looks unusual')).not.toBeInTheDocument();
+        const input = screen.getByRole('textbox', { name: 'Name' });
+        expect(input).toHaveAttribute('aria-invalid', 'true');
+        expect(input).toHaveAccessibleDescription('Required');
+        expect(warn.mock.calls).toEqual([[ERROR_AND_VALIDATION_WARNING]]);
+      } finally {
+        warn.mockRestore();
+      }
+    });
+
+    it.each([
+      {
+        name: 'error={true} and a validationMessage',
+        props: { error: true, validationMessage: 'x' },
+      },
+      {
+        name: 'an error and validationState="success"',
+        props: { error: 'e', validationState: 'success' },
+      },
+    ] satisfies Array<{ name: string; props: Partial<FieldProps> }>)(
+      'warns about $name',
+      ({ props }) => {
+        const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+        try {
+          render(
+            <Field label="Name" {...props}>
+              <input />
+            </Field>,
+          );
+          expect(screen.getByRole('textbox', { name: 'Name' })).toHaveAttribute(
+            'aria-invalid',
+            'true',
+          );
+          expect(screen.queryByText('x')).not.toBeInTheDocument();
+          expect(warn.mock.calls).toEqual([[ERROR_AND_VALIDATION_WARNING]]);
+        } finally {
+          warn.mockRestore();
+        }
+      },
+    );
+
+    it('does not warn when error and validationState="error" agree', () => {
+      const warn = vi.spyOn(console, 'warn');
+      try {
+        render(
+          <Field label="Name" error="Required" validationState="error">
+            <input />
+          </Field>,
+        );
+        expect(screen.getByRole('alert')).toHaveTextContent('Required');
+        expect(warn).not.toHaveBeenCalled();
+      } finally {
+        warn.mockRestore();
+      }
+    });
+
+    it('validationMessageIcon={null} or content that renders nothing shows no icon', () => {
+      render(
+        <>
+          <Field label="A" validationMessage="No icon" validationMessageIcon={null}>
+            <input />
+          </Field>
+          <Field
+            label="B"
+            validationState="warning"
+            validationMessage="Empty icon"
+            validationMessageIcon={[false, '']}
+          >
+            <input />
+          </Field>
+        </>,
+      );
+      for (const text of ['No icon', 'Empty icon']) {
+        const message = messageElement(text);
+        expect(message.querySelector('svg'), text).toBeNull();
+        // Only the text span: no empty icon element.
+        expect(message.children, text).toHaveLength(1);
+      }
+    });
+
+    it('renders a custom validationMessageIcon instead of the default, decoratively', () => {
+      render(
+        <Field
+          label="Name"
+          validationState="success"
+          validationMessage="Available"
+          validationMessageIcon={<svg data-testid="custom-icon" />}
+        >
+          <input />
+        </Field>,
+      );
+      const message = messageElement('Available');
+      const custom = screen.getByTestId('custom-icon');
+      expect(message).toContainElement(custom);
+      expect(custom.closest('[aria-hidden="true"]')).not.toBeNull();
+      expect(message.querySelector('[data-wave-icon]')).toBeNull();
+      // The icon comes before the text.
+      expect(message.firstElementChild).toContainElement(custom);
+    });
+
+    it('re-inserts the message element when the state changes from warning to error', () => {
+      const ui = (state: ValidationState) => (
+        <Field label="Name" validationState={state} validationMessage="Check the name">
+          <input />
+        </Field>
+      );
+      const { rerender } = render(ui('warning'));
+      const warning = messageElement('Check the name');
+      expect(warning).toHaveAttribute('role', 'alert');
+      rerender(ui('error'));
+      const error = messageElement('Check the name');
+      // A new node, so the error is announced as a new alert.
+      expect(error).not.toBe(warning);
+      expect(warning).not.toBeInTheDocument();
+      expect(error).toHaveAttribute('data-validation-state', 'error');
+      expect(screen.getByRole('textbox', { name: 'Name' })).toHaveAttribute('aria-invalid', 'true');
+    });
+
+    it('describes an Input by its own error and a Field warning (both messages show)', () => {
+      render(
+        <Field
+          label="Email"
+          hint="Hint"
+          validationState="warning"
+          validationMessage="Unusual domain"
+        >
+          <Input error="Invalid address" />
+        </Field>,
+      );
+      const input = screen.getByRole('textbox', { name: 'Email' });
+      expect(screen.getByText('Invalid address')).toBeInTheDocument();
+      expect(input).toHaveAttribute('aria-invalid', 'true');
+      // Field merges its message and hint into the Input's props; the Input adds its own error.
+      expect(input).toHaveAccessibleDescription('Unusual domain Hint Invalid address');
+    });
+
+    it('provides the validation state and message id in FieldContext', () => {
+      /** Renders the context members it reads as data attributes. */
+      function Probe(props: React.InputHTMLAttributes<HTMLInputElement>) {
+        const field = useFieldContext();
+        return (
+          <input
+            {...props}
+            data-state={field?.validationState}
+            data-message-id={field?.validationMessageId}
+            data-error-id={field?.errorId}
+            data-invalid={String(field?.invalid)}
+            data-has-error-message={String(field?.hasErrorMessage)}
+          />
+        );
+      }
+      render(
+        <>
+          <Field label="Warning" validationState="warning" validationMessage="Heads up">
+            <Probe />
+          </Field>
+          <Field label="Error" validationMessage="Required">
+            <Probe />
+          </Field>
+          <Field label="Plain">
+            <Probe />
+          </Field>
+        </>,
+      );
+      const context = (name: string) => {
+        const { state, messageId, errorId, invalid, hasErrorMessage } = screen.getByRole(
+          'textbox',
+          { name },
+        ).dataset;
+        return { state, messageId, errorId, invalid, hasErrorMessage };
+      };
+      expect(context('Warning')).toEqual({
+        state: 'warning',
+        messageId: messageElement('Heads up').id,
+        errorId: undefined,
+        invalid: 'false',
+        hasErrorMessage: 'false',
+      });
+      expect(context('Error')).toEqual({
+        state: 'error',
+        messageId: messageElement('Required').id,
+        errorId: messageElement('Required').id,
+        invalid: 'true',
+        hasErrorMessage: 'true',
+      });
+      expect(context('Plain')).toEqual({
+        state: 'none',
+        messageId: undefined,
+        errorId: undefined,
+        invalid: 'false',
+        hasErrorMessage: 'false',
+      });
+    });
+  });
+
+  describe('orientation', () => {
+    it('renders data-orientation="vertical" by default with the label above the control', () => {
+      render(
+        <Field label="Name" data-testid="root">
+          <input />
+        </Field>,
+      );
+      const root = screen.getByTestId('root');
+      expect(root).toHaveAttribute('data-orientation', 'vertical');
+      expect(root).toHaveClass('flex-col');
+    });
+
+    it('horizontal: the label in a start column, the control, message and hint in a column beside it', async () => {
+      render(
+        <Field
+          label="Name"
+          hint="Hint"
+          validationState="warning"
+          validationMessage="Message"
+          orientation="horizontal"
+          data-testid="root"
+        >
+          <input />
+        </Field>,
+      );
+      const root = screen.getByTestId('root');
+      expect(root).toHaveAttribute('data-orientation', 'horizontal');
+      expect(root).toHaveClass('flex-row', 'items-start');
+      const label = screen.getByText('Name').closest('label');
+      expect(root.firstElementChild).toBe(label);
+      expect(label).toHaveClass('basis-1/3', 'shrink-0', 'mb-0');
+      const input = screen.getByRole('textbox', { name: 'Name' });
+      const column = input.parentElement as HTMLElement;
+      expect(column).not.toBe(root);
+      expect(column.parentElement).toBe(root);
+      expect(column).toHaveClass('flex', 'flex-1', 'min-w-0', 'flex-col');
+      expect(column).toContainElement(messageElement('Message'));
+      expect(column).toContainElement(messageElement('Hint'));
+      expect(input).toHaveAccessibleDescription('Message Hint');
+      await expectNoA11yViolations();
+    });
+
+    it('horizontal keeps the DOM order under dir="rtl"', () => {
+      renderWithProviders(
+        <Field label="Name" hint="Hint" orientation="horizontal" data-testid="root">
+          <input />
+        </Field>,
+        { dir: 'rtl' },
+      );
+      const root = screen.getByTestId('root');
+      const input = screen.getByRole('textbox', { name: 'Name' });
+      expect(root.firstElementChild).toBe(screen.getByText('Name').closest('label'));
+      expect(root.lastElementChild).toContainElement(input);
+      expect(root.className).not.toMatch(/\b(?:ml|mr|pl|pr|left|right)-/);
+    });
+
+    it.each(['ltr', 'rtl'] as const)(
+      'horizontal (%s): a Switch, Checkbox or RadioGroup gets a 32px first row, so its first line lines up with the label',
+      (dir) => {
+        renderWithProviders(
+          <>
+            <Field label="Display name" orientation="horizontal">
+              <Input />
+            </Field>
+            <Field label="Notifications" orientation="horizontal">
+              <Switch label="Email me about replies" />
+            </Field>
+            <Field label="Newsletter" orientation="horizontal">
+              <Checkbox label="Send me the monthly newsletter" />
+            </Field>
+            <Field label="Theme" orientation="horizontal">
+              <RadioGroup>
+                <RadioItem value="light" label="Light" />
+                <RadioItem value="dark" label="Dark" />
+              </RadioGroup>
+            </Field>
+            <Field label="Alerts" orientation="horizontal">
+              <div className="flex flex-col gap-2">
+                <Checkbox label="Email" />
+                <Checkbox label="Push" />
+              </div>
+            </Field>
+          </>,
+          { dir },
+        );
+        const column = (control: HTMLElement) => {
+          const root = control.closest('[data-orientation="horizontal"]');
+          if (!root?.lastElementChild) throw new Error('no horizontal Field around the control');
+          return root.lastElementChild;
+        };
+        // The label is centred on a 32px row (6px above its 20px line)...
+        for (const name of ['Display name', 'Notifications', 'Newsletter', 'Theme', 'Alerts']) {
+          expect(screen.getByText(name).closest('label')).toHaveClass('pt-1.5');
+        }
+        // ...a 32px control fills that row as it is...
+        const input = screen.getByRole('textbox', { name: 'Display name' });
+        expect(paddedFirstChild(column(input))).toBeNull();
+        // ...and a control of 20px rows gets 6px above and below its first row.
+        const toggle = screen.getByRole('switch', { name: 'Notifications Email me about replies' });
+        expect(paddedFirstChild(column(toggle))).toBe(toggle.closest('label'));
+        const box = screen.getByRole('checkbox', {
+          name: 'Newsletter Send me the monthly newsletter',
+        });
+        expect(paddedFirstChild(column(box))).toBe(box.closest('label'));
+        const group = screen.getByRole('radiogroup', { name: 'Theme' });
+        expect(paddedFirstChild(column(group))).toBe(group);
+        const email = screen.getByRole('checkbox', { name: 'Alerts Email' });
+        expect(paddedFirstChild(column(email))).toBe(email.closest('label')?.parentElement);
+      },
+    );
+
+    it('horizontal without a label: the column takes the full width', () => {
+      render(
+        <Field orientation="horizontal" hint="Hint" data-testid="root">
+          <input aria-label="Code" />
+        </Field>,
+      );
+      const root = screen.getByTestId('root');
+      expect(root.children).toHaveLength(1);
+      expect(root.firstElementChild).toHaveClass('flex-1');
+      expect(root.firstElementChild).toContainElement(
+        screen.getByRole('textbox', { name: 'Code' }),
+      );
+    });
+  });
+
+  describe('a custom control with renderWithFieldContext', () => {
+    /** A custom switch built on `useFieldControl` (CLAUDE.md "Field wiring for a custom control"). */
+    function CustomSwitch(props: FieldControlProps) {
+      const fieldProps = useFieldControl(props);
+      return <button type="button" role="switch" aria-checked="false" {...fieldProps} />;
+    }
+
+    it('is described by a Field warning and its hint, and not marked invalid', () => {
+      renderWithFieldContext(<CustomSwitch />, {
+        validationState: 'warning',
+        validationMessageId: FIELD_TEST_IDS.messageId,
+        hintId: FIELD_TEST_IDS.hintId,
+      });
+      const control = screen.getByRole('switch', { name: FIELD_TEST_TEXT.label });
+      expect(control).toHaveAccessibleDescription(
+        `${FIELD_TEST_TEXT.message} ${FIELD_TEST_TEXT.hint}`,
+      );
+      expect(control).not.toHaveAttribute('aria-invalid');
     });
   });
 
@@ -600,9 +1193,10 @@ describe('Field', () => {
       const custom = screen.getByTestId('custom');
       expect(custom.id).toMatch(/^field-/);
       expect(screen.getByText('Name').closest('label')).toHaveAttribute('for', custom.id);
+      // The error message, then the hint (which stays visible next to the error).
       expect(custom).toHaveAttribute(
         'aria-describedby',
-        screen.getByRole('alert').getAttribute('id'),
+        `${screen.getByRole('alert').id} ${messageElement('Your full name').id}`,
       );
       expect(custom).toHaveAttribute('aria-invalid', 'true');
       // A role-less element takes no aria-required and no native required (the element decides):

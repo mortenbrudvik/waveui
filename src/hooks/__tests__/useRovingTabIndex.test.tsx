@@ -9,6 +9,7 @@ import {
   type UseRovingTabIndexOptions,
   type UseRovingTabIndexResult,
 } from '../useRovingTabIndex';
+import { focusableDisabledProps } from '../../lib/aria';
 
 type Orientation = UseRovingTabIndexOptions['orientation'];
 
@@ -51,6 +52,10 @@ interface DomItem {
   label?: string;
   disabled?: boolean;
   ariaDisabled?: boolean;
+  /** `aria-disabled`, `data-disabled` and `data-disabled-focusable` (a `disabledFocusable` control). */
+  disabledFocusable?: boolean;
+  /** The composite's own `data-roving-disabled` marker. */
+  rovingDisabled?: boolean;
   text?: string;
 }
 
@@ -81,6 +86,8 @@ function DomGroup({
             data-roving-text={item.text}
             disabled={item.disabled}
             aria-disabled={item.ariaDisabled || undefined}
+            data-roving-disabled={item.rovingDisabled ? '' : undefined}
+            {...focusableDisabledProps(item.disabledFocusable, { reachable: true })}
             tabIndex={result.getTabIndex(item.value)}
           >
             {item.label ?? item.value}
@@ -640,6 +647,181 @@ describe('useRovingTabIndex', () => {
       });
       expect(button('a')).toHaveAttribute('tabindex', '0');
       expect(button('b')).toHaveAttribute('tabindex', '-1');
+    });
+  });
+
+  describe('focusable disabled items (data-disabled-focusable) stay reachable', () => {
+    it('arrows land on an aria-disabled item marked data-disabled-focusable', async () => {
+      const user = userEvent.setup();
+      render(
+        <DomGroup
+          items={[{ value: 'a' }, { value: 'b', disabledFocusable: true }, { value: 'c' }]}
+          activeValue="a"
+        />,
+      );
+      expect(button('b')).toHaveAttribute('aria-disabled', 'true');
+      focus(button('a'));
+      await user.keyboard('{ArrowRight}');
+      expect(button('b')).toHaveFocus();
+      await user.keyboard('{ArrowRight}');
+      expect(button('c')).toHaveFocus();
+      await user.keyboard('{ArrowLeft}');
+      expect(button('b')).toHaveFocus();
+    });
+
+    it('Home and End include it', async () => {
+      const user = userEvent.setup();
+      render(
+        <DomGroup
+          items={[
+            { value: 'a', disabledFocusable: true },
+            { value: 'b' },
+            { value: 'c', disabledFocusable: true },
+          ]}
+          activeValue="b"
+        />,
+      );
+      focus(button('b'));
+      await user.keyboard('{End}');
+      expect(button('c')).toHaveFocus();
+      await user.keyboard('{Home}');
+      expect(button('a')).toHaveFocus();
+    });
+
+    it('typeahead includes it', async () => {
+      const user = userEvent.setup();
+      render(
+        <DomGroup
+          items={[
+            { value: 'new', label: 'New file' },
+            { value: 'open', label: 'Open', disabledFocusable: true },
+            { value: 'copy', label: 'Copy' },
+          ]}
+          orientation="vertical"
+          typeahead
+        />,
+      );
+      focus(button('New file'));
+      await user.keyboard('o');
+      expect(button('Open')).toHaveFocus();
+    });
+
+    it("holds the tab stop as the active item (tabStop 'active')", () => {
+      render(
+        <DomGroup
+          items={[{ value: 'a' }, { value: 'b', disabledFocusable: true }]}
+          activeValue="b"
+        />,
+      );
+      expect(button('a')).toHaveAttribute('tabindex', '-1');
+      expect(button('b')).toHaveAttribute('tabindex', '0');
+    });
+
+    it('holds the tab stop as the first item when nothing is selected', () => {
+      render(<DomGroup items={[{ value: 'a', disabledFocusable: true }, { value: 'b' }]} />);
+      expect(button('a')).toHaveAttribute('tabindex', '0');
+      expect(button('b')).toHaveAttribute('tabindex', '-1');
+    });
+
+    it("holds the tab stop as the last focused item (tabStop 'last-focused')", async () => {
+      const user = userEvent.setup();
+      render(
+        <>
+          <Managed tabStop="last-focused">
+            <button type="button">Bold</button>
+            <button type="button" {...focusableDisabledProps(true, { reachable: true })}>
+              Italic
+            </button>
+            <button type="button">Underline</button>
+          </Managed>
+          <button type="button">after</button>
+        </>,
+      );
+      await user.tab();
+      await user.keyboard('{ArrowRight}');
+      expect(button('Italic')).toHaveFocus();
+      expect(button('Italic')).toHaveAttribute('tabindex', '0');
+      expect(button('Bold')).toHaveAttribute('tabindex', '-1');
+
+      await user.tab();
+      expect(button('after')).toHaveFocus();
+      await user.tab({ shift: true });
+      expect(button('Italic')).toHaveFocus();
+    });
+
+    it('still skips a natively disabled item that carries the attribute', async () => {
+      const user = userEvent.setup();
+      render(
+        <DomGroup
+          items={[
+            { value: 'a' },
+            { value: 'b', disabled: true, disabledFocusable: true },
+            { value: 'c' },
+          ]}
+          activeValue="b"
+        />,
+      );
+      expect(button('b')).toHaveAttribute('tabindex', '-1');
+      expect(button('a')).toHaveAttribute('tabindex', '0');
+      focus(button('a'));
+      await user.keyboard('{ArrowRight}');
+      expect(button('c')).toHaveFocus();
+    });
+
+    it('still skips an item the composite marks data-roving-disabled', async () => {
+      const user = userEvent.setup();
+      render(
+        <DomGroup
+          items={[
+            { value: 'a' },
+            { value: 'b', rovingDisabled: true, disabledFocusable: true },
+            { value: 'c' },
+          ]}
+          activeValue="b"
+        />,
+      );
+      expect(button('b')).toHaveAttribute('tabindex', '-1');
+      focus(button('a'));
+      await user.keyboard('{ArrowRight}');
+      expect(button('c')).toHaveFocus();
+    });
+
+    it('still skips an aria-disabled item without the attribute', async () => {
+      const user = userEvent.setup();
+      render(
+        <DomGroup
+          items={[{ value: 'a' }, { value: 'b', ariaDisabled: true }, { value: 'c' }]}
+          activeValue="a"
+        />,
+      );
+      focus(button('a'));
+      await user.keyboard('{ArrowRight}');
+      expect(button('c')).toHaveFocus();
+    });
+
+    it('observes the attribute: adding or removing it restamps the tab stop', async () => {
+      render(
+        <Managed>
+          <button type="button" aria-disabled="true">
+            Bold
+          </button>
+          <button type="button">Italic</button>
+        </Managed>,
+      );
+      expect(button('Bold')).toHaveAttribute('tabindex', '-1');
+      expect(button('Italic')).toHaveAttribute('tabindex', '0');
+
+      await act(async () => {
+        button('Bold').setAttribute('data-disabled-focusable', '');
+      });
+      expect(button('Bold')).toHaveAttribute('tabindex', '0');
+      expect(button('Italic')).toHaveAttribute('tabindex', '-1');
+
+      await act(async () => {
+        button('Bold').removeAttribute('data-disabled-focusable');
+      });
+      expect(button('Bold')).toHaveAttribute('tabindex', '-1');
+      expect(button('Italic')).toHaveAttribute('tabindex', '0');
     });
   });
 
