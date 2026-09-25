@@ -9,7 +9,14 @@ import type {
   Size,
   Appearance,
   TypographyVariant,
+  IconPosition,
+  ValidationState,
+  LabelPosition,
+  OpenChangeDetails,
+  ModalOpenChangeReason,
+  ModalType,
 } from '../types';
+import type { DismissReason } from '../layers';
 import * as TypesModule from '../types';
 import { resolveSlot, renderSlot } from '../slot';
 
@@ -50,5 +57,47 @@ describe('shared vocabulary (layout#16, data-display#30)', () => {
   it('still re-exports the slot helpers as values (0.4 compatibility)', () => {
     expect(TypesModule.resolveSlot).toBe(resolveSlot);
     expect(TypesModule.renderSlot).toBe(renderSlot);
+  });
+});
+
+describe('icon, label and validation vocabulary', () => {
+  it('IconPosition is the inline start or end of a label', () => {
+    expectTypeOf<IconPosition>().toEqualTypeOf<'before' | 'after'>();
+    expectTypeOf<'start'>().not.toMatchTypeOf<IconPosition>();
+  });
+
+  it('ValidationState has the four Field message states', () => {
+    expectTypeOf<ValidationState>().toEqualTypeOf<'none' | 'error' | 'warning' | 'success'>();
+  });
+
+  it('LabelPosition has the four sides; components narrow it with Extract', () => {
+    expectTypeOf<LabelPosition>().toEqualTypeOf<'before' | 'after' | 'above' | 'below'>();
+    expectTypeOf<Extract<LabelPosition, 'before' | 'after'>>().toEqualTypeOf<'before' | 'after'>();
+  });
+});
+
+describe('open-change vocabulary', () => {
+  it('OpenChangeDetails carries the reason and the DOM event', () => {
+    expectTypeOf<OpenChangeDetails<'escape'>>().toEqualTypeOf<{
+      reason: 'escape';
+      event: Event;
+    }>();
+    expectTypeOf<OpenChangeDetails['reason']>().toEqualTypeOf<string>();
+    expectTypeOf<OpenChangeDetails['event']>().toEqualTypeOf<Event>();
+  });
+
+  it('ModalOpenChangeReason lists the Dialog and Drawer reasons', () => {
+    expectTypeOf<ModalOpenChangeReason>().toEqualTypeOf<
+      'trigger' | 'close' | 'close-button' | 'escape' | 'outside-press'
+    >();
+  });
+
+  it('ModalOpenChangeReason includes every modal dismiss reason of the layer stack', () => {
+    expectTypeOf<Exclude<DismissReason, 'focus-outside'>>().toMatchTypeOf<ModalOpenChangeReason>();
+  });
+
+  it('ModalType is modal or alert', () => {
+    expectTypeOf<ModalType>().toEqualTypeOf<'modal' | 'alert'>();
+    expectTypeOf<'non-modal'>().not.toMatchTypeOf<ModalType>();
   });
 });

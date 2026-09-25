@@ -1,6 +1,7 @@
 import * as React from 'react';
 import { cn } from '../../lib/cn';
 import type { BadgeAppearance, BadgeColor, Size } from '../../lib/types';
+import { badgeColorClasses } from './Badge.colors';
 
 /** Properties for the Badge component. */
 export interface BadgeProps extends React.HTMLAttributes<HTMLSpanElement> {
@@ -8,7 +9,12 @@ export interface BadgeProps extends React.HTMLAttributes<HTMLSpanElement> {
    * @default 'filled'
    */
   appearance?: BadgeAppearance;
-  /** Semantic color of the badge.
+  /**
+   * Semantic color: `brand`, `danger`, `important`, `informative`, `severe`, `subtle`, `success`,
+   * `warning`. `severe` is dark orange. `subtle` is the page background with foreground text, for
+   * colored surfaces. `important` renders the severe (orange) colors in 0.x, as in 0.5; in 1.0 it
+   * becomes Fluent's neutral high-emphasis color (near black in the light theme) — use `severe` to
+   * keep the orange look.
    * @default 'brand'
    */
   color?: BadgeColor;
@@ -19,40 +25,6 @@ export interface BadgeProps extends React.HTMLAttributes<HTMLSpanElement> {
   /** Ref to the root `<span>`. */
   ref?: React.Ref<HTMLSpanElement>;
 }
-
-/** Theme-token classes per color (the foreground tokens keep text readable in every theme). */
-const colorMap: Record<BadgeColor, { filled: string; tint: string; border: string }> = {
-  brand: {
-    filled: 'bg-primary text-primary-foreground',
-    tint: 'bg-info-tint text-info-tint-foreground',
-    border: 'border-primary',
-  },
-  success: {
-    filled: 'bg-success text-success-foreground',
-    tint: 'bg-success-tint text-success-tint-foreground',
-    border: 'border-success',
-  },
-  warning: {
-    filled: 'bg-warning text-warning-foreground',
-    tint: 'bg-warning-tint text-warning-tint-foreground',
-    border: 'border-warning',
-  },
-  danger: {
-    filled: 'bg-destructive text-destructive-foreground',
-    tint: 'bg-error-tint text-error-tint-foreground',
-    border: 'border-destructive',
-  },
-  important: {
-    filled: 'bg-severe text-severe-foreground',
-    tint: 'bg-severe-tint text-severe-tint-foreground',
-    border: 'border-severe',
-  },
-  informative: {
-    filled: 'bg-muted text-foreground',
-    tint: 'bg-muted text-foreground',
-    border: 'border-border',
-  },
-};
 
 const sizeClasses: Record<Size, string> = {
   'extra-small': 'text-[10px] leading-[14px] px-1',
@@ -66,10 +38,15 @@ const sizeClasses: Record<Size, string> = {
  * A short, non-interactive label that highlights a status or category ("New", "Beta", "3").
  * `appearance` picks a solid fill, a light tint or an outline; `color` the semantic color. Colors
  * come from the theme tokens, so the text keeps its contrast in the light, dark and high-contrast
- * themes.
+ * themes. The root carries `data-color` and `data-appearance` with the resolved values.
+ *
+ * A badge whose text alone does not say what it means ("3") can be named with `aria-label` or
+ * `aria-labelledby`: it then gets `role="img"` (unless you pass a `role`), so the name is
+ * announced.
  *
  * @example
  * <Badge appearance="tint" color="success">Passed</Badge>
+ * <Badge aria-label="3 unread messages">3</Badge>
  */
 export const Badge = ({
   appearance = 'filled',
@@ -80,7 +57,7 @@ export const Badge = ({
   ref,
   ...props
 }: BadgeProps) => {
-  const c = colorMap[color];
+  const c = badgeColorClasses[color];
 
   const appearanceClasses =
     appearance === 'filled'
@@ -89,9 +66,15 @@ export const Badge = ({
         ? c.tint
         : cn('bg-transparent border text-foreground', c.border);
 
+  // A name on a role-less <span> is not announced (and fails axe): name it as an image.
+  const named = Boolean(props['aria-label'] || props['aria-labelledby']);
+
   return (
     <span
       ref={ref}
+      role={named ? 'img' : undefined}
+      data-color={color}
+      data-appearance={appearance}
       className={cn(
         'rounded-full inline-flex items-center font-semibold',
         sizeClasses[size],

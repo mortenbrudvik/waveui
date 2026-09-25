@@ -431,9 +431,18 @@ const CONTRAST_PAIRS: Array<[string, string, number]> = [
   ['ring', 'card', 3],
   ['ring', 'subtle-hover', 3],
   ['stroke-accessible', 'background', 3],
+  // Progress fills on the track (ProgressBar `color`; its warning fill uses `severe`).
   ['primary', 'track', 3],
+  ['success', 'track', 3],
+  ['error', 'track', 3],
+  ['severe', 'track', 3],
   ['error', 'background', 4.5],
   ['error', 'card', 4.5],
+  // Field warning and success messages, on the page and on cards.
+  ['warning-tint-foreground', 'background', 4.5],
+  ['warning-tint-foreground', 'card', 4.5],
+  ['success-tint-foreground', 'background', 4.5],
+  ['success-tint-foreground', 'card', 4.5],
   ['error-foreground', 'error', 4.5],
   ['destructive-foreground', 'destructive', 4.5],
   ['success-foreground', 'success', 4.5],
@@ -459,8 +468,9 @@ const CONTRAST_PAIRS: Array<[string, string, number]> = [
 ];
 
 /**
- * Ratios printed in §2.1.3 (rounded to two decimals there). The unrounded ratio must match them,
- * so an edited token value cannot silently drift from the documented table.
+ * Ratios printed in §2.1.3 (rounded to two decimals there), plus the success, error and severe
+ * progress fills on the track (recorded to two decimals in 0.6). The unrounded ratio must match
+ * them, so an edited token value cannot silently drift from the documented table.
  */
 const TABLED_RATIOS: Array<[string, string, [number | null, number | null, number | null]]> = [
   ['foreground', 'background', [15.52, 14.55, 21.0]],
@@ -481,6 +491,9 @@ const TABLED_RATIOS: Array<[string, string, [number | null, number | null, numbe
   ['ring', 'selected', [4.81, 5.72, 11.65]],
   ['stroke-accessible', 'background', [6.19, 6.48, 21.0]],
   ['primary', 'track', [4.08, 4.48, 5.78]],
+  ['success', 'track', [4.07, 4.26, 5.63]],
+  ['error', 'track', [4.59, 4.61, 3.1]],
+  ['severe', 'track', [3.45, 3.67, 3.62]],
   ['error', 'background', [6.07, 6.17, 7.71]],
   ['error', 'card', [null, 5.36, null]],
   ['error-foreground', 'error', [6.07, 8.91, 7.71]],
@@ -581,7 +594,8 @@ const BOUND_TEXT_SURFACES: Record<string, string[]> = {
   'selected-foreground': ['selected'],
   'inverted-foreground': ['inverted'],
   // Status icons and badge text: on their tint (MessageBar, Badge, Stepper) and on the page (Toast).
-  'success-tint-foreground': ['success-tint', 'background'],
+  // Field success messages also sit on cards.
+  'success-tint-foreground': ['success-tint', 'background', 'card'],
   'error-tint-foreground': ['error-tint', 'background'],
   'severe-tint-foreground': ['severe-tint', 'background'],
   // Text on fills.
@@ -614,7 +628,7 @@ const NOT_TEXT_TOKENS: Record<string, string> = {
   'stroke-accessible': 'control border, Slider rail, Rating outline star (3:1)',
   input: 'control border',
   ring: 'focus indicator (3:1)',
-  track: 'progress track (the primary fill carries 3:1)',
+  track: 'progress track (the primary, success, error and severe fills carry 3:1)',
   skeleton: 'loading placeholder',
   rating: 'Rating star glyph (3:1)',
   'presence-available': 'presence glyph (3:1)',

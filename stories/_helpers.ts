@@ -42,6 +42,8 @@ const badgeColors = [
   'danger',
   'important',
   'informative',
+  'severe',
+  'subtle',
 ] as const satisfies readonly BadgeColor[];
 
 /** `size` (`Size`): extra-small … extra-large. */

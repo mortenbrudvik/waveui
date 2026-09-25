@@ -7,7 +7,11 @@ import { setRef } from '../lib/mergeRefs';
 import { useEventCallback } from './useEventCallback';
 import { isAltGraphCharacter, useTypeahead, type TypeaheadItem } from './useTypeahead';
 
-/** Configuration options for the {@link useRovingTabIndex} hook. */
+/**
+ * Configuration options for the {@link useRovingTabIndex} hook. Disabled items are skipped; items
+ * marked `data-disabled-focusable` (the `disabledFocusable` prop of WaveUI buttons, links and
+ * choice controls) stay reachable and may hold the tab stop: APG allows focusable disabled items.
+ */
 export interface UseRovingTabIndexOptions {
   /**
    * The selected value. It may be absent, `''` or `null` (nothing selected) and does not have to be
@@ -178,6 +182,7 @@ const NON_TEXT_INPUT_TYPES = new Set([
 const OBSERVED_ATTRIBUTES = [
   'disabled',
   'aria-disabled',
+  'data-disabled-focusable',
   'data-roving-disabled',
   'data-roving-value',
   'data-roving-container',
@@ -211,10 +216,21 @@ function getFocusTarget(item: ResolvedItem): HTMLElement | null {
   return tabbable instanceof HTMLElement ? tabbable : null;
 }
 
+/**
+ * Whether the keys skip an item, in this order: the composite's own `data-roving-disabled` marker
+ * (not `"false"`) and native `disabled` skip it; `data-disabled-focusable` keeps it (a
+ * `disabledFocusable` control: APG allows focusable disabled items); `aria-disabled="true"` skips
+ * it.
+ */
 function isDisabledElement(el: HTMLElement): boolean {
   const marker = el.getAttribute('data-roving-disabled');
   if (marker !== null && marker !== 'false') return true;
-  if (el.getAttribute('aria-disabled') === 'true') return true;
+  if (isNativelyDisabled(el)) return true;
+  if (el.hasAttribute('data-disabled-focusable')) return false;
+  return el.getAttribute('aria-disabled') === 'true';
+}
+
+function isNativelyDisabled(el: HTMLElement): boolean {
   if ((el as { disabled?: unknown }).disabled === true) return true;
   try {
     return el.matches(':disabled');
@@ -604,10 +620,14 @@ function startsOnItem(item: ResolvedItem | null, target: EventTarget | null, con
  *   In the 0.4 call shape and with explicit `items`, only elements with their own roving container
  *   are nested composites: a role-only `radiogroup`/`tablist`/… element between the container and
  *   the items (the widget's root inside a wrapper that holds the ref) does not swallow them.
- * - **Disabled items** (`disabled`, `aria-disabled="true"`, `data-roving-disabled`) are skipped and
- *   never hold the tab stop. The enabled set is tracked with a MutationObserver, so an item that
- *   disables itself moves the tab stop without the owner re-rendering. With `manageTabIndex`, a
- *   control hidden by CSS counts as disabled and `input[type=hidden]` is no item.
+ * - **Disabled items** (`data-roving-disabled`, `disabled`, `aria-disabled="true"`) are skipped and
+ *   never hold the tab stop. Items marked `data-disabled-focusable` (the `disabledFocusable` prop
+ *   of WaveUI buttons, links and choice controls) stay reachable and may hold the tab stop: APG
+ *   allows focusable disabled items. The attribute only overrides `aria-disabled`: an item that is
+ *   natively disabled or marked `data-roving-disabled` is still skipped. The enabled set is
+ *   tracked with a MutationObserver, so an item that disables itself moves the tab stop without
+ *   the owner re-rendering. With `manageTabIndex`, a control hidden by CSS counts as disabled and
+ *   `input[type=hidden]` is no item.
  * - **Tab stop** (`tabStop`): `'active'` — the enabled `activeValue` item, else the first enabled
  *   item; `'last-focused'` — the last focused enabled item, else the `'active'` rule. A nested
  *   composite or a control that uses the arrow keys itself holds it only when no other item can.
