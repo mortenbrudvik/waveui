@@ -455,7 +455,7 @@ export const ColorPicker = ({
             aria-errormessage={errorMessageId}
             aria-describedby={joinIds(
               draftInvalid && errorId,
-              fieldInvalid && field?.errorId,
+              field?.validationMessageId ?? (fieldInvalid ? field?.errorId : undefined),
               errorMessageId,
             )}
             maxLength={9}

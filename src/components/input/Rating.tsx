@@ -1,7 +1,7 @@
 import * as React from 'react';
 import { cn } from '../../lib/cn';
 import { composeEventHandlers } from '../../lib/composeEventHandlers';
-import { warnDeprecated } from '../../lib/dev';
+import { warnDeprecated, warnOnce } from '../../lib/dev';
 import { getArrowIntent, getDirection } from '../../lib/direction';
 import { StarIcon } from '../../lib/icons';
 import { focusRing } from '../../lib/styles';
@@ -76,6 +76,20 @@ export interface RatingProps extends Omit<
   ref?: React.Ref<HTMLDivElement>;
 }
 
+/** Built-in texts of RatingDisplay, for localization. */
+export interface RatingDisplayLabels {
+  /**
+   * Accessible name. `formattedValue` is `value` formatted with `locale` (as shown).
+   * @default (value, max, formattedValue) => `Rating: ${formattedValue} out of ${max}`
+   */
+  rating?: (value: number, max: number, formattedValue: string) => string;
+  /**
+   * Count part of the name.
+   * @default (count, formatted) => count === 1 ? '1 rating' : `${formatted} ratings`
+   */
+  count?: (count: number, formattedCount: string) => string;
+}
+
 /** Properties for the RatingDisplay (read-only) component. */
 export interface RatingDisplayProps extends React.HTMLAttributes<HTMLDivElement> {
   /**
@@ -87,10 +101,34 @@ export interface RatingDisplayProps extends React.HTMLAttributes<HTMLDivElement>
    * @default 5
    */
   max?: number;
-  /** Size of the star icons.
+  /** Size of the star icons (and of the value and count text).
    * @default 'medium'
    */
   size?: Size;
+  /**
+   * Shows the value as text after the stars, formatted with `locale` (up to one decimal).
+   * @default false
+   */
+  showValue?: boolean;
+  /**
+   * Number of ratings: shown as "(1,160)" after the value with the locale's digit grouping, and
+   * added to the accessible name ("…, 1,160 ratings").
+   */
+  count?: number;
+  /**
+   * One filled star followed by the value (and the count) instead of `max` stars. Implies
+   * `showValue`.
+   * @default false
+   */
+  compact?: boolean;
+  /**
+   * BCP 47 locale of the value and count formatting (runtime default when omitted; pass it when
+   * rendering on the server). A tag `Intl` rejects (the POSIX `de_DE`, a typo) falls back to the
+   * runtime default locale (development warning).
+   */
+  locale?: string;
+  /** Built-in texts, for localization. */
+  labels?: RatingDisplayLabels;
   /** Ref to the root element. */
   ref?: React.Ref<HTMLDivElement>;
 }
@@ -310,56 +348,130 @@ export const Rating = ({
 };
 Rating.displayName = 'Rating';
 
+/** Text size of the value and the count, following the star size. */
+const textSizeMap: Record<Size, string> = {
+  'extra-small': 'text-caption-1',
+  small: 'text-caption-1',
+  medium: 'text-body-1',
+  large: 'text-body-2',
+  'extra-large': 'text-body-2',
+};
+
+const defaultRatingLabel = (_value: number, max: number, formattedValue: string) =>
+  `Rating: ${formattedValue} out of ${max}`;
+const defaultCountLabel = (count: number, formattedCount: string) =>
+  count === 1 ? '1 rating' : `${formattedCount} ratings`;
+
+/** `locale` when `Intl` accepts it as a language tag, else `undefined` (the runtime default). */
+function supportedLocale(locale: string | undefined): string | undefined {
+  if (locale === undefined) return undefined;
+  try {
+    Intl.getCanonicalLocales(locale);
+    return locale;
+  } catch {
+    return undefined;
+  }
+}
+
 /**
  * A read-only star rating (`role="img"` named "Rating: <value> out of <max>"). A fractional value
  * is drawn with a partly filled star, so the stars and the name show the same value.
+ *
+ * - `showValue` adds the value as text after the stars, `count` the number of ratings ("(1,160)",
+ *   also added to the name), and `compact` shows one filled star with the value instead of `max`
+ *   stars (the root carries `data-compact`). Without them only the stars show.
+ * - The value (up to one decimal) and the count are formatted with `locale`, in the text and in
+ *   the name; `labels` localizes the name. Pass `locale` when rendering on the server.
  */
 export const RatingDisplay = ({
   value,
   max = 5,
   size = 'medium',
+  showValue = false,
+  count,
+  compact = false,
+  locale,
+  labels,
   className,
   ref,
   ...rest
 }: RatingDisplayProps) => {
   const starSize = sizeMap[size];
+  const formatLocale = supportedLocale(locale);
+  const invalidLocale = locale !== undefined && formatLocale === undefined;
+  React.useEffect(() => {
+    if (invalidLocale) {
+      warnOnce(
+        `RatingDisplay:invalid-locale:${locale}`,
+        `RatingDisplay: \`locale\` "${locale}" is not a valid BCP 47 language tag (use hyphens, as ` +
+          'in "en-US"). The runtime default locale formats the value instead, so the server and ' +
+          'the browser may render different text.',
+      );
+    }
+  }, [invalidLocale, locale]);
+
+  const formattedValue = new Intl.NumberFormat(formatLocale, { maximumFractionDigits: 1 }).format(
+    value,
+  );
+  const formattedCount =
+    count === undefined ? undefined : new Intl.NumberFormat(formatLocale).format(count);
+  const ratingName = (labels?.rating ?? defaultRatingLabel)(value, max, formattedValue);
+  const name =
+    count === undefined || formattedCount === undefined
+      ? ratingName
+      : `${ratingName}, ${(labels?.count ?? defaultCountLabel)(count, formattedCount)}`;
+  const showText = showValue || compact || count !== undefined;
+  const textSize = textSizeMap[size];
 
   return (
     <div
       ref={ref}
       role="img"
-      aria-label={`Rating: ${value} out of ${max}`}
+      aria-label={name}
+      data-compact={compact ? '' : undefined}
       className={cn('inline-flex items-center gap-0.5', className)}
       {...rest}
     >
-      {Array.from({ length: max }, (_, i) => {
-        // The share of this star that the value covers, in whole percent.
-        const percent = Math.round(Math.min(1, Math.max(0, value - i)) * 100);
-        if (percent > 0 && percent < 100) {
-          // The outline of an empty star, with the filled star clipped to the fraction over it
-          // from the inline start (the reading direction of the stars, also under RTL).
-          return (
-            <span key={i} className="relative inline-flex text-stroke-accessible">
-              <Star filled={false} className={starSize} />
-              <span
-                className="absolute inset-y-0 start-0 flex overflow-hidden text-rating"
-                style={{ width: `${percent}%` }}
-              >
-                <Star filled className={cn(starSize, 'shrink-0')} />
+      {compact ? (
+        <span className="inline-flex text-rating">
+          <Star filled className={starSize} />
+        </span>
+      ) : (
+        Array.from({ length: max }, (_, i) => {
+          // The share of this star that the value covers, in whole percent.
+          const percent = Math.round(Math.min(1, Math.max(0, value - i)) * 100);
+          if (percent > 0 && percent < 100) {
+            // The outline of an empty star, with the filled star clipped to the fraction over it
+            // from the inline start (the reading direction of the stars, also under RTL).
+            return (
+              <span key={i} className="relative inline-flex text-stroke-accessible">
+                <Star filled={false} className={starSize} />
+                <span
+                  className="absolute inset-y-0 start-0 flex overflow-hidden text-rating"
+                  style={{ width: `${percent}%` }}
+                >
+                  <Star filled className={cn(starSize, 'shrink-0')} />
+                </span>
               </span>
+            );
+          }
+          const filled = percent === 100;
+          return (
+            <span
+              key={i}
+              className={cn('inline-flex', filled ? 'text-rating' : 'text-stroke-accessible')}
+            >
+              <Star filled={filled} className={starSize} />
             </span>
           );
-        }
-        const filled = percent === 100;
-        return (
-          <span
-            key={i}
-            className={cn('inline-flex', filled ? 'text-rating' : 'text-stroke-accessible')}
-          >
-            <Star filled={filled} className={starSize} />
-          </span>
-        );
-      })}
+        })
+      )}
+      {showText && (
+        <span className={cn('ms-1 font-semibold text-foreground', textSize)}>{formattedValue}</span>
+      )}
+      {formattedCount !== undefined && (
+        <span className={cn('ms-1 text-muted-foreground', textSize)}>({formattedCount})</span>
+      )}
     </div>
   );
 };

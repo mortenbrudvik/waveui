@@ -1,10 +1,13 @@
 import * as React from 'react';
+import { hydrateRoot } from 'react-dom/client';
+import { renderToString } from 'react-dom/server';
 import { describe, it, expect, expectTypeOf, vi } from 'vitest';
 import { act, fireEvent, render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { Rating, RatingDisplay } from '../Rating';
-import type { RatingDisplayProps, RatingLabels, RatingProps } from '../Rating';
+import type { RatingDisplayLabels, RatingDisplayProps, RatingLabels, RatingProps } from '../Rating';
 import {
+  expectNoA11yViolations,
   renderWithProviders,
   testComposedHandler,
   testNoImplicitSubmit,
@@ -627,7 +630,218 @@ describe('RatingDisplay', () => {
   });
 });
 
+describe('RatingDisplay — value text, count, compact and localizable name', () => {
+  /** The visible text of a RatingDisplay (its stars have none). */
+  function visibleText(): string {
+    return screen.getByRole('img').textContent ?? '';
+  }
+
+  /**
+   * Runs `run` with `Intl.NumberFormat` defaulting to `defaultLocale` when no locale is passed, as
+   * a runtime (a server, a browser) with that default locale does.
+   */
+  async function withDefaultLocale<T>(defaultLocale: string, run: () => Promise<T>): Promise<T> {
+    const Native = Intl.NumberFormat;
+    const spy = vi.spyOn(Intl, 'NumberFormat').mockImplementation(function (
+      locales?: Intl.LocalesArgument,
+      options?: Intl.NumberFormatOptions,
+    ) {
+      return new Native(locales ?? defaultLocale, options);
+    } as unknown as typeof Intl.NumberFormat);
+    try {
+      return await run();
+    } finally {
+      spy.mockRestore();
+    }
+  }
+
+  it('shows no text by default (the stars only, as in 0.5)', () => {
+    render(<RatingDisplay value={4.5} data-testid="root" />);
+    const root = screen.getByTestId('root');
+    expect(root.children).toHaveLength(5);
+    expect(root.textContent).toBe('');
+    expect(root).not.toHaveAttribute('data-compact');
+  });
+
+  it.each([
+    { locale: 'en-US', text: '4.5' },
+    { locale: 'de-DE', text: '4,5' },
+  ])('shows the value formatted for $locale with showValue', ({ locale, text }) => {
+    render(<RatingDisplay value={4.5} showValue locale={locale} />);
+    expect(visibleText()).toBe(text);
+    const valueText = screen.getByText(text);
+    expect(valueText).toHaveClass('ms-1', 'font-semibold', 'text-foreground', 'text-body-1');
+  });
+
+  it('shows up to one decimal', () => {
+    render(<RatingDisplay value={4.56} showValue locale="en-US" />);
+    expect(visibleText()).toBe('4.6');
+    expect(screen.getByRole('img', { name: 'Rating: 4.6 out of 5' })).toBeInTheDocument();
+  });
+
+  it.each([
+    { locale: 'en-US', text: '4.5(1,160)', name: 'Rating: 4.5 out of 5, 1,160 ratings' },
+    { locale: 'de-DE', text: '4,5(1.160)', name: 'Rating: 4,5 out of 5, 1.160 ratings' },
+  ])(
+    'shows the value and the grouped count and adds the count to the name ($locale)',
+    ({ locale, text, name }) => {
+      render(<RatingDisplay value={4.5} count={1160} locale={locale} />);
+      expect(visibleText()).toBe(text);
+      expect(screen.getByRole('img')).toHaveAccessibleName(name);
+      const countText = screen.getByText(/^\(/);
+      expect(countText).toHaveClass('ms-1', 'text-muted-foreground');
+    },
+  );
+
+  it('names a single rating in the singular', () => {
+    render(<RatingDisplay value={5} count={1} locale="en-US" />);
+    expect(screen.getByRole('img')).toHaveAccessibleName('Rating: 5 out of 5, 1 rating');
+    expect(visibleText()).toBe('5(1)');
+  });
+
+  it('localizes the name with labels', () => {
+    render(
+      <RatingDisplay
+        value={4.5}
+        max={5}
+        count={1160}
+        locale="de-DE"
+        labels={{
+          rating: (value, max, formattedValue) => `Bewertung: ${formattedValue} von ${max}`,
+          count: (count, formattedCount) =>
+            count === 1 ? '1 Bewertung' : `${formattedCount} Bewertungen`,
+        }}
+      />,
+    );
+    expect(screen.getByRole('img')).toHaveAccessibleName('Bewertung: 4,5 von 5, 1.160 Bewertungen');
+  });
+
+  it('passes value, max and the formatted value to labels.rating, and count to labels.count', () => {
+    const rating = vi.fn(() => 'Score');
+    const count = vi.fn(() => 'votes');
+    render(
+      <RatingDisplay
+        value={3.25}
+        max={10}
+        count={2500}
+        locale="en-US"
+        labels={{ rating, count }}
+      />,
+    );
+    expect(rating).toHaveBeenLastCalledWith(3.25, 10, '3.3');
+    expect(count).toHaveBeenLastCalledWith(2500, '2,500');
+    expect(screen.getByRole('img')).toHaveAccessibleName('Score, votes');
+  });
+
+  it('keeps a consumer aria-label as the name', () => {
+    render(<RatingDisplay value={4} count={12} aria-label="Average: 4 stars from 12 reviews" />);
+    expect(screen.getByRole('img')).toHaveAccessibleName('Average: 4 stars from 12 reviews');
+  });
+
+  it('compact renders one filled star followed by the value (and the count)', () => {
+    render(<RatingDisplay value={3.5} compact count={20} locale="en-US" data-testid="root" />);
+    const root = screen.getByTestId('root');
+    expect(root).toHaveAttribute('data-compact', '');
+    const stars = root.querySelectorAll('svg');
+    expect(stars).toHaveLength(1);
+    expect(stars[0]).toHaveAttribute('fill', 'currentColor');
+    expect(stars[0].closest('.text-rating')).not.toBeNull();
+    expect(visibleText()).toBe('3.5(20)');
+    expect(root).toHaveAccessibleName('Rating: 3.5 out of 5, 20 ratings');
+  });
+
+  it.each([
+    { size: 'extra-small', text: 'text-caption-1' },
+    { size: 'small', text: 'text-caption-1' },
+    { size: 'medium', text: 'text-body-1' },
+    { size: 'large', text: 'text-body-2' },
+    { size: 'extra-large', text: 'text-body-2' },
+  ] as const)('sizes the text with the stars ($size)', ({ size, text }) => {
+    render(<RatingDisplay value={4} showValue count={3} size={size} locale="en-US" />);
+    expect(screen.getByText('4')).toHaveClass(text);
+    expect(screen.getByText('(3)')).toHaveClass(text);
+  });
+
+  it('uses logical margins for the text (RTL)', () => {
+    const { container } = renderWithProviders(
+      <RatingDisplay value={4} count={3} locale="en-US" />,
+      { dir: 'rtl' },
+    );
+    expect(container.innerHTML).not.toMatch(/\b(?:ml|mr)-/);
+    expect(screen.getByText('4')).toHaveClass('ms-1');
+  });
+
+  it('passes axe with the value, the count and compact', async () => {
+    render(
+      <>
+        <RatingDisplay value={4.5} showValue locale="en-US" />
+        <RatingDisplay value={4.5} count={1160} locale="en-US" />
+        <RatingDisplay value={4.5} compact locale="en-US" />
+      </>,
+    );
+    await expectNoA11yViolations();
+  });
+
+  it('with locale, hydrates the server HTML without a mismatch when the runtime locales differ', async () => {
+    const element = <RatingDisplay value={4.5} count={1160} locale="de-DE" />;
+    const container = document.createElement('div');
+    container.innerHTML = await withDefaultLocale('en-US', async () => renderToString(element));
+    document.body.appendChild(container);
+    const error = vi.spyOn(console, 'error');
+    // A text or attribute mismatch is reported here (React then renders the client text).
+    const onRecoverableError = vi.fn();
+    let root: ReturnType<typeof hydrateRoot> | undefined;
+    try {
+      await withDefaultLocale('nb-NO', async () => {
+        await act(async () => {
+          root = hydrateRoot(container, element, { onRecoverableError });
+        });
+      });
+      expect(onRecoverableError).not.toHaveBeenCalled();
+      expect(error).not.toHaveBeenCalled();
+      expect(screen.getByRole('img')).toHaveAccessibleName('Rating: 4,5 out of 5, 1.160 ratings');
+    } finally {
+      error.mockRestore();
+      act(() => root?.unmount());
+      container.remove();
+    }
+  });
+
+  it('falls back to the runtime locale for a tag Intl rejects, with a development warning', () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    try {
+      render(<RatingDisplay value={4.5} showValue locale="de_DE" />);
+      expect(screen.getByRole('img')).toHaveAccessibleName(
+        `Rating: ${new Intl.NumberFormat(undefined, { maximumFractionDigits: 1 }).format(4.5)} out of 5`,
+      );
+      expect(warn.mock.calls).toEqual([
+        [
+          '[WaveUI] RatingDisplay: `locale` "de_DE" is not a valid BCP 47 language tag (use ' +
+            'hyphens, as in "en-US"). The runtime default locale formats the value instead, so the ' +
+            'server and the browser may render different text.',
+        ],
+      ]);
+    } finally {
+      warn.mockRestore();
+    }
+  });
+});
+
 describe('Rating — types', () => {
+  it('types the RatingDisplay text props and labels', () => {
+    expectTypeOf<RatingDisplayProps['showValue']>().toEqualTypeOf<boolean | undefined>();
+    expectTypeOf<RatingDisplayProps['count']>().toEqualTypeOf<number | undefined>();
+    expectTypeOf<RatingDisplayProps['compact']>().toEqualTypeOf<boolean | undefined>();
+    expectTypeOf<RatingDisplayProps['locale']>().toEqualTypeOf<string | undefined>();
+    expectTypeOf<RatingDisplayProps['labels']>().toEqualTypeOf<RatingDisplayLabels | undefined>();
+    expectTypeOf<NonNullable<RatingDisplayLabels['rating']>>().toEqualTypeOf<
+      (value: number, max: number, formattedValue: string) => string
+    >();
+    expectTypeOf<NonNullable<RatingDisplayLabels['count']>>().toEqualTypeOf<
+      (count: number, formattedCount: string) => string
+    >();
+  });
+
   it('declares ref in the props interfaces (C-REF)', () => {
     expectTypeOf<RatingProps['ref']>().toEqualTypeOf<React.Ref<HTMLDivElement> | undefined>();
     expectTypeOf<RatingDisplayProps['ref']>().toEqualTypeOf<

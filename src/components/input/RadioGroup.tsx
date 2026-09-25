@@ -3,6 +3,7 @@ import { joinIds } from '../../lib/aria';
 import { cn } from '../../lib/cn';
 import { composeEventHandlers } from '../../lib/composeEventHandlers';
 import { isDev, reportMissingContext, warnDeprecated, warnOnce } from '../../lib/dev';
+import { materialiseSlotContent, slotRendersContent } from '../../lib/slot';
 import { focusRing, forcedColors } from '../../lib/styles';
 import type { Orientation } from '../../lib/types';
 import { useControllable } from '../../hooks/useControllable';
@@ -234,10 +235,12 @@ export interface RadioItemProps extends Omit<
   /** Value associated with this radio option. */
   value: string;
   /**
-   * Text label displayed next to the radio indicator. It names the radio through
-   * `aria-labelledby`, after a consumer `aria-labelledby`; a consumer `aria-label` names it instead.
+   * Label next to the radio indicator (any phrasing content, links included, but no other form
+   * controls). It names the radio through `aria-labelledby`, after a consumer `aria-labelledby`;
+   * a consumer `aria-label` names it instead. Clicking its text selects the radio; clicking a link
+   * inside it follows the link. `children` are not rendered: pass the label here.
    */
-  label?: string;
+  label?: React.ReactNode;
   /** Whether the radio item is disabled and non-interactive (also when the group is disabled). */
   disabled?: boolean;
   /** Class name of the item's root `<label>` element. */
@@ -254,7 +257,9 @@ export interface RadioItemProps extends Omit<
  * Native button props (`id`, `aria-*`, `data-*`, handlers, `style`) and `ref` go to the radio
  * button; `className` stays on the root `<label>` and `labelClassName` styles the label text. A
  * consumer `onClick` runs before the selection; `preventDefault()` in it cancels the selection.
- * Must be rendered inside a RadioGroup (also inside Fragments or wrapper elements).
+ * Must be rendered inside a RadioGroup (also inside Fragments or wrapper elements). `label` takes
+ * rich content (a second line of subtext, a link); `children` are not rendered (a development
+ * warning says so).
  */
 export function RadioItem({
   value,
@@ -264,21 +269,33 @@ export function RadioItem({
   labelClassName,
   onClick,
   'aria-labelledby': ariaLabelledBy,
+  children,
   ref,
   ...rest
 }: RadioItemProps) {
   const ctx = useRadioGroupContext('RadioItem');
+  const hasChildren = slotRendersContent(children);
+  React.useEffect(() => {
+    if (hasChildren) {
+      warnOnce(
+        'RadioItem:children',
+        'RadioItem: children are not rendered. Pass the label in `label`.',
+      );
+    }
+  }, [hasChildren]);
   const generatedId = useId('radio-item');
   const labelTextId = useId('radio-item-label');
 
   const isDisabled = Boolean(disabled || ctx.disabled);
   const selected = ctx.value === value;
+  // `0` is a label; `null`, `false`, `''` and empty collections are not (C-SLOTS).
+  const hasLabel = slotRendersContent(label);
   // The label text names the radio through aria-labelledby, disabled or not: axe exempts the dimmed
   // text of a disabled radio only when the radio references it this way (its <label> exemption
   // covers native inputs only). A consumer aria-label still names the radio alone; a consumer
   // aria-labelledby comes first.
   const labelledBy =
-    label && rest['aria-label'] === undefined
+    hasLabel && rest['aria-label'] === undefined
       ? joinIds(ariaLabelledBy, labelTextId)
       : ariaLabelledBy;
 
@@ -327,9 +344,9 @@ export function RadioItem({
           />
         )}
       </button>
-      {label && (
+      {hasLabel && (
         <span id={labelTextId} className={cn('text-body-1 text-foreground', labelClassName)}>
-          {label}
+          {materialiseSlotContent(label)}
         </span>
       )}
     </label>

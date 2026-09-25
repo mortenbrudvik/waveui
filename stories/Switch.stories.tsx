@@ -58,3 +58,54 @@ export const InForm: Story = {
     </form>
   ),
 };
+
+/**
+ * `labelPosition` puts the label after the switch (default), before it or above it. A settings
+ * list puts the labels before the switches and spreads each row across the width.
+ */
+export const LabelPositions: Story = {
+  render: (args) => (
+    <div className="flex w-80 flex-col gap-6">
+      <div className="flex flex-col gap-3">
+        <Switch {...args} label="Wi-Fi" labelPosition="before" className="flex justify-between" />
+        <Switch
+          {...args}
+          label="Bluetooth"
+          labelPosition="before"
+          className="flex justify-between"
+          defaultChecked
+        />
+        <Switch
+          {...args}
+          label="Airplane mode"
+          labelPosition="before"
+          className="flex justify-between"
+        />
+      </div>
+      <Switch {...args} label="Label above" labelPosition="above" />
+      <Switch {...args} label="Label after (default)" />
+    </div>
+  ),
+};
+
+/**
+ * `disabledFocusable` keeps the switch in the tab order while it cannot be toggled, so keyboard
+ * and screen-reader users reach it and hear why (here through `aria-describedby`). It is not
+ * submitted with its form.
+ */
+export const DisabledFocusable: Story = {
+  args: {
+    label: 'Automatic updates',
+    disabledFocusable: true,
+    defaultChecked: true,
+    'aria-describedby': 'updates-reason',
+  },
+  render: (args) => (
+    <div className="flex flex-col items-start gap-1">
+      <Switch {...args} />
+      <p id="updates-reason" className="text-caption-1 text-muted-foreground">
+        Managed by your organization.
+      </p>
+    </div>
+  ),
+};

@@ -1,11 +1,20 @@
 import * as React from 'react';
 import { describe, it, expect, expectTypeOf, vi } from 'vitest';
-import { act, render, screen } from '@testing-library/react';
+import { act, fireEvent, render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { Checkbox } from '../Checkbox';
-import type { CheckboxProps } from '../Checkbox';
-import { testSystemProps, testComposedHandler, testNoImplicitSubmit } from '../../../test-utils';
+import type { CheckboxLabelPosition, CheckboxProps } from '../Checkbox';
+import {
+  expectNoA11yViolations,
+  renderWithProviders,
+  testSystemProps,
+  testComposedHandler,
+  testNoImplicitSubmit,
+} from '../../../test-utils';
 import { renderWithFieldContext, FIELD_TEST_IDS, FIELD_TEST_TEXT } from '../../../test-utils-field';
+
+/** The development warning of a Checkbox with children. */
+const CHILDREN_WARNING = '[WaveUI] Checkbox: children are not rendered. Pass the label in `label`.';
 
 describe('Checkbox', () => {
   testSystemProps(Checkbox, {
@@ -18,6 +27,7 @@ describe('Checkbox', () => {
       { name: 'indeterminate', props: { indeterminate: true } },
       { name: 'disabled', props: { disabled: true } },
       { name: 'required with a name', props: { name: 'terms', required: true } },
+      { name: 'label before', props: { labelPosition: 'before' } },
     ],
   });
 
@@ -679,7 +689,244 @@ describe('Checkbox — styling tokens', () => {
   });
 });
 
+describe('Checkbox — rich label and labelPosition', () => {
+  const richLabel = (
+    <>
+      I agree to the <a href="#terms">terms</a>
+    </>
+  );
+
+  it('a label with a link names the checkbox with its whole text', async () => {
+    render(<Checkbox label={richLabel} />);
+    const cb = screen.getByRole('checkbox', { name: 'I agree to the terms' });
+    expect(screen.getByRole('link', { name: 'terms' })).toBeInTheDocument();
+    expect(cb).toHaveAttribute('aria-checked', 'false');
+    await expectNoA11yViolations();
+  });
+
+  it('clicking the label text toggles; clicking the link inside it does not', async () => {
+    const user = userEvent.setup();
+    const onCheckedChange = vi.fn();
+    render(
+      <React.StrictMode>
+        <Checkbox label={richLabel} onCheckedChange={onCheckedChange} />
+      </React.StrictMode>,
+    );
+    const cb = screen.getByRole('checkbox', { name: 'I agree to the terms' });
+    await user.click(screen.getByText(/I agree to the/));
+    expect(cb).toHaveAttribute('aria-checked', 'true');
+    // fireEvent, not userEvent: user-event forwards every click inside a <label> to its control,
+    // while browsers (and jsdom) skip the forwarding for a click on interactive content.
+    fireEvent.click(screen.getByRole('link', { name: 'terms' }));
+    expect(cb).toHaveAttribute('aria-checked', 'true');
+    expect(onCheckedChange.mock.calls).toEqual([[true]]);
+  });
+
+  it('renders the label after the control by default, with data-label-position="after"', () => {
+    render(<Checkbox label="Accept" data-testid="root" />);
+    const root = screen.getByTestId('root');
+    expect(root).toHaveAttribute('data-label-position', 'after');
+    const cb = screen.getByRole('checkbox', { name: 'Accept' });
+    const text = screen.getByText('Accept');
+    expect(cb.compareDocumentPosition(text) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  });
+
+  it('labelPosition="before" renders the label before the control and keeps the name', async () => {
+    const user = userEvent.setup();
+    render(<Checkbox label="Accept" labelPosition="before" data-testid="root" />);
+    const root = screen.getByTestId('root');
+    expect(root).toHaveAttribute('data-label-position', 'before');
+    const text = screen.getByText('Accept');
+    expect(root.firstElementChild).toBe(text);
+    const cb = screen.getByRole('checkbox', { name: 'Accept' });
+    expect(text.compareDocumentPosition(cb) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    await user.click(text);
+    expect(cb).toHaveAttribute('aria-checked', 'true');
+    await expectNoA11yViolations();
+  });
+
+  it('keeps the DOM order of labelPosition="before" under dir="rtl"', () => {
+    renderWithProviders(<Checkbox label="Accept" labelPosition="before" data-testid="root" />, {
+      dir: 'rtl',
+    });
+    expect(screen.getByTestId('root').firstElementChild).toBe(screen.getByText('Accept'));
+  });
+
+  it('renders label={0} as content', () => {
+    render(<Checkbox label={0} />);
+    expect(screen.getByRole('checkbox', { name: '0' })).toHaveAttribute(
+      'aria-labelledby',
+      screen.getByText('0').id,
+    );
+  });
+
+  it('does not render children and warns once that the label goes in `label`', () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    try {
+      const { rerender } = render(
+        <React.StrictMode>
+          <Checkbox label="Accept">Ignored text</Checkbox>
+        </React.StrictMode>,
+      );
+      rerender(
+        <React.StrictMode>
+          <Checkbox label="Accept">Ignored text</Checkbox>
+        </React.StrictMode>,
+      );
+      expect(screen.queryByText('Ignored text')).not.toBeInTheDocument();
+      expect(screen.getByRole('checkbox')).toHaveAccessibleName('Accept');
+      expect(warn.mock.calls).toEqual([[CHILDREN_WARNING]]);
+    } finally {
+      warn.mockRestore();
+    }
+  });
+
+  it('does not warn about children that render nothing', () => {
+    const warn = vi.spyOn(console, 'warn');
+    try {
+      render(<Checkbox label="Accept">{null}</Checkbox>);
+      expect(warn).not.toHaveBeenCalled();
+    } finally {
+      warn.mockRestore();
+    }
+  });
+});
+
+describe('Checkbox — disabledFocusable', () => {
+  it('stays in the tab order with aria-disabled and the data attributes instead of disabled', async () => {
+    const user = userEvent.setup();
+    render(<Checkbox label="Accept" disabledFocusable data-testid="root" />);
+    const cb = screen.getByRole('checkbox', { name: 'Accept' });
+    await user.tab();
+    expect(cb).toHaveFocus();
+    expect(cb).not.toBeDisabled();
+    expect(cb).toHaveAttribute('aria-disabled', 'true');
+    expect(cb).toHaveAttribute('data-disabled', '');
+    expect(cb).toHaveAttribute('data-disabled-focusable', '');
+    expect(screen.getByTestId('root')).not.toHaveAttribute('aria-disabled');
+    await expectNoA11yViolations();
+  });
+
+  it('is not toggled by a click, the label text, Space or Enter, and calls no handler (StrictMode)', async () => {
+    const user = userEvent.setup();
+    const onCheckedChange = vi.fn();
+    const onClick = vi.fn();
+    render(
+      <React.StrictMode>
+        <Checkbox
+          label="Accept"
+          disabledFocusable
+          onCheckedChange={onCheckedChange}
+          onClick={onClick}
+        />
+      </React.StrictMode>,
+    );
+    const cb = screen.getByRole('checkbox', { name: 'Accept' });
+    await user.click(cb);
+    await user.click(screen.getByText('Accept'));
+    act(() => cb.focus());
+    await user.keyboard(' ');
+    await user.keyboard('{Enter}');
+    expect(cb).toHaveAttribute('aria-checked', 'false');
+    expect(onCheckedChange).not.toHaveBeenCalled();
+    expect(onClick).not.toHaveBeenCalled();
+  });
+
+  it('keeps a click, Space and Enter on the checkbox from reaching ancestor onClick handlers (like a natively disabled control)', async () => {
+    const user = userEvent.setup();
+    const onAncestorClick = vi.fn();
+    const { rerender } = render(
+      <div onClick={onAncestorClick}>
+        <Checkbox label="Accept" disabledFocusable />
+      </div>,
+    );
+    const cb = screen.getByRole('checkbox', { name: 'Accept' });
+    await user.click(cb);
+    act(() => cb.focus());
+    await user.keyboard(' ');
+    await user.keyboard('{Enter}');
+    expect(onAncestorClick).not.toHaveBeenCalled();
+    expect(cb).toHaveAttribute('aria-checked', 'false');
+
+    // The same three activations of an available checkbox do reach the ancestor, once each.
+    rerender(
+      <div onClick={onAncestorClick}>
+        <Checkbox label="Accept" />
+      </div>,
+    );
+    await user.click(cb);
+    await user.keyboard(' ');
+    await user.keyboard('{Enter}');
+    expect(onAncestorClick).toHaveBeenCalledTimes(3);
+  });
+
+  it('wins over disabled: the checkbox stays focusable', () => {
+    render(<Checkbox label="Accept" disabled disabledFocusable />);
+    const cb = screen.getByRole('checkbox', { name: 'Accept' });
+    expect(cb).not.toBeDisabled();
+    expect(cb).toHaveAttribute('aria-disabled', 'true');
+  });
+
+  it('has the disabled look, forced colors included', () => {
+    render(<Checkbox label="Accept" disabledFocusable defaultChecked data-testid="root" />);
+    expect(screen.getByTestId('root')).toHaveClass('cursor-not-allowed', 'opacity-50');
+    const cb = screen.getByRole('checkbox', { name: 'Accept' });
+    expect(cb).toHaveClass('forced-colors:border-[GrayText]', 'forced-colors:bg-[Canvas]');
+    expect(cb.querySelector('svg')).toHaveClass('forced-colors:text-[GrayText]');
+  });
+
+  it('is neither submitted nor validated with its form', () => {
+    render(
+      <form aria-label="Form">
+        <Checkbox name="terms" label="Accept" required defaultChecked disabledFocusable />
+      </form>,
+    );
+    const form = screen.getByRole('form', { name: 'Form' }) as HTMLFormElement;
+    expect(Array.from(new FormData(form).keys())).toEqual([]);
+    expect(form.checkValidity()).toBe(true);
+  });
+
+  it('does not block the submission of a required Field', () => {
+    renderWithFieldContext(
+      <form aria-label="Form">
+        <Checkbox label="Accept" disabledFocusable />
+      </form>,
+      { required: true },
+    );
+    const form = screen.getByRole('form', { name: 'Form' }) as HTMLFormElement;
+    expect(form.checkValidity()).toBe(true);
+  });
+
+  it('routes a consumer aria-disabled to the checkbox, which then only carries the attribute', async () => {
+    const user = userEvent.setup();
+    render(<Checkbox label="Accept" aria-disabled data-testid="root" />);
+    const cb = screen.getByRole('checkbox', { name: 'Accept' });
+    expect(cb).toHaveAttribute('aria-disabled', 'true');
+    expect(screen.getByTestId('root')).not.toHaveAttribute('aria-disabled');
+    expect(cb).not.toHaveAttribute('data-disabled-focusable');
+    // Without disabledFocusable, aria-disabled keeps its 0.5 meaning: the look and handlers stay.
+    await user.click(cb);
+    expect(cb).toHaveAttribute('aria-checked', 'true');
+  });
+});
+
 describe('Checkbox — types', () => {
+  it('types disabledFocusable as an optional boolean', () => {
+    expectTypeOf<CheckboxProps['disabledFocusable']>().toEqualTypeOf<boolean | undefined>();
+  });
+
+  it('types label as ReactNode and labelPosition as before/after', () => {
+    expectTypeOf<CheckboxProps['label']>().toEqualTypeOf<React.ReactNode>();
+    expectTypeOf<CheckboxLabelPosition>().toEqualTypeOf<'before' | 'after'>();
+    expectTypeOf<CheckboxProps['labelPosition']>().toEqualTypeOf<
+      CheckboxLabelPosition | undefined
+    >();
+    // @ts-expect-error -- Checkbox labels go before or after the box only
+    void (<Checkbox labelPosition="above" />);
+    // @ts-expect-error -- Checkbox labels go before or after the box only
+    void (<Checkbox labelPosition="below" />);
+  });
+
   it('declares ref, controlRef and the routed handlers in CheckboxProps (C-REF, C-ROUTING)', () => {
     expectTypeOf<CheckboxProps['ref']>().toEqualTypeOf<React.Ref<HTMLLabelElement> | undefined>();
     expectTypeOf<CheckboxProps['controlRef']>().toEqualTypeOf<

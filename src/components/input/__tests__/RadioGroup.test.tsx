@@ -1,11 +1,12 @@
 import * as React from 'react';
 import { afterEach, describe, it, expect, expectTypeOf, vi } from 'vitest';
-import { act, render, screen } from '@testing-library/react';
+import { act, fireEvent, render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { RadioGroup, RadioGroupItem, RadioItem } from '../RadioGroup';
 import type { RadioGroupItemProps, RadioGroupProps, RadioItemProps } from '../RadioGroup';
 import type { Orientation } from '../../../lib/types';
 import {
+  expectNoA11yViolations,
   renderWithProviders,
   testComposedHandler,
   testCompoundExposure,
@@ -24,6 +25,10 @@ const twoItems = [
 function radio(name: string): HTMLElement {
   return screen.getByRole('radio', { name });
 }
+
+/** The development warning of a radio item with children. */
+const CHILDREN_WARNING =
+  '[WaveUI] RadioItem: children are not rendered. Pass the label in `label`.';
 
 const ONCHANGE_DEPRECATION =
   '[WaveUI] RadioGroup: `onChange` is deprecated and will be removed in 1.0. Use `onValueChange` instead.';
@@ -715,6 +720,92 @@ describe('RadioItem — the label text names the radio through aria-labelledby',
   });
 });
 
+describe('RadioItem — rich label', () => {
+  it('a label with a line of subtext names the radio with its whole text', async () => {
+    render(
+      <RadioGroup aria-label="Plan">
+        <RadioItem
+          value="pro"
+          label={
+            <span className="flex flex-col">
+              <span>Pro</span>{' '}
+              <span className="text-caption-1 text-muted-foreground">For growing teams</span>
+            </span>
+          }
+        />
+      </RadioGroup>,
+    );
+    expect(screen.getByRole('radio', { name: 'Pro For growing teams' })).toBeInTheDocument();
+    await expectNoA11yViolations();
+  });
+
+  it('clicking the label text selects; clicking a link inside it does not', async () => {
+    const user = userEvent.setup();
+    const onValueChange = vi.fn();
+    render(
+      <React.StrictMode>
+        <RadioGroup aria-label="Plan" onValueChange={onValueChange}>
+          <RadioItem value="free" label="Free" />
+          <RadioItem
+            value="pro"
+            label={
+              <>
+                Pro (<a href="#pricing">see pricing</a>)
+              </>
+            }
+          />
+        </RadioGroup>
+      </React.StrictMode>,
+    );
+    const pro = screen.getByRole('radio', { name: 'Pro (see pricing)' });
+    // fireEvent, not userEvent: user-event forwards every click inside a <label> to its control,
+    // while browsers (and jsdom) skip the forwarding for a click on interactive content.
+    fireEvent.click(screen.getByRole('link', { name: 'see pricing' }));
+    expect(pro).toHaveAttribute('aria-checked', 'false');
+    await user.click(screen.getByText(/^Pro \(/));
+    expect(pro).toHaveAttribute('aria-checked', 'true');
+    expect(onValueChange.mock.calls).toEqual([['pro']]);
+  });
+
+  it('renders label={0} as content', () => {
+    render(
+      <RadioGroup aria-label="Count">
+        <RadioItem value="0" label={0} />
+      </RadioGroup>,
+    );
+    expect(screen.getByRole('radio', { name: '0' })).toHaveAttribute(
+      'aria-labelledby',
+      screen.getByText('0').id,
+    );
+  });
+
+  it('does not render children and warns once that the label goes in `label`', () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    try {
+      const ui = (
+        <React.StrictMode>
+          <RadioGroup aria-label="Plan">
+            <RadioItem value="a" label="Alpha">
+              Ignored text
+            </RadioItem>
+            <RadioItem value="b" label="Beta">
+              Also ignored
+            </RadioItem>
+          </RadioGroup>
+        </React.StrictMode>
+      );
+      const { rerender } = render(ui);
+      rerender(ui);
+      expect(screen.queryByText('Ignored text')).not.toBeInTheDocument();
+      expect(screen.queryByText('Also ignored')).not.toBeInTheDocument();
+      expect(radio('Alpha')).toBeInTheDocument();
+      expect(warn.mock.calls).toEqual([[CHILDREN_WARNING]]);
+    } finally {
+      warn.mockRestore();
+    }
+  });
+});
+
 describe('RadioGroup - roving tabindex', () => {
   it('only the selected radio has tabIndex 0', () => {
     render(
@@ -1206,6 +1297,10 @@ describe('RadioGroup — types', () => {
     expectTypeOf<RadioGroupProps['onValueChange']>().toEqualTypeOf<
       ((value: string) => void) | undefined
     >();
+  });
+
+  it('types the RadioItem label as ReactNode', () => {
+    expectTypeOf<RadioItemProps['label']>().toEqualTypeOf<React.ReactNode>();
   });
 
   it('RadioItem accepts native button attributes', () => {
