@@ -215,8 +215,8 @@ export interface TimePickerProps extends Omit<
    * Called when edited text is not accepted on Enter or blur (once per edit): it is not a time
    * (`'unparseable'`) or lies outside `minTime`/`maxTime` (`'out-of-range'`). The text stays in the
    * input, which is marked `aria-invalid` and described by an error message (left to the
-   * surrounding `Field` when it shows an error); Enter also closes the list, so it does not cover
-   * the message. Enter reports it again when pressed again.
+   * surrounding `Field` when it shows an error); Enter and leaving the input also close the list,
+   * so it does not cover the message. Enter reports it again when pressed again.
    */
   onInvalidInput?: (text: string, reason: TimePickerInvalidReason) => void;
   /**
@@ -276,8 +276,8 @@ function startsWithQuery(item: ListboxItem, text: string): boolean {
  *   else the first one that contains it; Enter commits the active option. Enter or leaving the
  *   field also commits a complete typed time that is not in the list (`9:15 AM`, `14:45`) when it
  *   lies within `minTime`/`maxTime`, and erased text clears the value (as the clear button does);
- *   Enter never submits the form with edited text. Other typed text is kept (Enter closes the
- *   list): the input is marked invalid and an error message describes it (`onInvalidInput`,
+ *   Enter never submits the form with edited text, and both close the list. Other typed text is
+ *   kept: the input is marked invalid and an error message describes it (`onInvalidInput`,
  *   reported once per edit) until the text is edited or replaced (an option, the clear button,
  *   Escape, a form reset, a new value from the parent). Escape on a closed list reverts any edit,
  *   erased text included, to the selected time.
@@ -674,6 +674,12 @@ export const TimePicker = (props: TimePickerProps) => {
         closeList();
         if (reason !== null) rejectDraft(draft, reason);
       }
+      if (event.key === 'Tab' && open && !expanded) {
+        // useListbox closes the list on Tab only while it shows options. The status text shown
+        // instead ('No matching times', 'No times available') closes too: the clear button, the
+        // next tab stop, is inside the picker, so focus moving there does not dismiss it.
+        closeList();
+      }
     },
   );
   const handleKeyUp = composeEventHandlers(onKeyUp, lb.onKeyUp);
@@ -687,9 +693,12 @@ export const TimePicker = (props: TimePickerProps) => {
   };
 
   const handleBlur = composeEventHandlers(onBlur, () => {
-    // Rejected text is kept; text that Enter already rejected is not reported again.
-    if (!interactive || draft === null || invalid !== null) return;
-    const reason = commitDraft(draft);
+    if (!interactive || draft === null) return;
+    // Leaving the input settles the edit as Enter does: rejected text is kept (text that was
+    // already rejected is not reported again) and the list closes either way, so it does not cover
+    // the error message.
+    const reason = invalid === null ? commitDraft(draft) : null;
+    closeList();
     if (reason !== null) rejectDraft(draft, reason);
   });
 
