@@ -207,6 +207,37 @@ function roundTo(n: number, decimals: number): number {
   return Number(n.toFixed(Math.min(decimals, 20)));
 }
 
+// Phase 4 D18, Fluent's timing (`DEFAULT_SPIN_DELAY_MS`, `MIN_SPIN_DELAY_MS`, `MAX_SPIN_TIME_MS`)
+// without its step on the press itself.
+/** Delay before a press becomes a hold, and the first delay between repeats (ms). */
+const SPIN_DELAY = 300;
+/** The shortest delay between repeats, reached after SPIN_RAMP ms of holding. */
+const SPIN_MIN_DELAY = 80;
+/** How long into a hold the delay between repeats takes to ease down to SPIN_MIN_DELAY (ms). */
+const SPIN_RAMP = 1000;
+
+/** The delay after a step taken `elapsed` ms into a hold: 300ms easing linearly to 80ms. */
+function spinDelay(elapsed: number): number {
+  const t = Math.min(1, elapsed / SPIN_RAMP);
+  return Math.round(SPIN_DELAY + (SPIN_MIN_DELAY - SPIN_DELAY) * t);
+}
+
+/**
+ * Runs the timers of a hold: calls `step` once SPIN_DELAY has passed, then again after each
+ * `spinDelay` (steps at 300, 534, 717, 859, 970 and 1057ms, then every 80ms), until `step` returns
+ * false or the returned function is called.
+ */
+function startSpin(step: () => boolean): () => void {
+  let elapsed = SPIN_DELAY;
+  let timer = setTimeout(function tick() {
+    if (!step()) return;
+    const delay = spinDelay(elapsed);
+    elapsed += delay;
+    timer = setTimeout(tick, delay);
+  }, SPIN_DELAY);
+  return () => clearTimeout(timer);
+}
+
 /** Per-size widths of the step buttons and the input's flex basis, and the glyph size. */
 const SPIN_SIZE: Readonly<Record<CoreSize, { button: string; input: string; glyph: number }>> = {
   small: { button: 'w-6', input: 'w-10', glyph: 12 },
@@ -220,6 +251,8 @@ const stepButtonClass = cn(
   'flex h-full shrink-0 items-center justify-center bg-transparent p-0 text-foreground',
   'not-disabled:not-aria-disabled:hover:bg-subtle-hover not-disabled:not-aria-disabled:active:bg-subtle-pressed',
   'disabled:pointer-events-none',
+  // A finger holding a button (D18): no double-tap zoom, text selection or iOS callout.
+  'touch-manipulation select-none [-webkit-touch-callout:none]',
 );
 
 /**
@@ -230,6 +263,14 @@ const stepButtonClass = cn(
  *   Shift+End keep their native text-selection instead). The −/+ buttons are not tab stops and
  *   never take focus, so focus stays on the spinbutton and screen readers announce the new
  *   value.
+ * - **Pointer** on the −/+ buttons (mouse, touch or pen): a short press steps once, on release
+ *   (its click), never on the press alone, so a finger that starts a scroll on a button changes
+ *   nothing. Holding a button repeats the step: the first after 300ms, then faster, every 80ms
+ *   after about a second (Fluent's timing). A hold stops when the button is released, the
+ *   pointer leaves it or the press turns into a scroll, at the bound, when the window loses
+ *   focus, and when the spin button becomes disabled or read-only. A click without a press (a
+ *   screen reader, `element.click()`) steps once. The buttons open no context menu (a long press
+ *   on touch would), show no iOS callout, and allow no text selection or double-tap zoom.
  * - **Typing** edits a draft: the value is parsed, clamped and committed on blur or Enter
  *   (Escape reverts). Text that is not a number is flagged with `aria-invalid` and reverted on
  *   blur. Steps (keys and buttons) start from the typed number, and the −/+ buttons are disabled
@@ -381,12 +422,102 @@ export const SpinButton = (props: SpinButtonProps | SpinButtonAllowEmptyProps): 
     setValue(clamp(rounded));
   };
 
+  /** The value one step of `delta` from `from` (0 while empty), rounded and clamped. */
+  const stepFrom = (from: number | null, delta: number) => {
+    const base = from ?? 0;
+    const decimals = places ?? Math.max(decimalsOf(step), decimalsOf(delta), decimalsOf(base));
+    return clamp(roundTo(base + delta, decimals));
+  };
+
   /** Steps from the typed draft when it is a number, else from the value (0 while empty). */
   const stepBy = (delta: number) => {
-    const from = current ?? 0;
-    const decimals = places ?? Math.max(decimalsOf(step), decimalsOf(delta), decimalsOf(from));
-    commit(roundTo(from + delta, decimals));
+    setDraft(null);
+    setValue(stepFrom(current, delta));
   };
+
+  // Phase 4 D18: a press on a step button becomes a hold after SPIN_DELAY and then repeats
+  // (startSpin runs the timers); a shorter press steps on its click (WCAG 2.5.2).
+  const holdRef = React.useRef<{
+    direction: 1 | -1;
+    /** Whether the hold has stepped yet. */
+    stepped: boolean;
+    stop: () => void;
+  } | null>(null);
+  // Whether the press that ends in the next pointer click has repeated (reset by every pointerdown).
+  const repeatedRef = React.useRef(false);
+
+  const stopHold = React.useCallback(() => {
+    holdRef.current?.stop();
+    holdRef.current = null;
+  }, []);
+
+  /** Whether the value the user sees is at the bound a step in `direction` moves towards. */
+  const atBound = (direction: 1 | -1) =>
+    current !== null && (direction === 1 ? current >= max : current <= min);
+
+  // One step of the hold, with the latest render's values; returns false to end the hold.
+  const holdStep = useEventCallback((): boolean => {
+    const hold = holdRef.current;
+    if (!hold) return false;
+    if (!interactive || atBound(hold.direction)) {
+      stopHold();
+      return false;
+    }
+    repeatedRef.current = true;
+    const delta = hold.direction * step;
+    if (hold.stepped) {
+      // Later steps build on the latest value (useControllable's updater), not on this render's,
+      // so each step adds to the previous one even before React has rendered it.
+      setDraft(null);
+      setValue((prev) => stepFrom(prev, delta));
+    } else {
+      // The first step starts where a click would: from the typed number, else the value.
+      hold.stepped = true;
+      stepBy(delta);
+    }
+    return true;
+  });
+
+  const startHold = (event: React.PointerEvent<HTMLButtonElement>, direction: 1 | -1) => {
+    // Every pointerdown resets the flag, so a hold that ended without a click (at a bound, or a
+    // touch long press) cannot swallow the click of a later press.
+    repeatedRef.current = false;
+    if (event.button !== 0 || !interactive) return;
+    // Touch and pen capture the pointer implicitly; release it, so pointerleave fires when the
+    // finger slides off the button.
+    const button = event.currentTarget;
+    if (event.pointerType !== 'mouse' && button.hasPointerCapture?.(event.pointerId)) {
+      button.releasePointerCapture(event.pointerId);
+    }
+    stopHold();
+    holdRef.current = { direction, stepped: false, stop: startSpin(holdStep) };
+  };
+
+  const clickStep = (event: React.MouseEvent<HTMLButtonElement>, direction: 1 | -1) => {
+    // A click without a press (detail 0: a screen reader, element.click()) steps once; a pointer
+    // click steps unless its press already repeated.
+    if (event.detail !== 0 && repeatedRef.current) {
+      repeatedRef.current = false;
+      return;
+    }
+    stepBy(direction * step);
+  };
+
+  // A hold stops once the control cannot step its way any more: disabled, read-only, or at the
+  // bound it steps towards (where its button is disabled).
+  React.useEffect(() => {
+    const hold = holdRef.current;
+    if (hold && (!interactive || atBound(hold.direction))) stopHold();
+  });
+  // It also stops when the window loses focus (a release outside it never reaches the button),
+  // and on unmount.
+  React.useEffect(() => {
+    window.addEventListener('blur', stopHold);
+    return () => {
+      window.removeEventListener('blur', stopHold);
+      stopHold();
+    };
+  }, [stopHold]);
 
   const commitDraft = () => {
     if (draft === null) return;
@@ -552,8 +683,13 @@ export const SpinButton = (props: SpinButtonProps | SpinButtonAllowEmptyProps): 
       <button
         type="button"
         tabIndex={-1}
+        onPointerDown={(event) => startHold(event, -1)}
+        onPointerUp={stopHold}
+        onPointerCancel={stopHold}
+        onPointerLeave={stopHold}
+        onClick={(event) => clickStep(event, -1)}
         onMouseDown={keepFocus}
-        onClick={() => stepBy(-step)}
+        onContextMenu={(event) => event.preventDefault()}
         disabled={!interactive || (current !== null && current <= min)}
         aria-label={labels?.decrement ?? 'Decrement'}
         className={cn(
@@ -614,8 +750,13 @@ export const SpinButton = (props: SpinButtonProps | SpinButtonAllowEmptyProps): 
       <button
         type="button"
         tabIndex={-1}
+        onPointerDown={(event) => startHold(event, 1)}
+        onPointerUp={stopHold}
+        onPointerCancel={stopHold}
+        onPointerLeave={stopHold}
+        onClick={(event) => clickStep(event, 1)}
         onMouseDown={keepFocus}
-        onClick={() => stepBy(step)}
+        onContextMenu={(event) => event.preventDefault()}
         disabled={!interactive || (current !== null && current >= max)}
         aria-label={labels?.increment ?? 'Increment'}
         className={cn(

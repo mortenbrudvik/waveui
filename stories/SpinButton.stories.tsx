@@ -2,10 +2,18 @@ import type { Meta, StoryObj } from '@storybook/react';
 import { useState } from 'react';
 import { fn } from 'storybook/test';
 import { SpinButton } from '../src';
+// Phase 4 type, in the barrel from wave C (INTEGRATION): imported from its module until then.
+import type { SpinButtonBaseProps } from '../src/components/input/SpinButton';
+import { coreSizeArgType, inputAppearanceArgType } from './_helpers';
+import { SizeAppearanceGrid } from './_grids';
 
 const meta = {
   title: 'Components/Input/SpinButton',
   component: SpinButton,
+  argTypes: {
+    ...coreSizeArgType,
+    ...inputAppearanceArgType,
+  },
   args: {
     'aria-label': 'Quantity',
     defaultValue: 0,
@@ -89,4 +97,64 @@ export const Controlled: Story = {
       </div>
     );
   },
+};
+
+/** Owns a price and shows it as currency; the story args (any mode) give it everything else. */
+function CurrencySpinButton({
+  onValueChange,
+  ...props
+}: SpinButtonBaseProps & { onValueChange?: (value: number) => void }) {
+  const [value, setValue] = useState(1);
+  return (
+    <SpinButton
+      aria-label="Price"
+      {...props}
+      value={value}
+      onValueChange={(next) => {
+        setValue(next);
+        onValueChange?.(next);
+      }}
+      step={0.5}
+      displayValue={`$${value.toFixed(2)}`}
+    />
+  );
+}
+
+/**
+ * A controlled currency value: `displayValue` shows `$1.00` while the field is not being edited
+ * (and is its `aria-valuetext`); focus it to edit the plain number.
+ */
+export const DisplayValue: Story = {
+  args: { 'aria-label': 'Price' },
+  render: (args) => <CurrencySpinButton {...args} />,
+};
+
+/** `allowEmpty`: the value starts empty (`null`), and clearing the text empties it again. */
+export const AllowEmpty: Story = {
+  render: () => <SpinButton aria-label="Guests (optional)" allowEmpty min={1} max={12} />,
+};
+
+/** `precision={2}` rounds typed and stepped values to two decimals, without padding them. */
+export const Precision: Story = {
+  args: { 'aria-label': 'Weight in kg', precision: 2, step: 0.25, defaultValue: 1.5 },
+};
+
+/** A root sized with `className` widens the input, not the space around it. */
+export const FullWidth: Story = {
+  args: { 'aria-label': 'Quantity', className: 'w-full' },
+};
+
+export const SizesAndAppearances: Story = {
+  render: (args) => (
+    <SizeAppearanceGrid
+      render={(size, appearance) => (
+        <SpinButton
+          {...args}
+          size={size}
+          appearance={appearance}
+          aria-label={`${size} ${appearance}`}
+        />
+      )}
+    />
+  ),
 };
