@@ -1173,6 +1173,385 @@ describe('useRestoreFocus — onlyIfFocusInside (popovers)', () => {
     expect(button('Close from outside')).toHaveFocus();
   });
 
+  /** A trigger, a button elsewhere and a surface restoring only when focus is inside. */
+  function Page({
+    open,
+    isHoverClose,
+    children,
+  }: {
+    open: boolean;
+    isHoverClose?: () => boolean;
+    children?: React.ReactNode;
+  }) {
+    const triggerRef = React.useRef<HTMLButtonElement>(null);
+    return (
+      <>
+        <button type="button" ref={triggerRef}>
+          Trigger
+        </button>
+        <button type="button">Elsewhere</button>
+        <Surface open={open} triggerRef={triggerRef} onlyIfFocusInside isHoverClose={isHoverClose}>
+          {children}
+        </Surface>
+      </>
+    );
+  }
+
+  const hoverClose = () => true;
+
+  it('restores from <body> although the surface never had focus (a Safari click, a controlled open)', () => {
+    const { rerender } = render(<Page open={false} />);
+    rerender(<Page open />);
+    expect(document.activeElement).toBe(document.body);
+    rerender(<Page open={false} />);
+    expect(button('Trigger')).toHaveFocus();
+  });
+
+  it('isHoverClose: a hover close restores nothing when focus is on <body> (a hover card that never had it)', () => {
+    const { rerender } = render(<Page open={false} isHoverClose={hoverClose} />);
+    rerender(<Page open isHoverClose={hoverClose} />);
+    expect(document.activeElement).toBe(document.body);
+    rerender(<Page open={false} isHoverClose={hoverClose} />);
+    expect(button('Trigger')).not.toHaveFocus();
+    expect(document.activeElement).toBe(document.body);
+  });
+
+  it('restores from <body> after focus left an element outside the surface (a click that focused the trigger, then a press on text)', async () => {
+    const { rerender } = render(<Page open={false} />);
+    rerender(<Page open />);
+    // A press on a non-focusable spot moves focus to <body>.
+    act(() => button('Elsewhere').focus());
+    act(() => button('Elsewhere').blur());
+    await flushMicrotasks();
+    rerender(<Page open={false} />);
+    expect(button('Trigger')).toHaveFocus();
+  });
+
+  it('restores from <body> to finalFocusRef (a context popover opened by a right click with nothing focused)', () => {
+    function ContextPage({ open }: { open: boolean }) {
+      const finalRef = React.useRef<HTMLButtonElement>(null);
+      return (
+        <>
+          <button type="button" ref={finalRef}>
+            Row
+          </button>
+          <Surface open={open} finalFocusRef={finalRef} onlyIfFocusInside />
+        </>
+      );
+    }
+    const { rerender } = render(<ContextPage open={false} />);
+    rerender(<ContextPage open />);
+    expect(document.activeElement).toBe(document.body);
+    rerender(<ContextPage open={false} />);
+    expect(button('Row')).toHaveFocus();
+  });
+
+  it('still restores when focus left the surface for <body> (a press on a non-focusable spot)', async () => {
+    const { rerender } = render(<Page open={false} />);
+    rerender(<Page open />);
+    act(() => button('Inside').focus());
+    act(() => button('Inside').blur());
+    await flushMicrotasks();
+    rerender(<Page open={false} />);
+    expect(button('Trigger')).toHaveFocus();
+  });
+
+  it('isHoverClose: a hover close restores nothing after focus left the surface for <body> (a press on text in a hover card)', async () => {
+    const { rerender } = render(<Page open={false} isHoverClose={hoverClose} />);
+    rerender(<Page open isHoverClose={hoverClose} />);
+    act(() => button('Inside').focus());
+    act(() => button('Inside').blur());
+    await flushMicrotasks();
+    rerender(<Page open={false} isHoverClose={hoverClose} />);
+    expect(button('Trigger')).not.toHaveFocus();
+    expect(document.activeElement).toBe(document.body);
+  });
+
+  it('isHoverClose: a hover close leaves focus that moved elsewhere where it is', () => {
+    const { rerender } = render(<Page open={false} isHoverClose={hoverClose} />);
+    rerender(<Page open isHoverClose={hoverClose} />);
+    act(() => button('Elsewhere').focus());
+    rerender(<Page open={false} isHoverClose={hoverClose} />);
+    expect(button('Elsewhere')).toHaveFocus();
+  });
+
+  it('isHoverClose is read at each close: a later close that is not by hover restores from <body>', () => {
+    let byHover = true;
+    const isHoverClose = () => byHover;
+    const { rerender } = render(<Page open={false} isHoverClose={isHoverClose} />);
+    rerender(<Page open isHoverClose={isHoverClose} />);
+    rerender(<Page open={false} isHoverClose={isHoverClose} />);
+    expect(document.activeElement).toBe(document.body);
+    rerender(<Page open isHoverClose={isHoverClose} />);
+    byHover = false;
+    rerender(<Page open={false} isHoverClose={isHoverClose} />);
+    expect(button('Trigger')).toHaveFocus();
+  });
+
+  it('a surface opened from inside a surface that closes by hover goes along without moving focus (unmounted with it)', async () => {
+    let byHover = true;
+    const isHoverClose = () => byHover;
+    function InnerCard() {
+      const triggerRef = React.useRef<HTMLButtonElement>(null);
+      const [open, setOpen] = React.useState(false);
+      return (
+        <>
+          <button type="button" ref={triggerRef} onClick={() => setOpen(true)}>
+            Inner trigger
+          </button>
+          <Surface open={open} triggerRef={triggerRef} onlyIfFocusInside />
+        </>
+      );
+    }
+    const page = (open: boolean) => (
+      <Page open={open} isHoverClose={isHoverClose}>
+        <InnerCard />
+      </Page>
+    );
+    const { rerender } = render(page(false));
+    rerender(page(true));
+    act(() => button('Inner trigger').click());
+    expect(screen.getAllByRole('dialog')).toHaveLength(2);
+    expect(document.activeElement).toBe(document.body);
+    rerender(page(false));
+    await flushMicrotasks();
+    expect(screen.queryByRole('dialog')).toBeNull();
+    expect(document.activeElement).toBe(document.body);
+
+    // Not by hover: both restore, the outer surface to its trigger.
+    byHover = false;
+    rerender(page(true));
+    act(() => button('Inner trigger').click());
+    rerender(page(false));
+    await flushMicrotasks();
+    expect(button('Trigger')).toHaveFocus();
+  });
+
+  it('a surface opened from inside a surface that closes by hover goes along without moving focus (closed in the same commit)', () => {
+    function Menuish({
+      outer,
+      inner,
+      isHoverClose,
+    }: {
+      outer: boolean;
+      inner: boolean;
+      isHoverClose: () => boolean;
+    }) {
+      const outerTriggerRef = React.useRef<HTMLButtonElement>(null);
+      const innerTriggerRef = React.useRef<HTMLButtonElement>(null);
+      return (
+        <>
+          <button type="button" ref={outerTriggerRef}>
+            File
+          </button>
+          {/* Rendered first, so its restore runs first (a submenu's runs before its menu's). */}
+          <Portal>
+            <Surface open={inner} triggerRef={innerTriggerRef} onlyIfFocusInside />
+          </Portal>
+          <Surface
+            open={outer}
+            triggerRef={outerTriggerRef}
+            onlyIfFocusInside
+            isHoverClose={isHoverClose}
+          >
+            <button type="button" ref={innerTriggerRef}>
+              Open recent
+            </button>
+          </Surface>
+        </>
+      );
+    }
+    const hover = () => true;
+    const { rerender } = render(<Menuish outer={false} inner={false} isHoverClose={hover} />);
+    rerender(<Menuish outer inner={false} isHoverClose={hover} />);
+    rerender(<Menuish outer inner isHoverClose={hover} />);
+    expect(screen.getAllByRole('dialog')).toHaveLength(2);
+    rerender(<Menuish outer={false} inner={false} isHoverClose={hover} />);
+    expect(screen.queryByRole('dialog')).toBeNull();
+    expect(document.activeElement).toBe(document.body);
+  });
+
+  /** A restore target outside every surface, for nested surfaces that would otherwise find none. */
+  const elsewhere = () => screen.queryByRole('button', { name: 'Elsewhere' });
+
+  it('a nested surface opened with no opener captured is recognised through its trigger', () => {
+    /** Closes without unmounting its content (a surface that stays while it exits). */
+    function KeptSurface({
+      open,
+      children,
+      ...options
+    }: SurfaceOptions & { open: boolean; children: React.ReactNode }) {
+      const [surface, setSurface] = React.useState<HTMLDivElement | null>(null);
+      useRestoreFocus({ enabled: open, container: surface, ...options });
+      return (
+        <div ref={setSurface} role="dialog" aria-label="Kept" hidden={!open}>
+          {children}
+        </div>
+      );
+    }
+    function Kept({ open }: { open: boolean }) {
+      const innerTriggerRef = React.useRef<HTMLButtonElement>(null);
+      return (
+        <>
+          <button type="button">Elsewhere</button>
+          {/* Open from its first commit, before its trigger's ref is set: nothing is captured. */}
+          <Portal>
+            <Surface
+              open={open}
+              triggerRef={innerTriggerRef}
+              onlyIfFocusInside
+              fallback={elsewhere}
+            >
+              <span>Inner content</span>
+            </Surface>
+          </Portal>
+          <KeptSurface open={open} onlyIfFocusInside isHoverClose={hoverClose}>
+            <button type="button" ref={innerTriggerRef}>
+              Inner trigger
+            </button>
+          </KeptSurface>
+        </>
+      );
+    }
+    const { rerender } = render(<Kept open />);
+    expect(screen.getAllByRole('dialog')).toHaveLength(2);
+    rerender(<Kept open={false} />);
+    expect(screen.queryByRole('dialog')).toBeNull();
+    expect(document.activeElement).toBe(document.body);
+  });
+
+  it('a hover close takes nested surfaces along at any depth (a surface opened from a portaled one)', async () => {
+    function Level({ name, children }: { name: string; children?: React.ReactNode }) {
+      const triggerRef = React.useRef<HTMLButtonElement>(null);
+      const [open, setOpen] = React.useState(false);
+      return (
+        <>
+          <button type="button" ref={triggerRef} onClick={() => setOpen(true)}>
+            {name}
+          </button>
+          <Portal>
+            <Surface open={open} triggerRef={triggerRef} onlyIfFocusInside fallback={elsewhere}>
+              {children ?? <span>{`${name} content`}</span>}
+            </Surface>
+          </Portal>
+        </>
+      );
+    }
+    const page = (open: boolean) => (
+      <Page open={open} isHoverClose={hoverClose}>
+        <Level name="Second">
+          <Level name="Third" />
+        </Level>
+      </Page>
+    );
+    const { rerender } = render(page(false));
+    rerender(page(true));
+    act(() => button('Second').click());
+    act(() => button('Third').click());
+    expect(screen.getAllByRole('dialog')).toHaveLength(3);
+    expect(document.activeElement).toBe(document.body);
+    rerender(page(false));
+    await flushMicrotasks();
+    expect(screen.queryByRole('dialog')).toBeNull();
+    expect(document.activeElement).toBe(document.body);
+  });
+
+  it('isHoverClose: a hover close still restores when focus is inside the surface as it unmounts', async () => {
+    function Conditional({ show }: { show: boolean }) {
+      const triggerRef = React.useRef<HTMLButtonElement>(null);
+      return (
+        <>
+          <button type="button" ref={triggerRef}>
+            Trigger
+          </button>
+          {show && (
+            <Surface open triggerRef={triggerRef} onlyIfFocusInside isHoverClose={hoverClose} />
+          )}
+        </>
+      );
+    }
+    const { rerender } = render(<Conditional show={false} />);
+    rerender(<Conditional show />);
+    act(() => button('Inside').focus());
+    rerender(<Conditional show={false} />);
+    await flushMicrotasks();
+    expect(button('Trigger')).toHaveFocus();
+  });
+
+  it('still restores when the focused element inside the surface was removed before the close', () => {
+    function Removable() {
+      const [shown, setShown] = React.useState(true);
+      return shown ? (
+        <button type="button" onClick={() => setShown(false)}>
+          Remove me
+        </button>
+      ) : null;
+    }
+    const { rerender } = render(<Page open={false} />);
+    rerender(
+      <Page open>
+        <Removable />
+      </Page>,
+    );
+    act(() => button('Remove me').focus());
+    act(() => button('Remove me').click());
+    expect(document.activeElement).toBe(document.body);
+    rerender(<Page open={false} />);
+    expect(button('Trigger')).toHaveFocus();
+  });
+
+  it('still restores when focus was in a layer opened from the surface, closed with it', async () => {
+    const user = userEvent.setup();
+    /** A portaled child layer anchored to a button inside the surface. */
+    function ChildMenu({ onPick }: { onPick: () => void }) {
+      const [open, setOpen] = React.useState(false);
+      const triggerRef = React.useRef<HTMLButtonElement>(null);
+      const surfaceRef = React.useRef<HTMLDivElement>(null);
+      const { layerId } = useDismiss({
+        open,
+        onDismiss: () => setOpen(false),
+        refs: [surfaceRef, triggerRef],
+        anchorRef: triggerRef,
+      });
+      return (
+        <>
+          <button type="button" ref={triggerRef} onClick={() => setOpen(true)}>
+            Sort
+          </button>
+          {open && (
+            <Portal layerId={layerId}>
+              <div ref={surfaceRef} role="menu" aria-label="Sort">
+                <button type="button" role="menuitem" onClick={onPick}>
+                  By name
+                </button>
+              </div>
+            </Portal>
+          )}
+        </>
+      );
+    }
+    function App() {
+      const [open, setOpen] = React.useState(false);
+      return (
+        <>
+          <button type="button" onClick={() => setOpen(true)}>
+            Trigger
+          </button>
+          <Surface open={open} onlyIfFocusInside>
+            <ChildMenu onPick={() => setOpen(false)} />
+          </Surface>
+        </>
+      );
+    }
+    render(<App />);
+    await user.click(button('Trigger'));
+    await user.click(button('Sort'));
+    // The item closes the surface, and its own menu goes with it: focus falls to <body>.
+    await user.click(screen.getByRole('menuitem', { name: 'By name' }));
+    expect(screen.queryByRole('dialog')).toBeNull();
+    expect(button('Trigger')).toHaveFocus();
+  });
+
   it('decides at unmount: focus elsewhere then, removed in the same commit, is not restored', async () => {
     function Page({ show }: { show: boolean }) {
       const triggerRef = React.useRef<HTMLButtonElement>(null);

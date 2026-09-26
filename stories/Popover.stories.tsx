@@ -140,8 +140,8 @@ export const Controlled: Story = {
  * A hover card: with `openOnHover` the card opens when the mouse pointer rests on the trigger
  * (`openDelay`) and closes once the pointer has left the trigger and the card (`closeDelay`),
  * unless focus is inside the card. A triangle towards the card keeps it open while the pointer
- * moves into it. Opening by hover does not move focus; Tab from the trigger enters the card, and a
- * click on the trigger pins it. Touch and pen open it by a tap only.
+ * moves into it. Opening and closing by hover move no focus; Tab from the trigger enters the card,
+ * and a click on the trigger pins it. Touch and pen open it by a tap only.
  */
 export const HoverCard: Story = {
   args: {
@@ -209,7 +209,8 @@ export const ContextPopover: Story = {
  * `target` places the content at another element (or at a `VirtualElement`, such as a point).
  * This controlled popover has no trigger: it is anchored to a toggle button outside it, which
  * carries its own `aria-haspopup`, `aria-expanded` and `aria-controls`. A press on the toggle is
- * no outside press (the toggle closes the popover itself), and Tab from it enters the content.
+ * no outside press (the toggle closes the popover itself), Tab from it enters the content, and
+ * Close returns focus to it.
  */
 export const AnchoredToTarget: Story = {
   render: function AnchoredToTargetStory({ onOpenChange, ...args }) {
@@ -234,6 +235,9 @@ export const AnchoredToTarget: Story = {
         <Popover {...args} open={open} onOpenChange={change} target={target}>
           <Popover.Content id={contentId} title="Details">
             <p style={{ margin: 0 }}>Anchored to the Details button.</p>
+            <Button size="small" className="mt-3" onClick={() => change(false)}>
+              Close
+            </Button>
           </Popover.Content>
         </Popover>
       </>

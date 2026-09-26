@@ -32,6 +32,16 @@ export interface UseRestoreFocusOptions {
    * click that moved focus elsewhere is respected. @default false
    */
   onlyIfFocusInside?: boolean;
+  /**
+   * Read when the surface closes, or unmounts while open: `true` when the hover intent closed it
+   * (Popover and Menu `openOnHover`, a submenu closing by hover). A hover close never moves focus:
+   * it restores only while focus is inside the surface, so focus on `<body>` (where a hover-opened
+   * surface leaves it) or elsewhere stays where it is. A surface opened from inside one that closes
+   * by hover (its opener, else its trigger, lies in that surface: a submenu, a hover card in a
+   * hover card, at any depth) is taken along, and its close counts as a hover close too. Every
+   * other close keeps the rules above.
+   */
+  isHoverClose?: () => boolean;
 }
 
 interface Latest {
@@ -129,6 +139,50 @@ interface FocusTracker {
   last: OpenerRecord | null;
   /** Removes the listeners; `null` while none are installed. */
   uninstall: (() => void) | null;
+  /**
+   * The mounted surfaces, as the other instances see them (see {@link isClosingByHover}). Created
+   * on first use: a tracker made by another copy of the library does not have it.
+   */
+  surfaces?: Set<SurfaceEntry>;
+}
+
+/** A mounted `useRestoreFocus`, as the other instances see it. */
+interface SurfaceEntry {
+  /** Whether the surface is closing by hover (its `isHoverClose`). */
+  isHoverClose(): boolean;
+  /** The surface element, while there is one. */
+  getContainer(): HTMLElement | null;
+  /** The element the surface was opened from: its captured opener, else its trigger. */
+  getOpener(): HTMLElement | null;
+}
+
+function getSurfaceEntries(): Set<SurfaceEntry> {
+  const tracker = getFocusTracker();
+  tracker.surfaces ??= new Set();
+  return tracker.surfaces;
+}
+
+/**
+ * Whether the close of `entry` is a hover close: its own, or that of a surface holding the element
+ * it was opened from (a submenu in a menu that closes by hover, a hover card inside a hover card,
+ * at any depth), which takes it along.
+ */
+function isClosingByHover(entry: SurfaceEntry, seen = new Set<SurfaceEntry>()): boolean {
+  if (seen.has(entry)) return false;
+  seen.add(entry);
+  if (entry.isHoverClose()) return true;
+  const opener = entry.getOpener();
+  if (!opener) return false;
+  for (const other of getSurfaceEntries()) {
+    const container = other === entry ? null : other.getContainer();
+    if (container && container.contains(opener) && isClosingByHover(other, seen)) return true;
+  }
+  return false;
+}
+
+/** Whether this close is a hover close: the surface's own, or that of a surface it was opened from. */
+function isHoverCloseOf(entry: SurfaceEntry | null, options: UseRestoreFocusOptions): boolean {
+  return entry ? isClosingByHover(entry) : options.isHoverClose?.() === true;
 }
 
 function getFocusTracker(): FocusTracker {
@@ -344,12 +398,18 @@ function getNearbyTargets(
   return targets;
 }
 
-/** Whether focus is where a popover's restore should still act: inside the surface or lost. */
-function isFocusInsideOrLost(container: HTMLElement | null | undefined): boolean {
+/**
+ * Whether the restore acts for this close: always while focus is inside the surface; otherwise
+ * never for a hover close (`isClosingByHover`, asked only then), and with `onlyIfFocusInside` only
+ * when focus was lost to `<body>`.
+ */
+function shouldRestore(options: UseRestoreFocusOptions, isHoverClose: () => boolean): boolean {
   if (typeof document === 'undefined') return false;
   const active = document.activeElement;
-  if (!active || active === document.body || active === document.documentElement) return true;
-  return !!container && container.contains(active);
+  const onBody = !active || active === document.body || active === document.documentElement;
+  if (!onBody && options.container?.contains(active)) return true;
+  if (!onBody && options.onlyIfFocusInside) return false;
+  return !isHoverClose();
 }
 
 /**
@@ -440,6 +500,10 @@ function restore(latest: Latest, opener: OpenerRecord | null): void {
  *   open, and is not dropped on `<body>` while a valid target exists. Focus uses `preventScroll`.
  * - `onlyIfFocusInside` (popovers): restores only when focus is inside the surface or was lost to
  *   `<body>`.
+ * - `isHoverClose`: a close by the hover intent restores only when focus is inside the surface, so
+ *   a hover close never moves focus from `<body>` or from where the user put it. The same holds for
+ *   a surface opened from inside one that closes by hover (a submenu, a hover card in a hover
+ *   card): every mounted instance is known to the others through the focus tracker's record.
  */
 export function useRestoreFocus(options: UseRestoreFocusOptions): void {
   const parentLayerId = React.useContext(DismissLayerContext);
@@ -448,10 +512,30 @@ export function useRestoreFocus(options: UseRestoreFocusOptions): void {
   const insertionEnabledRef = useRef(false);
   const layoutEnabledRef = useRef(false);
   const scheduledRef = useRef<object | null>(null);
+  const entryRef = useRef<SurfaceEntry | null>(null);
   const { enabled } = options;
 
   // Track focus while mounted, so an opener removed in the commit that opens the surface is known.
-  useLayoutEffect(() => retainFocusTracker(), []);
+  // And be known to the other instances: a surface closing by hover takes along the surfaces opened
+  // from inside it, whose closes are then hover closes too.
+  useLayoutEffect(() => {
+    const release = retainFocusTracker();
+    const entry: SurfaceEntry = {
+      isHoverClose: () => latestRef.current.options.isHoverClose?.() === true,
+      getContainer: () => latestRef.current.options.container ?? null,
+      getOpener: () =>
+        capturedRef.current?.element ?? latestRef.current.options.triggerRef?.current ?? null,
+    };
+    entryRef.current = entry;
+    const surfaces = getSurfaceEntries();
+    surfaces.add(entry);
+    return () => {
+      release();
+      // Kept to the end of the commit: a surface opened from inside this one, closing along with
+      // it, still asks about it.
+      queueMicrotask(() => surfaces.delete(entry));
+    };
+  }, []);
 
   // Mutation phase: record the latest options and capture the opener when `enabled` turns on,
   // before autoFocus (layout phase) or a focus trap's initial focus moves focus into the surface.
@@ -470,11 +554,11 @@ export function useRestoreFocus(options: UseRestoreFocusOptions): void {
     if (!wasEnabled || enabled) return;
     const latest = latestRef.current;
     const captured = capturedRef.current;
+    const entry = entryRef.current;
+    // Decided before the opener is dropped: a hover close is also recognised through it.
+    const acts = shouldRestore(latest.options, () => isHoverCloseOf(entry, latest.options));
     capturedRef.current = null;
-    if (latest.options.onlyIfFocusInside && !isFocusInsideOrLost(latest.options.container)) {
-      return;
-    }
-    restore(latest, captured);
+    if (acts) restore(latest, captured);
   }, [enabled]);
 
   // Unmount while enabled: restore in a microtask, cancelled by a remount of this instance.
@@ -482,14 +566,14 @@ export function useRestoreFocus(options: UseRestoreFocusOptions): void {
     const latest = latestRef;
     const captured = capturedRef;
     const scheduled = scheduledRef;
+    const entryHolder = entryRef;
     scheduled.current = null;
     return () => {
       const snapshot = latest.current;
       if (!snapshot.options.enabled) return;
       // Decide now, while the surface is still in the document.
-      if (snapshot.options.onlyIfFocusInside && !isFocusInsideOrLost(snapshot.options.container)) {
-        return;
-      }
+      const entry = entryHolder.current;
+      if (!shouldRestore(snapshot.options, () => isHoverCloseOf(entry, snapshot.options))) return;
       const token = {};
       scheduled.current = token;
       const opener = captured.current;

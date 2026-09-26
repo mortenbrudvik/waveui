@@ -42,7 +42,12 @@ export interface PopoverProps {
    * @default false
    */
   defaultOpen?: boolean;
-  /** Called with the requested open state (trigger click, Escape, outside press). */
+  /**
+   * Called with the requested open state when it differs from the current one: a trigger click,
+   * Escape and an outside press; the hover opening and closing of `openOnHover`; and, with
+   * `openOnContext`, a context gesture (a right click, a macOS Ctrl+click, Shift+F10 or the
+   * ContextMenu key), a right click outside, and a scroll that moves the row it opened at.
+   */
   onOpenChange?: (open: boolean) => void;
   /**
    * Side of the trigger the content opens on. `start`/`end` follow the writing direction. The
@@ -62,12 +67,12 @@ export interface PopoverProps {
   /**
    * Open the popover when a mouse pointer rests on its trigger (a hover card), and close it once
    * the pointer has been off the trigger and the content for `closeDelay` while focus is not
-   * inside the content. A popover opened by hover does not take focus; a click on its trigger
-   * keeps it open and keeps focus where it is (a second click closes it, as without hover). After
-   * Escape or an outside press it does not reopen until the pointer has left the trigger. Touch
-   * and pen never open it by hover, and an `aria-disabled` trigger never opens. A triangle
-   * between the trigger and the content keeps it open while the pointer moves diagonally into it.
-   * Ignored with `openOnContext` (development warning).
+   * inside the content. A popover opened by hover does not take focus, and its hover close leaves
+   * focus where it is; a click on its trigger keeps it open and keeps focus where it is (a second
+   * click closes it, as without hover). After Escape or an outside press it does not reopen until
+   * the pointer has left the trigger. Touch and pen never open it by hover, and an `aria-disabled`
+   * trigger never opens. A triangle between the trigger and the content keeps it open while the
+   * pointer moves diagonally into it. Ignored with `openOnContext` (development warning).
    * @default false
    */
   openOnHover?: boolean;
@@ -91,10 +96,11 @@ export interface PopoverProps {
    * focus into the content, instead of a click. Focus returns to the element that had it. The
    * browser's context menu is suppressed there and inside the content, except in text fields
    * inside the region, which keep it. A press elsewhere, a right click outside or a scroll that
-   * moves the region closes it. The trigger gets no `aria-haspopup`/`aria-expanded` (it is not a
-   * popover button; with a render-prop child, do not spread them): name the content with
-   * `title`, `aria-label` or `aria-labelledby`, and consider `aria-keyshortcuts="Shift+F10"` on
-   * the region. iOS Safari reports no long press. `openOnHover` is ignored with it.
+   * moves the row it opened at (the one under the pointer, or the focused one), as a scroll of
+   * the region's own content does, closes it. The trigger gets no `aria-haspopup`/`aria-expanded`
+   * (it is not a popover button; with a render-prop child, do not spread them): name the content
+   * with `title`, `aria-label` or `aria-labelledby`, and consider `aria-keyshortcuts="Shift+F10"`
+   * on the region. iOS Safari reports no long press. `openOnHover` is ignored with it.
    * @default false
    */
   openOnContext?: boolean;
@@ -370,6 +376,16 @@ const PopoverRoot = ({
   children,
 }: PopoverProps) => {
   const [openState, setOpen] = useControllable(openProp, defaultOpen ?? false, onOpenChange);
+  // A hover close in flight (written in handlers, read when the popover closes): set when the hover
+  // intent asks to close, so that close moves no focus even when a controlled parent applies it in
+  // a later render (a transition). Every other request to open or close forgets it, and so does
+  // the next opening.
+  const hoverCloseRef = React.useRef(false);
+  const requestOpen = useEventCallback<SetValue<boolean>>((next) => {
+    hoverCloseRef.current = false;
+    setOpen(next);
+  });
+  const isHoverClose = React.useCallback(() => hoverCloseRef.current, []);
   // The content lives in a portal, which renders only in the browser: until then (the server
   // HTML, hydration) the popover reports itself closed, so the trigger's aria-expanded and
   // aria-controls never describe content that is not there.
@@ -448,7 +464,7 @@ const PopoverRoot = ({
   );
   const { layerId } = useDismiss({
     open,
-    onDismiss: () => setOpen(false),
+    onDismiss: () => requestOpen(false),
     refs: openOnContext
       ? [surfaceRef, targetRef, ...(ignoreOutsideRefs ?? [])]
       : [surfaceRef, triggerRef, targetRef, ...(ignoreOutsideRefs ?? [])],
@@ -473,17 +489,19 @@ const PopoverRoot = ({
     layerId,
     onOpen: (origin) => {
       focusContentRef.current = origin === 'keyboard';
-      setOpen(true);
+      requestOpen(true);
     },
-    onClose: () => setOpen(false),
+    onClose: () => requestOpen(false),
   });
   React.useInsertionEffect(() => {
     contextOpenerRef.current = contextOpener;
   }, [contextOpener]);
 
   // Focus returns to the element that takes focus for the trigger, as Shift+Tab from the content
-  // does. In context mode it returns to the element focused at the gesture (the row): the region
-  // is no restore target of its own (as `triggerRef` it would be taken for the opener).
+  // does, when the popover closes while focus is inside it or on `<body>`; a hover close restores
+  // only focus inside, so it never moves focus. In context mode it returns to the element focused
+  // at the gesture (the row): the region is no restore target of its own (as `triggerRef` it
+  // would be taken for the opener).
   const triggerFocusRef = useTriggerFocusRef(triggerRef);
   useRestoreFocus({
     enabled: open,
@@ -492,7 +510,11 @@ const PopoverRoot = ({
     finalFocusRef: openOnContext ? contextOpener : undefined,
     fallback: resolveFocusTarget,
     onlyIfFocusInside: true,
+    isHoverClose,
   });
+  React.useLayoutEffect(() => {
+    if (open) hoverCloseRef.current = false;
+  }, [open]);
 
   const triggerElementRef = useMergedRefs<HTMLElement>(triggerRef, setTriggerElement);
   const surfaceElementRef = useMergedRefs<HTMLElement>(surfaceRef, setSurface, setFloating);
@@ -553,16 +575,20 @@ const PopoverRoot = ({
     surface,
     onOpen: () => {
       setHoverRequested(true);
-      setOpen(true);
+      requestOpen(true);
     },
-    onClose: () => setOpen(false),
+    onClose: () => {
+      // Before the request: a parent may apply it synchronously (flushSync).
+      hoverCloseRef.current = true;
+      setOpen(false);
+    },
     canClose: canHoverClose,
   });
 
   const onTriggerClick = useEventCallback(() => {
     cancelHover();
     if (open && reason === 'hover') setOpenReason('other');
-    else setOpen((current) => !current);
+    else requestOpen((current) => !current);
   });
 
   // The element the content follows in the keyboard order: in context mode the element focused
@@ -610,7 +636,7 @@ const PopoverRoot = ({
   const context = React.useMemo<PopoverContextValue>(
     () => ({
       open,
-      setOpen,
+      setOpen: requestOpen,
       contentId,
       setCustomContentId,
       triggerId,
@@ -637,7 +663,7 @@ const PopoverRoot = ({
     }),
     [
       open,
-      setOpen,
+      requestOpen,
       contentId,
       triggerId,
       resolvedTriggerId,

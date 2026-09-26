@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import type * as React from 'react';
 import { isDisabledTrigger, isEditableTarget, isOwnEvent } from '../lib/events';
 import { isInsideLayerTree } from '../lib/layers';
@@ -38,8 +38,9 @@ export interface ContextMenuAnchor {
   /** The origin of the last gesture. */
   origin: ContextOrigin | null;
   /**
-   * The element focused at the last gesture (not `<body>`, not inside the surface's layer tree),
-   * else `null`: the first focus-return target of a context-opened surface.
+   * The element focused at the gesture that opened the surface (not `<body>`, not inside the
+   * surface's layer tree), else `null`: the first focus-return target of a context-opened surface.
+   * Kept through its close; an open without a gesture (a controlled open) forgets it.
    */
   opener: React.RefObject<HTMLElement | null>;
   /** Compose onto the trigger. */
@@ -55,7 +56,7 @@ export interface ContextMenuAnchor {
   surfaceHandlers: { onContextMenu: React.MouseEventHandler<HTMLElement> };
 }
 
-/** Pixels the anchor's reference element may move before an outside scroll closes the surface. */
+/** Pixels a gesture's reference element may move before an outside scroll closes the surface. */
 const SCROLL_TOLERANCE = 2;
 
 /** Whether a keydown is the keyboard context gesture: Shift+F10 or the ContextMenu key. */
@@ -102,13 +103,18 @@ interface Gesture {
  *    surface. With `enabled: false` it is left to the browser (the surface handler is inert).
  * 5. **While open from a context gesture:** a `contextmenu` outside the layer tree and the trigger
  *    calls `onClose('outside-context-menu', event)` without preventing it; a scroll outside the
- *    layer tree calls `onClose('scroll', event)` only when the anchor's reference element (the
- *    point's `contextElement`, the keyboard anchor, else the trigger) moved more than 2 px since
- *    the gesture.
+ *    layer tree calls `onClose('scroll', event)` only when a reference element of the gesture moved
+ *    more than 2 px since the gesture. For a pointer gesture those are the element it landed on
+ *    (the row under the pointer, which a scroll of the region's content moves) and the trigger;
+ *    for a keyboard gesture the keyboard anchor, else the trigger. A scroll that moves none of them
+ *    (inertial scrolling still running at the right click, a scroll in an unrelated panel) is
+ *    ignored.
  * 6. `anchor` and `origin` are replaced at the next gesture, not reset on close. `fromContext` is
  *    decided when `open` becomes `true`: `true` when a gesture of the hook caused that open, else
  *    `false`; a gesture while open makes it `true` (the surface moves to the gesture). It keeps its
- *    value while the surface is closed or exiting.
+ *    value while the surface is closed or exiting. `opener` is kept through the close too, and
+ *    forgotten (`null`) when the surface opens without a gesture, so a close or Tab after that
+ *    open never returns to an earlier gesture's element.
  */
 export function useContextMenuAnchor(options: UseContextMenuAnchorOptions): ContextMenuAnchor {
   const { enabled, open, trigger, layerId, onOpen, onClose } = options;
@@ -131,10 +137,10 @@ export function useContextMenuAnchor(options: UseContextMenuAnchorOptions): Cont
   if (gesture && pending) setGesture({ ...gesture, pending: false });
 
   const opener = useRef<HTMLElement | null>(null);
-  // The keyboard flag and the reference element's rectangle at the gesture: written in handlers
+  // The keyboard flag and the reference elements' rectangles at the gesture: written in handlers
   // and effects only.
   const keyboardFlagRef = useRef<{ clear: () => void } | null>(null);
-  const referenceRef = useRef<{ element: Element; rect: DOMRect } | null>(null);
+  const referencesRef = useRef<Array<{ element: Element; rect: DOMRect }>>([]);
 
   const requestOpen = useEventCallback(onOpen);
   const requestClose = useEventCallback(onClose);
@@ -179,9 +185,17 @@ export function useContextMenuAnchor(options: UseContextMenuAnchorOptions): Cont
     [layerId],
   );
 
+  /** Records the gesture and the rectangles of the elements whose movement closes the surface. */
   const startGesture = useCallback(
-    (anchor: HTMLElement | VirtualElement | null, origin: ContextOrigin, reference: Element) => {
-      referenceRef.current = { element: reference, rect: reference.getBoundingClientRect() };
+    (
+      anchor: HTMLElement | VirtualElement | null,
+      origin: ContextOrigin,
+      references: readonly Element[],
+    ) => {
+      referencesRef.current = references.map((element) => ({
+        element,
+        rect: element.getBoundingClientRect(),
+      }));
       setGesture({ anchor, origin, pending: true });
     },
     [],
@@ -196,7 +210,11 @@ export function useContextMenuAnchor(options: UseContextMenuAnchorOptions): Cont
       if (keyboardFlagRef.current) return;
       const region = event.currentTarget;
       recordOpener(region.ownerDocument);
-      startGesture(pointAnchor(event.clientX, event.clientY, region), 'pointer', region);
+      // The element the gesture landed on (a row, which scrolls inside the region; `isOwnEvent`
+      // keeps it inside), and the region.
+      const target = event.target as Element;
+      const references = target === region ? [region] : [target, region];
+      startGesture(pointAnchor(event.clientX, event.clientY, region), 'pointer', references);
       requestOpen('pointer', event.nativeEvent);
     },
     [enabled, recordOpener, startGesture, requestOpen],
@@ -212,7 +230,7 @@ export function useContextMenuAnchor(options: UseContextMenuAnchorOptions): Cont
       recordOpener(region.ownerDocument);
       const target = event.target as HTMLElement;
       const anchor = target !== region ? target : null;
-      startGesture(anchor, 'keyboard', anchor ?? region);
+      startGesture(anchor, 'keyboard', [anchor ?? region]);
       requestOpen('keyboard', event.nativeEvent);
     },
     [enabled, setKeyboardFlag, recordOpener, startGesture, requestOpen],
@@ -226,6 +244,13 @@ export function useContextMenuAnchor(options: UseContextMenuAnchorOptions): Cont
     },
     [enabled],
   );
+
+  // The opener belongs to the gesture: an open that no gesture caused (a controlled open from a
+  // toolbar button) forgets the last gesture's, before any close or Tab can return to it. It is
+  // kept through the close of a gesture-opened surface, which returns focus to it.
+  useLayoutEffect(() => {
+    if (open && !nextFromContext) opener.current = null;
+  }, [open, nextFromContext]);
 
   // The flag clears when the surface closes; nothing is left behind on unmount.
   useEffect(() => {
@@ -247,12 +272,13 @@ export function useContextMenuAnchor(options: UseContextMenuAnchorOptions): Cont
     };
     const onScroll = (event: Event) => {
       if (!isOutside(event.target)) return;
-      const reference = referenceRef.current;
-      if (!reference) return;
-      const now = reference.element.getBoundingClientRect();
-      const moved =
-        Math.abs(now.left - reference.rect.left) > SCROLL_TOLERANCE ||
-        Math.abs(now.top - reference.rect.top) > SCROLL_TOLERANCE;
+      const moved = referencesRef.current.some(({ element, rect }) => {
+        const now = element.getBoundingClientRect();
+        return (
+          Math.abs(now.left - rect.left) > SCROLL_TOLERANCE ||
+          Math.abs(now.top - rect.top) > SCROLL_TOLERANCE
+        );
+      });
       if (moved) requestClose('scroll', event);
     };
     doc.addEventListener('contextmenu', onContextMenu, true);

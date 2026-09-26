@@ -2,6 +2,7 @@ import * as React from 'react';
 import { afterEach, beforeEach, describe, it, expect, expectTypeOf, vi } from 'vitest';
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import userEvent, { type UserEvent } from '@testing-library/user-event';
+import { flushSync } from 'react-dom';
 import { hydrateRoot } from 'react-dom/client';
 import { renderToString } from 'react-dom/server';
 import {
@@ -772,6 +773,43 @@ describe('Popover', () => {
       await user.click(screen.getByRole('button', { name: 'Elsewhere' }));
       expect(dialog()).not.toBeInTheDocument();
       expect(screen.getByRole('button', { name: 'Elsewhere' })).toHaveFocus();
+    });
+
+    it('returns focus to the trigger on Escape after a press on text in the content moved focus to <body>', async () => {
+      const user = userEvent.setup();
+      render(<Basic />);
+      const toggle = screen.getByRole('button', { name: 'Toggle' });
+      // A click focuses the trigger (Chromium, Firefox on Windows and Linux).
+      await user.click(toggle);
+      expect(toggle).toHaveFocus();
+      await user.click(screen.getByText('Popover body'));
+      expect(dialog()).toBeInTheDocument();
+      expect(document.body).toHaveFocus();
+      await user.keyboard('{Escape}');
+      expect(dialog()).not.toBeInTheDocument();
+      expect(toggle).toHaveFocus();
+    });
+
+    it('returns focus to the trigger on Escape when the click that opened it left the trigger unfocused', async () => {
+      const user = userEvent.setup();
+      render(
+        <Popover>
+          <Popover.Trigger>
+            {/* A click leaves the trigger unfocused, as in Safari and Firefox on macOS. */}
+            <button type="button" onMouseDown={(event) => event.preventDefault()}>
+              Toggle
+            </button>
+          </Popover.Trigger>
+          <Popover.Content>Popover body</Popover.Content>
+        </Popover>,
+      );
+      const toggle = screen.getByRole('button', { name: 'Toggle' });
+      await user.click(toggle);
+      expect(dialog()).toBeInTheDocument();
+      expect(document.body).toHaveFocus();
+      await user.keyboard('{Escape}');
+      expect(dialog()).not.toBeInTheDocument();
+      expect(toggle).toHaveFocus();
     });
 
     describe('with the wrapper-span trigger (asChild={false} and the automatic fallback)', () => {
@@ -1891,6 +1929,221 @@ describe('Popover', () => {
       expect(dialog()).not.toBeInTheDocument();
     });
 
+    /** A hover card whose trigger has a Tooltip; the card holds text, and a button with `follow`. */
+    function TooltipCard({ follow = false }: { follow?: boolean }) {
+      return (
+        <Popover openOnHover>
+          <Popover.Trigger>
+            <Tooltip content="Open the profile" openDelay={0}>
+              <button type="button">Profile</button>
+            </Tooltip>
+          </Popover.Trigger>
+          <Popover.Content title="Card">
+            <p>Product designer, Oslo</p>
+            {follow && <button type="button">Follow</button>}
+          </Popover.Content>
+        </Popover>
+      );
+    }
+
+    it('a hover close moves no focus: <body> keeps it, and a Tooltip on the trigger stays hidden', async () => {
+      render(<TooltipCard />);
+      await user.hover(trigger());
+      advance(300);
+      expect(screen.getByRole('dialog', { name: 'Card' })).toBeInTheDocument();
+      expect(document.body).toHaveFocus();
+      await user.unhover(trigger());
+      advance(600);
+      expect(dialog()).not.toBeInTheDocument();
+      expect(document.body).toHaveFocus();
+      advance(1000);
+      expect(screen.queryByRole('tooltip')).not.toBeInTheDocument();
+    });
+
+    it('a hover close after a press on text in the card (focus on <body>) moves no focus', async () => {
+      render(<TooltipCard />);
+      await user.hover(trigger());
+      advance(300);
+      await user.click(screen.getByText('Product designer, Oslo'));
+      expect(document.body).toHaveFocus();
+      await user.unhover(screen.getByRole('dialog'));
+      advance(600);
+      expect(dialog()).not.toBeInTheDocument();
+      expect(document.body).toHaveFocus();
+      advance(1000);
+      expect(screen.queryByRole('tooltip')).not.toBeInTheDocument();
+    });
+
+    it('a hover close after focus left a button in the card for <body> (a press on text) moves no focus', async () => {
+      render(<TooltipCard follow />);
+      await user.hover(trigger());
+      advance(300);
+      const follow = screen.getByRole('button', { name: 'Follow' });
+      await user.click(follow);
+      expect(follow).toHaveFocus();
+      await user.click(screen.getByText('Product designer, Oslo'));
+      expect(document.body).toHaveFocus();
+      await user.unhover(screen.getByRole('dialog'));
+      advance(600);
+      expect(dialog()).not.toBeInTheDocument();
+      expect(document.body).toHaveFocus();
+      advance(1000);
+      expect(screen.queryByRole('tooltip')).not.toBeInTheDocument();
+    });
+
+    it('a hover card inside a hover card goes along with the outer card’s hover close without moving focus', async () => {
+      render(
+        <>
+          <Popover openOnHover>
+            <Popover.Trigger>
+              <button type="button">Profile</button>
+            </Popover.Trigger>
+            <Popover.Content title="Card">
+              <p>Works with</p>
+              <Popover openOnHover closeDelay={5000}>
+                <Popover.Trigger>
+                  <button type="button">Ann</button>
+                </Popover.Trigger>
+                <Popover.Content title="Ann’s card">Team lead</Popover.Content>
+              </Popover>
+            </Popover.Content>
+          </Popover>
+          <button type="button">Elsewhere</button>
+        </>,
+      );
+      await user.hover(trigger());
+      advance(300);
+      await user.hover(screen.getByRole('button', { name: 'Ann' }));
+      advance(300);
+      expect(screen.getByRole('dialog', { name: 'Ann’s card' })).toBeInTheDocument();
+      expect(document.body).toHaveFocus();
+      // The outer card's closeDelay (500 ms) ends first and takes the inner card along.
+      await user.hover(screen.getByRole('button', { name: 'Elsewhere' }));
+      advance(600);
+      await act(async () => {});
+      expect(dialog()).not.toBeInTheDocument();
+      expect(document.body).toHaveFocus();
+    });
+
+    it('only the hover close leaves focus alone: Escape on a hover-opened card returns focus to the trigger', async () => {
+      render(<HoverCard />);
+      await user.hover(trigger());
+      advance(300);
+      expect(dialog()).toBeInTheDocument();
+      expect(document.body).toHaveFocus();
+      await user.keyboard('{Escape}');
+      expect(dialog()).not.toBeInTheDocument();
+      expect(trigger()).toHaveFocus();
+    });
+
+    it('a hover close the controlled parent refused does not linger: a later Escape returns focus to the trigger', async () => {
+      const onOpenChange = vi.fn();
+      function RefusingCard() {
+        const [open, setOpen] = React.useState(false);
+        const [refused, setRefused] = React.useState(false);
+        return (
+          <HoverCard
+            open={open}
+            onOpenChange={(next) => {
+              onOpenChange(next);
+              // The first close request is refused.
+              if (!next && !refused) setRefused(true);
+              else setOpen(next);
+            }}
+          />
+        );
+      }
+      render(<RefusingCard />);
+      await user.hover(trigger());
+      advance(300);
+      await user.unhover(trigger());
+      advance(600);
+      expect(onOpenChange.mock.calls).toEqual([[true], [false]]);
+      expect(dialog()).toBeInTheDocument();
+      expect(document.body).toHaveFocus();
+      await user.keyboard('{Escape}');
+      expect(onOpenChange.mock.calls).toEqual([[true], [false], [false]]);
+      expect(dialog()).not.toBeInTheDocument();
+      expect(trigger()).toHaveFocus();
+    });
+
+    it('after a hover close, an opening and a closing by the parent alone return focus from <body> to the trigger', async () => {
+      const onOpenChange = vi.fn();
+      function ParentCard({ forced }: { forced?: boolean }) {
+        const [open, setOpen] = React.useState(false);
+        return (
+          <HoverCard
+            open={forced ?? open}
+            onOpenChange={(next) => {
+              onOpenChange(next);
+              setOpen(next);
+            }}
+          />
+        );
+      }
+      const { rerender } = render(<ParentCard />);
+      await user.hover(trigger());
+      advance(300);
+      await user.unhover(trigger());
+      advance(600);
+      expect(onOpenChange.mock.calls).toEqual([[true], [false]]);
+      expect(dialog()).not.toBeInTheDocument();
+      expect(document.body).toHaveFocus();
+      rerender(<ParentCard forced />);
+      expect(dialog()).toBeInTheDocument();
+      rerender(<ParentCard forced={false} />);
+      expect(dialog()).not.toBeInTheDocument();
+      expect(trigger()).toHaveFocus();
+      expect(onOpenChange.mock.calls).toEqual([[true], [false]]);
+    });
+
+    it('a hover close that a controlled parent applies synchronously (flushSync) moves no focus', async () => {
+      function SyncCard() {
+        const [open, setOpen] = React.useState(false);
+        return <HoverCard open={open} onOpenChange={(next) => flushSync(() => setOpen(next))} />;
+      }
+      render(<SyncCard />);
+      await user.hover(trigger());
+      advance(300);
+      expect(dialog()).toBeInTheDocument();
+      await user.unhover(trigger());
+      advance(600);
+      expect(dialog()).not.toBeInTheDocument();
+      expect(document.body).toHaveFocus();
+    });
+
+    it('a hover close that a controlled parent applies in a transition still moves no focus', async () => {
+      function TransitionCard() {
+        const [open, setOpen] = React.useState(false);
+        return (
+          <Popover
+            openOnHover
+            open={open}
+            onOpenChange={(next) => {
+              if (next) setOpen(true);
+              else React.startTransition(() => setOpen(false));
+            }}
+          >
+            <Popover.Trigger>
+              <button type="button">Profile</button>
+            </Popover.Trigger>
+            <Popover.Content title="Card">
+              <p>Product designer, Oslo</p>
+            </Popover.Content>
+          </Popover>
+        );
+      }
+      render(<TransitionCard />);
+      await user.hover(trigger());
+      advance(300);
+      expect(screen.getByRole('dialog', { name: 'Card' })).toBeInTheDocument();
+      await user.unhover(trigger());
+      advance(600);
+      await act(async () => {});
+      expect(dialog()).not.toBeInTheDocument();
+      expect(document.body).toHaveFocus();
+    });
+
     it('openDelay and closeDelay set the timing', async () => {
       render(<HoverCard openDelay={100} closeDelay={1000} />);
       await user.hover(trigger());
@@ -2359,6 +2612,21 @@ describe('Popover', () => {
         expect(dialog()).not.toBeInTheDocument();
       });
 
+      it('a scroll of the region’s content that moves the row under the pointer closes it', () => {
+        const onOpenChange = vi.fn();
+        render(<FileList onOpenChange={onOpenChange} />);
+        mockRect(region(), { x: 100, y: 100, width: 300, height: 200 });
+        mockRect(row(3), { x: 100, y: 180, width: 300, height: 30 });
+        fireEvent.contextMenu(row(3), { button: 2, clientX: 300, clientY: 190 });
+        fireEvent.scroll(region());
+        expect(dialog()).toBeInTheDocument();
+        // The rows scroll inside the region, which stays where it is.
+        mockRect(row(3), { x: 100, y: 120, width: 300, height: 30 });
+        fireEvent.scroll(region());
+        expect(dialog()).not.toBeInTheDocument();
+        expect(onOpenChange.mock.calls).toEqual([[true], [false]]);
+      });
+
       it('suppresses the browser menu inside the content', () => {
         render(<FileList />);
         fireEvent.contextMenu(row(3), { button: 2, clientX: 300, clientY: 200 });
@@ -2423,6 +2691,84 @@ describe('Popover', () => {
         expect(screen.getByRole('button', { name: 'Share' })).toHaveFocus();
         await user.tab();
         expect(row(4)).toHaveFocus();
+      });
+
+      it('a Dialog opened from the content returns focus to the row the gesture came from when it closes', async () => {
+        const user = userEvent.setup();
+        function WithDialog() {
+          const [open, setOpen] = React.useState(false);
+          const [deleting, setDeleting] = React.useState(false);
+          return (
+            <>
+              <FileList
+                open={open}
+                onOpenChange={setOpen}
+                content={
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setOpen(false);
+                      setDeleting(true);
+                    }}
+                  >
+                    Delete…
+                  </button>
+                }
+              />
+              <Dialog open={deleting} onOpenChange={setDeleting}>
+                <Dialog.Content title="Delete Row 4?">
+                  <Dialog.Close>
+                    <button type="button">Cancel</button>
+                  </Dialog.Close>
+                </Dialog.Content>
+              </Dialog>
+            </>
+          );
+        }
+        render(<WithDialog />);
+        act(() => row(4).focus());
+        await user.keyboard('{Shift>}{F10}{/Shift}');
+        expect(screen.getByRole('button', { name: 'Delete…' })).toHaveFocus();
+        await user.click(screen.getByRole('button', { name: 'Delete…' }));
+        expect(screen.getByRole('dialog', { name: 'Delete Row 4?' })).toBeInTheDocument();
+        expect(screen.queryByRole('dialog', { name: 'File actions' })).not.toBeInTheDocument();
+        await user.click(screen.getByRole('button', { name: 'Cancel' }));
+        expect(dialog()).not.toBeInTheDocument();
+        expect(row(4)).toHaveFocus();
+      });
+
+      it('an open without a gesture forgets the gesture’s row: focus returns to the button that opened it, and the content follows the region', async () => {
+        const user = userEvent.setup();
+        function WithToolbar() {
+          const [open, setOpen] = React.useState(false);
+          return (
+            <>
+              <FileList open={open} onOpenChange={setOpen} />
+              <button type="button" onClick={() => setOpen(true)}>
+                More actions
+              </button>
+            </>
+          );
+        }
+        render(<WithToolbar />);
+        act(() => row(4).focus());
+        await user.keyboard('{Shift>}{F10}{/Shift}');
+        await user.keyboard('{Escape}');
+        expect(row(4)).toHaveFocus();
+
+        const more = screen.getByRole('button', { name: 'More actions' });
+        await user.click(more);
+        expect(screen.getByRole('dialog', { name: 'File actions' })).toBeInTheDocument();
+        act(() => screen.getByRole('button', { name: 'Open' }).focus());
+        await user.keyboard('{Escape}');
+        expect(dialog()).not.toBeInTheDocument();
+        expect(more).toHaveFocus();
+
+        // In the keyboard order the content follows the region (its first row), not row 4.
+        await user.click(more);
+        act(() => screen.getByRole('button', { name: 'Open' }).focus());
+        await user.tab({ shift: true });
+        expect(row(1)).toHaveFocus();
       });
 
       it('focuses the content itself when nothing in it can take focus', () => {

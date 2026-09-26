@@ -375,6 +375,40 @@ describe('useContextMenuAnchor', () => {
       expect(surface()).toBeNull();
     });
 
+    it('a scroll of the region’s content that moves the row under the pointer closes it', () => {
+      const { onClose } = setup();
+      mockRect(region(), { x: 0, y: 100, width: 300, height: 200 });
+      mockRect(row(3), { x: 0, y: 160, width: 300, height: 20 });
+      fireEvent.contextMenu(row(3), { button: 2, clientX: 40, clientY: 170 });
+      // The rows scroll inside the region; the region itself stays where it is.
+      mockRect(row(3), { x: 0, y: 100, width: 300, height: 20 });
+      fireEvent.scroll(region());
+      expect(onClose).toHaveBeenCalledWith('scroll', expect.any(Event));
+      expect(surface()).toBeNull();
+    });
+
+    it('a scroll that moves neither the row under the pointer nor the region does not close it', () => {
+      const { onClose } = setup();
+      mockRect(region(), { x: 0, y: 100, width: 300, height: 200 });
+      mockRect(row(3), { x: 0, y: 160, width: 300, height: 20 });
+      fireEvent.contextMenu(row(3), { button: 2, clientX: 40, clientY: 170 });
+      fireEvent.scroll(screen.getByRole('button', { name: 'Outside' }));
+      fireEvent.scroll(document);
+      expect(onClose).not.toHaveBeenCalled();
+      expect(surface()).not.toBeNull();
+    });
+
+    it('a right click on the region’s own box measures the region', () => {
+      const { onClose } = setup();
+      mockRect(region(), { x: 0, y: 100, width: 300, height: 200 });
+      fireEvent.contextMenu(region(), { button: 2, clientX: 250, clientY: 290 });
+      fireEvent.scroll(document);
+      expect(onClose).not.toHaveBeenCalled();
+      mockRect(region(), { x: 0, y: 40, width: 300, height: 200 });
+      fireEvent.scroll(document);
+      expect(onClose).toHaveBeenCalledWith('scroll', expect.any(Event));
+    });
+
     it('a scroll inside the surface does not close it, even when the region moved', () => {
       const { onClose } = setup();
       mockRect(region(), { x: 0, y: 100, width: 300, height: 200 });
@@ -445,6 +479,39 @@ describe('useContextMenuAnchor', () => {
       fireEvent.click(screen.getByRole('button', { name: 'Open from outside' }));
       expect(snapshot().open).toBe(true);
       expect(snapshot().fromContext).toBe(false);
+    });
+  });
+
+  describe('the opener belongs to the gesture', () => {
+    it('keeps the opener after the close of a gesture-opened surface', async () => {
+      const user = userEvent.setup();
+      const { snapshot } = setup();
+      act(() => row(3).focus());
+      await user.keyboard('{Shift>}{F10}{/Shift}');
+      await user.keyboard('{Escape}');
+      expect(snapshot().open).toBe(false);
+      expect(snapshot().opener).toBe(row(3));
+    });
+
+    it('forgets the opener when the surface opens without a gesture', async () => {
+      const user = userEvent.setup();
+      const { snapshot } = setup();
+      act(() => row(3).focus());
+      await user.keyboard('{Shift>}{F10}{/Shift}');
+      await user.keyboard('{Escape}');
+      await user.click(screen.getByRole('button', { name: 'Open from outside' }));
+      expect(snapshot().open).toBe(true);
+      expect(snapshot().opener).toBeNull();
+    });
+
+    it('records the opener of a gesture while a surface opened without one is open', async () => {
+      const user = userEvent.setup();
+      const { snapshot } = setup();
+      await user.click(screen.getByRole('button', { name: 'Open from outside' }));
+      act(() => row(2).focus());
+      fireEvent.contextMenu(row(2), { button: 2, clientX: 5, clientY: 6 });
+      expect(snapshot().fromContext).toBe(true);
+      expect(snapshot().opener).toBe(row(2));
     });
   });
 
