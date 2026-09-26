@@ -13,6 +13,7 @@ export { resolveSlot, renderSlot } from './lib/slot';
 export type { Slot, SlotObject, ResolvedSlot } from './lib/slot';
 export { composeEventHandlers } from './lib/composeEventHandlers';
 export { mergeRefs } from './lib/mergeRefs';
+export * from './lib/classNames';
 
 // Hooks
 export { useControllable } from './hooks/useControllable';

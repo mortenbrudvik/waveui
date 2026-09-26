@@ -34,6 +34,7 @@ import type {
   BreadcrumbItemAnchorProps,
   BreadcrumbItemButtonProps,
   BreadcrumbItemOwnProps,
+  buttonClassNames,
   ButtonProps,
   CheckboxLabelPosition,
   CheckboxProps,
@@ -118,6 +119,7 @@ import type {
   ToastController,
   ToasterProps,
   ToastPosition,
+  toggleButtonClassNames,
   ToggleButtonProps,
   Toolbar,
   ToolbarButton,
@@ -138,6 +140,7 @@ import type {
   ValidationState,
   VirtualElement,
   WaveDir,
+  waveProviderClassNames,
 } from '../index';
 
 const srcDir = fileURLToPath(new URL('..', import.meta.url));
@@ -304,6 +307,39 @@ const INTERNAL_HELPERS: Record<string, string> = {
     'mask: the 0.4 sort props are a type error next to the 0.5 sort API',
 };
 
+/**
+ * Public types of Fluent parity phase 3 (spec §4.3, §0.2 rule 24) that a wave-B prop reaches
+ * before INTEGRATION (wave C) exports them from the barrels: the walk skips them by name (the part
+ * after `#` of a label). INTEGRATION empties the list; a later phase fills it the same way.
+ */
+const PENDING_PUBLIC_TYPES: readonly string[] = [
+  'AlphaSliderLabels',
+  'AlphaSliderProps',
+  'ColorAreaLabels',
+  'ColorAreaProps',
+  'ColorPickerHexFieldProps',
+  'ColorPickerPreviewProps',
+  'ColorPickerSwatchesProps',
+  'ColorSliderLabels',
+  'ColorSliderProps',
+  'MessageBarActionsProps',
+  'MessageBarTitleProps',
+  'ToastBodyProps',
+  'ToastCloseProps',
+  'ToastCloseRenderProps',
+  'ToastDispatchOptions',
+  'ToastFooterProps',
+  'ToastTitleProps',
+  'ToasterHandle',
+  'ToasterShortcuts',
+  'TreeCheckedItemsChangeDetails',
+  'TreeItemPersonaLayoutProps',
+  'TreeLabels',
+];
+
+/** `components/feedback/Toaster.tsx#ToastDispatchOptions` → `ToastDispatchOptions`. */
+const typeNameOf = (label: string): string => label.slice(label.indexOf('#') + 1);
+
 /** A program over virtual files (plus the default lib), for testing the walker itself. */
 function createVirtualProgram(files: Record<string, string>, root: string): ts.Program {
   const options: ts.CompilerOptions = {
@@ -409,8 +445,17 @@ describe('public type surface (src/index.ts)', () => {
   };
 
   it('exports every named type that a public declaration refers to', () => {
-    expect(getUnexported().filter((label) => !(label in INTERNAL_HELPERS))).toEqual([]);
+    expect(
+      getUnexported().filter(
+        (label) =>
+          !(label in INTERNAL_HELPERS) && !PENDING_PUBLIC_TYPES.includes(typeNameOf(label)),
+      ),
+    ).toEqual([]);
   }, 60_000);
+
+  it('keeps PENDING_PUBLIC_TYPES sorted and free of duplicates', () => {
+    expect(PENDING_PUBLIC_TYPES).toEqual([...new Set(PENDING_PUBLIC_TYPES)].sort());
+  });
 
   it('lists only internal helpers that a public declaration still refers to', () => {
     const current = getUnexported();
@@ -750,5 +795,19 @@ describe('0.7 menus, popovers and toolbars from the package entry', () => {
     // @ts-expect-error the pressed state of a toolbar toggle is the Toolbar's checkedValues
     const pressed: ToolbarToggleButtonProps = { name: 'format', value: 'bold', pressed: true };
     expect([huge, checkbox, pressed]).toHaveLength(3);
+  });
+});
+
+describe('0.8 stable class names from the package entry', () => {
+  it('the registry constants are readonly objects of string literal types', () => {
+    expectTypeOf<(typeof buttonClassNames)['root']>().toEqualTypeOf<'wave-button'>();
+    expectTypeOf<(typeof buttonClassNames)['icon']>().toEqualTypeOf<'wave-button__icon'>();
+    expectTypeOf<typeof toggleButtonClassNames>().toHaveProperty('icon');
+    expectTypeOf<(typeof waveProviderClassNames)['root']>().toEqualTypeOf<'wave-root'>();
+    const assignRoot = (constants: typeof buttonClassNames) => {
+      // @ts-expect-error: the constants are `as const`, so their keys are readonly.
+      constants.root = 'wave-button';
+    };
+    expectTypeOf(assignRoot).toBeFunction();
   });
 });
