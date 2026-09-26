@@ -1,3 +1,4 @@
+import { defineConfig } from 'eslint/config';
 import js from '@eslint/js';
 import tseslint from 'typescript-eslint';
 import reactHooks from 'eslint-plugin-react-hooks';
@@ -93,12 +94,12 @@ const commonJsGlobals = {
   require: 'readonly',
 };
 
-export default tseslint.config(
+export default defineConfig(
   {
     ignores: ['dist/', 'node_modules/', 'coverage/', 'storybook-static/', '*.config.*'],
   },
   js.configs.recommended,
-  ...tseslint.configs.recommended,
+  tseslint.configs.recommended,
   {
     plugins: { 'react-hooks': reactHooks },
     rules: {
