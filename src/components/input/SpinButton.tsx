@@ -12,6 +12,7 @@ import {
 } from '../../lib/styles';
 import type { CoreSize, InputAppearance } from '../../lib/types';
 import { useControllable } from '../../hooks/useControllable';
+import { useEventCallback } from '../../hooks/useEventCallback';
 import { useFieldContext, useFieldControl } from '../../hooks/useFieldControl';
 import { useFormReset } from '../../hooks/useFormReset';
 import { useMergedRefs } from '../../hooks/useMergedRefs';
@@ -442,14 +443,15 @@ export const SpinButton = (props: SpinButtonProps | SpinButtonAllowEmptyProps): 
     }
   }, [displayValue, isControlled]);
 
-  const handleFocus = (e: React.FocusEvent<HTMLInputElement>) => {
+  // A stable callback, so composing it with the consumer's onFocus reads no ref during render.
+  const handleFocus = useEventCallback((e: React.FocusEvent<HTMLInputElement>) => {
     const input = e.target;
     reselectRef.current =
       input.value.length > 0 &&
       input.selectionStart === 0 &&
       input.selectionEnd === input.value.length;
     setFocused(true);
-  };
+  });
 
   const handleBlur = () => {
     commitDraft();
@@ -579,13 +581,7 @@ export const SpinButton = (props: SpinButtonProps | SpinButtonAllowEmptyProps): 
               : String(value))
         }
         onChange={(e) => setDraft(e.target.value)}
-        // Inlined rather than composeEventHandlers(onFocus, handleFocus, …): handleFocus writes a
-        // ref, and the lint rule (react-hooks/refs) only recognises a ref write as safe when the
-        // function that performs it is itself the JSX event handler, not a value passed to one.
-        onFocus={(e: React.FocusEvent<HTMLInputElement>) => {
-          onFocus?.(e);
-          handleFocus(e);
-        }}
+        onFocus={composeEventHandlers(onFocus, handleFocus, { checkDefaultPrevented: false })}
         onBlur={composeEventHandlers(onBlur, handleBlur, { checkDefaultPrevented: false })}
         onKeyDown={composeEventHandlers(onKeyDown, handleKeyDown)}
         onKeyUp={onKeyUp}
