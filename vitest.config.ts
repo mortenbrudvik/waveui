@@ -15,8 +15,8 @@ export default defineConfig({
     setupFiles: ['./src/test-setup.ts'],
     globals: true,
     // Claude Code's git worktrees live in .claude/worktrees/ inside the checkout. Git ignores them
-    // (.git/info/exclude), Vitest does not: without this, a run in the main checkout also runs
-    // every worktree's copy of the tests.
+    // (.gitignore), Vitest does not: without this, a run in the main checkout also runs every
+    // worktree's copy of the tests.
     exclude: [...configDefaults.exclude, '.claude/worktrees/**'],
     coverage: {
       provider: 'v8',
