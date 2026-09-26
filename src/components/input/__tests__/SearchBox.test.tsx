@@ -6,6 +6,7 @@ import { renderToString } from 'react-dom/server';
 import { SearchBox, type SearchBoxProps } from '../SearchBox';
 import { Button } from '../../button/Button';
 import { Portal } from '../../portal/Portal';
+import { WaveProvider } from '../../provider/WaveProvider';
 import type { Slot, SlotObject } from '../../../lib/types';
 import { inputInvalidWithin } from '../../../lib/styles';
 import {
@@ -1545,4 +1546,104 @@ describe('SearchBox', () => {
     render(<SearchBox aria-label="Search" defaultValue="abc" dismiss={<span>X</span>} />);
     await expectNoA11yViolations();
   });
+});
+
+describe('sizes and appearances (Phase 4 P4-01)', () => {
+  const box = () => screen.getByRole('searchbox', { name: 'Search' });
+  const root = () => box().closest('[data-size]') as HTMLElement;
+  // The brief's tests query { name: 'Clear' }; the real 0.7 default is DEFAULT_CLEAR_LABEL
+  // ('Clear search', SearchBox.tsx), so the queries here use that name instead.
+  const clear = () => screen.getByRole('button', { name: 'Clear search' });
+
+  it('renders the 0.7 classes and medium outline attributes by default', () => {
+    render(<SearchBox aria-label="Search" defaultValue="x" />);
+    expect(root()).toHaveClass('h-8', 'text-body-1', 'border-input', 'bg-background');
+    expect(root()).toHaveAttribute('data-size', 'medium');
+    expect(root()).toHaveAttribute('data-appearance', 'outline');
+    expect(clear()).toHaveClass('h-6', 'w-6', 'me-1');
+  });
+
+  it('small: 20px clear button with a 24px hit area anchored on the button itself', () => {
+    render(<SearchBox aria-label="Search" defaultValue="x" size="small" />);
+    expect(root()).toHaveClass('h-6', 'text-caption-1');
+    expect(clear()).toHaveClass(
+      'size-5',
+      'relative',
+      'before:absolute',
+      'before:-inset-0.5',
+      'me-1',
+    );
+  });
+
+  it('large: 32px clear button', () => {
+    render(<SearchBox aria-label="Search" defaultValue="x" size="large" />);
+    expect(root()).toHaveClass('h-10', 'text-body-2');
+    expect(clear()).toHaveClass('size-8');
+  });
+
+  it('takes the Field size and the provider appearance', () => {
+    renderWithFieldContext(
+      <WaveProvider inputDefaults={{ appearance: 'underline' }}>
+        <SearchBox />
+      </WaveProvider>,
+      { size: 'large' },
+    );
+    const el = screen.getByRole('searchbox', { name: FIELD_TEST_TEXT.label });
+    const wrapper = el.closest('[data-size]') as HTMLElement;
+    expect(wrapper).toHaveAttribute('data-size', 'large');
+    expect(wrapper).toHaveAttribute('data-appearance', 'underline');
+  });
+
+  it.each([
+    ['underline', ['rounded-none', 'border-0', 'border-b', 'bg-transparent']],
+    ['filled-darker', ['border-input-filled-stroke', 'bg-input-filled-darker']],
+    ['filled-lighter', ['border-input-filled-stroke', 'bg-input-filled-lighter']],
+  ] as const)('appearance="%s" renders its classes', (appearance, classes) => {
+    render(<SearchBox aria-label="Search" appearance={appearance} />);
+    expect(root()).toHaveClass(...classes);
+    expect(root()).toHaveAttribute('data-appearance', appearance);
+  });
+
+  it('takes the Field size; its own size wins', () => {
+    const { rerender } = renderWithFieldContext(<SearchBox />, { size: 'large' });
+    const wrapper = () =>
+      screen
+        .getByRole('searchbox', { name: FIELD_TEST_TEXT.label })
+        .closest('[data-size]') as HTMLElement;
+    expect(wrapper()).toHaveAttribute('data-size', 'large');
+    rerender(<SearchBox size="small" />);
+    expect(wrapper()).toHaveAttribute('data-size', 'small');
+  });
+
+  it('takes WaveProvider inputDefaults; its own props win', () => {
+    const { rerender } = renderWithProviders(<SearchBox aria-label="Search" />, {
+      inputDefaults: { size: 'small', appearance: 'underline' },
+    });
+    expect(root()).toHaveAttribute('data-size', 'small');
+    expect(root()).toHaveAttribute('data-appearance', 'underline');
+    rerender(<SearchBox aria-label="Search" size="large" appearance="outline" />);
+    expect(root()).toHaveAttribute('data-size', 'large');
+    expect(root()).toHaveAttribute('data-appearance', 'outline');
+  });
+
+  it.each(['underline', 'filled-darker'] as const)(
+    'an invalid %s field keeps the destructive border and the focus color on its bottom (own aria-invalid)',
+    (appearance) => {
+      render(<SearchBox aria-label="Search" appearance={appearance} aria-invalid />);
+      expect(root()).toHaveClass('border-destructive', 'focus-within:border-b-primary');
+    },
+  );
+
+  it.each(['underline', 'filled-darker'] as const)(
+    'an invalid %s field keeps the destructive border and the focus color on its bottom (Field error)',
+    (appearance) => {
+      renderWithFieldContext(<SearchBox appearance={appearance} />, {
+        errorId: FIELD_TEST_IDS.errorId,
+      });
+      const wrapper = screen
+        .getByRole('searchbox', { name: FIELD_TEST_TEXT.label })
+        .closest('[data-size]') as HTMLElement;
+      expect(wrapper).toHaveClass('border-destructive', 'focus-within:border-b-primary');
+    },
+  );
 });

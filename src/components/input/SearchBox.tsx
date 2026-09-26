@@ -13,8 +13,16 @@ import {
   slotRendersContent,
   slotWrapsDefaultContent,
 } from '../../lib/slot';
-import { focusRing, inputFocusWithin, inputInvalidWithin } from '../../lib/styles';
-import type { Slot, SlotObject } from '../../lib/types';
+import {
+  focusRing,
+  hitAreaLayer,
+  inputAppearanceClasses,
+  inputFocusWithin,
+  inputHeightClasses,
+  inputInvalidWithin,
+  inputTextClasses,
+} from '../../lib/styles';
+import type { CoreSize, InputAppearance, Slot, SlotObject } from '../../lib/types';
 import { useControllable } from '../../hooks/useControllable';
 import { useFieldControl } from '../../hooks/useFieldControl';
 import { useFormReset } from '../../hooks/useFormReset';
@@ -27,6 +35,7 @@ import {
   placeButtonIcon,
 } from '../button/Button.slots';
 import { isInvalidLook } from './Input';
+import { useInputLook } from './inputLook';
 
 /**
  * Props that SearchBox routes to its `<input>` (C-ROUTING): the id, the ARIA naming/validation
@@ -96,6 +105,17 @@ export interface SearchBoxProps
   /** Whether the search box is disabled and non-interactive. */
   disabled?: boolean;
   /**
+   * Size of the field: `small` (24px tall), `medium` (32px) or `large` (40px). Default: the
+   * surrounding Field's `size`, else `WaveProvider inputDefaults.size`, else `'medium'`.
+   */
+  size?: CoreSize;
+  /**
+   * Look of the field: `outline` (a full border), `underline` (a bottom stroke only),
+   * `filled-darker` or `filled-lighter` (a fill without a visible stroke: give the field a visible
+   * label). Default: `WaveProvider inputDefaults.appearance`, else `'outline'`.
+   */
+  appearance?: InputAppearance;
+  /**
    * Slot rendered before the text (replaces the default search icon). It takes the room it needs;
    * the text starts after it. A value that renders nothing (`null`, `false`, `''`, an empty array
    * or Fragment) keeps the default icon.
@@ -140,6 +160,15 @@ export interface SearchBoxProps
   /** Ref to the `<input type="search">` (the focusable control). */
   controlRef?: React.Ref<HTMLInputElement>;
 }
+
+/** Per-size metrics of SearchBox (medium is the 0.7 look). */
+const SEARCH_SIZE: Readonly<
+  Record<CoreSize, { before: string; after: string; input: string; clear: string; glyph: number }>
+> = {
+  small: { before: 'ps-1.5', after: 'pe-1.5', input: 'px-1.5', clear: 'size-5', glyph: 12 },
+  medium: { before: 'ps-2', after: 'pe-2', input: 'px-2', clear: 'h-6 w-6', glyph: 16 },
+  large: { before: 'ps-3', after: 'pe-3', input: 'px-3', clear: 'size-8', glyph: 20 },
+};
 
 type UnknownProps = Record<string, unknown>;
 
@@ -266,7 +295,7 @@ function splitButtonLike(type: unknown, props: UnknownProps, children: React.Rea
  * it is the default icon; a slot object with its own content props (`className`, `style`, …)
  * wraps the default icon in its element.
  */
-function resolveDismiss(dismiss: SearchBoxProps['dismiss']): DismissParts {
+function resolveDismiss(dismiss: SearchBoxProps['dismiss'], size: CoreSize): DismissParts {
   // The type is unwrapped (C-COMPOUND): a Button written in a Server Component arrives as a lazy
   // client reference, and must be merged like a plain one rather than nested inside the clear
   // button. A slot object is never an element, so the check can take any slot value as a node.
@@ -313,7 +342,11 @@ function resolveDismiss(dismiss: SearchBoxProps['dismiss']): DismissParts {
   // A button object without content (`{ onClick }`, `{ type: 'button' }`) or a content object
   // without children (`{ className }`) keeps the default icon inside the object's own element (its
   // className/style/attributes still apply). Markup of its own takes no children at all.
-  const contentChildren = empty ? <DismissIcon /> : hasChildren ? children : undefined;
+  const contentChildren = empty ? (
+    <DismissIcon size={SEARCH_SIZE[size].glyph} />
+  ) : hasChildren ? (
+    children
+  ) : undefined;
   const content =
     contentChildren === undefined
       ? React.createElement(Component, { 'aria-hidden': true, ...contentProps })
@@ -344,6 +377,10 @@ function resolveDismiss(dismiss: SearchBoxProps['dismiss']): DismissParts {
  *   the label, hint, error and required state automatically.
  * - **Forms**: with `name` the text is submitted with the form; a form reset restores
  *   `defaultValue`.
+ * - **Size and appearance**: `size` resolves from its own prop, then the surrounding `Field`'s
+ *   `size`, then `WaveProvider inputDefaults.size`, else `'medium'`; `appearance` from its own
+ *   prop, then `WaveProvider inputDefaults.appearance`, else `'outline'`; both render as
+ *   `data-size` and `data-appearance` on the root `<div>`.
  *
  * @example
  * <SearchBox aria-label="Search files" value={query} onValueChange={setQuery} />
@@ -356,6 +393,8 @@ export const SearchBox = ({
   onClear,
   placeholder = 'Search',
   disabled,
+  size: sizeProp,
+  appearance: appearanceProp,
   contentBefore,
   contentAfter,
   dismiss,
@@ -420,8 +459,9 @@ export const SearchBox = ({
     { nativeRequired: true },
   );
   const invalidLook = isInvalidLook(false, fieldProps['aria-invalid']);
+  const { size, appearance } = useInputLook(sizeProp, appearanceProp);
 
-  const dismissParts = resolveDismiss(dismiss);
+  const dismissParts = resolveDismiss(dismiss, size);
   const dismissKind = dismissParts.kind;
   React.useEffect(() => {
     if (dismissKind === 'element') {
@@ -512,7 +552,11 @@ export const SearchBox = ({
       'aria-label': hasOwnName || namedByContent ? undefined : DEFAULT_CLEAR_LABEL,
       className: cn(
         // Padding and background set here (C-NATIVE): an app-wide `button` rule cannot fill it.
-        'me-1 flex h-6 w-6 shrink-0 items-center justify-center rounded bg-transparent p-0 text-muted-foreground',
+        'me-1 flex shrink-0 items-center justify-center rounded bg-transparent p-0 text-muted-foreground',
+        SEARCH_SIZE[size].clear,
+        // hitAreaLayer needs a positioned element: unlike the picker buttons, the small clear
+        // button sits in the row without its own position, so it sets one here.
+        size === 'small' && cn('relative', hitAreaLayer),
         'not-disabled:not-aria-disabled:hover:text-foreground',
         focusRing,
         'disabled:cursor-not-allowed',
@@ -528,7 +572,7 @@ export const SearchBox = ({
       ? undefined
       : dismissKind === 'content'
         ? dismissParts.content
-        : (dismissParts.content ?? <DismissIcon />);
+        : (dismissParts.content ?? <DismissIcon size={SEARCH_SIZE[size].glyph} />);
   // A slot value that renders nothing is no slot (the default icon before the text, no box after).
   const hasBefore = slotRendersContent(contentBefore);
   const hasAfter = slotRendersContent(contentAfter);
@@ -536,10 +580,16 @@ export const SearchBox = ({
   return (
     <div
       ref={ref}
+      data-size={size}
+      data-appearance={appearance}
       className={cn(
         // The root draws the field; the slots, the text and the clear button are laid out side by
         // side inside it, so a slot never covers the text.
-        'relative inline-flex h-8 w-full items-center rounded border border-input border-b-stroke-accessible bg-background text-body-1 text-foreground',
+        'relative inline-flex w-full items-center',
+        inputHeightClasses[size],
+        inputTextClasses[size],
+        inputAppearanceClasses[appearance],
+        'text-foreground',
         inputFocusWithin,
         invalidLook && inputInvalidWithin,
         // The dimmed look lifts while a focus ring shows inside the root (a clear button kept
@@ -553,11 +603,11 @@ export const SearchBox = ({
       // Composed at press time, like the clear button's click: the handler reads the input ref.
       onMouseDown={(event) => composeEventHandlers(onMouseDown, handleRootMouseDown)(event)}
     >
-      <span className="flex shrink-0 items-center ps-2">
+      <span className={cn('flex shrink-0 items-center', SEARCH_SIZE[size].before)}>
         {hasBefore ? (
           renderSlot(contentBefore, 'span', 'shrink-0')
         ) : (
-          <SearchIcon className="text-muted-foreground" />
+          <SearchIcon size={SEARCH_SIZE[size].glyph} className="text-muted-foreground" />
         )}
       </span>
 
@@ -569,7 +619,9 @@ export const SearchBox = ({
         placeholder={placeholder}
         disabled={disabled}
         className={cn(
-          'h-full min-w-0 flex-1 appearance-none border-none bg-transparent px-2 text-body-1 text-foreground',
+          'h-full min-w-0 flex-1 appearance-none border-none bg-transparent text-foreground',
+          SEARCH_SIZE[size].input,
+          inputTextClasses[size],
           'placeholder:text-muted-foreground',
           'focus:outline-hidden',
           'disabled:cursor-not-allowed',
@@ -599,7 +651,7 @@ export const SearchBox = ({
       />
 
       {hasAfter && (
-        <span className="flex shrink-0 items-center pe-2">
+        <span className={cn('flex shrink-0 items-center', SEARCH_SIZE[size].after)}>
           {renderSlot(contentAfter, 'span', 'shrink-0')}
         </span>
       )}
