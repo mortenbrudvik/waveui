@@ -8,6 +8,7 @@
 import * as registry from '../lib/classNames';
 import * as entry from '../index';
 import { cn } from '../lib/cn';
+import { getStableClassNames } from '../test-utils';
 
 type ClassNameConstant = Readonly<Record<string, string>>;
 
@@ -126,5 +127,180 @@ describe('class-name registry: tailwind-merge (spec D3)', () => {
           .includes(cls),
     );
     expect(dropped).toEqual([]);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Completeness and the applied check (spec §1.4.3)
+// ---------------------------------------------------------------------------
+
+/**
+ * Public components that render no element of their own (spec D3), so they have no constant. An
+ * entry the package entry does not export yet (`ToastClose` before INTEGRATION) is ignored.
+ */
+const NO_ELEMENT: readonly string[] = [
+  'Dialog', // a context provider: Dialog.Content renders the surface
+  'DialogClose', // clones its child (asChild={false} renders a wrapper span that takes className)
+  'DialogTrigger', // clones its child
+  'DrawerClose', // clones its child
+  'DrawerTrigger', // clones its child
+  'MenuTrigger', // clones its child
+  'Popover', // a context provider: Popover.Content renders the surface
+  'PopoverTrigger', // clones its child
+  'Presence', // clones its child
+  'ToastClose', // clones its child (phase 3; exported by INTEGRATION)
+];
+
+/**
+ * The Phase 3 constants (`'<constant>'`: every key) and keys (`'<constant>.<key>'`) that the
+ * wave-B packages apply (spec §0.2 rule 24): the applied check and the component check skip them
+ * whether or not their package has landed. INTEGRATION (wave C) empties the list; a later phase
+ * fills it the same way.
+ */
+const PENDING_CLASS_NAMES: readonly string[] = [
+  'alphaSliderClassNames',
+  'colorAreaClassNames',
+  'colorPickerHexFieldClassNames',
+  'colorPickerPreviewClassNames',
+  'colorPickerSwatchesClassNames',
+  'colorSliderClassNames',
+  'messageBarActionsClassNames',
+  'messageBarTitleClassNames',
+  'toastBodyClassNames',
+  'toastFooterClassNames',
+  'toastTitleClassNames',
+  'toasterClassNames.toast',
+  'treeItemClassNames.actions',
+  'treeItemClassNames.aside',
+  'treeItemClassNames.iconAfter',
+  'treeItemClassNames.indicator',
+  'treeItemPersonaLayoutClassNames',
+];
+
+const isPending = (name: string, key?: string): boolean =>
+  PENDING_CLASS_NAMES.includes(name) ||
+  (key !== undefined && PENDING_CLASS_NAMES.includes(`${name}.${key}`));
+
+function isComponentLike(value: unknown): value is object {
+  return (
+    typeof value === 'function' ||
+    (typeof value === 'object' && value !== null && '$$typeof' in value)
+  );
+}
+
+function displayNameOf(value: object): string {
+  const own: unknown = Reflect.get(value, 'displayName');
+  if (typeof own === 'string') return own;
+  const inner: unknown = Reflect.get(value, 'type'); // React.memo(Component)
+  if ((typeof inner === 'function' || typeof inner === 'object') && inner !== null) {
+    const name: unknown = Reflect.get(inner, 'displayName');
+    if (typeof name === 'string') return name;
+  }
+  return '';
+}
+
+/** The entry's public components and their compound members, by flat name (`CardHeader`). */
+function publicComponents(): Map<string, object> {
+  const found = new Map<string, object>();
+  for (const [name, value] of Object.entries(entry)) {
+    if (!/^[A-Z]/.test(name) || !isComponentLike(value)) continue;
+    found.set(name, value);
+    for (const key of Object.keys(value)) {
+      const member: unknown = Reflect.get(value, key);
+      if (/^[A-Z]/.test(key) && isComponentLike(member)) found.set(`${name}${key}`, member);
+    }
+  }
+  return found;
+}
+
+/**
+ * The constant of a public component: by its flat name, else by its displayName (the alias table
+ * of `getStableClassNames`: `RadioItem`, `TableHead`, and `ComboboxOption`, whose value is Option).
+ */
+function constantOf(flatName: string, value: object): string | undefined {
+  const byName = `${flatName[0].toLowerCase()}${flatName.slice(1)}ClassNames`;
+  if (Object.hasOwn(registry, byName)) return byName;
+  return getStableClassNames(displayNameOf(value))?.constant;
+}
+
+describe('class-name registry: completeness (spec §1.4.3)', () => {
+  const components = publicComponents();
+
+  it('has a constant for every public component and compound member, or lists it on NO_ELEMENT', () => {
+    const missing = [...components]
+      .filter(
+        ([flat, value]) => constantOf(flat, value) === undefined && !NO_ELEMENT.includes(flat),
+      )
+      .map(([flat]) => flat)
+      .sort();
+    expect(missing).toEqual([]);
+  });
+
+  it('lists on NO_ELEMENT only components without a constant, sorted', () => {
+    const wrong = NO_ELEMENT.filter((flat) => {
+      const value = components.get(flat);
+      return value !== undefined && constantOf(flat, value) !== undefined;
+    });
+    expect(wrong).toEqual([]);
+    expect(NO_ELEMENT).toEqual([...new Set(NO_ELEMENT)].sort());
+  });
+
+  it("resolves every public component's displayName to its constant (the gate rule and testClassName find it)", () => {
+    const unresolved = [...components]
+      .filter(([flat, value]) => {
+        const constant = constantOf(flat, value);
+        return (
+          constant !== undefined && getStableClassNames(displayNameOf(value))?.constant !== constant
+        );
+      })
+      .map(([flat, value]) => `${flat} (displayName "${displayNameOf(value)}")`);
+    expect(unresolved).toEqual([]);
+  });
+
+  it('names every constant after a public component, except the pending Phase 3 constants', () => {
+    const orphans = constants
+      .map(([name]) => name)
+      .filter((name) => !isPending(name))
+      .filter(
+        (name) => !components.has(`${name[0].toUpperCase()}${name.slice(1, -'ClassNames'.length)}`),
+      );
+    expect(orphans).toEqual([]);
+  });
+});
+
+describe('class-name registry: applied in src/components (spec §1.4.3)', () => {
+  const sources = Object.values(
+    import.meta.glob<string>(['../components/**/*.{ts,tsx}', '!**/__tests__/**'], {
+      query: '?raw',
+      import: 'default',
+      eager: true,
+    }),
+  ).join('\n');
+
+  it('uses every root and part as <constant>.<key> in a component module, except the pending ones', () => {
+    const unapplied: string[] = [];
+    for (const [name, value] of constants) {
+      for (const key of Object.keys(value)) {
+        if (isPending(name, key)) continue;
+        if (!new RegExp(`(?<![\\w$])${name}\\.${key}(?![\\w$])`).test(sources)) {
+          unapplied.push(`${name}.${key}`);
+        }
+      }
+    }
+    expect(unapplied.sort()).toEqual([]);
+  });
+
+  it('keeps PENDING_CLASS_NAMES sorted, free of duplicates and naming registry entries', () => {
+    expect(PENDING_CLASS_NAMES).toEqual([...new Set(PENDING_CLASS_NAMES)].sort());
+    const unknown = PENDING_CLASS_NAMES.filter((pending) => {
+      const [name, key] = pending.split('.');
+      const constant: unknown = Reflect.get(registry, name);
+      return (
+        typeof constant !== 'object' ||
+        constant === null ||
+        (key !== undefined && !Object.hasOwn(constant, key))
+      );
+    });
+    expect(unknown).toEqual([]);
   });
 });
