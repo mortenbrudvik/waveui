@@ -1,4 +1,4 @@
-import { defineConfig } from 'vitest/config';
+import { configDefaults, defineConfig } from 'vitest/config';
 import tailwindcss from '@tailwindcss/vite';
 import react from '@vitejs/plugin-react';
 import { resolve } from 'path';
@@ -14,6 +14,10 @@ export default defineConfig({
     environment: 'jsdom',
     setupFiles: ['./src/test-setup.ts'],
     globals: true,
+    // Claude Code's git worktrees live in .claude/worktrees/ inside the checkout. Git ignores them
+    // (.git/info/exclude), Vitest does not: without this, a run in the main checkout also runs
+    // every worktree's copy of the tests.
+    exclude: [...configDefaults.exclude, '.claude/worktrees/**'],
     coverage: {
       provider: 'v8',
       reporter: ['text', 'lcov', 'json-summary'],
