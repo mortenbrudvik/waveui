@@ -104,6 +104,13 @@ export interface SpinButtonBaseProps
    */
   labels?: SpinButtonLabels;
   /**
+   * Text shown for the value while the field is not being edited, and its `aria-valuetext` (a
+   * `$1.00` for 1). While the field has focus and can be edited it shows the plain number, so
+   * typing edits the number. Applies only while `value` is controlled (update it with the
+   * value); Fluent's `displayValue`.
+   */
+  displayValue?: string;
+  /**
    * Size of the field: `small` (24px tall), `medium` (32px) or `large` (40px). Default: the
    * surrounding Field's `size`, else `WaveProvider inputDefaults.size`, else `'medium'`.
    *
@@ -233,6 +240,11 @@ const stepButtonClass = cn(
  *   own, or a required Field's) still blocks submitting an empty value: the check runs on the
  *   `HiddenInput` that carries the committed value, not on the shown text, so it keeps working
  *   even when the shown text is not empty.
+ * - **Display text**: `displayValue` shows formatted text (`$1.00`) for the value while the field
+ *   is not being edited, and as its `aria-valuetext`; while the field has focus and can be
+ *   edited it shows the plain number instead, so typing still edits the number (a consumer
+ *   `aria-valuetext` always wins). It applies only while `value` is controlled: an uncontrolled
+ *   spin button ignores it and warns once in development.
  * - **Size and appearance**: `size` resolves from its own prop, then the surrounding `Field`'s
  *   `size`, then `WaveProvider inputDefaults.size`, else `'medium'`; `appearance` from its own
  *   prop, then `WaveProvider inputDefaults.appearance`, else `'outline'`; both render as
@@ -270,6 +282,7 @@ export const SpinButton = (props: SpinButtonProps | SpinButtonAllowEmptyProps): 
     name,
     form,
     labels,
+    displayValue,
     size: sizeProp,
     appearance: appearanceProp,
     className,
@@ -305,10 +318,14 @@ export const SpinButton = (props: SpinButtonProps | SpinButtonAllowEmptyProps): 
 
   if (onChange !== undefined) warnDeprecated('SpinButton', 'onChange', 'onValueChange');
   const initialValue = defaultValue !== undefined ? defaultValue : allowEmpty ? null : 0;
-  const [value, setValue] = useControllable<number | null>(valueProp, initialValue, (next) => {
-    onValueChange?.(next);
-    if (next !== null) onChange?.(next);
-  });
+  const [value, setValue, isControlled] = useControllable<number | null>(
+    valueProp,
+    initialValue,
+    (next) => {
+      onValueChange?.(next);
+      if (next !== null) onChange?.(next);
+    },
+  );
 
   // The text is a draft while the user types (null = show the value).
   const [draft, setDraft] = React.useState<string | null>(null);
@@ -318,6 +335,12 @@ export const SpinButton = (props: SpinButtonProps | SpinButtonAllowEmptyProps): 
     setPrevValue(value);
     setDraft(null);
   }
+  // Phase 4 D15: whether the input currently has focus, tracked from the composed onFocus/onBlur
+  // below (after the consumer's), for the displayValue formula.
+  const [focused, setFocused] = React.useState(false);
+  // Whether the whole text was selected right before the focus that `focused` now reflects, so
+  // the effect below can reselect the whole new text once the shown text switches.
+  const reselectRef = React.useRef(false);
 
   const draftNumber = draft === null ? null : parseNumberText(draft);
   // What stepping starts from: the typed draft when it is a number, else the value. The −/+
@@ -331,6 +354,9 @@ export const SpinButton = (props: SpinButtonProps | SpinButtonAllowEmptyProps): 
 
   const clamp = (n: number) => Math.min(max, Math.max(min, n));
   const interactive = !disabled && !readOnly;
+  // Phase 4 D15: displayValue applies only while the value is controlled; while the field has
+  // focus and can be edited, the plain number always shows instead (never displayValue).
+  const showsDisplay = isControlled && displayValue !== undefined;
 
   const commit = (next: number) => {
     setDraft(null);
@@ -404,6 +430,41 @@ export const SpinButton = (props: SpinButtonProps | SpinButtonAllowEmptyProps): 
       );
     }
   });
+
+  // Phase 4 D15: an uncontrolled SpinButton ignores displayValue (it would make the shown text
+  // lie as soon as the value changes without a matching prop update).
+  React.useEffect(() => {
+    if (displayValue !== undefined && !isControlled) {
+      warnOnce(
+        'SpinButton:displayValue-uncontrolled',
+        'SpinButton: `displayValue` is ignored while the value is uncontrolled; pass `value` (and update it in `onValueChange`).',
+      );
+    }
+  }, [displayValue, isControlled]);
+
+  const handleFocus = (e: React.FocusEvent<HTMLInputElement>) => {
+    const input = e.target;
+    reselectRef.current =
+      input.value.length > 0 &&
+      input.selectionStart === 0 &&
+      input.selectionEnd === input.value.length;
+    setFocused(true);
+  };
+
+  const handleBlur = () => {
+    commitDraft();
+    setFocused(false);
+  };
+
+  // Reselects the whole text once the shown text switches (blur shows displayValue, and a
+  // programmatic focus that starts the field's editing mode shows the plain number) after a
+  // focus that started with everything selected (Tab, or a consumer onFocus that calls
+  // select()), so typing right after still replaces the whole value.
+  React.useLayoutEffect(() => {
+    if (!focused || !reselectRef.current) return;
+    reselectRef.current = false;
+    inputRef.current?.select();
+  }, [focused]);
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
     // Read-only: the keys keep their native caret behaviour and never change the value.
@@ -508,11 +569,24 @@ export const SpinButton = (props: SpinButtonProps | SpinButtonAllowEmptyProps): 
         aria-valuenow={value ?? undefined}
         aria-valuemin={Number.isFinite(min) ? min : undefined}
         aria-valuemax={Number.isFinite(max) ? max : undefined}
-        aria-valuetext={ariaValueText}
-        value={draft ?? (value === null ? '' : String(value))}
+        aria-valuetext={ariaValueText ?? (showsDisplay ? displayValue : undefined)}
+        value={
+          draft ??
+          (showsDisplay && !(focused && interactive)
+            ? displayValue
+            : value === null
+              ? ''
+              : String(value))
+        }
         onChange={(e) => setDraft(e.target.value)}
-        onFocus={onFocus}
-        onBlur={composeEventHandlers(onBlur, commitDraft, { checkDefaultPrevented: false })}
+        // Inlined rather than composeEventHandlers(onFocus, handleFocus, …): handleFocus writes a
+        // ref, and the lint rule (react-hooks/refs) only recognises a ref write as safe when the
+        // function that performs it is itself the JSX event handler, not a value passed to one.
+        onFocus={(e: React.FocusEvent<HTMLInputElement>) => {
+          onFocus?.(e);
+          handleFocus(e);
+        }}
+        onBlur={composeEventHandlers(onBlur, handleBlur, { checkDefaultPrevented: false })}
         onKeyDown={composeEventHandlers(onKeyDown, handleKeyDown)}
         onKeyUp={onKeyUp}
         disabled={disabled}

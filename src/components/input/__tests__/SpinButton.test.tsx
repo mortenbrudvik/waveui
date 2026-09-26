@@ -986,12 +986,13 @@ describe('allowEmpty (Phase 4 D16, D17)', () => {
   it('stepping from empty starts at 0 and clamps: min 1 gives 1 both ways', async () => {
     const user = userEvent.setup();
     const { unmount } = render(<SpinButton aria-label="Quantity" allowEmpty min={1} />);
-    spin().focus();
+    // Phase 4 D15 tracks focus (for displayValue): a bare .focus() now updates state too.
+    act(() => spin().focus());
     await user.keyboard('{ArrowUp}');
     expect(spin()).toHaveValue('1');
     unmount();
     render(<SpinButton aria-label="Quantity" allowEmpty min={1} />);
-    spin().focus();
+    act(() => spin().focus());
     await user.keyboard('{ArrowDown}');
     expect(spin()).toHaveValue('1');
   });
@@ -1010,7 +1011,11 @@ describe('allowEmpty (Phase 4 D16, D17)', () => {
       </form>,
     );
     const form = screen.getByRole('form', { name: 'Order' }) as HTMLFormElement;
-    expect(form.checkValidity()).toBe(false);
+    // Phase 4 D15 tracks focus (for displayValue): checkValidity() fires `invalid` on the empty
+    // required hidden input, whose handler now updates that state too.
+    act(() => {
+      expect(form.checkValidity()).toBe(false);
+    });
     const hidden = form.elements.namedItem('qty') as HTMLInputElement;
     expect(hidden.validity.valueMissing).toBe(true);
     act(() => form.requestSubmit());
@@ -1028,7 +1033,8 @@ describe('allowEmpty (Phase 4 D16, D17)', () => {
     );
     const form = screen.getByRole('form', { name: 'Order' }) as HTMLFormElement;
     expect(new FormData(form).get('qty')).toBe('');
-    spin().focus();
+    // Phase 4 D15 tracks focus (for displayValue): a bare .focus() now updates state too.
+    act(() => spin().focus());
     await user.keyboard('{ArrowUp}');
     expect(new FormData(form).get('qty')).toBe('1');
     await user.click(screen.getByRole('button', { name: 'Reset' }));
@@ -1069,5 +1075,144 @@ describe('allowEmpty (Phase 4 D16, D17)', () => {
     const flag: boolean = Math.random() > 1;
     // @ts-expect-error a boolean variable fits neither member
     render(<SpinButton aria-label="Quantity" allowEmpty={flag} value={null} />);
+  });
+});
+
+describe('displayValue (Phase 4 D15)', () => {
+  function Currency(props: { readOnly?: boolean }) {
+    const [value, setValue] = React.useState(1);
+    return (
+      <SpinButton
+        aria-label="Price"
+        value={value}
+        onValueChange={setValue}
+        displayValue={`$${value.toFixed(2)}`}
+        {...props}
+      />
+    );
+  }
+  const price = () => screen.getByRole('spinbutton', { name: 'Price' });
+
+  it('shows displayValue and uses it as aria-valuetext while not focused', () => {
+    render(<Currency />);
+    expect(price()).toHaveValue('$1.00');
+    expect(price()).toHaveAttribute('aria-valuetext', '$1.00');
+    expect(price()).toHaveAttribute('aria-valuenow', '1');
+  });
+
+  it('shows the plain number while focused and editable, and displayValue again after blur', async () => {
+    const user = userEvent.setup();
+    render(<Currency />);
+    await user.click(price());
+    expect(price()).toHaveValue('1');
+    expect(price()).toHaveAttribute('aria-valuetext', '$1.00');
+    await user.keyboard('{ArrowUp}');
+    expect(price()).toHaveValue('2');
+    expect(price()).toHaveAttribute('aria-valuetext', '$2.00');
+    await user.tab();
+    expect(price()).toHaveValue('$2.00');
+  });
+
+  it('reselects the whole text when the focus switch happens with everything selected', () => {
+    render(<Currency />);
+    const input = price() as HTMLInputElement;
+    input.setSelectionRange(0, input.value.length);
+    act(() => input.focus());
+    expect(input.value).toBe('1');
+    expect(input.selectionStart).toBe(0);
+    expect(input.selectionEnd).toBe(1);
+  });
+
+  it('keeps displayValue while focused but read-only', async () => {
+    const user = userEvent.setup();
+    render(<Currency readOnly />);
+    await user.click(price());
+    expect(price()).toHaveValue('$1.00');
+  });
+
+  it('a consumer aria-valuetext wins', () => {
+    render(
+      <SpinButton aria-label="Price" value={1} displayValue="$1.00" aria-valuetext="one dollar" />,
+    );
+    expect(price()).toHaveAttribute('aria-valuetext', 'one dollar');
+  });
+
+  it('is ignored when uncontrolled, with one warning', () => {
+    const warn = spyWarn();
+    try {
+      render(<SpinButton aria-label="Price" defaultValue={1} displayValue="$1.00" />);
+      expect(price()).toHaveValue('1');
+      expect(price()).not.toHaveAttribute('aria-valuetext');
+      expect(warn).toHaveBeenCalledTimes(1);
+      expect(warn).toHaveBeenCalledWith(
+        '[WaveUI] SpinButton: `displayValue` is ignored while the value is uncontrolled; pass `value` (and update it in `onValueChange`).',
+      );
+    } finally {
+      warn.mockRestore();
+    }
+  });
+
+  // Deferred from Task B6 (spec §2 P4-02 Tests: "required + empty: … also when a `displayValue`
+  // is shown for the empty value"), for a controlled value with allowEmpty. D15's "while focused
+  // and editable it shows the plain number" and D17's "while focused and editable, an empty value
+  // shows '' (never String(null))" both win over displayValue, so right after committing to null
+  // with Enter (which keeps focus) the field shows the empty text, not a display string. D17 also
+  // explains why the *hidden* input, not the visible one, decides validity: once blurred, the
+  // visible input legitimately shows its displayValue for the empty value, so its own `required`
+  // cannot catch the empty value (spec case added beyond the brief).
+  it('with a controlled value and displayValue, clearing and committing to null shows the empty text while still focused and the display text once blurred; required still blocks the empty value through the hidden input', async () => {
+    const user = userEvent.setup();
+    const onValueChange = vi.fn();
+    const onSubmit = vi.fn((event: React.FormEvent) => event.preventDefault());
+    function Order() {
+      const [value, setValue] = React.useState<number | null>(3);
+      return (
+        <form onSubmit={onSubmit} aria-label="Order">
+          <SpinButton
+            aria-label="Quantity"
+            allowEmpty
+            required
+            name="qty"
+            value={value}
+            onValueChange={(next) => {
+              onValueChange(next);
+              setValue(next);
+            }}
+            displayValue={value === null ? 'No value' : `${value} units`}
+          />
+        </form>
+      );
+    }
+    render(<Order />);
+    const form = screen.getByRole('form', { name: 'Order' }) as HTMLFormElement;
+
+    // Not focused yet: the empty-value rule does not apply (value is 3), so displayValue shows.
+    expect(spin()).toHaveValue('3 units');
+    await user.click(spin());
+    // Focused: the plain number, not the display text (D15).
+    expect(spin()).toHaveValue('3');
+    await user.clear(spin());
+    await user.keyboard('{Enter}');
+    expect(onValueChange).toHaveBeenCalledTimes(1);
+    expect(onValueChange).toHaveBeenCalledWith(null);
+    // Still focused right after commit: the focused/editable rule wins over displayValue even
+    // for the empty value.
+    expect(spin()).toHaveValue('');
+    expect(onSubmit).not.toHaveBeenCalled();
+
+    await user.tab();
+    // Blurred: the empty value now shows its displayValue ("shown for the empty value") — yet
+    // the hidden input, not this visible text, decides validity.
+    expect(spin()).toHaveValue('No value');
+    // checkValidity() fires `invalid` on the empty required hidden input, whose handler focuses
+    // the spinbutton (a state update, since Phase 4 D15 tracks focus for displayValue).
+    act(() => {
+      expect(form.checkValidity()).toBe(false);
+    });
+    const hidden = form.elements.namedItem('qty') as HTMLInputElement;
+    expect(hidden.validity.valueMissing).toBe(true);
+    act(() => form.requestSubmit());
+    expect(onSubmit).not.toHaveBeenCalled();
+    expect(spin()).toHaveFocus();
   });
 });
