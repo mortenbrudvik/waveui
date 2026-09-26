@@ -962,9 +962,9 @@ function preventMouseDown(event: React.MouseEvent): void {
  *   picker builds from its query.
  * - **Active option** is derived during render: the highlighted value, else the `autoHighlight`
  *   fallback. The highlight is reset on close and after a single-select commit that closes the
- *   listbox, and dropped once it is not navigable and enabled any more (filtered out, hidden,
- *   removed by an update, disabled; a disabled option stays with `disabledOptionsFocusable`), so
- *   it does not come back without a user action when the option returns. With
+ *   listbox, and dropped once it is not navigable any more (filtered out, hidden, removed by an
+ *   update, or disabled without `disabledOptionsFocusable`), so it does not come back without a
+ *   user action when the option returns. With
  *   `highlightOnFilter` the first option becomes active whenever the options change while open
  *   (`useActiveDescendant`'s `activateFirstOnChange`). Editable: a text-editing key (printable
  *   characters, Backspace/Delete, cut/paste/undo/redo) clears the highlight — visual focus
