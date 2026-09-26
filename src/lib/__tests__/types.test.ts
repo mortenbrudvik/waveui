@@ -22,6 +22,8 @@ import type {
   PopupRect,
   VirtualElement,
   PopupTarget,
+  CoreSize,
+  InputAppearance,
 } from '../types';
 import type { VirtualElement as FloatingVirtualElement } from '@floating-ui/react-dom';
 import type { DismissReason } from '../layers';
@@ -171,5 +173,18 @@ describe('popup anchors (Menu.Popover and Popover target)', () => {
 
   it('PopupTarget is an element, a VirtualElement or null', () => {
     expectTypeOf<PopupTarget>().toEqualTypeOf<HTMLElement | VirtualElement | null>();
+  });
+});
+
+describe('CoreSize and InputAppearance (Phase 4 D3, D4)', () => {
+  it('CoreSize is the three field sizes, a subset of Size', () => {
+    expectTypeOf<CoreSize>().toEqualTypeOf<'small' | 'medium' | 'large'>();
+    expectTypeOf<CoreSize>().toExtend<Size>();
+  });
+
+  it('InputAppearance has the four appearances', () => {
+    expectTypeOf<InputAppearance>().toEqualTypeOf<
+      'outline' | 'underline' | 'filled-darker' | 'filled-lighter'
+    >();
   });
 });

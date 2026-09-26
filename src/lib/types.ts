@@ -40,6 +40,18 @@ export type SelectionMode = 'single' | 'multiple';
 /** Font weight vocabulary shared by Text and Label (400 / 600 / 700). */
 export type TextWeight = 'regular' | 'semibold' | 'bold';
 
+/**
+ * The three-step size of text inputs, pickers, Field and Label (Fluent's field sizes): `small`
+ * (24px tall), `medium` (32px) and `large` (40px).
+ */
+export type CoreSize = Extract<Size, 'small' | 'medium' | 'large'>;
+
+/**
+ * Look of a text input or picker: `outline` (a full border), `underline` (a bottom stroke only),
+ * `filled-darker` or `filled-lighter` (a fill without a visible stroke).
+ */
+export type InputAppearance = 'outline' | 'underline' | 'filled-darker' | 'filled-lighter';
+
 /** Geometry of a surface (Image, Skeleton, SwatchPicker, …). */
 export type Shape = 'circular' | 'square' | 'rounded';
 
