@@ -992,6 +992,14 @@ describe('size and shape (Phase 4 D14)', () => {
     // @ts-expect-error Checkbox has no rounded shape
     render(<Checkbox label="Accept" shape="rounded" />);
   });
+
+  it('renders and reports the defaults for a size or shape from untyped code', () => {
+    // @ts-expect-error Checkbox has no small size
+    render(<Checkbox label="Accept" size="small" shape="rounded" />);
+    expect(box()).toHaveClass('h-[18px]', 'w-[18px]', 'rounded-xs');
+    expect(root()).toHaveAttribute('data-size', 'medium');
+    expect(root()).toHaveAttribute('data-shape', 'square');
+  });
 });
 
 describe('Checkbox — types', () => {

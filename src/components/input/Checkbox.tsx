@@ -253,11 +253,12 @@ export const Checkbox = ({
   useFormReset(buttonRef, () => setChecked(defaultChecked), form);
 
   const on = checked || indeterminate;
-  // Falls back to the default metrics for a size or shape outside the union: TypeScript rejects
-  // one (a type error, not a runtime path a correctly typed caller can reach), but the value
-  // still reaches this render function at runtime, so a lookup miss must not throw.
-  const sizeMetrics = CHECKBOX_SIZE[size] ?? CHECKBOX_SIZE.medium;
-  const shapeClass = CHECKBOX_SHAPE[shape] ?? CHECKBOX_SHAPE.square;
+  // A size or shape outside the unions (from untyped code) renders, and is reported in the data
+  // attributes, as the default: TypeScript rejects one, but the value still reaches this render.
+  const resolvedSize: CheckboxSize = Object.hasOwn(CHECKBOX_SIZE, size) ? size : 'medium';
+  const resolvedShape: CheckboxShape = Object.hasOwn(CHECKBOX_SHAPE, shape) ? shape : 'square';
+  const sizeMetrics = CHECKBOX_SIZE[resolvedSize];
+  const shapeClass = CHECKBOX_SHAPE[resolvedShape];
   // Focusable-disabled wins over `disabled`: the box stays focusable but looks and acts disabled.
   const unavailable = disabled || disabledFocusable;
   // The glyph is the forced-colors leaf; the box stays on system colors (see `checkedBox`).
@@ -272,8 +273,8 @@ export const Checkbox = ({
     <label
       ref={ref}
       data-label-position={labelPosition}
-      data-size={size}
-      data-shape={shape}
+      data-size={resolvedSize}
+      data-shape={resolvedShape}
       className={cn(
         // items-start: the box lines up with the first line of a label that wraps or has a second
         // line, not with its middle.
