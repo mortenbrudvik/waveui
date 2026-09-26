@@ -1,4 +1,10 @@
 import * as React from 'react';
+import {
+  tabListClassNames,
+  tabListPanelClassNames,
+  tabListPanelsClassNames,
+  tabListTabClassNames,
+} from '../../lib/classNames';
 import { flattenChildren, getElementType } from '../../lib/children';
 import { cn } from '../../lib/cn';
 import { composeEventHandlers } from '../../lib/composeEventHandlers';
@@ -437,6 +443,7 @@ const TabListRoot = ({
           role="tablist"
           aria-orientation={orientation}
           className={cn(
+            tabListClassNames.root,
             isVertical
               ? 'flex w-40 flex-col border-e border-border'
               : 'flex border-b border-border',
@@ -502,6 +509,7 @@ const Tab = ({ value, id: idProp, className, children, onClick, ref, ...rest }: 
       type="button"
       role="tab"
       className={cn(
+        tabListTabClassNames.root,
         'px-4 py-2 text-body-1 font-semibold transition-colors motion-reduce:transition-none',
         isVertical && 'text-start',
         selected
@@ -572,7 +580,7 @@ const TabPanel = ({ value, id: idProp, children, className, ref, ...rest }: TabP
     <div
       role="tabpanel"
       tabIndex={0}
-      className={cn('p-4', focusRing, className)}
+      className={cn(tabListPanelClassNames.root, 'p-4', focusRing, className)}
       {...rest}
       id={id}
       aria-labelledby={tabId}
@@ -601,7 +609,11 @@ export interface TabPanelsProps extends React.HTMLAttributes<HTMLDivElement> {
  * renders inside the tablist unless it is placed in `TabList.Panels`.
  */
 const TabPanels = ({ className, children, ref, ...rest }: TabPanelsProps) => (
-  <div ref={ref} className={cn('min-w-0 flex-1', className)} {...rest}>
+  <div
+    ref={ref}
+    className={cn(tabListPanelsClassNames.root, 'min-w-0 flex-1', className)}
+    {...rest}
+  >
     {children}
   </div>
 );

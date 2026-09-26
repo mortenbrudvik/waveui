@@ -1,4 +1,10 @@
 import * as React from 'react';
+import {
+  accordionClassNames,
+  accordionItemClassNames,
+  accordionPanelClassNames,
+  accordionTriggerClassNames,
+} from '../../lib/classNames';
 import { flattenChildren, getElementType } from '../../lib/children';
 import { cn } from '../../lib/cn';
 import { composeEventHandlers } from '../../lib/composeEventHandlers';
@@ -308,7 +314,11 @@ const AccordionRoot = (props: AccordionProps) => {
       <AccordionItemContext.Provider value={null}>
         <AccordionPanelSlotContext.Provider value={null}>
           <AccordionHeadingOutsideContext.Provider value={false}>
-            <div ref={ref} className={cn('divide-y divide-border', className)} {...rest}>
+            <div
+              ref={ref}
+              className={cn(accordionClassNames.root, 'divide-y divide-border', className)}
+              {...rest}
+            >
               {children}
             </div>
           </AccordionHeadingOutsideContext.Provider>
@@ -449,7 +459,7 @@ const AccordionItem = ({
       panelElement ??= panel;
       parts.push(
         wrapsTriggerOnly(child) ? (
-          <Heading key={key} className={HEADING_CLASS}>
+          <Heading key={key} className={cn(accordionTriggerClassNames.heading, HEADING_CLASS)}>
             <AccordionHeadingOutsideContext.Provider value={true}>
               {child}
             </AccordionHeadingOutsideContext.Provider>
@@ -489,7 +499,12 @@ const AccordionItem = ({
   return (
     <AccordionItemContext.Provider value={itemContext}>
       <AccordionPanelSlotContext.Provider value={panelSlot}>
-        <div ref={ref} data-state={isOpen ? 'open' : 'closed'} className={cn(className)} {...rest}>
+        <div
+          ref={ref}
+          data-state={isOpen ? 'open' : 'closed'}
+          className={cn(accordionItemClassNames.root, className)}
+          {...rest}
+        >
           {hasTrigger ? null : <AccordionTrigger>{value}</AccordionTrigger>}
           {parts}
           {!hasPanel && extra.length > 0 ? <AccordionPanel>{extra}</AccordionPanel> : null}
@@ -541,6 +556,7 @@ const AccordionTrigger = ({
     <button
       type="button"
       className={cn(
+        accordionTriggerClassNames.root,
         'flex w-full items-center justify-between gap-2 px-4 py-3 text-start text-body-1 font-semibold text-foreground',
         'not-disabled:not-aria-disabled:hover:bg-subtle-hover not-disabled:not-aria-disabled:active:bg-subtle-pressed',
         disabledStyles,
@@ -562,6 +578,7 @@ const AccordionTrigger = ({
       <ChevronDownIcon
         size={16}
         className={cn(
+          accordionTriggerClassNames.expandIcon,
           'shrink-0 transition-transform motion-reduce:transition-none',
           item.isOpen && 'rotate-180',
         )}
@@ -569,7 +586,11 @@ const AccordionTrigger = ({
     </button>
   );
   // Inside a wrapper chain (a Tooltip) the Item has rendered the heading around the wrapper.
-  return headingOutside ? button : <Heading className={HEADING_CLASS}>{button}</Heading>;
+  return headingOutside ? (
+    button
+  ) : (
+    <Heading className={cn(accordionTriggerClassNames.heading, HEADING_CLASS)}>{button}</Heading>
+  );
 };
 AccordionTrigger.displayName = 'AccordionTrigger';
 
@@ -599,7 +620,12 @@ const AccordionPanel = ({ id: idProp, className, children, ref, ...rest }: Accor
   if (inPanel) {
     // Misplaced: its content joins the enclosing region (one region and one panel id per item).
     return (
-      <div className={cn(className)} {...rest} id={idProp || undefined} ref={ref}>
+      <div
+        className={cn(accordionPanelClassNames.root, className)}
+        {...rest}
+        id={idProp || undefined}
+        ref={ref}
+      >
         {children}
       </div>
     );
@@ -608,7 +634,11 @@ const AccordionPanel = ({ id: idProp, className, children, ref, ...rest }: Accor
     <AccordionPanelSlotContext.Provider value={IN_PANEL}>
       <div
         role="region"
-        className={cn('px-4 pb-3 text-body-1 text-muted-foreground', className)}
+        className={cn(
+          accordionPanelClassNames.root,
+          'px-4 pb-3 text-body-1 text-muted-foreground',
+          className,
+        )}
         {...rest}
         id={idProp || item.panelId}
         aria-labelledby={item.triggerId}

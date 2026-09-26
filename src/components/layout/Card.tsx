@@ -1,4 +1,10 @@
 import * as React from 'react';
+import {
+  cardBodyClassNames,
+  cardClassNames,
+  cardFooterClassNames,
+  cardHeaderClassNames,
+} from '../../lib/classNames';
 import { cn } from '../../lib/cn';
 import { composeEventHandlers } from '../../lib/composeEventHandlers';
 import { hasWarned, isDev, warnOnce } from '../../lib/dev';
@@ -251,6 +257,7 @@ const CardRoot: PolymorphicComponent<'div', CardOwnProps> = (props) => {
         ref={mergedRef}
         data-selected={selected ? '' : undefined}
         className={cn(
+          cardClassNames.root,
           'overflow-hidden rounded-md border border-border bg-card shadow-4',
           // Positions the check glyph / checkbox; plain cards keep their 0.4 positioning.
           (selectable || selected !== undefined) && 'relative',
@@ -276,13 +283,17 @@ const CardRoot: PolymorphicComponent<'div', CardOwnProps> = (props) => {
             aria-label={selectLabel}
             aria-labelledby={selectLabel ? undefined : titleId}
             className={cn(
+              cardClassNames.checkbox,
               'absolute end-3 top-3 m-0 size-4 cursor-pointer accent-primary',
               focusRing,
             )}
           />
         )}
         {selected && !checkboxMode && (
-          <CheckIcon size={12} className="absolute end-2 top-2 text-primary" />
+          <CheckIcon
+            size={12}
+            className={cn(cardClassNames.checkmark, 'absolute end-2 top-2 text-primary')}
+          />
         )}
         {children}
       </Component>
@@ -330,14 +341,21 @@ export const CardHeader: PolymorphicComponent<'div', CardHeaderOwnProps> = (prop
   const hasSubtitle = slotRendersContent(subtitle);
   return (
     // In a checkbox card the header keeps clear of the checkbox in the top end corner.
-    <Component ref={ref} className={cn('p-4', titleId && 'pe-10', className)} {...rest}>
+    <Component
+      ref={ref}
+      className={cn(cardHeaderClassNames.root, 'p-4', titleId && 'pe-10', className)}
+      {...rest}
+    >
       {hasTitle && (
-        <div id={titleId ?? undefined} className="text-subtitle-1">
+        <div
+          id={titleId ?? undefined}
+          className={cn(cardHeaderClassNames.title, 'text-subtitle-1')}
+        >
           {materialiseSlotContent(title)}
         </div>
       )}
       {hasSubtitle && (
-        <div className="text-caption-1 text-muted-foreground">
+        <div className={cn(cardHeaderClassNames.subtitle, 'text-caption-1 text-muted-foreground')}>
           {materialiseSlotContent(subtitle)}
         </div>
       )}
@@ -368,7 +386,9 @@ type CardSectionImplProps = React.HTMLAttributes<HTMLElement> & {
 export const CardBody: PolymorphicComponent<'div', CardBodyOwnProps> = (props) => {
   const { as, className, ref, ...rest } = props as CardSectionImplProps;
   const Component: React.ElementType = as ?? 'div';
-  return <Component ref={ref} className={cn('p-4 pt-0', className)} {...rest} />;
+  return (
+    <Component ref={ref} className={cn(cardBodyClassNames.root, 'p-4 pt-0', className)} {...rest} />
+  );
 };
 CardBody.displayName = 'CardBody';
 
@@ -390,7 +410,11 @@ export const CardFooter: PolymorphicComponent<'div', CardFooterOwnProps> = (prop
   const { as, className, ref, ...rest } = props as CardSectionImplProps;
   const Component: React.ElementType = as ?? 'div';
   return (
-    <Component ref={ref} className={cn('flex justify-end gap-2 p-4 pt-0', className)} {...rest} />
+    <Component
+      ref={ref}
+      className={cn(cardFooterClassNames.root, 'flex justify-end gap-2 p-4 pt-0', className)}
+      {...rest}
+    />
   );
 };
 CardFooter.displayName = 'CardFooter';

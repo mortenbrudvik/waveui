@@ -1,4 +1,5 @@
 import * as React from 'react';
+import { treeClassNames, treeItemClassNames } from '../../lib/classNames';
 import { flattenChildren, isElementOfType } from '../../lib/children';
 import { cn } from '../../lib/cn';
 import { composeEventHandlers } from '../../lib/composeEventHandlers';
@@ -230,7 +231,7 @@ const TreeRoot = ({
       <TreeParentContext.Provider value={null}>
         <div
           role="tree"
-          className={cn('text-body-1', className)}
+          className={cn(treeClassNames.root, 'text-body-1', className)}
           {...rest}
           data-roving-container=""
           onKeyDown={composeEventHandlers(onKeyDown, handleKeyDown)}
@@ -387,7 +388,9 @@ const TreeItem = ({
   // to the row. The check does not consume a generator: renderSlot still renders its items.
   const iconNode =
     icon && slotRendersContent(icon)
-      ? renderSlot(icon, 'span', 'inline-flex shrink-0', { 'aria-hidden': true })
+      ? renderSlot(icon, 'span', cn(treeItemClassNames.icon, 'inline-flex shrink-0'), {
+          'aria-hidden': true,
+        })
       : null;
   const hasChildren = nestedItems.length > 0 && !leaf;
   const isSelected = ctx.selected !== undefined ? ctx.selected === value : undefined;
@@ -456,6 +459,7 @@ const TreeItem = ({
       aria-selected={isSelected}
       aria-current={isCurrent ? true : undefined}
       className={cn(
+        treeItemClassNames.root,
         // The focus ring is drawn on the row: an outline on the treeitem would surround its
         // whole subtree.
         'block outline-none',
@@ -481,6 +485,7 @@ const TreeItem = ({
       <div
         data-tree-row=""
         className={cn(
+          treeItemClassNames.row,
           'flex cursor-pointer items-center gap-1.5 rounded px-2 py-1 hover:bg-subtle-hover',
           isSelected && cn('bg-subtle-selected font-semibold', forcedColors.selectedContainer),
         )}
@@ -488,6 +493,7 @@ const TreeItem = ({
         {hasChildren ? (
           <ChevronRightIcon
             className={cn(
+              treeItemClassNames.expandIcon,
               'shrink-0 transition-transform motion-reduce:transition-none',
               isExpanded ? 'rotate-90' : 'wave-rtl:-scale-x-100',
             )}
@@ -496,14 +502,19 @@ const TreeItem = ({
           <span className="w-3 shrink-0" aria-hidden="true" />
         )}
         {iconNode}
-        <span id={labelId} data-tree-label="" data-roving-text={typeaheadText} className="truncate">
+        <span
+          id={labelId}
+          data-tree-label=""
+          data-roving-text={typeaheadText}
+          className={cn(treeItemClassNames.label, 'truncate')}
+        >
           <TreeLabelContext.Provider value>{labelContent}</TreeLabelContext.Provider>
         </span>
       </div>
       {hasChildren && isExpanded && (
         <TreeParentContext.Provider value={value}>
           <TreeLabelContext.Provider value={false}>
-            <div role="group" className="ps-4">
+            <div role="group" className={cn(treeItemClassNames.group, 'ps-4')}>
               {nestedItems}
             </div>
           </TreeLabelContext.Provider>

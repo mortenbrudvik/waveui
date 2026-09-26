@@ -1,4 +1,5 @@
 import * as React from 'react';
+import { overflowClassNames, overflowItemClassNames } from '../../lib/classNames';
 import { cn } from '../../lib/cn';
 import { isDev, reportMissingContext, warnOnce } from '../../lib/dev';
 import { useMergedRefs } from '../../hooks/useMergedRefs';
@@ -555,7 +556,7 @@ const OverflowRoot = ({ overflowButton, children, className, ref, ...rest }: Ove
         // row's box would then reach past its container, which a scroll container around an
         // edge-to-edge row (or the page) counts as overflow. The store measures the room without
         // the padding.
-        className={cn('flex items-center overflow-hidden p-1', className)}
+        className={cn(overflowClassNames.root, 'flex items-center overflow-hidden p-1', className)}
         {...rest}
       >
         {children}
@@ -570,7 +571,10 @@ const OverflowRoot = ({ overflowButton, children, className, ref, ...rest }: Ove
             ref={setButton}
             data-overflow-button=""
             data-overflow-pinned={pinned ? '' : undefined}
-            className="sticky -end-1 flex shrink-0 items-center self-stretch ps-1 data-[overflow-pinned]:bg-background data-[overflow-pinned]:pe-1"
+            className={cn(
+              overflowClassNames.overflowButton,
+              'sticky -end-1 flex shrink-0 items-center self-stretch ps-1 data-[overflow-pinned]:bg-background data-[overflow-pinned]:pe-1',
+            )}
           >
             {overflowButton(hiddenCount, buttonIds)}
           </div>
@@ -611,7 +615,7 @@ export const OverflowItem = ({
   return (
     <div
       ref={mergedRef}
-      className={cn('shrink-0', className)}
+      className={cn(overflowItemClassNames.root, 'shrink-0', className)}
       {...rest}
       style={isHidden ? { ...style, display: 'none' } : style}
       aria-hidden={isHidden ? true : ariaHidden}
