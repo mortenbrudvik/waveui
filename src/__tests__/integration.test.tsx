@@ -139,6 +139,24 @@ const menuitem = (name: string) => screen.getByRole('menuitem', { name });
 // Barrel
 // ---------------------------------------------------------------------------
 
+/**
+ * Flat names of compound members that a wave-B package attaches before INTEGRATION exports them
+ * from the barrels (Phase 3 spec §0.2 rules 21 and 24): the barrel test's twin of
+ * `PENDING_FLAT_EXPORTS` in `scripts/verify-dist.mjs`. Keep it sorted; Task I1 empties it.
+ */
+const PENDING_FLAT_MEMBERS: readonly string[] = [
+  'ColorPickerHexField',
+  'ColorPickerPreview',
+  'ColorPickerSwatches',
+  'MessageBarActions',
+  'MessageBarTitle',
+  'ToastBody',
+  'ToastClose',
+  'ToastFooter',
+  'ToastTitle',
+  'TreeItemPersonaLayout',
+];
+
 describe('public barrel (spec §5.11, C-COMPOUND)', () => {
   const barrel = Wave as unknown as Record<string, unknown>;
   const isComponent = (value: unknown) =>
@@ -157,13 +175,21 @@ describe('public barrel (spec §5.11, C-COMPOUND)', () => {
       if (members.length > 0) compounds += 1;
       for (const member of members) {
         const flat = `${name}${member}`;
-        if (!(flat in barrel)) missing.push(flat);
-        else if (barrel[flat] !== (value as Record<string, unknown>)[member]) different.push(flat);
+        if (!(flat in barrel)) {
+          if (!PENDING_FLAT_MEMBERS.includes(flat)) missing.push(flat);
+        } else if (barrel[flat] !== (value as Record<string, unknown>)[member]) {
+          different.push(flat);
+        }
       }
     }
     expect(compounds).toBeGreaterThanOrEqual(19);
     expect(missing).toEqual([]);
     expect(different).toEqual([]);
+  });
+
+  it('lists on PENDING_FLAT_MEMBERS only flat names the barrel does not export yet', () => {
+    expect(PENDING_FLAT_MEMBERS).toEqual([...new Set(PENDING_FLAT_MEMBERS)].sort());
+    expect(PENDING_FLAT_MEMBERS.filter((flat) => flat in barrel)).toEqual([]);
   });
 
   it('exports the new public hooks, utilities and Portal', () => {

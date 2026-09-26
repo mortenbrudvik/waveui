@@ -26,6 +26,7 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import {
   checkCjsParity,
+  checkClassNameExports,
   checkDeclarations,
   checkDevEnvironment,
   checkDirectives,
@@ -65,8 +66,8 @@ const DIRECTIVE = '"use client";\n';
 
 /**
  * The fixture's rolled-up declarations: every name on REQUIRED_DECLARATIONS (a utility, a
- * documented component, a props type, a documented compound and a hook), and the empty export
- * list that ends every roll-up.
+ * documented component, a props type, a documented compound, a hook and a class-name constant),
+ * and the empty export list that ends every roll-up.
  */
 const DTS =
   'export declare function cn(...inputs: unknown[]): string;\n' +
@@ -74,6 +75,7 @@ const DTS =
   'export declare type ButtonProps = { disabled?: boolean };\n' +
   '/** A menu. */\nexport declare const Menu: (props: object) => null;\n' +
   'export declare function usePresence(visible: boolean): { isMounted: boolean };\n' +
+  "export declare const buttonClassNames: { readonly root: 'wave-button'; readonly icon: 'wave-button__icon' };\n" +
   '\nexport { }\n';
 
 /** What vite-plugin-dts rolls up when TypeScript writes the declarations elsewhere. */
@@ -81,7 +83,7 @@ const EMPTY_ROLL_UP = 'export { }\n';
 
 /** A correct preserveModules dist: Button, a Card and a Dialog compound, a hook and `cn`. */
 function goodFiles() {
-  const component = (name, members = []) => {
+  const component = (name, members = [], constant) => {
     const parts = members.map(
       (member) =>
         `function ${name}${member}() { return null; }\n${name}${member}.displayName = '${name}${member}';\n`,
@@ -91,14 +93,17 @@ function goodFiles() {
           .map((member) => `${member}: ${name}${member}`)
           .join(', ')} });\n`
       : `export const ${name} = ${name}Root;\n`;
+    const classes = `${constant ? `${constant}.root, ` : ''}'${name.toLowerCase()}'`;
     const esm =
       `${DIRECTIVE}import { cn } from '../../lib/cn.mjs';\n` +
-      `function ${name}Root(props) { return cn('${name.toLowerCase()}', props && props.className); }\n` +
+      (constant ? `import { ${constant} } from '../../lib/classNames.mjs';\n` : '') +
+      `function ${name}Root(props) { return cn(${classes}, props && props.className); }\n` +
       `${name}Root.displayName = '${name}';\n${parts.join('')}${assign}` +
       (members.length ? `export { ${members.map((member) => name + member).join(', ')} };\n` : '');
     const cjs =
       `${DIRECTIVE}const { cn } = require('../../lib/cn.cjs');\n` +
-      `function ${name}Root(props) { return cn('${name.toLowerCase()}', props && props.className); }\n` +
+      (constant ? `const { ${constant} } = require('../../lib/classNames.cjs');\n` : '') +
+      `function ${name}Root(props) { return cn(${classes}, props && props.className); }\n` +
       `${name}Root.displayName = '${name}';\n${parts.join('')}` +
       `exports.${name} = Object.assign(${name}Root, { ${members
         .map((member) => `${member}: ${name}${member}`)
@@ -106,7 +111,7 @@ function goodFiles() {
       members.map((member) => `exports.${name}${member} = ${name}${member};\n`).join('');
     return { esm, cjs };
   };
-  const button = component('Button');
+  const button = component('Button', [], 'buttonClassNames');
   const card = component('Card', ['Header']);
   const dialog = component('Dialog', ['Trigger', 'Content']);
   // The presence core (0.7): a hook and a component on it, with React external.
@@ -158,6 +163,12 @@ function goodFiles() {
       "export function cn(...inputs) { return inputs.filter(Boolean).join(' '); }\n",
     'dist/lib/cn.cjs':
       "exports.cn = function cn(...inputs) { return inputs.filter(Boolean).join(' '); };\n",
+    'dist/lib/classNames.mjs':
+      "export const buttonClassNames = { root: 'wave-button', icon: 'wave-button__icon' };\n" +
+      "export const dialogContentClassNames = { root: 'wave-dialog-content', body: 'wave-dialog-content__body' };\n",
+    'dist/lib/classNames.cjs':
+      "exports.buttonClassNames = { root: 'wave-button', icon: 'wave-button__icon' };\n" +
+      "exports.dialogContentClassNames = { root: 'wave-dialog-content', body: 'wave-dialog-content__body' };\n",
     'dist/lib/dev.mjs': dev('export const isDev = isDevEnvironment();\n'),
     'dist/lib/dev.cjs': dev('exports.isDev = isDevEnvironment();\n'),
     'dist/hooks/useThing.mjs': `${DIRECTIVE}import { useState } from 'react';\nexport function useThing() { return useState(0); }\n`,
@@ -176,6 +187,7 @@ function goodFiles() {
     'dist/components/navigation/Menu.cjs': menu.cjs,
     'dist/index.mjs':
       "export { cn } from './lib/cn.mjs';\n" +
+      "export { buttonClassNames, dialogContentClassNames } from './lib/classNames.mjs';\n" +
       "export { useThing } from './hooks/useThing.mjs';\n" +
       "export { Button } from './components/button/Button.mjs';\n" +
       "export { Card, CardHeader } from './components/layout/Card.mjs';\n" +
@@ -186,6 +198,7 @@ function goodFiles() {
     'dist/index.cjs':
       "Object.defineProperty(exports, '__esModule', { value: true });\n" +
       "const cn = require('./lib/cn.cjs');\n" +
+      "const classNames = require('./lib/classNames.cjs');\n" +
       "const hook = require('./hooks/useThing.cjs');\n" +
       "const button = require('./components/button/Button.cjs');\n" +
       "const card = require('./components/layout/Card.cjs');\n" +
@@ -194,6 +207,8 @@ function goodFiles() {
       "const presence = require('./components/motion/Presence.cjs');\n" +
       "const menu = require('./components/navigation/Menu.cjs');\n" +
       'exports.cn = cn.cn;\nexports.useThing = hook.useThing;\nexports.Button = button.Button;\n' +
+      'exports.buttonClassNames = classNames.buttonClassNames;\n' +
+      'exports.dialogContentClassNames = classNames.dialogContentClassNames;\n' +
       'exports.Card = card.Card;\nexports.CardHeader = card.CardHeader;\n' +
       'exports.Dialog = dialog.Dialog;\nexports.DialogTrigger = dialog.DialogTrigger;\n' +
       'exports.DialogContent = dialog.DialogContent;\n' +
@@ -391,8 +406,8 @@ describe('checkDeclarations (repo-level#5)', () => {
       'dist/index.d.cts': EMPTY_ROLL_UP,
     });
     expect(checkDeclarations(dist)).toEqual([
-      "index.d.ts does not declare and export cn, Button, ButtonProps, Menu, usePresence (an empty or partial roll-up: check tsconfig.json's rootDir and the declaration plugin in vite.config.ts)",
-      "index.d.cts does not declare and export cn, Button, ButtonProps, Menu, usePresence (an empty or partial roll-up: check tsconfig.json's rootDir and the declaration plugin in vite.config.ts)",
+      "index.d.ts does not declare and export cn, Button, ButtonProps, Menu, usePresence, buttonClassNames (an empty or partial roll-up: check tsconfig.json's rootDir and the declaration plugin in vite.config.ts)",
+      "index.d.cts does not declare and export cn, Button, ButtonProps, Menu, usePresence, buttonClassNames (an empty or partial roll-up: check tsconfig.json's rootDir and the declaration plugin in vite.config.ts)",
     ]);
   });
 
@@ -413,7 +428,7 @@ describe('checkDeclarations (repo-level#5)', () => {
     expect(checkDeclarations(fixture({ 'dist/index.d.cts': EMPTY_ROLL_UP }).dist)).toEqual([
       expect.stringMatching(/index\.d\.cts differs/),
       expect.stringMatching(
-        /^index\.d\.cts does not declare and export cn, Button, ButtonProps, Menu, usePresence \(/,
+        /^index\.d\.cts does not declare and export cn, Button, ButtonProps, Menu, usePresence, buttonClassNames \(/,
       ),
     ]);
   });
@@ -935,12 +950,13 @@ describe('probeTreeShaking (repo-level#3)', () => {
     const files = goodFiles();
     const single =
       files['dist/lib/cn.mjs'] +
+      files['dist/lib/classNames.mjs'] +
       files['dist/components/button/Button.mjs']
         .replace(DIRECTIVE, '')
-        .replace(/^import .*\n/m, '') +
+        .replace(/^import .*\n/gm, '') +
       files['dist/components/overlays/Dialog.mjs']
         .replace(DIRECTIVE, '')
-        .replace(/^import .*\n/m, '');
+        .replace(/^import .*\n/gm, '');
     const { dist } = fixture({ 'dist/index.mjs': single });
     const errors = await probeTreeShaking(dist);
     expect(errors.join('\n')).toMatch(/index\.mjs/);
@@ -1080,17 +1096,157 @@ describe('probeSizeBudget', () => {
 });
 
 describe('the flat-name bridge (PENDING_FLAT_EXPORTS)', () => {
-  it('is empty: the real exports carry the flat name of every compound member, Toolbar included', async () => {
-    expect(PENDING_FLAT_EXPORTS).toEqual([]);
+  it('lists only exported components that are no compounds yet or still lack flat names (the real exports)', async () => {
     const mod = await import('../../src/index.ts');
     expect(Object.keys(mod.Toolbar).filter((key) => /^[A-Z]/.test(key))).not.toEqual([]);
-    expect(checkFlatExports(mod)).toEqual({ errors: [], pending: [], planned: [] });
-    expect(checkFlatExports(mod, { final: true })).toEqual({
-      errors: [],
-      pending: [],
-      planned: [],
-    });
+    const result = checkFlatExports(mod);
+    expect(result.errors).toEqual([]);
+    for (const name of PENDING_FLAT_EXPORTS) {
+      const pendingMember = result.pending.some(
+        (flat) => flat.startsWith(name) && /^[A-Z]/.test(flat.slice(name.length)),
+      );
+      expect(
+        result.planned.includes(name) || pendingMember,
+        `${name} is neither planned nor pending`,
+      ).toBe(true);
+    }
+    const final = checkFlatExports(mod, { final: true });
+    if (PENDING_FLAT_EXPORTS.length === 0) {
+      expect(final).toEqual({ errors: [], pending: [], planned: [] });
+    } else {
+      expect(final.errors).toEqual(
+        expect.arrayContaining([expect.stringMatching(/PENDING_FLAT_EXPORTS .*still lists/)]),
+      );
+    }
   }, 60_000);
+});
+
+describe('the class-name registry (P3-00)', () => {
+  it('requires the class-name constants in the roll-up (buttonClassNames)', () => {
+    expect(REQUIRED_DECLARATIONS).toContain('buttonClassNames');
+    const dts = DTS.replace(/^export declare const buttonClassNames.*\n/m, '');
+    expect(
+      checkDeclarations(fixture({ 'dist/index.d.ts': dts, 'dist/index.d.cts': dts }).dist),
+    ).toEqual([
+      expect.stringMatching(/^index\.d\.ts does not declare and export buttonClassNames \(/),
+      expect.stringMatching(/^index\.d\.cts does not declare and export buttonClassNames \(/),
+    ]);
+  });
+
+  it('reports an entry whose buttonClassNames is a client reference (from a "use client" module)', async () => {
+    const files = goodFiles();
+    const { dist } = fixture({
+      'dist/components/button/Button.mjs': `${files['dist/components/button/Button.mjs']}export { buttonClassNames } from '../../lib/classNames.mjs';\n`,
+      'dist/index.mjs': files['dist/index.mjs'].replace(
+        "export { buttonClassNames, dialogContentClassNames } from './lib/classNames.mjs';",
+        "export { buttonClassNames } from './components/button/Button.mjs';\n" +
+          "export { dialogContentClassNames } from './lib/classNames.mjs';",
+      ),
+    });
+    expect(await checkServerImport(dist)).toEqual([
+      expect.stringMatching(
+        /^index\.mjs under node --conditions=react-server: buttonClassNames is not a plain object/,
+      ),
+    ]);
+  });
+
+  it('reports a class-name module whose export is not an object of strings', async () => {
+    const files = goodFiles();
+    const { dist } = fixture({
+      'dist/lib/classNames.mjs': `${files['dist/lib/classNames.mjs']}export const brokenClassNames = { root: 1 };\n`,
+    });
+    expect(await checkServerImport(dist)).toEqual([
+      expect.stringMatching(
+        /^lib\/classNames\.mjs under node --conditions=react-server: brokenClassNames is not an object of class-name strings/,
+      ),
+    ]);
+  });
+
+  it('passes when the entry exports every class-name constant with the same value, in both formats', async () => {
+    expect(await checkClassNameExports(fixture().dist)).toEqual([]);
+  });
+
+  it('reports a registry constant the entry does not export', async () => {
+    const files = goodFiles();
+    const { dist } = fixture({
+      'dist/index.mjs': files['dist/index.mjs'].replace(
+        'export { buttonClassNames, dialogContentClassNames }',
+        'export { buttonClassNames }',
+      ),
+    });
+    expect(await checkClassNameExports(dist)).toEqual([
+      'index.mjs does not export dialogContentClassNames (a class-name constant of lib/classNames.mjs)',
+    ]);
+  });
+
+  it('reports a constant the entry exports with another value', async () => {
+    const files = goodFiles();
+    const { dist } = fixture({
+      'dist/index.cjs': files['dist/index.cjs'].replace(
+        'exports.buttonClassNames = classNames.buttonClassNames;',
+        "exports.buttonClassNames = { root: 'wave-button' };",
+      ),
+    });
+    expect(await checkClassNameExports(dist)).toEqual([
+      'index.cjs exports buttonClassNames with another value than lib/classNames.cjs',
+    ]);
+  });
+
+  it('reports a missing registry module', async () => {
+    expect(await checkClassNameExports(fixture({ 'dist/lib/classNames.cjs': null }).dist)).toEqual([
+      'lib/classNames.cjs is missing (the class-name registry, src/lib/classNames.ts)',
+    ]);
+  });
+});
+
+describe('probeTreeShaking: class-name strings (P3-00)', () => {
+  const strings = { keepStrings: ['wave-button'], dropStrings: ['wave-dialog-content'] };
+
+  it("passes when the bundle keeps Button's class string and drops the unused constant", async () => {
+    expect(await probeTreeShaking(fixture().dist, strings)).toEqual([]);
+  });
+
+  it('reports a string that should have been dropped', async () => {
+    const files = goodFiles();
+    const { dist } = fixture({
+      // Button now also uses the Dialog surface's constant, so its bundle keeps that string.
+      'dist/components/button/Button.mjs': files['dist/components/button/Button.mjs']
+        .replace(
+          'import { buttonClassNames } from',
+          'import { buttonClassNames, dialogContentClassNames } from',
+        )
+        .replace(
+          'cn(buttonClassNames.root, ',
+          'cn(buttonClassNames.root, dialogContentClassNames.root, ',
+        ),
+    });
+    expect(await probeTreeShaking(dist, strings)).toEqual([
+      'the bundle of an import of only Button contains the string "wave-dialog-content" (an unused class-name constant was not tree-shaken)',
+    ]);
+  });
+
+  it('reports a string the bundle lacks', async () => {
+    const files = goodFiles();
+    const { dist } = fixture({
+      'dist/components/button/Button.mjs': files['dist/components/button/Button.mjs']
+        .replace("import { buttonClassNames } from '../../lib/classNames.mjs';\n", '')
+        .replace('cn(buttonClassNames.root, ', 'cn('),
+    });
+    expect(await probeTreeShaking(dist, strings)).toEqual([
+      'the bundle of an import of only Button lacks the string "wave-button"',
+    ]);
+  });
+
+  it('reports a listed string that occurs in no module of dist (the probe would pass vacuously)', async () => {
+    expect(
+      await probeTreeShaking(fixture().dist, {
+        keepStrings: ['wave-button'],
+        dropStrings: ['wave-gone'],
+      }),
+    ).toEqual([
+      '"wave-gone", listed for the bundle of an import of only Button, occurs in no module of dist (the probe would pass vacuously)',
+    ]);
+  });
 });
 
 describe('verifyDist and main', () => {
@@ -1101,6 +1257,25 @@ describe('verifyDist and main', () => {
     const { dist } = fixture();
     const result = await verifyDist(dist, noPending);
     expect(result.errors).toEqual([]);
+  }, 30_000);
+
+  it('runs the class-name checks: a registry constant missing from the entry fails', async () => {
+    const files = goodFiles();
+    const { dist } = fixture({
+      'dist/index.mjs': files['dist/index.mjs'].replace(
+        'export { buttonClassNames, dialogContentClassNames }',
+        'export { buttonClassNames }',
+      ),
+      'dist/index.cjs': files['dist/index.cjs'].replace(
+        'exports.dialogContentClassNames = classNames.dialogContentClassNames;\n',
+        '',
+      ),
+    });
+    const { errors } = await verifyDist(dist, noPending);
+    expect(errors).toEqual([
+      'index.mjs does not export dialogContentClassNames (a class-name constant of lib/classNames.mjs)',
+      'index.cjs does not export dialogContentClassNames (a class-name constant of lib/classNames.cjs)',
+    ]);
   }, 30_000);
 
   it('collects the failures of every check', async () => {
