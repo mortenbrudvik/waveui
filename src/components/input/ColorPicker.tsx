@@ -14,6 +14,13 @@ import { isInvalidLook } from './Input';
 import { SwatchPicker } from './SwatchPicker';
 import type { SwatchItem } from './SwatchPicker';
 import {
+  DEFAULT_COLOR,
+  DEFAULT_COLOR_PICKER_LABELS,
+  type ColorPickerLabels,
+} from './ColorPicker.parts';
+
+export type { ColorPickerLabels };
+import {
   alphaToOpacity,
   formatHexColor,
   isHexDraft,
@@ -33,34 +40,6 @@ export interface ColorPickerPreset {
   color: string;
   /** Accessible name of the preset swatch, e.g. `'Cranberry'`. */
   label: string;
-}
-
-/**
- * Texts of the ColorPicker's own parts, for localisation. Every key is optional; missing keys use
- * the English default.
- */
-export interface ColorPickerLabels {
-  /** Visible caption above the hex field.
-   * @default 'Hex'
-   */
-  hex?: string;
-  /** Accessible name of the hex text field.
-   * @default 'Hex color value'
-   */
-  hexInput?: string;
-  /** Error text shown (and used as the hex field's description) while the typed text can never be
-   * a hex color, or when the field is left with text that is not one (such as `#12345`).
-   * @default 'Enter a hex color such as #0f6cbd.'
-   */
-  hexError?: string;
-  /** Accessible name of the preset swatches radiogroup.
-   * @default 'Preset colors'
-   */
-  presets?: string;
-  /** Visible label and accessible name of the opacity slider.
-   * @default 'Opacity'
-   */
-  opacity?: string;
 }
 
 /** Properties for the ColorPicker component. */
@@ -119,17 +98,6 @@ export interface ColorPickerProps extends Omit<
   /** Ref to the root `role="group"` element. */
   ref?: React.Ref<HTMLDivElement>;
 }
-
-// wave-allow-color: default color value (user color data, C-TOKENS exception)
-const DEFAULT_COLOR = '#0f6cbd';
-
-const DEFAULT_LABELS: Required<ColorPickerLabels> = {
-  hex: 'Hex',
-  hexInput: 'Hex color value',
-  hexError: `Enter a hex color such as ${DEFAULT_COLOR}.`,
-  presets: 'Preset colors',
-  opacity: 'Opacity',
-};
 
 const DEFAULT_PRESETS: readonly ColorPickerPreset[] = [
   { color: '#0f6cbd', label: 'Blue' }, // wave-allow-color: preset swatch data
@@ -257,7 +225,7 @@ export const ColorPicker = ({
   // below).
   const rawDefault = defaultValue ?? DEFAULT_COLOR;
   const initialValue = normalizeHexColor(rawDefault) ?? rawDefault;
-  const strings = { ...DEFAULT_LABELS, ...labels };
+  const strings = { ...DEFAULT_COLOR_PICKER_LABELS, ...labels };
   const [color, setColor] = useControllable(valueProp, initialValue, (next: string) => {
     onValueChange?.(next);
     onChange?.(next);

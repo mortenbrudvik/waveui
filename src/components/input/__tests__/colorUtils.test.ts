@@ -1,6 +1,13 @@
 import { describe, it, expect } from 'vitest';
 import {
+  alphaSliderGradient,
   alphaToOpacity,
+  alphaValueText,
+  areaValueText,
+  colorAreaGradient,
+  colorSliderGradient,
+  displayColor,
+  displayHue,
   formatHexColor,
   getCheckColors,
   getRelativeLuminance,
@@ -10,6 +17,11 @@ import {
   parseCssColor,
   parseHexColor,
   parseHexInput,
+  railKeyTarget,
+  sameColor,
+  sliderValueText,
+  toPercent,
+  toPosition,
 } from '../colorUtils';
 
 describe('parseHexColor', () => {
@@ -178,5 +190,110 @@ describe('getCheckColors', () => {
 
   it('falls back to a black glyph with a white halo for colors it cannot parse', () => {
     expect(getCheckColors('rebeccapurple')).toEqual({ glyph: BLACK, halo: WHITE });
+  });
+});
+
+describe('color part helpers (P3-05)', () => {
+  const none = { shiftKey: false, altKey: false, ctrlKey: false, metaKey: false };
+
+  it('displayHue keeps 0–360 (360 is the end of a hue rail) and wraps the rest', () => {
+    expect(
+      [0, 208, 360, 361, -30, 720, Number.NaN, Number.POSITIVE_INFINITY].map((h) => displayHue(h)),
+    ).toEqual([0, 208, 360, 1, 330, 0, 0, 0]);
+  });
+
+  it('displayColor clamps what a part shows; a missing or non-number alpha is opaque', () => {
+    expect(displayColor({ h: 720, s: 1.5, v: Number.NaN })).toEqual({ h: 0, s: 1, v: 0, a: 1 });
+    expect(displayColor({ h: -30, s: -1, v: 2, a: 1.4 })).toEqual({ h: 330, s: 0, v: 1, a: 1 });
+    expect(displayColor({ h: 10, s: 0.5, v: 0.5, a: Number.NaN })).toEqual({
+      h: 10,
+      s: 0.5,
+      v: 0.5,
+      a: 1,
+    });
+  });
+
+  it('toPercent rounds a 0–1 channel and toPosition writes a CSS percentage', () => {
+    expect(toPercent(0.72)).toBe(72);
+    expect(toPercent(0.726)).toBe(73);
+    expect(toPosition(0.7234)).toBe('72.34%');
+    expect(toPosition(1)).toBe('100%');
+  });
+
+  it('sameColor compares every channel, a missing alpha as 1', () => {
+    expect(sameColor({ h: 1, s: 0.5, v: 0.5 }, { h: 1, s: 0.5, v: 0.5, a: 1 })).toBe(true);
+    expect(sameColor({ h: 1, s: 0.5, v: 0.5 }, { h: 1, s: 0.5, v: 0.4 })).toBe(false);
+  });
+
+  it('railKeyTarget: 1 per arrow, 10 with Shift or a page key, the ends with Home and End, mirrored in RTL', () => {
+    expect(railKeyTarget('ArrowRight', none, 'ltr', 50, 100)).toBe(51);
+    expect(railKeyTarget('ArrowLeft', none, 'ltr', 50, 100)).toBe(49);
+    expect(railKeyTarget('ArrowLeft', none, 'rtl', 50, 100)).toBe(51);
+    expect(railKeyTarget('ArrowUp', none, 'rtl', 50, 100)).toBe(51);
+    expect(railKeyTarget('ArrowDown', { ...none, shiftKey: true }, 'ltr', 50, 100)).toBe(40);
+    expect(railKeyTarget('PageUp', none, 'ltr', 355, 360)).toBe(360);
+    expect(railKeyTarget('PageDown', none, 'ltr', 5, 100)).toBe(0);
+    expect(railKeyTarget('Home', none, 'ltr', 50, 360)).toBe(0);
+    expect(railKeyTarget('End', none, 'ltr', 50, 360)).toBe(360);
+    expect(railKeyTarget('Tab', none, 'ltr', 50, 100)).toBeNull();
+  });
+
+  it('railKeyTarget leaves browser shortcuts alone (Alt, Ctrl, Meta)', () => {
+    expect(railKeyTarget('ArrowLeft', { ...none, altKey: true }, 'ltr', 50, 100)).toBeNull();
+    expect(railKeyTarget('End', { ...none, ctrlKey: true }, 'ltr', 50, 100)).toBeNull();
+    expect(railKeyTarget('ArrowUp', { ...none, metaKey: true }, 'ltr', 50, 100)).toBeNull();
+  });
+
+  it('builds the gradients from the color', () => {
+    expect(colorAreaGradient(208)).toBe(
+      'linear-gradient(to top, #000000, transparent), linear-gradient(to right, #ffffff, #0088ff)',
+    );
+    expect(colorSliderGradient('hue', displayColor({ h: 0, s: 0, v: 0 }), 'vertical')).toBe(
+      'linear-gradient(to top, #ff0000, #ffff00, #00ff00, #00ffff, #0000ff, #ff00ff, #ff0000)',
+    );
+    expect(
+      colorSliderGradient('saturation', displayColor({ h: 0, s: 0.5, v: 1 }), 'horizontal'),
+    ).toBe('linear-gradient(to right, #ffffff, #ff0000)');
+    expect(colorSliderGradient('value', displayColor({ h: 0, s: 1, v: 0.3 }), 'horizontal')).toBe(
+      'linear-gradient(to right, #000000, #ff0000)',
+    );
+    expect(
+      alphaSliderGradient(displayColor({ h: 0, s: 1, v: 1, a: 0.5 }), false, 'horizontal'),
+    ).toBe('linear-gradient(to right, transparent, #ff0000)');
+    expect(alphaSliderGradient(displayColor({ h: 0, s: 1, v: 1 }), true, 'vertical')).toBe(
+      'linear-gradient(to top, #ff0000, transparent)',
+    );
+  });
+
+  it('writes the value texts, each starting with its own channel (D22)', () => {
+    const names = { saturation: 'Saturation', brightness: 'Brightness' };
+    const darkBlue = displayColor({ h: 220, s: 0.72, v: 0.4 });
+    expect(areaValueText(darkBlue, 'saturation', names)).toBe(
+      'Saturation 72%, Brightness 40%, dark blue',
+    );
+    expect(areaValueText(darkBlue, 'value', names)).toBe(
+      'Brightness 40%, Saturation 72%, dark blue',
+    );
+    expect(areaValueText(darkBlue, 'saturation', { ...names, colorName: () => '' })).toBe(
+      'Saturation 72%, Brightness 40%',
+    );
+    expect(
+      areaValueText(darkBlue, 'value', {
+        ...names,
+        valueText: (_color, channel) => `custom ${channel}`,
+      }),
+    ).toBe('custom value');
+
+    const brand = displayColor({ h: 210, s: 0.92, v: 0.74 });
+    expect(sliderValueText(brand, 'hue', {})).toBe('210°, blue');
+    expect(sliderValueText(brand, 'hue', { colorName: () => '' })).toBe('210°');
+    expect(sliderValueText(brand, 'saturation', {})).toBe('92%');
+    expect(sliderValueText(brand, 'value', {})).toBe('74%');
+
+    const translucent = displayColor({ h: 0, s: 1, v: 1, a: 0.4 });
+    expect(alphaValueText(translucent, false)).toBe('40%');
+    expect(alphaValueText(translucent, true)).toBe('60%');
+    expect(alphaValueText(displayColor({ h: 0, s: 1, v: 1 }), false)).toBe('100%');
+    expect(alphaValueText(translucent, true, (_color, t) => (t ? 'clear' : 'solid'))).toBe('clear');
   });
 });
