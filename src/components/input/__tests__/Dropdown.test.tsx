@@ -1,10 +1,16 @@
 import * as React from 'react';
-import { afterEach, describe, it, expect, vi } from 'vitest';
+import { afterEach, describe, it, expect, expectTypeOf, vi } from 'vitest';
 import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { renderToString } from 'react-dom/server';
 import { hydrateRoot } from 'react-dom/client';
-import { Dropdown, DropdownOption, DropdownOptionGroup, type DropdownLabels } from '../Dropdown';
+import {
+  Dropdown,
+  DropdownOption,
+  DropdownOptionGroup,
+  type DropdownLabels,
+  type DropdownProps,
+} from '../Dropdown';
 import { Option, OptionGroup } from '../Combobox';
 import {
   asClientReference,
@@ -16,6 +22,7 @@ import {
 } from '../../../test-utils';
 import { FIELD_TEST_IDS, FIELD_TEST_TEXT, renderWithFieldContext } from '../../../test-utils-field';
 import { DismissLayerProvider, useDismiss } from '../../../hooks/useDismiss';
+import { __getAnnouncerText, __resetAnnouncer } from '../../../hooks/useAnnounce';
 
 const FRUITS = [
   <Option key="a" value="a">
@@ -86,6 +93,7 @@ const DEPRECATED_ON_OPTION_SELECT =
 
 afterEach(() => {
   vi.restoreAllMocks();
+  __resetAnnouncer();
 });
 
 describe('Dropdown', () => {
@@ -1352,5 +1360,180 @@ describe('Dropdown', () => {
     const group = screen.getByRole('group', { name: 'Fruit' });
     expect(group.closest('[data-wave-listbox-surface]')).not.toBeNull();
     expect(within(group).getByRole('option', { name: 'Apple' })).toBeInTheDocument();
+  });
+
+  describe('multiselect', () => {
+    function renderMulti(props: Partial<DropdownProps<true>> = {}) {
+      return render(
+        <Dropdown aria-label="Fruit" multiselect {...props}>
+          {FRUITS}
+        </Dropdown>,
+      );
+    }
+
+    it('toggles options with Enter, Space and a click and keeps the list open', async () => {
+      const user = userEvent.setup();
+      const onValueChange = vi.fn();
+      renderMulti({ onValueChange });
+      await user.click(combobox());
+      await user.click(option('Apple'));
+      await user.keyboard('{ArrowDown}{Enter}{ArrowDown}{ }');
+      expect(onValueChange.mock.calls).toEqual([[['a']], [['a', 'b']], [['a', 'b', 'c']]]);
+      expect(listbox()).toHaveAttribute('aria-multiselectable', 'true');
+      expect(option('Banana')).toHaveAttribute('aria-selected', 'true');
+      expect(combobox()).toHaveAttribute('aria-expanded', 'true');
+    });
+
+    it('closes without committing on Tab, Escape and Alt+ArrowUp', async () => {
+      const user = userEvent.setup();
+      const onValueChange = vi.fn();
+      renderMulti({ onValueChange });
+      await user.click(combobox());
+      await user.keyboard('{ArrowDown}{Alt>}{ArrowUp}{/Alt}');
+      expect(combobox()).toHaveAttribute('aria-expanded', 'false');
+      expect(onValueChange).not.toHaveBeenCalled();
+    });
+
+    it('shows labels.selection of the labels in selection order, truncated, and leaves unknown values out', () => {
+      renderMulti({ defaultValue: ['c', 'zz', 'a'] });
+      const text = combobox().querySelector('span');
+      expect(text).toHaveTextContent('Cherry, Apple');
+      expect(text).toHaveClass('truncate');
+    });
+
+    it('localizes the joined text', () => {
+      renderMulti({ defaultValue: ['a', 'b'], labels: { selection: (l) => l.join('、') } });
+      expect(combobox()).toHaveTextContent('Apple、Banana');
+    });
+
+    it('announces each toggle, not a clear', async () => {
+      const user = userEvent.setup();
+      renderMulti({ clearable: true });
+      await user.click(combobox());
+      await user.click(option('Apple'));
+      expect(__getAnnouncerText()).toBe('Apple added, 1 selected');
+      await user.click(option('Apple'));
+      expect(__getAnnouncerText()).toBe('Apple removed, 0 selected');
+      await user.click(option('Banana'));
+      __resetAnnouncer();
+      await user.click(screen.getByRole('button', { name: 'Clear selection' }));
+      expect(__getAnnouncerText()).toBe('');
+    });
+
+    it('announces nothing for a controlled change', () => {
+      const { rerender } = render(
+        <Dropdown aria-label="Fruit" multiselect value={['a']}>
+          {FRUITS}
+        </Dropdown>,
+      );
+      rerender(
+        <Dropdown aria-label="Fruit" multiselect value={['a', 'b']}>
+          {FRUITS}
+        </Dropdown>,
+      );
+      expect(__getAnnouncerText()).toBe('');
+    });
+
+    it('clears every value and focuses the button', async () => {
+      const user = userEvent.setup();
+      const onValueChange = vi.fn();
+      renderMulti({ defaultValue: ['a', 'b'], clearable: true, onValueChange });
+      await user.click(screen.getByRole('button', { name: 'Clear selection' }));
+      expect(onValueChange).toHaveBeenLastCalledWith([]);
+      expect(combobox()).toHaveFocus();
+    });
+
+    it('submits one entry per value, requires one, and resets to defaultValue by content', async () => {
+      const user = userEvent.setup();
+      const onValueChange = vi.fn();
+      const { container } = render(
+        <form>
+          <Dropdown
+            aria-label="Fruit"
+            multiselect
+            name="fruit"
+            required
+            defaultValue={['a', 'b']}
+            onValueChange={onValueChange}
+          >
+            {FRUITS}
+          </Dropdown>
+          <button type="reset">Reset</button>
+        </form>,
+      );
+      const form = container.querySelector('form')!;
+      expect(new FormData(form).getAll('fruit')).toEqual(['a', 'b']);
+      await user.click(screen.getByRole('button', { name: 'Reset' }));
+      expect(onValueChange).not.toHaveBeenCalled();
+    });
+
+    it('fires the deprecated onOptionSelect per toggle', async () => {
+      const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+      const user = userEvent.setup();
+      const onOptionSelect = vi.fn();
+      renderMulti({ onOptionSelect });
+      await user.click(combobox());
+      await user.click(option('Apple'));
+      await user.click(option('Apple'));
+      expect(onOptionSelect.mock.calls).toEqual([['a'], ['a']]);
+      expect(warn.mock.calls).toEqual([[DEPRECATED_ON_OPTION_SELECT]]);
+    });
+
+    it('warns once for a duplicated value and toggles the first', async () => {
+      const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+      const user = userEvent.setup();
+      const onValueChange = vi.fn();
+      render(
+        <Dropdown aria-label="Fruit" multiselect onValueChange={onValueChange}>
+          <Option value="a">Apple</Option>
+          <Option value="a">Apricot</Option>
+        </Dropdown>,
+      );
+      expect(warn.mock.calls).toEqual([
+        [
+          '[WaveUI] Listbox: several options share the value "a". Option values must be unique within a listbox; only the first one can be highlighted and selected.',
+        ],
+      ]);
+      await user.click(combobox());
+      await user.click(option('Apricot'));
+      expect(onValueChange).toHaveBeenCalledWith(['a']);
+      // The store canonicalizes a duplicated value to the first registered item, whichever
+      // duplicate was clicked: the announced label is Apple's, not Apricot's.
+      expect(__getAnnouncerText()).toBe('Apple added, 1 selected');
+    });
+
+    it('calls onValueChange once per toggle in StrictMode', async () => {
+      const user = userEvent.setup();
+      const onValueChange = vi.fn();
+      render(
+        <React.StrictMode>
+          <Dropdown aria-label="Fruit" multiselect onValueChange={onValueChange}>
+            {FRUITS}
+          </Dropdown>
+        </React.StrictMode>,
+      );
+      await user.click(combobox());
+      await user.click(option('Cherry'));
+      expect(onValueChange).toHaveBeenCalledTimes(1);
+      expect(onValueChange).toHaveBeenCalledWith(['c']);
+      await user.click(option('Apple'));
+      expect(onValueChange).toHaveBeenCalledTimes(2);
+      expect(onValueChange).toHaveBeenCalledWith(['c', 'a']);
+    });
+  });
+
+  describe('multiselect types', () => {
+    it('types the value by signature and keeps ComponentProps', () => {
+      expectTypeOf<React.ComponentProps<typeof Dropdown>>().toEqualTypeOf<DropdownProps>();
+      void (
+        <Dropdown multiselect onValueChange={(v) => expectTypeOf(v).toEqualTypeOf<string[]>()} />
+      );
+      void (<Dropdown value="a" onValueChange={(v) => expectTypeOf(v).toEqualTypeOf<string>()} />);
+      // @ts-expect-error a string value with multiselect
+      void (<Dropdown multiselect value="a" />);
+      const flag = Math.random() > 0.5;
+      // @ts-expect-error a non-literal multiselect matches neither signature
+      void (<Dropdown multiselect={flag} />);
+    });
   });
 });
