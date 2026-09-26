@@ -482,8 +482,9 @@ function FontPicker({
         ref={buttonRef}
         onClick={() => setOpen((current) => !current)}
         onKeyDown={(event) => {
-          // Open with nothing shown: close, and leave Escape to an enclosing layer.
-          if (event.key === 'Escape' && open && !expanded) {
+          // Open with nothing shown: close, and leave Escape to an enclosing layer (not an Escape
+          // that only cancels an IME composition).
+          if (event.key === 'Escape' && open && !expanded && !event.nativeEvent.isComposing) {
             setOpen(false);
             return;
           }
@@ -705,6 +706,68 @@ describe('Option parts for custom pickers (option-2, option-3, listbox-2)', () =
       expect(option('Georgia').querySelector('[data-wave-option-box]')).toBeNull();
       expect(option('Georgia').querySelector('svg')).toBeNull();
     });
+
+    it('keeps the Highlight outline of a selected option while no box carries the state', async () => {
+      const user = userEvent.setup();
+      render(<FontPicker multiselect showCheck={false} defaultValues={['Georgia']} />);
+      await user.click(fontButton());
+      expect(fontButton()).toHaveAttribute('aria-expanded', 'true');
+      expect(option('Georgia')).toHaveClass('forced-colors:outline-[Highlight]');
+      expect(option('Arial')).not.toHaveClass('forced-colors:outline-[Highlight]');
+    });
+
+    it("draws a disabled option's box in the row's muted colour, checked or not", () => {
+      renderInListbox(
+        <>
+          <Option value="a" disabled>
+            Apple
+          </Option>
+          <Option value="b" disabled>
+            Banana
+          </Option>
+          <Option value="c" disabled checkIcon={<span data-testid="glyph-c">★</span>}>
+            Cherry
+          </Option>
+        </>,
+        { selected: ['a', 'c'], multiselect: true },
+      );
+      // The row's disabled look is its muted text colour, which the box follows.
+      expect(option('Apple')).toHaveAttribute('aria-disabled', 'true');
+      const disabledBox = [
+        'border-current',
+        'bg-transparent',
+        'forced-colors:border-[GrayText]',
+        'forced-colors:bg-[Canvas]',
+      ];
+      const checked = option('Apple').querySelector('[data-wave-option-box]');
+      expect(checked).toHaveClass(...disabledBox);
+      for (const cls of [
+        'border-primary',
+        'bg-primary',
+        'text-primary-foreground',
+        'forced-colors:bg-[Highlight]',
+        'forced-colors:text-[HighlightText]',
+        'forced-colors:forced-color-adjust-none',
+      ]) {
+        expect(checked).not.toHaveClass(cls);
+      }
+      expect(checked?.querySelector('svg')).toHaveClass(
+        'forced-colors:text-[GrayText]',
+        'forced-colors:forced-color-adjust-none',
+      );
+      const unchecked = option('Banana').querySelector('[data-wave-option-box]');
+      expect(unchecked).toHaveClass(...disabledBox);
+      expect(unchecked).not.toHaveClass('border-stroke-accessible');
+      expect(unchecked).not.toHaveClass('forced-colors:border-[ButtonText]');
+      expect(unchecked?.childNodes).toHaveLength(0);
+      // A custom glyph takes the same GrayText recipe.
+      const custom = option('Cherry').querySelector('[data-wave-option-box]');
+      expect(custom).toHaveClass(...disabledBox);
+      expect(screen.getByTestId('glyph-c').parentElement).toHaveClass(
+        'forced-colors:text-[GrayText]',
+        'forced-colors:forced-color-adjust-none',
+      );
+    });
   });
 
   describe('OptionGroup naming (option-3)', () => {
@@ -763,23 +826,59 @@ describe('Option parts for custom pickers (option-2, option-3, listbox-2)', () =
       expect(warn.mock.calls).toEqual([[GROUP_UNNAMED]]);
     });
 
-    it('warns once for a group without a label or a name, and for a label that is hidden text', () => {
+    it('warns once for a group without a label or a name', () => {
       const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
       renderInListbox(
-        <>
-          <OptionGroup>
-            <Option value="x">X</Option>
-          </OptionGroup>
-          <OptionGroup label={<span aria-hidden="true">🍋</span>}>
-            <Option value="y">Y</Option>
-          </OptionGroup>
-        </>,
+        <OptionGroup>
+          <Option value="x">X</Option>
+        </OptionGroup>,
       );
       expect(warn.mock.calls).toEqual([[GROUP_UNNAMED]]);
-      expect(screen.getAllByRole('group').map((group) => group.parentElement?.tagName)).toEqual([
-        'LI',
-        'LI',
-      ]);
+      // No heading: the presentation item holds only the group list.
+      expect(screen.getByRole('group').parentElement?.children).toHaveLength(1);
+    });
+
+    it('warns once for a label whose text is hidden from assistive technology', () => {
+      const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+      renderInListbox(
+        <OptionGroup label={<span aria-hidden="true">🍋</span>}>
+          <Option value="y">Y</Option>
+        </OptionGroup>,
+      );
+      // The heading shows its text, but the group it labels has no accessible name.
+      const group = screen.getByRole('group');
+      expect(group.previousElementSibling).toHaveTextContent('🍋');
+      expect(group).toHaveAccessibleName('');
+      expect(warn.mock.calls).toEqual([[GROUP_UNNAMED]]);
+    });
+
+    it('warns once for an empty aria-label, which names nothing and leaves out the heading', () => {
+      const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+      renderInListbox(
+        <OptionGroup label="Citrus" aria-label="">
+          <Option value="l">Lime</Option>
+        </OptionGroup>,
+      );
+      expect(screen.getByRole('group')).not.toHaveAttribute('aria-labelledby');
+      expect(warn.mock.calls).toEqual([[GROUP_UNNAMED]]);
+    });
+
+    it('checks the name again when a rerender changes the label', () => {
+      const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+      const { rerender } = renderInListbox(
+        <OptionGroup label="Citrus">
+          <Option value="l">Lime</Option>
+        </OptionGroup>,
+      );
+      expect(warn).not.toHaveBeenCalled();
+      rerender(
+        <ListboxHarness>
+          <OptionGroup label={<svg aria-hidden="true" />}>
+            <Option value="l">Lime</Option>
+          </OptionGroup>
+        </ListboxHarness>,
+      );
+      expect(warn.mock.calls).toEqual([[GROUP_UNNAMED]]);
     });
 
     it('does not warn for a label named by an image', () => {

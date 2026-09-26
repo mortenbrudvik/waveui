@@ -42,7 +42,9 @@ export interface OptionProps extends Omit<React.LiHTMLAttributes<HTMLLIElement>,
   /**
    * Whether the option is disabled: it stays in the list but can never be selected (a click, Enter
    * and Space do nothing). Keyboard navigation and typeahead skip it, unless the listbox keeps
-   * disabled options focusable (`disabledOptionsFocusable`), where they reach it.
+   * disabled options focusable (`disabledOptionsFocusable`), where they reach it. It is drawn in
+   * the muted text colour, its check included: in a multi-select list the checkbox square takes
+   * that colour instead of the brand colour, checked or not.
    * @default false
    */
   disabled?: boolean;
@@ -156,17 +158,33 @@ function useOptionGroupMembership(value: string): void {
   }, [groups, value]);
 }
 
+/*
+ * Forced colours of a disabled option's box, as Checkbox draws a disabled box: GrayText on Canvas
+ * for the square and its glyph, without the Highlight background of `forcedColors.selectedLeaf`.
+ */
+const DISABLED_BOX_FORCED_COLORS = 'forced-colors:border-[GrayText] forced-colors:bg-[Canvas]';
+const DISABLED_GLYPH_FORCED_COLORS =
+  'forced-colors:text-[GrayText] forced-colors:forced-color-adjust-none';
+
+/** What the check column of an option draws (see {@link renderCheck}). */
+interface CheckState {
+  selected: boolean;
+  multiselect: boolean;
+  disabled: boolean;
+}
+
 /**
  * The check column of an option. Single-select: the check glyph, kept in its place but not drawn
  * while the option is not selected, so the option texts line up. Multi-select: a 16px checkbox
  * square in Checkbox's colours, with the glyph inside only while selected; as a leaf indicator it
- * takes `forcedColors.selectedLeaf` while checked. `glyph` is the consumer's `checkIcon` when it
- * renders content, else `undefined` for the default glyph.
+ * takes `forcedColors.selectedLeaf` while checked. A disabled option's square follows the row, as
+ * the single-select glyph does: its muted text colour draws the square and the glyph, in place of
+ * the brand colour. `glyph` is the consumer's `checkIcon` when it renders content, else
+ * `undefined` for the default glyph.
  */
 function renderCheck(
   glyph: Slot<'span'> | undefined,
-  selected: boolean,
-  multiselect: boolean,
+  { selected, multiselect, disabled }: CheckState,
 ): React.ReactNode {
   if (!multiselect) {
     const classes = cn('shrink-0', !selected && 'invisible');
@@ -176,22 +194,32 @@ function renderCheck(
       renderSlot(glyph, 'span', cn('inline-flex', classes), { 'aria-hidden': true })
     );
   }
+  // One class set per state, so a disabled box never carries the brand classes it replaces.
+  let boxClasses: string;
+  if (disabled) {
+    boxClasses = cn('border-current bg-transparent', DISABLED_BOX_FORCED_COLORS);
+  } else if (selected) {
+    boxClasses = cn('border-primary bg-primary text-primary-foreground', forcedColors.selectedLeaf);
+  } else {
+    boxClasses = cn('border-stroke-accessible bg-transparent', forcedColors.control);
+  }
+  const glyphClasses = disabled ? DISABLED_GLYPH_FORCED_COLORS : undefined;
   return (
     <span
       aria-hidden="true"
       data-wave-option-box=""
       className={cn(
         'flex h-4 w-4 shrink-0 items-center justify-center rounded-xs border',
-        selected
-          ? cn('border-primary bg-primary text-primary-foreground', forcedColors.selectedLeaf)
-          : cn('border-stroke-accessible bg-transparent', forcedColors.control),
+        boxClasses,
       )}
     >
       {selected &&
         (glyph === undefined ? (
-          <CheckIcon size={12} />
+          <CheckIcon size={12} className={glyphClasses} />
         ) : (
-          renderSlot(glyph, 'span', 'inline-flex shrink-0', { 'aria-hidden': true })
+          renderSlot(glyph, 'span', cn('inline-flex shrink-0', glyphClasses), {
+            'aria-hidden': true,
+          })
         ))}
     </span>
   );
@@ -254,13 +282,14 @@ function OptionImpl(props: OptionProps) {
       onPointerMove={composeEventHandlers(onPointerMove, highlightOption)}
       className={cn(
         OPTION_CLASSES,
-        // Multi-select: the box carries the state, and `forcedColors.selectedContainer` would draw
-        // every selected option like the active one in forced colours.
-        selected && !multiselect && forcedColors.selectedContainer,
+        // While a multi-select option draws its box, the box carries the state, and
+        // `forcedColors.selectedContainer` would draw every selected option like the active one.
+        selected && !(multiselect && showCheck) && forcedColors.selectedContainer,
         className,
       )}
     >
-      {showCheck && renderCheck(checkIconRenders ? checkIcon : undefined, selected, multiselect)}
+      {showCheck &&
+        renderCheck(checkIconRenders ? checkIcon : undefined, { selected, multiselect, disabled })}
       <span className="min-w-0 flex-1">{children ?? value}</span>
     </li>
   );
@@ -352,6 +381,27 @@ function nameText(node: Node | null): string {
   return text;
 }
 
+/**
+ * Whether a group's list has a name, for the development check of `OptionGroup`, in the order the
+ * name is computed: a consumer `aria-labelledby` that is not blank (its presence counts; the
+ * elements it names are not read), else a non-blank `aria-label`, else the heading that labels the
+ * list. A string or number label is its own text; only an element label is read from the rendered
+ * heading ({@link nameText}).
+ */
+function groupHasName(
+  label: React.ReactNode,
+  ariaLabel: string | undefined,
+  labelledBy: string | undefined,
+  labelId: string,
+  heading: HTMLElement | null,
+): boolean {
+  if (labelledBy !== undefined && labelledBy !== labelId && labelledBy.trim() !== '') return true;
+  if (ariaLabel !== undefined && ariaLabel.trim() !== '') return true;
+  if (labelledBy !== labelId) return false;
+  if (typeof label === 'string' || typeof label === 'number') return String(label).trim() !== '';
+  return nameText(heading).trim() !== '';
+}
+
 const UNNAMED_GROUP_WARNING = 'OptionGroup:unnamed';
 
 function OptionGroupImpl({
@@ -397,21 +447,17 @@ function OptionGroupImpl({
   const hasLabel = slotRendersContent(label);
   const labelledBy = ariaLabelledBy ?? (ariaLabel === undefined && hasLabel ? labelId : undefined);
 
-  // C-DEV: a group needs a name. Checked after every commit until the warning fired, since the
-  // heading's text can come from a component, from what names the list: the heading's text, a
-  // consumer `aria-labelledby` (taken as a name) or `aria-label`.
+  // C-DEV: warn once when nothing names the group, checked again whenever the label, the
+  // consumer `aria-label` or the resolved `aria-labelledby` changes.
   const headingRef = React.useRef<HTMLDivElement | null>(null);
   React.useEffect(() => {
     if (!isDev || hasWarned(UNNAMED_GROUP_WARNING)) return;
-    const labelledByText =
-      labelledBy === labelId ? nameText(headingRef.current) : (labelledBy ?? '');
-    if (labelledByText.trim() === '' && (ariaLabel ?? '').trim() === '') {
-      warnOnce(
-        UNNAMED_GROUP_WARNING,
-        'OptionGroup: the group has no name. Give it a text `label`, `aria-label` or `aria-labelledby`.',
-      );
-    }
-  });
+    if (groupHasName(label, ariaLabel, labelledBy, labelId, headingRef.current)) return;
+    warnOnce(
+      UNNAMED_GROUP_WARNING,
+      'OptionGroup: the group has no name. Give it a text `label`, `aria-label` or `aria-labelledby`.',
+    );
+  }, [label, ariaLabel, labelledBy, labelId]);
 
   return (
     <li
@@ -533,7 +579,10 @@ export interface UseListboxPopupResult {
  * While the listbox is open with nothing to show (`surfaceOpen` is `false`), Escape is left to an
  * enclosing layer, such as a Dialog around the picker. Let your combobox's key handler leave it
  * too: on such an Escape, set your open state to `false` without calling `listbox.onKeyDown`,
- * which handles Escape (and prevents its default) whenever the listbox is open.
+ * which handles Escape (and prevents its default) whenever the listbox is open. Do so only when
+ * `!event.nativeEvent.isComposing`, as Dropdown, Combobox and TagPicker do: an Escape that only
+ * cancels an IME composition must not close the listbox, and `listbox.onKeyDown` ignores such
+ * keys too.
  *
  * @example
  * const expanded = open && listbox.items.length > 0;
@@ -588,12 +637,15 @@ export interface ListboxSurfaceProps {
   /**
    * The list is shown: the listbox is open and has options to show (`open &&
    * listbox.items.length > 0`). The list then renders in the surface, and otherwise `hidden`, in
-   * place inside your picker.
+   * place inside your picker. Set your combobox's `aria-expanded` to this value after spreading
+   * `getComboboxProps()`, which reports `open`, so the combobox is not announced as expanded while
+   * nothing is shown.
    */
   expanded: boolean;
   /**
    * Shown in the surface while the listbox is open but not expanded, such as a "No matches"
-   * message. Nothing shows while it is `undefined` or `null`.
+   * message. `undefined` and `null` show no surface; any other value shows one, so `false` and
+   * `''` show an empty surface.
    */
   emptyContent?: React.ReactNode;
   /** Names the list. Name it with this or `aria-labelledby`, usually your picker's label. */
