@@ -1222,6 +1222,68 @@ describe('useListbox — one navigable list, derived active value (input-pickers
     rerender(<InlineFilter query="da" />);
     expect(activeText()).toBe('Date');
   });
+
+  it('highlightOnFilter compares the enabled navigation values, not the full navigable set', () => {
+    // Pins the accepted difference from 0.7 recorded at spec §1.1.2 (ruling R10): the values
+    // useActiveDescendant tracks for activateFirstOnChange are useListbox's navigation values
+    // (enabled only, by default), not the full navigable (filtered, disabled included) set.
+    const itemsWith = (disabledB: boolean): ListboxItem[] => [
+      { value: 'a', label: 'Apple' },
+      { value: 'b', label: 'Banana', disabled: disabledB },
+      { value: 'c', label: 'Cherry' },
+    ];
+    function Probe({ includeB, disabledB }: { includeB: boolean; disabledB: boolean }) {
+      const [open, setOpen] = React.useState(true);
+      const lb = useListbox({
+        open,
+        onOpenChange: setOpen,
+        mode: 'editable',
+        selectedValues: [],
+        onSelect: () => {},
+        items: itemsWith(disabledB),
+        filter: (item) => item.value !== 'b' || includeB, // only b's filtered-set membership moves
+        highlightOnFilter: true,
+      });
+      return (
+        <ListboxContext.Provider value={lb.context}>
+          <input {...lb.getComboboxProps()} aria-label="Fruit" onKeyDown={lb.onKeyDown} readOnly />
+          <ul {...lb.getListboxProps()} aria-label="Fruits">
+            {lb.items.map((item) => (
+              <Row key={item.value} item={item} />
+            ))}
+          </ul>
+        </ListboxContext.Provider>
+      );
+    }
+
+    // (a) A disabled option entering or leaving the filtered set does not move the highlight to
+    // the first option: the enabled navigation values ([a, c]) never include the disabled b, so
+    // they do not change either way.
+    const { rerender, unmount } = render(<Probe includeB={false} disabledB />);
+    expect(activeText()).toBe('Apple'); // fallback: the first enabled option
+    key('ArrowDown');
+    expect(activeText()).toBe('Cherry');
+    rerender(<Probe includeB disabledB />); // the disabled Banana enters the filtered set
+    expect(activeText()).toBe('Cherry'); // unmoved
+    rerender(<Probe includeB={false} disabledB />); // and leaves it again
+    expect(activeText()).toBe('Cherry'); // still unmoved
+    unmount();
+
+    // (b) An option becoming disabled or enabled while open moves the highlight to the first
+    // enabled option: it enters or leaves the enabled navigation values although the filtered set
+    // (includeB) never changes.
+    const second = render(<Probe includeB disabledB={false} />);
+    expect(activeText()).toBe('Apple');
+    key('ArrowDown');
+    key('ArrowDown');
+    expect(activeText()).toBe('Cherry');
+    second.rerender(<Probe includeB disabledB />); // Banana becomes disabled
+    expect(activeText()).toBe('Apple'); // moved to the first enabled option
+    key('ArrowDown');
+    expect(activeText()).toBe('Cherry');
+    second.rerender(<Probe includeB disabledB={false} />); // Banana becomes enabled again
+    expect(activeText()).toBe('Apple'); // moved again
+  });
 });
 
 /* ------------------------------------------------------------------ */
@@ -2176,6 +2238,125 @@ describe('useListbox — disabled options (input-pickers#28)', () => {
     key('ArrowDown'); // reopens on the selected Apple
     key('ArrowDown');
     expect(activeText()).toBe('Banana');
+  });
+});
+
+/* ------------------------------------------------------------------ */
+/*  disabledOptionsFocusable (option-1)                                */
+/* ------------------------------------------------------------------ */
+
+describe('useListbox — disabledOptionsFocusable (option-1)', () => {
+  const A_B_DISABLED_C = (
+    <>
+      <Opt value="a">Apple</Opt>
+      <Opt value="b" disabled>
+        Banana
+      </Opt>
+      <Opt value="c">Cherry</Opt>
+    </>
+  );
+
+  it('skips disabled options by default (0.7)', () => {
+    render(<Picker>{A_B_DISABLED_C}</Picker>);
+    key('ArrowDown');
+    expect(activeText()).toBe('Apple');
+    key('ArrowDown');
+    expect(activeText()).toBe('Cherry');
+  });
+
+  it('reaches disabled options with the arrows, Home/End, PageUp/PageDown and typeahead', () => {
+    const ref = React.createRef<UseListboxResult>();
+    render(
+      <Picker disabledOptionsFocusable resultRef={ref}>
+        {A_B_DISABLED_C}
+      </Picker>,
+    );
+    key('ArrowDown'); // opens on the first option
+    expect(activeText()).toBe('Apple');
+    key('ArrowDown');
+    expect(activeText()).toBe('Banana');
+    expect(activeOption()).toHaveAttribute('aria-disabled', 'true');
+    expect(combobox()).toHaveAttribute('aria-activedescendant', ref.current?.getOptionId('b'));
+    key('End');
+    expect(activeText()).toBe('Cherry');
+    key('Home');
+    expect(activeText()).toBe('Apple');
+    key('PageDown'); // clamped: only 3 options
+    expect(activeText()).toBe('Cherry');
+    key('PageUp');
+    expect(activeText()).toBe('Apple');
+    key('b'); // typeahead
+    expect(activeText()).toBe('Banana');
+    expect(combobox()).toHaveAttribute('aria-activedescendant', ref.current?.getOptionId('b'));
+  });
+
+  it('commits nothing on a disabled active option and keeps the list open', () => {
+    const onSelect = vi.fn();
+    render(
+      <Picker disabledOptionsFocusable defaultOpen onSelectSpy={onSelect}>
+        {A_B_DISABLED_C}
+      </Picker>,
+    );
+    key('ArrowDown'); // Apple -> Banana
+    expect(activeText()).toBe('Banana');
+    expect(key('Enter').defaultPrevented).toBe(true);
+    expect(onSelect).not.toHaveBeenCalled();
+    expect(expanded()).toBe(true);
+    expect(key(' ').defaultPrevented).toBe(true);
+    expect(onSelect).not.toHaveBeenCalled();
+    expect(expanded()).toBe(true);
+    fireEvent.click(screen.getByRole('option', { name: 'Banana' }));
+    expect(onSelect).not.toHaveBeenCalled();
+    expect(expanded()).toBe(true);
+    expect(activeText()).toBe('Banana');
+  });
+
+  it('closes without committing on Tab and Alt+ArrowUp from a disabled active option', () => {
+    const onSelect = vi.fn();
+    const onOpenChange = vi.fn();
+    render(
+      <Picker
+        disabledOptionsFocusable
+        defaultOpen
+        onSelectSpy={onSelect}
+        onOpenChangeSpy={onOpenChange}
+      >
+        {A_B_DISABLED_C}
+      </Picker>,
+    );
+    key('ArrowDown'); // Apple -> Banana
+    expect(activeText()).toBe('Banana');
+    expect(key('Tab').defaultPrevented).toBe(false);
+    expect(onSelect).not.toHaveBeenCalled();
+    expect(onOpenChange).toHaveBeenLastCalledWith(
+      false,
+      expect.objectContaining({ reason: 'tab', event: expect.any(Event) }),
+    );
+    expect(expanded()).toBe(false);
+
+    onOpenChange.mockClear();
+    key('ArrowDown'); // reopens on the first option (nothing selected)
+    expect(activeText()).toBe('Apple');
+    key('ArrowDown');
+    expect(activeText()).toBe('Banana');
+    expect(key('ArrowUp', { altKey: true }).defaultPrevented).toBe(true);
+    expect(onSelect).not.toHaveBeenCalled();
+    expect(onOpenChange).toHaveBeenLastCalledWith(
+      false,
+      expect.objectContaining({ reason: 'keyboard', event: expect.any(Event) }),
+    );
+    expect(expanded()).toBe(false);
+  });
+
+  it('lets the fallback be a disabled option', () => {
+    const ref = React.createRef<UseListboxResult>();
+    render(
+      <Picker disabledOptionsFocusable defaultValue="b" defaultOpen resultRef={ref}>
+        {A_B_DISABLED_C}
+      </Picker>,
+    );
+    expect(activeText()).toBe('Banana');
+    expect(combobox()).toHaveAttribute('aria-activedescendant', ref.current?.getOptionId('b'));
   });
 });
 

@@ -30,7 +30,10 @@ export interface ListboxItem {
   label: string;
   /** Text matched by typeahead and filters instead of `label`. */
   textValue?: string;
-  /** Disabled options are rendered but skipped by navigation and never committed. */
+  /**
+   * Disabled options are rendered but skipped by navigation, unless
+   * {@link UseListboxOptions.disabledOptionsFocusable}, and never committed.
+   */
   disabled?: boolean;
   /**
    * Hidden options (the consumer's `hidden` attribute) are left out of navigation and rendering
@@ -92,6 +95,14 @@ export interface UseListboxOptions {
   /** Printable characters move to the matching option. @default mode === 'select-only' */
   typeahead?: boolean;
   /**
+   * Keeps disabled options in the arrow-key, Home/End, PageUp/PageDown and typeahead order: they
+   * still cannot be committed (Enter, Space and a click do nothing and the list stays open), and
+   * Tab and Alt+ArrowUp in single-select select-only mode close without committing instead of
+   * committing them. The `autoHighlight` fallback may then be a disabled option too.
+   * @default false
+   */
+  disabledOptionsFocusable?: boolean;
+  /**
    * The option that is active while no option is highlighted: `'selected'` — the first selected
    * navigable option in list order (not in `selectedValues` order), else the first option;
    * `'first'` — the first option; `false` — none. A highlighted option that leaves the navigable
@@ -152,7 +163,8 @@ export interface UseListboxResult {
   activeDescendantId: string | undefined;
   /**
    * The navigable items in DOM/data order: without filtered-out and hidden items; disabled ones
-   * are included (navigation skips them).
+   * are included (navigation skips them, unless
+   * {@link UseListboxOptions.disabledOptionsFocusable}).
    */
   items: ListboxItem[];
   /** Unfiltered lookup (registered options or `items`), e.g. for the selected option's label. */
@@ -804,7 +816,8 @@ function preventMouseDown(event: React.MouseEvent): void {
  *   continues the search instead); Alt+ArrowUp and Tab commit and close in single-select mode
  *   (with `multiselect` they only close; Tab is not prevented); Escape closes.
  *   "Selected" means the first selected navigable option in list order. Disabled options are
- *   skipped and never committed; hidden options are not navigable at all.
+ *   skipped unless `disabledOptionsFocusable`, and never committed; hidden options are not
+ *   navigable at all.
  * - The active option is scrolled into view (`{ block: 'nearest' }`) in a layout effect, except
  *   after a pointer highlight (the list would scroll under the pointer).
  *
@@ -836,6 +849,7 @@ export function useListbox(options: UseListboxOptions): UseListboxResult {
     filter,
     loop = false,
     typeahead = mode === 'select-only',
+    disabledOptionsFocusable = false,
     autoHighlight = 'selected',
     highlightOnFilter = false,
     onActiveValueChange,
@@ -857,9 +871,14 @@ export function useListbox(options: UseListboxOptions): UseListboxResult {
     () => allItems.filter((item) => !item.hidden && (!filter || filter(item))),
     [allItems, filter],
   );
-  const enabledValues = useMemo(
-    () => navigable.filter((item) => !item.disabled).map((item) => item.value),
-    [navigable],
+  // The values useActiveDescendant navigates: enabled navigable items, or every navigable item
+  // (disabled included) with disabledOptionsFocusable.
+  const navigationValues = useMemo(
+    () =>
+      disabledOptionsFocusable
+        ? navigable.map((item) => item.value)
+        : navigable.filter((item) => !item.disabled).map((item) => item.value),
+    [navigable, disabledOptionsFocusable],
   );
   const itemByValue = useMemo(() => {
     const map = new Map<string, ListboxItem>();
@@ -877,10 +896,10 @@ export function useListbox(options: UseListboxOptions): UseListboxResult {
   const selectedSet = new Set(selectedValues);
 
   // In list order (APG), not in the order the values were selected.
-  const firstSelected = enabledValues.find((value) => selectedSet.has(value)) ?? null;
+  const firstSelected = navigationValues.find((value) => selectedSet.has(value)) ?? null;
   let fallback: string | null = null;
-  if (autoHighlight === 'selected') fallback = firstSelected ?? enabledValues[0] ?? null;
-  else if (autoHighlight === 'first') fallback = enabledValues[0] ?? null;
+  if (autoHighlight === 'selected') fallback = firstSelected ?? navigationValues[0] ?? null;
+  else if (autoHighlight === 'first') fallback = navigationValues[0] ?? null;
 
   const getOptionId = useCallback(
     (value: string) => `${listboxId}-opt-${store.getIndex(value)}`,
@@ -899,7 +918,7 @@ export function useListbox(options: UseListboxOptions): UseListboxResult {
   // with unchanged options (ArrowDown, a click) keeps the autoHighlight start. Every highlight but
   // the pointer's is scrolled into view (the list would scroll under the pointer).
   const ad = useActiveDescendant({
-    items: enabledValues,
+    items: navigationValues,
     getId: getOptionId,
     enabled: open,
     fallback,
@@ -938,7 +957,7 @@ export function useListbox(options: UseListboxOptions): UseListboxResult {
       navigable.map((item) => ({
         value: item.value,
         text: item.textValue ?? item.label,
-        disabled: item.disabled,
+        disabled: disabledOptionsFocusable ? false : item.disabled,
       })),
     onMatch: (value) => {
       ad.setActiveValue(value);
@@ -956,14 +975,14 @@ export function useListbox(options: UseListboxOptions): UseListboxResult {
     // the input: the highlight is cleared (highlightOnFilter: the first option), so Enter after
     // typing never commits an option highlighted before the edit.
     if (mode === 'editable' && open && editsText(event)) {
-      ad.setActiveValue(highlightOnFilter ? (enabledValues[0] ?? null) : null);
+      ad.setActiveValue(highlightOnFilter ? (navigationValues[0] ?? null) : null);
     }
     const altGraph = isAltGraphCharacter(event);
     if ((event.ctrlKey && !altGraph) || event.metaKey) return;
     const { key, altKey } = event;
     const selectOnly = mode === 'select-only';
-    const first = enabledValues[0] ?? null;
-    const last = enabledValues[enabledValues.length - 1] ?? null;
+    const first = navigationValues[0] ?? null;
+    const last = navigationValues[navigationValues.length - 1] ?? null;
 
     const openWith = (value: string | null) => {
       ad.setActiveValue(value);
@@ -991,7 +1010,14 @@ export function useListbox(options: UseListboxOptions): UseListboxResult {
         event.preventDefault();
         if (altKey) {
           if (!open) return;
-          if (selectOnly && !multiselect && activeValue !== null) {
+          // A disabled active option (disabledOptionsFocusable) closes instead of committing:
+          // commit()'s own guard would otherwise leave the key unhandled.
+          if (
+            selectOnly &&
+            !multiselect &&
+            activeValue !== null &&
+            !itemByValue.get(activeValue)?.disabled
+          ) {
             commit(activeValue, 'select', event.nativeEvent);
           } else {
             onOpenChange?.(false, { reason: 'keyboard', event: event.nativeEvent });
@@ -1039,7 +1065,14 @@ export function useListbox(options: UseListboxOptions): UseListboxResult {
         return;
       case 'Tab':
         if (!open) return;
-        if (selectOnly && !multiselect && activeValue !== null) {
+        // A disabled active option (disabledOptionsFocusable) closes instead of committing: see
+        // the Alt+ArrowUp comment above.
+        if (
+          selectOnly &&
+          !multiselect &&
+          activeValue !== null &&
+          !itemByValue.get(activeValue)?.disabled
+        ) {
           commit(activeValue, 'tab', event.nativeEvent);
         } else {
           onOpenChange?.(false, { reason: 'tab', event: event.nativeEvent });
