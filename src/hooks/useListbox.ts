@@ -172,8 +172,9 @@ export interface UseListboxResult {
   /** `${listboxId}-opt-${n}`; `n` is assigned the first time a value is seen and never changes. */
   getOptionId(value: string): string;
   /**
-   * Highlights an option while open (ignored when it is not navigable or disabled; dropped when it
-   * leaves the navigable set later). Scrolled into view like a keyboard highlight.
+   * Highlights an option while open (ignored when it is not navigable, or disabled unless
+   * {@link UseListboxOptions.disabledOptionsFocusable}; dropped when it leaves the navigable set
+   * later). Scrolled into view like a keyboard highlight.
    */
   setActiveValue(value: string | null): void;
   /** Attach to the combobox element. Ignores events a consumer handler already prevented. */
