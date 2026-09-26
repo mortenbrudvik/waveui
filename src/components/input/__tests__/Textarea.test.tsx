@@ -5,6 +5,8 @@ import userEvent from '@testing-library/user-event';
 import { Textarea, type TextareaProps } from '../Textarea';
 import { inputInvalid } from '../../../lib/styles';
 import { testSystemProps, testFocusEvents, expectNoA11yViolations } from '../../../test-utils';
+import { renderWithFieldContext, FIELD_TEST_TEXT } from '../../../test-utils-field';
+import { WaveProvider } from '../../provider/WaveProvider';
 
 describe('Textarea', () => {
   testSystemProps(Textarea, {
@@ -134,6 +136,50 @@ describe('Textarea', () => {
     it('passes axe with a string error', async () => {
       render(<Textarea aria-label="Message" error="Message is required" />);
       await expectNoA11yViolations();
+    });
+  });
+
+  describe('sizes and appearances (Phase 4 P4-01)', () => {
+    const box = () => screen.getByRole('textbox', { name: 'Notes' });
+
+    it('renders the 0.7 classes and medium outline attributes by default', () => {
+      render(<Textarea aria-label="Notes" />);
+      expect(box()).toHaveClass(
+        'min-h-20',
+        'px-3',
+        'py-2',
+        'text-body-1',
+        'resize-y',
+        'border-input',
+      );
+      expect(box()).toHaveAttribute('data-size', 'medium');
+      expect(box()).toHaveAttribute('data-appearance', 'outline');
+    });
+
+    it.each([
+      ['small', ['min-h-16', 'px-2', 'py-1', 'text-caption-1']],
+      ['large', ['min-h-24', 'px-4', 'py-2.5', 'text-body-2']],
+    ] as const)('size="%s"', (size, classes) => {
+      render(<Textarea aria-label="Notes" size={size} />);
+      expect(box()).toHaveClass(...classes);
+      expect(box()).toHaveAttribute('data-size', size);
+    });
+
+    it('underline keeps vertical resizing and square corners', () => {
+      render(<Textarea aria-label="Notes" appearance="underline" />);
+      expect(box()).toHaveClass('resize-y', 'rounded-none', 'border-0', 'border-b');
+    });
+
+    it('takes the Field size and the provider appearance', () => {
+      renderWithFieldContext(
+        <WaveProvider inputDefaults={{ appearance: 'filled-darker' }}>
+          <Textarea />
+        </WaveProvider>,
+        { size: 'large' },
+      );
+      const el = screen.getByRole('textbox', { name: FIELD_TEST_TEXT.label });
+      expect(el).toHaveAttribute('data-size', 'large');
+      expect(el).toHaveAttribute('data-appearance', 'filled-darker');
     });
   });
 });
