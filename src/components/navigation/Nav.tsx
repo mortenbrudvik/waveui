@@ -240,10 +240,12 @@ export interface NavItemOwnProps {
  * it at run time instead.
  */
 type NoAnchorOnlyAttributes = {
-  [K in Exclude<
-    keyof React.AnchorHTMLAttributes<HTMLAnchorElement>,
-    keyof React.ButtonHTMLAttributes<HTMLButtonElement>
-  >]?: undefined;
+  [
+    K in Exclude<
+      keyof React.AnchorHTMLAttributes<HTMLAnchorElement>,
+      keyof React.ButtonHTMLAttributes<HTMLButtonElement>
+    >
+  ]?: undefined;
 };
 
 /**

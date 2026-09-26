@@ -9,14 +9,7 @@ export type BadgeAppearance = 'filled' | 'tint' | 'outline';
 
 /** Semantic colors of Badge and CounterBadge. */
 export type BadgeColor =
-  | 'brand'
-  | 'success'
-  | 'warning'
-  | 'danger'
-  | 'important'
-  | 'informative'
-  | 'severe'
-  | 'subtle';
+  'brand' | 'success' | 'warning' | 'danger' | 'important' | 'informative' | 'severe' | 'subtle';
 
 /** Semantic status used for alerts, messages, and status indicators. */
 export type Status = 'success' | 'warning' | 'error' | 'info';
@@ -89,11 +82,7 @@ export interface OpenChangeDetails<R extends string = string> {
  * backdrop). The last two are `DismissReason` values of the dismiss-layer stack.
  */
 export type ModalOpenChangeReason =
-  | 'trigger'
-  | 'close'
-  | 'close-button'
-  | 'escape'
-  | 'outside-press';
+  'trigger' | 'close' | 'close-button' | 'escape' | 'outside-press';
 
 /** How a modal surface blocks the page (`'non-modal'` joins in a later release). */
 export type ModalType = 'modal' | 'alert';

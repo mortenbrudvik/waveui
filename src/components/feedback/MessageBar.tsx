@@ -219,8 +219,7 @@ function resolveDismiss(dismiss: MessageBarProps['dismiss']): DismissParts | nul
     // Markup of the merged button (`dangerouslySetInnerHTML`) is its content as well, rendered in
     // a span inside the dismiss button (the button itself also holds the icon).
     const markup = element.props.dangerouslySetInnerHTML as
-      | React.HTMLAttributes<HTMLElement>['dangerouslySetInnerHTML']
-      | undefined;
+      React.HTMLAttributes<HTMLElement>['dangerouslySetInnerHTML'] | undefined;
     const children =
       markup != null ? (
         <span className={dismissContentClassName} dangerouslySetInnerHTML={markup} />
