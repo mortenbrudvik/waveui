@@ -268,7 +268,9 @@ const stepButtonClass = cn(
  *   nothing. Holding a button repeats the step: the first after 300ms, then faster, every 80ms
  *   after about a second (Fluent's timing). A hold stops when the button is released, the
  *   pointer leaves it or the press turns into a scroll, at the bound, when the window loses
- *   focus, and when the spin button becomes disabled or read-only. A click without a press (a
+ *   focus, and when the spin button becomes disabled or read-only. Only the primary button of a
+ *   primary pointer holds: a second finger, a secondary button or a Ctrl+press with a mouse (the
+ *   secondary click on macOS) neither starts a hold nor ends one. A click without a press (a
  *   screen reader, `element.click()`) steps once. The buttons open no context menu (a long press
  *   on touch would), show no iOS callout, and allow no text selection or double-tap zoom.
  * - **Typing** edits a draft: the value is parsed, clamped and committed on blur or Enter
@@ -438,18 +440,26 @@ export const SpinButton = (props: SpinButtonProps | SpinButtonAllowEmptyProps): 
   // Phase 4 D18: a press on a step button becomes a hold after SPIN_DELAY and then repeats
   // (startSpin runs the timers); a shorter press steps on its click (WCAG 2.5.2).
   const holdRef = React.useRef<{
+    /** The pointer holding the button: only its release, cancel or leave ends the hold. */
+    pointerId: number;
     direction: 1 | -1;
     /** Whether the hold has stepped yet. */
     stepped: boolean;
     stop: () => void;
   } | null>(null);
-  // Whether the press that ends in the next pointer click has repeated (reset by every pointerdown).
+  // Whether the press that ends in the next pointer click has repeated (reset by every press of
+  // a primary pointer).
   const repeatedRef = React.useRef(false);
 
   const stopHold = React.useCallback(() => {
     holdRef.current?.stop();
     holdRef.current = null;
   }, []);
+
+  /** Ends the hold on a pointerup, pointercancel or pointerleave of the pointer holding it. */
+  const endHold = (event: React.PointerEvent<HTMLButtonElement>) => {
+    if (event.pointerId === holdRef.current?.pointerId) stopHold();
+  };
 
   /** Whether the value the user sees is at the bound a step in `direction` moves towards. */
   const atBound = (direction: 1 | -1) =>
@@ -466,8 +476,10 @@ export const SpinButton = (props: SpinButtonProps | SpinButtonAllowEmptyProps): 
     repeatedRef.current = true;
     const delta = hold.direction * step;
     if (hold.stepped) {
-      // Later steps build on the latest value (useControllable's updater), not on this render's,
-      // so each step adds to the previous one even before React has rendered it.
+      // Later steps start from what useControllable's updater gets, never from this render's
+      // closure: a value set earlier in the same task (several steps can run before React
+      // renders), else the rendered one, so a controlled parent that ignored a step is stepped
+      // from its own value again.
       setDraft(null);
       setValue((prev) => stepFrom(prev, delta));
     } else {
@@ -479,18 +491,31 @@ export const SpinButton = (props: SpinButtonProps | SpinButtonAllowEmptyProps): 
   });
 
   const startHold = (event: React.PointerEvent<HTMLButtonElement>, direction: 1 | -1) => {
-    // Every pointerdown resets the flag, so a hold that ended without a click (at a bound, or a
-    // touch long press) cannot swallow the click of a later press.
+    // Only a primary pointer presses a step button: a second finger (which gets no click) neither
+    // starts a hold nor resets the flag of the press that holds one.
+    if (!event.isPrimary) return;
+    // Every press resets the flag, so a hold that ended without a click (at a bound, or a touch
+    // long press) cannot swallow the click of a later press.
     repeatedRef.current = false;
-    if (event.button !== 0 || !interactive) return;
-    // Touch and pen capture the pointer implicitly; release it, so pointerleave fires when the
-    // finger slides off the button.
-    const button = event.currentTarget;
-    if (event.pointerType !== 'mouse' && button.hasPointerCapture?.(event.pointerId)) {
-      button.releasePointerCapture(event.pointerId);
+    // A hold needs the primary button: not a secondary one, nor a Ctrl+press with a mouse (the
+    // secondary click on macOS).
+    if (event.button !== 0 || (event.pointerType === 'mouse' && event.ctrlKey) || !interactive) {
+      return;
+    }
+    // Touch and pen capture the pointer implicitly on the element the press landed on (the glyph
+    // when the finger lands on it); release it there, so pointerleave fires when the finger slides
+    // off the button.
+    const holder = event.target instanceof Element ? event.target : event.currentTarget;
+    if (event.pointerType !== 'mouse' && holder.hasPointerCapture?.(event.pointerId)) {
+      holder.releasePointerCapture(event.pointerId);
     }
     stopHold();
-    holdRef.current = { direction, stepped: false, stop: startSpin(holdStep) };
+    holdRef.current = {
+      pointerId: event.pointerId,
+      direction,
+      stepped: false,
+      stop: startSpin(holdStep),
+    };
   };
 
   const clickStep = (event: React.MouseEvent<HTMLButtonElement>, direction: 1 | -1) => {
@@ -684,9 +709,9 @@ export const SpinButton = (props: SpinButtonProps | SpinButtonAllowEmptyProps): 
         type="button"
         tabIndex={-1}
         onPointerDown={(event) => startHold(event, -1)}
-        onPointerUp={stopHold}
-        onPointerCancel={stopHold}
-        onPointerLeave={stopHold}
+        onPointerUp={endHold}
+        onPointerCancel={endHold}
+        onPointerLeave={endHold}
         onClick={(event) => clickStep(event, -1)}
         onMouseDown={keepFocus}
         onContextMenu={(event) => event.preventDefault()}
@@ -751,9 +776,9 @@ export const SpinButton = (props: SpinButtonProps | SpinButtonAllowEmptyProps): 
         type="button"
         tabIndex={-1}
         onPointerDown={(event) => startHold(event, 1)}
-        onPointerUp={stopHold}
-        onPointerCancel={stopHold}
-        onPointerLeave={stopHold}
+        onPointerUp={endHold}
+        onPointerCancel={endHold}
+        onPointerLeave={endHold}
         onClick={(event) => clickStep(event, 1)}
         onMouseDown={keepFocus}
         onContextMenu={(event) => event.preventDefault()}

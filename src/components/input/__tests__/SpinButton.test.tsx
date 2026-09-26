@@ -1282,8 +1282,10 @@ describe('press-and-hold (Phase 4 D18)', () => {
     vi.useRealTimers();
   });
 
-  const press = (button: HTMLElement, pointerType = 'mouse') =>
-    fireEvent.pointerDown(button, { button: 0, pointerId: 1, pointerType });
+  // A browser's first pointer of a type is its primary one (a jsdom PointerEvent defaults to
+  // isPrimary false, which a second finger has).
+  const press = (target: Element, pointerType = 'mouse') =>
+    fireEvent.pointerDown(target, { button: 0, pointerId: 1, pointerType, isPrimary: true });
   const release = (button: HTMLElement, pointerType = 'mouse') => {
     fireEvent.pointerUp(button, { button: 0, pointerId: 1, pointerType });
     fireEvent.click(button, { detail: 1 });
@@ -1315,11 +1317,11 @@ describe('press-and-hold (Phase 4 D18)', () => {
     expect(spin()).toHaveValue('0');
     advance(20); // 310ms
     expect(spin()).toHaveValue('1');
-    advance(230); // 540ms: the second step at 534ms
+    advance(250); // 560ms: the second step at 534ms
     expect(spin()).toHaveValue('2');
-    advance(760); // 1300ms: steps at 717, 859, 970, 1057, 1137, 1217 and 1297ms
+    advance(760); // 1320ms: steps at 717, 859, 970, 1057, 1137, 1217 and 1297ms
     expect(spin()).toHaveValue('9');
-    advance(160); // 1460ms: 80ms apart from now on
+    advance(160); // 1480ms: 80ms apart from now on (1377 and 1457ms)
     expect(spin()).toHaveValue('11');
     release(incrementButton(), pointerType);
     expect(spin()).toHaveValue('11'); // the click that ends a hold adds no step
@@ -1359,7 +1361,12 @@ describe('press-and-hold (Phase 4 D18)', () => {
   it('ignores a secondary-button press, prevents the context menu and keeps focus in the input', () => {
     render(<SpinButton aria-label="Quantity" />);
     act(() => spin().focus());
-    fireEvent.pointerDown(incrementButton(), { button: 2, pointerId: 1, pointerType: 'mouse' });
+    fireEvent.pointerDown(incrementButton(), {
+      button: 2,
+      pointerId: 1,
+      pointerType: 'mouse',
+      isPrimary: true,
+    });
     advance(1000);
     expect(spin()).toHaveValue('0');
     const menu = createEvent.contextMenu(incrementButton());
@@ -1381,8 +1388,9 @@ describe('press-and-hold (Phase 4 D18)', () => {
   // and of D18, beyond what the brief's tests above cover: a short press of every pointer type,
   // the lower bound, the control becoming disabled or read-only mid-hold, a press on a disabled or
   // read-only control, unmounting mid-hold, the flag every pointerdown resets, the first step from
-  // a typed number, a controlled value, StrictMode, pen capture, pointerdown never cancelled,
-  // focus kept throughout a hold, and the suppression classes.
+  // a typed number, a controlled value (updated or ignored by its parent), StrictMode, pen capture
+  // and a capture held by the glyph, other pointers, a macOS Ctrl+press, pointerdown never
+  // cancelled, focus kept throughout a hold, and the suppression classes.
 
   it.each(['touch', 'pen'])(
     'a short %s press steps once, on its click, not on pointerdown',
@@ -1478,7 +1486,7 @@ describe('press-and-hold (Phase 4 D18)', () => {
     render(<SpinButton aria-label="Quantity" />);
     fireEvent.change(spin(), { target: { value: '7' } });
     press(incrementButton());
-    advance(540);
+    advance(560);
     expect(spin()).toHaveValue('9');
   });
 
@@ -1489,8 +1497,20 @@ describe('press-and-hold (Phase 4 D18)', () => {
     }
     render(<Controlled />);
     press(incrementButton());
-    advance(1300);
+    advance(1320);
     expect(spin()).toHaveValue('9');
+  });
+
+  it('a controlled parent that ignores onValueChange gets each step from the value it renders', async () => {
+    const onValueChange = vi.fn();
+    render(<SpinButton aria-label="Quantity" value={0} onValueChange={onValueChange} />);
+    press(incrementButton());
+    advance(310);
+    // A new task, as between two steps in a browser: nothing chains from the ignored step.
+    await act(async () => {});
+    advance(250); // past the second step, at 534ms
+    expect(onValueChange.mock.calls).toEqual([[1], [1]]);
+    expect(spin()).toHaveValue('0');
   });
 
   it('a hold fires onValueChange once per step in StrictMode', () => {
@@ -1501,7 +1521,7 @@ describe('press-and-hold (Phase 4 D18)', () => {
       </React.StrictMode>,
     );
     press(incrementButton());
-    advance(540);
+    advance(560);
     release(incrementButton());
     expect(onValueChange.mock.calls).toEqual([[1], [2]]);
   });
@@ -1515,12 +1535,59 @@ describe('press-and-hold (Phase 4 D18)', () => {
     expect(releaseCapture).toHaveBeenCalledWith(1);
   });
 
+  it('releases the implicit capture where the press landed: on the glyph, not the button', () => {
+    render(<SpinButton aria-label="Quantity" />);
+    const glyph = incrementButton().querySelector('svg') as SVGSVGElement;
+    const releaseCapture = vi.fn();
+    Object.assign(glyph, { hasPointerCapture: () => true, releasePointerCapture: releaseCapture });
+    press(glyph, 'touch');
+    expect(releaseCapture).toHaveBeenCalledWith(1);
+  });
+
+  it('other pointers neither stop the hold nor start their own', () => {
+    render(<SpinButton aria-label="Quantity" />);
+    press(incrementButton(), 'touch');
+    advance(310);
+    expect(spin()).toHaveValue('1');
+    // A second finger (not the primary pointer) presses the other button, then lifts.
+    const second = { button: 0, pointerId: 2, pointerType: 'touch', isPrimary: false };
+    fireEvent.pointerDown(decrementButton(), second);
+    advance(470); // 780ms: steps at 534 and 717ms (a hold of its own would step down at 610ms)
+    expect(spin()).toHaveValue('3');
+    fireEvent.pointerUp(decrementButton(), second);
+    fireEvent.pointerLeave(decrementButton(), second);
+    // A third finger lands on the held button and turns into a scroll.
+    const third = { button: 0, pointerId: 3, pointerType: 'touch', isPrimary: false };
+    fireEvent.pointerDown(incrementButton(), third);
+    fireEvent.pointerCancel(incrementButton(), third);
+    fireEvent.pointerLeave(incrementButton(), third);
+    advance(540); // 1320ms: steps at 859, 970, 1057, 1137, 1217 and 1297ms
+    expect(spin()).toHaveValue('9');
+    release(incrementButton(), 'touch');
+    expect(spin()).toHaveValue('9'); // the click that ends the hold still adds no step
+  });
+
+  it('a macOS Ctrl+press (the secondary click there) never starts a hold', () => {
+    render(<SpinButton aria-label="Quantity" />);
+    fireEvent.pointerDown(incrementButton(), {
+      button: 0,
+      ctrlKey: true,
+      pointerId: 1,
+      pointerType: 'mouse',
+      isPrimary: true,
+    });
+    expect(vi.getTimerCount()).toBe(0);
+    advance(1000);
+    expect(spin()).toHaveValue('0');
+  });
+
   it('never cancels pointerdown, and still cancels mousedown so a press keeps focus in the input', () => {
     render(<SpinButton aria-label="Quantity" />);
     const down = createEvent.pointerDown(incrementButton(), {
       button: 0,
       pointerId: 1,
       pointerType: 'mouse',
+      isPrimary: true,
     });
     fireEvent(incrementButton(), down);
     expect(down.defaultPrevented).toBe(false);
