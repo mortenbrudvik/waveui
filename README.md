@@ -1274,6 +1274,8 @@ The CHANGELOG's [0.6.0 "Changed" section](CHANGELOG.md#changed-1) lists every be
 
 ## Upgrading from 0.4
 
+npm went from 0.4.0 to 0.7.0: 0.5.0 and 0.6.0 were never published, and their changes ship in 0.7.0. From 0.4.0, take these steps, then those of [Upgrading from 0.5](#upgrading-from-05) and [Upgrading from 0.6](#upgrading-from-06).
+
 1. The npm package name is unchanged (`@mortenbrudvik/waveui`, as in 0.4.0). Replace `waveui` imports copied from the 0.4 guide, and a git or local dependency named `waveui`, with `@mortenbrudvik/waveui`.
 2. Styles: without Tailwind, keep `import '@mortenbrudvik/waveui/styles'` and make sure a `WaveProvider` wraps the app; with Tailwind 4, switch to `@import '@mortenbrudvik/waveui/tailwind';` after `@import 'tailwindcss';`. Import `preflight.css` if you relied on Wave's Preflight.
 3. Rename CSS overrides of the 0.4 semantic variables (`--primary`, `--border`, …) to `--wave-*`. Code that reads 0.4 variables (`var(--primary)`, `var(--ring)`, `var(--brand-80)`, `var(--grey-14)`) must switch to the `--wave-*` names too: 0.5 no longer defines them. Until then, import `legacy-tokens.css`. Overrides of the ramp names (`--brand-*`, `--grey-*`) keep working without it.
