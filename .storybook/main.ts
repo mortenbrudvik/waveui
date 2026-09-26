@@ -48,7 +48,13 @@ function hasTailwind(plugins: PluginOption[]): boolean {
 
 const config: StorybookConfig = {
   stories: ['../stories/**/*.stories.@(ts|tsx)'],
-  addons: ['@storybook/addon-a11y', '@storybook/addon-docs'],
+  addons: ['@storybook/addon-a11y', '@storybook/addon-docs', '@storybook/addon-mcp'],
+  /**
+   * The component manifest feeds the MCP server of `@storybook/addon-mcp` (`/mcp` on the dev
+   * server, registered for Claude Code in .mcp.json): an agent reads each component's props,
+   * docs and stories from it, and finds the stories that a change affects.
+   */
+  features: { componentsManifest: true },
   framework: {
     name: '@storybook/react-vite',
     options: {},
