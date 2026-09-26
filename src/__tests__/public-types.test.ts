@@ -40,14 +40,17 @@ import type {
   CheckedValues,
   CheckedValuesChangeDetails,
   CheckedValuesChangeHandler,
+  collectOptionLabels,
   ComboboxLabels,
   ComboboxProps,
   CompoundButtonProps,
   CounterBadgeProps,
+  DayOfWeek,
   DialogModalType,
   DialogOpenChangeDetails,
   DialogOpenChangeReason,
   DialogProps,
+  DismissReason,
   DrawerOpenChangeDetails,
   DrawerOpenChangeReason,
   DrawerProps,
@@ -56,9 +59,24 @@ import type {
   FieldContextValue,
   FieldControlIdClaim,
   FieldProps,
+  FirstWeekOfYear,
   IconPosition,
   LabelPosition,
   LinkProps,
+  ListboxComboboxProps,
+  ListboxContextValue,
+  ListboxElementKind,
+  ListboxItem,
+  ListboxListProps,
+  ListboxOpenChangeReason,
+  ListboxOptionElementProps,
+  ListboxProvider,
+  ListboxProviderProps,
+  ListboxSelectDetails,
+  ListboxStore,
+  ListboxSurface,
+  ListboxSurfaceProps,
+  markListboxElement,
   Menu,
   MenuButtonProps,
   MenuGroupHeaderProps,
@@ -132,6 +150,18 @@ import type {
   ToolbarToggleButtonProps,
   TooltipAppearance,
   TooltipProps,
+  useActiveDescendant,
+  UseActiveDescendantOptions,
+  UseActiveDescendantResult,
+  useListbox,
+  useListboxOption,
+  UseListboxOptionProps,
+  UseListboxOptionResult,
+  UseListboxOptions,
+  useListboxPopup,
+  UseListboxPopupOptions,
+  UseListboxPopupResult,
+  UseListboxResult,
   UsePresenceOptions,
   UsePresenceResult,
   UseRovingTabIndexOptions,
@@ -750,5 +780,90 @@ describe('0.7 menus, popovers and toolbars from the package entry', () => {
     // @ts-expect-error the pressed state of a toolbar toggle is the Toolbar's checkedValues
     const pressed: ToolbarToggleButtonProps = { name: 'format', value: 'bold', pressed: true };
     expect([huge, checkbox, pressed]).toHaveLength(3);
+  });
+});
+
+// The 0.10 listbox primitives, useActiveDescendant and the date types, imported from the package
+// entry (compile-time, `tsconfig.dev.json`).
+describe('0.10 listbox primitives, useActiveDescendant and the date types from the package entry', () => {
+  it('useActiveDescendant: its options and result', () => {
+    expectTypeOf<UseActiveDescendantResult['activeDescendantId']>().toEqualTypeOf<
+      string | undefined
+    >();
+    expectTypeOf<typeof useActiveDescendant>()
+      .parameter(0)
+      .toEqualTypeOf<UseActiveDescendantOptions>();
+    expectTypeOf<typeof useActiveDescendant>().returns.toEqualTypeOf<UseActiveDescendantResult>();
+  });
+
+  it('useListbox: its modes, callbacks, element props, context and store', () => {
+    expectTypeOf<UseListboxOptions['mode']>().toEqualTypeOf<
+      'editable' | 'select-only' | 'standalone'
+    >();
+    expectTypeOf<ListboxListProps['tabIndex']>().toEqualTypeOf<0 | -1>();
+    expectTypeOf<typeof useListbox>().parameter(0).toEqualTypeOf<UseListboxOptions>();
+    expectTypeOf<typeof useListbox>().returns.toEqualTypeOf<UseListboxResult>();
+    expectTypeOf<ListboxOpenChangeReason>().toEqualTypeOf<
+      'keyboard' | 'select' | 'escape' | 'tab'
+    >();
+    expectTypeOf<NonNullable<UseListboxOptions['onOpenChange']>>()
+      .parameter(1)
+      .toEqualTypeOf<OpenChangeDetails<ListboxOpenChangeReason> | undefined>();
+    expectTypeOf<UseListboxOptions['onSelect']>()
+      .parameter(1)
+      .toEqualTypeOf<ListboxSelectDetails | undefined>();
+    expectTypeOf<ListboxSelectDetails['item']>().toEqualTypeOf<ListboxItem>();
+    expectTypeOf<
+      ReturnType<UseListboxResult['getComboboxProps']>
+    >().toEqualTypeOf<ListboxComboboxProps>();
+    expectTypeOf<
+      ReturnType<UseListboxResult['getListboxProps']>
+    >().toEqualTypeOf<ListboxListProps>();
+    expectTypeOf<UseListboxResult['context']>().toEqualTypeOf<ListboxContextValue>();
+    expectTypeOf<ListboxContextValue['mode']>().toEqualTypeOf<UseListboxOptions['mode']>();
+    // The store's members that option components of your own build on.
+    expectTypeOf<ListboxContextValue['store']>().toEqualTypeOf<ListboxStore>();
+    expectTypeOf<ListboxStore['getIndex']>().toEqualTypeOf<(value: string) => number>();
+    expectTypeOf<ListboxStore['register']>().toEqualTypeOf<
+      (item: ListboxItem, element: RefObject<HTMLElement | null>) => () => void
+    >();
+  });
+
+  it('useListboxOption, markListboxElement and collectOptionLabels', () => {
+    expectTypeOf<typeof useListboxOption>().parameter(0).toEqualTypeOf<UseListboxOptionProps>();
+    expectTypeOf<typeof useListboxOption>().returns.toEqualTypeOf<UseListboxOptionResult>();
+    expectTypeOf<
+      UseListboxOptionResult['optionProps']
+    >().toEqualTypeOf<ListboxOptionElementProps>();
+    expectTypeOf<ListboxOptionElementProps<HTMLLIElement>['ref']>().toEqualTypeOf<
+      RefCallback<HTMLLIElement>
+    >();
+    expectTypeOf<ListboxElementKind>().toEqualTypeOf<'option' | 'group'>();
+    expectTypeOf<typeof markListboxElement>().parameter(1).toEqualTypeOf<ListboxElementKind>();
+    expectTypeOf<typeof collectOptionLabels>().parameter(0).toEqualTypeOf<ReactNode>();
+    expectTypeOf<typeof collectOptionLabels>().returns.toEqualTypeOf<Map<string, string>>();
+  });
+
+  it('ListboxProvider, ListboxSurface, useListboxPopup and DismissReason', () => {
+    expectTypeOf<typeof ListboxProvider>().parameter(0).toEqualTypeOf<ListboxProviderProps>();
+    expectTypeOf<ListboxProviderProps['value']>().toEqualTypeOf<ListboxContextValue>();
+    expectTypeOf<typeof ListboxSurface>().parameter(0).toEqualTypeOf<ListboxSurfaceProps>();
+    expectTypeOf<ListboxSurfaceProps['listbox']>().toEqualTypeOf<UseListboxResult>();
+    expectTypeOf<ListboxSurfaceProps['floatingProps']>().toEqualTypeOf<
+      UseListboxPopupResult['floatingProps']
+    >();
+    expectTypeOf<typeof useListboxPopup>().parameter(0).toEqualTypeOf<UseListboxPopupOptions>();
+    expectTypeOf<typeof useListboxPopup>().returns.toEqualTypeOf<UseListboxPopupResult>();
+    expectTypeOf<DismissReason>().toEqualTypeOf<'escape' | 'outside-press' | 'focus-outside'>();
+    expectTypeOf<UseListboxPopupOptions['onDismiss']>().toEqualTypeOf<
+      (reason: DismissReason) => void
+    >();
+  });
+
+  it('DayOfWeek and FirstWeekOfYear', () => {
+    expectTypeOf<DayOfWeek>().toEqualTypeOf<0 | 1 | 2 | 3 | 4 | 5 | 6>();
+    expectTypeOf<FirstWeekOfYear>().toEqualTypeOf<
+      'first-day' | 'first-full-week' | 'first-four-day-week'
+    >();
   });
 });

@@ -22,6 +22,8 @@ import type {
   PopupRect,
   VirtualElement,
   PopupTarget,
+  DayOfWeek,
+  FirstWeekOfYear,
 } from '../types';
 import type { VirtualElement as FloatingVirtualElement } from '@floating-ui/react-dom';
 import type { DismissReason } from '../layers';
@@ -171,5 +173,17 @@ describe('popup anchors (Menu.Popover and Popover target)', () => {
 
   it('PopupTarget is an element, a VirtualElement or null', () => {
     expectTypeOf<PopupTarget>().toEqualTypeOf<HTMLElement | VirtualElement | null>();
+  });
+});
+
+describe('date vocabulary (Calendar, DatePicker)', () => {
+  it('DayOfWeek numbers the days as Date.prototype.getDay() does', () => {
+    expectTypeOf<DayOfWeek>().toEqualTypeOf<0 | 1 | 2 | 3 | 4 | 5 | 6>();
+  });
+
+  it('FirstWeekOfYear names the three rules for week 1 of a year', () => {
+    expectTypeOf<FirstWeekOfYear>().toEqualTypeOf<
+      'first-day' | 'first-full-week' | 'first-four-day-week'
+    >();
   });
 });

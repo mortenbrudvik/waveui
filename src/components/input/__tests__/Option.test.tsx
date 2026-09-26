@@ -221,7 +221,7 @@ describe('Option / OptionGroup (input-pickers#1, #6, #20)', () => {
       <ul>
         <Option value="a">Apple</Option>
       </ul>,
-      '[WaveUI] Option must be used within a listbox (Combobox or Dropdown)',
+      '[WaveUI] Option must be used within a listbox (Listbox, Combobox, Dropdown or a ListboxProvider)',
     );
   });
 });

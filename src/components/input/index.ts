@@ -40,6 +40,15 @@ export {
   type DropdownLabels,
 } from './Dropdown';
 export {
+  ListboxProvider,
+  type ListboxProviderProps,
+  ListboxSurface,
+  type ListboxSurfaceProps,
+  useListboxPopup,
+  type UseListboxPopupOptions,
+  type UseListboxPopupResult,
+} from './Option';
+export {
   SwatchPicker,
   type SwatchPickerProps,
   type SwatchItem,

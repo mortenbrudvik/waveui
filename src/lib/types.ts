@@ -146,6 +146,16 @@ export interface VirtualElement {
  */
 export type PopupTarget = HTMLElement | VirtualElement | null;
 
+/** A day of the week, as `Date.prototype.getDay()` numbers them: 0 is Sunday, 6 is Saturday. */
+export type DayOfWeek = 0 | 1 | 2 | 3 | 4 | 5 | 6;
+
+/**
+ * Which week is week 1 of a year: the week of January 1 (`'first-day'`), the first week that lies
+ * wholly in the year (`'first-full-week'`), or the first week with at least four days in the year
+ * (`'first-four-day-week'`, ISO 8601 when weeks start on Monday).
+ */
+export type FirstWeekOfYear = 'first-day' | 'first-full-week' | 'first-four-day-week';
+
 // Re-export slot and polymorphic types for convenience
 export type { Slot, SlotObject, ResolvedSlot } from './slot';
 export type { PolymorphicProps, PolymorphicComponent } from './polymorphic';

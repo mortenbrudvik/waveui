@@ -22,7 +22,10 @@ import { isAltGraphCharacter, useTypeahead } from './useTypeahead';
 /*  Public types                                                       */
 /* ------------------------------------------------------------------ */
 
-/** One option of a listbox. */
+/**
+ * One option of a listbox: an entry of {@link UseListboxOptions.items} (data mode), or what an
+ * option registers (registration mode, {@link useListboxOption}).
+ */
 export interface ListboxItem {
   /** Unique value within the listbox. */
   value: string;
@@ -36,18 +39,25 @@ export interface ListboxItem {
    */
   disabled?: boolean;
   /**
-   * Hidden options (the consumer's `hidden` attribute) are left out of navigation and rendering
-   * like filtered-out ones: never highlighted, reached by typeahead or committed with the keyboard
-   * (registered options render `hidden`). Their label stays known
+   * Hidden options (an option's own `hidden` attribute, or a hidden group around it) are left out
+   * of navigation and rendering like filtered-out ones: never highlighted, reached by typeahead or
+   * committed with the keyboard (registered options render `hidden`). Their label stays known
    * ({@link UseListboxResult.getItem}).
    */
   hidden?: boolean;
 }
 
-/** Why {@link UseListboxOptions.onOpenChange} was called. */
+/**
+ * Why {@link UseListboxOptions.onOpenChange} was called: `'keyboard'` (a key opens the listbox, or
+ * closes it without a commit), `'select'` (a commit closes it), `'escape'` or `'tab'` (Tab closes
+ * it, after committing the active option in single-select select-only mode).
+ */
 export type ListboxOpenChangeReason = 'keyboard' | 'select' | 'escape' | 'tab';
 
-/** Second argument of `useListbox`'s `onSelect`. */
+/**
+ * Second argument of {@link UseListboxOptions.onSelect}: the committed option and the event behind
+ * the commit.
+ */
 export interface ListboxSelectDetails {
   /** The committed option. */
   item: ListboxItem;
@@ -58,8 +68,8 @@ export interface ListboxSelectDetails {
 /** Options of {@link useListbox}. */
 export interface UseListboxOptions {
   /**
-   * Whether the listbox is shown. The consumer owns the open state. Standalone mode: whether the
-   * list has focus — an option is active only while it does.
+   * Whether the listbox is shown. You own the open state: `onOpenChange` asks you to change it.
+   * Standalone mode: whether the list has focus — an option is active only while it does.
    */
   open: boolean;
   /**
@@ -80,7 +90,11 @@ export interface UseListboxOptions {
    * (see {@link UseListboxResult.getListboxProps}).
    */
   mode: 'editable' | 'select-only' | 'standalone';
-  /** Several values can be selected; committing keeps the listbox open. @default false */
+  /**
+   * Several values can be selected: the list gets `aria-multiselectable`, and a commit keeps the
+   * listbox open on the committed option (your `onSelect` adds or removes the value).
+   * @default false
+   */
   multiselect?: boolean;
   /** The selected values (`[]` when nothing is selected). */
   selectedValues: readonly string[];
@@ -93,11 +107,21 @@ export interface UseListboxOptions {
    */
   onSelect: (value: string, details?: ListboxSelectDetails) => void;
   /**
-   * Data mode: the options. Omitted ⇒ registration mode — the `Option` children register
-   * themselves through {@link ListboxContext} ({@link useListboxOption}).
+   * Data mode: the options, in list order. Omit it for registration mode, where the options
+   * register themselves in DOM order: `Option`s, or option components of your own on
+   * {@link useListboxOption}, rendered inside the listbox's context
+   * ({@link UseListboxResult.context}, which `ListboxSurface` and `ListboxProvider` provide).
    */
   items?: readonly ListboxItem[];
-  /** Hides items from navigation and rendering (registered options render `hidden`). */
+  /**
+   * The navigability predicate: an item it returns `false` for is filtered out — left out of the
+   * keys, typeahead and {@link UseListboxResult.items}, never active, and rendered `hidden` as a
+   * registered option (its label stays known). A picker builds it from its query, the text typed
+   * so far: Combobox keeps the options whose `textValue ?? label` contains it, ignoring case, and
+   * a component with a `filter(option, query)` prop builds this predicate by binding its current
+   * query to it. Hidden items stay out whatever it returns. Without it, every item that is not
+   * hidden is navigable.
+   */
   filter?: (item: ListboxItem) => boolean;
   /** Arrow keys wrap around at the ends. @default false */
   loop?: boolean;
@@ -110,8 +134,8 @@ export interface UseListboxOptions {
   /**
    * Keeps disabled options in the arrow-key, Home/End, PageUp/PageDown and typeahead order: they
    * still cannot be committed (Enter, Space and a click do nothing and the list stays open), and
-   * Tab and Alt+ArrowUp in single-select select-only mode close without committing instead of
-   * committing them. The `autoHighlight` fallback may then be a disabled option too.
+   * while one is active, Tab and Alt+ArrowUp in single-select select-only mode close the listbox
+   * without a commit. The `autoHighlight` fallback may then be a disabled option too.
    * @default false
    */
   disabledOptionsFocusable?: boolean;
@@ -125,10 +149,14 @@ export interface UseListboxOptions {
    */
   autoHighlight?: 'selected' | 'first' | false;
   /**
-   * Editable: whenever the enabled navigable options change while open (typing), the first of them
-   * becomes active — also when the keystroke that opens the listbox changes them (compared with
-   * those before opening) — and so does every text-editing key while open, also when they stay the
-   * same. Opening with unchanged options keeps the `autoHighlight` start.
+   * Editable: whenever the options the keys reach (the navigable ones, the disabled ones only with
+   * `disabledOptionsFocusable`) change while open, compared by content — typing that filters them
+   * — the first of them becomes active, also when the keystroke that opens the listbox changes
+   * them (compared with those before opening); so does every text-editing key while open, also
+   * when they stay the same. Opening with unchanged options keeps the `autoHighlight` start. It
+   * sets {@link useActiveDescendant}'s `activateFirstOnChange` (the text-editing keys are this
+   * hook's own).
+   * @default false
    */
   highlightOnFilter?: boolean;
   /**
@@ -141,7 +169,7 @@ export interface UseListboxOptions {
   idPrefix?: string;
   /**
    * Editable: Escape with the listbox closed and text in the input calls this (and prevents the
-   * default) so the consumer can clear its draft text. Not handled when omitted.
+   * default), so you can clear the typed text. Not handled when omitted.
    */
   onClearDraft?: () => void;
 }
@@ -149,15 +177,20 @@ export interface UseListboxOptions {
 /** Props for the combobox element (spread them; see {@link UseListboxResult.getComboboxProps}). */
 export interface ListboxComboboxProps {
   role: 'combobox';
+  /** {@link UseListboxOptions.open}. */
   'aria-expanded': boolean;
+  /** The listbox's id ({@link UseListboxResult.listboxId}). */
   'aria-controls': string;
+  /** The active option's id, while the listbox is open and an option is active. */
   'aria-activedescendant'?: string;
   'aria-haspopup': 'listbox';
+  /** Editable mode: typing filters the options. */
   'aria-autocomplete'?: 'list';
 }
 
 /** Props for the listbox element (see {@link UseListboxResult.getListboxProps}). */
 export interface ListboxListProps {
+  /** {@link UseListboxResult.listboxId}. */
   id: string;
   role: 'listbox';
   /** With {@link UseListboxOptions.multiselect}. */
@@ -179,7 +212,10 @@ export interface ListboxListProps {
 export interface UseListboxResult {
   /** Id of the listbox element. */
   listboxId: string;
-  /** The active (highlighted) option, derived during render; `null` while closed. */
+  /**
+   * The active (highlighted) option, derived during render; `null` while closed (in standalone
+   * mode, while the list does not have focus).
+   */
   activeValue: string | null;
   /** `getOptionId(activeValue)` while open and an option is active. */
   activeDescendantId: string | undefined;
@@ -196,12 +232,13 @@ export interface UseListboxResult {
   /**
    * Highlights an option while open (ignored when it is not navigable, or disabled unless
    * {@link UseListboxOptions.disabledOptionsFocusable}; dropped when it leaves the navigable set
-   * later). Scrolled into view like a keyboard highlight.
+   * later). Scrolled into view like a keyboard highlight. `null` returns to the `autoHighlight`
+   * option. A value set while closed survives only when the same update opens the listbox.
    */
   setActiveValue(value: string | null): void;
   /**
-   * Attach to the combobox element (to the list in standalone mode). Ignores events a consumer
-   * handler already prevented.
+   * Attach to the combobox element (to the list in standalone mode). Ignores key events a handler
+   * of yours already prevented (compose yours first).
    */
   onKeyDown(event: React.KeyboardEvent): void;
   /**
@@ -224,37 +261,62 @@ export interface UseListboxResult {
    * Both: `aria-multiselectable` with `multiselect`.
    */
   getListboxProps(): ListboxListProps;
-  /** Provide it with `<ListboxContext.Provider value={context}>` around the options. */
+  /**
+   * The context of the listbox's options: `ListboxSurface` provides it; for a list you render
+   * yourself, pass it to `ListboxProvider` around the options.
+   */
   context: ListboxContextValue;
 }
 
 /**
- * Per-option state of a listbox. Subscribe with `useSyncExternalStore` and read one value
- * (`() => store.isHidden(value)`), so only components whose answer changed re-render.
+ * The per-option state of a listbox ({@link ListboxContextValue.store}) and the contract of option
+ * components: {@link useListboxOption} is built on it, and so can an option component of your own
+ * be. `register` adds an option, `getIndex` gives its stable id, and the flags say how to draw it:
+ * subscribe with `useSyncExternalStore` and read one value (`() => store.isActive(value)`), so only
+ * the options whose answer changed re-render.
  */
 export interface ListboxStore {
+  /** Calls `listener` after a flag of any option changed. Returns the unsubscribe function. */
   subscribe(listener: () => void): () => void;
+  /** Whether `value` is the active option, the one `aria-activedescendant` points at. */
   isActive(value: string): boolean;
+  /** Whether `value` is selected. */
   isSelected(value: string): boolean;
+  /** Whether `value` is filtered out or hidden: render its option `hidden`. */
   isHidden(value: string): boolean;
-  /** The stable per-listbox index of `value`, assigned the first time the value is seen. */
+  /**
+   * The stable per-listbox index of `value`, assigned the first time the value is seen: the
+   * option's id is `${listboxId}-opt-${getIndex(value)}` ({@link UseListboxResult.getOptionId}),
+   * the same across filtering and remounts.
+   */
   getIndex(value: string): number;
   /**
-   * Registers an option and its element. The registrations of a commit are published once from
-   * the listbox root's layout effect (later ones once per microtask). Returns the unregister.
+   * Registers an option and its element (registration mode): call it from a layout effect, as
+   * {@link useListboxOption} does, and call the returned function to unregister, when the option
+   * unmounts or before it registers a changed item. The options are ordered by their elements'
+   * DOM position. The registrations of a commit are published once from the listbox's layout
+   * effect (later ones once per microtask).
    */
   register(item: ListboxItem, element: React.RefObject<HTMLElement | null>): () => void;
 }
 
-/** Value of {@link ListboxContext} (use {@link UseListboxResult.context}). */
+/**
+ * The context a listbox provides to its options (`useListbox(...).context`; pass it to
+ * `ListboxProvider` for a list rendered without `ListboxSurface`).
+ */
 export interface ListboxContextValue {
+  /** The listbox element's id, which the option ids start with. */
   listboxId: string;
+  /** The per-option state and the registration of the options. */
   store: ListboxStore;
   /** Whether the listbox is {@link UseListboxOptions.multiselect}. */
   multiselect: boolean;
   /** The listbox's {@link UseListboxOptions.mode}: standalone options add the pointer press. */
   mode: 'editable' | 'select-only' | 'standalone';
-  /** Commits `value` (option click); `event` is the click behind it. */
+  /**
+   * Commits `value` (an option click): `item` stands for the option while it has not registered
+   * yet, and `event` is the click behind the commit. A disabled option is never committed.
+   */
   select(value: string, item: ListboxItem, event: Event): void;
   /** Highlights `value` (pointer movement); not scrolled into view, so the list stays put. */
   highlight(value: string): void;
@@ -276,6 +338,7 @@ export interface ListboxContextValue {
  * DOM position, also when the option is memoized and only moved (see {@link useListbox}).
  */
 export interface UseListboxOptionProps {
+  /** The option's value, unique within the listbox. */
   value: string;
   /**
    * Display label; falls back to `textValue`, then the element's text content, then `value`. The
@@ -284,12 +347,19 @@ export interface UseListboxOptionProps {
    * for such options.
    */
   label?: string;
+  /** Text matched by typeahead and filters instead of the label. */
   textValue?: string;
+  /**
+   * The option can never be committed; the keys skip it unless the listbox has
+   * {@link UseListboxOptions.disabledOptionsFocusable}.
+   * @default false
+   */
   disabled?: boolean;
   /**
-   * The consumer hid the option (its own `hidden` attribute, or a hidden group around it): it
-   * registers as a hidden item ({@link ListboxItem.hidden}), so it is not navigable, and
+   * The option is hidden (its own `hidden` attribute, or a hidden group around it): it registers
+   * as a hidden item ({@link ListboxItem.hidden}), so it is not navigable, and
    * `optionProps.hidden` is set from the first render (server included).
+   * @default false
    */
   hidden?: boolean;
 }
@@ -299,31 +369,48 @@ export interface UseListboxOptionProps {
  * in standalone mode, with yours).
  */
 export interface ListboxOptionElementProps<E extends HTMLElement = HTMLElement> {
+  /**
+   * The option's stable id ({@link UseListboxResult.getOptionId}), which `aria-activedescendant`
+   * points at while the option is active.
+   */
   id: string;
   role: 'option';
   'aria-selected': boolean;
+  /** While disabled. */
   'aria-disabled'?: true;
+  /** While filtered out or hidden. */
   hidden?: boolean;
+  /** While the option is active, for styling. */
   'data-active'?: '';
+  /** While selected, for styling. */
   'data-selected'?: '';
+  /** While disabled, for styling. */
   'data-disabled'?: '';
+  /** Commits the option (a disabled one does nothing). */
   onClick(event: React.MouseEvent<E>): void;
+  /** Makes the option under the pointer active (not a disabled one), without scrolling the list. */
   onPointerMove(event: React.PointerEvent<E>): void;
   /** Standalone mode only: the pointer press ({@link ListboxContextValue.press}). */
   onMouseDown?(event: React.MouseEvent<E>): void;
+  /** Registers the element; it also sets the `ref` passed to {@link useListboxOption}. */
   ref: React.RefCallback<E>;
 }
 
 /** Result of {@link useListboxOption}. */
 export interface UseListboxOptionResult<E extends HTMLElement = HTMLElement> {
+  /** The option's stable id. */
   id: string;
+  /** Whether the option is selected. */
   selected: boolean;
+  /** Whether the option is active (keyboard or pointer highlight). */
   active: boolean;
+  /** Whether the option is disabled. */
   disabled: boolean;
-  /** Filtered out, or hidden by the consumer ({@link UseListboxOptionProps.hidden}). */
+  /** Filtered out, or hidden by its own props ({@link UseListboxOptionProps.hidden}). */
   hidden: boolean;
   /** Whether the surrounding listbox is {@link UseListboxOptions.multiselect}. */
   multiselect: boolean;
+  /** Spread onto the option element (see {@link ListboxOptionElementProps}). */
   optionProps: ListboxOptionElementProps<E>;
 }
 
@@ -660,7 +747,11 @@ function warnIfPageWide(ancestor: Node): void {
 /*  Context                                                            */
 /* ------------------------------------------------------------------ */
 
-/** Provided by listbox roots (`<ListboxContext.Provider value={listbox.context}>`). */
+/**
+ * The listbox context of the options, provided by `ListboxProvider` (and `ListboxSurface`, which
+ * renders one). Not public: a context object would need flat names for its `Provider` and
+ * `Consumer` members.
+ */
 export const ListboxContext: React.Context<ListboxContextValue | null> =
   React.createContext<ListboxContextValue | null>(null);
 ListboxContext.displayName = 'ListboxContext';
@@ -683,7 +774,10 @@ function getInertContext(): ListboxContextValue {
 function useListboxContext(componentName: string): ListboxContextValue {
   const context = useContext(ListboxContext);
   if (context) return context;
-  reportMissingContext(componentName, 'a listbox (Combobox or Dropdown)');
+  reportMissingContext(
+    componentName,
+    'a listbox (Listbox, Combobox, Dropdown or a ListboxProvider)',
+  );
   return getInertContext();
 }
 
@@ -693,19 +787,25 @@ function useListboxContext(componentName: string): ListboxContextValue {
 
 const LISTBOX_ELEMENT_KIND = Symbol.for('@mortenbrudvik/waveui/listbox-element-kind');
 
-/** What {@link collectOptionLabels} does with a marked component's elements. */
+/**
+ * What {@link collectOptionLabels} does with the elements of a component marked by
+ * {@link markListboxElement}: `'option'` reads a value and its label, `'group'` walks the children.
+ */
 export type ListboxElementKind = 'option' | 'group';
 
 /**
- * Marks a component so {@link collectOptionLabels} recognises its elements: `'option'` (reads
- * `value` and the label) or `'group'` (walks its `children`). Returns the component (function,
- * `memo` or `forwardRef` components). Required for every exported option/group component:
- * unmarked components are opaque to {@link collectOptionLabels}, so their labels are unknown on
- * the server and in the first client render.
+ * Marks a component so {@link collectOptionLabels} recognises its elements: `'option'` (reads its
+ * `value` prop and its label: the `label` prop, else `textValue`, else its text children, as
+ * `Option`'s) or `'group'` (walks its `children`). Returns the component (function, `memo` or
+ * `forwardRef` components). Mark every option or group component of your own that is rendered in
+ * a listbox (`Option` and `OptionGroup` are marked): unmarked components are opaque to
+ * {@link collectOptionLabels}, so their labels are unknown on the server and in the first client
+ * render.
  *
  * @example
- * export const Option = markListboxElement(OptionImpl, 'option');
- * export const OptionGroup = markListboxElement(OptionGroupImpl, 'group');
+ * // Option components of your own, built on useListboxOption:
+ * export const ColorOption = markListboxElement(ColorOptionImpl, 'option');
+ * export const ColorGroup = markListboxElement(ColorGroupImpl, 'group');
  */
 export function markListboxElement<C extends object>(component: C, kind: ListboxElementKind): C {
   Object.defineProperty(component, LISTBOX_ELEMENT_KIND, { value: kind, configurable: true });
@@ -835,12 +935,14 @@ function preventMouseDown(event: React.MouseEvent): void {
 }
 
 /**
- * The listbox behaviour shared by Combobox, Dropdown, TagPicker and TimePicker (spec §2.5): one
- * navigable option list drives the highlight, `aria-activedescendant` and the commit, so the
- * highlighted option is always the one Enter selects.
+ * The listbox behaviour of Listbox, Combobox, Dropdown, TagPicker and TimePicker, and the base of a
+ * custom picker: one navigable option list drives the highlight, `aria-activedescendant` and the
+ * commit, so the highlighted option is always the one Enter selects. The highlight is
+ * {@link useActiveDescendant}'s.
  *
- * - **Items.** Data mode (`items`) or registration mode: `Option`s call {@link useListboxOption}
- *   inside {@link ListboxContext} and register in DOM order (OptionGroups included). The
+ * - **Items.** Data mode (`items`) or registration mode: `Option`s, or option components of your
+ *   own on {@link useListboxOption}, register inside the listbox's context (`context`, which
+ *   `ListboxSurface` and `ListboxProvider` provide) in DOM order, `OptionGroup`s included. The
  *   registrations of one commit are published once from this hook's layout effect (which runs
  *   after the options'); later additions/removals are published once per microtask. A keyed
  *   reorder of the same options re-sorts them: the DOM order is re-checked after a commit of this
@@ -848,16 +950,19 @@ function preventMouseDown(event: React.MouseEvent): void {
  *   and, while it is mounted, whenever option elements move (a `MutationObserver` on their
  *   common ancestor) — so memoized options or hoisted elements that a wrapper component inside
  *   the listbox reorders are re-sorted too, although neither the options nor this component
- *   render. Options register even when filtered out or hidden by the consumer (they render
- *   `hidden` and are not navigable), so labels are always known — use {@link collectOptionLabels}
- *   for the display text before registration (SSR/first render).
+ *   render. Options register even when filtered out or hidden (they render `hidden` and are not
+ *   navigable), so labels are always known — use {@link collectOptionLabels} for the display text
+ *   before registration (SSR/first render). `filter` is the navigability predicate, which a
+ *   picker builds from its query.
  * - **Active option** is derived during render: the highlighted value, else the `autoHighlight`
  *   fallback. The highlight is reset on close and after a single-select commit, and dropped once
  *   it is not navigable and enabled any more (filtered out, hidden, removed by an update,
- *   disabled), so it does not come back without a user action when the option returns. Editable:
- *   a text-editing key (printable characters, Backspace/Delete, cut/paste/undo/redo) clears it —
- *   visual focus returns to the textbox (APG) — so Enter after typing never commits an option
- *   highlighted before the edit.
+ *   disabled; a disabled option stays with `disabledOptionsFocusable`), so it does not come back
+ *   without a user action when the option returns. Editable: a text-editing key (printable
+ *   characters, Backspace/Delete, cut/paste/undo/redo) clears it — visual focus returns to the
+ *   textbox (APG) — so Enter after typing never commits an option highlighted before the edit.
+ *   With `highlightOnFilter` the first option becomes active instead, and whenever filtering
+ *   changes the options (`useActiveDescendant`'s `activateFirstOnChange`).
  * - **Ids** `${listboxId}-opt-${n}` are stable per value (across filtering and remounts between
  *   an inline closed list and a portaled open list).
  * - **Store.** Options read their active/selected/hidden flags through a store, so moving the
@@ -884,21 +989,23 @@ function preventMouseDown(event: React.MouseEvent): void {
  * - The active option is scrolled into view (`{ block: 'nearest' }`) in a layout effect, except
  *   after a pointer highlight or a pointer press (the list would scroll under the pointer).
  *
- * **Consumer contract** (Combobox, Dropdown, TagPicker, TimePicker). Beyond the spec §2.5 signature:
- * - All options of a listbox live in a single container at a time (§5.5: inline only while
- *   closed, portaled only while open — never both, not even for an exit animation). Options split
- *   over two containers are watched from `<body>` and registered twice (development warns).
+ * **Consumer contract** (Listbox, Combobox, Dropdown, TagPicker, TimePicker and custom pickers):
+ * - All options of a listbox live in a single container at a time (inline only while closed,
+ *   portaled only while open — never both, not even for an exit animation; `ListboxSurface` does
+ *   this). Options split over two containers are watched from `<body>` and registered twice
+ *   (development warns).
  * - Spread `getComboboxProps()` onto the combobox element and attach **both** `onKeyDown` and
- *   `onKeyUp` to it (compose them with the consumer's handlers, C-COMPOSE). `onKeyUp` is required
- *   for a `<button>` combobox (select-only): without it the button's native click on Space keyup
+ *   `onKeyUp` to it (compose them with your own handlers). `onKeyUp` is required for a
+ *   `<button>` combobox (select-only): without it the button's native click on Space keyup
  *   toggles the listbox again after a keydown commit.
- * - Registration mode: export the option components through {@link markListboxElement}
- *   (`Option = markListboxElement(OptionImpl, 'option')`, `OptionGroup =
- *   markListboxElement(OptionGroupImpl, 'group')`; memo components can be marked too).
- *   {@link collectOptionLabels} walks only marked components, so without the marks the server
- *   render and the first client render have no display text.
+ * - Registration mode: mark option and group components of your own with
+ *   {@link markListboxElement} (`Option` and `OptionGroup` are marked; memo components can be
+ *   marked too). {@link collectOptionLabels} walks only marked components, so without the marks
+ *   the server render and the first client render have no display text.
  * - Display text: `getItem(value)?.label ?? collectOptionLabels(children).get(value)` (`?? value`
- *   for freeform input only). Editable consumers pass `onClearDraft` for Escape on a closed list.
+ *   for freeform input only). Editable pickers pass `onClearDraft` for Escape on a closed list.
+ * - A popup list renders in `ListboxSurface`, placed and dismissed by `useListboxPopup`; a list
+ *   rendered without it gets the options' context from `ListboxProvider`.
  * - Standalone mode (a listbox that holds focus): spread `getListboxProps()` onto the list and
  *   merge its `ref` with yours (a pointer press on an option focuses the list through it), attach
  *   `onKeyDown` to the list and pass the list's focus state as `open`. `getComboboxProps()` is not
@@ -1309,15 +1416,17 @@ function optionFlags(store: ListboxStore, value: string): number {
 }
 
 /**
- * An option of the surrounding listbox ({@link ListboxContext}). Registers the option (registration
- * mode) and its element, and reads its flags from the listbox store, so it re-renders only when
- * its own active/selected/hidden state changes. Spread `optionProps` onto the `<li>` (`id`,
- * `role="option"`, `aria-selected`, `aria-disabled`, `hidden`, `data-active`/`data-selected`/
- * `data-disabled` for styling, C-CLASS) and compose its `onClick` — and in standalone mode its
- * `onMouseDown`, the pointer press — with the consumer's.
+ * An option of the surrounding listbox, for option components of your own: the listbox's context
+ * comes from `ListboxSurface` or `ListboxProvider` ({@link UseListboxResult.context}). Registers
+ * the option (registration mode) and its element, and reads its flags from the listbox store, so
+ * it re-renders only when its own active/selected/hidden state changes. Spread `optionProps` onto
+ * the `<li>` (`id`, `role="option"`, `aria-selected`, `aria-disabled`, `hidden`, and
+ * `data-active`/`data-selected`/`data-disabled` for styling) and compose its `onClick` — and in
+ * standalone mode its `onMouseDown`, the pointer press — with your own handlers. Mark the
+ * component with {@link markListboxElement}, so its label is known before it registers.
  *
  * Throws in development when used outside a listbox; in production it logs the error once and
- * renders an inert option (C-CONTEXT).
+ * renders an inert option.
  *
  * @typeParam E The option element type (`HTMLLIElement` for an `<li>`), so `ref` needs no cast.
  */

@@ -3206,7 +3206,7 @@ describe('useListboxOption — context guard (C-CONTEXT)', () => {
   it('throws a [WaveUI] error in development outside a listbox', () => {
     expectThrows(
       <Opt value="a">Apple</Opt>,
-      '[WaveUI] Option must be used within a listbox (Combobox or Dropdown)',
+      '[WaveUI] Option must be used within a listbox (Listbox, Combobox, Dropdown or a ListboxProvider)',
     );
   });
 
@@ -3230,7 +3230,9 @@ describe('useListboxOption — context guard (C-CONTEXT)', () => {
         'Banana',
       ]);
       expect(error.mock.calls).toEqual([
-        ['[WaveUI] Option must be used within a listbox (Combobox or Dropdown)'],
+        [
+          '[WaveUI] Option must be used within a listbox (Listbox, Combobox, Dropdown or a ListboxProvider)',
+        ],
       ]);
     } finally {
       error.mockRestore();
