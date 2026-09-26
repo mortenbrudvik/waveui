@@ -2920,6 +2920,16 @@ describe('useListbox — standalone mode (listbox-1)', () => {
     expect(onOpenChange).not.toHaveBeenCalled();
   });
 
+  it('leaves ArrowLeft and ArrowRight alone (a vertical list): not prevented, nothing moves', () => {
+    render(<StandaloneList />);
+    act(() => fruitList().focus());
+    listKey('ArrowDown');
+    expect(listActiveText()).toBe('Banana');
+    expect(listKey('ArrowLeft')).toBe(true);
+    expect(listKey('ArrowRight')).toBe(true);
+    expect(listActiveText()).toBe('Banana');
+  });
+
   it('a press on an option of an unfocused list focuses the list and activates the option without scrolling; the click commits it', () => {
     const scroll = vi.fn();
     const original = Element.prototype.scrollIntoView;
@@ -2986,27 +2996,84 @@ describe('useListbox — standalone mode (listbox-1)', () => {
     }
   });
 
-  it('a press on a disabled option focuses the list and keeps the active option; its click commits nothing', () => {
+  it('multiselect: a press and a click toggle the pressed option on, once, and keep it active', () => {
     const onSelect = vi.fn();
-    render(
-      <StandaloneList onSelectSpy={onSelect}>
+    render(<StandaloneList multiselect defaultValues={['a']} onSelectSpy={onSelect} />);
+    const cherry = screen.getByRole('option', { name: 'Cherry' });
+    fireEvent.mouseDown(cherry);
+    fireEvent.click(cherry);
+    expect(onSelect.mock.calls).toEqual([
+      ['c', { item: expect.objectContaining({ value: 'c' }), event: expect.any(Event) }],
+    ]);
+    expect(selectedText()).toBe('a,c');
+    expect(fruitList()).toHaveFocus();
+    // Not the first selected option (Apple), which is the fallback.
+    expect(listActiveText()).toBe('Cherry');
+  });
+
+  it('a press on a disabled option focuses the list and keeps the active option, without scrolling; its click commits nothing', () => {
+    const scroll = vi.fn();
+    const original = Element.prototype.scrollIntoView;
+    Element.prototype.scrollIntoView = scroll;
+    const onSelect = vi.fn();
+    try {
+      render(
+        <StandaloneList onSelectSpy={onSelect}>
+          <Opt value="a">Apple</Opt>
+          <Opt value="b" disabled>
+            Banana
+          </Opt>
+          <Opt value="c">Cherry</Opt>
+        </StandaloneList>,
+      );
+      const banana = screen.getByRole('option', { name: 'Banana' });
+      fireEvent.mouseDown(banana);
+      expect(fruitList()).toHaveFocus();
+      expect(listActiveText()).toBe('Apple'); // the focus fallback
+      expect(scroll).not.toHaveBeenCalled();
+      listKey('ArrowDown'); // skips the disabled Banana
+      expect(listActiveText()).toBe('Cherry');
+      scroll.mockClear(); // the key move scrolled
+      fireEvent.mouseDown(banana); // the list has focus: nothing changes
+      expect(listActiveText()).toBe('Cherry');
+      expect(scroll).not.toHaveBeenCalled();
+      fireEvent.click(banana);
+      expect(onSelect).not.toHaveBeenCalled();
+    } finally {
+      Element.prototype.scrollIntoView = original;
+    }
+  });
+
+  it('a press on a disabled option of an unfocused list starts on the selected option without scrolling', () => {
+    const scroll = vi.fn();
+    const original = Element.prototype.scrollIntoView;
+    Element.prototype.scrollIntoView = scroll;
+    const options = (
+      <>
         <Opt value="a">Apple</Opt>
         <Opt value="b" disabled>
           Banana
         </Opt>
         <Opt value="c">Cherry</Opt>
-      </StandaloneList>,
+      </>
     );
-    const banana = screen.getByRole('option', { name: 'Banana' });
-    fireEvent.mouseDown(banana);
-    expect(fruitList()).toHaveFocus();
-    expect(listActiveText()).toBe('Apple'); // the focus fallback
-    listKey('ArrowDown'); // skips the disabled Banana
-    expect(listActiveText()).toBe('Cherry');
-    fireEvent.mouseDown(banana);
-    expect(listActiveText()).toBe('Cherry');
-    fireEvent.click(banana);
-    expect(onSelect).not.toHaveBeenCalled();
+    try {
+      const { unmount } = render(<StandaloneList defaultValues={['c']}>{options}</StandaloneList>);
+      fireEvent.mouseDown(screen.getByRole('option', { name: 'Banana' }));
+      expect(fruitList()).toHaveFocus();
+      expect(listActiveText()).toBe('Cherry'); // the selected option, not the first
+      expect(scroll).not.toHaveBeenCalled();
+      unmount();
+
+      // No fallback (autoHighlight={false}): the list takes focus with no active option.
+      render(<StandaloneList autoHighlight={false}>{options}</StandaloneList>);
+      fireEvent.mouseDown(screen.getByRole('option', { name: 'Banana' }));
+      expect(fruitList()).toHaveFocus();
+      expect(listActiveText()).toBeNull();
+      expect(scroll).not.toHaveBeenCalled();
+    } finally {
+      Element.prototype.scrollIntoView = original;
+    }
   });
 
   it('disabledOptionsFocusable: a press activates a disabled option, whose click commits nothing', () => {
@@ -3027,6 +3094,64 @@ describe('useListbox — standalone mode (listbox-1)', () => {
     fireEvent.click(banana);
     expect(onSelect).not.toHaveBeenCalled();
     expect(listActiveText()).toBe('Banana');
+  });
+
+  it('warns once when the list drops the hook ref, so a press cannot focus it; the click still commits', () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    // Not mocked: an unexpected error still prints.
+    const error = vi.spyOn(console, 'error');
+    const onSelect = vi.fn();
+    function OwnRefList() {
+      const ownRef = React.useRef<HTMLUListElement>(null);
+      const [focused, setFocused] = React.useState(false);
+      const [selected, setSelected] = React.useState<readonly string[]>([]);
+      const lb = useListbox({
+        open: focused,
+        mode: 'standalone',
+        selectedValues: selected,
+        onSelect: (v, details) => {
+          onSelect(v, details);
+          setSelected([v]);
+        },
+      });
+      return (
+        <ListboxContext.Provider value={lb.context}>
+          {/* The own ref after the spread replaces the hook's ref instead of merging with it. */}
+          <ul
+            {...lb.getListboxProps()}
+            ref={ownRef}
+            aria-label="Fruits"
+            onKeyDown={lb.onKeyDown}
+            onFocus={() => setFocused(true)}
+            onBlur={() => setFocused(false)}
+          >
+            {FRUITS}
+          </ul>
+          <output data-testid="value">{selected.join(',')}</output>
+        </ListboxContext.Provider>
+      );
+    }
+    try {
+      render(<OwnRefList />);
+      const banana = screen.getByRole('option', { name: 'Banana' });
+      fireEvent.mouseDown(banana);
+      expect(fruitList()).not.toHaveFocus();
+      fireEvent.click(banana);
+      expect(onSelect.mock.calls).toEqual([
+        ['b', { item: expect.objectContaining({ value: 'b' }), event: expect.any(Event) }],
+      ]);
+      expect(selectedText()).toBe('b');
+      fireEvent.mouseDown(screen.getByRole('option', { name: 'Cherry' }));
+      expect(warn.mock.calls).toEqual([
+        [
+          '[WaveUI] useListbox: the list element is unknown, so a pointer press cannot focus the list. Pass the `ref` of `getListboxProps()` to the list element, merged with your own ref.',
+        ],
+      ]);
+      expect(error).not.toHaveBeenCalled();
+    } finally {
+      warn.mockRestore();
+      error.mockRestore();
+    }
   });
 });
 

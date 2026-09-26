@@ -170,7 +170,7 @@ export interface ListboxListProps {
   'aria-activedescendant'?: string;
   /**
    * Standalone mode: the list element, which a pointer press on an option focuses. Merge it with
-   * your own ref.
+   * your own ref (a press warns in development when it was dropped).
    */
   ref?: React.RefCallback<HTMLElement>;
 }
@@ -262,9 +262,11 @@ export interface ListboxContextValue {
    * Standalone mode: a pointer press on option `value` (its `mousedown`, whose default the option
    * prevents). Focuses the list without scrolling and makes the option active without scrolling
    * it into view, in one update, so the click that follows commits the pressed option even when
-   * focus would have scrolled another option into view. An option that cannot be active (a
-   * disabled one, unless {@link UseListboxOptions.disabledOptionsFocusable}) only focuses the
-   * list.
+   * focus would have scrolled another option into view. A press on an option that cannot be
+   * active (a disabled one, unless {@link UseListboxOptions.disabledOptionsFocusable}) keeps a
+   * focused list's active option, and an unfocused list starts on its `autoHighlight` option,
+   * not scrolled into view either. Development warns once when the list element is unknown
+   * (the `ref` of {@link UseListboxResult.getListboxProps} was not passed on).
    */
   press(value: string): void;
 }
@@ -1024,10 +1026,21 @@ export function useListbox(options: UseListboxOptions): UseListboxResult {
   // scrolls). Focusing the list and moving to the option land in one update, so the render that
   // enables the active option (the consumer's focus state) has the pressed one, not the fallback
   // that the scroll effect would scroll under the pointer before the click. An option that
-  // cannot be active is not moved to: the next render would drop it together with the highlight.
+  // cannot be active is not moved to (the next render would drop it together with the highlight):
+  // a focused list keeps its active option, and an unfocused one (`open` is its focus state)
+  // starts on its fallback, moved to without scrolling for the same reason.
   const press = useEventCallback((value: string) => {
-    listElement?.focus({ preventScroll: true });
+    if (listElement) {
+      listElement.focus({ preventScroll: true });
+    } else if (standalone) {
+      warnOnce(
+        'useListbox:list-ref',
+        'useListbox: the list element is unknown, so a pointer press cannot focus the list. Pass ' +
+          'the `ref` of `getListboxProps()` to the list element, merged with your own ref.',
+      );
+    }
     if (navigationValues.includes(value)) ad.setActiveValue(value, { scroll: false });
+    else if (!open && fallback !== null) ad.setActiveValue(fallback, { scroll: false });
   });
 
   // The native keydown event behind a typeahead match, so onMatch (called from inside
