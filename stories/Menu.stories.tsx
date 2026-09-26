@@ -445,10 +445,10 @@ export const LinkItems: Story = {
 /**
  * Submenus are nested `<Menu>`s: a `Menu.Trigger` around a `Menu.Item` opens one. ArrowRight
  * (ArrowLeft in RTL), Enter, Space, a click, or resting the mouse on the item opens it; ArrowLeft
- * and Escape close it and return to the item. Activating an item or Tab closes every level and
- * returns focus to "File". A triangle between an item and its open submenu keeps the submenu open
- * while the mouse moves diagonally across the other items, and while focus is in the menu the item
- * under the mouse takes focus.
+ * and Escape close it and return to the item. Activating an item closes every level and returns
+ * focus to "File"; Tab closes every level and tabbing continues from "File". A triangle between an
+ * item and its open submenu keeps the submenu open while the mouse moves diagonally across the
+ * other items, and while focus is in the menu the item under the mouse takes focus.
  */
 export const Submenus: Story = {
   args: {
@@ -503,6 +503,8 @@ export const Submenus: Story = {
 export const StaticWithSubmenu: Story = {
   args: {
     'aria-label': 'Edit',
+    // A static menu is as wide as its container: this width leaves its submenus room beside it.
+    className: 'w-64',
     children: (
       <>
         <Menu.Item shortcut="Ctrl+X">Cut</Menu.Item>
@@ -624,9 +626,10 @@ const FILES = ['report.docx', 'notes.txt', 'budget.xlsx', 'photo.png'];
 /**
  * `openOnContext`: the file list is a context-menu region. A right click opens the menu at the
  * pointer; Shift+F10 or the ContextMenu key opens it at the focused file (the region announces the
- * shortcut with `aria-keyshortcuts`). Escape, Tab and choosing an action return focus to that
- * file; Space on "Pinned" or "Available offline" toggles it and keeps the menu open. The menu is
- * named by its `aria-label`; the region gets no menu-button state.
+ * shortcut with `aria-keyshortcuts`). Escape and choosing an action return focus to that file;
+ * Tab closes the menu and tabbing continues from that file. Space on "Pinned" or "Available
+ * offline" toggles it and keeps the menu open. The menu is named by its `aria-label`; the region
+ * gets no menu-button state.
  */
 export const ContextMenu: Story = {
   args: {

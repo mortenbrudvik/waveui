@@ -66,6 +66,16 @@ describe('MenuItemRow and the column alignment', () => {
     ]);
   });
 
+  it('the shortcut takes its direction from its own text (dir="auto"), so "Ctrl+," keeps its order in RTL', () => {
+    renderInMenuList(<MenuItem shortcut="Ctrl+,">Settings</MenuItem>, {
+      renderOptions: { wrapper: RtlProvider },
+    });
+    expect(screen.getByRole('menuitem').closest('[dir]')).toHaveAttribute('dir', 'rtl');
+    const shortcut = screen.getByText('Ctrl+,');
+    expect(shortcut).toHaveAttribute('dir', 'auto');
+    expect(shortcut).toHaveClass('ms-4', 'text-caption-1', 'text-muted-foreground');
+  });
+
   it('a plain item renders hidden checkmark and icon placeholders that show when the list has the column', () => {
     renderInMenuList(<MenuItem>Paste</MenuItem>);
     const row = item('Paste');

@@ -9,7 +9,7 @@ import { menuItemClasses } from './Menu.shared';
 export interface MenuItemLinkOwnProps {
   /** Icon before the label (decorative); the rules of `Menu.Item.icon`. */
   icon?: Slot<'span'>;
-  /** Keyboard shortcut text at the end of the item. */
+  /** Keyboard shortcut text at the end of the item; the rules of `Menu.Item.shortcut`. */
   shortcut?: string;
   /**
    * Unavailable: `aria-disabled`, skipped by the arrow keys, never activated, and its click is

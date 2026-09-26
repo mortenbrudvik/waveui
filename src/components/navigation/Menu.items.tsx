@@ -19,7 +19,10 @@ export interface MenuItemProps extends React.HTMLAttributes<HTMLDivElement> {
    * icon (`''`, `0`) or a list of nothing renders no icon box.
    */
   icon?: Slot<'span'>;
-  /** Keyboard shortcut text displayed at the end of the item. */
+  /**
+   * Keyboard shortcut text displayed at the end of the item. Its direction comes from its own text
+   * (`dir="auto"`), so "Ctrl+," keeps its order in an RTL menu.
+   */
   shortcut?: string;
   /** Whether the menu item is disabled (`aria-disabled`; skipped by keyboard navigation). */
   disabled?: boolean;
@@ -63,7 +66,7 @@ export interface MenuItemRowProps {
   icon?: Slot<'span'>;
   /** The label (typeahead reads a non-string label through its `data-menu-label` element). */
   label: React.ReactNode;
-  /** The shortcut text. */
+  /** The shortcut text (rendered with `dir="auto"`). */
   shortcut?: string;
   /** Content at the row's end: the submenu chevron or a switch. */
   end?: React.ReactNode;
@@ -143,7 +146,13 @@ export function MenuItemRow({
       >
         {materialiseSlotContent(label)}
       </span>
-      {shortcut && <span className="ms-4 text-caption-1 text-muted-foreground">{shortcut}</span>}
+      {/* The shortcut takes its direction from its own text (`dir="auto"` also isolates it): in an
+          RTL menu, "Ctrl+," would otherwise be reordered to ",+Ctrl". */}
+      {shortcut && (
+        <span dir="auto" className="ms-4 text-caption-1 text-muted-foreground">
+          {shortcut}
+        </span>
+      )}
       {end}
     </>
   );

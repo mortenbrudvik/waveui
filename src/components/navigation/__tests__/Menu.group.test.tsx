@@ -1,10 +1,11 @@
 import * as React from 'react';
 import { describe, it, expect, vi, afterEach } from 'vitest';
-import { act, screen } from '@testing-library/react';
+import { act, render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { hydrateRoot } from 'react-dom/client';
 import { renderToString } from 'react-dom/server';
 import { MenuGroup, MenuGroupHeader } from '../Menu.group';
+import type { MenuGroupProps } from '../Menu.group';
 import { MenuItemCheckbox, MenuItemRadio } from '../Menu.selectable';
 import { MenuDivider, MenuItem } from '../Menu.items';
 import {
@@ -26,6 +27,9 @@ const UNLABELLED_WARNING =
 
 const HEADER_CLASSES =
   'flex items-center gap-2 px-3 pb-1 pt-2 text-caption-1 font-semibold text-muted-foreground';
+
+const EXTRA_HEADER_WARNING =
+  '[WaveUI] Menu.GroupHeader: this Menu.Group already has a header (its first direct child header), so this one does not label the group. Give a group one header, or put this one in a Menu.Group of its own.';
 
 const sortRadios = (
   <>
@@ -112,6 +116,40 @@ describe('labelling', () => {
     );
   });
 
+  it('an aria-label or aria-labelledby holding undefined is no name of its own: the header still labels the group', () => {
+    const warn = vi.spyOn(console, 'warn');
+    // A wrapper that forwards both props, whether or not its consumer set them.
+    function ForwardingGroup({ children, ...props }: MenuGroupProps) {
+      return (
+        <MenuGroup aria-label={props['aria-label']} aria-labelledby={props['aria-labelledby']}>
+          {children}
+        </MenuGroup>
+      );
+    }
+    renderInMenuList(
+      <>
+        <MenuGroup aria-labelledby={undefined}>
+          <MenuGroupHeader>Sort by</MenuGroupHeader>
+          {sortRadios}
+        </MenuGroup>
+        <ForwardingGroup>
+          <MenuGroupHeader>Show</MenuGroupHeader>
+          <MenuItem>Ruler</MenuItem>
+        </ForwardingGroup>
+      </>,
+    );
+    expect(screen.getByRole('group', { name: 'Sort by' })).toHaveAttribute(
+      'aria-labelledby',
+      screen.getByText('Sort by').id,
+    );
+    expect(screen.getByRole('group', { name: 'Show' })).toHaveAttribute(
+      'aria-labelledby',
+      screen.getByText('Show').id,
+    );
+    expect(findDanglingIdRefs()).toEqual([]);
+    expect(warn).not.toHaveBeenCalled();
+  });
+
   it('without a header the group has no aria-labelledby, and nothing dangles', () => {
     const warn = vi.spyOn(console, 'warn');
     renderInMenuList(<MenuGroup data-testid="group">{sortRadios}</MenuGroup>);
@@ -143,7 +181,96 @@ describe('labelling', () => {
     expect(screen.getByTestId('first')).not.toHaveAttribute('aria-labelledby');
     expect(screen.getByTestId('second')).not.toHaveAttribute('aria-labelledby');
     expect(screen.queryByRole('group', { name: 'Sort by' })).toBeNull();
+    // Nothing points at such a header, so it renders no generated id.
+    expect(screen.getByText('Sort by')).not.toHaveAttribute('id');
+    expect(screen.getByText('Show')).not.toHaveAttribute('id');
     expect(warn.mock.calls).toEqual([[UNLABELLED_WARNING]]);
+  });
+
+  it('a wrapped header next to a direct-child header does not label the group, renders no generated id and warns once', () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    function MoreHeader() {
+      return <MenuGroupHeader>More</MenuGroupHeader>;
+    }
+    renderInMenuList(
+      <MenuGroup>
+        <MenuGroupHeader>Sort by</MenuGroupHeader>
+        <MoreHeader />
+        {sortRadios}
+      </MenuGroup>,
+    );
+    const sortHeader = screen.getByText('Sort by');
+    expect(sortHeader.id).toMatch(/^menu-group-header-/);
+    expect(screen.getByRole('group', { name: 'Sort by' })).toHaveAttribute(
+      'aria-labelledby',
+      sortHeader.id,
+    );
+    expect(screen.getByText('More')).not.toHaveAttribute('id');
+    expect(findDanglingIdRefs()).toEqual([]);
+    expect(warn.mock.calls).toEqual([[EXTRA_HEADER_WARNING]]);
+  });
+
+  it('a second direct-child header does not label the group either: it keeps only its own id and warns once', () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    renderInMenuList(
+      <MenuGroup>
+        <MenuGroupHeader>Show</MenuGroupHeader>
+        <MenuItem>Ruler</MenuItem>
+        <MenuGroupHeader>Also show</MenuGroupHeader>
+        <MenuItem>Grid</MenuItem>
+        <MenuGroupHeader id="panels-header">Panels</MenuGroupHeader>
+        <MenuItem>Outline</MenuItem>
+      </MenuGroup>,
+    );
+    expect(screen.getByRole('group', { name: 'Show' })).toHaveAttribute(
+      'aria-labelledby',
+      screen.getByText('Show').id,
+    );
+    expect(screen.getByText('Also show')).not.toHaveAttribute('id');
+    expect(screen.getByText('Panels')).toHaveAttribute('id', 'panels-header');
+    expect(findDanglingIdRefs()).toEqual([]);
+    expect(warn.mock.calls).toEqual([[EXTRA_HEADER_WARNING]]);
+  });
+
+  it('a second header warns in a group named by aria-label too', () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    renderInMenuList(
+      <MenuGroup aria-label="Sort">
+        <MenuGroupHeader>Sort by</MenuGroupHeader>
+        <MenuGroupHeader>Order</MenuGroupHeader>
+        {sortRadios}
+      </MenuGroup>,
+    );
+    expect(screen.getByRole('group', { name: 'Sort' })).not.toHaveAttribute('aria-labelledby');
+    expect(screen.getByText('Order')).not.toHaveAttribute('id');
+    expect(warn.mock.calls).toEqual([[EXTRA_HEADER_WARNING]]);
+  });
+
+  it('the header its scan found keeps labelling the group in StrictMode, after a re-render and as a Server Component reference', () => {
+    const warn = vi.spyOn(console, 'warn');
+    const ClientHeader = asClientReference(MenuGroupHeader);
+    function Groups({ sortLabel }: { sortLabel: string }) {
+      return (
+        <MenuListHarness>
+          <MenuGroup>
+            <MenuGroupHeader>{sortLabel}</MenuGroupHeader>
+            {sortRadios}
+          </MenuGroup>
+          <MenuGroup>
+            <ClientHeader>Show</ClientHeader>
+            <MenuItem>Ruler</MenuItem>
+          </MenuGroup>
+        </MenuListHarness>
+      );
+    }
+    const { rerender } = render(<Groups sortLabel="Sort by" />, { wrapper: React.StrictMode });
+    expect(screen.getByRole('group', { name: 'Sort by' })).toBeInTheDocument();
+    expect(screen.getByRole('group', { name: 'Show' })).toBeInTheDocument();
+    rerender(<Groups sortLabel="Order by" />);
+    expect(screen.getByRole('group', { name: 'Order by' })).toBeInTheDocument();
+    expect(screen.getByRole('group', { name: 'Show' })).toBeInTheDocument();
+    expect(findDanglingIdRefs()).toEqual([]);
+    expect(warn).not.toHaveBeenCalled();
   });
 
   it('a wrapped header in a group named by aria-label does not warn', () => {
