@@ -1,5 +1,6 @@
 import * as React from 'react';
 import { cn } from '../../lib/cn';
+import { dividerClassNames } from '../../lib/classNames';
 import { joinIds } from '../../lib/aria';
 import { renderSlot, slotRendersContent } from '../../lib/slot';
 import { useId } from '../../hooks/useId';
@@ -72,15 +73,19 @@ export const Divider: PolymorphicComponent<'hr', DividerOwnProps> = (props) => {
     const Wrapper: React.ElementType = as ?? 'div';
     // A consumer aria-label names the separator; aria-labelledby would take precedence over it.
     const labelledBy = rest['aria-label'] ? ariaLabelledBy : joinIds(ariaLabelledBy, labelId);
-    const lineClassName = vertical
-      ? 'w-0 min-h-2 flex-1 border-s border-border'
-      : 'h-0 min-w-2 flex-1 border-t border-border';
+    const lineClassName = cn(
+      dividerClassNames.line,
+      vertical
+        ? 'w-0 min-h-2 flex-1 border-s border-border'
+        : 'h-0 min-w-2 flex-1 border-t border-border',
+    );
     return (
       <Wrapper
         ref={ref}
         role="separator"
         aria-orientation={vertical ? 'vertical' : undefined}
         className={cn(
+          dividerClassNames.root,
           vertical
             ? 'inline-flex min-h-12 flex-col items-center gap-1 self-stretch'
             : 'flex items-center gap-3',
@@ -92,7 +97,7 @@ export const Divider: PolymorphicComponent<'hr', DividerOwnProps> = (props) => {
         <div aria-hidden="true" className={lineClassName} />
         {/* Rendered as a slot: a generator checked above was read once, and renderSlot renders
             the items read then. */}
-        {renderSlot(children, 'span', labelClassName, { id: labelId })}
+        {renderSlot(children, 'span', cn(dividerClassNames.label, labelClassName), { id: labelId })}
         <div aria-hidden="true" className={lineClassName} />
       </Wrapper>
     );
@@ -106,7 +111,7 @@ export const Divider: PolymorphicComponent<'hr', DividerOwnProps> = (props) => {
         role="separator"
         aria-orientation="vertical"
         aria-labelledby={ariaLabelledBy}
-        className={cn('inline-block h-6 border-s border-border', className)}
+        className={cn(dividerClassNames.root, 'inline-block h-6 border-s border-border', className)}
         {...rest}
       />
     );
@@ -118,7 +123,11 @@ export const Divider: PolymorphicComponent<'hr', DividerOwnProps> = (props) => {
       ref={ref}
       role="separator"
       aria-labelledby={ariaLabelledBy}
-      className={cn('m-0 h-0 w-full border-0 border-t border-solid border-border', className)}
+      className={cn(
+        dividerClassNames.root,
+        'm-0 h-0 w-full border-0 border-t border-solid border-border',
+        className,
+      )}
       {...rest}
     />
   );

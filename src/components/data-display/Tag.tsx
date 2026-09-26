@@ -1,5 +1,6 @@
 import * as React from 'react';
 import { cn } from '../../lib/cn';
+import { tagClassNames } from '../../lib/classNames';
 import { warnDeprecated, warnOnce } from '../../lib/dev';
 import { mergeProps } from '../../lib/mergeProps';
 import { getElementType } from '../../lib/children';
@@ -187,9 +188,12 @@ function isPlainObject(value: unknown): value is UnknownProps {
   return proto === null || proto === Object.prototype;
 }
 
-/** The decorative default dismiss glyph. */
-function defaultDismissContent(): React.ReactNode {
-  return <DismissIcon size={12} />;
+/**
+ * The decorative default dismiss glyph. It carries the dismiss icon part class when it is the
+ * dismiss button's own content, not when the element of a slot object wraps it.
+ */
+function defaultDismissContent(className?: string): React.ReactNode {
+  return <DismissIcon size={12} className={className} />;
 }
 
 /**
@@ -205,7 +209,7 @@ function resolveDismissSlot(slot: TagOwnProps['dismissIcon']): ResolvedDismissSl
   if (!slotRendersContent(slot)) {
     return {
       buttonProps: null,
-      content: defaultDismissContent(),
+      content: defaultDismissContent(tagClassNames.dismissIcon),
       warning: null,
       ignoredName: false,
       contentMayName: false,
@@ -236,7 +240,9 @@ function resolveDismissSlot(slot: TagOwnProps['dismissIcon']): ResolvedDismissSl
     const icon = isWaveButton ? elementProps.icon : undefined;
     const { props: buttonProps, ignoredName } = withoutName(slotProps);
     const iconNode = slotRendersContent(icon)
-      ? renderSlot(icon, 'span', iconClassName, { 'aria-hidden': true })
+      ? renderSlot(icon, 'span', cn(tagClassNames.dismissIcon, iconClassName), {
+          'aria-hidden': true,
+        })
       : null;
     // A generator is read once by the check; its items are what renders (and names the button).
     // Markup of the merged button (`dangerouslySetInnerHTML`) is its content as well: the dismiss
@@ -252,7 +258,7 @@ function resolveDismissSlot(slot: TagOwnProps['dismissIcon']): ResolvedDismissSl
       content:
         iconNode || slotRendersContent(ownContent)
           ? placeButtonIcon(iconNode, ownContent, isWaveButton && elementProps.iconPosition)
-          : defaultDismissContent(),
+          : defaultDismissContent(tagClassNames.dismissIcon),
       warning: 'button-element',
       ignoredName,
       contentMayName: true,
@@ -295,9 +301,16 @@ function resolveDismissSlot(slot: TagOwnProps['dismissIcon']): ResolvedDismissSl
     // An object without content styles the default icon, e.g. `{ className: 'text-error' }` (as in
     // MessageBar and SearchBox); a Wave Button's icon comes before the content (after it with
     // `iconPosition="after"`).
-    if (slotRendersContent(ownProps.icon)) {
+    // The dismiss icon part is the merged Button's icon element when there is one, else the
+    // element this slot object renders (a default glyph inside it stays without the part class).
+    const hasButtonIcon = slotRendersContent(ownProps.icon);
+    if (hasButtonIcon) {
       contentProps.children = placeButtonIcon(
-        renderSlot(ownProps.icon as Slot<'span'>, 'span', iconClassName),
+        renderSlot(
+          ownProps.icon as Slot<'span'>,
+          'span',
+          cn(tagClassNames.dismissIcon, iconClassName),
+        ),
         materialiseSlotContent(contentProps.children),
         ownProps.iconPosition,
       );
@@ -306,9 +319,12 @@ function resolveDismissSlot(slot: TagOwnProps['dismissIcon']): ResolvedDismissSl
     }
     return {
       buttonProps: isButtonObject || Object.keys(buttonProps).length > 0 ? buttonProps : null,
-      content: renderSlot(contentProps as SlotObject<'span'>, 'span', iconClassName, {
-        'aria-hidden': true,
-      }),
+      content: renderSlot(
+        contentProps as SlotObject<'span'>,
+        'span',
+        cn(!hasButtonIcon && tagClassNames.dismissIcon, iconClassName),
+        { 'aria-hidden': true },
+      ),
       warning: isButtonObject ? 'button-object' : null,
       ignoredName,
       contentMayName: false,
@@ -319,7 +335,14 @@ function resolveDismissSlot(slot: TagOwnProps['dismissIcon']): ResolvedDismissSl
 
   return {
     buttonProps: null,
-    content: renderSlot(slot as Slot<'span'>, 'span', iconClassName, { 'aria-hidden': true }),
+    content: renderSlot(
+      slot as Slot<'span'>,
+      'span',
+      cn(tagClassNames.dismissIcon, iconClassName),
+      {
+        'aria-hidden': true,
+      },
+    ),
     warning: null,
     ignoredName: false,
     contentMayName: false,
@@ -430,6 +453,7 @@ export const Tag: PolymorphicComponent<'span', TagOwnProps> = (props) => {
   const ownButtonProps: UnknownProps = {
     type: 'button',
     className: cn(
+      tagClassNames.dismissButton,
       'inline-flex size-5 shrink-0 items-center justify-center rounded-full border-0 bg-transparent p-0 text-foreground',
       'not-disabled:not-aria-disabled:hover:bg-subtle-pressed',
       'disabled:cursor-not-allowed disabled:opacity-50',
@@ -447,13 +471,17 @@ export const Tag: PolymorphicComponent<'span', TagOwnProps> = (props) => {
     <Component
       ref={ref}
       className={cn(
+        tagClassNames.root,
         'inline-flex items-center gap-1 rounded-full bg-muted py-1 ps-3 text-body-1 text-foreground',
         dismissible ? 'pe-1.5' : 'pe-3',
         className,
       )}
       {...rest}
     >
-      <span id={contentId} className="inline-flex items-center gap-1">
+      <span
+        id={contentId}
+        className={cn(tagClassNames.primaryText, 'inline-flex items-center gap-1')}
+      >
         {children}
       </span>
       {dismissible && (

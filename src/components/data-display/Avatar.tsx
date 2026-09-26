@@ -1,6 +1,7 @@
 import * as React from 'react';
 import { joinIds } from '../../lib/aria';
 import { cn } from '../../lib/cn';
+import { avatarClassNames } from '../../lib/classNames';
 import { composeEventHandlers } from '../../lib/composeEventHandlers';
 import { useMergedRefs } from '../../hooks/useMergedRefs';
 import { PersonIcon } from '../../lib/icons';
@@ -295,7 +296,7 @@ export const Avatar = ({
           src={imageSlot}
           alt={imageAlt}
           {...imageDescription}
-          className={IMAGE_CLASS}
+          className={cn(avatarClassNames.image, IMAGE_CLASS)}
           onError={handleError}
         />
       );
@@ -323,7 +324,7 @@ export const Avatar = ({
         : slotProps
           ? { ...(imageSlot as object), ...overrides }
           : imageSlot;
-      imageNode = renderSlot(slot as Slot<'img'>, 'img', IMAGE_CLASS, {
+      imageNode = renderSlot(slot as Slot<'img'>, 'img', cn(avatarClassNames.image, IMAGE_CLASS), {
         alt: imageAlt,
         ...imageDescription,
       });
@@ -333,7 +334,7 @@ export const Avatar = ({
           src={src}
           alt={imageAlt}
           {...imageDescription}
-          className={IMAGE_CLASS}
+          className={cn(avatarClassNames.image, IMAGE_CLASS)}
           onError={handleError}
         />
       );
@@ -346,7 +347,7 @@ export const Avatar = ({
   // does not consume a generator: renderSlot still renders its items.
   const iconNode =
     imageNode === null && icon && slotRendersContent(icon)
-      ? renderSlot(icon, 'span', 'inline-flex', { 'aria-hidden': true })
+      ? renderSlot(icon, 'span', cn(avatarClassNames.icon, 'inline-flex'), { 'aria-hidden': true })
       : null;
   const initials = imageNode === null && iconNode === null && name ? getInitials(name) : '';
 
@@ -358,10 +359,14 @@ export const Avatar = ({
     content = iconNode;
     colorClass = 'bg-muted text-muted-foreground';
   } else if (initials) {
-    content = <span aria-hidden="true">{initials}</span>;
+    content = (
+      <span aria-hidden="true" className={avatarClassNames.initials}>
+        {initials}
+      </span>
+    );
     colorClass = 'bg-primary text-primary-foreground';
   } else {
-    content = <PersonIcon size="60%" />;
+    content = <PersonIcon size="60%" className={avatarClassNames.icon} />;
     colorClass = 'bg-muted text-muted-foreground';
   }
 
@@ -401,11 +406,12 @@ export const Avatar = ({
   // 0.4 and like `icon`: no stray "0" in the corner, and no wrapper taking the root props.
   const badgeNode =
     badge && slotRendersContent(badge)
-      ? renderSlot(badge, 'span', 'absolute bottom-0 end-0 inline-flex')
+      ? renderSlot(badge, 'span', cn(avatarClassNames.badge, 'absolute bottom-0 end-0 inline-flex'))
       : null;
   const hasBadge = badgeNode !== null;
 
   const visualClassName = cn(
+    avatarClassNames.visual,
     'inline-flex items-center justify-center rounded-full overflow-hidden shrink-0 font-bold',
     avatarSizeClasses[size],
     colorClass,
@@ -413,14 +419,23 @@ export const Avatar = ({
 
   if (!hasBadge) {
     return (
-      <span ref={rootVisualRef} {...a11yProps} {...rest} className={cn(visualClassName, className)}>
+      <span
+        ref={rootVisualRef}
+        {...a11yProps}
+        {...rest}
+        className={cn(avatarClassNames.root, visualClassName, className)}
+      >
         {content}
       </span>
     );
   }
 
   return (
-    <span ref={ref} {...rest} className={cn('relative inline-flex shrink-0', className)}>
+    <span
+      ref={ref}
+      {...rest}
+      className={cn(avatarClassNames.root, 'relative inline-flex shrink-0', className)}
+    >
       <span ref={visualRef} {...a11yProps} className={visualClassName}>
         {content}
       </span>

@@ -1,5 +1,6 @@
 import * as React from 'react';
 import { cn } from '../../lib/cn';
+import { personaClassNames } from '../../lib/classNames';
 import type { PresenceStatus, Size, Slot } from '../../lib/types';
 import { renderSlot, slotRendersContent } from '../../lib/slot';
 import { Avatar } from './Avatar';
@@ -72,19 +73,39 @@ export const Persona = ({
     ) : null;
 
   return (
-    <div ref={ref} className={cn('inline-flex items-center gap-3', className)} {...props}>
+    <div
+      ref={ref}
+      className={cn(personaClassNames.root, 'inline-flex items-center gap-3', className)}
+      {...props}
+    >
       <div className="relative inline-flex shrink-0">
         {avatar && slotRendersContent(avatar) ? (
-          renderSlot(avatar, 'span')
+          renderSlot(avatar, 'span', personaClassNames.avatar)
         ) : (
-          <Avatar src={src} name={name} size={size} decorative />
+          <Avatar
+            src={src}
+            name={name}
+            size={size}
+            decorative
+            className={personaClassNames.avatar}
+          />
         )}
-        {badgeNode && <span className="absolute bottom-0 end-0 inline-flex">{badgeNode}</span>}
+        {badgeNode && (
+          <span className={cn(personaClassNames.badge, 'absolute bottom-0 end-0 inline-flex')}>
+            {badgeNode}
+          </span>
+        )}
       </div>
       <div className="flex flex-col">
-        <span className="font-semibold text-body-1">{name}</span>
+        <span className={cn(personaClassNames.primaryText, 'font-semibold text-body-1')}>
+          {name}
+        </span>
         {secondaryText && (
-          <span className="text-caption-1 text-muted-foreground">{secondaryText}</span>
+          <span
+            className={cn(personaClassNames.secondaryText, 'text-caption-1 text-muted-foreground')}
+          >
+            {secondaryText}
+          </span>
         )}
       </div>
     </div>

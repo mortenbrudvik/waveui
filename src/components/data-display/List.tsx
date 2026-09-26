@@ -1,5 +1,6 @@
 import * as React from 'react';
 import { cn } from '../../lib/cn';
+import { listClassNames, listItemClassNames } from '../../lib/classNames';
 import { flattenChildren, isElementOfType } from '../../lib/children';
 import { composeEventHandlers } from '../../lib/composeEventHandlers';
 import { reportMissingContext, warnDeprecated, warnOnce } from '../../lib/dev';
@@ -459,7 +460,7 @@ const ListRoot = <M extends ListSelectionMode = 'single'>(props: ListProps<M>): 
       <Root
         role={role}
         aria-multiselectable={selectable && multiple ? true : undefined}
-        className={cn('m-0 list-none p-0', className)}
+        className={cn(listClassNames.root, 'm-0 list-none p-0', className)}
         {...rest}
         ref={rootRef}
         data-roving-container={selectable ? '' : undefined}
@@ -643,6 +644,7 @@ export const ListItem = ({
     <Element
       role={role}
       className={cn(
+        listItemClassNames.root,
         'flex items-center border-b border-border px-4 py-2 text-body-1',
         selectable && ['relative cursor-pointer', focusRingInset],
         selectable &&
@@ -658,7 +660,10 @@ export const ListItem = ({
       ref={itemRefs}
       {...interactiveProps}
     >
-      <ContentCell role={mode === 'grid' ? 'gridcell' : undefined} className="min-w-0 flex-1">
+      <ContentCell
+        role={mode === 'grid' ? 'gridcell' : undefined}
+        className={cn(listItemClassNames.content, 'min-w-0 flex-1')}
+      >
         {children}
       </ContentCell>
       {hasAction && (
@@ -809,7 +814,7 @@ function ListActionCell({ grid, onRemovedWithFocus, children }: ListActionCellPr
       role={grid ? 'gridcell' : undefined}
       tabIndex={grid ? -1 : undefined}
       data-list-action=""
-      className={cn('ms-2 shrink-0', grid && focusRingInset)}
+      className={cn(listItemClassNames.action, 'ms-2 shrink-0', grid && focusRingInset)}
     >
       {children}
     </Cell>
