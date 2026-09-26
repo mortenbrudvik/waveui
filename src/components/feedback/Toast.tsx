@@ -1,4 +1,5 @@
 import * as React from 'react';
+import { toastClassNames, toasterClassNames } from '../../lib/classNames';
 import { cn } from '../../lib/cn';
 import { reportMissingContext, warnOnce } from '../../lib/dev';
 import { getDirection } from '../../lib/direction';
@@ -229,6 +230,7 @@ export const Toast = ({
       {...liveRegion}
       {...rest}
       className={cn(
+        toastClassNames.root,
         'flex items-start gap-3 rounded border border-s-4 border-border bg-background p-3 text-foreground shadow-4',
         STATUS_BORDER[status],
         className,
@@ -236,11 +238,15 @@ export const Toast = ({
     >
       <span
         aria-hidden="true"
-        className={cn('mt-0.5 inline-flex shrink-0', STATUS_ICON_COLOR[status])}
+        className={cn(
+          toastClassNames.icon,
+          'mt-0.5 inline-flex shrink-0',
+          STATUS_ICON_COLOR[status],
+        )}
       >
         <StatusIcon status={status} />
       </span>
-      <div className="min-w-0 flex-1">
+      <div className={cn(toastClassNames.content, 'min-w-0 flex-1')}>
         <StatusText label={getStatusLabel(status, statusLabel)} />
         {title ? <div className="text-body-2 font-semibold text-foreground">{title}</div> : null}
         {hasBody ? <div className="mt-0.5 text-body-1 text-muted-foreground">{body}</div> : null}
@@ -250,6 +256,7 @@ export const Toast = ({
           type="button"
           onClick={() => onDismiss()}
           className={cn(
+            toastClassNames.dismissButton,
             'inline-flex shrink-0 cursor-pointer items-center justify-center rounded border-none bg-transparent p-1 text-muted-foreground',
             'not-disabled:not-aria-disabled:hover:bg-subtle-hover not-disabled:not-aria-disabled:hover:text-foreground',
             'not-disabled:not-aria-disabled:active:bg-subtle-pressed',
@@ -806,6 +813,7 @@ export const Toaster = ({
             forgetFocusOrigin(event);
           }}
           className={cn(
+            toasterClassNames.root,
             'fixed flex w-80 max-w-[calc(100vw-2rem)] flex-col gap-2',
             positionClasses[position],
             className,

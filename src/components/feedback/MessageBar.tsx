@@ -1,5 +1,6 @@
 import * as React from 'react';
 import { isElementOfType } from '../../lib/children';
+import { messageBarClassNames } from '../../lib/classNames';
 import { cn } from '../../lib/cn';
 import { warnOnce } from '../../lib/dev';
 import { DismissIcon } from '../../lib/icons';
@@ -168,9 +169,12 @@ interface DismissParts {
 
 const noop = () => {};
 
-/** The decorative default dismiss glyph. */
-function defaultDismissContent(): React.ReactNode {
-  return <DismissIcon />;
+/**
+ * The decorative default dismiss glyph. It carries the dismiss icon part class when it is the
+ * dismiss button's own content, not when the element of a slot object wraps it.
+ */
+function defaultDismissContent(className?: string): React.ReactNode {
+  return <DismissIcon className={className} />;
 }
 
 function isButtonType(type: unknown): boolean {
@@ -181,7 +185,7 @@ function isButtonType(type: unknown): boolean {
 function defaultDismiss(): DismissParts {
   return {
     buttonProps: {},
-    content: defaultDismissContent(),
+    content: defaultDismissContent(messageBarClassNames.dismissIcon),
     contentMayName: false,
     literalTextLabel: false,
     disabledFocusable: false,
@@ -231,12 +235,14 @@ function resolveDismiss(dismiss: MessageBarProps['dismiss']): DismissParts | nul
     const icon = element.props.icon as Slot<'span'>;
     const iconNode =
       isWaveButton && slotRendersContent(icon)
-        ? renderSlot(icon, 'span', dismissContentClassName, { 'aria-hidden': true })
+        ? renderSlot(icon, 'span', cn(messageBarClassNames.dismissIcon, dismissContentClassName), {
+            'aria-hidden': true,
+          })
         : null;
     const content =
       iconNode || slotRendersContent(children)
         ? placeButtonIcon(iconNode, children, element.props.iconPosition)
-        : defaultDismissContent();
+        : defaultDismissContent(messageBarClassNames.dismissIcon);
     return {
       buttonProps,
       content,
@@ -264,9 +270,12 @@ function resolveDismiss(dismiss: MessageBarProps['dismiss']): DismissParts | nul
       // Wave Button's own props are not attributes: `icon`, `iconPosition` and
       // `disabledFocusable` are applied below, the others (`appearance`, `size`) are dropped.
       if (key === 'icon' && slotRendersContent(value)) {
-        iconNode = renderSlot(value as Slot<'span'>, 'span', dismissContentClassName, {
-          'aria-hidden': true,
-        });
+        iconNode = renderSlot(
+          value as Slot<'span'>,
+          'span',
+          cn(messageBarClassNames.dismissIcon, dismissContentClassName),
+          { 'aria-hidden': true },
+        );
       }
     } else if (
       BUTTON_ONLY_KEYS.has(key) ||
@@ -288,7 +297,11 @@ function resolveDismiss(dismiss: MessageBarProps['dismiss']): DismissParts | nul
   const elementProps = {
     'aria-hidden': true,
     ...contentProps,
-    className: cn(dismissContentClassName, contentProps.className as string | undefined),
+    className: cn(
+      iconNode === null && messageBarClassNames.dismissIcon,
+      dismissContentClassName,
+      contentProps.className as string | undefined,
+    ),
   };
   let inner: React.ReactNode = null;
   if (iconNode || slotRendersContent(children)) {
@@ -335,7 +348,11 @@ export const MessageBar = ({
   ref,
   ...rest
 }: MessageBarProps) => {
-  const iconClassName = cn('mt-0.5 inline-flex shrink-0', STATUS_ICON_COLOR[status]);
+  const iconClassName = cn(
+    messageBarClassNames.icon,
+    'mt-0.5 inline-flex shrink-0',
+    STATUS_ICON_COLOR[status],
+  );
   const renderedIcon =
     icon !== undefined ? (
       renderSlot(icon, 'span', iconClassName, { 'aria-hidden': true })
@@ -400,6 +417,7 @@ export const MessageBar = ({
         'aria-label': hasOwnName || namedByContent ? undefined : DEFAULT_DISMISS_LABEL,
         onClick: () => onDismiss?.(),
         className: cn(
+          messageBarClassNames.dismissButton,
           'ms-auto inline-flex shrink-0 cursor-pointer items-center justify-center rounded border-none bg-transparent p-1 text-muted-foreground',
           'not-disabled:not-aria-disabled:hover:bg-subtle-hover not-disabled:not-aria-disabled:hover:text-foreground',
           'not-disabled:not-aria-disabled:active:bg-subtle-pressed',
@@ -431,6 +449,7 @@ export const MessageBar = ({
       role={status === 'error' || status === 'warning' ? 'alert' : 'status'}
       {...rest}
       className={cn(
+        messageBarClassNames.root,
         'flex items-start gap-3 rounded border-s-4 px-4 py-3 text-foreground',
         tintClasses[status],
         STATUS_BORDER[status],
@@ -438,7 +457,7 @@ export const MessageBar = ({
       )}
     >
       {renderedIcon}
-      <div className="min-w-0 flex-1 text-body-1">
+      <div className={cn(messageBarClassNames.body, 'min-w-0 flex-1 text-body-1')}>
         <StatusText label={getStatusLabel(status, statusLabel)} />
         {children}
       </div>

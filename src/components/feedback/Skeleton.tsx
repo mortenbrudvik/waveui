@@ -1,4 +1,5 @@
 import * as React from 'react';
+import { skeletonClassNames, skeletonGroupClassNames } from '../../lib/classNames';
 import { cn } from '../../lib/cn';
 import { resolveDeprecatedProp } from '../../lib/dev';
 import type { Shape } from '../../lib/types';
@@ -71,6 +72,7 @@ const SkeletonRoot = ({
       {...rest}
       ref={ref}
       className={cn(
+        skeletonClassNames.root,
         'bg-skeleton animate-wave-pulse motion-reduce:animate-none',
         forcedColorsFill,
         shapeClasses[shape],
@@ -105,13 +107,19 @@ export const SkeletonGroup = ({
   // Destructured with a default rather than set before `{...rest}`: a wrapper that forwards
   // `aria-busy={props['aria-busy']}` passes `undefined`, which must not strip the busy state.
   'aria-busy': busy = true,
+  className,
   children,
   ref,
   ...rest
 }: SkeletonGroupProps) => {
   const loading = busy !== false && busy !== 'false';
   return (
-    <div {...rest} aria-busy={busy} ref={ref}>
+    <div
+      {...rest}
+      aria-busy={busy}
+      ref={ref}
+      className={cn(skeletonGroupClassNames.root, className)}
+    >
       {loading && <span className="sr-only">{label}</span>}
       {children}
     </div>
