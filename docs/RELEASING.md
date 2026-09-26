@@ -68,6 +68,7 @@ It reports the packages with verified registry signatures and those with verifie
   ```
 
 - **publish fails with `E404 Not Found` or `ENEEDAUTH`**: npm did not accept the OIDC token, so the trusted publisher does not match the workflow. It must name the repository `mortenbrudvik/waveui`, the workflow file `release.yml` and the environment `npm`, all case-sensitive. Check it with `npm trust list @mortenbrudvik/waveui`, fix it (a configuration cannot be edited: `npm trust revoke @mortenbrudvik/waveui --id=<id>`, then create it again as below), and use **Re-run failed jobs** on the run: the packed tarball is kept for 7 days.
+- **publish fails after the upload reached npm** (a network error after the upload, for example): **Re-run failed jobs**. The publish job finds the same tarball on npm (same integrity) and skips the upload, so the GitHub release still runs; a different tarball under that version fails the job.
 - **github-release fails** after the publish: **Re-run failed jobs**. The job creates the release, or updates the notes and the tarball of one that exists.
 - **Re-run all jobs** of a published release fails in verify: the version is on npm. Re-run only the failed jobs.
 - **A broken package on npm** cannot be replaced: a version number is used up once published, even after an unpublish. Release a patch version.

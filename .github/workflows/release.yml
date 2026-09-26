@@ -22,7 +22,8 @@ on:
 permissions: {}
 
 concurrency:
-  # One release at a time; a running release is never cancelled.
+  # One release at a time; a running release is never cancelled. GitHub keeps one pending run per
+  # group, so push release tags one at a time: a third tag cancels the one still waiting (re-run it).
   group: release
   cancel-in-progress: false
 
@@ -116,27 +117,40 @@ jobs:
     steps:
       # No checkout and no npm ci: nothing from the repository or its dependencies runs in the only
       # job that can publish. No registry-url either: npm authenticates with the OIDC token.
+      # Node 24's bundled npm (11.19) is enough for trusted publishing (11.5.1+) and publishes a
+      # packed tarball without the lockfile, so this job installs no other npm.
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version: 24
           package-manager-cache: false
-      - name: Install npm ${{ env.NPM_VERSION }}
-        run: npm install -g "npm@${{ env.NPM_VERSION }}"
       - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
           name: release
           path: release
       # --provenance makes the publish fail rather than ship without a provenance attestation. A
       # prerelease goes to the `next` dist-tag; a release takes `latest`, which npm refuses to move
-      # back to a lower version (a patch of an older line needs its own dist-tag).
+      # back to a lower version (a patch of an older line needs its own dist-tag). A re-run after a
+      # publish that reached npm but failed afterwards finds this tarball there and skips the upload.
       - name: Publish
         env:
           PRERELEASE: ${{ needs.verify.outputs.prerelease }}
+          VERSION: ${{ needs.verify.outputs.version }}
         run: |
           shopt -s nullglob
           tarballs=(release/*.tgz)
           if [ "${#tarballs[@]}" -ne 1 ]; then
             echo "::error::expected one tarball in the release artifact, found ${#tarballs[@]}"
+            exit 1
+          fi
+          name=$(tar -xOzf "${tarballs[0]}" package/package.json | node -p 'JSON.parse(require("fs").readFileSync(0, "utf8")).name')
+          published=$(npm view "$name@$VERSION" dist.integrity 2> /dev/null || true)
+          if [ -n "$published" ]; then
+            packed="sha512-$(openssl dgst -sha512 -binary "${tarballs[0]}" | openssl base64 -A)"
+            if [ "$published" = "$packed" ]; then
+              echo "::notice::$name@$VERSION is already on npm with this tarball (an earlier attempt published it)"
+              exit 0
+            fi
+            echo "::error::$name@$VERSION is already on npm with a different tarball"
             exit 1
           fi
           args=(--provenance)
