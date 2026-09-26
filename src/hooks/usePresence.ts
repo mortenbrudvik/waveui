@@ -188,11 +188,14 @@ function waitForMotion(el: HTMLElement, onEnd: () => void): (() => void) | null 
 
 /**
  * Mounts and unmounts an element with CSS enter and exit motion. Style the phases with
- * `data-presence` variants, e.g. `transition-opacity duration-wave-normal starting:opacity-0
- * data-[presence=exiting]:opacity-0 motion-reduce:transition-none`. Destructure the result
- * (`const { isMounted, ref, presenceProps } = usePresence(open)`): react-hooks/refs treats an
- * object whose member is passed to `ref` as a ref, so reading `phase` or `presenceProps` from the
- * whole object during render is an error (the usePopupPosition rule).
+ * `data-presence` variants, e.g. `transition-opacity duration-wave-normal
+ * data-[presence=entering]:starting:opacity-0 data-[presence=exiting]:opacity-0
+ * motion-reduce:transition-none`. Gate the enter's start style on the entering phase, as there: an
+ * ungated `starting:` class (`@starting-style`) applies to every first style of the element, so it
+ * also animates a mount the core treats as `entered` (without `appear`, and when hydrating).
+ * Destructure the result (`const { isMounted, ref, presenceProps } = usePresence(open)`):
+ * react-hooks/refs treats an object whose member is passed to `ref` as a ref, so reading `phase`
+ * or `presenceProps` from the whole object during render is an error (the usePopupPosition rule).
  *
  * - **Phases.** On the server and while hydrating the element is `entered` when `visible`, else
  *   `exited`; a client mount is `entering` with `appear`, else `entered` (or `exited`). `visible`
@@ -218,7 +221,7 @@ function waitForMotion(el: HTMLElement, onEnd: () => void): (() => void) | null 
  *   <div
  *     ref={ref}
  *     {...presenceProps}
- *     className="transition-opacity duration-wave-normal starting:opacity-0 data-[presence=exiting]:opacity-0 motion-reduce:transition-none"
+ *     className="transition-opacity duration-wave-normal data-[presence=entering]:starting:opacity-0 data-[presence=exiting]:opacity-0 motion-reduce:transition-none"
  *   />
  * ) : null;
  *

@@ -33,6 +33,24 @@ interface ChangeRequest {
   listener: CheckedValuesChangeHandler | undefined;
 }
 
+/**
+ * The items of group `name`: an own property only, so a name that is an `Object.prototype` key
+ * (`constructor`, `toString`, `__proto__`) reads as an empty group like any other unknown name.
+ */
+function groupOf(values: CheckedValues, name: string): readonly string[] {
+  return (Object.hasOwn(values, name) ? values[name] : undefined) ?? [];
+}
+
+/** Sets group `name` as an own property (an assignment to `__proto__` would set the prototype). */
+function setGroup(values: Record<string, string[]>, name: string, items: string[]): void {
+  Object.defineProperty(values, name, {
+    value: items,
+    enumerable: true,
+    writable: true,
+    configurable: true,
+  });
+}
+
 /** A copy of `values` in which every group is a new array, and group `name` holds `items`. */
 function withGroup(
   values: CheckedValues,
@@ -40,8 +58,8 @@ function withGroup(
   items: readonly string[],
 ): Record<string, string[]> {
   const next: Record<string, string[]> = {};
-  for (const key of Object.keys(values)) next[key] = [...(values[key] ?? [])];
-  next[name] = [...items];
+  for (const key of Object.keys(values)) setGroup(next, key, [...groupOf(values, key)]);
+  setGroup(next, name, [...items]);
   return next;
 }
 
@@ -84,9 +102,10 @@ export function withCheckedValuesListener(
  * chain.
  *
  * - `toggle` and `select` compute the next value from the value the user sees. The next value is
- *   a new object in which every group is a new array; an unknown group reads as empty, and
- *   removing a value keeps the order of the others. `select` of the value that already is the
- *   group's only value changes nothing and calls nothing.
+ *   a new object in which every group is a new array; an unknown group reads as empty (a name
+ *   that is an `Object.prototype` key, such as `constructor` or `__proto__`, included: groups are
+ *   own properties), and removing a value keeps the order of the others. `select` of the value
+ *   that already is the group's only value changes nothing and calls nothing.
  * - The callback receives a copy of the new values (every array copied again), so a consumer who
  *   mutates it, or stores it with `setState`, never changes the state the hook renders; `details`
  *   is `{ name, checkedItems, event }`, `checkedItems` being `checkedValues[name]` of that copy.
@@ -111,7 +130,7 @@ export function useCheckedValues(
     (next) => {
       const request = requestRef.current;
       if (!request) return;
-      const emitted = withGroup(next, request.name, next[request.name] ?? []);
+      const emitted = withGroup(next, request.name, groupOf(next, request.name));
       const details: CheckedValuesChangeDetails = {
         name: request.name,
         checkedItems: emitted[request.name],
@@ -137,7 +156,7 @@ export function useCheckedValues(
   const toggle = useCallback<CheckedValuesApi['toggle']>(
     (name, value, event, listener) => {
       change({ name, event, listener }, (previous) => {
-        const items = previous[name] ?? [];
+        const items = groupOf(previous, name);
         const next = items.includes(value)
           ? items.filter((item) => item !== value)
           : [...items, value];
@@ -150,7 +169,7 @@ export function useCheckedValues(
   const select = useCallback<CheckedValuesApi['select']>(
     (name, value, event, listener) => {
       change({ name, event, listener }, (previous) => {
-        const items = previous[name] ?? [];
+        const items = groupOf(previous, name);
         if (items.length === 1 && items[0] === value) return previous;
         return withGroup(previous, name, [value]);
       });
@@ -161,7 +180,7 @@ export function useCheckedValues(
   return useMemo<CheckedValuesApi>(
     () => ({
       values,
-      isChecked: (name, value) => (values[name] ?? []).includes(value),
+      isChecked: (name, value) => groupOf(values, name).includes(value),
       toggle,
       select,
     }),

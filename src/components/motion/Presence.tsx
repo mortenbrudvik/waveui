@@ -36,9 +36,12 @@ function singleElement(children: React.ReactNode): React.ReactElement<ChildProps
  * Shows and hides its child with CSS enter and exit motion: the child stays mounted while its exit
  * motion runs, `inert` and marked `data-presence="exiting"`, and unmounts when it ends (at once
  * under reduced motion or without motion). Style the phases on the child: a transition with the
- * `duration-wave-*` and `ease-wave-*` tokens, its start with the `starting:` variant, its exit
- * with `data-[presence=exiting]:` classes, and a `motion-reduce:` counterpart (the `usePresence`
- * JSDoc and the Presence stories show complete class lists).
+ * `duration-wave-*` and `ease-wave-*` tokens, its start with the `starting:` variant gated on the
+ * entering phase (`data-[presence=entering]:starting:` classes), its exit with
+ * `data-[presence=exiting]:` classes, and a `motion-reduce:` counterpart (the `usePresence` JSDoc
+ * and the Presence stories show complete class lists). An ungated `starting:` class also animates
+ * a child that mounts `entered` (`appear={false}`, hydration): `@starting-style` applies to every
+ * first style of an element.
  *
  * - The child is a single element (it must accept a `ref`, as DOM elements and ref-forwarding
  *   components do), which receives `data-presence`, `inert` while exiting and the presence ref,

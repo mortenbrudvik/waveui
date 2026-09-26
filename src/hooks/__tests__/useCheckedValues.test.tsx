@@ -153,6 +153,75 @@ describe('useCheckedValues', () => {
     expect(result.current.isChecked('view', 'grid')).toBe(true);
   });
 
+  describe('group names that are Object.prototype keys', () => {
+    const INHERITED = ['constructor', 'toString', 'valueOf', 'hasOwnProperty', '__proto__'];
+
+    it.each(INHERITED)('reads group %j as empty, and items of it render', (name) => {
+      render(<Uncontrolled toggles={[[name, 'a']]} radios={[[name, 'b']]} />);
+      expect(pressed('a')).toBe('false');
+      expect(pressed('b')).toBe('false');
+    });
+
+    it.each(INHERITED)('toggles and selects in group %j as in any other group', async (name) => {
+      const user = userEvent.setup();
+      const onChange = vi.fn<CheckedValuesChangeHandler>();
+      render(
+        <Uncontrolled
+          onCheckedValuesChange={onChange}
+          toggles={[
+            [name, 'a'],
+            [name, 'b'],
+          ]}
+          radios={[[name, 'c']]}
+        />,
+      );
+      await user.click(screen.getByRole('button', { name: 'a' }));
+      await user.click(screen.getByRole('button', { name: 'b' }));
+      expect(pressed('a')).toBe('true');
+      expect(pressed('b')).toBe('true');
+      const [values, details] = onChange.mock.calls[1];
+      // An own group of that name, not a prototype write.
+      expect(Object.getPrototypeOf(values)).toBe(Object.prototype);
+      expect(Object.keys(values)).toEqual([name]);
+      expect(Object.getOwnPropertyDescriptor(values, name)?.value).toEqual(['a', 'b']);
+      expect(details).toEqual({ name, checkedItems: ['a', 'b'], event: expect.any(MouseEvent) });
+      expect(details!.checkedItems).toBe(Object.getOwnPropertyDescriptor(values, name)?.value);
+
+      await user.click(screen.getByRole('button', { name: 'a' }));
+      expect(pressed('a')).toBe('false');
+      expect(Object.getOwnPropertyDescriptor(onChange.mock.calls[2][0], name)?.value).toEqual([
+        'b',
+      ]);
+
+      await user.click(screen.getByRole('button', { name: 'c' }));
+      expect(pressed('b')).toBe('false');
+      expect(pressed('c')).toBe('true');
+      expect(onChange).toHaveBeenCalledTimes(4);
+      expect(onChange.mock.calls[3][1]).toEqual({
+        name,
+        checkedItems: ['c'],
+        event: expect.any(MouseEvent),
+      });
+    });
+
+    it('keeps an own "__proto__" group of the given values, and copies it as a group', () => {
+      const onChange = vi.fn<CheckedValuesChangeHandler>();
+      // JSON.parse makes "__proto__" an own key, as a stored state would be.
+      const initial = JSON.parse('{"__proto__": ["a"], "view": ["grid"]}') as CheckedValues;
+      const { result } = renderHook(() => useCheckedValues(undefined, initial, onChange));
+      expect(result.current.isChecked('__proto__', 'a')).toBe(true);
+      expect(result.current.isChecked('view', 'a')).toBe(false);
+
+      act(() => result.current.toggle('view', 'ruler', clickEvent()));
+      const [values] = onChange.mock.calls[0];
+      expect(Object.getPrototypeOf(values)).toBe(Object.prototype);
+      expect(Object.keys(values)).toEqual(['__proto__', 'view']);
+      expect(Object.getOwnPropertyDescriptor(values, '__proto__')?.value).toEqual(['a']);
+      expect(result.current.isChecked('__proto__', 'a')).toBe(true);
+      expect(result.current.isChecked('view', 'ruler')).toBe(true);
+    });
+  });
+
   it('controlled: the rendered value follows the prop', () => {
     const { result, rerender } = renderHook(
       ({ values }: { values: CheckedValues }) => useCheckedValues(values, undefined, undefined),
@@ -517,12 +586,18 @@ describe('useDuplicatePairRegistry', () => {
     expect(warn).not.toHaveBeenCalled();
   });
 
-  it('logs nothing in production', () => {
+  it('counts nothing and logs nothing in production: every registration returns one no-op', async () => {
     vi.stubEnv('NODE_ENV', 'production');
+    // A copy of the module loaded in production: `isDev` is read once, when `lib/dev` loads.
+    vi.resetModules();
+    const production = await import('../useCheckedValues');
     const warn = vi.spyOn(console, 'warn');
-    const { result } = renderHook(() => useDuplicatePairRegistry(KEY, message));
-    result.current('format', 'bold');
-    result.current('format', 'bold');
+    const { result } = renderHook(() => production.useDuplicatePairRegistry(KEY, message));
+    const first = result.current('format', 'bold');
+    // A counted registration returns its own cleanup; the production one is shared.
+    expect(result.current('format', 'bold')).toBe(first);
+    expect(result.current('align', 'italic')).toBe(first);
+    expect(first()).toBeUndefined();
     expect(warn).not.toHaveBeenCalled();
   });
 

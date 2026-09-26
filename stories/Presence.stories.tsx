@@ -55,10 +55,12 @@ function TogglePresence({
 }
 
 /**
- * The card fades and slides in with a `starting:` style, and out with `data-[presence=exiting]:`
- * classes that use a faster, accelerating curve; it unmounts when its exit transition ends. Under
- * reduced motion (`motion-reduce:transition-none`) it appears and disappears at once, and so does
- * the core's phase.
+ * The card fades and slides in with a `starting:` style gated on the entering phase
+ * (`data-[presence=entering]:starting:`), and out with `data-[presence=exiting]:` classes that use
+ * a faster, accelerating curve; it unmounts when its exit transition ends. A card that mounts
+ * shown does not animate unless `appear` is set (an ungated `starting:` class would animate it
+ * while the phase is already `entered`). Under reduced motion (`motion-reduce:transition-none`) it
+ * appears and disappears at once, and so does the core's phase.
  */
 export const FadeAndSlide: Story = {
   render: function FadeAndSlidePresence(args) {
@@ -69,7 +71,7 @@ export const FadeAndSlide: Story = {
         child={
           <section
             aria-label="Details"
-            className={`${cardClasses} transition-[opacity,translate] duration-wave-normal ease-wave-decelerate-mid starting:translate-y-1 starting:opacity-0 data-[presence=exiting]:translate-y-1 data-[presence=exiting]:opacity-0 data-[presence=exiting]:duration-wave-fast data-[presence=exiting]:ease-wave-accelerate-mid motion-reduce:transition-none`}
+            className={`${cardClasses} transition-[opacity,translate] duration-wave-normal ease-wave-decelerate-mid data-[presence=entering]:starting:translate-y-1 data-[presence=entering]:starting:opacity-0 data-[presence=exiting]:translate-y-1 data-[presence=exiting]:opacity-0 data-[presence=exiting]:duration-wave-fast data-[presence=exiting]:ease-wave-accelerate-mid motion-reduce:transition-none`}
           >
             The report was saved to your documents.
           </section>
@@ -93,7 +95,7 @@ export const KeepMounted: Story = {
         child={
           <section
             aria-label="Note"
-            className={`${cardClasses} transition-opacity duration-wave-normal ease-wave-easy-ease starting:opacity-0 data-[presence=exiting]:opacity-0 motion-reduce:transition-none`}
+            className={`${cardClasses} transition-opacity duration-wave-normal ease-wave-easy-ease data-[presence=entering]:starting:opacity-0 data-[presence=exiting]:opacity-0 motion-reduce:transition-none`}
           >
             <Input aria-label="Note text" placeholder="Type a note, then hide and show it" />
           </section>

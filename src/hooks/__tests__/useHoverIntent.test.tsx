@@ -28,6 +28,8 @@ interface HarnessProps {
   disabled?: boolean;
   /** Puts an `aria-disabled` element inside the trigger instead. */
   disabledInside?: boolean;
+  /** The trigger's `key`: a new one renders the trigger as a new DOM node. */
+  triggerKey?: string;
   onOpen?: UseHoverIntentOptions['onOpen'];
   onClose?: UseHoverIntentOptions['onClose'];
   apiRef?: React.RefObject<HarnessApi | null>;
@@ -43,6 +45,7 @@ function HoverHarness({
   enabled = true,
   disabled = false,
   disabledInside = false,
+  triggerKey,
   onOpen,
   onClose,
   apiRef,
@@ -74,6 +77,7 @@ function HoverHarness({
   return (
     <>
       <div
+        key={triggerKey}
         ref={setTrigger}
         data-testid={`${name}-trigger`}
         aria-disabled={disabled || undefined}
@@ -344,6 +348,56 @@ describe('useHoverIntent', () => {
       expect(onOpen).toHaveBeenCalledTimes(2);
     });
 
+    it('a trigger rendered anew under the resting pointer opens nothing until the pointer leaves it', async () => {
+      const apiRef = React.createRef<HarnessApi>() as React.RefObject<HarnessApi | null>;
+      const onOpen = vi.fn();
+      const { rerender } = render(
+        <HoverHarness name="a" triggerKey="first" apiRef={apiRef} onOpen={onOpen} />,
+      );
+      await user.pointer({ target: triggerOf('a'), coords: { clientX: 10, clientY: 10 } });
+      advance(300);
+      expect(onOpen).toHaveBeenCalledTimes(1);
+
+      // Dismissed while the pointer rests on the trigger, which then renders as a new node: the
+      // pointer enters the new node without ever leaving the old one.
+      act(() => apiRef.current!.setOpen(false));
+      const previous = triggerOf('a');
+      rerender(<HoverHarness name="a" triggerKey="second" apiRef={apiRef} onOpen={onOpen} />);
+      expect(triggerOf('a')).not.toBe(previous);
+      await user.pointer({ target: triggerOf('a'), coords: { clientX: 12, clientY: 10 } });
+      advance(400);
+      expect(surfaceOf('a')).toBeNull();
+      expect(onOpen).toHaveBeenCalledTimes(1);
+
+      await user.unhover(triggerOf('a'));
+      await user.hover(triggerOf('a'));
+      advance(300);
+      expect(surfaceOf('a')).not.toBeNull();
+      expect(onOpen).toHaveBeenCalledTimes(2);
+    });
+
+    it('a hover close is no dismissal, also when the pointer is back on the trigger as it commits', async () => {
+      // The pointer reaches the trigger again after the close timer fired, before the close
+      // commits.
+      const backOnTrigger = () =>
+        triggerOf('a').dispatchEvent(new PointerEvent('pointerover', { bubbles: true }));
+      const { rerender } = render(
+        <HoverHarness name="a" triggerKey="first" onClose={backOnTrigger} />,
+      );
+      await user.hover(triggerOf('a'));
+      advance(300);
+      await user.unhover(triggerOf('a'));
+      advance(300);
+      expect(surfaceOf('a')).toBeNull();
+
+      // The trigger renders as a new node under the resting pointer, which enters it without a
+      // leave: hover opens it as usual.
+      rerender(<HoverHarness name="a" triggerKey="second" onClose={backOnTrigger} />);
+      await user.pointer({ target: triggerOf('a'), coords: { clientX: 12, clientY: 10 } });
+      advance(300);
+      expect(surfaceOf('a')).not.toBeNull();
+    });
+
     it('a close the hook caused leaves hover opening as usual', async () => {
       render(<HoverHarness name="a" />);
       await user.hover(triggerOf('a'));
@@ -426,6 +480,42 @@ describe('useHoverIntent', () => {
       expect(surfaceOf('b')).toBeNull();
       advance(130);
       expect(surfaceOf('b')).not.toBeNull();
+    });
+
+    it('a held opening stays off when a move retries it after a dismissal on its trigger', async () => {
+      const group = createHoverIntentGroup();
+      const apiRef = React.createRef<HarnessApi>() as React.RefObject<HarnessApi | null>;
+      const onOpenB = vi.fn();
+      render(
+        <>
+          <HoverHarness name="a" group={group} />
+          <HoverHarness name="b" group={group} apiRef={apiRef} onOpen={onOpenB} />
+        </>,
+      );
+      mockRect(triggerOf('b'), TRIGGER_B);
+      await hoverOpen('a', TRIGGER_A, SURFACE_A, { clientX: 90, clientY: 10 });
+
+      // Onto b inside a's zone: b's opening fires while the zone holds the point.
+      await leaveATowards(triggerOf('b'), 90, 20);
+      advance(100);
+      await user.pointer({ target: triggerOf('b'), coords: { clientX: 93, clientY: 30 } });
+      advance(200);
+      expect(surfaceOf('b')).toBeNull();
+
+      // b opens another way (the app's controlled open) and is dismissed while the pointer rests
+      // on its trigger; then a move over b retries the held opening.
+      act(() => apiRef.current!.setOpen(true));
+      act(() => apiRef.current!.setOpen(false));
+      await user.pointer({ target: triggerOf('b'), coords: { clientX: 20, clientY: 70 } });
+      advance(400);
+      expect(surfaceOf('b')).toBeNull();
+      expect(onOpenB).not.toHaveBeenCalled();
+
+      await user.unhover(triggerOf('b'));
+      await user.hover(triggerOf('b'));
+      advance(300);
+      expect(surfaceOf('b')).not.toBeNull();
+      expect(onOpenB).toHaveBeenCalledTimes(1);
     });
 
     it('a move outside the triangle ends the zone; the surface closes closeDelay after the leave', async () => {
