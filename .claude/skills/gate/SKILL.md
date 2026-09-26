@@ -11,7 +11,7 @@ context: fork
 ## Run
 
 1. Record what the gate runs on: `git rev-parse --short HEAD`, the branch, and `git status --short`. The gate runs on the working tree, uncommitted changes included, but a merge carries only commits.
-2. From the root of the checkout under test (a worktree runs its own), run `node scripts/claude/gate.mjs` with a Bash timeout of 600000 ms. It takes about four minutes: typecheck, lint, format:check, test and build-storybook in parallel, then build, verify-dist, check:package and test:pack in order.
+2. From the root of the checkout under test (a worktree runs its own), run `node scripts/claude/gate.mjs` with a Bash timeout of 600000 ms. It takes about four minutes: typecheck, lint, format:check, test and build-storybook in parallel, then build, verify-dist, check:package and test:pack in order. Start nothing else heavy while it runs (another test suite, build or Storybook): the gate already runs five steps at once, and more load turns slow tests into timeouts that read as failures. A test that fails by timeout is re-run alone (`npx vitest run <file>`) before it counts.
    - `--base <ref>`: the merge base for the exception and docs checks (default `main`).
    - `--only <step,…>` / `--skip <step,…>`: a partial run, for re-checking a fixed step.
 3. For each failed step, open its log (the path is in the table; the summary shows only the last 30 lines) and find the first actionable error: the file, line and message where the failure starts, not the last frames of a stack trace.
