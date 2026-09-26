@@ -26,7 +26,7 @@ function Probe({ resultRef, onRender, ...options }: ProbeProps) {
   const result = useActiveDescendant({ getId: (v) => `opt-${v}`, ...options });
   React.useImperativeHandle(resultRef, () => result);
   return (
-    <ul>
+    <ul aria-activedescendant={result.activeDescendantId}>
       {options.items.map((v) => (
         <li key={v} id={`opt-${v}`} data-active={result.activeValue === v ? '' : undefined}>
           {v}
@@ -99,6 +99,33 @@ describe('useActiveDescendant', () => {
     expect(ref.current!.activeValue).toBeNull();
   });
 
+  it('activateFirstOnChange overrides a value set in the same update as the items it belongs to', () => {
+    function Changer({
+      resultRef,
+    }: {
+      resultRef: React.RefObject<UseActiveDescendantResult | null>;
+    }) {
+      const [items, setItems] = React.useState<readonly string[]>(ABC);
+      const result = useActiveDescendant({ items, getId: (v) => v, activateFirstOnChange: true });
+      React.useImperativeHandle(resultRef, () => result);
+      return (
+        <button
+          type="button"
+          onClick={() => {
+            setItems(['c', 'd']);
+            result.setActiveValue('d');
+          }}
+        >
+          change
+        </button>
+      );
+    }
+    const ref = React.createRef<UseActiveDescendantResult>();
+    const { getByRole } = render(<Changer resultRef={ref} />);
+    act(() => getByRole('button').click());
+    expect(ref.current!.activeValue).toBe('c'); // the first item of the new items, not the move to "d"
+  });
+
   it('keeps a move made in the same update that enables it', () => {
     function Opener({
       resultRef,
@@ -138,6 +165,38 @@ describe('useActiveDescendant', () => {
     expect(ref.current!.activeValue).toBeNull(); // enabling with unchanged items keeps the fallback
   });
 
+  it('activateFirstOnChange wins over the fallback when the items change in the same update that enables the hook', () => {
+    const ref = React.createRef<UseActiveDescendantResult>();
+    const { rerender } = render(
+      <Probe items={ABC} activateFirstOnChange enabled={false} fallback="c" resultRef={ref} />,
+    );
+    // Items change and the hook becomes enabled in the same rerender; "c" is a valid fallback (it is
+    // in the new items) but not the first item, so a value of "c" would mean the fallback won.
+    rerender(<Probe items={['b', 'c']} activateFirstOnChange fallback="c" resultRef={ref} />);
+    expect(ref.current!.activeValue).toBe('b');
+  });
+
+  it('keeps the fallback, not the first item, when the items changed while disabled and enabling adds no further change', () => {
+    const ref = React.createRef<UseActiveDescendantResult>();
+    const { rerender } = render(
+      <Probe items={ABC} activateFirstOnChange enabled={false} fallback="c" resultRef={ref} />,
+    );
+    // The items change while still disabled: activateFirstOnChange does not move (disabled).
+    rerender(
+      <Probe
+        items={['b', 'c']}
+        activateFirstOnChange
+        enabled={false}
+        fallback="c"
+        resultRef={ref}
+      />,
+    );
+    // Enabling now adds no further items change (compared with the render right before it), so the
+    // first-item rule does not fire and the fallback shows.
+    rerender(<Probe items={['b', 'c']} activateFirstOnChange fallback="c" resultRef={ref} />);
+    expect(ref.current!.activeValue).toBe('c');
+  });
+
   it('adds no render without activateFirstOnChange', () => {
     const onRender = vi.fn();
     const { rerender } = render(<Probe items={ABC} onRender={onRender} />);
@@ -157,6 +216,17 @@ describe('useActiveDescendant', () => {
     act(() => ref.current!.setActiveValue(null));
     act(() => ref.current!.move(-10));
     expect(ref.current!.activeValue).toBe('c'); // from nothing: a negative delta goes to the last
+  });
+
+  it('never wraps move(1) or move(-1), unlike next/prev, even with loop', () => {
+    const ref = React.createRef<UseActiveDescendantResult>();
+    render(<Probe items={ABC} loop resultRef={ref} />);
+    act(() => ref.current!.setActiveValue('c')); // the last item
+    act(() => ref.current!.move(1));
+    expect(ref.current!.activeValue).toBe('c'); // stays, does not wrap to "a"
+    act(() => ref.current!.setActiveValue('a')); // the first item
+    act(() => ref.current!.move(-1));
+    expect(ref.current!.activeValue).toBe('a'); // stays, does not wrap to "c"
   });
 
   it('scrolls keyboard moves into view, not pointer moves or scroll: false', () => {
@@ -209,7 +279,9 @@ describe('useActiveDescendant', () => {
   });
 
   it('puts the id in the server HTML and keeps method identities', () => {
-    expect(renderToString(<Probe items={ABC} fallback="b" />)).toContain('data-active');
+    expect(renderToString(<Probe items={ABC} fallback="b" />)).toContain(
+      'aria-activedescendant="opt-b"',
+    );
     const ref = React.createRef<UseActiveDescendantResult>();
     const { rerender } = render(<Probe items={ABC} resultRef={ref} />);
     const first = ref.current!.next;

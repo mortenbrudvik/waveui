@@ -160,8 +160,9 @@ export function useActiveDescendant(
   const last = useEventCallback(() => setActiveValue(items[items.length - 1] ?? null));
   const next = useEventCallback(() => setActiveValue(step(items, activeValue, 1, loop)));
   const prev = useEventCallback(() => setActiveValue(step(items, activeValue, -1, loop)));
+  // Never wraps, whatever `loop` is: `loop` is next()/prev()'s wrap at the ends only (fix round 1).
   const move = useEventCallback((delta: number) =>
-    setActiveValue(step(items, activeValue, delta, loop)),
+    setActiveValue(step(items, activeValue, delta, false)),
   );
 
   const resolveElement = useEventCallback((value: string): HTMLElement | null => {
