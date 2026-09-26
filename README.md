@@ -124,6 +124,45 @@ export function Shell({ children }: { children: React.ReactNode }) {
 
 **Theme classes.** The tokens are selected by `wave-light` (also `:root`), `wave-dark` and `wave-high-contrast`; `getThemeClassName(theme)` returns them. For dark and high contrast the provider also emits the deprecated 0.4 classes `dark` and `high-contrast`, so 0.4 `.dark` selectors in your CSS and class-based `dark:` variants (`@custom-variant dark (&:where(.dark, .dark *));`) keep working. Tailwind 4's default `dark:` variant follows `prefers-color-scheme`, not a class, and Wave does not define a class-based one. Wave's CSS still honours the two legacy classes, but they set only `--wave-*` variables. `color-scheme` is set on the three `wave-*` theme classes only, never on `:root`, so a page without a provider keeps its own scrollbar and form-control scheme.
 
+**The page outside the provider.** The page's scrollbar and its canvas (the overscroll area and the space below short content) take their colours from `<html>`, which a provider never touches. To match them, put the theme classes on `<html>` as well, which sets `color-scheme` there; in a server-rendered layout that is `<html className={getThemeClassName(theme)}>` (safe in a Server Component). `color-scheme` gives the canvas the browser's default colour for the scheme; for the theme's own background, add `html { background-color: var(--wave-background); }` to your CSS.
+
+**Following the operating system.** `theme` takes one of the named themes, so resolve the OS setting in your app and pass the result:
+
+```tsx
+import * as React from 'react';
+import { WaveProvider, getThemeClassName, type WaveTheme } from '@mortenbrudvik/waveui';
+
+const DARK = '(prefers-color-scheme: dark)';
+
+function subscribe(onChange: () => void) {
+  const query = window.matchMedia(DARK);
+  query.addEventListener('change', onChange);
+  return () => query.removeEventListener('change', onChange);
+}
+
+function useSystemTheme(): WaveTheme {
+  const dark = React.useSyncExternalStore(
+    subscribe,
+    () => window.matchMedia(DARK).matches,
+    () => false, // the server renders light
+  );
+  return dark ? 'dark' : 'light';
+}
+
+export function Shell({ children }: { children: React.ReactNode }) {
+  const theme = useSystemTheme();
+  // The page outside the provider: its scrollbar and canvas.
+  React.useLayoutEffect(() => {
+    const classes = getThemeClassName(theme).split(' ');
+    document.documentElement.classList.add(...classes);
+    return () => document.documentElement.classList.remove(...classes);
+  }, [theme]);
+  return <WaveProvider theme={theme}>{children}</WaveProvider>;
+}
+```
+
+A server cannot know the setting, so a server-rendered page paints light first and switches to dark after hydration on a dark system. `<meta name="color-scheme" content="light dark">` in the document head at least draws the scrollbar and canvas in the system's scheme from the start (the theme class on `<html>` takes over once it is set).
+
 ### Customizing tokens
 
 Every color is a runtime CSS variable prefixed `--wave-`. The Tailwind color utilities use the same name without the prefix: `--wave-muted-foreground` is `text-muted-foreground`, `--wave-primary` is `bg-primary`, `border-primary`, `ring-primary`, and so on.
@@ -1012,6 +1051,42 @@ export function App() {
 
 - **`limit`** caps how many toasts show at once (`<Toaster limit={3}>`). Further toasts wait in a queue, in dispatch order, and appear as shown toasts go; a waiting toast is not announced and its timer does not run until it shows. Lowering the limit never hides a shown toast. A value below 1 counts as 1 (with a development warning), and a fraction rounds down. Dispatching the id of a waiting toast again replaces its options and keeps its place; `dismissToast(id)` removes a waiting toast silently.
 - **`dismissAllToasts()`** (from `useToastController()`) removes every toast, shown and waiting, and cancels their timers. When focus was in a toast, it returns to the element that had it before.
+
+**Toasts from code outside components.** A query cache, an event handler or a helper module cannot call a hook. Give it the controller of a mounted Toaster: a component inside `<Toaster>` publishes it from an effect, and toasts dispatched through it get everything above (the announcements, the pausing, `limit`, the focus handling).
+
+```tsx
+// toasts.ts
+import type { ToastController, ToastOptions } from '@mortenbrudvik/waveui';
+
+let controller: ToastController | null = null;
+
+export function setToastController(next: ToastController | null) {
+  controller = next;
+}
+
+/** Shows a toast from anywhere; returns its id, or `undefined` while no Toaster is mounted. */
+export function showToast(options: ToastOptions) {
+  return controller?.dispatchToast(options);
+}
+```
+
+```tsx
+// ToastBridge.tsx: render it once, anywhere inside <Toaster>
+import * as React from 'react';
+import { useToastController } from '@mortenbrudvik/waveui';
+import { setToastController } from './toasts';
+
+export function ToastBridge() {
+  const controller = useToastController();
+  React.useEffect(() => {
+    setToastController(controller);
+    return () => setToastController(null);
+  }, [controller]);
+  return null;
+}
+```
+
+A toast shown while no bridge is mounted (before the Toaster mounts, or after it unmounts) is dropped. Keep notifications in the Toaster rather than in an area of your own: an open modal `Dialog` or `Drawer` makes the rest of the page `inert`, so your own area would take no clicks, drop out of the accessibility tree and sit under the dialog, while the Toaster's region stays usable over modals.
 
 ### Badges
 
