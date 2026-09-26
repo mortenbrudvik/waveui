@@ -1561,11 +1561,14 @@ describe('sizes and appearances (Phase 4 P4-01)', () => {
     expect(root()).toHaveAttribute('data-size', 'medium');
     expect(root()).toHaveAttribute('data-appearance', 'outline');
     expect(clear()).toHaveClass('h-6', 'w-6', 'me-1');
+    expect(clear()).not.toHaveClass('relative');
+    expect(clear()).not.toHaveClass('before:absolute');
   });
 
   it('small: 20px clear button with a 24px hit area anchored on the button itself', () => {
     render(<SearchBox aria-label="Search" defaultValue="x" size="small" />);
     expect(root()).toHaveClass('h-6', 'text-caption-1');
+    expect(root()).toHaveAttribute('data-size', 'small');
     expect(clear()).toHaveClass(
       'size-5',
       'relative',
@@ -1578,7 +1581,10 @@ describe('sizes and appearances (Phase 4 P4-01)', () => {
   it('large: 32px clear button', () => {
     render(<SearchBox aria-label="Search" defaultValue="x" size="large" />);
     expect(root()).toHaveClass('h-10', 'text-body-2');
+    expect(root()).toHaveAttribute('data-size', 'large');
     expect(clear()).toHaveClass('size-8');
+    expect(clear()).not.toHaveClass('relative');
+    expect(clear()).not.toHaveClass('before:absolute');
   });
 
   it('takes the Field size and the provider appearance', () => {
