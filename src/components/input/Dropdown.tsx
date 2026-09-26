@@ -4,7 +4,6 @@ import { composeEventHandlers } from '../../lib/composeEventHandlers';
 import { warnDeprecated } from '../../lib/dev';
 import { ChevronDownIcon, DismissIcon } from '../../lib/icons';
 import { disabledStyles, focusRing, inputFocus, inputInvalid } from '../../lib/styles';
-import { announce, useAnnounce } from '../../hooks/useAnnounce';
 import { useControllable } from '../../hooks/useControllable';
 import { useFieldContext, useFieldControl } from '../../hooks/useFieldControl';
 import { useFormReset } from '../../hooks/useFormReset';
@@ -13,9 +12,9 @@ import { useMergedRefs } from '../../hooks/useMergedRefs';
 import { HiddenInput } from '../internal/HiddenInput';
 import { isInvalidLook } from './Input';
 import { ListboxSurface, Option, OptionGroup, useListboxPopup } from './Option';
-import { defaultAddedLabel, defaultRemovedLabel, defaultSelectionLabel } from './pickerLabels';
+import { announceToggle, defaultSelectionLabel, PickerAnnouncer } from './pickerLabels';
 import { PICKER_ICON_BUTTON_CLASSES, pickerEndPadding } from './pickerStyles';
-import { sameValues, toggleValue } from './pickerValues';
+import { EMPTY_VALUES, resetValues, toggleValue, toValues } from './pickerValues';
 import type { RoutedHandlers } from './routedHandlers';
 
 /* ------------------------------------------------------------------ */
@@ -158,22 +157,6 @@ export interface DropdownComponent {
   OptionGroup: typeof OptionGroup;
 }
 
-/** The empty multi-select value: `defaultValue`'s fallback while `multiselect` is on, and the
- * stable array `handleClear` clears to. */
-const EMPTY_VALUES: readonly string[] = [];
-
-/**
- * Mounts the shared announcer regions (`useAnnounce`) only while a multi-select Dropdown is on the
- * page (M2): a single-select Dropdown's DOM stays exactly as in 0.7, with no `[data-wave-announcer]`
- * added to `document.body`. Renders nothing; toggles announce through the module-level `announce`
- * function directly, which these regions keep alive.
- */
-function DropdownAnnouncer() {
-  useAnnounce();
-  return null;
-}
-DropdownAnnouncer.displayName = 'Dropdown.Announcer';
-
 const DropdownRoot = (props: DropdownProps<boolean>) => {
   const {
     multiselect = false,
@@ -241,10 +224,9 @@ const DropdownRoot = (props: DropdownProps<boolean>) => {
     },
   );
   // Normalised for the listbox, the display text and the clear/reset logic: a single value is its
-  // own one-element array. `Array.isArray` (not `typeof value === 'string'`) also keeps a `value`
-  // passed as `null`/`undefined` from JavaScript (bypassing the type system) from crashing, as 0.7
-  // did for the single-select string.
-  const values: readonly string[] = Array.isArray(value) ? value : value ? [value] : [];
+  // own one-element array, and a `value` passed as `null`/`undefined` from JavaScript (bypassing
+  // the type system) is none rather than a crash, as 0.7 did for the single-select string.
+  const values = toValues(value);
 
   // A dropdown that starts disabled never shows its list, so it starts closed (no close to report
   // later).
@@ -288,12 +270,11 @@ const DropdownRoot = (props: DropdownProps<boolean>) => {
       // read from `children` before the option registered, else the raw value. Announces a
       // toggle the user made (D41): never a controlled change, a clear or a form reset, none of
       // which reach this callback.
-      const label = details?.item.label ?? optionLabels.get(next) ?? next;
-      announce(
-        (added ? (labels?.added ?? defaultAddedLabel) : (labels?.removed ?? defaultRemovedLabel))(
-          label,
-          updated.length,
-        ),
+      announceToggle(
+        labels,
+        details?.item.label ?? optionLabels.get(next) ?? next,
+        added,
+        updated.length,
       );
     },
     idPrefix: 'dropdown-listbox',
@@ -318,14 +299,8 @@ const DropdownRoot = (props: DropdownProps<boolean>) => {
         setValue(defaultValue ?? '');
         return;
       }
-      const raw = defaultValue ?? EMPTY_VALUES;
-      const initial = Array.isArray(raw) ? raw : EMPTY_VALUES;
-      // Compared by content (C-FORMS): an inline default array is a new reference on every
-      // render, and a reset that keeps the same values reports nothing.
-      setValue((current) => {
-        const currentValues = Array.isArray(current) ? current : EMPTY_VALUES;
-        return sameValues(currentValues, initial) ? current : [...initial];
-      });
+      // Compared by content (C-FORMS), so a reset that keeps the same values reports nothing.
+      setValue((current) => resetValues(current, defaultValue));
     },
     form,
   );
@@ -364,7 +339,7 @@ const DropdownRoot = (props: DropdownProps<boolean>) => {
 
   return (
     <div {...rest} ref={rootMergedRef} className={cn('relative inline-flex flex-col', className)}>
-      {multiselect && <DropdownAnnouncer />}
+      {multiselect && <PickerAnnouncer />}
       <div className="relative flex items-center">
         <button
           type="button"
