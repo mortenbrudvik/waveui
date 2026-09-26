@@ -11,6 +11,7 @@ import {
 } from 'react';
 import { getElementType } from '../lib/children';
 import { isDev, reportMissingContext, warnOnce } from '../lib/dev';
+import type { OpenChangeDetails } from '../lib/types';
 import { useActiveDescendant } from './useActiveDescendant';
 import { useEventCallback } from './useEventCallback';
 import { useId } from './useId';
@@ -43,26 +44,42 @@ export interface ListboxItem {
 /** Why {@link UseListboxOptions.onOpenChange} was called. */
 export type ListboxOpenChangeReason = 'keyboard' | 'select' | 'escape' | 'tab';
 
+/** Second argument of `useListbox`'s `onSelect`. */
+export interface ListboxSelectDetails {
+  /** The committed option. */
+  item: ListboxItem;
+  /** The key or click event behind the commit. */
+  event: Event;
+}
+
 /** Options of {@link useListbox}. */
 export interface UseListboxOptions {
   /** Whether the listbox is shown. The consumer owns the open state. */
   open: boolean;
-  /** Called when a key (or a commit) wants to open or close the listbox. */
-  onOpenChange: (open: boolean, reason: ListboxOpenChangeReason) => void;
+  /**
+   * Called when a key (or a commit) wants to open or close the listbox. `details.reason` says why
+   * (`'keyboard'`, `'select'` — a commit that closes the list —, `'escape'` or `'tab'`) and
+   * `details.event` is the key or click event behind it. WaveUI always passes `details`; it is
+   * typed optional until 1.0 so that code which calls this prop itself keeps compiling.
+   */
+  onOpenChange?: (open: boolean, details?: OpenChangeDetails<ListboxOpenChangeReason>) => void;
   /**
    * `'editable'`: a text input combobox (Combobox, TagPicker, TimePicker).
    * `'select-only'`: a button/div combobox without text entry (Dropdown).
    */
   mode: 'editable' | 'select-only';
-  /** Several values can be selected; committing keeps the listbox open. */
-  multiple?: boolean;
+  /** Several values can be selected; committing keeps the listbox open. @default false */
+  multiselect?: boolean;
   /** The selected values (`[]` when nothing is selected). */
   selectedValues: readonly string[];
   /**
    * Called when an option is committed: click, Enter/Space, and in single-select select-only mode
-   * also Tab and Alt+ArrowUp (with `multiple` they close without committing).
+   * also Tab and Alt+ArrowUp (with `multiselect` they close without committing). `details.item` is
+   * the committed option and `details.event` the key or click event behind the commit. WaveUI
+   * always passes `details`; it is typed optional until 1.0 so that code which calls this prop
+   * itself keeps compiling.
    */
-  onSelect: (value: string, item: ListboxItem) => void;
+  onSelect: (value: string, details?: ListboxSelectDetails) => void;
   /**
    * Data mode: the options. Omitted ⇒ registration mode — the `Option` children register
    * themselves through {@link ListboxContext} ({@link useListboxOption}).
@@ -90,6 +107,12 @@ export interface UseListboxOptions {
    * same. Opening with unchanged options keeps the `autoHighlight` start.
    */
   highlightOnFilter?: boolean;
+  /**
+   * Called after the active (highlighted) option changes — arrow keys, typeahead, the pointer, a
+   * filter change, opening — and with `null` when the listbox closes. Passed straight through to
+   * {@link useActiveDescendant}'s `onActiveValueChange`.
+   */
+  onActiveValueChange?: (value: string | null) => void;
   /** Prefix of the generated listbox id. @default 'listbox' */
   idPrefix?: string;
   /**
@@ -177,8 +200,10 @@ export interface ListboxStore {
 export interface ListboxContextValue {
   listboxId: string;
   store: ListboxStore;
-  /** Commits `value` (option click). */
-  select(value: string, item: ListboxItem): void;
+  /** Whether the listbox is {@link UseListboxOptions.multiselect}. */
+  multiselect: boolean;
+  /** Commits `value` (option click); `event` is the click behind it. */
+  select(value: string, item: ListboxItem, event: Event): void;
   /** Highlights `value` (pointer movement); not scrolled into view, so the list stays put. */
   highlight(value: string): void;
 }
@@ -207,7 +232,7 @@ export interface UseListboxOptionProps {
 }
 
 /** Props for an option element (spread them onto the `<li>`; compose `onClick` with yours). */
-export interface ListboxOptionProps<E extends HTMLElement = HTMLElement> {
+export interface ListboxOptionElementProps<E extends HTMLElement = HTMLElement> {
   id: string;
   role: 'option';
   'aria-selected': boolean;
@@ -229,7 +254,9 @@ export interface UseListboxOptionResult<E extends HTMLElement = HTMLElement> {
   disabled: boolean;
   /** Filtered out, or hidden by the consumer ({@link UseListboxOptionProps.hidden}). */
   hidden: boolean;
-  optionProps: ListboxOptionProps<E>;
+  /** Whether the surrounding listbox is {@link UseListboxOptions.multiselect}. */
+  multiselect: boolean;
+  optionProps: ListboxOptionElementProps<E>;
 }
 
 /* ------------------------------------------------------------------ */
@@ -576,6 +603,7 @@ function getInertContext(): ListboxContextValue {
   inertContext ??= {
     listboxId: 'wave-listbox-inert',
     store: new ListboxStoreImpl([]),
+    multiselect: false,
     select: () => {},
     highlight: () => {},
   };
@@ -774,7 +802,7 @@ function preventMouseDown(event: React.MouseEvent): void {
  *   jump 10; Enter/Space open or commit (always prevented on keydown, Space also on keyup, so a
  *   `<button>` combobox is not clicked again; a Space typed within 500 ms of a typeahead character
  *   continues the search instead); Alt+ArrowUp and Tab commit and close in single-select mode
- *   (with `multiple` they only close; Tab is not prevented); Escape closes.
+ *   (with `multiselect` they only close; Tab is not prevented); Escape closes.
  *   "Selected" means the first selected navigable option in list order. Disabled options are
  *   skipped and never committed; hidden options are not navigable at all.
  * - The active option is scrolled into view (`{ block: 'nearest' }`) in a layout effect, except
@@ -801,7 +829,7 @@ export function useListbox(options: UseListboxOptions): UseListboxResult {
     open,
     onOpenChange,
     mode,
-    multiple = false,
+    multiselect = false,
     selectedValues,
     onSelect,
     items: dataItems,
@@ -810,6 +838,7 @@ export function useListbox(options: UseListboxOptions): UseListboxResult {
     typeahead = mode === 'select-only',
     autoHighlight = 'selected',
     highlightOnFilter = false,
+    onActiveValueChange,
     idPrefix,
     onClearDraft,
   } = options;
@@ -877,26 +906,32 @@ export function useListbox(options: UseListboxOptions): UseListboxResult {
     loop,
     activateFirstOnChange: highlightOnFilter,
     getElement: store.getElement,
+    onActiveValueChange,
   });
   const { activeValue, activeDescendantId } = ad;
 
   const commit = useEventCallback(
-    (value: string, reason: 'select' | 'tab', fallbackItem?: ListboxItem): void => {
+    (value: string, reason: 'select' | 'tab', event: Event, fallbackItem?: ListboxItem): void => {
       const item = itemByValue.get(value) ?? fallbackItem;
       if (!item || item.disabled) return;
-      onSelect(value, item);
-      if (multiple && reason === 'select') {
+      onSelect(value, { item, event });
+      if (multiselect && reason === 'select') {
         ad.setActiveValue(value);
       } else {
         ad.setActiveValue(null);
-        onOpenChange(false, reason);
+        onOpenChange?.(false, { reason, event });
       }
     },
   );
 
-  const select = useEventCallback((value: string, item: ListboxItem) => {
-    commit(value, 'select', item);
+  const select = useEventCallback((value: string, item: ListboxItem, event: Event) => {
+    commit(value, 'select', event, item);
   });
+
+  // The native keydown event behind a typeahead match, so onMatch (called from inside
+  // onTypeahead(), itself only ever called from onKeyDown below) can report it: onMatch has no
+  // event parameter of its own (useTypeahead is unchanged by this hook).
+  const keyEventRef = useRef<Event | null>(null);
 
   const { onTypeahead } = useTypeahead({
     getItems: () =>
@@ -907,12 +942,16 @@ export function useListbox(options: UseListboxOptions): UseListboxResult {
       })),
     onMatch: (value) => {
       ad.setActiveValue(value);
-      if (!open) onOpenChange(true, 'keyboard');
+      const event = keyEventRef.current;
+      if (!open && event) onOpenChange?.(true, { reason: 'keyboard', event });
     },
   });
 
   const onKeyDown = useEventCallback((event: React.KeyboardEvent) => {
     if (event.defaultPrevented || event.nativeEvent.isComposing) return;
+    // Every open change and commit below comes from this key, so its native event is always
+    // available; kept in a ref too, for the typeahead match handled outside this closure.
+    keyEventRef.current = event.nativeEvent;
     // Editable: a key that edits the text returns visual focus to the textbox (APG) and is left to
     // the input: the highlight is cleared (highlightOnFilter: the first option), so Enter after
     // typing never commits an option highlighted before the edit.
@@ -928,18 +967,20 @@ export function useListbox(options: UseListboxOptions): UseListboxResult {
 
     const openWith = (value: string | null) => {
       ad.setActiveValue(value);
-      if (!open) onOpenChange(true, 'keyboard');
+      if (!open) onOpenChange?.(true, { reason: 'keyboard', event: event.nativeEvent });
     };
     const commitOrClose = () => {
-      if (activeValue !== null) commit(activeValue, 'select');
-      else if (!multiple) onOpenChange(false, 'keyboard');
+      if (activeValue !== null) commit(activeValue, 'select', event.nativeEvent);
+      else if (!multiselect) {
+        onOpenChange?.(false, { reason: 'keyboard', event: event.nativeEvent });
+      }
     };
 
     switch (key) {
       case 'ArrowDown':
         event.preventDefault();
         if (altKey) {
-          if (!open) onOpenChange(true, 'keyboard');
+          if (!open) onOpenChange?.(true, { reason: 'keyboard', event: event.nativeEvent });
         } else if (!open) {
           openWith(firstSelected ?? first);
         } else {
@@ -950,8 +991,11 @@ export function useListbox(options: UseListboxOptions): UseListboxResult {
         event.preventDefault();
         if (altKey) {
           if (!open) return;
-          if (selectOnly && !multiple && activeValue !== null) commit(activeValue, 'select');
-          else onOpenChange(false, 'keyboard');
+          if (selectOnly && !multiselect && activeValue !== null) {
+            commit(activeValue, 'select', event.nativeEvent);
+          } else {
+            onOpenChange?.(false, { reason: 'keyboard', event: event.nativeEvent });
+          }
         } else if (!open) {
           openWith(firstSelected ?? last);
         } else {
@@ -976,18 +1020,18 @@ export function useListbox(options: UseListboxOptions): UseListboxResult {
           // Closed: not prevented, so the surrounding form submits (APG).
           if (open && activeValue !== null) {
             event.preventDefault();
-            commit(activeValue, 'select');
+            commit(activeValue, 'select', event.nativeEvent);
           }
           return;
         }
         event.preventDefault();
-        if (!open) onOpenChange(true, 'keyboard');
+        if (!open) onOpenChange?.(true, { reason: 'keyboard', event: event.nativeEvent });
         else commitOrClose();
         return;
       case 'Escape':
         if (open) {
           event.preventDefault();
-          onOpenChange(false, 'escape');
+          onOpenChange?.(false, { reason: 'escape', event: event.nativeEvent });
         } else if (!selectOnly && onClearDraft && hasText(event.currentTarget)) {
           event.preventDefault();
           onClearDraft();
@@ -995,8 +1039,11 @@ export function useListbox(options: UseListboxOptions): UseListboxResult {
         return;
       case 'Tab':
         if (!open) return;
-        if (selectOnly && !multiple && activeValue !== null) commit(activeValue, 'tab');
-        else onOpenChange(false, 'tab');
+        if (selectOnly && !multiselect && activeValue !== null) {
+          commit(activeValue, 'tab', event.nativeEvent);
+        } else {
+          onOpenChange?.(false, { reason: 'tab', event: event.nativeEvent });
+        }
         return;
       default:
         break;
@@ -1006,7 +1053,7 @@ export function useListbox(options: UseListboxOptions): UseListboxResult {
     if (!typeahead || (altKey && !altGraph) || key.length !== 1) {
       if (key === ' ' && selectOnly) {
         event.preventDefault();
-        if (!open) onOpenChange(true, 'keyboard');
+        if (!open) onOpenChange?.(true, { reason: 'keyboard', event: event.nativeEvent });
         else commitOrClose();
       }
       return;
@@ -1019,13 +1066,13 @@ export function useListbox(options: UseListboxOptions): UseListboxResult {
     if (key === ' ') {
       // Not part of a typeahead search: Space opens or commits (select-only).
       event.preventDefault();
-      if (!open) onOpenChange(true, 'keyboard');
+      if (!open) onOpenChange?.(true, { reason: 'keyboard', event: event.nativeEvent });
       else commitOrClose();
       return;
     }
     if (selectOnly && !open) {
       event.preventDefault();
-      onOpenChange(true, 'keyboard');
+      onOpenChange?.(true, { reason: 'keyboard', event: event.nativeEvent });
     }
   });
 
@@ -1061,8 +1108,8 @@ export function useListbox(options: UseListboxOptions): UseListboxResult {
   }, [dataItems]);
 
   const context = useMemo<ListboxContextValue>(
-    () => ({ listboxId, store, select, highlight: ad.highlight }),
-    [listboxId, store, select, ad.highlight],
+    () => ({ listboxId, store, multiselect, select, highlight: ad.highlight }),
+    [listboxId, store, multiselect, select, ad.highlight],
   );
 
   return {
@@ -1093,7 +1140,7 @@ export function useListbox(options: UseListboxOptions): UseListboxResult {
         tabIndex: -1,
         onMouseDown: preventMouseDown,
       };
-      if (multiple) props['aria-multiselectable'] = true;
+      if (multiselect) props['aria-multiselectable'] = true;
       return props;
     },
     context,
@@ -1140,7 +1187,7 @@ export function useListboxOption<E extends HTMLElement = HTMLElement>(
   ref?: React.Ref<E>,
 ): UseListboxOptionResult<E> {
   const context = useListboxContext('Option');
-  const { store, listboxId, select, highlight } = context;
+  const { store, listboxId, multiselect, select, highlight } = context;
   const { value, label, textValue, disabled = false, hidden: hiddenByConsumer = false } = props;
 
   const id = `${listboxId}-opt-${store.getIndex(value)}`;
@@ -1185,18 +1232,21 @@ export function useListboxOption<E extends HTMLElement = HTMLElement>(
     [],
   );
 
-  const onClick = useCallback(() => {
-    if (disabled) return;
-    const item: ListboxItem = { value, label: label ?? textValue ?? value };
-    if (textValue !== undefined) item.textValue = textValue;
-    select(value, item);
-  }, [select, value, label, textValue, disabled]);
+  const onClick = useCallback(
+    (event: React.MouseEvent<E>) => {
+      if (disabled) return;
+      const item: ListboxItem = { value, label: label ?? textValue ?? value };
+      if (textValue !== undefined) item.textValue = textValue;
+      select(value, item, event.nativeEvent);
+    },
+    [select, value, label, textValue, disabled],
+  );
 
   const onPointerMove = useCallback(() => {
     if (!disabled && !store.isActive(value)) highlight(value);
   }, [highlight, store, value, disabled]);
 
-  const optionProps: ListboxOptionProps<E> = {
+  const optionProps: ListboxOptionElementProps<E> = {
     id,
     role: 'option',
     'aria-selected': selected,
@@ -1212,5 +1262,5 @@ export function useListboxOption<E extends HTMLElement = HTMLElement>(
   if (active) optionProps['data-active'] = '';
   if (selected) optionProps['data-selected'] = '';
 
-  return { id, selected, active, disabled, hidden, optionProps };
+  return { id, selected, active, disabled, hidden, multiselect, optionProps };
 }

@@ -400,7 +400,7 @@ export const TagPicker = (props: TagPickerProps) => {
     open,
     onOpenChange: (next) => setOpen(next),
     mode: 'editable',
-    multiple: true,
+    multiselect: true,
     selectedValues: selected,
     onSelect: (value) => addTag(value),
     items: available,

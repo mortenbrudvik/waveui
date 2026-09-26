@@ -12,10 +12,13 @@ import {
   useListbox,
   useListboxOption,
   type ListboxItem,
+  type ListboxOpenChangeReason,
+  type ListboxSelectDetails,
   type UseListboxOptions,
   type UseListboxResult,
 } from '../useListbox';
 import { asClientReference, expectThrows } from '../../test-utils';
+import type { OpenChangeDetails } from '../../lib/types';
 
 /* ------------------------------------------------------------------ */
 /*  Stand-ins for P05's Option / OptionGroup                           */
@@ -93,8 +96,8 @@ interface PickerProps extends HarnessOptions {
   filterByText?: boolean;
   /** While open, render the list in a portal (remounts the options). */
   portal?: boolean;
-  onSelectSpy?: (value: string, item: ListboxItem) => void;
-  onOpenChangeSpy?: (open: boolean, reason: string) => void;
+  onSelectSpy?: (value: string, details?: ListboxSelectDetails) => void;
+  onOpenChangeSpy?: (open: boolean, details?: OpenChangeDetails<ListboxOpenChangeReason>) => void;
   onRootRender?: () => void;
   resultRef?: React.RefObject<UseListboxResult | null>;
 }
@@ -108,7 +111,7 @@ function Picker(props: PickerProps) {
     filterByText = false,
     portal = false,
     mode = 'select-only',
-    multiple = false,
+    multiselect = false,
     onSelectSpy,
     onOpenChangeSpy,
     onRootRender,
@@ -130,20 +133,20 @@ function Picker(props: PickerProps) {
   );
   const lb = useListbox({
     open,
-    onOpenChange: (next, reason) => {
+    onOpenChange: (next, details) => {
       setOpen(next);
       if (!next) setDraft(null);
-      onOpenChangeSpy?.(next, reason);
+      onOpenChangeSpy?.(next, details);
     },
     mode,
-    multiple,
-    selectedValues: multiple ? values : value ? [value] : [],
-    onSelect: (v, item) => {
-      if (multiple)
+    multiselect,
+    selectedValues: multiselect ? values : value ? [value] : [],
+    onSelect: (v, details) => {
+      if (multiselect)
         setValues((prev) => (prev.includes(v) ? prev.filter((x) => x !== v) : [...prev, v]));
       else setValue(v);
       setDraft(null);
-      onSelectSpy?.(v, item);
+      onSelectSpy?.(v, details);
     },
     filter,
     ...options,
@@ -183,7 +186,7 @@ function Picker(props: PickerProps) {
         )}
         {portal && open ? createPortal(list, document.body) : list}
         <output data-testid="items">{lb.items.map((i) => i.value).join(',')}</output>
-        <output data-testid="value">{multiple ? values.join(',') : value}</output>
+        <output data-testid="value">{multiselect ? values.join(',') : value}</output>
       </div>
     </ListboxContext.Provider>
   );
@@ -917,7 +920,7 @@ describe('useListbox — ids and aria-activedescendant (input-pickers#3)', () =>
     expect(ref.current?.getListboxProps()).not.toHaveProperty('aria-multiselectable');
 
     rerender(
-      <Picker resultRef={ref} mode="editable" multiple idPrefix="tags">
+      <Picker resultRef={ref} mode="editable" multiselect idPrefix="tags">
         {FRUITS}
       </Picker>,
     );
@@ -1006,7 +1009,13 @@ describe('useListbox — one navigable list, derived active value (input-pickers
     await user.keyboard('{ArrowDown}');
     expect(activeText()).toBe('Beta');
     await user.keyboard('{Enter}');
-    expect(onSelect).toHaveBeenCalledWith('b', expect.objectContaining({ value: 'b' }));
+    expect(onSelect).toHaveBeenCalledWith(
+      'b',
+      expect.objectContaining({
+        item: expect.objectContaining({ value: 'b' }),
+        event: expect.any(Event),
+      }),
+    );
     expect(combobox()).toHaveValue('Beta');
   });
 
@@ -1239,7 +1248,7 @@ interface DataPickerProps extends HarnessOptions {
   items: readonly ListboxItem[];
   defaultOpen?: boolean;
   onRowRender?: (value: string) => void;
-  onSelectSpy?: (value: string, item: ListboxItem) => void;
+  onSelectSpy?: (value: string, details?: ListboxSelectDetails) => void;
   /** React key of a row. @default the item value */
   rowKey?: (item: ListboxItem, index: number) => string;
 }
@@ -1260,9 +1269,9 @@ function DataPicker({
     onOpenChange: setOpen,
     mode,
     selectedValues: value ? [value] : [],
-    onSelect: (v, item) => {
+    onSelect: (v, details) => {
       setValue(v);
-      onSelectSpy?.(v, item);
+      onSelectSpy?.(v, details);
     },
     items,
     ...options,
@@ -1310,7 +1319,10 @@ describe('useListbox — data mode', () => {
     key('ArrowDown');
     expect(activeText()).toBe('Apple');
     key('Enter');
-    expect(onSelect).toHaveBeenCalledWith('a', ITEMS[0]);
+    expect(onSelect).toHaveBeenCalledWith(
+      'a',
+      expect.objectContaining({ item: ITEMS[0], event: expect.any(Event) }),
+    );
   });
 
   it('async shrink with autoHighlight: the activedescendant points at an existing option', () => {
@@ -1328,7 +1340,10 @@ describe('useListbox — data mode', () => {
     const onSelect = vi.fn();
     render(<DataPicker items={ITEMS} defaultOpen onSelectSpy={onSelect} />);
     fireEvent.click(screen.getByRole('option', { name: 'Date' }));
-    expect(onSelect).toHaveBeenCalledWith('d', ITEMS[3]);
+    expect(onSelect).toHaveBeenCalledWith(
+      'd',
+      expect.objectContaining({ item: ITEMS[3], event: expect.any(Event) }),
+    );
   });
 
   it('warns about duplicate item values', () => {
@@ -1592,14 +1607,26 @@ describe('useListbox — select-only keys (APG)', () => {
     expect(expanded()).toBe(true);
     key('ArrowDown');
     expect(key('Enter').defaultPrevented).toBe(true);
-    expect(onSelect).toHaveBeenLastCalledWith('b', expect.objectContaining({ label: 'Banana' }));
+    expect(onSelect).toHaveBeenLastCalledWith(
+      'b',
+      expect.objectContaining({
+        item: expect.objectContaining({ label: 'Banana' }),
+        event: expect.any(Event),
+      }),
+    );
     expect(expanded()).toBe(false);
 
     expect(key(' ').defaultPrevented).toBe(true);
     expect(expanded()).toBe(true);
     key('ArrowDown');
     expect(key(' ').defaultPrevented).toBe(true);
-    expect(onSelect).toHaveBeenLastCalledWith('c', expect.objectContaining({ label: 'Cherry' }));
+    expect(onSelect).toHaveBeenLastCalledWith(
+      'c',
+      expect.objectContaining({
+        item: expect.objectContaining({ label: 'Cherry' }),
+        event: expect.any(Event),
+      }),
+    );
     expect(expanded()).toBe(false);
   });
 
@@ -1639,7 +1666,10 @@ describe('useListbox — select-only keys (APG)', () => {
     key('ArrowUp', { altKey: true });
     expect(expanded()).toBe(false);
     expect(screen.getByTestId('value')).toHaveTextContent('c');
-    expect(onOpenChange).toHaveBeenLastCalledWith(false, 'select');
+    expect(onOpenChange).toHaveBeenLastCalledWith(
+      false,
+      expect.objectContaining({ reason: 'select', event: expect.any(Event) }),
+    );
   });
 
   it('Tab commits the active option and closes without preventing the focus move', () => {
@@ -1649,15 +1679,18 @@ describe('useListbox — select-only keys (APG)', () => {
     key('ArrowDown');
     expect(key('Tab').defaultPrevented).toBe(false);
     expect(screen.getByTestId('value')).toHaveTextContent('b');
-    expect(onOpenChange).toHaveBeenLastCalledWith(false, 'tab');
+    expect(onOpenChange).toHaveBeenLastCalledWith(
+      false,
+      expect.objectContaining({ reason: 'tab', event: expect.any(Event) }),
+    );
   });
 
-  it('multiple: opens on the first selected option in list order; Tab and Alt+ArrowUp close without committing', () => {
+  it('multiselect: opens on the first selected option in list order; Tab and Alt+ArrowUp close without committing', () => {
     const onSelect = vi.fn();
     const onOpenChange = vi.fn();
     render(
       <Picker
-        multiple
+        multiselect
         defaultValues={['c', 'a']}
         onSelectSpy={onSelect}
         onOpenChangeSpy={onOpenChange}
@@ -1670,13 +1703,19 @@ describe('useListbox — select-only keys (APG)', () => {
     key('ArrowDown');
     key('Tab');
     expect(expanded()).toBe(false);
-    expect(onOpenChange).toHaveBeenLastCalledWith(false, 'tab');
+    expect(onOpenChange).toHaveBeenLastCalledWith(
+      false,
+      expect.objectContaining({ reason: 'tab', event: expect.any(Event) }),
+    );
     key('ArrowUp');
     expect(activeText()).toBe('Apple');
     key('ArrowDown');
     key('ArrowUp', { altKey: true });
     expect(expanded()).toBe(false);
-    expect(onOpenChange).toHaveBeenLastCalledWith(false, 'keyboard');
+    expect(onOpenChange).toHaveBeenLastCalledWith(
+      false,
+      expect.objectContaining({ reason: 'keyboard', event: expect.any(Event) }),
+    );
     expect(onSelect).not.toHaveBeenCalled();
     expect(screen.getByTestId('value')).toHaveTextContent(/^c,a$/);
   });
@@ -1686,7 +1725,10 @@ describe('useListbox — select-only keys (APG)', () => {
     render(<Picker onOpenChangeSpy={onOpenChange}>{FRUITS}</Picker>);
     key('ArrowDown');
     expect(key('Escape').defaultPrevented).toBe(true);
-    expect(onOpenChange).toHaveBeenLastCalledWith(false, 'escape');
+    expect(onOpenChange).toHaveBeenLastCalledWith(
+      false,
+      expect.objectContaining({ reason: 'escape', event: expect.any(Event) }),
+    );
     expect(key('Escape').defaultPrevented).toBe(false);
   });
 
@@ -1756,7 +1798,10 @@ describe('useListbox — editable keys (APG)', () => {
     expect(activeText()).toBe('Banana');
     expect(key('ArrowUp', { altKey: true }).defaultPrevented).toBe(true);
     expect(expanded()).toBe(false);
-    expect(onOpenChange).toHaveBeenLastCalledWith(false, 'keyboard');
+    expect(onOpenChange).toHaveBeenLastCalledWith(
+      false,
+      expect.objectContaining({ reason: 'keyboard', event: expect.any(Event) }),
+    );
     expect(onSelect).not.toHaveBeenCalled();
     expect(screen.getByTestId('value')).toBeEmptyDOMElement();
 
@@ -1846,7 +1891,7 @@ describe('useListbox — editable keys (APG)', () => {
     const user = userEvent.setup();
     const onSelect = vi.fn();
     render(
-      <Picker mode="editable" multiple filterByText autoHighlight={false} onSelectSpy={onSelect}>
+      <Picker mode="editable" multiselect filterByText autoHighlight={false} onSelectSpy={onSelect}>
         <Opt value="a">Apple</Opt>
         <Opt value="b">Banana</Opt>
         <Opt value="bl">Blueberry</Opt>
@@ -1964,7 +2009,10 @@ describe('useListbox — editable keys (APG)', () => {
     );
     key('ArrowDown');
     expect(key('Escape').defaultPrevented).toBe(true);
-    expect(onOpenChange).toHaveBeenLastCalledWith(false, 'escape');
+    expect(onOpenChange).toHaveBeenLastCalledWith(
+      false,
+      expect.objectContaining({ reason: 'escape', event: expect.any(Event) }),
+    );
     expect(onClearDraft).not.toHaveBeenCalled();
     expect(combobox()).toHaveValue('Apple');
     expect(key('Escape').defaultPrevented).toBe(true);
@@ -1997,13 +2045,16 @@ describe('useListbox — editable keys (APG)', () => {
     );
     key('ArrowDown');
     expect(key('Tab').defaultPrevented).toBe(false);
-    expect(onOpenChange).toHaveBeenLastCalledWith(false, 'tab');
+    expect(onOpenChange).toHaveBeenLastCalledWith(
+      false,
+      expect.objectContaining({ reason: 'tab', event: expect.any(Event) }),
+    );
     expect(onSelect).not.toHaveBeenCalled();
   });
 
-  it('multiple: Enter commits and keeps the listbox open on the same option', () => {
+  it('multiselect: Enter commits and keeps the listbox open on the same option', () => {
     render(
-      <Picker mode="editable" multiple>
+      <Picker mode="editable" multiselect>
         {FRUITS}
       </Picker>,
     );
@@ -2017,9 +2068,9 @@ describe('useListbox — editable keys (APG)', () => {
     expect(screen.getByTestId('value')).toHaveTextContent('b,c');
   });
 
-  it('multiple: clicking an option keeps the listbox open', () => {
+  it('multiselect: clicking an option keeps the listbox open', () => {
     render(
-      <Picker mode="editable" multiple defaultOpen>
+      <Picker mode="editable" multiselect defaultOpen>
         {FRUITS}
       </Picker>,
     );
@@ -2308,6 +2359,51 @@ describe('useListbox — scrollIntoView (input-pickers#18)', () => {
     } finally {
       Element.prototype.scrollIntoView = original;
     }
+  });
+});
+
+/* ------------------------------------------------------------------ */
+/*  onActiveValueChange and multiselect (F5-foundation)                */
+/* ------------------------------------------------------------------ */
+
+describe('useListbox — onActiveValueChange', () => {
+  it('reports the active option (open, arrows, hover, filter, close) once each', () => {
+    const onActiveValueChange = vi.fn();
+    render(
+      <React.StrictMode>
+        <Picker onActiveValueChange={onActiveValueChange}>{FRUITS}</Picker>
+      </React.StrictMode>,
+    );
+    key('ArrowDown'); // opens: nothing selected, so autoHighlight starts at the first option
+    key('ArrowDown'); // moves to the second option
+    fireEvent.pointerMove(screen.getByRole('option', { name: 'Cherry' })); // hovers the third
+    key('Escape'); // closes
+    expect(onActiveValueChange.mock.calls).toEqual([['a'], ['b'], ['c'], [null]]);
+  });
+});
+
+describe('useListbox — multiselect', () => {
+  it('puts multiselect in the context and the option result', () => {
+    const onResult = vi.fn();
+    function Probe({ value }: { value: string }) {
+      const context = React.useContext(ListboxContext);
+      const { multiselect, optionProps } = useListboxOption({ value });
+      onResult(multiselect, context?.multiselect);
+      return <li {...optionProps}>{value}</li>;
+    }
+    const { rerender } = render(
+      <Picker multiselect>
+        <Probe value="a" />
+      </Picker>,
+    );
+    expect(onResult).toHaveBeenLastCalledWith(true, true);
+
+    rerender(
+      <Picker>
+        <Probe value="a" />
+      </Picker>,
+    );
+    expect(onResult).toHaveBeenLastCalledWith(false, false);
   });
 });
 
