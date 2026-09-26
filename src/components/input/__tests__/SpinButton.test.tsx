@@ -1011,6 +1011,8 @@ describe('allowEmpty (Phase 4 D16, D17)', () => {
     );
     const form = screen.getByRole('form', { name: 'Order' }) as HTMLFormElement;
     expect(form.checkValidity()).toBe(false);
+    const hidden = form.elements.namedItem('qty') as HTMLInputElement;
+    expect(hidden.validity.valueMissing).toBe(true);
     act(() => form.requestSubmit());
     expect(onSubmit).not.toHaveBeenCalled();
     expect(spin()).toHaveFocus();
@@ -1049,6 +1051,12 @@ describe('allowEmpty (Phase 4 D16, D17)', () => {
     expectTypeOf<SpinButtonAllowEmptyProps['value']>().toEqualTypeOf<number | null | undefined>();
     expectTypeOf<React.ComponentProps<typeof SpinButton>>().toEqualTypeOf<
       SpinButtonProps | SpinButtonAllowEmptyProps
+    >();
+    expectTypeOf<SpinButtonProps['onValueChange']>().toEqualTypeOf<
+      ((value: number) => void) | undefined
+    >();
+    expectTypeOf<SpinButtonAllowEmptyProps['onValueChange']>().toEqualTypeOf<
+      ((value: number | null) => void) | undefined
     >();
     type Props = React.ComponentProps<typeof SpinButton>;
     expectTypeOf<Props['onChange']>().toEqualTypeOf<((value: number) => void) | undefined>();
