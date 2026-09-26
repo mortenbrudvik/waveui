@@ -1,5 +1,6 @@
 import * as React from 'react';
 import { cn } from '../../lib/cn';
+import { colorPickerClassNames } from '../../lib/classNames';
 import { warnDeprecated, warnOnce } from '../../lib/dev';
 import { joinIds } from '../../lib/aria';
 import { focusRing, inputFocus, inputInvalid } from '../../lib/styles';
@@ -427,6 +428,7 @@ export const ColorPicker = ({
       role="group"
       {...groupProps}
       className={cn(
+        colorPickerClassNames.root,
         'relative inline-flex flex-col gap-3 rounded border border-border bg-background p-3 shadow-4',
         className,
       )}
@@ -493,7 +495,14 @@ export const ColorPicker = ({
       {/* Opacity slider */}
       {showOpacity && (
         <div className="flex items-center gap-2">
-          <span className="w-14 text-caption-1 text-muted-foreground">{strings.opacity}</span>
+          <span
+            className={cn(
+              colorPickerClassNames.opacityLabel,
+              'w-14 text-caption-1 text-muted-foreground',
+            )}
+          >
+            {strings.opacity}
+          </span>
           <input
             type="range"
             min={0}
@@ -508,7 +517,14 @@ export const ColorPicker = ({
               focusRing,
             )}
           />
-          <span className="w-10 text-end text-caption-1 text-muted-foreground">{opacity}%</span>
+          <span
+            className={cn(
+              colorPickerClassNames.opacityValue,
+              'w-10 text-end text-caption-1 text-muted-foreground',
+            )}
+          >
+            {opacity}%
+          </span>
         </div>
       )}
 

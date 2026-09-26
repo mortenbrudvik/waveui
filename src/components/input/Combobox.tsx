@@ -1,4 +1,5 @@
 import * as React from 'react';
+import { comboboxClassNames } from '../../lib/classNames';
 import { cn } from '../../lib/cn';
 import { composeEventHandlers } from '../../lib/composeEventHandlers';
 import { warnDeprecated } from '../../lib/dev';
@@ -407,7 +408,11 @@ const ComboboxRoot = (props: ComboboxProps) => {
       : fieldProps['aria-labelledby'];
 
   return (
-    <div {...rest} ref={rootMergedRef} className={cn('relative inline-flex flex-col', className)}>
+    <div
+      {...rest}
+      ref={rootMergedRef}
+      className={cn(comboboxClassNames.root, 'relative inline-flex flex-col', className)}
+    >
       <div className="relative flex items-center">
         <input
           type="text"
@@ -442,6 +447,7 @@ const ComboboxRoot = (props: ComboboxProps) => {
             checkDefaultPrevented: false,
           })}
           className={cn(
+            comboboxClassNames.input,
             inputBase,
             'border-b-stroke-accessible',
             inputFocus,
@@ -459,6 +465,7 @@ const ComboboxRoot = (props: ComboboxProps) => {
             onMouseDown={(event) => event.preventDefault()}
             onClick={handleClear}
             className={cn(
+              comboboxClassNames.clearButton,
               PICKER_ICON_BUTTON_CLASSES,
               showExpand ? 'end-7' : 'end-1',
               focusRing,
@@ -477,6 +484,8 @@ const ComboboxRoot = (props: ComboboxProps) => {
             listboxId={listbox.listboxId}
             disabled={disabled || !!readOnly}
             onToggle={handleExpandClick}
+            className={comboboxClassNames.expandButton}
+            iconClassName={comboboxClassNames.expandIcon}
           />
         )}
       </div>
@@ -492,9 +501,17 @@ const ComboboxRoot = (props: ComboboxProps) => {
         floatingProps={floatingProps}
         open={open}
         expanded={expanded}
+        listboxClassName={comboboxClassNames.listbox}
+        surfaceClassName={comboboxClassNames.surface}
         emptyContent={
           draft ? (
-            <div aria-hidden="true" className="px-3 py-1.5 text-body-1 text-muted-foreground">
+            <div
+              aria-hidden="true"
+              className={cn(
+                comboboxClassNames.emptyMessage,
+                'px-3 py-1.5 text-body-1 text-muted-foreground',
+              )}
+            >
               {noMatchesText}
             </div>
           ) : undefined

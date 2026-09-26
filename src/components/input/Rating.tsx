@@ -1,4 +1,5 @@
 import * as React from 'react';
+import { ratingClassNames, ratingDisplayClassNames } from '../../lib/classNames';
 import { cn } from '../../lib/cn';
 import { composeEventHandlers } from '../../lib/composeEventHandlers';
 import { warnDeprecated, warnOnce } from '../../lib/dev';
@@ -287,6 +288,7 @@ export const Rating = ({
       {...fieldProps}
       aria-disabled={disabled || undefined}
       className={cn(
+        ratingClassNames.root,
         'relative inline-flex items-center gap-0.5',
         disabled && 'pointer-events-none opacity-50',
         className,
@@ -317,6 +319,7 @@ export const Rating = ({
             tabIndex={disabled ? -1 : getTabIndex(key)}
             disabled={disabled}
             className={cn(
+              ratingClassNames.star,
               'inline-flex cursor-pointer rounded border-0 bg-transparent transition-colors motion-reduce:transition-none disabled:cursor-not-allowed',
               targetPaddingMap[size],
               focusRing,
@@ -330,7 +333,7 @@ export const Rating = ({
               if (!disabled) setHovered(starValue);
             }}
           >
-            <Star filled={filled} className={starSize} />
+            <Star filled={filled} className={cn(ratingClassNames.icon, starSize)} />
           </button>
         );
       })}
@@ -429,12 +432,12 @@ export const RatingDisplay = ({
       role="img"
       aria-label={name}
       data-compact={compact ? '' : undefined}
-      className={cn('inline-flex items-center gap-0.5', className)}
+      className={cn(ratingDisplayClassNames.root, 'inline-flex items-center gap-0.5', className)}
       {...rest}
     >
       {compact ? (
-        <span className="inline-flex text-rating">
-          <Star filled className={starSize} />
+        <span className={cn(ratingDisplayClassNames.star, 'inline-flex text-rating')}>
+          <Star filled className={cn(ratingDisplayClassNames.icon, starSize)} />
         </span>
       ) : (
         Array.from({ length: max }, (_, i) => {
@@ -444,13 +447,19 @@ export const RatingDisplay = ({
             // The outline of an empty star, with the filled star clipped to the fraction over it
             // from the inline start (the reading direction of the stars, also under RTL).
             return (
-              <span key={i} className="relative inline-flex text-stroke-accessible">
-                <Star filled={false} className={starSize} />
+              <span
+                key={i}
+                className={cn(
+                  ratingDisplayClassNames.star,
+                  'relative inline-flex text-stroke-accessible',
+                )}
+              >
+                <Star filled={false} className={cn(ratingDisplayClassNames.icon, starSize)} />
                 <span
                   className="absolute inset-y-0 start-0 flex overflow-hidden text-rating"
                   style={{ width: `${percent}%` }}
                 >
-                  <Star filled className={cn(starSize, 'shrink-0')} />
+                  <Star filled className={cn(ratingDisplayClassNames.icon, starSize, 'shrink-0')} />
                 </span>
               </span>
             );
@@ -459,18 +468,32 @@ export const RatingDisplay = ({
           return (
             <span
               key={i}
-              className={cn('inline-flex', filled ? 'text-rating' : 'text-stroke-accessible')}
+              className={cn(
+                ratingDisplayClassNames.star,
+                'inline-flex',
+                filled ? 'text-rating' : 'text-stroke-accessible',
+              )}
             >
-              <Star filled={filled} className={starSize} />
+              <Star filled={filled} className={cn(ratingDisplayClassNames.icon, starSize)} />
             </span>
           );
         })
       )}
       {showText && (
-        <span className={cn('ms-1 font-semibold text-foreground', textSize)}>{formattedValue}</span>
+        <span
+          className={cn(
+            ratingDisplayClassNames.value,
+            'ms-1 font-semibold text-foreground',
+            textSize,
+          )}
+        >
+          {formattedValue}
+        </span>
       )}
       {formattedCount !== undefined && (
-        <span className={cn('ms-1 text-muted-foreground', textSize)}>({formattedCount})</span>
+        <span className={cn(ratingDisplayClassNames.count, 'ms-1 text-muted-foreground', textSize)}>
+          ({formattedCount})
+        </span>
       )}
     </div>
   );

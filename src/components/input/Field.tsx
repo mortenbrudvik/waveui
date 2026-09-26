@@ -1,6 +1,7 @@
 import * as React from 'react';
 import { cn } from '../../lib/cn';
 import { joinIds } from '../../lib/aria';
+import { fieldClassNames } from '../../lib/classNames';
 import { warnOnce } from '../../lib/dev';
 import { ErrorIcon, SuccessIcon, WarningIcon, type IconComponent } from '../../lib/icons';
 import { materialiseSlotContent, renderSlot, slotRendersContent, type Slot } from '../../lib/slot';
@@ -341,12 +342,17 @@ const MESSAGE_ICON_CLASSES = 'mt-0.5 inline-flex shrink-0';
 function renderMessageIcon(state: ValidationState, icon: Slot<'span'> | undefined) {
   if (icon !== undefined) {
     return slotRendersContent(icon)
-      ? renderSlot(icon, 'span', MESSAGE_ICON_CLASSES, { 'aria-hidden': true })
+      ? renderSlot(icon, 'span', cn(fieldClassNames.validationMessageIcon, MESSAGE_ICON_CLASSES), {
+          'aria-hidden': true,
+        })
       : null;
   }
   const Icon = MESSAGE_ICONS[state];
   return Icon ? (
-    <span aria-hidden="true" className={MESSAGE_ICON_CLASSES}>
+    <span
+      aria-hidden="true"
+      className={cn(fieldClassNames.validationMessageIcon, MESSAGE_ICON_CLASSES)}
+    >
       <Icon size={12} />
     </span>
   ) : null;
@@ -551,14 +557,22 @@ export const Field = ({
           id={messageId}
           role={state === 'error' || state === 'warning' ? 'alert' : undefined}
           data-validation-state={state}
-          className={cn('mt-1 flex items-start gap-1 text-caption-1', MESSAGE_COLORS[state])}
+          className={cn(
+            fieldClassNames.validationMessage,
+            'mt-1 flex items-start gap-1 text-caption-1',
+            MESSAGE_COLORS[state],
+          )}
         >
           {renderMessageIcon(state, validationMessageIcon)}
           <span>{materialiseSlotContent(message)}</span>
         </p>
       ) : null}
       {hasHint ? (
-        <p key="hint" id={hintId} className="mt-1 text-caption-1 text-muted-foreground">
+        <p
+          key="hint"
+          id={hintId}
+          className={cn(fieldClassNames.hint, 'mt-1 text-caption-1 text-muted-foreground')}
+        >
           {materialiseSlotContent(hint)}
         </p>
       ) : null}
@@ -570,7 +584,12 @@ export const Field = ({
       ref={ref}
       data-orientation={orientation}
       data-validation-state={state}
-      className={cn('flex', horizontal ? 'flex-row items-start gap-x-3' : 'flex-col', className)}
+      className={cn(
+        fieldClassNames.root,
+        'flex',
+        horizontal ? 'flex-row items-start gap-x-3' : 'flex-col',
+        className,
+      )}
       {...rest}
     >
       {hasLabel ? (
@@ -578,6 +597,7 @@ export const Field = ({
           id={labelId}
           htmlFor={controlId}
           className={cn(
+            fieldClassNames.label,
             'mb-1 text-body-1 font-semibold text-foreground',
             // Beside the control: a third of the width, its first line centred on a 32px row.
             horizontal && 'mb-0 shrink-0 basis-1/3 pt-1.5',
@@ -585,7 +605,7 @@ export const Field = ({
         >
           {materialiseSlotContent(label)}
           {required && (
-            <span aria-hidden="true" className="ms-0.5 text-error">
+            <span aria-hidden="true" className={cn(fieldClassNames.required, 'ms-0.5 text-error')}>
               *
             </span>
           )}

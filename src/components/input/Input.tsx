@@ -1,6 +1,7 @@
 import * as React from 'react';
 import { cn } from '../../lib/cn';
 import { joinIds } from '../../lib/aria';
+import { inputClassNames } from '../../lib/classNames';
 import { renderSlot, slotRendersContent } from '../../lib/slot';
 import { inputFocus, inputFocusWithin, inputInvalid, inputInvalidWithin } from '../../lib/styles';
 import type { Slot } from '../../lib/types';
@@ -48,12 +49,16 @@ function isAriaValid(ariaInvalid: React.AriaAttributes['aria-invalid']): boolean
  * marked invalid and no message is rendered or referenced (ARIA: an error message of a valid
  * control is hidden).
  *
+ * `partClassName` is the host's stable `errorMessage` class, first in the message's classes
+ * (Input, Select and Textarea each pass their own).
+ *
  * @internal Not exported from the package.
  */
 export function useControlErrorMessage(
   error: string | boolean | undefined,
   errorMessageProps: InputErrorMessageProps | undefined,
   consumerAriaInvalid?: React.AriaAttributes['aria-invalid'],
+  partClassName?: string,
 ): ControlErrorMessage {
   const field = useFieldContext();
   const generatedId = useId('error');
@@ -70,7 +75,7 @@ export function useControlErrorMessage(
       role="alert"
       {...messageRest}
       id={messageId}
-      className={cn('mt-1 block text-caption-1 text-error', messageClassName)}
+      className={cn(partClassName, 'mt-1 block text-caption-1 text-error', messageClassName)}
     >
       {error}
     </span>
@@ -170,6 +175,7 @@ export const Input = ({
     error,
     errorMessageProps,
     ariaInvalid,
+    inputClassNames.errorMessage,
   );
   const fieldProps = useFieldControl(
     {
@@ -213,6 +219,7 @@ export const Input = ({
         hidden={hidden}
         style={style}
         className={cn(
+          inputClassNames.root,
           'inline-flex h-8 w-full items-center rounded border border-input border-b-stroke-accessible bg-background text-body-1 text-foreground',
           inputFocusWithin,
           invalidLook && inputInvalidWithin,
@@ -222,10 +229,12 @@ export const Input = ({
           className,
         )}
       >
-        {hasBefore && renderSlot(contentBefore, 'span', 'shrink-0 ps-2')}
+        {hasBefore &&
+          renderSlot(contentBefore, 'span', cn(inputClassNames.contentBefore, 'shrink-0 ps-2'))}
         <input
           ref={ref}
           className={cn(
+            inputClassNames.input,
             'h-full w-full min-w-0 bg-transparent px-2 text-body-1 text-foreground',
             'placeholder:text-muted-foreground',
             'focus:outline-hidden',
@@ -233,7 +242,8 @@ export const Input = ({
           )}
           {...inputProps}
         />
-        {hasAfter && renderSlot(contentAfter, 'span', 'shrink-0 pe-2')}
+        {hasAfter &&
+          renderSlot(contentAfter, 'span', cn(inputClassNames.contentAfter, 'shrink-0 pe-2'))}
       </span>
     );
   } else {
@@ -241,6 +251,8 @@ export const Input = ({
       <input
         ref={ref}
         className={cn(
+          inputClassNames.root,
+          inputClassNames.input,
           'h-8 w-full rounded border border-input border-b-stroke-accessible bg-background px-3 text-body-1 text-foreground',
           'placeholder:text-muted-foreground',
           inputFocus,
