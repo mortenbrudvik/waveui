@@ -8,8 +8,10 @@
  *     formats) starts with `"use client"`; no other file does — not `dist/lib/cn.*`, not
  *     `dist/index.*`, not any `index.*` barrel, not the bundler runtime (repo-level#2);
  *   - declarations: `dist/index.d.ts` and its `dist/index.d.cts` copy for the `require`
- *     condition (repo-level#5); every component it exports carries a JSDoc (C-DOCS: a compound
- *     is documented on its `Object.assign` export, which is what the roll-up keeps);
+ *     condition (repo-level#5); each declares and exports the public names on
+ *     {@link REQUIRED_DECLARATIONS}, so an empty roll-up (only `export { }`) fails the build;
+ *     every component it exports carries a JSDoc (C-DOCS: a compound is documented on its
+ *     `Object.assign` export, which is what the roll-up keeps);
  *   - development mode: `dist/lib/dev.mjs` and `dist/lib/dev.cjs` still read
  *     `process.env.NODE_ENV` at run time, so a consumer's bundler decides between development and
  *     production (a `define` in vite.config.ts would inline the library's own build mode);
@@ -305,13 +307,22 @@ export function checkDirectives(dist) {
 const COMPONENT_NAME = /^[A-Z](?=[A-Za-z0-9]*[a-z])[A-Za-z0-9]*$/;
 
 /**
- * The components a rolled-up declaration file (`dist/index.d.ts`) exports without a JSDoc, in
- * declaration order (C-DOCS). A component is an exported value (`declare
- * const` or `declare function`) with a PascalCase name, exported directly or renamed by the roll-up
- * (`declare const Image_2` + `export { Image_2 as Image }`). Its JSDoc is the `/** … *\/` block
- * right before its first declaration (for overloads, the first signature).
+ * Public names that `dist/index.d.ts` and `dist/index.d.cts` must declare and export: a utility,
+ * a component, a props type, a compound and a hook. The build passes with an empty roll-up:
+ * vite-plugin-dts 4 rolls up only `export { }` when TypeScript writes the declarations somewhere
+ * else than it expects (TypeScript 6 without `rootDir` in tsconfig.json). Without this list, only
+ * `npm run test:pack`, which type-checks the packed tarball, would notice.
  */
-export function undocumentedComponents(dts) {
+export const REQUIRED_DECLARATIONS = ['cn', 'Button', 'ButtonProps', 'Menu', 'usePresence'];
+
+/**
+ * The top-level declarations of a rolled-up declaration file: the first declaration of every
+ * value (`declare const`, `declare function`) and of every type (`interface`, `type`, `class`,
+ * `enum`); the names exported by a value declaration or an export list (exported name → local
+ * name; the roll-up renames some: `declare const Image_2` + `export { Image_2 as Image }`); and
+ * the names exported by a type declaration.
+ */
+function indexDeclarations(dts) {
   const ts = require('typescript');
   const file = ts.createSourceFile(
     'index.d.ts',
@@ -324,10 +335,6 @@ export function undocumentedComponents(dts) {
     (ts.canHaveModifiers(statement) ? (ts.getModifiers(statement) ?? []) : []).some(
       (modifier) => modifier.kind === ts.SyntaxKind.ExportKeyword,
     );
-  const hasJsDoc = (statement) =>
-    (ts.getLeadingCommentRanges(dts, statement.getFullStart()) ?? []).some((range) =>
-      /^\/\*\*\s/.test(dts.slice(range.pos, range.end)),
-    );
   const valueNames = (statement) => {
     if (ts.isVariableStatement(statement)) {
       return statement.declarationList.declarations
@@ -336,14 +343,28 @@ export function undocumentedComponents(dts) {
     }
     return ts.isFunctionDeclaration(statement) && statement.name ? [statement.name.text] : [];
   };
+  const typeName = (statement) =>
+    (ts.isInterfaceDeclaration(statement) ||
+      ts.isTypeAliasDeclaration(statement) ||
+      ts.isClassDeclaration(statement) ||
+      ts.isEnumDeclaration(statement)) &&
+    statement.name
+      ? statement.name.text
+      : undefined;
 
-  // The first declaration of every value, and the exported names (exported name → local name).
-  const declarations = new Map();
+  const values = new Map();
+  const types = new Map();
   const exported = new Map();
+  const exportedTypes = new Set();
   for (const statement of file.statements) {
     for (const name of valueNames(statement)) {
-      if (!declarations.has(name)) declarations.set(name, statement);
+      if (!values.has(name)) values.set(name, statement);
       if (isExported(statement)) exported.set(name, name);
+    }
+    const type = typeName(statement);
+    if (type !== undefined) {
+      if (!types.has(type)) types.set(type, statement);
+      if (isExported(statement)) exportedTypes.add(type);
     }
     if (
       ts.isExportDeclaration(statement) &&
@@ -356,19 +377,51 @@ export function undocumentedComponents(dts) {
       }
     }
   }
+  return { values, types, exported, exportedTypes };
+}
+
+/**
+ * The components a rolled-up declaration file (`dist/index.d.ts`) exports without a JSDoc, in
+ * declaration order (C-DOCS). A component is an exported value (`declare
+ * const` or `declare function`) with a PascalCase name, exported directly or renamed by the roll-up
+ * (`declare const Image_2` + `export { Image_2 as Image }`). Its JSDoc is the `/** … *\/` block
+ * right before its first declaration (for overloads, the first signature).
+ */
+export function undocumentedComponents(dts) {
+  const ts = require('typescript');
+  const hasJsDoc = (statement) =>
+    (ts.getLeadingCommentRanges(dts, statement.getFullStart()) ?? []).some((range) =>
+      /^\/\*\*\s/.test(dts.slice(range.pos, range.end)),
+    );
+  const { values, exported } = indexDeclarations(dts);
   return [...exported]
-    .filter(([name, local]) => COMPONENT_NAME.test(name) && declarations.has(local))
-    .map(([name, local]) => ({ name, statement: declarations.get(local) }))
+    .filter(([name, local]) => COMPONENT_NAME.test(name) && values.has(local))
+    .map(([name, local]) => ({ name, statement: values.get(local) }))
     .filter(({ statement }) => !hasJsDoc(statement))
     .sort((a, b) => a.statement.pos - b.statement.pos)
     .map(({ name }) => name);
 }
 
 /**
- * `index.d.ts` and its `index.d.cts` copy for the `require` condition (repo-level#5); every
- * component the declarations export has a JSDoc (C-DOCS).
+ * The names of `names` that a rolled-up declaration file does not both declare and export, in
+ * the order given. A name counts when a declaration of that name (a value or a type) is exported,
+ * or when an export list exports a declaration of the file under it (`export { Image_2 as Image }`).
  */
-export function checkDeclarations(dist) {
+export function missingDeclarations(dts, names) {
+  const { values, types, exported, exportedTypes } = indexDeclarations(dts);
+  return names.filter((name) => {
+    if (exportedTypes.has(name)) return false;
+    const local = exported.get(name);
+    return local === undefined || !(values.has(local) || types.has(local));
+  });
+}
+
+/**
+ * `index.d.ts` and its `index.d.cts` copy for the `require` condition (repo-level#5); each
+ * declares and exports `requiredDeclarations` (default {@link REQUIRED_DECLARATIONS}), so an empty
+ * or partial roll-up fails; every component the declarations export has a JSDoc (C-DOCS).
+ */
+export function checkDeclarations(dist, { requiredDeclarations = REQUIRED_DECLARATIONS } = {}) {
   const errors = [];
   const dts = join(dist, 'index.d.ts');
   const dcts = join(dist, 'index.d.cts');
@@ -380,6 +433,20 @@ export function checkDeclarations(dist) {
     errors.push('index.d.cts is missing (CommonJS consumers would get ESM-typed declarations)');
   } else if (esm !== undefined && cjs !== esm) {
     errors.push('index.d.cts differs from index.d.ts (it must be a copy of the rolled-up file)');
+  }
+  for (const [name, text] of [
+    ['index.d.ts', esm],
+    ['index.d.cts', cjs],
+  ]) {
+    // Reported above: a missing file, an empty index.d.ts, an index.d.cts that is not its copy.
+    if (text === undefined || text.trim() === '') continue;
+    const missing = missingDeclarations(text, requiredDeclarations);
+    if (missing.length > 0) {
+      errors.push(
+        `${name} does not declare and export ${missing.join(', ')} (an empty or partial ` +
+          "roll-up: check tsconfig.json's rootDir and the declaration plugin in vite.config.ts)",
+      );
+    }
   }
   for (const name of esm ? undocumentedComponents(esm) : []) {
     errors.push(

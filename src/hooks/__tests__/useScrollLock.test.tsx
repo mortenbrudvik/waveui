@@ -22,7 +22,10 @@ const body = document.body;
 
 let restoreCss: (() => void) | null = null;
 
-/** Makes `CSS.supports('scrollbar-gutter', 'stable')` answer `supported` (jsdom has no `CSS`). */
+/**
+ * Makes `CSS.supports('scrollbar-gutter', 'stable')` answer `supported`, whatever the environment
+ * says (jsdom 30 answers `true`; jsdom before 30 has no `CSS`).
+ */
 function mockGutterSupport(supported: boolean) {
   const previous = Object.getOwnPropertyDescriptor(globalThis, 'CSS');
   Object.defineProperty(globalThis, 'CSS', {

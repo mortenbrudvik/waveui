@@ -663,6 +663,8 @@ import { cn } from '@mortenbrudvik/waveui';
 cn('px-4 py-2', true && 'px-6 py-3', 'px-8'); // 'py-3 px-8': the last conflicting class wins
 cn('text-body-1 text-foreground', 'text-primary'); // 'text-body-1 text-primary': size kept, color replaced
 cn('shadow-4', 'shadow-lg'); // 'shadow-lg'
+cn('pe-8', 'px-6'); // 'px-6': a later axis shorthand replaces the logical sides it covers
+cn('px-6', 'pe-8'); // 'px-6 pe-8': a later side stays, and wins in the CSS
 ```
 
 Components always pass the consumer's `className` last, so a user class **replaces a conflicting class of the same variant**: `bg-error` replaces a resting `bg-primary`. A class behind a different variant is not a conflict, and both stay:

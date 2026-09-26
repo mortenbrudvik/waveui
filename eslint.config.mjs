@@ -1,3 +1,4 @@
+import { defineConfig } from 'eslint/config';
 import js from '@eslint/js';
 import tseslint from 'typescript-eslint';
 import reactHooks from 'eslint-plugin-react-hooks';
@@ -6,10 +7,10 @@ import prettier from 'eslint-config-prettier';
 /**
  * Node.js globals for the plain JavaScript build, verification and pack scripts (and fixtures) in
  * `scripts/`. The `globals` package is not a dependency (spec §3.4), so this is the list of
- * non-ECMAScript globals that Node 20 — the `engines` floor (>=20.19) — defines. ECMAScript
- * built-ins come from `ecmaVersion`. Globals that only newer Node versions define (`navigator`,
- * `WebSocket`) are deliberately absent, so a script that relies on them fails lint instead of
- * failing at runtime on Node 20.
+ * non-ECMAScript globals that Node 22 — the `engines` floor (>=22.12) — defines. ECMAScript
+ * built-ins come from `ecmaVersion`. Globals that only newer Node versions define (`CloseEvent`,
+ * `URLPattern`) are deliberately absent, so a script that relies on them fails lint instead of
+ * failing at runtime on Node 22.
  */
 const nodeGlobals = Object.fromEntries(
   [
@@ -34,6 +35,7 @@ const nodeGlobals = Object.fromEntries(
     'MessageChannel',
     'MessageEvent',
     'MessagePort',
+    'Navigator',
     'Performance',
     'PerformanceEntry',
     'PerformanceMark',
@@ -59,6 +61,7 @@ const nodeGlobals = Object.fromEntries(
     'URL',
     'URLSearchParams',
     'WebAssembly',
+    'WebSocket',
     'WritableStream',
     'WritableStreamDefaultController',
     'WritableStreamDefaultWriter',
@@ -71,6 +74,7 @@ const nodeGlobals = Object.fromEntries(
     'crypto',
     'fetch',
     'global',
+    'navigator',
     'performance',
     'process',
     'queueMicrotask',
@@ -90,12 +94,12 @@ const commonJsGlobals = {
   require: 'readonly',
 };
 
-export default tseslint.config(
+export default defineConfig(
   {
     ignores: ['dist/', 'node_modules/', 'coverage/', 'storybook-static/', '*.config.*'],
   },
   js.configs.recommended,
-  ...tseslint.configs.recommended,
+  tseslint.configs.recommended,
   {
     plugins: { 'react-hooks': reactHooks },
     rules: {
@@ -109,13 +113,6 @@ export default tseslint.config(
         'warn',
         { argsIgnorePattern: '^_', ignoreRestSiblings: true },
       ],
-    },
-  },
-  {
-    // Declaration files mirror third-party typings (e.g. Vitest's `Assertion<T = any>`).
-    files: ['**/*.d.ts'],
-    rules: {
-      '@typescript-eslint/no-explicit-any': 'off',
     },
   },
   {

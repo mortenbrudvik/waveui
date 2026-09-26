@@ -14,7 +14,7 @@ A React component library inspired by the Fluent UI 2 design language: 65 access
 - React 19 (`react` and `react-dom` `^19.0.0`)
 - Tailwind CSS `^4.1.0` only if you use the [Tailwind path](#tailwind-css-4); the precompiled stylesheet needs no Tailwind
 - Browsers: Chrome/Edge 111+, Safari 16.4+, Firefox 128+ (the CSS uses `@property`, `color-mix()`, `:where()` and `:has()`)
-- Node.js 20.19+ (`engines`)
+- Node.js 22.12+ (`engines`)
 
 ## Installation
 
@@ -1243,7 +1243,7 @@ Typeahead (Menu, selectable List, Tree, Dropdown) accepts characters typed with 
 
 ## Upgrading from 0.6
 
-0.7 removes nothing public; these changes can still affect tests and styles:
+0.7 removes nothing public; these changes can still affect your setup, tests and styles:
 
 1. Menu surfaces render `data-presence` next to `data-state`, and stay mounted (`data-state="closed"`, `inert`) while an exit motion of yours runs; without exit classes a menu still unmounts at once.
 2. Menu items render a hidden placeholder before the label for each column they do not fill (the check column, the icon column), and a menu that mixes items with and without icons now lines the labels up.
@@ -1252,6 +1252,8 @@ Typeahead (Menu, selectable List, Tree, Dropdown) accepts characters typed with 
 5. Tooltip `delay` is deprecated: rename it to `openDelay` (it still works and warns once in development).
 6. `Menu.Item` `persistOnClick` defaults to the Menu's new `persistOnItemClick` (`false`): no change unless you set it.
 7. While focus is in a menu, the item under the mouse takes focus: a test that hovers an item and then presses Enter activates the hovered item.
+8. Wave now requires tailwind-merge 3.7, so an axis shorthand in your `className` (`px-6`) replaces a component's own logical side class of the same variant (`pe-8` on `Dialog.Title`) instead of losing to it in the CSS: write `px-6 pe-8` to keep the side.
+9. Wave requires Node.js 22.12 or later (`engines`; Node.js 20 reached its end of life on 2026-04-30). npm and pnpm warn on an older Node.js (npm stops with `engine-strict`), and Yarn 1 refuses to install.
 
 The CHANGELOG's [0.7.0 "Changed" section](CHANGELOG.md#changed) lists every behaviour, DOM and type change.
 
@@ -1281,6 +1283,8 @@ The CHANGELOG's [0.6.0 "Changed" section](CHANGELOG.md#changed-1) lists every be
 The [CHANGELOG](CHANGELOG.md) lists every change, including behaviour and DOM changes that can affect tests and styles.
 
 ## Development
+
+Working on Wave needs Node.js 22.22.2+, 24.15+ or 26+ (not 25) and npm 11.11 or later (`devEngines` in `package.json`). npm stops on other Node.js versions, which the development dependencies do not support, and warns about an older npm, which drops the `libc` fields from `package-lock.json`. `allowScripts` in `package.json` denies the install scripts of esbuild and @parcel/watcher: their prebuilt binaries come from optional dependencies. npm 12 blocks every other dependency install script until it is approved; `npm install-scripts ls` lists them.
 
 ```bash
 npm install

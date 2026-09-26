@@ -234,9 +234,9 @@ function getFocusables(cell: HTMLElement): HTMLElement[] {
 
 /*
  * The helpers below walk element children with `firstElementChild`/`nextElementSibling`, never
- * through a `children` collection: jsdom does not cache indexed `HTMLCollection` access, so
- * `Array.from(root.children)` or an indexed loop over a large list is O(n²) in consumers' test
- * suites (table-core#22).
+ * through a `children` collection: jsdom before 30.1 does not cache indexed `HTMLCollection`
+ * access, so `Array.from(root.children)` or an indexed loop over a large list is O(n²) in the test
+ * suites of consumers on those versions (table-core#22).
  */
 
 /** Position of an item element among its list's items (the root's element children). */

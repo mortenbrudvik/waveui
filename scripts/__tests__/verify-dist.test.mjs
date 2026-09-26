@@ -40,11 +40,13 @@ import {
   importSpecifiers,
   isMainModule,
   main,
+  missingDeclarations,
   PENDING_FLAT_EXPORTS,
   probeIncludes,
   probeSizeBudget,
   probeTreeShaking,
   removeWorkDir,
+  REQUIRED_DECLARATIONS,
   runScript,
   undocumentedComponents,
   verifyDist,
@@ -60,6 +62,22 @@ const fixtureRoot = fixtureRun.work;
 afterAll(() => removeWorkDir(fixtureRun));
 
 const DIRECTIVE = '"use client";\n';
+
+/**
+ * The fixture's rolled-up declarations: every name on REQUIRED_DECLARATIONS (a utility, a
+ * documented component, a props type, a documented compound and a hook), and the empty export
+ * list that ends every roll-up.
+ */
+const DTS =
+  'export declare function cn(...inputs: unknown[]): string;\n' +
+  '/** A button. */\nexport declare const Button: (props: object) => null;\n' +
+  'export declare type ButtonProps = { disabled?: boolean };\n' +
+  '/** A menu. */\nexport declare const Menu: (props: object) => null;\n' +
+  'export declare function usePresence(visible: boolean): { isMounted: boolean };\n' +
+  '\nexport { }\n';
+
+/** What vite-plugin-dts rolls up when TypeScript writes the declarations elsewhere. */
+const EMPTY_ROLL_UP = 'export { }\n';
 
 /** A correct preserveModules dist: Button, a Card and a Dialog compound, a hook and `cn`. */
 function goodFiles() {
@@ -125,9 +143,6 @@ function goodFiles() {
       "function Menu(props) { const { isMounted, phase } = hook.usePresence(props.open); return isMounted ? jsxRuntime.jsx('div', { role: 'menu', 'data-presence': phase, children: props.children }) : null; }\n" +
       "Menu.displayName = 'Menu';\nexports.Menu = Menu;\n",
   };
-  const dts =
-    'export declare function cn(...inputs: unknown[]): string;\n' +
-    '/** A button. */\nexport declare const Button: (props: object) => null;\n';
   // src/lib/dev.ts reads the bundler-injected mode at call time.
   const dev = (exportSyntax) =>
     `function isDevEnvironment() {\n  try {\n    return process.env.NODE_ENV !== "production";\n  } catch {\n    return true;\n  }\n}\n${exportSyntax}`;
@@ -184,8 +199,8 @@ function goodFiles() {
       'exports.DialogContent = dialog.DialogContent;\n' +
       'exports.usePresence = presenceHook.usePresence;\nexports.Presence = presence.Presence;\n' +
       'exports.Menu = menu.Menu;\n',
-    'dist/index.d.ts': dts,
-    'dist/index.d.cts': dts,
+    'dist/index.d.ts': DTS,
+    'dist/index.d.cts': DTS,
   };
 }
 
@@ -352,17 +367,100 @@ describe('checkDeclarations (repo-level#5)', () => {
 
   it('reports an index.d.cts that is not a copy of index.d.ts', () => {
     expect(
-      checkDeclarations(fixture({ 'dist/index.d.cts': 'export declare const x: 1;\n' }).dist),
+      checkDeclarations(fixture({ 'dist/index.d.cts': `${DTS}export declare const x: 1;\n` }).dist),
     ).toEqual([expect.stringMatching(/index\.d\.cts differs/)]);
   });
 
   it('reports an exported component without a JSDoc (C-DOCS)', () => {
-    const dts = 'export declare const Card: () => null;\n';
+    const dts = `${DTS}export declare const Card: () => null;\n`;
     expect(
       checkDeclarations(fixture({ 'dist/index.d.ts': dts, 'dist/index.d.cts': dts }).dist),
     ).toEqual([
       'index.d.ts: the exported component Card has no JSDoc (document it on its export, C-DOCS)',
     ]);
+  });
+
+  it('finds every name on REQUIRED_DECLARATIONS in the fixture (extend DTS with the list)', () => {
+    expect(REQUIRED_DECLARATIONS.length).toBeGreaterThan(0);
+    expect(missingDeclarations(DTS, REQUIRED_DECLARATIONS)).toEqual([]);
+  });
+
+  it('reports an empty roll-up (only `export { }`) in both files', () => {
+    const { dist } = fixture({
+      'dist/index.d.ts': EMPTY_ROLL_UP,
+      'dist/index.d.cts': EMPTY_ROLL_UP,
+    });
+    expect(checkDeclarations(dist)).toEqual([
+      "index.d.ts does not declare and export cn, Button, ButtonProps, Menu, usePresence (an empty or partial roll-up: check tsconfig.json's rootDir and the declaration plugin in vite.config.ts)",
+      "index.d.cts does not declare and export cn, Button, ButtonProps, Menu, usePresence (an empty or partial roll-up: check tsconfig.json's rootDir and the declaration plugin in vite.config.ts)",
+    ]);
+  });
+
+  it('names each required name a partial roll-up leaves out', () => {
+    const dts = DTS.replace('export declare type ButtonProps', 'declare type ButtonProps').replace(
+      '/** A menu. */\nexport declare const Menu',
+      '/** A menu. */\ndeclare const Menu',
+    );
+    expect(
+      checkDeclarations(fixture({ 'dist/index.d.ts': dts, 'dist/index.d.cts': dts }).dist),
+    ).toEqual([
+      expect.stringMatching(/^index\.d\.ts does not declare and export ButtonProps, Menu \(/),
+      expect.stringMatching(/^index\.d\.cts does not declare and export ButtonProps, Menu \(/),
+    ]);
+  });
+
+  it('checks index.d.cts on its own', () => {
+    expect(checkDeclarations(fixture({ 'dist/index.d.cts': EMPTY_ROLL_UP }).dist)).toEqual([
+      expect.stringMatching(/index\.d\.cts differs/),
+      expect.stringMatching(
+        /^index\.d\.cts does not declare and export cn, Button, ButtonProps, Menu, usePresence \(/,
+      ),
+    ]);
+  });
+
+  it('takes the required names as an option', () => {
+    expect(checkDeclarations(fixture().dist, { requiredDeclarations: ['cn', 'Card'] })).toEqual([
+      expect.stringMatching(/^index\.d\.ts does not declare and export Card \(/),
+      expect.stringMatching(/^index\.d\.cts does not declare and export Card \(/),
+    ]);
+    const empty = fixture({ 'dist/index.d.ts': EMPTY_ROLL_UP, 'dist/index.d.cts': EMPTY_ROLL_UP });
+    expect(checkDeclarations(empty.dist, { requiredDeclarations: [] })).toEqual([]);
+  });
+});
+
+describe('missingDeclarations', () => {
+  it('accepts exported values and types, also when an export list renames them', () => {
+    const dts = [
+      'export declare function cn(...inputs: unknown[]): string;',
+      '/** A compound. */',
+      'export declare const Card: { (props: CardProps): JSX.Element; Header: typeof CardHeader };',
+      'export declare interface CardProps { title?: string }',
+      "export declare type Size = 'small' | 'large';",
+      'export declare enum Level { Low, High }',
+      'export declare class Store {}',
+      'declare const Image_2: () => null;',
+      'declare interface Option_2 { value: string }',
+      'export { Image_2 as Image }',
+      'export { Option_2 as Option }',
+      'export { }',
+    ].join('\n');
+    const names = ['cn', 'Card', 'CardProps', 'Size', 'Level', 'Store', 'Image', 'Option'];
+    expect(missingDeclarations(dts, names)).toEqual([]);
+  });
+
+  it('names, in the given order, what is absent, local or exported without a declaration', () => {
+    const dts = [
+      'declare const Button: () => null;',
+      'declare interface ButtonProps { disabled?: boolean }',
+      'export { Ghost }',
+      'export { Phantom_2 as Phantom }',
+      'export { }',
+    ].join('\n');
+    expect(
+      missingDeclarations(dts, ['usePresence', 'Button', 'ButtonProps', 'Ghost', 'Phantom']),
+    ).toEqual(['usePresence', 'Button', 'ButtonProps', 'Ghost', 'Phantom']);
+    expect(missingDeclarations('export { }\n', ['cn'])).toEqual(['cn']);
+    expect(missingDeclarations('export { }\n', [])).toEqual([]);
   });
 });
 
@@ -1014,6 +1112,19 @@ describe('verifyDist and main', () => {
         'lib/dev.cjs is missing',
       ]),
     );
+  });
+
+  it('fails a dist whose JavaScript is correct but whose declarations rolled up empty', async () => {
+    // TypeScript 6 without tsconfig.json's rootDir: the build passes, index.d.ts is `export { }`.
+    const { dist } = fixture({
+      'dist/index.d.ts': EMPTY_ROLL_UP,
+      'dist/index.d.cts': EMPTY_ROLL_UP,
+    });
+    const { errors } = await verifyDist(dist, noPending);
+    expect(errors).toEqual([
+      expect.stringMatching(/^index\.d\.ts does not declare and export cn, Button, /),
+      expect.stringMatching(/^index\.d\.cts does not declare and export cn, Button, /),
+    ]);
   });
 
   it('runs the presence probes: a Button bundle with the presence core fails', async () => {

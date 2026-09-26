@@ -39,7 +39,8 @@
  * nothing.
  *
  * ## Environment provided by `src/test-setup.ts`
- * - jest-dom matchers (`@testing-library/jest-dom/vitest`) and vitest-axe's `toHaveNoViolations`.
+ * - jest-dom matchers (`@testing-library/jest-dom/matchers`) and vitest-axe's `toHaveNoViolations`,
+ *   typed on Vitest's `Matchers<R, T>` by `src/vitest-axe.d.ts`.
  * - `Element.prototype.scrollIntoView` is a `vi.fn()` when jsdom lacks it; its calls are cleared
  *   after every test.
  * - `window.matchMedia` answers `matches: false` for every query when jsdom lacks it (it is the

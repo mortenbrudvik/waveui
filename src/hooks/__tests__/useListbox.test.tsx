@@ -276,8 +276,7 @@ function createReorderableOptions(initial: string[], onOptionRender?: (value: st
  */
 function onItemsPublished(result: UseListboxResult | null, listener: () => void): () => void {
   const store = result?.context.store as unknown as
-    | { subscribeItems?: (listener: () => void) => () => void }
-    | undefined;
+    { subscribeItems?: (listener: () => void) => () => void } | undefined;
   if (typeof store?.subscribeItems !== 'function') throw new Error('no store.subscribeItems');
   return store.subscribeItems(listener);
 }

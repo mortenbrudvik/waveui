@@ -26,10 +26,7 @@ export interface UseFocusTrapOptions {
    * wins). @default 'first' (the first tabbable element, else the container)
    */
   initialFocus?:
-    | React.RefObject<HTMLElement | null>
-    | 'first'
-    | 'container'
-    | (() => HTMLElement | null);
+    React.RefObject<HTMLElement | null> | 'first' | 'container' | (() => HTMLElement | null);
   /** Regions outside the container whose tabbables join the Tab cycle. @default ALLOW_OUTSIDE_SELECTOR */
   allowOutsideSelector?: string;
 }

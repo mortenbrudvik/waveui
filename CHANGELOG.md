@@ -18,6 +18,8 @@ The second Fluent UI v9 parity release: Phase 2 of the [roadmap](docs/ROADMAP.md
 5. **Tooltip `delay`** is deprecated: use `openDelay`. The old prop still works and warns once in development, which a test that spies on `console.warn` sees.
 6. **`Menu.Item` `persistOnClick`** defaults to the Menu's new `persistOnItemClick`, which is `false` unless you set it: 0.6 menus behave as before.
 7. **Focus follows the mouse in menus.** While focus is in a menu (an open popup menu and its submenus, or a static menu the user is in), the enabled item under the mouse pointer takes focus, as in Fluent and native menus. Tests that hover an item and then press Enter or an arrow key act on the hovered item. Keyboard use is unchanged, and hover never takes focus into a menu that focus is not in.
+8. **Class merging (tailwind-merge 3.7).** Wave now requires `tailwind-merge` `^3.7.0`. With it, `cn`, which merges every component's `className`, lets an axis shorthand of yours (`px-*`, `mx-*`, `inset-x-*`, `border-x-*`, and the `y` forms) replace a component's own logical side class of the same variant (`ps`/`pe`, `ms`/`me`, `start`/`end`, `border-s`/`border-e`, and the block sides). 0.6 kept both, and the component's side class won in the CSS. `<Dialog.Title className="px-6">` now drops its `pe-8`, so a long title can run under the Close button: write `px-6 pe-8` to keep the side, or set only the side you mean (`ps-6`). See [Behaviour](#behaviour).
+9. **Node.js 22.12 or later.** `engines.node` is `>=22.12.0` (was `>=20.19.0`): Node.js 20 has been end-of-life since 2026-04-30. On an older Node.js, npm and pnpm only warn (`EBADENGINE`) unless `engine-strict` is set, and Yarn 1 refuses to install. See [Packaging](#packaging).
 
 ### Added
 
@@ -63,6 +65,7 @@ The second Fluent UI v9 parity release: Phase 2 of the [roadmap](docs/ROADMAP.md
 - **`Menu.Item` `persistOnClick`** defaults to the Menu's `persistOnItemClick` (`false` unless set), so 0.6 menus behave as before.
 - **ToggleButton** reports its state for its role, read from the first token of `role`: `aria-pressed` without a `role` or with `role="button"` (as in 0.6); `aria-checked`, and `data-checked` while pressed, with `role` `checkbox`, `radio`, `switch`, `menuitemcheckbox`, `menuitemradio`, `option` or `treeitem` (a consumer `aria-pressed` is dropped); neither with any other role (`tab`, `link`, `menuitem`, …), with a one-time development warning. 0.6 rendered `aria-pressed`, which ARIA allows only on buttons. `onPressedChange` is unchanged.
 - **Tooltip** `delay` warns once in development: it is the deprecated name of `openDelay`.
+- **Class merging**: Wave requires `tailwind-merge` 3.7 (see [Packaging](#packaging)). With it, `cn`, which merges every component's `className`, lets a later axis shorthand replace the logical side classes it covers, of the same variant: `px-*` replaces `ps-*` and `pe-*`, `mx-*` replaces `ms-*` and `me-*`, `inset-x-*` replaces `start-*` and `end-*`, `border-x-*` replaces `border-s-*` and `border-e-*`, and the `y` forms replace the block sides. 0.6 kept both classes, and since Tailwind writes the side utilities after the shorthand, the component's side class won. `<Dialog.Title className="px-6">` had 32px of end padding (its `pe-8`, the room for the Close button) and now has 24px; `className="px-6 pe-8"` keeps the 32px, and `ps-6` changes only the start side. A later side class of yours still stays next to an earlier shorthand (`cn('px-4', 'ps-3')` keeps both), and a class of another variant is kept (`hover:pe-2` stays next to `px-4`). An app that already installed tailwind-merge 3.7 through the earlier `^3.5.0` range has this behaviour already.
 
 #### Visual
 
@@ -86,6 +89,17 @@ The second Fluent UI v9 parity release: Phase 2 of the [roadmap](docs/ROADMAP.md
 - `typeof Toolbar` gains static members (`Toolbar.Button`, …), and `ToolbarOwnProps` gains `size`, `checkedValues`, `defaultCheckedValues` and `onCheckedValuesChange`: a `keyof ToolbarOwnProps` check in your code sees them.
 - `MenuProps`, `MenuPopoverProps`, `PopoverProps`, `TooltipProps` and `ToggleButtonProps` gain the optional props listed under [Added](#added).
 
+#### Packaging
+
+- **Node.js**: `engines.node` `>=20.19.0` → `>=22.12.0`, since Node.js 20 is end-of-life. 22.12 is the first Node.js 22 release that enables `require()` of ES modules by default and marks import attributes stable, and the Node.js 22 floor of Vite 8. The built files use neither: the ESM and CommonJS entries load and render on the server on Node.js 22.12.0.
+- **Runtime dependencies**: `tailwind-merge` `^3.5.0` → `^3.7.0`, which changes how `cn` merges an axis shorthand with the logical sides (see [Behaviour](#behaviour)), and `@floating-ui/react-dom` `^2.1.6` → `^2.1.9`. `clsx` and the peer dependencies are unchanged.
+- **`dist/preflight.css`** is built with Tailwind CSS 4.3: the page font stack (`html`, `:host`) is an explicit platform list (`-apple-system`, `BlinkMacSystemFont`, `Segoe UI`, `Roboto`, `Helvetica Neue`, `Noto Sans`, `Arial`, `sans-serif`, then the emoji fonts) instead of `ui-sans-serif, system-ui, sans-serif`, and Firefox's `:-moz-focusring` outline reset no longer applies to `<iframe>`. Only pages that import it see the change: inside `WaveProvider` the components take their font from the theme.
+- **`dist/styles.css`** is built with Tailwind CSS 4.3: zero-valued spacing custom properties (such as `--tw-translate-x`) are printed as `0px` instead of `calc(.25rem * 0)`, with the same computed values.
+- **Type declarations** write `JSX.Element` return types as `React.JSX.Element`, from a namespace import of `react` (@types/react 19.3); the type is the same.
+- **Build**: TypeScript 6.0, Vite 8.3 and Rolldown 1.2. Internal dist modules, which are not in the exports map, re-export all of their source exports, and the CommonJS files use Node-mode `__toESM` interop; the public ESM and CommonJS exports are unchanged.
+- **Repository settings** in `package.json`, which npm reads only from the project it installs into, so they do not affect an app that installs Wave: `devEngines` (Node.js `^22.22.2 || ^24.15.0 || >=26.0.0` and npm `>=11.11.0` to work on Wave) and `allowScripts` (the install scripts of esbuild and @parcel/watcher are denied).
+- **Development**: the tests run on Vitest 5 (was 4) with @vitest/coverage-v8 5, on jsdom 30 (was 29) and with @testing-library/jest-dom 7 (was 6). jsdom 30 supports Node.js 22.22.2+, 24.15+ and 26+, and Vitest 5 leaves out Node.js 25, which sets the `devEngines` range. TypeScript is held to 6.0.x (`~6.0.3`), since typescript-eslint supports TypeScript below 6.1, and `eslint.config.mjs` uses ESLint's `defineConfig` instead of typescript-eslint's deprecated `config` helper, with the same rules. `verify-dist` also fails when `dist/index.d.ts` or `dist/index.d.cts` does not declare and export `cn`, `Button`, `ButtonProps`, `Menu` and `usePresence`, so a build whose declarations roll up to an empty `export { }` (TypeScript 6 without `rootDir` in `tsconfig.json`) fails `npm run build` instead of only `npm run test:pack`. Nothing in the package changes.
+
 ### Deprecated
 
 - **Tooltip `delay`**: use `openDelay` (the new name wins when both are set). `delay` still works through 0.x and warns once in development; it is removed in 1.0.
@@ -102,7 +116,7 @@ Against 0.6.0, measured the way 0.6 did: `dist/styles.css` as built, and minifie
 
 | Output | 0.6.0 | 0.7.0 |
 |---|---|---|
-| `dist/styles.css` | 53.6 KiB (9.7 KiB gzip) | 56.3 KiB (10.0 KiB gzip) |
+| `dist/styles.css` | 53.6 KiB (9.7 KiB gzip) | 56.2 KiB (10.0 KiB gzip) |
 | An import of only `Button` | 9.8 KiB (3.6 KiB gzip) | 10.9 KiB (3.7 KiB gzip) |
 | An import of only `Menu` | 45.6 KiB (16.1 KiB gzip) | 80.8 KiB (27.3 KiB gzip) |
 | An import of only `Toolbar` | 14.7 KiB (5.6 KiB gzip) | 32.5 KiB (11.2 KiB gzip) |

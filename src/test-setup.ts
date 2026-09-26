@@ -1,7 +1,8 @@
 /**
  * Vitest setup file (`vitest.config.ts` `setupFiles`), evaluated before every test file.
  *
- * - jest-dom matchers and vitest-axe's `toHaveNoViolations`.
+ * - jest-dom matchers (`@testing-library/jest-dom/matchers`) and vitest-axe's `toHaveNoViolations`,
+ *   typed by `src/vitest-axe.d.ts`.
  * - `Element.prototype.scrollIntoView` stub (`vi.fn()`, calls cleared after every test) when jsdom
  *   lacks it (`input-basic#31`).
  * - `window.matchMedia` default stub (nothing matches) when jsdom lacks it — the
@@ -52,12 +53,16 @@
  *
  * `src/test-utils.ts` documents the helpers and this environment (source of truth).
  */
-import '@testing-library/jest-dom/vitest';
+import * as jestDomMatchers from '@testing-library/jest-dom/matchers';
 import { act, cleanup } from '@testing-library/react';
 import { afterEach, expect, vi } from 'vitest';
 import { toHaveNoViolations } from 'vitest-axe/matchers';
 import { __resetWarnings } from './lib/dev';
 
+// jest-dom's matchers are registered from its `/matchers` entry, not through its `/vitest` entry:
+// that entry's type augmentation (`Assertion<T>`) does not merge with Vitest 5's `Assertion<R, T>`.
+// `src/vitest-axe.d.ts` types both matcher sets on Vitest's `Matchers<R, T>`.
+expect.extend(jestDomMatchers);
 expect.extend({ toHaveNoViolations });
 
 // ---------------------------------------------------------------------------

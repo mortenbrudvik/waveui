@@ -6,7 +6,7 @@ How tests are written in this repository, with the helpers of `src/test-utils.ts
 
 ## 1. Stack and commands
 
-Vitest 4, React Testing Library, `@testing-library/user-event`, jsdom and vitest-axe. Tests live in `__tests__/` next to the module they test (`src/components/input/__tests__/Switch.test.tsx`) and import it from its module path (`../Switch`); repo-level suites live in `src/__tests__/`.
+Vitest 5, React Testing Library, `@testing-library/user-event`, jsdom and vitest-axe. Tests live in `__tests__/` next to the module they test (`src/components/input/__tests__/Switch.test.tsx`) and import it from its module path (`../Switch`); repo-level suites live in `src/__tests__/`.
 
 Each example below starts with a comment naming the test file it belongs in: the component's own `<Component>.test.tsx`, which exists for every component. The examples are condensed to show one pattern each; they are not copies of tests in those files.
 
@@ -25,7 +25,7 @@ Vitest picks a quiet reporter when it runs under an AI agent, which hides the co
 
 Evaluated before every test file:
 
-- jest-dom matchers and vitest-axe's `toHaveNoViolations`.
+- jest-dom matchers (registered from `@testing-library/jest-dom/matchers`) and vitest-axe's `toHaveNoViolations`. `src/vitest-axe.d.ts` types both on Vitest's `Matchers<R, T>` interface. jest-dom's `/vitest` entry is not used: its type augmentation does not merge with Vitest 5's `Assertion<R, T>`. A new custom matcher is registered with `expect.extend` in the setup and typed in the same interface.
 - `Element.prototype.scrollIntoView` is a `vi.fn()` when jsdom lacks it (calls cleared after every test).
 - `window.matchMedia` answers `false` for every query when jsdom lacks it; `mockMatchMedia()` changes the answers.
 - **No global `ResizeObserver`**, as in a consumer's jsdom; call `installResizeObserverMock()` when a test needs one.
@@ -36,6 +36,8 @@ Evaluated before every test file:
   Tests that append nodes, register layers directly or set such styles themselves undo that in their own `afterEach` (it runs first), or in `try`/`finally` inside the test. Not in `onTestFinished`: its callbacks run after these assertions, so a container a test appended itself (for `renderToString` and `hydrateRoot`) would already have failed it. `onTestFinished` suits what the assertions do not check, such as a document listener or a prototype stub (`mockAnimations` restores `getAnimations` that way).
 
 `vi.mock()` works as usual. Do not call `vi.resetModules()` at the top of a test file: importing `src/test-utils.ts` afterwards would evaluate the setup a second time.
+
+Vitest 5 clears the call history of every mock before each test (its `clearMocks` default), before the `beforeEach` hooks run; implementations stay. A `vi.fn()` created at module level, in a `describe` body or in `beforeAll` starts every test with no calls, so a test cannot assert calls recorded there: record them in the test or in `beforeEach`.
 
 ## 3. `testSystemProps`: the cross-cutting contract
 
@@ -417,6 +419,7 @@ it('Space toggles and keeps the menu open; Enter toggles and closes it', async (
 - `installResizeObserverMock()` installs a controllable `ResizeObserver` and returns `{ trigger(target?), restore() }`; `trigger` calls the observers inside `act()`.
 - `mockRect(el, { x, y, width, height })` gives an element a layout box (`getBoundingClientRect`, `offsetWidth`/`clientWidth`, `offsetHeight`/`clientHeight`); stub `scrollWidth`/`scrollHeight` yourself to simulate overflowing content.
 - `mockMatchMedia({ query: boolean })` answers `matchMedia` queries and notifies mounted listeners. The answers last one test: call it in the test or in `beforeEach`, never in `beforeAll`.
+- jsdom 30 has `CSS.escape()` and `CSS.supports()`, and `CSS.supports('scrollbar-gutter', 'stable')` answers `true`. So a scroll lock (Dialog, Drawer) on a page given a scrollbar (`clientWidth` of `document.documentElement` below `window.innerWidth`) sets `scrollbar-gutter: stable` on `<html>`, not `padding-inline-end` on `<body>`. A test of either path replaces `CSS` on `globalThis` and puts the old descriptor back afterwards (`mockGutterSupport` in `useScrollLock.test.tsx`).
 - A measured size reaches a component through its `ResizeObserver` callback: give the element a box with `mockRect`, then call `trigger(element)`. `Dialog.Footer` reports its height this way, and the test reads `body.style.getPropertyValue('--wave-dialog-footer-height')` on the dialog body.
 - A test that asserts that nothing is measured needs the mock too: without a `ResizeObserver` nothing measures anyway, so the assertion proves nothing. "`Dialog.Footer` inside a Drawer" (`Drawer.test.tsx`) installs the mock, gives the footer a height, triggers it and then asserts that the drawer body has no style; it restores the mock and its console spy in `finally`.
 

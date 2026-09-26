@@ -215,7 +215,6 @@ describe('ColorPicker — hex input (input-basic#41, input-pickers#24, #25)', ()
     const user = userEvent.setup();
     const onValueChange = vi.fn();
     render(<ColorPicker defaultValue="#0f6cbd80" onValueChange={onValueChange} />);
-    // user.clear, not a select-all: user-event refuses typing into a full maxLength field.
     await user.clear(hexInput());
     await user.type(hexInput(), 'abc');
     await user.tab();
@@ -281,7 +280,6 @@ describe('ColorPicker — hex input (input-basic#41, input-pickers#24, #25)', ()
     const onValueChange = vi.fn();
     render(<ColorPicker defaultValue="#0f6cbd" onValueChange={onValueChange} />);
     const input = hexInput();
-    // user.clear, not a select-all: user-event sizes a paste by maxLength minus the full value.
     await user.clear(input);
     await user.paste('#abcdef ');
     expect(onValueChange.mock.calls).toEqual([['#abcdef']]);
@@ -498,7 +496,6 @@ describe('ColorPicker — opacity (input-pickers#15, input-basic#30)', () => {
     const user = userEvent.setup();
     const onValueChange = vi.fn();
     render(<ColorPicker showOpacity defaultValue="#ff000080" onValueChange={onValueChange} />);
-    // (user-event refuses to type into a full maxLength field even over a selection: clear first)
     await user.clear(hexInput());
     await user.keyboard('#abcdef');
     expect(onValueChange).toHaveBeenLastCalledWith('#abcdef80');

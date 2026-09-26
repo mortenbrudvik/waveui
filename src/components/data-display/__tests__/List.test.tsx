@@ -1965,9 +1965,10 @@ describe('List', () => {
       expectOneBuild();
     });
 
-    it('never walks the items through a children collection (O(n²) in jsdom)', () => {
-      // jsdom does not cache indexed HTMLCollection access, so `root.children[i]` loops and
-      // `Array.from(root.children)` made each commit of a 3000-item list cost about a second.
+    it('never walks the items through a children collection (O(n²) in jsdom before 30.1)', () => {
+      // jsdom before 30.1 does not cache indexed HTMLCollection access, so `root.children[i]`
+      // loops and `Array.from(root.children)` made each commit of a 3000-item list cost about a
+      // second there. Consumers' test suites may still run those versions.
       const docs = (actionOn: string | null) => (
         <List selectable selectionMode="multiple" aria-label="Docs">
           <List.Item>Intro</List.Item>
