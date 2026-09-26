@@ -9,6 +9,8 @@ import {
   renderWithProviders,
   expectNoA11yViolations,
 } from '../../../test-utils';
+import { renderWithFieldContext, FIELD_TEST_TEXT } from '../../../test-utils-field';
+import type { CoreSize } from '../../../lib/types';
 
 describe('Input', () => {
   testSystemProps(Input, {
@@ -389,5 +391,129 @@ describe('Input', () => {
       expect(onValueChange).toHaveBeenCalledTimes(1);
       expect(onValueChange).toHaveBeenCalledWith('x');
     });
+  });
+});
+
+describe('sizes and appearances (Phase 4 P4-01)', () => {
+  const field = (name = 'Name') => screen.getByRole('textbox', { name });
+
+  it('renders the 0.7 classes and medium outline attributes by default', () => {
+    render(<Input aria-label="Name" />);
+    expect(field()).toHaveClass(
+      'h-8',
+      'w-full',
+      'px-3',
+      'text-body-1',
+      'rounded',
+      'border',
+      'border-input',
+      'border-b-stroke-accessible',
+      'bg-background',
+    );
+    expect(field()).toHaveAttribute('data-size', 'medium');
+    expect(field()).toHaveAttribute('data-appearance', 'outline');
+  });
+
+  it.each([
+    ['small', ['h-6', 'px-2', 'text-caption-1']],
+    ['large', ['h-10', 'px-4', 'text-body-2']],
+  ] as const)('size="%s" renders its height, padding and type ramp', (size, classes) => {
+    render(<Input aria-label="Name" size={size} />);
+    expect(field()).toHaveClass(...classes);
+    expect(field()).toHaveAttribute('data-size', size);
+  });
+
+  it.each([
+    ['underline', ['rounded-none', 'border-0', 'border-b', 'bg-transparent']],
+    ['filled-darker', ['border-input-filled-stroke', 'bg-input-filled-darker']],
+    ['filled-lighter', ['border-input-filled-stroke', 'bg-input-filled-lighter']],
+  ] as const)('appearance="%s" renders its classes', (appearance, classes) => {
+    render(<Input aria-label="Name" appearance={appearance} />);
+    expect(field()).toHaveClass(...classes);
+    expect(field()).toHaveAttribute('data-appearance', appearance);
+  });
+
+  it('takes the Field size; its own size wins', () => {
+    const { rerender } = renderWithFieldContext(<Input />, { size: 'large' });
+    expect(field(FIELD_TEST_TEXT.label)).toHaveAttribute('data-size', 'large');
+    rerender(<Input size="small" />);
+    expect(field(FIELD_TEST_TEXT.label)).toHaveAttribute('data-size', 'small');
+  });
+
+  it('takes WaveProvider inputDefaults; its own props win', () => {
+    const { rerender } = renderWithProviders(<Input aria-label="Name" />, {
+      inputDefaults: { size: 'small', appearance: 'underline' },
+    });
+    expect(field()).toHaveAttribute('data-size', 'small');
+    expect(field()).toHaveAttribute('data-appearance', 'underline');
+    rerender(<Input aria-label="Name" size="large" appearance="outline" />);
+    expect(field()).toHaveAttribute('data-size', 'large');
+    expect(field()).toHaveAttribute('data-appearance', 'outline');
+  });
+
+  it('updates classes and attributes when size and appearance change (Review Focus 2)', () => {
+    const { rerender } = render(<Input aria-label="Name" size="small" />);
+    rerender(<Input aria-label="Name" size="large" appearance="filled-darker" />);
+    expect(field()).toHaveClass('h-10', 'bg-input-filled-darker');
+    expect(field()).not.toHaveClass('h-6', 'bg-background');
+    expect(field()).toHaveAttribute('data-size', 'large');
+    expect(field()).toHaveAttribute('data-appearance', 'filled-darker');
+  });
+
+  it.each(['underline', 'filled-darker'] as const)(
+    'an invalid %s field keeps the destructive border and the focus color on its bottom',
+    (appearance) => {
+      render(<Input aria-label="Name" appearance={appearance} error />);
+      expect(field()).toHaveClass('border-destructive', 'focus:border-b-primary');
+    },
+  );
+
+  it('with slots, the wrapper carries the size, the appearance and their attributes', () => {
+    render(<Input aria-label="Name" size="large" appearance="filled-lighter" contentBefore="@" />);
+    const wrapper = field().parentElement as HTMLElement;
+    expect(wrapper).toHaveClass('h-10', 'text-body-2', 'bg-input-filled-lighter');
+    expect(wrapper).toHaveAttribute('data-size', 'large');
+    expect(wrapper).toHaveAttribute('data-appearance', 'filled-lighter');
+    expect(field()).toHaveClass('px-3', 'text-body-2');
+    expect(field()).not.toHaveAttribute('data-size');
+  });
+});
+
+describe('htmlSize and the numeric size (Phase 4 D10)', () => {
+  const field = () => screen.getByRole('textbox', { name: 'Name' });
+  const NUMERIC_SIZE_WARNING =
+    '[WaveUI] Input: `size={number}` is deprecated and will be removed in 1.0. Use `htmlSize` instead.';
+
+  it('a numeric size renders the native attribute, keeps the medium design size and warns once', () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const { rerender } = render(<Input aria-label="Name" size={20} />);
+    rerender(<Input aria-label="Name" size={20} />);
+    expect(field()).toHaveAttribute('size', '20');
+    expect(field()).toHaveAttribute('data-size', 'medium');
+    expect(field()).toHaveClass('h-8');
+    expect(warn).toHaveBeenCalledTimes(1);
+    expect(warn).toHaveBeenCalledWith(NUMERIC_SIZE_WARNING);
+  });
+
+  it('htmlSize alone renders the attribute without a warning', () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    render(<Input aria-label="Name" htmlSize={12} size="small" />);
+    expect(field()).toHaveAttribute('size', '12');
+    expect(field()).toHaveAttribute('data-size', 'small');
+    expect(warn).not.toHaveBeenCalled();
+  });
+
+  it('with both, htmlSize wins and the numeric form still warns', () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    render(<Input aria-label="Name" htmlSize={12} size={20} />);
+    expect(field()).toHaveAttribute('size', '12');
+    expect(warn).toHaveBeenCalledTimes(1);
+    expect(warn).toHaveBeenCalledWith(NUMERIC_SIZE_WARNING);
+  });
+
+  it('types: CoreSize or a number', () => {
+    expectTypeOf<InputProps['size']>().toEqualTypeOf<CoreSize | number | undefined>();
+    // @ts-expect-error not a size
+    render(<Input aria-label="Name" size="huge" />);
   });
 });

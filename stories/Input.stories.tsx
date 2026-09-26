@@ -1,10 +1,16 @@
 import type { Meta, StoryObj } from '@storybook/react';
 import { fn } from 'storybook/test';
 import { Input } from '../src';
+import { coreSizeArgType, inputAppearanceArgType } from './_helpers';
+import { SizeAppearanceGrid } from './_grids';
 
 const meta = {
   title: 'Components/Input/Input',
   component: Input,
+  argTypes: {
+    ...coreSizeArgType,
+    ...inputAppearanceArgType,
+  },
   args: {
     'aria-label': 'Name',
     placeholder: 'Enter text...',
@@ -58,4 +64,20 @@ export const Disabled: Story = {
     placeholder: 'Disabled',
     disabled: true,
   },
+};
+
+export const SizesAndAppearances: Story = {
+  render: (args) => (
+    <SizeAppearanceGrid
+      render={(size, appearance) => (
+        <Input
+          {...args}
+          size={size}
+          appearance={appearance}
+          aria-label={`${size} ${appearance}`}
+          placeholder={`${size} ${appearance}`}
+        />
+      )}
+    />
+  ),
 };
