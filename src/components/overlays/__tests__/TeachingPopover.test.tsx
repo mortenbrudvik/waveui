@@ -575,6 +575,10 @@ describe('TeachingPopover', () => {
     );
 
     describe('keyboard order next to the target', () => {
+      // Each test presses Tab many times through user-event, and each press scans the page for
+      // tab stops: up to about two seconds alone, but more than Vitest's 5 s default under the
+      // parallel gate or on a CI runner, hence the 20 s timeouts.
+
       /** The focused element's name, `dialog` for the surface, or `body` when focus left the page. */
       const focused = () => {
         const el = document.activeElement;
@@ -630,19 +634,19 @@ describe('TeachingPopover', () => {
       it('Tab moves through the popover and continues after the target', async () => {
         const user = await renderPage();
         expect(await tabs(user, 4)).toEqual(['Close', 'Back', 'Next', 'After']);
-      });
+      }, 20_000);
 
       it('Shift+Tab from the element after the target enters the popover at its last button', async () => {
         const user = await renderPage();
         screen.getByRole('button', { name: 'After' }).focus();
         expect(await tabs(user, 4, true)).toEqual(['Next', 'Back', 'Close', 'New feature']);
-      });
+      }, 20_000);
 
       it('Shift+Tab from the surface returns to the target, and Tab from the target enters the popover', async () => {
         const user = await renderPage();
         expect(await tabs(user, 2, true)).toEqual(['New feature', 'Before']);
         expect(await tabs(user, 3)).toEqual(['New feature', 'Close', 'Back']);
-      });
+      }, 20_000);
 
       it('Tab from the last element of the page moves past the popover and leaves the page: one visit per lap, no Tab cycle', async () => {
         const user = await renderPage();
@@ -658,7 +662,7 @@ describe('TeachingPopover', () => {
         expect(await tabs(user, 3)).toEqual(['After', 'End', 'body']);
         expect(screen.getByRole('dialog')).toBeInTheDocument();
         expect(screen.getByRole('dialog').style.visibility).toBe('');
-      });
+      }, 20_000);
 
       it.each([
         ['Tab', false],
@@ -675,6 +679,7 @@ describe('TeachingPopover', () => {
             scans.mock.calls.filter(([selector]) => selector === FOCUSABLE_SELECTOR),
           ).toHaveLength(1);
         },
+        20_000,
       );
 
       it('a Shift+Tab lap from outside the page visits the popover once, after the target', async () => {
@@ -690,7 +695,7 @@ describe('TeachingPopover', () => {
           'Before',
           'body',
         ]);
-      });
+      }, 20_000);
 
       it.each([
         ['a script', false, 'Next', 'After'],
@@ -712,6 +717,7 @@ describe('TeachingPopover', () => {
           expect(focused()).toBe(landsOn);
           expect(await tabs(user, 1)).toEqual([next]);
         },
+        20_000,
       );
 
       it.each([
@@ -730,6 +736,7 @@ describe('TeachingPopover', () => {
           expect(screen.getByRole('button', { name: 'Done' })).toHaveFocus();
           expect(await tabs(user, expected.length, shift)).toEqual(expected);
         },
+        20_000,
       );
 
       it('a target that is not focusable: the tab stops around it', async () => {
@@ -739,7 +746,7 @@ describe('TeachingPopover', () => {
         expect(await tabs(user, 2)).toEqual(['Italic', 'Close']);
         screen.getByRole('button', { name: 'Next' }).focus();
         expect(await tabs(user, 1)).toEqual(['After']);
-      });
+      }, 20_000);
 
       it('a target without anything focusable: the tab stops before and after it', async () => {
         const user = await renderPage('heading');
@@ -747,7 +754,7 @@ describe('TeachingPopover', () => {
         expect(await tabs(user, 1)).toEqual(['Close']);
         screen.getByRole('button', { name: 'Next' }).focus();
         expect(await tabs(user, 1)).toEqual(['After']);
-      });
+      }, 20_000);
 
       it('a target with no tab stop at or before it: the popover is reached again where its portal is, and no Tab cycle forms', async () => {
         const user = userEvent.setup();
@@ -789,7 +796,7 @@ describe('TeachingPopover', () => {
           'body',
           'Next',
         ]);
-      });
+      }, 20_000);
     });
 
     it('renders inline without a target (no portal, no beak)', () => {
