@@ -143,6 +143,28 @@ describe('cn — token colours merge as colours', () => {
   });
 });
 
+describe('cn — axis shorthands and logical sides (C-LOGICAL)', () => {
+  it('a later axis shorthand replaces the logical sides it covers', () => {
+    expect(cn('ps-3 pe-2', 'px-4')).toBe('px-4');
+    // Dialog.Title's end padding gives way to a consumer's horizontal padding.
+    expect(cn('pe-8 text-subtitle-1', 'px-6')).toBe('text-subtitle-1 px-6');
+    expect(cn('ms-2 me-1', 'mx-auto')).toBe('mx-auto');
+    expect(cn('start-0 end-0', 'inset-x-0')).toBe('inset-x-0');
+    expect(cn('border-s border-e-2', 'border-x-0')).toBe('border-x-0');
+  });
+
+  it('a later logical side stays next to an earlier axis shorthand', () => {
+    expect(cn('px-4', 'ps-3')).toBe('px-4 ps-3');
+    expect(cn('mx-2', 'me-auto')).toBe('mx-2 me-auto');
+    expect(cn('inset-x-0', 'end-2')).toBe('inset-x-0 end-2');
+  });
+
+  it('keeps the logical sides next to the other axis and another variant', () => {
+    expect(cn('ps-3 pe-2', 'py-1')).toBe('ps-3 pe-2 py-1');
+    expect(cn('hover:pe-2', 'px-4')).toBe('hover:pe-2 px-4');
+  });
+});
+
 describe('twMerge', () => {
   it('is the configured merger (knows the Wave scales)', () => {
     expect(twMerge('text-body-1 text-foreground')).toBe('text-body-1 text-foreground');

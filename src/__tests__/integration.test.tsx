@@ -1753,9 +1753,8 @@ describe('Tab out of a Popover or Menu with a wrapper-span trigger inside a Dial
 
   // The menu closes on Tab and Shift+Tab, puts focus on the button inside the span and lets the
   // browser move on from there (APG menu button), so Shift+Tab reaches the element before the
-  // trigger. user-event computes Tab's default action from the key's target, which is gone once
-  // the menu closed: the key goes through fireEvent, and a Tab from the button stands for the
-  // browser's continuation.
+  // trigger. The key goes through fireEvent, whose result shows that the menu left it to the
+  // browser (not prevented), and a Tab from the button stands for the browser's continuation.
   it.each(SPANS)(
     'Menu, %s: Tab and Shift+Tab close the menu on the button inside the span, and tabbing continues from that button',
     async (_name, spanTabIndex) => {
