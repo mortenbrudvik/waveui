@@ -298,7 +298,10 @@ const sizeClasses: Record<'small' | 'medium', string> = {
 /**
  * The dialog surface, rendered in a portal (inheriting the WaveProvider theme) while the dialog is
  * open: backdrop, title, Close button and a scrolling body. It takes the full width up to its
- * `size` and never exceeds the viewport (the body scrolls). It is `role="dialog"`, or
+ * `size` and never exceeds the viewport (the body scrolls, also sideways for content wider than
+ * the dialog). Its 1rem gap to the viewport edges is its own margin, so a margin in `className`
+ * replaces the gap: with the width and height caps lifted as well and its height set to the
+ * viewport's, it fills the viewport (a full-screen dialog). It is `role="dialog"`, or
  * `role="alertdialog"` when the Dialog has `modalType="alert"` (a `role` you pass wins), and
  * carries `data-modal-type` with the resolved type.
  */
@@ -362,7 +365,7 @@ export const DialogContent = ({
   return (
     <Portal layerId={layer.layerId}>
       <div
-        className="fixed inset-0 flex items-center justify-center bg-backdrop p-4"
+        className="fixed inset-0 flex items-center justify-center bg-backdrop"
         onMouseDown={backdropPress.onMouseDown}
       >
         <div
@@ -375,8 +378,12 @@ export const DialogContent = ({
           {...rest}
           className={cn(
             // The border marks the surface where the shadow cannot: in high contrast the page,
-            // the backdrop and the surface are black, and forced colors drop shadows.
-            'relative flex max-h-[calc(100dvh-2rem)] w-full flex-col rounded-lg border border-border bg-background p-6 text-foreground shadow-64',
+            // the backdrop and the surface are black, and forced colors drop shadows. The 1rem gap
+            // to the viewport edges is the surface's own margin, not the backdrop's padding, so a
+            // margin in `className` replaces it and a full-screen dialog can reach the edges. Its
+            // minimum width is zero, so content wider than the room inside the gap scrolls in the
+            // body instead of pushing the surface over the gap.
+            'relative m-4 flex min-w-0 max-h-[calc(100dvh-2rem)] w-full flex-col rounded-lg border border-border bg-background p-6 text-foreground shadow-64',
             sizeClasses[size],
             className,
           )}

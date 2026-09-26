@@ -159,6 +159,40 @@ export const NarrowViewport: Story = {
 };
 
 /**
+ * A workspace dialog sized through `className`: up to 72rem wide on a large screen
+ * (`max-w-[72rem]` replaces the `size` cap), and full screen below 48rem, where the classes also
+ * remove the surface's 1rem margin to the viewport, its height cap, its radius and its border.
+ */
+export const LargeAndFullScreen: Story = {
+  args: {
+    defaultOpen: true,
+    children: (
+      <Dialog.Content
+        title="Migrate the build to Vite"
+        className="max-w-[72rem] max-[48rem]:m-0 max-[48rem]:h-dvh max-[48rem]:max-h-none max-[48rem]:rounded-none max-[48rem]:border-0"
+      >
+        {Array.from({ length: 6 }, (_, index) => (
+          <p key={index} className="mb-2">
+            Section {index + 1}. A task dialog that is a workspace rather than a form: its content
+            can lay itself out in more columns as the dialog widens, and the body scrolls when it is
+            taller than the dialog.
+          </p>
+        ))}
+        <Dialog.Footer>
+          <Dialog.Close>
+            <Button appearance="subtle">Cancel</Button>
+          </Dialog.Close>
+          <Dialog.Close>
+            <Button appearance="primary">Save</Button>
+          </Dialog.Close>
+        </Dialog.Footer>
+      </Dialog.Content>
+    ),
+  },
+  parameters: openStoryParameters,
+};
+
+/**
  * `modalType="alert"`: a confirmation that needs an answer. The surface is `role="alertdialog"`,
  * and a backdrop press does not close it (Escape, the Close button and `Dialog.Close` still do).
  * The least destructive action comes first.

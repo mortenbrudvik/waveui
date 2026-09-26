@@ -397,7 +397,6 @@ describe('Dialog', () => {
       const dialog = screen.getByRole('dialog');
       expect(dialog).toHaveClass('w-full', 'max-w-[600px]', 'max-h-[calc(100dvh-2rem)]');
       expect(dialog).not.toHaveClass('w-[600px]');
-      expect(backdrop()).toHaveClass('p-4');
       expect(screen.getByText('Body').parentElement).toHaveClass('overflow-y-auto');
     });
 
@@ -406,6 +405,37 @@ describe('Dialog', () => {
       const dialog = screen.getByRole('dialog');
       expect(dialog).toHaveClass('w-full', 'max-w-[400px]');
       expect(dialog).not.toHaveClass('w-[400px]');
+    });
+
+    it('keeps its 1rem gap to the viewport as its own margin, not as backdrop padding (issue #4)', () => {
+      render(<Basic dialogProps={{ defaultOpen: true }} />);
+      expect(screen.getByRole('dialog')).toHaveClass('m-4');
+      expect(backdrop().className).not.toMatch(/(^|\s)p[xytrblse]?-/);
+    });
+
+    it('keeps the gap when its content is wider than the room inside it (issue #4)', () => {
+      // A flex item is never narrower than its content unless its minimum width is zero: without
+      // it, a long URL or a wide table would push the surface over its margin to the viewport
+      // edges (0.7's padded backdrop kept the gap; the body scrolls sideways instead).
+      render(<Basic dialogProps={{ defaultOpen: true }} />);
+      expect(screen.getByRole('dialog')).toHaveClass('min-w-0');
+    });
+
+    it('lets a className remove the gap and lift the caps, for a full-screen dialog (issue #4)', () => {
+      render(
+        <Basic
+          dialogProps={{ defaultOpen: true }}
+          contentProps={{ className: 'm-0 h-dvh max-h-none max-w-none rounded-none' }}
+        />,
+      );
+      const dialog = screen.getByRole('dialog');
+      expect(dialog).toHaveClass('m-0', 'h-dvh', 'max-h-none', 'max-w-none', 'rounded-none');
+      expect(dialog).not.toHaveClass('m-4');
+      expect(dialog).not.toHaveClass('max-w-[600px]');
+      expect(dialog).not.toHaveClass('max-h-[calc(100dvh-2rem)]');
+      expect(dialog).not.toHaveClass('rounded-lg');
+      // Nothing around the surface keeps a gap the className cannot reach.
+      expect(backdrop().className).not.toMatch(/(^|\s)p[xytrblse]?-/);
     });
   });
 
