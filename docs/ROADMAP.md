@@ -68,7 +68,7 @@ These come from section 6 of the report. Parity work must not regress them: an i
 
 ## 3. Process per release
 
-- **Entry criteria (every phase):** the previous phase is merged to `main` with a green final gate; this phase's design spec is written, reviewed and approved; open questions of the spec are answered by the maintainer.
+- **Entry criteria (every phase):** the previous phase is merged to `main` with a green final gate, released or not (only Phase 14 waits for the release of 0.18.0); this phase's design spec is written, reviewed and approved; open questions of the spec are answered by the maintainer.
 - **Exit criteria (every phase):** every item's acceptance criteria are met and covered by tests; the full gate passes (`npm run typecheck`, `npm run lint`, `npm run format:check`, `npm test`, `npm run build`, `node scripts/verify-dist.mjs --final`, `npm run check:package`, `npm run test:pack`, `npm run build-storybook`); the CHANGELOG section is complete (Added, Changed, Deprecated); README, guide and `CLAUDE.md` are updated; the size report is in the CHANGELOG; no conventions-gate exception was added without a written reason.
 - **Release:** a phase ships when its release commit (version set, CHANGELOG section dated `## [x.y.0] - YYYY-MM-DD`) is merged to `main` and tagged `vx.y.0`: the tag runs the release workflow, which checks the tag, runs the full gate again, publishes to npm with provenance and creates the GitHub release ([`docs/RELEASING.md`](RELEASING.md)).
 - **Execution** follows the 0.5 model: a foundation package first, then component packages with disjoint file ownership in parallel, then INTEGRATION (barrels, cross-component tests, `verify-dist` flat names), then DOCS, then the final gate. A parallel package tests only against the foundation and its own files; a case that needs two parallel packages at once is an INTEGRATION test. A shared type whose widening breaks a module (a `Record<Union, …>` map) is widened by the package that owns that module. Agents never run git write commands; the lead commits per package.
@@ -293,7 +293,7 @@ Goal: dialogs support alert confirmations and close reasons with actions in view
 ### Phase 2 — 0.7.0: menus and commands
 
 **Theme.** Command surfaces at Fluent's level: stateful menu items, groups, links, submenus, hover and context menus; toolbar state. The release also lands the presence core that every surface added from here on mounts through, so later motion work (Phase 10) adds classes instead of refitting mount logic. The detailed design (exact APIs, behaviour, files, tests, packages and rulings D1–D32) is [`docs/superpowers/specs/2026-09-26-fluent-parity-phase-2-design.md`](superpowers/specs/2026-09-26-fluent-parity-phase-2-design.md); the entries below are its summary, and the spec wins where they differ. The **Spec:** lines name where it changed a sketch.
-**Entry:** 0.6.0 released; Phase 2 spec approved with a bundle budget for the presence core. **Exit:** process criteria; Menu keyboard row of the README updated (submenus, checkable items); a `verify-dist` probe proves the presence core is absent from a Button-only bundle.
+**Entry:** 0.6.0 merged to `main`; Phase 2 spec approved with a bundle budget for the presence core. **Exit:** process criteria; Menu keyboard row of the README updated (submenus, checkable items); a `verify-dist` probe proves the presence core is absent from a Button-only bundle.
 
 #### Epic 2.0 — Presence core
 
@@ -392,7 +392,7 @@ Goal: toolbars hold grouped toggle and exclusive-choice state, and toggle button
 ### Phase 3 — 0.8.0: notifications, color and trees
 
 **Theme.** Toasts carry any content and actions and are reachable from the keyboard; MessageBars get a real action area. The release also closes the three high gaps that depend on nothing earlier (ColorArea, ColorSlider, tree multi-select), and from here on every component and part carries a stable class name.
-**Entry:** 0.7.0 released (Toast titles may hold a `Menu`); spec approved. **Exit:** process criteria; README "Toasts" rewritten around rich content; the conventions gate enforces the class-name rule.
+**Entry:** 0.7.0 merged to `main` (Toast titles may hold a `Menu`); spec approved. **Exit:** process criteria; README "Toasts" rewritten around rich content; the conventions gate enforces the class-name rule.
 
 #### Epic 3.0 — Stable class names
 
@@ -472,7 +472,7 @@ Goal: trees support multi-select and row actions.
 ### Phase 4 — 0.9.0: form controls — size, appearance, values and labels
 
 **Theme.** Every text input and picker gets Fluent's sizes and appearances through one shared recipe; value controls reach Fluent's feature set; InfoLabel works as a Field label.
-**Entry:** 0.8.0 released; spec approved (token additions reviewed for contrast). **Exit:** process criteria; README "Forms and Field" and the guide's input section updated.
+**Entry:** 0.8.0 merged to `main`; spec approved (token additions reviewed for contrast). **Exit:** process criteria; README "Forms and Field" and the guide's input section updated.
 
 #### Epic 4.1 — Size and appearance
 
@@ -518,7 +518,7 @@ Goal: InfoLabel is a real label and can be a Field's label.
 ### Phase 5 — 0.10.0: pickers
 
 **Theme.** Multi-select, custom filtering and async search, public listbox building blocks, composable swatches and an inline calendar.
-**Entry:** 0.9.0 released; spec approved. **Exit:** process criteria; README "Built-in text" and keyboard rows for the new parts.
+**Entry:** 0.9.0 merged to `main`; spec approved. **Exit:** process criteria; README "Built-in text" and keyboard rows for the new parts.
 
 #### Epic 5.1 — Listbox
 
@@ -569,7 +569,7 @@ Goal: an inline calendar and faster date entry.
 ### Phase 6 — 0.11.0: tags, drawers and the app shell
 
 **Theme.** Selectable and dismissible tag sets, composable tag pickers, the full drawer family, non-modal dialogs and a navigation drawer for app shells. (Trees moved to 0.8.0 with the high gap `tree-1`.)
-**Entry:** 0.10.0 released; spec approved. **Exit:** process criteria; an "App shell" story (NavDrawer + inline Drawer + Toolbar).
+**Entry:** 0.10.0 merged to `main`; spec approved. **Exit:** process criteria; an "App shell" story (NavDrawer + inline Drawer + Toolbar).
 
 #### Epic 6.1 — Tags
 
@@ -644,7 +644,7 @@ Goal: the responsive navigation pattern of Fluent apps.
 ### Phase 7 — 0.12.0: overlay and focus primitives made public
 
 **Theme.** The positioning, dismiss, modal and focus machinery behind WaveUI's overlays becomes public API, so apps can build custom surfaces that join WaveUI's layer stack.
-**Entry:** 0.11.0 released (virtual anchors, hover intent and focusable groups have shipped internally); spec approved. **Exit:** process criteria; a "Custom overlays" guide chapter; `verify-dist` tree-shaking probes for each hook.
+**Entry:** 0.11.0 merged to `main` (virtual anchors, hover intent and focusable groups have shipped internally); spec approved. **Exit:** process criteria; a "Custom overlays" guide chapter; `verify-dist` tree-shaking probes for each hook.
 
 #### Epic 7.1 — Positioning and layers
 
@@ -679,7 +679,7 @@ Goal: grid navigation, focusable groups and focus utilities for custom widgets.
 ### Phase 8 — 0.13.0: identity, cards, tabs and carousel
 
 **Theme.** People and entity displays, card layouts, tab styles and carousels at Fluent's breadth.
-**Entry:** 0.12.0 released; spec approved (persona palette tokens reviewed). **Exit:** process criteria.
+**Entry:** 0.12.0 merged to `main`; spec approved (persona palette tokens reviewed). **Exit:** process criteria.
 
 #### Epic 8.1 — Identity
 
@@ -736,7 +736,7 @@ Goal: card, tab and carousel variants.
 ### Phase 9 — 0.14.0: collections, data grids and guided tours
 
 **Theme.** Overflow and breadcrumbs for deep hierarchies, sortable data out of the box, table building blocks, navigable lists and composable teaching popovers.
-**Entry:** 0.13.0 released; spec approved. **Exit:** process criteria; README "Sorting and selecting in a DataGrid" rewritten for built-in sorting.
+**Entry:** 0.13.0 merged to `main`; spec approved. **Exit:** process criteria; README "Sorting and selecting in a DataGrid" rewritten for built-in sorting.
 
 #### Epic 9.1 — Overflow and breadcrumbs
 
@@ -809,7 +809,7 @@ Goal: TeachingPopover supports custom actions, then composable parts.
 ### Phase 10 — 0.15.0: motion on components
 
 **Theme.** Enter and exit animations on every overlay and disclosure, honouring reduced motion. The presence core has shipped in 0.7.0 (P2-00) and every surface added since mounts through it, so this phase adds motion classes and moves the older surfaces onto the core. Larger project.
-**Entry:** 0.14.0 released; spec approved. **Exit:** process criteria; guide chapter "Motion" extended with the component motion (its tokens and the presence core are documented since 0.7); `verify-dist` probe proves motion code is absent from a Button-only bundle.
+**Entry:** 0.14.0 merged to `main`; spec approved. **Exit:** process criteria; guide chapter "Motion" extended with the component motion (its tokens and the presence core are documented since 0.7); `verify-dist` probe proves motion code is absent from a Button-only bundle.
 
 #### Epic 10.1 — Motion
 
@@ -833,7 +833,7 @@ Goal: every overlay and disclosure can animate in and out, and apps can tune or 
 ### Phase 11 — 0.16.0: tables and lists at data scale
 
 **Theme.** A headless table state, selection that follows the data, resizable columns and virtualization. Larger project.
-**Entry:** 0.15.0 released; spec approved with the virtualization decision (built-in windowing versus documented adapters) and its bundle budget. **Exit:** process criteria; a 10,000-row story within a stated render budget.
+**Entry:** 0.15.0 merged to `main`; spec approved with the virtualization decision (built-in windowing versus documented adapters) and its bundle budget. **Exit:** process criteria; a 10,000-row story within a stated render budget.
 
 #### Epic 11.1 — Data scale
 
@@ -867,7 +867,7 @@ Goal: grids, lists, trees and comboboxes that stay correct and fast with data th
 ### Phase 12 — 0.17.0: theming API and charts strategy
 
 **Theme.** Custom themes as objects that reach portals, brand generation, broader token families, and a documented way to chart with WaveUI tokens. Larger project.
-**Entry:** 0.16.0 released; spec approved (token names frozen for 1.0 review). **Exit:** process criteria; every new token pair in `tokens.test.ts`.
+**Entry:** 0.16.0 merged to `main`; spec approved (token names frozen for 1.0 review). **Exit:** process criteria; every new token pair in `tokens.test.ts`.
 
 #### Epic 12.1 — Theming
 
@@ -902,7 +902,7 @@ Goal: themes beyond the three named ones, applied consistently to portals.
 ### Phase 13 — 0.18.0: customization surface and 1.0 notices
 
 **Theme.** Props for structural parts and public contexts for recomposition, on top of the stable class names of 0.8; and the last 0.x release announces everything 1.0 changes. Larger project.
-**Entry:** 0.17.0 released; spec approved (naming reviewed with the 1.0 namespacing decision). **Exit:** process criteria; README "Slots" rewritten; every Phase 14 change announced (P13-03).
+**Entry:** 0.17.0 merged to `main`; spec approved (naming reviewed with the 1.0 namespacing decision). **Exit:** process criteria; README "Slots" rewritten; every Phase 14 change announced (P13-03).
 
 #### Epic 13.1 — Customization
 
@@ -935,7 +935,7 @@ Goal: nothing changes in 1.0 that a 0.x release did not announce.
 ### Phase 14 — 1.0.0: API freeze
 
 **Theme.** Remove what 0.x deprecated, make the choices 0.x deferred, and freeze the API.
-**Entry:** 0.18.0 released with the notices of P13-03; a 1.0 release candidate branch; every deprecation of 0.5–0.18 listed. **Exit:** process criteria; "Upgrading to 1.0" guide; semver from here on.
+**Entry:** 0.18.0 released with the notices of P13-03 (merged is not enough here: 1.0 changes nothing that a 0.x release did not announce); a 1.0 release candidate branch; every deprecation of 0.5–0.18 listed. **Exit:** process criteria; "Upgrading to 1.0" guide; semver from here on.
 
 #### Epic 14.1 — Freeze
 
