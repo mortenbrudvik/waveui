@@ -1,6 +1,6 @@
 import * as React from 'react';
 import { joinIds } from '../lib/aria';
-import type { ValidationState } from '../lib/types';
+import type { CoreSize, ValidationState } from '../lib/types';
 import { useId } from './useId';
 
 /**
@@ -54,6 +54,12 @@ export interface FieldContextValue {
    * `errorId` is set only while that message is an error.
    */
   validationMessageId?: string;
+  /**
+   * The Field's own `size` prop, when set: the default size of the text inputs and pickers inside
+   * it (their own `size` wins). Absent when the Field has no `size` (the controls then fall back to
+   * `WaveProvider inputDefaults`) and in contexts built before 0.9.
+   */
+  size?: CoreSize;
 }
 
 /**

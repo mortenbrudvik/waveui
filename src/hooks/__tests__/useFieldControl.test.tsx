@@ -575,6 +575,17 @@ describe('useFieldControl — one control takes the controlId (controlIdClaim)',
       error.mockRestore();
     }
   });
+
+  it('a Field size is no attribute: the props are unchanged by it (Phase 4)', () => {
+    function Probe() {
+      const props = useFieldControl({ 'aria-label': 'Name' });
+      return <input {...props} />;
+    }
+    renderWithFieldContext(<Probe />, { size: 'large' });
+    const input = screen.getByRole('textbox', { name: 'Name' });
+    expect(input).not.toHaveAttribute('size');
+    expect(input).not.toHaveAttribute('data-size');
+  });
 });
 
 describe('renderWithFieldContext', () => {
