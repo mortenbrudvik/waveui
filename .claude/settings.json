@@ -1,0 +1,31 @@
+{
+  "enabledPlugins": {
+    "vercel@claude-plugins-official": false,
+    "frontend-design@claude-plugins-official": false
+  },
+  "hooks": {
+    "PostToolUse": [
+      {
+        "matcher": "Edit|MultiEdit|Write",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"$CLAUDE_PROJECT_DIR/scripts/claude/hooks.mjs\" after-edit",
+            "timeout": 60
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"$CLAUDE_PROJECT_DIR/scripts/claude/hooks.mjs\" before-stop",
+            "timeout": 180
+          }
+        ]
+      }
+    ]
+  }
+}
