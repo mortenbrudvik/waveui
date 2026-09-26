@@ -1297,6 +1297,12 @@ npm run check:package    # publint + are-the-types-wrong on a packed tarball
 npm run test:pack        # pack the tarball and smoke-test it in plain and Tailwind fixtures
 ```
 
+GitHub Actions runs these checks, `npm run format:check` and a Storybook build on every push to `main` and every pull request (`.github/workflows/ci.yml`), and the tests, build and pack smoke test also on Node.js 22 and 26 and on Windows.
+
+### Releasing
+
+Releases are published by GitHub Actions, never from a local machine: set the version (`npm version <x.y.z> --no-git-tag-version`), date its CHANGELOG section (`## [x.y.z] - YYYY-MM-DD`), merge to `main`, then tag that commit `vX.Y.Z` and push the tag. The release workflow checks the tag against `package.json` and the CHANGELOG, runs the full gate, publishes to npm through trusted publishing with a provenance attestation, and creates the GitHub release. [docs/RELEASING.md](docs/RELEASING.md) has the exact steps, the one-time setup and how to verify a release.
+
 ## License
 
 MIT
