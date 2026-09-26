@@ -364,51 +364,93 @@ Portaled surfaces use three layers: `--wave-z-overlay` (1000: dialogs, drawers, 
 
 ## 6. Motion & Animation
 
-### Durations and Easing (reference values)
+### Motion Tokens
 
-Fluent's motion values, for inline styles or custom CSS. They are not Wave tokens or Tailwind classes; components use Tailwind's `duration-*` utilities.
+Fluent's motion tokens (`motionTokens` of `@fluentui/react-motion`), with Fluent's values. They are CSS variables on `:root` in every style entry, the same in every theme (next to the stacking layers), and on the Tailwind path they are utilities too. (Before 0.7 this chapter listed reference values of its own; five of its curves did not match Fluent's.)
 
-| Name | Value | Usage |
-|-------|-------|-------|
-| `ultra-fast` | 50ms | Micro-interactions (checkbox tick) |
-| `faster` | 100ms | Small transitions (color change, opacity) |
-| `fast` | 150ms | Standard hover/focus transitions |
-| `normal` | 200ms | Default animation duration |
-| `gentle` | 250ms | Deliberate transitions |
-| `slow` | 300ms | Large element transitions |
-| `slower` | 400ms | Page transitions |
-| `ultra-slow` | 500ms | Dramatic entrances |
+| Duration | Variable | Tailwind utility | Value | Usage |
+|-------|-------|-------|-------|-------|
+| `ultra-fast` | `--wave-duration-ultra-fast` | `duration-wave-ultra-fast` | 50ms | Micro-interactions (a checkbox tick) |
+| `faster` | `--wave-duration-faster` | `duration-wave-faster` | 100ms | Small transitions (color change, opacity) |
+| `fast` | `--wave-duration-fast` | `duration-wave-fast` | 150ms | Hover and focus feedback, short exits |
+| `normal` | `--wave-duration-normal` | `duration-wave-normal` | 200ms | Default duration |
+| `gentle` | `--wave-duration-gentle` | `duration-wave-gentle` | 250ms | Deliberate transitions |
+| `slow` | `--wave-duration-slow` | `duration-wave-slow` | 300ms | Large elements |
+| `slower` | `--wave-duration-slower` | `duration-wave-slower` | 400ms | Page-level transitions |
+| `ultra-slow` | `--wave-duration-ultra-slow` | `duration-wave-ultra-slow` | 500ms | Dramatic entrances |
 
-| Curve | CSS value | Usage |
-|-------|-----------|-------|
-| `accelerate-max` | `cubic-bezier(1, 0, 1, 1)` | Exit only (fast start, slow end) |
-| `accelerate-mid` | `cubic-bezier(0.7, 0, 1, 0.5)` | Exit medium |
-| `accelerate-min` | `cubic-bezier(0.8, 0, 1, 1)` | Subtle exit |
-| `decelerate-max` | `cubic-bezier(0, 0, 0, 1)` | Enter only (slow start, fast end) |
-| `decelerate-mid` | `cubic-bezier(0.1, 0.9, 0.2, 1)` | Enter medium |
-| `decelerate-min` | `cubic-bezier(0.33, 0, 0.1, 1)` | Subtle enter |
-| `easy-ease-max` | `cubic-bezier(0.8, 0, 0.2, 1)` | Bidirectional dramatic |
-| `easy-ease` | `cubic-bezier(0.33, 0, 0.67, 1)` | Standard bidirectional |
-| `linear` | `linear` | Continuous animations (spinners) |
+| Curve | Variable | Tailwind utility | Value | Usage |
+|-------|-------|-------|-------|-------|
+| `accelerate-max` | `--wave-curve-accelerate-max` | `ease-wave-accelerate-max` | `cubic-bezier(0.9, 0.1, 1, 0.2)` | Exit, strongest acceleration |
+| `accelerate-mid` | `--wave-curve-accelerate-mid` | `ease-wave-accelerate-mid` | `cubic-bezier(1, 0, 1, 1)` | Exit |
+| `accelerate-min` | `--wave-curve-accelerate-min` | `ease-wave-accelerate-min` | `cubic-bezier(0.8, 0, 0.78, 1)` | Subtle exit |
+| `decelerate-max` | `--wave-curve-decelerate-max` | `ease-wave-decelerate-max` | `cubic-bezier(0.1, 0.9, 0.2, 1)` | Enter, strongest deceleration |
+| `decelerate-mid` | `--wave-curve-decelerate-mid` | `ease-wave-decelerate-mid` | `cubic-bezier(0, 0, 0, 1)` | Enter |
+| `decelerate-min` | `--wave-curve-decelerate-min` | `ease-wave-decelerate-min` | `cubic-bezier(0.33, 0, 0.1, 1)` | Subtle enter |
+| `easy-ease-max` | `--wave-curve-easy-ease-max` | `ease-wave-easy-ease-max` | `cubic-bezier(0.8, 0, 0.2, 1)` | Bidirectional, dramatic |
+| `easy-ease` | `--wave-curve-easy-ease` | `ease-wave-easy-ease` | `cubic-bezier(0.33, 0, 0.67, 1)` | Standard bidirectional |
+| `linear` | `--wave-curve-linear` | `ease-wave-linear` | `cubic-bezier(0, 0, 1, 1)` | Continuous motion (progress, spinners) |
+
+- The utilities come from the `@theme inline` block of `src/styles/tokens.css` (`--transition-duration-wave-*` and `--ease-wave-*`), so a Tailwind build generates the ones you use. The precompiled `./styles` holds the variables but only the utilities Wave itself uses (none of these yet): without Tailwind, write `transition: opacity var(--wave-duration-normal) var(--wave-curve-decelerate-mid)`.
+- `cn` knows the scales: `cn('duration-wave-fast', 'duration-200')` keeps `duration-200`, `cn('ease-wave-linear', 'ease-in')` keeps `ease-in`, and `cn('duration-wave-fast', 'ease-wave-linear')` keeps both.
+- The tokens are never zeroed under reduced motion: components and your own code reduce motion themselves (below).
 
 ### Motion Patterns
 
-- **Enter**: `decelerate-mid` + 200–300ms. Element slides/fades in, decelerating to rest.
-- **Exit**: `accelerate-mid` + 100–200ms. Element accelerates away. Faster than enter.
-- **Hover/focus**: `easy-ease` + 100–150ms. Quick, responsive feedback.
-- **Layout shift**: `easy-ease` + 200ms. Smooth repositioning.
+- **Enter**: `decelerate-mid` + `normal` to `slow` (200–300ms). The element slides or fades in, decelerating to rest.
+- **Exit**: `accelerate-mid` + `faster` to `normal` (100–200ms). The element accelerates away, faster than it entered.
+- **Hover/focus**: `easy-ease` + `faster` to `fast` (100–150ms). Quick, responsive feedback.
+- **Layout shift**: `easy-ease` + `normal` (200ms). Smooth repositioning.
+
+### Enter and Exit: the Presence Core
+
+An element that animates out must stay in the DOM until its exit motion ends. `usePresence(visible, options?)` and the `<Presence visible>` component do that with CSS only: no JS animation library, no inline style and no class of their own. They write one attribute, `data-presence`, with the element's phase (`PresencePhase`):
+
+| Phase | When | Attributes |
+|---|---|---|
+| `entering` | `visible` became `true` (or the element mounted with `appear`), until its enter motion ends | `data-presence="entering"` |
+| `entered` | shown | `data-presence="entered"` |
+| `exiting` | `visible` became `false`, until its exit motion ends | `data-presence="exiting"`, `inert` |
+| `exited` | hidden: unmounted, or with `unmountOnExit={false}` kept mounted | `data-presence="exited"`, `inert`, `hidden` |
+
+Style the enter with Tailwind's `starting:` variant (CSS `@starting-style`: the element's first style) and the exit with `data-[presence=exiting]:`, and pair them with `motion-reduce:`:
+
+```tsx
+import { Presence } from '@mortenbrudvik/waveui';
+
+export const Details = ({ open }: { open: boolean }) => (
+  <Presence visible={open}>
+    <section
+      aria-label="Details"
+      className="transition-[opacity,translate] duration-wave-normal ease-wave-decelerate-mid starting:translate-y-1 starting:opacity-0 data-[presence=exiting]:translate-y-1 data-[presence=exiting]:opacity-0 data-[presence=exiting]:duration-wave-fast data-[presence=exiting]:ease-wave-accelerate-mid motion-reduce:transition-none"
+    >
+      The report was saved to your documents.
+    </section>
+  </Presence>
+);
+```
+
+- **When a phase ends.** `entering` and `exiting` end when every finite animation and transition of the element itself has finished (`element.getAnimations()`; a cancelled one counts as finished, an infinite one is ignored). Engines without `getAnimations` read the element's computed `animation-*` and `transition-*` times and its end events. The phase ends at once when the element has no running motion and under `prefers-reduced-motion: reduce`, from a layout effect, so an element without motion unmounts before the browser paints.
+- **Exiting is inert.** The exiting element is out of the tab order and the accessibility tree, so a closing surface cannot catch focus, a click or Escape while it fades.
+- **Focus and layers follow the open state.** A component keys its dismiss layer, focus restore, positioning and initial focus on its open state, never on the presence mount: focus returns and the next Escape reaches the layer below when the surface closes, not after its exit motion, and a surface shown again during its exit returns to `entering` on the same element.
+- **Server rendering.** On the server and while hydrating the element renders `entered` (or `exited`), so a hydrated element does not replay its enter motion; `appear` runs it only for an element mounted on the client after hydration.
+- **Options.** `unmountOnExit={false}` keeps an exited element mounted, `hidden` and `inert`, so its state (a typed value, a scroll position) survives; `onEntered` and `onExited` report the end of a phase, once per phase (StrictMode included; `onExited` from the commit that unmounts or hides the element).
+- **The hook.** `const { isMounted, ref, presenceProps } = usePresence(open)`: render the element while `isMounted`, pass it `ref` (merge it with your own through `useMergedRefs`) and spread `presenceProps`. Destructure the result, since `eslint-plugin-react-hooks` treats the whole object as a ref once its `ref` is passed on. `<Presence>` does the same for a single child element (or calls a render function with the result).
+- **Where it is used.** Every `Menu.Popover`, root menu and submenu, mounts through the core, with no motion of its own: a consumer can animate a menu with `data-[presence=…]:` classes on `Menu.Popover`, and it still unmounts at once without them. Components added from 0.7 on mount through it; the other overlays and disclosures move onto it when they get their enter and exit motion.
+- **Browser support.** `@starting-style` needs Chrome and Edge 117+, Safari 17.5+ or Firefox 129+; older browsers show the element at once, and the exit still runs.
 
 ### Reduced Motion
 
-Wave has **no global reduced-motion override** (0.4 had one on `*`, which also froze spinners mid-turn). Each component handles `prefers-reduced-motion` itself:
+Wave has **no global reduced-motion override** (0.4 had one on `*`, which also froze spinners mid-turn), and the motion tokens are never zeroed. Each component handles `prefers-reduced-motion` itself:
 
 - every transition carries a `motion-reduce:` variant (usually `motion-reduce:transition-none`);
 - `Spinner` keeps spinning, slower (`motion-reduce:animate-wave-spin-slow`), so it still reads as "busy";
 - the indeterminate `ProgressBar` becomes a full-width pulse instead of a sliding bar (never a static partial bar that looks like real progress);
 - `Skeleton` stops pulsing;
-- `Carousel` with `autoPlay` starts with rotation stopped.
+- `Carousel` with `autoPlay` starts with rotation stopped;
+- the presence core ends every enter and exit phase at once, even while a motion runs.
 
-Do the same in your own components: pair every `transition-*` or `animate-*` class with a `motion-reduce:` variant, and check `window.matchMedia('(prefers-reduced-motion: reduce)').matches` before JS-driven animation.
+Do the same in your own components: pair every `transition-*` or `animate-*` class with a `motion-reduce:` variant (a `data-[presence=…]:` or `starting:` motion too), and check `window.matchMedia('(prefers-reduced-motion: reduce)').matches` before JS-driven animation.
 
 ### Animations
 
@@ -551,10 +593,10 @@ export const Panel = /* @__PURE__ */ Object.assign(PanelRoot, { Header: PanelHea
 **Usage**: `<Card><Card.Header title="…" /></Card>` in client components, `<Card><CardHeader title="…" /></Card>` anywhere.
 
 - **Parts from Server Components.** A part written in a Server Component reaches the client as a lazy reference, so compounds identify their parts with `isElementOfType(child, Part)` / `getElementType(child)` from `src/lib/children.ts`, and count, slice or classify their children with `flattenChildren` (Fragments flattened, keys kept). Every compound therefore works when composed in a Server Component with the flat names, with the same server HTML and behaviour as in a client file. Test this with `asClientReference(Part)` (see the [testing guide](testing-best-practices.md)). A walk deeper than the direct children (a part inside the consumer's markup) uses `getElementType(node, { suspend: false })`: a lazy chunk still loading inside the consumer's own `<Suspense>` then suspends only that boundary, not the whole compound (and `renderToString` does not throw).
-- **Component JSDoc** sits only on the exported `Object.assign(…)` const (the root gets none; likewise on a wrapper-call export and on the first overload), so it reaches `index.d.ts`, and it names no internal symbol (`XRoot`) or spec label. Storybook autodocs read it from there (`.storybook/exportDocblocks.ts`), so stories never repeat it (no meta JSDoc, no `docs.description.component` for a compound): `.storybook/__tests__/exportDocblocks.test.ts` gates this, and verify-dist fails on an undocumented exported component.
+- **Component JSDoc** sits only on the exported `Object.assign(…)` const (the root gets none, also when it lives in a sibling module, as `MenuRoot` in `Menu.root.tsx` does; likewise on a wrapper-call export and on the first overload), so it reaches `index.d.ts`, and it names no internal symbol (`XRoot`) or spec label. Storybook autodocs read it from there (`.storybook/exportDocblocks.ts`), so stories never repeat it (no meta JSDoc, no `docs.description.component` for a compound): `.storybook/__tests__/exportDocblocks.test.ts` gates this, and verify-dist fails on an undocumented exported component.
 - A part rendered outside its root throws `[WaveUI] <Part> must be used within <Root>` in development; in production it logs that once per message and renders inert (`reportMissingContext` from `src/lib/dev.ts`).
 
-Compound components: `Accordion`, `Breadcrumb`, `Card`, `Carousel`, `Combobox`, `DataGrid`, `Dialog`, `Drawer`, `Dropdown`, `List`, `Menu`, `Nav`, `Overflow`, `Popover`, `RadioGroup`, `Skeleton`, `Stepper`, `TabList`, `Table`, `Tree`. The README lists every flat name. Fragments are looked into (each element of a Fragment is a Breadcrumb item, an AvatarGroup member or a Carousel slide), but a component that renders a part itself is not recognised where a compound classifies its children: write `Carousel.Item`s, and nested `Tree.Item`s, in the compound itself (directly, in Fragments, or for Tree from a render function such as `children.map(renderNode)`).
+Compound components: `Accordion`, `Breadcrumb`, `Card`, `Carousel`, `Combobox`, `DataGrid`, `Dialog`, `Drawer`, `Dropdown`, `List`, `Menu`, `Nav`, `Overflow`, `Popover`, `RadioGroup`, `Skeleton`, `Stepper`, `TabList`, `Table`, `Toolbar`, `Tree`. The README lists every flat name. Fragments are looked into (each element of a Fragment is a Breadcrumb item, an AvatarGroup member or a Carousel slide), but a component that renders a part itself is not recognised where a compound classifies its children: write `Carousel.Item`s, and nested `Tree.Item`s, in the compound itself (directly, in Fragments, or for Tree from a render function such as `children.map(renderNode)`).
 
 ### Pattern 3: Slot System
 
@@ -612,7 +654,7 @@ export function useExpanded(expanded: boolean | undefined, defaultExpanded = fal
 
 ### Pattern 5: cn() Utility
 
-`cn()` combines `clsx` (conditional classes) with a `tailwind-merge` that knows Wave's type ramp (`text-caption-2` … `text-display`), shadow scale (`shadow-2` … `shadow-64`), `font-wave` and the `animate-wave-*` animations:
+`cn()` combines `clsx` (conditional classes) with a `tailwind-merge` that knows Wave's type ramp (`text-caption-2` … `text-display`), shadow scale (`shadow-2` … `shadow-64`), `font-wave`, the `animate-wave-*` animations and the motion tokens (`duration-wave-*`, `ease-wave-*`):
 
 ```tsx
 import { cn } from '@mortenbrudvik/waveui';
@@ -663,7 +705,7 @@ The part after the prefix is React's own id, whose format changes between React 
 
 ### Pattern 7: Polymorphic Components
 
-`Button`, `CompoundButton`, `Link`, `Text`, `Toolbar`, `Card` (and its parts), `Stack`, `Flex`, `Grid`, `Tag` and `Divider` take an `as` prop, and their props are type-checked against the rendered element:
+`Button`, `CompoundButton`, `Link`, `Text`, `Toolbar`, `Toolbar.Button`, `Menu.ItemLink`, `Card` (and its parts), `Stack`, `Flex`, `Grid`, `Tag` and `Divider` take an `as` prop, and their props are type-checked against the rendered element:
 
 ```tsx
 import { Button, Text } from '@mortenbrudvik/waveui';
@@ -686,7 +728,7 @@ export interface TrackedButtonProps extends ButtonProps {
 }
 ```
 
-Each component declares `XOwnProps` with its own props only (never the default element's HTML attributes) and `type XProps<C extends React.ElementType = '<default element>'> = PolymorphicProps<C, XOwnProps>`, where the default is the component's own element: `'button'` for Button and CompoundButton, `'a'` for Link, `'span'` for Text and Tag, `'hr'` for Divider, and `'div'` for Toolbar, Card and its parts, Stack, Flex and Grid. `<Button as="a" formAction>` is a type error.
+Each component declares `XOwnProps` with its own props only (never the default element's HTML attributes) and `type XProps<C extends React.ElementType = '<default element>'> = PolymorphicProps<C, XOwnProps>`, where the default is the component's own element: `'button'` for Button, CompoundButton and `Toolbar.Button`, `'a'` for Link and `Menu.ItemLink`, `'span'` for Text and Tag, `'hr'` for Divider, and `'div'` for Toolbar, Card and its parts, Stack, Flex and Grid. `<Button as="a" formAction>` is a type error.
 
 `React.ComponentProps<typeof Button>`, `React.memo(Button)` and Storybook's `Meta<typeof Button>` see the default element's props (`ButtonProps`): `PolymorphicComponent` ends with a default-element call signature. For another element, name it: `ButtonProps<'a'>`, and `StoryObj<ButtonProps<'a'>>` for stories whose args use `as`. In tests, a `testSystemProps` call whose `a11yVariants` use `as` names the widened type: `testSystemProps<ButtonProps<React.ElementType>>(Button, …)`.
 
@@ -750,6 +792,9 @@ For custom controls, `FieldContextValue` carries the state: `validationState` an
 - Overlay surfaces render through `Portal` into `document.body` (or `WaveProvider`'s `portalContainer`) inside a `wave-portal` wrapper that carries the theme, direction and font.
 - A `Portal` renders nothing on the server or during hydration, so a component whose open surface is portaled gates its open state on the client: `const isClient = useIsClient();` then `const open = openState && isClient;` (the state from `useControllable` stays as it is, so no `onOpenChange` fires). Rendered with `defaultOpen` or `open`, it is closed in the server HTML (no `aria-expanded="true"`, no `aria-controls` or `aria-activedescendant` pointing at a missing element) and opens once hydrated: Popover, Menu, Dialog, Drawer, DatePicker, TimePicker and TagPicker. Combobox and Dropdown get the same result because their options register only on the client.
 - Escape and outside presses close only the topmost layer; presses inside overlays opened from a surface count as inside it. A surface that closes when focus leaves it (Menu, listbox popups, the AvatarGroup and InfoLabel popups) decides in a microtask after the focus change, so an `autoFocus` field of a popover, dialog or portal opened from inside it keeps it open.
+- **Context mode** (`openOnContext` on Menu and Popover): the trigger's child is a context-menu region, not a popup button. A cloned child or wrapper span receives the forwarded props and, of the trigger's own, only its id, ref and context-gesture handlers (`useTriggerElement` with `omitStateAria`); a render-prop child still receives every member, and the `aria-haspopup`, `aria-expanded` and `aria-controls` it spreads are removed from its element after each commit, with a development warning. The surface is not labelled by the region: it needs `aria-label` (Popover also `title`). The element focused at the gesture is the first focus-return target.
+- **`target`** (`Menu.Popover`, and the `Popover` root next to `side` and `align`) takes a `PopupTarget`: an element held in state or a `VirtualElement` (`{ getBoundingClientRect, contextElement? }`, an inline object is fine). The positioning reference is the context anchor while a context gesture opened the surface, else `target`, else the trigger; a `target` element counts as inside for outside presses. TeachingPopover's `target` also takes a ref and no `VirtualElement`, until a later release unifies them.
+- **Submenus.** A `<Menu>` rendered in a menu list at the list's portal depth (`PortalDepthContext`) is a submenu; a Menu inside a Popover or Dialog opened from an item (a portal in between) is a root menu. Every close of a menu first closes its open submenu, innermost first, and a submenu's open state is its own and its parent's, so a parent that closes, by any path, takes its submenus with it in the same commit.
 - Clicks and keys from a portal opened inside an item (a Popover in a `Menu.Item`, a popup from a List action) bubble through the React tree; the item's own handling ignores events whose target is outside it in the DOM (C-COMPOSE), while the consumer's handlers still receive them (a disabled `Menu.Item` calls no `onClick`, as a disabled button).
 
 ### Props Interface Conventions
@@ -758,8 +803,9 @@ For custom controls, `FieldContextValue` carries the state: `validationState` an
 - Omit conflicting native props: `Omit<React.HTMLAttributes<HTMLDivElement>, 'onChange' | 'defaultValue'>`
 - Name value callbacks after the state (`onValueChange`, `onCheckedChange`, `onOpenChange`); `onChange` is only the native change event
 - Declare `ref` in the interface; export the props type with the component (`CardHeaderProps`, `DataGridRowProps`)
-- Use shared types from `src/lib/types.ts`: `Size`, `Appearance`, `Status`, `Orientation`, `SelectionMode`, `TextWeight`, `Shape`, `PopupSide`, `PopupAlign`, `BadgeColor`, `IconPosition`, `ValidationState`, `LabelPosition` (take a subset with `Extract<LabelPosition, …>`), `ModalType`, `OpenChangeDetails<R>`
-- Prefer Fluent's prop name when it fits the conventions (`disabledFocusable`, `iconPosition`, `validationState`, `modalType`, `selectTabOnFocus`); open state stays `open`/`defaultOpen`/`onOpenChange`, and extra callback data goes in a second, optional `details` argument (`onOpenChange(open, details?)`)
+- Use shared types from `src/lib/types.ts`: `Size`, `Appearance`, `Status`, `Orientation`, `SelectionMode`, `TextWeight`, `Shape`, `PopupSide`, `PopupAlign`, `BadgeColor`, `IconPosition`, `ValidationState`, `LabelPosition` (take a subset with `Extract<LabelPosition, …>`), `ModalType`, `OpenChangeDetails<R>`, `CheckedValues`, `CheckedValuesChangeHandler`, `PopupTarget`, `VirtualElement`
+- Prefer Fluent's prop name when it fits the conventions (`disabledFocusable`, `iconPosition`, `validationState`, `modalType`, `selectTabOnFocus`, `persistOnItemClick`, `openOnHover`, `openOnContext`, `isAccessible`); open state stays `open`/`defaultOpen`/`onOpenChange`, a state callback is named after its state (`checkedValues` → `onCheckedValuesChange`, not Fluent's `onCheckedValueChange`), and extra callback data goes in a second, optional `details` argument (`onOpenChange(open, details?)`, `onCheckedValuesChange(checkedValues, details?)`)
+- One delay vocabulary: `openDelay` and `closeDelay` in milliseconds (Menu 250/250, Popover 250/500, Tooltip 200/100). Menu's and Popover's apply to mouse hover only, Tooltip's `openDelay` also to keyboard focus
 
 ---
 
@@ -796,7 +842,7 @@ Tab          → leaves the group
 
 Only one item holds `tabIndex={0}`. Disabled items are skipped (natively disabled or `aria-disabled`, except the focusable disabled ones below), and so are controls hidden with CSS (`display: none` or `visibility: hidden` inside the container, a closed `<details>`) and the `type="hidden"` input of a named value control. Left/Right are mirrored in RTL. Arrows that start in a text field, select, slider, spin button or editable combobox inside the group are left to that control (a SearchBox in a Toolbar keeps its caret keys). A Dropdown (select-only combobox) keeps Up/Down, Home and End for its list, but Left/Right move past it, so in a vertical Toolbar the arrows cannot leave it.
 
-In a Toolbar, a nested composite (a RadioGroup, a TabList) keeps its own Tab stop and arrow keys, and focusing it or a text field, select, slider or spin button keeps the toolbar's Tab stop on the last focused other control, so Tab and Shift+Tab can return to the toolbar; such a control holds the stop only when nothing else can. These rules live in `useRovingTabIndex` (the CSS-hidden check in its `manageTabIndex` mode, which Toolbar and Menu use); an `itemSelector` the browser rejects logs a development warning.
+In a Toolbar, a nested composite (a RadioGroup, a TabList) keeps its own Tab stop and arrow keys (a `Toolbar.RadioGroup` does not: see [Toolbar radio groups](#toolbar-radio-groups)), and focusing it or a text field, select, slider or spin button keeps the toolbar's Tab stop on the last focused other control, so Tab and Shift+Tab can return to the toolbar; such a control holds the stop only when nothing else can. These rules live in `useRovingTabIndex` (the CSS-hidden check in its `manageTabIndex` mode, which Toolbar and Menu use); an `itemSelector` the browser rejects logs a development warning.
 
 **Focusable disabled items.** A control with `disabledFocusable` (Button, CompoundButton, ToggleButton, MenuButton, a SplitButton half, Link, Checkbox, Switch) carries `aria-disabled="true"` and `data-disabled-focusable`, and `useRovingTabIndex` keeps such an item: the arrow keys, Home/End and typeahead reach it, and it may hold the Tab stop (APG allows focusable disabled items in toolbars). Enter, Space and clicks on it do nothing, and a Tooltip on it opens on focus to say why it is unavailable. Natively disabled items and a composite's own `data-roving-disabled` items are still skipped.
 
@@ -812,10 +858,10 @@ In a Toolbar, a nested composite (a RadioGroup, a TabList) keeps its own Tab sto
 
 | Component | Arrow keys |
 |---|---|
-| Toolbar | Left/Right (Up/Down when `orientation="vertical"`), wrapping |
+| Toolbar | Left/Right (Up/Down when `orientation="vertical"`), wrapping; in a `Toolbar.RadioGroup` also the cross axis, within the group |
 | RadioGroup, SwatchPicker | all four arrows, wrapping; moving selects |
 | TabList | Left/Right (Up/Down when vertical), wrapping; moving selects (automatic activation), or with `selectTabOnFocus={false}` only moves focus (manual activation: Enter or Space selects) |
-| Menu | Up/Down, wrapping; typeahead |
+| Menu | Up/Down, wrapping; typeahead; Right/Left open and close submenus (mirrored in RTL) |
 | List (selectable) | Up/Down, wrapping; typeahead above 7 items; Enter/Space toggle selection |
 | Tree | see below |
 
@@ -831,6 +877,30 @@ In a Toolbar, a nested composite (a RadioGroup, a TabList) keeps its own Tab sto
 ```
 
 Wherever there is typeahead (Menu, selectable List, Tree, Dropdown), a Space typed within 500 ms of a character continues the search instead of activating or committing, so "new y" reaches "New York". Characters typed with AltGr, which Windows reports as Ctrl+Alt (Polish `ł`, Romanian `ș`), count; Ctrl+Alt with an arrow, Home, End or Space is left to the browser. An item that refuses focus (hidden by CSS) is passed over for the next match. Keys typed in content inside an item, such as a List row's action button, are not typeahead. Menu matches item labels only, never an icon's text or a shortcut.
+
+#### Toolbar radio groups
+
+```
+Left / Right           → move through the toolbar's buttons, toggles and radios alike (Up / Down
+                         when vertical; mirrored in RTL); never check
+Up / Down (in a group) → next / previous enabled radio of the group, wrapping inside it (Left /
+                         Right in a vertical toolbar); never check
+Space / Enter / click  → check the focused radio (press a toggle)
+Tab                    → leaves the toolbar; one Tab stop (the last focused control)
+```
+
+`Toolbar.RadioGroup` (`role="radiogroup"`, named with `aria-label`) follows the APG Toolbar example's text-alignment group: its `Toolbar.RadioButton`s (`role="radio"`, `aria-checked`) are items of the toolbar's own arrow order, not one nested composite with its own Tab stop, because the group carries `data-roving-transparent`, the `useRovingTabIndex` marker for a composite role that joins the enclosing arrow order. The cross-axis keys move among the group's radios only (natively disabled ones skipped, `disabledFocusable` ones reachable). Unlike a RadioGroup outside a toolbar, moving focus never selects: in a toolbar the arrow keys belong to navigation.
+
+```tsx
+<Toolbar aria-label="Formatting" defaultCheckedValues={{ format: ['bold'], align: ['left'] }}>
+  <Toolbar.ToggleButton name="format" value="bold">Bold</Toolbar.ToggleButton>
+  <Toolbar.Divider />
+  <Toolbar.RadioGroup aria-label="Text alignment">
+    <Toolbar.RadioButton name="align" value="left">Left</Toolbar.RadioButton>
+    <Toolbar.RadioButton name="align" value="center">Center</Toolbar.RadioButton>
+  </Toolbar.RadioGroup>
+</Toolbar>
+```
 
 #### Combobox, TagPicker, TimePicker (editable combobox)
 
@@ -894,12 +964,37 @@ A cell with a single non-text widget (a checkbox, a sort button, a link) focuses
 #### Menu
 
 ```
-Trigger: Enter / Space / ArrowDown → open and focus the first item; ArrowUp → open and focus the last
-Menu:    ArrowDown / ArrowUp        → next / previous item (wrapping); Home / End; typeahead (labels)
-         Enter / Space              → activate the item (closes the menu unless persistOnClick)
-         Escape                     → close and return focus to the trigger
-         Tab                        → close; focus continues from the trigger
+Trigger:  Enter / Space / ArrowDown → open and focus the first item; ArrowUp → open and focus the last
+Menu:     ArrowDown / ArrowUp        → next / previous item (wrapping); Home / End; typeahead (labels)
+          Enter / Space              → activate the item (closes the menu unless persistOnClick or
+                                       persistOnItemClick)
+          Escape                     → close the innermost open menu; focus returns to its trigger
+                                       (from a submenu trigger item: the submenu closes, focus stays)
+          Tab                        → close every level; focus continues from the root trigger
+Checkable item (checkbox, radio, switch):
+          Space                      → change it; the menu stays open
+          Enter / click              → change it and close a popup menu
+Link item:
+          Enter                      → the browser's link activation (Shift, Ctrl, Cmd: new window or tab)
+          Space                      → follow the link
+Submenu trigger item:
+          ArrowRight / Enter / Space → open the submenu and focus its first item (ArrowLeft in RTL)
+In a submenu:
+          ArrowLeft                  → close it; focus returns to its item (ArrowRight in RTL)
+Split row (Menu.SplitGroup):
+          ArrowRight                 → from the action to the submenu button; on it, open the submenu
+          ArrowLeft                  → back to the action (both mirrored in RTL)
+Context-menu region (openOnContext):
+          Shift+F10 / ContextMenu    → open at the focused element; focus returns there on close
 ```
+
+**Checkable items** follow the APG menu pattern: Space changes a `menuitemcheckbox` or `menuitemradio` without closing the menu, so several options can be set in a row; Enter and a click change it and close a popup menu (Fluent closes on Space too unless the item persists). Activating a checked radio item changes nothing and still closes. The item's `aria-checked` carries the state; the check glyph and the switch drawing are decorative. Put each radio `name` in its own `Menu.Group` (or separate the sets with `Menu.Divider`): assistive technology counts a radio set by its group or separators, not by `name`.
+
+**Submenus.** A submenu trigger item is a `menuitem` with `aria-haspopup="menu"`, `aria-expanded` and, while open, `aria-controls`; the submenu is a `role="menu"` labelled by its item. ArrowDown, ArrowUp, Home, End and typeahead on the trigger item stay the parent list's. Escape and "previous" close one level at a time and return focus to the item; item activation and Tab close the whole chain, and focus goes to the root trigger before the menus close (under a static menu, to the submenu's trigger item), so a Dialog opened from a submenu item returns focus there. A disabled trigger item never opens its submenu. In a split row both halves are items of the parent list's vertical order, so the arrows reach every item with the keys screen-reader users expect; typeahead skips the label-less submenu half.
+
+**Hover and focus.** A menu opened by hover takes no focus (hover must not steal keyboard focus); its trigger's opening keys (and a click) pin it and move focus in. While focus is inside a menu tree, the mouse moving over an item focuses it, as in native menus, so Enter, the arrows and Escape act on the list the user points at; a submenu that loses focus that way closes after `closeDelay`, unless the pointer returns, while a keyboard move to another item closes it at once. A surface closed by Escape or an outside press stays closed until the pointer has left its trigger (WCAG 1.4.13).
+
+**Context menus.** A context-menu region is not a menu button: it carries no `aria-haspopup` or `aria-expanded`, and a click does nothing. Shift+F10 and the ContextMenu key open the menu at the focused element (a row), a right click at the pointer; the menu takes focus on its first item, and Escape, Tab and item activation return focus to the element that had it. Name the menu with `aria-label` and announce the gesture with `aria-keyshortcuts="Shift+F10"` on the region. Text fields inside the region keep the browser's own context menu, for paste and spelling suggestions.
 
 A trigger with `aria-disabled="true"` (a `disabledFocusable` MenuButton or SplitButton menu half, also inside the trigger's wrapper span) stays focusable, but its click, Enter, Space, ArrowDown and ArrowUp never open the menu. A menu taller than the space next to its trigger scrolls inside the viewport, and the focused item is scrolled into view.
 
@@ -934,8 +1029,8 @@ Typed text in the DatePicker input is kept and marked invalid when it is not an 
 - **Rating**: Right/Up one star more, Left/Down one fewer (never below 1), Home/End first/last; mirrored in RTL.
 - **Card** (selectable, `selectionControl="card"`): Enter (key down) or Space (key up).
 - **Stepper**: every reachable step is a Tab stop; Enter/Space activate.
-- **Tooltip, InfoLabel**: open on keyboard focus; Escape closes. Focus, blur and pointer entry inside a popup that the Tooltip's child renders in a portal (a DatePicker calendar, a listbox) do not show or hide the tooltip or reach its `onFocus`/`onBlur`; `onMouseEnter`/`onMouseLeave` follow React's tree. An icon-only trigger named by `Tooltip relationship="label"` also names a Popover it opens.
-- **Popover, TeachingPopover**: Escape closes. When focus was inside (or lost to `<body>`), Popover returns it to its trigger, TeachingPopover to where focus was before it opened (with `target`, to the target when nothing had focus, such as a tour opened on page load; see [Focus Management](#focus-management)). In the Tab order the portaled content follows its trigger (TeachingPopover with `target`: the target), like inline content: Tab from the trigger enters it, Tab past its last element continues after the trigger, Shift+Tab from its first element returns to the trigger (or, when nothing in the trigger can take focus, to the tab stop before it), and Shift+Tab from the element after the trigger enters it at its last element. For a trigger outside the tab order the content follows the tab stop before the trigger; with no tab stop before the trigger or target, it is reached where it is portaled, at the end of the page, in both directions. A Tab lap visits the content once: Tab from the last element of the page moves past the portaled content (it is hidden for that one Tab) and leaves the page, and Shift+Tab from the browser's own controls reaches the page's last element (outside every open popover) instead of the content. Content that the Tab from the page end still reaches follows the document order, so Tab never cycles. Focus leaving it does not close it (Escape or an outside press does).
+- **Tooltip, InfoLabel**: open on keyboard focus (Tooltip after `openDelay`, 200ms by default; it hides `closeDelay` after the pointer leaves, and at once on blur); Escape closes. Focus, blur and pointer entry inside a popup that the Tooltip's child renders in a portal (a DatePicker calendar, a listbox) do not show or hide the tooltip or reach its `onFocus`/`onBlur`; `onMouseEnter`/`onMouseLeave` follow React's tree. An icon-only trigger named by `Tooltip relationship="label"` also names a Popover it opens.
+- **Popover, TeachingPopover**: Escape closes. When focus was inside (or lost to `<body>`), Popover returns it to its trigger, TeachingPopover to where focus was before it opened (with `target`, to the target when nothing had focus, such as a tour opened on page load; see [Focus Management](#focus-management)). In the Tab order the portaled content follows its trigger (TeachingPopover with `target`: the target), like inline content: Tab from the trigger enters it, Tab past its last element continues after the trigger, Shift+Tab from its first element returns to the trigger (or, when nothing in the trigger can take focus, to the tab stop before it), and Shift+Tab from the element after the trigger enters it at its last element. For a trigger outside the tab order the content follows the tab stop before the trigger; with no tab stop before the trigger or target, it is reached where it is portaled, at the end of the page, in both directions. A Tab lap visits the content once: Tab from the last element of the page moves past the portaled content (it is hidden for that one Tab) and leaves the page, and Shift+Tab from the browser's own controls reaches the page's last element (outside every open popover) instead of the content. Content that the Tab from the page end still reaches follows the document order, so Tab never cycles. Focus leaving it does not close it (Escape or an outside press does). A hover card (`openOnHover`) opens without taking focus and is still entered by Tab from its trigger. A context popover (`openOnContext`) opened by Shift+F10 or the ContextMenu key moves focus into the content (its first tabbable element, else the surface), and Escape returns focus to the element that had it; one opened by a right click leaves focus where it is, and Tab from that element enters the content.
 - **Accordion, Carousel, Nav, Breadcrumb, Pagination**: native buttons and links (Tab, Enter, Space); no arrow-key navigation.
 
 ### ARIA Patterns
@@ -1527,7 +1622,7 @@ export function ConfirmDelete({ onDelete }: { onDelete: () => void }) {
 ### Component Catalog (65 components)
 
 **Buttons & Actions** (7)
-`Button` `CompoundButton` `ToggleButton` `SplitButton` `MenuButton` `Link` `Toolbar`
+`Button` `CompoundButton` `ToggleButton` `SplitButton` `MenuButton` `Link` `Toolbar` (plus the Toolbar parts `Toolbar.Button`, `Toolbar.ToggleButton`, `Toolbar.RadioGroup`, `Toolbar.RadioButton`, `Toolbar.Group`, `Toolbar.Divider`)
 
 **Input & Forms** (19)
 `Input` `Textarea` `Field` `Label` `Checkbox` `RadioGroup` `Switch` `Select` `SearchBox` `Slider` `SpinButton` `Combobox` `Dropdown` `TagPicker` `Rating` `ColorPicker` `SwatchPicker` `DatePicker` `TimePicker` (plus `RadioGroup.Item`/`RadioItem`, `Option`/`OptionGroup` and `RatingDisplay`)
@@ -1539,7 +1634,7 @@ export function ConfirmDelete({ onDelete }: { onDelete: () => void }) {
 `Card` `Accordion` `TabList` `Tree` `Carousel` `Overflow` `Grid` `Stack` `Flex`
 
 **Navigation** (5)
-`Breadcrumb` `Menu` `Nav` `Stepper` `Pagination`
+`Breadcrumb` `Menu` `Nav` `Stepper` `Pagination` (plus the Menu parts `Menu.ItemCheckbox`, `Menu.ItemRadio`, `Menu.ItemSwitch`, `Menu.ItemLink`, `Menu.Group`, `Menu.GroupHeader`, `Menu.SplitGroup`)
 
 **Feedback** (5)
 `MessageBar` `ProgressBar` `Spinner` `Skeleton` `Toast`/`Toaster`
@@ -1555,6 +1650,9 @@ export function ConfirmDelete({ onDelete }: { onDelete: () => void }) {
 
 **Provider** (1)
 `WaveProvider` (plus the `Portal` utility)
+
+**Motion** (utility)
+`Presence` (`usePresence` is its hook form)
 
 ### Most-Used Tailwind Classes
 
@@ -1604,6 +1702,10 @@ wave-rtl:-scale-x-100    /* mirror a directional glyph in RTL */
 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring  /* focusRing */
 focus:outline-hidden focus:border-b-2 focus:border-b-primary                       /* inputFocus */
 
+/* Motion (Tailwind path) */
+transition-opacity duration-wave-fast ease-wave-easy-ease motion-reduce:transition-none
+starting:opacity-0 data-[presence=exiting]:opacity-0   /* enter and exit with Presence */
+
 /* Disabled-aware states */
 not-disabled:not-aria-disabled:hover:bg-subtle-hover
 not-disabled:not-aria-disabled:active:bg-subtle-pressed
@@ -1626,7 +1728,11 @@ not-disabled:not-aria-disabled:active:bg-subtle-pressed
 | `src/lib/styles.ts` | Focus rings, input focus and forced-colors recipes |
 | `src/lib/composeEventHandlers.ts` | Consumer + internal handler composition |
 | `src/hooks/useControllable.ts` | Controlled/uncontrolled state hook |
-| `src/hooks/useRovingTabIndex.ts` | Roving tab index for composite widgets |
+| `src/hooks/useRovingTabIndex.ts` | Roving tab index for composite widgets (`data-roving-transparent`) |
+| `src/hooks/usePresence.ts`, `src/components/motion/Presence.tsx` | The presence core (enter and exit phases) |
+| `src/hooks/useCheckedValues.ts` | `checkedValues` state of Menu and Toolbar (internal) |
+| `src/hooks/useHoverIntent.ts`, `src/hooks/useContextMenuAnchor.ts`, `src/lib/events.ts` | Hover opening and the safe zone, context gestures, event predicates (internal) |
+| `src/components/navigation/Menu.*.tsx` | The Menu modules (root, context, items, trigger, popover, item kinds, groups, links, split rows) |
 | `src/hooks/useFieldControl.ts` | `FieldContext` and the Field wiring for controls |
 | `src/hooks/useListbox.ts` | Listbox model of Combobox, Dropdown, TagPicker and TimePicker (internal) |
 | `src/hooks/useDismiss.ts`, `src/lib/layers.ts` | Layered Escape and outside-press dismissal (internal) |
@@ -1639,12 +1745,12 @@ not-disabled:not-aria-disabled:active:bg-subtle-pressed
 | Widget | Enter group | Navigate | Activate | Leave |
 |--------|------------|----------|----------|-------|
 | Button | Tab | – | Enter/Space | Tab |
-| Toolbar | Tab (last focused control) | Left/Right (Up/Down vertical), Home/End; `disabledFocusable` controls included | Enter/Space | Tab |
+| Toolbar | Tab (last focused control) | Left/Right (Up/Down vertical), Home/End; `disabledFocusable` controls included; Up/Down within a radio group | Enter/Space (press, check) | Tab |
 | RadioGroup, SwatchPicker | Tab (selected item) | All arrows, Home/End | Selects on move | Tab |
 | Tabs | Tab (selected tab) | Left/Right (Up/Down vertical), Home/End | Selects on move (with `selectTabOnFocus={false}`: Enter/Space) | Tab |
 | Combobox, TagPicker, TimePicker | Tab | Down/Up (open and move) | Enter | Escape / Tab |
 | Dropdown | Tab | Down/Up/Home/End, typeahead, PageUp/PageDown | Enter/Space | Escape / Tab (commits) |
-| Menu | Enter/Space/Down on the trigger | Up/Down, Home/End, typeahead | Enter/Space | Escape / Tab |
+| Menu | Enter/Space/Down on the trigger; Shift+F10 on a context region | Up/Down, Home/End, typeahead; Right/Left into and out of submenus | Enter/Space (Space keeps a checkable item's menu open) | Escape (one level) / Tab (all) |
 | Tree | Tab (selected item) | Up/Down, Left/Right (collapse/expand), Home/End, typeahead | Enter/Space | Tab |
 | List (selectable) | Tab | Up/Down, Home/End | Enter/Space (toggle) | Tab |
 | DataGrid | Tab (one tab stop) | Arrows, Home/End, Ctrl+Home/End, PageUp/PageDown | Enter/F2 (into cell), Space (select row) | Tab / Escape (from cell widgets) |
@@ -1681,11 +1787,13 @@ Deprecated names still work through 0.x, warn once in development and will be re
 | Theme classes `dark`, `high-contrast` | `wave-dark`, `wave-high-contrast` |
 | `@mortenbrudvik/waveui/legacy-tokens.css` (0.4 variable names) | `--wave-*` variables |
 | Button objects in `MessageBar.dismiss`, `SearchBox.dismiss`, `Tag.dismissIcon` | Icon content, plus `onDismiss` / `onClear` |
+| Tooltip `delay` | `openDelay` |
 
-**Announced for 1.0 (no warning in 0.6):**
+**Announced for 1.0 (no warning yet):**
 
 - Badge and CounterBadge `color="important"` renders the orange severe colors through 0.x and becomes Fluent's neutral high-emphasis color (near black in the light theme) in 1.0: use `color="severe"` to keep the orange look.
 - The `details` parameter of Dialog and Drawer `onOpenChange` becomes required: read it as `details?.reason`.
+- The `details` parameter of Menu and Toolbar `onCheckedValuesChange` becomes required: read it as `details?.name`.
 
 ---
 

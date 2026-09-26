@@ -1,9 +1,10 @@
 # WaveUI roadmap: Fluent UI v9 parity
 
-- **Status:** plan of record from 0.6.0 to 1.0.0. Written 2026-09-25 on `feat/fluent-parity`; revised the same day after three reviews (conventions, sequencing, Phase 1 against the code). Review points that were not applied are listed with reasons in the Phase 1 spec, §8. **Phase 1 (0.6.0) is implemented** on `feat/fluent-parity` and unreleased (CHANGELOG `## [0.6.0] - Unreleased`); this line marks it released when 0.6.0 ships.
+- **Status:** plan of record from 0.6.0 to 1.0.0. Written 2026-09-25 on `feat/fluent-parity`; revised the same day after three reviews (conventions, sequencing, Phase 1 against the code). Review points that were not applied are listed with reasons in the Phase 1 spec, §8. **Phase 1 (0.6.0) is implemented** and merged to `main`, unreleased (CHANGELOG `## [0.6.0] - Unreleased`). **Phase 2 (0.7.0) is implemented** on `feat/fluent-parity-phase-2` and unreleased (CHANGELOG `## [0.7.0] - Unreleased`; design spec [`docs/superpowers/specs/2026-09-26-fluent-parity-phase-2-design.md`](superpowers/specs/2026-09-26-fluent-parity-phase-2-design.md)). This line marks each phase released when its version ships.
 - **Baseline:** `@mortenbrudvik/waveui` 0.5.0 (merged to `main`, unreleased) against `@fluentui/react-components` 9.74.9.
 - **Inputs:** the verified comparison report [`docs/research/fluent-ui-v9-comparison.md`](research/fluent-ui-v9-comparison.md) and its gap list (475 gaps: 7 high, 135 medium, 333 low). Every gap id below (`buttons-3`, `menu-10`, …) is an id of that list.
-- **Phase 1 design:** [`docs/superpowers/specs/2026-09-25-fluent-parity-phase-1-design.md`](superpowers/specs/2026-09-25-fluent-parity-phase-1-design.md) (0.6.0, implemented; unreleased). Every later phase gets its own design spec before work starts (see [Process](#3-process-per-release)).
+- **Phase 1 design:** [`docs/superpowers/specs/2026-09-25-fluent-parity-phase-1-design.md`](superpowers/specs/2026-09-25-fluent-parity-phase-1-design.md) (0.6.0, implemented; unreleased).
+- **Phase 2 design:** [`docs/superpowers/specs/2026-09-26-fluent-parity-phase-2-design.md`](superpowers/specs/2026-09-26-fluent-parity-phase-2-design.md) (0.7.0, implemented on `feat/fluent-parity-phase-2`; unreleased). Every later phase gets its own design spec before work starts (see [Process](#3-process-per-release)).
 
 How to read this document:
 - **Phases** are releases (minor versions after 0.5.0, then 1.0.0). A phase has a theme, epics, entry and exit criteria.
@@ -290,7 +291,7 @@ Goal: dialogs support alert confirmations and close reasons with actions in view
 
 ### Phase 2 — 0.7.0: menus and commands
 
-**Theme.** Command surfaces at Fluent's level: stateful menu items, groups, links, submenus, hover and context menus; toolbar state. The release also lands the presence core that every surface added from here on mounts through, so later motion work (Phase 10) adds classes instead of refitting mount logic.
+**Theme.** Command surfaces at Fluent's level: stateful menu items, groups, links, submenus, hover and context menus; toolbar state. The release also lands the presence core that every surface added from here on mounts through, so later motion work (Phase 10) adds classes instead of refitting mount logic. The detailed design (exact APIs, behaviour, files, tests, packages and rulings D1–D32) is [`docs/superpowers/specs/2026-09-26-fluent-parity-phase-2-design.md`](superpowers/specs/2026-09-26-fluent-parity-phase-2-design.md); the entries below are its summary, and the spec wins where they differ. The **Spec:** lines name where it changed a sketch.
 **Entry:** 0.6.0 released; Phase 2 spec approved with a bundle budget for the presence core. **Exit:** process criteria; Menu keyboard row of the README updated (submenus, checkable items); a `verify-dist` probe proves the presence core is absent from a Button-only bundle.
 
 #### Epic 2.0 — Presence core
@@ -302,6 +303,7 @@ Goal: one mount and unmount mechanism for every surface built from 0.7 on.
   - **API sketch:** tokens `--wave-duration-{ultra-fast,faster,fast,normal,gentle,slow,slower,ultra-slow}` and `--wave-curve-{accelerate,decelerate,easy-ease,linear}-{min,mid,max}` matching Fluent's `motionTokens` (the guide's reference values corrected), Tailwind utilities `duration-wave-*`, `ease-wave-*`; `usePresence(visible, { appear?, unmountOnExit? })` returning `{ isMounted, state: 'entering' | 'entered' | 'exiting' | 'exited', ref }` and a `<Presence>` component; driven by CSS classes on `data-state` and `animationend`/`transitionend` (no JS animation library); reduced motion finishes immediately. New surfaces (submenus P2-04, toast parts P3-02, drawer types P6-05…P6-07, NavDrawer P6-08) mount through it from the start; existing surfaces move onto it when Phase 10 animates them.
   - **Acceptance:** SSR renders the entered state; StrictMode; tree-shaking probe; an element that is exiting is `inert` and out of the accessibility tree.
   - **Guards:** no runtime styles (classes and `data-state` only); Carousel still starts paused under reduced motion.
+  - **Spec:** the curves are Fluent's exact nine (`accelerate-max/mid/min`, `decelerate-max/mid/min`, `easy-ease-max`, `easy-ease`, `linear`), not a `{min,mid,max}` grid (D5). The phase is `phase: PresencePhase`, written to its own attribute `data-presence`, not `state` and `data-state`, which components keep for their own meaning (D2, D3); phases end through `getAnimations()`. The hook also returns `presenceProps` and takes `onEntered`/`onExited`; `usePresence` and `Presence` are public (D27), with a `verify-dist` size budget (D28).
   - **Size:** M. **Depends on:** none.
 
 #### Epic 2.1 — Menu item model
@@ -324,16 +326,19 @@ Goal: menus can hold checkable, grouped and link items with a single checked-val
     Menu: `checkedValues?: Readonly<Record<string, readonly string[]>>`, `defaultCheckedValues?`, `onCheckedValuesChange?: (checkedValues: Record<string, string[]>, details: { name: string; checkedItems: string[] }) => void` (value first, fires on change only, through `useControllable`), `persistOnItemClick?: boolean`. Fluent's `onCheckedValueChange(event, { name, checkedItems })` becomes the `details` argument; the callback is named after the state (C-NAMING). Items: `name`, `value`, `checkmark?: Slot<'span'>`, `persistOnClick?`, `disabled`; `role="menuitemcheckbox"`/`"menuitemradio"`, `aria-checked`, `data-checked`. The list reserves icon and checkmark columns automatically when any item has one (`menu-6`). Flat names `MenuItemCheckbox`, `MenuItemRadio`, `MenuItemSwitch`. Works in the static Menu too.
   - **Acceptance:** APG menu keys unchanged; Space toggles without closing when `persistOnClick`; radio items exclusive per `name`; forced-colors checkmarks visible; StrictMode once; RSC flat names.
   - **Guards:** the dismiss-layer stack (Escape routed by focus).
+  - **Spec:** `details` is optional and adds `event` (`onCheckedValuesChange(checkedValues, details?: { name, checkedItems, event })`), like every `details` argument added in 0.x (D6); Space always keeps the menu open, not only with `persistOnClick` (APG, D8); a submenu shares its parent's checked values unless it sets its own (D7); the columns are CSS `:has()`, without `hasIcons`/`hasCheckmarks` (D10); `checkmark` is a required indicator (D11).
   - **Size:** M. **Depends on:** P1-23.
 - **P2-02 `Menu.Group` and `Menu.GroupHeader`.**
   - **Closes:** `menu-15` (M).
   - **API sketch:** `Menu.Group` (`role="group"`, `aria-labelledby` = its header's `useId` id), `Menu.GroupHeader` (presentational heading text, not a menu item); flat `MenuGroup`, `MenuGroupHeader`.
   - **Acceptance:** typeahead and arrows skip headers; axe clean with mixed checkbox and radio groups.
+  - **Spec:** the group is labelled only by a header among its direct children (a static scan), never by a dangling id (D12).
   - **Size:** S. **Depends on:** P2-01.
 - **P2-03 `Menu.ItemLink`.**
   - **Closes:** `menu-14` (M).
   - **API sketch:** polymorphic (`as` a router link, default `'a'`): `href`, `icon`, `disabled`; `role="menuitem"` on the anchor; activating it closes the menu and lets the browser navigate (middle-click and the link context menu keep working).
   - **Acceptance:** Enter follows the link; a disabled item drops `href`; flat `MenuItemLink`.
+  - **Spec:** Enter is left to the browser, every click closes the menu (modified clicks included) and `persistOnItemClick` does not apply (D13).
   - **Size:** S. **Depends on:** none.
 
 #### Epic 2.2 — Submenus, hover and anchoring
@@ -345,18 +350,21 @@ Goal: cascading menus, hover-opened surfaces with a pointer safe zone, and menus
   - **API sketch:** a `<Menu>` nested in `Menu.Popover` whose `Menu.Trigger` wraps a `Menu.Item` becomes a submenu: the item gets `aria-haspopup="menu"`, `aria-expanded` and a mirrored chevron (`wave-rtl:-scale-x-100`); the submenu opens on the side `end` with flip and mounts through the presence core (P2-00). Keys through `getArrowIntent`: "next" (ArrowRight in LTR) opens and focuses the first item, "previous" or Escape closes only the submenu and returns focus to its item; Tab and item activation close the whole chain. Nested dismiss layers through `Portal layerId`. `Menu.SplitGroup` puts a main item and a submenu trigger in one row.
   - **Acceptance:** RTL test; three levels deep; outside press closes the chain; focus returns to the root trigger; axe for every open level. SplitGroup: the two halves are two stops in one row, and "next" from the main item moves to the trigger (it does not open the submenu); "next" on the trigger opens the submenu; activating the main item closes the chain; RTL test; axe with the split row's submenu open.
   - **Guards:** the dismiss-layer stack; named portal layers plus nesting depth.
+  - **Spec:** a Menu is a submenu when it sits in a menu list at the list's portal depth, so a Menu in a Popover or Dialog opened from an item stays a root menu (D14); every `Menu.Popover`, not only submenus, mounts through the presence core (D4); a closing menu closes its open submenu first, and a submenu's open state is its own and its parent's (D15).
   - **Size:** M. **Depends on:** P2-00, P2-01.
 - **P2-05 Hover opening, the safe zone and one delay vocabulary.**
   - **Closes:** `menu-2` (L), `popover-1` (M), `foundation-22` (L), `positioning-8` (L), `tooltip-3` (L).
   - **API sketch:** Menu `openOnHover?: boolean` (default `true` for submenus, `false` for root menus); Popover `openOnHover?: boolean`. One delay vocabulary for the hover-driven overlays: `openDelay?: number` and `closeDelay?: number` (ms) on Menu, Popover and Tooltip (Popover `closeDelay` default 500, Fluent's `mouseLeaveDelay`; Tooltip gains `closeDelay`, Fluent's `hideDelay`). Tooltip's 0.5 `delay` becomes a deprecated alias of `openDelay` (`resolveDeprecatedProp`). An internal hover-intent helper with a triangle safe zone between the trigger and the surface; touch and pen ignore hover.
   - **Acceptance:** moving diagonally into a submenu keeps it open; keyboard behaviour unchanged; reduced motion unaffected (no motion involved); the `delay` alias warns once and still works.
   - **Guards:** Popover keeps the trigger's Tab order and names itself.
+  - **Spec:** the defaults are Menu 250/250, Popover 250/500 and Tooltip 200/100 ms (D17); hover never moves focus, activating the trigger pins a hover-opened surface, and a surface dismissed by Escape stays closed until the pointer leaves (D18); focus follows the mouse inside a focused menu tree, a behaviour change for 0.6 popup menus (D31).
   - **Size:** M. **Depends on:** P2-04.
 - **P2-06 Context menus and custom anchors.**
   - **Closes:** `menu-1` (M), `foundation-18` (M), `popover-2` (L), `popover-3` (L), `positioning-2` (L).
   - **API sketch:** `Menu openOnContext?: boolean` and `Popover openOnContext?: boolean` (the `contextmenu` event on the trigger, Shift+F10 and the ContextMenu key; the surface opens at the pointer); `target?: HTMLElement | VirtualElement | null` on `Menu.Popover` and `Popover.Content` (a controlled surface without a trigger); `VirtualElement = { getBoundingClientRect(): DOMRect }` accepted by `usePopupPosition`.
   - **Acceptance:** focus return when opened from the pointer (to the trigger or the target); no native context menu while open; axe.
   - **Guards:** the documented focus-return chain.
+  - **Spec:** `target` lives where `side`/`align` live, on `Menu.Popover` and on the `Popover` root (not `Popover.Content`), typed with the public `PopupTarget` (`HTMLElement | VirtualElement | null`; `VirtualElement` and `PopupRect` are public too), without a ref (D20, D21); the key press decides a gesture's origin, the element focused at the gesture is the focus-return target, and text fields in the region keep the browser's menu (D19); a context region gets no state ARIA (D29).
   - **Size:** M. **Depends on:** P2-04.
 
 #### Epic 2.3 — Toolbar and toggle state
@@ -368,12 +376,14 @@ Goal: toolbars hold grouped toggle and exclusive-choice state, and toggle button
   - **API sketch:** Toolbar `checkedValues`/`defaultCheckedValues`/`onCheckedValuesChange(checkedValues, { name, checkedItems })` (as Menu, P2-01); ToggleButton `name` + `value` bind to it inside a Toolbar; `Toolbar.RadioGroup` (`role="radiogroup"`, marked so its radios join the toolbar's arrow order instead of counting as one nested composite) and `Toolbar.RadioButton` (`role="radio"`, `aria-checked`, toggle look); `Toolbar.Group` (`role="presentation"`, follows `orientation`); `Toolbar.Divider` (orientation-aware separator sized to the toolbar); Toolbar `size` as the default size of its buttons; `Toolbar.Button` with `vertical` (icon over label). Flat names for every part.
   - **Acceptance:** one tab stop; arrows move through toggles and radios alike; radio selection exclusive per `name`; RTL; forced colors.
   - **Guards:** Toolbar works over any focusable descendant: an Input and a Combobox in the same toolbar as a radio group still join the arrow order (the 0.5 tests stay; a new test mixes them).
+  - **Spec:** a plain ToggleButton does not bind to `checkedValues`: the bound part is `Toolbar.ToggleButton` (Fluent's name) with required `name` and `value`, next to `Toolbar.RadioButton` (D22); radios do not select on focus, and Up/Down move within a radio group (D23); `size` is the five-size `Size` (D24).
   - **Size:** M. **Depends on:** P1-04 (`disabledFocusable` items stay reachable), P2-01 (the checked-values shape).
 - **P2-08 ToggleButton `isAccessible` and role-aware checked state.**
   - **Closes:** `buttons-8` (M), `buttons-10` (L).
   - **API sketch:** `isAccessible?: boolean` (Fluent's name): a brand-filled checked look with on-brand text (and an inset stroke for `primary`), so the state never relies on a tint alone; with `role="checkbox"`, `"radio"`, `"menuitemcheckbox"` or `"menuitemradio"` ToggleButton writes `aria-checked` instead of `aria-pressed`.
   - **Acceptance:** contrast pairs of the checked look asserted in `tokens.test.ts`; forced colors unchanged.
   - **Guards:** `ToggleButton.onPressedChange` fires the same way with either ARIA attribute.
+  - **Spec:** `aria-checked` (and `data-checked`) for seven roles (`checkbox`, `radio`, `switch`, `menuitemcheckbox`, `menuitemradio`, `option`, `treeitem`); any other role but `button` gets neither attribute and a development warning; `data-pressed` always (D25).
   - **Size:** S. **Depends on:** none.
 
 ---
@@ -641,7 +651,7 @@ Goal: public, documented positioning and dismiss hooks and a shared `positioning
 
 - **P7-01 Public positioning and dismiss hooks; `positioning` prop.**
   - **Closes:** `positioning-1` (M), `foundation-20` (M), `foundation-19` (L), `positioning-5` (L), `foundation-21` (L), `positioning-6` (L), `positioning-7` (L), `positioning-4` (L), `positioning-3` (L), `combobox-5` (L), `dropdown-5` (L), `tagpicker-10` (L), `datepicker-9` (L).
-  - **API sketch:** export `usePopupPosition` (options: `side`, `align`, `offset`, `flip` with `fallbackPlacements`, `shift`, `fitViewport`, `matchReferenceWidth`, `strategy`, `hideWhenDetached`, virtual reference, `onPositioned`; result adds an imperative `update()`), `useDismiss`, `DismissLayerProvider`, `Portal layerId`. A `positioning?: PopupPositioning` prop for the advanced options only (`offset`, `fitViewport`, `matchReferenceWidth` — the hook's name — `fallbackPlacements`, `target`) on Popover, Menu.Popover, Tooltip, TeachingPopover, Combobox, Dropdown, TagPicker, DatePicker and TimePicker. The top-level `side`/`align` props stay the way to place a surface and are not part of `positioning`, so there is one source for each option. Popover gets `fitViewport` (Fluent's autoSize).
+  - **API sketch:** export `usePopupPosition` (options: `side`, `align`, `offset`, `flip` with `fallbackPlacements`, `shift`, `fitViewport`, `matchReferenceWidth`, `strategy`, `hideWhenDetached`, virtual reference, `onPositioned`; result adds an imperative `update()`), `useDismiss`, `DismissLayerProvider`, `Portal layerId`. A `positioning?: PopupPositioning` prop for the advanced options only (`offset`, `fitViewport`, `matchReferenceWidth` — the hook's name — `fallbackPlacements`, `target`) on Popover, Menu.Popover, Tooltip, TeachingPopover, Combobox, Dropdown, TagPicker, DatePicker and TimePicker. The top-level `side`/`align` props stay the way to place a surface and are not part of `positioning`, so there is one source for each option. Popover gets `fitViewport` (Fluent's autoSize). One `target` type everywhere: 0.7 ships `target` on `Menu.Popover` and the `Popover` root as `PopupTarget` (an element or a `VirtualElement`, no ref), while TeachingPopover's 0.6 `target` takes an element or a `RefObject` and no `VirtualElement`; this item widens both, without breaking either (TeachingPopover gains `VirtualElement`, Menu and Popover gain `RefObject`).
   - **Acceptance:** a custom popup story built only on public hooks sits correctly in the layer stack (Escape order, outside press, toasts); API documented in the README "Hooks and utilities".
   - **Guards:** the dismiss-layer stack; named portal layers plus nesting depth; Tooltip text in the server HTML.
   - **Size:** M. **Depends on:** P2-06.
@@ -798,7 +808,7 @@ Goal: TeachingPopover supports custom actions, then composable parts.
 ### Phase 10 — 0.15.0: motion on components
 
 **Theme.** Enter and exit animations on every overlay and disclosure, honouring reduced motion. The presence core has shipped in 0.7.0 (P2-00) and every surface added since mounts through it, so this phase adds motion classes and moves the older surfaces onto the core. Larger project.
-**Entry:** 0.14.0 released; spec approved. **Exit:** process criteria; guide chapter "Motion" rewritten with the tokens; `verify-dist` probe proves motion code is absent from a Button-only bundle.
+**Entry:** 0.14.0 released; spec approved. **Exit:** process criteria; guide chapter "Motion" extended with the component motion (its tokens and the presence core are documented since 0.7); `verify-dist` probe proves motion code is absent from a Button-only bundle.
 
 #### Epic 10.1 — Motion
 
@@ -915,7 +925,7 @@ Goal: nothing changes in 1.0 that a 0.x release did not announce.
 
 - **P13-03 1.0 deprecation notices and warnings.**
   - **Closes:** none (it owns principle 2's announcement step for Phase 14).
-  - **Scope:** a one-time development warning (`warnDeprecated`/`warnOnce`, C-DEV) for every use P14-02 removes that code can detect and that does not warn yet — including Badge `color="important"` (its meaning changes in P14-05; the Phase 1 spec, D1, deferred this warning to the last 0.x minor); CHANGELOG "Deprecated" announcements for what cannot warn at runtime (`legacy-tokens.css`, the `.dark`/`.high-contrast` theme classes, `animations.css`) and for the 1.0 default and type changes: TimePicker `hourCycle` follows the locale (P14-06), the `details` parameter of every `onOpenChange` becomes required (P14-02), `Image.alt` becomes required (P14-03), and the ref-placement decision (P14-04) once made; the "Upgrading to 1.0" guide drafted.
+  - **Scope:** a one-time development warning (`warnDeprecated`/`warnOnce`, C-DEV) for every use P14-02 removes that code can detect and that does not warn yet — including Badge `color="important"` (its meaning changes in P14-05; the Phase 1 spec, D1, deferred this warning to the last 0.x minor); CHANGELOG "Deprecated" announcements for what cannot warn at runtime (`legacy-tokens.css`, the `.dark`/`.high-contrast` theme classes, `animations.css`) and for the 1.0 default and type changes: TimePicker `hourCycle` follows the locale (P14-06), the `details` parameter of every `onOpenChange` and of `onCheckedValuesChange` (Menu, Toolbar; 0.7) becomes required (P14-02), `Image.alt` becomes required (P14-03), and the ref-placement decision (P14-04) once made; the "Upgrading to 1.0" guide drafted.
   - **Acceptance:** every Phase 14 item is announced in a 0.x CHANGELOG and, where code can detect the use, warns in development; a test per warning.
   - **Size:** M. **Depends on:** P2-05, P4-01, P8-04 (the aliases they add), and every other item that adds a deprecated alias.
 
@@ -938,7 +948,7 @@ Goal: a clean, stable 1.0 API.
   - **Size:** L. **Depends on:** P3-00, P12-03.
 - **P14-02 Remove the deprecated aliases.**
   - **Closes:** none (no gap; flagged in the 0.5 CHANGELOG "Deprecated" section).
-  - **Scope:** every old name of the 0.5 migration table, `legacy-tokens.css`, the `.dark`/`.high-contrast` theme classes, the button-object form of the dismiss and clear slots, `animations.css`, the numeric `size` of Input and Select (P4-01), Tooltip `delay` (P2-05), PresenceBadge `dnd`/`oof` (P8-04), and every other alias added in 0.6–0.18; the optional `details` parameter of `onOpenChange` becomes required wherever it exists (Dialog, Drawer, and the surfaces that adopted `OpenChangeDetails` later).
+  - **Scope:** every old name of the 0.5 migration table, `legacy-tokens.css`, the `.dark`/`.high-contrast` theme classes, the button-object form of the dismiss and clear slots, `animations.css`, the numeric `size` of Input and Select (P4-01), Tooltip `delay` (P2-05), PresenceBadge `dnd`/`oof` (P8-04), and every other alias added in 0.6–0.18; the optional `details` parameter of `onOpenChange` becomes required wherever it exists (Dialog, Drawer, and the surfaces that adopted `OpenChangeDetails` later), and so does the `details` parameter of `onCheckedValuesChange` (Menu, Toolbar; announced in the 0.7 CHANGELOG).
   - **Acceptance:** `warnDeprecated` has no callers; the migration table moves to "Upgrading to 1.0".
   - **Size:** M. **Depends on:** P13-03 (and so on all earlier phases).
 - **P14-03 `Image.alt` required.**
@@ -1263,6 +1273,14 @@ Each keeps an APG-aligned or already-documented WaveUI behaviour; revisit only o
 - `popoversurface-3` — Popover keeps focus on the trigger and the inline Tab order.
 - `progress-5` — ProgressBar `max` defaults to 100 (changing it would silently break bars).
 
+Behaviour differences decided by a phase spec (Phase 2, 0.7.0), with no gap of their own:
+
+- Checkbox, radio and switch menu items keep the menu open on Space (the APG menu pattern); Fluent closes it unless the item persists. Enter and a click close it in both.
+- A submenu shares its parent menu's `checkedValues` unless it sets `checkedValues` or `defaultCheckedValues` (an `onCheckedValuesChange` alone only listens); Fluent gives every Menu its own state.
+- `Menu.ItemLink` closes its menu on every click and ignores `persistOnItemClick`, as browser bookmark menus do.
+- Editable fields inside a context-menu region (`openOnContext`) keep the browser's context menu (paste, spelling suggestions) and open nothing; there is no opt-out in 0.7.
+- No global positioning configuration (Fluent's `PositioningConfigurationProvider`): per-component props, and the `positioning` prop of P7-01. The other half of `positioning-8`, the safe zone, shipped in 0.7 (P2-05).
+
 ### 8.4 Deferred (preview in Fluent, or low value now)
 
 - `menu-18` — MenuGrid (preview package).
@@ -1276,3 +1294,8 @@ Each keeps an APG-aligned or already-documented WaveUI behaviour; revisit only o
 Small fixes found while shipping a phase that close no Fluent gap. Any package that touches the component may pick one up; its CHANGELOG entry describes the fix.
 
 - **Focus after a value is cleared from outside the clear button.** Combobox, Dropdown, DatePicker, TimePicker and SearchBox keep focus in the control when the user clears it through the clear button, but when a parent, a programmatic form reset or a timer clears the value while the clear button has keyboard focus, the button unmounts and focus drops to `<body>`. Fix: one shared clear-button part for the five controls that moves focus to the control's input or button (`usePreserveFocus`) when it unmounts while focused. **Size:** M.
+- **A long press opens no context menu in iOS Safari.** It fires no `contextmenu` on a long press, so `openOnContext` (Menu, Popover) has no touch gesture there; 0.7 documents the limitation. Fix: a long-press timer on touch pointers for browsers that fire no `contextmenu`, without a second opening where they do. **Size:** S.
+- **A warning for radio sets without a group.** Radio items of different `name`s that share a menu list without a `Menu.Group` or `Menu.Divider` between the sets are announced as one set. 0.7 rejected a development warning (the DOM does not carry the item order the check needs; the `Menu.ItemRadio` JSDoc and the README give the rule). Fix: a check over the list's items in DOM order, if a cheap one is found. **Size:** S.
+- **`aria-controls` for a `Menu.Popover` `target` toggle.** `MenuPopoverProps` omits `id` and the surface id is generated, so a toggle button used as a menu's `target` cannot point `aria-controls` at the menu (it carries `aria-haspopup` and `aria-expanded`; Popover's content takes an `id`, so its toggle can). Fix: accept a consumer `id` on `Menu.Popover`, which the trigger's `aria-controls` follows, as Popover does. **Size:** S.
+- **Two headers in one `Menu.Group`** render the same id, so the group's name comes from whichever is first in the DOM (the JSDoc asks for one header; nothing detects a second). Fix: give the group's id only to the header its scan found, or warn once on a second header. **Size:** S.
+- **A context surface opened later without a gesture.** Menu and Popover in context mode keep the opener of the last gesture, so a later controlled open from outside (no gesture) uses that older opener, when it is still connected, as its focus-return target (and Popover as its Tab anchor). Fix: forget the opener when an open does not come from a gesture, in both components at once. **Size:** S.
