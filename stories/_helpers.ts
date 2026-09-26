@@ -1,7 +1,8 @@
 /**
  * Shared Storybook `argTypes` for the Wave prop vocabulary (C-NAMING): `size`, `appearance`,
- * `orientation`, `iconPosition`, the Field `validationState` and the Badge `appearance`/`color`
- * values.
+ * `orientation`, `iconPosition`, the Field `validationState`, the Badge `appearance`/`color`
+ * values, and the `size` (`CoreSize`) and `appearance` (`InputAppearance`) of the text controls
+ * and pickers.
  *
  * Each entry is checked with `satisfies ArgTypes`, and each `options` list with `satisfies` against
  * the library type it documents, so a value that is not part of the vocabulary fails the dev type
