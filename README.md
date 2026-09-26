@@ -1252,6 +1252,7 @@ Typeahead (Menu, selectable List, Tree, Dropdown) accepts characters typed with 
 5. Tooltip `delay` is deprecated: rename it to `openDelay` (it still works and warns once in development).
 6. `Menu.Item` `persistOnClick` defaults to the Menu's new `persistOnItemClick` (`false`): no change unless you set it.
 7. While focus is in a menu, the item under the mouse takes focus: a test that hovers an item and then presses Enter activates the hovered item.
+8. Wave now requires tailwind-merge 3.7, so an axis shorthand in your `className` (`px-6`) replaces a component's own logical side class of the same variant (`pe-8` on `Dialog.Title`) instead of losing to it in the CSS: write `px-6 pe-8` to keep the side.
 
 The CHANGELOG's [0.7.0 "Changed" section](CHANGELOG.md#changed) lists every behaviour, DOM and type change.
 
