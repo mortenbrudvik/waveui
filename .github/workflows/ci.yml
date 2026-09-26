@@ -1,0 +1,111 @@
+# The exit gate of docs/ROADMAP.md §3 on every push to main and every pull request: the nine
+# commands of scripts/claude/gate.mjs, each as its own step. A compatibility matrix runs the tests,
+# the build and the pack smoke test on the other supported Node.js lines and on Windows.
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+# Least privilege: CI only reads the repository.
+permissions:
+  contents: read
+
+concurrency:
+  # refs/pull/<n>/merge for a pull request, refs/heads/<branch> otherwise.
+  group: ci-${{ github.ref }}
+  # A new push to a pull request cancels its superseded run; every main commit keeps its result.
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+env:
+  # The npm the lockfile and the allowScripts policy are written for (devEngines asks for
+  # npm >= 11.11; Node.js 22 bundles npm 10.9, Node.js 24 npm 11.19). One place to change it.
+  NPM_VERSION: 12.1.0
+  STORYBOOK_DISABLE_TELEMETRY: 1
+
+jobs:
+  gate:
+    name: Gate (Linux, Node 24)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 24
+          cache: npm
+      - name: Install npm ${{ env.NPM_VERSION }}
+        run: npm install -g "npm@${{ env.NPM_VERSION }}"
+      - name: Install dependencies
+        id: install
+        run: npm ci --no-audit --no-fund
+      # Every check runs even when an earlier one failed, so one run reports all of them (as
+      # scripts/claude/gate.mjs does); the steps that need the build are skipped when it failed.
+      - name: Type-check
+        if: ${{ !cancelled() && steps.install.outcome == 'success' }}
+        run: npm run typecheck
+      - name: Lint
+        if: ${{ !cancelled() && steps.install.outcome == 'success' }}
+        run: npm run lint
+      - name: Check formatting
+        if: ${{ !cancelled() && steps.install.outcome == 'success' }}
+        run: npm run format:check
+      - name: Test
+        if: ${{ !cancelled() && steps.install.outcome == 'success' }}
+        run: npm test
+      - name: Build
+        id: build
+        if: ${{ !cancelled() && steps.install.outcome == 'success' }}
+        run: npm run build
+      - name: Verify dist (final)
+        if: ${{ !cancelled() && steps.build.outcome == 'success' }}
+        run: node scripts/verify-dist.mjs --final
+      - name: Check the package (publint, attw)
+        if: ${{ !cancelled() && steps.build.outcome == 'success' }}
+        run: npm run check:package
+      - name: Pack smoke test
+        if: ${{ !cancelled() && steps.build.outcome == 'success' }}
+        run: npm run test:pack
+      - name: Build Storybook
+        if: ${{ !cancelled() && steps.install.outcome == 'success' }}
+        run: npm run build-storybook
+
+  compat:
+    name: Test (${{ matrix.os }}, Node ${{ matrix.node }})
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          # The oldest supported line (devEngines ^22.22.2; engines >=22.12 for consumers).
+          - { os: ubuntu-24.04, node: 22 }
+          # The Current line (devEngines >=26); setup-node downloads it.
+          - { os: ubuntu-24.04, node: 26 }
+          # The maintainer's platform: the Windows paths of the build and pack scripts.
+          - { os: windows-2025, node: 24 }
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: ${{ matrix.node }}
+          cache: npm
+      # The expression form (not $NPM_VERSION) also works in pwsh, the Windows default shell.
+      - name: Install npm ${{ env.NPM_VERSION }}
+        run: npm install -g "npm@${{ env.NPM_VERSION }}"
+      - name: Install dependencies
+        run: npm ci --no-audit --no-fund
+      - name: Test
+        run: npm test
+      - name: Build
+        run: npm run build
+      - name: Verify dist (final)
+        run: node scripts/verify-dist.mjs --final
+      - name: Pack smoke test
+        run: npm run test:pack

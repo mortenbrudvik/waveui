@@ -70,6 +70,9 @@
     "src/styles",
     "!src/styles/__tests__"
   ],
+  "publishConfig": {
+    "access": "public"
+  },
   "scripts": {
     "dev": "storybook dev -p 6006",
     "build": "tsc -p tsconfig.json --noEmit && vite build && node scripts/build-css.mjs && node scripts/verify-dist.mjs",

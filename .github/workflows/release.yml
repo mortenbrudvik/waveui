@@ -1,0 +1,173 @@
+# Publishes a release when a tag vX.Y.Z (or vX.Y.Z-<prerelease>) is pushed: docs/RELEASING.md.
+#
+#   verify          checks the tag against package.json, CHANGELOG.md and npm
+#                   (scripts/check-release.mjs), runs the full gate and packs the tarball
+#   publish         publishes that tarball to npm through trusted publishing: an OIDC token of this
+#                   workflow instead of a stored npm token, with a provenance attestation
+#   github-release  creates the GitHub release with the CHANGELOG section as its notes
+#
+# npm accepts the OIDC token only while the package's trusted publisher names this repository, this
+# file (release.yml) and the `npm` environment of the publish job:
+#   npm trust github @mortenbrudvik/waveui --file release.yml --repository mortenbrudvik/waveui \
+#     --environment npm --allow-publish
+# There is no manual trigger, so nothing but a pushed tag can publish.
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*.*.*'
+
+# Nothing by default: each job asks for what it needs.
+permissions: {}
+
+concurrency:
+  # One release at a time; a running release is never cancelled.
+  group: release
+  cancel-in-progress: false
+
+env:
+  NPM_VERSION: 12.1.0
+  STORYBOOK_DISABLE_TELEMETRY: 1
+
+jobs:
+  verify:
+    name: Verify, gate and pack
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    permissions:
+      contents: read
+    outputs:
+      version: ${{ steps.check.outputs.version }}
+      prerelease: ${{ steps.check.outputs.prerelease }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0 # origin/main, for the check below
+          persist-credentials: false
+      - name: The tagged commit is on main
+        run: |
+          if ! git merge-base --is-ancestor HEAD origin/main; then
+            echo "::error::$GITHUB_REF_NAME points at $(git rev-parse --short HEAD), which is not on main: tag a commit of main"
+            exit 1
+          fi
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 24
+          # setup-node turns npm caching on by itself (devEngines names npm): off, so no cache that
+          # another run wrote feeds the release build.
+          package-manager-cache: false
+      # Fails before the gate when the tag, package.json and CHANGELOG disagree or the version is
+      # already on npm; writes the release notes and the version outputs. Needs only Node.js.
+      - name: Tag, package.json and CHANGELOG agree; the version is not on npm
+        id: check
+        run: >-
+          node scripts/check-release.mjs "$GITHUB_REF_NAME" --registry
+          --notes "$RUNNER_TEMP/release/notes.md" --output "$GITHUB_OUTPUT"
+      - name: Install npm ${{ env.NPM_VERSION }}
+        run: npm install -g "npm@${{ env.NPM_VERSION }}"
+      - name: Install dependencies
+        run: npm ci --no-audit --no-fund
+      # The full gate: prepublishOnly's commands plus lint, formatting and Storybook. The publish
+      # job publishes the tarball packed below, which runs no lifecycle scripts.
+      - name: Type-check
+        run: npm run typecheck
+      - name: Lint
+        run: npm run lint
+      - name: Check formatting
+        run: npm run format:check
+      - name: Build
+        run: npm run build
+      - name: Verify dist (final)
+        run: node scripts/verify-dist.mjs --final
+      - name: Test
+        run: npm test
+      - name: Check the package (publint, attw)
+        run: npm run check:package
+      - name: Pack smoke test
+        run: npm run test:pack
+      - name: Build Storybook
+        run: npm run build-storybook
+      - name: Pack the tarball to publish
+        run: npm pack --pack-destination "$RUNNER_TEMP/release"
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: release
+          path: |
+            ${{ runner.temp }}/release/*.tgz
+            ${{ runner.temp }}/release/notes.md
+          if-no-files-found: error
+          retention-days: 7
+          overwrite: true
+
+  publish:
+    name: Publish to npm
+    needs: verify
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    # Must match the trusted publisher's --environment. Give the environment a deployment rule for
+    # v* tags (docs/RELEASING.md), so only a release tag can run this job.
+    environment:
+      name: npm
+      url: https://www.npmjs.com/package/@mortenbrudvik/waveui/v/${{ needs.verify.outputs.version }}
+    permissions:
+      contents: read
+      id-token: write # the OIDC token npm exchanges for a publish token, and signs provenance with
+    steps:
+      # No checkout and no npm ci: nothing from the repository or its dependencies runs in the only
+      # job that can publish. No registry-url either: npm authenticates with the OIDC token.
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 24
+          package-manager-cache: false
+      - name: Install npm ${{ env.NPM_VERSION }}
+        run: npm install -g "npm@${{ env.NPM_VERSION }}"
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: release
+          path: release
+      # --provenance makes the publish fail rather than ship without a provenance attestation. A
+      # prerelease goes to the `next` dist-tag; a release takes `latest`, which npm refuses to move
+      # back to a lower version (a patch of an older line needs its own dist-tag).
+      - name: Publish
+        env:
+          PRERELEASE: ${{ needs.verify.outputs.prerelease }}
+        run: |
+          shopt -s nullglob
+          tarballs=(release/*.tgz)
+          if [ "${#tarballs[@]}" -ne 1 ]; then
+            echo "::error::expected one tarball in the release artifact, found ${#tarballs[@]}"
+            exit 1
+          fi
+          args=(--provenance)
+          if [ "$PRERELEASE" = true ]; then args+=(--tag next); fi
+          npm publish "${tarballs[0]}" "${args[@]}"
+
+  github-release:
+    name: GitHub release
+    needs: [verify, publish]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      contents: write # create the release
+    steps:
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: release
+          path: release
+      # Updates the release instead when a re-run finds it (the notes and the tarball).
+      - name: Create the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          TAG: ${{ github.ref_name }}
+          PRERELEASE: ${{ needs.verify.outputs.prerelease }}
+        run: |
+          if gh release view "$TAG" > /dev/null 2>&1; then
+            gh release edit "$TAG" --notes-file release/notes.md
+            gh release upload "$TAG" release/*.tgz --clobber
+          else
+            args=(--verify-tag --title "$TAG" --notes-file release/notes.md)
+            if [ "$PRERELEASE" = true ]; then args+=(--prerelease); fi
+            gh release create "$TAG" "${args[@]}" release/*.tgz
+          fi
