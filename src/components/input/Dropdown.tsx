@@ -4,7 +4,7 @@ import { composeEventHandlers } from '../../lib/composeEventHandlers';
 import { warnDeprecated } from '../../lib/dev';
 import { ChevronDownIcon, DismissIcon } from '../../lib/icons';
 import { disabledStyles, focusRing, inputFocus, inputInvalid } from '../../lib/styles';
-import { useAnnounce } from '../../hooks/useAnnounce';
+import { announce, useAnnounce } from '../../hooks/useAnnounce';
 import { useControllable } from '../../hooks/useControllable';
 import { useFieldContext, useFieldControl } from '../../hooks/useFieldControl';
 import { useFormReset } from '../../hooks/useFormReset';
@@ -15,6 +15,7 @@ import { isInvalidLook } from './Input';
 import { ListboxSurface, Option, OptionGroup, useListboxPopup } from './Option';
 import { defaultAddedLabel, defaultRemovedLabel, defaultSelectionLabel } from './pickerLabels';
 import { PICKER_ICON_BUTTON_CLASSES, pickerEndPadding } from './pickerStyles';
+import { sameValues, toggleValue } from './pickerValues';
 import type { RoutedHandlers } from './routedHandlers';
 
 /* ------------------------------------------------------------------ */
@@ -31,8 +32,8 @@ export interface DropdownLabels {
    */
   clear?: string;
   /**
-   * The text of the selected labels shown in the combobox with `multiselect`, in selection order
-   * (Fluent's `selectedOptions`); values without an option are left out.
+   * The text of the selected labels shown in the combobox with `multiselect`, in selection order;
+   * values without an option are left out. Replaces the button's joined value text.
    * @default (labels) => labels.join(', ')
    */
   selection?: (labels: string[]) => string;
@@ -57,9 +58,9 @@ export interface DropdownProps<M extends boolean = false> extends Omit<
 > {
   /**
    * Several options can be selected (Fluent's `multiselect`): the value is an array, options show
-   * a checkbox, Enter, Space and a click toggle an option and keep the list open, and each toggle
-   * is announced. A non-literal `multiselect={flag}` is a type error: render two elements, one
-   * for each mode.
+   * a checkbox, Enter and Space toggle the highlighted option, a click toggles the clicked
+   * option, the list stays open, and each toggle is announced. A non-literal `multiselect={flag}`
+   * is a type error: render two elements, one for each mode.
    * @default false
    */
   multiselect?: M;
@@ -157,13 +158,21 @@ export interface DropdownComponent {
   OptionGroup: typeof OptionGroup;
 }
 
-/** `defaultValue`/`value` while `multiselect` is on and nothing is uncontrolled yet. */
+/** The empty multi-select value: `defaultValue`'s fallback while `multiselect` is on, and the
+ * stable array `handleClear` clears to. */
 const EMPTY_VALUES: readonly string[] = [];
 
-/** Whether two selections hold the same values in the same order (a reset compared by content). */
-function sameValues(a: readonly string[], b: readonly string[]): boolean {
-  return a.length === b.length && a.every((value, index) => value === b[index]);
+/**
+ * Mounts the shared announcer regions (`useAnnounce`) only while a multi-select Dropdown is on the
+ * page (M2): a single-select Dropdown's DOM stays exactly as in 0.7, with no `[data-wave-announcer]`
+ * added to `document.body`. Renders nothing; toggles announce through the module-level `announce`
+ * function directly, which these regions keep alive.
+ */
+function DropdownAnnouncer() {
+  useAnnounce();
+  return null;
 }
+DropdownAnnouncer.displayName = 'Dropdown.Announcer';
 
 const DropdownRoot = (props: DropdownProps<boolean>) => {
   const {
@@ -232,8 +241,10 @@ const DropdownRoot = (props: DropdownProps<boolean>) => {
     },
   );
   // Normalised for the listbox, the display text and the clear/reset logic: a single value is its
-  // own one-element array.
-  const values: readonly string[] = typeof value === 'string' ? (value ? [value] : []) : value;
+  // own one-element array. `Array.isArray` (not `typeof value === 'string'`) also keeps a `value`
+  // passed as `null`/`undefined` from JavaScript (bypassing the type system) from crashing, as 0.7
+  // did for the single-select string.
+  const values: readonly string[] = Array.isArray(value) ? value : value ? [value] : [];
 
   // A dropdown that starts disabled never shows its list, so it starts closed (no close to report
   // later).
@@ -251,10 +262,6 @@ const DropdownRoot = (props: DropdownProps<boolean>) => {
     if (lockedOpen) setOpen(false);
   }, [lockedOpen, setOpen]);
 
-  // Announces a multiselect toggle the user made (D41): never a controlled change, a clear or a
-  // form reset, none of which call `onSelect` below.
-  const announce = useAnnounce();
-
   const rootRef = React.useRef<HTMLDivElement | null>(null);
   const buttonRef = React.useRef<HTMLButtonElement | null>(null);
 
@@ -267,20 +274,23 @@ const DropdownRoot = (props: DropdownProps<boolean>) => {
     multiselect,
     selectedValues: values,
     onSelect: (next, details) => {
-      onOptionSelect?.(next);
       if (!multiselect) {
+        // 0.7 order: the value callback first, the deprecated one after.
         setValue(next);
+        onOptionSelect?.(next);
         return;
       }
-      const adding = !values.includes(next);
-      const updated = adding ? [...values, next] : values.filter((v) => v !== next);
+      const { values: updated, added } = toggleValue(values, next);
       setValue(updated);
-      // The committed option's label (never read from `listbox` here, per the frozen listbox
-      // seam): the item useListbox passed, else the label read from `children` before it
-      // registered, else the raw value.
+      onOptionSelect?.(next);
+      // The committed option's label: the item useListbox passed in `details` (its own result,
+      // `listbox`, cannot be read from inside the options object passed to it), else the label
+      // read from `children` before the option registered, else the raw value. Announces a
+      // toggle the user made (D41): never a controlled change, a clear or a form reset, none of
+      // which reach this callback.
       const label = details?.item.label ?? optionLabels.get(next) ?? next;
       announce(
-        (adding ? (labels?.added ?? defaultAddedLabel) : (labels?.removed ?? defaultRemovedLabel))(
+        (added ? (labels?.added ?? defaultAddedLabel) : (labels?.removed ?? defaultRemovedLabel))(
           label,
           updated.length,
         ),
@@ -309,11 +319,11 @@ const DropdownRoot = (props: DropdownProps<boolean>) => {
         return;
       }
       const raw = defaultValue ?? EMPTY_VALUES;
-      const initial = typeof raw === 'string' ? EMPTY_VALUES : raw;
+      const initial = Array.isArray(raw) ? raw : EMPTY_VALUES;
       // Compared by content (C-FORMS): an inline default array is a new reference on every
       // render, and a reset that keeps the same values reports nothing.
       setValue((current) => {
-        const currentValues = typeof current === 'string' ? EMPTY_VALUES : current;
+        const currentValues = Array.isArray(current) ? current : EMPTY_VALUES;
         return sameValues(currentValues, initial) ? current : [...initial];
       });
     },
@@ -354,6 +364,7 @@ const DropdownRoot = (props: DropdownProps<boolean>) => {
 
   return (
     <div {...rest} ref={rootMergedRef} className={cn('relative inline-flex flex-col', className)}>
+      {multiselect && <DropdownAnnouncer />}
       <div className="relative flex items-center">
         <button
           type="button"
@@ -444,10 +455,10 @@ export const DropdownOptionGroup = OptionGroup;
  * in a wrapper `<div>` inside the root.
  *
  * `multiselect` turns the value into an array (Fluent's `selectedOptions`): options draw a
- * checkbox, Enter, Space and a click toggle the highlighted option and keep the list open (Tab,
- * Escape and Alt+ArrowUp close without committing), the button shows the selected labels in
- * selection order (`labels.selection`, replacing the placeholder while any are selected, values
- * without an option left out) and every toggle the user makes is announced
+ * checkbox; Enter and Space toggle the highlighted option, a click toggles the clicked option, and
+ * the list stays open (Tab, Escape and Alt+ArrowUp close without committing); the button shows the
+ * selected labels in selection order (`labels.selection`, replacing the placeholder while any are
+ * selected, values without an option left out) and every toggle the user makes is announced
  * (`labels.added`/`labels.removed`, never for a controlled change, a clear or a form reset).
  * `clearable` then clears every value. A non-literal `multiselect={flag}` is a type error: render
  * two elements, one for each mode.

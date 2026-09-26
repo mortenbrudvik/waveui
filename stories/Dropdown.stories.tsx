@@ -99,19 +99,21 @@ export const Disabled: Story = {
  * button, and `clearable` clears all of them. */
 export const Multiselect: StoryObj<DropdownProps<true>> = {
   args: {
+    'aria-label': undefined,
     multiselect: true,
     clearable: true,
-    'aria-label': 'Fruits',
   },
   // The spread alone leaves `multiselect` optional (StoryObj widens `args`), which satisfies
   // neither call signature (D9): the literal attribute after it forces the multi-select one.
   render: (args) => (
-    <Dropdown {...args} multiselect>
-      <Dropdown.Option value="apple">Apple</Dropdown.Option>
-      <Dropdown.Option value="banana">Banana</Dropdown.Option>
-      <Dropdown.Option value="cherry">Cherry</Dropdown.Option>
-      <Dropdown.Option value="date">Date</Dropdown.Option>
-    </Dropdown>
+    <Field label="Fruits">
+      <Dropdown {...args} multiselect>
+        <Dropdown.Option value="apple">Apple</Dropdown.Option>
+        <Dropdown.Option value="banana">Banana</Dropdown.Option>
+        <Dropdown.Option value="cherry">Cherry</Dropdown.Option>
+        <Dropdown.Option value="date">Date</Dropdown.Option>
+      </Dropdown>
+    </Field>
   ),
 };
 

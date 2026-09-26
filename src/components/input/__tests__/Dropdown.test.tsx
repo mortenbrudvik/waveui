@@ -651,6 +651,20 @@ describe('Dropdown', () => {
       expect(warn.mock.calls).toEqual([[DEPRECATED_ON_OPTION_SELECT]]);
     });
 
+    it('calls onValueChange before the deprecated onOptionSelect (0.7 order)', async () => {
+      const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+      const user = userEvent.setup();
+      const calls: string[] = [];
+      renderDropdown({
+        onValueChange: () => calls.push('onValueChange'),
+        onOptionSelect: () => calls.push('onOptionSelect'),
+      });
+      await user.click(combobox());
+      await user.click(option('Apple'));
+      expect(calls).toEqual(['onValueChange', 'onOptionSelect']);
+      expect(warn.mock.calls).toEqual([[DEPRECATED_ON_OPTION_SELECT]]);
+    });
+
     it('warns once that onOptionSelect is deprecated', () => {
       const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
       const { rerender } = renderDropdown({ onOptionSelect: () => {} });
@@ -1362,6 +1376,11 @@ describe('Dropdown', () => {
     expect(within(group).getByRole('option', { name: 'Apple' })).toBeInTheDocument();
   });
 
+  it('adds no announcer live region for a single-select Dropdown (M2)', () => {
+    renderDropdown();
+    expect(document.querySelector('[data-wave-announcer]')).toBeNull();
+  });
+
   describe('multiselect', () => {
     function renderMulti(props: Partial<DropdownProps<true>> = {}) {
       return render(
@@ -1369,6 +1388,12 @@ describe('Dropdown', () => {
           {FRUITS}
         </Dropdown>,
       );
+    }
+
+    /** Flushes the frame the announcer's first write waits for (`src/hooks/useAnnounce.ts`), so a
+     * synchronous read right after can be trusted either way. */
+    async function flushAnnouncerFrame() {
+      await act(() => new Promise<void>((resolve) => requestAnimationFrame(() => resolve())));
     }
 
     it('toggles options with Enter, Space and a click and keeps the list open', async () => {
@@ -1384,14 +1409,33 @@ describe('Dropdown', () => {
       expect(combobox()).toHaveAttribute('aria-expanded', 'true');
     });
 
-    it('closes without committing on Tab, Escape and Alt+ArrowUp', async () => {
+    it('closes without committing on Alt+ArrowUp, Tab and Escape, reopening before each', async () => {
       const user = userEvent.setup();
       const onValueChange = vi.fn();
-      renderMulti({ onValueChange });
+      render(
+        <>
+          <Dropdown aria-label="Fruit" multiselect onValueChange={onValueChange}>
+            {FRUITS}
+          </Dropdown>
+          <button type="button">Next</button>
+        </>,
+      );
       await user.click(combobox());
       await user.keyboard('{ArrowDown}{Alt>}{ArrowUp}{/Alt}');
       expect(combobox()).toHaveAttribute('aria-expanded', 'false');
       expect(onValueChange).not.toHaveBeenCalled();
+
+      await user.click(combobox());
+      await user.keyboard('{ArrowDown}{Escape}');
+      expect(combobox()).toHaveAttribute('aria-expanded', 'false');
+      expect(onValueChange).not.toHaveBeenCalled();
+
+      await user.click(combobox());
+      await user.keyboard('{ArrowDown}');
+      await user.tab();
+      expect(combobox()).toHaveAttribute('aria-expanded', 'false');
+      expect(onValueChange).not.toHaveBeenCalled();
+      expect(screen.getByRole('button', { name: 'Next' })).toHaveFocus();
     });
 
     it('shows labels.selection of the labels in selection order, truncated, and leaves unknown values out', () => {
@@ -1406,32 +1450,82 @@ describe('Dropdown', () => {
       expect(combobox()).toHaveTextContent('Apple、Banana');
     });
 
+    it('shows the placeholder while multiselect has no values', () => {
+      renderMulti({ placeholder: 'Pick some fruit' });
+      expect(combobox()).toHaveTextContent('Pick some fruit');
+    });
+
+    it('draws the option checkbox box for every option, selected or not', async () => {
+      const user = userEvent.setup();
+      renderMulti({ defaultValue: ['a'] });
+      await user.click(combobox());
+      expect(option('Apple').querySelector('[data-wave-option-box]')).not.toBeNull();
+      expect(option('Banana').querySelector('[data-wave-option-box]')).not.toBeNull();
+    });
+
+    it('mounts the announcer live region while mounted, and removes it on unmount (M2)', () => {
+      const { unmount } = renderMulti();
+      expect(document.querySelector('[data-wave-announcer]')).not.toBeNull();
+      unmount();
+      expect(document.querySelector('[data-wave-announcer]')).toBeNull();
+    });
+
+    it('does not crash on a null value from JavaScript', () => {
+      renderMulti({ value: null as never });
+      expect(combobox()).toHaveTextContent('Select an option');
+    });
+
     it('announces each toggle, not a clear', async () => {
       const user = userEvent.setup();
       renderMulti({ clearable: true });
       await user.click(combobox());
       await user.click(option('Apple'));
-      expect(__getAnnouncerText()).toBe('Apple added, 1 selected');
+      await waitFor(() => expect(__getAnnouncerText()).toBe('Apple added, 1 selected'));
       await user.click(option('Apple'));
-      expect(__getAnnouncerText()).toBe('Apple removed, 0 selected');
+      await waitFor(() => expect(__getAnnouncerText()).toBe('Apple removed, 0 selected'));
       await user.click(option('Banana'));
-      __resetAnnouncer();
+      await waitFor(() => expect(__getAnnouncerText()).toBe('Banana added, 1 selected'));
       await user.click(screen.getByRole('button', { name: 'Clear selection' }));
-      expect(__getAnnouncerText()).toBe('');
+      // Settled (waitFor above), so this flush proves a clear announces nothing: a variant that
+      // announces on clear would show a different message here.
+      await flushAnnouncerFrame();
+      expect(__getAnnouncerText()).toBe('Banana added, 1 selected');
     });
 
-    it('announces nothing for a controlled change', () => {
+    it('announces nothing for a controlled change', async () => {
+      const user = userEvent.setup();
       const { rerender } = render(
         <Dropdown aria-label="Fruit" multiselect value={['a']}>
           {FRUITS}
         </Dropdown>,
       );
+      // Settle the regions on a real toggle first (the announcement fires regardless of whether
+      // the controlled parent reflects it back).
+      await user.click(combobox());
+      await user.click(option('Banana'));
+      await waitFor(() => expect(__getAnnouncerText()).toBe('Banana added, 2 selected'));
       rerender(
-        <Dropdown aria-label="Fruit" multiselect value={['a', 'b']}>
+        <Dropdown aria-label="Fruit" multiselect value={['a', 'c']}>
           {FRUITS}
         </Dropdown>,
       );
-      expect(__getAnnouncerText()).toBe('');
+      // A variant that announces every value change from an effect would show a different
+      // message here once that effect's write lands.
+      await flushAnnouncerFrame();
+      expect(__getAnnouncerText()).toBe('Banana added, 2 selected');
+    });
+
+    it('toggles again when a controlled parent ignores the callback (separate interactions)', async () => {
+      const user = userEvent.setup();
+      const onValueChange = vi.fn();
+      renderMulti({ value: ['a'], onValueChange });
+      await user.click(combobox());
+      // A multiselect commit keeps the list open (unlike single-select), so the list is still
+      // open for the second interaction: no second click on the combobox to reopen it.
+      await user.click(option('Banana'));
+      expect(onValueChange).toHaveBeenLastCalledWith(['a', 'b']);
+      await user.click(option('Banana'));
+      expect(onValueChange.mock.calls).toEqual([[['a', 'b']], [['a', 'b']]]);
     });
 
     it('clears every value and focuses the button', async () => {
@@ -1443,28 +1537,73 @@ describe('Dropdown', () => {
       expect(combobox()).toHaveFocus();
     });
 
-    it('submits one entry per value, requires one, and resets to defaultValue by content', async () => {
-      const user = userEvent.setup();
-      const onValueChange = vi.fn();
-      const { container } = render(
-        <form>
-          <Dropdown
-            aria-label="Fruit"
-            multiselect
-            name="fruit"
-            required
-            defaultValue={['a', 'b']}
-            onValueChange={onValueChange}
-          >
-            {FRUITS}
-          </Dropdown>
-          <button type="reset">Reset</button>
-        </form>,
-      );
-      const form = container.querySelector('form')!;
-      expect(new FormData(form).getAll('fruit')).toEqual(['a', 'b']);
-      await user.click(screen.getByRole('button', { name: 'Reset' }));
-      expect(onValueChange).not.toHaveBeenCalled();
+    describe('forms (D10)', () => {
+      it('an empty required multiselect blocks the form; the invalid event focuses the combobox', () => {
+        render(
+          <form aria-label="Order">
+            <Dropdown aria-label="Fruit" multiselect name="fruit" required>
+              {FRUITS}
+            </Dropdown>
+          </form>,
+        );
+        const form = screen.getByRole('form', { name: 'Order' }) as HTMLFormElement;
+        expect(form.checkValidity()).toBe(false);
+        act(() => {
+          form.reportValidity();
+        });
+        expect(combobox()).toHaveFocus();
+      });
+
+      it('submits one entry per value; a toggle then a form reset restores defaultValue, unannounced', async () => {
+        const user = userEvent.setup();
+        const onValueChange = vi.fn();
+        const { container } = render(
+          <form>
+            <Dropdown
+              aria-label="Fruit"
+              multiselect
+              name="fruit"
+              defaultValue={['a', 'b']}
+              onValueChange={onValueChange}
+            >
+              {FRUITS}
+            </Dropdown>
+            <button type="reset">Reset</button>
+          </form>,
+        );
+        const form = container.querySelector('form')!;
+        expect(new FormData(form).getAll('fruit')).toEqual(['a', 'b']);
+        await user.click(combobox());
+        await user.click(option('Cherry'));
+        await waitFor(() => expect(__getAnnouncerText()).toBe('Cherry added, 3 selected'));
+        await user.click(screen.getByRole('button', { name: 'Reset' }));
+        expect(onValueChange).toHaveBeenLastCalledWith(['a', 'b']);
+        // A variant that announces a reset would show a different message here.
+        await flushAnnouncerFrame();
+        expect(__getAnnouncerText()).toBe('Cherry added, 3 selected');
+      });
+
+      it('rerendering with a new inline defaultValue array, then resetting, makes no call (compared by content)', async () => {
+        const user = userEvent.setup();
+        const onValueChange = vi.fn();
+        const make = () => (
+          <form>
+            <Dropdown
+              aria-label="Fruit"
+              multiselect
+              defaultValue={['a', 'b']}
+              onValueChange={onValueChange}
+            >
+              {FRUITS}
+            </Dropdown>
+            <button type="reset">Reset</button>
+          </form>
+        );
+        const { rerender } = render(make());
+        rerender(make());
+        await user.click(screen.getByRole('button', { name: 'Reset' }));
+        expect(onValueChange).not.toHaveBeenCalled();
+      });
     });
 
     it('fires the deprecated onOptionSelect per toggle', async () => {
@@ -1499,7 +1638,13 @@ describe('Dropdown', () => {
       expect(onValueChange).toHaveBeenCalledWith(['a']);
       // The store canonicalizes a duplicated value to the first registered item, whichever
       // duplicate was clicked: the announced label is Apple's, not Apricot's.
-      expect(__getAnnouncerText()).toBe('Apple added, 1 selected');
+      await waitFor(() => expect(__getAnnouncerText()).toBe('Apple added, 1 selected'));
+      // No further warning from the interactions above.
+      expect(warn.mock.calls).toEqual([
+        [
+          '[WaveUI] Listbox: several options share the value "a". Option values must be unique within a listbox; only the first one can be highlighted and selected.',
+        ],
+      ]);
     });
 
     it('calls onValueChange once per toggle in StrictMode', async () => {
@@ -1534,6 +1679,14 @@ describe('Dropdown', () => {
       const flag = Math.random() > 0.5;
       // @ts-expect-error a non-literal multiselect matches neither signature
       void (<Dropdown multiselect={flag} />);
+    });
+
+    it('stays extendable by an interface', () => {
+      interface ExtendedDropdownProps extends DropdownProps {
+        extra?: string;
+      }
+      expectTypeOf<ExtendedDropdownProps['multiselect']>().toEqualTypeOf<false | undefined>();
+      expectTypeOf<ExtendedDropdownProps['value']>().toEqualTypeOf<string | undefined>();
     });
   });
 });
