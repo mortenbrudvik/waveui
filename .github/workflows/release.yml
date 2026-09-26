@@ -137,7 +137,9 @@ jobs:
           VERSION: ${{ needs.verify.outputs.version }}
         run: |
           shopt -s nullglob
-          tarballs=(release/*.tgz)
+          # The ./ keeps npm from reading `release/<file>.tgz` as the GitHub repository shorthand
+          # `owner/repo` (it then runs git ls-remote against github.com/release/<file>.tgz).
+          tarballs=(./release/*.tgz)
           if [ "${#tarballs[@]}" -ne 1 ]; then
             echo "::error::expected one tarball in the release artifact, found ${#tarballs[@]}"
             exit 1
