@@ -5056,12 +5056,16 @@ describe('stable class names: input folder', () => {
         presets={[{ color: '#d13438', label: 'Red' }]}
       />,
     );
-    expect(screen.getByRole('group', { name: 'Accent color' })).toHaveClass(
-      colorPickerClassNames.root,
+    const picker = screen.getByRole('group', { name: 'Accent color' });
+    expect(picker).toHaveClass(colorPickerClassNames.root);
+    // The opacity row's caption and readout, found by their classes rather than as the slider's
+    // siblings: P3-color (Task C10) replaces the slider with an AlphaSlider and keeps both spans.
+    expect(picker.querySelector(`.${colorPickerClassNames.opacityLabel}`)).toHaveTextContent(
+      'Opacity',
     );
-    const opacity = screen.getByRole('slider', { name: 'Opacity' });
-    expect(opacity.previousElementSibling).toHaveClass(colorPickerClassNames.opacityLabel);
-    expect(opacity.nextElementSibling).toHaveClass(colorPickerClassNames.opacityValue);
+    expect(picker.querySelector(`.${colorPickerClassNames.opacityValue}`)).toHaveTextContent(
+      '100%',
+    );
     // The presets are a SwatchPicker, which keeps its own root class.
     expect(screen.getByRole('radiogroup')).toHaveClass(swatchPickerClassNames.root);
   });
