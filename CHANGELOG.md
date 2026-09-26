@@ -10,12 +10,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Upgrading from 0.7
 
 1. **`Dialog.Content` classes that set a margin, a percentage size or a position.** The dialog's 1rem gap to the viewport is now the surface's own margin instead of the backdrop's padding. A margin you pass replaces the gap on its sides instead of adding to it (add 1rem to keep the old distance), a percentage width or height resolves against the whole viewport instead of the viewport minus 2rem, and a surface you position with `fixed` or `absolute` and insets (a side sheet) is offset by the margin until you add `m-0`. See [DOM structure](#dom-structure).
+2. **Dialog body text is the primary text colour**, as in Drawer and Popover; it was muted. Put text that should stay secondary in an element with `text-muted-foreground`. See [Visual](#visual).
 
 ### Changed
 
+#### Visual
+
+- **Dialog: the body text is the primary text colour** (part of [#4](https://github.com/mortenbrudvik/waveui/issues/4)). `Dialog.Content` rendered its body in the muted foreground, so rich content (a task's details, the paragraphs of a form) read as secondary text, unlike the same content in a Drawer or a Popover and in Fluent's DialogContent. The body now inherits the surface's primary foreground; the title and the Close button keep their colours.
+
 #### DOM structure
 
-- **Dialog: the gap to the viewport is the surface's own margin** (part of [#4](https://github.com/mortenbrudvik/waveui/issues/4)). `Dialog.Content` kept its 1rem distance from the viewport edges as padding on the backdrop, which its `className` could not reach, so a larger or full-screen dialog needed negative margins that mirror that padding. The backdrop now has no padding, and the surface has a 1rem margin and a zero minimum width, so content wider than the dialog still scrolls in the body: without classes of yours, a dialog looks as in 0.7. A `className` on `Dialog.Content` can now remove the gap and lift the caps: `m-0 h-dvh max-h-none max-w-none rounded-none border-0` makes a full-screen dialog, `max-w-[72rem]` a wider one, and the same classes behind a breakpoint make one that goes full screen only on narrow screens (README, "Dialogs and triggers"). Negative margins that mirror the old padding keep covering the viewport when the size is in viewport units (`w-screen h-dvh`); for other margins, percentage sizes and positioned surfaces, see [Upgrading from 0.7](#upgrading-from-07).
+- **Dialog: the gap to the viewport is the surface's own margin** (part of [#4](https://github.com/mortenbrudvik/waveui/issues/4)). `Dialog.Content` kept its 1rem distance from the viewport edges as padding on the backdrop, which its `className` could not reach, so a larger or full-screen dialog needed negative margins that mirror that padding. The backdrop now has no padding, and the surface has a 1rem margin and a zero minimum width, so content wider than the dialog still scrolls in the body: without classes of yours, a dialog is laid out as in 0.7. A `className` on `Dialog.Content` can now remove the gap and lift the caps: `m-0 h-dvh max-h-none max-w-none rounded-none border-0` makes a full-screen dialog, `max-w-[72rem]` a wider one, and the same classes behind a breakpoint make one that goes full screen only on narrow screens (README, "Dialogs and triggers"). Negative margins that mirror the old padding keep covering the viewport when the size is in viewport units (`w-screen h-dvh`); for other margins, percentage sizes and positioned surfaces, see [Upgrading from 0.7](#upgrading-from-07).
 
 ## [0.7.0] - 2026-09-26
 

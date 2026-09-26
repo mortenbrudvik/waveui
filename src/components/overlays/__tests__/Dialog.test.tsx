@@ -389,6 +389,13 @@ describe('Dialog', () => {
       expect(dialog.closest('.wave-high-contrast')).not.toBeNull();
       expect(dialog).toHaveClass('border', 'border-border');
     });
+
+    it('renders its body in the primary text colour, as Drawer and Popover do (issue #4)', () => {
+      render(<Basic dialogProps={{ defaultOpen: true }} />);
+      // The body inherits the surface's foreground, so rich content never reads as secondary text.
+      expect(screen.getByRole('dialog')).toHaveClass('text-foreground');
+      expect(screen.getByText('Body').parentElement).not.toHaveClass('text-muted-foreground');
+    });
   });
 
   describe('responsive sizing (overlays#7)', () => {
