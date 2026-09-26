@@ -1,6 +1,6 @@
 {
   "name": "@mortenbrudvik/waveui",
-  "version": "0.5.0",
+  "version": "0.7.0",
   "type": "module",
   "description": "A comprehensive React component library with modern design tokens — accessible, composable components built with TypeScript and Tailwind CSS",
   "license": "MIT",
