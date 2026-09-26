@@ -103,6 +103,8 @@ export const Multiselect: StoryObj<ComboboxProps<true>> = {
     defaultValue: ['apple', 'cherry'],
     placeholder: 'Select fruits...',
   },
+  // `freeform` is not available with `multiselect`: hide the meta's control on this story.
+  argTypes: { freeform: { table: { disable: true } } },
   // The spread alone leaves `multiselect` optional (StoryObj widens `args`), which satisfies
   // neither call signature (D9): the literal attribute after it forces the multi-select one.
   render: (args) => (

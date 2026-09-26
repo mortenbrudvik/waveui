@@ -11,6 +11,10 @@ describe('toValues', () => {
     expect(toValues('a')).toEqual(['a']);
   });
 
+  it('keeps any other truthy value passed from JavaScript as its one value, as 0.7 did', () => {
+    expect(toValues(5 as never)).toEqual([5]);
+  });
+
   it.each([
     ['an empty string', ''],
     ['null (from JavaScript)', null],

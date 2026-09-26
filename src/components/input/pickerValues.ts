@@ -5,12 +5,15 @@
 export const EMPTY_VALUES: readonly string[] = [];
 
 /**
- * The selected values of a picker's value: an array as it is, a non-empty string as its one value,
- * and anything else (`''`, or `null` and `undefined` passed from JavaScript past the types) as none.
+ * The selected values of a picker's value: an array as it is, any other truthy value as its one
+ * value (as 0.7 treated a single value), and `''`, or `null` and `undefined` passed from JavaScript
+ * past the types, as none.
  */
 export function toValues(value: string | readonly string[] | null | undefined): readonly string[] {
   if (Array.isArray(value)) return value;
-  return typeof value === 'string' && value !== '' ? [value] : EMPTY_VALUES;
+  // `Array.isArray` does not narrow a readonly array out of the union, and a value passed from
+  // JavaScript may be any truthy value: it is kept as it is, as 0.7 kept it.
+  return value ? [value as string] : EMPTY_VALUES;
 }
 
 /** Whether two selections hold the same values in the same order (a reset compared by content). */
