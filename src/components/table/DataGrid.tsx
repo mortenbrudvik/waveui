@@ -1,5 +1,13 @@
 import * as React from 'react';
 import { cn } from '../../lib/cn';
+import {
+  dataGridBodyClassNames,
+  dataGridCellClassNames,
+  dataGridClassNames,
+  dataGridHeaderCellClassNames,
+  dataGridHeaderClassNames,
+  dataGridRowClassNames,
+} from '../../lib/classNames';
 import { flattenChildren, isElementOfType } from '../../lib/children';
 import { composeEventHandlers } from '../../lib/composeEventHandlers';
 import {
@@ -898,13 +906,21 @@ const DataGridRoot = (props: DataGridProps) => {
           {...containerRest}
           aria-label={containerHasRole ? containerLabel : undefined}
           aria-labelledby={containerHasRole ? containerLabelledBy : undefined}
-          className={cn('overflow-x-auto rounded-md border border-border', containerClassName)}
+          className={cn(
+            dataGridClassNames.container,
+            'overflow-x-auto rounded-md border border-border',
+            containerClassName,
+          )}
         >
           <table
             ref={mergedRef}
             role="grid"
             aria-multiselectable={selectionMode === 'multiple' || undefined}
-            className={cn('w-full border-separate border-spacing-0', className)}
+            className={cn(
+              dataGridClassNames.root,
+              'w-full border-separate border-spacing-0',
+              className,
+            )}
             {...rest}
             onKeyDown={composeEventHandlers(onKeyDown, gridProps.onKeyDown)}
             onFocus={composeEventHandlers(onFocus, gridProps.onFocus, {
@@ -956,7 +972,12 @@ function DataGridSelectionHeaderCell({
       ref={ref}
       scope="col"
       data-selection-cell=""
-      className={cn(selectionCell, 'text-start', focusRingInset)}
+      className={cn(
+        dataGridHeaderClassNames.selectionCell,
+        selectionCell,
+        'text-start',
+        focusRingInset,
+      )}
     >
       {selectionMode === 'multiple' ? (
         <input
@@ -968,7 +989,7 @@ function DataGridSelectionHeaderCell({
             setClicks((count) => count + 1);
             toggleAll();
           }}
-          className={cn(nativeControl, focusRingInset)}
+          className={cn(dataGridHeaderClassNames.selectAllCheckbox, nativeControl, focusRingInset)}
         />
       ) : (
         <span className="sr-only">{selectionHeaderLabel}</span>
@@ -1012,7 +1033,11 @@ function DataGridSelectionHeaderSlot({
   return isFirst ? (
     <DataGridSelectionHeaderCell ref={cellRef} selectionMode={selectionMode} />
   ) : (
-    <td ref={cellRef} data-selection-cell="" className={cn(selectionCell, focusRingInset)} />
+    <td
+      ref={cellRef}
+      data-selection-cell=""
+      className={cn(dataGridHeaderClassNames.selectionCell, selectionCell, focusRingInset)}
+    />
   );
 }
 
@@ -1095,7 +1120,11 @@ const DataGridHeader = ({ children, className, ref, ...rest }: DataGridHeaderPro
   return (
     <DataGridSectionContext.Provider value="header">
       <DataGridHeaderSlotsContext.Provider value={slots}>
-        <thead ref={mergedRef} className={cn('bg-card', className)} {...rest}>
+        <thead
+          ref={mergedRef}
+          className={cn(dataGridHeaderClassNames.root, 'bg-card', className)}
+          {...rest}
+        >
           {content}
         </thead>
       </DataGridHeaderSlotsContext.Provider>
@@ -1106,7 +1135,7 @@ DataGridHeader.displayName = 'DataGridHeader';
 
 const sortIcon = (direction: SortDirection) => (
   <svg
-    className="h-3 w-3 shrink-0"
+    className={cn(dataGridHeaderCellClassNames.sortIcon, 'h-3 w-3 shrink-0')}
     viewBox="0 0 12 12"
     fill="currentColor"
     aria-hidden="true"
@@ -1166,6 +1195,7 @@ const DataGridHeaderCell = ({
       scope="col"
       aria-sort={sortColumnId !== undefined ? (sortedDirection ?? 'none') : undefined}
       className={cn(
+        dataGridHeaderCellClassNames.root,
         cellBase,
         'text-start align-middle font-semibold text-caption-1 uppercase tracking-wider',
         focusRingInset,
@@ -1181,6 +1211,7 @@ const DataGridHeaderCell = ({
         <button
           type="button"
           className={cn(
+            dataGridHeaderCellClassNames.button,
             'inline-flex w-full cursor-pointer select-none items-center gap-1 border-0 bg-transparent px-4 py-3 text-start text-inherit [font:inherit] uppercase tracking-wider',
             focusRingInset,
           )}
@@ -1199,7 +1230,7 @@ DataGridHeaderCell.displayName = 'DataGridHeaderCell';
 /** The grid's `<tbody>`. */
 const DataGridBody = ({ children, className, ref, ...rest }: DataGridBodyProps) => (
   <DataGridSectionContext.Provider value="body">
-    <tbody ref={ref} className={className} {...rest}>
+    <tbody ref={ref} className={cn(dataGridBodyClassNames.root, className)} {...rest}>
       {children}
     </tbody>
   </DataGridSectionContext.Provider>
@@ -1308,7 +1339,11 @@ const DataGridRow = ({
     );
   } else if (selectable) {
     selectionCellElement = (
-      <td role="gridcell" data-selection-cell="" className={cn(selectionCell, focusRingInset)}>
+      <td
+        role="gridcell"
+        data-selection-cell=""
+        className={cn(dataGridRowClassNames.selectionCell, selectionCell, focusRingInset)}
+      >
         {rowId !== undefined && (
           <input
             type={selectionMode === 'multiple' ? 'checkbox' : 'radio'}
@@ -1321,7 +1356,7 @@ const DataGridRow = ({
             onChange={() => toggleRow(rowId)}
             aria-label={selectionLabel ?? (labelledBy ? undefined : 'Select row')}
             aria-labelledby={selectionLabel === undefined ? labelledBy : undefined}
-            className={cn(nativeControl, focusRingInset)}
+            className={cn(dataGridRowClassNames.selectionControl, nativeControl, focusRingInset)}
           />
         )}
       </td>
@@ -1332,6 +1367,7 @@ const DataGridRow = ({
     <tr
       ref={ref}
       className={cn(
+        dataGridRowClassNames.root,
         !inHeader &&
           'hover:bg-subtle-hover data-[selected]:bg-selected transition-colors motion-reduce:transition-none',
         selectable && isSelected && forcedColors.selectedContainer,
@@ -1354,7 +1390,7 @@ const DataGridCell = ({ children, className, ref, ...rest }: DataGridCellProps) 
   <td
     ref={ref}
     role="gridcell"
-    className={cn(cellBase, 'text-body-1', focusRingInset, className)}
+    className={cn(dataGridCellClassNames.root, cellBase, 'text-body-1', focusRingInset, className)}
     {...rest}
   >
     {children}
