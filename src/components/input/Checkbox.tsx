@@ -6,7 +6,7 @@ import { warnDeprecated, warnOnce } from '../../lib/dev';
 import { CheckIcon, SubtractIcon } from '../../lib/icons';
 import { materialiseSlotContent, slotRendersContent } from '../../lib/slot';
 import { focusRing, forcedColors } from '../../lib/styles';
-import type { LabelPosition } from '../../lib/types';
+import type { LabelPosition, Shape, Size } from '../../lib/types';
 import { useControllable } from '../../hooks/useControllable';
 import { useFieldContext, useFieldControl } from '../../hooks/useFieldControl';
 import { useFormReset } from '../../hooks/useFormReset';
@@ -28,6 +28,26 @@ type CheckboxControlHandlers = 'onClick' | 'onFocus' | 'onBlur' | 'onKeyDown' | 
 
 /** Where a Checkbox renders its label: after the box (default) or before it. */
 export type CheckboxLabelPosition = Extract<LabelPosition, 'before' | 'after'>;
+
+/** Size of the box: an 18px box (the 0.7 look) or a 22px box with a bigger glyph. */
+export type CheckboxSize = Extract<Size, 'medium' | 'large'>;
+
+/** Shape of the box: square corners (the 0.7 look) or a circular, round box. */
+export type CheckboxShape = Extract<Shape, 'square' | 'circular'>;
+
+/** Per-size box, glyph and label-offset classes. */
+const CHECKBOX_SIZE: Readonly<
+  Record<CheckboxSize, { box: string; glyph: number; offset: string }>
+> = {
+  medium: { box: 'h-[18px] w-[18px]', glyph: 12, offset: 'mt-px' },
+  large: { box: 'h-[22px] w-[22px]', glyph: 16, offset: '-mt-px' },
+};
+
+/** Per-shape corner classes. */
+const CHECKBOX_SHAPE: Readonly<Record<CheckboxShape, string>> = {
+  square: 'rounded-xs',
+  circular: 'rounded-full',
+};
 
 /** Properties for the Checkbox component. */
 export interface CheckboxProps extends Omit<
@@ -83,6 +103,18 @@ export interface CheckboxProps extends Omit<
    */
   labelPosition?: CheckboxLabelPosition;
   /**
+   * Size of the box: an 18px box (the 0.7 look) or a 22px box with a bigger glyph. Unlike the
+   * text controls and pickers, Checkbox does not read a surrounding Field's size or a
+   * WaveProvider's input defaults: this prop is the only source of its size.
+   * @default 'medium'
+   */
+  size?: CheckboxSize;
+  /**
+   * Shape of the box: square corners (the 0.7 look) or a circular, round box.
+   * @default 'square'
+   */
+  shape?: CheckboxShape;
+  /**
    * Form field name. With a name, the checkbox takes part in native form submission: it submits
    * `name=value` while checked.
    */
@@ -128,6 +160,9 @@ export interface CheckboxProps extends Omit<
  *   `labelPosition="before"` (the root carries `data-label-position`). The box lines up with the
  *   first line of a label that wraps or has a second line. `children` are not rendered (a
  *   development warning says so).
+ * - `size` (`medium`, `large`) and `shape` (`square`, `circular`) set the box's dimensions and
+ *   corners; the root carries `data-size` and `data-shape`. Checkbox does not read a surrounding
+ *   `Field`'s size or a `WaveProvider`'s input defaults.
  */
 export const Checkbox = ({
   checked: checkedProp,
@@ -139,6 +174,8 @@ export const Checkbox = ({
   disabledFocusable = false,
   label,
   labelPosition = 'after',
+  size = 'medium',
+  shape = 'square',
   name,
   value,
   required,
@@ -216,6 +253,11 @@ export const Checkbox = ({
   useFormReset(buttonRef, () => setChecked(defaultChecked), form);
 
   const on = checked || indeterminate;
+  // Falls back to the default metrics for a size or shape outside the union: TypeScript rejects
+  // one (a type error, not a runtime path a correctly typed caller can reach), but the value
+  // still reaches this render function at runtime, so a lookup miss must not throw.
+  const sizeMetrics = CHECKBOX_SIZE[size] ?? CHECKBOX_SIZE.medium;
+  const shapeClass = CHECKBOX_SHAPE[shape] ?? CHECKBOX_SHAPE.square;
   // Focusable-disabled wins over `disabled`: the box stays focusable but looks and acts disabled.
   const unavailable = disabled || disabledFocusable;
   // The glyph is the forced-colors leaf; the box stays on system colors (see `checkedBox`).
@@ -230,6 +272,8 @@ export const Checkbox = ({
     <label
       ref={ref}
       data-label-position={labelPosition}
+      data-size={size}
+      data-shape={shape}
       className={cn(
         // items-start: the box lines up with the first line of a label that wraps or has a second
         // line, not with its middle.
@@ -276,9 +320,13 @@ export const Checkbox = ({
         className={cn(
           // p-0 and the unchecked bg-transparent are set here, not left to the native reset, which
           // any app button style overrides (C-NATIVE).
-          'flex h-[18px] w-[18px] shrink-0 items-center justify-center rounded-xs border p-0 transition-colors motion-reduce:transition-none',
-          // Centred on the 20px first line of the label text.
-          hasLabel && 'mt-px',
+          cn(
+            'flex shrink-0 items-center justify-center border p-0 transition-colors motion-reduce:transition-none',
+            sizeMetrics.box,
+            shapeClass,
+          ),
+          // Centred on the label's 20px first line: nudged down at medium, up at large.
+          hasLabel && sizeMetrics.offset,
           focusRing,
           on
             ? cn(
@@ -292,9 +340,9 @@ export const Checkbox = ({
         )}
       >
         {indeterminate ? (
-          <SubtractIcon size={12} className={glyphClassName} />
+          <SubtractIcon size={sizeMetrics.glyph} className={glyphClassName} />
         ) : checked ? (
-          <CheckIcon size={12} className={glyphClassName} />
+          <CheckIcon size={sizeMetrics.glyph} className={glyphClassName} />
         ) : null}
       </button>
       {labelPosition !== 'before' && labelText}

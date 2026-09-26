@@ -956,6 +956,44 @@ describe('Checkbox — disabledFocusable', () => {
   });
 });
 
+describe('size and shape (Phase 4 D14)', () => {
+  const box = () => screen.getByRole('checkbox', { name: 'Accept' });
+  const root = () => box().closest('label') as HTMLElement;
+
+  it('medium square is the 0.7 look, with its attributes', () => {
+    render(<Checkbox label="Accept" defaultChecked />);
+    expect(box()).toHaveClass('h-[18px]', 'w-[18px]', 'rounded-xs', 'mt-px');
+    expect(box().querySelector('svg')).toHaveAttribute('width', '12');
+    expect(root()).toHaveAttribute('data-size', 'medium');
+    expect(root()).toHaveAttribute('data-shape', 'square');
+  });
+
+  it('large is a 22px box with a 16px glyph', () => {
+    render(<Checkbox label="Accept" size="large" defaultChecked />);
+    expect(box()).toHaveClass('h-[22px]', 'w-[22px]', '-mt-px');
+    expect(box().querySelector('svg')).toHaveAttribute('width', '16');
+    expect(root()).toHaveAttribute('data-size', 'large');
+  });
+
+  it('circular is round', () => {
+    render(<Checkbox label="Accept" shape="circular" />);
+    expect(box()).toHaveClass('rounded-full');
+    expect(root()).toHaveAttribute('data-shape', 'circular');
+  });
+
+  it('ignores the Field size', () => {
+    renderWithFieldContext(<Checkbox label="Accept" />, { size: 'large' });
+    expect(screen.getByRole('checkbox').closest('label')).toHaveAttribute('data-size', 'medium');
+  });
+
+  it('types', () => {
+    // @ts-expect-error Checkbox has no small size
+    render(<Checkbox label="Accept" size="small" />);
+    // @ts-expect-error Checkbox has no rounded shape
+    render(<Checkbox label="Accept" shape="rounded" />);
+  });
+});
+
 describe('Checkbox — types', () => {
   it('types disabledFocusable as an optional boolean', () => {
     expectTypeOf<CheckboxProps['disabledFocusable']>().toEqualTypeOf<boolean | undefined>();

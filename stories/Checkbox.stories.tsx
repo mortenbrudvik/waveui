@@ -145,3 +145,26 @@ export const DisabledFocusable: Story = {
     </div>
   ),
 };
+
+/**
+ * `size` (`medium`, `large`) and `shape` (`square`, `circular`) set the box's dimensions and
+ * corners. Checkbox does not read a surrounding Field's size or a WaveProvider's input defaults.
+ */
+export const SizesAndShapes: Story = {
+  render: (args) => (
+    <div className="grid grid-cols-2 gap-3">
+      {(['medium', 'large'] as const).flatMap((size) =>
+        (['square', 'circular'] as const).map((shape) => (
+          <Checkbox
+            {...args}
+            key={`${size}-${shape}`}
+            size={size}
+            shape={shape}
+            defaultChecked={shape === 'square'}
+            label={`${size} ${shape}`}
+          />
+        )),
+      )}
+    </div>
+  ),
+};
