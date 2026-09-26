@@ -4,8 +4,13 @@ import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { Textarea, type TextareaProps } from '../Textarea';
 import { inputInvalid } from '../../../lib/styles';
-import { testSystemProps, testFocusEvents, expectNoA11yViolations } from '../../../test-utils';
-import { renderWithFieldContext, FIELD_TEST_TEXT } from '../../../test-utils-field';
+import {
+  testSystemProps,
+  testFocusEvents,
+  renderWithProviders,
+  expectNoA11yViolations,
+} from '../../../test-utils';
+import { renderWithFieldContext, FIELD_TEST_IDS, FIELD_TEST_TEXT } from '../../../test-utils-field';
 import { WaveProvider } from '../../provider/WaveProvider';
 
 describe('Textarea', () => {
@@ -140,7 +145,7 @@ describe('Textarea', () => {
   });
 
   describe('sizes and appearances (Phase 4 P4-01)', () => {
-    const box = () => screen.getByRole('textbox', { name: 'Notes' });
+    const box = (name = 'Notes') => screen.getByRole('textbox', { name });
 
     it('renders the 0.7 classes and medium outline attributes by default', () => {
       render(<Textarea aria-label="Notes" />);
@@ -165,9 +170,37 @@ describe('Textarea', () => {
       expect(box()).toHaveAttribute('data-size', size);
     });
 
+    it.each([
+      ['underline', ['rounded-none', 'border-0', 'border-b', 'bg-transparent']],
+      ['filled-darker', ['border-input-filled-stroke', 'bg-input-filled-darker']],
+      ['filled-lighter', ['border-input-filled-stroke', 'bg-input-filled-lighter']],
+    ] as const)('appearance="%s" renders its classes', (appearance, classes) => {
+      render(<Textarea aria-label="Notes" appearance={appearance} />);
+      expect(box()).toHaveClass(...classes);
+      expect(box()).toHaveAttribute('data-appearance', appearance);
+    });
+
     it('underline keeps vertical resizing and square corners', () => {
       render(<Textarea aria-label="Notes" appearance="underline" />);
       expect(box()).toHaveClass('resize-y', 'rounded-none', 'border-0', 'border-b');
+    });
+
+    it('takes the Field size; its own size wins', () => {
+      const { rerender } = renderWithFieldContext(<Textarea />, { size: 'large' });
+      expect(box(FIELD_TEST_TEXT.label)).toHaveAttribute('data-size', 'large');
+      rerender(<Textarea size="small" />);
+      expect(box(FIELD_TEST_TEXT.label)).toHaveAttribute('data-size', 'small');
+    });
+
+    it('takes WaveProvider inputDefaults; its own props win', () => {
+      const { rerender } = renderWithProviders(<Textarea aria-label="Notes" />, {
+        inputDefaults: { size: 'small', appearance: 'underline' },
+      });
+      expect(box()).toHaveAttribute('data-size', 'small');
+      expect(box()).toHaveAttribute('data-appearance', 'underline');
+      rerender(<Textarea aria-label="Notes" size="large" appearance="outline" />);
+      expect(box()).toHaveAttribute('data-size', 'large');
+      expect(box()).toHaveAttribute('data-appearance', 'outline');
     });
 
     it('takes the Field size and the provider appearance', () => {
@@ -181,5 +214,26 @@ describe('Textarea', () => {
       expect(el).toHaveAttribute('data-size', 'large');
       expect(el).toHaveAttribute('data-appearance', 'filled-darker');
     });
+
+    it.each(['underline', 'filled-darker'] as const)(
+      'an invalid %s field keeps the destructive border and the focus color on its bottom',
+      (appearance) => {
+        render(<Textarea aria-label="Notes" appearance={appearance} error />);
+        expect(box()).toHaveClass('border-destructive', 'focus:border-b-primary');
+      },
+    );
+
+    it.each(['underline', 'filled-darker'] as const)(
+      'a Field error at %s keeps the destructive border and the focus color on its bottom',
+      (appearance) => {
+        renderWithFieldContext(<Textarea appearance={appearance} />, {
+          errorId: FIELD_TEST_IDS.errorId,
+        });
+        expect(box(FIELD_TEST_TEXT.label)).toHaveClass(
+          'border-destructive',
+          'focus:border-b-primary',
+        );
+      },
+    );
   });
 });

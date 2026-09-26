@@ -9,7 +9,7 @@ import {
   renderWithProviders,
   expectNoA11yViolations,
 } from '../../../test-utils';
-import { renderWithFieldContext, FIELD_TEST_TEXT } from '../../../test-utils-field';
+import { renderWithFieldContext, FIELD_TEST_IDS, FIELD_TEST_TEXT } from '../../../test-utils-field';
 import type { CoreSize } from '../../../lib/types';
 
 describe('Input', () => {
@@ -465,6 +465,19 @@ describe('sizes and appearances (Phase 4 P4-01)', () => {
     (appearance) => {
       render(<Input aria-label="Name" appearance={appearance} error />);
       expect(field()).toHaveClass('border-destructive', 'focus:border-b-primary');
+    },
+  );
+
+  it.each(['underline', 'filled-darker'] as const)(
+    'a Field error at %s keeps the destructive border and the focus color on its bottom',
+    (appearance) => {
+      renderWithFieldContext(<Input appearance={appearance} />, {
+        errorId: FIELD_TEST_IDS.errorId,
+      });
+      expect(field(FIELD_TEST_TEXT.label)).toHaveClass(
+        'border-destructive',
+        'focus:border-b-primary',
+      );
     },
   );
 

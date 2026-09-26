@@ -4,12 +4,14 @@ import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { Select, type SelectProps } from '../Select';
 import { inputInvalid } from '../../../lib/styles';
+import type { CoreSize } from '../../../lib/types';
 import {
   testSystemProps,
   testFocusEvents,
   renderWithProviders,
   expectNoA11yViolations,
 } from '../../../test-utils';
+import { renderWithFieldContext, FIELD_TEST_IDS, FIELD_TEST_TEXT } from '../../../test-utils-field';
 
 const options = [
   React.createElement('option', { key: 'a', value: 'a' }, 'Alpha'),
@@ -202,7 +204,7 @@ describe('Select', () => {
 });
 
 describe('sizes and appearances (Phase 4 P4-01)', () => {
-  const select = () => screen.getByRole('combobox', { name: 'Country' });
+  const select = (name = 'Country') => screen.getByRole('combobox', { name });
   const renderSelect = (props: Partial<SelectProps> = {}) =>
     render(
       <Select aria-label="Country" {...props}>
@@ -232,11 +234,79 @@ describe('sizes and appearances (Phase 4 P4-01)', () => {
     expect(select()).toHaveClass(...classes);
   });
 
+  it.each([
+    ['underline', ['rounded-none', 'border-0', 'border-b', 'bg-transparent']],
+    ['filled-darker', ['border-input-filled-stroke', 'bg-input-filled-darker']],
+    ['filled-lighter', ['border-input-filled-stroke', 'bg-input-filled-lighter']],
+  ] as const)('appearance="%s" renders its classes', (appearance, classes) => {
+    renderSelect({ appearance });
+    expect(select()).toHaveClass(...classes);
+    expect(select()).toHaveAttribute('data-appearance', appearance);
+  });
+
   it('a filled appearance keeps the chevron image next to its fill', () => {
     renderSelect({ appearance: 'filled-darker' });
     expect(select()).toHaveClass('bg-input-filled-darker');
     expect(select().className).toContain('bg-[image:');
   });
+
+  it('takes the Field size; its own size wins', () => {
+    const { rerender } = renderWithFieldContext(
+      <Select>
+        <option>Norway</option>
+      </Select>,
+      { size: 'large' },
+    );
+    expect(select(FIELD_TEST_TEXT.label)).toHaveAttribute('data-size', 'large');
+    rerender(
+      <Select size="small">
+        <option>Norway</option>
+      </Select>,
+    );
+    expect(select(FIELD_TEST_TEXT.label)).toHaveAttribute('data-size', 'small');
+  });
+
+  it('takes WaveProvider inputDefaults; its own props win', () => {
+    const { rerender } = renderWithProviders(
+      <Select aria-label="Country">
+        <option>Norway</option>
+      </Select>,
+      { inputDefaults: { size: 'small', appearance: 'underline' } },
+    );
+    expect(select()).toHaveAttribute('data-size', 'small');
+    expect(select()).toHaveAttribute('data-appearance', 'underline');
+    rerender(
+      <Select aria-label="Country" size="large" appearance="outline">
+        <option>Norway</option>
+      </Select>,
+    );
+    expect(select()).toHaveAttribute('data-size', 'large');
+    expect(select()).toHaveAttribute('data-appearance', 'outline');
+  });
+
+  it.each(['underline', 'filled-darker'] as const)(
+    'an invalid %s field keeps the destructive border and the focus color on its bottom',
+    (appearance) => {
+      renderSelect({ appearance, error: true });
+      expect(select()).toHaveClass('border-destructive', 'focus:border-b-primary');
+    },
+  );
+
+  it.each(['underline', 'filled-darker'] as const)(
+    'a Field error at %s keeps the destructive border and the focus color on its bottom',
+    (appearance) => {
+      renderWithFieldContext(
+        <Select appearance={appearance}>
+          <option>Norway</option>
+        </Select>,
+        { errorId: FIELD_TEST_IDS.errorId },
+      );
+      expect(select(FIELD_TEST_TEXT.label)).toHaveClass(
+        'border-destructive',
+        'focus:border-b-primary',
+      );
+    },
+  );
 
   it('a numeric size is the native visible-rows attribute, deprecated', () => {
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
@@ -259,5 +329,27 @@ describe('sizes and appearances (Phase 4 P4-01)', () => {
     const el = screen.getByLabelText('Country');
     expect(el).toHaveAttribute('size', '3');
     expect(warn).not.toHaveBeenCalled();
+  });
+
+  it('with both, htmlSize wins and the numeric form still warns', () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    renderSelect({ htmlSize: 3, size: 4 });
+    // Same role change as above: the native `size` is 3 here too.
+    const el = screen.getByLabelText('Country');
+    expect(el).toHaveAttribute('size', '3');
+    expect(warn).toHaveBeenCalledTimes(1);
+    expect(warn).toHaveBeenCalledWith(
+      '[WaveUI] Select: `size={number}` is deprecated and will be removed in 1.0. Use `htmlSize` instead.',
+    );
+  });
+
+  it('types: CoreSize or a number', () => {
+    expectTypeOf<SelectProps['size']>().toEqualTypeOf<CoreSize | number | undefined>();
+    render(
+      // @ts-expect-error not a size
+      <Select aria-label="Country" size="huge">
+        <option>Norway</option>
+      </Select>,
+    );
   });
 });
