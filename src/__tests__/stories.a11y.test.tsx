@@ -295,6 +295,13 @@ describe('uncommentedTodoOptOuts', () => {
   });
 });
 
+/**
+ * Time allowed for one story's audit. A story that renders many composite controls (the size ×
+ * appearance grids of the pickers render twelve fields, each with its closed listbox inline) needs
+ * seconds of axe time, and under the full suite's parallel load that can pass Vitest's 5 s default.
+ */
+const STORY_AUDIT_TIMEOUT = 20_000;
+
 for (const [path, load] of Object.entries(storyModules).sort(([a], [b]) => a.localeCompare(b))) {
   const file = path.replace(/^(\.\.\/)+/, '');
 
@@ -340,9 +347,13 @@ for (const [path, load] of Object.entries(storyModules).sort(([a], [b]) => a.loc
         it.todo(`${name} (a11y.test: 'todo')`);
         continue;
       }
-      it(name, async () => {
-        await auditStory(Story);
-      });
+      it(
+        name,
+        async () => {
+          await auditStory(Story);
+        },
+        STORY_AUDIT_TIMEOUT,
+      );
     }
   });
 }
