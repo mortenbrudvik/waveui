@@ -6,9 +6,16 @@ const CORE_SIZES: readonly CoreSize[] = ['small', 'medium', 'large'];
 
 /** Options of {@link useInputLook}. */
 export interface InputLookOptions<S extends Size> {
-  /** The sizes the control supports; a Field or provider size outside them is skipped. */
+  /**
+   * The sizes the control supports; a Field or provider size outside them is skipped.
+   * @default the three core sizes (`small`, `medium`, `large`)
+   */
   sizes?: readonly S[];
-  /** The size when nothing else applies. @default 'medium' */
+  /**
+   * The size when nothing else applies. Pass it when `sizes` leaves out `medium`: the fallback is
+   * not checked against `sizes`.
+   * @default 'medium'
+   */
   defaultSize?: S;
 }
 

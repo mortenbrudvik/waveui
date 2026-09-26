@@ -75,4 +75,17 @@ describe('useInputLook (Phase 4 D6)', () => {
     renderWithFieldContext(<Probe options={options} />, { size: 'small' });
     expect(look()).toBe('medium outline');
   });
+
+  it('skips a provider size outside the supported sizes and uses defaultSize', () => {
+    const options = {
+      sizes: ['medium', 'large', 'extra-large'] as const,
+      defaultSize: 'extra-large' as const,
+    };
+    render(
+      <WaveProvider inputDefaults={{ size: 'small' }}>
+        <Probe options={options} />
+      </WaveProvider>,
+    );
+    expect(look()).toBe('extra-large outline');
+  });
 });
