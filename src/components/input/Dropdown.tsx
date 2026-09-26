@@ -3,16 +3,32 @@ import { cn } from '../../lib/cn';
 import { composeEventHandlers } from '../../lib/composeEventHandlers';
 import { warnDeprecated } from '../../lib/dev';
 import { ChevronDownIcon, DismissIcon } from '../../lib/icons';
-import { disabledStyles, focusRing, inputFocus, inputInvalid } from '../../lib/styles';
+import {
+  disabledStyles,
+  focusRing,
+  inputAppearanceClasses,
+  inputFocus,
+  inputHeightClasses,
+  inputInvalid,
+  inputPaddingClasses,
+  inputTextClasses,
+} from '../../lib/styles';
+import type { CoreSize, InputAppearance } from '../../lib/types';
 import { useControllable } from '../../hooks/useControllable';
 import { useFieldContext, useFieldControl } from '../../hooks/useFieldControl';
 import { useFormReset } from '../../hooks/useFormReset';
 import { collectOptionLabels, useListbox } from '../../hooks/useListbox';
 import { useMergedRefs } from '../../hooks/useMergedRefs';
 import { HiddenInput } from '../internal/HiddenInput';
+import { useInputLook } from './inputLook';
 import { isInvalidLook } from './Input';
 import { ListboxSurface, Option, OptionGroup, useListboxPopup } from './Option';
-import { PICKER_ICON_BUTTON_CLASSES, pickerEndPadding } from './pickerStyles';
+import {
+  pickerButtonOffset,
+  pickerEndPadding,
+  pickerGlyphSize,
+  pickerIconButtonClasses,
+} from './pickerStyles';
 import type { RoutedHandlers } from './routedHandlers';
 
 /* ------------------------------------------------------------------ */
@@ -75,6 +91,18 @@ export interface DropdownProps extends Omit<
    * @default false
    */
   disabled?: boolean;
+  /**
+   * Size of the field: `small` (24px tall), `medium` (32px) or `large` (40px). Default: the
+   * surrounding Field's `size`, else `WaveProvider inputDefaults.size`, else `'medium'`. The
+   * listbox keeps its size.
+   */
+  size?: CoreSize;
+  /**
+   * Look of the field: `outline` (a full border), `underline` (a bottom stroke only),
+   * `filled-darker` or `filled-lighter` (a fill without a visible stroke: give the field a visible
+   * label). Default: `WaveProvider inputDefaults.appearance`, else `'outline'`.
+   */
+  appearance?: InputAppearance;
   /** Name of the value in form submissions (renders a hidden input). */
   name?: string;
   /** Id of the form the value belongs to, when the Dropdown is outside it. */
@@ -117,6 +145,8 @@ const DropdownRoot = (props: DropdownProps) => {
     onOpenChange,
     placeholder = 'Select an option',
     disabled = false,
+    size: sizeProp,
+    appearance: appearanceProp,
     name,
     form,
     required,
@@ -159,6 +189,7 @@ const DropdownRoot = (props: DropdownProps) => {
   });
   // The error look follows the resolved state: the consumer's `aria-invalid` or the Field's.
   const invalidLook = isInvalidLook(false, fieldProps['aria-invalid']);
+  const { size, appearance } = useInputLook(sizeProp, appearanceProp);
 
   const [value, setValue] = useControllable(valueProp, defaultValue ?? '', onValueChange);
   // A dropdown that starts disabled never shows its list, so it starts closed (no close to report
@@ -235,7 +266,13 @@ const DropdownRoot = (props: DropdownProps) => {
       : fieldProps['aria-labelledby'];
 
   return (
-    <div {...rest} ref={rootMergedRef} className={cn('relative inline-flex flex-col', className)}>
+    <div
+      data-size={size}
+      data-appearance={appearance}
+      {...rest}
+      ref={rootMergedRef}
+      className={cn('relative inline-flex flex-col', className)}
+    >
       <div className="relative flex items-center">
         <button
           type="button"
@@ -256,8 +293,13 @@ const DropdownRoot = (props: DropdownProps) => {
           className={cn(
             // Every padding is set here (C-NATIVE), not left to an app-wide `button` rule. The end
             // padding keeps the text clear of the chevron (and of the clear button while it shows).
-            'relative flex h-8 w-full items-center justify-between rounded border border-input border-b-stroke-accessible bg-background px-3 py-0 text-start text-body-1 text-foreground',
-            pickerEndPadding(showClear ? 2 : 1),
+            'relative flex w-full items-center justify-between py-0 text-start',
+            inputHeightClasses[size],
+            inputPaddingClasses[size],
+            inputTextClasses[size],
+            inputAppearanceClasses[appearance],
+            'text-foreground',
+            pickerEndPadding(showClear ? 2 : 1, size),
             inputFocus,
             disabledStyles,
             invalidLook && inputInvalid,
@@ -267,8 +309,10 @@ const DropdownRoot = (props: DropdownProps) => {
             {displayText || placeholder}
           </span>
           <ChevronDownIcon
+            size={pickerGlyphSize(size, 'chevron')}
             className={cn(
-              'absolute end-3 transition-transform motion-reduce:transition-none',
+              'absolute transition-transform motion-reduce:transition-none',
+              size === 'small' ? 'end-2' : 'end-3',
               expanded && 'rotate-180',
             )}
           />
@@ -281,9 +325,14 @@ const DropdownRoot = (props: DropdownProps) => {
             // Keeps focus on the combobox while the pointer clears it.
             onMouseDown={(event) => event.preventDefault()}
             onClick={handleClear}
-            className={cn(PICKER_ICON_BUTTON_CLASSES, 'end-7', focusRing, disabledStyles)}
+            className={cn(
+              pickerIconButtonClasses(size, appearance),
+              pickerButtonOffset(size, 2),
+              focusRing,
+              disabledStyles,
+            )}
           >
-            <DismissIcon />
+            <DismissIcon size={pickerGlyphSize(size, 'icon')} />
           </button>
         )}
       </div>
@@ -333,6 +382,11 @@ export const DropdownOptionGroup = OptionGroup;
  * whenever it ends up `aria-invalid` (its own `aria-invalid` or a `Field` error). With
  * `name`/`required` the value takes part in form submission, validation and reset. The open
  * listbox renders in a portal; while closed it stays in the DOM, hidden.
+ *
+ * **Size and appearance**: `size` resolves from its own prop, then the surrounding `Field`'s
+ * `size`, then `WaveProvider inputDefaults.size`, else `'medium'`; `appearance` from its own prop,
+ * then `WaveProvider inputDefaults.appearance`, else `'outline'`; both render as `data-size` and
+ * `data-appearance` on the root `<div>`. The listbox keeps its size.
  *
  * Sub-components: `Dropdown.Option`, `Dropdown.OptionGroup`. React Server Components import the
  * flat names `DropdownOption` / `DropdownOptionGroup` (dotted access needs a client file).

@@ -4,7 +4,13 @@ import { act, fireEvent, render, screen, waitFor, within } from '@testing-librar
 import userEvent from '@testing-library/user-event';
 import { renderToString } from 'react-dom/server';
 import { hydrateRoot } from 'react-dom/client';
-import { Dropdown, DropdownOption, DropdownOptionGroup, type DropdownLabels } from '../Dropdown';
+import {
+  Dropdown,
+  DropdownOption,
+  DropdownOptionGroup,
+  type DropdownLabels,
+  type DropdownProps,
+} from '../Dropdown';
 import { Option, OptionGroup } from '../Combobox';
 import {
   asClientReference,
@@ -1350,5 +1356,157 @@ describe('Dropdown', () => {
     const group = screen.getByRole('group', { name: 'Fruit' });
     expect(group.closest('[data-wave-listbox-surface]')).not.toBeNull();
     expect(within(group).getByRole('option', { name: 'Apple' })).toBeInTheDocument();
+  });
+
+  describe('sizes and appearances (Phase 4 P4-01)', () => {
+    const renderDropdown = (props: Partial<DropdownProps> = {}) =>
+      render(
+        <Dropdown aria-label="Role" clearable defaultValue="user" {...props}>
+          <Dropdown.Option value="user">User</Dropdown.Option>
+        </Dropdown>,
+      );
+    const button = () => screen.getByRole('combobox', { name: 'Role' });
+    const chevron = () => button().querySelector('svg') as SVGElement;
+    const clear = () => screen.getByRole('button', { name: 'Clear selection' });
+
+    it('keeps the 0.7 classes at medium', () => {
+      renderDropdown();
+      expect(button()).toHaveClass('h-8', 'px-3', 'text-body-1', 'pe-14');
+      expect(chevron()).toHaveClass('end-3');
+      expect(clear()).toHaveClass('h-6', 'w-6', 'end-7');
+    });
+
+    it.each([
+      ['small', ['h-6', 'px-2', 'text-caption-1', 'pe-13'], 'end-2', ['size-5', 'end-7']],
+      ['large', ['h-10', 'px-4', 'text-body-2', 'pe-18'], 'end-3', ['size-8', 'end-9']],
+    ] as const)('%s', (size, buttonClasses, chevronOffset, clearClasses) => {
+      renderDropdown({ size });
+      expect(button()).toHaveClass(...buttonClasses);
+      expect(chevron()).toHaveClass(chevronOffset);
+      expect(clear()).toHaveClass(...clearClasses);
+    });
+
+    it('renders the appearance on the button and the attributes on the root', () => {
+      renderDropdown({ appearance: 'filled-lighter' });
+      expect(button()).toHaveClass('bg-input-filled-lighter', 'border-input-filled-stroke');
+      const root = button().closest('[data-appearance]') as HTMLElement;
+      expect(root).toHaveAttribute('data-appearance', 'filled-lighter');
+      expect(root).toHaveAttribute('data-size', 'medium');
+    });
+
+    // Spec cases added beyond the brief (§2.2's Tests paragraph, binding via "as §2.1 for each
+    // picker"; §2.1's Tests paragraph at line 334): the default data-size/data-appearance; the
+    // remaining appearances with their data-appearance; the Field size with an own size winning;
+    // WaveProvider inputDefaults with own props winning; invalid (a Field error, and Dropdown's
+    // own aria-invalid, its 0.7 invalid state) at underline and filled-darker; the glyph widths
+    // per size for the chevron and the clear button; RTL offsets.
+
+    it('renders the default data-size and data-appearance on the root', () => {
+      renderDropdown();
+      const root = button().closest('[data-appearance]') as HTMLElement;
+      expect(root).toHaveAttribute('data-size', 'medium');
+      expect(root).toHaveAttribute('data-appearance', 'outline');
+    });
+
+    it.each([
+      ['underline', ['rounded-none', 'border-0', 'border-b', 'bg-transparent']],
+      ['filled-darker', ['border-input-filled-stroke', 'bg-input-filled-darker']],
+    ] as const)(
+      'appearance="%s" renders its classes and data-appearance',
+      (appearance, classes) => {
+        renderDropdown({ appearance });
+        expect(button()).toHaveClass(...classes);
+        const root = button().closest('[data-appearance]') as HTMLElement;
+        expect(root).toHaveAttribute('data-appearance', appearance);
+      },
+    );
+
+    it('takes the Field size; its own size wins', () => {
+      const { rerender } = renderWithFieldContext(
+        <Dropdown clearable defaultValue="user">
+          <Dropdown.Option value="user">User</Dropdown.Option>
+        </Dropdown>,
+        { size: 'large' },
+      );
+      const byName = () =>
+        screen.getByRole('combobox', { name: FIELD_TEST_TEXT.label }).closest('[data-size]');
+      expect(byName()).toHaveAttribute('data-size', 'large');
+      rerender(
+        <Dropdown size="small" clearable defaultValue="user">
+          <Dropdown.Option value="user">User</Dropdown.Option>
+        </Dropdown>,
+      );
+      expect(byName()).toHaveAttribute('data-size', 'small');
+    });
+
+    it('takes WaveProvider inputDefaults; its own props win', () => {
+      const { rerender } = renderWithProviders(
+        <Dropdown aria-label="Role" clearable defaultValue="user">
+          <Dropdown.Option value="user">User</Dropdown.Option>
+        </Dropdown>,
+        { inputDefaults: { size: 'small', appearance: 'underline' } },
+      );
+      const root = () =>
+        screen.getByRole('combobox', { name: 'Role' }).closest('[data-size]') as HTMLElement;
+      expect(root()).toHaveAttribute('data-size', 'small');
+      expect(root()).toHaveAttribute('data-appearance', 'underline');
+      rerender(
+        <Dropdown aria-label="Role" size="large" appearance="outline" clearable defaultValue="user">
+          <Dropdown.Option value="user">User</Dropdown.Option>
+        </Dropdown>,
+      );
+      expect(root()).toHaveAttribute('data-size', 'large');
+      expect(root()).toHaveAttribute('data-appearance', 'outline');
+    });
+
+    it.each(['underline', 'filled-darker'] as const)(
+      'an invalid %s field keeps the destructive border and the focus color on its bottom (Field error)',
+      (appearance) => {
+        renderWithFieldContext(
+          <Dropdown appearance={appearance} clearable defaultValue="user">
+            <Dropdown.Option value="user">User</Dropdown.Option>
+          </Dropdown>,
+          { errorId: FIELD_TEST_IDS.errorId },
+        );
+        const control = screen.getByRole('combobox', { name: FIELD_TEST_TEXT.label });
+        expect(control).toHaveClass('border-destructive', 'focus:border-b-primary');
+      },
+    );
+
+    it.each(['underline', 'filled-darker'] as const)(
+      "an invalid %s field keeps the destructive border and the focus color on its bottom (Dropdown's own invalid state)",
+      (appearance) => {
+        renderDropdown({ appearance, 'aria-invalid': true });
+        expect(button()).toHaveClass('border-destructive', 'focus:border-b-primary');
+      },
+    );
+
+    it.each([
+      ['small', 12, 12],
+      ['medium', 12, 16],
+      ['large', 16, 20],
+    ] as const)('glyph widths at size=%s: chevron %spx, clear %spx', (size, chevronPx, clearPx) => {
+      renderDropdown({ size });
+      expect(chevron()).toHaveAttribute('width', String(chevronPx));
+      expect(clear().querySelector('svg')).toHaveAttribute('width', String(clearPx));
+    });
+
+    it('extends the small clear button hit area with a transparent layer (WCAG 2.5.8)', () => {
+      renderDropdown({ size: 'small' });
+      expect(clear()).toHaveClass('before:absolute', 'before:-inset-0.5');
+    });
+
+    it('keeps the chevron and the clear button at the inline end in RTL', () => {
+      renderWithProviders(
+        <Dropdown aria-label="Role" size="large" clearable defaultValue="user">
+          <Dropdown.Option value="user">User</Dropdown.Option>
+        </Dropdown>,
+        { dir: 'rtl' },
+      );
+      expect(screen.getByRole('combobox', { name: 'Role' }).querySelector('svg')).toHaveClass(
+        'end-3',
+      );
+      expect(screen.getByRole('button', { name: 'Clear selection' })).toHaveClass('end-9');
+    });
   });
 });
