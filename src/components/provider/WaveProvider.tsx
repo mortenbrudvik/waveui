@@ -2,6 +2,7 @@ import * as React from 'react';
 import { cn } from '../../lib/cn';
 import { warnOnce } from '../../lib/dev';
 import { getThemeClassName, isWaveTheme, WAVE_THEMES, type WaveTheme } from '../../lib/theme';
+import type { CoreSize, InputAppearance } from '../../lib/types';
 
 // The theme helper lives in server-safe src/lib (no "use client"), so React Server Components can
 // call it; it stays exported from here too.
@@ -10,6 +11,14 @@ export type { WaveTheme } from '../../lib/theme';
 
 /** Text direction for bidirectional layout support. */
 export type WaveDir = 'ltr' | 'rtl';
+
+/** Default size and appearance of the text inputs and pickers in a subtree. */
+export interface InputDefaults {
+  /** Default `size` of Input, Textarea, Select, SearchBox, SpinButton and the pickers. */
+  size?: CoreSize;
+  /** Default `appearance` of the same controls. */
+  appearance?: InputAppearance;
+}
 
 /** Props accepted by {@link WaveProvider}. */
 export interface WaveProviderProps extends React.HTMLAttributes<HTMLDivElement> {
@@ -30,6 +39,14 @@ export interface WaveProviderProps extends React.HTMLAttributes<HTMLDivElement> 
    * @default the enclosing WaveProvider's container, else document.body
    */
   portalContainer?: HTMLElement | null;
+  /**
+   * Default `size` and `appearance` of the text inputs and pickers in the subtree (Input,
+   * Textarea, Select, SearchBox, SpinButton, Combobox, Dropdown, DatePicker, TimePicker,
+   * TagPicker). Their own props and a Field's `size` win. A nested provider merges its keys over
+   * the enclosing provider's; an omitted key is inherited.
+   * @default the enclosing WaveProvider's defaults, else none (`medium`, `outline`)
+   */
+  inputDefaults?: InputDefaults;
   /** Content rendered inside the themed container. */
   children: React.ReactNode;
   /** Ref to the themed root `<div>`. */
@@ -49,6 +66,8 @@ export interface WaveContextValue {
   themeClassName: string;
   /** Element portaled overlays render into; `null` means `document.body`. */
   portalContainer: HTMLElement | null;
+  /** The merged input defaults of the providers above (`{}` outside a provider). */
+  inputDefaults: InputDefaults;
   /** `false` when no {@link WaveProvider} is above the caller (the defaults are returned). */
   hasProvider: boolean;
 }
@@ -58,6 +77,7 @@ const DEFAULT_CONTEXT: WaveContextValue = {
   dir: 'ltr',
   themeClassName: '',
   portalContainer: null,
+  inputDefaults: {},
   hasProvider: false,
 };
 
@@ -89,11 +109,15 @@ export function useWaveTheme(): WaveContextValue {
  *   enclosing provider, so `<WaveProvider theme="light">` inside an RTL app is a light panel that
  *   stays right-to-left and keeps the app's portal container. At the top level the defaults are
  *   `'light'`, `'ltr'` and `document.body`.
+ * - `inputDefaults` nests differently: a nested provider's defined keys override the enclosing
+ *   provider's, and an omitted key is inherited, so setting only `appearance` in a nested provider
+ *   keeps the enclosing provider's `size`.
  */
 export const WaveProvider = ({
   theme: themeProp,
   dir: dirProp,
   portalContainer: portalContainerProp,
+  inputDefaults: inputDefaultsProp,
   children,
   className,
   ref,
@@ -107,6 +131,17 @@ export const WaveProvider = ({
   const dir = dirProp ?? parent.dir;
   const portalContainer =
     portalContainerProp === undefined ? parent.portalContainer : portalContainerProp;
+
+  // Defined keys override the enclosing provider's; the merged object keeps its identity while the
+  // two values are equal, so an inline `inputDefaults={{ … }}` does not re-render every input.
+  const size = inputDefaultsProp?.size ?? parent.inputDefaults.size;
+  const appearance = inputDefaultsProp?.appearance ?? parent.inputDefaults.appearance;
+  const inputDefaults = React.useMemo<InputDefaults>(() => {
+    const merged: InputDefaults = {};
+    if (size !== undefined) merged.size = size;
+    if (appearance !== undefined) merged.appearance = appearance;
+    return merged;
+  }, [size, appearance]);
 
   // An unknown value (untyped callers) renders, and is reported, as the light theme.
   const resolvedTheme: WaveTheme = isWaveTheme(theme) ? theme : 'light';
@@ -122,8 +157,15 @@ export const WaveProvider = ({
   }, [theme]);
 
   const value = React.useMemo<WaveContextValue>(
-    () => ({ theme: resolvedTheme, dir, themeClassName, portalContainer, hasProvider: true }),
-    [resolvedTheme, dir, themeClassName, portalContainer],
+    () => ({
+      theme: resolvedTheme,
+      dir,
+      themeClassName,
+      portalContainer,
+      inputDefaults,
+      hasProvider: true,
+    }),
+    [resolvedTheme, dir, themeClassName, portalContainer, inputDefaults],
   );
 
   return (

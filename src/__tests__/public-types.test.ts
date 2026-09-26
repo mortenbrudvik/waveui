@@ -43,6 +43,7 @@ import type {
   ComboboxLabels,
   ComboboxProps,
   CompoundButtonProps,
+  CoreSize,
   CounterBadgeProps,
   DialogModalType,
   DialogOpenChangeDetails,
@@ -57,6 +58,8 @@ import type {
   FieldControlIdClaim,
   FieldProps,
   IconPosition,
+  InputAppearance,
+  InputDefaults,
   LabelPosition,
   LinkProps,
   Menu,
@@ -137,7 +140,9 @@ import type {
   UseRovingTabIndexOptions,
   ValidationState,
   VirtualElement,
+  WaveContextValue,
   WaveDir,
+  WaveProviderProps,
 } from '../index';
 
 const srcDir = fileURLToPath(new URL('..', import.meta.url));
@@ -750,5 +755,17 @@ describe('0.7 menus, popovers and toolbars from the package entry', () => {
     // @ts-expect-error the pressed state of a toolbar toggle is the Toolbar's checkedValues
     const pressed: ToolbarToggleButtonProps = { name: 'format', value: 'bold', pressed: true };
     expect([huge, checkbox, pressed]).toHaveLength(3);
+  });
+});
+
+// The 0.9 input defaults, imported from the package entry (compile-time, tsconfig.dev.json).
+describe('0.9 input defaults from the package entry (Phase 4 D7)', () => {
+  it('InputDefaults, and the WaveProviderProps/WaveContextValue members that use it', () => {
+    expectTypeOf<InputDefaults>().toEqualTypeOf<{
+      size?: CoreSize;
+      appearance?: InputAppearance;
+    }>();
+    expectTypeOf<WaveProviderProps['inputDefaults']>().toEqualTypeOf<InputDefaults | undefined>();
+    expectTypeOf<WaveContextValue['inputDefaults']>().toEqualTypeOf<InputDefaults>();
   });
 });

@@ -1107,6 +1107,14 @@ describe('renderWithProviders', () => {
       'high-contrast/ltr',
     );
   });
+
+  it('renderWithProviders passes inputDefaults to the provider', () => {
+    function Probe() {
+      return <output>{useWaveTheme().inputDefaults.size}</output>;
+    }
+    renderWithProviders(<Probe />, { inputDefaults: { size: 'large' } });
+    expect(screen.getByRole('status')).toHaveTextContent('large');
+  });
 });
 
 // ---------------------------------------------------------------------------

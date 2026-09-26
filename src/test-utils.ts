@@ -77,7 +77,8 @@
  * (`tsconfig.dev.json`). `data-*` attributes are always accepted.
  *
  * ## Other helpers
- * - {@link renderWithProviders}: renders inside `WaveProvider` with `theme`/`dir` (RTL tests).
+ * - {@link renderWithProviders}: renders inside `WaveProvider` with `theme`/`dir`/`inputDefaults`
+ *   (RTL tests).
  * - {@link testNoImplicitSubmit}: internal `<button>`s are never submit buttons, portaled ones
  *   included, and clicking inside the form never submits it (C-BUTTON-TYPE).
  * - {@link testComposedHandler}: a consumer handler composes with the built-in behaviour and can
@@ -121,7 +122,7 @@ import type { UserEvent } from '@testing-library/user-event';
 import { onTestFinished } from 'vitest';
 import { configureAxe } from 'vitest-axe';
 import { WaveProvider } from './components/provider/WaveProvider';
-import type { WaveDir, WaveTheme } from './components/provider/WaveProvider';
+import type { InputDefaults, WaveDir, WaveTheme } from './components/provider/WaveProvider';
 import { describeElement } from './test-setup';
 
 /*
@@ -933,12 +934,14 @@ export interface RenderWithProvidersOptions extends RenderOptions {
   theme?: WaveTheme;
   /** `WaveProvider` direction — use `'rtl'` for the RTL test of directional components. @default 'ltr' */
   dir?: WaveDir;
+  /** `WaveProvider` input defaults. */
+  inputDefaults?: InputDefaults;
 }
 
 /**
- * Renders `ui` inside `<WaveProvider theme dir>` (the provider's existing `theme`/`dir` props).
- * A `wrapper` option is rendered inside the provider. Returns the usual RTL result; `rerender`
- * keeps the providers.
+ * Renders `ui` inside `<WaveProvider theme dir inputDefaults>` (the provider's existing
+ * `theme`/`dir`/`inputDefaults` props). A `wrapper` option is rendered inside the provider.
+ * Returns the usual RTL result; `rerender` keeps the providers.
  *
  * @example
  * renderWithProviders(<Pagination totalPages={5} />, { dir: 'rtl' });
@@ -947,10 +950,10 @@ export function renderWithProviders(
   ui: React.ReactElement,
   options: RenderWithProvidersOptions = {},
 ): RenderResult {
-  const { theme, dir, wrapper: InnerWrapper, ...renderOptions } = options;
+  const { theme, dir, inputDefaults, wrapper: InnerWrapper, ...renderOptions } = options;
   function Providers({ children }: { children: React.ReactNode }) {
     const inner = InnerWrapper ? React.createElement(InnerWrapper, null, children) : children;
-    return React.createElement(WaveProvider, { theme, dir, children: inner });
+    return React.createElement(WaveProvider, { theme, dir, inputDefaults, children: inner });
   }
   return render(ui, { ...renderOptions, wrapper: Providers });
 }
