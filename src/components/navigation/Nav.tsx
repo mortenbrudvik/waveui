@@ -1,5 +1,11 @@
 import * as React from 'react';
 import { cn } from '../../lib/cn';
+import {
+  navCategoryClassNames,
+  navClassNames,
+  navItemClassNames,
+  navSubItemClassNames,
+} from '../../lib/classNames';
 import type { Slot } from '../../lib/types';
 import { renderSlot, slotRendersContent } from '../../lib/slot';
 import {
@@ -387,9 +393,12 @@ const iconClasses = 'flex h-5 w-5 shrink-0 items-center justify-center';
  * Avatar, and so is a collection whose items render nothing, so no empty 20px box is rendered
  * before the label. The check does not consume a generator: renderSlot still renders its items.
  */
-function renderIcon(icon: Slot<'span'> | undefined): React.ReactElement | null {
+function renderIcon(
+  icon: Slot<'span'> | undefined,
+  className: string | undefined,
+): React.ReactElement | null {
   return icon && slotRendersContent(icon)
-    ? renderSlot(icon, 'span', iconClasses, { 'aria-hidden': true })
+    ? renderSlot(icon, 'span', cn(className, iconClasses), { 'aria-hidden': true })
     : null;
 }
 
@@ -523,11 +532,20 @@ function opensElsewhere(event: React.MouseEvent<HTMLElement>): boolean {
   return (!!target && target.toLowerCase() !== '_self') || link.hasAttribute('download');
 }
 
+/** The stable classes of an entry, written literally by Nav.Item and Nav.SubItem. */
+interface NavEntryClassNames {
+  root: string;
+  listItem: string;
+  icon?: string;
+  content?: string;
+}
+
 /** Shared rendering of Nav.Item and Nav.SubItem (link or button). */
 function renderNavEntry(
   props: NavEntryProps,
   context: NavContextValue,
   classes: { base: string; selected: string; idle: string },
+  stable: NavEntryClassNames,
   withIcon: boolean,
 ): React.ReactElement {
   const { value, icon, disabled = false, href, className, children, onClick, ref, ...rest } = props;
@@ -550,16 +568,25 @@ function renderNavEntry(
 
   const content = (
     <>
-      {withIcon && renderIcon(icon)}
-      {withIcon ? <span className="flex-1 text-start">{children}</span> : children}
+      {withIcon && renderIcon(icon, stable.icon)}
+      {withIcon ? (
+        <span className={cn(stable.content, 'flex-1 text-start')}>{children}</span>
+      ) : (
+        children
+      )}
     </>
   );
 
-  const entryClassName = cn(classes.base, isSelected ? classes.selected : classes.idle, className);
+  const entryClassName = cn(
+    stable.root,
+    classes.base,
+    isSelected ? classes.selected : classes.idle,
+    className,
+  );
 
   if (isLink) {
     return (
-      <li>
+      <li className={stable.listItem}>
         <a
           {...(rest as React.AnchorHTMLAttributes<HTMLAnchorElement>)}
           ref={ref as React.Ref<HTMLAnchorElement>}
@@ -579,7 +606,7 @@ function renderNavEntry(
   // `rel` only belongs on a link: a button item drops it (React types it on every element).
   const { rel, ...buttonRest } = rest;
   return (
-    <li>
+    <li className={stable.listItem}>
       <button
         type="button"
         {...(buttonRest as React.ButtonHTMLAttributes<HTMLButtonElement>)}
@@ -671,7 +698,7 @@ const NavCategory = ({
   }
 
   return (
-    <li ref={ref} {...rest} className={className}>
+    <li ref={ref} {...rest} className={cn(navCategoryClassNames.root, className)}>
       <button
         type="button"
         aria-expanded={isOpen}
@@ -679,12 +706,13 @@ const NavCategory = ({
         aria-current={containsCurrent ? true : undefined}
         data-contains-current={containsCurrent ? '' : undefined}
         onClick={() => toggleCategory(value)}
-        className={categoryButtonClasses}
+        className={cn(navCategoryClassNames.button, categoryButtonClasses)}
       >
-        {renderIcon(icon)}
-        <span className="flex-1 text-start">{buttonLabel}</span>
+        {renderIcon(icon, navCategoryClassNames.icon)}
+        <span className={cn(navCategoryClassNames.label, 'flex-1 text-start')}>{buttonLabel}</span>
         <ChevronDownIcon
           className={cn(
+            navCategoryClassNames.expandIcon,
             'shrink-0 transition-transform motion-reduce:transition-none',
             isOpen && 'rotate-180',
           )}
@@ -692,7 +720,7 @@ const NavCategory = ({
       </button>
       {isOpen && (
         <NavCategoryValueContext.Provider value={value}>
-          <ul id={listId} className="m-0 list-none p-0">
+          <ul id={listId} className={cn(navCategoryClassNames.list, 'm-0 list-none p-0')}>
             {items}
           </ul>
         </NavCategoryValueContext.Provider>
@@ -730,7 +758,18 @@ function NavItem(props: NavItemProps | NavItemDynamicProps): React.ReactElement 
   const context = useNavContext('Nav.Item');
   useNavValue(context, 'item', props.value);
   useRecordCategory(context, props.value);
-  return renderNavEntry(props as NavEntryProps, context, itemClasses, true);
+  return renderNavEntry(
+    props as NavEntryProps,
+    context,
+    itemClasses,
+    {
+      root: navItemClassNames.root,
+      listItem: navItemClassNames.listItem,
+      icon: navItemClassNames.icon,
+      content: navItemClassNames.content,
+    },
+    true,
+  );
 }
 NavItem.displayName = 'NavItem';
 
@@ -749,7 +788,13 @@ function NavSubItem(props: NavSubItemProps | NavSubItemDynamicProps): React.Reac
   const context = useNavContext('Nav.SubItem');
   useNavValue(context, 'item', props.value);
   useRecordCategory(context, props.value);
-  return renderNavEntry(props as NavEntryProps, context, subItemClasses, false);
+  return renderNavEntry(
+    props as NavEntryProps,
+    context,
+    subItemClasses,
+    { root: navSubItemClassNames.root, listItem: navSubItemClassNames.listItem },
+    false,
+  );
 }
 NavSubItem.displayName = 'NavSubItem';
 
@@ -858,9 +903,13 @@ const NavRoot = ({
         aria-label="Navigation"
         {...rest}
         ref={ref}
-        className={cn('w-60 border-e border-border bg-background py-2', className)}
+        className={cn(
+          navClassNames.root,
+          'w-60 border-e border-border bg-background py-2',
+          className,
+        )}
       >
-        <ul className="m-0 list-none p-0">{children}</ul>
+        <ul className={cn(navClassNames.list, 'm-0 list-none p-0')}>{children}</ul>
       </nav>
     </NavContext.Provider>
   );

@@ -1,5 +1,11 @@
 import * as React from 'react';
 import { cn } from '../../lib/cn';
+import {
+  menuItemCheckboxClassNames,
+  menuItemClassNames,
+  menuItemRadioClassNames,
+  menuItemSwitchClassNames,
+} from '../../lib/classNames';
 import { warnOnce } from '../../lib/dev';
 import { CheckIcon } from '../../lib/icons';
 import { renderSlot, slotRendersContent } from '../../lib/slot';
@@ -8,7 +14,7 @@ import type { Slot } from '../../lib/types';
 import { useMenuContext, useMenuListContext } from './Menu.context';
 import { menuItemClasses } from './Menu.shared';
 import { MenuItemRow, useMenuItemActivation, useMenuItemPlacementWarning } from './Menu.items';
-import type { MenuItemProps } from './Menu.items';
+import type { MenuItemProps, MenuItemRowPartClassNames } from './Menu.items';
 
 /** The `checkedValues` group a checkable menu item belongs to (Fluent's `MenuItemSelectableProps`). */
 export interface MenuItemSelectableProps {
@@ -44,6 +50,10 @@ interface SelectableMenuItemProps extends MenuItemCheckboxProps {
   kind: SelectableKind;
   /** The part's name in diagnostics (`Menu.ItemCheckbox`). */
   componentName: string;
+  /** The item element's stable classes: the base item's and the kind's own. */
+  rootClassName: string;
+  /** The row parts' stable classes (the base item's and the kind's own). */
+  partClassNames: MenuItemRowPartClassNames;
 }
 
 /*
@@ -61,6 +71,7 @@ function renderSwitchIndicator(checked: boolean, disabled: boolean): React.React
       aria-hidden="true"
       data-menu-switch=""
       className={cn(
+        menuItemSwitchClassNames.track,
         'relative inline-flex h-[16px] w-[32px] shrink-0 items-center rounded-full border transition-colors duration-200 motion-reduce:transition-none',
         checked
           ? cn('border-primary bg-primary', disabled ? switchDisabledOnTrack : switchOnTrack)
@@ -72,6 +83,7 @@ function renderSwitchIndicator(checked: boolean, disabled: boolean): React.React
     >
       <span
         className={cn(
+          menuItemSwitchClassNames.thumb,
           'block h-[10px] w-[10px] rounded-full transition-transform duration-200 motion-reduce:transition-none forced-colors:forced-color-adjust-none',
           checked
             ? 'translate-x-[18px] wave-rtl:-translate-x-[18px] bg-primary-foreground'
@@ -95,6 +107,8 @@ function renderSwitchIndicator(checked: boolean, disabled: boolean): React.React
 function SelectableMenuItem({
   kind,
   componentName,
+  rootClassName,
+  partClassNames,
   name,
   value,
   checkmark,
@@ -172,7 +186,7 @@ function SelectableMenuItem({
       data-disabled={disabled ? '' : undefined}
       onClick={activation.onClick}
       onKeyDown={activation.onKeyDown}
-      className={cn(menuItemClasses, className)}
+      className={cn(rootClassName, menuItemClasses, className)}
     >
       <MenuItemRow
         checkmark={checkColumn}
@@ -180,6 +194,7 @@ function SelectableMenuItem({
         label={children}
         shortcut={shortcut}
         markLabel={!ownRovingText}
+        partClassNames={partClassNames}
         end={kind === 'switch' ? renderSwitchIndicator(checked, disabled) : undefined}
       />
     </div>
@@ -199,7 +214,18 @@ SelectableMenuItem.displayName = 'SelectableMenuItem';
  * Also exported as `MenuItemCheckbox` (import the flat name from React Server Components).
  */
 export const MenuItemCheckbox = (props: MenuItemCheckboxProps) => (
-  <SelectableMenuItem {...props} kind="checkbox" componentName="Menu.ItemCheckbox" />
+  <SelectableMenuItem
+    {...props}
+    kind="checkbox"
+    componentName="Menu.ItemCheckbox"
+    rootClassName={cn(menuItemClassNames.root, menuItemCheckboxClassNames.root)}
+    partClassNames={{
+      checkmark: cn(menuItemClassNames.checkmark, menuItemCheckboxClassNames.checkmark),
+      icon: cn(menuItemClassNames.icon, menuItemCheckboxClassNames.icon),
+      content: cn(menuItemClassNames.content, menuItemCheckboxClassNames.content),
+      shortcut: cn(menuItemClassNames.shortcut, menuItemCheckboxClassNames.shortcut),
+    }}
+  />
 );
 MenuItemCheckbox.displayName = 'MenuItemCheckbox';
 
@@ -218,7 +244,18 @@ MenuItemCheckbox.displayName = 'MenuItemCheckbox';
  * Also exported as `MenuItemRadio` (import the flat name from React Server Components).
  */
 export const MenuItemRadio = (props: MenuItemRadioProps) => (
-  <SelectableMenuItem {...props} kind="radio" componentName="Menu.ItemRadio" />
+  <SelectableMenuItem
+    {...props}
+    kind="radio"
+    componentName="Menu.ItemRadio"
+    rootClassName={cn(menuItemClassNames.root, menuItemRadioClassNames.root)}
+    partClassNames={{
+      checkmark: cn(menuItemClassNames.checkmark, menuItemRadioClassNames.checkmark),
+      icon: cn(menuItemClassNames.icon, menuItemRadioClassNames.icon),
+      content: cn(menuItemClassNames.content, menuItemRadioClassNames.content),
+      shortcut: cn(menuItemClassNames.shortcut, menuItemRadioClassNames.shortcut),
+    }}
+  />
 );
 MenuItemRadio.displayName = 'MenuItemRadio';
 
@@ -232,6 +269,16 @@ MenuItemRadio.displayName = 'MenuItemRadio';
  * Also exported as `MenuItemSwitch` (import the flat name from React Server Components).
  */
 export const MenuItemSwitch = (props: MenuItemSwitchProps) => (
-  <SelectableMenuItem {...props} kind="switch" componentName="Menu.ItemSwitch" />
+  <SelectableMenuItem
+    {...props}
+    kind="switch"
+    componentName="Menu.ItemSwitch"
+    rootClassName={cn(menuItemClassNames.root, menuItemSwitchClassNames.root)}
+    partClassNames={{
+      icon: cn(menuItemClassNames.icon, menuItemSwitchClassNames.icon),
+      content: cn(menuItemClassNames.content, menuItemSwitchClassNames.content),
+      shortcut: cn(menuItemClassNames.shortcut, menuItemSwitchClassNames.shortcut),
+    }}
+  />
 );
 MenuItemSwitch.displayName = 'MenuItemSwitch';

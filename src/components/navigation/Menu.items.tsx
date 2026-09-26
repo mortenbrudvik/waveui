@@ -1,5 +1,6 @@
 import * as React from 'react';
 import { cn } from '../../lib/cn';
+import { menuDividerClassNames, menuItemClassNames } from '../../lib/classNames';
 import type { Slot } from '../../lib/types';
 import { materialiseSlotContent, renderSlot, slotRendersContent } from '../../lib/slot';
 import { warnOnce } from '../../lib/dev';
@@ -76,6 +77,19 @@ export interface MenuItemRowProps {
    * @default true
    */
   markLabel?: boolean;
+  /**
+   * Stable classes of the row's parts, written literally by each item kind (the check column,
+   * the icon box, the label and the shortcut).
+   */
+  partClassNames?: MenuItemRowPartClassNames;
+}
+
+/** Internal: the stable classes of an item row's parts (see `MenuItemRowProps.partClassNames`). */
+export interface MenuItemRowPartClassNames {
+  checkmark?: string;
+  icon?: string;
+  content?: string;
+  shortcut?: string;
 }
 
 /**
@@ -112,6 +126,7 @@ export function MenuItemRow({
   shortcut,
   end,
   markLabel = true,
+  partClassNames,
 }: MenuItemRowProps): React.ReactElement {
   // The check does not consume a one-shot iterable label: it is rendered materialised.
   const hasLabel = slotRendersContent(label);
@@ -120,10 +135,12 @@ export function MenuItemRow({
   // the label. The check does not consume a generator: renderSlot still renders its items.
   const iconNode =
     icon && slotRendersContent(icon)
-      ? renderSlot(icon, 'span', 'flex h-5 w-5 shrink-0 items-center justify-center', {
-          'aria-hidden': true,
-          'data-menu-icon': '',
-        })
+      ? renderSlot(
+          icon,
+          'span',
+          cn(partClassNames?.icon, 'flex h-5 w-5 shrink-0 items-center justify-center'),
+          { 'aria-hidden': true, 'data-menu-icon': '' },
+        )
       : null;
 
   return (
@@ -132,7 +149,10 @@ export function MenuItemRow({
         <span
           aria-hidden="true"
           data-menu-checkmark=""
-          className="inline-flex w-4 shrink-0 items-center justify-center"
+          className={cn(
+            partClassNames?.checkmark,
+            'inline-flex w-4 shrink-0 items-center justify-center',
+          )}
         >
           {checkmark}
         </span>
@@ -141,7 +161,7 @@ export function MenuItemRow({
       )}
       {iconNode ?? (hasLabel && renderColumnSpace('icon'))}
       <span
-        className="flex-1"
+        className={cn(partClassNames?.content, 'flex-1')}
         data-menu-label={markLabel && hasLabel && typeof label !== 'string' ? '' : undefined}
       >
         {materialiseSlotContent(label)}
@@ -149,7 +169,10 @@ export function MenuItemRow({
       {/* The shortcut takes its direction from its own text (`dir="auto"` also isolates it): in an
           RTL menu, "Ctrl+," would otherwise be reordered to ",+Ctrl". */}
       {shortcut && (
-        <span dir="auto" className="ms-4 text-caption-1 text-muted-foreground">
+        <span
+          dir="auto"
+          className={cn(partClassNames?.shortcut, 'ms-4 text-caption-1 text-muted-foreground')}
+        >
           {shortcut}
         </span>
       )}
@@ -362,16 +385,27 @@ export const MenuItem = ({
       data-has-submenu={isSubmenuTrigger ? '' : undefined}
       onClick={activation.onClick}
       onKeyDown={activation.onKeyDown}
-      className={cn(menuItemClasses, className)}
+      className={cn(menuItemClassNames.root, menuItemClasses, className)}
     >
       <MenuItemRow
         icon={icon}
         label={children}
         shortcut={shortcut}
         markLabel={!ownRovingText}
+        partClassNames={{
+          icon: menuItemClassNames.icon,
+          content: menuItemClassNames.content,
+          shortcut: menuItemClassNames.shortcut,
+        }}
         end={
           isSubmenuTrigger ? (
-            <ChevronRightIcon size={16} className="ms-auto shrink-0 wave-rtl:-scale-x-100" />
+            <ChevronRightIcon
+              size={16}
+              className={cn(
+                menuItemClassNames.submenuIndicator,
+                'ms-auto shrink-0 wave-rtl:-scale-x-100',
+              )}
+            />
           ) : undefined
         }
       />
@@ -391,7 +425,7 @@ export const MenuDivider = ({ className, ref, ...rest }: MenuDividerProps) => {
       role="separator"
       {...rest}
       ref={ref}
-      className={cn('my-1 border-t border-border', className)}
+      className={cn(menuDividerClassNames.root, 'my-1 border-t border-border', className)}
     />
   );
 };
