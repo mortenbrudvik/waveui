@@ -2132,4 +2132,164 @@ describe('TimePicker', () => {
         .map((o) => o.textContent),
     ).toEqual(['9:00 AM', '9:30 AM', '10:00 AM']);
   });
+
+  describe('sizes and appearances (Phase 4 P4-01)', () => {
+    const renderPicker = (props: Partial<TimePickerProps> = {}) =>
+      render(<TimePicker aria-label="Start" clearable defaultValue="09:00" {...props} />);
+    const input = () => screen.getByRole('combobox', { name: 'Start' });
+    const root = () => input().closest('[data-size]') as HTMLElement;
+    const clear = () => screen.getByRole('button', { name: 'Clear time' });
+    const expand = () => screen.getByRole('button', { name: 'Show times' });
+
+    it('keeps the 0.7 classes and renders the medium outline attributes', () => {
+      renderPicker();
+      expect(input()).toHaveClass('h-8', 'px-3', 'text-body-1', 'border-input', 'pe-14');
+      expect(expand()).toHaveClass('h-6', 'w-6', 'end-1');
+      expect(clear()).toHaveClass('h-6', 'w-6', 'end-7');
+      expect(root()).toHaveAttribute('data-size', 'medium');
+      expect(root()).toHaveAttribute('data-appearance', 'outline');
+    });
+
+    it('small: 24px field, 20px buttons with hit layers at end-1 and end-7, pe-13', () => {
+      renderPicker({ size: 'small' });
+      expect(input()).toHaveClass('h-6', 'px-2', 'text-caption-1', 'pe-13');
+      expect(expand()).toHaveClass('size-5', 'before:-inset-0.5', 'end-1');
+      expect(clear()).toHaveClass('size-5', 'before:-inset-0.5', 'end-7');
+    });
+
+    it('large: 40px field, 32px buttons at end-1 and end-9, pe-18', () => {
+      renderPicker({ size: 'large' });
+      expect(input()).toHaveClass('h-10', 'px-4', 'text-body-2', 'pe-18');
+      expect(expand()).toHaveClass('size-8', 'end-1');
+      expect(clear()).toHaveClass('size-8', 'end-9');
+    });
+
+    it('an appearance styles the input; the time list does not change', async () => {
+      const user = userEvent.setup();
+      renderPicker({ appearance: 'filled-darker', size: 'large' });
+      expect(input()).toHaveClass('bg-input-filled-darker');
+      await user.click(expand());
+      expect(screen.getAllByRole('option')[0]).toHaveClass('px-3', 'py-1.5', 'text-body-1');
+    });
+
+    it('takes the Field size', () => {
+      renderWithFieldContext(<TimePicker />, { size: 'large' });
+      const el = screen.getByRole('combobox', { name: FIELD_TEST_TEXT.label });
+      expect(el.closest('[data-size]')).toHaveAttribute('data-size', 'large');
+      expect(el).toHaveClass('h-10', 'text-body-2');
+    });
+
+    // Spec cases added beyond the brief (§2.1's Tests paragraph, binding via §2.2's "as §2.1 for
+    // each picker"): each appearance with its data-appearance; the Field size with an own size
+    // winning; WaveProvider inputDefaults with own props winning; invalid (a Field error and
+    // TimePicker's own rejected-text invalid state) at underline and filled-darker; the glyph
+    // widths per size for both buttons; the expandIcon rule (Phase 1 D21) at every size; RTL.
+
+    it.each([
+      ['underline', ['rounded-none', 'border-0', 'border-b', 'bg-transparent']],
+      ['filled-darker', ['border-input-filled-stroke', 'bg-input-filled-darker']],
+      ['filled-lighter', ['border-input-filled-stroke', 'bg-input-filled-lighter']],
+    ] as const)(
+      'appearance="%s" renders its classes and data-appearance',
+      (appearance, classes) => {
+        renderPicker({ appearance });
+        expect(input()).toHaveClass(...classes);
+        expect(root()).toHaveAttribute('data-appearance', appearance);
+      },
+    );
+
+    it('takes the Field size; its own size wins', () => {
+      const { rerender } = renderWithFieldContext(<TimePicker />, { size: 'large' });
+      const byName = () =>
+        screen.getByRole('combobox', { name: FIELD_TEST_TEXT.label }).closest('[data-size]');
+      expect(byName()).toHaveAttribute('data-size', 'large');
+      rerender(<TimePicker size="small" />);
+      expect(byName()).toHaveAttribute('data-size', 'small');
+    });
+
+    it('takes WaveProvider inputDefaults; its own props win', () => {
+      const { rerender } = renderWithProviders(<TimePicker aria-label="Start" />, {
+        inputDefaults: { size: 'small', appearance: 'underline' },
+      });
+      expect(root()).toHaveAttribute('data-size', 'small');
+      expect(root()).toHaveAttribute('data-appearance', 'underline');
+      rerender(<TimePicker aria-label="Start" size="large" appearance="outline" />);
+      expect(root()).toHaveAttribute('data-size', 'large');
+      expect(root()).toHaveAttribute('data-appearance', 'outline');
+    });
+
+    it.each(['underline', 'filled-darker'] as const)(
+      'an invalid %s field keeps the destructive border and the focus color on its bottom (Field error)',
+      (appearance) => {
+        renderWithFieldContext(<TimePicker appearance={appearance} />, {
+          errorId: FIELD_TEST_IDS.errorId,
+        });
+        const byName = screen.getByRole('combobox', { name: FIELD_TEST_TEXT.label });
+        expect(byName).toHaveClass('border-destructive', 'focus:border-b-primary');
+      },
+    );
+
+    it.each(['underline', 'filled-darker'] as const)(
+      'a rejected time at appearance="%s" keeps the destructive border and the focus color on its bottom (TimePicker\'s own invalid state)',
+      async (appearance) => {
+        const user = userEvent.setup();
+        renderPicker({ appearance });
+        await user.clear(input());
+        await user.type(input(), 'zz');
+        await user.keyboard('{Enter}');
+        expect(input()).toHaveAttribute('aria-invalid', 'true');
+        expect(input()).toHaveClass('border-destructive', 'focus:border-b-primary');
+      },
+    );
+
+    it.each([
+      ['small', 12, 12],
+      ['medium', 12, 16],
+      ['large', 16, 20],
+    ] as const)('glyph widths at size=%s: chevron %spx, clear %spx', (size, chevronPx, clearPx) => {
+      renderPicker({ size });
+      expect(expand().querySelector('svg')).toHaveAttribute('width', String(chevronPx));
+      expect(clear().querySelector('svg')).toHaveAttribute('width', String(clearPx));
+    });
+
+    describe('the expandIcon rule at every size (Phase 1 D21)', () => {
+      it.each([
+        ['small', null, 12],
+        ['small', undefined, 12],
+        ['medium', null, 12],
+        ['medium', undefined, 12],
+        ['large', null, 16],
+        ['large', undefined, 16],
+      ] as const)('keeps the chevron sized for %s with expandIcon %s', (size, expandIcon, px) => {
+        renderPicker({ size, expandIcon });
+        expect(expand().querySelector('svg')).toHaveAttribute('data-wave-icon', 'chevron-down');
+        expect(expand().querySelector('svg')).toHaveAttribute('width', String(px));
+      });
+
+      it.each(['small', 'medium', 'large'] as const)(
+        'hides the button at size=%s with expandIcon false',
+        (size) => {
+          renderPicker({ size, expandIcon: false });
+          expect(screen.queryByRole('button', { name: 'Show times' })).not.toBeInTheDocument();
+        },
+      );
+
+      it.each(['small', 'medium', 'large'] as const)(
+        'renders a custom expandIcon as given at size=%s',
+        (size) => {
+          renderPicker({ size, expandIcon: <svg data-testid="clock" /> });
+          expect(screen.getByTestId('clock').closest('button')).toBe(expand());
+        },
+      );
+    });
+
+    it('keeps the buttons at the inline end in RTL', () => {
+      renderWithProviders(
+        <TimePicker aria-label="Start" size="large" clearable defaultValue="09:30" />,
+        { dir: 'rtl' },
+      );
+      expect(screen.getByRole('button', { name: 'Show times' })).toHaveClass('end-1');
+      expect(screen.getByRole('button', { name: 'Clear time' })).toHaveClass('end-9');
+    });
+  });
 });

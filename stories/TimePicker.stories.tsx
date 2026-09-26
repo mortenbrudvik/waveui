@@ -2,6 +2,8 @@ import type { Meta, StoryObj } from '@storybook/react';
 import { useState } from 'react';
 import { fn } from 'storybook/test';
 import { Field, TimePicker } from '../src';
+import { coreSizeArgType, inputAppearanceArgType } from './_helpers';
+import { SizeAppearanceGrid } from './_grids';
 
 const meta = {
   title: 'Components/Input/TimePicker',
@@ -12,6 +14,8 @@ const meta = {
     format: { control: 'select', options: ['12h', '24h'] },
     step: { control: { type: 'number', min: 1 } },
     expandIcon: { control: false },
+    ...coreSizeArgType,
+    ...inputAppearanceArgType,
   },
   args: {
     'aria-label': 'Time',
@@ -113,4 +117,21 @@ export const Controlled: Story = {
       </div>
     );
   },
+};
+
+export const SizesAndAppearances: Story = {
+  render: (args) => (
+    <SizeAppearanceGrid
+      render={(size, appearance) => (
+        <TimePicker
+          {...args}
+          size={size}
+          appearance={appearance}
+          clearable
+          defaultValue="09:30"
+          aria-label={`${size} ${appearance}`}
+        />
+      )}
+    />
+  ),
 };

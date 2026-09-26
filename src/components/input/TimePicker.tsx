@@ -10,10 +10,14 @@ import {
   disabledStyles,
   focusRing,
   forcedColors,
-  inputBase,
+  inputAppearanceClasses,
   inputFocus,
+  inputHeightClasses,
   inputInvalid,
+  inputPaddingClasses,
+  inputTextClasses,
 } from '../../lib/styles';
+import type { CoreSize, InputAppearance } from '../../lib/types';
 import { useControllable } from '../../hooks/useControllable';
 import { useDismiss } from '../../hooks/useDismiss';
 import { useFieldContext, useFieldControl } from '../../hooks/useFieldControl';
@@ -35,8 +39,14 @@ import {
   normalizeTimeStep,
   timeToMinutes,
 } from './dateUtils';
+import { useInputLook } from './inputLook';
 import { isInvalidLook } from './Input';
-import { PICKER_ICON_BUTTON_CLASSES, pickerEndPadding } from './pickerStyles';
+import {
+  pickerButtonOffset,
+  pickerEndPadding,
+  pickerGlyphSize,
+  pickerIconButtonClasses,
+} from './pickerStyles';
 import type { RoutedHandlers } from './routedHandlers';
 
 /* ------------------------------------------------------------------ */
@@ -178,6 +188,18 @@ export interface TimePickerProps extends Omit<
    */
   disabled?: boolean;
   /**
+   * Size of the field: `small` (24px tall), `medium` (32px) or `large` (40px). Default: the
+   * surrounding Field's `size`, else `WaveProvider inputDefaults.size`, else `'medium'`. The time
+   * list keeps its size.
+   */
+  size?: CoreSize;
+  /**
+   * Look of the field: `outline` (a full border), `underline` (a bottom stroke only),
+   * `filled-darker` or `filled-lighter` (a fill without a visible stroke: give the field a visible
+   * label). Default: `WaveProvider inputDefaults.appearance`, else `'outline'`.
+   */
+  appearance?: InputAppearance;
+  /**
    * Makes the input read-only: the list does not open and the value cannot change. Turning it (or
    * `disabled`) on while the user is typing drops the typed text.
    */
@@ -299,6 +321,10 @@ function startsWithQuery(item: ListboxItem, text: string): boolean {
  *   picker instead of to the clear button that disappears.
  * - The value is `HH:mm` (24-hour) whatever the display `format`; values off the `step` grid or
  *   outside the bounds are still displayed in `format`.
+ * - **Size and appearance**: `size` resolves from its own prop, then the surrounding `Field`'s
+ *   `size`, then `WaveProvider inputDefaults.size`, else `'medium'`; `appearance` from its own
+ *   prop, then `WaveProvider inputDefaults.appearance`, else `'outline'`; both render as
+ *   `data-size` and `data-appearance` on the root `<div>`. The time list keeps its size.
  * - The input (`controlRef`) receives `id`, `aria-label`, `aria-labelledby`, `aria-describedby`,
  *   `aria-invalid`, `aria-required`, `aria-errormessage`, `aria-details`, `tabIndex`,
  *   `autoFocus`, `onFocus`/`onBlur`/`onKeyDown`/`onKeyUp` and the text input attributes
@@ -322,6 +348,8 @@ export const TimePicker = (props: TimePickerProps) => {
     maxTime = '23:59',
     placeholder = 'Select a time',
     disabled = false,
+    size: sizeProp,
+    appearance: appearanceProp,
     readOnly,
     clearable = false,
     expandIcon,
@@ -361,6 +389,8 @@ export const TimePicker = (props: TimePickerProps) => {
   } = props;
 
   if (onChange !== undefined) warnDeprecated('TimePicker', 'onChange', 'onValueChange');
+
+  const { size, appearance } = useInputLook(sizeProp, appearanceProp);
 
   const [selectedValue, setSelectedValue] = useControllable<string>(
     valueProp,
@@ -766,7 +796,13 @@ export const TimePicker = (props: TimePickerProps) => {
 
   return (
     <ListboxContext.Provider value={lb.context}>
-      <div {...rest} ref={rootRefs} className={cn('relative inline-flex flex-col', className)}>
+      <div
+        data-size={size}
+        data-appearance={appearance}
+        {...rest}
+        ref={rootRefs}
+        className={cn('relative inline-flex flex-col', className)}
+      >
         <div ref={setReference} className="relative flex items-center">
           <input
             ref={inputRefs}
@@ -796,12 +832,16 @@ export const TimePicker = (props: TimePickerProps) => {
             autoFocus={autoFocus}
             tabIndex={tabIndex}
             className={cn(
-              inputBase,
-              'border-b-stroke-accessible',
+              inputHeightClasses[size],
+              'w-full',
+              inputPaddingClasses[size],
+              inputTextClasses[size],
+              inputAppearanceClasses[appearance],
+              'text-foreground placeholder:text-muted-foreground',
               inputFocus,
               disabledStyles,
               invalidLook && inputInvalid,
-              pickerEndPadding(Number(showClear) + Number(showExpand)),
+              pickerEndPadding(Number(showClear) + Number(showExpand), size),
             )}
           />
           {showClear && (
@@ -813,13 +853,13 @@ export const TimePicker = (props: TimePickerProps) => {
               onMouseDown={(event) => event.preventDefault()}
               onClick={handleClear}
               className={cn(
-                PICKER_ICON_BUTTON_CLASSES,
-                showExpand ? 'end-7' : 'end-1',
+                pickerIconButtonClasses(size, appearance),
+                pickerButtonOffset(size, showExpand ? 2 : 1),
                 focusRing,
                 disabledStyles,
               )}
             >
-              <DismissIcon />
+              <DismissIcon size={pickerGlyphSize(size, 'icon')} />
             </button>
           )}
           {showExpand && (
@@ -831,6 +871,8 @@ export const TimePicker = (props: TimePickerProps) => {
               listboxId={lb.listboxId}
               disabled={disabled || !!readOnly}
               onToggle={handleExpandClick}
+              size={size}
+              appearance={appearance}
             />
           )}
         </div>
