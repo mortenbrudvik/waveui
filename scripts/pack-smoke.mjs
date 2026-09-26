@@ -521,6 +521,22 @@ function npm(label, args, options = {}) {
 }
 
 /**
+ * The result (`filename`, `files`, …) of the one package in the output of `npm pack --json`:
+ * npm 10 and 11 print an array of results, npm 12 an object keyed by package name. Anything
+ * printed before the JSON is skipped: it starts at the first line that opens with `[` or `{`.
+ */
+export function parsePackOutput(stdout) {
+  const start = stdout.search(/^[[{]/m);
+  if (start === -1) throw new Error(`npm pack printed no JSON:\n${stdout}`);
+  const parsed = JSON.parse(stdout.slice(start));
+  const results = Array.isArray(parsed) ? parsed : Object.values(parsed);
+  if (results.length !== 1) {
+    throw new Error(`npm pack reported ${results.length} packages instead of 1:\n${stdout}`);
+  }
+  return results[0];
+}
+
+/**
  * Packs the package into `dir` (also under `npm publish --dry-run`, see npmEnv); returns the
  * tarball path and its file list.
  */
@@ -529,7 +545,7 @@ export function pack(dir) {
     cwd: root,
     env: npmEnv(),
   });
-  const [info] = JSON.parse(stdout.slice(stdout.indexOf('[')));
+  const info = parsePackOutput(stdout);
   return { tarball: join(dir, info.filename), files: info.files.map((file) => file.path) };
 }
 

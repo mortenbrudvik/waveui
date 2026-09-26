@@ -24,6 +24,7 @@ import {
   fixtureManifest,
   pack,
   parseArgs,
+  parsePackOutput,
   viteBuildCss,
 } from '../pack-smoke.mjs';
 import { createWorkDir, removeWorkDir } from '../verify-dist.mjs';
@@ -631,6 +632,38 @@ describe('parseArgs', () => {
       keep: true,
     });
     expect(() => parseArgs(['--fixture', 'other'])).toThrow(/other/);
+  });
+});
+
+describe('parsePackOutput', () => {
+  const result = {
+    id: '@mortenbrudvik/waveui@0.7.0',
+    name: '@mortenbrudvik/waveui',
+    filename: 'mortenbrudvik-waveui-0.7.0.tgz',
+    files: [{ path: 'LICENSE' }, { path: 'package.json' }],
+  };
+
+  it('reads the array npm 10 and 11 print', () => {
+    expect(parsePackOutput(`${JSON.stringify([result], null, 2)}\n`)).toEqual(result);
+  });
+
+  it('reads the object keyed by package name npm 12 prints', () => {
+    // The first `[` of this output opens `files`, not the result.
+    const stdout = `${JSON.stringify({ [result.name]: result }, null, 2)}\n`;
+    expect(parsePackOutput(stdout)).toEqual(result);
+  });
+
+  it('skips lines printed before the JSON', () => {
+    const stdout = `> @mortenbrudvik/waveui@0.7.0 prepack\n> echo {x} [y]\n\n${JSON.stringify([result])}\n`;
+    expect(parsePackOutput(stdout)).toEqual(result);
+  });
+
+  it('fails on output without JSON or with other than one package', () => {
+    expect(() => parsePackOutput('npm notice nothing\n')).toThrow(/printed no JSON/);
+    expect(() => parsePackOutput('[]\n')).toThrow(/0 packages instead of 1/);
+    expect(() => parsePackOutput(JSON.stringify({ a: result, b: result }))).toThrow(
+      /2 packages instead of 1/,
+    );
   });
 });
 
