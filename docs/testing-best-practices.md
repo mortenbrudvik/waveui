@@ -381,7 +381,7 @@ it('stays mounted, inert and closed while it exits', async () => {
 
 ### The Menu item harness: `renderInMenuList(ui, options?)`
 
-`src/components/navigation/__tests__/menuHarness.tsx` renders item kinds (`Menu.ItemCheckbox`, `Menu.ItemLink`, `Menu.Group`, …) inside the Menu and list contexts, with a real checked-values state and the list's roving keys, but without the Menu root, trigger and popover modules: a `role="menu"` list named "Test menu". Options: `isStatic` (a static list ignores close requests), `closeFromItem` (a spy by default, returned as `closeFromItem`: assert that an activation closes a popup menu), `checkedValues`, `defaultCheckedValues`, `onCheckedValuesChange`, `persistOnItemClick`, `submenuTrigger` and `renderOptions` (a `wrapper`, for RTL). `MenuListHarness` is the same tree as an element, for `renderToString` and `hydrateRoot` and for a controlled parent. Cases that need a real popup menu (focus returning to the trigger, submenus, the server HTML of a real static `Menu`) are in the Menu suites and `src/__tests__/integration.test.tsx`.
+`src/components/navigation/__tests__/menuHarness.tsx` renders item kinds (`Menu.ItemCheckbox`, `Menu.ItemLink`, `Menu.Group`, …) inside the Menu and list contexts, with a real checked-values state and the list's roving keys, but without the Menu root, trigger and popover modules: a `role="menu"` list named "Test menu". Options: `isStatic` (a static list ignores close requests), `closeFromItem` (a spy by default, returned as `closeFromItem`: assert that an activation closes a popup menu), `checkedValues`, `defaultCheckedValues`, `onCheckedValuesChange`, `persistOnItemClick`, `submenuTrigger`, `dir` (`'rtl'` renders the list inside `<WaveProvider dir="rtl">`) and `renderOptions` (passed on to `render`). `MenuListHarness` is the same tree as an element, for `renderToString` and `hydrateRoot` and for a controlled parent. Cases that need a real popup menu (focus returning to the trigger, submenus, the server HTML of a real static `Menu`) are in the Menu suites and `src/__tests__/integration.test.tsx`.
 
 ```tsx
 // src/components/navigation/__tests__/Menu.selectable.test.tsx
@@ -565,10 +565,43 @@ describe('Tooltip openDelay', () => {
 Hover opening (Menu submenus, `openOnHover` on Menu and Popover) follows the mouse only. Simulate it with `user.hover`/`user.unhover`, or with `user.pointer({ target, coords: { clientX, clientY } })` for a path, under the fake timers above; touch and pen are pointer events you dispatch inside `act` (`new PointerEvent('pointerover', { bubbles: true, pointerType: 'touch' })`, then `pointermove`), which must open nothing and move no focus. The triangle safe zone is computed from rectangles, which jsdom does not lay out: give the trigger items and the surface boxes with `mockRect` after they render, then move the pointer through points inside and outside the triangle. Keep 50–100 ms of margin around every delay (assert "still closed" at `openDelay - 100` and "open" at `openDelay + 100`), so a busy machine's real time, which `shouldAdvanceTime` adds, cannot flip the result.
 
 ```tsx
-// src/components/navigation/__tests__/Menu.hover.test.tsx
+// After src/components/navigation/__tests__/Menu.hover.test.tsx
+import { act, render, screen } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
+import { Menu } from '../Menu';
+
+beforeEach(() => {
+  vi.useFakeTimers({ shouldAdvanceTime: true });
+});
+afterEach(() => {
+  vi.useRealTimers();
+});
+
+/** A click-opened File menu with an "Open recent" submenu. */
+function FileMenu() {
+  return (
+    <Menu>
+      <Menu.Trigger>
+        <button type="button">File</button>
+      </Menu.Trigger>
+      <Menu.Popover>
+        <Menu.Item>New</Menu.Item>
+        <Menu>
+          <Menu.Trigger>
+            <Menu.Item>Open recent</Menu.Item>
+          </Menu.Trigger>
+          <Menu.Popover>
+            <Menu.Item>report.docx</Menu.Item>
+          </Menu.Popover>
+        </Menu>
+      </Menu.Popover>
+    </Menu>
+  );
+}
+
 it('opens a submenu openDelay after its item is hovered, without taking focus', async () => {
   const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
-  render(<FileMenu />); // a click-opened File menu with an "Open recent" submenu
+  render(<FileMenu />);
   await user.click(screen.getByRole('button', { name: 'File' }));
   const item = screen.getByRole('menuitem', { name: 'Open recent' });
   await user.hover(item);
@@ -587,6 +620,7 @@ it('opens a submenu openDelay after its item is hovered, without taking focus', 
 
 - Focus follows the mouse inside a focused menu tree: a test that hovers an item and then presses Enter activates the hovered item. Hover into a menu that focus is not in moves no focus; test both.
 - The "dismissed stays dismissed" rule needs the pointer on the trigger at the dismissal: hover, press Escape, move within the trigger past `openDelay` (nothing opens), then `unhover` and hover again (it opens).
+- A close by hover moves no focus: open a menu or hover card by hover with nothing focused, `unhover` past `closeDelay`, and assert `expect(document.body).toHaveFocus()` (a Tooltip on the trigger, with `openDelay={0}`, must stay hidden too). Also test that the other closes still return focus: Escape on the same hover-opened surface focuses the trigger.
 
 ## 8. Development warnings
 
@@ -656,7 +690,7 @@ A passing test prints nothing, the stories gate (`src/__tests__/stories.a11y.tes
 - Popups: open-state axe, dismissal (Escape, outside press) and focus-return tests. Portaled content is not in `container`: query it with `screen`.
 - A click on a link inside a `<label>` (a rich Checkbox, Switch or Radio `label`): user-event forwards every click inside a label to the label's control, which browsers do not do for interactive content. Test "clicking the link does not toggle" with `fireEvent.click(link)` (jsdom's own label activation skips interactive descendants, as browsers do) and say why in a comment; click the label text with `userEvent`.
 - Shift+Tab from the browser's own controls (the Popover and TeachingPopover keyboard order): dispatch the window's `blur` and `focus` events before focusing the element (`window.dispatchEvent(new FocusEvent('blur'))`, then `'focus'`); a focus from nothing without that window focus counts as a focus restore in the page and keeps the order after the trigger.
-- **Context menus** (`openOnContext`). A pointer gesture is `fireEvent.contextMenu(el, { button: 2, clientX, clientY })`, and a macOS Ctrl+click `{ button: 0, ctrlKey: true, clientX, clientY }`; `fireEvent` returns `false` when the component prevented the browser's menu, so assert it (`true` in a text field of the region). A keyboard gesture is the key press on the focused element (`await user.keyboard('{Shift>}{F10}{/Shift}')` or `'{ContextMenu}'`), optionally followed by the `fireEvent.contextMenu(el, { button: 0 })` the browser dispatches for it, which must not move the menu. A position needs a viewport and rectangles: set `clientWidth`/`clientHeight` on `document.documentElement` (remove them after the test) and give the row a box with `mockRect`, then assert the surface's `transform` inside `waitFor`.
+- **Context menus** (`openOnContext`). A pointer gesture is `fireEvent.contextMenu(el, { button: 2, clientX, clientY })`, and a macOS Ctrl+click `{ button: 0, ctrlKey: true, clientX, clientY }`; `fireEvent` returns `false` when the component prevented the browser's menu, so assert it (`true` in a text field of the region). A keyboard gesture is the key press on the focused element (`await user.keyboard('{Shift>}{F10}{/Shift}')` or `'{ContextMenu}'`), optionally followed by the `fireEvent.contextMenu(el, { button: 0 })` the browser dispatches for it, which must not move the menu. A position needs a viewport and rectangles: set `clientWidth`/`clientHeight` on `document.documentElement` (remove them after the test) and give the row a box with `mockRect`, then assert the surface's `transform` inside `waitFor`. A second right click while the menu is open, as Chromium and Firefox report it, is `fireEvent.pointerDown(row, { button: 2, … })`, the row's focus (`act(() => row.focus())`, then `await act(async () => {})`) and `fireEvent.contextMenu(row, …)`: the menu must move without an `onOpenChange` call. A scroll closes a pointer-opened surface when it moves the region or the row under the pointer: give both a box with `mockRect`, change one, and `fireEvent.scroll` an element outside the surface.
 - **Link navigation** (`Menu.ItemLink`). jsdom logs "Not implemented: navigation" for a followed `href` other than a hash. Use hash hrefs (`#settings`) where the case allows; otherwise add a bubble-phase `click` listener on `document` (it runs after React's root listener) that records `event.defaultPrevented` and then calls `preventDefault()` itself, and remove it with `onTestFinished`. A capture listener would run before React and see nothing. user-event's Enter on a focused `<a href>` dispatches the click, as a browser does; `fireEvent.keyDown` does not.
 - **What jsdom cannot show.** jsdom has no `inert` behaviour (an inert element still takes focus, and React's post-commit focus restore can land in it), no `getAnimations`, no `:has()` layout, no hit testing, no real transition timing, and it cannot tell how an engine dispatches the keyboard `contextmenu`. Assert attributes, classes and the events the component handles; a test that depends on browser `inert` semantics can model them (the local `focusSkipsInert()` of `Menu.contextMenu.test.tsx` spies on `HTMLElement.prototype.focus` to skip elements inside `[inert]`). The rest is the real-browser checklist of the phase spec (Storybook in Chrome, Firefox and Safari).
 - Type-level contracts go in `__tests__` too; `tsconfig.dev.json` type-checks them:
