@@ -4,14 +4,13 @@ import { composeEventHandlers } from '../../lib/composeEventHandlers';
 import { warnOnce } from '../../lib/dev';
 import { getArrowIntent, getDirection } from '../../lib/direction';
 import type { PolymorphicComponent, PolymorphicProps } from '../../lib/polymorphic';
-import { resolveSlot, slotRendersContent } from '../../lib/slot';
-import type { SlotObject } from '../../lib/slot';
 import { forcedColors } from '../../lib/styles';
-import type { Size, Slot } from '../../lib/types';
+import type { Size } from '../../lib/types';
 import { Button } from './Button';
 import type { ButtonOwnProps } from './Button';
 import { ToggleButton } from './ToggleButton';
 import type { ToggleButtonProps } from './ToggleButton';
+import { withPartClass } from './Button.slots';
 import { useToolbarContext } from './Toolbar.context';
 
 /*
@@ -55,22 +54,6 @@ const verticalIconBoxClasses: Record<Size, string> = {
 };
 
 /**
- * `icon` as a slot object whose element also carries `box`: shorthand content becomes the
- * children of a span with `box`, a slot object keeps its element and attributes and gets `box`
- * before its own classes. An icon that renders nothing stays as it is (no icon).
- */
-function withIconBox(icon: Slot<'span'> | undefined, box: string): Slot<'span'> | undefined {
-  if (!slotRendersContent(icon)) return icon;
-  const resolved = resolveSlot(icon, 'span', box);
-  if (!resolved) return icon;
-  return {
-    ...resolved.props,
-    as: resolved.Component,
-    children: resolved.children,
-  } as SlotObject<'span'>;
-}
-
-/**
  * A Button with the toolbar's size and the `subtle` appearance by default (your `size` and
  * `appearance` win). `vertical` puts the icon above a caption-size label, for ribbon-style
  * toolbars. Polymorphic like Button (`as="a"`, a router link). Must be rendered inside a
@@ -96,7 +79,7 @@ export const ToolbarButton: PolymorphicComponent<'button', ToolbarButtonOwnProps
       {...rest}
       appearance={appearance}
       size={effectiveSize}
-      icon={vertical ? withIconBox(icon, verticalIconBoxClasses[effectiveSize]) : icon}
+      icon={vertical ? withPartClass(icon, verticalIconBoxClasses[effectiveSize]) : icon}
       data-vertical={vertical ? '' : undefined}
       className={cn(vertical && verticalButtonClasses, className)}
     />
