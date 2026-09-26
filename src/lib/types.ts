@@ -101,7 +101,9 @@ export type ModalType = 'modal' | 'alert';
 /**
  * Checked items of a menu or toolbar, per group `name`: `{ sort: ['date'], view: ['ruler', 'grid'] }`.
  * A checkbox or switch item (or a toolbar toggle) is checked while its `value` is in
- * `checkedValues[name]`; a radio item while its `value` is the group's only value.
+ * `checkedValues[name]`, and so is a radio item (or a toolbar radio); checking a radio makes its
+ * value the group's only value, so give a radio group at most one value. Any string is a group
+ * name, `Object.prototype` keys such as `constructor` included.
  */
 export type CheckedValues = Readonly<Record<string, readonly string[]>>;
 

@@ -1,10 +1,12 @@
 import * as React from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { flushSync } from 'react-dom';
 import { act, render, screen } from '@testing-library/react';
 import userEvent, { type UserEvent } from '@testing-library/user-event';
 import { Menu } from '../Menu';
 import type { MenuProps } from '../Menu';
 import { MenuButton } from '../../button/MenuButton';
+import { Tooltip } from '../../overlays/Tooltip';
 import { expectNoA11yViolations, mockRect } from '../../../test-utils';
 
 let user: UserEvent;
@@ -600,6 +602,176 @@ describe('a root menu with openOnHover', () => {
       ],
     ]);
     warn.mockClear();
+  });
+
+  it('a hover close moves no focus: <body> keeps it, and a Tooltip on the trigger stays hidden', async () => {
+    render(
+      <Menu openOnHover>
+        <Menu.Trigger>
+          <Tooltip content="More file actions" openDelay={0}>
+            <button type="button">File</button>
+          </Tooltip>
+        </Menu.Trigger>
+        <Menu.Popover>
+          <Menu.Item>New</Menu.Item>
+          <Menu.Item>Open</Menu.Item>
+        </Menu.Popover>
+      </Menu>,
+    );
+    await user.hover(button('File'));
+    advance(300);
+    expect(menu('File')).toBeInTheDocument();
+    expect(document.body).toHaveFocus();
+    await user.unhover(button('File'));
+    advance(400);
+    expect(queryMenu('File')).not.toBeInTheDocument();
+    expect(document.body).toHaveFocus();
+    // Focus on the trigger would have opened its Tooltip.
+    advance(1000);
+    expect(screen.queryByRole('tooltip')).not.toBeInTheDocument();
+  });
+
+  it('a hover close takes a hover-opened submenu along without moving focus', async () => {
+    const onRecentOpenChange = vi.fn();
+    render(<FileMenu root={{ openOnHover: true }} recent={{ onOpenChange: onRecentOpenChange }} />);
+    await user.hover(button('File'));
+    advance(300);
+    await user.hover(item('Open recent'));
+    advance(400);
+    expect(menu('Open recent')).toBeInTheDocument();
+    expect(document.body).toHaveFocus();
+    await user.hover(button('Elsewhere'));
+    advance(600);
+    await act(async () => {});
+    expect(screen.queryByRole('menu')).not.toBeInTheDocument();
+    expect(document.body).toHaveFocus();
+    expect(onRecentOpenChange.mock.calls).toEqual([[true], [false]]);
+  });
+
+  it('a submenu closed by hover while its hover-opened menu stays open moves no focus', async () => {
+    render(<FileMenu root={{ openOnHover: true }} />);
+    await user.hover(button('File'));
+    advance(300);
+    await user.hover(item('Open recent'));
+    advance(400);
+    expect(menu('Open recent')).toBeInTheDocument();
+    // No safe zone (the submenu has no size in jsdom): the pointer rests on "New".
+    await user.hover(item('New'));
+    advance(400);
+    expect(queryMenu('Open recent')).not.toBeInTheDocument();
+    expect(menu('File')).toBeInTheDocument();
+    expect(document.body).toHaveFocus();
+  });
+
+  it('a static menu’s submenu closed by hover moves no focus', async () => {
+    render(
+      <Menu aria-label="Edit">
+        <Menu.Item>Cut</Menu.Item>
+        <Menu>
+          <Menu.Trigger>
+            <Menu.Item>Paste special</Menu.Item>
+          </Menu.Trigger>
+          <Menu.Popover>
+            <Menu.Item>Text only</Menu.Item>
+          </Menu.Popover>
+        </Menu>
+      </Menu>,
+    );
+    await user.hover(item('Paste special'));
+    advance(300);
+    expect(menu('Paste special')).toBeInTheDocument();
+    expect(document.body).toHaveFocus();
+    await user.unhover(item('Paste special'));
+    advance(400);
+    expect(queryMenu('Paste special')).not.toBeInTheDocument();
+    expect(document.body).toHaveFocus();
+  });
+
+  it('only the hover close leaves focus alone: Escape on a hover-opened menu returns focus to the trigger', async () => {
+    render(<HoverMenu />);
+    await user.hover(button('Actions'));
+    advance(300);
+    expect(menu('Actions')).toBeInTheDocument();
+    expect(document.body).toHaveFocus();
+    await user.keyboard('{Escape}');
+    expect(queryMenu('Actions')).not.toBeInTheDocument();
+    expect(button('Actions')).toHaveFocus();
+  });
+
+  it('a hover close the controlled parent refused does not linger: a later Escape returns focus to the trigger', async () => {
+    let refuse = true;
+    function RefusingMenu() {
+      const [open, setOpen] = React.useState(false);
+      return (
+        <HoverMenu
+          open={open}
+          onOpenChange={(next) => {
+            // The first close (the hover close) is refused.
+            if (!next && refuse) {
+              refuse = false;
+              return;
+            }
+            setOpen(next);
+          }}
+        />
+      );
+    }
+    render(<RefusingMenu />);
+    await user.hover(button('Actions'));
+    advance(300);
+    await user.hover(button('Elsewhere'));
+    advance(400);
+    expect(refuse).toBe(false);
+    expect(menu('Actions')).toBeInTheDocument();
+    expect(document.body).toHaveFocus();
+    await user.keyboard('{Escape}');
+    expect(queryMenu('Actions')).not.toBeInTheDocument();
+    expect(button('Actions')).toHaveFocus();
+  });
+
+  it('a hover close that a controlled parent applies synchronously (flushSync) moves no focus', async () => {
+    function SyncMenu() {
+      const [open, setOpen] = React.useState(false);
+      return (
+        <HoverMenu
+          open={open}
+          onOpenChange={(next) => {
+            flushSync(() => setOpen(next));
+          }}
+        />
+      );
+    }
+    render(<SyncMenu />);
+    await user.hover(button('Actions'));
+    advance(300);
+    expect(menu('Actions')).toBeInTheDocument();
+    await user.hover(button('Elsewhere'));
+    advance(400);
+    expect(queryMenu('Actions')).not.toBeInTheDocument();
+    expect(document.body).toHaveFocus();
+  });
+
+  it('after a hover close, an opening and a closing by the app alone return focus from <body> to the trigger', async () => {
+    function ControlledMenu({ open }: { open?: boolean }) {
+      const [state, setState] = React.useState(false);
+      return <HoverMenu open={open ?? state} onOpenChange={setState} />;
+    }
+    const { rerender } = render(<ControlledMenu />);
+    await user.hover(button('Actions'));
+    advance(300);
+    await user.hover(button('Elsewhere'));
+    advance(400);
+    expect(queryMenu('Actions')).not.toBeInTheDocument();
+    expect(document.body).toHaveFocus();
+    // The app opens the menu (focus moves to its first item), focus falls to <body>, and the app
+    // closes it: no hover close is in flight any more.
+    rerender(<ControlledMenu open />);
+    expect(item('Edit')).toHaveFocus();
+    act(() => item('Edit').blur());
+    expect(document.body).toHaveFocus();
+    rerender(<ControlledMenu open={false} />);
+    expect(queryMenu('Actions')).not.toBeInTheDocument();
+    expect(button('Actions')).toHaveFocus();
   });
 
   it('a static menu ignores openOnHover and openOnContext (one warning) and accepts the delays', () => {

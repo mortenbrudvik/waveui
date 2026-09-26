@@ -71,6 +71,24 @@ function pointAnchor(x: number, y: number, contextElement: Element): VirtualElem
   return { getBoundingClientRect: () => rect, contextElement };
 }
 
+/** An element whose movement since the gesture closes the surface, with its rectangle then. */
+interface ScrollReference {
+  element: Element;
+  rect: DOMRect;
+  /**
+   * The element a pointer gesture landed on: once it has no box (removed, or `display: none`,
+   * such as a row's hover-only action), it no longer counts, and the region alone decides.
+   */
+  optional: boolean;
+}
+
+/** Whether an element has left the document or the layout (it has no box). */
+function hasNoBox(element: Element): boolean {
+  if (!element.isConnected) return true;
+  const rect = element.getBoundingClientRect();
+  return rect.width === 0 && rect.height === 0;
+}
+
 /** The last gesture: its anchor and origin, and whether it has yet to decide `fromContext`. */
 interface Gesture {
   anchor: HTMLElement | VirtualElement | null;
@@ -104,11 +122,13 @@ interface Gesture {
  * 5. **While open from a context gesture:** a `contextmenu` outside the layer tree and the trigger
  *    calls `onClose('outside-context-menu', event)` without preventing it; a scroll outside the
  *    layer tree calls `onClose('scroll', event)` only when a reference element of the gesture moved
- *    more than 2 px since the gesture. For a pointer gesture those are the element it landed on
- *    (the row under the pointer, which a scroll of the region's content moves) and the trigger;
- *    for a keyboard gesture the keyboard anchor, else the trigger. A scroll that moves none of them
- *    (inertial scrolling still running at the right click, a scroll in an unrelated panel) is
- *    ignored.
+ *    more than 2 px since the gesture. For a pointer gesture those are the trigger and the element
+ *    the gesture landed on (the row under the pointer, which a scroll of the region's content
+ *    moves), the latter only while it has a box: once it is removed or `display: none` (a row's
+ *    hover-only action), the trigger alone counts. For a keyboard gesture the reference is the
+ *    keyboard anchor, else the trigger. A scroll that moves none of them (a scroll in an unrelated
+ *    panel) is ignored; inertial scrolling of the region's content that is still running at the
+ *    right click moves the row, so it closes the surface.
  * 6. `anchor` and `origin` are replaced at the next gesture, not reset on close. `fromContext` is
  *    decided when `open` becomes `true`: `true` when a gesture of the hook caused that open, else
  *    `false`; a gesture while open makes it `true` (the surface moves to the gesture). It keeps its
@@ -140,7 +160,7 @@ export function useContextMenuAnchor(options: UseContextMenuAnchorOptions): Cont
   // The keyboard flag and the reference elements' rectangles at the gesture: written in handlers
   // and effects only.
   const keyboardFlagRef = useRef<{ clear: () => void } | null>(null);
-  const referencesRef = useRef<Array<{ element: Element; rect: DOMRect }>>([]);
+  const referencesRef = useRef<ScrollReference[]>([]);
 
   const requestOpen = useEventCallback(onOpen);
   const requestClose = useEventCallback(onClose);
@@ -185,17 +205,24 @@ export function useContextMenuAnchor(options: UseContextMenuAnchorOptions): Cont
     [layerId],
   );
 
-  /** Records the gesture and the rectangles of the elements whose movement closes the surface. */
+  /**
+   * Records the gesture and the rectangles of the elements whose movement closes the surface: the
+   * required ones, then an optional one (see `ScrollReference.optional`).
+   */
   const startGesture = useCallback(
     (
       anchor: HTMLElement | VirtualElement | null,
       origin: ContextOrigin,
       references: readonly Element[],
+      optionalReference?: Element,
     ) => {
-      referencesRef.current = references.map((element) => ({
+      const record = (element: Element, optional: boolean): ScrollReference => ({
         element,
         rect: element.getBoundingClientRect(),
-      }));
+        optional,
+      });
+      referencesRef.current = references.map((element) => record(element, false));
+      if (optionalReference) referencesRef.current.push(record(optionalReference, true));
       setGesture({ anchor, origin, pending: true });
     },
     [],
@@ -210,11 +237,15 @@ export function useContextMenuAnchor(options: UseContextMenuAnchorOptions): Cont
       if (keyboardFlagRef.current) return;
       const region = event.currentTarget;
       recordOpener(region.ownerDocument);
-      // The element the gesture landed on (a row, which scrolls inside the region; `isOwnEvent`
-      // keeps it inside), and the region.
+      // The region, and the element the gesture landed on (a row, which scrolls inside the
+      // region; `isOwnEvent` keeps it inside) while it keeps a box.
       const target = event.target as Element;
-      const references = target === region ? [region] : [target, region];
-      startGesture(pointAnchor(event.clientX, event.clientY, region), 'pointer', references);
+      startGesture(
+        pointAnchor(event.clientX, event.clientY, region),
+        'pointer',
+        [region],
+        target === region ? undefined : target,
+      );
       requestOpen('pointer', event.nativeEvent);
     },
     [enabled, recordOpener, startGesture, requestOpen],
@@ -272,7 +303,8 @@ export function useContextMenuAnchor(options: UseContextMenuAnchorOptions): Cont
     };
     const onScroll = (event: Event) => {
       if (!isOutside(event.target)) return;
-      const moved = referencesRef.current.some(({ element, rect }) => {
+      const moved = referencesRef.current.some(({ element, rect, optional }) => {
+        if (optional && hasNoBox(element)) return false;
         const now = element.getBoundingClientRect();
         return (
           Math.abs(now.left - rect.left) > SCROLL_TOLERANCE ||

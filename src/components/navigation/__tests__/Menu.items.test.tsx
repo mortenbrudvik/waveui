@@ -14,7 +14,6 @@ import {
 } from '../Menu.items';
 import type { MenuItemActivationOptions } from '../Menu.items';
 import { INERT_MENU_CONTEXT, MenuContext, useMenuListContext } from '../Menu.context';
-import { WaveProvider } from '../../provider/WaveProvider';
 import { expectNoA11yViolations } from '../../../test-utils';
 import { MenuListHarness, renderInMenuList } from './menuHarness';
 
@@ -38,10 +37,6 @@ function describeRow(row: Element): string[] {
     if (child.hasAttribute('data-testid')) return `testid:${child.getAttribute('data-testid')}`;
     return `text:${child.textContent}`;
   });
-}
-
-function RtlProvider({ children }: { children: React.ReactNode }) {
-  return <WaveProvider dir="rtl">{children}</WaveProvider>;
 }
 
 describe('MenuItemRow and the column alignment', () => {
@@ -68,7 +63,7 @@ describe('MenuItemRow and the column alignment', () => {
 
   it('the shortcut takes its direction from its own text (dir="auto"), so "Ctrl+," keeps its order in RTL', () => {
     renderInMenuList(<MenuItem shortcut="Ctrl+,">Settings</MenuItem>, {
-      renderOptions: { wrapper: RtlProvider },
+      dir: 'rtl',
     });
     expect(screen.getByRole('menuitem').closest('[dir]')).toHaveAttribute('dir', 'rtl');
     const shortcut = screen.getByText('Ctrl+,');
@@ -497,7 +492,7 @@ describe('the submenu-trigger path of Menu.Item', () => {
   it('keeps the chevron class and the logical row in RTL', () => {
     renderInMenuList(<MenuItem>Open recent</MenuItem>, {
       submenuTrigger: true,
-      renderOptions: { wrapper: RtlProvider },
+      dir: 'rtl',
     });
     const row = item('Open recent');
     expect(row.closest('[dir]')).toHaveAttribute('dir', 'rtl');

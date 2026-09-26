@@ -398,6 +398,38 @@ describe('useContextMenuAnchor', () => {
       expect(surface()).not.toBeNull();
     });
 
+    it('a row under the pointer that loses its box after the gesture no longer counts; the region still does', () => {
+      const { onClose } = setup();
+      mockRect(region(), { x: 0, y: 100, width: 300, height: 200 });
+      mockRect(row(3), { x: 0, y: 160, width: 300, height: 20 });
+      fireEvent.contextMenu(row(3), { button: 2, clientX: 40, clientY: 170 });
+      // The row is hidden (display: none, a hover-only action once the pointer is in the menu).
+      mockRect(row(3), { x: 0, y: 0, width: 0, height: 0 });
+      fireEvent.scroll(screen.getByRole('button', { name: 'Outside' }));
+      fireEvent.scroll(document);
+      expect(onClose).not.toHaveBeenCalled();
+      mockRect(region(), { x: 0, y: 40, width: 300, height: 200 });
+      fireEvent.scroll(document);
+      expect(onClose).toHaveBeenCalledWith('scroll', expect.any(Event));
+    });
+
+    it('an element under the pointer that is removed after the gesture no longer counts', () => {
+      const { onClose } = setup();
+      mockRect(region(), { x: 0, y: 100, width: 300, height: 200 });
+      const action = document.createElement('span');
+      action.textContent = 'Row action';
+      region().append(action);
+      mockRect(action, { x: 280, y: 160, width: 16, height: 16 });
+      fireEvent.contextMenu(action, { button: 2, clientX: 285, clientY: 165 });
+      expect(surface()).not.toBeNull();
+      // Removed, it has no box any more (as a browser reports for a detached element).
+      action.remove();
+      mockRect(action, { x: 0, y: 0, width: 0, height: 0 });
+      fireEvent.scroll(screen.getByRole('button', { name: 'Outside' }));
+      expect(onClose).not.toHaveBeenCalled();
+      expect(surface()).not.toBeNull();
+    });
+
     it('a right click on the region’s own box measures the region', () => {
       const { onClose } = setup();
       mockRect(region(), { x: 0, y: 100, width: 300, height: 200 });

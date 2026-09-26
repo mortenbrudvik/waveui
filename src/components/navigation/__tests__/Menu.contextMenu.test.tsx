@@ -142,6 +142,7 @@ describe('Menu openOnContext', () => {
   it.each([
     ['a right-button press', { button: 2 }],
     ['a macOS Ctrl+press', { button: 0, ctrlKey: true }],
+    ['a touch long press', { button: 0, pointerType: 'touch' }],
   ] as const)(
     'a second gesture that focuses its row on %s moves the open menu without closing it',
     async (_name, press) => {
@@ -335,6 +336,48 @@ describe('Menu openOnContext', () => {
       expect(row('photo.png')).toHaveFocus();
     });
 
+    it('a primary press on a row whose click handler stops propagation closes it as focus leaves the menu', async () => {
+      const user = userEvent.setup();
+      const onOpenChange = vi.fn();
+      render(
+        <Menu openOnContext onOpenChange={onOpenChange}>
+          <Menu.Trigger>
+            <div data-testid="region">
+              <button type="button">report.docx</button>
+              <button type="button" onClick={(event) => event.stopPropagation()}>
+                notes.txt
+              </button>
+            </div>
+          </Menu.Trigger>
+          <Menu.Popover aria-label="File actions">
+            <Menu.Item>Open</Menu.Item>
+          </Menu.Popover>
+        </Menu>,
+      );
+      fireEvent.contextMenu(row('report.docx'), { button: 2, clientX: 100, clientY: 200 });
+      expect(item('Open')).toHaveFocus();
+      // The click never reaches the document, so only the focus move closes the menu.
+      await user.click(row('notes.txt'));
+      expect(queryFileMenu()).not.toBeInTheDocument();
+      expect(row('notes.txt')).toHaveFocus();
+      expect(onOpenChange.mock.calls).toEqual([[true], [false]]);
+    });
+
+    it('focus the app moves into the region closes it, also after a right click has ended', async () => {
+      render(<FileList />);
+      fireEvent.contextMenu(row('notes.txt'), { button: 2, clientX: 100, clientY: 200 });
+      // A second right click as Windows reports it: the contextmenu event after the release.
+      const point = { button: 2, clientX: 120, clientY: 260 };
+      fireEvent.pointerDown(row('budget.xlsx'), point);
+      fireEvent.pointerUp(row('budget.xlsx'), point);
+      fireEvent.contextMenu(row('budget.xlsx'), point);
+      expect(item('Open')).toHaveFocus();
+      act(() => row('photo.png').focus());
+      await act(async () => {});
+      expect(queryFileMenu()).not.toBeInTheDocument();
+      expect(row('photo.png')).toHaveFocus();
+    });
+
     it('a right click outside closes it without preventing the browser’s menu', () => {
       render(<FileList />);
       fireEvent.contextMenu(row('notes.txt'), { button: 2, clientX: 100, clientY: 200 });
@@ -447,6 +490,33 @@ describe('Menu openOnContext', () => {
       expect(screen.getByRole('dialog', { name: 'Delete draft.md?' })).toBeInTheDocument();
       await user.click(screen.getByRole('button', { name: 'Cancel' }));
       expect(row('draft.md')).toHaveFocus();
+    });
+
+    it('an opening without a gesture forgets the last gesture’s row: Escape returns focus to the button that opened it', async () => {
+      const user = userEvent.setup();
+      function WithMoreActions() {
+        const [open, setOpen] = React.useState(false);
+        return (
+          <>
+            <FileList menu={{ open, onOpenChange: setOpen }} />
+            <button type="button" onClick={() => setOpen(true)}>
+              More actions
+            </button>
+          </>
+        );
+      }
+      render(<WithMoreActions />);
+      act(() => row('notes.txt').focus());
+      await user.keyboard('{Shift>}{F10}{/Shift}');
+      expect(item('Open')).toHaveFocus();
+      await user.keyboard('{Escape}');
+      expect(row('notes.txt')).toHaveFocus();
+
+      await user.click(screen.getByRole('button', { name: 'More actions' }));
+      expect(item('Open')).toHaveFocus();
+      await user.keyboard('{Escape}');
+      expect(queryFileMenu()).not.toBeInTheDocument();
+      expect(screen.getByRole('button', { name: 'More actions' })).toHaveFocus();
     });
 
     it('without a focused row, focus goes to the region’s first tabbable element', async () => {

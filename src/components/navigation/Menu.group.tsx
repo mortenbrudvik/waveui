@@ -112,7 +112,12 @@ export const MenuGroupHeader = (props: MenuGroupHeaderProps) => {
 
   // The header the group's scan found is the one rendered with the scanned element's props object.
   // Only it renders the id the group points at: any other header (inside a custom component or an
-  // element, or a second one) keeps only its own id, so no two headers share one.
+  // element, or a second one) keeps only its own id, so no two headers share one. This relies on
+  // React passing an element's own props object to its component (the client, Fizz, a lazy client
+  // reference and `Children.toArray` clones all do in React 19, though React does not document it).
+  // If a React upgrade breaks it, the scanned header loses its id: Menu.group.test.tsx's "the header
+  // its scan found keeps labelling the group in StrictMode, after a re-render and as a Server
+  // Component reference" and the server-HTML dangling-reference test fail.
   const scanned = group.headerProps === props;
   // C-DEV: any other header labels nothing and warns, except in a group that has no header its
   // scan found and is named by the consumer's label (that label is the unlabelled warning's remedy).

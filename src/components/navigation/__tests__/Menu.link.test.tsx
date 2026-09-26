@@ -6,7 +6,6 @@ import { MenuItemLink } from '../Menu.link';
 import type { MenuItemLinkOwnProps, MenuItemLinkProps } from '../Menu.link';
 import { MenuItem } from '../Menu.items';
 import { INERT_MENU_CONTEXT, MenuContext } from '../Menu.context';
-import { WaveProvider } from '../../provider/WaveProvider';
 import { expectNoA11yViolations, testSystemProps } from '../../../test-utils';
 import { MenuListHarness, renderInMenuList } from './menuHarness';
 
@@ -15,10 +14,6 @@ afterEach(() => {
 });
 
 const link = (name: string) => screen.getByRole('menuitem', { name });
-
-function RtlProvider({ children }: { children: React.ReactNode }) {
-  return <WaveProvider dir="rtl">{children}</WaveProvider>;
-}
 
 /**
  * Records whether each click that reaches `document` was default-prevented, then prevents it, so
@@ -71,7 +66,7 @@ describe('the link element', () => {
       <MenuItemLink href="#settings" shortcut="Ctrl+,">
         Settings
       </MenuItemLink>,
-      { renderOptions: { wrapper: RtlProvider } },
+      { dir: 'rtl' },
     );
     expect(screen.getByRole('menuitem').closest('[dir]')).toHaveAttribute('dir', 'rtl');
     expect(screen.getByText('Ctrl+,')).toHaveAttribute('dir', 'auto');

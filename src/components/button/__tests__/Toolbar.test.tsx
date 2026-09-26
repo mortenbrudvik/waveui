@@ -990,6 +990,51 @@ describe('Toolbar', () => {
       ]);
     });
 
+    it('a group name that is an Object.prototype key ("constructor") works like any other', async () => {
+      const user = userEvent.setup();
+      const onCheckedValuesChange = vi.fn<CheckedValuesChangeHandler>();
+      render(
+        <Toolbar aria-label="Formatting" onCheckedValuesChange={onCheckedValuesChange}>
+          <Toolbar.ToggleButton name="constructor" value="bold">
+            Bold
+          </Toolbar.ToggleButton>
+        </Toolbar>,
+      );
+      expect(button('Bold')).toHaveAttribute('aria-pressed', 'false');
+      await user.click(button('Bold'));
+      expect(button('Bold')).toHaveAttribute('aria-pressed', 'true');
+      await user.click(button('Bold'));
+      expect(button('Bold')).toHaveAttribute('aria-pressed', 'false');
+      const [values, details] = onCheckedValuesChange.mock.calls[0];
+      expect(Object.entries(values)).toEqual([['constructor', ['bold']]]);
+      expect(details).toEqual({
+        name: 'constructor',
+        checkedItems: ['bold'],
+        event: expect.any(MouseEvent),
+      });
+      expect(Object.entries(onCheckedValuesChange.mock.calls[1][0])).toEqual([['constructor', []]]);
+    });
+
+    it('a radio is checked while its value is in the group; checking one makes it the only value', async () => {
+      const user = userEvent.setup();
+      const onCheckedValuesChange = vi.fn<CheckedValuesChangeHandler>();
+      render(
+        <Formatting
+          defaultCheckedValues={{ align: ['left', 'center'] }}
+          onCheckedValuesChange={onCheckedValuesChange}
+        />,
+      );
+      // A group should hold one value; one that holds several shows each of them checked.
+      expect(radio('Left')).toHaveAttribute('aria-checked', 'true');
+      expect(radio('Center')).toHaveAttribute('aria-checked', 'true');
+      await user.click(radio('Left'));
+      expect(radio('Left')).toHaveAttribute('aria-checked', 'true');
+      expect(radio('Center')).toHaveAttribute('aria-checked', 'false');
+      expect(onCheckedValuesChange.mock.calls.map(([values]) => values)).toEqual([
+        { align: ['left'] },
+      ]);
+    });
+
     it('renders the pressed and checked states in the server HTML and hydrates without warnings', async () => {
       const tree = <Formatting defaultCheckedValues={{ format: ['italic'], align: ['center'] }} />;
       const html = renderToString(tree);

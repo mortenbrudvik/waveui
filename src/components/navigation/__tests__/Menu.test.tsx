@@ -1535,6 +1535,52 @@ describe('Menu popup (Menu.Trigger + Menu.Popover)', () => {
     await expectNoA11yViolations();
   });
 
+  it('an aria-label or aria-labelledby that holds undefined (a wrapper forwarding it) keeps the trigger’s name', async () => {
+    const user = userEvent.setup();
+    function ForwardingPopover(props: { 'aria-label'?: string; 'aria-labelledby'?: string }) {
+      return (
+        <Menu.Popover aria-label={props['aria-label']} aria-labelledby={props['aria-labelledby']}>
+          <Menu.Item>Edit</Menu.Item>
+        </Menu.Popover>
+      );
+    }
+    render(
+      <Menu>
+        <Menu.Trigger>
+          <button type="button">Actions</button>
+        </Menu.Trigger>
+        <ForwardingPopover />
+      </Menu>,
+    );
+    await user.click(trigger());
+    expect(screen.getByRole('menu', { name: 'Actions' })).toHaveAttribute(
+      'aria-labelledby',
+      trigger().id,
+    );
+  });
+
+  it('a consumer aria-labelledby names the menu instead of the trigger', async () => {
+    const user = userEvent.setup();
+    render(
+      <>
+        <span id="menu-heading">File commands</span>
+        <Menu>
+          <Menu.Trigger>
+            <button type="button">Actions</button>
+          </Menu.Trigger>
+          <Menu.Popover aria-labelledby="menu-heading">
+            <Menu.Item>Edit</Menu.Item>
+          </Menu.Popover>
+        </Menu>
+      </>,
+    );
+    await user.click(trigger());
+    expect(screen.getByRole('menu', { name: 'File commands' })).toHaveAttribute(
+      'aria-labelledby',
+      'menu-heading',
+    );
+  });
+
   it('a popup menu without Menu.Trigger does not point aria-labelledby at a missing id', () => {
     render(
       <Menu defaultOpen>

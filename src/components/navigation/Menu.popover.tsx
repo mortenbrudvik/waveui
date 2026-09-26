@@ -51,7 +51,8 @@ export interface MenuPopoverProps extends Omit<React.HTMLAttributes<HTMLDivEleme
   children: React.ReactNode;
   /**
    * Ref to the portaled `role="menu"` surface. Its `id` is generated (the trigger's
-   * `aria-controls` points to it), and it is labelled by the trigger unless `aria-label` is given.
+   * `aria-controls` points to it), and it is labelled by the trigger unless `aria-label` or
+   * `aria-labelledby` is given (one that holds `undefined` counts as not given).
    */
   ref?: React.Ref<HTMLDivElement>;
 }
@@ -177,6 +178,7 @@ export const MenuPopover = ({
     closeChain,
     dismiss,
     hoverSurfaceHandlers,
+    isHoverClose,
     openOnContext,
     contextSurfaceHandlers,
     contextAnchor,
@@ -308,6 +310,8 @@ export const MenuPopover = ({
     finalFocusRef: openOnContext ? contextOpener : undefined,
     fallback: getReturnFocus,
     onlyIfFocusInside: true,
+    // A hover close moves no focus (a submenu closing with it is taken along by the hook).
+    isHoverClose,
   });
 
   // C-DEV: a surface that no trigger labels needs its own name.
@@ -465,13 +469,17 @@ export const MenuPopover = ({
       <MenuListContext.Provider value={listContext}>
         <div
           role="menu"
-          aria-labelledby={
-            // A context region's whole text is no name: a context menu is named by aria-label.
-            triggerElement && !openOnContext && rest['aria-label'] === undefined
-              ? labelledBy
-              : undefined
-          }
           {...rest}
+          // After the spread: a consumer name wins when it is defined, and a forwarded key that
+          // holds `undefined` does not remove the trigger's. A context region's whole text is no
+          // name: a context menu is named by aria-label.
+          aria-labelledby={
+            rest['aria-labelledby'] !== undefined
+              ? rest['aria-labelledby']
+              : triggerElement && !openOnContext && rest['aria-label'] === undefined
+                ? labelledBy
+                : undefined
+          }
           {...presenceProps}
           ref={mergedRef}
           id={menuId}

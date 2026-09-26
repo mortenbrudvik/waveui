@@ -1445,18 +1445,21 @@ describe('mockAnimations', () => {
   });
 
   describe('the stub lasts one test', () => {
-    // Both tests record what they see; afterAll checks the pair (in any order, and skipped when a
-    // filter selects only one of them).
-    const seen: boolean[] = [];
+    // Both tests record whether they installed the stub and what they see; afterAll checks each
+    // against its role, so the check holds in any order (in the declared order the second test is
+    // the one that would see a stub left behind) and is skipped when a filter selects only one.
+    const seen: Array<{ installed: boolean; found: boolean }> = [];
     afterAll(() => {
-      if (seen.length === 2) expect(seen).toEqual([true, false]);
+      if (seen.length !== 2) return;
+      expect(seen.find((entry) => entry.installed)?.found).toBe(true);
+      expect(seen.find((entry) => !entry.installed)?.found).toBe(false);
     });
     it('installs getAnimations in the first test', () => {
       mockAnimations();
-      seen.push('getAnimations' in Element.prototype);
+      seen.push({ installed: true, found: 'getAnimations' in Element.prototype });
     });
     it('finds no getAnimations in the next test (jsdom has none)', () => {
-      seen.push('getAnimations' in Element.prototype);
+      seen.push({ installed: false, found: 'getAnimations' in Element.prototype });
     });
   });
 });

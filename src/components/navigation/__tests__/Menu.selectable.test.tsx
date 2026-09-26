@@ -14,7 +14,6 @@ import type {
 import { MenuItem } from '../Menu.items';
 import type { MenuItemProps } from '../Menu.items';
 import { INERT_MENU_CONTEXT, MenuContext } from '../Menu.context';
-import { WaveProvider } from '../../provider/WaveProvider';
 import type { CheckedValues, CheckedValuesChangeDetails, Slot } from '../../../lib/types';
 import { expectNoA11yViolations, expectThrows, testSystemProps } from '../../../test-utils';
 import { MenuListHarness, renderInMenuList } from './menuHarness';
@@ -27,10 +26,6 @@ const checkbox = (name: string) => screen.getByRole('menuitemcheckbox', { name }
 const radio = (name: string) => screen.getByRole('menuitemradio', { name });
 
 const CHECKMARK_SPACE = 'hidden w-4 shrink-0 group-has-[[data-menu-checkmark]]/menu:inline-flex';
-
-function RtlProvider({ children }: { children: React.ReactNode }) {
-  return <WaveProvider dir="rtl">{children}</WaveProvider>;
-}
 
 function Harness({ children }: { children: React.ReactNode }) {
   return <MenuListHarness>{children}</MenuListHarness>;
@@ -213,6 +208,55 @@ describe('checked values', () => {
       { view: ['grid'] },
       expect.objectContaining({ name: 'view', checkedItems: ['grid'] }),
     );
+  });
+
+  it('a group name that is an Object.prototype key ("__proto__") works like any other', async () => {
+    const user = userEvent.setup();
+    const onCheckedValuesChange = vi.fn();
+    renderInMenuList(
+      <MenuItemCheckbox name="__proto__" value="ruler">
+        Ruler
+      </MenuItemCheckbox>,
+      { onCheckedValuesChange },
+    );
+    expect(checkbox('Ruler')).toHaveAttribute('aria-checked', 'false');
+    await user.click(checkbox('Ruler'));
+    expect(checkbox('Ruler')).toHaveAttribute('aria-checked', 'true');
+    const [values, details] = onCheckedValuesChange.mock.calls[0] as [
+      CheckedValues,
+      CheckedValuesChangeDetails,
+    ];
+    // An own group, not the object's prototype.
+    expect(Object.getPrototypeOf(values)).toBe(Object.prototype);
+    expect(Object.entries(values)).toEqual([['__proto__', ['ruler']]]);
+    expect(details).toEqual(
+      expect.objectContaining({ name: '__proto__', checkedItems: ['ruler'] }),
+    );
+  });
+
+  it('a radio item is checked while its value is in the group; checking one makes it the only value', async () => {
+    const user = userEvent.setup();
+    const onCheckedValuesChange = vi.fn();
+    renderInMenuList(
+      <>
+        <MenuItemRadio name="sort" value="name">
+          Name
+        </MenuItemRadio>
+        <MenuItemRadio name="sort" value="date">
+          Date
+        </MenuItemRadio>
+      </>,
+      { defaultCheckedValues: { sort: ['name', 'date'] }, onCheckedValuesChange },
+    );
+    // A radio group should hold one value; one that holds several shows each of them checked.
+    expect(radio('Name')).toHaveAttribute('aria-checked', 'true');
+    expect(radio('Date')).toHaveAttribute('aria-checked', 'true');
+    await user.click(radio('Name'));
+    expect(radio('Name')).toHaveAttribute('aria-checked', 'true');
+    expect(radio('Date')).toHaveAttribute('aria-checked', 'false');
+    expect(onCheckedValuesChange.mock.calls.map(([values]) => values)).toEqual([
+      { sort: ['name'] },
+    ]);
   });
 
   it('a switch item toggles like a checkbox item', async () => {
@@ -815,7 +859,7 @@ describe('the switch indicator', () => {
       </>,
       {
         defaultCheckedValues: { view: ['on', 'on-disabled'] },
-        renderOptions: options.rtl ? { wrapper: RtlProvider } : undefined,
+        dir: options.rtl ? 'rtl' : undefined,
       },
     );
     const parts = (name: string) => {

@@ -83,8 +83,9 @@ export interface MenuContextValue {
    */
   isSubmenu: boolean;
   /**
-   * The menu's own close (Escape, an outside press, Tab, item activation, the trigger toggle, the
-   * hover close): it closes its open submenu first (innermost first), then itself.
+   * The menu's own close (Escape, an outside press, Tab, item activation, the trigger toggle): it
+   * closes its open submenu first (innermost first), then itself. The hover close does the same,
+   * marked as one (`isHoverClose`).
    */
   requestClose: () => void;
   /**
@@ -99,15 +100,11 @@ export interface MenuContextValue {
    */
   registerOpenSubmenu: (submenu: OpenSubmenu) => () => void;
   /**
-   * Whether focus is inside the menu's list or anything opened from it (submenus, a Popover of an
-   * item), not on its trigger. A static menu: its element, or its open submenu.
-   */
-  containsFocus: () => boolean;
-  /**
    * Whether focus is inside a list of the menu's chain: its own list (the surface, or the static
-   * menu's element) or, recursively, its open submenu's. Unlike `containsFocus`, a portal opened
-   * from an item (a Popover, a Dialog, a root Menu inside them) does not count: the item under
-   * the mouse pointer takes focus only while focus is in one of the chain's lists.
+   * menu's element) or, recursively, its open submenu's. A portal opened from an item (a Popover,
+   * a Dialog, a root Menu inside them) does not count here, although focus there keeps a hover
+   * close waiting: the item under the mouse pointer takes focus only while focus is in one of the
+   * chain's lists.
    */
   listContainsFocus: () => boolean;
   /** Milliseconds before a hover opening (a submenu inherits its parent's). */
@@ -128,6 +125,12 @@ export interface MenuContextValue {
   isHoverFocusing: () => boolean;
   /** Whether the open menu was opened by hover and not pinned since (click, keys, context). */
   isHoverOpen: () => boolean;
+  /**
+   * Whether the close in flight was asked for by the hover intent (the menu's own hover close);
+   * set by that close request, cleared by every other one and by the next opening. A hover close
+   * moves no focus (the surface's focus restore reads it).
+   */
+  isHoverClose: () => boolean;
   /** Hover opening: composed onto the trigger (inert while hover is off). */
   hoverTriggerHandlers: HoverIntent['triggerHandlers'];
   /** Hover opening: composed onto the surface (inert while hover is off). */
@@ -223,13 +226,13 @@ export const INERT_MENU_CONTEXT: MenuContextValue = {
   requestClose: noop,
   closeChain: noop,
   registerOpenSubmenu: () => noop,
-  containsFocus: () => false,
   listContainsFocus: () => false,
   openDelay: 250,
   closeDelay: 250,
   dismiss: noop,
   isHoverFocusing: () => false,
   isHoverOpen: () => false,
+  isHoverClose: () => false,
   hoverTriggerHandlers: { onPointerEnter: noop, onPointerMove: noop, onPointerLeave: noop },
   hoverSurfaceHandlers: { onPointerEnter: noop, onPointerLeave: noop },
   openOnContext: false,

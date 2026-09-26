@@ -38,6 +38,7 @@ import type { CheckedValues, CheckedValuesChangeHandler } from '../../../lib/typ
 import { useCheckedValues } from '../../../hooks/useCheckedValues';
 import { useRovingTabIndex } from '../../../hooks/useRovingTabIndex';
 import { PortalDepthContext } from '../../portal/Portal';
+import { WaveProvider } from '../../provider/WaveProvider';
 import {
   INERT_MENU_CONTEXT,
   INERT_MENU_LIST_CONTEXT,
@@ -68,7 +69,12 @@ export interface MenuListHarnessOptions {
   persistOnItemClick?: boolean;
   /** Wraps the list in `MenuSubmenuTriggerContext` for the dormant submenu path. */
   submenuTrigger?: boolean;
-  /** Passed on to `render` (e.g. `wrapper` for RTL through `WaveProvider`). */
+  /**
+   * `renderInMenuList` only: `'rtl'` renders the list inside `<WaveProvider dir="rtl">` (inside
+   * `renderOptions.wrapper`, when there is one).
+   */
+  dir?: 'ltr' | 'rtl';
+  /** Passed on to `render`. */
   renderOptions?: RenderOptions;
 }
 
@@ -84,7 +90,7 @@ export function MenuListHarness({
   persistOnItemClick = false,
   submenuTrigger = false,
   children,
-}: Omit<MenuListHarnessOptions, 'renderOptions'> & { children: React.ReactNode }) {
+}: Omit<MenuListHarnessOptions, 'renderOptions' | 'dir'> & { children: React.ReactNode }) {
   const checked = useCheckedValues(checkedValues, defaultCheckedValues, onCheckedValuesChange);
   // Every other member is inert (the inert context also covers members added later).
   const menu = React.useMemo<MenuContextValue>(
@@ -159,15 +165,16 @@ export function renderInMenuList(
   ui: React.ReactNode,
   options: MenuListHarnessOptions = {},
 ): RenderResult & { closeFromItem: Mock; list: HTMLElement } {
-  const { closeFromItem: onClose, renderOptions = {}, ...harness } = options;
+  const { closeFromItem: onClose, renderOptions = {}, dir, ...harness } = options;
   const closeFromItem = vi.fn(onClose ?? noop);
   const { wrapper: Outer, ...rest } = renderOptions;
   function MenuListHarnessWrapper({ children }: { children: React.ReactNode }) {
-    const tree = (
+    const list = (
       <MenuListHarness {...harness} closeFromItem={closeFromItem}>
         {children}
       </MenuListHarness>
     );
+    const tree = dir ? <WaveProvider dir={dir}>{list}</WaveProvider> : list;
     return Outer ? <Outer>{tree}</Outer> : tree;
   }
   const result = render(ui, { ...rest, wrapper: MenuListHarnessWrapper });

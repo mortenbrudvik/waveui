@@ -336,11 +336,19 @@ export const MenuRoot = ({
   });
 
   // Every close of this menu closes its open submenu first, innermost first, through the
-  // submenu's own state: each controlled submenu hears onOpenChange(false) once.
-  const requestClose = useEventCallback(() => {
+  // submenu's own state: each controlled submenu hears onOpenChange(false) once. A close asked for
+  // by the hover intent is marked (before the request, in case the app applies it synchronously),
+  // so the surface's focus restore moves no focus; every other close request, and the next
+  // opening, clears the mark. A submenu closed along with it is taken along by the restore itself.
+  const hoverCloseRef = React.useRef(false);
+  const isHoverClose = React.useCallback(() => hoverCloseRef.current, []);
+  const closeMenu = (byHover: boolean) => {
+    hoverCloseRef.current = byHover;
     openSubmenuRef.current?.close();
     setOpen(false);
-  });
+  };
+  const requestClose = useEventCallback(() => closeMenu(false));
+  const requestHoverClose = useEventCallback(() => closeMenu(true));
 
   // Why the open menu is open: a hover opening stays unpinned (the hover close applies) until the
   // trigger is activated; every other opening (click, keys, context, a controlled `open`) pins it.
@@ -348,7 +356,10 @@ export const MenuRoot = ({
   const hoverOpenPendingRef = React.useRef(false);
   const initialFocusRef = React.useRef<InitialFocus>('first');
   React.useLayoutEffect(() => {
-    if (open) openReasonRef.current = hoverOpenPendingRef.current ? 'hover' : 'other';
+    if (open) {
+      openReasonRef.current = hoverOpenPendingRef.current ? 'hover' : 'other';
+      hoverCloseRef.current = false;
+    }
     hoverOpenPendingRef.current = false;
   }, [open]);
   const isHoverOpen = React.useCallback(() => openReasonRef.current === 'hover', []);
@@ -371,7 +382,7 @@ export const MenuRoot = ({
       initialFocusRef.current = 'none';
       setOpen(true);
     },
-    onClose: requestClose,
+    onClose: requestHoverClose,
     // Pinned, or focus inside the menu (not on its trigger): the hover close waits.
     canClose: () => openReasonRef.current === 'hover' && !containsFocus(),
   });
@@ -445,14 +456,42 @@ export const MenuRoot = ({
   const isHoverFocusing = useEventCallback(
     (): boolean => (parentListHoverFocusing?.() ?? false) || (parentHoverFocusing?.() ?? false),
   );
+  // A press in progress that can be a context gesture: the right button, a Ctrl+press (the macOS
+  // context click) or a touch or pen press (a long press). Recorded at its pointerdown and
+  // forgotten at its pointerup, while a context menu is open.
+  const contextPressRef = React.useRef(false);
+  React.useEffect(() => {
+    if (!contextMode || !open || !triggerElement) return undefined;
+    const doc = triggerElement.ownerDocument;
+    const onPointerDown = (event: PointerEvent) => {
+      contextPressRef.current =
+        event.button === 2 ||
+        (event.button === 0 &&
+          (event.ctrlKey || event.pointerType === 'touch' || event.pointerType === 'pen'));
+    };
+    const onPointerEnd = () => {
+      contextPressRef.current = false;
+    };
+    doc.addEventListener('pointerdown', onPointerDown, true);
+    doc.addEventListener('pointerup', onPointerEnd, true);
+    doc.addEventListener('pointercancel', onPointerEnd, true);
+    return () => {
+      doc.removeEventListener('pointerdown', onPointerDown, true);
+      doc.removeEventListener('pointerup', onPointerEnd, true);
+      doc.removeEventListener('pointercancel', onPointerEnd, true);
+      contextPressRef.current = false;
+    };
+  }, [contextMode, open, triggerElement]);
+
   const dismiss = useEventCallback((reason: DismissReason, event: Event) => {
-    // Focus moving into a context menu's region does not close it: a right-button (or macOS
-    // Ctrl+) press focuses the row under the pointer before the contextmenu event that moves the
-    // menu there (Chromium, Firefox). A primary press in the region closes it as an outside press,
-    // and Tab through the surface's own handler.
+    // Focus that such a press moves into a context menu's region does not close the menu: a
+    // right-button (or macOS Ctrl+) press focuses the row under the pointer before the contextmenu
+    // event that moves the menu there (Chromium, Firefox). Any other focus move into the region (a
+    // primary press, the app) closes it, as does an outside press and Tab (the surface's handler).
     if (
       reason === 'focus-outside' &&
       contextMode &&
+      contextPressRef.current &&
       event.target instanceof Node &&
       triggerRef.current?.contains(event.target)
     ) {
@@ -529,13 +568,13 @@ export const MenuRoot = ({
       requestClose,
       closeChain,
       registerOpenSubmenu,
-      containsFocus,
       listContainsFocus,
       openDelay,
       closeDelay,
       dismiss,
       isHoverFocusing,
       isHoverOpen,
+      isHoverClose,
       hoverTriggerHandlers,
       hoverSurfaceHandlers,
       openOnContext: contextMode,
@@ -564,13 +603,13 @@ export const MenuRoot = ({
       requestClose,
       closeChain,
       registerOpenSubmenu,
-      containsFocus,
       listContainsFocus,
       openDelay,
       closeDelay,
       dismiss,
       isHoverFocusing,
       isHoverOpen,
+      isHoverClose,
       hoverTriggerHandlers,
       hoverSurfaceHandlers,
       contextMode,
