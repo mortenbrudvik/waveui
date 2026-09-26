@@ -200,3 +200,64 @@ describe('Select', () => {
     });
   });
 });
+
+describe('sizes and appearances (Phase 4 P4-01)', () => {
+  const select = () => screen.getByRole('combobox', { name: 'Country' });
+  const renderSelect = (props: Partial<SelectProps> = {}) =>
+    render(
+      <Select aria-label="Country" {...props}>
+        <option>Norway</option>
+      </Select>,
+    );
+
+  it('renders the 0.7 classes (paddings and chevron) by default', () => {
+    renderSelect();
+    expect(select()).toHaveClass(
+      'h-8',
+      'ps-3',
+      'pe-8',
+      'text-body-1',
+      'bg-[size:5px_5px,5px_5px]',
+      'bg-[position:right_16px_center,right_11px_center]',
+    );
+    expect(select()).toHaveAttribute('data-size', 'medium');
+    expect(select()).toHaveAttribute('data-appearance', 'outline');
+  });
+
+  it.each([
+    ['small', ['h-6', 'ps-2', 'pe-6', 'text-caption-1', 'bg-[size:4px_4px,4px_4px]']],
+    ['large', ['h-10', 'ps-4', 'pe-10', 'text-body-2', 'bg-[size:6px_6px,6px_6px]']],
+  ] as const)('size="%s" scales the paddings and the chevron', (size, classes) => {
+    renderSelect({ size });
+    expect(select()).toHaveClass(...classes);
+  });
+
+  it('a filled appearance keeps the chevron image next to its fill', () => {
+    renderSelect({ appearance: 'filled-darker' });
+    expect(select()).toHaveClass('bg-input-filled-darker');
+    expect(select().className).toContain('bg-[image:');
+  });
+
+  it('a numeric size is the native visible-rows attribute, deprecated', () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    renderSelect({ size: 4 });
+    // A `size` greater than 1 gives the `<select>` the accessible role `listbox` (jsdom follows
+    // the HTML-AAM mapping here), so it is no longer reachable as a `combobox`: query by label.
+    const el = screen.getByLabelText('Country');
+    expect(el).toHaveAttribute('size', '4');
+    expect(el).toHaveAttribute('data-size', 'medium');
+    expect(warn).toHaveBeenCalledTimes(1);
+    expect(warn).toHaveBeenCalledWith(
+      '[WaveUI] Select: `size={number}` is deprecated and will be removed in 1.0. Use `htmlSize` instead.',
+    );
+  });
+
+  it('htmlSize alone does not warn', () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    renderSelect({ htmlSize: 3 });
+    // Same role change as above: the native `size` is 3 here too.
+    const el = screen.getByLabelText('Country');
+    expect(el).toHaveAttribute('size', '3');
+    expect(warn).not.toHaveBeenCalled();
+  });
+});
