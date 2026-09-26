@@ -70,3 +70,38 @@ export const Invalid: Story = {
     </Field>
   ),
 };
+
+const FRUIT = [
+  { value: 'apple', label: 'Apple' },
+  { value: 'banana', label: 'Banana' },
+];
+
+/** Every size (`medium`, `large`, `extra-large`) at every appearance, with a selected tag. */
+export const SizesAndAppearances: Story = {
+  render: (args) => (
+    <div className="grid gap-4">
+      {(['outline', 'underline', 'filled-darker', 'filled-lighter'] as const).map((appearance) => (
+        <div
+          key={appearance}
+          className={
+            appearance === 'filled-lighter'
+              ? 'grid grid-cols-3 items-start gap-3 rounded bg-secondary p-3'
+              : 'grid grid-cols-3 items-start gap-3 p-3'
+          }
+        >
+          {(['medium', 'large', 'extra-large'] as const).map((size) => (
+            <TagPicker
+              {...args}
+              key={size}
+              size={size}
+              appearance={appearance}
+              options={FRUIT}
+              defaultValue={['apple']}
+              aria-label={`${size} ${appearance}`}
+            />
+          ))}
+        </div>
+      ))}
+    </div>
+  ),
+};

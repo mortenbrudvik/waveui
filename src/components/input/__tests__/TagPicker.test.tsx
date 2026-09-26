@@ -9,6 +9,7 @@ import {
   type TagPickerLabels,
   type TagPickerOption,
   type TagPickerProps,
+  type TagPickerSize,
 } from '../TagPicker';
 import {
   findDanglingIdRefsInHtml,
@@ -1158,5 +1159,149 @@ describe('TagPicker', () => {
       expect(control).toHaveClass('border-input', 'border-b-stroke-accessible');
       expect(control).not.toHaveClass('border-destructive');
     });
+  });
+
+  describe('sizes and appearances (Phase 4 D12)', () => {
+    const OPTIONS = [
+      { value: 'a', label: 'Apple' },
+      { value: 'b', label: 'Banana' },
+    ];
+    const input = () => screen.getByRole('combobox', { name: 'Fruit' });
+    const control = () => input().closest('[data-wave-tagpicker-control]') as HTMLElement;
+    const tag = () => screen.getByRole('listitem');
+
+    it('keeps the 0.7 classes at medium', () => {
+      render(<TagPicker aria-label="Fruit" options={OPTIONS} defaultValue={['a']} />);
+      expect(control()).toHaveClass('gap-1', 'px-2', 'py-1.5', 'border-input');
+      expect(tag()).toHaveClass('px-2', 'py-0.5', 'text-body-1');
+      expect(input()).toHaveClass('py-0.5', 'text-body-1');
+      const root = input().closest('[data-size]') as HTMLElement;
+      expect(root).toHaveAttribute('data-size', 'medium');
+      expect(root).toHaveAttribute('data-appearance', 'outline');
+    });
+
+    it.each([
+      [
+        'large',
+        ['gap-1.5', 'px-2.5', 'py-2'],
+        ['px-2', 'py-1', 'text-body-1'],
+        ['py-1', 'text-body-1'],
+      ],
+      [
+        'extra-large',
+        ['gap-1.5', 'px-3', 'py-2.5'],
+        ['px-2.5', 'py-1', 'text-body-2'],
+        ['py-1', 'text-body-2'],
+      ],
+    ] as const)('%s', (size, controlClasses, tagClasses, inputClasses) => {
+      render(<TagPicker aria-label="Fruit" options={OPTIONS} defaultValue={['a']} size={size} />);
+      expect(control()).toHaveClass(...controlClasses);
+      expect(tag()).toHaveClass(...tagClasses);
+      expect(input()).toHaveClass(...inputClasses);
+    });
+
+    it('a Field small falls back to medium; a Field large is large', () => {
+      const { unmount } = renderWithFieldContext(<TagPicker options={OPTIONS} />, {
+        size: 'small',
+      });
+      const first = screen.getByRole('combobox', { name: FIELD_TEST_TEXT.label });
+      expect(first.closest('[data-size]')).toHaveAttribute('data-size', 'medium');
+      unmount();
+      renderWithFieldContext(<TagPicker options={OPTIONS} />, { size: 'large' });
+      const second = screen.getByRole('combobox', { name: FIELD_TEST_TEXT.label });
+      expect(second.closest('[data-size]')).toHaveAttribute('data-size', 'large');
+    });
+
+    it('the control takes the appearance', () => {
+      render(<TagPicker aria-label="Fruit" options={OPTIONS} appearance="underline" />);
+      expect(control()).toHaveClass('border-0', 'border-b', 'rounded-none');
+    });
+
+    it('types: TagPicker has no small size', () => {
+      expectTypeOf<TagPickerProps['size']>().toEqualTypeOf<TagPickerSize | undefined>();
+      // @ts-expect-error TagPicker has no small size
+      render(<TagPicker aria-label="Fruit" options={OPTIONS} size="small" />);
+    });
+
+    // Spec cases added beyond the brief (§2.2's Tests paragraph, binding via "as §2.1 for each
+    // picker"; §2.1's Tests paragraph at line 334): each appearance with its data-appearance; an
+    // own size winning over a Field size; WaveProvider inputDefaults with own props winning (a
+    // provider "small" also gives "medium", since TagPicker has no small); invalid (a Field
+    // error, and TagPicker's own aria-invalid, its 0.7 invalid state) at underline and
+    // filled-darker; the remove buttons' 0.7 box and glyph at every size.
+
+    it.each([
+      ['outline', ['border-input', 'bg-background']],
+      ['underline', ['rounded-none', 'border-0', 'border-b', 'bg-transparent']],
+      ['filled-darker', ['border-input-filled-stroke', 'bg-input-filled-darker']],
+      ['filled-lighter', ['border-input-filled-stroke', 'bg-input-filled-lighter']],
+    ] as const)(
+      'appearance="%s" renders its classes and data-appearance',
+      (appearance, classes) => {
+        render(<TagPicker aria-label="Fruit" options={OPTIONS} appearance={appearance} />);
+        expect(control()).toHaveClass(...classes);
+        const root = input().closest('[data-appearance]') as HTMLElement;
+        expect(root).toHaveAttribute('data-appearance', appearance);
+      },
+    );
+
+    it('an own size wins over a Field size', () => {
+      const { rerender } = renderWithFieldContext(<TagPicker options={OPTIONS} />, {
+        size: 'large',
+      });
+      const byName = () =>
+        screen.getByRole('combobox', { name: FIELD_TEST_TEXT.label }).closest('[data-size]');
+      expect(byName()).toHaveAttribute('data-size', 'large');
+      rerender(<TagPicker options={OPTIONS} size="extra-large" />);
+      expect(byName()).toHaveAttribute('data-size', 'extra-large');
+    });
+
+    it('takes WaveProvider inputDefaults; its own props win (a provider "small" gives "medium")', () => {
+      const { rerender } = renderWithProviders(<TagPicker aria-label="Fruit" options={OPTIONS} />, {
+        inputDefaults: { size: 'small', appearance: 'underline' },
+      });
+      const root = () =>
+        screen.getByRole('combobox', { name: 'Fruit' }).closest('[data-size]') as HTMLElement;
+      expect(root()).toHaveAttribute('data-size', 'medium');
+      expect(root()).toHaveAttribute('data-appearance', 'underline');
+      rerender(
+        <TagPicker aria-label="Fruit" options={OPTIONS} size="extra-large" appearance="outline" />,
+      );
+      expect(root()).toHaveAttribute('data-size', 'extra-large');
+      expect(root()).toHaveAttribute('data-appearance', 'outline');
+    });
+
+    it.each(['underline', 'filled-darker'] as const)(
+      'an invalid %s field keeps the destructive border and the focus color on its bottom (own aria-invalid)',
+      (appearance) => {
+        render(
+          <TagPicker aria-label="Fruit" options={OPTIONS} appearance={appearance} aria-invalid />,
+        );
+        expect(control()).toHaveClass('border-destructive', 'focus-within:border-b-primary');
+      },
+    );
+
+    it.each(['underline', 'filled-darker'] as const)(
+      'an invalid %s field keeps the destructive border and the focus color on its bottom (Field error)',
+      (appearance) => {
+        renderWithFieldContext(<TagPicker options={OPTIONS} appearance={appearance} />, {
+          errorId: FIELD_TEST_IDS.errorId,
+        });
+        const fieldControl = screen
+          .getByRole('combobox', { name: FIELD_TEST_TEXT.label })
+          .closest('[data-wave-tagpicker-control]') as HTMLElement;
+        expect(fieldControl).toHaveClass('border-destructive', 'focus-within:border-b-primary');
+      },
+    );
+
+    it.each(['medium', 'large', 'extra-large'] as const)(
+      'keeps the remove button\'s 0.7 box and glyph at size="%s"',
+      (size) => {
+        render(<TagPicker aria-label="Fruit" options={OPTIONS} defaultValue={['a']} size={size} />);
+        const remove = screen.getByRole('button', { name: 'Remove Apple' });
+        expect(remove).toHaveClass('ms-0.5', 'rounded-sm', 'p-0', 'bg-transparent');
+        expect(remove.querySelector('svg')).toHaveAttribute('width', '12');
+      },
+    );
   });
 });
