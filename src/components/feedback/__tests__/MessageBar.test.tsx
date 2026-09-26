@@ -1318,6 +1318,20 @@ describe('MessageBar', () => {
   describe('internal status building blocks (feedback-navigation#4)', () => {
     testDisplayName(StatusIcon, 'StatusIcon');
     testDisplayName(StatusText, 'StatusText');
+
+    // The bar and the toast container pass the id from Fluent parity phase 3 on (P3-04, P3-02).
+    it('renders its id on the visually hidden text, so a labelled bar or toast can name it', () => {
+      render(<StatusText label="Warning:" id="status-text-id" />);
+      const text = document.getElementById('status-text-id');
+      expect(text).toHaveClass('sr-only');
+      expect(text?.textContent).toBe('Warning: ');
+    });
+
+    it('renders nothing for an empty label, so an id never names an empty element', () => {
+      const { container } = render(<StatusText label="" id="status-text-id" />);
+      expect(container).toBeEmptyDOMElement();
+      expect(document.getElementById('status-text-id')).toBeNull();
+    });
   });
 
   describe('forms (button-provider#1)', () => {
