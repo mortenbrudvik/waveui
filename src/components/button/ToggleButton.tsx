@@ -1,10 +1,12 @@
 import * as React from 'react';
 import { cn } from '../../lib/cn';
+import { toggleButtonClassNames } from '../../lib/classNames';
 import { composeEventHandlers } from '../../lib/composeEventHandlers';
 import { warnOnce } from '../../lib/dev';
 import { useControllable } from '../../hooks/useControllable';
 import type { Size, Appearance, IconPosition, Slot } from '../../lib/types';
 import { Button } from './Button';
+import { withPartClass } from './Button.slots';
 import { buttonClassName } from './buttonStyles';
 
 /** Properties for the ToggleButton component. */
@@ -139,6 +141,7 @@ export const ToggleButton = ({
   disabled = false,
   disabledFocusable = false,
   isAccessible = false,
+  icon,
   className,
   onClick,
   ...props
@@ -167,6 +170,7 @@ export const ToggleButton = ({
   return (
     <Button
       {...props}
+      icon={withPartClass(icon, toggleButtonClassNames.icon)}
       appearance={appearance}
       size={size}
       disabled={disabled}
@@ -181,6 +185,7 @@ export const ToggleButton = ({
       data-pressed={isPressed ? '' : undefined}
       onClick={handleClick}
       className={cn(
+        toggleButtonClassNames.root,
         isPressed && getPressedLayer(appearance, disabledLook, isAccessible),
         className,
       )}

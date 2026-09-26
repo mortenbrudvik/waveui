@@ -1,5 +1,13 @@
 import * as React from 'react';
 import { cn } from '../../lib/cn';
+import {
+  toolbarButtonClassNames,
+  toolbarDividerClassNames,
+  toolbarGroupClassNames,
+  toolbarRadioButtonClassNames,
+  toolbarRadioGroupClassNames,
+  toolbarToggleButtonClassNames,
+} from '../../lib/classNames';
 import { composeEventHandlers } from '../../lib/composeEventHandlers';
 import { warnOnce } from '../../lib/dev';
 import { getArrowIntent, getDirection } from '../../lib/direction';
@@ -79,9 +87,12 @@ export const ToolbarButton: PolymorphicComponent<'button', ToolbarButtonOwnProps
       {...rest}
       appearance={appearance}
       size={effectiveSize}
-      icon={vertical ? withPartClass(icon, verticalIconBoxClasses[effectiveSize]) : icon}
+      icon={withPartClass(
+        vertical ? withPartClass(icon, verticalIconBoxClasses[effectiveSize]) : icon,
+        toolbarButtonClassNames.icon,
+      )}
       data-vertical={vertical ? '' : undefined}
-      className={cn(vertical && verticalButtonClasses, className)}
+      className={cn(toolbarButtonClassNames.root, vertical && verticalButtonClasses, className)}
     />
   );
 };
@@ -141,6 +152,8 @@ export const ToolbarToggleButton = ({
   value,
   appearance = 'subtle',
   size,
+  icon,
+  className,
   onClick,
   ...rest
 }: ToolbarToggleButtonProps) => {
@@ -150,6 +163,8 @@ export const ToolbarToggleButton = ({
   return (
     <ToggleButton
       {...rest}
+      icon={withPartClass(icon, toolbarToggleButtonClassNames.icon)}
+      className={cn(toolbarToggleButtonClassNames.root, className)}
       appearance={appearance}
       size={size ?? toolbar.size}
       pressed={checked.isChecked(name, value)}
@@ -181,6 +196,8 @@ export const ToolbarRadioButton = ({
   value,
   appearance = 'subtle',
   size,
+  icon,
+  className,
   onClick,
   ...rest
 }: ToolbarRadioButtonProps) => {
@@ -190,6 +207,8 @@ export const ToolbarRadioButton = ({
   return (
     <ToggleButton
       {...rest}
+      icon={withPartClass(icon, toolbarRadioButtonClassNames.icon)}
+      className={cn(toolbarRadioButtonClassNames.root, className)}
       role="radio"
       appearance={appearance}
       size={size ?? toolbar.size}
@@ -283,7 +302,12 @@ export const ToolbarRadioGroup = ({
       role="radiogroup"
       data-roving-transparent=""
       onKeyDown={composeEventHandlers(onKeyDown, handleCrossAxisKeyDown)}
-      className={cn('flex gap-1', orientation === 'vertical' && 'flex-col', className)}
+      className={cn(
+        toolbarRadioGroupClassNames.root,
+        'flex gap-1',
+        orientation === 'vertical' && 'flex-col',
+        className,
+      )}
     />
   );
 };
@@ -320,7 +344,12 @@ export const ToolbarGroup = ({ role, className, ref, ...rest }: ToolbarGroupProp
       data-orientation={orientation}
       {...rest}
       ref={ref}
-      className={cn('flex gap-1', orientation === 'vertical' && 'flex-col', className)}
+      className={cn(
+        toolbarGroupClassNames.root,
+        'flex gap-1',
+        orientation === 'vertical' && 'flex-col',
+        className,
+      )}
     />
   );
 };
@@ -351,6 +380,7 @@ export const ToolbarDivider = ({ className, ref, ...rest }: ToolbarDividerProps)
       {...rest}
       ref={ref}
       className={cn(
+        toolbarDividerClassNames.root,
         vertical
           ? 'my-1 h-0 shrink-0 self-stretch border-t border-border'
           : 'mx-1 w-0 shrink-0 self-stretch border-s border-border',

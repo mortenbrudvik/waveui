@@ -6,6 +6,7 @@ import { renderToString } from 'react-dom/server';
 import { ToggleButton } from '../ToggleButton';
 import type { ToggleButtonProps } from '../ToggleButton';
 import { buttonClassName } from '../buttonStyles';
+import { buttonClassNames, toggleButtonClassNames } from '../../../lib/classNames';
 import {
   testSystemProps,
   testFocusEvents,
@@ -25,8 +26,16 @@ const BoldIcon = () => (
 
 /** The class list of an element as a sorted array (order-independent comparison). */
 const classesOf = (el: Element) => Array.from(el.classList).sort();
-/** The classes of a `buttonClassName()` result as a sorted array. */
-const classesFrom = (value: string) => value.split(/\s+/).filter(Boolean).sort();
+/**
+ * The classes a ToggleButton's `<button>` carries for a `buttonClassName()` result: the helper's
+ * classes plus the stable classes of Button and ToggleButton (P3-00), as a sorted array.
+ */
+const classesFrom = (value: string) =>
+  [
+    ...value.split(/\s+/).filter(Boolean),
+    buttonClassNames.root,
+    toggleButtonClassNames.root,
+  ].sort();
 /** The forced-colors classes of an element, sorted. */
 const forcedColorsOf = (el: Element) =>
   classesOf(el).filter((cls) => cls.startsWith('forced-colors:'));
