@@ -1,6 +1,6 @@
 import * as React from 'react';
 import { describe, it, expect, vi, expectTypeOf } from 'vitest';
-import { act, render, screen } from '@testing-library/react';
+import { act, createEvent, fireEvent, render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import {
   SpinButton,
@@ -1214,5 +1214,62 @@ describe('displayValue (Phase 4 D15)', () => {
     act(() => form.requestSubmit());
     expect(onSubmit).not.toHaveBeenCalled();
     expect(spin()).toHaveFocus();
+  });
+});
+
+describe('precision (Phase 4 D19)', () => {
+  it('rounds a typed commit and steps, without padding', async () => {
+    const user = userEvent.setup();
+    const onValueChange = vi.fn();
+    render(
+      <SpinButton aria-label="Quantity" precision={2} step={0.001} onValueChange={onValueChange} />,
+    );
+    await user.clear(spin());
+    await user.type(spin(), '1.234{Enter}');
+    expect(onValueChange).toHaveBeenLastCalledWith(1.23);
+    await user.keyboard('{ArrowUp}');
+    expect(onValueChange).toHaveBeenLastCalledWith(1.23);
+  });
+
+  it('precision 2 shows 1, not 1.00', () => {
+    render(<SpinButton aria-label="Quantity" precision={2} defaultValue={1} />);
+    expect(spin()).toHaveValue('1');
+  });
+
+  // Math.trunc(NaN) is NaN, which Math.min/Math.max propagate: without this guard a NaN
+  // precision would reach roundTo and round every commit to zero decimals instead of leaving
+  // the 0.7 rule in place (decided in Task B8, not in the brief).
+  it('a non-finite precision behaves as unset', async () => {
+    const user = userEvent.setup();
+    const onValueChange = vi.fn();
+    render(
+      <SpinButton aria-label="Quantity" precision={NaN} step={0.1} onValueChange={onValueChange} />,
+    );
+    await user.click(spin());
+    await user.keyboard('{ArrowUp}');
+    expect(spin()).toHaveValue('0.1');
+    expect(onValueChange).toHaveBeenLastCalledWith(0.1);
+  });
+});
+
+describe('Shift+Home and Shift+End (Phase 4 D21)', () => {
+  it('keep their native selection and change nothing', () => {
+    const onValueChange = vi.fn();
+    render(
+      <SpinButton
+        aria-label="Quantity"
+        min={0}
+        max={9}
+        defaultValue={5}
+        onValueChange={onValueChange}
+      />,
+    );
+    const homeEvent = createEvent.keyDown(spin(), { key: 'Home', shiftKey: true });
+    fireEvent(spin(), homeEvent);
+    expect(homeEvent.defaultPrevented).toBe(false);
+    const endEvent = createEvent.keyDown(spin(), { key: 'End', shiftKey: true });
+    fireEvent(spin(), endEvent);
+    expect(endEvent.defaultPrevented).toBe(false);
+    expect(onValueChange).not.toHaveBeenCalled();
   });
 });

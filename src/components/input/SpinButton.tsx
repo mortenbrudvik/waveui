@@ -93,6 +93,12 @@ export interface SpinButtonBaseProps
    * @default step * 10
    */
   largeStep?: number;
+  /**
+   * Decimals every committed value is rounded to, typed or stepped (0–20); the number is not
+   * padded (use `displayValue` for `1.00`). Default: steps round to the decimals of `step` and
+   * the value, typed values are kept as typed.
+   */
+  precision?: number;
   /** Whether the spin button is disabled and non-interactive. */
   disabled?: boolean;
   /** Form field name. With a name, the committed value is submitted with the form. */
@@ -220,14 +226,16 @@ const stepButtonClass = cn(
  * A numeric input with decrement/increment buttons (APG spinbutton pattern).
  *
  * - **Keyboard** on the input: ArrowUp/ArrowDown step by `step`, PageUp/PageDown by `largeStep`
- *   (default ten steps), Home/End jump to `min`/`max` when they are finite. The −/+ buttons are
- *   not tab stops and never take focus, so focus stays on the spinbutton and screen readers
- *   announce the new value.
+ *   (default ten steps), Home/End jump to `min`/`max` when they are finite (Shift+Home and
+ *   Shift+End keep their native text-selection instead). The −/+ buttons are not tab stops and
+ *   never take focus, so focus stays on the spinbutton and screen readers announce the new
+ *   value.
  * - **Typing** edits a draft: the value is parsed, clamped and committed on blur or Enter
  *   (Escape reverts). Text that is not a number is flagged with `aria-invalid` and reverted on
  *   blur. Steps (keys and buttons) start from the typed number, and the −/+ buttons are disabled
  *   when that number is at `min`/`max`. Steps are rounded to the precision of `step` and of the
- *   value, so `0.1 + 0.2` is `0.3`.
+ *   value, so `0.1 + 0.2` is `0.3`; `precision` rounds every committed value, typed or stepped,
+ *   to a fixed number of decimals instead, without padding it (pad with `displayValue`).
  * - **Routing**: `id`, ARIA, native input attributes and focus/keyboard handlers go to the
  *   `<input role="spinbutton">`; `className`, `style`, `data-*`, other handlers and `ref` stay on
  *   the root (`controlRef` reaches the input). Inside a `Field` it picks up the label, hint, error
@@ -279,6 +287,7 @@ export const SpinButton = (props: SpinButtonProps | SpinButtonAllowEmptyProps): 
     max = Infinity,
     step = 1,
     largeStep,
+    precision,
     disabled,
     name,
     form,
@@ -358,17 +367,25 @@ export const SpinButton = (props: SpinButtonProps | SpinButtonAllowEmptyProps): 
   // Phase 4 D15: displayValue applies only while the value is controlled; while the field has
   // focus and can be edited, the plain number always shows instead (never displayValue).
   const showsDisplay = isControlled && displayValue !== undefined;
+  // Phase 4 D19: a non-finite precision (NaN, Infinity) behaves as unset instead of reaching
+  // roundTo, since Math.trunc(NaN) is NaN and Math.min/Math.max would otherwise carry it
+  // through to `toFixed`, which treats a NaN argument as 0 (rounding to whole numbers).
+  const places =
+    precision === undefined || !Number.isFinite(precision)
+      ? undefined
+      : Math.min(20, Math.max(0, Math.trunc(precision)));
 
   const commit = (next: number) => {
     setDraft(null);
-    setValue(clamp(next));
+    const rounded = places === undefined ? next : roundTo(next, places);
+    setValue(clamp(rounded));
   };
 
   /** Steps from the typed draft when it is a number, else from the value (0 while empty). */
   const stepBy = (delta: number) => {
     const from = current ?? 0;
-    const precision = Math.max(decimalsOf(step), decimalsOf(delta), decimalsOf(from));
-    commit(roundTo(from + delta, precision));
+    const decimals = places ?? Math.max(decimalsOf(step), decimalsOf(delta), decimalsOf(from));
+    commit(roundTo(from + delta, decimals));
   };
 
   const commitDraft = () => {
@@ -486,6 +503,7 @@ export const SpinButton = (props: SpinButtonProps | SpinButtonAllowEmptyProps): 
       }
       case 'Home':
       case 'End': {
+        if (e.shiftKey) return; // Shift+Home/End select text (Fluent)
         const bound = e.key === 'Home' ? min : max;
         if (!Number.isFinite(bound)) return; // no bound: Home/End move the caret
         e.preventDefault();
