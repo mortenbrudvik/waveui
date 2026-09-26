@@ -56,6 +56,12 @@ export interface MenuPopoverProps extends Omit<React.HTMLAttributes<HTMLDivEleme
   ref?: React.Ref<HTMLDivElement>;
 }
 
+/**
+ * A submenu with room on neither side of its trigger item is shifted across that side, over its
+ * parent menu, to stay inside the viewport (as native and Fluent menus do).
+ */
+const SUBMENU_SHIFT = { padding: 8, crossAxis: true } as const;
+
 /** Whether a `target` is an element (duck typed, so an element of another realm counts). */
 function isElementTarget(target: PopupTarget | undefined): target is HTMLElement {
   return !!target && (target as Partial<Node>).nodeType === 1;
@@ -63,12 +69,13 @@ function isElementTarget(target: PopupTarget | undefined): target is HTMLElement
 
 /**
  * Internal: the mouse behaviour of a menu list (the static root and every `Menu.Popover`
- * surface). While focus is inside the menu tree (the chain's root list or any of its submenus), a
- * mouse `pointermove` over an enabled item of this list focuses it (`preventScroll`), unless it
- * already has focus or a submenu's safe zone of this list holds the point. Hover moves no focus
- * while focus is elsewhere, so a hover-opened menu or a static menu the user is not in never takes
- * focus from the page. Also returns the list's hover group (the safe zones of its submenu trigger
- * items) and the flag the submenus of the list read while such a focus change runs.
+ * surface). While focus is inside a list of the menu tree (the chain's root list or any of its
+ * submenus), a mouse `pointermove` over an enabled item of this list focuses it (`preventScroll`),
+ * unless it already has focus or a submenu's safe zone of this list holds the point. Hover moves
+ * no focus while focus is elsewhere, so a hover-opened menu or a static menu the user is not in
+ * never takes focus from the page, and a Popover, Dialog or other portal opened from an item
+ * keeps it. Also returns the list's hover group (the safe zones of its submenu trigger items) and
+ * the flag the submenus of the list read while such a focus change runs.
  */
 export function useMenuListPointer(menu: MenuContextValue): {
   hoverGroup: HoverIntentGroup;
@@ -87,7 +94,7 @@ export function useMenuListPointer(menu: MenuContextValue): {
     if (item.ownerDocument.activeElement === item) return;
     let root = menu;
     while (root.parent) root = root.parent;
-    if (!root.containsFocus() || hoverGroup.isHeld(event.clientX, event.clientY)) return;
+    if (!root.listContainsFocus() || hoverGroup.isHeld(event.clientX, event.clientY)) return;
     hoverFocusingRef.current = true;
     item.focus({ preventScroll: true });
     // A submenu that just lost focus is dismissed (focus outside) in a microtask the focus change
@@ -116,12 +123,14 @@ export function useMenuListPointer(menu: MenuContextValue): {
  * there moves on inside it and keeps the menu open.
  *
  * In a submenu it opens at the end side of its trigger item (`side="end"`, `offset={0}`) and
- * flips to fit the viewport. ArrowLeft (ArrowRight in RTL) and Escape close only the submenu and
- * return focus to its trigger item; item activation and Tab close every menu of the chain and put
- * focus on the root trigger.
+ * flips to fit the viewport; with room on neither side, it overlaps its parent menu inside the
+ * viewport. ArrowLeft (ArrowRight in RTL) and Escape close only the submenu and return focus to
+ * its trigger item; item activation and Tab close every menu of the chain and put focus on the
+ * root trigger.
  *
  * While focus is inside the menu (or one of its submenus), the item under the mouse pointer takes
- * focus, so Enter activates the item you point at.
+ * focus, so Enter activates the item you point at. Focus in a Popover, Dialog or other portal
+ * opened from an item stays there.
  *
  * A context menu (`openOnContext`) opens at the pointer or at the focused row and returns focus to
  * the element focused at the gesture; it is not labelled by its region, so give it `aria-label`
@@ -194,6 +203,7 @@ export const MenuPopover = ({
     align,
     offset: offset ?? (isSubmenu ? 0 : 4),
     fitViewport: true,
+    shift: isSubmenu ? SUBMENU_SHIFT : undefined,
   });
   // The size limits come from menuPopoverClasses, which a consumer class can replace; an inline
   // max-height/max-width would beat every class.

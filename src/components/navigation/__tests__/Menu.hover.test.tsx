@@ -537,6 +537,33 @@ describe('a root menu with openOnHover', () => {
     expect(onOpenChange.mock.calls).toEqual([[true]]);
   });
 
+  it('a hover opening that a controlled menu applies in a transition stays a hover opening: no focus move, and it closes after the pointer leaves', async () => {
+    const onOpenChange = vi.fn();
+    function TransitionMenu() {
+      const [open, setOpen] = React.useState(false);
+      return (
+        <HoverMenu
+          open={open}
+          onOpenChange={(next) => {
+            onOpenChange(next);
+            React.startTransition(() => setOpen(next));
+          }}
+        />
+      );
+    }
+    render(<TransitionMenu />);
+    await user.hover(button('Actions'));
+    advance(300);
+    await act(async () => {});
+    expect(menu('Actions')).toBeInTheDocument();
+    expect(document.body).toHaveFocus();
+    await user.hover(button('Elsewhere'));
+    advance(300);
+    await act(async () => {});
+    expect(queryMenu('Actions')).not.toBeInTheDocument();
+    expect(onOpenChange.mock.calls).toEqual([[true], [false]]);
+  });
+
   it('a disabledFocusable MenuButton trigger does not open on hover', async () => {
     render(
       <Menu openOnHover>

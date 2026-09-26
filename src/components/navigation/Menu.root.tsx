@@ -11,7 +11,7 @@ import { useCheckedValues, withCheckedValuesListener } from '../../hooks/useChec
 import { useContextMenuAnchor } from '../../hooks/useContextMenuAnchor';
 import { useControllable } from '../../hooks/useControllable';
 import { useEventCallback } from '../../hooks/useEventCallback';
-import { useHoverIntent } from '../../hooks/useHoverIntent';
+import { useHoverIntent, type HoverIntent } from '../../hooks/useHoverIntent';
 import { useId } from '../../hooks/useId';
 import { useIsClient } from '../../hooks/useIsClient';
 import { useMergedRefs } from '../../hooks/useMergedRefs';
@@ -110,14 +110,15 @@ export interface MenuProps extends React.HTMLAttributes<HTMLDivElement> {
   /**
    * Make `Menu.Trigger` a context-menu region: a right click (a Ctrl+click on macOS, a long press
    * where the browser reports one) opens the menu at the pointer, and Shift+F10 or the
-   * ContextMenu key opens it at the focused element inside the region, instead of a click.
-   * Focus returns to the element that had it. The browser's context menu is suppressed there
-   * and inside the menu, except in text fields inside the region, which keep it. A press
-   * elsewhere, a right click outside or a scroll that moves the region closes it. The trigger
-   * gets no `aria-haspopup`/`aria-expanded` (it is not a menu button; with a render-prop child,
-   * do not spread them): name the menu with `aria-label` on `Menu.Popover`, and consider
-   * `aria-keyshortcuts="Shift+F10"` on the region. iOS Safari reports no long press. Ignored on
-   * a submenu; `openOnHover` is ignored with it.
+   * ContextMenu key opens it at the focused element inside the region, instead of a click; a
+   * second gesture while it is open moves it there. Focus returns to the element that had it.
+   * The browser's context menu is suppressed there and inside the menu, except in text fields
+   * inside the region, which keep it. A press elsewhere, a right click outside or a scroll that
+   * moves the region or the row of the gesture (the one under the pointer, or the focused one)
+   * closes it. The trigger gets no `aria-haspopup`/`aria-expanded` (it is not a menu button; with
+   * a render-prop child, do not spread them): name the menu with `aria-label` on `Menu.Popover`,
+   * and consider `aria-keyshortcuts="Shift+F10"` on the region. iOS Safari reports no long press.
+   * Ignored on a submenu; `openOnHover` is ignored with it.
    * @default false
    */
   openOnContext?: boolean;
@@ -325,6 +326,14 @@ export const MenuRoot = ({
     }
     return openSubmenuRef.current?.containsFocus() ?? false;
   });
+  // Focus in a list of the chain: this menu's list, else (recursively) its open submenu's. A
+  // portal opened from an item does not count, so hover never takes focus from it.
+  const listContainsFocus = useEventCallback((): boolean => {
+    const element = surfaceApiRef.current?.surface ?? staticMenuRef.current;
+    const active = element?.ownerDocument.activeElement;
+    if (element && active && element.contains(active)) return true;
+    return openSubmenuRef.current?.listContainsFocus() ?? false;
+  });
 
   // Every close of this menu closes its open submenu first, innermost first, through the
   // submenu's own state: each controlled submenu hears onOpenChange(false) once.
@@ -342,20 +351,10 @@ export const MenuRoot = ({
     if (open) openReasonRef.current = hoverOpenPendingRef.current ? 'hover' : 'other';
     hoverOpenPendingRef.current = false;
   }, [open]);
-  // A hover opening also counts itself, so it always renders once more: when the menu is still
-  // closed then (a controlled menu whose app kept `open` false), the opening did not take and its
-  // pending marks are cleared, so a later opening by the app is an ordinary one (it focuses the
-  // first item and is pinned).
-  const [hoverOpenings, setHoverOpenings] = React.useState(0);
-  React.useLayoutEffect(() => {
-    if (open || hoverOpenings === 0) return;
-    hoverOpenPendingRef.current = false;
-    if (initialFocusRef.current === 'none') initialFocusRef.current = 'first';
-  }, [open, hoverOpenings]);
   const isHoverOpen = React.useCallback(() => openReasonRef.current === 'hover', []);
 
   const {
-    triggerHandlers: hoverTriggerHandlers,
+    triggerHandlers: hoverIntentTriggerHandlers,
     surfaceHandlers: hoverSurfaceHandlers,
     cancel: cancelHover,
     startClose: startHoverClose,
@@ -370,13 +369,32 @@ export const MenuRoot = ({
     onOpen: () => {
       hoverOpenPendingRef.current = true;
       initialFocusRef.current = 'none';
-      setHoverOpenings((count) => count + 1);
       setOpen(true);
     },
     onClose: requestClose,
     // Pinned, or focus inside the menu (not on its trigger): the hover close waits.
     canClose: () => openReasonRef.current === 'hover' && !containsFocus(),
   });
+
+  // A hover opening stays pending until the menu opens, in a later render too (an app that
+  // applies it in a transition). One the app has not applied when the pointer leaves the trigger
+  // (a controlled menu whose app kept `open` false) is forgotten then, so a later opening by the
+  // app is an ordinary one: it focuses the first item and is pinned.
+  const forgetHoverOpening = useEventCallback(() => {
+    if (open) return;
+    hoverOpenPendingRef.current = false;
+    if (initialFocusRef.current === 'none') initialFocusRef.current = 'first';
+  });
+  const hoverTriggerHandlers = React.useMemo<HoverIntent['triggerHandlers']>(
+    () => ({
+      ...hoverIntentTriggerHandlers,
+      onPointerLeave: (event) => {
+        hoverIntentTriggerHandlers.onPointerLeave(event);
+        forgetHoverOpening();
+      },
+    }),
+    [hoverIntentTriggerHandlers, forgetHoverOpening],
+  );
 
   const openWithFocus = React.useCallback(
     (target: InitialFocus) => {
@@ -428,6 +446,18 @@ export const MenuRoot = ({
     (): boolean => (parentListHoverFocusing?.() ?? false) || (parentHoverFocusing?.() ?? false),
   );
   const dismiss = useEventCallback((reason: DismissReason, event: Event) => {
+    // Focus moving into a context menu's region does not close it: a right-button (or macOS
+    // Ctrl+) press focuses the row under the pointer before the contextmenu event that moves the
+    // menu there (Chromium, Firefox). A primary press in the region closes it as an outside press,
+    // and Tab through the surface's own handler.
+    if (
+      reason === 'focus-outside' &&
+      contextMode &&
+      event.target instanceof Node &&
+      triggerRef.current?.contains(event.target)
+    ) {
+      return;
+    }
     if (reason === 'focus-outside' && isSubmenu && hoverMode && isHoverFocusing()) {
       openReasonRef.current = 'hover';
       startHoverClose(event);
@@ -448,8 +478,8 @@ export const MenuRoot = ({
 
   // A submenu registers with its parent while it is open.
   const submenuHandle = React.useMemo<OpenSubmenu>(
-    () => ({ close: requestClose, containsFocus }),
-    [requestClose, containsFocus],
+    () => ({ close: requestClose, containsFocus, listContainsFocus }),
+    [requestClose, containsFocus, listContainsFocus],
   );
   const registerWithParent = parent?.registerOpenSubmenu;
   React.useLayoutEffect(() => {
@@ -500,6 +530,7 @@ export const MenuRoot = ({
       closeChain,
       registerOpenSubmenu,
       containsFocus,
+      listContainsFocus,
       openDelay,
       closeDelay,
       dismiss,
@@ -534,6 +565,7 @@ export const MenuRoot = ({
       closeChain,
       registerOpenSubmenu,
       containsFocus,
+      listContainsFocus,
       openDelay,
       closeDelay,
       dismiss,

@@ -2004,11 +2004,13 @@ describe('Menu events from a portal opened inside an item', () => {
     disabled = false,
     onRenameClick,
     onRenameKeyDown,
+    onDelete,
   }: {
     persistOnClick?: boolean;
     disabled?: boolean;
     onRenameClick?: React.MouseEventHandler<HTMLDivElement>;
     onRenameKeyDown?: React.KeyboardEventHandler<HTMLDivElement>;
+    onDelete?: () => void;
   }) {
     return (
       <Menu defaultOpen>
@@ -2030,13 +2032,33 @@ describe('Menu events from a portal opened inside an item', () => {
               </div>
             </Portal>
           </Menu.Item>
-          <Menu.Item>Delete</Menu.Item>
+          <Menu.Item onClick={onDelete}>Delete</Menu.Item>
         </Menu.Popover>
       </Menu>
     );
   }
 
   const input = () => screen.getByRole('textbox', { name: 'New name' });
+
+  it('hovering another item while typing in a field of the portal leaves focus there: Enter does not activate that item', async () => {
+    const user = userEvent.setup();
+    const onDelete = vi.fn();
+    render(<MenuWithNestedPortal onDelete={onDelete} />);
+    await user.click(input());
+    await user.keyboard('a');
+    await user.hover(item('Delete'));
+    expect(input()).toHaveFocus();
+    await user.keyboard('b{Enter}');
+    expect(input()).toHaveValue('ab');
+    expect(onDelete).not.toHaveBeenCalled();
+    expect(queryMenu()).toBeInTheDocument();
+
+    // Back in the menu's list, the item under the pointer takes focus again.
+    await user.hover(item('Rename…'));
+    act(() => item('Rename…').focus());
+    await user.hover(item('Delete'));
+    expect(item('Delete')).toHaveFocus();
+  });
 
   it('Space types into a field of the portal: the item is not activated', async () => {
     const user = userEvent.setup();

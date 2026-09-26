@@ -1,6 +1,6 @@
 import * as React from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { act, fireEvent, render, screen } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import userEvent, { type UserEvent } from '@testing-library/user-event';
 import { hydrateRoot } from 'react-dom/client';
 import { renderToString } from 'react-dom/server';
@@ -10,7 +10,7 @@ import { useMenuContext } from '../Menu.context';
 import { Dialog } from '../../overlays/Dialog';
 import { getOpenLayers } from '../../../lib/layers';
 import type { CheckedValuesChangeHandler } from '../../../lib/types';
-import { expectNoA11yViolations, renderWithProviders } from '../../../test-utils';
+import { expectNoA11yViolations, mockRect, renderWithProviders } from '../../../test-utils';
 
 let warn: ReturnType<typeof vi.spyOn>;
 let error: ReturnType<typeof vi.spyOn>;
@@ -372,6 +372,47 @@ describe('Menu submenus', () => {
     await user.keyboard('{ArrowLeft}');
     expect(onOpenChange.mock.calls).toEqual([[true], [false]]);
   });
+});
+
+describe('submenu placement', () => {
+  const html = document.documentElement;
+  beforeEach(() => {
+    // A 1024×768 viewport (jsdom has no layout).
+    Object.defineProperty(html, 'clientWidth', { configurable: true, value: 1024 });
+    Object.defineProperty(html, 'clientHeight', { configurable: true, value: 768 });
+  });
+  afterEach(() => {
+    Reflect.deleteProperty(html, 'clientWidth');
+    Reflect.deleteProperty(html, 'clientHeight');
+  });
+
+  /** The surface's `translate(x, y)` position (floating-ui's transform styles). */
+  function translateOf(el: HTMLElement): { x: number; y: number } {
+    const match = /translate\(\s*(-?[\d.]+)px,\s*(-?[\d.]+)px/.exec(el.style.transform);
+    return match ? { x: Number(match[1]), y: Number(match[2]) } : { x: NaN, y: NaN };
+  }
+
+  it.each([
+    ['ltr', 'right', 1024 - 8 - 180],
+    ['rtl', 'left', 8],
+  ] as const)(
+    '%s: a submenu with room on neither side of its trigger item overlaps its parent inside the viewport',
+    async (dir, side, x) => {
+      const user = userEvent.setup();
+      renderWithProviders(<FileMenu />, { dir });
+      await user.click(fileButton());
+      // A full-width menu: its item spans x 16–1008, so 180px fit on neither side.
+      mockRect(item('Open recent'), { x: 16, y: 40, width: 992, height: 30 });
+      await user.click(item('Open recent'));
+      const submenu = menu('Open recent');
+      mockRect(submenu, { width: 180, height: 100 });
+      // A layout change measures the surface again.
+      fireEvent(window, new Event('resize'));
+      await waitFor(() => expect(translateOf(submenu)).toEqual({ x, y: 40 }));
+      expect(submenu).toHaveAttribute('data-side', side);
+      expect(submenu.style.getPropertyValue('--wave-popup-available-width')).toBe('1008px');
+    },
+  );
 });
 
 describe('closing a chain of controlled submenus', () => {

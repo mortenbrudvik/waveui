@@ -229,6 +229,50 @@ describe('usePopupPosition', () => {
     expect(y + boxes.floating.height).toBeLessThanOrEqual(boxes.reference.y);
   });
 
+  it.each([
+    ['LTR', 'ltr', 'right', 1024 - 8 - 180],
+    ['RTL', 'rtl', 'left', 8],
+  ] as const)(
+    'with shift crossAxis, a side placement with no room on either side moves across its side into the viewport (%s)',
+    async (_name, dir, side, x) => {
+      // A 992px wide anchor (the item of a full-width menu): a 180px surface fits neither after it
+      // (x 1008–1188) nor before it (x -164–16).
+      boxes.reference = { x: 16, y: 100, width: 992, height: 30 };
+      boxes.floating = { x: 0, y: 0, width: 180, height: 100 };
+      let last: UsePopupPositionResult | null = null;
+      render(
+        <WaveProvider dir={dir}>
+          <Popup
+            side="end"
+            offset={0}
+            fitViewport
+            shift={{ padding: 8, crossAxis: true }}
+            onResult={(r) => (last = r)}
+          />
+        </WaveProvider>,
+      );
+      await waitFor(() => expect(last!.isPositioned).toBe(true));
+      const floating = screen.getByTestId('floating');
+      expect(floating).toHaveAttribute('data-side', side);
+      // It overlaps the anchor, up to the 8px viewport padding, at the anchor's top.
+      expect(translateOf(floating)).toEqual({ x, y: 100 });
+      // The whole viewport width, less the padding, is available to it.
+      expect(floating.style.getPropertyValue('--wave-popup-available-width')).toBe('1008px');
+    },
+  );
+
+  it('without shift crossAxis, a side placement moves only along its side', async () => {
+    boxes.reference = { x: 16, y: 100, width: 992, height: 30 };
+    boxes.floating = { x: 0, y: 0, width: 180, height: 100 };
+    let last: UsePopupPositionResult | null = null;
+    render(<Popup side="end" offset={0} fitViewport onResult={(r) => (last = r)} />);
+    await waitFor(() => expect(last!.isPositioned).toBe(true));
+    const floating = screen.getByTestId('floating');
+    expect(floating).toHaveAttribute('data-side', 'right');
+    expect(translateOf(floating)).toEqual({ x: 1008, y: 100 });
+    expect(floating.style.getPropertyValue('--wave-popup-available-width')).toBe('8px');
+  });
+
   it('does not shift when shift is disabled', async () => {
     boxes.reference = { x: 940, y: 100, width: 60, height: 20 };
     boxes.floating = { x: 0, y: 0, width: 256, height: 100 };

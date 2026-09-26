@@ -39,6 +39,8 @@ export interface OpenSubmenu {
   close(): void;
   /** Whether focus is inside the submenu's list or anything opened from it. */
   containsFocus(): boolean;
+  /** Whether focus is inside the submenu's list or the list of one of its open submenus. */
+  listContainsFocus(): boolean;
 }
 
 /** The state and callbacks of one `<Menu>`, shared by its parts. */
@@ -101,6 +103,13 @@ export interface MenuContextValue {
    * item), not on its trigger. A static menu: its element, or its open submenu.
    */
   containsFocus: () => boolean;
+  /**
+   * Whether focus is inside a list of the menu's chain: its own list (the surface, or the static
+   * menu's element) or, recursively, its open submenu's. Unlike `containsFocus`, a portal opened
+   * from an item (a Popover, a Dialog, a root Menu inside them) does not count: the item under
+   * the mouse pointer takes focus only while focus is in one of the chain's lists.
+   */
+  listContainsFocus: () => boolean;
   /** Milliseconds before a hover opening (a submenu inherits its parent's). */
   openDelay: number;
   /** Milliseconds before a hover close (a submenu inherits its parent's). */
@@ -215,6 +224,7 @@ export const INERT_MENU_CONTEXT: MenuContextValue = {
   closeChain: noop,
   registerOpenSubmenu: () => noop,
   containsFocus: () => false,
+  listContainsFocus: () => false,
   openDelay: 250,
   closeDelay: 250,
   dismiss: noop,

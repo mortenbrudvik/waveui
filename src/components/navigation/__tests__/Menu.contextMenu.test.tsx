@@ -140,6 +140,41 @@ describe('Menu openOnContext', () => {
   });
 
   it.each([
+    ['a right-button press', { button: 2 }],
+    ['a macOS Ctrl+press', { button: 0, ctrlKey: true }],
+  ] as const)(
+    'a second gesture that focuses its row on %s moves the open menu without closing it',
+    async (_name, press) => {
+      const user = userEvent.setup();
+      const onOpenChange = vi.fn();
+      render(<FileList menu={{ onOpenChange }} />);
+      fireEvent.contextMenu(row('notes.txt'), { button: 2, clientX: 100, clientY: 200 });
+      await waitFor(() => expect(translateOf(fileMenu())).toEqual({ x: 100, y: 204 }));
+      const surface = fileMenu();
+      // Chromium and Firefox focus the row under the pointer at the press, before the contextmenu
+      // event (which Windows fires at the release): the menu stays open meanwhile.
+      const point = { ...press, clientX: 150, clientY: 300 };
+      fireEvent.pointerDown(row('draft.md'), point);
+      fireEvent.mouseDown(row('draft.md'), point);
+      act(() => row('draft.md').focus());
+      await act(async () => {});
+      expect(fileMenu()).toBe(surface);
+      expect(onOpenChange.mock.calls).toEqual([[true]]);
+
+      fireEvent.contextMenu(row('draft.md'), point);
+      expect(fileMenu()).toBe(surface);
+      expect(item('Open')).toHaveFocus();
+      await waitFor(() => expect(translateOf(fileMenu())).toEqual({ x: 150, y: 304 }));
+      expect(onOpenChange.mock.calls).toEqual([[true]]);
+      // Focus returns to the row of the second gesture.
+      await user.keyboard('{Escape}');
+      expect(queryFileMenu()).not.toBeInTheDocument();
+      expect(row('draft.md')).toHaveFocus();
+      expect(onOpenChange.mock.calls).toEqual([[true], [false]]);
+    },
+  );
+
+  it.each([
     ['Shift+F10', '{Shift>}{F10}{/Shift}'],
     ['the ContextMenu key', '{ContextMenu}'],
   ])('%s on a focused row opens the menu against that row', async (_name, keys) => {
@@ -309,15 +344,17 @@ describe('Menu openOnContext', () => {
       expect(queryFileMenu()).not.toBeInTheDocument();
     });
 
-    it('a scroll outside that moves the region closes it; one that does not, and one inside, do not', () => {
+    it('a scroll outside that moves the region and the row of the gesture closes it; one that does not, and one inside, do not', () => {
       render(<FileList />);
       mockRect(region(), { x: 0, y: 100, width: 300, height: 200 });
+      mockRect(row('notes.txt'), { x: 0, y: 130, width: 300, height: 30 });
       fireEvent.contextMenu(row('notes.txt'), { button: 2, clientX: 100, clientY: 200 });
-      // A scroll that did not move the region (inertial scrolling at the right click).
+      // A scroll that moved nothing (inertial scrolling at the right click).
       fireEvent.scroll(screen.getByTestId('page'));
       expect(fileMenu()).toBeInTheDocument();
-      // A scroll inside the menu (a long menu), even with the region moved.
+      // A scroll inside the menu (a long menu), even with the page moved.
       mockRect(region(), { x: 0, y: 40, width: 300, height: 200 });
+      mockRect(row('notes.txt'), { x: 0, y: 70, width: 300, height: 30 });
       fireEvent.scroll(fileMenu());
       expect(fileMenu()).toBeInTheDocument();
       fireEvent.scroll(screen.getByTestId('page'));

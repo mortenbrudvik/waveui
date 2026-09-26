@@ -1790,7 +1790,7 @@ describe('Tab out of a Popover or Menu with a wrapper-span trigger inside a Dial
 // React bubbles the events of the portaled Popover.Content through the Menu.Item and the menu
 // surface. The menu leaves them alone: no activation, no typeahead, no close, no focus move.
 describe('a Popover inside a persistOnClick Menu.Item', () => {
-  function RenameMenu({ onRename }: { onRename?: () => void }) {
+  function RenameMenu({ onRename, onDelete }: { onRename?: () => void; onDelete?: () => void }) {
     return (
       <Menu defaultOpen>
         <Menu.Trigger>
@@ -1806,7 +1806,7 @@ describe('a Popover inside a persistOnClick Menu.Item', () => {
               </Popover.Content>
             </Popover>
           </Menu.Item>
-          <Menu.Item>Delete</Menu.Item>
+          <Menu.Item onClick={onDelete}>Delete</Menu.Item>
         </Menu.Popover>
       </Menu>
     );
@@ -1844,6 +1844,22 @@ describe('a Popover inside a persistOnClick Menu.Item', () => {
     render(<RenameMenu />);
     await user.click(button('Save'));
     expect(button('Save')).toHaveFocus();
+    expect(screen.getByRole('menu', { name: 'Actions' })).toBeInTheDocument();
+    expect(screen.getByRole('dialog', { name: 'Rename' })).toBeInTheDocument();
+  });
+
+  it('hovering another item while typing in the field leaves focus there: Enter does not activate that item', async () => {
+    const user = userEvent.setup();
+    const onDelete = vi.fn();
+    render(<RenameMenu onDelete={onDelete} />);
+    await user.click(nameInput());
+    await user.keyboard('abc');
+    // On its way, the pointer crosses Delete: the item under it takes no focus from the popover.
+    await user.hover(menuitem('Delete'));
+    expect(nameInput()).toHaveFocus();
+    await user.keyboard('d{Enter}');
+    expect(nameInput()).toHaveValue('abcd');
+    expect(onDelete).not.toHaveBeenCalled();
     expect(screen.getByRole('menu', { name: 'Actions' })).toBeInTheDocument();
     expect(screen.getByRole('dialog', { name: 'Rename' })).toBeInTheDocument();
   });
@@ -3700,6 +3716,23 @@ describe('menus and commands across components', () => {
       // The outer menu is still open.
       expect(menuNamed('View')).toBeInTheDocument();
       expect(button('View')).toHaveAttribute('aria-expanded', 'true');
+    });
+
+    it('with focus in the inner menu, hovering an item of the outer menu leaves focus in the inner one', async () => {
+      const user = userEvent.setup();
+      render(<Inside />);
+      await user.click(button('View'));
+      await user.click(screen.getByText('Sort settings…'));
+      await user.click(button('Sort by'));
+      expect(checkbox('Grid')).toHaveFocus();
+
+      await user.hover(menuitem('Refresh'));
+      await act(async () => {});
+      expect(checkbox('Grid')).toHaveFocus();
+      expect(menuNamed('Sort by')).toBeInTheDocument();
+      // Hover inside the inner menu still moves focus there.
+      await user.hover(menuitem('Name'));
+      expect(menuitem('Name')).toHaveFocus();
     });
   });
 });

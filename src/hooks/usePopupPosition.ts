@@ -35,10 +35,12 @@ export interface UsePopupPositionOptions {
   /**
    * Shift along the side to stay inside the viewport. Its padding is also the viewport padding of
    * `flip` and of `size` (`fitViewport`, `matchReferenceWidth`): `true` means 8px, and `false`
-   * lets the popup flip only once it touches the viewport edge and grow right up to it.
+   * lets the popup flip only once it touches the viewport edge and grow right up to it. With
+   * `crossAxis: true` it also shifts across the side, over the anchor, when neither side has room
+   * after `flip` (submenus), and `fitViewport` then offers the whole viewport in that direction.
    * @default { padding: 8 }
    */
-  shift?: boolean | { padding: number };
+  shift?: boolean | { padding: number; crossAxis?: boolean };
   /** Make the surface as wide as the anchor (listboxes). @default false */
   matchReferenceWidth?: boolean;
   /** Limit the surface to the available space (`max-width`/`max-height`). @default false */
@@ -206,10 +208,13 @@ export function usePopupPosition(options: UsePopupPositionOptions): UsePopupPosi
     align === 'center' ? physicalSide : `${physicalSide}-${align}`
   ) as Placement;
   const padding = shift === false ? 0 : shift === true ? 8 : shift.padding;
+  const shiftCrossAxis = typeof shift === 'object' && shift.crossAxis === true;
 
   const middleware: Middleware[] = [offsetMiddleware(offset)];
   if (flip) middleware.push(flipMiddleware({ padding }));
-  if (shift !== false) middleware.push(shiftMiddleware({ padding }));
+  if (shift !== false) {
+    middleware.push(shiftMiddleware({ padding, crossAxis: shiftCrossAxis }));
+  }
   if (matchReferenceWidth || fitViewport) {
     middleware.push(sizeMiddleware({ padding, apply: sizeApply }));
   }
