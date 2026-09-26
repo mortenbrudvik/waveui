@@ -49,7 +49,8 @@ export const inputPaddingClasses: Readonly<Record<CoreSize, string>> = {
  * Fill, strokes and corners of each appearance, for a field drawn on its own element or on a
  * wrapper. Compose the focus and invalid recipes after it: they recolor the borders the appearance
  * draws. The filled appearances have a transparent stroke (a visible one in the high-contrast
- * theme); `underline` and the filled appearances keep a boundary in forced colors.
+ * theme). In forced colors, the filled appearances and the one with only a bottom stroke draw their
+ * border in the system's button text color, so every appearance keeps a visible boundary.
  */
 export const inputAppearanceClasses: Readonly<Record<InputAppearance, string>> = {
   outline: 'rounded border border-input border-b-stroke-accessible bg-background',
@@ -63,9 +64,9 @@ export const inputAppearanceClasses: Readonly<Record<InputAppearance, string>> =
 
 /**
  * Extends a 20px control's pointer target to 24px (WCAG 2.5.8): a transparent layer 2px beyond
- * each edge. The element must be positioned: the picker buttons are absolute, and a static
- * element adds relative positioning itself (this recipe does not, because cn() would then replace
- * an absolute position).
+ * each edge. The element must be positioned: the picker buttons already are, and any other element
+ * sets its own position (the recipe sets none, because cn() would then replace the position of a
+ * picker button).
  */
 export const hitAreaLayer = 'before:absolute before:-inset-0.5';
 
