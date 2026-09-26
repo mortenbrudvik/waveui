@@ -11,6 +11,7 @@ import {
 } from 'react';
 import { getElementType } from '../lib/children';
 import { isDev, reportMissingContext, warnOnce } from '../lib/dev';
+import { useActiveDescendant } from './useActiveDescendant';
 import { useEventCallback } from './useEventCallback';
 import { useId } from './useId';
 import { useMergedRefs } from './useMergedRefs';
@@ -83,10 +84,10 @@ export interface UseListboxOptions {
    */
   autoHighlight?: 'selected' | 'first' | false;
   /**
-   * Editable: whenever the navigable set changes while open (typing), its first option becomes
-   * active — also when the keystroke that opens the listbox changes the set (compared with the set
-   * before opening) — and so does every text-editing key while open, also when the set stays the
-   * same. Opening with an unchanged set keeps the `autoHighlight` start.
+   * Editable: whenever the enabled navigable options change while open (typing), the first of them
+   * becomes active — also when the keystroke that opens the listbox changes them (compared with
+   * those before opening) — and so does every text-editing key while open, also when they stay the
+   * same. Opening with unchanged options keeps the `autoHighlight` start.
    */
   highlightOnFilter?: boolean;
   /** Prefix of the generated listbox id. @default 'listbox' */
@@ -271,12 +272,6 @@ function sameItems(a: readonly ListboxItem[], b: readonly ListboxItem[]): boolea
   return a.every((item, index) => sameItem(item, b[index]));
 }
 
-function sameValues(a: readonly ListboxItem[], b: readonly ListboxItem[]): boolean {
-  if (a === b) return true;
-  if (a.length !== b.length) return false;
-  return a.every((item, index) => item.value === b[index].value);
-}
-
 function compareRegistrations(a: Registration, b: Registration): number {
   const ea = a.element.current;
   const eb = b.element.current;
@@ -376,14 +371,14 @@ class ListboxStoreImpl implements ListboxStore {
     return this.itemsSnapshot;
   };
 
-  /** The mounted element of an option (for scrolling). */
-  getElement(value: string): HTMLElement | null {
+  /** The mounted element of an option (for scrolling); passed on detached, hence an arrow. */
+  getElement = (value: string): HTMLElement | null => {
     for (const { item, element } of this.registrations) {
       const el = element.current;
       if (item.value === value && el && el.isConnected) return el;
     }
     return null;
-  }
+  };
 
   setRegistrationMode(enabled: boolean): void {
     if (enabled === this.registrationMode) return;
@@ -704,26 +699,6 @@ export function collectOptionLabels(children: React.ReactNode): Map<string, stri
 /*  useListbox                                                         */
 /* ------------------------------------------------------------------ */
 
-function step(
-  values: readonly string[],
-  current: string | null,
-  delta: number,
-  loop: boolean,
-): string | null {
-  const count = values.length;
-  if (count === 0) return null;
-  const index = current === null ? -1 : values.indexOf(current);
-  if (index === -1) return delta > 0 ? values[0] : values[count - 1];
-  let next = index + delta;
-  if (next < 0 || next >= count) {
-    next =
-      loop && Math.abs(delta) === 1
-        ? (next + count) % count
-        : Math.max(0, Math.min(count - 1, next));
-  }
-  return values[next];
-}
-
 function hasText(element: EventTarget): boolean {
   return (
     (element instanceof HTMLInputElement || element instanceof HTMLTextAreaElement) &&
@@ -857,7 +832,6 @@ export function useListbox(options: UseListboxOptions): UseListboxResult {
     () => navigable.filter((item) => !item.disabled).map((item) => item.value),
     [navigable],
   );
-  const enabledSet = useMemo(() => new Set(enabledValues), [enabledValues]);
   const itemByValue = useMemo(() => {
     const map = new Map<string, ListboxItem>();
     for (const item of allItems) if (!map.has(item.value)) map.set(item.value, item);
@@ -873,54 +847,38 @@ export function useListbox(options: UseListboxOptions): UseListboxResult {
   }, [allItems, navigable]);
   const selectedSet = new Set(selectedValues);
 
-  // The highlighted value (keyboard, pointer, typeahead, setActiveValue), adjusted during render
-  // (C-HOOKS: no effect) and stored once:
-  // - reset on close (also a highlight set while closed);
-  // - highlightOnFilter: moved to the first option when the navigable set changes (below);
-  // - dropped once it is not navigable and enabled any more (filtered out, hidden, removed by an
-  //   update, disabled), so the option is not highlighted again without a user action when it
-  //   returns.
-  const [activeRaw, setActiveRaw] = useState<string | null>(null);
-  let highlighted = open ? activeRaw : null;
-
-  // highlightOnFilter: compared by content, not identity — an inline `filter` yields a new array on
-  // every render pass (also the pass React repeats after this state update). The set is tracked
-  // while closed too, so the keystroke that opens the listbox and filters it in the same update
-  // counts as a filter change (compared with the set before opening); opening with an unchanged
-  // set (ArrowDown, a click) keeps the autoHighlight start.
-  const [filterTrack, setFilterTrack] = useState(() => ({ open, items: navigable }));
-  if (highlightOnFilter) {
-    const itemsChanged = !sameValues(filterTrack.items, navigable);
-    if (itemsChanged || filterTrack.open !== open) {
-      setFilterTrack({ open, items: navigable });
-      if (open && itemsChanged) highlighted = enabledValues[0] ?? null;
-    }
-  }
-  if (highlighted !== null && !enabledSet.has(highlighted)) highlighted = null;
-  if (highlighted !== activeRaw) setActiveRaw(highlighted);
-
   // In list order (APG), not in the order the values were selected.
   const firstSelected = enabledValues.find((value) => selectedSet.has(value)) ?? null;
   let fallback: string | null = null;
   if (autoHighlight === 'selected') fallback = firstSelected ?? enabledValues[0] ?? null;
   else if (autoHighlight === 'first') fallback = enabledValues[0] ?? null;
-  const activeValue = open ? (highlighted ?? fallback) : null;
 
   const getOptionId = useCallback(
     (value: string) => `${listboxId}-opt-${store.getIndex(value)}`,
     [listboxId, store],
   );
-  const activeDescendantId = activeValue !== null ? getOptionId(activeValue) : undefined;
   const getItem = useCallback((value: string) => itemByValue.get(value), [itemByValue]);
 
-  // The value the pointer highlighted, until the scroll effect has seen it: a pointer highlight is
-  // not scrolled into view. Every other highlight (keyboard, typeahead, setActiveValue) clears it.
-  const pointerHighlightRef = useRef<string | null>(null);
-  const setActive = useCallback((value: string | null) => {
-    pointerHighlightRef.current = null;
-    setActiveRaw(value);
-  }, []);
-  const setActiveValue = setActive;
+  // The active option, derived during render (C-HOOKS: no effect): the highlighted value (keyboard,
+  // pointer, typeahead, setActiveValue), else the autoHighlight fallback. The highlight is forgotten
+  // on close (one set while closed survives only when the same update opens the listbox) and
+  // dropped once it is not navigable and enabled any more (filtered out, hidden, removed by an
+  // update, disabled), so it does not come back without a user action when the option returns.
+  // highlightOnFilter: the first option whenever the enabled options change while open, compared
+  // by content (an inline `filter` yields new arrays on every render) and with the options before
+  // opening, so the keystroke that opens the listbox and filters it in one update counts; opening
+  // with unchanged options (ArrowDown, a click) keeps the autoHighlight start. Every highlight but
+  // the pointer's is scrolled into view (the list would scroll under the pointer).
+  const ad = useActiveDescendant({
+    items: enabledValues,
+    getId: getOptionId,
+    enabled: open,
+    fallback,
+    loop,
+    activateFirstOnChange: highlightOnFilter,
+    getElement: store.getElement,
+  });
+  const { activeValue, activeDescendantId } = ad;
 
   const commit = useEventCallback(
     (value: string, reason: 'select' | 'tab', fallbackItem?: ListboxItem): void => {
@@ -928,9 +886,9 @@ export function useListbox(options: UseListboxOptions): UseListboxResult {
       if (!item || item.disabled) return;
       onSelect(value, item);
       if (multiple && reason === 'select') {
-        setActive(value);
+        ad.setActiveValue(value);
       } else {
-        setActive(null);
+        ad.setActiveValue(null);
         onOpenChange(false, reason);
       }
     },
@@ -938,12 +896,6 @@ export function useListbox(options: UseListboxOptions): UseListboxResult {
 
   const select = useEventCallback((value: string, item: ListboxItem) => {
     commit(value, 'select', item);
-  });
-
-  const highlight = useEventCallback((value: string) => {
-    if (!open || !enabledSet.has(value) || value === activeValue) return;
-    pointerHighlightRef.current = value;
-    setActiveRaw(value);
   });
 
   const { onTypeahead } = useTypeahead({
@@ -954,7 +906,7 @@ export function useListbox(options: UseListboxOptions): UseListboxResult {
         disabled: item.disabled,
       })),
     onMatch: (value) => {
-      setActive(value);
+      ad.setActiveValue(value);
       if (!open) onOpenChange(true, 'keyboard');
     },
   });
@@ -965,7 +917,7 @@ export function useListbox(options: UseListboxOptions): UseListboxResult {
     // the input: the highlight is cleared (highlightOnFilter: the first option), so Enter after
     // typing never commits an option highlighted before the edit.
     if (mode === 'editable' && open && editsText(event)) {
-      setActive(highlightOnFilter ? (enabledValues[0] ?? null) : null);
+      ad.setActiveValue(highlightOnFilter ? (enabledValues[0] ?? null) : null);
     }
     const altGraph = isAltGraphCharacter(event);
     if ((event.ctrlKey && !altGraph) || event.metaKey) return;
@@ -975,10 +927,9 @@ export function useListbox(options: UseListboxOptions): UseListboxResult {
     const last = enabledValues[enabledValues.length - 1] ?? null;
 
     const openWith = (value: string | null) => {
-      setActive(value);
+      ad.setActiveValue(value);
       if (!open) onOpenChange(true, 'keyboard');
     };
-    const move = (delta: number) => setActive(step(enabledValues, activeValue, delta, loop));
     const commitOrClose = () => {
       if (activeValue !== null) commit(activeValue, 'select');
       else if (!multiple) onOpenChange(false, 'keyboard');
@@ -992,7 +943,7 @@ export function useListbox(options: UseListboxOptions): UseListboxResult {
         } else if (!open) {
           openWith(firstSelected ?? first);
         } else {
-          move(1);
+          ad.next();
         }
         return;
       case 'ArrowUp':
@@ -1004,7 +955,7 @@ export function useListbox(options: UseListboxOptions): UseListboxResult {
         } else if (!open) {
           openWith(firstSelected ?? last);
         } else {
-          move(-1);
+          ad.prev();
         }
         return;
       case 'Home':
@@ -1017,7 +968,8 @@ export function useListbox(options: UseListboxOptions): UseListboxResult {
       case 'PageDown':
         if (!selectOnly || !open) return;
         event.preventDefault();
-        move(key === 'PageDown' ? 10 : -10);
+        // Clamped at the ends, never wrapping (also with loop).
+        ad.move(key === 'PageDown' ? 10 : -10);
         return;
       case 'Enter':
         if (!selectOnly) {
@@ -1099,19 +1051,6 @@ export function useListbox(options: UseListboxOptions): UseListboxResult {
     return () => store.disconnect();
   }, [store]);
 
-  // Keep the active option visible in the scrollable listbox — not after a pointer highlight: the
-  // option under the pointer is already (at least partly) visible, and scrolling would move the
-  // list under the pointer.
-  useLayoutEffect(() => {
-    const fromPointer = activeValue !== null && activeValue === pointerHighlightRef.current;
-    pointerHighlightRef.current = null;
-    if (activeValue === null || fromPointer) return;
-    const element =
-      store.getElement(activeValue) ??
-      (typeof document !== 'undefined' ? document.getElementById(getOptionId(activeValue)) : null);
-    element?.scrollIntoView?.({ block: 'nearest' });
-  }, [activeValue, getOptionId, store]);
-
   useEffect(() => {
     if (!dataItems) return;
     const seen = new Set<string>();
@@ -1122,8 +1061,8 @@ export function useListbox(options: UseListboxOptions): UseListboxResult {
   }, [dataItems]);
 
   const context = useMemo<ListboxContextValue>(
-    () => ({ listboxId, store, select, highlight }),
-    [listboxId, store, select, highlight],
+    () => ({ listboxId, store, select, highlight: ad.highlight }),
+    [listboxId, store, select, ad.highlight],
   );
 
   return {
@@ -1133,7 +1072,7 @@ export function useListbox(options: UseListboxOptions): UseListboxResult {
     items: navigable,
     getItem,
     getOptionId,
-    setActiveValue,
+    setActiveValue: ad.setActiveValue,
     onKeyDown,
     onKeyUp,
     getComboboxProps: () => {
