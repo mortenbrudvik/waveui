@@ -1284,7 +1284,7 @@ The [CHANGELOG](CHANGELOG.md) lists every change, including behaviour and DOM ch
 
 ## Development
 
-Working on Wave needs Node.js 22.13+, 24 or 26+ (not 25) and npm 11.11 or later (`devEngines` in `package.json`). npm stops on other Node.js versions, which the development dependencies do not support, and warns about an older npm, which drops the `libc` fields from `package-lock.json`. `allowScripts` in `package.json` denies the install scripts of esbuild and @parcel/watcher: their prebuilt binaries come from optional dependencies. npm 12 blocks every other dependency install script until it is approved; `npm install-scripts ls` lists them.
+Working on Wave needs Node.js 22.22.2+, 24.15+ or 26+ (not 25) and npm 11.11 or later (`devEngines` in `package.json`). npm stops on other Node.js versions, which the development dependencies do not support, and warns about an older npm, which drops the `libc` fields from `package-lock.json`. `allowScripts` in `package.json` denies the install scripts of esbuild and @parcel/watcher: their prebuilt binaries come from optional dependencies. npm 12 blocks every other dependency install script until it is approved; `npm install-scripts ls` lists them.
 
 ```bash
 npm install

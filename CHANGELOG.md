@@ -97,8 +97,8 @@ The second Fluent UI v9 parity release: Phase 2 of the [roadmap](docs/ROADMAP.md
 - **`dist/styles.css`** is built with Tailwind CSS 4.3: zero-valued spacing custom properties (such as `--tw-translate-x`) are printed as `0px` instead of `calc(.25rem * 0)`, with the same computed values.
 - **Type declarations** write `JSX.Element` return types as `React.JSX.Element`, from a namespace import of `react` (@types/react 19.3); the type is the same.
 - **Build**: TypeScript 6.0, Vite 8.3 and Rolldown 1.2. Internal dist modules, which are not in the exports map, re-export all of their source exports, and the CommonJS files use Node-mode `__toESM` interop; the public ESM and CommonJS exports are unchanged.
-- **Repository settings** in `package.json`, which npm reads only from the project it installs into, so they do not affect an app that installs Wave: `devEngines` (Node.js `^22.13.0 || ^24.0.0 || >=26.0.0` and npm `>=11.11.0` to work on Wave) and `allowScripts` (the install scripts of esbuild and @parcel/watcher are denied).
-- **Development**: the tests run on Vitest 5 (was 4) with @vitest/coverage-v8 5. Vitest 5 supports Node.js 22.12+, 24 and 26+, which is why `devEngines` leaves out Node.js 25. Nothing in the package changes.
+- **Repository settings** in `package.json`, which npm reads only from the project it installs into, so they do not affect an app that installs Wave: `devEngines` (Node.js `^22.22.2 || ^24.15.0 || >=26.0.0` and npm `>=11.11.0` to work on Wave) and `allowScripts` (the install scripts of esbuild and @parcel/watcher are denied).
+- **Development**: the tests run on Vitest 5 (was 4) with @vitest/coverage-v8 5, and on jsdom 30 (was 29). jsdom 30 supports Node.js 22.22.2+, 24.15+ and 26+, and Vitest 5 leaves out Node.js 25, which sets the `devEngines` range. Nothing in the package changes.
 
 ### Deprecated
 

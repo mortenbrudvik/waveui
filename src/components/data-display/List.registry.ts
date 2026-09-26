@@ -152,9 +152,9 @@ export class ListRegistry {
    * child of `root` (an element wrapped around an item) or has no element.
    *
    * The children are walked with `nextElementSibling`, never through the `root.children`
-   * collection: jsdom does not cache indexed `HTMLCollection` access, so an indexed loop (or
-   * `Array.from`) is O(n²) there and made every commit of a large list in a consumer's test suite
-   * cost seconds.
+   * collection: jsdom before 30.1 does not cache indexed `HTMLCollection` access, so an indexed
+   * loop (or `Array.from`) is O(n²) there and made every commit of a large list in a consumer's
+   * test suite cost seconds.
    */
   syncOrder(root: Element | null): void {
     if (!this.active || !root || this.records.size < 2) return;
