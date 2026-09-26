@@ -743,7 +743,7 @@ describe('ToggleButton', () => {
     );
 
     it('with another role, a consumer aria-pressed is dropped and a consumer aria-checked is kept', () => {
-      vi.spyOn(console, 'warn').mockImplementation(() => {});
+      const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
       render(
         <ToggleButton role="menuitem" aria-pressed="true" aria-checked="mixed">
           Toggle
@@ -753,7 +753,7 @@ describe('ToggleButton', () => {
       expect(btn).not.toHaveAttribute('aria-pressed');
       expect(btn).toHaveAttribute('aria-checked', 'mixed');
       expect(btn).not.toHaveAttribute('data-checked');
-      expect(console.warn).toHaveBeenCalledWith(roleStateWarning('menuitem'));
+      expect(warn.mock.calls).toEqual([[roleStateWarning('menuitem')]]);
     });
 
     it('warns once in development, not for every render or instance', () => {
@@ -799,7 +799,7 @@ describe('ToggleButton', () => {
     });
 
     it('has no axe violations with role="tab" inside a tab list (pressed)', async () => {
-      vi.spyOn(console, 'warn').mockImplementation(() => {});
+      const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
       render(
         <div role="tablist" aria-label="Views">
           <ToggleButton role="tab" defaultPressed>
@@ -808,7 +808,7 @@ describe('ToggleButton', () => {
         </div>,
       );
       await expectNoA11yViolations();
-      expect(console.warn).toHaveBeenCalledWith(roleStateWarning('tab'));
+      expect(warn.mock.calls).toEqual([[roleStateWarning('tab')]]);
     });
 
     it.each([

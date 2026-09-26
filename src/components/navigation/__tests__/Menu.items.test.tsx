@@ -140,6 +140,21 @@ describe('MenuItemRow and the column alignment', () => {
     expect(half.textContent).toBe('');
   });
 
+  it('a Menu.Item without children marks no typeahead label, so typing writes no text onto it', async () => {
+    const user = userEvent.setup();
+    renderInMenuList(
+      <>
+        <MenuItem>Save</MenuItem>
+        <MenuItem aria-label="More save options" />
+      </>,
+    );
+    const half = item('More save options');
+    expect(half.querySelector('[data-menu-label]')).toBeNull();
+    act(() => item('Save').focus());
+    await user.keyboard('x');
+    expect(half).not.toHaveAttribute('data-roving-text');
+  });
+
   it('renders a one-shot iterable label (a generator), which the label check does not consume', () => {
     const error = vi.spyOn(console, 'error');
     function* words() {

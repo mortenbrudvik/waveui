@@ -219,7 +219,11 @@ function isInNestedComposite(el: Element, container: Element, roleComposites: bo
 
 /** What an element looked like before the hook stamped it, to hand it back unchanged. */
 interface StampedOriginal {
-  /** The author's own `tabindex` attribute, or `null`. */
+  /**
+   * The author's own `tabindex` attribute, or `null`, read at the first stamp. A `tabIndex` the
+   * author renders differently while the element is stamped is not seen (the stamps overwrite it),
+   * so the hand-back restores the first value.
+   */
   tabIndex: string | null;
   /** Whether the hook added the element's `data-roving-value`. */
   addedValue: boolean;

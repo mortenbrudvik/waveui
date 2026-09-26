@@ -43,10 +43,10 @@ function rowItems(row: HTMLElement): HTMLElement[] {
 /**
  * One row with a main action and a button that opens a submenu (`role="group"` holding two menu
  * items). ArrowDown and ArrowUp visit both halves; ArrowRight (ArrowLeft in RTL) moves from the
- * action to the submenu button, and on the button opens the submenu; ArrowLeft moves back. The
- * submenu half is a `Menu.Item` without children, named by its `aria-label`; it shows only the
- * submenu chevron, after a divider line. Activating the action closes the menu like any item. It
- * works the same inside a static menu.
+ * action to the submenu button, and on the button opens the submenu; ArrowLeft (ArrowRight in RTL)
+ * moves back. The submenu half is a `Menu.Item` without children, named by its `aria-label`; it
+ * shows only the submenu chevron, after a divider line. Activating the action closes the menu like
+ * any item. It works the same inside a static menu.
  *
  * Also exported as `MenuSplitGroup` (import the flat name from React Server Components).
  *

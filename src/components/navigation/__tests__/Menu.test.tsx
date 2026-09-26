@@ -4,8 +4,25 @@ import { act, fireEvent, render, screen, waitFor, within } from '@testing-librar
 import userEvent from '@testing-library/user-event';
 import { hydrateRoot } from 'react-dom/client';
 import { renderToString } from 'react-dom/server';
-import { Menu, MenuDivider, MenuItem, MenuPopover, MenuTrigger } from '../Menu';
+import {
+  Menu,
+  MenuDivider,
+  MenuGroup,
+  MenuGroupHeader,
+  MenuItem,
+  MenuItemCheckbox,
+  MenuItemLink,
+  MenuItemRadio,
+  MenuItemSwitch,
+  MenuPopover,
+  MenuSplitGroup,
+  MenuTrigger,
+} from '../Menu';
 import type { MenuItemProps, MenuProps, MenuTriggerProps } from '../Menu';
+import * as GroupModule from '../Menu.group';
+import * as LinkModule from '../Menu.link';
+import * as SelectableModule from '../Menu.selectable';
+import * as SplitGroupModule from '../Menu.splitGroup';
 import { INERT_MENU_CONTEXT, MenuContext } from '../Menu.context';
 import type { MenuContextValue, MenuSurfaceApi } from '../Menu.context';
 import type { Slot } from '../../../lib/types';
@@ -84,13 +101,49 @@ describe('Menu', () => {
     conflictingClass: { className: 'rounded-none', overrides: 'rounded-md' },
   });
 
-  testCompoundExposure(Menu, ['Item', 'Divider', 'Trigger', 'Popover']);
+  testCompoundExposure(Menu, [
+    'Item',
+    'Divider',
+    'Trigger',
+    'Popover',
+    'ItemCheckbox',
+    'ItemRadio',
+    'ItemSwitch',
+    'ItemLink',
+    'Group',
+    'GroupHeader',
+    'SplitGroup',
+  ]);
 
   it('exports every sub-component under its flat name (C-COMPOUND)', () => {
     expect(MenuItem).toBe(Menu.Item);
     expect(MenuDivider).toBe(Menu.Divider);
     expect(MenuTrigger).toBe(Menu.Trigger);
     expect(MenuPopover).toBe(Menu.Popover);
+    const parts = [
+      [MenuItemCheckbox, Menu.ItemCheckbox],
+      [MenuItemRadio, Menu.ItemRadio],
+      [MenuItemSwitch, Menu.ItemSwitch],
+      [MenuItemLink, Menu.ItemLink],
+      [MenuGroup, Menu.Group],
+      [MenuGroupHeader, Menu.GroupHeader],
+      [MenuSplitGroup, Menu.SplitGroup],
+    ] as const;
+    for (const [flat, dotted] of parts) {
+      // A missing member would pass `undefined === undefined`.
+      expect(typeof flat).toBe('function');
+      expect(flat).toBe(dotted);
+    }
+  });
+
+  it('the flat names are the part modules’ components (one component per part)', () => {
+    expect(MenuItemCheckbox).toBe(SelectableModule.MenuItemCheckbox);
+    expect(MenuItemRadio).toBe(SelectableModule.MenuItemRadio);
+    expect(MenuItemSwitch).toBe(SelectableModule.MenuItemSwitch);
+    expect(MenuItemLink).toBe(LinkModule.MenuItemLink);
+    expect(MenuGroup).toBe(GroupModule.MenuGroup);
+    expect(MenuGroupHeader).toBe(GroupModule.MenuGroupHeader);
+    expect(MenuSplitGroup).toBe(SplitGroupModule.MenuSplitGroup);
   });
 
   it('renders with role="menu"', () => {
@@ -2375,7 +2428,7 @@ describe('Menu.Trigger rendered as a wrapper span', () => {
 });
 
 // ---------------------------------------------------------------------------
-// Parts written in a React Server Component: lazy element types (C-COMPOUND)
+// The surface registration (what the trigger and the root reach while the menu is open)
 // ---------------------------------------------------------------------------
 
 describe('Menu.Popover surface registration', () => {
@@ -2430,6 +2483,10 @@ describe('Menu.Popover surface registration', () => {
     expect(log).toEqual(['commit open=false']);
   });
 });
+
+// ---------------------------------------------------------------------------
+// Parts written in a React Server Component: lazy element types (C-COMPOUND)
+// ---------------------------------------------------------------------------
 
 describe('Menu parts as client references (lazy element types)', () => {
   it('a popup menu of lazy parts renders the same server HTML and works the same', async () => {

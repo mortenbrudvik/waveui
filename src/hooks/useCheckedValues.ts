@@ -1,4 +1,5 @@
-import { useCallback, useMemo, useRef } from 'react';
+import { useCallback, useMemo, useRef, useState } from 'react';
+import { isDev, warnOnce } from '../lib/dev';
 import type {
   CheckedValues,
   CheckedValuesChangeDetails,
@@ -165,5 +166,43 @@ export function useCheckedValues(
       select,
     }),
     [values, toggle, select],
+  );
+}
+
+const noop = () => {};
+
+/**
+ * The duplicate check of one owner of checked values (a menu list, a toolbar): each item
+ * registers its `name`/`value` pair from an effect and unregisters in the cleanup (the returned
+ * function). Registering a pair that is already registered warns once under `warnKey` with
+ * `message(name, value)`, since both items would show as checked.
+ *
+ * - The counts live as long as the caller, per owner: the same pair in two owners is fine, and
+ *   StrictMode's effect, cleanup, effect counts an item once.
+ * - The function keeps its identity while `warnKey` and `message` do, so pass a module-level
+ *   `message` (the owner puts the function in a memoized context value, C-MEMO).
+ * - Development only: in production registering counts nothing and returns a no-op.
+ *
+ * Internal (Menu, Toolbar).
+ */
+export function useDuplicatePairRegistry(
+  warnKey: string,
+  message: (name: string, value: string) => string,
+): (name: string, value: string) => () => void {
+  const [counts] = useState(() => new Map<string, number>());
+  return useCallback(
+    (name: string, value: string) => {
+      if (!isDev) return noop;
+      const key = JSON.stringify([name, value]);
+      const count = (counts.get(key) ?? 0) + 1;
+      counts.set(key, count);
+      if (count > 1) warnOnce(warnKey, message(name, value));
+      return () => {
+        const remaining = (counts.get(key) ?? 1) - 1;
+        if (remaining > 0) counts.set(key, remaining);
+        else counts.delete(key);
+      };
+    },
+    [counts, warnKey, message],
   );
 }

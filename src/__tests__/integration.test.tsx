@@ -9,9 +9,9 @@
 import * as React from 'react';
 import { hydrateRoot, type Root } from 'react-dom/client';
 import { renderToString } from 'react-dom/server';
-import { afterEach, describe, expect, it, vi } from 'vitest';
-import { act, fireEvent, render, screen, within } from '@testing-library/react';
-import userEvent from '@testing-library/user-event';
+import { afterEach, beforeEach, describe, expect, it, onTestFinished, vi } from 'vitest';
+import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import userEvent, { type UserEvent } from '@testing-library/user-event';
 import * as ImageStories from '../../stories/Image.stories';
 import * as Wave from '../index';
 import {
@@ -46,8 +46,13 @@ import {
   Input,
   Menu,
   MenuButton,
+  MenuGroup,
+  MenuGroupHeader,
   MenuItem,
+  MenuItemCheckbox,
+  MenuItemRadio,
   MenuPopover,
+  MenuSplitGroup,
   MenuTrigger,
   Nav,
   NavCategory,
@@ -80,17 +85,27 @@ import {
   Toaster,
   ToggleButton,
   Toolbar,
+  ToolbarButton,
+  ToolbarDivider,
+  ToolbarRadioButton,
+  ToolbarRadioGroup,
+  ToolbarToggleButton,
   Tooltip,
   Tree,
   TreeItem,
   useOverflowMenu,
   useToastController,
+  type CheckedValuesChangeDetails,
   type DialogProps,
+  type MenuProps,
 } from '../index';
+import { getOpenLayers } from '../lib/layers';
 import {
   asClientReference,
   expectNoA11yViolations,
+  findDanglingIdRefsInHtml,
   installResizeObserverMock,
+  mockAnimations,
   mockRect,
 } from '../test-utils';
 
@@ -376,7 +391,7 @@ describe('Tooltip > Dialog.Trigger > Button (overlays#5)', () => {
   function SettingsDialog() {
     return (
       <Dialog>
-        <Tooltip content="Opens the settings" delay={0}>
+        <Tooltip content="Opens the settings" openDelay={0}>
           <Dialog.Trigger>
             <Button>Settings</Button>
           </Dialog.Trigger>
@@ -427,6 +442,32 @@ describe('Tooltip > Dialog.Trigger > Button (overlays#5)', () => {
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
     expect(button('Settings')).toHaveFocus();
   });
+
+  it('the deprecated delay prop still sets the open delay, and warns once', async () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const user = userEvent.setup();
+    render(
+      <Dialog>
+        <Tooltip content="Opens the settings" delay={0}>
+          <Dialog.Trigger>
+            <Button>Settings</Button>
+          </Dialog.Trigger>
+        </Tooltip>
+        <Dialog.Content title="Settings">
+          <p>Body</p>
+        </Dialog.Content>
+      </Dialog>,
+    );
+    await user.hover(button('Settings'));
+    expect(tooltipSurface()).toHaveTextContent('Opens the settings');
+    await user.click(button('Settings'));
+    expect(screen.getByRole('dialog', { name: 'Settings' })).toBeInTheDocument();
+    expect(warn.mock.calls).toEqual([
+      [
+        '[WaveUI] Tooltip: `delay` is deprecated and will be removed in 1.0. Use `openDelay` instead.',
+      ],
+    ]);
+  });
 });
 
 // ---------------------------------------------------------------------------
@@ -453,7 +494,7 @@ describe('Tooltip inside clipping containers (overlays#36)', () => {
       <Card data-testid="card">
         <Card.Header title="Project" />
         <Card.Body>
-          <Tooltip content="Opens the project" delay={0}>
+          <Tooltip content="Opens the project" openDelay={0}>
             <Button>Open</Button>
           </Tooltip>
         </Card.Body>
@@ -480,7 +521,7 @@ describe('Tooltip inside clipping containers (overlays#36)', () => {
           <Table.Row>
             <Table.Cell>Report.pdf</Table.Cell>
             <Table.Cell>
-              <Tooltip content="Deletes Report.pdf" delay={0}>
+              <Tooltip content="Deletes Report.pdf" openDelay={0}>
                 <Button>Delete</Button>
               </Tooltip>
             </Table.Cell>
@@ -509,7 +550,7 @@ describe('Tooltip inside clipping containers (overlays#36)', () => {
             <Table.Cell>Report.pdf</Table.Cell>
             <Table.Cell>
               <Menu>
-                <Tooltip content="Actions for Report.pdf" delay={0}>
+                <Tooltip content="Actions for Report.pdf" openDelay={0}>
                   <Menu.Trigger>
                     <MenuButton>More</MenuButton>
                   </Menu.Trigger>
@@ -546,7 +587,7 @@ describe('Tooltip inside clipping containers (overlays#36)', () => {
         <Card.Header title="Project" />
         <Card.Footer>
           <Popover>
-            <Tooltip content="Share this project" delay={0}>
+            <Tooltip content="Share this project" openDelay={0}>
               <Popover.Trigger>
                 <Button>Share</Button>
               </Popover.Trigger>
@@ -577,7 +618,7 @@ describe('Tooltip inside clipping containers (overlays#36)', () => {
     render(
       <Overflow data-testid="row">
         <OverflowItem itemId="bold">
-          <Tooltip content="Bold (Ctrl+B)" delay={0}>
+          <Tooltip content="Bold (Ctrl+B)" openDelay={0}>
             <Button>Bold</Button>
           </Tooltip>
         </OverflowItem>
@@ -598,7 +639,7 @@ describe('Tooltip inside clipping containers (overlays#36)', () => {
     const onOpenChange = vi.fn();
     render(
       <Drawer open title="Filters" onOpenChange={onOpenChange}>
-        <Tooltip content="Clears every filter" delay={0}>
+        <Tooltip content="Clears every filter" openDelay={0}>
           <Button>Reset</Button>
         </Tooltip>
       </Drawer>,
@@ -1531,7 +1572,7 @@ describe('Tab from the trigger of an open layer that sits outside the dialog con
               <Button>Format</Button>
             </Popover.Trigger>
             <Popover.Content title="Format">
-              <Tooltip content="Bold text" delay={0}>
+              <Tooltip content="Bold text" openDelay={0}>
                 <Button>Bold</Button>
               </Tooltip>
               <Button>Italic</Button>
@@ -1554,7 +1595,7 @@ describe('Tab from the trigger of an open layer that sits outside the dialog con
         <Dialog.Content title="Edit">
           <Button>In dialog</Button>
           <Portal>
-            <Tooltip content="First" delay={0}>
+            <Tooltip content="First" openDelay={0}>
               <Button>P1</Button>
             </Tooltip>
             <Button>P2</Button>
@@ -1921,7 +1962,7 @@ describe('a Toolbar with a focusable disabled Button', () => {
     return (
       <Toolbar aria-label="Formatting">
         <Button onClick={onBold}>Bold</Button>
-        <Tooltip content="Copy something first" delay={0}>
+        <Tooltip content="Copy something first" openDelay={0}>
           <Button disabledFocusable onClick={onPaste}>
             Paste
           </Button>
@@ -2485,6 +2526,1185 @@ describe('a SpinButton in a Dialog or Drawer: a backdrop press commits its typed
 });
 
 // ---------------------------------------------------------------------------
+// Menus and commands: checkable items, links, submenus, hover and context menus, toolbars
+// ---------------------------------------------------------------------------
+
+describe('menus and commands across components', () => {
+  const html = document.documentElement;
+  let warn: ReturnType<typeof vi.spyOn>;
+  let error: ReturnType<typeof vi.spyOn>;
+  beforeEach(() => {
+    warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    error = vi.spyOn(console, 'error').mockImplementation(() => {});
+    // A 1024×768 viewport (jsdom has no layout), so a menu fits where it is placed.
+    Object.defineProperty(html, 'clientWidth', { configurable: true, value: 1024 });
+    Object.defineProperty(html, 'clientHeight', { configurable: true, value: 768 });
+  });
+  afterEach(() => {
+    Reflect.deleteProperty(html, 'clientWidth');
+    Reflect.deleteProperty(html, 'clientHeight');
+    try {
+      // Nothing is logged: no test here expects a warning.
+      expect(warn).not.toHaveBeenCalled();
+      expect(error).not.toHaveBeenCalled();
+    } finally {
+      vi.restoreAllMocks();
+    }
+  });
+
+  const checkbox = (name: string) => screen.getByRole('menuitemcheckbox', { name });
+  const radio = (name: string) => screen.getByRole('menuitemradio', { name });
+  const menuNamed = (name: string) => screen.getByRole('menu', { name });
+  const queryMenuNamed = (name: string) => screen.queryByRole('menu', { name });
+  const checkedOf = (el: HTMLElement) => el.getAttribute('aria-checked');
+
+  /** The surface's `translate(x, y)` position (floating-ui's transform styles). */
+  function translateOf(el: HTMLElement): { x: number; y: number } {
+    const match = /translate\(\s*(-?[\d.]+)px,\s*(-?[\d.]+)px/.exec(el.style.transform);
+    return match ? { x: Number(match[1]), y: Number(match[2]) } : { x: NaN, y: NaN };
+  }
+
+  /** Fake timers for the hover cases, with a user-event instance that advances them. */
+  function setupHoverClock(): { user: UserEvent; advance: (ms: number) => void } {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    onTestFinished(() => {
+      vi.useRealTimers();
+    });
+    return {
+      user: userEvent.setup({ advanceTimers: vi.advanceTimersByTime }),
+      advance: (ms) =>
+        act(() => {
+          vi.advanceTimersByTime(ms);
+        }),
+    };
+  }
+
+  // -------------------------------------------------------------------------
+  // Checkable items and groups in a submenu, bound to the root's checked values
+  // -------------------------------------------------------------------------
+
+  describe('a File menu with a View submenu of grouped checkbox and radio items', () => {
+    function FileMenu({ root, view }: { root?: Partial<MenuProps>; view?: Partial<MenuProps> }) {
+      return (
+        <Menu defaultCheckedValues={{ show: ['ruler'], sort: ['name'] }} {...root}>
+          <Menu.Trigger>
+            <MenuButton>File</MenuButton>
+          </Menu.Trigger>
+          <Menu.Popover>
+            <Menu.Item>New</Menu.Item>
+            <Menu {...view}>
+              <Menu.Trigger>
+                <Menu.Item>View</Menu.Item>
+              </Menu.Trigger>
+              <Menu.Popover>
+                <Menu.Group>
+                  <Menu.GroupHeader>Show</Menu.GroupHeader>
+                  <Menu.ItemCheckbox name="show" value="ruler">
+                    Ruler
+                  </Menu.ItemCheckbox>
+                  <Menu.ItemCheckbox name="show" value="grid">
+                    Gridlines
+                  </Menu.ItemCheckbox>
+                </Menu.Group>
+                <Menu.Divider />
+                <Menu.Group>
+                  <Menu.GroupHeader>Sort by</Menu.GroupHeader>
+                  <Menu.ItemRadio name="sort" value="name">
+                    Name
+                  </Menu.ItemRadio>
+                  <Menu.ItemRadio name="sort" value="date">
+                    Date
+                  </Menu.ItemRadio>
+                </Menu.Group>
+              </Menu.Popover>
+            </Menu>
+            <Menu.Item>Exit</Menu.Item>
+          </Menu.Popover>
+        </Menu>
+      );
+    }
+
+    async function openView(user: UserEvent) {
+      await user.click(button('File'));
+      await user.click(menuitem('View'));
+      expect(checkbox('Ruler')).toHaveFocus();
+    }
+
+    it('Space toggles in the submenu and keeps every menu open; the root holds the values', async () => {
+      const user = userEvent.setup();
+      const onCheckedValuesChange = vi.fn();
+      render(<FileMenu root={{ onCheckedValuesChange }} />);
+      await openView(user);
+      expect(screen.getByRole('group', { name: 'Show' })).toContainElement(checkbox('Gridlines'));
+      expect(screen.getByRole('group', { name: 'Sort by' })).toContainElement(radio('Date'));
+      expect(checkedOf(checkbox('Ruler'))).toBe('true');
+      expect(checkedOf(radio('Name'))).toBe('true');
+
+      // The group headers are no items: ArrowDown goes from Gridlines to Name.
+      await user.keyboard('{ArrowDown} ');
+      expect(checkedOf(checkbox('Gridlines'))).toBe('true');
+      await user.keyboard('{ArrowDown}{ArrowDown} ');
+      expect(radio('Date')).toHaveFocus();
+      expect(checkedOf(radio('Date'))).toBe('true');
+      expect(checkedOf(radio('Name'))).toBe('false');
+      expect(menuNamed('View')).toBeInTheDocument();
+      expect(menuNamed('File')).toBeInTheDocument();
+
+      expect(
+        onCheckedValuesChange.mock.calls.map(([values, details]) => [
+          values,
+          details.name,
+          details.checkedItems,
+          details.event.type,
+        ]),
+      ).toEqual([
+        [{ show: ['ruler', 'grid'], sort: ['name'] }, 'show', ['ruler', 'grid'], 'click'],
+        [{ show: ['ruler', 'grid'], sort: ['date'] }, 'sort', ['date'], 'click'],
+      ]);
+      await expectNoA11yViolations(document.body);
+    });
+
+    it('Enter toggles, closes every menu and leaves focus on the root MenuButton', async () => {
+      const user = userEvent.setup();
+      const onOpenChange = vi.fn();
+      render(<FileMenu root={{ onOpenChange }} />);
+      await openView(user);
+      await user.keyboard('{ArrowDown}{Enter}');
+      expect(screen.queryByRole('menu')).not.toBeInTheDocument();
+      expect(button('File')).toHaveFocus();
+      expect(button('File')).toHaveAttribute('aria-expanded', 'false');
+      expect(onOpenChange.mock.calls).toEqual([[true], [false]]);
+
+      await openView(user);
+      expect(checkedOf(checkbox('Gridlines'))).toBe('true');
+    });
+
+    it('a submenu with its own defaultCheckedValues keeps a separate state', async () => {
+      const user = userEvent.setup();
+      const onRootChange = vi.fn();
+      const onViewChange = vi.fn();
+      render(
+        <FileMenu
+          root={{ onCheckedValuesChange: onRootChange }}
+          view={{ defaultCheckedValues: { show: ['grid'] }, onCheckedValuesChange: onViewChange }}
+        />,
+      );
+      await openView(user);
+      expect(checkedOf(checkbox('Ruler'))).toBe('false');
+      expect(checkedOf(checkbox('Gridlines'))).toBe('true');
+      expect(checkedOf(radio('Name'))).toBe('false');
+      await user.keyboard(' ');
+      expect(checkedOf(checkbox('Ruler'))).toBe('true');
+      expect(onViewChange.mock.calls.map(([values]) => values)).toEqual([
+        { show: ['grid', 'ruler'] },
+      ]);
+      expect(onRootChange).not.toHaveBeenCalled();
+    });
+
+    it('a submenu with only onCheckedValuesChange shares the root’s state and hears its changes after the root', async () => {
+      const user = userEvent.setup();
+      const order: string[] = [];
+      const rootCalls: Array<[Record<string, string[]>, CheckedValuesChangeDetails | undefined]> =
+        [];
+      const viewCalls: typeof rootCalls = [];
+      render(
+        <FileMenu
+          root={{
+            onCheckedValuesChange: (values, details) => {
+              order.push('root');
+              rootCalls.push([values, details]);
+            },
+          }}
+          view={{
+            onCheckedValuesChange: (values, details) => {
+              order.push('view');
+              viewCalls.push([values, details]);
+            },
+          }}
+        />,
+      );
+      await openView(user);
+      expect(checkedOf(checkbox('Ruler'))).toBe('true');
+      await user.keyboard('{ArrowDown} ');
+      expect(order).toEqual(['root', 'view']);
+      expect(viewCalls[0][0]).toBe(rootCalls[0][0]);
+      expect(viewCalls[0][1]).toBe(rootCalls[0][1]);
+      expect(rootCalls[0][0]).toEqual({ show: ['ruler', 'grid'], sort: ['name'] });
+    });
+  });
+
+  // -------------------------------------------------------------------------
+  // Link items in a popup menu and a submenu
+  // -------------------------------------------------------------------------
+
+  describe('Menu.ItemLink in a popup menu and in a submenu', () => {
+    function AccountMenu(props: Partial<MenuProps>) {
+      return (
+        <Menu {...props}>
+          <Menu.Trigger>
+            <MenuButton>Account</MenuButton>
+          </Menu.Trigger>
+          <Menu.Popover>
+            <Menu.ItemLink href="#profile">Profile</Menu.ItemLink>
+            <Menu>
+              <Menu.Trigger>
+                <Menu.Item>Help</Menu.Item>
+              </Menu.Trigger>
+              <Menu.Popover>
+                <Menu.ItemLink href="#docs">Documentation</Menu.ItemLink>
+              </Menu.Popover>
+            </Menu>
+          </Menu.Popover>
+        </Menu>
+      );
+    }
+
+    /**
+     * Records, for each click that reaches `document`, whether it was default-prevented and where
+     * focus was, then prevents it (jsdom does not navigate). A bubble-phase listener on `document`
+     * runs after React's root listener, so it sees what the item did.
+     */
+    function recordClicks(): Array<{
+      prevented: boolean;
+      ctrlKey: boolean;
+      focused: string | null;
+    }> {
+      const clicks: Array<{ prevented: boolean; ctrlKey: boolean; focused: string | null }> = [];
+      const listener = (event: MouseEvent) => {
+        clicks.push({
+          prevented: event.defaultPrevented,
+          ctrlKey: event.ctrlKey,
+          focused: document.activeElement?.textContent ?? null,
+        });
+        event.preventDefault();
+      };
+      document.addEventListener('click', listener);
+      onTestFinished(() => document.removeEventListener('click', listener));
+      return clicks;
+    }
+
+    const cases = [
+      ['in the root list', 'a click', 'Profile', false, false],
+      ['in the root list', 'a Ctrl-click', 'Profile', true, false],
+      ['in a submenu', 'a click', 'Documentation', false, false],
+      ['in a submenu', 'a Ctrl-click', 'Documentation', true, false],
+      ['in a submenu under persistOnItemClick', 'a click', 'Documentation', false, true],
+    ] as const;
+
+    it.each(cases)(
+      '%s, %s closes every menu, focusing the MenuButton first, and navigates',
+      async (_where, _click, name, ctrlKey, persistOnItemClick) => {
+        const user = userEvent.setup();
+        render(<AccountMenu persistOnItemClick={persistOnItemClick} />);
+        await user.click(button('Account'));
+        if (name === 'Documentation') await user.click(menuitem('Help'));
+        const link = menuitem(name);
+        expect(link.tagName).toBe('A');
+        const clicks = recordClicks();
+        if (ctrlKey) await user.keyboard('{Control>}');
+        await user.click(link);
+        if (ctrlKey) await user.keyboard('{/Control}');
+        expect(clicks).toEqual([{ prevented: false, ctrlKey, focused: 'Account' }]);
+        expect(screen.queryByRole('menu')).not.toBeInTheDocument();
+        expect(button('Account')).toHaveFocus();
+      },
+    );
+  });
+
+  // -------------------------------------------------------------------------
+  // A context menu with checkable items and a submenu
+  // -------------------------------------------------------------------------
+
+  describe('a context menu with checkable items and a submenu', () => {
+    const ROWS = ['report.docx', 'notes.txt', 'draft.md'];
+
+    function FileList({ onCheckedValuesChange }: Partial<MenuProps>) {
+      return (
+        <div data-testid="page">
+          <Menu
+            openOnContext
+            defaultCheckedValues={{ sort: ['name'] }}
+            onCheckedValuesChange={onCheckedValuesChange}
+          >
+            <Menu.Trigger>
+              <div data-testid="region" aria-keyshortcuts="Shift+F10">
+                {ROWS.map((name) => (
+                  <button key={name} type="button">
+                    {name}
+                  </button>
+                ))}
+              </div>
+            </Menu.Trigger>
+            <Menu.Popover aria-label="File actions">
+              <Menu.Item>Open</Menu.Item>
+              <Menu.ItemCheckbox name="flags" value="pinned">
+                Pinned
+              </Menu.ItemCheckbox>
+              <Menu>
+                <Menu.Trigger>
+                  <Menu.Item>Sort by</Menu.Item>
+                </Menu.Trigger>
+                <Menu.Popover>
+                  <Menu.ItemRadio name="sort" value="name">
+                    Name
+                  </Menu.ItemRadio>
+                  <Menu.ItemRadio name="sort" value="date">
+                    Date
+                  </Menu.ItemRadio>
+                </Menu.Popover>
+              </Menu>
+            </Menu.Popover>
+          </Menu>
+          <button type="button">Elsewhere</button>
+        </div>
+      );
+    }
+
+    it('a right click opens it at the pointer, named by its aria-label; axe is clean with the submenu open', async () => {
+      const user = userEvent.setup();
+      render(<FileList />);
+      expect(
+        fireEvent.contextMenu(button('notes.txt'), { button: 2, clientX: 100, clientY: 200 }),
+      ).toBe(false);
+      const surface = menuNamed('File actions');
+      expect(surface).not.toHaveAttribute('aria-labelledby');
+      expect(menuitem('Open')).toHaveFocus();
+      await waitFor(() => expect(translateOf(surface)).toEqual({ x: 100, y: 204 }));
+      for (const name of ['aria-haspopup', 'aria-expanded', 'aria-controls']) {
+        expect(screen.getByTestId('region')).not.toHaveAttribute(name);
+      }
+      await user.click(menuitem('Sort by'));
+      expect(radio('Name')).toHaveFocus();
+      expect(menuNamed('Sort by')).toBeInTheDocument();
+      await expectNoA11yViolations(document.body);
+    });
+
+    it('Shift+F10 on a row opens it at the row; Escape in the submenu closes only the submenu; Enter on a checkable item closes the chain and returns focus to the row', async () => {
+      const user = userEvent.setup();
+      const onCheckedValuesChange = vi.fn();
+      render(<FileList onCheckedValuesChange={onCheckedValuesChange} />);
+      mockRect(button('draft.md'), { x: 20, y: 300, width: 200, height: 30 });
+      act(() => button('draft.md').focus());
+      await user.keyboard('{Shift>}{F10}{/Shift}');
+      expect(menuitem('Open')).toHaveFocus();
+      await waitFor(() =>
+        expect(translateOf(menuNamed('File actions'))).toEqual({ x: 20, y: 334 }),
+      );
+
+      await user.keyboard('{ArrowDown}{ArrowDown}{ArrowRight}');
+      expect(radio('Name')).toHaveFocus();
+      await user.keyboard('{Escape}');
+      expect(queryMenuNamed('Sort by')).not.toBeInTheDocument();
+      expect(menuitem('Sort by')).toHaveFocus();
+      expect(menuNamed('File actions')).toBeInTheDocument();
+
+      await user.keyboard('{ArrowUp}{Enter}');
+      expect(screen.queryByRole('menu')).not.toBeInTheDocument();
+      expect(button('draft.md')).toHaveFocus();
+      expect(onCheckedValuesChange.mock.calls.map(([values]) => values)).toEqual([
+        { sort: ['name'], flags: ['pinned'] },
+      ]);
+    });
+
+    it('a right click outside closes the menu and its submenu without preventing the browser’s menu', async () => {
+      const user = userEvent.setup();
+      render(<FileList />);
+      fireEvent.contextMenu(button('notes.txt'), { button: 2, clientX: 100, clientY: 200 });
+      await user.click(menuitem('Sort by'));
+      expect(menuNamed('Sort by')).toBeInTheDocument();
+      expect(fireEvent.contextMenu(button('Elsewhere'), { button: 2 })).toBe(true);
+      expect(screen.queryByRole('menu')).not.toBeInTheDocument();
+      expect(getOpenLayers()).toEqual([]);
+    });
+  });
+
+  // -------------------------------------------------------------------------
+  // A Toolbar over toggles, a radio group, fields and a menu button
+  // -------------------------------------------------------------------------
+
+  describe('a Toolbar with toggles, a radio group, an Input, a Combobox and a MenuButton', () => {
+    const tabStops = () =>
+      Array.from(screen.getByRole('toolbar').querySelectorAll<HTMLElement>('[tabindex="0"]'));
+    const toolbarRadio = (name: string) => screen.getByRole('radio', { name });
+
+    function EditorToolbar() {
+      return (
+        <>
+          <button type="button">Before</button>
+          <Toolbar
+            aria-label="Editor"
+            defaultCheckedValues={{ format: ['bold'], align: ['start'] }}
+          >
+            <Toolbar.ToggleButton name="format" value="bold">
+              Bold
+            </Toolbar.ToggleButton>
+            <Toolbar.ToggleButton name="format" value="italic">
+              Italic
+            </Toolbar.ToggleButton>
+            <Toolbar.Divider />
+            <Toolbar.RadioGroup aria-label="Alignment">
+              <Toolbar.RadioButton name="align" value="start">
+                Start
+              </Toolbar.RadioButton>
+              <Toolbar.RadioButton name="align" value="center">
+                Center
+              </Toolbar.RadioButton>
+            </Toolbar.RadioGroup>
+            <Toolbar.Divider />
+            <Input aria-label="Find" defaultValue="wave" />
+            <Combobox aria-label="Font">
+              <Combobox.Option value="sans">Sans</Combobox.Option>
+              <Combobox.Option value="serif">Serif</Combobox.Option>
+            </Combobox>
+            <Menu defaultCheckedValues={{ view: ['ruler'] }}>
+              <Menu.Trigger>
+                <MenuButton>View</MenuButton>
+              </Menu.Trigger>
+              <Menu.Popover>
+                <Menu.ItemCheckbox name="view" value="ruler">
+                  Ruler
+                </Menu.ItemCheckbox>
+                <Menu.ItemCheckbox name="view" value="grid">
+                  Gridlines
+                </Menu.ItemCheckbox>
+              </Menu.Popover>
+            </Menu>
+          </Toolbar>
+          <button type="button">After</button>
+        </>
+      );
+    }
+
+    it('the arrows reach every control, the MenuButton opens its menu with ArrowDown, Escape returns to it, and the toolbar keeps one tab stop', async () => {
+      const user = userEvent.setup();
+      render(<EditorToolbar />);
+      const find = screen.getByRole('textbox', { name: 'Find' });
+      const font = screen.getByRole('combobox', { name: 'Font' });
+
+      await user.tab();
+      await user.tab();
+      expect(button('Bold')).toHaveFocus();
+      expect(button('Bold')).toHaveAttribute('aria-pressed', 'true');
+      await user.keyboard('{ArrowRight}');
+      expect(button('Italic')).toHaveFocus();
+      await user.keyboard('{ArrowRight}');
+      expect(toolbarRadio('Start')).toHaveFocus();
+      await user.keyboard('{ArrowRight}');
+      expect(toolbarRadio('Center')).toHaveFocus();
+      // The arrows only move focus: the checked radio stays checked.
+      expect(toolbarRadio('Start')).toHaveAttribute('aria-checked', 'true');
+      expect(toolbarRadio('Center')).toHaveAttribute('aria-checked', 'false');
+      await user.keyboard('{ArrowRight}');
+      expect(find).toHaveFocus();
+      // The Input keeps Left/Right for its caret.
+      expect(fireEvent.keyDown(find, { key: 'ArrowLeft' })).toBe(true);
+      await user.keyboard('{End}');
+      expect(find).toHaveFocus();
+
+      act(() => button('View').focus());
+      await user.keyboard('{ArrowLeft}');
+      expect(font).toHaveFocus();
+      act(() => button('View').focus());
+
+      await user.keyboard('{ArrowDown}');
+      expect(menuNamed('View')).toBeInTheDocument();
+      expect(checkbox('Ruler')).toHaveFocus();
+      await user.keyboard('{ArrowDown} ');
+      expect(checkedOf(checkbox('Gridlines'))).toBe('true');
+      // Keys in the portaled menu stay the menu's: the toolbar did not move focus.
+      expect(checkbox('Gridlines')).toHaveFocus();
+      await expectNoA11yViolations(document.body);
+      await user.keyboard('{Escape}');
+      expect(queryMenuNamed('View')).not.toBeInTheDocument();
+      expect(button('View')).toHaveFocus();
+      expect(tabStops()).toEqual([button('View')]);
+
+      await user.tab();
+      expect(button('After')).toHaveFocus();
+      await user.tab({ shift: true });
+      expect(button('View')).toHaveFocus();
+    });
+  });
+
+  describe('Menu.Trigger around a Toolbar.Button', () => {
+    it('the trigger props merge onto the polymorphic part, which keeps its toolbar look', async () => {
+      const user = userEvent.setup();
+      render(
+        <Toolbar aria-label="Insert" size="small">
+          <Toolbar.Button>Undo</Toolbar.Button>
+          <Menu>
+            <Menu.Trigger>
+              <Toolbar.Button vertical icon={{ children: '+' }}>
+                Insert
+              </Toolbar.Button>
+            </Menu.Trigger>
+            <Menu.Popover>
+              <Menu.Item>Table</Menu.Item>
+              <Menu.Item>Picture</Menu.Item>
+            </Menu.Popover>
+          </Menu>
+        </Toolbar>,
+      );
+      const insert = button('Insert');
+      expect(insert.tagName).toBe('BUTTON');
+      expect(insert).toHaveAttribute('aria-haspopup', 'menu');
+      expect(insert).toHaveAttribute('aria-expanded', 'false');
+      expect(insert).toHaveAttribute('data-vertical', '');
+      expect(insert.parentElement).toBe(screen.getByRole('toolbar'));
+
+      act(() => button('Undo').focus());
+      await user.keyboard('{ArrowRight}');
+      expect(insert).toHaveFocus();
+      await user.keyboard('{Enter}');
+      const menu = menuNamed('Insert');
+      expect(insert).toHaveAttribute('aria-expanded', 'true');
+      expect(insert).toHaveAttribute('aria-controls', menu.id);
+      expect(menuitem('Table')).toHaveFocus();
+      await expectNoA11yViolations(document.body);
+      await user.keyboard('{ArrowDown}{Enter}');
+      expect(screen.queryByRole('menu')).not.toBeInTheDocument();
+      expect(insert).toHaveFocus();
+    });
+  });
+
+  // -------------------------------------------------------------------------
+  // Hover: a hover card holding a menu, and focus following the mouse in a submenu
+  // -------------------------------------------------------------------------
+
+  describe('a Popover with openOnHover holding a MenuButton and a Menu', () => {
+    it('opens on hover; while the menu is open (focus in a layer of the popover) the pointer leaving does not close it', async () => {
+      const { user, advance } = setupHoverClock();
+      const onOpenChange = vi.fn();
+      render(
+        <>
+          <Popover openOnHover onOpenChange={onOpenChange}>
+            <Popover.Trigger>
+              <Button>Ada Lovelace</Button>
+            </Popover.Trigger>
+            <Popover.Content title="Ada Lovelace">
+              <Menu>
+                <Menu.Trigger>
+                  <MenuButton>Contact</MenuButton>
+                </Menu.Trigger>
+                <Menu.Popover>
+                  <Menu.Item>Email</Menu.Item>
+                  <Menu.Item>Chat</Menu.Item>
+                </Menu.Popover>
+              </Menu>
+            </Popover.Content>
+          </Popover>
+          <button type="button">Elsewhere</button>
+        </>,
+      );
+      await user.hover(button('Ada Lovelace'));
+      advance(300);
+      const card = screen.getByRole('dialog', { name: 'Ada Lovelace' });
+      expect(button('Ada Lovelace')).not.toHaveFocus();
+
+      await user.hover(button('Contact'));
+      await user.click(button('Contact'));
+      expect(menuNamed('Contact')).toBeInTheDocument();
+      expect(menuitem('Email')).toHaveFocus();
+
+      await user.hover(button('Elsewhere'));
+      advance(1000);
+      expect(card).toBeInTheDocument();
+      expect(menuNamed('Contact')).toBeInTheDocument();
+      expect(onOpenChange.mock.calls).toEqual([[true]]);
+
+      await user.keyboard('{Escape}');
+      expect(queryMenuNamed('Contact')).not.toBeInTheDocument();
+      expect(button('Contact')).toHaveFocus();
+      // Focus is inside the card: it stays open.
+      advance(1000);
+      expect(card).toBeInTheDocument();
+    });
+  });
+
+  describe('a hover-opened submenu inside a click-opened menu', () => {
+    it('hovering a checkbox item of the submenu focuses it, and Space toggles that item', async () => {
+      const { user, advance } = setupHoverClock();
+      const onCheckedValuesChange = vi.fn();
+      render(
+        <Menu onCheckedValuesChange={onCheckedValuesChange}>
+          <Menu.Trigger>
+            <MenuButton>File</MenuButton>
+          </Menu.Trigger>
+          <Menu.Popover>
+            <Menu.ItemCheckbox name="file" value="autosave">
+              Autosave
+            </Menu.ItemCheckbox>
+            <Menu>
+              <Menu.Trigger>
+                <Menu.Item>View</Menu.Item>
+              </Menu.Trigger>
+              <Menu.Popover>
+                <Menu.ItemCheckbox name="view" value="ruler">
+                  Ruler
+                </Menu.ItemCheckbox>
+                <Menu.ItemCheckbox name="view" value="grid">
+                  Gridlines
+                </Menu.ItemCheckbox>
+              </Menu.Popover>
+            </Menu>
+          </Menu.Popover>
+        </Menu>,
+      );
+      await user.click(button('File'));
+      expect(checkbox('Autosave')).toHaveFocus();
+      await user.hover(menuitem('View'));
+      advance(300);
+      expect(menuNamed('View')).toBeInTheDocument();
+      // The submenu opened by hover: focus followed the mouse to its item, not into it.
+      expect(menuitem('View')).toHaveFocus();
+
+      await user.hover(checkbox('Gridlines'));
+      expect(checkbox('Gridlines')).toHaveFocus();
+      await user.keyboard(' ');
+      expect(checkedOf(checkbox('Gridlines'))).toBe('true');
+      expect(checkedOf(checkbox('Autosave'))).toBe('false');
+      expect(menuNamed('View')).toBeInTheDocument();
+      expect(onCheckedValuesChange.mock.calls.map(([values]) => values)).toEqual([
+        { view: ['grid'] },
+      ]);
+    });
+  });
+
+  // -------------------------------------------------------------------------
+  // Focus return through a closing chain; exit motion inside a Dialog
+  // -------------------------------------------------------------------------
+
+  describe('a Dialog opened from a submenu item', () => {
+    function FileMenu() {
+      const [confirming, setConfirming] = React.useState(false);
+      return (
+        <>
+          <Menu>
+            <Menu.Trigger>
+              <MenuButton>File</MenuButton>
+            </Menu.Trigger>
+            <Menu.Popover>
+              <Menu.Item>New</Menu.Item>
+              <Menu>
+                <Menu.Trigger>
+                  <Menu.Item>More</Menu.Item>
+                </Menu.Trigger>
+                <Menu.Popover>
+                  <Menu.Item>Duplicate</Menu.Item>
+                  <Menu.Item onClick={() => setConfirming(true)}>Delete…</Menu.Item>
+                </Menu.Popover>
+              </Menu>
+            </Menu.Popover>
+          </Menu>
+          <Dialog open={confirming} onOpenChange={setConfirming}>
+            <Dialog.Content title="Delete the file?">
+              <Dialog.Close>
+                <Button>Cancel</Button>
+              </Dialog.Close>
+            </Dialog.Content>
+          </Dialog>
+        </>
+      );
+    }
+
+    it.each([
+      ['Escape', '{Escape}'],
+      ['its Close button', null],
+    ])('returns focus to the root MenuButton when it closes (%s)', async (_how, keys) => {
+      const user = userEvent.setup();
+      render(<FileMenu />);
+      await user.click(button('File'));
+      await user.keyboard('{ArrowDown}{ArrowRight}');
+      expect(menuitem('Duplicate')).toHaveFocus();
+      await user.keyboard('{ArrowDown}{Enter}');
+      // Every menu closed (the modal Dialog hides the rest of the page, hence `hidden`).
+      expect(screen.queryByRole('menu', { hidden: true })).not.toBeInTheDocument();
+      expect(screen.getByRole('button', { name: 'File', hidden: true })).toHaveAttribute(
+        'aria-expanded',
+        'false',
+      );
+      expect(screen.getByRole('dialog', { name: 'Delete the file?' })).toBeInTheDocument();
+      if (keys) await user.keyboard(keys);
+      else await user.click(button('Cancel'));
+      expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+      expect(button('File')).toHaveFocus();
+    });
+  });
+
+  describe('a Menu.Popover with an exit motion inside a Dialog, with a submenu of radio items', () => {
+    function SettingsDialog({
+      onDialogOpenChange,
+      onSortOpenChange,
+    }: {
+      onDialogOpenChange: (open: boolean) => void;
+      onSortOpenChange: (open: boolean) => void;
+    }) {
+      const [sortOpen, setSortOpen] = React.useState(false);
+      return (
+        <Dialog defaultOpen onOpenChange={onDialogOpenChange}>
+          <Dialog.Content title="Settings">
+            <Menu defaultCheckedValues={{ sort: ['name'] }}>
+              <Menu.Trigger>
+                <MenuButton>View</MenuButton>
+              </Menu.Trigger>
+              <Menu.Popover data-testid="view-surface" data-test-motion="">
+                <Menu.Item>Refresh</Menu.Item>
+                <Menu
+                  open={sortOpen}
+                  onOpenChange={(next) => {
+                    onSortOpenChange(next);
+                    setSortOpen(next);
+                  }}
+                >
+                  <Menu.Trigger>
+                    <Menu.Item>Sort by</Menu.Item>
+                  </Menu.Trigger>
+                  <Menu.Popover data-testid="sort-surface">
+                    <Menu.ItemRadio name="sort" value="name">
+                      Name
+                    </Menu.ItemRadio>
+                    <Menu.ItemRadio name="sort" value="date">
+                      Date
+                    </Menu.ItemRadio>
+                  </Menu.Popover>
+                </Menu>
+              </Menu.Popover>
+            </Menu>
+          </Dialog.Content>
+        </Dialog>
+      );
+    }
+
+    const surface = (id: string) => document.querySelector<HTMLElement>(`[data-testid="${id}"]`);
+
+    it.each([
+      ['Enter on a radio item of the submenu', '{ArrowDown}{Enter}'],
+      ['Escape in the submenu, then in the root list', '{Escape}{Escape}'],
+    ])(
+      '%s closes the submenu (its onOpenChange(false) once) and the menu; while it exits no menu layer is left, and the next Escape closes the Dialog',
+      async (_how, keys) => {
+        const motion = mockAnimations();
+        const user = userEvent.setup();
+        const onDialogOpenChange = vi.fn();
+        const onSortOpenChange = vi.fn();
+        render(
+          <SettingsDialog
+            onDialogOpenChange={onDialogOpenChange}
+            onSortOpenChange={onSortOpenChange}
+          />,
+        );
+        await user.click(button('View'));
+        await act(async () => {
+          await motion.finishAll();
+        });
+        await user.click(menuitem('Sort by'));
+        expect(radio('Name')).toHaveFocus();
+        expect(getOpenLayers()).toHaveLength(3);
+
+        await user.keyboard(keys);
+        const root = surface('view-surface')!;
+        expect(root).toHaveAttribute('data-presence', 'exiting');
+        expect(root).toHaveAttribute('data-state', 'closed');
+        expect(root).toHaveAttribute('inert');
+        expect(surface('sort-surface')).toBeNull();
+        expect(onSortOpenChange.mock.calls).toEqual([[true], [false]]);
+        expect(button('View')).toHaveFocus();
+        // Only the Dialog's layer is left: the exiting surface is no layer.
+        expect(getOpenLayers()).toHaveLength(1);
+
+        await user.keyboard('{Escape}');
+        expect(onDialogOpenChange.mock.calls).toEqual([[false, expect.anything()]]);
+        expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+      },
+    );
+  });
+
+  // -------------------------------------------------------------------------
+  // SplitButton routing with a menu that holds a submenu
+  // -------------------------------------------------------------------------
+
+  describe('a SplitButton whose menu half opens a Menu with a submenu', () => {
+    it('keeps the routed props on the right halves, and activation in the submenu returns focus to the menu half', async () => {
+      const user = userEvent.setup();
+      const onSave = vi.fn();
+      const onPdf = vi.fn();
+      render(
+        <>
+          <span id="save-hint">Saves a draft</span>
+          <Menu>
+            <Menu.Trigger>
+              {(triggerProps) => (
+                <SplitButton
+                  aria-label="Save options"
+                  aria-describedby="save-hint"
+                  data-testid="split"
+                  menuButtonProps={triggerProps}
+                  onClick={onSave}
+                >
+                  Save
+                </SplitButton>
+              )}
+            </Menu.Trigger>
+            <Menu.Popover>
+              <Menu.Item>Save a copy</Menu.Item>
+              <Menu>
+                <Menu.Trigger>
+                  <Menu.Item>Export</Menu.Item>
+                </Menu.Trigger>
+                <Menu.Popover>
+                  <Menu.Item onClick={onPdf}>PDF</Menu.Item>
+                  <Menu.Item>Word</Menu.Item>
+                </Menu.Popover>
+              </Menu>
+            </Menu.Popover>
+          </Menu>
+        </>,
+      );
+      const group = screen.getByRole('group', { name: 'Save options' });
+      expect(group).toHaveAttribute('data-testid', 'split');
+      expect(button('Save')).toHaveAccessibleDescription('Saves a draft');
+      expect(button('Save')).not.toHaveAttribute('aria-haspopup');
+      const more = button('More options');
+      expect(more).toHaveAttribute('aria-haspopup', 'menu');
+      expect(more).not.toHaveAttribute('aria-describedby');
+
+      await user.click(button('Save'));
+      expect(onSave).toHaveBeenCalledTimes(1);
+      expect(screen.queryByRole('menu')).not.toBeInTheDocument();
+
+      await user.click(more);
+      expect(menuNamed('More options')).toBeInTheDocument();
+      await user.keyboard('{ArrowDown}{ArrowRight}');
+      expect(menuNamed('Export')).toBeInTheDocument();
+      expect(menuitem('PDF')).toHaveFocus();
+      await expectNoA11yViolations(document.body);
+      await user.keyboard('{Enter}');
+      expect(onPdf).toHaveBeenCalledTimes(1);
+      expect(onSave).toHaveBeenCalledTimes(1);
+      expect(screen.queryByRole('menu')).not.toBeInTheDocument();
+      expect(more).toHaveFocus();
+      expect(more).toHaveAttribute('aria-expanded', 'false');
+    });
+  });
+
+  // -------------------------------------------------------------------------
+  // A Tooltip on an accessible Toolbar toggle
+  // -------------------------------------------------------------------------
+
+  describe('a Tooltip with openDelay on a Toolbar.ToggleButton with isAccessible', () => {
+    it('shows on focus after the delay; the toggle reports aria-pressed and data-pressed together', async () => {
+      const { user, advance } = setupHoverClock();
+      render(
+        <>
+          <button type="button">Before</button>
+          <Toolbar aria-label="Formatting" defaultCheckedValues={{ format: ['bold'] }}>
+            <Tooltip content="Bold (Ctrl+B)" openDelay={300}>
+              <Toolbar.ToggleButton name="format" value="bold" isAccessible>
+                Bold
+              </Toolbar.ToggleButton>
+            </Tooltip>
+            <Toolbar.ToggleButton name="format" value="italic" isAccessible>
+              Italic
+            </Toolbar.ToggleButton>
+          </Toolbar>
+        </>,
+      );
+      const bold = button('Bold');
+      expect(bold).toHaveAccessibleDescription('Bold (Ctrl+B)');
+      expect(bold).toHaveAttribute('aria-pressed', 'true');
+      expect(bold).toHaveAttribute('data-pressed', '');
+      expect(bold).not.toHaveAttribute('aria-checked');
+      expect(bold).toHaveClass('bg-primary', 'text-primary-foreground');
+
+      await user.tab();
+      await user.tab();
+      expect(bold).toHaveFocus();
+      advance(250);
+      expect(tooltipSurface()).toBeNull();
+      advance(60);
+      expect(tooltipSurface()).toHaveTextContent('Bold (Ctrl+B)');
+
+      await user.keyboard(' ');
+      expect(bold).toHaveAttribute('aria-pressed', 'false');
+      expect(bold).not.toHaveAttribute('data-pressed');
+      expect(bold).not.toHaveClass('bg-primary');
+      await expectNoA11yViolations(document.body);
+    });
+  });
+
+  // -------------------------------------------------------------------------
+  // The checkable item kinds in real menus
+  // -------------------------------------------------------------------------
+
+  describe('checkbox, radio and switch items in a real MenuButton menu', () => {
+    function OptionsMenu(props: Partial<MenuProps>) {
+      return (
+        <Menu defaultCheckedValues={{ show: ['ruler'], sort: ['name'] }} {...props}>
+          <Menu.Trigger>
+            <MenuButton>Options</MenuButton>
+          </Menu.Trigger>
+          <Menu.Popover>
+            <Menu.ItemCheckbox name="show" value="ruler">
+              Ruler
+            </Menu.ItemCheckbox>
+            <Menu.Divider />
+            <Menu.Group>
+              <Menu.GroupHeader>Sort by</Menu.GroupHeader>
+              <Menu.ItemRadio name="sort" value="name">
+                Name
+              </Menu.ItemRadio>
+              <Menu.ItemRadio name="sort" value="date">
+                Date
+              </Menu.ItemRadio>
+            </Menu.Group>
+            <Menu.Divider />
+            <Menu.ItemSwitch name="editor" value="autosave">
+              Autosave
+            </Menu.ItemSwitch>
+          </Menu.Popover>
+        </Menu>
+      );
+    }
+
+    const items = {
+      Ruler: () => checkbox('Ruler'),
+      Date: () => radio('Date'),
+      Autosave: () => checkbox('Autosave'),
+    } as const;
+    // Space changes the item; Enter changes it back (a checked radio stays checked).
+    const cases = [
+      ['Ruler', 'false', 'true'],
+      ['Date', 'true', 'true'],
+      ['Autosave', 'true', 'false'],
+    ] as const;
+
+    it.each(cases)(
+      '%s: Space keeps the menu open; Enter closes it and focuses the MenuButton',
+      async (name, afterSpace, afterEnter) => {
+        const user = userEvent.setup();
+        render(<OptionsMenu />);
+        await user.click(button('Options'));
+        act(() => items[name]().focus());
+        await user.keyboard(' ');
+        expect(checkedOf(items[name]())).toBe(afterSpace);
+        expect(menuNamed('Options')).toBeInTheDocument();
+        expect(items[name]()).toHaveFocus();
+        await user.keyboard('{Enter}');
+        expect(screen.queryByRole('menu')).not.toBeInTheDocument();
+        expect(button('Options')).toHaveFocus();
+        await user.click(button('Options'));
+        expect(checkedOf(items[name]())).toBe(afterEnter);
+      },
+    );
+
+    it('a click closes the menu and focuses the MenuButton; persistOnItemClick keeps it open', async () => {
+      const user = userEvent.setup();
+      const { rerender } = render(<OptionsMenu />);
+      await user.click(button('Options'));
+      await user.click(checkbox('Autosave'));
+      expect(screen.queryByRole('menu')).not.toBeInTheDocument();
+      expect(button('Options')).toHaveFocus();
+
+      rerender(<OptionsMenu persistOnItemClick />);
+      await user.click(button('Options'));
+      expect(checkedOf(checkbox('Autosave'))).toBe('true');
+      await user.click(checkbox('Autosave'));
+      await user.click(radio('Date'));
+      act(() => checkbox('Ruler').focus());
+      await user.keyboard('{Enter}');
+      expect(menuNamed('Options')).toBeInTheDocument();
+      expect(checkedOf(checkbox('Autosave'))).toBe('false');
+      expect(checkedOf(radio('Date'))).toBe('true');
+      expect(checkedOf(checkbox('Ruler'))).toBe('false');
+      await expectNoA11yViolations(document.body);
+    });
+
+    it('inside a Dialog, Escape closes only the menu; the next Escape closes the Dialog', async () => {
+      const user = userEvent.setup();
+      const onOpenChange = vi.fn();
+      render(
+        <Dialog defaultOpen onOpenChange={onOpenChange}>
+          <Dialog.Content title="Page setup">
+            <OptionsMenu />
+          </Dialog.Content>
+        </Dialog>,
+      );
+      await user.click(button('Options'));
+      await user.keyboard('{ArrowDown} ');
+      expect(checkedOf(radio('Name'))).toBe('true');
+      expect(menuNamed('Options')).toBeInTheDocument();
+      await expectNoA11yViolations(document.body);
+      await user.keyboard('{Escape}');
+      expect(screen.queryByRole('menu')).not.toBeInTheDocument();
+      expect(screen.getByRole('dialog', { name: 'Page setup' })).toBeInTheDocument();
+      expect(button('Options')).toHaveFocus();
+      expect(onOpenChange).not.toHaveBeenCalled();
+      await user.keyboard('{Escape}');
+      expect(onOpenChange.mock.calls).toEqual([[false, expect.anything()]]);
+    });
+
+    it('a static Menu renders its checked state, the check glyph and the group’s label in the server HTML, and hydrates it', async () => {
+      const tree = (
+        <Menu aria-label="View options" defaultCheckedValues={{ show: ['ruler'], sort: ['date'] }}>
+          <Menu.ItemCheckbox name="show" value="ruler">
+            Ruler
+          </Menu.ItemCheckbox>
+          <Menu.ItemSwitch name="show" value="grid">
+            Gridlines
+          </Menu.ItemSwitch>
+          <Menu.Divider />
+          <Menu.Group>
+            <Menu.GroupHeader>Sort by</Menu.GroupHeader>
+            <Menu.ItemRadio name="sort" value="name">
+              Name
+            </Menu.ItemRadio>
+            <Menu.ItemRadio name="sort" value="date">
+              Date
+            </Menu.ItemRadio>
+          </Menu.Group>
+        </Menu>
+      );
+      const serverHtml = renderToString(tree);
+      expect(findDanglingIdRefsInHtml(serverHtml)).toEqual([]);
+      const container = document.createElement('div');
+      container.innerHTML = serverHtml;
+      document.body.appendChild(container);
+      let root: Root | undefined;
+      try {
+        // The server HTML, before hydration.
+        const ruler = within(container).getByRole('menuitemcheckbox', { name: 'Ruler' });
+        expect(ruler).toHaveAttribute('aria-checked', 'true');
+        expect(ruler).toHaveAttribute('data-checked', '');
+        expect(ruler.querySelector('[data-menu-checkmark] svg')).not.toBeNull();
+        const date = within(container).getByRole('menuitemradio', { name: 'Date' });
+        expect(date).toHaveAttribute('aria-checked', 'true');
+        expect(date.querySelector('[data-menu-checkmark] svg')).not.toBeNull();
+        const name = within(container).getByRole('menuitemradio', { name: 'Name' });
+        expect(name).toHaveAttribute('aria-checked', 'false');
+        expect(name.querySelector('[data-menu-checkmark]')).toBeEmptyDOMElement();
+        expect(
+          within(container).getByRole('menuitemcheckbox', { name: 'Gridlines' }),
+        ).toHaveAttribute('aria-checked', 'false');
+        const group = within(container).getByRole('group', { name: 'Sort by' });
+        expect(group.getAttribute('aria-labelledby')).toBe(
+          within(group).getByText('Sort by').closest('[id]')?.id,
+        );
+
+        // Hydration: no mismatch (the describe's console.error spy sees any hydration warning).
+        const recoverable: unknown[] = [];
+        await act(async () => {
+          root = hydrateRoot(container, tree, {
+            onRecoverableError: (reason) => recoverable.push(reason),
+          });
+        });
+        expect(recoverable).toEqual([]);
+
+        const user = userEvent.setup();
+        await user.click(within(container).getByRole('menuitemradio', { name: 'Name' }));
+        expect(within(container).getByRole('menuitemradio', { name: 'Name' })).toHaveAttribute(
+          'aria-checked',
+          'true',
+        );
+        expect(date).toHaveAttribute('aria-checked', 'false');
+        await expectNoA11yViolations(document.body);
+      } finally {
+        act(() => root?.unmount());
+        container.remove();
+      }
+    });
+  });
+
+  // -------------------------------------------------------------------------
+  // A Menu in a Popover opened from a menu item is a root menu
+  // -------------------------------------------------------------------------
+
+  describe('a Popover opened from a Menu.Item, holding a MenuButton and a Menu', () => {
+    const innerMenu = (
+      <Menu>
+        <Menu.Trigger>
+          <MenuButton>Sort by</MenuButton>
+        </Menu.Trigger>
+        <Menu.Popover>
+          <Menu.ItemCheckbox name="view" value="grid">
+            Grid
+          </Menu.ItemCheckbox>
+          <Menu.Item>Name</Menu.Item>
+        </Menu.Popover>
+      </Menu>
+    );
+
+    function Inside() {
+      return (
+        <Menu defaultCheckedValues={{ view: ['grid'] }}>
+          <Menu.Trigger>
+            <MenuButton>View</MenuButton>
+          </Menu.Trigger>
+          <Menu.Popover>
+            <Menu.Item persistOnClick>
+              <Popover>
+                <Popover.Trigger asChild={false}>Sort settings…</Popover.Trigger>
+                <Popover.Content title="Sort settings">{innerMenu}</Popover.Content>
+              </Popover>
+            </Menu.Item>
+            <Menu.Item>Refresh</Menu.Item>
+          </Menu.Popover>
+        </Menu>
+      );
+    }
+
+    function NextToTheItems() {
+      const [open, setOpen] = React.useState(false);
+      const [anchor, setAnchor] = React.useState<HTMLDivElement | null>(null);
+      return (
+        <Menu defaultCheckedValues={{ view: ['grid'] }}>
+          <Menu.Trigger>
+            <MenuButton>View</MenuButton>
+          </Menu.Trigger>
+          <Menu.Popover>
+            <Menu.Item ref={setAnchor} persistOnClick onClick={() => setOpen(true)}>
+              Sort settings…
+            </Menu.Item>
+            <Menu.Item>Refresh</Menu.Item>
+            <Popover open={open} onOpenChange={setOpen} target={anchor}>
+              <Popover.Content title="Sort settings">{innerMenu}</Popover.Content>
+            </Popover>
+          </Menu.Popover>
+        </Menu>
+      );
+    }
+
+    it.each([
+      ['inside the item', Inside],
+      ['next to the items, placed at the item', NextToTheItems],
+    ])('rendered %s, the inner Menu is a root menu of its own', async (_where, Tree) => {
+      const { user, advance } = setupHoverClock();
+      render(<Tree />);
+      await user.click(button('View'));
+      await user.click(screen.getByText('Sort settings…'));
+      const sortBy = button('Sort by');
+      expect(screen.getByRole('dialog', { name: 'Sort settings' })).toContainElement(sortBy);
+      expect(sortBy).not.toHaveAttribute('data-has-submenu');
+
+      // No hover opening, as for any root menu.
+      await user.hover(sortBy);
+      advance(600);
+      expect(queryMenuNamed('Sort by')).not.toBeInTheDocument();
+
+      await user.click(sortBy);
+      expect(menuNamed('Sort by')).toHaveAttribute('data-side', 'bottom');
+      // Its own checked values, not the outer menu's.
+      expect(checkedOf(checkbox('Grid'))).toBe('false');
+      await user.click(menuitem('Name'));
+      expect(queryMenuNamed('Sort by')).not.toBeInTheDocument();
+      expect(sortBy).toHaveFocus();
+      // The outer menu is still open.
+      expect(menuNamed('View')).toBeInTheDocument();
+      expect(button('View')).toHaveAttribute('aria-expanded', 'true');
+    });
+  });
+});
+
+// ---------------------------------------------------------------------------
 // Compounds written in a React Server Component
 // ---------------------------------------------------------------------------
 
@@ -2606,6 +3826,129 @@ describe('compounds composed in a React Server Component', () => {
         await user.keyboard('{Escape}');
         expect(screen.queryByRole('menu')).not.toBeInTheDocument();
         expect(button('Actions')).toHaveFocus();
+      },
+    }),
+    ssrCase({
+      name: 'Menu (static, a labelled group of checkable items)',
+      parts: {
+        Group: MenuGroup,
+        GroupHeader: MenuGroupHeader,
+        ItemCheckbox: MenuItemCheckbox,
+        ItemRadio: MenuItemRadio,
+      },
+      tree: ({ Group, GroupHeader, ItemCheckbox, ItemRadio }) => (
+        <Menu aria-label="View" defaultCheckedValues={{ show: ['ruler'], sort: ['name'] }}>
+          <ItemCheckbox name="show" value="ruler">
+            Ruler
+          </ItemCheckbox>
+          <Group>
+            <GroupHeader>Sort by</GroupHeader>
+            <ItemRadio name="sort" value="name">
+              Name
+            </ItemRadio>
+            <ItemRadio name="sort" value="date">
+              Date
+            </ItemRadio>
+          </Group>
+        </Menu>
+      ),
+      serverText: 'aria-labelledby',
+      interact: async (user) => {
+        expect(screen.getByRole('group', { name: 'Sort by' })).toBeInTheDocument();
+        const date = screen.getByRole('menuitemradio', { name: 'Date' });
+        await user.click(date);
+        expect(date).toHaveAttribute('aria-checked', 'true');
+        expect(screen.getByRole('menuitemradio', { name: 'Name' })).toHaveAttribute(
+          'aria-checked',
+          'false',
+        );
+      },
+    }),
+    ssrCase({
+      name: 'Menu (static, a split row with a submenu)',
+      parts: {
+        SplitGroup: MenuSplitGroup,
+        Trigger: MenuTrigger,
+        Popover: MenuPopover,
+        Item: MenuItem,
+      },
+      tree: ({ SplitGroup, Trigger, Popover: MenuSurface, Item }) => (
+        <Menu aria-label="Edit">
+          <Item>Cut</Item>
+          <SplitGroup>
+            <Item>Find</Item>
+            <Menu>
+              <Trigger>
+                <Item aria-label="More find options" />
+              </Trigger>
+              <MenuSurface>
+                <Item>Replace…</Item>
+              </MenuSurface>
+            </Menu>
+          </SplitGroup>
+        </Menu>
+      ),
+      serverText: 'aria-haspopup="menu"',
+      interact: async (user) => {
+        const half = menuitem('More find options');
+        expect(half).toHaveAttribute('aria-expanded', 'false');
+        act(() => menuitem('Find').focus());
+        await user.keyboard('{ArrowRight}');
+        expect(half).toHaveFocus();
+        await user.keyboard('{ArrowRight}');
+        expect(screen.getByRole('menu', { name: 'More find options' })).toBeInTheDocument();
+        expect(menuitem('Replace…')).toHaveFocus();
+      },
+    }),
+    ssrCase({
+      name: 'Toolbar (bound toggles and a radio group)',
+      parts: {
+        Button: ToolbarButton,
+        ToggleButton: ToolbarToggleButton,
+        RadioGroup: ToolbarRadioGroup,
+        RadioButton: ToolbarRadioButton,
+        Divider: ToolbarDivider,
+      },
+      tree: ({
+        Button: Action,
+        ToggleButton: Toggle,
+        RadioGroup: Radios,
+        RadioButton,
+        Divider,
+      }) => (
+        <Toolbar
+          aria-label="Formatting"
+          defaultCheckedValues={{ format: ['bold'], align: ['start'] }}
+        >
+          <Toggle name="format" value="bold">
+            Bold
+          </Toggle>
+          <Divider />
+          <Radios aria-label="Alignment">
+            <RadioButton name="align" value="start">
+              Start
+            </RadioButton>
+            <RadioButton name="align" value="end">
+              End
+            </RadioButton>
+          </Radios>
+          <Action>Clear</Action>
+        </Toolbar>
+      ),
+      serverText: 'aria-pressed="true"',
+      interact: async (user) => {
+        expect(screen.getByRole('radio', { name: 'Start' })).toHaveAttribute(
+          'aria-checked',
+          'true',
+        );
+        await user.click(button('Bold'));
+        expect(button('Bold')).toHaveAttribute('aria-pressed', 'false');
+        await user.click(screen.getByRole('radio', { name: 'End' }));
+        expect(screen.getByRole('radio', { name: 'End' })).toHaveAttribute('aria-checked', 'true');
+        expect(screen.getByRole('radio', { name: 'Start' })).toHaveAttribute(
+          'aria-checked',
+          'false',
+        );
       },
     }),
     ssrCase({

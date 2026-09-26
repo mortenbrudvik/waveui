@@ -281,7 +281,7 @@ describe('Tooltip', () => {
       expect(isShown()).toBe(false);
     });
 
-    it('shows after 200 ms by default, on hover and on focus', async () => {
+    it('shows after 200 ms by default on hover', async () => {
       const user = setupTimers();
       let enteredAt = 0;
       render(
@@ -291,6 +291,24 @@ describe('Tooltip', () => {
       );
       await user.hover(screen.getByRole('button', { name: 'Target' }));
       advanceTo(enteredAt + 199);
+      expect(surface()).toBeNull();
+      advance(1);
+      await waitFor(() => expect(surface()).not.toBeNull());
+    });
+
+    it('shows after 200 ms by default on keyboard focus (openDelay applies to focus too)', async () => {
+      const user = setupTimers();
+      let focusedAt = 0;
+      render(
+        <Tooltip content="Tooltip text">
+          <button type="button" onFocus={() => (focusedAt = Date.now())}>
+            Target
+          </button>
+        </Tooltip>,
+      );
+      await user.tab();
+      expect(screen.getByRole('button', { name: 'Target' })).toHaveFocus();
+      advanceTo(focusedAt + 199);
       expect(surface()).toBeNull();
       advance(1);
       await waitFor(() => expect(surface()).not.toBeNull());

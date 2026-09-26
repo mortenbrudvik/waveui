@@ -34,7 +34,10 @@ export interface MenuItemProps extends React.HTMLAttributes<HTMLDivElement> {
    * `Menu.SplitGroup`, which then needs `aria-label`.
    */
   children?: React.ReactNode;
-  /** Ref to the `role="menuitem"` element. */
+  /**
+   * Ref to the item element (`role="menuitem"`; `menuitemcheckbox` or `menuitemradio` for the
+   * checkable items).
+   */
   ref?: React.Ref<HTMLDivElement>;
 }
 
@@ -136,7 +139,7 @@ export function MenuItemRow({
       {iconNode ?? (hasLabel && renderColumnSpace('icon'))}
       <span
         className="flex-1"
-        data-menu-label={markLabel && typeof label !== 'string' ? '' : undefined}
+        data-menu-label={markLabel && hasLabel && typeof label !== 'string' ? '' : undefined}
       >
         {materialiseSlotContent(label)}
       </span>
@@ -304,7 +307,9 @@ export function useMenuItemPlacementWarning(componentName: string): void {
  *
  * As the child of a submenu's `Menu.Trigger` (a `Menu` nested in a menu list), the item is the
  * submenu's trigger: it shows a chevron at its end (mirrored in RTL) and `data-has-submenu`, and
- * activating it never closes its own menu.
+ * activating it never closes its own menu. ArrowRight (ArrowLeft in RTL), Enter, Space and a click
+ * open the submenu and move focus to its first item; resting the mouse on the item opens it
+ * without moving focus.
  *
  * Also exported as `MenuItem` (import the flat name from React Server Components).
  */

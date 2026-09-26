@@ -337,13 +337,23 @@ export const MenuRoot = ({
   // trigger is activated; every other opening (click, keys, context, a controlled `open`) pins it.
   const openReasonRef = React.useRef<'hover' | 'other'>('other');
   const hoverOpenPendingRef = React.useRef(false);
+  const initialFocusRef = React.useRef<InitialFocus>('first');
   React.useLayoutEffect(() => {
     if (open) openReasonRef.current = hoverOpenPendingRef.current ? 'hover' : 'other';
     hoverOpenPendingRef.current = false;
   }, [open]);
+  // A hover opening also counts itself, so it always renders once more: when the menu is still
+  // closed then (a controlled menu whose app kept `open` false), the opening did not take and its
+  // pending marks are cleared, so a later opening by the app is an ordinary one (it focuses the
+  // first item and is pinned).
+  const [hoverOpenings, setHoverOpenings] = React.useState(0);
+  React.useLayoutEffect(() => {
+    if (open || hoverOpenings === 0) return;
+    hoverOpenPendingRef.current = false;
+    if (initialFocusRef.current === 'none') initialFocusRef.current = 'first';
+  }, [open, hoverOpenings]);
   const isHoverOpen = React.useCallback(() => openReasonRef.current === 'hover', []);
 
-  const initialFocusRef = React.useRef<InitialFocus>('first');
   const {
     triggerHandlers: hoverTriggerHandlers,
     surfaceHandlers: hoverSurfaceHandlers,
@@ -360,6 +370,7 @@ export const MenuRoot = ({
     onOpen: () => {
       hoverOpenPendingRef.current = true;
       initialFocusRef.current = 'none';
+      setHoverOpenings((count) => count + 1);
       setOpen(true);
     },
     onClose: requestClose,

@@ -13,7 +13,17 @@
  */
 import { isAbsolute, relative, resolve, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import type { ReactNode } from 'react';
+import type {
+  Dispatch,
+  HTMLAttributes,
+  KeyboardEventHandler,
+  MouseEventHandler,
+  PointerEventHandler,
+  ReactNode,
+  RefCallback,
+  RefObject,
+  SetStateAction,
+} from 'react';
 import ts from 'typescript';
 import { describe, expect, expectTypeOf, it } from 'vitest';
 import type {
@@ -27,6 +37,9 @@ import type {
   ButtonProps,
   CheckboxLabelPosition,
   CheckboxProps,
+  CheckedValues,
+  CheckedValuesChangeDetails,
+  CheckedValuesChangeHandler,
   ComboboxLabels,
   ComboboxProps,
   CompoundButtonProps,
@@ -46,7 +59,23 @@ import type {
   IconPosition,
   LabelPosition,
   LinkProps,
+  Menu,
   MenuButtonProps,
+  MenuGroupHeaderProps,
+  MenuGroupProps,
+  MenuItemCheckbox,
+  MenuItemCheckboxProps,
+  MenuItemLink,
+  MenuItemLinkProps,
+  MenuItemProps,
+  MenuItemRadioProps,
+  MenuItemSelectableProps,
+  MenuItemSwitchProps,
+  MenuPopoverProps,
+  MenuProps,
+  MenuSplitGroup,
+  MenuSplitGroupProps,
+  MenuTriggerProps,
   ModalOpenChangeReason,
   ModalType,
   NavItemAnchorProps,
@@ -58,6 +87,10 @@ import type {
   NavSubItemOwnProps,
   OpenChangeDetails,
   Orientation,
+  PopoverProps,
+  PopoverTriggerChildProps,
+  PopupRect,
+  PopupTarget,
   PresencePhase,
   PresenceProps,
   ProgressBarColor,
@@ -67,6 +100,7 @@ import type {
   RatingDisplayProps,
   SearchBoxInputProps,
   SearchBoxProps,
+  Size,
   Slot,
   SpinButtonInputProps,
   SpinButtonProps,
@@ -77,6 +111,7 @@ import type {
   SwitchLabelPosition,
   SwitchProps,
   TabListProps,
+  TeachingPopoverProps,
   TimePickerInvalidReason,
   TimePickerLabels,
   TimePickerProps,
@@ -84,11 +119,24 @@ import type {
   ToasterProps,
   ToastPosition,
   ToggleButtonProps,
+  Toolbar,
+  ToolbarButton,
+  ToolbarButtonOwnProps,
+  ToolbarButtonProps,
+  ToolbarDividerProps,
+  ToolbarGroupProps,
+  ToolbarProps,
+  ToolbarRadioButtonProps,
+  ToolbarRadioGroupProps,
+  ToolbarToggleButton,
+  ToolbarToggleButtonProps,
   TooltipAppearance,
   TooltipProps,
   UsePresenceOptions,
+  UsePresenceResult,
   UseRovingTabIndexOptions,
   ValidationState,
+  VirtualElement,
   WaveDir,
 } from '../index';
 
@@ -545,9 +593,158 @@ describe('0.7 presence core from the package entry', () => {
     expectTypeOf<PresencePhase>().toEqualTypeOf<'entering' | 'entered' | 'exiting' | 'exited'>();
     expectTypeOf<PresenceProps['visible']>().toEqualTypeOf<boolean>();
     expectTypeOf<UsePresenceOptions['unmountOnExit']>().toEqualTypeOf<boolean | undefined>();
+    expectTypeOf<UsePresenceResult['phase']>().toEqualTypeOf<PresencePhase>();
 
     // @ts-expect-error `visible` is required
     const props: PresenceProps = { children: null as unknown as PresenceProps['children'] };
     expect(props).toBeDefined();
+  });
+});
+
+// The 0.7 menus and commands, imported from the package entry (compile-time, `tsconfig.dev.json`).
+describe('0.7 menus, popovers and toolbars from the package entry', () => {
+  it('checked values: the Menu props, the details and a handler that takes the values only', () => {
+    expectTypeOf<MenuProps['checkedValues']>().toEqualTypeOf<CheckedValues | undefined>();
+    expectTypeOf<MenuProps['defaultCheckedValues']>().toEqualTypeOf<CheckedValues | undefined>();
+    expectTypeOf<MenuProps['onCheckedValuesChange']>().toEqualTypeOf<
+      CheckedValuesChangeHandler | undefined
+    >();
+    expectTypeOf<CheckedValues>().toEqualTypeOf<Readonly<Record<string, readonly string[]>>>();
+    expectTypeOf<CheckedValuesChangeDetails>().toEqualTypeOf<{
+      name: string;
+      checkedItems: string[];
+      event: Event;
+    }>();
+
+    // `details` is optional until 1.0: a handler of the values alone fits, a state setter too,
+    // and code that calls the prop may pass the values only.
+    type Handler = NonNullable<MenuProps['onCheckedValuesChange']>;
+    const valuesOnly = (values: Record<string, string[]>) => void values;
+    expectTypeOf(valuesOnly).toExtend<Handler>();
+    expectTypeOf<Dispatch<SetStateAction<CheckedValues>>>().toExtend<Handler>();
+    expectTypeOf<Dispatch<SetStateAction<Record<string, string[]>>>>().toExtend<Handler>();
+    expectTypeOf<Handler>().toBeCallableWith({ view: ['grid'] });
+    expectTypeOf<Handler>().parameter(1).toEqualTypeOf<CheckedValuesChangeDetails | undefined>();
+    expectTypeOf<NonNullable<ToolbarProps['onCheckedValuesChange']>>().toEqualTypeOf<Handler>();
+    // A readonly literal is a valid controlled value.
+    expectTypeOf<{ readonly view: readonly ['grid'] }>().toExtend<CheckedValues>();
+  });
+
+  it('Menu: the popup props, the item kinds, the trigger props and the target', () => {
+    expectTypeOf<
+      Pick<
+        MenuProps,
+        'openOnHover' | 'openDelay' | 'closeDelay' | 'openOnContext' | 'persistOnItemClick'
+      >
+    >().toEqualTypeOf<{
+      openOnHover?: boolean;
+      openDelay?: number;
+      closeDelay?: number;
+      openOnContext?: boolean;
+      persistOnItemClick?: boolean;
+    }>();
+    expectTypeOf<MenuPopoverProps['target']>().toEqualTypeOf<PopupTarget | undefined>();
+    expectTypeOf<PopupTarget>().toEqualTypeOf<HTMLElement | VirtualElement | null>();
+    expectTypeOf<DOMRect>().toExtend<PopupRect>();
+    expectTypeOf<ReturnType<VirtualElement['getBoundingClientRect']>>().toEqualTypeOf<PopupRect>();
+
+    // A label-less item (the submenu half of a split row) compiles.
+    expectTypeOf<Pick<MenuItemProps, 'children'>>().toEqualTypeOf<{ children?: ReactNode }>();
+    expectTypeOf<Pick<MenuItemCheckboxProps, 'name' | 'value'>>().toEqualTypeOf<{
+      name: string;
+      value: string;
+    }>();
+    expectTypeOf<MenuItemCheckboxProps>().toExtend<MenuItemProps>();
+    expectTypeOf<MenuItemRadioProps>().toExtend<MenuItemSelectableProps>();
+    expectTypeOf<MenuItemSwitchProps>().toExtend<MenuItemSelectableProps>();
+    expectTypeOf<MenuItemCheckboxProps['checkmark']>().toEqualTypeOf<Slot<'span'> | undefined>();
+    expectTypeOf<MenuItemLinkProps<'a'>['href']>().toEqualTypeOf<string | undefined>();
+    expectTypeOf<MenuItemLinkProps['disabled']>().toEqualTypeOf<boolean | undefined>();
+    expectTypeOf<MenuGroupProps>().toExtend<HTMLAttributes<HTMLDivElement>>();
+    expectTypeOf<MenuGroupHeaderProps>().toExtend<HTMLAttributes<HTMLDivElement>>();
+    expectTypeOf<MenuSplitGroupProps['children']>().toEqualTypeOf<ReactNode>();
+    expectTypeOf<typeof Menu.ItemCheckbox>().toEqualTypeOf<typeof MenuItemCheckbox>();
+    expectTypeOf<typeof Menu.ItemLink>().toEqualTypeOf<typeof MenuItemLink>();
+    expectTypeOf<typeof Menu.SplitGroup>().toEqualTypeOf<typeof MenuSplitGroup>();
+
+    // The trigger props keep every 0.6 member and type; the handler members are optional.
+    expectTypeOf<MenuTriggerProps['aria-expanded']>().toEqualTypeOf<boolean>();
+    expectTypeOf<MenuTriggerProps['aria-haspopup']>().toEqualTypeOf<'menu'>();
+    expectTypeOf<MenuTriggerProps['onClick']>().toEqualTypeOf<MouseEventHandler<HTMLElement>>();
+    expectTypeOf<MenuTriggerProps['onContextMenu']>().toEqualTypeOf<
+      MouseEventHandler<HTMLElement> | undefined
+    >();
+    expectTypeOf<MenuTriggerProps['onPointerEnter']>().toEqualTypeOf<
+      PointerEventHandler<HTMLElement> | undefined
+    >();
+
+    // @ts-expect-error a radio item needs its group's `name`
+    const radio: MenuItemRadioProps = { value: 'date', children: 'Date' };
+    // @ts-expect-error a VirtualElement reads its rectangle through getBoundingClientRect
+    const anchor: VirtualElement = {};
+    expect([radio, anchor]).toHaveLength(2);
+  });
+
+  it('Popover, TeachingPopover and Tooltip: hover, context, target and the delay vocabulary', () => {
+    expectTypeOf<
+      Pick<PopoverProps, 'openOnHover' | 'openDelay' | 'closeDelay' | 'openOnContext'>
+    >().toEqualTypeOf<{
+      openOnHover?: boolean;
+      openDelay?: number;
+      closeDelay?: number;
+      openOnContext?: boolean;
+    }>();
+    expectTypeOf<PopoverProps['target']>().toEqualTypeOf<PopupTarget | undefined>();
+    // TeachingPopover's 0.6 target (an element or a ref, no VirtualElement) is unchanged.
+    expectTypeOf<TeachingPopoverProps['target']>().toEqualTypeOf<
+      RefObject<HTMLElement | null> | HTMLElement | null | undefined
+    >();
+    // Unchanged: its optional handler members are filled in hover and context modes.
+    expectTypeOf<PopoverTriggerChildProps>().toEqualTypeOf<
+      Omit<HTMLAttributes<HTMLElement>, 'children'> & {
+        id: string;
+        'aria-haspopup': 'dialog';
+        'aria-expanded': boolean;
+        'aria-controls': string | undefined;
+        onClick: MouseEventHandler<HTMLElement>;
+        onKeyDown: KeyboardEventHandler<HTMLElement>;
+        ref: RefCallback<HTMLElement>;
+      }
+    >();
+
+    expectTypeOf<Pick<TooltipProps, 'openDelay' | 'closeDelay' | 'delay'>>().toEqualTypeOf<{
+      openDelay?: number;
+      closeDelay?: number;
+      delay?: number;
+    }>();
+  });
+
+  it('Toolbar and ToggleButton: size, the bound parts and isAccessible', () => {
+    expectTypeOf<ToolbarProps['size']>().toEqualTypeOf<Size | undefined>();
+    expectTypeOf<ToolbarProps['checkedValues']>().toEqualTypeOf<CheckedValues | undefined>();
+    expectTypeOf<Pick<ToolbarToggleButtonProps, 'name' | 'value'>>().toEqualTypeOf<{
+      name: string;
+      value: string;
+    }>();
+    expectTypeOf<Pick<ToolbarRadioButtonProps, 'name' | 'value'>>().toEqualTypeOf<{
+      name: string;
+      value: string;
+    }>();
+    expectTypeOf<ToolbarButtonProps<'a'>['href']>().toEqualTypeOf<string | undefined>();
+    expectTypeOf<ToolbarButtonOwnProps['vertical']>().toEqualTypeOf<boolean | undefined>();
+    expectTypeOf<ToolbarRadioGroupProps>().toExtend<HTMLAttributes<HTMLDivElement>>();
+    expectTypeOf<ToolbarGroupProps>().toExtend<HTMLAttributes<HTMLDivElement>>();
+    expectTypeOf<ToolbarDividerProps>().not.toHaveProperty('children');
+    expectTypeOf<typeof Toolbar.Button>().toEqualTypeOf<typeof ToolbarButton>();
+    expectTypeOf<typeof Toolbar.ToggleButton>().toEqualTypeOf<typeof ToolbarToggleButton>();
+    expectTypeOf<ToggleButtonProps['isAccessible']>().toEqualTypeOf<boolean | undefined>();
+
+    // @ts-expect-error Toolbar sizes are the five Wave sizes
+    const huge: ToolbarProps = { size: 'huge' };
+    // @ts-expect-error a toolbar radio is always role="radio"
+    const checkbox: ToolbarRadioButtonProps = { name: 'align', value: 'start', role: 'checkbox' };
+    // @ts-expect-error the pressed state of a toolbar toggle is the Toolbar's checkedValues
+    const pressed: ToolbarToggleButtonProps = { name: 'format', value: 'bold', pressed: true };
+    expect([huge, checkbox, pressed]).toHaveLength(3);
   });
 });

@@ -112,6 +112,19 @@ function goodFiles() {
       "function Presence(props) { const { isMounted, phase } = hook.usePresence(props.visible); return isMounted ? jsxRuntime.jsx('div', { 'data-presence': phase, children: props.children }) : null; }\n" +
       "Presence.displayName = 'Presence';\nexports.Presence = Presence;\n",
   };
+  // A component on the presence core (Menu.Popover, 0.7): an import of only Menu holds it.
+  const menu = {
+    esm:
+      `${DIRECTIVE}import { jsx } from 'react/jsx-runtime';\n` +
+      "import { usePresence } from '../../hooks/usePresence.mjs';\n" +
+      "function Menu(props) { const { isMounted, phase } = usePresence(props.open); return isMounted ? jsx('div', { role: 'menu', 'data-presence': phase, children: props.children }) : null; }\n" +
+      "Menu.displayName = 'Menu';\nexport { Menu };\n",
+    cjs:
+      `${DIRECTIVE}const jsxRuntime = require('react/jsx-runtime');\n` +
+      "const hook = require('../../hooks/usePresence.cjs');\n" +
+      "function Menu(props) { const { isMounted, phase } = hook.usePresence(props.open); return isMounted ? jsxRuntime.jsx('div', { role: 'menu', 'data-presence': phase, children: props.children }) : null; }\n" +
+      "Menu.displayName = 'Menu';\nexports.Menu = Menu;\n",
+  };
   const dts =
     'export declare function cn(...inputs: unknown[]): string;\n' +
     '/** A button. */\nexport declare const Button: (props: object) => null;\n';
@@ -144,6 +157,8 @@ function goodFiles() {
     'dist/hooks/usePresence.cjs': usePresence.cjs,
     'dist/components/motion/Presence.mjs': presence.esm,
     'dist/components/motion/Presence.cjs': presence.cjs,
+    'dist/components/navigation/Menu.mjs': menu.esm,
+    'dist/components/navigation/Menu.cjs': menu.cjs,
     'dist/index.mjs':
       "export { cn } from './lib/cn.mjs';\n" +
       "export { useThing } from './hooks/useThing.mjs';\n" +
@@ -151,7 +166,8 @@ function goodFiles() {
       "export { Card, CardHeader } from './components/layout/Card.mjs';\n" +
       "export { Dialog, DialogTrigger, DialogContent } from './components/overlays/Dialog.mjs';\n" +
       "export { usePresence } from './hooks/usePresence.mjs';\n" +
-      "export { Presence } from './components/motion/Presence.mjs';\n",
+      "export { Presence } from './components/motion/Presence.mjs';\n" +
+      "export { Menu } from './components/navigation/Menu.mjs';\n",
     'dist/index.cjs':
       "Object.defineProperty(exports, '__esModule', { value: true });\n" +
       "const cn = require('./lib/cn.cjs');\n" +
@@ -161,11 +177,13 @@ function goodFiles() {
       "const dialog = require('./components/overlays/Dialog.cjs');\n" +
       "const presenceHook = require('./hooks/usePresence.cjs');\n" +
       "const presence = require('./components/motion/Presence.cjs');\n" +
+      "const menu = require('./components/navigation/Menu.cjs');\n" +
       'exports.cn = cn.cn;\nexports.useThing = hook.useThing;\nexports.Button = button.Button;\n' +
       'exports.Card = card.Card;\nexports.CardHeader = card.CardHeader;\n' +
       'exports.Dialog = dialog.Dialog;\nexports.DialogTrigger = dialog.DialogTrigger;\n' +
       'exports.DialogContent = dialog.DialogContent;\n' +
-      'exports.usePresence = presenceHook.usePresence;\nexports.Presence = presence.Presence;\n',
+      'exports.usePresence = presenceHook.usePresence;\nexports.Presence = presence.Presence;\n' +
+      'exports.Menu = menu.Menu;\n',
     'dist/index.d.ts': dts,
     'dist/index.d.cts': dts,
   };
@@ -962,20 +980,16 @@ describe('probeSizeBudget', () => {
 });
 
 describe('the flat-name bridge (PENDING_FLAT_EXPORTS)', () => {
-  it('lists Toolbar, which the real exports report as planned until it is a compound, then as pending', async () => {
-    expect(PENDING_FLAT_EXPORTS).toEqual(['Toolbar']);
+  it('is empty: the real exports carry the flat name of every compound member, Toolbar included', async () => {
+    expect(PENDING_FLAT_EXPORTS).toEqual([]);
     const mod = await import('../../src/index.ts');
-    const members = Object.keys(mod.Toolbar).filter((key) => /^[A-Z]/.test(key));
-    const result = checkFlatExports(mod);
-    expect(result.errors).toEqual([]);
-    if (members.length === 0) {
-      // 0.6: Toolbar is no compound yet.
-      expect(result).toEqual({ errors: [], pending: [], planned: ['Toolbar'] });
-    } else {
-      // Toolbar has parts whose flat names the barrels do not export yet.
-      expect(result.planned).toEqual([]);
-      expect(result.pending.every((name) => name.startsWith('Toolbar'))).toBe(true);
-    }
+    expect(Object.keys(mod.Toolbar).filter((key) => /^[A-Z]/.test(key))).not.toEqual([]);
+    expect(checkFlatExports(mod)).toEqual({ errors: [], pending: [], planned: [] });
+    expect(checkFlatExports(mod, { final: true })).toEqual({
+      errors: [],
+      pending: [],
+      planned: [],
+    });
   }, 60_000);
 });
 
@@ -1021,17 +1035,17 @@ describe('verifyDist and main', () => {
   it('reports a dist without the presence core module (the include probe)', async () => {
     const files = goodFiles();
     const { dist } = fixture({
-      // Presence no longer uses the hook module: an import of only Presence lacks it.
-      'dist/components/motion/Presence.mjs': files['dist/components/motion/Presence.mjs']
+      // Menu no longer uses the hook module: an import of only Menu lacks it.
+      'dist/components/navigation/Menu.mjs': files['dist/components/navigation/Menu.mjs']
         .replace("import { usePresence } from '../../hooks/usePresence.mjs';\n", '')
         .replace(
-          'const { isMounted, phase } = usePresence(props.visible);',
-          "const isMounted = props.visible; const phase = 'entered';",
+          'const { isMounted, phase } = usePresence(props.open);',
+          "const isMounted = props.open; const phase = 'entered';",
         ),
     });
     const { errors } = await verifyDist(dist, noPending);
     expect(errors).toEqual([
-      'hooks/usePresence.mjs is not in the bundle of an import of only Presence',
+      'hooks/usePresence.mjs is not in the bundle of an import of only Menu',
     ]);
   });
 

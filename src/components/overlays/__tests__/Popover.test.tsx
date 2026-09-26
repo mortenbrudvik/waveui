@@ -2413,6 +2413,18 @@ describe('Popover', () => {
         expect(row(4)).toHaveFocus();
       });
 
+      it('Tab past the content’s last element continues after the row the gesture came from', async () => {
+        const user = userEvent.setup();
+        render(<FileList />);
+        act(() => row(3).focus());
+        await user.keyboard('{Shift>}{F10}{/Shift}');
+        expect(screen.getByRole('button', { name: 'Open' })).toHaveFocus();
+        await user.tab();
+        expect(screen.getByRole('button', { name: 'Share' })).toHaveFocus();
+        await user.tab();
+        expect(row(4)).toHaveFocus();
+      });
+
       it('focuses the content itself when nothing in it can take focus', () => {
         render(<FileList content="No actions for this file" />);
         act(() => row(2).focus());

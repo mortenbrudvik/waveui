@@ -210,6 +210,28 @@ describe('hover opening of submenus', () => {
     expect(item('New')).toHaveFocus();
   });
 
+  it('resting on a sibling trigger item outside the safe zone opens its submenu and closes the open one, each reporting once', async () => {
+    const onRecentOpenChange = vi.fn();
+    const onShareOpenChange = vi.fn();
+    render(
+      <FileMenu
+        recent={{ onOpenChange: onRecentOpenChange }}
+        share={{ onOpenChange: onShareOpenChange }}
+      />,
+    );
+    await user.click(button('File'));
+    await user.hover(item('Open recent'));
+    advance(300);
+    expect(menu('Open recent')).toBeInTheDocument();
+    // No safe zone (the submenu has no size in jsdom): the pointer rests on "Share".
+    await user.hover(item('Share'));
+    advance(300);
+    expect(menu('Share')).toBeInTheDocument();
+    expect(queryMenu('Open recent')).not.toBeInTheDocument();
+    expect(onRecentOpenChange.mock.calls).toEqual([[true], [false]]);
+    expect(onShareOpenChange.mock.calls).toEqual([[true]]);
+  });
+
   it('a submenu inherits its parent’s delays', async () => {
     render(<FileMenu root={{ openDelay: 400, closeDelay: 100 }} />);
     await user.click(button('File'));
@@ -479,6 +501,40 @@ describe('a root menu with openOnHover', () => {
     expect(menu('Actions')).toBeInTheDocument();
     advance(250);
     expect(queryMenu('Actions')).not.toBeInTheDocument();
+  });
+
+  it.each(['touch', 'pen'] as const)('%s pointers on its trigger open nothing', async (type) => {
+    const onOpenChange = vi.fn();
+    render(<HoverMenu onOpenChange={onOpenChange} />);
+    const trigger = button('Actions');
+    act(() => {
+      trigger.dispatchEvent(new PointerEvent('pointerover', { bubbles: true, pointerType: type }));
+      trigger.dispatchEvent(new PointerEvent('pointermove', { bubbles: true, pointerType: type }));
+    });
+    advance(1000);
+    expect(queryMenu('Actions')).not.toBeInTheDocument();
+    expect(onOpenChange).not.toHaveBeenCalled();
+  });
+
+  it('a hover opening that a controlled menu ignores leaves no trace: the app’s own opening focuses the first item and pins it', async () => {
+    const onOpenChange = vi.fn();
+    const { rerender } = render(<HoverMenu open={false} onOpenChange={onOpenChange} />);
+    await user.hover(button('Actions'));
+    advance(300);
+    // The hover asked to open; the app kept the menu closed.
+    expect(onOpenChange.mock.calls).toEqual([[true]]);
+    expect(queryMenu('Actions')).not.toBeInTheDocument();
+    await user.hover(button('Elsewhere'));
+    act(() => button('Elsewhere').focus());
+
+    // Later the app opens it itself: an opening like any other, not a hover opening.
+    rerender(<HoverMenu open onOpenChange={onOpenChange} />);
+    expect(menu('Actions')).toBeInTheDocument();
+    expect(item('Edit')).toHaveFocus();
+    await user.hover(button('Actions'));
+    await user.hover(button('Elsewhere'));
+    advance(1000);
+    expect(onOpenChange.mock.calls).toEqual([[true]]);
   });
 
   it('a disabledFocusable MenuButton trigger does not open on hover', async () => {

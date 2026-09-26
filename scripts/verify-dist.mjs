@@ -71,10 +71,10 @@ const require = createRequire(import.meta.url);
 
 /**
  * A temporary bridge: components whose flat sub-component names (`<Parent><Member>`,
- * C-COMPOUND) are not exported from `dist/index.mjs` yet. Fluent parity phase 2 (0.7) lists
- * `Toolbar`: it becomes a compound (`Toolbar.Button`, …) before the button barrel exports the
- * flat names of its parts, so it is reported as planned (not a compound yet), then as pending,
- * until the barrels export the flat names and the list is emptied again. The rules:
+ * C-COMPOUND) are not exported from `dist/index.mjs` yet. The list is empty: Fluent parity
+ * phase 2 (0.7) listed `Toolbar` while it became a compound (`Toolbar.Button`, …) before the
+ * button barrel exported the flat names of its parts, and emptied it again once the barrel did.
+ * A future compound whose parts land before their flat names goes on it the same way. The rules:
  *   - an entry whose flat names all exist fails the check ("remove it"), and so does an entry
  *     that is not an exported component, so the list only shrinks;
  *   - an entry that is exported but not a compound yet is tolerated;
@@ -83,7 +83,7 @@ const require = createRequire(import.meta.url);
  * A compound that is not listed must export every flat name. A flat name that is exported must
  * equal its dotted member, listed or not.
  */
-export const PENDING_FLAT_EXPORTS = ['Toolbar'];
+export const PENDING_FLAT_EXPORTS = [];
 
 /**
  * The presence core's probes: an import of only `Button` drops it, an import of only
@@ -92,7 +92,7 @@ export const PENDING_FLAT_EXPORTS = ['Toolbar'];
  * 2 KiB of the phase 2 design, adjusted once as its open question 8 allows).
  */
 const PRESENCE_MODULE = 'hooks/usePresence.mjs';
-const PRESENCE_INCLUDE_KEEP = 'Presence';
+const PRESENCE_INCLUDE_KEEP = 'Menu';
 const PRESENCE_BUDGET = {
   names: ['usePresence', 'Presence'],
   maxMinifiedBytes: 6804,

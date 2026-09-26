@@ -722,6 +722,21 @@ describe('Toolbar parts', () => {
       expect(group).toHaveClass('flex', 'flex-col', 'gap-1');
     });
 
+    it('its role cannot be replaced: its radios and cross-axis keys need the radiogroup', () => {
+      render(
+        <Toolbar aria-label="Paragraph">
+          <Toolbar.RadioGroup aria-label="Alignment" role="toolbar">
+            <Toolbar.RadioButton name="align" value="left">
+              Left
+            </Toolbar.RadioButton>
+          </Toolbar.RadioGroup>
+        </Toolbar>,
+      );
+      expect(screen.getByRole('radiogroup', { name: 'Alignment' })).toContainElement(
+        screen.getByRole('radio', { name: 'Left' }),
+      );
+    });
+
     it('warns once in development when it has no accessible name', () => {
       const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
       render(
@@ -956,6 +971,12 @@ describe('Toolbar parts', () => {
           <Toolbar.ToggleButton name="format" value="bold">
             Bold
           </Toolbar.ToggleButton>
+          <Toolbar.RadioGroup aria-label="Alignment">
+            <Toolbar.RadioButton name="align" value="left">
+              Left
+            </Toolbar.RadioButton>
+          </Toolbar.RadioGroup>
+          <Toolbar.Group data-testid="group" />
           <Toolbar.Divider />
         </>,
       );
@@ -965,6 +986,12 @@ describe('Toolbar parts', () => {
           <Toolbar.ToggleButton name="format" value="bold">
             Bold
           </Toolbar.ToggleButton>
+          <Toolbar.RadioGroup aria-label="Alignment">
+            <Toolbar.RadioButton name="align" value="left">
+              Left
+            </Toolbar.RadioButton>
+          </Toolbar.RadioGroup>
+          <Toolbar.Group data-testid="group" />
           <Toolbar.Divider />
         </>,
       );
@@ -973,10 +1000,18 @@ describe('Toolbar parts', () => {
       );
       await user.click(button('Bold'));
       expect(button('Bold')).toHaveAttribute('aria-pressed', 'false');
+      const left = screen.getByRole('radio', { name: 'Left' });
+      await user.click(left);
+      expect(left).toHaveAttribute('aria-checked', 'false');
+      expect(screen.getByRole('radiogroup', { name: 'Alignment' })).toContainElement(left);
+      expect(screen.getByTestId('group')).toHaveAttribute('role', 'presentation');
       expect(screen.getByRole('separator')).toHaveAttribute('aria-orientation', 'vertical');
       expect(error.mock.calls).toEqual([
         ['[WaveUI] Toolbar.Button must be used within Toolbar'],
         ['[WaveUI] Toolbar.ToggleButton must be used within Toolbar'],
+        ['[WaveUI] Toolbar.RadioGroup must be used within Toolbar'],
+        ['[WaveUI] Toolbar.RadioButton must be used within Toolbar'],
+        ['[WaveUI] Toolbar.Group must be used within Toolbar'],
         ['[WaveUI] Toolbar.Divider must be used within Toolbar'],
       ]);
     });

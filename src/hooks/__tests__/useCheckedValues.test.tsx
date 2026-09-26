@@ -1,12 +1,14 @@
-import { describe, it, expect, vi, expectTypeOf } from 'vitest';
+import { afterEach, describe, it, expect, vi, expectTypeOf } from 'vitest';
 import { act, render, renderHook, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import * as React from 'react';
 import {
   useCheckedValues,
+  useDuplicatePairRegistry,
   withCheckedValuesListener,
   type CheckedValuesApi,
 } from '../useCheckedValues';
+import { __resetWarnings } from '../../lib/dev';
 import type {
   CheckedValues,
   CheckedValuesChangeDetails,
@@ -416,5 +418,122 @@ describe('withCheckedValuesListener', () => {
     });
     act(() => result.current.toggle('view', 'grid', clickEvent(), () => calls.push('caller')));
     expect(calls).toEqual(['submenu', 'caller']);
+  });
+});
+
+describe('useDuplicatePairRegistry', () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+    vi.unstubAllEnvs();
+  });
+
+  const KEY = 'Test:duplicate-value';
+  const message = (name: string, value: string) =>
+    `Test: "${name}" and "${value}" are registered twice.`;
+
+  /** Registers its pair from an effect and unregisters in the cleanup, as an item does. */
+  function Item({
+    register,
+    name,
+    value,
+  }: {
+    register: (name: string, value: string) => () => void;
+    name: string;
+    value: string;
+  }) {
+    React.useEffect(() => register(name, value), [register, name, value]);
+    return null;
+  }
+
+  /** One owner (a menu list, a toolbar) and its items. */
+  function Owner({ pairs }: { pairs: Array<[name: string, value: string]> }) {
+    const register = useDuplicatePairRegistry(KEY, message);
+    return pairs.map(([name, value], index) => (
+      <Item key={index} register={register} name={name} value={value} />
+    ));
+  }
+
+  it('warns once, with the message for the pair, when a registered pair registers again', () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const { result } = renderHook(() => useDuplicatePairRegistry(KEY, message));
+    result.current('format', 'bold');
+    result.current('format', 'italic');
+    result.current('align', 'bold');
+    expect(warn).not.toHaveBeenCalled();
+    result.current('format', 'bold');
+    // Warned once per key: a third registration, or a second duplicated pair, logs nothing more.
+    result.current('format', 'bold');
+    result.current('align', 'bold');
+    expect(warn.mock.calls).toEqual([['[WaveUI] Test: "format" and "bold" are registered twice.']]);
+  });
+
+  it('keeps pairs whose parts contain commas or quotes apart', () => {
+    const warn = vi.spyOn(console, 'warn');
+    const { result } = renderHook(() => useDuplicatePairRegistry(KEY, message));
+    result.current('a,b', 'c');
+    result.current('a', 'b,c');
+    result.current('"a"', 'b');
+    result.current('a', '"b"');
+    expect(warn).not.toHaveBeenCalled();
+  });
+
+  it('frees a pair when its registration is undone', () => {
+    const warn = vi.spyOn(console, 'warn');
+    const { result } = renderHook(() => useDuplicatePairRegistry(KEY, message));
+    const unregister = result.current('format', 'bold');
+    unregister();
+    result.current('format', 'bold');
+    expect(warn).not.toHaveBeenCalled();
+  });
+
+  it('counts per owner: the same pair in two owners does not warn, in StrictMode either', () => {
+    const warn = vi.spyOn(console, 'warn');
+    render(
+      <React.StrictMode>
+        <Owner pairs={[['format', 'bold']]} />
+        <Owner pairs={[['format', 'bold']]} />
+      </React.StrictMode>,
+    );
+    expect(warn).not.toHaveBeenCalled();
+  });
+
+  it('warns for two items of one owner; once one unmounts and the other moves away, the pair is free', () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const { rerender } = render(
+      <Owner
+        pairs={[
+          ['format', 'bold'],
+          ['format', 'bold'],
+        ]}
+      />,
+    );
+    expect(warn.mock.calls).toEqual([['[WaveUI] Test: "format" and "bold" are registered twice.']]);
+    // Forget the warning, so a pair that is still counted would warn again.
+    warn.mockClear();
+    __resetWarnings();
+    rerender(<Owner pairs={[['format', 'bold']]} />);
+    rerender(<Owner pairs={[['format', 'italic']]} />);
+    rerender(<Owner pairs={[['format', 'bold']]} />);
+    expect(warn).not.toHaveBeenCalled();
+  });
+
+  it('logs nothing in production', () => {
+    vi.stubEnv('NODE_ENV', 'production');
+    const warn = vi.spyOn(console, 'warn');
+    const { result } = renderHook(() => useDuplicatePairRegistry(KEY, message));
+    result.current('format', 'bold');
+    result.current('format', 'bold');
+    expect(warn).not.toHaveBeenCalled();
+  });
+
+  it('keeps its identity across renders while the key and the message do', () => {
+    const { result, rerender } = renderHook(() => useDuplicatePairRegistry(KEY, message));
+    const first = result.current;
+    rerender();
+    expect(result.current).toBe(first);
+    expectTypeOf(useDuplicatePairRegistry).parameters.toEqualTypeOf<
+      [warnKey: string, message: (name: string, value: string) => string]
+    >();
+    expectTypeOf(first).toEqualTypeOf<(name: string, value: string) => () => void>();
   });
 });

@@ -1,6 +1,6 @@
 import * as React from 'react';
-import type { CheckedValuesApi } from '../../hooks/useCheckedValues';
-import { isDev, reportMissingContext, warnOnce } from '../../lib/dev';
+import { useDuplicatePairRegistry, type CheckedValuesApi } from '../../hooks/useCheckedValues';
+import { reportMissingContext } from '../../lib/dev';
 import type { Orientation, Size } from '../../lib/types';
 
 /*
@@ -50,30 +50,15 @@ export function useToolbarContext(componentName: string): ToolbarContextValue {
   return INERT_TOOLBAR_CONTEXT;
 }
 
+/** The warning for two toggle or radio buttons of one toolbar with the same `name`/`value` pair. */
+function duplicateValueMessage(name: string, value: string): string {
+  return `Toolbar: two toggle or radio buttons of one toolbar have the name "${name}" and the value "${value}", so both show as pressed. Give every part of a group its own value.`;
+}
+
 /**
  * The `registerCheckable` of one toolbar: a count per `name`/`value` pair, kept for the toolbar's
  * lifetime. A second registration of a pair warns once (development only).
  */
 export function useToolbarCheckableRegistry(): ToolbarContextValue['registerCheckable'] {
-  const [counts] = React.useState(() => new Map<string, number>());
-  return React.useCallback(
-    (name: string, value: string) => {
-      if (!isDev) return noop;
-      const key = JSON.stringify([name, value]);
-      const count = (counts.get(key) ?? 0) + 1;
-      counts.set(key, count);
-      if (count > 1) {
-        warnOnce(
-          'Toolbar:duplicate-value',
-          `Toolbar: two toggle or radio buttons of one toolbar have the name "${name}" and the value "${value}", so both show as pressed. Give every part of a group its own value.`,
-        );
-      }
-      return () => {
-        const remaining = (counts.get(key) ?? 1) - 1;
-        if (remaining > 0) counts.set(key, remaining);
-        else counts.delete(key);
-      };
-    },
-    [counts],
-  );
+  return useDuplicatePairRegistry('Toolbar:duplicate-value', duplicateValueMessage);
 }

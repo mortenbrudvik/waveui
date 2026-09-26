@@ -239,6 +239,7 @@ export interface ToolbarRadioGroupProps extends React.HTMLAttributes<HTMLDivElem
  *   as in the toolbar's own arrow order. A consumer `onKeyDown` runs first
  *   (`event.preventDefault()` cancels the move).
  * - Without `aria-label` or `aria-labelledby` it warns once in development.
+ * - Its `role` is always `radiogroup` (a `role` you pass is ignored): its radios need it.
  * - Must be rendered inside a {@link Toolbar}; flat export for React Server Components
  *   (`Toolbar.RadioGroup` in client files).
  *
@@ -249,7 +250,6 @@ export interface ToolbarRadioGroupProps extends React.HTMLAttributes<HTMLDivElem
  * </Toolbar.RadioGroup>
  */
 export const ToolbarRadioGroup = ({
-  role,
   className,
   onKeyDown,
   ref,
@@ -294,9 +294,10 @@ export const ToolbarRadioGroup = ({
 
   return (
     <div
-      role={role ?? 'radiogroup'}
       {...rest}
       ref={ref}
+      // Its radios and the cross-axis keys need the radiogroup: the role is not replaceable.
+      role="radiogroup"
       data-roving-transparent=""
       onKeyDown={composeEventHandlers(onKeyDown, handleCrossAxisKeyDown)}
       className={cn('flex gap-1', orientation === 'vertical' && 'flex-col', className)}

@@ -1,8 +1,8 @@
 import * as React from 'react';
-import type { CheckedValuesApi } from '../../hooks/useCheckedValues';
+import { useDuplicatePairRegistry, type CheckedValuesApi } from '../../hooks/useCheckedValues';
 import type { ContextMenuAnchor } from '../../hooks/useContextMenuAnchor';
 import type { HoverIntent, HoverIntentGroup } from '../../hooks/useHoverIntent';
-import { isDev, reportMissingContext, warnOnce } from '../../lib/dev';
+import { reportMissingContext } from '../../lib/dev';
 import type { DismissReason } from '../../lib/layers';
 import type { VirtualElement } from '../../lib/types';
 
@@ -262,30 +262,15 @@ export function useMenuListContext(): MenuListContextValue | null {
   return React.useContext(MenuListContext);
 }
 
+/** The warning for two checkable items of one menu list with the same `name`/`value` pair. */
+function duplicateValueMessage(name: string, value: string): string {
+  return `Menu: two checkable items of one menu list have the name "${name}" and the value "${value}", so both show as checked. Give every item of a group its own value.`;
+}
+
 /**
  * The `registerCheckable` of one menu list: a count per `name`/`value` pair, kept for the list's
  * lifetime. A second registration of a pair warns once (development only).
  */
 export function useCheckableRegistry(): MenuListContextValue['registerCheckable'] {
-  const [counts] = React.useState(() => new Map<string, number>());
-  return React.useCallback(
-    (name: string, value: string) => {
-      if (!isDev) return noop;
-      const key = JSON.stringify([name, value]);
-      const count = (counts.get(key) ?? 0) + 1;
-      counts.set(key, count);
-      if (count > 1) {
-        warnOnce(
-          'Menu:duplicate-value',
-          `Menu: two checkable items of one menu list have the name "${name}" and the value "${value}", so both show as checked. Give every item of a group its own value.`,
-        );
-      }
-      return () => {
-        const remaining = (counts.get(key) ?? 1) - 1;
-        if (remaining > 0) counts.set(key, remaining);
-        else counts.delete(key);
-      };
-    },
-    [counts],
-  );
+  return useDuplicatePairRegistry('Menu:duplicate-value', duplicateValueMessage);
 }

@@ -37,15 +37,28 @@ export function leadingDocblock(source: string, node: ts.Node): string | null {
   return last === undefined ? null : docblockText(last) || null;
 }
 
-/** A top-level binding of a module: a `const` (its statement and initializer) or a function. */
+/**
+ * A top-level binding of a module: a `const` (its statement and initializer), a function, or a
+ * value imported from another module (a compound whose root lives in a sibling module).
+ */
 type Binding =
   | { kind: 'const'; statement: ts.VariableStatement; init: ts.Expression | undefined }
-  | { kind: 'function'; declarations: ts.FunctionDeclaration[] };
+  | { kind: 'function'; declarations: ts.FunctionDeclaration[] }
+  | { kind: 'import' };
 
 function collectBindings(file: ts.SourceFile): Map<string, Binding> {
   const bindings = new Map<string, Binding>();
   for (const statement of file.statements) {
-    if (ts.isVariableStatement(statement)) {
+    if (ts.isImportDeclaration(statement)) {
+      const clause = statement.importClause;
+      if (!clause || clause.isTypeOnly) continue;
+      if (clause.name) bindings.set(clause.name.text, { kind: 'import' });
+      if (clause.namedBindings && ts.isNamedImports(clause.namedBindings)) {
+        for (const element of clause.namedBindings.elements) {
+          if (!element.isTypeOnly) bindings.set(element.name.text, { kind: 'import' });
+        }
+      }
+    } else if (ts.isVariableStatement(statement)) {
       for (const declaration of statement.declarationList.declarations) {
         if (ts.isIdentifier(declaration.name)) {
           bindings.set(declaration.name.text, {
@@ -82,8 +95,10 @@ function unwrapExpression(expression: ts.Expression): ts.Expression {
 /**
  * The name of the component definition an exported expression wraps: through the first argument of
  * each call (`Object.assign(Root, …)`, `React.memo(Impl)`, `markListboxElement(Memo, 'option')`)
- * and local constants initialized with such a call, down to a function declaration or a constant
- * holding an arrow or function expression. `undefined` for anything else.
+ * and local constants initialized with such a call, down to a function declaration, a constant
+ * holding an arrow or function expression, or a value imported from another module (the compound's
+ * root defined in a sibling module: the patch runs in this module, where the import is the same
+ * function object). `undefined` for anything else.
  */
 function wrappedDefinition(
   expression: ts.Expression,
@@ -99,15 +114,20 @@ function wrappedDefinition(
   seen.add(current.text);
   const binding = bindings.get(current.text);
   if (!binding) return undefined;
-  if (binding.kind === 'function') return current.text;
+  if (binding.kind === 'function' || binding.kind === 'import') return current.text;
   const init = binding.init && unwrapExpression(binding.init);
   if (!init) return undefined;
   if (ts.isArrowFunction(init) || ts.isFunctionExpression(init)) return current.text;
   return ts.isCallExpression(init) ? wrappedDefinition(init, bindings, seen) : undefined;
 }
 
-/** The docblock a definition carries itself (react-docgen's component description). */
+/**
+ * The docblock a definition carries itself (react-docgen's component description). An imported
+ * definition's docblock is in its own module, out of sight here: `null`, and the patch, which only
+ * fills an empty description, leaves a description docgen found there alone.
+ */
 function ownDocblock(source: string, binding: Binding): string | null {
+  if (binding.kind === 'import') return null;
   if (binding.kind === 'const') return leadingDocblock(source, binding.statement);
   const implementation = binding.declarations.find((declaration) => declaration.body);
   return implementation ? leadingDocblock(source, implementation) : null;
@@ -123,7 +143,7 @@ const isExported = (statement: ts.Statement) =>
  * The component definitions of a module that have no docblock of their own but are documented on
  * their export, mapped to that docblock's text (react-docgen's format):
  * - `export const X = …(Definition, …)` with a docblock, where the expression wraps `Definition`
- *   (see the wrapping rule above);
+ *   (see the wrapping rule above), also when `Definition` is imported from another module;
  * - an overloaded function whose implementation has no docblock but whose first overload has one.
  */
 export function exportDocblocks(source: string, fileName = 'component.tsx'): Map<string, string> {
