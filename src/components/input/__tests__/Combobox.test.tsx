@@ -11,6 +11,7 @@ import {
   Option,
   OptionGroup,
   type ComboboxLabels,
+  type ComboboxProps,
 } from '../Combobox';
 import {
   asClientReference,
@@ -23,6 +24,7 @@ import {
 import { FIELD_TEST_IDS, FIELD_TEST_TEXT, renderWithFieldContext } from '../../../test-utils-field';
 import { DismissLayerProvider, useDismiss } from '../../../hooks/useDismiss';
 import { Button } from '../../button/Button';
+import { WaveProvider } from '../../provider/WaveProvider';
 
 const FRUITS = [
   <Option key="a" value="a">
@@ -1882,5 +1884,183 @@ describe('Combobox', () => {
     // consumer's plain class is the option's only background.
     const backgrounds = [...apple.classList].filter((c) => /(?:^|:)bg-/.test(c));
     expect(backgrounds).toEqual(['bg-primary']);
+  });
+});
+
+describe('sizes and appearances (Phase 4 P4-01)', () => {
+  const renderCombobox = (props: Partial<ComboboxProps> = {}) =>
+    render(
+      <Combobox aria-label="Fruit" clearable defaultValue="apple" {...props}>
+        <Combobox.Option value="apple">Apple</Combobox.Option>
+      </Combobox>,
+    );
+  const input = () => screen.getByRole('combobox', { name: 'Fruit' });
+  const root = () => input().closest('[data-size]') as HTMLElement;
+  const clear = () => screen.getByRole('button', { name: 'Clear selection' });
+  const expand = () => screen.getByRole('button', { name: 'Show options' });
+
+  it('keeps the 0.7 classes and renders the medium outline attributes', () => {
+    renderCombobox();
+    expect(input()).toHaveClass('h-8', 'px-3', 'text-body-1', 'border-input', 'pe-14');
+    expect(expand()).toHaveClass('h-6', 'w-6', 'end-1');
+    expect(clear()).toHaveClass('h-6', 'w-6', 'end-7');
+    expect(root()).toHaveAttribute('data-size', 'medium');
+    expect(root()).toHaveAttribute('data-appearance', 'outline');
+  });
+
+  it('small: 24px field, 20px buttons with hit layers at end-1 and end-7, pe-13', () => {
+    renderCombobox({ size: 'small' });
+    expect(input()).toHaveClass('h-6', 'px-2', 'text-caption-1', 'pe-13');
+    expect(expand()).toHaveClass('size-5', 'before:-inset-0.5', 'end-1');
+    expect(clear()).toHaveClass('size-5', 'before:-inset-0.5', 'end-7');
+  });
+
+  it('large: 40px field, 32px buttons at end-1 and end-9, pe-18, larger glyphs', () => {
+    renderCombobox({ size: 'large' });
+    expect(input()).toHaveClass('h-10', 'px-4', 'text-body-2', 'pe-18');
+    expect(expand()).toHaveClass('size-8', 'end-1');
+    expect(clear()).toHaveClass('size-8', 'end-9');
+    expect(expand().querySelector('svg')).toHaveAttribute('width', '16');
+    expect(clear().querySelector('svg')).toHaveAttribute('width', '20');
+  });
+
+  it('an appearance styles the input; the listbox does not change', async () => {
+    const user = userEvent.setup();
+    renderCombobox({ appearance: 'underline', size: 'large' });
+    expect(input()).toHaveClass('border-0', 'border-b', 'rounded-none');
+    await user.click(expand());
+    const option = screen.getByRole('option', { name: 'Apple' });
+    expect(option).toHaveClass('px-3', 'py-1.5', 'text-body-1');
+  });
+
+  it('takes the Field size and the provider appearance', () => {
+    renderWithFieldContext(
+      <WaveProvider inputDefaults={{ appearance: 'filled-darker' }}>
+        <Combobox>
+          <Combobox.Option value="a">A</Combobox.Option>
+        </Combobox>
+      </WaveProvider>,
+      { size: 'small' },
+    );
+    const el = screen.getByRole('combobox', { name: FIELD_TEST_TEXT.label });
+    expect(el.closest('[data-size]')).toHaveAttribute('data-size', 'small');
+    expect(el.closest('[data-appearance]')).toHaveAttribute('data-appearance', 'filled-darker');
+    expect(screen.getByRole('button', { name: 'Show options' })).toHaveClass(
+      'not-disabled:not-aria-disabled:hover:bg-subtle-pressed',
+    );
+  });
+
+  it('keeps the buttons at the inline end in RTL', () => {
+    renderWithProviders(
+      <Combobox aria-label="Fruit" size="large">
+        <Combobox.Option value="apple">Apple</Combobox.Option>
+      </Combobox>,
+      { dir: 'rtl' },
+    );
+    expect(screen.getByRole('button', { name: 'Show options' })).toHaveClass('end-1');
+  });
+
+  // Spec cases added beyond the brief (§2.1's Tests paragraph, binding via §2.2's "as §2.1 for
+  // each picker"): each appearance with its data-appearance; the Field size with an own size
+  // winning; WaveProvider inputDefaults with own props winning; invalid at underline and
+  // filled-darker; the expandIcon rule (Phase 1 D21) at every size.
+
+  it.each([
+    ['underline', ['rounded-none', 'border-0', 'border-b', 'bg-transparent']],
+    ['filled-darker', ['border-input-filled-stroke', 'bg-input-filled-darker']],
+    ['filled-lighter', ['border-input-filled-stroke', 'bg-input-filled-lighter']],
+  ] as const)('appearance="%s" renders its classes and data-appearance', (appearance, classes) => {
+    renderCombobox({ appearance });
+    expect(input()).toHaveClass(...classes);
+    expect(root()).toHaveAttribute('data-appearance', appearance);
+  });
+
+  it('takes the Field size; its own size wins', () => {
+    const { rerender } = renderWithFieldContext(
+      <Combobox>
+        <Combobox.Option value="a">A</Combobox.Option>
+      </Combobox>,
+      { size: 'large' },
+    );
+    const byName = () =>
+      screen.getByRole('combobox', { name: FIELD_TEST_TEXT.label }).closest('[data-size]');
+    expect(byName()).toHaveAttribute('data-size', 'large');
+    rerender(
+      <Combobox size="small">
+        <Combobox.Option value="a">A</Combobox.Option>
+      </Combobox>,
+    );
+    expect(byName()).toHaveAttribute('data-size', 'small');
+  });
+
+  it('takes WaveProvider inputDefaults; its own props win', () => {
+    const { rerender } = renderWithProviders(
+      <Combobox aria-label="Fruit">
+        <Combobox.Option value="a">A</Combobox.Option>
+      </Combobox>,
+      { inputDefaults: { size: 'small', appearance: 'underline' } },
+    );
+    expect(root()).toHaveAttribute('data-size', 'small');
+    expect(root()).toHaveAttribute('data-appearance', 'underline');
+    rerender(
+      <Combobox aria-label="Fruit" size="large" appearance="outline">
+        <Combobox.Option value="a">A</Combobox.Option>
+      </Combobox>,
+    );
+    expect(root()).toHaveAttribute('data-size', 'large');
+    expect(root()).toHaveAttribute('data-appearance', 'outline');
+  });
+
+  it.each(['underline', 'filled-darker'] as const)(
+    'an invalid %s field keeps the destructive border and the focus color on its bottom (own aria-invalid)',
+    (appearance) => {
+      renderCombobox({ appearance, 'aria-invalid': true });
+      expect(input()).toHaveClass('border-destructive', 'focus:border-b-primary');
+    },
+  );
+
+  it.each(['underline', 'filled-darker'] as const)(
+    'an invalid %s field keeps the destructive border and the focus color on its bottom (Field error)',
+    (appearance) => {
+      renderWithFieldContext(
+        <Combobox appearance={appearance}>
+          <Combobox.Option value="a">A</Combobox.Option>
+        </Combobox>,
+        { errorId: FIELD_TEST_IDS.errorId },
+      );
+      const byName = screen.getByRole('combobox', { name: FIELD_TEST_TEXT.label });
+      expect(byName).toHaveClass('border-destructive', 'focus:border-b-primary');
+    },
+  );
+
+  describe('the expandIcon rule at every size (Phase 1 D21)', () => {
+    it.each([
+      ['small', null, 12],
+      ['small', undefined, 12],
+      ['medium', null, 12],
+      ['medium', undefined, 12],
+      ['large', null, 16],
+      ['large', undefined, 16],
+    ] as const)('keeps the chevron sized for %s with expandIcon %s', (size, expandIcon, px) => {
+      renderCombobox({ size, expandIcon });
+      expect(expand().querySelector('svg')).toHaveAttribute('data-wave-icon', 'chevron-down');
+      expect(expand().querySelector('svg')).toHaveAttribute('width', String(px));
+    });
+
+    it.each(['small', 'medium', 'large'] as const)(
+      'hides the button at size=%s with expandIcon false',
+      (size) => {
+        renderCombobox({ size, expandIcon: false });
+        expect(screen.queryByRole('button', { name: 'Show options' })).not.toBeInTheDocument();
+      },
+    );
+
+    it.each(['small', 'medium', 'large'] as const)(
+      'renders a custom expandIcon as given at size=%s',
+      (size) => {
+        renderCombobox({ size, expandIcon: <svg data-testid="caret" /> });
+        expect(screen.getByTestId('caret').closest('button')).toBe(expand());
+      },
+    );
   });
 });

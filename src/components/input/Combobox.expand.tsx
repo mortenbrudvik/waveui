@@ -5,8 +5,9 @@ import { ChevronDownIcon } from '../../lib/icons';
 import { renderSlot, slotRendersContent } from '../../lib/slot';
 import type { Slot } from '../../lib/slot';
 import { disabledStyles, focusRing } from '../../lib/styles';
+import type { CoreSize, InputAppearance } from '../../lib/types';
 import { unwrapButtonGlyph } from '../button/Button.slots';
-import { PICKER_ICON_BUTTON_CLASSES } from './pickerStyles';
+import { pickerButtonOffset, pickerGlyphSize, pickerIconButtonClasses } from './pickerStyles';
 
 /**
  * Whether an `expandIcon` value shows the expand button (the rule of optional indicator glyphs):
@@ -33,6 +34,17 @@ export interface PickerExpandButtonProps {
   disabled: boolean;
   /** Opens or closes the list and returns focus to the input. */
   onToggle: () => void;
+  /**
+   * Size of the button box and its glyph (Phase 4 D11): the picker's resolved `size`.
+   * @default 'medium'
+   */
+  size?: CoreSize;
+  /**
+   * Appearance of the field the button sits in (Phase 4 D11): `filled-darker` gets a hover fill
+   * one step darker than the field.
+   * @default 'outline'
+   */
+  appearance?: InputAppearance;
 }
 
 /**
@@ -41,7 +53,9 @@ export interface PickerExpandButtonProps {
  * press keeps focus in the input. Its glyph is decorative (`aria-hidden`) and turns while the list
  * is expanded. A `<button>` or `Button` element passed as `expandIcon`, or a slot object whose
  * `as` is one, is not nested: its children become the glyph (the chevron when they render
- * nothing), its props are dropped and a one-time development warning names the slot.
+ * nothing), its props are dropped and a one-time development warning names the slot. `size` and
+ * `appearance` (Phase 4 D11) default to `'medium'`/`'outline'` for a caller that has not resolved
+ * them yet.
  */
 export const PickerExpandButton = ({
   component,
@@ -51,6 +65,8 @@ export const PickerExpandButton = ({
   listboxId,
   disabled,
   onToggle,
+  size = 'medium',
+  appearance = 'outline',
 }: PickerExpandButtonProps) => {
   // The glyph slot rule shared with SplitButton and MenuButton `menuIcon` (C-SLOTS).
   const { glyph: content, button } = unwrapButtonGlyph(expandIcon);
@@ -65,7 +81,12 @@ export const PickerExpandButton = ({
     }
   }, [button, component]);
 
-  const glyph = content != null && slotRendersContent(content) ? content : <ChevronDownIcon />;
+  const glyph =
+    content != null && slotRendersContent(content) ? (
+      content
+    ) : (
+      <ChevronDownIcon size={pickerGlyphSize(size, 'chevron')} />
+    );
 
   return (
     <button
@@ -78,7 +99,12 @@ export const PickerExpandButton = ({
       // Keeps focus in the input: a press must not blur it (a blur commits typed text).
       onMouseDown={(event) => event.preventDefault()}
       onClick={onToggle}
-      className={cn(PICKER_ICON_BUTTON_CLASSES, 'end-1', focusRing, disabledStyles)}
+      className={cn(
+        pickerIconButtonClasses(size, appearance),
+        pickerButtonOffset(size, 1),
+        focusRing,
+        disabledStyles,
+      )}
     >
       {renderSlot(
         glyph,
