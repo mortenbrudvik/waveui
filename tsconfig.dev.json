@@ -2,6 +2,7 @@
   "extends": "./tsconfig.json",
   "compilerOptions": {
     "noEmit": true,
+    "rootDir": ".",
     "types": ["vitest/globals", "vite/client"]
   },
   "include": ["src", "stories", ".storybook/**/*"],
