@@ -1346,6 +1346,138 @@ describe('useRovingTabIndex', () => {
     });
   });
 
+  describe('transparent composites (data-roving-transparent)', () => {
+    /** A toolbar with a radio group between two buttons; `transparent` marks the group. */
+    function AlignToolbar({ transparent }: { transparent: boolean }) {
+      return (
+        <Managed tabStop="last-focused">
+          <button type="button">Bold</button>
+          <div
+            role="radiogroup"
+            aria-label="Align"
+            data-roving-transparent={transparent ? '' : undefined}
+          >
+            <button type="button" role="radio" aria-checked>
+              Left
+            </button>
+            <button type="button" role="radio" aria-checked={false}>
+              Center
+            </button>
+          </div>
+          <button type="button">Italic</button>
+        </Managed>
+      );
+    }
+    const radio = (name: string) => screen.getByRole('radio', { name });
+
+    it('makes the radios of a marked radiogroup items of the enclosing container', async () => {
+      const user = userEvent.setup();
+      render(
+        <>
+          <AlignToolbar transparent />
+          <button type="button">after</button>
+        </>,
+      );
+      // One tab stop: the hook stamps the radios like the other items.
+      expect(button('Bold')).toHaveAttribute('tabindex', '0');
+      expect(radio('Left')).toHaveAttribute('tabindex', '-1');
+      expect(radio('Center')).toHaveAttribute('tabindex', '-1');
+      expect(button('Italic')).toHaveAttribute('tabindex', '-1');
+
+      await user.tab();
+      expect(button('Bold')).toHaveFocus();
+      await user.keyboard('{ArrowRight}');
+      expect(radio('Left')).toHaveFocus();
+      await user.keyboard('{ArrowRight}');
+      expect(radio('Center')).toHaveFocus();
+      await user.keyboard('{ArrowRight}');
+      expect(button('Italic')).toHaveFocus();
+      await user.keyboard('{ArrowLeft}');
+      expect(radio('Center')).toHaveFocus();
+      expect(radio('Center')).toHaveAttribute('tabindex', '0');
+      expect(button('Bold')).toHaveAttribute('tabindex', '-1');
+      await user.keyboard('{Home}');
+      expect(button('Bold')).toHaveFocus();
+      await user.keyboard('{End}');
+      expect(button('Italic')).toHaveFocus();
+
+      // Tab leaves the toolbar from its single tab stop.
+      await user.tab();
+      expect(button('after')).toHaveFocus();
+      await user.tab({ shift: true });
+      expect(button('Italic')).toHaveFocus();
+    });
+
+    it('without the marker the radiogroup stays one nested composite', async () => {
+      const user = userEvent.setup();
+      render(<AlignToolbar transparent={false} />);
+      // The hook writes no tabindex inside it.
+      expect(radio('Left')).not.toHaveAttribute('tabindex');
+      expect(radio('Center')).not.toHaveAttribute('tabindex');
+      focus(button('Bold'));
+      await user.keyboard('{ArrowRight}');
+      expect(radio('Left')).toHaveFocus();
+      await user.keyboard('{ArrowRight}');
+      expect(button('Italic')).toHaveFocus();
+    });
+
+    it('restamps when the marker is added or removed', async () => {
+      const user = userEvent.setup();
+      const { rerender } = render(<AlignToolbar transparent={false} />);
+      expect(radio('Center')).not.toHaveAttribute('tabindex');
+
+      rerender(<AlignToolbar transparent />);
+      expect(radio('Left')).toHaveAttribute('tabindex', '-1');
+      expect(radio('Center')).toHaveAttribute('tabindex', '-1');
+      focus(radio('Left'));
+      await user.keyboard('{ArrowRight}');
+      expect(radio('Center')).toHaveFocus();
+
+      rerender(<AlignToolbar transparent={false} />);
+      focus(button('Bold'));
+      await user.keyboard('{ArrowRight}');
+      // One item again, reached through its first focusable radio.
+      expect(radio('Left')).toHaveFocus();
+      await user.keyboard('{ArrowRight}');
+      expect(button('Italic')).toHaveFocus();
+    });
+
+    it('never makes an element with its own roving container transparent', async () => {
+      const user = userEvent.setup();
+      function Inner() {
+        const { containerProps } = useRovingTabIndex({ orientation: 'vertical' });
+        return (
+          <div role="radiogroup" aria-label="inner" data-roving-transparent="" {...containerProps}>
+            <button type="button" role="radio" aria-checked data-roving-value="x" tabIndex={0}>
+              X
+            </button>
+            <button
+              type="button"
+              role="radio"
+              aria-checked={false}
+              data-roving-value="y"
+              tabIndex={-1}
+            >
+              Y
+            </button>
+          </div>
+        );
+      }
+      render(
+        <Managed>
+          <button type="button">Bold</button>
+          <Inner />
+          <button type="button">Italic</button>
+        </Managed>,
+      );
+      focus(button('Bold'));
+      await user.keyboard('{ArrowRight}');
+      expect(radio('X')).toHaveFocus();
+      await user.keyboard('{ArrowRight}');
+      expect(button('Italic')).toHaveFocus();
+    });
+  });
+
   describe('controls that cannot take focus', () => {
     it.each([
       [

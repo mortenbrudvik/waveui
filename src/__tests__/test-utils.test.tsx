@@ -1,7 +1,7 @@
 import * as React from 'react';
 import { createPortal } from 'react-dom';
 import { renderToString } from 'react-dom/server';
-import { cleanup, render, screen } from '@testing-library/react';
+import { act, cleanup, render, screen } from '@testing-library/react';
 import type { UserEvent } from '@testing-library/user-event';
 import { axe as defaultVitestAxe, configureAxe } from 'vitest-axe';
 import { Button } from '../components/button/Button';
@@ -30,6 +30,7 @@ import {
   findDanglingIdRefs,
   findDanglingIdRefsInHtml,
   installResizeObserverMock,
+  mockAnimations,
   mockMatchMedia,
   mockRect,
   renderWithProviders,
@@ -1340,6 +1341,126 @@ describe('mockRect', () => {
     mockRect(el, { width: 5 });
     expect(el.getBoundingClientRect()).toMatchObject({ x: 0, width: 5, right: 5, height: 0 });
     expect(el.offsetWidth).toBe(5);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// mockAnimations (the waiting phases of the presence core)
+// ---------------------------------------------------------------------------
+
+describe('mockAnimations', () => {
+  /** Whether the element's (mocked) animations have all settled, and how. */
+  async function settled(animation: Animation): Promise<'finished' | 'cancelled'> {
+    return animation.finished.then(
+      () => 'finished' as const,
+      () => 'cancelled' as const,
+    );
+  }
+
+  it('by default animates elements with data-test-motion while entering or exiting', () => {
+    const motion = mockAnimations();
+    render(
+      <>
+        <div data-testid="entering" data-test-motion="" data-presence="entering" />
+        <div data-testid="exiting" data-test-motion="" data-presence="exiting" />
+        <div data-testid="entered" data-test-motion="" data-presence="entered" />
+        <div data-testid="unmarked" data-presence="exiting" />
+      </>,
+    );
+    expect(screen.getByTestId('entering').getAnimations()).toHaveLength(1);
+    expect(screen.getByTestId('exiting').getAnimations()).toHaveLength(1);
+    expect(screen.getByTestId('entered').getAnimations()).toEqual([]);
+    expect(screen.getByTestId('unmarked').getAnimations()).toEqual([]);
+    expect(motion.started).toBe(2);
+  });
+
+  it('hands out one running finite animation per element until it settles', async () => {
+    const motion = mockAnimations();
+    render(<div data-testid="el" data-test-motion="" data-presence="exiting" />);
+    const el = screen.getByTestId('el');
+    const [animation] = el.getAnimations();
+    expect(animation.playState).toBe('running');
+    const endTime = animation.effect?.getComputedTiming().endTime;
+    expect(Number.isFinite(endTime)).toBe(true);
+    expect(el.getAnimations()).toEqual([animation]);
+    expect(motion.started).toBe(1);
+
+    await motion.finishAll();
+    expect(await settled(animation)).toBe('finished');
+    expect(animation.playState).toBe('finished');
+    // A settled animation is not running any more: a new request hands out a new one.
+    const [next] = el.getAnimations();
+    expect(next).not.toBe(animation);
+    expect(motion.started).toBe(2);
+  });
+
+  it('takes a custom predicate', () => {
+    const motion = mockAnimations({ animated: (el) => el.id === 'moving' });
+    render(
+      <>
+        <div data-testid="moving" id="moving" />
+        <div data-testid="still" data-test-motion="" data-presence="exiting" />
+      </>,
+    );
+    expect(screen.getByTestId('moving').getAnimations()).toHaveLength(1);
+    expect(screen.getByTestId('still').getAnimations()).toEqual([]);
+    expect(motion.started).toBe(1);
+  });
+
+  it('finishAll resolves every animation handed out so far, and the reactions to them run', async () => {
+    const motion = mockAnimations({ animated: () => true });
+    render(
+      <>
+        <div data-testid="a" />
+        <div data-testid="b" />
+      </>,
+    );
+    const animations = [
+      ...screen.getByTestId('a').getAnimations(),
+      ...screen.getByTestId('b').getAnimations(),
+    ];
+    const seen: string[] = [];
+    void Promise.all(animations.map((animation) => animation.finished)).then(() =>
+      seen.push('all finished'),
+    );
+    await act(async () => {
+      await motion.finishAll();
+    });
+    expect(seen).toEqual(['all finished']);
+  });
+
+  it('cancelAll rejects them, as a cancelled animation does', async () => {
+    const motion = mockAnimations({ animated: () => true });
+    render(<div data-testid="a" />);
+    const [animation] = screen.getByTestId('a').getAnimations();
+    await act(async () => {
+      await motion.cancelAll();
+    });
+    expect(await settled(animation)).toBe('cancelled');
+    expect(animation.playState).toBe('idle');
+    await expect(animation.finished).rejects.toMatchObject({ name: 'AbortError' });
+    // Settled animations are not settled again.
+    await motion.finishAll();
+    expect(await settled(animation)).toBe('cancelled');
+  });
+
+  describe('the stub lasts one test', () => {
+    // Both tests record whether they installed the stub and what they see; afterAll checks each
+    // against its role, so the check holds in any order (in the declared order the second test is
+    // the one that would see a stub left behind) and is skipped when a filter selects only one.
+    const seen: Array<{ installed: boolean; found: boolean }> = [];
+    afterAll(() => {
+      if (seen.length !== 2) return;
+      expect(seen.find((entry) => entry.installed)?.found).toBe(true);
+      expect(seen.find((entry) => !entry.installed)?.found).toBe(false);
+    });
+    it('installs getAnimations in the first test', () => {
+      mockAnimations();
+      seen.push({ installed: true, found: 'getAnimations' in Element.prototype });
+    });
+    it('finds no getAnimations in the next test (jsdom has none)', () => {
+      seen.push({ installed: false, found: 'getAnimations' in Element.prototype });
+    });
   });
 });
 

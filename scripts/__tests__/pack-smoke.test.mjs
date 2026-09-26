@@ -250,7 +250,9 @@ describe('checkTailwindCss (repo-level#1)', () => {
     '@layer theme,base,components,utilities;' +
     '@layer theme{:root,:host{--color-red-500:red}:root,.wave-light{--wave-primary:#0f6cbd}}' +
     '@layer base{*{box-sizing:border-box}.wave-root,.wave-portal{font-family:var(--wave-font-family)}}' +
-    '@layer utilities{.bg-primary{background-color:var(--color-primary)}.text-body-1{font-size:14px}.p-4{padding:1rem}}';
+    '@layer utilities{.bg-primary{background-color:var(--color-primary)}.text-body-1{font-size:14px}.p-4{padding:1rem}' +
+    '.duration-wave-normal{--tw-duration:var(--wave-duration-normal);transition-duration:var(--wave-duration-normal)}' +
+    '.ease-wave-decelerate-mid{--tw-ease:var(--wave-curve-decelerate-mid);transition-timing-function:var(--wave-curve-decelerate-mid)}}';
 
   it('passes Wave tokens in theme, base rules in base and the component classes from dist', () => {
     expect(checkTailwindCss(good)).toEqual([]);
@@ -277,6 +279,18 @@ describe('checkTailwindCss (repo-level#1)', () => {
 
   it("reports a missing consumer utility (the fixture's own sources were not scanned)", () => {
     expect(checkTailwindCss(good.replace('.p-4{padding:1rem}', '')).join('\n')).toMatch(/\.p-4/);
+  });
+
+  it('reports motion utilities the consumer uses that the Wave theme did not generate', () => {
+    const withoutMotion = good
+      .replace(/\.duration-wave-normal\{[^}]*\}/, '')
+      .replace(/\.ease-wave-decelerate-mid\{[^}]*\}/, '');
+    expect(checkTailwindCss(withoutMotion)).toEqual([
+      "the motion utilities .duration-wave-normal, .ease-wave-decelerate-mid were not generated (the Wave theme's --transition-duration-wave-* and --ease-wave-* mappings are missing)",
+    ]);
+    expect(checkTailwindCss(good.replace(/\.ease-wave-decelerate-mid\{[^}]*\}/, ''))).toEqual([
+      "the motion utilities .ease-wave-decelerate-mid were not generated (the Wave theme's --transition-duration-wave-* and --ease-wave-* mappings are missing)",
+    ]);
   });
 
   describe("the wave-rtl classes of the package's dist (C-LOGICAL)", () => {
@@ -352,6 +366,13 @@ describe('the Tailwind fixture', () => {
     expect(css).toMatch(/@import '@mortenbrudvik\/waveui\/variants\.css';/);
     expect(css).toMatch(/@source '\.\/node_modules\/@mortenbrudvik\/waveui\/dist';/);
     expect(css).not.toMatch(/waveui\/tailwind/);
+  });
+
+  it("uses Wave's motion utilities in its own source (the Tailwind path exposes them)", () => {
+    const html = readFileSync(join(fixture, 'src/app.html'), 'utf8');
+    expect(html).toMatch(
+      /<main class="[^"]*\bduration-wave-normal ease-wave-decelerate-mid\b[^"]*">/,
+    );
   });
 });
 

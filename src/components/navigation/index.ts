@@ -8,7 +8,20 @@ export type {
   BreadcrumbItemDynamicProps,
 } from './Breadcrumb';
 
-export { Menu, MenuItem, MenuDivider, MenuTrigger, MenuPopover } from './Menu';
+export {
+  Menu,
+  MenuItem,
+  MenuDivider,
+  MenuTrigger,
+  MenuPopover,
+  MenuItemCheckbox,
+  MenuItemRadio,
+  MenuItemSwitch,
+  MenuItemLink,
+  MenuGroup,
+  MenuGroupHeader,
+  MenuSplitGroup,
+} from './Menu';
 export type {
   MenuProps,
   MenuItemProps,
@@ -16,6 +29,15 @@ export type {
   MenuTriggerProps,
   MenuTriggerComponentProps,
   MenuPopoverProps,
+  MenuItemSelectableProps,
+  MenuItemCheckboxProps,
+  MenuItemRadioProps,
+  MenuItemSwitchProps,
+  MenuItemLinkProps,
+  MenuItemLinkOwnProps,
+  MenuGroupProps,
+  MenuGroupHeaderProps,
+  MenuSplitGroupProps,
 } from './Menu';
 
 export { Nav, NavCategory, NavItem, NavSubItem } from './Nav';

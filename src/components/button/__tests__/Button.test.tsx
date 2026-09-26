@@ -1314,7 +1314,7 @@ describe('Button', () => {
     it('a Tooltip around it opens on keyboard focus and describes it', async () => {
       const user = userEvent.setup();
       render(
-        <Tooltip content="Make a change first" delay={0}>
+        <Tooltip content="Make a change first" openDelay={0}>
           <Button disabledFocusable>Save</Button>
         </Tooltip>,
       );

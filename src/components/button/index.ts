@@ -20,5 +20,23 @@ export type { MenuButtonProps } from './MenuButton';
 export { Link } from './Link';
 export type { LinkProps, LinkOwnProps, LinkAppearance, LinkVariant } from './Link';
 
-export { Toolbar } from './Toolbar';
-export type { ToolbarProps, ToolbarOwnProps } from './Toolbar';
+export {
+  Toolbar,
+  ToolbarButton,
+  ToolbarToggleButton,
+  ToolbarRadioGroup,
+  ToolbarRadioButton,
+  ToolbarGroup,
+  ToolbarDivider,
+} from './Toolbar';
+export type {
+  ToolbarProps,
+  ToolbarOwnProps,
+  ToolbarButtonProps,
+  ToolbarButtonOwnProps,
+  ToolbarToggleButtonProps,
+  ToolbarRadioButtonProps,
+  ToolbarRadioGroupProps,
+  ToolbarGroupProps,
+  ToolbarDividerProps,
+} from './Toolbar';

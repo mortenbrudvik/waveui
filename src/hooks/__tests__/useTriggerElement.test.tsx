@@ -24,6 +24,7 @@ function Trigger({
   asChild,
   onResolvedId,
   extraProps,
+  omitStateAria,
 }: {
   children: React.ReactElement | ((props: TestTriggerProps) => React.ReactNode) | React.ReactNode;
   open?: boolean;
@@ -33,6 +34,8 @@ function Trigger({
   onResolvedId?: (id: string) => void;
   /** Props a consumer passes to the trigger (`role`, `tabIndex`, …), merged into the trigger props. */
   extraProps?: Record<string, unknown>;
+  /** The context-menu mode of the hook. */
+  omitStateAria?: boolean;
 }) {
   const triggerProps: TestTriggerProps = {
     ...extraProps,
@@ -49,6 +52,7 @@ function Trigger({
         componentName: 'Test.Trigger',
         asChild,
         onResolvedId,
+        omitStateAria,
       })}
     </>
   );
@@ -787,6 +791,152 @@ describe('useTriggerElement', () => {
       await expectNoA11yViolations(container);
       expect(takeWarnings()).toEqual([WRAPPED_WARNING]);
     });
+  });
+});
+
+describe('useTriggerElement — context-menu mode (omitStateAria)', () => {
+  let warnSpy: ReturnType<typeof vi.spyOn>;
+  function takeWarnings(): unknown[] {
+    const messages = warnSpy.mock.calls.map((call: unknown[]) => call[0]);
+    warnSpy.mockClear();
+    return messages;
+  }
+  const CONTEXT_WARNING =
+    '[WaveUI] Test.Trigger: the trigger element is a context-menu region (openOnContext), which is not a menu button: do not spread aria-haspopup, aria-expanded and aria-controls onto it.';
+  const STATE_ARIA_NAMES = ['aria-haspopup', 'aria-expanded', 'aria-controls'];
+
+  beforeEach(() => {
+    __resetWarnings();
+    warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+  });
+  afterEach(() => {
+    try {
+      expect(warnSpy).not.toHaveBeenCalled();
+    } finally {
+      warnSpy.mockRestore();
+      __resetWarnings();
+    }
+  });
+
+  function expectNoStateAria(el: Element) {
+    for (const name of STATE_ARIA_NAMES) expect(el, name).not.toHaveAttribute(name);
+  }
+
+  it('gives a cloned child the other trigger props but no state ARIA', async () => {
+    const user = userEvent.setup();
+    const onToggle = vi.fn();
+    const triggerRef = React.createRef<HTMLElement>();
+    const { rerender } = render(
+      <Trigger omitStateAria onToggle={onToggle} triggerRef={triggerRef}>
+        <div role="group" aria-label="Files" tabIndex={0}>
+          Rows
+        </div>
+      </Trigger>,
+    );
+    const region = screen.getByRole('group', { name: 'Files' });
+    expect(region).toHaveAttribute('id', 'generated-trigger');
+    expect(triggerRef.current).toBe(region);
+    expectNoStateAria(region);
+    await user.click(region);
+    expect(onToggle).toHaveBeenCalledTimes(1);
+
+    rerender(
+      <Trigger omitStateAria open onToggle={onToggle} triggerRef={triggerRef}>
+        <div role="group" aria-label="Files" tabIndex={0}>
+          Rows
+        </div>
+      </Trigger>,
+    );
+    expectNoStateAria(region);
+    await expectNoA11yViolations();
+  });
+
+  it('gives a wrapper span no state ARIA and moves none onto the element inside it', () => {
+    const { container } = render(
+      <Trigger omitStateAria open asChild={false}>
+        <button type="button">Row</button>
+      </Trigger>,
+    );
+    const span = container.querySelector('span')!;
+    expect(span).toHaveAttribute('id', 'generated-trigger');
+    expectNoStateAria(span);
+    expectNoStateAria(screen.getByRole('button', { name: 'Row' }));
+  });
+
+  it('gives no state ARIA to a wrapper span the consumer made the trigger either', () => {
+    render(
+      <Trigger omitStateAria open asChild={false} extraProps={{ role: 'button', tabIndex: 0 }}>
+        Files
+      </Trigger>,
+    );
+    expectNoStateAria(screen.getByRole('button', { name: 'Files' }));
+  });
+
+  it('removes the state ARIA a render-prop child spreads, after every commit, and warns once', async () => {
+    const renderRegion = ({ ref, ...props }: TestTriggerProps) => (
+      <div
+        role="region"
+        aria-label="Files"
+        tabIndex={0}
+        ref={ref as React.Ref<HTMLDivElement>}
+        {...props}
+      >
+        Rows
+      </div>
+    );
+    const { rerender } = render(<Trigger omitStateAria>{renderRegion}</Trigger>);
+    const region = screen.getByRole('region', { name: 'Files' });
+    expect(region).toHaveAttribute('id', 'generated-trigger');
+    expectNoStateAria(region);
+    expect(takeWarnings()).toEqual([CONTEXT_WARNING]);
+
+    // A re-render with the same values: React leaves the removed attributes alone.
+    rerender(<Trigger omitStateAria>{renderRegion}</Trigger>);
+    expectNoStateAria(region);
+    // New values: React writes them, and they are removed again (without a second warning).
+    rerender(
+      <Trigger omitStateAria open>
+        {renderRegion}
+      </Trigger>,
+    );
+    expectNoStateAria(region);
+    expect(takeWarnings()).toEqual([]);
+    await expectNoA11yViolations();
+  });
+
+  it('passes the trigger ref on to a render-prop child, and neither removes nor warns when none is spread', () => {
+    const triggerRef = React.createRef<HTMLElement>();
+    render(
+      <Trigger omitStateAria triggerRef={triggerRef}>
+        {({ ref, id, onClick }: TestTriggerProps) => (
+          <div
+            role="region"
+            aria-label="Files"
+            ref={ref as React.Ref<HTMLDivElement>}
+            id={id}
+            onClick={onClick}
+          >
+            Rows
+          </div>
+        )}
+      </Trigger>,
+    );
+    const region = screen.getByRole('region', { name: 'Files' });
+    expect(triggerRef.current).toBe(region);
+    expectNoStateAria(region);
+  });
+
+  it('leaves the default mode unchanged: a render-prop child keeps what it spreads', () => {
+    render(
+      <Trigger>
+        {({ ref, ...props }: TestTriggerProps) => (
+          <button type="button" ref={ref as React.Ref<HTMLButtonElement>} {...props}>
+            Open
+          </button>
+        )}
+      </Trigger>,
+    );
+    expect(screen.getByRole('button', { name: 'Open' })).toHaveAttribute('aria-expanded', 'false');
   });
 });
 

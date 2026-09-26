@@ -168,7 +168,7 @@ describe('Tooltip', () => {
 
     it('describes the child immediately, before any delay', () => {
       render(
-        <Tooltip content="Saves the draft" delay={5000}>
+        <Tooltip content="Saves the draft" openDelay={5000}>
           <button type="button">Save</button>
         </Tooltip>,
       );
@@ -182,7 +182,7 @@ describe('Tooltip', () => {
       render(
         <>
           <span id="own-hint">Ctrl+S</span>
-          <Tooltip content="Saves the draft" delay={0}>
+          <Tooltip content="Saves the draft" openDelay={0}>
             <button type="button" aria-describedby="own-hint">
               Save
             </button>
@@ -209,7 +209,11 @@ describe('Tooltip', () => {
       // The consumer handler runs just before the built-in one schedules the show timer.
       let enteredAt = 0;
       render(
-        <Tooltip content="Tooltip text" delay={300} onMouseEnter={() => (enteredAt = Date.now())}>
+        <Tooltip
+          content="Tooltip text"
+          openDelay={300}
+          onMouseEnter={() => (enteredAt = Date.now())}
+        >
           <button type="button">Hover me</button>
         </Tooltip>,
       );
@@ -226,7 +230,7 @@ describe('Tooltip', () => {
       let focusedAt = 0;
       render(
         <>
-          <Tooltip content="Tooltip text" delay={200} onFocus={() => (focusedAt = Date.now())}>
+          <Tooltip content="Tooltip text" openDelay={200} onFocus={() => (focusedAt = Date.now())}>
             <button type="button">Target</button>
           </Tooltip>
           <button type="button">Next</button>
@@ -247,7 +251,7 @@ describe('Tooltip', () => {
       const user = setupTimers();
       render(
         <>
-          <Tooltip content="Tooltip text" delay={200}>
+          <Tooltip content="Tooltip text" openDelay={200}>
             <button type="button">Target</button>
           </Tooltip>
           <button type="button">Elsewhere</button>
@@ -265,7 +269,7 @@ describe('Tooltip', () => {
     it('cancels a pending show when the pointer leaves before the delay', async () => {
       const user = setupTimers();
       render(
-        <Tooltip content="Tooltip text" delay={200}>
+        <Tooltip content="Tooltip text" openDelay={200}>
           <button type="button">Target</button>
         </Tooltip>,
       );
@@ -276,13 +280,106 @@ describe('Tooltip', () => {
       advance(1000);
       expect(isShown()).toBe(false);
     });
+
+    it('shows after 200 ms by default on hover', async () => {
+      const user = setupTimers();
+      let enteredAt = 0;
+      render(
+        <Tooltip content="Tooltip text" onMouseEnter={() => (enteredAt = Date.now())}>
+          <button type="button">Target</button>
+        </Tooltip>,
+      );
+      await user.hover(screen.getByRole('button', { name: 'Target' }));
+      advanceTo(enteredAt + 199);
+      expect(surface()).toBeNull();
+      advance(1);
+      await waitFor(() => expect(surface()).not.toBeNull());
+    });
+
+    it('shows after 200 ms by default on keyboard focus (openDelay applies to focus too)', async () => {
+      const user = setupTimers();
+      let focusedAt = 0;
+      render(
+        <Tooltip content="Tooltip text">
+          <button type="button" onFocus={() => (focusedAt = Date.now())}>
+            Target
+          </button>
+        </Tooltip>,
+      );
+      await user.tab();
+      expect(screen.getByRole('button', { name: 'Target' })).toHaveFocus();
+      advanceTo(focusedAt + 199);
+      expect(surface()).toBeNull();
+      advance(1);
+      await waitFor(() => expect(surface()).not.toBeNull());
+    });
+
+    it('the deprecated delay still sets the show delay and warns once', async () => {
+      const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+      const user = setupTimers();
+      let enteredAt = 0;
+      const { rerender } = render(
+        <Tooltip content="Tooltip text" delay={300} onMouseEnter={() => (enteredAt = Date.now())}>
+          <button type="button">Target</button>
+        </Tooltip>,
+      );
+      await user.hover(screen.getByRole('button', { name: 'Target' }));
+      advanceTo(enteredAt + 299);
+      expect(surface()).toBeNull();
+      advance(1);
+      await waitFor(() => expect(surface()).not.toBeNull());
+      rerender(
+        <Tooltip content="Tooltip text" delay={300} onMouseEnter={() => (enteredAt = Date.now())}>
+          <button type="button">Target</button>
+        </Tooltip>,
+      );
+      expect(warn.mock.calls).toEqual([
+        [
+          '[WaveUI] Tooltip: `delay` is deprecated and will be removed in 1.0. Use `openDelay` instead.',
+        ],
+      ]);
+    });
+
+    it('openDelay wins over the deprecated delay', async () => {
+      const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+      const user = setupTimers();
+      let enteredAt = 0;
+      render(
+        <Tooltip
+          content="Tooltip text"
+          openDelay={100}
+          delay={500}
+          onMouseEnter={() => (enteredAt = Date.now())}
+        >
+          <button type="button">Target</button>
+        </Tooltip>,
+      );
+      await user.hover(screen.getByRole('button', { name: 'Target' }));
+      advanceTo(enteredAt + 99);
+      expect(surface()).toBeNull();
+      advance(1);
+      await waitFor(() => expect(surface()).not.toBeNull());
+      expect(warn.mock.calls).toEqual([
+        [
+          '[WaveUI] Tooltip: `delay` is deprecated and will be removed in 1.0. Use `openDelay` instead.',
+        ],
+      ]);
+    });
+
+    it('types the delays: openDelay and closeDelay in milliseconds, delay still accepted', () => {
+      expectTypeOf<TooltipProps['openDelay']>().toEqualTypeOf<number | undefined>();
+      expectTypeOf<TooltipProps['closeDelay']>().toEqualTypeOf<number | undefined>();
+      expectTypeOf<TooltipProps['delay']>().toEqualTypeOf<number | undefined>();
+    });
   });
 
   describe('dismissal (overlays#19)', () => {
-    it('hides after a short grace period when the pointer leaves', async () => {
+    it('hides closeDelay after the pointer leaves, 100 ms by default', async () => {
       const user = setupTimers();
+      // The consumer handler runs just before the built-in one schedules the hide timer.
+      let leftAt = 0;
       render(
-        <Tooltip content="Tooltip text" delay={0}>
+        <Tooltip content="Tooltip text" openDelay={0} onMouseLeave={() => (leftAt = Date.now())}>
           <button type="button">Target</button>
         </Tooltip>,
       );
@@ -290,15 +387,60 @@ describe('Tooltip', () => {
       await user.hover(target);
       await waitFor(() => expect(surface()).not.toBeNull());
       await user.unhover(target);
+      advanceTo(leftAt + 99);
       expect(surface()).not.toBeNull();
-      advance(150);
+      advance(1);
       await waitFor(() => expect(surface()).toBeNull());
+    });
+
+    it('closeDelay sets the hide delay after the pointer leaves', async () => {
+      const user = setupTimers();
+      let leftAt = 0;
+      render(
+        <Tooltip
+          content="Tooltip text"
+          openDelay={0}
+          closeDelay={400}
+          onMouseLeave={() => (leftAt = Date.now())}
+        >
+          <button type="button">Target</button>
+        </Tooltip>,
+      );
+      const target = screen.getByRole('button', { name: 'Target' });
+      await user.hover(target);
+      await waitFor(() => expect(surface()).not.toBeNull());
+      await user.unhover(target);
+      advanceTo(leftAt + 399);
+      expect(surface()).not.toBeNull();
+      advance(1);
+      await waitFor(() => expect(surface()).toBeNull());
+    });
+
+    it('blur and Escape hide at once, whatever closeDelay', async () => {
+      const user = setupTimers();
+      render(
+        <>
+          <Tooltip content="Tooltip text" openDelay={0} closeDelay={1000}>
+            <button type="button">Target</button>
+          </Tooltip>
+          <button type="button">Elsewhere</button>
+        </>,
+      );
+      const target = screen.getByRole('button', { name: 'Target' });
+      focus(target);
+      await waitFor(() => expect(surface()).not.toBeNull());
+      focus(screen.getByRole('button', { name: 'Elsewhere' }));
+      expect(surface()).toBeNull();
+      focus(target);
+      await waitFor(() => expect(surface()).not.toBeNull());
+      await user.keyboard('{Escape}');
+      expect(surface()).toBeNull();
     });
 
     it('stays visible while the pointer moves onto the tooltip (hoverable)', async () => {
       const user = setupTimers();
       render(
-        <Tooltip content="Tooltip text" delay={0}>
+        <Tooltip content="Tooltip text" openDelay={0}>
           <button type="button">Target</button>
         </Tooltip>,
       );
@@ -317,7 +459,7 @@ describe('Tooltip', () => {
     it('has a transparent hover bridge only across the gap facing the trigger', async () => {
       const user = setupTimers();
       render(
-        <Tooltip content="Tooltip text" delay={0}>
+        <Tooltip content="Tooltip text" openDelay={0}>
           <button type="button">Target</button>
         </Tooltip>,
       );
@@ -347,7 +489,7 @@ describe('Tooltip', () => {
     it('Escape hides a visible tooltip', async () => {
       const user = setupTimers();
       render(
-        <Tooltip content="Tooltip text" delay={0}>
+        <Tooltip content="Tooltip text" openDelay={0}>
           <button type="button">Target</button>
         </Tooltip>,
       );
@@ -362,7 +504,7 @@ describe('Tooltip', () => {
       const user = setupTimers();
       render(
         <ParentLayer>
-          <Tooltip content="Tooltip text" delay={0}>
+          <Tooltip content="Tooltip text" openDelay={0}>
             <button type="button">Target</button>
           </Tooltip>
         </ParentLayer>,
@@ -381,7 +523,7 @@ describe('Tooltip', () => {
     it('renders the surface in a tooltip-layer portal, hidden from assistive technology', async () => {
       const user = setupTimers();
       const { container } = render(
-        <Tooltip content="Tooltip text" delay={0}>
+        <Tooltip content="Tooltip text" openDelay={0}>
           <button type="button">Target</button>
         </Tooltip>,
       );
@@ -396,7 +538,7 @@ describe('Tooltip', () => {
     it('wraps text and resets inherited typography', async () => {
       const user = setupTimers();
       render(
-        <Tooltip content="Tooltip text" delay={0}>
+        <Tooltip content="Tooltip text" openDelay={0}>
           <button type="button">Target</button>
         </Tooltip>,
       );
@@ -420,7 +562,7 @@ describe('Tooltip', () => {
       });
       const user = setupTimers();
       render(
-        <Tooltip content="Tooltip text" delay={0} data-testid="target">
+        <Tooltip content="Tooltip text" openDelay={0} data-testid="target">
           <button type="button">Target</button>
         </Tooltip>,
       );
@@ -440,7 +582,7 @@ describe('Tooltip', () => {
       });
       const user = setupTimers();
       render(
-        <Tooltip content="Tooltip text" delay={0} data-testid="target">
+        <Tooltip content="Tooltip text" openDelay={0} data-testid="target">
           <button type="button">Target</button>
         </Tooltip>,
       );
@@ -455,7 +597,7 @@ describe('Tooltip', () => {
       });
       const user = setupTimers();
       renderWithProviders(
-        <Tooltip content="Tooltip text" delay={0} side="end" data-testid="target">
+        <Tooltip content="Tooltip text" openDelay={0} side="end" data-testid="target">
           <button type="button">Target</button>
         </Tooltip>,
         { dir: 'rtl' },
@@ -477,7 +619,7 @@ describe('Tooltip', () => {
 
     it('uses the inverted token colors by default', async () => {
       const el = await showSurface(
-        <Tooltip content="Tip" delay={0}>
+        <Tooltip content="Tip" openDelay={0}>
           <button type="button">Target</button>
         </Tooltip>,
       );
@@ -486,7 +628,7 @@ describe('Tooltip', () => {
 
     it('appearance="normal" uses the background token colors', async () => {
       const el = await showSurface(
-        <Tooltip content="Tip" appearance="normal" delay={0}>
+        <Tooltip content="Tip" appearance="normal" openDelay={0}>
           <button type="button">Target</button>
         </Tooltip>,
       );
@@ -502,7 +644,7 @@ describe('Tooltip', () => {
       async (variant, expected) => {
         const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
         const el = await showSurface(
-          <Tooltip content="Tip" variant={variant} delay={0}>
+          <Tooltip content="Tip" variant={variant} openDelay={0}>
             <button type="button">Target</button>
           </Tooltip>,
         );
@@ -518,7 +660,7 @@ describe('Tooltip', () => {
     it('appearance wins over the deprecated variant', async () => {
       const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
       const el = await showSurface(
-        <Tooltip content="Tip" appearance="inverted" variant="light" delay={0}>
+        <Tooltip content="Tip" appearance="inverted" variant="light" openDelay={0}>
           <button type="button">Target</button>
         </Tooltip>,
       );
@@ -793,7 +935,7 @@ describe('Tooltip', () => {
       const user = userEvent.setup();
       const { container } = render(
         <TriggerStandIn>
-          <Tooltip content="More actions" delay={0}>
+          <Tooltip content="More actions" openDelay={0}>
             <Button>Actions</Button>
           </Tooltip>
         </TriggerStandIn>,
@@ -884,7 +1026,7 @@ describe('Tooltip', () => {
       const user = userEvent.setup();
       const onClick = vi.fn();
       render(
-        <Tooltip content="Tip" delay={0} onClick={onClick}>
+        <Tooltip content="Tip" openDelay={0} onClick={onClick}>
           <button type="button">Target</button>
         </Tooltip>,
       );
@@ -926,7 +1068,7 @@ describe('Tooltip', () => {
     function renderPicker(handlers: Partial<React.ComponentProps<typeof Tooltip>> = {}) {
       render(
         <>
-          <Tooltip content="Pick the start date" delay={0} {...handlers}>
+          <Tooltip content="Pick the start date" openDelay={0} {...handlers}>
             <PickerStandIn />
           </Tooltip>
           <button type="button">Elsewhere</button>
@@ -939,7 +1081,7 @@ describe('Tooltip', () => {
       const user = setupTimers();
       const onFocus = vi.fn();
       const onBlur = vi.fn();
-      const input = renderPicker({ onFocus, onBlur, delay: 100 });
+      const input = renderPicker({ onFocus, onBlur, openDelay: 100 });
       await user.tab();
       expect(input).toHaveFocus();
       advance(100);
@@ -994,7 +1136,7 @@ describe('Tooltip', () => {
       handler: 'onFocus',
       defaultProps: {
         content: 'Tip',
-        delay: 0,
+        openDelay: 0,
         children: <button type="button">Target</button>,
       },
       act: async ({ user }) => {
@@ -1013,7 +1155,7 @@ describe('Tooltip', () => {
       handler: 'onMouseEnter',
       defaultProps: {
         content: 'Tip',
-        delay: 0,
+        openDelay: 0,
         children: <button type="button">Target</button>,
       },
       act: async ({ user }) => {
@@ -1028,7 +1170,7 @@ describe('Tooltip', () => {
   it('has no accessibility violations while visible (table-core#20)', async () => {
     const user = userEvent.setup();
     render(
-      <Tooltip content="Saves the draft" delay={0}>
+      <Tooltip content="Saves the draft" openDelay={0}>
         <button type="button">Save</button>
       </Tooltip>,
     );
@@ -1097,7 +1239,7 @@ describe('Tooltip', () => {
         <React.StrictMode>
           <Tooltip
             content="Tooltip text"
-            delay={300}
+            openDelay={300}
             open={false}
             onOpenChange={onOpenChange}
             onMouseEnter={() => (enteredAt = Date.now())}
@@ -1122,7 +1264,7 @@ describe('Tooltip', () => {
       setupTimers();
       const onOpenChange = vi.fn();
       render(
-        <Tooltip content="Tooltip text" delay={0} open={false} onOpenChange={onOpenChange}>
+        <Tooltip content="Tooltip text" openDelay={0} open={false} onOpenChange={onOpenChange}>
           <button type="button">Target</button>
         </Tooltip>,
       );
@@ -1136,7 +1278,7 @@ describe('Tooltip', () => {
       const onOpenChange = vi.fn();
       render(
         <React.StrictMode>
-          <Tooltip content="Tooltip text" delay={0} onOpenChange={onOpenChange}>
+          <Tooltip content="Tooltip text" openDelay={0} onOpenChange={onOpenChange}>
             <button type="button">Target</button>
           </Tooltip>
         </React.StrictMode>,

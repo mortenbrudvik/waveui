@@ -4,8 +4,27 @@ import { act, fireEvent, render, screen, waitFor, within } from '@testing-librar
 import userEvent from '@testing-library/user-event';
 import { hydrateRoot } from 'react-dom/client';
 import { renderToString } from 'react-dom/server';
-import { Menu, MenuDivider, MenuItem, MenuPopover, MenuTrigger } from '../Menu';
+import {
+  Menu,
+  MenuDivider,
+  MenuGroup,
+  MenuGroupHeader,
+  MenuItem,
+  MenuItemCheckbox,
+  MenuItemLink,
+  MenuItemRadio,
+  MenuItemSwitch,
+  MenuPopover,
+  MenuSplitGroup,
+  MenuTrigger,
+} from '../Menu';
 import type { MenuItemProps, MenuProps, MenuTriggerProps } from '../Menu';
+import * as GroupModule from '../Menu.group';
+import * as LinkModule from '../Menu.link';
+import * as SelectableModule from '../Menu.selectable';
+import * as SplitGroupModule from '../Menu.splitGroup';
+import { INERT_MENU_CONTEXT, MenuContext } from '../Menu.context';
+import type { MenuContextValue, MenuSurfaceApi } from '../Menu.context';
 import type { Slot } from '../../../lib/types';
 import { useModalLayer } from '../../../hooks/useModalLayer';
 import { Portal } from '../../portal/Portal';
@@ -82,13 +101,49 @@ describe('Menu', () => {
     conflictingClass: { className: 'rounded-none', overrides: 'rounded-md' },
   });
 
-  testCompoundExposure(Menu, ['Item', 'Divider', 'Trigger', 'Popover']);
+  testCompoundExposure(Menu, [
+    'Item',
+    'Divider',
+    'Trigger',
+    'Popover',
+    'ItemCheckbox',
+    'ItemRadio',
+    'ItemSwitch',
+    'ItemLink',
+    'Group',
+    'GroupHeader',
+    'SplitGroup',
+  ]);
 
   it('exports every sub-component under its flat name (C-COMPOUND)', () => {
     expect(MenuItem).toBe(Menu.Item);
     expect(MenuDivider).toBe(Menu.Divider);
     expect(MenuTrigger).toBe(Menu.Trigger);
     expect(MenuPopover).toBe(Menu.Popover);
+    const parts = [
+      [MenuItemCheckbox, Menu.ItemCheckbox],
+      [MenuItemRadio, Menu.ItemRadio],
+      [MenuItemSwitch, Menu.ItemSwitch],
+      [MenuItemLink, Menu.ItemLink],
+      [MenuGroup, Menu.Group],
+      [MenuGroupHeader, Menu.GroupHeader],
+      [MenuSplitGroup, Menu.SplitGroup],
+    ] as const;
+    for (const [flat, dotted] of parts) {
+      // A missing member would pass `undefined === undefined`.
+      expect(typeof flat).toBe('function');
+      expect(flat).toBe(dotted);
+    }
+  });
+
+  it('the flat names are the part modules’ components (one component per part)', () => {
+    expect(MenuItemCheckbox).toBe(SelectableModule.MenuItemCheckbox);
+    expect(MenuItemRadio).toBe(SelectableModule.MenuItemRadio);
+    expect(MenuItemSwitch).toBe(SelectableModule.MenuItemSwitch);
+    expect(MenuItemLink).toBe(LinkModule.MenuItemLink);
+    expect(MenuGroup).toBe(GroupModule.MenuGroup);
+    expect(MenuGroupHeader).toBe(GroupModule.MenuGroupHeader);
+    expect(MenuSplitGroup).toBe(SplitGroupModule.MenuSplitGroup);
   });
 
   it('renders with role="menu"', () => {
@@ -111,6 +166,11 @@ describe('Menu', () => {
     const menu = screen.getByTestId('menu');
     expect(menu).toHaveClass('rounded-md');
     expect(menu).not.toHaveClass('rounded-lg');
+  });
+
+  it('the static menu element is the group/menu its items align their columns to', () => {
+    renderStaticMenu({ className: 'consumer-class' });
+    expect(screen.getByTestId('menu')).toHaveClass('group/menu', 'consumer-class');
   });
 
   describe('roving focus (static menu)', () => {
@@ -570,15 +630,22 @@ describe('Menu', () => {
     });
 
     // An icon that renders nothing is no icon, as in Nav, Tree and Avatar: no empty 20px
-    // aria-hidden box before the label.
+    // aria-hidden box before the label. The item keeps only the hidden column placeholders, which
+    // show when another item of the menu has an icon (or a check).
     it.each(EMPTY_ICONS)('renders no icon box for an icon set to %s', (_kind, makeIcon) => {
       render(
         <Menu>
           <Menu.Item icon={makeIcon()}>Item</Menu.Item>
         </Menu>,
       );
-      expect(screen.getByRole('menuitem').querySelector('[aria-hidden="true"]')).toBeNull();
-      expect(screen.getByRole('menuitem').textContent).toBe('Item');
+      const menuItem = screen.getByRole('menuitem');
+      expect(menuItem.querySelector('[data-menu-icon]')).toBeNull();
+      expect(
+        Array.from(menuItem.querySelectorAll('[aria-hidden="true"]'), (hidden) =>
+          hidden.getAttribute('data-menu-column-space'),
+        ),
+      ).toEqual(['checkmark', 'icon']);
+      expect(menuItem.textContent).toBe('Item');
     });
 
     it('renders the items of a generator icon that has content (the check does not consume it)', () => {
@@ -1358,6 +1425,16 @@ describe('Menu popup (Menu.Trigger + Menu.Popover)', () => {
     expect(wrapper).not.toHaveAttribute('aria-controls');
   });
 
+  it('Menu.Popover is the group/menu its items align their columns to', async () => {
+    const user = userEvent.setup();
+    render(<PopupMenu popoverClassName="popover-class" />);
+    await user.click(trigger());
+    expect(screen.getByRole('menu', { name: 'Actions' })).toHaveClass(
+      'group/menu',
+      'popover-class',
+    );
+  });
+
   it('forwards className, ref and rest props of Menu.Popover to the menu surface', async () => {
     const user = userEvent.setup();
     const ref = React.createRef<HTMLDivElement>();
@@ -1456,6 +1533,52 @@ describe('Menu popup (Menu.Trigger + Menu.Popover)', () => {
     const menu = screen.getByRole('menu', { name: 'File actions' });
     expect(menu).not.toHaveAttribute('aria-labelledby');
     await expectNoA11yViolations();
+  });
+
+  it('an aria-label or aria-labelledby that holds undefined (a wrapper forwarding it) keeps the trigger’s name', async () => {
+    const user = userEvent.setup();
+    function ForwardingPopover(props: { 'aria-label'?: string; 'aria-labelledby'?: string }) {
+      return (
+        <Menu.Popover aria-label={props['aria-label']} aria-labelledby={props['aria-labelledby']}>
+          <Menu.Item>Edit</Menu.Item>
+        </Menu.Popover>
+      );
+    }
+    render(
+      <Menu>
+        <Menu.Trigger>
+          <button type="button">Actions</button>
+        </Menu.Trigger>
+        <ForwardingPopover />
+      </Menu>,
+    );
+    await user.click(trigger());
+    expect(screen.getByRole('menu', { name: 'Actions' })).toHaveAttribute(
+      'aria-labelledby',
+      trigger().id,
+    );
+  });
+
+  it('a consumer aria-labelledby names the menu instead of the trigger', async () => {
+    const user = userEvent.setup();
+    render(
+      <>
+        <span id="menu-heading">File commands</span>
+        <Menu>
+          <Menu.Trigger>
+            <button type="button">Actions</button>
+          </Menu.Trigger>
+          <Menu.Popover aria-labelledby="menu-heading">
+            <Menu.Item>Edit</Menu.Item>
+          </Menu.Popover>
+        </Menu>
+      </>,
+    );
+    await user.click(trigger());
+    expect(screen.getByRole('menu', { name: 'File commands' })).toHaveAttribute(
+      'aria-labelledby',
+      'menu-heading',
+    );
   });
 
   it('a popup menu without Menu.Trigger does not point aria-labelledby at a missing id', () => {
@@ -1927,11 +2050,13 @@ describe('Menu events from a portal opened inside an item', () => {
     disabled = false,
     onRenameClick,
     onRenameKeyDown,
+    onDelete,
   }: {
     persistOnClick?: boolean;
     disabled?: boolean;
     onRenameClick?: React.MouseEventHandler<HTMLDivElement>;
     onRenameKeyDown?: React.KeyboardEventHandler<HTMLDivElement>;
+    onDelete?: () => void;
   }) {
     return (
       <Menu defaultOpen>
@@ -1953,13 +2078,33 @@ describe('Menu events from a portal opened inside an item', () => {
               </div>
             </Portal>
           </Menu.Item>
-          <Menu.Item>Delete</Menu.Item>
+          <Menu.Item onClick={onDelete}>Delete</Menu.Item>
         </Menu.Popover>
       </Menu>
     );
   }
 
   const input = () => screen.getByRole('textbox', { name: 'New name' });
+
+  it('hovering another item while typing in a field of the portal leaves focus there: Enter does not activate that item', async () => {
+    const user = userEvent.setup();
+    const onDelete = vi.fn();
+    render(<MenuWithNestedPortal onDelete={onDelete} />);
+    await user.click(input());
+    await user.keyboard('a');
+    await user.hover(item('Delete'));
+    expect(input()).toHaveFocus();
+    await user.keyboard('b{Enter}');
+    expect(input()).toHaveValue('ab');
+    expect(onDelete).not.toHaveBeenCalled();
+    expect(queryMenu()).toBeInTheDocument();
+
+    // Back in the menu's list, the item under the pointer takes focus again.
+    await user.hover(item('Rename…'));
+    act(() => item('Rename…').focus());
+    await user.hover(item('Delete'));
+    expect(item('Delete')).toHaveFocus();
+  });
 
   it('Space types into a field of the portal: the item is not activated', async () => {
     const user = userEvent.setup();
@@ -2347,6 +2492,63 @@ describe('Menu.Trigger rendered as a wrapper span', () => {
     expect(wrapper).not.toHaveAttribute('aria-haspopup');
     expect(trigger()).toHaveAttribute('aria-expanded', 'false');
     expect(trigger()).toHaveAttribute('aria-haspopup', 'menu');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// The surface registration (what the trigger and the root reach while the menu is open)
+// ---------------------------------------------------------------------------
+
+describe('Menu.Popover surface registration', () => {
+  /**
+   * A Menu context whose open state the test sets, with a `registerSurface` that logs, and a probe
+   * that logs each commit of a new open state (its layout effect runs after Menu.Popover's).
+   */
+  function RegistrationHarness({ open, log }: { open: boolean; log: string[] }) {
+    // Stable, as the Menu root's is.
+    const registerSurface = React.useCallback(
+      (api: MenuSurfaceApi | null) => {
+        log.push(api ? 'register' : 'unregister');
+      },
+      [log],
+    );
+    const value = React.useMemo<MenuContextValue>(
+      () => ({ ...INERT_MENU_CONTEXT, popup: true, open, registerSurface }),
+      [open, registerSurface],
+    );
+    return (
+      <MenuContext.Provider value={value}>
+        <MenuPopover aria-label="Actions">
+          <MenuItem>Edit</MenuItem>
+        </MenuPopover>
+        <CommitProbe open={open} log={log} />
+      </MenuContext.Provider>
+    );
+  }
+
+  function CommitProbe({ open, log }: { open: boolean; log: string[] }) {
+    React.useLayoutEffect(() => {
+      log.push(`commit open=${open}`);
+    }, [open, log]);
+    return null;
+  }
+
+  it('registers the open surface and unregisters it in the commit that closes the menu', () => {
+    const log: string[] = [];
+    const { rerender } = render(<RegistrationHarness open log={log} />);
+    expect(log.filter((entry) => entry !== 'commit open=true')).toEqual(['register']);
+    log.length = 0;
+    rerender(<RegistrationHarness open={false} log={log} />);
+    // No closed surface stays registered, not even until the surface element is gone: from 0.7 a
+    // surface can stay mounted while it exits, and a registered one would take the next opening.
+    expect(log).toEqual(['unregister', 'commit open=false']);
+    expect(queryMenu()).not.toBeInTheDocument();
+  });
+
+  it('registers no closed surface', () => {
+    const log: string[] = [];
+    render(<RegistrationHarness open={false} log={log} />);
+    expect(log).toEqual(['commit open=false']);
   });
 });
 

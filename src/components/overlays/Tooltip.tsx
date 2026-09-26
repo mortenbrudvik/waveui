@@ -37,13 +37,24 @@ export interface TooltipProps extends Omit<React.HTMLAttributes<HTMLSpanElement>
    * @deprecated Use `appearance` (`'dark'` → `'inverted'`, `'light'` → `'normal'`).
    */
   variant?: 'dark' | 'light';
-  /** Delay in milliseconds before the tooltip appears on hover or focus.
+  /**
+   * Milliseconds before the tooltip appears when the pointer rests on the child or the child
+   * receives keyboard focus (Fluent's `showDelay`; unlike Menu's and Popover's `openDelay`, it
+   * applies to focus too).
    * @default 200
    */
+  openDelay?: number;
+  /**
+   * Milliseconds before it hides once the pointer has left the child and the tooltip (Fluent's
+   * `hideDelay`); blur and Escape hide it at once.
+   * @default 100
+   */
+  closeDelay?: number;
+  /** @deprecated Use `openDelay`. */
   delay?: number;
   /**
    * Controlled open state (Fluent's `visible`). The tooltip still asks to open on hover and focus
-   * (after `delay`) and to close on leave, blur and Escape through `onOpenChange`. The surface
+   * (after `openDelay`) and to close on leave, blur and Escape through `onOpenChange`. The surface
    * renders only in the browser: an open tooltip is closed in the server HTML and opens once it
    * has hydrated.
    */
@@ -119,9 +130,6 @@ const bridgeClasses = [
  * panels), and the hover bridge towards the trigger.
  */
 const surfaceClasses = `max-w-60 whitespace-normal break-words rounded px-3 py-1.5 text-caption-1 font-normal normal-case tracking-normal text-start shadow-8 ${bridgeClasses}`;
-
-/** Grace period before hiding after the pointer leaves, so it can move onto the tooltip. */
-const HIDE_DELAY_MS = 100;
 
 type UnknownProps = Record<string, unknown>;
 type Relationship = NonNullable<TooltipProps['relationship']>;
@@ -256,7 +264,8 @@ function useRelationshipTarget(
  *   it on focus without waiting for the delay; the child's own ids are kept.
  * - The visual surface is rendered in a portal only while visible (it is `aria-hidden`, a copy of
  *   the description), positioned on `side`/`align` with flipping and shifting to stay in view.
- * - It stays visible while the pointer moves onto it, hides shortly after the pointer leaves or
+ * - It appears `openDelay` after the pointer rests on the child or the child takes keyboard focus,
+ *   stays visible while the pointer moves onto it, hides `closeDelay` after the pointer leaves or
  *   immediately on blur, and Escape hides it without closing an enclosing dialog or popover. Focus
  *   and hover inside a popup the child renders in a portal (a DatePicker calendar, a listbox) do
  *   not show it, and the pointer moving onto such a popup hides it.
@@ -293,7 +302,9 @@ export const Tooltip = ({
   content,
   appearance: appearanceProp,
   variant,
-  delay = 200,
+  openDelay: openDelayProp,
+  closeDelay = 100,
+  delay,
   open: openProp,
   defaultOpen,
   onOpenChange,
@@ -317,6 +328,8 @@ export const Tooltip = ({
       'variant',
       'appearance',
     ) ?? 'inverted';
+  const openDelay =
+    resolveDeprecatedProp('Tooltip', openDelayProp, delay, 'delay', 'openDelay') ?? 200;
   const [open, setOpen] = useControllable(openProp, defaultOpen ?? false, onOpenChange);
   // The surface lives in a portal, which renders only in the browser: until then (the server HTML,
   // hydration) the tooltip is closed; the hidden description is rendered either way.
@@ -351,14 +364,14 @@ export const Tooltip = ({
   const show = useEventCallback(() => {
     clearTimer();
     if (visible) return;
-    if (delay <= 0) {
+    if (openDelay <= 0) {
       setOpen(true);
       return;
     }
     timerRef.current = setTimeout(() => {
       timerRef.current = undefined;
       setOpen(true);
-    }, delay);
+    }, openDelay);
   });
 
   const hide = useEventCallback(() => {
@@ -366,13 +379,14 @@ export const Tooltip = ({
     setOpen(false);
   });
 
+  // The grace period after the pointer leaves lets it move onto the tooltip.
   const scheduleHide = useEventCallback(() => {
     clearTimer();
     if (!visible) return;
     timerRef.current = setTimeout(() => {
       timerRef.current = undefined;
       setOpen(false);
-    }, HIDE_DELAY_MS);
+    }, closeDelay);
   });
 
   // An Escape-only layer while visible: Escape hides the tooltip before any enclosing overlay. The

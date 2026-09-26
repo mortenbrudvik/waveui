@@ -5,6 +5,7 @@
  * and no story repeats it. Where `.storybook/main.ts` places the plugin is tested with the rest of
  * the Storybook configuration in scripts/__tests__/verify-storybook.test.mjs.
  */
+import { posix } from 'node:path';
 import ts from 'typescript';
 import { describe, expect, it } from 'vitest';
 import {
@@ -48,6 +49,26 @@ describe('exportDocblocks', () => {
     expect(entries(exportDocblocks(source))).toEqual({
       OptionImpl: 'An option.',
       GroupImpl: 'A group.',
+    });
+  });
+
+  it('follows a definition imported from another module (a compound root in a sibling module)', () => {
+    const source = [
+      "import { MenuRoot } from './Menu.root';",
+      "import MenuDefault, { type MenuProps, MenuItem as Item } from './Menu.items';",
+      "import type { MenuTriggerProps } from './Menu.trigger';",
+      '/** A menu of actions. */',
+      'export const Menu = /* @__PURE__ */ Object.assign(MenuRoot, { Item });',
+      '/** A default import. */',
+      'export const Other = React.memo(MenuDefault);',
+      '/** A type-only import is no definition. */',
+      'export const Typed = wrap(MenuProps);',
+      '/** Neither is a type-only module import. */',
+      'export const Trigger = wrap(MenuTriggerProps);',
+    ].join('\n');
+    expect(entries(exportDocblocks(source))).toEqual({
+      MenuRoot: 'A menu of actions.',
+      MenuDefault: 'A default import.',
     });
   });
 
@@ -139,6 +160,19 @@ describe('docgenDescriptionPatch', () => {
     expect(run(undefined)).toBeUndefined();
   });
 
+  it('patches an imported definition in the module that imports it', () => {
+    const imported = [
+      "import { MenuRoot } from './Menu.root';",
+      '/** A menu. */',
+      'export const Menu = Object.assign(MenuRoot, {});',
+    ].join('\n');
+    const MenuRoot: { __docgenInfo?: { description: string } } = {
+      __docgenInfo: { description: '' },
+    };
+    new Function('MenuRoot', docgenDescriptionPatch(imported))(MenuRoot);
+    expect(MenuRoot.__docgenInfo).toEqual({ description: 'A menu.' });
+  });
+
   it('is empty for a module without such a definition', () => {
     expect(docgenDescriptionPatch('/** Doc. */\nexport const Button = () => null;')).toBe('');
   });
@@ -204,6 +238,45 @@ const compounds = Object.entries(componentSources).flatMap(([key, source]) => {
   });
 });
 
+const parse = (source: string, fileName = 'module.tsx') =>
+  ts.createSourceFile(fileName, source, ts.ScriptTarget.Latest, true, ts.ScriptKind.TSX);
+
+/**
+ * Where a compound's root is defined when the compound's module imports it (`import { MenuRoot }
+ * from './Menu.root'`): the key of that module in `componentSources` and the root's name there.
+ * `null` for a root defined in the compound's own module.
+ */
+function importedRoot(source: string, file: string, root: string): [string, string] | null {
+  for (const statement of parse(source, file).statements) {
+    if (!ts.isImportDeclaration(statement) || !ts.isStringLiteral(statement.moduleSpecifier)) {
+      continue;
+    }
+    const bindings = statement.importClause?.namedBindings;
+    const element =
+      bindings && ts.isNamedImports(bindings)
+        ? bindings.elements.find((candidate) => candidate.name.text === root)
+        : undefined;
+    if (!element) continue;
+    const module = posix.join(posix.dirname(file), statement.moduleSpecifier.text);
+    return [`../../${module}.tsx`, (element.propertyName ?? element.name).text];
+  }
+  return null;
+}
+
+/** The docblock a top-level definition carries in its own module (react-docgen's description). */
+function definitionDocblock(source: string, name: string): string | null {
+  const definition = parse(source).statements.find(
+    (statement) =>
+      (ts.isVariableStatement(statement) &&
+        statement.declarationList.declarations.some(
+          (declaration) => ts.isIdentifier(declaration.name) && declaration.name.text === name,
+        )) ||
+      (ts.isFunctionDeclaration(statement) && !!statement.body && statement.name?.text === name),
+  );
+  if (!definition) throw new Error(`no top-level definition of ${name}`);
+  return leadingDocblock(source, definition);
+}
+
 describe('component docs of the library (C-DOCS)', () => {
   it('finds the compounds', () => {
     expect(compounds.map(([name]) => name)).toEqual(
@@ -214,10 +287,31 @@ describe('component docs of the library (C-DOCS)', () => {
   it.each(compounds)(
     '%s (%s): the component JSDoc is on the export only, and autodocs shows it',
     (_name, file, root, docblock) => {
+      const source = componentSources[`../../${file}`];
       expect(docblock).toMatch(/\S/);
-      expect(exportDocblocks(componentSources[`../../${file}`], file).get(root)).toBe(docblock);
+      expect(exportDocblocks(source, file).get(root)).toBe(docblock);
+      // A root imported from a sibling module gets the export's docblock only while docgen finds
+      // none there: a docblock of its own would replace the export's in autodocs.
+      const imported = importedRoot(source, file, root);
+      if (imported) {
+        const [module, name] = imported;
+        expect(componentSources[module], module).toBeDefined();
+        expect(
+          definitionDocblock(componentSources[module], name),
+          `${name} (${module})`,
+        ).toBeNull();
+      }
     },
   );
+
+  it('finds the definition of a root imported from a sibling module', () => {
+    const file = 'src/components/navigation/Menu.tsx';
+    expect(importedRoot(componentSources[`../../${file}`], file, 'MenuRoot')).toEqual([
+      '../../src/components/navigation/Menu.root.tsx',
+      'MenuRoot',
+    ]);
+    expect(importedRoot('const CardRoot = () => null;', 'src/Card.tsx', 'CardRoot')).toBeNull();
+  });
 
   it.each([
     ['src/components/input/Option.tsx', ['OptionImpl', 'OptionGroupImpl']],

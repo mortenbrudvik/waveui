@@ -2,6 +2,7 @@ import * as React from 'react';
 import { describe, it, expect, expectTypeOf, vi, afterEach } from 'vitest';
 import { act, fireEvent, render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
+import { renderToString } from 'react-dom/server';
 import { ToggleButton } from '../ToggleButton';
 import type { ToggleButtonProps } from '../ToggleButton';
 import { buttonClassName } from '../buttonStyles';
@@ -10,6 +11,7 @@ import {
   testFocusEvents,
   testNoImplicitSubmit,
   renderWithProviders,
+  expectNoA11yViolations,
 } from '../../../test-utils';
 import type { Appearance, IconPosition } from '../../../lib/types';
 
@@ -25,6 +27,24 @@ const BoldIcon = () => (
 const classesOf = (el: Element) => Array.from(el.classList).sort();
 /** The classes of a `buttonClassName()` result as a sorted array. */
 const classesFrom = (value: string) => value.split(/\s+/).filter(Boolean).sort();
+/** The forced-colors classes of an element, sorted. */
+const forcedColorsOf = (el: Element) =>
+  classesOf(el).filter((cls) => cls.startsWith('forced-colors:'));
+
+/** The roles that report the state with `aria-checked` instead of `aria-pressed`. */
+const CHECKED_ROLES = [
+  'checkbox',
+  'radio',
+  'switch',
+  'menuitemcheckbox',
+  'menuitemradio',
+  'option',
+  'treeitem',
+] as const;
+
+/** The development warning of a role that allows neither `aria-pressed` nor `aria-checked`. */
+const roleStateWarning = (role: string) =>
+  `[WaveUI] ToggleButton: \`role="${role}"\` allows neither \`aria-pressed\` nor \`aria-checked\`, so the pressed state is not exposed to assistive technology. Leave the role out (or use \`button\`), or use a role that has a checked state: \`checkbox\`, \`radio\`, \`switch\`, \`menuitemcheckbox\`, \`menuitemradio\`, \`option\` or \`treeitem\`.`;
 
 describe('ToggleButton', () => {
   afterEach(() => {
@@ -42,6 +62,10 @@ describe('ToggleButton', () => {
       { name: 'pressed and disabled', props: { pressed: true, disabled: true } },
       { name: 'pressed and disabledFocusable', props: { pressed: true, disabledFocusable: true } },
       { name: 'icon only with aria-label', props: { icon: <BoldIcon />, 'aria-label': 'Bold' } },
+      { name: 'pressed with isAccessible', props: { pressed: true, isAccessible: true } },
+      { name: 'role="checkbox"', props: { role: 'checkbox' } },
+      { name: 'role="checkbox", pressed', props: { role: 'checkbox', pressed: true } },
+      { name: 'role="switch", pressed', props: { role: 'switch', pressed: true } },
     ],
   });
 
@@ -511,6 +535,306 @@ describe('ToggleButton', () => {
     });
   });
 
+  describe('isAccessible', () => {
+    it.each(APPEARANCES)(
+      'a pressed %s toggle uses the accessible pressed classes (a brand fill with on-brand text)',
+      (appearance) => {
+        render(
+          <ToggleButton appearance={appearance} defaultPressed isAccessible>
+            Toggle
+          </ToggleButton>,
+        );
+        const btn = screen.getByRole('button', { name: 'Toggle' });
+        expect(classesOf(btn)).toEqual(
+          classesFrom(buttonClassName({ appearance, pressed: true, accessible: true })),
+        );
+        expect(btn).toHaveClass('text-primary-foreground');
+        expect(btn).toHaveClass(appearance === 'primary' ? 'bg-primary-pressed' : 'bg-primary');
+        expect(btn).not.toHaveClass('bg-selected', 'text-selected-foreground');
+      },
+    );
+
+    it('a pressed primary toggle adds an inset on-brand stroke', () => {
+      render(
+        <ToggleButton appearance="primary" defaultPressed isAccessible>
+          Toggle
+        </ToggleButton>,
+      );
+      expect(screen.getByRole('button', { name: 'Toggle' })).toHaveClass(
+        'inset-ring-2',
+        'inset-ring-primary-foreground',
+      );
+    });
+
+    it.each(APPEARANCES)('an unpressed %s toggle keeps the shared button classes', (appearance) => {
+      render(
+        <ToggleButton appearance={appearance} isAccessible>
+          Toggle
+        </ToggleButton>,
+      );
+      expect(classesOf(screen.getByRole('button', { name: 'Toggle' }))).toEqual(
+        classesFrom(buttonClassName({ appearance })),
+      );
+    });
+
+    it('switches between the unpressed and the accessible pressed classes on click', async () => {
+      const user = userEvent.setup();
+      render(
+        <ToggleButton appearance="subtle" isAccessible>
+          Toggle
+        </ToggleButton>,
+      );
+      const btn = screen.getByRole('button', { name: 'Toggle' });
+      await user.click(btn);
+      expect(classesOf(btn)).toEqual(
+        classesFrom(buttonClassName({ appearance: 'subtle', pressed: true, accessible: true })),
+      );
+      await user.click(btn);
+      expect(classesOf(btn)).toEqual(classesFrom(buttonClassName({ appearance: 'subtle' })));
+    });
+
+    it.each(APPEARANCES)(
+      'a pressed and disabled %s toggle keeps the disabled look and the GrayText forced-colors outline',
+      (appearance) => {
+        render(
+          <>
+            <ToggleButton appearance={appearance} pressed disabled isAccessible>
+              Native
+            </ToggleButton>
+            <ToggleButton appearance={appearance} pressed disabledFocusable isAccessible>
+              Focusable
+            </ToggleButton>
+          </>,
+        );
+        for (const name of ['Native', 'Focusable']) {
+          const btn = screen.getByRole('button', { name });
+          expect(classesOf(btn), name).toEqual(
+            classesFrom(
+              buttonClassName({ appearance, pressed: true, disabled: true, accessible: true }),
+            ),
+          );
+          expect(btn).toHaveClass('opacity-50', 'forced-colors:outline-[GrayText]');
+          expect(btn).not.toHaveClass('forced-colors:outline-[Highlight]');
+        }
+      },
+    );
+
+    it.each(APPEARANCES)(
+      'a pressed %s toggle has the same forced-colors classes with and without isAccessible',
+      (appearance) => {
+        render(
+          <>
+            <ToggleButton appearance={appearance} defaultPressed>
+              Tint
+            </ToggleButton>
+            <ToggleButton appearance={appearance} defaultPressed isAccessible>
+              Brand
+            </ToggleButton>
+            <ToggleButton appearance={appearance} pressed disabled>
+              Tint disabled
+            </ToggleButton>
+            <ToggleButton appearance={appearance} pressed disabled isAccessible>
+              Brand disabled
+            </ToggleButton>
+          </>,
+        );
+        const byName = (name: string) => screen.getByRole('button', { name });
+        expect(forcedColorsOf(byName('Brand'))).toEqual(forcedColorsOf(byName('Tint')));
+        expect(forcedColorsOf(byName('Brand'))).toContain('forced-colors:outline-[Highlight]');
+        expect(forcedColorsOf(byName('Brand disabled'))).toEqual(
+          forcedColorsOf(byName('Tint disabled')),
+        );
+      },
+    );
+  });
+
+  describe('the state attribute follows the role', () => {
+    it.each([
+      ['no role', undefined],
+      ['role="button"', 'button'],
+    ])('%s: aria-pressed, and data-pressed while pressed', async (_name, role) => {
+      const user = userEvent.setup();
+      const warn = vi.spyOn(console, 'warn');
+      render(<ToggleButton role={role}>Toggle</ToggleButton>);
+      const btn = screen.getByRole('button', { name: 'Toggle' });
+      expect(btn).toHaveAttribute('aria-pressed', 'false');
+      expect(btn).not.toHaveAttribute('data-pressed');
+      await user.click(btn);
+      expect(btn).toHaveAttribute('aria-pressed', 'true');
+      expect(btn).toHaveAttribute('data-pressed', '');
+      expect(btn).not.toHaveAttribute('aria-checked');
+      expect(btn).not.toHaveAttribute('data-checked');
+      expect(warn).not.toHaveBeenCalled();
+    });
+
+    it.each(CHECKED_ROLES)(
+      'role="%s": aria-checked and data-checked instead of aria-pressed',
+      async (role) => {
+        const user = userEvent.setup();
+        const warn = vi.spyOn(console, 'warn');
+        render(<ToggleButton role={role}>Toggle</ToggleButton>);
+        const btn = screen.getByRole(role, { name: 'Toggle' });
+        expect(btn).toHaveAttribute('aria-checked', 'false');
+        expect(btn).not.toHaveAttribute('aria-pressed');
+        expect(btn).not.toHaveAttribute('data-checked');
+        expect(btn).not.toHaveAttribute('data-pressed');
+
+        await user.click(btn);
+        expect(btn).toHaveAttribute('aria-checked', 'true');
+        expect(btn).toHaveAttribute('data-checked', '');
+        expect(btn).toHaveAttribute('data-pressed', '');
+        expect(btn).not.toHaveAttribute('aria-pressed');
+
+        await user.click(btn);
+        expect(btn).toHaveAttribute('aria-checked', 'false');
+        expect(btn).not.toHaveAttribute('data-checked');
+        expect(btn).not.toHaveAttribute('data-pressed');
+        expect(warn).not.toHaveBeenCalled();
+      },
+    );
+
+    it('drops a consumer aria-pressed next to aria-checked', () => {
+      render(
+        <ToggleButton role="checkbox" aria-pressed="true" defaultPressed>
+          Toggle
+        </ToggleButton>,
+      );
+      const btn = screen.getByRole('checkbox', { name: 'Toggle' });
+      expect(btn).toHaveAttribute('aria-checked', 'true');
+      expect(btn).not.toHaveAttribute('aria-pressed');
+    });
+
+    it('reads the first token of the role, whatever its case', () => {
+      render(
+        <>
+          <ToggleButton role="switch checkbox" defaultPressed>
+            Grid
+          </ToggleButton>
+          <ToggleButton role=" Checkbox " defaultPressed>
+            Ruler
+          </ToggleButton>
+        </>,
+      );
+      for (const name of ['Grid', 'Ruler']) {
+        const btn = screen.getByText(name).closest('button');
+        expect(btn, name).toHaveAttribute('aria-checked', 'true');
+        expect(btn, name).toHaveAttribute('data-checked', '');
+        expect(btn, name).not.toHaveAttribute('aria-pressed');
+      }
+    });
+
+    it.each(['tab', 'link'])(
+      'role="%s": neither aria-pressed nor aria-checked, data-pressed while pressed, and a development warning',
+      async (role) => {
+        const user = userEvent.setup();
+        const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+        render(<ToggleButton role={role}>Toggle</ToggleButton>);
+        const btn = screen.getByRole(role, { name: 'Toggle' });
+        expect(btn).not.toHaveAttribute('aria-pressed');
+        expect(btn).not.toHaveAttribute('aria-checked');
+        expect(btn).not.toHaveAttribute('data-pressed');
+        await user.click(btn);
+        expect(btn).toHaveAttribute('data-pressed', '');
+        expect(btn).not.toHaveAttribute('aria-pressed');
+        expect(btn).not.toHaveAttribute('aria-checked');
+        expect(btn).not.toHaveAttribute('data-checked');
+        expect(warn.mock.calls).toEqual([[roleStateWarning(role)]]);
+      },
+    );
+
+    it('with another role, a consumer aria-pressed is dropped and a consumer aria-checked is kept', () => {
+      const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+      render(
+        <ToggleButton role="menuitem" aria-pressed="true" aria-checked="mixed">
+          Toggle
+        </ToggleButton>,
+      );
+      const btn = screen.getByRole('menuitem', { name: 'Toggle' });
+      expect(btn).not.toHaveAttribute('aria-pressed');
+      expect(btn).toHaveAttribute('aria-checked', 'mixed');
+      expect(btn).not.toHaveAttribute('data-checked');
+      expect(warn.mock.calls).toEqual([[roleStateWarning('menuitem')]]);
+    });
+
+    it('warns once in development, not for every render or instance', () => {
+      const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+      const { rerender } = render(
+        <div role="tablist" aria-label="Views">
+          <ToggleButton role="tab">One</ToggleButton>
+          <ToggleButton role="tab">Two</ToggleButton>
+        </div>,
+      );
+      rerender(
+        <div role="tablist" aria-label="Views">
+          <ToggleButton role="tab" className="px-4">
+            One
+          </ToggleButton>
+          <ToggleButton role="tab">Two</ToggleButton>
+        </div>,
+      );
+      expect(warn.mock.calls).toEqual([[roleStateWarning('tab')]]);
+    });
+
+    it('renders the state attributes in the server HTML', () => {
+      const html = renderToString(
+        <>
+          <ToggleButton role="checkbox" defaultPressed>
+            Grid
+          </ToggleButton>
+          <ToggleButton defaultPressed>Bold</ToggleButton>
+        </>,
+      );
+      // A detached element: nothing reaches document.body.
+      const parsed = document.createElement('div');
+      parsed.innerHTML = html;
+      const [checkbox, button] = Array.from(parsed.querySelectorAll('button'));
+      expect(checkbox).toHaveAttribute('role', 'checkbox');
+      expect(checkbox).toHaveAttribute('aria-checked', 'true');
+      expect(checkbox).toHaveAttribute('data-checked', '');
+      expect(checkbox).toHaveAttribute('data-pressed', '');
+      expect(checkbox).not.toHaveAttribute('aria-pressed');
+      expect(button).toHaveAttribute('aria-pressed', 'true');
+      expect(button).toHaveAttribute('data-pressed', '');
+      expect(button).not.toHaveAttribute('data-checked');
+    });
+
+    it('has no axe violations with role="tab" inside a tab list (pressed)', async () => {
+      const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+      render(
+        <div role="tablist" aria-label="Views">
+          <ToggleButton role="tab" defaultPressed>
+            List
+          </ToggleButton>
+        </div>,
+      );
+      await expectNoA11yViolations();
+      expect(warn.mock.calls).toEqual([[roleStateWarning('tab')]]);
+    });
+
+    it.each([
+      ['role="checkbox"', 'checkbox'],
+      ['no role', undefined],
+    ])(
+      'StrictMode (%s): onPressedChange fires once per click with the same arguments',
+      async (_name, role) => {
+        const user = userEvent.setup();
+        const onPressedChange = vi.fn();
+        render(
+          <React.StrictMode>
+            <ToggleButton role={role} onPressedChange={onPressedChange}>
+              Toggle
+            </ToggleButton>
+          </React.StrictMode>,
+        );
+        const btn = screen.getByText('Toggle').closest('button');
+        if (!btn) throw new Error('no button');
+        await user.click(btn);
+        await user.click(btn);
+        expect(onPressedChange.mock.calls).toEqual([[true], [false]]);
+      },
+    );
+  });
+
   describe('types (button-provider#27)', () => {
     it('ToggleButtonProps carries ref (C-REF)', () => {
       expectTypeOf<ToggleButtonProps['ref']>().toEqualTypeOf<
@@ -526,6 +850,13 @@ describe('ToggleButton', () => {
       expectTypeOf<ToggleButtonProps['disabledFocusable']>().toEqualTypeOf<boolean | undefined>();
       // @ts-expect-error iconPosition is 'before' | 'after'
       const element = <ToggleButton iconPosition="end">Bold</ToggleButton>;
+      expect(element).toBeTruthy();
+    });
+
+    it('isAccessible is an optional boolean', () => {
+      expectTypeOf<ToggleButtonProps['isAccessible']>().toEqualTypeOf<boolean | undefined>();
+      // @ts-expect-error isAccessible is a boolean
+      const element = <ToggleButton isAccessible="yes">Bold</ToggleButton>;
       expect(element).toBeTruthy();
     });
   });

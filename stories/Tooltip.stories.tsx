@@ -41,7 +41,8 @@ const meta = {
     relationship: 'description',
     side: 'top',
     align: 'center',
-    delay: 200,
+    openDelay: 200,
+    closeDelay: 100,
     defaultOpen: false,
     onOpenChange: fn(),
     children: <Button>Hover me</Button>,
@@ -125,5 +126,27 @@ export const InsideATrigger: Story = {
       </Popover.Trigger>
       <Popover.Content title="Filters">Choose which items to show.</Popover.Content>
     </Popover>
+  ),
+};
+
+/**
+ * `openDelay` is how long the pointer rests on the child, or the child has keyboard focus, before
+ * the tooltip appears; `closeDelay` is how long it stays once the pointer has left the child and
+ * the tooltip. Blur and Escape hide it at once. `delay` is the deprecated name of `openDelay`.
+ */
+export const Delays: Story = {
+  args: {
+    content: 'Appears at once and stays for a second',
+    openDelay: 0,
+    closeDelay: 1000,
+    children: <Button>Quick to show, slow to hide</Button>,
+  },
+  render: (args) => (
+    <div className="flex items-center gap-4">
+      <Tooltip {...args} />
+      <Tooltip {...args} content="Appears after a second" openDelay={1000} closeDelay={100}>
+        <Button>Slow to show</Button>
+      </Tooltip>
+    </div>
   ),
 };

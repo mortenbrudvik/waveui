@@ -33,7 +33,7 @@ Evaluated before every test file:
   - the **overlay-state release assertion** (`assertOverlayStateReleased`): if an open dismiss layer, a focus trap, a scroll lock, modal isolation (`inert`), a `useRestoreFocus` tracker user or an inline style of a scroll lock (`overflow`, `scrollbar-gutter` on `<html>`, `padding-inline-end` on `<body>`) outlived the unmounted trees, it is released and **the test fails** naming it;
   - the **body-cleanup assertion**: if `document.body` still has children (a leaked portal, live region or toast, or a node the test appended itself), they are removed and **the test fails** naming them.
 
-  Tests that append nodes, register layers directly or set such styles themselves undo that in their own `afterEach` (it runs first).
+  Tests that append nodes, register layers directly or set such styles themselves undo that in their own `afterEach` (it runs first), or in `try`/`finally` inside the test. Not in `onTestFinished`: its callbacks run after these assertions, so a container a test appended itself (for `renderToString` and `hydrateRoot`) would already have failed it. `onTestFinished` suits what the assertions do not check, such as a document listener or a prototype stub (`mockAnimations` restores `getAnimations` that way).
 
 `vi.mock()` works as usual. Do not call `vi.resetModules()` at the top of a test file: importing `src/test-utils.ts` afterwards would evaluate the setup a second time.
 
@@ -331,6 +331,87 @@ it('is described by a Field warning without becoming invalid', () => {
 
 The real `Field` around every control is covered by `src/__tests__/integration.test.tsx`.
 
+### `mockAnimations(options?)`: presence phases
+
+jsdom has no `Element.prototype.getAnimations`, so an element that mounts through the presence core (`usePresence`, `Presence`, every `Menu.Popover`) ends its `entering` and `exiting` phases at once there, as it does in a browser without motion. `mockAnimations()` installs `getAnimations` for the current test: an element that carries `data-test-motion` and whose `data-presence` is `entering` or `exiting` reports one running animation, so the phase waits until `finishAll()` (or `cancelAll()`, a cancelled animation, which also ends it). Call it in the test or in a `beforeEach` (it restores the previous `getAnimations` through `onTestFinished`, which a `beforeAll` cannot use), and call `finishAll`/`cancelAll` inside `act`. `animated: (el) => boolean` replaces the default predicate.
+
+```tsx
+// src/components/navigation/__tests__/Menu.presence.test.tsx
+import { act, render, screen } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
+import { Menu } from '../Menu';
+import { mockAnimations } from '../../../test-utils';
+
+it('stays mounted, inert and closed while it exits', async () => {
+  const motion = mockAnimations();
+  const user = userEvent.setup();
+  render(
+    <Menu>
+      <Menu.Trigger>
+        <button type="button">Actions</button>
+      </Menu.Trigger>
+      <Menu.Popover data-test-motion="">
+        <Menu.Item>Edit</Menu.Item>
+      </Menu.Popover>
+    </Menu>,
+  );
+  await user.click(screen.getByRole('button', { name: 'Actions' }));
+  await act(async () => {
+    await motion.finishAll(); // ends the enter phase
+  });
+  const surface = screen.getByRole('menu', { name: 'Actions' });
+
+  await user.keyboard('{Escape}');
+  expect(surface).toHaveAttribute('data-presence', 'exiting');
+  expect(surface).toHaveAttribute('data-state', 'closed');
+  expect(surface).toHaveAttribute('inert');
+  expect(screen.getByRole('button', { name: 'Actions' })).toHaveFocus(); // focus is back already
+
+  await act(async () => {
+    await motion.finishAll();
+  });
+  expect(surface).not.toBeInTheDocument();
+});
+```
+
+- Testing Library does not treat `inert` as hidden, and jsdom lets an inert element take focus: assert the `inert` attribute and where focus is, and keep a reference from before the close (as above) to check that the element leaves the document after the exit.
+- Test reduced motion both ways with `mockMatchMedia({ '(prefers-reduced-motion: reduce)': true })`: the phase then ends at once although an animation runs.
+- Without `mockAnimations`, the core falls back to the element's computed `animation-*` and `transition-*` times: with inline `animationName`/`animationDuration` styles and fake timers the phase ends at the duration plus 50 ms, or at the element's own end event. jsdom has no `AnimationEvent`: dispatch an `Event('animationend')` with an `animationName` property.
+- The hook adds no `style` and no `class`: assert `data-presence`, `inert` and `hidden`, never computed styles.
+
+### The Menu item harness: `renderInMenuList(ui, options?)`
+
+`src/components/navigation/__tests__/menuHarness.tsx` renders item kinds (`Menu.ItemCheckbox`, `Menu.ItemLink`, `Menu.Group`, …) inside the Menu and list contexts, with a real checked-values state and the list's roving keys, but without the Menu root, trigger and popover modules: a `role="menu"` list named "Test menu". Options: `isStatic` (a static list ignores close requests), `closeFromItem` (a spy by default, returned as `closeFromItem`: assert that an activation closes a popup menu), `checkedValues`, `defaultCheckedValues`, `onCheckedValuesChange`, `persistOnItemClick`, `submenuTrigger`, `dir` (`'rtl'` renders the list inside `<WaveProvider dir="rtl">`) and `renderOptions` (passed on to `render`). `MenuListHarness` is the same tree as an element, for `renderToString` and `hydrateRoot` and for a controlled parent. Cases that need a real popup menu (focus returning to the trigger, submenus, the server HTML of a real static `Menu`) are in the Menu suites and `src/__tests__/integration.test.tsx`.
+
+```tsx
+// src/components/navigation/__tests__/Menu.selectable.test.tsx
+import { act, screen } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
+import { MenuItemCheckbox } from '../Menu.selectable';
+import { renderInMenuList } from './menuHarness';
+
+it('Space toggles and keeps the menu open; Enter toggles and closes it', async () => {
+  const user = userEvent.setup();
+  const { closeFromItem } = renderInMenuList(
+    <MenuItemCheckbox name="view" value="grid">
+      Grid
+    </MenuItemCheckbox>,
+  );
+  const item = screen.getByRole('menuitemcheckbox', { name: 'Grid' });
+  act(() => item.focus());
+  await user.keyboard(' ');
+  expect(item).toHaveAttribute('aria-checked', 'true');
+  expect(closeFromItem).not.toHaveBeenCalled();
+  await user.keyboard('{Enter}');
+  expect(item).toHaveAttribute('aria-checked', 'false');
+  expect(closeFromItem).toHaveBeenCalledTimes(1);
+});
+```
+
+- The column alignment is CSS `:has()`, which jsdom does not lay out: assert the placeholder spans and their `group-has-[…]/menu:` classes, not their visibility.
+- After a `rerender` that changes item attributes inside a roving container, flush with `await act(async () => {})` before pressing keys (the roving hook restamps from a MutationObserver).
+- jsdom joins a row's shortcut text to its accessible name (`RulerCtrl+R`): query such an item by a regular expression (`{ name: /^Ruler/ }`).
+
 ### Browser API mocks
 
 - `installResizeObserverMock()` installs a controllable `ResizeObserver` and returns `{ trigger(target?), restore() }`; `trigger` calls the observers inside `act()`.
@@ -400,6 +481,7 @@ it('starts auto-rotation stopped for reduced motion', () => {
 - **One call per interaction.** Every stateful component has a StrictMode test that its value callback fires exactly once per interaction.
 - **Separate interactions.** When a controlled component's parent ignores the callback, repeated interactions must be separate tasks: use `userEvent`, or `await act(async () => {})` between `fireEvent` calls. Back-to-back `fireEvent` calls run in one task and chain like uncontrolled updates (two clicks on `<ToggleButton pressed={false}>` would emit `true`, then `false`).
 - **Change-only vs every activation.** Value callbacks (`onValueChange`, `onCheckedChange`, `onOpenChange`) fire only on change; event callbacks (`onPageChange`, `onStepChange`, `Tree` `onItemSelect`, the deprecated `onTabSelect`/`onNavItemSelect`/`onOptionSelect`) fire on every activation. Test re-selection for both kinds.
+- **Checked values.** Menu and Toolbar call `onCheckedValuesChange(checkedValues, details)` once per change (a re-selected radio calls nothing) with a new object, then `details = { name, checkedItems, event }`: assert both arguments, `details.checkedItems` being `checkedValues[name]` and `details.event` the click (`toHaveBeenCalledWith({ view: ['grid'] }, expect.objectContaining({ name: 'view', checkedItems: ['grid'] }))`, or the exact `event` captured in the item's `onClick` through `event.nativeEvent`), once per change in StrictMode, and that a controlled parent that ignores the callback keeps its value.
 - **A second `details` argument.** Dialog and Drawer call `onOpenChange(open, details)` with `{ reason, event }`, so `toHaveBeenCalledWith(false)` no longer matches. When the reason is not the point of the test, write `toHaveBeenCalledWith(false, expect.anything())`; when it is, `toHaveBeenCalledWith(false, expect.objectContaining({ reason: 'escape' }))`, or the exact object in the component's own tests: `{ reason: 'outside-press', event: expect.any(Event) }`. A controlled dialog that refuses a reason is tested by asserting that it stays open after that interaction and closes after another (Escape).
 
 ```tsx
@@ -446,7 +528,7 @@ import { act, render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { Tooltip } from '../Tooltip';
 
-describe('Tooltip delay', () => {
+describe('Tooltip openDelay', () => {
   beforeEach(() => {
     vi.useFakeTimers({ shouldAdvanceTime: true });
   });
@@ -457,7 +539,7 @@ describe('Tooltip delay', () => {
   it('shows the visual surface after the delay', async () => {
     const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
     render(
-      <Tooltip content="Save changes" delay={300}>
+      <Tooltip content="Save changes" openDelay={300}>
         <button type="button">Save</button>
       </Tooltip>,
     );
@@ -476,6 +558,69 @@ describe('Tooltip delay', () => {
 - Wrap direct `vi.advanceTimersByTime(…)` calls in `act()`: timers that set state outside `act()` log warnings.
 - `queueMicrotask` stays real (never add it to `toFake`). Focus moves that run in a microtask (a removed toast moving focus on, a focus trap returning focus that landed outside it) are asserted after `await act(async () => {})` or a `userEvent` action: after `act(() => el.focus())` on an element outside an open Dialog, Drawer or DatePicker calendar, flush before asserting where focus ended up. Focus-outside dismissal is decided in a microtask too: after focusing an element outside an open Menu, listbox popup, AvatarGroup popup or InfoLabel popup with a synchronous `act(() => el.focus())`, flush (or write `await act(async () => el.focus())`) before asserting that it closed.
 - Switch back to real timers (or keep `shouldAdvanceTime`) before an axe audit.
+- Tooltip's 0.6 `delay` prop is deprecated and warns: write `openDelay` (and `closeDelay`); keep `delay` only in a test that asserts the deprecation warning.
+
+### Hover and the safe zone
+
+Hover opening (Menu submenus, `openOnHover` on Menu and Popover) follows the mouse only. Simulate it with `user.hover`/`user.unhover`, or with `user.pointer({ target, coords: { clientX, clientY } })` for a path, under the fake timers above; touch and pen are pointer events you dispatch inside `act` (`new PointerEvent('pointerover', { bubbles: true, pointerType: 'touch' })`, then `pointermove`), which must open nothing and move no focus. The triangle safe zone is computed from rectangles, which jsdom does not lay out: give the trigger items and the surface boxes with `mockRect` after they render, then move the pointer through points inside and outside the triangle. Keep 50–100 ms of margin around every delay (assert "still closed" at `openDelay - 100` and "open" at `openDelay + 100`), so a busy machine's real time, which `shouldAdvanceTime` adds, cannot flip the result.
+
+```tsx
+// After src/components/navigation/__tests__/Menu.hover.test.tsx
+import { act, render, screen } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
+import { Menu } from '../Menu';
+
+beforeEach(() => {
+  vi.useFakeTimers({ shouldAdvanceTime: true });
+});
+afterEach(() => {
+  vi.useRealTimers();
+});
+
+/** A click-opened File menu with an "Open recent" submenu. */
+function FileMenu() {
+  return (
+    <Menu>
+      <Menu.Trigger>
+        <button type="button">File</button>
+      </Menu.Trigger>
+      <Menu.Popover>
+        <Menu.Item>New</Menu.Item>
+        <Menu>
+          <Menu.Trigger>
+            <Menu.Item>Open recent</Menu.Item>
+          </Menu.Trigger>
+          <Menu.Popover>
+            <Menu.Item>report.docx</Menu.Item>
+          </Menu.Popover>
+        </Menu>
+      </Menu.Popover>
+    </Menu>
+  );
+}
+
+it('opens a submenu openDelay after its item is hovered, without taking focus', async () => {
+  const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
+  render(<FileMenu />);
+  await user.click(screen.getByRole('button', { name: 'File' }));
+  const item = screen.getByRole('menuitem', { name: 'Open recent' });
+  await user.hover(item);
+  expect(item).toHaveFocus(); // focus follows the mouse inside the menu, not into the submenu
+  act(() => {
+    vi.advanceTimersByTime(150);
+  });
+  expect(screen.queryByRole('menu', { name: 'Open recent' })).not.toBeInTheDocument();
+  act(() => {
+    vi.advanceTimersByTime(200);
+  });
+  expect(screen.getByRole('menu', { name: 'Open recent' })).toBeInTheDocument();
+  expect(item).toHaveFocus();
+});
+```
+
+- Focus follows the mouse inside a focused menu tree: a test that hovers an item and then presses Enter activates the hovered item. Hover into a menu that focus is not in moves no focus; test both.
+- The "dismissed stays dismissed" rule needs the pointer on the trigger at the dismissal: hover, press Escape, move within the trigger past `openDelay` (nothing opens), then `unhover` and hover again (it opens).
+- A close by hover moves no focus: open a menu or hover card by hover with nothing focused, `unhover` past `closeDelay`, and assert `expect(document.body).toHaveFocus()` (a Tooltip on the trigger, with `openDelay={0}`, must stay hidden too). Also test that the other closes still return focus: Escape on the same hover-opened surface focuses the trigger.
 
 ## 8. Development warnings
 
@@ -545,6 +690,9 @@ A passing test prints nothing, the stories gate (`src/__tests__/stories.a11y.tes
 - Popups: open-state axe, dismissal (Escape, outside press) and focus-return tests. Portaled content is not in `container`: query it with `screen`.
 - A click on a link inside a `<label>` (a rich Checkbox, Switch or Radio `label`): user-event forwards every click inside a label to the label's control, which browsers do not do for interactive content. Test "clicking the link does not toggle" with `fireEvent.click(link)` (jsdom's own label activation skips interactive descendants, as browsers do) and say why in a comment; click the label text with `userEvent`.
 - Shift+Tab from the browser's own controls (the Popover and TeachingPopover keyboard order): dispatch the window's `blur` and `focus` events before focusing the element (`window.dispatchEvent(new FocusEvent('blur'))`, then `'focus'`); a focus from nothing without that window focus counts as a focus restore in the page and keeps the order after the trigger.
+- **Context menus** (`openOnContext`). A pointer gesture is `fireEvent.contextMenu(el, { button: 2, clientX, clientY })`, and a macOS Ctrl+click `{ button: 0, ctrlKey: true, clientX, clientY }`; `fireEvent` returns `false` when the component prevented the browser's menu, so assert it (`true` in a text field of the region). A keyboard gesture is the key press on the focused element (`await user.keyboard('{Shift>}{F10}{/Shift}')` or `'{ContextMenu}'`), optionally followed by the `fireEvent.contextMenu(el, { button: 0 })` the browser dispatches for it, which must not move the menu. A position needs a viewport and rectangles: set `clientWidth`/`clientHeight` on `document.documentElement` (remove them after the test) and give the row a box with `mockRect`, then assert the surface's `transform` inside `waitFor`. A second right click while the menu is open, as Chromium and Firefox report it, is `fireEvent.pointerDown(row, { button: 2, … })`, the row's focus (`act(() => row.focus())`, then `await act(async () => {})`) and `fireEvent.contextMenu(row, …)`: the menu must move without an `onOpenChange` call. A scroll closes a pointer-opened surface when it moves the region or the row under the pointer: give both a box with `mockRect`, change one, and `fireEvent.scroll` an element outside the surface.
+- **Link navigation** (`Menu.ItemLink`). jsdom logs "Not implemented: navigation" for a followed `href` other than a hash. Use hash hrefs (`#settings`) where the case allows; otherwise add a bubble-phase `click` listener on `document` (it runs after React's root listener) that records `event.defaultPrevented` and then calls `preventDefault()` itself, and remove it with `onTestFinished`. A capture listener would run before React and see nothing. user-event's Enter on a focused `<a href>` dispatches the click, as a browser does; `fireEvent.keyDown` does not.
+- **What jsdom cannot show.** jsdom has no `inert` behaviour (an inert element still takes focus, and React's post-commit focus restore can land in it), no `getAnimations`, no `:has()` layout, no hit testing, no real transition timing, and it cannot tell how an engine dispatches the keyboard `contextmenu`. Assert attributes, classes and the events the component handles; a test that depends on browser `inert` semantics can model them (the local `focusSkipsInert()` of `Menu.contextMenu.test.tsx` spies on `HTMLElement.prototype.focus` to skip elements inside `[inert]`). The rest is the real-browser checklist of the phase spec (Storybook in Chrome, Firefox and Safari).
 - Type-level contracts go in `__tests__` too; `tsconfig.dev.json` type-checks them:
 
 ```tsx
@@ -564,7 +712,7 @@ it('types anchor props when rendered as a link', () => {
 
 - `src/__tests__/conventions.test.ts` — the conventions gate: one test per source file of `src/components` (raw colors also in `stories/`), reporting `file:line [rule]` for raw colors, physical utilities, `translate-x` without a `wave-rtl:` counterpart, Tailwind's bare `rtl:`/`ltr:` variants (use `wave-rtl:`), `focus:outline-none`, arbitrary animations, `forwardRef`, `enabled:` variants, `<button>` without `type`, and transitions or animations without a `motion-reduce:` variant. `src/hooks` and `src/lib` are not scanned. Filter with `-t "<path>"`.
 - `src/__tests__/stories.a11y.test.tsx` — renders every story with the Storybook preview (WaveProvider, light theme) and audits it with the shared axe instance. Opt-out only with `parameters: { a11y: { test: 'todo' } }` and a comment explaining why.
-- `src/__tests__/integration.test.tsx` — compositions across components with the real public API (Menu + MenuButton/SplitButton, Tooltip on triggers, Field around every control, toasts over modals, pickers inside dialogs, stacked dialogs with `autoFocus`, Tab from a shown Tooltip or open InfoLabel inside a dialog's focus trap, a Popover inside a `Menu.Item`), and the Server Component regression suite (see [`asClientReference`](#asclientreferencepart-parts-written-in-a-server-component)). When a release is built in parallel work packages with disjoint files (see `docs/ROADMAP.md`, "Process per release"), a component's own tests use only the shared foundation and its own files: a stand-in with the same attributes (`renderWithFieldContext` for a Field state, a plain `<button aria-disabled="true">` for a focusable disabled button inside `Menu.Trigger`). Every case that needs the real components of two packages at once goes here, once both have landed: in 0.6, a Toolbar with a `disabledFocusable` Button and its Tooltip, `Menu.Trigger` around a `disabledFocusable` MenuButton and SplitButton, a Field warning around Input, Checkbox, Combobox, ColorPicker and a native `<input>`, ProgressBar in a Field, an alert Dialog with a Toaster, a long form with a sticky `Dialog.Footer`, and a SpinButton in a Dialog and in a Drawer whose typed value a backdrop press commits (the component files keep the same mechanism with a plain `<input onBlur>`).
+- `src/__tests__/integration.test.tsx` — compositions across components with the real public API (Menu + MenuButton/SplitButton, Tooltip on triggers, Field around every control, toasts over modals, pickers inside dialogs, stacked dialogs with `autoFocus`, Tab from a shown Tooltip or open InfoLabel inside a dialog's focus trap, a Popover inside a `Menu.Item`), and the Server Component regression suite (see [`asClientReference`](#asclientreferencepart-parts-written-in-a-server-component)). When a release is built in parallel work packages with disjoint files (see `docs/ROADMAP.md`, "Process per release"), a component's own tests use only the shared foundation and its own files: a stand-in with the same attributes (`renderWithFieldContext` for a Field state, a plain `<button aria-disabled="true">` for a focusable disabled button inside `Menu.Trigger`). Every case that needs the real components of two packages at once goes here, once both have landed: in 0.6, a Toolbar with a `disabledFocusable` Button and its Tooltip, `Menu.Trigger` around a `disabledFocusable` MenuButton and SplitButton, a Field warning around Input, Checkbox, Combobox, ColorPicker and a native `<input>`, ProgressBar in a Field, an alert Dialog with a Toaster, a long form with a sticky `Dialog.Footer`, and a SpinButton in a Dialog and in a Drawer whose typed value a backdrop press commits (the component files keep the same mechanism with a plain `<input onBlur>`). In 0.7 the Menu item kinds were tested through the harness of section 5, and the integration suite holds the real popup menus: checkable items in a submenu sharing the root's `checkedValues`, links closing the chain, a context menu with checkable items and a submenu, a Toolbar with a radio group, an Input, a Combobox and a MenuButton, a Popover or Dialog opened from a menu item (a root menu of its own), an exiting `Menu.Popover` inside a Dialog, and a hover-opened submenu inside a click-opened root.
 - `src/__tests__/public-types.test.ts` — every named type that a public declaration refers to (a prop type, an `extends` base, a parameter or return type) is exported from `src/index.ts`. Export a new component's prop types from the entry; only the structural helpers in its `INTERNAL_HELPERS` list may stay internal, and that list must stay current.
 - `src/__tests__/test-utils.test.tsx` — tests of the helpers themselves.
 - `src/styles/__tests__/tokens.test.ts` — every theme declares every token, and every contrast pair meets its WCAG threshold (unrounded); it also pins `base.css` and the style entries and tests `scripts/build-css.mjs`. It runs in the node environment (`// @vitest-environment node`): it needs no DOM, and under jsdom Vite's client transform could not load the gate scripts.

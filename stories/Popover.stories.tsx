@@ -1,7 +1,7 @@
 import * as React from 'react';
 import type { Meta, StoryObj } from '@storybook/react';
 import { fn } from 'storybook/test';
-import { Popover, Button, Tooltip } from '../src';
+import { Popover, Avatar, Button, Input, Tooltip } from '../src';
 
 /** Decorative filter icon (the Button hides its icon slot from assistive technology). */
 const FilterIcon = () => (
@@ -22,10 +22,16 @@ const meta = {
       control: 'select',
       options: ['start', 'center', 'end'],
     },
+    // An element held in state or a VirtualElement (an object with a function): set in code.
+    target: { control: false },
   },
   args: {
     side: 'bottom',
     align: 'start',
+    openOnHover: false,
+    openDelay: 250,
+    closeDelay: 500,
+    openOnContext: false,
     onOpenChange: fn(),
     children: (
       <>
@@ -126,6 +132,115 @@ export const Controlled: Story = {
           External Toggle
         </Button>
       </div>
+    );
+  },
+};
+
+/**
+ * A hover card: with `openOnHover` the card opens when the mouse pointer rests on the trigger
+ * (`openDelay`) and closes once the pointer has left the trigger and the card (`closeDelay`),
+ * unless focus is inside the card. A triangle towards the card keeps it open while the pointer
+ * moves into it. Opening and closing by hover move no focus; Tab from the trigger enters the card,
+ * and a click on the trigger pins it. Touch and pen open it by a tap only.
+ */
+export const HoverCard: Story = {
+  args: {
+    openOnHover: true,
+    children: (
+      <>
+        <Popover.Trigger>
+          <Button appearance="transparent">Maria Lopez</Button>
+        </Popover.Trigger>
+        <Popover.Content title="Maria Lopez">
+          <div className="flex items-center gap-3">
+            <Avatar name="Maria Lopez" size="large" />
+            <span className="text-muted-foreground">Product designer, Oslo</span>
+          </div>
+          <Button appearance="primary" size="small" className="mt-3">
+            Follow
+          </Button>
+        </Popover.Content>
+      </>
+    ),
+  },
+};
+
+/**
+ * A context popover: with `openOnContext` the trigger is a context-menu region. A right click on a
+ * file (a Ctrl+click on macOS) opens the details at the pointer and leaves focus where it is; Tab
+ * from the focused file enters them. Shift+F10 or the ContextMenu key on the focused file opens
+ * them next to it and moves focus into them, and Escape returns focus to the file. The filter
+ * field keeps the browser's own context menu. The region is no popover button (no
+ * `aria-haspopup`), so the content is named by its `title`, and `aria-keyshortcuts` announces the
+ * key.
+ */
+export const ContextPopover: Story = {
+  args: {
+    openOnContext: true,
+    children: (
+      <>
+        <Popover.Trigger>
+          <div
+            role="group"
+            aria-label="Files"
+            aria-keyshortcuts="Shift+F10"
+            className="flex w-64 flex-col items-stretch gap-1"
+          >
+            {['Report.docx', 'Budget.xlsx', 'Slides.pptx'].map((file) => (
+              <Button key={file} appearance="subtle" className="justify-start">
+                {file}
+              </Button>
+            ))}
+            <Input aria-label="Filter files" placeholder="Filter" />
+          </div>
+        </Popover.Trigger>
+        <Popover.Content title="File details">
+          <p style={{ margin: 0 }}>Shared with 3 people, edited today.</p>
+          <Button size="small" className="mt-3">
+            Share
+          </Button>
+        </Popover.Content>
+      </>
+    ),
+  },
+};
+
+/**
+ * `target` places the content at another element (or at a `VirtualElement`, such as a point).
+ * This controlled popover has no trigger: it is anchored to a toggle button outside it, which
+ * carries its own `aria-haspopup`, `aria-expanded` and `aria-controls`. A press on the toggle is
+ * no outside press (the toggle closes the popover itself), Tab from it enters the content, and
+ * Close returns focus to it.
+ */
+export const AnchoredToTarget: Story = {
+  render: function AnchoredToTargetStory({ onOpenChange, ...args }) {
+    const [open, setOpen] = React.useState(false);
+    const [target, setTarget] = React.useState<HTMLButtonElement | null>(null);
+    const contentId = React.useId();
+    const change = (next: boolean) => {
+      setOpen(next);
+      onOpenChange?.(next);
+    };
+    return (
+      <>
+        <Button
+          ref={setTarget}
+          aria-haspopup="dialog"
+          aria-expanded={open}
+          aria-controls={open ? contentId : undefined}
+          onClick={() => change(!open)}
+        >
+          Details
+        </Button>
+        <Popover {...args} open={open} onOpenChange={change} target={target}>
+          <Popover.Content id={contentId} title="Details">
+            <p style={{ margin: 0 }}>Anchored to the Details button.</p>
+            <Button size="small" className="mt-3" onClick={() => change(false)}>
+              Close
+            </Button>
+          </Popover.Content>
+        </Popover>
+      </>
     );
   },
 };

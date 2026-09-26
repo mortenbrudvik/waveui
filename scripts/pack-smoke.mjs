@@ -227,11 +227,16 @@ export function checkPlainCss(css) {
   return errors;
 }
 
+/** Wave motion utilities used by the Tailwind fixture's own source (`src/app.html`). */
+const MOTION_UTILITIES = ['duration-wave-normal', 'ease-wave-decelerate-mid'];
+
 /**
  * A Tailwind consumer build (repo-level#1): Wave's tokens in `@layer theme`, the component classes
  * generated from the package's `dist`, each of `directionClasses` (the `wave-rtl:` classes of the
- * dist's class strings) compiled with Wave's `wave-rtl` variant, and the consumer's own
- * utilities. `setup` names the build: `'tailwind'` (default) imports the complete
+ * dist's class strings) compiled with Wave's `wave-rtl` variant, the consumer's own utilities,
+ * and the Wave motion utilities the fixture's own source uses (`duration-wave-normal`,
+ * `ease-wave-decelerate-mid`: the theme maps the motion tokens for Tailwind builds). `setup`
+ * names the build: `'tailwind'` (default) imports the complete
  * `./tailwind` entry, which also puts Wave's base rules in `@layer base`; `'tokens'` is a custom
  * setup on `./tokens` with `./variants.css` and its own `@source`, which brings its own base. Any
  * other `setup` throws a `TypeError`.
@@ -273,6 +278,13 @@ export function checkTailwindCss(css, { directionClasses = [], setup = 'tailwind
         `the component class .${name} was not generated (the package's dist was not scanned)`,
       );
     }
+  }
+  const motion = MOTION_UTILITIES.filter((name) => !classes.has(name));
+  if (motion.length > 0) {
+    errors.push(
+      `the motion utilities ${motion.map((name) => `.${name}`).join(', ')} were not generated ` +
+        "(the Wave theme's --transition-duration-wave-* and --ease-wave-* mappings are missing)",
+    );
   }
   const uncompiled = missingDirectionVariant(css, directionClasses);
   if (uncompiled.length > 0) {

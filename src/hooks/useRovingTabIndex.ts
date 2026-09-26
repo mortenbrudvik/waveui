@@ -186,6 +186,7 @@ const OBSERVED_ATTRIBUTES = [
   'data-roving-disabled',
   'data-roving-value',
   'data-roving-container',
+  'data-roving-transparent',
   'tabindex',
   'hidden',
   'inert',
@@ -195,11 +196,37 @@ const OBSERVED_ATTRIBUTES = [
   'contenteditable',
 ];
 
+/**
+ * Whether `el` is a nested composite: it has its own roving container, or (with `roleComposites`)
+ * a composite role. An element marked `data-roving-transparent` is never one by its role (a
+ * `role="radiogroup"` whose radios are items of the enclosing container, `Toolbar.RadioGroup`);
+ * its own `data-roving-container` still makes it one.
+ */
 function isNestedComposite(el: Element, roleComposites: boolean): boolean {
   if (el.hasAttribute('data-roving-container')) return true;
-  if (!roleComposites) return false;
+  if (!roleComposites || el.hasAttribute('data-roving-transparent')) return false;
   const role = el.getAttribute('role');
   return role !== null && COMPOSITE_ROLES.has(role);
+}
+
+/** Whether `el` is a nested composite or inside one, below `container`. */
+function isInNestedComposite(el: Element, container: Element, roleComposites: boolean): boolean {
+  for (let node: Element | null = el; node && node !== container; node = node.parentElement) {
+    if (isNestedComposite(node, roleComposites)) return true;
+  }
+  return false;
+}
+
+/** What an element looked like before the hook stamped it, to hand it back unchanged. */
+interface StampedOriginal {
+  /**
+   * The author's own `tabindex` attribute, or `null`, read at the first stamp. A `tabIndex` the
+   * author renders differently while the element is stamped is not seen (the stamps overwrite it),
+   * so the hand-back restores the first value.
+   */
+  tabIndex: string | null;
+  /** Whether the hook added the element's `data-roving-value`. */
+  addedValue: boolean;
 }
 
 function isFocusableSelf(el: HTMLElement): boolean {
@@ -376,7 +403,7 @@ class RovingStore {
     roleComposites: true,
   };
 
-  private readonly stamped = new WeakSet<Element>();
+  private readonly stamped = new WeakMap<Element, StampedOriginal>();
   private readonly autoValues = new WeakMap<Element, string>();
   private autoCounter = 0;
   private notify: (() => void) | null = null;
@@ -500,9 +527,14 @@ class RovingStore {
     return result;
   }
 
-  /** manageTabIndex: writes tabIndex 0 on the tab stop and -1 on every other own item. */
+  /**
+   * manageTabIndex: writes tabIndex 0 on the tab stop and -1 on every other own item. An element
+   * it stamped that now belongs to a nested composite (a `data-roving-transparent` marker removed)
+   * gets its own `tabindex` back, and loses the `data-roving-value` the hook added.
+   */
   stamp(): void {
     if (!this.options.manageTabIndex || !this.container) return;
+    this.release(this.container);
     const resolved = this.resolve();
     const stop = resolveTabStop(
       resolved.map(toEntry),
@@ -513,12 +545,38 @@ class RovingStore {
     for (const item of resolved) {
       if (item.nested) continue;
       const { element } = item;
-      this.stamped.add(element);
+      let original = this.stamped.get(element);
+      if (!original) {
+        original = {
+          tabIndex: element.getAttribute('tabindex'),
+          addedValue: !element.hasAttribute('data-roving-value'),
+        };
+        this.stamped.set(element, original);
+      }
       const tabIndex = item.value === stop ? '0' : '-1';
       if (element.getAttribute('tabindex') !== tabIndex) element.setAttribute('tabindex', tabIndex);
       if (!element.hasAttribute('data-roving-value')) {
         element.setAttribute('data-roving-value', item.value);
       }
+    }
+  }
+
+  /** Hands the elements it stamped that now belong to a nested composite back to their author. */
+  private release(container: HTMLElement): void {
+    let candidates: HTMLElement[];
+    try {
+      candidates = Array.from(container.querySelectorAll<HTMLElement>(this.options.itemSelector));
+    } catch {
+      return;
+    }
+    for (const candidate of candidates) {
+      const original = this.stamped.get(candidate);
+      if (!original) continue;
+      if (!isInNestedComposite(candidate, container, this.options.roleComposites)) continue;
+      this.stamped.delete(candidate);
+      if (original.tabIndex === null) candidate.removeAttribute('tabindex');
+      else candidate.setAttribute('tabindex', original.tabIndex);
+      if (original.addedValue) candidate.removeAttribute('data-roving-value');
     }
   }
 
@@ -616,7 +674,10 @@ function startsOnItem(item: ResolvedItem | null, target: EventTarget | null, con
  *   `[data-roving-value]`) whose nearest roving container is this one. A nested composite (an
  *   element with its own `data-roving-container`, or a radiogroup/listbox/grid/tablist/menu/tree/
  *   spinbutton role) counts as one item whose focus target is its own tab stop; the hook never
- *   writes tabindex inside it, so it keeps its own Tab stop. Pass `items` to fix the order instead.
+ *   writes tabindex inside it, so it keeps its own Tab stop. An element marked
+ *   `data-roving-transparent` is never a nested composite by its role: its items are items of this
+ *   container (the radios of `Toolbar.RadioGroup`); it must not carry a `data-roving-container`.
+ *   Pass `items` to fix the order instead.
  *   In the 0.4 call shape and with explicit `items`, only elements with their own roving container
  *   are nested composites: a role-only `radiogroup`/`tablist`/… element between the container and
  *   the items (the widget's root inside a wrapper that holds the ref) does not swallow them.
