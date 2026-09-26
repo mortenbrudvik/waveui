@@ -1,6 +1,7 @@
 import * as React from 'react';
 import { flattenChildren, getElementType, isElementOfType } from '../../lib/children';
 import { cn } from '../../lib/cn';
+import { drawerClassNames, drawerTitleClassNames } from '../../lib/classNames';
 import { isDev, warnOnce } from '../../lib/dev';
 import { DismissIcon } from '../../lib/icons';
 import { slotRendersContent } from '../../lib/slot';
@@ -284,7 +285,11 @@ export const DrawerTitle = ({ id, className, children, ref, ...rest }: DrawerTit
       {...rest}
       id={titleId}
       ref={titleRef}
-      className={cn('text-subtitle-1 font-semibold text-foreground', className)}
+      className={cn(
+        drawerTitleClassNames.root,
+        'text-subtitle-1 font-semibold text-foreground',
+        className,
+      )}
     >
       {children}
     </h2>
@@ -445,7 +450,10 @@ const DrawerRoot = ({
       {triggers}
       {open && (
         <Portal layerId={layer.layerId}>
-          <div className="fixed inset-0 bg-backdrop" onMouseDown={backdropPress.onMouseDown}>
+          <div
+            className={cn(drawerClassNames.backdrop, 'fixed inset-0 bg-backdrop')}
+            onMouseDown={backdropPress.onMouseDown}
+          >
             <div
               ref={mergedRef}
               role="dialog"
@@ -454,6 +462,7 @@ const DrawerRoot = ({
               tabIndex={-1}
               {...rest}
               className={cn(
+                drawerClassNames.root,
                 'fixed top-0 flex h-full w-80 max-w-full flex-col border-border bg-background text-foreground shadow-64',
                 positionClasses[position],
                 className,
@@ -461,9 +470,17 @@ const DrawerRoot = ({
             >
               <DrawerContext.Provider value={panelContext}>
                 <ModalSurfaceContext.Provider value={titles.context}>
-                  <div className="flex items-center justify-between gap-2 border-b border-border p-4">
+                  <div
+                    className={cn(
+                      drawerClassNames.header,
+                      'flex items-center justify-between gap-2 border-b border-border p-4',
+                    )}
+                  >
                     {hasTitle && (
-                      <h2 id={propTitleId} className="text-subtitle-1 font-semibold">
+                      <h2
+                        id={propTitleId}
+                        className={cn(drawerTitleClassNames.root, 'text-subtitle-1 font-semibold')}
+                      >
                         {title}
                       </h2>
                     )}
@@ -475,10 +492,12 @@ const DrawerRoot = ({
                       onClick={(event) =>
                         requestOpen(false, { reason: 'close-button', event: event.nativeEvent })
                       }
-                      className="ms-auto text-muted-foreground"
+                      className={cn(drawerClassNames.closeButton, 'ms-auto text-muted-foreground')}
                     />
                   </div>
-                  <div className="min-h-0 flex-1 overflow-y-auto p-4">{content}</div>
+                  <div className={cn(drawerClassNames.body, 'min-h-0 flex-1 overflow-y-auto p-4')}>
+                    {content}
+                  </div>
                 </ModalSurfaceContext.Provider>
               </DrawerContext.Provider>
             </div>
