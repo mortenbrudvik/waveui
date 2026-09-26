@@ -5,7 +5,9 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [0.7.0] - Unreleased
+## [0.7.0] - 2026-09-26
+
+**The first release on npm since 0.4.0.** 0.5.0 and 0.6.0 were never published to npm: their changes ship in 0.7.0, and their own sections of the CHANGELOG describe them. Upgrading from 0.4.0, follow [Upgrading from 0.4](#upgrading-from-04) (0.5.0), then [Upgrading from 0.5](#upgrading-from-05) (0.6.0), then [Upgrading from 0.6](#upgrading-from-06) (0.7.0), and read the Changed sections of all three versions.
 
 The second Fluent UI v9 parity release: Phase 2 of the [roadmap](docs/ROADMAP.md), menus and commands, plus the presence core that new surfaces mount through from now on. It closes 3 high, 9 medium and 17 low gaps of the [Fluent UI v9 comparison](docs/research/fluent-ui-v9-comparison.md) (the ids in backticks below). Fluent's names are used where they fit Wave's conventions (`checkedValues`, `persistOnItemClick`, `openOnHover`, `openOnContext`, `isAccessible`, `Menu.ItemCheckbox`, `Toolbar.RadioGroup`); a state callback is named after its state and receives the value first, with extra data in a second, optional `details` argument (`onCheckedValuesChange(checkedValues, details?)`, Fluent's `onCheckedValueChange(event, data)`). **Nothing public was removed**, and no public type was narrowed. Changes of behaviour, DOM structure and types that are not additions are listed under [Changed](#changed): read them before upgrading if your tests assert Wave's DOM or console output, or hover over menu items.
 
@@ -99,6 +101,7 @@ The second Fluent UI v9 parity release: Phase 2 of the [roadmap](docs/ROADMAP.md
 - **Build**: TypeScript 6.0, Vite 8.3 and Rolldown 1.2. Internal dist modules, which are not in the exports map, re-export all of their source exports, and the CommonJS files use Node-mode `__toESM` interop; the public ESM and CommonJS exports are unchanged.
 - **Repository settings** in `package.json`, which npm reads only from the project it installs into, so they do not affect an app that installs Wave: `devEngines` (Node.js `^22.22.2 || ^24.15.0 || >=26.0.0` and npm `>=11.11.0` to work on Wave) and `allowScripts` (the install scripts of esbuild and @parcel/watcher are denied).
 - **Development**: the tests run on Vitest 5 (was 4) with @vitest/coverage-v8 5, on jsdom 30 (was 29) and with @testing-library/jest-dom 7 (was 6). jsdom 30 supports Node.js 22.22.2+, 24.15+ and 26+, and Vitest 5 leaves out Node.js 25, which sets the `devEngines` range. TypeScript is held to 6.0.x (`~6.0.3`), since typescript-eslint supports TypeScript below 6.1, and `eslint.config.mjs` uses ESLint's `defineConfig` instead of typescript-eslint's deprecated `config` helper; declaration files lose their `no-explicit-any` exemption (it only served Vitest 4's matcher types), the scripts' Node.js globals follow Node.js 22 (`navigator`, `Navigator` and `WebSocket`). `verify-dist` also fails when `dist/index.d.ts` or `dist/index.d.cts` does not declare and export `cn`, `Button`, `ButtonProps`, `Menu` and `usePresence`, so a build whose declarations roll up to an empty `export { }` (TypeScript 6 without `rootDir` in `tsconfig.json`) fails `npm run build` instead of only `npm run test:pack`. Nothing in the package changes.
+- **Publishing**: releases are published by GitHub Actions. Pushing a tag `vX.Y.Z` runs the release workflow, which checks the tag against `package.json` and the CHANGELOG, runs the full gate, publishes through npm trusted publishing (a short-lived OIDC token of the workflow, no stored npm token) with a provenance attestation that links the package to its source commit and build, and creates the GitHub release from the CHANGELOG section. `npm audit signatures` verifies the attestation. `package.json` sets `publishConfig.access` to `public`. See [docs/RELEASING.md](docs/RELEASING.md).
 
 ### Deprecated
 
@@ -127,7 +130,9 @@ Against 0.6.0, measured the way 0.6 did: `dist/styles.css` as built, and minifie
 - `Menu` now carries its item kinds, submenus, the presence core and the hover and context-menu helpers; `Toolbar` its parts, which import Button and ToggleButton.
 - `dist/styles.css` grows by the 17 motion variables and the classes of the new parts.
 
-## [0.6.0] - Unreleased
+## [0.6.0] - Not published (ships in 0.7.0)
+
+Never published to npm on its own: these changes reached npm in [0.7.0](#070---2026-09-26).
 
 The first Fluent UI v9 parity release: Phase 1 of the [roadmap](docs/ROADMAP.md), small changes that need no new subsystem. It closes 34 medium and 14 low gaps of the [Fluent UI v9 comparison](docs/research/fluent-ui-v9-comparison.md) (the ids in backticks below, such as `buttons-3`, are its gap ids) and mitigates two more (`badge-1`, `taggroup-1`). Fluent's prop names are used where they fit Wave's conventions (`disabledFocusable`, `iconPosition`, `validationState`, `modalType`, `selectTabOnFocus`); open state keeps Wave's `open`/`defaultOpen`/`onOpenChange`, and extra callback data goes in a second, optional `details` argument. **Nothing public was removed**, and no public type was narrowed except the `color` attribute that ProgressBar and CounterBadge inherit (see [Types](#types-1)). Changes of behaviour, DOM structure and types that are not additions are listed under [Changed](#changed-1): read them before upgrading if your tests assert Wave's DOM or callback arguments, or your CSS styles Wave's internals.
 
@@ -273,7 +278,9 @@ Against 0.5.0, built the same way and measured once for this release with a scri
 
 An import of only `Button` still leaves Dialog out (`verify-dist`'s tree-shaking probe passes). Combobox and TimePicker now import the `Button` module (their expand button recognises a `Button` passed as its glyph): an import of only Combobox grows from 49.8 KiB to 57.1 KiB (17.5 KiB to 19.7 KiB gzip).
 
-## [0.5.0] - Unreleased
+## [0.5.0] - Not published (ships in 0.7.0)
+
+Never published to npm on its own: these changes reached npm in [0.7.0](#070---2026-09-26).
 
 The full-review release: it addresses the 305 issues found by a review of the whole library (accessibility, theming, packaging, forms, overlays, keyboard support and tests), and the issues found by a second full-codebase review of that work (compounds written in React Server Components, keyboard and focus order, forms, forced colors, localizable built-in labels, right-to-left styling inside mixed-direction pages, types and tooling). One is a partial won't-fix: Wave's Tailwind color utility names (`bg-primary`, `text-foreground`, …) stay unprefixed in 0.5, and namespacing them is being considered for 1.0; see the README's "Global effects" for the colliding names and workarounds. **Nothing public was removed.** Renamed props and values keep their 0.4 names as deprecated aliases that warn once in development and will be removed in 1.0. Changes of behaviour, DOM structure and types that are not renames are listed under [Changed](#changed-2); read them before upgrading if you style Wave's internals or assert its DOM in tests.
 

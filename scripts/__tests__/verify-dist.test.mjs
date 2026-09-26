@@ -603,6 +603,8 @@ describe('checkServerImport (repo-level#2)', () => {
     ]);
   });
 
+  // Two checks, each loading the fixture in two child Node.js processes: slow under load (the
+  // parallel gate, a CI runner), hence the timeout.
   it('reports a cn that is missing or returns the wrong value', async () => {
     expect(await checkServerImport(fixture({ 'dist/lib/cn.cjs': null }).dist)).toEqual([
       expect.stringContaining('lib/cn.cjs'),
@@ -612,7 +614,7 @@ describe('checkServerImport (repo-level#2)', () => {
         fixture({ 'dist/lib/cn.mjs': 'export function cn() { return 1; }\n' }).dist,
       ),
     ).toEqual([expect.stringContaining('lib/cn.mjs')]);
-  });
+  }, 30_000);
 
   it('loads every other src/lib module the entry imports, not only cn', async () => {
     const { dist } = fixture({
@@ -1092,11 +1094,14 @@ describe('the flat-name bridge (PENDING_FLAT_EXPORTS)', () => {
 });
 
 describe('verifyDist and main', () => {
+  // Every test runs the whole check: its probes bundle the fixture with Vite several times and
+  // load it in child Node.js processes. That takes about a second alone, and more than Vitest's
+  // 5 s default under the parallel gate or on a CI runner, hence the 30 s timeouts.
   it('passes a correct dist', async () => {
     const { dist } = fixture();
     const result = await verifyDist(dist, noPending);
     expect(result.errors).toEqual([]);
-  });
+  }, 30_000);
 
   it('collects the failures of every check', async () => {
     const { dist } = fixture({
@@ -1112,7 +1117,7 @@ describe('verifyDist and main', () => {
         'lib/dev.cjs is missing',
       ]),
     );
-  });
+  }, 30_000);
 
   it('fails a dist whose JavaScript is correct but whose declarations rolled up empty', async () => {
     // TypeScript 6 without tsconfig.json's rootDir: the build passes, index.d.ts is `export { }`.
@@ -1125,7 +1130,7 @@ describe('verifyDist and main', () => {
       expect.stringMatching(/^index\.d\.ts does not declare and export cn, Button, /),
       expect.stringMatching(/^index\.d\.cts does not declare and export cn, Button, /),
     ]);
-  });
+  }, 30_000);
 
   it('runs the presence probes: a Button bundle with the presence core fails', async () => {
     const files = goodFiles();
@@ -1141,7 +1146,7 @@ describe('verifyDist and main', () => {
     expect(errors).toEqual([
       'hooks/usePresence.mjs is in the bundle of an import of only Button (Presence must be dropped)',
     ]);
-  });
+  }, 30_000);
 
   it('reports a dist without the presence core module (the include probe)', async () => {
     const files = goodFiles();
@@ -1158,7 +1163,7 @@ describe('verifyDist and main', () => {
     expect(errors).toEqual([
       'hooks/usePresence.mjs is not in the bundle of an import of only Menu',
     ]);
-  });
+  }, 30_000);
 
   it('prints the measured presence budget', async () => {
     const lines = [];
@@ -1167,7 +1172,7 @@ describe('verifyDist and main', () => {
     expect(lines.join('\n')).toMatch(
       /verify-dist: presence core \(usePresence \+ Presence\): \d+ B minified \(budget 6804\), \d+ B gzip \(budget 2927\)/,
     );
-  });
+  }, 30_000);
 
   it('exits 0 for a correct dist and 1 otherwise', async () => {
     const quiet = { log: () => {}, error: () => {} };
@@ -1176,7 +1181,7 @@ describe('verifyDist and main', () => {
       await main(['--dist', fixture({ 'dist/index.d.cts': null }).dist, '--no-pending'], quiet),
     ).toBe(1);
     expect(await main(['--dist', join(fixtureRoot, 'missing')], quiet)).toBe(1);
-  });
+  }, 30_000);
 
   it('fails the final gate (--final) while PENDING_FLAT_EXPORTS is not empty', async () => {
     const lines = [];
@@ -1190,7 +1195,7 @@ describe('verifyDist and main', () => {
     }
     const { errors } = await verifyDist(fixture().dist, { pendingFlatExports: [], final: true });
     expect(errors).toEqual([]);
-  });
+  }, 30_000);
 
   it('tolerates pending flat names, and only while the bridge is open', async () => {
     const { dist } = fixture({
@@ -1217,7 +1222,7 @@ describe('verifyDist and main', () => {
     const io = { log: (line) => lines.push(line), error: (line) => lines.push(line) };
     expect(await main(['--dist', dist, '--no-pending'], io)).toBe(1);
     expect(lines.join('\n')).toMatch(/CardHeader is not exported/);
-  });
+  }, 30_000);
 });
 
 describe('the entry guard of the gate scripts', () => {

@@ -1274,6 +1274,8 @@ The CHANGELOG's [0.6.0 "Changed" section](CHANGELOG.md#changed-1) lists every be
 
 ## Upgrading from 0.4
 
+npm went from 0.4.0 to 0.7.0: 0.5.0 and 0.6.0 were never published, and their changes ship in 0.7.0. From 0.4.0, take these steps, then those of [Upgrading from 0.5](#upgrading-from-05) and [Upgrading from 0.6](#upgrading-from-06).
+
 1. The npm package name is unchanged (`@mortenbrudvik/waveui`, as in 0.4.0). Replace `waveui` imports copied from the 0.4 guide, and a git or local dependency named `waveui`, with `@mortenbrudvik/waveui`.
 2. Styles: without Tailwind, keep `import '@mortenbrudvik/waveui/styles'` and make sure a `WaveProvider` wraps the app; with Tailwind 4, switch to `@import '@mortenbrudvik/waveui/tailwind';` after `@import 'tailwindcss';`. Import `preflight.css` if you relied on Wave's Preflight.
 3. Rename CSS overrides of the 0.4 semantic variables (`--primary`, `--border`, …) to `--wave-*`. Code that reads 0.4 variables (`var(--primary)`, `var(--ring)`, `var(--brand-80)`, `var(--grey-14)`) must switch to the `--wave-*` names too: 0.5 no longer defines them. Until then, import `legacy-tokens.css`. Overrides of the ramp names (`--brand-*`, `--grey-*`) keep working without it.
@@ -1296,6 +1298,12 @@ npm run build            # type-check, library build, CSS build, dist verificati
 npm run check:package    # publint + are-the-types-wrong on a packed tarball
 npm run test:pack        # pack the tarball and smoke-test it in plain and Tailwind fixtures
 ```
+
+GitHub Actions runs these checks, `npm run format:check` and a Storybook build on every push to `main` and every pull request (`.github/workflows/ci.yml`), and the tests, build and pack smoke test also on Node.js 22 and 26 and on Windows.
+
+### Releasing
+
+Releases are published by GitHub Actions, never from a local machine: set the version (`npm version <x.y.z> --no-git-tag-version`), date its CHANGELOG section (`## [x.y.z] - YYYY-MM-DD`), merge to `main`, then tag that commit `vX.Y.Z` and push the tag. The release workflow checks the tag against `package.json` and the CHANGELOG, runs the full gate, publishes to npm through trusted publishing with a provenance attestation, and creates the GitHub release. [docs/RELEASING.md](docs/RELEASING.md) has the exact steps, the one-time setup and how to verify a release.
 
 ## License
 

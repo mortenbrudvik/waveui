@@ -677,6 +677,8 @@ describe('useGridNavigation', () => {
   });
 
   describe('performance', () => {
+    // It counts style reads and tab-index writes, not time; rendering the 200-row grid takes more
+    // than Vitest's 5 s default under a loaded CI runner, hence the 20 s timeout.
     it('re-syncs only the cells focus moves between, not the whole grid', async () => {
       const user = userEvent.setup();
       render(<LargeHarness rows={200} />);
@@ -694,7 +696,7 @@ describe('useGridNavigation', () => {
       // thousands of times; re-syncing the cells involved reads them a few dozen times.
       expect(reads).toBeLessThan(100);
       expect(writes.count()).toBeLessThan(10);
-    });
+    }, 20_000);
 
     it('still covers widgets added to a cell later', async () => {
       function Growing({ extra }: { extra: boolean }) {
