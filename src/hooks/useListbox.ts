@@ -57,20 +57,29 @@ export interface ListboxSelectDetails {
 
 /** Options of {@link useListbox}. */
 export interface UseListboxOptions {
-  /** Whether the listbox is shown. The consumer owns the open state. */
+  /**
+   * Whether the listbox is shown. The consumer owns the open state. Standalone mode: whether the
+   * list has focus — an option is active only while it does.
+   */
   open: boolean;
   /**
    * Called when a key (or a commit) wants to open or close the listbox. `details.reason` says why
    * (`'keyboard'`, `'select'` — a commit that closes the list —, `'escape'` or `'tab'`) and
    * `details.event` is the key or click event behind it. WaveUI always passes `details`; it is
-   * typed optional until 1.0 so that code which calls this prop itself keeps compiling.
+   * typed optional until 1.0 so that code which calls this prop itself keeps compiling. Never
+   * called in standalone mode.
    */
   onOpenChange?: (open: boolean, details?: OpenChangeDetails<ListboxOpenChangeReason>) => void;
   /**
    * `'editable'`: a text input combobox (Combobox, TagPicker, TimePicker).
    * `'select-only'`: a button/div combobox without text entry (Dropdown).
+   * `'standalone'`: a listbox that holds focus itself (Listbox), with nothing to open or close:
+   * `open` is its focus state, the keys move and commit (a commit keeps the committed option
+   * active), Tab, Escape and Alt+Arrow keys are left to the page, `onOpenChange` is never called,
+   * and a pointer press on an option focuses the list and activates the option without scrolling
+   * (see {@link UseListboxResult.getListboxProps}).
    */
-  mode: 'editable' | 'select-only';
+  mode: 'editable' | 'select-only' | 'standalone';
   /** Several values can be selected; committing keeps the listbox open. @default false */
   multiselect?: boolean;
   /** The selected values (`[]` when nothing is selected). */
@@ -92,7 +101,11 @@ export interface UseListboxOptions {
   filter?: (item: ListboxItem) => boolean;
   /** Arrow keys wrap around at the ends. @default false */
   loop?: boolean;
-  /** Printable characters move to the matching option. @default mode === 'select-only' */
+  /**
+   * Printable characters move to the matching option (on by default in select-only and standalone
+   * mode).
+   * @default mode !== 'editable'
+   */
   typeahead?: boolean;
   /**
    * Keeps disabled options in the arrow-key, Home/End, PageUp/PageDown and typeahead order: they
@@ -147,10 +160,19 @@ export interface ListboxComboboxProps {
 export interface ListboxListProps {
   id: string;
   role: 'listbox';
+  /** With {@link UseListboxOptions.multiselect}. */
   'aria-multiselectable'?: true;
-  tabIndex: -1;
-  /** Keeps focus on the combobox while options are clicked. */
-  onMouseDown(event: React.MouseEvent): void;
+  /** `-1` in the combobox modes (focus stays on the combobox); `0` in standalone mode. */
+  tabIndex: 0 | -1;
+  /** The combobox modes: keeps focus on the combobox while options are clicked. */
+  onMouseDown?(event: React.MouseEvent): void;
+  /** Standalone mode: the active option's id while the list has focus and an option is active. */
+  'aria-activedescendant'?: string;
+  /**
+   * Standalone mode: the list element, which a pointer press on an option focuses. Merge it with
+   * your own ref.
+   */
+  ref?: React.RefCallback<HTMLElement>;
 }
 
 /** Result of {@link useListbox}. */
@@ -177,7 +199,10 @@ export interface UseListboxResult {
    * later). Scrolled into view like a keyboard highlight.
    */
   setActiveValue(value: string | null): void;
-  /** Attach to the combobox element. Ignores events a consumer handler already prevented. */
+  /**
+   * Attach to the combobox element (to the list in standalone mode). Ignores events a consumer
+   * handler already prevented.
+   */
   onKeyDown(event: React.KeyboardEvent): void;
   /**
    * Attach to the combobox element next to `onKeyDown`. Required for a `<button>` combobox
@@ -185,7 +210,19 @@ export interface UseListboxResult {
    * again after the keydown opened or committed.
    */
   onKeyUp(event: React.KeyboardEvent): void;
+  /**
+   * Props for the combobox element (spread them): its role, `aria-expanded`, `aria-controls`,
+   * `aria-haspopup`, `aria-activedescendant` while an option is active and, in editable mode,
+   * `aria-autocomplete`. Not used in standalone mode, where the list itself has focus.
+   */
   getComboboxProps(): ListboxComboboxProps;
+  /**
+   * Props for the listbox element (spread them). The combobox modes: `tabIndex: -1` and an
+   * `onMouseDown` that keeps focus on the combobox while options are clicked. Standalone mode:
+   * `tabIndex: 0`, `aria-activedescendant` while an option is active, and a `ref` (merge it with
+   * yours: a pointer press on an option focuses the list through it), without `onMouseDown`.
+   * Both: `aria-multiselectable` with `multiselect`.
+   */
   getListboxProps(): ListboxListProps;
   /** Provide it with `<ListboxContext.Provider value={context}>` around the options. */
   context: ListboxContextValue;
@@ -215,10 +252,21 @@ export interface ListboxContextValue {
   store: ListboxStore;
   /** Whether the listbox is {@link UseListboxOptions.multiselect}. */
   multiselect: boolean;
+  /** The listbox's {@link UseListboxOptions.mode}: standalone options add the pointer press. */
+  mode: 'editable' | 'select-only' | 'standalone';
   /** Commits `value` (option click); `event` is the click behind it. */
   select(value: string, item: ListboxItem, event: Event): void;
   /** Highlights `value` (pointer movement); not scrolled into view, so the list stays put. */
   highlight(value: string): void;
+  /**
+   * Standalone mode: a pointer press on option `value` (its `mousedown`, whose default the option
+   * prevents). Focuses the list without scrolling and makes the option active without scrolling
+   * it into view, in one update, so the click that follows commits the pressed option even when
+   * focus would have scrolled another option into view. An option that cannot be active (a
+   * disabled one, unless {@link UseListboxOptions.disabledOptionsFocusable}) only focuses the
+   * list.
+   */
+  press(value: string): void;
 }
 
 /**
@@ -244,7 +292,10 @@ export interface UseListboxOptionProps {
   hidden?: boolean;
 }
 
-/** Props for an option element (spread them onto the `<li>`; compose `onClick` with yours). */
+/**
+ * Props for an option element (spread them onto the `<li>`; compose `onClick`, and `onMouseDown`
+ * in standalone mode, with yours).
+ */
 export interface ListboxOptionElementProps<E extends HTMLElement = HTMLElement> {
   id: string;
   role: 'option';
@@ -256,6 +307,8 @@ export interface ListboxOptionElementProps<E extends HTMLElement = HTMLElement> 
   'data-disabled'?: '';
   onClick(event: React.MouseEvent<E>): void;
   onPointerMove(event: React.PointerEvent<E>): void;
+  /** Standalone mode only: the pointer press ({@link ListboxContextValue.press}). */
+  onMouseDown?(event: React.MouseEvent<E>): void;
   ref: React.RefCallback<E>;
 }
 
@@ -617,8 +670,10 @@ function getInertContext(): ListboxContextValue {
     listboxId: 'wave-listbox-inert',
     store: new ListboxStoreImpl([]),
     multiselect: false,
+    mode: 'select-only',
     select: () => {},
     highlight: () => {},
+    press: () => {},
   };
   return inertContext;
 }
@@ -815,12 +870,17 @@ function preventMouseDown(event: React.MouseEvent): void {
  *   jump 10; Enter/Space open or commit (always prevented on keydown, Space also on keyup, so a
  *   `<button>` combobox is not clicked again; a Space typed within 500 ms of a typeahead character
  *   continues the search instead); Alt+ArrowUp and Tab commit and close in single-select mode
- *   (with `multiselect` they only close; Tab is not prevented); Escape closes.
+ *   (with `multiselect` they only close; Tab is not prevented); Escape closes. Standalone (the
+ *   list has focus; nothing opens or closes): ArrowDown/ArrowUp move (from no active option to
+ *   the first/last), Home/End, PageUp/PageDown (10) and typeahead move; Enter and Space commit
+ *   and keep the committed option active (a Space typed within 500 ms of a typeahead character
+ *   continues the search instead); Tab, Escape and Alt+Arrow keys are not handled and not
+ *   prevented, so the page and enclosing layers get them.
  *   "Selected" means the first selected navigable option in list order. Disabled options are
  *   skipped unless `disabledOptionsFocusable`, and never committed; hidden options are not
  *   navigable at all.
  * - The active option is scrolled into view (`{ block: 'nearest' }`) in a layout effect, except
- *   after a pointer highlight (the list would scroll under the pointer).
+ *   after a pointer highlight or a pointer press (the list would scroll under the pointer).
  *
  * **Consumer contract** (Combobox, Dropdown, TagPicker, TimePicker). Beyond the spec §2.5 signature:
  * - All options of a listbox live in a single container at a time (§5.5: inline only while
@@ -837,11 +897,15 @@ function preventMouseDown(event: React.MouseEvent): void {
  *   render and the first client render have no display text.
  * - Display text: `getItem(value)?.label ?? collectOptionLabels(children).get(value)` (`?? value`
  *   for freeform input only). Editable consumers pass `onClearDraft` for Escape on a closed list.
+ * - Standalone mode (a listbox that holds focus): spread `getListboxProps()` onto the list and
+ *   merge its `ref` with yours (a pointer press on an option focuses the list through it), attach
+ *   `onKeyDown` to the list and pass the list's focus state as `open`. `getComboboxProps()` is not
+ *   used.
  */
 export function useListbox(options: UseListboxOptions): UseListboxResult {
   const {
     open,
-    onOpenChange,
+    onOpenChange: onOpenChangeProp,
     mode,
     multiselect = false,
     selectedValues,
@@ -849,7 +913,7 @@ export function useListbox(options: UseListboxOptions): UseListboxResult {
     items: dataItems,
     filter,
     loop = false,
-    typeahead = mode === 'select-only',
+    typeahead = mode !== 'editable',
     disabledOptionsFocusable = false,
     autoHighlight = 'selected',
     highlightOnFilter = false,
@@ -857,6 +921,13 @@ export function useListbox(options: UseListboxOptions): UseListboxResult {
     idPrefix,
     onClearDraft,
   } = options;
+
+  const standalone = mode === 'standalone';
+  // Standalone mode has nothing to open or close (`open` is the list's focus state), so every open
+  // change requested below — a key, a commit, a typeahead match — reaches no callback there.
+  const onOpenChange = standalone ? undefined : onOpenChangeProp;
+  // Standalone mode: the list element (from getListboxProps().ref), which a pointer press focuses.
+  const [listElement, setListElement] = useState<HTMLElement | null>(null);
 
   const listboxId = useId(idPrefix ?? 'listbox');
   const [store] = useState(() => new ListboxStoreImpl(selectedValues));
@@ -935,7 +1006,8 @@ export function useListbox(options: UseListboxOptions): UseListboxResult {
       const item = itemByValue.get(value) ?? fallbackItem;
       if (!item || item.disabled) return;
       onSelect(value, { item, event });
-      if (multiselect && reason === 'select') {
+      // Standalone and multi-select commits keep the list as it is, on the committed option.
+      if (standalone || (multiselect && reason === 'select')) {
         ad.setActiveValue(value);
       } else {
         ad.setActiveValue(null);
@@ -946,6 +1018,16 @@ export function useListbox(options: UseListboxOptions): UseListboxResult {
 
   const select = useEventCallback((value: string, item: ListboxItem, event: Event) => {
     commit(value, 'select', event, item);
+  });
+
+  // Standalone: an option's mousedown (its default prevented, so the browser neither focuses nor
+  // scrolls). Focusing the list and moving to the option land in one update, so the render that
+  // enables the active option (the consumer's focus state) has the pressed one, not the fallback
+  // that the scroll effect would scroll under the pointer before the click. An option that
+  // cannot be active is not moved to: the next render would drop it together with the highlight.
+  const press = useEventCallback((value: string) => {
+    listElement?.focus({ preventScroll: true });
+    if (navigationValues.includes(value)) ad.setActiveValue(value, { scroll: false });
   });
 
   // The native keydown event behind a typeahead match, so onMatch (called from inside
@@ -981,7 +1063,14 @@ export function useListbox(options: UseListboxOptions): UseListboxResult {
     const altGraph = isAltGraphCharacter(event);
     if ((event.ctrlKey && !altGraph) || event.metaKey) return;
     const { key, altKey } = event;
+    // Standalone: nothing opens or closes, so Tab, Escape and Alt+Arrow keys are left to the page
+    // and to enclosing layers (a Dialog's Escape), returned before anything is prevented.
+    if (standalone && (key === 'Tab' || key === 'Escape' || (altKey && key.startsWith('Arrow')))) {
+      return;
+    }
     const selectOnly = mode === 'select-only';
+    // Select-only and standalone: Home/End, PageUp/PageDown, Enter and Space act on the list.
+    const editable = mode === 'editable';
     const first = navigationValues[0] ?? null;
     const last = navigationValues[navigationValues.length - 1] ?? null;
 
@@ -1031,19 +1120,19 @@ export function useListbox(options: UseListboxOptions): UseListboxResult {
         return;
       case 'Home':
       case 'End':
-        if (!selectOnly) return;
+        if (editable) return;
         event.preventDefault();
         openWith(key === 'Home' ? first : last);
         return;
       case 'PageUp':
       case 'PageDown':
-        if (!selectOnly || !open) return;
+        if (editable || !open) return;
         event.preventDefault();
         // Clamped at the ends, never wrapping (also with loop).
         ad.move(key === 'PageDown' ? 10 : -10);
         return;
       case 'Enter':
-        if (!selectOnly) {
+        if (editable) {
           // Closed: not prevented, so the surrounding form submits (APG).
           if (open && activeValue !== null) {
             event.preventDefault();
@@ -1059,7 +1148,7 @@ export function useListbox(options: UseListboxOptions): UseListboxResult {
         if (open) {
           event.preventDefault();
           onOpenChange?.(false, { reason: 'escape', event: event.nativeEvent });
-        } else if (!selectOnly && onClearDraft && hasText(event.currentTarget)) {
+        } else if (editable && onClearDraft && hasText(event.currentTarget)) {
           event.preventDefault();
           onClearDraft();
         }
@@ -1083,9 +1172,9 @@ export function useListbox(options: UseListboxOptions): UseListboxResult {
         break;
     }
 
-    if (key === ' ' && !selectOnly) return;
+    if (key === ' ' && editable) return;
     if (!typeahead || (altKey && !altGraph) || key.length !== 1) {
-      if (key === ' ' && selectOnly) {
+      if (key === ' ' && !editable) {
         event.preventDefault();
         if (!open) onOpenChange?.(true, { reason: 'keyboard', event: event.nativeEvent });
         else commitOrClose();
@@ -1098,7 +1187,7 @@ export function useListbox(options: UseListboxOptions): UseListboxResult {
       return;
     }
     if (key === ' ') {
-      // Not part of a typeahead search: Space opens or commits (select-only).
+      // Not part of a typeahead search: Space opens or commits (select-only; standalone: commits).
       event.preventDefault();
       if (!open) onOpenChange?.(true, { reason: 'keyboard', event: event.nativeEvent });
       else commitOrClose();
@@ -1142,8 +1231,8 @@ export function useListbox(options: UseListboxOptions): UseListboxResult {
   }, [dataItems]);
 
   const context = useMemo<ListboxContextValue>(
-    () => ({ listboxId, store, multiselect, select, highlight: ad.highlight }),
-    [listboxId, store, multiselect, select, ad.highlight],
+    () => ({ listboxId, store, multiselect, mode, select, highlight: ad.highlight, press }),
+    [listboxId, store, multiselect, mode, select, ad.highlight, press],
   );
 
   return {
@@ -1168,12 +1257,14 @@ export function useListbox(options: UseListboxOptions): UseListboxResult {
       return props;
     },
     getListboxProps: () => {
-      const props: ListboxListProps = {
-        id: listboxId,
-        role: 'listbox',
-        tabIndex: -1,
-        onMouseDown: preventMouseDown,
-      };
+      // Standalone: the list takes focus (its ref, for the pointer press) and carries the active
+      // descendant; the combobox modes keep focus on the combobox.
+      const props: ListboxListProps = standalone
+        ? { id: listboxId, role: 'listbox', tabIndex: 0, ref: setListElement }
+        : { id: listboxId, role: 'listbox', tabIndex: -1, onMouseDown: preventMouseDown };
+      if (standalone && activeDescendantId !== undefined) {
+        props['aria-activedescendant'] = activeDescendantId;
+      }
       if (multiselect) props['aria-multiselectable'] = true;
       return props;
     },
@@ -1209,7 +1300,8 @@ function optionFlags(store: ListboxStore, value: string): number {
  * mode) and its element, and reads its flags from the listbox store, so it re-renders only when
  * its own active/selected/hidden state changes. Spread `optionProps` onto the `<li>` (`id`,
  * `role="option"`, `aria-selected`, `aria-disabled`, `hidden`, `data-active`/`data-selected`/
- * `data-disabled` for styling, C-CLASS) and compose its `onClick` with the consumer's.
+ * `data-disabled` for styling, C-CLASS) and compose its `onClick` — and in standalone mode its
+ * `onMouseDown`, the pointer press — with the consumer's.
  *
  * Throws in development when used outside a listbox; in production it logs the error once and
  * renders an inert option (C-CONTEXT).
@@ -1221,7 +1313,7 @@ export function useListboxOption<E extends HTMLElement = HTMLElement>(
   ref?: React.Ref<E>,
 ): UseListboxOptionResult<E> {
   const context = useListboxContext('Option');
-  const { store, listboxId, multiselect, select, highlight } = context;
+  const { store, listboxId, multiselect, mode, select, highlight, press } = context;
   const { value, label, textValue, disabled = false, hidden: hiddenByConsumer = false } = props;
 
   const id = `${listboxId}-opt-${store.getIndex(value)}`;
@@ -1280,6 +1372,17 @@ export function useListboxOption<E extends HTMLElement = HTMLElement>(
     if (!disabled && !store.isActive(value)) highlight(value);
   }, [highlight, store, value, disabled]);
 
+  // Standalone: the browser would focus the list itself, and focus would scroll the list's
+  // active option into view under the pointer before the click; the press focuses the list
+  // without scrolling and makes this option active instead.
+  const onMouseDown = useCallback(
+    (event: React.MouseEvent<E>) => {
+      event.preventDefault();
+      press(value);
+    },
+    [press, value],
+  );
+
   const optionProps: ListboxOptionElementProps<E> = {
     id,
     role: 'option',
@@ -1288,6 +1391,7 @@ export function useListboxOption<E extends HTMLElement = HTMLElement>(
     onPointerMove,
     ref: mergedRef,
   };
+  if (mode === 'standalone') optionProps.onMouseDown = onMouseDown;
   if (disabled) {
     optionProps['aria-disabled'] = true;
     optionProps['data-disabled'] = '';
