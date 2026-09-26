@@ -26,8 +26,9 @@ export interface TextareaProps extends React.TextareaHTMLAttributes<HTMLTextArea
   /** Props of the error message element (`id`, `className`, …) rendered for a string `error`. */
   errorMessageProps?: InputErrorMessageProps;
   /**
-   * Size of the field: `small` (24px tall), `medium` (32px) or `large` (40px). Default: the
-   * surrounding Field's `size`, else `WaveProvider inputDefaults.size`, else `'medium'`.
+   * Size of the field, a minimum height with its type ramp: `small` (64px, Caption 1 text),
+   * `medium` (80px, Body 1) or `large` (96px, Body 2). Default: the surrounding Field's `size`,
+   * else `WaveProvider inputDefaults.size`, else `'medium'`.
    */
   size?: CoreSize;
   /**
