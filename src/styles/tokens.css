@@ -136,6 +136,9 @@
   --wave-stroke-hover: #c7c7c7;
   --wave-stroke-accessible: #616161;
   --wave-input: #d1d1d1;
+  /* Filled inputs: Fluent's colorNeutralBackground3; the stroke shows only in high contrast. */
+  --wave-input-filled-darker: #f5f5f5;
+  --wave-input-filled-stroke: transparent;
   --wave-ring: var(--wave-brand-80);
 
   /* Status */
@@ -180,6 +183,7 @@
   --wave-secondary-foreground: var(--wave-foreground);
   --wave-accent: var(--wave-primary);
   --wave-accent-foreground: var(--wave-primary-foreground);
+  --wave-input-filled-lighter: var(--wave-background);
 }
 
 /* ---------------------------------------------------------------------------------------------
@@ -221,6 +225,8 @@
   --wave-stroke-hover: #757575;
   --wave-stroke-accessible: #adadad;
   --wave-input: #666666;
+  --wave-input-filled-darker: #141414;
+  --wave-input-filled-stroke: transparent;
   --wave-ring: var(--wave-brand-100);
 
   /* Status. success is text too (4.60:1 on muted and subtle-selected #383838, where Fluent's
@@ -267,6 +273,7 @@
   --wave-secondary-foreground: var(--wave-foreground);
   --wave-accent: var(--wave-primary);
   --wave-accent-foreground: var(--wave-primary-foreground);
+  --wave-input-filled-lighter: var(--wave-background);
 }
 
 /* ---------------------------------------------------------------------------------------------
@@ -310,6 +317,8 @@
   --wave-stroke-hover: #ffffff;
   --wave-stroke-accessible: #ffffff;
   --wave-input: #ffffff;
+  --wave-input-filled-darker: #000000;
+  --wave-input-filled-stroke: #ffffff;
   --wave-ring: #ffff00;
 
   /* Status */
@@ -354,6 +363,7 @@
   --wave-secondary-foreground: var(--wave-foreground);
   --wave-accent: var(--wave-primary);
   --wave-accent-foreground: var(--wave-primary-foreground);
+  --wave-input-filled-lighter: var(--wave-background);
 }
 
 /* ---------------------------------------------------------------------------------------------
@@ -404,6 +414,9 @@
   --color-stroke-hover: var(--wave-stroke-hover);
   --color-stroke-accessible: var(--wave-stroke-accessible);
   --color-input: var(--wave-input);
+  --color-input-filled-darker: var(--wave-input-filled-darker);
+  --color-input-filled-lighter: var(--wave-input-filled-lighter);
+  --color-input-filled-stroke: var(--wave-input-filled-stroke);
   --color-ring: var(--wave-ring);
   --color-success: var(--wave-success);
   --color-success-foreground: var(--wave-success-foreground);

@@ -262,6 +262,9 @@ const TOKENS: Record<string, [string, string, string]> = {
   'stroke-hover': ['#c7c7c7', '#757575', '#ffffff'],
   'stroke-accessible': ['#616161', '#adadad', '#ffffff'],
   input: ['#d1d1d1', '#666666', '#ffffff'],
+  'input-filled-darker': ['#f5f5f5', '#141414', '#000000'],
+  'input-filled-lighter': ['#ffffff', '#292929', '#000000'],
+  'input-filled-stroke': ['transparent', 'transparent', '#ffffff'],
   ring: ['#0f6cbd', '#479ef5', '#ffff00'],
   success: ['#107c10', '#5db55d', '#3ff23f'],
   'success-foreground': ['#ffffff', '#000000', '#000000'],
@@ -302,6 +305,7 @@ const DERIVED: Record<string, string> = {
   'secondary-foreground': 'var(--wave-foreground)',
   accent: 'var(--wave-primary)',
   'accent-foreground': 'var(--wave-primary-foreground)',
+  'input-filled-lighter': 'var(--wave-background)',
 };
 
 /** Primary aliases that reference the brand ramp (repo-level#15, button-provider#10). */
@@ -435,6 +439,13 @@ const CONTRAST_PAIRS: Array<[string, string, number]> = [
   ['ring', 'card', 3],
   ['ring', 'subtle-hover', 3],
   ['stroke-accessible', 'background', 3],
+  // Filled input focus ring and state colors on the input's own fill (Phase 4 D5).
+  ['primary', 'input-filled-darker', 3],
+  ['destructive', 'input-filled-darker', 3],
+  ['ring', 'input-filled-darker', 3],
+  ['primary', 'input-filled-lighter', 3],
+  ['destructive', 'input-filled-lighter', 3],
+  ['ring', 'input-filled-lighter', 3],
   // Progress fills on the track (ProgressBar `color`; its warning fill uses `severe`).
   ['primary', 'track', 3],
   ['success', 'track', 3],
@@ -499,6 +510,12 @@ const TABLED_RATIOS: Array<[string, string, [number | null, number | null, numbe
   ['primary', 'selected', [4.81, 6.62, 8.56]],
   ['ring', 'selected', [4.81, 5.72, 11.65]],
   ['stroke-accessible', 'background', [6.19, 6.48, 21.0]],
+  ['primary', 'input-filled-darker', [4.94, 7.6, 14.37]],
+  ['destructive', 'input-filled-darker', [5.56, 7.82, 7.71]],
+  ['ring', 'input-filled-darker', [4.94, 6.56, 19.56]],
+  ['primary', 'input-filled-lighter', [5.38, 6.0, 14.37]],
+  ['destructive', 'input-filled-lighter', [6.07, 6.17, 7.71]],
+  ['ring', 'input-filled-lighter', [5.38, 5.18, 19.56]],
   ['primary', 'track', [4.08, 4.48, 5.78]],
   ['success', 'track', [4.07, 4.26, 5.63]],
   ['error', 'track', [4.59, 4.61, 3.1]],
@@ -542,15 +559,14 @@ const SECTION_4_5_MATRIX = SECTION_4_5_FOREGROUNDS.flatMap(([fg, threshold]) =>
 
 /**
  * Pairs §2.1.3 prints as a lower bound (`≥ 7.09`) rather than a ratio: the high-contrast presence
- * glyph on each presence fill.
+ * glyph on each presence fill. Also the high-contrast filled-input stroke against its own
+ * background (Phase 4 D5), since `CONTRAST_PAIRS` runs in every theme and cannot compare
+ * `transparent`.
  */
 type MinimumPair = [theme: ThemeName, fg: string, bg: string, minimum: number];
-const TABLED_MINIMUMS = [
-  'presence-available',
-  'presence-busy',
-  'presence-away',
-  'presence-oof',
-].map((fill): MinimumPair => ['high-contrast', 'presence-glyph', fill, 7.09]);
+const TABLED_MINIMUMS = ['presence-available', 'presence-busy', 'presence-away', 'presence-oof']
+  .map((fill): MinimumPair => ['high-contrast', 'presence-glyph', fill, 7.09])
+  .concat([['high-contrast', 'input-filled-stroke', 'background', 3] satisfies MinimumPair]);
 
 /**
  * Text contrast matrix (WCAG 1.4.3: 4.5:1, compared unrounded). The pairs above are the ones the
@@ -580,6 +596,8 @@ const TEXT_SURFACES = [
   'error-tint',
   'severe-tint',
   'info-tint',
+  'input-filled-darker',
+  'input-filled-lighter',
 ];
 
 /** Text tokens that may sit on every `TEXT_SURFACES` entry, with where they are used as text. */
@@ -636,6 +654,7 @@ const NOT_TEXT_TOKENS: Record<string, string> = {
   'stroke-hover': 'control border state',
   'stroke-accessible': 'control border, Slider rail, Rating outline star (3:1)',
   input: 'control border',
+  'input-filled-stroke': 'filled input border (transparent except in high contrast)',
   ring: 'focus indicator (3:1)',
   track: 'progress track (the primary, success, error and severe fills carry 3:1)',
   skeleton: 'loading placeholder',
