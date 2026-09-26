@@ -335,6 +335,9 @@ function createVirtualProgram(files: Record<string, string>, root: string): ts.P
 }
 
 describe('findUnexportedPublicTypes (the walker)', () => {
+  // 60 s, as for the program tests below, instead of Vitest's 5 s default: type-checking even this
+  // small program against TypeScript's default lib takes about 1 s alone, a few seconds in the
+  // full suite and more than 5 s under `npm run test:coverage` (V8 instruments the compiler).
   it('finds unexported names in written, heritage, parameter and inferred positions', () => {
     const root = resolve(srcDir, '__virtual_public_types__');
     const program = createVirtualProgram(
@@ -381,11 +384,12 @@ describe('findUnexportedPublicTypes (the walker)', () => {
       'widget.ts#QueryTarget',
       'widget.ts#ReturnAlias',
     ]);
-  });
+  }, 60_000);
 });
 
 describe('public type surface (src/index.ts)', () => {
-  // One program for both tests (building it takes a few seconds).
+  // One program for both tests (building it takes a few seconds, more under coverage: hence their
+  // 60 s timeouts).
   let unexported: string[] | undefined;
   const getUnexported = (): string[] => {
     if (!unexported) {

@@ -49,7 +49,7 @@ npx tsc -p tsconfig.dev.json --noEmit
 
 `prepublishOnly` runs typecheck, build, `verify-dist --final`, tests, `check:package` and `test:pack`. Do not hard-code test counts anywhere.
 
-Toolchain: `devEngines` requires Node `^22.13.0 || >=24.0.0` (npm stops on another) and npm >= 11.11 (warns; older npm drops the lockfile's `libc` fields). The package's own floor is `engines.node` `>=22.12.0`, and `check-ts-coverage` requires the `@types/node` major to equal it. `allowScripts` denies the install scripts of esbuild and @parcel/watcher (prebuilt binaries); npm 12 blocks every other dependency install script until approved (`npm install-scripts ls`).
+Toolchain: `devEngines` requires Node `^22.13.0 || ^24.0.0 || >=26.0.0` (npm stops on another) and npm >= 11.11 (warns; older npm drops the lockfile's `libc` fields). The package's own floor is `engines.node` `>=22.12.0`, and `check-ts-coverage` requires the `@types/node` major to equal it. `allowScripts` denies the install scripts of esbuild and @parcel/watcher (prebuilt binaries); npm 12 blocks every other dependency install script until approved (`npm install-scripts ls`).
 
 ## Architecture
 

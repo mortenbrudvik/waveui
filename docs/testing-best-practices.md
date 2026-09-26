@@ -6,7 +6,7 @@ How tests are written in this repository, with the helpers of `src/test-utils.ts
 
 ## 1. Stack and commands
 
-Vitest 4, React Testing Library, `@testing-library/user-event`, jsdom and vitest-axe. Tests live in `__tests__/` next to the module they test (`src/components/input/__tests__/Switch.test.tsx`) and import it from its module path (`../Switch`); repo-level suites live in `src/__tests__/`.
+Vitest 5, React Testing Library, `@testing-library/user-event`, jsdom and vitest-axe. Tests live in `__tests__/` next to the module they test (`src/components/input/__tests__/Switch.test.tsx`) and import it from its module path (`../Switch`); repo-level suites live in `src/__tests__/`.
 
 Each example below starts with a comment naming the test file it belongs in: the component's own `<Component>.test.tsx`, which exists for every component. The examples are condensed to show one pattern each; they are not copies of tests in those files.
 
@@ -36,6 +36,8 @@ Evaluated before every test file:
   Tests that append nodes, register layers directly or set such styles themselves undo that in their own `afterEach` (it runs first), or in `try`/`finally` inside the test. Not in `onTestFinished`: its callbacks run after these assertions, so a container a test appended itself (for `renderToString` and `hydrateRoot`) would already have failed it. `onTestFinished` suits what the assertions do not check, such as a document listener or a prototype stub (`mockAnimations` restores `getAnimations` that way).
 
 `vi.mock()` works as usual. Do not call `vi.resetModules()` at the top of a test file: importing `src/test-utils.ts` afterwards would evaluate the setup a second time.
+
+Vitest 5 clears the call history of every mock before each test (its `clearMocks` default), before the `beforeEach` hooks run; implementations stay. A `vi.fn()` created at module level, in a `describe` body or in `beforeAll` starts every test with no calls, so a test cannot assert calls recorded there: record them in the test or in `beforeEach`.
 
 ## 3. `testSystemProps`: the cross-cutting contract
 

@@ -115,13 +115,6 @@ export default tseslint.config(
     },
   },
   {
-    // Declaration files mirror third-party typings (e.g. Vitest's `Assertion<T = any>`).
-    files: ['**/*.d.ts'],
-    rules: {
-      '@typescript-eslint/no-explicit-any': 'off',
-    },
-  },
-  {
     files: ['stories/**/*.tsx'],
     rules: {
       'react-hooks/rules-of-hooks': 'off',
