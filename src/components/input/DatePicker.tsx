@@ -11,10 +11,14 @@ import {
   disabledStyles,
   focusRing,
   forcedColors,
-  inputBase,
+  inputAppearanceClasses,
   inputFocus,
+  inputHeightClasses,
   inputInvalid,
+  inputPaddingClasses,
+  inputTextClasses,
 } from '../../lib/styles';
+import type { CoreSize, InputAppearance } from '../../lib/types';
 import { useControllable } from '../../hooks/useControllable';
 import { useDismiss } from '../../hooks/useDismiss';
 import { useFieldContext, useFieldControl } from '../../hooks/useFieldControl';
@@ -47,7 +51,14 @@ import {
   startOfDay,
   startOfMonth,
 } from './dateUtils';
+import { useInputLook } from './inputLook';
 import { isInvalidLook } from './Input';
+import {
+  pickerButtonOffset,
+  pickerEndPadding,
+  pickerGlyphSize,
+  pickerIconButtonClasses,
+} from './pickerStyles';
 import type { RoutedHandlers } from './routedHandlers';
 
 /** Why typed text was not accepted (see {@link DatePickerProps.onInvalidInput}). */
@@ -162,6 +173,18 @@ export interface DatePickerProps extends Omit<
    */
   disabled?: boolean;
   /**
+   * Size of the field: `small` (24px tall), `medium` (32px) or `large` (40px). Default: the
+   * surrounding Field's `size`, else `WaveProvider inputDefaults.size`, else `'medium'`. The
+   * calendar keeps its size.
+   */
+  size?: CoreSize;
+  /**
+   * Look of the field: `outline` (a full border), `underline` (a bottom stroke only),
+   * `filled-darker` or `filled-lighter` (a fill without a visible stroke: give the field a visible
+   * label). Default: `WaveProvider inputDefaults.appearance`, else `'outline'`.
+   */
+  appearance?: InputAppearance;
+  /**
    * Makes the input read-only: the calendar does not open and the value cannot change. Turning it
    * (or `disabled`) on while the user is typing drops the typed text.
    */
@@ -232,9 +255,6 @@ export interface DatePickerProps extends Omit<
 
 // Every button sets its own padding and background (C-NATIVE): an app-wide `button` rule would
 // otherwise pad and fill them.
-const ICON_BUTTON_CLASSES =
-  'absolute flex h-6 w-6 items-center justify-center rounded bg-transparent p-0 text-muted-foreground not-disabled:not-aria-disabled:hover:bg-subtle-hover not-disabled:not-aria-disabled:hover:text-foreground';
-
 const NAV_BUTTON_CLASSES =
   'flex h-8 w-8 items-center justify-center rounded bg-transparent p-0 text-foreground not-disabled:not-aria-disabled:hover:bg-subtle-hover';
 
@@ -277,6 +297,10 @@ function toWeeks(days: Date[]): Date[][] {
  *   clear button that disappears.
  * - Every emitted date is local midnight. The calendar opens on the month of the selected date or
  *   today, clamped into `minDate`/`maxDate`.
+ * - **Size and appearance**: `size` resolves from its own prop, then the surrounding `Field`'s
+ *   `size`, then `WaveProvider inputDefaults.size`, else `'medium'`; `appearance` from its own
+ *   prop, then `WaveProvider inputDefaults.appearance`, else `'outline'`; both render as
+ *   `data-size` and `data-appearance` on the root `<div>`. The calendar keeps its size.
  * - The input (`controlRef`) receives `id`, `aria-label`, `aria-labelledby`, `aria-describedby`,
  *   `aria-invalid`, `aria-required`, `aria-errormessage`, `aria-details`, `tabIndex`,
  *   `autoFocus`, `onFocus`/`onBlur`/`onKeyDown`/`onKeyUp` and the text input attributes
@@ -304,6 +328,8 @@ export const DatePicker = (props: DatePickerProps) => {
     disabledDates,
     placeholder = 'Select a date',
     disabled = false,
+    size: sizeProp,
+    appearance: appearanceProp,
     readOnly,
     clearable = false,
     firstDayOfWeek = 0,
@@ -342,6 +368,8 @@ export const DatePicker = (props: DatePickerProps) => {
   } = props;
 
   if (onChange !== undefined) warnDeprecated('DatePicker', 'onChange', 'onValueChange');
+
+  const { size, appearance } = useInputLook(sizeProp, appearanceProp);
 
   const hasCustomFormat = formatDateProp !== undefined;
   const hasCustomParse = parseDateProp !== undefined;
@@ -775,7 +803,13 @@ export const DatePicker = (props: DatePickerProps) => {
   }
 
   return (
-    <div {...rest} ref={ref} className={cn('relative inline-flex flex-col', className)}>
+    <div
+      data-size={size}
+      data-appearance={appearance}
+      {...rest}
+      ref={ref}
+      className={cn('relative inline-flex flex-col', className)}
+    >
       <div ref={setReference} className="relative flex items-center">
         <input
           ref={inputRefs}
@@ -801,12 +835,16 @@ export const DatePicker = (props: DatePickerProps) => {
           autoFocus={autoFocus}
           tabIndex={tabIndex}
           className={cn(
-            inputBase,
-            'border-b-stroke-accessible',
+            inputHeightClasses[size],
+            'w-full',
+            inputPaddingClasses[size],
+            inputTextClasses[size],
+            inputAppearanceClasses[appearance],
+            'text-foreground placeholder:text-muted-foreground',
             inputFocus,
             disabledStyles,
             invalidLook && inputInvalid,
-            showClear ? 'pe-14' : 'pe-8',
+            pickerEndPadding(showClear ? 2 : 1, size),
           )}
         />
         {showClear && (
@@ -816,9 +854,14 @@ export const DatePicker = (props: DatePickerProps) => {
             disabled={disabled}
             onMouseDown={handleClearMouseDown}
             onClick={handleClear}
-            className={cn(ICON_BUTTON_CLASSES, 'end-7', focusRing, disabledStyles)}
+            className={cn(
+              pickerIconButtonClasses(size, appearance),
+              pickerButtonOffset(size, 2),
+              focusRing,
+              disabledStyles,
+            )}
           >
-            <DismissIcon />
+            <DismissIcon size={pickerGlyphSize(size, 'icon')} />
           </button>
         )}
         <button
@@ -830,9 +873,14 @@ export const DatePicker = (props: DatePickerProps) => {
           aria-controls={isOpen ? dialogId : undefined}
           disabled={disabled || readOnly}
           onClick={handleToggle}
-          className={cn(ICON_BUTTON_CLASSES, 'end-1', focusRing, disabledStyles)}
+          className={cn(
+            pickerIconButtonClasses(size, appearance),
+            pickerButtonOffset(size, 1),
+            focusRing,
+            disabledStyles,
+          )}
         >
-          <CalendarIcon />
+          <CalendarIcon size={pickerGlyphSize(size, 'icon')} />
         </button>
       </div>
       {showOwnError && (

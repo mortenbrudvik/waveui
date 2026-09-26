@@ -2127,4 +2127,135 @@ describe('DatePicker', () => {
     expect(textbox()).toHaveAttribute('aria-invalid', 'true');
     expect(await axe(document.body)).toHaveNoViolations();
   });
+
+  describe('sizes and appearances (Phase 4 P4-01)', () => {
+    const renderPicker = (props: Partial<DatePickerProps> = {}) =>
+      render(
+        <DatePicker aria-label="Due" clearable defaultValue={new Date(2026, 0, 5)} {...props} />,
+      );
+    const input = () => screen.getByRole('textbox', { name: 'Due' });
+    const root = () => input().closest('[data-size]') as HTMLElement;
+    const calendar = () => screen.getByRole('button', { name: 'Open calendar' });
+    const clear = () => screen.getByRole('button', { name: 'Clear date' });
+
+    it('keeps the 0.7 classes and renders the medium outline attributes', () => {
+      renderPicker();
+      expect(input()).toHaveClass('h-8', 'px-3', 'text-body-1', 'border-input', 'pe-14');
+      expect(calendar()).toHaveClass('h-6', 'w-6', 'end-1');
+      expect(clear()).toHaveClass('h-6', 'w-6', 'end-7');
+      expect(root()).toHaveAttribute('data-size', 'medium');
+      expect(root()).toHaveAttribute('data-appearance', 'outline');
+    });
+
+    it('small: 20px buttons with hit layers at end-1 and end-7, pe-13', () => {
+      renderPicker({ size: 'small' });
+      expect(input()).toHaveClass('h-6', 'px-2', 'text-caption-1', 'pe-13');
+      expect(calendar()).toHaveClass('size-5', 'before:-inset-0.5', 'end-1');
+      expect(clear()).toHaveClass('size-5', 'before:-inset-0.5', 'end-7');
+    });
+
+    it('large: 32px buttons at end-1 and end-9, pe-18, 20px glyphs', () => {
+      renderPicker({ size: 'large' });
+      expect(input()).toHaveClass('h-10', 'px-4', 'text-body-2', 'pe-18');
+      expect(calendar()).toHaveClass('size-8', 'end-1');
+      expect(clear()).toHaveClass('size-8', 'end-9');
+      expect(calendar().querySelector('svg')).toHaveAttribute('width', '20');
+    });
+
+    it('an appearance styles the input; the calendar dialog does not change', async () => {
+      const user = userEvent.setup();
+      renderPicker({ appearance: 'underline', size: 'large' });
+      expect(input()).toHaveClass('border-0', 'border-b');
+      await user.click(calendar());
+      expect(screen.getByRole('dialog')).toHaveClass('p-3', 'shadow-16');
+    });
+
+    it('takes the Field size', () => {
+      renderWithFieldContext(<DatePicker />, { size: 'small' });
+      const el = screen.getByRole('textbox', { name: FIELD_TEST_TEXT.label });
+      expect(el.closest('[data-size]')).toHaveAttribute('data-size', 'small');
+    });
+
+    // Spec cases added beyond the brief (§2.1's Tests paragraph, binding via §2.2's "as §2.1 for
+    // each picker"): each appearance with its data-appearance; the Field size with an own size
+    // winning; WaveProvider inputDefaults with own props winning; invalid (a Field error and
+    // DatePicker's own rejected-text invalid state) at underline and filled-darker; the glyph
+    // widths per size for both buttons; RTL.
+
+    it.each([
+      ['underline', ['rounded-none', 'border-0', 'border-b', 'bg-transparent']],
+      ['filled-darker', ['border-input-filled-stroke', 'bg-input-filled-darker']],
+      ['filled-lighter', ['border-input-filled-stroke', 'bg-input-filled-lighter']],
+    ] as const)(
+      'appearance="%s" renders its classes and data-appearance',
+      (appearance, classes) => {
+        renderPicker({ appearance });
+        expect(input()).toHaveClass(...classes);
+        expect(root()).toHaveAttribute('data-appearance', appearance);
+      },
+    );
+
+    it('takes the Field size; its own size wins', () => {
+      const { rerender } = renderWithFieldContext(<DatePicker />, { size: 'large' });
+      const byName = () =>
+        screen.getByRole('textbox', { name: FIELD_TEST_TEXT.label }).closest('[data-size]');
+      expect(byName()).toHaveAttribute('data-size', 'large');
+      rerender(<DatePicker size="small" />);
+      expect(byName()).toHaveAttribute('data-size', 'small');
+    });
+
+    it('takes WaveProvider inputDefaults; its own props win', () => {
+      const { rerender } = renderWithProviders(<DatePicker aria-label="Due" />, {
+        inputDefaults: { size: 'small', appearance: 'underline' },
+      });
+      expect(root()).toHaveAttribute('data-size', 'small');
+      expect(root()).toHaveAttribute('data-appearance', 'underline');
+      rerender(<DatePicker aria-label="Due" size="large" appearance="outline" />);
+      expect(root()).toHaveAttribute('data-size', 'large');
+      expect(root()).toHaveAttribute('data-appearance', 'outline');
+    });
+
+    it.each(['underline', 'filled-darker'] as const)(
+      'an invalid %s field keeps the destructive border and the focus color on its bottom (Field error)',
+      (appearance) => {
+        renderWithFieldContext(<DatePicker appearance={appearance} />, {
+          errorId: FIELD_TEST_IDS.errorId,
+        });
+        const byName = screen.getByRole('textbox', { name: FIELD_TEST_TEXT.label });
+        expect(byName).toHaveClass('border-destructive', 'focus:border-b-primary');
+      },
+    );
+
+    it.each(['underline', 'filled-darker'] as const)(
+      'a rejected date at appearance="%s" keeps the destructive border and the focus color on its bottom (DatePicker\'s own invalid state)',
+      async (appearance) => {
+        const user = userEvent.setup();
+        renderPicker({ appearance });
+        await user.clear(input());
+        await user.type(input(), 'soon');
+        await user.keyboard('{Enter}');
+        expect(input()).toHaveAttribute('aria-invalid', 'true');
+        expect(input()).toHaveClass('border-destructive', 'focus:border-b-primary');
+      },
+    );
+
+    it.each([
+      ['small', 12],
+      ['medium', 16],
+      ['large', 20],
+    ] as const)('glyph widths at size=%s: %spx for both buttons', (size, px) => {
+      renderPicker({ size });
+      expect(calendar().querySelector('svg')).toHaveAttribute('width', String(px));
+      expect(clear().querySelector('svg')).toHaveAttribute('width', String(px));
+    });
+
+    it('keeps the buttons at the inline end in RTL', () => {
+      renderWithProviders(
+        <DatePicker aria-label="Due" size="large" clearable defaultValue={new Date(2026, 0, 5)} />,
+        { dir: 'rtl' },
+      );
+      expect(screen.getByRole('button', { name: 'Open calendar' })).toHaveClass('end-1');
+      expect(screen.getByRole('button', { name: 'Clear date' })).toHaveClass('end-9');
+    });
+  });
 });
