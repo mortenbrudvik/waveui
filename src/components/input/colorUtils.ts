@@ -1,10 +1,12 @@
 /**
- * Color helpers for ColorPicker and SwatchPicker: hex parsing/normalisation, the alpha byte ↔
- * opacity percentage, and the luminance-picked check glyph drawn on a user-supplied swatch.
+ * Color helpers for ColorPicker, SwatchPicker and the HSV color parts: hex parsing and
+ * normalisation (on the grammar of `src/lib/color.ts`), the alpha byte ↔ opacity percentage, and
+ * the luminance-picked check glyph drawn on a user-supplied swatch.
  *
  * Internal (not exported from the package). Pure functions, no DOM access, so they run on the
  * server and in tests.
  */
+import { parseHexBytes } from '../../lib/color';
 
 /** A parsed hex color: the `#rrggbb` part (lowercase) and the alpha byte (0–255). */
 export interface HexColor {
@@ -33,7 +35,6 @@ const BLACK = '#000000';
 // wave-allow-color: luminance-picked check glyph on a user swatch (C-TOKENS exception, input-pickers#16)
 const WHITE = '#ffffff';
 
-const HEX_COLOR = /^#([0-9a-f]{3}|[0-9a-f]{4}|[0-9a-f]{6}|[0-9a-f]{8})$/i;
 const HEX_INPUT = /^#([0-9a-f]{6}|[0-9a-f]{8})$/i;
 const HEX_DRAFT = /^#?[0-9a-f]{0,8}$/i;
 
@@ -47,21 +48,6 @@ function toHexByte(value: number): string {
     .padStart(2, '0');
 }
 
-function fromDigits(digits: string): HexColor {
-  const long =
-    digits.length <= 4
-      ? digits
-          .split('')
-          .map((d) => d + d)
-          .join('')
-      : digits;
-  const lower = long.toLowerCase();
-  return {
-    rgb: `#${lower.slice(0, 6)}`,
-    alpha: lower.length === 8 ? parseInt(lower.slice(6, 8), 16) : 255,
-  };
-}
-
 /**
  * Parses a hex color (`#rgb`, `#rgba`, `#rrggbb` or `#rrggbbaa`, case-insensitive, surrounding
  * whitespace ignored). Returns `null` for anything else (named colors, `rgb()`, a missing `#`).
@@ -69,8 +55,13 @@ function fromDigits(digits: string): HexColor {
  * @example parseHexColor('#0F6CBD80') // { rgb: '#0f6cbd', alpha: 128 }
  */
 export function parseHexColor(value: string): HexColor | null {
-  const match = HEX_COLOR.exec(value.trim());
-  return match ? fromDigits(match[1]) : null;
+  const bytes = parseHexBytes(value);
+  return bytes
+    ? {
+        rgb: `#${toHexByte(bytes.r)}${toHexByte(bytes.g)}${toHexByte(bytes.b)}`,
+        alpha: bytes.alpha,
+      }
+    : null;
 }
 
 /**
@@ -78,8 +69,7 @@ export function parseHexColor(value: string): HexColor | null {
  * so the short forms a user passes through while typing (`#abc`) are never committed.
  */
 export function parseHexInput(text: string): HexColor | null {
-  const match = HEX_INPUT.exec(text.trim());
-  return match ? fromDigits(match[1]) : null;
+  return HEX_INPUT.test(text.trim()) ? parseHexColor(text) : null;
 }
 
 /**

@@ -22,6 +22,8 @@ import type {
   PopupRect,
   VirtualElement,
   PopupTarget,
+  ColorPickerShape,
+  HsvColor,
 } from '../types';
 import type { VirtualElement as FloatingVirtualElement } from '@floating-ui/react-dom';
 import type { DismissReason } from '../layers';
@@ -171,5 +173,17 @@ describe('popup anchors (Menu.Popover and Popover target)', () => {
 
   it('PopupTarget is an element, a VirtualElement or null', () => {
     expectTypeOf<PopupTarget>().toEqualTypeOf<HTMLElement | VirtualElement | null>();
+  });
+});
+
+describe('color vocabulary (P3-05)', () => {
+  it("HsvColor has a hue, a saturation, a value and an optional alpha (Fluent's HsvColor)", () => {
+    expectTypeOf<HsvColor>().toEqualTypeOf<{ h: number; s: number; v: number; a?: number }>();
+  });
+
+  it('ColorPickerShape is the rounded and square subset of Shape', () => {
+    expectTypeOf<ColorPickerShape>().toEqualTypeOf<'rounded' | 'square'>();
+    expectTypeOf<ColorPickerShape>().toExtend<Shape>();
+    expectTypeOf<'circular'>().not.toMatchTypeOf<ColorPickerShape>();
   });
 });
