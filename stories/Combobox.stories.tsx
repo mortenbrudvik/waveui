@@ -1,6 +1,6 @@
 import type { Meta, StoryObj } from '@storybook/react';
 import { fn } from 'storybook/test';
-import { Combobox, Field, Option, OptionGroup } from '../src';
+import { Combobox, Field, Option, OptionGroup, type ComboboxProps } from '../src';
 
 const meta = {
   title: 'Components/Input/Combobox',
@@ -87,6 +87,34 @@ export const Clearable: Story = {
       <Option value="banana">Banana</Option>
       <Option value="cherry">Cherry</Option>
     </Combobox>
+  ),
+};
+
+/**
+ * `multiselect` selects several options: a checkbox per option, and the selected labels in the
+ * input until you type. Focusing the input selects them, so typing replaces them with text that
+ * filters the options; a toggle shows them again. `clearable` clears all of them.
+ */
+export const Multiselect: StoryObj<ComboboxProps<true>> = {
+  args: {
+    'aria-label': undefined,
+    multiselect: true,
+    clearable: true,
+    defaultValue: ['apple', 'cherry'],
+    placeholder: 'Select fruits...',
+  },
+  // The spread alone leaves `multiselect` optional (StoryObj widens `args`), which satisfies
+  // neither call signature (D9): the literal attribute after it forces the multi-select one.
+  render: (args) => (
+    <Field label="Fruits">
+      <Combobox {...args} multiselect>
+        <Option value="apple">Apple</Option>
+        <Option value="banana">Banana</Option>
+        <Option value="cherry">Cherry</Option>
+        <Option value="grape">Grape</Option>
+        <Option value="orange">Orange</Option>
+      </Combobox>
+    </Field>
   ),
 };
 

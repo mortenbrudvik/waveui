@@ -1,6 +1,6 @@
 import * as React from 'react';
-import { afterEach, describe, it, expect, vi } from 'vitest';
-import { act, render, screen, within } from '@testing-library/react';
+import { afterEach, describe, it, expect, expectTypeOf, vi } from 'vitest';
+import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { hydrateRoot } from 'react-dom/client';
 import { renderToString } from 'react-dom/server';
@@ -10,10 +10,13 @@ import {
   ComboboxOptionGroup,
   Option,
   OptionGroup,
+  insertedText,
   type ComboboxLabels,
+  type ComboboxProps,
 } from '../Combobox';
 import {
   asClientReference,
+  expectNoA11yViolations,
   findDanglingIdRefsInHtml,
   renderWithProviders,
   testCompoundExposure,
@@ -22,6 +25,7 @@ import {
 } from '../../../test-utils';
 import { FIELD_TEST_IDS, FIELD_TEST_TEXT, renderWithFieldContext } from '../../../test-utils-field';
 import { DismissLayerProvider, useDismiss } from '../../../hooks/useDismiss';
+import { __getAnnouncerText, __resetAnnouncer } from '../../../hooks/useAnnounce';
 import { Button } from '../../button/Button';
 
 const FRUITS = [
@@ -46,7 +50,7 @@ const COUNTRIES = [
 ];
 
 function combobox(name = 'Fruit') {
-  return screen.getByRole('combobox', { name });
+  return screen.getByRole<HTMLInputElement>('combobox', { name });
 }
 
 function option(name: string) {
@@ -109,6 +113,7 @@ const EXPAND_ICON_BUTTON_SLOT =
 
 afterEach(() => {
   vi.restoreAllMocks();
+  __resetAnnouncer();
 });
 
 describe('Combobox', () => {
@@ -957,6 +962,20 @@ describe('Combobox', () => {
       await user.click(option('Beta'));
       expect(onValueChange).toHaveBeenCalledWith('b');
       expect(onOptionSelect).toHaveBeenCalledTimes(2);
+      expect(warn.mock.calls).toEqual([[DEPRECATED_ON_OPTION_SELECT]]);
+    });
+
+    it('calls onValueChange before the deprecated onOptionSelect (0.7 order)', async () => {
+      const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+      const user = userEvent.setup();
+      const calls: string[] = [];
+      renderCombobox({
+        onValueChange: () => calls.push('onValueChange'),
+        onOptionSelect: () => calls.push('onOptionSelect'),
+      });
+      await user.click(combobox());
+      await user.click(option('Apple'));
+      expect(calls).toEqual(['onValueChange', 'onOptionSelect']);
       expect(warn.mock.calls).toEqual([[DEPRECATED_ON_OPTION_SELECT]]);
     });
 
@@ -1884,5 +1903,765 @@ describe('Combobox', () => {
     // consumer's plain class is the option's only background.
     const backgrounds = [...apple.classList].filter((c) => /(?:^|:)bg-/.test(c));
     expect(backgrounds).toEqual(['bg-primary']);
+  });
+
+  it('adds no announcer live region for a single-select Combobox (M2)', () => {
+    renderCombobox();
+    expect(document.querySelector('[data-wave-announcer]')).toBeNull();
+  });
+
+  describe('multiselect', () => {
+    // The labels of the spec's examples ("Apple, Banana"); FRUITS above has Beta.
+    const BASKET = [
+      <Option key="a" value="a">
+        Apple
+      </Option>,
+      <Option key="b" value="b">
+        Banana
+      </Option>,
+      <Option key="c" value="c">
+        Cherry
+      </Option>,
+      <Option key="d" value="d">
+        Date
+      </Option>,
+    ];
+    const ALL = ['Apple', 'Banana', 'Cherry', 'Date'];
+
+    function renderMulti(props: Partial<ComboboxProps<true>> = {}) {
+      return render(
+        <Combobox aria-label="Fruit" multiselect {...props}>
+          {BASKET}
+        </Combobox>,
+      );
+    }
+
+    /** Renders a multi-select Combobox after a button and moves focus into it with Tab, which
+     * selects its text. */
+    async function tabIntoMulti(props: Partial<ComboboxProps<true>> = {}) {
+      const user = userEvent.setup();
+      render(
+        <>
+          <button type="button">Before</button>
+          <Combobox aria-label="Fruit" multiselect {...props}>
+            {BASKET}
+          </Combobox>
+        </>,
+      );
+      await user.click(screen.getByRole('button', { name: 'Before' }));
+      await user.tab();
+      return user;
+    }
+
+    /** Leaves the input with Shift+Tab and comes back with Tab: the labels show again, selected. */
+    async function reenter(user: ReturnType<typeof userEvent.setup>) {
+      await user.tab({ shift: true });
+      await user.tab();
+    }
+
+    /**
+     * An edit the way a browser makes it: `beforeinput` while the selection it replaces is still in
+     * place, then the new value and the `input` event that React's `onChange` reads.
+     */
+    function edit(input: HTMLInputElement, value: string, inputType: string, isComposing = false) {
+      fireEvent(
+        input,
+        new InputEvent('beforeinput', { bubbles: true, cancelable: true, inputType, isComposing }),
+      );
+      fireEvent.input(input, { target: { value }, inputType, isComposing });
+    }
+
+    /** Flushes the frame the announcer's first write waits for (`src/hooks/useAnnounce.ts`), so a
+     * synchronous read right after can be trusted either way. */
+    async function flushAnnouncerFrame() {
+      await act(() => new Promise<void>((resolve) => requestAnimationFrame(() => resolve())));
+    }
+
+    describe('the labels in the input (D11)', () => {
+      it('shows the labels and no placeholder while values are selected', () => {
+        render(
+          <Combobox
+            aria-label="Fruit"
+            multiselect
+            placeholder="Pick fruit"
+            defaultValue={['a', 'b']}
+          >
+            {BASKET}
+          </Combobox>,
+        );
+        expect(combobox()).toHaveValue('Apple, Banana');
+        expect(combobox()).not.toHaveAttribute('placeholder');
+      });
+
+      it('shows the placeholder while no value is selected', () => {
+        renderMulti({ placeholder: 'Pick fruit' });
+        expect(combobox()).toHaveValue('');
+        expect(combobox()).toHaveAttribute('placeholder', 'Pick fruit');
+      });
+
+      it('joins the labels in selection order and leaves unknown values out', () => {
+        renderMulti({ defaultValue: ['c', 'zz', 'a'] });
+        expect(combobox()).toHaveValue('Cherry, Apple');
+      });
+
+      it('localizes the joined text with labels.selection', () => {
+        renderMulti({ defaultValue: ['a', 'b'], labels: { selection: (l) => l.join('、') } });
+        expect(combobox()).toHaveValue('Apple、Banana');
+      });
+
+      it('renders the labels and no placeholder on the server', () => {
+        const html = renderToString(
+          <Combobox
+            aria-label="Fruit"
+            multiselect
+            placeholder="Pick fruit"
+            defaultValue={['a', 'b']}
+          >
+            {BASKET}
+          </Combobox>,
+        );
+        const host = document.createElement('div'); // detached: nothing reaches document.body
+        host.innerHTML = html;
+        const input = host.querySelector('input[role="combobox"]');
+        expect(input).toHaveAttribute('value', 'Apple, Banana');
+        expect(input).not.toHaveAttribute('placeholder');
+      });
+
+      it('truncates many labels without growing and keeps the whole text as the value', () => {
+        const names = Array.from({ length: 30 }, (_, index) => `Fruit ${index + 1}`);
+        const options = names.map((name, index) => (
+          <Option key={name} value={String(index)}>
+            {name}
+          </Option>
+        ));
+        const single = render(
+          <Combobox aria-label="Fruit" defaultValue="0">
+            {options}
+          </Combobox>,
+        );
+        const singleClasses = combobox().className;
+        single.unmount();
+        render(
+          <Combobox
+            aria-label="Fruit"
+            multiselect
+            defaultValue={names.map((_, index) => `${index}`)}
+          >
+            {options}
+          </Combobox>,
+        );
+        expect(combobox()).toHaveValue(names.join(', '));
+        // The one-line input of a single-select Combobox, full width and one row high: it clips
+        // the text instead of growing.
+        expect(combobox().className).toBe(singleClasses);
+        expect(combobox()).toHaveClass('w-full', 'h-8');
+      });
+    });
+
+    describe('focus selects the labels (D11 rule 1)', () => {
+      it('selects the labels on Tab and on a click, so typing replaces them', async () => {
+        const user = userEvent.setup();
+        render(
+          <>
+            <button type="button">Before</button>
+            <Combobox aria-label="Fruit" multiselect defaultValue={['a']}>
+              {BASKET}
+            </Combobox>
+          </>,
+        );
+        await user.click(screen.getByRole('button', { name: 'Before' }));
+        await user.tab();
+        expect([combobox().selectionStart, combobox().selectionEnd]).toEqual([0, 'Apple'.length]);
+        await user.keyboard('ch');
+        expect(combobox()).toHaveValue('ch');
+        expect(screen.getAllByRole('option').map((o) => o.textContent)).toEqual(['Cherry']);
+
+        // A click that focuses the input selects the labels too (user-event puts the caret at the
+        // end of the text on mousedown, before the focus).
+        await user.click(screen.getByRole('button', { name: 'Before' }));
+        expect(combobox()).toHaveValue('Apple');
+        await user.click(combobox());
+        expect([combobox().selectionStart, combobox().selectionEnd]).toEqual([0, 'Apple'.length]);
+        await user.keyboard('d');
+        expect(combobox()).toHaveValue('d');
+      });
+
+      it('keeps the selection on the mouseup of the press that focused the input, and only then', () => {
+        const onMouseUp = vi.fn();
+        renderMulti({ defaultValue: ['a'], onMouseUp });
+        const input = combobox();
+        // The press that focuses the input: a browser would drop the selection on its mouseup.
+        fireEvent.mouseDown(input);
+        act(() => input.focus());
+        expect([input.selectionStart, input.selectionEnd]).toEqual([0, 'Apple'.length]);
+        expect(fireEvent.mouseUp(input)).toBe(false);
+        // A press in the focused input places the caret as usual.
+        fireEvent.mouseDown(input);
+        expect(fireEvent.mouseUp(input)).toBe(true);
+        // The root keeps the consumer's mouse handlers (C-ROUTING): both mouseups reached it.
+        expect(onMouseUp).toHaveBeenCalledTimes(2);
+      });
+
+      it('tells a press in the focused input apart inside a shadow root', () => {
+        const host = document.createElement('div');
+        document.body.appendChild(host);
+        const container = document.createElement('div');
+        host.attachShadow({ mode: 'open' }).appendChild(container);
+        const { unmount } = render(
+          <Combobox aria-label="Fruit" multiselect defaultValue={['a']}>
+            {BASKET}
+          </Combobox>,
+          { container },
+        );
+        try {
+          const input = container.querySelector('input')!;
+          fireEvent.mouseDown(input);
+          act(() => input.focus());
+          expect(fireEvent.mouseUp(input)).toBe(false);
+          // The document reports the shadow host as its focused element, not the input.
+          expect(document.activeElement).toBe(host);
+          fireEvent.mouseDown(input);
+          expect(fireEvent.mouseUp(input)).toBe(true);
+        } finally {
+          unmount();
+          host.remove();
+        }
+      });
+
+      it('leaves the mouseup alone while no labels show', () => {
+        renderMulti();
+        const input = combobox();
+        fireEvent.mouseDown(input);
+        act(() => input.focus());
+        expect(fireEvent.mouseUp(input)).toBe(true);
+      });
+
+      it('calls the consumer onFocus first; its preventDefault() skips the selection', async () => {
+        const user = userEvent.setup();
+        const onFocus = vi.fn((event: React.FocusEvent<HTMLInputElement>) =>
+          event.preventDefault(),
+        );
+        renderMulti({ defaultValue: ['a'], onFocus });
+        await user.click(combobox());
+        expect(onFocus).toHaveBeenCalledTimes(1);
+        // Where user-event's mousedown put the caret: the end of the text.
+        expect([combobox().selectionStart, combobox().selectionEnd]).toEqual([5, 5]);
+      });
+    });
+
+    describe('editing the labels (D11 rules 2 to 4)', () => {
+      it('queries only the text an edit inserted into the labels', () => {
+        render(
+          <Combobox aria-label="Fruit" multiselect defaultValue={['a', 'b']}>
+            {BASKET}
+          </Combobox>,
+        );
+        fireEvent.change(combobox(), { target: { value: 'Apple, Cher Banana' } });
+        expect(combobox()).toHaveValue('Cher ');
+      });
+
+      it('queries only the text typed where the caret was moved into the labels, or after them', async () => {
+        const user = await tabIntoMulti({ defaultValue: ['a', 'b'] });
+        act(() => combobox().setSelectionRange(7, 7));
+        await user.keyboard('Ch');
+        expect(combobox()).toHaveValue('Ch');
+        expect(visibleOptions()).toEqual(['Cherry']);
+        // A toggle shows the labels again with the caret at their end: typing adds to them.
+        await user.click(option('Cherry'));
+        expect(combobox()).toHaveValue('Apple, Banana, Cherry');
+        await user.keyboard('d');
+        expect(combobox()).toHaveValue('d');
+        expect(visibleOptions()).toEqual(['Date']);
+      });
+
+      it('queries only the text a drop inserts, although focus selected the labels', async () => {
+        await tabIntoMulti({ defaultValue: ['a', 'b'] });
+        // A drop inserts at the drop point, not in place of the selection.
+        edit(combobox(), 'Apple, Cher Banana', 'insertFromDrop');
+        expect(combobox()).toHaveValue('Cher ');
+      });
+
+      it('shows the labels again for a value equal to them (an undo)', () => {
+        render(
+          <Combobox aria-label="Fruit" multiselect defaultValue={['a']}>
+            {BASKET}
+          </Combobox>,
+        );
+        fireEvent.change(combobox(), { target: { value: 'x' } });
+        fireEvent.change(combobox(), { target: { value: 'Apple' } });
+        expect(combobox()).toHaveValue('Apple');
+        // no query: every option shows
+        expect(visibleOptions()).toEqual(ALL);
+      });
+
+      it('replaces the selected labels with text that begins or ends like them', async () => {
+        const onValueChange = vi.fn();
+        const user = await tabIntoMulti({ defaultValue: ['a', 'b'], onValueChange });
+        // "a" is the last letter of "Apple, Banana": the edit replaced all of it, so the query is
+        // all of the new text.
+        await user.keyboard('a');
+        expect(combobox()).toHaveValue('a');
+        expect(visibleOptions()).toEqual(['Apple', 'Banana', 'Date']);
+        await reenter(user);
+        await user.paste('Banana');
+        expect(combobox()).toHaveValue('Banana');
+        expect(visibleOptions()).toEqual(['Banana']);
+        await reenter(user);
+        const input = combobox();
+        fireEvent.compositionStart(input, { data: '' });
+        // The composition's text stays as the browser wrote it: rewriting the value would end it.
+        edit(input, 'A', 'insertCompositionText', true);
+        expect(input).toHaveValue('A');
+        edit(input, 'Ap', 'insertCompositionText', true);
+        fireEvent.compositionEnd(input, { data: 'Ap' });
+        expect(input).toHaveValue('Ap');
+        expect(visibleOptions()).toEqual(['Apple']);
+        expect(onValueChange).not.toHaveBeenCalled();
+      });
+
+      it('never removes a value with Backspace, Delete or cut', async () => {
+        const onValueChange = vi.fn();
+        const user = await tabIntoMulti({ defaultValue: ['a', 'b'], onValueChange });
+        // Over the selected labels: the query is empty, and the input shows it.
+        await user.keyboard('{Backspace}');
+        expect(combobox()).toHaveValue('');
+        expect(visibleOptions()).toEqual(ALL);
+        // Escape shows the labels again, the caret at their end: erasing there empties the query.
+        await user.keyboard('{Escape}');
+        expect(combobox()).toHaveValue('Apple, Banana');
+        await user.keyboard('{Backspace}');
+        expect(combobox()).toHaveValue('');
+        await user.keyboard('{Escape}{Home}{Delete}');
+        expect(combobox()).toHaveValue('');
+        await reenter(user);
+        await user.keyboard('{Delete}');
+        expect(combobox()).toHaveValue('');
+        await reenter(user);
+        await user.cut();
+        expect(combobox()).toHaveValue('');
+        await user.tab({ shift: true });
+        expect(combobox()).toHaveValue('Apple, Banana');
+        expect(onValueChange).not.toHaveBeenCalled();
+      });
+
+      it('handles paste and composition over the labels', async () => {
+        const onValueChange = vi.fn();
+        const user = await tabIntoMulti({ defaultValue: ['a', 'b'], onValueChange });
+        await user.paste('Ch');
+        expect(combobox()).toHaveValue('Ch');
+        expect(visibleOptions()).toEqual(['Cherry']);
+        await reenter(user);
+        const input = combobox();
+        fireEvent.compositionStart(input, { data: '' });
+        edit(input, 'd', 'insertCompositionText', true);
+        expect(input).toHaveValue('d');
+        edit(input, 'da', 'insertCompositionText', true);
+        fireEvent.compositionEnd(input, { data: 'da' });
+        expect(input).toHaveValue('da');
+        expect(visibleOptions()).toEqual(['Date']);
+        expect(onValueChange).not.toHaveBeenCalled();
+      });
+
+      it('shows the labels while read-only and edits nothing', async () => {
+        const user = userEvent.setup();
+        const onValueChange = vi.fn();
+        renderMulti({ readOnly: true, defaultValue: ['a', 'b'], onValueChange });
+        expect(combobox()).toHaveValue('Apple, Banana');
+        await user.click(combobox());
+        await user.keyboard('ch{Enter}{Backspace}{ArrowDown}{Enter}');
+        expect(combobox()).toHaveValue('Apple, Banana');
+        expect(combobox()).toHaveAttribute('aria-expanded', 'false');
+        expect(onValueChange).not.toHaveBeenCalled();
+      });
+    });
+
+    describe('toggles and closing (D10)', () => {
+      it('clears the query after a toggle and keeps the list open', async () => {
+        const user = userEvent.setup();
+        render(
+          <Combobox aria-label="Fruit" multiselect>
+            {BASKET}
+          </Combobox>,
+        );
+        await user.click(combobox());
+        await user.keyboard('ch{Enter}');
+        expect(combobox()).toHaveValue('Cherry');
+        expect(combobox()).toHaveAttribute('aria-expanded', 'true');
+        // Every option shows again; the toggled one stays active.
+        expect(visibleOptions()).toEqual(ALL);
+        expect(activeOption()).toHaveTextContent('Cherry');
+        await user.click(option('Apple'));
+        expect(combobox()).toHaveValue('Cherry, Apple');
+        expect(combobox()).toHaveAttribute('aria-expanded', 'true');
+      });
+
+      it('toggles with Enter and a click, not with Space, in a multiselectable list', async () => {
+        const user = userEvent.setup();
+        const onValueChange = vi.fn();
+        renderMulti({ onValueChange });
+        await user.click(combobox());
+        await user.click(option('Apple'));
+        await user.keyboard('{ArrowDown}{Enter}');
+        expect(onValueChange.mock.calls).toEqual([[['a']], [['a', 'b']]]);
+        expect(screen.getByRole('listbox')).toHaveAttribute('aria-multiselectable', 'true');
+        expect(option('Apple')).toHaveAttribute('aria-selected', 'true');
+        expect(option('Banana')).toHaveAttribute('aria-selected', 'true');
+        expect(option('Cherry')).toHaveAttribute('aria-selected', 'false');
+        expect(option('Cherry').querySelector('[data-wave-option-box]')).not.toBeNull();
+        // Space is text in an editable combobox: it starts a query, it toggles nothing.
+        await user.keyboard(' ');
+        expect(onValueChange).toHaveBeenCalledTimes(2);
+      });
+
+      it('closes without committing on Tab, Escape and Alt+ArrowUp', async () => {
+        const user = userEvent.setup();
+        const onValueChange = vi.fn();
+        render(
+          <>
+            <Combobox aria-label="Fruit" multiselect onValueChange={onValueChange}>
+              {BASKET}
+            </Combobox>
+            <button type="button">Next</button>
+          </>,
+        );
+        await user.click(combobox());
+        await user.keyboard('{ArrowDown}{Alt>}{ArrowUp}{/Alt}');
+        expect(combobox()).toHaveAttribute('aria-expanded', 'false');
+        expect(onValueChange).not.toHaveBeenCalled();
+
+        await user.keyboard('{ArrowDown}{Escape}');
+        expect(combobox()).toHaveAttribute('aria-expanded', 'false');
+        expect(onValueChange).not.toHaveBeenCalled();
+
+        await user.keyboard('{ArrowDown}');
+        expect(activeOption()).toHaveTextContent('Apple');
+        await user.tab();
+        expect(combobox()).toHaveAttribute('aria-expanded', 'false');
+        expect(screen.getByRole('button', { name: 'Next' })).toHaveFocus();
+        expect(onValueChange).not.toHaveBeenCalled();
+      });
+
+      it('shows the labels again on blur and close', async () => {
+        const user = userEvent.setup();
+        render(
+          <>
+            <Combobox aria-label="Fruit" multiselect defaultValue={['a', 'b']}>
+              {BASKET}
+            </Combobox>
+            <button type="button">Next</button>
+            <p>Outside</p>
+          </>,
+        );
+        await user.click(combobox());
+        await user.keyboard('ch');
+        await user.keyboard('{Escape}');
+        expect(combobox()).toHaveAttribute('aria-expanded', 'false');
+        expect(combobox()).toHaveValue('Apple, Banana');
+        await user.keyboard('x');
+        expect(combobox()).toHaveValue('x');
+        await user.click(screen.getByText('Outside'));
+        expect(combobox()).toHaveAttribute('aria-expanded', 'false');
+        expect(combobox()).toHaveValue('Apple, Banana');
+        await user.click(combobox());
+        await user.keyboard('ch');
+        await user.tab();
+        expect(screen.getByRole('button', { name: 'Next' })).toHaveFocus();
+        expect(combobox()).toHaveValue('Apple, Banana');
+      });
+
+      it('shows the labels again on a blur alone (a list the parent keeps closed)', async () => {
+        const user = await tabIntoMulti({ defaultValue: ['a', 'b'], open: false });
+        await user.keyboard('ch');
+        expect(combobox()).toHaveValue('ch');
+        expect(combobox()).toHaveAttribute('aria-expanded', 'false');
+        await user.tab({ shift: true });
+        expect(screen.getByRole('button', { name: 'Before' })).toHaveFocus();
+        expect(combobox()).toHaveValue('Apple, Banana');
+      });
+
+      it('clears every value, drops the query, closes the list and focuses the input', async () => {
+        const user = userEvent.setup();
+        const onValueChange = vi.fn();
+        renderMulti({ defaultValue: ['a', 'b'], clearable: true, onValueChange });
+        await user.click(combobox());
+        await user.keyboard('ch');
+        expect(combobox()).toHaveValue('ch');
+        await user.click(screen.getByRole('button', { name: 'Clear selection' }));
+        expect(onValueChange.mock.calls).toEqual([[[]]]);
+        expect(combobox()).toHaveValue('');
+        expect(combobox()).toHaveFocus();
+        expect(combobox()).toHaveAttribute('aria-expanded', 'false');
+        expect(screen.queryByRole('button', { name: 'Clear selection' })).not.toBeInTheDocument();
+        await user.click(combobox());
+        expect(visibleOptions()).toEqual(ALL);
+      });
+
+      it('toggles again when a controlled parent ignores the callback (separate interactions)', async () => {
+        const user = userEvent.setup();
+        const onValueChange = vi.fn();
+        renderMulti({ value: ['a'], onValueChange });
+        await user.click(combobox());
+        // A multiselect commit keeps the list open, so the second click needs no reopening.
+        await user.click(option('Banana'));
+        expect(onValueChange).toHaveBeenLastCalledWith(['a', 'b']);
+        await user.click(option('Banana'));
+        expect(onValueChange.mock.calls).toEqual([[['a', 'b']], [['a', 'b']]]);
+        expect(combobox()).toHaveValue('Apple');
+      });
+
+      it('calls onValueChange once per toggle in StrictMode', async () => {
+        const user = userEvent.setup();
+        const onValueChange = vi.fn();
+        render(
+          <React.StrictMode>
+            <Combobox aria-label="Fruit" multiselect onValueChange={onValueChange}>
+              {BASKET}
+            </Combobox>
+          </React.StrictMode>,
+        );
+        await user.click(combobox());
+        await user.click(option('Cherry'));
+        expect(onValueChange).toHaveBeenCalledTimes(1);
+        expect(onValueChange).toHaveBeenCalledWith(['c']);
+        await user.click(option('Apple'));
+        expect(onValueChange).toHaveBeenCalledTimes(2);
+        expect(onValueChange).toHaveBeenCalledWith(['c', 'a']);
+      });
+
+      it('fires the deprecated onOptionSelect per toggle', async () => {
+        const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+        const user = userEvent.setup();
+        const onOptionSelect = vi.fn();
+        renderMulti({ onOptionSelect });
+        await user.click(combobox());
+        await user.click(option('Apple'));
+        await user.click(option('Apple'));
+        expect(onOptionSelect.mock.calls).toEqual([['a'], ['a']]);
+        expect(warn.mock.calls).toEqual([[DEPRECATED_ON_OPTION_SELECT]]);
+      });
+
+      it('passes axe while open with selected values', async () => {
+        const user = userEvent.setup();
+        renderMulti({ defaultValue: ['a', 'c'], clearable: true });
+        await user.click(combobox());
+        expect(screen.getByRole('listbox')).toBeInTheDocument();
+        await expectNoA11yViolations();
+      });
+    });
+
+    describe('announcements (D41)', () => {
+      it('announces each toggle, by a click or Enter, not a clear', async () => {
+        const user = userEvent.setup();
+        renderMulti({ clearable: true });
+        await user.click(combobox());
+        await user.click(option('Apple'));
+        await waitFor(() => expect(__getAnnouncerText()).toBe('Apple added, 1 selected'));
+        await user.click(option('Apple'));
+        await waitFor(() => expect(__getAnnouncerText()).toBe('Apple removed, 0 selected'));
+        await user.keyboard('ba{Enter}');
+        await waitFor(() => expect(__getAnnouncerText()).toBe('Banana added, 1 selected'));
+        await user.click(screen.getByRole('button', { name: 'Clear selection' }));
+        // Settled (waitFor above), so this flush proves a clear announces nothing: a variant that
+        // announces on clear would show a different message here.
+        await flushAnnouncerFrame();
+        expect(__getAnnouncerText()).toBe('Banana added, 1 selected');
+      });
+
+      it('localizes the announcements with labels.added and labels.removed', async () => {
+        const user = userEvent.setup();
+        renderMulti({
+          labels: {
+            added: (label, count) => `${label} lagt til (${count})`,
+            removed: (label, count) => `${label} fjernet (${count})`,
+          },
+        });
+        await user.click(combobox());
+        await user.click(option('Date'));
+        await waitFor(() => expect(__getAnnouncerText()).toBe('Date lagt til (1)'));
+        await user.click(option('Date'));
+        await waitFor(() => expect(__getAnnouncerText()).toBe('Date fjernet (0)'));
+      });
+
+      it('announces nothing for a controlled change', async () => {
+        const user = userEvent.setup();
+        const { rerender } = render(
+          <Combobox aria-label="Fruit" multiselect value={['a']}>
+            {BASKET}
+          </Combobox>,
+        );
+        // Settle the regions on a real toggle first (the announcement fires regardless of whether
+        // the controlled parent reflects it back).
+        await user.click(combobox());
+        await user.click(option('Banana'));
+        await waitFor(() => expect(__getAnnouncerText()).toBe('Banana added, 2 selected'));
+        rerender(
+          <Combobox aria-label="Fruit" multiselect value={['a', 'c']}>
+            {BASKET}
+          </Combobox>,
+        );
+        // A variant that announces every value change from an effect would show a different
+        // message here once that effect's write lands.
+        await flushAnnouncerFrame();
+        expect(__getAnnouncerText()).toBe('Banana added, 2 selected');
+      });
+
+      it('says "No matches" in its own status region, not through the toggle announcer', async () => {
+        const user = userEvent.setup();
+        const { container } = renderMulti({ defaultValue: ['a'] });
+        await user.click(combobox());
+        await user.click(option('Banana'));
+        await waitFor(() => expect(__getAnnouncerText()).toBe('Banana added, 2 selected'));
+        await user.keyboard('zz');
+        const status = within(container).getByRole('status');
+        expect(status).toHaveTextContent('No matches');
+        await user.keyboard('z');
+        expect(within(container).getByRole('status')).toBe(status);
+        expect(status).toHaveTextContent(/^No matches$/);
+        await flushAnnouncerFrame();
+        expect(__getAnnouncerText()).toBe('Banana added, 2 selected');
+      });
+
+      it('mounts the announcer live region while mounted, and removes it on unmount (M2)', () => {
+        const { unmount } = renderMulti();
+        expect(document.querySelector('[data-wave-announcer]')).not.toBeNull();
+        unmount();
+        expect(document.querySelector('[data-wave-announcer]')).toBeNull();
+      });
+
+      it('does not crash on a null value from JavaScript', () => {
+        renderMulti({ value: null as never, placeholder: 'Pick fruit' });
+        expect(combobox()).toHaveValue('');
+        expect(combobox()).toHaveAttribute('placeholder', 'Pick fruit');
+      });
+    });
+
+    describe('forms (D10)', () => {
+      it('an empty required multiselect blocks the form; the invalid event focuses the input', async () => {
+        const user = userEvent.setup();
+        render(
+          <form aria-label="Order">
+            <Combobox aria-label="Fruit" multiselect name="fruit" required>
+              {BASKET}
+            </Combobox>
+          </form>,
+        );
+        const form = screen.getByRole('form', { name: 'Order' }) as HTMLFormElement;
+        expect(form.checkValidity()).toBe(false);
+        act(() => {
+          form.reportValidity();
+        });
+        expect(combobox()).toHaveFocus();
+        await user.click(combobox());
+        await user.click(option('Date'));
+        expect(form.checkValidity()).toBe(true);
+      });
+
+      it('submits one entry per value, unknown ones included; a toggle then a reset restores defaultValue, unannounced', async () => {
+        const user = userEvent.setup();
+        const onValueChange = vi.fn();
+        const { container } = render(
+          <form>
+            <Combobox
+              aria-label="Fruit"
+              multiselect
+              name="fruit"
+              defaultValue={['a', 'zz', 'b']}
+              onValueChange={onValueChange}
+            >
+              {BASKET}
+            </Combobox>
+            <button type="reset">Reset</button>
+          </form>,
+        );
+        const form = container.querySelector('form')!;
+        expect(new FormData(form).getAll('fruit')).toEqual(['a', 'zz', 'b']);
+        await user.click(combobox());
+        await user.click(option('Cherry'));
+        await waitFor(() => expect(__getAnnouncerText()).toBe('Cherry added, 4 selected'));
+        expect(new FormData(form).getAll('fruit')).toEqual(['a', 'zz', 'b', 'c']);
+        await user.click(screen.getByRole('button', { name: 'Reset' }));
+        expect(onValueChange).toHaveBeenLastCalledWith(['a', 'zz', 'b']);
+        expect(combobox()).toHaveValue('Apple, Banana');
+        // A variant that announces a reset would show a different message here.
+        await flushAnnouncerFrame();
+        expect(__getAnnouncerText()).toBe('Cherry added, 4 selected');
+      });
+
+      it('rerendering with a new inline defaultValue array, then resetting, makes no call (compared by content)', async () => {
+        const user = userEvent.setup();
+        const onValueChange = vi.fn();
+        const make = () => (
+          <form>
+            <Combobox
+              aria-label="Fruit"
+              multiselect
+              defaultValue={['a', 'b']}
+              onValueChange={onValueChange}
+            >
+              {BASKET}
+            </Combobox>
+            <button type="reset">Reset</button>
+          </form>
+        );
+        const { rerender } = render(make());
+        rerender(make());
+        await user.click(screen.getByRole('button', { name: 'Reset' }));
+        expect(onValueChange).not.toHaveBeenCalled();
+        expect(combobox()).toHaveValue('Apple, Banana');
+      });
+    });
+  });
+
+  describe('multiselect types', () => {
+    it('types the value by signature and keeps ComponentProps', () => {
+      expectTypeOf<React.ComponentProps<typeof Combobox>>().toEqualTypeOf<ComboboxProps>();
+      void (
+        <Combobox multiselect onValueChange={(v) => expectTypeOf(v).toEqualTypeOf<string[]>()} />
+      );
+      void (<Combobox value="a" onValueChange={(v) => expectTypeOf(v).toEqualTypeOf<string>()} />);
+      // @ts-expect-error a string value with multiselect
+      void (<Combobox multiselect value="a" />);
+      const flag = Math.random() > 0.5;
+      // @ts-expect-error a non-literal multiselect matches neither signature
+      void (<Combobox multiselect={flag} />);
+      expectTypeOf<NonNullable<ComboboxLabels['selection']>>().toEqualTypeOf<
+        (labels: string[]) => string
+      >();
+      expectTypeOf<NonNullable<ComboboxLabels['added']>>().toEqualTypeOf<
+        (label: string, count: number) => string
+      >();
+      expectTypeOf<NonNullable<ComboboxLabels['removed']>>().toEqualTypeOf<
+        (label: string, count: number) => string
+      >();
+    });
+
+    it('rejects freeform with multiselect at the type level', () => {
+      // @ts-expect-error freeform is not in the multi-select signature
+      void (<Combobox multiselect freeform />);
+      expectTypeOf<ComboboxProps<true>>().not.toHaveProperty('freeform');
+      expectTypeOf<ComboboxProps['freeform']>().toEqualTypeOf<boolean | undefined>();
+    });
+
+    it('stays extendable by an interface', () => {
+      interface ExtendedComboboxProps extends ComboboxProps {
+        extra?: string;
+      }
+      expectTypeOf<ExtendedComboboxProps['multiselect']>().toEqualTypeOf<false | undefined>();
+      expectTypeOf<ExtendedComboboxProps['value']>().toEqualTypeOf<string | undefined>();
+      expectTypeOf<ExtendedComboboxProps['freeform']>().toEqualTypeOf<boolean | undefined>();
+    });
+  });
+});
+
+describe('insertedText', () => {
+  it.each([
+    ['Apple, Banana', 'Apple, Bananac', 'c'],
+    ['Apple, Banana', 'c', 'c'],
+    ['Apple, Banana', 'Apple, xBanana', 'x'],
+    ['Apple, Banana', 'Apple, Banan', ''],
+    ['Apple, Banana', 'Apple, Banana', ''],
+    ['ab', 'aab', 'a'],
+  ])('%j → %j inserts %j', (before, after, expected) => {
+    expect(insertedText(before, after)).toBe(expected);
   });
 });

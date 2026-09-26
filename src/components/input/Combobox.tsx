@@ -5,6 +5,7 @@ import { warnDeprecated } from '../../lib/dev';
 import { DismissIcon } from '../../lib/icons';
 import type { Slot } from '../../lib/slot';
 import { disabledStyles, focusRing, inputBase, inputFocus, inputInvalid } from '../../lib/styles';
+import { announce, useAnnounce } from '../../hooks/useAnnounce';
 import { useControllable } from '../../hooks/useControllable';
 import { useFieldContext, useFieldControl } from '../../hooks/useFieldControl';
 import { useFormReset } from '../../hooks/useFormReset';
@@ -14,7 +15,9 @@ import { HiddenInput } from '../internal/HiddenInput';
 import { PickerExpandButton, showsExpandButton } from './Combobox.expand';
 import { isInvalidLook } from './Input';
 import { ListboxSurface, Option, OptionGroup, useListboxPopup } from './Option';
+import { defaultAddedLabel, defaultRemovedLabel, defaultSelectionLabel } from './pickerLabels';
 import { PICKER_ICON_BUTTON_CLASSES, pickerEndPadding } from './pickerStyles';
+import { sameValues, toggleValue } from './pickerValues';
 import type { RoutedHandlers } from './routedHandlers';
 
 export { Option, OptionGroup } from './Option';
@@ -41,28 +44,64 @@ export interface ComboboxLabels {
    * @default 'Show options'
    */
   expand?: string;
+  /**
+   * The text of the selected labels the input shows with `multiselect` while no text is typed, in
+   * selection order; values without an option are left out.
+   * @default (labels) => labels.join(', ')
+   */
+  selection?: (labels: string[]) => string;
+  /**
+   * Announced when a `multiselect` toggle selects an option; `count` is the number of values
+   * selected after the change.
+   * @default (label, count) => `${label} added, ${count} selected`
+   */
+  added?: (label: string, count: number) => string;
+  /**
+   * Announced when a `multiselect` toggle deselects an option; `count` is the number of values
+   * selected after the change.
+   * @default (label, count) => `${label} removed, ${count} selected`
+   */
+  removed?: (label: string, count: number) => string;
 }
 
-/** Properties for the Combobox component. */
-export interface ComboboxProps extends Omit<
+/**
+ * Properties for the Combobox component. `ComboboxProps<true>` are the props of a multi-select
+ * Combobox (`multiselect`), which has no `freeform`.
+ */
+export type ComboboxProps<M extends boolean = false> = Omit<
   React.HTMLAttributes<HTMLDivElement>,
   'onChange' | 'defaultValue' | RoutedHandlers
-> {
-  /** Controlled selected value (`''` for none). */
-  value?: string;
+> & {
+  /**
+   * Several options can be selected (Fluent's `multiselect`): the value is an array, options show
+   * a checkbox, Enter and a click toggle an option and keep the list open, and each toggle is
+   * announced. While no text is typed the input shows the selected labels, which focusing it
+   * selects, so typing replaces them with text that filters the options. Not available with
+   * `freeform`. A non-literal `multiselect={flag}` is a type error: render two elements, one for
+   * each mode.
+   * @default false
+   */
+  multiselect?: M;
+  /**
+   * Controlled selected value (`''` for none), or with `multiselect` the selected values (Fluent's
+   * `selectedOptions`).
+   */
+  value?: M extends true ? readonly string[] : string;
   /**
    * Initial selected value for uncontrolled usage.
-   * @default ''
+   * @default '' (`[]` with `multiselect`)
    */
-  defaultValue?: string;
+  defaultValue?: M extends true ? readonly string[] : string;
   /**
-   * Called with the new value when it changes: an option is selected, or (with `freeform`) the
-   * text changes. Not called when the current option is selected again.
+   * Called with the new value when it changes: an option is selected (toggled with `multiselect`,
+   * which passes a new array), or (with `freeform`) the text changes. Not called when the current
+   * option is selected again. Fluent's `onOptionSelect`, under WaveUI's value/onValueChange
+   * naming.
    */
-  onValueChange?: (value: string) => void;
+  onValueChange?: M extends true ? (value: string[]) => void : (value: string) => void;
   /**
-   * Called on every option activation, also when the current option is selected again (and, with
-   * `freeform`, on every text change).
+   * Called on every option activation, also when the current option is selected again (every
+   * toggle with `multiselect`; with `freeform`, every text change).
    * @deprecated Use `onValueChange`.
    */
   onOptionSelect?: (value: string) => void;
@@ -88,15 +127,9 @@ export interface ComboboxProps extends Omit<
    */
   disabled?: boolean;
   /**
-   * Whether the typed text is itself the value. Without it, typing only filters the options (the
-   * first match becomes active, so Enter selects it) and the input shows the selected option's
-   * label again when the listbox closes or loses focus. With it, the input shows typed text as
-   * typed (also when it equals an option's value), a selected option's label, and a controlled
-   * `value` as soon as the parent sets it (a parent that normalizes or rejects the text).
-   * @default false
+   * Name of the value in form submissions (renders a hidden input; one per value with
+   * `multiselect`).
    */
-  freeform?: boolean;
-  /** Name of the value in form submissions (renders a hidden input). */
   name?: string;
   /** Id of the form the value belongs to, when the Combobox is outside it. */
   form?: string;
@@ -122,8 +155,8 @@ export interface ComboboxProps extends Omit<
   /**
    * Shows a clear button while a value is selected (not while `readOnly`; while `disabled` it is
    * shown disabled, as in DatePicker and TimePicker). It clears the value
-   * (`onValueChange('')`), drops typed text, closes the list and moves focus to the input. It is
-   * a tab stop after the input.
+   * (`onValueChange('')`; every value with `multiselect`, `onValueChange([])`), drops typed text,
+   * closes the list and moves focus to the input. It is a tab stop after the input.
    * @default false
    */
   clearable?: boolean;
@@ -137,11 +170,16 @@ export interface ComboboxProps extends Omit<
    */
   expandIcon?: Slot<'span'>;
   /**
-   * The built-in texts (the "No matches" status and the names of the clear and expand buttons),
-   * for localization. Unset members keep their English defaults.
+   * The built-in texts (the "No matches" status, the names of the clear and expand buttons and,
+   * with `multiselect`, the selected-labels text and the toggle announcements), for localization.
+   * Unset members keep their English defaults.
    */
   labels?: ComboboxLabels;
-  /** Called when the `<input role="combobox">` receives focus (the root keeps other handlers). */
+  /**
+   * Called when the `<input role="combobox">` receives focus (the root keeps other handlers).
+   * With `multiselect`, a focus while the input shows the selected labels then selects them;
+   * `event.preventDefault()` skips that.
+   */
   onFocus?: React.FocusEventHandler<HTMLInputElement>;
   /** Called when the `<input role="combobox">` loses focus. */
   onBlur?: React.FocusEventHandler<HTMLInputElement>;
@@ -156,14 +194,110 @@ export interface ComboboxProps extends Omit<
   controlRef?: React.Ref<HTMLInputElement>;
   /** Ref to the root `<div>`. */
   ref?: React.Ref<HTMLDivElement>;
+} & ([M] extends [true]
+    ? unknown
+    : {
+        /**
+         * Whether the typed text is itself the value. Without it, typing only filters the options
+         * (the first match becomes active, so Enter selects it) and the input shows the selected
+         * option's label again when the listbox closes or loses focus. With it, the input shows
+         * typed text as typed (also when it equals an option's value), a selected option's label,
+         * and a controlled `value` as soon as the parent sets it (a parent that normalizes or
+         * rejects the text). Not available with `multiselect`: free text cannot be one of several
+         * values.
+         * @default false
+         */
+        freeform?: boolean;
+      });
+
+/** The Combobox component's type: a multi-select signature, then the single-select one. */
+export interface ComboboxComponent {
+  (props: ComboboxProps<true> & { multiselect: true }): React.ReactNode;
+  (props: ComboboxProps): React.ReactNode;
+  displayName?: string;
+  Option: typeof Option;
+  OptionGroup: typeof OptionGroup;
 }
+
+/**
+ * The text an edit inserted into `before`, given the new value `after`: `after` without the part
+ * it shares with `before` at its start and at its end.
+ */
+export function insertedText(before: string, after: string): string {
+  const max = Math.min(before.length, after.length);
+  let start = 0;
+  while (start < max && before[start] === after[start]) start += 1;
+  let end = 0;
+  while (end < max - start && before[before.length - 1 - end] === after[after.length - 1 - end]) {
+    end += 1;
+  }
+  return after.slice(start, after.length - end);
+}
+
+/**
+ * The text an edit put in place of the range `start`–`end` of `before` (the selection when the
+ * edit began), given the new value `after`; `undefined` when `after` does not keep the text around
+ * that range, so the edit replaced something else (a character erased next to a collapsed caret).
+ */
+function replacedText(
+  before: string,
+  after: string,
+  start: number,
+  end: number,
+): string | undefined {
+  const kept = before.length - end;
+  if (
+    start > end ||
+    end > before.length ||
+    after.length < start + kept ||
+    !after.startsWith(before.slice(0, start)) ||
+    !after.endsWith(before.slice(end))
+  ) {
+    return undefined;
+  }
+  return after.slice(start, after.length - kept);
+}
+
+/** The empty multi-select value: `defaultValue`'s fallback while `multiselect` is on, and the
+ * stable array `handleClear` clears to. */
+const EMPTY_VALUES: readonly string[] = [];
+
+/**
+ * Mounts the shared announcer regions (`useAnnounce`) only while a multi-select Combobox is on the
+ * page: a single-select Combobox's DOM stays as in 0.7, with no `[data-wave-announcer]` added to
+ * `document.body`. Renders nothing; toggles announce through the module-level `announce` function
+ * directly, which these regions keep alive.
+ */
+function ComboboxAnnouncer() {
+  useAnnounce();
+  return null;
+}
+ComboboxAnnouncer.displayName = 'Combobox.Announcer';
 
 function matchesText(item: ListboxItem, text: string): boolean {
   return (item.textValue ?? item.label).toLowerCase().includes(text.toLowerCase());
 }
 
-const ComboboxRoot = (props: ComboboxProps) => {
+// The root restates `freeform` (already in `ComboboxProps<boolean>`) for react-docgen, which builds
+// Storybook's props table and component manifest and skips the conditional part of
+// `ComboboxProps` that declares it. Keep both texts equal.
+const ComboboxRoot = (
+  props: ComboboxProps<boolean> & {
+    /**
+     * Whether the typed text is itself the value. Without it, typing only filters the options
+     * (the first match becomes active, so Enter selects it) and the input shows the selected
+     * option's label again when the listbox closes or loses focus. With it, the input shows
+     * typed text as typed (also when it equals an option's value), a selected option's label,
+     * and a controlled `value` as soon as the parent sets it (a parent that normalizes or
+     * rejects the text). Not available with `multiselect`: free text cannot be one of several
+     * values.
+     * @default false
+     */
+    freeform?: boolean;
+  },
+) => {
   const {
+    multiselect = false,
     value: valueProp,
     defaultValue,
     onValueChange,
@@ -173,7 +307,7 @@ const ComboboxRoot = (props: ComboboxProps) => {
     onOpenChange,
     placeholder,
     disabled = false,
-    freeform = false,
+    freeform: freeformProp = false,
     name,
     form,
     required,
@@ -211,6 +345,10 @@ const ComboboxRoot = (props: ComboboxProps) => {
 
   if (onOptionSelect !== undefined) warnDeprecated('Combobox', 'onOptionSelect', 'onValueChange');
 
+  // The multi-select signature has no `freeform` (D11); passed anyway from JavaScript, it is
+  // ignored there.
+  const freeform = freeformProp && !multiselect;
+
   const field = useFieldContext();
   const isRequired = required ?? field?.required ?? false;
   const validates = isRequired && !readOnly;
@@ -227,7 +365,24 @@ const ComboboxRoot = (props: ComboboxProps) => {
   // The error look follows the resolved state: the consumer's `aria-invalid` or the Field's.
   const invalidLook = isInvalidLook(false, fieldProps['aria-invalid']);
 
-  const [value, setValue] = useControllable(valueProp, defaultValue ?? '', onValueChange);
+  const [value, setValue] = useControllable<string | readonly string[]>(
+    valueProp,
+    defaultValue ?? (multiselect ? EMPTY_VALUES : ''),
+    (next) => {
+      // The two call signatures make `onValueChange` a union of incompatible functions from here:
+      // the root itself is written against the wider, internal shape (D9).
+      (onValueChange as ((value: string | string[]) => void) | undefined)?.(
+        typeof next === 'string' ? next : [...next],
+      );
+    },
+  );
+  // The selected values, for the listbox and the multi-select paths: a single value is its own
+  // one-element array. `Array.isArray` also keeps a `value` passed as `null` from JavaScript
+  // (bypassing the type system) from crashing, as 0.7 did for the single-select string.
+  const values: readonly string[] = Array.isArray(value) ? value : value ? [value] : [];
+  // The single-select value as 0.7 read it.
+  const single = multiselect ? '' : (value as string);
+
   const interactive = !disabled && !readOnly;
   // A combobox that starts disabled or read-only never shows its list, so it starts closed (no
   // close to report later).
@@ -238,7 +393,8 @@ const ComboboxRoot = (props: ComboboxProps) => {
   );
   const open = openState && interactive;
   // Text typed since the last commit, the filter; `null` shows the committed value's label
-  // (input-pickers#7). Freeform: the input shows the value, and the draft follows that text.
+  // (input-pickers#7), or the selected labels with `multiselect`. Freeform: the input shows the
+  // value, and the draft follows that text.
   const [draft, setDraft] = React.useState<string | null>(null);
   // Locking the control (readOnly/disabled) while typing drops the draft, so the input shows the
   // committed value again (adjust-during-render pattern, C-HOOKS).
@@ -299,12 +455,34 @@ const ComboboxRoot = (props: ComboboxProps) => {
       else close();
     },
     mode: 'editable',
-    selectedValues: value ? [value] : [],
-    onSelect: (next) => {
-      setValue(next);
+    multiselect,
+    selectedValues: values,
+    onSelect: (next, details) => {
+      if (!multiselect) {
+        // 0.7 order: the value callback first, the deprecated one after.
+        setValue(next);
+        onOptionSelect?.(next);
+        setDraft(null);
+        setTypedValue(null);
+        return;
+      }
+      const { values: updated, added } = toggleValue(values, next);
+      setValue(updated);
       onOptionSelect?.(next);
+      // The toggled option's label: the item useListbox passed in `details` (its own result,
+      // `listbox`, cannot be read from inside the options object passed to it), else the label
+      // read from `children` before the option registered, else the raw value. Announces a
+      // toggle the user made (D41): never a controlled change, a clear or a form reset, none of
+      // which reach this callback.
+      const label = details?.item.label ?? optionLabels.get(next) ?? next;
+      announce(
+        (added ? (labels?.added ?? defaultAddedLabel) : (labels?.removed ?? defaultRemovedLabel))(
+          label,
+          updated.length,
+        ),
+      );
+      // A toggle clears the query, so the labels show again; the list stays open (D11).
       setDraft(null);
-      setTypedValue(null);
     },
     filter,
     // Typing a filter makes its first match active (like Fluent's Combobox), so Enter selects what
@@ -316,15 +494,26 @@ const ComboboxRoot = (props: ComboboxProps) => {
     onClearDraft: clearDraft,
   });
 
-  // The input text. Freeform: the value as typed while it is the value the user typed last, else
-  // the label of the option with that value, else the value itself — so the text follows a
-  // controlled parent that normalizes or rejects what was typed while the input still has focus.
-  // Otherwise: the typed filter, else the selected option's label.
-  const optionLabel = value
-    ? (listbox.getItem(value)?.label ?? optionLabels.get(value))
-    : undefined;
+  const labelOf = (v: string) => listbox.getItem(v)?.label ?? optionLabels.get(v);
+  // Multi-select: the selected labels in selection order, values without an option left out
+  // (D10), joined by `labels.selection`.
+  let labelsText = '';
+  if (multiselect) {
+    const shown = values.map(labelOf).filter((label): label is string => label !== undefined);
+    if (shown.length > 0) labelsText = (labels?.selection ?? defaultSelectionLabel)(shown);
+  }
+  // Multi-select: while no text is typed, the input shows the selected labels (D11).
+  const showingLabels = multiselect && draft === null && values.length > 0;
+
+  // The input text. Multi-select: the typed query, else the selected labels. Freeform: the value
+  // as typed while it is the value the user typed last, else the label of the option with that
+  // value, else the value itself — so the text follows a controlled parent that normalizes or
+  // rejects what was typed while the input still has focus. Otherwise: the typed filter, else the
+  // selected option's label.
+  const optionLabel = single ? labelOf(single) : undefined;
   let inputText: string;
-  if (freeform) inputText = value === typedValue ? value : (optionLabel ?? value);
+  if (multiselect) inputText = draft ?? labelsText;
+  else if (freeform) inputText = single === typedValue ? single : (optionLabel ?? single);
   else inputText = draft ?? optionLabel ?? '';
   // Freeform: the filter follows the text (adjust-during-render pattern, C-HOOKS; the text does not
   // depend on the filter, so this settles in one pass).
@@ -349,12 +538,63 @@ const ComboboxRoot = (props: ComboboxProps) => {
   useFormReset(
     inputRef,
     () => {
-      setValue(defaultValue ?? '');
+      if (multiselect) {
+        const raw = defaultValue ?? EMPTY_VALUES;
+        const initial = Array.isArray(raw) ? raw : EMPTY_VALUES;
+        // Compared by content (C-FORMS): an inline default array is a new reference on every
+        // render, and a reset that keeps the same values reports nothing.
+        setValue((current) => {
+          const currentValues = Array.isArray(current) ? current : EMPTY_VALUES;
+          return sameValues(currentValues, initial) ? current : [...initial];
+        });
+      } else {
+        setValue(defaultValue ?? '');
+      }
       setDraft(null);
       setTypedValue(null);
     },
     form,
   );
+
+  // D11 rule 1: focusing the input while it shows the labels (Tab, a click, a Field label) selects
+  // them, so an edit of any kind replaces them natively, without the value being rewritten during
+  // the edit. A pointer press sets the caret on its mouseup, which would drop that selection, so
+  // the mouseup of the press that focused the input is prevented (only that one: a later press in
+  // the focused input places the caret as usual). The ref is written in handlers only (C-HOOKS).
+  const pointerFocusRef = React.useRef(false);
+  const handleMouseDown = (event: React.MouseEvent<HTMLInputElement>) => {
+    const input = event.currentTarget;
+    // The focused element of the input's document or shadow root (a document reports a shadow
+    // root's host instead).
+    const root = input.getRootNode() as Node & { activeElement?: Element | null };
+    pointerFocusRef.current = showingLabels && root.activeElement !== input;
+  };
+  const handleFocus = (event: React.FocusEvent<HTMLInputElement>) => {
+    if (showingLabels) event.currentTarget.select();
+  };
+  const handleMouseUp = (event: React.MouseEvent<HTMLInputElement>) => {
+    if (!pointerFocusRef.current) return;
+    pointerFocusRef.current = false;
+    event.preventDefault();
+  };
+
+  // Multi-select: the selection the next edit replaces, read on `beforeinput` (the last moment
+  // before an edit of any kind; React has no event for it), for the change that follows. A drop
+  // inserts at the drop point, not in place of the selection, so it records none.
+  const editRangeRef = React.useRef<readonly [number, number] | null>(null);
+  React.useEffect(() => {
+    const input = inputRef.current;
+    if (!multiselect || !input) return;
+    const record = (event: InputEvent) => {
+      const { selectionStart, selectionEnd } = input;
+      editRangeRef.current =
+        event.inputType === 'insertFromDrop' || selectionStart === null || selectionEnd === null
+          ? null
+          : [selectionStart, selectionEnd];
+    };
+    input.addEventListener('beforeinput', record);
+    return () => input.removeEventListener('beforeinput', record);
+  }, [multiselect]);
 
   const handleKeyDown = (event: React.KeyboardEvent<HTMLInputElement>) => {
     if (event.key === 'Escape' && open && !surfaceOpen && !event.nativeEvent.isComposing) {
@@ -372,7 +612,27 @@ const ComboboxRoot = (props: ComboboxProps) => {
 
   const handleChange = (event: React.ChangeEvent<HTMLInputElement>) => {
     const text = event.target.value;
-    setDraft(text);
+    const range = editRangeRef.current;
+    editRangeRef.current = null;
+    if (!multiselect) {
+      setDraft(text);
+    } else if (text === labelsText) {
+      // D11 rule 3: a value equal to the labels (an undo, also of a query) shows them again, with
+      // no query.
+      setDraft(null);
+    } else if (showingLabels) {
+      // D11 rule 2: the query is the text the edit inserted into the labels. With the selection
+      // the edit replaced (all of the labels after a focus, rule 1), that is the text now in its
+      // place, however much of it looks like the labels; without one (a drop, an edit the input
+      // did not announce), the new value without the part it shares with the labels at its start
+      // and its end. Backspace and Delete leave an empty query and never remove a value (rule 4).
+      setDraft(
+        (range && replacedText(labelsText, text, range[0], range[1])) ??
+          insertedText(labelsText, text),
+      );
+    } else {
+      setDraft(text);
+    }
     if (!open) setOpen(true);
     if (freeform) commitText(text);
   };
@@ -390,7 +650,7 @@ const ComboboxRoot = (props: ComboboxProps) => {
   // (which calls the deprecated `onOptionSelect` in freeform mode). The button disappears with the
   // value, so focus moves to the input explicitly (C-DISABLED).
   const handleClear = () => {
-    setValue('');
+    setValue(multiselect ? EMPTY_VALUES : '');
     setTypedValue(null);
     setDraft(null);
     setOpen(false);
@@ -399,7 +659,7 @@ const ComboboxRoot = (props: ComboboxProps) => {
 
   const showExpand = showsExpandButton(expandIcon);
   // Read-only comboboxes offer no clear action (the value cannot change).
-  const showClear = clearable && value !== '' && !readOnly;
+  const showClear = clearable && (multiselect ? values.length > 0 : single !== '') && !readOnly;
 
   const listLabelledBy =
     fieldProps['aria-label'] === undefined
@@ -408,6 +668,7 @@ const ComboboxRoot = (props: ComboboxProps) => {
 
   return (
     <div {...rest} ref={rootMergedRef} className={cn('relative inline-flex flex-col', className)}>
+      {multiselect && <ComboboxAnnouncer />}
       <div className="relative flex items-center">
         <input
           type="text"
@@ -420,7 +681,8 @@ const ComboboxRoot = (props: ComboboxProps) => {
           ref={inputMergedRef}
           disabled={disabled}
           readOnly={readOnly}
-          placeholder={placeholder}
+          // Multi-select: the selected labels take the placeholder's place (D11).
+          placeholder={multiselect && values.length > 0 ? undefined : placeholder}
           autoCapitalize={autoCapitalize}
           autoCorrect={autoCorrect}
           maxLength={maxLength}
@@ -434,10 +696,12 @@ const ComboboxRoot = (props: ComboboxProps) => {
           onClick={() => {
             if (!open && interactive) setOpen(true);
           }}
+          onMouseDown={handleMouseDown}
+          onMouseUp={handleMouseUp}
           // Read-only: no listbox keys at all (they would open, commit or clear the value).
           onKeyDown={composeEventHandlers(onKeyDown, readOnly ? undefined : handleKeyDown)}
           onKeyUp={composeEventHandlers(onKeyUp, listbox.onKeyUp)}
-          onFocus={onFocus}
+          onFocus={composeEventHandlers(onFocus, handleFocus)}
           onBlur={composeEventHandlers(onBlur, () => setDraft(null), {
             checkDefaultPrevented: false,
           })}
@@ -508,7 +772,7 @@ const ComboboxRoot = (props: ComboboxProps) => {
         name={name}
         form={form}
         disabled={disabled}
-        value={value}
+        value={multiselect ? values : single}
         type="text"
         // Like a native readonly input, a read-only Combobox is barred from constraint validation
         // (the user could not fix it); its value is still submitted.
@@ -536,6 +800,19 @@ export const ComboboxOptionGroup = OptionGroup;
  * list without taking focus from the input and is not a tab stop; `clearable` adds a clear button,
  * a tab stop after the input. Both sit with the input in a wrapper `<div>` inside the root.
  *
+ * `multiselect` turns the value into an array (Fluent's `selectedOptions`): options draw a
+ * checkbox; Enter and a click toggle an option and keep the list open (Tab, Escape and
+ * Alt+ArrowUp close without committing), and every toggle the user makes is announced
+ * (`labels.added`/`labels.removed`, never for a controlled change, a clear or a form reset).
+ * While no text is typed the input shows the selected labels in selection order
+ * (`labels.selection`, values without an option left out) instead of the placeholder. Focusing
+ * the input selects them, so typing, pasting or composing text replaces them with a query that
+ * filters the options; text inserted into them queries only what was inserted, a value equal to
+ * them (an undo) shows them again, and a toggle, a close or a blur clears the query. Backspace and
+ * Delete only edit the text: the options, the clear button (which clears every value) and a form
+ * reset change the value. `freeform` is not available with `multiselect`, and a non-literal
+ * `multiselect={flag}` is a type error: render two elements, one for each mode.
+ *
  * The `<input>` receives `id`, `aria-label`, `aria-labelledby`, `aria-describedby`,
  * `aria-invalid`, `aria-required`, `aria-errormessage`, `aria-details`, `tabIndex`, `autoFocus`,
  * `onFocus`/`onBlur`/`onKeyDown`/`onKeyUp` and the text input attributes `autoComplete`,
@@ -543,8 +820,10 @@ export const ComboboxOptionGroup = OptionGroup;
  * `ref`, `className`, `style`, other `aria-*` attributes and the remaining props stay on the root
  * `<div>`. Inside a `Field` the input is labelled and described by it. It shows the error look
  * whenever it ends up `aria-invalid` (its own `aria-invalid` or a `Field` error). With
- * `name`/`required` the value takes part in form submission, validation and reset. The open
- * listbox renders in a portal; while closed it stays in the DOM, hidden.
+ * `name`/`required` the value takes part in form submission (one hidden input per value with
+ * `multiselect`), validation and reset (a `multiselect` reset is compared by content, so restoring
+ * the same values reports nothing). The open listbox renders in a portal; while closed it stays
+ * in the DOM, hidden.
  *
  * Sub-components: `Combobox.Option`, `Combobox.OptionGroup`. React Server Components import the
  * flat names `ComboboxOption` / `ComboboxOptionGroup` (dotted access needs a client file).
@@ -552,4 +831,4 @@ export const ComboboxOptionGroup = OptionGroup;
 export const Combobox = /* @__PURE__ */ Object.assign(ComboboxRoot, {
   Option,
   OptionGroup,
-});
+}) as ComboboxComponent;
