@@ -19,7 +19,9 @@ import type {
   Appearance,
   BadgeAppearance,
   BadgeColor,
+  CoreSize,
   IconPosition,
+  InputAppearance,
   Orientation,
   Size,
   ValidationState,
@@ -61,6 +63,13 @@ const badgeColors = [
   'severe',
   'subtle',
 ] as const satisfies readonly BadgeColor[];
+const coreSizes = ['small', 'medium', 'large'] as const satisfies readonly CoreSize[];
+const inputAppearances = [
+  'outline',
+  'underline',
+  'filled-darker',
+  'filled-lighter',
+] as const satisfies readonly InputAppearance[];
 
 /** `size` (`Size`): extra-small … extra-large. */
 export const sizeArgType = {
@@ -98,4 +107,14 @@ export const badgeAppearanceArgType = {
 /** Badge `color` (`BadgeColor`). */
 export const badgeColorArgType = {
   color: { control: 'select', options: badgeColors },
+} satisfies ArgTypes;
+
+/** `size` of the text controls and pickers (`CoreSize`). */
+export const coreSizeArgType = {
+  size: { control: 'inline-radio', options: coreSizes },
+} satisfies ArgTypes;
+
+/** `appearance` of the text controls and pickers (`InputAppearance`). */
+export const inputAppearanceArgType = {
+  appearance: { control: 'select', options: inputAppearances },
 } satisfies ArgTypes;
