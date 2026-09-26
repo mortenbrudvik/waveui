@@ -11,6 +11,11 @@ import {
   inputFocusWithin,
   inputInvalid,
   inputInvalidWithin,
+  inputHeightClasses,
+  inputTextClasses,
+  inputPaddingClasses,
+  inputAppearanceClasses,
+  hitAreaLayer,
   disabledStyles,
   forcedColors,
   motionSafeTransition,
@@ -86,29 +91,33 @@ describe('input recipes (input-basic#9)', () => {
   });
 });
 
-describe('invalid recipes', () => {
-  it('inputInvalid is the destructive border, kept on the focused bottom stroke', () => {
-    expect(tokens(inputInvalid)).toEqual(['border-destructive', 'focus:border-b-destructive']);
+describe('invalid recipes (Phase 4 D4)', () => {
+  it('inputInvalid is the destructive border on every border the appearance draws', () => {
+    expect(tokens(inputInvalid)).toEqual(['border-destructive']);
   });
 
-  it('inputInvalidWithin is the wrapper form (the inner control has the focus)', () => {
-    expect(tokens(inputInvalidWithin)).toEqual([
-      'border-destructive',
-      'focus-within:border-b-destructive',
-    ]);
+  it('inputInvalidWithin is the wrapper form', () => {
+    expect(tokens(inputInvalidWithin)).toEqual(['border-destructive']);
   });
 
-  it('placed after the base and focus recipes, it replaces their border colours', () => {
+  it('after the base and focus recipes, it recolors the borders and leaves the focused bottom to the focus recipe', () => {
     const merged = tokens(cn(inputBase, 'border-b-stroke-accessible', inputFocus, inputInvalid));
-    expect(merged).toEqual(expect.arrayContaining(tokens(inputInvalid)));
+    expect(merged).toContain('border-destructive');
     expect(merged).not.toContain('border-input');
     expect(merged).not.toContain('border-b-stroke-accessible');
-    expect(merged).not.toContain('focus:border-b-primary');
-    expect(merged).toEqual(expect.arrayContaining(['focus:outline-hidden', 'focus:border-b-2']));
+    expect(merged).toEqual(
+      expect.arrayContaining([
+        'focus:outline-hidden',
+        'focus:border-b-2',
+        'focus:border-b-primary',
+      ]),
+    );
 
     const wrapper = tokens(cn('border border-input', inputFocusWithin, inputInvalidWithin));
-    expect(wrapper).not.toContain('focus-within:border-b-primary');
-    expect(wrapper).toEqual(expect.arrayContaining(tokens(inputInvalidWithin)));
+    expect(wrapper).toEqual(
+      expect.arrayContaining(['border-destructive', 'focus-within:border-b-primary']),
+    );
+    expect(wrapper).not.toContain('border-input');
   });
 
   it('are the classes Input shows for a resolved aria-invalid today (no visual change on adoption)', () => {
@@ -131,6 +140,95 @@ describe('invalid recipes', () => {
 
   it('use tokens only', () => {
     expect(`${inputInvalid} ${inputInvalidWithin}`).not.toMatch(/#|white|black|red-/);
+  });
+});
+
+describe('input size and appearance maps (Phase 4 §1.2)', () => {
+  it('has one entry per size and per appearance', () => {
+    expect(Object.keys(inputHeightClasses)).toEqual(['small', 'medium', 'large']);
+    expect(Object.keys(inputTextClasses)).toEqual(['small', 'medium', 'large']);
+    expect(Object.keys(inputPaddingClasses)).toEqual(['small', 'medium', 'large']);
+    expect(Object.keys(inputAppearanceClasses)).toEqual([
+      'outline',
+      'underline',
+      'filled-darker',
+      'filled-lighter',
+    ]);
+  });
+
+  it('sizes are 24/32/40px tall, caption-1/body-1/body-2 and 8/12/16px padded', () => {
+    expect(inputHeightClasses).toEqual({ small: 'h-6', medium: 'h-8', large: 'h-10' });
+    expect(inputTextClasses).toEqual({
+      small: 'text-caption-1',
+      medium: 'text-body-1',
+      large: 'text-body-2',
+    });
+    expect(inputPaddingClasses).toEqual({ small: 'px-2', medium: 'px-3', large: 'px-4' });
+  });
+
+  it('medium outline composes the 0.7 field classes', () => {
+    const classes = tokens(
+      cn(
+        inputHeightClasses.medium,
+        inputPaddingClasses.medium,
+        inputTextClasses.medium,
+        inputAppearanceClasses.outline,
+      ),
+    );
+    expect(classes).toEqual(
+      expect.arrayContaining([
+        'h-8',
+        'px-3',
+        'text-body-1',
+        'rounded',
+        'border',
+        'border-input',
+        'border-b-stroke-accessible',
+        'bg-background',
+      ]),
+    );
+  });
+
+  it('underline draws only the bottom stroke, square and unfilled, with a forced-colors boundary', () => {
+    expect(tokens(inputAppearanceClasses.underline)).toEqual([
+      'rounded-none',
+      'border-0',
+      'border-b',
+      'border-b-stroke-accessible',
+      'bg-transparent',
+      'forced-colors:border-[ButtonText]',
+    ]);
+  });
+
+  it.each(['filled-darker', 'filled-lighter'] as const)(
+    '%s is a fill with the filled stroke token and a forced-colors boundary',
+    (appearance) => {
+      expect(tokens(inputAppearanceClasses[appearance])).toEqual([
+        'rounded',
+        'border',
+        'border-input-filled-stroke',
+        `bg-input-${appearance}`,
+        'forced-colors:border-[ButtonText]',
+      ]);
+    },
+  );
+
+  it('the invalid look recolors the drawn borders of every appearance', () => {
+    expect(tokens(cn(inputAppearanceClasses.underline, inputInvalid))).toEqual(
+      expect.arrayContaining(['border-0', 'border-b', 'border-destructive']),
+    );
+    const filled = tokens(cn(inputAppearanceClasses['filled-darker'], inputInvalid));
+    expect(filled).toContain('border-destructive');
+    expect(filled).not.toContain('border-input-filled-stroke');
+    const focused = tokens(cn(inputAppearanceClasses.outline, inputFocus, inputInvalid));
+    expect(focused).toEqual(
+      expect.arrayContaining(['border-destructive', 'focus:border-b-primary']),
+    );
+  });
+
+  it('hitAreaLayer extends a 20px box by 2px on every side and does not position it', () => {
+    expect(tokens(hitAreaLayer)).toEqual(['before:absolute', 'before:-inset-0.5']);
+    expect(tokens(cn('absolute size-5', hitAreaLayer))).toContain('absolute');
   });
 });
 

@@ -395,11 +395,10 @@ describe('ColorPicker — hex input (input-basic#41, input-pickers#24, #25)', ()
     await user.tripleClick(typed);
     await user.keyboard('#zzz');
     expect(typed).toHaveClass(...inputInvalid.split(' '));
-    for (const replaced of [
-      'border-input',
-      'border-b-stroke-accessible',
-      'focus:border-b-primary',
-    ]) {
+    // Keeps the destructive border and shows the focus color on the focused bottom border
+    // (Phase 4 D4).
+    expect(typed).toHaveClass('focus:border-b-primary');
+    for (const replaced of ['border-input', 'border-b-stroke-accessible']) {
       expect(typed).not.toHaveClass(replaced);
     }
     for (const input of [typed, consumer]) {

@@ -261,7 +261,7 @@ describe('DatePicker', () => {
 
     it('draws the destructive border while the input is invalid', async () => {
       const user = userEvent.setup();
-      const invalidClasses = ['border-destructive', 'focus:border-b-destructive'];
+      const invalidClasses = ['border-destructive'];
       const { unmount } = render(<DatePicker aria-label="Date" locale="en-US" />);
       expect(textbox()).toHaveClass('border-input', 'border-b-stroke-accessible');
       for (const name of invalidClasses) expect(textbox()).not.toHaveClass(name);
@@ -271,6 +271,9 @@ describe('DatePicker', () => {
       expect(textbox()).toHaveClass(...invalidClasses);
       expect(textbox()).not.toHaveClass('border-input');
       expect(textbox()).not.toHaveClass('border-b-stroke-accessible');
+      // Keeps the destructive border and shows the focus color on the focused bottom border
+      // (Phase 4 D4).
+      expect(textbox()).toHaveClass('focus:border-b-primary');
       await user.clear(textbox());
       for (const name of invalidClasses) expect(textbox()).not.toHaveClass(name);
       unmount();

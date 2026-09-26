@@ -1030,12 +1030,10 @@ describe('Dropdown', () => {
       renderInvalid();
       const control = screen.getByRole('combobox');
       expect(control).toHaveAttribute('aria-invalid', 'true');
-      expect(control).toHaveClass('border', 'border-destructive', 'focus:border-b-destructive');
-      for (const replaced of [
-        'border-input',
-        'border-b-stroke-accessible',
-        'focus:border-b-primary',
-      ]) {
+      // Keeps the destructive border and shows the focus color on the focused bottom border
+      // (Phase 4 D4).
+      expect(control).toHaveClass('border', 'border-destructive', 'focus:border-b-primary');
+      for (const replaced of ['border-input', 'border-b-stroke-accessible']) {
         expect(control).not.toHaveClass(replaced);
       }
     });

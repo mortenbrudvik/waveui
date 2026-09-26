@@ -2,6 +2,7 @@
  * Shared class-string recipes. They are plain literals so Tailwind's scanner (`@source ../lib`)
  * generates every utility; compose them with `cn()` before the consumer's `className`.
  */
+import type { CoreSize, InputAppearance } from './types';
 
 /** Focus-visible ring for focusable controls (C-FOCUS). */
 export const focusRing =
@@ -15,9 +16,58 @@ export const focusRingInset =
 export const focusWithinRing =
   'focus-within:outline-2 focus-within:outline-offset-2 focus-within:outline-ring';
 
-/** Base look of text-entry controls (Input, Textarea, Select, picker inputs). */
+/**
+ * Base look of text-entry controls (Input, Textarea, Select, picker inputs).
+ * @deprecated Compose inputHeightClasses, inputTextClasses, inputPaddingClasses and
+ * inputAppearanceClasses.
+ */
 export const inputBase =
   'h-8 w-full rounded border border-input bg-background px-3 text-body-1 text-foreground placeholder:text-muted-foreground';
+
+/** Height of a text control or picker per size: 24, 32 or 40px. */
+export const inputHeightClasses: Readonly<Record<CoreSize, string>> = {
+  small: 'h-6',
+  medium: 'h-8',
+  large: 'h-10',
+};
+
+/** Type ramp of a text control or picker per size. */
+export const inputTextClasses: Readonly<Record<CoreSize, string>> = {
+  small: 'text-caption-1',
+  medium: 'text-body-1',
+  large: 'text-body-2',
+};
+
+/** Horizontal padding of a text control drawn on its own element, per size: 8, 12 or 16px. */
+export const inputPaddingClasses: Readonly<Record<CoreSize, string>> = {
+  small: 'px-2',
+  medium: 'px-3',
+  large: 'px-4',
+};
+
+/**
+ * Fill, strokes and corners of each appearance, for a field drawn on its own element or on a
+ * wrapper. Compose the focus and invalid recipes after it: they recolor the borders the appearance
+ * draws. The filled appearances have a transparent stroke (a visible one in the high-contrast
+ * theme); `underline` and the filled appearances keep a boundary in forced colors.
+ */
+export const inputAppearanceClasses: Readonly<Record<InputAppearance, string>> = {
+  outline: 'rounded border border-input border-b-stroke-accessible bg-background',
+  underline:
+    'rounded-none border-0 border-b border-b-stroke-accessible bg-transparent forced-colors:border-[ButtonText]',
+  'filled-darker':
+    'rounded border border-input-filled-stroke bg-input-filled-darker forced-colors:border-[ButtonText]',
+  'filled-lighter':
+    'rounded border border-input-filled-stroke bg-input-filled-lighter forced-colors:border-[ButtonText]',
+};
+
+/**
+ * Extends a 20px control's pointer target to 24px (WCAG 2.5.8): a transparent layer 2px beyond
+ * each edge. The element must be positioned: the picker buttons are absolute, and a static
+ * element adds relative positioning itself (this recipe does not, because cn() would then replace
+ * an absolute position).
+ */
+export const hitAreaLayer = 'before:absolute before:-inset-0.5';
 
 /**
  * Focus indicator of text-entry controls: a 2px primary bottom border. `focus:outline-hidden`
@@ -35,18 +85,19 @@ export const inputFocusWithin = 'focus-within:border-b-2 focus-within:border-b-p
 
 /**
  * Invalid look of a text-entry control (Input, Select, Textarea, SearchBox, SpinButton, Combobox,
- * Dropdown, the picker inputs): the destructive border, kept on the bottom stroke while focused.
- * Apply it when the control's resolved `aria-invalid` is `true` (its own error state, the
- * consumer's `aria-invalid` or the surrounding Field's), after {@link inputBase} and
- * {@link inputFocus} in `cn()` so it replaces their border colours.
+ * Dropdown, the picker inputs), for every appearance: the destructive color on every border the
+ * appearance draws. Apply it when the control's resolved `aria-invalid` is `true`, after the
+ * appearance and {@link inputFocus} in `cn()`: while the control is focused, the focus recipe
+ * colors the 2px bottom border and the other borders stay destructive.
  */
-export const inputInvalid = 'border-destructive focus:border-b-destructive';
+export const inputInvalid = 'border-destructive';
 
 /**
  * Wrapper form of {@link inputInvalid} for a control drawn by a styled wrapper around the
- * focusable input (Input with slots, SpinButton), placed after {@link inputFocusWithin}.
+ * focusable input (Input with slots, SearchBox, SpinButton, TagPicker), placed after
+ * {@link inputFocusWithin}.
  */
-export const inputInvalidWithin = 'border-destructive focus-within:border-b-destructive';
+export const inputInvalidWithin = 'border-destructive';
 
 /**
  * Disabled look for native `disabled` and `aria-disabled` (C-DISABLED) controls. An

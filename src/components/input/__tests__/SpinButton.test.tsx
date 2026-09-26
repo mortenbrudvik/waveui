@@ -611,11 +611,10 @@ describe('SpinButton — naming, routing and styling', () => {
     expect(spin()).toHaveAttribute('aria-invalid', 'true');
     const root = screen.getByTestId('root');
     expect(root).toHaveClass(...inputInvalidWithin.split(' '));
-    for (const replaced of [
-      'border-input',
-      'border-b-stroke-accessible',
-      'focus-within:border-b-primary',
-    ]) {
+    // Keeps the destructive border and shows the focus color on the focused bottom border
+    // (Phase 4 D4).
+    expect(root).toHaveClass('focus-within:border-b-primary');
+    for (const replaced of ['border-input', 'border-b-stroke-accessible']) {
       expect(root).not.toHaveClass(replaced);
     }
   });

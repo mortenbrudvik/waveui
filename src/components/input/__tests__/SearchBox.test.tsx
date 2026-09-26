@@ -1509,12 +1509,10 @@ describe('SearchBox', () => {
       // The wrapper form of the shared recipe: the root draws the field around the input.
       const invalid = screen.getByTestId('invalid');
       expect(invalid).toHaveClass(...inputInvalidWithin.split(' '));
-      expect(invalid).toHaveClass('border-destructive', 'focus-within:border-b-destructive');
-      for (const replaced of [
-        'border-input',
-        'border-b-stroke-accessible',
-        'focus-within:border-b-primary',
-      ]) {
+      // Keeps the destructive border and shows the focus color on the focused bottom border
+      // (Phase 4 D4).
+      expect(invalid).toHaveClass('border-destructive', 'focus-within:border-b-primary');
+      for (const replaced of ['border-input', 'border-b-stroke-accessible']) {
         expect(invalid).not.toHaveClass(replaced);
       }
       expect(screen.getByTestId('valid')).not.toHaveClass('border-destructive');
