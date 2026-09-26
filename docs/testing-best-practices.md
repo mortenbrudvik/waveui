@@ -25,7 +25,7 @@ Vitest picks a quiet reporter when it runs under an AI agent, which hides the co
 
 Evaluated before every test file:
 
-- jest-dom matchers and vitest-axe's `toHaveNoViolations`.
+- jest-dom matchers (registered from `@testing-library/jest-dom/matchers`) and vitest-axe's `toHaveNoViolations`. `src/vitest-axe.d.ts` types both on Vitest's `Matchers<R, T>` interface. jest-dom's `/vitest` entry is not used: its type augmentation does not merge with Vitest 5's `Assertion<R, T>`. A new custom matcher is registered with `expect.extend` in the setup and typed in the same interface.
 - `Element.prototype.scrollIntoView` is a `vi.fn()` when jsdom lacks it (calls cleared after every test).
 - `window.matchMedia` answers `false` for every query when jsdom lacks it; `mockMatchMedia()` changes the answers.
 - **No global `ResizeObserver`**, as in a consumer's jsdom; call `installResizeObserverMock()` when a test needs one.
