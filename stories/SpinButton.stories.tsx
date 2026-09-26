@@ -79,7 +79,8 @@ export const Controlled: Story = {
         <SpinButton
           {...args}
           value={value}
-          onValueChange={(next) => {
+          onValueChange={(next: number | null) => {
+            if (next === null) return;
             setValue(next);
             args.onValueChange?.(next);
           }}

@@ -1,8 +1,13 @@
 import * as React from 'react';
-import { describe, it, expect, vi } from 'vitest';
+import { describe, it, expect, vi, expectTypeOf } from 'vitest';
 import { act, render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { SpinButton, type SpinButtonLabels } from '../SpinButton';
+import {
+  SpinButton,
+  type SpinButtonLabels,
+  type SpinButtonProps,
+  type SpinButtonAllowEmptyProps,
+} from '../SpinButton';
 import { inputInvalidWithin } from '../../../lib/styles';
 import { testFocusEvents, testSystemProps, renderWithProviders } from '../../../test-utils';
 import { renderWithFieldContext, FIELD_TEST_IDS, FIELD_TEST_TEXT } from '../../../test-utils-field';
@@ -841,6 +846,10 @@ describe('sizes, appearances and geometry (Phase 4 D13, D20)', () => {
     expect(incrementButton()).not.toHaveClass('border-s');
     expect(decrementButton()).not.toHaveClass('border-e');
     expect(incrementButton()).toHaveClass('not-disabled:not-aria-disabled:hover:bg-subtle-pressed');
+    // tailwind-merge must not silently keep the outline hover class alongside the filled-darker one.
+    expect(incrementButton()).not.toHaveClass(
+      'not-disabled:not-aria-disabled:hover:bg-subtle-hover',
+    );
   });
 
   it('takes the Field size', () => {
@@ -915,4 +924,142 @@ describe('sizes, appearances and geometry (Phase 4 D13, D20)', () => {
       expect(wrapper).toHaveClass('border-destructive', 'focus-within:border-b-primary');
     },
   );
+});
+
+describe('allowEmpty (Phase 4 D16, D17)', () => {
+  it('starts empty without a value: no text, no aria-valuenow', () => {
+    render(<SpinButton aria-label="Quantity" allowEmpty />);
+    expect(spin()).toHaveValue('');
+    expect(spin()).not.toHaveAttribute('aria-valuenow');
+  });
+
+  it('clearing and committing emits null once (blur and Enter), in StrictMode', async () => {
+    const user = userEvent.setup();
+    const onValueChange = vi.fn();
+    render(
+      <React.StrictMode>
+        <SpinButton
+          aria-label="Quantity"
+          allowEmpty
+          defaultValue={3}
+          onValueChange={onValueChange}
+        />
+      </React.StrictMode>,
+    );
+    await user.clear(spin());
+    await user.keyboard('{Enter}');
+    expect(onValueChange).toHaveBeenCalledTimes(1);
+    expect(onValueChange).toHaveBeenCalledWith(null);
+    expect(spin()).toHaveValue('');
+  });
+
+  // The spec's Tests paragraph lists both commit paths ("on blur and on Enter"); the case above
+  // exercises Enter, this one blur (spec case added beyond the brief).
+  it('clearing and committing on blur emits null once, in StrictMode', async () => {
+    const user = userEvent.setup();
+    const onValueChange = vi.fn();
+    render(
+      <React.StrictMode>
+        <SpinButton
+          aria-label="Quantity"
+          allowEmpty
+          defaultValue={3}
+          onValueChange={onValueChange}
+        />
+      </React.StrictMode>,
+    );
+    await user.clear(spin());
+    await user.tab();
+    expect(onValueChange).toHaveBeenCalledTimes(1);
+    expect(onValueChange).toHaveBeenCalledWith(null);
+    expect(spin()).toHaveValue('');
+  });
+
+  it('without allowEmpty, clearing still reverts (0.7)', async () => {
+    const user = userEvent.setup();
+    render(<SpinButton aria-label="Quantity" defaultValue={3} />);
+    await user.clear(spin());
+    await user.tab();
+    expect(spin()).toHaveValue('3');
+  });
+
+  it('stepping from empty starts at 0 and clamps: min 1 gives 1 both ways', async () => {
+    const user = userEvent.setup();
+    const { unmount } = render(<SpinButton aria-label="Quantity" allowEmpty min={1} />);
+    spin().focus();
+    await user.keyboard('{ArrowUp}');
+    expect(spin()).toHaveValue('1');
+    unmount();
+    render(<SpinButton aria-label="Quantity" allowEmpty min={1} />);
+    spin().focus();
+    await user.keyboard('{ArrowDown}');
+    expect(spin()).toHaveValue('1');
+  });
+
+  it('keeps both step buttons enabled while empty', () => {
+    render(<SpinButton aria-label="Quantity" allowEmpty min={0} max={10} />);
+    expect(incrementButton()).toBeEnabled();
+    expect(decrementButton()).toBeEnabled();
+  });
+
+  it('required and empty: the hidden input blocks the submit and focuses the spinbutton', () => {
+    const onSubmit = vi.fn((event: React.FormEvent) => event.preventDefault());
+    render(
+      <form onSubmit={onSubmit} aria-label="Order">
+        <SpinButton aria-label="Quantity" allowEmpty required name="qty" />
+      </form>,
+    );
+    const form = screen.getByRole('form', { name: 'Order' }) as HTMLFormElement;
+    expect(form.checkValidity()).toBe(false);
+    act(() => form.requestSubmit());
+    expect(onSubmit).not.toHaveBeenCalled();
+    expect(spin()).toHaveFocus();
+  });
+
+  it('submits "" through the hidden input and resets to null', async () => {
+    const user = userEvent.setup();
+    render(
+      <form aria-label="Order">
+        <SpinButton aria-label="Quantity" allowEmpty name="qty" />
+        <button type="reset">Reset</button>
+      </form>,
+    );
+    const form = screen.getByRole('form', { name: 'Order' }) as HTMLFormElement;
+    expect(new FormData(form).get('qty')).toBe('');
+    spin().focus();
+    await user.keyboard('{ArrowUp}');
+    expect(new FormData(form).get('qty')).toBe('1');
+    await user.click(screen.getByRole('button', { name: 'Reset' }));
+    expect(spin()).toHaveValue('');
+  });
+
+  it('a controlled null from outside replaces a typed draft (Review Focus 4)', async () => {
+    const user = userEvent.setup();
+    const { rerender } = render(
+      <SpinButton aria-label="Quantity" allowEmpty value={5} onValueChange={() => {}} />,
+    );
+    await user.type(spin(), '7');
+    expect(spin()).toHaveValue('57');
+    rerender(<SpinButton aria-label="Quantity" allowEmpty value={null} onValueChange={() => {}} />);
+    expect(spin()).toHaveValue('');
+  });
+
+  it('types: null only with allowEmpty; onChange readable on the union', () => {
+    expectTypeOf<SpinButtonProps['value']>().toEqualTypeOf<number | undefined>();
+    expectTypeOf<SpinButtonAllowEmptyProps['value']>().toEqualTypeOf<number | null | undefined>();
+    expectTypeOf<React.ComponentProps<typeof SpinButton>>().toEqualTypeOf<
+      SpinButtonProps | SpinButtonAllowEmptyProps
+    >();
+    type Props = React.ComponentProps<typeof SpinButton>;
+    expectTypeOf<Props['onChange']>().toEqualTypeOf<((value: number) => void) | undefined>();
+    interface Wrapper extends SpinButtonProps {
+      hint?: string;
+    }
+    expectTypeOf<Wrapper['value']>().toEqualTypeOf<number | undefined>();
+    // @ts-expect-error null needs allowEmpty
+    render(<SpinButton aria-label="Quantity" value={null} />);
+    const flag: boolean = Math.random() > 1;
+    // @ts-expect-error a boolean variable fits neither member
+    render(<SpinButton aria-label="Quantity" allowEmpty={flag} value={null} />);
+  });
 });

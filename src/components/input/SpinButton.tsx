@@ -12,7 +12,7 @@ import {
 } from '../../lib/styles';
 import type { CoreSize, InputAppearance } from '../../lib/types';
 import { useControllable } from '../../hooks/useControllable';
-import { useFieldControl } from '../../hooks/useFieldControl';
+import { useFieldContext, useFieldControl } from '../../hooks/useFieldControl';
 import { useFormReset } from '../../hooks/useFormReset';
 import { useMergedRefs } from '../../hooks/useMergedRefs';
 import { HiddenInput } from '../internal/HiddenInput';
@@ -65,31 +65,17 @@ export interface SpinButtonLabels {
   decrement?: string;
 }
 
-/** Properties for the SpinButton component. */
-export interface SpinButtonProps
+/**
+ * Properties every SpinButton mode shares (every member of {@link SpinButtonProps} and
+ * {@link SpinButtonAllowEmptyProps} except the value members, which differ between them).
+ */
+export interface SpinButtonBaseProps
   extends
     Omit<
       React.HTMLAttributes<HTMLDivElement>,
       'onChange' | 'defaultValue' | keyof SpinButtonInputProps
     >,
     SpinButtonInputProps {
-  /** Controlled numeric value. */
-  value?: number;
-  /** Initial value for uncontrolled usage (also what a form reset restores).
-   * @default 0
-   */
-  defaultValue?: number;
-  /**
-   * Called with the new value when it changes: a step (buttons, arrow keys, PageUp/PageDown,
-   * Home/End) or a typed value committed on blur or Enter. Not called while the user is typing,
-   * nor when the value stays the same.
-   */
-  onValueChange?: (value: number) => void;
-  /**
-   * Called with the new value when it changes.
-   * @deprecated Use `onValueChange`. (`onChange` is reserved for native change events.)
-   */
-  onChange?: (value: number) => void;
   /** Minimum allowed value.
    * @default -Infinity
    */
@@ -138,6 +124,49 @@ export interface SpinButtonProps
   ref?: React.Ref<HTMLDivElement>;
   /** Ref to the `<input role="spinbutton">` (the focusable control). */
   controlRef?: React.Ref<HTMLInputElement>;
+}
+
+/** SpinButton props with a number value (the 0.7 shape). */
+export interface SpinButtonProps extends SpinButtonBaseProps {
+  /**
+   * Allows an empty value (`null`). Takes the literal `true`: a `boolean` variable fits neither
+   * member of the props, so branch the JSX or spread `{ allowEmpty: true, value }`.
+   * @default false
+   */
+  allowEmpty?: false;
+  /** Controlled numeric value. */
+  value?: number;
+  /** Initial value for uncontrolled usage (also what a form reset restores).
+   * @default 0
+   */
+  defaultValue?: number;
+  /**
+   * Called with the new value when it changes: a step (buttons, arrow keys, PageUp/PageDown,
+   * Home/End) or a typed value committed on blur or Enter. Not called while the user is typing,
+   * nor when the value stays the same.
+   */
+  onValueChange?: (value: number) => void;
+  /**
+   * Called with the new value when it changes.
+   * @deprecated Use `onValueChange`. (`onChange` is reserved for native change events.)
+   */
+  onChange?: (value: number) => void;
+}
+
+/** SpinButton props with `allowEmpty`: the value may be `null` (an empty field). */
+export interface SpinButtonAllowEmptyProps extends SpinButtonBaseProps {
+  /** The value may be `null`: clearing the text and committing it empties the field. */
+  allowEmpty: true;
+  /** Controlled value; `null` is an empty field. */
+  value?: number | null;
+  /** Initial value for uncontrolled usage (also what a form reset restores).
+   * @default null
+   */
+  defaultValue?: number | null;
+  /** Called with the new value when it changes, `null` when the field is emptied. */
+  onValueChange?: (value: number | null) => void;
+  /** Not available with `allowEmpty` (the deprecated alias of `onValueChange`). */
+  onChange?: never;
 }
 
 /** Decimal numbers as a user types them: `12`, `-3`, `1.5`, `.5`, `2.`, `1e3`. */
@@ -198,6 +227,12 @@ const stepButtonClass = cn(
  *   or use a label (development warning otherwise).
  * - **Forms**: with `name` the committed value is submitted; `required` makes the input natively
  *   required; a form reset restores `defaultValue`.
+ * - **Empty values**: `allowEmpty` lets the value become `null` (an empty field). Clearing the
+ *   text and committing it (blur or Enter) sets the value to `null`, uncontrolled too; stepping
+ *   up or down from an empty value starts at 0 and clamps to the nearest bound. `required` (its
+ *   own, or a required Field's) still blocks submitting an empty value: the check runs on the
+ *   `HiddenInput` that carries the committed value, not on the shown text, so it keeps working
+ *   even when the shown text is not empty.
  * - **Size and appearance**: `size` resolves from its own prop, then the surrounding `Field`'s
  *   `size`, then `WaveProvider inputDefaults.size`, else `'medium'`; `appearance` from its own
  *   prop, then `WaveProvider inputDefaults.appearance`, else `'outline'`; both render as
@@ -211,56 +246,68 @@ const stepButtonClass = cn(
  * @example
  * <SpinButton aria-label="Quantity" min={1} max={10} value={qty} onValueChange={setQty} />
  */
-export const SpinButton = ({
-  value: valueProp,
-  defaultValue,
-  onValueChange,
-  onChange,
-  min = -Infinity,
-  max = Infinity,
-  step = 1,
-  largeStep,
-  disabled,
-  name,
-  form,
-  labels,
-  size: sizeProp,
-  appearance: appearanceProp,
-  className,
-  hidden,
-  ref,
-  controlRef,
-  // Routed to the input (C-ROUTING)
-  id,
-  'aria-label': ariaLabel,
-  'aria-labelledby': ariaLabelledBy,
-  'aria-describedby': ariaDescribedBy,
-  'aria-invalid': ariaInvalid,
-  'aria-required': ariaRequired,
-  'aria-errormessage': ariaErrorMessage,
-  'aria-details': ariaDetails,
-  'aria-valuetext': ariaValueText,
-  required,
-  readOnly,
-  placeholder,
-  maxLength,
-  spellCheck,
-  autoComplete = 'off',
-  autoFocus,
-  inputMode,
-  enterKeyHint,
-  tabIndex,
-  onFocus,
-  onBlur,
-  onKeyDown,
-  onKeyUp,
-  ...rest
-}: SpinButtonProps) => {
+export const SpinButton = (props: SpinButtonProps | SpinButtonAllowEmptyProps): React.ReactNode => {
+  const {
+    allowEmpty = false,
+    value: valueProp,
+    defaultValue,
+    onValueChange,
+    onChange,
+    ...baseProps
+  } = props as SpinButtonBaseProps & {
+    allowEmpty?: boolean;
+    value?: number | null;
+    defaultValue?: number | null;
+    onValueChange?: (value: number | null) => void;
+    onChange?: (value: number) => void;
+  };
+  const {
+    min = -Infinity,
+    max = Infinity,
+    step = 1,
+    largeStep,
+    disabled,
+    name,
+    form,
+    labels,
+    size: sizeProp,
+    appearance: appearanceProp,
+    className,
+    hidden,
+    ref,
+    controlRef,
+    // Routed to the input (C-ROUTING)
+    id,
+    'aria-label': ariaLabel,
+    'aria-labelledby': ariaLabelledBy,
+    'aria-describedby': ariaDescribedBy,
+    'aria-invalid': ariaInvalid,
+    'aria-required': ariaRequired,
+    'aria-errormessage': ariaErrorMessage,
+    'aria-details': ariaDetails,
+    'aria-valuetext': ariaValueText,
+    required,
+    readOnly,
+    placeholder,
+    maxLength,
+    spellCheck,
+    autoComplete = 'off',
+    autoFocus,
+    inputMode,
+    enterKeyHint,
+    tabIndex,
+    onFocus,
+    onBlur,
+    onKeyDown,
+    onKeyUp,
+    ...rest
+  } = baseProps;
+
   if (onChange !== undefined) warnDeprecated('SpinButton', 'onChange', 'onValueChange');
-  const initialValue = defaultValue ?? 0;
-  const [value, setValue] = useControllable(valueProp, initialValue, (next: number) => {
+  const initialValue = defaultValue !== undefined ? defaultValue : allowEmpty ? null : 0;
+  const [value, setValue] = useControllable<number | null>(valueProp, initialValue, (next) => {
     onValueChange?.(next);
-    onChange?.(next);
+    if (next !== null) onChange?.(next);
   });
 
   // The text is a draft while the user types (null = show the value).
@@ -290,14 +337,20 @@ export const SpinButton = ({
     setValue(clamp(next));
   };
 
-  /** Steps from the typed draft when it is a number, else from the value. */
+  /** Steps from the typed draft when it is a number, else from the value (0 while empty). */
   const stepBy = (delta: number) => {
-    const precision = Math.max(decimalsOf(step), decimalsOf(delta), decimalsOf(current));
-    commit(roundTo(current + delta, precision));
+    const from = current ?? 0;
+    const precision = Math.max(decimalsOf(step), decimalsOf(delta), decimalsOf(from));
+    commit(roundTo(from + delta, precision));
   };
 
   const commitDraft = () => {
     if (draft === null) return;
+    if (allowEmpty && draft.trim() === '') {
+      setDraft(null);
+      setValue(null);
+      return;
+    }
     if (draftNumber === null) setDraft(null);
     else commit(draftNumber);
   };
@@ -305,6 +358,8 @@ export const SpinButton = ({
   const inputRef = React.useRef<HTMLInputElement>(null);
   const mergedInputRef = useMergedRefs(inputRef, controlRef);
 
+  const field = useFieldContext();
+  const isRequired = required ?? field?.required ?? false;
   const fieldProps = useFieldControl(
     {
       id,
@@ -418,7 +473,7 @@ export const SpinButton = ({
         tabIndex={-1}
         onMouseDown={keepFocus}
         onClick={() => stepBy(-step)}
-        disabled={!interactive || current <= min}
+        disabled={!interactive || (current !== null && current <= min)}
         aria-label={labels?.decrement ?? 'Decrement'}
         className={cn(
           stepButtonClass,
@@ -450,11 +505,11 @@ export const SpinButton = ({
         aria-invalid={ariaInvalidValue}
         aria-errormessage={ariaErrorMessage}
         aria-details={ariaDetails}
-        aria-valuenow={value}
+        aria-valuenow={value ?? undefined}
         aria-valuemin={Number.isFinite(min) ? min : undefined}
         aria-valuemax={Number.isFinite(max) ? max : undefined}
         aria-valuetext={ariaValueText}
-        value={draft ?? String(value)}
+        value={draft ?? (value === null ? '' : String(value))}
         onChange={(e) => setDraft(e.target.value)}
         onFocus={onFocus}
         onBlur={composeEventHandlers(onBlur, commitDraft, { checkDefaultPrevented: false })}
@@ -473,7 +528,7 @@ export const SpinButton = ({
         tabIndex={-1}
         onMouseDown={keepFocus}
         onClick={() => stepBy(step)}
-        disabled={!interactive || current >= max}
+        disabled={!interactive || (current !== null && current >= max)}
         aria-label={labels?.increment ?? 'Increment'}
         className={cn(
           stepButtonClass,
@@ -487,7 +542,15 @@ export const SpinButton = ({
         <AddIcon size={SPIN_SIZE[size].glyph} />
       </button>
 
-      <HiddenInput name={name} form={form} disabled={disabled} value={String(value)} />
+      <HiddenInput
+        name={name}
+        form={form}
+        disabled={disabled}
+        type="text"
+        value={value === null ? '' : String(value)}
+        required={allowEmpty ? isRequired : undefined}
+        onInvalid={() => inputRef.current?.focus()}
+      />
     </div>
   );
 };
