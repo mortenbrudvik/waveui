@@ -1904,6 +1904,7 @@ describe('sizes and appearances (Phase 4 P4-01)', () => {
     expect(input()).toHaveClass('h-8', 'px-3', 'text-body-1', 'border-input', 'pe-14');
     expect(expand()).toHaveClass('h-6', 'w-6', 'end-1');
     expect(clear()).toHaveClass('h-6', 'w-6', 'end-7');
+    expect(clear().querySelector('svg')).toHaveAttribute('width', '16');
     expect(root()).toHaveAttribute('data-size', 'medium');
     expect(root()).toHaveAttribute('data-appearance', 'outline');
   });
@@ -1913,6 +1914,7 @@ describe('sizes and appearances (Phase 4 P4-01)', () => {
     expect(input()).toHaveClass('h-6', 'px-2', 'text-caption-1', 'pe-13');
     expect(expand()).toHaveClass('size-5', 'before:-inset-0.5', 'end-1');
     expect(clear()).toHaveClass('size-5', 'before:-inset-0.5', 'end-7');
+    expect(clear().querySelector('svg')).toHaveAttribute('width', '12');
   });
 
   it('large: 40px field, 32px buttons at end-1 and end-9, pe-18, larger glyphs', () => {
@@ -1952,12 +1954,13 @@ describe('sizes and appearances (Phase 4 P4-01)', () => {
 
   it('keeps the buttons at the inline end in RTL', () => {
     renderWithProviders(
-      <Combobox aria-label="Fruit" size="large">
+      <Combobox aria-label="Fruit" size="large" clearable defaultValue="apple">
         <Combobox.Option value="apple">Apple</Combobox.Option>
       </Combobox>,
       { dir: 'rtl' },
     );
     expect(screen.getByRole('button', { name: 'Show options' })).toHaveClass('end-1');
+    expect(screen.getByRole('button', { name: 'Clear selection' })).toHaveClass('end-9');
   });
 
   // Spec cases added beyond the brief (§2.1's Tests paragraph, binding via §2.2's "as §2.1 for
