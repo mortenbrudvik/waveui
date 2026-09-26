@@ -3,13 +3,21 @@ import { cn } from '../../lib/cn';
 import { composeEventHandlers } from '../../lib/composeEventHandlers';
 import { warnDeprecated, warnOnce } from '../../lib/dev';
 import { AddIcon, SubtractIcon } from '../../lib/icons';
-import { inputFocusWithin, inputInvalidWithin } from '../../lib/styles';
+import {
+  inputAppearanceClasses,
+  inputFocusWithin,
+  inputHeightClasses,
+  inputInvalidWithin,
+  inputTextClasses,
+} from '../../lib/styles';
+import type { CoreSize, InputAppearance } from '../../lib/types';
 import { useControllable } from '../../hooks/useControllable';
 import { useFieldControl } from '../../hooks/useFieldControl';
 import { useFormReset } from '../../hooks/useFormReset';
 import { useMergedRefs } from '../../hooks/useMergedRefs';
 import { HiddenInput } from '../internal/HiddenInput';
 import { isInvalidLook } from './Input';
+import { useInputLook } from './inputLook';
 
 /**
  * Props that SpinButton routes to its `<input role="spinbutton">` (C-ROUTING): the id, the ARIA
@@ -109,6 +117,23 @@ export interface SpinButtonProps
    * localization. Unset members keep their English defaults.
    */
   labels?: SpinButtonLabels;
+  /**
+   * Size of the field: `small` (24px tall), `medium` (32px) or `large` (40px). Default: the
+   * surrounding Field's `size`, else `WaveProvider inputDefaults.size`, else `'medium'`.
+   *
+   * SpinButton is 24, 32 or 40px tall like every field; its buttons are square-ish, 24, 32 or
+   * 40px wide.
+   */
+  size?: CoreSize;
+  /**
+   * Look of the field: `outline` (a full border), `underline` (a bottom stroke only),
+   * `filled-darker` or `filled-lighter` (a fill without a visible stroke: give the field a
+   * visible label). Default: `WaveProvider inputDefaults.appearance`, else `'outline'`.
+   *
+   * The step buttons keep a 1px separator from the input only in `outline`; the other
+   * appearances have none.
+   */
+  appearance?: InputAppearance;
   /** Ref to the root `<div>`. */
   ref?: React.Ref<HTMLDivElement>;
   /** Ref to the `<input role="spinbutton">` (the focusable control). */
@@ -139,9 +164,17 @@ function roundTo(n: number, decimals: number): number {
   return Number(n.toFixed(Math.min(decimals, 20)));
 }
 
+/** Per-size widths of the step buttons and the input's flex basis, and the glyph size. */
+const SPIN_SIZE: Readonly<Record<CoreSize, { button: string; input: string; glyph: number }>> = {
+  small: { button: 'w-6', input: 'w-10', glyph: 12 },
+  medium: { button: 'w-8', input: 'w-12', glyph: 12 },
+  large: { button: 'w-10', input: 'w-14', glyph: 16 },
+};
+
 const stepButtonClass = cn(
-  // Padding and background set here (C-NATIVE): an app-wide `button` rule cannot fill them.
-  'flex h-8 w-8 shrink-0 items-center justify-center border-input bg-transparent p-0 text-foreground',
+  // Padding and background set here (C-NATIVE): an app-wide `button` rule cannot fill them. The
+  // size and, in `outline`, the separator are added per render (SPIN_SIZE, D13).
+  'flex h-full shrink-0 items-center justify-center bg-transparent p-0 text-foreground',
   'not-disabled:not-aria-disabled:hover:bg-subtle-hover not-disabled:not-aria-disabled:active:bg-subtle-pressed',
   'disabled:pointer-events-none',
 );
@@ -165,6 +198,14 @@ const stepButtonClass = cn(
  *   or use a label (development warning otherwise).
  * - **Forms**: with `name` the committed value is submitted; `required` makes the input natively
  *   required; a form reset restores `defaultValue`.
+ * - **Size and appearance**: `size` resolves from its own prop, then the surrounding `Field`'s
+ *   `size`, then `WaveProvider inputDefaults.size`, else `'medium'`; `appearance` from its own
+ *   prop, then `WaveProvider inputDefaults.appearance`, else `'outline'`; both render as
+ *   `data-size` and `data-appearance` on the root. SpinButton takes every size the other fields
+ *   do, and unlike 0.7 its root is now exactly as tall as theirs, with its step buttons and
+ *   input taking up that height; sizing the root wider widens the input instead of leaving
+ *   empty space inside it. The step buttons keep a 1px separator from the input only in
+ *   `outline`; the other appearances have none.
  * - The −/+ buttons are named "Decrement"/"Increment"; `labels` localizes the names.
  *
  * @example
@@ -183,6 +224,8 @@ export const SpinButton = ({
   name,
   form,
   labels,
+  size: sizeProp,
+  appearance: appearanceProp,
   className,
   hidden,
   ref,
@@ -279,6 +322,7 @@ export const SpinButton = ({
   // error look follows the shared rule of the text controls.
   const ariaInvalidValue = draftInvalid ? true : fieldProps['aria-invalid'];
   const invalidLook = isInvalidLook(false, ariaInvalidValue);
+  const { size, appearance } = useInputLook(sizeProp, appearanceProp);
 
   useFormReset(
     inputRef,
@@ -318,8 +362,8 @@ export const SpinButton = ({
       case 'PageUp':
       case 'PageDown': {
         e.preventDefault();
-        const size = e.key === 'ArrowUp' || e.key === 'ArrowDown' ? step : big;
-        stepBy(e.key === 'ArrowUp' || e.key === 'PageUp' ? size : -size);
+        const amount = e.key === 'ArrowUp' || e.key === 'ArrowDown' ? step : big;
+        stepBy(e.key === 'ArrowUp' || e.key === 'PageUp' ? amount : -amount);
         return;
       }
       case 'Home':
@@ -354,8 +398,13 @@ export const SpinButton = ({
   return (
     <div
       ref={ref}
+      data-size={size}
+      data-appearance={appearance}
       className={cn(
-        'relative inline-flex items-center rounded border border-input border-b-stroke-accessible bg-background',
+        'relative inline-flex items-center',
+        inputHeightClasses[size],
+        inputTextClasses[size],
+        inputAppearanceClasses[appearance],
         inputFocusWithin,
         invalidLook && inputInvalidWithin,
         disabled && 'cursor-not-allowed opacity-50',
@@ -371,9 +420,16 @@ export const SpinButton = ({
         onClick={() => stepBy(-step)}
         disabled={!interactive || current <= min}
         aria-label={labels?.decrement ?? 'Decrement'}
-        className={cn(stepButtonClass, 'border-e', !disabled && 'disabled:opacity-50')}
+        className={cn(
+          stepButtonClass,
+          SPIN_SIZE[size].button,
+          appearance === 'outline' && 'border-e border-input',
+          appearance === 'filled-darker' &&
+            'not-disabled:not-aria-disabled:hover:bg-subtle-pressed',
+          !disabled && 'disabled:opacity-50',
+        )}
       >
-        <SubtractIcon size={12} />
+        <SubtractIcon size={SPIN_SIZE[size].glyph} />
       </button>
 
       <input
@@ -405,7 +461,11 @@ export const SpinButton = ({
         onKeyDown={composeEventHandlers(onKeyDown, handleKeyDown)}
         onKeyUp={onKeyUp}
         disabled={disabled}
-        className="h-8 w-12 min-w-0 border-none bg-transparent text-center text-body-1 text-foreground focus:outline-hidden disabled:cursor-not-allowed [appearance:textfield]"
+        className={cn(
+          'h-full min-w-0 flex-auto border-none bg-transparent text-center text-foreground focus:outline-hidden disabled:cursor-not-allowed [appearance:textfield]',
+          SPIN_SIZE[size].input,
+          inputTextClasses[size],
+        )}
       />
 
       <button
@@ -415,9 +475,16 @@ export const SpinButton = ({
         onClick={() => stepBy(step)}
         disabled={!interactive || current >= max}
         aria-label={labels?.increment ?? 'Increment'}
-        className={cn(stepButtonClass, 'border-s', !disabled && 'disabled:opacity-50')}
+        className={cn(
+          stepButtonClass,
+          SPIN_SIZE[size].button,
+          appearance === 'outline' && 'border-s border-input',
+          appearance === 'filled-darker' &&
+            'not-disabled:not-aria-disabled:hover:bg-subtle-pressed',
+          !disabled && 'disabled:opacity-50',
+        )}
       >
-        <AddIcon size={12} />
+        <AddIcon size={SPIN_SIZE[size].glyph} />
       </button>
 
       <HiddenInput name={name} form={form} disabled={disabled} value={String(value)} />

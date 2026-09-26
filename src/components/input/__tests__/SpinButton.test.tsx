@@ -4,7 +4,7 @@ import { act, render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { SpinButton, type SpinButtonLabels } from '../SpinButton';
 import { inputInvalidWithin } from '../../../lib/styles';
-import { testFocusEvents, testSystemProps } from '../../../test-utils';
+import { testFocusEvents, testSystemProps, renderWithProviders } from '../../../test-utils';
 import { renderWithFieldContext, FIELD_TEST_IDS, FIELD_TEST_TEXT } from '../../../test-utils-field';
 
 const spin = (name = 'Quantity') => screen.getByRole('spinbutton', { name });
@@ -810,4 +810,109 @@ describe('SpinButton — native forms (C-FORMS)', () => {
     expect(spin('Unnamed')).toHaveValue('7');
     expect(new FormData(getForm()).getAll('qty')).toEqual(['2']);
   });
+});
+
+describe('sizes, appearances and geometry (Phase 4 D13, D20)', () => {
+  const root = () => spin().closest('[data-size]') as HTMLElement;
+
+  it('medium outline: a 32px root, full-height 32px-wide buttons, a 48px flexible input', () => {
+    render(<SpinButton aria-label="Quantity" />);
+    expect(root()).toHaveClass('h-8', 'text-body-1', 'border-input', 'bg-background');
+    expect(root()).toHaveAttribute('data-size', 'medium');
+    expect(root()).toHaveAttribute('data-appearance', 'outline');
+    expect(incrementButton()).toHaveClass('h-full', 'w-8', 'border-s', 'border-input');
+    expect(decrementButton()).toHaveClass('h-full', 'w-8', 'border-e', 'border-input');
+    expect(spin()).toHaveClass('h-full', 'w-12', 'flex-auto', 'min-w-0', 'text-body-1');
+  });
+
+  it.each([
+    ['small', 'h-6', 'w-6', 'w-10', 'text-caption-1'],
+    ['large', 'h-10', 'w-10', 'w-14', 'text-body-2'],
+  ] as const)('size="%s"', (size, rootHeight, buttonWidth, inputWidth, text) => {
+    render(<SpinButton aria-label="Quantity" size={size} />);
+    expect(root()).toHaveClass(rootHeight, text);
+    expect(incrementButton()).toHaveClass(buttonWidth);
+    expect(spin()).toHaveClass(inputWidth);
+  });
+
+  it('the separators render only in outline; on filled-darker the buttons hover one step darker', () => {
+    render(<SpinButton aria-label="Quantity" appearance="filled-darker" />);
+    expect(root()).toHaveClass('bg-input-filled-darker');
+    expect(incrementButton()).not.toHaveClass('border-s');
+    expect(decrementButton()).not.toHaveClass('border-e');
+    expect(incrementButton()).toHaveClass('not-disabled:not-aria-disabled:hover:bg-subtle-pressed');
+  });
+
+  it('takes the Field size', () => {
+    renderWithFieldContext(<SpinButton />, { size: 'large' });
+    const el = screen.getByRole('spinbutton', { name: FIELD_TEST_TEXT.label });
+    expect(el.closest('[data-size]')).toHaveAttribute('data-size', 'large');
+  });
+
+  // The cases below are the rest of §2.1's "Tests (per control, in its test file)" paragraph
+  // (binding for every text control, SpinButton included), beyond what the brief's tests above
+  // cover: every appearance's classes and attribute, an own size winning over the Field's, the
+  // provider's inputDefaults with an own prop winning, and the invalid look at underline and
+  // filled-darker, through the Field and through the control's own invalid state.
+
+  it.each([
+    ['underline', ['rounded-none', 'border-0', 'border-b', 'bg-transparent']],
+    ['filled-darker', ['border-input-filled-stroke', 'bg-input-filled-darker']],
+    ['filled-lighter', ['border-input-filled-stroke', 'bg-input-filled-lighter']],
+  ] as const)(
+    'appearance="%s" renders its classes and attribute, with no separators',
+    (appearance, classes) => {
+      render(<SpinButton aria-label="Quantity" appearance={appearance} />);
+      expect(root()).toHaveClass(...classes);
+      expect(root()).toHaveAttribute('data-appearance', appearance);
+      expect(incrementButton()).not.toHaveClass('border-s');
+      expect(decrementButton()).not.toHaveClass('border-e');
+    },
+  );
+
+  it("the SpinButton's own size wins over the Field size", () => {
+    const { rerender } = renderWithFieldContext(<SpinButton />, { size: 'large' });
+    const fieldRoot = () =>
+      screen
+        .getByRole('spinbutton', { name: FIELD_TEST_TEXT.label })
+        .closest('[data-size]') as HTMLElement;
+    expect(fieldRoot()).toHaveAttribute('data-size', 'large');
+    rerender(<SpinButton size="small" />);
+    expect(fieldRoot()).toHaveAttribute('data-size', 'small');
+  });
+
+  it('takes WaveProvider inputDefaults; its own props win', () => {
+    const { rerender } = renderWithProviders(<SpinButton aria-label="Quantity" />, {
+      inputDefaults: { size: 'small', appearance: 'underline' },
+    });
+    expect(root()).toHaveAttribute('data-size', 'small');
+    expect(root()).toHaveAttribute('data-appearance', 'underline');
+    rerender(<SpinButton aria-label="Quantity" size="large" appearance="outline" />);
+    expect(root()).toHaveAttribute('data-size', 'large');
+    expect(root()).toHaveAttribute('data-appearance', 'outline');
+  });
+
+  it.each(['underline', 'filled-darker'] as const)(
+    "typed non-numeric text (the control's own invalid state) keeps the destructive border at %s",
+    async (appearance) => {
+      const user = userEvent.setup();
+      render(<SpinButton aria-label="Quantity" appearance={appearance} />);
+      await user.clear(spin());
+      await user.type(spin(), 'abc');
+      expect(root()).toHaveClass('border-destructive', 'focus-within:border-b-primary');
+    },
+  );
+
+  it.each(['underline', 'filled-darker'] as const)(
+    'a Field error at %s keeps the destructive border and the focus color on its bottom',
+    (appearance) => {
+      renderWithFieldContext(<SpinButton appearance={appearance} />, {
+        errorId: FIELD_TEST_IDS.errorId,
+      });
+      const wrapper = screen
+        .getByRole('spinbutton', { name: FIELD_TEST_TEXT.label })
+        .closest('[data-size]') as HTMLElement;
+      expect(wrapper).toHaveClass('border-destructive', 'focus-within:border-b-primary');
+    },
+  );
 });
