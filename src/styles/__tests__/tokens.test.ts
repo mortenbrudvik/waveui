@@ -422,6 +422,8 @@ const CONTRAST_PAIRS: Array<[string, string, number]> = [
   ['primary', 'background', 4.5],
   ['primary', 'subtle-hover', 4.5],
   ['primary', 'card', 4.5],
+  // Also the checked box of a multi-select Option on its selected row (0.10, D8), a non-text
+  // graphic that needs 3:1; the text threshold covers it.
   ['primary', 'subtle-selected', 4.5],
   ['foreground', 'subtle-selected', 4.5],
   ['muted-foreground', 'subtle-selected', 4.5],
@@ -435,6 +437,9 @@ const CONTRAST_PAIRS: Array<[string, string, number]> = [
   ['ring', 'card', 3],
   ['ring', 'subtle-hover', 3],
   ['stroke-accessible', 'background', 3],
+  // The unchecked box of a multi-select Option (0.10, D8) on the active and the selected row.
+  ['stroke-accessible', 'subtle-hover', 3],
+  ['stroke-accessible', 'subtle-selected', 3],
   // Progress fills on the track (ProgressBar `color`; its warning fill uses `severe`).
   ['primary', 'track', 3],
   ['success', 'track', 3],
@@ -478,7 +483,8 @@ const CONTRAST_PAIRS: Array<[string, string, number]> = [
 
 /**
  * Ratios printed in §2.1.3 (rounded to two decimals there), plus the success, error and severe
- * progress fills on the track (recorded to two decimals in 0.6). The unrounded ratio must match
+ * progress fills on the track (recorded to two decimals in 0.6) and the unchecked multi-select
+ * Option box on its rows (recorded to two decimals in 0.10). The unrounded ratio must match
  * them, so an edited token value cannot silently drift from the documented table.
  */
 const TABLED_RATIOS: Array<[string, string, [number | null, number | null, number | null]]> = [
@@ -499,6 +505,8 @@ const TABLED_RATIOS: Array<[string, string, [number | null, number | null, numbe
   ['primary', 'selected', [4.81, 6.62, 8.56]],
   ['ring', 'selected', [4.81, 5.72, 11.65]],
   ['stroke-accessible', 'background', [6.19, 6.48, 21.0]],
+  ['stroke-accessible', 'subtle-hover', [5.68, 5.63, 16.48]],
+  ['stroke-accessible', 'subtle-selected', [5.2, 5.23, 12.63]],
   ['primary', 'track', [4.08, 4.48, 5.78]],
   ['success', 'track', [4.07, 4.26, 5.63]],
   ['error', 'track', [4.59, 4.61, 3.1]],

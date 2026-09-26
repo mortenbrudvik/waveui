@@ -1,13 +1,32 @@
 import * as React from 'react';
-import { describe, it, expect, vi } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { afterEach, describe, it, expect, expectTypeOf, vi } from 'vitest';
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { renderToString } from 'react-dom/server';
-import { Option, OptionGroup } from '../Option';
+import {
+  ListboxProvider,
+  ListboxSurface,
+  Option,
+  OptionGroup,
+  useListboxPopup,
+  type ListboxSurfaceProps,
+  type OptionGroupProps,
+  type OptionProps,
+  type UseListboxPopupResult,
+} from '../Option';
 import { Combobox, Option as ComboboxReexport, OptionGroup as GroupReexport } from '../Combobox';
 import { Dropdown } from '../Dropdown';
-import { collectOptionLabels } from '../../../hooks/useListbox';
-import { asClientReference, testDisplayName, expectThrows } from '../../../test-utils';
+import { collectOptionLabels, useListbox } from '../../../hooks/useListbox';
+import { DismissLayerProvider, useDismiss } from '../../../hooks/useDismiss';
+import { useMergedRefs } from '../../../hooks/useMergedRefs';
+import type { Slot } from '../../../lib/slot';
+import {
+  asClientReference,
+  findDanglingIdRefsInHtml,
+  mockRect,
+  testDisplayName,
+  expectThrows,
+} from '../../../test-utils';
 
 function combobox() {
   return screen.getByRole('combobox', { name: 'Fruit' });
@@ -321,5 +340,688 @@ describe('Option / OptionGroup hidden by the consumer', () => {
     expect(screen.getAllByRole('option').map((o) => o.textContent)).toEqual(['USA']);
     await user.keyboard('{ArrowDown}{ArrowDown}{Enter}');
     expect(onValueChange.mock.calls).toEqual([['us']]);
+  });
+});
+
+/* ------------------------------------------------------------------ */
+/*  Custom pickers: the public listbox parts (option-2, option-3, listbox-2) */
+/* ------------------------------------------------------------------ */
+
+interface ListboxHarnessProps {
+  /** The selected values. */
+  selected?: readonly string[];
+  multiselect?: boolean;
+  children?: React.ReactNode;
+}
+
+/**
+ * An open select-only listbox without a combobox or ListboxSurface: the list a custom picker
+ * renders itself, with its options under a ListboxProvider.
+ */
+function ListboxHarness({ selected = [], multiselect = false, children }: ListboxHarnessProps) {
+  const listbox = useListbox({
+    open: true,
+    mode: 'select-only',
+    multiselect,
+    selectedValues: selected,
+    onSelect: () => {},
+  });
+  return (
+    <ListboxProvider value={listbox.context}>
+      <ul {...listbox.getListboxProps()} aria-label="Fruit">
+        {children}
+      </ul>
+    </ListboxProvider>
+  );
+}
+
+function renderInListbox(ui: React.ReactNode, options: Omit<ListboxHarnessProps, 'children'> = {}) {
+  return render(<ListboxHarness {...options}>{ui}</ListboxHarness>);
+}
+
+function option(name: string): HTMLElement {
+  return screen.getByRole('option', { name });
+}
+
+/** A listbox that holds focus itself (standalone mode): an option press focuses the list. */
+function StandaloneHarness({ children }: { children?: React.ReactNode }) {
+  const [focused, setFocused] = React.useState(false);
+  const [selected, setSelected] = React.useState<readonly string[]>([]);
+  const listbox = useListbox({
+    open: focused,
+    mode: 'standalone',
+    selectedValues: selected,
+    onSelect: (value) => setSelected([value]),
+  });
+  return (
+    <ListboxProvider value={listbox.context}>
+      <ul
+        {...listbox.getListboxProps()}
+        aria-label="Fruit"
+        onKeyDown={listbox.onKeyDown}
+        onFocus={() => setFocused(true)}
+        onBlur={() => setFocused(false)}
+      >
+        {children}
+      </ul>
+    </ListboxProvider>
+  );
+}
+
+/** A dismiss layer (a Dialog, for example) around a picker. */
+function ParentLayer({
+  onDismiss,
+  children,
+}: {
+  onDismiss: () => void;
+  children: React.ReactNode;
+}) {
+  const ref = React.useRef<HTMLDivElement>(null);
+  const { layerId } = useDismiss({ open: true, onDismiss, refs: [ref] });
+  return (
+    <DismissLayerProvider layerId={layerId}>
+      <div ref={ref}>{children}</div>
+    </DismissLayerProvider>
+  );
+}
+
+const FONTS = ['Arial', 'Georgia', 'Verdana'];
+
+interface FontPickerProps extends Pick<
+  ListboxSurfaceProps,
+  'showCheck' | 'listClassName' | 'surfaceClassName'
+> {
+  fonts?: readonly string[];
+  multiselect?: boolean;
+  defaultValues?: readonly string[];
+}
+
+/**
+ * A minimal custom picker on the listbox parts (spec §1.3): a button combobox, `useListbox`,
+ * `useListboxPopup` and `ListboxSurface`. The root's `data-open` shows the open state.
+ */
+function FontPicker({
+  fonts = FONTS,
+  multiselect = false,
+  defaultValues = [],
+  ...surfaceProps
+}: FontPickerProps) {
+  const [open, setOpen] = React.useState(false);
+  const [values, setValues] = React.useState<readonly string[]>(defaultValues);
+  const rootRef = React.useRef<HTMLDivElement>(null);
+  const anchorRef = React.useRef<HTMLButtonElement>(null);
+  const listbox = useListbox({
+    open,
+    onOpenChange: (next) => setOpen(next),
+    mode: 'select-only',
+    multiselect,
+    selectedValues: values,
+    onSelect: (value) =>
+      setValues((current) => {
+        if (!multiselect) return [value];
+        return current.includes(value) ? current.filter((v) => v !== value) : [...current, value];
+      }),
+  });
+  // Nothing to show (no options): the list stays collapsed.
+  const expanded = open && listbox.items.length > 0;
+  const { layerId, setReference, surfaceRef, floatingProps } = useListboxPopup({
+    open,
+    surfaceOpen: expanded,
+    onDismiss: () => setOpen(false),
+    rootRef,
+    anchorRef,
+  });
+  const buttonRef = useMergedRefs<HTMLButtonElement>(anchorRef, setReference);
+  return (
+    <div ref={rootRef} data-open={open ? '' : undefined}>
+      <button
+        type="button"
+        aria-label="Font"
+        {...listbox.getComboboxProps()}
+        aria-expanded={expanded}
+        ref={buttonRef}
+        onClick={() => setOpen((current) => !current)}
+        onKeyDown={(event) => {
+          // Open with nothing shown: close, and leave Escape to an enclosing layer.
+          if (event.key === 'Escape' && open && !expanded) {
+            setOpen(false);
+            return;
+          }
+          listbox.onKeyDown(event);
+        }}
+        onKeyUp={listbox.onKeyUp}
+      >
+        {values.join(', ') || 'Pick a font'}
+      </button>
+      <ListboxSurface
+        listbox={listbox}
+        layerId={layerId}
+        surfaceRef={surfaceRef}
+        floatingProps={floatingProps}
+        open={open}
+        expanded={expanded}
+        aria-label="Fonts"
+        {...surfaceProps}
+      >
+        {fonts.map((font) => (
+          <Option key={font} value={font}>
+            {font}
+          </Option>
+        ))}
+      </ListboxSurface>
+    </div>
+  );
+}
+
+function fontButton(): HTMLElement {
+  return screen.getByRole('combobox', { name: 'Font' });
+}
+
+function fontSurface(): HTMLElement | null {
+  return document.querySelector<HTMLElement>('[data-wave-listbox-surface]');
+}
+
+const CHECK_ICON_EMPTY =
+  '[WaveUI] Option: `checkIcon` renders nothing, so the default check shows: a selected option must show its state. Pass a glyph, or leave it unset.';
+
+const GROUP_UNNAMED =
+  '[WaveUI] OptionGroup: the group has no name. Give it a text `label`, `aria-label` or `aria-labelledby`.';
+
+describe('Option parts for custom pickers (option-2, option-3, listbox-2)', () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  describe('Option checkIcon (option-2)', () => {
+    it('replaces the check glyph with checkIcon and keeps the 0.7 svg by default', () => {
+      renderInListbox(
+        <>
+          <Option value="a" checkIcon={<span data-testid="glyph">★</span>}>
+            Apple
+          </Option>
+          <Option value="b">Banana</Option>
+        </>,
+        { selected: ['a', 'b'] },
+      );
+      expect(
+        within(option('Apple')).getByTestId('glyph').closest('[aria-hidden="true"]'),
+      ).not.toBeNull();
+      expect(option('Apple').querySelector('svg')).toBeNull();
+      expect(option('Banana').querySelector('svg')).toHaveClass('shrink-0');
+    });
+
+    it('keeps the check column for a custom glyph: shown while selected, invisible otherwise', () => {
+      renderInListbox(
+        <>
+          <Option value="a" checkIcon="✓">
+            Apple
+          </Option>
+          <Option value="b" checkIcon={{ className: 'text-success', children: '✓' }}>
+            Banana
+          </Option>
+        </>,
+        { selected: ['a'] },
+      );
+      const shown = within(option('Apple')).getByText('✓');
+      expect(shown).toHaveAttribute('aria-hidden', 'true');
+      expect(shown).toHaveClass('shrink-0');
+      expect(shown).not.toHaveClass('invisible');
+      // A slot object keeps the column classes and adds its own.
+      const kept = within(option('Banana')).getByText('✓');
+      expect(kept).toHaveAttribute('aria-hidden', 'true');
+      expect(kept).toHaveClass('shrink-0', 'invisible', 'text-success');
+      // The glyph is not part of the option's name.
+      expect(option('Apple')).toHaveAccessibleName('Apple');
+    });
+
+    it('keeps the 0.7 check for null and undefined, without a warning', () => {
+      const warn = vi.spyOn(console, 'warn');
+      renderInListbox(
+        <>
+          <Option value="a" checkIcon={null}>
+            Apple
+          </Option>
+          <Option value="b" checkIcon={undefined}>
+            Banana
+          </Option>
+        </>,
+        { selected: ['a'] },
+      );
+      expect(option('Apple').querySelector('svg')).toHaveAttribute('data-wave-icon', 'check');
+      expect(option('Apple').querySelector('svg')).toHaveClass('shrink-0');
+      expect(option('Apple').querySelector('svg')).not.toHaveClass('invisible');
+      expect(option('Banana').querySelector('svg')).toHaveClass('shrink-0', 'invisible');
+      expect(warn).not.toHaveBeenCalled();
+    });
+
+    it('keeps the default and warns once for a checkIcon that renders nothing', () => {
+      const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+      renderInListbox(
+        <Option value="a" checkIcon={false}>
+          Apple
+        </Option>,
+        { selected: ['a'] },
+      );
+      expect(option('Apple').querySelector('svg')).not.toBeNull();
+      expect(warn.mock.calls).toEqual([[CHECK_ICON_EMPTY]]);
+    });
+
+    it("keeps the default for '', [] and an empty Fragment, with one warning", () => {
+      const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+      renderInListbox(
+        <>
+          <Option value="a" checkIcon="">
+            Apple
+          </Option>
+          <Option value="b" checkIcon={[]}>
+            Banana
+          </Option>
+          <Option value="c" checkIcon={<></>}>
+            Cherry
+          </Option>
+        </>,
+        { selected: ['a', 'b', 'c'] },
+      );
+      for (const name of ['Apple', 'Banana', 'Cherry']) {
+        expect(option(name).querySelector('svg')).toHaveAttribute('data-wave-icon', 'check');
+      }
+      expect(warn.mock.calls).toEqual([[CHECK_ICON_EMPTY]]);
+    });
+  });
+
+  describe('the multi-select box (D8)', () => {
+    it('draws a checkbox box in a multi-select list, without the Highlight outline', () => {
+      renderInListbox(<Option value="a">Apple</Option>, { selected: ['a'], multiselect: true });
+      const box = option('Apple').querySelector('[data-wave-option-box]');
+      expect(box).toHaveAttribute('aria-hidden', 'true');
+      expect(box).toHaveClass('bg-primary');
+      expect(option('Apple').className).not.toMatch(/outline-\[Highlight\]/);
+    });
+
+    it('checked and unchecked boxes: their colours, forced-colors recipes and the glyph only while selected', () => {
+      renderInListbox(
+        <>
+          <Option value="a">Apple</Option>
+          <Option value="b">Banana</Option>
+        </>,
+        { selected: ['a'], multiselect: true },
+      );
+      const checked = option('Apple').querySelector('[data-wave-option-box]');
+      expect(checked).toHaveClass(
+        'h-4',
+        'w-4',
+        'shrink-0',
+        'rounded-xs',
+        'border',
+        'border-primary',
+        'bg-primary',
+        'text-primary-foreground',
+        'forced-colors:bg-[Highlight]',
+        'forced-colors:text-[HighlightText]',
+        'forced-colors:forced-color-adjust-none',
+      );
+      expect(checked?.querySelector('svg')).toHaveAttribute('data-wave-icon', 'check');
+      const unchecked = option('Banana').querySelector('[data-wave-option-box]');
+      expect(unchecked).toHaveAttribute('aria-hidden', 'true');
+      expect(unchecked).toHaveClass(
+        'border-stroke-accessible',
+        'bg-transparent',
+        'forced-colors:border-[ButtonText]',
+      );
+      expect(unchecked).not.toHaveClass('bg-primary');
+      expect(unchecked?.childNodes).toHaveLength(0);
+      // The box is the check column: no second glyph next to it.
+      expect(option('Apple').querySelectorAll('svg')).toHaveLength(1);
+      expect(option('Banana').querySelector('svg')).toBeNull();
+      // The box carries the state; the Highlight outline would look like the active option.
+      for (const name of ['Apple', 'Banana']) {
+        expect(option(name).className).not.toMatch(/outline-\[Highlight\]/);
+      }
+    });
+
+    it('draws a custom checkIcon inside the box while selected', () => {
+      renderInListbox(
+        <>
+          <Option value="a" checkIcon={<span data-testid="glyph-a">★</span>}>
+            Apple
+          </Option>
+          <Option value="b" checkIcon={<span data-testid="glyph-b">★</span>}>
+            Banana
+          </Option>
+        </>,
+        { selected: ['a'], multiselect: true },
+      );
+      const box = option('Apple').querySelector('[data-wave-option-box]');
+      expect(box).toContainElement(screen.getByTestId('glyph-a'));
+      expect(box?.querySelector('svg')).toBeNull();
+      expect(screen.queryByTestId('glyph-b')).toBeNull();
+    });
+
+    it('draws no box when the surface turns the check off (showCheck={false})', async () => {
+      const user = userEvent.setup();
+      render(<FontPicker multiselect showCheck={false} defaultValues={['Georgia']} />);
+      await user.click(fontButton());
+      expect(option('Georgia')).toHaveAttribute('aria-selected', 'true');
+      expect(option('Georgia').querySelector('[data-wave-option-box]')).toBeNull();
+      expect(option('Georgia').querySelector('svg')).toBeNull();
+    });
+  });
+
+  describe('OptionGroup naming (option-3)', () => {
+    it('routes an OptionGroup name to its group list, a defined consumer name winning', () => {
+      const warn = vi.spyOn(console, 'warn');
+      renderInListbox(
+        <>
+          <OptionGroup label="Citrus" aria-label="Sour fruit">
+            <Option value="l">Lime</Option>
+          </OptionGroup>
+          <OptionGroup aria-label="Other">
+            <Option value="p">Pear</Option>
+          </OptionGroup>
+          <OptionGroup label={<span>Berries</span>} aria-label={undefined}>
+            <Option value="s">Strawberry</Option>
+          </OptionGroup>
+        </>,
+      );
+      const sour = screen.getByRole('group', { name: 'Sour fruit' });
+      expect(sour).not.toHaveAttribute('aria-labelledby');
+      expect(sour.parentElement).toHaveTextContent('Citrus'); // the heading still shows
+      const other = screen.getByRole('group', { name: 'Other' });
+      // No label: no heading element, only the group list in the presentation item.
+      expect(other.parentElement?.children).toHaveLength(1);
+      const berries = screen.getByRole('group', { name: 'Berries' });
+      expect(berries).toHaveAttribute('aria-labelledby', berries.previousElementSibling?.id);
+      expect(warn).not.toHaveBeenCalled();
+    });
+
+    it('sends aria-labelledby to the group list and keeps the other props on its item', () => {
+      render(
+        <>
+          <span id="stone-fruit">Stone fruit</span>
+          <ListboxHarness>
+            <OptionGroup label="Heading" aria-labelledby="stone-fruit" data-testid="item">
+              <Option value="p">Peach</Option>
+            </OptionGroup>
+          </ListboxHarness>
+        </>,
+      );
+      const group = screen.getByRole('group', { name: 'Stone fruit' });
+      expect(group).toHaveAttribute('aria-labelledby', 'stone-fruit');
+      const item = screen.getByTestId('item');
+      expect(item).toHaveAttribute('role', 'presentation');
+      expect(item).not.toHaveAttribute('aria-labelledby');
+      expect(item).toContainElement(group);
+    });
+
+    it('warns once for an unnamed group, an icon-only label included', () => {
+      const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+      renderInListbox(
+        <OptionGroup label={<svg aria-hidden="true" />}>
+          <Option value="x">X</Option>
+        </OptionGroup>,
+      );
+      expect(warn.mock.calls).toEqual([[GROUP_UNNAMED]]);
+    });
+
+    it('warns once for a group without a label or a name, and for a label that is hidden text', () => {
+      const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+      renderInListbox(
+        <>
+          <OptionGroup>
+            <Option value="x">X</Option>
+          </OptionGroup>
+          <OptionGroup label={<span aria-hidden="true">🍋</span>}>
+            <Option value="y">Y</Option>
+          </OptionGroup>
+        </>,
+      );
+      expect(warn.mock.calls).toEqual([[GROUP_UNNAMED]]);
+      expect(screen.getAllByRole('group').map((group) => group.parentElement?.tagName)).toEqual([
+        'LI',
+        'LI',
+      ]);
+    });
+
+    it('does not warn for a label named by an image', () => {
+      const warn = vi.spyOn(console, 'warn');
+      renderInListbox(
+        <OptionGroup label={<svg role="img" aria-label="Citrus" />}>
+          <Option value="l">Lime</Option>
+        </OptionGroup>,
+      );
+      expect(screen.getByRole('group', { name: 'Citrus' })).toHaveAttribute('aria-labelledby');
+      expect(warn).not.toHaveBeenCalled();
+    });
+
+    it('server HTML: a group names its list without a dangling reference', () => {
+      const html = renderToString(
+        <Dropdown aria-label="Fruit">
+          <OptionGroup aria-label="Citrus">
+            <Option value="l">Lemon</Option>
+          </OptionGroup>
+          <OptionGroup label={<b>Berries</b>}>
+            <Option value="s">Strawberry</Option>
+          </OptionGroup>
+        </Dropdown>,
+      );
+      expect(html).toContain('role="group" aria-label="Citrus"');
+      expect(html).toMatch(/role="group" aria-labelledby="[^"]+"/);
+      expect(findDanglingIdRefsInHtml(html)).toEqual([]);
+    });
+  });
+
+  describe('ListboxProvider', () => {
+    it('provides a listbox context to options rendered without ListboxSurface', () => {
+      renderInListbox(
+        <>
+          <Option value="a">Apple</Option>
+          <Option value="b">Banana</Option>
+        </>,
+        { selected: ['b'] },
+      );
+      const list = screen.getByRole('listbox', { name: 'Fruit' });
+      expect(option('Apple').parentElement).toBe(list);
+      expect(option('Apple')).toHaveAttribute('aria-selected', 'false');
+      expect(option('Banana')).toHaveAttribute('aria-selected', 'true');
+      // The options registered with the listbox: its active option (the selected Banana) is set.
+      expect(option('Banana')).toHaveAttribute('data-active');
+    });
+
+    it('sets its displayName', () => {
+      expect(ListboxProvider.displayName).toBe('ListboxProvider');
+    });
+  });
+
+  describe('Option pointer handlers', () => {
+    it('composes a consumer onMouseDown with the pointer press of a standalone list', () => {
+      const onMouseDown = vi.fn();
+      render(
+        <StandaloneHarness>
+          <Option value="a">Apple</Option>
+          <Option value="b" onMouseDown={onMouseDown}>
+            Banana
+          </Option>
+        </StandaloneHarness>,
+      );
+      const list = screen.getByRole('listbox', { name: 'Fruit' });
+      // The press prevents the default, focuses the list and makes the pressed option active.
+      expect(fireEvent.mouseDown(option('Banana'))).toBe(false);
+      expect(onMouseDown).toHaveBeenCalledTimes(1);
+      expect(list).toHaveFocus();
+      expect(list).toHaveAttribute('aria-activedescendant', option('Banana').id);
+    });
+
+    it('a consumer onMouseDown that calls preventDefault() stops the press', () => {
+      const onMouseDown = vi.fn((event: React.MouseEvent) => event.preventDefault());
+      render(
+        <StandaloneHarness>
+          <Option value="a">Apple</Option>
+          <Option value="b" onMouseDown={onMouseDown}>
+            Banana
+          </Option>
+        </StandaloneHarness>,
+      );
+      const list = screen.getByRole('listbox', { name: 'Fruit' });
+      fireEvent.mouseDown(option('Banana'));
+      expect(onMouseDown).toHaveBeenCalledTimes(1);
+      expect(list).not.toHaveFocus();
+      expect(list).not.toHaveAttribute('aria-activedescendant');
+    });
+
+    it('keeps a consumer onMouseDown in a popup list', () => {
+      const onMouseDown = vi.fn();
+      renderInListbox(
+        <Option value="a" onMouseDown={onMouseDown}>
+          Apple
+        </Option>,
+      );
+      fireEvent.mouseDown(option('Apple'));
+      expect(onMouseDown).toHaveBeenCalledTimes(1);
+    });
+  });
+
+  describe('ListboxSurface and useListboxPopup (listbox-2)', () => {
+    it('a minimal custom picker opens, positions its surface below the button and selects', async () => {
+      const user = userEvent.setup();
+      render(<FontPicker />);
+      expect(fontButton()).toHaveAttribute('aria-expanded', 'false');
+      expect(fontSurface()).toBeNull(); // the closed list is inline and hidden, without a surface
+      await user.click(fontButton());
+      expect(fontButton()).toHaveAttribute('aria-expanded', 'true');
+      const list = screen.getByRole('listbox', { name: 'Fonts' });
+      expect(list.closest('[data-wave-portal]')).not.toBeNull();
+      expect(fontSurface()).toContainElement(list);
+      expect(fontSurface()).toHaveAttribute('data-side', 'bottom');
+      expect(fontSurface()).toHaveAttribute('data-align', 'start');
+      // As wide as the button.
+      expect(fontSurface()?.style.width).toBe('var(--wave-popup-reference-width)');
+      expect(fontButton()).toHaveAttribute('aria-controls', list.id);
+      await user.click(option('Georgia'));
+      expect(fontButton()).toHaveTextContent('Georgia');
+      expect(fontButton()).toHaveAttribute('aria-expanded', 'false');
+      expect(fontSurface()).toBeNull();
+    });
+
+    it('flips the surface above the button near the viewport bottom', async () => {
+      const html = document.documentElement;
+      Object.defineProperty(html, 'clientWidth', { configurable: true, value: 1024 });
+      Object.defineProperty(html, 'clientHeight', { configurable: true, value: 768 });
+      try {
+        const user = userEvent.setup();
+        render(<FontPicker />);
+        mockRect(fontButton(), { x: 100, y: 740, width: 200, height: 32 });
+        await user.click(fontButton());
+        await waitFor(() => expect(fontSurface()).toHaveAttribute('data-side', 'top'));
+        expect(fontSurface()).toHaveAttribute('data-align', 'start');
+      } finally {
+        Reflect.deleteProperty(html, 'clientWidth');
+        Reflect.deleteProperty(html, 'clientHeight');
+      }
+    });
+
+    it('closes on a press outside and on Escape', async () => {
+      const user = userEvent.setup();
+      render(
+        <>
+          <FontPicker />
+          <p>Outside</p>
+        </>,
+      );
+      const root = fontButton().parentElement;
+      await user.click(fontButton());
+      expect(root).toHaveAttribute('data-open');
+      await user.click(screen.getByText('Outside'));
+      expect(root).not.toHaveAttribute('data-open');
+      expect(fontSurface()).toBeNull();
+
+      await user.click(fontButton());
+      expect(fontButton()).toHaveAttribute('aria-expanded', 'true');
+      await user.keyboard('{Escape}');
+      expect(root).not.toHaveAttribute('data-open');
+      expect(fontSurface()).toBeNull();
+      expect(fontButton()).toHaveFocus();
+    });
+
+    it('inside another layer, Escape closes only the popup; the next Escape reaches the layer', async () => {
+      const user = userEvent.setup();
+      const onParentDismiss = vi.fn();
+      render(
+        <ParentLayer onDismiss={onParentDismiss}>
+          <FontPicker />
+        </ParentLayer>,
+      );
+      await user.click(fontButton());
+      await user.keyboard('{Escape}');
+      expect(fontButton()).toHaveAttribute('aria-expanded', 'false');
+      expect(onParentDismiss).not.toHaveBeenCalled();
+      await user.keyboard('{Escape}');
+      expect(onParentDismiss).toHaveBeenCalledTimes(1);
+    });
+
+    it('hands Escape to an enclosing layer while it shows nothing (no options, overlays#1)', async () => {
+      const user = userEvent.setup();
+      const onParentDismiss = vi.fn();
+      render(
+        <ParentLayer onDismiss={onParentDismiss}>
+          <FontPicker fonts={[]} />
+        </ParentLayer>,
+      );
+      const root = fontButton().parentElement;
+      await user.click(fontButton());
+      // Open, with nothing to show: collapsed, and no surface.
+      expect(root).toHaveAttribute('data-open');
+      expect(fontButton()).toHaveAttribute('aria-expanded', 'false');
+      expect(fontSurface()).toBeNull();
+      await user.keyboard('{Escape}');
+      expect(onParentDismiss).toHaveBeenCalledTimes(1);
+      expect(root).not.toHaveAttribute('data-open');
+    });
+
+    it('lets listClassName replace the list’s maximum height', async () => {
+      const user = userEvent.setup();
+      render(<FontPicker listClassName="max-h-80" />);
+      // The closed, inline list carries it too (hidden, so it has no accessible name to query).
+      const inline = screen.getByRole('listbox', { hidden: true });
+      expect(inline).toHaveClass('max-h-80');
+      expect(inline).not.toHaveClass('max-h-60');
+      await user.click(fontButton());
+      const list = screen.getByRole('listbox', { name: 'Fonts' });
+      expect(list).toHaveClass('max-h-80', 'min-h-0', 'overflow-auto');
+      expect(list).not.toHaveClass('max-h-60');
+    });
+
+    it('keeps the 0.7 list and surface classes without the class props', async () => {
+      const user = userEvent.setup();
+      render(<FontPicker />);
+      await user.click(fontButton());
+      expect(screen.getByRole('listbox', { name: 'Fonts' }).className).toBe(
+        'min-h-0 max-h-60 overflow-auto',
+      );
+      expect(fontSurface()?.className).toBe(
+        'flex flex-col overflow-hidden rounded border border-border bg-background py-1 text-foreground shadow-4',
+      );
+    });
+
+    it('merges surfaceClassName last onto the surface', async () => {
+      const user = userEvent.setup();
+      render(<FontPicker surfaceClassName="shadow-8 rounded-lg" />);
+      await user.click(fontButton());
+      expect(fontSurface()).toHaveClass('shadow-8', 'rounded-lg', 'border', 'bg-background');
+      expect(fontSurface()).not.toHaveClass('shadow-4');
+      expect(fontSurface()).not.toHaveClass('rounded');
+    });
+  });
+
+  describe('types', () => {
+    it('types the new props and the renamed popup result', () => {
+      expectTypeOf<OptionProps['checkIcon']>().toEqualTypeOf<Slot<'span'> | undefined>();
+      expectTypeOf<OptionGroupProps['label']>().toEqualTypeOf<React.ReactNode>();
+      expectTypeOf<ListboxSurfaceProps['listClassName']>().toEqualTypeOf<string | undefined>();
+      expectTypeOf<ListboxSurfaceProps['surfaceClassName']>().toEqualTypeOf<string | undefined>();
+      expectTypeOf(useListboxPopup).returns.toEqualTypeOf<UseListboxPopupResult>();
+      expectTypeOf<ListboxSurfaceProps['floatingProps']>().toEqualTypeOf<
+        UseListboxPopupResult['floatingProps']
+      >();
+    });
   });
 });
