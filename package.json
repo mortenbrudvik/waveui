@@ -13,7 +13,19 @@
     "url": "https://github.com/mortenbrudvik/waveui/issues"
   },
   "engines": {
-    "node": ">=20.19.0"
+    "node": ">=22.12.0"
+  },
+  "devEngines": {
+    "runtime": {
+      "name": "node",
+      "version": "^22.13.0 || >=24.0.0",
+      "onFail": "error"
+    },
+    "packageManager": {
+      "name": "npm",
+      "version": ">=11.11.0",
+      "onFail": "warn"
+    }
   },
   "keywords": [
     "react",
@@ -103,7 +115,7 @@
     "@testing-library/jest-dom": "^6.6.0",
     "@testing-library/react": "^16.3.3",
     "@testing-library/user-event": "^14.6.7",
-    "@types/node": "^20.19.43",
+    "@types/node": "^22.20.4",
     "@types/react": "^19.3.0",
     "@types/react-dom": "^19.3.0",
     "@vitejs/plugin-react": "^6.1.1",
@@ -125,5 +137,9 @@
     "vite-plugin-dts": "^4.5.4",
     "vitest": "^4.1.11",
     "vitest-axe": "^0.1.0"
+  },
+  "allowScripts": {
+    "esbuild": false,
+    "@parcel/watcher": false
   }
 }

@@ -19,6 +19,7 @@ The second Fluent UI v9 parity release: Phase 2 of the [roadmap](docs/ROADMAP.md
 6. **`Menu.Item` `persistOnClick`** defaults to the Menu's new `persistOnItemClick`, which is `false` unless you set it: 0.6 menus behave as before.
 7. **Focus follows the mouse in menus.** While focus is in a menu (an open popup menu and its submenus, or a static menu the user is in), the enabled item under the mouse pointer takes focus, as in Fluent and native menus. Tests that hover an item and then press Enter or an arrow key act on the hovered item. Keyboard use is unchanged, and hover never takes focus into a menu that focus is not in.
 8. **Class merging (tailwind-merge 3.7).** Wave now requires `tailwind-merge` `^3.7.0`. With it, `cn`, which merges every component's `className`, lets an axis shorthand of yours (`px-*`, `mx-*`, `inset-x-*`, `border-x-*`, and the `y` forms) replace a component's own logical side class of the same variant (`ps`/`pe`, `ms`/`me`, `start`/`end`, `border-s`/`border-e`, and the block sides). 0.6 kept both, and the component's side class won in the CSS. `<Dialog.Title className="px-6">` now drops its `pe-8`, so a long title can run under the Close button: write `px-6 pe-8` to keep the side, or set only the side you mean (`ps-6`). See [Behaviour](#behaviour).
+9. **Node.js 22.12 or later.** `engines.node` is `>=22.12.0` (was `>=20.19.0`): Node.js 20 has been end-of-life since 2026-04-30. On an older Node.js, npm and pnpm only warn (`EBADENGINE`) unless `engine-strict` is set, and Yarn 1 refuses to install. See [Packaging](#packaging).
 
 ### Added
 
@@ -90,11 +91,13 @@ The second Fluent UI v9 parity release: Phase 2 of the [roadmap](docs/ROADMAP.md
 
 #### Packaging
 
+- **Node.js**: `engines.node` `>=20.19.0` → `>=22.12.0`, since Node.js 20 is end-of-life. 22.12 is the first Node.js 22 release that enables `require()` of ES modules by default and marks import attributes stable, and the Node.js 22 floor of Vite 8. The built files use neither: the ESM and CommonJS entries load and render on the server on Node.js 22.12.0.
 - **Runtime dependencies**: `tailwind-merge` `^3.5.0` → `^3.7.0`, which changes how `cn` merges an axis shorthand with the logical sides (see [Behaviour](#behaviour)), and `@floating-ui/react-dom` `^2.1.6` → `^2.1.9`. `clsx` and the peer dependencies are unchanged.
 - **`dist/preflight.css`** is built with Tailwind CSS 4.3: the page font stack (`html`, `:host`) is an explicit platform list (`-apple-system`, `BlinkMacSystemFont`, `Segoe UI`, `Roboto`, `Helvetica Neue`, `Noto Sans`, `Arial`, `sans-serif`, then the emoji fonts) instead of `ui-sans-serif, system-ui, sans-serif`, and Firefox's `:-moz-focusring` outline reset no longer applies to `<iframe>`. Only pages that import it see the change: inside `WaveProvider` the components take their font from the theme.
 - **`dist/styles.css`** is built with Tailwind CSS 4.3: zero-valued spacing custom properties (such as `--tw-translate-x`) are printed as `0px` instead of `calc(.25rem * 0)`, with the same computed values.
 - **Type declarations** write `JSX.Element` return types as `React.JSX.Element`, from a namespace import of `react` (@types/react 19.3); the type is the same.
 - **Build**: TypeScript 6.0, Vite 8.3 and Rolldown 1.2. Internal dist modules, which are not in the exports map, re-export all of their source exports, and the CommonJS files use Node-mode `__toESM` interop; the public ESM and CommonJS exports are unchanged.
+- **Repository settings** in `package.json`, which npm reads only from the project it installs into, so they do not affect an app that installs Wave: `devEngines` (Node.js `^22.13.0 || >=24.0.0` and npm `>=11.11.0` to work on Wave) and `allowScripts` (the install scripts of esbuild and @parcel/watcher are denied).
 
 ### Deprecated
 

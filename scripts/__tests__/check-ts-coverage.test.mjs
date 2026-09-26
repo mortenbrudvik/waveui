@@ -1,6 +1,6 @@
 // @vitest-environment node
 import { spawnSync } from 'node:child_process';
-import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
@@ -120,11 +120,18 @@ describe('checkTypesNode', () => {
 describe('check-ts-coverage.mjs as a script', () => {
   // Importing the module (as this file does) must not run the checks; running it as a script must,
   // or `npm run typecheck` would pass silently. The fixture program lies outside the repo, so the
-  // dev-program checks fail, while the prerelease @types/node declaration must pass.
+  // dev-program checks fail, while the prerelease @types/node declaration must pass. The script
+  // compares it with the repository's installed @types/node, so the fixture takes the engines
+  // floor of the repository's package.json.
   const script = fileURLToPath(new URL('../check-ts-coverage.mjs', import.meta.url));
+  const repoPackage = JSON.parse(
+    readFileSync(fileURLToPath(new URL('../../package.json', import.meta.url)), 'utf8'),
+  );
   let dir;
 
   beforeAll(() => {
+    const floorMajor = lowestMajor(repoPackage.engines.node);
+    expect(floorMajor).toBeTypeOf('number');
     dir = mkdtempSync(join(tmpdir(), 'check-ts-coverage-'));
     writeFileSync(join(dir, 'index.ts'), 'export {};\n');
     writeFileSync(
@@ -134,8 +141,8 @@ describe('check-ts-coverage.mjs as a script', () => {
     writeFileSync(
       join(dir, 'package.json'),
       JSON.stringify({
-        engines: { node: '>=20.19.0' },
-        devDependencies: { '@types/node': '^20.0.0-rc1' },
+        engines: { node: repoPackage.engines.node },
+        devDependencies: { '@types/node': `^${floorMajor}.0.0-rc1` },
       }),
     );
   });
