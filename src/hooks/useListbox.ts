@@ -36,13 +36,16 @@ export interface ListboxItem {
   /**
    * Disabled options are rendered but skipped by navigation, unless
    * {@link UseListboxOptions.disabledOptionsFocusable}, and never committed.
+   * @default false
    */
   disabled?: boolean;
   /**
-   * Hidden options (an option's own `hidden` attribute, or a hidden group around it) are left out
-   * of navigation and rendering like filtered-out ones: never highlighted, reached by typeahead or
-   * committed with the keyboard (registered options render `hidden`). Their label stays known
-   * ({@link UseListboxResult.getItem}).
+   * Hidden options are left out of navigation and rendering like filtered-out ones: never
+   * highlighted, reached by typeahead or committed with the keyboard (registered options render
+   * `hidden`). Their label stays known ({@link UseListboxResult.getItem}). In data mode (`items`)
+   * it is the item's own flag; a registered option is hidden by its own `hidden` attribute or by a
+   * hidden group around it.
+   * @default false
    */
   hidden?: boolean;
 }
@@ -116,11 +119,11 @@ export interface UseListboxOptions {
   /**
    * The navigability predicate: an item it returns `false` for is filtered out — left out of the
    * keys, typeahead and {@link UseListboxResult.items}, never active, and rendered `hidden` as a
-   * registered option (its label stays known). A picker builds it from its query, the text typed
-   * so far: Combobox keeps the options whose `textValue ?? label` contains it, ignoring case, and
-   * a component with a `filter(option, query)` prop builds this predicate by binding its current
-   * query to it. Hidden items stay out whatever it returns. Without it, every item that is not
-   * hidden is navigable.
+   * registered option (its label stays known). It is never called for a hidden item, which stays
+   * out anyway. A picker builds it from its query, the text typed so far: by default, Combobox
+   * keeps the options whose `textValue ?? label` contains it, ignoring case, and a component with
+   * a `filter(option, query)` prop builds this predicate by binding its current query to it.
+   * Without it, every item that is not hidden is navigable.
    */
   filter?: (item: ListboxItem) => boolean;
   /** Arrow keys wrap around at the ends. @default false */
@@ -149,13 +152,13 @@ export interface UseListboxOptions {
    */
   autoHighlight?: 'selected' | 'first' | false;
   /**
-   * Editable: whenever the options the keys reach (the navigable ones, the disabled ones only with
-   * `disabledOptionsFocusable`) change while open, compared by content — typing that filters them
-   * — the first of them becomes active, also when the keystroke that opens the listbox changes
-   * them (compared with those before opening); so does every text-editing key while open, also
-   * when they stay the same. Opening with unchanged options keeps the `autoHighlight` start. It
-   * sets {@link useActiveDescendant}'s `activateFirstOnChange` (the text-editing keys are this
-   * hook's own).
+   * Whenever the options the keys reach (the navigable ones, the disabled ones only with
+   * `disabledOptionsFocusable`) change while open, compared by content — as when typing filters
+   * them — the first of them becomes active, also when the update that opens the listbox changes
+   * them (compared with those before opening, as the keystroke that opens a filtered list does).
+   * Opening with unchanged options keeps the `autoHighlight` start. It sets
+   * {@link useActiveDescendant}'s `activateFirstOnChange`. In editable mode every text-editing key
+   * while open makes the first option active as well, also when the options stay the same.
    * @default false
    */
   highlightOnFilter?: boolean;
@@ -230,10 +233,13 @@ export interface UseListboxResult {
   /** `${listboxId}-opt-${n}`; `n` is assigned the first time a value is seen and never changes. */
   getOptionId(value: string): string;
   /**
-   * Highlights an option while open (ignored when it is not navigable, or disabled unless
-   * {@link UseListboxOptions.disabledOptionsFocusable}; dropped when it leaves the navigable set
-   * later). Scrolled into view like a keyboard highlight. `null` returns to the `autoHighlight`
-   * option. A value set while closed survives only when the same update opens the listbox.
+   * Highlights `value` while open, scrolled into view like a keyboard highlight; `null` returns the
+   * highlight to the `autoHighlight` option. The value is checked in the next render: if it is not
+   * navigable then (disabled options count as not navigable unless
+   * {@link UseListboxOptions.disabledOptionsFocusable}), it is dropped like `null`, and the
+   * highlight returns to the `autoHighlight` option, or to none. A kept value is dropped when it
+   * leaves the navigable set later. A value set while closed survives only when the same update
+   * opens the listbox.
    */
   setActiveValue(value: string | null): void;
   /**
@@ -955,14 +961,15 @@ function preventMouseDown(event: React.MouseEvent): void {
  *   before registration (SSR/first render). `filter` is the navigability predicate, which a
  *   picker builds from its query.
  * - **Active option** is derived during render: the highlighted value, else the `autoHighlight`
- *   fallback. The highlight is reset on close and after a single-select commit, and dropped once
- *   it is not navigable and enabled any more (filtered out, hidden, removed by an update,
- *   disabled; a disabled option stays with `disabledOptionsFocusable`), so it does not come back
- *   without a user action when the option returns. Editable: a text-editing key (printable
- *   characters, Backspace/Delete, cut/paste/undo/redo) clears it — visual focus returns to the
- *   textbox (APG) — so Enter after typing never commits an option highlighted before the edit.
- *   With `highlightOnFilter` the first option becomes active instead, and whenever filtering
- *   changes the options (`useActiveDescendant`'s `activateFirstOnChange`).
+ *   fallback. The highlight is reset on close and after a single-select commit that closes the
+ *   listbox, and dropped once it is not navigable and enabled any more (filtered out, hidden,
+ *   removed by an update, disabled; a disabled option stays with `disabledOptionsFocusable`), so
+ *   it does not come back without a user action when the option returns. With
+ *   `highlightOnFilter` the first option becomes active whenever the options change while open
+ *   (`useActiveDescendant`'s `activateFirstOnChange`). Editable: a text-editing key (printable
+ *   characters, Backspace/Delete, cut/paste/undo/redo) clears the highlight — visual focus
+ *   returns to the textbox (APG) — so Enter after typing never commits an option highlighted
+ *   before the edit; with `highlightOnFilter` the key makes the first option active instead.
  * - **Ids** `${listboxId}-opt-${n}` are stable per value (across filtering and remounts between
  *   an inline closed list and a portaled open list).
  * - **Store.** Options read their active/selected/hidden flags through a store, so moving the
@@ -1091,13 +1098,14 @@ export function useListbox(options: UseListboxOptions): UseListboxResult {
   // The active option, derived during render (C-HOOKS: no effect): the highlighted value (keyboard,
   // pointer, typeahead, setActiveValue), else the autoHighlight fallback. The highlight is forgotten
   // on close (one set while closed survives only when the same update opens the listbox) and
-  // dropped once it is not navigable and enabled any more (filtered out, hidden, removed by an
-  // update, disabled), so it does not come back without a user action when the option returns.
-  // highlightOnFilter: the first option whenever the enabled options change while open, compared
-  // by content (an inline `filter` yields new arrays on every render) and with the options before
-  // opening, so the keystroke that opens the listbox and filters it in one update counts; opening
-  // with unchanged options (ArrowDown, a click) keeps the autoHighlight start. Every highlight but
-  // the pointer's is scrolled into view (the list would scroll under the pointer).
+  // dropped once it is not navigable any more (filtered out, hidden, removed by an update, or
+  // disabled without disabledOptionsFocusable), so it does not come back without a user action
+  // when the option returns. highlightOnFilter: the first option whenever the navigable options
+  // change while open, compared by content (an inline `filter` yields new arrays on every render)
+  // and with the options before opening, so the keystroke that opens the listbox and filters it in
+  // one update counts; opening with unchanged options (ArrowDown, a click) keeps the autoHighlight
+  // start. Every highlight but the pointer's (a hover, a standalone press) is scrolled into view
+  // (the list would scroll under the pointer).
   const ad = useActiveDescendant({
     items: navigationValues,
     getId: getOptionId,
