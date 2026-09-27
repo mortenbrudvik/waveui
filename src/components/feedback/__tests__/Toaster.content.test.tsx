@@ -514,6 +514,36 @@ describe('severity (P3-01, D12)', () => {
     warn.mockRestore();
   });
 
+  it('does not warn across a same-toastId replacement (Toast to content, Toast to Toast)', () => {
+    const warn = vi.spyOn(console, 'warn');
+    const { dispatchContent } = renderToaster();
+    dispatchContent(
+      <Toast status="error">
+        <Toast.Title>Upload failed</Toast.Title>
+      </Toast>,
+      { toastId: 'content', timeout: 0 },
+    );
+    dispatchContent(<p>Offline. Retrying when the connection returns.</p>, {
+      toastId: 'content',
+      status: 'warning',
+      timeout: 0,
+    });
+    dispatchContent(
+      <Toast status="error">
+        <Toast.Title>Upload failed</Toast.Title>
+      </Toast>,
+      { toastId: 'toast', timeout: 0 },
+    );
+    dispatchContent(
+      <Toast status="warning">
+        <Toast.Title>Disk almost full</Toast.Title>
+      </Toast>,
+      { toastId: 'toast', status: 'warning', timeout: 0 },
+    );
+    expect(warn).not.toHaveBeenCalled();
+    warn.mockRestore();
+  });
+
   it('keeps the 0.7 announcement of the options form', () => {
     const { dispatch } = renderToaster();
     dispatch({ status: 'error', title: 'Upload failed', body: 'Try again.', timeout: 0 });

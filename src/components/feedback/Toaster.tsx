@@ -628,10 +628,14 @@ function ToastContainer({
   }, [entry, announce]);
 
   // A rendered Toast's severity wins over the dispatch options' (D12); an explicit, different
-  // `status` in the options warns once. Read from the ref, not the `toast` state: replacing a
-  // registered Toast with content that renders none (same dispatch) unregisters it by clearing the
-  // ref synchronously, while `setToast(null)` only lands on a later render — depending on the
-  // state would fire this effect once against the just-unregistered Toast's stale status.
+  // `status` in the options warns once. Read from the ref, not the `toast` state, inside the
+  // effect: replacing a registered Toast with content that renders none (a replacement by
+  // `toastId`) unregisters it by clearing the ref synchronously, while `setToast(null)` only lands
+  // on a later render — depending on the state would fire this effect once against the
+  // just-unregistered Toast's stale status. `toast` still triggers the effect (without being read
+  // directly), so it also re-runs when a Toast registers after this commit (content that renders
+  // its Toast later, inside the consumer's own `<Suspense>`) or changes its own `status` without a
+  // new dispatch; `entry` alone would never trigger a re-check for either.
   const optionStatus = entry.form === 'content' ? entry.options.status : undefined;
   React.useEffect(() => {
     const toastStatus = toastRef.current?.status;
@@ -642,7 +646,7 @@ function ToastContainer({
       'Toaster:status-conflict',
       `Toaster: the dispatched Toast has status "${toastStatus}" but the dispatch options pass "${optionStatus}"; the Toast's status is used. Remove \`status\` from the options.`,
     );
-  }, [entry, optionStatus]);
+  }, [entry, optionStatus, toast]);
   if (!isMounted) return null;
   return (
     <div
