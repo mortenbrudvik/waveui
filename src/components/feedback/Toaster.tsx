@@ -79,7 +79,7 @@ export interface ToastDispatchOptions {
   /**
    * Severity of content that renders no `Toast`: the announcement's politeness (`error` is
    * assertive), its spoken prefix and the container's name. A rendered `Toast` uses its own
-   * `status`.
+   * `status`; a different value passed here warns in development.
    * @default 'info'
    */
   status?: Status;
@@ -460,17 +460,21 @@ function getSidePanelOffset(viewport: HTMLElement, position: ToastPosition): num
   return Math.ceil(offset);
 }
 
-/** The text written into the live region for a toast ("Error: Upload failed Try again."). */
-function getAnnouncement({ status = 'info', statusLabel, title, body }: ToastOptions): string {
-  return [getStatusLabel(status, statusLabel), title, body].filter(Boolean).join(' ');
-}
-
 /**
  * How long a toast's text stays in the live region: long enough for screen readers to pick it up
  * (also a polite message queued behind other speech), short enough that someone browsing the
  * Notifications region later meets the text once, in the toast, not a second time in the region.
  */
 const ANNOUNCEMENT_DURATION = 2000;
+
+/** A toast's message for the live regions, composed by its container after it mounts (D13). */
+interface Announcement {
+  /** The dispatch it belongs to: a replacement (a new `seq`) is announced again. */
+  seq: number;
+  text: string;
+  /** `error` toasts are announced assertively, every other status politely. */
+  assertive: boolean;
+}
 
 /**
  * One toast's message in a live region. It is added when the toast is shown (at dispatch, or when
@@ -494,6 +498,7 @@ interface ToastContainerProps {
   onDismiss: (id: string) => void;
   onExited: (id: string) => void;
   getFocusFallback: (from: HTMLElement | null) => HTMLElement | null;
+  announce: (id: string, announcement: Announcement) => void;
 }
 
 function isTitlePart(
@@ -520,6 +525,7 @@ function ToastContainer({
   onDismiss,
   onExited,
   getFocusFallback,
+  announce,
 }: ToastContainerProps) {
   const { id, dismissed } = entry;
   // Mounted through the presence core (D29): a dismissed toast exits, `inert`, and is removed when
@@ -602,6 +608,41 @@ function ToastContainer({
       entry.options.timeout ?? (hasAction(node, toastRef.current) ? 0 : DEFAULT_TIMEOUT);
     timers.start(entry.id, entry.seq, timeout);
   }, [entry, timers]);
+
+  // What screen readers hear (D13), once per dispatch after the content has mounted: the severity
+  // text of the rendered Toast (else the dispatch options'), then the toast's text; `error` is
+  // assertive.
+  React.useLayoutEffect(() => {
+    if (entry.dismissed) return;
+    const registered = toastRef.current;
+    const status = registered?.status ?? entry.options.status ?? 'info';
+    const label = registered
+      ? registered.statusLabel
+      : getStatusLabel(status, entry.options.statusLabel);
+    const text = entry.form === 'options' ? [entry.options.title, entry.options.body] : [];
+    announce(entry.id, {
+      seq: entry.seq,
+      text: [label, ...text].filter(Boolean).join(' '),
+      assertive: status === 'error',
+    });
+  }, [entry, announce]);
+
+  // A rendered Toast's severity wins over the dispatch options' (D12); an explicit, different
+  // `status` in the options warns once. Read from the ref, not the `toast` state: replacing a
+  // registered Toast with content that renders none (same dispatch) unregisters it by clearing the
+  // ref synchronously, while `setToast(null)` only lands on a later render — depending on the
+  // state would fire this effect once against the just-unregistered Toast's stale status.
+  const optionStatus = entry.form === 'content' ? entry.options.status : undefined;
+  React.useEffect(() => {
+    const toastStatus = toastRef.current?.status;
+    if (optionStatus === undefined || toastStatus === undefined || optionStatus === toastStatus) {
+      return;
+    }
+    warnOnce(
+      'Toaster:status-conflict',
+      `Toaster: the dispatched Toast has status "${toastStatus}" but the dispatch options pass "${optionStatus}"; the Toast's status is used. Remove \`status\` from the options.`,
+    );
+  }, [entry, optionStatus]);
   if (!isMounted) return null;
   return (
     <div
@@ -691,6 +732,27 @@ export const Toaster = ({
   ...rest
 }: ToasterProps) => {
   const [toasts, setToasts] = React.useState<ToastEntry[]>([]);
+  // Each toast's message, written by its container after the toast mounts (a layout effect), so
+  // the severity is the rendered Toast's and the text what the toast renders.
+  const [announcements, setAnnouncements] = React.useState<ReadonlyMap<string, Announcement>>(
+    () => new Map(),
+  );
+  const announce = React.useCallback((id: string, announcement: Announcement) => {
+    setAnnouncements((prev) => {
+      const current = prev.get(id);
+      if (
+        current &&
+        current.seq === announcement.seq &&
+        current.text === announcement.text &&
+        current.assertive === announcement.assertive
+      ) {
+        return prev;
+      }
+      const next = new Map(prev);
+      next.set(id, announcement);
+      return next;
+    });
+  }, []);
   const limit = resolveLimit(limitProp);
   // Waiting toasts are shown here, during render, with the current limit (adjust state while
   // rendering, C-HOOKS): every path that frees a place or raises the limit promotes them, and a
@@ -812,13 +874,19 @@ export const Toaster = ({
     setToasts((prev) => markAllDismissed(prev));
   }, [timers]);
 
-  // The exit of a dismissed toast ended: remove it (one revived meanwhile stays).
+  // The exit of a dismissed toast ended: remove it and its message (one revived meanwhile stays).
   const removeExited = React.useCallback((id: string) => {
     setToasts((prev) =>
       prev.some((t) => t.id === id && t.dismissed)
         ? prev.filter((t) => !(t.id === id && t.dismissed))
         : prev,
     );
+    setAnnouncements((prev) => {
+      if (!prev.has(id)) return prev;
+      const next = new Map(prev);
+      next.delete(id);
+      return next;
+    });
   }, []);
 
   const controller = React.useMemo<ToastController>(
@@ -890,14 +958,16 @@ export const Toaster = ({
     previousFocusRef.current = null;
   };
 
+  // Each shown toast's message for its first 2 s, while it is not dismissed (a waiting toast is
+  // announced when it appears); a replacement is a new dispatch, so it is read again.
   const polite: React.ReactNode[] = [];
   const assertive: React.ReactNode[] = [];
-  // Only shown toasts are announced (a waiting toast is announced when it appears), and a
-  // dismissed one no longer is.
   for (const toast of shownToasts) {
-    if (toast.dismissed || toast.form !== 'options') continue;
-    const message = <LiveMessage key={toast.seq} text={getAnnouncement(toast.options)} />;
-    (toast.options.status === 'error' ? assertive : polite).push(message);
+    if (toast.dismissed) continue;
+    const announcement = announcements.get(toast.id);
+    if (!announcement || announcement.seq !== toast.seq || !announcement.text) continue;
+    const message = <LiveMessage key={announcement.seq} text={announcement.text} />;
+    (announcement.assertive ? assertive : polite).push(message);
   }
 
   const viewportStyle =
@@ -949,6 +1019,7 @@ export const Toaster = ({
               onDismiss={dismissToast}
               onExited={removeExited}
               getFocusFallback={getFocusFallback}
+              announce={announce}
             />
           ))}
         </div>

@@ -6,7 +6,13 @@ import userEvent from '@testing-library/user-event';
 import { Toast, Toaster } from '../Toast';
 import type { ToastController, ToastOptions } from '../Toast';
 import { expectNoA11yViolations, findDanglingIdRefs } from '../../../test-utils';
-import { ControllerProbe, advance, getToasts, renderToaster } from './toasterHarness';
+import {
+  ControllerProbe,
+  advance,
+  getLiveRegion,
+  getToasts,
+  renderToaster,
+} from './toasterHarness';
 
 /** A Toast inside the app's own component (the static scan of the dispatched element cannot see it). */
 function SavedToast() {
@@ -436,5 +442,81 @@ describe('the timeout of a toast with an action (P3-01, D12)', () => {
     expect(screen.getByText('Message deleted')).toBeInTheDocument();
     advance(1);
     expect(getToasts()).toHaveLength(0);
+  });
+});
+
+describe('severity (P3-01, D12)', () => {
+  it('announces a dispatched error Toast assertively, with its own severity text', () => {
+    const { dispatchContent } = renderToaster();
+    dispatchContent(
+      <Toast status="error">
+        <Toast.Title>Upload failed</Toast.Title>
+      </Toast>,
+      { timeout: 0 },
+    );
+    expect(getLiveRegion('assertive')).toHaveTextContent(/^Error:/);
+    expect(getLiveRegion('polite')).toBeEmptyDOMElement();
+  });
+
+  it('announces a dispatched success Toast politely', () => {
+    const { dispatchContent } = renderToaster();
+    dispatchContent(<SavedToast />, { timeout: 0 });
+    expect(getLiveRegion('polite')).toHaveTextContent(/^Success:/);
+    expect(getLiveRegion('assertive')).toBeEmptyDOMElement();
+  });
+
+  it('uses the options’ status and statusLabel for content without a Toast', () => {
+    const { dispatchContent } = renderToaster();
+    dispatchContent(<p>Connection lost</p>, {
+      status: 'error',
+      statusLabel: 'Fehler:',
+      timeout: 0,
+    });
+    expect(getLiveRegion('assertive')).toHaveTextContent(/^Fehler:/);
+    expect(getToasts()[0]).toHaveAccessibleName('Fehler:');
+  });
+
+  it('uses the rendered Toast’s status over an explicit option, with one development warning', () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const { dispatchContent } = renderToaster();
+    dispatchContent(
+      <Toast status="error">
+        <Toast.Title>Upload failed</Toast.Title>
+      </Toast>,
+      { status: 'info', timeout: 0 },
+    );
+    expect(getLiveRegion('assertive')).toHaveTextContent(/^Error:/);
+    expect(getToasts()[0]).toHaveAccessibleName('Error: Upload failed');
+    expect(warn.mock.calls).toEqual([
+      [
+        '[WaveUI] Toaster: the dispatched Toast has status "error" but the dispatch options pass "info"; the Toast\'s status is used. Remove `status` from the options.',
+      ],
+    ]);
+    warn.mockRestore();
+  });
+
+  it('does not warn when the options pass no status, or the Toast’s own', () => {
+    const warn = vi.spyOn(console, 'warn');
+    const { dispatchContent } = renderToaster();
+    dispatchContent(
+      <Toast status="error">
+        <Toast.Title>Upload failed</Toast.Title>
+      </Toast>,
+      { timeout: 0 },
+    );
+    dispatchContent(
+      <Toast status="warning">
+        <Toast.Title>Disk almost full</Toast.Title>
+      </Toast>,
+      { status: 'warning', timeout: 0 },
+    );
+    expect(warn).not.toHaveBeenCalled();
+    warn.mockRestore();
+  });
+
+  it('keeps the 0.7 announcement of the options form', () => {
+    const { dispatch } = renderToaster();
+    dispatch({ status: 'error', title: 'Upload failed', body: 'Try again.', timeout: 0 });
+    expect(getLiveRegion('assertive').textContent).toBe('Error: Upload failed Try again.');
   });
 });
