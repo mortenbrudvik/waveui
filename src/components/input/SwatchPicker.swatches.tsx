@@ -81,8 +81,10 @@ export interface ColorSwatchProps extends Omit<
   ref?: React.Ref<HTMLButtonElement>;
 }
 
+// D18: swatches read SwatchPickerContext; their own ref/className/style/rest go straight to the
+// button (an explicit exception to C-ROUTING's root/control split).
 /**
- * One color swatch of a `SwatchPicker`, read from `items` or rendered directly as a child (D18).
+ * One color swatch of a `SwatchPicker`, read from `items` or rendered directly as a child.
  * Outside a `SwatchPicker` it throws in development and renders inertly in production
  * (C-CONTEXT).
  *

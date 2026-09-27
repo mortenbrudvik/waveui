@@ -1,5 +1,6 @@
+import * as React from 'react';
 import { afterEach, describe, it, expect, vi } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { act, render, screen } from '@testing-library/react';
 import { SwatchPicker } from '../SwatchPicker';
 import { ColorSwatch } from '../SwatchPicker.swatches';
 import { Tooltip } from '../../overlays/Tooltip';
@@ -7,6 +8,20 @@ import { expectThrows, testComposedHandler, testSystemProps } from '../../../tes
 
 function spyWarn() {
   return vi.spyOn(console, 'warn').mockImplementation(() => {});
+}
+
+function unnamedMessage(value: string): string {
+  return (
+    `[WaveUI] ColorSwatch: swatch "${value}" has no accessible name, so it is announced by its ` +
+    'color value. Pass `aria-label`, or wrap it in a Tooltip with `relationship="label"`.'
+  );
+}
+
+function duplicateMessage(value: string): string {
+  return (
+    `[WaveUI] SwatchPicker: several swatches share the value "${value}". Swatch values must be ` +
+    'unique; only the first one can be selected.'
+  );
 }
 
 describe('ColorSwatch', () => {
@@ -80,27 +95,101 @@ describe('ColorSwatch', () => {
     expect(error.mock.calls).toEqual([['[WaveUI] ColorSwatch must be used within SwatchPicker']]);
   });
 
-  it('warns once per duplicated value and once for an unnamed swatch', () => {
+  it('warns once per duplicated value and once for an unnamed swatch, even rerendered', () => {
     const warn = spyWarn();
-    render(
+    const duplicated = (
       <SwatchPicker aria-label="Color">
         <ColorSwatch value="a" color="#000001" />
         <ColorSwatch value="a" color="#000002" aria-label="Two" />
-      </SwatchPicker>,
+      </SwatchPicker>
     );
+    const { rerender } = render(duplicated);
+    // (a) A rerender with the same duplicates must not add a second warning.
+    rerender(duplicated);
     expect(warn).toHaveBeenCalledTimes(2);
     expect(warn.mock.calls).toEqual(
-      expect.arrayContaining([
-        [
-          '[WaveUI] ColorSwatch: swatch "a" has no accessible name, so it is announced by its ' +
-            'color value. Pass `aria-label`, or wrap it in a Tooltip with `relationship="label"`.',
-        ],
-        [
-          '[WaveUI] SwatchPicker: several swatches share the value "a". Swatch values must be ' +
-            'unique; only the first one can be selected.',
-        ],
+      expect.arrayContaining([[unnamedMessage('a')], [duplicateMessage('a')]]),
+    );
+  });
+
+  it('warns exactly once per duplicated value and once for an unnamed swatch, in StrictMode', () => {
+    const warn = spyWarn();
+    const duplicated = (
+      <React.StrictMode>
+        <SwatchPicker aria-label="Color">
+          <ColorSwatch value="a" color="#000001" />
+          <ColorSwatch value="a" color="#000002" aria-label="Two" />
+        </SwatchPicker>
+      </React.StrictMode>
+    );
+    const { rerender } = render(duplicated);
+    rerender(duplicated);
+    // StrictMode's double mount effects (register, then its cleanup, then register again) must
+    // still settle on exactly these two warnings, not four.
+    expect(warn).toHaveBeenCalledTimes(2);
+    expect(warn.mock.calls).toEqual(
+      expect.arrayContaining([[unnamedMessage('a')], [duplicateMessage('a')]]),
+    );
+  });
+
+  it('does not warn about swatch values in StrictMode, when keyed swatches are reordered or one is replaced', async () => {
+    const warn = vi.spyOn(console, 'warn');
+    const renderSwatches = (keys: string[]) => (
+      <React.StrictMode>
+        <SwatchPicker aria-label="Color">
+          {keys.map((key) => (
+            <ColorSwatch
+              key={key}
+              value={key.replace('-new', '')}
+              color="#000000"
+              aria-label={key}
+            />
+          ))}
+        </SwatchPicker>
+      </React.StrictMode>
+    );
+    const { rerender } = render(renderSwatches(['a', 'b', 'c']));
+    // Async act: the roving store sees the moved swatches through a MutationObserver (a microtask).
+    await act(async () => rerender(renderSwatches(['c', 'a', 'b'])));
+    // 'a-new' keeps the same value ('a') under a different key: the old instance unmounts
+    // (unregisters) and the new one mounts (registers) in the same commit.
+    await act(async () => rerender(renderSwatches(['c', 'a-new', 'b'])));
+    expect(screen.getAllByRole('radio')).toHaveLength(3);
+    expect(warn).not.toHaveBeenCalled();
+  });
+
+  it('a resolved duplicate does not warn again; a later duplicate of a different value still does', async () => {
+    const warn = spyWarn();
+    const swatches = (list: ReadonlyArray<{ key: string; value: string; label: string }>) => (
+      <SwatchPicker aria-label="Color">
+        {list.map((s) => (
+          <ColorSwatch key={s.key} value={s.value} color="#000000" aria-label={s.label} />
+        ))}
+      </SwatchPicker>
+    );
+    const { rerender } = render(
+      swatches([
+        { key: '1', value: 'a', label: 'One' },
+        { key: '2', value: 'a', label: 'Two' },
+        { key: '3', value: 'b', label: 'Three' },
       ]),
     );
+    expect(warn.mock.calls).toEqual([[duplicateMessage('a')]]);
+
+    // Removes swatch '2' (the "a" duplicate is resolved) and adds swatch '4', a new "b" duplicate.
+    // Async act: the roving store sees the added/removed swatches through a MutationObserver (a
+    // microtask).
+    warn.mockClear();
+    await act(async () => {
+      rerender(
+        swatches([
+          { key: '1', value: 'a', label: 'One' },
+          { key: '3', value: 'b', label: 'Three' },
+          { key: '4', value: 'b', label: 'Four' },
+        ]),
+      );
+    });
+    expect(warn.mock.calls).toEqual([[duplicateMessage('b')]]);
   });
 
   it('falls back to the color value as its accessible name when unnamed', () => {

@@ -56,10 +56,11 @@ export interface SwatchPickerProps extends Omit<
    * @deprecated Use `onValueChange`.
    */
   onChange?: (value: string) => void;
+  // D18: an explicit C-ROUTING exception — a swatch's own ref/className/style/rest land on its
+  // button, so a wrapping element's props reach the element that has focus.
   /**
    * Swatches rendered directly, in order, after `items` (e.g. `ColorSwatch`): read the picker's
-   * context, so they may be wrapped in a `Tooltip` or another element that forwards its own props
-   * (D18).
+   * context, so they may be wrapped in a `Tooltip` or another element that forwards its own props.
    */
   children?: React.ReactNode;
   /** Size of each swatch button (24, 32 or 40px).
