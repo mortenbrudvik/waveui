@@ -16,6 +16,7 @@ import {
 // restoring the spies themselves.
 afterEach(() => {
   vi.restoreAllMocks();
+  vi.unstubAllEnvs();
 });
 
 const HeartFilled = () => <svg data-testid="heart-filled" />;
@@ -687,9 +688,12 @@ describe('item value checks (Phase 4 D26)', () => {
   it('outside a root in production: logs once and renders an empty display star', () => {
     vi.stubEnv('NODE_ENV', 'production');
     const error = vi.spyOn(console, 'error').mockImplementation(() => {});
-    const { container } = render(<RatingItem value={1} />);
+    const orphan = <RatingItem value={1} />;
+    const { container, rerender } = render(orphan);
+    rerender(orphan);
     expect(container.querySelector('svg')).not.toBeNull();
-    expect(error).toHaveBeenCalledTimes(1);
-    vi.unstubAllEnvs();
+    expect(error.mock.calls).toEqual([
+      ['[WaveUI] Rating.Item must be used within a rating (Rating or RatingDisplay)'],
+    ]);
   });
 });
