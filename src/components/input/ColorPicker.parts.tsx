@@ -1,9 +1,29 @@
 import * as React from 'react';
 import { useControllable } from '../../hooks/useControllable';
 import type { FieldContextValue } from '../../hooks/useFieldControl';
+import { useId } from '../../hooks/useId';
+import { useMergedRefs } from '../../hooks/useMergedRefs';
+import { joinIds } from '../../lib/aria';
+import {
+  colorPickerHexFieldClassNames,
+  colorPickerPreviewClassNames,
+  colorPickerSwatchesClassNames,
+} from '../../lib/classNames';
+import { cn } from '../../lib/cn';
+import { composeEventHandlers } from '../../lib/composeEventHandlers';
+import { reportMissingContext } from '../../lib/dev';
+import { inputFocus, inputInvalid } from '../../lib/styles';
 import type { ColorPickerShape, HsvColor } from '../../lib/types';
-import type { SwatchItem } from './SwatchPicker';
-import { sameColor, type HexColor } from './colorUtils';
+import { isInvalidLook } from './Input';
+import { SwatchPicker, type SwatchItem, type SwatchPickerProps } from './SwatchPicker';
+import {
+  formatHexColor,
+  isHexDraft,
+  parseHexColor,
+  parseHexInput,
+  sameColor,
+  type HexColor,
+} from './colorUtils';
 
 /*
  * The picker's labels and context, and how the standalone color parts bind to it (spec P3-05,
@@ -204,3 +224,315 @@ export function useColorPartState({
     disabled,
   };
 }
+
+// ---------------------------------------------------------------------------------------------
+// The picker-only parts: ColorPicker.HexField, ColorPicker.Swatches, ColorPicker.Preview
+// ---------------------------------------------------------------------------------------------
+
+/** The context a misplaced part renders with in production (C-CONTEXT). */
+const INERT_PICKER_CONTEXT: ColorPickerContextValue = {
+  hsv: DEFAULT_PART_COLOR,
+  setHsv: noop,
+  color: DEFAULT_COLOR,
+  parsed: null,
+  setColor: noop,
+  pickPreset: noop,
+  presetItems: [],
+  shape: 'rounded',
+  labels: DEFAULT_COLOR_PICKER_LABELS,
+  disabled: true,
+  draftResetKey: 0,
+  field: null,
+  groupInvalid: undefined,
+  errorMessageId: undefined,
+  registerHexInput: noop,
+};
+
+/**
+ * The context of a picker-only part: throws `[WaveUI] <name> must be used within <ColorPicker>`
+ * in development; logs once and returns an inert value in production (C-CONTEXT).
+ */
+export function usePickerPartContext(componentName: string): ColorPickerContextValue {
+  const context = React.useContext(ColorPickerContext);
+  if (context) return context;
+  reportMissingContext(componentName, '<ColorPicker>');
+  return INERT_PICKER_CONTEXT;
+}
+
+/** The hex field's text while the user edits it (`null` state: the field shows the value). */
+interface HexDraft {
+  /** The typed text. */
+  text: string;
+  /** Kept after leaving the field because it is not a hex color, so it is flagged as invalid. */
+  flagged: boolean;
+}
+
+/** A hex draft without digits (`''` or a lone `#`): leaving the field shows the value again. */
+function isBlankDraft(text: string): boolean {
+  const trimmed = text.trim();
+  return trimmed === '' || trimmed === '#';
+}
+
+/** Whether typed hex text carries its own alpha digits (`#rgba` or `#rrggbbaa`). */
+function hasAlphaDigits(text: string): boolean {
+  const digits = text.trim().replace(/^#/, '').length;
+  return digits === 4 || digits === 8;
+}
+
+/**
+ * Properties for the ColorPickerHexField sub-component. `id`, the labelling and validation
+ * `aria-*` (`aria-label`, `aria-labelledby`, `aria-describedby`, `aria-invalid`,
+ * `aria-errormessage`, `aria-details`, `aria-required`), `autoFocus`, `tabIndex`, the focus and key
+ * handlers and the text-entry attributes (`inputMode`, `enterKeyHint`, `autoCapitalize`,
+ * `autoCorrect`, `spellCheck`) go to the `<input>`; everything else stays on the outer label.
+ */
+export interface ColorPickerHexFieldProps extends React.HTMLAttributes<HTMLElement> {
+  /** Ref to the hex `<input>`. */
+  controlRef?: React.Ref<HTMLInputElement>;
+  /** Ref to the field's outer element: the label around the caption, the input and the error. */
+  ref?: React.Ref<HTMLLabelElement>;
+}
+
+/**
+ * The hex text field of a ColorPicker: a caption, the input and its error. The text is a draft:
+ * complete 6- and 8-digit values apply while typing, text that can never be a hex color is
+ * flagged at once, and leaving the field (or Enter) applies a short `#rgb`/`#rgba` and shows the
+ * value again; other text stays flagged until it is corrected, cleared, or the value changes from
+ * elsewhere (a preset, another part, the parent, a form reset). Inside a Field it carries the
+ * Field's invalid state and error. Must be inside a ColorPicker. Also exported as
+ * `ColorPickerHexField` (import the flat name in React Server Components).
+ */
+export const ColorPickerHexField = ({
+  id,
+  'aria-label': ariaLabel,
+  'aria-labelledby': ariaLabelledBy,
+  'aria-describedby': ariaDescribedBy,
+  'aria-invalid': ariaInvalid,
+  'aria-errormessage': ariaErrorMessage,
+  'aria-details': ariaDetails,
+  'aria-required': ariaRequired,
+  autoFocus,
+  tabIndex,
+  onFocus,
+  onBlur,
+  onKeyDown,
+  onKeyUp,
+  inputMode,
+  enterKeyHint,
+  autoCapitalize,
+  autoCorrect,
+  spellCheck,
+  controlRef,
+  className,
+  ref,
+  ...rest
+}: ColorPickerHexFieldProps) => {
+  const picker = usePickerPartContext('ColorPicker.HexField');
+  const { color, parsed, field, groupInvalid, errorMessageId, labels } = picker;
+  const alpha = parsed?.alpha ?? 255;
+
+  // The hex text is a draft over `color` while the user edits it (null: show `color`).
+  const [draft, setDraft] = React.useState<HexDraft | null>(null);
+  // A value change from elsewhere replaces a flagged draft (input-pickers#25); while the user
+  // types, the draft is not flagged and stays.
+  const [syncedColor, setSyncedColor] = React.useState(color);
+  if (color !== syncedColor) {
+    setSyncedColor(color);
+    if (draft?.flagged) setDraft(null);
+  }
+  // A form reset or a preset pick drops any draft.
+  const [seenResetKey, setSeenResetKey] = React.useState(picker.draftResetKey);
+  if (picker.draftResetKey !== seenResetKey) {
+    setSeenResetKey(picker.draftResetKey);
+    setDraft(null);
+  }
+  const hexText = draft?.text ?? color;
+  const draftInvalid =
+    draft !== null && !isBlankDraft(draft.text) && (draft.flagged || !isHexDraft(draft.text));
+  // Any invalid state from outside (the picker's prop or the Field) is set on the input as is;
+  // only `true` shows the error look.
+  const fieldInvalid =
+    groupInvalid !== undefined && groupInvalid !== false && groupInvalid !== 'false';
+  const errorId = useId('wave-color-picker-error');
+  const resolvedInvalid =
+    ariaInvalid ?? (draftInvalid ? true : fieldInvalid ? groupInvalid : undefined);
+  const invalidLook = isInvalidLook(false, resolvedInvalid);
+  const inputRef = React.useRef<HTMLInputElement>(null);
+  const mergedInputRef = useMergedRefs(inputRef, controlRef, picker.registerHexInput);
+
+  /** The single commit path: every edit is `#rrggbb` + an alpha byte. */
+  const commit = (rgb: string, nextAlpha: number) =>
+    picker.setColor(formatHexColor(rgb, nextAlpha));
+
+  const handleChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+    // Surrounding whitespace (a pasted `'#abcdef '`) is dropped, so the text that is checked,
+    // committed and shown is the same.
+    let text = event.target.value.trim();
+    if (text !== '' && !text.startsWith('#')) text = `#${text}`;
+    setDraft({ text, flagged: false });
+    const typed = parseHexInput(text);
+    // A 6-digit hex keeps the current opacity; an 8-digit one brings its own alpha.
+    if (typed) commit(typed.rgb, hasAlphaDigits(text) ? typed.alpha : alpha);
+  };
+
+  /** Finishes the draft when the field is left or Enter is pressed. */
+  const finishDraft = () => {
+    if (draft === null || draft.flagged) return;
+    const typed = parseHexColor(draft.text);
+    if (typed || isBlankDraft(draft.text)) {
+      // A short `#rgb` (current opacity) or `#rgba` is applied here; complete values were
+      // applied while typing, so a rejecting parent is not asked twice. Then the field shows the
+      // current value (also when a controlled parent rejected it).
+      if (typed && !parseHexInput(draft.text)) {
+        commit(typed.rgb, hasAlphaDigits(draft.text) ? typed.alpha : alpha);
+      }
+      setDraft(null);
+      return;
+    }
+    // Text that is not a hex color is kept and flagged instead of thrown away (WCAG 3.3.1).
+    setDraft({ text: draft.text, flagged: true });
+  };
+
+  const handleBlur = composeEventHandlers(onBlur, finishDraft);
+  // Not prevented: Enter still submits the surrounding form, with the color just applied.
+  const handleKeyDown = composeEventHandlers(
+    onKeyDown,
+    (event: React.KeyboardEvent<HTMLElement>) => {
+      if (event.key === 'Enter' && !event.nativeEvent.isComposing) finishDraft();
+    },
+  );
+
+  return (
+    <label
+      ref={ref}
+      className={cn(colorPickerHexFieldClassNames.root, 'flex min-w-0 flex-col gap-1', className)}
+      {...rest}
+    >
+      <span
+        className={cn(colorPickerHexFieldClassNames.label, 'text-caption-1 text-muted-foreground')}
+      >
+        {labels.hex}
+      </span>
+      <input
+        ref={mergedInputRef}
+        id={id}
+        type="text"
+        value={hexText}
+        onChange={handleChange}
+        onKeyDown={handleKeyDown}
+        onKeyUp={onKeyUp}
+        onFocus={onFocus}
+        onBlur={handleBlur}
+        aria-label={ariaLabel ?? (ariaLabelledBy === undefined ? labels.hexInput : undefined)}
+        aria-labelledby={ariaLabelledBy}
+        aria-invalid={resolvedInvalid}
+        aria-errormessage={ariaErrorMessage ?? errorMessageId}
+        aria-describedby={joinIds(
+          draftInvalid && errorId,
+          field?.validationMessageId ?? (fieldInvalid ? field?.errorId : undefined),
+          errorMessageId,
+          ariaDescribedBy,
+        )}
+        aria-details={ariaDetails}
+        aria-required={ariaRequired}
+        autoFocus={autoFocus}
+        tabIndex={tabIndex}
+        inputMode={inputMode}
+        enterKeyHint={enterKeyHint}
+        autoCapitalize={autoCapitalize}
+        autoCorrect={autoCorrect}
+        spellCheck={spellCheck ?? false}
+        maxLength={9}
+        autoComplete="off"
+        className={cn(
+          colorPickerHexFieldClassNames.input,
+          'w-24 rounded border border-input border-b-stroke-accessible bg-background px-2 py-1 text-body-1 text-foreground',
+          inputFocus,
+          invalidLook && inputInvalid,
+        )}
+      />
+      {draftInvalid && (
+        <span
+          id={errorId}
+          className={cn(colorPickerHexFieldClassNames.errorMessage, 'text-caption-1 text-error')}
+        >
+          {labels.hexError}
+        </span>
+      )}
+    </label>
+  );
+};
+
+ColorPickerHexField.displayName = 'ColorPickerHexField';
+
+/** Properties for the ColorPickerSwatches sub-component: the picker's `presets` as a SwatchPicker. */
+export type ColorPickerSwatchesProps = Omit<
+  SwatchPickerProps,
+  'items' | 'value' | 'defaultValue' | 'onValueChange' | 'onChange' | 'name' | 'form' | 'required'
+>;
+
+/**
+ * The picker's `presets` as swatches (a SwatchPicker named by `labels.presets`, small and rounded
+ * unless you pass `size` or `shape`). Picking one keeps the opacity. Renders nothing without
+ * presets. Must be inside a ColorPicker. Also exported as `ColorPickerSwatches`.
+ */
+export const ColorPickerSwatches = ({
+  className,
+  'aria-label': ariaLabel,
+  size = 'small',
+  shape = 'rounded',
+  ...rest
+}: ColorPickerSwatchesProps) => {
+  const picker = usePickerPartContext('ColorPicker.Swatches');
+  if (picker.presetItems.length === 0) return null;
+  return (
+    <SwatchPicker
+      aria-label={
+        ariaLabel ?? (rest['aria-labelledby'] === undefined ? picker.labels.presets : undefined)
+      }
+      size={size}
+      shape={shape}
+      {...rest}
+      className={cn(colorPickerSwatchesClassNames.root, className)}
+      items={picker.presetItems}
+      value={picker.parsed ? picker.parsed.rgb : ''}
+      onValueChange={picker.pickPreset}
+    />
+  );
+};
+
+ColorPickerSwatches.displayName = 'ColorPickerSwatches';
+
+/** Properties for the ColorPickerPreview sub-component. */
+export interface ColorPickerPreviewProps extends React.HTMLAttributes<HTMLDivElement> {
+  ref?: React.Ref<HTMLDivElement>;
+}
+
+/**
+ * A swatch of the picker's current color (decorative, `aria-hidden`); it keeps its color in forced
+ * colors and follows the picker's `shape`. Must be inside a ColorPicker. Also exported as
+ * `ColorPickerPreview`.
+ */
+export const ColorPickerPreview = ({ className, style, ref, ...rest }: ColorPickerPreviewProps) => {
+  const picker = usePickerPartContext('ColorPicker.Preview');
+  const shown = picker.parsed
+    ? formatHexColor(picker.parsed.rgb, picker.parsed.alpha)
+    : picker.color;
+  return (
+    <div
+      data-color-preview=""
+      aria-hidden="true"
+      {...rest}
+      ref={ref}
+      className={cn(
+        colorPickerPreviewClassNames.root,
+        'h-10 w-10 shrink-0 rounded border border-border forced-colors:forced-color-adjust-none',
+        picker.shape === 'square' && 'rounded-none',
+        className,
+      )}
+      style={{ ...style, backgroundColor: shown }}
+    />
+  );
+};
+
+ColorPickerPreview.displayName = 'ColorPickerPreview';

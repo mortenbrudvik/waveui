@@ -1,10 +1,11 @@
 import * as React from 'react';
-import { describe, it, expect, vi } from 'vitest';
+import { describe, it, expect, vi, expectTypeOf } from 'vitest';
 import { act, fireEvent, render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { ColorPicker } from '../ColorPicker';
+import { ColorPicker, type ColorPickerProps } from '../ColorPicker';
 import { Field } from '../Field';
 import { focusRing, inputInvalid } from '../../../lib/styles';
+import type { ColorPickerShape } from '../../../lib/types';
 import { expectNoA11yViolations, testSystemProps } from '../../../test-utils';
 import { renderWithFieldContext, FIELD_TEST_IDS, FIELD_TEST_TEXT } from '../../../test-utils-field';
 
@@ -1067,5 +1068,72 @@ describe('ColorPicker — native forms (C-FORMS)', () => {
     expect(hexInput()).not.toHaveAttribute('aria-invalid');
     expect(hexInput()).not.toHaveAccessibleDescription();
     expect(onValueChange).not.toHaveBeenCalled();
+  });
+});
+
+describe('ColorPicker — composition (D21)', () => {
+  it('renders only its children inside its named group, and still submits the value', () => {
+    const { container } = render(
+      <form aria-label="Form">
+        <ColorPicker aria-label="Accent" name="accent" showOpacity>
+          <ColorPicker.HexField />
+        </ColorPicker>
+      </form>,
+    );
+    const group = screen.getByRole('group', { name: 'Accent' });
+    expect(within(group).getByRole('textbox', { name: 'Hex color value' })).toBeInTheDocument();
+    expect(screen.queryByRole('radiogroup')).toBeNull();
+    expect(screen.queryByRole('slider', { name: 'Opacity' })).toBeNull();
+    expect(container.querySelector('[data-color-preview]')).toBeNull();
+    const form = screen.getByRole('form', { name: 'Form' }) as HTMLFormElement;
+    expect(new FormData(form).get('accent')).toBe('#0f6cbd');
+  });
+
+  it('renders the default layout when the children render nothing', () => {
+    render(<ColorPicker aria-label="Accent">{false}</ColorPicker>);
+    expect(hexInput()).toBeInTheDocument();
+    expect(screen.getByRole('radiogroup', { name: 'Preset colors' })).toBeInTheDocument();
+  });
+
+  it('keeps the Field wiring on the group: one control id, one required input, the error on the hex field', () => {
+    const { container } = renderWithFieldContext(
+      <ColorPicker>
+        <ColorPicker.HexField />
+        <ColorPicker.Swatches />
+      </ColorPicker>,
+      { required: true, errorId: FIELD_TEST_IDS.errorId, hintId: FIELD_TEST_IDS.hintId },
+    );
+    const group = screen.getByRole('group', { name: FIELD_TEST_TEXT.label });
+    expect(group).toHaveAttribute('id', FIELD_TEST_IDS.controlId);
+    expect(container.querySelectorAll(`[id="${FIELD_TEST_IDS.controlId}"]`)).toHaveLength(1);
+    expect(container.querySelectorAll('input[required]')).toHaveLength(1);
+    expect(hexInput()).toHaveAttribute('aria-invalid', 'true');
+    expect(hexInput()).toHaveAccessibleDescription(FIELD_TEST_TEXT.error);
+  });
+
+  it("the hidden input's invalid event focuses the hex field, or else the first tabbable element", () => {
+    const first = render(
+      <ColorPicker aria-label="Accent" required>
+        <ColorPicker.HexField />
+      </ColorPicker>,
+    );
+    fireEvent.invalid(first.container.querySelector('input[required]') as HTMLInputElement);
+    expect(hexInput()).toHaveFocus();
+    first.unmount();
+
+    const second = render(
+      <ColorPicker aria-label="Accent" required defaultValue="#d13438">
+        <ColorPicker.Swatches />
+      </ColorPicker>,
+    );
+    fireEvent.invalid(second.container.querySelector('input[required]') as HTMLInputElement);
+    expect(screen.getByRole('radio', { name: 'Red' })).toHaveFocus();
+  });
+
+  it('types: shape is the ColorPicker subset of Shape', () => {
+    expectTypeOf<ColorPickerProps['shape']>().toEqualTypeOf<ColorPickerShape | undefined>();
+    // @ts-expect-error a ColorPicker is rounded or square
+    const circular = <ColorPicker shape="circular" />;
+    expect(circular).toBeTruthy();
   });
 });
