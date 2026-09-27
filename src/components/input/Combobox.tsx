@@ -142,15 +142,18 @@ export interface ComboboxProps<M extends boolean = false> extends Omit<
    * text whenever the text is not empty; an option it returns `false` for is filtered out. It may
    * keep options that do not contain the text: `filter={() => true}` with `query` and
    * `onQueryChange` leaves the matching to you (a server-side search that replaces the options),
-   * and a filter that always keeps an option of your own gives a "Create …" entry.
+   * and a filter that always keeps an option of your own gives a "Create …" entry. With a
+   * server-side search, keep the selected option among the children, `hidden` while the results
+   * leave it out: a value without an option shows no label (the "Async search" story does this).
    * @default a case-insensitive substring match on the option's `textValue`, else its `label`
    */
   filter?: (option: ListboxItem, query: string) => boolean;
   /**
    * Controlled query: the text typed since the last commit, which filters the options. A
-   * non-empty query shows in the input; `''` shows the selected option's label (the selected
-   * labels with `multiselect`), except while the user edits the text, so erased text stays empty.
-   * Not used with `freeform`, where the typed text is the value.
+   * non-empty query shows in the input (hidden while `disabled` or `readOnly`); `''` shows the
+   * selected option's label (the selected labels with `multiselect`), except while the user edits
+   * the text, so erased text stays empty. Not used with `freeform`, where the typed text is the
+   * value.
    */
   query?: string;
   /**
@@ -162,7 +165,8 @@ export interface ComboboxProps<M extends boolean = false> extends Omit<
   /**
    * Called with the new query when it changes: as the user types, and with `''` when it resets (a
    * commit, a close, a blur, Escape, the clear button, a form reset, or `disabled` or `readOnly`
-   * turned on while text is typed). Never called with `freeform`.
+   * turned on while text is typed). A Combobox that mounts disabled or read-only reports nothing:
+   * it keeps a controlled query, which shows once it unlocks. Never called with `freeform`.
    */
   onQueryChange?: (query: string) => void;
   /**
@@ -318,6 +322,12 @@ function hasFocus(element: Element): boolean {
   return root.activeElement === element;
 }
 
+/**
+ * How the control came to be locked (`disabled` or `readOnly`): not at all, by a change while
+ * mounted, or since it mounted.
+ */
+type LockState = 'unlocked' | 'locked' | 'mounted-locked';
+
 /** The default `filter` (0.7's match): a case-insensitive substring of `textValue ?? label`. */
 function matchesText(item: ListboxItem, text: string): boolean {
   return (item.textValue ?? item.label).toLowerCase().includes(text.toLowerCase());
@@ -465,18 +475,21 @@ const ComboboxRoot = (props: ComboboxProps<boolean>) => {
   // Locking the control (readOnly/disabled) while typing drops the typed text, so the input shows
   // the committed value again: hidden during render above, the editing state and the freeform
   // draft dropped here (adjust-during-render pattern, C-HOOKS), and the query reset reported from
-  // an effect, since `onQueryChange` never runs during render (D12).
-  const [wasInteractive, setWasInteractive] = React.useState(interactive);
-  if (wasInteractive !== interactive) {
-    setWasInteractive(interactive);
-    if (!interactive) {
-      setEditing(false);
-      setFreeformDraft(null);
-    }
+  // an effect, since `onQueryChange` never runs during render (D12). `lock` is how the control
+  // came to be locked: `'locked'` by a change while mounted, whose reset is reported once, or
+  // `'mounted-locked'` since it mounted, which reports nothing and keeps a controlled query,
+  // hidden until the control unlocks (R20).
+  const [lock, setLock] = React.useState<LockState>(interactive ? 'unlocked' : 'mounted-locked');
+  if (interactive && lock !== 'unlocked') {
+    setLock('unlocked');
+  } else if (!interactive && lock === 'unlocked') {
+    setLock('locked');
+    setEditing(false);
+    setFreeformDraft(null);
   }
   React.useEffect(() => {
-    if (!interactive) setQuery('');
-  }, [interactive, setQuery]);
+    if (lock === 'locked') setQuery('');
+  }, [lock, setQuery]);
   // Locking also closes the list itself, not only the derived `open`, so unlocking does not reopen
   // it without a user action. The close is reported through onOpenChange (a consumer callback from
   // an effect, C-HOOKS); a controlled `open` that stays true is still not shown while locked.

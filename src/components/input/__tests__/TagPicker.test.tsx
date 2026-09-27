@@ -1256,6 +1256,70 @@ describe('TagPicker', () => {
           new Set(['banana', 'cherry', 'date']),
         );
       });
+
+      it('supports async search with filter={() => true}', async () => {
+        vi.useFakeTimers({ shouldAdvanceTime: true });
+        try {
+          const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
+          const [apple, banana, cherry] = options;
+          function Search() {
+            const [query, setQuery] = React.useState('');
+            const [results, setResults] = React.useState<TagPickerOption[]>([apple, banana]);
+            React.useEffect(() => {
+              const id = setTimeout(() => setResults(query ? [cherry] : [apple, banana]), 200);
+              return () => clearTimeout(id);
+            }, [query]);
+            return (
+              <TagPicker
+                aria-label="Fruits"
+                options={results}
+                filter={() => true}
+                query={query}
+                onQueryChange={setQuery}
+              />
+            );
+          }
+          render(<Search />);
+          await user.type(combobox(), 'x');
+          // Loading: the previous results stay, the first of them active.
+          expect(listed()).toEqual(['Apple', 'Banana']);
+          expect(activeOption()).toHaveTextContent('Apple');
+          await act(async () => {
+            vi.advanceTimersByTime(250);
+          });
+          expect(listed()).toEqual(['Cherry']);
+          expect(activeOption()).toHaveTextContent('Cherry');
+        } finally {
+          vi.useRealTimers();
+        }
+      });
+
+      it('keeps the arrowed-to option active while the parent renders a new inline filter on every key', async () => {
+        const user = userEvent.setup();
+        function Parent() {
+          const [query, setQuery] = React.useState('e');
+          const [, setKeys] = React.useState(0);
+          return (
+            <TagPicker
+              aria-label="Fruits"
+              options={options}
+              query={query}
+              onQueryChange={setQuery}
+              onKeyDown={() => setKeys((count) => count + 1)}
+              filter={(option, text) => option.label.toLowerCase().includes(text.toLowerCase())}
+            />
+          );
+        }
+        render(<Parent />);
+        act(() => combobox().focus());
+        // The first ArrowDown opens the list on the first option, the second moves on.
+        await user.keyboard('{ArrowDown}{ArrowDown}');
+        expect(listed()).toEqual(['Apple', 'Cherry', 'Date']);
+        expect(activeOption()).toHaveTextContent('Cherry');
+        // Another key renders the parent (and a new filter) again: the highlight stays.
+        await user.keyboard('{Shift}');
+        expect(activeOption()).toHaveTextContent('Cherry');
+      });
     });
 
     describe('query', () => {
@@ -1343,18 +1407,65 @@ describe('TagPicker', () => {
       it('reports a lock reset from an effect, once, without a render-phase update', () => {
         const error = vi.spyOn(console, 'error');
         const onQueryChange = vi.fn();
-        const { rerender } = renderPicker({ defaultQuery: 'ch', onQueryChange });
-        rerender(
-          <TagPicker
-            aria-label="Fruits"
-            options={options}
-            defaultQuery="ch"
-            disabled
-            onQueryChange={onQueryChange}
-          />,
-        );
+        // The parent stores the query, so a call during the render of the TagPicker would update
+        // the parent while it renders, which React reports.
+        function Parent({ disabled }: { disabled: boolean }) {
+          const [query, setQuery] = React.useState('ch');
+          return (
+            <TagPicker
+              aria-label="Fruits"
+              options={options}
+              query={query}
+              onQueryChange={(next) => {
+                onQueryChange(next);
+                setQuery(next);
+              }}
+              disabled={disabled}
+            />
+          );
+        }
+        const { rerender } = render(<Parent disabled={false} />);
+        expect(combobox()).toHaveValue('ch');
+        rerender(<Parent disabled />);
+        expect(combobox()).toHaveValue('');
         expect(onQueryChange.mock.calls).toEqual([['']]);
         expect(error).not.toHaveBeenCalled();
+      });
+
+      it('keeps a controlled query when it mounts locked: hidden, unreported, shown on unlock (R20)', async () => {
+        const user = userEvent.setup();
+        const onQueryChange = vi.fn();
+        // A query the parent restored (from the URL, say) while it loads.
+        function Parent({ disabled }: { disabled: boolean }) {
+          const [query, setQuery] = React.useState('swe');
+          return (
+            <TagPicker
+              aria-label="Fruits"
+              options={options}
+              query={query}
+              onQueryChange={(next) => {
+                onQueryChange(next);
+                setQuery(next);
+              }}
+              disabled={disabled}
+            />
+          );
+        }
+        const { rerender } = render(<Parent disabled />);
+        expect(combobox()).toHaveValue('');
+        await act(async () => {});
+        expect(onQueryChange).not.toHaveBeenCalled();
+        rerender(<Parent disabled={false} />);
+        await act(async () => {});
+        expect(combobox()).toHaveValue('swe');
+        expect(onQueryChange).not.toHaveBeenCalled();
+        // Locking after typing reports the reset, once.
+        await user.type(combobox(), 'x');
+        expect(combobox()).toHaveValue('swex');
+        rerender(<Parent disabled />);
+        await act(async () => {});
+        expect(combobox()).toHaveValue('');
+        expect(onQueryChange.mock.calls).toEqual([['swex'], ['']]);
       });
 
       it.each([
