@@ -5,7 +5,7 @@ import { Field, useId, useMergedRefs } from '../src';
 import { Listbox, type ListboxProps } from '../src/components/input/Listbox';
 import { ListboxSurface, Option, useListboxPopup } from '../src/components/input/Option';
 import { useActiveDescendant } from '../src/hooks/useActiveDescendant';
-import { useListbox } from '../src/hooks/useListbox';
+import { useListbox, type ListboxItem } from '../src/hooks/useListbox';
 
 const meta = {
   title: 'Components/Input/Listbox',
@@ -117,85 +117,136 @@ export const InField: Story = {
 
 const FONTS = ['Arial', 'Georgia', 'Verdana', 'Times New Roman', 'Courier New'] as const;
 
+/** The navigability predicate a picker on `useListbox` builds from its own query: a
+ * case-insensitive substring match on the option's `textValue`, else its `label` (Combobox's 0.7
+ * default `filter`). */
+function matchesFont(item: ListboxItem, text: string): boolean {
+  return (item.textValue ?? item.label).toLowerCase().includes(text.toLowerCase());
+}
+
 /**
  * A font picker built only on the public listbox primitives, not on `Listbox` itself:
- * `useListbox` in select-only mode for its state and keys, `useListboxPopup` for the popup's
- * dismissal and position, and `ListboxSurface` for its list and popup — the acceptance story of
- * P5-03 (spec §10): every piece here is public API. Each `Option` shows its own font.
+ * `useListbox` in editable mode for its state, filtering and keys, `useListboxPopup` for the
+ * popup's dismissal and position, and `ListboxSurface` for its list and popup — the acceptance
+ * story of P5-03 (spec §10): every piece here is public API. Typing opens the list and filters
+ * the fonts through `useListbox`'s `filter`; Enter (or a click) selects the highlighted font;
+ * blurring the input or pressing Escape while text is typed restores the selected font's name
+ * instead, as Combobox's 0.7 draft does (`src/components/input/Combobox.tsx` is the full-featured
+ * reference this keeps small). The chosen font submits through a plain hidden input. Each `Option`
+ * shows its own font.
  */
 function FontPicker() {
   const [open, setOpen] = React.useState(false);
   const [value, setValue] = React.useState('');
+  // The typed filter while editing; `null` shows the selected font's name instead.
+  const [draft, setDraft] = React.useState<string | null>(null);
+  const [submitted, setSubmitted] = React.useState<string | null>(null);
   const rootRef = React.useRef<HTMLDivElement>(null);
-  const anchorRef = React.useRef<HTMLButtonElement>(null);
+  const inputRef = React.useRef<HTMLInputElement>(null);
   const listbox = useListbox({
     open,
-    onOpenChange: setOpen,
-    mode: 'select-only',
+    onOpenChange: (next) => {
+      setOpen(next);
+      // Every close (Escape with options shown, Tab, a commit) restores the selected font's name.
+      if (!next) setDraft(null);
+    },
+    mode: 'editable',
     selectedValues: value ? [value] : [],
-    onSelect: (next) => setValue(next),
+    onSelect: (next) => {
+      setValue(next);
+      setDraft(null);
+    },
+    filter: draft ? (item) => matchesFont(item, draft) : undefined,
+    // The first match highlighted while typing, so Enter selects what the list shows; nothing
+    // highlighted on a plain open, so Enter without typing does not select the first font.
+    autoHighlight: draft ? 'first' : false,
   });
-  // Nothing to show (every font filtered out, say): the list stays collapsed.
+  // Nothing to show (every font filtered out): the list stays collapsed.
   const expanded = open && listbox.items.length > 0;
   const { layerId, setReference, surfaceRef, floatingProps } = useListboxPopup({
     open,
     surfaceOpen: expanded,
     onDismiss: () => setOpen(false),
     rootRef,
-    anchorRef,
+    anchorRef: inputRef,
   });
-  const buttonRef = useMergedRefs<HTMLButtonElement>(anchorRef, setReference);
+  const inputMergedRef = useMergedRefs<HTMLInputElement>(inputRef, setReference);
+  const inputText = draft ?? value;
 
   return (
-    <div ref={rootRef} data-open={open ? '' : undefined}>
+    <form
+      className="flex flex-col items-start gap-2"
+      onSubmit={(event) => {
+        event.preventDefault();
+        setSubmitted(String(new FormData(event.currentTarget).get('font') ?? ''));
+      }}
+    >
+      <div ref={rootRef} data-open={open ? '' : undefined}>
+        <input
+          type="text"
+          aria-label="Font"
+          autoComplete="off"
+          {...listbox.getComboboxProps()}
+          aria-expanded={expanded}
+          ref={inputMergedRef}
+          value={inputText}
+          onChange={(event) => {
+            setDraft(event.target.value);
+            if (!open) setOpen(true);
+          }}
+          onBlur={() => setDraft(null)}
+          onKeyDown={(event) => {
+            // Open with nothing shown: close it ourselves, and leave Escape to an enclosing layer
+            // (never an Escape that only cancels an IME composition).
+            if (event.key === 'Escape' && open && !expanded && !event.nativeEvent.isComposing) {
+              setOpen(false);
+              setDraft(null);
+              return;
+            }
+            listbox.onKeyDown(event);
+          }}
+          onKeyUp={listbox.onKeyUp}
+          placeholder="Type a font name…"
+          style={{ fontFamily: draft === null && value ? value : undefined }}
+          className="w-56 rounded border border-border bg-background px-3 py-1.5 text-body-1 text-foreground focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
+        />
+        <ListboxSurface
+          listbox={listbox}
+          layerId={layerId}
+          surfaceRef={surfaceRef}
+          floatingProps={floatingProps}
+          open={open}
+          expanded={expanded}
+          aria-label="Fonts"
+          listClassName="max-h-80"
+        >
+          {FONTS.map((font) => (
+            <Option key={font} value={font} style={{ fontFamily: font }}>
+              {font}
+            </Option>
+          ))}
+        </ListboxSurface>
+      </div>
+      {/* HiddenInput is internal: a plain hidden input carries the value into the form. */}
+      <input type="hidden" name="font" value={value} />
       <button
-        type="button"
-        aria-label="Font"
-        {...listbox.getComboboxProps()}
-        aria-expanded={expanded}
-        ref={buttonRef}
-        onClick={() => setOpen((current) => !current)}
-        onKeyDown={(event) => {
-          // Open with nothing shown: close it ourselves, and leave Escape to an enclosing layer
-          // (never an Escape that only cancels an IME composition).
-          if (event.key === 'Escape' && open && !expanded && !event.nativeEvent.isComposing) {
-            setOpen(false);
-            return;
-          }
-          listbox.onKeyDown(event);
-        }}
-        onKeyUp={listbox.onKeyUp}
-        style={{ fontFamily: value || undefined }}
-        className="flex h-9 w-56 items-center justify-between gap-2 rounded border border-border bg-background px-3 text-body-1 text-foreground focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
+        type="submit"
+        className="rounded border border-border bg-background px-3 py-1.5 text-body-1 text-foreground focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
       >
-        <span className="truncate">{value || 'Pick a font'}</span>
-        <span aria-hidden className="shrink-0 text-muted-foreground">
-          ▾
-        </span>
+        Submit
       </button>
-      <ListboxSurface
-        listbox={listbox}
-        layerId={layerId}
-        surfaceRef={surfaceRef}
-        floatingProps={floatingProps}
-        open={open}
-        expanded={expanded}
-        aria-label="Fonts"
-        listClassName="max-h-80"
-      >
-        {FONTS.map((font) => (
-          <Option key={font} value={font} style={{ fontFamily: font }}>
-            {font}
-          </Option>
-        ))}
-      </ListboxSurface>
-    </div>
+      <p className="text-caption-1 text-muted-foreground">
+        Submitted: {submitted === null ? 'nothing yet' : submitted || '(no font)'}
+      </p>
+    </form>
   );
 }
 
 /**
  * The acceptance story: a font picker built only on the public listbox primitives (`useListbox`,
- * `useListboxPopup`, `ListboxSurface`, `Option`), not on `Listbox` itself.
+ * `useListboxPopup`, `ListboxSurface`, `Option`), not on `Listbox` itself. Demonstrates opening
+ * and filtering the fonts by typing, selecting one, and submitting it through a plain hidden
+ * input inside a form.
  */
 export const CustomPicker: Story = {
   render: () => <FontPicker />,
@@ -220,7 +271,8 @@ const COMMANDS: readonly Command[] = [
  * (`role="combobox"`) points `aria-activedescendant` at the active command of a filtered
  * `<ul role="listbox">`. ArrowUp and ArrowDown move the active command, and Enter runs it. The
  * list has no open/close state of its own here (it is always shown): a minimal illustration of
- * the hook, not a full combobox.
+ * the hook, not a full combobox. It relies on `aria-activedescendant` alone to say which command
+ * is active and announces nothing else (no live region), unlike `useListbox`'s pickers.
  */
 function CommandPaletteWidget() {
   const inputId = useId('command-palette');
@@ -282,7 +334,11 @@ function CommandPaletteWidget() {
         className="m-0 mt-1 w-64 list-none rounded border border-border bg-background py-1"
       >
         {commands.length === 0 ? (
-          <li aria-disabled={true} role="option" className="px-3 py-1.5 text-muted-foreground">
+          <li
+            aria-disabled={true}
+            role="option"
+            className="px-3 py-1.5 text-body-1 text-muted-foreground"
+          >
             No matching commands
           </li>
         ) : (
