@@ -7,7 +7,7 @@ import { Toast, Toaster, useToastController } from '../Toast';
 import type { ToastController, ToastOptions, ToastProps, ToasterProps } from '../Toast';
 import { useDismiss } from '../../../hooks/useDismiss';
 import { useModalIsolation } from '../../../hooks/useModalIsolation';
-import { toastTitleClassNames } from '../../../lib/classNames';
+import { toastClassNames, toastTitleClassNames } from '../../../lib/classNames';
 import { Portal } from '../../portal/Portal';
 import {
   expectNoA11yViolations,
@@ -63,7 +63,7 @@ function getLiveRegion(politeness: 'polite' | 'assertive'): HTMLElement {
   return region;
 }
 
-/** The visual toasts rendered by the Toaster, in order. */
+/** The toast containers of the Toaster (one per toast), in order. */
 const getToasts = () =>
   Array.from(getViewport().querySelectorAll<HTMLElement>('[data-wave-toast]'));
 
@@ -535,10 +535,14 @@ describe('Toaster: announcements (feedback-navigation#11, #14)', () => {
     expect(getLiveRegion(politeness)).toHaveTextContent(`${label} Upload Details here`);
     expect(getLiveRegion(other)).toBeEmptyDOMElement();
 
-    // The Toaster's toasts are not live regions themselves (feedback-navigation#11).
+    // The Toaster's toasts are not live regions themselves (feedback-navigation#11): each sits in
+    // a named group (D10), and the Toast inside it has no live-region role either.
     const [toast] = getToasts();
-    expect(toast).not.toHaveAttribute('role');
+    expect(toast).toHaveAttribute('role', 'group');
     expect(toast).not.toHaveAttribute('aria-live');
+    const visual = toast.querySelector(`.${toastClassNames.root}`);
+    expect(visual).not.toHaveAttribute('role');
+    expect(visual).not.toHaveAttribute('aria-live');
     expect(toast.querySelector(`[data-wave-icon="${status}"]`)).not.toBeNull();
     expect(toast).toHaveTextContent(new RegExp(`^${label}\\s*Upload\\s*Details here`));
   });

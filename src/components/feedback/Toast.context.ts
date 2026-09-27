@@ -8,13 +8,6 @@ export const ToasterContext = React.createContext<ToastController | null>(null);
 ToasterContext.displayName = 'ToasterContext';
 
 /**
- * `true` for the toasts the Toaster renders in its region, which its live regions announce. A
- * Toast rendered anywhere else (also as app content inside `<Toaster>`) is a live region itself.
- */
-export const ToasterRegionContext = React.createContext(false);
-ToasterRegionContext.displayName = 'ToasterRegionContext';
-
-/**
  * A part registered with its toast (D9, D10): the title (its label names the toast), the body (it
  * describes the toast) or the footer (its controls are actions). The getters are read when the
  * container composes its name, timer and announcement, after the parts have mounted.

@@ -1,18 +1,22 @@
 import * as React from 'react';
+import { joinIds } from '../../lib/aria';
 import { cn } from '../../lib/cn';
 import { toasterClassNames } from '../../lib/classNames';
 import { reportMissingContext, warnOnce } from '../../lib/dev';
 import { getDirection } from '../../lib/direction';
 import { getFirstTabbable } from '../../lib/focus';
 import { getOpenLayers, subscribeLayers } from '../../lib/layers';
+import { focusRing } from '../../lib/styles';
 import type { Status } from '../../lib/types';
 import { useDirection } from '../../hooks/useDirection';
+import { useEventCallback } from '../../hooks/useEventCallback';
 import { useId } from '../../hooks/useId';
 import { useMergedRefs } from '../../hooks/useMergedRefs';
 import { usePreserveFocus } from '../../hooks/usePreserveFocus';
 import { Portal } from '../portal/Portal';
 import { getStatusLabel } from './MessageBar.status';
-import { ToasterContext, ToasterRegionContext } from './Toast.context';
+import { ToastContext, ToasterContext } from './Toast.context';
+import type { ToastContextValue, ToastPartRegistration, ToastRegistration } from './Toast.context';
 import { ToastRoot } from './Toast.root';
 
 /* ------------------------------------------------------------------ */
@@ -391,7 +395,7 @@ function LiveMessage({ text }: { text: string }) {
 }
 LiveMessage.displayName = 'LiveMessage';
 
-interface ToasterItemProps {
+interface ToastContainerProps {
   entry: ToastEntry;
   index: number;
   timers: ToastTimers;
@@ -399,20 +403,81 @@ interface ToasterItemProps {
   getFocusFallback: (index: number) => HTMLElement | null;
 }
 
-/** One toast of the Toaster: pause handlers and focus preservation on removal. */
-function ToasterItem({ entry, index, timers, onDismiss, getFocusFallback }: ToasterItemProps) {
-  const ref = React.useRef<HTMLDivElement>(null);
-  usePreserveFocus(ref, () => getFocusFallback(index));
+function isTitlePart(
+  part: ToastPartRegistration,
+): part is Extract<ToastPartRegistration, { kind: 'title' }> {
+  return part.kind === 'title';
+}
+
+function isBodyPart(
+  part: ToastPartRegistration,
+): part is Extract<ToastPartRegistration, { kind: 'body' }> {
+  return part.kind === 'body';
+}
+
+/**
+ * One toast of the Toaster (D10): a `role="group"` container, focusable by script (no Tab stop),
+ * named by the toast's severity text and title and described by its body while a Toast inside
+ * has registered them (so no id reference dangles). It provides the per-toast context, pauses the
+ * timers and keeps focus when the toast goes.
+ */
+function ToastContainer({
+  entry,
+  index,
+  timers,
+  onDismiss,
+  getFocusFallback,
+}: ToastContainerProps) {
   const { id, options } = entry;
+  const containerRef = React.useRef<HTMLDivElement>(null);
+  usePreserveFocus(containerRef, () => getFocusFallback(index));
+  const titleId = useId('wave-toast-title');
+
+  // The registrations of the parts and of the Toast inside, whose layout effects run before this
+  // component's: in state for the name and description, in refs for reads after mount.
+  const [parts, setParts] = React.useState<readonly ToastPartRegistration[]>([]);
+  const partsRef = React.useRef<readonly ToastPartRegistration[]>([]);
+  const registerPart = React.useCallback((part: ToastPartRegistration) => {
+    partsRef.current = [...partsRef.current, part];
+    setParts(partsRef.current);
+    return () => {
+      partsRef.current = partsRef.current.filter((item) => item !== part);
+      setParts(partsRef.current);
+    };
+  }, []);
+  const [toast, setToast] = React.useState<ToastRegistration | null>(null);
+  const toastRef = React.useRef<ToastRegistration | null>(null);
+  const registerToast = React.useCallback((registration: ToastRegistration) => {
+    toastRef.current = registration;
+    setToast(registration);
+    return () => {
+      if (toastRef.current !== registration) return;
+      toastRef.current = null;
+      setToast(null);
+    };
+  }, []);
+
+  // `Toast.Close` and the Dismiss button: the Toast's `onDismiss`, then the dismissal (D9, D11).
+  const dismiss = useEventCallback(() => {
+    toastRef.current?.onDismiss?.();
+    onDismiss(id);
+  });
+  const context = React.useMemo<ToastContextValue>(
+    () => ({ titleId, dismiss, registerPart, registerToast }),
+    [titleId, dismiss, registerPart, registerToast],
+  );
+
+  const titlePart = parts.find(isTitlePart);
+  const bodyPart = parts.find(isBodyPart);
   return (
-    <ToastRoot
-      ref={ref}
+    <div
+      ref={containerRef}
+      role="group"
+      tabIndex={-1}
       data-wave-toast=""
-      status={options.status}
-      statusLabel={options.statusLabel}
-      title={options.title}
-      dismissLabel={options.dismissLabel}
-      onDismiss={() => onDismiss(id)}
+      aria-labelledby={joinIds(toast?.statusTextId, titlePart?.id)}
+      aria-describedby={bodyPart?.id}
+      className={cn(toasterClassNames.toast, 'rounded', focusRing)}
       onPointerEnter={() => timers.pause(id, 'hover')}
       onPointerLeave={() => timers.resume(id, 'hover')}
       onFocus={() => timers.pause(id, 'focus')}
@@ -422,11 +487,20 @@ function ToasterItem({ entry, index, timers, onDismiss, getFocusFallback }: Toas
         timers.resume(id, 'focus');
       }}
     >
-      {options.body}
-    </ToastRoot>
+      <ToastContext.Provider value={context}>
+        <ToastRoot
+          status={options.status}
+          statusLabel={options.statusLabel}
+          title={options.title}
+          dismissLabel={options.dismissLabel}
+        >
+          {options.body}
+        </ToastRoot>
+      </ToastContext.Provider>
+    </div>
   );
 }
-ToasterItem.displayName = 'ToasterItem';
+ToastContainer.displayName = 'ToastContainer';
 
 /**
  * Provides {@link useToastController} to its children and shows the dispatched toasts.
@@ -700,22 +774,20 @@ export const Toaster = ({
           <div aria-live="assertive" aria-atomic="false" className="sr-only">
             {assertive}
           </div>
-          <ToasterRegionContext.Provider value={true}>
-            {/* The index within the rendered (shown) toasts, which getFocusFallback walks. Today the
-                shown toasts are a prefix of the entries (appended, promoted oldest first, replaced
-                in place, removed in order), so it equals the entry index; the shown list stays the
-                source so that a change to that order cannot break focus movement. */}
-            {shownToasts.map((toast, index) => (
-              <ToasterItem
-                key={toast.id}
-                entry={toast}
-                index={index}
-                timers={timers}
-                onDismiss={dismissToast}
-                getFocusFallback={getFocusFallback}
-              />
-            ))}
-          </ToasterRegionContext.Provider>
+          {/* The index within the rendered (shown) toasts, which getFocusFallback walks. Today the
+              shown toasts are a prefix of the entries (appended, promoted oldest first, replaced
+              in place, removed in order), so it equals the entry index; the shown list stays the
+              source so that a change to that order cannot break focus movement. */}
+          {shownToasts.map((toast, index) => (
+            <ToastContainer
+              key={toast.id}
+              entry={toast}
+              index={index}
+              timers={timers}
+              onDismiss={dismissToast}
+              getFocusFallback={getFocusFallback}
+            />
+          ))}
         </div>
       </Portal>
     </ToasterContext.Provider>

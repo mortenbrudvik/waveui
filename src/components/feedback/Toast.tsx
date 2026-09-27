@@ -20,7 +20,8 @@ export type { ToasterProps, ToastOptions, ToastController, ToastPosition } from 
  * children are the 0.5 form and render as a Title and a Body.
  *
  * - **In a Toaster** (dispatched with `useToastController()`): not a live region itself; the
- *   Toaster announces it through its permanent live regions.
+ *   Toaster announces it through its permanent live regions and names its container by the
+ *   severity text and title. Every Toast there shows the Dismiss button.
  * - **On its own** (your own container, an inline notice): a live region, as in 0.4 —
  *   `role="status"` with `aria-live="polite"`, or `role="alert"` with `aria-live="assertive"` for
  *   `error` (override with `role`/`aria-live`). A live region that is added together with its

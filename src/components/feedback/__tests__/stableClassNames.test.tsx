@@ -161,7 +161,11 @@ describe('stable class names (P3-00): feedback folder', () => {
       toasterClassNames.root,
     );
     await user.click(screen.getByRole('button', { name: 'Notify' }));
-    const toast = document.querySelector('[data-wave-toast]');
+    // The `data-wave-toast` marker sits on the container (Task T5); the Toast itself, one level
+    // in, still keeps only its own class.
+    const container = document.querySelector('[data-wave-toast]');
+    expect(container).toHaveClass(toasterClassNames.toast);
+    const toast = container?.querySelector(`.${toastClassNames.root}`);
     expect(toast).toHaveClass(toastClassNames.root);
   });
 

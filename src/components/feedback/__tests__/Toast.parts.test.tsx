@@ -5,22 +5,26 @@ import userEvent from '@testing-library/user-event';
 import { renderToString } from 'react-dom/server';
 import { hydrateRoot } from 'react-dom/client';
 import type { Root } from 'react-dom/client';
-import { Toast, ToastBody, ToastClose, ToastFooter, ToastTitle } from '../Toast';
-import type { ToastProps } from '../Toast';
+import { Toast, Toaster, ToastBody, ToastClose, ToastFooter, ToastTitle } from '../Toast';
+import type { ToastController, ToastProps } from '../Toast';
 import { Button } from '../../button/Button';
 import type { Slot } from '../../../lib/slot';
 import {
   toastBodyClassNames,
   toastClassNames,
+  toasterClassNames,
   toastFooterClassNames,
   toastTitleClassNames,
 } from '../../../lib/classNames';
 import {
   asClientReference,
+  expectNoA11yViolations,
   expectThrows,
+  findDanglingIdRefs,
   testCompoundExposure,
   testSystemProps,
 } from '../../../test-utils';
+import { ControllerProbe, getToasts, renderToaster } from './toasterHarness';
 
 /** Renders a part inside a standalone Toast, the host its context needs. */
 function ToastWrapper({ children }: { children: React.ReactNode }) {
@@ -425,5 +429,76 @@ describe('Toast.Close (P3-02, toasttrigger-1)', () => {
       </Toast.Close>,
       '[WaveUI] Toast.Close must be used within <Toast>',
     );
+  });
+});
+
+describe('the toast container (P3-02, D10)', () => {
+  it('wraps every toast in a focusable group named by its severity and title, described by its body', () => {
+    const { dispatch } = renderToaster();
+    dispatch({
+      status: 'error',
+      title: 'Upload failed',
+      body: 'The file is too large.',
+      timeout: 0,
+    });
+    const [container] = getToasts();
+    expect(container).toHaveAttribute('role', 'group');
+    expect(container).toHaveAttribute('tabindex', '-1');
+    expect(container).toHaveClass(toasterClassNames.toast);
+    expect(screen.getByRole('group', { name: 'Error: Upload failed' })).toBe(container);
+    expect(container).toHaveAccessibleDescription('The file is too large.');
+    // The marker moved from the Toast to its container.
+    expect(container.querySelector('[data-wave-toast]')).toBeNull();
+    expect(findDanglingIdRefs()).toEqual([]);
+  });
+
+  it('names the group by the severity alone without a title, by the title alone without a severity text', () => {
+    const { dispatch } = renderToaster();
+    dispatch({ status: 'warning', title: '', body: 'Check your connection.', timeout: 0 });
+    dispatch({ statusLabel: '', title: 'Saved', timeout: 0 });
+    dispatch({ statusLabel: '', title: '', body: 'Plain', timeout: 0 });
+    const [severityOnly, titleOnly, unnamed] = getToasts();
+    expect(severityOnly).toHaveAccessibleName('Warning:');
+    expect(titleOnly).toHaveAccessibleName('Saved');
+    expect(titleOnly).not.toHaveAttribute('aria-describedby');
+    expect(unnamed).not.toHaveAttribute('aria-labelledby');
+    expect(findDanglingIdRefs()).toEqual([]);
+  });
+
+  it('shows the Dismiss button of every Toast and dismisses the toast with it', async () => {
+    const user = userEvent.setup();
+    const { dispatch } = renderToaster();
+    dispatch({ title: 'Saved', timeout: 0 });
+    await user.click(within(getToasts()[0]).getByRole('button', { name: 'Dismiss' }));
+    expect(getToasts()).toHaveLength(0);
+  });
+
+  it('keeps one registration per part under StrictMode', () => {
+    const controllerRef = React.createRef<ToastController>();
+    render(
+      <React.StrictMode>
+        <Toaster>
+          <ControllerProbe ref={controllerRef} />
+        </Toaster>
+      </React.StrictMode>,
+    );
+    const dispatchSave = (body: string | undefined) =>
+      act(() => {
+        controllerRef.current?.dispatchToast({ toastId: 'save', title: 'Saved', body, timeout: 0 });
+      });
+    dispatchSave('Your changes were saved.');
+    const [container] = getToasts();
+    expect(container).toHaveAccessibleName('Info: Saved');
+    expect(container).toHaveAccessibleDescription('Your changes were saved.');
+    // A registration left behind by StrictMode's second effect run would keep the description.
+    dispatchSave(undefined);
+    expect(container).not.toHaveAttribute('aria-describedby');
+    expect(findDanglingIdRefs()).toEqual([]);
+  });
+
+  it('has no accessibility violations with a title and a body (open)', async () => {
+    const { dispatch } = renderToaster({}, { app: <p>App content</p> });
+    dispatch({ status: 'success', title: 'Saved', body: 'Your changes were saved.', timeout: 0 });
+    await expectNoA11yViolations(document.body);
   });
 });

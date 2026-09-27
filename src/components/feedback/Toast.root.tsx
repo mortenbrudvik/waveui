@@ -17,7 +17,7 @@ import {
   StatusText,
   getStatusLabel,
 } from './MessageBar.status';
-import { ToastContext, ToastUnscannedContext, ToasterRegionContext } from './Toast.context';
+import { ToastContext, ToastUnscannedContext } from './Toast.context';
 import type { ToastContextValue } from './Toast.context';
 import { ToastBody, ToastFooter, ToastTitle } from './Toast.parts';
 
@@ -43,7 +43,11 @@ export interface ToastProps extends React.HTMLAttributes<HTMLDivElement> {
    * `MessageBar.icon`). Fluent's `ToastTitle` `media`.
    */
   icon?: Slot<'span'>;
-  /** Called when the dismiss button is activated. Passing it renders the dismiss button. */
+  /**
+   * Called when the Dismiss button or a `Toast.Close` is activated; passing it renders the button.
+   * Inside the Toaster every Toast shows the button and it dismisses the toast (your `onDismiss`
+   * runs first). A timeout, Escape, Delete and `dismissToast` do not call it.
+   */
   onDismiss?: () => void;
   /**
    * Accessible name of the dismiss button. Pass a translation for other languages.
@@ -109,11 +113,31 @@ export const ToastRoot = ({
   ref,
   ...rest
 }: ToastProps) => {
-  const inToasterRegion = React.useContext(ToasterRegionContext);
+  // Inside the Toaster's container, whose context has `registerToast`, the Toast registers its
+  // severity, `onDismiss` and Dismiss button there and its parts use that context (the container's
+  // ids); everywhere else it provides its own context and is a live region (D9, D10).
+  const host = React.useContext(ToastContext);
+  const registerToast = host?.registerToast ?? null;
+  const inToaster = registerToast !== null;
+  const label = getStatusLabel(status, statusLabel);
+  const statusTextId = useId('wave-toast-status');
   const titleId = useId('wave-toast-title');
   const handleDismiss = useEventCallback(onDismiss);
   const hasOnDismiss = onDismiss !== undefined;
-  const context = React.useMemo<ToastContextValue>(
+  const dismissButtonRef = React.useRef<HTMLButtonElement>(null);
+
+  React.useLayoutEffect(() => {
+    if (!registerToast) return undefined;
+    return registerToast({
+      status,
+      statusLabel: label,
+      statusTextId: label ? statusTextId : undefined,
+      onDismiss: hasOnDismiss ? handleDismiss : undefined,
+      getDismissButton: () => dismissButtonRef.current,
+    });
+  }, [registerToast, status, label, statusTextId, hasOnDismiss, handleDismiss]);
+
+  const ownContext = React.useMemo<ToastContextValue>(
     () => ({
       titleId,
       dismiss: hasOnDismiss ? handleDismiss : undefined,
@@ -122,6 +146,9 @@ export const ToastRoot = ({
     }),
     [titleId, hasOnDismiss, handleDismiss],
   );
+  // Inside the Toaster every Toast shows the Dismiss button (D11); elsewhere `onDismiss` does.
+  const dismiss = inToaster ? host?.dismiss : ownContext.dismiss;
+
   const { content, titleTwice } = renderParts(title, children);
   React.useEffect(() => {
     if (!titleTwice) return;
@@ -130,6 +157,7 @@ export const ToastRoot = ({
       'Toast: `title` is ignored because a Toast.Title is among the children. Remove one of them.',
     );
   }, [titleTwice]);
+
   // The status icon: only `undefined` keeps the default; `null`, or anything that renders
   // nothing, shows none (C-SLOTS status-icon rule). The class rides in the slot's base classes,
   // so a slot object that swaps the element keeps it.
@@ -146,47 +174,52 @@ export const ToastRoot = ({
     ) : slotRendersContent(icon) ? (
       renderSlot(icon, 'span', iconClassName, { 'aria-hidden': true })
     ) : null;
-  const liveRegion: React.HTMLAttributes<HTMLDivElement> = inToasterRegion
+
+  const liveRegion: React.HTMLAttributes<HTMLDivElement> = inToaster
     ? {}
     : status === 'error'
       ? { role: 'alert', 'aria-live': 'assertive' }
       : { role: 'status', 'aria-live': 'polite' };
-  return (
-    <ToastContext.Provider value={context}>
-      <div
-        ref={ref}
-        {...liveRegion}
-        {...rest}
-        className={cn(
-          toastClassNames.root,
-          'flex items-start gap-3 rounded border border-s-4 border-border bg-background p-3 text-foreground shadow-4',
-          STATUS_BORDER[status],
-          className,
-        )}
-      >
-        {renderedIcon}
-        <div className={cn(toastClassNames.content, 'min-w-0 flex-1')}>
-          <StatusText label={getStatusLabel(status, statusLabel)} />
-          {content}
-        </div>
-        {onDismiss ? (
-          <button
-            type="button"
-            onClick={() => onDismiss()}
-            className={cn(
-              toastClassNames.dismissButton,
-              'inline-flex shrink-0 cursor-pointer items-center justify-center rounded border-none bg-transparent p-1 text-muted-foreground',
-              'not-disabled:not-aria-disabled:hover:bg-subtle-hover not-disabled:not-aria-disabled:hover:text-foreground',
-              'not-disabled:not-aria-disabled:active:bg-subtle-pressed',
-              focusRing,
-            )}
-            aria-label={dismissLabel}
-          >
-            <DismissIcon />
-          </button>
-        ) : null}
+  const root = (
+    <div
+      ref={ref}
+      {...liveRegion}
+      {...rest}
+      className={cn(
+        toastClassNames.root,
+        'flex items-start gap-3 rounded border border-s-4 border-border bg-background p-3 text-foreground shadow-4',
+        STATUS_BORDER[status],
+        className,
+      )}
+    >
+      {renderedIcon}
+      <div className={cn(toastClassNames.content, 'min-w-0 flex-1')}>
+        <StatusText label={label} id={statusTextId} />
+        {content}
       </div>
-    </ToastContext.Provider>
+      {dismiss ? (
+        <button
+          ref={dismissButtonRef}
+          type="button"
+          onClick={() => dismiss()}
+          className={cn(
+            toastClassNames.dismissButton,
+            'inline-flex shrink-0 cursor-pointer items-center justify-center rounded border-none bg-transparent p-1 text-muted-foreground',
+            'not-disabled:not-aria-disabled:hover:bg-subtle-hover not-disabled:not-aria-disabled:hover:text-foreground',
+            'not-disabled:not-aria-disabled:active:bg-subtle-pressed',
+            focusRing,
+          )}
+          aria-label={dismissLabel}
+        >
+          <DismissIcon />
+        </button>
+      ) : null}
+    </div>
+  );
+  return inToaster ? (
+    root
+  ) : (
+    <ToastContext.Provider value={ownContext}>{root}</ToastContext.Provider>
   );
 };
 ToastRoot.displayName = 'Toast';
