@@ -914,37 +914,24 @@ describe('size (Phase 4 D14)', () => {
   });
 
   it('small: 32×16 track, 10px thumb, 24px-tall target layer, centred on the label line', () => {
-    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
-    try {
-      const { rerender } = render(<Switch label="Wi-Fi" size="small" />);
-      expect(control()).toHaveClass(
-        'h-[16px]',
-        'w-[32px]',
-        'mt-0.5',
-        'before:-inset-y-1',
-        'before:inset-x-0',
-      );
-      expect(thumb()).toHaveClass(
-        'h-[10px]',
-        'w-[10px]',
-        'translate-x-[2px]',
-        'wave-rtl:-translate-x-[2px]',
-      );
-      // Switching to a controlled `checked` here (instead of a click) makes useControllable warn
-      // once that the switch left uncontrolled mode (C-DEV); unrelated to size.
-      rerender(<Switch label="Wi-Fi" size="small" checked onCheckedChange={() => {}} />);
-      expect(thumb()).toHaveClass('translate-x-[18px]', 'wave-rtl:-translate-x-[18px]');
-      expect(warn.mock.calls).toEqual([
-        [
-          '[WaveUI] A component is changing from uncontrolled to controlled. Components should ' +
-            'not switch between controlled and uncontrolled: pass `undefined` only when the ' +
-            'component is uncontrolled, and the empty value (for example `[]`, `null` or `""`) ' +
-            'to clear a controlled value.',
-        ],
-      ]);
-    } finally {
-      warn.mockRestore();
-    }
+    const { rerender } = render(
+      <Switch label="Wi-Fi" size="small" checked={false} onCheckedChange={() => {}} />,
+    );
+    expect(control()).toHaveClass(
+      'h-[16px]',
+      'w-[32px]',
+      'mt-0.5',
+      'before:-inset-y-1',
+      'before:inset-x-0',
+    );
+    expect(thumb()).toHaveClass(
+      'h-[10px]',
+      'w-[10px]',
+      'translate-x-[2px]',
+      'wave-rtl:-translate-x-[2px]',
+    );
+    rerender(<Switch label="Wi-Fi" size="small" checked onCheckedChange={() => {}} />);
+    expect(thumb()).toHaveClass('translate-x-[18px]', 'wave-rtl:-translate-x-[18px]');
   });
 
   it('mirrors the small thumb in RTL through the wave-rtl classes', () => {
