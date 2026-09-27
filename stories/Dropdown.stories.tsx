@@ -1,3 +1,4 @@
+import * as React from 'react';
 import type { Meta, StoryObj } from '@storybook/react';
 import { fn } from 'storybook/test';
 import { Dropdown, Field, type DropdownProps } from '../src';
@@ -115,6 +116,39 @@ export const Multiselect: StoryObj<DropdownProps<true>> = {
       </Dropdown>
     </Field>
   ),
+};
+
+/**
+ * A Dropdown next to plain text that follows `onActiveOptionChange`: the highlighted option after
+ * every change (arrow keys, typeahead, the pointer, opening), and "none" once the list closes.
+ */
+function ActiveOptionPreviewDropdown({ onActiveOptionChange, ...args }: DropdownProps) {
+  const [active, setActive] = React.useState<string | null>(null);
+  return (
+    <div className="flex flex-col gap-1">
+      <Dropdown
+        {...args}
+        onActiveOptionChange={(value) => {
+          setActive(value);
+          onActiveOptionChange?.(value);
+        }}
+      >
+        <Dropdown.Option value="cat">Cat</Dropdown.Option>
+        <Dropdown.Option value="dog">Dog</Dropdown.Option>
+        <Dropdown.Option value="fish">Fish</Dropdown.Option>
+        <Dropdown.Option value="hamster">Hamster</Dropdown.Option>
+      </Dropdown>
+      <p className="text-caption-1 text-muted-foreground">Active option: {active ?? 'none'}</p>
+    </div>
+  );
+}
+
+export const ActiveOptionPreview: Story = {
+  args: {
+    placeholder: 'Select an option',
+    onActiveOptionChange: fn(),
+  },
+  render: (args) => <ActiveOptionPreviewDropdown {...args} />,
 };
 
 /** Invalid state through a Field error (the Field labels and describes the button). */

@@ -3575,6 +3575,88 @@ describe('Combobox', () => {
       >();
     });
   });
+
+  describe('onActiveOptionChange (P5-02, D14)', () => {
+    it('reports the active option through arrows, hover, and null on close', async () => {
+      const user = userEvent.setup();
+      const onActiveOptionChange = vi.fn();
+      renderCombobox({ onActiveOptionChange });
+      combobox().focus();
+      await user.keyboard('{ArrowDown}');
+      await user.keyboard('{ArrowDown}');
+      await user.hover(option('Cherry'));
+      await user.keyboard('{Escape}');
+      expect(onActiveOptionChange.mock.calls).toEqual([['a'], ['b'], ['c'], [null]]);
+    });
+
+    it('reports the selected option when ArrowDown opens the list', async () => {
+      const user = userEvent.setup();
+      const onActiveOptionChange = vi.fn();
+      renderCombobox({ defaultValue: 'b', onActiveOptionChange });
+      combobox().focus();
+      await user.keyboard('{ArrowDown}');
+      expect(onActiveOptionChange).toHaveBeenCalledOnce();
+      expect(onActiveOptionChange).toHaveBeenCalledWith('b');
+    });
+
+    it('reports a filter change that moves the active option', async () => {
+      const user = userEvent.setup();
+      const onActiveOptionChange = vi.fn();
+      renderCombobox({
+        onActiveOptionChange,
+        children: [
+          <Option key="peach" value="peach">
+            Peach
+          </Option>,
+          <Option key="pear" value="pear">
+            Pear
+          </Option>,
+          <Option key="plum" value="plum">
+            Plum
+          </Option>,
+        ],
+      });
+      await user.type(combobox(), 'p');
+      expect(onActiveOptionChange).toHaveBeenCalledWith('peach');
+      await user.type(combobox(), 'l');
+      expect(visibleOptions()).toEqual(['Plum']);
+      expect(onActiveOptionChange).toHaveBeenLastCalledWith('plum');
+    });
+
+    it('reports the active option the same way in multiselect mode', async () => {
+      const user = userEvent.setup();
+      const onActiveOptionChange = vi.fn();
+      render(
+        <Combobox aria-label="Fruit" multiselect onActiveOptionChange={onActiveOptionChange}>
+          {FRUITS}
+        </Combobox>,
+      );
+      combobox().focus();
+      await user.keyboard('{ArrowDown}');
+      await user.keyboard('{ArrowDown}');
+      await user.keyboard('{Escape}');
+      expect(onActiveOptionChange.mock.calls).toEqual([['a'], ['b'], [null]]);
+    });
+
+    it('calls onActiveOptionChange once per change in StrictMode', async () => {
+      const user = userEvent.setup();
+      const onActiveOptionChange = vi.fn();
+      render(
+        <React.StrictMode>
+          <Combobox aria-label="Fruit" onActiveOptionChange={onActiveOptionChange}>
+            {FRUITS}
+          </Combobox>
+        </React.StrictMode>,
+      );
+      combobox().focus();
+      await user.keyboard('{ArrowDown}');
+      expect(onActiveOptionChange).toHaveBeenCalledTimes(1);
+      expect(onActiveOptionChange).toHaveBeenLastCalledWith('a');
+      await user.keyboard('{ArrowDown}');
+      expect(onActiveOptionChange).toHaveBeenCalledTimes(2);
+      expect(onActiveOptionChange).toHaveBeenLastCalledWith('b');
+    });
+  });
 });
 
 describe('insertedText', () => {

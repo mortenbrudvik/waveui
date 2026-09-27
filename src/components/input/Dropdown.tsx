@@ -99,6 +99,13 @@ export interface DropdownProps<M extends boolean = false> extends Omit<
   /** Called when the listbox opens or closes. */
   onOpenChange?: (open: boolean) => void;
   /**
+   * Called after the active (highlighted) option changes — arrow keys, typeahead, the pointer —
+   * and with `null` when the list closes. It reports what `aria-activedescendant` points at, from
+   * an effect once the change commits. Fluent has no equivalent: it never highlights on hover and
+   * reports nothing when the list closes.
+   */
+  onActiveOptionChange?: (value: string | null) => void;
+  /**
    * Placeholder text shown when no value is selected. It is not an accessible name: label the
    * Dropdown with a `Field`, `aria-label` or `aria-labelledby`.
    * @default 'Select an option'
@@ -167,6 +174,7 @@ const DropdownRoot = (props: DropdownProps<boolean>) => {
     open: openProp,
     defaultOpen,
     onOpenChange,
+    onActiveOptionChange,
     placeholder = 'Select an option',
     disabled = false,
     name,
@@ -277,6 +285,7 @@ const DropdownRoot = (props: DropdownProps<boolean>) => {
         updated.length,
       );
     },
+    onActiveValueChange: onActiveOptionChange,
     idPrefix: 'dropdown-listbox',
   });
 

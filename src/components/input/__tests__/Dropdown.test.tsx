@@ -1689,4 +1689,69 @@ describe('Dropdown', () => {
       expectTypeOf<ExtendedDropdownProps['value']>().toEqualTypeOf<string | undefined>();
     });
   });
+
+  describe('onActiveOptionChange (P5-02, D14)', () => {
+    it('reports the active option through arrows, hover, and null on close', async () => {
+      const user = userEvent.setup();
+      const onActiveOptionChange = vi.fn();
+      renderDropdown({ onActiveOptionChange });
+      await user.click(combobox());
+      await user.keyboard('{ArrowDown}');
+      await user.hover(option('Cherry'));
+      await user.keyboard('{Escape}');
+      expect(onActiveOptionChange.mock.calls).toEqual([['a'], ['b'], ['c'], [null]]);
+    });
+
+    it('reports the selected option as active when the list opens', async () => {
+      const user = userEvent.setup();
+      const onActiveOptionChange = vi.fn();
+      renderDropdown({ value: 'c', onActiveOptionChange });
+      await user.click(combobox());
+      expect(onActiveOptionChange).toHaveBeenCalledOnce();
+      expect(onActiveOptionChange).toHaveBeenCalledWith('c');
+    });
+
+    it('reports a typeahead move (also opening the list)', async () => {
+      const user = userEvent.setup();
+      const onActiveOptionChange = vi.fn();
+      renderDropdown({ onActiveOptionChange });
+      combobox().focus();
+      await user.keyboard('d');
+      expect(activeOption()).toHaveTextContent('Date');
+      expect(onActiveOptionChange).toHaveBeenCalledOnce();
+      expect(onActiveOptionChange).toHaveBeenCalledWith('d');
+    });
+
+    it('reports the active option the same way in multiselect mode', async () => {
+      const user = userEvent.setup();
+      const onActiveOptionChange = vi.fn();
+      render(
+        <Dropdown aria-label="Fruit" multiselect onActiveOptionChange={onActiveOptionChange}>
+          {FRUITS}
+        </Dropdown>,
+      );
+      await user.click(combobox());
+      await user.keyboard('{ArrowDown}');
+      await user.keyboard('{Escape}');
+      expect(onActiveOptionChange.mock.calls).toEqual([['a'], ['b'], [null]]);
+    });
+
+    it('calls onActiveOptionChange once per change in StrictMode', async () => {
+      const user = userEvent.setup();
+      const onActiveOptionChange = vi.fn();
+      render(
+        <React.StrictMode>
+          <Dropdown aria-label="Fruit" onActiveOptionChange={onActiveOptionChange}>
+            {FRUITS}
+          </Dropdown>
+        </React.StrictMode>,
+      );
+      await user.click(combobox());
+      expect(onActiveOptionChange).toHaveBeenCalledTimes(1);
+      expect(onActiveOptionChange).toHaveBeenLastCalledWith('a');
+      await user.keyboard('{ArrowDown}');
+      expect(onActiveOptionChange).toHaveBeenCalledTimes(2);
+      expect(onActiveOptionChange).toHaveBeenLastCalledWith('b');
+    });
+  });
 });

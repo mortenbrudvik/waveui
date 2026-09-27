@@ -170,6 +170,13 @@ export interface ComboboxProps<M extends boolean = false> extends Omit<
    */
   onQueryChange?: (query: string) => void;
   /**
+   * Called after the active (highlighted) option changes — arrow keys, the pointer, a filter
+   * change that moves it — and with `null` when the list closes. It reports what
+   * `aria-activedescendant` points at, from an effect once the change commits. Fluent has no
+   * equivalent: it never highlights on hover and reports nothing when the list closes.
+   */
+  onActiveOptionChange?: (value: string | null) => void;
+  /**
    * Name of the value in form submissions (renders a hidden input; one per value with
    * `multiselect`).
    */
@@ -350,6 +357,7 @@ const ComboboxRoot = (props: ComboboxProps<boolean>) => {
     query: queryProp,
     defaultQuery,
     onQueryChange,
+    onActiveOptionChange,
     name,
     form,
     required,
@@ -601,6 +609,7 @@ const ComboboxRoot = (props: ComboboxProps<boolean>) => {
     // cleared. Freeform: the text is the value, so Enter keeps it unless the user moved to an
     // option.
     autoHighlight: !freeform && draft ? 'first' : false,
+    onActiveValueChange: onActiveOptionChange,
     idPrefix: 'combobox-listbox',
     onClearDraft: clearDraft,
   });
