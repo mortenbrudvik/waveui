@@ -10,7 +10,13 @@ export type {
   ToastCloseRenderProps,
 } from './Toast.parts';
 export { Toaster, useToastController } from './Toaster';
-export type { ToasterProps, ToastOptions, ToastController, ToastPosition } from './Toaster';
+export type {
+  ToasterProps,
+  ToastOptions,
+  ToastController,
+  ToastPosition,
+  ToastDispatchOptions,
+} from './Toaster';
 
 /**
  * A notification: status icon, visually hidden severity text, title, body, footer and a Dismiss
@@ -18,6 +24,8 @@ export type { ToasterProps, ToastOptions, ToastController, ToastPosition } from 
  * `action`), `Toast.Body` (with an optional `subtitle`) and `Toast.Footer` (a row of actions); a
  * `Toast.Close` anywhere inside makes its child dismiss the toast. The `title` prop and plain
  * children are the 0.5 form and render as a Title and a Body.
+ *
+ * Dispatch it with `useToastController().dispatchToast(<Toast>…</Toast>)`, or render it yourself.
  *
  * - **In a Toaster** (dispatched with `useToastController()`): not a live region itself; the
  *   Toaster announces it through its permanent live regions and names its container by the

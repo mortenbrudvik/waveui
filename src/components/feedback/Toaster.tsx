@@ -7,6 +7,7 @@ import { getDirection } from '../../lib/direction';
 import { getFirstTabbable } from '../../lib/focus';
 import { getOpenLayers, subscribeLayers } from '../../lib/layers';
 import { focusRing } from '../../lib/styles';
+import { isToastOptions } from '../../lib/toaster';
 import type { Status } from '../../lib/types';
 import { useDirection } from '../../hooks/useDirection';
 import { useEventCallback } from '../../hooks/useEventCallback';
@@ -15,7 +16,7 @@ import { useMergedRefs } from '../../hooks/useMergedRefs';
 import { usePresence } from '../../hooks/usePresence';
 import { usePreserveFocus } from '../../hooks/usePreserveFocus';
 import { Portal } from '../portal/Portal';
-import { getStatusLabel } from './MessageBar.status';
+import { StatusText, getStatusLabel } from './MessageBar.status';
 import { ToastContext, ToasterContext } from './Toast.context';
 import type { ToastContextValue, ToastPartRegistration, ToastRegistration } from './Toast.context';
 import { ToastRoot } from './Toast.root';
@@ -64,13 +65,44 @@ export interface ToastOptions {
   dismissLabel?: string;
 }
 
+/** Options of `dispatchToast(content, options)`, the form that shows your own React content. */
+export interface ToastDispatchOptions {
+  /** As `ToastOptions.toastId`: dispatching again with the id of a shown or exiting toast replaces it. */
+  toastId?: string;
+  /**
+   * Auto-dismiss timeout in milliseconds, as `ToastOptions.timeout`.
+   * @default 5000
+   */
+  timeout?: number;
+  /**
+   * Severity of content that renders no `Toast`: the announcement's politeness (`error` is
+   * assertive), its spoken prefix and the container's name. A rendered `Toast` uses its own
+   * `status`.
+   * @default 'info'
+   */
+  status?: Status;
+  /** Visually hidden severity text for content that renders no `Toast` (as `Toast.statusLabel`). */
+  statusLabel?: string;
+  /**
+   * Text announced instead of the toast's title, body and action labels (the severity text still
+   * comes first), for a toast whose visible text is no good announcement, such as a progress toast.
+   */
+  announcement?: string;
+}
+
 /** The toast API returned by {@link useToastController}. */
 export interface ToastController {
   /**
-   * Shows a toast and returns its id (`options.toastId`, or a generated one). A toast with the same
-   * id is replaced. Beyond the Toaster's `limit`, the toast waits in a queue until it can be shown.
+   * Shows a toast and returns its id. `dispatchToast(content, options?)` shows your content,
+   * usually a `<Toast>` with parts; `dispatchToast(options)` builds a toast from text (0.5). A
+   * plain object is read as options; anything else (an element, a portal, a string) is content. A
+   * toast with the same id is replaced (revived while it exits); beyond the Toaster's `limit` the
+   * toast waits in a queue. Fluent's `dispatchToast(content, options)` returns nothing.
    */
-  dispatchToast: (options: ToastOptions) => string;
+  dispatchToast: {
+    (content: React.ReactNode, options?: ToastDispatchOptions): string;
+    (options: ToastOptions): string;
+  };
   /**
    * Dismisses the toast with this id and cancels its timer: a shown toast exits (it stays, inert,
    * until an exit motion of yours ends), a waiting one is removed. Unknown ids are ignored.
@@ -83,9 +115,13 @@ export interface ToastController {
   dismissAllToasts: () => void;
 }
 
-interface ToastEntry {
+/** What a dispatch stores: the options form, or your content with its options. */
+type DispatchedToast =
+  | { form: 'options'; options: ToastOptions }
+  | { form: 'content'; content: React.ReactNode; options: ToastDispatchOptions };
+
+type ToastEntry = DispatchedToast & {
   id: string;
-  options: ToastOptions;
   /** Increases with every dispatch, so a replaced toast is announced again. */
   seq: number;
   /**
@@ -98,7 +134,7 @@ interface ToastEntry {
    * entry is removed when the exit ends; a dispatch with its id revives it (D29).
    */
   dismissed: boolean;
-}
+};
 
 /**
  * Flags the oldest waiting toasts as shown while fewer than `limit` toasts are shown and not
@@ -151,7 +187,8 @@ function resolveLimit(limit: number | undefined): number {
 /* ------------------------------------------------------------------ */
 
 const INERT_CONTROLLER: ToastController = {
-  dispatchToast: (options) => options.toastId ?? '',
+  dispatchToast: (first: React.ReactNode | ToastOptions, second?: ToastDispatchOptions) =>
+    (isToastOptions(first) ? first.toastId : second?.toastId) ?? '',
   dismissToast: () => {},
   dismissAllToasts: () => {},
 };
@@ -161,9 +198,10 @@ const MISSING_TOASTER_MESSAGE =
   'useToastController must be used within <Toaster>. Wrap your app (or the part of it that shows toasts) in <Toaster>: it provides the controller to its children.';
 
 /**
- * Returns the {@link ToastController} of the enclosing `<Toaster>`: `dispatchToast(options)` shows
- * a toast and returns its id, `dismissToast(id)` removes it, `dismissAllToasts()` removes every
- * toast.
+ * Returns the {@link ToastController} of the enclosing `<Toaster>`: `dispatchToast(content,
+ * options?)` shows your content (usually a `<Toast>` with parts) and `dispatchToast(options)` a
+ * toast built from text; both return the toast's id. `dismissToast(id)` dismisses one toast,
+ * `dismissAllToasts()` every toast.
  *
  * Must be called inside `<Toaster>`, which provides the controller to its children — wrap the app
  * (or the part of it that shows toasts) in `<Toaster>`; a sibling `<Toaster />` does not work.
@@ -173,7 +211,19 @@ const MISSING_TOASTER_MESSAGE =
  * @example
  * function SaveButton() {
  *   const { dispatchToast } = useToastController();
- *   return <Button onClick={() => dispatchToast({ status: 'success', title: 'Saved' })}>Save</Button>;
+ *   return (
+ *     <Button
+ *       onClick={() =>
+ *         dispatchToast(
+ *           <Toast status="success">
+ *             <Toast.Title>Saved</Toast.Title>
+ *           </Toast>,
+ *         )
+ *       }
+ *     >
+ *       Save
+ *     </Button>
+ *   );
  * }
  * // <Toaster><App /></Toaster>
  */
@@ -463,7 +513,7 @@ function ToastContainer({
   onExited,
   getFocusFallback,
 }: ToastContainerProps) {
-  const { id, options, dismissed } = entry;
+  const { id, dismissed } = entry;
   // Mounted through the presence core (D29): a dismissed toast exits, `inert`, and is removed when
   // its exit ends (at once without motion); dispatching its id again revives it.
   const {
@@ -489,6 +539,7 @@ function ToastContainer({
     enabled: !dismissed,
   });
   const titleId = useId('wave-toast-title');
+  const ownStatusTextId = useId('wave-toast-status');
 
   // The registrations of the parts and of the Toast inside, whose layout effects run before this
   // component's: in state for the name and description, in refs for reads after mount.
@@ -526,6 +577,13 @@ function ToastContainer({
 
   const titlePart = parts.find(isTitlePart);
   const bodyPart = parts.find(isBodyPart);
+  // Content without a Toast (D10): a visually hidden severity text from the dispatch options,
+  // first in the container, while no Toast has registered its own.
+  const ownSeverityLabel =
+    entry.form === 'content' && toast === null
+      ? getStatusLabel(entry.options.status ?? 'info', entry.options.statusLabel)
+      : '';
+  const severityId = toast ? toast.statusTextId : ownSeverityLabel ? ownStatusTextId : undefined;
   if (!isMounted) return null;
   return (
     <div
@@ -533,7 +591,7 @@ function ToastContainer({
       role="group"
       tabIndex={-1}
       data-wave-toast=""
-      aria-labelledby={joinIds(toast?.statusTextId, titlePart?.id)}
+      aria-labelledby={joinIds(severityId, titlePart?.id)}
       aria-describedby={bodyPart?.id}
       className={cn(toasterClassNames.toast, 'rounded', focusRing)}
       {...presenceProps}
@@ -546,15 +604,20 @@ function ToastContainer({
         timers.resume(id, 'focus');
       }}
     >
+      {ownSeverityLabel ? <StatusText label={ownSeverityLabel} id={ownStatusTextId} /> : null}
       <ToastContext.Provider value={context}>
-        <ToastRoot
-          status={options.status}
-          statusLabel={options.statusLabel}
-          title={options.title}
-          dismissLabel={options.dismissLabel}
-        >
-          {options.body}
-        </ToastRoot>
+        {entry.form === 'options' ? (
+          <ToastRoot
+            status={entry.options.status}
+            statusLabel={entry.options.statusLabel}
+            title={entry.options.title}
+            dismissLabel={entry.options.dismissLabel}
+          >
+            {entry.options.body}
+          </ToastRoot>
+        ) : (
+          entry.content
+        )}
       </ToastContext.Provider>
     </div>
   );
@@ -565,6 +628,11 @@ ToastContainer.displayName = 'ToastContainer';
  * Provides {@link useToastController} to its children and shows the dispatched toasts.
  *
  * - **Wrap the app** in `<Toaster>`; components below it call `useToastController()`.
+ * - **Two ways to dispatch:** `dispatchToast(<Toast>…</Toast>)` shows your content, usually a
+ *   `Toast` with `Toast.Title`, `Toast.Body` and `Toast.Footer`; `dispatchToast({ title, body })`
+ *   builds a toast from text. Both return the toast's id. Content without a `Toast` takes its
+ *   severity from the options (`status`, `statusLabel`) and shows no Dismiss button (add a
+ *   `Toast.Close`).
  * - The toasts render in a portal (the `toast` layer, above dialogs) inside a region labelled
  *   "Notifications" (override with `aria-label`). The region is allow-listed for modals
  *   (`data-wave-focus-trap-allow`): it stays reachable by Tab and exposed to assistive technology
@@ -701,17 +769,22 @@ export const Toaster = ({
   }, [toasts, timers]);
 
   // A new toast waits until the render promotes it; a replaced one keeps its place and whether it
-  // is shown (a waiting toast keeps waiting with the new options), and an exiting one is revived.
-  const dispatchToast = React.useCallback(
-    (options: ToastOptions): string => {
+  // is shown (a waiting toast keeps waiting with the new content), and an exiting one is revived.
+  const dispatchToast = React.useCallback<ToastController['dispatchToast']>(
+    (first: React.ReactNode | ToastOptions, second?: ToastDispatchOptions): string => {
       counterRef.current += 1;
       const seq = counterRef.current;
-      const id = options.toastId ?? `${prefix}-${seq}`;
+      const dispatched: DispatchedToast = isToastOptions(first)
+        ? { form: 'options', options: first }
+        : { form: 'content', content: first, options: second ?? {} };
+      const id = dispatched.options.toastId ?? `${prefix}-${seq}`;
       setToasts((prev) => {
         const index = prev.findIndex((t) => t.id === id);
-        if (index === -1) return [...prev, { id, options, seq, shown: false, dismissed: false }];
+        const shown = index === -1 ? false : prev[index].shown;
+        const entry: ToastEntry = { ...dispatched, id, seq, shown, dismissed: false };
+        if (index === -1) return [...prev, entry];
         const next = prev.slice();
-        next[index] = { id, options, seq, shown: prev[index].shown, dismissed: false };
+        next[index] = entry;
         return next;
       });
       return id;
@@ -815,7 +888,7 @@ export const Toaster = ({
   // Only shown toasts are announced (a waiting toast is announced when it appears), and a
   // dismissed one no longer is.
   for (const toast of shownToasts) {
-    if (toast.dismissed) continue;
+    if (toast.dismissed || toast.form !== 'options') continue;
     const message = <LiveMessage key={toast.seq} text={getAnnouncement(toast.options)} />;
     (toast.options.status === 'error' ? assertive : polite).push(message);
   }

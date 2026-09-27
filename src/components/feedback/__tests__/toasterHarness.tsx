@@ -6,7 +6,7 @@ import * as React from 'react';
 import { act, render, screen } from '@testing-library/react';
 import { vi } from 'vitest';
 import { Toaster, useToastController } from '../Toast';
-import type { ToastController, ToastOptions, ToasterProps } from '../Toast';
+import type { ToastController, ToastDispatchOptions, ToastOptions, ToasterProps } from '../Toast';
 
 /** Exposes the controller of the enclosing Toaster to the test. */
 export function ControllerProbe({ ref }: { ref: React.Ref<ToastController> }) {
@@ -38,6 +38,16 @@ export function renderToaster(
     });
     return id;
   };
+  const dispatchContent = (
+    content: React.ReactNode,
+    contentOptions?: ToastDispatchOptions,
+  ): string => {
+    let id = '';
+    act(() => {
+      id = controller().dispatchToast(content, contentOptions);
+    });
+    return id;
+  };
   const dismiss = (id: string) => {
     act(() => controller().dismissToast(id));
   };
@@ -46,7 +56,7 @@ export function renderToaster(
   };
   /** Re-renders the Toaster with new props (the same app content). */
   const setProps = (next: Partial<ToasterProps>) => utils.rerender(ui(next));
-  return { ...utils, controller, dispatch, dismiss, dismissAll, setProps };
+  return { ...utils, controller, dispatch, dispatchContent, dismiss, dismissAll, setProps };
 }
 
 export const getViewport = () => screen.getByRole('region', { name: 'Notifications' });
