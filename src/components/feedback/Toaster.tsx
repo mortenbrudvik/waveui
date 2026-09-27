@@ -76,7 +76,10 @@ export interface ToastController {
    * until an exit motion of yours ends), a waiting one is removed. Unknown ids are ignored.
    */
   dismissToast: (id: string) => void;
-  /** Removes every toast, shown and queued, and cancels their timers. */
+  /**
+   * Dismisses every toast and cancels their timers: shown toasts exit (as `dismissToast`), queued
+   * ones are removed.
+   */
   dismissAllToasts: () => void;
 }
 
@@ -328,8 +331,9 @@ export interface ToasterProps extends React.HTMLAttributes<HTMLDivElement> {
   /**
    * Most toasts shown at once. Further toasts wait in a queue (in dispatch order) and appear when
    * a shown toast goes; a queued toast is not announced and its timer does not run until then.
-   * Lowering it never hides a toast that is already shown. A value below 1 counts as 1
-   * (development warning); `Infinity` means no limit.
+   * Lowering it never hides a toast that is already shown, and a toast dispatched again with its id
+   * while it exits comes back at once, even when `limit` toasts are already shown. A value below 1
+   * counts as 1 (development warning); `Infinity` means no limit.
    * @default Infinity
    */
   limit?: number;
@@ -776,8 +780,8 @@ export const Toaster = ({
 
   // Focus entering the toasts from an element outside: return there when the focused toast goes.
   // Focus that arrives with no related target keeps what is remembered: that is the Toaster's own
-  // move to the next toast after a removal (focus passed through `<body>` while the removed node
-  // was gone) or the window regaining focus. Moves between toasts change nothing.
+  // move to the next toast in the dismissing commit (the dismissed container is still there, inert,
+  // when focus leaves it) or the window regaining focus. Moves between toasts change nothing.
   const rememberFocusOrigin = (event: React.FocusEvent<HTMLDivElement>) => {
     const from = event.relatedTarget;
     if (from instanceof HTMLElement && !event.currentTarget.contains(from)) {
@@ -787,8 +791,9 @@ export const Toaster = ({
 
   // Focus leaving the toasts for another element or for `<body>` forgets the element, so a toast
   // focused again later from nowhere never sends focus back to something focused long before.
-  // Kept: moves between toasts, a removed toast (its node is gone; the Toaster moves focus itself)
-  // and the window losing focus (the element keeps document focus while another window is active).
+  // Kept: moves between toasts, a dismissed toast (its container is still there, inert, when the
+  // Toaster moves focus itself; it is removed only once its exit ends) and the window losing focus
+  // (the element keeps document focus while another window is active).
   const forgetFocusOrigin = (event: React.FocusEvent<HTMLDivElement>) => {
     const viewport = event.currentTarget;
     const to = event.relatedTarget;

@@ -26,7 +26,13 @@ import {
   testCompoundExposure,
   testSystemProps,
 } from '../../../test-utils';
-import { ControllerProbe, getLiveRegion, getToasts, renderToaster } from './toasterHarness';
+import {
+  ControllerProbe,
+  advance,
+  getLiveRegion,
+  getToasts,
+  renderToaster,
+} from './toasterHarness';
 
 /** Renders a part inside a standalone Toast, the host its context needs. */
 function ToastWrapper({ children }: { children: React.ReactNode }) {
@@ -645,5 +651,64 @@ describe('presence (P3-02, D29)', () => {
     });
     expect(getToasts()).toHaveLength(0);
     expect(input).toHaveFocus();
+  });
+
+  it('starts exactly one dismiss timer for a toast revived during its exit', async () => {
+    vi.useFakeTimers();
+    try {
+      const motion = mockAnimations({ animated: isToast });
+      const { dispatch, dismiss } = renderToaster();
+      dispatch({ toastId: 'sync', title: 'Syncing…', timeout: 1000 });
+      await act(async () => {
+        await motion.finishAll();
+      });
+      dismiss('sync');
+      expect(getToasts()[0]).toHaveAttribute('data-presence', 'exiting');
+      dispatch({ toastId: 'sync', status: 'success', title: 'Synced', timeout: 1000 });
+      // The revived toast's own dismiss timer, not stacked with a leftover one from before it
+      // exited, plus the fade timer of its freshly announced (re-)message: one of each, not two
+      // competing dismiss timers.
+      expect(vi.getTimerCount()).toBe(2);
+      advance(999);
+      expect(getToasts()[0]).not.toHaveAttribute('data-presence', 'exiting');
+      advance(1);
+      expect(getToasts()[0]).toHaveAttribute('data-presence', 'exiting');
+      await act(async () => {
+        await motion.finishAll();
+      });
+      expect(getToasts()).toHaveLength(0);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('moves focus to the remembered origin when every shown toast is dismissed in one commit', async () => {
+    const motion = mockAnimations({ animated: isToast });
+    const user = userEvent.setup();
+    const { dispatch, dismissAll } = renderToaster({}, { app: <input aria-label="Name" /> });
+    const input = screen.getByRole('textbox', { name: 'Name' });
+    dispatch({ title: 'First', timeout: 0 });
+    dispatch({ title: 'Second', timeout: 0 });
+    await act(async () => {
+      await motion.finishAll();
+    });
+    await user.click(input);
+    await user.tab();
+    const [first, second] = getToasts();
+    expect(within(first).getByRole('button', { name: 'Dismiss' })).toHaveFocus();
+
+    dismissAll();
+    expect(first).toHaveAttribute('data-presence', 'exiting');
+    expect(first).toHaveAttribute('inert');
+    expect(second).toHaveAttribute('data-presence', 'exiting');
+    expect(second).toHaveAttribute('inert');
+    // Every shown toast is exiting: none is a live candidate for the fallback, so focus returns to
+    // the element that was focused before it entered the toasts.
+    expect(input).toHaveFocus();
+
+    await act(async () => {
+      await motion.finishAll();
+    });
+    expect(getToasts()).toHaveLength(0);
   });
 });
