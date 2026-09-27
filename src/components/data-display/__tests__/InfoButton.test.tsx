@@ -502,8 +502,14 @@ describe('InfoButton behaviour (Phase 4 D29)', () => {
     advance(300);
     mockRect(note(), { x: 12, y: 40, width: 200, height: 52 });
     await user.pointer({ target: document.body, coords: { clientX: 112, clientY: 99 } });
+    // 150ms in the zone, moving towards the note: each move there restarts the close delay.
+    advance(75);
+    await user.pointer({ target: document.body, coords: { clientX: 114, clientY: 98 } });
+    advance(75);
+    await user.pointer({ target: document.body, coords: { clientX: 116, clientY: 97 } });
     // Beside the button, away from the note: the zone ends and the close timer runs on.
     await user.pointer({ target: document.body, coords: { clientX: 60, clientY: 110 } });
+    // Past the close delay counted from leaving the button, not yet past the one of the last move.
     advance(150);
     expect(note()).toBeInTheDocument();
     advance(150);
@@ -650,6 +656,63 @@ describe('InfoButton behaviour (Phase 4 D29)', () => {
     await user.tab();
     expect(button()).toHaveFocus();
     expect(note()).toBeInTheDocument();
+  });
+
+  it.each([
+    [
+      'a press on blank space closed a pinned note',
+      async (user: ReturnType<typeof setup>) => {
+        await user.click(button());
+        await user.click(document.body);
+      },
+    ],
+    [
+      'Escape closed a note that keyboard focus opened',
+      async (user: ReturnType<typeof setup>) => {
+        await user.tab();
+        await user.keyboard('{Escape}');
+      },
+    ],
+  ])('after %s, a switch of window or tab does not reopen it', async (_, dismiss) => {
+    const user = setup();
+    render(<InfoButton info="Some info" />);
+    await dismiss(user);
+    expect(screen.queryByRole('note')).toBeNull();
+    expect(button()).toHaveFocus();
+    // The window loses focus: the button blurs, to nothing, but stays the document's focused
+    // element. When the window comes back, the browser focuses the button again, from nothing.
+    fireEvent.blur(button());
+    fireEvent.focusOut(button());
+    fireEvent(window, new FocusEvent('blur'));
+    fireEvent(window, new FocusEvent('focus'));
+    fireEvent.focus(button());
+    fireEvent.focusIn(button());
+    expect(button()).toHaveFocus();
+    expect(screen.queryByRole('note')).toBeNull();
+  });
+
+  it('keyboard focus keeps a pinned note pinned: after Tab in and Shift+Tab back, a click closes it', async () => {
+    const user = setup();
+    render(<InfoButton info={INFO} />);
+    await user.tab();
+    await user.keyboard('{Enter}');
+    expect(note()).toBeInTheDocument();
+    await user.tab();
+    expect(screen.getByRole('link', { name: 'Rules' })).toHaveFocus();
+    await user.tab({ shift: true });
+    expect(button()).toHaveFocus();
+    expect(note()).toBeInTheDocument();
+    await user.click(button());
+    expect(screen.queryByRole('note')).toBeNull();
+  });
+
+  it('a natively disabled button never hover-opens', async () => {
+    const user = setup();
+    render(<InfoButton info="Some info" disabled />);
+    expect(button()).toBeDisabled();
+    await user.hover(button());
+    advance(300);
+    expect(screen.queryByRole('note')).toBeNull();
   });
 
   it('a press that ends without a click does not make later keyboard focus look like pointer focus', async () => {

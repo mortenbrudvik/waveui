@@ -105,10 +105,10 @@ function isFocusInsideNote(note: HTMLElement | null, layerId: string): boolean {
  *   diagonally from the button into the note keeps it open; touch and pen never hover); keyboard
  *   focus on the button opens it too, while focus that comes from a pointer press waits for the
  *   click. A hover close moves no focus, and a note that keyboard focus opened or keeps never
- *   closes because of pointer movement. Opening never moves focus into the note. Escape, a press
- *   outside and focus moving outside the button and the note close it; Escape returns focus to
- *   the button when it was in the note, and a dismissed note opens again on keyboard focus only
- *   once focus has left both.
+ *   closes because of pointer movement. Opening never moves focus. Escape, a press outside and
+ *   focus moving outside the button and the note close it; Escape returns focus to the button when
+ *   it was in the note, and a dismissed note opens again on keyboard focus only once focus has
+ *   left both.
  * - **Tab path.** The note is portaled, but it keeps its place right after the button in the
  *   keyboard order: Tab from the open button enters the note's first element (a link in it), Tab
  *   past its last element continues after the button, and Shift+Tab from its first element
@@ -149,6 +149,7 @@ export const InfoButton = ({
   'aria-labelledby': ariaLabelledBy,
   'aria-describedby': ariaDescribedBy,
   className,
+  disabled,
   onClick,
   onFocus,
   onBlur,
@@ -216,6 +217,7 @@ export const InfoButton = ({
       // focus has left both then, so keyboard focus may reopen the note at once.
       if (dismissReason !== 'focus-outside') dismissedRef.current = true;
       hoverCloseRef.current = false;
+      // Declared below; the layer calls this only from its document listeners, after render.
       cancelHover();
       setReason(null);
     },
@@ -238,7 +240,9 @@ export const InfoButton = ({
     surfaceHandlers: hoverSurfaceHandlers,
     cancel: cancelHover,
   } = useHoverIntent({
-    enabled: openOnHover,
+    // Browsers send pointer events to a disabled button too, and the hook skips only an
+    // `aria-disabled` trigger.
+    enabled: openOnHover && !disabled,
     open,
     openDelay: HOVER_DELAY,
     closeDelay: HOVER_DELAY,
@@ -293,10 +297,14 @@ export const InfoButton = ({
   });
 
   const handleBlur = useEventCallback((event: React.FocusEvent<HTMLButtonElement>) => {
-    // Tab from the button into the note keeps a dismissal; focus lost to nothing (a press on a
-    // spot that takes no focus) has left both.
+    const button = event.currentTarget;
     const next = event.relatedTarget as Node | null;
+    // Tab from the button into the note keeps a dismissal.
     if (next && note?.contains(next)) return;
+    // So does the window losing focus (a switch of window or tab): the button stays the document's
+    // focused element, and the browser focuses it again, from nothing, when the window comes back.
+    if (!next && button.ownerDocument.activeElement === button) return;
+    // Focus lost to nothing in the page (a press on a spot that takes no focus) has left both.
     dismissedRef.current = false;
   });
 
@@ -349,6 +357,7 @@ export const InfoButton = ({
         data-size={size}
         {...rest}
         ref={buttonRefs}
+        disabled={disabled}
         aria-label={ariaLabel}
         aria-labelledby={ariaLabelledBy}
         aria-describedby={joinIds(ariaDescribedBy, infoId)}
