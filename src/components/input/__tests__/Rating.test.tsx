@@ -4,12 +4,25 @@ import { renderToString } from 'react-dom/server';
 import { describe, it, expect, expectTypeOf, vi } from 'vitest';
 import { act, fireEvent, render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { Rating, RatingDisplay } from '../Rating';
-import type { RatingDisplayLabels, RatingDisplayProps, RatingLabels, RatingProps } from '../Rating';
+import { Rating, RatingDisplay, RatingDisplayItem, RatingItem } from '../Rating';
+import type {
+  RatingDisplayLabels,
+  RatingDisplayProps,
+  RatingItemProps,
+  RatingLabels,
+  RatingProps,
+} from '../Rating';
 import {
+  asClientReference,
   expectNoA11yViolations,
+  expectThrows,
   renderWithProviders,
+  testA11y,
+  testClassName,
   testComposedHandler,
+  testCompoundExposure,
+  testDisplayName,
+  testForwardRef,
   testNoImplicitSubmit,
   testSystemProps,
 } from '../../../test-utils';
@@ -850,5 +863,225 @@ describe('Rating — types', () => {
     expectTypeOf<RatingProps['onValueChange']>().toEqualTypeOf<
       ((value: number) => void) | undefined
     >();
+  });
+});
+
+describe('RatingItem and the compounds (Phase 4 D26)', () => {
+  testCompoundExposure(Rating, ['Item']);
+  testCompoundExposure(RatingDisplay, ['Item']);
+
+  it('is the same part on both roots and flat', () => {
+    expect(Rating.Item).toBe(RatingItem);
+    expect(RatingDisplay.Item).toBe(RatingItem);
+  });
+
+  it('children replace the generated stars, and behave like them', async () => {
+    const user = userEvent.setup();
+    const onValueChange = vi.fn();
+    render(
+      <Rating aria-label="Service" max={3} onValueChange={onValueChange}>
+        <Rating.Item value={1} />
+        <Rating.Item value={2} />
+        <Rating.Item value={3} />
+      </Rating>,
+    );
+    expect(screen.getAllByRole('radio')).toHaveLength(3);
+    await user.click(screen.getByRole('radio', { name: '2 stars' }));
+    expect(onValueChange).toHaveBeenCalledWith(2);
+  });
+
+  it('children as client references render the same markup', () => {
+    const Item = asClientReference(RatingItem);
+    const plain = renderToString(
+      <Rating aria-label="Service" max={2} defaultValue={1}>
+        <RatingItem value={1} />
+        <RatingItem value={2} />
+      </Rating>,
+    );
+    const reference = renderToString(
+      <Rating aria-label="Service" max={2} defaultValue={1}>
+        <Item value={1} />
+        <Item value={2} />
+      </Rating>,
+    );
+    expect(reference).toBe(plain);
+  });
+
+  it('throws outside a rating in development', () => {
+    expectThrows(
+      <RatingItem value={1} />,
+      '[WaveUI] Rating.Item must be used within a rating (Rating or RatingDisplay)',
+    );
+  });
+});
+
+describe('RatingItem — system props, routing and children (Phase 4 D26)', () => {
+  /** A Rating whose only star is the item under test. */
+  function ServiceRating({ children }: { children: React.ReactNode }) {
+    return (
+      <Rating aria-label="Service" max={2}>
+        {children}
+      </Rating>
+    );
+  }
+
+  // testSystemProps without its rest-spread test, whose consumer `aria-label` must name the
+  // element: the star is named by the root's `labels.star` (RatingItemProps omits `aria-label`).
+  // The routing test below covers the rest spread.
+  const itemProps = { value: 2 };
+  testForwardRef(RatingItem, 'button', itemProps, { wrapper: ServiceRating });
+  testClassName(RatingItem, itemProps, {
+    wrapper: ServiceRating,
+    conflictingClass: { className: 'rounded-md', overrides: 'rounded' },
+  });
+  testDisplayName(RatingItem, 'RatingItem');
+  testA11y(RatingItem, itemProps, { wrapper: ServiceRating });
+
+  testComposedHandler(RatingItem, {
+    handler: 'onClick',
+    defaultProps: itemProps,
+    wrapper: ServiceRating,
+    act: async ({ user }) => {
+      await user.click(star(2));
+    },
+    assertInternal: () => {
+      expect(star(2)).toHaveAttribute('aria-checked', 'true');
+    },
+    assertInternalSuppressed: () => {
+      expect(star(2)).toHaveAttribute('aria-checked', 'false');
+    },
+  });
+
+  testComposedHandler(RatingItem, {
+    handler: 'onMouseEnter',
+    defaultProps: itemProps,
+    wrapper: ServiceRating,
+    act: async ({ user }) => {
+      await user.hover(star(2));
+    },
+    assertInternal: () => {
+      expect(star(2)).toHaveClass('text-rating');
+    },
+    assertInternalSuppressed: () => {
+      expect(star(2)).toHaveClass('text-stroke-accessible');
+    },
+  });
+
+  it('spreads the other attributes to the star; its name, role, checked state and tab stop stay its own', () => {
+    // What typed code cannot pass (RatingItemProps omits it), as untyped code would.
+    const untyped = {
+      role: 'button',
+      'aria-label': 'Renamed',
+      'aria-checked': false,
+      tabIndex: 5,
+    } as unknown as Partial<RatingItemProps>;
+    render(
+      <Rating aria-label="Service" max={2} defaultValue={2}>
+        <Rating.Item value={1} />
+        <Rating.Item
+          value={2}
+          data-testid="star"
+          title="Two"
+          style={{ opacity: 0.5 }}
+          {...untyped}
+        />
+      </Rating>,
+    );
+    const item = screen.getByTestId('star');
+    expect(item).toBe(star(2));
+    expect(item).toHaveAttribute('title', 'Two');
+    expect(item).toHaveStyle({ opacity: '0.5' });
+    expect(item).toHaveAttribute('aria-checked', 'true');
+    expect(item).toHaveAttribute('tabindex', '0');
+  });
+
+  it.each([
+    ['plain', RatingItem],
+    ['client reference', asClientReference(RatingItem)],
+  ] as const)(
+    '%s children choose by click and by keys, and hold the roving tab stop',
+    async (_kind, Item) => {
+      const user = userEvent.setup();
+      const onValueChange = vi.fn();
+      render(
+        <Rating aria-label="Service" max={3} onValueChange={onValueChange}>
+          <Item value={1} />
+          <Item value={2} />
+          <Item value={3} />
+        </Rating>,
+      );
+      await user.tab();
+      expect(star(1)).toHaveFocus();
+      await user.keyboard('{End}');
+      expect(star(3)).toHaveFocus();
+      await user.click(star(2));
+      expect(onValueChange.mock.calls).toEqual([[3], [2]]);
+      expect(star(2)).toHaveAttribute('tabindex', '0');
+    },
+  );
+
+  it('RatingDisplay renders its children in place of the stars; compact ignores them', () => {
+    const items = (
+      <>
+        <RatingDisplay.Item value={1} data-testid="one" />
+        <RatingDisplay.Item value={2} data-testid="two" className="custom-star" />
+      </>
+    );
+    const { rerender } = render(
+      <RatingDisplay value={1.5} max={2} data-testid="root">
+        {items}
+      </RatingDisplay>,
+    );
+    expect(Array.from(screen.getByTestId('root').children)).toEqual([
+      screen.getByTestId('one'),
+      screen.getByTestId('two'),
+    ]);
+    expect(screen.getByTestId('one')).toHaveClass('inline-flex', 'text-rating');
+    const partial = screen.getByTestId('two');
+    expect(partial).toHaveClass('relative', 'text-stroke-accessible', 'custom-star');
+    expect(partial.lastElementChild).toHaveStyle({ width: '50%' });
+
+    rerender(
+      <RatingDisplay value={1.5} max={2} compact locale="en-US" data-testid="root">
+        {items}
+      </RatingDisplay>,
+    );
+    expect(screen.queryByTestId('one')).toBeNull();
+    expect(screen.getByTestId('root').querySelectorAll('svg')).toHaveLength(1);
+  });
+
+  it.each<[string, React.ReactNode]>([
+    ['an empty array', []],
+    ['false', false],
+    ['an empty Fragment', React.createElement(React.Fragment)],
+  ])('children that render nothing (%s) keep the generated stars', (_label, children) => {
+    render(
+      <>
+        <Rating aria-label="Service">{children}</Rating>
+        <RatingDisplay value={2} data-testid="display">
+          {children}
+        </RatingDisplay>
+      </>,
+    );
+    expect(screen.getAllByRole('radio')).toHaveLength(5);
+    expect(screen.getByTestId('display').children).toHaveLength(5);
+  });
+
+  it('exports RatingDisplay.Item under its flat name too (C-COMPOUND)', () => {
+    expect(typeof RatingDisplayItem).toBe('function');
+    expect(RatingDisplayItem).toBe(RatingDisplay.Item);
+  });
+
+  it('types: one RatingItem; ref declared; no name, role, checked state, tab stop or children', () => {
+    expectTypeOf<typeof Rating.Item>().toEqualTypeOf<typeof RatingItem>();
+    expectTypeOf<typeof RatingDisplay.Item>().toEqualTypeOf<typeof RatingItem>();
+    expectTypeOf<typeof RatingDisplayItem>().toEqualTypeOf<typeof RatingItem>();
+    expectTypeOf<RatingItemProps['value']>().toEqualTypeOf<number>();
+    expectTypeOf<RatingItemProps['ref']>().toEqualTypeOf<React.Ref<HTMLElement> | undefined>();
+    expectTypeOf<RatingItemProps>().not.toHaveProperty('aria-label');
+    expectTypeOf<RatingItemProps>().not.toHaveProperty('aria-checked');
+    expectTypeOf<RatingItemProps>().not.toHaveProperty('role');
+    expectTypeOf<RatingItemProps>().not.toHaveProperty('tabIndex');
+    expectTypeOf<RatingItemProps>().not.toHaveProperty('children');
   });
 });
