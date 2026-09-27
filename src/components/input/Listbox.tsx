@@ -7,6 +7,7 @@ import { focusRing } from '../../lib/styles';
 import { useControllable } from '../../hooks/useControllable';
 import { useFieldContext, useFieldControl } from '../../hooks/useFieldControl';
 import { useFormReset } from '../../hooks/useFormReset';
+import { useIsClient } from '../../hooks/useIsClient';
 import { useListbox } from '../../hooks/useListbox';
 import { useMergedRefs } from '../../hooks/useMergedRefs';
 import { HiddenInput } from '../internal/HiddenInput';
@@ -68,18 +69,28 @@ export interface ListboxProps<M extends boolean = false> extends Omit<
   onValueChange?: M extends true ? (value: string[]) => void : (value: string) => void;
   /**
    * Called after the active (highlighted) option changes — focus, arrow keys, typeahead, the
-   * pointer — and with `null` when the list loses focus. It reports what `aria-activedescendant`
-   * points at, from an effect once the change commits. Fluent's `onActiveOptionChange` reports
-   * neither the pointer (its options have no hover highlight) nor the loss of focus.
+   * pointer — and with `null` when focus leaves the list (a switch to another window keeps the
+   * active option). It reports what `aria-activedescendant` points at, from an effect once the
+   * change commits. Fluent's `onActiveOptionChange` reports neither the pointer (its options have
+   * no hover highlight) nor the loss of focus.
    */
   onActiveOptionChange?: (value: string | null) => void;
   /**
    * Takes the list out of the tab order (a click does not focus it either, as a disabled native
-   * `<select>`): nothing can be selected, and nothing is submitted or validated. Renders
-   * `aria-disabled` and `data-disabled`.
+   * `<select>`) and dims it: its options take no pointer input, nothing can be selected, and
+   * nothing is submitted or validated. Renders `aria-disabled` and `data-disabled`. An
+   * `aria-disabled` of your own without `disabled` is passed through as it is: the list stays
+   * interactive.
    * @default false
    */
   disabled?: boolean;
+  /**
+   * Focuses the list when it mounts in the browser (React focuses only form controls itself), not
+   * while `disabled`. Server-rendered HTML carries the `autofocus` attribute for the browser's own
+   * autofocus, so a hydrating list takes no focus, as React leaves a hydrated form control alone.
+   * @default false
+   */
+  autoFocus?: boolean;
   /**
    * Keeps disabled options in the arrow-key, Home/End, PageUp/PageDown and typeahead order (the
    * option that is active on focus may then be a disabled one too); they still cannot be
@@ -124,6 +135,14 @@ const UNNAMED_WARNING =
   'Listbox: the listbox has no accessible name. Pass `aria-label` or `aria-labelledby`, or ' +
   'render it inside a Field.';
 
+/** The state attributes of a disabled list, rendered only while `disabled` (C-DISABLED). */
+const DISABLED_ATTRIBUTES = { 'aria-disabled': true, 'data-disabled': '' } as const;
+
+/** Whether `element` is the focused element of its document or shadow root. */
+function isActiveElement(element: HTMLElement): boolean {
+  return (element.getRootNode() as Partial<DocumentOrShadowRoot>).activeElement === element;
+}
+
 const ListboxRoot = (props: ListboxProps<boolean>) => {
   const {
     multiselect = false,
@@ -133,6 +152,7 @@ const ListboxRoot = (props: ListboxProps<boolean>) => {
     onActiveOptionChange,
     disabled = false,
     disabledOptionsFocusable = false,
+    autoFocus = false,
     labels,
     name,
     form,
@@ -188,6 +208,24 @@ const ListboxRoot = (props: ListboxProps<boolean>) => {
   // list has focus, so its outline never shows on a list the user is not in (D17).
   const [focused, setFocused] = React.useState(false);
   const listRef = React.useRef<HTMLUListElement | null>(null);
+  const isClient = useIsClient();
+  // Whether the mount's autoFocus was handled: a later change never focuses the list.
+  const autoFocusHandledRef = React.useRef(false);
+
+  // The focus state follows the DOM, not only focus events, on mount, once hydrated and whenever
+  // `disabled` changes: a list focused before hydration (a tab, the browser's autofocus) has focus
+  // without a focus event React saw, and a browser that moves focus off a list whose tab stop went
+  // away fires no blur. React focuses only form controls for `autoFocus`, so a list mounted in the
+  // browser focuses itself; a hydrating one leaves focus where it is, as React does for a control.
+  React.useLayoutEffect(() => {
+    const list = listRef.current;
+    if (!list) return;
+    if (!autoFocusHandledRef.current) {
+      autoFocusHandledRef.current = true;
+      if (autoFocus && !disabled && isClient) list.focus();
+    }
+    setFocused(!disabled && isActiveElement(list));
+  }, [autoFocus, disabled, isClient]);
 
   const listbox = useListbox({
     open: focused && !disabled,
@@ -247,8 +285,12 @@ const ListboxRoot = (props: ListboxProps<boolean>) => {
   const handleFocus = (event: React.FocusEvent<HTMLUListElement>) => {
     if (event.target === event.currentTarget) setFocused(true);
   };
+  // A switch to another window blurs the list but leaves it the active element, so the list keeps
+  // its active option for the return, as a native `<select size>` keeps its keyboard position;
+  // focus that moves elsewhere in the page changes the active element before the blur.
   const handleBlur = (event: React.FocusEvent<HTMLUListElement>) => {
-    if (event.target === event.currentTarget) setFocused(false);
+    const list = event.currentTarget;
+    if (event.target === list && !isActiveElement(list)) setFocused(false);
   };
 
   return (
@@ -262,8 +304,12 @@ const ListboxRoot = (props: ListboxProps<boolean>) => {
       tabIndex={disabled ? undefined : listProps.tabIndex}
       aria-activedescendant={listProps['aria-activedescendant']}
       aria-multiselectable={listProps['aria-multiselectable']}
-      aria-disabled={disabled || undefined}
-      data-disabled={disabled ? '' : undefined}
+      // Rendered only while disabled, so a consumer `aria-disabled` on an enabled list passes
+      // through as it is (C-DISABLED: the list stays interactive).
+      {...(disabled ? DISABLED_ATTRIBUTES : undefined)}
+      // The server renders the `autofocus` attribute for the browser; the effect above focuses a
+      // list mounted in the browser. Without autoFocus the prop stays out of hydration's check.
+      autoFocus={autoFocus || undefined}
       ref={mergedRef}
       onKeyDown={composeEventHandlers(onKeyDown, handleKeyDown)}
       onKeyUp={composeEventHandlers(onKeyUp, listbox.onKeyUp)}
@@ -275,10 +321,13 @@ const ListboxRoot = (props: ListboxProps<boolean>) => {
         // (C-NATIVE).
         'relative m-0 flex list-none flex-col overflow-y-auto px-0 py-1 text-foreground',
         // The active option's outline shows focus; while no option can be active (an empty list,
-        // every option hidden or disabled), the list's own ring does (WCAG 2.4.7). The outline
-        // is hidden only while focused, so forced colors still draw one (C-FOCUS).
+        // every option hidden, or every option disabled without disabledOptionsFocusable), the
+        // list's own ring does (WCAG 2.4.7). The outline is hidden only while focused, so forced
+        // colors still draw one (C-FOCUS).
         listbox.activeValue === null ? focusRing : 'focus:outline-hidden',
-        disabled && 'cursor-not-allowed opacity-50',
+        // Disabled: the options take no pointer input (inherited by the options of a group), so
+        // none hovers and the list's own not-allowed cursor shows over them.
+        disabled && 'cursor-not-allowed opacity-50 *:pointer-events-none',
         className,
       )}
     >
@@ -311,12 +360,13 @@ export const ListboxOptionGroup = OptionGroup;
  * option look of Dropdown and Combobox. Use `List` with `selectable` (`selectionMode`) instead
  * when each item needs real focus, actions of its own or interactive content.
  *
- * - **Focus.** One tab stop. The active option exists only while the list has focus: the
- *   selected option (with `multiselect`, the first selected one in list order), else the first.
- *   While no option can be active (an empty list, or every option disabled or hidden) the list
+ * - **Focus.** One tab stop. The active option exists only while the list has focus, and a
+ *   switch to another window keeps it: the selected option (with `multiselect`, the first
+ *   selected one in list order), else the first. While no option can be active (an empty list,
+ *   every option hidden, or every option disabled without `disabledOptionsFocusable`) the list
  *   draws its own focus ring. A press on an option focuses the list and makes that option active
  *   without scrolling, so the click selects it even while the selected option is scrolled out of
- *   view.
+ *   view. `autoFocus` focuses the list when it mounts.
  * - **Keys.** ArrowDown and ArrowUp move without wrapping, Home and End go to the first and last
  *   option, PageUp and PageDown move ten options, and typing moves to the matching option
  *   (typeahead). Space and Enter select the active option: the selection does not follow the
@@ -330,15 +380,16 @@ export const ListboxOptionGroup = OptionGroup;
  *   (`labels.added`/`labels.removed`; never a controlled change or a form reset). A non-literal
  *   `multiselect={flag}` is a type error: render two elements, one for each mode.
  * - **Disabled.** `disabled` takes the list out of the tab order (a click does not focus it
- *   either), selects nothing and submits nothing. Disabled options are skipped by the keys unless
- *   `disabledOptionsFocusable`, and are never selected.
- * - **Forms and Field.** With `name`/`required` the value takes part in form submission (one
- *   entry, or one per value with `multiselect`), validation (a missing value moves focus to the
- *   list) and reset (to `defaultValue`; a `multiselect` reset is compared by content, so
- *   restoring the same values reports nothing). Inside a `Field` the list is labelled
- *   by its label, described by its message and hint, and takes its invalid and required state;
- *   otherwise name it with `aria-label` or `aria-labelledby` (development warns once when it has
- *   no name).
+ *   either), dims it, takes pointer input off its options, selects nothing and submits nothing.
+ *   Disabled options are skipped by the keys unless `disabledOptionsFocusable`, and are never
+ *   selected.
+ * - **Forms and Field.** With `name` the value is submitted with its form (one entry, or one per
+ *   value with `multiselect`), and `required` needs a value (native validation; a missing value
+ *   moves focus to the list). A reset of its form restores `defaultValue`, with or without a
+ *   `name` (a `multiselect` reset is compared by content, so restoring the same values reports
+ *   nothing). Inside a `Field` the list is labelled by its label, described by its message and
+ *   hint, and takes its invalid and required state; otherwise name it with `aria-label` or
+ *   `aria-labelledby` (development warns once when it has no name).
  * - It has no built-in height: give it one through `className` and it scrolls.
  *
  * Every prop, the `ref` and the handlers go to the `<ul>`. Sub-components: `Listbox.Option`,

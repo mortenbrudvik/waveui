@@ -169,8 +169,12 @@ describe('Listbox', () => {
       const user = userEvent.setup();
       renderList({ id: 'fruits' });
       expect(list()).toHaveAttribute('id', 'fruits');
+      // The option ids keep the list's own `listbox-` prefix, whatever id the consumer gives it.
+      for (const fruit of ['Apple', 'Banana', 'Cherry']) {
+        expect(option(fruit).id).toMatch(/^listbox-.+-opt-\d+$/);
+      }
       await user.tab();
-      expect(active()).toHaveTextContent('Apple');
+      expect(list()).toHaveAttribute('aria-activedescendant', option('Apple').id);
       await expectNoA11yViolations();
     });
 
@@ -242,6 +246,97 @@ describe('Listbox', () => {
       await user.tab();
       expect(onBlur).toHaveBeenCalledTimes(1);
       expect(active()).toBeNull();
+    });
+
+    it('keeps the active option through a window switch, which leaves it the active element', async () => {
+      const user = userEvent.setup();
+      const onActiveOptionChange = vi.fn();
+      renderList({ onActiveOptionChange });
+      await user.tab();
+      await user.keyboard('{End}');
+      expect(active()).toHaveTextContent('Cherry');
+      // Alt+Tab: the list receives a blur, but stays the document's active element (a native
+      // `<select size>` keeps its keyboard position), then a focus when the window returns.
+      fireEvent.blur(list());
+      expect(list()).toHaveFocus();
+      expect(active()).toHaveTextContent('Cherry');
+      fireEvent.focus(list());
+      expect(active()).toHaveTextContent('Cherry');
+      expect(onActiveOptionChange.mock.calls).toEqual([['apple'], ['cherry']]);
+    });
+
+    it('keeps its focus through disable and re-enable, and its keys work again', async () => {
+      const user = userEvent.setup();
+      const { rerender } = renderList();
+      await user.tab();
+      expect(active()).toHaveTextContent('Apple');
+      rerender(
+        <Listbox aria-label="Fruits" disabled>
+          {OPTIONS}
+        </Listbox>,
+      );
+      expect(list()).not.toHaveAttribute('aria-activedescendant');
+      rerender(<Listbox aria-label="Fruits">{OPTIONS}</Listbox>);
+      expect(list()).toHaveFocus();
+      expect(active()).toHaveTextContent('Apple');
+      await user.keyboard('{ArrowDown}');
+      expect(active()).toHaveTextContent('Banana');
+    });
+
+    it('forgets focus that left it without a blur while it was disabled', async () => {
+      const user = userEvent.setup();
+      const onActiveOptionChange = vi.fn();
+      const ui = (disabled: boolean) => (
+        <>
+          <Listbox
+            aria-label="Fruits"
+            disabled={disabled}
+            onActiveOptionChange={onActiveOptionChange}
+          >
+            {OPTIONS}
+          </Listbox>
+          <button type="button">Other</button>
+        </>
+      );
+      const { rerender } = render(ui(false));
+      await user.tab();
+      expect(active()).toHaveTextContent('Apple');
+      rerender(ui(true));
+      // A browser that takes focus off a list whose tab stop went away fires no blur: a window
+      // capture listener keeps the focusout from React while focus moves on.
+      const swallow = (event: Event) => event.stopPropagation();
+      window.addEventListener('focusout', swallow, true);
+      try {
+        act(() => screen.getByRole('button', { name: 'Other' }).focus());
+      } finally {
+        window.removeEventListener('focusout', swallow, true);
+      }
+      onActiveOptionChange.mockClear();
+      rerender(ui(false));
+      expect(screen.getByRole('button', { name: 'Other' })).toHaveFocus();
+      expect(list()).not.toHaveAttribute('aria-activedescendant');
+      expect(onActiveOptionChange).not.toHaveBeenCalled();
+    });
+
+    it('focuses itself on a client mount with autoFocus', () => {
+      renderList({ autoFocus: true });
+      expect(list()).toHaveFocus();
+      expect(active()).toHaveTextContent('Apple');
+    });
+
+    it('takes no focus with autoFocus while disabled, nor when enabled later', () => {
+      const { rerender } = render(
+        <Listbox aria-label="Fruits" autoFocus disabled>
+          {OPTIONS}
+        </Listbox>,
+      );
+      expect(list()).not.toHaveFocus();
+      rerender(
+        <Listbox aria-label="Fruits" autoFocus>
+          {OPTIONS}
+        </Listbox>,
+      );
+      expect(list()).not.toHaveFocus();
     });
 
     it('starts on the first selected option in list order with multiselect', async () => {
@@ -444,6 +539,21 @@ describe('Listbox', () => {
       await user.keyboard('{ }{ArrowDown}{ }{ArrowUp}{ }');
       expect(onValueChange.mock.calls).toEqual([[['apple']], [['apple', 'banana']], [['banana']]]);
       await waitFor(() => expect(__getAnnouncerText()).toBe('Apple removed, 1 selected'));
+    });
+
+    it('toggles with Enter in multi-select mode too, keeping the toggled option active', async () => {
+      const user = userEvent.setup();
+      const onValueChange = vi.fn();
+      renderMulti({ onValueChange });
+      await user.tab();
+      await user.keyboard('{ArrowDown}{Enter}{End}{Enter}');
+      expect(onValueChange.mock.calls).toEqual([[['banana']], [['banana', 'cherry']]]);
+      await waitFor(() => expect(__getAnnouncerText()).toBe('Cherry added, 2 selected'));
+      await user.keyboard('{Enter}');
+      expect(onValueChange).toHaveBeenLastCalledWith(['banana']);
+      expect(active()).toHaveTextContent('Cherry');
+      expect(option('Cherry')).toHaveAttribute('aria-selected', 'false');
+      await waitFor(() => expect(__getAnnouncerText()).toBe('Cherry removed, 1 selected'));
     });
 
     it('composes a consumer onKeyDown, whose preventDefault() skips the built-in keys', async () => {
@@ -683,6 +793,30 @@ describe('Listbox', () => {
       expect(fireEvent.keyDown(list(), { key: 'Enter' })).toBe(true);
       expect(fireEvent.keyDown(list(), { key: ' ' })).toBe(true);
       expect(onValueChange).not.toHaveBeenCalled();
+    });
+
+    it('takes pointer input off its options while disabled, so none hovers and the list cursor shows', () => {
+      const { rerender } = renderList();
+      expect(list()).not.toHaveClass('*:pointer-events-none');
+      rerender(
+        <Listbox aria-label="Fruits" disabled>
+          {OPTIONS}
+        </Listbox>,
+      );
+      // pointer-events is inherited: the options inside a group follow their group's item.
+      expect(list()).toHaveClass('cursor-not-allowed', 'opacity-50', '*:pointer-events-none');
+    });
+
+    it('passes a consumer aria-disabled through on an enabled list, which stays interactive (C-DISABLED)', async () => {
+      const user = userEvent.setup();
+      const onValueChange = vi.fn();
+      renderList({ 'aria-disabled': true, onValueChange });
+      expect(list()).toHaveAttribute('aria-disabled', 'true');
+      expect(list()).not.toHaveAttribute('data-disabled');
+      expect(list()).toHaveAttribute('tabindex', '0');
+      await user.click(option('Banana'));
+      expect(list()).toHaveFocus();
+      expect(onValueChange).toHaveBeenCalledWith('banana');
     });
   });
 
@@ -1039,6 +1173,86 @@ describe('Listbox', () => {
       } finally {
         act(() => root?.unmount());
         container.remove();
+      }
+    });
+
+    it('takes the focus it got before hydration, so its keys work once hydrated', async () => {
+      const element = (
+        <Listbox aria-label="Fruits" defaultValue="banana">
+          {OPTIONS}
+        </Listbox>
+      );
+      const container = document.createElement('div');
+      container.innerHTML = renderToString(element);
+      document.body.appendChild(container);
+      const error = vi.spyOn(console, 'error');
+      let root: ReturnType<typeof hydrateRoot> | undefined;
+      try {
+        // The user tabbed into the server-rendered list (or the browser autofocused it) before
+        // the page hydrated: no React focus handler saw it.
+        container.querySelector<HTMLElement>('[role="listbox"]')?.focus();
+        await act(async () => {
+          root = hydrateRoot(container, element);
+        });
+        expect(error).not.toHaveBeenCalled();
+        expect(list()).toHaveFocus();
+        expect(active()).toHaveTextContent('Banana');
+        const user = userEvent.setup();
+        await user.keyboard('{ArrowDown}');
+        expect(active()).toHaveTextContent('Cherry');
+      } finally {
+        act(() => root?.unmount());
+        container.remove();
+      }
+    });
+
+    it('renders autofocus for the browser, and takes no focus when it hydrates', async () => {
+      const element = (
+        <Listbox aria-label="Fruits" autoFocus>
+          {OPTIONS}
+        </Listbox>
+      );
+      const html = renderToString(element);
+      const parsed = document.createElement('div'); // detached: nothing reaches document.body
+      parsed.innerHTML = html;
+      expect(parsed.querySelector('[role="listbox"]')).toHaveAttribute('autofocus');
+
+      const other = document.createElement('button');
+      other.type = 'button';
+      other.textContent = 'Other';
+      const container = document.createElement('div');
+      container.innerHTML = html;
+      document.body.append(other, container);
+      // Browsers reflect the global `autofocus` attribute on every HTML element, and React's
+      // hydration compares the `autoFocus` prop with it; jsdom reflects it on form controls only.
+      const reflected = Object.getOwnPropertyDescriptor(HTMLElement.prototype, 'autofocus');
+      Object.defineProperty(HTMLElement.prototype, 'autofocus', {
+        configurable: true,
+        get(this: HTMLElement) {
+          return this.hasAttribute('autofocus');
+        },
+        set(this: HTMLElement, value: boolean) {
+          this.toggleAttribute('autofocus', value);
+        },
+      });
+      const error = vi.spyOn(console, 'error');
+      let root: ReturnType<typeof hydrateRoot> | undefined;
+      try {
+        // The user moved focus on before the page hydrated: hydration must not take it back, as
+        // React's own autoFocus leaves a hydrated control alone.
+        other.focus();
+        await act(async () => {
+          root = hydrateRoot(container, element);
+        });
+        expect(error).not.toHaveBeenCalled();
+        expect(other).toHaveFocus();
+        expect(list()).not.toHaveAttribute('aria-activedescendant');
+      } finally {
+        act(() => root?.unmount());
+        container.remove();
+        other.remove();
+        if (reflected) Object.defineProperty(HTMLElement.prototype, 'autofocus', reflected);
+        else Reflect.deleteProperty(HTMLElement.prototype, 'autofocus');
       }
     });
 
