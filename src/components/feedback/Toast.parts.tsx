@@ -6,10 +6,12 @@ import {
   toastTitleClassNames,
 } from '../../lib/classNames';
 import { warnOnce } from '../../lib/dev';
+import { mergeProps } from '../../lib/mergeProps';
 import { materialiseSlotContent, renderSlot, slotRendersContent } from '../../lib/slot';
 import type { Slot } from '../../lib/slot';
 import { useId } from '../../hooks/useId';
 import { useMergedRefs } from '../../hooks/useMergedRefs';
+import { useTriggerElement } from '../../hooks/useTriggerElement';
 import { ToastUnscannedContext, useToastContext } from './Toast.context';
 
 /**
@@ -165,3 +167,49 @@ export const ToastFooter = ({ className, ref, ...rest }: ToastFooterProps) => {
   );
 };
 ToastFooter.displayName = 'ToastFooter';
+
+/** Props a `Toast.Close` puts on its element (and passes to a render-prop child), as `DialogCloseRenderProps`. */
+export interface ToastCloseRenderProps extends React.HTMLAttributes<HTMLElement> {
+  onClick: React.MouseEventHandler<HTMLElement>;
+  /** A callback ref, so the props spread onto any element type. */
+  ref: React.RefCallback<HTMLElement>;
+}
+
+/** Properties for the ToastClose sub-component (as `DialogCloseProps`). */
+export interface ToastCloseProps extends Omit<React.HTMLAttributes<HTMLElement>, 'children'> {
+  /** The element that dismisses the toast; a single element gets a composed `onClick`, a function the props. */
+  children: React.ReactNode | ((props: ToastCloseRenderProps) => React.ReactNode);
+  /** `false` renders a wrapper `<span>` that dismisses on click. @default true */
+  asChild?: boolean;
+  /** Ref to the close element (the child, or the wrapper span). */
+  ref?: React.Ref<HTMLElement>;
+}
+
+/**
+ * Makes its single child dismiss the toast: it calls the Toast's `onDismiss` (when there is one),
+ * then, inside the Toaster, dismisses the toast. Your `onClick` runs first; `preventDefault()`
+ * keeps the toast. Works in dispatched content with or without a `Toast`. Fluent's `ToastTrigger`.
+ *
+ * Also exported as `ToastClose` (import the flat name from React Server Components).
+ */
+export const ToastClose = ({ children, asChild, ref, ...rest }: ToastCloseProps) => {
+  const { dismiss } = useToastContext('Toast.Close');
+  const mergedRef = useMergedRefs<HTMLElement>(ref);
+  const hasDismiss = dismiss !== undefined;
+  React.useEffect(() => {
+    if (hasDismiss) return;
+    warnOnce(
+      'Toast.Close:no-dismiss',
+      'Toast.Close has nothing to dismiss: render it in a toast dispatched to a Toaster, or in a Toast with `onDismiss`.',
+    );
+  }, [hasDismiss]);
+  const close = React.useCallback(() => {
+    dismiss?.();
+  }, [dismiss]);
+  const closeProps = mergeProps({ onClick: close, ref: mergedRef }, rest);
+  return useTriggerElement(children, closeProps as ToastCloseRenderProps, {
+    componentName: 'Toast.Close',
+    asChild,
+  });
+};
+ToastClose.displayName = 'ToastClose';

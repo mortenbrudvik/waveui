@@ -1,11 +1,13 @@
 import * as React from 'react';
 import { describe, expect, expectTypeOf, it, vi } from 'vitest';
 import { act, render, screen, within } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import { renderToString } from 'react-dom/server';
 import { hydrateRoot } from 'react-dom/client';
 import type { Root } from 'react-dom/client';
-import { Toast, ToastBody, ToastFooter, ToastTitle } from '../Toast';
+import { Toast, ToastBody, ToastClose, ToastFooter, ToastTitle } from '../Toast';
 import type { ToastProps } from '../Toast';
+import { Button } from '../../button/Button';
 import type { Slot } from '../../../lib/slot';
 import {
   toastBodyClassNames,
@@ -56,12 +58,13 @@ describe('Toast parts (P3-02, toast-2)', () => {
     });
   });
 
-  testCompoundExposure(Toast, ['Title', 'Body', 'Footer']);
+  testCompoundExposure(Toast, ['Title', 'Body', 'Footer', 'Close']);
 
   it('exports every part under its flat name (C-COMPOUND)', () => {
     expect(ToastTitle).toBe(Toast.Title);
     expect(ToastBody).toBe(Toast.Body);
     expect(ToastFooter).toBe(Toast.Footer);
+    expect(ToastClose).toBe(Toast.Close);
   });
 
   it('renders the title row, the body with its subtitle and the footer in the content column', () => {
@@ -288,5 +291,139 @@ describe('Toast parts (P3-02, toast-2)', () => {
     it('types icon as a span slot', () => {
       expectTypeOf<ToastProps['icon']>().toEqualTypeOf<Slot<'span'> | undefined>();
     });
+  });
+});
+
+describe('Toast.Close (P3-02, toasttrigger-1)', () => {
+  it('makes its child call the Toast’s onDismiss', async () => {
+    const user = userEvent.setup();
+    const onDismiss = vi.fn();
+    render(
+      <Toast onDismiss={onDismiss}>
+        <Toast.Title
+          action={
+            <Toast.Close>
+              <button type="button">Got it</button>
+            </Toast.Close>
+          }
+        >
+          Saved
+        </Toast.Title>
+      </Toast>,
+    );
+    await user.click(screen.getByRole('button', { name: 'Got it' }));
+    expect(onDismiss).toHaveBeenCalledTimes(1);
+  });
+
+  it('runs the child’s onClick first; preventDefault() there keeps the toast', async () => {
+    const user = userEvent.setup();
+    const onDismiss = vi.fn();
+    const calls: string[] = [];
+    render(
+      <Toast onDismiss={onDismiss}>
+        <Toast.Footer>
+          <Toast.Close>
+            <button type="button" onClick={() => calls.push('child')}>
+              Undo
+            </button>
+          </Toast.Close>
+          <Toast.Close>
+            <button type="button" onClick={(event) => event.preventDefault()}>
+              Keep
+            </button>
+          </Toast.Close>
+        </Toast.Footer>
+      </Toast>,
+    );
+    onDismiss.mockImplementation(() => calls.push('dismiss'));
+    await user.click(screen.getByRole('button', { name: 'Undo' }));
+    expect(calls).toEqual(['child', 'dismiss']);
+    await user.click(screen.getByRole('button', { name: 'Keep' }));
+    expect(onDismiss).toHaveBeenCalledTimes(1);
+  });
+
+  it('unwraps a Fragment around a single child', async () => {
+    const user = userEvent.setup();
+    const onDismiss = vi.fn();
+    render(
+      <Toast onDismiss={onDismiss}>
+        <Toast.Footer>
+          <Toast.Close>
+            <>
+              <button type="button">Close</button>
+            </>
+          </Toast.Close>
+        </Toast.Footer>
+      </Toast>,
+    );
+    await user.click(screen.getByRole('button', { name: 'Close' }));
+    expect(onDismiss).toHaveBeenCalledTimes(1);
+  });
+
+  it('passes its props to a render-prop child', async () => {
+    const user = userEvent.setup();
+    const onDismiss = vi.fn();
+    render(
+      <Toast onDismiss={onDismiss}>
+        <Toast.Footer>
+          <Toast.Close>
+            {(props) => (
+              <button type="button" {...props}>
+                Done
+              </button>
+            )}
+          </Toast.Close>
+        </Toast.Footer>
+      </Toast>,
+    );
+    await user.click(screen.getByRole('button', { name: 'Done' }));
+    expect(onDismiss).toHaveBeenCalledTimes(1);
+  });
+
+  it('does not dismiss through a disabledFocusable Button', async () => {
+    const user = userEvent.setup();
+    const onDismiss = vi.fn();
+    render(
+      <Toast onDismiss={onDismiss}>
+        <Toast.Footer>
+          <Toast.Close>
+            <Button disabledFocusable>Undo</Button>
+          </Toast.Close>
+        </Toast.Footer>
+      </Toast>,
+    );
+    const undo = screen.getByRole('button', { name: 'Undo' });
+    await user.click(undo);
+    act(() => undo.focus());
+    await user.keyboard('{Enter}');
+    expect(onDismiss).not.toHaveBeenCalled();
+  });
+
+  it('warns once when there is nothing to dismiss', () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    render(
+      <Toast>
+        <Toast.Footer>
+          <Toast.Close>
+            <button type="button">Close</button>
+          </Toast.Close>
+        </Toast.Footer>
+      </Toast>,
+    );
+    expect(warn.mock.calls).toEqual([
+      [
+        '[WaveUI] Toast.Close has nothing to dismiss: render it in a toast dispatched to a Toaster, or in a Toast with `onDismiss`.',
+      ],
+    ]);
+    warn.mockRestore();
+  });
+
+  it('throws outside a Toast (C-CONTEXT)', () => {
+    expectThrows(
+      <Toast.Close>
+        <button type="button">Close</button>
+      </Toast.Close>,
+      '[WaveUI] Toast.Close must be used within <Toast>',
+    );
   });
 });
