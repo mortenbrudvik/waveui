@@ -4,13 +4,14 @@ import { joinIds } from '../../lib/aria';
 import { warnOnce } from '../../lib/dev';
 import { ErrorIcon, SuccessIcon, WarningIcon, type IconComponent } from '../../lib/icons';
 import { materialiseSlotContent, renderSlot, slotRendersContent, type Slot } from '../../lib/slot';
-import type { Orientation, ValidationState } from '../../lib/types';
+import type { CoreSize, Orientation, ValidationState } from '../../lib/types';
 import { useId } from '../../hooks/useId';
 import {
   FieldContext,
   createFieldControlIdClaim,
   type FieldContextValue,
 } from '../../hooks/useFieldControl';
+import { useWaveTheme } from '../provider/WaveProvider';
 
 /** Props Field reads from and merges into its first element child. */
 interface InjectedFieldProps {
@@ -72,6 +73,12 @@ export interface FieldProps extends React.HTMLAttributes<HTMLDivElement> {
    * @default 'vertical'
    */
   orientation?: Orientation;
+  /**
+   * The label's size and the default `size` of the text inputs and pickers inside the Field
+   * (their own `size` wins; choice controls keep theirs). The message and the hint stay small.
+   * @default `WaveProvider` `inputDefaults.size`, else `'medium'`.
+   */
+  size?: CoreSize;
   /**
    * Whether the field is required: shows a decorative asterisk next to the label, sets
    * `aria-required`, and turns on native constraint validation. `<input>`, `<select>`,
@@ -321,15 +328,26 @@ const MESSAGE_COLORS: Readonly<Record<ValidationState, string>> = {
   none: 'text-muted-foreground',
 };
 
-/**
- * Horizontal layout: the label's first line is centred on a 32px row, the height of an Input, a
- * Select and the other text controls. Checkbox, Switch and RadioGroup rows are one 20px line, so a
- * first child that holds one (also a wrapper of several) gets 6px above and below: its first line
- * then lines up with the label's, also when its label wraps or a group lists its items one below
- * the other.
- */
-const SHORT_ROW_FIRST_CHILD =
-  '[&>:first-child:has([role=checkbox],[role=switch],label>[role=radio])]:py-1.5';
+/** The label's type ramp per Field size (0.7 default: medium). */
+const LABEL_TEXT: Readonly<Record<CoreSize, string>> = {
+  small: 'text-caption-1',
+  medium: 'text-body-1',
+  large: 'text-body-2',
+};
+
+/** Horizontal layout: the label's first line centred on a 24, 32 or 40px control. */
+const LABEL_TOP: Readonly<Record<CoreSize, string>> = {
+  small: 'pt-1',
+  medium: 'pt-1.5',
+  large: 'pt-2.25',
+};
+
+/** Horizontal layout: a Checkbox, Switch or RadioGroup row lined up with the label. */
+const SHORT_ROW_FIRST_CHILD: Readonly<Record<CoreSize, string>> = {
+  small: '[&>:first-child:has([role=checkbox],[role=switch],label>[role=radio])]:py-0.5',
+  medium: '[&>:first-child:has([role=checkbox],[role=switch],label>[role=radio])]:py-1.5',
+  large: '[&>:first-child:has([role=checkbox],[role=switch],label>[role=radio])]:py-2.5',
+};
 
 /** The icon box before a message: 12px glyphs line up with the first line of caption text. */
 const MESSAGE_ICON_CLASSES = 'mt-0.5 inline-flex shrink-0';
@@ -365,6 +383,12 @@ function renderMessageIcon(state: ValidationState, icon: Slot<'span'> | undefine
  * - `orientation="horizontal"` puts the label in a start column beside the control, with the
  *   message and the hint below the control. The label lines up with the first line of the
  *   control (a Checkbox, Switch or RadioGroup gets 6px of padding above and below for it).
+ * - `size` sets the label's type ramp and, in the horizontal layout, its top padding and the
+ *   padding that lines a Checkbox, Switch or RadioGroup row up with it, so the label's first
+ *   line keeps lining up with a 24, 32 or 40px control. The message and the hint stay small.
+ *   Controls inside read the prop from `FieldContext` as their own default `size` (their own
+ *   `size` wins); the Field's own label falls back to `WaveProvider inputDefaults.size`, else
+ *   `medium`, and the root always renders that resolved value as `data-size`.
  * - Provides `FieldContext`: the library's inputs (Input, Select, Textarea, Slider, SearchBox,
  *   Checkbox, Switch, RadioGroup, Rating, SpinButton, pickers, …) read it wherever they are inside
  *   the Field and are named by the label, described by the message and the hint and marked
@@ -442,6 +466,7 @@ export const Field = ({
   validationMessage,
   validationMessageIcon,
   orientation = 'vertical',
+  size,
   required = false,
   htmlFor,
   className,
@@ -453,6 +478,10 @@ export const Field = ({
   // Hands the control id to one library control when Field leaves its first child alone.
   const [controlIdClaim] = React.useState(createFieldControlIdClaim);
   const { elementCount, targetId, controlIdAssigned } = getChildInfo(children);
+  // Own prop, else the provider default, else medium (D8); called unconditionally (C-HOOKS), so
+  // the provider fallback still applies while `size` is unset.
+  const { inputDefaults } = useWaveTheme();
+  const labelSize = size ?? inputDefaults.size ?? 'medium';
 
   // The library's "renders nothing" rule: nullish, booleans, '' and collections of only those (an
   // empty `errors.map(…)`) are no label, hint or message; `0` is content.
@@ -513,6 +542,7 @@ export const Field = ({
       controlIdClaim,
       validationState: state,
       validationMessageId: messageId,
+      size,
     }),
     [
       controlId,
@@ -526,6 +556,7 @@ export const Field = ({
       controlIdClaim,
       state,
       messageId,
+      size,
     ],
   );
 
@@ -569,6 +600,7 @@ export const Field = ({
     <div
       ref={ref}
       data-orientation={orientation}
+      data-size={labelSize}
       data-validation-state={state}
       className={cn('flex', horizontal ? 'flex-row items-start gap-x-3' : 'flex-col', className)}
       {...rest}
@@ -578,9 +610,10 @@ export const Field = ({
           id={labelId}
           htmlFor={controlId}
           className={cn(
-            'mb-1 text-body-1 font-semibold text-foreground',
-            // Beside the control: a third of the width, its first line centred on a 32px row.
-            horizontal && 'mb-0 shrink-0 basis-1/3 pt-1.5',
+            'mb-1 font-semibold text-foreground',
+            LABEL_TEXT[labelSize],
+            // Beside the control: a third of the width, its first line lined up with LABEL_TOP.
+            horizontal && cn('mb-0 shrink-0 basis-1/3', LABEL_TOP[labelSize]),
           )}
         >
           {materialiseSlotContent(label)}
@@ -592,7 +625,9 @@ export const Field = ({
         </label>
       ) : null}
       {horizontal ? (
-        <div className={cn('flex min-w-0 flex-1 flex-col', SHORT_ROW_FIRST_CHILD)}>{control}</div>
+        <div className={cn('flex min-w-0 flex-1 flex-col', SHORT_ROW_FIRST_CHILD[labelSize])}>
+          {control}
+        </div>
       ) : (
         control
       )}

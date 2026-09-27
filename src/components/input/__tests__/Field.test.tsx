@@ -991,6 +991,77 @@ describe('Field', () => {
     });
   });
 
+  describe('size (Phase 4 D8)', () => {
+    function SizeProbe() {
+      return <output>{useFieldContext()?.size ?? 'unset'}</output>;
+    }
+
+    it('the context carries the size prop only', () => {
+      const { rerender } = render(
+        <Field label="Name">
+          <SizeProbe />
+        </Field>,
+      );
+      expect(screen.getByRole('status')).toHaveTextContent('unset');
+      rerender(
+        <Field label="Name" size="large">
+          <SizeProbe />
+        </Field>,
+      );
+      expect(screen.getByRole('status')).toHaveTextContent('large');
+    });
+
+    it.each([
+      ['small', 'text-caption-1'],
+      ['medium', 'text-body-1'],
+      ['large', 'text-body-2'],
+    ] as const)('a %s Field sizes its label with %s and renders data-size', (size, text) => {
+      const { container } = render(
+        <Field label="Name" size={size}>
+          <input />
+        </Field>,
+      );
+      expect(screen.getByText('Name')).toHaveClass(text);
+      expect(container.firstElementChild).toHaveAttribute('data-size', size);
+    });
+
+    it('without a size, the label follows the provider default', () => {
+      const { container } = renderWithProviders(
+        <Field label="Name">
+          <input />
+        </Field>,
+        { inputDefaults: { size: 'large' } },
+      );
+      expect(screen.getByText('Name')).toHaveClass('text-body-2');
+      expect(container.querySelector('[data-orientation]')).toHaveAttribute('data-size', 'large');
+    });
+
+    it.each([
+      [
+        'small',
+        'pt-1',
+        '[&>:first-child:has([role=checkbox],[role=switch],label>[role=radio])]:py-0.5',
+      ],
+      [
+        'large',
+        'pt-2.25',
+        '[&>:first-child:has([role=checkbox],[role=switch],label>[role=radio])]:py-2.5',
+      ],
+    ] as const)(
+      'horizontal %s: the label and short rows line up',
+      (size, labelPadding, rowPadding) => {
+        render(
+          <Field label="Name" size={size} orientation="horizontal">
+            <input />
+          </Field>,
+        );
+        const label = screen.getByText('Name');
+        expect(label).toHaveClass(labelPadding);
+        expect(label.nextElementSibling).toHaveClass(rowPadding);
+      },
+    );
+  });
+
   describe('a custom control with renderWithFieldContext', () => {
     /** A custom switch built on `useFieldControl` (CLAUDE.md "Field wiring for a custom control"). */
     function CustomSwitch(props: FieldControlProps) {
