@@ -1,6 +1,6 @@
 import * as React from 'react';
 import { describe, expect, expectTypeOf, it, vi } from 'vitest';
-import { act, render, screen, within } from '@testing-library/react';
+import { act, fireEvent, render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { renderToString } from 'react-dom/server';
 import { hydrateRoot } from 'react-dom/client';
@@ -21,10 +21,12 @@ import {
   expectNoA11yViolations,
   expectThrows,
   findDanglingIdRefs,
+  mockAnimations,
+  mockMatchMedia,
   testCompoundExposure,
   testSystemProps,
 } from '../../../test-utils';
-import { ControllerProbe, getToasts, renderToaster } from './toasterHarness';
+import { ControllerProbe, getLiveRegion, getToasts, renderToaster } from './toasterHarness';
 
 /** Renders a part inside a standalone Toast, the host its context needs. */
 function ToastWrapper({ children }: { children: React.ReactNode }) {
@@ -500,5 +502,148 @@ describe('the toast container (P3-02, D10)', () => {
     const { dispatch } = renderToaster({}, { app: <p>App content</p> });
     dispatch({ status: 'success', title: 'Saved', body: 'Your changes were saved.', timeout: 0 });
     await expectNoA11yViolations(document.body);
+  });
+});
+
+describe('presence (P3-02, D29)', () => {
+  const isToast = (el: Element) => el.hasAttribute('data-wave-toast');
+
+  it('keeps a dismissed toast mounted, exiting and inert until its exit ends', async () => {
+    mockMatchMedia({ '(prefers-reduced-motion: reduce)': false });
+    const motion = mockAnimations({ animated: isToast });
+    const { dispatch, dismiss } = renderToaster();
+    const id = dispatch({ title: 'Saved', timeout: 0 });
+    const [container] = getToasts();
+    expect(container).toHaveAttribute('data-presence', 'entering');
+    await act(async () => {
+      await motion.finishAll();
+    });
+    expect(container).toHaveAttribute('data-presence', 'entered');
+
+    dismiss(id);
+    expect(container).toHaveAttribute('data-presence', 'exiting');
+    expect(container).toHaveAttribute('inert');
+    // No longer announced.
+    expect(getLiveRegion('polite')).toBeEmptyDOMElement();
+    await act(async () => {
+      await motion.finishAll();
+    });
+    expect(getToasts()).toHaveLength(0);
+  });
+
+  it('ends the exit at once under reduced motion', () => {
+    mockMatchMedia({ '(prefers-reduced-motion: reduce)': true });
+    mockAnimations({ animated: isToast });
+    const { dispatch, dismiss } = renderToaster();
+    const id = dispatch({ title: 'Saved', timeout: 0 });
+    expect(getToasts()[0]).toHaveAttribute('data-presence', 'entered');
+    dismiss(id);
+    expect(getToasts()).toHaveLength(0);
+  });
+
+  it('does not count a dismissed toast toward limit: the next one shows at once', async () => {
+    const motion = mockAnimations({ animated: isToast });
+    const { dispatch, dismiss } = renderToaster({ limit: 1 });
+    const first = dispatch({ title: 'First', timeout: 0 });
+    dispatch({ title: 'Second', timeout: 0 });
+    await act(async () => {
+      await motion.finishAll();
+    });
+    expect(getToasts()).toHaveLength(1);
+    dismiss(first);
+    const [exiting, shown] = getToasts();
+    expect(exiting).toHaveAttribute('data-presence', 'exiting');
+    expect(shown).toHaveTextContent('Second');
+    expect(shown).not.toHaveAttribute('inert');
+    expect(getLiveRegion('polite')).toHaveTextContent('Info: Second');
+    await act(async () => {
+      await motion.finishAll();
+    });
+    expect(getToasts()).toEqual([shown]);
+  });
+
+  it('revives an exiting toast dispatched again with its id', async () => {
+    const motion = mockAnimations({ animated: isToast });
+    const { dispatch, dismiss } = renderToaster();
+    dispatch({ toastId: 'sync', title: 'Syncing…', timeout: 0 });
+    await act(async () => {
+      await motion.finishAll();
+    });
+    const [container] = getToasts();
+    dismiss('sync');
+    expect(container).toHaveAttribute('data-presence', 'exiting');
+    dispatch({ toastId: 'sync', status: 'success', title: 'Synced', timeout: 0 });
+    expect(getToasts()).toEqual([container]);
+    expect(container).toHaveAttribute('data-presence', 'entering');
+    expect(container).not.toHaveAttribute('inert');
+    expect(getLiveRegion('polite')).toHaveTextContent('Success: Synced');
+    await act(async () => {
+      await motion.finishAll();
+    });
+    expect(container).toHaveAttribute('data-presence', 'entered');
+    expect(getToasts()).toEqual([container]);
+  });
+
+  it('moves focus in the dismissing commit to the next toast that is not exiting', async () => {
+    const motion = mockAnimations({ animated: isToast });
+    const user = userEvent.setup();
+    const { dispatch, dismiss } = renderToaster();
+    dispatch({ title: 'First', timeout: 0 });
+    const second = dispatch({ title: 'Second', timeout: 0 });
+    dispatch({ title: 'Third', timeout: 0 });
+    await act(async () => {
+      await motion.finishAll();
+    });
+    const [first, secondContainer, third] = getToasts();
+    dismiss(second);
+    await user.click(within(first).getByRole('button', { name: 'Dismiss' }));
+    // Two toasts exit at once; focus skips both and lands on Third before either exit ends.
+    expect(within(third).getByRole('button', { name: 'Dismiss' })).toHaveFocus();
+    expect(first).toHaveAttribute('data-presence', 'exiting');
+    expect(secondContainer).toHaveAttribute('data-presence', 'exiting');
+    await act(async () => {
+      await motion.finishAll();
+    });
+    expect(getToasts()).toEqual([third]);
+  });
+
+  it('moves focus from a focused container to the next container itself', () => {
+    const { dispatch, dismiss } = renderToaster();
+    const first = dispatch({ title: 'First', timeout: 0 });
+    dispatch({ title: 'Second', timeout: 0 });
+    const [firstContainer, secondContainer] = getToasts();
+    act(() => firstContainer.focus());
+    dismiss(first);
+    expect(secondContainer).toHaveFocus();
+  });
+
+  it('keeps the return target when the browser blurs a dismissed toast later (focus fix-up)', async () => {
+    const motion = mockAnimations({ animated: isToast });
+    const user = userEvent.setup();
+    const { dispatch, dismiss } = renderToaster({}, { app: <input aria-label="Name" /> });
+    const input = screen.getByRole('textbox', { name: 'Name' });
+    const first = dispatch({ title: 'First', timeout: 0 });
+    dispatch({ title: 'Second', timeout: 0 });
+    await act(async () => {
+      await motion.finishAll();
+    });
+    await user.click(input);
+    await user.tab();
+    const [firstContainer, second] = getToasts();
+    const firstButton = within(firstContainer).getByRole('button', { name: 'Dismiss' });
+    expect(firstButton).toHaveFocus();
+    dismiss(first);
+    const secondButton = within(second).getByRole('button', { name: 'Dismiss' });
+    expect(secondButton).toHaveFocus();
+    // A browser's focus fix-up blurs the inert, exiting subtree later, with <body> active.
+    const active = vi.spyOn(document, 'activeElement', 'get').mockReturnValue(document.body);
+    fireEvent.focusOut(firstButton, { relatedTarget: null });
+    active.mockRestore();
+    await user.keyboard('{Enter}');
+    await act(async () => {
+      await motion.finishAll();
+    });
+    expect(getToasts()).toHaveLength(0);
+    expect(input).toHaveFocus();
   });
 });

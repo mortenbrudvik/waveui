@@ -12,6 +12,7 @@ import { useDirection } from '../../hooks/useDirection';
 import { useEventCallback } from '../../hooks/useEventCallback';
 import { useId } from '../../hooks/useId';
 import { useMergedRefs } from '../../hooks/useMergedRefs';
+import { usePresence } from '../../hooks/usePresence';
 import { usePreserveFocus } from '../../hooks/usePreserveFocus';
 import { Portal } from '../portal/Portal';
 import { getStatusLabel } from './MessageBar.status';
@@ -46,9 +47,9 @@ export interface ToastOptions {
   timeout?: number;
   /**
    * Identifier of the toast. `dispatchToast` returns it (a generated one when omitted). Dispatching
-   * again with the id of a toast that is still shown replaces that toast (content and timer); with
-   * the id of a toast that waits beyond the Toaster's `limit`, it replaces its options and the toast
-   * keeps its place in the queue.
+   * again with the id of a toast that is shown, or still exiting after its dismissal, replaces or
+   * revives that toast (content and timer); with the id of a toast that waits beyond the Toaster's
+   * `limit`, it replaces its options and the toast keeps its place in the queue.
    */
   toastId?: string;
   /**
@@ -71,8 +72,8 @@ export interface ToastController {
    */
   dispatchToast: (options: ToastOptions) => string;
   /**
-   * Removes the toast with this id (shown or waiting) and cancels its timer. Unknown ids are
-   * ignored.
+   * Dismisses the toast with this id and cancels its timer: a shown toast exits (it stays, inert,
+   * until an exit motion of yours ends), a waiting one is removed. Unknown ids are ignored.
    */
   dismissToast: (id: string) => void;
   /** Removes every toast, shown and queued, and cancels their timers. */
@@ -89,21 +90,51 @@ interface ToastEntry {
    * Toaster's `limit`. Only {@link promoteQueued} sets it; it never goes back to `false`.
    */
   shown: boolean;
+  /**
+   * Dismissed: its container exits (not announced, no timer, not counted toward `limit`) and the
+   * entry is removed when the exit ends; a dispatch with its id revives it (D29).
+   */
+  dismissed: boolean;
 }
 
 /**
- * Flags the oldest waiting toasts as shown while fewer than `limit` are shown. Returns `toasts`
- * itself when nothing changes, so the Toaster's render-time update settles.
+ * Flags the oldest waiting toasts as shown while fewer than `limit` toasts are shown and not
+ * dismissed. Returns `toasts` itself when nothing changes, so the Toaster's render-time update
+ * settles.
  */
 function promoteQueued(toasts: ToastEntry[], limit: number): ToastEntry[] {
-  let shownCount = 0;
-  for (const toast of toasts) if (toast.shown) shownCount += 1;
-  if (shownCount >= limit || shownCount === toasts.length) return toasts;
+  let active = 0;
+  let waiting = false;
+  for (const toast of toasts) {
+    if (!toast.shown) waiting = true;
+    else if (!toast.dismissed) active += 1;
+  }
+  if (!waiting || active >= limit) return toasts;
   return toasts.map((toast) => {
-    if (toast.shown || shownCount >= limit) return toast;
-    shownCount += 1;
+    if (toast.shown || active >= limit) return toast;
+    active += 1;
     return { ...toast, shown: true };
   });
+}
+
+/** Dismisses a shown toast (it exits) and drops a waiting one; `toasts` itself when nothing changes. */
+function markDismissed(toasts: ToastEntry[], id: string): ToastEntry[] {
+  const index = toasts.findIndex((toast) => toast.id === id);
+  if (index === -1) return toasts;
+  const toast = toasts[index];
+  if (!toast.shown) return [...toasts.slice(0, index), ...toasts.slice(index + 1)];
+  if (toast.dismissed) return toasts;
+  const next = toasts.slice();
+  next[index] = { ...toast, dismissed: true };
+  return next;
+}
+
+/** Dismisses every shown toast and drops the waiting ones; `toasts` itself when nothing changes. */
+function markAllDismissed(toasts: ToastEntry[]): ToastEntry[] {
+  if (toasts.every((toast) => toast.shown && toast.dismissed)) return toasts;
+  return toasts
+    .filter((toast) => toast.shown)
+    .map((toast) => (toast.dismissed ? toast : { ...toast, dismissed: true }));
 }
 
 /** `limit` as the Toaster applies it: whole toasts, at least 1; `undefined` means no limit. */
@@ -397,10 +428,10 @@ LiveMessage.displayName = 'LiveMessage';
 
 interface ToastContainerProps {
   entry: ToastEntry;
-  index: number;
   timers: ToastTimers;
   onDismiss: (id: string) => void;
-  getFocusFallback: (index: number) => HTMLElement | null;
+  onExited: (id: string) => void;
+  getFocusFallback: (from: HTMLElement | null) => HTMLElement | null;
 }
 
 function isTitlePart(
@@ -423,14 +454,36 @@ function isBodyPart(
  */
 function ToastContainer({
   entry,
-  index,
   timers,
   onDismiss,
+  onExited,
   getFocusFallback,
 }: ToastContainerProps) {
-  const { id, options } = entry;
-  const containerRef = React.useRef<HTMLDivElement>(null);
-  usePreserveFocus(containerRef, () => getFocusFallback(index));
+  const { id, options, dismissed } = entry;
+  // Mounted through the presence core (D29): a dismissed toast exits, `inert`, and is removed when
+  // its exit ends (at once without motion); dispatching its id again revives it.
+  const {
+    isMounted,
+    ref: presenceRef,
+    presenceProps,
+  } = usePresence(!dismissed, {
+    appear: true,
+    onExited: () => onExited(id),
+  });
+  const containerRef = React.useRef<HTMLDivElement | null>(null);
+  // The last element, for the focus fallback, which may run after the container has unmounted.
+  const lastElementRef = React.useRef<HTMLDivElement | null>(null);
+  const attach = React.useCallback((node: HTMLDivElement | null) => {
+    containerRef.current = node;
+    if (node) lastElementRef.current = node;
+  }, []);
+  const mergedRef = useMergedRefs<HTMLDivElement>(attach, presenceRef);
+  // Focus leaves a dismissed toast in its dismissing commit: `enabled` flipping to `false` moves it
+  // in the layout phase, while the inert node is still there; a toast removed with the Toaster
+  // moves it after the unmount.
+  usePreserveFocus(containerRef, () => getFocusFallback(lastElementRef.current), {
+    enabled: !dismissed,
+  });
   const titleId = useId('wave-toast-title');
 
   // The registrations of the parts and of the Toast inside, whose layout effects run before this
@@ -469,15 +522,17 @@ function ToastContainer({
 
   const titlePart = parts.find(isTitlePart);
   const bodyPart = parts.find(isBodyPart);
+  if (!isMounted) return null;
   return (
     <div
-      ref={containerRef}
+      ref={mergedRef}
       role="group"
       tabIndex={-1}
       data-wave-toast=""
       aria-labelledby={joinIds(toast?.statusTextId, titlePart?.id)}
       aria-describedby={bodyPart?.id}
       className={cn(toasterClassNames.toast, 'rounded', focusRing)}
+      {...presenceProps}
       onPointerEnter={() => timers.pause(id, 'hover')}
       onPointerLeave={() => timers.resume(id, 'hover')}
       onFocus={() => timers.pause(id, 'focus')}
@@ -593,9 +648,7 @@ export const Toaster = ({
   }, [position, dir]);
 
   const [timers] = React.useState(() =>
-    createToastTimers((id) =>
-      setToasts((prev) => (prev.some((t) => t.id === id) ? prev.filter((t) => t.id !== id) : prev)),
-    ),
+    createToastTimers((id) => setToasts((prev) => markDismissed(prev, id))),
   );
 
   // Timers run only while mounted (StrictMode's simulated unmount suspends and resumes them) and
@@ -633,15 +686,18 @@ export const Toaster = ({
   }, [timers]);
 
   // Starts the timer of every newly shown toast, and restarts it for a shown toast dispatched again
-  // (a new `seq`); `timers.start` ignores a dispatch it has already started.
+  // (a new `seq`); `timers.start` ignores a dispatch it has already started. A dismissed toast has
+  // none.
   React.useEffect(() => {
     for (const toast of toasts) {
-      if (toast.shown) timers.start(toast.id, toast.seq, toast.options.timeout ?? DEFAULT_TIMEOUT);
+      if (toast.shown && !toast.dismissed) {
+        timers.start(toast.id, toast.seq, toast.options.timeout ?? DEFAULT_TIMEOUT);
+      }
     }
   }, [toasts, timers]);
 
   // A new toast waits until the render promotes it; a replaced one keeps its place and whether it
-  // is shown (a waiting toast keeps waiting with the new options).
+  // is shown (a waiting toast keeps waiting with the new options), and an exiting one is revived.
   const dispatchToast = React.useCallback(
     (options: ToastOptions): string => {
       counterRef.current += 1;
@@ -649,9 +705,9 @@ export const Toaster = ({
       const id = options.toastId ?? `${prefix}-${seq}`;
       setToasts((prev) => {
         const index = prev.findIndex((t) => t.id === id);
-        if (index === -1) return [...prev, { id, options, seq, shown: false }];
+        if (index === -1) return [...prev, { id, options, seq, shown: false, dismissed: false }];
         const next = prev.slice();
-        next[index] = { id, options, seq, shown: prev[index].shown };
+        next[index] = { id, options, seq, shown: prev[index].shown, dismissed: false };
         return next;
       });
       return id;
@@ -662,40 +718,60 @@ export const Toaster = ({
   const dismissToast = React.useCallback(
     (id: string) => {
       timers.remove(id);
-      setToasts((prev) => (prev.some((t) => t.id === id) ? prev.filter((t) => t.id !== id) : prev));
+      setToasts((prev) => markDismissed(prev, id));
     },
     [timers],
   );
 
   const dismissAllToasts = React.useCallback(() => {
     timers.clear();
-    setToasts((prev) => (prev.length === 0 ? prev : []));
+    setToasts((prev) => markAllDismissed(prev));
   }, [timers]);
+
+  // The exit of a dismissed toast ended: remove it (one revived meanwhile stays).
+  const removeExited = React.useCallback((id: string) => {
+    setToasts((prev) =>
+      prev.some((t) => t.id === id && t.dismissed)
+        ? prev.filter((t) => !(t.id === id && t.dismissed))
+        : prev,
+    );
+  }, []);
 
   const controller = React.useMemo<ToastController>(
     () => ({ dispatchToast, dismissToast, dismissAllToasts }),
     [dispatchToast, dismissToast, dismissAllToasts],
   );
 
-  // Runs after the removed toast is gone (possibly after the whole Toaster): never throws.
-  const getFocusFallback = React.useCallback((index: number): HTMLElement | null => {
+  // Where focus goes when the focused toast is dismissed (in its dismissing commit) or removed with
+  // the Toaster: the next toast that is not exiting, else the previous one — that container itself
+  // when focus was on the dismissed container (after Delete or the shortcut), else its first
+  // tabbable element — else the element focused before focus entered the toasts. Runs possibly
+  // after the whole Toaster is gone: never throws.
+  const getFocusFallback = React.useCallback((from: HTMLElement | null): HTMLElement | null => {
     const viewport = viewportRef.current;
-    const remaining = viewport
+    const containers = viewport
       ? Array.from(viewport.children).filter(
           (el): el is HTMLElement =>
             el instanceof HTMLElement && el.hasAttribute('data-wave-toast'),
         )
       : [];
-    for (const toast of [remaining[index], remaining[index - 1]]) {
-      const target = toast?.isConnected ? getFirstTabbable(toast) : null;
+    const onContainer = !!from && from.ownerDocument.activeElement === from;
+    const index = from ? containers.indexOf(from) : -1;
+    const isLive = (el: HTMLElement) =>
+      el !== from && el.isConnected && el.getAttribute('data-presence') !== 'exiting';
+    const next = containers.slice(index + 1).find(isLive);
+    const previous = index > 0 ? containers.slice(0, index).reverse().find(isLive) : undefined;
+    for (const candidate of [next, previous]) {
+      if (!candidate) continue;
+      const target = onContainer ? candidate : getFirstTabbable(candidate);
       if (target) return target;
     }
-    // Focus leaves the toasts here without a blur of the viewport (the focused node is gone), so
-    // the element is forgotten as it is used: a toast focused later from nowhere does not send
-    // focus back to it.
-    const previous = previousFocusRef.current;
+    // Focus leaves the toasts here without a blur of the viewport (the focused node is inert or
+    // gone), so the element is forgotten as it is used: a toast focused later from nowhere does not
+    // send focus back to it.
+    const previousFocus = previousFocusRef.current;
     previousFocusRef.current = null;
-    return previous?.isConnected ? previous : null;
+    return previousFocus?.isConnected ? previousFocus : null;
   }, []);
 
   // Focus entering the toasts from an element outside: return there when the focused toast goes.
@@ -717,6 +793,9 @@ export const Toaster = ({
     const viewport = event.currentTarget;
     const to = event.relatedTarget;
     if (to instanceof Node && viewport.contains(to)) return;
+    // A blur from inside a dismissed (exiting, inert) toast: the Toaster has moved focus itself,
+    // or a browser's focus fix-up blurs the inert subtree later.
+    if (event.target.closest('[data-wave-toast][data-presence="exiting"]')) return;
     if (to === null) {
       const from = event.target;
       if (!from.isConnected) return;
@@ -726,10 +805,12 @@ export const Toaster = ({
     previousFocusRef.current = null;
   };
 
-  // Only shown toasts are announced: a waiting toast is announced when it appears.
   const polite: React.ReactNode[] = [];
   const assertive: React.ReactNode[] = [];
+  // Only shown toasts are announced (a waiting toast is announced when it appears), and a
+  // dismissed one no longer is.
   for (const toast of shownToasts) {
+    if (toast.dismissed) continue;
     const message = <LiveMessage key={toast.seq} text={getAnnouncement(toast.options)} />;
     (toast.options.status === 'error' ? assertive : polite).push(message);
   }
@@ -774,17 +855,14 @@ export const Toaster = ({
           <div aria-live="assertive" aria-atomic="false" className="sr-only">
             {assertive}
           </div>
-          {/* The index within the rendered (shown) toasts, which getFocusFallback walks. Today the
-              shown toasts are a prefix of the entries (appended, promoted oldest first, replaced
-              in place, removed in order), so it equals the entry index; the shown list stays the
-              source so that a change to that order cannot break focus movement. */}
-          {shownToasts.map((toast, index) => (
+          {/* Shown toasts, exiting ones included: getFocusFallback walks the containers in this order. */}
+          {shownToasts.map((toast) => (
             <ToastContainer
               key={toast.id}
               entry={toast}
-              index={index}
               timers={timers}
               onDismiss={dismissToast}
+              onExited={removeExited}
               getFocusFallback={getFocusFallback}
             />
           ))}
