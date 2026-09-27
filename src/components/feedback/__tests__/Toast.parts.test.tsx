@@ -1,10 +1,12 @@
 import * as React from 'react';
-import { describe, expect, it, vi } from 'vitest';
+import { describe, expect, expectTypeOf, it, vi } from 'vitest';
 import { act, render, screen, within } from '@testing-library/react';
 import { renderToString } from 'react-dom/server';
 import { hydrateRoot } from 'react-dom/client';
 import type { Root } from 'react-dom/client';
 import { Toast, ToastBody, ToastFooter, ToastTitle } from '../Toast';
+import type { ToastProps } from '../Toast';
+import type { Slot } from '../../../lib/slot';
 import {
   toastBodyClassNames,
   toastClassNames,
@@ -247,5 +249,44 @@ describe('Toast parts (P3-02, toast-2)', () => {
       error.mockRestore();
       host.remove();
     }
+  });
+
+  describe('icon (P3-02, toast-3)', () => {
+    it('renders the status icon by default', () => {
+      render(<Toast status="warning" title="Disk almost full" data-testid="toast" />);
+      const icon = screen.getByTestId('toast').querySelector(`.${toastClassNames.icon}`);
+      expect(icon).toHaveAttribute('aria-hidden', 'true');
+      expect(icon?.querySelector('[data-wave-icon="warning"]')).not.toBeNull();
+    });
+
+    it('replaces the status icon with the icon slot, decoratively', () => {
+      render(<Toast title="Synced" icon={<svg data-testid="sync" />} data-testid="toast" />);
+      const icon = screen.getByTestId('sync').parentElement;
+      expect(icon).toHaveClass(toastClassNames.icon);
+      expect(icon).toHaveAttribute('aria-hidden', 'true');
+      expect(screen.getByTestId('toast').querySelector('[data-wave-icon]')).toBeNull();
+    });
+
+    it('keeps the icon class on a slot object that swaps the element', () => {
+      render(<Toast title="Starred" icon={{ as: 'i', children: '★' }} data-testid="toast" />);
+      const icon = screen.getByTestId('toast').querySelector('i');
+      expect(icon).toHaveClass(toastClassNames.icon);
+      expect(icon).toHaveAttribute('aria-hidden', 'true');
+    });
+
+    it.each([
+      ['null', null],
+      ['false', false],
+      ["''", ''],
+    ])('shows no icon for %s (anything that renders nothing)', (_, icon) => {
+      render(<Toast title="Plain" icon={icon} data-testid="toast" />);
+      const toast = screen.getByTestId('toast');
+      expect(toast.querySelector(`.${toastClassNames.icon}`)).toBeNull();
+      expect(toast.querySelector('[aria-hidden="true"]')).toBeNull();
+    });
+
+    it('types icon as a span slot', () => {
+      expectTypeOf<ToastProps['icon']>().toEqualTypeOf<Slot<'span'> | undefined>();
+    });
   });
 });
