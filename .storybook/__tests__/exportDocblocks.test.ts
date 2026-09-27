@@ -217,13 +217,32 @@ const storySources = import.meta.glob<string>('../../stories/*.stories.tsx', {
 });
 const repoPath = (key: string) => key.slice('../../'.length);
 
-/** Every `export const X = /* @__PURE__ *\/ Object.assign(Root, …)`: [name, file, root, export docblock]. */
+/** An expression without the casts, `satisfies` and parentheses around it. */
+function unwrapExpression(expression: ts.Expression | undefined): ts.Expression | undefined {
+  let current = expression;
+  while (
+    current &&
+    (ts.isAsExpression(current) ||
+      ts.isSatisfiesExpression(current) ||
+      ts.isParenthesizedExpression(current) ||
+      ts.isNonNullExpression(current))
+  ) {
+    current = current.expression;
+  }
+  return current;
+}
+
+/**
+ * Every `export const X = /* @__PURE__ *\/ Object.assign(Root, …)`, also behind a cast (`… as
+ * XComponent`, the typed call signatures of Dropdown, Combobox and Listbox): [name, file, root,
+ * export docblock].
+ */
 const compounds = Object.entries(componentSources).flatMap(([key, source]) => {
   const file = ts.createSourceFile(key, source, ts.ScriptTarget.Latest, true, ts.ScriptKind.TSX);
   return file.statements.flatMap((statement) => {
     if (!ts.isVariableStatement(statement)) return [];
     return statement.declarationList.declarations.flatMap((declaration) => {
-      const init = declaration.initializer;
+      const init = unwrapExpression(declaration.initializer);
       const isAssign =
         init &&
         ts.isCallExpression(init) &&
@@ -281,6 +300,12 @@ describe('component docs of the library (C-DOCS)', () => {
   it('finds the compounds', () => {
     expect(compounds.map(([name]) => name)).toEqual(
       expect.arrayContaining(['Accordion', 'Card', 'Carousel', 'Dialog', 'List', 'RadioGroup']),
+    );
+  });
+
+  it('finds the compounds exported behind a cast to their call signatures', () => {
+    expect(compounds.map(([name]) => name)).toEqual(
+      expect.arrayContaining(['Combobox', 'Dropdown', 'Listbox']),
     );
   });
 
