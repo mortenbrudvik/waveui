@@ -2,9 +2,10 @@ import * as React from 'react';
 import { hydrateRoot } from 'react-dom/client';
 import { renderToString } from 'react-dom/server';
 import { describe, it, expect, expectTypeOf, vi } from 'vitest';
-import { act, fireEvent, render, screen } from '@testing-library/react';
+import { act, fireEvent, render, renderHook, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { Rating, RatingDisplay, RatingDisplayItem, RatingItem } from '../Rating';
+import { INERT_RATING_CONTEXT, RatingContext, useRatingItemRegistry } from '../Rating.item';
 import type {
   RatingDisplayLabels,
   RatingDisplayProps,
@@ -916,10 +917,11 @@ describe('RatingItem and the compounds (Phase 4 D26)', () => {
 });
 
 describe('RatingItem — system props, routing and children (Phase 4 D26)', () => {
-  /** A Rating whose only star is the item under test. */
+  /** A two-star Rating whose second star is the item under test: a complete item set. */
   function ServiceRating({ children }: { children: React.ReactNode }) {
     return (
       <Rating aria-label="Service" max={2}>
+        <Rating.Item value={1} />
         {children}
       </Rating>
     );
@@ -936,6 +938,15 @@ describe('RatingItem — system props, routing and children (Phase 4 D26)', () =
   });
   testDisplayName(RatingItem, 'RatingItem');
   testA11y(RatingItem, itemProps, { wrapper: ServiceRating });
+
+  it('renders the item under test in a complete item set: one star per value from 1 to max', () => {
+    render(
+      <ServiceRating>
+        <RatingItem {...itemProps} />
+      </ServiceRating>,
+    );
+    expect(screen.getAllByRole('radio')).toEqual([star(1), star(2)]);
+  });
 
   testComposedHandler(RatingItem, {
     handler: 'onClick',
@@ -1050,6 +1061,26 @@ describe('RatingItem — system props, routing and children (Phase 4 D26)', () =
     expect(screen.getByTestId('root').querySelectorAll('svg')).toHaveLength(1);
   });
 
+  it('RatingDisplay.Item passes the consumer onClick and onMouseEnter to its star, full or partial', async () => {
+    const user = userEvent.setup();
+    const full = { onClick: vi.fn(), onMouseEnter: vi.fn() };
+    const partial = { onClick: vi.fn(), onMouseEnter: vi.fn() };
+    render(
+      <RatingDisplay value={1.5} max={2}>
+        <RatingDisplay.Item value={1} data-testid="full" {...full} />
+        <RatingDisplay.Item value={2} data-testid="partial" {...partial} />
+      </RatingDisplay>,
+    );
+    await user.hover(screen.getByTestId('full'));
+    await user.click(screen.getByTestId('full'));
+    expect(full.onMouseEnter).toHaveBeenCalledTimes(1);
+    expect(full.onClick).toHaveBeenCalledTimes(1);
+    await user.hover(screen.getByTestId('partial'));
+    await user.click(screen.getByTestId('partial'));
+    expect(partial.onMouseEnter).toHaveBeenCalledTimes(1);
+    expect(partial.onClick).toHaveBeenCalledTimes(1);
+  });
+
   it.each<[string, React.ReactNode]>([
     ['an empty array', []],
     ['false', false],
@@ -1083,5 +1114,58 @@ describe('RatingItem — system props, routing and children (Phase 4 D26)', () =
     expectTypeOf<RatingItemProps>().not.toHaveProperty('role');
     expectTypeOf<RatingItemProps>().not.toHaveProperty('tabIndex');
     expectTypeOf<RatingItemProps>().not.toHaveProperty('children');
+  });
+});
+
+describe('the item registry of a rating root (read by the item value checks)', () => {
+  it('counts the registered values, and is one registry, function and Map for the root lifetime', () => {
+    const { result, rerender } = renderHook(() => useRatingItemRegistry());
+    const registry = result.current;
+    const unregisterFirst = registry.registerItem(2);
+    const unregisterSecond = registry.registerItem(2);
+    registry.registerItem(3);
+    expect([...registry.counts]).toEqual([
+      [2, 2],
+      [3, 1],
+    ]);
+    unregisterFirst();
+    expect([...registry.counts]).toEqual([
+      [2, 1],
+      [3, 1],
+    ]);
+    unregisterSecond();
+    expect([...registry.counts]).toEqual([[3, 1]]);
+    rerender();
+    expect(result.current).toBe(registry);
+    expect(result.current.registerItem).toBe(registry.registerItem);
+    expect(result.current.counts).toBe(registry.counts);
+  });
+
+  it('holds the value of every mounted item after each commit', () => {
+    const { result } = renderHook(() => useRatingItemRegistry());
+    const { counts, registerItem } = result.current;
+    const context = { ...INERT_RATING_CONTEXT, registerItem };
+    const { rerender, unmount } = render(
+      <RatingContext.Provider value={context}>
+        <RatingItem value={1} />
+        <RatingItem value={2} />
+      </RatingContext.Provider>,
+    );
+    expect([...counts]).toEqual([
+      [1, 1],
+      [2, 1],
+    ]);
+    rerender(
+      <RatingContext.Provider value={context}>
+        <RatingItem value={1} />
+        <RatingItem value={3} />
+      </RatingContext.Provider>,
+    );
+    expect([...counts]).toEqual([
+      [1, 1],
+      [3, 1],
+    ]);
+    unmount();
+    expect(counts.size).toBe(0);
   });
 });

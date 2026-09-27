@@ -253,7 +253,7 @@ const RatingRoot = ({
   };
 
   const starLabel = labels?.star ?? defaultStarLabel;
-  const registerItem = useRatingItemRegistry();
+  const { registerItem } = useRatingItemRegistry();
   const context = React.useMemo<RatingContextValue>(
     () => ({
       kind: 'input',
@@ -390,7 +390,7 @@ const RatingDisplayRoot = ({
   const showText = showValue || compact || count !== undefined;
   const textSize = textSizeMap[size];
 
-  const registerItem = useRatingItemRegistry();
+  const { registerItem } = useRatingItemRegistry();
   // Read-only: the stars take the inert actions (they choose, preview and rove nothing).
   const context = React.useMemo<RatingContextValue>(
     () => ({

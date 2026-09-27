@@ -116,22 +116,41 @@ export function useRatingContext(): RatingContextValue {
   return INERT_RATING_CONTEXT;
 }
 
+/** The item registry of a rating root: the values of its mounted items, counted. */
+export interface RatingItemRegistry {
+  /**
+   * Counts a mounted item's value and returns the cleanup that uncounts it. Items call it from a
+   * layout effect.
+   */
+  registerItem: (value: number) => () => void;
+  /**
+   * How many mounted items have each value. The items change it in their layout effects, so read
+   * it in an effect of the root (a passive effect runs after every layout effect of the commit),
+   * never during render.
+   */
+  counts: ReadonlyMap<number, number>;
+}
+
 /**
- * A root's `registerItem`: counts the values of its mounted items (each item registers from a
- * layout effect and unregisters in its cleanup). Stable, so the memoized context keeps its
- * identity.
+ * A rating root's item registry: one object, with the same `registerItem` and `counts`, for the
+ * root's lifetime, so the memoized context keeps its identity.
  */
-export function useRatingItemRegistry(): (value: number) => () => void {
-  const countsRef = React.useRef<Map<number, number> | null>(null);
-  return React.useCallback((value: number) => {
-    const counts = (countsRef.current ??= new Map<number, number>());
-    counts.set(value, (counts.get(value) ?? 0) + 1);
-    return () => {
-      const count = (counts.get(value) ?? 1) - 1;
-      if (count > 0) counts.set(value, count);
-      else counts.delete(value);
+export function useRatingItemRegistry(): RatingItemRegistry {
+  const [registry] = React.useState<RatingItemRegistry>(() => {
+    const counts = new Map<number, number>();
+    return {
+      counts,
+      registerItem: (value) => {
+        counts.set(value, (counts.get(value) ?? 0) + 1);
+        return () => {
+          const count = (counts.get(value) ?? 1) - 1;
+          if (count > 0) counts.set(value, count);
+          else counts.delete(value);
+        };
+      },
     };
-  }, []);
+  });
+  return registry;
 }
 
 /** Properties for the RatingItem component (`Rating.Item`, `RatingDisplay.Item`). */
@@ -160,20 +179,15 @@ export interface RatingItemProps extends Omit<
  *   the root.
  * - Outside a `Rating` or `RatingDisplay` it throws in development.
  */
-export const RatingItem = ({
-  value,
-  className,
-  onClick,
-  onMouseEnter,
-  ref,
-  ...rest
-}: RatingItemProps) => {
+export const RatingItem = ({ value, className, ref, ...rest }: RatingItemProps) => {
   const ctx = useRatingContext();
   const { registerItem } = ctx;
   React.useLayoutEffect(() => registerItem(value), [registerItem, value]);
   const starSize = sizeMap[ctx.size];
   const filledColor = FILLED_COLOR[ctx.color];
 
+  // `rest` keeps every consumer handler: a star without handlers of its own (a display star)
+  // spreads them all, and a star that composes one takes that one out of `rest` itself.
   if (ctx.kind === 'display') {
     // The share of this star that the drawn value covers, in whole percent.
     const percent = Math.round(Math.min(1, Math.max(0, ctx.drawnValue - (value - 1))) * 100);
@@ -208,12 +222,14 @@ export const RatingItem = ({
     );
   }
 
+  // The radio composes the consumer's click and mouse-enter handlers with its own.
+  const { onClick, onMouseEnter, ...radioProps } = rest;
   const key = String(value);
   const filled = ctx.drawnValue >= value;
   return (
     <button
       type="button"
-      {...rest}
+      {...radioProps}
       ref={ref as React.Ref<HTMLButtonElement>}
       role="radio"
       aria-checked={ctx.value === value}
