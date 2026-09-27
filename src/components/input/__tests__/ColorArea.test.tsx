@@ -1,5 +1,5 @@
 import * as React from 'react';
-import { describe, it, expect, expectTypeOf, vi } from 'vitest';
+import { describe, it, expect, expectTypeOf, vi, afterEach, beforeEach } from 'vitest';
 import { act, fireEvent, render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { renderToString } from 'react-dom/server';
@@ -8,7 +8,12 @@ import { ColorArea, type ColorAreaProps } from '../ColorArea';
 import { colorAreaClassNames } from '../../../lib/classNames';
 import { hsvToHex } from '../../../lib/color';
 import type { HsvColor } from '../../../lib/types';
-import { renderWithProviders, testSystemProps } from '../../../test-utils';
+import {
+  mockMatchMedia,
+  mockRect,
+  renderWithProviders,
+  testSystemProps,
+} from '../../../test-utils';
 import { FIELD_TEST_IDS, FIELD_TEST_TEXT, renderWithFieldContext } from '../../../test-utils-field';
 import { PickerHarness } from './colorPartHarness';
 
@@ -16,9 +21,17 @@ const DARK_BLUE: HsvColor = { h: 220, s: 0.72, v: 0.4 };
 const MIDDLE: HsvColor = { h: 100, s: 0.5, v: 0.5 };
 const group = (name = 'Accent') => screen.getByRole('group', { name });
 // `hidden: true`: where the primary pointer is not coarse, the input without the Tab stop is
-// aria-hidden (Task C8).
-const saturationInput = () => screen.getByRole('slider', { name: 'Saturation', hidden: true });
-const brightnessInput = () => screen.getByRole('slider', { name: 'Brightness', hidden: true });
+// aria-hidden (Task C8). `name` is a matcher function, not a string: `dom-accessibility-api`
+// always computes the accessible name of a self-`aria-hidden` element as `''` (it never receives
+// this query's `hidden: true`, which only lifts the later accessibility-tree filter), so the
+// matcher reads the raw `aria-label` attribute instead — the same value while it is exposed.
+const sliderNamed = (label: string) =>
+  screen.getByRole('slider', {
+    hidden: true,
+    name: (_accessibleName, element) => element.getAttribute('aria-label') === label,
+  });
+const saturationInput = () => sliderNamed('Saturation');
+const brightnessInput = () => sliderNamed('Brightness');
 
 describe('ColorArea', () => {
   testSystemProps(ColorArea, {
@@ -223,6 +236,21 @@ describe('ColorArea', () => {
     expect(elsewhere).toHaveFocus();
   });
 
+  it('a key on the axis of an earlier assistive-technology change moves focus there', () => {
+    render(
+      <>
+        <button type="button">Elsewhere</button>
+        <ColorArea aria-label="Accent" defaultValue={MIDDLE} />
+      </>,
+    );
+    const elsewhere = screen.getByRole('button', { name: 'Elsewhere' });
+    act(() => elsewhere.focus());
+    fireEvent.change(brightnessInput(), { target: { value: '80' } });
+    expect(elsewhere).toHaveFocus();
+    fireEvent.keyDown(brightnessInput(), { key: 'ArrowUp' });
+    expect(brightnessInput()).toHaveFocus();
+  });
+
   describe('value texts and labels (D22)', () => {
     it('labels rename the sliders and their role description, colorName replaces the namer, valueText the whole text', () => {
       render(
@@ -238,8 +266,8 @@ describe('ColorArea', () => {
           }}
         />,
       );
-      const saturation = screen.getByRole('slider', { name: 'Sättigung', hidden: true });
-      const brightness = screen.getByRole('slider', { name: 'Helligkeit', hidden: true });
+      const saturation = sliderNamed('Sättigung');
+      const brightness = sliderNamed('Helligkeit');
       expect(saturation).toHaveAttribute('aria-roledescription', '2D-Regler');
       expect(saturation).toHaveAttribute('aria-valuetext', 'saturation 40');
       expect(brightness).toHaveAttribute('aria-valuetext', 'value 40');
@@ -453,25 +481,226 @@ describe('ColorArea', () => {
     });
   });
 
-  it('renders on the server and hydrates without warnings', () => {
-    const ui = <ColorArea aria-label="Accent" defaultValue={DARK_BLUE} />;
+  describe('pointer (D19)', () => {
+    const CAPTURE_METHODS = [
+      'setPointerCapture',
+      'releasePointerCapture',
+      'hasPointerCapture',
+    ] as const;
+    let saved: Array<[string, PropertyDescriptor | undefined]> = [];
+
+    beforeEach(() => {
+      // jsdom has no pointer capture: a stand-in that remembers the captured pointer ids.
+      const captured = new WeakMap<Element, Set<number>>();
+      saved = CAPTURE_METHODS.map((name) => [
+        name,
+        Object.getOwnPropertyDescriptor(Element.prototype, name),
+      ]);
+      Object.defineProperties(Element.prototype, {
+        setPointerCapture: {
+          configurable: true,
+          writable: true,
+          value(this: Element, pointerId: number) {
+            const ids = captured.get(this) ?? new Set<number>();
+            ids.add(pointerId);
+            captured.set(this, ids);
+          },
+        },
+        releasePointerCapture: {
+          configurable: true,
+          writable: true,
+          value(this: Element, pointerId: number) {
+            captured.get(this)?.delete(pointerId);
+          },
+        },
+        hasPointerCapture: {
+          configurable: true,
+          writable: true,
+          value(this: Element, pointerId: number) {
+            return captured.get(this)?.has(pointerId) ?? false;
+          },
+        },
+      });
+    });
+
+    afterEach(() => {
+      for (const [name, descriptor] of saved) {
+        if (descriptor) Object.defineProperty(Element.prototype, name, descriptor);
+        else Reflect.deleteProperty(Element.prototype, name);
+      }
+    });
+
+    function renderArea(props: Partial<ColorAreaProps> = {}, dir?: 'rtl') {
+      const onValueChange = vi.fn();
+      const ui = (
+        <ColorArea
+          aria-label="Accent"
+          defaultValue={MIDDLE}
+          onValueChange={onValueChange}
+          {...props}
+        />
+      );
+      if (dir) renderWithProviders(ui, { dir });
+      else render(ui);
+      const root = group();
+      mockRect(root.querySelector(`.${colorAreaClassNames.field}`) as Element, {
+        left: 0,
+        top: 0,
+        width: 200,
+        height: 100,
+      });
+      return { root, onValueChange };
+    }
+
+    it.each(['mouse', 'touch', 'pen'])(
+      'a %s press jumps the thumb to the point, focuses the Tab stop and drags while captured',
+      (pointerType) => {
+        const { root, onValueChange } = renderArea();
+        fireEvent.pointerDown(root, {
+          pointerId: 1,
+          button: 0,
+          pointerType,
+          clientX: 50,
+          clientY: 25,
+        });
+        expect(onValueChange).toHaveBeenLastCalledWith({ h: 100, s: 0.25, v: 0.75 });
+        expect(saturationInput()).toHaveFocus();
+        expect(root.hasPointerCapture(1)).toBe(true);
+        fireEvent.pointerMove(root, { pointerId: 1, pointerType, clientX: 100, clientY: 50 });
+        expect(onValueChange).toHaveBeenLastCalledWith({ h: 100, s: 0.5, v: 0.5 });
+        root.releasePointerCapture(1);
+        fireEvent.pointerMove(root, { pointerId: 1, pointerType, clientX: 150, clientY: 0 });
+        expect(onValueChange).toHaveBeenCalledTimes(2);
+      },
+    );
+
+    it('clamps a drag outside the field to its edges', () => {
+      const { root, onValueChange } = renderArea();
+      fireEvent.pointerDown(root, { pointerId: 1, button: 0, clientX: 50, clientY: 50 });
+      fireEvent.pointerMove(root, { pointerId: 1, clientX: 300, clientY: -20 });
+      expect(onValueChange).toHaveBeenLastCalledWith({ h: 100, s: 1, v: 1 });
+    });
+
+    it('mirrors the x axis in right-to-left layouts', () => {
+      const { root, onValueChange } = renderArea({}, 'rtl');
+      fireEvent.pointerDown(root, { pointerId: 1, button: 0, clientX: 50, clientY: 25 });
+      expect(onValueChange).toHaveBeenLastCalledWith({ h: 100, s: 0.75, v: 0.75 });
+    });
+
+    it('focuses the input that has the Tab stop (brightness after an ArrowUp)', async () => {
+      const user = userEvent.setup();
+      const { root } = renderArea();
+      act(() => saturationInput().focus());
+      await user.keyboard('{ArrowUp}');
+      act(() => saturationInput().blur());
+      fireEvent.pointerDown(root, { pointerId: 1, button: 0, clientX: 10, clientY: 10 });
+      expect(brightnessInput()).toHaveFocus();
+    });
+
+    it('ignores a secondary button', () => {
+      const secondary = renderArea();
+      fireEvent.pointerDown(secondary.root, { pointerId: 1, button: 2, clientX: 50, clientY: 25 });
+      expect(secondary.onValueChange).not.toHaveBeenCalled();
+    });
+
+    it('ignores a press the consumer prevented', () => {
+      const { root, onValueChange } = renderArea({
+        onPointerDown: (event) => event.preventDefault(),
+      });
+      fireEvent.pointerDown(root, { pointerId: 1, button: 0, clientX: 50, clientY: 25 });
+      expect(onValueChange).not.toHaveBeenCalled();
+      expect(root.hasPointerCapture(1)).toBe(false);
+    });
+
+    it('ignores presses while disabled', () => {
+      const { root, onValueChange } = renderArea({ disabled: true });
+      fireEvent.pointerDown(root, { pointerId: 1, button: 0, clientX: 50, clientY: 25 });
+      expect(onValueChange).not.toHaveBeenCalled();
+      expect(root.hasPointerCapture(1)).toBe(false);
+    });
+  });
+
+  describe('exposure: one slider unless the primary pointer is coarse (D19)', () => {
+    it('hides the input without the Tab stop from assistive technology, following the Tab stop', async () => {
+      const user = userEvent.setup();
+      render(<ColorArea aria-label="Accent" defaultValue={MIDDLE} />);
+      expect(screen.getAllByRole('slider')).toEqual([saturationInput()]);
+      expect(brightnessInput()).toHaveAttribute('aria-hidden', 'true');
+      act(() => saturationInput().focus());
+      await user.keyboard('{ArrowUp}');
+      expect(screen.getAllByRole('slider')).toEqual([brightnessInput()]);
+      expect(saturationInput()).toHaveAttribute('aria-hidden', 'true');
+      expect(brightnessInput()).not.toHaveAttribute('aria-hidden');
+    });
+
+    it('exposes both inputs on a coarse (touch) primary pointer, still with one Tab stop', () => {
+      mockMatchMedia({ '(pointer: coarse)': true });
+      render(<ColorArea aria-label="Accent" />);
+      expect(screen.getAllByRole('slider')).toHaveLength(2);
+      expect(brightnessInput()).not.toHaveAttribute('aria-hidden');
+      expect(brightnessInput()).toHaveAttribute('tabindex', '-1');
+    });
+
+    it('follows a change of the primary pointer', () => {
+      const restore = mockMatchMedia({ '(pointer: coarse)': true });
+      render(<ColorArea aria-label="Accent" />);
+      expect(screen.getAllByRole('slider')).toHaveLength(2);
+      restore();
+      expect(screen.getAllByRole('slider')).toHaveLength(1);
+    });
+  });
+
+  function hydrate(ui: React.ReactElement, before?: () => void) {
     const html = renderToString(ui);
-    expect(html).toContain('--wave-color-area-gradient');
     const container = document.createElement('div');
     container.innerHTML = html;
     document.body.appendChild(container);
+    before?.();
     const error = vi.spyOn(console, 'error');
     let root: ReturnType<typeof hydrateRoot> | undefined;
-    try {
-      act(() => {
-        root = hydrateRoot(container, ui);
-      });
-      expect(error).not.toHaveBeenCalled();
-    } finally {
-      act(() => root?.unmount());
-      container.remove();
-      error.mockRestore();
-    }
+    return {
+      html,
+      container,
+      run(check: () => void) {
+        try {
+          act(() => {
+            root = hydrateRoot(container, ui);
+          });
+          expect(error).not.toHaveBeenCalled();
+          check();
+        } finally {
+          act(() => root?.unmount());
+          container.remove();
+          error.mockRestore();
+        }
+      },
+    };
+  }
+
+  it('renders the one-slider model on the server and hydrates without warnings', () => {
+    const server = hydrate(<ColorArea aria-label="Accent" defaultValue={DARK_BLUE} />);
+    expect(server.html).toContain('--wave-color-area-gradient');
+    expect(server.container.querySelector('input[aria-label="Brightness"]')).toHaveAttribute(
+      'aria-hidden',
+      'true',
+    );
+    server.run(() => {
+      expect(server.container.querySelector('input[aria-label="Brightness"]')).toHaveAttribute(
+        'aria-hidden',
+        'true',
+      );
+    });
+  });
+
+  it('hydrates on a coarse pointer without warnings and exposes both inputs afterwards', () => {
+    const server = hydrate(<ColorArea aria-label="Accent" />, () => {
+      mockMatchMedia({ '(pointer: coarse)': true });
+    });
+    server.run(() => {
+      expect(server.container.querySelector('input[aria-label="Brightness"]')).not.toHaveAttribute(
+        'aria-hidden',
+      );
+    });
   });
 
   it('types: an HsvColor value and the ColorPicker shapes', () => {

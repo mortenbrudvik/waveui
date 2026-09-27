@@ -6,6 +6,7 @@ import { composeEventHandlers } from '../../lib/composeEventHandlers';
 import { getArrowIntent, getDirection } from '../../lib/direction';
 import { isOwnEvent } from '../../lib/events';
 import type { ColorPickerShape, HsvColor } from '../../lib/types';
+import { useEventCallback } from '../../hooks/useEventCallback';
 import { useFieldContext, useFieldControl } from '../../hooks/useFieldControl';
 import { useFormReset } from '../../hooks/useFormReset';
 import { useMergedRefs } from '../../hooks/useMergedRefs';
@@ -105,14 +106,45 @@ function clampPercent(value: number): number {
   return Math.min(100, Math.max(0, value));
 }
 
+/** Touch-primary devices expose both inputs, so a touch screen reader can swipe each (D19). */
+const COARSE_POINTER = '(pointer: coarse)';
+
+function getCoarsePointerQuery(): MediaQueryList | null {
+  if (typeof window === 'undefined' || typeof window.matchMedia !== 'function') return null;
+  return window.matchMedia(COARSE_POINTER);
+}
+
+function subscribeCoarsePointer(notify: () => void): () => void {
+  const query = getCoarsePointerQuery();
+  if (!query) return () => {};
+  if (typeof query.addEventListener === 'function') {
+    query.addEventListener('change', notify);
+    return () => query.removeEventListener('change', notify);
+  }
+  // Safari < 14
+  query.addListener(notify);
+  return () => query.removeListener(notify);
+}
+
+function getCoarsePointer(): boolean {
+  return getCoarsePointerQuery()?.matches ?? false;
+}
+
+/** The server renders the desktop model: one exposed slider. */
+function getServerCoarsePointer(): boolean {
+  return false;
+}
+
 /**
  * A 2-D color field: saturation from left to right (mirrored in right-to-left layouts) and
  * brightness from bottom to top, at the value's hue. ArrowLeft and ArrowRight move saturation by
  * 1 %, ArrowUp and ArrowDown brightness; Shift with an arrow moves by 10, Page Up and Page Down
- * move brightness by 10, and Home and End set saturation to 0 and 100. It is one Tab stop holding
- * two sliders for assistive technology, "Saturation" and "Brightness", whose value texts start
- * with their own channel and name the color; focus follows the axis a key moves. Inside a
- * ColorPicker, leave `value` and `defaultValue` out and it binds to the picker. Fluent's
+ * move brightness by 10, and Home and End set saturation to 0 and 100. A press or drag (mouse,
+ * touch or pen) moves the thumb to the pointer. It is one Tab stop holding two sliders for
+ * assistive technology, "Saturation" and "Brightness", whose value texts start with their own
+ * channel and name the color; focus follows the axis a key moves, and unless the primary pointer
+ * is coarse (touch), only the slider with the Tab stop is exposed. Inside a ColorPicker, leave
+ * `value` and `defaultValue` out and it binds to the picker. Fluent's
  * `ColorArea`, with `value`/`onValueChange` for its `color`/`onChange`.
  *
  * @example
@@ -141,6 +173,8 @@ export const ColorArea = ({
   autoFocus,
   tabIndex,
   onKeyDown,
+  onPointerDown,
+  onPointerMove,
   ref,
   ...rest
 }: ColorAreaProps) => {
@@ -164,10 +198,18 @@ export const ColorArea = ({
   const brightness = toPercent(shown.v);
 
   const [activeAxis, setActiveAxis] = React.useState<AreaAxis>('saturation');
-  // Bumped together with `activeAxis` from a keyboard-driven axis change, so the layout effect
-  // below can move focus only for those changes (never an AT-driven change or a real focus event).
-  // A plain counter, not a ref: react-hooks/refs only allows a ref's `current` to be touched from
-  // an effect, a ref callback or a function assigned directly to a JSX handler prop, not one passed
+  const coarsePointer = React.useSyncExternalStore(
+    subscribeCoarsePointer,
+    getCoarsePointer,
+    getServerCoarsePointer,
+  );
+  const fieldRef = React.useRef<HTMLDivElement>(null);
+  // Bumped on every handled key (not only an axis change), so the layout effect below moves focus
+  // to the axis's input even when the key's axis is the one an earlier assistive-technology change
+  // already made the Tab stop, without moving focus; focusing an input that already has focus does
+  // nothing. Never bumped for an AT-driven change (`handleInputChange`) or a real focus event. A
+  // plain counter, not a ref: react-hooks/refs only allows a ref's `current` to be touched from an
+  // effect, a ref callback or a function assigned directly to a JSX handler prop, not one passed
   // through `composeEventHandlers`.
   const [focusToken, setFocusToken] = React.useState(0);
   const rootRef = React.useRef<HTMLDivElement>(null);
@@ -270,10 +312,10 @@ export const ColorArea = ({
       }
       // Prevented, so the native range input never moves on its own.
       event.preventDefault();
-      if (axis !== activeAxis) {
-        setActiveAxis(axis);
-        setFocusToken((token) => token + 1);
-      }
+      if (axis !== activeAxis) setActiveAxis(axis);
+      // Every handled key moves focus to its axis's input, even when an earlier
+      // assistive-technology change already made that axis the Tab stop (D19 review, Task C8).
+      setFocusToken((token) => token + 1);
       applyAxis(axis, clampPercent(next));
     },
   );
@@ -288,6 +330,50 @@ export const ColorArea = ({
   const handleInputFocus = (axis: AreaAxis) => () => {
     if (axis !== activeAxis) setActiveAxis(axis);
   };
+
+  // Both read a ref (`fieldRef`, or `saturationRef`/`brightnessRef`): `useEventCallback` (a custom
+  // hook, opaque to react-hooks/refs) keeps that safe to call from the handler below, unlike a
+  // plain function or `React.useCallback` passed into the generic `composeEventHandlers`.
+  /** Moves the thumb to the pointer: saturation along x (mirrored in RTL), brightness along y. */
+  const moveToPointer = useEventCallback((event: React.PointerEvent<HTMLDivElement>) => {
+    const fieldElement = fieldRef.current;
+    if (!fieldElement) return;
+    const rect = fieldElement.getBoundingClientRect();
+    if (rect.width <= 0 || rect.height <= 0) return;
+    const x = Math.min(1, Math.max(0, (event.clientX - rect.left) / rect.width));
+    const s = getDirection(event.currentTarget) === 'rtl' ? 1 - x : x;
+    const v = Math.min(1, Math.max(0, 1 - (event.clientY - rect.top) / rect.height));
+    if (s === shown.s && v === shown.v) return;
+    part.setColor({ ...color, s, v });
+  });
+  /** Focuses the input of the active axis (the press moves focus there instead of the point). */
+  const focusActiveAxis = useEventCallback(() => {
+    (activeAxis === 'saturation' ? saturationRef : brightnessRef).current?.focus({
+      preventScroll: true,
+    });
+  });
+
+  const handlePointerDown = composeEventHandlers(
+    onPointerDown,
+    (event: React.PointerEvent<HTMLDivElement>) => {
+      if (part.disabled || event.button !== 0 || !isOwnEvent(event)) return;
+      // No text selection and no focus move of the press: focus goes to the Tab stop instead.
+      event.preventDefault();
+      event.currentTarget.setPointerCapture(event.pointerId);
+      moveToPointer(event);
+      focusActiveAxis();
+    },
+  );
+
+  // The drag lasts while the root holds the pointer; losing the capture (pointerup,
+  // lostpointercapture) ends it.
+  const handlePointerMove = composeEventHandlers(
+    onPointerMove,
+    (event: React.PointerEvent<HTMLDivElement>) => {
+      if (part.disabled || !event.currentTarget.hasPointerCapture(event.pointerId)) return;
+      moveToPointer(event);
+    },
+  );
 
   const textLabels = {
     saturation: strings.saturation,
@@ -315,6 +401,9 @@ export const ColorArea = ({
     'aria-errormessage': errorMessageId,
     // One Tab stop: the input used last (C-ROUTING: a consumer tabIndex applies to it).
     tabIndex: axis === activeAxis ? (tabIndex ?? 0) : -1,
+    // Where the primary pointer is not coarse, desktop screen readers meet one 2-D slider: the
+    // input without the Tab stop is hidden (it stays focusable by script, never by Tab).
+    'aria-hidden': axis !== activeAxis && !coarsePointer ? true : undefined,
     onChange: handleInputChange(axis),
     onFocus: handleInputFocus(axis),
     className: 'sr-only',
@@ -335,8 +424,11 @@ export const ColorArea = ({
       {...rest}
       ref={mergedRootRef}
       onKeyDown={handleKeyDown}
+      onPointerDown={handlePointerDown}
+      onPointerMove={handlePointerMove}
     >
       <div
+        ref={fieldRef}
         aria-hidden="true"
         className={cn(
           colorAreaClassNames.field,
