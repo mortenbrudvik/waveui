@@ -414,6 +414,37 @@ describe('useToastController', () => {
       expect(error.mock.calls).toEqual([[MISSING_TOASTER_MESSAGE]]);
       expect(screen.queryByText('Lost')).not.toBeInTheDocument();
     });
+
+    it('also returns the given toastId for the content form outside <Toaster>', () => {
+      vi.stubEnv('NODE_ENV', 'production');
+      const error = vi.spyOn(console, 'error').mockImplementation(() => {});
+      let result = 'unset';
+      function Probe() {
+        const { dispatchToast } = useToastController();
+        return (
+          <button
+            type="button"
+            onClick={() => {
+              result = dispatchToast(<span />, { toastId: 'lost' });
+            }}
+          >
+            Go
+          </button>
+        );
+      }
+      const { rerender } = render(
+        <>
+          <Probe />
+          <Probe />
+        </>,
+      );
+      rerender(<Probe />);
+      rerender(<Probe />);
+      fireEvent.click(screen.getByRole('button', { name: 'Go' }));
+      expect(result).toBe('lost');
+      // Logged once, not on every render of every calling component.
+      expect(error.mock.calls).toEqual([[MISSING_TOASTER_MESSAGE]]);
+    });
   });
 
   it('returns an inert controller whose dismissAllToasts does nothing in production', () => {

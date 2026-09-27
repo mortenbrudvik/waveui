@@ -130,6 +130,31 @@ describe('dispatchToast with content (P3-01, toast-1)', () => {
     expect(container).toHaveAccessibleName('Offline');
     expect(container).not.toHaveAttribute('aria-describedby');
     expect(findDanglingIdRefs()).toEqual([]);
+
+    // From a Toast to plain content (no Toast at all): `toast` becomes `null`, so the container's
+    // own severity text (from the dispatch options) takes over as the label.
+    dispatchContent(<p>Offline. Retrying when the connection returns.</p>, {
+      toastId: 'upload',
+      status: 'warning',
+      timeout: 0,
+    });
+    expect(getToasts()).toEqual([container]);
+    expect(container).toHaveAccessibleName('Warning:');
+    expect(container).not.toHaveAttribute('aria-describedby');
+    expect(findDanglingIdRefs()).toEqual([]);
+
+    // And back to a Toast: the container's own severity text is gone, the Toast's takes over again.
+    dispatchContent(
+      <Toast status="error">
+        <Toast.Title>Upload failed</Toast.Title>
+        <Toast.Body>The file is too large.</Toast.Body>
+      </Toast>,
+      { toastId: 'upload', timeout: 0 },
+    );
+    expect(getToasts()).toEqual([container]);
+    expect(container).toHaveAccessibleName('Error: Upload failed');
+    expect(container).toHaveAccessibleDescription('The file is too large.');
+    expect(findDanglingIdRefs()).toEqual([]);
   });
 
   it('keeps one toast when the same toastId is dispatched twice in one tick; the second wins', () => {
@@ -248,6 +273,24 @@ describe('dispatchToast with content (P3-01, toast-1)', () => {
       advance(3000);
       dispatchContent(<p>Upload complete</p>, { toastId: 'upload' });
       expect(screen.queryByText('Uploading…')).not.toBeInTheDocument();
+      advance(4999);
+      expect(screen.getByText('Upload complete')).toBeInTheDocument();
+      advance(1);
+      expect(getToasts()).toHaveLength(0);
+    });
+
+    it('keeps one timer for two same-tick dispatches: a leftover from the first would remove the toast early', () => {
+      const { controller, dispatchContent } = renderToaster();
+      // Two dispatches in one tick (as the "second wins" test): only one entry ever commits, so
+      // only one timer ever starts. If a leftover timer from the first of the pair survived, it
+      // would fire at t=5000 (5s after this act), well before the assertions below.
+      act(() => {
+        controller().dispatchToast(<p>Uploading…</p>, { toastId: 'upload' });
+        controller().dispatchToast(<p>Uploading, 50%</p>, { toastId: 'upload' });
+      });
+      advance(3000);
+      // A third dispatch at t=3000 restarts the (one) timer for another 5000ms, due at t=8000.
+      dispatchContent(<p>Upload complete</p>, { toastId: 'upload' });
       advance(4999);
       expect(screen.getByText('Upload complete')).toBeInTheDocument();
       advance(1);
