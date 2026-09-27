@@ -559,6 +559,7 @@ describe('ColorArea', () => {
         fireEvent.pointerDown(root, {
           pointerId: 1,
           button: 0,
+          isPrimary: true,
           pointerType,
           clientX: 50,
           clientY: 25,
@@ -576,14 +577,26 @@ describe('ColorArea', () => {
 
     it('clamps a drag outside the field to its edges', () => {
       const { root, onValueChange } = renderArea();
-      fireEvent.pointerDown(root, { pointerId: 1, button: 0, clientX: 50, clientY: 50 });
+      fireEvent.pointerDown(root, {
+        pointerId: 1,
+        button: 0,
+        isPrimary: true,
+        clientX: 50,
+        clientY: 50,
+      });
       fireEvent.pointerMove(root, { pointerId: 1, clientX: 300, clientY: -20 });
       expect(onValueChange).toHaveBeenLastCalledWith({ h: 100, s: 1, v: 1 });
     });
 
     it('mirrors the x axis in right-to-left layouts', () => {
       const { root, onValueChange } = renderArea({}, 'rtl');
-      fireEvent.pointerDown(root, { pointerId: 1, button: 0, clientX: 50, clientY: 25 });
+      fireEvent.pointerDown(root, {
+        pointerId: 1,
+        button: 0,
+        isPrimary: true,
+        clientX: 50,
+        clientY: 25,
+      });
       expect(onValueChange).toHaveBeenLastCalledWith({ h: 100, s: 0.75, v: 0.75 });
     });
 
@@ -592,29 +605,74 @@ describe('ColorArea', () => {
       const { root } = renderArea();
       act(() => saturationInput().focus());
       await user.keyboard('{ArrowUp}');
-      act(() => saturationInput().blur());
-      fireEvent.pointerDown(root, { pointerId: 1, button: 0, clientX: 10, clientY: 10 });
+      expect(brightnessInput()).toHaveFocus();
+      // Focus must leave the area before the press, or the assertion below would hold even
+      // without the press moving it (the ArrowUp above already focused brightnessInput).
+      act(() => brightnessInput().blur());
+      expect(brightnessInput()).not.toHaveFocus();
+      fireEvent.pointerDown(root, {
+        pointerId: 1,
+        button: 0,
+        isPrimary: true,
+        clientX: 10,
+        clientY: 10,
+      });
       expect(brightnessInput()).toHaveFocus();
     });
 
     it('ignores a secondary button', () => {
       const secondary = renderArea();
-      fireEvent.pointerDown(secondary.root, { pointerId: 1, button: 2, clientX: 50, clientY: 25 });
+      fireEvent.pointerDown(secondary.root, {
+        pointerId: 1,
+        button: 2,
+        isPrimary: true,
+        clientX: 50,
+        clientY: 25,
+      });
       expect(secondary.onValueChange).not.toHaveBeenCalled();
+    });
+
+    it('ignores a second (non-primary) finger', () => {
+      const { root, onValueChange } = renderArea();
+      fireEvent.pointerDown(root, {
+        pointerId: 2,
+        button: 0,
+        isPrimary: false,
+        pointerType: 'touch',
+        clientX: 50,
+        clientY: 25,
+      });
+      expect(onValueChange).not.toHaveBeenCalled();
+      expect(root.hasPointerCapture(2)).toBe(false);
+      // The default axis (saturation) is what the press would have focused, had it not been
+      // ignored.
+      expect(saturationInput()).not.toHaveFocus();
     });
 
     it('ignores a press the consumer prevented', () => {
       const { root, onValueChange } = renderArea({
         onPointerDown: (event) => event.preventDefault(),
       });
-      fireEvent.pointerDown(root, { pointerId: 1, button: 0, clientX: 50, clientY: 25 });
+      fireEvent.pointerDown(root, {
+        pointerId: 1,
+        button: 0,
+        isPrimary: true,
+        clientX: 50,
+        clientY: 25,
+      });
       expect(onValueChange).not.toHaveBeenCalled();
       expect(root.hasPointerCapture(1)).toBe(false);
     });
 
     it('ignores presses while disabled', () => {
       const { root, onValueChange } = renderArea({ disabled: true });
-      fireEvent.pointerDown(root, { pointerId: 1, button: 0, clientX: 50, clientY: 25 });
+      fireEvent.pointerDown(root, {
+        pointerId: 1,
+        button: 0,
+        isPrimary: true,
+        clientX: 50,
+        clientY: 25,
+      });
       expect(onValueChange).not.toHaveBeenCalled();
       expect(root.hasPointerCapture(1)).toBe(false);
     });

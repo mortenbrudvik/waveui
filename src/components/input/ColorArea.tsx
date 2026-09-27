@@ -9,6 +9,7 @@ import type { ColorPickerShape, HsvColor } from '../../lib/types';
 import { useEventCallback } from '../../hooks/useEventCallback';
 import { useFieldContext, useFieldControl } from '../../hooks/useFieldControl';
 import { useFormReset } from '../../hooks/useFormReset';
+import { useMediaQuery } from '../../hooks/useMediaQuery';
 import { useMergedRefs } from '../../hooks/useMergedRefs';
 import { HiddenInput } from '../internal/HiddenInput';
 import { useColorPartState } from './ColorPicker.parts';
@@ -109,32 +110,6 @@ function clampPercent(value: number): number {
 /** Touch-primary devices expose both inputs, so a touch screen reader can swipe each (D19). */
 const COARSE_POINTER = '(pointer: coarse)';
 
-function getCoarsePointerQuery(): MediaQueryList | null {
-  if (typeof window === 'undefined' || typeof window.matchMedia !== 'function') return null;
-  return window.matchMedia(COARSE_POINTER);
-}
-
-function subscribeCoarsePointer(notify: () => void): () => void {
-  const query = getCoarsePointerQuery();
-  if (!query) return () => {};
-  if (typeof query.addEventListener === 'function') {
-    query.addEventListener('change', notify);
-    return () => query.removeEventListener('change', notify);
-  }
-  // Safari < 14
-  query.addListener(notify);
-  return () => query.removeListener(notify);
-}
-
-function getCoarsePointer(): boolean {
-  return getCoarsePointerQuery()?.matches ?? false;
-}
-
-/** The server renders the desktop model: one exposed slider. */
-function getServerCoarsePointer(): boolean {
-  return false;
-}
-
 /**
  * A 2-D color field: saturation from left to right (mirrored in right-to-left layouts) and
  * brightness from bottom to top, at the value's hue. ArrowLeft and ArrowRight move saturation by
@@ -198,11 +173,7 @@ export const ColorArea = ({
   const brightness = toPercent(shown.v);
 
   const [activeAxis, setActiveAxis] = React.useState<AreaAxis>('saturation');
-  const coarsePointer = React.useSyncExternalStore(
-    subscribeCoarsePointer,
-    getCoarsePointer,
-    getServerCoarsePointer,
-  );
+  const coarsePointer = useMediaQuery(COARSE_POINTER);
   const fieldRef = React.useRef<HTMLDivElement>(null);
   // Bumped on every handled key (not only an axis change), so the layout effect below moves focus
   // to the axis's input even when the key's axis is the one an earlier assistive-technology change
@@ -356,7 +327,7 @@ export const ColorArea = ({
   const handlePointerDown = composeEventHandlers(
     onPointerDown,
     (event: React.PointerEvent<HTMLDivElement>) => {
-      if (part.disabled || event.button !== 0 || !isOwnEvent(event)) return;
+      if (part.disabled || event.button !== 0 || !event.isPrimary || !isOwnEvent(event)) return;
       // No text selection and no focus move of the press: focus goes to the Tab stop instead.
       event.preventDefault();
       event.currentTarget.setPointerCapture(event.pointerId);
