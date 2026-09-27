@@ -1193,6 +1193,7 @@ describe('color and icons (Phase 4 D24, D25)', () => {
     ['neutral', 'text-foreground'],
   ] as const)('%s fills with %s and keeps the outline token', (color, filled) => {
     render(<Rating aria-label="Service" defaultValue={1} color={color} />);
+    expect(screen.getByRole('radiogroup')).toHaveAttribute('data-color', color);
     expect(screen.getByRole('radio', { name: '1 star' })).toHaveClass(filled);
     expect(screen.getByRole('radio', { name: '2 stars' })).toHaveClass('text-stroke-accessible');
   });
@@ -1260,11 +1261,13 @@ describe('color and icons (Phase 4 D24, D25)', () => {
       <Rating
         aria-label="Love"
         max={1}
+        defaultValue={1}
         iconFilled={<button type="button">♥</button>}
         iconOutline={<HeartOutline />}
       />,
     );
     expect(screen.getByRole('radio').querySelector('button')).toBeNull();
+    expect(within(screen.getByRole('radio')).getByText('♥')).toBeInTheDocument();
     expect(warn).toHaveBeenCalledTimes(1);
     expect(warn).toHaveBeenCalledWith(
       '[WaveUI] Rating: `iconFilled` received a button element; its children render as the glyph of the star and its props were dropped (buttons cannot be nested). Pass icon content instead, e.g. `iconFilled={<MyIcon />}`.',

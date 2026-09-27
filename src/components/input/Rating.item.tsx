@@ -2,6 +2,8 @@ import * as React from 'react';
 import { cn } from '../../lib/cn';
 import { composeEventHandlers } from '../../lib/composeEventHandlers';
 import { reportMissingContext, warnOnce } from '../../lib/dev';
+import { getDirection } from '../../lib/direction';
+import { isOwnEvent } from '../../lib/events';
 import { StarIcon } from '../../lib/icons';
 import { materialiseSlotContent, renderSlot, slotRendersContent, type Slot } from '../../lib/slot';
 import { focusRing } from '../../lib/styles';
@@ -11,12 +13,23 @@ import { unwrapButtonGlyph, type UnwrappedButton } from '../button/Button.slots'
 /** Color of a rating's filled stars. */
 export type RatingColor = 'neutral' | 'brand' | 'marigold';
 
-/** Filled-star color of each `color` (unfilled stars keep the 3:1 outline token). */
+/** Filled-star color of each `color` (unfilled stars keep {@link UNFILLED_COLOR}). */
 export const FILLED_COLOR: Readonly<Record<RatingColor, string>> = {
   marigold: 'text-rating',
   brand: 'text-primary',
   neutral: 'text-foreground',
 };
+
+/** Unfilled-star color in every `color`: the outline token, with a 3:1 non-text contrast. */
+const UNFILLED_COLOR = 'text-stroke-accessible';
+
+/**
+ * The color a root draws (Phase 4 D24): `color` itself, or `'marigold'` (the default) for
+ * `undefined` and for a value outside the union from untyped code.
+ */
+export function resolveRatingColor(color: RatingColor | undefined): RatingColor {
+  return color === 'brand' || color === 'neutral' ? color : 'marigold';
+}
 
 /** Icon size of each star size. */
 const sizeMap: Record<Size, string> = {
@@ -137,12 +150,32 @@ export function useStarGlyphs(
   );
 }
 
+/** How a whole star looks, filled or unfilled: see {@link starLook}. */
+interface StarLook {
+  /** The color class: the rating color when filled, else the outline token. */
+  colorClass: string;
+  /** The glyph of the pair to draw (`null`: the default star). */
+  glyph: Slot<'span'> | null;
+}
+
 /**
- * One glyph of a star: the custom `glyph` when there is one, in a decorative span of the star's
- * size (an SVG child fills it), else the default star, filled or outlined (the outline keeps a
- * 3:1 non-text contrast).
+ * The one look of a star (every star kind draws through it): a filled star takes the rating
+ * color and the filled glyph of the pair, an unfilled star the outline token and the outline
+ * glyph.
  */
-function Star({
+function starLook(filled: boolean, color: RatingColor, glyphs: StarGlyphs): StarLook {
+  return filled
+    ? { colorClass: FILLED_COLOR[color], glyph: glyphs.filled }
+    : { colorClass: UNFILLED_COLOR, glyph: glyphs.outline };
+}
+
+/**
+ * Draws only the glyph of a star, in the color its box sets: the custom `glyph` when there is
+ * one, in a decorative span of the star's size (an SVG child fills it), else the default star,
+ * filled or outlined. The box around it (a {@link StarGlyph}, or the radio of a whole star)
+ * carries the color.
+ */
+function GlyphLayer({
   filled,
   glyph,
   className,
@@ -162,7 +195,7 @@ function Star({
     <StarIcon className={className} fill="none" stroke="currentColor" strokeWidth={1.5} />
   );
 }
-Star.displayName = 'Star';
+GlyphLayer.displayName = 'GlyphLayer';
 
 /** Properties of {@link StarGlyph}. */
 export interface StarGlyphProps extends Omit<React.HTMLAttributes<HTMLSpanElement>, 'color'> {
@@ -186,8 +219,9 @@ export interface StarGlyphProps extends Omit<React.HTMLAttributes<HTMLSpanElemen
  * same wherever it is placed: at 1 the filled glyph in the rating color, at 0 the unfilled glyph
  * in the outline color, and in between the unfilled glyph with the filled glyph clipped over it
  * from the inline start to the fraction (the reading direction of the stars, also under RTL).
- * The stars of a RatingDisplay (each item, and the compact star) draw through it; a radio star is
- * a box itself (its button carries the color) and draws its glyph with {@link Star}.
+ * The stars of a RatingDisplay (each item, and the compact star) and the half stars of a Rating
+ * draw through it; a whole radio star is a box itself (its button carries the color) and draws
+ * its glyph with {@link GlyphLayer}.
  */
 export const StarGlyph = ({
   fraction,
@@ -200,32 +234,30 @@ export const StarGlyph = ({
 }: StarGlyphProps) => {
   const percent = Math.round(Math.min(1, Math.max(0, fraction)) * 100);
   const starSize = sizeMap[size];
-  const filledColor = FILLED_COLOR[color];
   if (percent > 0 && percent < 100) {
+    const unfilled = starLook(false, color, glyphs);
+    const filled = starLook(true, color, glyphs);
     return (
       <span
         {...rest}
         ref={ref}
-        className={cn('relative inline-flex text-stroke-accessible', className)}
+        className={cn('relative inline-flex', unfilled.colorClass, className)}
       >
-        <Star filled={false} glyph={glyphs.outline} className={starSize} />
+        <GlyphLayer filled={false} glyph={unfilled.glyph} className={starSize} />
         <span
-          className={cn('absolute inset-y-0 start-0 flex overflow-hidden', filledColor)}
+          className={cn('absolute inset-y-0 start-0 flex overflow-hidden', filled.colorClass)}
           style={{ width: `${percent}%` }}
         >
-          <Star filled glyph={glyphs.filled} className={cn(starSize, 'shrink-0')} />
+          <GlyphLayer filled glyph={filled.glyph} className={cn(starSize, 'shrink-0')} />
         </span>
       </span>
     );
   }
   const filled = percent === 100;
+  const look = starLook(filled, color, glyphs);
   return (
-    <span
-      {...rest}
-      ref={ref}
-      className={cn('inline-flex', filled ? filledColor : 'text-stroke-accessible', className)}
-    >
-      <Star filled={filled} glyph={filled ? glyphs.filled : glyphs.outline} className={starSize} />
+    <span {...rest} ref={ref} className={cn('inline-flex', look.colorClass, className)}>
+      <GlyphLayer filled={filled} glyph={look.glyph} className={starSize} />
     </span>
   );
 };
@@ -261,7 +293,10 @@ export interface RatingContextValue {
   starLabel: (value: number, max: number) => string;
   /** The roving `tabIndex` of the star whose `data-roving-value` is `key`. */
   getTabIndex: (key: string) => number;
-  /** Chooses `value`; with `focus`, the radio of `value` also takes focus. */
+  /**
+   * Chooses `value`; with `focus`, the radio of `value` also takes focus, without scrolling (a
+   * pointer click on a half star).
+   */
   choose: (value: number, focus: boolean) => void;
   /** Previews `value` under the mouse (`0` clears the preview). */
   preview: (value: number) => void;
@@ -346,25 +381,30 @@ export interface RatingItemProps extends Omit<
   React.HTMLAttributes<HTMLElement>,
   'role' | 'aria-checked' | 'aria-label' | 'aria-labelledby' | 'tabIndex' | 'children' | 'onChange'
 > {
-  /** The star's full value, from 1 to the root's `max`: the rating it chooses, or shows. */
+  /**
+   * The star's full value, from 1 to the root's `max`: the rating it chooses (with the root's
+   * `step={0.5}` also its half, `value - 0.5`), or shows.
+   */
   value: number;
   /**
    * The glyph of this star when filled, as a pair with `iconOutline`, following the rules of the
-   * root's `iconFilled`. An item that sets either glyph of the pair (`null` included) draws its
-   * own pair instead of its root's, and a glyph it leaves unset is the default star (a
-   * development warning says so).
+   * root's `iconFilled` (a button is unwrapped, its children becoming the glyph, and a value or
+   * button children that render nothing draw the default star). An item that sets either glyph
+   * of the pair (`null` included) draws its own pair instead of its root's, and a glyph it leaves
+   * unset is the default star (a development warning says so).
    */
   iconFilled?: Slot<'span'>;
   /**
    * The glyph of this star when unfilled, as a pair with `iconFilled`, following the rules of the
-   * root's `iconOutline`. An item that sets either glyph of the pair (`null` included) draws its
-   * own pair instead of its root's, and a glyph it leaves unset is the default star (a
-   * development warning says so).
+   * root's `iconOutline` (a button is unwrapped, its children becoming the glyph, and a value or
+   * button children that render nothing draw the default star). An item that sets either glyph
+   * of the pair (`null` included) draws its own pair instead of its root's, and a glyph it leaves
+   * unset is the default star (a development warning says so).
    */
   iconOutline?: Slot<'span'>;
   /**
-   * Ref to the star element: the `role="radio"` button in a Rating, the star `<span>` in a
-   * RatingDisplay.
+   * Ref to the star element: the `role="radio"` button in a Rating, the star `<span>` in a Rating
+   * with `step={0.5}` and in a RatingDisplay.
    */
   ref?: React.Ref<HTMLElement>;
 }
@@ -374,13 +414,15 @@ export interface RatingItemProps extends Omit<
  * `max` as the root's children, in place of the stars it generates.
  *
  * - In a `Rating` it is a `role="radio"` button named by the root's `labels.star` ("2 stars"),
- *   chosen, previewed and roved as a generated star is; in a `RatingDisplay` it is a star filled,
- *   partly filled or empty by the root's value.
+ *   chosen, previewed and roved as a generated star is. With the root's `step={0.5}` it is a star
+ *   `<span>`, one pointer target that chooses by the pointer's position, holding two transparent
+ *   radios: its half value, then its full value ("1.5 stars", "2 stars"). In a `RatingDisplay` it
+ *   is a star filled, partly filled or empty by the root's value.
  * - It draws the root's `color` and glyph pair, or its own `iconFilled`/`iconOutline` pair when it
  *   sets one.
  * - `className`, `style`, `data-*`, the other attributes, the handlers and `ref` go to that star
- *   element, the consumer's handlers first. Its role, name, checked state and tab stop come from
- *   the root.
+ *   element, the consumer's handlers first. The role, name, checked state and tab stop of its
+ *   radio (or radios) come from the root.
  * - Outside a `Rating` or `RatingDisplay` it throws in development.
  */
 export const RatingItem = ({
@@ -415,11 +457,85 @@ export const RatingItem = ({
     );
   }
 
+  if (ctx.step === 0.5) {
+    // A half star (D22): one pointer target (a span with the padding of a whole star) holding two
+    // transparent radios over its halves, the half value first. The pointer chooses by its
+    // position over the star; the keyboard and screen readers use the radios. The span composes
+    // the consumer's click and pointer-move handlers with its own.
+    const { onClick, onPointerMove, ...starProps } = rest;
+    const half = value - 0.5;
+    const drawn = ctx.drawnValue;
+    const fraction = drawn >= value ? 1 : drawn >= half ? 0.5 : 0;
+    // The value under the pointer: the half from the inline start (mirrored under RTL), else the
+    // full value.
+    const pick = (event: React.MouseEvent<HTMLElement>) => {
+      const rect = event.currentTarget.getBoundingClientRect();
+      const fromStart =
+        getDirection(event.currentTarget) === 'rtl'
+          ? rect.right - event.clientX
+          : event.clientX - rect.left;
+      return fromStart < rect.width / 2 ? half : value;
+    };
+    return (
+      <span
+        {...starProps}
+        ref={ref as React.Ref<HTMLSpanElement>}
+        data-rating-star=""
+        className={cn(
+          'relative inline-flex cursor-pointer rounded',
+          targetPaddingMap[ctx.size],
+          'has-focus-visible:outline-2 has-focus-visible:outline-offset-2 has-focus-visible:outline-ring',
+          ctx.disabled && 'cursor-not-allowed',
+          className,
+        )}
+        onClick={composeEventHandlers(onClick, (event) => {
+          // A click on a radio (Space, Enter, a screen reader, `click()`) chose its own value, and
+          // a click without a press (`detail` 0) or from a portal inside the star is not the
+          // pointer's to place.
+          if (ctx.disabled || event.detail === 0 || !isOwnEvent(event)) return;
+          if ((event.target as Element).closest('[role="radio"]')) return;
+          ctx.choose(pick(event), true);
+        })}
+        onPointerMove={composeEventHandlers(onPointerMove, (event) => {
+          if (!ctx.disabled && event.pointerType === 'mouse' && isOwnEvent(event)) {
+            ctx.preview(pick(event));
+          }
+        })}
+      >
+        <StarGlyph fraction={fraction} size={ctx.size} color={ctx.color} glyphs={glyphs} />
+        {[half, value].map((radioValue, index) => {
+          const radioKey = String(radioValue);
+          return (
+            <button
+              key={radioKey}
+              type="button"
+              role="radio"
+              aria-checked={ctx.value === radioValue}
+              aria-label={ctx.starLabel(radioValue, ctx.max)}
+              data-roving-value={radioKey}
+              tabIndex={ctx.disabled ? -1 : ctx.getTabIndex(radioKey)}
+              disabled={ctx.disabled}
+              className={cn(
+                'pointer-events-none absolute inset-y-0 w-1/2 border-0 bg-transparent p-0 opacity-0',
+                index === 0 ? 'start-0' : 'end-0',
+              )}
+              onClick={() => {
+                // Choosing the current value again is a no-op for both callbacks (useControllable).
+                if (!ctx.disabled) ctx.choose(radioValue, false);
+              }}
+            />
+          );
+        })}
+      </span>
+    );
+  }
+
   // The radio composes the consumer's click and mouse-enter handlers with its own. It is the
   // star's box itself (the button carries the color), so it draws only the glyph.
   const { onClick, onMouseEnter, ...radioProps } = rest;
   const key = String(value);
   const filled = ctx.drawnValue >= value;
+  const look = starLook(filled, ctx.color, glyphs);
   return (
     <button
       type="button"
@@ -435,7 +551,7 @@ export const RatingItem = ({
         'inline-flex cursor-pointer rounded border-0 bg-transparent transition-colors motion-reduce:transition-none disabled:cursor-not-allowed',
         targetPaddingMap[ctx.size],
         focusRing,
-        filled ? FILLED_COLOR[ctx.color] : 'text-stroke-accessible',
+        look.colorClass,
         className,
       )}
       onClick={composeEventHandlers(onClick, () => {
@@ -446,11 +562,7 @@ export const RatingItem = ({
         if (!ctx.disabled) ctx.preview(value);
       })}
     >
-      <Star
-        filled={filled}
-        glyph={filled ? glyphs.filled : glyphs.outline}
-        className={sizeMap[ctx.size]}
-      />
+      <GlyphLayer filled={filled} glyph={look.glyph} className={sizeMap[ctx.size]} />
     </button>
   );
 };
