@@ -897,6 +897,69 @@ describe('Switch — disabledFocusable', () => {
   });
 });
 
+describe('size (Phase 4 D14)', () => {
+  const control = () => screen.getByRole('switch', { name: 'Wi-Fi' });
+  const thumb = () => control().firstElementChild as HTMLElement;
+
+  it('medium is the 0.7 look', () => {
+    render(<Switch label="Wi-Fi" defaultChecked />);
+    expect(control()).toHaveClass('h-[20px]', 'w-[40px]');
+    expect(thumb()).toHaveClass(
+      'h-[14px]',
+      'w-[14px]',
+      'translate-x-[22px]',
+      'wave-rtl:-translate-x-[22px]',
+    );
+    expect(control().closest('label')).toHaveAttribute('data-size', 'medium');
+  });
+
+  it('small: 32×16 track, 10px thumb, 24px-tall target layer, centred on the label line', () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    try {
+      const { rerender } = render(<Switch label="Wi-Fi" size="small" />);
+      expect(control()).toHaveClass(
+        'h-[16px]',
+        'w-[32px]',
+        'mt-0.5',
+        'before:-inset-y-1',
+        'before:inset-x-0',
+      );
+      expect(thumb()).toHaveClass(
+        'h-[10px]',
+        'w-[10px]',
+        'translate-x-[2px]',
+        'wave-rtl:-translate-x-[2px]',
+      );
+      // Switching to a controlled `checked` here (instead of a click) makes useControllable warn
+      // once that the switch left uncontrolled mode (C-DEV); unrelated to size.
+      rerender(<Switch label="Wi-Fi" size="small" checked onCheckedChange={() => {}} />);
+      expect(thumb()).toHaveClass('translate-x-[18px]', 'wave-rtl:-translate-x-[18px]');
+      expect(warn.mock.calls).toEqual([
+        [
+          '[WaveUI] A component is changing from uncontrolled to controlled. Components should ' +
+            'not switch between controlled and uncontrolled: pass `undefined` only when the ' +
+            'component is uncontrolled, and the empty value (for example `[]`, `null` or `""`) ' +
+            'to clear a controlled value.',
+        ],
+      ]);
+    } finally {
+      warn.mockRestore();
+    }
+  });
+
+  it('mirrors the small thumb in RTL through the wave-rtl classes', () => {
+    renderWithProviders(<Switch label="Wi-Fi" size="small" defaultChecked />, { dir: 'rtl' });
+    expect(thumb()).toHaveClass('wave-rtl:-translate-x-[18px]');
+  });
+
+  it('renders and reports the default for a size from untyped code', () => {
+    // @ts-expect-error Switch has no large size
+    render(<Switch label="Wi-Fi" size="large" />);
+    expect(control()).toHaveClass('h-[20px]', 'w-[40px]');
+    expect(control().closest('label')).toHaveAttribute('data-size', 'medium');
+  });
+});
+
 describe('Switch — types', () => {
   it('types disabledFocusable as an optional boolean', () => {
     expectTypeOf<SwitchProps['disabledFocusable']>().toEqualTypeOf<boolean | undefined>();

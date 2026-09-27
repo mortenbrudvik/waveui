@@ -5,7 +5,7 @@ import { composeEventHandlers } from '../../lib/composeEventHandlers';
 import { warnDeprecated, warnOnce } from '../../lib/dev';
 import { materialiseSlotContent, slotRendersContent } from '../../lib/slot';
 import { focusRing, forcedColors } from '../../lib/styles';
-import type { LabelPosition } from '../../lib/types';
+import type { LabelPosition, Size } from '../../lib/types';
 import { useControllable } from '../../hooks/useControllable';
 import { useFieldContext, useFieldControl } from '../../hooks/useFieldControl';
 import { useFormReset } from '../../hooks/useFormReset';
@@ -26,6 +26,29 @@ type SwitchControlHandlers = 'onClick' | 'onFocus' | 'onBlur' | 'onKeyDown' | 'o
 
 /** Where a Switch renders its label: after the track (default), before it or above it. */
 export type SwitchLabelPosition = Extract<LabelPosition, 'before' | 'after' | 'above'>;
+
+/** Size of the track: a 32x16 track with a 10px thumb, or the 0.7 40x20 track with a 14px thumb. */
+export type SwitchSize = Extract<Size, 'small' | 'medium'>;
+
+/** Per-size track, thumb and label-offset classes. */
+const SWITCH_SIZE: Readonly<
+  Record<SwitchSize, { track: string; thumb: string; on: string; off: string; offset: string }>
+> = {
+  small: {
+    track: 'h-[16px] w-[32px] before:absolute before:inset-x-0 before:-inset-y-1',
+    thumb: 'h-[10px] w-[10px]',
+    on: 'translate-x-[18px] wave-rtl:-translate-x-[18px]',
+    off: 'translate-x-[2px] wave-rtl:-translate-x-[2px]',
+    offset: 'mt-0.5',
+  },
+  medium: {
+    track: 'h-[20px] w-[40px]',
+    thumb: 'h-[14px] w-[14px]',
+    on: 'translate-x-[22px] wave-rtl:-translate-x-[22px]',
+    off: 'translate-x-[2px] wave-rtl:-translate-x-[2px]',
+    offset: '',
+  },
+};
 
 /** Properties for the Switch component. */
 export interface SwitchProps extends Omit<
@@ -73,6 +96,14 @@ export interface SwitchProps extends Omit<
    */
   labelPosition?: SwitchLabelPosition;
   /**
+   * Size of the track: the 0.7 40x20 track with a 14px thumb, or a small 32x16 track with a 10px
+   * thumb and a 24px-tall pointer target. Unlike the text controls and pickers, Switch does not
+   * read a surrounding Field's size or a WaveProvider's input defaults: this prop is the only
+   * source of its size.
+   * @default 'medium'
+   */
+  size?: SwitchSize;
+  /**
    * Form field name. With a name, the switch takes part in native form submission: it submits
    * `name=value` while on.
    */
@@ -119,6 +150,8 @@ export interface SwitchProps extends Omit<
  *   `labelPosition` (the root carries `data-label-position`). Beside the label, the switch lines
  *   up with the first line of a label that wraps or has a second line. `children` are not
  *   rendered (a development warning says so).
+ * - `size` (`small`, `medium`) sets the track and thumb dimensions; the root carries `data-size`.
+ *   Switch does not read a surrounding `Field`'s size or a `WaveProvider`'s input defaults.
  */
 export const Switch = ({
   checked: checkedProp,
@@ -129,6 +162,7 @@ export const Switch = ({
   disabledFocusable = false,
   label,
   labelPosition = 'after',
+  size = 'medium',
   name,
   value,
   required,
@@ -202,6 +236,10 @@ export const Switch = ({
   const mergedControlRef = useMergedRefs(buttonRef, controlRef);
   useFormReset(buttonRef, () => setChecked(defaultChecked), form);
 
+  // A size outside the union (from untyped code) renders, and is reported in the data attribute,
+  // as the default: TypeScript rejects one, but the value still reaches this render.
+  const resolvedSize: SwitchSize = Object.hasOwn(SWITCH_SIZE, size) ? size : 'medium';
+  const sizeMetrics = SWITCH_SIZE[resolvedSize];
   const labelText = hasLabel ? (
     <span id={labelTextId} className="text-body-1 text-foreground">
       {materialiseSlotContent(label)}
@@ -215,9 +253,11 @@ export const Switch = ({
     <label
       ref={ref}
       data-label-position={labelPosition}
+      data-size={resolvedSize}
       className={cn(
-        // items-start: the 20px track lines up with the 20px first line of a label that wraps or
-        // has a second line, not with its middle.
+        // items-start: the track lines up with the top of the label's first line, not its
+        // middle, when the label wraps or has a second line; medium's 20px track matches that
+        // 20px line exactly, small's 16px track gets an offset below to stay centred on it.
         'relative inline-flex items-start gap-2 select-none',
         labelPosition === 'above' && 'flex-col gap-1',
         // The dimmed look lifts while a focus ring shows inside the root (the control's, under
@@ -260,12 +300,16 @@ export const Switch = ({
             : composeEventHandlers(onClick, () => setChecked((prev) => !prev))
         }
         className={cn(
-          // The whole control is sized in px, like the Checkbox box and the radio circle: the thumb
-          // and its offsets are px, so a track in rem would stop fitting them at any root font size
-          // other than 16px. The 40x20 track (1px border) leaves a 2px inset around the 14px thumb.
-          // p-0 is set here, not left to the native reset, which any app button style overrides
-          // (C-NATIVE): the thumb offsets assume no padding.
-          'relative inline-flex h-[20px] w-[40px] shrink-0 items-center rounded-full border p-0 transition-colors duration-200 motion-reduce:transition-none',
+          // The whole control is sized in px, like the Checkbox box and the radio circle: the
+          // thumb and its offsets are px, so a track in rem would stop fitting them at any root
+          // font size other than 16px. Medium keeps the 0.7 look, a 40x20 track around a 14px
+          // thumb, a 2px gap on every side. Small is a 32x16 track around a 10px thumb, the same
+          // 2px gap, and a transparent strip behind the track that grows the pointer target to
+          // 24px tall. No padding is assumed here, unlike the native reset that any app button
+          // style overrides (C-NATIVE): the thumb offsets rely on it staying at zero.
+          'relative inline-flex shrink-0 items-center rounded-full border p-0 transition-colors duration-200 motion-reduce:transition-none',
+          sizeMetrics.track,
+          hasLabel && sizeMetrics.offset,
           focusRing,
           checked
             ? cn('border-primary bg-primary', unavailable ? disabledOnTrack : onTrack)
@@ -278,10 +322,11 @@ export const Switch = ({
         <span
           aria-hidden="true"
           className={cn(
-            'block h-[14px] w-[14px] rounded-full transition-transform duration-200 motion-reduce:transition-none forced-colors:forced-color-adjust-none',
+            'block rounded-full transition-transform duration-200 motion-reduce:transition-none forced-colors:forced-color-adjust-none',
+            sizeMetrics.thumb,
             checked
-              ? 'translate-x-[22px] wave-rtl:-translate-x-[22px] bg-primary-foreground'
-              : 'translate-x-[2px] wave-rtl:-translate-x-[2px] bg-stroke-accessible',
+              ? cn(sizeMetrics.on, 'bg-primary-foreground')
+              : cn(sizeMetrics.off, 'bg-stroke-accessible'),
             unavailable
               ? 'forced-colors:bg-[GrayText]'
               : checked

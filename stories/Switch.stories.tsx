@@ -109,3 +109,25 @@ export const DisabledFocusable: Story = {
     </div>
   ),
 };
+
+/**
+ * `size` (`small`, `medium`) sets the track and thumb dimensions. Switch does not read a
+ * surrounding Field's size or a WaveProvider's input defaults.
+ */
+export const Sizes: Story = {
+  render: (args) => (
+    <div className="grid grid-cols-2 gap-3">
+      {(['small', 'medium'] as const).flatMap((size) =>
+        [false, true].map((on) => (
+          <Switch
+            {...args}
+            key={`${size}-${on}`}
+            size={size}
+            defaultChecked={on}
+            label={`${size} ${on ? 'on' : 'off'}`}
+          />
+        )),
+      )}
+    </div>
+  ),
+};
