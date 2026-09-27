@@ -304,7 +304,7 @@ export const ColorSlider = ({
             colorSliderClassNames.thumb,
             COLOR_THUMB_CLASSES,
             vertical ? THUMB_POSITION_VERTICAL : THUMB_POSITION_HORIZONTAL,
-            'group-has-[:focus-visible]/color-slider:ring-2 group-has-[:focus-visible]/color-slider:ring-background group-has-[:focus-visible]/color-slider:outline-2 group-has-[:focus-visible]/color-slider:outline-offset-2 group-has-[:focus-visible]/color-slider:outline-ring forced-colors:group-has-[:focus-visible]/color-slider:outline-[Highlight]',
+            'group-has-[:focus-visible]/color-slider:ring-2 group-has-[:focus-visible]/color-slider:ring-background forced-colors:group-has-[:focus-visible]/color-slider:ring-[Canvas] group-has-[:focus-visible]/color-slider:outline-2 group-has-[:focus-visible]/color-slider:outline-offset-2 group-has-[:focus-visible]/color-slider:outline-ring forced-colors:group-has-[:focus-visible]/color-slider:outline-[Highlight]',
           )}
         />
       </span>
@@ -313,6 +313,7 @@ export const ColorSlider = ({
           type="text"
           name={name}
           form={form}
+          disabled={part.disabled}
           value={hsvToHex(part.color)}
           required={isRequired}
           onInvalid={() => inputRef.current?.focus()}

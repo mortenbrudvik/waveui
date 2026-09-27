@@ -73,6 +73,7 @@ describe('AlphaSlider', () => {
     expect(rail.firstElementChild).toHaveClass('bg-(image:--wave-color-slider-gradient)');
     expect(rootOf(input).querySelector(`.${alphaSliderClassNames.thumb}`)).toHaveClass(
       'group-has-[:focus-visible]/alpha-slider:outline-ring',
+      'forced-colors:group-has-[:focus-visible]/alpha-slider:ring-[Canvas]',
     );
   });
 
@@ -158,6 +159,27 @@ describe('AlphaSlider', () => {
     expect(new FormData(form).get('tint')).toBe('#ff000066');
     fireEvent.change(slider(), { target: { value: '100' } });
     expect(new FormData(form).get('tint')).toBe('#ff0000');
+  });
+
+  it('a disabled slider submits nothing; enabled it still submits the hex', () => {
+    const { unmount } = render(
+      <form aria-label="Form">
+        <AlphaSlider name="tint" defaultValue={{ h: 0, s: 1, v: 1, a: 0.4 }} disabled />
+      </form>,
+    );
+    expect(
+      new FormData(screen.getByRole('form', { name: 'Form' }) as HTMLFormElement).get('tint'),
+    ).toBeNull();
+    unmount();
+
+    render(
+      <form aria-label="Form">
+        <AlphaSlider name="tint" defaultValue={{ h: 0, s: 1, v: 1, a: 0.4 }} />
+      </form>,
+    );
+    expect(
+      new FormData(screen.getByRole('form', { name: 'Form' }) as HTMLFormElement).get('tint'),
+    ).toBe('#ff000066');
   });
 
   it("bound: takes the picker's opacity and transparency names and writes the working color", async () => {

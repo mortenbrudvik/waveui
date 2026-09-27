@@ -349,7 +349,7 @@ export const ColorArea = ({
           colorAreaClassNames.thumb,
           COLOR_THUMB_CLASSES,
           'start-(--wave-color-area-x) bottom-(--wave-color-area-y) -translate-x-1/2 wave-rtl:translate-x-1/2 translate-y-1/2',
-          'group-has-[:focus-visible]/color-area:ring-2 group-has-[:focus-visible]/color-area:ring-background group-has-[:focus-visible]/color-area:outline-2 group-has-[:focus-visible]/color-area:outline-offset-2 group-has-[:focus-visible]/color-area:outline-ring forced-colors:group-has-[:focus-visible]/color-area:outline-[Highlight]',
+          'group-has-[:focus-visible]/color-area:ring-2 group-has-[:focus-visible]/color-area:ring-background forced-colors:group-has-[:focus-visible]/color-area:ring-[Canvas] group-has-[:focus-visible]/color-area:outline-2 group-has-[:focus-visible]/color-area:outline-offset-2 group-has-[:focus-visible]/color-area:outline-ring forced-colors:group-has-[:focus-visible]/color-area:outline-[Highlight]',
         )}
       />
       <input
@@ -373,6 +373,7 @@ export const ColorArea = ({
           type="text"
           name={name}
           form={form}
+          disabled={part.disabled}
           value={hsvToHex(color)}
           required={isRequired}
           onInvalid={() =>

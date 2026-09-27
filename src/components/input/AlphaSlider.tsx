@@ -237,7 +237,7 @@ export const AlphaSlider = ({
             alphaSliderClassNames.thumb,
             COLOR_THUMB_CLASSES,
             vertical ? THUMB_POSITION_VERTICAL : THUMB_POSITION_HORIZONTAL,
-            'group-has-[:focus-visible]/alpha-slider:ring-2 group-has-[:focus-visible]/alpha-slider:ring-background group-has-[:focus-visible]/alpha-slider:outline-2 group-has-[:focus-visible]/alpha-slider:outline-offset-2 group-has-[:focus-visible]/alpha-slider:outline-ring forced-colors:group-has-[:focus-visible]/alpha-slider:outline-[Highlight]',
+            'group-has-[:focus-visible]/alpha-slider:ring-2 group-has-[:focus-visible]/alpha-slider:ring-background forced-colors:group-has-[:focus-visible]/alpha-slider:ring-[Canvas] group-has-[:focus-visible]/alpha-slider:outline-2 group-has-[:focus-visible]/alpha-slider:outline-offset-2 group-has-[:focus-visible]/alpha-slider:outline-ring forced-colors:group-has-[:focus-visible]/alpha-slider:outline-[Highlight]',
           )}
         />
       </span>
@@ -246,6 +246,7 @@ export const AlphaSlider = ({
           type="text"
           name={name}
           form={form}
+          disabled={part.disabled}
           value={hsvToHex(part.color)}
           required={isRequired}
           onInvalid={() => inputRef.current?.focus()}

@@ -77,6 +77,7 @@ describe('ColorArea', () => {
       'bottom-(--wave-color-area-y)',
       'group-has-[:focus-visible]/color-area:outline-ring',
       'group-has-[:focus-visible]/color-area:ring-background',
+      'forced-colors:group-has-[:focus-visible]/color-area:ring-[Canvas]',
     );
     expect(root).toHaveClass('group/color-area', 'touch-none', 'rounded');
   });
@@ -139,7 +140,7 @@ describe('ColorArea', () => {
       expect(screen.getByRole('button', { name: 'After' })).toHaveFocus();
     });
 
-    it('mirrors the saturation arrows in right-to-left layouts', async () => {
+    it('mirrors the saturation arrows in right-to-left layouts; the vertical arrow is unaffected', async () => {
       const user = userEvent.setup();
       const onValueChange = vi.fn();
       renderWithProviders(
@@ -148,7 +149,11 @@ describe('ColorArea', () => {
       );
       act(() => saturationInput().focus());
       await user.keyboard('{ArrowLeft}');
-      expect(onValueChange.mock.calls).toEqual([[{ ...MIDDLE, s: 0.51 }]]);
+      expect(onValueChange).toHaveBeenLastCalledWith({ ...MIDDLE, s: 0.51 });
+      await user.keyboard('{ArrowRight}');
+      expect(onValueChange).toHaveBeenLastCalledWith(MIDDLE);
+      await user.keyboard('{ArrowUp}');
+      expect(onValueChange).toHaveBeenLastCalledWith({ ...MIDDLE, v: 0.51 });
     });
 
     it('a key at the end of an axis changes and reports nothing', async () => {
@@ -199,6 +204,23 @@ describe('ColorArea', () => {
     fireEvent.change(brightnessInput(), { target: { value: '80' } });
     expect(onValueChange.mock.calls).toEqual([[{ ...MIDDLE, v: 0.8 }]]);
     expect(brightnessInput()).toHaveAttribute('tabindex', '0');
+  });
+
+  it('an assistive-technology change on the unfocused input moves the Tab stop, not focus', () => {
+    const onValueChange = vi.fn();
+    render(
+      <>
+        <button type="button">Elsewhere</button>
+        <ColorArea aria-label="Accent" defaultValue={MIDDLE} onValueChange={onValueChange} />
+      </>,
+    );
+    const elsewhere = screen.getByRole('button', { name: 'Elsewhere' });
+    act(() => elsewhere.focus());
+    fireEvent.change(brightnessInput(), { target: { value: '80' } });
+    expect(onValueChange.mock.calls).toEqual([[{ ...MIDDLE, v: 0.8 }]]);
+    expect(brightnessInput()).toHaveAttribute('tabindex', '0');
+    expect(saturationInput()).toHaveAttribute('tabindex', '-1');
+    expect(elsewhere).toHaveFocus();
   });
 
   describe('value texts and labels (D22)', () => {
@@ -259,6 +281,17 @@ describe('ColorArea', () => {
       }
     });
 
+    it('leaves aria-errormessage off both inputs while the area is not invalid', () => {
+      render(
+        <>
+          <ColorArea aria-label="Accent" aria-errormessage="accent-error" />
+          <span id="accent-error">Pick a darker color.</span>
+        </>,
+      );
+      expect(saturationInput()).not.toHaveAttribute('aria-errormessage');
+      expect(brightnessInput()).not.toHaveAttribute('aria-errormessage');
+    });
+
     it('takes the invalid state of a surrounding Field on both inputs', () => {
       renderWithFieldContext(<ColorArea />, { errorId: FIELD_TEST_IDS.errorId });
       expect(saturationInput()).toHaveAttribute('aria-invalid', 'true');
@@ -297,6 +330,32 @@ describe('ColorArea', () => {
       act(() => form.reset());
       expect(new FormData(form).get('accent')).toBe('#ff0000');
       expect(onValueChange.mock.calls).toEqual([[{ h: 0, s: 0, v: 1 }], [{ h: 0, s: 1, v: 1 }]]);
+    });
+
+    it('a disabled part submits nothing; enabled it still submits the hex', () => {
+      const { unmount } = render(
+        <form aria-label="Form">
+          <ColorArea
+            aria-label="Accent"
+            name="accent"
+            defaultValue={{ h: 0, s: 1, v: 1 }}
+            disabled
+          />
+        </form>,
+      );
+      expect(
+        new FormData(screen.getByRole('form', { name: 'Form' }) as HTMLFormElement).get('accent'),
+      ).toBeNull();
+      unmount();
+
+      render(
+        <form aria-label="Form">
+          <ColorArea aria-label="Accent" name="accent" defaultValue={{ h: 0, s: 1, v: 1 }} />
+        </form>,
+      );
+      expect(
+        new FormData(screen.getByRole('form', { name: 'Form' }) as HTMLFormElement).get('accent'),
+      ).toBe('#ff0000');
     });
 
     it('required and aria-required make the hidden input required; the inputs never are', () => {

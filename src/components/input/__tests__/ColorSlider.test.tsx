@@ -87,6 +87,7 @@ describe('ColorSlider', () => {
       'group-has-[:focus-visible]/color-slider:outline-2',
       'group-has-[:focus-visible]/color-slider:outline-ring',
       'group-has-[:focus-visible]/color-slider:ring-background',
+      'forced-colors:group-has-[:focus-visible]/color-slider:ring-[Canvas]',
     );
     expect(root).toHaveClass('group/color-slider');
   });
@@ -371,6 +372,27 @@ describe('ColorSlider', () => {
       );
       const form = screen.getByRole('form', { name: 'Form' }) as HTMLFormElement;
       expect(Array.from(new FormData(form).keys())).toEqual([]);
+    });
+
+    it('a disabled slider submits nothing; enabled it still submits the hex', () => {
+      const { unmount } = render(
+        <form aria-label="Form">
+          <ColorSlider name="hue" defaultValue={{ h: 0, s: 1, v: 1 }} disabled />
+        </form>,
+      );
+      expect(
+        new FormData(screen.getByRole('form', { name: 'Form' }) as HTMLFormElement).get('hue'),
+      ).toBeNull();
+      unmount();
+
+      render(
+        <form aria-label="Form">
+          <ColorSlider name="hue" defaultValue={{ h: 0, s: 1, v: 1 }} />
+        </form>,
+      );
+      expect(
+        new FormData(screen.getByRole('form', { name: 'Form' }) as HTMLFormElement).get('hue'),
+      ).toBe('#ff0000');
     });
   });
 
