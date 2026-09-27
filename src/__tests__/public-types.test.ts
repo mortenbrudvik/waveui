@@ -14,6 +14,7 @@
 import { isAbsolute, relative, resolve, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import type {
+  ComponentProps,
   Dispatch,
   HTMLAttributes,
   KeyboardEventHandler,
@@ -37,6 +38,8 @@ import type {
   ButtonProps,
   CheckboxLabelPosition,
   CheckboxProps,
+  CheckboxShape,
+  CheckboxSize,
   CheckedValues,
   CheckedValuesChangeDetails,
   CheckedValuesChangeHandler,
@@ -45,6 +48,7 @@ import type {
   CompoundButtonProps,
   CoreSize,
   CounterBadgeProps,
+  DatePickerProps,
   DialogModalType,
   DialogOpenChangeDetails,
   DialogOpenChangeReason,
@@ -58,9 +62,13 @@ import type {
   FieldControlIdClaim,
   FieldProps,
   IconPosition,
+  InfoButtonProps,
+  InfoLabelProps,
   InputAppearance,
   InputDefaults,
+  InputProps,
   LabelPosition,
+  LabelProps,
   LinkProps,
   Menu,
   MenuButtonProps,
@@ -99,12 +107,24 @@ import type {
   ProgressBarColor,
   ProgressBarProps,
   RadioItemProps,
+  Rating,
+  RatingColor,
+  RatingDisplay,
+  RatingDisplayItem,
   RatingDisplayLabels,
   RatingDisplayProps,
+  RatingItem,
+  RatingProps,
   SearchBoxInputProps,
   SearchBoxProps,
+  SelectProps,
   Size,
+  SliderProps,
+  SliderSize,
   Slot,
+  SpinButton,
+  SpinButtonAllowEmptyProps,
+  SpinButtonBaseProps,
   SpinButtonInputProps,
   SpinButtonProps,
   SpinnerAppearance,
@@ -113,8 +133,12 @@ import type {
   SplitButtonProps,
   SwitchLabelPosition,
   SwitchProps,
+  SwitchSize,
   TabListProps,
+  TagPickerProps,
+  TagPickerSize,
   TeachingPopoverProps,
+  TextareaProps,
   TimePickerInvalidReason,
   TimePickerLabels,
   TimePickerProps,
@@ -767,5 +791,70 @@ describe('0.9 input defaults from the package entry (Phase 4 D7)', () => {
     }>();
     expectTypeOf<WaveProviderProps['inputDefaults']>().toEqualTypeOf<InputDefaults | undefined>();
     expectTypeOf<WaveContextValue['inputDefaults']>().toEqualTypeOf<InputDefaults>();
+  });
+});
+
+// Phase 4: sizes, appearances, SpinButton's value union, Rating and the label components,
+// imported from the package entry (compile-time, tsconfig.dev.json).
+describe('Phase 4 public types', () => {
+  it('sizes and appearances', () => {
+    expectTypeOf<InputProps['size']>().toEqualTypeOf<CoreSize | number | undefined>();
+    expectTypeOf<InputProps['htmlSize']>().toEqualTypeOf<number | undefined>();
+    expectTypeOf<SelectProps['size']>().toEqualTypeOf<CoreSize | number | undefined>();
+    expectTypeOf<TextareaProps['size']>().toEqualTypeOf<CoreSize | undefined>();
+    for (const appearance of [
+      {} as InputProps['appearance'],
+      {} as TextareaProps['appearance'],
+      {} as SelectProps['appearance'],
+      {} as SearchBoxProps['appearance'],
+      {} as ComboboxProps['appearance'],
+      {} as DropdownProps['appearance'],
+      {} as DatePickerProps['appearance'],
+      {} as TimePickerProps['appearance'],
+      {} as TagPickerProps['appearance'],
+      {} as SpinButtonBaseProps['appearance'],
+    ]) {
+      expectTypeOf(appearance).toEqualTypeOf<InputAppearance | undefined>();
+    }
+    expectTypeOf<TagPickerProps['size']>().toEqualTypeOf<TagPickerSize | undefined>();
+    expectTypeOf<CheckboxProps['size']>().toEqualTypeOf<CheckboxSize | undefined>();
+    expectTypeOf<CheckboxProps['shape']>().toEqualTypeOf<CheckboxShape | undefined>();
+    expectTypeOf<SwitchProps['size']>().toEqualTypeOf<SwitchSize | undefined>();
+    expectTypeOf<SliderProps['size']>().toEqualTypeOf<SliderSize | number | undefined>();
+    expectTypeOf<FieldProps['size']>().toEqualTypeOf<CoreSize | undefined>();
+    expectTypeOf<FieldContextValue['size']>().toEqualTypeOf<CoreSize | undefined>();
+  });
+
+  it('SpinButton, Rating, labels', () => {
+    expectTypeOf<SpinButtonProps['value']>().toEqualTypeOf<number | undefined>();
+    expectTypeOf<SpinButtonAllowEmptyProps['value']>().toEqualTypeOf<number | null | undefined>();
+    expectTypeOf<ComponentProps<typeof SpinButton>>().toEqualTypeOf<
+      SpinButtonProps | SpinButtonAllowEmptyProps
+    >();
+    expectTypeOf<RatingProps['step']>().toEqualTypeOf<0.5 | 1 | undefined>();
+    expectTypeOf<RatingProps['color']>().toEqualTypeOf<RatingColor | undefined>();
+    expectTypeOf<typeof Rating.Item>().toEqualTypeOf<typeof RatingItem>();
+    expectTypeOf<typeof RatingDisplay.Item>().toEqualTypeOf<typeof RatingItem>();
+    expectTypeOf<typeof RatingDisplayItem>().toEqualTypeOf<typeof RatingItem>();
+    expectTypeOf<InfoLabelProps['info']>().toEqualTypeOf<ReactNode>();
+    expectTypeOf<InfoLabelProps['openOnHover']>().toEqualTypeOf<boolean | undefined>();
+    expectTypeOf<InfoButtonProps['openOnHover']>().toEqualTypeOf<boolean | undefined>();
+    expectTypeOf<LabelProps['required']>().toEqualTypeOf<boolean | ReactNode | undefined>();
+  });
+
+  it('rejects invalid values', () => {
+    // @ts-expect-error not a size
+    const inputSize: InputProps['size'] = 'huge';
+    // @ts-expect-error TagPicker has no small size
+    const tagPicker: TagPickerProps['size'] = 'small';
+    // @ts-expect-error Checkbox has no small size
+    const checkbox: CheckboxProps['size'] = 'small';
+    // @ts-expect-error Switch has no large size
+    const switchSize: SwitchProps['size'] = 'large';
+    // @ts-expect-error quarter stars
+    const step: RatingProps['step'] = 0.25;
+    // @ts-expect-error info is required
+    const infoButton: InfoButtonProps = {};
+    void [inputSize, tagPicker, checkbox, switchSize, step, infoButton];
   });
 });

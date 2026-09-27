@@ -1,9 +1,7 @@
 import type { Meta, StoryObj } from '@storybook/react';
 import { useState } from 'react';
 import { fn } from 'storybook/test';
-import { SpinButton } from '../src';
-// Phase 4 type, in the barrel from wave C (INTEGRATION): imported from its module until then.
-import type { SpinButtonBaseProps } from '../src/components/input/SpinButton';
+import { SpinButton, type SpinButtonBaseProps } from '../src';
 import { coreSizeArgType, inputAppearanceArgType } from './_helpers';
 import { SizeAppearanceGrid } from './_grids';
 

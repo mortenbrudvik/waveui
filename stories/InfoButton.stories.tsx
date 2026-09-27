@@ -1,5 +1,5 @@
 import type { Meta, StoryObj } from '@storybook/react';
-import { InfoButton, type InfoButtonProps } from '../src/components/data-display/InfoButton';
+import { InfoButton } from '../src';
 
 const meta = {
   title: 'Components/Data Display/InfoButton',
@@ -13,7 +13,7 @@ export default meta;
 type Story = StoryObj<typeof meta>;
 
 export const NextToAHeading: Story = {
-  render: (args: InfoButtonProps) => (
+  render: (args) => (
     <div className="flex items-center gap-1">
       <h2 id="billing-heading" className="text-subtitle-2">
         Billing

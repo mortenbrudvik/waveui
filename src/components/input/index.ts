@@ -1,7 +1,13 @@
 export { Input, type InputProps, type InputErrorMessageProps } from './Input';
 export { Textarea, type TextareaProps } from './Textarea';
 export { Field, type FieldProps } from './Field';
-export { Checkbox, type CheckboxProps, type CheckboxLabelPosition } from './Checkbox';
+export {
+  Checkbox,
+  type CheckboxProps,
+  type CheckboxLabelPosition,
+  type CheckboxSize,
+  type CheckboxShape,
+} from './Checkbox';
 export {
   RadioGroup,
   RadioGroupItem,
@@ -10,15 +16,17 @@ export {
   type RadioGroupItemProps,
   type RadioItemProps,
 } from './RadioGroup';
-export { Switch, type SwitchProps, type SwitchLabelPosition } from './Switch';
+export { Switch, type SwitchProps, type SwitchLabelPosition, type SwitchSize } from './Switch';
 export { Select, type SelectProps } from './Select';
 export { SearchBox, type SearchBoxProps, type SearchBoxInputProps } from './SearchBox';
-export { Slider, type SliderProps } from './Slider';
+export { Slider, type SliderProps, type SliderSize } from './Slider';
 export {
   SpinButton,
   type SpinButtonProps,
   type SpinButtonInputProps,
   type SpinButtonLabels,
+  type SpinButtonBaseProps,
+  type SpinButtonAllowEmptyProps,
 } from './SpinButton';
 export { Label, type LabelProps } from './Label';
 export {
@@ -57,14 +65,19 @@ export {
   type TagPickerProps,
   type TagPickerOption,
   type TagPickerLabels,
+  type TagPickerSize,
 } from './TagPicker';
 export {
   Rating,
   RatingDisplay,
+  RatingItem,
+  RatingDisplayItem,
   type RatingProps,
   type RatingDisplayProps,
   type RatingDisplayLabels,
   type RatingLabels,
+  type RatingItemProps,
+  type RatingColor,
 } from './Rating';
 export {
   TimePicker,
