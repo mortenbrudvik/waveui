@@ -170,10 +170,11 @@ export interface ComboboxProps<M extends boolean = false> extends Omit<
    */
   onQueryChange?: (query: string) => void;
   /**
-   * Called after the active (highlighted) option changes — arrow keys, the pointer, a filter
-   * change that moves it — and with `null` when the list closes. It reports what
-   * `aria-activedescendant` points at, from an effect once the change commits. Fluent has no
-   * equivalent: it never highlights on hover and reports nothing when the list closes.
+   * Called after the active (highlighted) option changes — opening, arrow keys, the pointer, a
+   * filter change that moves it — and with `null` when the list closes. It reports what
+   * `aria-activedescendant` points at, from an effect once the change commits. Fluent's
+   * `onActiveOptionChange` reports neither the pointer (its options have no hover highlight) nor
+   * the close.
    */
   onActiveOptionChange?: (value: string | null) => void;
   /**

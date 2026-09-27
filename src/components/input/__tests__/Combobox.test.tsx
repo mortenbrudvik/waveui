@@ -3617,7 +3617,7 @@ describe('Combobox', () => {
         ],
       });
       await user.type(combobox(), 'p');
-      expect(onActiveOptionChange).toHaveBeenCalledWith('peach');
+      expect(onActiveOptionChange.mock.calls).toEqual([['peach']]);
       await user.type(combobox(), 'l');
       expect(visibleOptions()).toEqual(['Plum']);
       expect(onActiveOptionChange).toHaveBeenLastCalledWith('plum');
