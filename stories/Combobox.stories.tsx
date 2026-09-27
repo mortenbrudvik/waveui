@@ -1,6 +1,7 @@
+import * as React from 'react';
 import type { Meta, StoryObj } from '@storybook/react';
 import { fn } from 'storybook/test';
-import { Combobox, Field, Option, OptionGroup, type ComboboxProps } from '../src';
+import { Combobox, Field, Option, OptionGroup, type ComboboxProps, type ListboxItem } from '../src';
 
 const meta = {
   title: 'Components/Input/Combobox',
@@ -118,6 +119,134 @@ export const Multiselect: StoryObj<ComboboxProps<true>> = {
       </Combobox>
     </Field>
   ),
+};
+
+/** Lower case without accents, so "creme" compares equal to "Crème". */
+function fold(text: string) {
+  return text
+    .normalize('NFD')
+    .replace(/\p{Diacritic}/gu, '')
+    .toLowerCase();
+}
+
+/** Matches an option whose label starts with the typed text, ignoring case and accents. */
+function startsWithIgnoringAccents(option: ListboxItem, query: string) {
+  return fold(option.label).startsWith(fold(query));
+}
+
+/**
+ * `filter` replaces the built-in match (a substring of the label, ignoring case). Here an option
+ * matches when its label starts with the typed text, ignoring accents: "creme" finds "Crème
+ * brûlée", and "e" finds "Éclair" but not the desserts that only contain an "e".
+ */
+export const CustomFilter: Story = {
+  args: {
+    'aria-label': 'Dessert',
+    placeholder: 'Type the start of a dessert...',
+  },
+  render: (args) => (
+    <Combobox {...args} filter={startsWithIgnoringAccents}>
+      <Option value="creme-brulee">Crème brûlée</Option>
+      <Option value="eclair">Éclair</Option>
+      <Option value="mille-feuille">Mille-feuille</Option>
+      <Option value="pain-au-chocolat">Pain au chocolat</Option>
+      <Option value="tarte-tatin">Tarte Tatin</Option>
+    </Combobox>
+  ),
+};
+
+const COUNTRIES = [
+  'Argentina',
+  'Australia',
+  'Austria',
+  'Belgium',
+  'Brazil',
+  'Canada',
+  'Chile',
+  'Denmark',
+  'Finland',
+  'France',
+  'Germany',
+  'Iceland',
+  'Ireland',
+  'Italy',
+  'Japan',
+  'Mexico',
+  'Netherlands',
+  'Norway',
+  'Portugal',
+  'Spain',
+  'Sweden',
+];
+
+/** The fake server's answer: the first eight countries whose name contains the query. */
+function searchCountries(query: string) {
+  const text = query.toLowerCase();
+  return COUNTRIES.filter((name) => name.toLowerCase().includes(text)).slice(0, 8);
+}
+
+/**
+ * A search on a server: the parent owns the query (`query`, `onQueryChange`), asks for results
+ * 300 ms after the last keystroke, and renders them as the options, which `filter={() => true}`
+ * keeps as they are. Until the answer arrives the previous results stay, so "No matches" is said
+ * only when the answer is empty. The selected country stays a hidden option while an answer
+ * leaves it out, so the input keeps showing its label.
+ */
+function AsyncSearchCombobox({ onQueryChange, onValueChange, ...args }: ComboboxProps) {
+  const [value, setValue] = React.useState('');
+  const [query, setQuery] = React.useState('');
+  // The query the shown results answer: the search is pending while it differs from `query`.
+  const [answered, setAnswered] = React.useState('');
+  const [results, setResults] = React.useState(() => searchCountries(''));
+  React.useEffect(() => {
+    if (query === answered) return;
+    const timer = setTimeout(() => {
+      setResults(searchCountries(query));
+      setAnswered(query);
+    }, 300);
+    return () => clearTimeout(timer);
+  }, [query, answered]);
+  return (
+    <div className="flex flex-col gap-1">
+      <Combobox
+        {...args}
+        value={value}
+        onValueChange={(next) => {
+          setValue(next);
+          onValueChange?.(next);
+        }}
+        filter={() => true}
+        query={query}
+        onQueryChange={(next) => {
+          setQuery(next);
+          onQueryChange?.(next);
+        }}
+      >
+        {results.map((name) => (
+          <Option key={name} value={name}>
+            {name}
+          </Option>
+        ))}
+        {value !== '' && !results.includes(value) && (
+          <Option key={value} value={value} hidden>
+            {value}
+          </Option>
+        )}
+      </Combobox>
+      <span className="text-caption-1 text-muted-foreground">
+        {query === answered ? `${results.length} results` : 'Searching…'}
+      </span>
+    </div>
+  );
+}
+
+export const AsyncSearch: Story = {
+  args: {
+    'aria-label': 'Country',
+    placeholder: 'Search countries...',
+    onQueryChange: fn(),
+  },
+  render: (args) => <AsyncSearchCombobox {...args} />,
 };
 
 /**

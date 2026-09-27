@@ -18,6 +18,8 @@ import { usePreserveFocus } from '../../hooks/usePreserveFocus';
 import { HiddenInput } from '../internal/HiddenInput';
 import { isInvalidLook } from './Input';
 import { ListboxSurface, Option, useListboxPopup } from './Option';
+import { announceToggle } from './pickerLabels';
+import { EMPTY_VALUES, sameValues } from './pickerValues';
 import type { RoutedHandlers } from './routedHandlers';
 
 /** Represents a single selectable tag option. */
@@ -61,8 +63,11 @@ export interface TagPickerLabels {
 
 const defaultRemoveLabel = (label: string) => `Remove ${label}`;
 const defaultSummaryLabel = (labels: string[]) => `Selected: ${labels.join(', ')}`;
-const defaultAddedLabel = (label: string, count: number) => `${label} added, ${count} selected`;
-const defaultRemovedLabel = (label: string, count: number) => `${label} removed, ${count} selected`;
+
+/** The default `filter` (0.7's match): a case-insensitive substring of the option's label. */
+function matchesText(item: ListboxItem, text: string): boolean {
+  return item.label.toLowerCase().includes(text.toLowerCase());
+}
 
 /** Properties for the TagPicker component. */
 export interface TagPickerProps extends Omit<
@@ -108,6 +113,33 @@ export interface TagPickerProps extends Omit<
    * @default 'Select...'
    */
   placeholder?: string;
+  /**
+   * Whether an option matches the typed text (the query). Called with every listed option (its
+   * `value` and `label`; selected options are not listed) and the text whenever the text is not
+   * empty; an option it returns `false` for is filtered out. It may keep options that do not
+   * contain the text: `filter={() => true}` with `query` and `onQueryChange` leaves the matching
+   * to you (a server-side search that replaces `options`), and a filter that always keeps an
+   * option of your own gives a "Create …" entry.
+   * @default a case-insensitive substring match on the option's `label`
+   */
+  filter?: (option: ListboxItem, query: string) => boolean;
+  /**
+   * Controlled query: the text typed since the last tag was added, which filters the options and
+   * shows in the input.
+   */
+  query?: string;
+  /**
+   * Initial query for uncontrolled usage. A TagPicker that starts disabled or read-only starts
+   * without it (as it starts closed).
+   * @default ''
+   */
+  defaultQuery?: string;
+  /**
+   * Called with the new query when it changes: as the user types, and with `''` when it resets (a
+   * tag added, Escape on the closed list, a form reset, or `disabled` or `readOnly` turned on
+   * while text is typed). A blur or a close keeps the text.
+   */
+  onQueryChange?: (query: string) => void;
   /**
    * Whether the tag picker is disabled: nothing can be added or removed, and the remove buttons
    * leave the tab order.
@@ -161,13 +193,6 @@ export interface TagPickerProps extends Omit<
   ref?: React.Ref<HTMLDivElement>;
 }
 
-const EMPTY: readonly string[] = [];
-
-/** Whether two selections hold the same values in the same order. */
-function sameTags(a: readonly string[], b: readonly string[]): boolean {
-  return a.length === b.length && a.every((value, index) => value === b[index]);
-}
-
 interface TagRemoveButtonProps {
   /** The accessible name of the button. */
   label: string;
@@ -219,7 +244,10 @@ function TagRemoveButton({
  * surrounding form), Escape closes the list (and then clears the typed text). Backspace in the
  * empty input moves focus to the last tag; Backspace or Delete there removes it. Additions and
  * removals are announced ("Cherry removed, 2 selected"), and so is "No matches" for text that
- * matches no option.
+ * matches no option. `filter` replaces the match (it may keep options that do not contain the
+ * text, for a server-side search or a "Create …" entry), and `query`/`defaultQuery`/
+ * `onQueryChange` control the typed text, which resets to `''` when a tag is added, on Escape and
+ * on a form reset, and stays on a blur.
  *
  * The tags form a list named "Selected"; the input is described by a summary of the selected
  * labels ("Selected: Apple, Banana"). These built-in texts are English; `labels` localizes them.
@@ -246,6 +274,10 @@ export const TagPicker = (props: TagPickerProps) => {
     defaultOpen,
     onOpenChange,
     placeholder = 'Select...',
+    filter,
+    query: queryProp,
+    defaultQuery,
+    onQueryChange,
     disabled = false,
     name,
     form,
@@ -301,7 +333,7 @@ export const TagPicker = (props: TagPickerProps) => {
 
   const [selected, setSelected] = useControllable<readonly string[]>(
     valueProp,
-    defaultValue ?? EMPTY,
+    defaultValue ?? EMPTY_VALUES,
     (next) => {
       // The props are read only; the callbacks receive an array of their own.
       const list = [...next];
@@ -322,14 +354,20 @@ export const TagPicker = (props: TagPickerProps) => {
   // aria-controls and aria-activedescendant never name a missing element.
   const isClient = useIsClient();
   const open = openState && interactive && isClient;
-  const [query, setQuery] = React.useState('');
-  // Locking the control (readOnly/disabled) while typing drops the typed text (adjust-during-render
-  // pattern, C-HOOKS).
-  const [wasInteractive, setWasInteractive] = React.useState(interactive);
-  if (wasInteractive !== interactive) {
-    setWasInteractive(interactive);
+  // The query (D12): the text typed since the last tag was added, which filters the options. A
+  // picker that starts locked starts without a query, as it starts closed.
+  const [queryState, setQuery] = useControllable(
+    queryProp,
+    interactive ? (defaultQuery ?? '') : '',
+    onQueryChange,
+  );
+  // Locking the control (readOnly/disabled) while typing drops the typed text: hidden during
+  // render here, and the reset reported from an effect, since `onQueryChange` never runs during
+  // render (D12).
+  const query = interactive ? queryState : '';
+  React.useEffect(() => {
     if (!interactive) setQuery('');
-  }
+  }, [interactive, setQuery]);
   // Locking also closes the list itself, not only the derived `open`, so unlocking does not reopen
   // it without a user action. The close is reported through onOpenChange (a consumer callback from
   // an effect, C-HOOKS); a controlled `open` that stays true is still not shown while locked.
@@ -337,7 +375,9 @@ export const TagPicker = (props: TagPickerProps) => {
   React.useEffect(() => {
     if (lockedOpen) setOpen(false);
   }, [lockedOpen, setOpen]);
-  const announce = useAnnounce();
+  // Keeps the shared live regions alive while mounted: every addition and removal is announced
+  // (`announceToggle`).
+  useAnnounce();
 
   const rootRef = React.useRef<HTMLDivElement | null>(null);
   const inputRef = React.useRef<HTMLInputElement | null>(null);
@@ -356,12 +396,11 @@ export const TagPicker = (props: TagPickerProps) => {
       .filter((option) => !chosen.has(option.value))
       .map((option) => ({ value: option.value, label: option.label }));
   }, [options, selected]);
-  const filter = React.useMemo(
-    () =>
-      query
-        ? (item: ListboxItem) => item.label.toLowerCase().includes(query.toLowerCase())
-        : undefined,
-    [query],
+  // useListbox's navigability predicate: `filter` (else the 0.7 match) bound to the typed text,
+  // while there is any (D13).
+  const listFilter = React.useMemo(
+    () => (query ? (item: ListboxItem) => (filter ?? matchesText)(item, query) : undefined),
+    [query, filter],
   );
 
   // Unknown values render as tags labelled by the raw value (input-pickers#22).
@@ -385,14 +424,14 @@ export const TagPicker = (props: TagPickerProps) => {
     const next = [...selected, value];
     setSelected(next);
     setQuery('');
-    announce((labels?.added ?? defaultAddedLabel)(labelOf(value), next.length));
+    announceToggle(labels, labelOf(value), true, next.length);
   };
 
   const removeTag = (value: string) => {
     if (!interactive) return;
     const next = selected.filter((v) => v !== value);
     setSelected(next);
-    announce((labels?.removed ?? defaultRemovedLabel)(labelOf(value), next.length));
+    announceToggle(labels, labelOf(value), false, next.length);
     focusInput();
   };
 
@@ -404,7 +443,7 @@ export const TagPicker = (props: TagPickerProps) => {
     selectedValues: selected,
     onSelect: (value) => addTag(value),
     items: available,
-    filter,
+    filter: listFilter,
     // Typing a filter makes its first match active (as in Combobox), so Enter adds what the list
     // shows instead of submitting the form. Nothing is active on open or with the text cleared.
     autoHighlight: query ? 'first' : false,
@@ -434,8 +473,8 @@ export const TagPicker = (props: TagPickerProps) => {
     () => {
       // Compared by content (C-FORMS): an inline default is a new array on every render, and a
       // reset that keeps the same tags reports nothing.
-      const initial = defaultValue ?? EMPTY;
-      setSelected((current) => (sameTags(current, initial) ? current : [...initial]));
+      const initial = defaultValue ?? EMPTY_VALUES;
+      setSelected((current) => (sameValues(current, initial) ? current : [...initial]));
       setQuery('');
     },
     form,

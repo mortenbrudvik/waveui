@@ -19,6 +19,7 @@ import {
 import { FIELD_TEST_IDS, FIELD_TEST_TEXT, renderWithFieldContext } from '../../../test-utils-field';
 import { DismissLayerProvider, useDismiss } from '../../../hooks/useDismiss';
 import { __getAnnouncerText } from '../../../hooks/useAnnounce';
+import type { ListboxItem } from '../../../hooks/useListbox';
 
 const options = [
   { value: 'apple', label: 'Apple' },
@@ -1163,6 +1164,278 @@ describe('TagPicker', () => {
       const control = screen.getByRole('group');
       expect(control).toHaveClass('border-input', 'border-b-stroke-accessible');
       expect(control).not.toHaveClass('border-destructive');
+    });
+  });
+
+  describe('filter and query (P5-02, D12, D13)', () => {
+    const PREFIX = (option: ListboxItem, query: string) =>
+      option.label.toLowerCase().startsWith(query.toLowerCase());
+
+    function listed() {
+      return screen.queryAllByRole('option').map((o) => o.textContent);
+    }
+
+    /** A parent that owns the query: every onQueryChange call is recorded, then applied. */
+    function ControlledQuery({
+      onQueryChange,
+      ...props
+    }: Partial<TagPickerProps> & { onQueryChange: (query: string) => void }) {
+      const [query, setQuery] = React.useState('');
+      return (
+        <TagPicker
+          aria-label="Fruits"
+          options={options}
+          {...props}
+          query={query}
+          onQueryChange={(next) => {
+            onQueryChange(next);
+            setQuery(next);
+          }}
+        />
+      );
+    }
+
+    describe('filter', () => {
+      it('filters with a custom filter and keeps options that do not contain the text', async () => {
+        const user = userEvent.setup();
+        const { container } = render(
+          <TagPicker
+            aria-label="Fruits"
+            options={[...options, { value: 'create', label: 'Create …' }]}
+            filter={(option, query) =>
+              option.value === 'create' ||
+              option.label.toLowerCase().startsWith(query.toLowerCase())
+            }
+          />,
+        );
+        await user.type(combobox(), 'ba');
+        expect(screen.getAllByRole('option').map((o) => o.textContent)).toEqual([
+          'Banana',
+          'Create …',
+        ]);
+        await user.type(combobox(), 'zz');
+        expect(listed()).toEqual(['Create …']);
+        expect(activeOption()).toHaveTextContent('Create …');
+        expect(within(container).getByRole('status')).toBeEmptyDOMElement();
+      });
+
+      it('says "No matches" when a custom filter (a prefix match) keeps none', async () => {
+        const user = userEvent.setup();
+        const { container } = renderPicker({ filter: PREFIX });
+        // The default match, a substring, would keep Apple, Cherry and Date for "e".
+        await user.type(combobox(), 'e');
+        expect(listed()).toEqual([]);
+        expect(within(container).getByRole('status')).toHaveTextContent('No matches');
+        await user.clear(combobox());
+        await user.type(combobox(), 'ch');
+        expect(listed()).toEqual(['Cherry']);
+      });
+
+      it('lists every option for any text with filter={() => true}; Enter adds the first', async () => {
+        const user = userEvent.setup();
+        const onValueChange = vi.fn();
+        renderPicker({ filter: () => true, onValueChange });
+        await user.type(combobox(), 'zzz');
+        expect(listed()).toEqual(['Apple', 'Banana', 'Cherry', 'Date']);
+        expect(activeOption()).toHaveTextContent('Apple');
+        await user.keyboard('{Enter}');
+        expect(onValueChange.mock.calls).toEqual([[['apple']]]);
+      });
+
+      it('is called with each listed option (a ListboxItem) and the typed text', async () => {
+        const user = userEvent.setup();
+        const filter = vi.fn((_option: ListboxItem, _query: string) => true);
+        renderPicker({ filter, defaultValue: ['apple'] });
+        await user.click(combobox());
+        // Not while the text is empty.
+        expect(filter).not.toHaveBeenCalled();
+        await user.keyboard('x');
+        expect(filter).toHaveBeenCalledWith({ value: 'banana', label: 'Banana' }, 'x');
+        // A selected option is not listed, so the filter never sees it.
+        expect(new Set(filter.mock.calls.map(([option]) => option.value))).toEqual(
+          new Set(['banana', 'cherry', 'date']),
+        );
+      });
+    });
+
+    describe('query', () => {
+      it('reports the typed text and its resets: a tag added, Escape with text, a form reset', async () => {
+        const user = userEvent.setup();
+        const onQueryChange = vi.fn();
+        render(
+          <form aria-label="Order">
+            <ControlledQuery onQueryChange={onQueryChange} />
+          </form>,
+        );
+        await user.type(combobox(), 'ch');
+        await user.keyboard('{Enter}');
+        expect(tags()).toEqual(['Cherry']);
+        expect(combobox()).toHaveValue('');
+        expect(onQueryChange.mock.calls).toEqual([['c'], ['ch'], ['']]);
+        onQueryChange.mockClear();
+        // The first Escape closes the list and keeps the text; the second clears it.
+        await user.keyboard('ba{Escape}');
+        expect(combobox()).toHaveValue('ba');
+        await user.keyboard('{Escape}');
+        expect(combobox()).toHaveValue('');
+        expect(onQueryChange.mock.calls).toEqual([['b'], ['ba'], ['']]);
+        onQueryChange.mockClear();
+        await user.keyboard('da');
+        act(() => (screen.getByRole('form', { name: 'Order' }) as HTMLFormElement).reset());
+        expect(combobox()).toHaveValue('');
+        expect(onQueryChange.mock.calls).toEqual([['d'], ['da'], ['']]);
+      });
+
+      it('keeps the query on a blur and a close (0.7)', async () => {
+        const user = userEvent.setup();
+        const onQueryChange = vi.fn();
+        render(
+          <>
+            <ControlledQuery onQueryChange={onQueryChange} />
+            <button type="button">Next</button>
+          </>,
+        );
+        await user.type(combobox(), 'ch');
+        await user.tab();
+        expect(screen.getByRole('button', { name: 'Next' })).toHaveFocus();
+        expect(combobox()).toHaveAttribute('aria-expanded', 'false');
+        expect(combobox()).toHaveValue('ch');
+        expect(onQueryChange.mock.calls).toEqual([['c'], ['ch']]);
+      });
+
+      it('shows a controlled query, filters with it, and keeps one the parent keeps after a tag is added', async () => {
+        const user = userEvent.setup();
+        const onQueryChange = vi.fn();
+        renderPicker({ query: 'an', onQueryChange });
+        expect(combobox()).toHaveValue('an');
+        await user.click(combobox());
+        expect(listed()).toEqual(['Banana']);
+        expect(activeOption()).toHaveTextContent('Banana');
+        await user.keyboard('{Enter}');
+        expect(tags()).toEqual(['Banana']);
+        expect(onQueryChange.mock.calls).toEqual([['']]);
+        expect(combobox()).toHaveValue('an');
+      });
+
+      it('starts from defaultQuery: shown and filtering', async () => {
+        const user = userEvent.setup();
+        renderPicker({ defaultQuery: 'ch' });
+        expect(combobox()).toHaveValue('ch');
+        await user.click(combobox());
+        expect(listed()).toEqual(['Cherry']);
+      });
+
+      it('calls onQueryChange once per change in StrictMode', async () => {
+        const user = userEvent.setup();
+        const onQueryChange = vi.fn();
+        render(
+          <React.StrictMode>
+            <TagPicker aria-label="Fruits" options={options} onQueryChange={onQueryChange} />
+          </React.StrictMode>,
+        );
+        await user.type(combobox(), 'ch');
+        await user.keyboard('{Enter}');
+        expect(onQueryChange.mock.calls).toEqual([['c'], ['ch'], ['']]);
+      });
+    });
+
+    describe('locking (D12)', () => {
+      it('reports a lock reset from an effect, once, without a render-phase update', () => {
+        const error = vi.spyOn(console, 'error');
+        const onQueryChange = vi.fn();
+        const { rerender } = renderPicker({ defaultQuery: 'ch', onQueryChange });
+        rerender(
+          <TagPicker
+            aria-label="Fruits"
+            options={options}
+            defaultQuery="ch"
+            disabled
+            onQueryChange={onQueryChange}
+          />,
+        );
+        expect(onQueryChange.mock.calls).toEqual([['']]);
+        expect(error).not.toHaveBeenCalled();
+      });
+
+      it.each([
+        ['disabled', { disabled: true }],
+        ['readOnly', { readOnly: true }],
+      ] as const)(
+        'hides a controlled query typed before %s turns on, and reports its reset once, logging nothing',
+        async (_label, lock) => {
+          const user = userEvent.setup();
+          const error = vi.spyOn(console, 'error');
+          const onQueryChange = vi.fn();
+          const { rerender } = render(<ControlledQuery onQueryChange={onQueryChange} />);
+          await user.type(combobox(), 'ch');
+          rerender(<ControlledQuery onQueryChange={onQueryChange} {...lock} />);
+          expect(combobox()).toHaveValue('');
+          expect(onQueryChange.mock.calls).toEqual([['c'], ['ch'], ['']]);
+          rerender(<ControlledQuery onQueryChange={onQueryChange} {...lock} />);
+          rerender(<ControlledQuery onQueryChange={onQueryChange} />);
+          expect(combobox()).toHaveValue('');
+          expect(onQueryChange).toHaveBeenCalledTimes(3);
+          // A render-phase call would make React log an update of the parent during the render of
+          // the TagPicker.
+          expect(error).not.toHaveBeenCalled();
+        },
+      );
+
+      it('hides a query the parent keeps while locked, reports its reset once, and shows it unlocked', async () => {
+        const onQueryChange = vi.fn();
+        const make = (readOnly: boolean) => (
+          <TagPicker
+            aria-label="Fruits"
+            options={options}
+            query="ch"
+            onQueryChange={onQueryChange}
+            readOnly={readOnly}
+          />
+        );
+        const { rerender } = render(make(false));
+        expect(combobox()).toHaveValue('ch');
+        rerender(make(true));
+        expect(combobox()).toHaveValue('');
+        // Later renders while locked, in tasks of their own (a parent that renders for another
+        // reason), report nothing more.
+        await act(async () => {});
+        rerender(make(true));
+        await act(async () => {});
+        expect(combobox()).toHaveValue('');
+        expect(onQueryChange.mock.calls).toEqual([['']]);
+        rerender(make(false));
+        expect(combobox()).toHaveValue('ch');
+        expect(onQueryChange.mock.calls).toEqual([['']]);
+      });
+
+      it('drops a defaultQuery when it mounts locked and reports nothing (as defaultOpen)', () => {
+        const onQueryChange = vi.fn();
+        const make = (disabled: boolean) => (
+          <TagPicker
+            aria-label="Fruits"
+            options={options}
+            defaultQuery="ch"
+            onQueryChange={onQueryChange}
+            disabled={disabled}
+          />
+        );
+        const { rerender } = render(make(true));
+        expect(combobox()).toHaveValue('');
+        rerender(make(false));
+        expect(combobox()).toHaveValue('');
+        expect(onQueryChange).not.toHaveBeenCalled();
+      });
+    });
+
+    it('types filter, query, defaultQuery and onQueryChange', () => {
+      expectTypeOf<TagPickerProps['filter']>().toEqualTypeOf<
+        ((option: ListboxItem, query: string) => boolean) | undefined
+      >();
+      expectTypeOf<TagPickerProps['query']>().toEqualTypeOf<string | undefined>();
+      expectTypeOf<TagPickerProps['defaultQuery']>().toEqualTypeOf<string | undefined>();
+      expectTypeOf<TagPickerProps['onQueryChange']>().toEqualTypeOf<
+        ((query: string) => void) | undefined
+      >();
     });
   });
 });

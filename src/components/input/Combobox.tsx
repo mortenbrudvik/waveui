@@ -137,6 +137,35 @@ export interface ComboboxProps<M extends boolean = false> extends Omit<
    */
   freeform?: M extends true ? never : boolean;
   /**
+   * Whether an option matches the typed text (the query, or with `freeform` the typed value).
+   * Called with every option that is not hidden (its `value`, `label` and `textValue`) and the
+   * text whenever the text is not empty; an option it returns `false` for is filtered out. It may
+   * keep options that do not contain the text: `filter={() => true}` with `query` and
+   * `onQueryChange` leaves the matching to you (a server-side search that replaces the options),
+   * and a filter that always keeps an option of your own gives a "Create …" entry.
+   * @default a case-insensitive substring match on the option's `textValue`, else its `label`
+   */
+  filter?: (option: ListboxItem, query: string) => boolean;
+  /**
+   * Controlled query: the text typed since the last commit, which filters the options. A
+   * non-empty query shows in the input; `''` shows the selected option's label (the selected
+   * labels with `multiselect`), except while the user edits the text, so erased text stays empty.
+   * Not used with `freeform`, where the typed text is the value.
+   */
+  query?: string;
+  /**
+   * Initial query for uncontrolled usage. A Combobox that starts disabled or read-only starts
+   * without it (as it starts closed). Not used with `freeform`.
+   * @default ''
+   */
+  defaultQuery?: string;
+  /**
+   * Called with the new query when it changes: as the user types, and with `''` when it resets (a
+   * commit, a close, a blur, Escape, the clear button, a form reset, or `disabled` or `readOnly`
+   * turned on while text is typed). Never called with `freeform`.
+   */
+  onQueryChange?: (query: string) => void;
+  /**
    * Name of the value in form submissions (renders a hidden input; one per value with
    * `multiselect`).
    */
@@ -289,6 +318,7 @@ function hasFocus(element: Element): boolean {
   return root.activeElement === element;
 }
 
+/** The default `filter` (0.7's match): a case-insensitive substring of `textValue ?? label`. */
 function matchesText(item: ListboxItem, text: string): boolean {
   return (item.textValue ?? item.label).toLowerCase().includes(text.toLowerCase());
 }
@@ -306,6 +336,10 @@ const ComboboxRoot = (props: ComboboxProps<boolean>) => {
     placeholder,
     disabled = false,
     freeform: freeformProp = false,
+    filter,
+    query: queryProp,
+    defaultQuery,
+    onQueryChange,
     name,
     form,
     required,
@@ -356,6 +390,17 @@ const ComboboxRoot = (props: ComboboxProps<boolean>) => {
       );
     }
   }, [freeformIgnored]);
+  // With `freeform` the typed text is the value, so the query props are unused (D12).
+  const queryIgnored = freeform && (queryProp !== undefined || defaultQuery !== undefined);
+  React.useEffect(() => {
+    if (queryIgnored) {
+      warnOnce(
+        'Combobox:query-freeform',
+        'Combobox: `query` and `defaultQuery` are not used with `freeform`: the typed text is the ' +
+          'value (`value`, `onValueChange`).',
+      );
+    }
+  }, [queryIgnored]);
 
   const field = useFieldContext();
   const isRequired = required ?? field?.required ?? false;
@@ -400,17 +445,38 @@ const ComboboxRoot = (props: ComboboxProps<boolean>) => {
     onOpenChange,
   );
   const open = openState && interactive;
+  // The query (D12): the text typed since the last commit, which filters the options, and
+  // `editing`, set while the user edits it, so erased text stays empty instead of showing the
+  // committed value. A Combobox that starts locked starts without a query, as it starts closed.
+  // Freeform: the text is the value, so the query is unused (`onQueryChange` is never called)
+  // and 0.7's draft follows the text instead.
+  const [query, setQuery] = useControllable(
+    freeform ? undefined : queryProp,
+    interactive ? (defaultQuery ?? '') : '',
+    freeform ? undefined : onQueryChange,
+  );
+  const [editing, setEditing] = React.useState(false);
+  const [freeformDraft, setFreeformDraft] = React.useState<string | null>(null);
   // Text typed since the last commit, the filter; `null` shows the committed value's label
-  // (input-pickers#7), or the selected labels with `multiselect`. Freeform: the input shows the
-  // value, and the draft follows that text.
-  const [draft, setDraft] = React.useState<string | null>(null);
-  // Locking the control (readOnly/disabled) while typing drops the draft, so the input shows the
-  // committed value again (adjust-during-render pattern, C-HOOKS).
+  // (input-pickers#7), or the selected labels with `multiselect`: the query while it is not empty
+  // or the user edits it, and never while locked. Freeform: the input shows the value, and the
+  // draft follows that text.
+  const draft = freeform ? freeformDraft : interactive && (editing || query !== '') ? query : null;
+  // Locking the control (readOnly/disabled) while typing drops the typed text, so the input shows
+  // the committed value again: hidden during render above, the editing state and the freeform
+  // draft dropped here (adjust-during-render pattern, C-HOOKS), and the query reset reported from
+  // an effect, since `onQueryChange` never runs during render (D12).
   const [wasInteractive, setWasInteractive] = React.useState(interactive);
   if (wasInteractive !== interactive) {
     setWasInteractive(interactive);
-    if (!interactive) setDraft(null);
+    if (!interactive) {
+      setEditing(false);
+      setFreeformDraft(null);
+    }
   }
+  React.useEffect(() => {
+    if (!interactive) setQuery('');
+  }, [interactive, setQuery]);
   // Locking also closes the list itself, not only the derived `open`, so unlocking does not reopen
   // it without a user action. The close is reported through onOpenChange (a consumer callback from
   // an effect, C-HOOKS); a controlled `open` that stays true is still not shown while locked.
@@ -427,10 +493,34 @@ const ComboboxRoot = (props: ComboboxProps<boolean>) => {
   const inputRef = React.useRef<HTMLInputElement | null>(null);
 
   const optionLabels = React.useMemo(() => collectOptionLabels(children), [children]);
-  const filter = React.useMemo(
-    () => (draft ? (item: ListboxItem) => matchesText(item, draft) : undefined),
-    [draft],
+  // useListbox's navigability predicate: `filter` (else the 0.7 match) bound to the typed text,
+  // while there is any (D13).
+  const filterText = draft ?? '';
+  const listFilter = React.useMemo(
+    () =>
+      filterText ? (item: ListboxItem) => (filter ?? matchesText)(item, filterText) : undefined,
+    [filterText, filter],
   );
+
+  // 0.7's `setDraft(text)`: the typed text becomes `text` (the query, reported, while editing).
+  const editDraft = (text: string) => {
+    if (freeform) {
+      setFreeformDraft(text);
+    } else {
+      setEditing(true);
+      setQuery(text);
+    }
+  };
+  // 0.7's `setDraft(null)`: the typed text is dropped, so the input shows the committed value
+  // again (the query resets to `''`).
+  const dropDraft = () => {
+    if (freeform) {
+      setFreeformDraft(null);
+    } else {
+      setEditing(false);
+      setQuery('');
+    }
+  };
 
   const commitText = (text: string) => {
     setTypedValue(text);
@@ -440,7 +530,7 @@ const ComboboxRoot = (props: ComboboxProps<boolean>) => {
 
   const close = () => {
     setOpen(false);
-    setDraft(null);
+    dropDraft();
   };
 
   // APG: Escape on a closed listbox clears the textbox. Freeform: the text is the value, so it is
@@ -449,11 +539,11 @@ const ComboboxRoot = (props: ComboboxProps<boolean>) => {
   let clearDraft: (() => void) | undefined;
   if (freeform) {
     clearDraft = () => {
-      setDraft(null);
+      setFreeformDraft(null);
       commitText('');
     };
   } else if (draft) {
-    clearDraft = () => setDraft(null);
+    clearDraft = dropDraft;
   }
 
   const listbox = useListbox({
@@ -470,7 +560,7 @@ const ComboboxRoot = (props: ComboboxProps<boolean>) => {
         // 0.7 order: the value callback first, the deprecated one after.
         setValue(next);
         onOptionSelect?.(next);
-        setDraft(null);
+        dropDraft();
         setTypedValue(null);
         return;
       }
@@ -490,9 +580,9 @@ const ComboboxRoot = (props: ComboboxProps<boolean>) => {
       );
       // A toggle clears the query, so the labels show again, selected (R18); the list stays open
       // (D11).
-      setDraft(null);
+      dropDraft();
     },
-    filter,
+    filter: listFilter,
     // Typing a filter makes its first match active (like Fluent's Combobox), so Enter selects what
     // the list shows instead of submitting the form. Nothing is active on open or with the text
     // cleared. Freeform: the text is the value, so Enter keeps it unless the user moved to an
@@ -526,7 +616,9 @@ const ComboboxRoot = (props: ComboboxProps<boolean>) => {
   else inputText = draft ?? optionLabel ?? '';
   // Freeform: the filter follows the text (adjust-during-render pattern, C-HOOKS; the text does not
   // depend on the filter, so this settles in one pass).
-  if (freeform && draft !== null && draft !== inputText) setDraft(inputText);
+  if (freeform && freeformDraft !== null && freeformDraft !== inputText) {
+    setFreeformDraft(inputText);
+  }
 
   const expanded = open && listbox.items.length > 0;
   const noMatchesText = labels?.noMatches ?? 'No matches';
@@ -553,7 +645,7 @@ const ComboboxRoot = (props: ComboboxProps<boolean>) => {
       } else {
         setValue(defaultValue ?? '');
       }
-      setDraft(null);
+      dropDraft();
       setTypedValue(null);
     },
     form,
@@ -636,11 +728,11 @@ const ComboboxRoot = (props: ComboboxProps<boolean>) => {
         ? announced
         : null;
     if (!multiselect) {
-      setDraft(text);
+      editDraft(text);
     } else if (text === labelsText && (edit === null || HISTORY_EDITS.has(edit.inputType))) {
       // D11 rule 3, for an undo or a redo (R17): text equal to the labels shows them again, with
       // no query. Any other edit that leaves their text, typed or pasted, is a query.
-      setDraft(null);
+      dropDraft();
     } else if (showingLabels) {
       // D11 rule 2: the query is the text the edit inserted into the labels. With the selection
       // the edit replaced (all of the labels after a focus, rule 1), that is the text now in its
@@ -649,12 +741,12 @@ const ComboboxRoot = (props: ComboboxProps<boolean>) => {
       // the labels at its start and its end. Backspace and Delete leave an empty query and never
       // remove a value (rule 4).
       const range = edit?.range;
-      setDraft(
+      editDraft(
         (range && replacedText(labelsText, text, range[0], range[1])) ??
           insertedText(labelsText, text),
       );
     } else {
-      setDraft(text);
+      editDraft(text);
     }
     if (!open) setOpen(true);
     if (freeform) commitText(text);
@@ -675,7 +767,7 @@ const ComboboxRoot = (props: ComboboxProps<boolean>) => {
   const handleClear = () => {
     setValue(multiselect ? EMPTY_VALUES : '');
     setTypedValue(null);
-    setDraft(null);
+    dropDraft();
     setOpen(false);
     inputRef.current?.focus();
   };
@@ -727,7 +819,7 @@ const ComboboxRoot = (props: ComboboxProps<boolean>) => {
           onKeyDown={composeEventHandlers(onKeyDown, readOnly ? undefined : handleKeyDown)}
           onKeyUp={composeEventHandlers(onKeyUp, listbox.onKeyUp)}
           onFocus={composeEventHandlers(onFocus, handleFocus)}
-          onBlur={composeEventHandlers(onBlur, () => setDraft(null), {
+          onBlur={composeEventHandlers(onBlur, dropDraft, {
             checkDefaultPrevented: false,
           })}
           className={cn(
@@ -821,9 +913,13 @@ export const ComboboxOptionGroup = OptionGroup;
  * filter: its first match becomes active while typing, and the input shows the selected option's
  * label again when the listbox closes. With `freeform` the text itself is the value. Text that
  * matches no option shows "No matches" (`labels.noMatches`), announced through a status region.
- * The expand button at the end of the input (a chevron, see `expandIcon`) opens and closes the
- * list without taking focus from the input and is not a tab stop; `clearable` adds a clear button,
- * a tab stop after the input. Both sit with the input in a wrapper `<div>` inside the root.
+ * `filter` replaces the match (it may keep options that do not contain the text, for a server-side
+ * search or a "Create …" entry), and `query`/`defaultQuery`/`onQueryChange` control the typed
+ * text (not with `freeform`), which resets to `''` on a commit, a close, a blur, Escape, the clear
+ * button and a form reset. The expand button at the end of the input (a chevron, see
+ * `expandIcon`) opens and closes the list without taking focus from the input and is not a tab
+ * stop; `clearable` adds a clear button, a tab stop after the input. Both sit with the input in a
+ * wrapper `<div>` inside the root.
  *
  * `multiselect` turns the value into an array (Fluent's `selectedOptions`): options draw a
  * checkbox; Enter and a click toggle an option and keep the list open (Tab, Escape and

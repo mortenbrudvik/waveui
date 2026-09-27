@@ -5,11 +5,13 @@ import { announce, useAnnounce } from '../../hooks/useAnnounce';
 /** Dropdown/Combobox `labels.selection`: the selected labels joined for display. */
 export const defaultSelectionLabel = (labels: string[]): string => labels.join(', ');
 
-/** Dropdown/Combobox/Listbox `labels.added`: announced when a multi-select toggle adds a value. */
+/** Dropdown/Combobox/Listbox/TagPicker `labels.added`: announced when a multi-select toggle adds
+ * a value. */
 export const defaultAddedLabel = (label: string, count: number): string =>
   `${label} added, ${count} selected`;
 
-/** Dropdown/Combobox/Listbox `labels.removed`: announced when a multi-select toggle removes a value. */
+/** Dropdown/Combobox/Listbox/TagPicker `labels.removed`: announced when a multi-select toggle
+ * removes a value. */
 export const defaultRemovedLabel = (label: string, count: number): string =>
   `${label} removed, ${count} selected`;
 
@@ -22,7 +24,8 @@ export interface ToggleAnnouncementLabels {
 /**
  * Announces a multi-select toggle the user made: `labels.added` or `labels.removed` (else their
  * English defaults) for the toggled option's `label`, with the `count` of values selected after it.
- * The picker's announcer regions ({@link PickerAnnouncer}) must be mounted.
+ * The picker's announcer regions must be mounted ({@link PickerAnnouncer}, or `useAnnounce` as
+ * TagPicker does).
  */
 export function announceToggle(
   labels: ToggleAnnouncementLabels | undefined,
