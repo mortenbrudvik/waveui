@@ -166,7 +166,10 @@ function FontPicker() {
   const { layerId, setReference, surfaceRef, floatingProps } = useListboxPopup({
     open,
     surfaceOpen: expanded,
-    onDismiss: () => setOpen(false),
+    onDismiss: () => {
+      setOpen(false);
+      setDraft(null);
+    },
     rootRef,
     anchorRef: inputRef,
   });
