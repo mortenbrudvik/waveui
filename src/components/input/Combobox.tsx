@@ -178,6 +178,14 @@ export interface ComboboxProps<M extends boolean = false> extends Omit<
    */
   onActiveOptionChange?: (value: string | null) => void;
   /**
+   * Keeps disabled options in the arrow-key order (the first match highlighted while typing may
+   * then be a disabled one too); they still cannot be selected (Enter and a click do nothing and
+   * the list stays open). Unlike Fluent, which always keeps disabled options reachable, WaveUI
+   * skips them by default.
+   * @default false
+   */
+  disabledOptionsFocusable?: boolean;
+  /**
    * Name of the value in form submissions (renders a hidden input; one per value with
    * `multiselect`).
    */
@@ -359,6 +367,7 @@ const ComboboxRoot = (props: ComboboxProps<boolean>) => {
     defaultQuery,
     onQueryChange,
     onActiveOptionChange,
+    disabledOptionsFocusable = false,
     name,
     form,
     required,
@@ -576,6 +585,7 @@ const ComboboxRoot = (props: ComboboxProps<boolean>) => {
     },
     mode: 'editable',
     multiselect,
+    disabledOptionsFocusable,
     selectedValues: values,
     onSelect: (next, details) => {
       if (!multiselect) {

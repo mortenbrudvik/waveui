@@ -234,6 +234,28 @@ describe('Combobox', () => {
       expect(activeOption()).toHaveTextContent('Apple');
     });
 
+    it('reaches disabled options with disabledOptionsFocusable and commits nothing on them (P5-03, D6)', async () => {
+      const user = userEvent.setup();
+      const onValueChange = vi.fn();
+      render(
+        <Combobox aria-label="Fruit" disabledOptionsFocusable onValueChange={onValueChange}>
+          <Option value="a">Apple</Option>
+          <Option value="b" disabled>
+            Banana
+          </Option>
+          <Option value="c">Cherry</Option>
+        </Combobox>,
+      );
+      combobox().focus();
+      await user.keyboard('{ArrowDown}');
+      expect(activeOption()).toHaveTextContent('Apple');
+      await user.keyboard('{ArrowDown}');
+      expect(activeOption()).toHaveTextContent('Banana');
+      await user.keyboard('{Enter}');
+      expect(onValueChange).not.toHaveBeenCalled();
+      expect(combobox()).toHaveAttribute('aria-expanded', 'true');
+    });
+
     it('aria-controls equals the listbox id and aria-activedescendant follows the highlight', async () => {
       const user = userEvent.setup();
       renderCombobox();

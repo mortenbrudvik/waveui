@@ -9,6 +9,8 @@ const meta = {
   argTypes: {
     disabled: { control: 'boolean' },
     clearable: { control: 'boolean' },
+    disabledOptionsFocusable: { control: 'boolean' },
+    expandIcon: { control: false },
   },
   args: {
     'aria-label': 'Pet',
@@ -149,6 +151,68 @@ export const ActiveOptionPreview: Story = {
     onActiveOptionChange: fn(),
   },
   render: (args) => <ActiveOptionPreviewDropdown {...args} />,
+};
+
+/**
+ * `expandIcon` replaces the chevron with your own glyph; a `<button>` or `Button` passed here is
+ * not nested (its children become the glyph).
+ */
+export const CustomExpandIcon: Story = {
+  args: {
+    defaultValue: 'dog',
+    expandIcon: <span aria-hidden>▾</span>,
+  },
+  render: (args) => (
+    <Dropdown {...args}>
+      <Dropdown.Option value="cat">Cat</Dropdown.Option>
+      <Dropdown.Option value="dog">Dog</Dropdown.Option>
+      <Dropdown.Option value="fish">Fish</Dropdown.Option>
+    </Dropdown>
+  ),
+};
+
+/**
+ * `renderValue` renders the button's content while a value is selected, in place of the selected
+ * label. It receives the raw value, not the label, so it is a good place to add content the
+ * label alone cannot show, such as a status dot.
+ */
+export const RenderedValue: Story = {
+  args: {
+    defaultValue: 'dog',
+    renderValue: (value: string) => (
+      <span className="inline-flex items-center gap-1.5">
+        <span aria-hidden className="size-2 shrink-0 rounded-full bg-success" />
+        <span className="capitalize">{value}</span>
+      </span>
+    ),
+  },
+  render: (args) => (
+    <Dropdown {...args}>
+      <Dropdown.Option value="cat">Cat</Dropdown.Option>
+      <Dropdown.Option value="dog">Dog</Dropdown.Option>
+      <Dropdown.Option value="fish">Fish</Dropdown.Option>
+    </Dropdown>
+  ),
+};
+
+/**
+ * `disabledOptionsFocusable` keeps disabled options in the arrow-key order (they still cannot be
+ * selected), unlike the default, which skips them.
+ */
+export const DisabledOptions: Story = {
+  args: {
+    disabledOptionsFocusable: true,
+    placeholder: 'Select an animal',
+  },
+  render: (args) => (
+    <Dropdown {...args}>
+      <Dropdown.Option value="cat">Cat</Dropdown.Option>
+      <Dropdown.Option value="dog" disabled>
+        Dog (not available)
+      </Dropdown.Option>
+      <Dropdown.Option value="fish">Fish</Dropdown.Option>
+    </Dropdown>
+  ),
 };
 
 /** Invalid state through a Field error (the Field labels and describes the button). */

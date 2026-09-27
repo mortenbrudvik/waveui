@@ -1,15 +1,19 @@
 import * as React from 'react';
 import { cn } from '../../lib/cn';
 import { composeEventHandlers } from '../../lib/composeEventHandlers';
-import { warnDeprecated } from '../../lib/dev';
+import { warnDeprecated, warnOnce } from '../../lib/dev';
 import { ChevronDownIcon, DismissIcon } from '../../lib/icons';
+import { renderSlot, slotRendersContent } from '../../lib/slot';
+import type { Slot } from '../../lib/slot';
 import { disabledStyles, focusRing, inputFocus, inputInvalid } from '../../lib/styles';
 import { useControllable } from '../../hooks/useControllable';
 import { useFieldContext, useFieldControl } from '../../hooks/useFieldControl';
 import { useFormReset } from '../../hooks/useFormReset';
 import { collectOptionLabels, useListbox } from '../../hooks/useListbox';
 import { useMergedRefs } from '../../hooks/useMergedRefs';
+import { unwrapButtonGlyph } from '../button/Button.slots';
 import { HiddenInput } from '../internal/HiddenInput';
+import { showsExpandButton } from './Combobox.expand';
 import { isInvalidLook } from './Input';
 import { ListboxSurface, Option, OptionGroup, useListboxPopup } from './Option';
 import { announceToggle, defaultSelectionLabel, PickerAnnouncer } from './pickerLabels';
@@ -106,11 +110,30 @@ export interface DropdownProps<M extends boolean = false> extends Omit<
    */
   onActiveOptionChange?: (value: string | null) => void;
   /**
+   * Keeps disabled options in the arrow-key, Home/End, PageUp/PageDown and typeahead order (the
+   * highlighted-by-default option may then be a disabled one too); they still cannot be selected
+   * (Enter, Space and a click do nothing and the list stays open), and in single-select mode,
+   * reaching one with Tab or Alt+ArrowUp closes the list without selecting it. Unlike Fluent,
+   * which always keeps disabled options reachable, WaveUI skips them by default.
+   * @default false
+   */
+  disabledOptionsFocusable?: boolean;
+  /**
    * Placeholder text shown when no value is selected. It is not an accessible name: label the
    * Dropdown with a `Field`, `aria-label` or `aria-labelledby`.
    * @default 'Select an option'
    */
   placeholder?: string;
+  /**
+   * Renders the button's content while a value is selected (the placeholder shows otherwise), in
+   * place of the selected label (`labels.selection` with `multiselect`). It receives the raw
+   * value(s), never a label; the content must be non-interactive, and its text is the combobox's
+   * value, so image-only content leaves the value empty.
+   * @default the selected label (`labels.selection` with `multiselect`)
+   */
+  renderValue?: M extends true
+    ? (value: string[]) => React.ReactNode
+    : (value: string) => React.ReactNode;
   /**
    * Whether the dropdown is disabled and non-interactive. Turning it on while the listbox is open
    * closes it (`onOpenChange(false)`).
@@ -133,6 +156,14 @@ export interface DropdownProps<M extends boolean = false> extends Omit<
    * @default false
    */
   clearable?: boolean;
+  /**
+   * The glyph at the end of the button (default: a chevron). `null` or `undefined` keep it;
+   * `false`, or a value that renders nothing, hides it (the button's end padding follows,
+   * together with `clearable`). Decorative content rendered inside the button: a `<button>` or
+   * `Button` passed here is not nested (its children become the glyph, with a development
+   * warning).
+   */
+  expandIcon?: Slot<'span'>;
   /**
    * The clear button's name and, with `multiselect`, the selected-labels text and the toggle
    * announcements, for localization. Unset members keep their English defaults.
@@ -175,12 +206,15 @@ const DropdownRoot = (props: DropdownProps<boolean>) => {
     defaultOpen,
     onOpenChange,
     onActiveOptionChange,
+    disabledOptionsFocusable = false,
     placeholder = 'Select an option',
+    renderValue,
     disabled = false,
     name,
     form,
     required,
     clearable = false,
+    expandIcon,
     labels,
     autoFocus,
     tabIndex,
@@ -262,6 +296,7 @@ const DropdownRoot = (props: DropdownProps<boolean>) => {
     onOpenChange: (next) => setOpen(next),
     mode: 'select-only',
     multiselect,
+    disabledOptionsFocusable,
     selectedValues: values,
     onSelect: (next, details) => {
       if (!multiselect) {
@@ -322,6 +357,35 @@ const DropdownRoot = (props: DropdownProps<boolean>) => {
       : ''
     : (shownLabels[0] ?? '');
 
+  // D15: the optional-indicator rule (Phase 1 D21) shared with Combobox's expand button, and the
+  // glyph slot rule shared with SplitButton, MenuButton `menuIcon` and Combobox/TimePicker
+  // `expandIcon` (C-SLOTS).
+  const showExpand = showsExpandButton(expandIcon);
+  const { glyph: expandGlyph, button: expandIconButton } = unwrapButtonGlyph(expandIcon);
+  React.useEffect(() => {
+    if (expandIconButton) {
+      warnOnce(
+        'Dropdown:expandIcon-button',
+        `Dropdown: \`expandIcon\` received ${expandIconButton}; its children render as the ` +
+          'glyph of the combobox button and its props were dropped (buttons cannot be nested). ' +
+          'Pass icon content instead, e.g. `expandIcon={<MyIcon />}`.',
+      );
+    }
+  }, [expandIconButton]);
+
+  // D15: `renderValue` replaces the button's content while a value is selected, given the raw
+  // value(s) — never a label — so it is called only while `values` holds any (never for `''`/
+  // `[]`); without it, the selected label(s) computed above show as in 0.7.
+  const hasValue = values.length > 0;
+  const showValue = renderValue ? hasValue : displayText !== '';
+  const valueNode = !hasValue
+    ? undefined
+    : renderValue
+      ? (renderValue as (value: string | string[]) => React.ReactNode)(
+          multiselect ? [...values] : (values[0] ?? ''),
+        )
+      : displayText;
+
   const handleKeyDown = (event: React.KeyboardEvent<HTMLButtonElement>) => {
     if (event.key === 'Escape' && open && !expanded && !event.nativeEvent.isComposing) {
       // Open with nothing shown (no options): close, but leave Escape to an enclosing layer
@@ -339,7 +403,7 @@ const DropdownRoot = (props: DropdownProps<boolean>) => {
     buttonRef.current?.focus();
   };
 
-  const showClear = clearable && values.length > 0;
+  const showClear = clearable && hasValue;
 
   const listLabelledBy =
     fieldProps['aria-label'] === undefined
@@ -370,21 +434,34 @@ const DropdownRoot = (props: DropdownProps<boolean>) => {
             // Every padding is set here (C-NATIVE), not left to an app-wide `button` rule. The end
             // padding keeps the text clear of the chevron (and of the clear button while it shows).
             'relative flex h-8 w-full items-center justify-between rounded border border-input border-b-stroke-accessible bg-background px-3 py-0 text-start text-body-1 text-foreground',
-            pickerEndPadding(showClear ? 2 : 1),
+            pickerEndPadding(Number(showClear) + Number(showExpand)),
             inputFocus,
             disabledStyles,
             invalidLook && inputInvalid,
           )}
         >
-          <span className={cn('truncate', !displayText && 'text-muted-foreground')}>
-            {displayText || placeholder}
+          <span className={cn('truncate', !showValue && 'text-muted-foreground')}>
+            {showValue ? valueNode : placeholder}
           </span>
-          <ChevronDownIcon
-            className={cn(
-              'absolute end-3 transition-transform motion-reduce:transition-none',
-              expanded && 'rotate-180',
-            )}
-          />
+          {showExpand &&
+            (expandGlyph != null && slotRendersContent(expandGlyph) ? (
+              renderSlot(
+                expandGlyph,
+                'span',
+                cn(
+                  'absolute end-3 inline-flex transition-transform motion-reduce:transition-none',
+                  expanded && 'rotate-180',
+                ),
+                { 'aria-hidden': true },
+              )
+            ) : (
+              <ChevronDownIcon
+                className={cn(
+                  'absolute end-3 transition-transform motion-reduce:transition-none',
+                  expanded && 'rotate-180',
+                )}
+              />
+            ))}
         </button>
         {showClear && (
           <button
@@ -394,7 +471,12 @@ const DropdownRoot = (props: DropdownProps<boolean>) => {
             // Keeps focus on the combobox while the pointer clears it.
             onMouseDown={(event) => event.preventDefault()}
             onClick={handleClear}
-            className={cn(PICKER_ICON_BUTTON_CLASSES, 'end-7', focusRing, disabledStyles)}
+            className={cn(
+              PICKER_ICON_BUTTON_CLASSES,
+              showExpand ? 'end-7' : 'end-1',
+              focusRing,
+              disabledStyles,
+            )}
           >
             <DismissIcon />
           </button>
@@ -435,8 +517,9 @@ export const DropdownOptionGroup = OptionGroup;
  * A select-only combobox (APG): a button that opens a listbox of `Option`s. Enter, Space,
  * ArrowDown/ArrowUp, Home/End and typing a character open it and move the highlight
  * (`aria-activedescendant`); Enter/Space select, Tab selects the highlighted option and moves on,
- * Escape closes. `clearable` adds a clear button, a tab stop after the combobox button; both sit
- * in a wrapper `<div>` inside the root.
+ * Escape closes. The button's chevron (see `expandIcon`) turns while the list is open, and
+ * `renderValue` replaces its content while a value is selected. `clearable` adds a clear button,
+ * a tab stop after the combobox button; both sit in a wrapper `<div>` inside the root.
  *
  * `multiselect` turns the value into an array (Fluent's `selectedOptions`): options draw a
  * checkbox; Enter and Space toggle the highlighted option, a click toggles the clicked option, and

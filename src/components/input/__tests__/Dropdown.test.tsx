@@ -1182,6 +1182,131 @@ describe('Dropdown', () => {
     expect([...renders.keys()].sort()).toEqual(['a', 'b']);
   });
 
+  describe('expandIcon and renderValue (P5-03, D15)', () => {
+    function chevron() {
+      return combobox().querySelector('svg');
+    }
+
+    it('keeps the 0.7 chevron by default and hides it with false', () => {
+      const { rerender } = renderDropdown({ clearable: true, defaultValue: 'a' });
+      expect(combobox().querySelector('svg')).toHaveClass('absolute', 'end-3'); // 0.7
+      rerender(
+        <Dropdown aria-label="Fruit" clearable defaultValue="a" expandIcon={false}>
+          {FRUITS}
+        </Dropdown>,
+      );
+      expect(combobox().querySelector('svg')).toBeNull();
+      expect(combobox()).toHaveClass('pe-8'); // one button: the clear button
+      expect(screen.getByRole('button', { name: 'Clear selection' })).toHaveClass('end-1');
+    });
+
+    it.each([
+      ['null', null],
+      ['undefined', undefined],
+    ])('keeps the chevron with expandIcon %s', (_label, expandIcon) => {
+      renderDropdown({ expandIcon });
+      expect(chevron()).toHaveAttribute('data-wave-icon', 'chevron-down');
+    });
+
+    it.each([
+      ['true', true],
+      ['an empty string', ''],
+      ['an empty array', []],
+      ['an empty Fragment', <></>],
+    ])('hides the chevron with expandIcon %s (renders nothing)', (_label, expandIcon) => {
+      renderDropdown({ expandIcon, clearable: true, defaultValue: 'a' });
+      expect(chevron()).toBeNull();
+      expect(combobox()).toHaveClass('pe-8'); // one button: the clear button
+    });
+
+    it('renders custom content as the decorative glyph, in place of the chevron', () => {
+      renderDropdown({ expandIcon: <svg data-testid="caret" /> });
+      const caret = screen.getByTestId('caret');
+      expect(caret.parentElement).toHaveAttribute('aria-hidden', 'true');
+      expect(caret.parentElement).toHaveClass('absolute', 'end-3', 'inline-flex');
+      expect(combobox().querySelector('[data-wave-icon="chevron-down"]')).toBeNull();
+    });
+
+    it('turns the custom glyph while the list is open, without motion when reduced', async () => {
+      const user = userEvent.setup();
+      renderDropdown({ expandIcon: <svg data-testid="caret" /> });
+      const glyph = () => screen.getByTestId('caret').parentElement;
+      expect(glyph()).toHaveClass('transition-transform', 'motion-reduce:transition-none');
+      expect(glyph()).not.toHaveClass('rotate-180');
+      await user.click(combobox());
+      expect(glyph()).toHaveClass('rotate-180');
+    });
+
+    it('unwraps a button passed as expandIcon and warns once', () => {
+      const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+      renderDropdown({ expandIcon: <button type="button">▾</button> });
+      expect(within(combobox()).queryByRole('button')).toBeNull();
+      expect(warn.mock.calls).toEqual([
+        [
+          '[WaveUI] Dropdown: `expandIcon` received a button element; its children render as ' +
+            'the glyph of the combobox button and its props were dropped (buttons cannot be ' +
+            'nested). Pass icon content instead, e.g. `expandIcon={<MyIcon />}`.',
+        ],
+      ]);
+    });
+
+    it('keeps the chevron for a button element without content (warns once)', () => {
+      const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+      renderDropdown({ expandIcon: <button type="button" /> });
+      expect(chevron()).toHaveAttribute('data-wave-icon', 'chevron-down');
+      expect(warn).toHaveBeenCalledOnce();
+    });
+
+    it('renders renderValue content while a value is selected, given the raw value (not the label)', () => {
+      renderDropdown({ defaultValue: 'a', renderValue: (v) => <b>{`Selected: ${v}`}</b> });
+      expect(combobox()).toHaveTextContent('Selected: a');
+      expect(combobox()).not.toHaveTextContent('Apple');
+    });
+
+    it('never calls renderValue and shows the placeholder while nothing is selected', () => {
+      const renderValue = vi.fn((v: string) => <b>{v}</b>);
+      renderDropdown({ renderValue, placeholder: 'Pick one' });
+      expect(combobox()).toHaveTextContent('Pick one');
+      expect(renderValue).not.toHaveBeenCalled();
+    });
+
+    it('passes the array of values to renderValue with multiselect', () => {
+      render(
+        <Dropdown
+          aria-label="Fruit"
+          multiselect
+          defaultValue={['a', 'b']}
+          renderValue={(values) => `${values.length} selected`}
+        >
+          {FRUITS}
+        </Dropdown>,
+      );
+      expect(combobox()).toHaveTextContent('2 selected');
+    });
+
+    it('reaches disabled options with disabledOptionsFocusable and commits nothing on them', async () => {
+      const user = userEvent.setup();
+      const onValueChange = vi.fn();
+      render(
+        <Dropdown aria-label="Fruit" disabledOptionsFocusable onValueChange={onValueChange}>
+          <Option value="a">Apple</Option>
+          <Option value="b" disabled>
+            Banana
+          </Option>
+          <Option value="c">Cherry</Option>
+        </Dropdown>,
+      );
+      await user.click(combobox());
+      expect(activeOption()).toHaveTextContent('Apple');
+      await user.keyboard('{ArrowDown}');
+      expect(activeOption()).toHaveTextContent('Banana');
+      await user.keyboard('{Enter}');
+      expect(onValueChange).not.toHaveBeenCalled();
+      expect(combobox()).toHaveAttribute('aria-expanded', 'true');
+      expect(listbox()).toBeInTheDocument();
+    });
+  });
+
   describe('clear button', () => {
     function clearButton(name = 'Clear selection') {
       return screen.getByRole('button', { name });
