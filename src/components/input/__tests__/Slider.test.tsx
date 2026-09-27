@@ -462,4 +462,12 @@ describe('size (Phase 4 D10, D14)', () => {
     // @ts-expect-error Slider has no large size
     render(<Slider aria-label="Volume" size="large" />);
   });
+
+  it('renders and reports the default for a size from untyped code', () => {
+    // @ts-expect-error Slider has no large size
+    render(<Slider aria-label="Volume" size="large" />);
+    expect(slider()).toHaveAttribute('data-size', 'medium');
+    expect(slider()).toHaveClass('[&::-webkit-slider-thumb]:h-5');
+    expect(slider()).not.toHaveClass('h-6');
+  });
 });
