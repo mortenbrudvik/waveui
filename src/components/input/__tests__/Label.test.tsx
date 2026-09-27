@@ -99,6 +99,26 @@ describe('Label', () => {
     });
   });
 
+  describe('required content (Phase 4 D27)', () => {
+    it('true shows the decorative asterisk', () => {
+      render(<Label required>Email</Label>);
+      expect(screen.getByText('*')).toHaveAttribute('aria-hidden', 'true');
+    });
+
+    it('content replaces the asterisk inside the same decorative span', () => {
+      render(<Label required={<span>(required)</span>}>Email</Label>);
+      const indicator = screen.getByText('(required)').parentElement as HTMLElement;
+      expect(indicator).toHaveAttribute('aria-hidden', 'true');
+      expect(indicator).toHaveClass('ms-1', 'text-error');
+      expect(screen.queryByText('*')).toBeNull();
+    });
+
+    it('content that renders nothing shows no indicator', () => {
+      const { container } = render(<Label required="">Email</Label>);
+      expect(container.querySelector('[aria-hidden="true"]')).toBeNull();
+    });
+  });
+
   describe('weight (layout#16)', () => {
     it.each([
       ['semibold', 'font-semibold'],
