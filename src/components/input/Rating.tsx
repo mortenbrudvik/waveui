@@ -3,7 +3,7 @@ import { cn } from '../../lib/cn';
 import { composeEventHandlers } from '../../lib/composeEventHandlers';
 import { warnDeprecated, warnOnce } from '../../lib/dev';
 import { getArrowIntent, getDirection } from '../../lib/direction';
-import type { Slot } from '../../lib/slot';
+import { slotRendersContent, type Slot } from '../../lib/slot';
 import type { Size } from '../../lib/types';
 import { useControllable } from '../../hooks/useControllable';
 import { useEventCallback } from '../../hooks/useEventCallback';
@@ -19,6 +19,7 @@ import {
   ratingItems,
   resolveRatingColor,
   StarGlyph,
+  useRatingItemChecks,
   useRatingItemRegistry,
   useStarGlyphs,
   type RatingColor,
@@ -69,11 +70,11 @@ export interface RatingProps extends Omit<
   max?: number;
   /**
    * The grain of the rating: `1` (whole stars) or `0.5` (half stars). With `0.5`, each star stays
-   * one 24×24px pointer target: the half is chosen by the pointer's position over it (the half
-   * at the inline start, which mirrors under `dir="rtl"`), and two transparent radios per star,
-   * the half value then the full value, serve the keyboard and screen readers. The keys then move
-   * by half a star. A value other than `0.5` (from untyped code) counts as `1`. RatingDisplay has
-   * no `step`: it draws any fraction.
+   * one pointer target of at least 24×24px (a larger `size` keeps a larger one): the half is
+   * chosen by the pointer's position over it (the half at the inline start, which mirrors under
+   * `dir="rtl"`), and two transparent radios per star, the half value then the full value, serve
+   * the keyboard and screen readers. The keys then move by half a star. A value other than `0.5`
+   * (from untyped code) counts as `1`. RatingDisplay has no `step`: it draws any fraction.
    * @default 1
    */
   step?: 0.5 | 1;
@@ -356,7 +357,12 @@ const RatingRoot = ({
   const resolvedColor = resolveRatingColor(color);
   const glyphs = useStarGlyphs('Rating', iconFilled, iconOutline);
   const starLabel = labels?.star ?? defaultStarLabel;
-  const { registerItem } = useRatingItemRegistry();
+  const { registerItem, counts } = useRatingItemRegistry();
+  // Whether the root draws its own children instead of the `max` generated stars (D26): the
+  // generated stars always cover every value on their own, so only a custom item set can leave
+  // one missing.
+  const hasItems = slotRendersContent(children);
+  useRatingItemChecks(counts, max, hasItems);
   const context = React.useMemo<RatingContextValue>(
     () => ({
       kind: 'input',
@@ -502,7 +508,11 @@ const RatingDisplayRoot = ({
 
   const resolvedColor = resolveRatingColor(color);
   const glyphs = useStarGlyphs('RatingDisplay', iconFilled, iconOutline);
-  const { registerItem } = useRatingItemRegistry();
+  const { registerItem, counts } = useRatingItemRegistry();
+  // A compact display ignores `children` (D26): it never renders items of its own, so a value
+  // from 1 to `max` without an item is never "missing" on purpose.
+  const hasItems = !compact && slotRendersContent(children);
+  useRatingItemChecks(counts, max, hasItems);
   // Read-only: the stars take the inert actions (they choose, preview and rove nothing).
   const context = React.useMemo<RatingContextValue>(
     () => ({

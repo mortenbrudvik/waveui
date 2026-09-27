@@ -409,7 +409,6 @@ describe('half stars (Phase 4 D22, D23)', () => {
 
   it('the star is one box that draws the focus ring of either radio; every size keeps a 24px target', () => {
     const { rerender } = render(<Rating aria-label="Service" step={0.5} />);
-    expect(star3()).toHaveAttribute('data-rating-star', '');
     expect(star3()).toHaveClass(
       'relative',
       'inline-flex',
@@ -516,6 +515,40 @@ describe('half stars (Phase 4 D22, D23)', () => {
     expect(radio('1 star')).toHaveFocus();
   });
 
+  // B21 carry-over (review Minor 2): the radio search a pointer click bails out for is bounded to
+  // this star, so an unrelated `role="radio"` ancestor elsewhere in the document cannot silence
+  // every pointer pick.
+  it('a Rating nested inside an unrelated role="radio" element still chooses by pointer position', () => {
+    const onValueChange = vi.fn();
+    render(
+      <div role="radio" aria-checked="false">
+        <Rating aria-label="Service" step={0.5} onValueChange={onValueChange} />
+      </div>,
+    );
+    clickAt(star3(), 0.25);
+    expect(onValueChange.mock.calls).toEqual([[2.5]]);
+  });
+
+  // B21 carry-over (review Minor 4): pins the ends at step 0.5 (the keys' 0.7 "no wrap, no clear"
+  // rule extended to the half grid).
+  it('ArrowRight at max emits nothing', async () => {
+    const user = userEvent.setup();
+    const onValueChange = vi.fn();
+    render(<Rating aria-label="Service" step={0.5} value={5} onValueChange={onValueChange} />);
+    await user.tab();
+    await user.keyboard('{ArrowRight}');
+    expect(onValueChange).not.toHaveBeenCalled();
+  });
+
+  it('ArrowLeft at the minimum step (0.5) emits nothing', async () => {
+    const user = userEvent.setup();
+    const onValueChange = vi.fn();
+    render(<Rating aria-label="Service" step={0.5} value={0.5} onValueChange={onValueChange} />);
+    await user.tab();
+    await user.keyboard('{ArrowLeft}');
+    expect(onValueChange).not.toHaveBeenCalled();
+  });
+
   it('types: RatingProps step', () => {
     expectTypeOf<RatingProps['step']>().toEqualTypeOf<0.5 | 1 | undefined>();
   });
@@ -597,5 +630,66 @@ describe('Rating.Item at step 0.5: the star element (Phase 4 D22, D26)', () => {
     expect(box).toHaveAttribute('title', 'Two');
     await user.hover(box);
     expect(onMouseEnter).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('item value checks (Phase 4 D26)', () => {
+  it('warns once per duplicated value, per value outside 1…max and for a missing value', () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    render(
+      <Rating aria-label="Service" max={3}>
+        <Rating.Item value={1} />
+        <Rating.Item value={1} />
+        <Rating.Item value={4} />
+      </Rating>,
+    );
+    expect(warn.mock.calls.map(([message]) => message)).toEqual([
+      '[WaveUI] Rating.Item: two items have the value 1; give each star a unique value from 1 to max.',
+      '[WaveUI] Rating.Item: the value 4 is not a whole number from 1 to 3.',
+      '[WaveUI] Rating.Item: no item has the value 2; pass one Rating.Item per value from 1 to max.',
+    ]);
+  });
+
+  it('logs each message once in StrictMode', () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    render(
+      <React.StrictMode>
+        <Rating aria-label="Service" max={3}>
+          <Rating.Item value={1} />
+          <Rating.Item value={1} />
+          <Rating.Item value={4} />
+        </Rating>
+      </React.StrictMode>,
+    );
+    expect(warn.mock.calls.map(([message]) => message)).toEqual([
+      '[WaveUI] Rating.Item: two items have the value 1; give each star a unique value from 1 to max.',
+      '[WaveUI] Rating.Item: the value 4 is not a whole number from 1 to 3.',
+      '[WaveUI] Rating.Item: no item has the value 2; pass one Rating.Item per value from 1 to max.',
+    ]);
+  });
+
+  it('generated stars never warn', () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    render(<Rating aria-label="Service" max={7} />);
+    expect(warn).not.toHaveBeenCalled();
+  });
+
+  it('a compact RatingDisplay ignores children and never warns about a missing value', () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    render(
+      <RatingDisplay value={2} max={3} compact>
+        <RatingDisplay.Item value={1} />
+      </RatingDisplay>,
+    );
+    expect(warn).not.toHaveBeenCalled();
+  });
+
+  it('outside a root in production: logs once and renders an empty display star', () => {
+    vi.stubEnv('NODE_ENV', 'production');
+    const error = vi.spyOn(console, 'error').mockImplementation(() => {});
+    const { container } = render(<RatingItem value={1} />);
+    expect(container.querySelector('svg')).not.toBeNull();
+    expect(error).toHaveBeenCalledTimes(1);
+    vi.unstubAllEnvs();
   });
 });

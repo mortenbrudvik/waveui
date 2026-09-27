@@ -120,3 +120,66 @@ export const DisplayLocalized: StoryObj<typeof RatingDisplay> = {
     </div>
   ),
 };
+
+const Heart = ({ filled }: { filled: boolean }) => (
+  <svg
+    viewBox="0 0 24 24"
+    fill={filled ? 'currentColor' : 'none'}
+    stroke="currentColor"
+    strokeWidth={1.5}
+  >
+    <path d="M12 21s-7-4.4-9.3-9A5.3 5.3 0 0 1 12 6.6 5.3 5.3 0 0 1 21.3 12C19 16.6 12 21 12 21z" />
+  </svg>
+);
+
+/** `step={0.5}` offers half stars: the pointer chooses by its position over the star. */
+export const HalfStars: Story = { args: { 'aria-label': 'Service', step: 0.5, defaultValue: 3.5 } };
+
+/** `color` recolors the filled stars; unfilled stars keep the same 3:1 outline in every color. */
+export const Colors: Story = {
+  render: (args) => (
+    <div className="grid gap-3">
+      {(['marigold', 'brand', 'neutral'] as const).map((color) => (
+        <div key={color} className="flex items-center gap-4">
+          <Rating {...args} color={color} defaultValue={3} aria-label={`${color} rating`} />
+          <RatingDisplay color={color} value={3.6} showValue />
+        </div>
+      ))}
+    </div>
+  ),
+};
+
+/**
+ * `iconFilled`/`iconOutline` replace the star glyph, as a pair (a filled and an unfilled star
+ * must differ by shape, not by color alone). The RatingDisplay clips the filled glyph over the
+ * outline glyph for a partial value (`3.6` fills 60% of the fourth heart).
+ */
+export const CustomIcons: Story = {
+  render: (args) => (
+    <div className="flex items-center gap-4">
+      <Rating
+        {...args}
+        aria-label="Love"
+        defaultValue={2}
+        iconFilled={<Heart filled />}
+        iconOutline={<Heart filled={false} />}
+      />
+      <RatingDisplay
+        value={3.6}
+        iconFilled={<Heart filled />}
+        iconOutline={<Heart filled={false} />}
+      />
+    </div>
+  ),
+};
+
+/** `Rating.Item` children replace the generated stars: here only the first star has its own icon pair. */
+export const CustomItems: Story = {
+  render: (args) => (
+    <Rating {...args} aria-label="Mood" max={3} defaultValue={2}>
+      <Rating.Item value={1} iconFilled={<Heart filled />} iconOutline={<Heart filled={false} />} />
+      <Rating.Item value={2} />
+      <Rating.Item value={3} />
+    </Rating>
+  ),
+};

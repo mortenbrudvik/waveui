@@ -289,9 +289,9 @@ export interface RatingContextValue {
   glyphs: StarGlyphs;
   /** The stars cannot be chosen or previewed (a disabled Rating, and every RatingDisplay). */
   disabled: boolean;
-  /** The accessible name of the star that chooses `value` (the root's `labels.star`). */
+  /** The accessible name of the radio that chooses `value` (the root's `labels.star`). */
   starLabel: (value: number, max: number) => string;
-  /** The roving `tabIndex` of the star whose `data-roving-value` is `key`. */
+  /** The roving `tabIndex` of the radio whose `data-roving-value` is `key`. */
   getTabIndex: (key: string) => number;
   /**
    * Chooses `value`; with `focus`, the radio of `value` also takes focus, without scrolling (a
@@ -376,6 +376,56 @@ export function useRatingItemRegistry(): RatingItemRegistry {
   return registry;
 }
 
+/**
+ * The item value checks of a rating root (Phase 4 D26, C-DEV): a passive effect, run after every
+ * layout effect of the commit (so every item's own layout effect has already registered its
+ * value, C-HOOKS: `counts` is never read during render), that warns once per problem found. No
+ * dependency array: `counts` keeps its identity for the root's lifetime (`useRatingItemRegistry`)
+ * and only its entries change in place, so the effect must re-run on every commit to see a later
+ * change, exactly as the registration effects of `useListbox` do.
+ *
+ * - A value more than one item registers is not unique (`Rating.Item:duplicate:<value>`).
+ * - A value that is not a whole number from 1 to `max` — untyped code, or a mistake — is not one
+ *   of the star positions the root can draw (`Rating.Item:value:<value>`).
+ * - `hasItems`: the root draws its own children instead of the `max` generated stars, which
+ *   always cover every value on their own; only then can a value from 1 to `max` be left without
+ *   an item, and only the first one found is named (`Rating.Item:missing`).
+ */
+export function useRatingItemChecks(
+  counts: ReadonlyMap<number, number>,
+  max: number,
+  hasItems: boolean,
+): void {
+  React.useEffect(() => {
+    for (const [value, count] of counts) {
+      if (count > 1) {
+        warnOnce(
+          `Rating.Item:duplicate:${value}`,
+          `Rating.Item: two items have the value ${value}; give each star a unique value from 1 ` +
+            'to max.',
+        );
+      }
+      if (!Number.isInteger(value) || value < 1 || value > max) {
+        warnOnce(
+          `Rating.Item:value:${value}`,
+          `Rating.Item: the value ${value} is not a whole number from 1 to ${max}.`,
+        );
+      }
+    }
+    if (!hasItems) return;
+    for (let value = 1; value <= max; value++) {
+      if (!counts.has(value)) {
+        warnOnce(
+          'Rating.Item:missing',
+          `Rating.Item: no item has the value ${value}; pass one Rating.Item per value from 1 to ` +
+            'max.',
+        );
+        return;
+      }
+    }
+  });
+}
+
 /** Properties for the RatingItem component (`Rating.Item`, `RatingDisplay.Item`). */
 export interface RatingItemProps extends Omit<
   React.HTMLAttributes<HTMLElement>,
@@ -423,6 +473,13 @@ export interface RatingItemProps extends Omit<
  * - `className`, `style`, `data-*`, the other attributes, the handlers and `ref` go to that star
  *   element, the consumer's handlers first. The role, name, checked state and tab stop of its
  *   radio (or radios) come from the root.
+ * - At `step={1}` the consumer's `onClick` and `onMouseEnter` compose onto the radio itself, so a
+ *   `preventDefault()` in either vetoes that star's own activation or hover preview. At
+ *   `step={0.5}` `onClick` and `onPointerMove` compose onto the star `<span>` instead: its two
+ *   radios run their own `onClick` first and choose their own value directly (Space, Enter, a
+ *   screen reader, or `radio.click()`), before the click bubbles to the span's composed handler,
+ *   so a `preventDefault()` there vetoes only a pointer-chosen value, never a keyboard or
+ *   assistive-technology activation.
  * - Outside a `Rating` or `RatingDisplay` it throws in development.
  */
 export const RatingItem = ({
@@ -480,7 +537,6 @@ export const RatingItem = ({
       <span
         {...starProps}
         ref={ref as React.Ref<HTMLSpanElement>}
-        data-rating-star=""
         className={cn(
           'relative inline-flex cursor-pointer rounded',
           targetPaddingMap[ctx.size],
@@ -491,9 +547,13 @@ export const RatingItem = ({
         onClick={composeEventHandlers(onClick, (event) => {
           // A click on a radio (Space, Enter, a screen reader, `click()`) chose its own value, and
           // a click without a press (`detail` 0) or from a portal inside the star is not the
-          // pointer's to place.
+          // pointer's to place. The radio search is bounded to this star: an unrelated
+          // `role="radio"` ancestor elsewhere in the document (the star's own radios have no
+          // children, so a pointer click's target is never one of them, `pointer-events-none`)
+          // must not silence every pointer pick.
           if (ctx.disabled || event.detail === 0 || !isOwnEvent(event)) return;
-          if ((event.target as Element).closest('[role="radio"]')) return;
+          const radio = (event.target as Element).closest('[role="radio"]');
+          if (radio && event.currentTarget.contains(radio)) return;
           ctx.choose(pick(event), true);
         })}
         onPointerMove={composeEventHandlers(onPointerMove, (event) => {
