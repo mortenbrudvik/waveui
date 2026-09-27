@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, afterEach } from 'vitest';
 import { renderToString } from 'react-dom/server';
+import { hydrateRoot } from 'react-dom/client';
 import { act, fireEvent, render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { InfoLabel } from '../InfoLabel';
@@ -7,14 +8,15 @@ import { expectNoA11yViolations, testNoImplicitSubmit, testSystemProps } from '.
 
 const INFO = 'Use at least 8 characters.';
 
-/** The visual popup (portaled, aria-hidden, only while open). */
+/** The InfoButton note (portaled, role="note", only mounted while open). */
 function getSurface(): HTMLElement | null {
   return document.querySelector<HTMLElement>('[data-wave-infolabel-surface]');
 }
 
-function renderInfoLabel(props: Partial<React.ComponentProps<typeof InfoLabel>> = {}) {
-  const utils = render(<InfoLabel label="Password" info={INFO} {...props} />);
-  return { ...utils, button: screen.getByRole('button', { name: 'Information' }) };
+/** Renders `<InfoLabel info={INFO}>Password</InfoLabel>` and returns its info button. */
+function renderInfoLabel() {
+  const utils = render(<InfoLabel info={INFO}>Password</InfoLabel>);
+  return { ...utils, button: screen.getByRole('button', { name: 'Password Information' }) };
 }
 
 describe('InfoLabel', () => {
@@ -25,11 +27,11 @@ describe('InfoLabel', () => {
   testSystemProps(InfoLabel, {
     expectedTag: 'span',
     displayName: 'InfoLabel',
-    defaultProps: { label: 'Name', info: 'Enter your name' },
+    defaultProps: { children: 'Name', info: 'Enter your name' },
   });
 
   it('renders the label text', () => {
-    render(<InfoLabel label="Email" info="Your email address" />);
+    render(<InfoLabel info="Your email address">Email</InfoLabel>);
     expect(screen.getByText('Email')).toBeInTheDocument();
   });
 
@@ -42,9 +44,13 @@ describe('InfoLabel', () => {
       expect(screen.queryByRole('img')).not.toBeInTheDocument();
     });
 
-    it('accepts a localised button label', () => {
-      render(<InfoLabel label="Passwort" info={INFO} infoButtonLabel="Hinweis" />);
-      expect(screen.getByRole('button', { name: 'Hinweis' })).toBeInTheDocument();
+    it('accepts a localised button label, appended after the label text', () => {
+      render(
+        <InfoLabel info={INFO} infoButtonLabel="Hinweis">
+          Passwort
+        </InfoLabel>,
+      );
+      expect(screen.getByRole('button', { name: 'Passwort Hinweis' })).toBeInTheDocument();
     });
 
     it('describes the button with the info text while closed (SSR-safe inline description)', () => {
@@ -54,7 +60,7 @@ describe('InfoLabel', () => {
     });
 
     it('renders the description on the server', () => {
-      const html = renderToString(<InfoLabel label="Password" info={INFO} />);
+      const html = renderToString(<InfoLabel info={INFO}>Password</InfoLabel>);
       expect(html).toContain(INFO);
       expect(html).toMatch(/aria-describedby="([^"]+)"[\s\S]*id="\1" hidden=""/);
     });
@@ -67,7 +73,7 @@ describe('InfoLabel', () => {
     });
   });
 
-  testNoImplicitSubmit(InfoLabel, { defaultProps: { label: 'Password', info: INFO } });
+  testNoImplicitSubmit(InfoLabel, { defaultProps: { children: 'Password', info: INFO } });
 
   describe('interaction (data-display#13)', () => {
     it('opens on a mouse click and stays open (not open-then-closed)', async () => {
@@ -78,7 +84,7 @@ describe('InfoLabel', () => {
       expect(button).toHaveAttribute('aria-expanded', 'true');
       const surface = getSurface();
       expect(surface).toHaveTextContent(INFO);
-      expect(surface).toHaveAttribute('aria-hidden', 'true');
+      expect(surface).toHaveAttribute('role', 'note');
     });
 
     it('closes on a second click', async () => {
@@ -132,10 +138,10 @@ describe('InfoLabel', () => {
       render(
         <>
           <button type="button">Previous</button>
-          <InfoLabel label="Password" info={INFO} />
+          <InfoLabel info={INFO}>Password</InfoLabel>
         </>,
       );
-      const button = screen.getByRole('button', { name: 'Information' });
+      const button = screen.getByRole('button', { name: 'Password Information' });
       const previous = screen.getByRole('button', { name: 'Previous' });
 
       press(button);
@@ -240,13 +246,15 @@ describe('InfoLabel', () => {
       const user = userEvent.setup();
       render(
         <>
-          <InfoLabel label="Password" info={INFO} />
+          <InfoLabel info={INFO}>Password</InfoLabel>
           <button type="button">Next</button>
         </>,
       );
       await user.tab();
       expect(getSurface()).not.toBeNull();
       await user.tab();
+      // The focus-outside dismissal decides in a microtask (the dismiss layer).
+      await act(async () => {});
       expect(screen.getByRole('button', { name: 'Next' })).toHaveFocus();
       expect(getSurface()).toBeNull();
     });
@@ -255,14 +263,16 @@ describe('InfoLabel', () => {
       const user = userEvent.setup();
       render(
         <>
-          <InfoLabel label="Password" info={INFO} />
+          <InfoLabel info={INFO}>Password</InfoLabel>
           <button type="button">Next</button>
         </>,
       );
-      const button = screen.getByRole('button', { name: 'Information' });
+      const button = screen.getByRole('button', { name: 'Password Information' });
       await user.click(button);
       expect(button).toHaveAttribute('aria-expanded', 'true');
       await user.tab();
+      // The focus-outside dismissal decides in a microtask (the dismiss layer).
+      await act(async () => {});
       expect(screen.getByRole('button', { name: 'Next' })).toHaveFocus();
       expect(button).toHaveAttribute('aria-expanded', 'false');
       expect(getSurface()).toBeNull();
@@ -272,11 +282,11 @@ describe('InfoLabel', () => {
       const user = userEvent.setup();
       render(
         <>
-          <InfoLabel label="Password" info={INFO} />
+          <InfoLabel info={INFO}>Password</InfoLabel>
           <p>Elsewhere</p>
         </>,
       );
-      await user.click(screen.getByRole('button', { name: 'Information' }));
+      await user.click(screen.getByRole('button', { name: 'Password Information' }));
       expect(getSurface()).not.toBeNull();
       await user.click(screen.getByText('Elsewhere'));
       expect(getSurface()).toBeNull();
@@ -355,6 +365,116 @@ describe('InfoLabel', () => {
       await user.tab();
       expect(getSurface()).not.toBeNull();
       await expectNoA11yViolations();
+    });
+  });
+
+  describe('InfoLabel as a label (Phase 4 D31)', () => {
+    it('renders the label content in a <label>, with the label props routed to it', () => {
+      render(
+        <InfoLabel
+          info="Use 12 characters."
+          htmlFor="pw"
+          required
+          size="large"
+          weight="semibold"
+          id="pw-label"
+        >
+          Password
+        </InfoLabel>,
+      );
+      const label = screen.getByText('Password').closest('label') as HTMLLabelElement;
+      expect(label).toHaveAttribute('for', 'pw');
+      expect(label).toHaveAttribute('id', 'pw-label');
+      expect(label).toHaveClass('text-body-2', 'font-semibold');
+      expect(label).toHaveTextContent('Password*');
+    });
+
+    it('keeps className, style, ref and a data-* attribute on the root <span>', () => {
+      let rootFromRef: HTMLSpanElement | null = null;
+      render(
+        <InfoLabel
+          info="x"
+          className="custom-class"
+          style={{ width: '42px' }}
+          data-testid="info-label-root"
+          ref={(node) => {
+            rootFromRef = node;
+          }}
+        >
+          Password
+        </InfoLabel>,
+      );
+      const root = screen.getByTestId('info-label-root');
+      expect(root.tagName).toBe('SPAN');
+      expect(root).toBe(rootFromRef);
+      expect(root).toHaveClass('custom-class');
+      expect(root).toHaveStyle({ width: '42px' });
+    });
+
+    it('names the button "<label> Information" and localizes the second part', () => {
+      const { rerender } = render(<InfoLabel info="x">Password</InfoLabel>);
+      expect(screen.getByRole('button', { name: 'Password Information' })).toBeInTheDocument();
+      rerender(
+        <InfoLabel info="x" infoButtonLabel="Info">
+          Password
+        </InfoLabel>,
+      );
+      expect(screen.getByRole('button', { name: 'Password Info' })).toBeInTheDocument();
+    });
+
+    it('the deprecated label prop still works and warns once; children win', () => {
+      const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+      const { rerender } = render(<InfoLabel label="Old" info="x" />);
+      expect(screen.getByText('Old')).toBeInTheDocument();
+      rerender(
+        <InfoLabel label="Old" info="x">
+          New
+        </InfoLabel>,
+      );
+      expect(screen.getByText('New')).toBeInTheDocument();
+      expect(warn).toHaveBeenCalledTimes(1);
+      expect(warn).toHaveBeenCalledWith(
+        '[WaveUI] InfoLabel: `label` is deprecated and will be removed in 1.0. Use `children` instead.',
+      );
+    });
+
+    it('rich info: a link in the note is reachable by Tab', async () => {
+      const user = userEvent.setup();
+      render(<InfoLabel info={<a href="#rules">Rules</a>}>Password</InfoLabel>);
+      await user.tab();
+      await user.tab();
+      expect(screen.getByRole('link', { name: 'Rules' })).toHaveFocus();
+    });
+
+    it('disabled dims only the label; the button stays usable', async () => {
+      const user = userEvent.setup();
+      render(
+        <InfoLabel info="x" disabled openOnHover={false}>
+          Password
+        </InfoLabel>,
+      );
+      expect(screen.getByText('Password').closest('label')).toHaveClass('text-muted-foreground');
+      await user.click(screen.getByRole('button', { name: 'Password Information' }));
+      expect(screen.getByRole('note')).toBeInTheDocument();
+    });
+
+    it('server HTML hydrates without warnings', async () => {
+      const ui = <InfoLabel info="Use 12 characters.">Password</InfoLabel>;
+      const container = document.createElement('div');
+      container.innerHTML = renderToString(ui);
+      document.body.appendChild(container);
+      const error = vi.spyOn(console, 'error');
+      let root: ReturnType<typeof hydrateRoot> | undefined;
+      try {
+        await act(async () => {
+          root = hydrateRoot(container, ui);
+        });
+        expect(error).not.toHaveBeenCalled();
+      } finally {
+        act(() => root?.unmount());
+        container.remove();
+        error.mockRestore();
+      }
     });
   });
 });
