@@ -1,10 +1,14 @@
 import * as React from 'react';
+import { flattenChildren, isElementOfType } from '../../lib/children';
 import { cn } from '../../lib/cn';
 import { toastClassNames } from '../../lib/classNames';
+import { warnOnce } from '../../lib/dev';
 import { DismissIcon } from '../../lib/icons';
 import { materialiseSlotContent, slotRendersContent } from '../../lib/slot';
 import { focusRing } from '../../lib/styles';
 import type { Status } from '../../lib/types';
+import { useEventCallback } from '../../hooks/useEventCallback';
+import { useId } from '../../hooks/useId';
 import {
   STATUS_BORDER,
   STATUS_ICON_COLOR,
@@ -12,11 +16,9 @@ import {
   StatusText,
   getStatusLabel,
 } from './MessageBar.status';
-import { ToasterRegionContext } from './Toast.context';
-
-/* ------------------------------------------------------------------ */
-/*  Toast (individual notification)                                   */
-/* ------------------------------------------------------------------ */
+import { ToastContext, ToastUnscannedContext, ToasterRegionContext } from './Toast.context';
+import type { ToastContextValue } from './Toast.context';
+import { ToastBody, ToastFooter, ToastTitle } from './Toast.parts';
 
 /** Properties for the Toast component. */
 export interface ToastProps extends React.HTMLAttributes<HTMLDivElement> {
@@ -24,7 +26,10 @@ export interface ToastProps extends React.HTMLAttributes<HTMLDivElement> {
    * @default 'info'
    */
   status?: Status;
-  /** Title text displayed in the toast. */
+  /**
+   * Title text (the 0.5 form; renders as a `Toast.Title`). A `Toast.Title` among the children wins
+   * over it (development warning).
+   */
   title?: string;
   /**
    * Visually hidden status text read before the toast (`'Info:'`, `'Success:'`, `'Warning:'`,
@@ -42,19 +47,50 @@ export interface ToastProps extends React.HTMLAttributes<HTMLDivElement> {
   ref?: React.Ref<HTMLDivElement>;
 }
 
+const registerNothing: ToastContextValue['registerPart'] = () => () => {};
+
 /**
- * The visual of a single notification: status icon, visually hidden status text, title, body and an
- * optional dismiss button. Usually rendered by `<Toaster>` through `useToastController()`.
- *
- * - **In a Toaster** (dispatched with `useToastController()`): not a live region itself; the
- *   Toaster announces it through its permanent live regions.
- * - **On its own** (your own container, an inline notice): a live region, as in 0.4 —
- *   `role="status"` with `aria-live="polite"`, or `role="alert"` with `aria-live="assertive"` for
- *   `error` (override with `role`/`aria-live`). A live region that is added together with its
- *   text is not announced by every screen reader, so render the Toast in advance and change its
- *   content, or dispatch it through a Toaster.
+ * The content column's parts. With a `Toast.Title`, `Toast.Body` or `Toast.Footer` among the
+ * direct children (Fragments and Server Component references included), the children render as
+ * given, after a Title made from the `title` prop when there is no Title part. Otherwise the 0.5
+ * form: the `title` prop as a Title and the children as a Body (none for content that renders
+ * nothing).
  */
-export const Toast = ({
+function renderParts(
+  title: string | undefined,
+  children: React.ReactNode,
+): { content: React.ReactNode; titleTwice: boolean } {
+  // A generator is read once here (and cached), so the scan and the render see the same items.
+  const items = materialiseSlotContent(children);
+  const flat = flattenChildren(items);
+  if (flat.some(({ node }) => isElementOfType(node, ToastTitle, ToastBody, ToastFooter))) {
+    const hasTitlePart = flat.some(({ node }) => isElementOfType(node, ToastTitle));
+    return {
+      content: (
+        <>
+          {title && !hasTitlePart ? <ToastTitle>{title}</ToastTitle> : null}
+          {items}
+        </>
+      ),
+      titleTwice: Boolean(title) && hasTitlePart,
+    };
+  }
+  return {
+    content: (
+      <>
+        {title ? <ToastTitle>{title}</ToastTitle> : null}
+        {slotRendersContent(items) ? (
+          <ToastBody>
+            <ToastUnscannedContext.Provider value={true}>{items}</ToastUnscannedContext.Provider>
+          </ToastBody>
+        ) : null}
+      </>
+    ),
+    titleTwice: false,
+  };
+}
+
+export const ToastRoot = ({
   status = 'info',
   title,
   statusLabel,
@@ -66,59 +102,76 @@ export const Toast = ({
   ...rest
 }: ToastProps) => {
   const inToasterRegion = React.useContext(ToasterRegionContext);
-  // Content that renders nothing (`''`, `[]`, `<></>`) gets no body element; a generator is read
-  // once by the check and its items render.
-  const body = materialiseSlotContent(children);
-  const hasBody = slotRendersContent(body);
+  const titleId = useId('wave-toast-title');
+  const handleDismiss = useEventCallback(onDismiss);
+  const hasOnDismiss = onDismiss !== undefined;
+  const context = React.useMemo<ToastContextValue>(
+    () => ({
+      titleId,
+      dismiss: hasOnDismiss ? handleDismiss : undefined,
+      registerPart: registerNothing,
+      registerToast: null,
+    }),
+    [titleId, hasOnDismiss, handleDismiss],
+  );
+  const { content, titleTwice } = renderParts(title, children);
+  React.useEffect(() => {
+    if (!titleTwice) return;
+    warnOnce(
+      'Toast:title-twice',
+      'Toast: `title` is ignored because a Toast.Title is among the children. Remove one of them.',
+    );
+  }, [titleTwice]);
   const liveRegion: React.HTMLAttributes<HTMLDivElement> = inToasterRegion
     ? {}
     : status === 'error'
       ? { role: 'alert', 'aria-live': 'assertive' }
       : { role: 'status', 'aria-live': 'polite' };
   return (
-    <div
-      ref={ref}
-      {...liveRegion}
-      {...rest}
-      className={cn(
-        toastClassNames.root,
-        'flex items-start gap-3 rounded border border-s-4 border-border bg-background p-3 text-foreground shadow-4',
-        STATUS_BORDER[status],
-        className,
-      )}
-    >
-      <span
-        aria-hidden="true"
+    <ToastContext.Provider value={context}>
+      <div
+        ref={ref}
+        {...liveRegion}
+        {...rest}
         className={cn(
-          toastClassNames.icon,
-          'mt-0.5 inline-flex shrink-0',
-          STATUS_ICON_COLOR[status],
+          toastClassNames.root,
+          'flex items-start gap-3 rounded border border-s-4 border-border bg-background p-3 text-foreground shadow-4',
+          STATUS_BORDER[status],
+          className,
         )}
       >
-        <StatusIcon status={status} />
-      </span>
-      <div className={cn(toastClassNames.content, 'min-w-0 flex-1')}>
-        <StatusText label={getStatusLabel(status, statusLabel)} />
-        {title ? <div className="text-body-2 font-semibold text-foreground">{title}</div> : null}
-        {hasBody ? <div className="mt-0.5 text-body-1 text-muted-foreground">{body}</div> : null}
-      </div>
-      {onDismiss ? (
-        <button
-          type="button"
-          onClick={() => onDismiss()}
+        <span
+          aria-hidden="true"
           className={cn(
-            toastClassNames.dismissButton,
-            'inline-flex shrink-0 cursor-pointer items-center justify-center rounded border-none bg-transparent p-1 text-muted-foreground',
-            'not-disabled:not-aria-disabled:hover:bg-subtle-hover not-disabled:not-aria-disabled:hover:text-foreground',
-            'not-disabled:not-aria-disabled:active:bg-subtle-pressed',
-            focusRing,
+            toastClassNames.icon,
+            'mt-0.5 inline-flex shrink-0',
+            STATUS_ICON_COLOR[status],
           )}
-          aria-label={dismissLabel}
         >
-          <DismissIcon />
-        </button>
-      ) : null}
-    </div>
+          <StatusIcon status={status} />
+        </span>
+        <div className={cn(toastClassNames.content, 'min-w-0 flex-1')}>
+          <StatusText label={getStatusLabel(status, statusLabel)} />
+          {content}
+        </div>
+        {onDismiss ? (
+          <button
+            type="button"
+            onClick={() => onDismiss()}
+            className={cn(
+              toastClassNames.dismissButton,
+              'inline-flex shrink-0 cursor-pointer items-center justify-center rounded border-none bg-transparent p-1 text-muted-foreground',
+              'not-disabled:not-aria-disabled:hover:bg-subtle-hover not-disabled:not-aria-disabled:hover:text-foreground',
+              'not-disabled:not-aria-disabled:active:bg-subtle-pressed',
+              focusRing,
+            )}
+            aria-label={dismissLabel}
+          >
+            <DismissIcon />
+          </button>
+        ) : null}
+      </div>
+    </ToastContext.Provider>
   );
 };
-Toast.displayName = 'Toast';
+ToastRoot.displayName = 'Toast';

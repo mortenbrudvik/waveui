@@ -13,7 +13,7 @@ import { usePreserveFocus } from '../../hooks/usePreserveFocus';
 import { Portal } from '../portal/Portal';
 import { getStatusLabel } from './MessageBar.status';
 import { ToasterContext, ToasterRegionContext } from './Toast.context';
-import { Toast } from './Toast.root';
+import { ToastRoot } from './Toast.root';
 
 /* ------------------------------------------------------------------ */
 /*  Types                                                             */
@@ -405,7 +405,7 @@ function ToasterItem({ entry, index, timers, onDismiss, getFocusFallback }: Toas
   usePreserveFocus(ref, () => getFocusFallback(index));
   const { id, options } = entry;
   return (
-    <Toast
+    <ToastRoot
       ref={ref}
       data-wave-toast=""
       status={options.status}
@@ -423,7 +423,7 @@ function ToasterItem({ entry, index, timers, onDismiss, getFocusFallback }: Toas
       }}
     >
       {options.body}
-    </Toast>
+    </ToastRoot>
   );
 }
 ToasterItem.displayName = 'ToasterItem';

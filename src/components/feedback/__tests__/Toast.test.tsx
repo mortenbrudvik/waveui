@@ -7,6 +7,7 @@ import { Toast, Toaster, useToastController } from '../Toast';
 import type { ToastController, ToastOptions, ToastProps, ToasterProps } from '../Toast';
 import { useDismiss } from '../../../hooks/useDismiss';
 import { useModalIsolation } from '../../../hooks/useModalIsolation';
+import { toastTitleClassNames } from '../../../lib/classNames';
 import { Portal } from '../../portal/Portal';
 import {
   expectNoA11yViolations,
@@ -99,8 +100,9 @@ describe('Toast', () => {
   });
 
   describe('body content', () => {
-    /** The element after the title: the body, or `null` when none renders. */
-    const bodyAfter = (title: string) => screen.getByText(title).nextElementSibling;
+    /** The element after the title row: the body, or `null` when none renders. */
+    const bodyAfter = (title: string) =>
+      screen.getByText(title).closest(`.${toastTitleClassNames.root}`)?.nextElementSibling ?? null;
 
     it.each([
       ['an empty string', ''],

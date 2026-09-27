@@ -11,6 +11,7 @@ import {
   spinnerClassNames,
   toastClassNames,
   toasterClassNames,
+  toastTitleClassNames,
 } from '../../../lib/classNames';
 import { Button } from '../../button/Button';
 import { MessageBar } from '../MessageBar';
@@ -133,7 +134,9 @@ describe('stable class names (P3-00): feedback folder', () => {
     const toast = screen.getByRole('status');
     expect(toast).toHaveClass(toastClassNames.root);
     expect(toast.firstElementChild).toHaveClass(toastClassNames.icon);
-    expect(screen.getByText('Saved').parentElement).toHaveClass(toastClassNames.content);
+    expect(
+      screen.getByText('Saved').closest(`.${toastTitleClassNames.root}`)?.parentElement,
+    ).toHaveClass(toastClassNames.content);
     expect(screen.getByRole('button', { name: 'Dismiss' })).toHaveClass(
       toastClassNames.dismissButton,
     );
