@@ -5,7 +5,6 @@ import { hexToHsv, hsvToHex } from '../../lib/color';
 import { warnDeprecated, warnOnce } from '../../lib/dev';
 import { getFirstTabbable } from '../../lib/focus';
 import { slotRendersContent } from '../../lib/slot';
-import { focusRing } from '../../lib/styles';
 import type { ColorPickerShape, HsvColor } from '../../lib/types';
 import { useControllable } from '../../hooks/useControllable';
 import { useEventCallback } from '../../hooks/useEventCallback';
@@ -13,6 +12,9 @@ import { FieldContext, useFieldContext, useFieldControl } from '../../hooks/useF
 import { useFormReset } from '../../hooks/useFormReset';
 import { useMergedRefs } from '../../hooks/useMergedRefs';
 import { HiddenInput } from '../internal/HiddenInput';
+import { AlphaSlider } from './AlphaSlider';
+import { ColorArea } from './ColorArea';
+import { ColorSlider } from './ColorSlider';
 import type { SwatchItem } from './SwatchPicker';
 import {
   ColorPickerContext,
@@ -25,13 +27,7 @@ import {
   type ColorPickerContextValue,
   type ColorPickerLabels,
 } from './ColorPicker.parts';
-import {
-  alphaToOpacity,
-  formatHexColor,
-  normalizeHexColor,
-  opacityToAlpha,
-  parseHexColor,
-} from './colorUtils';
+import { alphaToOpacity, formatHexColor, normalizeHexColor, parseHexColor } from './colorUtils';
 
 export { ColorPickerHexField, ColorPickerPreview, ColorPickerSwatches };
 export type { ColorPickerLabels };
@@ -91,16 +87,18 @@ export interface ColorPickerProps extends Omit<
    * @default Blue, Red, Green, Yellow, Purple, Teal, Pink and Black (Fluent brand colors)
    */
   presets?: ReadonlyArray<string | ColorPickerPreset>;
-  /** Whether the default layout shows the opacity row (the opacity is the alpha byte of `value`).
-   * Does nothing with `children`.
+  /**
+   * Whether the default layout shows the opacity row: the caption, an alpha slider (0–100 %,
+   * named by `labels.opacity`) and the percentage. The opacity is the alpha byte of `value`. Does
+   * nothing with `children`.
    * @default false
    */
   showOpacity?: boolean;
   /** Texts of the picker's own parts and of the color parts bound to it, for localisation. */
   labels?: ColorPickerLabels;
   /**
-   * `'square'` removes the corner radius of the preview and of the color parts bound to the
-   * picker (the area and the rails).
+   * `'square'` removes the corner radius of the preview and of the area and the rails of the
+   * color parts bound to it, including those of the default layout.
    * @default 'rounded'
    */
   shape?: ColorPickerShape;
@@ -174,6 +172,20 @@ function resolvePresets(presets: ReadonlyArray<string | ColorPickerPreset>): Res
   return { items, invalid, translucent };
 }
 
+/**
+ * The working color for a hex value that differs from it: the value's HSV, keeping the previous
+ * hue when the new color has no hue of its own (a gray, white or black) and the previous
+ * saturation too at zero brightness, so a hue slider does not jump to red when the color reaches
+ * gray. `hsvToHex` of the result is `hex` again.
+ */
+function deriveWorkingColor(hex: string, previous: HsvColor): HsvColor {
+  const next = hexToHsv(hex);
+  if (!next) return previous;
+  if (next.v === 0) return { ...next, h: previous.h, s: previous.s };
+  if (next.s === 0) return { ...next, h: previous.h };
+  return next;
+}
+
 // The ColorPicker root, documented on the exported `ColorPicker` const.
 const ColorPickerRoot = ({
   value: valueProp,
@@ -228,7 +240,7 @@ const ColorPickerRoot = ({
     if (invalidValue !== null) {
       warnOnce(
         'ColorPicker:invalid-value',
-        `ColorPicker: "${invalidValue}" is not a hex color (#rrggbb or #rrggbbaa). Pass a hex value; the opacity slider is disabled until then.`,
+        `ColorPicker: "${invalidValue}" is not a hex color (#rrggbb or #rrggbbaa). Pass a hex value; the color area and sliders are disabled until then.`,
       );
     }
   }, [invalidValue]);
@@ -308,10 +320,22 @@ const ColorPickerRoot = ({
     setColor(formatHexColor(preset.rgb, alpha));
   });
 
-  // Replaced by the working color in the next task: here the bound parts read the value's HSV.
-  const hsv = React.useMemo(() => hexToHsv(color) ?? DEFAULT_PART_COLOR, [color]);
+  // The working color: HSV, so hue and saturation survive gray, white and black (hex keeps
+  // neither). The value stays the source of truth: whenever it differs from the working color (a
+  // change from outside, a form reset, or a controlled parent that ignored onValueChange), the
+  // working color follows it. A parent that accepts a change sets exactly `hsvToHex(hsv)`, so the
+  // working color is kept.
+  const [hsv, setHsvState] = React.useState<HsvColor>(() =>
+    deriveWorkingColor(color, DEFAULT_PART_COLOR),
+  );
+  const normalized = parsed ? formatHexColor(parsed.rgb, parsed.alpha) : null;
+  if (normalized !== null && hsvToHex(hsv) !== normalized) {
+    setHsvState(deriveWorkingColor(normalized, hsv));
+  }
   const setHsv = useEventCallback((next: HsvColor) => {
-    if (parsed) setColor(hsvToHex(next));
+    if (!parsed) return;
+    setHsvState(next);
+    setColor(hsvToHex(next));
   });
 
   const context = React.useMemo<ColorPickerContextValue>(
@@ -350,11 +374,6 @@ const ColorPickerRoot = ({
     ],
   );
 
-  const handleOpacityChange = (event: React.ChangeEvent<HTMLInputElement>) => {
-    if (!parsed) return;
-    setColor(formatHexColor(parsed.rgb, opacityToAlpha(Number(event.target.value))));
-  };
-
   /** The hidden input's `onInvalid`: the hex field when there is one, else the first tabbable element. */
   const focusInvalidTarget = () => {
     const root = rootRef.current;
@@ -381,6 +400,8 @@ const ColorPickerRoot = ({
             children
           ) : (
             <>
+              <ColorArea />
+              <ColorSlider />
               <div className="flex items-start gap-2">
                 <ColorPickerPreview />
                 <ColorPickerHexField />
@@ -396,20 +417,7 @@ const ColorPickerRoot = ({
                   >
                     {strings.opacity}
                   </span>
-                  <input
-                    type="range"
-                    min={0}
-                    max={100}
-                    value={opacity}
-                    onChange={handleOpacityChange}
-                    disabled={!parsed}
-                    aria-label={strings.opacity}
-                    aria-valuetext={`${opacity}%`}
-                    className={cn(
-                      'h-1 flex-1 accent-primary disabled:cursor-not-allowed disabled:opacity-50',
-                      focusRing,
-                    )}
-                  />
+                  <AlphaSlider className="min-w-0 flex-1" />
                   <span
                     className={cn(
                       colorPickerClassNames.opacityValue,
@@ -442,8 +450,9 @@ ColorPickerRoot.displayName = 'ColorPicker';
  * A color picker whose value is a hex string (`#rrggbb`, or `#rrggbbaa` with an alpha byte),
  * grouped as a named `role="group"`.
  *
- * - **Default layout** (no children): a preview and the hex field, preset swatches and, with
- *   `showOpacity`, an opacity row.
+ * - **Default layout** (no children): a color area (saturation and brightness) and a hue slider,
+ *   then a preview and the hex field, preset swatches and, with `showOpacity`, an opacity row
+ *   whose slider is an `AlphaSlider` (0–100 %). Dragging to gray, white or black keeps the hue.
  * - **Your own layout** (children): `ColorArea`, `ColorSlider` and `AlphaSlider`, which bind to
  *   the picker while they have neither `value` nor `defaultValue`, and the parts
  *   `ColorPicker.HexField`, `ColorPicker.Swatches` and `ColorPicker.Preview`.

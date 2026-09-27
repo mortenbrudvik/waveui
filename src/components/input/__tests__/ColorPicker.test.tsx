@@ -2,9 +2,13 @@ import * as React from 'react';
 import { describe, it, expect, vi, expectTypeOf } from 'vitest';
 import { act, fireEvent, render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
+import { AlphaSlider } from '../AlphaSlider';
+import { ColorArea } from '../ColorArea';
 import { ColorPicker, type ColorPickerProps } from '../ColorPicker';
+import { ColorSlider } from '../ColorSlider';
 import { Field } from '../Field';
-import { focusRing, inputInvalid } from '../../../lib/styles';
+import { alphaSliderClassNames } from '../../../lib/classNames';
+import { inputInvalid } from '../../../lib/styles';
 import type { ColorPickerShape } from '../../../lib/types';
 import { expectNoA11yViolations, testSystemProps } from '../../../test-utils';
 import { renderWithFieldContext, FIELD_TEST_IDS, FIELD_TEST_TEXT } from '../../../test-utils-field';
@@ -27,7 +31,7 @@ const DEPRECATED_ON_CHANGE =
 function invalidValueWarning(value: string) {
   return (
     `[WaveUI] ColorPicker: "${value}" is not a hex color (#rrggbb or #rrggbbaa). Pass a hex ` +
-    'value; the opacity slider is disabled until then.'
+    'value; the color area and sliders are disabled until then.'
   );
 }
 
@@ -431,10 +435,15 @@ describe('ColorPicker — hex input (input-basic#41, input-pickers#24, #25)', ()
 });
 
 describe('ColorPicker — opacity (input-pickers#15, input-basic#30)', () => {
-  it('shows the shared focus ring on the opacity slider (C-FOCUS)', () => {
+  it('shows the two-tone focus indicator on the opacity slider thumb (C-FOCUS)', () => {
     render(<ColorPicker showOpacity />);
-    expect(opacitySlider()).toHaveClass(...focusRing.split(' '));
-    expect(opacitySlider()).not.toHaveClass('outline-none');
+    const root = opacitySlider().closest(`.${alphaSliderClassNames.root}`) as HTMLElement;
+    expect(root.querySelector(`.${alphaSliderClassNames.thumb}`)).toHaveClass(
+      'group-has-[:focus-visible]/alpha-slider:outline-2',
+      'group-has-[:focus-visible]/alpha-slider:outline-offset-2',
+      'group-has-[:focus-visible]/alpha-slider:outline-ring',
+      'group-has-[:focus-visible]/alpha-slider:ring-background',
+    );
     expect(opacitySlider()).not.toHaveClass('focus:outline-none');
   });
 
@@ -1135,5 +1144,177 @@ describe('ColorPicker — composition (D21)', () => {
     // @ts-expect-error a ColorPicker is rounded or square
     const circular = <ColorPicker shape="circular" />;
     expect(circular).toBeTruthy();
+  });
+});
+
+const areaGroup = () => screen.getByRole('group', { name: 'Saturation and brightness' });
+const saturationInput = () => screen.getByRole('slider', { name: 'Saturation', hidden: true });
+const hueSlider = () => screen.getByRole('slider', { name: 'Hue' });
+
+describe('ColorPicker — default layout and working color (D21)', () => {
+  it('puts a color area and a hue slider above the rows of 0.7', () => {
+    render(<ColorPicker aria-label="Accent" showOpacity />);
+    const order = [
+      areaGroup(),
+      hueSlider(),
+      hexInput(),
+      screen.getByRole('radiogroup', { name: 'Preset colors' }),
+      opacitySlider(),
+    ];
+    for (let i = 1; i < order.length; i++) {
+      expect(
+        order[i - 1].compareDocumentPosition(order[i]) & Node.DOCUMENT_POSITION_FOLLOWING,
+      ).toBeTruthy();
+    }
+  });
+
+  it('keeps the hue while saturation is dragged to zero and back', async () => {
+    const user = userEvent.setup();
+    const onValueChange = vi.fn();
+    render(
+      <ColorPicker aria-label="Accent" defaultValue="#0f6cbd" onValueChange={onValueChange} />,
+    );
+    act(() => saturationInput().focus());
+    await user.keyboard('{Home}');
+    expect(onValueChange).toHaveBeenLastCalledWith('#bdbdbd');
+    expect(hueSlider()).toHaveValue('208');
+    await user.keyboard('{End}');
+    expect(onValueChange).toHaveBeenLastCalledWith('#0065bd');
+    expect(hueSlider()).toHaveValue('208');
+  });
+
+  it('keeps the hue when a gray value arrives from outside, and the saturation for black', () => {
+    const { rerender } = render(<ColorPicker aria-label="Accent" value="#0f6cbd" />);
+    rerender(<ColorPicker aria-label="Accent" value="#808080" />);
+    expect(hueSlider()).toHaveValue('208');
+    expect(saturationInput()).toHaveValue('0');
+    rerender(<ColorPicker aria-label="Accent" value="#0f6cbd" />);
+    rerender(<ColorPicker aria-label="Accent" value="#000000" />);
+    expect(saturationInput()).toHaveValue('92');
+    expect(hueSlider()).toHaveValue('208');
+  });
+
+  it('keeps the area, the hue slider and the hex field at the value of a parent that ignores onValueChange', async () => {
+    const user = userEvent.setup();
+    const onValueChange = vi.fn();
+    render(<ColorPicker aria-label="Accent" value="#0f6cbd" onValueChange={onValueChange} />);
+    act(() => saturationInput().focus());
+    await user.keyboard('{Home}');
+    expect(onValueChange.mock.calls).toEqual([['#bdbdbd']]);
+    expect(saturationInput()).toHaveValue('92');
+    expect(hueSlider()).toHaveValue('208');
+    expect(hexInput()).toHaveValue('#0f6cbd');
+    await user.keyboard('{Home}');
+    expect(onValueChange.mock.calls).toEqual([['#bdbdbd'], ['#bdbdbd']]);
+  });
+
+  it('disables the bound parts while the value is not a hex color', () => {
+    const warn = spyWarn();
+    try {
+      render(<ColorPicker aria-label="Accent" value="red" showOpacity />);
+      expect(saturationInput()).toBeDisabled();
+      expect(hueSlider()).toBeDisabled();
+      expect(opacitySlider()).toBeDisabled();
+      expect(areaGroup()).toHaveAttribute('data-disabled', '');
+      expect(warn.mock.calls).toEqual([[invalidValueWarning('red')]]);
+    } finally {
+      warn.mockRestore();
+    }
+  });
+
+  it('never gives the Field to the area or the hue slider: the Field labels only the group', () => {
+    renderWithFieldContext(<ColorPicker />, { required: true });
+    expect(screen.getByRole('group', { name: FIELD_TEST_TEXT.label })).toBeInTheDocument();
+    expect(areaGroup()).toBeInTheDocument();
+    expect(hueSlider()).not.toHaveAttribute('id', FIELD_TEST_IDS.controlId);
+  });
+
+  it('reports each change of a bound part once in StrictMode', async () => {
+    const user = userEvent.setup();
+    const onValueChange = vi.fn();
+    render(
+      <React.StrictMode>
+        <ColorPicker aria-label="Accent" defaultValue="#cc0000" onValueChange={onValueChange} />
+      </React.StrictMode>,
+    );
+    act(() => hueSlider().focus());
+    await user.keyboard('{End}');
+    expect(onValueChange).not.toHaveBeenCalled();
+    fireEvent.change(hueSlider(), { target: { value: '120' } });
+    expect(onValueChange.mock.calls).toEqual([['#00cc00']]);
+  });
+});
+
+describe('ColorPicker — the color parts bind to it (D21)', () => {
+  it("edits the picker's value through Fluent's composition", async () => {
+    const user = userEvent.setup();
+    const onValueChange = vi.fn();
+    render(
+      <ColorPicker aria-label="Accent" defaultValue="#ff0000" onValueChange={onValueChange}>
+        <ColorArea />
+        <ColorSlider />
+        <AlphaSlider />
+      </ColorPicker>,
+    );
+    act(() => saturationInput().focus());
+    await user.keyboard('{PageDown}{PageDown}');
+    expect(onValueChange).toHaveBeenLastCalledWith('#cc0000');
+    fireEvent.change(hueSlider(), { target: { value: '120' } });
+    expect(onValueChange).toHaveBeenLastCalledWith('#00cc00');
+    act(() => opacitySlider().focus());
+    await user.keyboard('{Home}');
+    expect(onValueChange).toHaveBeenLastCalledWith('#00cc0000');
+  });
+
+  it("bound parts take the picker's shape and labels, render no hidden input and ignore name", () => {
+    render(
+      <form aria-label="Form">
+        <ColorPicker
+          aria-label="Accent"
+          name="accent"
+          shape="square"
+          labels={{ hue: 'Farbton', area: 'Fläche' }}
+        >
+          <ColorArea name="area" />
+          <ColorSlider name="hue" />
+        </ColorPicker>
+      </form>,
+    );
+    expect(screen.getByRole('group', { name: 'Fläche' })).toHaveClass('rounded-none');
+    expect(screen.getByRole('slider', { name: 'Farbton' })).toBeInTheDocument();
+    const form = screen.getByRole('form', { name: 'Form' }) as HTMLFormElement;
+    expect(Array.from(new FormData(form).keys())).toEqual(['accent']);
+  });
+
+  it('a part with its own value stays independent inside the picker', async () => {
+    const user = userEvent.setup();
+    const onValueChange = vi.fn();
+    const own = vi.fn();
+    render(
+      <ColorPicker aria-label="Accent" onValueChange={onValueChange}>
+        <ColorSlider
+          aria-label="Own hue"
+          defaultValue={{ h: 30, s: 1, v: 1 }}
+          onValueChange={own}
+        />
+      </ColorPicker>,
+    );
+    act(() => screen.getByRole('slider', { name: 'Own hue' }).focus());
+    await user.keyboard('{ArrowRight}');
+    expect(own.mock.calls).toEqual([[{ h: 31, s: 1, v: 1 }]]);
+    expect(onValueChange).not.toHaveBeenCalled();
+  });
+
+  it('a bound part given only onValueChange hears its own changes (C-NAMING)', async () => {
+    const user = userEvent.setup();
+    const onHue = vi.fn();
+    render(
+      <ColorPicker aria-label="Accent" defaultValue="#ff0000">
+        <ColorSlider onValueChange={onHue} />
+      </ColorPicker>,
+    );
+    act(() => hueSlider().focus());
+    await user.keyboard('{ArrowRight}');
+    expect(onHue.mock.calls).toEqual([[{ h: 1, s: 1, v: 1 }]]);
   });
 });
