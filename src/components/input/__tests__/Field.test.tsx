@@ -4,6 +4,8 @@ import { render, screen } from '@testing-library/react';
 import { Field, type FieldProps } from '../Field';
 import { Checkbox } from '../Checkbox';
 import { Input } from '../Input';
+import { Label } from '../Label';
+import { InfoLabel } from '../../data-display/InfoLabel';
 import { RadioGroup, RadioItem } from '../RadioGroup';
 import { Select } from '../Select';
 import { Textarea } from '../Textarea';
@@ -17,7 +19,12 @@ import {
   type FieldControlProps,
 } from '../../../hooks/useFieldControl';
 import type { Orientation, Slot, ValidationState } from '../../../lib/types';
-import { testSystemProps, expectNoA11yViolations, renderWithProviders } from '../../../test-utils';
+import {
+  testSystemProps,
+  expectNoA11yViolations,
+  renderWithProviders,
+  asClientReference,
+} from '../../../test-utils';
 import { renderWithFieldContext, FIELD_TEST_IDS, FIELD_TEST_TEXT } from '../../../test-utils-field';
 
 /** The development warning of a Field with more than one element child. */
@@ -33,6 +40,12 @@ function multipleChildrenWarning(extra: number) {
 const ERROR_AND_VALIDATION_WARNING =
   '[WaveUI] Field: `error` and `validationMessage`/`validationState` are both set; `error` wins. ' +
   'Use one of them.';
+
+/** The development warning of a label element whose `htmlFor` points away from the control. */
+const LABEL_HTML_FOR_WARNING =
+  "[WaveUI] Field: the label element's `htmlFor` points at a different element than the Field's " +
+  'control, which would leave the control unnamed; Field points it at the control. Remove it, or ' +
+  'give the control that id.';
 
 /**
  * The first child of a horizontal Field's control column that the column's first-row rule pads,
@@ -1060,6 +1073,203 @@ describe('Field', () => {
         expect(label.nextElementSibling).toHaveClass(rowPadding);
       },
     );
+  });
+
+  describe('label elements (Phase 4 D32)', () => {
+    it('renders an InfoLabel as the label without nesting labels; the control is named by the text', () => {
+      const { container } = render(
+        <Field label={<InfoLabel info="Use 12 characters.">Password</InfoLabel>} required>
+          <input />
+        </Field>,
+      );
+      expect(container.querySelectorAll('label')).toHaveLength(1);
+      expect(container.querySelector('label label')).toBeNull();
+      expect(screen.getByRole('textbox')).toHaveAccessibleName('Password');
+      expect(screen.getByRole('button', { name: 'Password Information' })).toBeInTheDocument();
+      expect(screen.getAllByText('*')).toHaveLength(1);
+    });
+
+    it('gives the element id, htmlFor, required, size, semibold weight and the layout classes', () => {
+      render(
+        <Field label={<Label>Plan</Label>} size="large" orientation="horizontal" required>
+          <input />
+        </Field>,
+      );
+      const label = screen.getByText('Plan').closest('label') as HTMLLabelElement;
+      expect(label).toHaveClass('text-body-2', 'font-semibold', 'basis-1/3', 'pt-2.25');
+      expect(label).toHaveAttribute('for', screen.getByRole('textbox').id);
+      expect(label.id).not.toBe('');
+    });
+
+    it('keeps the element own id and weight; its id labels a group control', () => {
+      render(
+        <Field
+          label={
+            <Label id="plan-label" weight="regular">
+              Plan
+            </Label>
+          }
+        >
+          <div role="radiogroup" />
+        </Field>,
+      );
+      expect(screen.getByText('Plan').closest('label')).toHaveAttribute('id', 'plan-label');
+      expect(screen.getByText('Plan').closest('label')).not.toHaveClass('font-semibold');
+      expect(screen.getByRole('radiogroup')).toHaveAttribute('aria-labelledby', 'plan-label');
+    });
+
+    it('warns once when the element htmlFor points away from the control', () => {
+      const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+      try {
+        render(
+          <Field label={<Label htmlFor="elsewhere">Name</Label>}>
+            <input id="mine" />
+          </Field>,
+        );
+        expect(screen.getByText('Name').closest('label')).toHaveAttribute('for', 'mine');
+        expect(warn).toHaveBeenCalledTimes(1);
+        expect(warn.mock.calls).toEqual([[LABEL_HTML_FOR_WARNING]]);
+      } finally {
+        warn.mockRestore();
+      }
+    });
+
+    it('recognizes client-reference label elements', () => {
+      const ReferenceLabel = asClientReference(Label);
+      const { container } = render(
+        <Field label={<ReferenceLabel>Name</ReferenceLabel>}>
+          <input />
+        </Field>,
+      );
+      expect(container.querySelectorAll('label')).toHaveLength(1);
+      expect(screen.getByRole('textbox')).toHaveAccessibleName('Name');
+    });
+
+    it("takes the element's own htmlFor as the control id when the control has none, without a warning", () => {
+      const warn = vi.spyOn(console, 'warn');
+      const error = vi.spyOn(console, 'error');
+      try {
+        render(
+          <Field label={<Label htmlFor="custom">Name</Label>}>
+            <input />
+          </Field>,
+        );
+        const input = screen.getByRole('textbox', { name: 'Name' });
+        expect(input).toHaveAttribute('id', 'custom');
+        expect(screen.getByText('Name').closest('label')).toHaveAttribute('for', 'custom');
+        expect(warn).not.toHaveBeenCalled();
+        expect(error).not.toHaveBeenCalled();
+      } finally {
+        warn.mockRestore();
+        error.mockRestore();
+      }
+    });
+
+    it('recognizes a client-reference InfoLabel element', () => {
+      const ReferenceInfoLabel = asClientReference(InfoLabel);
+      const { container } = render(
+        <Field label={<ReferenceInfoLabel info="Use 12 characters.">Password</ReferenceInfoLabel>}>
+          <input />
+        </Field>,
+      );
+      expect(container.querySelectorAll('label')).toHaveLength(1);
+      expect(screen.getByRole('textbox')).toHaveAccessibleName('Password');
+      expect(screen.getByRole('button', { name: 'Password Information' })).toBeInTheDocument();
+    });
+
+    it("gives a Label element the vertical layout classes, before the element's own className", () => {
+      const { container, rerender } = render(
+        <Field label={<Label>Plan</Label>}>
+          <input />
+        </Field>,
+      );
+      expect(container.querySelectorAll('label')).toHaveLength(1);
+      const label = screen.getByText('Plan').closest('label');
+      expect(label).toHaveClass('mb-1', 'text-body-1', 'font-semibold');
+      expect(label).not.toHaveClass('basis-1/3');
+      // The element's own classes come last, so they win a conflicting class.
+      rerender(
+        <Field label={<Label className="mb-2 plan-label">Plan</Label>}>
+          <input />
+        </Field>,
+      );
+      expect(screen.getByText('Plan').closest('label')).toHaveClass('mb-2', 'plan-label');
+      expect(screen.getByText('Plan').closest('label')).not.toHaveClass('mb-1');
+    });
+
+    it("keeps the element's own size", () => {
+      const { container } = render(
+        <Field label={<Label size="small">Plan</Label>} size="large">
+          <input />
+        </Field>,
+      );
+      expect(container.querySelectorAll('label')).toHaveLength(1);
+      const label = screen.getByText('Plan').closest('label');
+      expect(label).toHaveClass('text-caption-1');
+      expect(label).not.toHaveClass('text-body-2');
+    });
+
+    it("gives the element the Field's required state, so only its own asterisk shows; its own required={false} wins", () => {
+      render(
+        <>
+          <Field label={<Label>Email</Label>} required>
+            <input />
+          </Field>
+          <Field label={<Label required={false}>Phone</Label>} required>
+            <input />
+          </Field>
+        </>,
+      );
+      const asterisks = screen.getAllByText('*');
+      expect(asterisks).toHaveLength(1);
+      expect(screen.getByText('Email').closest('label')).toContainElement(asterisks[0]);
+      expect(asterisks[0]).toHaveAttribute('aria-hidden', 'true');
+      expect(screen.getByText('Phone').closest('label')).toHaveTextContent(/^Phone$/);
+      // The controls stay required: the Field's required state still reaches them.
+      expect(screen.getByRole('textbox', { name: 'Email' })).toBeRequired();
+      expect(screen.getByRole('textbox', { name: 'Phone' })).toBeRequired();
+    });
+
+    it("gives an InfoLabel element the Field's size and label id, which reach its <label>", () => {
+      render(
+        <Field label={<InfoLabel info="Billed monthly.">Plan</InfoLabel>} size="small">
+          <div role="radiogroup" />
+        </Field>,
+      );
+      const label = screen.getByText('Plan').closest('label') as HTMLLabelElement;
+      expect(label).toHaveClass('text-caption-1', 'font-semibold');
+      expect(screen.getByRole('button', { name: 'Plan Information' })).toHaveAttribute(
+        'data-size',
+        'small',
+      );
+      const group = screen.getByRole('radiogroup');
+      expect(group).toHaveAttribute('aria-labelledby', label.id);
+      expect(group).toHaveAccessibleName('Plan');
+      // The layout classes land on the InfoLabel's root, the element in the label's place.
+      expect(label.parentElement).toHaveClass('mb-1');
+    });
+
+    it('puts an InfoLabel element in the start column of a horizontal Field', async () => {
+      render(
+        <Field
+          label={<InfoLabel info="Use 12 characters.">Password</InfoLabel>}
+          orientation="horizontal"
+          hint="Hint"
+          required
+          data-testid="root"
+        >
+          <input />
+        </Field>,
+      );
+      const infoLabel = screen.getByText('Password').closest('label')?.parentElement;
+      expect(screen.getByTestId('root').firstElementChild).toBe(infoLabel);
+      expect(infoLabel).toHaveClass('mb-0', 'shrink-0', 'basis-1/3', 'pt-1.5');
+      expect(infoLabel).not.toHaveClass('mb-1');
+      const input = screen.getByRole('textbox', { name: 'Password' });
+      expect(input).toHaveAccessibleDescription('Hint');
+      expect(input).toBeRequired();
+      await expectNoA11yViolations();
+    });
   });
 
   describe('a custom control with renderWithFieldContext', () => {
