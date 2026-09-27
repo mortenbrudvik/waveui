@@ -4,7 +4,7 @@ import { cn } from '../../lib/cn';
 import { toasterClassNames } from '../../lib/classNames';
 import { reportMissingContext, warnOnce } from '../../lib/dev';
 import { getDirection } from '../../lib/direction';
-import { getFirstTabbable } from '../../lib/focus';
+import { getFirstTabbable, getTabbableElements } from '../../lib/focus';
 import { getOpenLayers, subscribeLayers } from '../../lib/layers';
 import { focusRing } from '../../lib/styles';
 import { isToastOptions } from '../../lib/toaster';
@@ -70,8 +70,10 @@ export interface ToastDispatchOptions {
   /** As `ToastOptions.toastId`: dispatching again with the id of a shown or exiting toast replaces it. */
   toastId?: string;
   /**
-   * Auto-dismiss timeout in milliseconds, as `ToastOptions.timeout`.
-   * @default 5000
+   * Auto-dismiss timeout in milliseconds, as `ToastOptions.timeout`. A toast that holds an action
+   * (an interactive element besides its Dismiss button) stays until it is dismissed unless you
+   * pass one: people using a screen reader, a switch or voice control need time to reach it.
+   * @default 5000, or no timeout for a toast with an action
    */
   timeout?: number;
   /**
@@ -174,6 +176,12 @@ function markAllDismissed(toasts: ToastEntry[]): ToastEntry[] {
   return toasts
     .filter((toast) => toast.shown)
     .map((toast) => (toast.dismissed ? toast : { ...toast, dismissed: true }));
+}
+
+/** Whether a toast holds an action: an element in its Tab order other than its Dismiss button. */
+function hasAction(container: HTMLElement, toast: ToastRegistration | null): boolean {
+  const dismissButton = toast?.getDismissButton() ?? null;
+  return getTabbableElements(container).some((el) => el !== dismissButton);
 }
 
 /** `limit` as the Toaster applies it: whole toasts, at least 1; `undefined` means no limit. */
@@ -584,6 +592,16 @@ function ToastContainer({
       ? getStatusLabel(entry.options.status ?? 'info', entry.options.statusLabel)
       : '';
   const severityId = toast ? toast.statusTextId : ownSeverityLabel ? ownStatusTextId : undefined;
+  // The timer of each dispatch (D12), started once the content has mounted (its registrations ran
+  // first): the dispatch's `timeout`, else none for a toast with an action — people using a screen
+  // reader, a switch or voice control need time to reach it — else 5000 ms.
+  React.useLayoutEffect(() => {
+    const node = containerRef.current;
+    if (entry.dismissed || !node) return;
+    const timeout =
+      entry.options.timeout ?? (hasAction(node, toastRef.current) ? 0 : DEFAULT_TIMEOUT);
+    timers.start(entry.id, entry.seq, timeout);
+  }, [entry, timers]);
   if (!isMounted) return null;
   return (
     <div
@@ -756,17 +774,6 @@ export const Toaster = ({
       timers.setSuspended(true);
     };
   }, [timers]);
-
-  // Starts the timer of every newly shown toast, and restarts it for a shown toast dispatched again
-  // (a new `seq`); `timers.start` ignores a dispatch it has already started. A dismissed toast has
-  // none.
-  React.useEffect(() => {
-    for (const toast of toasts) {
-      if (toast.shown && !toast.dismissed) {
-        timers.start(toast.id, toast.seq, toast.options.timeout ?? DEFAULT_TIMEOUT);
-      }
-    }
-  }, [toasts, timers]);
 
   // A new toast waits until the render promotes it; a replaced one keeps its place and whether it
   // is shown (a waiting toast keeps waiting with the new content), and an exiting one is revived.

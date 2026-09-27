@@ -339,3 +339,102 @@ describe('dispatchToast with content (P3-01, toast-1)', () => {
     >();
   });
 });
+
+describe('the timeout of a toast with an action (P3-01, D12)', () => {
+  beforeEach(() => {
+    vi.useFakeTimers();
+  });
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  const undoToast = (onUndo: () => void = () => {}) => (
+    <Toast>
+      <Toast.Title
+        action={
+          <button type="button" onClick={onUndo}>
+            Undo
+          </button>
+        }
+      >
+        Message deleted
+      </Toast.Title>
+    </Toast>
+  );
+
+  it('keeps a toast with an action and no timeout until it is dismissed', () => {
+    const { dispatchContent } = renderToaster();
+    dispatchContent(undoToast());
+    advance(60_000);
+    expect(screen.getByText('Message deleted')).toBeInTheDocument();
+  });
+
+  it('honours an explicit timeout on a toast with an action', () => {
+    const { dispatchContent } = renderToaster();
+    dispatchContent(undoToast(), { timeout: 3000 });
+    advance(2999);
+    expect(screen.getByText('Message deleted')).toBeInTheDocument();
+    advance(1);
+    expect(getToasts()).toHaveLength(0);
+  });
+
+  it('dismisses a toast without an action after 5000 ms (its Dismiss button is no action)', () => {
+    const { dispatchContent } = renderToaster();
+    dispatchContent(<SavedToast />);
+    advance(4999);
+    expect(getToasts()).toHaveLength(1);
+    advance(1);
+    expect(getToasts()).toHaveLength(0);
+  });
+
+  it.each([
+    [
+      'an empty title action',
+      <Toast key="t">
+        <Toast.Title action={false}>Saved</Toast.Title>
+      </Toast>,
+    ],
+    [
+      'an empty footer',
+      <Toast key="f">
+        <Toast.Title>Saved</Toast.Title>
+        <Toast.Footer>{false}</Toast.Footer>
+      </Toast>,
+    ],
+  ])('keeps the 5 s timeout for %s: no action', (_, content) => {
+    const { dispatchContent } = renderToaster();
+    dispatchContent(content);
+    advance(5000);
+    expect(getToasts()).toHaveLength(0);
+  });
+
+  it('runs an Undo handler and pauses the timers while it has focus', async () => {
+    const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
+    const onUndo = vi.fn();
+    const { dispatchContent } = renderToaster();
+    dispatchContent(undoToast(onUndo), { timeout: 3000 });
+    advance(1000);
+    const undo = screen.getByRole('button', { name: 'Undo' });
+    act(() => undo.focus());
+    advance(10_000);
+    expect(screen.getByText('Message deleted')).toBeInTheDocument();
+    // The toast's timer is paused (cleared) while `undo` has focus, so switching the fake clock to
+    // auto-advance for this one awaited interaction cannot move its deadline: dispatching a real
+    // keydown/keypress/click/keyup sequence goes through the shared testing-library `act()`
+    // wrapper, which needs real elapsed time to settle once an actual event was dispatched (a bare
+    // `await act(async () => {})` resolves at once; `userEvent.setup({ delay: null })` — which
+    // skips only user-event's own inter-key wait — does not help, with or without `advanceTimers`),
+    // and otherwise never resolves under a clock that only moves on an explicit
+    // `advanceTimersByTime` call (reproduced with no Toast code and no rendered React tree at all).
+    // Switching back before `blur()` keeps the resumed countdown's boundary exact.
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    await user.keyboard('{Enter}');
+    vi.useFakeTimers();
+    expect(onUndo).toHaveBeenCalledTimes(1);
+    act(() => undo.blur());
+    advance(1999);
+    expect(screen.getByText('Message deleted')).toBeInTheDocument();
+    advance(1);
+    expect(getToasts()).toHaveLength(0);
+  });
+});
