@@ -42,8 +42,10 @@ import {
   Dropdown,
   DropdownOption,
   Field,
+  InfoButton,
   InfoLabel,
   Input,
+  Label,
   Menu,
   MenuButton,
   MenuGroup,
@@ -65,6 +67,9 @@ import {
   ProgressBar,
   RadioGroup,
   Rating,
+  RatingDisplay,
+  RatingDisplayItem,
+  RatingItem,
   SearchBox,
   Select,
   Slider,
@@ -95,6 +100,7 @@ import {
   TreeItem,
   useOverflowMenu,
   useToastController,
+  WaveProvider,
   type CheckedValuesChangeDetails,
   type DialogProps,
   type MenuProps,
@@ -1609,6 +1615,9 @@ describe('Tab from the trigger of an open layer that sits outside the dialog con
     expect(button('P2')).toHaveFocus();
   });
 
+  // The two InfoLabel cases below, since 0.9 (Phase 4 D31): the label is InfoLabel's children, and
+  // the info button is named "‹label› Information". Their notes hold only text, so Tab from the
+  // open button has nothing to enter and moves on in the order around the InfoLabel.
   it('an open InfoLabel in a consumer Portal: Tab and Shift+Tab move to the elements around it', async () => {
     const user = userEvent.setup();
     render(
@@ -1617,18 +1626,18 @@ describe('Tab from the trigger of an open layer that sits outside the dialog con
           <button type="button">In dialog</button>
           <Portal>
             <button type="button">P1</button>
-            <InfoLabel label="Password" info="Use 8 characters." />
+            <InfoLabel info="Use 8 characters.">Password</InfoLabel>
             <button type="button">P2</button>
           </Portal>
         </Dialog.Content>
       </Dialog>,
     );
-    await user.click(button('Information'));
-    expect(button('Information')).toHaveAttribute('aria-expanded', 'true');
+    await user.click(button('Password Information'));
+    expect(button('Password Information')).toHaveAttribute('aria-expanded', 'true');
     await user.tab();
     expect(button('P2')).toHaveFocus();
-    await user.click(button('Information'));
-    expect(button('Information')).toHaveAttribute('aria-expanded', 'true');
+    await user.click(button('Password Information'));
+    expect(button('Password Information')).toHaveAttribute('aria-expanded', 'true');
     await user.tab({ shift: true });
     expect(button('P1')).toHaveFocus();
   });
@@ -1643,7 +1652,7 @@ describe('Tab from the trigger of an open layer that sits outside the dialog con
               <button type="button">Options</button>
             </Popover.Trigger>
             <Popover.Content title="Options">
-              <InfoLabel label="Password" info="Use 8 characters." />
+              <InfoLabel info="Use 8 characters.">Password</InfoLabel>
               <button type="button">Next</button>
             </Popover.Content>
           </Popover>
@@ -1651,8 +1660,8 @@ describe('Tab from the trigger of an open layer that sits outside the dialog con
       </Dialog>,
     );
     await user.click(button('Options'));
-    await user.click(button('Information'));
-    expect(button('Information')).toHaveAttribute('aria-expanded', 'true');
+    await user.click(button('Password Information'));
+    expect(button('Password Information')).toHaveAttribute('aria-expanded', 'true');
     await user.tab();
     expect(button('Next')).toHaveFocus();
   });
@@ -3737,6 +3746,554 @@ describe('menus and commands across components', () => {
 });
 
 // ---------------------------------------------------------------------------
+// Phase 4: form controls (sizes and appearances, values, labels)
+// ---------------------------------------------------------------------------
+
+/**
+ * The Phase 4 cases (spec §4.8) that need two of its packages at once or a real Field: sizes and
+ * appearances resolved from a Field and from `WaveProvider inputDefaults` (D6–D9), Label and
+ * InfoLabel elements as a Field's label (D31, D32), the empty SpinButton value (D17), half stars
+ * (D22), the info note in a modal Dialog (D29), Server Component references (D26, D32) and the 0.7
+ * guards at a non-default look.
+ */
+describe('Phase 4 (form controls)', () => {
+  let warn: ReturnType<typeof vi.spyOn>;
+  let error: ReturnType<typeof vi.spyOn>;
+  beforeEach(() => {
+    warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    error = vi.spyOn(console, 'error').mockImplementation(() => {});
+  });
+  afterEach(() => {
+    try {
+      // Nothing is logged: no case here expects a warning, and an act() warning is an error.
+      expect(warn).not.toHaveBeenCalled();
+      expect(error).not.toHaveBeenCalled();
+    } finally {
+      vi.restoreAllMocks();
+    }
+  });
+
+  const TAG_OPTIONS = [
+    { value: 'a', label: 'Apple' },
+    { value: 'b', label: 'Banana' },
+  ];
+
+  /**
+   * The ten text controls and pickers that take their size from a Field (D6), with the role of
+   * the element the Field names. `render` passes a `className` (and an own `size`) to the control:
+   * the element that receives `className` carries `data-size` and `data-appearance` (D9).
+   */
+  const SIZED_CONTROLS: ReadonlyArray<{
+    name: string;
+    role: string;
+    render: (props: { className: string; size?: 'large' }) => React.ReactElement;
+  }> = [
+    { name: 'Input', role: 'textbox', render: (props) => <Input {...props} /> },
+    { name: 'Textarea', role: 'textbox', render: (props) => <Textarea {...props} /> },
+    {
+      name: 'Select',
+      role: 'combobox',
+      render: (props) => (
+        <Select {...props}>
+          <option value="a">Apple</option>
+        </Select>
+      ),
+    },
+    { name: 'SearchBox', role: 'searchbox', render: (props) => <SearchBox {...props} /> },
+    { name: 'SpinButton', role: 'spinbutton', render: (props) => <SpinButton {...props} /> },
+    {
+      name: 'Combobox',
+      role: 'combobox',
+      render: (props) => <Combobox {...props}>{fruitOptions}</Combobox>,
+    },
+    {
+      name: 'Dropdown',
+      role: 'combobox',
+      render: (props) => <Dropdown {...props}>{fruitOptions}</Dropdown>,
+    },
+    {
+      name: 'DatePicker',
+      role: 'textbox',
+      render: (props) => <DatePicker locale="en-US" {...props} />,
+    },
+    { name: 'TimePicker', role: 'combobox', render: (props) => <TimePicker {...props} /> },
+    {
+      name: 'TagPicker',
+      role: 'combobox',
+      render: (props) => <TagPicker options={TAG_OPTIONS} {...props} />,
+    },
+  ];
+
+  /** The Field root around a control (it carries the Field's `data-validation-state`). */
+  const fieldOf = (el: Element) => el.closest<HTMLElement>('[data-validation-state]');
+  /** The resolved size and appearance an element renders. */
+  const look = (el: Element | null) => [
+    el?.getAttribute('data-size'),
+    el?.getAttribute('data-appearance'),
+  ];
+
+  it('case 1: a Field size reaches every text control and picker (TagPicker: small gives medium), and sizes the label and its horizontal padding; an own size wins', () => {
+    // The Field label's type ramp and its top padding beside the control, per size (D8).
+    const LABEL_RAMP = { small: 'text-caption-1', large: 'text-body-2' } as const;
+    const LABEL_TOP = { small: 'pt-1', large: 'pt-2.25' } as const;
+    for (const { name, role, render: control } of SIZED_CONTROLS) {
+      for (const size of ['small', 'large'] as const) {
+        for (const orientation of ['vertical', 'horizontal'] as const) {
+          const where = `${name} in a ${orientation} Field size="${size}"`;
+          const { container, unmount } = render(
+            <Field label={name} size={size} orientation={orientation}>
+              {control({ className: 'sized-control' })}
+            </Field>,
+          );
+          const field = container.firstElementChild as HTMLElement;
+          const sized = container.querySelector('.sized-control');
+          // Exactly two elements carry a size: the Field root and the element that takes the
+          // control's className.
+          const carriers = Array.from(container.querySelectorAll('[data-size]'));
+          expect(carriers, where).toHaveLength(2);
+          expect(carriers[0], where).toBe(field);
+          expect(carriers[1], where).toBe(sized);
+          expect(field, where).toHaveAttribute('data-size', size);
+          expect(look(sized), where).toEqual([
+            name === 'TagPicker' && size === 'small' ? 'medium' : size,
+            'outline',
+          ]);
+          // The Field names the control, so the size reached the Field's own control.
+          expect(within(container).getByRole(role, { name }), where).toBeInTheDocument();
+          const label = within(field).getByText(name, { selector: 'label' });
+          expect(label, where).toHaveClass(LABEL_RAMP[size]);
+          expect(label, where).not.toHaveClass('text-body-1');
+          if (orientation === 'horizontal') {
+            expect(label, where).toHaveClass(LABEL_TOP[size]);
+            expect(label, where).not.toHaveClass('pt-1.5');
+          } else {
+            expect(label, where).not.toHaveClass(LABEL_TOP[size]);
+          }
+          unmount();
+        }
+      }
+      const { container, unmount } = render(
+        <Field label={name} size="small">
+          {control({ className: 'sized-control', size: 'large' })}
+        </Field>,
+      );
+      expect(container.firstElementChild, `${name}: the Field`).toHaveAttribute(
+        'data-size',
+        'small',
+      );
+      expect(
+        container.querySelector('.sized-control'),
+        `${name}: its own size="large" wins`,
+      ).toHaveAttribute('data-size', 'large');
+      unmount();
+    }
+  });
+
+  it('case 2: provider defaults reach the controls in a Field without size; a Field size and own props win; a nested provider merges; choice controls keep medium', () => {
+    render(
+      <WaveProvider inputDefaults={{ size: 'small', appearance: 'filled-darker' }}>
+        <Field label="Name">
+          <Input />
+        </Field>
+        <Field label="Fruit">
+          <Combobox>{fruitOptions}</Combobox>
+        </Field>
+        <Field label="Tags">
+          <TagPicker options={TAG_OPTIONS} />
+        </Field>
+        <Field label="Big" size="large">
+          <Input />
+        </Field>
+        <WaveProvider inputDefaults={{ appearance: 'underline' }}>
+          <Field label="Nested">
+            <Input />
+          </Field>
+        </WaveProvider>
+        <Input aria-label="Own" size="large" appearance="outline" />
+        <Checkbox label="Check" />
+        <Switch label="Toggle" />
+        <Slider aria-label="Level" />
+        <Field label="Agree" size="large">
+          <Checkbox />
+        </Field>
+        <Field label="Notify" size="small">
+          <Switch />
+        </Field>
+        <Field label="Volume" size="small">
+          <Slider />
+        </Field>
+      </WaveProvider>,
+    );
+    const root = (el: Element) => el.closest('[data-appearance]');
+    const name = screen.getByRole('textbox', { name: 'Name' });
+    expect(look(name)).toEqual(['small', 'filled-darker']);
+    // The Field without a size sizes its own label from the provider too (D8).
+    expect(fieldOf(name)).toHaveAttribute('data-size', 'small');
+    expect(look(root(screen.getByRole('combobox', { name: 'Fruit' })))).toEqual([
+      'small',
+      'filled-darker',
+    ]);
+    // TagPicker has no small: the provider's size is skipped (D6, D12).
+    expect(look(root(screen.getByRole('combobox', { name: 'Tags' })))).toEqual([
+      'medium',
+      'filled-darker',
+    ]);
+    const big = screen.getByRole('textbox', { name: 'Big' });
+    expect(look(big)).toEqual(['large', 'filled-darker']);
+    expect(fieldOf(big)).toHaveAttribute('data-size', 'large');
+    expect(look(screen.getByRole('textbox', { name: 'Nested' }))).toEqual(['small', 'underline']);
+    expect(look(screen.getByRole('textbox', { name: 'Own' }))).toEqual(['large', 'outline']);
+    // Checkbox, Switch and Slider read neither the provider's nor a Field's size (D6).
+    for (const [role, label] of [
+      ['checkbox', 'Check'],
+      ['switch', 'Toggle'],
+      ['checkbox', 'Agree'],
+      ['switch', 'Notify'],
+    ] as const) {
+      expect(screen.getByRole(role, { name: label }).closest('label'), label).toHaveAttribute(
+        'data-size',
+        'medium',
+      );
+    }
+    expect(screen.getByRole('slider', { name: 'Level' })).toHaveAttribute('data-size', 'medium');
+    expect(screen.getByRole('slider', { name: 'Volume' })).toHaveAttribute('data-size', 'medium');
+  });
+
+  it('case 3: an InfoLabel as a required Field’s label: the input is named "Password", the info button "Password Information"; Tab visits the button, the link in its note, then the input; Escape in the note returns to the button', async () => {
+    const user = userEvent.setup();
+    render(
+      <Field
+        required
+        label={
+          <InfoLabel
+            info={
+              <>
+                Use 12 characters. <a href="#rules">Rules</a>
+              </>
+            }
+          >
+            Password
+          </InfoLabel>
+        }
+      >
+        <Input />
+      </Field>,
+    );
+    const input = screen.getByRole('textbox', { name: 'Password' });
+    const info = button('Password Information');
+    expect(input).toBeRequired();
+    expect(info).toHaveAccessibleDescription('Use 12 characters. Rules');
+    expect(info).toHaveAttribute('aria-expanded', 'false');
+    // The InfoLabel's <label> stands in for the Field's: one label, and one required indicator.
+    expect(document.querySelectorAll('label')).toHaveLength(1);
+    expect(screen.getAllByText('*')).toHaveLength(1);
+    await expectNoA11yViolations(document.body);
+
+    // Keyboard focus opens the note; focus stays on the button.
+    await user.tab();
+    expect(info).toHaveFocus();
+    const note = screen.getByRole('note', { name: 'Password Information' });
+    expect(info).toHaveAttribute('aria-expanded', 'true');
+    expect(info).toHaveAttribute('aria-controls', note.id);
+    expect(info).toHaveAccessibleDescription('Use 12 characters. Rules');
+    await expectNoA11yViolations(document.body);
+
+    await user.tab();
+    expect(within(note).getByRole('link', { name: 'Rules' })).toHaveFocus();
+    // Tab past the note continues after the button: the input.
+    await user.tab();
+    expect(input).toHaveFocus();
+    await act(async () => {});
+    expect(screen.queryByRole('note')).toBeNull();
+
+    await user.tab({ shift: true });
+    expect(info).toHaveFocus();
+    await user.tab();
+    expect(screen.getByRole('link', { name: 'Rules' })).toHaveFocus();
+    await user.keyboard('{Escape}');
+    expect(screen.queryByRole('note')).toBeNull();
+    expect(info).toHaveFocus();
+    expect(info).toHaveAttribute('aria-expanded', 'false');
+    await expectNoA11yViolations(document.body);
+    // The dismissed note stays closed: Tab from the button goes straight to the input.
+    await user.tab();
+    expect(input).toHaveFocus();
+    expect(screen.queryByRole('note')).toBeNull();
+  });
+
+  it('case 4: a Label element as the label of a Field around a RadioGroup names the group through aria-labelledby and keeps its regular weight; no nested label', async () => {
+    const { container } = render(
+      <Field label={<Label weight="regular">Plan</Label>}>
+        <RadioGroup>
+          <RadioGroup.Item value="free" label="Free" />
+          <RadioGroup.Item value="pro" label="Pro" />
+        </RadioGroup>
+      </Field>,
+    );
+    const label = screen.getByText('Plan', { selector: 'label' });
+    const group = screen.getByRole('radiogroup', { name: 'Plan' });
+    expect(label.id).not.toBe('');
+    expect(group).toHaveAttribute('aria-labelledby', label.id);
+    expect(container.querySelector('label label')).toBeNull();
+    // Field's own label is semibold; the element's own weight wins (D32).
+    expect(label).not.toHaveClass('font-semibold');
+    expect(label).not.toHaveClass('font-bold');
+    await expectNoA11yViolations(document.body);
+  });
+
+  it('case 5: a required Field blocks an empty allowEmpty SpinButton through its hidden input; a value submits', async () => {
+    const user = userEvent.setup();
+    const onSubmit = vi.fn((event: React.FormEvent) => event.preventDefault());
+    render(
+      <form aria-label="Order" onSubmit={onSubmit}>
+        <Field label="Guests" required>
+          <SpinButton allowEmpty name="guests" />
+        </Field>
+      </form>,
+    );
+    const form = screen.getByRole('form', { name: 'Order' }) as HTMLFormElement;
+    const spin = screen.getByRole('spinbutton', { name: 'Guests' });
+    const hidden = () => form.elements.namedItem('guests') as HTMLInputElement;
+    expect(spin).toHaveValue('');
+    expect(spin).not.toHaveAttribute('aria-valuenow');
+    expect(hidden()).toBeRequired();
+    // The blocked submit fires `invalid` on the hidden input, whose handler focuses the spinbutton
+    // (a state update of the spin button: inside act).
+    act(() => form.requestSubmit());
+    expect(onSubmit).not.toHaveBeenCalled();
+    expect(spin).toHaveFocus();
+    act(() => {
+      expect(form.checkValidity()).toBe(false);
+    });
+    expect(hidden().validity.valueMissing).toBe(true);
+
+    await user.keyboard('{ArrowUp}');
+    expect(spin).toHaveValue('1');
+    expect(spin).toHaveAttribute('aria-valuenow', '1');
+    expect(hidden().validity.valid).toBe(true);
+    expect(form.checkValidity()).toBe(true);
+    expect(new FormData(form).getAll('guests')).toEqual(['1']);
+    act(() => form.requestSubmit());
+    expect(onSubmit).toHaveBeenCalledTimes(1);
+  });
+
+  it('case 6: a half-star Rating in a required Field submits a pointer choice of 3.5; a form reset restores its default', async () => {
+    const user = userEvent.setup();
+    const onSubmit = vi.fn((event: React.FormEvent) => event.preventDefault());
+    render(
+      <form aria-label="Review" onSubmit={onSubmit}>
+        <Field label="Score" required>
+          <Rating step={0.5} name="score" />
+        </Field>
+        <button type="reset">Reset</button>
+      </form>,
+    );
+    const form = screen.getByRole('form', { name: 'Review' }) as HTMLFormElement;
+    const checked = () =>
+      screen
+        .getAllByRole('radio')
+        .filter((radio) => radio.getAttribute('aria-checked') === 'true')
+        .map((radio) => radio.getAttribute('aria-label'));
+    expect(screen.getByRole('radiogroup', { name: 'Score' })).toHaveAttribute(
+      'aria-required',
+      'true',
+    );
+    // The blocked submit fires `invalid` on the hidden input, whose handler focuses the tab stop.
+    act(() => form.requestSubmit());
+    expect(onSubmit).not.toHaveBeenCalled();
+    expect(screen.getByRole('radio', { name: '0.5 stars' })).toHaveFocus();
+    act(() => {
+      expect(form.checkValidity()).toBe(false);
+    });
+    expect(new FormData(form).getAll('score')).toEqual([]);
+
+    // A click on the start half of the fourth star chooses 3.5 and focuses its radio (D22).
+    const star4 = screen.getByRole('radio', { name: '4 stars' }).parentElement as HTMLElement;
+    mockRect(star4, { left: 0, top: 0, width: 24, height: 24 });
+    fireEvent.click(star4, { clientX: 6, clientY: 12, detail: 1 });
+    expect(checked()).toEqual(['3.5 stars']);
+    expect(screen.getByRole('radio', { name: '3.5 stars' })).toHaveFocus();
+    expect(new FormData(form).getAll('score')).toEqual(['3.5']);
+    expect(form.checkValidity()).toBe(true);
+    act(() => form.requestSubmit());
+    expect(onSubmit).toHaveBeenCalledTimes(1);
+
+    await user.click(button('Reset'));
+    expect(checked()).toEqual([]);
+    expect(new FormData(form).getAll('score')).toEqual([]);
+    act(() => {
+      expect(form.checkValidity()).toBe(false);
+    });
+  });
+
+  function InfoInDialog() {
+    const [open, setOpen] = React.useState(false);
+    return (
+      <Dialog open={open} onOpenChange={setOpen}>
+        <Dialog.Trigger>
+          <Button>Settings</Button>
+        </Dialog.Trigger>
+        <Dialog.Content title="Settings">
+          <InfoLabel info={<a href="#more">More</a>}>Theme</InfoLabel>
+        </Dialog.Content>
+      </Dialog>
+    );
+  }
+
+  it('case 7: in a modal Dialog the info note opens as a nested layer; Escape closes the note (focus back on its button), then the Dialog (focus back on its trigger)', async () => {
+    const user = userEvent.setup();
+    render(<InfoInDialog />);
+    const settings = button('Settings');
+    await user.click(settings);
+    const dialog = screen.getByRole('dialog', { name: 'Settings' });
+    expect(within(dialog).getByRole('button', { name: 'Close' })).toHaveFocus();
+    // Keyboard focus on the info button opens its note.
+    await user.tab();
+    const info = within(dialog).getByRole('button', { name: 'Theme Information' });
+    expect(info).toHaveFocus();
+    const note = screen.getByRole('note', { name: 'Theme Information' });
+    // A layer of its own above the Dialog's, portaled outside the dialog and not made inert.
+    const layers = getOpenLayers();
+    expect(layers.map((layer) => layer.kind)).toEqual(['modal', 'popover']);
+    expect(layers[1].parentId).toBe(layers[0].id);
+    expect(dialog.contains(note)).toBe(false);
+    expect(note.closest('[inert], [aria-hidden="true"]')).toBeNull();
+    await expectNoA11yViolations(document.body);
+
+    await user.tab();
+    expect(within(note).getByRole('link', { name: 'More' })).toHaveFocus();
+    await user.keyboard('{Escape}');
+    expect(screen.queryByRole('note')).toBeNull();
+    expect(info).toHaveFocus();
+    expect(screen.getByRole('dialog', { name: 'Settings' })).toBeInTheDocument();
+    expect(getOpenLayers()).toHaveLength(1);
+
+    await user.keyboard('{Escape}');
+    expect(screen.queryByRole('dialog')).toBeNull();
+    expect(settings).toHaveFocus();
+  });
+
+  it('case 8: Server Component references: Rating.Item and RatingDisplay.Item children render and choose as plain items; an InfoLabel Field label is recognized; InfoButton renders by its flat name', async () => {
+    const user = userEvent.setup();
+    const Item = asClientReference(RatingItem);
+    const DisplayItem = asClientReference(RatingDisplayItem);
+    const stars = (Star: typeof RatingItem, step: 0.5 | 1) => (
+      <Rating aria-label="Stars" max={3} step={step}>
+        <Star value={1} />
+        <Star value={2} />
+        <Star value={3} />
+      </Rating>
+    );
+    for (const step of [1, 0.5] as const) {
+      const plain = renderToString(stars(RatingItem, step));
+      expect(plain).toContain(step === 1 ? 'aria-label="3 stars"' : 'aria-label="2.5 stars"');
+      expect(renderToString(stars(Item, step)), `step ${step}`).toBe(plain);
+    }
+    const display = (Star: typeof RatingItem) => (
+      <RatingDisplay value={2.5} max={3} locale="en-US">
+        <Star value={1} />
+        <Star value={2} />
+        <Star value={3} />
+      </RatingDisplay>
+    );
+    const plainDisplay = renderToString(display(RatingDisplayItem));
+    expect(plainDisplay).toContain('width:50%');
+    expect(renderToString(display(DisplayItem))).toBe(plainDisplay);
+
+    // The references choose as the plain items do: by the pointer's half of a star, and by keys.
+    render(stars(Item, 0.5));
+    const star3 = screen.getByRole('radio', { name: '3 stars' }).parentElement as HTMLElement;
+    mockRect(star3, { left: 0, top: 0, width: 24, height: 24 });
+    fireEvent.click(star3, { clientX: 6, clientY: 12, detail: 1 });
+    expect(screen.getByRole('radio', { name: '2.5 stars' })).toHaveAttribute(
+      'aria-checked',
+      'true',
+    );
+    expect(screen.getByRole('radio', { name: '2.5 stars' })).toHaveFocus();
+    await user.keyboard('{ArrowRight}');
+    expect(screen.getByRole('radio', { name: '3 stars' })).toHaveAttribute('aria-checked', 'true');
+    expect(screen.getByRole('radio', { name: '2.5 stars' })).toHaveAttribute(
+      'aria-checked',
+      'false',
+    );
+
+    const ReferenceInfoLabel = asClientReference(InfoLabel);
+    const field = (label: React.ReactNode) =>
+      renderToString(
+        <Field label={label}>
+          <input />
+        </Field>,
+      );
+    const reference = field(<ReferenceInfoLabel info="Hint">Name</ReferenceInfoLabel>);
+    expect(reference).toBe(field(<InfoLabel info="Hint">Name</InfoLabel>));
+    expect(reference.match(/<label/g)).toHaveLength(1);
+
+    // InfoButton, imported by its flat name, renders the same as a client reference.
+    const ReferenceInfoButton = asClientReference(InfoButton);
+    const infoButton = renderToString(<InfoButton info="Hint" />);
+    expect(infoButton).toContain('aria-label="Information"');
+    expect(renderToString(<ReferenceInfoButton info="Hint" />)).toBe(infoButton);
+  });
+
+  it('case 9: the 0.7 guards hold at non-default sizes and appearances', async () => {
+    const user = userEvent.setup();
+    const onSubmit = vi.fn((event: React.FormEvent) => event.preventDefault());
+    render(
+      <form aria-label="Profile" onSubmit={onSubmit}>
+        <Field label="Name" required>
+          <Input size="large" appearance="underline" />
+        </Field>
+        <Input
+          aria-label="Email"
+          size="small"
+          appearance="filled-darker"
+          error="Enter an email address"
+        />
+        <Combobox aria-label="Fruit" name="fruit" size="large" defaultValue="apple">
+          <Combobox.Option value="apple">Apple</Combobox.Option>
+          <Combobox.Option value="pear">Pear</Combobox.Option>
+        </Combobox>
+        <button type="reset">Reset</button>
+      </form>,
+    );
+    const form = screen.getByRole('form', { name: 'Profile' }) as HTMLFormElement;
+
+    // A required Field blocks submitting an empty large underline Input.
+    const name = screen.getByRole('textbox', { name: 'Name' }) as HTMLInputElement;
+    expect(look(name)).toEqual(['large', 'underline']);
+    expect(name).toBeRequired();
+    expect(form.checkValidity()).toBe(false);
+    expect(name.validity.valueMissing).toBe(true);
+    act(() => form.requestSubmit());
+    expect(onSubmit).not.toHaveBeenCalled();
+
+    // Input's own error renders, describes and marks it invalid at small filled-darker, whose
+    // border takes the error color.
+    const email = screen.getByRole('textbox', { name: 'Email' });
+    expect(look(email)).toEqual(['small', 'filled-darker']);
+    const alert = screen.getByRole('alert');
+    expect(alert).toHaveTextContent('Enter an email address');
+    expect(email).toHaveAttribute('aria-invalid', 'true');
+    expect(email).toHaveAccessibleDescription('Enter an email address');
+    expect(email).toHaveAttribute('aria-errormessage', alert.id);
+    expect(email).toHaveClass('border-destructive');
+    expect(email).not.toHaveClass('border-input-filled-stroke');
+
+    // A Combobox with a name resets with its form at large.
+    const fruit = screen.getByRole('combobox', { name: 'Fruit' });
+    expect(look(fruit.closest('[data-appearance]'))).toEqual(['large', 'outline']);
+    expect(new FormData(form).get('fruit')).toBe('apple');
+    await user.click(fruit);
+    await user.click(screen.getByRole('option', { name: 'Pear' }));
+    expect(fruit).toHaveValue('Pear');
+    expect(new FormData(form).get('fruit')).toBe('pear');
+    await user.click(button('Reset'));
+    expect(fruit).toHaveValue('Apple');
+    expect(new FormData(form).get('fruit')).toBe('apple');
+  });
+});
+
+// ---------------------------------------------------------------------------
 // Compounds written in a React Server Component
 // ---------------------------------------------------------------------------
 
@@ -4122,6 +4679,127 @@ describe('compounds composed in a React Server Component', () => {
         await user.click(alice);
         expect(alice).toBeChecked();
         expect(screen.getByRole('row', { name: /Alice/ })).toHaveAttribute('aria-selected', 'true');
+      },
+    }),
+    ssrCase({
+      name: 'Rating (Rating.Item children, half stars)',
+      parts: { Item: RatingItem },
+      tree: ({ Item }) => (
+        <Rating aria-label="Score" max={3} step={0.5} defaultValue={1.5}>
+          <Item value={1} />
+          <Item value={2} />
+          <Item value={3} />
+        </Rating>
+      ),
+      serverText: 'aria-label="2.5 stars"',
+      interact: async (user) => {
+        const checked = () =>
+          screen
+            .getAllByRole('radio')
+            .filter((radio) => radio.getAttribute('aria-checked') === 'true')
+            .map((radio) => radio.getAttribute('aria-label'));
+        expect(checked()).toEqual(['1.5 stars']);
+        // A click on the end half of the third star chooses 3, then ArrowLeft half a star less.
+        const star3 = screen.getByRole('radio', { name: '3 stars' }).parentElement as HTMLElement;
+        mockRect(star3, { left: 0, top: 0, width: 24, height: 24 });
+        fireEvent.click(star3, { clientX: 18, clientY: 12, detail: 1 });
+        expect(checked()).toEqual(['3 stars']);
+        expect(screen.getByRole('radio', { name: '3 stars' })).toHaveFocus();
+        await user.keyboard('{ArrowLeft}');
+        expect(checked()).toEqual(['2.5 stars']);
+      },
+    }),
+    ssrCase({
+      name: 'RatingDisplay (RatingDisplay.Item children)',
+      parts: { Item: RatingDisplayItem },
+      tree: ({ Item }) => (
+        <RatingDisplay value={2.5} max={3} locale="en-US">
+          <Item value={1} />
+          <Item value={2} />
+          <Item value={3} />
+        </RatingDisplay>
+      ),
+      serverText: 'Rating: 2.5 out of 3',
+      interact: async () => {
+        // A display has nothing to operate: the hydrated items draw the value (the third star
+        // half filled, its filled glyph clipped to 50%).
+        const stars = Array.from(
+          screen.getByRole('img', { name: 'Rating: 2.5 out of 3' }).children,
+        );
+        expect(stars).toHaveLength(3);
+        expect(
+          stars.map((star) => star.querySelector<HTMLElement>('[style]')?.style.width),
+        ).toEqual([undefined, undefined, '50%']);
+      },
+    }),
+    ssrCase({
+      name: 'Field (an InfoLabel as its label)',
+      parts: { Label: InfoLabel },
+      tree: ({ Label: FieldLabel }) => (
+        <Field
+          required
+          label={
+            <FieldLabel
+              info={
+                <>
+                  Use 12 characters. <a href="#rules">Rules</a>
+                </>
+              }
+            >
+              Password
+            </FieldLabel>
+          }
+        >
+          <Input />
+        </Field>
+      ),
+      serverText: 'Use 12 characters.',
+      interact: async (user) => {
+        // Recognized as a label element: its <label> is the only one, and names the input.
+        expect(document.querySelectorAll('label')).toHaveLength(1);
+        const input = screen.getByRole('textbox', { name: 'Password' });
+        expect(input).toBeRequired();
+        const info = button('Password Information');
+        expect(info).toHaveAccessibleDescription('Use 12 characters. Rules');
+        await user.tab();
+        expect(info).toHaveFocus();
+        expect(screen.getByRole('note', { name: 'Password Information' })).toBeInTheDocument();
+        await user.tab();
+        expect(screen.getByRole('link', { name: 'Rules' })).toHaveFocus();
+        await user.keyboard('{Escape}');
+        expect(screen.queryByRole('note')).toBeNull();
+        expect(info).toHaveFocus();
+      },
+    }),
+    ssrCase({
+      name: 'InfoButton (by its flat name, next to a heading)',
+      parts: { Info: InfoButton },
+      tree: ({ Info }) => (
+        <section aria-labelledby="billing">
+          <h2 id="billing">Billing</h2>
+          <Info
+            id="billing-info"
+            aria-labelledby="billing billing-info"
+            info={
+              <>
+                Invoices are sent monthly. <a href="#billing-help">Learn more</a>
+              </>
+            }
+          />
+        </section>
+      ),
+      serverText: 'Invoices are sent monthly.',
+      interact: async (user) => {
+        const info = button('Billing Information');
+        expect(info).toHaveAccessibleDescription('Invoices are sent monthly. Learn more');
+        await user.click(info);
+        expect(screen.getByRole('note', { name: 'Billing Information' })).toBeInTheDocument();
+        expect(info).toHaveFocus();
+        await user.tab();
+        expect(screen.getByRole('link', { name: 'Learn more' })).toHaveFocus();
+        await user.keyboard('{Escape}');
+        expect(screen.queryByRole('note')).toBeNull();
+        expect(info).toHaveFocus();
       },
     }),
   ];
