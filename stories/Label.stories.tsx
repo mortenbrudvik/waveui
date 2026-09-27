@@ -72,3 +72,11 @@ export const Sizes: Story = {
     </div>
   ),
 };
+
+/** Any node works as the required indicator, not just `true`'s asterisk. */
+export const CustomRequired: Story = {
+  args: {
+    children: 'Promo code',
+    required: <span>(required)</span>,
+  },
+};
