@@ -550,3 +550,133 @@ describe('severity (P3-01, D12)', () => {
     expect(getLiveRegion('assertive').textContent).toBe('Error: Upload failed Try again.');
   });
 });
+
+describe('announcements (P3-01, D13)', () => {
+  it('announces a rich toast once: severity, title, body, action labels, never "Dismiss"', () => {
+    const { dispatchContent } = renderToaster();
+    dispatchContent(
+      <Toast status="error">
+        <Toast.Title action={<button type="button">Retry</button>}>Upload failed</Toast.Title>
+        <Toast.Body>The file is too large.</Toast.Body>
+      </Toast>,
+      { timeout: 0 },
+    );
+    const assertive = getLiveRegion('assertive');
+    expect(assertive.textContent).toBe('Error: Upload failed The file is too large. Retry');
+    expect(assertive.childElementCount).toBe(1);
+    // No provider or announcer is mounted: the Toaster's own live regions announce.
+    expect(document.querySelector('[data-wave-announcer]')).toBeNull();
+  });
+
+  it('reads the subtitle with the body and the footer’s labels after it', () => {
+    const { dispatchContent } = renderToaster();
+    dispatchContent(
+      <Toast status="success">
+        <Toast.Title>Email sent</Toast.Title>
+        <Toast.Body subtitle="Just now">Your message was delivered.</Toast.Body>
+        <Toast.Footer>
+          <button type="button">Undo</button>
+          <button type="button" aria-label="Open the sent folder">
+            <svg aria-hidden="true" />
+          </button>
+        </Toast.Footer>
+      </Toast>,
+      { timeout: 0 },
+    );
+    expect(getLiveRegion('polite').textContent).toBe(
+      'Success: Email sent Your message was delivered. Just now Undo Open the sent folder',
+    );
+  });
+
+  it('skips aria-hidden text and reads an image’s alt', () => {
+    const { dispatchContent } = renderToaster();
+    dispatchContent(
+      <Toast>
+        <Toast.Body>
+          Sent to <img src="data:," alt="Ada Lovelace" />
+          <span aria-hidden="true"> ✓</span>
+        </Toast.Body>
+      </Toast>,
+      { timeout: 0 },
+    );
+    expect(getLiveRegion('polite').textContent).toBe('Info: Sent to Ada Lovelace');
+  });
+
+  it('does not let its own transient severity text bleed into a title-less, body-less Toast’s announcement', () => {
+    // Reviewer regression (T10): on the commit where a Toast with no title or body first
+    // registers, the container's own severity text is still in the DOM too (its `toast` state
+    // has not caught up with the registration yet), next to the Toast's own severity text.
+    // composeToastText's fallback walk (used because there is no title or body part) must skip
+    // both `ownStatusTextId` and the Toast's own `statusTextId`, or the announcement gains an
+    // extra "Info:" before the Toast's own "Error:".
+    const { dispatchContent } = renderToaster();
+    dispatchContent(<Toast status="error" />, { timeout: 0 });
+    const assertive = getLiveRegion('assertive');
+    expect(assertive.textContent).toBe('Error:');
+    expect(assertive.childElementCount).toBe(1);
+  });
+
+  it('reads content without a Toast whole, after the options’ severity text', () => {
+    const { dispatchContent } = renderToaster();
+    dispatchContent(
+      <div>
+        <strong>3 files</strong> uploaded <button type="button">View</button>
+      </div>,
+      { status: 'success', timeout: 0 },
+    );
+    expect(getLiveRegion('polite').textContent).toBe('Success: 3 files uploaded View');
+  });
+
+  it('announces `announcement` instead of the text; statusLabel "" drops the severity', () => {
+    const { dispatchContent } = renderToaster();
+    dispatchContent(
+      <Toast>
+        <Toast.Title>Uploading report.pdf</Toast.Title>
+        <Toast.Body>
+          <progress aria-label="Upload progress" value={30} max={100} />
+        </Toast.Body>
+      </Toast>,
+      { announcement: 'Upload started', timeout: 0 },
+    );
+    dispatchContent(<p>Quiet</p>, { statusLabel: '', announcement: 'Hello', timeout: 0 });
+    const texts = Array.from(getLiveRegion('polite').children, (child) => child.textContent);
+    expect(texts).toEqual(['Info: Upload started', 'Hello']);
+  });
+
+  it('announces a toast replaced by its toastId again, with the new text', () => {
+    const { dispatchContent } = renderToaster();
+    dispatchContent(<p>One</p>, { toastId: 'sync', timeout: 0 });
+    dispatchContent(<p>Two</p>, { toastId: 'sync', timeout: 0 });
+    const polite = getLiveRegion('polite');
+    expect(polite.textContent).toBe('Info: Two');
+    expect(polite.childElementCount).toBe(1);
+  });
+
+  it('announces the second of two same-id dispatches in one tick, once', () => {
+    const { controller } = renderToaster();
+    act(() => {
+      controller().dispatchToast(<p>First version</p>, { toastId: 'sync', timeout: 0 });
+      controller().dispatchToast(<p>Second version</p>, { toastId: 'sync', timeout: 0 });
+    });
+    const polite = getLiveRegion('polite');
+    expect(polite.textContent).toBe('Info: Second version');
+    expect(polite.childElementCount).toBe(1);
+  });
+
+  it('announces once per dispatch under StrictMode', () => {
+    const controllerRef = React.createRef<ToastController>();
+    render(
+      <React.StrictMode>
+        <Toaster>
+          <ControllerProbe ref={controllerRef} />
+        </Toaster>
+      </React.StrictMode>,
+    );
+    act(() => {
+      controllerRef.current?.dispatchToast(<SavedToast />, { timeout: 0 });
+    });
+    const polite = getLiveRegion('polite');
+    expect(polite.childElementCount).toBe(1);
+    expect(polite.textContent).toBe('Success: Saved Your changes were saved.');
+  });
+});

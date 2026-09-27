@@ -27,8 +27,9 @@ export type {
  *
  * Dispatch it with `useToastController().dispatchToast(<Toast>…</Toast>)`, or render it yourself.
  *
- * - **In a Toaster** (dispatched with `useToastController()`): not a live region itself; the
- *   Toaster announces it through its permanent live regions and names its container by the
+ * - **In a Toaster**: not a live region itself; the Toaster announces it once through its
+ *   permanent live regions (its severity text, title, body and the labels of its actions, never
+ *   the Dismiss button), politely or, for `error`, assertively, and names its container by the
  *   severity text and title. Every Toast there shows the Dismiss button.
  * - **On its own** (your own container, an inline notice): a live region, as in 0.4 —
  *   `role="status"` with `aria-live="polite"`, or `role="alert"` with `aria-live="assertive"` for

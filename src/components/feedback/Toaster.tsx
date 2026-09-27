@@ -513,6 +513,114 @@ function isBodyPart(
   return part.kind === 'body';
 }
 
+function isFooterPart(
+  part: ToastPartRegistration,
+): part is Extract<ToastPartRegistration, { kind: 'footer' }> {
+  return part.kind === 'footer';
+}
+
+/** Elements whose text runs on without a break; every other element separates its text. */
+const INLINE_ELEMENTS = new Set([
+  'a',
+  'abbr',
+  'b',
+  'bdi',
+  'bdo',
+  'cite',
+  'code',
+  'data',
+  'dfn',
+  'em',
+  'i',
+  'kbd',
+  'label',
+  'mark',
+  'q',
+  's',
+  'samp',
+  'small',
+  'span',
+  'strong',
+  'sub',
+  'sup',
+  'time',
+  'u',
+  'var',
+]);
+
+/** Elements a screen reader names by their `aria-label` rather than by their content. */
+const NAMED_BY_LABEL = new Set(['a', 'button', 'img', 'input', 'select', 'svg', 'textarea']);
+
+/**
+ * The text a screen reader reads for `root`'s content (D13): text nodes, an image's `alt` and the
+ * `aria-label` of a control; `aria-hidden="true"` and `hidden` subtrees, and elements `skip`
+ * accepts, are left out; whitespace is collapsed. Fluent reads the raw text content instead, which
+ * includes hidden text and misses `alt` text.
+ */
+function getAccessibleText(root: Element | null, skip?: (el: Element) => boolean): string {
+  if (!root) return '';
+  const parts: string[] = [];
+  const visit = (node: Node, isRoot: boolean): void => {
+    if (node.nodeType === Node.TEXT_NODE) {
+      parts.push(node.textContent ?? '');
+      return;
+    }
+    if (node.nodeType !== Node.ELEMENT_NODE) return;
+    const el = node as Element;
+    if (!isRoot && skip?.(el)) return;
+    if (el.getAttribute('aria-hidden') === 'true' || el.hasAttribute('hidden')) return;
+    const label = el.getAttribute('aria-label');
+    if (label && (NAMED_BY_LABEL.has(el.localName) || el.hasAttribute('role'))) {
+      parts.push(` ${label} `);
+      return;
+    }
+    if (el.localName === 'img') {
+      parts.push(` ${el.getAttribute('alt') ?? ''} `);
+      return;
+    }
+    const separate = !INLINE_ELEMENTS.has(el.localName);
+    if (separate) parts.push(' ');
+    for (const child of Array.from(el.childNodes)) visit(child, false);
+    if (separate) parts.push(' ');
+  };
+  visit(root, true);
+  return parts.join('').replace(/\s+/g, ' ').trim();
+}
+
+/**
+ * A toast's announced text after its severity (D13): the title, the body (its subtitle included),
+ * then the labels of its actions (the title's `action` and the footer, never the Dismiss button).
+ * Content without a title or body part is read whole, without the severity texts.
+ */
+function composeToastText(
+  container: HTMLElement,
+  parts: readonly ToastPartRegistration[],
+  toast: ToastRegistration | null,
+  ownStatusTextId: string,
+): string {
+  const title = parts.find(isTitlePart);
+  const body = parts.find(isBodyPart);
+  if (!title && !body) {
+    const dismissButton = toast?.getDismissButton() ?? null;
+    return getAccessibleText(
+      container,
+      (el) =>
+        el === dismissButton ||
+        (el.id !== '' && (el.id === ownStatusTextId || el.id === toast?.statusTextId)),
+    );
+  }
+  const label = title?.getLabel() ?? null;
+  return [
+    getAccessibleText(label),
+    getAccessibleText(body?.getElement() ?? null),
+    // The title row without its text: the `action` slot.
+    getAccessibleText(title?.getRow() ?? null, (el) => el === label),
+    ...parts.filter(isFooterPart).map((footer) => getAccessibleText(footer.getElement())),
+  ]
+    .filter(Boolean)
+    .join(' ');
+}
+
 /**
  * One toast of the Toaster (D10): a `role="group"` container, focusable by script (no Tab stop),
  * named by the toast's severity text and title and described by its body while a Toast inside
@@ -610,22 +718,26 @@ function ToastContainer({
   }, [entry, timers]);
 
   // What screen readers hear (D13), once per dispatch after the content has mounted: the severity
-  // text of the rendered Toast (else the dispatch options'), then the toast's text; `error` is
-  // assertive.
+  // text of the rendered Toast (else the dispatch options'), then `announcement` or the text the
+  // toast renders; `error` is assertive.
   React.useLayoutEffect(() => {
-    if (entry.dismissed) return;
+    const node = containerRef.current;
+    if (entry.dismissed || !node) return;
     const registered = toastRef.current;
     const status = registered?.status ?? entry.options.status ?? 'info';
     const label = registered
       ? registered.statusLabel
       : getStatusLabel(status, entry.options.statusLabel);
-    const text = entry.form === 'options' ? [entry.options.title, entry.options.body] : [];
+    const text =
+      entry.form === 'content' && entry.options.announcement !== undefined
+        ? entry.options.announcement
+        : composeToastText(node, partsRef.current, registered, ownStatusTextId);
     announce(entry.id, {
       seq: entry.seq,
-      text: [label, ...text].filter(Boolean).join(' '),
+      text: [label, text].filter(Boolean).join(' '),
       assertive: status === 'error',
     });
-  }, [entry, announce]);
+  }, [entry, announce, ownStatusTextId]);
 
   // A rendered Toast's severity wins over the dispatch options' (D12); an explicit, different
   // `status` in the options warns once. Read from the ref, not the `toast` state, inside the
@@ -701,8 +813,10 @@ ToastContainer.displayName = 'ToastContainer';
  *   (`data-wave-focus-trap-allow`): it stays reachable by Tab and exposed to assistive technology
  *   while a Dialog or Drawer is open, and clicking a toast never dismisses the overlay below.
  * - Two permanent, visually hidden live regions (polite, and assertive for `error`) announce every
- *   toast; the toasts themselves are not live regions. Each message stays in its live region for
- *   2 seconds (or until its toast goes), so browsing the region later meets the text only once.
+ *   toast once, read from what it renders after it mounts: the severity text, the title, the body
+ *   and the labels of its actions (never the Dismiss button), or the dispatch's `announcement`.
+ *   The toasts themselves are not live regions. Each message stays in its live region for 2
+ *   seconds (or until its toast goes), so browsing the region later meets the text only once.
  * - While an open modal panel covers the toasts' corner (a Drawer on the same side), the toasts
  *   move beside it, so they never hide its focused controls (WCAG 2.4.11). Without room beside it
  *   (a full-width panel on a narrow screen) they keep their corner.
