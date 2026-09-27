@@ -43,6 +43,15 @@ export const Disabled: Story = {
   },
 };
 
+export const Sizes: Story = {
+  render: (args) => (
+    <div className="grid gap-4">
+      <Slider {...args} size="small" defaultValue={30} aria-label="Small volume" />
+      <Slider {...args} size="medium" defaultValue={60} aria-label="Medium volume" />
+    </div>
+  ),
+};
+
 /**
  * Under `dir="rtl"` the minimum is on the right, so the rail fills from the right up to the
  * thumb.

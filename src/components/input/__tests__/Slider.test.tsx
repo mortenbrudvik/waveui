@@ -2,9 +2,10 @@ import * as React from 'react';
 import { renderToString } from 'react-dom/server';
 import { describe, it, expect, vi, expectTypeOf } from 'vitest';
 import { act, render, screen, fireEvent } from '@testing-library/react';
-import { Slider, type SliderProps } from '../Slider';
+import { Slider, type SliderProps, type SliderSize } from '../Slider';
 import { forcedColors } from '../../../lib/styles';
 import { testSystemProps, testFocusEvents } from '../../../test-utils';
+import { renderWithFieldContext } from '../../../test-utils-field';
 
 /** The fill variable of a slider: the share of the rail up to the thumb. */
 function progress(slider: HTMLElement): string {
@@ -401,5 +402,64 @@ describe('Slider', () => {
       expect(units(thumb, 'w')).toBe(units(thumb, 'h'));
       expect(className).not.toMatch(/slider-thumb\]:-?mt-\[/);
     });
+  });
+});
+
+describe('size (Phase 4 D10, D14)', () => {
+  const slider = () => screen.getByRole('slider', { name: 'Volume' });
+
+  it('medium is the 0.7 look', () => {
+    render(<Slider aria-label="Volume" />);
+    expect(slider()).toHaveClass(
+      '[&::-webkit-slider-thumb]:h-5',
+      '[&::-webkit-slider-runnable-track]:h-1',
+      '[&::-webkit-slider-thumb]:-mt-2',
+    );
+    expect(slider()).toHaveAttribute('data-size', 'medium');
+  });
+
+  it('small: a 16px thumb on a 2px rail in a 24px-tall input', () => {
+    render(<Slider aria-label="Volume" size="small" />);
+    expect(slider()).toHaveClass(
+      'h-6',
+      '[&::-webkit-slider-thumb]:h-4',
+      '[&::-webkit-slider-thumb]:w-4',
+      '[&::-webkit-slider-thumb]:-mt-1.75',
+      '[&::-webkit-slider-runnable-track]:h-0.5',
+      '[&::-moz-range-thumb]:h-4',
+      '[&::-moz-range-track]:h-0.5',
+      '[&::-moz-range-progress]:h-0.5',
+    );
+  });
+
+  it('a numeric size renders nothing and is reported once', () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    try {
+      const { rerender } = render(<Slider aria-label="Volume" size={3} />);
+      expect(slider()).not.toHaveAttribute('size');
+      expect(slider()).toHaveAttribute('data-size', 'medium');
+      expect(warn).toHaveBeenCalledTimes(1);
+      expect(warn).toHaveBeenCalledWith(
+        '[WaveUI] Slider: a numeric `size` has no effect (a range input ignores the native attribute) and is removed in 1.0; remove it.',
+      );
+      // warnOnce: a re-render with the same numeric size does not warn again.
+      rerender(<Slider aria-label="Volume" size={3} />);
+      expect(warn).toHaveBeenCalledTimes(1);
+    } finally {
+      warn.mockRestore();
+    }
+  });
+
+  // D6: unlike the text controls and pickers, Slider takes neither the Field size nor the
+  // provider defaults.
+  it('ignores the Field size', () => {
+    renderWithFieldContext(<Slider aria-label="Volume" />, { size: 'large' });
+    expect(slider()).toHaveAttribute('data-size', 'medium');
+  });
+
+  it('types', () => {
+    expectTypeOf<SliderProps['size']>().toEqualTypeOf<SliderSize | number | undefined>();
+    // @ts-expect-error Slider has no large size
+    render(<Slider aria-label="Volume" size="large" />);
   });
 });
