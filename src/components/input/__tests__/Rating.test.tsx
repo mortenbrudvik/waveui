@@ -1,18 +1,20 @@
 import * as React from 'react';
 import { hydrateRoot } from 'react-dom/client';
 import { renderToString } from 'react-dom/server';
-import { describe, it, expect, expectTypeOf, vi } from 'vitest';
-import { act, fireEvent, render, renderHook, screen } from '@testing-library/react';
+import { afterEach, describe, it, expect, expectTypeOf, vi } from 'vitest';
+import { act, fireEvent, render, renderHook, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { Rating, RatingDisplay, RatingDisplayItem, RatingItem } from '../Rating';
 import { INERT_RATING_CONTEXT, RatingContext, useRatingItemRegistry } from '../Rating.item';
 import type {
+  RatingColor,
   RatingDisplayLabels,
   RatingDisplayProps,
   RatingItemProps,
   RatingLabels,
   RatingProps,
 } from '../Rating';
+import type { Slot } from '../../../lib/slot';
 import {
   asClientReference,
   expectNoA11yViolations,
@@ -1167,5 +1169,331 @@ describe('the item registry of a rating root (read by the item value checks)', (
     ]);
     unmount();
     expect(counts.size).toBe(0);
+  });
+});
+
+describe('color and icons (Phase 4 D24, D25)', () => {
+  // The warning tests spy on console.warn without restoring the spy themselves.
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  const HeartFilled = () => <svg data-testid="heart-filled" />;
+  const HeartOutline = () => <svg data-testid="heart-outline" />;
+
+  it('marigold is the default; the root renders data-color', () => {
+    render(<Rating aria-label="Service" defaultValue={2} />);
+    expect(screen.getByRole('radiogroup')).toHaveAttribute('data-color', 'marigold');
+    expect(screen.getByRole('radio', { name: '1 star' })).toHaveClass('text-rating');
+    expect(screen.getByRole('radio', { name: '3 stars' })).toHaveClass('text-stroke-accessible');
+  });
+
+  it.each([
+    ['brand', 'text-primary'],
+    ['neutral', 'text-foreground'],
+  ] as const)('%s fills with %s and keeps the outline token', (color, filled) => {
+    render(<Rating aria-label="Service" defaultValue={1} color={color} />);
+    expect(screen.getByRole('radio', { name: '1 star' })).toHaveClass(filled);
+    expect(screen.getByRole('radio', { name: '2 stars' })).toHaveClass('text-stroke-accessible');
+  });
+
+  it('an unknown color from untyped code renders as marigold', () => {
+    render(<Rating aria-label="Service" color={'red' as never} />);
+    expect(screen.getByRole('radiogroup')).toHaveAttribute('data-color', 'marigold');
+  });
+
+  it('RatingDisplay takes the color too, and keeps continuous partial fills', () => {
+    const { container } = render(<RatingDisplay value={4.6} color="brand" />);
+    expect(screen.getByRole('img')).toHaveAttribute('data-color', 'brand');
+    const clip = container.querySelector('[style*="width"]') as HTMLElement;
+    expect(clip).toHaveStyle({ width: '60%' });
+    expect(clip).toHaveClass('text-primary');
+  });
+
+  it('renders a custom icon pair, decorative', () => {
+    render(
+      <Rating
+        aria-label="Love"
+        defaultValue={1}
+        max={2}
+        iconFilled={<HeartFilled />}
+        iconOutline={<HeartOutline />}
+      />,
+    );
+    expect(screen.getByTestId('heart-filled').closest('[aria-hidden="true"]')).not.toBeNull();
+    expect(screen.getByTestId('heart-outline')).toBeInTheDocument();
+  });
+
+  it("an item's own pair wins over the group's", () => {
+    render(
+      <Rating
+        aria-label="Love"
+        max={1}
+        defaultValue={1}
+        iconFilled={<HeartFilled />}
+        iconOutline={<HeartOutline />}
+      >
+        <Rating.Item
+          value={1}
+          iconFilled={<svg data-testid="own" />}
+          iconOutline={<HeartOutline />}
+        />
+      </Rating>,
+    );
+    expect(screen.getByTestId('own')).toBeInTheDocument();
+    expect(screen.queryByTestId('heart-filled')).toBeNull();
+  });
+
+  it('one icon of the pair warns once; an empty slot keeps the star and warns', () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    render(<Rating aria-label="Love" iconFilled={<HeartFilled />} />);
+    render(<RatingDisplay value={1} iconFilled={[]} iconOutline={<HeartOutline />} />);
+    expect(warn.mock.calls.map(([message]) => message)).toEqual([
+      '[WaveUI] Rating: pass both `iconFilled` and `iconOutline`: with only one of them, the other is the default star.',
+      '[WaveUI] RatingDisplay: `iconFilled` renders nothing, so the default star is used.',
+    ]);
+  });
+
+  it('unwraps a button passed as an icon, with a warning', () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    render(
+      <Rating
+        aria-label="Love"
+        max={1}
+        iconFilled={<button type="button">♥</button>}
+        iconOutline={<HeartOutline />}
+      />,
+    );
+    expect(screen.getByRole('radio').querySelector('button')).toBeNull();
+    expect(warn).toHaveBeenCalledTimes(1);
+    expect(warn).toHaveBeenCalledWith(
+      '[WaveUI] Rating: `iconFilled` received a button element; its children render as the glyph of the star and its props were dropped (buttons cannot be nested). Pass icon content instead, e.g. `iconFilled={<MyIcon />}`.',
+    );
+  });
+
+  it('types: color narrows the inherited HTML attribute', () => {
+    expectTypeOf<RatingProps['color']>().toEqualTypeOf<RatingColor | undefined>();
+    // @ts-expect-error not a rating color
+    render(<Rating aria-label="Service" color="red" />);
+  });
+
+  // Spec P4-03 "Tests" cases beyond the brief.
+
+  it.each([
+    ['marigold', 'text-rating'],
+    ['brand', 'text-primary'],
+    ['neutral', 'text-foreground'],
+  ] as const)(
+    'RatingDisplay %s: whole and partial stars fill with %s; unfilled stars keep the outline token',
+    (color, filled) => {
+      render(<RatingDisplay value={1.5} max={3} color={color} />);
+      const root = screen.getByRole('img');
+      expect(root).toHaveAttribute('data-color', color);
+      const [whole, partial, empty] = Array.from(root.children) as HTMLElement[];
+      expect(whole).toHaveClass('inline-flex', filled);
+      expect(partial).toHaveClass('relative', 'text-stroke-accessible');
+      expect(partial.lastElementChild).toHaveClass(filled);
+      expect(empty).toHaveClass('text-stroke-accessible');
+      expect(empty).not.toHaveClass(filled);
+    },
+  );
+
+  it('an unknown color renders marigold in the classes too, on both roots, and no color attribute', () => {
+    render(
+      <>
+        <Rating aria-label="Service" defaultValue={1} color={'red' as never} />
+        <RatingDisplay value={1.5} max={2} color={'red' as never} />
+      </>,
+    );
+    const group = screen.getByRole('radiogroup');
+    expect(group).not.toHaveAttribute('color');
+    expect(screen.getByRole('radio', { name: '1 star' })).toHaveClass('text-rating');
+    const display = screen.getByRole('img');
+    expect(display).toHaveAttribute('data-color', 'marigold');
+    expect(display).not.toHaveAttribute('color');
+    expect(display.firstElementChild).toHaveClass('text-rating');
+    expect(display.querySelector('[style*="width"]')).toHaveClass('text-rating');
+  });
+
+  it('draws both glyphs of the pair decorative and sized by the star size', () => {
+    render(
+      <Rating
+        aria-label="Love"
+        max={2}
+        defaultValue={1}
+        size="large"
+        iconFilled={<HeartFilled />}
+        iconOutline={<HeartOutline />}
+      />,
+    );
+    for (const id of ['heart-filled', 'heart-outline']) {
+      const glyph = screen.getByTestId(id).parentElement as HTMLElement;
+      expect(glyph).toHaveAttribute('aria-hidden', 'true');
+      expect(glyph).toHaveClass('inline-flex', 'h-6', 'w-6', '[&>svg]:size-full');
+    }
+    expect(within(star(1)).getByTestId('heart-filled')).toBeInTheDocument();
+    expect(within(star(2)).getByTestId('heart-outline')).toBeInTheDocument();
+    // The radios keep their color classes and their 24px targets.
+    expect(star(1)).toHaveClass('text-rating', 'p-0.5');
+    expect(star(2)).toHaveClass('text-stroke-accessible');
+  });
+
+  it('a glyph that renders nothing draws the default star; null draws it without a warning', () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    render(
+      <>
+        <RatingDisplay
+          value={1}
+          max={2}
+          iconFilled={[]}
+          iconOutline={<HeartOutline />}
+          data-testid="empty"
+        />
+        <RatingDisplay value={1} max={2} iconFilled={null} iconOutline={null} data-testid="null" />
+      </>,
+    );
+    const [filled, unfilled] = Array.from(screen.getByTestId('empty').children);
+    // The default star, filled in the rating color, next to the custom outline glyph.
+    expect(filled).toHaveClass('text-rating');
+    expect(filled.firstElementChild).toHaveAttribute('data-wave-icon', 'star');
+    expect(filled.firstElementChild).toHaveAttribute('fill', 'currentColor');
+    expect(within(unfilled as HTMLElement).getByTestId('heart-outline')).toBeInTheDocument();
+    const nullStars = Array.from(screen.getByTestId('null').querySelectorAll('svg'));
+    expect(nullStars.map((svg) => svg.getAttribute('data-wave-icon'))).toEqual(['star', 'star']);
+    expect(warn.mock.calls).toEqual([
+      ['[WaveUI] RatingDisplay: `iconFilled` renders nothing, so the default star is used.'],
+    ]);
+  });
+
+  it('RatingDisplay clips the custom filled glyph over the custom outline glyph (4.6: 60%)', () => {
+    render(
+      <RatingDisplay value={4.6} iconFilled={<HeartFilled />} iconOutline={<HeartOutline />} />,
+    );
+    const stars = Array.from(screen.getByRole('img', { name: 'Rating: 4.6 out of 5' }).children);
+    const partial = stars[4] as HTMLElement;
+    expect(partial).toHaveClass('relative', 'text-stroke-accessible');
+    const [outline, clip] = Array.from(partial.children) as HTMLElement[];
+    expect(outline).toHaveAttribute('aria-hidden', 'true');
+    expect(within(outline).getByTestId('heart-outline')).toBeInTheDocument();
+    expect(clip).toHaveClass('absolute', 'start-0', 'overflow-hidden', 'text-rating');
+    expect(clip).toHaveStyle({ width: '60%' });
+    expect(within(clip).getByTestId('heart-filled').parentElement).toHaveClass('shrink-0');
+    // Four whole stars and the clipped one draw the custom filled glyph; no default star is drawn.
+    expect(screen.getAllByTestId('heart-filled')).toHaveLength(5);
+    expect(screen.getAllByTestId('heart-outline')).toHaveLength(1);
+    expect(document.querySelector('[data-wave-icon="star"]')).toBeNull();
+  });
+
+  it('RatingDisplay unwraps a slot object that renders a button, with a warning', () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    render(
+      <RatingDisplay
+        value={0}
+        max={2}
+        iconFilled={<HeartFilled />}
+        iconOutline={{ as: 'button', children: '♡' }}
+      />,
+    );
+    const display = screen.getByRole('img');
+    expect(display.querySelector('button')).toBeNull();
+    expect(within(display).getAllByText('♡')).toHaveLength(2);
+    expect(warn.mock.calls).toEqual([
+      [
+        '[WaveUI] RatingDisplay: `iconOutline` received a slot object that renders a button; its children render as the glyph of the star and its props were dropped (buttons cannot be nested). Pass icon content instead, e.g. `iconOutline={<MyIcon />}`.',
+      ],
+    ]);
+  });
+
+  it('children: an item that sets its pair (null included) draws it; the others draw the group pair', () => {
+    render(
+      <Rating
+        aria-label="Mood"
+        max={3}
+        defaultValue={3}
+        iconFilled={<HeartFilled />}
+        iconOutline={<HeartOutline />}
+      >
+        <Rating.Item
+          value={1}
+          iconFilled={<svg data-testid="own" />}
+          iconOutline={<svg data-testid="own-outline" />}
+        />
+        <Rating.Item value={2} iconFilled={null} iconOutline={null} />
+        <Rating.Item value={3} />
+      </Rating>,
+    );
+    expect(within(star(1)).getByTestId('own')).toBeInTheDocument();
+    expect(star(2).querySelector('svg')).toHaveAttribute('data-wave-icon', 'star');
+    expect(within(star(3)).getByTestId('heart-filled')).toBeInTheDocument();
+    expect(screen.getAllByTestId('heart-filled')).toHaveLength(1);
+  });
+
+  it('Rating.Item warns with its dotted prefix, once in StrictMode: one icon of its pair', () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    render(
+      <React.StrictMode>
+        <Rating aria-label="Love" max={2}>
+          <Rating.Item value={1} iconOutline={<HeartOutline />} />
+          <Rating.Item value={2} />
+        </Rating>
+      </React.StrictMode>,
+    );
+    expect(warn.mock.calls).toEqual([
+      [
+        '[WaveUI] Rating.Item: pass both `iconFilled` and `iconOutline`: with only one of them, the other is the default star.',
+      ],
+    ]);
+  });
+
+  it('Rating.Item unwraps a button passed as its icon: the glyph renders in the radio, with a warning', () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    render(
+      <Rating aria-label="Love" max={1} defaultValue={1}>
+        <Rating.Item
+          value={1}
+          iconFilled={<button type="button">♥</button>}
+          iconOutline={<HeartOutline />}
+        />
+      </Rating>,
+    );
+    const radio = star(1);
+    expect(radio.querySelector('button')).toBeNull();
+    expect(within(radio).getByText('♥')).toHaveAttribute('aria-hidden', 'true');
+    expect(warn.mock.calls).toEqual([
+      [
+        '[WaveUI] Rating.Item: `iconFilled` received a button element; its children render as the glyph of the star and its props were dropped (buttons cannot be nested). Pass icon content instead, e.g. `iconFilled={<MyIcon />}`.',
+      ],
+    ]);
+  });
+
+  it('compact: the one star takes the color and the custom filled glyph', () => {
+    render(
+      <RatingDisplay
+        value={4.2}
+        compact
+        color="neutral"
+        locale="en-US"
+        iconFilled={<HeartFilled />}
+        iconOutline={<HeartOutline />}
+        data-testid="root"
+      />,
+    );
+    const root = screen.getByTestId('root');
+    expect(root).toHaveAttribute('data-color', 'neutral');
+    expect(screen.getByTestId('heart-filled').closest('.text-foreground')).not.toBeNull();
+    expect(screen.queryByTestId('heart-outline')).toBeNull();
+    expect(root.querySelector('[data-wave-icon="star"]')).toBeNull();
+  });
+
+  it('types: RatingDisplay takes color; the three props interfaces take the icon pair', () => {
+    expectTypeOf<RatingDisplayProps['color']>().toEqualTypeOf<RatingColor | undefined>();
+    expectTypeOf<RatingProps['iconFilled']>().toEqualTypeOf<Slot<'span'> | undefined>();
+    expectTypeOf<RatingProps['iconOutline']>().toEqualTypeOf<Slot<'span'> | undefined>();
+    expectTypeOf<RatingDisplayProps['iconFilled']>().toEqualTypeOf<Slot<'span'> | undefined>();
+    expectTypeOf<RatingDisplayProps['iconOutline']>().toEqualTypeOf<Slot<'span'> | undefined>();
+    expectTypeOf<RatingItemProps['iconFilled']>().toEqualTypeOf<Slot<'span'> | undefined>();
+    expectTypeOf<RatingItemProps['iconOutline']>().toEqualTypeOf<Slot<'span'> | undefined>();
+    // @ts-expect-error not a rating color
+    render(<RatingDisplay value={3} color="red" />);
   });
 });

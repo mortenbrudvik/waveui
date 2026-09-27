@@ -3,6 +3,7 @@ import { cn } from '../../lib/cn';
 import { composeEventHandlers } from '../../lib/composeEventHandlers';
 import { warnDeprecated, warnOnce } from '../../lib/dev';
 import { getArrowIntent, getDirection } from '../../lib/direction';
+import type { Slot } from '../../lib/slot';
 import type { Size } from '../../lib/types';
 import { useControllable } from '../../hooks/useControllable';
 import { useFieldContext, useFieldControl } from '../../hooks/useFieldControl';
@@ -15,9 +16,10 @@ import {
   RatingContext,
   RatingItem,
   ratingItems,
-  sizeMap,
-  Star,
+  StarGlyph,
   useRatingItemRegistry,
+  useStarGlyphs,
+  type RatingColor,
   type RatingContextValue,
 } from './Rating.item';
 
@@ -38,7 +40,7 @@ const defaultStarLabel = (value: number) => `${value} star${value !== 1 ? 's' : 
 /** Properties for the Rating component. */
 export interface RatingProps extends Omit<
   React.HTMLAttributes<HTMLDivElement>,
-  'onChange' | 'defaultValue'
+  'onChange' | 'defaultValue' | 'color'
 > {
   /** Controlled rating value (`0` = no rating). */
   value?: number;
@@ -62,6 +64,34 @@ export interface RatingProps extends Omit<
    * @default 'medium'
    */
   size?: Size;
+  /**
+   * Color of the filled stars: `marigold` (default), `brand` or `neutral`; unfilled stars keep a
+   * 3:1 outline. Fluent's default is `neutral`. A value outside the three (from untyped code)
+   * renders as `marigold`; the root carries `data-color` with the resolved value.
+   * @default 'marigold'
+   */
+  color?: RatingColor;
+  /**
+   * The glyph of a filled star. `iconFilled` and `iconOutline` are the glyphs of a filled and an
+   * unfilled star, as a pair; decorative. Fluent's RatingDisplay takes one `icon`; here a filled
+   * and an unfilled star must differ by shape, not by color alone.
+   *
+   * - Each glyph is sized by `size` (an SVG child fills the star) and takes the star's color
+   *   (paint it with `currentColor`).
+   * - `null`, `undefined` and a value that renders nothing draw the default star. A value that
+   *   renders nothing, and a pair with only one of the two set, log a development warning.
+   * - A `<button>` or `Button` element (or a slot object whose `as` is one) is not nested in the
+   *   star: its children become the glyph, its props are dropped, and a development warning says
+   *   so.
+   * - A `Rating.Item` that sets its own pair draws that one instead.
+   */
+  iconFilled?: Slot<'span'>;
+  /**
+   * The glyph of an unfilled star, as a pair with `iconFilled` (its rules apply); decorative.
+   * Fluent's RatingDisplay takes one `icon`; here a filled and an unfilled star must differ by
+   * shape, not by color alone.
+   */
+  iconOutline?: Slot<'span'>;
   /** Whether the rating is disabled and non-interactive.
    * @default false
    */
@@ -104,7 +134,7 @@ export interface RatingDisplayLabels {
 }
 
 /** Properties for the RatingDisplay (read-only) component. */
-export interface RatingDisplayProps extends React.HTMLAttributes<HTMLDivElement> {
+export interface RatingDisplayProps extends Omit<React.HTMLAttributes<HTMLDivElement>, 'color'> {
   /**
    * Rating value to display. A fraction is drawn as a partly filled star (`4.6` fills 60% of the
    * fifth star), so the stars show the value the accessible name reports.
@@ -118,6 +148,35 @@ export interface RatingDisplayProps extends React.HTMLAttributes<HTMLDivElement>
    * @default 'medium'
    */
   size?: Size;
+  /**
+   * Color of the filled stars: `marigold` (default), `brand` or `neutral`; unfilled stars keep a
+   * 3:1 outline. Fluent's default is `neutral`. A value outside the three (from untyped code)
+   * renders as `marigold`; the root carries `data-color` with the resolved value.
+   * @default 'marigold'
+   */
+  color?: RatingColor;
+  /**
+   * The glyph of a filled star. `iconFilled` and `iconOutline` are the glyphs of a filled and an
+   * unfilled star, as a pair; decorative. Fluent's RatingDisplay takes one `icon`; here a filled
+   * and an unfilled star must differ by shape, not by color alone.
+   *
+   * - Each glyph is sized by `size` (an SVG child fills the star) and takes the star's color
+   *   (paint it with `currentColor`). A partly filled star clips the filled glyph over the
+   *   unfilled one from the inline start, and the `compact` star is the filled glyph.
+   * - `null`, `undefined` and a value that renders nothing draw the default star. A value that
+   *   renders nothing, and a pair with only one of the two set, log a development warning.
+   * - A `<button>` or `Button` element (or a slot object whose `as` is one) is not nested in the
+   *   star: its children become the glyph, its props are dropped, and a development warning says
+   *   so.
+   * - A `RatingDisplay.Item` that sets its own pair draws that one instead.
+   */
+  iconFilled?: Slot<'span'>;
+  /**
+   * The glyph of an unfilled star, as a pair with `iconFilled` (its rules apply); decorative.
+   * Fluent's RatingDisplay takes one `icon`; here a filled and an unfilled star must differ by
+   * shape, not by color alone.
+   */
+  iconOutline?: Slot<'span'>;
   /**
    * Shows the value as text after the stars, formatted with `locale` (up to one decimal).
    * @default false
@@ -158,6 +217,9 @@ const RatingRoot = ({
   onChange,
   max = 5,
   size = 'medium',
+  color,
+  iconFilled,
+  iconOutline,
   disabled = false,
   name,
   required,
@@ -252,6 +314,9 @@ const RatingRoot = ({
     rootRef.current?.querySelector<HTMLElement>('[data-roving-value][tabindex="0"]')?.focus();
   };
 
+  // A value outside the union (untyped code) renders as marigold.
+  const resolvedColor: RatingColor = color === 'brand' || color === 'neutral' ? color : 'marigold';
+  const glyphs = useStarGlyphs('Rating', iconFilled, iconOutline);
   const starLabel = labels?.star ?? defaultStarLabel;
   const { registerItem } = useRatingItemRegistry();
   const context = React.useMemo<RatingContextValue>(
@@ -262,7 +327,8 @@ const RatingRoot = ({
       step: 1,
       max,
       size,
-      color: 'marigold',
+      color: resolvedColor,
+      glyphs,
       disabled,
       starLabel,
       getTabIndex,
@@ -278,6 +344,8 @@ const RatingRoot = ({
       drawnValue,
       max,
       size,
+      resolvedColor,
+      glyphs,
       disabled,
       starLabel,
       getTabIndex,
@@ -293,6 +361,7 @@ const RatingRoot = ({
       aria-label={defaultName}
       {...fieldProps}
       aria-disabled={disabled || undefined}
+      data-color={resolvedColor}
       className={cn(
         'relative inline-flex items-center gap-0.5',
         disabled && 'pointer-events-none opacity-50',
@@ -353,6 +422,9 @@ const RatingDisplayRoot = ({
   value,
   max = 5,
   size = 'medium',
+  color,
+  iconFilled,
+  iconOutline,
   showValue = false,
   count,
   compact = false,
@@ -363,7 +435,6 @@ const RatingDisplayRoot = ({
   ref,
   ...rest
 }: RatingDisplayProps) => {
-  const starSize = sizeMap[size];
   const formatLocale = supportedLocale(locale);
   const invalidLocale = locale !== undefined && formatLocale === undefined;
   React.useEffect(() => {
@@ -390,6 +461,9 @@ const RatingDisplayRoot = ({
   const showText = showValue || compact || count !== undefined;
   const textSize = textSizeMap[size];
 
+  // A value outside the union (untyped code) renders as marigold.
+  const resolvedColor: RatingColor = color === 'brand' || color === 'neutral' ? color : 'marigold';
+  const glyphs = useStarGlyphs('RatingDisplay', iconFilled, iconOutline);
   const { registerItem } = useRatingItemRegistry();
   // Read-only: the stars take the inert actions (they choose, preview and rove nothing).
   const context = React.useMemo<RatingContextValue>(
@@ -400,9 +474,11 @@ const RatingDisplayRoot = ({
       drawnValue: value,
       max,
       size,
+      color: resolvedColor,
+      glyphs,
       registerItem,
     }),
-    [value, max, size, registerItem],
+    [value, max, size, resolvedColor, glyphs, registerItem],
   );
 
   return (
@@ -411,13 +487,12 @@ const RatingDisplayRoot = ({
       role="img"
       aria-label={name}
       data-compact={compact ? '' : undefined}
+      data-color={resolvedColor}
       className={cn('inline-flex items-center gap-0.5', className)}
       {...rest}
     >
       {compact ? (
-        <span className="inline-flex text-rating">
-          <Star filled className={starSize} />
-        </span>
+        <StarGlyph fraction={1} size={size} color={resolvedColor} glyphs={glyphs} />
       ) : (
         <RatingContext.Provider value={context}>
           {ratingItems(children, max)}
@@ -446,6 +521,8 @@ RatingDisplayRoot.displayName = 'RatingDisplay';
  * - `onValueChange` (and the deprecated `onChange` alias) fire only when the rating changes, so
  *   choosing the current star again calls neither.
  * - Hovering previews a value; the preview never outlives the hover or a disabled state.
+ * - `color` colors the filled stars (`marigold`, the default, `brand` or `neutral`; the root
+ *   carries `data-color`); `iconFilled` and `iconOutline` replace the star glyphs, as a pair.
  * - Inside a `Field` it is named by the Field label (instead of the default "Rating") and
  *   described by its hint and error. The stars are named "1 star", "2 stars", …; `labels`
  *   localizes these names.
@@ -469,6 +546,8 @@ export const Rating = /* @__PURE__ */ Object.assign(RatingRoot, { Item: RatingIt
  *   stars (the root carries `data-compact`). Without them only the stars show.
  * - The value (up to one decimal) and the count are formatted with `locale`, in the text and in
  *   the name; `labels` localizes the name. Pass `locale` when rendering on the server.
+ * - `color` colors the filled stars (`marigold`, the default, `brand` or `neutral`; the root
+ *   carries `data-color`); `iconFilled` and `iconOutline` replace the star glyphs, as a pair.
  * - The stars are generated from `max`. Children that render content replace them: one
  *   `RatingDisplay.Item` per value from 1 to `max`. A `compact` display ignores them.
  *
