@@ -12,6 +12,11 @@ function daysFromToday(days: number): Date {
 const toISO = (d: Date) =>
   `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 
+/** Stories that render the calendar open show it in an iframe, so the docs page stays usable. */
+const openStoryParameters = {
+  docs: { story: { inline: false, iframeHeight: 480 } },
+};
+
 const meta = {
   title: 'Components/Input/DatePicker',
   component: DatePicker,
@@ -131,4 +136,39 @@ export const Controlled: Story = {
       </div>
     );
   },
+};
+
+/** The heading is a button to the month view, whose heading (the year) opens the year view. */
+export const MonthAndYearPicker: Story = {
+  args: {
+    'aria-label': 'Birth date',
+    showMonthPicker: true,
+    defaultValue: new Date(2025, 5, 15),
+    today: new Date(2025, 5, 18),
+    defaultOpen: true,
+  },
+  parameters: openStoryParameters,
+};
+
+export const WeekNumbers: Story = {
+  args: {
+    showWeekNumbers: true,
+    firstDayOfWeek: 1,
+    defaultValue: new Date(2025, 5, 15),
+    today: new Date(2025, 5, 18),
+    defaultOpen: true,
+  },
+  parameters: openStoryParameters,
+};
+
+/** The footer button closes the calendar; with `showGoToToday` it sits next to "Go to today". */
+export const CloseButton: Story = {
+  args: {
+    showCloseButton: true,
+    showGoToToday: true,
+    defaultValue: new Date(2025, 5, 15),
+    today: new Date(2025, 5, 18),
+    defaultOpen: true,
+  },
+  parameters: openStoryParameters,
 };
