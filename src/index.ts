@@ -14,6 +14,9 @@ export type { Slot, SlotObject, ResolvedSlot } from './lib/slot';
 export { composeEventHandlers } from './lib/composeEventHandlers';
 export { mergeRefs } from './lib/mergeRefs';
 export * from './lib/classNames';
+export { hsvToHex, hexToHsv } from './lib/color';
+export { createToaster } from './lib/toaster';
+export type { ToasterHandle } from './lib/toaster';
 
 // Hooks
 export { useControllable } from './hooks/useControllable';

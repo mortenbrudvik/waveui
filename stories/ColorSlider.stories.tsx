@@ -1,13 +1,13 @@
 import type { Meta, StoryObj } from '@storybook/react';
 import { fn } from 'storybook/test';
-// Module path until the color parts join the barrels (INTEGRATION, spec §0.2 rule 25).
-import { ColorSlider } from '../src/components/input/ColorSlider';
-import { orientationArgType } from './_helpers';
+import { ColorSlider } from '../src';
+import { colorPickerShapeArgType, orientationArgType } from './_helpers';
 
 const meta = {
   title: 'Components/Input/ColorSlider',
   component: ColorSlider,
   argTypes: {
+    ...colorPickerShapeArgType,
     ...orientationArgType,
     channel: { control: 'inline-radio', options: ['hue', 'saturation', 'value'] },
   },

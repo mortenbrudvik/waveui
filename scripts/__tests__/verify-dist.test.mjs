@@ -1096,28 +1096,31 @@ describe('probeSizeBudget', () => {
 });
 
 describe('the flat-name bridge (PENDING_FLAT_EXPORTS)', () => {
-  it('lists only exported components that are no compounds yet or still lack flat names (the real exports)', async () => {
+  it('is empty: the real exports carry the flat name of every compound member, the 0.8 parts included', async () => {
+    expect(PENDING_FLAT_EXPORTS).toEqual([]);
     const mod = await import('../../src/index.ts');
-    expect(Object.keys(mod.Toolbar).filter((key) => /^[A-Z]/.test(key))).not.toEqual([]);
-    const result = checkFlatExports(mod);
-    expect(result.errors).toEqual([]);
-    for (const name of PENDING_FLAT_EXPORTS) {
-      const pendingMember = result.pending.some(
-        (flat) => flat.startsWith(name) && /^[A-Z]/.test(flat.slice(name.length)),
-      );
-      expect(
-        result.planned.includes(name) || pendingMember,
-        `${name} is neither planned nor pending`,
-      ).toBe(true);
+    const members = [
+      ['Toast', 'Title'],
+      ['Toast', 'Body'],
+      ['Toast', 'Footer'],
+      ['Toast', 'Close'],
+      ['MessageBar', 'Title'],
+      ['MessageBar', 'Actions'],
+      ['ColorPicker', 'HexField'],
+      ['ColorPicker', 'Swatches'],
+      ['ColorPicker', 'Preview'],
+      ['Tree', 'ItemPersonaLayout'],
+      ['Toolbar', 'Button'],
+    ];
+    for (const [compound, member] of members) {
+      expect(mod[`${compound}${member}`], `${compound}${member}`).toBe(mod[compound][member]);
     }
-    const final = checkFlatExports(mod, { final: true });
-    if (PENDING_FLAT_EXPORTS.length === 0) {
-      expect(final).toEqual({ errors: [], pending: [], planned: [] });
-    } else {
-      expect(final.errors).toEqual(
-        expect.arrayContaining([expect.stringMatching(/PENDING_FLAT_EXPORTS .*still lists/)]),
-      );
-    }
+    expect(checkFlatExports(mod)).toEqual({ errors: [], pending: [], planned: [] });
+    expect(checkFlatExports(mod, { final: true })).toEqual({
+      errors: [],
+      pending: [],
+      planned: [],
+    });
   }, 60_000);
 });
 

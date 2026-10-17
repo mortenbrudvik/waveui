@@ -140,22 +140,11 @@ const menuitem = (name: string) => screen.getByRole('menuitem', { name });
 // ---------------------------------------------------------------------------
 
 /**
- * Flat names of compound members that a wave-B package attaches before INTEGRATION exports them
- * from the barrels (Phase 3 spec §0.2 rules 21 and 24): the barrel test's twin of
- * `PENDING_FLAT_EXPORTS` in `scripts/verify-dist.mjs`. Keep it sorted; Task I1 empties it.
+ * Flat names of compound members that a package attaches before the barrels export them (the
+ * barrel test's twin of `PENDING_FLAT_EXPORTS` in `scripts/verify-dist.mjs`). Empty since wave C
+ * of 0.8; a later phase whose parts land before their flat names lists them here the same way.
  */
-const PENDING_FLAT_MEMBERS: readonly string[] = [
-  'ColorPickerHexField',
-  'ColorPickerPreview',
-  'ColorPickerSwatches',
-  'MessageBarActions',
-  'MessageBarTitle',
-  'ToastBody',
-  'ToastClose',
-  'ToastFooter',
-  'ToastTitle',
-  'TreeItemPersonaLayout',
-];
+const PENDING_FLAT_MEMBERS: readonly string[] = [];
 
 describe('public barrel (spec §5.11, C-COMPOUND)', () => {
   const barrel = Wave as unknown as Record<string, unknown>;
@@ -182,7 +171,8 @@ describe('public barrel (spec §5.11, C-COMPOUND)', () => {
         }
       }
     }
-    expect(compounds).toBeGreaterThanOrEqual(19);
+    // At least 19 compounds in 0.7; Toast, MessageBar and ColorPicker join them in 0.8.
+    expect(compounds).toBeGreaterThanOrEqual(22);
     expect(missing).toEqual([]);
     expect(different).toEqual([]);
   });
@@ -207,6 +197,36 @@ describe('public barrel (spec §5.11, C-COMPOUND)', () => {
       'useIsOverflowItemVisible',
       'RadioItem',
       'OverflowItem',
+    ]) {
+      expect(barrel[name], name).toBeTypeOf('function');
+    }
+  });
+
+  it('exports the 0.8 compound parts, the color parts and helpers, and createToaster', () => {
+    const members: Array<[string, string]> = [
+      ['Toast', 'Title'],
+      ['Toast', 'Body'],
+      ['Toast', 'Footer'],
+      ['Toast', 'Close'],
+      ['MessageBar', 'Title'],
+      ['MessageBar', 'Actions'],
+      ['ColorPicker', 'HexField'],
+      ['ColorPicker', 'Swatches'],
+      ['ColorPicker', 'Preview'],
+      ['Tree', 'ItemPersonaLayout'],
+    ];
+    for (const [compound, member] of members) {
+      const flat = `${compound}${member}`;
+      expect(barrel[flat], flat).toBeDefined();
+      expect(barrel[flat], flat).toBe((barrel[compound] as Record<string, unknown>)[member]);
+    }
+    for (const name of [
+      'ColorArea',
+      'ColorSlider',
+      'AlphaSlider',
+      'createToaster',
+      'hsvToHex',
+      'hexToHsv',
     ]) {
       expect(barrel[name], name).toBeTypeOf('function');
     }
@@ -243,6 +263,21 @@ describe('public barrel (spec §5.11, C-COMPOUND)', () => {
       'StatusIcon',
       'useModalTrigger',
       'ListRegistry',
+      'StatusText',
+      'withPartClass',
+      'getStableClassNames',
+      'isToastOptions',
+      'bindToasterHandle',
+      'ToasterHandleBinding',
+      'MessageBarPartContext',
+      'useMessageBarReflow',
+      'useColorPickerContext',
+      'hsvToRgb',
+      'rgbToHsv',
+      'collectItems',
+      'computeCheckStates',
+      'toggleCheck',
+      'isHiddenByCss',
     ];
     expect(internal.filter((name) => name in barrel)).toEqual([]);
   });

@@ -1,18 +1,25 @@
 import type { Meta, StoryObj } from '@storybook/react';
 import { useState } from 'react';
 import { fn } from 'storybook/test';
-import { Button, ColorPicker, Popover, SpinButton } from '../src';
+import {
+  AlphaSlider,
+  Button,
+  ColorArea,
+  ColorPicker,
+  ColorSlider,
+  Popover,
+  SpinButton,
+  hexToHsv,
+  hsvToHex,
+} from '../src';
 import type { HsvColor } from '../src';
-// Module paths until the color parts and helpers join the barrels (INTEGRATION, spec §0.2 rule 25).
-import { AlphaSlider } from '../src/components/input/AlphaSlider';
-import { ColorArea } from '../src/components/input/ColorArea';
-import { ColorSlider } from '../src/components/input/ColorSlider';
-import { hexToHsv, hsvToHex } from '../src/lib/color';
+import { colorPickerShapeArgType } from './_helpers';
 
 const meta = {
   title: 'Components/Input/ColorPicker',
   component: ColorPicker,
   argTypes: {
+    ...colorPickerShapeArgType,
     showOpacity: { control: 'boolean' },
   },
   args: {

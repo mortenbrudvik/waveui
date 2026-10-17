@@ -19,6 +19,7 @@ import type {
   Appearance,
   BadgeAppearance,
   BadgeColor,
+  ColorPickerShape,
   IconPosition,
   Orientation,
   Size,
@@ -61,6 +62,7 @@ const badgeColors = [
   'severe',
   'subtle',
 ] as const satisfies readonly BadgeColor[];
+const colorPickerShapes = ['rounded', 'square'] as const satisfies readonly ColorPickerShape[];
 
 /** `size` (`Size`): extra-small … extra-large. */
 export const sizeArgType = {
@@ -98,4 +100,9 @@ export const badgeAppearanceArgType = {
 /** Badge `color` (`BadgeColor`). */
 export const badgeColorArgType = {
   color: { control: 'select', options: badgeColors },
+} satisfies ArgTypes;
+
+/** `shape` (`ColorPickerShape`) of ColorPicker, ColorArea, ColorSlider and AlphaSlider: rounded or square. */
+export const colorPickerShapeArgType = {
+  shape: { control: 'inline-radio', options: colorPickerShapes },
 } satisfies ArgTypes;

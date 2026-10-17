@@ -1,10 +1,16 @@
 import * as React from 'react';
 import type { Meta, StoryObj } from '@storybook/react';
 import { fn } from 'storybook/test';
-import { Button, Drawer, ProgressBar, Toast, Toaster, useToastController } from '../src';
+import {
+  Button,
+  Drawer,
+  ProgressBar,
+  Toast,
+  Toaster,
+  createToaster,
+  useToastController,
+} from '../src';
 import type { ToastProps } from '../src';
-// Module path until the package entry exports it (wave C).
-import { createToaster } from '../src/lib/toaster';
 
 const meta = {
   title: 'Components/Feedback/Toast',

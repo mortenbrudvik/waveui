@@ -308,34 +308,10 @@ const INTERNAL_HELPERS: Record<string, string> = {
 };
 
 /**
- * Public types of Fluent parity phase 3 (spec §4.3, §0.2 rule 24) that a wave-B prop reaches
- * before INTEGRATION (wave C) exports them from the barrels: the walk skips them by name (the part
- * after `#` of a label). INTEGRATION empties the list; a later phase fills it the same way.
+ * Public type names that a prop refers to before the barrels export them (spec §0.2 rule 24,
+ * §1.5), matched against the name after `#` of the walk's labels. Empty since wave C of 0.8.
  */
-const PENDING_PUBLIC_TYPES: readonly string[] = [
-  'AlphaSliderLabels',
-  'AlphaSliderProps',
-  'ColorAreaLabels',
-  'ColorAreaProps',
-  'ColorPickerHexFieldProps',
-  'ColorPickerPreviewProps',
-  'ColorPickerSwatchesProps',
-  'ColorSliderLabels',
-  'ColorSliderProps',
-  'MessageBarActionsProps',
-  'MessageBarTitleProps',
-  'ToastBodyProps',
-  'ToastCloseProps',
-  'ToastCloseRenderProps',
-  'ToastDispatchOptions',
-  'ToastFooterProps',
-  'ToastTitleProps',
-  'ToasterHandle',
-  'ToasterShortcuts',
-  'TreeCheckedItemsChangeDetails',
-  'TreeItemPersonaLayoutProps',
-  'TreeLabels',
-];
+const PENDING_PUBLIC_TYPES: readonly string[] = [];
 
 /** `components/feedback/Toaster.tsx#ToastDispatchOptions` → `ToastDispatchOptions`. */
 const typeNameOf = (label: string): string => label.slice(label.indexOf('#') + 1);

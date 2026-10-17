@@ -1,15 +1,16 @@
 import type { Meta, StoryObj } from '@storybook/react';
 import { useState } from 'react';
 import { fn } from 'storybook/test';
+import { ColorArea, ColorSlider, hsvToHex } from '../src';
 import type { HsvColor } from '../src';
-// Module paths until the color parts join the barrels (INTEGRATION, spec §0.2 rule 25).
-import { ColorArea } from '../src/components/input/ColorArea';
-import { ColorSlider } from '../src/components/input/ColorSlider';
-import { hsvToHex } from '../src/lib/color';
+import { colorPickerShapeArgType } from './_helpers';
 
 const meta = {
   title: 'Components/Input/ColorArea',
   component: ColorArea,
+  argTypes: {
+    ...colorPickerShapeArgType,
+  },
   args: {
     'aria-label': 'Accent color',
     onValueChange: fn(),

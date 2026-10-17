@@ -1,13 +1,13 @@
 import type { Meta, StoryObj } from '@storybook/react';
 import { fn } from 'storybook/test';
-// Module path until the color parts join the barrels (INTEGRATION, spec §0.2 rule 25).
-import { AlphaSlider } from '../src/components/input/AlphaSlider';
-import { orientationArgType } from './_helpers';
+import { AlphaSlider } from '../src';
+import { colorPickerShapeArgType, orientationArgType } from './_helpers';
 
 const meta = {
   title: 'Components/Input/AlphaSlider',
   component: AlphaSlider,
   argTypes: {
+    ...colorPickerShapeArgType,
     ...orientationArgType,
     transparency: { control: 'boolean' },
   },

@@ -81,13 +81,12 @@ const require = createRequire(import.meta.url);
 
 /**
  * A temporary bridge: components whose flat sub-component names (`<Parent><Member>`,
- * C-COMPOUND) are not exported from `dist/index.mjs` yet. Fluent parity phase 3 (0.8) lists
- * `ColorPicker`, `MessageBar` and `Toast`, which its wave-B packages turn into compounds
- * (`ColorPicker.HexField`, `MessageBar.Actions`, `Toast.Title`, …) before INTEGRATION exports
- * their flat names from the barrels; `Tree` joins the list, in its sorted place, in the commit
- * that attaches `Tree.ItemPersonaLayout` (Tree is already a complete compound, which the list may
- * not hold before then). INTEGRATION empties the list again, as phase 2 did for `Toolbar`. The
- * rules:
+ * C-COMPOUND) are not exported from `dist/index.mjs` yet. The list is empty: Fluent parity
+ * phase 3 (0.8) listed `ColorPicker`, `MessageBar`, `Toast` and `Tree` while their new parts
+ * (`Toast.Title`, `MessageBar.Actions`, `ColorPicker.HexField`, `Tree.ItemPersonaLayout`, …)
+ * landed before the barrels exported their flat names, and emptied it again once the barrels did
+ * (as phase 2 did for `Toolbar`). A future compound whose parts land before their flat names goes
+ * on it the same way. The rules:
  *   - an entry whose flat names all exist fails the check ("remove it"), and so does an entry
  *     that is not an exported component, so the list only shrinks;
  *   - an entry that is exported but not a compound yet is tolerated;
@@ -96,7 +95,7 @@ const require = createRequire(import.meta.url);
  * A compound that is not listed must export every flat name. A flat name that is exported must
  * equal its dotted member, listed or not.
  */
-export const PENDING_FLAT_EXPORTS = ['ColorPicker', 'MessageBar', 'Toast', 'Tree'];
+export const PENDING_FLAT_EXPORTS = [];
 
 /**
  * The presence core's probes: an import of only `Button` drops it, an import of only
