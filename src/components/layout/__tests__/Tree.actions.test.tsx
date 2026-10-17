@@ -356,6 +356,101 @@ describe('Tree.Item - actions', () => {
     expect(item('Documents')).toHaveAttribute('aria-expanded', 'true');
   });
 
+  it('a click on an action in another row makes that row the active item: its actions take the Tab stop and Shift+Tab returns to it', async () => {
+    const user = userEvent.setup();
+    render(<Rows />);
+    act(() => item('Documents').focus());
+    expect(button('Rename Documents')).toHaveAttribute('tabindex', '0');
+    await user.click(button('Rename Readme'));
+    expect(button('Rename Readme')).toHaveFocus();
+    expect(button('Rename Readme')).toHaveAttribute('tabindex', '0');
+    expect(button('Rename Documents')).toHaveAttribute('tabindex', '-1');
+    await user.tab({ shift: true });
+    expect(item('Readme.md')).toHaveFocus();
+  });
+
+  it('a click on an action changes no check in a checkbox tree', async () => {
+    const user = userEvent.setup();
+    const onCheckedItemsChange = vi.fn();
+    render(
+      <Rows
+        selectionMode="multiple"
+        defaultCheckedItems={['readme']}
+        onCheckedItemsChange={onCheckedItemsChange}
+      />,
+    );
+    await user.click(button('Rename Documents'));
+    await user.click(button('Rename Readme'));
+    expect(onCheckedItemsChange).not.toHaveBeenCalled();
+    expect(item('Readme.md')).toHaveAttribute('aria-checked', 'true');
+    expect(item('Documents')).toHaveAttribute('aria-checked', 'false');
+  });
+
+  describe('a focused action that disappears while its item stays', () => {
+    const Dynamic = ({ actions }: { actions: React.ReactNode }) => (
+      <>
+        <Tree aria-label="Files">
+          <Tree.Item value="readme" actions={actions}>
+            Readme.md
+          </Tree.Item>
+        </Tree>
+        <button type="button">After</button>
+      </>
+    );
+
+    it('moves focus to the item when the actions go away', async () => {
+      const user = userEvent.setup();
+      const { rerender } = render(
+        <Dynamic actions={<button type="button">Rename Readme</button>} />,
+      );
+      act(() => item('Readme.md').focus());
+      await user.tab();
+      expect(button('Rename Readme')).toHaveFocus();
+      rerender(<Dynamic actions={false} />);
+      expect(item('Readme.md')).toHaveFocus();
+    });
+
+    it('moves focus to the item when the focused action is removed from the others', async () => {
+      const user = userEvent.setup();
+      const { rerender } = render(
+        <Dynamic
+          actions={[
+            <button key="rename" type="button">
+              Rename Readme
+            </button>,
+            <button key="delete" type="button">
+              Delete Readme
+            </button>,
+          ]}
+        />,
+      );
+      act(() => item('Readme.md').focus());
+      await user.tab();
+      expect(button('Rename Readme')).toHaveFocus();
+      rerender(
+        <Dynamic
+          actions={[
+            <button key="delete" type="button">
+              Delete Readme
+            </button>,
+          ]}
+        />,
+      );
+      expect(item('Readme.md')).toHaveFocus();
+      await act(async () => {});
+    });
+
+    it('leaves focus alone when it was not in the actions', async () => {
+      const user = userEvent.setup();
+      const { rerender } = render(
+        <Dynamic actions={<button type="button">Rename Readme</button>} />,
+      );
+      await user.click(button('After'));
+      rerender(<Dynamic actions={false} />);
+      expect(button('After')).toHaveFocus();
+    });
+  });
+
   it('* and a letter pressed on an action do nothing to the tree; * on the item still expands its siblings', async () => {
     const user = userEvent.setup();
     render(<Rows defaultExpandedItems={[]} />);

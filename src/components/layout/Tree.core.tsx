@@ -497,13 +497,16 @@ interface TreeItemActionsProps {
  * a popup (`aria-haspopup`) never move focus to another item.
  */
 const TreeItemActions = ({ labelledBy, tabStop, children }: TreeItemActionsProps) => {
-  const { containerProps } = useRovingTabIndex({
+  const {
+    containerProps: { ref: rovingRef },
+    handleKeyDown: rovingKeyDown,
+    handleFocus: rovingFocus,
+  } = useRovingTabIndex({
     itemSelector: ACTION_ITEM_SELECTOR,
     manageTabIndex: true,
     orientation: 'horizontal',
     tabStop,
   });
-  const mergedRef = useMergedRefs<HTMLSpanElement>(containerProps.ref);
 
   const handleKeyDown = (event: React.KeyboardEvent<HTMLSpanElement>) => {
     // A key from a popup an action opened reaches here through the React tree: not ours.
@@ -525,11 +528,9 @@ const TreeItemActions = ({ labelledBy, tabStop, children }: TreeItemActionsProps
       aria-orientation="horizontal"
       data-tree-actions=""
       data-roving-container=""
-      ref={mergedRef}
-      onKeyDown={composeEventHandlers(handleKeyDown, containerProps.onKeyDown)}
-      onFocus={composeEventHandlers(undefined, containerProps.onFocus, {
-        checkDefaultPrevented: false,
-      })}
+      ref={rovingRef}
+      onKeyDown={composeEventHandlers(handleKeyDown, rovingKeyDown)}
+      onFocus={rovingFocus}
       className={cn(
         treeItemClassNames.actions,
         'inline-flex items-center gap-1',
@@ -585,6 +586,7 @@ export const TreeItem = ({
   onClick,
   onKeyDown,
   onFocus,
+  onBlur,
   ref,
   ...props
 }: TreeItemProps) => {
@@ -755,9 +757,33 @@ export const TreeItem = ({
     }
   };
 
+  // Focus in the actions: tracked from the events, because a removed element fires no reliable
+  // blur. A blur that leaves for another element, or from an element still in the document, ends it.
+  const focusInActions = React.useRef(false);
+  const inOwnActions = (event: React.FocusEvent<HTMLElement>) =>
+    (event.target as Element).closest('[data-tree-actions]')?.closest('[role="treeitem"]') ===
+    event.currentTarget;
+  // Focus on the item, or on one of its own actions (a click), makes it the active item.
   const handleFocus = (event: React.FocusEvent<HTMLDivElement>) => {
-    if (event.target === event.currentTarget) ctx.onItemFocus(value);
+    if (event.target === event.currentTarget || inOwnActions(event)) ctx.onItemFocus(value);
+    if (inOwnActions(event)) focusInActions.current = true;
   };
+
+  const handleActionsBlur = (event: React.FocusEvent<HTMLDivElement>) => {
+    if (inOwnActions(event) && (event.relatedTarget !== null || event.target.isConnected)) {
+      focusInActions.current = false;
+    }
+  };
+  // An action that had focus is gone and focus fell to the page: it goes to the item instead.
+  React.useLayoutEffect(() => {
+    if (!focusInActions.current) return;
+    const item = itemRef.current;
+    const active = item?.ownerDocument.activeElement;
+    if (item && (!active || active === item.ownerDocument.body)) {
+      focusInActions.current = false;
+      item.focus({ preventScroll: true });
+    }
+  });
 
   // The checkbox never takes focus (APG: focus stays on tree items): a press on it focuses its
   // item instead, and its click toggles the check without activating the item.
@@ -862,7 +888,12 @@ export const TreeItem = ({
       data-current={isCurrent ? '' : undefined}
       onClick={handleClick}
       onKeyDown={handleKeyDown}
-      onFocus={composeEventHandlers(onFocus, handleFocus, { checkDefaultPrevented: false })}
+      onFocus={(event) =>
+        composeEventHandlers(onFocus, handleFocus, { checkDefaultPrevented: false })(event)
+      }
+      onBlur={(event) =>
+        composeEventHandlers(onBlur, handleActionsBlur, { checkDefaultPrevented: false })(event)
+      }
       ref={mergedRef}
     >
       <div

@@ -67,10 +67,10 @@ export interface UseRovingTabIndexOptions {
    *  uses the arrow keys itself (text field, select, slider, spin button, editable combobox) holds
    *  it only when no other item can: arrows pressed there never lead back to the other items, so
    *  focusing one keeps the tab stop on the last focused other item. 'none': no item holds it
-   *  (every item gets tabIndex -1; a nested composite keeps its own tab stop, and marked
-   *  `data-roving-transparent` its items join the group's arrow order), for a composite reached only by the arrow keys of an enclosing
-   *  widget or by a script (a tree row's actions); the keys, `focusValue`, `focusFirst` and
-   *  `focusLast` keep working. */
+   *  (every item gets tabIndex -1; a nested composite keeps its own tab stop, and one marked
+   *  `data-roving-transparent` joins the group's arrow order), for a composite reached only by
+   *  the arrow keys of an enclosing widget or by a script (a tree row's actions); the keys,
+   *  `focusValue`, `focusFirst` and `focusLast` keep working. */
   tabStop?: 'active' | 'last-focused' | 'none';
   /** true ⇒ the hook writes tabIndex 0/-1 onto item elements itself and assigns
    *  data-roving-value="auto-<n>" to items that lack one. For containers that do not render their
