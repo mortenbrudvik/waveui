@@ -6,6 +6,7 @@ import { Button } from '../Button';
 import { MenuButton } from '../MenuButton';
 import type { MenuButtonProps } from '../MenuButton';
 import { buttonClassName, buttonSizeClasses } from '../buttonStyles';
+import { buttonClassNames, menuButtonClassNames } from '../../../lib/classNames';
 import { testSystemProps, testFocusEvents, testNoImplicitSubmit } from '../../../test-utils';
 import type { Appearance, Size, Slot } from '../../../lib/types';
 import { composeStories } from '@storybook/react';
@@ -537,7 +538,12 @@ describe('MenuButton', () => {
     it.each(APPEARANCES)('%s uses the shared button classes plus the label gap', (appearance) => {
       render(<MenuButton appearance={appearance}>Actions</MenuButton>);
       const button = screen.getByRole('button', { name: 'Actions' });
-      const expected = [...buttonClassName({ appearance }).split(/\s+/), 'gap-1.5'].sort();
+      const expected = [
+        ...buttonClassName({ appearance }).split(/\s+/),
+        'gap-1.5',
+        buttonClassNames.root,
+        menuButtonClassNames.root,
+      ].sort();
       expect(Array.from(button.classList).sort()).toEqual(expected);
     });
 

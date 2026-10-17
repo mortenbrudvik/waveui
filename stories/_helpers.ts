@@ -1,8 +1,8 @@
 /**
  * Shared Storybook `argTypes` for the Wave prop vocabulary (C-NAMING): `size`, `appearance`,
  * `orientation`, `iconPosition`, the Field `validationState`, the Badge `appearance`/`color`
- * values, and the `size` (`CoreSize`) and `appearance` (`InputAppearance`) of the text controls
- * and pickers.
+ * values, the `size` (`CoreSize`) and `appearance` (`InputAppearance`) of the text controls and
+ * pickers, and the color `shape` values.
  *
  * Each entry is checked with `satisfies ArgTypes`, and each `options` list with `satisfies` against
  * the library type it documents, so a value that is not part of the vocabulary fails the dev type
@@ -20,6 +20,7 @@ import type {
   Appearance,
   BadgeAppearance,
   BadgeColor,
+  ColorPickerShape,
   CoreSize,
   IconPosition,
   InputAppearance,
@@ -64,6 +65,7 @@ const badgeColors = [
   'severe',
   'subtle',
 ] as const satisfies readonly BadgeColor[];
+const colorPickerShapes = ['rounded', 'square'] as const satisfies readonly ColorPickerShape[];
 const coreSizes = ['small', 'medium', 'large'] as const satisfies readonly CoreSize[];
 const inputAppearances = [
   'outline',
@@ -118,4 +120,9 @@ export const coreSizeArgType = {
 /** `appearance` of the text controls and pickers (`InputAppearance`). */
 export const inputAppearanceArgType = {
   appearance: { control: 'select', options: inputAppearances },
+} satisfies ArgTypes;
+
+/** `shape` (`ColorPickerShape`) of ColorPicker, ColorArea, ColorSlider and AlphaSlider: rounded or square. */
+export const colorPickerShapeArgType = {
+  shape: { control: 'inline-radio', options: colorPickerShapes },
 } satisfies ArgTypes;

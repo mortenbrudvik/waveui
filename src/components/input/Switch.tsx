@@ -1,5 +1,6 @@
 import * as React from 'react';
 import { focusableDisabledProps, joinIds } from '../../lib/aria';
+import { switchClassNames } from '../../lib/classNames';
 import { cn } from '../../lib/cn';
 import { composeEventHandlers } from '../../lib/composeEventHandlers';
 import { warnDeprecated, warnOnce } from '../../lib/dev';
@@ -241,7 +242,7 @@ export const Switch = ({
   const resolvedSize: SwitchSize = Object.hasOwn(SWITCH_SIZE, size) ? size : 'medium';
   const sizeMetrics = SWITCH_SIZE[resolvedSize];
   const labelText = hasLabel ? (
-    <span id={labelTextId} className="text-body-1 text-foreground">
+    <span id={labelTextId} className={cn(switchClassNames.label, 'text-body-1 text-foreground')}>
       {materialiseSlotContent(label)}
     </span>
   ) : null;
@@ -255,6 +256,7 @@ export const Switch = ({
       data-label-position={labelPosition}
       data-size={resolvedSize}
       className={cn(
+        switchClassNames.root,
         // items-start: the track lines up with the top of the label's first line, not its
         // middle, when the label wraps or has a second line; medium's 20px track matches that
         // 20px line exactly, small's 16px track gets an offset below to stay centred on it.
@@ -300,6 +302,7 @@ export const Switch = ({
             : composeEventHandlers(onClick, () => setChecked((prev) => !prev))
         }
         className={cn(
+          switchClassNames.track,
           // The whole control is sized in px, like the Checkbox box and the radio circle: the
           // thumb and its offsets are px, so a track in rem would stop fitting them at any root
           // font size other than 16px. Medium keeps the 0.7 look, a 40x20 track around a 14px
@@ -324,6 +327,7 @@ export const Switch = ({
         <span
           aria-hidden="true"
           className={cn(
+            switchClassNames.thumb,
             'block rounded-full transition-transform duration-200 motion-reduce:transition-none forced-colors:forced-color-adjust-none',
             sizeMetrics.thumb,
             checked

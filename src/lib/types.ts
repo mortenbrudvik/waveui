@@ -56,6 +56,24 @@ export type InputAppearance = 'outline' | 'underline' | 'filled-darker' | 'fille
 export type Shape = 'circular' | 'square' | 'rounded';
 
 /**
+ * A color in HSV (Fluent's `HsvColor`): `h` is the hue in degrees (0–360), `s` the saturation, `v`
+ * the brightness (value) and `a` the opacity, each from 0 to 1. Without `a` the color is opaque.
+ */
+export interface HsvColor {
+  /** Hue in degrees, 0–360. */
+  h: number;
+  /** Saturation, 0–1. */
+  s: number;
+  /** Brightness (value), 0–1. */
+  v: number;
+  /** Opacity, 0–1; left out means opaque. */
+  a?: number;
+}
+
+/** The shape of ColorPicker and its color parts (a subset of `Shape`). */
+export type ColorPickerShape = Extract<Shape, 'rounded' | 'square'>;
+
+/**
  * Side of the anchor a popup is placed on. `start`/`end` follow the writing direction;
  * `left`/`right` are physical.
  */

@@ -1,5 +1,7 @@
 import * as React from 'react';
+import { joinIds } from '../../lib/aria';
 import { isElementOfType } from '../../lib/children';
+import { messageBarClassNames } from '../../lib/classNames';
 import { cn } from '../../lib/cn';
 import { warnOnce } from '../../lib/dev';
 import { DismissIcon } from '../../lib/icons';
@@ -14,8 +16,10 @@ import {
 } from '../../lib/slot';
 import { focusRing } from '../../lib/styles';
 import type { Status, Slot, SlotObject } from '../../lib/types';
+import { useId } from '../../hooks/useId';
 import { useMergedRefs } from '../../hooks/useMergedRefs';
 import { Button } from '../button/Button';
+import { useMessageBarReflow } from './MessageBar.reflow';
 import {
   BUTTON_OWN_PROP_KEYS,
   MERGED_DISABLED_FOCUSABLE_PROPS,
@@ -29,6 +33,16 @@ import {
   StatusText,
   getStatusLabel,
 } from './MessageBar.status';
+import {
+  ACTIONS_PLACEMENT,
+  CONTENT_PLACEMENT,
+  EXTRA_TITLE_PLACEMENT,
+  MessageBarActions,
+  MessageBarPartContext,
+  MessageBarTitle,
+  partitionMessageBarChildren,
+  useTitlePlacement,
+} from './MessageBar.parts';
 
 /** Properties for the MessageBar component. */
 export interface MessageBarProps extends React.HTMLAttributes<HTMLDivElement> {
@@ -51,7 +65,8 @@ export interface MessageBarProps extends React.HTMLAttributes<HTMLDivElement> {
   onDismiss?: () => void;
   /**
    * Custom status icon, rendered decoratively (`aria-hidden="true"`, a slot object can override
-   * it) in the status color. `null` renders no icon.
+   * it) in the status color. Only `undefined` keeps the default status icon; `null`, or anything that
+   * renders nothing (`false`, `''`), shows no icon.
    */
   icon?: Slot<'span'>;
   /**
@@ -95,7 +110,20 @@ export interface MessageBarProps extends React.HTMLAttributes<HTMLDivElement> {
    * Pass icon content instead, e.g. `dismiss={<CloseIcon />}`.
    */
   dismiss?: Slot<'span'> | SlotObject<'button'>;
-  /** Message content to display. */
+  /**
+   * How the text and the actions share the bar. `'singleline'`: the actions sit on the text's row
+   * (the text wraps inside its column; it is never cut off). `'multiline'`: the actions get a row of
+   * their own under the text. `'auto'`: the actions stay on the text's row while the text fits on
+   * one line, measured after mount (the server renders one row), and move below it otherwise; a bar
+   * without `MessageBar.Actions` is `'multiline'`, the 0.7 look. The root renders the layout in use
+   * as `data-layout` (`singleline` or `multiline`). Fluent's `layout`.
+   * @default 'auto'
+   */
+  layout?: 'auto' | 'singleline' | 'multiline';
+  /**
+   * The message: body text, with the parts `MessageBar.Title` and `MessageBar.Actions` as direct
+   * children (see the component docs).
+   */
   children: React.ReactNode;
   /** Ref to the root `<div>`. */
   ref?: React.Ref<HTMLDivElement>;
@@ -140,6 +168,29 @@ const HANDLER_KEY = /^on[A-Z]/;
 
 const dismissContentClassName = 'inline-flex items-center justify-center';
 
+/** Live-region roles: a title is read as the start of their content, never as their name. */
+const LIVE_REGION_ROLES: ReadonlySet<string> = new Set([
+  'alert',
+  'status',
+  'log',
+  'marquee',
+  'timer',
+]);
+
+/** Roles that take no name. */
+const UNNAMED_ROLES: ReadonlySet<string> = new Set(['none', 'presentation', 'generic']);
+
+/** The first token of a `role` value (a list of fallback roles is read by its first). */
+function firstRoleToken(role: string | undefined): string | undefined {
+  return role?.trim().split(/\s+/)[0] || undefined;
+}
+
+/** Whether a title names a bar with this role (spec D16: a non-live role, such as region or group). */
+function isNamedByTitle(role: string | undefined): boolean {
+  const token = firstRoleToken(role);
+  return token !== undefined && !LIVE_REGION_ROLES.has(token) && !UNNAMED_ROLES.has(token);
+}
+
 interface DismissParts {
   /** Props merged onto the wired dismiss button. */
   buttonProps: UnknownProps;
@@ -168,9 +219,12 @@ interface DismissParts {
 
 const noop = () => {};
 
-/** The decorative default dismiss glyph. */
-function defaultDismissContent(): React.ReactNode {
-  return <DismissIcon />;
+/**
+ * The decorative default dismiss glyph. It carries the dismiss icon part class when it is the
+ * dismiss button's own content, not when the element of a slot object wraps it.
+ */
+function defaultDismissContent(className?: string): React.ReactNode {
+  return <DismissIcon className={className} />;
 }
 
 function isButtonType(type: unknown): boolean {
@@ -181,7 +235,7 @@ function isButtonType(type: unknown): boolean {
 function defaultDismiss(): DismissParts {
   return {
     buttonProps: {},
-    content: defaultDismissContent(),
+    content: defaultDismissContent(messageBarClassNames.dismissIcon),
     contentMayName: false,
     literalTextLabel: false,
     disabledFocusable: false,
@@ -231,12 +285,14 @@ function resolveDismiss(dismiss: MessageBarProps['dismiss']): DismissParts | nul
     const icon = element.props.icon as Slot<'span'>;
     const iconNode =
       isWaveButton && slotRendersContent(icon)
-        ? renderSlot(icon, 'span', dismissContentClassName, { 'aria-hidden': true })
+        ? renderSlot(icon, 'span', cn(messageBarClassNames.dismissIcon, dismissContentClassName), {
+            'aria-hidden': true,
+          })
         : null;
     const content =
       iconNode || slotRendersContent(children)
         ? placeButtonIcon(iconNode, children, element.props.iconPosition)
-        : defaultDismissContent();
+        : defaultDismissContent(messageBarClassNames.dismissIcon);
     return {
       buttonProps,
       content,
@@ -264,9 +320,12 @@ function resolveDismiss(dismiss: MessageBarProps['dismiss']): DismissParts | nul
       // Wave Button's own props are not attributes: `icon`, `iconPosition` and
       // `disabledFocusable` are applied below, the others (`appearance`, `size`) are dropped.
       if (key === 'icon' && slotRendersContent(value)) {
-        iconNode = renderSlot(value as Slot<'span'>, 'span', dismissContentClassName, {
-          'aria-hidden': true,
-        });
+        iconNode = renderSlot(
+          value as Slot<'span'>,
+          'span',
+          cn(messageBarClassNames.dismissIcon, dismissContentClassName),
+          { 'aria-hidden': true },
+        );
       }
     } else if (
       BUTTON_ONLY_KEYS.has(key) ||
@@ -288,7 +347,11 @@ function resolveDismiss(dismiss: MessageBarProps['dismiss']): DismissParts | nul
   const elementProps = {
     'aria-hidden': true,
     ...contentProps,
-    className: cn(dismissContentClassName, contentProps.className as string | undefined),
+    className: cn(
+      iconNode === null && messageBarClassNames.dismissIcon,
+      dismissContentClassName,
+      contentProps.className as string | undefined,
+    ),
   };
   let inner: React.ReactNode = null;
   if (iconNode || slotRendersContent(children)) {
@@ -309,36 +372,29 @@ function resolveDismiss(dismiss: MessageBarProps['dismiss']): DismissParts | nul
   };
 }
 
-/**
- * An inline message that tells the user about the state of a page or task: a status icon, a
- * visually hidden status label ("Warning:"), the message and an optional dismiss button.
- *
- * - The status sets the tint, the logical start border, the icon and the role (`alert` for
- *   `warning`/`error`, `status` otherwise). Screen readers hear the severity through `statusLabel`.
- * - The dismiss button is always the MessageBar's own `<button>` wired to `onDismiss`
- *   (`type="button"` unless a merged button slot sets its own `type`); the `dismiss` slot only
- *   replaces its content (see {@link MessageBarProps.dismiss}).
- *
- * @example
- * <MessageBar status="warning" onDismiss={() => setVisible(false)}>
- *   Your subscription expires in 3 days.
- * </MessageBar>
- */
-export const MessageBar = ({
+// The MessageBar root, documented on the exported `MessageBar` const.
+const MessageBarRoot = ({
   status = 'info',
   statusLabel,
   onDismiss,
   icon,
   dismiss,
+  layout = 'auto',
   children,
   className,
   ref,
   ...rest
 }: MessageBarProps) => {
-  const iconClassName = cn('mt-0.5 inline-flex shrink-0', STATUS_ICON_COLOR[status]);
+  const iconClassName = cn(
+    messageBarClassNames.icon,
+    'mt-0.5 inline-flex shrink-0',
+    STATUS_ICON_COLOR[status],
+  );
   const renderedIcon =
     icon !== undefined ? (
-      renderSlot(icon, 'span', iconClassName, { 'aria-hidden': true })
+      slotRendersContent(icon) ? (
+        renderSlot(icon, 'span', iconClassName, { 'aria-hidden': true })
+      ) : null
     ) : (
       <span aria-hidden="true" className={iconClassName}>
         <StatusIcon status={status} size={20} />
@@ -400,6 +456,7 @@ export const MessageBar = ({
         'aria-label': hasOwnName || namedByContent ? undefined : DEFAULT_DISMISS_LABEL,
         onClick: () => onDismiss?.(),
         className: cn(
+          messageBarClassNames.dismissButton,
           'ms-auto inline-flex shrink-0 cursor-pointer items-center justify-center rounded border-none bg-transparent p-1 text-muted-foreground',
           'not-disabled:not-aria-disabled:hover:bg-subtle-hover not-disabled:not-aria-disabled:hover:text-foreground',
           'not-disabled:not-aria-disabled:active:bg-subtle-pressed',
@@ -425,26 +482,160 @@ export const MessageBar = ({
     );
   }
 
+  // Parts (D15): a static scan of the direct children (Fragments flattened, Server Component
+  // references included), so the title and the actions are placed in the server HTML too.
+  const { title, ownTitleId, actions, body } = partitionMessageBarChildren(children);
+  const generatedTitleId = useId('wave-message-bar-title');
+  const titlePlacement = useTitlePlacement(ownTitleId, generatedTitleId);
+  const titleId = titlePlacement.titleId;
+
+  // Labelling (D16). The role the bar renders: the consumer's when the prop is given (it is spread
+  // after the default, as in 0.7), else the status role. A live bar is read once, title included,
+  // and gets no name; a bar with a non-live role is named by the severity text and the title.
+  const defaultRole = status === 'error' || status === 'warning' ? 'alert' : 'status';
+  const role = 'role' in rest ? rest.role : defaultRole;
+  // A prop that holds `undefined` (a wrapper forwarding it) is no name of the consumer's.
+  const ownName = rest['aria-label'] !== undefined || rest['aria-labelledby'] !== undefined;
+  const statusText = getStatusLabel(status, statusLabel);
+  const statusTextId = useId('wave-message-bar-status');
+  const namedByTitle = title !== undefined && !ownName && isNamedByTitle(role);
+  // Written after the spread, so a forwarded `aria-labelledby={undefined}` cannot remove it.
+  const labelledBy = ownName
+    ? rest['aria-labelledby']
+    : namedByTitle
+      ? joinIds(statusText ? statusTextId : undefined, titleId)
+      : undefined;
+  const missingRegionName = firstRoleToken(role) === 'region' && title === undefined && !ownName;
+  React.useEffect(() => {
+    if (missingRegionName) {
+      warnOnce(
+        'MessageBar:region-name',
+        'MessageBar: a bar with role="region" is a landmark only when it has a name. Add a MessageBar.Title, or pass aria-label or aria-labelledby.',
+      );
+    }
+  }, [missingRegionName]);
+
+  // Layout (D17): one DOM order in every layout (icon, text, actions, Dismiss), so a layout change
+  // never moves a focused element; only classes change. Without actions the bar keeps 0.7's markup.
+  const hasActions = actions.length > 0;
+  // `'auto'` with actions measures its text (MessageBar.reflow.ts); the elements it reads are held
+  // in state through callback refs, attached only while it measures (no extra render otherwise).
+  const measuring = layout === 'auto' && hasActions;
+  const [rootElement, setRootElement] = React.useState<HTMLDivElement | null>(null);
+  const [textElement, setTextElement] = React.useState<HTMLDivElement | null>(null);
+  const rootRef = useMergedRefs<HTMLDivElement>(ref, measuring ? setRootElement : undefined);
+  const measuredLayout = useMessageBarReflow(rootElement, textElement, measuring);
+  const resolvedLayout: 'singleline' | 'multiline' =
+    layout === 'auto' ? (hasActions ? measuredLayout : 'multiline') : layout;
+  // While it measures one row, the text column does not wrap, so text that does not fit overflows
+  // the column (never cut off) and the measurement sees it.
+  const unwrapped = measuring && resolvedLayout === 'singleline';
+
+  // The text column: the severity text, the title (and a space, so the two never run together),
+  // then the body in its order.
+  const text = (
+    <div
+      ref={measuring ? setTextElement : undefined}
+      className={cn(
+        messageBarClassNames.body,
+        'min-w-0 flex-1 text-body-1',
+        unwrapped && 'whitespace-nowrap',
+      )}
+    >
+      <StatusText id={namedByTitle && statusText ? statusTextId : undefined} label={statusText} />
+      {title && (
+        <MessageBarPartContext.Provider value={titlePlacement}>
+          {title.element}
+        </MessageBarPartContext.Provider>
+      )}
+      {title && ' '}
+      {body.map(({ key, node, extraTitle }) =>
+        extraTitle ? (
+          <MessageBarPartContext.Provider key={key} value={EXTRA_TITLE_PLACEMENT}>
+            {node}
+          </MessageBarPartContext.Provider>
+        ) : (
+          <React.Fragment key={key}>{node}</React.Fragment>
+        ),
+      )}
+    </div>
+  );
+
   return (
     <div
-      ref={ref}
-      role={status === 'error' || status === 'warning' ? 'alert' : 'status'}
+      ref={rootRef}
+      role={defaultRole}
+      data-layout={resolvedLayout}
       {...rest}
+      aria-labelledby={labelledBy}
       className={cn(
+        messageBarClassNames.root,
         'flex items-start gap-3 rounded border-s-4 px-4 py-3 text-foreground',
         tintClasses[status],
         STATUS_BORDER[status],
         className,
       )}
     >
-      {renderedIcon}
-      <div className="min-w-0 flex-1 text-body-1">
-        <StatusText label={getStatusLabel(status, statusLabel)} />
-        {children}
-      </div>
-      {renderedDismiss}
+      <MessageBarPartContext.Provider value={CONTENT_PLACEMENT}>
+        {renderedIcon}
+        {hasActions ? (
+          // A layout wrapper (not a part): the text column and the actions, in this DOM order.
+          <div
+            className={cn(
+              'flex min-w-0 flex-1 gap-x-3 gap-y-2',
+              resolvedLayout === 'multiline' ? 'flex-col' : 'items-start',
+            )}
+          >
+            {text}
+            <MessageBarPartContext.Provider value={ACTIONS_PLACEMENT}>
+              {actions.map(({ key, element }) => (
+                <React.Fragment key={key}>{element}</React.Fragment>
+              ))}
+            </MessageBarPartContext.Provider>
+          </div>
+        ) : (
+          text
+        )}
+        {renderedDismiss}
+      </MessageBarPartContext.Provider>
     </div>
   );
 };
+MessageBarRoot.displayName = 'MessageBar';
 
-MessageBar.displayName = 'MessageBar';
+/**
+ * An inline message that tells the user about the state of a page or task: a status icon, a
+ * visually hidden status label ("Warning:"), an optional title, the message, optional actions and
+ * an optional dismiss button.
+ *
+ * - The status sets the tint, the logical start border, the icon and the role (`alert` for
+ *   `warning`/`error`, `status` otherwise). Screen readers hear the severity through `statusLabel`.
+ * - Parts, as direct children: `MessageBar.Title` (a semibold lead-in, read first after the
+ *   severity) and `MessageBar.Actions` (buttons after the text on one row, or below it with
+ *   `layout="multiline"`). The built-in Dismiss button stays the bar's own.
+ * - With its default roles the bar is a live region and the title is read as the start of its
+ *   content; give the bar `role="region"` (a notice that stays on the page) and the title names it.
+ * - The dismiss button is always the MessageBar's own `<button>` wired to `onDismiss`
+ *   (`type="button"` unless a merged button slot sets its own `type`); the `dismiss` slot only
+ *   replaces its content (see {@link MessageBarProps.dismiss}).
+ *
+ * React Server Components cannot dot into a client module: import the flat names
+ * `MessageBarTitle` and `MessageBarActions` there; `MessageBar.Title` and `MessageBar.Actions`
+ * work in client files.
+ *
+ * @example
+ * <MessageBar status="warning" onDismiss={() => setVisible(false)}>
+ *   <MessageBar.Title>Update available</MessageBar.Title>
+ *   A new version is ready to install.
+ *   <MessageBar.Actions>
+ *     <Button size="small">Update now</Button>
+ *   </MessageBar.Actions>
+ * </MessageBar>
+ */
+export const MessageBar = /* @__PURE__ */ Object.assign(MessageBarRoot, {
+  Title: MessageBarTitle,
+  Actions: MessageBarActions,
+});
+
+export { MessageBarTitle, MessageBarActions };
+export type { MessageBarTitleProps, MessageBarActionsProps } from './MessageBar.parts';

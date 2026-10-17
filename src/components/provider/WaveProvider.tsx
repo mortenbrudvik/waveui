@@ -1,6 +1,7 @@
 import * as React from 'react';
 import { cn } from '../../lib/cn';
 import { warnOnce } from '../../lib/dev';
+import { waveProviderClassNames } from '../../lib/classNames';
 import { getThemeClassName, isWaveTheme, WAVE_THEMES, type WaveTheme } from '../../lib/theme';
 import type { CoreSize, InputAppearance } from '../../lib/types';
 
@@ -176,7 +177,7 @@ export const WaveProvider = ({
         dir={dir}
         data-wave-theme={resolvedTheme}
         className={cn(
-          'wave-root',
+          waveProviderClassNames.root,
           themeClassName,
           'bg-background text-foreground font-wave text-body-1',
           className,

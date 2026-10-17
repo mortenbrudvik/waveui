@@ -16,6 +16,7 @@ import * as ImageStories from '../../stories/Image.stories';
 import * as Wave from '../index';
 import {
   Accordion,
+  AlphaSlider,
   AccordionItem,
   AccordionPanel,
   AccordionTrigger,
@@ -24,7 +25,9 @@ import {
   Carousel,
   CarouselItem,
   Checkbox,
+  ColorArea,
   ColorPicker,
+  ColorSlider,
   Combobox,
   ComboboxOption,
   DataGrid,
@@ -46,7 +49,9 @@ import {
   InfoLabel,
   Input,
   Label,
+  Link,
   Menu,
+  MessageBar,
   MenuButton,
   MenuGroup,
   MenuGroupHeader,
@@ -87,6 +92,7 @@ import {
   TeachingPopover,
   Textarea,
   TimePicker,
+  Toast,
   Toaster,
   ToggleButton,
   Toolbar,
@@ -98,9 +104,40 @@ import {
   Tooltip,
   Tree,
   TreeItem,
+  colorAreaClassNames,
+  createToaster,
   useOverflowMenu,
   useToastController,
   WaveProvider,
+  Avatar,
+  ColorPickerHexField,
+  ColorPickerPreview,
+  ColorPickerSwatches,
+  MessageBarActions,
+  MessageBarTitle,
+  Persona,
+  ToastBody,
+  ToastClose,
+  ToastFooter,
+  ToastTitle,
+  TreeItemPersonaLayout,
+  avatarClassNames,
+  buttonClassNames,
+  dialogContentClassNames,
+  dialogTitleClassNames,
+  menuButtonClassNames,
+  menuItemClassNames,
+  menuPopoverClassNames,
+  messageBarTitleClassNames,
+  personaClassNames,
+  splitButtonClassNames,
+  toastBodyClassNames,
+  toastClassNames,
+  toasterClassNames,
+  toastTitleClassNames,
+  toggleButtonClassNames,
+  toolbarClassNames,
+  toolbarToggleButtonClassNames,
   type CheckedValuesChangeDetails,
   type DialogProps,
   type MenuProps,
@@ -145,6 +182,13 @@ const menuitem = (name: string) => screen.getByRole('menuitem', { name });
 // Barrel
 // ---------------------------------------------------------------------------
 
+/**
+ * Flat names of compound members that a package attaches before the barrels export them (the
+ * barrel test's twin of `PENDING_FLAT_EXPORTS` in `scripts/verify-dist.mjs`). Empty since wave C
+ * of 0.8; a later phase whose parts land before their flat names lists them here the same way.
+ */
+const PENDING_FLAT_MEMBERS: readonly string[] = [];
+
 describe('public barrel (spec §5.11, C-COMPOUND)', () => {
   const barrel = Wave as unknown as Record<string, unknown>;
   const isComponent = (value: unknown) =>
@@ -163,13 +207,22 @@ describe('public barrel (spec §5.11, C-COMPOUND)', () => {
       if (members.length > 0) compounds += 1;
       for (const member of members) {
         const flat = `${name}${member}`;
-        if (!(flat in barrel)) missing.push(flat);
-        else if (barrel[flat] !== (value as Record<string, unknown>)[member]) different.push(flat);
+        if (!(flat in barrel)) {
+          if (!PENDING_FLAT_MEMBERS.includes(flat)) missing.push(flat);
+        } else if (barrel[flat] !== (value as Record<string, unknown>)[member]) {
+          different.push(flat);
+        }
       }
     }
-    expect(compounds).toBeGreaterThanOrEqual(19);
+    // At least 19 compounds in 0.7; Toast, MessageBar and ColorPicker join them in 0.8.
+    expect(compounds).toBeGreaterThanOrEqual(22);
     expect(missing).toEqual([]);
     expect(different).toEqual([]);
+  });
+
+  it('lists on PENDING_FLAT_MEMBERS only flat names the barrel does not export yet', () => {
+    expect(PENDING_FLAT_MEMBERS).toEqual([...new Set(PENDING_FLAT_MEMBERS)].sort());
+    expect(PENDING_FLAT_MEMBERS.filter((flat) => flat in barrel)).toEqual([]);
   });
 
   it('exports the new public hooks, utilities and Portal', () => {
@@ -187,6 +240,36 @@ describe('public barrel (spec §5.11, C-COMPOUND)', () => {
       'useIsOverflowItemVisible',
       'RadioItem',
       'OverflowItem',
+    ]) {
+      expect(barrel[name], name).toBeTypeOf('function');
+    }
+  });
+
+  it('exports the 0.8 compound parts, the color parts and helpers, and createToaster', () => {
+    const members: Array<[string, string]> = [
+      ['Toast', 'Title'],
+      ['Toast', 'Body'],
+      ['Toast', 'Footer'],
+      ['Toast', 'Close'],
+      ['MessageBar', 'Title'],
+      ['MessageBar', 'Actions'],
+      ['ColorPicker', 'HexField'],
+      ['ColorPicker', 'Swatches'],
+      ['ColorPicker', 'Preview'],
+      ['Tree', 'ItemPersonaLayout'],
+    ];
+    for (const [compound, member] of members) {
+      const flat = `${compound}${member}`;
+      expect(barrel[flat], flat).toBeDefined();
+      expect(barrel[flat], flat).toBe((barrel[compound] as Record<string, unknown>)[member]);
+    }
+    for (const name of [
+      'ColorArea',
+      'ColorSlider',
+      'AlphaSlider',
+      'createToaster',
+      'hsvToHex',
+      'hexToHsv',
     ]) {
       expect(barrel[name], name).toBeTypeOf('function');
     }
@@ -234,6 +317,21 @@ describe('public barrel (spec §5.11, C-COMPOUND)', () => {
       'pickerButtonOffset',
       'pickerGlyphSize',
       'pickerEndPadding',
+      'StatusText',
+      'withPartClass',
+      'getStableClassNames',
+      'isToastOptions',
+      'bindToasterHandle',
+      'ToasterHandleBinding',
+      'MessageBarPartContext',
+      'useMessageBarReflow',
+      'useColorPickerContext',
+      'hsvToRgb',
+      'rgbToHsv',
+      'collectItems',
+      'computeCheckStates',
+      'toggleCheck',
+      'isHiddenByCss',
     ];
     expect(internal.filter((name) => name in barrel)).toEqual([]);
   });
@@ -4334,6 +4432,8 @@ describe('compounds composed in a React Server Component', () => {
   }
   const ssrCase = <P extends Parts>(c: SsrCase<P>) => c as unknown as SsrCase;
 
+  const toastDismiss = vi.fn();
+
   const cases: SsrCase[] = [
     ssrCase({
       name: 'Carousel',
@@ -4813,6 +4913,110 @@ describe('compounds composed in a React Server Component', () => {
         expect(info).toHaveFocus();
       },
     }),
+    ssrCase({
+      name: 'Toast (a title with an action, a body with a subtitle, a footer)',
+      parts: { Title: ToastTitle, Body: ToastBody, Footer: ToastFooter, Close: ToastClose },
+      tree: ({ Title, Body, Footer, Close }) => (
+        <Toast status="success" onDismiss={toastDismiss}>
+          <Title
+            action={
+              <Close>
+                <Button>Undo</Button>
+              </Close>
+            }
+          >
+            Saved
+          </Title>
+          <Body subtitle="2 files">Your changes are saved.</Body>
+          <Footer>
+            <Button>View changes</Button>
+          </Footer>
+        </Toast>
+      ),
+      serverText: 'Your changes are saved.',
+      interact: async (user) => {
+        toastDismiss.mockClear();
+        // Rendered by the app, not dispatched: its own live region (spec D10).
+        const toast = screen.getByRole('status');
+        expect(toast).toHaveTextContent(/^Success:\s*Saved/);
+        expect(within(toast).getByText('2 files')).toHaveClass(toastBodyClassNames.subtitle);
+        await user.click(button('Undo'));
+        expect(toastDismiss).toHaveBeenCalledTimes(1);
+      },
+    }),
+    ssrCase({
+      name: 'MessageBar (a titled region with actions; no ResizeObserver, as in consumers’ jsdom)',
+      parts: { Title: MessageBarTitle, Actions: MessageBarActions },
+      tree: ({ Title, Actions }) => (
+        <MessageBar status="warning" role="region">
+          <Title>Update available</Title>A new version is ready to install.
+          <Actions>
+            <Button>Install</Button>
+          </Actions>
+        </MessageBar>
+      ),
+      serverText: 'Update available',
+      interact: async (user) => {
+        // The default layout="auto" with actions must not need a ResizeObserver (review focus).
+        expect(globalThis.ResizeObserver).toBeUndefined();
+        const bar = screen.getByRole('region', { name: 'Warning: Update available' });
+        expect(bar).toHaveAttribute('data-layout', 'singleline');
+        expect(within(bar).getByText('Update available')).toHaveClass(
+          messageBarTitleClassNames.root,
+        );
+        await user.click(within(bar).getByRole('button', { name: 'Install' }));
+        expect(bar).toHaveAttribute('data-layout', 'singleline');
+      },
+    }),
+    ssrCase({
+      name: 'ColorPicker (a custom layout of the preview, the hex field and the swatches)',
+      parts: {
+        HexField: ColorPickerHexField,
+        Swatches: ColorPickerSwatches,
+        Preview: ColorPickerPreview,
+      },
+      tree: ({ HexField, Swatches, Preview }) => (
+        <ColorPicker aria-label="Accent" defaultValue="#0f6cbd">
+          <Preview />
+          <HexField />
+          <Swatches />
+        </ColorPicker>
+      ),
+      serverText: 'value="#0f6cbd"',
+      interact: async (user) => {
+        const hex = screen.getByRole('textbox', { name: 'Hex color value' });
+        expect(hex).toHaveValue('#0f6cbd');
+        await user.click(screen.getByRole('radio', { name: 'Red' }));
+        expect(hex).toHaveValue('#d13438');
+      },
+    }),
+    ssrCase({
+      name: 'Tree (persona rows in a checkbox tree)',
+      parts: { Item: TreeItem, ItemPersonaLayout: TreeItemPersonaLayout },
+      tree: ({ Item, ItemPersonaLayout }) => (
+        <Tree aria-label="People" selectionMode="multiple" defaultCheckedItems={['ada']}>
+          <Item value="ada">
+            <ItemPersonaLayout media={<Avatar name="Ada Lovelace" />} description="Engineer">
+              Ada Lovelace
+            </ItemPersonaLayout>
+          </Item>
+          <Item value="grace">
+            <ItemPersonaLayout description="Admiral">Grace Hopper</ItemPersonaLayout>
+          </Item>
+        </Tree>
+      ),
+      serverText: 'aria-checked="true"',
+      interact: async (user) => {
+        const ada = screen.getByRole('treeitem', { name: 'Ada Lovelace' });
+        expect(ada).toHaveAccessibleDescription('Engineer');
+        expect(ada).toHaveAttribute('aria-checked', 'true');
+        const grace = screen.getByRole('treeitem', { name: 'Grace Hopper' });
+        expect(grace).toHaveAttribute('aria-checked', 'false');
+        // The checkbox is named like its item: by the person's name, not the description (D25, D28).
+        await user.click(screen.getByRole('checkbox', { name: 'Grace Hopper' }));
+        expect(grace).toHaveAttribute('aria-checked', 'true');
+      },
+    }),
   ];
 
   const hydrated: Array<{ root: Root; container: HTMLElement }> = [];
@@ -4869,5 +5073,1048 @@ describe('Image story placeholder (repo-level#32)', () => {
     const fills = Array.from(svg.matchAll(/fill="([^"]*)"/g), (match) => match[1]);
     expect(fills.length).toBeGreaterThanOrEqual(2);
     for (const fill of fills) expect(fill).toMatch(/^#[0-9a-f]{6}$/i);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// 0.8 (Fluent parity phase 3): toasts across components (spec §4.4 #1–#5)
+// ---------------------------------------------------------------------------
+
+/** The Toaster's region (`'Notifications'` unless the Toaster has its own `aria-label`). */
+const toastRegion = (name = 'Notifications') => screen.getByRole('region', { name });
+/** A toast's container: `role="group"`, named by its severity text and title (spec D10). */
+const toastGroup = (name: string) => screen.getByRole('group', { name });
+/** The Toaster's polite live region (0.7's `role="status"` region, one message per toast). */
+const politeMessages = (name = 'Notifications') => within(toastRegion(name)).getByRole('status');
+
+/** A MenuButton with a Menu, used as a toast's title action. */
+function ToastFileMenu() {
+  return (
+    <Menu>
+      <Menu.Trigger>
+        <MenuButton size="small">More</MenuButton>
+      </Menu.Trigger>
+      <Menu.Popover>
+        <Menu.Item>Open file</Menu.Item>
+        <Menu.Item>Copy link</Menu.Item>
+      </Menu.Popover>
+    </Menu>
+  );
+}
+
+/** Dispatches a rich toast whose title action opens a Menu (spec §4.4 #1, #10). */
+function UploadToastButton({ timeout }: { timeout?: number }) {
+  const { dispatchToast } = useToastController();
+  return (
+    <Button
+      onClick={() =>
+        dispatchToast(
+          <Toast status="success">
+            <Toast.Title action={<ToastFileMenu />}>File uploaded</Toast.Title>
+            <Toast.Body>report.pdf is ready.</Toast.Body>
+          </Toast>,
+          timeout === undefined ? undefined : { timeout },
+        )
+      }
+    >
+      Upload
+    </Button>
+  );
+}
+
+describe('a Menu in a dispatched toast (spec §4.4 #1)', () => {
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  async function setup() {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
+    render(
+      <Toaster>
+        <UploadToastButton timeout={3000} />
+      </Toaster>,
+    );
+    await user.click(button('Upload'));
+    expect(toastGroup('Success: File uploaded')).toBeInTheDocument();
+    // Into the toast by keyboard: the pointer stays on Upload, outside the region, so only focus
+    // can pause the timers.
+    await user.tab();
+    expect(button('More')).toHaveFocus();
+    await user.keyboard('{Enter}');
+    expect(screen.getByRole('menu', { name: 'More' })).toBeInTheDocument();
+    expect(menuitem('Open file')).toHaveFocus();
+    return { user };
+  }
+
+  it('keeps the timers paused while focus is in the menu, a portal opened from the toast', async () => {
+    await setup();
+    act(() => {
+      vi.advanceTimersByTime(6000);
+    });
+    expect(toastGroup('Success: File uploaded')).toBeInTheDocument();
+    await expectNoA11yViolations(document.body);
+  });
+
+  it('Escape closes only the menu first, then dismisses the toasts and returns focus to the origin', async () => {
+    const { user } = await setup();
+    await user.keyboard('{Escape}');
+    expect(screen.queryByRole('menu')).not.toBeInTheDocument();
+    expect(button('More')).toHaveFocus();
+    expect(toastGroup('Success: File uploaded')).toBeInTheDocument();
+
+    await user.keyboard('{Escape}');
+    await act(async () => {});
+    expect(screen.queryByRole('group', { name: 'Success: File uploaded' })).not.toBeInTheDocument();
+    expect(button('Upload')).toHaveFocus();
+  });
+
+  it.each(['{Delete}', '{Backspace}'])(
+    '%s on a menu item keeps the toast and the menu',
+    async (key) => {
+      const { user } = await setup();
+      await user.keyboard(key);
+      await act(async () => {});
+      expect(toastGroup('Success: File uploaded')).toBeInTheDocument();
+      expect(screen.getByRole('menu', { name: 'More' })).toBeInTheDocument();
+    },
+  );
+});
+
+describe('a rich toast over a modal Dialog (spec §4.4 #2)', () => {
+  function DeleteRowButton({ onUndo }: { onUndo: () => void }) {
+    const { dispatchToast } = useToastController();
+    return (
+      <Button
+        onClick={() =>
+          dispatchToast(
+            <Toast status="success">
+              <Toast.Title>Row deleted</Toast.Title>
+              <Toast.Footer>
+                <Toast.Close>
+                  <Button onClick={onUndo}>Undo</Button>
+                </Toast.Close>
+              </Toast.Footer>
+            </Toast>,
+          )
+        }
+      >
+        Delete row
+      </Button>
+    );
+  }
+
+  function setup() {
+    const onOpenChange = vi.fn();
+    const onUndo = vi.fn();
+    render(
+      <Toaster>
+        <Dialog open onOpenChange={onOpenChange}>
+          <Dialog.Content title="Settings">
+            <DeleteRowButton onUndo={onUndo} />
+          </Dialog.Content>
+        </Dialog>
+      </Toaster>,
+    );
+    return { onOpenChange, onUndo, user: userEvent.setup() };
+  }
+
+  it('Tab reaches Undo while the Dialog is open; Escape dismisses the toasts and leaves the Dialog open', async () => {
+    const { user, onOpenChange } = setup();
+    await user.click(button('Delete row'));
+    expect(toastGroup('Success: Row deleted')).toBeInTheDocument();
+    await expectNoA11yViolations(document.body);
+    await user.tab();
+    expect(button('Undo')).toHaveFocus();
+    await user.keyboard('{Escape}');
+    await act(async () => {});
+    expect(screen.queryByRole('group', { name: 'Success: Row deleted' })).not.toBeInTheDocument();
+    expect(screen.getByRole('dialog', { name: 'Settings' })).toBeInTheDocument();
+    expect(onOpenChange).not.toHaveBeenCalled();
+    expect(button('Delete row')).toHaveFocus();
+  });
+
+  it('Delete on a focused toast dismisses only that toast and focuses the next one', async () => {
+    const { user, onOpenChange } = setup();
+    await user.click(button('Delete row'));
+    await user.click(button('Delete row'));
+    expect(screen.getAllByRole('group', { name: 'Success: Row deleted' })).toHaveLength(2);
+    await user.tab();
+    const [firstUndo] = screen.getAllByRole('button', { name: 'Undo' });
+    expect(firstUndo).toHaveFocus();
+    await user.keyboard('{Delete}');
+    await act(async () => {});
+    expect(screen.getAllByRole('group', { name: 'Success: Row deleted' })).toHaveLength(1);
+    expect(screen.getByRole('button', { name: 'Undo' })).toHaveFocus();
+    expect(screen.getByRole('dialog', { name: 'Settings' })).toBeInTheDocument();
+    expect(onOpenChange).not.toHaveBeenCalled();
+  });
+
+  function RenameToastButton() {
+    const { dispatchToast } = useToastController();
+    return (
+      <Button
+        onClick={() =>
+          dispatchToast(
+            <Toast status="warning">
+              <Toast.Title>Report ready</Toast.Title>
+              <Toast.Footer>
+                <Dialog>
+                  <Dialog.Trigger>
+                    <Button>Rename</Button>
+                  </Dialog.Trigger>
+                  <Dialog.Content title="Rename report">
+                    <Input aria-label="File name" defaultValue="report.pdf" />
+                  </Dialog.Content>
+                </Dialog>
+              </Toast.Footer>
+            </Toast>,
+          )
+        }
+      >
+        Export
+      </Button>
+    );
+  }
+
+  it('Delete in a Dialog opened from a toast keeps the toast', async () => {
+    const user = userEvent.setup();
+    render(
+      <Toaster>
+        <RenameToastButton />
+      </Toaster>,
+    );
+    await user.click(button('Export'));
+    await user.click(button('Rename'));
+    const dialog = screen.getByRole('dialog', { name: 'Rename report' });
+    const close = within(dialog).getByRole('button', { name: 'Close' });
+    act(() => close.focus());
+    await act(async () => {});
+    await user.keyboard('{Delete}');
+    await act(async () => {});
+    expect(toastGroup('Warning: Report ready')).toBeInTheDocument();
+    expect(screen.getByRole('dialog', { name: 'Rename report' })).toBeInTheDocument();
+  });
+});
+
+describe('a Tooltip and a Popover on a toast (spec §4.4 #3)', () => {
+  function ArchiveToastButton() {
+    const { dispatchToast } = useToastController();
+    return (
+      <Button
+        onClick={() =>
+          dispatchToast(
+            <Toast status="info">
+              <Toast.Title
+                action={
+                  <Tooltip content="Restores the message" openDelay={0}>
+                    <Button>Undo</Button>
+                  </Tooltip>
+                }
+              >
+                Moved to Archive
+              </Toast.Title>
+              <Toast.Footer>
+                <Popover>
+                  <Popover.Trigger>
+                    <Button>Details</Button>
+                  </Popover.Trigger>
+                  <Popover.Content title="Details">
+                    <p>Moved by a rule.</p>
+                    <Button>Edit rule</Button>
+                  </Popover.Content>
+                </Popover>
+              </Toast.Footer>
+            </Toast>,
+          )
+        }
+      >
+        Archive
+      </Button>
+    );
+  }
+
+  function setup() {
+    render(
+      <Toaster>
+        <ArchiveToastButton />
+      </Toaster>,
+    );
+    return userEvent.setup();
+  }
+
+  it('with the tooltip shown, Escape hides only the tooltip; the next Escape dismisses the toasts', async () => {
+    const user = setup();
+    await user.click(button('Archive'));
+    await user.tab();
+    const undo = button('Undo');
+    expect(undo).toHaveFocus();
+    await waitFor(() => expect(tooltipSurface()).not.toBeNull());
+    expect(undo).toHaveAccessibleDescription('Restores the message');
+
+    await user.keyboard('{Escape}');
+    expect(tooltipSurface()).toBeNull();
+    expect(toastGroup('Info: Moved to Archive')).toBeInTheDocument();
+
+    await user.keyboard('{Escape}');
+    await act(async () => {});
+    expect(screen.queryByRole('group', { name: 'Info: Moved to Archive' })).not.toBeInTheDocument();
+    expect(button('Archive')).toHaveFocus();
+  });
+
+  it('Escape in a Popover opened from a toast closes only the popover', async () => {
+    const user = setup();
+    await user.click(button('Archive'));
+    await user.click(button('Details'));
+    const popover = screen.getByRole('dialog', { name: 'Details' });
+    act(() => within(popover).getByRole('button', { name: 'Edit rule' }).focus());
+    await user.keyboard('{Escape}');
+    expect(screen.queryByRole('dialog', { name: 'Details' })).not.toBeInTheDocument();
+    expect(toastGroup('Info: Moved to Archive')).toBeInTheDocument();
+    expect(button('Details')).toHaveFocus();
+  });
+});
+
+describe('Toast.Close around a Link and a Button (spec §4.4 #4)', () => {
+  function MoveToastButton({
+    onUndo,
+    onKeep,
+  }: {
+    onUndo?: React.MouseEventHandler<HTMLAnchorElement>;
+    onKeep?: React.MouseEventHandler<HTMLButtonElement>;
+  }) {
+    const { dispatchToast } = useToastController();
+    return (
+      <Button
+        onClick={() =>
+          dispatchToast(
+            <Toast status="info">
+              <Toast.Title
+                action={
+                  <Toast.Close>
+                    <Link href="#undo" onClick={onUndo}>
+                      Undo
+                    </Link>
+                  </Toast.Close>
+                }
+              >
+                Moved
+              </Toast.Title>
+              <Toast.Footer>
+                <Toast.Close>
+                  <Button onClick={onKeep}>Keep</Button>
+                </Toast.Close>
+              </Toast.Footer>
+            </Toast>,
+          )
+        }
+      >
+        Move
+      </Button>
+    );
+  }
+
+  it('a Link in the title action runs its handler and dismisses the toast', async () => {
+    const onUndo = vi.fn();
+    const user = userEvent.setup();
+    render(
+      <Toaster>
+        <MoveToastButton onUndo={onUndo} />
+      </Toaster>,
+    );
+    await user.click(button('Move'));
+    await user.click(screen.getByRole('link', { name: 'Undo' }));
+    await act(async () => {});
+    expect(onUndo).toHaveBeenCalledTimes(1);
+    expect(screen.queryByRole('group', { name: 'Info: Moved' })).not.toBeInTheDocument();
+  });
+
+  it('a Button in the footer runs its handler and dismisses the toast', async () => {
+    const onKeep = vi.fn();
+    const user = userEvent.setup();
+    render(
+      <Toaster>
+        <MoveToastButton onKeep={onKeep} />
+      </Toaster>,
+    );
+    await user.click(button('Move'));
+    await user.click(button('Keep'));
+    await act(async () => {});
+    expect(onKeep).toHaveBeenCalledTimes(1);
+    expect(screen.queryByRole('group', { name: 'Info: Moved' })).not.toBeInTheDocument();
+  });
+
+  it('preventDefault() in the Button’s onClick keeps the toast', async () => {
+    const onKeep = vi.fn((event: React.MouseEvent<HTMLButtonElement>) => event.preventDefault());
+    const user = userEvent.setup();
+    render(
+      <Toaster>
+        <MoveToastButton onKeep={onKeep} />
+      </Toaster>,
+    );
+    await user.click(button('Move'));
+    await user.click(button('Keep'));
+    await act(async () => {});
+    expect(onKeep).toHaveBeenCalledTimes(1);
+    expect(toastGroup('Info: Moved')).toBeInTheDocument();
+  });
+});
+
+// Created at module scope, as an app's toasts module creates them (P3-08).
+const appToaster = createToaster();
+const updatesToaster = createToaster();
+/** Stands in for a router: the toast's link reads it from above the Toaster. */
+const RouteContext = React.createContext('#/');
+
+function DocumentLink() {
+  const href = React.useContext(RouteContext);
+  return <Link href={href}>Open</Link>;
+}
+
+/** A plain function outside React, as a query-cache callback or a server-event handler is. */
+function notifySaved(): string {
+  return appToaster.dispatchToast(
+    <Toast status="success">
+      <Toast.Title action={<DocumentLink />}>Saved</Toast.Title>
+    </Toast>,
+  );
+}
+
+describe('a module-scope toaster handle (spec §4.4 #5, P3-08)', () => {
+  it('shows, announces once and dismisses a toast dispatched from a plain function; its content reads context from above the Toaster', async () => {
+    render(
+      <RouteContext.Provider value="#/documents/42">
+        <Toaster toaster={appToaster}>
+          <p>App</p>
+        </Toaster>
+      </RouteContext.Provider>,
+    );
+    let id = '';
+    act(() => {
+      id = notifySaved();
+    });
+    expect(id).not.toBe('');
+    const group = toastGroup('Success: Saved');
+    expect(within(group).getByRole('link', { name: 'Open' })).toHaveAttribute(
+      'href',
+      '#/documents/42',
+    );
+    const polite = politeMessages();
+    expect(polite.children).toHaveLength(1);
+    expect(polite).toHaveTextContent('Success: Saved Open');
+    await expectNoA11yViolations(document.body);
+
+    act(() => appToaster.dismissToast(id));
+    await act(async () => {});
+    expect(screen.queryByRole('group', { name: 'Success: Saved' })).not.toBeInTheDocument();
+  });
+
+  it('a Toaster bound to a second handle stays independent', async () => {
+    render(
+      <>
+        <Toaster toaster={appToaster}>
+          <p>App</p>
+        </Toaster>
+        <Toaster toaster={updatesToaster} position="top-start" aria-label="Updates" />
+      </>,
+    );
+    act(() => {
+      updatesToaster.dispatchToast({ title: 'Update installed', timeout: 0 });
+    });
+    const updates = toastRegion('Updates');
+    expect(
+      within(updates).getByRole('group', { name: 'Info: Update installed' }),
+    ).toBeInTheDocument();
+    expect(within(toastRegion()).queryByRole('group')).toBeNull();
+
+    act(() => appToaster.dismissAllToasts());
+    await act(async () => {});
+    expect(
+      within(updates).getByRole('group', { name: 'Info: Update installed' }),
+    ).toBeInTheDocument();
+
+    act(() => updatesToaster.dismissAllToasts());
+    await act(async () => {});
+    expect(within(updates).queryByRole('group')).toBeNull();
+  });
+});
+
+describe('toasts and a modal Dialog: the shortcut and a tooltip (Phase 3 review focus)', () => {
+  it('the focus shortcut focuses the newest toast; Escape returns focus into the Dialog, which stays open', async () => {
+    const onOpenChange = vi.fn();
+    const user = userEvent.setup();
+    render(
+      <Toaster
+        shortcuts={{
+          focus: (event) => event.altKey && event.shiftKey && event.code === 'KeyN',
+        }}
+      >
+        <Dialog open onOpenChange={onOpenChange}>
+          <Dialog.Content title="Settings">
+            <NotifyButton />
+          </Dialog.Content>
+        </Dialog>
+      </Toaster>,
+    );
+    await user.click(button('Notify'));
+    await user.keyboard('{Alt>}{Shift>}N{/Shift}{/Alt}');
+    // The Dialog's focus trap decides about outside focus in a microtask.
+    await act(async () => {});
+    expect(toastGroup('Info: Saved')).toHaveFocus();
+
+    await user.keyboard('{Escape}');
+    await act(async () => {});
+    expect(screen.queryByRole('group', { name: 'Info: Saved' })).not.toBeInTheDocument();
+    expect(button('Notify')).toHaveFocus();
+    expect(screen.getByRole('dialog', { name: 'Settings' })).toBeInTheDocument();
+    expect(onOpenChange).not.toHaveBeenCalled();
+  });
+
+  function TooltipToastButton() {
+    const { dispatchToast } = useToastController();
+    return (
+      <Button
+        onClick={() =>
+          dispatchToast(
+            <Toast status="info">
+              <Toast.Title
+                action={
+                  <Tooltip content="Restores the message" openDelay={0}>
+                    <Button>Undo</Button>
+                  </Tooltip>
+                }
+              >
+                Moved to Archive
+              </Toast.Title>
+            </Toast>,
+          )
+        }
+      >
+        Archive
+      </Button>
+    );
+  }
+
+  it('over a modal Dialog, the first Escape hides only the tooltip, the next dismisses the toasts; the Dialog stays open', async () => {
+    const onOpenChange = vi.fn();
+    const user = userEvent.setup();
+    render(
+      <Toaster>
+        <Dialog open onOpenChange={onOpenChange}>
+          <Dialog.Content title="Mail">
+            <TooltipToastButton />
+          </Dialog.Content>
+        </Dialog>
+      </Toaster>,
+    );
+    await user.click(button('Archive'));
+    await user.tab();
+    expect(button('Undo')).toHaveFocus();
+    await waitFor(() => expect(tooltipSurface()).not.toBeNull());
+
+    await user.keyboard('{Escape}');
+    expect(tooltipSurface()).toBeNull();
+    expect(toastGroup('Info: Moved to Archive')).toBeInTheDocument();
+    expect(onOpenChange).not.toHaveBeenCalled();
+
+    await user.keyboard('{Escape}');
+    await act(async () => {});
+    expect(screen.queryByRole('group', { name: 'Info: Moved to Archive' })).not.toBeInTheDocument();
+    expect(screen.getByRole('dialog', { name: 'Mail' })).toBeInTheDocument();
+    expect(onOpenChange).not.toHaveBeenCalled();
+    expect(button('Archive')).toHaveFocus();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// 0.8: message bars, color and trees across components (spec §4.4 #6–#9)
+// ---------------------------------------------------------------------------
+
+describe('a MenuButton in MessageBar.Actions (spec §4.4 #6)', () => {
+  it('reads the severity, the title and the body once, then the actions, and opens the menu from the action', async () => {
+    const user = userEvent.setup();
+    render(
+      <MessageBar status="warning">
+        <MessageBar.Title>Update available</MessageBar.Title>A new version is ready to install.
+        <MessageBar.Actions>
+          <Menu>
+            <Menu.Trigger>
+              <MenuButton>Options</MenuButton>
+            </Menu.Trigger>
+            <Menu.Popover>
+              <Menu.Item>Install tonight</Menu.Item>
+              <Menu.Item>Remind me later</Menu.Item>
+            </Menu.Popover>
+          </Menu>
+        </MessageBar.Actions>
+      </MessageBar>,
+    );
+    const bar = screen.getByRole('alert');
+    // A live-region bar is not named by its title (spec D16): the title is read with the content.
+    expect(bar).not.toHaveAttribute('aria-labelledby');
+    expect(bar.textContent).toMatch(
+      /^Warning: Update available A new version is ready to install\.\s*Options$/,
+    );
+    await user.click(within(bar).getByRole('button', { name: 'Options' }));
+    expect(screen.getByRole('menu', { name: 'Options' })).toBeInTheDocument();
+    expect(menuitem('Install tonight')).toHaveFocus();
+    await expectNoA11yViolations(document.body);
+    await user.keyboard('{Escape}');
+    expect(screen.queryByRole('menu')).not.toBeInTheDocument();
+    expect(button('Options')).toHaveFocus();
+  });
+});
+
+describe('a composed ColorPicker in a Field (spec §4.4 #7)', () => {
+  function ThemeForm({ onSubmit }: { onSubmit: (data: FormData) => void }) {
+    return (
+      <form
+        aria-label="Theme"
+        onSubmit={(event) => {
+          event.preventDefault();
+          onSubmit(new FormData(event.currentTarget));
+        }}
+      >
+        <Field label="Accent color" error="Pick a darker color">
+          <ColorPicker name="accent" defaultValue="#808080">
+            <ColorArea />
+            <ColorSlider />
+            <ColorPicker.HexField />
+          </ColorPicker>
+        </Field>
+        <Button type="submit">Save</Button>
+        <Button type="reset">Reset</Button>
+      </form>
+    );
+  }
+
+  it('names the picker by the Field label and describes its hex input by the Field error', async () => {
+    render(<ThemeForm onSubmit={() => {}} />);
+    const picker = screen.getByRole('group', { name: 'Accent color' });
+    expect(
+      within(picker).getByRole('group', { name: 'Saturation and brightness' }),
+    ).toBeInTheDocument();
+    const hex = within(picker).getByRole('textbox', { name: 'Hex color value' });
+    expect(hex).toHaveAccessibleDescription(/Pick a darker color/);
+    expect(hex).toHaveAttribute('aria-invalid', 'true');
+    expect(within(picker).getByRole('slider', { name: 'Hue' })).toBeInTheDocument();
+    expect(duplicateIds()).toEqual([]);
+    await expectNoA11yViolations(document.body);
+  });
+
+  it('submits the hex color; a form reset restores the default and keeps the working hue', async () => {
+    const onSubmit = vi.fn<(data: FormData) => void>();
+    const user = userEvent.setup();
+    render(<ThemeForm onSubmit={onSubmit} />);
+    const hue = screen.getByRole('slider', { name: 'Hue' });
+    const saturation = screen.getByRole('slider', { name: 'Saturation' });
+    // The gray default has no hue of its own: the slider sets the working hue, the hex stays.
+    fireEvent.change(hue, { target: { value: '120' } });
+    await act(async () => {});
+    fireEvent.change(saturation, { target: { value: '50' } });
+    await act(async () => {});
+    expect(screen.getByRole('textbox', { name: 'Hex color value' })).toHaveValue('#408040');
+
+    await user.click(button('Save'));
+    expect(onSubmit).toHaveBeenCalledTimes(1);
+    expect(onSubmit.mock.calls[0][0].get('accent')).toBe('#408040');
+
+    await user.click(button('Reset'));
+    await act(async () => {});
+    expect(screen.getByRole('textbox', { name: 'Hex color value' })).toHaveValue('#808080');
+    expect(hue).toHaveValue('120');
+    expect(saturation).toHaveValue('0');
+  });
+
+  it('names a standalone ColorSlider by the Field label, not by its "Hue" default', () => {
+    render(
+      <Field label="Accent hue">
+        <ColorSlider />
+      </Field>,
+    );
+    expect(screen.getByRole('slider', { name: 'Accent hue' })).toBeInTheDocument();
+    expect(screen.queryByRole('slider', { name: 'Hue' })).toBeNull();
+  });
+
+  it('a required Field with an error: one control id, no duplicate ids, the area not described by the Field, one required input (review focus)', () => {
+    render(
+      <form aria-label="Theme">
+        <Field label="Accent color" hint="Used for links" error="Pick a darker color" required>
+          <ColorPicker name="accent">
+            <ColorArea />
+            <ColorSlider />
+            <AlphaSlider />
+            <ColorPicker.HexField />
+          </ColorPicker>
+        </Field>
+      </form>,
+    );
+    const picker = screen.getByRole('group', { name: 'Accent color' });
+    expect(duplicateIds()).toEqual([]);
+    const label = screen.getByText(/Accent color/, { selector: 'label' });
+    const controlId = label.getAttribute('for');
+    if (controlId) {
+      expect(document.querySelectorAll(`[id="${controlId}"]`)).toHaveLength(1);
+      expect(picker.id).toBe(controlId);
+    }
+    const area = within(picker).getByRole('group', { name: 'Saturation and brightness' });
+    for (const input of within(area).getAllByRole('slider', { hidden: true })) {
+      expect(input).not.toHaveAccessibleDescription(/Pick a darker color|Used for links/);
+    }
+    const required = picker.querySelectorAll('input[required]');
+    expect(required).toHaveLength(1);
+    expect(required[0]).toHaveAttribute('name', 'accent');
+    const form = screen.getByRole('form', { name: 'Theme' }) as HTMLFormElement;
+    expect(form.checkValidity()).toBe(true);
+  });
+});
+
+/** jsdom has no pointer capture: a capture flag per test, restored afterwards. */
+function stubPointerCapture() {
+  const proto = Element.prototype;
+  const names = ['setPointerCapture', 'releasePointerCapture', 'hasPointerCapture'] as const;
+  const previous = names.map((name) => Object.getOwnPropertyDescriptor(proto, name));
+  let captured = false;
+  const define = (name: (typeof names)[number], value: (...args: never[]) => unknown) =>
+    Object.defineProperty(proto, name, { configurable: true, writable: true, value });
+  define('setPointerCapture', () => {
+    captured = true;
+  });
+  define('releasePointerCapture', () => {
+    captured = false;
+  });
+  define('hasPointerCapture', () => captured);
+  onTestFinished(() => {
+    names.forEach((name, index) => {
+      const descriptor = previous[index];
+      if (descriptor) Object.defineProperty(proto, name, descriptor);
+      else Reflect.deleteProperty(proto, name);
+    });
+  });
+}
+
+describe('a ColorPicker in a Popover (spec §4.4 #8)', () => {
+  it('a drag on the area that ends outside the surface keeps the popover open; Escape closes it and returns focus', async () => {
+    stubPointerCapture();
+    const user = userEvent.setup();
+    render(
+      <Popover>
+        <Popover.Trigger>
+          <Button>Pick color</Button>
+        </Popover.Trigger>
+        <Popover.Content title="Color">
+          <ColorPicker defaultValue="#0f6cbd" />
+        </Popover.Content>
+      </Popover>,
+    );
+    await user.click(button('Pick color'));
+    const popover = screen.getByRole('dialog', { name: 'Color' });
+    const area = within(popover).getByRole('group', { name: 'Saturation and brightness' });
+    const field = area.querySelector<HTMLElement>(`.${colorAreaClassNames.field}`);
+    expect(field).not.toBeNull();
+    mockRect(area, { x: 0, y: 0, width: 200, height: 100 });
+    mockRect(field!, { x: 0, y: 0, width: 200, height: 100 });
+
+    // The press starts inside the surface; the move and the release happen far outside it (with
+    // pointer capture the browser keeps targeting the area).
+    await user.pointer([
+      { keys: '[MouseLeft>]', target: field!, coords: { clientX: 50, clientY: 50 } },
+      { target: field!, coords: { clientX: 500, clientY: 500 } },
+      { keys: '[/MouseLeft]', target: field!, coords: { clientX: 500, clientY: 500 } },
+    ]);
+    expect(screen.getByRole('dialog', { name: 'Color' })).toBeInTheDocument();
+    const saturation = within(area).getByRole('slider', { name: 'Saturation', hidden: true });
+    // The input without the Tab stop is aria-hidden here, and testing-library computes its name as
+    // '': match the raw aria-label instead.
+    const brightness = within(area).getByRole('slider', {
+      hidden: true,
+      name: (_name, element) => element.getAttribute('aria-label') === 'Brightness',
+    });
+    expect(saturation).toHaveValue('100');
+    expect(brightness).toHaveValue('0');
+    expect(saturation).toHaveFocus();
+
+    await user.keyboard('{Escape}');
+    expect(screen.queryByRole('dialog', { name: 'Color' })).not.toBeInTheDocument();
+    expect(button('Pick color')).toHaveFocus();
+  });
+});
+
+describe('a Tree with a MenuButton in its actions (spec §4.4 #9)', () => {
+  function FileActions({ name }: { name: string }) {
+    return (
+      <Menu>
+        <Menu.Trigger>
+          <MenuButton size="small" aria-label={`More actions for ${name}`} />
+        </Menu.Trigger>
+        <Menu.Popover>
+          <Menu.Item>Rename</Menu.Item>
+          <Menu.Item>Delete</Menu.Item>
+        </Menu.Popover>
+      </Menu>
+    );
+  }
+
+  function Files({ onItemSelect }: { onItemSelect?: (value: string) => void }) {
+    return (
+      <Tree aria-label="Files" navigationMode="treegrid" onItemSelect={onItemSelect}>
+        <Tree.Item value="report" actions={<FileActions name="Report.docx" />}>
+          Report.docx
+        </Tree.Item>
+        <Tree.Item value="notes">Notes.txt</Tree.Item>
+      </Tree>
+    );
+  }
+
+  it('ArrowRight reaches the action, ArrowDown opens its menu, Escape returns to it, ArrowLeft to the item', async () => {
+    const onItemSelect = vi.fn();
+    const user = userEvent.setup();
+    render(<Files onItemSelect={onItemSelect} />);
+    await user.tab();
+    const report = screen.getByRole('treeitem', { name: 'Report.docx' });
+    expect(report).toHaveFocus();
+    await user.keyboard('{ArrowRight}');
+    const more = button('More actions for Report.docx');
+    expect(more).toHaveFocus();
+    await user.keyboard('{ArrowDown}');
+    expect(screen.getByRole('menu', { name: 'More actions for Report.docx' })).toBeInTheDocument();
+    expect(menuitem('Rename')).toHaveFocus();
+    await expectNoA11yViolations(document.body);
+    await user.keyboard('{Escape}');
+    expect(screen.queryByRole('menu')).not.toBeInTheDocument();
+    expect(more).toHaveFocus();
+    await user.keyboard('{ArrowLeft}');
+    expect(report).toHaveFocus();
+    expect(onItemSelect).not.toHaveBeenCalled();
+  });
+
+  it('Enter on the action opens its menu and never activates the item', async () => {
+    const onItemSelect = vi.fn();
+    const user = userEvent.setup();
+    render(<Files onItemSelect={onItemSelect} />);
+    await user.tab();
+    await user.keyboard('{ArrowRight}');
+    await user.keyboard('{Enter}');
+    expect(screen.getByRole('menu', { name: 'More actions for Report.docx' })).toBeInTheDocument();
+    expect(onItemSelect).not.toHaveBeenCalled();
+    await user.keyboard('{Escape}');
+    expect(button('More actions for Report.docx')).toHaveFocus();
+  });
+
+  it('a checkbox Tree in a Dialog: Space toggles the item, Escape closes the Dialog', async () => {
+    const onOpenChange = vi.fn();
+    const onCheckedItemsChange = vi.fn();
+    const user = userEvent.setup();
+    render(
+      <Dialog open onOpenChange={onOpenChange}>
+        <Dialog.Content title="Choose folders">
+          <Tree
+            aria-label="Folders"
+            selectionMode="multiple"
+            onCheckedItemsChange={onCheckedItemsChange}
+          >
+            <Tree.Item value="docs">Documents</Tree.Item>
+            <Tree.Item value="music">Music</Tree.Item>
+          </Tree>
+        </Dialog.Content>
+      </Dialog>,
+    );
+    const docs = screen.getByRole('treeitem', { name: 'Documents' });
+    act(() => docs.focus());
+    await act(async () => {});
+    await user.keyboard(' ');
+    expect(docs).toHaveAttribute('aria-checked', 'true');
+    expect(onCheckedItemsChange).toHaveBeenCalledTimes(1);
+    expect(onCheckedItemsChange).toHaveBeenCalledWith(['docs'], {
+      value: 'docs',
+      checked: true,
+      event: expect.any(Event),
+    });
+    expect(screen.getByRole('dialog', { name: 'Choose folders' })).toBeInTheDocument();
+    await user.keyboard('{Escape}');
+    expect(onOpenChange).toHaveBeenCalledWith(false, expect.objectContaining({ reason: 'escape' }));
+  });
+
+  it('in a Dialog: Escape in the action’s menu closes only the menu; Space on the item toggles it; the next Escape closes the Dialog (review focus)', async () => {
+    const onOpenChange = vi.fn();
+    const user = userEvent.setup();
+    render(
+      <Dialog open onOpenChange={onOpenChange}>
+        <Dialog.Content title="Files">
+          <Tree aria-label="Files" selectionMode="multiple" navigationMode="treegrid">
+            <Tree.Item value="report" actions={<FileActions name="Report.docx" />}>
+              Report.docx
+            </Tree.Item>
+            <Tree.Item value="notes">Notes.txt</Tree.Item>
+          </Tree>
+        </Dialog.Content>
+      </Dialog>,
+    );
+    const report = screen.getByRole('treeitem', { name: 'Report.docx' });
+    act(() => report.focus());
+    await act(async () => {});
+    await user.keyboard('{ArrowRight}');
+    await user.keyboard('{ArrowDown}');
+    expect(screen.getByRole('menu', { name: 'More actions for Report.docx' })).toBeInTheDocument();
+
+    await user.keyboard('{Escape}');
+    expect(screen.queryByRole('menu')).not.toBeInTheDocument();
+    expect(button('More actions for Report.docx')).toHaveFocus();
+    expect(onOpenChange).not.toHaveBeenCalled();
+
+    await user.keyboard('{ArrowLeft}');
+    expect(report).toHaveFocus();
+    await user.keyboard(' ');
+    expect(report).toHaveAttribute('aria-checked', 'true');
+    expect(screen.queryByRole('menu')).not.toBeInTheDocument();
+
+    await user.keyboard('{Escape}');
+    expect(onOpenChange).toHaveBeenCalledTimes(1);
+    expect(onOpenChange).toHaveBeenCalledWith(false, expect.objectContaining({ reason: 'escape' }));
+  });
+});
+
+// ---------------------------------------------------------------------------
+// 0.8: stable class names across compounds, server-safe exports (spec §4.4 #10–#11)
+// ---------------------------------------------------------------------------
+
+describe('stable class names across compounds (spec §4.4 #10)', () => {
+  it('a Toolbar.ToggleButton carries the classes of Button, ToggleButton and its own, on its root and its icon', () => {
+    render(
+      <Toolbar aria-label="Formatting">
+        <Toolbar.ToggleButton name="format" value="bold" icon={<svg data-testid="bold-icon" />}>
+          Bold
+        </Toolbar.ToggleButton>
+      </Toolbar>,
+    );
+    expect(screen.getByRole('toolbar', { name: 'Formatting' })).toHaveClass(toolbarClassNames.root);
+    expect(button('Bold')).toHaveClass(
+      buttonClassNames.root,
+      toggleButtonClassNames.root,
+      toolbarToggleButtonClassNames.root,
+    );
+    expect(screen.getByTestId('bold-icon').parentElement).toHaveClass(
+      buttonClassNames.icon,
+      toggleButtonClassNames.icon,
+      toolbarToggleButtonClassNames.icon,
+    );
+  });
+
+  it('a SplitButton’s halves carry the Button class and their part classes', () => {
+    render(<SplitButton>Save</SplitButton>);
+    expect(screen.getByRole('group')).toHaveClass(splitButtonClassNames.root);
+    expect(button('Save')).toHaveClass(
+      buttonClassNames.root,
+      splitButtonClassNames.primaryActionButton,
+    );
+    expect(button('More options')).toHaveClass(
+      buttonClassNames.root,
+      splitButtonClassNames.menuButton,
+    );
+  });
+
+  it('Dialog.Content’s close button and title heading carry their classes', () => {
+    render(
+      <Dialog open onOpenChange={() => {}}>
+        <Dialog.Content title="Settings">Body</Dialog.Content>
+      </Dialog>,
+    );
+    const dialog = screen.getByRole('dialog', { name: 'Settings' });
+    expect(dialog).toHaveClass(dialogContentClassNames.root);
+    expect(within(dialog).getByRole('heading', { name: 'Settings' })).toHaveClass(
+      dialogTitleClassNames.root,
+    );
+    expect(within(dialog).getByRole('button', { name: 'Close' })).toHaveClass(
+      buttonClassNames.root,
+      dialogContentClassNames.closeButton,
+    );
+  });
+
+  it('Persona’s built-in Avatar carries the Avatar classes and the Persona part class', () => {
+    const { container } = render(<Persona name="Ada Lovelace" secondaryText="Engineer" />);
+    expect(container.firstElementChild).toHaveClass(personaClassNames.root);
+    const avatar = container.querySelector(`.${personaClassNames.avatar}`);
+    expect(avatar).not.toBeNull();
+    expect(avatar).toHaveClass(avatarClassNames.root, avatarClassNames.visual);
+  });
+
+  it('a Menu in a toast carries both components’ classes', async () => {
+    const user = userEvent.setup();
+    render(
+      <Toaster>
+        <UploadToastButton />
+      </Toaster>,
+    );
+    await user.click(button('Upload'));
+    expect(toastRegion()).toHaveClass(toasterClassNames.root);
+    const group = toastGroup('Success: File uploaded');
+    expect(group).toHaveClass(toasterClassNames.toast);
+    const label = within(group).getByText('File uploaded');
+    expect(label).toHaveClass(toastTitleClassNames.label);
+    expect(label.closest(`.${toastTitleClassNames.root}`)).not.toBeNull();
+    expect(label.closest(`.${toastClassNames.root}`)).not.toBeNull();
+    const more = button('More');
+    expect(more).toHaveClass(buttonClassNames.root, menuButtonClassNames.root);
+    expect(more.closest(`.${toastTitleClassNames.action}`)).not.toBeNull();
+    await user.click(more);
+    expect(screen.getByRole('menu', { name: 'More' })).toHaveClass(menuPopoverClassNames.root);
+    expect(menuitem('Open file')).toHaveClass(menuItemClassNames.root);
+  });
+});
+
+/** Created at module scope, as an app's toasts module creates it (P3-08). */
+const pageToaster = createToaster();
+
+describe('server-safe 0.8 exports in a server render (spec §4.4 #11)', () => {
+  /** A Server Component that styles app markup with a class-name constant (no client code). */
+  function StyleNote() {
+    return <p data-selector={`.${buttonClassNames.root}`}>Buttons</p>;
+  }
+
+  it('a Server Component reads a class-name constant from the entry: a plain string that Button renders first', () => {
+    const html = renderToString(
+      <>
+        <StyleNote />
+        <Button>Save</Button>
+      </>,
+    );
+    expect(typeof buttonClassNames.root).toBe('string');
+    expect(html).toContain(`data-selector=".${buttonClassNames.root}"`);
+    expect(html).toMatch(new RegExp(`<button[^>]* class="${buttonClassNames.root}[ "]`));
+  });
+
+  it('a page whose module created a toaster handle renders no toast on the server; the hydrated Toaster shows the handle’s toasts', async () => {
+    const tree = (
+      <Toaster toaster={pageToaster}>
+        <p>Page</p>
+      </Toaster>
+    );
+    const html = renderToString(tree);
+    expect(html).toContain('Page');
+    expect(html).not.toContain('role="group"');
+    expect(findDanglingIdRefsInHtml(html)).toEqual([]);
+
+    const container = document.createElement('div');
+    container.innerHTML = html;
+    document.body.appendChild(container);
+    let root: Root | undefined;
+    const error = vi.spyOn(console, 'error');
+    try {
+      await act(async () => {
+        root = hydrateRoot(container, tree);
+      });
+      expect(error).not.toHaveBeenCalled();
+      act(() => {
+        pageToaster.dispatchToast({ title: 'Welcome back', timeout: 0 });
+      });
+      expect(screen.getByRole('group', { name: 'Info: Welcome back' })).toBeInTheDocument();
+      act(() => pageToaster.dismissAllToasts());
+      await act(async () => {});
+      expect(screen.queryByRole('group', { name: 'Info: Welcome back' })).toBeNull();
+    } finally {
+      act(() => root?.unmount());
+      container.remove();
+      error.mockRestore();
+    }
   });
 });

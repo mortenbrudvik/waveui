@@ -1,6 +1,7 @@
 import * as React from 'react';
 import { cn } from '../../lib/cn';
 import { joinIds } from '../../lib/aria';
+import { inputClassNames } from '../../lib/classNames';
 import { resolveDeprecatedProp } from '../../lib/dev';
 import { renderSlot, slotRendersContent } from '../../lib/slot';
 import {
@@ -59,12 +60,16 @@ function isAriaValid(ariaInvalid: React.AriaAttributes['aria-invalid']): boolean
  * marked invalid and no message is rendered or referenced (ARIA: an error message of a valid
  * control is hidden).
  *
+ * `partClassName` is the host's stable `errorMessage` class, first in the message's classes
+ * (Input, Select and Textarea each pass their own).
+ *
  * @internal Not exported from the package.
  */
 export function useControlErrorMessage(
   error: string | boolean | undefined,
   errorMessageProps: InputErrorMessageProps | undefined,
   consumerAriaInvalid?: React.AriaAttributes['aria-invalid'],
+  partClassName?: string,
 ): ControlErrorMessage {
   const field = useFieldContext();
   const generatedId = useId('error');
@@ -81,7 +86,7 @@ export function useControlErrorMessage(
       role="alert"
       {...messageRest}
       id={messageId}
-      className={cn('mt-1 block text-caption-1 text-error', messageClassName)}
+      className={cn(partClassName, 'mt-1 block text-caption-1 text-error', messageClassName)}
     >
       {error}
     </span>
@@ -215,6 +220,7 @@ export const Input = ({
     error,
     errorMessageProps,
     ariaInvalid,
+    inputClassNames.errorMessage,
   );
   const fieldProps = useFieldControl(
     {
@@ -272,6 +278,7 @@ export const Input = ({
         data-size={size}
         data-appearance={appearance}
         className={cn(
+          inputClassNames.root,
           'inline-flex w-full items-center',
           inputHeightClasses[size],
           inputTextClasses[size],
@@ -285,10 +292,16 @@ export const Input = ({
           className,
         )}
       >
-        {hasBefore && renderSlot(contentBefore, 'span', cn('shrink-0', SLOT_PADDING[size].before))}
+        {hasBefore &&
+          renderSlot(
+            contentBefore,
+            'span',
+            cn(inputClassNames.contentBefore, 'shrink-0', SLOT_PADDING[size].before),
+          )}
         <input
           ref={ref}
           className={cn(
+            inputClassNames.input,
             'h-full w-full min-w-0 bg-transparent',
             SLOT_PADDING[size].input,
             inputTextClasses[size],
@@ -300,7 +313,12 @@ export const Input = ({
           {...inputProps}
           size={nativeSize}
         />
-        {hasAfter && renderSlot(contentAfter, 'span', cn('shrink-0', SLOT_PADDING[size].after))}
+        {hasAfter &&
+          renderSlot(
+            contentAfter,
+            'span',
+            cn(inputClassNames.contentAfter, 'shrink-0', SLOT_PADDING[size].after),
+          )}
       </span>
     );
   } else {
@@ -310,6 +328,8 @@ export const Input = ({
         data-size={size}
         data-appearance={appearance}
         className={cn(
+          inputClassNames.root,
+          inputClassNames.input,
           inputHeightClasses[size],
           'w-full',
           inputPaddingClasses[size],

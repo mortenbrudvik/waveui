@@ -2,6 +2,7 @@ import * as React from 'react';
 import { flushSync } from 'react-dom';
 import { cn } from '../../lib/cn';
 import { focusableDisabledProps, joinIds, preventIfDisabled } from '../../lib/aria';
+import { datePickerClassNames } from '../../lib/classNames';
 import { composeEventHandlers } from '../../lib/composeEventHandlers';
 import { warnDeprecated, warnOnce } from '../../lib/dev';
 import { getArrowIntent, getDirection } from '../../lib/direction';
@@ -808,7 +809,7 @@ export const DatePicker = (props: DatePickerProps) => {
       data-appearance={appearance}
       {...rest}
       ref={ref}
-      className={cn('relative inline-flex flex-col', className)}
+      className={cn(datePickerClassNames.root, 'relative inline-flex flex-col', className)}
     >
       <div ref={setReference} className="relative flex items-center">
         <input
@@ -835,6 +836,7 @@ export const DatePicker = (props: DatePickerProps) => {
           autoFocus={autoFocus}
           tabIndex={tabIndex}
           className={cn(
+            datePickerClassNames.input,
             inputHeightClasses[size],
             'w-full',
             inputPaddingClasses[size],
@@ -855,6 +857,7 @@ export const DatePicker = (props: DatePickerProps) => {
             onMouseDown={handleClearMouseDown}
             onClick={handleClear}
             className={cn(
+              datePickerClassNames.clearButton,
               pickerIconButtonClasses(size, appearance),
               pickerButtonOffset(size, 2),
               focusRing,
@@ -874,6 +877,7 @@ export const DatePicker = (props: DatePickerProps) => {
           disabled={disabled || readOnly}
           onClick={handleToggle}
           className={cn(
+            datePickerClassNames.openCalendarButton,
             pickerIconButtonClasses(size, appearance),
             pickerButtonOffset(size, 1),
             focusRing,
@@ -884,7 +888,11 @@ export const DatePicker = (props: DatePickerProps) => {
         </button>
       </div>
       {showOwnError && (
-        <p id={errorId} role="alert" className="mt-1 text-caption-1 text-error">
+        <p
+          id={errorId}
+          role="alert"
+          className={cn(datePickerClassNames.errorMessage, 'mt-1 text-caption-1 text-error')}
+        >
           {errorMessage}
         </p>
       )}
@@ -908,20 +916,37 @@ export const DatePicker = (props: DatePickerProps) => {
             {...floatingProps}
             data-state="open"
             onKeyDown={handleDialogKeyDown}
-            className="rounded-md border border-border bg-background p-3 text-foreground shadow-16"
+            className={cn(
+              datePickerClassNames.surface,
+              'rounded-md border border-border bg-background p-3 text-foreground shadow-16',
+            )}
           >
-            <div className="mb-2 flex items-center justify-between gap-2">
+            <div
+              className={cn(
+                datePickerClassNames.header,
+                'mb-2 flex items-center justify-between gap-2',
+              )}
+            >
               <button
                 type="button"
                 aria-label={labels?.previousMonth ?? 'Previous month'}
                 aria-controls={gridId}
                 {...focusableDisabledProps(previousDisabled)}
                 onClick={preventIfDisabled(previousDisabled, () => navigateMonth(-1))}
-                className={cn(NAV_BUTTON_CLASSES, focusRing, disabledStyles)}
+                className={cn(
+                  datePickerClassNames.previousMonthButton,
+                  NAV_BUTTON_CLASSES,
+                  focusRing,
+                  disabledStyles,
+                )}
               >
                 <ChevronLeftIcon className="wave-rtl:-scale-x-100" />
               </button>
-              <h2 id={headingId} aria-live="polite" className="text-body-1 font-semibold">
+              <h2
+                id={headingId}
+                aria-live="polite"
+                className={cn(datePickerClassNames.heading, 'text-body-1 font-semibold')}
+              >
                 {formatMonthYear(viewMonth, locale)}
               </h2>
               <button
@@ -930,7 +955,12 @@ export const DatePicker = (props: DatePickerProps) => {
                 aria-controls={gridId}
                 {...focusableDisabledProps(nextDisabled)}
                 onClick={preventIfDisabled(nextDisabled, () => navigateMonth(1))}
-                className={cn(NAV_BUTTON_CLASSES, focusRing, disabledStyles)}
+                className={cn(
+                  datePickerClassNames.nextMonthButton,
+                  NAV_BUTTON_CLASSES,
+                  focusRing,
+                  disabledStyles,
+                )}
               >
                 <ChevronRightIcon className="wave-rtl:-scale-x-100" />
               </button>
@@ -941,7 +971,7 @@ export const DatePicker = (props: DatePickerProps) => {
               role="grid"
               aria-labelledby={headingId}
               onKeyDown={handleGridKeyDown}
-              className="border-collapse"
+              className={cn(datePickerClassNames.grid, 'border-collapse')}
             >
               <thead>
                 <tr>
@@ -951,7 +981,10 @@ export const DatePicker = (props: DatePickerProps) => {
                       scope="col"
                       abbr={weekday.long}
                       aria-label={weekday.long}
-                      className="h-8 w-8 text-center text-caption-1 font-normal text-muted-foreground"
+                      className={cn(
+                        datePickerClassNames.weekday,
+                        'h-8 w-8 text-center text-caption-1 font-normal text-muted-foreground',
+                      )}
                     >
                       <span aria-hidden="true">{weekday.short}</span>
                       <span className="sr-only">{weekday.long}</span>
@@ -989,6 +1022,7 @@ export const DatePicker = (props: DatePickerProps) => {
                             onFocus={() => handleDayFocus(day)}
                             onClick={() => selectDate(day)}
                             className={cn(
+                              datePickerClassNames.day,
                               DAY_CLASSES,
                               focusRing,
                               disabledStyles,

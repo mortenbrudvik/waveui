@@ -1,6 +1,7 @@
 import * as React from 'react';
 import { flattenChildren, isElementOfType } from '../../lib/children';
 import { cn } from '../../lib/cn';
+import { avatarGroupClassNames } from '../../lib/classNames';
 import { warnOnce } from '../../lib/dev';
 import { getTabbableElements } from '../../lib/focus';
 import { isInsideLayerTree } from '../../lib/layers';
@@ -240,12 +241,16 @@ export const AvatarGroup = ({
       aria-label={ariaLabel}
       aria-labelledby={ariaLabelledBy}
       {...props}
-      className={cn('inline-flex items-center', className)}
+      className={cn(avatarGroupClassNames.root, 'inline-flex items-center', className)}
     >
       {visible.map(({ key, node }, i) => (
         <span
           key={key}
-          className={cn('inline-flex rounded-full ring-2 ring-background', i > 0 && '-ms-2')}
+          className={cn(
+            avatarGroupClassNames.item,
+            'inline-flex rounded-full ring-2 ring-background',
+            i > 0 && '-ms-2',
+          )}
         >
           {node}
         </span>
@@ -259,6 +264,7 @@ export const AvatarGroup = ({
           aria-expanded={isOpen}
           aria-controls={isOpen ? popupId : undefined}
           className={cn(
+            avatarGroupClassNames.overflowButton,
             'inline-flex shrink-0 cursor-pointer items-center justify-center rounded-full border-0 p-0 font-semibold',
             'bg-muted text-muted-foreground ring-2 ring-background',
             'not-disabled:not-aria-disabled:hover:bg-subtle-pressed',
@@ -282,14 +288,15 @@ export const AvatarGroup = ({
             data-state="open"
             {...floatingProps}
             className={cn(
+              avatarGroupClassNames.surface,
               'min-w-32 max-w-xs rounded-md border border-border bg-background p-2 text-body-1 text-foreground shadow-16',
               focusRing,
             )}
             onKeyDown={handleSurfaceKeyDown}
           >
-            <ul className="m-0 flex list-none flex-col gap-1 p-0">
+            <ul className={cn(avatarGroupClassNames.list, 'm-0 flex list-none flex-col gap-1 p-0')}>
               {hidden.map(({ key, node }) => (
-                <li key={key} className="px-1 py-0.5">
+                <li key={key} className={cn(avatarGroupClassNames.listItem, 'px-1 py-0.5')}>
                   {getMemberName(node) ?? (rendersUnnamed(node) ? unnamedMemberLabel : node)}
                 </li>
               ))}

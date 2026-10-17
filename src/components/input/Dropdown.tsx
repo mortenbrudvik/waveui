@@ -1,4 +1,5 @@
 import * as React from 'react';
+import { dropdownClassNames } from '../../lib/classNames';
 import { cn } from '../../lib/cn';
 import { composeEventHandlers } from '../../lib/composeEventHandlers';
 import { warnDeprecated } from '../../lib/dev';
@@ -271,7 +272,7 @@ const DropdownRoot = (props: DropdownProps) => {
       data-appearance={appearance}
       {...rest}
       ref={rootMergedRef}
-      className={cn('relative inline-flex flex-col', className)}
+      className={cn(dropdownClassNames.root, 'relative inline-flex flex-col', className)}
     >
       <div className="relative flex items-center">
         <button
@@ -291,6 +292,7 @@ const DropdownRoot = (props: DropdownProps) => {
           onFocus={onFocus}
           onBlur={onBlur}
           className={cn(
+            dropdownClassNames.button,
             // Every padding is set here (C-NATIVE), not left to an app-wide `button` rule. The end
             // padding keeps the text clear of the chevron (and of the clear button while it shows).
             'relative flex w-full items-center justify-between py-0 text-start',
@@ -305,12 +307,19 @@ const DropdownRoot = (props: DropdownProps) => {
             invalidLook && inputInvalid,
           )}
         >
-          <span className={cn('truncate', !displayText && 'text-muted-foreground')}>
+          <span
+            className={cn(
+              dropdownClassNames.value,
+              'truncate',
+              !displayText && 'text-muted-foreground',
+            )}
+          >
             {displayText || placeholder}
           </span>
           <ChevronDownIcon
             size={pickerGlyphSize(size, 'chevron')}
             className={cn(
+              dropdownClassNames.expandIcon,
               'absolute transition-transform motion-reduce:transition-none',
               size === 'small' ? 'end-2' : 'end-3',
               expanded && 'rotate-180',
@@ -326,6 +335,7 @@ const DropdownRoot = (props: DropdownProps) => {
             onMouseDown={(event) => event.preventDefault()}
             onClick={handleClear}
             className={cn(
+              dropdownClassNames.clearButton,
               pickerIconButtonClasses(size, appearance),
               pickerButtonOffset(size, 2),
               focusRing,
@@ -343,6 +353,8 @@ const DropdownRoot = (props: DropdownProps) => {
         floatingProps={floatingProps}
         open={open}
         expanded={expanded}
+        listboxClassName={dropdownClassNames.listbox}
+        surfaceClassName={dropdownClassNames.surface}
         aria-label={fieldProps['aria-label']}
         aria-labelledby={listLabelledBy}
       >

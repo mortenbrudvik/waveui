@@ -1,4 +1,5 @@
 import * as React from 'react';
+import { ratingClassNames, ratingDisplayClassNames } from '../../lib/classNames';
 import { cn } from '../../lib/cn';
 import { composeEventHandlers } from '../../lib/composeEventHandlers';
 import { warnDeprecated, warnOnce } from '../../lib/dev';
@@ -410,6 +411,7 @@ const RatingRoot = ({
       aria-disabled={disabled || undefined}
       data-color={resolvedColor}
       className={cn(
+        ratingClassNames.root,
         'relative inline-flex items-center gap-0.5',
         disabled && 'pointer-events-none opacity-50',
         className,
@@ -538,7 +540,7 @@ const RatingDisplayRoot = ({
       aria-label={name}
       data-compact={compact ? '' : undefined}
       data-color={resolvedColor}
-      className={cn('inline-flex items-center gap-0.5', className)}
+      className={cn(ratingDisplayClassNames.root, 'inline-flex items-center gap-0.5', className)}
       {...rest}
     >
       {compact ? (
@@ -549,10 +551,20 @@ const RatingDisplayRoot = ({
         </RatingContext.Provider>
       )}
       {showText && (
-        <span className={cn('ms-1 font-semibold text-foreground', textSize)}>{formattedValue}</span>
+        <span
+          className={cn(
+            ratingDisplayClassNames.value,
+            'ms-1 font-semibold text-foreground',
+            textSize,
+          )}
+        >
+          {formattedValue}
+        </span>
       )}
       {formattedCount !== undefined && (
-        <span className={cn('ms-1 text-muted-foreground', textSize)}>({formattedCount})</span>
+        <span className={cn(ratingDisplayClassNames.count, 'ms-1 text-muted-foreground', textSize)}>
+          ({formattedCount})
+        </span>
       )}
     </div>
   );

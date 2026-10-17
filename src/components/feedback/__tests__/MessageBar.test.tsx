@@ -8,6 +8,7 @@ import { MessageBar } from '../MessageBar';
 import type { MessageBarProps } from '../MessageBar';
 import { StatusIcon, StatusText } from '../MessageBar.status';
 import { Button } from '../../button/Button';
+import { messageBarClassNames } from '../../../lib/classNames';
 import type { Slot } from '../../../lib/types';
 import {
   asClientReference,
@@ -52,6 +53,46 @@ describe('MessageBar', () => {
 
   it('declares ref in the props interface (button-provider#27)', () => {
     expectTypeOf<MessageBarProps['ref']>().toEqualTypeOf<React.Ref<HTMLDivElement> | undefined>();
+  });
+
+  describe('layout (P3-04)', () => {
+    it('renders data-layout="multiline" by default and keeps the 0.7 markup of a bar without actions', () => {
+      render(
+        <MessageBar onDismiss={() => {}} data-testid="bar">
+          Msg
+        </MessageBar>,
+      );
+      const bar = screen.getByTestId('bar');
+      expect(bar).toHaveAttribute('data-layout', 'multiline');
+      expect(Array.from(bar.children, (child) => child.tagName)).toEqual(['SPAN', 'DIV', 'BUTTON']);
+      expect(bar.children[1]).toHaveClass('min-w-0', 'flex-1', 'text-body-1');
+      expect(bar.children[1]).not.toHaveClass('whitespace-nowrap');
+    });
+
+    it('an explicit singleline bar without actions renders the same markup', () => {
+      const { container, rerender } = render(<MessageBar onDismiss={() => {}}>Msg</MessageBar>);
+      const auto = container.innerHTML.replace('data-layout="multiline"', '');
+      rerender(
+        <MessageBar layout="singleline" onDismiss={() => {}}>
+          Msg
+        </MessageBar>,
+      );
+      expect(screen.getByRole('status')).toHaveAttribute('data-layout', 'singleline');
+      expect(container.innerHTML.replace('data-layout="singleline"', '')).toBe(auto);
+    });
+
+    it('types layout as a union', () => {
+      expectTypeOf<MessageBarProps['layout']>().toEqualTypeOf<
+        'auto' | 'singleline' | 'multiline' | undefined
+      >();
+      const elements = [
+        // @ts-expect-error `wrap` is not a layout
+        <MessageBar key="1" layout="wrap">
+          Msg
+        </MessageBar>,
+      ];
+      expect(elements).toHaveLength(1);
+    });
   });
 
   it('renders children', () => {
@@ -168,6 +209,24 @@ describe('MessageBar', () => {
       );
       expect(screen.getByTestId('bar').querySelector('[aria-hidden="true"]')).toBeNull();
     });
+
+    it.each([
+      ['null', null],
+      ['false', false],
+      ['an empty string', ''],
+    ] as const)(
+      'icon set to %s renders no icon element at all (status icon rule)',
+      (_name, icon) => {
+        render(
+          <MessageBar icon={icon as Slot<'span'>} data-testid="bar">
+            Msg
+          </MessageBar>,
+        );
+        const bar = screen.getByTestId('bar');
+        expect(bar.getElementsByClassName(messageBarClassNames.icon)).toHaveLength(0);
+        expect(bar.querySelector('[aria-hidden="true"]')).toBeNull();
+      },
+    );
   });
 
   describe('status tokens (button-provider#3)', () => {
@@ -1318,6 +1377,20 @@ describe('MessageBar', () => {
   describe('internal status building blocks (feedback-navigation#4)', () => {
     testDisplayName(StatusIcon, 'StatusIcon');
     testDisplayName(StatusText, 'StatusText');
+
+    // The bar and the toast container pass the id from Fluent parity phase 3 on (P3-04, P3-02).
+    it('renders its id on the visually hidden text, so a labelled bar or toast can name it', () => {
+      render(<StatusText label="Warning:" id="status-text-id" />);
+      const text = document.getElementById('status-text-id');
+      expect(text).toHaveClass('sr-only');
+      expect(text?.textContent).toBe('Warning: ');
+    });
+
+    it('renders nothing for an empty label, so an id never names an empty element', () => {
+      const { container } = render(<StatusText label="" id="status-text-id" />);
+      expect(container).toBeEmptyDOMElement();
+      expect(document.getElementById('status-text-id')).toBeNull();
+    });
   });
 
   describe('forms (button-provider#1)', () => {

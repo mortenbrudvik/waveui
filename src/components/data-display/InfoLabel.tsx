@@ -1,5 +1,6 @@
 import * as React from 'react';
 import { cn } from '../../lib/cn';
+import { infoLabelClassNames } from '../../lib/classNames';
 import { resolveDeprecatedProp } from '../../lib/dev';
 import { useId } from '../../hooks/useId';
 import { markFieldLabel } from '../input/fieldLabel';
@@ -79,7 +80,11 @@ export const InfoLabel = ({
   const labelId = id || generatedLabelId;
   const buttonId = useId('info-label-button');
   return (
-    <span ref={ref} className={cn('inline-flex items-center gap-0', className)} {...rest}>
+    <span
+      ref={ref}
+      className={cn(infoLabelClassNames.root, 'inline-flex items-center gap-0', className)}
+      {...rest}
+    >
       <Label
         id={labelId}
         htmlFor={htmlFor}
@@ -92,6 +97,7 @@ export const InfoLabel = ({
       </Label>
       <InfoButton
         id={buttonId}
+        className={infoLabelClassNames.infoButton}
         info={info}
         size={size}
         openOnHover={openOnHover}

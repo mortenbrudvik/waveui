@@ -5,6 +5,8 @@ import { act, cleanup, render, screen } from '@testing-library/react';
 import type { UserEvent } from '@testing-library/user-event';
 import { axe as defaultVitestAxe, configureAxe } from 'vitest-axe';
 import { Button } from '../components/button/Button';
+import { ToggleButton } from '../components/button/ToggleButton';
+import { RadioGroup, RadioItem } from '../components/input/RadioGroup';
 import { useWaveTheme } from '../components/provider/WaveProvider';
 import { Portal } from '../components/portal/Portal';
 import { DismissLayerProvider, useDismiss } from '../hooks/useDismiss';
@@ -13,6 +15,7 @@ import { useModalIsolation } from '../hooks/useModalIsolation';
 import { useRestoreFocus } from '../hooks/useRestoreFocus';
 import { useScrollLock } from '../hooks/useScrollLock';
 import { getElementType } from '../lib/children';
+import * as registry from '../lib/classNames';
 import { cn } from '../lib/cn';
 import { composeEventHandlers } from '../lib/composeEventHandlers';
 import { warnOnce } from '../lib/dev';
@@ -25,10 +28,12 @@ import {
   assertOverlayStateReleased,
   axe,
   createOverlayTestWrapper,
+  DISPLAY_NAME_ALIASES,
   expectNoA11yViolations,
   expectThrows,
   findDanglingIdRefs,
   findDanglingIdRefsInHtml,
+  getStableClassNames,
   installResizeObserverMock,
   mockAnimations,
   mockMatchMedia,
@@ -44,6 +49,7 @@ import {
   testNoImplicitSubmit,
   testRestSpread,
   testSystemProps,
+  VARIANT_BASES,
 } from '../test-utils';
 import type { TestSystemPropsConfig } from '../test-utils';
 import { resolveFieldTestContext } from '../test-utils-field';
@@ -143,6 +149,17 @@ const ReplacingBox = ({ className, ...rest }: BoxProps) => (
 /** Bug: the consumer class goes first, so tailwind-merge drops a conflicting user class. */
 const UserFirstBox = ({ className, ...rest }: BoxProps) => (
   <div className={cn(className, 'flex p-4')} {...rest} />
+);
+
+/** Bug: claims Button's display name, but its className target carries no stable class. */
+const UnclassedButton = ({ className, ...rest }: React.ButtonHTMLAttributes<HTMLButtonElement>) => (
+  <button type="button" className={cn('px-3', className)} {...rest} />
+);
+UnclassedButton.displayName = 'Button';
+
+/** RadioGroup.Item needs its group. */
+const OneChoiceGroup = ({ children }: { children: React.ReactNode }) => (
+  <RadioGroup aria-label="Choice">{children}</RadioGroup>
 );
 
 interface CheckProps extends React.HTMLAttributes<HTMLSpanElement> {
@@ -836,6 +853,108 @@ describe('testClassName', () => {
     await expect(
       run(pick(tests, 'lets a conflicting consumer className win over the default')),
     ).rejects.toThrow(/gap-2/);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Stable class names (Fluent parity phase 3, P3-00)
+// ---------------------------------------------------------------------------
+
+const STABLE_CASE = 'carries its stable classes on the element that receives className';
+
+describe('getStableClassNames', () => {
+  it('finds the constant of a display name by camel case', () => {
+    expect(getStableClassNames('CardHeader')).toEqual({
+      constant: 'cardHeaderClassNames',
+      root: 'wave-card-header',
+      carries: ['wave-card-header'],
+    });
+    expect(getStableClassNames('WaveProvider')).toEqual({
+      constant: 'waveProviderClassNames',
+      root: 'wave-root',
+      carries: ['wave-root'],
+    });
+  });
+
+  it('finds a display name that differs from its flat name through DISPLAY_NAME_ALIASES', () => {
+    expect(getStableClassNames('RadioItem')).toEqual({
+      constant: 'radioGroupItemClassNames',
+      root: 'wave-radio-group-item',
+      carries: ['wave-radio-group-item'],
+    });
+    expect(getStableClassNames('Step')?.constant).toBe('stepperStepClassNames');
+    expect(getStableClassNames('Tab')?.constant).toBe('tabListTabClassNames');
+    expect(getStableClassNames('TabPanel')?.constant).toBe('tabListPanelClassNames');
+    expect(getStableClassNames('TabPanels')?.constant).toBe('tabListPanelsClassNames');
+    expect(getStableClassNames('TableHead')?.constant).toBe('tableHeaderClassNames');
+    expect(getStableClassNames('TableHeadCell')?.constant).toBe('tableHeaderCellClassNames');
+  });
+
+  it("puts a variant's base roots before its own in carries (VARIANT_BASES)", () => {
+    expect(getStableClassNames('ToggleButton')?.carries).toEqual([
+      'wave-button',
+      'wave-toggle-button',
+    ]);
+    expect(getStableClassNames('ToolbarToggleButton')?.carries).toEqual([
+      'wave-button',
+      'wave-toggle-button',
+      'wave-toolbar-toggle-button',
+    ]);
+    expect(getStableClassNames('MenuItemCheckbox')?.carries).toEqual([
+      'wave-menu-item',
+      'wave-menu-item-checkbox',
+    ]);
+    expect(getStableClassNames('CounterBadge')?.carries).toEqual([
+      'wave-badge',
+      'wave-counter-badge',
+    ]);
+  });
+
+  it('knows no constant for internal components, contexts or an empty name', () => {
+    expect(getStableClassNames('MenuItemRow')).toBeUndefined();
+    expect(getStableClassNames('ToasterContext')).toBeUndefined();
+    expect(getStableClassNames('')).toBeUndefined();
+  });
+
+  it('points every alias, variant and base at a registry constant', () => {
+    const names = new Set(Object.keys(registry));
+    const unknown = [
+      ...Object.values(DISPLAY_NAME_ALIASES),
+      ...Object.keys(VARIANT_BASES),
+      ...Object.values(VARIANT_BASES).flat(),
+    ].filter((name) => !names.has(name));
+    expect(unknown).toEqual([]);
+  });
+});
+
+describe('testClassName: stable classes (P3-00)', () => {
+  it('registers the case only for a component whose displayName names a constant', () => {
+    expect(collect(() => testClassName(GoodBox)).map((t) => t.name)).not.toContain(STABLE_CASE);
+    expect(collect(() => testClassName(Button, { children: 'Save' })).map((t) => t.name)).toContain(
+      STABLE_CASE,
+    );
+  });
+
+  it('passes for Button, whose className lands next to wave-button', async () => {
+    const tests = collect(() => testClassName(Button, { children: 'Save' }));
+    await expect(run(pick(tests, STABLE_CASE))).resolves.toBeUndefined();
+  });
+
+  it('checks every class a variant carries (ToggleButton: wave-button and wave-toggle-button)', async () => {
+    const tests = collect(() => testClassName(ToggleButton, { children: 'Bold' }));
+    await expect(run(pick(tests, STABLE_CASE))).resolves.toBeUndefined();
+  });
+
+  it('checks where className lands, not where the rest props go (RadioGroup.Item: the label)', async () => {
+    const tests = collect(() =>
+      testClassName(RadioItem, { value: 'a', label: 'Alpha' }, { wrapper: OneChoiceGroup }),
+    );
+    await expect(run(pick(tests, STABLE_CASE))).resolves.toBeUndefined();
+  });
+
+  it('fails, naming the constant, when that element lacks a stable class', async () => {
+    const tests = collect(() => testClassName(UnclassedButton, { children: 'Save' }));
+    await expect(run(pick(tests, STABLE_CASE))).rejects.toThrow(/buttonClassNames\.root/);
   });
 });
 

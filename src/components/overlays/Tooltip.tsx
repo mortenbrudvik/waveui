@@ -1,6 +1,7 @@
 import * as React from 'react';
 import { cn } from '../../lib/cn';
 import { joinIds } from '../../lib/aria';
+import { tooltipClassNames } from '../../lib/classNames';
 import { resolveDeprecatedProp, warnOnce } from '../../lib/dev';
 import { composeEventHandlers } from '../../lib/composeEventHandlers';
 import { FOCUSABLE_SELECTOR, getFirstTabbable } from '../../lib/focus';
@@ -437,7 +438,7 @@ export const Tooltip = ({
     <span
       ref={wrapperElementRef}
       {...wrapperProps}
-      className={cn('inline-block', className)}
+      className={cn(tooltipClassNames.root, 'inline-block', className)}
       onMouseEnter={composeEventHandlers(onMouseEnter, showOnEnter)}
       onMouseLeave={composeEventHandlers(onMouseLeave, scheduleHide)}
       onMouseOver={composeEventHandlers(
@@ -458,7 +459,7 @@ export const Tooltip = ({
             aria-hidden="true"
             data-wave-tooltip-surface=""
             {...floatingProps}
-            className={cn(surfaceClasses, appearanceClasses[appearance])}
+            className={cn(tooltipClassNames.content, surfaceClasses, appearanceClasses[appearance])}
           >
             {content}
           </span>

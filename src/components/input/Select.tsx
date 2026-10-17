@@ -1,6 +1,7 @@
 import * as React from 'react';
 import { cn } from '../../lib/cn';
 import { joinIds } from '../../lib/aria';
+import { selectClassNames } from '../../lib/classNames';
 import { resolveDeprecatedProp } from '../../lib/dev';
 import {
   inputAppearanceClasses,
@@ -106,6 +107,7 @@ export const Select = ({
     error,
     errorMessageProps,
     ariaInvalid,
+    selectClassNames.errorMessage,
   );
   const fieldProps = useFieldControl(
     {
@@ -139,6 +141,7 @@ export const Select = ({
       data-size={size}
       data-appearance={appearance}
       className={cn(
+        selectClassNames.root,
         inputHeightClasses[size],
         'w-full appearance-none',
         inputTextClasses[size],

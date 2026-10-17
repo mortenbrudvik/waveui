@@ -88,7 +88,7 @@ describe('Tree', () => {
     ],
   });
 
-  testCompoundExposure(Tree, ['Item']);
+  testCompoundExposure(Tree, ['Item', 'ItemPersonaLayout']);
   testDisplayName(Tree.Item, 'TreeItem');
 
   it('exports Tree.Item under its flat name (C-COMPOUND)', () => {
@@ -99,6 +99,13 @@ describe('Tree', () => {
     render(<Tree aria-label="Files">{fileTree}</Tree>);
     const tree = screen.getByRole('tree', { name: 'Files' });
     expect(within(tree).getAllByRole('treeitem')).toHaveLength(3);
+  });
+
+  it('renders data-selection-mode="none" by default, and no aria-multiselectable (C-CLASS)', () => {
+    render(<Tree aria-label="Files">{fileTree}</Tree>);
+    const tree = screen.getByRole('tree', { name: 'Files' });
+    expect(tree).toHaveAttribute('data-selection-mode', 'none');
+    expect(tree).not.toHaveAttribute('aria-multiselectable');
   });
 
   it('expands nested items on click', async () => {

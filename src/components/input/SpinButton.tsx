@@ -1,4 +1,5 @@
 import * as React from 'react';
+import { spinButtonClassNames } from '../../lib/classNames';
 import { cn } from '../../lib/cn';
 import { composeEventHandlers } from '../../lib/composeEventHandlers';
 import { warnDeprecated, warnOnce } from '../../lib/dev';
@@ -693,6 +694,7 @@ export const SpinButton = (props: SpinButtonProps | SpinButtonAllowEmptyProps): 
       data-size={size}
       data-appearance={appearance}
       className={cn(
+        spinButtonClassNames.root,
         'relative inline-flex items-center',
         inputHeightClasses[size],
         inputTextClasses[size],
@@ -718,6 +720,7 @@ export const SpinButton = (props: SpinButtonProps | SpinButtonAllowEmptyProps): 
         disabled={!interactive || (current !== null && current <= min)}
         aria-label={labels?.decrement ?? 'Decrement'}
         className={cn(
+          spinButtonClassNames.decrementButton,
           stepButtonClass,
           SPIN_SIZE[size].button,
           appearance === 'outline' && 'border-e border-input',
@@ -766,6 +769,7 @@ export const SpinButton = (props: SpinButtonProps | SpinButtonAllowEmptyProps): 
         onKeyUp={onKeyUp}
         disabled={disabled}
         className={cn(
+          spinButtonClassNames.input,
           'h-full min-w-0 flex-auto border-none bg-transparent text-center text-foreground focus:outline-hidden disabled:cursor-not-allowed [appearance:textfield]',
           SPIN_SIZE[size].input,
           inputTextClasses[size],
@@ -785,6 +789,7 @@ export const SpinButton = (props: SpinButtonProps | SpinButtonAllowEmptyProps): 
         disabled={!interactive || (current !== null && current >= max)}
         aria-label={labels?.increment ?? 'Increment'}
         className={cn(
+          spinButtonClassNames.incrementButton,
           stepButtonClass,
           SPIN_SIZE[size].button,
           appearance === 'outline' && 'border-s border-input',

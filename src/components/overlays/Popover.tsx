@@ -1,5 +1,6 @@
 import * as React from 'react';
 import { cn } from '../../lib/cn';
+import { popoverContentClassNames } from '../../lib/classNames';
 import { isDev, reportMissingContext, warnOnce } from '../../lib/dev';
 import { slotRendersContent } from '../../lib/slot';
 import { composeEventHandlers } from '../../lib/composeEventHandlers';
@@ -954,6 +955,7 @@ export const PopoverContent = ({
           hover ? composeEventHandlers(onPointerLeave, hover.onPointerLeave) : onPointerLeave
         }
         className={cn(
+          popoverContentClassNames.root,
           'w-64 rounded-md border border-border bg-background p-4 text-body-1 font-normal text-foreground normal-case tracking-normal text-start shadow-4',
           className,
         )}
@@ -963,9 +965,13 @@ export const PopoverContent = ({
           side={placedSide}
           style={arrowStyles}
           data-wave-popover-arrow=""
+          className={popoverContentClassNames.beak}
         />
         {hasTitle && (
-          <h2 id={titleId} className="mb-2 text-subtitle-2 font-semibold">
+          <h2
+            id={titleId}
+            className={cn(popoverContentClassNames.title, 'mb-2 text-subtitle-2 font-semibold')}
+          >
             {title}
           </h2>
         )}

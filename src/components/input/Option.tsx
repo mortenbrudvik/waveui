@@ -1,4 +1,5 @@
 import * as React from 'react';
+import { optionClassNames, optionGroupClassNames } from '../../lib/classNames';
 import { cn } from '../../lib/cn';
 import { composeEventHandlers } from '../../lib/composeEventHandlers';
 import { CheckIcon } from '../../lib/icons';
@@ -175,10 +176,19 @@ function OptionImpl(props: OptionProps) {
       ref={optionRef}
       onClick={composeEventHandlers(onClick, selectOption)}
       onPointerMove={composeEventHandlers(onPointerMove, highlightOption)}
-      className={cn(OPTION_CLASSES, selected && forcedColors.selectedContainer, className)}
+      className={cn(
+        optionClassNames.root,
+        OPTION_CLASSES,
+        selected && forcedColors.selectedContainer,
+        className,
+      )}
     >
-      {showCheck && <CheckIcon className={cn('shrink-0', !selected && 'invisible')} />}
-      <span className="min-w-0 flex-1">{children ?? value}</span>
+      {showCheck && (
+        <CheckIcon
+          className={cn(optionClassNames.checkIcon, 'shrink-0', !selected && 'invisible')}
+        />
+      )}
+      <span className={cn(optionClassNames.content, 'min-w-0 flex-1')}>{children ?? value}</span>
     </li>
   );
 }
@@ -260,16 +270,19 @@ function OptionGroupImpl({ label, className, children, hidden, ref, ...rest }: O
       ref={ref}
       role="presentation"
       hidden={hidden || empty || undefined}
-      className={className}
+      className={cn(optionGroupClassNames.root, className)}
     >
       <div
         id={labelId}
         role="presentation"
-        className="px-3 py-1 text-caption-1 font-semibold text-muted-foreground"
+        className={cn(
+          optionGroupClassNames.label,
+          'px-3 py-1 text-caption-1 font-semibold text-muted-foreground',
+        )}
       >
         {label}
       </div>
-      <ul role="group" aria-labelledby={labelId}>
+      <ul role="group" aria-labelledby={labelId} className={optionGroupClassNames.list}>
         <OptionGroupHiddenContext.Provider value={hiddenByConsumer}>
           <OptionGroupContext.Provider value={groups}>{children}</OptionGroupContext.Provider>
         </OptionGroupHiddenContext.Provider>
@@ -369,6 +382,10 @@ export interface ListboxSurfaceProps {
   'aria-labelledby'?: string;
   /** Options draw a check mark while selected. @default true */
   showCheck?: boolean;
+  /** The host's stable class for the listbox element (its `listbox` part). */
+  listboxClassName?: string;
+  /** The host's stable class for the portaled surface (its `surface` part). */
+  surfaceClassName?: string;
   children?: React.ReactNode;
 }
 
@@ -393,6 +410,8 @@ export function ListboxSurface(props: ListboxSurfaceProps) {
     'aria-label': ariaLabel,
     'aria-labelledby': ariaLabelledBy,
     showCheck = true,
+    listboxClassName,
+    surfaceClassName,
     children,
   } = props;
 
@@ -404,7 +423,7 @@ export function ListboxSurface(props: ListboxSurfaceProps) {
           aria-label={ariaLabel}
           aria-labelledby={ariaLabelledBy}
           hidden={!expanded || undefined}
-          className="min-h-0 max-h-60 overflow-auto"
+          className={cn(listboxClassName, 'min-h-0 max-h-60 overflow-auto')}
         >
           {children}
         </ul>
@@ -425,7 +444,10 @@ export function ListboxSurface(props: ListboxSurfaceProps) {
           {...floatingProps}
           data-wave-listbox-surface=""
           onMouseDown={preventMouseDown}
-          className="flex flex-col overflow-hidden rounded border border-border bg-background py-1 text-foreground shadow-4"
+          className={cn(
+            surfaceClassName,
+            'flex flex-col overflow-hidden rounded border border-border bg-background py-1 text-foreground shadow-4',
+          )}
         >
           {expanded ? list : emptyContent}
         </div>

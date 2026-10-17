@@ -1,6 +1,14 @@
 import * as React from 'react';
 import { flattenChildren, isElementOfType } from '../../lib/children';
 import { cn } from '../../lib/cn';
+import {
+  tableBodyClassNames,
+  tableCellClassNames,
+  tableClassNames,
+  tableHeaderCellClassNames,
+  tableHeaderClassNames,
+  tableRowClassNames,
+} from '../../lib/classNames';
 import { warnDeprecated, warnOnce } from '../../lib/dev';
 import { focusRing } from '../../lib/styles';
 import { useId } from '../../hooks/useId';
@@ -173,6 +181,7 @@ const TableRoot = ({
         isRegion ? regionLabelledBy : consumerRole !== undefined ? containerLabelledBy : undefined
       }
       className={cn(
+        tableClassNames.container,
         'overflow-x-auto rounded-md border border-border',
         scrollable && focusRing,
         containerClassName,
@@ -182,6 +191,7 @@ const TableRoot = ({
         ref={ref}
         data-striped={striped ? '' : undefined}
         className={cn(
+          tableClassNames.root,
           'w-full border-separate border-spacing-0',
           // `:where()` keeps the stripe at specificity 0, so any row class wins (C-CLASS).
           striped && '[:where(&>tbody>tr:nth-child(odd))]:bg-card',
@@ -198,7 +208,7 @@ TableRoot.displayName = 'Table';
 
 /** The table's `<thead>`. */
 const TableHeader = ({ children, className, ref, ...rest }: TableHeaderProps) => (
-  <thead ref={ref} {...rest} className={cn('bg-card', className)}>
+  <thead ref={ref} {...rest} className={cn(tableHeaderClassNames.root, 'bg-card', className)}>
     {children}
   </thead>
 );
@@ -210,6 +220,7 @@ const TableHeaderCell = ({ children, className, ref, ...props }: TableHeaderCell
     ref={ref}
     scope="col"
     className={cn(
+      tableHeaderCellClassNames.root,
       'px-4 py-3 text-start font-semibold text-caption-1 uppercase tracking-wider border-b border-border',
       className,
     )}
@@ -236,7 +247,7 @@ TableHeadCell.displayName = 'TableHeadCell';
 
 /** The table's `<tbody>`. */
 const TableBody = ({ children, className, ref, ...rest }: TableBodyProps) => (
-  <tbody ref={ref} {...rest} className={className}>
+  <tbody ref={ref} {...rest} className={cn(tableBodyClassNames.root, className)}>
     {children}
   </tbody>
 );
@@ -247,6 +258,7 @@ const TableRow = ({ children, className, ref, ...props }: TableRowProps) => (
   <tr
     ref={ref}
     className={cn(
+      tableRowClassNames.root,
       'hover:bg-subtle-hover transition-colors motion-reduce:transition-none',
       className,
     )}
@@ -261,7 +273,11 @@ TableRow.displayName = 'TableRow';
 const TableCell = ({ children, className, ref, ...props }: TableCellProps) => (
   <td
     ref={ref}
-    className={cn('px-4 py-3 text-body-1 border-b border-border', className)}
+    className={cn(
+      tableCellClassNames.root,
+      'px-4 py-3 text-body-1 border-b border-border',
+      className,
+    )}
     {...props}
   >
     {children}

@@ -1,5 +1,6 @@
 import * as React from 'react';
 import { cn } from '../../lib/cn';
+import { menuItemClassNames, menuItemLinkClassNames } from '../../lib/classNames';
 import type { PolymorphicComponent, PolymorphicProps } from '../../lib/polymorphic';
 import type { Slot } from '../../lib/types';
 import { MenuItemRow, useMenuItemActivation, useMenuItemPlacementWarning } from './Menu.items';
@@ -101,9 +102,25 @@ export const MenuItemLink: PolymorphicComponent<'a', MenuItemLinkOwnProps> = (pr
       data-disabled={disabled ? '' : undefined}
       onClick={activation.onClick}
       onKeyDown={activation.onKeyDown}
-      className={cn(menuItemClasses, 'text-foreground no-underline', className)}
+      className={cn(
+        menuItemClassNames.root,
+        menuItemLinkClassNames.root,
+        menuItemClasses,
+        'text-foreground no-underline',
+        className,
+      )}
     >
-      <MenuItemRow icon={icon} label={children} shortcut={shortcut} markLabel={!ownRovingText} />
+      <MenuItemRow
+        icon={icon}
+        label={children}
+        shortcut={shortcut}
+        markLabel={!ownRovingText}
+        partClassNames={{
+          icon: cn(menuItemClassNames.icon, menuItemLinkClassNames.icon),
+          content: cn(menuItemClassNames.content, menuItemLinkClassNames.content),
+          shortcut: cn(menuItemClassNames.shortcut, menuItemLinkClassNames.shortcut),
+        }}
+      />
     </Component>
   );
 };

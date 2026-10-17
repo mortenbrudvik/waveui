@@ -8,11 +8,14 @@
  *   give it what the Button would have done with `icon`, `iconPosition` and `disabledFocusable`.
  * - Glyph slots inside a wired button (SplitButton and MenuButton `menuIcon`, Combobox and
  *   TimePicker `expandIcon`) unwrap it: {@link unwrapButtonGlyph}.
+ * - Variants that hand their `icon` to Button (ToggleButton, CompoundButton, MenuButton,
+ *   SplitButton, the Toolbar buttons) add their part class to it: {@link withPartClass}.
  */
 import * as React from 'react';
 import { focusableDisabledProps } from '../../lib/aria';
 import { isElementOfType } from '../../lib/children';
-import type { Slot } from '../../lib/slot';
+import { resolveSlot, slotRendersContent } from '../../lib/slot';
+import type { Slot, SlotObject } from '../../lib/slot';
 import { Button } from './Button';
 import type { ButtonOwnProps } from './Button';
 
@@ -92,6 +95,30 @@ export const MERGED_DISABLED_FOCUSABLE_PROPS = {
  */
 export const mergedAriaDisabledClasses =
   'aria-disabled:cursor-not-allowed aria-disabled:opacity-50 aria-disabled:focus-visible:opacity-100';
+
+/**
+ * `slot` as a slot object whose element also carries `className`: a variant's part class on the
+ * icon that Button draws (`icon={withPartClass(icon, toggleButtonClassNames.icon)}`), so Button's
+ * icon span carries both components' classes and Button needs no class prop of its own.
+ * Shorthand content becomes the children of a `<span>` with the class; a slot object keeps its
+ * element, attributes, `ref` and own classes, with `className` before them (so the consumer's
+ * class still wins a conflict). A slot that renders nothing (`null`, `false`, `''`, `[]`, `<></>`)
+ * is returned as it is, so no empty icon element renders; applying it twice adds both classes to
+ * one element.
+ */
+export function withPartClass(
+  slot: Slot<'span'> | undefined,
+  className: string,
+): Slot<'span'> | undefined {
+  if (!slotRendersContent(slot)) return slot;
+  const resolved = resolveSlot(slot, 'span', className);
+  if (!resolved) return slot;
+  return {
+    ...resolved.props,
+    as: resolved.Component,
+    children: resolved.children,
+  } as SlotObject<'span'>;
+}
 
 /** What {@link unwrapButtonGlyph} unwrapped, for the slot's development warning. */
 export type UnwrappedButton = 'a button element' | 'a slot object that renders a button';

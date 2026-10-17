@@ -20,7 +20,9 @@ import type {
   KeyboardEventHandler,
   MouseEventHandler,
   PointerEventHandler,
+  ReactElement,
   ReactNode,
+  Ref,
   RefCallback,
   RefObject,
   SetStateAction,
@@ -31,10 +33,13 @@ import type {
   AccordionBaseProps,
   AccordionMultipleProps,
   AccordionSingleProps,
+  AlphaSliderLabels,
+  AlphaSliderProps,
   BadgeColor,
   BreadcrumbItemAnchorProps,
   BreadcrumbItemButtonProps,
   BreadcrumbItemOwnProps,
+  buttonClassNames,
   ButtonProps,
   CheckboxLabelPosition,
   CheckboxProps,
@@ -43,6 +48,16 @@ import type {
   CheckedValues,
   CheckedValuesChangeDetails,
   CheckedValuesChangeHandler,
+  ColorAreaLabels,
+  ColorAreaProps,
+  ColorPickerHexFieldProps,
+  ColorPickerLabels,
+  ColorPickerPreviewProps,
+  ColorPickerProps,
+  ColorPickerShape,
+  ColorPickerSwatchesProps,
+  ColorSliderLabels,
+  ColorSliderProps,
   ComboboxLabels,
   ComboboxProps,
   CompoundButtonProps,
@@ -61,6 +76,7 @@ import type {
   FieldContextValue,
   FieldControlIdClaim,
   FieldProps,
+  HsvColor,
   IconPosition,
   InfoButtonProps,
   InfoLabelProps,
@@ -87,6 +103,9 @@ import type {
   MenuSplitGroup,
   MenuSplitGroupProps,
   MenuTriggerProps,
+  MessageBarActionsProps,
+  MessageBarProps,
+  MessageBarTitleProps,
   ModalOpenChangeReason,
   ModalType,
   NavItemAnchorProps,
@@ -118,6 +137,7 @@ import type {
   SearchBoxInputProps,
   SearchBoxProps,
   SelectProps,
+  SelectionMode,
   Size,
   SliderProps,
   SliderSize,
@@ -131,6 +151,7 @@ import type {
   SpinnerProps,
   SplitButtonMenuButtonProps,
   SplitButtonProps,
+  Status,
   SwitchLabelPosition,
   SwitchProps,
   SwitchSize,
@@ -142,9 +163,20 @@ import type {
   TimePickerInvalidReason,
   TimePickerLabels,
   TimePickerProps,
+  ToastBodyProps,
+  ToastCloseProps,
+  ToastCloseRenderProps,
   ToastController,
+  ToastDispatchOptions,
+  ToasterHandle,
   ToasterProps,
+  ToasterShortcuts,
+  ToastFooterProps,
+  ToastOptions,
   ToastPosition,
+  ToastProps,
+  ToastTitleProps,
+  toggleButtonClassNames,
   ToggleButtonProps,
   Toolbar,
   ToolbarButton,
@@ -159,6 +191,10 @@ import type {
   ToolbarToggleButtonProps,
   TooltipAppearance,
   TooltipProps,
+  TreeCheckedItemsChangeDetails,
+  TreeItemPersonaLayoutProps,
+  TreeItemProps,
+  TreeProps,
   UsePresenceOptions,
   UsePresenceResult,
   UseRovingTabIndexOptions,
@@ -167,6 +203,7 @@ import type {
   WaveContextValue,
   WaveDir,
   WaveProviderProps,
+  waveProviderClassNames,
 } from '../index';
 
 const srcDir = fileURLToPath(new URL('..', import.meta.url));
@@ -333,6 +370,15 @@ const INTERNAL_HELPERS: Record<string, string> = {
     'mask: the 0.4 sort props are a type error next to the 0.5 sort API',
 };
 
+/**
+ * Public type names that a prop refers to before the barrels export them (spec §0.2 rule 24,
+ * §1.5), matched against the name after `#` of the walk's labels. Empty since wave C of 0.8.
+ */
+const PENDING_PUBLIC_TYPES: readonly string[] = [];
+
+/** `components/feedback/Toaster.tsx#ToastDispatchOptions` → `ToastDispatchOptions`. */
+const typeNameOf = (label: string): string => label.slice(label.indexOf('#') + 1);
+
 /** A program over virtual files (plus the default lib), for testing the walker itself. */
 function createVirtualProgram(files: Record<string, string>, root: string): ts.Program {
   const options: ts.CompilerOptions = {
@@ -438,8 +484,17 @@ describe('public type surface (src/index.ts)', () => {
   };
 
   it('exports every named type that a public declaration refers to', () => {
-    expect(getUnexported().filter((label) => !(label in INTERNAL_HELPERS))).toEqual([]);
+    expect(
+      getUnexported().filter(
+        (label) =>
+          !(label in INTERNAL_HELPERS) && !PENDING_PUBLIC_TYPES.includes(typeNameOf(label)),
+      ),
+    ).toEqual([]);
   }, 60_000);
+
+  it('keeps PENDING_PUBLIC_TYPES sorted and free of duplicates', () => {
+    expect(PENDING_PUBLIC_TYPES).toEqual([...new Set(PENDING_PUBLIC_TYPES)].sort());
+  });
 
   it('lists only internal helpers that a public declaration still refers to', () => {
     const current = getUnexported();
@@ -874,5 +929,213 @@ describe('Phase 4 public types', () => {
     // @ts-expect-error a null value needs `allowEmpty`
     const nullValue: ComponentProps<typeof SpinButton> = { value: null };
     void [inputSize, tagPicker, checkbox, switchSize, step, infoButton, ratingColor, nullValue];
+  });
+});
+
+describe('0.8 stable class names from the package entry', () => {
+  it('the registry constants are readonly objects of string literal types', () => {
+    expectTypeOf<(typeof buttonClassNames)['root']>().toEqualTypeOf<'wave-button'>();
+    expectTypeOf<(typeof buttonClassNames)['icon']>().toEqualTypeOf<'wave-button__icon'>();
+    expectTypeOf<typeof toggleButtonClassNames>().toHaveProperty('icon');
+    expectTypeOf<(typeof waveProviderClassNames)['root']>().toEqualTypeOf<'wave-root'>();
+    const assignRoot = (constants: typeof buttonClassNames) => {
+      // @ts-expect-error: the constants are `as const`, so their keys are readonly.
+      constants.root = 'wave-button';
+    };
+    expectTypeOf(assignRoot).toBeFunction();
+  });
+});
+
+// The 0.8 notifications, color, trees and class names, imported from the package entry
+// (compile-time, `tsconfig.dev.json`). Values are read as types from the entry's namespace, so
+// the file imports no runtime value.
+type Entry = typeof import('../index');
+
+describe('0.8 notifications, color, trees and class names from the package entry', () => {
+  it('toasts: the dispatchToast overloads, the content options, the parts and the handle', () => {
+    type DispatchToast = ToastController['dispatchToast'];
+    expectTypeOf<DispatchToast>()
+      .toBeCallableWith({ title: 'Saved' })
+      .returns.toEqualTypeOf<string>();
+    expectTypeOf<DispatchToast>()
+      .toBeCallableWith({} as ReactElement, { timeout: 0, status: 'error' })
+      .returns.toEqualTypeOf<string>();
+    expectTypeOf<DispatchToast>().toBeCallableWith('Saved').returns.toEqualTypeOf<string>();
+    // Types derived from the member keep 0.7's shape: TypeScript reads the last overload.
+    expectTypeOf<Parameters<DispatchToast>>().toEqualTypeOf<[options: ToastOptions]>();
+    expectTypeOf<ReturnType<DispatchToast>>().toEqualTypeOf<string>();
+    expectTypeOf<ToastDispatchOptions>().toEqualTypeOf<{
+      toastId?: string;
+      timeout?: number;
+      status?: Status;
+      statusLabel?: string;
+      announcement?: string;
+    }>();
+
+    expectTypeOf<ToastProps['icon']>().toEqualTypeOf<Slot<'span'> | undefined>();
+    expectTypeOf<ToastProps['title']>().toEqualTypeOf<string | undefined>();
+    expectTypeOf<ToastTitleProps['action']>().toEqualTypeOf<Slot<'span'> | undefined>();
+    expectTypeOf<ToastTitleProps>().toExtend<HTMLAttributes<HTMLDivElement>>();
+    expectTypeOf<ToastBodyProps['subtitle']>().toEqualTypeOf<ReactNode>();
+    expectTypeOf<ToastFooterProps>().toExtend<HTMLAttributes<HTMLDivElement>>();
+    expectTypeOf<ToastCloseProps['asChild']>().toEqualTypeOf<boolean | undefined>();
+    expectTypeOf<ToastCloseProps['children']>().toEqualTypeOf<
+      ReactNode | ((props: ToastCloseRenderProps) => ReactNode)
+    >();
+    expectTypeOf<ToastCloseRenderProps['onClick']>().toEqualTypeOf<
+      MouseEventHandler<HTMLElement>
+    >();
+    expectTypeOf<ToastCloseRenderProps['ref']>().toEqualTypeOf<RefCallback<HTMLElement>>();
+    expectTypeOf<ToastCloseRenderProps>().toExtend<HTMLAttributes<HTMLElement>>();
+    expectTypeOf<Entry['Toast']['Title']>().toEqualTypeOf<Entry['ToastTitle']>();
+    expectTypeOf<Entry['Toast']['Body']>().toEqualTypeOf<Entry['ToastBody']>();
+    expectTypeOf<Entry['Toast']['Footer']>().toEqualTypeOf<Entry['ToastFooter']>();
+    expectTypeOf<Entry['Toast']['Close']>().toEqualTypeOf<Entry['ToastClose']>();
+
+    expectTypeOf<ToasterProps['shortcuts']>().toEqualTypeOf<ToasterShortcuts | undefined>();
+    expectTypeOf<ToasterShortcuts>().toEqualTypeOf<{
+      focus?: (event: KeyboardEvent) => boolean;
+    }>();
+    expectTypeOf<ToasterProps['toaster']>().toEqualTypeOf<ToasterHandle | undefined>();
+    // The handle is the controller and nothing more (spec D33).
+    expectTypeOf<ToasterHandle>().toEqualTypeOf<ToastController>();
+    expectTypeOf<Entry['createToaster']>().toEqualTypeOf<() => ToasterHandle>();
+  });
+
+  it('MessageBar: layout and the parts', () => {
+    expectTypeOf<MessageBarProps['layout']>().toEqualTypeOf<
+      'auto' | 'singleline' | 'multiline' | undefined
+    >();
+    expectTypeOf<MessageBarTitleProps>().toExtend<HTMLAttributes<HTMLSpanElement>>();
+    expectTypeOf<MessageBarActionsProps>().toExtend<HTMLAttributes<HTMLDivElement>>();
+    expectTypeOf<Entry['MessageBar']['Title']>().toEqualTypeOf<Entry['MessageBarTitle']>();
+    expectTypeOf<Entry['MessageBar']['Actions']>().toEqualTypeOf<Entry['MessageBarActions']>();
+  });
+
+  it('color: HsvColor, ColorPickerShape, the helpers, the standalone parts and the picker', () => {
+    expectTypeOf<HsvColor>().toEqualTypeOf<{ h: number; s: number; v: number; a?: number }>();
+    expectTypeOf<ColorPickerShape>().toEqualTypeOf<'rounded' | 'square'>();
+    expectTypeOf<Entry['hsvToHex']>().toEqualTypeOf<(color: HsvColor) => string>();
+    expectTypeOf<Entry['hexToHsv']>().toEqualTypeOf<(hex: string) => HsvColor | null>();
+
+    expectTypeOf<ColorAreaProps['value']>().toEqualTypeOf<HsvColor | undefined>();
+    expectTypeOf<ColorAreaProps['defaultValue']>().toEqualTypeOf<HsvColor | undefined>();
+    expectTypeOf<ColorAreaProps['onValueChange']>().toEqualTypeOf<
+      ((value: HsvColor) => void) | undefined
+    >();
+    expectTypeOf<ColorAreaProps['shape']>().toEqualTypeOf<ColorPickerShape | undefined>();
+    expectTypeOf<ColorAreaProps['labels']>().toEqualTypeOf<ColorAreaLabels | undefined>();
+    expectTypeOf<ColorAreaProps['controlRef']>().toEqualTypeOf<Ref<HTMLInputElement> | undefined>();
+    expectTypeOf<ColorAreaLabels['colorName']>().toEqualTypeOf<
+      ((color: HsvColor) => string) | undefined
+    >();
+    expectTypeOf<ColorAreaLabels['valueText']>().toEqualTypeOf<
+      ((color: HsvColor, channel: 'saturation' | 'value') => string) | undefined
+    >();
+
+    expectTypeOf<ColorSliderProps['channel']>().toEqualTypeOf<
+      'hue' | 'saturation' | 'value' | undefined
+    >();
+    expectTypeOf<ColorSliderProps['orientation']>().toEqualTypeOf<Orientation | undefined>();
+    expectTypeOf<ColorSliderProps['value']>().toEqualTypeOf<HsvColor | undefined>();
+    expectTypeOf<ColorSliderLabels['valueText']>().toEqualTypeOf<
+      ((color: HsvColor, channel: 'hue' | 'saturation' | 'value') => string) | undefined
+    >();
+
+    expectTypeOf<AlphaSliderProps['transparency']>().toEqualTypeOf<boolean | undefined>();
+    expectTypeOf<AlphaSliderProps['labels']>().toEqualTypeOf<AlphaSliderLabels | undefined>();
+    expectTypeOf<AlphaSliderProps>().not.toHaveProperty('channel');
+    expectTypeOf<AlphaSliderLabels['valueText']>().toEqualTypeOf<
+      ((color: HsvColor, transparency: boolean) => string) | undefined
+    >();
+
+    expectTypeOf<ColorPickerProps['shape']>().toEqualTypeOf<ColorPickerShape | undefined>();
+    expectTypeOf<ColorPickerProps['children']>().toEqualTypeOf<ReactNode>();
+    expectTypeOf<ColorPickerLabels['area']>().toEqualTypeOf<string | undefined>();
+    expectTypeOf<ColorPickerLabels['colorName']>().toEqualTypeOf<
+      ((color: HsvColor) => string) | undefined
+    >();
+    expectTypeOf<ColorPickerLabels['valueText']>().toEqualTypeOf<
+      ((color: HsvColor, channel: 'hue' | 'saturation' | 'value' | 'alpha') => string) | undefined
+    >();
+    expectTypeOf<ColorPickerHexFieldProps['controlRef']>().toEqualTypeOf<
+      Ref<HTMLInputElement> | undefined
+    >();
+    expectTypeOf<ColorPickerSwatchesProps>().not.toHaveProperty('items');
+    expectTypeOf<ColorPickerPreviewProps>().toExtend<HTMLAttributes<HTMLDivElement>>();
+    expectTypeOf<Entry['ColorPicker']['HexField']>().toEqualTypeOf<Entry['ColorPickerHexField']>();
+    expectTypeOf<Entry['ColorPicker']['Swatches']>().toEqualTypeOf<Entry['ColorPickerSwatches']>();
+    expectTypeOf<Entry['ColorPicker']['Preview']>().toEqualTypeOf<Entry['ColorPickerPreview']>();
+  });
+
+  it('trees: selection modes, checked items with details, row content, persona rows and tabStop', () => {
+    expectTypeOf<TreeProps['selectionMode']>().toEqualTypeOf<'none' | SelectionMode | undefined>();
+    expectTypeOf<TreeProps['checkedItems']>().toEqualTypeOf<readonly string[] | undefined>();
+    expectTypeOf<TreeProps['defaultCheckedItems']>().toEqualTypeOf<readonly string[] | undefined>();
+    expectTypeOf<TreeCheckedItemsChangeDetails>().toEqualTypeOf<{
+      value: string;
+      checked: boolean;
+      event: Event;
+    }>();
+    // `details` is optional until 1.0: a handler of the items alone fits, a state setter too,
+    // and code that calls the prop may pass the items only.
+    type Handler = NonNullable<TreeProps['onCheckedItemsChange']>;
+    const itemsOnly = (items: string[]) => void items;
+    expectTypeOf(itemsOnly).toExtend<Handler>();
+    expectTypeOf<Dispatch<SetStateAction<string[]>>>().toExtend<Handler>();
+    expectTypeOf<Dispatch<SetStateAction<readonly string[]>>>().toExtend<Handler>();
+    expectTypeOf<Handler>().toBeCallableWith(['docs']);
+    expectTypeOf<Handler>().parameter(1).toEqualTypeOf<TreeCheckedItemsChangeDetails | undefined>();
+
+    expectTypeOf<TreeProps['navigationMode']>().toEqualTypeOf<'tree' | 'treegrid' | undefined>();
+    expectTypeOf<TreeItemProps['actions']>().toEqualTypeOf<ReactNode>();
+    expectTypeOf<TreeItemProps['aside']>().toEqualTypeOf<ReactNode>();
+    expectTypeOf<TreeItemProps['iconAfter']>().toEqualTypeOf<Slot<'span'> | undefined>();
+    expectTypeOf<TreeItemProps['expandIcon']>().toEqualTypeOf<Slot<'span'> | undefined>();
+    expectTypeOf<TreeItemPersonaLayoutProps['media']>().toEqualTypeOf<ReactNode>();
+    expectTypeOf<TreeItemPersonaLayoutProps['description']>().toEqualTypeOf<ReactNode>();
+    expectTypeOf<TreeItemPersonaLayoutProps>().toExtend<HTMLAttributes<HTMLSpanElement>>();
+    expectTypeOf<Entry['Tree']['ItemPersonaLayout']>().toEqualTypeOf<
+      Entry['TreeItemPersonaLayout']
+    >();
+    expectTypeOf<UseRovingTabIndexOptions['tabStop']>().toEqualTypeOf<
+      'active' | 'last-focused' | 'none' | undefined
+    >();
+  });
+
+  it('class-name constants have literal, readonly types; the new unions refuse other values', () => {
+    expectTypeOf<
+      Entry['toastTitleClassNames']['label']
+    >().toEqualTypeOf<'wave-toast-title__label'>();
+    expectTypeOf<Entry['toasterClassNames']['toast']>().toEqualTypeOf<'wave-toaster__toast'>();
+    expectTypeOf<Entry['colorAreaClassNames']['thumb']>().toEqualTypeOf<'wave-color-area__thumb'>();
+    expectTypeOf<
+      Entry['treeItemClassNames']['actions']
+    >().toEqualTypeOf<'wave-tree-item__actions'>();
+    expectTypeOf<
+      Entry['treeItemPersonaLayoutClassNames']['main']
+    >().toEqualTypeOf<'wave-tree-item-persona-layout__main'>();
+
+    // @ts-expect-error the MessageBar layouts are auto, singleline and multiline
+    const wrap: MessageBarProps['layout'] = 'wrap';
+    // @ts-expect-error opacity has its own slider (AlphaSlider)
+    const alpha: ColorSliderProps['channel'] = 'alpha';
+    // @ts-expect-error Fluent's 'multiselect' is 'multiple' in WaveUI
+    const multiselect: TreeProps['selectionMode'] = 'multiselect';
+    // @ts-expect-error the navigation modes are tree and treegrid
+    const grid: TreeProps['navigationMode'] = 'grid';
+    // @ts-expect-error a ColorPicker is rounded or square
+    const circular: ColorPickerProps['shape'] = 'circular';
+    const classes = {} as Entry['buttonClassNames'];
+    // @ts-expect-error the registry constants are readonly
+    classes.root = 'wave-custom';
+    expect([wrap, alpha, multiselect, grid, circular, classes.root]).toEqual([
+      'wrap',
+      'alpha',
+      'multiselect',
+      'grid',
+      'circular',
+      'wave-custom',
+    ]);
   });
 });

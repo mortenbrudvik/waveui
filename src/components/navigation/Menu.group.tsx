@@ -1,5 +1,6 @@
 import * as React from 'react';
 import { cn } from '../../lib/cn';
+import { menuGroupClassNames, menuGroupHeaderClassNames } from '../../lib/classNames';
 import { flattenChildren, isElementOfType } from '../../lib/children';
 import { reportMissingContext, warnOnce } from '../../lib/dev';
 import { useId } from '../../hooks/useId';
@@ -64,7 +65,7 @@ function useMenuGroupContext(componentName: string): MenuGroupContextValue {
  *
  * Also exported as `MenuGroup` (import the flat name from React Server Components).
  */
-export const MenuGroup = ({ children, ref, ...rest }: MenuGroupProps) => {
+export const MenuGroup = ({ children, className, ref, ...rest }: MenuGroupProps) => {
   const generatedId = useId('menu-group-header');
   // A static scan, so the reference is in the server HTML and never points at a missing id.
   const header = flattenChildren(children).find(({ node }) =>
@@ -89,7 +90,13 @@ export const MenuGroup = ({ children, ref, ...rest }: MenuGroupProps) => {
 
   return (
     <MenuGroupContext.Provider value={context}>
-      <div role="group" {...rest} ref={ref} aria-labelledby={labelledBy}>
+      <div
+        role="group"
+        {...rest}
+        ref={ref}
+        aria-labelledby={labelledBy}
+        className={cn(menuGroupClassNames.root, className)}
+      >
         {children}
       </div>
     </MenuGroupContext.Provider>
@@ -144,6 +151,7 @@ export const MenuGroupHeader = (props: MenuGroupHeaderProps) => {
       ref={ref}
       id={(scanned ? group.headerId : id) || undefined}
       className={cn(
+        menuGroupHeaderClassNames.root,
         'flex items-center gap-2 px-3 pb-1 pt-2 text-caption-1 font-semibold text-muted-foreground',
         className,
       )}

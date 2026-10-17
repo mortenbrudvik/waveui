@@ -45,6 +45,10 @@ export interface PickerExpandButtonProps {
    * @default 'outline'
    */
   appearance?: InputAppearance;
+  /** The host's stable class for the button (its `expandButton` part). */
+  className?: string;
+  /** The host's stable class for the glyph `<span>` (its `expandIcon` part). */
+  iconClassName?: string;
 }
 
 /**
@@ -67,6 +71,8 @@ export const PickerExpandButton = ({
   onToggle,
   size = 'medium',
   appearance = 'outline',
+  className,
+  iconClassName,
 }: PickerExpandButtonProps) => {
   // The glyph slot rule shared with SplitButton and MenuButton `menuIcon` (C-SLOTS).
   const { glyph: content, button } = unwrapButtonGlyph(expandIcon);
@@ -100,6 +106,7 @@ export const PickerExpandButton = ({
       onMouseDown={(event) => event.preventDefault()}
       onClick={onToggle}
       className={cn(
+        className,
         pickerIconButtonClasses(size, appearance),
         pickerButtonOffset(size, 1),
         focusRing,
@@ -110,6 +117,7 @@ export const PickerExpandButton = ({
         glyph,
         'span',
         cn(
+          iconClassName,
           'inline-flex transition-transform motion-reduce:transition-none',
           expanded && 'rotate-180',
         ),

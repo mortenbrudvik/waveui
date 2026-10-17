@@ -1,10 +1,12 @@
 # WaveUI roadmap: Fluent UI v9 parity
 
-- **Status:** plan of record from 0.6.0 to 1.0.0. Written 2026-09-25 on `feat/fluent-parity`; revised the same day after three reviews (conventions, sequencing, Phase 1 against the code). Review points that were not applied are listed with reasons in the Phase 1 spec, §8. **Phase 1 (0.6.0) and Phase 2 (0.7.0) are released** in 0.7.0 (CHANGELOG `## [0.7.0] - 2026-09-26`), the first npm release since 0.4.0: 0.5.0 and 0.6.0 were never published on their own (CHANGELOG `## [0.6.0] - Not published (ships in 0.7.0)`). Phase 2's design spec is [`docs/superpowers/specs/2026-09-26-fluent-parity-phase-2-design.md`](superpowers/specs/2026-09-26-fluent-parity-phase-2-design.md). **Phase 4 (0.9.0) is implemented** on `feat/fluent-parity-phase-4` in parallel with Phase 3, and is unreleased; its design spec is [`docs/superpowers/specs/2026-09-26-fluent-parity-phase-4-design.md`](superpowers/specs/2026-09-26-fluent-parity-phase-4-design.md). This line marks each phase released when its version ships.
+- **Status:** plan of record from 0.6.0 to 1.0.0. Written 2026-09-25 on `feat/fluent-parity`; revised the same day after three reviews (conventions, sequencing, Phase 1 against the code). Review points that were not applied are listed with reasons in the Phase 1 spec, §8. **Phase 1 (0.6.0) and Phase 2 (0.7.0) are released** in 0.7.0 (CHANGELOG `## [0.7.0] - 2026-09-26`), the first npm release since 0.4.0: 0.5.0 and 0.6.0 were never published on their own (CHANGELOG `## [0.6.0] - Not published (ships in 0.7.0)`). Phase 2's design spec is [`docs/superpowers/specs/2026-09-26-fluent-parity-phase-2-design.md`](superpowers/specs/2026-09-26-fluent-parity-phase-2-design.md). **Phase 3 (0.8.0) is implemented, unreleased**, on `feat/fluent-parity-phase-3`, merged to `main`; its design spec, [`docs/superpowers/specs/2026-09-26-fluent-parity-phase-3-design.md`](superpowers/specs/2026-09-26-fluent-parity-phase-3-design.md), records where it changed the Phase 3 sketches below. **Phase 4 (0.9.0) is implemented** on `feat/fluent-parity-phase-4` in parallel with Phase 3 (which is merged into it), and is unreleased; its design spec is [`docs/superpowers/specs/2026-09-26-fluent-parity-phase-4-design.md`](superpowers/specs/2026-09-26-fluent-parity-phase-4-design.md). This line marks each phase released when its version ships. Revised again on 2026-09-26 for the GitHub issues [#4](https://github.com/mortenbrudvik/waveui/issues/4) to [#7](https://github.com/mortenbrudvik/waveui/issues/7), filed from taskboard, an app built on WaveUI: P3-08 (a toaster handle) and P4-05 (a system theme) are new; P6-04, P6-06 and P7-02 take up the issues' TagPicker, Dialog and notification-region proposals; the Dialog's viewport gap and body text colour were fixed outside the phases (CHANGELOG 0.8.0).
 - **Baseline:** `@mortenbrudvik/waveui` 0.5.0 (merged to `main`; never published on its own, it ships in 0.7.0) against `@fluentui/react-components` 9.74.9.
 - **Inputs:** the verified comparison report [`docs/research/fluent-ui-v9-comparison.md`](research/fluent-ui-v9-comparison.md) and its gap list (475 gaps: 7 high, 135 medium, 333 low). Every gap id below (`buttons-3`, `menu-10`, …) is an id of that list.
 - **Phase 1 design:** [`docs/superpowers/specs/2026-09-25-fluent-parity-phase-1-design.md`](superpowers/specs/2026-09-25-fluent-parity-phase-1-design.md) (0.6.0, implemented; released in 0.7.0).
 - **Phase 2 design:** [`docs/superpowers/specs/2026-09-26-fluent-parity-phase-2-design.md`](superpowers/specs/2026-09-26-fluent-parity-phase-2-design.md) (0.7.0, released 2026-09-26). Every later phase gets its own design spec before work starts (see [Process](#3-process-per-release)).
+- **Phase 3 design:** [`docs/superpowers/specs/2026-09-26-fluent-parity-phase-3-design.md`](superpowers/specs/2026-09-26-fluent-parity-phase-3-design.md) (0.8.0, implemented; unreleased).
+- **Phase 4 design:** [`docs/superpowers/specs/2026-09-26-fluent-parity-phase-4-design.md`](superpowers/specs/2026-09-26-fluent-parity-phase-4-design.md) (0.9.0, implemented; unreleased).
 
 How to read this document:
 - **Phases** are releases (minor versions after 0.5.0, then 1.0.0). A phase has a theme, epics, entry and exit criteria.
@@ -81,8 +83,8 @@ These come from section 6 of the report. Parity work must not regress them: an i
 |---|---|---|---|---|
 | 1 | 0.6.0 | Quick wins that need no new subsystem | 26 (P1-00 … P1-25) | 0 / 34 / 14 |
 | 2 | 0.7.0 | Menus and commands; the presence core | 9 (P2-00 … P2-08) | 3 / 9 / 17 |
-| 3 | 0.8.0 | Notifications, color and trees; stable class names | 8 (P3-00 … P3-07) | 4 / 6 / 10 |
-| 4 | 0.9.0 | Form controls: size, appearance, values and labels | 4 | 0 / 15 / 19 |
+| 3 | 0.8.0 | Notifications, color and trees; stable class names | 9 (P3-00 … P3-08) | 4 / 6 / 10 |
+| 4 | 0.9.0 | Form controls: size, appearance, values and labels; a system theme | 5 | 0 / 15 / 19 |
 | 5 | 0.10.0 | Pickers: multi-select, filtering, listbox, swatches, calendar | 5 | 0 / 8 / 20 |
 | 6 | 0.11.0 | Tags, drawers and the app shell | 9 | 0 / 18 / 22 |
 | 7 | 0.12.0 | Overlay and focus primitives made public | 3 | 0 / 5 / 17 |
@@ -91,10 +93,10 @@ These come from section 6 of the report. Parity work must not regress them: an i
 | 10 | 0.15.0 | Motion on components (larger project) | 2 | 0 / 1 / 11 |
 | 11 | 0.16.0 | Tables and lists at data scale (larger project) | 4 | 0 / 7 / 7 |
 | 12 | 0.17.0 | Theming API and charts strategy (larger project) | 4 | 0 / 3 (1 by strategy) / 8 |
-| 13 | 0.18.0 | Customization surface and 1.0 notices (larger project) | 3 | 0 / 1 / 12 |
+| 13 | 0.18.0 | Customization surface and 1.0 notices (larger project) | 3 | 0 / 1 / 13 |
 | 14 | 1.0.0 | API freeze | 6 | 0 / 2 / 2 |
-| — | backlog | Low-impact gaps not tied to an item | — | 0 / 0 / 122 |
-| | | **Total** | **98** | **7 / 135 (1 by strategy) / 333** |
+| — | backlog | Low-impact gaps not tied to an item | — | 0 / 0 / 121 |
+| | | **Total** | **100** | **7 / 135 (1 by strategy) / 333** |
 
 "By strategy" is `foundation-46` (chart components): P12-04 resolves it with a documented strategy, not with components (§1.1 goal 2). All seven high gaps ship by 0.8.0: the menu items and submenus in 0.7.0, rich toasts, ColorArea, ColorSlider and tree multi-select in 0.8.0.
 
@@ -391,15 +393,17 @@ Goal: toolbars hold grouped toggle and exclusive-choice state, and toggle button
 
 ### Phase 3 — 0.8.0: notifications, color and trees
 
-**Theme.** Toasts carry any content and actions and are reachable from the keyboard; MessageBars get a real action area. The release also closes the three high gaps that depend on nothing earlier (ColorArea, ColorSlider, tree multi-select), and from here on every component and part carries a stable class name.
+**Theme.** Toasts carry any content and actions, can be dispatched from code outside React components and are reachable from the keyboard; MessageBars get a real action area. The release also closes the three high gaps that depend on nothing earlier (ColorArea, ColorSlider, tree multi-select), and from here on every component and part carries a stable class name.
 **Entry:** 0.7.0 merged to `main` (Toast titles may hold a `Menu`); spec approved. **Exit:** process criteria; README "Toasts" rewritten around rich content; the conventions gate enforces the class-name rule.
+
+**What the Phase 3 spec changed** ([design](superpowers/specs/2026-09-26-fluent-parity-phase-3-design.md); each ruling gives its reason): the class-name constants live in one server-safe registry, `src/lib/classNames.ts`, exported from the entry, not in the component modules (D2); P3-00 mitigates `buttons-29` and P13-02 closes it (D8); the dismissing part is `Toast.Close`, not `Toast.Trigger`, and the status icon is replaced through `icon` on the Toast root, with no `media` slot on `Toast.Title` (D9); a toast whose content holds an action stays until it is dismissed unless the dispatch passes a `timeout` (D12); a MessageBar's title names the bar only when the bar has a non-live role (D16); `layout="auto"` measures the text column, and no layout clips text (D17); `ColorArea`, `ColorSlider` and `AlphaSlider` bind to an enclosing ColorPicker, which gains `ColorPicker.Preview` and no `Area`, `HueSlider` or `AlphaSlider` members (D21); a checkbox tree's checkbox is an exposed `role="checkbox"`, not a decorative indicator (D25); `navigationMode` changes the keyboard only (D27); the persona layout is `Tree.ItemPersonaLayout`, Fluent's name (D28); dispatches through an unbound toaster handle wait in its queue (D33). P3-00's acceptance "`verify-dist` flat names include the constants" is met by verify-dist's check that the entry exports every constant with the same value.
 
 #### Epic 3.0 — Stable class names
 
 Goal: a stable styling hook on every component and part, enforced for everything created later.
 
 - **P3-00 Stable class names for components and parts.**
-  - **Closes:** `foundation-37` (M), `buttons-29` (L).
+  - **Closes:** `foundation-37` (M). **Mitigates:** `buttons-29` (L), closed by P13-02 (static class names are half of that gap; the public contexts are the other half).
   - **API sketch:** every component root and named part gets a stable class (`wave-button`, `wave-button__icon`, …) exported as constants (`buttonClassNames = { root, icon }`); the existing `data-wave-*` markers stay; the library never styles through these classes (they are consumer hooks). A conventions-gate rule checks that every component module applies its root class and exports its constant, so every later component and part is created with one. Per-part documentation follows in P13-01.
   - **Acceptance:** the gate rule is green for all components and the parts added in 0.6 and 0.7; `verify-dist` flat names include the constants; tree-shaking probes unchanged.
   - **Guards:** no runtime styles; `cn()` keeps the consumer's `className` last.
@@ -407,7 +411,7 @@ Goal: a stable styling hook on every component and part, enforced for everything
 
 #### Epic 3.1 — Rich toasts
 
-Goal: toasts dispatched through the Toaster can hold actions, links and live content, with Fluent's layout parts.
+Goal: toasts dispatched through the Toaster can hold actions, links and live content, with Fluent's layout parts, and plain modules can dispatch them too.
 
 - **P3-01 `dispatchToast` with React content.**
   - **Closes:** `toast-1` (H).
@@ -427,6 +431,12 @@ Goal: toasts dispatched through the Toaster can hold actions, links and live con
   - **Acceptance:** documented in the keyboard table; focus return tested; no conflict with Dialog's Escape (the dismiss-layer rules decide).
   - **Guards:** the dismiss-layer stack routes Escape by focus.
   - **Size:** S. **Depends on:** P1-18 (`dismissAllToasts`).
+- **P3-08 A toaster handle: dispatching from outside React components.** Added from [issue #5](https://github.com/mortenbrudvik/waveui/issues/5): query-cache callbacks, server-event handlers and shared helpers cannot call a hook, and an app's own toast store loses what the Toaster adds (announcements through its permanent live regions, timer pausing, `limit`, focus handling, the Drawer offset, the layer integration).
+  - **Closes:** `toaster-5` (L).
+  - **API sketch:** `createToaster(): ToasterHandle` returns a `ToastController` (`dispatchToast` in both forms of P3-01, `dismissToast`, `dismissAllToasts`) that any code can call; `<Toaster toaster={handle}>` binds one Toaster to it. Toasts dispatched through the handle render inside that Toaster, so React context in toast content (a router for a link) comes from where the Toaster is mounted. `useToastController()` keeps working unchanged inside any Toaster. Dispatches before a Toaster binds wait in the handle's queue (or warn in development: the spec decides); ids are returned at once, so `dismissToast` also removes a waiting toast. `createToaster()` touches no DOM, so a module-scope handle is safe on the server; a dispatch on the server does nothing, so a module-scope handle never carries toasts from one request to the next. One handle per Toaster is also the shape for several Toasters (`toaster-5`), instead of string ids; the JSDoc names Fluent's `toasterId`.
+  - **Acceptance:** a toast dispatched from a plain function with no React context is shown, announced once, timed, paused and dismissed exactly like one from `useToastController()`; two handles bound to two Toasters stay independent; unmounting a Toaster unbinds its handle; binding under StrictMode does not duplicate toasts; `handle.dispatchToast(<Toast status="error">…</Toast>)` renders a link in it with the router context of the Toaster's place; importing a module that creates a handle, and `renderToString` of a page with a bound Toaster, render no toast and throw nothing.
+  - **Guards:** live regions need no provider; Toaster timers pause on hover, focus, blur and hidden tabs; toasts stay reachable over modals and move out of a Drawer's way.
+  - **Size:** S. **Depends on:** P3-01 (the controller type the handle implements).
 
 #### Epic 3.2 — MessageBar actions
 
@@ -471,7 +481,7 @@ Goal: trees support multi-select and row actions.
 
 ### Phase 4 — 0.9.0: form controls — size, appearance, values and labels
 
-**Theme.** Every text input and picker gets Fluent's sizes and appearances through one shared recipe; value controls reach Fluent's feature set; InfoLabel works as a Field label.
+**Theme.** Every text input and picker gets Fluent's sizes and appearances through one shared recipe; value controls reach Fluent's feature set; InfoLabel works as a Field label; the theme can follow the operating system (P4-05, added from a GitHub issue).
 **Entry:** 0.8.0 merged to `main`; spec approved (token additions reviewed for contrast). **Exit:** process criteria; README "Forms and Field" and the guide's input section updated.
 **Spec:** [`docs/superpowers/specs/2026-09-26-fluent-parity-phase-4-design.md`](superpowers/specs/2026-09-26-fluent-parity-phase-4-design.md) (implemented, unreleased). The sketches below are the plan; where the spec changed one, a **Changed by the spec** line names the ruling (D-numbers are the spec's §0.3).
 
@@ -516,6 +526,17 @@ Goal: InfoLabel is a real label and can be a Field's label.
   - **Acceptance:** the control's accessible name is the label text only; the info button is named "Information about <label>"; SSR; axe.
   - **Guards:** Popover keeps the trigger's Tab order and names itself.
   - **Size:** M. **Depends on:** P1-06, P2-05.
+
+#### Epic 4.4 — System theme
+
+Goal: the theme can follow the operating system, and the page outside the provider can match it.
+
+- **P4-05 `theme="system"` and an opt-in document theme.** Added from [issue #7](https://github.com/mortenbrudvik/waveui/issues/7): an app that follows the OS light/dark setting resolves `prefers-color-scheme` itself today, and the page's scrollbar and canvas (the overscroll area and the space below short content), which take their colours from `<html>` outside the provider, stay light in the dark theme unless the app sets `color-scheme` there. The item depends on nothing: it runs as its own package, and may ship with an earlier phase whose spec takes it.
+  - **Closes:** none (not a Fluent gap: FluentProvider has no system mode either).
+  - **API sketch:** `WaveTheme` gains `'system'`: light or dark from `prefers-color-scheme`, following changes live. CSS decides the first paint: `getThemeClassName('system')` returns a class whose tokens are the light ones and switch to the dark ones under `@media (prefers-color-scheme: dark)` (the dark declarations repeated inside the media query; the spec decides whether the build generates them), with `color-scheme: light dark`. So the server HTML and hydration never show a dark-OS user the light theme, which a server render of `'light'` switched after hydration would do on every load. Portals get the class through `themeClassName`, and nested providers inherit `'system'`. `useWaveTheme()` keeps `theme: 'system'` and adds the resolved value (`resolvedTheme: 'light' | 'dark'`, from `matchMedia` through `useSyncExternalStore`, `'light'` on the server and during hydration), so code can still branch on it. `documentTheme?: boolean` (default `false`, which keeps the 0.5 rule that a provider never touches the page): while mounted, the provider puts its theme classes on `<html>`, which sets `color-scheme` there, and removes them on unmount; a second provider with it warns in development. A rule for `html` carrying a theme class paints the canvas with `--wave-background`, so `<html className={getThemeClassName(theme)}>` in a server-rendered layout, still the way to theme `<html>` in the server HTML, gets it too. `'system'` does not map `prefers-contrast: more` to `'high-contrast'` (forced colors have their own styles); the spec may revisit that.
+  - **Acceptance:** with `theme="system"`, a `matchMedia` change updates the resolved value of the provider and of the nested providers that inherit it, and portals follow through the class; `renderToString` plus hydration of `theme="system"` logs no warning; `documentTheme` puts the classes (and so `color-scheme: dark`) on `<html>` in the dark theme and removes them on unmount, and the server HTML leaves `<html>` alone; a test compares the system class's declarations with the light and dark ones, so `tokens.test.ts` keeps covering every pair.
+  - **Guards:** no runtime styles (a class and a media query in the stylesheet, no `<style>` element); WCAG contrast asserted for every token pair in all three themes.
+  - **Size:** S. **Depends on:** none.
 
 ---
 
@@ -598,8 +619,8 @@ Goal: tags reach Fluent's look and interaction model, and focus never drops afte
   - **Size:** M. **Depends on:** P6-02.
 - **P6-04 Composable TagPicker.**
   - **Closes:** `tagpicker-1` (M), `tagpicker-2` (M), `tagpicker-3` (M), `tagpicker-6` (M), `tagpicker-4` (L), `tagpicker-5` (L), `tagpicker-8` (L), `tagpicker-9` (L).
-  - **API sketch:** parts `TagPicker.Control`, `.Group` (built on TagGroup, P6-02, for focus after a dismiss), `.Input`, `.Button`, `.List`, `.Option` (`media`, `secondaryContent`), `.OptionGroup`; the 0.5 `options` array stays as the simple form. Free tagging: `allowCreate?: boolean` + `onOptionCreate?: (text: string) => void` (Enter adds the typed text). `expandIcon` (optional-indicator slot rule), a clear-all secondary action, and a single-line layout with a "+N" count (`overflow?: 'wrap' | 'count'`).
-  - **Acceptance:** people-picker story with Avatars; hidden inputs per value; "No matches" and added/removed announcements kept; every part honours the `size` and `appearance` of P4-01 (story matrix and type tests); axe.
+  - **API sketch:** parts `TagPicker.Control`, `.Group` (built on TagGroup, P6-02, for focus after a dismiss), `.Input`, `.Button`, `.List`, `.Option` (`media`, `secondaryContent`), `.OptionGroup`; the 0.5 `options` array stays as the simple form. Free tagging: `allowCreate?: boolean` + `onOptionCreate?: (text: string) => void`, offered as an option row ([issue #6](https://github.com/mortenbrudvik/waveui/issues/6)): while the trimmed query matches no option label (ignoring case), the list ends with a create option (`labels.create(text)`, default `Create "{text}"`), after the matches so that the first match stays the active option, and alone (so Enter creates) when nothing matches. The keyboard and the pointer reach it like any option, it is announced like one, and the usual "added" announcement follows. Creating calls `onOptionCreate(text)` and adds `text` through `onValueChange`; a value missing from `options` already renders with its raw text, so a controlled parent can add the option later. An empty or whitespace query, or one equal to an existing label (ignoring case), shows no create option, and Enter picks the existing one. `expandIcon` (optional-indicator slot rule), a clear-all secondary action, and a single-line layout with a "+N" count (`overflow?: 'wrap' | 'count'`).
+  - **Acceptance:** people-picker story with Avatars; hidden inputs per value; "No matches" and added/removed announcements kept; every part honours the `size` and `appearance` of P4-01 (story matrix and type tests); the create option: ArrowDown reaches it, Enter or a click creates (`onOptionCreate('infra')`, the tag added, the input cleared), none for `''`, `'  '` or a label that matches ignoring case, a created value in the hidden inputs and a form reset back to `defaultValue`, `labels.create` localizes it; axe (also with the create option active).
   - **Guards:** TagPicker filters as you type and announces "No matches"; hidden inputs and form reset.
   - **Size:** L. **Depends on:** P5-02, P5-03, P6-01, P6-02.
 
@@ -613,10 +634,10 @@ Goal: drawers of every size and position, pinned footers, inline and non-modal t
   - **Acceptance:** RTL; forced colors.
   - **Guards:** toasts move out of a Drawer's way: the Toaster offset logic learns the `bottom` position (toasts move clear of a bottom drawer as they do of an `end` one; a test for each); `Drawer.Trigger`/`Drawer.Close` unchanged.
   - **Size:** M. **Depends on:** P1-21.
-- **P6-06 Non-modal Dialog and Drawer; backdrop and close button options.**
+- **P6-06 Non-modal Dialog and Drawer; backdrop and close button options; Dialog sizes and title actions.**
   - **Closes:** `dialog-2` (M), `drw-6` (M), `dialogsurface-1` (L), `dialogtitle-2` (L).
-  - **API sketch:** the shared `ModalType` (0.6) widens to `'modal' | 'alert' | 'non-modal'` on Dialog and on Drawer (which gains `modalType`): non-modal has no backdrop, no focus trap, no `inert` and no scroll lock, moves focus in on open, closes on Escape; its `onOpenChange` reasons add `DismissReason`'s `'focus-outside'`. `Dialog.Content backdrop?: Slot<'div'>` (nested modals dim once). `closeButton?: Slot<'span'> | SlotObject<'button'>` with the C-SLOTS dismiss rules of MessageBar `dismiss`: `null` hides the built-in Close button, content renders inside the wired `<button>`, a `<button>`/`Button` passed is merged (never nested), and the name comes from `closeLabel` through `labelInName`.
-  - **Acceptance:** Toaster and dismiss-layer rules hold for non-modal surfaces; focus return; axe.
+  - **API sketch:** the shared `ModalType` (0.6) widens to `'modal' | 'alert' | 'non-modal'` on Dialog and on Drawer (which gains `modalType`): non-modal has no backdrop, no focus trap, no `inert` and no scroll lock, moves focus in on open, closes on Escape; its `onOpenChange` reasons add `DismissReason`'s `'focus-outside'`. `Dialog.Content backdrop?: Slot<'div'>` (nested modals dim once). `closeButton?: Slot<'span'> | SlotObject<'button'>` with the C-SLOTS dismiss rules of MessageBar `dismiss`: `null` hides the built-in Close button, content renders inside the wired `<button>`, a `<button>`/`Button` passed is merged (never nested), and the name comes from `closeLabel` through `labelInName`. From [issue #4](https://github.com/mortenbrudvik/waveui/issues/4) (workspace-sized dialogs; neither is a gap of the report): `Dialog.Content size` adds `'large'` and `'full'` (the names of Drawer's scale, P6-05; the spec sets the widths). `'full'` covers the viewport with no gap, radius or border, is `100dvh` high with the safe-area insets as padding, and keeps the body scrolling under the sticky `Dialog.Footer`; the surface carries `data-size`. `Dialog.Title action?: Slot<'span'>` (Fluent's `DialogTitle` `action`), and `Dialog.Content titleAction?: Slot<'span'>` for the `title` prop form: an area for header buttons before the built-in Close button in DOM and Tab order, which the title's end padding makes room for; it pairs with `closeButton`. The viewport gap is the surface's own margin (moved off the backdrop's padding by the fix for #4), so `'full'` and a consumer `className` can remove it.
+  - **Acceptance:** Toaster and dismiss-layer rules hold for non-modal surfaces; focus return; `size="full"` fills the viewport at 390px and 2560px wide, with Escape, the backdrop, the focus trap, focus return and `inert` isolation unchanged and the footer in view; the title action sits before the Close button in DOM and Tab order, in LTR and RTL; axe.
   - **Guards:** `inert` isolation of modal surfaces unchanged (toasts stay announced); the dismiss-layer stack.
   - **Size:** M. **Depends on:** P1-19, P1-20.
 - **P6-07 Inline drawer; surfaces that stay mounted.**
@@ -662,8 +683,8 @@ Goal: public, documented positioning and dismiss hooks and a shared `positioning
   - **Size:** M. **Depends on:** P2-06.
 - **P7-02 Public modal layer.**
   - **Closes:** `foundation-25` (M), `recompose-1` (L).
-  - **API sketch:** export `useModalLayer` (dismiss, focus trap, `inert` isolation, scroll lock, focus restore), `useFocusTrap` and `useRestoreFocus`, documented as the way to build a command palette or full-screen overlay.
-  - **Acceptance:** a command-palette story over a Dialog and under a Toaster behaves like a built-in modal.
+  - **API sketch:** export `useModalLayer` (dismiss, focus trap, `inert` isolation, scroll lock, focus restore), `useFocusTrap` and `useRestoreFocus`, documented as the way to build a command palette or full-screen overlay. A documented way to mark an app-owned region, such as a notification area, that modal surfaces leave usable (in their Tab cycle, not `inert`, inside every dismiss layer): the role the Toaster's internal `data-wave-focus-trap-allow` marker plays today, which [issue #5](https://github.com/mortenbrudvik/waveui/issues/5) (a comment) asks to make public. Until then the README sends such content to the Toaster (P3-08 dispatches to it from anywhere).
+  - **Acceptance:** a command-palette story over a Dialog and under a Toaster behaves like a built-in modal; an app-owned notification region marked that way stays usable (hit-testable, reachable by Tab, a press in it does not close the Dialog) over an open Dialog.
   - **Guards:** `inert` isolation instead of `aria-modal`, so toasts stay announced.
   - **Size:** S. **Depends on:** P7-01.
 
@@ -861,7 +882,7 @@ Goal: grids, lists, trees and comboboxes that stay correct and fast with data th
   - **Size:** M. **Depends on:** P11-01.
 - **P11-04 Virtualization.**
   - **Closes:** `virt-1` (M), `foundation-45` (M), `tree-9` (M), `list-6` (L), `combobox-7` (L), `table-2` (L).
-  - **API sketch:** registration that does not assume every item is mounted (DataGrid keyboard walks the data, not the DOM rows; List roving works with wrapper elements; Listbox options from data); `aria-rowcount`/`aria-rowindex`, `aria-setsize`/`aria-posinset` support; a flat tree model (`useFlatTree(items)`, `FlatTree`) for large and reorderable trees; Table `noNativeElements` (div rendering) for virtualizers; documented adapters for `@tanstack/react-virtual` (an optional peer, never a dependency) or a small built-in `Virtualizer`, decided in the spec.
+  - **API sketch:** registration that does not assume every item is mounted (DataGrid keyboard walks the data, not the DOM rows; List roving works with wrapper elements; Listbox options from data); `aria-rowcount`/`aria-rowindex`, `aria-setsize`/`aria-posinset` support; a flat tree model (`useFlatTree(items)`, `FlatTree`) for large and reorderable trees; Table `noNativeElements` (div rendering) for virtualizers; documented adapters for `@tanstack/react-virtual` (an optional peer, never a dependency) or a small built-in `Virtualizer`, decided in the spec. The flat model also revisits real `treegrid` roles for Tree's `navigationMode="treegrid"`, which keeps `tree` and `treeitem` in 0.8 (Phase 3 spec, D27).
   - **Acceptance:** 10,000-row DataGrid, 10,000-option Combobox and 5,000-node Tree stories; keyboard and screen-reader positions correct.
   - **Guards:** DataGrid on a native `<table role="grid">`: `noNativeElements` is Table-only and opt-in, and DataGrid's virtualization is built and tested on native table rows.
   - **Size:** L. **Depends on:** P11-01, P7-03, P5-03, P3-06, P3-07, P9-06.
@@ -914,12 +935,12 @@ Goal: apps can style and extend components without forking them.
 
 - **P13-01 Structural slots, render-function children and class-name docs.**
   - **Closes:** `foundation-34` (M), `foundation-35` (L), `foundation-36` (L), `form-basic-7` (L), `field-6` (L).
-  - **API sketch:** a `slotProps?: { <part>?: SlotProps }` prop on components with inner parts (Switch `track`/`thumb`, Checkbox `indicator`, Dialog `backdrop`/`body`, Input `root`/`input`, …) merged with C-COMPOSE rules; `SlotObject` children may be a render function `(Component, props) => ReactNode`; a public `getNativeElementProps(tag, props)` helper; Field accepts a render-function child `(fieldControlProps) => ReactNode`. The per-part documentation of the stable class names of P3-00 lands here, part by part next to `slotProps`.
+  - **API sketch:** a `slotProps?: { <part>?: SlotProps }` prop on components with inner parts (Switch `track`/`thumb`, Checkbox `indicator`, Dialog `backdrop`/`body`, Input `root`/`input`, …) merged with C-COMPOSE rules; `SlotObject` children may be a render function `(Component, props) => ReactNode`; a public `getNativeElementProps(tag, props)` helper; Field accepts a render-function child `(fieldControlProps) => ReactNode`. The per-part documentation of the stable class names of P3-00 lands here, part by part next to `slotProps`. The part keys of the class-name registry (Phase 3 spec, Appendix A) are the `slotProps` keys.
   - **Acceptance:** type tests per part; no behaviour change without `slotProps`.
   - **Guards:** `composeEventHandlers` lets consumers cancel the internal handler (slot handlers compose consumer-first).
   - **Size:** L. **Depends on:** P3-00.
 - **P13-02 Public contexts and recomposition hooks.**
-  - **Closes:** `foundation-39` (L), `api-1` (L), `menu-17` (L), `messagebar-6` (L), `foundation-38` (L), `form-basic-8` (L), `form-basic-21` (L), `ctx-1` (L).
+  - **Closes:** `foundation-39` (L), `api-1` (L), `menu-17` (L), `messagebar-6` (L), `foundation-38` (L), `form-basic-8` (L), `form-basic-21` (L), `ctx-1` (L), `buttons-29` (L; P3-00 shipped the static class names, this item the public contexts and recomposition hooks).
   - **API sketch:** export read hooks and providers where extension needs them: `useFieldContext`/`FieldContextProvider`, `useRadioGroupContext` (custom radio cards), Menu and MenuList contexts for custom items, MessageBar context, table/DataGrid contexts (sort, selection, row id); `WaveProvider classNames?: Partial<Record<ComponentName, string>>` for app-wide style hooks.
   - **Acceptance:** each exported context has a C-CONTEXT hook with the missing-provider error; stories for a custom radio card and a custom menu item.
   - **Size:** M. **Depends on:** P13-01.
@@ -930,7 +951,7 @@ Goal: nothing changes in 1.0 that a 0.x release did not announce.
 
 - **P13-03 1.0 deprecation notices and warnings.**
   - **Closes:** none (it owns principle 2's announcement step for Phase 14).
-  - **Scope:** a one-time development warning (`warnDeprecated`/`warnOnce`, C-DEV) for every use P14-02 removes that code can detect and that does not warn yet — including Badge `color="important"` (its meaning changes in P14-05; the Phase 1 spec, D1, deferred this warning to the last 0.x minor); CHANGELOG "Deprecated" announcements for what cannot warn at runtime (`legacy-tokens.css`, the `.dark`/`.high-contrast` theme classes, `animations.css`) and for the 1.0 default and type changes: TimePicker `hourCycle` follows the locale (P14-06), the `details` parameter of every `onOpenChange` and of `onCheckedValuesChange` (Menu, Toolbar; 0.7) becomes required (P14-02), `Image.alt` becomes required (P14-03), and the ref-placement decision (P14-04) once made; the "Upgrading to 1.0" guide drafted.
+  - **Scope:** a one-time development warning (`warnDeprecated`/`warnOnce`, C-DEV) for every use P14-02 removes that code can detect and that does not warn yet — including Badge `color="important"` (its meaning changes in P14-05; the Phase 1 spec, D1, deferred this warning to the last 0.x minor); CHANGELOG "Deprecated" announcements for what cannot warn at runtime (`legacy-tokens.css`, the `.dark`/`.high-contrast` theme classes, `animations.css`) and for the 1.0 default and type changes: TimePicker `hourCycle` follows the locale (P14-06), the `details` parameter of every `onOpenChange`, of `onCheckedValuesChange` (Menu, Toolbar; 0.7) and of `onCheckedItemsChange` (Tree; 0.8) becomes required (P14-02), `Image.alt` becomes required (P14-03), and the ref-placement decision (P14-04) once made; the "Upgrading to 1.0" guide drafted.
   - **Acceptance:** every Phase 14 item is announced in a 0.x CHANGELOG and, where code can detect the use, warns in development; a test per warning.
   - **Size:** M. **Depends on:** P2-05, P4-01, P8-04 (the aliases they add), and every other item that adds a deprecated alias.
 
@@ -953,7 +974,7 @@ Goal: a clean, stable 1.0 API.
   - **Size:** L. **Depends on:** P3-00, P12-03.
 - **P14-02 Remove the deprecated aliases.**
   - **Closes:** none (no gap; flagged in the 0.5 CHANGELOG "Deprecated" section).
-  - **Scope:** every old name of the 0.5 migration table, `legacy-tokens.css`, the `.dark`/`.high-contrast` theme classes, the button-object form of the dismiss and clear slots, `animations.css`, the numeric `size` of Input and Select (P4-01), Tooltip `delay` (P2-05), PresenceBadge `dnd`/`oof` (P8-04), and every other alias added in 0.6–0.18; the optional `details` parameter of `onOpenChange` becomes required wherever it exists (Dialog, Drawer, and the surfaces that adopted `OpenChangeDetails` later), and so does the `details` parameter of `onCheckedValuesChange` (Menu, Toolbar; announced in the 0.7 CHANGELOG).
+  - **Scope:** every old name of the 0.5 migration table, `legacy-tokens.css`, the `.dark`/`.high-contrast` theme classes, the button-object form of the dismiss and clear slots, `animations.css`, the numeric `size` of Input and Select (P4-01), Tooltip `delay` (P2-05), PresenceBadge `dnd`/`oof` (P8-04), and every other alias added in 0.6–0.18; the optional `details` parameter of `onOpenChange` becomes required wherever it exists (Dialog, Drawer, and the surfaces that adopted `OpenChangeDetails` later), and so do the `details` parameters of `onCheckedValuesChange` (Menu, Toolbar; announced in the 0.7 CHANGELOG) and `onCheckedItemsChange` (Tree; announced in the 0.8 CHANGELOG).
   - **Acceptance:** `warnDeprecated` has no callers; the migration table moves to "Upgrading to 1.0".
   - **Size:** M. **Depends on:** P13-03 (and so on all earlier phases).
 - **P14-03 `Image.alt` required.**
@@ -1008,6 +1029,7 @@ graph LR
   E41 --> E42[4.2 Value controls]
   E12 --> E43[4.3 Labels]
   E22 --> E43
+  E44[4.4 System theme]
 
   E41 --> E51[5.1 Listbox]
   E52[5.2 Swatches]
@@ -1077,7 +1099,7 @@ graph LR
 | Rating, RatingDisplay, RatingItem (stable) | `Rating`, `RatingDisplay` | RatingDisplay value, count, compact (P1-10); half values, icons, colors, public RatingItem (P4-03) | 1, 4 |
 | Combobox, Dropdown (stable) | same names | clearable, chevron (P1-11); size/appearance (P4-01); multiselect (P5-01); filter and query (P5-02) | 1, 4, 5 |
 | Listbox, Option, OptionGroup (stable) | `Option`/`OptionGroup` inside pickers; List `selectable` | public Listbox, listbox primitives and `useActiveDescendant` (P5-03) | 5 |
-| TagPicker (+ parts) (stable) | `TagPicker` (`options`) | size (P4-01); composable parts, rich tags, free tagging (P6-04) | 4, 6 |
+| TagPicker (+ parts) (stable) | `TagPicker` (`options`) | size (P4-01); composable parts, rich tags, free tagging with a create option (P6-04) | 4, 6 |
 | ColorPicker, ColorArea, ColorSlider, AlphaSlider (stable) | `ColorPicker` (hex, presets, opacity) | ColorArea, ColorSlider, composable picker (P3-05) | 3 |
 | SwatchPicker, ColorSwatch, ImageSwatch, EmptySwatch (stable) | `SwatchPicker` (`items`) | children, grid, swatch kinds (P5-04) | 5 |
 | DatePicker (compat) | `DatePicker` (first-class) | size (P4-01); month/year pickers (P5-05) | 4, 5 |
@@ -1092,7 +1114,7 @@ graph LR
 | List (stable) | `List` | navigation mode, `onAction`, `disabledSelection` (P9-06); virtualization (P11-04) | 9, 11 |
 | InfoLabel, InfoButton (stable) | `InfoLabel` | label features, rich info, InfoButton (P4-04) | 4 |
 | MessageBar (+ Title, Body, Actions, Group) (stable) | `MessageBar` | Title, Actions, reflow (P3-04); MessageBarGroup with motion (P10-01) | 3, 10 |
-| Toast, Toaster, useToastController, ToastTrigger (stable) | `Toast`, `Toaster`, `useToastController` | `limit`, `dismissAllToasts` (P1-18); rich content and parts (P3-01, P3-02); keyboard (P3-03); motion (P10-01) | 1, 3, 10 |
+| Toast, Toaster, useToastController, ToastTrigger (stable) | `Toast`, `Toaster`, `useToastController` | `limit`, `dismissAllToasts` (P1-18); rich content and parts (P3-01, P3-02); keyboard (P3-03); dispatching from outside React components, several Toasters (P3-08); motion (P10-01) | 1, 3, 10 |
 | ProgressBar, Spinner, Skeleton (stable) | same names | ProgressBar color and Field (P1-17); Spinner inverted and delay (P1-16); ProgressBar motion slot (P10-02) | 1, 10 |
 | Alert (deprecated) | MessageBar, Toast | covered | — |
 | Card (+ Header, Preview, Footer) (stable) | `Card` | appearances, header slots, preview (P8-05) | 8 |
@@ -1106,13 +1128,13 @@ graph LR
 | MenuGrid (preview) | none | deferred (non-goal) | — |
 | Nav (+ NavDrawer, NavCategory, NavItem, NavSubItem, NavSectionHeader, NavDivider, AppItem, SplitNavItem, Hamburger) (stable) | `Nav` | collapsed category shows current (P1-24); NavDrawer and Hamburger (P6-08); Nav parts (P6-09) | 1, 6 |
 | Breadcrumb (+ partitionBreadcrumbItems, truncation helpers) (stable) | `Breadcrumb` | overflow, sizes, focus mode, divider, truncation (P9-02) | 9 |
-| Dialog (+ Trigger, Surface, Body, Title, Content, Actions) (stable) | `Dialog` | alert, close reasons, footer in view (P1-19…P1-21); non-modal, backdrop, close button (P6-06); kept mounted (P6-07); motion (P10-01) | 1, 6, 10 |
+| Dialog (+ Trigger, Surface, Body, Title, Content, Actions) (stable) | `Dialog` | alert, close reasons, footer in view (P1-19…P1-21); non-modal, backdrop, close button, large and full sizes, title actions (P6-06); kept mounted (P6-07); motion (P10-01) | 1, 6, 10 |
 | Popover (stable) | `Popover` | hover opening and delays (P2-05); context and custom targets (P2-06); `positioning` (P7-01); other options in the backlog | 2, 7 |
 | Tooltip (stable) | `Tooltip` | controlled open (P1-22); `openDelay`/`closeDelay` (P2-05); `positioning` (P7-01); other options in the backlog | 1, 2, 7 |
 | TeachingPopover (+ parts) (stable) | `TeachingPopover` (`steps`) | footer actions (P9-07); composable parts (P9-08) | 9 |
 | Table (+ parts, TableResizeHandle, TableSelectionCell, TableCellLayout, TableCellActions) (stable) | `Table` | sortable headers, selection cell, cell layout, cell actions (P9-05); resize handle (P11-03); div rendering (P11-04) | 9, 11 |
 | DataGrid (+ parts, createTableColumn, useTableFeatures, useTableSort, useTableSelection, useTableColumnSizing) (stable) | `DataGrid` | columns, built-in sort (P9-03); row click, selection look (P9-04); headless state, data-scoped selection, resizing, virtualization (P11-01…P11-04) | 9, 11 |
-| FluentProvider, themes, tokens (stable) | `WaveProvider`, `--wave-*` tokens | input defaults (P4-01); theme objects, brand ramps, token breadth (P12-01…P12-03) | 4, 12 |
+| FluentProvider, themes, tokens (stable) | `WaveProvider`, `--wave-*` tokens | input defaults (P4-01); system theme (P4-05); theme objects, brand ramps, token breadth (P12-01…P12-03) | 4, 12 |
 | Motion (react-motion stable; motion components preview) | none | tokens and presence core (P2-00); motion on components (P10-01); slots (P10-02); preview components deferred | 2, 10 |
 | Positioning, tabster focus utilities (stable) | internal hooks, public `useRovingTabIndex` | `useActiveDescendant` (P5-03); public positioning, dismiss, modal layer, grid and group navigation (P7-01…P7-03) | 5, 7 |
 | Slots, `*ClassNames`, custom style hooks, recomposition hooks (stable) | icon/content slots, `className`, `data-*` | class names (P3-00); structural slots and class-name docs (P13-01); contexts (P13-02) | 3, 13 |
@@ -1130,9 +1152,9 @@ Low gaps that are not part of an item's work. Any package that touches the compo
 ### 8.1 Coverage summary
 
 - **High and medium (142):** each is in exactly one item's **Closes** line; none is deferred. 141 are closed by the item's work; `foundation-46` (chart components) is resolved by strategy (P12-04), because charts are a non-goal (§1.3). `foundation-9` (namespaced utilities) is closed by the 1.0 item P14-01.
-- **Low (333):** 211 are closed by items above; the 122 below remain in the backlog: 105 still to schedule, 12 intentional differences and 5 deferred.
+- **Low (333):** 212 are closed by items above; the 121 below remain in the backlog: 104 still to schedule, 12 intentional differences and 5 deferred.
 - The gap list has two entries with the id `nav-1`: the Nav density gap (navigation family, backlog below) and the Table keyboard-helper gap (table family), written `table/nav-1` in this document (closed by P7-03). The gap list should give the table gap a unique id (for example `table-nav-1`) when it is next regenerated.
-- Two gaps are mitigated early without being closed: `taggroup-1` by P1-15 (closed by P6-02) and `badge-1` by P1-13 (closed by P14-05).
+- Three gaps are mitigated early without being closed: `taggroup-1` by P1-15 (closed by P6-02), `badge-1` by P1-13 (closed by P14-05) and `buttons-29` by P3-00 (closed by P13-02).
 
 ### 8.2 Backlog by family
 
@@ -1180,7 +1202,6 @@ Low gaps that are not part of an item's work. Any package that touches the compo
 - `toast-4` — Toast inverted appearance.
 - `toaster-3` — Toaster offset.
 - `toaster-4` — centered positions and per-toast position.
-- `toaster-5` — several Toasters addressed by `toasterId`.
 - `toaster-6` — inline Toaster.
 - `toaster-7` — per-toast politeness and a custom announce function.
 - `toaster-8` — toast priority.
@@ -1286,6 +1307,19 @@ Behaviour differences decided by a phase spec (Phase 2, 0.7.0), with no gap of t
 - Editable fields inside a context-menu region (`openOnContext`) keep the browser's context menu (paste, spelling suggestions) and open nothing; there is no opt-out in 0.7.
 - No global positioning configuration (Fluent's `PositioningConfigurationProvider`): per-component props, and the `positioning` prop of P7-01. The other half of `positioning-8`, the safe zone, shipped in 0.7 (P2-05).
 
+Behaviour differences decided by a phase spec (Phase 3, 0.8.0), with no gap of their own:
+
+- A toast's severity (its politeness and spoken prefix) comes from the rendered `Toast`; Fluent reads it from the dispatch options only.
+- Every `Toast` in a Toaster shows the Dismiss button, rich ones included; the opt-out stays in the backlog (`toaster-9`).
+- A toast that holds an action stays until it is dismissed unless the dispatch passes a `timeout`; Fluent times out every toast.
+- Every toast pauses while the pointer or focus is anywhere in the toast region; Fluent pauses the toasts of a position while one has focus, and on hover or window blur only with `pauseOnHover` and `pauseOnWindowBlur`.
+- Backspace also dismisses a focused toast (the delete key of Mac keyboards), next to Fluent's Delete.
+- A MessageBar's title does not name a bar that is a live region (its default roles); it is read as the start of its content. With a non-live role (`region`, `group`) it names the bar, as Fluent's always does.
+- One DOM order (icon, text, actions, Dismiss) serves both MessageBar layouts, where Fluent reorders the DOM; no layout clips the text, where Fluent's single line does not wrap.
+- ColorArea mirrors its x axis in right-to-left layouts; Fluent's does not.
+- Checks in a multi-select Tree cascade; Fluent's nested Tree keeps them independent (its flat-tree helper computes the cascade).
+- `navigationMode="treegrid"` changes the keyboard only and keeps the `tree` and `treeitem` roles, as Fluent's does.
+
 Behaviour differences decided by the Phase 4 spec (0.9.0), with no gap of their own:
 
 - A focused invalid field keeps its error color on the other borders; Fluent hides it until blur (D4).
@@ -1319,3 +1353,8 @@ Small fixes found while shipping a phase that close no Fluent gap. Any package t
 - **A surface opened from a hover card without a trigger or a focused opener.** A close by hover moves no focus, also for the surfaces opened from inside the closing one (a submenu, a hover card in a hover card), which it recognises by where their opener, else their trigger, sits in the DOM. A surface that the app opens from inside a hover card with a `target`, no trigger and nothing focused has neither, so its close keeps the usual focus return. Fix: record the layer a surface was opened from and follow the layer tree instead. **Size:** S.
 - **A `<Fragment ref>` around a child that Wave unwraps.** React 19.3 made Fragment refs stable: `<Fragment ref={ref}>` receives a `FragmentInstance` for its children. Three places look through a Fragment and render its children without it, so a consumer's Fragment ref never attaches there: `unwrapFragment` (`src/lib/renderTrigger.tsx`), which the triggers built on `useTriggerElement` and Tooltip use to reach the single element they clone; `Presence` (`src/components/motion/Presence.tsx`), which unwraps a Fragment around its single child; and `flattenChildren` (`src/lib/children.ts`), which compounds use to count, slice and classify their children. Fix: keep a Fragment that carries a `ref` (render the unwrapped or flattened children inside it again), with a test per site, or document that a Fragment ref is not supported there. **Size:** S.
 - **vite-plugin-dts 5.** Deferred in 0.7; the build stays on vite-plugin-dts 4.5.4, which needs `rootDir` in tsconfig.json under TypeScript 6 (`verify-dist` fails an empty roll-up). vite-plugin-dts 5.1.1 is a deprecated wrapper around unplugin-dts 1.1.1, whose type bundling appends every non-exported top-level `declare namespace` block to the rolled-up `index.d.ts` and `index.d.cts`: the `displayName` namespaces of `BreadcrumbItem`, `NavItem` and `NavSubItem` (functions exported through an export list) and the `NodeJS` namespace of `src/env.d.ts`. A consumer that type-checks libraries (`skipLibCheck: false`) then gets TS2395 ("Individual declarations in merged declaration … must be all exported or all local"). Revisit when this is fixed upstream, preferably by moving to `unplugin-dts` itself: its `bundleTypes` option replaces `rollupTypes`, `@microsoft/api-extractor` becomes a peer dependency to install, and the plugin is named `unplugin-dts`, so `.storybook/main.ts` must filter that name instead of `vite:dts`. **Size:** S.
+- **Arrow keys between toasts.** 0.8 moves between toasts with Tab only; Fluent's arrow navigation is marked as a stopgap in its own source. Fix: Up and Down between the toast containers of a Toaster, once a pattern that screen readers support is found. **Size:** S.
+- **Tree checks that do not cascade.** A 0.8 checkbox tree always cascades (the Phase 3 ruling, D24), so a tree whose parents are independent items cannot be built. Fix: an option for independent checks, named in its phase spec. **Size:** S.
+- **Range selection in a multi-select Tree.** Shift+Arrow, Shift+Space and Ctrl+A (optional in the APG treeview pattern) are not implemented. **Size:** M.
+- **Real `treegrid` roles.** `navigationMode="treegrid"` keeps `tree` and `treeitem`, because treegrid rows need one flat list with `aria-level`. Fix: with the flat tree model of P11-04. **Size:** M.
+- **Focus return to a hidden Tree row action.** A row's actions hide again (on devices with hover, outside forced colors) once no hover, focus or expanded trigger keeps them shown, and a hidden action cannot take focus. So a Dialog that the app renders outside the actions and opens through state (a "Delete…" menu item that opens a confirm Dialog) returns focus to the nearest element that can take it, normally the item, not to the action; 0.8 documents rendering the Dialog inside `actions` instead. Fix: keep hidden actions focusable by script (e.g. hide them by opacity and pointer events instead of visibility, weighing that they would then stay in the accessibility tree), or hold them while a layer opened from the row is open. **Size:** S.

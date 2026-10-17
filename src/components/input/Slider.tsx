@@ -1,4 +1,5 @@
 import * as React from 'react';
+import { sliderClassNames } from '../../lib/classNames';
 import { cn } from '../../lib/cn';
 import { composeEventHandlers } from '../../lib/composeEventHandlers';
 import { warnOnce } from '../../lib/dev';
@@ -226,6 +227,7 @@ export const Slider = ({
       ref={mergedRef}
       type="range"
       className={cn(
+        sliderClassNames.root,
         'w-full cursor-pointer appearance-none bg-transparent',
         // A 24px-tall input at the small size, the rail centred in it (D14).
         size === 'small' && 'h-6',

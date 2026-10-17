@@ -1,5 +1,6 @@
 import * as React from 'react';
 import { joinIds } from '../../lib/aria';
+import { radioGroupClassNames, radioGroupItemClassNames } from '../../lib/classNames';
 import { cn } from '../../lib/cn';
 import { composeEventHandlers } from '../../lib/composeEventHandlers';
 import { isDev, reportMissingContext, warnDeprecated, warnOnce } from '../../lib/dev';
@@ -205,6 +206,7 @@ const RadioGroupRoot = ({
         aria-orientation={orientation}
         aria-disabled={disabled || undefined}
         className={cn(
+          radioGroupClassNames.root,
           'relative flex',
           orientation === 'vertical' ? 'flex-col gap-2' : 'flex-row gap-4',
           className,
@@ -315,6 +317,7 @@ export function RadioItem({
   return (
     <label
       className={cn(
+        radioGroupItemClassNames.root,
         // items-start: the radio lines up with the first line of a label that wraps or has a
         // second line, not with its middle.
         'inline-flex items-start gap-2 select-none',
@@ -339,6 +342,7 @@ export function RadioItem({
         data-roving-value={value}
         onClick={composeEventHandlers(onClick, () => ctx.select(value))}
         className={cn(
+          radioGroupItemClassNames.indicator,
           // p-0 and bg-transparent are set here, not left to the native reset, which any app button
           // style overrides (C-NATIVE).
           'flex h-[18px] w-[18px] shrink-0 items-center justify-center rounded-full border bg-transparent p-0 transition-colors motion-reduce:transition-none',
@@ -366,7 +370,14 @@ export function RadioItem({
         )}
       </button>
       {hasLabel && (
-        <span id={labelTextId} className={cn('text-body-1 text-foreground', labelClassName)}>
+        <span
+          id={labelTextId}
+          className={cn(
+            radioGroupItemClassNames.label,
+            'text-body-1 text-foreground',
+            labelClassName,
+          )}
+        >
           {materialiseSlotContent(label)}
         </span>
       )}

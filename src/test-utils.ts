@@ -104,6 +104,10 @@
  * - {@link findDanglingIdRefsInHtml}: the ARIA id references of an HTML string (`renderToString`
  *   output) that point at no element of that HTML, `aria-controls` included (a component
  *   rendered open on the server must not reference its portaled surface).
+ * - {@link getStableClassNames}: a component's stable class names by its `displayName` (the
+ *   registry lookup of {@link testClassName}, the conventions gate's `class-names` rule and
+ *   `src/__tests__/classNames.test.ts`), with {@link DISPLAY_NAME_ALIASES} and
+ *   {@link VARIANT_BASES}.
  * - `vi.mock()` in a test file works as usual, also for the modules the setup imports
  *   (`src/lib/dev`, RTL): the mock applies to the test file's imports and to every module it
  *   loads afterwards; only the setup's own bindings (its after-each `cleanup()` and
@@ -123,6 +127,7 @@ import { onTestFinished } from 'vitest';
 import { configureAxe } from 'vitest-axe';
 import { WaveProvider } from './components/provider/WaveProvider';
 import type { InputDefaults, WaveDir, WaveTheme } from './components/provider/WaveProvider';
+import * as registry from './lib/classNames';
 import { describeElement } from './test-setup';
 
 /*
@@ -384,6 +389,86 @@ export async function expectNoA11yViolations(root?: Element): Promise<void> {
 }
 
 // ---------------------------------------------------------------------------
+// Stable class names (Fluent parity phase 3, P3-00)
+// ---------------------------------------------------------------------------
+
+/** The class-name registry (`src/lib/classNames.ts`) as a table: constant name → classes by key. */
+const CLASS_NAME_REGISTRY = registry as unknown as Readonly<
+  Record<string, Readonly<Record<string, string>>>
+>;
+
+/**
+ * Display names that differ from their flat export names (Appendix A of the phase 3 spec), mapped
+ * to the constant of the component they name. Every other public component's constant is its
+ * camel-cased display name plus `ClassNames`.
+ */
+export const DISPLAY_NAME_ALIASES: Readonly<Record<string, string>> = {
+  RadioItem: 'radioGroupItemClassNames',
+  Step: 'stepperStepClassNames',
+  Tab: 'tabListTabClassNames',
+  TabPanel: 'tabListPanelClassNames',
+  TabPanels: 'tabListPanelsClassNames',
+  TableHead: 'tableHeaderClassNames',
+  TableHeadCell: 'tableHeaderCellClassNames',
+};
+
+/**
+ * Variants (spec D5): a variant's root also carries the roots of these constants, base first (the
+ * roots of Appendix A's "Also carries" column).
+ */
+export const VARIANT_BASES: Readonly<Record<string, readonly string[]>> = {
+  compoundButtonClassNames: ['buttonClassNames'],
+  toggleButtonClassNames: ['buttonClassNames'],
+  menuButtonClassNames: ['buttonClassNames'],
+  toolbarButtonClassNames: ['buttonClassNames'],
+  toolbarToggleButtonClassNames: ['buttonClassNames', 'toggleButtonClassNames'],
+  toolbarRadioButtonClassNames: ['buttonClassNames', 'toggleButtonClassNames'],
+  counterBadgeClassNames: ['badgeClassNames'],
+  colorPickerSwatchesClassNames: ['swatchPickerClassNames'],
+  menuItemCheckboxClassNames: ['menuItemClassNames'],
+  menuItemRadioClassNames: ['menuItemClassNames'],
+  menuItemSwitchClassNames: ['menuItemClassNames'],
+  menuItemLinkClassNames: ['menuItemClassNames'],
+};
+
+/** A component's stable class names, from {@link getStableClassNames}. */
+export interface StableClassNames {
+  /** The registry constant, e.g. `'toggleButtonClassNames'`. */
+  constant: string;
+  /** Its root class, e.g. `'wave-toggle-button'`. */
+  root: string;
+  /** Every root class the element that receives `className` carries, base first. */
+  carries: readonly string[];
+}
+
+/**
+ * The stable class names (`src/lib/classNames.ts`) of the component with `displayName`: its
+ * constant (the camel-cased display name plus `ClassNames`, or the entry of
+ * {@link DISPLAY_NAME_ALIASES}), its root class and `carries`, every root class the element that
+ * receives `className` must carry (the roots of the component's {@link VARIANT_BASES}, then its
+ * own). `undefined` for a display name no constant names (internal components, contexts). Used by
+ * {@link testClassName}, the conventions gate's `class-names` rule and
+ * `src/__tests__/classNames.test.ts`.
+ */
+export function getStableClassNames(displayName: string): StableClassNames | undefined {
+  if (!displayName) return undefined;
+  const constant =
+    DISPLAY_NAME_ALIASES[displayName] ??
+    `${displayName[0].toLowerCase()}${displayName.slice(1)}ClassNames`;
+  if (!Object.hasOwn(CLASS_NAME_REGISTRY, constant)) return undefined;
+  const { root } = CLASS_NAME_REGISTRY[constant];
+  const bases = VARIANT_BASES[constant] ?? [];
+  return {
+    constant,
+    root,
+    carries: [...bases.map((base) => CLASS_NAME_REGISTRY[base].root), root],
+  };
+}
+
+/** The name of the stable-class case of {@link testClassName}. */
+const STABLE_CLASSES_CASE = 'carries its stable classes on the element that receives className';
+
+// ---------------------------------------------------------------------------
 // Internals
 // ---------------------------------------------------------------------------
 
@@ -499,6 +584,11 @@ export function testRestSpread<P extends object>(
  *
  * Both renders read the element carrying `data-testid`, which must be the element that receives
  * `className`.
+ * - `carries its stable classes on the element that receives className` (only for a component
+ *   whose `displayName` names a constant of `src/lib/classNames.ts`, see
+ *   {@link getStableClassNames}): with the consumer class, the element that received it (found in
+ *   `document.body`, so a portaled or wrapped root counts, and no `data-testid` is read) carries
+ *   every class of `carries`: a variant's base roots and its own.
  *
  * @param Component The component under test.
  * @param props     Props every render needs.
@@ -554,6 +644,21 @@ export function testClassName<P extends object>(
         el,
         `default "${conflicting.overrides}" survived next to "${conflicting.className}"`,
       ).not.toHaveClass(conflicting.overrides);
+    });
+  }
+
+  const displayName = displayNameOf(Component);
+  const stable = typeof displayName === 'string' ? getStableClassNames(displayName) : undefined;
+  if (stable) {
+    it(STABLE_CLASSES_CASE, () => {
+      renderComponent(Component, { ...props, className: customClass }, options);
+      const target = document.body.querySelector(`.${customClass}`);
+      expect(target, `no element received className "${customClass}"`).not.toBeNull();
+      const missing = stable.carries.filter((cls) => !target?.classList.contains(cls));
+      expect(
+        missing,
+        `stable classes missing where className lands: apply ${stable.constant}.root first in that element's cn() (src/lib/classNames.ts), and a variant also its base constants' roots`,
+      ).toEqual([]);
     });
   }
 }

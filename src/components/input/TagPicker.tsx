@@ -1,6 +1,7 @@
 import * as React from 'react';
 import { cn } from '../../lib/cn';
 import { joinIds } from '../../lib/aria';
+import { tagPickerClassNames } from '../../lib/classNames';
 import { composeEventHandlers } from '../../lib/composeEventHandlers';
 import { warnDeprecated, warnOnce } from '../../lib/dev';
 import { getArrowIntent, getDirection } from '../../lib/direction';
@@ -245,6 +246,7 @@ function TagRemoveButton({
       disabled={disabled}
       aria-label={label}
       className={cn(
+        tagPickerClassNames.removeButton,
         // Padding and background set here (C-NATIVE), not left to an app-wide rule.
         'ms-0.5 inline-flex rounded-sm bg-transparent p-0 text-muted-foreground not-disabled:not-aria-disabled:hover:text-foreground disabled:cursor-not-allowed',
         focusRing,
@@ -568,7 +570,7 @@ export const TagPicker = (props: TagPickerProps) => {
       data-appearance={appearance}
       {...rest}
       ref={rootMergedRef}
-      className={cn('relative', className)}
+      className={cn(tagPickerClassNames.root, 'relative', className)}
     >
       <div
         ref={setReference}
@@ -576,6 +578,7 @@ export const TagPicker = (props: TagPickerProps) => {
         role="group"
         aria-disabled={disabled || undefined}
         className={cn(
+          tagPickerClassNames.control,
           'flex flex-wrap items-center',
           sizeClasses.control,
           inputAppearanceClasses[appearance],
@@ -593,7 +596,7 @@ export const TagPicker = (props: TagPickerProps) => {
           <div
             role="list"
             aria-label={labels?.selected ?? 'Selected'}
-            className="flex flex-wrap items-center gap-1"
+            className={cn(tagPickerClassNames.group, 'flex flex-wrap items-center gap-1')}
           >
             {selected.map((value) => {
               const label = labelOf(value);
@@ -602,6 +605,7 @@ export const TagPicker = (props: TagPickerProps) => {
                   key={value}
                   role="listitem"
                   className={cn(
+                    tagPickerClassNames.tag,
                     'inline-flex items-center gap-1 rounded bg-muted text-foreground',
                     sizeClasses.tag,
                   )}
@@ -662,6 +666,7 @@ export const TagPicker = (props: TagPickerProps) => {
           onFocus={onFocus}
           onBlur={onBlur}
           className={cn(
+            tagPickerClassNames.input,
             'min-w-15 flex-1 bg-transparent text-foreground placeholder:text-muted-foreground focus:outline-hidden',
             sizeClasses.input,
           )}
@@ -680,9 +685,17 @@ export const TagPicker = (props: TagPickerProps) => {
         open={open}
         expanded={expanded}
         showCheck={false}
+        listboxClassName={tagPickerClassNames.listbox}
+        surfaceClassName={tagPickerClassNames.surface}
         emptyContent={
           query !== '' ? (
-            <div aria-hidden="true" className="px-3 py-1.5 text-body-1 text-muted-foreground">
+            <div
+              aria-hidden="true"
+              className={cn(
+                tagPickerClassNames.emptyMessage,
+                'px-3 py-1.5 text-body-1 text-muted-foreground',
+              )}
+            >
               {noMatchesText}
             </div>
           ) : undefined
@@ -692,7 +705,12 @@ export const TagPicker = (props: TagPickerProps) => {
       >
         {expanded &&
           listbox.items.map((item) => (
-            <Option key={item.value} value={item.value} label={item.label}>
+            <Option
+              key={item.value}
+              value={item.value}
+              label={item.label}
+              className={tagPickerClassNames.option}
+            >
               {item.label}
             </Option>
           ))}

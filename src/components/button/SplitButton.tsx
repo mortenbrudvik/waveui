@@ -1,12 +1,13 @@
 import * as React from 'react';
 import { cn } from '../../lib/cn';
+import { splitButtonClassNames } from '../../lib/classNames';
 import { warnOnce } from '../../lib/dev';
 import { ChevronDownIcon } from '../../lib/icons';
 import { mergeProps } from '../../lib/mergeProps';
 import { slotRendersContent } from '../../lib/slot';
 import type { Size, Appearance, IconPosition, Slot } from '../../lib/types';
 import { Button } from './Button';
-import { unwrapButtonGlyph } from './Button.slots';
+import { unwrapButtonGlyph, withPartClass } from './Button.slots';
 
 /**
  * Props for one half of a SplitButton (`menuButtonProps`, `primaryActionButtonProps`): native
@@ -218,7 +219,7 @@ export const SplitButton = ({
       ref={ref}
       {...props}
       role={role ?? 'group'}
-      className={cn('inline-flex items-stretch', className)}
+      className={cn(splitButtonClassNames.root, 'inline-flex items-stretch', className)}
     >
       <Button
         {...primary}
@@ -226,9 +227,14 @@ export const SplitButton = ({
         size={size}
         disabled={!primaryFocusable && (disabled || Boolean(primary.disabled))}
         disabledFocusable={primaryFocusable}
-        icon={icon}
+        icon={withPartClass(icon, splitButtonClassNames.icon)}
         iconPosition={iconPosition}
-        className={cn(halfClasses, 'rounded-e-none border-e-0', primary.className)}
+        className={cn(
+          splitButtonClassNames.primaryActionButton,
+          halfClasses,
+          'rounded-e-none border-e-0',
+          primary.className,
+        )}
       >
         {children}
       </Button>
@@ -238,8 +244,12 @@ export const SplitButton = ({
         size={size}
         disabled={!menuFocusable && (disabled || Boolean(menu.disabled))}
         disabledFocusable={menuFocusable}
-        icon={menuIconRenders ? menuGlyph : <ChevronDownIcon />}
+        icon={withPartClass(
+          menuIconRenders ? menuGlyph : <ChevronDownIcon />,
+          splitButtonClassNames.menuIcon,
+        )}
         className={cn(
+          splitButtonClassNames.menuButton,
           halfClasses,
           menuButtonSizeClasses[size],
           'rounded-s-none',

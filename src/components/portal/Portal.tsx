@@ -1,6 +1,7 @@
 import * as React from 'react';
 import { createPortal } from 'react-dom';
 import { cn } from '../../lib/cn';
+import { portalClassNames } from '../../lib/classNames';
 import { Z_INDEX, registerLayerElement } from '../../lib/layers';
 import { useIsClient } from '../../hooks/useIsClient';
 import { useDirection } from '../../hooks/useDirection';
@@ -98,7 +99,7 @@ export const Portal = ({
   return createPortal(
     <div
       ref={wrapperRef}
-      className={cn('wave-portal', themeClassName, className)}
+      className={cn(portalClassNames.root, themeClassName, className)}
       dir={dir}
       data-wave-portal=""
       data-layer={layer}

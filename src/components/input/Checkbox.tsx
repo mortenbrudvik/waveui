@@ -1,5 +1,6 @@
 import * as React from 'react';
 import { focusableDisabledProps, joinIds } from '../../lib/aria';
+import { checkboxClassNames } from '../../lib/classNames';
 import { cn } from '../../lib/cn';
 import { composeEventHandlers } from '../../lib/composeEventHandlers';
 import { warnDeprecated, warnOnce } from '../../lib/dev';
@@ -264,7 +265,7 @@ export const Checkbox = ({
   // The glyph is the forced-colors leaf; the box stays on system colors (see `checkedBox`).
   const glyphClassName = unavailable ? disabledGlyph : forcedColors.selectedLeaf;
   const labelText = hasLabel ? (
-    <span id={labelTextId} className="text-body-1 text-foreground">
+    <span id={labelTextId} className={cn(checkboxClassNames.label, 'text-body-1 text-foreground')}>
       {materialiseSlotContent(label)}
     </span>
   ) : null;
@@ -276,6 +277,7 @@ export const Checkbox = ({
       data-size={resolvedSize}
       data-shape={resolvedShape}
       className={cn(
+        checkboxClassNames.root,
         // items-start: the box lines up with the first line of a label that wraps or has a second
         // line, not with its middle.
         'relative inline-flex items-start gap-2 select-none',
@@ -319,6 +321,7 @@ export const Checkbox = ({
             : composeEventHandlers(onClick, () => setChecked((prev) => !prev))
         }
         className={cn(
+          checkboxClassNames.indicator,
           // p-0 and the unchecked bg-transparent are set here, not left to the native reset, which
           // any app button style overrides (C-NATIVE).
           cn(

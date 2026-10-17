@@ -1,4 +1,5 @@
 import * as React from 'react';
+import { gridClassNames } from '../../lib/classNames';
 import { cn } from '../../lib/cn';
 import type { PolymorphicComponent, PolymorphicProps } from '../../lib/polymorphic';
 
@@ -119,6 +120,7 @@ export const Grid: PolymorphicComponent<'div', GridOwnProps> = (props) => {
     <Component
       ref={ref}
       className={cn(
+        gridClassNames.root,
         'grid',
         columns && columnsMap[columns],
         gap && gapMap[gap],

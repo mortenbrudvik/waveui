@@ -1,5 +1,6 @@
 import * as React from 'react';
 import { cn } from '../../lib/cn';
+import { labelClassNames } from '../../lib/classNames';
 import { markFieldLabel } from './fieldLabel';
 import { materialiseSlotContent, slotRendersContent } from '../../lib/slot';
 import type { CoreSize, TextWeight } from '../../lib/types';
@@ -63,6 +64,7 @@ export const Label = ({
     <label
       ref={ref}
       className={cn(
+        labelClassNames.root,
         disabled ? 'text-muted-foreground' : 'text-foreground',
         sizeMap[size],
         weightMap[weight],
@@ -72,11 +74,11 @@ export const Label = ({
     >
       {children}
       {required === true ? (
-        <span className="ms-1 text-error" aria-hidden="true">
+        <span className={cn(labelClassNames.required, 'ms-1 text-error')} aria-hidden="true">
           *
         </span>
       ) : required !== false && slotRendersContent(required) ? (
-        <span className="ms-1 text-error" aria-hidden="true">
+        <span className={cn(labelClassNames.required, 'ms-1 text-error')} aria-hidden="true">
           {materialiseSlotContent(required)}
         </span>
       ) : null}

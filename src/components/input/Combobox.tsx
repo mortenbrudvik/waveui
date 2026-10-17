@@ -1,4 +1,5 @@
 import * as React from 'react';
+import { comboboxClassNames } from '../../lib/classNames';
 import { cn } from '../../lib/cn';
 import { composeEventHandlers } from '../../lib/composeEventHandlers';
 import { warnDeprecated } from '../../lib/dev';
@@ -443,7 +444,7 @@ const ComboboxRoot = (props: ComboboxProps) => {
       data-appearance={appearance}
       {...rest}
       ref={rootMergedRef}
-      className={cn('relative inline-flex flex-col', className)}
+      className={cn(comboboxClassNames.root, 'relative inline-flex flex-col', className)}
     >
       <div className="relative flex items-center">
         <input
@@ -479,6 +480,7 @@ const ComboboxRoot = (props: ComboboxProps) => {
             checkDefaultPrevented: false,
           })}
           className={cn(
+            comboboxClassNames.input,
             inputHeightClasses[size],
             'w-full',
             inputPaddingClasses[size],
@@ -500,6 +502,7 @@ const ComboboxRoot = (props: ComboboxProps) => {
             onMouseDown={(event) => event.preventDefault()}
             onClick={handleClear}
             className={cn(
+              comboboxClassNames.clearButton,
               pickerIconButtonClasses(size, appearance),
               pickerButtonOffset(size, showExpand ? 2 : 1),
               focusRing,
@@ -520,6 +523,8 @@ const ComboboxRoot = (props: ComboboxProps) => {
             onToggle={handleExpandClick}
             size={size}
             appearance={appearance}
+            className={comboboxClassNames.expandButton}
+            iconClassName={comboboxClassNames.expandIcon}
           />
         )}
       </div>
@@ -535,9 +540,17 @@ const ComboboxRoot = (props: ComboboxProps) => {
         floatingProps={floatingProps}
         open={open}
         expanded={expanded}
+        listboxClassName={comboboxClassNames.listbox}
+        surfaceClassName={comboboxClassNames.surface}
         emptyContent={
           draft ? (
-            <div aria-hidden="true" className="px-3 py-1.5 text-body-1 text-muted-foreground">
+            <div
+              aria-hidden="true"
+              className={cn(
+                comboboxClassNames.emptyMessage,
+                'px-3 py-1.5 text-body-1 text-muted-foreground',
+              )}
+            >
               {noMatchesText}
             </div>
           ) : undefined

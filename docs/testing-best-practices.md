@@ -84,7 +84,7 @@ It registers these building blocks, which are also exported for tests that need 
 
 - `testForwardRef(Component, expectedTag, props?, options?)` — a `ref` receives the element that carries `data-testid`, and that element has `expectedTag`.
 - `testRestSpread(Component, props?, options?)` — `data-testid` lands on the root. Without `control`, `aria-label` lands on the root too; with `control`, `getByRole(control.role, { name })` must find the focusable element, `aria-label` must not stay on the root, and `data-testid` must stay on the outermost element that contains the control.
-- `testClassName(Component, props?, options?)` — every default class survives a consumer `className`; with `conflictingClass`, the consumer class wins and the default is gone.
+- `testClassName(Component, props?, options?)` — every default class survives a consumer `className`; with `conflictingClass`, the consumer class wins and the default is gone; and, for a component with a stable class-name constant, the element that received the consumer class also carries the component's root class and the base classes of a variant (a ToggleButton: `wave-button` and `wave-toggle-button`). The last case is registered only when `getStableClassNames(displayName)` finds a constant (see [Stable class names](#stable-class-names-getstableclassnamesdisplayname)), and it looks the element up by the consumer class, so a component whose `className` lands on a wrapper or a portaled element (`RadioGroup.Item`'s label, a Dialog surface) needs no config change.
 - `testPolymorphicAs(Component, props?, options?)` — with `polymorphic`.
 - `testDisplayName(Component, name)`.
 - `testA11y(Component, props?, { scope?, wrapper? })` — plus one test per `a11yVariants` entry.
@@ -498,6 +498,198 @@ it('starts auto-rotation stopped for reduced motion', () => {
 });
 ```
 
+### Stable class names: `getStableClassNames(displayName)`
+
+`getStableClassNames(displayName)` (`src/test-utils.ts`) returns `{ constant, root, carries }` for a component with a registry constant, else `undefined`: the constant's name (`toggleButtonClassNames`), its root class and every root class the element must carry, the base classes of a variant included (`VARIANT_BASES`). A display name that differs from its flat name is looked up through `DISPLAY_NAME_ALIASES` (`RadioItem` → `radioGroupItemClassNames`). `testClassName` uses it; assert part classes yourself, reading the constant:
+
+```tsx
+// src/components/button/__tests__/stableClassNames.test.tsx
+import { render, screen } from '@testing-library/react';
+import { ToggleButton } from '../ToggleButton';
+import { buttonClassNames, toggleButtonClassNames } from '../../../lib/classNames';
+
+it('puts both icon classes on the icon span', () => {
+  render(<ToggleButton icon={<svg />} aria-label="Bold" />);
+  const icon = screen.getByRole('button', { name: 'Bold' }).querySelector('span[aria-hidden]');
+  expect(icon).toHaveClass(buttonClassNames.icon, toggleButtonClassNames.icon);
+});
+```
+
+### Toasts
+
+- **Dispatching content.** Render a Toaster and a button that dispatches (`useToastController()` inside it), or a handle from `createToaster()` created in the test (never at module scope of a test file, which would share it between tests). The toast's container is `getByRole('group', { name: 'Success: Email sent' })`; its parts carry their stable classes.
+- **Announcements.** The Toaster's two permanent live regions receive each toast's text once: assert that text there (the severity, title, body and action labels, never "Dismiss"), and that an `error` toast lands in the assertive one. Nothing needs a provider.
+- **Presence.** A toast's container mounts through the presence core: `mockAnimations({ animated: (el) => el.hasAttribute('data-wave-toast') })` keeps a dismissed toast `exiting` (and `inert`) until `motion.finishAll()`, so a test can check that focus moved to the next toast before the exit ends and that the exiting toast no longer counts toward `limit`.
+- **The shortcut.** `shortcuts={{ focus: (event) => event.altKey && event.shiftKey && event.code === 'KeyN' }}` and `await user.keyboard('{Alt>}{Shift>}N{/Shift}{/Alt}')` from anywhere in the page; Escape and Delete go to the focused container (`act(() => container.focus())`).
+- **Timers.** The fake-timer recipe of section 7. A toast with an action gets no timer unless the dispatch passes `timeout`: assert `vi.getTimerCount()` or that the toast is still there after the default 5 seconds.
+- **Server rendering.** A test file with `// @vitest-environment node` can dispatch through a handle created at module scope of the test file (the rule above is about sharing a bound handle between tests; here no Toaster ever binds it, so nothing is shared, and the dispatch returns an id and does nothing) and `renderToString` a page with a bound Toaster (no toast in the HTML).
+
+### ResizeObserver layout: the MessageBar reflow
+
+`layout="auto"` with `MessageBar.Actions` observes the bar and measures it one animation frame after a resize. Install the mock, give the bar and its text column the widths of a real layout (jsdom lays nothing out), report the resize and let the frame land:
+
+```tsx
+// src/components/feedback/__tests__/MessageBar.reflow.test.tsx
+import { act, render, screen } from '@testing-library/react';
+import { Button } from '../../button/Button';
+import { MessageBar } from '../MessageBar';
+import { messageBarClassNames } from '../../../lib/classNames';
+import { installResizeObserverMock, mockRect } from '../../../test-utils';
+
+const nextFrame = () => new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
+
+it('switches to the multiline layout while the text overflows', async () => {
+  const ro = installResizeObserverMock();
+  try {
+    render(
+      <MessageBar>
+        Your session expires in five minutes.
+        <MessageBar.Actions>
+          <Button>Retry</Button>
+        </MessageBar.Actions>
+      </MessageBar>,
+    );
+    const bar = screen.getByRole('status');
+    const column = bar.querySelector(`.${messageBarClassNames.body}`) as HTMLElement;
+    expect(bar).toHaveAttribute('data-layout', 'singleline');
+    mockRect(bar, { width: 400 });
+    mockRect(column, { width: 200 });
+    Object.defineProperty(column, 'scrollWidth', { configurable: true, value: 350 });
+    ro.trigger(bar);
+    await act(async () => {
+      await nextFrame();
+    });
+    expect(bar).toHaveAttribute('data-layout', 'multiline');
+  } finally {
+    ro.restore();
+  }
+});
+```
+
+To prove that a bar observes nothing (`'auto'` without actions, an explicit layout), spy on `ResizeObserver.prototype.observe` after `installResizeObserverMock()` and expect no call; without the mock nothing observes anyway, and the assertion would prove nothing.
+
+### Pointer drags: the color parts
+
+jsdom has no pointer capture. Stub the three methods in a `beforeEach` (and restore them afterwards), give the field a box, and dispatch pointer events with their `pointerType` and `isPrimary`:
+
+```tsx
+// src/components/input/__tests__/ColorArea.test.tsx
+import { fireEvent, render, screen } from '@testing-library/react';
+import { ColorArea } from '../ColorArea';
+import { colorAreaClassNames } from '../../../lib/classNames';
+import { mockRect } from '../../../test-utils';
+
+const CAPTURE_METHODS = ['setPointerCapture', 'releasePointerCapture', 'hasPointerCapture'] as const;
+let saved: Array<[string, PropertyDescriptor | undefined]> = [];
+
+beforeEach(() => {
+  const captured = new WeakMap<Element, Set<number>>();
+  saved = CAPTURE_METHODS.map((name) => [name, Object.getOwnPropertyDescriptor(Element.prototype, name)]);
+  Object.defineProperties(Element.prototype, {
+    setPointerCapture: {
+      configurable: true,
+      writable: true,
+      value(this: Element, pointerId: number) {
+        const ids = captured.get(this) ?? new Set<number>();
+        ids.add(pointerId);
+        captured.set(this, ids);
+      },
+    },
+    releasePointerCapture: {
+      configurable: true,
+      writable: true,
+      value(this: Element, pointerId: number) {
+        captured.get(this)?.delete(pointerId);
+      },
+    },
+    hasPointerCapture: {
+      configurable: true,
+      writable: true,
+      value(this: Element, pointerId: number) {
+        return captured.get(this)?.has(pointerId) ?? false;
+      },
+    },
+  });
+});
+
+afterEach(() => {
+  for (const [name, descriptor] of saved) {
+    if (descriptor) Object.defineProperty(Element.prototype, name, descriptor);
+    else Reflect.deleteProperty(Element.prototype, name);
+  }
+});
+
+it('jumps to a touch press', () => {
+  const onValueChange = vi.fn();
+  render(<ColorArea aria-label="Accent" defaultValue={{ h: 100, s: 0.5, v: 0.5 }} onValueChange={onValueChange} />);
+  const area = screen.getByRole('group', { name: 'Accent' });
+  mockRect(area.querySelector(`.${colorAreaClassNames.field}`) as Element, {
+    left: 0,
+    top: 0,
+    width: 200,
+    height: 100,
+  });
+  fireEvent.pointerDown(area, {
+    pointerId: 1,
+    button: 0,
+    isPrimary: true,
+    pointerType: 'touch',
+    clientX: 50,
+    clientY: 25,
+  });
+  expect(onValueChange).toHaveBeenLastCalledWith({ h: 100, s: 0.25, v: 0.75 });
+});
+```
+
+Test RTL with `renderWithProviders(ui, { dir: 'rtl' })` (the x axis mirrors), and the pointer type with `mockMatchMedia({ '(pointer: coarse)': true })`: on a coarse pointer both inputs stay exposed (without it the mock matches nothing, which is the desktop model the server renders).
+
+### ColorArea: one exposed slider, found by its raw `aria-label`
+
+Where the primary pointer is not coarse, the input without the Tab stop is `aria-hidden`. Testing Library computes the accessible name of a self-`aria-hidden` element as `''` even with `hidden: true` (the name computation never sees that option, which only lifts the later accessibility-tree filter), so a string `name` finds nothing. Match the raw attribute instead; it holds the same text while the input is exposed:
+
+```tsx
+// src/components/input/__tests__/ColorArea.test.tsx
+const sliderNamed = (label: string) =>
+  screen.getByRole('slider', {
+    hidden: true,
+    name: (_accessibleName, element) => element.getAttribute('aria-label') === label,
+  });
+const saturationInput = () => sliderNamed('Saturation');
+const brightnessInput = () => sliderNamed('Brightness');
+```
+
+### Strict fake timers and awaited user-event
+
+The toast suites use strict fake timers (`vi.useFakeTimers()` without `shouldAdvanceTime`) to assert exact 1 ms boundaries. Under them an awaited `userEvent` call hangs: Testing Library's async `act` wrapper awaits a `setTimeout(0)` that it advances only for Jest's fake timers, and `userEvent.setup({ delay: null })` does not help. Use `fireEvent` and a synchronous `act(() => el.focus())`. If an awaited `userEvent` call is unavoidable, switch to `vi.useFakeTimers({ shouldAdvanceTime: true })` for that call only, and only when no timer is pending at either switch: calling `vi.useFakeTimers()` again keeps the clock's time but installs a new clock and discards the pending timers.
+
+### Watching a `useSyncExternalStore` store: a pass-through `vi.mock('react')`
+
+To learn which listeners a `useSyncExternalStore` store was given (the MessageBar reflow test asserts that none is notified), wrap the hook in a module mock of `react` that records each listener and otherwise changes nothing:
+
+```tsx
+const storeListeners = vi.hoisted(() => [] as Array<ReturnType<typeof vi.fn>>);
+
+vi.mock('react', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('react')>();
+  const useSyncExternalStore: typeof actual.useSyncExternalStore = (subscribe, ...rest) =>
+    actual.useSyncExternalStore(
+      (listener) => {
+        const spy = vi.fn(listener);
+        storeListeners.push(spy);
+        return subscribe(spy);
+      },
+      ...rest,
+    );
+  return { ...actual, default: { ...actual, useSyncExternalStore }, useSyncExternalStore };
+});
+```
+
+Keep it a pure pass-through: the mock replaces React for the whole test file.
+
+### Pure models: the tree cascade
+
+`Tree.selection.ts` holds the cascade as pure functions (`collectItems`, `computeCheckStates`, `toggleCheck`). Test them without rendering: build the item tree from JSX children, then assert the state map and the emitted arrays (tree order, fully checked parents included, unmatched values kept at the end). Render only for what the model cannot show: the attributes, the keys and the callback.
+
 ## 6. Controlled components and callbacks
 
 - **One call per interaction.** Every stateful component has a StrictMode test that its value callback fires exactly once per interaction.
@@ -789,10 +981,11 @@ it('types anchor props when rendered as a link', () => {
 
 ## 11. Repo-level suites
 
-- `src/__tests__/conventions.test.ts` — the conventions gate: one test per source file of `src/components` (raw colors also in `stories/`), reporting `file:line [rule]` for raw colors, physical utilities, `translate-x` without a `wave-rtl:` counterpart, Tailwind's bare `rtl:`/`ltr:` variants (use `wave-rtl:`), `focus:outline-none`, arbitrary animations, `forwardRef`, `enabled:` variants, `<button>` without `type`, and transitions or animations without a `motion-reduce:` variant. `src/hooks` and `src/lib` are not scanned. Filter with `-t "<path>"`.
+- `src/__tests__/conventions.test.ts` — the conventions gate: one test per source file of `src/components` (raw colors also in `stories/`), reporting `file:line [rule]` for raw colors, physical utilities, `translate-x` without a `wave-rtl:` counterpart, Tailwind's bare `rtl:`/`ltr:` variants (use `wave-rtl:`), `focus:outline-none`, arbitrary animations, `forwardRef`, `enabled:` variants, `<button>` without `type`, transitions or animations without a `motion-reduce:` variant, and a module that sets a registered component's `displayName` without applying its class-name constant's `root` (`class-names`). `src/hooks` and `src/lib` are not scanned. Filter with `-t "<path>"`.
 - `src/__tests__/stories.a11y.test.tsx` — renders every story with the Storybook preview (WaveProvider, light theme) and audits it with the shared axe instance. Opt-out only with `parameters: { a11y: { test: 'todo' } }` and a comment explaining why.
 - `src/__tests__/integration.test.tsx` — compositions across components with the real public API (Menu + MenuButton/SplitButton, Tooltip on triggers, Field around every control, toasts over modals, pickers inside dialogs, stacked dialogs with `autoFocus`, Tab from a shown Tooltip or open InfoLabel inside a dialog's focus trap, a Popover inside a `Menu.Item`), and the Server Component regression suite (see [`asClientReference`](#asclientreferencepart-parts-written-in-a-server-component)). When a release is built in parallel work packages with disjoint files (see `docs/ROADMAP.md`, "Process per release"), a component's own tests use only the shared foundation and its own files: a stand-in with the same attributes (`renderWithFieldContext` for a Field state, a plain `<button aria-disabled="true">` for a focusable disabled button inside `Menu.Trigger`). Every case that needs the real components of two packages at once goes here, once both have landed: in 0.6, a Toolbar with a `disabledFocusable` Button and its Tooltip, `Menu.Trigger` around a `disabledFocusable` MenuButton and SplitButton, a Field warning around Input, Checkbox, Combobox, ColorPicker and a native `<input>`, ProgressBar in a Field, an alert Dialog with a Toaster, a long form with a sticky `Dialog.Footer`, and a SpinButton in a Dialog and in a Drawer whose typed value a backdrop press commits (the component files keep the same mechanism with a plain `<input onBlur>`). In 0.7 the Menu item kinds were tested through the harness of section 5, and the integration suite holds the real popup menus: checkable items in a submenu sharing the root's `checkedValues`, links closing the chain, a context menu with checkable items and a submenu, a Toolbar with a radio group, an Input, a Combobox and a MenuButton, a Popover or Dialog opened from a menu item (a root menu of its own), an exiting `Menu.Popover` inside a Dialog, and a hover-opened submenu inside a click-opened root.
 - `src/__tests__/public-types.test.ts` — every named type that a public declaration refers to (a prop type, an `extends` base, a parameter or return type) is exported from `src/index.ts`. Export a new component's prop types from the entry; only the structural helpers in its `INTERNAL_HELPERS` list may stay internal, and that list must stay current.
+- `src/__tests__/classNames.test.ts` — the class-name registry: every component-like export of the entry (and every compound member) has a constant or is on `NO_ELEMENT`; every constant follows the formula (`wave-<kebab name>`, `__<kebab part>`, no repeated string, no reserved scope class); every export is exported by the entry with the same value; the registry imports nothing; every value is applied as `<constant>.<key>` in some module of `src/components`, except the entries of `PENDING_CLASS_NAMES`, which a phase fills for the parts its parallel packages add and INTEGRATION empties. `public-types.test.ts` has the same kind of bridge, `PENDING_PUBLIC_TYPES`, for public types that become reachable before the barrels export them.
 - `src/__tests__/test-utils.test.tsx` — tests of the helpers themselves.
 - `src/styles/__tests__/tokens.test.ts` — every theme declares every token, and every contrast pair meets its WCAG threshold (unrounded); it also pins `base.css` and the style entries and tests `scripts/build-css.mjs`. It runs in the node environment (`// @vitest-environment node`): it needs no DOM, and under jsdom Vite's client transform could not load the gate scripts.
 
