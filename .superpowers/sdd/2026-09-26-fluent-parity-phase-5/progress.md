@@ -295,3 +295,6 @@ Task E6: DONE; controller fix (R21): CloseButton story lacked showCloseButton, o
 Task E6: review (sonnet) — PASS/PASS, 0 Critical/Important, 2 Minor (Controlled story text; module-path imports, wave C)
 Task E6: complete (0173a32)
 Package P5-calendar (E1–E6): complete
+Pushed becbf0a (origin up to date)
+Wave C: Task F1 dispatched (sonnet), BASE becbf0a
+Task F1: DONE; committed a6fb630; review (sonnet) dispatched
