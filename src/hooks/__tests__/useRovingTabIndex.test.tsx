@@ -1418,6 +1418,7 @@ describe('useRovingTabIndex', () => {
       expect(button('Italic')).toHaveAttribute('tabindex', '0');
       expect(button('Bold')).toHaveAttribute('tabindex', '-1');
       rerender(<Switchable tabStop="none" />);
+      expect(button('Bold')).toHaveAttribute('tabindex', '-1');
       expect(button('Italic')).toHaveAttribute('tabindex', '-1');
     });
   });

@@ -67,7 +67,8 @@ export interface UseRovingTabIndexOptions {
    *  uses the arrow keys itself (text field, select, slider, spin button, editable combobox) holds
    *  it only when no other item can: arrows pressed there never lead back to the other items, so
    *  focusing one keeps the tab stop on the last focused other item. 'none': no item holds it
-   *  (every item gets tabIndex -1), for a composite reached only by the arrow keys of an enclosing
+   *  (every item gets tabIndex -1; a nested composite keeps its own tab stop, and marked
+   *  `data-roving-transparent` its items join the group's arrow order), for a composite reached only by the arrow keys of an enclosing
    *  widget or by a script (a tree row's actions); the keys, `focusValue`, `focusFirst` and
    *  `focusLast` keep working. */
   tabStop?: 'active' | 'last-focused' | 'none';
@@ -698,8 +699,9 @@ function startsOnItem(item: ResolvedItem | null, target: EventTarget | null, con
  * - **Tab stop** (`tabStop`): `'active'` — the enabled `activeValue` item, else the first enabled
  *   item; `'last-focused'` — the last focused enabled item, else the `'active'` rule. A nested
  *   composite or a control that uses the arrow keys itself holds it only when no other item can;
- *   `'none'` — no item: every item is `tabIndex=-1`, and focus reaches the items only through the
- *   keys or a script.
+ *   `'none'` — no item: every item is `tabIndex=-1` (a nested composite keeps its own tab stop;
+ *   mark it `data-roving-transparent` to join the group's arrow order), and focus reaches the
+ *   items only through the keys or a script.
  * - **Keys** are ignored when another handler already called `preventDefault()`; with Meta; with
  *   Alt or Ctrl, except a single character typed with AltGr (Ctrl+Alt on Windows), which is
  *   typeahead text (arrows, Home, End and Space with Ctrl+Alt stay ignored); and when they start

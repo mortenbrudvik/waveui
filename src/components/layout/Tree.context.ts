@@ -27,6 +27,8 @@ export interface TreeContextValue {
   getTabIndex: (value: string) => 0 | -1;
   focusValue: (value: string) => void;
   onItemFocus: (value: string) => void;
+  /** The item that focus is on or inside (its actions); `null` while focus is outside the tree. */
+  focusedItem: string | null;
   /**
    * Development only: counts a mounted item's value and warns once per value that several items
    * share. Returns the unregistration.
@@ -67,6 +69,7 @@ const INERT_CONTEXT: TreeContextValue = {
   getTabIndex: () => -1,
   focusValue: () => {},
   onItemFocus: () => {},
+  focusedItem: null,
   registerValue: () => () => {},
   selectionMode: 'none',
   checked: new Set(),

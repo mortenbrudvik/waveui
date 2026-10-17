@@ -20,6 +20,12 @@ export type { TreeCheckedItemsChangeDetails, TreeItemProps, TreeProps } from './
  * included), followed by listed values that match no item, and `details` (`value`, `checked`,
  * `event`).
  *
+ * Row content: `actions` (buttons at the end of the row, in a toolbar named by the item, shown on
+ * hover and focus, and always where there is no hover or colors are forced), `aside` (a count or a
+ * badge that describes the item), `iconAfter` and `expandIcon`. Tab from the focused item enters
+ * its actions and Shift+Tab returns. Keys and clicks on the actions never activate or check the
+ * item.
+ *
  * Items are `Tree.Item` elements; nested items are written in their parent's children (directly,
  * in Fragments, or returned by a render function), not rendered by a component of their own.
  * Every item needs a `value` that is unique within the Tree.

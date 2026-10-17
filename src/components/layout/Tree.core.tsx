@@ -1,13 +1,15 @@
 import * as React from 'react';
+import { joinIds } from '../../lib/aria';
 import { flattenChildren, isElementOfType } from '../../lib/children';
 import { treeClassNames, treeItemClassNames } from '../../lib/classNames';
 import { cn } from '../../lib/cn';
 import { composeEventHandlers } from '../../lib/composeEventHandlers';
 import { isDev, warnOnce } from '../../lib/dev';
 import { getDirection } from '../../lib/direction';
+import { isOwnEvent } from '../../lib/events';
 import { CheckIcon, ChevronRightIcon, SubtractIcon } from '../../lib/icons';
 import type { SelectionMode } from '../../lib/types';
-import { renderSlot, slotRendersContent, type Slot } from '../../lib/slot';
+import { materialiseSlotContent, renderSlot, slotRendersContent, type Slot } from '../../lib/slot';
 import { forcedColors } from '../../lib/styles';
 import { useControllable } from '../../hooks/useControllable';
 import { useEventCallback } from '../../hooks/useEventCallback';
@@ -76,6 +78,36 @@ function forestInTreeOrder(
     })
     .map((entry) => entry.node);
 }
+
+/**
+ * The tree's own items for the tab stop and the arrow keys: the treeitems. A row's actions are a
+ * roving container of their own, which the default selector would count as one more item.
+ */
+const TREE_ITEM_SELECTOR = '[role="treeitem"]';
+
+/** Every focusable control a row's actions can hold (Toolbar's rule). */
+const ACTION_ITEM_SELECTOR = 'button, [href], input, select, textarea, [role="button"], [tabindex]';
+
+/** Shows a row's actions while its item has focus (`:focus`, also after a click, so Tab reaches them). */
+const ACTIONS_ON_ITEM_FOCUS = '[&:focus>[data-tree-row]_[data-tree-actions]]:visible';
+
+/** Makes the aside invisible while its item has focus, where the actions take its place. */
+const ASIDE_OFF_ON_ITEM_FOCUS =
+  '[@media(hover:hover)]:not-forced-colors:[&:focus>[data-tree-row]_[data-tree-aside]]:invisible';
+
+/**
+ * The actions stay invisible until the row is hovered or the item or an action has focus, and
+ * always show in forced colors and without hover (touch). An invisible action takes no focus.
+ */
+const ACTIONS_VISIBILITY =
+  'invisible group-hover/row:visible focus-within:visible forced-colors:visible [@media(hover:none)]:visible';
+
+/** The aside gives way to the actions where the two share one place. */
+const ASIDE_OFF_WITH_ACTIONS =
+  'not-forced-colors:group-hover/row:invisible [@media(hover:hover)]:not-forced-colors:group-focus-within/end:invisible';
+
+/** Aside and actions share one cell, and sit side by side where the actions always show. */
+const END_CELL_SHARED = '[&>*]:[grid-area:1/1] forced-colors:flex [@media(hover:none)]:flex';
 
 /* ------------------------------------------------------------------ */
 /*  Tree                                                               */
@@ -275,6 +307,7 @@ export const TreeRoot = ({
 
   const { containerProps, getTabIndex, focusValue } = useRovingTabIndex({
     activeValue: focusedItem ?? effectiveSelected ?? null,
+    itemSelector: TREE_ITEM_SELECTOR,
     orientation: 'vertical',
     loop: false,
     typeahead: true,
@@ -291,6 +324,7 @@ export const TreeRoot = ({
       getTabIndex,
       focusValue,
       onItemFocus: setFocusedItem,
+      focusedItem,
       registerValue,
       selectionMode,
       checked,
@@ -306,6 +340,7 @@ export const TreeRoot = ({
       current,
       getTabIndex,
       focusValue,
+      focusedItem,
       registerValue,
       selectionMode,
       checked,
@@ -376,6 +411,25 @@ export interface TreeItemProps extends React.HTMLAttributes<HTMLDivElement> {
    * icon (`''`, `0`) or a list of nothing renders no span.
    */
   icon?: Slot<'span'>;
+  /** Icon after the label (decorative, `aria-hidden`; a falsy value renders nothing, as `icon`). */
+  iconAfter?: Slot<'span'>;
+  /**
+   * Replaces the expand chevron (decorative). `null`/`undefined` keep the chevron; `false`, or
+   * anything that renders nothing, hides it (`aria-expanded` still reports the state). Not rotated.
+   */
+  expandIcon?: Slot<'span'>;
+  /**
+   * Non-interactive content at the end of the row, such as a count or a badge. It describes the item
+   * (`aria-describedby`); it hides while the actions show on hover or focus.
+   */
+  aside?: React.ReactNode;
+  /**
+   * Buttons at the end of the row (a toolbar named by the item's label). Shown while the row is
+   * hovered or the item or its actions have focus, and always in forced colors and without hover
+   * (touch). Tab reaches them from the focused item (`navigationMode="tree"`), or the arrow keys do
+   * (`"treegrid"`). Keys and clicks on them never activate or check the item.
+   */
+  actions?: React.ReactNode;
   /**
    * Renders the item as a leaf even when it has nested `Tree.Item`s: they are not rendered, and
    * the item has no `aria-expanded` and does not expand. An item is expandable only while it has
@@ -409,24 +463,84 @@ function syncTypeaheadText(tree: HTMLElement): void {
 
 /**
  * Whether a keyboard event belongs to this treeitem: its target (the focused element) is this
- * treeitem or inside its row, not a nested item.
+ * treeitem or inside its row, not a nested item and not the row's actions (their keys are theirs).
  */
 function isOwnKeyEvent(event: React.KeyboardEvent<HTMLElement>): boolean {
   const target = event.target as Element | null;
+  if (target?.closest?.('[data-tree-actions]')) return false;
   return target?.closest?.('[role="treeitem"]') === event.currentTarget;
 }
 
 /**
  * Whether a click landed on this treeitem's own row (or on the treeitem element itself). Clicks
  * in its child group, including the indentation gutter beside the nested rows, clicks on nested
- * items and clicks on its checkbox are not its own.
+ * items, on its checkbox and on its actions are not its own.
  */
 function isOwnClick(event: React.MouseEvent<HTMLElement>): boolean {
   const target = event.target as Element | null;
   if (target === event.currentTarget) return true;
-  if (target?.closest?.('[data-tree-checkbox]')) return false;
+  if (target?.closest?.('[data-tree-checkbox], [data-tree-actions]')) return false;
   return target?.closest?.('[data-tree-row]')?.parentElement === event.currentTarget;
 }
+
+interface TreeItemActionsProps {
+  /** Id of the element that names the item. */
+  labelledBy: string;
+  /** `'last-focused'` while the actions hold a Tab stop (their item has focus), else `'none'`. */
+  tabStop: 'last-focused' | 'none';
+  children: React.ReactNode;
+}
+
+/**
+ * A row's actions: the consumer's controls rove with the arrow keys and hold at most one Tab
+ * stop. A key pressed on an action is the action's: ArrowDown and ArrowUp on an action that opens
+ * a popup (`aria-haspopup`) never move focus to another item.
+ */
+const TreeItemActions = ({ labelledBy, tabStop, children }: TreeItemActionsProps) => {
+  const { containerProps } = useRovingTabIndex({
+    itemSelector: ACTION_ITEM_SELECTOR,
+    manageTabIndex: true,
+    orientation: 'horizontal',
+    tabStop,
+  });
+  const mergedRef = useMergedRefs<HTMLSpanElement>(containerProps.ref);
+
+  const handleKeyDown = (event: React.KeyboardEvent<HTMLSpanElement>) => {
+    // A key from a popup an action opened reaches here through the React tree: not ours.
+    if (event.defaultPrevented || !isOwnEvent(event)) return;
+    const popup = (event.target as Element).getAttribute('aria-haspopup');
+    if (
+      (event.key === 'ArrowDown' || event.key === 'ArrowUp') &&
+      popup !== null &&
+      popup !== 'false'
+    ) {
+      event.preventDefault();
+    }
+  };
+
+  return (
+    <span
+      role="toolbar"
+      aria-labelledby={labelledBy}
+      aria-orientation="horizontal"
+      data-tree-actions=""
+      data-roving-container=""
+      ref={mergedRef}
+      onKeyDown={composeEventHandlers(handleKeyDown, containerProps.onKeyDown)}
+      onFocus={composeEventHandlers(undefined, containerProps.onFocus, {
+        checkDefaultPrevented: false,
+      })}
+      className={cn(
+        treeItemClassNames.actions,
+        'inline-flex items-center gap-1',
+        ACTIONS_VISIBILITY,
+      )}
+    >
+      {children}
+    </span>
+  );
+};
+TreeItemActions.displayName = 'TreeItemActions';
 
 /**
  * One node of a Tree. Text and other content are the label; nested `Tree.Item` children form its
@@ -444,10 +558,15 @@ function isOwnClick(event: React.MouseEvent<HTMLElement>): boolean {
  * and the child group. Its `onClick` receives only clicks on its own row (not on its child group
  * or nested items) and its `onKeyDown` only keys pressed while focus is on it or in its row; both
  * run before the built-in behaviour (call `event.preventDefault()` to skip it). In a checkbox
- * tree, a click on the item's checkbox toggles its check and is not passed to `onClick`. Its
+ * tree, a click on the item's checkbox toggles its check and is not passed to `onClick`, and
+ * neither is a click on its actions; `onKeyDown` receives no keys pressed in the actions. Its
  * other event handlers (`onFocus`, `onDoubleClick`, `onContextMenu` and the rest) are not
  * filtered: as DOM events bubble, they also receive events from its child group and nested items
  * (compare `event.target` with `event.currentTarget` to tell them apart).
+ *
+ * `actions` render in a toolbar at the end of the row, named by the item; keys and clicks on them
+ * belong to them and never activate or check the item. `aside` sits before them and describes the
+ * item.
  *
  * The item is named by its label (`aria-labelledby`), not by its icon or nested items; an
  * `aria-label` or `aria-labelledby` prop replaces that name. Typeahead matches the label text too
@@ -456,6 +575,10 @@ function isOwnClick(event: React.MouseEvent<HTMLElement>): boolean {
 export const TreeItem = ({
   value,
   icon,
+  iconAfter,
+  expandIcon,
+  aside,
+  actions,
   leaf = false,
   className,
   children,
@@ -473,6 +596,7 @@ export const TreeItem = ({
   const insideLabel = React.useContext(TreeLabelContext);
   const isExpanded = ctx.expanded.has(value);
   const labelId = useId('tree-item-label');
+  const asideId = useId('tree-item-aside');
   const ancestorListed = React.useContext(TreeCheckForcedContext);
   const itemRef = React.useRef<HTMLDivElement>(null);
   const mergedRef = useMergedRefs<HTMLDivElement>(ref, itemRef);
@@ -510,7 +634,39 @@ export const TreeItem = ({
           'aria-hidden': true,
         })
       : null;
+  const iconAfterNode =
+    iconAfter && slotRendersContent(iconAfter)
+      ? renderSlot(iconAfter, 'span', cn(treeItemClassNames.iconAfter, 'inline-flex shrink-0'), {
+          'aria-hidden': true,
+        })
+      : null;
+  // No empty aside and no empty toolbar (`actions={cond && <Button />}` with `cond` false).
+  const hasAside = slotRendersContent(aside);
+  const hasActions = slotRendersContent(actions);
   const hasChildren = nestedItems.length > 0 && !leaf;
+
+  // The optional-indicator slot rule (C-SLOTS): `null`/`undefined` keep the chevron, `false` or
+  // content that renders nothing hides it (the spacer keeps the column), and a custom glyph is
+  // rendered as given, not rotated.
+  let chevron: React.ReactNode = <span className="w-3 shrink-0" aria-hidden="true" />;
+  if (hasChildren && (expandIcon === undefined || expandIcon === null)) {
+    chevron = (
+      <ChevronRightIcon
+        className={cn(
+          treeItemClassNames.expandIcon,
+          'shrink-0 transition-transform motion-reduce:transition-none',
+          isExpanded ? 'rotate-90' : 'wave-rtl:-scale-x-100',
+        )}
+      />
+    );
+  } else if (hasChildren && slotRendersContent(expandIcon)) {
+    chevron = renderSlot(
+      expandIcon,
+      'span',
+      cn(treeItemClassNames.expandIcon, 'inline-flex shrink-0'),
+      { 'aria-hidden': true },
+    );
+  }
 
   // Checkbox tree: the item computes its state from its own subtree (the child-group rule) and
   // the checked list, so every state renders on the server and needs no other item. A top-level
@@ -679,6 +835,8 @@ export const TreeItem = ({
         // whole subtree.
         'block outline-none',
         '[&:focus-visible>[data-tree-row]]:outline-2 [&:focus-visible>[data-tree-row]]:-outline-offset-2 [&:focus-visible>[data-tree-row]]:outline-ring',
+        hasActions && ACTIONS_ON_ITEM_FOCUS,
+        hasActions && hasAside && ASIDE_OFF_ON_ITEM_FOCUS,
         className,
       )}
       {...rest}
@@ -687,6 +845,8 @@ export const TreeItem = ({
       aria-labelledby={
         rest['aria-labelledby'] ?? (rest['aria-label'] === undefined ? labelId : undefined)
       }
+      // The aside describes the item, after a consumer description.
+      aria-describedby={joinIds(rest['aria-describedby'], hasAside ? asideId : undefined)}
       aria-expanded={hasChildren ? isExpanded : undefined}
       // From the checked list, after the rest props, so a consumer cannot contradict it.
       aria-checked={
@@ -710,32 +870,60 @@ export const TreeItem = ({
         className={cn(
           treeItemClassNames.row,
           'flex cursor-pointer items-center gap-1.5 rounded px-2 py-1 hover:bg-subtle-hover',
+          hasActions && 'group/row',
           isSelected && cn('bg-subtle-selected font-semibold', forcedColors.selectedContainer),
         )}
       >
-        {hasChildren ? (
-          <ChevronRightIcon
-            className={cn(
-              treeItemClassNames.expandIcon,
-              'shrink-0 transition-transform motion-reduce:transition-none',
-              isExpanded ? 'rotate-90' : 'wave-rtl:-scale-x-100',
-            )}
-          />
-        ) : (
-          <span className="w-3 shrink-0" aria-hidden="true" />
-        )}
+        {chevron}
         {indicator}
         {iconNode}
         <span
           id={labelId}
           data-tree-label=""
           data-roving-text={typeaheadText}
-          className={cn(treeItemClassNames.label, 'truncate')}
+          // The label shrinks (and truncates) when the row has content after it.
+          className={cn(
+            treeItemClassNames.label,
+            'truncate',
+            (iconAfterNode || hasAside || hasActions) && 'min-w-0',
+          )}
         >
           <TreeCheckForcedContext.Provider value={false}>
             <TreeLabelContext.Provider value>{labelContent}</TreeLabelContext.Provider>
           </TreeCheckForcedContext.Provider>
         </span>
+        {iconAfterNode}
+        {(hasAside || hasActions) && (
+          <span
+            data-tree-end=""
+            className={cn(
+              'group/end ms-auto inline-grid shrink-0 items-center gap-1',
+              hasAside && hasActions && END_CELL_SHARED,
+            )}
+          >
+            {hasAside && (
+              <span
+                id={asideId}
+                data-tree-aside=""
+                className={cn(
+                  treeItemClassNames.aside,
+                  'inline-flex items-center text-caption-1 text-muted-foreground',
+                  hasActions && ASIDE_OFF_WITH_ACTIONS,
+                )}
+              >
+                {materialiseSlotContent(aside)}
+              </span>
+            )}
+            {hasActions && (
+              <TreeItemActions
+                labelledBy={labelId}
+                tabStop={ctx.focusedItem === value ? 'last-focused' : 'none'}
+              >
+                {materialiseSlotContent(actions)}
+              </TreeItemActions>
+            )}
+          </span>
+        )}
       </div>
       {hasChildren && isExpanded && (
         <TreeParentContext.Provider value={value}>
