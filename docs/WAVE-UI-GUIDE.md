@@ -597,7 +597,7 @@ export const Panel = /* @__PURE__ */ Object.assign(PanelRoot, { Header: PanelHea
 - **Component JSDoc** sits only on the exported `Object.assign(…)` const (the root gets none, also when it lives in a sibling module, as `MenuRoot` in `Menu.root.tsx` does; likewise on a wrapper-call export and on the first overload), so it reaches `index.d.ts`, and it names no internal symbol (`XRoot`) or spec label. Storybook autodocs read it from there (`.storybook/exportDocblocks.ts`), so stories never repeat it (no meta JSDoc, no `docs.description.component` for a compound): `.storybook/__tests__/exportDocblocks.test.ts` gates this, and verify-dist fails on an undocumented exported component.
 - A part rendered outside its root throws `[WaveUI] <Part> must be used within <Root>` in development; in production it logs that once per message and renders inert (`reportMissingContext` from `src/lib/dev.ts`).
 
-Compound components: `Accordion`, `Breadcrumb`, `Card`, `Carousel`, `Combobox`, `DataGrid`, `Dialog`, `Drawer`, `Dropdown`, `List`, `Menu`, `Nav`, `Overflow`, `Popover`, `RadioGroup`, `Skeleton`, `Stepper`, `TabList`, `Table`, `Toolbar`, `Tree`. The README lists every flat name. Fragments are looked into (each element of a Fragment is a Breadcrumb item, an AvatarGroup member or a Carousel slide), but a component that renders a part itself is not recognised where a compound classifies its children: write `Carousel.Item`s, and nested `Tree.Item`s, in the compound itself (directly, in Fragments, or for Tree from a render function such as `children.map(renderNode)`).
+Compound components: `Accordion`, `Breadcrumb`, `Card`, `Carousel`, `ColorPicker`, `Combobox`, `DataGrid`, `Dialog`, `Drawer`, `Dropdown`, `List`, `Menu`, `MessageBar`, `Nav`, `Overflow`, `Popover`, `RadioGroup`, `Skeleton`, `Stepper`, `TabList`, `Table`, `Toast`, `Toolbar`, `Tree`. The README lists every flat name. Fragments are looked into (each element of a Fragment is a Breadcrumb item, an AvatarGroup member or a Carousel slide), but a component that renders a part itself is not recognised where a compound classifies its children: write `Carousel.Item`s, and nested `Tree.Item`s, in the compound itself (directly, in Fragments, or for Tree from a render function such as `children.map(renderNode)`).
 
 ### Pattern 3: Slot System
 
@@ -800,6 +800,46 @@ For custom controls, `FieldContextValue` carries the state: `validationState` an
 - **Submenus.** A `<Menu>` rendered in a menu list at the list's portal depth (`PortalDepthContext`) is a submenu; a Menu inside a Popover or Dialog opened from an item (a portal in between) is a root menu. Every close of a menu first closes its open submenu, innermost first, and a submenu's open state is its own and its parent's, so a parent that closes, by any path, takes its submenus with it in the same commit.
 - Clicks and keys from a portal opened inside an item (a Popover in a `Menu.Item`, a popup from a List action) bubble through the React tree; the item's own handling ignores events whose target is outside it in the DOM (C-COMPOSE), while the consumer's handlers still receive them (a disabled `Menu.Item` calls no `onClick`, as a disabled button).
 
+### Pattern 10: Stable Class Names
+
+Every public component and compound part carries a stable class, registered in `src/lib/classNames.ts` and exported from the package entry. A new component registers its constant in the same change:
+
+```tsx
+// src/lib/classNames.ts (server-safe: no imports)
+/** Stable class names of Chip: `root` on the `<button>`, `icon` on the icon box. */
+export const chipClassNames = {
+  root: 'wave-chip',
+  icon: 'wave-chip__icon',
+} as const;
+```
+
+```tsx
+// src/components/button/Chip.tsx
+import { chipClassNames } from '../../lib/classNames';
+
+export const Chip = ({ icon, className, ref, children, ...rest }: ChipProps) => (
+  <button
+    type="button"
+    ref={ref}
+    className={cn(chipClassNames.root, 'rounded-md border border-stroke px-3 py-1', focusRing, className)}
+    {...rest}
+  >
+    {renderSlot(icon, 'span', cn(chipClassNames.icon, 'inline-flex size-4'), { 'aria-hidden': true })}
+    {children}
+  </button>
+);
+Chip.displayName = 'Chip';
+```
+
+- **Names.** The root class is `wave-` and the kebab-cased flat export name (`CardHeader` → `wave-card-header`); a part class is `<root>__<kebab part key>`; the constant is the camel-cased flat name plus `ClassNames`, with camelCase keys and `as const`. `WaveProvider` (`wave-root`) and `Portal` (`wave-portal`) keep their scope classes. A component that renders no element of its own (Dialog, Popover, Presence, the trigger and close parts that clone their child) has no constant; an alias shares its target's (`ComboboxOption` uses `optionClassNames`).
+- **Placement.** The root class goes first in the `cn()` of the element that receives `className`, so the consumer's class still comes last. A part is an element the component renders that a prop or slot fills or controls (icon, dismiss button, expand icon, checkmark, secondary text, validation message) or visible structure (track, thumb, rail, surface, header, footer); hidden inputs, visually hidden text, live regions and layout wrappers are not parts. A slot part passes its class in `renderSlot`'s base classes, so it stays when a slot object swaps the element. Never apply a stable class inside a shared style helper (`buttonClassName()`, `menuItemClasses`): elements that are not that component use those helpers too. Note the one letter between the public `buttonClassNames` and the internal `buttonClassName()`.
+- **Variants and nesting.** A variant lists the base constant first: `cn(buttonClassNames.root, toggleButtonClassNames.root, …)`. A variant that renders Button hands its icon class over with `withPartClass(icon, toggleButtonClassNames.icon)` (`Button.slots.tsx`), which wraps the slot so that Button's own icon span carries both classes; Button gains no prop. A public component rendered inside another gets the parent's part class through its `className`: `<Button {...menuButtonProps} className={cn(splitButtonClassNames.menuButton, menuButtonProps?.className)} />`.
+- **Literal member access.** Write each member you apply literally (`toggleButtonClassNames.root`, never `names[kind].root`), also when a shared renderer draws the element: the menu item kinds pass `rootClassName={cn(menuItemClassNames.root, menuItemCheckboxClassNames.root)}` to `MenuItemRow`. The gate and the registry test find the constants by that text.
+- **No state classes.** State stays in `data-*` attributes and ARIA (C-CLASS).
+- **Enforcement.** The conventions gate's `class-names` rule fails a module that sets a registered component's `displayName` without applying its constant's `root`; `testSystemProps` asserts the root classes where `className` lands; `src/__tests__/classNames.test.ts` checks that every public component has a constant (or is on its no-element list), that every constant follows the formula, that every key is applied somewhere in `src/components`, and that the entry exports every constant; `verify-dist` checks that the entry exports them with the same values, that a Server Component can read them, and that an import of only Button keeps `'wave-button'` and drops other components' classes.
+- **Stability.** The names are public API: no class is removed before 1.0. A renamed part, or a part that becomes a compound member of its own, keeps its old class next to the new one until 1.0; moving a class to another element is a CHANGELOG "Changed" DOM entry.
+- **Words.** The registry is under `src/lib`, which Tailwind scans: its JSDoc names elements by role ("the grid element"), never with a utility name as a bare word ([Pattern 5](#pattern-5-cn-utility)).
+
 ### Props Interface Conventions
 
 - Extend native HTML attributes: `React.HTMLAttributes<HTMLDivElement>`
@@ -938,15 +978,48 @@ Escape                           → close
 ```
 Tab                  → enters at the selected item, else the first
 ArrowDown / ArrowUp  → next / previous visible item
-ArrowRight           → expand, or move to the first child (mirrored in RTL)
-ArrowLeft            → collapse, or move to the parent (mirrored in RTL)
+ArrowRight           → expand, or move to the first child (mirrored in RTL); with
+                       navigationMode="treegrid", into the item's actions instead (a collapsed
+                       parent still expands first)
+ArrowLeft            → collapse, or move to the parent (mirrored in RTL); from the first action
+                       (treegrid), back to the item
 Home / End           → first / last visible item
-Enter / Space        → activate (onItemSelect) and toggle a parent
+Enter                → activate (onItemSelect) and toggle a parent
+Space                → activate; in a checkbox tree (selectionMode="multiple"), toggle the check
 *                    → expand all siblings
 Printable characters → jump to the next item starting with the text
+Tab (on an item)     → into its actions (navigationMode="tree"); Shift+Tab back
 ```
 
 Nested items are `Tree.Item` elements in their parent's children: directly, in Fragments or from a render function (`children.map(renderNode)`). A `Tree.Item` rendered by a recursive component is not part of its parent's group (a development warning names it). `value`s are unique (a duplicate warns). `leaf` renders an item as a leaf even when it has nested items; an item is expandable only while it has nested items, so for children loaded on first expansion give it a placeholder child ("Loading…") until they arrive.
+
+**Checkbox trees.** With `selectionMode="multiple"`, Space toggles the focused item's check (a Space that continues a typeahead search stays typeahead) and Enter still activates it. Checks cascade: toggling an item sets it and all its descendants, and a parent is checked, mixed or unchecked from its descendants. A click on the row's checkbox toggles; a click elsewhere on the row activates.
+
+**Row actions.** An item's `actions` render in a toolbar of the row. With `navigationMode="tree"`, the toolbar's buttons rove with `useRovingTabIndex` and hold one Tab stop while their item is the tree's active item, so Tab from the item enters them and Shift+Tab returns; with `navigationMode="treegrid"` they take no Tab stop, the "next" arrow enters them, "previous" from the first action returns, "next" and "previous" move between actions without wrapping, and Up and Down move to the previous or next item. Keys and clicks inside the actions are theirs: the item ignores them (no activation, check, expansion or typeahead), and an action that handles an arrow key itself (a MenuButton opening its menu on ArrowDown) keeps it.
+
+#### Toaster
+
+```
+App shortcut (shortcuts.focus) → focus the newest toast (a named group)
+Tab / Shift+Tab                → through the toasts' controls
+Escape                         → dismiss every toast; focus returns to where it was
+Delete / Backspace             → dismiss the focused toast; focus moves to the next one
+```
+
+The Toaster's region takes Escape only when the key is pressed inside the region in the DOM (a key pressed in a Menu, Popover or Dialog opened from a toast reaches the region through the React tree and is left alone) and when no open, Escape-enabled dismiss layer is anchored inside it (a Tooltip on a toast's button, a Menu opened from a toast closes first). It then prevents the default, so the dismiss-layer stack never routes that Escape to a Dialog or Drawer below the toasts, returns focus to the element focused before focus entered the toasts, and dismisses them. Delete and Backspace act on the focused toast container or a control inside it, except in an editable field. A dismissed toast moves focus in the dismissing commit: to the next toast that is not exiting (its container, when focus was on the container), else the previous one, else the remembered origin. The pointer or focus anywhere in the region pauses every toast's timer.
+
+#### ColorArea (2-D slider)
+
+```
+Tab                    → one stop (the input used last; saturation at first)
+ArrowLeft / ArrowRight → saturation −1 / +1 (mirrored in RTL)
+ArrowDown / ArrowUp    → brightness −1 / +1
+Shift + arrow          → by 10
+PageDown / PageUp      → brightness −10 / +10
+Home / End             → saturation 0 / 100
+```
+
+The area holds two visually hidden native range inputs, saturation and brightness; focus, and the Tab stop, follow the axis that changed, so the channel that changed is announced. Unless the primary pointer is coarse (`(pointer: coarse)`: a touch device), the other input is `tabIndex=-1` and `aria-hidden`, so desktop screen readers meet one 2-D slider (the server renders this model too); on touch devices both stay exposed, so a touch screen reader can swipe each. A pointer press jumps and drags with pointer capture. `ColorSlider` and `AlphaSlider` are one native range input each, with the same keys on their axis.
 
 #### DataGrid
 
@@ -1084,17 +1157,36 @@ A collapsed `Nav.Category` that contains the current page marks its toggle butto
 #### Tree
 
 ```html
-<div role="tree" aria-label="File browser">
-  <div role="treeitem" aria-expanded="true" aria-labelledby="label-src">
-    <div><span id="label-src">src</span></div>
+<div role="tree" aria-label="Files" aria-multiselectable="true" data-selection-mode="multiple">
+  <div role="treeitem" aria-expanded="true" aria-checked="mixed" aria-labelledby="label-docs">
+    <div>
+      <span role="checkbox" aria-checked="mixed" tabindex="-1" aria-labelledby="label-docs"></span>
+      <span id="label-docs">Documents</span>
+      <span role="toolbar" aria-labelledby="label-docs" aria-orientation="horizontal">…</span>
+    </div>
     <div role="group">
-      <div role="treeitem" aria-labelledby="label-index"><div><span id="label-index">index.ts</span></div></div>
+      <div role="treeitem" aria-checked="true" aria-labelledby="label-cv">…</div>
     </div>
   </div>
 </div>
 ```
 
-Each treeitem contains its label row and its child group, and is named by its label (not by its icon or nested items).
+Each treeitem contains its label row and its child group, and is named by its label (not by its icon or nested items). In a checkbox tree (`selectionMode="multiple"`) every item carries `aria-checked` (`mixed` for a partly checked parent) and never `aria-selected` (APG: one or the other); the row's checkbox is an exposed `role="checkbox"` with the same state, outside the Tab order and labelled by the item, so touch screen readers and voice control can change a check (a decorative indicator would leave them only the item's activation, WCAG 4.1.2). In a single-selection tree every item carries `aria-selected` and the radio is decorative. A row's actions are a `role="toolbar"` named by the item's label, an `aside` joins the item's `aria-describedby`, and a `Tree.ItemPersonaLayout` names the item by the person's name and describes it by the description. `navigationMode="treegrid"` changes the keyboard only: the roles stay `tree` and `treeitem`, because a real treegrid needs one flat list of rows with `aria-level`.
+
+#### Color area and sliders
+
+```html
+<div role="group" aria-labelledby="field-label">
+  <div aria-hidden="true"><!-- the gradient field --></div>
+  <input type="range" min="0" max="100" value="72" aria-label="Saturation"
+         aria-roledescription="2D slider" aria-valuetext="Saturation 72%, Brightness 74%, dark blue" />
+  <input type="range" min="0" max="100" value="74" aria-label="Brightness"
+         aria-roledescription="2D slider" aria-orientation="vertical"
+         aria-valuetext="Brightness 74%, Saturation 72%, dark blue" tabindex="-1" aria-hidden="true" />
+</div>
+```
+
+Each value text starts with its own channel, so the value that changed is heard first, and ends with the color's name (a built-in English namer that `labels.colorName` replaces). A group supports neither `aria-invalid` nor `aria-errormessage`, so both inputs get them. A `ColorSlider` says "210°, blue" (hue) or "72%", an `AlphaSlider` "40%"; a vertical slider is a horizontal input turned a quarter turn, with `aria-orientation="vertical"`.
 
 #### Live Regions (Toasts, Status)
 
@@ -1106,13 +1198,13 @@ Each treeitem contains its label row and its child group, and is named by its la
 <div aria-live="assertive">Error: failed to save</div>
 ```
 
-Live regions must exist before their content changes. `Toaster` keeps two permanent, visually hidden regions (polite, and assertive for `error` toasts); the toasts themselves are not live regions. Use `announce(message, politeness?)` or `useAnnounce()` for your own announcements; they go through a shared region that modal isolation never makes inert.
+Live regions must exist before their content changes. `Toaster` keeps two permanent, visually hidden regions (polite, and assertive for `error` toasts) and adds each toast to one of them once, as text: the severity, the title, the body with its subtitle and the labels of its actions (never the Dismiss button). The toast itself is a `role="group"` container named by its severity and title, described by its body and focusable by the shortcut (`tabIndex="-1"`, no Tab stop), not a live region; a `Toast` rendered outside a Toaster is its own live region, with no name. A MessageBar with its default role (`alert` for warnings and errors, `status` otherwise) is a live region that its title does not name, because a named live region can have its name read with its content, which would read the title twice: the title is read as the first words of the content. With a non-live `role="region"` or `"group"`, the title names the bar through `aria-labelledby` (the severity text, then the title). Use `announce(message, politeness?)` or `useAnnounce()` for your own announcements; they go through a shared region that modal isolation never makes inert.
 
 ### Focus Management
 
 1. **Focus rings**: focusable controls use `focusRing` (`focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring`), cells and rows `focusRingInset`; text inputs show a primary bottom border (`inputFocus`) with `focus:outline-hidden`, which keeps an outline in forced-colors mode. Never use `focus:outline-none`. A focusable control with the disabled look (`disabledFocusable`, a self-disabling boundary button) goes back to full opacity while its ring shows, so the ring keeps its contrast.
 2. **Moving focus into overlays**: Dialog and Drawer focus their first focusable element (or keep an `autoFocus` element, also when stacked over or nested in another dialog, and in a popover opened from one), Menu focuses its first item, the DatePicker calendar its focused day. Build custom overlays on these components rather than re-implementing traps.
-3. **Focus restoration**: when an overlay closes, focus returns to where it came from. Dialog and Drawer use `finalFocusRef` when given, else the element that was focused when they opened (the trigger, for a trigger click; a trigger's wrapper span resolves to the element inside it), or a trigger when nothing had focus. When that element is gone, focus goes to a mounted trigger, then to the element next to where the opener was (the next row's action after a delete), then to the overlay below. Popovers and menus return focus to their trigger (TeachingPopover: to where focus was) when focus was inside them (or lost to `<body>`) at close. A close by hover moves no focus, and neither does the close of a surface opened from inside one that closes by hover (a submenu, a hover card in a hover card). When a focused element disappears (a SearchBox clear button, a removed toast, a boundary button), the component moves focus somewhere sensible instead of dropping it to `<body>`; TimePicker and DatePicker settle erased text on Tab before focus moves, so Tab never lands on the clear button that the commit removes.
+3. **Focus restoration**: when an overlay closes, focus returns to where it came from. Dialog and Drawer use `finalFocusRef` when given, else the element that was focused when they opened (the trigger, for a trigger click; a trigger's wrapper span resolves to the element inside it), or a trigger when nothing had focus. When that element is gone, focus goes to a mounted trigger, then to the element next to where the opener was (the next row's action after a delete), then to the overlay below. Popovers and menus return focus to their trigger (TeachingPopover: to where focus was) when focus was inside them (or lost to `<body>`) at close. A close by hover moves no focus, and neither does the close of a surface opened from inside one that closes by hover (a submenu, a hover card in a hover card). When a focused element disappears (a SearchBox clear button, a dismissed toast, a boundary button), the component moves focus somewhere sensible instead of dropping it to `<body>`; TimePicker and DatePicker settle erased text on Tab before focus moves, so Tab never lands on the clear button that the commit removes.
 4. **Focus trapping**: Dialog and Drawer trap Tab, including the Toaster region and overlays opened from them. Tab inside a plain `<Portal>` rendered in a dialog is native and wraps to the dialog's first or last element at the portal's edges. Focus that lands outside the trap is returned in a microtask after the `focusin`.
 5. **Skip links**: for content-heavy pages, provide a "Skip to main content" link.
 
@@ -1121,7 +1213,7 @@ Live regions must exist before their content changes. `Toaster` keeps two perman
 Background colors are replaced and box shadows removed in forced-colors mode, so state that is shown only by a background fades away. Wave's components add Tailwind `forced-colors:` variants with system colors:
 
 - `src/lib/styles.ts` `forcedColors` recipes: `selectedLeaf` (`Highlight`/`HighlightText` with `forced-color-adjust: none`, for leaf indicators only: the Switch thumb, check glyphs, the ProgressBar fill, the selected day), `selectedContainer` (a `Highlight` outline for selected options, rows and cards), `control` (`ButtonText` borders), `border` (`CanvasText`), `fill` (a `Highlight` background with `forced-color-adjust: none`, for leaf indicators drawn with their own background: step and pager dots, connectors), `rangeInput` (a native range input: rail `CanvasText`, thumb `Highlight`, `GrayText` while disabled, a `Highlight` focus outline), `ringArc` (a border-drawn ring: the arc `Highlight` on a `Canvas` track) and `disabled` (`GrayText`).
-- Components with forced-colors styling include Switch, Checkbox, RadioGroup, SwatchPicker, Slider, ProgressBar, Spinner, Skeleton (`GrayText` placeholders), DatePicker, TimePicker, Select, listbox options, List, Tree, Card, DataGrid, Pagination, Stepper (completed connectors `Highlight`, the others `CanvasText`), Carousel, TeachingPopover (step dots), PresenceBadge and the Button family (every Button appearance draws a 1px border, so it keeps an edge). Dialog and Drawer draw a 1px border, so their edge stays visible where the shadow disappears.
+- Components with forced-colors styling include Switch, Checkbox, RadioGroup, SwatchPicker, Slider, ProgressBar, Spinner, Skeleton (`GrayText` placeholders), DatePicker, TimePicker, Select, listbox options, List, Tree, Card, DataGrid, Pagination, Stepper (completed connectors `Highlight`, the others `CanvasText`), Carousel, TeachingPopover (step dots), PresenceBadge, ColorArea, ColorSlider and AlphaSlider (the field and the rails keep their colors with `forced-color-adjust: none` on those elements only; the thumbs draw their ring and focus indicator in `CanvasText`, `Canvas` and `Highlight`), the Tree checkbox and radio indicators (Checkbox's recipe) and the Button family (every Button appearance draws a 1px border, so it keeps an edge). Dialog and Drawer draw a 1px border, so their edge stays visible where the shadow disappears.
 - Text inputs use `focus:outline-hidden`, which Tailwind turns into a visible outline in forced colors.
 
 **System color keywords**: `Canvas`, `CanvasText`, `LinkText`, `Highlight`, `HighlightText`, `ButtonFace`, `ButtonText`, `GrayText`.
@@ -1137,7 +1229,7 @@ The **high-contrast theme** (`WaveProvider theme="high-contrast"`) is a separate
 - Validation errors: `Field`'s `error`, or `error="…"` on Input/Select/Textarea, render a `role="alert"` message linked with `aria-describedby`; a Field `validationState="warning"` message is announced too, without marking the control invalid
 - Hide decorative elements with `aria-hidden="true"` (Wave's icon slots do it for you)
 - Name progress indicators and landmarks: `ProgressBar` `label`, `Spinner` `label` (default "Loading"), `Toolbar` and `Nav` `aria-label`
-- Translate the names and hidden texts components render themselves: `closeLabel` (Dialog.Content, Drawer, TeachingPopover), `statusLabel` (MessageBar, Toast), `dismissLabel` (Toast, `dispatchToast` options, Tag), Carousel `labels` and `autoPlayLabels`, Stepper `statusLabels`, Pagination `getItemAriaLabel`, and the `labels` objects of ColorPicker, Combobox, DataGrid, DatePicker, Dropdown, Rating, RatingDisplay, SpinButton, TagPicker, TeachingPopover and TimePicker (the README's "Built-in text" lists every one)
+- Translate the names and hidden texts components render themselves: `closeLabel` (Dialog.Content, Drawer, TeachingPopover), `statusLabel` (MessageBar, Toast), `dismissLabel` (Toast, `dispatchToast` options, Tag), Carousel `labels` and `autoPlayLabels`, Stepper `statusLabels`, Pagination `getItemAriaLabel`, and the `labels` objects of AlphaSlider, ColorArea, ColorPicker, ColorSlider, Combobox, DataGrid, DatePicker, Dropdown, Rating, RatingDisplay, SpinButton, TagPicker, TeachingPopover and TimePicker (the README's "Built-in text" lists every one)
 
 ---
 
@@ -1493,19 +1585,29 @@ export function FruitPicker() {
 **Toast notifications** — wrap the app in `<Toaster>` and call `useToastController()` below it:
 
 ```tsx
-import { Button, Toaster, useToastController } from '@mortenbrudvik/waveui';
+import { Button, Toast, Toaster, useToastController } from '@mortenbrudvik/waveui';
 
-function SaveButton() {
+function SaveButton({ onUndo }: { onUndo: () => void }) {
   const { dispatchToast } = useToastController();
   return (
     <Button
       onClick={() =>
-        dispatchToast({
-          status: 'success',
-          title: 'Saved',
-          body: 'Your changes have been saved.',
-          timeout: 5000,
-        })
+        dispatchToast(
+          <Toast status="success">
+            <Toast.Title
+              action={
+                <Toast.Close>
+                  <Button size="small" appearance="transparent" onClick={onUndo}>
+                    Undo
+                  </Button>
+                </Toast.Close>
+              }
+            >
+              Saved
+            </Toast.Title>
+            <Toast.Body>Your changes have been saved.</Toast.Body>
+          </Toast>,
+        )
       }
     >
       Save
@@ -1513,16 +1615,16 @@ function SaveButton() {
   );
 }
 
-export function App() {
+export function App({ undo }: { undo: () => void }) {
   return (
     <Toaster position="bottom-end">
-      <SaveButton />
+      <SaveButton onUndo={undo} />
     </Toaster>
   );
 }
 ```
 
-A sibling `<Toaster />` does not work: `useToastController()` outside a Toaster throws in development. Toast timers pause while a toast is hovered or focused and while the page is in the background (the window has lost focus, or the tab is hidden, also when the Toaster mounted there). `dismissLabel` and `statusLabel` in the `dispatchToast` options translate the dismiss button's name and the hidden status text. `<Toaster limit={3}>` shows at most three toasts and queues the rest (a queued toast is not announced and does not count down until it shows); `dismissAllToasts()` from the controller removes every toast.
+A sibling `<Toaster />` does not work: `useToastController()` outside a Toaster throws in development (from code outside components, dispatch through a `createToaster()` handle bound with `<Toaster toaster={handle}>`). Every toast pauses while the pointer or focus is anywhere in the toast region and while the page is in the background, and a toast with an action (the Undo above) stays until it is dismissed unless the dispatch passes `timeout`. The rendered Toast's `status` sets the announcement's politeness and prefix. `statusLabel` translates the hidden status text; `<Toaster limit={3}>` shows at most three toasts and queues the rest (a queued toast is not announced and does not count down until it shows); `dismissAllToasts()` from the controller removes every toast. The text form `dispatchToast({ status, title, body })` still works.
 
 **Dialog confirmation** — `modalType="alert"` for a question that needs an answer (a backdrop press does not close it), `autoFocus` on the least destructive action, and `Dialog.Footer` inside `Dialog.Content`:
 
@@ -1599,7 +1701,7 @@ export function ConfirmDelete({ onDelete }: { onDelete: () => void }) {
 | Boolean toggle | `Switch`, `Checkbox`, `ToggleButton` |
 | Choose one from few | `RadioGroup` |
 | Pick a number | `Slider`, `SpinButton` |
-| Pick a color | `ColorPicker`, `SwatchPicker` |
+| Pick a color | `ColorPicker`, `ColorArea`, `ColorSlider`, `AlphaSlider`, `SwatchPicker` |
 | Show user identity | `Avatar`, `AvatarGroup`, `Persona` |
 | Categorize items | `Badge`, `Tag`, `CounterBadge` |
 | Show status | `PresenceBadge`, `MessageBar` |
@@ -1608,7 +1710,7 @@ export function ConfirmDelete({ onDelete }: { onDelete: () => void }) {
 | Overlay content | `Dialog`, `Drawer`, `Popover`, `Tooltip` |
 | Offer actions in a popup | `Menu` with `MenuButton` or `SplitButton` |
 | Show progress | `Spinner`, `ProgressBar`, `Skeleton` |
-| Notify users | `Toast` / `Toaster`, `MessageBar` |
+| Notify users | `Toast` / `Toaster` (`createToaster()` from outside components), `MessageBar` |
 | Pick a date | `DatePicker` |
 | Pick a time | `TimePicker` |
 | Guide users | `TeachingPopover` |
@@ -1622,25 +1724,25 @@ export function ConfirmDelete({ onDelete }: { onDelete: () => void }) {
 
 ## 12. Quick Reference
 
-### Component Catalog (65 components)
+### Component Catalog (68 components)
 
 **Buttons & Actions** (7)
 `Button` `CompoundButton` `ToggleButton` `SplitButton` `MenuButton` `Link` `Toolbar` (plus the Toolbar parts `Toolbar.Button`, `Toolbar.ToggleButton`, `Toolbar.RadioGroup`, `Toolbar.RadioButton`, `Toolbar.Group`, `Toolbar.Divider`)
 
-**Input & Forms** (19)
-`Input` `Textarea` `Field` `Label` `Checkbox` `RadioGroup` `Switch` `Select` `SearchBox` `Slider` `SpinButton` `Combobox` `Dropdown` `TagPicker` `Rating` `ColorPicker` `SwatchPicker` `DatePicker` `TimePicker` (plus `RadioGroup.Item`/`RadioItem`, `Option`/`OptionGroup` and `RatingDisplay`)
+**Input & Forms** (22)
+`Input` `Textarea` `Field` `Label` `Checkbox` `RadioGroup` `Switch` `Select` `SearchBox` `Slider` `SpinButton` `Combobox` `Dropdown` `TagPicker` `Rating` `ColorPicker` `ColorArea` `ColorSlider` `AlphaSlider` `SwatchPicker` `DatePicker` `TimePicker` (plus `RadioGroup.Item`/`RadioItem`, `Option`/`OptionGroup`, `RatingDisplay` and the ColorPicker parts `ColorPicker.HexField`, `ColorPicker.Swatches`, `ColorPicker.Preview`)
 
 **Data Display** (11)
 `Avatar` `AvatarGroup` `Badge` `PresenceBadge` `CounterBadge` `Tag` `Persona` `Divider` `InfoLabel` `Image` `List`
 
 **Layout** (9)
-`Card` `Accordion` `TabList` `Tree` `Carousel` `Overflow` `Grid` `Stack` `Flex`
+`Card` `Accordion` `TabList` `Tree` `Carousel` `Overflow` `Grid` `Stack` `Flex` (plus `Tree.ItemPersonaLayout`)
 
 **Navigation** (5)
 `Breadcrumb` `Menu` `Nav` `Stepper` `Pagination` (plus the Menu parts `Menu.ItemCheckbox`, `Menu.ItemRadio`, `Menu.ItemSwitch`, `Menu.ItemLink`, `Menu.Group`, `Menu.GroupHeader`, `Menu.SplitGroup`)
 
 **Feedback** (5)
-`MessageBar` `ProgressBar` `Spinner` `Skeleton` `Toast`/`Toaster`
+`MessageBar` `ProgressBar` `Spinner` `Skeleton` `Toast`/`Toaster` (plus `MessageBar.Title`, `MessageBar.Actions`, `Toast.Title`, `Toast.Body`, `Toast.Footer`, `Toast.Close`)
 
 **Overlays** (5)
 `Dialog` `Popover` `Tooltip` `Drawer` `TeachingPopover`
@@ -1729,6 +1831,11 @@ not-disabled:not-aria-disabled:active:bg-subtle-pressed
 | `src/lib/slot.ts` | Slot system for customizable sub-elements (`slotRendersContent`, `materialiseSlotContent`, `slotWrapsDefaultContent`) |
 | `src/lib/children.ts` | `getElementType` (`{ suspend: false }` for walks deeper than the direct children), `isElementOfType`, `flattenChildren` for compound parts (Server Component references, Fragments) |
 | `src/lib/styles.ts` | Focus rings, input focus and forced-colors recipes |
+| `src/lib/classNames.ts` | The stable class-name registry (public, server-safe) |
+| `src/lib/color.ts` | `hsvToHex`, `hexToHsv` (public, server-safe) |
+| `src/lib/toaster.ts` | `createToaster`, the toaster handle (public, server-safe) |
+| `src/components/feedback/Toast*.tsx`, `src/components/feedback/Toaster.tsx` | The Toast modules (compound, root, parts, context, the Toaster) |
+| `src/components/layout/Tree*.ts(x)` | The Tree modules (compound, root and items, context, the cascade model, the persona layout) |
 | `src/lib/composeEventHandlers.ts` | Consumer + internal handler composition |
 | `src/hooks/useControllable.ts` | Controlled/uncontrolled state hook |
 | `src/hooks/useRovingTabIndex.ts` | Roving tab index for composite widgets (`data-roving-transparent`) |
@@ -1754,7 +1861,9 @@ not-disabled:not-aria-disabled:active:bg-subtle-pressed
 | Combobox, TagPicker, TimePicker | Tab | Down/Up (open and move) | Enter | Escape / Tab |
 | Dropdown | Tab | Down/Up/Home/End, typeahead, PageUp/PageDown | Enter/Space | Escape / Tab (commits) |
 | Menu | Enter/Space/Down on the trigger; Shift+F10 on a context region | Up/Down, Home/End, typeahead; Right/Left into and out of submenus | Enter/Space (Space keeps a checkable item's menu open) | Escape (one level) / Tab (all) |
-| Tree | Tab (selected item) | Up/Down, Left/Right (collapse/expand), Home/End, typeahead | Enter/Space | Tab |
+| Tree | Tab (selected item) | Up/Down, Left/Right (collapse/expand), Home/End, typeahead; into a row's actions by Tab (`tree`) or Right (`treegrid`) | Enter/Space (Space toggles the check in a checkbox tree) | Tab |
+| Toaster | the app's `shortcuts.focus` key press | Tab through the toasts' controls | Enter/Space on a control | Escape (all toasts) / Delete, Backspace (the focused one) |
+| ColorArea | Tab (one stop) | Arrows, Shift+arrows, PageUp/PageDown, Home/End | – | Tab |
 | List (selectable) | Tab | Up/Down, Home/End | Enter/Space (toggle) | Tab |
 | DataGrid | Tab (one tab stop) | Arrows, Home/End, Ctrl+Home/End, PageUp/PageDown | Enter/F2 (into cell), Space (select row) | Tab / Escape (from cell widgets) |
 | DatePicker calendar | Alt+Down on the input, or the toggle | Arrows, PageUp/PageDown, Shift+PageUp/PageDown, Home/End | Enter/Space | Escape |
@@ -1797,6 +1906,7 @@ Deprecated names still work through 0.x, warn once in development and will be re
 - Badge and CounterBadge `color="important"` renders the orange severe colors through 0.x and becomes Fluent's neutral high-emphasis color (near black in the light theme) in 1.0: use `color="severe"` to keep the orange look.
 - The `details` parameter of Dialog and Drawer `onOpenChange` becomes required: read it as `details?.reason`.
 - The `details` parameter of Menu and Toolbar `onCheckedValuesChange` becomes required: read it as `details?.name`.
+- The `details` parameter of Tree `onCheckedItemsChange` becomes required: read it as `details?.value`.
 
 ---
 
