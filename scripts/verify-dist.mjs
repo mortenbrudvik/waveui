@@ -33,7 +33,8 @@
  *     Vite's own `build()` API, contains only Button's module and its static imports — no
  *     Dialog code (repo-level#3), and neither the presence core (`hooks/usePresence`) nor
  *     `Presence`. The probe honours package.json `sideEffects` exactly as a consumer's bundler
- *     does;
+ *     does; an import of only `Field` contains no InfoButton module, so a Field-only bundle never
+ *     includes InfoButton's overlay code;
  *   - presence core: an import of only `Presence` contains `hooks/usePresence` (the probe finds
  *     the core where it is used), and the closure of `usePresence` + `Presence`, minified with
  *     bare imports external, stays within {@link PRESENCE_BUDGET} and imports nothing but
@@ -95,6 +96,8 @@ export const PENDING_FLAT_EXPORTS = [];
  */
 const PRESENCE_MODULE = 'hooks/usePresence.mjs';
 const PRESENCE_INCLUDE_KEEP = 'Menu';
+/** An import of only `Field` drops this module: Field imports a marker module, never InfoButton. */
+const INFO_BUTTON_MODULE = 'components/data-display/InfoButton.mjs';
 const PRESENCE_BUDGET = {
   names: ['usePresence', 'Presence'],
   maxMinifiedBytes: 6804,
@@ -1195,6 +1198,13 @@ export async function verifyDist(
         keep: 'Button',
         drop: 'Presence',
         dropModules: [PRESENCE_MODULE],
+      })),
+    );
+    errors.push(
+      ...(await probeTreeShaking(distRoot, {
+        keep: 'Field',
+        drop: 'InfoButton',
+        dropModules: [INFO_BUTTON_MODULE],
       })),
     );
   } catch (error) {
