@@ -65,10 +65,19 @@ describe('date helpers', () => {
     expect(isSameDay(undefined, new Date(2025, 5, 1))).toBe(false);
   });
 
-  it.each([0, 1, 2, 3, 4, 5, 6] as const)('startOfWeek for firstDayOfWeek %i', (first) => {
-    const day = startOfWeek(new Date(2025, 5, 12), first);
+  // 2025-06-12 is a Thursday.
+  it.each([
+    [0, 8],
+    [1, 9],
+    [2, 10],
+    [3, 11],
+    [4, 12],
+    [5, 6],
+    [6, 7],
+  ] as const)('startOfWeek for firstDayOfWeek %i is June %i', (first, dayOfMonth) => {
+    const day = startOfWeek(new Date(2025, 5, 12, 18), first);
     expect(day.getDay()).toBe(first);
-    expect(day <= new Date(2025, 5, 12)).toBe(true);
+    expect(fields(day)).toEqual([2025, 6, dayOfMonth, 0, 0]);
   });
 
   it('startOfWeek defaults to Sunday and stays on a week start', () => {
@@ -112,6 +121,24 @@ describe('date helpers', () => {
     expect(getWeekNumber(new Date(2025, 0, 6), iso)).toBe(2);
     expect(getWeekNumber(new Date(2020, 11, 31), iso)).toBe(53);
     expect(getWeekNumber(new Date(2021, 0, 4), iso)).toBe(1);
+  });
+
+  it('numbers Monday weeks for first-day and first-full-week', () => {
+    // 2025-01-01 is a Wednesday; 2024-01-01 was a Monday.
+    const firstDay = { firstDayOfWeek: 1, firstWeekOfYear: 'first-day' } as const;
+    expect(getWeekNumber(new Date(2024, 11, 29), firstDay)).toBe(52);
+    expect(getWeekNumber(new Date(2024, 11, 30), firstDay)).toBe(1);
+    expect(getWeekNumber(new Date(2025, 0, 1), firstDay)).toBe(1);
+    expect(getWeekNumber(new Date(2025, 0, 5), firstDay)).toBe(1);
+    expect(getWeekNumber(new Date(2025, 0, 6), firstDay)).toBe(2);
+    const full = { firstDayOfWeek: 1, firstWeekOfYear: 'first-full-week' } as const;
+    expect(getWeekNumber(new Date(2024, 11, 29), full)).toBe(52);
+    expect(getWeekNumber(new Date(2024, 11, 30), full)).toBe(53);
+    expect(getWeekNumber(new Date(2025, 0, 1), full)).toBe(53);
+    expect(getWeekNumber(new Date(2025, 0, 5), full)).toBe(53);
+    expect(getWeekNumber(new Date(2025, 0, 6), full)).toBe(1);
+    expect(getWeekNumber(new Date(2025, 0, 12), full)).toBe(1);
+    expect(getWeekNumber(new Date(2025, 0, 13), full)).toBe(2);
   });
 
   it('ignores the time of day when numbering weeks', () => {
