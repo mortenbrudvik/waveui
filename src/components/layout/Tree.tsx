@@ -4,7 +4,7 @@ export type { TreeCheckedItemsChangeDetails, TreeItemProps, TreeProps } from './
 
 /**
  * A hierarchical list (WAI-ARIA Tree View pattern) with a single tab stop: Up/Down move between
- * visible items, Home/End to the first/last, Right expands or moves to the first child, Left
+ * visible items, Home/End to the first/last, Right expands or moves to the first child (or into the row's actions, see below), Left
  * collapses or moves to the parent (both mirrored in RTL), Enter activates (and toggles a
  * parent), and so does Space unless the tree has checkboxes, `*` expands the siblings, and typing
  * jumps to an item by its text.
@@ -24,7 +24,10 @@ export type { TreeCheckedItemsChangeDetails, TreeItemProps, TreeProps } from './
  * hover and focus, and always where there is no hover or colors are forced), `aside` (a count or a
  * badge that describes the item), `iconAfter` and `expandIcon`. Tab from the focused item enters
  * its actions and Shift+Tab returns. Keys and clicks on the actions never activate or check the
- * item.
+ * item. With `navigationMode="treegrid"`, Right (Left in right-to-left layouts) moves from an item
+ * into its actions and Left returns, the actions take no Tab stop, and on an open parent Right
+ * moves into its actions rather than to its first child (Down does); the roles stay `tree` and
+ * `treeitem`.
  *
  * Items are `Tree.Item` elements; nested items are written in their parent's children (directly,
  * in Fragments, or returned by a render function), not rendered by a component of their own.

@@ -5,8 +5,9 @@ import { treeClassNames, treeItemClassNames } from '../../lib/classNames';
 import { cn } from '../../lib/cn';
 import { composeEventHandlers } from '../../lib/composeEventHandlers';
 import { isDev, warnOnce } from '../../lib/dev';
-import { getDirection } from '../../lib/direction';
-import { isOwnEvent } from '../../lib/events';
+import { getArrowIntent, getDirection } from '../../lib/direction';
+import { isEditableTarget, isOwnEvent } from '../../lib/events';
+import { isHiddenInput } from '../../lib/focus';
 import { CheckIcon, ChevronRightIcon, SubtractIcon } from '../../lib/icons';
 import type { SelectionMode } from '../../lib/types';
 import { materialiseSlotContent, renderSlot, slotRendersContent, type Slot } from '../../lib/slot';
@@ -109,6 +110,38 @@ const ASIDE_OFF_WITH_ACTIONS =
 /** Aside and actions share one cell, and sit side by side where the actions always show. */
 const END_CELL_SHARED = '[&>*]:[grid-area:1/1] forced-colors:flex [@media(hover:none)]:flex';
 
+/**
+ * The first action the toolbar's arrow keys reach, by the roving hook's rule: not natively
+ * disabled, not marked `data-roving-disabled`, not `aria-disabled` unless focusable-disabled, not a
+ * hidden form input and not inside a `hidden` or `inert` element of the toolbar.
+ */
+function firstAction(toolbar: HTMLElement): HTMLElement | null {
+  for (const el of Array.from(toolbar.querySelectorAll<HTMLElement>(ACTION_ITEM_SELECTOR))) {
+    if (isHiddenInput(el) || el.matches(':disabled')) continue;
+    const concealed = el.closest('[hidden], [inert]');
+    if (concealed && toolbar.contains(concealed)) continue;
+    const marker = el.getAttribute('data-roving-disabled');
+    if (marker !== null && marker !== 'false') continue;
+    if (
+      el.getAttribute('aria-disabled') === 'true' &&
+      !el.hasAttribute('data-disabled-focusable')
+    ) {
+      continue;
+    }
+    return el;
+  }
+  return null;
+}
+
+/** Focuses the first action of an item's own row; `false` when the row has none. */
+function focusFirstAction(item: HTMLElement): boolean {
+  const toolbar = item.querySelector<HTMLElement>(':scope > [data-tree-row] [data-tree-actions]');
+  const first = toolbar ? firstAction(toolbar) : null;
+  if (!first) return false;
+  first.focus();
+  return true;
+}
+
 /* ------------------------------------------------------------------ */
 /*  Tree                                                               */
 /* ------------------------------------------------------------------ */
@@ -160,6 +193,14 @@ export interface TreeProps extends React.HTMLAttributes<HTMLDivElement> {
   /** Controlled checked items (`selectionMode="multiple"`); see the cascade rule in the component docs. */
   checkedItems?: readonly string[];
   /**
+   * `'tree'`: Tab from a focused item enters its actions. `'treegrid'`: the "next" arrow (ArrowRight,
+   * ArrowLeft in RTL) moves into an item's actions and "previous" returns; on an expanded parent
+   * "next" no longer moves to the first child (ArrowDown does). The roles stay `tree` and `treeitem`
+   * (Fluent's `navigationMode`).
+   * @default 'tree'
+   */
+  navigationMode?: 'tree' | 'treegrid';
+  /**
    * Initially checked items (uncontrolled).
    * @default []
    */
@@ -181,6 +222,7 @@ export const TreeRoot = ({
   selected,
   current,
   selectionMode = 'none',
+  navigationMode = 'tree',
   checkedItems,
   defaultCheckedItems,
   onCheckedItemsChange,
@@ -325,6 +367,7 @@ export const TreeRoot = ({
       focusValue,
       onItemFocus: setFocusedItem,
       focusedItem,
+      navigationMode,
       registerValue,
       selectionMode,
       checked,
@@ -341,6 +384,7 @@ export const TreeRoot = ({
       getTabIndex,
       focusValue,
       focusedItem,
+      navigationMode,
       registerValue,
       selectionMode,
       checked,
@@ -486,17 +530,29 @@ function isOwnClick(event: React.MouseEvent<HTMLElement>): boolean {
 interface TreeItemActionsProps {
   /** Id of the element that names the item. */
   labelledBy: string;
-  /** `'last-focused'` while the actions hold a Tab stop (their item has focus), else `'none'`. */
+  /** `'last-focused'` while the actions hold a Tab stop (their item has focus, tree mode), else `'none'`. */
   tabStop: 'last-focused' | 'none';
+  /** `'treegrid'`: the arrows do not wrap, and "previous" on the first action returns to the item. */
+  navigationMode: 'tree' | 'treegrid';
+  /** Moves focus back to the item. */
+  onReturn: () => void;
   children: React.ReactNode;
 }
 
 /**
  * A row's actions: the consumer's controls rove with the arrow keys and hold at most one Tab
  * stop. A key pressed on an action is the action's: ArrowDown and ArrowUp on an action that opens
- * a popup (`aria-haspopup`) never move focus to another item.
+ * a popup (`aria-haspopup`) never move focus to another item. In treegrid navigation, "previous"
+ * on the first action returns to the item.
  */
-const TreeItemActions = ({ labelledBy, tabStop, children }: TreeItemActionsProps) => {
+const TreeItemActions = ({
+  labelledBy,
+  tabStop,
+  navigationMode,
+  onReturn,
+  children,
+}: TreeItemActionsProps) => {
+  const treegrid = navigationMode === 'treegrid';
   const {
     containerProps: { ref: rovingRef },
     handleKeyDown: rovingKeyDown,
@@ -505,19 +561,33 @@ const TreeItemActions = ({ labelledBy, tabStop, children }: TreeItemActionsProps
     itemSelector: ACTION_ITEM_SELECTOR,
     manageTabIndex: true,
     orientation: 'horizontal',
+    loop: !treegrid,
     tabStop,
   });
 
   const handleKeyDown = (event: React.KeyboardEvent<HTMLSpanElement>) => {
     // A key from a popup an action opened reaches here through the React tree: not ours.
     if (event.defaultPrevented || !isOwnEvent(event)) return;
-    const popup = (event.target as Element).getAttribute('aria-haspopup');
+    const target = event.target as HTMLElement;
+    const popup = target.getAttribute('aria-haspopup');
     if (
       (event.key === 'ArrowDown' || event.key === 'ArrowUp') &&
       popup !== null &&
       popup !== 'false'
     ) {
       event.preventDefault();
+      return;
+    }
+    if (!treegrid || event.altKey || event.ctrlKey || event.metaKey || isEditableTarget(target)) {
+      return;
+    }
+    const intent = getArrowIntent(event.key, {
+      orientation: 'horizontal',
+      dir: getDirection(event.currentTarget),
+    });
+    if (intent === 'prev' && target === firstAction(event.currentTarget)) {
+      event.preventDefault();
+      onReturn();
     }
   };
 
@@ -715,10 +785,6 @@ export const TreeItem = ({
     onKeyDown?.(event);
     if (event.defaultPrevented || event.altKey || event.ctrlKey || event.metaKey) return;
 
-    const rtl = getDirection(event.currentTarget) === 'rtl';
-    const forward = rtl ? 'ArrowLeft' : 'ArrowRight';
-    const back = rtl ? 'ArrowRight' : 'ArrowLeft';
-
     switch (event.key) {
       case 'Enter':
         event.preventDefault();
@@ -729,17 +795,6 @@ export const TreeItem = ({
         // A checkbox tree toggles the focused item's check (APG); the other modes activate.
         if (checkState !== undefined) ctx.toggleChecked(value, event.nativeEvent);
         else activate();
-        return;
-      case forward:
-        event.preventDefault();
-        if (!hasChildren) return;
-        if (!isExpanded) ctx.toggle(value);
-        else if (firstChildValue !== undefined) ctx.focusValue(firstChildValue);
-        return;
-      case back:
-        event.preventDefault();
-        if (hasChildren && isExpanded) ctx.toggle(value);
-        else if (parent !== null) ctx.focusValue(parent);
         return;
       case '*': {
         event.preventDefault();
@@ -754,6 +809,26 @@ export const TreeItem = ({
         return;
       }
       default:
+    }
+
+    const intent = getArrowIntent(event.key, {
+      orientation: 'horizontal',
+      dir: getDirection(event.currentTarget),
+    });
+    if (intent === 'next') {
+      event.preventDefault();
+      if (hasChildren && !isExpanded) {
+        ctx.toggle(value);
+        return;
+      }
+      // Treegrid navigation moves into the row's actions, also from an open parent (Down reaches
+      // its first child), where APG's tree moves to the first child.
+      if (ctx.navigationMode === 'treegrid' && focusFirstAction(event.currentTarget)) return;
+      if (hasChildren && firstChildValue !== undefined) ctx.focusValue(firstChildValue);
+    } else if (intent === 'prev') {
+      event.preventDefault();
+      if (hasChildren && isExpanded) ctx.toggle(value);
+      else if (parent !== null) ctx.focusValue(parent);
     }
   };
 
@@ -952,7 +1027,13 @@ export const TreeItem = ({
             {hasActions && (
               <TreeItemActions
                 labelledBy={labelId}
-                tabStop={ctx.focusedItem === value ? 'last-focused' : 'none'}
+                tabStop={
+                  ctx.navigationMode === 'tree' && ctx.focusedItem === value
+                    ? 'last-focused'
+                    : 'none'
+                }
+                navigationMode={ctx.navigationMode}
+                onReturn={() => ctx.focusValue(value)}
               >
                 {materialiseSlotContent(actions)}
               </TreeItemActions>

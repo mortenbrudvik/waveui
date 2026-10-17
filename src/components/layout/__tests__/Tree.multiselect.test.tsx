@@ -595,6 +595,10 @@ describe('Tree - selectionMode="multiple"', () => {
     expectTypeOf<TreeProps['selectionMode']>().toEqualTypeOf<
       'none' | 'single' | 'multiple' | undefined
     >();
+    expectTypeOf<TreeProps['navigationMode']>().toEqualTypeOf<'tree' | 'treegrid' | undefined>();
+    // @ts-expect-error only the two navigation modes exist
+    const gridMode = <Tree aria-label="x" navigationMode="grid" />;
+    expect(gridMode).toBeTruthy();
     expectTypeOf<TreeProps['checkedItems']>().toEqualTypeOf<readonly string[] | undefined>();
     expectTypeOf<TreeProps['defaultCheckedItems']>().toEqualTypeOf<readonly string[] | undefined>();
     expectTypeOf<NonNullable<TreeProps['onCheckedItemsChange']>>()

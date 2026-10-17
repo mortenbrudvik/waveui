@@ -1,6 +1,6 @@
 import * as React from 'react';
 import { describe, it, expect, vi, afterEach } from 'vitest';
-import { act, render, screen, within } from '@testing-library/react';
+import { act, fireEvent, render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { Tree, type TreeProps } from '../Tree';
 import { Menu } from '../../navigation/Menu';
@@ -587,5 +587,144 @@ describe('Tree.Item - actions', () => {
       </Tree>,
     );
     await expectNoA11yViolations();
+  });
+});
+
+describe('Tree - navigationMode="treegrid"', () => {
+  it('gives no action a Tab stop: Tab from the focused item leaves the tree', async () => {
+    const user = userEvent.setup();
+    render(<Rows navigationMode="treegrid" />);
+    act(() => item('Documents').focus());
+    for (const name of ['Rename Documents', 'Delete Documents', 'Rename Work', 'Rename Readme']) {
+      expect(button(name)).toHaveAttribute('tabindex', '-1');
+    }
+    await user.tab();
+    expect(button('After')).toHaveFocus();
+  });
+
+  it('"next" expands a collapsed parent, then moves into its actions, not to its first child; the arrows walk the actions without wrapping; "previous" on the first action returns', async () => {
+    const user = userEvent.setup();
+    render(<Rows navigationMode="treegrid" defaultExpandedItems={[]} />);
+    act(() => item('Documents').focus());
+    await user.keyboard('{ArrowRight}');
+    expect(item('Documents')).toHaveAttribute('aria-expanded', 'true');
+    expect(item('Documents')).toHaveFocus();
+    await user.keyboard('{ArrowRight}');
+    expect(button('Rename Documents')).toHaveFocus();
+    await user.keyboard('{ArrowRight}');
+    expect(button('Delete Documents')).toHaveFocus();
+    // The last action: "next" does nothing, and is still taken (default prevented).
+    expect(fireEvent.keyDown(button('Delete Documents'), { key: 'ArrowRight' })).toBe(false);
+    expect(button('Delete Documents')).toHaveFocus();
+    await user.keyboard('{ArrowLeft}');
+    expect(button('Rename Documents')).toHaveFocus();
+    await user.keyboard('{ArrowLeft}');
+    expect(item('Documents')).toHaveFocus();
+  });
+
+  it('a leaf with actions: "next" moves into them', async () => {
+    const user = userEvent.setup();
+    render(<Rows navigationMode="treegrid" />);
+    act(() => item('Readme.md').focus());
+    await user.keyboard('{ArrowRight}');
+    expect(button('Rename Readme')).toHaveFocus();
+  });
+
+  it('Home and End move to the first and last action, not to the first and last item', async () => {
+    const user = userEvent.setup();
+    render(<Rows navigationMode="treegrid" />);
+    act(() => item('Documents').focus());
+    await user.keyboard('{ArrowRight}');
+    await user.keyboard('{End}');
+    expect(button('Delete Documents')).toHaveFocus();
+    await user.keyboard('{Home}');
+    expect(button('Rename Documents')).toHaveFocus();
+  });
+
+  it('ArrowDown and ArrowUp on an action focus the next and previous visible item', async () => {
+    const user = userEvent.setup();
+    render(<Rows navigationMode="treegrid" />);
+    act(() => item('Documents').focus());
+    await user.keyboard('{ArrowRight}');
+    await user.keyboard('{ArrowDown}');
+    expect(item('Work')).toHaveFocus();
+    act(() => item('Readme.md').focus());
+    await user.keyboard('{ArrowRight}');
+    await user.keyboard('{ArrowUp}');
+    expect(item('Work')).toHaveFocus();
+  });
+
+  it('a row without actions behaves as in tree mode: "next" on an open parent moves to its first child', async () => {
+    const user = userEvent.setup();
+    render(
+      <Tree aria-label="Files" navigationMode="treegrid" defaultExpandedItems={['docs']}>
+        <Tree.Item value="docs" actions={false}>
+          Documents
+          <Tree.Item value="work">Work</Tree.Item>
+        </Tree.Item>
+      </Tree>,
+    );
+    act(() => item('Documents').focus());
+    await user.keyboard('{ArrowRight}');
+    expect(item('Work')).toHaveFocus();
+  });
+
+  it('Enter on an action never activates the item, and letters typed there are no typeahead', async () => {
+    const user = userEvent.setup();
+    const onRename = vi.fn();
+    const onItemSelect = vi.fn();
+    render(<Rows navigationMode="treegrid" onRename={onRename} onItemSelect={onItemSelect} />);
+    act(() => item('Documents').focus());
+    await user.keyboard('{ArrowRight}');
+    await user.keyboard('{Enter}');
+    expect(onRename).toHaveBeenCalledTimes(1);
+    expect(onItemSelect).not.toHaveBeenCalled();
+    await user.keyboard('w');
+    expect(button('Rename Documents')).toHaveFocus();
+  });
+
+  it('skips a disabled first action: "next" lands on the first enabled one, and "previous" there returns', async () => {
+    const user = userEvent.setup();
+    render(
+      <Tree aria-label="Files" navigationMode="treegrid">
+        <Tree.Item
+          value="readme"
+          actions={
+            <>
+              <button type="button" disabled>
+                Locked
+              </button>
+              <button type="button">Rename Readme</button>
+            </>
+          }
+        >
+          Readme.md
+        </Tree.Item>
+      </Tree>,
+    );
+    act(() => item('Readme.md').focus());
+    await user.keyboard('{ArrowRight}');
+    expect(button('Rename Readme')).toHaveFocus();
+    await user.keyboard('{ArrowLeft}');
+    expect(item('Readme.md')).toHaveFocus();
+  });
+
+  it('RTL: ArrowLeft moves into the actions and ArrowRight on the first action returns', async () => {
+    const user = userEvent.setup();
+    renderWithProviders(<Rows navigationMode="treegrid" />, { dir: 'rtl' });
+    act(() => item('Documents').focus());
+    await user.keyboard('{ArrowLeft}');
+    expect(button('Rename Documents')).toHaveFocus();
+    await user.keyboard('{ArrowLeft}');
+    expect(button('Delete Documents')).toHaveFocus();
+    await user.keyboard('{ArrowRight}{ArrowRight}');
+    expect(item('Documents')).toHaveFocus();
+  });
+
+  it('keeps the tree roles', () => {
+    render(<Rows navigationMode="treegrid" />);
+    expect(screen.getByRole('tree', { name: 'Files' })).toBeInTheDocument();
+    expect(screen.queryByRole('treegrid')).toBeNull();
+    expect(item('Documents')).toHaveAttribute('role', 'treeitem');
   });
 });
