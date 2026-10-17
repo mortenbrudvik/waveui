@@ -483,6 +483,15 @@ export interface TreeItemProps extends React.HTMLAttributes<HTMLDivElement> {
    * hovered or the item or its actions have focus, and always in forced colors and without hover
    * (touch). Tab reaches them from the focused item (`navigationMode="tree"`), or the arrow keys do
    * (`"treegrid"`). Keys and clicks on them never activate or check the item.
+   *
+   * They also stay shown while a Menu, Popover or Dialog rendered inside them holds focus or its
+   * trigger among them is expanded, so its focus return reaches the action. A dialog your app
+   * renders elsewhere and opens from an action through state (a "Delete…" menu item that opens a
+   * confirm Dialog) closes after the actions have hidden again (on devices with hover, outside
+   * forced colors): a hidden action cannot take focus, so focus returns to the nearest element
+   * that can, normally the item. Render such a Dialog inside `actions` (its `Dialog.Trigger`
+   * there, or the controlled Dialog next to the Menu that opens it) to return focus to the action;
+   * `finalFocusRef` cannot name it, since it is still hidden when the dialog closes.
    */
   actions?: React.ReactNode;
   /**

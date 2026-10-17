@@ -22,6 +22,7 @@ The third Fluent UI v9 parity release: Phase 3 of the [roadmap](docs/ROADMAP.md)
 9. **Tree** renders `data-selection-mode` (`none` unless you set `selectionMode`).
 10. **ColorPicker.** The default picker gains a color area and a hue slider above its 0.7 layout, and with `showOpacity` its opacity slider becomes an alpha slider over a checkerboard (still named "Opacity", 0–100). `children` of ColorPicker now render a custom layout; 0.7 ignored them. See [Visual](#visual).
 11. **`ToastController['dispatchToast']` is overloaded** (`dispatchToast(content, options?)` next to `dispatchToast(options)`): a test double that implements the interface must accept content too. `Parameters<ToastController['dispatchToast']>` is unchanged.
+12. **A `dispatchToast` options argument must be a plain object.** One that is not (a class instance, `Object.create(defaults)`) is now read as React content and throws when it renders. Pass a plain object, or spread it (`{ ...defaults, title }`). See [Behaviour](#behaviour).
 
 ### Added
 
@@ -51,6 +52,7 @@ The third Fluent UI v9 parity release: Phase 3 of the [roadmap](docs/ROADMAP.md)
 - **Every toast pauses while the pointer or focus is anywhere in the toast region**, and while the window is in the background (as in 0.7); 0.7 paused the hovered or focused toast only. Focus in a menu opened from a toast counts.
 - **A toast dispatched with content that holds an action stays until it is dismissed**, unless the dispatch passes a `timeout` (an Undo that vanished after 5 seconds is a time limit that people who use a screen reader, a switch or voice control often cannot meet, WCAG 2.2.1). The options form keeps 5000 ms.
 - **ColorPicker `children`** render a custom layout of the color parts; 0.7 ignored them.
+- **ColorPicker's invalid-value warning** (development only) names the parts a value that is not hex disables: it ends "Pass a hex value; the color area and sliders are disabled until then." instead of 0.7's "Pass a hex value; the opacity slider is disabled until then."
 - **A `dispatchToast` argument that is not a plain object is content.** 0.7 read any object as options; now only a plain object (prototype `Object.prototype` or `null`) is the options form, so a class instance or `Object.create(defaults)` passed as options is read as React content and throws when it renders. Pass a plain object, or spread it (`{ ...defaults, title }`).
 
 #### Visual
