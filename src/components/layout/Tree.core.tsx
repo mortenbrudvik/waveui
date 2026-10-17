@@ -57,6 +57,10 @@ const CHECKED_WITHOUT_MULTIPLE_MESSAGE =
   'Tree: `checkedItems` and `defaultCheckedItems` need selectionMode="multiple"; without it the ' +
   'tree draws no checkboxes and ignores them.';
 
+const SINGLE_WITHOUT_SELECTED_MESSAGE =
+  'Tree: selectionMode="single" draws a radio on every item for `selected`; pass `selected` ' +
+  '(null while nothing is selected) and update it from `onItemSelect`.';
+
 /** The registered top-level subtrees in document order, which is the tree order of their items. */
 function forestInTreeOrder(
   entries: ReadonlySet<React.RefObject<TreeSelectionEntry | null>> | null,
@@ -106,7 +110,9 @@ export interface TreeProps extends React.HTMLAttributes<HTMLDivElement> {
   /**
    * Value of the selected item. When set (also to `null`), every item carries `aria-selected`, and
    * the selected item is where keyboard focus enters the tree. It has no effect with
-   * `selectionMode="multiple"` (a development warning): items carry `aria-checked` instead.
+   * `selectionMode="multiple"` (a development warning): items carry `aria-checked` instead. With
+   * `selectionMode="single"` every item carries `aria-selected` even while it is not set (a
+   * development warning: the radios need it).
    */
   selected?: string | null;
   /** Value of the current item (for example the open page): it gets `aria-current="true"`. */
@@ -221,12 +227,23 @@ export const TreeRoot = ({
     pendingDetails.current = undefined;
   });
 
-  // An item carries aria-checked or aria-selected, never both (APG).
-  const effectiveSelected = selectionMode === 'multiple' ? undefined : selected;
+  // An item carries aria-checked or aria-selected, never both (APG); in single mode every item
+  // carries aria-selected from the first render, so the radios and the state agree.
+  const effectiveSelected =
+    selectionMode === 'multiple'
+      ? undefined
+      : selectionMode === 'single'
+        ? (selected ?? null)
+        : selected;
 
   React.useEffect(() => {
     if (selectionMode === 'multiple' && selected !== undefined) {
       warnOnce('Tree:selected-with-multiple', SELECTED_WITH_MULTIPLE_MESSAGE);
+    }
+  }, [selectionMode, selected]);
+  React.useEffect(() => {
+    if (selectionMode === 'single' && selected === undefined) {
+      warnOnce('Tree:single-without-selected', SINGLE_WITHOUT_SELECTED_MESSAGE);
     }
   }, [selectionMode, selected]);
   const hasCheckedProps = checkedItems !== undefined || defaultCheckedItems !== undefined;
@@ -427,10 +444,10 @@ function isOwnClick(event: React.MouseEvent<HTMLElement>): boolean {
  * and the child group. Its `onClick` receives only clicks on its own row (not on its child group
  * or nested items) and its `onKeyDown` only keys pressed while focus is on it or in its row; both
  * run before the built-in behaviour (call `event.preventDefault()` to skip it). In a checkbox
- * tree, a click on the item's checkbox toggles its check and is not passed to `onClick`. Its other event
- * handlers (`onFocus`, `onDoubleClick`, `onContextMenu` and the rest) are not filtered: as DOM
- * events bubble, they also receive events from its child group and nested items (compare
- * `event.target` with `event.currentTarget` to tell them apart).
+ * tree, a click on the item's checkbox toggles its check and is not passed to `onClick`. Its
+ * other event handlers (`onFocus`, `onDoubleClick`, `onContextMenu` and the rest) are not
+ * filtered: as DOM events bubble, they also receive events from its child group and nested items
+ * (compare `event.target` with `event.currentTarget` to tell them apart).
  *
  * The item is named by its label (`aria-labelledby`), not by its icon or nested items; an
  * `aria-label` or `aria-labelledby` prop replaces that name. Typeahead matches the label text too
@@ -596,7 +613,7 @@ export const TreeItem = ({
     ctx.toggleChecked(value, event.nativeEvent);
   };
 
-  const indicator =
+  const checkbox =
     checkState === undefined ? null : (
       <span
         role="checkbox"
@@ -623,6 +640,28 @@ export const TreeItem = ({
         ) : null}
       </span>
     );
+
+  // Single mode: a decorative radio (the treeitem's aria-selected carries the state). A click on
+  // it is a click on the row, so it activates the item.
+  const radio =
+    ctx.selectionMode === 'single' ? (
+      <span
+        aria-hidden="true"
+        className={cn(
+          treeItemClassNames.indicator,
+          'inline-flex size-4 shrink-0 items-center justify-center rounded-full border transition-colors motion-reduce:transition-none',
+          isSelected
+            ? 'border-2 border-primary forced-colors:border-[Highlight]'
+            : cn('border-stroke-accessible', forcedColors.control),
+        )}
+      >
+        {isSelected && (
+          <span className={cn('block size-2 rounded-full bg-primary', forcedColors.selectedLeaf)} />
+        )}
+      </span>
+    ) : null;
+  // A tree item shows its checkbox in multiple mode, its radio in single mode, and nothing else.
+  const indicator = checkbox ?? radio;
 
   // Items in this item's group are checked when the list checks this item or an ancestor.
   const groupListed = ancestorListed || (multiple && ctx.checked.has(value));
@@ -693,7 +732,9 @@ export const TreeItem = ({
           data-roving-text={typeaheadText}
           className={cn(treeItemClassNames.label, 'truncate')}
         >
-          <TreeLabelContext.Provider value>{labelContent}</TreeLabelContext.Provider>
+          <TreeCheckForcedContext.Provider value={false}>
+            <TreeLabelContext.Provider value>{labelContent}</TreeLabelContext.Provider>
+          </TreeCheckForcedContext.Provider>
         </span>
       </div>
       {hasChildren && isExpanded && (

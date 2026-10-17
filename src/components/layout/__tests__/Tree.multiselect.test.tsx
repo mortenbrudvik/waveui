@@ -189,9 +189,10 @@ describe('Tree - selectionMode="multiple"', () => {
   it('uncontrolled: defaultCheckedItems seeds the checks and each toggle calls back', async () => {
     const user = userEvent.setup();
     const onCheckedItemsChange = vi.fn();
+    const initial = ['photo'];
     renderChecks({
       defaultExpandedItems: ['images'],
-      defaultCheckedItems: ['photo'],
+      defaultCheckedItems: initial,
       onCheckedItemsChange,
     });
     expect(item('Images')).toHaveAttribute('aria-checked', 'true');
@@ -202,6 +203,7 @@ describe('Tree - selectionMode="multiple"', () => {
     );
     expect(item('Images')).toHaveAttribute('aria-checked', 'false');
     expect(Object.isFrozen(onCheckedItemsChange.mock.calls[0][0])).toBe(false);
+    expect(onCheckedItemsChange.mock.calls[0][0]).not.toBe(initial);
   });
 
   it('controlled: the checks follow a parent that accepts the change', async () => {
@@ -248,6 +250,7 @@ describe('Tree - selectionMode="multiple"', () => {
     renderChecks({ checkedItems: listed, onCheckedItemsChange });
     await user.click(checkbox('Images'));
     expect(Object.isFrozen(onCheckedItemsChange.mock.calls[0][0])).toBe(false);
+    expect(onCheckedItemsChange.mock.calls[0][0]).not.toBe(listed);
   });
 
   it('StrictMode: onCheckedItemsChange fires exactly once per toggle', async () => {
@@ -505,6 +508,43 @@ describe('Tree - selectionMode="multiple"', () => {
       expect(warnings(warn)).toEqual([ITEM_IN_LABEL_WARNING]);
     });
 
+    it('an item rendered in the label of an item under a listed grandparent is not checked with it, and toggles normally', async () => {
+      const user = userEvent.setup();
+      const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+      const onCheckedItemsChange = vi.fn();
+      function FileNode({ value }: { value: string }) {
+        return <Tree.Item value={value}>{value}</Tree.Item>;
+      }
+      render(
+        <Tree
+          aria-label="Files"
+          selectionMode="multiple"
+          defaultExpandedItems={['g']}
+          checkedItems={['g']}
+          onCheckedItemsChange={onCheckedItemsChange}
+        >
+          <Tree.Item value="g">
+            Grand
+            <Tree.Item value="w">
+              Wrapper
+              <FileNode value="x.txt" />
+            </Tree.Item>
+          </Tree.Item>
+        </Tree>,
+      );
+      expect(screen.getByRole('treeitem', { name: /^Wrapper/ })).toHaveAttribute(
+        'aria-checked',
+        'true',
+      );
+      expect(item('x.txt')).toHaveAttribute('aria-checked', 'false');
+      await user.click(checkbox('x.txt'));
+      expect(onCheckedItemsChange).toHaveBeenLastCalledWith(
+        ['g', 'w', 'x.txt'],
+        expect.objectContaining({ value: 'x.txt', checked: true }),
+      );
+      expect(warnings(warn)).toEqual([ITEM_IN_LABEL_WARNING]);
+    });
+
     it('children added later under a listed parent render checked; a listed placeholder value is kept as unmatched', async () => {
       const user = userEvent.setup();
       const onCheckedItemsChange = vi.fn();
@@ -578,5 +618,140 @@ describe('Tree - selectionMode="multiple"', () => {
     // @ts-expect-error Fluent's 'multiselect' is spelled 'multiple' in WaveUI
     const fluentName = <Tree aria-label="x" selectionMode="multiselect" />;
     expect(fluentName).toBeTruthy();
+  });
+});
+
+describe('Tree - selectionMode="single"', () => {
+  /** The row's indicator: the decorative radio in single mode. */
+  const radioOf = (name: string) =>
+    item(name).querySelector<HTMLElement>(
+      `:scope > [data-tree-row] > .${treeItemClassNames.indicator}`,
+    );
+
+  it('draws a decorative radio on every item and fills the selected one', () => {
+    render(
+      <Tree
+        aria-label="Files"
+        selectionMode="single"
+        selected="readme"
+        defaultExpandedItems={ALL_EXPANDED}
+      >
+        {files}
+      </Tree>,
+    );
+    const tree = screen.getByRole('tree');
+    expect(tree).toHaveAttribute('data-selection-mode', 'single');
+    expect(tree).not.toHaveAttribute('aria-multiselectable');
+    expect(screen.queryByRole('checkbox')).toBeNull();
+    for (const name of ['Documents', 'Work', 'Report.docx', 'Readme.md']) {
+      expect(radioOf(name)).toHaveAttribute('aria-hidden', 'true');
+    }
+    expect(radioOf('Readme.md')!.children).toHaveLength(1);
+    expect(radioOf('Documents')!.children).toHaveLength(0);
+    expect(item('Readme.md')).toHaveAttribute('aria-selected', 'true');
+    expect(item('Documents')).toHaveAttribute('aria-selected', 'false');
+    expect(item('Readme.md')).not.toHaveAttribute('aria-checked');
+  });
+
+  it('with selected={null}, every item carries aria-selected="false" and nothing warns', () => {
+    const warn = vi.spyOn(console, 'warn');
+    render(
+      <Tree aria-label="Files" selectionMode="single" selected={null}>
+        {files}
+      </Tree>,
+    );
+    for (const treeitem of screen.getAllByRole('treeitem')) {
+      expect(treeitem).toHaveAttribute('aria-selected', 'false');
+    }
+    expect(warn).not.toHaveBeenCalled();
+  });
+
+  it('without selected, warns once and still puts aria-selected="false" on every item', () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const ui = (
+      <Tree aria-label="Files" selectionMode="single">
+        {files}
+      </Tree>
+    );
+    const { rerender } = render(ui);
+    rerender(ui);
+    for (const treeitem of screen.getAllByRole('treeitem')) {
+      expect(treeitem).toHaveAttribute('aria-selected', 'false');
+    }
+    expect(warnings(warn)).toEqual([
+      '[WaveUI] Tree: selectionMode="single" draws a radio on every item for `selected`; pass ' +
+        '`selected` (null while nothing is selected) and update it from `onItemSelect`.',
+    ]);
+  });
+
+  it('a click on the radio, Space and Enter activate the item, as in 0.7', async () => {
+    const user = userEvent.setup();
+    const onItemSelect = vi.fn();
+    render(
+      <Tree aria-label="Files" selectionMode="single" selected={null} onItemSelect={onItemSelect}>
+        {files}
+      </Tree>,
+    );
+    await user.click(radioOf('Readme.md')!);
+    act(() => item('Images').focus());
+    await user.keyboard(' ');
+    await user.keyboard('{Enter}');
+    expect(onItemSelect.mock.calls).toEqual([['readme'], ['images'], ['images']]);
+  });
+
+  it('a controlled selection moves the filled radio', async () => {
+    const user = userEvent.setup();
+    function Controlled() {
+      const [selected, setSelected] = React.useState<string | null>(null);
+      return (
+        <Tree
+          aria-label="Files"
+          selectionMode="single"
+          selected={selected}
+          onItemSelect={setSelected}
+        >
+          {files}
+        </Tree>
+      );
+    }
+    render(<Controlled />);
+    await user.click(screen.getByText('Readme.md'));
+    expect(item('Readme.md')).toHaveAttribute('aria-selected', 'true');
+    expect(radioOf('Readme.md')!.children).toHaveLength(1);
+    expect(radioOf('Images')!.children).toHaveLength(0);
+  });
+
+  it('has no accessibility violations', async () => {
+    render(
+      <Tree
+        aria-label="Files"
+        selectionMode="single"
+        selected="work"
+        defaultExpandedItems={ALL_EXPANDED}
+      >
+        {files}
+      </Tree>,
+    );
+    await expectNoA11yViolations();
+  });
+});
+
+describe('Tree - selectionMode="none" (the default)', () => {
+  it('adds only data-selection-mode: no indicator, aria-checked, data-checked or aria-selected', () => {
+    render(
+      <Tree aria-label="Files" defaultExpandedItems={['docs']}>
+        {files}
+      </Tree>,
+    );
+    expect(screen.getByRole('tree')).toHaveAttribute('data-selection-mode', 'none');
+    expect(document.querySelector(`.${treeItemClassNames.indicator}`)).toBeNull();
+    for (const treeitem of screen.getAllByRole('treeitem')) {
+      expect(treeitem).not.toHaveAttribute('aria-checked');
+      expect(treeitem).not.toHaveAttribute('data-checked');
+      expect(treeitem).not.toHaveAttribute('data-mixed');
+      expect(treeitem).not.toHaveAttribute('aria-selected');
+    }
+    // The spacer and the label: nothing is added to a 0.7 row.
+    expect(item('Readme.md').querySelector('[data-tree-row]')!.children).toHaveLength(2);
   });
 });
