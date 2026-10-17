@@ -87,11 +87,9 @@ const require = createRequire(import.meta.url);
 
 /**
  * A temporary bridge: components whose flat sub-component names (`<Parent><Member>`,
- * C-COMPOUND) are not exported from `dist/index.mjs` yet. Fluent parity phase 5 (0.10) lists
- * `SwatchPicker`: it gains its `Row` member (`SwatchPicker.Row`, wave B) before the input barrel
- * exports `SwatchPickerRow` (wave C), which empties the list again. Until the member lands, the
- * check reports `SwatchPicker` as planned (an exported component that is no compound yet), and
- * then its flat name as pending. Phase 2 (0.7) did the same for `Toolbar`, which became a
+ * C-COMPOUND) are not exported from `dist/index.mjs` yet. The list is empty: phase 5 (0.10)
+ * listed `SwatchPicker` until the input barrel exported `SwatchPickerRow`. Phase 2 (0.7) did the
+ * same for `Toolbar`, which became a
  * compound (`Toolbar.Button`, …) before the button barrel exported the flat names of its parts,
  * and phase 3 (0.8) for `ColorPicker`, `MessageBar`, `Toast` and `Tree` while their new parts
  * (`Toast.Title`, `MessageBar.Actions`, `ColorPicker.HexField`, `Tree.ItemPersonaLayout`, …)
@@ -105,7 +103,7 @@ const require = createRequire(import.meta.url);
  * A compound that is not listed must export every flat name. A flat name that is exported must
  * equal its dotted member, listed or not.
  */
-export const PENDING_FLAT_EXPORTS = ['SwatchPicker'];
+export const PENDING_FLAT_EXPORTS = [];
 
 /**
  * The presence core's probes: an import of only `Button` drops it, an import of only

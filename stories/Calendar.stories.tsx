@@ -1,9 +1,7 @@
 import type { Meta, StoryObj } from '@storybook/react';
 import { useState } from 'react';
 import { fn } from 'storybook/test';
-import { Field } from '../src';
-import { Calendar } from '../src/components/input/Calendar';
-import { isSameDay } from '../src/lib/date';
+import { Calendar, Field, isSameDay } from '../src';
 
 /** A fixed "today", so the stories and their checks do not change with the date. */
 const TODAY = new Date(2025, 5, 18);

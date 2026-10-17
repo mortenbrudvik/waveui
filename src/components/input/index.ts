@@ -27,6 +27,7 @@ export {
   ComboboxOptionGroup,
   type ComboboxProps,
   type ComboboxLabels,
+  type ComboboxComponent,
   Option,
   type OptionProps,
   OptionGroup,
@@ -38,7 +39,16 @@ export {
   DropdownOptionGroup,
   type DropdownProps,
   type DropdownLabels,
+  type DropdownComponent,
 } from './Dropdown';
+export {
+  Listbox,
+  ListboxOption,
+  ListboxOptionGroup,
+  type ListboxProps,
+  type ListboxLabels,
+  type ListboxComponent,
+} from './Listbox';
 export {
   ListboxProvider,
   type ListboxProviderProps,
@@ -53,7 +63,18 @@ export {
   type SwatchPickerProps,
   type SwatchItem,
   type SwatchPickerSize,
+  type SwatchPickerLabels,
+  SwatchPickerRow,
+  type SwatchPickerRowProps,
 } from './SwatchPicker';
+export {
+  ColorSwatch,
+  type ColorSwatchProps,
+  ImageSwatch,
+  type ImageSwatchProps,
+  EmptySwatch,
+  type EmptySwatchProps,
+} from './SwatchPicker.swatches';
 export {
   ColorPicker,
   ColorPickerHexField,
@@ -96,3 +117,10 @@ export {
   type DatePickerInvalidReason,
   type DatePickerLabels,
 } from './DatePicker';
+export {
+  Calendar,
+  type CalendarProps,
+  type CalendarLabels,
+  type CalendarValueChangeDetails,
+} from './Calendar';
+export type { SelectionRange } from './dateUtils';

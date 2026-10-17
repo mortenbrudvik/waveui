@@ -1,12 +1,7 @@
 import type { Meta, StoryObj } from '@storybook/react';
 import { useState } from 'react';
 import { fn } from 'storybook/test';
-import { SwatchPicker, Tooltip } from '../src';
-import {
-  ColorSwatch,
-  EmptySwatch,
-  ImageSwatch,
-} from '../src/components/input/SwatchPicker.swatches';
+import { ColorSwatch, EmptySwatch, ImageSwatch, SwatchPicker, Tooltip } from '../src';
 
 const defaultItems = [
   { value: 'red', color: '#d13438', label: 'Red' }, // wave-allow-color: fixture

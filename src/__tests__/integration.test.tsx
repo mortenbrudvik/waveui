@@ -180,11 +180,8 @@ const menuitem = (name: string) => screen.getByRole('menuitem', { name });
  * Flat names of compound members that a package attaches before the barrels export them (the
  * barrel test's twin of `PENDING_FLAT_EXPORTS` in `scripts/verify-dist.mjs`). Empty since wave C
  * of 0.8; a later phase whose parts land before their flat names lists them here the same way.
- *
- * Phase 5 (0.10): `SwatchPicker.Row` is attached, and its flat `SwatchPickerRow` is exported by
- * the phase's INTEGRATION wave, which empties the list again (with `PENDING_FLAT_EXPORTS`).
  */
-const PENDING_FLAT_MEMBERS: readonly string[] = ['SwatchPickerRow'];
+const PENDING_FLAT_MEMBERS: readonly string[] = [];
 
 describe('public barrel (spec §5.11, C-COMPOUND)', () => {
   const barrel = Wave as unknown as Record<string, unknown>;

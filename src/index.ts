@@ -15,6 +15,8 @@ export { composeEventHandlers } from './lib/composeEventHandlers';
 export { mergeRefs } from './lib/mergeRefs';
 export type { DismissReason } from './lib/layers';
 export * from './lib/classNames';
+export { addDays, addMonths, isSameDay, startOfWeek, getWeekNumber } from './lib/date';
+export type { GetWeekNumberOptions } from './lib/date';
 export { hsvToHex, hexToHsv } from './lib/color';
 export { createToaster } from './lib/toaster';
 export type { ToasterHandle } from './lib/toaster';

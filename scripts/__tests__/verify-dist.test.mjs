@@ -1188,14 +1188,15 @@ describe('probeSizeBudget', () => {
 });
 
 describe('the flat-name bridge (PENDING_FLAT_EXPORTS)', () => {
-  it('lists SwatchPicker until INTEGRATION exports SwatchPickerRow', async () => {
-    expect(PENDING_FLAT_EXPORTS).toEqual(['SwatchPicker']);
+  it('is closed: the list is empty and the real exports pass, final mode included', async () => {
+    expect(PENDING_FLAT_EXPORTS).toEqual([]);
     const mod = await import('../../src/index.ts');
-    const result = checkFlatExports(mod);
-    expect(result.errors).toEqual([]);
-    expect([...result.planned, ...result.pending].some((n) => n.startsWith('SwatchPicker'))).toBe(
-      true,
-    );
+    expect(checkFlatExports(mod)).toEqual({ errors: [], pending: [], planned: [] });
+    expect(checkFlatExports(mod, { final: true })).toEqual({
+      errors: [],
+      pending: [],
+      planned: [],
+    });
   }, 60_000);
 
   it('the real exports carry the flat name of every compound member, the 0.8 parts included', async () => {
