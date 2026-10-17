@@ -28,3 +28,10 @@ Binding spec: `docs/superpowers/specs/2026-09-26-fluent-parity-phase-5-design.md
 
 ## Ruling R22 (git, every task)
 Never run `git checkout`, `restore`, `stash`, `reset` or any other git write. To check RED against the committed code, read it with `git show HEAD:<path>` into a scratch file, swap the files with file tools, then restore them.
+
+## D5 additions (from D4's review)
+- A `SwatchPicker.Row` must be a direct child or inside a Fragment: say so in the Row and `children` JSDoc, and warn once in development when a Row renders inside a Row (a wrapper component around a Row lands in an implicit row; nested rows fail axe).
+- A consumer `aria-required` alone shows the grid's Required hint (as the radiogroup carries `aria-required`): pin it with a test and one JSDoc phrase.
+- `layout` changed at runtime remounts the swatches (focus falls to the body): one JSDoc sentence on `layout`.
+- The Tooltip test with `relationship="description"` in every layout and in tab mode (spec P5-04 tests: a Tooltip names and describes).
+- Share the gap class between the root and the rows (a `swatchGap(spacing)` helper).

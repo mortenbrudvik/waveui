@@ -222,3 +222,29 @@ Task D1: review (sonnet) — Needs fixes: 1 Important (no rerender/StrictMode te
 Task D1: fix round 1/5 dispatched (resumed implementer)
 PAUSED by the user (2026-09-27). Task D1 fix round 1 was stopped near its end (its last step: re-running tests to confirm an act() warning was gone); uncommitted edits in src/components/input/SwatchPicker.swatches.tsx, SwatchPicker.tsx and __tests__/SwatchPicker.swatches.test.tsx (base ad2a739). To resume: SendMessage the D1 implementer to finish verification and append its "Fix round 1" report, then commit, re-review, and continue with D2 (notes task-D-dispatch-notes.md). Remaining after D: E1-E6 (task-E-dispatch-notes.md), wave C F1-F3 (task-F-dispatch-notes.md), wave D G1-G4, wave E H1 (task-H1-dispatch-notes.md), wave F I1 (after Phase 4 is on main), final review.
 D1 fix round committed by the controller after the pause, 56566ec (verified: SwatchPicker/swatches/ColorPicker 145 pass clean, eslint, both tsc); the fix round's re-review is still owed. Branch pushed to origin (feat/fluent-parity-phase-5, upstream set) at the user's request.
+RESUMED 2026-10-17 (branch unchanged on origin; Phase 4 not yet on main). Task D1: fix round 1 re-review dispatched (sonnet, review-D1-fix1.diff, ad2a739..56566ec)
+Task D1: fix round 1/5 (2 addressed, 0 open; commits ad2a739..56566ec; re-review sonnet: clean)
+Task D1: complete (commits 517f6eb..56566ec)
+Task D2: dispatched (base 688376c, sonnet; notes task-D-dispatch-notes.md)
+Task D2: implemented, committed e16b8fe (DONE; no RED run before implementing (mutation checks after); EmptySwatch grid form left to D4; data-spacing left to D4; hover border uses the gated form); both tsc verified clean; review package review-D2.diff
+Task D2: review (opus) — Needs fixes: 1 Important (plan gap: no testSystemProps or production-inert test for ImageSwatch and EmptySwatch), 12 Minor.
+Ruling R25: a disabled swatch that is selected keeps its selected state (aria-checked, check, ring) under the slash — it reports the value truthfully and stays unreachable; pinned by a test — cost if wrong: a look change later.
+Task D2: fix round 1/5 dispatched (I1 + M1-M11; M12 skipped: tests are not scanned; resumed implementer)
+H1 items (D2): ImageSwatch selection in forced colours (box-shadow ring dropped); the slash colours per line
+Task D2: fix round 1 implemented, committed 80959a6 (DONE; borderColor now via a --wave-swatch-border variable so the forced-colours edge wins; the unselected hover border replaces the custom colour); both tsc clean; review package review-D2-fix1.diff
+Task D2: fix round 1/5 (12 addressed, 0 open; commits e16b8fe..80959a6; re-review sonnet: clean; the hover replacing a custom borderColor judged acceptable)
+Task D2: complete (commits 688376c..80959a6)
+Task D3: dispatched (base 80959a6, sonnet)
+Task D3: implemented, committed 71fe2eb (DONE; the early container.contains(target) guard is redundant with the row check (kept as the explicit C-COMPOSE check); onKeyDown composes no consumer handler (D4 composes); dev tsc clean); review package review-D3.diff
+Task D3: review (sonnet) — Approved, 0 Critical/Important, 8 Minor.
+Task D3: fix round 1/5 dispatched for M1 (fieldset :disabled), M4 (vacuous all-disabled test), M6/M7 (test names or real mutation), M8 (data-roving-disabled and nested-target tests), M2 JSDoc line; M3/M5 deferred (marginal for swatches)
+Task D3: fix round 1/5 by the implementer, verified by the controller (R21: tests and a one-line guard; 15 grid tests pass, dev tsc clean), committed a0c73e4
+Task D3: minor (deferred): the grid does not try the next candidate when a chosen cell refuses focus; the explicit container guard is redundant with the row check
+Task D3: complete (commits 80959a6..a0c73e4)
+Task D4: dispatched (base a0c73e4, opus)
+Task D4: implemented, committed caee925 (DONE; 52 grid tests, RED 41/52, 9 mutations caught; known rule-21 SwatchPickerRow flat-name failure in integration.test; data-focus-mode always "arrow" until D5; both roving hooks run, the active one attached); both tsc clean; review package review-D4.diff
+Phase 3 merged to main (682e067), user notice 2026-10-17; Phase 4 still pending.
+Ruling R26: merge origin/main (Phase 3) into this branch now, after D4's review closes and before D5: the controller runs git merge, an opus agent resolves the conflicted files by file edits only (keeping Phase 3's stable class names and Phase 5's behaviour), the controller commits the merge; then an adaptation task applies P3-00 (stable class names) to the parts this branch added and fixes what the merged suite reports; D5 and E1-E6 then follow P3-00 (spec rule 22). Wave F keeps the Phase 4 merge — spec rule 22 allows an early merge; Phase 3 touches the branch's files (Dropdown, Combobox, Option, TagPicker, DatePicker, TimePicker, SwatchPicker, ColorPicker, verify-dist, barrels, CHANGELOG) — cost if wrong: the conflicts are resolved once now instead of together with Phase 4 later.
+Task D4: review (opus) — Approved, 0 Critical/Important, 7 Minor (layout switch probed correct).
+Task D4: minors → D5 notes (M1 Row in a wrapper: JSDoc or dev warning; M2 aria-required alone shows the hint: test + doc; M3 layout switch remounts: JSDoc note; M4 Tooltip relationship=description in every layout; M6 a swatchGap helper); M5, M7 deferred
+Task D4: complete (commits a0c73e4..caee925)
