@@ -20,6 +20,13 @@ import type {
 import { Button } from '../Button';
 import { buttonClassName } from '../buttonStyles';
 import {
+  buttonClassNames,
+  toggleButtonClassNames,
+  toolbarButtonClassNames,
+  toolbarRadioButtonClassNames,
+  toolbarToggleButtonClassNames,
+} from '../../../lib/classNames';
+import {
   expectNoA11yViolations,
   expectThrows,
   renderWithProviders,
@@ -39,6 +46,9 @@ const radio = (name: string) => screen.getByRole('radio', { name });
 const classesOf = (el: Element) => Array.from(el.classList).sort();
 /** The classes of a `buttonClassName()` result as a sorted array. */
 const classesFrom = (value: string) => value.split(/\s+/).filter(Boolean).sort();
+/** A `buttonClassName()` result plus the stable classes the element carries (P3-00), sorted. */
+const withStable = (value: string, ...stable: string[]) =>
+  [...classesFrom(value), ...stable].sort();
 
 /** The elements inside the toolbar that hold a Tab stop (`tabindex="0"`). */
 const tabStops = () =>
@@ -227,7 +237,11 @@ describe('Toolbar parts', () => {
         </Toolbar>,
       );
       expect(classesOf(button('Share'))).toEqual(
-        classesFrom(buttonClassName({ appearance: 'subtle', size: 'large' })),
+        withStable(
+          buttonClassName({ appearance: 'subtle', size: 'large' }),
+          buttonClassNames.root,
+          toolbarButtonClassNames.root,
+        ),
       );
       expect(button('Share')).toHaveAttribute('type', 'button');
       expect(button('Share')).not.toHaveAttribute('data-vertical');
@@ -401,7 +415,12 @@ describe('Toolbar parts', () => {
         </Toolbar>,
       );
       expect(classesOf(button('Bold'))).toEqual(
-        classesFrom(buttonClassName({ appearance: 'subtle', pressed: true, accessible: true })),
+        withStable(
+          buttonClassName({ appearance: 'subtle', pressed: true, accessible: true }),
+          buttonClassNames.root,
+          toggleButtonClassNames.root,
+          toolbarToggleButtonClassNames.root,
+        ),
       );
       const italic = button('Italic');
       expect(italic).toHaveAttribute('aria-disabled', 'true');
@@ -441,7 +460,12 @@ describe('Toolbar parts', () => {
       expect(left).toHaveAttribute('data-pressed', '');
       expect(left).not.toHaveAttribute('aria-pressed');
       expect(classesOf(left)).toEqual(
-        classesFrom(buttonClassName({ appearance: 'subtle', pressed: true })),
+        withStable(
+          buttonClassName({ appearance: 'subtle', pressed: true }),
+          buttonClassNames.root,
+          toggleButtonClassNames.root,
+          toolbarRadioButtonClassNames.root,
+        ),
       );
     });
 
@@ -996,7 +1020,11 @@ describe('Toolbar parts', () => {
         </>,
       );
       expect(classesOf(button('Cut'))).toEqual(
-        classesFrom(buttonClassName({ appearance: 'subtle', size: 'medium' })),
+        withStable(
+          buttonClassName({ appearance: 'subtle', size: 'medium' }),
+          buttonClassNames.root,
+          toolbarButtonClassNames.root,
+        ),
       );
       await user.click(button('Bold'));
       expect(button('Bold')).toHaveAttribute('aria-pressed', 'false');

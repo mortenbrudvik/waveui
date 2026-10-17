@@ -112,7 +112,7 @@ function Managed({
   onResult,
 }: {
   children: React.ReactNode;
-  tabStop?: 'active' | 'last-focused';
+  tabStop?: UseRovingTabIndexOptions['tabStop'];
   orientation?: Orientation;
   typeahead?: boolean;
   onResult?: (result: UseRovingTabIndexResult) => void;
@@ -1346,6 +1346,83 @@ describe('useRovingTabIndex', () => {
     });
   });
 
+  describe("tabStop 'none' (a composite reached by the arrow keys or a script only)", () => {
+    it('stamps tabIndex=-1 on every managed item; Tab passes the group, and the arrow keys still move', async () => {
+      const user = userEvent.setup();
+      render(
+        <>
+          <button type="button">before</button>
+          <Managed tabStop="none">
+            <button type="button">Bold</button>
+            <button type="button">Italic</button>
+          </Managed>
+          <button type="button">after</button>
+        </>,
+      );
+      expect(button('Bold')).toHaveAttribute('tabindex', '-1');
+      expect(button('Italic')).toHaveAttribute('tabindex', '-1');
+      await user.tab();
+      expect(button('before')).toHaveFocus();
+      await user.tab();
+      expect(button('after')).toHaveFocus();
+
+      focus(button('Bold'));
+      await user.keyboard('{ArrowRight}');
+      expect(button('Italic')).toHaveFocus();
+      expect(button('Italic')).toHaveAttribute('tabindex', '-1');
+      expect(button('Bold')).toHaveAttribute('tabindex', '-1');
+    });
+
+    it('getTabIndex returns -1 for every item, the active one included', () => {
+      let latest: UseRovingTabIndexResult | undefined;
+      render(
+        <DomGroup
+          items={ABC}
+          activeValue="b"
+          tabStop="none"
+          onResult={(result) => (latest = result)}
+        />,
+      );
+      expect(['a', 'b', 'c'].map((value) => latest!.getTabIndex(value))).toEqual([-1, -1, -1]);
+      expect(button('b')).toHaveAttribute('tabindex', '-1');
+    });
+
+    it('focusFirst still focuses the first enabled item', () => {
+      let latest: UseRovingTabIndexResult | undefined;
+      render(
+        <Managed tabStop="none" onResult={(result) => (latest = result)}>
+          <button type="button" disabled>
+            Cut
+          </button>
+          <button type="button">Copy</button>
+        </Managed>,
+      );
+      act(() => latest!.focusFirst());
+      expect(button('Copy')).toHaveFocus();
+    });
+
+    it("switching to 'last-focused' gives the last focused item the tab stop, and back to 'none' removes it", async () => {
+      const user = userEvent.setup();
+      function Switchable({ tabStop }: { tabStop: UseRovingTabIndexOptions['tabStop'] }) {
+        return (
+          <Managed tabStop={tabStop}>
+            <button type="button">Bold</button>
+            <button type="button">Italic</button>
+          </Managed>
+        );
+      }
+      const { rerender } = render(<Switchable tabStop="none" />);
+      focus(button('Bold'));
+      await user.keyboard('{ArrowRight}');
+      rerender(<Switchable tabStop="last-focused" />);
+      expect(button('Italic')).toHaveAttribute('tabindex', '0');
+      expect(button('Bold')).toHaveAttribute('tabindex', '-1');
+      rerender(<Switchable tabStop="none" />);
+      expect(button('Bold')).toHaveAttribute('tabindex', '-1');
+      expect(button('Italic')).toHaveAttribute('tabindex', '-1');
+    });
+  });
+
   describe('transparent composites (data-roving-transparent)', () => {
     /** A toolbar with a radio group between two buttons; `transparent` marks the group. */
     function AlignToolbar({ transparent }: { transparent: boolean }) {
@@ -2504,7 +2581,7 @@ describe('useRovingTabIndex', () => {
       >();
       expectTypeOf<UseRovingTabIndexResult['focusedValue']>().toEqualTypeOf<string | null>();
       expectTypeOf<UseRovingTabIndexOptions['tabStop']>().toEqualTypeOf<
-        'active' | 'last-focused' | undefined
+        'active' | 'last-focused' | 'none' | undefined
       >();
     });
   });

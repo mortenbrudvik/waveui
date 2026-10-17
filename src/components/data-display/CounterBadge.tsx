@@ -1,5 +1,6 @@
 import * as React from 'react';
 import { cn } from '../../lib/cn';
+import { badgeClassNames, counterBadgeClassNames } from '../../lib/classNames';
 import type { BadgeColor } from '../../lib/types';
 import { badgeColorClasses } from './Badge.colors';
 
@@ -108,6 +109,8 @@ export const CounterBadge = ({
       data-appearance={appearance}
       data-dot={dot ? '' : undefined}
       className={cn(
+        badgeClassNames.root,
+        counterBadgeClassNames.root,
         'inline-flex items-center justify-center rounded-full',
         dot
           ? // In forced colors the background would become Canvas and hide the dot.

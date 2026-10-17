@@ -435,6 +435,11 @@ const CONTRAST_PAIRS: Array<[string, string, number]> = [
   ['ring', 'card', 3],
   ['ring', 'subtle-hover', 3],
   ['stroke-accessible', 'background', 3],
+  // AlphaSlider's checkerboard (0.8): squares in `stroke` on `background` under the rail. A
+  // pattern that must stay visible, not text or a control boundary: 1.5:1. (`muted` on
+  // `background` reaches only 1.14, 1.24 and 1.21:1.) The thumbs of the color parts reuse
+  // `foreground` on `background` and `ring` on `background` above.
+  ['stroke', 'background', 1.5],
   // Progress fills on the track (ProgressBar `color`; its warning fill uses `severe`).
   ['primary', 'track', 3],
   ['success', 'track', 3],
@@ -499,6 +504,7 @@ const TABLED_RATIOS: Array<[string, string, [number | null, number | null, numbe
   ['primary', 'selected', [4.81, 6.62, 8.56]],
   ['ring', 'selected', [4.81, 5.72, 11.65]],
   ['stroke-accessible', 'background', [6.19, 6.48, 21.0]],
+  ['stroke', 'background', [1.53, 2.53, 21.0]],
   ['primary', 'track', [4.08, 4.48, 5.78]],
   ['success', 'track', [4.07, 4.26, 5.63]],
   ['error', 'track', [4.59, 4.61, 3.1]],
@@ -944,6 +950,16 @@ describe('tokens.css — contrast (WCAG 2.2, unrounded; button-provider#3, #10, 
   it('covers every §4.5 component combination in the threshold pairs', () => {
     const listed = new Set(CONTRAST_PAIRS.map((pair) => pair.join(' ')));
     expect(SECTION_4_5_MATRIX.filter((pair) => !listed.has(pair.join(' ')))).toEqual([]);
+  });
+
+  it('lists the pairs of the color parts: thumb edge, focus indicator and checkerboard (P3-05)', () => {
+    const listed = new Map(CONTRAST_PAIRS.map(([fg, bg, threshold]) => [`${fg} ${bg}`, threshold]));
+    // The thumbs' two-tone edge and their focus indicator (the ring outline around a background
+    // halo) reuse pairs that other components already need.
+    expect(listed.get('foreground background')).toBeGreaterThanOrEqual(3);
+    expect(listed.get('ring background')).toBeGreaterThanOrEqual(3);
+    // AlphaSlider's checkerboard: stroke squares on the background (muted fails in every theme).
+    expect(listed.get('stroke background')).toBe(1.5);
   });
 
   describe('text matrix: every text token on every surface it can sit on (WCAG 1.4.3)', () => {

@@ -1,5 +1,10 @@
 import * as React from 'react';
 import { cn } from '../../lib/cn';
+import {
+  dialogContentClassNames,
+  dialogFooterClassNames,
+  dialogTitleClassNames,
+} from '../../lib/classNames';
 import { warnOnce } from '../../lib/dev';
 import { DismissIcon } from '../../lib/icons';
 import { slotRendersContent } from '../../lib/slot';
@@ -365,7 +370,10 @@ export const DialogContent = ({
   return (
     <Portal layerId={layer.layerId}>
       <div
-        className="fixed inset-0 flex items-center justify-center bg-backdrop"
+        className={cn(
+          dialogContentClassNames.backdrop,
+          'fixed inset-0 flex items-center justify-center bg-backdrop',
+        )}
         onMouseDown={backdropPress.onMouseDown}
       >
         <div
@@ -377,6 +385,7 @@ export const DialogContent = ({
           data-modal-type={modalType}
           {...rest}
           className={cn(
+            dialogContentClassNames.root,
             // The border marks the surface where the shadow cannot: in high contrast the page,
             // the backdrop and the surface are black, and forced colors drop shadows. The 1rem gap
             // to the viewport edges is the surface's own margin, not the backdrop's padding, so a
@@ -390,7 +399,10 @@ export const DialogContent = ({
         >
           <ModalSurfaceContext.Provider value={surfaceContext}>
             {hasTitle && (
-              <h2 id={propTitleId} className="pe-8 text-subtitle-1 font-semibold">
+              <h2
+                id={propTitleId}
+                className={cn(dialogTitleClassNames.root, 'pe-8 text-subtitle-1 font-semibold')}
+              >
                 {title}
               </h2>
             )}
@@ -402,11 +414,17 @@ export const DialogContent = ({
               onClick={(event) =>
                 requestOpen(false, { reason: 'close-button', event: event.nativeEvent })
               }
-              className="absolute end-4 top-4 text-muted-foreground"
+              className={cn(
+                dialogContentClassNames.closeButton,
+                'absolute end-4 top-4 text-muted-foreground',
+              )}
             />
             <div
               // The scroll padding keeps a focused field above the sticky footer (WCAG 2.4.11).
-              className="-mx-1 mt-1 min-h-0 flex-1 overflow-y-auto scroll-pb-(--wave-dialog-footer-height) p-1 text-body-1"
+              className={cn(
+                dialogContentClassNames.body,
+                '-mx-1 mt-1 min-h-0 flex-1 overflow-y-auto scroll-pb-(--wave-dialog-footer-height) p-1 text-body-1',
+              )}
               style={
                 footerHeight === null
                   ? undefined
@@ -435,7 +453,11 @@ export const DialogTitle = ({ id, className, children, ref, ...rest }: DialogTit
       {...rest}
       id={titleId}
       ref={titleRef}
-      className={cn('pe-8 text-subtitle-1 font-semibold text-foreground', className)}
+      className={cn(
+        dialogTitleClassNames.root,
+        'pe-8 text-subtitle-1 font-semibold text-foreground',
+        className,
+      )}
     >
       {children}
     </h2>
@@ -505,7 +527,11 @@ export const DialogFooter = ({ children, className, ref, ...rest }: DialogFooter
       ref={mergedRef}
       {...rest}
       // Sticky only where the surface reserves the footer's height (Dialog.Content).
-      className={cn(setFooterHeight ? stickyFooterClasses : footerRowClasses, className)}
+      className={cn(
+        dialogFooterClassNames.root,
+        setFooterHeight ? stickyFooterClasses : footerRowClasses,
+        className,
+      )}
     >
       {children}
     </div>

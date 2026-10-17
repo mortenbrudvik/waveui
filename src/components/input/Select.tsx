@@ -1,6 +1,7 @@
 import * as React from 'react';
 import { cn } from '../../lib/cn';
 import { joinIds } from '../../lib/aria';
+import { selectClassNames } from '../../lib/classNames';
 import { inputFocus, inputInvalid } from '../../lib/styles';
 import { useFieldControl } from '../../hooks/useFieldControl';
 import { isInvalidLook, useControlErrorMessage, type InputErrorMessageProps } from './Input';
@@ -61,6 +62,7 @@ export const Select = ({
     error,
     errorMessageProps,
     ariaInvalid,
+    selectClassNames.errorMessage,
   );
   const fieldProps = useFieldControl(
     {
@@ -80,6 +82,7 @@ export const Select = ({
     <select
       ref={ref}
       className={cn(
+        selectClassNames.root,
         'h-8 w-full appearance-none rounded border border-input border-b-stroke-accessible bg-background ps-3 pe-8 text-body-1 text-foreground',
         // Chevron: two token-colored gradient halves of a small triangle at the inline end.
         'bg-no-repeat bg-[size:5px_5px,5px_5px] bg-[position:right_16px_center,right_11px_center] wave-rtl:bg-[position:left_11px_center,left_16px_center]',

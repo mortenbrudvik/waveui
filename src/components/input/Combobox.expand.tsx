@@ -33,6 +33,10 @@ export interface PickerExpandButtonProps {
   disabled: boolean;
   /** Opens or closes the list and returns focus to the input. */
   onToggle: () => void;
+  /** The host's stable class for the button (its `expandButton` part). */
+  className?: string;
+  /** The host's stable class for the glyph `<span>` (its `expandIcon` part). */
+  iconClassName?: string;
 }
 
 /**
@@ -51,6 +55,8 @@ export const PickerExpandButton = ({
   listboxId,
   disabled,
   onToggle,
+  className,
+  iconClassName,
 }: PickerExpandButtonProps) => {
   // The glyph slot rule shared with SplitButton and MenuButton `menuIcon` (C-SLOTS).
   const { glyph: content, button } = unwrapButtonGlyph(expandIcon);
@@ -78,12 +84,13 @@ export const PickerExpandButton = ({
       // Keeps focus in the input: a press must not blur it (a blur commits typed text).
       onMouseDown={(event) => event.preventDefault()}
       onClick={onToggle}
-      className={cn(PICKER_ICON_BUTTON_CLASSES, 'end-1', focusRing, disabledStyles)}
+      className={cn(className, PICKER_ICON_BUTTON_CLASSES, 'end-1', focusRing, disabledStyles)}
     >
       {renderSlot(
         glyph,
         'span',
         cn(
+          iconClassName,
           'inline-flex transition-transform motion-reduce:transition-none',
           expanded && 'rotate-180',
         ),

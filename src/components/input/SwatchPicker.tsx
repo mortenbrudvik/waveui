@@ -1,4 +1,5 @@
 import * as React from 'react';
+import { swatchPickerClassNames } from '../../lib/classNames';
 import { cn } from '../../lib/cn';
 import { composeEventHandlers } from '../../lib/composeEventHandlers';
 import { warnDeprecated, warnOnce } from '../../lib/dev';
@@ -217,7 +218,7 @@ export const SwatchPicker = ({
     <div
       role="radiogroup"
       {...fieldProps}
-      className={cn('relative flex flex-wrap gap-2', className)}
+      className={cn(swatchPickerClassNames.root, 'relative flex flex-wrap gap-2', className)}
       {...rest}
       ref={mergedRef}
       data-roving-container=""
@@ -240,6 +241,7 @@ export const SwatchPicker = ({
             tabIndex={getTabIndex(item.value)}
             onClick={() => setValue(item.value)}
             className={cn(
+              swatchPickerClassNames.swatch,
               sizeMap[size],
               shapeMap[shape],
               // The padding is set here (C-NATIVE); the swatch color is its background.

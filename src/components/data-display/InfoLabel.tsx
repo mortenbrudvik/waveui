@@ -1,5 +1,6 @@
 import * as React from 'react';
 import { cn } from '../../lib/cn';
+import { infoLabelClassNames } from '../../lib/classNames';
 import { focusRing } from '../../lib/styles';
 import { InfoIcon } from '../../lib/icons';
 import { useId } from '../../hooks/useId';
@@ -179,7 +180,11 @@ export const InfoLabel = ({
   return (
     <span
       ref={ref}
-      className={cn('inline-flex items-center gap-1 text-body-1', className)}
+      className={cn(
+        infoLabelClassNames.root,
+        'inline-flex items-center gap-1 text-body-1',
+        className,
+      )}
       {...props}
     >
       {label}
@@ -190,6 +195,7 @@ export const InfoLabel = ({
         aria-expanded={open}
         aria-describedby={descriptionId}
         className={cn(
+          infoLabelClassNames.infoButton,
           'inline-flex size-4 shrink-0 items-center justify-center rounded-full border-0 bg-transparent p-0 text-muted-foreground',
           'not-disabled:not-aria-disabled:hover:text-foreground',
           focusRing,
@@ -215,7 +221,10 @@ export const InfoLabel = ({
             data-wave-infolabel-surface=""
             data-state="open"
             {...floatingProps}
-            className="w-max max-w-xs rounded-md border border-border bg-background px-3 py-2 text-caption-1 text-foreground shadow-16"
+            className={cn(
+              infoLabelClassNames.info,
+              'w-max max-w-xs rounded-md border border-border bg-background px-3 py-2 text-caption-1 text-foreground shadow-16',
+            )}
             onPointerEnter={handlePointerEnter}
             onPointerLeave={handlePointerLeave}
           >

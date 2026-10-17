@@ -1,5 +1,6 @@
 import * as React from 'react';
 import { cn } from '../../lib/cn';
+import { linkClassNames } from '../../lib/classNames';
 import { resolveDeprecatedProp } from '../../lib/dev';
 import { focusRing } from '../../lib/styles';
 import type { PolymorphicComponent, PolymorphicProps } from '../../lib/polymorphic';
@@ -140,6 +141,7 @@ export const Link: PolymorphicComponent<'a', LinkOwnProps> = (props) => {
       {...handlers}
       ref={ref}
       className={cn(
+        linkClassNames.root,
         'cursor-pointer transition-colors motion-reduce:transition-none',
         focusRing,
         appearanceClasses[appearance],

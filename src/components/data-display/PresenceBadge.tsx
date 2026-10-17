@@ -1,5 +1,6 @@
 import * as React from 'react';
 import { cn } from '../../lib/cn';
+import { presenceBadgeClassNames } from '../../lib/classNames';
 import {
   PresenceAvailableIcon,
   PresenceAwayIcon,
@@ -107,6 +108,7 @@ export const PresenceBadge = ({
       data-glyph={glyph}
       {...props}
       className={cn(
+        presenceBadgeClassNames.root,
         'inline-flex shrink-0 items-center justify-center rounded-full ring-2 ring-background',
         'forced-colors:border',
         forcedColors.border,
@@ -115,7 +117,14 @@ export const PresenceBadge = ({
         className,
       )}
     >
-      <Icon size="100%" className={cn('size-full', glyph === 'arrow' && 'wave-rtl:-scale-x-100')} />
+      <Icon
+        size="100%"
+        className={cn(
+          presenceBadgeClassNames.icon,
+          'size-full',
+          glyph === 'arrow' && 'wave-rtl:-scale-x-100',
+        )}
+      />
     </span>
   );
 };

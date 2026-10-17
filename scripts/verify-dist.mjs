@@ -9,9 +9,9 @@
  *     `dist/index.*`, not any `index.*` barrel, not the bundler runtime (repo-level#2);
  *   - declarations: `dist/index.d.ts` and its `dist/index.d.cts` copy for the `require`
  *     condition (repo-level#5); each declares and exports the public names on
- *     {@link REQUIRED_DECLARATIONS}, so an empty roll-up (only `export { }`) fails the build;
- *     every component it exports carries a JSDoc (C-DOCS: a compound is documented on its
- *     `Object.assign` export, which is what the roll-up keeps);
+ *     {@link REQUIRED_DECLARATIONS} (a class-name constant among them), so an empty roll-up
+ *     (only `export { }`) fails the build; every component it exports carries a JSDoc (C-DOCS: a
+ *     compound is documented on its `Object.assign` export, which is what the roll-up keeps);
  *   - development mode: `dist/lib/dev.mjs` and `dist/lib/dev.cjs` still read
  *     `process.env.NODE_ENV` at run time, so a consumer's bundler decides between development and
  *     production (a `define` in vite.config.ts would inline the library's own build mode);
@@ -24,6 +24,14 @@
  *     `index.*` entries, `dist/lib/**`, the bundler runtime — must evaluate (no client-only
  *     React API at module scope, no dotting into a client reference such as `Card.Header`);
  *     `dist/lib/cn.*` must work and `dist/index.*` must export the server-side `cn`;
+ *     `dist/lib/color.*` and `dist/lib/toaster.*` must exist and work on the server (the color
+ *     helpers convert; a handle's dispatch returns an id and adds no global), and `dist/index.*`
+ *     must export `hsvToHex`, `hexToHsv` and `createToaster` from them, not from a client module;
+ *   - class names (P3-00): every export of `dist/lib/classNames.*` (the stable class-name
+ *     registry) is exported by `dist/index.*` with the same value, in both formats
+ *     ({@link checkClassNameExports}); under the react-server condition `dist/index.*` exports
+ *     `buttonClassNames` as a plain object whose root is `wave-button`, and every export of
+ *     `dist/lib/classNames.*` is an object of strings;
  *   - flat names: every sub-component of a compound export (`Card.Header`) is also exported
  *     from `dist/index.mjs` under its flat name (`CardHeader`), bound to the same component
  *     (C-COMPOUND, repo-level#2) — except the components on {@link PENDING_FLAT_EXPORTS}, a
@@ -33,11 +41,16 @@
  *     Vite's own `build()` API, contains only Button's module and its static imports — no
  *     Dialog code (repo-level#3), and neither the presence core (`hooks/usePresence`) nor
  *     `Presence`. The probe honours package.json `sideEffects` exactly as a consumer's bundler
- *     does;
+ *     does. The bundle also keeps Button's class string `'wave-button'` and drops the Dialog
+ *     surface's `'wave-dialog-content'` (the registry is tree-shaken per constant; a listed
+ *     string that occurs in no module of dist is an error);
  *   - presence core: an import of only `Presence` contains `hooks/usePresence` (the probe finds
  *     the core where it is used), and the closure of `usePresence` + `Presence`, minified with
  *     bare imports external, stays within {@link PRESENCE_BUDGET} and imports nothing but
- *     `react` and `react/jsx-runtime`. The CLI prints the measured sizes.
+ *     `react` and `react/jsx-runtime`. The CLI prints the measured sizes;
+ *   - opt-in modules (0.8): an import of only `Button` contains none of {@link OPT_IN_MODULES}
+ *     (the color parts and helpers, the toaster handle), and an import of only `Toaster`
+ *     contains `hooks/usePresence`;
  *
  * Usage: node scripts/verify-dist.mjs [--dist <dir>] [--no-pending | --final]
  *   --dist        the dist directory (default: dist); its parent holds the package.json
@@ -65,6 +78,7 @@ import {
 import { createRequire, isBuiltin } from 'node:module';
 import { tmpdir } from 'node:os';
 import { gzipSync } from 'node:zlib';
+import { isDeepStrictEqual } from 'node:util';
 import { basename, dirname, join, relative, resolve, sep } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 
@@ -74,9 +88,11 @@ const require = createRequire(import.meta.url);
 /**
  * A temporary bridge: components whose flat sub-component names (`<Parent><Member>`,
  * C-COMPOUND) are not exported from `dist/index.mjs` yet. The list is empty: Fluent parity
- * phase 2 (0.7) listed `Toolbar` while it became a compound (`Toolbar.Button`, …) before the
- * button barrel exported the flat names of its parts, and emptied it again once the barrel did.
- * A future compound whose parts land before their flat names goes on it the same way. The rules:
+ * phase 3 (0.8) listed `ColorPicker`, `MessageBar`, `Toast` and `Tree` while their new parts
+ * (`Toast.Title`, `MessageBar.Actions`, `ColorPicker.HexField`, `Tree.ItemPersonaLayout`, …)
+ * landed before the barrels exported their flat names, and emptied it again once the barrels did
+ * (as phase 2 did for `Toolbar`). A future compound whose parts land before their flat names goes
+ * on it the same way. The rules:
  *   - an entry whose flat names all exist fails the check ("remove it"), and so does an entry
  *     that is not an exported component, so the list only shrinks;
  *   - an entry that is exported but not a compound yet is tolerated;
@@ -101,6 +117,39 @@ const PRESENCE_BUDGET = {
   maxGzipBytes: 2927,
   allowedExternals: ['react', 'react/jsx-runtime'],
 };
+
+/**
+ * Modules an import of only `Button` must not contain (spec D30, 0.8): the color parts, the public
+ * color helpers and the toaster handle are opt-in. Each must exist in `dist`, or the probe would
+ * pass vacuously. Sorted.
+ */
+export const OPT_IN_MODULES = [
+  'components/input/AlphaSlider.mjs',
+  'components/input/ColorArea.mjs',
+  'components/input/ColorSlider.mjs',
+  'lib/color.mjs',
+  'lib/toaster.mjs',
+];
+
+/** An import of only this component holds the presence core (spec D29): its toasts mount on it. */
+const TOASTER_INCLUDE_KEEP = 'Toaster';
+
+/**
+ * The server-safe modules of 0.8 that a Server Component reaches through the entry (spec D18,
+ * D33): each must exist, and pass its check in {@link serverProbeSource}.
+ */
+const SERVER_SAFE_MODULES = [
+  'lib/color.mjs',
+  'lib/color.cjs',
+  'lib/toaster.mjs',
+  'lib/toaster.cjs',
+];
+
+/**
+ * The class-name strings of the Button-only probe (P3-00): the bundle keeps Button's root class
+ * and drops the Dialog surface's, so the registry (`lib/classNames`) is tree-shaken per constant.
+ */
+const BUTTON_ONLY_STRINGS = { keepStrings: ['wave-button'], dropStrings: ['wave-dialog-content'] };
 
 const JS_FILE = /\.(mjs|cjs|js)$/;
 
@@ -308,12 +357,19 @@ const COMPONENT_NAME = /^[A-Z](?=[A-Za-z0-9]*[a-z])[A-Za-z0-9]*$/;
 
 /**
  * Public names that `dist/index.d.ts` and `dist/index.d.cts` must declare and export: a utility,
- * a component, a props type, a compound and a hook. The build passes with an empty roll-up:
- * vite-plugin-dts 4 rolls up only `export { }` when TypeScript writes the declarations somewhere
- * else than it expects (TypeScript 6 without `rootDir` in tsconfig.json). Without this list, only
- * `npm run test:pack`, which type-checks the packed tarball, would notice.
+ * a component, a props type, a compound, a hook and a class-name constant. The build passes with
+ * an empty roll-up: vite-plugin-dts 4 rolls up only `export { }` when TypeScript writes the
+ * declarations somewhere else than it expects (TypeScript 6 without `rootDir` in tsconfig.json).
+ * Without this list, only `npm run test:pack`, which type-checks the packed tarball, would notice.
  */
-export const REQUIRED_DECLARATIONS = ['cn', 'Button', 'ButtonProps', 'Menu', 'usePresence'];
+export const REQUIRED_DECLARATIONS = [
+  'cn',
+  'Button',
+  'ButtonProps',
+  'Menu',
+  'usePresence',
+  'buttonClassNames',
+];
 
 /**
  * The top-level declarations of a rolled-up declaration file: the first declaration of every
@@ -665,8 +721,9 @@ export function clientReferenceStub(path, names, format) {
 /**
  * The script run under `node --conditions=react-server` that loads each of `files` (paths
  * relative to `dir`) and prints `{ [path]: { phase, message } }` for the failures: `load` when
- * the module does not evaluate, `check` when it loads but `lib/cn.*` does not work or `index.*`
- * does not export the server-side `cn`.
+ * the module does not evaluate, `check` when it loads but `lib/cn.*` does not work, `index.*`
+ * does not export the server-side `cn` and a plain `buttonClassNames`, or `lib/classNames.*`
+ * exports anything but objects of strings.
  */
 function serverProbeSource(dir, files, format) {
   const load =
@@ -682,10 +739,77 @@ const check = (path, m) => {
     const out = m.cn('a', false, 'b');
     if (out !== 'a b') throw new Error("cn('a', false, 'b') returned " + JSON.stringify(out));
   }
+  if (/^lib\\/classNames\\.[cm]?js$/.test(path)) {
+    const names = Object.keys(m).filter((name) => name !== 'default' && name !== '__esModule');
+    if (names.length === 0) throw new Error('exports no class-name constant');
+    for (const name of names) {
+      const value = m[name];
+      if (
+        typeof value !== 'object' ||
+        value === null ||
+        !Object.values(value).every((item) => typeof item === 'string')
+      ) {
+        throw new Error(name + ' is not an object of class-name strings');
+      }
+    }
+  }
   if (/^index\\.[cm]?js$/.test(path)) {
     if (typeof m.cn !== 'function') throw new Error('cn is not exported');
     if (m.cn.$$typeof === Symbol.for('react.client.reference')) {
       throw new Error('cn is a client reference (re-exported from a "use client" module)');
+    }
+    const constants = m.buttonClassNames;
+    if (typeof constants !== 'object' || constants === null) {
+      throw new Error(
+        'buttonClassNames is not a plain object (missing, or a client reference re-exported from a "use client" module)',
+      );
+    }
+    if (constants.root !== 'wave-button') {
+      throw new Error('buttonClassNames.root is ' + JSON.stringify(constants.root) + ", not 'wave-button'");
+    }
+  }
+  if (/^lib\\/color\\.[cm]?js$/.test(path)) {
+    if (typeof m.hsvToHex !== 'function' || typeof m.hexToHsv !== 'function') {
+      throw new Error('hsvToHex and hexToHsv are not both exported');
+    }
+    const red = m.hsvToHex({ h: 0, s: 1, v: 1 });
+    if (red !== '#ff0000') {
+      throw new Error('hsvToHex({ h: 0, s: 1, v: 1 }) returned ' + JSON.stringify(red));
+    }
+    const hsv = m.hexToHsv('#ff0000');
+    if (!hsv || hsv.h !== 0 || hsv.s !== 1 || hsv.v !== 1 || 'a' in hsv) {
+      throw new Error("hexToHsv('#ff0000') returned " + JSON.stringify(hsv));
+    }
+  }
+  if (/^lib\\/toaster\\.[cm]?js$/.test(path)) {
+    if (typeof m.createToaster !== 'function') throw new Error('createToaster is not exported');
+    const handle = m.createToaster();
+    for (const key of ['dispatchToast', 'dismissToast', 'dismissAllToasts']) {
+      if (typeof handle[key] !== 'function') throw new Error('the handle has no ' + key + '()');
+    }
+    // A dispatch on the server does nothing (spec D33): it returns its id and leaves no state
+    // behind for the next request.
+    const globals = Reflect.ownKeys(globalThis).length;
+    const id = handle.dispatchToast('x');
+    if (typeof id !== 'string' || id === '') {
+      throw new Error("dispatchToast('x') returned " + JSON.stringify(id) + ', not an id');
+    }
+    const given = handle.dispatchToast({ title: 'x', toastId: 'fixed' });
+    if (given !== 'fixed') {
+      throw new Error("dispatchToast({ toastId: 'fixed' }) returned " + JSON.stringify(given));
+    }
+    handle.dismissToast(id);
+    handle.dismissAllToasts();
+    if (Reflect.ownKeys(globalThis).length !== globals) {
+      throw new Error('a dispatch on the server added a global (it must do nothing)');
+    }
+  }
+  if (/^index\\.[cm]?js$/.test(path)) {
+    for (const name of ['hsvToHex', 'hexToHsv', 'createToaster']) {
+      if (typeof m[name] !== 'function') throw new Error(name + ' is not exported');
+      if (m[name].$$typeof === Symbol.for('react.client.reference')) {
+        throw new Error(name + ' is a client reference (re-exported from a "use client" module)');
+      }
     }
   }
 };
@@ -746,12 +870,16 @@ function relativeImports(dist, path) {
  * `node --conditions=react-server`. Reported: a module that does not evaluate (a client-only
  * React API at module scope, dotting into a client reference) — only the root cause, not the
  * modules that fail because they import it; a `lib/cn.*` that does not work; an `index.*` whose
- * `cn` is missing or a client reference.
+ * `cn` is missing or a client reference, or whose `buttonClassNames` is no plain object with the
+ * root `wave-button`; a `lib/classNames.*` export that is not an object of strings.
  */
 export async function checkServerImport(dist) {
   const errors = [];
   const distRoot = resolve(dist);
   for (const path of ['lib/cn.mjs', 'lib/cn.cjs']) {
+    if (!existsSync(join(distRoot, path))) errors.push(`${path} is missing`);
+  }
+  for (const path of SERVER_SAFE_MODULES) {
     if (!existsSync(join(distRoot, path))) errors.push(`${path} is missing`);
   }
   const manifest = join(distRoot, '..', 'package.json');
@@ -932,6 +1060,40 @@ export async function checkCjsParity(dist) {
   return errors;
 }
 
+/**
+ * The stable class-name registry (`dist/lib/classNames.*`, spec P3-00) is public API: every
+ * constant it exports is exported by the entry of the same format (`dist/index.mjs`,
+ * `dist/index.cjs`) with the same value. {@link checkFlatExports} walks only capitalised
+ * components, so without this check a constant missing from the entry would pass.
+ */
+export async function checkClassNameExports(dist) {
+  const errors = [];
+  const distRoot = resolve(dist);
+  const load = (file) => (file.endsWith('.cjs') ? require(file) : import(pathToFileURL(file).href));
+  for (const [registryPath, entryPath] of [
+    ['lib/classNames.mjs', 'index.mjs'],
+    ['lib/classNames.cjs', 'index.cjs'],
+  ]) {
+    const registryFile = join(distRoot, registryPath);
+    if (!existsSync(registryFile)) {
+      errors.push(`${registryPath} is missing (the class-name registry, src/lib/classNames.ts)`);
+      continue;
+    }
+    const registry = await load(registryFile);
+    const entry = await load(join(distRoot, entryPath));
+    for (const name of exportNames(registry)) {
+      if (!Object.hasOwn(entry, name)) {
+        errors.push(
+          `${entryPath} does not export ${name} (a class-name constant of ${registryPath})`,
+        );
+      } else if (!isDeepStrictEqual(entry[name], registry[name])) {
+        errors.push(`${entryPath} exports ${name} with another value than ${registryPath}`);
+      }
+    }
+  }
+  return errors;
+}
+
 /** Relative paths (in `dist/`) of the modules `path` statically imports, transitively. */
 function importClosure(dist, path) {
   const closure = new Set();
@@ -1016,13 +1178,21 @@ function bundledModules(distRoot, chunks) {
   return included;
 }
 
+/** A string literal `text` in any quotes: `'…'`, `"…"` or a template literal without substitutions. */
+function quotedLiteral(text) {
+  const escaped = text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  return new RegExp(`(["'\`])${escaped}\\1`);
+}
+
 /**
  * Tree-shaking probe (repo-level#3): bundles an entry that imports only `keep` from
  * `dist/index.mjs` with Vite's `build()` API (no write, no minification, bare imports external)
  * and asserts that the bundle holds `keep`'s module, only it and its static imports, no code of
  * `drop` (its module or its `displayName`) and none of `dropModules` (dist-relative module paths,
  * such as `hooks/usePresence.mjs`; a listed module that does not exist in `dist` is an error, since
- * the probe would pass vacuously).
+ * the probe would pass vacuously). `keepStrings` and `dropStrings` (the stable class names, P3-00)
+ * are string literals, matched with their quotes, that the bundle must, or must not, contain; a
+ * listed string that occurs in no JavaScript module of `dist` is an error for the same reason.
  *
  * The bundler reports module ids as real paths, so the probe imports and matches them through
  * the real path of `dist`: a dist reached through a symlink or a junction (a linked checkout or
@@ -1030,7 +1200,7 @@ function bundledModules(distRoot, chunks) {
  */
 export async function probeTreeShaking(
   dist,
-  { keep = 'Button', drop = 'Dialog', dropModules = [] } = {},
+  { keep = 'Button', drop = 'Dialog', dropModules = [], keepStrings = [], dropStrings = [] } = {},
 ) {
   const errors = [];
   const distRoot = realpathSync(resolve(dist));
@@ -1043,6 +1213,20 @@ export async function probeTreeShaking(
     if (!existing.has(fold(path))) {
       errors.push(
         `${path}, listed to be dropped from the bundle of an import of only ${keep}, does not exist in dist`,
+      );
+    }
+  }
+  const distCode = files
+    .filter((path) => JS_FILE.test(path))
+    .map((path) => readFileSync(join(distRoot, path), 'utf8'))
+    .join('\n');
+  const foundStrings = new Set();
+  for (const text of [...keepStrings, ...dropStrings]) {
+    if (quotedLiteral(text).test(distCode)) {
+      foundStrings.add(text);
+    } else {
+      errors.push(
+        `"${text}", listed for the bundle of an import of only ${keep}, occurs in no module of dist (the probe would pass vacuously)`,
       );
     }
   }
@@ -1083,6 +1267,18 @@ export async function probeTreeShaking(
   }
   if (keepModules.length > 0 && !displayName(keep).test(code)) {
     errors.push(`the probe bundle lacks ${keep} (displayName "${keep}")`);
+  }
+  for (const text of keepStrings) {
+    if (foundStrings.has(text) && !quotedLiteral(text).test(code)) {
+      errors.push(`the bundle of an import of only ${keep} lacks the string "${text}"`);
+    }
+  }
+  for (const text of dropStrings) {
+    if (foundStrings.has(text) && quotedLiteral(text).test(code)) {
+      errors.push(
+        `the bundle of an import of only ${keep} contains the string "${text}" (an unused class-name constant was not tree-shaken)`,
+      );
+    }
   }
   return errors;
 }
@@ -1189,12 +1385,30 @@ export async function verifyDist(
     errors.push(`index.mjs/index.cjs do not load in Node.js: ${error.message}`);
   }
   try {
-    errors.push(...(await probeTreeShaking(distRoot)));
+    errors.push(...(await checkClassNameExports(distRoot)));
+  } catch (error) {
+    errors.push(`class-name export check failed: ${error.message}`);
+  }
+  try {
+    errors.push(
+      ...(await probeTreeShaking(distRoot, {
+        keep: 'Button',
+        drop: 'Dialog',
+        ...BUTTON_ONLY_STRINGS,
+      })),
+    );
     errors.push(
       ...(await probeTreeShaking(distRoot, {
         keep: 'Button',
         drop: 'Presence',
         dropModules: [PRESENCE_MODULE],
+      })),
+    );
+    errors.push(
+      ...(await probeTreeShaking(distRoot, {
+        keep: 'Button',
+        drop: 'ColorArea',
+        dropModules: OPT_IN_MODULES,
       })),
     );
   } catch (error) {
@@ -1209,6 +1423,16 @@ export async function verifyDist(
     );
   } catch (error) {
     errors.push(`presence include probe failed: ${error.message}`);
+  }
+  try {
+    errors.push(
+      ...(await probeIncludes(distRoot, {
+        keep: TOASTER_INCLUDE_KEEP,
+        modules: [PRESENCE_MODULE],
+      })),
+    );
+  } catch (error) {
+    errors.push(`toaster include probe failed: ${error.message}`);
   }
   let budget = null;
   try {

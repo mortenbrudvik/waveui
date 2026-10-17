@@ -1,9 +1,11 @@
 import * as React from 'react';
 import { cn } from '../../lib/cn';
+import { buttonClassNames, compoundButtonClassNames } from '../../lib/classNames';
 import { materialiseSlotContent, renderSlot, slotRendersContent } from '../../lib/slot';
 import type { PolymorphicComponent, PolymorphicProps } from '../../lib/polymorphic';
 import type { Size, Appearance, IconPosition, Slot } from '../../lib/types';
 import { Button } from './Button';
+import { withPartClass } from './Button.slots';
 
 /**
  * The CompoundButton's own props (the XOwnProps rule of `PolymorphicProps`: component-specific
@@ -141,9 +143,9 @@ export const CompoundButton: PolymorphicComponent<'button', CompoundButtonOwnPro
         {...rest}
         appearance={appearance}
         size={size}
-        icon={icon}
+        icon={withPartClass(icon, compoundButtonClassNames.icon)}
         iconPosition={iconPosition}
-        className={className}
+        className={cn(compoundButtonClassNames.root, className)}
       />
     );
   }
@@ -151,15 +153,24 @@ export const CompoundButton: PolymorphicComponent<'button', CompoundButtonOwnPro
   const iconElement = renderSlot(
     slotRendersContent(icon) ? icon : undefined,
     'span',
-    cn('inline-flex shrink-0 items-center justify-center [&>svg]:size-full', iconBoxClasses[size]),
+    cn(
+      buttonClassNames.icon,
+      compoundButtonClassNames.icon,
+      'inline-flex shrink-0 items-center justify-center [&>svg]:size-full',
+      iconBoxClasses[size],
+    ),
     { 'aria-hidden': true },
   );
   const content = (
-    <span data-wave-compound-content="" className="flex min-w-0 flex-col items-start">
-      <span className="font-bold">{label}</span>
+    <span
+      data-wave-compound-content=""
+      className={cn(compoundButtonClassNames.contentContainer, 'flex min-w-0 flex-col items-start')}
+    >
+      <span className={cn(compoundButtonClassNames.primaryText, 'font-bold')}>{label}</span>
       {hasSecondary && (
         <span
           className={cn(
+            compoundButtonClassNames.secondaryText,
             'text-caption-1 font-normal',
             appearance === 'primary' ? 'text-primary-foreground' : 'text-muted-foreground',
           )}
@@ -176,6 +187,7 @@ export const CompoundButton: PolymorphicComponent<'button', CompoundButtonOwnPro
       appearance={appearance}
       size={size}
       className={cn(
+        compoundButtonClassNames.root,
         'h-auto items-center justify-start gap-3 text-start',
         paddingClasses[size],
         className,

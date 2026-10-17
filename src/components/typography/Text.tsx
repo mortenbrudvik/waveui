@@ -1,6 +1,7 @@
 import * as React from 'react';
 import { cn } from '../../lib/cn';
 import { warnDeprecated } from '../../lib/dev';
+import { textClassNames } from '../../lib/classNames';
 import type { PolymorphicComponent, PolymorphicProps } from '../../lib/polymorphic';
 import type { TextWeight, TypographyVariant } from '../../lib/types';
 
@@ -97,6 +98,7 @@ export const Text: PolymorphicComponent<'span', TextOwnProps> = (props) => {
     <Component
       {...rest}
       className={cn(
+        textClassNames.root,
         variantClasses[variant],
         resolvedWeight && weightClasses[resolvedWeight],
         className,

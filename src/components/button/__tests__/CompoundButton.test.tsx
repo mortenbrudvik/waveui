@@ -5,6 +5,7 @@ import userEvent from '@testing-library/user-event';
 import { CompoundButton } from '../CompoundButton';
 import type { CompoundButtonOwnProps, CompoundButtonProps } from '../CompoundButton';
 import { Button } from '../Button';
+import { compoundButtonClassNames } from '../../../lib/classNames';
 import {
   testSystemProps,
   testFocusEvents,
@@ -227,7 +228,7 @@ describe('CompoundButton', () => {
           expect(compound.querySelector('[data-wave-compound-content]')).toBeNull();
           expect(compound.childNodes).toHaveLength(1);
           expect(Array.from(compound.classList).sort()).toEqual(
-            Array.from(button.classList).sort(),
+            [...Array.from(button.classList), compoundButtonClassNames.root].sort(),
           );
           for (const cls of ['h-auto', 'gap-3', 'justify-start', 'py-2']) {
             expect(compound).not.toHaveClass(cls);

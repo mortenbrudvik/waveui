@@ -1,4 +1,5 @@
 import * as React from 'react';
+import { carouselClassNames, carouselItemClassNames } from '../../lib/classNames';
 import { flattenChildren, isElementOfType } from '../../lib/children';
 import { cn } from '../../lib/cn';
 import { composeEventHandlers } from '../../lib/composeEventHandlers';
@@ -298,7 +299,14 @@ const CarouselRoot = ({
   };
 
   if (total === 0) {
-    return <div ref={rootRef} className={cn('relative', className)} {...rootHandlers} {...rest} />;
+    return (
+      <div
+        ref={rootRef}
+        className={cn(carouselClassNames.root, 'relative', className)}
+        {...rootHandlers}
+        {...rest}
+      />
+    );
   }
 
   const offset = (dir === 'rtl' ? 1 : -1) * index * 100;
@@ -322,7 +330,7 @@ const CarouselRoot = ({
       aria-roledescription={carouselRoleDescription}
       aria-label="Carousel"
       // A stacking context of its own: the controls' z-index cannot lift them over page headers.
-      className={cn('relative isolate overflow-hidden', className)}
+      className={cn(carouselClassNames.root, 'relative isolate overflow-hidden', className)}
       {...rootHandlers}
       {...rest}
     >
@@ -336,14 +344,17 @@ const CarouselRoot = ({
           // The pointer over the control does not pause (APG): the user is operating it.
           onMouseEnter={() => setPointerOnControl(true)}
           onMouseLeave={() => setPointerOnControl(false)}
-          className={cn(controlButton, 'top-2 start-2')}
+          className={cn(carouselClassNames.autoPlayButton, controlButton, 'top-2 start-2')}
         >
           {stopped ? <PlayGlyph /> : <PauseGlyph />}
         </button>
       )}
       <div
         id={trackId}
-        className="flex transition-transform duration-300 ease-in-out motion-reduce:transition-none"
+        className={cn(
+          carouselClassNames.track,
+          'flex transition-transform duration-300 ease-in-out motion-reduce:transition-none',
+        )}
         style={{ transform: `translateX(${offset}%)` }}
       >
         {items.map(({ key, node }, i) => {
@@ -356,7 +367,7 @@ const CarouselRoot = ({
               aria-label={slideLabel(i, total)}
               aria-hidden={active ? undefined : true}
               inert={!active}
-              className="w-full shrink-0"
+              className={cn(carouselClassNames.slide, 'w-full shrink-0')}
             >
               {node}
             </div>
@@ -373,7 +384,11 @@ const CarouselRoot = ({
         aria-controls={trackId}
         {...focusableDisabledProps(prevDisabled)}
         onClick={preventIfDisabled(prevDisabled, goPrev)}
-        className={cn(controlButton, 'top-1/2 start-2 -translate-y-1/2')}
+        className={cn(
+          carouselClassNames.previousButton,
+          controlButton,
+          'top-1/2 start-2 -translate-y-1/2',
+        )}
       >
         <ChevronLeftIcon size={16} className={chevronClass} />
       </button>
@@ -383,14 +398,21 @@ const CarouselRoot = ({
         aria-controls={trackId}
         {...focusableDisabledProps(nextDisabled)}
         onClick={preventIfDisabled(nextDisabled, goNext)}
-        className={cn(controlButton, 'top-1/2 end-2 -translate-y-1/2')}
+        className={cn(
+          carouselClassNames.nextButton,
+          controlButton,
+          'top-1/2 end-2 -translate-y-1/2',
+        )}
       >
         <ChevronRightIcon size={16} className={chevronClass} />
       </button>
       <div
         role="group"
         aria-label={pickerLabel}
-        className="absolute inset-x-0 bottom-1 z-10 mx-auto flex w-fit"
+        className={cn(
+          carouselClassNames.picker,
+          'absolute inset-x-0 bottom-1 z-10 mx-auto flex w-fit',
+        )}
       >
         {items.map(({ key }, i) => {
           const active = i === index;
@@ -401,11 +423,16 @@ const CarouselRoot = ({
               aria-label={slideLabel(i, total)}
               aria-current={active ? 'true' : undefined}
               onClick={() => goTo(i)}
-              className={cn('group inline-flex h-6 min-w-6 items-center justify-center', focusRing)}
+              className={cn(
+                carouselClassNames.pickerButton,
+                'group inline-flex h-6 min-w-6 items-center justify-center',
+                focusRing,
+              )}
             >
               <span
                 aria-hidden="true"
                 className={cn(
+                  carouselClassNames.pickerIndicator,
                   'block h-2 rounded-full transition-[width,background-color] duration-200 motion-reduce:transition-none',
                   active
                     ? cn('w-5 bg-primary', forcedColors.selectedLeaf)
@@ -428,7 +455,7 @@ CarouselRoot.displayName = 'Carousel';
  */
 export const CarouselItem = ({ className, children, ref, ...rest }: CarouselItemProps) => {
   return (
-    <div ref={ref} className={cn('p-4', className)} {...rest}>
+    <div ref={ref} className={cn(carouselItemClassNames.root, 'p-4', className)} {...rest}>
       {children}
     </div>
   );

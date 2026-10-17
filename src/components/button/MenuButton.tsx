@@ -1,11 +1,12 @@
 import * as React from 'react';
 import { cn } from '../../lib/cn';
+import { menuButtonClassNames } from '../../lib/classNames';
 import { warnOnce } from '../../lib/dev';
 import { ChevronDownIcon } from '../../lib/icons';
 import { materialiseSlotContent, renderSlot, slotRendersContent } from '../../lib/slot';
 import type { Size, Appearance, Slot } from '../../lib/types';
 import { Button } from './Button';
-import { unwrapButtonGlyph } from './Button.slots';
+import { unwrapButtonGlyph, withPartClass } from './Button.slots';
 
 /** Properties for the MenuButton component. */
 export interface MenuButtonProps extends React.ButtonHTMLAttributes<HTMLButtonElement> {
@@ -112,9 +113,16 @@ export const MenuButton = ({
   // chevron, as for a picker's `expandIcon`.
   const indicator =
     menuIcon == null || (menuIconButton !== null && !slotRendersContent(glyph)) ? (
-      <ChevronDownIcon className="shrink-0" />
+      <ChevronDownIcon className={cn(menuButtonClassNames.menuIcon, 'shrink-0')} />
     ) : slotRendersContent(glyph) ? (
-      renderSlot(glyph, 'span', 'inline-flex shrink-0 items-center', { 'aria-hidden': true })
+      renderSlot(
+        glyph,
+        'span',
+        cn(menuButtonClassNames.menuIcon, 'inline-flex shrink-0 items-center'),
+        {
+          'aria-hidden': true,
+        },
+      )
     ) : null;
 
   // While the indicator renders, Button counts it as content: it sizes the button as labelled and
@@ -146,8 +154,13 @@ export const MenuButton = ({
       aria-expanded={ariaExpanded ?? expanded}
       appearance={appearance}
       size={size}
-      icon={icon}
-      className={cn('gap-1.5', unlabelled && unlabelledSizeClasses[size], className)}
+      icon={withPartClass(icon, menuButtonClassNames.icon)}
+      className={cn(
+        menuButtonClassNames.root,
+        'gap-1.5',
+        unlabelled && unlabelledSizeClasses[size],
+        className,
+      )}
     >
       {label}
       {indicator}

@@ -1,4 +1,5 @@
 import * as React from 'react';
+import { progressBarClassNames } from '../../lib/classNames';
 import { cn } from '../../lib/cn';
 import { isDev, warnOnce } from '../../lib/dev';
 import { forcedColors } from '../../lib/styles';
@@ -220,6 +221,7 @@ export const ProgressBar = ({
       {...barProps}
       ref={ref}
       className={cn(
+        progressBarClassNames.root,
         'h-2 overflow-hidden rounded-full bg-track',
         'forced-colors:border',
         forcedColors.border,
@@ -228,6 +230,7 @@ export const ProgressBar = ({
     >
       <div
         className={cn(
+          progressBarClassNames.bar,
           'h-full rounded-full',
           fillColorClasses[resolvedColor],
           forcedColors.selectedLeaf,
@@ -243,7 +246,7 @@ export const ProgressBar = ({
 
   return (
     <div className="flex flex-col gap-1">
-      <span id={labelId} className="text-body-1 text-foreground">
+      <span id={labelId} className={cn(progressBarClassNames.label, 'text-body-1 text-foreground')}>
         {label}
       </span>
       {bar}

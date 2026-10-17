@@ -1,5 +1,6 @@
 import * as React from 'react';
 import { cn } from '../../lib/cn';
+import { toolbarClassNames } from '../../lib/classNames';
 import { composeEventHandlers } from '../../lib/composeEventHandlers';
 import type { PolymorphicComponent, PolymorphicProps } from '../../lib/polymorphic';
 import type { CheckedValues, CheckedValuesChangeHandler, Orientation, Size } from '../../lib/types';
@@ -152,6 +153,7 @@ const ToolbarRoot: PolymorphicComponent<'div', ToolbarOwnProps> = (props) => {
           checkDefaultPrevented: false,
         })}
         className={cn(
+          toolbarClassNames.root,
           'inline-flex items-center gap-1 rounded border border-border',
           toolbarPaddingClasses[size],
           orientation === 'vertical' && 'flex-col items-stretch',

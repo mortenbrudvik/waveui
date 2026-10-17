@@ -25,8 +25,13 @@ export type {
 export { TabList, TabListTab, TabListPanel, TabListPanels } from './TabList';
 export type { TabListProps, TabProps, TabPanelProps, TabPanelsProps } from './TabList';
 
-export { Tree, TreeItem } from './Tree';
-export type { TreeProps, TreeItemProps } from './Tree';
+export { Tree, TreeItem, TreeItemPersonaLayout } from './Tree';
+export type {
+  TreeProps,
+  TreeItemProps,
+  TreeItemPersonaLayoutProps,
+  TreeCheckedItemsChangeDetails,
+} from './Tree';
 
 export { Carousel, CarouselItem } from './Carousel';
 export type {

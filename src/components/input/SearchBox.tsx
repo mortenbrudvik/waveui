@@ -1,5 +1,6 @@
 import * as React from 'react';
 import { getElementType, isElementOfType } from '../../lib/children';
+import { searchBoxClassNames } from '../../lib/classNames';
 import { cn } from '../../lib/cn';
 import { composeEventHandlers } from '../../lib/composeEventHandlers';
 import { warnDeprecated, warnOnce } from '../../lib/dev';
@@ -236,9 +237,12 @@ function splitButtonLike(type: unknown, props: UnknownProps, children: React.Rea
     for (const [key, value] of Object.entries(props)) {
       if (key !== 'children' && !BUTTON_OWN_PROP_KEYS.has(key)) buttonProps[key] = value;
     }
-    const iconNode = renderSlot(props.icon as Slot<'span'>, 'span', 'inline-flex', {
-      'aria-hidden': true,
-    });
+    const iconNode = renderSlot(
+      props.icon as Slot<'span'>,
+      'span',
+      cn(searchBoxClassNames.dismissIcon, 'inline-flex'),
+      { 'aria-hidden': true },
+    );
     const buttonContent =
       iconNode || hasChildren ? placeButtonIcon(iconNode, content, props.iconPosition) : null;
     return {
@@ -314,10 +318,16 @@ function resolveDismiss(dismiss: SearchBoxProps['dismiss']): DismissParts {
   // without children (`{ className }`) keeps the default icon inside the object's own element (its
   // className/style/attributes still apply). Markup of its own takes no children at all.
   const contentChildren = empty ? <DismissIcon /> : hasChildren ? children : undefined;
+  // The element the slot renders carries the dismissIcon part class, before the slot's own.
+  const iconProps = {
+    'aria-hidden': true,
+    ...contentProps,
+    className: cn(searchBoxClassNames.dismissIcon, contentProps.className as string | undefined),
+  };
   const content =
     contentChildren === undefined
-      ? React.createElement(Component, { 'aria-hidden': true, ...contentProps })
-      : React.createElement(Component, { 'aria-hidden': true, ...contentProps }, contentChildren);
+      ? React.createElement(Component, iconProps)
+      : React.createElement(Component, iconProps, contentChildren);
   return {
     kind: hasButtonProps ? 'button-object' : 'content',
     buttonProps,
@@ -511,6 +521,7 @@ export const SearchBox = ({
       disabled,
       'aria-label': hasOwnName || namedByContent ? undefined : DEFAULT_CLEAR_LABEL,
       className: cn(
+        searchBoxClassNames.dismissButton,
         // Padding and background set here (C-NATIVE): an app-wide `button` rule cannot fill it.
         'me-1 flex h-6 w-6 shrink-0 items-center justify-center rounded bg-transparent p-0 text-muted-foreground',
         'not-disabled:not-aria-disabled:hover:text-foreground',
@@ -528,7 +539,7 @@ export const SearchBox = ({
       ? undefined
       : dismissKind === 'content'
         ? dismissParts.content
-        : (dismissParts.content ?? <DismissIcon />);
+        : (dismissParts.content ?? <DismissIcon className={searchBoxClassNames.dismissIcon} />);
   // A slot value that renders nothing is no slot (the default icon before the text, no box after).
   const hasBefore = slotRendersContent(contentBefore);
   const hasAfter = slotRendersContent(contentAfter);
@@ -537,6 +548,7 @@ export const SearchBox = ({
     <div
       ref={ref}
       className={cn(
+        searchBoxClassNames.root,
         // The root draws the field; the slots, the text and the clear button are laid out side by
         // side inside it, so a slot never covers the text.
         'relative inline-flex h-8 w-full items-center rounded border border-input border-b-stroke-accessible bg-background text-body-1 text-foreground',
@@ -553,7 +565,7 @@ export const SearchBox = ({
       // Composed at press time, like the clear button's click: the handler reads the input ref.
       onMouseDown={(event) => composeEventHandlers(onMouseDown, handleRootMouseDown)(event)}
     >
-      <span className="flex shrink-0 items-center ps-2">
+      <span className={cn(searchBoxClassNames.contentBefore, 'flex shrink-0 items-center ps-2')}>
         {hasBefore ? (
           renderSlot(contentBefore, 'span', 'shrink-0')
         ) : (
@@ -569,6 +581,7 @@ export const SearchBox = ({
         placeholder={placeholder}
         disabled={disabled}
         className={cn(
+          searchBoxClassNames.input,
           'h-full min-w-0 flex-1 appearance-none border-none bg-transparent px-2 text-body-1 text-foreground',
           'placeholder:text-muted-foreground',
           'focus:outline-hidden',
@@ -599,7 +612,7 @@ export const SearchBox = ({
       />
 
       {hasAfter && (
-        <span className="flex shrink-0 items-center pe-2">
+        <span className={cn(searchBoxClassNames.contentAfter, 'flex shrink-0 items-center pe-2')}>
           {renderSlot(contentAfter, 'span', 'shrink-0')}
         </span>
       )}

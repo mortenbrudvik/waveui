@@ -1,17 +1,24 @@
 import * as React from 'react';
 import { cn } from '../../lib/cn';
+import {
+  toolbarButtonClassNames,
+  toolbarDividerClassNames,
+  toolbarGroupClassNames,
+  toolbarRadioButtonClassNames,
+  toolbarRadioGroupClassNames,
+  toolbarToggleButtonClassNames,
+} from '../../lib/classNames';
 import { composeEventHandlers } from '../../lib/composeEventHandlers';
 import { warnOnce } from '../../lib/dev';
 import { getArrowIntent, getDirection } from '../../lib/direction';
 import type { PolymorphicComponent, PolymorphicProps } from '../../lib/polymorphic';
-import { resolveSlot, slotRendersContent } from '../../lib/slot';
-import type { SlotObject } from '../../lib/slot';
 import { forcedColors } from '../../lib/styles';
-import type { Size, Slot } from '../../lib/types';
+import type { Size } from '../../lib/types';
 import { Button } from './Button';
 import type { ButtonOwnProps } from './Button';
 import { ToggleButton } from './ToggleButton';
 import type { ToggleButtonProps } from './ToggleButton';
+import { withPartClass } from './Button.slots';
 import { useToolbarContext } from './Toolbar.context';
 
 /*
@@ -55,22 +62,6 @@ const verticalIconBoxClasses: Record<Size, string> = {
 };
 
 /**
- * `icon` as a slot object whose element also carries `box`: shorthand content becomes the
- * children of a span with `box`, a slot object keeps its element and attributes and gets `box`
- * before its own classes. An icon that renders nothing stays as it is (no icon).
- */
-function withIconBox(icon: Slot<'span'> | undefined, box: string): Slot<'span'> | undefined {
-  if (!slotRendersContent(icon)) return icon;
-  const resolved = resolveSlot(icon, 'span', box);
-  if (!resolved) return icon;
-  return {
-    ...resolved.props,
-    as: resolved.Component,
-    children: resolved.children,
-  } as SlotObject<'span'>;
-}
-
-/**
  * A Button with the toolbar's size and the `subtle` appearance by default (your `size` and
  * `appearance` win). `vertical` puts the icon above a caption-size label, for ribbon-style
  * toolbars. Polymorphic like Button (`as="a"`, a router link). Must be rendered inside a
@@ -96,9 +87,12 @@ export const ToolbarButton: PolymorphicComponent<'button', ToolbarButtonOwnProps
       {...rest}
       appearance={appearance}
       size={effectiveSize}
-      icon={vertical ? withIconBox(icon, verticalIconBoxClasses[effectiveSize]) : icon}
+      icon={withPartClass(
+        vertical ? withPartClass(icon, verticalIconBoxClasses[effectiveSize]) : icon,
+        toolbarButtonClassNames.icon,
+      )}
       data-vertical={vertical ? '' : undefined}
-      className={cn(vertical && verticalButtonClasses, className)}
+      className={cn(toolbarButtonClassNames.root, vertical && verticalButtonClasses, className)}
     />
   );
 };
@@ -158,6 +152,8 @@ export const ToolbarToggleButton = ({
   value,
   appearance = 'subtle',
   size,
+  icon,
+  className,
   onClick,
   ...rest
 }: ToolbarToggleButtonProps) => {
@@ -167,6 +163,8 @@ export const ToolbarToggleButton = ({
   return (
     <ToggleButton
       {...rest}
+      icon={withPartClass(icon, toolbarToggleButtonClassNames.icon)}
+      className={cn(toolbarToggleButtonClassNames.root, className)}
       appearance={appearance}
       size={size ?? toolbar.size}
       pressed={checked.isChecked(name, value)}
@@ -198,6 +196,8 @@ export const ToolbarRadioButton = ({
   value,
   appearance = 'subtle',
   size,
+  icon,
+  className,
   onClick,
   ...rest
 }: ToolbarRadioButtonProps) => {
@@ -207,6 +207,8 @@ export const ToolbarRadioButton = ({
   return (
     <ToggleButton
       {...rest}
+      icon={withPartClass(icon, toolbarRadioButtonClassNames.icon)}
+      className={cn(toolbarRadioButtonClassNames.root, className)}
       role="radio"
       appearance={appearance}
       size={size ?? toolbar.size}
@@ -300,7 +302,12 @@ export const ToolbarRadioGroup = ({
       role="radiogroup"
       data-roving-transparent=""
       onKeyDown={composeEventHandlers(onKeyDown, handleCrossAxisKeyDown)}
-      className={cn('flex gap-1', orientation === 'vertical' && 'flex-col', className)}
+      className={cn(
+        toolbarRadioGroupClassNames.root,
+        'flex gap-1',
+        orientation === 'vertical' && 'flex-col',
+        className,
+      )}
     />
   );
 };
@@ -337,7 +344,12 @@ export const ToolbarGroup = ({ role, className, ref, ...rest }: ToolbarGroupProp
       data-orientation={orientation}
       {...rest}
       ref={ref}
-      className={cn('flex gap-1', orientation === 'vertical' && 'flex-col', className)}
+      className={cn(
+        toolbarGroupClassNames.root,
+        'flex gap-1',
+        orientation === 'vertical' && 'flex-col',
+        className,
+      )}
     />
   );
 };
@@ -368,6 +380,7 @@ export const ToolbarDivider = ({ className, ref, ...rest }: ToolbarDividerProps)
       {...rest}
       ref={ref}
       className={cn(
+        toolbarDividerClassNames.root,
         vertical
           ? 'my-1 h-0 shrink-0 self-stretch border-t border-border'
           : 'mx-1 w-0 shrink-0 self-stretch border-s border-border',

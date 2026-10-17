@@ -1,6 +1,7 @@
 import * as React from 'react';
 import { cn } from '../../lib/cn';
 import { joinIds } from '../../lib/aria';
+import { tagPickerClassNames } from '../../lib/classNames';
 import { composeEventHandlers } from '../../lib/composeEventHandlers';
 import { warnDeprecated, warnOnce } from '../../lib/dev';
 import { getArrowIntent, getDirection } from '../../lib/direction';
@@ -199,6 +200,7 @@ function TagRemoveButton({
       disabled={disabled}
       aria-label={label}
       className={cn(
+        tagPickerClassNames.removeButton,
         // Padding and background set here (C-NATIVE), not left to an app-wide rule.
         'ms-0.5 inline-flex rounded-sm bg-transparent p-0 text-muted-foreground not-disabled:not-aria-disabled:hover:text-foreground disabled:cursor-not-allowed',
         focusRing,
@@ -502,13 +504,18 @@ export const TagPicker = (props: TagPickerProps) => {
       : fieldProps['aria-labelledby'];
 
   return (
-    <div {...rest} ref={rootMergedRef} className={cn('relative', className)}>
+    <div
+      {...rest}
+      ref={rootMergedRef}
+      className={cn(tagPickerClassNames.root, 'relative', className)}
+    >
       <div
         ref={setReference}
         data-wave-tagpicker-control=""
         role="group"
         aria-disabled={disabled || undefined}
         className={cn(
+          tagPickerClassNames.control,
           'flex flex-wrap items-center gap-1 rounded border border-input border-b-stroke-accessible bg-background px-2 py-1.5',
           inputFocusWithin,
           invalidLook && inputInvalidWithin,
@@ -524,7 +531,7 @@ export const TagPicker = (props: TagPickerProps) => {
           <div
             role="list"
             aria-label={labels?.selected ?? 'Selected'}
-            className="flex flex-wrap items-center gap-1"
+            className={cn(tagPickerClassNames.group, 'flex flex-wrap items-center gap-1')}
           >
             {selected.map((value) => {
               const label = labelOf(value);
@@ -532,7 +539,10 @@ export const TagPicker = (props: TagPickerProps) => {
                 <div
                   key={value}
                   role="listitem"
-                  className="inline-flex items-center gap-1 rounded bg-muted px-2 py-0.5 text-body-1 text-foreground"
+                  className={cn(
+                    tagPickerClassNames.tag,
+                    'inline-flex items-center gap-1 rounded bg-muted px-2 py-0.5 text-body-1 text-foreground',
+                  )}
                 >
                   {label}
                   {!readOnly && (
@@ -589,7 +599,10 @@ export const TagPicker = (props: TagPickerProps) => {
           onKeyUp={composeEventHandlers(onKeyUp, listbox.onKeyUp)}
           onFocus={onFocus}
           onBlur={onBlur}
-          className="min-w-15 flex-1 bg-transparent py-0.5 text-body-1 text-foreground placeholder:text-muted-foreground focus:outline-hidden"
+          className={cn(
+            tagPickerClassNames.input,
+            'min-w-15 flex-1 bg-transparent py-0.5 text-body-1 text-foreground placeholder:text-muted-foreground focus:outline-hidden',
+          )}
         />
       </div>
       {/* Mounted before its text: a live region added together with its text is not announced by
@@ -605,9 +618,17 @@ export const TagPicker = (props: TagPickerProps) => {
         open={open}
         expanded={expanded}
         showCheck={false}
+        listboxClassName={tagPickerClassNames.listbox}
+        surfaceClassName={tagPickerClassNames.surface}
         emptyContent={
           query !== '' ? (
-            <div aria-hidden="true" className="px-3 py-1.5 text-body-1 text-muted-foreground">
+            <div
+              aria-hidden="true"
+              className={cn(
+                tagPickerClassNames.emptyMessage,
+                'px-3 py-1.5 text-body-1 text-muted-foreground',
+              )}
+            >
               {noMatchesText}
             </div>
           ) : undefined
@@ -617,7 +638,12 @@ export const TagPicker = (props: TagPickerProps) => {
       >
         {expanded &&
           listbox.items.map((item) => (
-            <Option key={item.value} value={item.value} label={item.label}>
+            <Option
+              key={item.value}
+              value={item.value}
+              label={item.label}
+              className={tagPickerClassNames.option}
+            >
               {item.label}
             </Option>
           ))}

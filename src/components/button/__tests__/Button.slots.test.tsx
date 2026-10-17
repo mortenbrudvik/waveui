@@ -8,7 +8,9 @@ import {
   MERGED_DISABLED_FOCUSABLE_PROPS,
   placeButtonIcon,
   unwrapButtonGlyph,
+  withPartClass,
 } from '../Button.slots';
+import { renderSlot } from '../../../lib/slot';
 import { asClientReference } from '../../../test-utils';
 import type { Slot } from '../../../lib/types';
 
@@ -120,6 +122,88 @@ describe('Button.slots', () => {
       const result = unwrapButtonGlyph(slot as Slot<'span'>);
       expect(result.glyph).toBe(slot);
       expect(result.button).toBeNull();
+    });
+  });
+
+  describe('withPartClass', () => {
+    const part = 'wave-test-part';
+
+    it('wraps shorthand content in a span that carries the class', () => {
+      render(<>{renderSlot(withPartClass(<svg data-testid="glyph" />, part), 'span', 'base')}</>);
+      const box = screen.getByTestId('glyph').parentElement;
+      expect(box?.tagName).toBe('SPAN');
+      expect(box?.className).toBe(`base ${part}`);
+    });
+
+    it("keeps a slot object's element, attributes, ref and own classes, the part class before its own", () => {
+      const ref = React.createRef<HTMLElement>();
+      const slot = {
+        as: 'i',
+        className: 'custom',
+        title: 'Bold',
+        ref,
+        children: 'B',
+      } as Slot<'span'>;
+      render(<>{renderSlot(withPartClass(slot, part), 'span', 'base')}</>);
+      const el = screen.getByTitle('Bold');
+      expect(el.tagName).toBe('I');
+      expect(el.className).toBe(`base ${part} custom`);
+      expect(el).toHaveTextContent('B');
+      expect(ref.current).toBe(el);
+    });
+
+    it('keeps the void element of a slot object, without children', () => {
+      const slot = { as: 'img', src: 'data:,', alt: 'Logo' } as Slot<'span'>;
+      render(<>{renderSlot(withPartClass(slot, part), 'span')}</>);
+      expect(screen.getByRole('img', { name: 'Logo' })).toHaveClass(part);
+    });
+
+    it('applies twice without a second wrapper (a variant of a variant)', () => {
+      const icon = withPartClass(
+        withPartClass(<svg data-testid="glyph" />, 'wave-test-inner'),
+        'wave-test-outer',
+      );
+      const { container } = render(<>{renderSlot(icon, 'span', 'base')}</>);
+      const box = screen.getByTestId('glyph').parentElement;
+      expect(box?.className).toBe('base wave-test-outer wave-test-inner');
+      expect(box?.parentElement).toBe(container);
+    });
+
+    it.each([
+      ['null', null],
+      ['undefined', undefined],
+      ['false', false],
+      ["''", ''],
+      ['[]', []],
+      ['<></>', <></>],
+    ])(
+      'returns %s unchanged: it renders nothing, so no empty icon element appears',
+      (_name, slot) => {
+        expect(withPartClass(slot as Slot<'span'>, part)).toBe(slot);
+      },
+    );
+
+    it('treats 0 as content', () => {
+      const { container } = render(<>{renderSlot(withPartClass(0, part), 'span')}</>);
+      expect(container.querySelector(`.${part}`)).toHaveTextContent('0');
+    });
+
+    it('reads a generator once, so a second render shows the same items', () => {
+      function* glyphs() {
+        yield <svg key="glyph" data-testid="generated-glyph" />;
+      }
+      const slot = withPartClass(glyphs(), part);
+      const { rerender } = render(<>{renderSlot(slot, 'span')}</>);
+      rerender(<>{renderSlot(slot, 'span')}</>);
+      expect(screen.getByTestId('generated-glyph').parentElement).toHaveClass(part);
+    });
+
+    it("becomes a Button's decorative icon span, with the class", () => {
+      render(<Button icon={withPartClass(<svg data-testid="glyph" />, part)}>Bold</Button>);
+      const span = screen.getByTestId('glyph').parentElement;
+      expect(span).toHaveClass(part);
+      expect(span).toHaveAttribute('aria-hidden', 'true');
+      expect(screen.getByRole('button', { name: 'Bold' })).toContainElement(span);
     });
   });
 });

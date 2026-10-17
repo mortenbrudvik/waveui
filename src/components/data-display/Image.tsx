@@ -1,5 +1,6 @@
 import * as React from 'react';
 import { cn } from '../../lib/cn';
+import { imageClassNames } from '../../lib/classNames';
 import { warnOnce } from '../../lib/dev';
 import type { Shape } from '../../lib/types';
 
@@ -119,6 +120,7 @@ export const Image = ({
       ref={ref}
       alt={alt}
       className={cn(
+        imageClassNames.root,
         fitMap[fit],
         shapeMap[shape],
         // Set here, not left to Preflight (C-NATIVE). The default fit fills the box, so an

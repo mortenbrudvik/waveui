@@ -1,5 +1,6 @@
 import * as React from 'react';
 import { cn } from '../../lib/cn';
+import { buttonClassNames } from '../../lib/classNames';
 import { warnOnce } from '../../lib/dev';
 import {
   materialiseSlotContent,
@@ -161,7 +162,7 @@ export const Button: PolymorphicComponent<'button', ButtonOwnProps> = (props) =>
   const iconElement = renderSlot(
     slotRendersContent(icon) ? icon : undefined,
     'span',
-    'inline-flex shrink-0 items-center',
+    cn(buttonClassNames.icon, 'inline-flex shrink-0 items-center'),
     { 'aria-hidden': true },
   );
   /** Derived from what renders, so an icon that renders nothing never counts. */
@@ -214,6 +215,7 @@ export const Button: PolymorphicComponent<'button', ButtonOwnProps> = (props) =>
       {...handlers}
       ref={ref}
       className={cn(
+        buttonClassNames.root,
         buttonClassName({ appearance, size, disabled: showDisabledLook, iconOnly }),
         hasIcon && hasLabel && 'gap-1.5',
         className,
