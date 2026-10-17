@@ -3,6 +3,7 @@ import { createPortal } from 'react-dom';
 import { afterEach, beforeEach, describe, expect, expectTypeOf, it, vi } from 'vitest';
 import { act, render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
+import { Link } from '../../button/Link';
 import { Toast, Toaster } from '../Toast';
 import type { ToastController, ToastOptions } from '../Toast';
 import { expectNoA11yViolations, findDanglingIdRefs } from '../../../test-utils';
@@ -602,18 +603,125 @@ describe('announcements (P3-01, D13)', () => {
     expect(getLiveRegion('polite').textContent).toBe('Info: Sent to Ada Lovelace');
   });
 
-  it('does not let its own transient severity text bleed into a title-less, body-less Toast’s announcement', () => {
-    // Reviewer regression (T10): on the commit where a Toast with no title or body first
-    // registers, the container's own severity text is still in the DOM too (its `toast` state
-    // has not caught up with the registration yet), next to the Toast's own severity text.
-    // composeToastText's fallback walk (used because there is no title or body part) must skip
-    // both `ownStatusTextId` and the Toast's own `statusTextId`, or the announcement gains an
-    // extra "Info:" before the Toast's own "Error:".
+  it('reads a Toast without title or body whole, minus the Toast’s own severity text and its Dismiss button', () => {
+    // The whole-container walk must skip the Toast's `statusTextId` span (the severity is added
+    // once, from the registration) and the Dismiss button (an `aria-label` the walk would read),
+    // and the container's own severity span that is still rendered on the registering commit.
     const { dispatchContent } = renderToaster();
     dispatchContent(<Toast status="error" />, { timeout: 0 });
     const assertive = getLiveRegion('assertive');
     expect(assertive.textContent).toBe('Error:');
     expect(assertive.childElementCount).toBe(1);
+  });
+
+  it('reads each action of a footer as its own word, links included', () => {
+    const { dispatchContent } = renderToaster();
+    dispatchContent(
+      <Toast>
+        <Toast.Title>Shared</Toast.Title>
+        <Toast.Footer>
+          <Link href="#open">Open</Link>
+          <Link href="#share">Share</Link>
+        </Toast.Footer>
+      </Toast>,
+      { timeout: 0 },
+    );
+    expect(getLiveRegion('polite').textContent).toBe('Info: Shared Open Share');
+  });
+
+  it('reads each action of the title’s action slot as its own word', () => {
+    const { dispatchContent } = renderToaster();
+    dispatchContent(
+      <Toast>
+        <Toast.Title
+          action={
+            <>
+              <span role="button" tabIndex={0}>
+                Undo
+              </span>
+              <span role="button" tabIndex={0}>
+                Redo
+              </span>
+            </>
+          }
+        >
+          Edited
+        </Toast.Title>
+      </Toast>,
+      { timeout: 0 },
+    );
+    expect(getLiveRegion('polite').textContent).toBe('Info: Edited Undo Redo');
+  });
+
+  it('skips a subtree with the hidden attribute', () => {
+    const { dispatchContent } = renderToaster();
+    dispatchContent(
+      <Toast>
+        <Toast.Body>
+          Visible<span hidden> secret</span>
+        </Toast.Body>
+      </Toast>,
+      { timeout: 0 },
+    );
+    expect(getLiveRegion('polite').textContent).toBe('Info: Visible');
+  });
+
+  it('reads the aria-label of a control by role, and walks into a labelled container', () => {
+    const { dispatchContent } = renderToaster();
+    dispatchContent(
+      <Toast>
+        <Toast.Title>Files</Toast.Title>
+        <Toast.Footer>
+          <span role="button" tabIndex={0} aria-label="Open folder">
+            icon
+          </span>
+          <div role="toolbar" aria-label="Toast actions">
+            <button type="button">Undo</button>
+            <button type="button">Redo</button>
+          </div>
+        </Toast.Footer>
+      </Toast>,
+      { timeout: 0 },
+    );
+    expect(getLiveRegion('polite').textContent).toBe('Info: Files Open folder Undo Redo');
+  });
+
+  it('skips style and template subtrees and does not split a word at a wbr', () => {
+    const { dispatchContent } = renderToaster();
+    dispatchContent(
+      <Toast>
+        <Toast.Body>
+          Super
+          <wbr />
+          cali
+          <style>{'.x { color: red; }'}</style>
+          <template>Hidden template</template>
+        </Toast.Body>
+      </Toast>,
+      { timeout: 0 },
+    );
+    expect(getLiveRegion('polite').textContent).toBe('Info: Supercali');
+  });
+
+  it('announces a Toast that renders one commit after the dispatch, once, with its own severity', async () => {
+    function LateToast() {
+      const [ready, setReady] = React.useState(false);
+      React.useEffect(() => {
+        queueMicrotask(() => setReady(true));
+      }, []);
+      return ready ? (
+        <Toast status="error">
+          <Toast.Title>Upload failed</Toast.Title>
+        </Toast>
+      ) : null;
+    }
+    const { dispatchContent } = renderToaster();
+    dispatchContent(<LateToast />, { timeout: 0 });
+    await act(async () => {});
+    const assertive = getLiveRegion('assertive');
+    expect(assertive.textContent).toBe('Error: Upload failed');
+    expect(assertive.childElementCount).toBe(1);
+    expect(getLiveRegion('polite')).toBeEmptyDOMElement();
   });
 
   it('reads content without a Toast whole, after the options’ severity text', () => {
@@ -654,11 +762,20 @@ describe('announcements (P3-01, D13)', () => {
 
   it('announces the second of two same-id dispatches in one tick, once', () => {
     const { controller } = renderToaster();
+    const polite = getLiveRegion('polite');
+    // The region keeps one message per toast id, so an earlier announcement could appear and be
+    // replaced unseen: record what is added.
+    const observer = new MutationObserver(() => {});
+    observer.observe(polite, { childList: true, subtree: true, characterData: true });
     act(() => {
       controller().dispatchToast(<p>First version</p>, { toastId: 'sync', timeout: 0 });
       controller().dispatchToast(<p>Second version</p>, { toastId: 'sync', timeout: 0 });
     });
-    const polite = getLiveRegion('polite');
+    const added = observer
+      .takeRecords()
+      .flatMap((record) => Array.from(record.addedNodes, (node) => node.textContent));
+    observer.disconnect();
+    expect(added).toEqual(['Info: Second version']);
     expect(polite.textContent).toBe('Info: Second version');
     expect(polite.childElementCount).toBe(1);
   });

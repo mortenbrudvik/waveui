@@ -546,16 +546,60 @@ const INLINE_ELEMENTS = new Set([
   'time',
   'u',
   'var',
+  'wbr',
 ]);
 
-/** Elements a screen reader names by their `aria-label` rather than by their content. */
-const NAMED_BY_LABEL = new Set(['a', 'button', 'img', 'input', 'select', 'svg', 'textarea']);
+/** Elements browsers never render as text. */
+const NOT_TEXT_ELEMENTS = new Set(['noscript', 'script', 'style', 'template']);
+
+/** Native elements a screen reader names by their `aria-label` rather than by their content. */
+const NATIVE_NAMED_BY_LABEL = new Set(['button', 'img', 'input', 'select', 'textarea']);
+
+/** Roles of controls and images, which are named by their `aria-label` rather than by content. */
+const ROLES_NAMED_BY_LABEL = new Set([
+  'button',
+  'checkbox',
+  'combobox',
+  'img',
+  'link',
+  'option',
+  'radio',
+  'slider',
+  'spinbutton',
+  'switch',
+  'tab',
+  'textbox',
+]);
+
+/**
+ * Whether `aria-label` replaces the content of `el` (a control, a link or an image); any other
+ * element, such as a labelled toolbar or group, is read through its content.
+ */
+function isNamedByLabel(el: Element): boolean {
+  const role = el.getAttribute('role')?.trim().split(/\s+/)[0];
+  if (role) return ROLES_NAMED_BY_LABEL.has(role) || role.startsWith('menuitem');
+  if (el.localName === 'a') return el.hasAttribute('href');
+  return NATIVE_NAMED_BY_LABEL.has(el.localName);
+}
+
+/**
+ * Whether `el` is left out of the accessible text: the `hidden` attribute, `aria-hidden="true"` and
+ * elements that are no text. Text hidden by a style sheet is still read: the spec defines hidden as
+ * the attribute and `aria-hidden`, and reading computed styles would make the text depend on CSS.
+ */
+function isNotRendered(el: Element): boolean {
+  return (
+    el.getAttribute('aria-hidden') === 'true' ||
+    el.hasAttribute('hidden') ||
+    NOT_TEXT_ELEMENTS.has(el.localName)
+  );
+}
 
 /**
  * The text a screen reader reads for `root`'s content (D13): text nodes, an image's `alt` and the
- * `aria-label` of a control; `aria-hidden="true"` and `hidden` subtrees, and elements `skip`
- * accepts, are left out; whitespace is collapsed. Fluent reads the raw text content instead, which
- * includes hidden text and misses `alt` text.
+ * `aria-label` of a control; `aria-hidden="true"` and `hidden` subtrees, elements that are no text
+ * and elements `skip` accepts are left out; whitespace is collapsed. Fluent reads the raw text
+ * content instead, which includes hidden text and misses `alt` text.
  */
 function getAccessibleText(root: Element | null, skip?: (el: Element) => boolean): string {
   if (!root) return '';
@@ -568,9 +612,9 @@ function getAccessibleText(root: Element | null, skip?: (el: Element) => boolean
     if (node.nodeType !== Node.ELEMENT_NODE) return;
     const el = node as Element;
     if (!isRoot && skip?.(el)) return;
-    if (el.getAttribute('aria-hidden') === 'true' || el.hasAttribute('hidden')) return;
+    if (isNotRendered(el)) return;
     const label = el.getAttribute('aria-label');
-    if (label && (NAMED_BY_LABEL.has(el.localName) || el.hasAttribute('role'))) {
+    if (label && isNamedByLabel(el)) {
       parts.push(` ${label} `);
       return;
     }
@@ -588,9 +632,24 @@ function getAccessibleText(root: Element | null, skip?: (el: Element) => boolean
 }
 
 /**
+ * The accessible text of each child of `root` on its own, so adjacent actions that a flex row lays
+ * out side by side (two links, two span-rooted buttons) are not read as one word.
+ */
+function getChildTexts(root: Element | null): string[] {
+  if (!root || isNotRendered(root)) return [];
+  return Array.from(root.childNodes, (node) => {
+    if (node.nodeType === Node.TEXT_NODE) {
+      return (node.textContent ?? '').replace(/\s+/g, ' ').trim();
+    }
+    return node.nodeType === Node.ELEMENT_NODE ? getAccessibleText(node as Element) : '';
+  }).filter(Boolean);
+}
+
+/**
  * A toast's announced text after its severity (D13): the title, the body (its subtitle included),
- * then the labels of its actions (the title's `action` and the footer, never the Dismiss button).
- * Content without a title or body part is read whole, without the severity texts.
+ * then the labels of its actions (the title's `action` and the footer, never the Dismiss button),
+ * each action on its own. Content without a title or body part is read whole, without the severity
+ * texts.
  */
 function composeToastText(
   container: HTMLElement,
@@ -610,12 +669,18 @@ function composeToastText(
     );
   }
   const label = title?.getLabel() ?? null;
+  // The title row without its text: the `action` slot, whose children are the actions.
+  const row = title?.getRow() ?? null;
+  const titleActions = row
+    ? Array.from(row.children)
+        .filter((child) => child !== label)
+        .flatMap((slot) => getChildTexts(slot))
+    : [];
   return [
     getAccessibleText(label),
     getAccessibleText(body?.getElement() ?? null),
-    // The title row without its text: the `action` slot.
-    getAccessibleText(title?.getRow() ?? null, (el) => el === label),
-    ...parts.filter(isFooterPart).map((footer) => getAccessibleText(footer.getElement())),
+    ...titleActions,
+    ...parts.filter(isFooterPart).flatMap((footer) => getChildTexts(footer.getElement())),
   ]
     .filter(Boolean)
     .join(' ');
@@ -719,7 +784,8 @@ function ToastContainer({
 
   // What screen readers hear (D13), once per dispatch after the content has mounted: the severity
   // text of the rendered Toast (else the dispatch options'), then `announcement` or the text the
-  // toast renders; `error` is assertive.
+  // toast renders; `error` is assertive. `toast` re-runs it for a Toast that registers after this
+  // commit (content that renders it later); `announce` drops a repeat of the same message.
   React.useLayoutEffect(() => {
     const node = containerRef.current;
     if (entry.dismissed || !node) return;
@@ -737,7 +803,7 @@ function ToastContainer({
       text: [label, text].filter(Boolean).join(' '),
       assertive: status === 'error',
     });
-  }, [entry, announce, ownStatusTextId]);
+  }, [entry, announce, ownStatusTextId, toast]);
 
   // A rendered Toast's severity wins over the dispatch options' (D12); an explicit, different
   // `status` in the options warns once. Read from the ref, not the `toast` state, inside the
@@ -813,8 +879,9 @@ ToastContainer.displayName = 'ToastContainer';
  *   (`data-wave-focus-trap-allow`): it stays reachable by Tab and exposed to assistive technology
  *   while a Dialog or Drawer is open, and clicking a toast never dismisses the overlay below.
  * - Two permanent, visually hidden live regions (polite, and assertive for `error`) announce every
- *   toast once, read from what it renders after it mounts: the severity text, the title, the body
- *   and the labels of its actions (never the Dismiss button), or the dispatch's `announcement`.
+ *   toast once per dispatch, read from what it renders after it mounts: the severity text, then
+ *   the title, the body and the labels of its actions (never the Dismiss button) or, instead of
+ *   those, the dispatch's `announcement`.
  *   The toasts themselves are not live regions. Each message stays in its live region for 2
  *   seconds (or until its toast goes), so browsing the region later meets the text only once.
  * - While an open modal panel covers the toasts' corner (a Drawer on the same side), the toasts
