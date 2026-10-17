@@ -686,3 +686,94 @@ describe('reconcile focus only after a silent fall to the page (fix round 2)', (
     expect(input).not.toHaveFocus();
   });
 });
+
+describe('the hover pause after the hovered toast is removed (fix E2, T13)', () => {
+  beforeEach(() => {
+    vi.useFakeTimers();
+  });
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  // When the node under the pointer is removed, the browser's next boundary event is a
+  // `pointerover` on the element now under the pointer with no (or a detached) related target:
+  // React synthesises no leave for the region from it, and no `pointerout` reaches the region.
+  it('ends when the pointer is next over an element outside the region', () => {
+    const { dispatch, dismiss } = renderToaster();
+    const upload = dispatch({ title: 'Upload', timeout: 0 });
+    dispatch({ title: 'Saved', timeout: 5000 });
+    fireEvent.pointerOver(getToasts()[0]);
+    dismiss(upload);
+    expect(screen.queryByText('Upload')).not.toBeInTheDocument();
+    advance(10_000);
+    expect(screen.getByText('Saved')).toBeInTheDocument();
+    // The remaining toast moves under the pointer: still in the region, still paused.
+    fireEvent.pointerOver(getToasts()[0], { relatedTarget: null });
+    advance(10_000);
+    expect(screen.getByText('Saved')).toBeInTheDocument();
+    // The pointer is next over the page.
+    fireEvent.pointerOver(document.body, { relatedTarget: null });
+    advance(4999);
+    expect(screen.getByText('Saved')).toBeInTheDocument();
+    advance(1);
+    expect(getToasts()).toHaveLength(0);
+  });
+
+  it('keeps the pause while the pointer moves into a layer opened from a toast', () => {
+    const { dispatchContent } = renderToaster();
+    dispatchContent(
+      <Toast>
+        <Toast.Title action={<MenuStandIn />}>Saved</Toast.Title>
+      </Toast>,
+      { timeout: 3000 },
+    );
+    const more = screen.getByRole('button', { name: 'More' });
+    fireEvent.pointerOver(more);
+    fireEvent.click(more);
+    const archive = screen.getByRole('button', { name: 'Archive' });
+    // Focus in the layer pauses the region too: take it out, so only the pointer holds the pause.
+    act(() => archive.blur());
+    fireEvent.pointerOut(more, { relatedTarget: archive });
+    fireEvent.pointerOver(archive, { relatedTarget: more });
+    advance(10_000);
+    expect(getToasts()).toHaveLength(1);
+    // Out of the layer onto the page: React's leave of the region (through the portal) resumes.
+    fireEvent.pointerOut(archive, { relatedTarget: document.body });
+    fireEvent.pointerOver(document.body, { relatedTarget: archive });
+    advance(3000);
+    expect(getToasts()).toHaveLength(0);
+  });
+
+  it('keeps the pause while the pointer is over a plain portal rendered from a toast', () => {
+    const { dispatchContent } = renderToaster();
+    dispatchContent(
+      <Toast>
+        <Toast.Title>Saved</Toast.Title>
+        <PortaledAction />
+      </Toast>,
+      { timeout: 3000 },
+    );
+    const portaled = screen.getByRole('button', { name: 'Portaled action' });
+    fireEvent.pointerOver(getToasts()[0]);
+    fireEvent.pointerOut(getToasts()[0], { relatedTarget: portaled });
+    fireEvent.pointerOver(portaled, { relatedTarget: getToasts()[0] });
+    advance(10_000);
+    expect(getToasts()).toHaveLength(1);
+    fireEvent.pointerOut(portaled, { relatedTarget: document.body });
+    advance(3000);
+    expect(getToasts()).toHaveLength(0);
+  });
+
+  it('still calls the consumer pointer handlers', () => {
+    const calls: string[] = [];
+    const { dispatch } = renderToaster({
+      onPointerEnter: () => calls.push('enter'),
+      onPointerOver: () => calls.push('over'),
+      onPointerLeave: () => calls.push('leave'),
+    });
+    dispatch({ title: 'Saved' });
+    fireEvent.pointerOver(getToasts()[0]);
+    fireEvent.pointerOut(getToasts()[0], { relatedTarget: document.body });
+    expect(calls).toEqual(['over', 'enter', 'leave']);
+  });
+});

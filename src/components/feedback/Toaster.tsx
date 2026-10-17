@@ -972,6 +972,7 @@ export const Toaster = ({
   onKeyDown,
   onPointerEnter,
   onPointerLeave,
+  onPointerOver,
   ref,
   ...rest
 }: ToasterProps) => {
@@ -1218,6 +1219,30 @@ export const Toaster = ({
     [reconcileFocus],
   );
 
+  // The pointer can leave the region without a leave reaching it: when the node under the pointer
+  // is removed (a hovered toast dismissed, timed out or pushed out by the limit, a menu item that
+  // closed its menu), the browser's next boundary event is a `pointerover` on the element now under
+  // the pointer with no related target, from which React synthesises no leave. So the 'hover' pause
+  // also ends on any `pointerover` that did not pass through the region: in React's tree, which
+  // takes in a portal opened from a toast (D14, as the enter and leave handlers do), or in the DOM
+  // and the layers anchored in it. A document listener in the bubble phase, so React's own
+  // listeners (on the root and portal containers, below the document) have marked the event first.
+  const regionPointerOverRef = React.useRef<Event | null>(null);
+  React.useEffect(() => {
+    const handlePointerOver = (event: Event) => {
+      const fromRegion = regionPointerOverRef.current === event;
+      regionPointerOverRef.current = null;
+      if (fromRegion || !timers.isPaused('hover')) return;
+      const viewport = viewportRef.current;
+      if (viewport && event.target instanceof Node && isInToastRegion(viewport, event.target)) {
+        return;
+      }
+      timers.setPaused('hover', false);
+    };
+    document.addEventListener('pointerover', handlePointerOver);
+    return () => document.removeEventListener('pointerover', handlePointerOver);
+  }, [timers]);
+
   // The latest entries and every container element, for the shortcut's document listener.
   const toastsRef = React.useRef<ToastEntry[]>(settled);
   React.useLayoutEffect(() => {
@@ -1361,6 +1386,12 @@ export const Toaster = ({
           onPointerLeave={(event) => {
             onPointerLeave?.(event);
             timers.setPaused('hover', false);
+          }}
+          onPointerOver={(event) => {
+            // Bookkeeping always runs. A portal opened from a toast counts as the region (D14):
+            // React bubbles its pointer events here too.
+            onPointerOver?.(event);
+            regionPointerOverRef.current = event.nativeEvent;
           }}
           onKeyDown={(event) => composeEventHandlers(onKeyDown, handleEscape)(event)}
           className={cn(
