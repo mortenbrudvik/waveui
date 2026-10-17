@@ -23,3 +23,6 @@ Binding spec: `docs/superpowers/specs/2026-09-26-fluent-parity-phase-5-design.md
 ## From E5
 - `CalendarLabels` is now a fifth known public-types failure (DatePickerLabels extends it): F1 exports `Calendar`, `CalendarProps`, `CalendarLabels`, `CalendarValueChangeDetails` from the input barrel and checks public-types is clean.
 - `SelectionRange` (dateUtils.ts, used by the public CalendarProps/DatePickerProps) must be exported from the entry too; the public-types test should then be clean.
+
+## From F2 review
+- Add a `verifyDist` case for the CALENDAR_ONLY exclusion probe (a fixture where Calendar imports the listbox hook fails verifyDist), so deleting that probe line fails the suite (task-F2-review.md Minor 1).

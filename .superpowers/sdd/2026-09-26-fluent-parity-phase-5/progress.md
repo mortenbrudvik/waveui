@@ -298,3 +298,35 @@ Package P5-calendar (E1–E6): complete
 Pushed becbf0a (origin up to date)
 Wave C: Task F1 dispatched (sonnet), BASE becbf0a
 Task F1: DONE; committed a6fb630; review (sonnet) dispatched
+Task F1: review (sonnet) — PASS/PASS, 1 Minor (docblock wrap; controller fixed in daedd11, which also carries 3 ledger lines from commit -a)
+Task F1: complete (a6fb630, daedd11)
+Task F2: dispatched (sonnet), BASE daedd11
+Task F2: DONE; committed 0f521c9; review (sonnet) dispatched
+Task F2: review (sonnet) — PASS/PASS, 2 Minor (CALENDAR_ONLY verifyDist case → F3; duplicated addDays check, parked)
+Task F2: complete (0f521c9)
+Task F3: dispatched (sonnet), BASE 0f521c9
+Task F3: DONE, full gate green (typecheck, lint, format, test, build, verify-dist --final, check:package, test:pack, build-storybook); committed 0cb6c98; review (opus) dispatched
+main moved: 44a9b41 chore(release): 0.8.0 (+ merge 6a03509), 5 files (CHANGELOG date, ROADMAP, comparison doc, version) — merge before wave D, after F3 review
+Task F3: review (opus) — PASS/PASS, 0 Critical/Important, 7 Minor (2 presence-only assertions, loose checks, import order, multiselect type check scope); 2 expected fails = test-utils it.fails self-tests (pre-existing)
+Task F3: fix round 1 (resume implementer, sonnet) — the 7 test minors
+Task F3: fix round 1 DONE; controller verified (integration + public-types 361 pass, no warnings); committed d43e8e8
+Task F3: complete (0cb6c98, d43e8e8)
+Wave C (INTEGRATION): complete
+Merged origin/main (0.8.0 release, 44a9b41) cleanly after wave C
+Wave D: notes task-G-dispatch-notes.md written (pending rulings for §10/CHANGELOG)
+Task G1: dispatched (opus) — CHANGELOG 0.10.0 + spec §10 pending notes
+Task G1: DONE; committed 74ee59c; review (sonnet) dispatched
+Task G2: dispatched (opus) — README (runs alongside the read-only G1 review; different file)
+Task G1: review (sonnet) — PASS/PASS, 0 Critical/Important, 2 Minor, both checked by controller and dismissed (8 M + 20 L matches spec §7 table; hashes exist, wave F merges, no rebase)
+Task G1: complete (74ee59c)
+Task G2: DONE; controller fixed SwatchPickerLabels.required JSDoc (R21, c45df1e); committed c3792dc; review (sonnet) dispatched
+Task G3: dispatched (opus) — CLAUDE.md, guide, testing guide (alongside the read-only G2 review)
+Wave F notes: task-I1-dispatch-notes.md (CHANGELOG anchors, Upgrading from 0.8, remeasure vs 0.9.0)
+Task G2: review (sonnet) — PASS/PASS, 0 Critical/Important, 3 Minor (useActiveDescendant row lacks getElement → controller after G3; 73 count → G3 verifies; SwatchPicker JSDoc already fixed c45df1e)
+Task G2: complete (c3792dc)
+User: "phase 4 has been merged" — origin/main 39305a0 (Phase 4, 0.9.0), 74 commits ahead
+Ruling R32: run wave F (I1) now — after G3 commits, before G4 (Phase 4 rewrote ROADMAP and the comparison doc; G4 on the merged tree avoids a second doc merge); the controller runs git merge, an opus agent resolves conflicts by file edits only and applies spec §3.3 steps 2-5 (P4-01 for Dropdown, documents, remeasure vs 0.9.0), the controller commits — cost if wrong: none, G4 just moves later
+Task G3: DONE; controller added getElement to README useActiveDescendant row (G2 Minor) + prettier table realign; committed 12c7969; review (sonnet) dispatched; merge of origin/main (Phase 4) waits for it
+Task G3: review (sonnet) — PASS/PASS, 0 Critical/Important, 6 Minor → G4 notes (after merge)
+Task G3: complete (12c7969)
+Task I1: git merge origin/main (39305a0) started
