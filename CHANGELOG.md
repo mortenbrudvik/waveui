@@ -95,15 +95,18 @@ The Fluent UI v9 parity release for form controls: Phase 4 of the [roadmap](docs
 
 ### Size
 
-Against 0.8.0, measured the way 0.6 and 0.7 did: `dist/styles.css` as built, and minified Vite builds of an entry that imports from `dist/index.mjs`, with bare imports external, both versions built from their commits and measured with the same script; sizes in KiB (1,024 bytes). **The numbers are measured in wave E of the release (Task E3), which replaces the table below.**
+Against 0.8.0, measured the way 0.6 and 0.7 did: `dist/styles.css` as built, and minified Vite builds of an entry that imports from `dist/index.mjs`, with bare imports external, both versions built from their commits and measured with the same script; sizes in KiB (1,024 bytes).
 
 | Output | 0.8.0 | 0.9.0 |
 |---|---|---|
-| `dist/styles.css` | to be measured | to be measured |
-| An import of only `Button` | to be measured | to be measured |
-| An import of only `Input` | to be measured | to be measured |
-| An import of only `Field` | to be measured | to be measured |
-| An import of everything | to be measured | to be measured |
+| `dist/styles.css` | 63.9 KiB (11.0 KiB gzip) | 67.5 KiB (11.5 KiB gzip) |
+| An import of only `Button` | 10.9 KiB (3.8 KiB gzip) | 10.9 KiB (3.8 KiB gzip) |
+| An import of only `Input` | 7.6 KiB (3.1 KiB gzip) | 9.3 KiB (3.7 KiB gzip) |
+| An import of only `Field` | 10.8 KiB (4.3 KiB gzip) | 12.1 KiB (4.8 KiB gzip) |
+| An import of everything | 435.6 KiB (137.4 KiB gzip) | 452.8 KiB (143.9 KiB gzip) |
+
+- An import of only `Input` grows the most in proportion (1.7 KiB): the shared input recipe (size, appearance and `data-size` handling) now sits in every text control. An import of only `Field` grows by 1.3 KiB for the same reason (label sizes, `Label` and `InfoLabel` elements, validation states) and stays free of InfoButton's overlay code, which only `InfoLabel` and `InfoButton` imports reach (`verify-dist` gates it). An import of only `Button` is unchanged.
+- `dist/styles.css` grows by the utilities of the new sizes, appearances and parts. The 0.8.0 column was re-measured from a build of its commit with the same script as 0.9.0, so it differs slightly from the 0.8.0 section's own table (63.3 and 434.6 KiB).
 
 ## [0.8.0] - Unreleased
 
