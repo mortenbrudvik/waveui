@@ -22,6 +22,11 @@ const ROW_SELECTOR = '[role="row"]';
 /** Whether the grid keys may land on `el`: not disabled, not hidden, not inert. */
 function isEnabledCell(el: HTMLElement, container: HTMLElement): boolean {
   if ((el as { disabled?: unknown }).disabled === true) return false;
+  try {
+    if (el.matches(':disabled')) return false; // inside a disabled fieldset
+  } catch {
+    // A browser without the selector: the other checks apply.
+  }
   const marker = el.getAttribute('data-roving-disabled');
   if (marker !== null && marker !== 'false') return false;
   if (!el.hasAttribute('data-disabled-focusable') && el.getAttribute('aria-disabled') === 'true') {
@@ -36,7 +41,8 @@ function isEnabledCell(el: HTMLElement, container: HTMLElement): boolean {
 /**
  * Internal. Roving focus for a two-dimensional grid of cells (SwatchPicker's grid layout): one
  * `useRovingTabIndex` on the container plus the keys a grid adds. Rows are the `role="row"`
- * elements inside the container and cells their `[data-roving-value]` elements.
+ * elements inside the container and cells their `[data-roving-value]` elements. A cell outside a
+ * row gets only the base hook's keys (Left/Right).
  *
  * - Left/Right move through the cells in reading order across rows (mirrored in RTL) and stop at
  *   the grid's first and last cell.
