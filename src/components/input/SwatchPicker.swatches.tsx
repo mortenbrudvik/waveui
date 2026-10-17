@@ -218,7 +218,10 @@ export interface ColorSwatchProps extends Omit<
    * @default the picker's
    */
   shape?: Shape;
-  /** Ref to the swatch button (`role="radio"` in the row layout, inside its cell in the grid layout). */
+  /**
+   * Ref to the swatch button: `role="radio"` in the row layout, inside its cell in the grid
+   * layout, a toggle button in tab mode.
+   */
   ref?: React.Ref<HTMLButtonElement>;
 }
 
@@ -414,7 +417,10 @@ export interface ImageSwatchProps extends Omit<
    * @default the picker's
    */
   shape?: Shape;
-  /** Ref to the swatch button (`role="radio"` in the row layout, inside its cell in the grid layout). */
+  /**
+   * Ref to the swatch button: `role="radio"` in the row layout, inside its cell in the grid
+   * layout, a toggle button in tab mode.
+   */
   ref?: React.Ref<HTMLButtonElement>;
 }
 

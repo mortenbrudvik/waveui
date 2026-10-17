@@ -131,7 +131,10 @@ export interface SwatchPickerProps extends Omit<
   required?: boolean;
   /** Id of the form the picker belongs to, when it is rendered outside that form. */
   form?: string;
-  /** Ref to the root element (`role="radiogroup"`, or `role="grid"` in the grid layout). */
+  /**
+   * Ref to the root element: `role="radiogroup"`, `role="grid"` in the grid layout, or
+   * `role="group"` in tab mode.
+   */
   ref?: React.Ref<HTMLDivElement>;
 }
 
