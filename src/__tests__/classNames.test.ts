@@ -148,7 +148,7 @@ const NO_ELEMENT: readonly string[] = [
   'Popover', // a context provider: Popover.Content renders the surface
   'PopoverTrigger', // clones its child
   'Presence', // clones its child
-  'ToastClose', // clones its child (phase 3; exported by INTEGRATION)
+  'ToastClose', // clones its child (phase 3)
 ];
 
 /**

@@ -24,6 +24,9 @@
  *     `index.*` entries, `dist/lib/**`, the bundler runtime — must evaluate (no client-only
  *     React API at module scope, no dotting into a client reference such as `Card.Header`);
  *     `dist/lib/cn.*` must work and `dist/index.*` must export the server-side `cn`;
+ *     `dist/lib/color.*` and `dist/lib/toaster.*` must exist and work on the server (the color
+ *     helpers convert; a handle's dispatch returns an id and adds no global), and `dist/index.*`
+ *     must export `hsvToHex`, `hexToHsv` and `createToaster` from them, not from a client module;
  *   - class names (P3-00): every export of `dist/lib/classNames.*` (the stable class-name
  *     registry) is exported by `dist/index.*` with the same value, in both formats
  *     ({@link checkClassNameExports}); under the react-server condition `dist/index.*` exports
@@ -44,7 +47,10 @@
  *   - presence core: an import of only `Presence` contains `hooks/usePresence` (the probe finds
  *     the core where it is used), and the closure of `usePresence` + `Presence`, minified with
  *     bare imports external, stays within {@link PRESENCE_BUDGET} and imports nothing but
- *     `react` and `react/jsx-runtime`. The CLI prints the measured sizes.
+ *     `react` and `react/jsx-runtime`. The CLI prints the measured sizes;
+ *   - opt-in modules (0.8): an import of only `Button` contains none of {@link OPT_IN_MODULES}
+ *     (the color parts and helpers, the toaster handle), and an import of only `Toaster`
+ *     contains `hooks/usePresence`;
  *
  * Usage: node scripts/verify-dist.mjs [--dist <dir>] [--no-pending | --final]
  *   --dist        the dist directory (default: dist); its parent holds the package.json
@@ -111,6 +117,33 @@ const PRESENCE_BUDGET = {
   maxGzipBytes: 2927,
   allowedExternals: ['react', 'react/jsx-runtime'],
 };
+
+/**
+ * Modules an import of only `Button` must not contain (spec D30, 0.8): the color parts, the public
+ * color helpers and the toaster handle are opt-in. Each must exist in `dist`, or the probe would
+ * pass vacuously. Sorted.
+ */
+export const OPT_IN_MODULES = [
+  'components/input/AlphaSlider.mjs',
+  'components/input/ColorArea.mjs',
+  'components/input/ColorSlider.mjs',
+  'lib/color.mjs',
+  'lib/toaster.mjs',
+];
+
+/** An import of only this component holds the presence core (spec D29): its toasts mount on it. */
+const TOASTER_INCLUDE_KEEP = 'Toaster';
+
+/**
+ * The server-safe modules of 0.8 that a Server Component reaches through the entry (spec D18,
+ * D33): each must exist, and pass its check in {@link serverProbeSource}.
+ */
+const SERVER_SAFE_MODULES = [
+  'lib/color.mjs',
+  'lib/color.cjs',
+  'lib/toaster.mjs',
+  'lib/toaster.cjs',
+];
 
 /**
  * The class-name strings of the Button-only probe (P3-00): the bundle keeps Button's root class
@@ -735,6 +768,50 @@ const check = (path, m) => {
       throw new Error('buttonClassNames.root is ' + JSON.stringify(constants.root) + ", not 'wave-button'");
     }
   }
+  if (/^lib\\/color\\.[cm]?js$/.test(path)) {
+    if (typeof m.hsvToHex !== 'function' || typeof m.hexToHsv !== 'function') {
+      throw new Error('hsvToHex and hexToHsv are not both exported');
+    }
+    const red = m.hsvToHex({ h: 0, s: 1, v: 1 });
+    if (red !== '#ff0000') {
+      throw new Error('hsvToHex({ h: 0, s: 1, v: 1 }) returned ' + JSON.stringify(red));
+    }
+    const hsv = m.hexToHsv('#ff0000');
+    if (!hsv || hsv.h !== 0 || hsv.s !== 1 || hsv.v !== 1 || 'a' in hsv) {
+      throw new Error("hexToHsv('#ff0000') returned " + JSON.stringify(hsv));
+    }
+  }
+  if (/^lib\\/toaster\\.[cm]?js$/.test(path)) {
+    if (typeof m.createToaster !== 'function') throw new Error('createToaster is not exported');
+    const handle = m.createToaster();
+    for (const key of ['dispatchToast', 'dismissToast', 'dismissAllToasts']) {
+      if (typeof handle[key] !== 'function') throw new Error('the handle has no ' + key + '()');
+    }
+    // A dispatch on the server does nothing (spec D33): it returns its id and leaves no state
+    // behind for the next request.
+    const globals = Reflect.ownKeys(globalThis).length;
+    const id = handle.dispatchToast('x');
+    if (typeof id !== 'string' || id === '') {
+      throw new Error("dispatchToast('x') returned " + JSON.stringify(id) + ', not an id');
+    }
+    const given = handle.dispatchToast({ title: 'x', toastId: 'fixed' });
+    if (given !== 'fixed') {
+      throw new Error("dispatchToast({ toastId: 'fixed' }) returned " + JSON.stringify(given));
+    }
+    handle.dismissToast(id);
+    handle.dismissAllToasts();
+    if (Reflect.ownKeys(globalThis).length !== globals) {
+      throw new Error('a dispatch on the server added a global (it must do nothing)');
+    }
+  }
+  if (/^index\\.[cm]?js$/.test(path)) {
+    for (const name of ['hsvToHex', 'hexToHsv', 'createToaster']) {
+      if (typeof m[name] !== 'function') throw new Error(name + ' is not exported');
+      if (m[name].$$typeof === Symbol.for('react.client.reference')) {
+        throw new Error(name + ' is a client reference (re-exported from a "use client" module)');
+      }
+    }
+  }
 };
 const message = (error) => String((error && error.message) || error).split('\\n')[0];
 (async () => {
@@ -800,6 +877,9 @@ export async function checkServerImport(dist) {
   const errors = [];
   const distRoot = resolve(dist);
   for (const path of ['lib/cn.mjs', 'lib/cn.cjs']) {
+    if (!existsSync(join(distRoot, path))) errors.push(`${path} is missing`);
+  }
+  for (const path of SERVER_SAFE_MODULES) {
     if (!existsSync(join(distRoot, path))) errors.push(`${path} is missing`);
   }
   const manifest = join(distRoot, '..', 'package.json');
@@ -1324,6 +1404,13 @@ export async function verifyDist(
         dropModules: [PRESENCE_MODULE],
       })),
     );
+    errors.push(
+      ...(await probeTreeShaking(distRoot, {
+        keep: 'Button',
+        drop: 'ColorArea',
+        dropModules: OPT_IN_MODULES,
+      })),
+    );
   } catch (error) {
     errors.push(`tree-shaking probe failed: ${error.message}`);
   }
@@ -1336,6 +1423,16 @@ export async function verifyDist(
     );
   } catch (error) {
     errors.push(`presence include probe failed: ${error.message}`);
+  }
+  try {
+    errors.push(
+      ...(await probeIncludes(distRoot, {
+        keep: TOASTER_INCLUDE_KEEP,
+        modules: [PRESENCE_MODULE],
+      })),
+    );
+  } catch (error) {
+    errors.push(`toaster include probe failed: ${error.message}`);
   }
   let budget = null;
   try {
