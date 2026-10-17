@@ -6,8 +6,8 @@ import { toasterClassNames } from '../../lib/classNames';
 import { reportMissingContext, warnOnce } from '../../lib/dev';
 import { getDirection } from '../../lib/direction';
 import { isEditableTarget, isOwnEvent } from '../../lib/events';
-import { getFirstTabbable, getTabbableElements } from '../../lib/focus';
-import { getOpenLayers, subscribeLayers } from '../../lib/layers';
+import { getFirstTabbable, getTabbableElements, isConnectedAndFocusable } from '../../lib/focus';
+import { getOpenLayers, isInsideLayerTree, subscribeLayers } from '../../lib/layers';
 import { focusRing } from '../../lib/styles';
 import { isToastOptions } from '../../lib/toaster';
 import type { Status } from '../../lib/types';
@@ -40,11 +40,11 @@ export interface ToastOptions {
   body?: string;
   /**
    * Auto-dismiss timeout in milliseconds. The countdown starts when the toast is shown (a toast
-   * waiting beyond the Toaster's `limit` does not count down) and pauses while the pointer is over
-   * the toast, while focus is inside it and while the browser window is in the background (it has
-   * lost focus, or the page is not shown, as in a background tab, also when the Toaster mounts
-   * there). `0` (or any value that is not a positive finite number) keeps the toast until it is
-   * dismissed.
+   * waiting beyond the Toaster's `limit` does not count down) and pauses while the pointer or
+   * focus is anywhere in the toast region (a menu or popover opened from a toast included) and
+   * while the browser window is in the background (it has lost focus, or the page is not shown, as
+   * in a background tab, also when the Toaster mounts there). `0` (or any value that is not a
+   * positive finite number) keeps the toast until it is dismissed.
    * @default 5000
    */
   timeout?: number;
@@ -189,6 +189,19 @@ function findNewestToast(toasts: readonly ToastEntry[]): ToastEntry | undefined 
   return newest;
 }
 
+/**
+ * Whether `node` is in the toast region: inside the viewport, or inside an open dismiss layer
+ * anchored inside it (a Menu, Popover or Tooltip opened from a toast, whose portal lives elsewhere
+ * in the document).
+ */
+function isInToastRegion(viewport: HTMLElement, node: Node): boolean {
+  if (viewport.contains(node)) return true;
+  return getOpenLayers().some((layer) => {
+    const anchor = layer.getAnchor();
+    return anchor !== null && viewport.contains(anchor) && isInsideLayerTree(layer.id, node);
+  });
+}
+
 /** Whether a toast holds an action: an element in its Tab order other than its Dismiss button. */
 function hasAction(container: HTMLElement, toast: ToastRegistration | null): boolean {
   const dismissButton = toast?.getDismissButton() ?? null;
@@ -268,25 +281,25 @@ interface RunningTimer {
 }
 
 /**
- * Auto-dismiss timers of one Toaster. A timer runs only while its toast is neither hovered nor
- * focused, the window is in the foreground and the Toaster is mounted; otherwise it is suspended
- * and keeps its remaining time. Every method is called from event handlers or effects, never
- * during render.
+ * Auto-dismiss timers of one Toaster. A timer runs only while neither the pointer nor focus is in
+ * the toast region (D14), the window is in the foreground and the Toaster is mounted; otherwise it
+ * is suspended and keeps its remaining time. Every method is called from event handlers or
+ * effects, never during render.
  */
 interface ToastTimers {
   /**
    * Starts the timer of the shown toast `id` for its dispatch `seq`, once: a call with the `seq`
    * already started does nothing, a new `seq` (the toast was replaced) restarts it. A timeout that
-   * is not a positive finite number means none. The pause state of `id` is kept: a replaced toast
-   * that is hovered or focused stays paused.
+   * is not a positive finite number means none. A toast replaced while the region is paused stays
+   * paused.
    */
   start(id: string, seq: number, timeout: number): void;
-  /** Cancels the timer of `id` and forgets its pause state. */
+  /** Cancels the timer of `id`. */
   remove(id: string): void;
-  /** Cancels every timer and forgets every pause state. */
+  /** Cancels every timer; the region's pause is kept. */
   clear(): void;
-  pause(id: string, reason: PauseReason): void;
-  resume(id: string, reason: PauseReason): void;
+  /** `true` while the pointer (`'hover'`) or focus (`'focus'`) is in the toast region. */
+  setPaused(reason: PauseReason, paused: boolean): void;
   /** `true` while the window has lost focus or the page is not shown (a background tab). */
   setInBackground(inBackground: boolean): void;
   /** `true` while the Toaster is unmounted (including StrictMode's simulated unmount). */
@@ -295,7 +308,8 @@ interface ToastTimers {
 
 function createToastTimers(onExpire: (id: string) => void): ToastTimers {
   const timers = new Map<string, RunningTimer>();
-  const pauses = new Map<string, Set<PauseReason>>();
+  /** Why the region pauses every timer. */
+  const pauses = new Set<PauseReason>();
   /** The dispatch (`seq`) whose timer was started last, per toast. */
   const started = new Map<string, number>();
   let inBackground = false;
@@ -304,12 +318,11 @@ function createToastTimers(onExpire: (id: string) => void): ToastTimers {
   const sync = (id: string) => {
     const timer = timers.get(id);
     if (!timer) return;
-    const canRun = !suspended && !inBackground && !(pauses.get(id)?.size ?? 0);
+    const canRun = !suspended && !inBackground && pauses.size === 0;
     if (canRun && timer.handle === null) {
       timer.startedAt = Date.now();
       timer.handle = setTimeout(() => {
         timers.delete(id);
-        pauses.delete(id);
         started.delete(id);
         onExpire(id);
       }, timer.remaining);
@@ -339,26 +352,16 @@ function createToastTimers(onExpire: (id: string) => void): ToastTimers {
     },
     remove(id) {
       stop(id);
-      pauses.delete(id);
       started.delete(id);
     },
     clear() {
       for (const id of Array.from(timers.keys())) stop(id);
-      pauses.clear();
       started.clear();
     },
-    pause(id, reason) {
-      let reasons = pauses.get(id);
-      if (!reasons) {
-        reasons = new Set();
-        pauses.set(id, reasons);
-      }
-      reasons.add(reason);
-      sync(id);
-    },
-    resume(id, reason) {
-      pauses.get(id)?.delete(reason);
-      sync(id);
+    setPaused(reason, paused) {
+      if (paused) pauses.add(reason);
+      else pauses.delete(reason);
+      syncAll();
     },
     setInBackground(value) {
       inBackground = value;
@@ -875,14 +878,6 @@ function ToastContainer({
       aria-describedby={bodyPart?.id}
       className={cn(toasterClassNames.toast, 'rounded', focusRing)}
       {...presenceProps}
-      onPointerEnter={() => timers.pause(id, 'hover')}
-      onPointerLeave={() => timers.resume(id, 'hover')}
-      onFocus={() => timers.pause(id, 'focus')}
-      onBlur={(event) => {
-        const next = event.relatedTarget;
-        if (next instanceof Node && event.currentTarget.contains(next)) return;
-        timers.resume(id, 'focus');
-      }}
       onKeyDown={handleKeyDown}
     >
       {ownSeverityLabel ? <StatusText label={ownSeverityLabel} id={ownStatusTextId} /> : null}
@@ -927,13 +922,12 @@ ToastContainer.displayName = 'ToastContainer';
  * - While an open modal panel covers the toasts' corner (a Drawer on the same side), the toasts
  *   move beside it, so they never hide its focused controls (WCAG 2.4.11). Without room beside it
  *   (a full-width panel on a narrow screen) they keep their corner.
- * - Timers pause while a toast is hovered or focused and while the window is in the background
- *   (it has lost focus, or the page is not shown, as in a background tab).
- *   When a toast that contains focus goes away, focus moves to the next toast (or the previous one
- *   when the last toast goes), or back to the element that was focused before focus entered the
- *   toasts once no toast is left (kept across the moves between toasts and while another window
- *   is active; forgotten once focus has returned to it, and when focus leaves the toasts for
- *   another element or for the page body).
+ * - Timers pause while the pointer or focus is anywhere in the toast region, a menu or popover
+ *   opened from a toast included (someone reading or operating one toast is reading the stack),
+ *   and while the window is in the background (it has lost focus, or the page is not shown, as in
+ *   a background tab). When a toast that contains focus goes away, focus moves to the next toast
+ *   (or the previous one), or back to the element that was focused before focus entered the
+ *   toasts once no toast is left.
  * - **Keyboard:** `shortcuts.focus` names a key press that moves focus to the newest toast (use a
  *   modifier, WCAG 2.1.4); Escape in the toast region dismisses every toast and returns focus to
  *   where it was before focus entered the toasts (a tooltip or menu of a toast closes first, and a
@@ -959,6 +953,8 @@ export const Toaster = ({
   onFocus,
   onBlur,
   onKeyDown,
+  onPointerEnter,
+  onPointerLeave,
   ref,
   ...rest
 }: ToasterProps) => {
@@ -1183,7 +1179,7 @@ export const Toaster = ({
     if (
       active instanceof HTMLElement &&
       active !== target.ownerDocument.body &&
-      !viewport?.contains(active)
+      !(viewport && isInToastRegion(viewport, active))
     ) {
       previousFocusRef.current = active;
     }
@@ -1196,26 +1192,27 @@ export const Toaster = ({
     return () => document.removeEventListener('keydown', listener);
   }, [hasFocusShortcut, handleShortcut]);
 
-  // Focus entering the toasts from an element outside: return there when the focused toast goes.
-  // Focus that arrives with no related target keeps what is remembered: that is the Toaster's own
-  // move to the next toast in the dismissing commit (the dismissed container is still there, inert,
-  // when focus leaves it) or the window regaining focus. Moves between toasts change nothing.
+  // Focus entering the toast region from an element outside it: return there when the focused
+  // toast goes and after Escape. Focus arriving with no related target keeps what is remembered
+  // (the Toaster's own move to the next toast, the window regaining focus). Moves inside the region
+  // — a layer opened from a toast included — change nothing, and an element that cannot take focus
+  // (inside a closing, inert surface) is never remembered.
   const rememberFocusOrigin = (event: React.FocusEvent<HTMLDivElement>) => {
     const from = event.relatedTarget;
-    if (from instanceof HTMLElement && !event.currentTarget.contains(from)) {
-      previousFocusRef.current = from;
-    }
+    if (!(from instanceof HTMLElement) || !isConnectedAndFocusable(from)) return;
+    if (isInToastRegion(event.currentTarget, from)) return;
+    previousFocusRef.current = from;
   };
 
-  // Focus leaving the toasts for another element or for `<body>` forgets the element, so a toast
+  // Focus leaving the region for another element or for `<body>` forgets the element, so a toast
   // focused again later from nowhere never sends focus back to something focused long before.
-  // Kept: moves between toasts, a dismissed toast (its container is still there, inert, when the
-  // Toaster moves focus itself; it is removed only once its exit ends) and the window losing focus
+  // Kept: moves inside the region (a layer opened from a toast included), a removed or dismissed
+  // toast (its node is gone or inert; the Toaster moves focus itself) and the window losing focus
   // (the element keeps document focus while another window is active).
   const forgetFocusOrigin = (event: React.FocusEvent<HTMLDivElement>) => {
     const viewport = event.currentTarget;
     const to = event.relatedTarget;
-    if (to instanceof Node && viewport.contains(to)) return;
+    if (to instanceof Node && isInToastRegion(viewport, to)) return;
     // A blur from inside a dismissed (exiting, inert) toast: the Toaster has moved focus itself,
     // or a browser's focus fix-up blurs the inert subtree later.
     if (event.target.closest('[data-wave-toast][data-presence="exiting"]')) return;
@@ -1279,12 +1276,26 @@ export const Toaster = ({
           style={viewportStyle}
           onFocus={(event) => {
             // Bookkeeping always runs (a consumer's preventDefault() cannot cancel a focus change).
+            // Focus in a portal opened from a toast arrives here too (React bubbles focus events
+            // through portals) and counts as focus in the region (D14).
             onFocus?.(event);
             rememberFocusOrigin(event);
+            timers.setPaused('focus', true);
           }}
           onBlur={(event) => {
             onBlur?.(event);
             forgetFocusOrigin(event);
+            const next = event.relatedTarget;
+            if (next instanceof Node && isInToastRegion(event.currentTarget, next)) return;
+            timers.setPaused('focus', false);
+          }}
+          onPointerEnter={(event) => {
+            onPointerEnter?.(event);
+            timers.setPaused('hover', true);
+          }}
+          onPointerLeave={(event) => {
+            onPointerLeave?.(event);
+            timers.setPaused('hover', false);
           }}
           onKeyDown={(event) => composeEventHandlers(onKeyDown, handleEscape)(event)}
           className={cn(

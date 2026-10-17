@@ -390,3 +390,101 @@ describe('Delete and Backspace (P3-03, D14)', () => {
     expect(getToasts()).toHaveLength(1);
   });
 });
+
+/** A layer opened from a toast's button, in a portal (a Menu stand-in): focus moves in and back. */
+function MenuStandIn() {
+  const [open, setOpen] = React.useState(false);
+  const buttonRef = React.useRef<HTMLButtonElement>(null);
+  const surfaceRef = React.useRef<HTMLDivElement>(null);
+  const close = () => {
+    setOpen(false);
+    buttonRef.current?.focus();
+  };
+  const { layerId } = useDismiss({
+    open,
+    onDismiss: close,
+    refs: [surfaceRef, buttonRef],
+    anchorRef: buttonRef,
+    kind: 'menu',
+  });
+  React.useLayoutEffect(() => {
+    if (open) surfaceRef.current?.querySelector('button')?.focus();
+  }, [open]);
+  return (
+    <>
+      <button ref={buttonRef} type="button" onClick={() => setOpen(true)}>
+        More
+      </button>
+      {open ? (
+        <Portal layerId={layerId}>
+          <div ref={surfaceRef} role="group" aria-label="More actions">
+            <button type="button" onClick={close}>
+              Archive
+            </button>
+          </div>
+        </Portal>
+      ) : null}
+    </>
+  );
+}
+
+describe('region-wide pausing (P3-03, D14)', () => {
+  beforeEach(() => {
+    vi.useFakeTimers();
+  });
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it('pauses every toast while the pointer is over one, and resumes when it leaves the region', () => {
+    const { dispatch } = renderToaster();
+    dispatch({ title: 'Hovered' });
+    dispatch({ title: 'Other' });
+    fireEvent.pointerOver(getToasts()[0]);
+    advance(20_000);
+    expect(getToasts()).toHaveLength(2);
+    fireEvent.pointerOut(getToasts()[0], { relatedTarget: document.body });
+    advance(5000);
+    expect(getToasts()).toHaveLength(0);
+  });
+
+  it('pauses every toast while focus is in one, and resumes when focus leaves the region', () => {
+    const { dispatch } = renderToaster();
+    dispatch({ title: 'Focused' });
+    dispatch({ title: 'Other' });
+    const button = within(getToasts()[0]).getByRole('button', { name: 'Dismiss' });
+    act(() => button.focus());
+    advance(20_000);
+    expect(getToasts()).toHaveLength(2);
+    act(() => button.blur());
+    advance(5000);
+    expect(getToasts()).toHaveLength(0);
+  });
+
+  it('keeps the timers paused and the return target while focus is in a layer opened from a toast', () => {
+    // Synchronous events: an awaited user-event call hangs under strict fake timers.
+    const { dispatchContent } = renderToaster({}, { app: <input aria-label="Name" /> });
+    const input = screen.getByRole('textbox', { name: 'Name' });
+    dispatchContent(
+      <Toast>
+        <Toast.Title action={<MenuStandIn />}>Saved</Toast.Title>
+      </Toast>,
+      { timeout: 3000 },
+    );
+    act(() => input.focus());
+    act(() => screen.getByRole('button', { name: 'More' }).focus());
+    expect(screen.getByRole('button', { name: 'More' })).toHaveFocus();
+    fireEvent.click(screen.getByRole('button', { name: 'More' }));
+    expect(screen.getByRole('button', { name: 'Archive' })).toHaveFocus();
+    advance(10_000);
+    expect(getToasts()).toHaveLength(1);
+    // The layer takes the first Escape and puts focus back on its button.
+    fireEvent.keyDown(screen.getByRole('button', { name: 'Archive' }), { key: 'Escape' });
+    expect(screen.getByRole('button', { name: 'More' })).toHaveFocus();
+    expect(getToasts()).toHaveLength(1);
+    // The origin survived the trip through the portal.
+    fireEvent.keyDown(screen.getByRole('button', { name: 'More' }), { key: 'Escape' });
+    expect(getToasts()).toHaveLength(0);
+    expect(input).toHaveFocus();
+  });
+});

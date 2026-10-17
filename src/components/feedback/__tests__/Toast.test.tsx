@@ -1047,14 +1047,17 @@ describe('Toaster: pausing (feedback-navigation#12)', () => {
     expect(screen.queryByText('Hover me')).not.toBeInTheDocument();
   });
 
-  it('pauses only the hovered toast', () => {
+  it('pauses every toast while the pointer is over one of them (the region, D14)', () => {
     const { dispatch } = renderToaster();
     dispatch({ title: 'Hovered' });
     dispatch({ title: 'Other' });
     fireEvent.pointerOver(getToasts()[0]);
     advance(5000);
     expect(screen.getByText('Hovered')).toBeInTheDocument();
-    expect(screen.queryByText('Other')).not.toBeInTheDocument();
+    expect(screen.getByText('Other')).toBeInTheDocument();
+    fireEvent.pointerOut(getToasts()[0], { relatedTarget: document.body });
+    advance(5000);
+    expect(getToasts()).toHaveLength(0);
   });
 
   it('pauses while focus is inside a toast', () => {
