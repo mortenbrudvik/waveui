@@ -261,9 +261,9 @@ it('renders its content in the open dialog', () => {
 });
 ```
 
-### `renderWithProviders(ui, { theme?, dir?, ...renderOptions })`
+### `renderWithProviders(ui, { theme?, dir?, inputDefaults?, ...renderOptions })`
 
-Renders inside `<WaveProvider theme dir>` (a `wrapper` option goes inside the provider; `rerender` keeps the providers). Every directional component has at least one RTL test:
+Renders inside `<WaveProvider theme dir inputDefaults>` (a `wrapper` option goes inside the provider; `rerender` keeps the providers). `inputDefaults` (`{ size?, appearance? }`) is the provider's default for the text controls and pickers. Every directional component has at least one RTL test:
 
 ```tsx
 // src/components/input/__tests__/RadioGroup.test.tsx
@@ -332,6 +332,25 @@ it('is described by a Field warning without becoming invalid', () => {
 ```
 
 The real `Field` around every control is covered by `src/__tests__/integration.test.tsx`.
+
+#### Resolution-order tests (size and appearance)
+
+A text control or picker resolves `size` as its own prop, then the Field's `size`, then `WaveProvider inputDefaults.size`, then `medium`, and `appearance` as its own prop, then `inputDefaults.appearance`, then `outline` (`useInputLook`). Test each link with the helper that supplies it, and assert the resolved value through the always-rendered `data-size` and `data-appearance`, with a class check for the look:
+
+- The Field link: `renderWithFieldContext(<Input />, { size: 'large' })`, then `rerender(<Input size="small" />)` and assert that the own prop wins. The context's `size` is the Field's own prop; leave it out to test the fall-through.
+- The provider link: `renderWithProviders(<Input aria-label="Name" />, { inputDefaults: { size: 'small', appearance: 'underline' } })`, then `rerender` with own props.
+- A control with a smaller union (TagPicker has no `small`) skips a Field or provider size outside it: assert the fallback `medium`.
+- The order between the Field and the provider needs the real `Field` inside a `WaveProvider`, so it belongs in `src/__tests__/integration.test.tsx` (a Field without `size` shows the provider's size; a Field `size` wins; a nested provider merges its keys over the enclosing one).
+- Choice controls (Checkbox, Switch, Slider) read neither source: test that a Field `size` or `inputDefaults` leaves them at their own default.
+
+```tsx
+it('takes the Field size; its own size wins', () => {
+  const { rerender } = renderWithFieldContext(<Input />, { size: 'large' });
+  expect(screen.getByRole('textbox', { name: FIELD_TEST_TEXT.label })).toHaveAttribute('data-size', 'large');
+  rerender(<Input size="small" />);
+  expect(screen.getByRole('textbox', { name: FIELD_TEST_TEXT.label })).toHaveAttribute('data-size', 'small');
+});
+```
 
 ### `mockAnimations(options?)`: presence phases
 
@@ -624,6 +643,63 @@ it('opens a submenu openDelay after its item is hovered, without taking focus', 
 - Focus follows the mouse inside a focused menu tree: a test that hovers an item and then presses Enter activates the hovered item. Hover into a menu that focus is not in moves no focus; test both.
 - The "dismissed stays dismissed" rule needs the pointer on the trigger at the dismissal: hover, press Escape, move within the trigger past `openDelay` (nothing opens), then `unhover` and hover again (it opens).
 - A close by hover moves no focus: open a menu or hover card by hover with nothing focused, `unhover` past `closeDelay`, and assert `expect(document.body).toHaveFocus()` (a Tooltip on the trigger, with `openDelay={0}`, must stay hidden too). Also test that the other closes still return focus: Escape on the same hover-opened surface focuses the trigger.
+
+### Press-and-hold (SpinButton step buttons)
+
+A hold is timer-driven (a 300 ms first delay, then an easing schedule down to 80 ms), so test it under the fake timers above. Dispatch the pointer events yourself: `fireEvent.pointerDown(button, { button: 0, pointerId: 1, pointerType, isPrimary: true })` (a jsdom `PointerEvent` is not primary by default, and a second finger is not), `act(() => vi.advanceTimersByTime(ms))` to move time, and `pointerUp` followed by `fireEvent.click(button, { detail: 1 })` to end the press as a browser does. Run the hold cases over the three pointer types with `it.each(['mouse', 'touch', 'pen'])`.
+
+```tsx
+const press = (target: Element, pointerType = 'mouse') =>
+  fireEvent.pointerDown(target, { button: 0, pointerId: 1, pointerType, isPrimary: true });
+const advance = (ms: number) => act(() => vi.advanceTimersByTime(ms));
+
+it.each(['mouse', 'touch', 'pen'])('a %s press steps only after the first delay', (pointerType) => {
+  render(<SpinButton aria-label="Quantity" />);
+  press(screen.getByRole('button', { name: 'Increment' }), pointerType);
+  advance(250); // 50-100 ms of margin around the 300 ms delay
+  expect(screen.getByRole('spinbutton')).toHaveValue('0');
+  advance(100);
+  expect(screen.getByRole('spinbutton')).toHaveValue('1');
+});
+```
+
+Cover, besides the schedule: a press released before the delay steps once, on its `click`; `pointercancel`, `pointerleave` of the button and a window blur stop a hold; the `click` that ends a hold adds no step; a `click` with `detail: 0` steps once. The step buttons are named by `labels.increment` and `labels.decrement` ("Increment", "Decrement").
+
+### Pointer positions for half stars
+
+A Rating with `step={0.5}` chooses the half or the whole from where the pointer lands on the star, which jsdom does not lay out. Give the star element a rectangle with `mockRect` after it renders (the star is the parent of its radios), then dispatch the pointer event with `clientX` inside that rectangle and `detail: 1` (a pointer click; `detail: 0` is how a keyboard or screen-reader click arrives, and it must choose the radio's own value instead). `pointerMove` with `pointerType: 'mouse'` drives the hover preview. Mirror the expectation under `renderWithProviders(ui, { dir: 'rtl' })`: the start half is then on the right.
+
+```tsx
+const star3 = () => screen.getByRole('radio', { name: '3 stars' }).parentElement as HTMLElement;
+
+it('a click on the first half of a star chooses the half value', () => {
+  render(<Rating aria-label="Service" step={0.5} max={5} />);
+  mockRect(star3(), { left: 100, right: 124, top: 0, bottom: 24, width: 24, height: 24 });
+  fireEvent.click(star3(), { clientX: 104, clientY: 12, detail: 1 });
+  expect(screen.getByRole('radio', { name: '2.5 stars' })).toBeChecked();
+});
+```
+
+### InfoButton's Tab path
+
+The note is portaled but keeps its place in the Tab order after the button, and opening it never moves focus. Test it with `userEvent` (`user.tab()` and `user.tab({ shift: true })`) and a button after it, with a link in `info`: the first `tab` focuses the button, which opens the note (keyboard focus opens it); the second enters the link; `tab({ shift: true })` returns to the button; two `tab`s from the button reach the following button and close the note (flush with `await act(async () => {})` before asserting that it closed, as focus-outside decisions run in a microtask). Also assert that Escape from the link focuses the button and does not reopen the note, and that with `openOnHover={false}` keyboard focus opens nothing.
+
+```tsx
+it('Tab enters the note and Shift+Tab returns', async () => {
+  const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
+  render(
+    <>
+      <InfoButton info={<a href="#rules">Rules</a>} />
+      <button type="button">After</button>
+    </>,
+  );
+  await user.tab();
+  await user.tab();
+  expect(screen.getByRole('link', { name: 'Rules' })).toHaveFocus();
+  await user.tab({ shift: true });
+  expect(screen.getByRole('button', { name: 'Information' })).toHaveFocus();
+});
+```
 
 ## 8. Development warnings
 
