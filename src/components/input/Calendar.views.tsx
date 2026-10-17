@@ -44,8 +44,8 @@ export interface CalendarDayGridProps {
   focusTarget: Date;
   /** The selected day (`aria-selected` on its cell, `aria-pressed` on its button). */
   value: Date | null;
-  /** Today's day (`aria-current="date"`). */
-  today: Date;
+  /** Today's day (`aria-current="date"`), or `null` while it is unknown (no day is marked). */
+  today: Date | null;
   /** First day of the week, the first column (Home and End move to the row's ends). */
   firstDayOfWeek: DayOfWeek;
   /** BCP 47 locale of the weekday names, the day numbers and the day labels. */

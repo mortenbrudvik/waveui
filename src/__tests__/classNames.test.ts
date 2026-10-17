@@ -163,6 +163,7 @@ const NO_ELEMENT: readonly string[] = [
  * `src/components/input/__tests__/stableClassNames.test.tsx` cover their elements meanwhile.
  */
 const PENDING_CLASS_NAMES: readonly string[] = [
+  'calendarClassNames',
   'colorSwatchClassNames',
   'emptySwatchClassNames',
   'imageSwatchClassNames',

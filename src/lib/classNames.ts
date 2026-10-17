@@ -575,6 +575,23 @@ export const datePickerClassNames = {
 } as const;
 
 /**
+ * Calendar: `root` on the `role="group"` element; `header` on the row of the navigation buttons
+ * and the heading; `previousButton` and `nextButton` on the navigation buttons; `heading` on the
+ * month text (a `<div>`, which labels the grid); `grid` on the `role="grid"` element; `weekday`
+ * on each weekday header cell; `day` on each day button.
+ */
+export const calendarClassNames = {
+  root: 'wave-calendar',
+  header: 'wave-calendar__header',
+  previousButton: 'wave-calendar__previous-button',
+  heading: 'wave-calendar__heading',
+  nextButton: 'wave-calendar__next-button',
+  grid: 'wave-calendar__grid',
+  weekday: 'wave-calendar__weekday',
+  day: 'wave-calendar__day',
+} as const;
+
+/**
  * SwatchPicker: `root` on the picker element (`role="radiogroup"`, or `role="grid"` in the grid
  * layout); `swatch` on the button of every swatch in it (`items`, and the `ColorSwatch`,
  * `ImageSwatch` and `EmptySwatch` children, next to their own classes).

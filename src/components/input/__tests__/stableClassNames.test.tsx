@@ -10,6 +10,7 @@ import { render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { renderToString } from 'react-dom/server';
 import {
+  calendarClassNames,
   checkboxClassNames,
   colorPickerClassNames,
   colorPickerSwatchesClassNames,
@@ -44,6 +45,7 @@ import {
 import { useListbox } from '../../../hooks/useListbox';
 import { useMergedRefs } from '../../../hooks/useMergedRefs';
 import { Button } from '../../button/Button';
+import { Calendar } from '../Calendar';
 import { Checkbox } from '../Checkbox';
 import { ColorPicker } from '../ColorPicker';
 import { Combobox, Option, OptionGroup } from '../Combobox';
@@ -885,5 +887,63 @@ describe('stable class names: the 0.10 listbox and swatch parts', () => {
       colorSwatchClassNames.root,
       swatchPickerClassNames.swatch,
     );
+  });
+});
+
+describe('stable class names: the 0.10 calendar parts', () => {
+  it('Calendar: root on the group, and its header, buttons, heading, grid, weekdays and days', () => {
+    render(<Calendar aria-label="Due date" locale="en-US" today={new Date(2025, 5, 12)} />);
+    const group = screen.getByRole('group', { name: 'Due date' });
+    expect(stableClassesOf(group)).toEqual([calendarClassNames.root]);
+    const previous = within(group).getByRole('button', { name: 'Previous month' });
+    expect(stableClassesOf(previous)).toEqual([calendarClassNames.previousButton]);
+    expect(stableClassesOf(previous.parentElement)).toEqual([calendarClassNames.header]);
+    expect(stableClassesOf(within(group).getByRole('button', { name: 'Next month' }))).toEqual([
+      calendarClassNames.nextButton,
+    ]);
+    expect(stableClassesOf(within(group).getByText('June 2025'))).toEqual([
+      calendarClassNames.heading,
+    ]);
+    const grid = within(group).getByRole('grid');
+    expect(stableClassesOf(grid)).toEqual([calendarClassNames.grid]);
+    expect(stableClassesOf(within(grid).getAllByRole('columnheader')[0])).toEqual([
+      calendarClassNames.weekday,
+    ]);
+    expect(
+      stableClassesOf(within(grid).getByRole('button', { name: 'Thursday, June 12, 2025' })),
+    ).toEqual([calendarClassNames.day]);
+    // Layout wrappers (the gridcells) and the hidden texts are no parts.
+    expect(stableClassesOf(within(grid).getAllByRole('gridcell')[0])).toEqual([]);
+  });
+
+  it("Calendar: the required hint is no part, and DatePicker's calendar keeps its own classes", async () => {
+    const user = userEvent.setup();
+    render(
+      <>
+        <Calendar aria-label="Due date" required today={new Date(2025, 5, 12)} />
+        <DatePicker aria-label="Start date" />
+      </>,
+    );
+    const group = screen.getByRole('group', { name: 'Due date' });
+    const hint = document.getElementById(group.getAttribute('aria-describedby') ?? '');
+    expect(hint).toHaveTextContent('Required');
+    expect(stableClassesOf(hint)).toEqual([]);
+    await user.click(screen.getByRole('button', { name: 'Open calendar' }));
+    const dialog = screen.getByRole('dialog');
+    expect(stableClassesOf(within(dialog).getByRole('grid'))).toEqual([datePickerClassNames.grid]);
+    expect(stableClassesOf(within(dialog).getByRole('button', { name: 'Previous month' }))).toEqual(
+      [datePickerClassNames.previousMonthButton],
+    );
+  });
+
+  it('renders the calendar classes in the server HTML (renderToString)', () => {
+    const host = parse(
+      renderToString(
+        <Calendar aria-label="Due date" locale="en-US" today={new Date(2025, 5, 12)} />,
+      ),
+    );
+    expect(host.querySelector('[role="group"]')).toHaveClass(calendarClassNames.root);
+    expect(host.querySelector('[role="grid"]')).toHaveClass(calendarClassNames.grid);
+    expect(host.querySelector('[data-date="2025-06-12"]')).toHaveClass(calendarClassNames.day);
   });
 });
