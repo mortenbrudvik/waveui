@@ -1,5 +1,21 @@
 import * as React from 'react';
 import { reportMissingContext } from '../../lib/dev';
+import type { SelectionMode } from '../../lib/types';
+import type { TreeNode } from './Tree.selection';
+
+/** What a top-level item hands to the root for the tree order of a toggle. */
+export interface TreeSelectionEntry {
+  /** The item's value and the Tree.Item elements among its children, recursively. */
+  node: TreeNode;
+  /** The treeitem element, which orders the top-level items. */
+  element: HTMLElement | null;
+}
+
+/**
+ * `true` inside the child group of an item that the checked list checks (its own value or an
+ * ancestor's is listed): every item there is checked.
+ */
+export const TreeCheckForcedContext = React.createContext(false);
 
 export interface TreeContextValue {
   expanded: ReadonlySet<string>;
@@ -16,6 +32,17 @@ export interface TreeContextValue {
    * share. Returns the unregistration.
    */
   registerValue: (value: string) => () => void;
+  /** The resolved selection mode. */
+  selectionMode: 'none' | SelectionMode;
+  /** The checked item values (`selectionMode="multiple"`); every item computes its state from them. */
+  checked: ReadonlySet<string>;
+  /** Toggles an item's check; `event` becomes `details.event` of `onCheckedItemsChange`. */
+  toggleChecked: (value: string, event: Event) => void;
+  /**
+   * Registers a top-level item's selection entry, read when a check toggles to put the items in
+   * tree order. Returns the unregistration.
+   */
+  registerTopLevel: (entry: React.RefObject<TreeSelectionEntry | null>) => () => void;
 }
 
 export const TreeContext = React.createContext<TreeContextValue | null>(null);
@@ -41,6 +68,10 @@ const INERT_CONTEXT: TreeContextValue = {
   focusValue: () => {},
   onItemFocus: () => {},
   registerValue: () => () => {},
+  selectionMode: 'none',
+  checked: new Set(),
+  toggleChecked: () => {},
+  registerTopLevel: () => () => {},
 };
 
 /** C-CONTEXT: throws in development, logs once and returns an inert value in production. */

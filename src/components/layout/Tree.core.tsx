@@ -5,7 +5,8 @@ import { cn } from '../../lib/cn';
 import { composeEventHandlers } from '../../lib/composeEventHandlers';
 import { isDev, warnOnce } from '../../lib/dev';
 import { getDirection } from '../../lib/direction';
-import { ChevronRightIcon } from '../../lib/icons';
+import { CheckIcon, ChevronRightIcon, SubtractIcon } from '../../lib/icons';
+import type { SelectionMode } from '../../lib/types';
 import { renderSlot, slotRendersContent, type Slot } from '../../lib/slot';
 import { forcedColors } from '../../lib/styles';
 import { useControllable } from '../../hooks/useControllable';
@@ -14,12 +15,21 @@ import { useId } from '../../hooks/useId';
 import { useMergedRefs } from '../../hooks/useMergedRefs';
 import { useRovingTabIndex } from '../../hooks/useRovingTabIndex';
 import {
+  TreeCheckForcedContext,
   TreeContext,
   TreeLabelContext,
   TreeParentContext,
   useTreeContext,
   type TreeContextValue,
+  type TreeSelectionEntry,
 } from './Tree.context';
+import {
+  collectItems,
+  computeCheckStates,
+  toggleCheck,
+  type CheckState,
+  type TreeNode,
+} from './Tree.selection';
 
 const EMPTY: readonly string[] = [];
 
@@ -39,9 +49,43 @@ function warnDuplicateValue(value: string): void {
   );
 }
 
+const SELECTED_WITH_MULTIPLE_MESSAGE =
+  'Tree: `selected` has no effect with selectionMode="multiple"; use `checkedItems`, and ' +
+  '`current` for the item the user is on.';
+
+const CHECKED_WITHOUT_MULTIPLE_MESSAGE =
+  'Tree: `checkedItems` and `defaultCheckedItems` need selectionMode="multiple"; without it the ' +
+  'tree draws no checkboxes and ignores them.';
+
+/** The registered top-level subtrees in document order, which is the tree order of their items. */
+function forestInTreeOrder(
+  entries: ReadonlySet<React.RefObject<TreeSelectionEntry | null>> | null,
+): TreeNode[] {
+  if (!entries) return [];
+  return Array.from(entries, (entry) => entry.current)
+    .filter((entry): entry is TreeSelectionEntry => entry !== null)
+    .sort((a, b) => {
+      if (!a.element || !b.element || a.element === b.element) return 0;
+      return a.element.compareDocumentPosition(b.element) & Node.DOCUMENT_POSITION_FOLLOWING
+        ? -1
+        : 1;
+    })
+    .map((entry) => entry.node);
+}
+
 /* ------------------------------------------------------------------ */
 /*  Tree                                                               */
 /* ------------------------------------------------------------------ */
+
+/** The second argument of `onCheckedItemsChange`. */
+export interface TreeCheckedItemsChangeDetails {
+  /** The item that was toggled. */
+  value: string;
+  /** Its new state (a toggle never leaves it mixed). */
+  checked: boolean;
+  /** The DOM event of the toggle: a keyboard event for Space, a mouse event for a click. */
+  event: Event;
+}
 
 /** Properties for the Tree component. */
 export interface TreeProps extends React.HTMLAttributes<HTMLDivElement> {
@@ -55,17 +99,38 @@ export interface TreeProps extends React.HTMLAttributes<HTMLDivElement> {
   /** Called with the new list of expanded item values when an item expands or collapses. */
   onExpandedItemsChange?: (expandedItems: string[]) => void;
   /**
-   * Called with an item's value every time it is activated (click, Enter or Space), also when the
-   * same item is activated again.
+   * Called with an item's value every time it is activated (a click on its row, Enter, or Space
+   * unless the tree has checkboxes), also when the same item is activated again.
    */
   onItemSelect?: (value: string) => void;
   /**
    * Value of the selected item. When set (also to `null`), every item carries `aria-selected`, and
-   * the selected item is where keyboard focus enters the tree.
+   * the selected item is where keyboard focus enters the tree. It has no effect with
+   * `selectionMode="multiple"` (a development warning): items carry `aria-checked` instead.
    */
   selected?: string | null;
   /** Value of the current item (for example the open page): it gets `aria-current="true"`. */
   current?: string | null;
+  /**
+   * How items are selected. `'none'`: activation only (0.7; `selected` highlights one item).
+   * `'single'`: a radio indicator on every item for `selected`/`onItemSelect`. `'multiple'`: a
+   * checkbox on every item, bound to `checkedItems`; checking an item checks its descendants, and a
+   * parent shows checked, mixed or unchecked from them. Fluent's `'multiselect'` is `'multiple'`.
+   * @default 'none'
+   */
+  selectionMode?: 'none' | SelectionMode;
+  /** Controlled checked items (`selectionMode="multiple"`); see the cascade rule in the component docs. */
+  checkedItems?: readonly string[];
+  /**
+   * Initially checked items (uncontrolled).
+   * @default []
+   */
+  defaultCheckedItems?: readonly string[];
+  /**
+   * Called with every checked item (in tree order) when a check changes (Fluent's `onCheckedChange`).
+   * WaveUI always passes `details`; it is typed optional until 1.0.
+   */
+  onCheckedItemsChange?: (checkedItems: string[], details?: TreeCheckedItemsChangeDetails) => void;
   /** Ref to the `role="tree"` element. */
   ref?: React.Ref<HTMLDivElement>;
 }
@@ -77,6 +142,10 @@ export const TreeRoot = ({
   onItemSelect,
   selected,
   current,
+  selectionMode = 'none',
+  checkedItems,
+  defaultCheckedItems,
+  onCheckedItemsChange,
   className,
   children,
   onKeyDown,
@@ -117,6 +186,56 @@ export const TreeRoot = ({
     onItemSelect?.(value);
   });
 
+  // Checked items (`selectionMode="multiple"`). useControllable passes the value only, so a toggle
+  // hands `details` to the change callback through a ref it writes and clears in the same event.
+  const [initialChecked] = React.useState<readonly string[]>(() => defaultCheckedItems ?? EMPTY);
+  const pendingDetails = React.useRef<TreeCheckedItemsChangeDetails | undefined>(undefined);
+  const [checkedList, setCheckedList] = useControllable<readonly string[]>(
+    checkedItems,
+    initialChecked,
+    (next) => onCheckedItemsChange?.([...next], pendingDetails.current),
+  );
+  const checked = React.useMemo(() => new Set(checkedList), [checkedList]);
+
+  // The top-level items' subtrees (each item scans its own children), read when a check toggles:
+  // they give the emitted list its tree order.
+  const topLevel = React.useRef<Set<React.RefObject<TreeSelectionEntry | null>> | null>(null);
+  const registerTopLevel = React.useCallback(
+    (entry: React.RefObject<TreeSelectionEntry | null>) => {
+      topLevel.current ??= new Set();
+      const entries = topLevel.current;
+      entries.add(entry);
+      return () => {
+        entries.delete(entry);
+      };
+    },
+    [],
+  );
+  const toggleChecked = useEventCallback((value: string, event: Event) => {
+    const forest = forestInTreeOrder(topLevel.current);
+    setCheckedList((previous) => {
+      const next = toggleCheck(forest, previous, value);
+      pendingDetails.current = { value, checked: next.includes(value), event };
+      return next;
+    });
+    pendingDetails.current = undefined;
+  });
+
+  // An item carries aria-checked or aria-selected, never both (APG).
+  const effectiveSelected = selectionMode === 'multiple' ? undefined : selected;
+
+  React.useEffect(() => {
+    if (selectionMode === 'multiple' && selected !== undefined) {
+      warnOnce('Tree:selected-with-multiple', SELECTED_WITH_MULTIPLE_MESSAGE);
+    }
+  }, [selectionMode, selected]);
+  const hasCheckedProps = checkedItems !== undefined || defaultCheckedItems !== undefined;
+  React.useEffect(() => {
+    if (selectionMode !== 'multiple' && hasCheckedProps) {
+      warnOnce('Tree:checked-without-multiple', CHECKED_WITHOUT_MULTIPLE_MESSAGE);
+    }
+  }, [selectionMode, hasCheckedProps]);
+
   // The item that has focus while focus is inside the tree: it holds the tab stop, so Shift+Tab
   // leaves the tree. Cleared when focus leaves; the next entry goes to `selected`, else the first.
   const [focusedItem, setFocusedItem] = React.useState<string | null>(null);
@@ -138,7 +257,7 @@ export const TreeRoot = ({
   }, []);
 
   const { containerProps, getTabIndex, focusValue } = useRovingTabIndex({
-    activeValue: focusedItem ?? selected ?? null,
+    activeValue: focusedItem ?? effectiveSelected ?? null,
     orientation: 'vertical',
     loop: false,
     typeahead: true,
@@ -150,14 +269,32 @@ export const TreeRoot = ({
       toggle,
       expand,
       activate,
-      selected,
+      selected: effectiveSelected,
       current,
       getTabIndex,
       focusValue,
       onItemFocus: setFocusedItem,
       registerValue,
+      selectionMode,
+      checked,
+      toggleChecked,
+      registerTopLevel,
     }),
-    [expanded, toggle, expand, activate, selected, current, getTabIndex, focusValue, registerValue],
+    [
+      expanded,
+      toggle,
+      expand,
+      activate,
+      effectiveSelected,
+      current,
+      getTabIndex,
+      focusValue,
+      registerValue,
+      selectionMode,
+      checked,
+      toggleChecked,
+      registerTopLevel,
+    ],
   );
 
   const mergedRef = useMergedRefs<HTMLDivElement>(ref, containerProps.ref);
@@ -182,22 +319,26 @@ export const TreeRoot = ({
   return (
     <TreeContext.Provider value={context}>
       <TreeParentContext.Provider value={null}>
-        <div
-          role="tree"
-          className={cn(treeClassNames.root, 'text-body-1', className)}
-          {...rest}
-          data-roving-container=""
-          onKeyDown={composeEventHandlers(onKeyDown, handleKeyDown)}
-          onKeyDownCapture={composeEventHandlers(onKeyDownCapture, handleKeyDownCapture)}
-          onFocus={composeEventHandlers(onFocus, containerProps.onFocus, {
-            checkDefaultPrevented: false,
-          })}
-          onBlur={composeEventHandlers(onBlur, handleBlur, { checkDefaultPrevented: false })}
-          ref={mergedRef}
-        >
-          {/* A Tree has its own items, also when it renders inside a label (a portaled popup). */}
-          <TreeLabelContext.Provider value={false}>{children}</TreeLabelContext.Provider>
-        </div>
+        <TreeCheckForcedContext.Provider value={false}>
+          <div
+            role="tree"
+            data-selection-mode={selectionMode}
+            aria-multiselectable={selectionMode === 'multiple' ? true : undefined}
+            className={cn(treeClassNames.root, 'text-body-1', className)}
+            {...rest}
+            data-roving-container=""
+            onKeyDown={composeEventHandlers(onKeyDown, handleKeyDown)}
+            onKeyDownCapture={composeEventHandlers(onKeyDownCapture, handleKeyDownCapture)}
+            onFocus={composeEventHandlers(onFocus, containerProps.onFocus, {
+              checkDefaultPrevented: false,
+            })}
+            onBlur={composeEventHandlers(onBlur, handleBlur, { checkDefaultPrevented: false })}
+            ref={mergedRef}
+          >
+            {/* A Tree has its own items, also when it renders inside a label (a portaled popup). */}
+            <TreeLabelContext.Provider value={false}>{children}</TreeLabelContext.Provider>
+          </div>
+        </TreeCheckForcedContext.Provider>
       </TreeParentContext.Provider>
     </TreeContext.Provider>
   );
@@ -260,12 +401,13 @@ function isOwnKeyEvent(event: React.KeyboardEvent<HTMLElement>): boolean {
 
 /**
  * Whether a click landed on this treeitem's own row (or on the treeitem element itself). Clicks
- * in its child group, including the indentation gutter beside the nested rows, and clicks on
- * nested items are not its own.
+ * in its child group, including the indentation gutter beside the nested rows, clicks on nested
+ * items and clicks on its checkbox are not its own.
  */
 function isOwnClick(event: React.MouseEvent<HTMLElement>): boolean {
   const target = event.target as Element | null;
   if (target === event.currentTarget) return true;
+  if (target?.closest?.('[data-tree-checkbox]')) return false;
   return target?.closest?.('[data-tree-row]')?.parentElement === event.currentTarget;
 }
 
@@ -277,12 +419,15 @@ function isOwnClick(event: React.MouseEvent<HTMLElement>): boolean {
  * Fragments, or returned by a render function (`{node.children.map(renderNode)}`). A component
  * that renders `Tree.Item` itself (a recursive `<NodeView node={child} />`) is not recognised:
  * its output becomes part of the label, so the parent cannot expand (a development warning names
- * this). Render data-driven trees with a render function instead.
+ * this). Render data-driven trees with a render function instead. The checks of a
+ * `selectionMode="multiple"` tree cascade by the same rule, so an item that such a component
+ * renders is not checked with its parent.
  *
  * `ref` and every other prop land on the `role="treeitem"` element, which contains the label row
  * and the child group. Its `onClick` receives only clicks on its own row (not on its child group
  * or nested items) and its `onKeyDown` only keys pressed while focus is on it or in its row; both
- * run before the built-in behaviour (call `event.preventDefault()` to skip it). Its other event
+ * run before the built-in behaviour (call `event.preventDefault()` to skip it). In a checkbox
+ * tree, a click on the item's checkbox toggles its check and is not passed to `onClick`. Its other event
  * handlers (`onFocus`, `onDoubleClick`, `onContextMenu` and the rest) are not filtered: as DOM
  * events bubble, they also receive events from its child group and nested items (compare
  * `event.target` with `event.currentTarget` to tell them apart).
@@ -311,8 +456,11 @@ export const TreeItem = ({
   const insideLabel = React.useContext(TreeLabelContext);
   const isExpanded = ctx.expanded.has(value);
   const labelId = useId('tree-item-label');
+  const ancestorListed = React.useContext(TreeCheckForcedContext);
+  const itemRef = React.useRef<HTMLDivElement>(null);
+  const mergedRef = useMergedRefs<HTMLDivElement>(ref, itemRef);
 
-  const { registerValue } = ctx;
+  const { registerValue, registerTopLevel } = ctx;
   React.useEffect(() => registerValue(value), [registerValue, value]);
   React.useEffect(() => {
     if (insideLabel) warnOnce('Tree.Item:inside-label', ITEM_IN_LABEL_MESSAGE);
@@ -346,6 +494,33 @@ export const TreeItem = ({
         })
       : null;
   const hasChildren = nestedItems.length > 0 && !leaf;
+
+  // Checkbox tree: the item computes its state from its own subtree (the child-group rule) and
+  // the checked list, so every state renders on the server and needs no other item. A top-level
+  // item also hands its subtree to the root, which orders a toggle's list by it.
+  const multiple = ctx.selectionMode === 'multiple';
+  const ownNode = React.useMemo<TreeNode | null>(
+    () =>
+      multiple
+        ? {
+            value,
+            children: leaf ? [] : collectItems(children, { item: TreeItem, tree: TreeRoot }),
+          }
+        : null,
+    [multiple, value, leaf, children],
+  );
+  const checkState: CheckState | undefined = ownNode
+    ? computeCheckStates([ownNode], ctx.checked, ancestorListed).get(value)
+    : undefined;
+  const selectionEntry = React.useRef<TreeSelectionEntry | null>(null);
+  React.useLayoutEffect(() => {
+    selectionEntry.current = ownNode ? { node: ownNode, element: itemRef.current } : null;
+  });
+  const isTopLevel = parent === null && !insideLabel;
+  React.useLayoutEffect(
+    () => (multiple && isTopLevel ? registerTopLevel(selectionEntry) : undefined),
+    [multiple, isTopLevel, registerTopLevel],
+  );
   const isSelected = ctx.selected !== undefined ? ctx.selected === value : undefined;
   const isCurrent = ctx.current !== undefined && ctx.current !== null && ctx.current === value;
 
@@ -371,9 +546,14 @@ export const TreeItem = ({
 
     switch (event.key) {
       case 'Enter':
-      case ' ':
         event.preventDefault();
         activate();
+        return;
+      case ' ':
+        event.preventDefault();
+        // A checkbox tree toggles the focused item's check (APG); the other modes activate.
+        if (checkState !== undefined) ctx.toggleChecked(value, event.nativeEvent);
+        else activate();
         return;
       case forward:
         event.preventDefault();
@@ -406,11 +586,54 @@ export const TreeItem = ({
     if (event.target === event.currentTarget) ctx.onItemFocus(value);
   };
 
+  // The checkbox never takes focus (APG: focus stays on tree items): a press on it focuses its
+  // item instead, and its click toggles the check without activating the item.
+  const keepFocusOnItem = (event: React.MouseEvent<HTMLSpanElement>) => {
+    event.preventDefault();
+    itemRef.current?.focus({ preventScroll: true });
+  };
+  const handleCheckboxClick = (event: React.MouseEvent<HTMLSpanElement>) => {
+    ctx.toggleChecked(value, event.nativeEvent);
+  };
+
+  const indicator =
+    checkState === undefined ? null : (
+      <span
+        role="checkbox"
+        aria-checked={checkState === 'mixed' ? 'mixed' : checkState === 'checked'}
+        aria-labelledby={labelId}
+        tabIndex={-1}
+        data-tree-checkbox=""
+        onMouseDown={keepFocusOnItem}
+        onClick={handleCheckboxClick}
+        className={cn(
+          treeItemClassNames.indicator,
+          // Checkbox's box: 16px inside a 24px target (the pseudo-element), WCAG 2.5.8.
+          'relative inline-flex size-4 shrink-0 items-center justify-center rounded-xs border transition-colors motion-reduce:transition-none',
+          'before:absolute before:-inset-1',
+          checkState === 'unchecked'
+            ? cn('border-stroke-accessible bg-transparent', forcedColors.control)
+            : 'border-primary bg-primary text-primary-foreground forced-colors:border-[Highlight] forced-colors:bg-[Highlight]',
+        )}
+      >
+        {checkState === 'mixed' ? (
+          <SubtractIcon size={12} className={forcedColors.selectedLeaf} />
+        ) : checkState === 'checked' ? (
+          <CheckIcon size={12} className={forcedColors.selectedLeaf} />
+        ) : null}
+      </span>
+    );
+
+  // Items in this item's group are checked when the list checks this item or an ancestor.
+  const groupListed = ancestorListed || (multiple && ctx.checked.has(value));
+
   return (
     <div
       role="treeitem"
       aria-selected={isSelected}
       aria-current={isCurrent ? true : undefined}
+      data-checked={checkState === 'checked' ? '' : undefined}
+      data-mixed={checkState === 'mixed' ? '' : undefined}
       className={cn(
         treeItemClassNames.root,
         // The focus ring is drawn on the row: an outline on the treeitem would surround its
@@ -426,6 +649,14 @@ export const TreeItem = ({
         rest['aria-labelledby'] ?? (rest['aria-label'] === undefined ? labelId : undefined)
       }
       aria-expanded={hasChildren ? isExpanded : undefined}
+      // From the checked list, after the rest props, so a consumer cannot contradict it.
+      aria-checked={
+        checkState === undefined
+          ? undefined
+          : checkState === 'mixed'
+            ? 'mixed'
+            : checkState === 'checked'
+      }
       tabIndex={ctx.getTabIndex(value)}
       data-roving-value={value}
       data-selected={isSelected ? '' : undefined}
@@ -433,7 +664,7 @@ export const TreeItem = ({
       onClick={handleClick}
       onKeyDown={handleKeyDown}
       onFocus={composeEventHandlers(onFocus, handleFocus, { checkDefaultPrevented: false })}
-      ref={ref}
+      ref={mergedRef}
     >
       <div
         data-tree-row=""
@@ -454,6 +685,7 @@ export const TreeItem = ({
         ) : (
           <span className="w-3 shrink-0" aria-hidden="true" />
         )}
+        {indicator}
         {iconNode}
         <span
           id={labelId}
@@ -466,11 +698,13 @@ export const TreeItem = ({
       </div>
       {hasChildren && isExpanded && (
         <TreeParentContext.Provider value={value}>
-          <TreeLabelContext.Provider value={false}>
-            <div role="group" className={cn(treeItemClassNames.group, 'ps-4')}>
-              {nestedItems}
-            </div>
-          </TreeLabelContext.Provider>
+          <TreeCheckForcedContext.Provider value={groupListed}>
+            <TreeLabelContext.Provider value={false}>
+              <div role="group" className={cn(treeItemClassNames.group, 'ps-4')}>
+                {nestedItems}
+              </div>
+            </TreeLabelContext.Provider>
+          </TreeCheckForcedContext.Provider>
         </TreeParentContext.Provider>
       )}
     </div>

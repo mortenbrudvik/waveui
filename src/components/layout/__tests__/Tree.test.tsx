@@ -101,6 +101,13 @@ describe('Tree', () => {
     expect(within(tree).getAllByRole('treeitem')).toHaveLength(3);
   });
 
+  it('renders data-selection-mode="none" by default, and no aria-multiselectable (C-CLASS)', () => {
+    render(<Tree aria-label="Files">{fileTree}</Tree>);
+    const tree = screen.getByRole('tree', { name: 'Files' });
+    expect(tree).toHaveAttribute('data-selection-mode', 'none');
+    expect(tree).not.toHaveAttribute('aria-multiselectable');
+  });
+
   it('expands nested items on click', async () => {
     const user = userEvent.setup();
     render(<Tree aria-label="Files">{fileTree}</Tree>);
