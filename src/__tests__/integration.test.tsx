@@ -44,6 +44,7 @@ import {
   Field,
   InfoLabel,
   Input,
+  Link,
   Menu,
   MenuButton,
   MenuGroup,
@@ -82,6 +83,7 @@ import {
   TeachingPopover,
   Textarea,
   TimePicker,
+  Toast,
   Toaster,
   ToggleButton,
   Toolbar,
@@ -93,6 +95,7 @@ import {
   Tooltip,
   Tree,
   TreeItem,
+  createToaster,
   useOverflowMenu,
   useToastController,
   type CheckedValuesChangeDetails,
@@ -4241,5 +4244,555 @@ describe('Image story placeholder (repo-level#32)', () => {
     const fills = Array.from(svg.matchAll(/fill="([^"]*)"/g), (match) => match[1]);
     expect(fills.length).toBeGreaterThanOrEqual(2);
     for (const fill of fills) expect(fill).toMatch(/^#[0-9a-f]{6}$/i);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// 0.8 (Fluent parity phase 3): toasts across components (spec §4.4 #1–#5)
+// ---------------------------------------------------------------------------
+
+/** The Toaster's region (`'Notifications'` unless the Toaster has its own `aria-label`). */
+const toastRegion = (name = 'Notifications') => screen.getByRole('region', { name });
+/** A toast's container: `role="group"`, named by its severity text and title (spec D10). */
+const toastGroup = (name: string) => screen.getByRole('group', { name });
+/** The Toaster's polite live region (0.7's `role="status"` region, one message per toast). */
+const politeMessages = (name = 'Notifications') => within(toastRegion(name)).getByRole('status');
+
+/** A MenuButton with a Menu, used as a toast's title action. */
+function ToastFileMenu() {
+  return (
+    <Menu>
+      <Menu.Trigger>
+        <MenuButton size="small">More</MenuButton>
+      </Menu.Trigger>
+      <Menu.Popover>
+        <Menu.Item>Open file</Menu.Item>
+        <Menu.Item>Copy link</Menu.Item>
+      </Menu.Popover>
+    </Menu>
+  );
+}
+
+/** Dispatches a rich toast whose title action opens a Menu (spec §4.4 #1, #10). */
+function UploadToastButton({ timeout }: { timeout?: number }) {
+  const { dispatchToast } = useToastController();
+  return (
+    <Button
+      onClick={() =>
+        dispatchToast(
+          <Toast status="success">
+            <Toast.Title action={<ToastFileMenu />}>File uploaded</Toast.Title>
+            <Toast.Body>report.pdf is ready.</Toast.Body>
+          </Toast>,
+          timeout === undefined ? undefined : { timeout },
+        )
+      }
+    >
+      Upload
+    </Button>
+  );
+}
+
+describe('a Menu in a dispatched toast (spec §4.4 #1)', () => {
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  async function setup() {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
+    render(
+      <Toaster>
+        <UploadToastButton timeout={3000} />
+      </Toaster>,
+    );
+    await user.click(button('Upload'));
+    expect(toastGroup('Success: File uploaded')).toBeInTheDocument();
+    // Into the toast by keyboard: the pointer stays on Upload, outside the region, so only focus
+    // can pause the timers.
+    await user.tab();
+    expect(button('More')).toHaveFocus();
+    await user.keyboard('{Enter}');
+    expect(screen.getByRole('menu', { name: 'More' })).toBeInTheDocument();
+    expect(menuitem('Open file')).toHaveFocus();
+    return { user };
+  }
+
+  it('keeps the timers paused while focus is in the menu, a portal opened from the toast', async () => {
+    await setup();
+    act(() => {
+      vi.advanceTimersByTime(6000);
+    });
+    expect(toastGroup('Success: File uploaded')).toBeInTheDocument();
+    await expectNoA11yViolations(document.body);
+  });
+
+  it('Escape closes only the menu first, then dismisses the toasts and returns focus to the origin', async () => {
+    const { user } = await setup();
+    await user.keyboard('{Escape}');
+    expect(screen.queryByRole('menu')).not.toBeInTheDocument();
+    expect(button('More')).toHaveFocus();
+    expect(toastGroup('Success: File uploaded')).toBeInTheDocument();
+
+    await user.keyboard('{Escape}');
+    await act(async () => {});
+    expect(screen.queryByRole('group', { name: 'Success: File uploaded' })).not.toBeInTheDocument();
+    expect(button('Upload')).toHaveFocus();
+  });
+
+  it.each(['{Delete}', '{Backspace}'])(
+    '%s on a menu item keeps the toast and the menu',
+    async (key) => {
+      const { user } = await setup();
+      await user.keyboard(key);
+      await act(async () => {});
+      expect(toastGroup('Success: File uploaded')).toBeInTheDocument();
+      expect(screen.getByRole('menu', { name: 'More' })).toBeInTheDocument();
+    },
+  );
+});
+
+describe('a rich toast over a modal Dialog (spec §4.4 #2)', () => {
+  function DeleteRowButton({ onUndo }: { onUndo: () => void }) {
+    const { dispatchToast } = useToastController();
+    return (
+      <Button
+        onClick={() =>
+          dispatchToast(
+            <Toast status="success">
+              <Toast.Title>Row deleted</Toast.Title>
+              <Toast.Footer>
+                <Toast.Close>
+                  <Button onClick={onUndo}>Undo</Button>
+                </Toast.Close>
+              </Toast.Footer>
+            </Toast>,
+          )
+        }
+      >
+        Delete row
+      </Button>
+    );
+  }
+
+  function setup() {
+    const onOpenChange = vi.fn();
+    const onUndo = vi.fn();
+    render(
+      <Toaster>
+        <Dialog open onOpenChange={onOpenChange}>
+          <Dialog.Content title="Settings">
+            <DeleteRowButton onUndo={onUndo} />
+          </Dialog.Content>
+        </Dialog>
+      </Toaster>,
+    );
+    return { onOpenChange, onUndo, user: userEvent.setup() };
+  }
+
+  it('Tab reaches Undo while the Dialog is open; Escape dismisses the toasts and leaves the Dialog open', async () => {
+    const { user, onOpenChange } = setup();
+    await user.click(button('Delete row'));
+    expect(toastGroup('Success: Row deleted')).toBeInTheDocument();
+    await expectNoA11yViolations(document.body);
+    await user.tab();
+    expect(button('Undo')).toHaveFocus();
+    await user.keyboard('{Escape}');
+    await act(async () => {});
+    expect(screen.queryByRole('group', { name: 'Success: Row deleted' })).not.toBeInTheDocument();
+    expect(screen.getByRole('dialog', { name: 'Settings' })).toBeInTheDocument();
+    expect(onOpenChange).not.toHaveBeenCalled();
+    expect(button('Delete row')).toHaveFocus();
+  });
+
+  it('Delete on a focused toast dismisses only that toast and focuses the next one', async () => {
+    const { user, onOpenChange } = setup();
+    await user.click(button('Delete row'));
+    await user.click(button('Delete row'));
+    expect(screen.getAllByRole('group', { name: 'Success: Row deleted' })).toHaveLength(2);
+    await user.tab();
+    const [firstUndo] = screen.getAllByRole('button', { name: 'Undo' });
+    expect(firstUndo).toHaveFocus();
+    await user.keyboard('{Delete}');
+    await act(async () => {});
+    expect(screen.getAllByRole('group', { name: 'Success: Row deleted' })).toHaveLength(1);
+    expect(screen.getByRole('button', { name: 'Undo' })).toHaveFocus();
+    expect(screen.getByRole('dialog', { name: 'Settings' })).toBeInTheDocument();
+    expect(onOpenChange).not.toHaveBeenCalled();
+  });
+
+  function RenameToastButton() {
+    const { dispatchToast } = useToastController();
+    return (
+      <Button
+        onClick={() =>
+          dispatchToast(
+            <Toast status="warning">
+              <Toast.Title>Report ready</Toast.Title>
+              <Toast.Footer>
+                <Dialog>
+                  <Dialog.Trigger>
+                    <Button>Rename</Button>
+                  </Dialog.Trigger>
+                  <Dialog.Content title="Rename report">
+                    <Input aria-label="File name" defaultValue="report.pdf" />
+                  </Dialog.Content>
+                </Dialog>
+              </Toast.Footer>
+            </Toast>,
+          )
+        }
+      >
+        Export
+      </Button>
+    );
+  }
+
+  it('Delete in a Dialog opened from a toast keeps the toast', async () => {
+    const user = userEvent.setup();
+    render(
+      <Toaster>
+        <RenameToastButton />
+      </Toaster>,
+    );
+    await user.click(button('Export'));
+    await user.click(button('Rename'));
+    const dialog = screen.getByRole('dialog', { name: 'Rename report' });
+    const close = within(dialog).getByRole('button', { name: 'Close' });
+    act(() => close.focus());
+    await act(async () => {});
+    await user.keyboard('{Delete}');
+    await act(async () => {});
+    expect(toastGroup('Warning: Report ready')).toBeInTheDocument();
+    expect(screen.getByRole('dialog', { name: 'Rename report' })).toBeInTheDocument();
+  });
+});
+
+describe('a Tooltip and a Popover on a toast (spec §4.4 #3)', () => {
+  function ArchiveToastButton() {
+    const { dispatchToast } = useToastController();
+    return (
+      <Button
+        onClick={() =>
+          dispatchToast(
+            <Toast status="info">
+              <Toast.Title
+                action={
+                  <Tooltip content="Restores the message" openDelay={0}>
+                    <Button>Undo</Button>
+                  </Tooltip>
+                }
+              >
+                Moved to Archive
+              </Toast.Title>
+              <Toast.Footer>
+                <Popover>
+                  <Popover.Trigger>
+                    <Button>Details</Button>
+                  </Popover.Trigger>
+                  <Popover.Content title="Details">
+                    <p>Moved by a rule.</p>
+                    <Button>Edit rule</Button>
+                  </Popover.Content>
+                </Popover>
+              </Toast.Footer>
+            </Toast>,
+          )
+        }
+      >
+        Archive
+      </Button>
+    );
+  }
+
+  function setup() {
+    render(
+      <Toaster>
+        <ArchiveToastButton />
+      </Toaster>,
+    );
+    return userEvent.setup();
+  }
+
+  it('with the tooltip shown, Escape hides only the tooltip; the next Escape dismisses the toasts', async () => {
+    const user = setup();
+    await user.click(button('Archive'));
+    await user.tab();
+    const undo = button('Undo');
+    expect(undo).toHaveFocus();
+    await waitFor(() => expect(tooltipSurface()).not.toBeNull());
+    expect(undo).toHaveAccessibleDescription('Restores the message');
+
+    await user.keyboard('{Escape}');
+    expect(tooltipSurface()).toBeNull();
+    expect(toastGroup('Info: Moved to Archive')).toBeInTheDocument();
+
+    await user.keyboard('{Escape}');
+    await act(async () => {});
+    expect(screen.queryByRole('group', { name: 'Info: Moved to Archive' })).not.toBeInTheDocument();
+    expect(button('Archive')).toHaveFocus();
+  });
+
+  it('Escape in a Popover opened from a toast closes only the popover', async () => {
+    const user = setup();
+    await user.click(button('Archive'));
+    await user.click(button('Details'));
+    const popover = screen.getByRole('dialog', { name: 'Details' });
+    act(() => within(popover).getByRole('button', { name: 'Edit rule' }).focus());
+    await user.keyboard('{Escape}');
+    expect(screen.queryByRole('dialog', { name: 'Details' })).not.toBeInTheDocument();
+    expect(toastGroup('Info: Moved to Archive')).toBeInTheDocument();
+    expect(button('Details')).toHaveFocus();
+  });
+});
+
+describe('Toast.Close around a Link and a Button (spec §4.4 #4)', () => {
+  function MoveToastButton({
+    onUndo,
+    onKeep,
+  }: {
+    onUndo?: React.MouseEventHandler<HTMLAnchorElement>;
+    onKeep?: React.MouseEventHandler<HTMLButtonElement>;
+  }) {
+    const { dispatchToast } = useToastController();
+    return (
+      <Button
+        onClick={() =>
+          dispatchToast(
+            <Toast status="info">
+              <Toast.Title
+                action={
+                  <Toast.Close>
+                    <Link href="#undo" onClick={onUndo}>
+                      Undo
+                    </Link>
+                  </Toast.Close>
+                }
+              >
+                Moved
+              </Toast.Title>
+              <Toast.Footer>
+                <Toast.Close>
+                  <Button onClick={onKeep}>Keep</Button>
+                </Toast.Close>
+              </Toast.Footer>
+            </Toast>,
+          )
+        }
+      >
+        Move
+      </Button>
+    );
+  }
+
+  it('a Link in the title action runs its handler and dismisses the toast', async () => {
+    const onUndo = vi.fn();
+    const user = userEvent.setup();
+    render(
+      <Toaster>
+        <MoveToastButton onUndo={onUndo} />
+      </Toaster>,
+    );
+    await user.click(button('Move'));
+    await user.click(screen.getByRole('link', { name: 'Undo' }));
+    await act(async () => {});
+    expect(onUndo).toHaveBeenCalledTimes(1);
+    expect(screen.queryByRole('group', { name: 'Info: Moved' })).not.toBeInTheDocument();
+  });
+
+  it('a Button in the footer runs its handler and dismisses the toast', async () => {
+    const onKeep = vi.fn();
+    const user = userEvent.setup();
+    render(
+      <Toaster>
+        <MoveToastButton onKeep={onKeep} />
+      </Toaster>,
+    );
+    await user.click(button('Move'));
+    await user.click(button('Keep'));
+    await act(async () => {});
+    expect(onKeep).toHaveBeenCalledTimes(1);
+    expect(screen.queryByRole('group', { name: 'Info: Moved' })).not.toBeInTheDocument();
+  });
+
+  it('preventDefault() in the Button’s onClick keeps the toast', async () => {
+    const onKeep = vi.fn((event: React.MouseEvent<HTMLButtonElement>) => event.preventDefault());
+    const user = userEvent.setup();
+    render(
+      <Toaster>
+        <MoveToastButton onKeep={onKeep} />
+      </Toaster>,
+    );
+    await user.click(button('Move'));
+    await user.click(button('Keep'));
+    await act(async () => {});
+    expect(onKeep).toHaveBeenCalledTimes(1);
+    expect(toastGroup('Info: Moved')).toBeInTheDocument();
+  });
+});
+
+// Created at module scope, as an app's toasts module creates them (P3-08).
+const appToaster = createToaster();
+const updatesToaster = createToaster();
+/** Stands in for a router: the toast's link reads it from above the Toaster. */
+const RouteContext = React.createContext('#/');
+
+function DocumentLink() {
+  const href = React.useContext(RouteContext);
+  return <Link href={href}>Open</Link>;
+}
+
+/** A plain function outside React, as a query-cache callback or a server-event handler is. */
+function notifySaved(): string {
+  return appToaster.dispatchToast(
+    <Toast status="success">
+      <Toast.Title action={<DocumentLink />}>Saved</Toast.Title>
+    </Toast>,
+  );
+}
+
+describe('a module-scope toaster handle (spec §4.4 #5, P3-08)', () => {
+  it('shows, announces once and dismisses a toast dispatched from a plain function; its content reads context from above the Toaster', async () => {
+    render(
+      <RouteContext.Provider value="#/documents/42">
+        <Toaster toaster={appToaster}>
+          <p>App</p>
+        </Toaster>
+      </RouteContext.Provider>,
+    );
+    let id = '';
+    act(() => {
+      id = notifySaved();
+    });
+    expect(id).not.toBe('');
+    const group = toastGroup('Success: Saved');
+    expect(within(group).getByRole('link', { name: 'Open' })).toHaveAttribute(
+      'href',
+      '#/documents/42',
+    );
+    const polite = politeMessages();
+    expect(polite.children).toHaveLength(1);
+    expect(polite).toHaveTextContent('Success: Saved Open');
+    await expectNoA11yViolations(document.body);
+
+    act(() => appToaster.dismissToast(id));
+    await act(async () => {});
+    expect(screen.queryByRole('group', { name: 'Success: Saved' })).not.toBeInTheDocument();
+  });
+
+  it('a Toaster bound to a second handle stays independent', async () => {
+    render(
+      <>
+        <Toaster toaster={appToaster}>
+          <p>App</p>
+        </Toaster>
+        <Toaster toaster={updatesToaster} position="top-start" aria-label="Updates" />
+      </>,
+    );
+    act(() => {
+      updatesToaster.dispatchToast({ title: 'Update installed', timeout: 0 });
+    });
+    const updates = toastRegion('Updates');
+    expect(
+      within(updates).getByRole('group', { name: 'Info: Update installed' }),
+    ).toBeInTheDocument();
+    expect(within(toastRegion()).queryByRole('group')).toBeNull();
+
+    act(() => appToaster.dismissAllToasts());
+    await act(async () => {});
+    expect(
+      within(updates).getByRole('group', { name: 'Info: Update installed' }),
+    ).toBeInTheDocument();
+
+    act(() => updatesToaster.dismissAllToasts());
+    await act(async () => {});
+    expect(within(updates).queryByRole('group')).toBeNull();
+  });
+});
+
+describe('toasts and a modal Dialog: the shortcut and a tooltip (Phase 3 review focus)', () => {
+  it('the focus shortcut focuses the newest toast; Escape returns focus into the Dialog, which stays open', async () => {
+    const onOpenChange = vi.fn();
+    const user = userEvent.setup();
+    render(
+      <Toaster
+        shortcuts={{
+          focus: (event) => event.altKey && event.shiftKey && event.code === 'KeyN',
+        }}
+      >
+        <Dialog open onOpenChange={onOpenChange}>
+          <Dialog.Content title="Settings">
+            <NotifyButton />
+          </Dialog.Content>
+        </Dialog>
+      </Toaster>,
+    );
+    await user.click(button('Notify'));
+    await user.keyboard('{Alt>}{Shift>}N{/Shift}{/Alt}');
+    // The Dialog's focus trap decides about outside focus in a microtask.
+    await act(async () => {});
+    expect(toastGroup('Info: Saved')).toHaveFocus();
+
+    await user.keyboard('{Escape}');
+    await act(async () => {});
+    expect(screen.queryByRole('group', { name: 'Info: Saved' })).not.toBeInTheDocument();
+    expect(button('Notify')).toHaveFocus();
+    expect(screen.getByRole('dialog', { name: 'Settings' })).toBeInTheDocument();
+    expect(onOpenChange).not.toHaveBeenCalled();
+  });
+
+  function TooltipToastButton() {
+    const { dispatchToast } = useToastController();
+    return (
+      <Button
+        onClick={() =>
+          dispatchToast(
+            <Toast status="info">
+              <Toast.Title
+                action={
+                  <Tooltip content="Restores the message" openDelay={0}>
+                    <Button>Undo</Button>
+                  </Tooltip>
+                }
+              >
+                Moved to Archive
+              </Toast.Title>
+            </Toast>,
+          )
+        }
+      >
+        Archive
+      </Button>
+    );
+  }
+
+  it('over a modal Dialog, the first Escape hides only the tooltip, the next dismisses the toasts; the Dialog stays open', async () => {
+    const onOpenChange = vi.fn();
+    const user = userEvent.setup();
+    render(
+      <Toaster>
+        <Dialog open onOpenChange={onOpenChange}>
+          <Dialog.Content title="Mail">
+            <TooltipToastButton />
+          </Dialog.Content>
+        </Dialog>
+      </Toaster>,
+    );
+    await user.click(button('Archive'));
+    await user.tab();
+    expect(button('Undo')).toHaveFocus();
+    await waitFor(() => expect(tooltipSurface()).not.toBeNull());
+
+    await user.keyboard('{Escape}');
+    expect(tooltipSurface()).toBeNull();
+    expect(toastGroup('Info: Moved to Archive')).toBeInTheDocument();
+    expect(onOpenChange).not.toHaveBeenCalled();
+
+    await user.keyboard('{Escape}');
+    await act(async () => {});
+    expect(screen.queryByRole('group', { name: 'Info: Moved to Archive' })).not.toBeInTheDocument();
+    expect(screen.getByRole('dialog', { name: 'Mail' })).toBeInTheDocument();
+    expect(onOpenChange).not.toHaveBeenCalled();
+    expect(button('Archive')).toHaveFocus();
   });
 });
