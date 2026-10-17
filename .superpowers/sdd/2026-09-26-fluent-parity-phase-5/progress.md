@@ -330,3 +330,17 @@ Task G3: DONE; controller added getElement to README useActiveDescendant row (G2
 Task G3: review (sonnet) — PASS/PASS, 0 Critical/Important, 6 Minor → G4 notes (after merge)
 Task G3: complete (12c7969)
 Task I1: git merge origin/main (39305a0) started
+Task I1: merge in progress (no commit); 21 conflicted files: CHANGELOG, CLAUDE.md, README, WAVE-UI-GUIDE, verify-dist.mjs, integration/public-types tests, Combobox/DatePicker/Dropdown/TagPicker (+ Dropdown/TagPicker/stableClassNames tests), types.test, tokens.test, Combobox/DatePicker/Dropdown stories; resolver (opus) dispatched
+Task I1: resolver DONE (19 conflicts + Combobox.test addition; 7 Dropdown + 1 Combobox size cases for multiselect/expandIcon; guide patterns renumbered 12/13; CHANGELOG 0.10.0/0.9.0/0.8.0 with 26 anchors re-derived; 74 components; size vs 0.9.0 452.8 -> 485.8 KiB); full gate green per resolver; merge committed 0df492b
+Ruling R33: README "Upgrading from" sections stay newest first (0.9 above 0.8), as the existing ones; spec §3.3 step 5 "after" read as the chain order, not page order — cost if wrong: move one section
+Task I1: merge review (opus) — correct, both phases intact, 0 Critical/Important, 3 Minor (Dropdown JSDoc wrap fixed; README order = R33; 2nd parent is b8ead19 = the 0.9.0 release merge, main moved after the fetch check — fine)
+Task I1: complete (0df492b + JSDoc rewrap)
+Task G4: dispatched (opus) on the merged tree
+Task G4: DONE (28 gaps; comparison guide revised to 0.10 incl. missing 0.9 rows; 6 G3 carry-over fixes); controller fixed spec §7 open-gap line (tagpicker-10 -> P7-01, combobox-7 -> P11-04); committed 9e271ad; review (sonnet) dispatched
+Task G4: review (sonnet) — PASS/PASS, 0 Critical/Important, 3 Minor (comparison guide wording, branch-measured sizes to remeasure at release, Calendar onClose note) parked
+Task G4: complete (9e271ad)
+Wave D (DOCS): complete
+Task H1: /gate started
+Task H1: /gate PASSED (9 steps + docs/output criteria) against origin/main at 9e271ad
+Task H1: /browser-check is user-invoked only (disable-model-invocation) — handed to the user with the checklist; not replicated
+Final whole-branch review (opus) dispatched

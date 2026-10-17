@@ -14,3 +14,6 @@ Add these to the spec's §6.3 checklist run (`/browser-check`), each with its ob
 ## From E5
 - Calendar marked-day dot visible in forced colours (Windows High Contrast / emulated forced-colors) on unselected, selected and range days.
 - Calendar view change by keyboard keeps focus in the calendar in Safari; clicking a non-focusing button elsewhere after using the calendar does not pull focus back (accepted edge case, note result).
+
+## From the Phase 4 merge
+- Multi-select Dropdown/Combobox/TagPicker at size small and large: the value text, the check boxes in the list and the clear/expand buttons do not overlap or clip (Phase 4 sizes x Phase 5 multiselect; jsdom asserts only classes).
