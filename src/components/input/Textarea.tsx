@@ -1,6 +1,7 @@
 import * as React from 'react';
 import { cn } from '../../lib/cn';
 import { joinIds } from '../../lib/aria';
+import { textareaClassNames } from '../../lib/classNames';
 import { inputFocus, inputInvalid } from '../../lib/styles';
 import { useFieldControl } from '../../hooks/useFieldControl';
 import { isInvalidLook, useControlErrorMessage, type InputErrorMessageProps } from './Input';
@@ -56,6 +57,7 @@ export const Textarea = ({
     error,
     errorMessageProps,
     ariaInvalid,
+    textareaClassNames.errorMessage,
   );
   const fieldProps = useFieldControl(
     {
@@ -75,6 +77,7 @@ export const Textarea = ({
     <textarea
       ref={ref}
       className={cn(
+        textareaClassNames.root,
         'min-h-20 w-full resize-y rounded border border-input border-b-stroke-accessible bg-background px-3 py-2 text-body-1 text-foreground',
         'placeholder:text-muted-foreground',
         inputFocus,

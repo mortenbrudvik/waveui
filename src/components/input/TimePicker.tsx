@@ -2,6 +2,7 @@ import * as React from 'react';
 import { flushSync } from 'react-dom';
 import { cn } from '../../lib/cn';
 import { joinIds } from '../../lib/aria';
+import { timePickerClassNames } from '../../lib/classNames';
 import { composeEventHandlers } from '../../lib/composeEventHandlers';
 import { warnDeprecated, warnOnce } from '../../lib/dev';
 import { CheckIcon, DismissIcon } from '../../lib/icons';
@@ -61,8 +62,20 @@ const TimePickerOption = React.memo(function TimePickerOption({
 }: TimePickerOptionProps) {
   const { selected, optionProps } = useListboxOption<HTMLLIElement>({ value, label });
   return (
-    <li {...optionProps} className={cn(OPTION_CLASSES, selected && forcedColors.selectedContainer)}>
-      <span className="flex h-4 w-4 shrink-0 items-center justify-center">
+    <li
+      {...optionProps}
+      className={cn(
+        timePickerClassNames.option,
+        OPTION_CLASSES,
+        selected && forcedColors.selectedContainer,
+      )}
+    >
+      <span
+        className={cn(
+          timePickerClassNames.checkIcon,
+          'flex h-4 w-4 shrink-0 items-center justify-center',
+        )}
+      >
         {selected ? <CheckIcon size={12} /> : null}
       </span>
       {label}
@@ -738,7 +751,10 @@ export const TimePicker = (props: TimePickerProps) => {
       aria-labelledby={listboxLabelledBy}
       aria-label={listboxLabelledBy ? undefined : (ariaLabel ?? labels?.list ?? 'Times')}
       hidden={hidden || undefined}
-      className="max-h-60 min-h-0 overflow-auto py-1 focus:outline-hidden"
+      className={cn(
+        timePickerClassNames.listbox,
+        'max-h-60 min-h-0 overflow-auto py-1 focus:outline-hidden',
+      )}
     >
       {lb.items.map((item) => (
         <TimePickerOption key={item.value} value={item.value} label={item.label} />
@@ -766,7 +782,11 @@ export const TimePicker = (props: TimePickerProps) => {
 
   return (
     <ListboxContext.Provider value={lb.context}>
-      <div {...rest} ref={rootRefs} className={cn('relative inline-flex flex-col', className)}>
+      <div
+        {...rest}
+        ref={rootRefs}
+        className={cn(timePickerClassNames.root, 'relative inline-flex flex-col', className)}
+      >
         <div ref={setReference} className="relative flex items-center">
           <input
             ref={inputRefs}
@@ -796,6 +816,7 @@ export const TimePicker = (props: TimePickerProps) => {
             autoFocus={autoFocus}
             tabIndex={tabIndex}
             className={cn(
+              timePickerClassNames.input,
               inputBase,
               'border-b-stroke-accessible',
               inputFocus,
@@ -813,6 +834,7 @@ export const TimePicker = (props: TimePickerProps) => {
               onMouseDown={(event) => event.preventDefault()}
               onClick={handleClear}
               className={cn(
+                timePickerClassNames.clearButton,
                 PICKER_ICON_BUTTON_CLASSES,
                 showExpand ? 'end-7' : 'end-1',
                 focusRing,
@@ -831,11 +853,17 @@ export const TimePicker = (props: TimePickerProps) => {
               listboxId={lb.listboxId}
               disabled={disabled || !!readOnly}
               onToggle={handleExpandClick}
+              className={timePickerClassNames.expandButton}
+              iconClassName={timePickerClassNames.expandIcon}
             />
           )}
         </div>
         {showOwnError && (
-          <p id={errorId} role="alert" className="mt-1 text-caption-1 text-error">
+          <p
+            id={errorId}
+            role="alert"
+            className={cn(timePickerClassNames.errorMessage, 'mt-1 text-caption-1 text-error')}
+          >
             {errorMessage}
           </p>
         )}
@@ -858,12 +886,21 @@ export const TimePicker = (props: TimePickerProps) => {
               ref={surfaceRefs}
               {...floatingProps}
               data-state="open"
-              className="flex flex-col overflow-hidden rounded border border-border bg-background shadow-8"
+              className={cn(
+                timePickerClassNames.surface,
+                'flex flex-col overflow-hidden rounded border border-border bg-background shadow-8',
+              )}
             >
               {hasMatches ? (
                 renderListbox(false)
               ) : (
-                <div aria-hidden="true" className="px-3 py-1.5 text-body-1 text-muted-foreground">
+                <div
+                  aria-hidden="true"
+                  className={cn(
+                    timePickerClassNames.emptyMessage,
+                    'px-3 py-1.5 text-body-1 text-muted-foreground',
+                  )}
+                >
                   {statusMessage}
                 </div>
               )}

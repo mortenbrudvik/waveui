@@ -1,5 +1,6 @@
 import * as React from 'react';
 import { cn } from '../../lib/cn';
+import { labelClassNames } from '../../lib/classNames';
 import type { Size, TextWeight } from '../../lib/types';
 
 /** Properties for the Label component. */
@@ -60,6 +61,7 @@ export const Label = ({
     <label
       ref={ref}
       className={cn(
+        labelClassNames.root,
         disabled ? 'text-muted-foreground' : 'text-foreground',
         sizeMap[size],
         weightMap[weight],
@@ -69,7 +71,7 @@ export const Label = ({
     >
       {children}
       {required && (
-        <span className="ms-1 text-error" aria-hidden="true">
+        <span className={cn(labelClassNames.required, 'ms-1 text-error')} aria-hidden="true">
           *
         </span>
       )}

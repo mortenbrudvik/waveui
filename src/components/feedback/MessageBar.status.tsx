@@ -54,9 +54,17 @@ export function StatusIcon({ status, size }: { status: Status; size?: number }) 
 }
 StatusIcon.displayName = 'StatusIcon';
 
-/** Visually hidden status text, followed by a space so it reads apart from the message. */
-export function StatusText({ label }: { label: string }) {
+/**
+ * Visually hidden status text, followed by a space so it reads apart from the message. `id` lets
+ * a labelled MessageBar or a toast container point `aria-labelledby` at it; an empty label
+ * renders nothing, so pass the id only while the text renders.
+ */
+export function StatusText({ label, id }: { label: string; id?: string }) {
   if (!label) return null;
-  return <span className="sr-only">{`${label} `}</span>;
+  return (
+    <span id={id} className="sr-only">
+      {`${label} `}
+    </span>
+  );
 }
 StatusText.displayName = 'StatusText';

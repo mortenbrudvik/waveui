@@ -56,10 +56,19 @@ export {
 } from './SwatchPicker';
 export {
   ColorPicker,
+  ColorPickerHexField,
+  ColorPickerSwatches,
+  ColorPickerPreview,
   type ColorPickerProps,
   type ColorPickerPreset,
   type ColorPickerLabels,
+  type ColorPickerHexFieldProps,
+  type ColorPickerSwatchesProps,
+  type ColorPickerPreviewProps,
 } from './ColorPicker';
+export { ColorArea, type ColorAreaProps, type ColorAreaLabels } from './ColorArea';
+export { ColorSlider, type ColorSliderProps, type ColorSliderLabels } from './ColorSlider';
+export { AlphaSlider, type AlphaSliderProps, type AlphaSliderLabels } from './AlphaSlider';
 
 export {
   TagPicker,

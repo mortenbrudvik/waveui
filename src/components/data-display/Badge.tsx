@@ -1,5 +1,6 @@
 import * as React from 'react';
 import { cn } from '../../lib/cn';
+import { badgeClassNames } from '../../lib/classNames';
 import type { BadgeAppearance, BadgeColor, Size } from '../../lib/types';
 import { badgeColorClasses } from './Badge.colors';
 
@@ -82,6 +83,7 @@ export const Badge = ({
       data-color={color}
       data-appearance={appearance}
       className={cn(
+        badgeClassNames.root,
         'rounded-full inline-flex items-center font-semibold',
         sizeClasses[size],
         appearanceClasses,

@@ -18,6 +18,7 @@ import {
   type DrawerTriggerProps,
 } from '../Drawer';
 import { Dialog } from '../Dialog';
+import { dialogFooterClassNames } from '../../../lib/classNames';
 import { useDismiss } from '../../../hooks/useDismiss';
 import { Portal } from '../../portal/Portal';
 import { getTopmostLayer } from '../../../lib/layers';
@@ -1646,7 +1647,10 @@ describe('Drawer', () => {
         const footer = screen.getByTestId('footer');
         // The 0.5 action row: the sticky classes are tuned for the Dialog body, whose scroll
         // padding reserves the footer's height; the drawer body has neither.
-        expect(footer).toHaveAttribute('class', 'mt-6 flex justify-end gap-2');
+        expect(footer).toHaveAttribute(
+          'class',
+          `${dialogFooterClassNames.root} mt-6 flex justify-end gap-2`,
+        );
         const body = footer.parentElement as HTMLElement;
         expect(body).toHaveClass('overflow-y-auto');
         mockRect(footer, { height: 64 });

@@ -1,5 +1,6 @@
 import * as React from 'react';
 import { cn } from '../../lib/cn';
+import { paginationClassNames } from '../../lib/classNames';
 import { focusableDisabledProps, preventIfDisabled } from '../../lib/aria';
 import { warnOnce } from '../../lib/dev';
 import {
@@ -280,15 +281,16 @@ const Pagination = ({
     target: number,
     unavailable: boolean,
     icon: React.ReactNode,
+    partClassName: string,
   ) => (
-    <li>
+    <li className={paginationClassNames.listItem}>
       <button
         type="button"
         aria-label={getItemAriaLabel(type, target, false)}
         disabled={disabled}
         {...(disabled ? {} : focusableDisabledProps(unavailable))}
         onClick={preventIfDisabled(unavailable, () => goTo(target))}
-        className={cn(itemBaseClasses, sizeClasses, idleItemClasses)}
+        className={cn(partClassName, itemBaseClasses, sizeClasses, idleItemClasses)}
       >
         {icon}
       </button>
@@ -296,14 +298,20 @@ const Pagination = ({
   );
 
   return (
-    <nav ref={ref} aria-label="Pagination" {...rest} className={cn(className)}>
-      <ol className="m-0 flex list-none items-center gap-1 p-0">
+    <nav
+      ref={ref}
+      aria-label="Pagination"
+      {...rest}
+      className={cn(paginationClassNames.root, className)}
+    >
+      <ol className={cn(paginationClassNames.list, 'm-0 flex list-none items-center gap-1 p-0')}>
         {showFirstLast &&
           renderNavButton(
             'first',
             1,
             atStart,
             <ChevronDoubleLeftIcon className={chevronClasses} />,
+            paginationClassNames.firstButton,
           )}
         {showPreviousNext &&
           renderNavButton(
@@ -311,6 +319,7 @@ const Pagination = ({
             Math.max(1, page - 1),
             atStart,
             <ChevronLeftIcon className={chevronClasses} />,
+            paginationClassNames.previousButton,
           )}
 
         {range.map((item, index) =>
@@ -318,9 +327,11 @@ const Pagination = ({
             <li
               key={index < range.length / 2 ? 'start-ellipsis' : 'end-ellipsis'}
               aria-hidden="true"
+              className={paginationClassNames.listItem}
             >
               <span
                 className={cn(
+                  paginationClassNames.ellipsis,
                   'inline-flex items-center justify-center text-muted-foreground',
                   sizeClasses,
                 )}
@@ -329,7 +340,7 @@ const Pagination = ({
               </span>
             </li>
           ) : (
-            <li key={item}>
+            <li key={item} className={paginationClassNames.listItem}>
               <button
                 type="button"
                 aria-label={getItemAriaLabel('page', item, item === page)}
@@ -337,6 +348,7 @@ const Pagination = ({
                 disabled={disabled}
                 onClick={() => goTo(item)}
                 className={cn(
+                  paginationClassNames.pageButton,
                   itemBaseClasses,
                   sizeClasses,
                   item === page ? currentItemClasses : idleItemClasses,
@@ -354,6 +366,7 @@ const Pagination = ({
             Math.min(pageCount, page + 1),
             atEnd,
             <ChevronRightIcon className={chevronClasses} />,
+            paginationClassNames.nextButton,
           )}
         {showFirstLast &&
           renderNavButton(
@@ -361,6 +374,7 @@ const Pagination = ({
             pageCount,
             atEnd,
             <ChevronDoubleRightIcon className={chevronClasses} />,
+            paginationClassNames.lastButton,
           )}
       </ol>
     </nav>

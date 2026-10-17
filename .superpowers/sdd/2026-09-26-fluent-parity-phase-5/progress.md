@@ -248,3 +248,4 @@ Ruling R26: merge origin/main (Phase 3) into this branch now, after D4's review 
 Task D4: review (opus) — Approved, 0 Critical/Important, 7 Minor (layout switch probed correct).
 Task D4: minors → D5 notes (M1 Row in a wrapper: JSDoc or dev warning; M2 aria-required alone shows the hint: test + doc; M3 layout switch remounts: JSDoc note; M4 Tooltip relationship=description in every layout; M6 a swatchGap helper); M5, M7 deferred
 Task D4: complete (commits a0c73e4..caee925)
+Phase 3 merge started: git merge --no-ff origin/main (682e067) — 11 conflicts (verify-dist.mjs + test, public-types.test, Combobox, Dropdown, Option, SwatchPicker, src/index.ts, lib types.test, tokens.test); resolution agent dispatched (opus, file edits only)

@@ -1,4 +1,5 @@
 import * as React from 'react';
+import { stackClassNames } from '../../lib/classNames';
 import { cn } from '../../lib/cn';
 import { resolveDeprecatedProp } from '../../lib/dev';
 import type { PolymorphicComponent, PolymorphicProps } from '../../lib/polymorphic';
@@ -104,6 +105,7 @@ export const Stack: PolymorphicComponent<'div', StackOwnProps> = (props) => {
     <Component
       ref={ref}
       className={cn(
+        stackClassNames.root,
         inline ? 'inline-flex' : 'flex',
         orientation === 'horizontal' ? 'flex-row' : 'flex-col',
         gapMap[gap],

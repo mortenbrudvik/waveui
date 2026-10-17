@@ -22,6 +22,8 @@ import type {
   PopupRect,
   VirtualElement,
   PopupTarget,
+  ColorPickerShape,
+  HsvColor,
   DayOfWeek,
   FirstWeekOfYear,
 } from '../types';
@@ -185,5 +187,17 @@ describe('date vocabulary (Calendar, DatePicker)', () => {
     expectTypeOf<FirstWeekOfYear>().toEqualTypeOf<
       'first-day' | 'first-full-week' | 'first-four-day-week'
     >();
+  });
+});
+
+describe('color vocabulary (P3-05)', () => {
+  it("HsvColor has a hue, a saturation, a value and an optional alpha (Fluent's HsvColor)", () => {
+    expectTypeOf<HsvColor>().toEqualTypeOf<{ h: number; s: number; v: number; a?: number }>();
+  });
+
+  it('ColorPickerShape is the rounded and square subset of Shape', () => {
+    expectTypeOf<ColorPickerShape>().toEqualTypeOf<'rounded' | 'square'>();
+    expectTypeOf<ColorPickerShape>().toExtend<Shape>();
+    expectTypeOf<'circular'>().not.toMatchTypeOf<ColorPickerShape>();
   });
 });

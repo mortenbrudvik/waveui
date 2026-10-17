@@ -7,6 +7,7 @@ import { Toast, Toaster, useToastController } from '../Toast';
 import type { ToastController, ToastOptions, ToastProps, ToasterProps } from '../Toast';
 import { useDismiss } from '../../../hooks/useDismiss';
 import { useModalIsolation } from '../../../hooks/useModalIsolation';
+import { toastClassNames, toastTitleClassNames } from '../../../lib/classNames';
 import { Portal } from '../../portal/Portal';
 import {
   expectNoA11yViolations,
@@ -62,7 +63,7 @@ function getLiveRegion(politeness: 'polite' | 'assertive'): HTMLElement {
   return region;
 }
 
-/** The visual toasts rendered by the Toaster, in order. */
+/** The toast containers of the Toaster (one per toast), in order. */
 const getToasts = () =>
   Array.from(getViewport().querySelectorAll<HTMLElement>('[data-wave-toast]'));
 
@@ -99,8 +100,9 @@ describe('Toast', () => {
   });
 
   describe('body content', () => {
-    /** The element after the title: the body, or `null` when none renders. */
-    const bodyAfter = (title: string) => screen.getByText(title).nextElementSibling;
+    /** The element after the title row: the body, or `null` when none renders. */
+    const bodyAfter = (title: string) =>
+      screen.getByText(title).closest(`.${toastTitleClassNames.root}`)?.nextElementSibling ?? null;
 
     it.each([
       ['an empty string', ''],
@@ -412,6 +414,37 @@ describe('useToastController', () => {
       expect(error.mock.calls).toEqual([[MISSING_TOASTER_MESSAGE]]);
       expect(screen.queryByText('Lost')).not.toBeInTheDocument();
     });
+
+    it('also returns the given toastId for the content form outside <Toaster>', () => {
+      vi.stubEnv('NODE_ENV', 'production');
+      const error = vi.spyOn(console, 'error').mockImplementation(() => {});
+      let result = 'unset';
+      function Probe() {
+        const { dispatchToast } = useToastController();
+        return (
+          <button
+            type="button"
+            onClick={() => {
+              result = dispatchToast(<span />, { toastId: 'lost' });
+            }}
+          >
+            Go
+          </button>
+        );
+      }
+      const { rerender } = render(
+        <>
+          <Probe />
+          <Probe />
+        </>,
+      );
+      rerender(<Probe />);
+      rerender(<Probe />);
+      fireEvent.click(screen.getByRole('button', { name: 'Go' }));
+      expect(result).toBe('lost');
+      // Logged once, not on every render of every calling component.
+      expect(error.mock.calls).toEqual([[MISSING_TOASTER_MESSAGE]]);
+    });
   });
 
   it('returns an inert controller whose dismissAllToasts does nothing in production', () => {
@@ -533,10 +566,14 @@ describe('Toaster: announcements (feedback-navigation#11, #14)', () => {
     expect(getLiveRegion(politeness)).toHaveTextContent(`${label} Upload Details here`);
     expect(getLiveRegion(other)).toBeEmptyDOMElement();
 
-    // The Toaster's toasts are not live regions themselves (feedback-navigation#11).
+    // The Toaster's toasts are not live regions themselves (feedback-navigation#11): each sits in
+    // a named group (D10), and the Toast inside it has no live-region role either.
     const [toast] = getToasts();
-    expect(toast).not.toHaveAttribute('role');
+    expect(toast).toHaveAttribute('role', 'group');
     expect(toast).not.toHaveAttribute('aria-live');
+    const visual = toast.querySelector(`.${toastClassNames.root}`);
+    expect(visual).not.toHaveAttribute('role');
+    expect(visual).not.toHaveAttribute('aria-live');
     expect(toast.querySelector(`[data-wave-icon="${status}"]`)).not.toBeNull();
     expect(toast).toHaveTextContent(new RegExp(`^${label}\\s*Upload\\s*Details here`));
   });
@@ -1010,14 +1047,17 @@ describe('Toaster: pausing (feedback-navigation#12)', () => {
     expect(screen.queryByText('Hover me')).not.toBeInTheDocument();
   });
 
-  it('pauses only the hovered toast', () => {
+  it('pauses every toast while the pointer is over one of them (the region, D14)', () => {
     const { dispatch } = renderToaster();
     dispatch({ title: 'Hovered' });
     dispatch({ title: 'Other' });
     fireEvent.pointerOver(getToasts()[0]);
     advance(5000);
     expect(screen.getByText('Hovered')).toBeInTheDocument();
-    expect(screen.queryByText('Other')).not.toBeInTheDocument();
+    expect(screen.getByText('Other')).toBeInTheDocument();
+    fireEvent.pointerOut(getToasts()[0], { relatedTarget: document.body });
+    advance(5000);
+    expect(getToasts()).toHaveLength(0);
   });
 
   it('pauses while focus is inside a toast', () => {

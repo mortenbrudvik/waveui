@@ -1,31 +1,4 @@
-import { useSyncExternalStore } from 'react';
-
-const QUERY = '(prefers-reduced-motion: reduce)';
-
-function getMediaQueryList(): MediaQueryList | null {
-  if (typeof window === 'undefined' || typeof window.matchMedia !== 'function') return null;
-  return window.matchMedia(QUERY);
-}
-
-function subscribe(notify: () => void): () => void {
-  const mql = getMediaQueryList();
-  if (!mql) return () => {};
-  if (typeof mql.addEventListener === 'function') {
-    mql.addEventListener('change', notify);
-    return () => mql.removeEventListener('change', notify);
-  }
-  // Safari < 14
-  mql.addListener(notify);
-  return () => mql.removeListener(notify);
-}
-
-function getSnapshot(): boolean {
-  return getMediaQueryList()?.matches ?? false;
-}
-
-function getServerSnapshot(): boolean {
-  return false;
-}
+import { useMediaQuery } from './useMediaQuery';
 
 /**
  * `true` while the user asks for reduced motion (`prefers-reduced-motion: reduce`), updated when
@@ -35,5 +8,5 @@ function getServerSnapshot(): boolean {
  * paused.
  */
 export function usePrefersReducedMotion(): boolean {
-  return useSyncExternalStore(subscribe, getSnapshot, getServerSnapshot);
+  return useMediaQuery('(prefers-reduced-motion: reduce)');
 }

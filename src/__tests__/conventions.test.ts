@@ -42,6 +42,12 @@
  *   transition, `motion-reduce:animate-*` for an animation (a `motion-reduce:animate-none` does not
  *   stop a `transition-colors`) — unless the line carries `wave-allow-motion: <reason>`.
  *   `motion-safe:` utilities need no reduction.
+ * - `class-names` (C-CLASS, stable class names): a module that assigns the `displayName` of a
+ *   component the class-name registry knows (`X.displayName = 'Button'`, looked up with
+ *   `getStableClassNames` from `src/test-utils.ts`, which also knows the display names that
+ *   differ from their flat names) reads that constant's root in code (`buttonClassNames.root`;
+ *   a mention in a comment or a string does not count). Internal display names (`MenuItemRow`,
+ *   contexts) are skipped.
  * - `lexer`: the source could not be tokenised reliably (an unterminated string, template literal
  *   or JSX element, unbalanced braces, or a template literal longer than
  *   {@link MAX_TEMPLATE_LINES} lines). Every other finding of that file is unreliable, so this is
@@ -74,8 +80,11 @@
  * it as `<T,>` (valid TypeScript there too) — a limitation of the gate, not a TypeScript error.
  *
  * Sources are read with `import.meta.glob(..., { query: '?raw' })` (no `node:fs`, so the dev
- * program needs no Node types).
+ * program needs no Node types). The `class-names` rule imports the registry lookup from
+ * `src/test-utils.ts`.
  */
+
+import { getStableClassNames } from '../test-utils';
 
 type SourceKind = 'component' | 'story';
 
@@ -90,6 +99,7 @@ type RuleId =
   | 'button-type'
   | 'motion'
   | 'direction-variant'
+  | 'class-names'
   | 'lexer';
 
 interface Violation {
@@ -115,6 +125,8 @@ const HINTS: Record<RuleId, string> = {
     "use Wave's `wave-rtl:` variant: Tailwind's `rtl:`/`ltr:` also match inside a subtree of the opposite direction. Write the left-to-right value as the base class and override it with `wave-rtl:` (C-LOGICAL)",
   motion:
     'add a `motion-reduce:` variant of the same kind (`motion-reduce:transition-none` for a transition, `motion-reduce:animate-*` for an animation) to the same class string, or `// wave-allow-motion: <reason>` (C-MOTION)',
+  'class-names':
+    "apply `<name>ClassNames.root` first in the root element's `cn()`, from `src/lib/classNames.ts` (C-CLASS, stable class names)",
   lexer:
     'the conventions lexer lost track of this file here, so its other findings are unreliable. This is a limitation of the gate, not necessarily an error in the code: simplify the construct (in .tsx, write type parameters the gate reads as JSX — e.g. a call signature `{ <T>(x: T): T }` or a lowercase `<t>(x: t) => t` — as `<T,>`, valid in type positions too) or fix the lexer in src/__tests__/conventions.test.ts',
 };
@@ -890,6 +902,28 @@ function buttonsWithoutType(lexed: Lexed): number[] {
   return found;
 }
 
+/** `X.displayName =` in code (the lexer's bare text, where comments and strings are blank). */
+const DISPLAY_NAME_ASSIGNMENT = /\b([A-Za-z_$][\w$]*)\.displayName\s*=(?!=)/g;
+
+/**
+ * The text of the string literal that starts at the first non-blank offset from `from` in `code`
+ * (the lexer's code text, where strings are kept), or `null` when none starts there (a
+ * displayName assigned from a variable).
+ */
+function stringLiteralAt(code: string, from: number): string | null {
+  let k = from;
+  while (k < code.length && /\s/.test(code[k])) k += 1;
+  const quote = code[k];
+  if (quote !== "'" && quote !== '"' && quote !== '`') return null;
+  const close = code.indexOf(quote, k + 1);
+  return close === -1 ? null : code.slice(k + 1, close);
+}
+
+/** Whether code (the bare text: no comments, no string contents) reads `<constant>.root`. */
+function readsRoot(bare: string, constant: string): boolean {
+  return new RegExp(`(?<![\\w$])${constant}\\s*\\.\\s*root(?![\\w$])`).test(bare);
+}
+
 /**
  * Runs every rule on one source file (returns violations in source order). `jsx`: whether the
  * file may contain JSX (`.tsx`).
@@ -1025,6 +1059,23 @@ function scanSource(source: string, kind: SourceKind, jsx = true): Violation[] {
     const m = /\bforwardRef\s*[<(]/.exec(lineText);
     if (m) add(index + 1, m.index, 'forward-ref', 'forwardRef(');
   });
+
+  // class-names: a module that assigns the displayName of a registered component reads that
+  // constant's root in code (C-CLASS, stable class names)
+  for (const m of lexed.bareText.matchAll(DISPLAY_NAME_ASSIGNMENT)) {
+    const offset = m.index ?? 0;
+    const displayName = stringLiteralAt(lexed.codeText, offset + m[0].length);
+    if (displayName === null) continue;
+    const stable = getStableClassNames(displayName);
+    if (!stable || readsRoot(lexed.bareText, stable.constant)) continue;
+    const line = lineOf(lexed, offset);
+    add(
+      line,
+      offset - lexed.lineStarts[line - 1],
+      'class-names',
+      `${m[1]}.displayName = '${displayName}' → ${stable.constant}.root`,
+    );
+  }
 
   // <button without a literal type=
   for (const offset of buttonsWithoutType(lexed)) {
@@ -1517,6 +1568,68 @@ describe('conventions gate rules', () => {
         '7:button-type:<button',
         '12:button-type:<button',
       ]);
+    });
+  });
+
+  describe('class-names', () => {
+    it('requires the stable root class of a registered displayName (C-CLASS)', () => {
+      const without = [
+        `export const Button = ({ className, ...rest }: Props) => (`,
+        `  <button type="button" className={cn('px-3', className)} {...rest} />`,
+        `);`,
+        `Button.displayName = 'Button';`,
+      ].join('\n');
+      expect(rules(without)).toEqual([
+        "4:class-names:Button.displayName = 'Button' → buttonClassNames.root",
+      ]);
+
+      const withRoot = [
+        `import { buttonClassNames } from '../../lib/classNames';`,
+        `export const Button = ({ className, ...rest }: Props) => (`,
+        `  <button type="button" className={cn(buttonClassNames.root, 'px-3', className)} {...rest} />`,
+        `);`,
+        `Button.displayName = 'Button';`,
+      ].join('\n');
+      expect(rules(withRoot)).toEqual([]);
+    });
+
+    it('counts the constant in code only, not in a comment or a string', () => {
+      const source = [
+        `// buttonClassNames.root is applied by the parent`,
+        `const note = 'buttonClassNames.root';`,
+        `export const Button = (props: Props) => <button type="button" {...props} />;`,
+        `Button.displayName = "Button";`,
+      ].join('\n');
+      expect(rules(source)).toEqual([
+        "4:class-names:Button.displayName = 'Button' → buttonClassNames.root",
+      ]);
+    });
+
+    it('skips display names that no constant names, and displayName text inside strings', () => {
+      const source = [
+        `const MenuItemRow = () => null;`,
+        `MenuItemRow.displayName = 'MenuItemRow';`,
+        `const ToasterContext = React.createContext(null);`,
+        `ToasterContext.displayName = 'ToasterContext';`,
+        `const label = 'X.displayName = "Button"';`,
+        `if (Other.displayName === 'Button') log();`,
+      ].join('\n');
+      expect(rules(source)).toEqual([]);
+    });
+
+    it('looks up a displayName that differs from its flat name through the alias table', () => {
+      const source = [
+        `export function RadioItem(props: Props) {`,
+        `  return <label className={cn('flex', props.className)} />;`,
+        `}`,
+        `RadioItem.displayName = 'RadioItem';`,
+      ].join('\n');
+      expect(rules(source)).toEqual([
+        "4:class-names:RadioItem.displayName = 'RadioItem' → radioGroupItemClassNames.root",
+      ]);
+      expect(
+        rules(source.replace(`cn('flex'`, `cn(radioGroupItemClassNames.root, 'flex'`)),
+      ).toEqual([]);
     });
   });
 

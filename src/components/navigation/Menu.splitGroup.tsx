@@ -1,5 +1,6 @@
 import * as React from 'react';
 import { cn } from '../../lib/cn';
+import { menuSplitGroupClassNames } from '../../lib/classNames';
 import { composeEventHandlers } from '../../lib/composeEventHandlers';
 import { warnOnce } from '../../lib/dev';
 import { flattenChildren, isElementOfType } from '../../lib/children';
@@ -104,6 +105,7 @@ export const MenuSplitGroup = ({
       data-menu-split-group=""
       onKeyDown={composeEventHandlers(onKeyDown, handleKeyDown)}
       className={cn(
+        menuSplitGroupClassNames.root,
         'flex items-stretch [&>:first-child]:flex-1 [&>:last-child]:border-s [&>:last-child]:border-border',
         className,
       )}

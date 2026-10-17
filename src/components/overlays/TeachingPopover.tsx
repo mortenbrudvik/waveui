@@ -1,5 +1,6 @@
 import * as React from 'react';
 import { cn } from '../../lib/cn';
+import { teachingPopoverClassNames } from '../../lib/classNames';
 import { resolveDeprecatedProp, warnOnce } from '../../lib/dev';
 import { focusableDisabledProps, preventIfDisabled } from '../../lib/aria';
 import { DismissIcon } from '../../lib/icons';
@@ -373,6 +374,7 @@ export const TeachingPopover = ({
             }
           : { style })}
         className={cn(
+          teachingPopoverClassNames.root,
           'relative w-80 rounded-md border border-border bg-background p-5 text-foreground shadow-8',
           focusRing,
           className,
@@ -384,6 +386,7 @@ export const TeachingPopover = ({
             side={placedSide}
             style={arrowStyles}
             data-wave-teaching-popover-arrow=""
+            className={teachingPopoverClassNames.beak}
           />
         )}
 
@@ -392,18 +395,33 @@ export const TeachingPopover = ({
           size="small"
           icon={<DismissIcon />}
           aria-label={closeLabel}
-          className="absolute end-3 top-3"
+          className={cn(teachingPopoverClassNames.closeButton, 'absolute end-3 top-3')}
           onClick={dismiss}
         />
 
-        <h3 id={titleId} className="mb-2 pe-8 text-subtitle-1 font-semibold text-foreground">
+        <h3
+          id={titleId}
+          className={cn(
+            teachingPopoverClassNames.title,
+            'mb-2 pe-8 text-subtitle-1 font-semibold text-foreground',
+          )}
+        >
           {step.title}
           <span className="sr-only">{`, ${stepPosition}`}</span>
         </h3>
 
-        <div className="mb-4 text-body-1 text-muted-foreground">{step.body}</div>
+        <div
+          className={cn(teachingPopoverClassNames.body, 'mb-4 text-body-1 text-muted-foreground')}
+        >
+          {step.body}
+        </div>
 
-        <div className="flex items-center justify-between gap-2">
+        <div
+          className={cn(
+            teachingPopoverClassNames.footer,
+            'flex items-center justify-between gap-2',
+          )}
+        >
           <div aria-hidden="true" className="flex items-center gap-1.5">
             {steps.map((_, i) => (
               <span
@@ -411,6 +429,7 @@ export const TeachingPopover = ({
                 data-wave-teaching-popover-dot=""
                 aria-current={i === index ? 'step' : undefined}
                 className={cn(
+                  teachingPopoverClassNames.dot,
                   'h-1.5 rounded-full transition-[width,background-color] motion-reduce:transition-none',
                   i === index
                     ? cn('w-4 bg-primary', forcedColors.fill)
@@ -424,12 +443,17 @@ export const TeachingPopover = ({
             {count > 1 && (
               <Button
                 {...focusableDisabledProps(isFirst)}
+                className={teachingPopoverClassNames.backButton}
                 onClick={preventIfDisabled(isFirst, handleBack)}
               >
                 {labels?.back ?? DEFAULT_BACK_LABEL}
               </Button>
             )}
-            <Button appearance="primary" onClick={handleNext}>
+            <Button
+              appearance="primary"
+              className={teachingPopoverClassNames.nextButton}
+              onClick={handleNext}
+            >
               {isLast ? (labels?.done ?? DEFAULT_DONE_LABEL) : (labels?.next ?? DEFAULT_NEXT_LABEL)}
             </Button>
           </div>

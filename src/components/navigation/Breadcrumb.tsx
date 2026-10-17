@@ -2,6 +2,7 @@ import * as React from 'react';
 import { preventIfDisabled } from '../../lib/aria';
 import { flattenChildren, isElementOfType } from '../../lib/children';
 import { cn } from '../../lib/cn';
+import { breadcrumbClassNames, breadcrumbItemClassNames } from '../../lib/classNames';
 import type { Slot } from '../../lib/types';
 import { renderSlot, slotRendersContent } from '../../lib/slot';
 import { warnOnce } from '../../lib/dev';
@@ -212,14 +213,27 @@ const BreadcrumbRoot = ({ children, className, ref, ...rest }: BreadcrumbProps) 
   const items = flattenChildren(children);
 
   return (
-    <nav ref={ref} aria-label="Breadcrumb" {...rest} className={className}>
-      <ol className="m-0 flex list-none items-center gap-1 p-0 text-body-1">
+    <nav
+      ref={ref}
+      aria-label="Breadcrumb"
+      {...rest}
+      className={cn(breadcrumbClassNames.root, className)}
+    >
+      <ol
+        className={cn(
+          breadcrumbClassNames.list,
+          'm-0 flex list-none items-center gap-1 p-0 text-body-1',
+        )}
+      >
         {items.map(({ key, node: child }, index) => (
-          <li key={key} className="flex items-center gap-1">
+          <li key={key} className={cn(breadcrumbClassNames.listItem, 'flex items-center gap-1')}>
             {index > 0 && (
               <ChevronRightIcon
                 data-wave-breadcrumb-separator=""
-                className="shrink-0 text-muted-foreground wave-rtl:-scale-x-100"
+                className={cn(
+                  breadcrumbClassNames.divider,
+                  'shrink-0 text-muted-foreground wave-rtl:-scale-x-100',
+                )}
               />
             )}
             {child}
@@ -306,7 +320,9 @@ function BreadcrumbItem(
   // `me-1` margin. The check does not consume a generator: renderSlot still renders its items.
   const renderedIcon =
     icon && slotRendersContent(icon)
-      ? renderSlot(icon, 'span', 'me-1 inline-flex shrink-0', { 'aria-hidden': true })
+      ? renderSlot(icon, 'span', cn(breadcrumbItemClassNames.icon, 'me-1 inline-flex shrink-0'), {
+          'aria-hidden': true,
+        })
       : null;
   const child =
     asChild && React.isValidElement<{ children?: React.ReactNode }>(children) ? children : null;
@@ -366,7 +382,11 @@ function BreadcrumbItem(
         ref={ref}
         onClick={preventIfDisabled(linkDisabled, onClick)}
         aria-current={current ? 'page' : undefined}
-        className={cn(current ? currentChildClasses : linkClasses, className)}
+        className={cn(
+          breadcrumbItemClassNames.root,
+          current ? currentChildClasses : linkClasses,
+          className,
+        )}
         icon={renderedIcon}
         child={linkDisabled ? disableLinkChild(child) : child}
       />
@@ -380,7 +400,7 @@ function BreadcrumbItem(
         ref={ref as React.Ref<HTMLSpanElement>}
         aria-current="page"
         onClick={onClick}
-        className={cn(currentClasses, className)}
+        className={cn(breadcrumbItemClassNames.root, currentClasses, className)}
       >
         {renderedIcon}
         {children}
@@ -399,7 +419,7 @@ function BreadcrumbItem(
         aria-disabled={linkDisabled ? true : ariaDisabled}
         tabIndex={linkDisabled ? -1 : anchorRest.tabIndex}
         onClick={preventIfDisabled(linkDisabled, onClick)}
-        className={cn(linkClasses, className)}
+        className={cn(breadcrumbItemClassNames.root, linkClasses, className)}
       >
         {renderedIcon}
         {children}
@@ -416,7 +436,7 @@ function BreadcrumbItem(
         {...(buttonRest as React.ButtonHTMLAttributes<HTMLButtonElement>)}
         ref={ref as React.Ref<HTMLButtonElement>}
         onClick={onClick}
-        className={cn(linkClasses, className)}
+        className={cn(breadcrumbItemClassNames.root, linkClasses, className)}
       >
         {renderedIcon}
         {children}
@@ -428,7 +448,7 @@ function BreadcrumbItem(
     <span
       {...spanAttributes(rest)}
       ref={ref as React.Ref<HTMLSpanElement>}
-      className={cn(textClasses, className)}
+      className={cn(breadcrumbItemClassNames.root, textClasses, className)}
     >
       {renderedIcon}
       {children}

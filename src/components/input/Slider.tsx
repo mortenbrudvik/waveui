@@ -1,4 +1,5 @@
 import * as React from 'react';
+import { sliderClassNames } from '../../lib/classNames';
 import { cn } from '../../lib/cn';
 import { composeEventHandlers } from '../../lib/composeEventHandlers';
 import { focusRing, forcedColors } from '../../lib/styles';
@@ -158,6 +159,7 @@ export const Slider = ({
       ref={mergedRef}
       type="range"
       className={cn(
+        sliderClassNames.root,
         'w-full cursor-pointer appearance-none bg-transparent',
         railClasses,
         // Thumb. WebKit and Blink align its top with the rail's top, so it is pulled up by half the

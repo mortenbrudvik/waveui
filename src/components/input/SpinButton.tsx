@@ -1,4 +1,5 @@
 import * as React from 'react';
+import { spinButtonClassNames } from '../../lib/classNames';
 import { cn } from '../../lib/cn';
 import { composeEventHandlers } from '../../lib/composeEventHandlers';
 import { warnDeprecated, warnOnce } from '../../lib/dev';
@@ -355,6 +356,7 @@ export const SpinButton = ({
     <div
       ref={ref}
       className={cn(
+        spinButtonClassNames.root,
         'relative inline-flex items-center rounded border border-input border-b-stroke-accessible bg-background',
         inputFocusWithin,
         invalidLook && inputInvalidWithin,
@@ -371,7 +373,12 @@ export const SpinButton = ({
         onClick={() => stepBy(-step)}
         disabled={!interactive || current <= min}
         aria-label={labels?.decrement ?? 'Decrement'}
-        className={cn(stepButtonClass, 'border-e', !disabled && 'disabled:opacity-50')}
+        className={cn(
+          spinButtonClassNames.decrementButton,
+          stepButtonClass,
+          'border-e',
+          !disabled && 'disabled:opacity-50',
+        )}
       >
         <SubtractIcon size={12} />
       </button>
@@ -405,7 +412,10 @@ export const SpinButton = ({
         onKeyDown={composeEventHandlers(onKeyDown, handleKeyDown)}
         onKeyUp={onKeyUp}
         disabled={disabled}
-        className="h-8 w-12 min-w-0 border-none bg-transparent text-center text-body-1 text-foreground focus:outline-hidden disabled:cursor-not-allowed [appearance:textfield]"
+        className={cn(
+          spinButtonClassNames.input,
+          'h-8 w-12 min-w-0 border-none bg-transparent text-center text-body-1 text-foreground focus:outline-hidden disabled:cursor-not-allowed [appearance:textfield]',
+        )}
       />
 
       <button
@@ -415,7 +425,12 @@ export const SpinButton = ({
         onClick={() => stepBy(step)}
         disabled={!interactive || current >= max}
         aria-label={labels?.increment ?? 'Increment'}
-        className={cn(stepButtonClass, 'border-s', !disabled && 'disabled:opacity-50')}
+        className={cn(
+          spinButtonClassNames.incrementButton,
+          stepButtonClass,
+          'border-s',
+          !disabled && 'disabled:opacity-50',
+        )}
       >
         <AddIcon size={12} />
       </button>

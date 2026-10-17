@@ -1,5 +1,6 @@
 import * as React from 'react';
 import { cn } from '../../lib/cn';
+import { menuClassNames } from '../../lib/classNames';
 import { composeEventHandlers } from '../../lib/composeEventHandlers';
 import { warnOnce } from '../../lib/dev';
 import { flattenChildren, isElementOfType } from '../../lib/children';
@@ -695,7 +696,7 @@ export const MenuRoot = ({
           )}
           onFocus={composeEventHandlers(onFocus, rovingFocus, { checkDefaultPrevented: false })}
           onPointerMove={composeEventHandlers(onPointerMove, listPointerMove)}
-          className={cn(menuSurfaceClasses, focusRing, className)}
+          className={cn(menuClassNames.root, menuSurfaceClasses, focusRing, className)}
         >
           {children}
         </div>

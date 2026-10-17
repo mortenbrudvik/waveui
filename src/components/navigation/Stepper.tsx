@@ -1,6 +1,7 @@
 import * as React from 'react';
 import { flattenChildren } from '../../lib/children';
 import { cn } from '../../lib/cn';
+import { stepperClassNames, stepperStepClassNames } from '../../lib/classNames';
 import { reportMissingContext } from '../../lib/dev';
 import { CheckIcon, DismissIcon } from '../../lib/icons';
 import { renderSlot, slotRendersContent } from '../../lib/slot';
@@ -361,7 +362,9 @@ const StepperStep = ({
   } else if (isCompleted && !hasIcon) {
     indicator = <CheckIcon />;
   } else if (hasIcon) {
-    indicator = renderSlot(icon, 'span', indicatorSlotClasses, { 'aria-hidden': true });
+    indicator = renderSlot(icon, 'span', cn(stepperStepClassNames.icon, indicatorSlotClasses), {
+      'aria-hidden': true,
+    });
   } else {
     indicator = <span className="text-caption-1 font-semibold">{index + 1}</span>;
   }
@@ -375,7 +378,14 @@ const StepperStep = ({
         : 'text-foreground';
 
   return (
-    <li ref={registerItem} className={cn('flex min-w-0', horizontal && !isLast && 'flex-1')}>
+    <li
+      ref={registerItem}
+      className={cn(
+        stepperStepClassNames.listItem,
+        'flex min-w-0',
+        horizontal && !isLast && 'flex-1',
+      )}
+    >
       <div
         ref={ref}
         data-active={isActive ? '' : undefined}
@@ -383,7 +393,11 @@ const StepperStep = ({
         data-error={error ? '' : undefined}
         data-disabled={disabled ? '' : undefined}
         {...rest}
-        className={cn(horizontal ? 'flex flex-1 items-center' : 'flex flex-1 flex-col', className)}
+        className={cn(
+          stepperStepClassNames.root,
+          horizontal ? 'flex flex-1 items-center' : 'flex flex-1 flex-col',
+          className,
+        )}
       >
         <div
           role="button"
@@ -396,6 +410,7 @@ const StepperStep = ({
           onKeyDown={handleKeyDown}
           onKeyUp={handleKeyUp}
           className={cn(
+            stepperStepClassNames.button,
             'relative flex rounded',
             horizontal ? 'flex-col items-center gap-1' : 'items-center gap-3',
             focusRing,
@@ -406,6 +421,7 @@ const StepperStep = ({
           <span
             aria-hidden="true"
             className={cn(
+              stepperStepClassNames.indicator,
               'flex size-8 shrink-0 items-center justify-center rounded-full border-2 transition-colors motion-reduce:transition-none',
               error
                 ? 'border-error bg-error-tint text-error-tint-foreground'
@@ -425,6 +441,7 @@ const StepperStep = ({
             <span
               id={labelId}
               className={cn(
+                stepperStepClassNames.label,
                 'font-semibold',
                 horizontal ? 'text-caption-1 whitespace-nowrap' : 'text-body-1',
                 toneClass,
@@ -436,6 +453,7 @@ const StepperStep = ({
               <span
                 id={descriptionId}
                 className={cn(
+                  stepperStepClassNames.description,
                   'text-muted-foreground',
                   horizontal ? 'text-caption-2 whitespace-nowrap' : 'text-caption-1',
                 )}
@@ -450,6 +468,7 @@ const StepperStep = ({
             data-wave-stepper-connector=""
             aria-hidden="true"
             className={cn(
+              stepperStepClassNames.connector,
               'transition-colors motion-reduce:transition-none',
               // Vertical: centred under the size-8 circle, (8 - 0.5) / 2 spacing units in, so the
               // offset scales with the circle at any root font size.
@@ -547,7 +566,12 @@ const StepperRoot = ({
         aria-label="Progress"
         data-orientation={orientation}
         {...rest}
-        className={cn('flex', horizontal ? 'flex-row items-start' : 'flex-col', className)}
+        className={cn(
+          stepperClassNames.root,
+          'flex',
+          horizontal ? 'flex-row items-start' : 'flex-col',
+          className,
+        )}
       >
         {/* role="list" is not redundant: WebKit/VoiceOver drops list semantics from a
             `list-style: none` list outside a <nav> unless the role is explicit. */}
@@ -555,6 +579,7 @@ const StepperRoot = ({
           ref={listRef}
           role="list"
           className={cn(
+            stepperClassNames.list,
             'm-0 flex list-none p-0',
             horizontal ? 'flex-1 flex-row items-start' : 'flex-col',
           )}

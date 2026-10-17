@@ -1,4 +1,5 @@
 import * as React from 'react';
+import { optionClassNames, optionGroupClassNames } from '../../lib/classNames';
 import { cn } from '../../lib/cn';
 import { composeEventHandlers } from '../../lib/composeEventHandlers';
 import { hasWarned, isDev, warnOnce } from '../../lib/dev';
@@ -187,7 +188,7 @@ function renderCheck(
   { selected, multiselect, disabled }: CheckState,
 ): React.ReactNode {
   if (!multiselect) {
-    const classes = cn('shrink-0', !selected && 'invisible');
+    const classes = cn(optionClassNames.checkIcon, 'shrink-0', !selected && 'invisible');
     return glyph === undefined ? (
       <CheckIcon className={classes} />
     ) : (
@@ -215,11 +216,16 @@ function renderCheck(
     >
       {selected &&
         (glyph === undefined ? (
-          <CheckIcon size={12} className={glyphClasses} />
+          <CheckIcon size={12} className={cn(optionClassNames.checkIcon, glyphClasses)} />
         ) : (
-          renderSlot(glyph, 'span', cn('inline-flex shrink-0', glyphClasses), {
-            'aria-hidden': true,
-          })
+          renderSlot(
+            glyph,
+            'span',
+            cn(optionClassNames.checkIcon, 'inline-flex shrink-0', glyphClasses),
+            {
+              'aria-hidden': true,
+            },
+          )
         ))}
     </span>
   );
@@ -281,6 +287,7 @@ function OptionImpl(props: OptionProps) {
       onMouseDown={composeEventHandlers(onMouseDown, pressOption)}
       onPointerMove={composeEventHandlers(onPointerMove, highlightOption)}
       className={cn(
+        optionClassNames.root,
         OPTION_CLASSES,
         // While a multi-select option draws its box, the box carries the state, and
         // `forcedColors.selectedContainer` would draw every selected option like the active one.
@@ -290,7 +297,7 @@ function OptionImpl(props: OptionProps) {
     >
       {showCheck &&
         renderCheck(checkIconRenders ? checkIcon : undefined, { selected, multiselect, disabled })}
-      <span className="min-w-0 flex-1">{children ?? value}</span>
+      <span className={cn(optionClassNames.content, 'min-w-0 flex-1')}>{children ?? value}</span>
     </li>
   );
 }
@@ -465,19 +472,27 @@ function OptionGroupImpl({
       ref={ref}
       role="presentation"
       hidden={hidden || empty || undefined}
-      className={className}
+      className={cn(optionGroupClassNames.root, className)}
     >
       {hasLabel && (
         <div
           ref={headingRef}
           id={labelId}
           role="presentation"
-          className="px-3 py-1 text-caption-1 font-semibold text-muted-foreground"
+          className={cn(
+            optionGroupClassNames.label,
+            'px-3 py-1 text-caption-1 font-semibold text-muted-foreground',
+          )}
         >
           {materialiseSlotContent(label)}
         </div>
       )}
-      <ul role="group" aria-label={ariaLabel} aria-labelledby={labelledBy}>
+      <ul
+        role="group"
+        aria-label={ariaLabel}
+        aria-labelledby={labelledBy}
+        className={optionGroupClassNames.list}
+      >
         <OptionGroupHiddenContext.Provider value={hiddenByConsumer}>
           <OptionGroupContext.Provider value={groups}>{children}</OptionGroupContext.Provider>
         </OptionGroupHiddenContext.Provider>

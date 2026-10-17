@@ -1,4 +1,5 @@
 import * as React from 'react';
+import { flexClassNames } from '../../lib/classNames';
 import { cn } from '../../lib/cn';
 import { hasWarned, isDev, warnOnce } from '../../lib/dev';
 import { getTabbableElements } from '../../lib/focus';
@@ -149,6 +150,7 @@ export const Flex: PolymorphicComponent<'div', FlexOwnProps> = (props) => {
     <Component
       ref={mergedRef}
       className={cn(
+        flexClassNames.root,
         inline ? 'inline-flex' : 'flex',
         directionMap[direction],
         wrap && wrapMap[wrap],

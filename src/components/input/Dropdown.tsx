@@ -1,4 +1,5 @@
 import * as React from 'react';
+import { dropdownClassNames } from '../../lib/classNames';
 import { cn } from '../../lib/cn';
 import { composeEventHandlers } from '../../lib/composeEventHandlers';
 import { warnDeprecated, warnOnce } from '../../lib/dev';
@@ -411,7 +412,11 @@ const DropdownRoot = (props: DropdownProps<boolean>) => {
       : fieldProps['aria-labelledby'];
 
   return (
-    <div {...rest} ref={rootMergedRef} className={cn('relative inline-flex flex-col', className)}>
+    <div
+      {...rest}
+      ref={rootMergedRef}
+      className={cn(dropdownClassNames.root, 'relative inline-flex flex-col', className)}
+    >
       {multiselect && <PickerAnnouncer />}
       <div className="relative flex items-center">
         <button
@@ -431,6 +436,7 @@ const DropdownRoot = (props: DropdownProps<boolean>) => {
           onFocus={onFocus}
           onBlur={onBlur}
           className={cn(
+            dropdownClassNames.button,
             // Every padding is set here (C-NATIVE), not left to an app-wide `button` rule. The end
             // padding keeps the text clear of the chevron (and of the clear button while it shows).
             'relative flex h-8 w-full items-center justify-between rounded border border-input border-b-stroke-accessible bg-background px-3 py-0 text-start text-body-1 text-foreground',
@@ -440,7 +446,13 @@ const DropdownRoot = (props: DropdownProps<boolean>) => {
             invalidLook && inputInvalid,
           )}
         >
-          <span className={cn('truncate', !showValue && 'text-muted-foreground')}>
+          <span
+            className={cn(
+              dropdownClassNames.value,
+              'truncate',
+              !showValue && 'text-muted-foreground',
+            )}
+          >
             {showValue ? valueNode : placeholder}
           </span>
           {showExpand &&
@@ -449,6 +461,7 @@ const DropdownRoot = (props: DropdownProps<boolean>) => {
                 expandGlyph,
                 'span',
                 cn(
+                  dropdownClassNames.expandIcon,
                   'absolute end-3 inline-flex transition-transform motion-reduce:transition-none',
                   expanded && 'rotate-180',
                 ),
@@ -457,6 +470,7 @@ const DropdownRoot = (props: DropdownProps<boolean>) => {
             ) : (
               <ChevronDownIcon
                 className={cn(
+                  dropdownClassNames.expandIcon,
                   'absolute end-3 transition-transform motion-reduce:transition-none',
                   expanded && 'rotate-180',
                 )}
@@ -472,6 +486,7 @@ const DropdownRoot = (props: DropdownProps<boolean>) => {
             onMouseDown={(event) => event.preventDefault()}
             onClick={handleClear}
             className={cn(
+              dropdownClassNames.clearButton,
               PICKER_ICON_BUTTON_CLASSES,
               showExpand ? 'end-7' : 'end-1',
               focusRing,
@@ -489,6 +504,8 @@ const DropdownRoot = (props: DropdownProps<boolean>) => {
         floatingProps={floatingProps}
         open={open}
         expanded={expanded}
+        listClassName={dropdownClassNames.listbox}
+        surfaceClassName={dropdownClassNames.surface}
         aria-label={fieldProps['aria-label']}
         aria-labelledby={listLabelledBy}
       >

@@ -1,4 +1,5 @@
 import * as React from 'react';
+import { swatchPickerClassNames } from '../../lib/classNames';
 import { cn } from '../../lib/cn';
 import { composeEventHandlers } from '../../lib/composeEventHandlers';
 import { joinIds } from '../../lib/aria';
@@ -319,6 +320,9 @@ const SwatchPickerRoot = ({
       value={item.value}
       color={item.color}
       aria-label={item.label || item.color}
+      // The swatches of `items` carry the picker's `swatch` part class (0.8), as they did when
+      // the picker drew them itself.
+      className={swatchPickerClassNames.swatch}
     />
   ));
 
@@ -334,6 +338,7 @@ const SwatchPickerRoot = ({
       data-shape={shape}
       data-spacing={spacing}
       className={cn(
+        swatchPickerClassNames.root,
         isGrid ? 'relative flex flex-col' : 'relative flex flex-wrap',
         spacing === 'small' ? 'gap-1' : 'gap-2',
         className,

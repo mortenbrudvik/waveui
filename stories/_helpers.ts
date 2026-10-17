@@ -1,7 +1,7 @@
 /**
  * Shared Storybook `argTypes` for the Wave prop vocabulary (C-NAMING): `size`, `appearance`,
- * `orientation`, `iconPosition`, the Field `validationState` and the Badge `appearance`/`color`
- * values.
+ * `orientation`, `iconPosition`, the Field `validationState`, the Badge `appearance`/`color` and the
+ * color `shape` values.
  *
  * Each entry is checked with `satisfies ArgTypes`, and each `options` list with `satisfies` against
  * the library type it documents, so a value that is not part of the vocabulary fails the dev type
@@ -19,6 +19,7 @@ import type {
   Appearance,
   BadgeAppearance,
   BadgeColor,
+  ColorPickerShape,
   IconPosition,
   Orientation,
   Size,
@@ -61,6 +62,7 @@ const badgeColors = [
   'severe',
   'subtle',
 ] as const satisfies readonly BadgeColor[];
+const colorPickerShapes = ['rounded', 'square'] as const satisfies readonly ColorPickerShape[];
 
 /** `size` (`Size`): extra-small … extra-large. */
 export const sizeArgType = {
@@ -98,4 +100,9 @@ export const badgeAppearanceArgType = {
 /** Badge `color` (`BadgeColor`). */
 export const badgeColorArgType = {
   color: { control: 'select', options: badgeColors },
+} satisfies ArgTypes;
+
+/** `shape` (`ColorPickerShape`) of ColorPicker, ColorArea, ColorSlider and AlphaSlider: rounded or square. */
+export const colorPickerShapeArgType = {
+  shape: { control: 'inline-radio', options: colorPickerShapes },
 } satisfies ArgTypes;

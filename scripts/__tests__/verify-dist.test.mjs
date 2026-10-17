@@ -26,6 +26,7 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import {
   checkCjsParity,
+  checkClassNameExports,
   checkDeclarations,
   checkDevEnvironment,
   checkDirectives,
@@ -41,6 +42,7 @@ import {
   isMainModule,
   main,
   missingDeclarations,
+  OPT_IN_MODULES,
   PENDING_FLAT_EXPORTS,
   probeIncludes,
   probeSizeBudget,
@@ -65,8 +67,8 @@ const DIRECTIVE = '"use client";\n';
 
 /**
  * The fixture's rolled-up declarations: every name on REQUIRED_DECLARATIONS (a utility, a
- * documented component, a props type, a documented compound and a hook), and the empty export
- * list that ends every roll-up.
+ * documented component, a props type, a documented compound, a hook and a class-name constant),
+ * and the empty export list that ends every roll-up.
  */
 const DTS =
   'export declare function cn(...inputs: unknown[]): string;\n' +
@@ -74,6 +76,7 @@ const DTS =
   'export declare type ButtonProps = { disabled?: boolean };\n' +
   '/** A menu. */\nexport declare const Menu: (props: object) => null;\n' +
   'export declare function usePresence(visible: boolean): { isMounted: boolean };\n' +
+  "export declare const buttonClassNames: { readonly root: 'wave-button'; readonly icon: 'wave-button__icon' };\n" +
   '\nexport { }\n';
 
 /** What vite-plugin-dts rolls up when TypeScript writes the declarations elsewhere. */
@@ -81,7 +84,7 @@ const EMPTY_ROLL_UP = 'export { }\n';
 
 /** A correct preserveModules dist: Button, a Card and a Dialog compound, a hook and `cn`. */
 function goodFiles() {
-  const component = (name, members = []) => {
+  const component = (name, members = [], constant) => {
     const parts = members.map(
       (member) =>
         `function ${name}${member}() { return null; }\n${name}${member}.displayName = '${name}${member}';\n`,
@@ -91,14 +94,17 @@ function goodFiles() {
           .map((member) => `${member}: ${name}${member}`)
           .join(', ')} });\n`
       : `export const ${name} = ${name}Root;\n`;
+    const classes = `${constant ? `${constant}.root, ` : ''}'${name.toLowerCase()}'`;
     const esm =
       `${DIRECTIVE}import { cn } from '../../lib/cn.mjs';\n` +
-      `function ${name}Root(props) { return cn('${name.toLowerCase()}', props && props.className); }\n` +
+      (constant ? `import { ${constant} } from '../../lib/classNames.mjs';\n` : '') +
+      `function ${name}Root(props) { return cn(${classes}, props && props.className); }\n` +
       `${name}Root.displayName = '${name}';\n${parts.join('')}${assign}` +
       (members.length ? `export { ${members.map((member) => name + member).join(', ')} };\n` : '');
     const cjs =
       `${DIRECTIVE}const { cn } = require('../../lib/cn.cjs');\n` +
-      `function ${name}Root(props) { return cn('${name.toLowerCase()}', props && props.className); }\n` +
+      (constant ? `const { ${constant} } = require('../../lib/classNames.cjs');\n` : '') +
+      `function ${name}Root(props) { return cn(${classes}, props && props.className); }\n` +
       `${name}Root.displayName = '${name}';\n${parts.join('')}` +
       `exports.${name} = Object.assign(${name}Root, { ${members
         .map((member) => `${member}: ${name}${member}`)
@@ -106,7 +112,7 @@ function goodFiles() {
       members.map((member) => `exports.${name}${member} = ${name}${member};\n`).join('');
     return { esm, cjs };
   };
-  const button = component('Button');
+  const button = component('Button', [], 'buttonClassNames');
   const card = component('Card', ['Header']);
   const dialog = component('Dialog', ['Trigger', 'Content']);
   // The presence core (0.7): a hook and a component on it, with React external.
@@ -143,6 +149,69 @@ function goodFiles() {
       "function Menu(props) { const { isMounted, phase } = hook.usePresence(props.open); return isMounted ? jsxRuntime.jsx('div', { role: 'menu', 'data-presence': phase, children: props.children }) : null; }\n" +
       "Menu.displayName = 'Menu';\nexports.Menu = Menu;\n",
   };
+  // 0.8 (INTEGRATION): the opt-in color parts, the server-safe color helpers and toaster handle,
+  // and a Toaster on the presence core.
+  const colorPart = (name) => ({
+    esm:
+      `${DIRECTIVE}import { cn } from '../../lib/cn.mjs';\n` +
+      "import { hsvToHex } from '../../lib/color.mjs';\n" +
+      `function ${name}(props) { return cn('${name.toLowerCase()}', hsvToHex(props.value)); }\n` +
+      `${name}.displayName = '${name}';\nexport { ${name} };\n`,
+    cjs:
+      `${DIRECTIVE}const { cn } = require('../../lib/cn.cjs');\n` +
+      "const { hsvToHex } = require('../../lib/color.cjs');\n" +
+      `function ${name}(props) { return cn('${name.toLowerCase()}', hsvToHex(props.value)); }\n` +
+      `${name}.displayName = '${name}';\nexports.${name} = ${name};\n`,
+  });
+  const colorArea = colorPart('ColorArea');
+  const colorSlider = colorPart('ColorSlider');
+  const alphaSlider = colorPart('AlphaSlider');
+  const colorHelpers = `function channel(n, h, s, v) {
+  const k = (n + h / 60) % 6;
+  return Math.round((v - v * s * Math.max(0, Math.min(k, 4 - k, 1))) * 255);
+}
+function hsvToHex(c) {
+  return '#' + [5, 3, 1].map((n) => channel(n, c.h, c.s, c.v).toString(16).padStart(2, '0')).join('');
+}
+function hexToHsv(text) {
+  const match = /^#([0-9a-f]{6})$/i.exec(String(text).trim());
+  if (!match) return null;
+  const [r, g, b] = [0, 2, 4].map((i) => parseInt(match[1].slice(i, i + 2), 16) / 255);
+  const max = Math.max(r, g, b);
+  const d = max - Math.min(r, g, b);
+  const h =
+    d === 0 ? 0 : max === r ? 60 * (((g - b) / d) % 6) : max === g ? 60 * ((b - r) / d + 2) : 60 * ((r - g) / d + 4);
+  return { h: (h + 360) % 360, s: max === 0 ? 0 : d / max, v: max };
+}
+`;
+  const toasterHandle = `let handles = 0;
+function createToaster() {
+  const prefix = 'fixture-toaster-' + ++handles + '-';
+  let count = 0;
+  const idOf = (arg, options) =>
+    (arg && typeof arg === 'object' && !('$$typeof' in arg) && arg.toastId) ||
+    (options && options.toastId) ||
+    prefix + ++count;
+  return {
+    dispatchToast: (arg, options) => idOf(arg, options),
+    dismissToast: () => {},
+    dismissAllToasts: () => {},
+  };
+}
+`;
+  // A Toaster on the presence core (0.8): an import of only Toaster holds it.
+  const toaster = {
+    esm:
+      `${DIRECTIVE}import { jsx } from 'react/jsx-runtime';\n` +
+      "import { usePresence } from '../../hooks/usePresence.mjs';\n" +
+      "function Toaster(props) { const { isMounted, phase } = usePresence(true); return isMounted ? jsx('div', { role: 'region', 'data-presence': phase, children: props.children }) : null; }\n" +
+      "Toaster.displayName = 'Toaster';\nexport { Toaster };\n",
+    cjs:
+      `${DIRECTIVE}const jsxRuntime = require('react/jsx-runtime');\n` +
+      "const hook = require('../../hooks/usePresence.cjs');\n" +
+      "function Toaster(props) { const { isMounted, phase } = hook.usePresence(true); return isMounted ? jsxRuntime.jsx('div', { role: 'region', 'data-presence': phase, children: props.children }) : null; }\n" +
+      "Toaster.displayName = 'Toaster';\nexports.Toaster = Toaster;\n",
+  };
   // src/lib/dev.ts reads the bundler-injected mode at call time.
   const dev = (exportSyntax) =>
     `function isDevEnvironment() {\n  try {\n    return process.env.NODE_ENV !== "production";\n  } catch {\n    return true;\n  }\n}\n${exportSyntax}`;
@@ -158,6 +227,12 @@ function goodFiles() {
       "export function cn(...inputs) { return inputs.filter(Boolean).join(' '); }\n",
     'dist/lib/cn.cjs':
       "exports.cn = function cn(...inputs) { return inputs.filter(Boolean).join(' '); };\n",
+    'dist/lib/classNames.mjs':
+      "export const buttonClassNames = { root: 'wave-button', icon: 'wave-button__icon' };\n" +
+      "export const dialogContentClassNames = { root: 'wave-dialog-content', body: 'wave-dialog-content__body' };\n",
+    'dist/lib/classNames.cjs':
+      "exports.buttonClassNames = { root: 'wave-button', icon: 'wave-button__icon' };\n" +
+      "exports.dialogContentClassNames = { root: 'wave-dialog-content', body: 'wave-dialog-content__body' };\n",
     'dist/lib/dev.mjs': dev('export const isDev = isDevEnvironment();\n'),
     'dist/lib/dev.cjs': dev('exports.isDev = isDevEnvironment();\n'),
     'dist/hooks/useThing.mjs': `${DIRECTIVE}import { useState } from 'react';\nexport function useThing() { return useState(0); }\n`,
@@ -174,18 +249,38 @@ function goodFiles() {
     'dist/components/motion/Presence.cjs': presence.cjs,
     'dist/components/navigation/Menu.mjs': menu.esm,
     'dist/components/navigation/Menu.cjs': menu.cjs,
+    'dist/components/input/ColorArea.mjs': colorArea.esm,
+    'dist/components/input/ColorArea.cjs': colorArea.cjs,
+    'dist/components/input/ColorSlider.mjs': colorSlider.esm,
+    'dist/components/input/ColorSlider.cjs': colorSlider.cjs,
+    'dist/components/input/AlphaSlider.mjs': alphaSlider.esm,
+    'dist/components/input/AlphaSlider.cjs': alphaSlider.cjs,
+    'dist/components/feedback/Toaster.mjs': toaster.esm,
+    'dist/components/feedback/Toaster.cjs': toaster.cjs,
+    'dist/lib/color.mjs': `${colorHelpers}export { hsvToHex, hexToHsv };\n`,
+    'dist/lib/color.cjs': `${colorHelpers}exports.hsvToHex = hsvToHex;\nexports.hexToHsv = hexToHsv;\n`,
+    'dist/lib/toaster.mjs': `${toasterHandle}export { createToaster };\n`,
+    'dist/lib/toaster.cjs': `${toasterHandle}exports.createToaster = createToaster;\n`,
     'dist/index.mjs':
       "export { cn } from './lib/cn.mjs';\n" +
+      "export { buttonClassNames, dialogContentClassNames } from './lib/classNames.mjs';\n" +
       "export { useThing } from './hooks/useThing.mjs';\n" +
       "export { Button } from './components/button/Button.mjs';\n" +
       "export { Card, CardHeader } from './components/layout/Card.mjs';\n" +
       "export { Dialog, DialogTrigger, DialogContent } from './components/overlays/Dialog.mjs';\n" +
       "export { usePresence } from './hooks/usePresence.mjs';\n" +
       "export { Presence } from './components/motion/Presence.mjs';\n" +
-      "export { Menu } from './components/navigation/Menu.mjs';\n",
+      "export { Menu } from './components/navigation/Menu.mjs';\n" +
+      "export { hsvToHex, hexToHsv } from './lib/color.mjs';\n" +
+      "export { createToaster } from './lib/toaster.mjs';\n" +
+      "export { ColorArea } from './components/input/ColorArea.mjs';\n" +
+      "export { ColorSlider } from './components/input/ColorSlider.mjs';\n" +
+      "export { AlphaSlider } from './components/input/AlphaSlider.mjs';\n" +
+      "export { Toaster } from './components/feedback/Toaster.mjs';\n",
     'dist/index.cjs':
       "Object.defineProperty(exports, '__esModule', { value: true });\n" +
       "const cn = require('./lib/cn.cjs');\n" +
+      "const classNames = require('./lib/classNames.cjs');\n" +
       "const hook = require('./hooks/useThing.cjs');\n" +
       "const button = require('./components/button/Button.cjs');\n" +
       "const card = require('./components/layout/Card.cjs');\n" +
@@ -193,12 +288,24 @@ function goodFiles() {
       "const presenceHook = require('./hooks/usePresence.cjs');\n" +
       "const presence = require('./components/motion/Presence.cjs');\n" +
       "const menu = require('./components/navigation/Menu.cjs');\n" +
+      "const color = require('./lib/color.cjs');\n" +
+      "const toasterHandle = require('./lib/toaster.cjs');\n" +
+      "const colorArea = require('./components/input/ColorArea.cjs');\n" +
+      "const colorSlider = require('./components/input/ColorSlider.cjs');\n" +
+      "const alphaSlider = require('./components/input/AlphaSlider.cjs');\n" +
+      "const toaster = require('./components/feedback/Toaster.cjs');\n" +
       'exports.cn = cn.cn;\nexports.useThing = hook.useThing;\nexports.Button = button.Button;\n' +
+      'exports.buttonClassNames = classNames.buttonClassNames;\n' +
+      'exports.dialogContentClassNames = classNames.dialogContentClassNames;\n' +
       'exports.Card = card.Card;\nexports.CardHeader = card.CardHeader;\n' +
       'exports.Dialog = dialog.Dialog;\nexports.DialogTrigger = dialog.DialogTrigger;\n' +
       'exports.DialogContent = dialog.DialogContent;\n' +
       'exports.usePresence = presenceHook.usePresence;\nexports.Presence = presence.Presence;\n' +
-      'exports.Menu = menu.Menu;\n',
+      'exports.Menu = menu.Menu;\n' +
+      'exports.hsvToHex = color.hsvToHex;\nexports.hexToHsv = color.hexToHsv;\n' +
+      'exports.createToaster = toasterHandle.createToaster;\n' +
+      'exports.ColorArea = colorArea.ColorArea;\nexports.ColorSlider = colorSlider.ColorSlider;\n' +
+      'exports.AlphaSlider = alphaSlider.AlphaSlider;\nexports.Toaster = toaster.Toaster;\n',
     'dist/index.d.ts': DTS,
     'dist/index.d.cts': DTS,
   };
@@ -391,8 +498,8 @@ describe('checkDeclarations (repo-level#5)', () => {
       'dist/index.d.cts': EMPTY_ROLL_UP,
     });
     expect(checkDeclarations(dist)).toEqual([
-      "index.d.ts does not declare and export cn, Button, ButtonProps, Menu, usePresence (an empty or partial roll-up: check tsconfig.json's rootDir and the declaration plugin in vite.config.ts)",
-      "index.d.cts does not declare and export cn, Button, ButtonProps, Menu, usePresence (an empty or partial roll-up: check tsconfig.json's rootDir and the declaration plugin in vite.config.ts)",
+      "index.d.ts does not declare and export cn, Button, ButtonProps, Menu, usePresence, buttonClassNames (an empty or partial roll-up: check tsconfig.json's rootDir and the declaration plugin in vite.config.ts)",
+      "index.d.cts does not declare and export cn, Button, ButtonProps, Menu, usePresence, buttonClassNames (an empty or partial roll-up: check tsconfig.json's rootDir and the declaration plugin in vite.config.ts)",
     ]);
   });
 
@@ -413,7 +520,7 @@ describe('checkDeclarations (repo-level#5)', () => {
     expect(checkDeclarations(fixture({ 'dist/index.d.cts': EMPTY_ROLL_UP }).dist)).toEqual([
       expect.stringMatching(/index\.d\.cts differs/),
       expect.stringMatching(
-        /^index\.d\.cts does not declare and export cn, Button, ButtonProps, Menu, usePresence \(/,
+        /^index\.d\.cts does not declare and export cn, Button, ButtonProps, Menu, usePresence, buttonClassNames \(/,
       ),
     ]);
   });
@@ -935,12 +1042,13 @@ describe('probeTreeShaking (repo-level#3)', () => {
     const files = goodFiles();
     const single =
       files['dist/lib/cn.mjs'] +
+      files['dist/lib/classNames.mjs'] +
       files['dist/components/button/Button.mjs']
         .replace(DIRECTIVE, '')
-        .replace(/^import .*\n/m, '') +
+        .replace(/^import .*\n/gm, '') +
       files['dist/components/overlays/Dialog.mjs']
         .replace(DIRECTIVE, '')
-        .replace(/^import .*\n/m, '');
+        .replace(/^import .*\n/gm, '');
     const { dist } = fixture({ 'dist/index.mjs': single });
     const errors = await probeTreeShaking(dist);
     expect(errors.join('\n')).toMatch(/index\.mjs/);
@@ -1089,6 +1197,285 @@ describe('the flat-name bridge (PENDING_FLAT_EXPORTS)', () => {
       true,
     );
   }, 60_000);
+
+  it('the real exports carry the flat name of every compound member, the 0.8 parts included', async () => {
+    const mod = await import('../../src/index.ts');
+    const members = [
+      ['Toast', 'Title'],
+      ['Toast', 'Body'],
+      ['Toast', 'Footer'],
+      ['Toast', 'Close'],
+      ['MessageBar', 'Title'],
+      ['MessageBar', 'Actions'],
+      ['ColorPicker', 'HexField'],
+      ['ColorPicker', 'Swatches'],
+      ['ColorPicker', 'Preview'],
+      ['Tree', 'ItemPersonaLayout'],
+      ['Toolbar', 'Button'],
+    ];
+    for (const [compound, member] of members) {
+      expect(mod[`${compound}${member}`], `${compound}${member}`).toBe(mod[compound][member]);
+    }
+    const result = checkFlatExports(mod);
+    expect(result.errors).toEqual([]);
+    // Only the bridge's own entries may be planned or pending.
+    expect(
+      [...result.planned, ...result.pending].filter(
+        (n) => !PENDING_FLAT_EXPORTS.some((entry) => n.startsWith(entry)),
+      ),
+    ).toEqual([]);
+  }, 60_000);
+});
+
+describe('the 0.8 opt-in modules and the Toaster probe (INTEGRATION)', () => {
+  it('lists the color parts, the color helpers and the toaster handle, sorted', () => {
+    expect(OPT_IN_MODULES).toEqual([
+      'components/input/AlphaSlider.mjs',
+      'components/input/ColorArea.mjs',
+      'components/input/ColorSlider.mjs',
+      'lib/color.mjs',
+      'lib/toaster.mjs',
+    ]);
+    expect([...OPT_IN_MODULES].sort()).toEqual(OPT_IN_MODULES);
+  });
+
+  it('passes when an import of only Button holds none of them', async () => {
+    expect(
+      await probeTreeShaking(fixture().dist, {
+        keep: 'Button',
+        drop: 'ColorArea',
+        dropModules: OPT_IN_MODULES,
+      }),
+    ).toEqual([]);
+  });
+
+  it('verifyDist reports a Button bundle that holds the color helpers', async () => {
+    const files = goodFiles();
+    const { dist } = fixture({
+      'dist/components/button/Button.mjs': files['dist/components/button/Button.mjs']
+        .replace(
+          "import { cn } from '../../lib/cn.mjs';\n",
+          "import { cn } from '../../lib/cn.mjs';\nimport { hsvToHex } from '../../lib/color.mjs';\n",
+        )
+        .replace('return cn(', 'hsvToHex({ h: 0, s: 0, v: 0 }); return cn('),
+    });
+    const { errors } = await verifyDist(dist, noPending);
+    expect(errors).toEqual([
+      'lib/color.mjs is in the bundle of an import of only Button (ColorArea must be dropped)',
+    ]);
+  }, 30_000);
+
+  it('verifyDist reports a Toaster bundle without the presence core', async () => {
+    const files = goodFiles();
+    const { dist } = fixture({
+      'dist/components/feedback/Toaster.mjs': files['dist/components/feedback/Toaster.mjs']
+        .replace("import { usePresence } from '../../hooks/usePresence.mjs';\n", '')
+        .replace(
+          'const { isMounted, phase } = usePresence(true);',
+          "const isMounted = true; const phase = 'entered';",
+        ),
+    });
+    const { errors } = await verifyDist(dist, noPending);
+    expect(errors).toEqual([
+      'hooks/usePresence.mjs is not in the bundle of an import of only Toaster',
+    ]);
+  }, 30_000);
+});
+
+describe('checkServerImport: the 0.8 server-safe modules (INTEGRATION)', () => {
+  it('reads the color helpers and createToaster from lib and from the entry', async () => {
+    expect(await checkServerImport(fixture().dist)).toEqual([]);
+  }, 30_000);
+
+  it('reports a missing color or toaster module', async () => {
+    const errors = await checkServerImport(
+      fixture({ 'dist/lib/color.mjs': null, 'dist/lib/toaster.cjs': null }).dist,
+    );
+    expect(errors).toEqual(['lib/color.mjs is missing', 'lib/toaster.cjs is missing']);
+  }, 30_000);
+
+  it('reports a handle that calls client code on the server', async () => {
+    const { dist } = fixture({
+      'dist/lib/toaster.mjs':
+        "import { useThing } from '../hooks/useThing.mjs';\n" +
+        "export function createToaster() { return { dispatchToast: () => { useThing(); return 'id'; }, dismissToast() {}, dismissAllToasts() {} }; }\n",
+    });
+    expect(await checkServerImport(dist)).toEqual([
+      expect.stringMatching(
+        /^lib\/toaster\.mjs under node --conditions=react-server: Attempted to call useThing\(\) from the server/,
+      ),
+    ]);
+  }, 30_000);
+
+  it('reports a handle whose dispatch returns no id', async () => {
+    const { dist } = fixture({
+      'dist/lib/toaster.mjs':
+        'export function createToaster() { return { dispatchToast() {}, dismissToast() {}, dismissAllToasts() {} }; }\n',
+    });
+    expect(await checkServerImport(dist)).toEqual([
+      "lib/toaster.mjs under node --conditions=react-server: dispatchToast('x') returned undefined, not an id",
+    ]);
+  }, 30_000);
+
+  it('reports a handle that keeps server dispatches in a global', async () => {
+    const { dist } = fixture({
+      'dist/lib/toaster.mjs':
+        'export function createToaster() {\n' +
+        '  return {\n' +
+        "    dispatchToast(arg) { (globalThis.__fixtureToasts ??= []).push(arg); return (arg && arg.toastId) || 'id'; },\n" +
+        '    dismissToast() {},\n' +
+        '    dismissAllToasts() {},\n' +
+        '  };\n' +
+        '}\n',
+    });
+    expect(await checkServerImport(dist)).toEqual([
+      'lib/toaster.mjs under node --conditions=react-server: a dispatch on the server added a global (it must do nothing)',
+    ]);
+  }, 30_000);
+
+  it('reports an entry whose createToaster comes from a "use client" module', async () => {
+    const files = goodFiles();
+    const { dist } = fixture({
+      'dist/hooks/useThing.mjs': `${files['dist/hooks/useThing.mjs']}export { createToaster } from '../lib/toaster.mjs';\n`,
+      'dist/index.mjs': files['dist/index.mjs'].replace(
+        "export { createToaster } from './lib/toaster.mjs';",
+        "export { createToaster } from './hooks/useThing.mjs';",
+      ),
+    });
+    expect(await checkServerImport(dist)).toEqual([
+      expect.stringMatching(
+        /^index\.mjs under node --conditions=react-server: createToaster is a client reference/,
+      ),
+    ]);
+  }, 30_000);
+});
+
+describe('the class-name registry (P3-00)', () => {
+  it('requires the class-name constants in the roll-up (buttonClassNames)', () => {
+    expect(REQUIRED_DECLARATIONS).toContain('buttonClassNames');
+    const dts = DTS.replace(/^export declare const buttonClassNames.*\n/m, '');
+    expect(
+      checkDeclarations(fixture({ 'dist/index.d.ts': dts, 'dist/index.d.cts': dts }).dist),
+    ).toEqual([
+      expect.stringMatching(/^index\.d\.ts does not declare and export buttonClassNames \(/),
+      expect.stringMatching(/^index\.d\.cts does not declare and export buttonClassNames \(/),
+    ]);
+  });
+
+  it('reports an entry whose buttonClassNames is a client reference (from a "use client" module)', async () => {
+    const files = goodFiles();
+    const { dist } = fixture({
+      'dist/components/button/Button.mjs': `${files['dist/components/button/Button.mjs']}export { buttonClassNames } from '../../lib/classNames.mjs';\n`,
+      'dist/index.mjs': files['dist/index.mjs'].replace(
+        "export { buttonClassNames, dialogContentClassNames } from './lib/classNames.mjs';",
+        "export { buttonClassNames } from './components/button/Button.mjs';\n" +
+          "export { dialogContentClassNames } from './lib/classNames.mjs';",
+      ),
+    });
+    expect(await checkServerImport(dist)).toEqual([
+      expect.stringMatching(
+        /^index\.mjs under node --conditions=react-server: buttonClassNames is not a plain object/,
+      ),
+    ]);
+  });
+
+  it('reports a class-name module whose export is not an object of strings', async () => {
+    const files = goodFiles();
+    const { dist } = fixture({
+      'dist/lib/classNames.mjs': `${files['dist/lib/classNames.mjs']}export const brokenClassNames = { root: 1 };\n`,
+    });
+    expect(await checkServerImport(dist)).toEqual([
+      expect.stringMatching(
+        /^lib\/classNames\.mjs under node --conditions=react-server: brokenClassNames is not an object of class-name strings/,
+      ),
+    ]);
+  });
+
+  it('passes when the entry exports every class-name constant with the same value, in both formats', async () => {
+    expect(await checkClassNameExports(fixture().dist)).toEqual([]);
+  });
+
+  it('reports a registry constant the entry does not export', async () => {
+    const files = goodFiles();
+    const { dist } = fixture({
+      'dist/index.mjs': files['dist/index.mjs'].replace(
+        'export { buttonClassNames, dialogContentClassNames }',
+        'export { buttonClassNames }',
+      ),
+    });
+    expect(await checkClassNameExports(dist)).toEqual([
+      'index.mjs does not export dialogContentClassNames (a class-name constant of lib/classNames.mjs)',
+    ]);
+  });
+
+  it('reports a constant the entry exports with another value', async () => {
+    const files = goodFiles();
+    const { dist } = fixture({
+      'dist/index.cjs': files['dist/index.cjs'].replace(
+        'exports.buttonClassNames = classNames.buttonClassNames;',
+        "exports.buttonClassNames = { root: 'wave-button' };",
+      ),
+    });
+    expect(await checkClassNameExports(dist)).toEqual([
+      'index.cjs exports buttonClassNames with another value than lib/classNames.cjs',
+    ]);
+  });
+
+  it('reports a missing registry module', async () => {
+    expect(await checkClassNameExports(fixture({ 'dist/lib/classNames.cjs': null }).dist)).toEqual([
+      'lib/classNames.cjs is missing (the class-name registry, src/lib/classNames.ts)',
+    ]);
+  });
+});
+
+describe('probeTreeShaking: class-name strings (P3-00)', () => {
+  const strings = { keepStrings: ['wave-button'], dropStrings: ['wave-dialog-content'] };
+
+  it("passes when the bundle keeps Button's class string and drops the unused constant", async () => {
+    expect(await probeTreeShaking(fixture().dist, strings)).toEqual([]);
+  });
+
+  it('reports a string that should have been dropped', async () => {
+    const files = goodFiles();
+    const { dist } = fixture({
+      // Button now also uses the Dialog surface's constant, so its bundle keeps that string.
+      'dist/components/button/Button.mjs': files['dist/components/button/Button.mjs']
+        .replace(
+          'import { buttonClassNames } from',
+          'import { buttonClassNames, dialogContentClassNames } from',
+        )
+        .replace(
+          'cn(buttonClassNames.root, ',
+          'cn(buttonClassNames.root, dialogContentClassNames.root, ',
+        ),
+    });
+    expect(await probeTreeShaking(dist, strings)).toEqual([
+      'the bundle of an import of only Button contains the string "wave-dialog-content" (an unused class-name constant was not tree-shaken)',
+    ]);
+  });
+
+  it('reports a string the bundle lacks', async () => {
+    const files = goodFiles();
+    const { dist } = fixture({
+      'dist/components/button/Button.mjs': files['dist/components/button/Button.mjs']
+        .replace("import { buttonClassNames } from '../../lib/classNames.mjs';\n", '')
+        .replace('cn(buttonClassNames.root, ', 'cn('),
+    });
+    expect(await probeTreeShaking(dist, strings)).toEqual([
+      'the bundle of an import of only Button lacks the string "wave-button"',
+    ]);
+  });
+
+  it('reports a listed string that occurs in no module of dist (the probe would pass vacuously)', async () => {
+    expect(
+      await probeTreeShaking(fixture().dist, {
+        keepStrings: ['wave-button'],
+        dropStrings: ['wave-gone'],
+      }),
+    ).toEqual([
+      '"wave-gone", listed for the bundle of an import of only Button, occurs in no module of dist (the probe would pass vacuously)',
+    ]);
+  });
 });
 
 describe('verifyDist and main', () => {
@@ -1099,6 +1486,25 @@ describe('verifyDist and main', () => {
     const { dist } = fixture();
     const result = await verifyDist(dist, noPending);
     expect(result.errors).toEqual([]);
+  }, 30_000);
+
+  it('runs the class-name checks: a registry constant missing from the entry fails', async () => {
+    const files = goodFiles();
+    const { dist } = fixture({
+      'dist/index.mjs': files['dist/index.mjs'].replace(
+        'export { buttonClassNames, dialogContentClassNames }',
+        'export { buttonClassNames }',
+      ),
+      'dist/index.cjs': files['dist/index.cjs'].replace(
+        'exports.dialogContentClassNames = classNames.dialogContentClassNames;\n',
+        '',
+      ),
+    });
+    const { errors } = await verifyDist(dist, noPending);
+    expect(errors).toEqual([
+      'index.mjs does not export dialogContentClassNames (a class-name constant of lib/classNames.mjs)',
+      'index.cjs does not export dialogContentClassNames (a class-name constant of lib/classNames.cjs)',
+    ]);
   }, 30_000);
 
   it('collects the failures of every check', async () => {

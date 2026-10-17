@@ -1,4 +1,5 @@
 import * as React from 'react';
+import { spinnerClassNames } from '../../lib/classNames';
 import { cn } from '../../lib/cn';
 import { forcedColors } from '../../lib/styles';
 import type { Size } from '../../lib/types';
@@ -140,13 +141,14 @@ export const Spinner = ({
       role={role}
       aria-label={nameFromLabel ? label : rest['aria-label']}
       ref={ref}
-      className={cn('inline-flex items-center gap-2', className)}
+      className={cn(spinnerClassNames.root, 'inline-flex items-center gap-2', className)}
     >
       {shown ? (
         <span
           aria-hidden="true"
           data-wave-spinner-ring=""
           className={cn(
+            spinnerClassNames.spinner,
             'rounded-full border-2 animate-wave-spin motion-reduce:animate-wave-spin-slow',
             colors.ring,
             forcedColors.ringArc,
@@ -156,7 +158,10 @@ export const Spinner = ({
       ) : null}
       <span
         data-wave-spinner-label=""
-        className={labelVisible ? cn('text-body-1', colors.label) : 'sr-only'}
+        className={cn(
+          spinnerClassNames.label,
+          labelVisible ? cn('text-body-1', colors.label) : 'sr-only',
+        )}
       >
         {announced ? label : null}
       </span>

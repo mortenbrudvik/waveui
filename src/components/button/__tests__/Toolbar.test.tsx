@@ -18,6 +18,13 @@ import { Button } from '../Button';
 import { Link } from '../Link';
 import { MenuButton } from '../MenuButton';
 import { buttonClassName } from '../buttonStyles';
+import {
+  buttonClassNames,
+  toggleButtonClassNames,
+  toolbarButtonClassNames,
+  toolbarRadioButtonClassNames,
+  toolbarToggleButtonClassNames,
+} from '../../../lib/classNames';
 import { Checkbox } from '../../input/Checkbox';
 import { Combobox } from '../../input/Combobox';
 import { Dropdown } from '../../input/Dropdown';
@@ -55,6 +62,9 @@ const SizeDropdown = (props: { name?: string }) => (
 const classesOf = (el: Element) => Array.from(el.classList).sort();
 /** The classes of a `buttonClassName()` result as a sorted array. */
 const classesFrom = (value: string) => value.split(/\s+/).filter(Boolean).sort();
+/** A `buttonClassName()` result plus the stable classes the element carries (P3-00), sorted. */
+const withStable = (value: string, ...stable: string[]) =>
+  [...classesFrom(value), ...stable].sort();
 
 const SIZES: Size[] = ['extra-small', 'small', 'medium', 'large', 'extra-large'];
 
@@ -849,11 +859,29 @@ describe('Toolbar', () => {
             <Button>Plain</Button>
           </Toolbar>,
         );
-        const partClasses = classesFrom(buttonClassName({ appearance: 'subtle', size }));
-        expect(classesOf(button('Cut'))).toEqual(partClasses);
-        expect(classesOf(button('Bold'))).toEqual(partClasses);
-        expect(classesOf(radio('Left'))).toEqual(partClasses);
-        expect(classesOf(button('Plain'))).toEqual(classesFrom(buttonClassName()));
+        const partClasses = buttonClassName({ appearance: 'subtle', size });
+        expect(classesOf(button('Cut'))).toEqual(
+          withStable(partClasses, buttonClassNames.root, toolbarButtonClassNames.root),
+        );
+        expect(classesOf(button('Bold'))).toEqual(
+          withStable(
+            partClasses,
+            buttonClassNames.root,
+            toggleButtonClassNames.root,
+            toolbarToggleButtonClassNames.root,
+          ),
+        );
+        expect(classesOf(radio('Left'))).toEqual(
+          withStable(
+            partClasses,
+            buttonClassNames.root,
+            toggleButtonClassNames.root,
+            toolbarRadioButtonClassNames.root,
+          ),
+        );
+        expect(classesOf(button('Plain'))).toEqual(
+          withStable(buttonClassName(), buttonClassNames.root),
+        );
       },
     );
 
@@ -874,13 +902,27 @@ describe('Toolbar', () => {
         </Toolbar>,
       );
       expect(classesOf(button('Cut'))).toEqual(
-        classesFrom(buttonClassName({ appearance: 'primary', size: 'large' })),
+        withStable(
+          buttonClassName({ appearance: 'primary', size: 'large' }),
+          buttonClassNames.root,
+          toolbarButtonClassNames.root,
+        ),
       );
       expect(classesOf(button('Bold'))).toEqual(
-        classesFrom(buttonClassName({ appearance: 'subtle', size: 'extra-large' })),
+        withStable(
+          buttonClassName({ appearance: 'subtle', size: 'extra-large' }),
+          buttonClassNames.root,
+          toggleButtonClassNames.root,
+          toolbarToggleButtonClassNames.root,
+        ),
       );
       expect(classesOf(radio('Left'))).toEqual(
-        classesFrom(buttonClassName({ appearance: 'outline', size: 'large' })),
+        withStable(
+          buttonClassName({ appearance: 'outline', size: 'large' }),
+          buttonClassNames.root,
+          toggleButtonClassNames.root,
+          toolbarRadioButtonClassNames.root,
+        ),
       );
     });
   });

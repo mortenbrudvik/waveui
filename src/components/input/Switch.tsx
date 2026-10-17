@@ -1,5 +1,6 @@
 import * as React from 'react';
 import { focusableDisabledProps, joinIds } from '../../lib/aria';
+import { switchClassNames } from '../../lib/classNames';
 import { cn } from '../../lib/cn';
 import { composeEventHandlers } from '../../lib/composeEventHandlers';
 import { warnDeprecated, warnOnce } from '../../lib/dev';
@@ -203,7 +204,7 @@ export const Switch = ({
   useFormReset(buttonRef, () => setChecked(defaultChecked), form);
 
   const labelText = hasLabel ? (
-    <span id={labelTextId} className="text-body-1 text-foreground">
+    <span id={labelTextId} className={cn(switchClassNames.label, 'text-body-1 text-foreground')}>
       {materialiseSlotContent(label)}
     </span>
   ) : null;
@@ -216,6 +217,7 @@ export const Switch = ({
       ref={ref}
       data-label-position={labelPosition}
       className={cn(
+        switchClassNames.root,
         // items-start: the 20px track lines up with the 20px first line of a label that wraps or
         // has a second line, not with its middle.
         'relative inline-flex items-start gap-2 select-none',
@@ -260,6 +262,7 @@ export const Switch = ({
             : composeEventHandlers(onClick, () => setChecked((prev) => !prev))
         }
         className={cn(
+          switchClassNames.track,
           // The whole control is sized in px, like the Checkbox box and the radio circle: the thumb
           // and its offsets are px, so a track in rem would stop fitting them at any root font size
           // other than 16px. The 40x20 track (1px border) leaves a 2px inset around the 14px thumb.
@@ -278,6 +281,7 @@ export const Switch = ({
         <span
           aria-hidden="true"
           className={cn(
+            switchClassNames.thumb,
             'block h-[14px] w-[14px] rounded-full transition-transform duration-200 motion-reduce:transition-none forced-colors:forced-color-adjust-none',
             checked
               ? 'translate-x-[22px] wave-rtl:-translate-x-[22px] bg-primary-foreground'
