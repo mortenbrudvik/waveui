@@ -1,10 +1,11 @@
 # WaveUI roadmap: Fluent UI v9 parity
 
-- **Status:** plan of record from 0.6.0 to 1.0.0. Written 2026-09-25 on `feat/fluent-parity`; revised the same day after three reviews (conventions, sequencing, Phase 1 against the code). Review points that were not applied are listed with reasons in the Phase 1 spec, §8. **Phase 1 (0.6.0) and Phase 2 (0.7.0) are released** in 0.7.0 (CHANGELOG `## [0.7.0] - 2026-09-26`), the first npm release since 0.4.0: 0.5.0 and 0.6.0 were never published on their own (CHANGELOG `## [0.6.0] - Not published (ships in 0.7.0)`). Phase 2's design spec is [`docs/superpowers/specs/2026-09-26-fluent-parity-phase-2-design.md`](superpowers/specs/2026-09-26-fluent-parity-phase-2-design.md). This line marks each phase released when its version ships. Revised again on 2026-09-26 for the GitHub issues [#4](https://github.com/mortenbrudvik/waveui/issues/4) to [#7](https://github.com/mortenbrudvik/waveui/issues/7), filed from taskboard, an app built on WaveUI: P3-08 (a toaster handle) and P4-05 (a system theme) are new; P6-04, P6-06 and P7-02 take up the issues' TagPicker, Dialog and notification-region proposals; the Dialog's viewport gap and body text colour were fixed outside the phases (CHANGELOG 0.8.0).
+- **Status:** plan of record from 0.6.0 to 1.0.0. Written 2026-09-25 on `feat/fluent-parity`; revised the same day after three reviews (conventions, sequencing, Phase 1 against the code). Review points that were not applied are listed with reasons in the Phase 1 spec, §8. **Phase 1 (0.6.0) and Phase 2 (0.7.0) are released** in 0.7.0 (CHANGELOG `## [0.7.0] - 2026-09-26`), the first npm release since 0.4.0: 0.5.0 and 0.6.0 were never published on their own (CHANGELOG `## [0.6.0] - Not published (ships in 0.7.0)`). Phase 2's design spec is [`docs/superpowers/specs/2026-09-26-fluent-parity-phase-2-design.md`](superpowers/specs/2026-09-26-fluent-parity-phase-2-design.md). **Phase 3 (0.8.0) is implemented, unreleased**, on `feat/fluent-parity-phase-3`; its design spec, [`docs/superpowers/specs/2026-09-26-fluent-parity-phase-3-design.md`](superpowers/specs/2026-09-26-fluent-parity-phase-3-design.md), records where it changed the Phase 3 sketches below. This line marks each phase released when its version ships. Revised again on 2026-09-26 for the GitHub issues [#4](https://github.com/mortenbrudvik/waveui/issues/4) to [#7](https://github.com/mortenbrudvik/waveui/issues/7), filed from taskboard, an app built on WaveUI: P3-08 (a toaster handle) and P4-05 (a system theme) are new; P6-04, P6-06 and P7-02 take up the issues' TagPicker, Dialog and notification-region proposals; the Dialog's viewport gap and body text colour were fixed outside the phases (CHANGELOG 0.8.0).
 - **Baseline:** `@mortenbrudvik/waveui` 0.5.0 (merged to `main`; never published on its own, it ships in 0.7.0) against `@fluentui/react-components` 9.74.9.
 - **Inputs:** the verified comparison report [`docs/research/fluent-ui-v9-comparison.md`](research/fluent-ui-v9-comparison.md) and its gap list (475 gaps: 7 high, 135 medium, 333 low). Every gap id below (`buttons-3`, `menu-10`, …) is an id of that list.
 - **Phase 1 design:** [`docs/superpowers/specs/2026-09-25-fluent-parity-phase-1-design.md`](superpowers/specs/2026-09-25-fluent-parity-phase-1-design.md) (0.6.0, implemented; released in 0.7.0).
 - **Phase 2 design:** [`docs/superpowers/specs/2026-09-26-fluent-parity-phase-2-design.md`](superpowers/specs/2026-09-26-fluent-parity-phase-2-design.md) (0.7.0, released 2026-09-26). Every later phase gets its own design spec before work starts (see [Process](#3-process-per-release)).
+- **Phase 3 design:** [`docs/superpowers/specs/2026-09-26-fluent-parity-phase-3-design.md`](superpowers/specs/2026-09-26-fluent-parity-phase-3-design.md) (0.8.0, implemented; unreleased).
 
 How to read this document:
 - **Phases** are releases (minor versions after 0.5.0, then 1.0.0). A phase has a theme, epics, entry and exit criteria.
@@ -81,7 +82,7 @@ These come from section 6 of the report. Parity work must not regress them: an i
 |---|---|---|---|---|
 | 1 | 0.6.0 | Quick wins that need no new subsystem | 26 (P1-00 … P1-25) | 0 / 34 / 14 |
 | 2 | 0.7.0 | Menus and commands; the presence core | 9 (P2-00 … P2-08) | 3 / 9 / 17 |
-| 3 | 0.8.0 | Notifications, color and trees; stable class names | 9 (P3-00 … P3-08) | 4 / 6 / 11 |
+| 3 | 0.8.0 | Notifications, color and trees; stable class names | 9 (P3-00 … P3-08) | 4 / 6 / 10 |
 | 4 | 0.9.0 | Form controls: size, appearance, values and labels; a system theme | 5 | 0 / 15 / 19 |
 | 5 | 0.10.0 | Pickers: multi-select, filtering, listbox, swatches, calendar | 5 | 0 / 8 / 20 |
 | 6 | 0.11.0 | Tags, drawers and the app shell | 9 | 0 / 18 / 22 |
@@ -91,7 +92,7 @@ These come from section 6 of the report. Parity work must not regress them: an i
 | 10 | 0.15.0 | Motion on components (larger project) | 2 | 0 / 1 / 11 |
 | 11 | 0.16.0 | Tables and lists at data scale (larger project) | 4 | 0 / 7 / 7 |
 | 12 | 0.17.0 | Theming API and charts strategy (larger project) | 4 | 0 / 3 (1 by strategy) / 8 |
-| 13 | 0.18.0 | Customization surface and 1.0 notices (larger project) | 3 | 0 / 1 / 12 |
+| 13 | 0.18.0 | Customization surface and 1.0 notices (larger project) | 3 | 0 / 1 / 13 |
 | 14 | 1.0.0 | API freeze | 6 | 0 / 2 / 2 |
 | — | backlog | Low-impact gaps not tied to an item | — | 0 / 0 / 121 |
 | | | **Total** | **100** | **7 / 135 (1 by strategy) / 333** |
@@ -394,12 +395,14 @@ Goal: toolbars hold grouped toggle and exclusive-choice state, and toggle button
 **Theme.** Toasts carry any content and actions, can be dispatched from code outside React components and are reachable from the keyboard; MessageBars get a real action area. The release also closes the three high gaps that depend on nothing earlier (ColorArea, ColorSlider, tree multi-select), and from here on every component and part carries a stable class name.
 **Entry:** 0.7.0 merged to `main` (Toast titles may hold a `Menu`); spec approved. **Exit:** process criteria; README "Toasts" rewritten around rich content; the conventions gate enforces the class-name rule.
 
+**What the Phase 3 spec changed** ([design](superpowers/specs/2026-09-26-fluent-parity-phase-3-design.md); each ruling gives its reason): the class-name constants live in one server-safe registry, `src/lib/classNames.ts`, exported from the entry, not in the component modules (D2); P3-00 mitigates `buttons-29` and P13-02 closes it (D8); the dismissing part is `Toast.Close`, not `Toast.Trigger`, and the status icon is replaced through `icon` on the Toast root, with no `media` slot on `Toast.Title` (D9); a toast whose content holds an action stays until it is dismissed unless the dispatch passes a `timeout` (D12); a MessageBar's title names the bar only when the bar has a non-live role (D16); `layout="auto"` measures the text column, and no layout clips text (D17); `ColorArea`, `ColorSlider` and `AlphaSlider` bind to an enclosing ColorPicker, which gains `ColorPicker.Preview` and no `Area`, `HueSlider` or `AlphaSlider` members (D21); a checkbox tree's checkbox is an exposed `role="checkbox"`, not a decorative indicator (D25); `navigationMode` changes the keyboard only (D27); the persona layout is `Tree.ItemPersonaLayout`, Fluent's name (D28); dispatches through an unbound toaster handle wait in its queue (D33). P3-00's acceptance "`verify-dist` flat names include the constants" is met by verify-dist's check that the entry exports every constant with the same value.
+
 #### Epic 3.0 — Stable class names
 
 Goal: a stable styling hook on every component and part, enforced for everything created later.
 
 - **P3-00 Stable class names for components and parts.**
-  - **Closes:** `foundation-37` (M), `buttons-29` (L).
+  - **Closes:** `foundation-37` (M). **Mitigates:** `buttons-29` (L), closed by P13-02 (static class names are half of that gap; the public contexts are the other half).
   - **API sketch:** every component root and named part gets a stable class (`wave-button`, `wave-button__icon`, …) exported as constants (`buttonClassNames = { root, icon }`); the existing `data-wave-*` markers stay; the library never styles through these classes (they are consumer hooks). A conventions-gate rule checks that every component module applies its root class and exports its constant, so every later component and part is created with one. Per-part documentation follows in P13-01.
   - **Acceptance:** the gate rule is green for all components and the parts added in 0.6 and 0.7; `verify-dist` flat names include the constants; tree-shaking probes unchanged.
   - **Guards:** no runtime styles; `cn()` keeps the consumer's `className` last.
@@ -874,7 +877,7 @@ Goal: grids, lists, trees and comboboxes that stay correct and fast with data th
   - **Size:** M. **Depends on:** P11-01.
 - **P11-04 Virtualization.**
   - **Closes:** `virt-1` (M), `foundation-45` (M), `tree-9` (M), `list-6` (L), `combobox-7` (L), `table-2` (L).
-  - **API sketch:** registration that does not assume every item is mounted (DataGrid keyboard walks the data, not the DOM rows; List roving works with wrapper elements; Listbox options from data); `aria-rowcount`/`aria-rowindex`, `aria-setsize`/`aria-posinset` support; a flat tree model (`useFlatTree(items)`, `FlatTree`) for large and reorderable trees; Table `noNativeElements` (div rendering) for virtualizers; documented adapters for `@tanstack/react-virtual` (an optional peer, never a dependency) or a small built-in `Virtualizer`, decided in the spec.
+  - **API sketch:** registration that does not assume every item is mounted (DataGrid keyboard walks the data, not the DOM rows; List roving works with wrapper elements; Listbox options from data); `aria-rowcount`/`aria-rowindex`, `aria-setsize`/`aria-posinset` support; a flat tree model (`useFlatTree(items)`, `FlatTree`) for large and reorderable trees; Table `noNativeElements` (div rendering) for virtualizers; documented adapters for `@tanstack/react-virtual` (an optional peer, never a dependency) or a small built-in `Virtualizer`, decided in the spec. The flat model also revisits real `treegrid` roles for Tree's `navigationMode="treegrid"`, which keeps `tree` and `treeitem` in 0.8 (Phase 3 spec, D27).
   - **Acceptance:** 10,000-row DataGrid, 10,000-option Combobox and 5,000-node Tree stories; keyboard and screen-reader positions correct.
   - **Guards:** DataGrid on a native `<table role="grid">`: `noNativeElements` is Table-only and opt-in, and DataGrid's virtualization is built and tested on native table rows.
   - **Size:** L. **Depends on:** P11-01, P7-03, P5-03, P3-06, P3-07, P9-06.
@@ -927,12 +930,12 @@ Goal: apps can style and extend components without forking them.
 
 - **P13-01 Structural slots, render-function children and class-name docs.**
   - **Closes:** `foundation-34` (M), `foundation-35` (L), `foundation-36` (L), `form-basic-7` (L), `field-6` (L).
-  - **API sketch:** a `slotProps?: { <part>?: SlotProps }` prop on components with inner parts (Switch `track`/`thumb`, Checkbox `indicator`, Dialog `backdrop`/`body`, Input `root`/`input`, …) merged with C-COMPOSE rules; `SlotObject` children may be a render function `(Component, props) => ReactNode`; a public `getNativeElementProps(tag, props)` helper; Field accepts a render-function child `(fieldControlProps) => ReactNode`. The per-part documentation of the stable class names of P3-00 lands here, part by part next to `slotProps`.
+  - **API sketch:** a `slotProps?: { <part>?: SlotProps }` prop on components with inner parts (Switch `track`/`thumb`, Checkbox `indicator`, Dialog `backdrop`/`body`, Input `root`/`input`, …) merged with C-COMPOSE rules; `SlotObject` children may be a render function `(Component, props) => ReactNode`; a public `getNativeElementProps(tag, props)` helper; Field accepts a render-function child `(fieldControlProps) => ReactNode`. The per-part documentation of the stable class names of P3-00 lands here, part by part next to `slotProps`. The part keys of the class-name registry (Phase 3 spec, Appendix A) are the `slotProps` keys.
   - **Acceptance:** type tests per part; no behaviour change without `slotProps`.
   - **Guards:** `composeEventHandlers` lets consumers cancel the internal handler (slot handlers compose consumer-first).
   - **Size:** L. **Depends on:** P3-00.
 - **P13-02 Public contexts and recomposition hooks.**
-  - **Closes:** `foundation-39` (L), `api-1` (L), `menu-17` (L), `messagebar-6` (L), `foundation-38` (L), `form-basic-8` (L), `form-basic-21` (L), `ctx-1` (L).
+  - **Closes:** `foundation-39` (L), `api-1` (L), `menu-17` (L), `messagebar-6` (L), `foundation-38` (L), `form-basic-8` (L), `form-basic-21` (L), `ctx-1` (L), `buttons-29` (L; P3-00 shipped the static class names, this item the public contexts and recomposition hooks).
   - **API sketch:** export read hooks and providers where extension needs them: `useFieldContext`/`FieldContextProvider`, `useRadioGroupContext` (custom radio cards), Menu and MenuList contexts for custom items, MessageBar context, table/DataGrid contexts (sort, selection, row id); `WaveProvider classNames?: Partial<Record<ComponentName, string>>` for app-wide style hooks.
   - **Acceptance:** each exported context has a C-CONTEXT hook with the missing-provider error; stories for a custom radio card and a custom menu item.
   - **Size:** M. **Depends on:** P13-01.
@@ -943,7 +946,7 @@ Goal: nothing changes in 1.0 that a 0.x release did not announce.
 
 - **P13-03 1.0 deprecation notices and warnings.**
   - **Closes:** none (it owns principle 2's announcement step for Phase 14).
-  - **Scope:** a one-time development warning (`warnDeprecated`/`warnOnce`, C-DEV) for every use P14-02 removes that code can detect and that does not warn yet — including Badge `color="important"` (its meaning changes in P14-05; the Phase 1 spec, D1, deferred this warning to the last 0.x minor); CHANGELOG "Deprecated" announcements for what cannot warn at runtime (`legacy-tokens.css`, the `.dark`/`.high-contrast` theme classes, `animations.css`) and for the 1.0 default and type changes: TimePicker `hourCycle` follows the locale (P14-06), the `details` parameter of every `onOpenChange` and of `onCheckedValuesChange` (Menu, Toolbar; 0.7) becomes required (P14-02), `Image.alt` becomes required (P14-03), and the ref-placement decision (P14-04) once made; the "Upgrading to 1.0" guide drafted.
+  - **Scope:** a one-time development warning (`warnDeprecated`/`warnOnce`, C-DEV) for every use P14-02 removes that code can detect and that does not warn yet — including Badge `color="important"` (its meaning changes in P14-05; the Phase 1 spec, D1, deferred this warning to the last 0.x minor); CHANGELOG "Deprecated" announcements for what cannot warn at runtime (`legacy-tokens.css`, the `.dark`/`.high-contrast` theme classes, `animations.css`) and for the 1.0 default and type changes: TimePicker `hourCycle` follows the locale (P14-06), the `details` parameter of every `onOpenChange`, of `onCheckedValuesChange` (Menu, Toolbar; 0.7) and of `onCheckedItemsChange` (Tree; 0.8) becomes required (P14-02), `Image.alt` becomes required (P14-03), and the ref-placement decision (P14-04) once made; the "Upgrading to 1.0" guide drafted.
   - **Acceptance:** every Phase 14 item is announced in a 0.x CHANGELOG and, where code can detect the use, warns in development; a test per warning.
   - **Size:** M. **Depends on:** P2-05, P4-01, P8-04 (the aliases they add), and every other item that adds a deprecated alias.
 
@@ -966,7 +969,7 @@ Goal: a clean, stable 1.0 API.
   - **Size:** L. **Depends on:** P3-00, P12-03.
 - **P14-02 Remove the deprecated aliases.**
   - **Closes:** none (no gap; flagged in the 0.5 CHANGELOG "Deprecated" section).
-  - **Scope:** every old name of the 0.5 migration table, `legacy-tokens.css`, the `.dark`/`.high-contrast` theme classes, the button-object form of the dismiss and clear slots, `animations.css`, the numeric `size` of Input and Select (P4-01), Tooltip `delay` (P2-05), PresenceBadge `dnd`/`oof` (P8-04), and every other alias added in 0.6–0.18; the optional `details` parameter of `onOpenChange` becomes required wherever it exists (Dialog, Drawer, and the surfaces that adopted `OpenChangeDetails` later), and so does the `details` parameter of `onCheckedValuesChange` (Menu, Toolbar; announced in the 0.7 CHANGELOG).
+  - **Scope:** every old name of the 0.5 migration table, `legacy-tokens.css`, the `.dark`/`.high-contrast` theme classes, the button-object form of the dismiss and clear slots, `animations.css`, the numeric `size` of Input and Select (P4-01), Tooltip `delay` (P2-05), PresenceBadge `dnd`/`oof` (P8-04), and every other alias added in 0.6–0.18; the optional `details` parameter of `onOpenChange` becomes required wherever it exists (Dialog, Drawer, and the surfaces that adopted `OpenChangeDetails` later), and so do the `details` parameters of `onCheckedValuesChange` (Menu, Toolbar; announced in the 0.7 CHANGELOG) and `onCheckedItemsChange` (Tree; announced in the 0.8 CHANGELOG).
   - **Acceptance:** `warnDeprecated` has no callers; the migration table moves to "Upgrading to 1.0".
   - **Size:** M. **Depends on:** P13-03 (and so on all earlier phases).
 - **P14-03 `Image.alt` required.**
@@ -1146,7 +1149,7 @@ Low gaps that are not part of an item's work. Any package that touches the compo
 - **High and medium (142):** each is in exactly one item's **Closes** line; none is deferred. 141 are closed by the item's work; `foundation-46` (chart components) is resolved by strategy (P12-04), because charts are a non-goal (§1.3). `foundation-9` (namespaced utilities) is closed by the 1.0 item P14-01.
 - **Low (333):** 212 are closed by items above; the 121 below remain in the backlog: 104 still to schedule, 12 intentional differences and 5 deferred.
 - The gap list has two entries with the id `nav-1`: the Nav density gap (navigation family, backlog below) and the Table keyboard-helper gap (table family), written `table/nav-1` in this document (closed by P7-03). The gap list should give the table gap a unique id (for example `table-nav-1`) when it is next regenerated.
-- Two gaps are mitigated early without being closed: `taggroup-1` by P1-15 (closed by P6-02) and `badge-1` by P1-13 (closed by P14-05).
+- Three gaps are mitigated early without being closed: `taggroup-1` by P1-15 (closed by P6-02), `badge-1` by P1-13 (closed by P14-05) and `buttons-29` by P3-00 (closed by P13-02).
 
 ### 8.2 Backlog by family
 
@@ -1299,6 +1302,19 @@ Behaviour differences decided by a phase spec (Phase 2, 0.7.0), with no gap of t
 - Editable fields inside a context-menu region (`openOnContext`) keep the browser's context menu (paste, spelling suggestions) and open nothing; there is no opt-out in 0.7.
 - No global positioning configuration (Fluent's `PositioningConfigurationProvider`): per-component props, and the `positioning` prop of P7-01. The other half of `positioning-8`, the safe zone, shipped in 0.7 (P2-05).
 
+Behaviour differences decided by a phase spec (Phase 3, 0.8.0), with no gap of their own:
+
+- A toast's severity (its politeness and spoken prefix) comes from the rendered `Toast`; Fluent reads it from the dispatch options only.
+- Every `Toast` in a Toaster shows the Dismiss button, rich ones included; the opt-out stays in the backlog (`toaster-9`).
+- A toast that holds an action stays until it is dismissed unless the dispatch passes a `timeout`; Fluent times out every toast.
+- Every toast pauses while the pointer or focus is anywhere in the toast region; Fluent pauses the toasts of a position while one has focus, and on hover or window blur only with `pauseOnHover` and `pauseOnWindowBlur`.
+- Backspace also dismisses a focused toast (the delete key of Mac keyboards), next to Fluent's Delete.
+- A MessageBar's title does not name a bar that is a live region (its default roles); it is read as the start of its content. With a non-live role (`region`, `group`) it names the bar, as Fluent's always does.
+- One DOM order (icon, text, actions, Dismiss) serves both MessageBar layouts, where Fluent reorders the DOM; no layout clips the text, where Fluent's single line does not wrap.
+- ColorArea mirrors its x axis in right-to-left layouts; Fluent's does not.
+- Checks in a multi-select Tree cascade; Fluent's nested Tree keeps them independent (its flat-tree helper computes the cascade).
+- `navigationMode="treegrid"` changes the keyboard only and keeps the `tree` and `treeitem` roles, as Fluent's does.
+
 ### 8.4 Deferred (preview in Fluent, or low value now)
 
 - `menu-18` — MenuGrid (preview package).
@@ -1319,3 +1335,7 @@ Small fixes found while shipping a phase that close no Fluent gap. Any package t
 - **A surface opened from a hover card without a trigger or a focused opener.** A close by hover moves no focus, also for the surfaces opened from inside the closing one (a submenu, a hover card in a hover card), which it recognises by where their opener, else their trigger, sits in the DOM. A surface that the app opens from inside a hover card with a `target`, no trigger and nothing focused has neither, so its close keeps the usual focus return. Fix: record the layer a surface was opened from and follow the layer tree instead. **Size:** S.
 - **A `<Fragment ref>` around a child that Wave unwraps.** React 19.3 made Fragment refs stable: `<Fragment ref={ref}>` receives a `FragmentInstance` for its children. Three places look through a Fragment and render its children without it, so a consumer's Fragment ref never attaches there: `unwrapFragment` (`src/lib/renderTrigger.tsx`), which the triggers built on `useTriggerElement` and Tooltip use to reach the single element they clone; `Presence` (`src/components/motion/Presence.tsx`), which unwraps a Fragment around its single child; and `flattenChildren` (`src/lib/children.ts`), which compounds use to count, slice and classify their children. Fix: keep a Fragment that carries a `ref` (render the unwrapped or flattened children inside it again), with a test per site, or document that a Fragment ref is not supported there. **Size:** S.
 - **vite-plugin-dts 5.** Deferred in 0.7; the build stays on vite-plugin-dts 4.5.4, which needs `rootDir` in tsconfig.json under TypeScript 6 (`verify-dist` fails an empty roll-up). vite-plugin-dts 5.1.1 is a deprecated wrapper around unplugin-dts 1.1.1, whose type bundling appends every non-exported top-level `declare namespace` block to the rolled-up `index.d.ts` and `index.d.cts`: the `displayName` namespaces of `BreadcrumbItem`, `NavItem` and `NavSubItem` (functions exported through an export list) and the `NodeJS` namespace of `src/env.d.ts`. A consumer that type-checks libraries (`skipLibCheck: false`) then gets TS2395 ("Individual declarations in merged declaration … must be all exported or all local"). Revisit when this is fixed upstream, preferably by moving to `unplugin-dts` itself: its `bundleTypes` option replaces `rollupTypes`, `@microsoft/api-extractor` becomes a peer dependency to install, and the plugin is named `unplugin-dts`, so `.storybook/main.ts` must filter that name instead of `vite:dts`. **Size:** S.
+- **Arrow keys between toasts.** 0.8 moves between toasts with Tab only; Fluent's arrow navigation is marked as a stopgap in its own source. Fix: Up and Down between the toast containers of a Toaster, once a pattern that screen readers support is found. **Size:** S.
+- **Tree checks that do not cascade.** A 0.8 checkbox tree always cascades (the Phase 3 ruling, D24), so a tree whose parents are independent items cannot be built. Fix: an option for independent checks, named in its phase spec. **Size:** S.
+- **Range selection in a multi-select Tree.** Shift+Arrow, Shift+Space and Ctrl+A (optional in the APG treeview pattern) are not implemented. **Size:** M.
+- **Real `treegrid` roles.** `navigationMode="treegrid"` keeps `tree` and `treeitem`, because treegrid rows need one flat list with `aria-level`. Fix: with the flat tree model of P11-04. **Size:** M.
