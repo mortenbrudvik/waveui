@@ -930,6 +930,22 @@ describe('Phase 4 public types', () => {
     const nullValue: ComponentProps<typeof SpinButton> = { value: null };
     void [inputSize, tagPicker, checkbox, switchSize, step, infoButton, ratingColor, nullValue];
   });
+
+  it('class-name constants of the Phase 4 parts (P3-00)', () => {
+    expectTypeOf<Entry['infoButtonClassNames']['root']>().toEqualTypeOf<'wave-info-button'>();
+    expectTypeOf<
+      Entry['infoButtonClassNames']['surface']
+    >().toEqualTypeOf<'wave-info-button__surface'>();
+    expectTypeOf<Entry['infoButtonClassNames']['beak']>().toEqualTypeOf<'wave-info-button__beak'>();
+    expectTypeOf<Entry['infoButtonClassNames']['info']>().toEqualTypeOf<'wave-info-button__info'>();
+    expectTypeOf<Entry['infoLabelClassNames']['label']>().toEqualTypeOf<'wave-info-label__label'>();
+    expectTypeOf<Entry['ratingItemClassNames']['root']>().toEqualTypeOf<'wave-rating-item'>();
+    expectTypeOf<Entry['ratingItemClassNames']['icon']>().toEqualTypeOf<'wave-rating-item__icon'>();
+    const classes = {} as Entry['ratingItemClassNames'];
+    // @ts-expect-error the registry constants are readonly
+    classes.icon = 'wave-custom';
+    expect(classes.icon).toBe('wave-custom');
+  });
 });
 
 describe('0.8 stable class names from the package entry', () => {

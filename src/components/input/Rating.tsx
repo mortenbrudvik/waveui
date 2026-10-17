@@ -544,7 +544,14 @@ const RatingDisplayRoot = ({
       {...rest}
     >
       {compact ? (
-        <StarGlyph fraction={1} size={size} color={resolvedColor} glyphs={glyphs} />
+        <StarGlyph
+          starClassName={ratingDisplayClassNames.star}
+          iconClassName={ratingDisplayClassNames.icon}
+          fraction={1}
+          size={size}
+          color={resolvedColor}
+          glyphs={glyphs}
+        />
       ) : (
         <RatingContext.Provider value={context}>
           {ratingItems(children, max)}

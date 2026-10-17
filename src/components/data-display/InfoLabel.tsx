@@ -5,7 +5,7 @@ import { resolveDeprecatedProp } from '../../lib/dev';
 import { useId } from '../../hooks/useId';
 import { markFieldLabel } from '../input/fieldLabel';
 import { Label, type LabelProps } from '../input/Label';
-import { InfoButton } from './InfoButton';
+import { InfoButton, InfoNoteClassContext } from './InfoButton';
 
 /** Properties for the InfoLabel component. */
 export interface InfoLabelProps
@@ -79,6 +79,11 @@ export const InfoLabel = ({
   // An empty `id` counts as unset, so the button's name never points at an empty id.
   const labelId = id || generatedLabelId;
   const buttonId = useId('info-label-button');
+  // The note of this InfoButton carries the label's `info` class, its 0.8 popup class (P3-00 D8).
+  const noteClass = React.useMemo(
+    () => ({ buttonId, className: infoLabelClassNames.info }),
+    [buttonId],
+  );
   return (
     <span
       ref={ref}
@@ -86,6 +91,7 @@ export const InfoLabel = ({
       {...rest}
     >
       <Label
+        className={infoLabelClassNames.label}
         id={labelId}
         htmlFor={htmlFor}
         required={required}
@@ -95,15 +101,17 @@ export const InfoLabel = ({
       >
         {content}
       </Label>
-      <InfoButton
-        id={buttonId}
-        className={infoLabelClassNames.infoButton}
-        info={info}
-        size={size}
-        openOnHover={openOnHover}
-        aria-label={infoButtonLabel}
-        aria-labelledby={`${labelId} ${buttonId}`}
-      />
+      <InfoNoteClassContext.Provider value={noteClass}>
+        <InfoButton
+          id={buttonId}
+          className={infoLabelClassNames.infoButton}
+          info={info}
+          size={size}
+          openOnHover={openOnHover}
+          aria-label={infoButtonLabel}
+          aria-labelledby={`${labelId} ${buttonId}`}
+        />
+      </InfoNoteClassContext.Provider>
     </span>
   );
 };

@@ -1,10 +1,10 @@
 import * as React from 'react';
 import { cn } from '../../lib/cn';
 import { joinIds } from '../../lib/aria';
+import { infoButtonClassNames } from '../../lib/classNames';
 import { composeEventHandlers } from '../../lib/composeEventHandlers';
 import { getFirstTabbable } from '../../lib/focus';
 import { InfoIcon } from '../../lib/icons';
-import { getLayerTreeElements } from '../../lib/layers';
 import { focusRing } from '../../lib/styles';
 import type { CoreSize } from '../../lib/types';
 import { useDismiss } from '../../hooks/useDismiss';
@@ -15,7 +15,7 @@ import { useMergedRefs } from '../../hooks/useMergedRefs';
 import { usePopupPosition } from '../../hooks/usePopupPosition';
 import { usePresence } from '../../hooks/usePresence';
 import { useRestoreFocus } from '../../hooks/useRestoreFocus';
-import { PopoverBeak, usePopoverTabOrder } from '../overlays/Popover.shared';
+import { isFocusInSurfaceTree, PopoverBeak, usePopoverTabOrder } from '../overlays/Popover.shared';
 import { Portal } from '../portal/Portal';
 
 /** Properties for the InfoButton component. */
@@ -75,19 +75,21 @@ const GLYPH: Readonly<Record<CoreSize, { size: number; margin: string }>> = {
  */
 const HOVER_DELAY = 250;
 
-/**
- * Whether focus is inside the note or in a layer opened from it (a popover of its content, whose
- * portal lives elsewhere): what keeps a hover-opened note open (Phase 2 D18). Focus on the button
- * does not count, although the button belongs to the dismiss layer.
- */
-function isFocusInsideNote(note: HTMLElement | null, layerId: string): boolean {
-  const active = note?.ownerDocument.activeElement;
-  if (!note || !active) return false;
-  if (note.contains(active)) return true;
-  return getLayerTreeElements(layerId, { includeOwnElements: false }).some((el) =>
-    el.contains(active),
-  );
+/** What InfoLabel tells the InfoButton it renders: see {@link InfoNoteClassContext}. */
+interface InfoNoteClass {
+  /** The `id` of the InfoButton the class is for. */
+  buttonId: string;
+  /** The class added to that InfoButton's note. */
+  className: string;
 }
+
+/**
+ * Internal (P3-00, D5): the class InfoLabel adds to the note of the InfoButton it renders, its
+ * 0.8 `info` part. Only the InfoButton whose `id` matches takes it, so an InfoButton inside the
+ * label's `info` content takes none. Not exported from the barrels.
+ */
+export const InfoNoteClassContext = React.createContext<InfoNoteClass | null>(null);
+InfoNoteClassContext.displayName = 'InfoNoteClassContext';
 
 /**
  * A button with the info glyph that shows `info` in a note next to it: text, links or other rich
@@ -166,6 +168,8 @@ export const InfoButton = ({
   const size: CoreSize = sizeProp === 'small' || sizeProp === 'large' ? sizeProp : 'medium';
   const generatedId = useId('info-button');
   const id = idProp || generatedId;
+  const noteClass = React.useContext(InfoNoteClassContext);
+  const noteClassName = noteClass?.buttonId === id ? noteClass.className : undefined;
   // An empty name would leave the button and the note unnamed: the glyph is decorative.
   const ariaLabel = ariaLabelProp || 'Information';
   const noteId = useId('info-note');
@@ -258,7 +262,7 @@ export const InfoButton = ({
     },
     // Only a note opened by hover, not pinned and not keyboard-owned, closes by hover; focus
     // inside the note (or a layer opened from it) blocks it too (Phase 2 D18).
-    canClose: () => reasonRef.current === 'hover' && !isFocusInsideNote(note, layerId),
+    canClose: () => reasonRef.current === 'hover' && !isFocusInSurfaceTree(note, layerId),
   });
 
   React.useEffect(() => () => clearTimeout(pressTimerRef.current), []);
@@ -364,6 +368,7 @@ export const InfoButton = ({
         aria-expanded={open}
         aria-controls={open ? noteId : undefined}
         className={cn(
+          infoButtonClassNames.root,
           'inline-flex size-6 shrink-0 items-center justify-center rounded-full border-0 bg-transparent p-0 text-muted-foreground',
           GLYPH[size].margin,
           'not-disabled:not-aria-disabled:hover:text-foreground',
@@ -407,15 +412,22 @@ export const InfoButton = ({
             onKeyDown={onNoteKeyDown}
             onPointerEnter={hoverSurfaceHandlers.onPointerEnter}
             onPointerLeave={hoverSurfaceHandlers.onPointerLeave}
-            className="w-max max-w-[min(20rem,calc(100vw-1rem))] rounded-md border border-border bg-background px-3 py-2 text-caption-1 text-foreground shadow-16"
+            className={cn(
+              infoButtonClassNames.surface,
+              noteClassName,
+              'w-max max-w-[min(20rem,calc(100vw-1rem))] rounded-md border border-border bg-background px-3 py-2 text-caption-1 text-foreground shadow-16',
+            )}
           >
             <PopoverBeak
               ref={arrowRef}
               side={side}
               style={arrowStyles}
               data-wave-popover-arrow=""
+              className={infoButtonClassNames.beak}
             />
-            <div id={infoId}>{info}</div>
+            <div id={infoId} className={infoButtonClassNames.info}>
+              {info}
+            </div>
           </div>
         </Portal>
       )}

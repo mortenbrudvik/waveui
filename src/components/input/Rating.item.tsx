@@ -1,4 +1,9 @@
 import * as React from 'react';
+import {
+  ratingClassNames,
+  ratingDisplayClassNames,
+  ratingItemClassNames,
+} from '../../lib/classNames';
 import { cn } from '../../lib/cn';
 import { composeEventHandlers } from '../../lib/composeEventHandlers';
 import { reportMissingContext, warnOnce } from '../../lib/dev';
@@ -210,6 +215,13 @@ export interface StarGlyphProps extends Omit<React.HTMLAttributes<HTMLSpanElemen
   color: RatingColor;
   /** The glyphs to draw, from {@link useStarGlyphs}. */
   glyphs: StarGlyphs;
+  /**
+   * The stable classes of the star's `<span>` (P3-00), first in its class list, before
+   * `className`: a star part, and a RatingItem's root.
+   */
+  starClassName?: string;
+  /** The stable classes of every glyph it draws (P3-00): the icon parts. */
+  iconClassName?: string;
   /** Ref to the star's `<span>`. */
   ref?: React.Ref<HTMLSpanElement>;
 }
@@ -228,6 +240,8 @@ export const StarGlyph = ({
   size,
   color,
   glyphs,
+  starClassName,
+  iconClassName,
   className,
   ref,
   ...rest
@@ -241,14 +255,18 @@ export const StarGlyph = ({
       <span
         {...rest}
         ref={ref}
-        className={cn('relative inline-flex', unfilled.colorClass, className)}
+        className={cn(starClassName, 'relative inline-flex', unfilled.colorClass, className)}
       >
-        <GlyphLayer filled={false} glyph={unfilled.glyph} className={starSize} />
+        <GlyphLayer filled={false} glyph={unfilled.glyph} className={cn(iconClassName, starSize)} />
         <span
           className={cn('absolute inset-y-0 start-0 flex overflow-hidden', filled.colorClass)}
           style={{ width: `${percent}%` }}
         >
-          <GlyphLayer filled glyph={filled.glyph} className={cn(starSize, 'shrink-0')} />
+          <GlyphLayer
+            filled
+            glyph={filled.glyph}
+            className={cn(iconClassName, starSize, 'shrink-0')}
+          />
         </span>
       </span>
     );
@@ -256,8 +274,12 @@ export const StarGlyph = ({
   const filled = percent === 100;
   const look = starLook(filled, color, glyphs);
   return (
-    <span {...rest} ref={ref} className={cn('inline-flex', look.colorClass, className)}>
-      <GlyphLayer filled={filled} glyph={look.glyph} className={starSize} />
+    <span
+      {...rest}
+      ref={ref}
+      className={cn(starClassName, 'inline-flex', look.colorClass, className)}
+    >
+      <GlyphLayer filled={filled} glyph={look.glyph} className={cn(iconClassName, starSize)} />
     </span>
   );
 };
@@ -496,6 +518,16 @@ export const RatingItem = ({
   // The item's own pair, when it sets either glyph, replaces its root's pair as a whole.
   const ownGlyphs = useStarGlyphs('Rating.Item', iconFilled, iconOutline);
   const glyphs = iconFilled !== undefined || iconOutline !== undefined ? ownGlyphs : ctx.glyphs;
+  // Stable classes (P3-00): the item's own, then its rating's part classes (a public component
+  // rendered inside another, D5), whether the root generated the item or the consumer passed it.
+  const starClassName =
+    ctx.kind === 'display'
+      ? cn(ratingItemClassNames.root, ratingDisplayClassNames.star)
+      : cn(ratingItemClassNames.root, ratingClassNames.star);
+  const iconClassName =
+    ctx.kind === 'display'
+      ? cn(ratingItemClassNames.icon, ratingDisplayClassNames.icon)
+      : cn(ratingItemClassNames.icon, ratingClassNames.icon);
 
   // `rest` keeps every consumer handler: a star without handlers of its own (a display star)
   // spreads them all, and a star that composes one takes that one out of `rest` itself.
@@ -505,6 +537,8 @@ export const RatingItem = ({
       <StarGlyph
         {...rest}
         ref={ref as React.Ref<HTMLSpanElement>}
+        starClassName={starClassName}
+        iconClassName={iconClassName}
         className={className}
         fraction={ctx.drawnValue - (value - 1)}
         size={ctx.size}
@@ -538,6 +572,7 @@ export const RatingItem = ({
         {...starProps}
         ref={ref as React.Ref<HTMLSpanElement>}
         className={cn(
+          starClassName,
           'relative inline-flex cursor-pointer rounded',
           targetPaddingMap[ctx.size],
           'has-focus-visible:outline-2 has-focus-visible:outline-offset-2 has-focus-visible:outline-ring',
@@ -562,7 +597,13 @@ export const RatingItem = ({
           }
         })}
       >
-        <StarGlyph fraction={fraction} size={ctx.size} color={ctx.color} glyphs={glyphs} />
+        <StarGlyph
+          iconClassName={iconClassName}
+          fraction={fraction}
+          size={ctx.size}
+          color={ctx.color}
+          glyphs={glyphs}
+        />
         {[half, value].map((radioValue, index) => {
           const radioKey = String(radioValue);
           return (
@@ -608,6 +649,7 @@ export const RatingItem = ({
       tabIndex={ctx.disabled ? -1 : ctx.getTabIndex(key)}
       disabled={ctx.disabled}
       className={cn(
+        starClassName,
         'inline-flex cursor-pointer rounded border-0 bg-transparent transition-colors motion-reduce:transition-none disabled:cursor-not-allowed',
         targetPaddingMap[ctx.size],
         focusRing,
@@ -623,7 +665,11 @@ export const RatingItem = ({
         if (!ctx.disabled && isOwnEvent(event)) ctx.preview(value);
       })}
     >
-      <GlyphLayer filled={filled} glyph={look.glyph} className={sizeMap[ctx.size]} />
+      <GlyphLayer
+        filled={filled}
+        glyph={look.glyph}
+        className={cn(iconClassName, sizeMap[ctx.size])}
+      />
     </button>
   );
 };
