@@ -110,6 +110,7 @@ export function resolveFieldTestContext(value: Partial<FieldContextValue> = {}):
   if (value.controlIdClaim !== undefined) resolved.controlIdClaim = value.controlIdClaim;
   if (validationState !== undefined) resolved.validationState = validationState;
   if (validationMessageId !== undefined) resolved.validationMessageId = validationMessageId;
+  if (value.size !== undefined) resolved.size = value.size;
   return resolved;
 }
 
@@ -159,6 +160,10 @@ function FieldHarness({ field, label, hint, error, message, children }: FieldHar
  * `errorId`; `role="alert"` in the `error` and `warning` states) and the hint `<p id={hintId}>`.
  * Query the control by role and name (`getByRole(role, { name: FIELD_TEST_TEXT.label })`) and
  * assert the description with `toHaveAccessibleDescription`.
+ *
+ * @example
+ * renderWithFieldContext(<Input />, { size: 'small' });
+ * // `size` sets the Field's size (the default size of the text controls inside it)
  *
  * @param ui      The control under test.
  * @param value   Partial context value, resolved by {@link resolveFieldTestContext}.

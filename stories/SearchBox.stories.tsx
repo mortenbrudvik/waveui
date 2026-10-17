@@ -2,10 +2,16 @@ import type { Meta, StoryObj } from '@storybook/react';
 import { useState } from 'react';
 import { fn } from 'storybook/test';
 import { SearchBox } from '../src';
+import { coreSizeArgType, inputAppearanceArgType } from './_helpers';
+import { SizeAppearanceGrid } from './_grids';
 
 const meta = {
   title: 'Components/Input/SearchBox',
   component: SearchBox,
+  argTypes: {
+    ...coreSizeArgType,
+    ...inputAppearanceArgType,
+  },
   args: {
     'aria-label': 'Search',
     placeholder: 'Search...',
@@ -62,4 +68,20 @@ export const Disabled: Story = {
     defaultValue: 'archived',
     disabled: true,
   },
+};
+
+export const SizesAndAppearances: Story = {
+  render: (args) => (
+    <SizeAppearanceGrid
+      render={(size, appearance) => (
+        <SearchBox
+          {...args}
+          size={size}
+          appearance={appearance}
+          defaultValue="design"
+          aria-label={`${size} ${appearance}`}
+        />
+      )}
+    />
+  ),
 };

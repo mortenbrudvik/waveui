@@ -6,7 +6,17 @@ import { warnDeprecated, warnOnce } from '../../lib/dev';
 import { ChevronDownIcon, DismissIcon } from '../../lib/icons';
 import { renderSlot, slotRendersContent } from '../../lib/slot';
 import type { Slot } from '../../lib/slot';
-import { disabledStyles, focusRing, inputFocus, inputInvalid } from '../../lib/styles';
+import {
+  disabledStyles,
+  focusRing,
+  inputAppearanceClasses,
+  inputFocus,
+  inputHeightClasses,
+  inputInvalid,
+  inputPaddingClasses,
+  inputTextClasses,
+} from '../../lib/styles';
+import type { CoreSize, InputAppearance } from '../../lib/types';
 import { useControllable } from '../../hooks/useControllable';
 import { useFieldContext, useFieldControl } from '../../hooks/useFieldControl';
 import { useFormReset } from '../../hooks/useFormReset';
@@ -15,10 +25,16 @@ import { useMergedRefs } from '../../hooks/useMergedRefs';
 import { unwrapButtonGlyph } from '../button/Button.slots';
 import { HiddenInput } from '../internal/HiddenInput';
 import { showsExpandButton } from './Combobox.expand';
+import { useInputLook } from './inputLook';
 import { isInvalidLook } from './Input';
 import { ListboxSurface, Option, OptionGroup, useListboxPopup } from './Option';
 import { announceToggle, defaultSelectionLabel, PickerAnnouncer } from './pickerLabels';
-import { PICKER_ICON_BUTTON_CLASSES, pickerEndPadding } from './pickerStyles';
+import {
+  pickerButtonOffset,
+  pickerEndPadding,
+  pickerGlyphSize,
+  pickerIconButtonClasses,
+} from './pickerStyles';
 import { EMPTY_VALUES, resetValues, toggleValue, toValues } from './pickerValues';
 import type { RoutedHandlers } from './routedHandlers';
 
@@ -142,6 +158,18 @@ export interface DropdownProps<M extends boolean = false> extends Omit<
    */
   disabled?: boolean;
   /**
+   * Size of the field: `small` (24px tall), `medium` (32px) or `large` (40px). Default: the
+   * surrounding Field's `size`, else `WaveProvider inputDefaults.size`, else `'medium'`. The
+   * listbox keeps its size; the multi-select value text and clear button follow it.
+   */
+  size?: CoreSize;
+  /**
+   * Look of the field: `outline` (a full border), `underline` (a bottom stroke only),
+   * `filled-darker` or `filled-lighter` (a fill without a visible stroke: give the field a visible
+   * label). Default: `WaveProvider inputDefaults.appearance`, else `'outline'`.
+   */
+  appearance?: InputAppearance;
+  /**
    * Name of the value in form submissions (renders a hidden input; one per value with
    * `multiselect`).
    */
@@ -160,7 +188,7 @@ export interface DropdownProps<M extends boolean = false> extends Omit<
   /**
    * The glyph at the end of the button (default: a chevron). `null` or `undefined` keep it;
    * `false`, or a value that renders nothing, hides it (the button's end padding follows,
-   * together with `clearable`). Decorative content rendered inside the button: a `<button>` or
+   * together with `clearable`). The default chevron's size and the glyph's offset follow `size`. Decorative content rendered inside the button: a `<button>` or
    * `Button` passed here is not nested (its children become the glyph, with a development
    * warning).
    */
@@ -211,6 +239,8 @@ const DropdownRoot = (props: DropdownProps<boolean>) => {
     placeholder = 'Select an option',
     renderValue,
     disabled = false,
+    size: sizeProp,
+    appearance: appearanceProp,
     name,
     form,
     required,
@@ -254,6 +284,7 @@ const DropdownRoot = (props: DropdownProps<boolean>) => {
   });
   // The error look follows the resolved state: the consumer's `aria-invalid` or the Field's.
   const invalidLook = isInvalidLook(false, fieldProps['aria-invalid']);
+  const { size, appearance } = useInputLook(sizeProp, appearanceProp);
 
   const [value, setValue] = useControllable<string | readonly string[]>(
     valueProp,
@@ -405,6 +436,9 @@ const DropdownRoot = (props: DropdownProps<boolean>) => {
   };
 
   const showClear = clearable && hasValue;
+  // The expand glyph's inline-end offset per size (P4-01), shared by the chevron and a consumer
+  // glyph.
+  const expandOffset = size === 'small' ? 'end-2' : 'end-3';
 
   const listLabelledBy =
     fieldProps['aria-label'] === undefined
@@ -413,6 +447,8 @@ const DropdownRoot = (props: DropdownProps<boolean>) => {
 
   return (
     <div
+      data-size={size}
+      data-appearance={appearance}
       {...rest}
       ref={rootMergedRef}
       className={cn(dropdownClassNames.root, 'relative inline-flex flex-col', className)}
@@ -439,8 +475,13 @@ const DropdownRoot = (props: DropdownProps<boolean>) => {
             dropdownClassNames.button,
             // Every padding is set here (C-NATIVE), not left to an app-wide `button` rule. The end
             // padding keeps the text clear of the chevron (and of the clear button while it shows).
-            'relative flex h-8 w-full items-center justify-between rounded border border-input border-b-stroke-accessible bg-background px-3 py-0 text-start text-body-1 text-foreground',
-            pickerEndPadding(Number(showClear) + Number(showExpand)),
+            'relative flex w-full items-center justify-between py-0 text-start',
+            inputHeightClasses[size],
+            inputPaddingClasses[size],
+            inputTextClasses[size],
+            inputAppearanceClasses[appearance],
+            'text-foreground',
+            pickerEndPadding(Number(showClear) + Number(showExpand), size),
             inputFocus,
             disabledStyles,
             invalidLook && inputInvalid,
@@ -462,16 +503,19 @@ const DropdownRoot = (props: DropdownProps<boolean>) => {
                 'span',
                 cn(
                   dropdownClassNames.expandIcon,
-                  'absolute end-3 inline-flex transition-transform motion-reduce:transition-none',
+                  'absolute inline-flex transition-transform motion-reduce:transition-none',
+                  expandOffset,
                   expanded && 'rotate-180',
                 ),
                 { 'aria-hidden': true },
               )
             ) : (
               <ChevronDownIcon
+                size={pickerGlyphSize(size, 'chevron')}
                 className={cn(
                   dropdownClassNames.expandIcon,
-                  'absolute end-3 transition-transform motion-reduce:transition-none',
+                  'absolute transition-transform motion-reduce:transition-none',
+                  expandOffset,
                   expanded && 'rotate-180',
                 )}
               />
@@ -487,13 +531,14 @@ const DropdownRoot = (props: DropdownProps<boolean>) => {
             onClick={handleClear}
             className={cn(
               dropdownClassNames.clearButton,
-              PICKER_ICON_BUTTON_CLASSES,
-              showExpand ? 'end-7' : 'end-1',
+              pickerIconButtonClasses(size, appearance),
+              // Before the chevron while it shows, else at the end.
+              pickerButtonOffset(size, showExpand ? 2 : 1),
               focusRing,
               disabledStyles,
             )}
           >
-            <DismissIcon />
+            <DismissIcon size={pickerGlyphSize(size, 'icon')} />
           </button>
         )}
       </div>
@@ -557,6 +602,11 @@ export const DropdownOptionGroup = OptionGroup;
  * `multiselect`), validation and reset (a `multiselect` reset is compared by content, so restoring
  * the same values reports nothing). The open listbox renders in a portal; while closed it stays
  * in the DOM, hidden.
+ *
+ * **Size and appearance**: `size` resolves from its own prop, then the surrounding `Field`'s
+ * `size`, then `WaveProvider inputDefaults.size`, else `'medium'`; `appearance` from its own prop,
+ * then `WaveProvider inputDefaults.appearance`, else `'outline'`; both render as `data-size` and
+ * `data-appearance` on the root `<div>`. The listbox keeps its size.
  *
  * Sub-components: `Dropdown.Option`, `Dropdown.OptionGroup`. React Server Components import the
  * flat names `DropdownOption` / `DropdownOptionGroup` (dotted access needs a client file).

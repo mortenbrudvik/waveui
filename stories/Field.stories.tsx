@@ -206,6 +206,23 @@ export const Horizontal: Story = {
   ),
 };
 
+/** Each Input picks up its size from the surrounding Field automatically. */
+export const Sizes: Story = {
+  render: (args) => (
+    <div className="flex flex-col gap-4">
+      <Field {...args} label="Small field" size="small">
+        <Input placeholder="Small" />
+      </Field>
+      <Field {...args} label="Medium field" size="medium">
+        <Input placeholder="Medium" />
+      </Field>
+      <Field {...args} label="Large field" size="large">
+        <Input placeholder="Large" />
+      </Field>
+    </div>
+  ),
+};
+
 /**
  * `validationMessageIcon` replaces the state icon (decorative); `null` shows no icon.
  */

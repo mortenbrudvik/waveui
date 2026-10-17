@@ -2,11 +2,12 @@ import * as React from 'react';
 import { cn } from '../../lib/cn';
 import { focusElement, getLastTabbable, getTabbableElements } from '../../lib/focus';
 import { getGlobalRegistry } from '../../lib/globalRegistry';
+import { getLayerTreeElements } from '../../lib/layers';
 import type { UsePopupPositionResult } from '../../hooks/usePopupPosition';
 import { useEventCallback } from '../../hooks/useEventCallback';
 
-// Parts shared by the anchored popups of this folder: Popover.Content and TeachingPopover with a
-// `target`. Internal: not exported from the barrels.
+// Parts shared by the anchored popups: Popover.Content and TeachingPopover with a `target`, and
+// InfoButton's note (data-display). Internal: not exported from the barrels.
 
 /** Final physical side of a positioned surface (the `side` result of `usePopupPosition`). */
 export type PopoverPhysicalSide = UsePopupPositionResult['side'];
@@ -46,6 +47,21 @@ export const PopoverBeak = ({ side, className, ref, ...rest }: PopoverBeakProps)
   />
 );
 PopoverBeak.displayName = 'PopoverBeak';
+
+/**
+ * Whether focus is inside `surface` or in a layer opened from it (a menu or popover of its
+ * content, whose portal lives elsewhere): what keeps a hover-opened surface open (Phase 2 D18).
+ * Focus on the trigger does not count, although the trigger belongs to the dismiss layer
+ * `layerId`. Popover.Content and InfoButton's note pass it to their hover intent's `canClose`.
+ */
+export function isFocusInSurfaceTree(surface: HTMLElement | null, layerId: string): boolean {
+  const active = surface?.ownerDocument.activeElement;
+  if (!surface || !active) return false;
+  if (surface.contains(active)) return true;
+  return getLayerTreeElements(layerId, { includeOwnElements: false }).some((el) =>
+    el.contains(active),
+  );
+}
 
 /**
  * The tabbable elements of the anchor's document, in sequential focus order, that are in the same

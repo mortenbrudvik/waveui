@@ -48,6 +48,8 @@ import type {
   CalendarValueChangeDetails,
   CheckboxLabelPosition,
   CheckboxProps,
+  CheckboxShape,
+  CheckboxSize,
   CheckedValues,
   CheckedValuesChangeDetails,
   CheckedValuesChangeHandler,
@@ -68,8 +70,10 @@ import type {
   ComboboxLabels,
   ComboboxProps,
   CompoundButtonProps,
+  CoreSize,
   CounterBadgeProps,
   DatePickerLabels,
+  DatePickerProps,
   DayOfWeek,
   DialogModalType,
   DialogOpenChangeDetails,
@@ -93,8 +97,14 @@ import type {
   HsvColor,
   IconPosition,
   ImageSwatchProps,
+  InfoButtonProps,
+  InfoLabelProps,
+  InputAppearance,
+  InputDefaults,
+  InputProps,
   isSameDay,
   LabelPosition,
+  LabelProps,
   LinkProps,
   Listbox,
   ListboxComboboxProps,
@@ -155,14 +165,26 @@ import type {
   ProgressBarColor,
   ProgressBarProps,
   RadioItemProps,
+  Rating,
+  RatingColor,
+  RatingDisplay,
+  RatingDisplayItem,
   RatingDisplayLabels,
   RatingDisplayProps,
+  RatingItem,
+  RatingProps,
   SearchBoxInputProps,
   SearchBoxProps,
+  SelectProps,
   SelectionMode,
   SelectionRange,
   Size,
+  SliderProps,
+  SliderSize,
   Slot,
+  SpinButton,
+  SpinButtonAllowEmptyProps,
+  SpinButtonBaseProps,
   SpinButtonInputProps,
   SpinButtonProps,
   SpinnerAppearance,
@@ -177,8 +199,12 @@ import type {
   SwatchPickerSize,
   SwitchLabelPosition,
   SwitchProps,
+  SwitchSize,
   TabListProps,
+  TagPickerProps,
+  TagPickerSize,
   TeachingPopoverProps,
+  TextareaProps,
   TimePickerInvalidReason,
   TimePickerLabels,
   TimePickerProps,
@@ -231,7 +257,9 @@ import type {
   UseRovingTabIndexOptions,
   ValidationState,
   VirtualElement,
+  WaveContextValue,
   WaveDir,
+  WaveProviderProps,
   waveProviderClassNames,
 } from '../index';
 
@@ -1039,6 +1067,115 @@ describe('0.10 listbox primitives, useActiveDescendant and the date types from t
     expectTypeOf<GetWeekNumberOptions['firstWeekOfYear']>().toEqualTypeOf<
       FirstWeekOfYear | undefined
     >();
+  });
+});
+
+// The 0.9 input defaults, imported from the package entry (compile-time, tsconfig.dev.json).
+describe('0.9 input defaults from the package entry (Phase 4 D7)', () => {
+  it('InputDefaults, and the WaveProviderProps/WaveContextValue members that use it', () => {
+    expectTypeOf<InputDefaults>().toEqualTypeOf<{
+      size?: CoreSize;
+      appearance?: InputAppearance;
+    }>();
+    expectTypeOf<WaveProviderProps['inputDefaults']>().toEqualTypeOf<InputDefaults | undefined>();
+    expectTypeOf<WaveContextValue['inputDefaults']>().toEqualTypeOf<InputDefaults>();
+  });
+});
+
+// Phase 4: sizes, appearances, SpinButton's value union, Rating and the label components,
+// imported from the package entry (compile-time, tsconfig.dev.json).
+describe('Phase 4 public types', () => {
+  it('sizes and appearances', () => {
+    expectTypeOf<InputProps['size']>().toEqualTypeOf<CoreSize | number | undefined>();
+    expectTypeOf<InputProps['htmlSize']>().toEqualTypeOf<number | undefined>();
+    expectTypeOf<SelectProps['size']>().toEqualTypeOf<CoreSize | number | undefined>();
+    expectTypeOf<TextareaProps['size']>().toEqualTypeOf<CoreSize | undefined>();
+    for (const appearance of [
+      {} as InputProps['appearance'],
+      {} as TextareaProps['appearance'],
+      {} as SelectProps['appearance'],
+      {} as SearchBoxProps['appearance'],
+      {} as ComboboxProps['appearance'],
+      {} as DropdownProps['appearance'],
+      {} as DatePickerProps['appearance'],
+      {} as TimePickerProps['appearance'],
+      {} as TagPickerProps['appearance'],
+      {} as SpinButtonBaseProps['appearance'],
+    ]) {
+      expectTypeOf(appearance).toEqualTypeOf<InputAppearance | undefined>();
+    }
+    expectTypeOf<TagPickerProps['size']>().toEqualTypeOf<TagPickerSize | undefined>();
+    expectTypeOf<CheckboxProps['size']>().toEqualTypeOf<CheckboxSize | undefined>();
+    expectTypeOf<CheckboxProps['shape']>().toEqualTypeOf<CheckboxShape | undefined>();
+    expectTypeOf<SwitchProps['size']>().toEqualTypeOf<SwitchSize | undefined>();
+    expectTypeOf<SliderProps['size']>().toEqualTypeOf<SliderSize | number | undefined>();
+    expectTypeOf<FieldProps['size']>().toEqualTypeOf<CoreSize | undefined>();
+    expectTypeOf<FieldContextValue['size']>().toEqualTypeOf<CoreSize | undefined>();
+  });
+
+  it('SpinButton, Rating, labels', () => {
+    expectTypeOf<SpinButtonProps['value']>().toEqualTypeOf<number | undefined>();
+    expectTypeOf<SpinButtonAllowEmptyProps['value']>().toEqualTypeOf<number | null | undefined>();
+    expectTypeOf<ComponentProps<typeof SpinButton>>().toEqualTypeOf<
+      SpinButtonProps | SpinButtonAllowEmptyProps
+    >();
+    expectTypeOf<RatingProps['step']>().toEqualTypeOf<0.5 | 1 | undefined>();
+    expectTypeOf<RatingProps['color']>().toEqualTypeOf<RatingColor | undefined>();
+    expectTypeOf<typeof Rating.Item>().toEqualTypeOf<typeof RatingItem>();
+    expectTypeOf<typeof RatingDisplay.Item>().toEqualTypeOf<typeof RatingItem>();
+    expectTypeOf<typeof RatingDisplayItem>().toEqualTypeOf<typeof RatingItem>();
+    expectTypeOf<InfoLabelProps['info']>().toEqualTypeOf<ReactNode>();
+    expectTypeOf<InfoLabelProps['openOnHover']>().toEqualTypeOf<boolean | undefined>();
+    expectTypeOf<InfoButtonProps['openOnHover']>().toEqualTypeOf<boolean | undefined>();
+    expectTypeOf<LabelProps['required']>().toEqualTypeOf<boolean | ReactNode | undefined>();
+    expectTypeOf<InfoLabelProps['label']>().toEqualTypeOf<ReactNode>();
+    // Optional (the deprecated alias of `children`): a label-less pick accepts `{}`.
+    expectTypeOf<{}>().toExtend<Pick<InfoLabelProps, 'label'>>(); // eslint-disable-line @typescript-eslint/no-empty-object-type -- the empty object is the point
+    expectTypeOf<InfoLabelProps['htmlFor']>().toEqualTypeOf<LabelProps['htmlFor']>();
+    expectTypeOf<InfoLabelProps['required']>().toEqualTypeOf<LabelProps['required']>();
+    expectTypeOf<InfoLabelProps['size']>().toEqualTypeOf<LabelProps['size']>();
+    expectTypeOf<InfoLabelProps['weight']>().toEqualTypeOf<LabelProps['weight']>();
+    expectTypeOf<InfoLabelProps['disabled']>().toEqualTypeOf<LabelProps['disabled']>();
+    // `never` on an optional member reads as `undefined`: the deprecated alias is unavailable
+    // with `allowEmpty`, and still readable on the component's union of props.
+    expectTypeOf<SpinButtonAllowEmptyProps['onChange']>().toEqualTypeOf<undefined>();
+    expectTypeOf<ComponentProps<typeof SpinButton>['onChange']>().toEqualTypeOf<
+      ((value: number) => void) | undefined
+    >();
+  });
+
+  it('rejects invalid values', () => {
+    // @ts-expect-error not a size
+    const inputSize: InputProps['size'] = 'huge';
+    // @ts-expect-error TagPicker has no small size
+    const tagPicker: TagPickerProps['size'] = 'small';
+    // @ts-expect-error Checkbox has no small size
+    const checkbox: CheckboxProps['size'] = 'small';
+    // @ts-expect-error Switch has no large size
+    const switchSize: SwitchProps['size'] = 'large';
+    // @ts-expect-error quarter stars
+    const step: RatingProps['step'] = 0.25;
+    // @ts-expect-error info is required
+    const infoButton: InfoButtonProps = {};
+    // @ts-expect-error not one of neutral, brand and marigold
+    const ratingColor: RatingProps['color'] = 'red';
+    // @ts-expect-error a null value needs `allowEmpty`
+    const nullValue: ComponentProps<typeof SpinButton> = { value: null };
+    void [inputSize, tagPicker, checkbox, switchSize, step, infoButton, ratingColor, nullValue];
+  });
+
+  it('class-name constants of the Phase 4 parts (P3-00)', () => {
+    expectTypeOf<Entry['infoButtonClassNames']['root']>().toEqualTypeOf<'wave-info-button'>();
+    expectTypeOf<Entry['infoButtonClassNames']['beak']>().toEqualTypeOf<'wave-info-button__beak'>();
+    expectTypeOf<Entry['infoButtonClassNames']['info']>().toEqualTypeOf<'wave-info-button__info'>();
+    expectTypeOf<Entry['infoButtonClassNames']>().not.toHaveProperty('surface');
+    expectTypeOf<Entry['infoLabelClassNames']['label']>().toEqualTypeOf<'wave-info-label__label'>();
+    expectTypeOf<Entry['ratingItemClassNames']['root']>().toEqualTypeOf<'wave-rating-item'>();
+    expectTypeOf<Entry['ratingItemClassNames']['icon']>().toEqualTypeOf<'wave-rating-item__icon'>();
+    const classes = {} as Entry['ratingItemClassNames'];
+    // @ts-expect-error the registry constants are readonly
+    classes.icon = 'wave-custom';
+    expect(classes.icon).toBe('wave-custom');
   });
 });
 

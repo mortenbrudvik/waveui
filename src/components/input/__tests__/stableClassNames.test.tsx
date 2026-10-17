@@ -21,6 +21,7 @@ import {
   emptySwatchClassNames,
   fieldClassNames,
   imageSwatchClassNames,
+  infoLabelClassNames,
   inputClassNames,
   labelClassNames,
   listboxClassNames,
@@ -31,6 +32,7 @@ import {
   radioGroupItemClassNames,
   ratingClassNames,
   ratingDisplayClassNames,
+  ratingItemClassNames,
   searchBoxClassNames,
   selectClassNames,
   sliderClassNames,
@@ -45,6 +47,7 @@ import {
 import { useListbox } from '../../../hooks/useListbox';
 import { useMergedRefs } from '../../../hooks/useMergedRefs';
 import { Button } from '../../button/Button';
+import { InfoLabel } from '../../data-display/InfoLabel';
 import { Calendar } from '../Calendar';
 import { Checkbox } from '../Checkbox';
 import { ColorPicker } from '../ColorPicker';
@@ -198,6 +201,35 @@ describe('stable class names: input folder', () => {
     expect(screen.getByTestId('custom-icon').parentElement).toHaveClass(
       fieldClassNames.validationMessageIcon,
     );
+  });
+
+  it('Field: a Label or InfoLabel element passed as label carries the label part', () => {
+    render(
+      <>
+        <Field label={<Label>Name</Label>}>
+          <Input />
+        </Field>
+        <Field label={<InfoLabel info="Used to sign in">Email</InfoLabel>}>
+          <Input />
+        </Field>
+      </>,
+    );
+    const name = screen.getByText('Name');
+    expect(name.tagName).toBe('LABEL');
+    expect(name).toHaveClass(labelClassNames.root, fieldClassNames.label);
+    // InfoLabel's className lands on its root span, which holds its own <label>.
+    const email = screen.getByText('Email');
+    expect(email).toHaveClass(labelClassNames.root, infoLabelClassNames.label);
+    expect(email.parentElement).toHaveClass(infoLabelClassNames.root, fieldClassNames.label);
+  });
+
+  it('Label: custom required content is the required part', () => {
+    render(
+      <Label required={<span>(required)</span>} htmlFor="name">
+        Name
+      </Label>,
+    );
+    expect(screen.getByText('(required)').parentElement).toHaveClass(labelClassNames.required);
   });
 
   it('Label: root and required mark', () => {
@@ -524,12 +556,70 @@ describe('stable class names: input folder', () => {
     expect(screen.getByRole('radiogroup')).toHaveClass(swatchPickerClassNames.root);
   });
 
-  it('Rating: root, stars and their glyphs', () => {
+  it('Rating: root, stars (RatingItems, which also carry the star part) and their glyphs', () => {
     render(<Rating aria-label="Score" defaultValue={3} />);
     expect(screen.getByRole('radiogroup', { name: 'Score' })).toHaveClass(ratingClassNames.root);
-    const [star] = screen.getAllByRole('radio');
-    expect(star).toHaveClass(ratingClassNames.star);
-    expect(star.querySelector('svg')).toHaveClass(ratingClassNames.icon);
+    const stars = screen.getAllByRole('radio');
+    expect(stars).toHaveLength(5);
+    for (const star of stars) {
+      expect(star).toHaveClass(ratingItemClassNames.root, ratingClassNames.star);
+      expect(star).not.toHaveClass(ratingDisplayClassNames.star);
+      // A filled (3) and an unfilled (2) default glyph alike.
+      expect(star.querySelector('svg')).toHaveClass(
+        ratingItemClassNames.icon,
+        ratingClassNames.icon,
+      );
+    }
+  });
+
+  it('Rating with step={0.5}: the star element carries the classes, its two radios do not', () => {
+    render(<Rating aria-label="Score" step={0.5} defaultValue={2.5} />);
+    const half = screen.getByRole('radio', { name: '2.5 stars' });
+    const full = screen.getByRole('radio', { name: '3 stars' });
+    // Both radios of a star are transparent inputs inside one star element (not parts, spec D4).
+    const star = half.parentElement as HTMLElement;
+    expect(full.parentElement).toBe(star);
+    expect(star).toHaveClass(ratingItemClassNames.root, ratingClassNames.star);
+    for (const radio of [half, full]) {
+      expect(radio).not.toHaveClass(ratingItemClassNames.root);
+      expect(radio).not.toHaveClass(ratingClassNames.star);
+    }
+    // The half-filled star draws two glyphs, the outline and the clipped filled one: both icons.
+    const glyphs = Array.from(star.querySelectorAll('svg'));
+    expect(glyphs).toHaveLength(2);
+    for (const glyph of glyphs) {
+      expect(glyph).toHaveClass(ratingItemClassNames.icon, ratingClassNames.icon);
+    }
+  });
+
+  it('Rating: Rating.Item children and a custom glyph pair carry the same classes', () => {
+    render(
+      <Rating
+        aria-label="Score"
+        max={2}
+        defaultValue={1}
+        iconFilled={<svg data-testid="heart" />}
+        iconOutline={<svg data-testid="heart-outline" />}
+      >
+        <Rating.Item value={1} className="wave-test-custom-class" />
+        <Rating.Item value={2} />
+      </Rating>,
+    );
+    const first = screen.getByRole('radio', { name: '1 star' });
+    expect(first).toHaveClass(
+      ratingItemClassNames.root,
+      ratingClassNames.star,
+      'wave-test-custom-class',
+    );
+    // A slot glyph keeps the part class on the span the slot renders.
+    expect(screen.getByTestId('heart').parentElement).toHaveClass(
+      ratingItemClassNames.icon,
+      ratingClassNames.icon,
+    );
+    expect(screen.getByTestId('heart-outline').parentElement).toHaveClass(
+      ratingItemClassNames.icon,
+      ratingClassNames.icon,
+    );
   });
 
   it('RatingDisplay: root, stars (the outer span of a partly filled one), glyphs, value, count', () => {
@@ -537,24 +627,50 @@ describe('stable class names: input folder', () => {
     const root = screen.getByRole('img');
     expect(root).toHaveClass(ratingDisplayClassNames.root);
     const stars = Array.from(root.children).slice(0, 5);
-    for (const star of stars) expect(star).toHaveClass(ratingDisplayClassNames.star);
+    for (const star of stars) {
+      expect(star).toHaveClass(ratingItemClassNames.root, ratingDisplayClassNames.star);
+      expect(star).not.toHaveClass(ratingClassNames.star);
+    }
     const partial = stars[3];
     const glyphs = Array.from(partial.querySelectorAll('svg'));
     expect(glyphs).toHaveLength(2);
-    for (const glyph of glyphs) expect(glyph).toHaveClass(ratingDisplayClassNames.icon);
+    for (const glyph of glyphs) {
+      expect(glyph).toHaveClass(ratingItemClassNames.icon, ratingDisplayClassNames.icon);
+    }
     // The clipping span of a partly filled star is a layout wrapper (judgement 27).
-    expect(partial.lastElementChild).not.toHaveClass(ratingDisplayClassNames.star);
+    expect(partial.lastElementChild?.className ?? '').not.toMatch(/\bwave-/);
     expect(within(root).getByText('3.5')).toHaveClass(ratingDisplayClassNames.value);
     expect(within(root).getByText('(12)')).toHaveClass(ratingDisplayClassNames.count);
   });
 
-  it('RatingDisplay: the one star of the compact layout', () => {
+  it('RatingDisplay: the one star of the compact layout (not a RatingItem)', () => {
     render(<RatingDisplay value={4} compact locale="en-US" />);
     const root = screen.getByRole('img');
     const star = root.firstElementChild as HTMLElement;
     expect(star).toHaveClass(ratingDisplayClassNames.star);
-    expect(star.querySelector('svg')).toHaveClass(ratingDisplayClassNames.icon);
+    expect(star).not.toHaveClass(ratingItemClassNames.root);
+    const glyph = star.querySelector('svg');
+    expect(glyph).toHaveClass(ratingDisplayClassNames.icon);
+    expect(glyph).not.toHaveClass(ratingItemClassNames.icon);
     expect(within(root).getByText('4')).toHaveClass(ratingDisplayClassNames.value);
+  });
+
+  it('Rating and RatingDisplay: the star classes are in the server HTML', () => {
+    const host = parse(
+      renderToString(
+        <>
+          <Rating aria-label="Score" step={0.5} defaultValue={1.5} />
+          <RatingDisplay value={2} locale="en-US" />
+        </>,
+      ),
+    );
+    expect(
+      host.querySelectorAll(`.${ratingItemClassNames.root}.${ratingClassNames.star}`),
+    ).toHaveLength(5);
+    expect(
+      host.querySelectorAll(`.${ratingItemClassNames.root}.${ratingDisplayClassNames.star}`),
+    ).toHaveLength(5);
+    expect(host.querySelectorAll(`svg.${ratingClassNames.icon}`)).toHaveLength(6);
   });
 
   it('renders the classes in the server HTML (renderToString)', () => {

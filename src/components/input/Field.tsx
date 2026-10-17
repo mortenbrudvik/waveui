@@ -5,13 +5,15 @@ import { fieldClassNames } from '../../lib/classNames';
 import { warnOnce } from '../../lib/dev';
 import { ErrorIcon, SuccessIcon, WarningIcon, type IconComponent } from '../../lib/icons';
 import { materialiseSlotContent, renderSlot, slotRendersContent, type Slot } from '../../lib/slot';
-import type { Orientation, ValidationState } from '../../lib/types';
+import type { CoreSize, Orientation, ValidationState } from '../../lib/types';
 import { useId } from '../../hooks/useId';
 import {
   FieldContext,
   createFieldControlIdClaim,
   type FieldContextValue,
 } from '../../hooks/useFieldControl';
+import { useWaveTheme } from '../provider/WaveProvider';
+import { isFieldLabelElement, type FieldLabelElementProps } from './fieldLabel';
 
 /** Props Field reads from and merges into its first element child. */
 interface InjectedFieldProps {
@@ -31,6 +33,18 @@ export interface FieldProps extends React.HTMLAttributes<HTMLDivElement> {
   /**
    * Label displayed above the control (beside it with `orientation="horizontal"`); names the
    * control.
+   *
+   * A `Label` or `InfoLabel` element passed as `label` renders in place of Field's own `<label>`,
+   * never inside it, and names the control by its label text alone (an InfoLabel's info button
+   * sits next to the `<label>`, outside it). Field always points it at the control (`htmlFor`),
+   * and gives it the Field's label id, `required`, label `size` and `weight="semibold"` (the look
+   * of Field's own label), each only where the element leaves it unset; Field's layout classes go
+   * before the element's `className`, so the element's classes win. The element's own `htmlFor`
+   * is read like the Field's `htmlFor` (which wins over it): it becomes the control's id when the
+   * control has none, and one that points at another element is replaced, with a development
+   * warning. Field shows no asterisk of its own next to such an element: the element shows its
+   * `required` indicator. Only the element itself is recognized, not one inside a Fragment, an
+   * array or another element.
    */
   label?: React.ReactNode;
   /** Hint shown below the control, after any validation message; describes the control. */
@@ -74,6 +88,12 @@ export interface FieldProps extends React.HTMLAttributes<HTMLDivElement> {
    */
   orientation?: Orientation;
   /**
+   * The label's size and the default `size` of the text inputs and pickers inside the Field
+   * (their own `size` wins; choice controls keep theirs). The message and the hint stay small.
+   * @default `WaveProvider` `inputDefaults.size`, else `'medium'`.
+   */
+  size?: CoreSize;
+  /**
    * Whether the field is required: shows a decorative asterisk next to the label, sets
    * `aria-required`, and turns on native constraint validation. `<input>`, `<select>`,
    * `<textarea>` and Input, Select, Textarea, Slider, SearchBox and SpinButton get the native
@@ -85,7 +105,8 @@ export interface FieldProps extends React.HTMLAttributes<HTMLDivElement> {
   required?: boolean;
   /**
    * The id of the control the label points at, when the control has no `id` of its own
-   * (default: a generated id).
+   * (default: the `htmlFor` of a `Label` or `InfoLabel` element passed as `label`, else a
+   * generated id).
    */
   htmlFor?: string;
   /** Ref to the root `<div>`. */
@@ -322,15 +343,65 @@ const MESSAGE_COLORS: Readonly<Record<ValidationState, string>> = {
   none: 'text-muted-foreground',
 };
 
+/** The label's type ramp per Field size (0.7 default: medium). */
+const LABEL_TEXT: Readonly<Record<CoreSize, string>> = {
+  small: 'text-caption-1',
+  medium: 'text-body-1',
+  large: 'text-body-2',
+};
+
+/** Horizontal layout: the label's first line centred on a 24, 32 or 40px control. */
+const LABEL_TOP: Readonly<Record<CoreSize, string>> = {
+  small: 'pt-1',
+  medium: 'pt-1.5',
+  large: 'pt-2.25',
+};
+
+/** Horizontal layout: a Checkbox, Switch or RadioGroup row lined up with the label. */
+const SHORT_ROW_FIRST_CHILD: Readonly<Record<CoreSize, string>> = {
+  small: '[&>:first-child:has([role=checkbox],[role=switch],label>[role=radio])]:py-0.5',
+  medium: '[&>:first-child:has([role=checkbox],[role=switch],label>[role=radio])]:py-1.5',
+  large: '[&>:first-child:has([role=checkbox],[role=switch],label>[role=radio])]:py-2.5',
+};
+
+/** What Field merges into a `Label` or `InfoLabel` element passed as its `label` (D32). */
+interface LabelElementState {
+  /** The id the element always points at (`htmlFor`). */
+  controlId: string;
+  /** The Field's label id, for an element without an `id` of its own. */
+  labelId: string | undefined;
+  /** Whether the Field is required. */
+  required: boolean;
+  /** The label size: the Field's `size`, else the provider default, else medium. */
+  size: CoreSize;
+  /** Field's layout classes for its label, merged before the element's own `className`. */
+  className: string;
+}
+
 /**
- * Horizontal layout: the label's first line is centred on a 32px row, the height of an Input, a
- * Select and the other text controls. Checkbox, Switch and RadioGroup rows are one 20px line, so a
- * first child that holds one (also a wrapper of several) gets 6px above and below: its first line
- * then lines up with the label's, also when its label wraps or a group lists its items one below
- * the other.
+ * Returns the `Label` or `InfoLabel` element passed as Field's `label` with Field's props merged
+ * in, to render in place of Field's own `<label>` (D32): `htmlFor` always points at the control;
+ * `id`, `required`, `size` and the semibold `weight` of Field's own label are given only where the
+ * element leaves them unset; Field's layout classes go before the element's own `className`, so
+ * its classes win.
  */
-const SHORT_ROW_FIRST_CHILD =
-  '[&>:first-child:has([role=checkbox],[role=switch],label>[role=radio])]:py-1.5';
+function mergeIntoLabelElement(
+  element: React.ReactElement<FieldLabelElementProps>,
+  state: LabelElementState,
+): React.ReactElement<FieldLabelElementProps> {
+  const own = element.props;
+  const merged: FieldLabelElementProps = {
+    htmlFor: state.controlId,
+    className: cn(state.className, own.className),
+  };
+  if (!own.id) merged.id = state.labelId;
+  // The element's own `required` (`false` included) wins; else a required Field makes it show its
+  // indicator.
+  if (own.required === undefined && state.required) merged.required = true;
+  if (own.size === undefined) merged.size = state.size;
+  if (own.weight === undefined) merged.weight = 'semibold';
+  return React.cloneElement(element, merged);
+}
 
 /** The icon box before a message: 12px glyphs line up with the first line of caption text. */
 const MESSAGE_ICON_CLASSES = 'mt-0.5 inline-flex shrink-0';
@@ -371,6 +442,17 @@ function renderMessageIcon(state: ValidationState, icon: Slot<'span'> | undefine
  * - `orientation="horizontal"` puts the label in a start column beside the control, with the
  *   message and the hint below the control. The label lines up with the first line of the
  *   control (a Checkbox, Switch or RadioGroup gets 6px of padding above and below for it).
+ * - `size` sets the label's type ramp and, in the horizontal layout, its top padding and the
+ *   padding that lines a Checkbox, Switch or RadioGroup row up with it, so the label's first
+ *   line keeps lining up with a 24, 32 or 40px control. The message and the hint stay small.
+ *   Controls inside read the prop from `FieldContext` as their own default `size` (their own
+ *   `size` wins); the Field's own label falls back to `WaveProvider inputDefaults.size`, else
+ *   `medium`, and the root always renders that resolved value as `data-size`.
+ * - `label` also takes a `Label` or `InfoLabel` element, which renders in place of Field's own
+ *   `<label>` with the Field's wiring (see `label`); an InfoLabel's info button sits next to the
+ *   label text, outside the `<label>`, so the control is named by the text alone. A group control
+ *   (RadioGroup, your own `<div role="radiogroup">`) is named through `aria-labelledby` pointing
+ *   at that `<label>`.
  * - Provides `FieldContext`: the library's inputs (Input, Select, Textarea, Slider, SearchBox,
  *   Checkbox, Switch, RadioGroup, Rating, SpinButton, pickers, …) read it wherever they are inside
  *   the Field and are named by the label, described by the message and the hint and marked
@@ -431,6 +513,13 @@ function renderMessageIcon(state: ValidationState, icon: Slot<'span'> | undefine
  * </Field>
  *
  * @example
+ * // An InfoLabel as the label: the input is named "Password", the info button
+ * // "Password Information".
+ * <Field label={<InfoLabel info="Use 12 characters or more.">Password</InfoLabel>} required>
+ *   <Input type="password" />
+ * </Field>
+ *
+ * @example
  * // A wrapper component goes inside a plain element.
  * <Field label="Name" required>
  *   <div>
@@ -448,6 +537,7 @@ export const Field = ({
   validationMessage,
   validationMessageIcon,
   orientation = 'vertical',
+  size,
   required = false,
   htmlFor,
   className,
@@ -459,6 +549,10 @@ export const Field = ({
   // Hands the control id to one library control when Field leaves its first child alone.
   const [controlIdClaim] = React.useState(createFieldControlIdClaim);
   const { elementCount, targetId, controlIdAssigned } = getChildInfo(children);
+  // Own prop, else the provider default, else medium (D8); called unconditionally (C-HOOKS), so
+  // the provider fallback still applies while `size` is unset.
+  const { inputDefaults } = useWaveTheme();
+  const labelSize = size ?? inputDefaults.size ?? 'medium';
 
   // The library's "renders nothing" rule: nullish, booleans, '' and collections of only those (an
   // empty `errors.map(…)`) are no label, hint or message; `0` is content.
@@ -478,9 +572,17 @@ export const Field = ({
     (validationMessageRendersContent ||
       (validationState !== undefined && validationState !== 'error'));
 
-  const controlId = targetId ?? htmlFor ?? fieldId;
+  // A Label or InfoLabel element renders in place of Field's own <label> (D32). Recognized by its
+  // marker: Field imports neither component, so a Field-only bundle has no info button code.
+  const labelElement = isFieldLabelElement(label) ? label : undefined;
+  // An empty `htmlFor` or `id` on the element counts as unset (`||`); Field's own `htmlFor` keeps
+  // its 0.7 meaning (`??`).
+  const labelHtmlFor = labelElement?.props.htmlFor || undefined;
+  const controlId = targetId ?? htmlFor ?? labelHtmlFor ?? fieldId;
+  // A label pointing at another element would leave the control unnamed.
+  const labelPointsElsewhere = labelHtmlFor !== undefined && labelHtmlFor !== controlId;
   const hasLabel = slotRendersContent(label);
-  const labelId = hasLabel ? `${fieldId}-label` : undefined;
+  const labelId = hasLabel ? labelElement?.props.id || `${fieldId}-label` : undefined;
   // The error message keeps its 0.5 id; the other states get their own.
   const messageId = hasMessage ? `${fieldId}-${invalid ? 'error' : 'message'}` : undefined;
   const errorId = invalid ? messageId : undefined;
@@ -506,6 +608,17 @@ export const Field = ({
     }
   }, [errorAndValidation]);
 
+  React.useEffect(() => {
+    if (labelPointsElsewhere) {
+      warnOnce(
+        'Field:label-htmlFor',
+        "Field: the label element's `htmlFor` points at a different element than the Field's control, " +
+          'which would leave the control unnamed; Field points it at the control. Remove it, or give ' +
+          'the control that id.',
+      );
+    }
+  }, [labelPointsElsewhere]);
+
   const context = React.useMemo<FieldContextValue>(
     () => ({
       controlId,
@@ -519,6 +632,7 @@ export const Field = ({
       controlIdClaim,
       validationState: state,
       validationMessageId: messageId,
+      size,
     }),
     [
       controlId,
@@ -532,6 +646,7 @@ export const Field = ({
       controlIdClaim,
       state,
       messageId,
+      size,
     ],
   );
 
@@ -545,6 +660,8 @@ export const Field = ({
   });
 
   const horizontal = orientation === 'horizontal';
+  // Beside the control: a third of the width, its first line lined up with LABEL_TOP.
+  const labelColumn = horizontal && cn('mb-0 shrink-0 basis-1/3', LABEL_TOP[labelSize]);
   const control = (
     <>
       <FieldContext.Provider value={context}>{content}</FieldContext.Provider>
@@ -583,6 +700,7 @@ export const Field = ({
     <div
       ref={ref}
       data-orientation={orientation}
+      data-size={labelSize}
       data-validation-state={state}
       className={cn(
         fieldClassNames.root,
@@ -592,15 +710,23 @@ export const Field = ({
       )}
       {...rest}
     >
-      {hasLabel ? (
+      {labelElement ? (
+        mergeIntoLabelElement(labelElement, {
+          controlId,
+          labelId,
+          required,
+          size: labelSize,
+          className: cn(fieldClassNames.label, 'mb-1', labelColumn),
+        })
+      ) : hasLabel ? (
         <label
           id={labelId}
           htmlFor={controlId}
           className={cn(
             fieldClassNames.label,
-            'mb-1 text-body-1 font-semibold text-foreground',
-            // Beside the control: a third of the width, its first line centred on a 32px row.
-            horizontal && 'mb-0 shrink-0 basis-1/3 pt-1.5',
+            'mb-1 font-semibold text-foreground',
+            LABEL_TEXT[labelSize],
+            labelColumn,
           )}
         >
           {materialiseSlotContent(label)}
@@ -612,7 +738,9 @@ export const Field = ({
         </label>
       ) : null}
       {horizontal ? (
-        <div className={cn('flex min-w-0 flex-1 flex-col', SHORT_ROW_FIRST_CHILD)}>{control}</div>
+        <div className={cn('flex min-w-0 flex-1 flex-col', SHORT_ROW_FIRST_CHILD[labelSize])}>
+          {control}
+        </div>
       ) : (
         control
       )}

@@ -5,6 +5,7 @@ import {
   WaveProvider,
   useWaveTheme,
   getThemeClassName,
+  type InputDefaults,
   type WaveContextValue,
   type WaveTheme,
 } from '../WaveProvider';
@@ -237,6 +238,7 @@ describe('WaveProvider', () => {
         dir: 'rtl',
         themeClassName: 'wave-high-contrast high-contrast',
         portalContainer: appRoot,
+        inputDefaults: {},
         hasProvider: true,
       });
     });
@@ -395,6 +397,7 @@ describe('useWaveTheme', () => {
       dir: 'ltr',
       themeClassName: 'wave-high-contrast high-contrast',
       portalContainer: portalTarget,
+      inputDefaults: {},
       hasProvider: true,
     });
   });
@@ -432,7 +435,71 @@ describe('useWaveTheme', () => {
       dir: 'ltr' | 'rtl';
       themeClassName: string;
       portalContainer: HTMLElement | null;
+      inputDefaults: InputDefaults;
       hasProvider: boolean;
     }>();
+  });
+});
+
+describe('inputDefaults (Phase 4 D7)', () => {
+  function Probe() {
+    const { inputDefaults } = useWaveTheme();
+    return <output data-testid="defaults">{JSON.stringify(inputDefaults)}</output>;
+  }
+  const read = () => JSON.parse(screen.getByTestId('defaults').textContent ?? '');
+
+  it('is {} outside a provider and without the prop', () => {
+    const { unmount } = render(<Probe />);
+    expect(read()).toEqual({});
+    unmount();
+    render(
+      <WaveProvider>
+        <Probe />
+      </WaveProvider>,
+    );
+    expect(read()).toEqual({});
+  });
+
+  it('a nested provider merges its defined keys over the enclosing ones (Review Focus 3)', () => {
+    render(
+      <WaveProvider inputDefaults={{ size: 'small', appearance: 'filled-darker' }}>
+        <WaveProvider inputDefaults={{ appearance: 'underline', size: undefined }}>
+          <Probe />
+        </WaveProvider>
+      </WaveProvider>,
+    );
+    expect(read()).toEqual({ size: 'small', appearance: 'underline' });
+  });
+
+  it('an empty object and an omitted prop inherit the enclosing defaults', () => {
+    render(
+      <WaveProvider inputDefaults={{ size: 'large' }}>
+        <WaveProvider inputDefaults={{}}>
+          <WaveProvider>
+            <Probe />
+          </WaveProvider>
+        </WaveProvider>
+      </WaveProvider>,
+    );
+    expect(read()).toEqual({ size: 'large' });
+  });
+
+  it('keeps the context identity across renders with an equal inline object', () => {
+    const seen = new Set<unknown>();
+    function Collect() {
+      seen.add(useWaveTheme());
+      return null;
+    }
+    const { rerender } = render(
+      <WaveProvider inputDefaults={{ size: 'small' }}>
+        <Collect />
+      </WaveProvider>,
+    );
+    rerender(
+      <WaveProvider inputDefaults={{ size: 'small' }}>
+        <Collect />
+      </WaveProvider>,
+    );
+    expect(seen.size).toBe(1);
   });
 });

@@ -2,6 +2,8 @@ import * as React from 'react';
 import type { Meta, StoryObj } from '@storybook/react';
 import { fn } from 'storybook/test';
 import { Combobox, Field, Option, OptionGroup, type ComboboxProps, type ListboxItem } from '../src';
+import { coreSizeArgType, inputAppearanceArgType } from './_helpers';
+import { SizeAppearanceGrid } from './_grids';
 
 const meta = {
   title: 'Components/Input/Combobox',
@@ -11,6 +13,8 @@ const meta = {
     freeform: { control: 'boolean' },
     clearable: { control: 'boolean' },
     expandIcon: { control: false },
+    ...coreSizeArgType,
+    ...inputAppearanceArgType,
   },
   args: {
     'aria-label': 'Fruit',
@@ -292,5 +296,25 @@ export const Invalid: Story = {
         <Option value="banana">Banana</Option>
       </Combobox>
     </Field>
+  ),
+};
+
+export const SizesAndAppearances: Story = {
+  render: (args) => (
+    <SizeAppearanceGrid
+      render={(size, appearance) => (
+        <Combobox
+          {...args}
+          size={size}
+          appearance={appearance}
+          clearable
+          defaultValue="apple"
+          aria-label={`${size} ${appearance}`}
+        >
+          <Combobox.Option value="apple">Apple</Combobox.Option>
+          <Combobox.Option value="banana">Banana</Combobox.Option>
+        </Combobox>
+      )}
+    />
   ),
 };

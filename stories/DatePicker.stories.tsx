@@ -2,6 +2,8 @@ import type { Meta, StoryObj } from '@storybook/react';
 import { useState } from 'react';
 import { fn } from 'storybook/test';
 import { DatePicker, Field } from '../src';
+import { coreSizeArgType, inputAppearanceArgType } from './_helpers';
+import { SizeAppearanceGrid } from './_grids';
 
 /** Local midnight `days` days from today (story ranges follow the current date). */
 function daysFromToday(days: number): Date {
@@ -25,6 +27,8 @@ const meta = {
     clearable: { control: 'boolean' },
     locale: { control: 'text' },
     firstDayOfWeek: { control: 'select', options: [0, 1, 2, 3, 4, 5, 6] },
+    ...coreSizeArgType,
+    ...inputAppearanceArgType,
   },
   args: {
     'aria-label': 'Date',
@@ -171,4 +175,21 @@ export const CloseButton: Story = {
     defaultOpen: true,
   },
   parameters: openStoryParameters,
+};
+
+export const SizesAndAppearances: Story = {
+  render: (args) => (
+    <SizeAppearanceGrid
+      render={(size, appearance) => (
+        <DatePicker
+          {...args}
+          size={size}
+          appearance={appearance}
+          clearable
+          defaultValue={new Date(2026, 0, 5)}
+          aria-label={`${size} ${appearance}`}
+        />
+      )}
+    />
+  ),
 };

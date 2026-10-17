@@ -2,11 +2,22 @@ import * as React from 'react';
 import { cn } from '../../lib/cn';
 import { joinIds } from '../../lib/aria';
 import { inputClassNames } from '../../lib/classNames';
+import { resolveDeprecatedProp } from '../../lib/dev';
 import { renderSlot, slotRendersContent } from '../../lib/slot';
-import { inputFocus, inputFocusWithin, inputInvalid, inputInvalidWithin } from '../../lib/styles';
-import type { Slot } from '../../lib/types';
+import {
+  inputAppearanceClasses,
+  inputFocus,
+  inputFocusWithin,
+  inputHeightClasses,
+  inputInvalid,
+  inputInvalidWithin,
+  inputPaddingClasses,
+  inputTextClasses,
+} from '../../lib/styles';
+import type { CoreSize, InputAppearance, Slot } from '../../lib/types';
 import { useId } from '../../hooks/useId';
 import { useFieldContext, useFieldControl } from '../../hooks/useFieldControl';
+import { legacyNativeSize, useInputLook } from './inputLook';
 
 /**
  * Props of the error message element that {@link Input}, `Select` and `Textarea` render after the
@@ -101,8 +112,15 @@ export function isInvalidLook(
   return ownError || ariaInvalid === true || ariaInvalid === 'true';
 }
 
+/** Padding of the slot spans and the inner input of the slot wrapper, per size. */
+const SLOT_PADDING: Readonly<Record<CoreSize, { before: string; after: string; input: string }>> = {
+  small: { before: 'ps-1.5', after: 'pe-1.5', input: 'px-1.5' },
+  medium: { before: 'ps-2', after: 'pe-2', input: 'px-2' },
+  large: { before: 'ps-3', after: 'pe-3', input: 'px-3' },
+};
+
 /** Properties for the Input component. */
-export interface InputProps extends React.InputHTMLAttributes<HTMLInputElement> {
+export interface InputProps extends Omit<React.InputHTMLAttributes<HTMLInputElement>, 'size'> {
   /**
    * Validation error.
    * - A non-empty string renders the message in a `role="alert"` element **after** the field (a
@@ -120,6 +138,24 @@ export interface InputProps extends React.InputHTMLAttributes<HTMLInputElement> 
   error?: string | boolean;
   /** Props of the error message element (`id`, `className`, …) rendered for a string `error`. */
   errorMessageProps?: InputErrorMessageProps;
+  /**
+   * Size of the field: `small` (24px tall), `medium` (32px) or `large` (40px). Default: the
+   * surrounding Field's `size`, else `WaveProvider inputDefaults.size`, else `'medium'`.
+   *
+   * A number is the native `size` attribute (the visible width in characters), as in 0.8: it
+   * still renders, warns once in development and is removed in 1.0. Use `htmlSize` for it.
+   * A string of digits only (`size="20"` from untyped code) counts as that number. Any other value
+   * outside the three sizes renders as if `size` were not set.
+   */
+  size?: CoreSize | number;
+  /** The native `size` attribute: the visible width of the field in characters. */
+  htmlSize?: number;
+  /**
+   * Look of the field: `outline` (a full border), `underline` (a bottom stroke only),
+   * `filled-darker` or `filled-lighter` (a fill without a visible stroke: give the field a visible
+   * label). Default: `WaveProvider inputDefaults.appearance`, else `'outline'`.
+   */
+  appearance?: InputAppearance;
   /**
    * Slot rendered before the input text (e.g., an icon). With content in either slot, a bordered
    * `<span>` around the input draws the field: it receives `className`, `style` and `hidden`,
@@ -144,6 +180,12 @@ export interface InputProps extends React.InputHTMLAttributes<HTMLInputElement> 
  * optional error message. Inside a `Field` it picks up the label, hint, error, `required` (native
  * attribute) and invalid state automatically.
  *
+ * `size` resolves from its own prop, then the surrounding `Field`'s `size`, then
+ * `WaveProvider inputDefaults.size`, else `'medium'`; `appearance` from its own prop, then
+ * `WaveProvider inputDefaults.appearance`, else `'outline'`; both render as `data-size` and
+ * `data-appearance` on the element that draws the field (the `<input>`, or the wrapper with slot
+ * content).
+ *
  * Every prop reaches the `<input>`, except with slot content: then a bordered `<span>` wrapper
  * draws the field and receives `className`, `style` and `hidden` (`ref` stays on the input).
  *
@@ -155,6 +197,9 @@ export interface InputProps extends React.InputHTMLAttributes<HTMLInputElement> 
 export const Input = ({
   error,
   errorMessageProps,
+  size: sizeProp,
+  htmlSize,
+  appearance: appearanceProp,
   contentBefore,
   contentAfter,
   onChange,
@@ -190,6 +235,18 @@ export const Input = ({
     { nativeRequired: true },
   );
   const invalidLook = isInvalidLook(invalid, fieldProps['aria-invalid']);
+  const numericSize = legacyNativeSize(sizeProp);
+  const nativeSize = resolveDeprecatedProp(
+    'Input',
+    htmlSize,
+    numericSize,
+    'size={number}',
+    'htmlSize',
+  );
+  const { size, appearance } = useInputLook(
+    numericSize === undefined && typeof sizeProp !== 'number' ? sizeProp : undefined,
+    appearanceProp,
+  );
 
   const handleChange =
     onChange || onValueChange
@@ -218,9 +275,15 @@ export const Input = ({
       <span
         hidden={hidden}
         style={style}
+        data-size={size}
+        data-appearance={appearance}
         className={cn(
           inputClassNames.root,
-          'inline-flex h-8 w-full items-center rounded border border-input border-b-stroke-accessible bg-background text-body-1 text-foreground',
+          'inline-flex w-full items-center',
+          inputHeightClasses[size],
+          inputTextClasses[size],
+          inputAppearanceClasses[appearance],
+          'text-foreground',
           inputFocusWithin,
           invalidLook && inputInvalidWithin,
           // The dimmed look lifts while a focus ring shows inside the wrapper (focusable slot
@@ -230,37 +293,56 @@ export const Input = ({
         )}
       >
         {hasBefore &&
-          renderSlot(contentBefore, 'span', cn(inputClassNames.contentBefore, 'shrink-0 ps-2'))}
+          renderSlot(
+            contentBefore,
+            'span',
+            cn(inputClassNames.contentBefore, 'shrink-0', SLOT_PADDING[size].before),
+          )}
         <input
           ref={ref}
           className={cn(
             inputClassNames.input,
-            'h-full w-full min-w-0 bg-transparent px-2 text-body-1 text-foreground',
+            'h-full w-full min-w-0 bg-transparent',
+            SLOT_PADDING[size].input,
+            inputTextClasses[size],
+            'text-foreground',
             'placeholder:text-muted-foreground',
             'focus:outline-hidden',
             'disabled:cursor-not-allowed',
           )}
           {...inputProps}
+          size={nativeSize}
         />
         {hasAfter &&
-          renderSlot(contentAfter, 'span', cn(inputClassNames.contentAfter, 'shrink-0 pe-2'))}
+          renderSlot(
+            contentAfter,
+            'span',
+            cn(inputClassNames.contentAfter, 'shrink-0', SLOT_PADDING[size].after),
+          )}
       </span>
     );
   } else {
     control = (
       <input
         ref={ref}
+        data-size={size}
+        data-appearance={appearance}
         className={cn(
           inputClassNames.root,
           inputClassNames.input,
-          'h-8 w-full rounded border border-input border-b-stroke-accessible bg-background px-3 text-body-1 text-foreground',
-          'placeholder:text-muted-foreground',
+          inputHeightClasses[size],
+          'w-full',
+          inputPaddingClasses[size],
+          inputTextClasses[size],
+          inputAppearanceClasses[appearance],
+          'text-foreground placeholder:text-muted-foreground',
           inputFocus,
           'disabled:cursor-not-allowed disabled:opacity-50',
           invalidLook && inputInvalid,
           className,
         )}
         {...controlProps}
+        size={nativeSize}
       />
     );
   }

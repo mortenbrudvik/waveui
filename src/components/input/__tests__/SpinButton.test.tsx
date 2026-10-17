@@ -1,10 +1,15 @@
 import * as React from 'react';
-import { describe, it, expect, vi } from 'vitest';
-import { act, render, screen } from '@testing-library/react';
+import { afterEach, beforeEach, describe, it, expect, vi, expectTypeOf } from 'vitest';
+import { act, createEvent, fireEvent, render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { SpinButton, type SpinButtonLabels } from '../SpinButton';
+import {
+  SpinButton,
+  type SpinButtonLabels,
+  type SpinButtonProps,
+  type SpinButtonAllowEmptyProps,
+} from '../SpinButton';
 import { inputInvalidWithin } from '../../../lib/styles';
-import { testFocusEvents, testSystemProps } from '../../../test-utils';
+import { testFocusEvents, testSystemProps, renderWithProviders } from '../../../test-utils';
 import { renderWithFieldContext, FIELD_TEST_IDS, FIELD_TEST_TEXT } from '../../../test-utils-field';
 
 const spin = (name = 'Quantity') => screen.getByRole('spinbutton', { name });
@@ -611,11 +616,10 @@ describe('SpinButton — naming, routing and styling', () => {
     expect(spin()).toHaveAttribute('aria-invalid', 'true');
     const root = screen.getByTestId('root');
     expect(root).toHaveClass(...inputInvalidWithin.split(' '));
-    for (const replaced of [
-      'border-input',
-      'border-b-stroke-accessible',
-      'focus-within:border-b-primary',
-    ]) {
+    // Keeps the destructive border and shows the focus color on the focused bottom border
+    // (Phase 4 D4).
+    expect(root).toHaveClass('focus-within:border-b-primary');
+    for (const replaced of ['border-input', 'border-b-stroke-accessible']) {
       expect(root).not.toHaveClass(replaced);
     }
   });
@@ -810,5 +814,815 @@ describe('SpinButton — native forms (C-FORMS)', () => {
     expect(spin('Named')).toHaveValue('2');
     expect(spin('Unnamed')).toHaveValue('7');
     expect(new FormData(getForm()).getAll('qty')).toEqual(['2']);
+  });
+});
+
+describe('sizes, appearances and geometry (Phase 4 D13, D20)', () => {
+  const root = () => spin().closest('[data-size]') as HTMLElement;
+
+  it('medium outline: a 32px root, full-height 32px-wide buttons, a 48px flexible input', () => {
+    render(<SpinButton aria-label="Quantity" />);
+    expect(root()).toHaveClass('h-8', 'text-body-1', 'border-input', 'bg-background');
+    expect(root()).toHaveAttribute('data-size', 'medium');
+    expect(root()).toHaveAttribute('data-appearance', 'outline');
+    expect(incrementButton()).toHaveClass('h-full', 'w-8', 'border-s', 'border-input');
+    expect(decrementButton()).toHaveClass('h-full', 'w-8', 'border-e', 'border-input');
+    expect(spin()).toHaveClass('h-full', 'w-12', 'flex-auto', 'min-w-0', 'text-body-1');
+  });
+
+  it.each([
+    ['small', 'h-6', 'w-6', 'w-10', 'text-caption-1'],
+    ['large', 'h-10', 'w-10', 'w-14', 'text-body-2'],
+  ] as const)('size="%s"', (size, rootHeight, buttonWidth, inputWidth, text) => {
+    render(<SpinButton aria-label="Quantity" size={size} />);
+    expect(root()).toHaveClass(rootHeight, text);
+    expect(incrementButton()).toHaveClass(buttonWidth);
+    expect(spin()).toHaveClass(inputWidth);
+  });
+
+  it('the separators render only in outline; on filled-darker the buttons hover one step darker', () => {
+    render(<SpinButton aria-label="Quantity" appearance="filled-darker" />);
+    expect(root()).toHaveClass('bg-input-filled-darker');
+    expect(incrementButton()).not.toHaveClass('border-s');
+    expect(decrementButton()).not.toHaveClass('border-e');
+    expect(incrementButton()).toHaveClass('not-disabled:not-aria-disabled:hover:bg-subtle-pressed');
+    // tailwind-merge must not silently keep the outline hover class alongside the filled-darker one.
+    expect(incrementButton()).not.toHaveClass(
+      'not-disabled:not-aria-disabled:hover:bg-subtle-hover',
+    );
+  });
+
+  it('takes the Field size', () => {
+    renderWithFieldContext(<SpinButton />, { size: 'large' });
+    const el = screen.getByRole('spinbutton', { name: FIELD_TEST_TEXT.label });
+    expect(el.closest('[data-size]')).toHaveAttribute('data-size', 'large');
+  });
+
+  // The cases below are the rest of §2.1's "Tests (per control, in its test file)" paragraph
+  // (binding for every text control, SpinButton included), beyond what the brief's tests above
+  // cover: every appearance's classes and attribute, an own size winning over the Field's, the
+  // provider's inputDefaults with an own prop winning, and the invalid look at underline and
+  // filled-darker, through the Field and through the control's own invalid state.
+
+  it.each([
+    ['underline', ['rounded-none', 'border-0', 'border-b', 'bg-transparent']],
+    ['filled-darker', ['border-input-filled-stroke', 'bg-input-filled-darker']],
+    ['filled-lighter', ['border-input-filled-stroke', 'bg-input-filled-lighter']],
+  ] as const)(
+    'appearance="%s" renders its classes and attribute, with no separators',
+    (appearance, classes) => {
+      render(<SpinButton aria-label="Quantity" appearance={appearance} />);
+      expect(root()).toHaveClass(...classes);
+      expect(root()).toHaveAttribute('data-appearance', appearance);
+      expect(incrementButton()).not.toHaveClass('border-s');
+      expect(decrementButton()).not.toHaveClass('border-e');
+    },
+  );
+
+  it("the SpinButton's own size wins over the Field size", () => {
+    const { rerender } = renderWithFieldContext(<SpinButton />, { size: 'large' });
+    const fieldRoot = () =>
+      screen
+        .getByRole('spinbutton', { name: FIELD_TEST_TEXT.label })
+        .closest('[data-size]') as HTMLElement;
+    expect(fieldRoot()).toHaveAttribute('data-size', 'large');
+    rerender(<SpinButton size="small" />);
+    expect(fieldRoot()).toHaveAttribute('data-size', 'small');
+  });
+
+  it('takes WaveProvider inputDefaults; its own props win', () => {
+    const { rerender } = renderWithProviders(<SpinButton aria-label="Quantity" />, {
+      inputDefaults: { size: 'small', appearance: 'underline' },
+    });
+    expect(root()).toHaveAttribute('data-size', 'small');
+    expect(root()).toHaveAttribute('data-appearance', 'underline');
+    rerender(<SpinButton aria-label="Quantity" size="large" appearance="outline" />);
+    expect(root()).toHaveAttribute('data-size', 'large');
+    expect(root()).toHaveAttribute('data-appearance', 'outline');
+  });
+
+  it.each(['underline', 'filled-darker'] as const)(
+    "typed non-numeric text (the control's own invalid state) keeps the destructive border at %s",
+    async (appearance) => {
+      const user = userEvent.setup();
+      render(<SpinButton aria-label="Quantity" appearance={appearance} />);
+      await user.clear(spin());
+      await user.type(spin(), 'abc');
+      expect(root()).toHaveClass('border-destructive', 'focus-within:border-b-primary');
+    },
+  );
+
+  it.each(['underline', 'filled-darker'] as const)(
+    'a Field error at %s keeps the destructive border and the focus color on its bottom',
+    (appearance) => {
+      renderWithFieldContext(<SpinButton appearance={appearance} />, {
+        errorId: FIELD_TEST_IDS.errorId,
+      });
+      const wrapper = screen
+        .getByRole('spinbutton', { name: FIELD_TEST_TEXT.label })
+        .closest('[data-size]') as HTMLElement;
+      expect(wrapper).toHaveClass('border-destructive', 'focus-within:border-b-primary');
+    },
+  );
+});
+
+describe('allowEmpty (Phase 4 D16, D17)', () => {
+  it('starts empty without a value: no text, no aria-valuenow', () => {
+    render(<SpinButton aria-label="Quantity" allowEmpty />);
+    expect(spin()).toHaveValue('');
+    expect(spin()).not.toHaveAttribute('aria-valuenow');
+  });
+
+  it('clearing and committing emits null once (blur and Enter), in StrictMode', async () => {
+    const user = userEvent.setup();
+    const onValueChange = vi.fn();
+    render(
+      <React.StrictMode>
+        <SpinButton
+          aria-label="Quantity"
+          allowEmpty
+          defaultValue={3}
+          onValueChange={onValueChange}
+        />
+      </React.StrictMode>,
+    );
+    await user.clear(spin());
+    await user.keyboard('{Enter}');
+    expect(onValueChange).toHaveBeenCalledTimes(1);
+    expect(onValueChange).toHaveBeenCalledWith(null);
+    expect(spin()).toHaveValue('');
+  });
+
+  // The spec's Tests paragraph lists both commit paths ("on blur and on Enter"); the case above
+  // exercises Enter, this one blur (spec case added beyond the brief).
+  it('clearing and committing on blur emits null once, in StrictMode', async () => {
+    const user = userEvent.setup();
+    const onValueChange = vi.fn();
+    render(
+      <React.StrictMode>
+        <SpinButton
+          aria-label="Quantity"
+          allowEmpty
+          defaultValue={3}
+          onValueChange={onValueChange}
+        />
+      </React.StrictMode>,
+    );
+    await user.clear(spin());
+    await user.tab();
+    expect(onValueChange).toHaveBeenCalledTimes(1);
+    expect(onValueChange).toHaveBeenCalledWith(null);
+    expect(spin()).toHaveValue('');
+  });
+
+  it('without allowEmpty, clearing still reverts (0.7)', async () => {
+    const user = userEvent.setup();
+    render(<SpinButton aria-label="Quantity" defaultValue={3} />);
+    await user.clear(spin());
+    await user.tab();
+    expect(spin()).toHaveValue('3');
+  });
+
+  it('stepping from empty starts at 0 and clamps: min 1 gives 1 both ways', async () => {
+    const user = userEvent.setup();
+    const { unmount } = render(<SpinButton aria-label="Quantity" allowEmpty min={1} />);
+    // Phase 4 D15 tracks focus (for displayValue): a bare .focus() now updates state too.
+    act(() => spin().focus());
+    await user.keyboard('{ArrowUp}');
+    expect(spin()).toHaveValue('1');
+    unmount();
+    render(<SpinButton aria-label="Quantity" allowEmpty min={1} />);
+    act(() => spin().focus());
+    await user.keyboard('{ArrowDown}');
+    expect(spin()).toHaveValue('1');
+  });
+
+  it('keeps both step buttons enabled while empty', () => {
+    render(<SpinButton aria-label="Quantity" allowEmpty min={0} max={10} />);
+    expect(incrementButton()).toBeEnabled();
+    expect(decrementButton()).toBeEnabled();
+  });
+
+  it('required and empty: the hidden input blocks the submit and focuses the spinbutton', () => {
+    const onSubmit = vi.fn((event: React.FormEvent) => event.preventDefault());
+    render(
+      <form onSubmit={onSubmit} aria-label="Order">
+        <SpinButton aria-label="Quantity" allowEmpty required name="qty" />
+      </form>,
+    );
+    const form = screen.getByRole('form', { name: 'Order' }) as HTMLFormElement;
+    // Phase 4 D15 tracks focus (for displayValue): checkValidity() fires `invalid` on the empty
+    // required hidden input, whose handler now updates that state too.
+    act(() => {
+      expect(form.checkValidity()).toBe(false);
+    });
+    const hidden = form.elements.namedItem('qty') as HTMLInputElement;
+    expect(hidden.validity.valueMissing).toBe(true);
+    act(() => form.requestSubmit());
+    expect(onSubmit).not.toHaveBeenCalled();
+    expect(spin()).toHaveFocus();
+  });
+
+  it('submits "" through the hidden input and resets to null', async () => {
+    const user = userEvent.setup();
+    render(
+      <form aria-label="Order">
+        <SpinButton aria-label="Quantity" allowEmpty name="qty" />
+        <button type="reset">Reset</button>
+      </form>,
+    );
+    const form = screen.getByRole('form', { name: 'Order' }) as HTMLFormElement;
+    expect(new FormData(form).get('qty')).toBe('');
+    // Phase 4 D15 tracks focus (for displayValue): a bare .focus() now updates state too.
+    act(() => spin().focus());
+    await user.keyboard('{ArrowUp}');
+    expect(new FormData(form).get('qty')).toBe('1');
+    await user.click(screen.getByRole('button', { name: 'Reset' }));
+    expect(spin()).toHaveValue('');
+  });
+
+  it('a controlled null from outside replaces a typed draft (Review Focus 4)', async () => {
+    const user = userEvent.setup();
+    const { rerender } = render(
+      <SpinButton aria-label="Quantity" allowEmpty value={5} onValueChange={() => {}} />,
+    );
+    await user.type(spin(), '7');
+    expect(spin()).toHaveValue('57');
+    rerender(<SpinButton aria-label="Quantity" allowEmpty value={null} onValueChange={() => {}} />);
+    expect(spin()).toHaveValue('');
+  });
+
+  it('types: null only with allowEmpty; onChange readable on the union', () => {
+    expectTypeOf<SpinButtonProps['value']>().toEqualTypeOf<number | undefined>();
+    expectTypeOf<SpinButtonAllowEmptyProps['value']>().toEqualTypeOf<number | null | undefined>();
+    expectTypeOf<React.ComponentProps<typeof SpinButton>>().toEqualTypeOf<
+      SpinButtonProps | SpinButtonAllowEmptyProps
+    >();
+    expectTypeOf<SpinButtonProps['onValueChange']>().toEqualTypeOf<
+      ((value: number) => void) | undefined
+    >();
+    expectTypeOf<SpinButtonAllowEmptyProps['onValueChange']>().toEqualTypeOf<
+      ((value: number | null) => void) | undefined
+    >();
+    type Props = React.ComponentProps<typeof SpinButton>;
+    expectTypeOf<Props['onChange']>().toEqualTypeOf<((value: number) => void) | undefined>();
+    interface Wrapper extends SpinButtonProps {
+      hint?: string;
+    }
+    expectTypeOf<Wrapper['value']>().toEqualTypeOf<number | undefined>();
+    // @ts-expect-error null needs allowEmpty
+    render(<SpinButton aria-label="Quantity" value={null} />);
+    const flag: boolean = Math.random() > 1;
+    // @ts-expect-error a boolean variable fits neither member
+    render(<SpinButton aria-label="Quantity" allowEmpty={flag} value={null} />);
+  });
+});
+
+describe('displayValue (Phase 4 D15)', () => {
+  function Currency(props: { readOnly?: boolean }) {
+    const [value, setValue] = React.useState(1);
+    return (
+      <SpinButton
+        aria-label="Price"
+        value={value}
+        onValueChange={setValue}
+        displayValue={`$${value.toFixed(2)}`}
+        {...props}
+      />
+    );
+  }
+  const price = () => screen.getByRole('spinbutton', { name: 'Price' });
+
+  it('shows displayValue and uses it as aria-valuetext while not focused', () => {
+    render(<Currency />);
+    expect(price()).toHaveValue('$1.00');
+    expect(price()).toHaveAttribute('aria-valuetext', '$1.00');
+    expect(price()).toHaveAttribute('aria-valuenow', '1');
+  });
+
+  it('shows the plain number while focused and editable, and displayValue again after blur', async () => {
+    const user = userEvent.setup();
+    render(<Currency />);
+    await user.click(price());
+    expect(price()).toHaveValue('1');
+    expect(price()).toHaveAttribute('aria-valuetext', '$1.00');
+    await user.keyboard('{ArrowUp}');
+    expect(price()).toHaveValue('2');
+    expect(price()).toHaveAttribute('aria-valuetext', '$2.00');
+    await user.tab();
+    expect(price()).toHaveValue('$2.00');
+  });
+
+  it('reselects the whole text when the focus switch happens with everything selected', () => {
+    render(<Currency />);
+    const input = price() as HTMLInputElement;
+    input.setSelectionRange(0, input.value.length);
+    act(() => input.focus());
+    expect(input.value).toBe('1');
+    expect(input.selectionStart).toBe(0);
+    expect(input.selectionEnd).toBe(1);
+  });
+
+  it('keeps displayValue while focused but read-only', async () => {
+    const user = userEvent.setup();
+    render(<Currency readOnly />);
+    await user.click(price());
+    expect(price()).toHaveValue('$1.00');
+  });
+
+  it('a consumer aria-valuetext wins', () => {
+    render(
+      <SpinButton aria-label="Price" value={1} displayValue="$1.00" aria-valuetext="one dollar" />,
+    );
+    expect(price()).toHaveAttribute('aria-valuetext', 'one dollar');
+  });
+
+  it('is ignored when uncontrolled, with one warning', () => {
+    const warn = spyWarn();
+    try {
+      render(<SpinButton aria-label="Price" defaultValue={1} displayValue="$1.00" />);
+      expect(price()).toHaveValue('1');
+      expect(price()).not.toHaveAttribute('aria-valuetext');
+      expect(warn).toHaveBeenCalledTimes(1);
+      expect(warn).toHaveBeenCalledWith(
+        '[WaveUI] SpinButton: `displayValue` is ignored while the value is uncontrolled; pass `value` (and update it in `onValueChange`).',
+      );
+    } finally {
+      warn.mockRestore();
+    }
+  });
+
+  // Deferred from Task B6 (spec §2 P4-02 Tests: "required + empty: … also when a `displayValue`
+  // is shown for the empty value"), for a controlled value with allowEmpty. D15's "while focused
+  // and editable it shows the plain number" and D17's "while focused and editable, an empty value
+  // shows '' (never String(null))" both win over displayValue, so right after committing to null
+  // with Enter (which keeps focus) the field shows the empty text, not a display string. D17 also
+  // explains why the *hidden* input, not the visible one, decides validity: once blurred, the
+  // visible input legitimately shows its displayValue for the empty value, so its own `required`
+  // cannot catch the empty value (spec case added beyond the brief).
+  it('with a controlled value and displayValue, clearing and committing to null shows the empty text while still focused and the display text once blurred; required still blocks the empty value through the hidden input', async () => {
+    const user = userEvent.setup();
+    const onValueChange = vi.fn();
+    const onSubmit = vi.fn((event: React.FormEvent) => event.preventDefault());
+    function Order() {
+      const [value, setValue] = React.useState<number | null>(3);
+      return (
+        <form onSubmit={onSubmit} aria-label="Order">
+          <SpinButton
+            aria-label="Quantity"
+            allowEmpty
+            required
+            name="qty"
+            value={value}
+            onValueChange={(next) => {
+              onValueChange(next);
+              setValue(next);
+            }}
+            displayValue={value === null ? 'No value' : `${value} units`}
+          />
+        </form>
+      );
+    }
+    render(<Order />);
+    const form = screen.getByRole('form', { name: 'Order' }) as HTMLFormElement;
+
+    // Not focused yet: the empty-value rule does not apply (value is 3), so displayValue shows.
+    expect(spin()).toHaveValue('3 units');
+    await user.click(spin());
+    // Focused: the plain number, not the display text (D15).
+    expect(spin()).toHaveValue('3');
+    await user.clear(spin());
+    await user.keyboard('{Enter}');
+    expect(onValueChange).toHaveBeenCalledTimes(1);
+    expect(onValueChange).toHaveBeenCalledWith(null);
+    // Still focused right after commit: the focused/editable rule wins over displayValue even
+    // for the empty value.
+    expect(spin()).toHaveValue('');
+    expect(onSubmit).not.toHaveBeenCalled();
+
+    await user.tab();
+    // Blurred: the empty value now shows its displayValue ("shown for the empty value") — yet
+    // the hidden input, not this visible text, decides validity.
+    expect(spin()).toHaveValue('No value');
+    // checkValidity() fires `invalid` on the empty required hidden input, whose handler focuses
+    // the spinbutton (a state update, since Phase 4 D15 tracks focus for displayValue).
+    act(() => {
+      expect(form.checkValidity()).toBe(false);
+    });
+    const hidden = form.elements.namedItem('qty') as HTMLInputElement;
+    expect(hidden.validity.valueMissing).toBe(true);
+    act(() => form.requestSubmit());
+    expect(onSubmit).not.toHaveBeenCalled();
+    expect(spin()).toHaveFocus();
+  });
+});
+
+describe('precision (Phase 4 D19)', () => {
+  it('rounds a typed commit and steps, without padding', async () => {
+    const user = userEvent.setup();
+    const onValueChange = vi.fn();
+    render(
+      <SpinButton aria-label="Quantity" precision={2} step={0.001} onValueChange={onValueChange} />,
+    );
+    await user.clear(spin());
+    await user.type(spin(), '1.234{Enter}');
+    expect(onValueChange).toHaveBeenLastCalledWith(1.23);
+    await user.keyboard('{ArrowUp}');
+    expect(onValueChange).toHaveBeenLastCalledWith(1.23);
+  });
+
+  it('precision 2 shows 1, not 1.00', () => {
+    render(<SpinButton aria-label="Quantity" precision={2} defaultValue={1} />);
+    expect(spin()).toHaveValue('1');
+  });
+
+  // Math.trunc(NaN) is NaN, which Math.min/Math.max propagate: without this guard a NaN
+  // precision would reach roundTo and round every commit to zero decimals instead of leaving
+  // the 0.7 rule in place (decided in Task B8, not in the brief).
+  it('a non-finite precision behaves as unset', async () => {
+    const user = userEvent.setup();
+    const onValueChange = vi.fn();
+    render(
+      <SpinButton aria-label="Quantity" precision={NaN} step={0.1} onValueChange={onValueChange} />,
+    );
+    await user.click(spin());
+    await user.keyboard('{ArrowUp}');
+    expect(spin()).toHaveValue('0.1');
+    expect(onValueChange).toHaveBeenLastCalledWith(0.1);
+  });
+});
+
+describe('Shift+Home and Shift+End (Phase 4 D21)', () => {
+  it('keep their native selection and change nothing', () => {
+    const onValueChange = vi.fn();
+    render(
+      <SpinButton
+        aria-label="Quantity"
+        min={0}
+        max={9}
+        defaultValue={5}
+        onValueChange={onValueChange}
+      />,
+    );
+    const homeEvent = createEvent.keyDown(spin(), { key: 'Home', shiftKey: true });
+    fireEvent(spin(), homeEvent);
+    expect(homeEvent.defaultPrevented).toBe(false);
+    const endEvent = createEvent.keyDown(spin(), { key: 'End', shiftKey: true });
+    fireEvent(spin(), endEvent);
+    expect(endEvent.defaultPrevented).toBe(false);
+    expect(onValueChange).not.toHaveBeenCalled();
+  });
+});
+
+describe('press-and-hold (Phase 4 D18)', () => {
+  beforeEach(() => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+  });
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  // A browser's first pointer of a type is its primary one (a jsdom PointerEvent defaults to
+  // isPrimary false, which a second finger has).
+  const press = (target: Element, pointerType = 'mouse') =>
+    fireEvent.pointerDown(target, { button: 0, pointerId: 1, pointerType, isPrimary: true });
+  const release = (button: HTMLElement, pointerType = 'mouse') => {
+    fireEvent.pointerUp(button, { button: 0, pointerId: 1, pointerType });
+    fireEvent.click(button, { detail: 1 });
+  };
+  const advance = (ms: number) => act(() => vi.advanceTimersByTime(ms));
+
+  it('a short press steps once, on its click, not on pointerdown', () => {
+    render(<SpinButton aria-label="Quantity" />);
+    press(incrementButton());
+    expect(spin()).toHaveValue('0');
+    advance(100);
+    release(incrementButton());
+    expect(spin()).toHaveValue('1');
+  });
+
+  it('a press cancelled before 300ms never steps (a scroll that starts on the button)', () => {
+    render(<SpinButton aria-label="Quantity" />);
+    press(incrementButton(), 'touch');
+    advance(200);
+    fireEvent.pointerCancel(incrementButton(), { pointerId: 1, pointerType: 'touch' });
+    advance(1000);
+    expect(spin()).toHaveValue('0');
+  });
+
+  it.each(['mouse', 'touch', 'pen'])('a %s hold repeats with the eased schedule', (pointerType) => {
+    render(<SpinButton aria-label="Quantity" />);
+    press(incrementButton(), pointerType);
+    advance(290);
+    expect(spin()).toHaveValue('0');
+    advance(20); // 310ms
+    expect(spin()).toHaveValue('1');
+    advance(250); // 560ms: the second step at 534ms
+    expect(spin()).toHaveValue('2');
+    advance(760); // 1320ms: steps at 717, 859, 970, 1057, 1137, 1217 and 1297ms
+    expect(spin()).toHaveValue('9');
+    advance(160); // 1480ms: 80ms apart from now on (1377 and 1457ms)
+    expect(spin()).toHaveValue('11');
+    release(incrementButton(), pointerType);
+    expect(spin()).toHaveValue('11'); // the click that ends a hold adds no step
+  });
+
+  it.each([
+    ['pointerup', (b: HTMLElement) => fireEvent.pointerUp(b, { pointerId: 1 })],
+    ['pointercancel', (b: HTMLElement) => fireEvent.pointerCancel(b, { pointerId: 1 })],
+    ['pointerleave', (b: HTMLElement) => fireEvent.pointerLeave(b, { pointerId: 1 })],
+    ['window blur', () => fireEvent.blur(window)],
+  ] as const)('a hold stops on %s', (_, stop) => {
+    render(<SpinButton aria-label="Quantity" />);
+    press(incrementButton());
+    advance(310);
+    expect(spin()).toHaveValue('1');
+    stop(incrementButton());
+    advance(1000);
+    expect(spin()).toHaveValue('1');
+  });
+
+  it('stops at the bound, and a later virtual click still steps', () => {
+    render(<SpinButton aria-label="Quantity" max={2} />);
+    press(incrementButton());
+    advance(1000);
+    expect(spin()).toHaveValue('2');
+    expect(incrementButton()).toBeDisabled();
+    fireEvent.click(decrementButton(), { detail: 0 });
+    expect(spin()).toHaveValue('1');
+  });
+
+  it('a click without a press (a screen reader) steps once', () => {
+    render(<SpinButton aria-label="Quantity" />);
+    fireEvent.click(incrementButton(), { detail: 0 });
+    expect(spin()).toHaveValue('1');
+  });
+
+  it('ignores a secondary-button press, prevents the context menu and keeps focus in the input', () => {
+    render(<SpinButton aria-label="Quantity" />);
+    act(() => spin().focus());
+    fireEvent.pointerDown(incrementButton(), {
+      button: 2,
+      pointerId: 1,
+      pointerType: 'mouse',
+      isPrimary: true,
+    });
+    advance(1000);
+    expect(spin()).toHaveValue('0');
+    const menu = createEvent.contextMenu(incrementButton());
+    fireEvent(incrementButton(), menu);
+    expect(menu.defaultPrevented).toBe(true);
+    expect(spin()).toHaveFocus();
+  });
+
+  it('releases the implicit capture of a touch pointer', () => {
+    render(<SpinButton aria-label="Quantity" />);
+    const button = incrementButton();
+    const release = vi.fn();
+    Object.assign(button, { hasPointerCapture: () => true, releasePointerCapture: release });
+    press(button, 'touch');
+    expect(release).toHaveBeenCalledWith(1);
+  });
+
+  // The cases below are the rest of the spec's press-and-hold tests (§2 P4-02 "Tests", binding)
+  // and of D18, beyond what the brief's tests above cover: a short press of every pointer type,
+  // the lower bound, the control becoming disabled or read-only mid-hold, a press on a disabled or
+  // read-only control, unmounting mid-hold, the flag every pointerdown resets, the first step from
+  // a typed number, a controlled value (updated or ignored by its parent), StrictMode, pen capture
+  // and a capture held by the glyph, other pointers, a macOS Ctrl+press, pointerdown never
+  // cancelled, focus kept throughout a hold, and the suppression classes.
+
+  it.each(['touch', 'pen'])(
+    'a short %s press steps once, on its click, not on pointerdown',
+    (pointerType) => {
+      render(<SpinButton aria-label="Quantity" />);
+      press(incrementButton(), pointerType);
+      expect(spin()).toHaveValue('0');
+      advance(100);
+      release(incrementButton(), pointerType);
+      expect(spin()).toHaveValue('1');
+    },
+  );
+
+  it('a hold going down stops at min: the button disables and no timer is left', () => {
+    const onValueChange = vi.fn();
+    render(<SpinButton aria-label="Quantity" min={-2} onValueChange={onValueChange} />);
+    press(decrementButton());
+    advance(1000);
+    expect(spin()).toHaveValue('-2');
+    expect(decrementButton()).toBeDisabled();
+    expect(vi.getTimerCount()).toBe(0);
+    advance(1000);
+    expect(onValueChange.mock.calls).toEqual([[-1], [-2]]);
+  });
+
+  it.each(['disabled', 'readOnly'] as const)(
+    'a hold stops when the control becomes %s, and does not resume when it is enabled again',
+    (prop) => {
+      const { rerender } = render(<SpinButton aria-label="Quantity" />);
+      press(incrementButton());
+      advance(310);
+      expect(spin()).toHaveValue('1');
+      rerender(
+        <SpinButton
+          aria-label="Quantity"
+          disabled={prop === 'disabled'}
+          readOnly={prop === 'readOnly'}
+        />,
+      );
+      expect(vi.getTimerCount()).toBe(0);
+      rerender(<SpinButton aria-label="Quantity" />);
+      advance(1000);
+      expect(spin()).toHaveValue('1');
+    },
+  );
+
+  it.each(['disabled', 'readOnly'] as const)(
+    'a press on a %s SpinButton never starts a hold',
+    (prop) => {
+      const onValueChange = vi.fn();
+      render(
+        <SpinButton
+          aria-label="Quantity"
+          disabled={prop === 'disabled'}
+          readOnly={prop === 'readOnly'}
+          onValueChange={onValueChange}
+        />,
+      );
+      // jsdom applies no pointer-events rule, so the press reaches the disabled button.
+      press(incrementButton());
+      expect(vi.getTimerCount()).toBe(0);
+      advance(1000);
+      expect(spin()).toHaveValue('0');
+      expect(onValueChange).not.toHaveBeenCalled();
+    },
+  );
+
+  it('a hold stops when the SpinButton unmounts', () => {
+    const onValueChange = vi.fn();
+    const { unmount } = render(<SpinButton aria-label="Quantity" onValueChange={onValueChange} />);
+    press(incrementButton());
+    advance(310);
+    expect(onValueChange.mock.calls).toEqual([[1]]);
+    unmount();
+    expect(vi.getTimerCount()).toBe(0);
+    advance(1000);
+    expect(onValueChange.mock.calls).toEqual([[1]]);
+  });
+
+  it('after a hold that ended without a click (a touch long press), the next tap steps once', () => {
+    render(<SpinButton aria-label="Quantity" />);
+    press(incrementButton(), 'touch');
+    advance(310);
+    expect(spin()).toHaveValue('1');
+    // A long press can end without a click; the next press resets the flag the hold set.
+    fireEvent.pointerUp(incrementButton(), { button: 0, pointerId: 1, pointerType: 'touch' });
+    press(incrementButton(), 'touch');
+    release(incrementButton(), 'touch');
+    expect(spin()).toHaveValue('2');
+  });
+
+  it('the first step of a hold starts from a typed number, as a click does', () => {
+    render(<SpinButton aria-label="Quantity" />);
+    fireEvent.change(spin(), { target: { value: '7' } });
+    press(incrementButton());
+    advance(560);
+    expect(spin()).toHaveValue('9');
+  });
+
+  it('a hold steps a controlled value that the parent updates', () => {
+    function Controlled() {
+      const [value, setValue] = React.useState(0);
+      return <SpinButton aria-label="Quantity" value={value} onValueChange={setValue} />;
+    }
+    render(<Controlled />);
+    press(incrementButton());
+    advance(1320);
+    expect(spin()).toHaveValue('9');
+  });
+
+  it('a controlled parent that ignores onValueChange gets each step from the value it renders', async () => {
+    const onValueChange = vi.fn();
+    render(<SpinButton aria-label="Quantity" value={0} onValueChange={onValueChange} />);
+    press(incrementButton());
+    advance(310);
+    // A new task, as between two steps in a browser: nothing chains from the ignored step.
+    await act(async () => {});
+    advance(250); // past the second step, at 534ms
+    expect(onValueChange.mock.calls).toEqual([[1], [1]]);
+    expect(spin()).toHaveValue('0');
+  });
+
+  it('a hold fires onValueChange once per step in StrictMode', () => {
+    const onValueChange = vi.fn();
+    render(
+      <React.StrictMode>
+        <SpinButton aria-label="Quantity" onValueChange={onValueChange} />
+      </React.StrictMode>,
+    );
+    press(incrementButton());
+    advance(560);
+    release(incrementButton());
+    expect(onValueChange.mock.calls).toEqual([[1], [2]]);
+  });
+
+  it('releases the implicit capture of a pen pointer too', () => {
+    render(<SpinButton aria-label="Quantity" />);
+    const button = incrementButton();
+    const releaseCapture = vi.fn();
+    Object.assign(button, { hasPointerCapture: () => true, releasePointerCapture: releaseCapture });
+    press(button, 'pen');
+    expect(releaseCapture).toHaveBeenCalledWith(1);
+  });
+
+  it('releases the implicit capture where the press landed: on the glyph, not the button', () => {
+    render(<SpinButton aria-label="Quantity" />);
+    const glyph = incrementButton().querySelector('svg') as SVGSVGElement;
+    const releaseCapture = vi.fn();
+    Object.assign(glyph, { hasPointerCapture: () => true, releasePointerCapture: releaseCapture });
+    press(glyph, 'touch');
+    expect(releaseCapture).toHaveBeenCalledWith(1);
+  });
+
+  it('other pointers neither stop the hold nor start their own', () => {
+    render(<SpinButton aria-label="Quantity" />);
+    press(incrementButton(), 'touch');
+    advance(310);
+    expect(spin()).toHaveValue('1');
+    // A second finger (not the primary pointer) presses the other button, then lifts.
+    const second = { button: 0, pointerId: 2, pointerType: 'touch', isPrimary: false };
+    fireEvent.pointerDown(decrementButton(), second);
+    advance(470); // 780ms: steps at 534 and 717ms (a hold of its own would step down at 610ms)
+    expect(spin()).toHaveValue('3');
+    fireEvent.pointerUp(decrementButton(), second);
+    fireEvent.pointerLeave(decrementButton(), second);
+    // A third finger lands on the held button and turns into a scroll.
+    const third = { button: 0, pointerId: 3, pointerType: 'touch', isPrimary: false };
+    fireEvent.pointerDown(incrementButton(), third);
+    fireEvent.pointerCancel(incrementButton(), third);
+    fireEvent.pointerLeave(incrementButton(), third);
+    advance(540); // 1320ms: steps at 859, 970, 1057, 1137, 1217 and 1297ms
+    expect(spin()).toHaveValue('9');
+    release(incrementButton(), 'touch');
+    expect(spin()).toHaveValue('9'); // the click that ends the hold still adds no step
+  });
+
+  it('a macOS Ctrl+press (the secondary click there) never starts a hold', () => {
+    render(<SpinButton aria-label="Quantity" />);
+    fireEvent.pointerDown(incrementButton(), {
+      button: 0,
+      ctrlKey: true,
+      pointerId: 1,
+      pointerType: 'mouse',
+      isPrimary: true,
+    });
+    expect(vi.getTimerCount()).toBe(0);
+    advance(1000);
+    expect(spin()).toHaveValue('0');
+  });
+
+  it('never cancels pointerdown, and still cancels mousedown so a press keeps focus in the input', () => {
+    render(<SpinButton aria-label="Quantity" />);
+    const down = createEvent.pointerDown(incrementButton(), {
+      button: 0,
+      pointerId: 1,
+      pointerType: 'mouse',
+      isPrimary: true,
+    });
+    fireEvent(incrementButton(), down);
+    expect(down.defaultPrevented).toBe(false);
+    const mouseDown = createEvent.mouseDown(incrementButton(), { button: 0 });
+    fireEvent(incrementButton(), mouseDown);
+    expect(mouseDown.defaultPrevented).toBe(true);
+  });
+
+  it('keeps focus in the input throughout a hold', async () => {
+    const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
+    render(<SpinButton aria-label="Quantity" />);
+    act(() => spin().focus());
+    // user-event runs the press's default action: an uncancelled mousedown would focus the
+    // button (a tabindex="-1" element takes focus from a pointer).
+    await user.pointer({ keys: '[MouseLeft>]', target: incrementButton() });
+    expect(spin()).toHaveFocus();
+    advance(1000);
+    // At least the steps at 300, 534, 717, 859 and 970ms: the wait that ends a user-event call
+    // lets the fake clock run on a little (shouldAdvanceTime), so the count is a lower bound.
+    expect(Number((spin() as HTMLInputElement).value)).toBeGreaterThanOrEqual(5);
+    expect(spin()).toHaveFocus();
+    const held = (spin() as HTMLInputElement).value;
+    await user.pointer({ keys: '[/MouseLeft]', target: incrementButton() });
+    expect(spin()).toHaveValue(held);
+    expect(spin()).toHaveFocus();
+  });
+
+  it('the step buttons suppress text selection, the iOS callout and double-tap zoom', () => {
+    render(<SpinButton aria-label="Quantity" />);
+    for (const button of [incrementButton(), decrementButton()]) {
+      expect(button).toHaveClass(
+        'touch-manipulation',
+        'select-none',
+        '[-webkit-touch-callout:none]',
+      );
+    }
   });
 });

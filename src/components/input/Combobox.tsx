@@ -5,7 +5,17 @@ import { composeEventHandlers } from '../../lib/composeEventHandlers';
 import { warnDeprecated, warnOnce } from '../../lib/dev';
 import { DismissIcon } from '../../lib/icons';
 import type { Slot } from '../../lib/slot';
-import { disabledStyles, focusRing, inputBase, inputFocus, inputInvalid } from '../../lib/styles';
+import {
+  disabledStyles,
+  focusRing,
+  inputAppearanceClasses,
+  inputFocus,
+  inputHeightClasses,
+  inputInvalid,
+  inputPaddingClasses,
+  inputTextClasses,
+} from '../../lib/styles';
+import type { CoreSize, InputAppearance } from '../../lib/types';
 import { useControllable } from '../../hooks/useControllable';
 import { useFieldContext, useFieldControl } from '../../hooks/useFieldControl';
 import { useFormReset } from '../../hooks/useFormReset';
@@ -13,10 +23,16 @@ import { collectOptionLabels, useListbox, type ListboxItem } from '../../hooks/u
 import { useMergedRefs } from '../../hooks/useMergedRefs';
 import { HiddenInput } from '../internal/HiddenInput';
 import { PickerExpandButton, showsExpandButton } from './Combobox.expand';
+import { useInputLook } from './inputLook';
 import { isInvalidLook } from './Input';
 import { ListboxSurface, Option, OptionGroup, useListboxPopup } from './Option';
 import { announceToggle, defaultSelectionLabel, PickerAnnouncer } from './pickerLabels';
-import { PICKER_ICON_BUTTON_CLASSES, pickerEndPadding } from './pickerStyles';
+import {
+  pickerButtonOffset,
+  pickerEndPadding,
+  pickerGlyphSize,
+  pickerIconButtonClasses,
+} from './pickerStyles';
 import { EMPTY_VALUES, resetValues, toggleValue, toValues } from './pickerValues';
 import type { RoutedHandlers } from './routedHandlers';
 
@@ -127,6 +143,18 @@ export interface ComboboxProps<M extends boolean = false> extends Omit<
    * @default false
    */
   disabled?: boolean;
+  /**
+   * Size of the field: `small` (24px tall), `medium` (32px) or `large` (40px). Default: the
+   * surrounding Field's `size`, else `WaveProvider inputDefaults.size`, else `'medium'`. The
+   * listbox keeps its size.
+   */
+  size?: CoreSize;
+  /**
+   * Look of the field: `outline` (a full border), `underline` (a bottom stroke only),
+   * `filled-darker` or `filled-lighter` (a fill without a visible stroke: give the field a visible
+   * label). Default: `WaveProvider inputDefaults.appearance`, else `'outline'`.
+   */
+  appearance?: InputAppearance;
   /**
    * Whether the typed text is itself the value. Without it, typing only filters the options (the
    * first match becomes active, so Enter selects it) and the input shows the selected option's
@@ -362,6 +390,8 @@ const ComboboxRoot = (props: ComboboxProps<boolean>) => {
     onOpenChange,
     placeholder,
     disabled = false,
+    size: sizeProp,
+    appearance: appearanceProp,
     freeform: freeformProp = false,
     filter,
     query: queryProp,
@@ -446,6 +476,7 @@ const ComboboxRoot = (props: ComboboxProps<boolean>) => {
   });
   // The error look follows the resolved state: the consumer's `aria-invalid` or the Field's.
   const invalidLook = isInvalidLook(false, fieldProps['aria-invalid']);
+  const { size, appearance } = useInputLook(sizeProp, appearanceProp);
 
   const [value, setValue] = useControllable<string | readonly string[]>(
     valueProp,
@@ -817,6 +848,8 @@ const ComboboxRoot = (props: ComboboxProps<boolean>) => {
 
   return (
     <div
+      data-size={size}
+      data-appearance={appearance}
       {...rest}
       ref={rootMergedRef}
       className={cn(comboboxClassNames.root, 'relative inline-flex flex-col', className)}
@@ -862,12 +895,16 @@ const ComboboxRoot = (props: ComboboxProps<boolean>) => {
           })}
           className={cn(
             comboboxClassNames.input,
-            inputBase,
-            'border-b-stroke-accessible',
+            inputHeightClasses[size],
+            'w-full',
+            inputPaddingClasses[size],
+            inputTextClasses[size],
+            inputAppearanceClasses[appearance],
+            'text-foreground placeholder:text-muted-foreground',
             inputFocus,
             disabledStyles,
             invalidLook && inputInvalid,
-            pickerEndPadding(Number(showClear) + Number(showExpand)),
+            pickerEndPadding(Number(showClear) + Number(showExpand), size),
           )}
         />
         {showClear && (
@@ -880,13 +917,13 @@ const ComboboxRoot = (props: ComboboxProps<boolean>) => {
             onClick={handleClear}
             className={cn(
               comboboxClassNames.clearButton,
-              PICKER_ICON_BUTTON_CLASSES,
-              showExpand ? 'end-7' : 'end-1',
+              pickerIconButtonClasses(size, appearance),
+              pickerButtonOffset(size, showExpand ? 2 : 1),
               focusRing,
               disabledStyles,
             )}
           >
-            <DismissIcon />
+            <DismissIcon size={pickerGlyphSize(size, 'icon')} />
           </button>
         )}
         {showExpand && (
@@ -898,6 +935,8 @@ const ComboboxRoot = (props: ComboboxProps<boolean>) => {
             listboxId={listbox.listboxId}
             disabled={disabled || !!readOnly}
             onToggle={handleExpandClick}
+            size={size}
+            appearance={appearance}
             className={comboboxClassNames.expandButton}
             iconClassName={comboboxClassNames.expandIcon}
           />
@@ -996,6 +1035,11 @@ export const ComboboxOptionGroup = OptionGroup;
  * `multiselect`), validation and reset (a `multiselect` reset is compared by content, so restoring
  * the same values reports nothing). The open listbox renders in a portal; while closed it stays
  * in the DOM, hidden.
+ *
+ * **Size and appearance**: `size` resolves from its own prop, then the surrounding `Field`'s
+ * `size`, then `WaveProvider inputDefaults.size`, else `'medium'`; `appearance` from its own prop,
+ * then `WaveProvider inputDefaults.appearance`, else `'outline'`; both render as `data-size` and
+ * `data-appearance` on the root `<div>`. The listbox keeps its size.
  *
  * Sub-components: `Combobox.Option`, `Combobox.OptionGroup`. React Server Components import the
  * flat names `ComboboxOption` / `ComboboxOptionGroup` (dotted access needs a client file).

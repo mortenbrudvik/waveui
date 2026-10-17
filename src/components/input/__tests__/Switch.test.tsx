@@ -897,6 +897,65 @@ describe('Switch — disabledFocusable', () => {
   });
 });
 
+describe('size (Phase 4 D14)', () => {
+  const control = () => screen.getByRole('switch', { name: 'Wi-Fi' });
+  const thumb = () => control().firstElementChild as HTMLElement;
+
+  it('medium is the 0.7 look', () => {
+    render(<Switch label="Wi-Fi" defaultChecked />);
+    expect(control()).toHaveClass('h-[20px]', 'w-[40px]');
+    expect(thumb()).toHaveClass(
+      'h-[14px]',
+      'w-[14px]',
+      'translate-x-[22px]',
+      'wave-rtl:-translate-x-[22px]',
+    );
+    expect(control().closest('label')).toHaveAttribute('data-size', 'medium');
+  });
+
+  it('small: 32×16 track, 10px thumb, 24px-tall target layer, centred on the label line', () => {
+    const { rerender } = render(
+      <Switch label="Wi-Fi" size="small" checked={false} onCheckedChange={() => {}} />,
+    );
+    expect(control()).toHaveClass(
+      'h-[16px]',
+      'w-[32px]',
+      'mt-0.5',
+      'before:-inset-y-[5px]',
+      'before:inset-x-0',
+    );
+    expect(thumb()).toHaveClass(
+      'h-[10px]',
+      'w-[10px]',
+      'translate-x-[2px]',
+      'wave-rtl:-translate-x-[2px]',
+    );
+    rerender(<Switch label="Wi-Fi" size="small" checked onCheckedChange={() => {}} />);
+    expect(thumb()).toHaveClass('translate-x-[18px]', 'wave-rtl:-translate-x-[18px]');
+  });
+
+  it('small with the label above: no offset (the column gap alone, 4px); beside it, the offset', () => {
+    const { rerender } = render(<Switch label="Wi-Fi" size="small" labelPosition="above" />);
+    expect(control().closest('label')).toHaveClass('flex-col', 'gap-1');
+    expect(control()).toHaveClass('h-[16px]', 'w-[32px]');
+    expect(control()).not.toHaveClass('mt-0.5');
+    rerender(<Switch label="Wi-Fi" size="small" labelPosition="before" />);
+    expect(control()).toHaveClass('mt-0.5');
+  });
+
+  it('mirrors the small thumb in RTL through the wave-rtl classes', () => {
+    renderWithProviders(<Switch label="Wi-Fi" size="small" defaultChecked />, { dir: 'rtl' });
+    expect(thumb()).toHaveClass('wave-rtl:-translate-x-[18px]');
+  });
+
+  it('renders and reports the default for a size from untyped code', () => {
+    // @ts-expect-error Switch has no large size
+    render(<Switch label="Wi-Fi" size="large" />);
+    expect(control()).toHaveClass('h-[20px]', 'w-[40px]');
+    expect(control().closest('label')).toHaveAttribute('data-size', 'medium');
+  });
+});
+
 describe('Switch — types', () => {
   it('types disabledFocusable as an optional boolean', () => {
     expectTypeOf<SwitchProps['disabledFocusable']>().toEqualTypeOf<boolean | undefined>();

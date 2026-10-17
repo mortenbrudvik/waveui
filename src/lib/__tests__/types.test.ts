@@ -22,6 +22,8 @@ import type {
   PopupRect,
   VirtualElement,
   PopupTarget,
+  CoreSize,
+  InputAppearance,
   ColorPickerShape,
   HsvColor,
   DayOfWeek,
@@ -186,6 +188,19 @@ describe('date vocabulary (Calendar, DatePicker)', () => {
   it('FirstWeekOfYear names the three rules for week 1 of a year', () => {
     expectTypeOf<FirstWeekOfYear>().toEqualTypeOf<
       'first-day' | 'first-full-week' | 'first-four-day-week'
+    >();
+  });
+});
+
+describe('CoreSize and InputAppearance (Phase 4 D3, D4)', () => {
+  it('CoreSize is the three field sizes, a subset of Size', () => {
+    expectTypeOf<CoreSize>().toEqualTypeOf<'small' | 'medium' | 'large'>();
+    expectTypeOf<CoreSize>().toExtend<Size>();
+  });
+
+  it('InputAppearance has the four appearances', () => {
+    expectTypeOf<InputAppearance>().toEqualTypeOf<
+      'outline' | 'underline' | 'filled-darker' | 'filled-lighter'
     >();
   });
 });

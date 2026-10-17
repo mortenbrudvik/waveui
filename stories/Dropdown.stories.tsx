@@ -2,6 +2,8 @@ import * as React from 'react';
 import type { Meta, StoryObj } from '@storybook/react';
 import { fn } from 'storybook/test';
 import { Dropdown, Field, type DropdownProps } from '../src';
+import { coreSizeArgType, inputAppearanceArgType } from './_helpers';
+import { SizeAppearanceGrid } from './_grids';
 
 const meta = {
   title: 'Components/Input/Dropdown',
@@ -11,6 +13,8 @@ const meta = {
     clearable: { control: 'boolean' },
     disabledOptionsFocusable: { control: 'boolean' },
     expandIcon: { control: false },
+    ...coreSizeArgType,
+    ...inputAppearanceArgType,
   },
   args: {
     'aria-label': 'Pet',
@@ -228,5 +232,25 @@ export const Invalid: Story = {
         <Dropdown.Option value="dog">Dog</Dropdown.Option>
       </Dropdown>
     </Field>
+  ),
+};
+
+export const SizesAndAppearances: Story = {
+  render: (args) => (
+    <SizeAppearanceGrid
+      render={(size, appearance) => (
+        <Dropdown
+          {...args}
+          size={size}
+          appearance={appearance}
+          clearable
+          defaultValue="user"
+          aria-label={`${size} ${appearance}`}
+        >
+          <Dropdown.Option value="admin">Admin</Dropdown.Option>
+          <Dropdown.Option value="user">User</Dropdown.Option>
+        </Dropdown>
+      )}
+    />
   ),
 };
