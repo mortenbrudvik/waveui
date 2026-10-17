@@ -188,9 +188,9 @@ export interface DropdownProps<M extends boolean = false> extends Omit<
   /**
    * The glyph at the end of the button (default: a chevron). `null` or `undefined` keep it;
    * `false`, or a value that renders nothing, hides it (the button's end padding follows,
-   * together with `clearable`). The default chevron's size and the glyph's offset follow `size`. Decorative content rendered inside the button: a `<button>` or
-   * `Button` passed here is not nested (its children become the glyph, with a development
-   * warning).
+   * together with `clearable`). The default chevron's size and the glyph's offset follow
+   * `size`. Decorative content rendered inside the button: a `<button>` or `Button` passed
+   * here is not nested (its children become the glyph, with a development warning).
    */
   expandIcon?: Slot<'span'>;
   /**
