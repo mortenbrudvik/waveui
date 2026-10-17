@@ -840,6 +840,20 @@ describe('Phase 4 public types', () => {
     expectTypeOf<InfoLabelProps['openOnHover']>().toEqualTypeOf<boolean | undefined>();
     expectTypeOf<InfoButtonProps['openOnHover']>().toEqualTypeOf<boolean | undefined>();
     expectTypeOf<LabelProps['required']>().toEqualTypeOf<boolean | ReactNode | undefined>();
+    expectTypeOf<InfoLabelProps['label']>().toEqualTypeOf<ReactNode>();
+    // Optional (the deprecated alias of `children`): a label-less pick accepts `{}`.
+    expectTypeOf<{}>().toExtend<Pick<InfoLabelProps, 'label'>>(); // eslint-disable-line @typescript-eslint/no-empty-object-type -- the empty object is the point
+    expectTypeOf<InfoLabelProps['htmlFor']>().toEqualTypeOf<LabelProps['htmlFor']>();
+    expectTypeOf<InfoLabelProps['required']>().toEqualTypeOf<LabelProps['required']>();
+    expectTypeOf<InfoLabelProps['size']>().toEqualTypeOf<LabelProps['size']>();
+    expectTypeOf<InfoLabelProps['weight']>().toEqualTypeOf<LabelProps['weight']>();
+    expectTypeOf<InfoLabelProps['disabled']>().toEqualTypeOf<LabelProps['disabled']>();
+    // `never` on an optional member reads as `undefined`: the deprecated alias is unavailable
+    // with `allowEmpty`, and still readable on the component's union of props.
+    expectTypeOf<SpinButtonAllowEmptyProps['onChange']>().toEqualTypeOf<undefined>();
+    expectTypeOf<ComponentProps<typeof SpinButton>['onChange']>().toEqualTypeOf<
+      ((value: number) => void) | undefined
+    >();
   });
 
   it('rejects invalid values', () => {
@@ -855,6 +869,10 @@ describe('Phase 4 public types', () => {
     const step: RatingProps['step'] = 0.25;
     // @ts-expect-error info is required
     const infoButton: InfoButtonProps = {};
-    void [inputSize, tagPicker, checkbox, switchSize, step, infoButton];
+    // @ts-expect-error not one of neutral, brand and marigold
+    const ratingColor: RatingProps['color'] = 'red';
+    // @ts-expect-error a null value needs `allowEmpty`
+    const nullValue: ComponentProps<typeof SpinButton> = { value: null };
+    void [inputSize, tagPicker, checkbox, switchSize, step, infoButton, ratingColor, nullValue];
   });
 });

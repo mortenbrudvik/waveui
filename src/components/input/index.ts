@@ -22,11 +22,11 @@ export { SearchBox, type SearchBoxProps, type SearchBoxInputProps } from './Sear
 export { Slider, type SliderProps, type SliderSize } from './Slider';
 export {
   SpinButton,
+  type SpinButtonBaseProps,
   type SpinButtonProps,
+  type SpinButtonAllowEmptyProps,
   type SpinButtonInputProps,
   type SpinButtonLabels,
-  type SpinButtonBaseProps,
-  type SpinButtonAllowEmptyProps,
 } from './SpinButton';
 export { Label, type LabelProps } from './Label';
 export {

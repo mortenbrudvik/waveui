@@ -223,6 +223,17 @@ describe('public barrel (spec §5.11, C-COMPOUND)', () => {
       'StatusIcon',
       'useModalTrigger',
       'ListRegistry',
+      'useInputLook',
+      'markFieldLabel',
+      'isFieldLabelElement',
+      'FIELD_LABEL',
+      'StarGlyph',
+      'useRatingItemRegistry',
+      'FILLED_COLOR',
+      'pickerIconButtonClasses',
+      'pickerButtonOffset',
+      'pickerGlyphSize',
+      'pickerEndPadding',
     ];
     expect(internal.filter((name) => name in barrel)).toEqual([]);
   });
