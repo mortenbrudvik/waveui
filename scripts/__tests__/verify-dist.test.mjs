@@ -76,6 +76,8 @@ const DTS =
   'export declare type ButtonProps = { disabled?: boolean };\n' +
   '/** A menu. */\nexport declare const Menu: (props: object) => null;\n' +
   'export declare function usePresence(visible: boolean): { isMounted: boolean };\n' +
+  'export declare function useActiveDescendant(): [string | null];\n' +
+  '/** A calendar. */\nexport declare const Calendar: (props: object) => null;\n' +
   "export declare const buttonClassNames: { readonly root: 'wave-button'; readonly icon: 'wave-button__icon' };\n" +
   '\nexport { }\n';
 
@@ -212,6 +214,46 @@ function createToaster() {
       "function Toaster(props) { const { isMounted, phase } = hook.usePresence(true); return isMounted ? jsxRuntime.jsx('div', { role: 'region', 'data-presence': phase, children: props.children }) : null; }\n" +
       "Toaster.displayName = 'Toaster';\nexports.Toaster = Toaster;\n",
   };
+  // 0.10 (INTEGRATION): the server-safe date helpers, the listbox core (a hook, Option, Listbox,
+  // Dropdown) and a Calendar that holds none of it.
+  const dateHelpers =
+    'function addDays(date, days) { const next = new Date(date.getTime()); next.setDate(next.getDate() + days); return next; }\n';
+  const useActiveDescendant = {
+    esm: `${DIRECTIVE}import { useState } from 'react';\nexport function useActiveDescendant() { return useState(null); }\n`,
+    cjs: `${DIRECTIVE}const react = require('react');\nexports.useActiveDescendant = function useActiveDescendant() { return react.useState(null); };\n`,
+  };
+  const useListbox = {
+    esm: `${DIRECTIVE}import { useState } from 'react';\nexport function useListbox() { return useState(null); }\n`,
+    cjs: `${DIRECTIVE}const react = require('react');\nexports.useListbox = function useListbox() { return react.useState(null); };\n`,
+  };
+  const option = {
+    esm: `${DIRECTIVE}function Option() { return null; }\nOption.displayName = 'Option';\nexport { Option };\n`,
+    cjs: `${DIRECTIVE}function Option() { return null; }\nOption.displayName = 'Option';\nexports.Option = Option;\n`,
+  };
+  const listboxUser = (name) => ({
+    esm:
+      `${DIRECTIVE}import { useListbox } from '../../hooks/useListbox.mjs';\n` +
+      "import { Option } from './Option.mjs';\n" +
+      `function ${name}() { useListbox(); return Option(); }\n${name}.displayName = '${name}';\nexport { ${name} };\n`,
+    cjs:
+      `${DIRECTIVE}const hook = require('../../hooks/useListbox.cjs');\n` +
+      "const option = require('./Option.cjs');\n" +
+      `function ${name}() { hook.useListbox(); return option.Option(); }\n${name}.displayName = '${name}';\nexports.${name} = ${name};\n`,
+  });
+  const listbox = listboxUser('Listbox');
+  const dropdown = listboxUser('Dropdown');
+  const calendar = {
+    esm:
+      `${DIRECTIVE}import { cn } from '../../lib/cn.mjs';\n` +
+      "import { addDays } from '../../lib/date.mjs';\n" +
+      "function Calendar(props) { return cn('calendar', String(addDays(props.value, 1))); }\n" +
+      "Calendar.displayName = 'Calendar';\nexport { Calendar };\n",
+    cjs:
+      `${DIRECTIVE}const { cn } = require('../../lib/cn.cjs');\n` +
+      "const { addDays } = require('../../lib/date.cjs');\n" +
+      "function Calendar(props) { return cn('calendar', String(addDays(props.value, 1))); }\n" +
+      "Calendar.displayName = 'Calendar';\nexports.Calendar = Calendar;\n",
+  };
   // src/lib/dev.ts reads the bundler-injected mode at call time.
   const dev = (exportSyntax) =>
     `function isDevEnvironment() {\n  try {\n    return process.env.NODE_ENV !== "production";\n  } catch {\n    return true;\n  }\n}\n${exportSyntax}`;
@@ -257,6 +299,20 @@ function createToaster() {
     'dist/components/input/AlphaSlider.cjs': alphaSlider.cjs,
     'dist/components/feedback/Toaster.mjs': toaster.esm,
     'dist/components/feedback/Toaster.cjs': toaster.cjs,
+    'dist/lib/date.mjs': `${dateHelpers}export { addDays };\n`,
+    'dist/lib/date.cjs': `${dateHelpers}exports.addDays = addDays;\n`,
+    'dist/hooks/useActiveDescendant.mjs': useActiveDescendant.esm,
+    'dist/hooks/useActiveDescendant.cjs': useActiveDescendant.cjs,
+    'dist/hooks/useListbox.mjs': useListbox.esm,
+    'dist/hooks/useListbox.cjs': useListbox.cjs,
+    'dist/components/input/Option.mjs': option.esm,
+    'dist/components/input/Option.cjs': option.cjs,
+    'dist/components/input/Listbox.mjs': listbox.esm,
+    'dist/components/input/Listbox.cjs': listbox.cjs,
+    'dist/components/input/Dropdown.mjs': dropdown.esm,
+    'dist/components/input/Dropdown.cjs': dropdown.cjs,
+    'dist/components/input/Calendar.mjs': calendar.esm,
+    'dist/components/input/Calendar.cjs': calendar.cjs,
     'dist/lib/color.mjs': `${colorHelpers}export { hsvToHex, hexToHsv };\n`,
     'dist/lib/color.cjs': `${colorHelpers}exports.hsvToHex = hsvToHex;\nexports.hexToHsv = hexToHsv;\n`,
     'dist/lib/toaster.mjs': `${toasterHandle}export { createToaster };\n`,
@@ -276,7 +332,12 @@ function createToaster() {
       "export { ColorArea } from './components/input/ColorArea.mjs';\n" +
       "export { ColorSlider } from './components/input/ColorSlider.mjs';\n" +
       "export { AlphaSlider } from './components/input/AlphaSlider.mjs';\n" +
-      "export { Toaster } from './components/feedback/Toaster.mjs';\n",
+      "export { Toaster } from './components/feedback/Toaster.mjs';\n" +
+      "export { addDays } from './lib/date.mjs';\n" +
+      "export { useActiveDescendant } from './hooks/useActiveDescendant.mjs';\n" +
+      "export { Listbox } from './components/input/Listbox.mjs';\n" +
+      "export { Dropdown } from './components/input/Dropdown.mjs';\n" +
+      "export { Calendar } from './components/input/Calendar.mjs';\n",
     'dist/index.cjs':
       "Object.defineProperty(exports, '__esModule', { value: true });\n" +
       "const cn = require('./lib/cn.cjs');\n" +
@@ -294,6 +355,11 @@ function createToaster() {
       "const colorSlider = require('./components/input/ColorSlider.cjs');\n" +
       "const alphaSlider = require('./components/input/AlphaSlider.cjs');\n" +
       "const toaster = require('./components/feedback/Toaster.cjs');\n" +
+      "const date = require('./lib/date.cjs');\n" +
+      "const activeDescendant = require('./hooks/useActiveDescendant.cjs');\n" +
+      "const listbox = require('./components/input/Listbox.cjs');\n" +
+      "const dropdown = require('./components/input/Dropdown.cjs');\n" +
+      "const calendar = require('./components/input/Calendar.cjs');\n" +
       'exports.cn = cn.cn;\nexports.useThing = hook.useThing;\nexports.Button = button.Button;\n' +
       'exports.buttonClassNames = classNames.buttonClassNames;\n' +
       'exports.dialogContentClassNames = classNames.dialogContentClassNames;\n' +
@@ -305,7 +371,10 @@ function createToaster() {
       'exports.hsvToHex = color.hsvToHex;\nexports.hexToHsv = color.hexToHsv;\n' +
       'exports.createToaster = toasterHandle.createToaster;\n' +
       'exports.ColorArea = colorArea.ColorArea;\nexports.ColorSlider = colorSlider.ColorSlider;\n' +
-      'exports.AlphaSlider = alphaSlider.AlphaSlider;\nexports.Toaster = toaster.Toaster;\n',
+      'exports.AlphaSlider = alphaSlider.AlphaSlider;\nexports.Toaster = toaster.Toaster;\n' +
+      'exports.addDays = date.addDays;\nexports.useActiveDescendant = activeDescendant.useActiveDescendant;\n' +
+      'exports.Listbox = listbox.Listbox;\nexports.Dropdown = dropdown.Dropdown;\n' +
+      'exports.Calendar = calendar.Calendar;\n',
     'dist/index.d.ts': DTS,
     'dist/index.d.cts': DTS,
   };
@@ -498,8 +567,8 @@ describe('checkDeclarations (repo-level#5)', () => {
       'dist/index.d.cts': EMPTY_ROLL_UP,
     });
     expect(checkDeclarations(dist)).toEqual([
-      "index.d.ts does not declare and export cn, Button, ButtonProps, Menu, usePresence, buttonClassNames (an empty or partial roll-up: check tsconfig.json's rootDir and the declaration plugin in vite.config.ts)",
-      "index.d.cts does not declare and export cn, Button, ButtonProps, Menu, usePresence, buttonClassNames (an empty or partial roll-up: check tsconfig.json's rootDir and the declaration plugin in vite.config.ts)",
+      "index.d.ts does not declare and export cn, Button, ButtonProps, Menu, usePresence, useActiveDescendant, Calendar, buttonClassNames (an empty or partial roll-up: check tsconfig.json's rootDir and the declaration plugin in vite.config.ts)",
+      "index.d.cts does not declare and export cn, Button, ButtonProps, Menu, usePresence, useActiveDescendant, Calendar, buttonClassNames (an empty or partial roll-up: check tsconfig.json's rootDir and the declaration plugin in vite.config.ts)",
     ]);
   });
 
@@ -520,7 +589,7 @@ describe('checkDeclarations (repo-level#5)', () => {
     expect(checkDeclarations(fixture({ 'dist/index.d.cts': EMPTY_ROLL_UP }).dist)).toEqual([
       expect.stringMatching(/index\.d\.cts differs/),
       expect.stringMatching(
-        /^index\.d\.cts does not declare and export cn, Button, ButtonProps, Menu, usePresence, buttonClassNames \(/,
+        /^index\.d\.cts does not declare and export cn, Button, ButtonProps, Menu, usePresence, useActiveDescendant, Calendar, buttonClassNames \(/,
       ),
     ]);
   });
@@ -753,7 +822,7 @@ describe('checkServerImport (repo-level#2)', () => {
       ...withIndexImport("export { registry } from './lib/registry.mjs';"),
     });
     expect(await checkServerImport(dist)).toEqual([]);
-  });
+  }, 30_000);
 
   it('reports server code that dots into a client reference (Card.Header)', async () => {
     const { dist } = fixture({
@@ -1349,6 +1418,112 @@ describe('checkServerImport: the 0.8 server-safe modules (INTEGRATION)', () => {
       ),
     ]);
   }, 30_000);
+});
+
+describe('the 0.10 probes (INTEGRATION)', () => {
+  const calendarOnly = {
+    keep: 'Calendar',
+    drop: 'Dropdown',
+    dropModules: ['hooks/useListbox.mjs', 'components/input/Option.mjs'],
+  };
+  const listboxOnly = { keep: 'Listbox', drop: 'Calendar' };
+
+  it('passes when Calendar holds no listbox code and Listbox no calendar code', async () => {
+    const { dist } = fixture();
+    expect(await probeTreeShaking(dist, calendarOnly)).toEqual([]);
+    expect(await probeTreeShaking(dist, listboxOnly)).toEqual([]);
+  });
+
+  it('reports a Calendar that imports the listbox hook', async () => {
+    const files = goodFiles();
+    const { dist } = fixture({
+      'dist/components/input/Calendar.mjs': files['dist/components/input/Calendar.mjs']
+        .replace(
+          "import { cn } from '../../lib/cn.mjs';\n",
+          "import { cn } from '../../lib/cn.mjs';\nimport { useListbox } from '../../hooks/useListbox.mjs';\n",
+        )
+        .replace('return cn(', 'useListbox(); return cn('),
+    });
+    expect(await probeTreeShaking(dist, calendarOnly)).toEqual([
+      'hooks/useListbox.mjs is in the bundle of an import of only Calendar (Dropdown must be dropped)',
+    ]);
+  });
+
+  it('reports a Listbox that imports the Calendar', async () => {
+    const files = goodFiles();
+    const { dist } = fixture({
+      'dist/components/input/Listbox.mjs': files['dist/components/input/Listbox.mjs']
+        .replace(
+          "import { Option } from './Option.mjs';\n",
+          "import { Option } from './Option.mjs';\nimport { Calendar } from './Calendar.mjs';\n",
+        )
+        .replace('return Option();', 'Calendar({ value: new Date(0) }); return Option();'),
+    });
+    expect(await probeTreeShaking(dist, listboxOnly)).toEqual([
+      'components/input/Calendar.mjs is in the bundle of an import of only Listbox (Calendar must be dropped)',
+      'Calendar code (displayName "Calendar") is in the bundle of an import of only Listbox',
+    ]);
+  });
+
+  it('verifyDist runs both exclusion probes', async () => {
+    const files = goodFiles();
+    const { dist } = fixture({
+      'dist/components/input/Listbox.mjs': files['dist/components/input/Listbox.mjs']
+        .replace(
+          "import { Option } from './Option.mjs';\n",
+          "import { Option } from './Option.mjs';\nimport { Calendar } from './Calendar.mjs';\n",
+        )
+        .replace('return Option();', 'Calendar({ value: new Date(0) }); return Option();'),
+    });
+    const { errors } = await verifyDist(dist, noPending);
+    expect(errors).toEqual([
+      'components/input/Calendar.mjs is in the bundle of an import of only Listbox (Calendar must be dropped)',
+      'Calendar code (displayName "Calendar") is in the bundle of an import of only Listbox',
+    ]);
+  }, 30_000);
+
+  it('reports a missing lib/date module', async () => {
+    const errors = await checkServerImport(fixture({ 'dist/lib/date.cjs': null }).dist);
+    expect(errors).toEqual(['lib/date.cjs is missing']);
+  }, 30_000);
+
+  it('reports a date module whose addDays does not return a Date', async () => {
+    const { dist } = fixture({ 'dist/lib/date.mjs': 'export function addDays() { return 1; }\n' });
+    expect(await checkServerImport(dist)).toEqual([
+      // The entry re-exports the same function, so it fails there too.
+      expect.stringMatching(/^index\.mjs under node --conditions=react-server: addDays/),
+      expect.stringMatching(/^lib\/date\.mjs under node --conditions=react-server: addDays/),
+    ]);
+  }, 30_000);
+
+  it('reports an entry whose addDays comes from a "use client" module', async () => {
+    const files = goodFiles();
+    const { dist } = fixture({
+      'dist/hooks/useThing.mjs': `${files['dist/hooks/useThing.mjs']}export { addDays } from '../lib/date.mjs';\n`,
+      'dist/index.mjs': files['dist/index.mjs'].replace(
+        "export { addDays } from './lib/date.mjs';",
+        "export { addDays } from './hooks/useThing.mjs';",
+      ),
+    });
+    expect(await checkServerImport(dist)).toEqual([
+      expect.stringMatching(
+        /^index\.mjs under node --conditions=react-server: addDays is a client reference/,
+      ),
+    ]);
+  }, 30_000);
+
+  it.each(['useActiveDescendant', 'Calendar'])('requires %s in the roll-up', (name) => {
+    expect(REQUIRED_DECLARATIONS).toContain(name);
+    const dts = DTS.split('\n')
+      .filter((line) => !new RegExp(`declare (const|function) ${name}\\b`).test(line))
+      .join('\n');
+    expect(
+      checkDeclarations(fixture({ 'dist/index.d.ts': dts, 'dist/index.d.cts': dts }).dist),
+    ).toEqual([
+      expect.stringMatching(new RegExp(`^index\\.d\\.ts does not declare and export ${name} \\(`)),
+      expect.stringMatching(new RegExp(`^index\\.d\\.cts does not declare and export ${name} \\(`)),
+    ]);
+  });
 });
 
 describe('the class-name registry (P3-00)', () => {
