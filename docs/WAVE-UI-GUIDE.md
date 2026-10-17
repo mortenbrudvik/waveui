@@ -831,13 +831,15 @@ export interface MaskedProps extends Omit<React.InputHTMLAttributes<HTMLInputEle
   size?: CoreSize;
   appearance?: InputAppearance;
   invalid?: boolean;
+  ref?: React.Ref<HTMLInputElement>;
 }
 
-export const Masked = ({ size, appearance, invalid, className, ...rest }: MaskedProps) => {
+export const Masked = ({ size, appearance, invalid, className, ref, ...rest }: MaskedProps) => {
   const look = useInputLook(size, appearance);
   return (
     <input
       type="text"
+      ref={ref}
       data-size={look.size}
       data-appearance={look.appearance}
       className={cn(
@@ -1174,7 +1176,7 @@ Live regions must exist before their content changes. `Toaster` keeps two perman
 - **SpinButton, press-and-hold.** A step never happens on the press alone (WCAG 2.5.2, Pointer Cancellation). A press on a step button, with a mouse, finger or pen, starts a 300 ms timer. Released earlier, it steps once, on its `click`; still pressed when the timer fires, it steps and then repeats, slowly at first and every 80 ms after about a second. Release, cancel, leaving the button, reaching the bound, the window losing focus, and the control becoming disabled or read-only all stop it, and the `click` that ends a hold adds no step. A `click` without a press (a screen reader activating the button) steps once. The buttons never take focus, and they suppress the long-press menu, text selection and double-tap zoom. Keyboard repeat is the operating system's.
 - **SpinButton, the empty value.** With `allowEmpty`, clearing the text and committing it sets the value to `null`; the empty input shows `''` (or `displayValue`), carries no `aria-valuenow`, and a required one blocks form submission through its hidden input. `allowEmpty` takes the literal `true` (a `boolean` variable fits neither props type). `displayValue` is the text shown and spoken (`aria-valuetext`) while the input is not being edited; while it has focus, the input shows the plain number, so typing edits `1`, not `$1.00`.
 - **Rating, half stars.** With `step={0.5}` each star is one 24x24px pointer target that holds two visually hidden radios (the half value, then the full one), named by `labels.star` ("2.5 stars", "3 stars"). The radios lie over the halves they stand for, so touch exploration finds them, but only the star takes pointer events: a click chooses the half or the whole by where it lands (mirrored in RTL), and the chosen radio takes focus. A click on a radio itself (Space, Enter, a screen reader) chooses that radio's value. Two 12px targets would fail WCAG 2.5.8, which is why the star, not the half, is the target. Filled and unfilled stars differ by shape (`iconFilled` and `iconOutline` are a pair), not by color alone.
-- **InfoButton, the note.** Opening the note never moves focus; it stays on the button. Tab from the open button enters the note's first tabbable element, so a link in it is reachable; Tab past its last element continues after the button; Shift+Tab from its first element returns to the button; Escape closes the note and returns focus to the button. Keyboard focus opens the note unless `openOnHover={false}`, and pointer movement does not close a note that keyboard focus opened or holds (WCAG 1.4.13). The button has `aria-expanded` and, while the note is open, `aria-controls`; it has no `aria-haspopup`, since a note is none of the kinds that attribute names. The description exists once: the `info` content is a hidden description of the button while the note is closed, and sits inside the note, which then describes the button, while it is open. The note is named like the button ("Password Information" inside an InfoLabel), which is why `aria-describedby` never points at it.
+- **InfoButton, the note.** Opening the note never moves focus; it stays on the button. Tab from the open button enters the note's first tabbable element, so a link in it is reachable; Tab past its last element continues after the button; Shift+Tab from its first element returns to the button; Escape closes the note and returns focus to the button. Keyboard focus opens the note unless `openOnHover={false}`, and pointer movement does not close a note that keyboard focus opened or holds (WCAG 1.4.13). The button has `aria-expanded` and, while the note is open, `aria-controls`; it has no `aria-haspopup`, since a note is none of the kinds that attribute names. The description exists once: the `info` content is a hidden description of the button while the note is closed, and sits inside the note, in an unnamed element that then describes the button, while it is open (the note itself is never in `aria-describedby`). The note is named like the button ("Password Information" inside an InfoLabel), which is why `aria-describedby` never points at it.
 
 ### Focus Management
 
@@ -1691,7 +1693,7 @@ export function ConfirmDelete({ onDelete }: { onDelete: () => void }) {
 
 ## 12. Quick Reference
 
-### Component Catalog (65 components)
+### Component Catalog (66 components)
 
 **Buttons & Actions** (7)
 `Button` `CompoundButton` `ToggleButton` `SplitButton` `MenuButton` `Link` `Toolbar` (plus the Toolbar parts `Toolbar.Button`, `Toolbar.ToggleButton`, `Toolbar.RadioGroup`, `Toolbar.RadioButton`, `Toolbar.Group`, `Toolbar.Divider`)
@@ -1699,8 +1701,8 @@ export function ConfirmDelete({ onDelete }: { onDelete: () => void }) {
 **Input & Forms** (19)
 `Input` `Textarea` `Field` `Label` `Checkbox` `RadioGroup` `Switch` `Select` `SearchBox` `Slider` `SpinButton` `Combobox` `Dropdown` `TagPicker` `Rating` `ColorPicker` `SwatchPicker` `DatePicker` `TimePicker` (plus `RadioGroup.Item`/`RadioItem`, `Option`/`OptionGroup` and `RatingDisplay`)
 
-**Data Display** (11)
-`Avatar` `AvatarGroup` `Badge` `PresenceBadge` `CounterBadge` `Tag` `Persona` `Divider` `InfoLabel` `Image` `List`
+**Data Display** (12)
+`Avatar` `AvatarGroup` `Badge` `PresenceBadge` `CounterBadge` `Tag` `Persona` `Divider` `InfoLabel` `InfoButton` `Image` `List`
 
 **Layout** (9)
 `Card` `Accordion` `TabList` `Tree` `Carousel` `Overflow` `Grid` `Stack` `Flex`
