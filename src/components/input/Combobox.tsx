@@ -3,6 +3,7 @@ import { comboboxClassNames } from '../../lib/classNames';
 import { cn } from '../../lib/cn';
 import { composeEventHandlers } from '../../lib/composeEventHandlers';
 import { warnDeprecated, warnOnce } from '../../lib/dev';
+import { isFocused } from '../../lib/focus';
 import { DismissIcon } from '../../lib/icons';
 import type { Slot } from '../../lib/slot';
 import {
@@ -17,12 +18,14 @@ import {
 } from '../../lib/styles';
 import type { CoreSize, InputAppearance } from '../../lib/types';
 import { useControllable } from '../../hooks/useControllable';
+import { useEventCallback } from '../../hooks/useEventCallback';
 import { useFieldContext, useFieldControl } from '../../hooks/useFieldControl';
 import { useFormReset } from '../../hooks/useFormReset';
 import { collectOptionLabels, useListbox, type ListboxItem } from '../../hooks/useListbox';
 import { useMergedRefs } from '../../hooks/useMergedRefs';
 import { HiddenInput } from '../internal/HiddenInput';
 import { PickerExpandButton, showsExpandButton } from './Combobox.expand';
+import { insertedText, replacedText } from './Combobox.text';
 import { useInputLook } from './inputLook';
 import { isInvalidLook } from './Input';
 import { ListboxSurface, Option, OptionGroup, useListboxPopup } from './Option';
@@ -297,56 +300,6 @@ export interface ComboboxComponent {
   OptionGroup: typeof OptionGroup;
 }
 
-function isHighSurrogate(code: number): boolean {
-  return code >= 0xd800 && code <= 0xdbff;
-}
-
-function isLowSurrogate(code: number): boolean {
-  return code >= 0xdc00 && code <= 0xdfff;
-}
-
-/**
- * The text an edit inserted into `before`, given the new value `after`: `after` without the part
- * it shares with `before` at its start and at its end. The shared parts end and begin between
- * characters, never inside a surrogate pair (a character outside the BMP, such as an emoji).
- */
-export function insertedText(before: string, after: string): string {
-  const max = Math.min(before.length, after.length);
-  let start = 0;
-  while (start < max && before[start] === after[start]) start += 1;
-  if (start > 0 && isHighSurrogate(after.charCodeAt(start - 1))) start -= 1;
-  let end = 0;
-  while (end < max - start && before[before.length - 1 - end] === after[after.length - 1 - end]) {
-    end += 1;
-  }
-  if (end > 0 && isLowSurrogate(after.charCodeAt(after.length - end))) end -= 1;
-  return after.slice(start, after.length - end);
-}
-
-/**
- * The text an edit put in place of the range `start`–`end` of `before` (the selection when the
- * edit began), given the new value `after`; `undefined` when `after` does not keep the text around
- * that range, so the edit replaced something else (a character erased next to a collapsed caret).
- */
-function replacedText(
-  before: string,
-  after: string,
-  start: number,
-  end: number,
-): string | undefined {
-  const kept = before.length - end;
-  if (
-    start > end ||
-    end > before.length ||
-    after.length < start + kept ||
-    !after.startsWith(before.slice(0, start)) ||
-    !after.endsWith(before.slice(end))
-  ) {
-    return undefined;
-  }
-  return after.slice(start, after.length - kept);
-}
-
 /**
  * An edit a `beforeinput` event announced: its `inputType`, and the selection it replaces, recorded
  * before the edit changes it. `range` is `null` where the edit does not replace the selection: a
@@ -359,13 +312,6 @@ interface AnnouncedEdit {
 
 /** The edits that restore earlier text: D11 rule 3 applies to them (R17). */
 const HISTORY_EDITS: ReadonlySet<string> = new Set(['historyUndo', 'historyRedo']);
-
-/** Whether `element` is the focused element of its document or shadow root (a document reports a
- * shadow root's host instead). */
-function hasFocus(element: Element): boolean {
-  const root = element.getRootNode() as Node & { activeElement?: Element | null };
-  return root.activeElement === element;
-}
 
 /**
  * How the control came to be locked (`disabled` or `readOnly`): not at all, by a change while
@@ -723,7 +669,7 @@ const ComboboxRoot = (props: ComboboxProps<boolean>) => {
   // the focused input places the caret as usual). The ref is written in handlers only (C-HOOKS).
   const pointerFocusRef = React.useRef(false);
   const handleMouseDown = (event: React.MouseEvent<HTMLInputElement>) => {
-    pointerFocusRef.current = showingLabels && !hasFocus(event.currentTarget);
+    pointerFocusRef.current = showingLabels && !isFocused(event.currentTarget);
   };
   const handleFocus = (event: React.FocusEvent<HTMLInputElement>) => {
     if (showingLabels) event.currentTarget.select();
@@ -739,13 +685,28 @@ const ComboboxRoot = (props: ComboboxProps<boolean>) => {
   // dependency, so the caret stays and rule 2 takes what is typed there.
   React.useLayoutEffect(() => {
     const input = inputRef.current;
-    if (showingLabels && input && hasFocus(input)) input.select();
+    if (showingLabels && input && isFocused(input)) input.select();
   }, [showingLabels, labelsText]);
 
   // Multi-select: the edit a `beforeinput` announced (the last moment before an edit of any kind,
   // with the selection it replaces still in place; React has no event for it), for the change
   // that follows.
   const announcedEditRef = React.useRef<AnnouncedEdit | null>(null);
+  // Multi-select: an edit that leaves the text as it was (the labels replaced by the same text: a
+  // one-letter label typed again, a paste of exactly the labels) changes no value, so React reports
+  // no change for it, while a browser fires `input` for every edit. Typing the labels' text is a
+  // query (R17), so this listener starts it; an undo or a redo keeps rule 3 (the labels show, with
+  // no query). The event is remembered, so a change React does report for it is not handled twice.
+  const handledInputRef = React.useRef<Event | null>(null);
+  const handleUnchangedEdit = useEventCallback((event: Event) => {
+    const input = event.currentTarget as HTMLInputElement;
+    if (!showingLabels || input.value !== labelsText) return;
+    announcedEditRef.current = null;
+    if (HISTORY_EDITS.has((event as Partial<InputEvent>).inputType ?? '')) return;
+    handledInputRef.current = event;
+    editDraft(labelsText);
+    if (!open) setOpen(true);
+  });
   React.useEffect(() => {
     const input = inputRef.current;
     if (!multiselect || !input) return;
@@ -764,8 +725,12 @@ const ComboboxRoot = (props: ComboboxProps<boolean>) => {
       };
     };
     input.addEventListener('beforeinput', record);
-    return () => input.removeEventListener('beforeinput', record);
-  }, [multiselect]);
+    input.addEventListener('input', handleUnchangedEdit);
+    return () => {
+      input.removeEventListener('beforeinput', record);
+      input.removeEventListener('input', handleUnchangedEdit);
+    };
+  }, [multiselect, handleUnchangedEdit]);
 
   const handleKeyDown = (event: React.KeyboardEvent<HTMLInputElement>) => {
     if (event.key === 'Escape' && open && !surfaceOpen && !event.nativeEvent.isComposing) {
@@ -782,6 +747,7 @@ const ComboboxRoot = (props: ComboboxProps<boolean>) => {
   };
 
   const handleChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+    if (event.nativeEvent === handledInputRef.current) return;
     const text = event.target.value;
     // The edit the last `beforeinput` announced, if this change is that edit. A change nothing
     // announced (autofill, an extension, a script) has none, and neither has one after an edit

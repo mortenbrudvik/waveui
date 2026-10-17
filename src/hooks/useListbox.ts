@@ -1504,9 +1504,12 @@ export function useListboxOption<E extends HTMLElement = HTMLElement>(
 
   // Standalone: the browser would focus the list itself, and focus would scroll the list's
   // active option into view under the pointer before the click; the press focuses the list
-  // without scrolling and makes this option active instead.
+  // without scrolling and makes this option active instead. Only the primary button presses: a
+  // right or middle press is left to the browser (its context menu, autoscroll), as on a native
+  // `<select size>`, and moves no active option.
   const onMouseDown = useCallback(
     (event: React.MouseEvent<E>) => {
+      if (event.button !== 0) return;
       event.preventDefault();
       press(value);
     },

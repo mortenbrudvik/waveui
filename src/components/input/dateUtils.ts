@@ -59,11 +59,6 @@ export function clampDate(date: Date, min?: Date | null, max?: Date | null): Dat
   return day;
 }
 
-/** `date` plus `amount` years (negative to go back), at local midnight; February 29 becomes 28. */
-export function addYears(date: Date, amount: number): Date {
-  return addMonths(date, amount * 12);
-}
-
 /** The first year of `year`'s decade (2025 gives 2020). */
 export function getDecadeStart(year: number): number {
   return Math.floor(year / 10) * 10;
@@ -124,7 +119,7 @@ export function isDayUnavailable(
 }
 
 /** What a pick selects (the Calendar's `selectionRange`). */
-export type SelectionRange = 'day' | 'week' | 'work-week' | 'month';
+export type CalendarSelectionRange = 'day' | 'week' | 'work-week' | 'month';
 
 /**
  * The days a pick of `date` selects, in order, at local midnight: the day itself (`'day'`, whatever
@@ -134,7 +129,7 @@ export type SelectionRange = 'day' | 'week' | 'work-week' | 'month';
  */
 export function getSelectionRange(
   date: Date,
-  mode: SelectionRange,
+  mode: CalendarSelectionRange,
   firstDayOfWeek: DayOfWeek,
   workWeekDays: readonly DayOfWeek[],
   isUnavailable?: (date: Date) => boolean,

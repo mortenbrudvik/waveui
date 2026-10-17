@@ -43,7 +43,7 @@ import {
   isYearOutOfRange,
   startOfDay,
   startOfMonth,
-  type SelectionRange,
+  type CalendarSelectionRange,
 } from './dateUtils';
 
 /**
@@ -222,7 +222,7 @@ export interface CalendarProps extends Omit<
    * out. Fluent's `dateRangeType`.
    * @default 'day'
    */
-  selectionRange?: SelectionRange;
+  selectionRange?: CalendarSelectionRange;
   /**
    * The days of `selectionRange="work-week"` (0 = Sunday), within the week that starts on
    * `firstDayOfWeek`.
@@ -320,7 +320,7 @@ export interface CalendarViewProps {
    * parent receives only the picked day.
    * @default 'day'
    */
-  selectionRange?: SelectionRange;
+  selectionRange?: CalendarSelectionRange;
   /** The days of the `'work-week'` range. @default [1, 2, 3, 4, 5] */
   workWeekDays?: readonly DayOfWeek[];
   /** Adds a footer button that shows today's month and focuses today. @default false */

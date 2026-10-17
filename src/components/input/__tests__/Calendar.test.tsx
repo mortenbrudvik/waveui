@@ -1121,6 +1121,8 @@ describe('Calendar', () => {
       for (const name of ['January 2025', 'February 2025']) {
         expect(cell(name)).toHaveAttribute('aria-disabled', 'true');
         expect(cell(name)).not.toBeDisabled();
+        // Struck through as an unavailable day is, so the look does not rest on the dimming alone.
+        expect(cell(name)).toHaveClass('aria-disabled:line-through', 'aria-disabled:opacity-50');
       }
       expect(cell('March 2025')).not.toHaveAttribute('aria-disabled');
       expect(screen.getByRole('button', { name: 'Previous year' })).toHaveAttribute(
@@ -1150,6 +1152,7 @@ describe('Calendar', () => {
       await openYears(user, '2027');
       for (const year of ['2019', '2024', '2028', '2030']) {
         expect(cell(year)).toHaveAttribute('aria-disabled', 'true');
+        expect(cell(year)).toHaveClass('aria-disabled:line-through');
       }
       for (const year of ['2025', '2026', '2027']) {
         expect(cell(year)).not.toHaveAttribute('aria-disabled');

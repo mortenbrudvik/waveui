@@ -4,6 +4,7 @@ import { cn } from '../../lib/cn';
 import { composeEventHandlers } from '../../lib/composeEventHandlers';
 import { warnOnce } from '../../lib/dev';
 import { isOwnEvent } from '../../lib/events';
+import { isFocused } from '../../lib/focus';
 import { focusRing } from '../../lib/styles';
 import { useControllable } from '../../hooks/useControllable';
 import { useFieldContext, useFieldControl } from '../../hooks/useFieldControl';
@@ -139,11 +140,6 @@ const UNNAMED_WARNING =
 /** The state attributes of a disabled list, rendered only while `disabled` (C-DISABLED). */
 const DISABLED_ATTRIBUTES = { 'aria-disabled': true, 'data-disabled': '' } as const;
 
-/** Whether `element` is the focused element of its document or shadow root. */
-function isActiveElement(element: HTMLElement): boolean {
-  return (element.getRootNode() as Partial<DocumentOrShadowRoot>).activeElement === element;
-}
-
 const ListboxRoot = (props: ListboxProps<boolean>) => {
   const {
     multiselect = false,
@@ -225,7 +221,7 @@ const ListboxRoot = (props: ListboxProps<boolean>) => {
       autoFocusHandledRef.current = true;
       if (autoFocus && !disabled && isClient) list.focus();
     }
-    setFocused(!disabled && isActiveElement(list));
+    setFocused(!disabled && isFocused(list));
   }, [autoFocus, disabled, isClient]);
 
   const listbox = useListbox({
@@ -255,6 +251,35 @@ const ListboxRoot = (props: ListboxProps<boolean>) => {
   // The hook's ref must reach the list: a pointer press on an option focuses the list through it.
   const { ref: listElementRef, ...listProps } = listbox.getListboxProps();
   const mergedRef = useMergedRefs<HTMLUListElement>(ref, listRef, listElementRef);
+
+  // The active option's outline shows focus only while the option is in the list's view: scrolled
+  // away (the wheel, a smaller list), the list draws its own ring as well (WCAG 2.4.7). A new active
+  // option counts as shown until the browser reports otherwise, since the keys scroll it into view
+  // (adjust-during-render pattern, C-HOOKS); without IntersectionObserver nothing is observed.
+  const activeId = listProps['aria-activedescendant'];
+  const [activeOutOfView, setActiveOutOfView] = React.useState(false);
+  const [observedId, setObservedId] = React.useState(activeId);
+  if (observedId !== activeId) {
+    setObservedId(activeId);
+    setActiveOutOfView(false);
+  }
+  React.useEffect(() => {
+    const list = listRef.current;
+    if (activeId === undefined || !list || typeof IntersectionObserver === 'undefined') return;
+    const option = Array.from(list.querySelectorAll('[role="option"]')).find(
+      (el) => el.id === activeId,
+    );
+    if (!option) return;
+    const observer = new IntersectionObserver(
+      (entries) => {
+        const entry = entries[entries.length - 1];
+        if (entry) setActiveOutOfView(!entry.isIntersecting);
+      },
+      { root: list },
+    );
+    observer.observe(option);
+    return () => observer.disconnect();
+  }, [activeId]);
 
   useFormReset(
     listRef,
@@ -291,7 +316,7 @@ const ListboxRoot = (props: ListboxProps<boolean>) => {
   // focus that moves elsewhere in the page changes the active element before the blur.
   const handleBlur = (event: React.FocusEvent<HTMLUListElement>) => {
     const list = event.currentTarget;
-    if (event.target === list && !isActiveElement(list)) setFocused(false);
+    if (event.target === list && !isFocused(list)) setFocused(false);
   };
 
   return (
@@ -323,10 +348,10 @@ const ListboxRoot = (props: ListboxProps<boolean>) => {
         // (C-NATIVE).
         'relative m-0 flex list-none flex-col overflow-y-auto px-0 py-1 text-foreground',
         // The active option's outline shows focus; while no option can be active (an empty list,
-        // every option hidden, or every option disabled without disabledOptionsFocusable), the
-        // list's own ring does (WCAG 2.4.7). The outline is hidden only while focused, so forced
-        // colors still draw one (C-FOCUS).
-        listbox.activeValue === null ? focusRing : 'focus:outline-hidden',
+        // every option hidden, or every option disabled without disabledOptionsFocusable), or the
+        // active one is scrolled out of view, the list's own ring does (WCAG 2.4.7). The outline
+        // is hidden only while focused, so forced colors still draw one (C-FOCUS).
+        listbox.activeValue === null || activeOutOfView ? focusRing : 'focus:outline-hidden',
         // Disabled: the options take no pointer input (inherited by the options of a group), so
         // none hovers and the list's own not-allowed cursor shows over them.
         disabled && 'cursor-not-allowed opacity-50 *:pointer-events-none',
@@ -365,10 +390,12 @@ export const ListboxOptionGroup = OptionGroup;
  * - **Focus.** One tab stop. The active option exists only while the list has focus, and a
  *   switch to another window keeps it: the selected option (with `multiselect`, the first
  *   selected one in list order), else the first. While no option can be active (an empty list,
- *   every option hidden, or every option disabled without `disabledOptionsFocusable`) the list
- *   draws its own focus ring. A press on an option focuses the list and makes that option active
+ *   every option hidden, or every option disabled without `disabledOptionsFocusable`), and while
+ *   the active option is scrolled out of the list's view, the list draws its own focus ring. A
+ *   press on an option with the primary button focuses the list and makes that option active
  *   without scrolling, so the click selects it even while the selected option is scrolled out of
- *   view. `autoFocus` focuses the list when it mounts.
+ *   view; a right or middle press is left to the browser. `autoFocus` focuses the list when it
+ *   mounts.
  * - **Keys.** ArrowDown and ArrowUp move without wrapping, Home and End go to the first and last
  *   option, PageUp and PageDown move ten options, and typing moves to the matching option
  *   (typeahead). Space and Enter select the active option: the selection does not follow the

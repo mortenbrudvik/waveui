@@ -136,4 +136,4 @@ export {
   type CalendarLabels,
   type CalendarValueChangeDetails,
 } from './Calendar';
-export type { SelectionRange } from './dateUtils';
+export type { CalendarSelectionRange } from './dateUtils';

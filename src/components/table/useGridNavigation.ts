@@ -1,6 +1,6 @@
 import * as React from 'react';
 import { getArrowIntent, getDirection } from '../../lib/direction';
-import { FOCUSABLE_SELECTOR, getFirstTabbable, isFocusable } from '../../lib/focus';
+import { FOCUSABLE_SELECTOR, getFirstTabbable, isFocusable, isFocused } from '../../lib/focus';
 
 /** Options of {@link useGridNavigation}. */
 export interface UseGridNavigationOptions {
@@ -156,11 +156,6 @@ function hasCheckedPeer(radio: HTMLInputElement): boolean {
 
 function isCellElement(el: Element): el is HTMLTableCellElement {
   return el.localName === 'td' || el.localName === 'th';
-}
-
-/** Whether `el` is the focused element of its document (or shadow root). */
-function isFocused(el: Element): boolean {
-  return (el.getRootNode() as Partial<DocumentOrShadowRoot>).activeElement === el;
 }
 
 /** The cell of `grid` that contains `node` (a nested table's cells belong to the outer cell). */

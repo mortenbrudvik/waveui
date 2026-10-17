@@ -10,7 +10,6 @@ import {
   ComboboxOptionGroup,
   Option,
   OptionGroup,
-  insertedText,
   type ComboboxLabels,
   type ComboboxProps,
 } from '../Combobox';
@@ -2417,6 +2416,71 @@ describe('Combobox', () => {
         expect(onValueChange.mock.calls).toEqual([[[]]]);
       });
 
+      describe('typed text equal to all of the labels (R17)', () => {
+        const SIZES = [
+          <Option key="s" value="s">
+            S
+          </Option>,
+          <Option key="m" value="m">
+            M
+          </Option>,
+          <Option key="medium" value="medium">
+            Medium
+          </Option>,
+        ];
+
+        async function tabIntoSizes(props: Partial<ComboboxProps<true>> = {}) {
+          const user = userEvent.setup();
+          render(
+            <>
+              <button type="button">Before</button>
+              <Combobox aria-label="Size" multiselect defaultValue={['m']} {...props}>
+                {SIZES}
+              </Combobox>
+            </>,
+          );
+          await user.click(screen.getByRole('button', { name: 'Before' }));
+          await user.tab();
+          return user;
+        }
+
+        it('starts the query with a keystroke that replaces a one-letter label with itself, and keeps the next one', async () => {
+          const onQueryChange = vi.fn();
+          const onValueChange = vi.fn();
+          const user = await tabIntoSizes({ onQueryChange, onValueChange });
+          expect(combobox('Size')).toHaveValue('M');
+          // The edit leaves the input's text as it was, so the input reports no change of value.
+          await user.keyboard('M');
+          expect(combobox('Size')).toHaveValue('M');
+          expect(onQueryChange.mock.calls).toEqual([['M']]);
+          expect(combobox('Size')).toHaveAttribute('aria-expanded', 'true');
+          expect(visibleOptions()).toEqual(['M', 'Medium']);
+          await user.keyboard('e');
+          expect(combobox('Size')).toHaveValue('Me');
+          expect(onQueryChange.mock.calls).toEqual([['M'], ['Me']]);
+          expect(visibleOptions()).toEqual(['Medium']);
+          expect(onValueChange).not.toHaveBeenCalled();
+        });
+
+        it('starts the query with a paste of exactly the labels text', async () => {
+          const user = await tabIntoSizes();
+          await user.paste('M');
+          expect(combobox('Size')).toHaveValue('M');
+          await user.keyboard('e');
+          expect(combobox('Size')).toHaveValue('Me');
+          expect(visibleOptions()).toEqual(['Medium']);
+        });
+
+        it('starts no query for an undo that leaves the labels as they are (rule 3)', async () => {
+          const onQueryChange = vi.fn();
+          await tabIntoSizes({ onQueryChange });
+          edit(combobox('Size'), 'M', 'historyUndo');
+          expect(combobox('Size')).toHaveValue('M');
+          expect(combobox('Size')).toHaveAttribute('aria-expanded', 'false');
+          expect(onQueryChange).not.toHaveBeenCalled();
+        });
+      });
+
       it('uses the selection a beforeinput reported only for the change it announced', async () => {
         await tabIntoMulti({ defaultValue: ['a', 'b'] });
         // An edit announced over the selected labels and then not made (cancelled, blocked)…
@@ -3677,23 +3741,6 @@ describe('Combobox', () => {
       expect(onActiveOptionChange).toHaveBeenCalledTimes(2);
       expect(onActiveOptionChange).toHaveBeenLastCalledWith('b');
     });
-  });
-});
-
-describe('insertedText', () => {
-  it.each([
-    ['Apple, Banana', 'Apple, Bananac', 'c'],
-    ['Apple, Banana', 'c', 'c'],
-    ['Apple, Banana', 'Apple, xBanana', 'x'],
-    ['Apple, Banana', 'Apple, Banan', ''],
-    ['Apple, Banana', 'Apple, Banana', ''],
-    ['ab', 'aab', 'a'],
-    // Characters outside the BMP: the shared start or end never splits a surrogate pair.
-    ['🍎', '🍌🍎', '🍌'],
-    ['🍎', '🍏', '🍏'],
-    ['🈀', '😀', '😀'],
-  ])('%j → %j inserts %j', (before, after, expected) => {
-    expect(insertedText(before, after)).toBe(expected);
   });
 });
 

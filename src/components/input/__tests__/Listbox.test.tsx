@@ -399,6 +399,76 @@ describe('Listbox', () => {
       expect(list()).not.toHaveClass('outline-hidden');
     });
 
+    describe('an active option scrolled out of view (WCAG 2.4.7)', () => {
+      /** jsdom has no IntersectionObserver: a stub whose `report` plays the browser's callback. */
+      class IntersectionObserverStub {
+        static instances: IntersectionObserverStub[] = [];
+        readonly observed: Element[] = [];
+        disconnected = false;
+        constructor(
+          readonly callback: IntersectionObserverCallback,
+          readonly options?: IntersectionObserverInit,
+        ) {
+          IntersectionObserverStub.instances.push(this);
+        }
+        observe(target: Element) {
+          this.observed.push(target);
+        }
+        unobserve() {}
+        disconnect() {
+          this.disconnected = true;
+        }
+        takeRecords() {
+          return [];
+        }
+        report(isIntersecting: boolean) {
+          const entries = this.observed.map(
+            (target) => ({ target, isIntersecting }) as IntersectionObserverEntry,
+          );
+          act(() => this.callback(entries, this as unknown as IntersectionObserver));
+        }
+      }
+
+      /** The observer still connected (one at a time). */
+      function observer() {
+        const live = IntersectionObserverStub.instances.filter((o) => !o.disconnected);
+        expect(live).toHaveLength(1);
+        return live[0]!;
+      }
+
+      afterEach(() => {
+        IntersectionObserverStub.instances = [];
+        vi.unstubAllGlobals();
+      });
+
+      it('draws the list’s own ring while the active option is out of the list’s view', async () => {
+        vi.stubGlobal('IntersectionObserver', IntersectionObserverStub);
+        const user = userEvent.setup();
+        renderList();
+        await user.tab();
+        expect(active()).toHaveTextContent('Apple');
+        const first = observer();
+        expect(first.options?.root).toBe(list());
+        expect(first.observed).toEqual([option('Apple')]);
+        // The wheel scrolls the active option away: the list itself shows focus.
+        first.report(false);
+        expect(list()).toHaveClass(...FOCUS_RING_CLASSES);
+        expect(list()).not.toHaveClass('focus:outline-hidden');
+        first.report(true);
+        expect(list()).toHaveClass('focus:outline-hidden');
+        first.report(false);
+        // The keys bring the next active option into view: it is observed afresh, and until the
+        // browser reports otherwise its outline shows focus.
+        await user.keyboard('{ArrowDown}');
+        expect(first.disconnected).toBe(true);
+        expect(observer().observed).toEqual([option('Banana')]);
+        expect(list()).toHaveClass('focus:outline-hidden');
+        // Without an active option nothing is observed.
+        await user.tab();
+        expect(IntersectionObserverStub.instances.every((o) => o.disconnected)).toBe(true);
+      });
+    });
+
     it('has an active option in an all-disabled list with disabledOptionsFocusable', async () => {
       const user = userEvent.setup();
       render(
@@ -442,6 +512,43 @@ describe('Listbox', () => {
       await user.click(option('Apple'));
       expect(onValueChange.mock.calls).toEqual([[['apple', 'cherry']], [['cherry']]]);
       expect(option('Apple')).toHaveAttribute('aria-selected', 'false');
+    });
+
+    it.each([
+      ['right', 2],
+      ['middle', 1],
+    ])(
+      'a %s press on an option of an unfocused list leaves it to the browser: no focus, no active option',
+      (_, button) => {
+        const onValueChange = vi.fn();
+        const onActiveOptionChange = vi.fn();
+        renderList({ onValueChange, onActiveOptionChange });
+        // Not prevented: the browser's own handling of the button (a context menu, autoscroll)
+        // stays, as on a native `<select size>`.
+        expect(fireEvent.mouseDown(option('Cherry'), { button })).toBe(true);
+        fireEvent.mouseUp(option('Cherry'), { button });
+        expect(list()).not.toHaveFocus();
+        expect(active()).toBeNull();
+        expect(onActiveOptionChange).not.toHaveBeenCalled();
+        expect(onValueChange).not.toHaveBeenCalled();
+      },
+    );
+
+    it.each([
+      ['right', 2],
+      ['middle', 1],
+    ])('a %s press on an option of a focused list keeps the active option', async (_, button) => {
+      const user = userEvent.setup();
+      const onValueChange = vi.fn();
+      const onActiveOptionChange = vi.fn();
+      renderList({ onValueChange, onActiveOptionChange });
+      await user.tab();
+      expect(active()).toHaveTextContent('Apple');
+      expect(fireEvent.mouseDown(option('Cherry'), { button })).toBe(true);
+      fireEvent.mouseUp(option('Cherry'), { button });
+      expect(active()).toHaveTextContent('Apple');
+      expect(onActiveOptionChange.mock.calls).toEqual([['apple']]);
+      expect(onValueChange).not.toHaveBeenCalled();
     });
 
     it('a press on a disabled option focuses the list and selects nothing', async () => {

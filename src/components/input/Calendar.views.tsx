@@ -296,9 +296,10 @@ const defaultMarkedDay = (dayLabel: string) => `${dayLabel}, marked`;
 const defaultWeekNumber = (week: number) => `Week ${week}`;
 
 // The month and year cells: the day buttons' look in a wider cell (C-NATIVE padding and
-// background, the gated hover, the selected fill).
+// background, the gated hover, the selected fill, and an unavailable cell struck through besides
+// the dimming of `disabledStyles`).
 const PICKER_CELL_CLASSES =
-  'flex h-12 w-14 items-center justify-center rounded bg-transparent p-0 text-caption-1 text-foreground not-disabled:not-aria-disabled:hover:bg-subtle-hover data-[outside]:text-muted-foreground data-[today]:border data-[today]:border-primary data-[today]:font-semibold data-[selected]:bg-primary data-[selected]:font-semibold data-[selected]:text-primary-foreground not-disabled:not-aria-disabled:data-[selected]:hover:bg-primary-hover';
+  'flex h-12 w-14 items-center justify-center rounded bg-transparent p-0 text-caption-1 text-foreground not-disabled:not-aria-disabled:hover:bg-subtle-hover data-[outside]:text-muted-foreground data-[today]:border data-[today]:border-primary data-[today]:font-semibold data-[selected]:bg-primary data-[selected]:font-semibold data-[selected]:text-primary-foreground not-disabled:not-aria-disabled:data-[selected]:hover:bg-primary-hover aria-disabled:line-through';
 
 /** The cells of a row of the month and year grids. */
 const PICKER_COLUMNS = 4;

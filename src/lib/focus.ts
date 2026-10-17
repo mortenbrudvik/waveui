@@ -241,7 +241,15 @@ export function focusElement(
   } catch {
     return false;
   }
-  return el.ownerDocument.activeElement === el;
+  return isFocused(el);
+}
+
+/**
+ * Whether `el` is the focused element of its document or shadow root. The document reports a
+ * shadow root's host as its active element instead, so this reads the element's own root.
+ */
+export function isFocused(el: Element): boolean {
+  return (el.getRootNode() as Partial<DocumentOrShadowRoot>).activeElement === el;
 }
 
 /** Whether the focused element of `container`'s document is `container` or inside it. */

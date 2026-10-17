@@ -2,7 +2,6 @@ import { describe, it, expect } from 'vitest';
 import {
   addDays,
   addMonths,
-  addYears,
   clampDate,
   formatDate,
   formatDayLabel,
@@ -331,13 +330,6 @@ describe('dateUtils — calendar systems', () => {
 });
 
 describe('dateUtils — month and year views', () => {
-  it('addYears moves by whole years at local midnight, clamping February 29', () => {
-    const moved = addYears(new Date(2024, 1, 29, 15, 30), 1);
-    expect(fields(moved)).toEqual([2025, 2, 28]);
-    expect(isMidnight(moved)).toBe(true);
-    expect(fields(addYears(new Date(2025, 5, 15), -10))).toEqual([2015, 6, 15]);
-  });
-
   it('getDecadeStart floors a year to its decade', () => {
     expect(getDecadeStart(2025)).toBe(2020);
     expect(getDecadeStart(2020)).toBe(2020);

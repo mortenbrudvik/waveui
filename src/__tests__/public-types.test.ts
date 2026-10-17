@@ -177,7 +177,7 @@ import type {
   SearchBoxProps,
   SelectProps,
   SelectionMode,
-  SelectionRange,
+  CalendarSelectionRange,
   Size,
   SliderProps,
   SliderSize,
@@ -1047,8 +1047,10 @@ describe('0.10 listbox primitives, useActiveDescendant and the date types from t
     >();
     expectTypeOf<DatePickerLabels>().toExtend<CalendarLabels>();
     expectTypeOf<CalendarProps['firstDayOfWeek']>().toEqualTypeOf<DayOfWeek | undefined>();
-    expectTypeOf<NonNullable<CalendarProps['selectionRange']>>().toEqualTypeOf<SelectionRange>();
-    expectTypeOf<SelectionRange>().toEqualTypeOf<'day' | 'week' | 'work-week' | 'month'>();
+    expectTypeOf<
+      NonNullable<CalendarProps['selectionRange']>
+    >().toEqualTypeOf<CalendarSelectionRange>();
+    expectTypeOf<CalendarSelectionRange>().toEqualTypeOf<'day' | 'week' | 'work-week' | 'month'>();
   });
 
   it('the date helpers: their signatures', () => {
