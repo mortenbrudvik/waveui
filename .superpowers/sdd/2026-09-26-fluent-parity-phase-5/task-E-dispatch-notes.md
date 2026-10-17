@@ -29,3 +29,6 @@ Binding spec: `docs/superpowers/specs/2026-09-26-fluent-parity-phase-5-design.md
 
 ## Ruling R22 (git, every task)
 Never run `git checkout`, `restore`, `stash`, `reset` or any other git write. To check RED against the committed code, read it with `git show HEAD:<path>` into a scratch file, swap the files with file tools, then restore them.
+
+## After the Phase 3 merge (ruling R26, spec rule 22)
+Every part the calendar tasks add (Calendar root, CalendarView header, heading button, the day, month and year grids and cells, week-number cells, the marked-day dot, the footer buttons) follows P3-00: a stable class name from the registry in `src/lib/classNames.ts`, its registry constant and JSDoc, and a case in `src/components/input/__tests__/stableClassNames.test.tsx`. DatePicker already has its Phase 3 classes: the extraction (E2) moves them with the markup unchanged, and Phase 3's DatePicker stable-class tests count as part of the regression suite (rule 23).

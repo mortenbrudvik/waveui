@@ -249,3 +249,10 @@ Task D4: review (opus) — Approved, 0 Critical/Important, 7 Minor (layout switc
 Task D4: minors → D5 notes (M1 Row in a wrapper: JSDoc or dev warning; M2 aria-required alone shows the hint: test + doc; M3 layout switch remounts: JSDoc note; M4 Tooltip relationship=description in every layout; M6 a swatchGap helper); M5, M7 deferred
 Task D4: complete (commits a0c73e4..caee925)
 Phase 3 merge started: git merge --no-ff origin/main (682e067) — 11 conflicts (verify-dist.mjs + test, public-types.test, Combobox, Dropdown, Option, SwatchPicker, src/index.ts, lib types.test, tokens.test); resolution agent dispatched (opus, file edits only)
+Phase 3 merge committed 5b63233 (resolution report merge-phase3-report.md; ListboxSurface keeps listClassName/surfaceClassName, used by Dropdown/Combobox/TagPicker for their stable classes; PENDING_FLAT_EXPORTS still [SwatchPicker]); remaining failures: classNames completeness (ListboxProvider, ListboxSurface, SwatchPickerRow), integration flat-name SwatchPickerRow, public-types (ComboboxComponent, DropdownComponent, SwatchPickerLabels, SwatchPickerRowProps)
+Task P3A (P3-00 adaptation of the Phase 5 parts so far): dispatched (base 5b63233, opus)
+Task P3A: implemented, committed b1d4e1f (DONE; ListboxSurface its own constant (P3-00 D3), so the pickers' popups carry wave-listbox-surface; Option.test full-class pin updated; box key indicator; no class on swatch check/slash, gridcell or required hint (P3 judgement 26, D4)); both tsc clean; review package review-P3A.diff
+Task P3A: review (sonnet) — Approved, 0 Critical/Important, 2 Minor
+Task P3A: note (→ G1 CHANGELOG, DOM changes): the Dropdown, Combobox and TagPicker popups carry wave-listbox-surface and wave-listbox-surface__list
+Task P3A: complete (commits 5b63233..b1d4e1f)
+Task D5: dispatched (base b1d4e1f, sonnet; follows P3-00)

@@ -35,3 +35,6 @@ Never run `git checkout`, `restore`, `stash`, `reset` or any other git write. To
 - `layout` changed at runtime remounts the swatches (focus falls to the body): one JSDoc sentence on `layout`.
 - The Tooltip test with `relationship="description"` in every layout and in tab mode (spec P5-04 tests: a Tooltip names and describes).
 - Share the gap class between the root and the rows (a `swatchGap(spacing)` helper).
+
+## After the Phase 3 merge (ruling R26, spec rule 22)
+Every part D5 adds follows P3-00: a stable class name from the registry in `src/lib/classNames.ts`, its registry constant and JSDoc, and a case in `src/components/input/__tests__/stableClassNames.test.tsx` (see how task P3A registered the swatch kinds and `SwatchPicker.Row`; its report is `task-P3A-report.md`).
