@@ -1,21 +1,13 @@
 import * as React from 'react';
 import { flushSync } from 'react-dom';
 import { cn } from '../../lib/cn';
-import { focusableDisabledProps, joinIds, preventIfDisabled } from '../../lib/aria';
+import { joinIds } from '../../lib/aria';
 import { datePickerClassNames } from '../../lib/classNames';
 import { composeEventHandlers } from '../../lib/composeEventHandlers';
 import { warnDeprecated, warnOnce } from '../../lib/dev';
-import { getArrowIntent, getDirection } from '../../lib/direction';
 import { FOCUSABLE_SELECTOR } from '../../lib/focus';
-import { CalendarIcon, ChevronLeftIcon, ChevronRightIcon, DismissIcon } from '../../lib/icons';
-import {
-  disabledStyles,
-  focusRing,
-  forcedColors,
-  inputBase,
-  inputFocus,
-  inputInvalid,
-} from '../../lib/styles';
+import { CalendarIcon, DismissIcon } from '../../lib/icons';
+import { disabledStyles, focusRing, inputBase, inputFocus, inputInvalid } from '../../lib/styles';
 import { useControllable } from '../../hooks/useControllable';
 import { useDismiss } from '../../hooks/useDismiss';
 import { useFieldContext, useFieldControl } from '../../hooks/useFieldControl';
@@ -28,25 +20,16 @@ import { usePopupPosition } from '../../hooks/usePopupPosition';
 import { useRestoreFocus } from '../../hooks/useRestoreFocus';
 import { HiddenInput } from '../internal/HiddenInput';
 import { Portal } from '../portal/Portal';
+import { CalendarView, type CalendarViewPartClassNames } from './Calendar';
 import {
-  addDays,
-  addMonths,
-  clampDate,
   formatDate as formatLocaleDate,
-  formatDayLabel,
-  formatDayNumber,
   formatISODate,
-  formatMonthYear,
-  getCalendarDays,
   getLocaleDateFormat,
-  getWeekdayNames,
   isDateInRange,
   isSameDay,
-  isSameMonth,
   isValidLocaleTag,
   parseDate as parseLocaleDate,
   startOfDay,
-  startOfMonth,
 } from './dateUtils';
 import { isInvalidLook } from './Input';
 import type { RoutedHandlers } from './routedHandlers';
@@ -236,20 +219,16 @@ export interface DatePickerProps extends Omit<
 const ICON_BUTTON_CLASSES =
   'absolute flex h-6 w-6 items-center justify-center rounded bg-transparent p-0 text-muted-foreground not-disabled:not-aria-disabled:hover:bg-subtle-hover not-disabled:not-aria-disabled:hover:text-foreground';
 
-const NAV_BUTTON_CLASSES =
-  'flex h-8 w-8 items-center justify-center rounded bg-transparent p-0 text-foreground not-disabled:not-aria-disabled:hover:bg-subtle-hover';
-
-// An unavailable day stays focusable in the roving grid (`aria-disabled`); the day button adds
-// `disabledStyles`, whose dimmed look lifts while the focus ring shows (opacity would dim the ring).
-const DAY_CLASSES =
-  'flex h-8 w-8 items-center justify-center rounded bg-transparent p-0 text-caption-1 text-foreground not-disabled:not-aria-disabled:hover:bg-subtle-hover data-[outside]:text-muted-foreground data-[today]:border data-[today]:border-primary data-[today]:font-semibold data-[selected]:bg-primary data-[selected]:font-semibold data-[selected]:text-primary-foreground not-disabled:not-aria-disabled:data-[selected]:hover:bg-primary-hover aria-disabled:line-through';
-
-/** The 42 grid days as 6 weeks. */
-function toWeeks(days: Date[]): Date[][] {
-  const weeks: Date[][] = [];
-  for (let i = 0; i < days.length; i += 7) weeks.push(days.slice(i, i + 7));
-  return weeks;
-}
+// The calendar's parts keep DatePicker's stable classes (0.8), on the same elements.
+const CALENDAR_PART_CLASS_NAMES: CalendarViewPartClassNames = {
+  header: datePickerClassNames.header,
+  previousMonthButton: datePickerClassNames.previousMonthButton,
+  heading: datePickerClassNames.heading,
+  nextMonthButton: datePickerClassNames.nextMonthButton,
+  grid: datePickerClassNames.grid,
+  weekday: datePickerClassNames.weekday,
+  day: datePickerClassNames.day,
+};
 
 /**
  * A date input with a calendar dialog (APG date picker dialog).
@@ -429,9 +408,6 @@ export const DatePicker = (props: DatePickerProps) => {
     }
   }
 
-  const isUnavailable = (date: Date) =>
-    !isDateInRange(date, minDate, maxDate) || !!disabledDates?.(startOfDay(date));
-
   /** Commits a day (or `null`); nothing is emitted when it is the same day. */
   const commitDate = (next: Date | null) => {
     const normalized = next ? startOfDay(next) : null;
@@ -462,88 +438,20 @@ export const DatePicker = (props: DatePickerProps) => {
     return true;
   };
 
-  /* ---- calendar view and focused day ------------------------------- */
-
-  const today = startOfDay(new Date());
-  const initialView = () => startOfMonth(clampDate(selectedDate ?? today, minDate, maxDate));
-  const [viewMonth, setViewMonth] = React.useState<Date>(initialView);
-  const [focusedDay, setFocusedDay] = React.useState<Date | null>(null);
+  /* ---- calendar --------------------------------------------------- */
 
   /** Opened with Alt+ArrowDown in the input: Escape returns focus there instead of the toggle. */
   const [openedFromInput, setOpenedFromInput] = React.useState(false);
 
-  // Every opening shows the selected (or current) month again: adjusted during render (C-HOOKS).
-  const [openSeen, setOpenSeen] = React.useState(isOpen);
-  if (openSeen !== isOpen) {
-    setOpenSeen(isOpen);
-    if (isOpen) {
-      setViewMonth(initialView());
-      setFocusedDay(null);
-    }
-  }
   // A closed calendar forgets where it was opened from. This also drops an Alt+ArrowDown whose
   // opening a controlled parent declined (it renders in the same update, still closed), so a later
   // opening by the parent returns focus to the toggle, not the input.
   if (openedFromInput && !isOpen) setOpenedFromInput(false);
 
-  const weeks = React.useMemo(
-    () => toWeeks(getCalendarDays(viewMonth, firstDayOfWeek)),
-    [viewMonth, firstDayOfWeek],
-  );
-
-  // The focused day is derived: the day moved to while it is shown (a pointer-focused day of the
-  // previous/next month counts too), else the selected day of the month, else today (clamped into
-  // the range), else the first available day of the month.
-  const inView = (date: Date | null | undefined): date is Date =>
-    !!date && isSameMonth(date, viewMonth);
-  const inGrid = (date: Date | null | undefined): date is Date =>
-    !!date && date >= weeks[0][0] && date <= weeks[weeks.length - 1][6];
-  const clampedToday = clampDate(today, minDate, maxDate);
-  const firstInRange = clampDate(viewMonth, minDate, maxDate);
-  const focusTarget = inGrid(focusedDay)
-    ? focusedDay
-    : inView(selectedDate)
-      ? startOfDay(selectedDate)
-      : inView(clampedToday)
-        ? clampedToday
-        : inView(firstInRange)
-          ? firstInRange
-          : viewMonth;
-  const focusIso = formatISODate(focusTarget);
-
-  const moveFocus = (next: Date) => {
-    const target = clampDate(next, minDate, maxDate);
-    setFocusedDay(target);
-    if (!isSameMonth(target, viewMonth)) setViewMonth(startOfMonth(target));
-  };
-
-  const navigateMonth = (delta: number) => {
-    const nextView = addMonths(viewMonth, delta);
-    const moved = clampDate(addMonths(focusTarget, delta), minDate, maxDate);
-    setViewMonth(nextView);
-    // From a day of the previous/next month the moved day may fall outside the new month: the
-    // focused day is then derived again (selected, today or the first day of the month).
-    setFocusedDay(isSameMonth(moved, nextView) ? moved : null);
-  };
-
-  /** Pointer (or assistive technology) focus on a day makes it the roving day; the month stays. */
-  const handleDayFocus = (day: Date) => {
-    if (!isSameDay(day, focusTarget)) setFocusedDay(day);
-  };
-
-  const previousDisabled = !!minDate && addDays(viewMonth, -1) < startOfDay(minDate);
-  const nextDisabled = !!maxDate && addMonths(viewMonth, 1) > startOfDay(maxDate);
-
-  const weekdays = React.useMemo(
-    () => getWeekdayNames(locale, firstDayOfWeek),
-    [locale, firstDayOfWeek],
-  );
-
   /* ---- elements, popup primitives ---------------------------------- */
 
   const inputRef = React.useRef<HTMLInputElement | null>(null);
   const toggleRef = React.useRef<HTMLButtonElement | null>(null);
-  const gridRef = React.useRef<HTMLTableElement | null>(null);
   const surfaceRef = React.useRef<HTMLDivElement | null>(null);
   /** Where focus goes when the calendar closes (`null`: back to the toggle). */
   const restoreTargetRef = React.useRef<HTMLElement | null>(null);
@@ -552,7 +460,6 @@ export const DatePicker = (props: DatePickerProps) => {
 
   const dialogId = useId('datepicker-dialog');
   const headingId = useId('datepicker-heading');
-  const gridId = useId('datepicker-grid');
   const errorId = useId('datepicker-error');
 
   const close = (restoreTo: HTMLElement | null) => {
@@ -586,7 +493,11 @@ export const DatePicker = (props: DatePickerProps) => {
   useFocusTrap(surface, {
     enabled: isOpen,
     layerId,
-    initialFocus: () => gridRef.current?.querySelector<HTMLElement>('button[tabindex="0"]') ?? null,
+    // The calendar mounts with the dialog, so its grid's tab stop is in the surface already.
+    initialFocus: () =>
+      surfaceRef.current?.querySelector<HTMLElement>(
+        '[data-wave-calendar-grid] button[tabindex="0"]',
+      ) ?? null,
   });
 
   useRestoreFocus({
@@ -602,16 +513,6 @@ export const DatePicker = (props: DatePickerProps) => {
   React.useLayoutEffect(() => {
     if (isOpen) restoreTargetRef.current = null;
   }, [isOpen]);
-
-  // Roving focus: while the grid holds focus, focus follows the focused day.
-  React.useLayoutEffect(() => {
-    const grid = gridRef.current;
-    if (!grid) return;
-    const active = grid.ownerDocument.activeElement;
-    if (!active || !grid.contains(active)) return;
-    const button = grid.querySelector<HTMLElement>(`button[data-date="${focusIso}"]`);
-    if (button && button !== active) button.focus();
-  }, [focusIso]);
 
   /* ---- forms and Field --------------------------------------------- */
 
@@ -704,8 +605,9 @@ export const DatePicker = (props: DatePickerProps) => {
     event.preventDefault();
   };
 
+  /** A day picked in the calendar (the calendar picks only available days). */
   const selectDate = (day: Date) => {
-    if (!interactive || isUnavailable(day)) return;
+    if (!interactive) return;
     commitDate(day);
     close(inputRef.current);
   };
@@ -715,46 +617,6 @@ export const DatePicker = (props: DatePickerProps) => {
     // Consumed here, so enclosing layers (a Dialog around the picker) ignore it.
     event.preventDefault();
     close(openedFromInput ? inputRef.current : null);
-  };
-
-  const handleGridKeyDown = (event: React.KeyboardEvent<HTMLTableElement>) => {
-    if (event.altKey || event.ctrlKey || event.metaKey) return;
-    const weekOffset = (focusTarget.getDay() - firstDayOfWeek + 7) % 7;
-    let next: Date;
-    switch (event.key) {
-      case 'ArrowLeft':
-      case 'ArrowRight': {
-        const intent = getArrowIntent(event.key, {
-          orientation: 'horizontal',
-          dir: getDirection(event.currentTarget),
-        });
-        next = addDays(focusTarget, intent === 'next' ? 1 : -1);
-        break;
-      }
-      case 'ArrowDown':
-        next = addDays(focusTarget, 7);
-        break;
-      case 'ArrowUp':
-        next = addDays(focusTarget, -7);
-        break;
-      case 'PageDown':
-        next = addMonths(focusTarget, event.shiftKey ? 12 : 1);
-        break;
-      case 'PageUp':
-        next = addMonths(focusTarget, event.shiftKey ? -12 : -1);
-        break;
-      case 'Home':
-        next = addDays(focusTarget, -weekOffset);
-        break;
-      case 'End':
-        next = addDays(focusTarget, 6 - weekOffset);
-        break;
-      default:
-        // Enter and Space activate the focused day button natively (click).
-        return;
-    }
-    event.preventDefault();
-    moveFocus(next);
   };
 
   /* ---- render ------------------------------------------------------ */
@@ -887,123 +749,19 @@ export const DatePicker = (props: DatePickerProps) => {
               'rounded-md border border-border bg-background p-3 text-foreground shadow-16',
             )}
           >
-            <div
-              className={cn(
-                datePickerClassNames.header,
-                'mb-2 flex items-center justify-between gap-2',
-              )}
-            >
-              <button
-                type="button"
-                aria-label={labels?.previousMonth ?? 'Previous month'}
-                aria-controls={gridId}
-                {...focusableDisabledProps(previousDisabled)}
-                onClick={preventIfDisabled(previousDisabled, () => navigateMonth(-1))}
-                className={cn(
-                  datePickerClassNames.previousMonthButton,
-                  NAV_BUTTON_CLASSES,
-                  focusRing,
-                  disabledStyles,
-                )}
-              >
-                <ChevronLeftIcon className="wave-rtl:-scale-x-100" />
-              </button>
-              <h2
-                id={headingId}
-                aria-live="polite"
-                className={cn(datePickerClassNames.heading, 'text-body-1 font-semibold')}
-              >
-                {formatMonthYear(viewMonth, locale)}
-              </h2>
-              <button
-                type="button"
-                aria-label={labels?.nextMonth ?? 'Next month'}
-                aria-controls={gridId}
-                {...focusableDisabledProps(nextDisabled)}
-                onClick={preventIfDisabled(nextDisabled, () => navigateMonth(1))}
-                className={cn(
-                  datePickerClassNames.nextMonthButton,
-                  NAV_BUTTON_CLASSES,
-                  focusRing,
-                  disabledStyles,
-                )}
-              >
-                <ChevronRightIcon className="wave-rtl:-scale-x-100" />
-              </button>
-            </div>
-            <table
-              ref={gridRef}
-              id={gridId}
-              role="grid"
-              aria-labelledby={headingId}
-              onKeyDown={handleGridKeyDown}
-              className={cn(datePickerClassNames.grid, 'border-collapse')}
-            >
-              <thead>
-                <tr>
-                  {weekdays.map((weekday) => (
-                    <th
-                      key={weekday.long}
-                      scope="col"
-                      abbr={weekday.long}
-                      aria-label={weekday.long}
-                      className={cn(
-                        datePickerClassNames.weekday,
-                        'h-8 w-8 text-center text-caption-1 font-normal text-muted-foreground',
-                      )}
-                    >
-                      <span aria-hidden="true">{weekday.short}</span>
-                      <span className="sr-only">{weekday.long}</span>
-                    </th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody>
-                {weeks.map((week, row) => (
-                  // Rows and cells are keyed by position, so the focused button survives a
-                  // month change and focus stays in the grid while it moves to the new day.
-                  <tr key={row}>
-                    {week.map((day, column) => {
-                      const iso = formatISODate(day);
-                      const isSelected = isSameDay(day, selectedDate);
-                      const isToday = isSameDay(day, today);
-                      const isFocused = iso === focusIso;
-                      const unavailable = isUnavailable(day);
-                      return (
-                        <td key={column} role="gridcell" aria-selected={isSelected} className="p-0">
-                          {/* Focus rests on the button, and screen readers do not reliably
-                              announce the gridcell's aria-selected from inside it: the selected
-                              day's button is also pressed. */}
-                          <button
-                            type="button"
-                            tabIndex={isFocused ? 0 : -1}
-                            aria-label={formatDayLabel(day, locale)}
-                            aria-pressed={isSelected || undefined}
-                            aria-current={isToday ? 'date' : undefined}
-                            {...focusableDisabledProps(unavailable)}
-                            data-date={iso}
-                            data-selected={isSelected ? '' : undefined}
-                            data-today={isToday ? '' : undefined}
-                            data-outside={isSameMonth(day, viewMonth) ? undefined : ''}
-                            onFocus={() => handleDayFocus(day)}
-                            onClick={() => selectDate(day)}
-                            className={cn(
-                              datePickerClassNames.day,
-                              DAY_CLASSES,
-                              focusRing,
-                              disabledStyles,
-                              isSelected && forcedColors.selectedLeaf,
-                            )}
-                          >
-                            {formatDayNumber(day, locale)}
-                          </button>
-                        </td>
-                      );
-                    })}
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+            <CalendarView
+              value={selectedDate}
+              onPick={selectDate}
+              minDate={minDate}
+              maxDate={maxDate}
+              disabledDates={disabledDates}
+              firstDayOfWeek={firstDayOfWeek}
+              locale={locale}
+              labels={labels}
+              headingAs="h2"
+              headingId={headingId}
+              partClassNames={CALENDAR_PART_CLASS_NAMES}
+            />
           </div>
         </Portal>
       )}
