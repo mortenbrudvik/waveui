@@ -9,7 +9,8 @@ import { isEditableTarget, isOwnEvent } from '../../lib/events';
 import { getFirstTabbable, getTabbableElements, isConnectedAndFocusable } from '../../lib/focus';
 import { getOpenLayers, isInsideLayerTree, subscribeLayers } from '../../lib/layers';
 import { focusRing } from '../../lib/styles';
-import { isToastOptions } from '../../lib/toaster';
+import { bindToasterHandle, isToastOptions } from '../../lib/toaster';
+import type { ToasterHandle } from '../../lib/toaster';
 import type { Status } from '../../lib/types';
 import { useDirection } from '../../hooks/useDirection';
 import { useEventCallback } from '../../hooks/useEventCallback';
@@ -426,6 +427,8 @@ export interface ToasterProps extends React.HTMLAttributes<HTMLDivElement> {
   limit?: number;
   /** Keyboard shortcuts; Escape, Delete and Backspace need none (see the component docs). */
   shortcuts?: ToasterShortcuts;
+  /** Binds this Toaster to a handle from `createToaster()`: toasts dispatched through the handle render here. */
+  toaster?: ToasterHandle;
   /** Ref to the toast region (the portaled `<div role="region">`). */
   ref?: React.Ref<HTMLDivElement>;
 }
@@ -908,7 +911,10 @@ ToastContainer.displayName = 'ToastContainer';
 /**
  * Provides {@link useToastController} to its children and shows the dispatched toasts.
  *
- * - **Wrap the app** in `<Toaster>`; components below it call `useToastController()`.
+ * - **Wrap the app** in `<Toaster>`; components below it call `useToastController()`, and code
+ *   outside components (a query-cache callback, a server-event handler) dispatches through a
+ *   handle from `createToaster()` bound with `toaster`, which also runs several Toasters side by
+ *   side (one handle each).
  * - **Two ways to dispatch:** `dispatchToast(<Toast>…</Toast>)` shows your content, usually a
  *   `Toast` with `Toast.Title`, `Toast.Body` and `Toast.Footer`; `dispatchToast({ title, body })`
  *   builds a toast from text. Both return the toast's id. Content without a `Toast` takes its
@@ -952,6 +958,7 @@ export const Toaster = ({
   position = 'bottom-end',
   limit: limitProp,
   shortcuts,
+  toaster: handle,
   className,
   style,
   children,
@@ -1125,6 +1132,28 @@ export const Toaster = ({
     () => ({ dispatchToast, dismissToast, dismissAllToasts }),
     [dispatchToast, dismissToast, dismissAllToasts],
   );
+
+  // A handle from createToaster() (P3-08, D33): bound in a layout effect, so dispatches that waited
+  // in its queue show before the first paint, and unbound on unmount (StrictMode binds again and
+  // finds the queue taken). A handle bound to another Toaster stays there.
+  const [handleOwner] = React.useState(() => ({}));
+  React.useLayoutEffect(() => {
+    if (!handle) return undefined;
+    const binding = bindToasterHandle(handle, handleOwner, controller);
+    if (binding.status === 'bound') return binding.unbind;
+    if (binding.status === 'taken') {
+      warnOnce(
+        'Toaster:handle-bound',
+        'Toaster: this handle is already bound to another Toaster; a handle binds one Toaster. Create one handle per Toaster.',
+      );
+    } else {
+      warnOnce(
+        'Toaster:handle-unknown',
+        'Toaster: `toaster` is not a handle from createToaster(), so nothing is bound. Pass the value createToaster() returns.',
+      );
+    }
+    return undefined;
+  }, [handle, handleOwner, controller]);
 
   // Where focus goes when the focused toast is dismissed (in its dismissing commit) or removed with
   // the Toaster: the next toast that is not exiting, else the previous one — that container itself

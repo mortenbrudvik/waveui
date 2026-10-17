@@ -1,8 +1,8 @@
 import * as React from 'react';
 import { createPortal } from 'react-dom';
 import { runInNewContext } from 'node:vm';
-import { describe, expect, it } from 'vitest';
-import { isToastOptions } from '../toaster';
+import { describe, expect, it, vi } from 'vitest';
+import { bindToasterHandle, createToaster, isToastOptions } from '../toaster';
 
 describe('isToastOptions (P3-01, D12)', () => {
   it.each([
@@ -60,5 +60,112 @@ describe('isToastOptions (P3-01, D12)', () => {
     ['an object from another realm', runInNewContext('({ title: "Saved" })') as unknown],
   ])('reads %s as options', (_, value) => {
     expect(isToastOptions(value)).toBe(true);
+  });
+});
+
+/** A controller whose calls the test reads (its parameters are wide, so it is a ToastController). */
+function fakeController() {
+  return {
+    dispatchToast: vi.fn<(first: unknown, second?: unknown) => string>(() => ''),
+    dismissToast: vi.fn<(id: string) => void>(),
+    dismissAllToasts: vi.fn<() => void>(),
+  };
+}
+
+describe('createToaster (P3-08, toaster-5)', () => {
+  it('returns ids at once, generated or given, unique across handles', () => {
+    const first = createToaster();
+    const second = createToaster();
+    const ids = [
+      first.dispatchToast({ title: 'One' }),
+      first.dispatchToast(React.createElement('span', null, 'Two')),
+      second.dispatchToast({ title: 'Three' }),
+    ];
+    expect(new Set(ids).size).toBe(3);
+    expect(ids.every((id) => id !== '')).toBe(true);
+    expect(first.dispatchToast({ toastId: 'given', title: 'Four' })).toBe('given');
+  });
+
+  it('queues dispatches until a Toaster binds, then replays them in order with their ids', () => {
+    const handle = createToaster();
+    const element = React.createElement('span', null, 'Two');
+    const one = handle.dispatchToast({ title: 'One' });
+    const two = handle.dispatchToast(element, { timeout: 0 });
+    const controller = fakeController();
+    expect(bindToasterHandle(handle, {}, controller).status).toBe('bound');
+    expect(controller.dispatchToast.mock.calls).toEqual([
+      [{ title: 'One', toastId: one }],
+      [element, { timeout: 0, toastId: two }],
+    ]);
+  });
+
+  it('replaces a waiting dispatch with the same id in place', () => {
+    const handle = createToaster();
+    handle.dispatchToast({ toastId: 'sync', title: 'Syncing…' });
+    handle.dispatchToast({ title: 'Other' });
+    handle.dispatchToast({ toastId: 'sync', title: 'Synced' });
+    const controller = fakeController();
+    bindToasterHandle(handle, {}, controller);
+    expect(controller.dispatchToast.mock.calls.map(([options]) => (options as { title: string }).title)).toEqual([
+      'Synced',
+      'Other',
+    ]);
+  });
+
+  it('removes a waiting toast with dismissToast, and every waiting toast with dismissAllToasts', () => {
+    const handle = createToaster();
+    const one = handle.dispatchToast({ title: 'One' });
+    handle.dispatchToast({ title: 'Two' });
+    handle.dismissToast(one);
+    const controller = fakeController();
+    bindToasterHandle(handle, {}, controller);
+    expect(controller.dispatchToast).toHaveBeenCalledTimes(1);
+
+    const other = createToaster();
+    other.dispatchToast({ title: 'Three' });
+    other.dismissAllToasts();
+    const otherController = fakeController();
+    bindToasterHandle(other, {}, otherController);
+    expect(otherController.dispatchToast).not.toHaveBeenCalled();
+  });
+
+  it('forwards to the bound controller at once', () => {
+    const handle = createToaster();
+    const controller = fakeController();
+    bindToasterHandle(handle, {}, controller);
+    const id = handle.dispatchToast({ title: 'Now' });
+    handle.dismissToast(id);
+    handle.dismissAllToasts();
+    expect(controller.dispatchToast.mock.calls).toEqual([[{ title: 'Now', toastId: id }]]);
+    expect(controller.dismissToast.mock.calls).toEqual([[id]]);
+    expect(controller.dismissAllToasts).toHaveBeenCalledTimes(1);
+  });
+
+  it('is not taken over by a second owner; unbound, it queues again for the next owner', () => {
+    const handle = createToaster();
+    const first = fakeController();
+    const binding = bindToasterHandle(handle, {}, first);
+    expect(bindToasterHandle(handle, {}, fakeController())).toEqual({ status: 'taken' });
+    if (binding.status === 'bound') binding.unbind();
+    handle.dispatchToast({ title: 'Waiting' });
+    expect(first.dispatchToast).not.toHaveBeenCalled();
+    const next = fakeController();
+    expect(bindToasterHandle(handle, {}, next).status).toBe('bound');
+    expect(next.dispatchToast).toHaveBeenCalledTimes(1);
+  });
+
+  it('takes the queue once when the same owner binds again (StrictMode)', () => {
+    const handle = createToaster();
+    const owner = {};
+    handle.dispatchToast({ title: 'Once' });
+    const controller = fakeController();
+    const first = bindToasterHandle(handle, owner, controller);
+    if (first.status === 'bound') first.unbind();
+    bindToasterHandle(handle, owner, controller);
+    expect(controller.dispatchToast).toHaveBeenCalledTimes(1);
+  });
+
+  it('reports an object that createToaster did not make as unknown', () => {
+    expect(bindToasterHandle(fakeController(), {}, fakeController())).toEqual({ status: 'unknown' });
   });
 });
