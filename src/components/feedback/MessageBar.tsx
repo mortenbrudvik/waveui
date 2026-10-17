@@ -1,4 +1,5 @@
 import * as React from 'react';
+import { joinIds } from '../../lib/aria';
 import { isElementOfType } from '../../lib/children';
 import { messageBarClassNames } from '../../lib/classNames';
 import { cn } from '../../lib/cn';
@@ -63,7 +64,8 @@ export interface MessageBarProps extends React.HTMLAttributes<HTMLDivElement> {
   onDismiss?: () => void;
   /**
    * Custom status icon, rendered decoratively (`aria-hidden="true"`, a slot object can override
-   * it) in the status color. `null` renders no icon.
+   * it) in the status color. Only `undefined` keeps the default status icon; `null`, or anything that
+   * renders nothing (`false`, `''`), shows no icon.
    */
   icon?: Slot<'span'>;
   /**
@@ -154,6 +156,29 @@ const NAMING_KEYS: ReadonlySet<string> = new Set(['aria-label', 'aria-labelledby
 const HANDLER_KEY = /^on[A-Z]/;
 
 const dismissContentClassName = 'inline-flex items-center justify-center';
+
+/** Live-region roles: a title is read as the start of their content, never as their name. */
+const LIVE_REGION_ROLES: ReadonlySet<string> = new Set([
+  'alert',
+  'status',
+  'log',
+  'marquee',
+  'timer',
+]);
+
+/** Roles that take no name. */
+const UNNAMED_ROLES: ReadonlySet<string> = new Set(['none', 'presentation', 'generic']);
+
+/** The first token of a `role` value (a list of fallback roles is read by its first). */
+function firstRoleToken(role: string | undefined): string | undefined {
+  return role?.trim().split(/\s+/)[0] || undefined;
+}
+
+/** Whether a title names a bar with this role (spec D16: a non-live role, such as region or group). */
+function isNamedByTitle(role: string | undefined): boolean {
+  const token = firstRoleToken(role);
+  return token !== undefined && !LIVE_REGION_ROLES.has(token) && !UNNAMED_ROLES.has(token);
+}
 
 interface DismissParts {
   /** Props merged onto the wired dismiss button. */
@@ -450,12 +475,39 @@ const MessageBarRoot = ({
   const { title, ownTitleId, actions, body } = partitionMessageBarChildren(children);
   const generatedTitleId = useId('wave-message-bar-title');
   const titlePlacement = useTitlePlacement(ownTitleId, generatedTitleId);
+  const titleId = titlePlacement.titleId;
+
+  // Labelling (D16). The role the bar renders: the consumer's when the prop is given (it is spread
+  // after the default, as in 0.7), else the status role. A live bar is read once, title included,
+  // and gets no name; a bar with a non-live role is named by the severity text and the title.
+  const defaultRole = status === 'error' || status === 'warning' ? 'alert' : 'status';
+  const role = 'role' in rest ? rest.role : defaultRole;
+  // A prop that holds `undefined` (a wrapper forwarding it) is no name of the consumer's.
+  const ownName = rest['aria-label'] !== undefined || rest['aria-labelledby'] !== undefined;
+  const statusText = getStatusLabel(status, statusLabel);
+  const statusTextId = useId('wave-message-bar-status');
+  const namedByTitle = title !== undefined && !ownName && isNamedByTitle(role);
+  // Written after the spread, so a forwarded `aria-labelledby={undefined}` cannot remove it.
+  const labelledBy = ownName
+    ? rest['aria-labelledby']
+    : namedByTitle
+      ? joinIds(statusText ? statusTextId : undefined, titleId)
+      : undefined;
+  const missingRegionName = firstRoleToken(role) === 'region' && title === undefined && !ownName;
+  React.useEffect(() => {
+    if (missingRegionName) {
+      warnOnce(
+        'MessageBar:region-name',
+        'MessageBar: a bar with role="region" is a landmark only when it has a name. Add a MessageBar.Title, or pass aria-label or aria-labelledby.',
+      );
+    }
+  }, [missingRegionName]);
 
   // The text column: the severity text, the title (and a space, so the two never run together),
   // then the body in its order.
   const text = (
     <div className={cn(messageBarClassNames.body, 'min-w-0 flex-1 text-body-1')}>
-      <StatusText label={getStatusLabel(status, statusLabel)} />
+      <StatusText id={namedByTitle && statusText ? statusTextId : undefined} label={statusText} />
       {title && (
         <MessageBarPartContext.Provider value={titlePlacement}>
           {title.element}
@@ -477,8 +529,9 @@ const MessageBarRoot = ({
   return (
     <div
       ref={ref}
-      role={status === 'error' || status === 'warning' ? 'alert' : 'status'}
+      role={defaultRole}
       {...rest}
+      aria-labelledby={labelledBy}
       className={cn(
         messageBarClassNames.root,
         'flex items-start gap-3 rounded border-s-4 px-4 py-3 text-foreground',

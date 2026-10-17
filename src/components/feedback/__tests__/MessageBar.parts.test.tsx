@@ -1,7 +1,7 @@
 import * as React from 'react';
 import { afterEach, describe, expect, expectTypeOf, it, vi } from 'vitest';
 import { renderToString } from 'react-dom/server';
-import { render, screen } from '@testing-library/react';
+import { render, screen, within } from '@testing-library/react';
 import { MessageBar, MessageBarActions, MessageBarTitle } from '../MessageBar';
 import type { MessageBarActionsProps, MessageBarTitleProps } from '../MessageBar';
 import { Button } from '../../button/Button';
@@ -12,7 +12,10 @@ import {
 } from '../../../lib/classNames';
 import {
   asClientReference,
+  expectNoA11yViolations,
   expectThrows,
+  findDanglingIdRefs,
+  findDanglingIdRefsInHtml,
   testCompoundExposure,
   testSystemProps,
 } from '../../../test-utils';
@@ -23,6 +26,9 @@ const ACTIONS_UNSCANNED =
   '[WaveUI] MessageBar.Actions is not a direct child of MessageBar, so it is not placed in the action area. Make it a direct child.';
 const TITLE_MULTIPLE =
   '[WaveUI] MessageBar.Title: this MessageBar already has a title (its first MessageBar.Title among its direct children), so this one renders as body text. Give a bar one title.';
+
+const REGION_NAME =
+  '[WaveUI] MessageBar: a bar with role="region" is a landmark only when it has a name. Add a MessageBar.Title, or pass aria-label or aria-labelledby.';
 
 /** Records `console.warn` for one test (restored after each test); assert what it recorded. */
 const spyOnWarn = () => vi.spyOn(console, 'warn').mockImplementation(() => {});
@@ -332,6 +338,158 @@ describe('MessageBar parts (P3-04)', () => {
         </MessageBar.Actions>,
         '[WaveUI] MessageBar.Actions must be used within <MessageBar>',
       );
+    });
+  });
+
+  describe('labelling (D16)', () => {
+    it('a live bar is not named by its title; the severity and the title are read first in its content', () => {
+      render(
+        <MessageBar status="warning">
+          <MessageBar.Title>Update available</MessageBar.Title>A new version is ready to install.
+        </MessageBar>,
+      );
+      const bar = screen.getByRole('alert');
+      expect(bar).not.toHaveAttribute('aria-labelledby');
+      expect(bar).toHaveAccessibleName('');
+      expect(textColumn(bar)).toHaveTextContent(
+        /^Warning:\s*Update available A new version is ready to install\.$/,
+      );
+      expect(within(bar).getByText('Warning:')).not.toHaveAttribute('id');
+    });
+
+    it.each(['region', 'group'] as const)(
+      'a bar with role="%s" is named by the severity and the title',
+      (role) => {
+        render(
+          <MessageBar status="warning" role={role}>
+            <MessageBar.Title>Update available</MessageBar.Title>
+            Install it tonight.
+          </MessageBar>,
+        );
+        expect(screen.getByRole(role, { name: 'Warning: Update available' })).toBeInTheDocument();
+        expect(findDanglingIdRefs()).toEqual([]);
+      },
+    );
+
+    it('names the bar through the consumer id of the title', () => {
+      render(
+        <MessageBar role="region">
+          <MessageBar.Title id="release-title">Release 4.2</MessageBar.Title>
+          Notes below.
+        </MessageBar>,
+      );
+      const bar = screen.getByRole('region', { name: 'Info: Release 4.2' });
+      expect(bar.getAttribute('aria-labelledby')?.split(' ')).toContain('release-title');
+    });
+
+    it('leaves the severity out of the name when statusLabel is empty', () => {
+      render(
+        <MessageBar status="warning" statusLabel="" role="region">
+          <MessageBar.Title id="t">Update available</MessageBar.Title>
+          Install it tonight.
+        </MessageBar>,
+      );
+      expect(screen.getByRole('region', { name: 'Update available' })).toHaveAttribute(
+        'aria-labelledby',
+        't',
+      );
+    });
+
+    it('lets a consumer aria-label or aria-labelledby win', () => {
+      const { unmount } = render(
+        <MessageBar role="region" aria-label="Release notes">
+          <MessageBar.Title>Update available</MessageBar.Title>
+          Install it tonight.
+        </MessageBar>,
+      );
+      expect(screen.getByRole('region', { name: 'Release notes' })).not.toHaveAttribute(
+        'aria-labelledby',
+      );
+      unmount();
+
+      render(
+        <>
+          <h2 id="notes-heading">Notes</h2>
+          <MessageBar role="region" aria-labelledby="notes-heading">
+            <MessageBar.Title>Update available</MessageBar.Title>
+            Install it tonight.
+          </MessageBar>
+        </>,
+      );
+      expect(screen.getByRole('region', { name: 'Notes' })).toHaveAttribute(
+        'aria-labelledby',
+        'notes-heading',
+      );
+    });
+
+    it('a forwarded aria-label={undefined} is not a name of the consumer', () => {
+      const warn = spyOnWarn();
+      render(
+        <MessageBar role="region" aria-label={undefined} aria-labelledby={undefined}>
+          <MessageBar.Title>Update available</MessageBar.Title>
+          Install it tonight.
+        </MessageBar>,
+      );
+      expect(screen.getByRole('region', { name: 'Info: Update available' })).toBeInTheDocument();
+      expect(warn).not.toHaveBeenCalled();
+    });
+
+    it('warns once about a region bar without a name', () => {
+      const warn = spyOnWarn();
+      render(<MessageBar role="region">Maintenance tonight.</MessageBar>);
+      expect(warn.mock.calls).toEqual([[REGION_NAME]]);
+    });
+
+    it('does not warn about a region bar named by its title or by the consumer', () => {
+      const warn = spyOnWarn();
+      render(
+        <>
+          <MessageBar role="region">
+            <MessageBar.Title>Maintenance</MessageBar.Title>
+            Tonight.
+          </MessageBar>
+          <MessageBar role="region" aria-label="Maintenance">
+            Tonight.
+          </MessageBar>
+        </>,
+      );
+      expect(warn).not.toHaveBeenCalled();
+    });
+
+    it('an empty title names nothing, so a region bar warns', () => {
+      const warn = spyOnWarn();
+      render(
+        <MessageBar role="region">
+          <MessageBar.Title>{''}</MessageBar.Title>
+          Tonight.
+        </MessageBar>,
+      );
+      expect(screen.getByRole('region')).not.toHaveAttribute('aria-labelledby');
+      expect(warn.mock.calls).toEqual([[REGION_NAME]]);
+    });
+
+    it('the server HTML of a titled region bar references only ids it contains', () => {
+      const html = renderToString(
+        <MessageBar role="region" status="error">
+          <MessageBar.Title>Sync paused</MessageBar.Title>
+          Reconnect to continue.
+        </MessageBar>,
+      );
+      expect(html).toContain('aria-labelledby=');
+      expect(findDanglingIdRefsInHtml(html)).toEqual([]);
+    });
+
+    it('has no accessibility violations: a region bar with a title and actions', async () => {
+      render(
+        <MessageBar role="region" status="warning" onDismiss={() => {}}>
+          <MessageBar.Title>Maintenance tonight</MessageBar.Title>
+          The service is unavailable from 22:00 to 23:00 UTC.
+          <MessageBar.Actions>
+            <Button>Details</Button>
+          </MessageBar.Actions>
+        </MessageBar>,
+      );
+      await expectNoA11yViolations();
     });
   });
 });
