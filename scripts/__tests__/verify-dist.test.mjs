@@ -1482,6 +1482,22 @@ describe('the 0.10 probes (INTEGRATION)', () => {
     ]);
   }, 30_000);
 
+  it('verifyDist reports a Calendar that imports the listbox hook (the CALENDAR_ONLY probe)', async () => {
+    const files = goodFiles();
+    const { dist } = fixture({
+      'dist/components/input/Calendar.mjs': files['dist/components/input/Calendar.mjs']
+        .replace(
+          "import { cn } from '../../lib/cn.mjs';\n",
+          "import { cn } from '../../lib/cn.mjs';\nimport { useListbox } from '../../hooks/useListbox.mjs';\n",
+        )
+        .replace('return cn(', 'useListbox(); return cn('),
+    });
+    const { errors } = await verifyDist(dist, noPending);
+    expect(errors).toEqual([
+      'hooks/useListbox.mjs is in the bundle of an import of only Calendar (Dropdown must be dropped)',
+    ]);
+  }, 30_000);
+
   it('reports a missing lib/date module', async () => {
     const errors = await checkServerImport(fixture({ 'dist/lib/date.cjs': null }).dist);
     expect(errors).toEqual(['lib/date.cjs is missing']);

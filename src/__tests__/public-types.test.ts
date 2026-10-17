@@ -14,6 +14,7 @@
 import { isAbsolute, relative, resolve, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import type {
+  ComponentProps,
   Dispatch,
   HTMLAttributes,
   KeyboardEventHandler,
@@ -30,6 +31,8 @@ import ts from 'typescript';
 import { describe, expect, expectTypeOf, it } from 'vitest';
 import type {
   AccordionBaseProps,
+  addDays,
+  addMonths,
   AccordionMultipleProps,
   AccordionSingleProps,
   AlphaSliderLabels,
@@ -40,6 +43,9 @@ import type {
   BreadcrumbItemOwnProps,
   buttonClassNames,
   ButtonProps,
+  CalendarLabels,
+  CalendarProps,
+  CalendarValueChangeDetails,
   CheckboxLabelPosition,
   CheckboxProps,
   CheckedValues,
@@ -56,10 +62,14 @@ import type {
   ColorPickerSwatchesProps,
   ColorSliderLabels,
   ColorSliderProps,
+  ColorSwatchProps,
+  Combobox,
+  ComboboxComponent,
   ComboboxLabels,
   ComboboxProps,
   CompoundButtonProps,
   CounterBadgeProps,
+  DatePickerLabels,
   DayOfWeek,
   DialogModalType,
   DialogOpenChangeDetails,
@@ -69,23 +79,34 @@ import type {
   DrawerOpenChangeDetails,
   DrawerOpenChangeReason,
   DrawerProps,
+  Dropdown,
+  DropdownComponent,
   DropdownLabels,
   DropdownProps,
+  EmptySwatchProps,
   FieldContextValue,
   FieldControlIdClaim,
   FieldProps,
   FirstWeekOfYear,
+  getWeekNumber,
+  GetWeekNumberOptions,
   HsvColor,
   IconPosition,
+  ImageSwatchProps,
+  isSameDay,
   LabelPosition,
   LinkProps,
+  Listbox,
   ListboxComboboxProps,
+  ListboxComponent,
   ListboxContextValue,
   ListboxElementKind,
   ListboxItem,
+  ListboxLabels,
   ListboxListProps,
   ListboxOpenChangeReason,
   ListboxOptionElementProps,
+  ListboxProps,
   ListboxProvider,
   ListboxProviderProps,
   ListboxSelectDetails,
@@ -123,6 +144,7 @@ import type {
   NavSubItemButtonProps,
   NavSubItemOwnProps,
   OpenChangeDetails,
+  OptionGroupProps,
   Orientation,
   PopoverProps,
   PopoverTriggerChildProps,
@@ -138,6 +160,7 @@ import type {
   SearchBoxInputProps,
   SearchBoxProps,
   SelectionMode,
+  SelectionRange,
   Size,
   Slot,
   SpinButtonInputProps,
@@ -146,7 +169,12 @@ import type {
   SpinnerProps,
   SplitButtonMenuButtonProps,
   SplitButtonProps,
+  startOfWeek,
   Status,
+  SwatchPickerLabels,
+  SwatchPickerProps,
+  SwatchPickerRowProps,
+  SwatchPickerSize,
   SwitchLabelPosition,
   SwitchProps,
   TabListProps,
@@ -919,6 +947,89 @@ describe('0.10 listbox primitives, useActiveDescendant and the date types from t
     expectTypeOf<DayOfWeek>().toEqualTypeOf<0 | 1 | 2 | 3 | 4 | 5 | 6>();
     expectTypeOf<FirstWeekOfYear>().toEqualTypeOf<
       'first-day' | 'first-full-week' | 'first-four-day-week'
+    >();
+  });
+
+  it('Dropdown, Combobox and Listbox: the single-select shape is the default, multiselect a literal', () => {
+    expectTypeOf<ComponentProps<typeof Dropdown>>().toEqualTypeOf<DropdownProps>();
+    expectTypeOf<ComponentProps<typeof Combobox>>().toEqualTypeOf<ComboboxProps>();
+    expectTypeOf<ComponentProps<typeof Listbox>>().toEqualTypeOf<ListboxProps>();
+    expectTypeOf<typeof Dropdown>().toExtend<DropdownComponent>();
+    expectTypeOf<typeof Combobox>().toExtend<ComboboxComponent>();
+    expectTypeOf<typeof Listbox>().toExtend<ListboxComponent>();
+    expectTypeOf<DropdownProps['value']>().toEqualTypeOf<string | undefined>();
+    expectTypeOf<DropdownProps<true>['value']>().toEqualTypeOf<readonly string[] | undefined>();
+    expectTypeOf<ListboxProps['value']>().toEqualTypeOf<string | undefined>();
+    expectTypeOf<ListboxProps<true>['value']>().toEqualTypeOf<readonly string[] | undefined>();
+    expectTypeOf<ComboboxProps['freeform']>().toEqualTypeOf<boolean | undefined>();
+    // A `never`-typed member (not an absent key), so ComboboxProps stays an extendable interface.
+    expectTypeOf<ComboboxProps<true>['freeform']>().toEqualTypeOf<undefined>();
+    // freeform is not available with multiselect.
+    expectTypeOf<{ freeform: true }>().not.toExtend<ComboboxProps<true>>();
+    // A boolean variable matches neither call signature.
+    expectTypeOf<{ multiselect: boolean }>().not.toExtend<DropdownProps>();
+    expectTypeOf<{ multiselect: boolean }>().not.toExtend<
+      DropdownProps<true> & { multiselect: true }
+    >();
+    // A generic interface can extend ComboboxProps, as DropdownProps does.
+    interface WrappedComboboxProps<M extends boolean = false> extends ComboboxProps<M> {
+      wrapperLabel?: string;
+    }
+    expectTypeOf<WrappedComboboxProps['freeform']>().toEqualTypeOf<boolean | undefined>();
+    expectTypeOf<WrappedComboboxProps<true>['freeform']>().toEqualTypeOf<undefined>();
+    expectTypeOf<ListboxLabels['added']>().toEqualTypeOf<
+      ((label: string, count: number) => string) | undefined
+    >();
+  });
+
+  it('SwatchPicker: the extra-small size, optional items and the swatch props', () => {
+    expectTypeOf<'extra-small'>().toExtend<SwatchPickerSize>();
+    expectTypeOf<SwatchPickerSize>().toEqualTypeOf<'extra-small' | 'small' | 'medium' | 'large'>();
+    expectTypeOf<Partial<Pick<SwatchPickerProps, 'items'>>>().toEqualTypeOf<
+      Pick<SwatchPickerProps, 'items'>
+    >();
+    expectTypeOf<SwatchPickerProps['layout']>().toEqualTypeOf<'row' | 'grid' | undefined>();
+    expectTypeOf<SwatchPickerProps['focusMode']>().toEqualTypeOf<'arrow' | 'tab' | undefined>();
+    expectTypeOf<SwatchPickerProps['labels']>().toEqualTypeOf<SwatchPickerLabels | undefined>();
+    expectTypeOf<SwatchPickerLabels['required']>().toEqualTypeOf<string | undefined>();
+    expectTypeOf<SwatchPickerRowProps['ref']>().toEqualTypeOf<Ref<HTMLDivElement> | undefined>();
+    expectTypeOf<ColorSwatchProps['color']>().toEqualTypeOf<string>();
+    expectTypeOf<ImageSwatchProps['src']>().toEqualTypeOf<string>();
+    expectTypeOf<EmptySwatchProps['size']>().toEqualTypeOf<SwatchPickerSize | undefined>();
+  });
+
+  it('OptionGroup: the label is an optional ReactNode', () => {
+    expectTypeOf<OptionGroupProps['label']>().toEqualTypeOf<ReactNode>();
+    expectTypeOf<Partial<Pick<OptionGroupProps, 'label'>>>().toEqualTypeOf<
+      Pick<OptionGroupProps, 'label'>
+    >();
+  });
+
+  it('Calendar: the value callback, the labels DatePicker extends and the selection range', () => {
+    expectTypeOf<NonNullable<CalendarProps['onValueChange']>>().parameters.toEqualTypeOf<
+      [date: Date | null, details?: CalendarValueChangeDetails]
+    >();
+    expectTypeOf<DatePickerLabels>().toExtend<CalendarLabels>();
+    expectTypeOf<CalendarProps['firstDayOfWeek']>().toEqualTypeOf<DayOfWeek | undefined>();
+    expectTypeOf<NonNullable<CalendarProps['selectionRange']>>().toEqualTypeOf<SelectionRange>();
+    expectTypeOf<SelectionRange>().toEqualTypeOf<'day' | 'week' | 'work-week' | 'month'>();
+  });
+
+  it('the date helpers: their signatures', () => {
+    expectTypeOf<typeof addDays>().toEqualTypeOf<(date: Date, amount: number) => Date>();
+    expectTypeOf<typeof addMonths>().toEqualTypeOf<(date: Date, amount: number) => Date>();
+    expectTypeOf<typeof isSameDay>().toEqualTypeOf<
+      (a: Date | null | undefined, b: Date | null | undefined) => boolean
+    >();
+    expectTypeOf<typeof startOfWeek>().toEqualTypeOf<
+      (date: Date, firstDayOfWeek?: DayOfWeek) => Date
+    >();
+    expectTypeOf<typeof getWeekNumber>().toEqualTypeOf<
+      (date: Date, options?: GetWeekNumberOptions) => number
+    >();
+    expectTypeOf<GetWeekNumberOptions['firstDayOfWeek']>().toEqualTypeOf<DayOfWeek | undefined>();
+    expectTypeOf<GetWeekNumberOptions['firstWeekOfYear']>().toEqualTypeOf<
+      FirstWeekOfYear | undefined
     >();
   });
 });
