@@ -1,5 +1,5 @@
 import * as React from 'react';
-import { swatchPickerClassNames } from '../../lib/classNames';
+import { swatchPickerClassNames, swatchPickerRowClassNames } from '../../lib/classNames';
 import { cn } from '../../lib/cn';
 import { composeEventHandlers } from '../../lib/composeEventHandlers';
 import { joinIds } from '../../lib/aria';
@@ -152,6 +152,7 @@ export const SwatchPickerRow = ({ className, ref, ...rest }: SwatchPickerRowProp
       {...rest}
       ref={ref}
       className={cn(
+        swatchPickerRowClassNames.root,
         // The grid layout's rows never wrap: Up and Down would not reach a wrapped swatch.
         layout === 'grid' ? 'flex' : 'flex basis-full flex-wrap',
         gap,
@@ -320,9 +321,6 @@ const SwatchPickerRoot = ({
       value={item.value}
       color={item.color}
       aria-label={item.label || item.color}
-      // The swatches of `items` carry the picker's `swatch` part class (0.8), as they did when
-      // the picker drew them itself.
-      className={swatchPickerClassNames.swatch}
     />
   ));
 

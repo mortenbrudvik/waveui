@@ -1,4 +1,10 @@
 import * as React from 'react';
+import {
+  colorSwatchClassNames,
+  emptySwatchClassNames,
+  imageSwatchClassNames,
+  swatchPickerClassNames,
+} from '../../lib/classNames';
 import { cn } from '../../lib/cn';
 import { composeEventHandlers } from '../../lib/composeEventHandlers';
 import { warnOnce } from '../../lib/dev';
@@ -222,6 +228,10 @@ interface SwatchRadioProps extends Omit<
   'value' | 'color'
 > {
   kind: 'ColorSwatch' | 'ImageSwatch';
+  /** The kind's stable root class, named by the module that sets its `displayName` (P3-00). */
+  rootClassName: string;
+  /** The kind's stable `icon` part class (ColorSwatch only). */
+  iconClassName?: string;
   value: string;
   /** What names the swatch when it has no name: 'color value' or 'value' (the warning's text). */
   fallbackKind: string;
@@ -244,6 +254,8 @@ interface SwatchRadioProps extends Omit<
 /** The radio button shared by `ColorSwatch` and `ImageSwatch`. */
 const SwatchRadio = ({
   kind,
+  rootClassName,
+  iconClassName,
   value,
   fallbackKind,
   defaultName,
@@ -301,6 +313,9 @@ const SwatchRadio = ({
       tabIndex={getTabIndex(value)}
       onClick={composeEventHandlers(onClick, () => select(value))}
       className={cn(
+        rootClassName,
+        // Every swatch in a picker carries the picker's part class, children included (0.8).
+        swatchPickerClassNames.swatch,
         swatchBaseClasses(size, shape, spacing),
         // A `borderColor` arrives as a variable, so the forced-colors edge below still wins.
         'border-[color:var(--wave-swatch-border,transparent)]',
@@ -327,7 +342,7 @@ const SwatchRadio = ({
       ) : (
         glyph != null &&
         slotRendersContent(glyph) &&
-        renderSlot(glyph, 'span', 'pointer-events-none inline-flex', {
+        renderSlot(glyph, 'span', cn(iconClassName, 'pointer-events-none inline-flex'), {
           'aria-hidden': true,
           style: checkColors ? { color: checkColors.glyph } : undefined,
         })
@@ -362,6 +377,8 @@ export const ColorSwatch = ({ color, borderColor, ...rest }: ColorSwatchProps) =
     <SwatchRadio
       {...rest}
       kind="ColorSwatch"
+      rootClassName={colorSwatchClassNames.root}
+      iconClassName={colorSwatchClassNames.icon}
       fallbackKind="color value"
       defaultName={color}
       checkColors={getCheckColors(color)}
@@ -419,6 +436,7 @@ export const ImageSwatch = ({ src, ...rest }: ImageSwatchProps) => {
     <SwatchRadio
       {...rest}
       kind="ImageSwatch"
+      rootClassName={imageSwatchClassNames.root}
       fallbackKind="value"
       defaultName={rest.value}
       checkColors={null}
@@ -511,6 +529,8 @@ export const EmptySwatch = ({
       data-wave-empty-swatch=""
       {...(isGrid && { 'data-roving-value': cellValue, tabIndex: getTabIndex(cellValue) })}
       className={cn(
+        emptySwatchClassNames.root,
+        swatchPickerClassNames.swatch,
         swatchBaseClasses(size, shape, spacing),
         'border-dashed border-stroke-accessible bg-transparent text-foreground',
         forcedColors.control,
@@ -519,7 +539,14 @@ export const EmptySwatch = ({
       )}
     >
       {slotRendersContent(content) &&
-        renderSlot(content, 'span', 'pointer-events-none inline-flex', { 'aria-hidden': true })}
+        renderSlot(
+          content,
+          'span',
+          cn(emptySwatchClassNames.icon, 'pointer-events-none inline-flex'),
+          {
+            'aria-hidden': true,
+          },
+        )}
     </button>
   );
   return isGrid ? <SwatchGridCell>{control}</SwatchGridCell> : control;

@@ -1,5 +1,9 @@
 import * as React from 'react';
-import { optionClassNames, optionGroupClassNames } from '../../lib/classNames';
+import {
+  listboxSurfaceClassNames,
+  optionClassNames,
+  optionGroupClassNames,
+} from '../../lib/classNames';
 import { cn } from '../../lib/cn';
 import { composeEventHandlers } from '../../lib/composeEventHandlers';
 import { hasWarned, isDev, warnOnce } from '../../lib/dev';
@@ -210,6 +214,7 @@ function renderCheck(
       aria-hidden="true"
       data-wave-option-box=""
       className={cn(
+        optionClassNames.indicator,
         'flex h-4 w-4 shrink-0 items-center justify-center rounded-xs border',
         boxClasses,
       )}
@@ -738,7 +743,11 @@ export function ListboxSurface(props: ListboxSurfaceProps) {
           aria-label={ariaLabel}
           aria-labelledby={ariaLabelledBy}
           hidden={!expanded || undefined}
-          className={cn('min-h-0 max-h-60 overflow-auto', listClassName)}
+          className={cn(
+            listboxSurfaceClassNames.list,
+            'min-h-0 max-h-60 overflow-auto',
+            listClassName,
+          )}
         >
           {children}
         </ul>
@@ -760,6 +769,7 @@ export function ListboxSurface(props: ListboxSurfaceProps) {
           data-wave-listbox-surface=""
           onMouseDown={preventMouseDown}
           className={cn(
+            listboxSurfaceClassNames.root,
             'flex flex-col overflow-hidden rounded border border-border bg-background py-1 text-foreground shadow-4',
             surfaceClassName,
           )}

@@ -144,6 +144,7 @@ const NO_ELEMENT: readonly string[] = [
   'DialogTrigger', // clones its child
   'DrawerClose', // clones its child
   'DrawerTrigger', // clones its child
+  'ListboxProvider', // a context provider: the custom picker renders the list (phase 5)
   'MenuTrigger', // clones its child
   'Popover', // a context provider: Popover.Content renders the surface
   'PopoverTrigger', // clones its child
@@ -155,8 +156,18 @@ const NO_ELEMENT: readonly string[] = [
  * Constants and keys that a later wave applies (spec §0.2 rule 24, §1.4.3): the "applied" check
  * skips them. Empty since wave C of 0.8, when every Phase 3 part landed. A later phase that
  * registers parts before they exist lists them here and empties the list when they land.
+ *
+ * Phase 5 (0.10) lists the constants of components that are built and carry their classes but
+ * are not exported from the entry yet, so the check that every constant names a public component
+ * skips them; its INTEGRATION wave exports them and empties the list. The stable-class tests of
+ * `src/components/input/__tests__/stableClassNames.test.tsx` cover their elements meanwhile.
  */
-const PENDING_CLASS_NAMES: readonly string[] = [];
+const PENDING_CLASS_NAMES: readonly string[] = [
+  'colorSwatchClassNames',
+  'emptySwatchClassNames',
+  'imageSwatchClassNames',
+  'listboxClassNames',
+];
 
 const isPending = (name: string, key?: string): boolean =>
   PENDING_CLASS_NAMES.includes(name) ||

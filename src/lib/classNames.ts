@@ -440,23 +440,41 @@ export const spinButtonClassNames = {
 } as const;
 
 /**
- * Option (also Combobox.Option and Dropdown.Option): `root` on the `role="option"` element;
- * `checkIcon` on the check `<svg>`; `content` on the content span.
+ * Option (also Combobox.Option, Dropdown.Option and Listbox.Option): `root` on the `role="option"`
+ * element; `indicator` on the checkbox square of a multi-select list; `checkIcon` on the check
+ * `<svg>`, or on the span of your `checkIcon` (inside the square in a multi-select list);
+ * `content` on the content span.
  */
 export const optionClassNames = {
   root: 'wave-option',
+  indicator: 'wave-option__indicator',
   checkIcon: 'wave-option__check-icon',
   content: 'wave-option__content',
 } as const;
 
 /**
- * OptionGroup (also Combobox.OptionGroup and Dropdown.OptionGroup): `root` on the group's entry
- * in the list; `label` on its heading; `list` on the `role="group"` list of its options.
+ * OptionGroup (also Combobox.OptionGroup, Dropdown.OptionGroup and Listbox.OptionGroup): `root`
+ * on the group's entry in the list; `label` on its heading (rendered only for a `label`); `list`
+ * on the `role="group"` list of its options.
  */
 export const optionGroupClassNames = {
   root: 'wave-option-group',
   label: 'wave-option-group__label',
   list: 'wave-option-group__list',
+} as const;
+
+/** Listbox: `root` on the `role="listbox"` list (its options carry Option's classes). */
+export const listboxClassNames = { root: 'wave-listbox' } as const;
+
+/**
+ * ListboxSurface: `root` on the portaled popup around the list, while it shows the list or the
+ * empty content; `list` on the `role="listbox"` list, also while it renders in place inside your
+ * picker. In Combobox, Dropdown and TagPicker these elements also carry the picker's own
+ * `surface` and `listbox` classes.
+ */
+export const listboxSurfaceClassNames = {
+  root: 'wave-listbox-surface',
+  list: 'wave-listbox-surface__list',
 } as const;
 
 /**
@@ -556,10 +574,42 @@ export const datePickerClassNames = {
   day: 'wave-date-picker__day',
 } as const;
 
-/** SwatchPicker: `root` on the `role="radiogroup"` element; `swatch` on each `role="radio"` button. */
+/**
+ * SwatchPicker: `root` on the picker element (`role="radiogroup"`, or `role="grid"` in the grid
+ * layout); `swatch` on the button of every swatch in it (`items`, and the `ColorSwatch`,
+ * `ImageSwatch` and `EmptySwatch` children, next to their own classes).
+ */
 export const swatchPickerClassNames = {
   root: 'wave-swatch-picker',
   swatch: 'wave-swatch-picker__swatch',
+} as const;
+
+/**
+ * SwatchPicker.Row: `root` on the row element (`role="row"` in the grid layout), also on the rows
+ * the picker adds around `items` and loose swatches.
+ */
+export const swatchPickerRowClassNames = { root: 'wave-swatch-picker-row' } as const;
+
+/**
+ * ColorSwatch (also the swatches of SwatchPicker's `items`; carries SwatchPicker's `swatch`):
+ * `root` on the swatch `<button>`, where `className` lands in every layout; `icon` on the span of
+ * your `icon`.
+ */
+export const colorSwatchClassNames = {
+  root: 'wave-color-swatch',
+  icon: 'wave-color-swatch__icon',
+} as const;
+
+/** ImageSwatch (carries SwatchPicker's `swatch`): `root` on the swatch `<button>`. */
+export const imageSwatchClassNames = { root: 'wave-image-swatch' } as const;
+
+/**
+ * EmptySwatch (carries SwatchPicker's `swatch`): `root` on the `<button>`; `icon` on the span of
+ * its glyph (the plus, or your `icon`).
+ */
+export const emptySwatchClassNames = {
+  root: 'wave-empty-swatch',
+  icon: 'wave-empty-swatch__icon',
 } as const;
 
 /**

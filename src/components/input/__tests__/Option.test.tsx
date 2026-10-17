@@ -19,6 +19,7 @@ import { Dropdown } from '../Dropdown';
 import { collectOptionLabels, useListbox } from '../../../hooks/useListbox';
 import { DismissLayerProvider, useDismiss } from '../../../hooks/useDismiss';
 import { useMergedRefs } from '../../../hooks/useMergedRefs';
+import { listboxSurfaceClassNames } from '../../../lib/classNames';
 import type { Slot } from '../../../lib/slot';
 import {
   asClientReference,
@@ -1093,11 +1094,12 @@ describe('Option parts for custom pickers (option-2, option-3, listbox-2)', () =
       const user = userEvent.setup();
       render(<FontPicker />);
       await user.click(fontButton());
+      // The stable classes (P3-00) come first, then the 0.7 utilities unchanged.
       expect(screen.getByRole('listbox', { name: 'Fonts' }).className).toBe(
-        'min-h-0 max-h-60 overflow-auto',
+        `${listboxSurfaceClassNames.list} min-h-0 max-h-60 overflow-auto`,
       );
       expect(fontSurface()?.className).toBe(
-        'flex flex-col overflow-hidden rounded border border-border bg-background py-1 text-foreground shadow-4',
+        `${listboxSurfaceClassNames.root} flex flex-col overflow-hidden rounded border border-border bg-background py-1 text-foreground shadow-4`,
       );
     });
 

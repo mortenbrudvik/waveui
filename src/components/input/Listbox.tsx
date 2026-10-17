@@ -1,4 +1,5 @@
 import * as React from 'react';
+import { listboxClassNames } from '../../lib/classNames';
 import { cn } from '../../lib/cn';
 import { composeEventHandlers } from '../../lib/composeEventHandlers';
 import { warnOnce } from '../../lib/dev';
@@ -317,6 +318,7 @@ const ListboxRoot = (props: ListboxProps<boolean>) => {
       onFocus={composeEventHandlers(onFocus, handleFocus, { checkDefaultPrevented: false })}
       onBlur={composeEventHandlers(onBlur, handleBlur, { checkDefaultPrevented: false })}
       className={cn(
+        listboxClassNames.root,
         // The list's own margin, padding and markers are set here, not left to the native reset
         // (C-NATIVE).
         'relative m-0 flex list-none flex-col overflow-y-auto px-0 py-1 text-foreground',
