@@ -55,6 +55,7 @@ export type {
   WaveTheme,
   WaveDir,
   WaveContextValue,
+  InputDefaults,
 } from './components/provider/WaveProvider';
 
 // Portal

@@ -1,10 +1,16 @@
 import type { Meta, StoryObj } from '@storybook/react';
 import { fn } from 'storybook/test';
 import { Textarea } from '../src';
+import { coreSizeArgType, inputAppearanceArgType } from './_helpers';
+import { SizeAppearanceGrid } from './_grids';
 
 const meta = {
   title: 'Components/Input/Textarea',
   component: Textarea,
+  argTypes: {
+    ...coreSizeArgType,
+    ...inputAppearanceArgType,
+  },
   args: {
     'aria-label': 'Message',
     placeholder: 'Enter your message...',
@@ -31,4 +37,20 @@ export const Disabled: Story = {
     placeholder: 'Disabled',
     disabled: true,
   },
+};
+
+export const SizesAndAppearances: Story = {
+  render: (args) => (
+    <SizeAppearanceGrid
+      render={(size, appearance) => (
+        <Textarea
+          {...args}
+          rows={2}
+          size={size}
+          appearance={appearance}
+          aria-label={`${size} ${appearance}`}
+        />
+      )}
+    />
+  ),
 };

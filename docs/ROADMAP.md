@@ -1,11 +1,12 @@
 # WaveUI roadmap: Fluent UI v9 parity
 
-- **Status:** plan of record from 0.6.0 to 1.0.0. Written 2026-09-25 on `feat/fluent-parity`; revised the same day after three reviews (conventions, sequencing, Phase 1 against the code). Review points that were not applied are listed with reasons in the Phase 1 spec, §8. **Phase 1 (0.6.0) and Phase 2 (0.7.0) are released** in 0.7.0 (CHANGELOG `## [0.7.0] - 2026-09-26`), the first npm release since 0.4.0: 0.5.0 and 0.6.0 were never published on their own (CHANGELOG `## [0.6.0] - Not published (ships in 0.7.0)`). Phase 2's design spec is [`docs/superpowers/specs/2026-09-26-fluent-parity-phase-2-design.md`](superpowers/specs/2026-09-26-fluent-parity-phase-2-design.md). **Phase 3 (0.8.0) is released** (CHANGELOG `## [0.8.0] - 2026-10-17`); its design spec, [`docs/superpowers/specs/2026-09-26-fluent-parity-phase-3-design.md`](superpowers/specs/2026-09-26-fluent-parity-phase-3-design.md), records where it changed the Phase 3 sketches below. This line marks each phase released when its version ships. Revised again on 2026-09-26 for the GitHub issues [#4](https://github.com/mortenbrudvik/waveui/issues/4) to [#7](https://github.com/mortenbrudvik/waveui/issues/7), filed from taskboard, an app built on WaveUI: P3-08 (a toaster handle) and P4-05 (a system theme) are new; P6-04, P6-06 and P7-02 take up the issues' TagPicker, Dialog and notification-region proposals; the Dialog's viewport gap and body text colour were fixed outside the phases (CHANGELOG 0.8.0).
+- **Status:** plan of record from 0.6.0 to 1.0.0. Written 2026-09-25 on `feat/fluent-parity`; revised the same day after three reviews (conventions, sequencing, Phase 1 against the code). Review points that were not applied are listed with reasons in the Phase 1 spec, §8. **Phase 1 (0.6.0) and Phase 2 (0.7.0) are released** in 0.7.0 (CHANGELOG `## [0.7.0] - 2026-09-26`), the first npm release since 0.4.0: 0.5.0 and 0.6.0 were never published on their own (CHANGELOG `## [0.6.0] - Not published (ships in 0.7.0)`). Phase 2's design spec is [`docs/superpowers/specs/2026-09-26-fluent-parity-phase-2-design.md`](superpowers/specs/2026-09-26-fluent-parity-phase-2-design.md). **Phase 3 (0.8.0) is released** (CHANGELOG `## [0.8.0] - 2026-10-17`); its design spec, [`docs/superpowers/specs/2026-09-26-fluent-parity-phase-3-design.md`](superpowers/specs/2026-09-26-fluent-parity-phase-3-design.md), records where it changed the Phase 3 sketches below. **Phase 4 (0.9.0) is implemented** on `feat/fluent-parity-phase-4` in parallel with Phase 3 (which is merged into it, with the 0.8.0 release), and is unreleased; its design spec is [`docs/superpowers/specs/2026-09-26-fluent-parity-phase-4-design.md`](superpowers/specs/2026-09-26-fluent-parity-phase-4-design.md). This line marks each phase released when its version ships. Revised again on 2026-09-26 for the GitHub issues [#4](https://github.com/mortenbrudvik/waveui/issues/4) to [#7](https://github.com/mortenbrudvik/waveui/issues/7), filed from taskboard, an app built on WaveUI: P3-08 (a toaster handle) and P4-05 (a system theme) are new; P6-04, P6-06 and P7-02 take up the issues' TagPicker, Dialog and notification-region proposals; the Dialog's viewport gap and body text colour were fixed outside the phases (CHANGELOG 0.8.0).
 - **Baseline:** `@mortenbrudvik/waveui` 0.5.0 (merged to `main`; never published on its own, it ships in 0.7.0) against `@fluentui/react-components` 9.74.9.
 - **Inputs:** the verified comparison report [`docs/research/fluent-ui-v9-comparison.md`](research/fluent-ui-v9-comparison.md) and its gap list (475 gaps: 7 high, 135 medium, 333 low). Every gap id below (`buttons-3`, `menu-10`, …) is an id of that list.
 - **Phase 1 design:** [`docs/superpowers/specs/2026-09-25-fluent-parity-phase-1-design.md`](superpowers/specs/2026-09-25-fluent-parity-phase-1-design.md) (0.6.0, implemented; released in 0.7.0).
 - **Phase 2 design:** [`docs/superpowers/specs/2026-09-26-fluent-parity-phase-2-design.md`](superpowers/specs/2026-09-26-fluent-parity-phase-2-design.md) (0.7.0, released 2026-09-26). Every later phase gets its own design spec before work starts (see [Process](#3-process-per-release)).
 - **Phase 3 design:** [`docs/superpowers/specs/2026-09-26-fluent-parity-phase-3-design.md`](superpowers/specs/2026-09-26-fluent-parity-phase-3-design.md) (0.8.0, released 2026-10-17).
+- **Phase 4 design:** [`docs/superpowers/specs/2026-09-26-fluent-parity-phase-4-design.md`](superpowers/specs/2026-09-26-fluent-parity-phase-4-design.md) (0.9.0, implemented; unreleased).
 
 How to read this document:
 - **Phases** are releases (minor versions after 0.5.0, then 1.0.0). A phase has a theme, epics, entry and exit criteria.
@@ -69,7 +70,7 @@ These come from section 6 of the report. Parity work must not regress them: an i
 
 ## 3. Process per release
 
-- **Entry criteria (every phase):** the previous phase is merged to `main` with a green final gate, released or not (only Phase 14 waits for the release of 0.18.0); this phase's design spec is written, reviewed and approved; open questions of the spec are answered by the maintainer.
+- **Entry criteria (every phase):** the previous phase is merged to `main` with a green final gate, released or not (only Phase 14 waits for the release of 0.18.0). A phase that depends on no item of the phase before it may be designed and implemented in parallel with it, on its own branch; it merges after that phase, with that phase merged into its branch first and its gate run again (Phase 4 ran next to Phase 3). This phase's design spec is written, reviewed and approved; open questions of the spec are answered by the maintainer.
 - **Exit criteria (every phase):** every item's acceptance criteria are met and covered by tests; the full gate passes (`npm run typecheck`, `npm run lint`, `npm run format:check`, `npm test`, `npm run build`, `node scripts/verify-dist.mjs --final`, `npm run check:package`, `npm run test:pack`, `npm run build-storybook`); the CHANGELOG section is complete (Added, Changed, Deprecated); README, guide and `CLAUDE.md` are updated; the size report is in the CHANGELOG; no conventions-gate exception was added without a written reason.
 - **Release:** a phase ships when its release commit (version set, CHANGELOG section dated `## [x.y.0] - YYYY-MM-DD`) is merged to `main` and tagged `vx.y.0`: the tag runs the release workflow, which checks the tag, runs the full gate again, publishes to npm with provenance and creates the GitHub release ([`docs/RELEASING.md`](RELEASING.md)).
 - **Execution** follows the 0.5 model: a foundation package first, then component packages with disjoint file ownership in parallel, then INTEGRATION (barrels, cross-component tests, `verify-dist` flat names), then DOCS, then the final gate. A parallel package tests only against the foundation and its own files; a case that needs two parallel packages at once is an INTEGRATION test. A shared type whose widening breaks a module (a `Record<Union, …>` map) is widened by the package that owns that module. Agents never run git write commands; the lead commits per package.
@@ -482,6 +483,7 @@ Goal: trees support multi-select and row actions.
 
 **Theme.** Every text input and picker gets Fluent's sizes and appearances through one shared recipe; value controls reach Fluent's feature set; InfoLabel works as a Field label; the theme can follow the operating system (P4-05, added from a GitHub issue).
 **Entry:** 0.8.0 merged to `main`; spec approved (token additions reviewed for contrast). **Exit:** process criteria; README "Forms and Field" and the guide's input section updated.
+**Spec:** [`docs/superpowers/specs/2026-09-26-fluent-parity-phase-4-design.md`](superpowers/specs/2026-09-26-fluent-parity-phase-4-design.md) (implemented, unreleased). The sketches below are the plan; where the spec changed one, a **Changed by the spec** line names the ruling (D-numbers are the spec's §0.3).
 
 #### Epic 4.1 — Size and appearance
 
@@ -490,6 +492,7 @@ Goal: one input style recipe with three sizes and four appearances for every tex
 - **P4-01 `size` and `appearance` for inputs and pickers.**
   - **Closes:** `form-basic-10` (M), `form-basic-11` (M), `combobox-3` (M), `dropdown-3` (M), `tagpicker-7` (M), `datepicker-8` (M), `timepicker-7` (M), `form-basic-14` (L), `form-basic-26` (L), `form-basic-36` (L), `form-basic-38` (L), `form-basic-4` (L), `field-5` (L), `foundation-4` (L), `form-basic-31` (L), `form-basic-18` (L), `form-basic-23` (L).
   - **API sketch:** `src/lib/types.ts` gains `CoreSize = Extract<Size, 'small' | 'medium' | 'large'>` (the three-step size, reused by Card P8-05, TabList P8-07 and Breadcrumb P9-02) and `InputAppearance = 'outline' | 'underline' | 'filled-darker' | 'filled-lighter'`. Input, Textarea, Select, SpinButton, SearchBox, Combobox, Dropdown, DatePicker and TimePicker take `size?: CoreSize` (24/32/40px) and `appearance?: InputAppearance`; TagPicker takes `Extract<Size, 'medium' | 'large' | 'extra-large'>` as in Fluent. A shared `inputStyles` recipe in `src/lib/styles.ts`; new tokens `--wave-input-filled-darker`/`-lighter` with contrast pairs. The native `size` attribute of Input **and Select** (Select's is the number of visible rows) moves to `htmlSize`; a numeric `size` keeps working on both as a deprecated alias (warns once). Field `size` sizes the label and is the default `size` of the text inputs and pickers inside it (through `FieldContext`); choice controls ignore it, since their unions differ. `WaveProvider inputDefaults?: { size?, appearance? }`. Choice controls: Checkbox `size: 'medium' | 'large'` and `shape: 'square' | 'circular'`, Switch `size: 'small' | 'medium'`, Slider `size: 'small' | 'medium'`.
+  - **Changed by the spec:** Slider's `size` is the Fluent names `'small' | 'medium'`, and a numeric `size` there only warns (D10). SpinButton gains `large` and its root takes the field height, 32px at medium (D13). The `allowEmpty` discriminated union is two interfaces (`SpinButtonProps`, `SpinButtonAllowEmptyProps`, over `SpinButtonBaseProps`) instead of one union type, so code that extends `SpinButtonProps` keeps compiling (D16). The SpinButton input fills a root you size, but a default width does not change (D20).
   - **Acceptance:** every control × size × appearance × theme in a story; invalid and focus looks per appearance (R8, R9); forced colors keep a boundary for `underline` and filled appearances; type tests for the numeric `size` alias on Input and Select.
   - **Guards:** control-level `error` on Input, Select and Textarea; hidden inputs and form reset on every picker; a required `Field` blocks submission natively.
   - **Size:** L. **Depends on:** P1-06 (Field context), P1-11.
@@ -507,6 +510,7 @@ Goal: SpinButton and Rating reach Fluent's value features.
 - **P4-03 Rating half values, icons, colors and items.**
   - **Closes:** `form-basic-39` (M), `form-basic-40` (L), `form-basic-41` (L), `form-basic-46` (L), `form-basic-42` (L).
   - **API sketch:** `step?: 0.5 | 1` (two radios per star with their own names through `labels.star(value, max)`), `icon?: Slot<'span'>` (filled and outline variants through `iconFilled`/`iconOutline`), `color?: 'neutral' | 'brand' | 'marigold'` on Rating and RatingDisplay; a public `RatingItem` with its item context for custom items (Fluent's `RatingItem`/`RatingItemProvider`).
+  - **Changed by the spec:** there is no single `icon` slot: the glyphs are `iconFilled` and `iconOutline` (D25). `RatingItem` is the part `Rating.Item`/`RatingDisplay.Item`, which works without a provider (D26).
   - **Acceptance:** arrow keys move by `step`, mirrored in RTL; contrast pairs for the colors.
   - **Guards:** Rating has 24px targets, RTL keys, `disabled`/`required`: half stars keep one 24×24px pointer target per star, the half is chosen by the pointer position over it, and the two radios per star are visually hidden.
   - **Size:** M. **Depends on:** none.
@@ -518,6 +522,7 @@ Goal: InfoLabel is a real label and can be a Field's label.
 - **P4-04 InfoLabel in Field; rich info; standalone InfoButton.**
   - **Closes:** `infolabel-1` (M), `infolabel-2` (M), `infolabel-3` (M), `form-basic-6` (M), `infolabel-4` (L), `infolabel-5` (L), `form-basic-9` (L).
   - **API sketch:** InfoLabel renders a `<label>` (`htmlFor`, `required`, `size`, `disabled`, `weight`) with the info button after it; `info?: ReactNode` renders focusable content in a non-modal popover (`role="note"`, named by the info button) instead of an aria-hidden tooltip; `openOn?: 'click' | 'hover-focus'` (default stays hover-focus, through Popover `openOnHover` and the safe zone of P2-05). Field accepts an InfoLabel element as `label` and gives it `htmlFor`, `id` and its required indicator, keeping the info button out of the control's name. `InfoButton` exported on its own. Label `required?: boolean | ReactNode` (custom indicator).
+  - **Changed by the spec:** InfoButton is not built on `Popover`, and the opening prop is `openOnHover` (the 0.7 hover vocabulary), not the sketched `openOn` (D28). InfoLabel takes its label as `children`, and the info button is named "‹label› Information" through `aria-labelledby`, not the sketched "Information about ‹label›", which needs the label's plain text (D31). A Field recognises the InfoLabel (or Label) element by a marker (D32).
   - **Acceptance:** the control's accessible name is the label text only; the info button is named "Information about <label>"; SSR; axe.
   - **Guards:** Popover keeps the trigger's Tab order and names itself.
   - **Size:** M. **Depends on:** P1-06, P2-05.
@@ -1162,7 +1167,7 @@ Low gaps that are not part of an item's work. Any package that touches the compo
 - `buttons-18` — Link colors for inverted and brand backgrounds.
 
 **Form inputs**
-- `form-basic-12` — Input `className` moves between the input and the wrapper when slots appear.
+- `form-basic-12` — Input `className` moves between the input and the wrapper when slots appear. Still open after Phase 4: the size and appearance work keeps the 0.7 behaviour (spec D2).
 - `form-basic-13` — Textarea `resize` prop.
 - `form-basic-15` — Textarea `onValueChange`.
 - `form-basic-20` — RadioGroup `horizontal-stacked` layout and Radio `labelPosition="below"` (the shared `LabelPosition` already has `'below'`).
@@ -1314,6 +1319,19 @@ Behaviour differences decided by a phase spec (Phase 3, 0.8.0), with no gap of t
 - ColorArea mirrors its x axis in right-to-left layouts; Fluent's does not.
 - Checks in a multi-select Tree cascade; Fluent's nested Tree keeps them independent (its flat-tree helper computes the cascade).
 - `navigationMode="treegrid"` changes the keyboard only and keeps the `tree` and `treeitem` roles, as Fluent's does.
+
+Behaviour differences decided by the Phase 4 spec (0.9.0), with no gap of their own:
+
+- A focused invalid field keeps its error color on the other borders; Fluent hides it until blur (D4).
+- SpinButton `displayValue` shows the plain number while the input is edited (D15).
+- Press-and-hold repeats for every pointer type, and the first step happens on click, not on the down-event (D18).
+- Stepping from an empty SpinButton starts at 0 and then clamps, so with `min={1}` both ArrowUp and ArrowDown give 1; Fluent starts from `min` when it is set, so its ArrowUp gives 2 (D17).
+- Rating keys do not wrap at either end (D23).
+- Rating's default `color` is `marigold`, and unfilled stars keep one outline token (D24).
+- No single `icon` slot on Rating: `iconFilled` and `iconOutline` (D25).
+- InfoButton keeps focus on the button when its note opens, including a keyboard-focus open; opening never moves focus (D29).
+- Large fields pad 16px horizontally (D3).
+- Textarea takes `underline`, which Fluent's Textarea lacks, so one `InputAppearance` union and one provider default serve every control (spec §8, Q9).
 
 ### 8.4 Deferred (preview in Fluent, or low value now)
 

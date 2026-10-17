@@ -6,7 +6,13 @@ import { composeEventHandlers } from '../../lib/composeEventHandlers';
 import { warnDeprecated, warnOnce } from '../../lib/dev';
 import { getArrowIntent, getDirection } from '../../lib/direction';
 import { DismissIcon } from '../../lib/icons';
-import { focusRing, inputFocusWithin, inputInvalidWithin } from '../../lib/styles';
+import {
+  focusRing,
+  inputAppearanceClasses,
+  inputFocusWithin,
+  inputInvalidWithin,
+} from '../../lib/styles';
+import type { InputAppearance, Size } from '../../lib/types';
 import { useAnnounce } from '../../hooks/useAnnounce';
 import { useControllable } from '../../hooks/useControllable';
 import { useFieldContext, useFieldControl } from '../../hooks/useFieldControl';
@@ -17,6 +23,7 @@ import { useListbox, type ListboxItem } from '../../hooks/useListbox';
 import { useMergedRefs } from '../../hooks/useMergedRefs';
 import { usePreserveFocus } from '../../hooks/usePreserveFocus';
 import { HiddenInput } from '../internal/HiddenInput';
+import { useInputLook } from './inputLook';
 import { isInvalidLook } from './Input';
 import { ListboxSurface, Option, useListboxPopup } from './Option';
 import type { RoutedHandlers } from './routedHandlers';
@@ -115,6 +122,19 @@ export interface TagPickerProps extends Omit<
    * @default false
    */
   disabled?: boolean;
+  /**
+   * Size of the tags and the field: `medium` (the 0.7 look), `large` or `extra-large` (Fluent's
+   * union; TagPicker has no `small`). Default: the surrounding Field's `size`, else `WaveProvider
+   * inputDefaults.size`, else `'medium'`; a Field or provider `small` gives `'medium'` too. The
+   * option list keeps its size.
+   */
+  size?: TagPickerSize;
+  /**
+   * Look of the field: `outline` (a full border), `underline` (a bottom stroke only),
+   * `filled-darker` or `filled-lighter` (a fill without a visible stroke: give the field a visible
+   * label). Default: `WaveProvider inputDefaults.appearance`, else `'outline'`.
+   */
+  appearance?: InputAppearance;
   /** Name of the values in form submissions (one hidden input per value). */
   name?: string;
   /** Id of the form the values belong to, when the TagPicker is outside it. */
@@ -161,6 +181,32 @@ export interface TagPickerProps extends Omit<
   /** Ref to the root `<div>`. */
   ref?: React.Ref<HTMLDivElement>;
 }
+
+/** Sizes of TagPicker (Fluent's): medium (the 0.7 look), large and extra-large. */
+export type TagPickerSize = Extract<Size, 'medium' | 'large' | 'extra-large'>;
+
+const TAG_PICKER_SIZES: readonly TagPickerSize[] = ['medium', 'large', 'extra-large'];
+
+/** Per-size classes of the control, the tags and the input (medium is the 0.7 look). */
+const TAG_PICKER_SIZE: Readonly<
+  Record<TagPickerSize, { control: string; tag: string; input: string }>
+> = {
+  medium: {
+    control: 'gap-1 px-2 py-1.5',
+    tag: 'px-2 py-0.5 text-body-1',
+    input: 'py-0.5 text-body-1',
+  },
+  large: {
+    control: 'gap-1.5 px-2.5 py-2',
+    tag: 'px-2 py-1 text-body-1',
+    input: 'py-1 text-body-1',
+  },
+  'extra-large': {
+    control: 'gap-1.5 px-3 py-2.5',
+    tag: 'px-2.5 py-1 text-body-2',
+    input: 'py-1 text-body-2',
+  },
+};
 
 const EMPTY: readonly string[] = [];
 
@@ -236,6 +282,12 @@ function TagRemoveButton({
  * Selected values without a matching option are shown with their raw value. The open list renders
  * only in the browser: an open list (`defaultOpen`, `open`) is closed in the server HTML and opens
  * once the picker has hydrated.
+ *
+ * **Size and appearance**: `size` resolves from its own prop, then the surrounding `Field`'s
+ * `size`, then `WaveProvider inputDefaults.size`, else `'medium'` (a Field or provider `small`
+ * gives `'medium'` too, since TagPicker has no `small`); `appearance` from its own prop, then
+ * `WaveProvider inputDefaults.appearance`, else `'outline'`; both render as `data-size` and
+ * `data-appearance` on the root `<div>`. The option list keeps its size.
  */
 export const TagPicker = (props: TagPickerProps) => {
   const {
@@ -249,6 +301,8 @@ export const TagPicker = (props: TagPickerProps) => {
     onOpenChange,
     placeholder = 'Select...',
     disabled = false,
+    size: sizeProp,
+    appearance: appearanceProp,
     name,
     form,
     required,
@@ -300,6 +354,13 @@ export const TagPicker = (props: TagPickerProps) => {
   });
   // The error look follows the resolved state: the consumer's `aria-invalid` or the Field's.
   const invalidLook = isInvalidLook(false, fieldProps['aria-invalid']);
+  const { size, appearance } = useInputLook(sizeProp, appearanceProp, {
+    sizes: TAG_PICKER_SIZES,
+    defaultSize: 'medium',
+  });
+  // A size outside TAG_PICKER_SIZES (from untyped code) is skipped by useInputLook, so `size` is
+  // always one of them and the data attribute carries the resolved value.
+  const sizeClasses = TAG_PICKER_SIZE[size];
 
   const [selected, setSelected] = useControllable<readonly string[]>(
     valueProp,
@@ -505,6 +566,8 @@ export const TagPicker = (props: TagPickerProps) => {
 
   return (
     <div
+      data-size={size}
+      data-appearance={appearance}
       {...rest}
       ref={rootMergedRef}
       className={cn(tagPickerClassNames.root, 'relative', className)}
@@ -516,7 +579,9 @@ export const TagPicker = (props: TagPickerProps) => {
         aria-disabled={disabled || undefined}
         className={cn(
           tagPickerClassNames.control,
-          'flex flex-wrap items-center gap-1 rounded border border-input border-b-stroke-accessible bg-background px-2 py-1.5',
+          'flex flex-wrap items-center',
+          sizeClasses.control,
+          inputAppearanceClasses[appearance],
           inputFocusWithin,
           invalidLook && inputInvalidWithin,
           disabled && 'cursor-not-allowed opacity-50',
@@ -541,7 +606,8 @@ export const TagPicker = (props: TagPickerProps) => {
                   role="listitem"
                   className={cn(
                     tagPickerClassNames.tag,
-                    'inline-flex items-center gap-1 rounded bg-muted px-2 py-0.5 text-body-1 text-foreground',
+                    'inline-flex items-center gap-1 rounded bg-muted text-foreground',
+                    sizeClasses.tag,
                   )}
                 >
                   {label}
@@ -601,7 +667,8 @@ export const TagPicker = (props: TagPickerProps) => {
           onBlur={onBlur}
           className={cn(
             tagPickerClassNames.input,
-            'min-w-15 flex-1 bg-transparent py-0.5 text-body-1 text-foreground placeholder:text-muted-foreground focus:outline-hidden',
+            'min-w-15 flex-1 bg-transparent text-foreground placeholder:text-muted-foreground focus:outline-hidden',
+            sizeClasses.input,
           )}
         />
       </div>

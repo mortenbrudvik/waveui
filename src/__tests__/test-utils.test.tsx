@@ -52,6 +52,7 @@ import {
   VARIANT_BASES,
 } from '../test-utils';
 import type { TestSystemPropsConfig } from '../test-utils';
+import { resolveFieldTestContext } from '../test-utils-field';
 import * as setup from '../test-setup';
 
 /**
@@ -1225,6 +1226,14 @@ describe('renderWithProviders', () => {
       'high-contrast/ltr',
     );
   });
+
+  it('renderWithProviders passes inputDefaults to the provider', () => {
+    function Probe() {
+      return <output>{useWaveTheme().inputDefaults.size}</output>;
+    }
+    renderWithProviders(<Probe />, { inputDefaults: { size: 'large' } });
+    expect(screen.getByRole('status')).toHaveTextContent('large');
+  });
 });
 
 // ---------------------------------------------------------------------------
@@ -2135,6 +2144,13 @@ function typeContracts(): void {
   // @ts-expect-error rootProps are still checked against the root's props
   createOverlayTestWrapper(UnionRoot, { mode: 'c' });
 }
+
+describe('resolveFieldTestContext', () => {
+  it('passes a Field size through (Phase 4)', () => {
+    expect(resolveFieldTestContext({ size: 'small' }).size).toBe('small');
+    expect('size' in resolveFieldTestContext({})).toBe(false);
+  });
+});
 
 it('type-level contracts compile (see typeContracts)', () => {
   expectTypeOf(typeContracts).toBeFunction();

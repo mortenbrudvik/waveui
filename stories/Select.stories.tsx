@@ -1,10 +1,16 @@
 import type { Meta, StoryObj } from '@storybook/react';
 import { fn } from 'storybook/test';
 import { Field, Select } from '../src';
+import { coreSizeArgType, inputAppearanceArgType } from './_helpers';
+import { SizeAppearanceGrid } from './_grids';
 
 const meta = {
   title: 'Components/Input/Select',
   component: Select,
+  argTypes: {
+    ...coreSizeArgType,
+    ...inputAppearanceArgType,
+  },
   args: {
     'aria-label': 'Option',
     onChange: fn(),
@@ -65,5 +71,18 @@ export const InField: Story = {
         <option value="se">Sweden</option>
       </Select>
     </Field>
+  ),
+};
+
+export const SizesAndAppearances: Story = {
+  render: (args) => (
+    <SizeAppearanceGrid
+      render={(size, appearance) => (
+        <Select {...args} size={size} appearance={appearance} aria-label={`${size} ${appearance}`}>
+          <option>Norway</option>
+          <option>Sweden</option>
+        </Select>
+      )}
+    />
   ),
 };

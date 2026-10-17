@@ -235,6 +235,9 @@ Generated from `src/styles/tokens.css`. A value followed by a name is a referenc
 | `stroke-hover` | `#c7c7c7` | `#757575` | `#ffffff` |
 | `stroke-accessible` | `#616161` | `#adadad` | `#ffffff` |
 | `input` | `#d1d1d1` | `#666666` | `#ffffff` |
+| `input-filled-darker` | `#f5f5f5` | `#141414` | `#000000` |
+| `input-filled-lighter` | `#ffffff` (background) | `#292929` (background) | `#000000` (background) |
+| `input-filled-stroke` | `transparent` | `transparent` | `#ffffff` |
 | `ring` | `#0f6cbd` (brand-80) | `#479ef5` (brand-100) | `#ffff00` |
 | `success` | `#107c10` | `#5db55d` | `#3ff23f` |
 | `success-foreground` | `#ffffff` | `#000000` | `#000000` |
@@ -276,6 +279,7 @@ How the groups are used:
 
 - **Surfaces and text**: `background`/`foreground` for the page, `card` for raised surfaces, `muted` for neutral chips and backgrounds, `muted-foreground` for secondary text.
 - **Interactive**: `primary` fills with `primary-foreground` text, `primary-hover`/`primary-pressed` for their states; `subtle-hover`, `subtle-pressed` and `subtle-selected` for transparent controls, rows and menu items; `selected` with `selected-foreground` for a brand-tinted selection; `ring` for focus.
+- **Input fills**: `input-filled-darker` and `input-filled-lighter` are the fills of the `filled-darker` and `filled-lighter` appearances (`filled-lighter` follows `background`), and `input-filled-stroke` is their border, transparent except in the high-contrast theme, where it keeps the field's boundary. Every text token keeps 4.5:1 on both fills.
 - **Strokes**: `border` for dividers and surfaces, `stroke` for control borders, `stroke-accessible` where the edge itself must reach 3:1 (unchecked checkboxes, the Switch track, Slider rail, carousel dots, input bottom borders).
 - **Status**: fills (`success`, `warning`, `error`, `severe`, `info`) with their `*-foreground`, and light tints (`*-tint`) with `*-tint-foreground` text for MessageBar and Badge.
 - **Specials**: `inverted` (Tooltip), `track` (ProgressBar), `skeleton`, `rating`, `presence-*` (PresenceBadge), `backdrop` (Dialog, Drawer).
@@ -850,13 +854,72 @@ Chip.displayName = 'Chip';
 - **Stability.** The names are public API: no class is removed before 1.0. A renamed part, or a part that becomes a compound member of its own, keeps its old class next to the new one until 1.0; moving a class to another element is a CHANGELOG "Changed" DOM entry.
 - **Words.** The registry is under `src/lib`, which Tailwind scans: its JSDoc names elements by role ("the grid element"), never with a utility name as a bare word ([Pattern 5](#pattern-5-cn-utility)).
 
+### Pattern 11: The Input Recipe (sizes and appearances)
+
+The ten text controls and pickers (Input, Textarea, Select, SearchBox, SpinButton, Combobox, Dropdown, DatePicker, TimePicker, TagPicker) share one look, built from class maps in `src/lib/styles.ts` over the markup each control already had. A control draws its field either on its own element (Input without slots, Textarea, Select, the Dropdown button) or on a wrapper around the native element (Input with slots, SearchBox, SpinButton, the pickers, TagPicker); the maps serve both forms, so no control gains or loses an element.
+
+- **The maps**, keyed by `CoreSize` (`small`, `medium`, `large`: 24, 32 and 40px) or `InputAppearance` (`outline`, `underline`, `filled-darker`, `filled-lighter`): `inputHeightClasses`, `inputTextClasses` (`text-caption-1`, `text-body-1`, `text-body-2`), `inputPaddingClasses` (8, 12 and 16px, for the element form) and `inputAppearanceClasses` (fill, strokes and corners; the appearances without a full visible stroke add `forced-colors:border-[ButtonText]`, so every appearance keeps a boundary in Windows High Contrast). `hitAreaLayer` grows a small button's target to 24px without growing its box; the picker buttons per size live in `pickerStyles.ts` (`pickerIconButtonClasses`, `pickerButtonOffset`, `pickerEndPadding`, `pickerGlyphSize`).
+- **Compose the state recipes after the appearance.** `inputFocus` and `inputFocusWithin` color the focused bottom border (`primary`, 2px), and `inputInvalid` and `inputInvalidWithin` color every border the appearance draws (`destructive`). A focused invalid field therefore shows the focus indicator below and the error on the other sides.
+- **Resolve with `useInputLook(size, appearance, { sizes?, defaultSize? })`** (internal): the control's own prop, then the surrounding Field's `size`, then `WaveProvider inputDefaults`, then `medium` and `outline`. A size outside `sizes` is skipped (TagPicker has no `small`). The choice controls (Checkbox, Switch, Slider) have their own unions and read neither the Field nor the provider.
+- **State attributes.** The element that receives `className` renders `data-size` and `data-appearance` with the resolved values, always, before `{...rest}`, so `[data-appearance=underline]` and a consumer's `className` meet on the same element.
+
+```tsx
+import * as React from 'react';
+import { cn } from '../../lib/cn';
+import {
+  inputAppearanceClasses,
+  inputFocus,
+  inputHeightClasses,
+  inputInvalid,
+  inputPaddingClasses,
+  inputTextClasses,
+} from '../../lib/styles';
+import type { CoreSize, InputAppearance } from '../../lib/types';
+import { useInputLook } from './inputLook';
+
+export interface MaskedProps extends Omit<React.InputHTMLAttributes<HTMLInputElement>, 'size'> {
+  size?: CoreSize;
+  appearance?: InputAppearance;
+  invalid?: boolean;
+  ref?: React.Ref<HTMLInputElement>;
+}
+
+export const Masked = ({ size, appearance, invalid, className, ref, ...rest }: MaskedProps) => {
+  const look = useInputLook(size, appearance);
+  return (
+    <input
+      type="text"
+      ref={ref}
+      data-size={look.size}
+      data-appearance={look.appearance}
+      className={cn(
+        'w-full text-foreground placeholder:text-muted-foreground',
+        inputHeightClasses[look.size],
+        inputTextClasses[look.size],
+        inputPaddingClasses[look.size],
+        inputAppearanceClasses[look.appearance],
+        inputFocus,
+        invalid && inputInvalid,
+        className,
+      )}
+      {...rest}
+    />
+  );
+};
+Masked.displayName = 'Masked';
+```
+
+- **A numeric HTML `size`.** Input and Select inherited the native `size`; they omit it and declare `size?: CoreSize | number` plus `htmlSize?: number`. A number keeps its meaning and is a deprecated alias of `htmlSize` (`resolveDeprecatedProp`), and the design size then resolves as if `size` were unset. Slider ignores the native attribute, so its number is only reported once, from an effect.
+- **Fields.** `Field size` sets the label's type ramp and, in the horizontal layout, its top padding; it reaches the controls inside through `FieldContextValue.size`, which is absent when the prop is unset so that the provider's default still applies. A `Label` or `InfoLabel` element passed as `label` is recognised by the marker in `fieldLabel.ts` (not by an import, so a Field-only bundle carries no InfoButton code) and rendered in place of Field's own `<label>`.
+- **Guidance for consumers.** The filled appearances have no visible stroke, so a filled field needs a visible label (a placeholder is not one); use `filled-darker` on the page background and `filled-lighter` on a surface other than the page background.
+
 ### Props Interface Conventions
 
 - Extend native HTML attributes: `React.HTMLAttributes<HTMLDivElement>`
 - Omit conflicting native props: `Omit<React.HTMLAttributes<HTMLDivElement>, 'onChange' | 'defaultValue'>`
 - Name value callbacks after the state (`onValueChange`, `onCheckedChange`, `onOpenChange`); `onChange` is only the native change event
 - Declare `ref` in the interface; export the props type with the component (`CardHeaderProps`, `DataGridRowProps`)
-- Use shared types from `src/lib/types.ts`: `Size`, `Appearance`, `Status`, `Orientation`, `SelectionMode`, `TextWeight`, `Shape`, `PopupSide`, `PopupAlign`, `BadgeColor`, `IconPosition`, `ValidationState`, `LabelPosition` (take a subset with `Extract<LabelPosition, …>`), `ModalType`, `OpenChangeDetails<R>`, `CheckedValues`, `CheckedValuesChangeHandler`, `PopupTarget`, `VirtualElement`
+- Use shared types from `src/lib/types.ts`: `Size`, `CoreSize`, `InputAppearance`, `Appearance`, `Status`, `Orientation`, `SelectionMode`, `TextWeight`, `Shape`, `PopupSide`, `PopupAlign`, `BadgeColor`, `IconPosition`, `ValidationState`, `LabelPosition` (take a subset with `Extract<LabelPosition, …>`), `ModalType`, `OpenChangeDetails<R>`, `CheckedValues`, `CheckedValuesChangeHandler`, `PopupTarget`, `VirtualElement`
 - Prefer Fluent's prop name when it fits the conventions (`disabledFocusable`, `iconPosition`, `validationState`, `modalType`, `selectTabOnFocus`, `persistOnItemClick`, `openOnHover`, `openOnContext`, `isAccessible`); open state stays `open`/`defaultOpen`/`onOpenChange`, a state callback is named after its state (`checkedValues` → `onCheckedValuesChange`, not Fluent's `onCheckedValueChange`), and extra callback data goes in a second, optional `details` argument (`onOpenChange(open, details?)`, `onCheckedValuesChange(checkedValues, details?)`)
 - One delay vocabulary: `openDelay` and `closeDelay` in milliseconds (Menu 250/250, Popover 250/500, Tooltip 200/100). Menu's and Popover's apply to mouse hover only, Tooltip's `openDelay` also to keyboard focus
 
@@ -1114,12 +1177,12 @@ Typed text in the DatePicker input is kept and marked invalid when it is not an 
 
 #### Other components
 
-- **SpinButton**: ArrowUp/ArrowDown step, PageUp/PageDown large step, Home/End min/max; Enter commits typed text, Escape reverts it.
+- **SpinButton**: ArrowUp/ArrowDown step, PageUp/PageDown large step, Home/End min/max (with Shift they select text, as in any text field); Enter commits typed text, Escape reverts it. Holding a step button with the pointer repeats the step (see [SpinButton, Rating and InfoButton](#spinbutton-rating-and-infobutton)).
 - **SearchBox**: Escape clears the text and keeps focus; the key is consumed, so an enclosing Dialog, Drawer or Popover stays open. In an empty field Escape reaches them.
-- **Rating**: Right/Up one star more, Left/Down one fewer (never below 1), Home/End first/last; mirrored in RTL.
+- **Rating**: Right/Up one `step` more (a star, or a half star with `step={0.5}`), Left/Down one fewer (never below `step`), Home/End the smallest value and `max`; mirrored in RTL.
 - **Card** (selectable, `selectionControl="card"`): Enter (key down) or Space (key up).
 - **Stepper**: every reachable step is a Tab stop; Enter/Space activate.
-- **Tooltip, InfoLabel**: open on keyboard focus (Tooltip after `openDelay`, 200ms by default; it hides `closeDelay` after the pointer leaves, and at once on blur); Escape closes. Focus, blur and pointer entry inside a popup that the Tooltip's child renders in a portal (a DatePicker calendar, a listbox) do not show or hide the tooltip or reach its `onFocus`/`onBlur`; `onMouseEnter`/`onMouseLeave` follow React's tree. An icon-only trigger named by `Tooltip relationship="label"` also names a Popover it opens.
+- **Tooltip, InfoLabel, InfoButton**: open on keyboard focus (Tooltip after `openDelay`, 200ms by default; it hides `closeDelay` after the pointer leaves, and at once on blur); Escape closes. Focus, blur and pointer entry inside a popup that the Tooltip's child renders in a portal (a DatePicker calendar, a listbox) do not show or hide the tooltip or reach its `onFocus`/`onBlur`; `onMouseEnter`/`onMouseLeave` follow React's tree. An icon-only trigger named by `Tooltip relationship="label"` also names a Popover it opens.
 - **Popover, TeachingPopover**: Escape closes. When focus was inside (or lost to `<body>`), Popover returns it to its trigger, TeachingPopover to where focus was before it opened (with `target`, to the target when nothing had focus, such as a tour opened on page load; see [Focus Management](#focus-management)). A close by hover moves no focus. In the Tab order the portaled content follows its trigger (TeachingPopover with `target`: the target), like inline content: Tab from the trigger enters it, Tab past its last element continues after the trigger, Shift+Tab from its first element returns to the trigger (or, when nothing in the trigger can take focus, to the tab stop before it), and Shift+Tab from the element after the trigger enters it at its last element. For a trigger outside the tab order the content follows the tab stop before the trigger; with no tab stop before the trigger or target, it is reached where it is portaled, at the end of the page, in both directions. A Tab lap visits the content once: Tab from the last element of the page moves past the portaled content (it is hidden for that one Tab) and leaves the page, and Shift+Tab from the browser's own controls reaches the page's last element (outside every open popover) instead of the content. Content that the Tab from the page end still reaches follows the document order, so Tab never cycles. Focus leaving it does not close it (Escape or an outside press does). A hover card (`openOnHover`) opens without taking focus and is still entered by Tab from its trigger. A context popover (`openOnContext`) opened by Shift+F10 or the ContextMenu key moves focus into the content (its first tabbable element, else the surface), and Escape returns focus to the element that had it; one opened by a right click leaves focus where it is, and Tab from that element enters the content.
 - **Accordion, Carousel, Nav, Breadcrumb, Pagination**: native buttons and links (Tab, Enter, Space); no arrow-key navigation.
 
@@ -1214,6 +1277,13 @@ Each value text starts with its own channel, so the value that changed is heard 
 
 Live regions must exist before their content changes. `Toaster` keeps two permanent, visually hidden regions (polite, and assertive for `error` toasts) and adds each toast to one of them once, as text: the severity, the title, the body with its subtitle and the labels of its actions (never the Dismiss button). The toast itself is a `role="group"` container named by its severity and title, described by its body and focusable by the shortcut (`tabIndex="-1"`, no Tab stop), not a live region; a `Toast` rendered outside a Toaster is its own live region, with no name. A MessageBar with its default role (`alert` for warnings and errors, `status` otherwise) is a live region that its title does not name, because a named live region can have its name read with its content, which would read the title twice: the title is read as the first words of the content. With a non-live `role="region"` or `"group"`, the title names the bar through `aria-labelledby` (the severity text, then the title). Use `announce(message, politeness?)` or `useAnnounce()` for your own announcements; they go through a shared region that modal isolation never makes inert.
 
+#### SpinButton, Rating and InfoButton
+
+- **SpinButton, press-and-hold.** A step never happens on the press alone (WCAG 2.5.2, Pointer Cancellation). A press on a step button, with a mouse, finger or pen, starts a 300 ms timer. Released earlier, it steps once, on its `click`; still pressed when the timer fires, it steps and then repeats, slowly at first and every 80 ms after about a second. Release, cancel, leaving the button, reaching the bound, the window losing focus, and the control becoming disabled or read-only all stop it, and the `click` that ends a hold adds no step. A `click` without a press (a screen reader activating the button) steps once. The buttons never take focus, and they suppress the long-press menu, text selection and double-tap zoom. Keyboard repeat is the operating system's.
+- **SpinButton, the empty value.** With `allowEmpty`, clearing the text and committing it sets the value to `null`; the empty input shows `''` (or `displayValue`), carries no `aria-valuenow`, and a required one blocks form submission through its hidden input. `allowEmpty` takes the literal `true` (a `boolean` variable fits neither props type). `displayValue` is the text shown and spoken (`aria-valuetext`) while the input is not being edited; while it has focus, the input shows the plain number, so typing edits `1`, not `$1.00`.
+- **Rating, half stars.** With `step={0.5}` each star is one 24x24px pointer target that holds two visually hidden radios (the half value, then the full one), named by `labels.star` ("2.5 stars", "3 stars"). The radios lie over the halves they stand for, so touch exploration finds them, but only the star takes pointer events: a click chooses the half or the whole by where it lands (mirrored in RTL), and the chosen radio takes focus. A click on a radio itself (Space, Enter, a screen reader) chooses that radio's value. Two 12px targets would fail WCAG 2.5.8, which is why the star, not the half, is the target. Filled and unfilled stars differ by shape (`iconFilled` and `iconOutline` are a pair), not by color alone.
+- **InfoButton, the note.** Opening the note never moves focus; it stays on the button. Tab from the open button enters the note's first tabbable element, so a link in it is reachable; Tab past its last element continues after the button; Shift+Tab from its first element returns to the button; Escape closes the note and returns focus to the button. Keyboard focus opens the note unless `openOnHover={false}`, and pointer movement does not close a note that keyboard focus opened or holds (WCAG 1.4.13). The button has `aria-expanded` and, while the note is open, `aria-controls`; it has no `aria-haspopup`, since a note is none of the kinds that attribute names. The description exists once: the `info` content is a hidden description of the button while the note is closed, and sits inside the note, in an unnamed element that then describes the button, while it is open (the note itself is never in `aria-describedby`). The note is named like the button ("Password Information" inside an InfoLabel), which is why `aria-describedby` never points at it.
+
 ### Focus Management
 
 1. **Focus rings**: focusable controls use `focusRing` (`focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring`), cells and rows `focusRingInset`; text inputs show a primary bottom border (`inputFocus`) with `focus:outline-hidden`, which keeps an outline in forced-colors mode. Never use `focus:outline-none`. A focusable control with the disabled look (`disabledFocusable`, a self-disabling boundary button) goes back to full opacity while its ring shows, so the ring keeps its contrast.
@@ -1266,7 +1336,8 @@ export const Root = ({ children }: { children: React.ReactNode }) => (
 - It renders `<div class="wave-root wave-<theme>">` that paints `bg-background text-foreground font-wave text-body-1` (a `className` you pass wins) and sets `dir` and `data-wave-theme`.
 - Providers nest in any order; every theme class re-declares all tokens, so a light panel inside a dark app is fully light. A nested provider inherits every prop it omits (`theme`, `dir`, `portalContainer`) from the enclosing one, so a theme-only panel in an RTL app stays RTL and keeps its overlays in the app's container; `portalContainer={null}` sends a nested subtree's overlays to `document.body`.
 - Portaled overlays receive the provider's theme classes and direction; `portalContainer` sets where they render.
-- `useWaveTheme()` returns `{ theme, dir, themeClassName, portalContainer, hasProvider }`.
+- `inputDefaults` (`{ size?: CoreSize; appearance?: InputAppearance }`) sets the default size and appearance of the text controls and pickers below it. A nested provider merges its defined keys over the enclosing provider's and inherits the rest.
+- `useWaveTheme()` returns `{ theme, dir, themeClassName, portalContainer, inputDefaults, hasProvider }` (`inputDefaults` is `{}` outside a provider).
 - With the precompiled `@mortenbrudvik/waveui/styles`, the provider is **required**: the base styles and the native-element reset apply only inside `.wave-root` and `.wave-portal`.
 
 Theme classes select the tokens:
@@ -1738,7 +1809,7 @@ export function ConfirmDelete({ onDelete }: { onDelete: () => void }) {
 
 ## 12. Quick Reference
 
-### Component Catalog (68 components)
+### Component Catalog (69 components)
 
 **Buttons & Actions** (7)
 `Button` `CompoundButton` `ToggleButton` `SplitButton` `MenuButton` `Link` `Toolbar` (plus the Toolbar parts `Toolbar.Button`, `Toolbar.ToggleButton`, `Toolbar.RadioGroup`, `Toolbar.RadioButton`, `Toolbar.Group`, `Toolbar.Divider`)
@@ -1746,8 +1817,8 @@ export function ConfirmDelete({ onDelete }: { onDelete: () => void }) {
 **Input & Forms** (22)
 `Input` `Textarea` `Field` `Label` `Checkbox` `RadioGroup` `Switch` `Select` `SearchBox` `Slider` `SpinButton` `Combobox` `Dropdown` `TagPicker` `Rating` `ColorPicker` `ColorArea` `ColorSlider` `AlphaSlider` `SwatchPicker` `DatePicker` `TimePicker` (plus `RadioGroup.Item`/`RadioItem`, `Option`/`OptionGroup`, `RatingDisplay` and the ColorPicker parts `ColorPicker.HexField`, `ColorPicker.Swatches`, `ColorPicker.Preview`)
 
-**Data Display** (11)
-`Avatar` `AvatarGroup` `Badge` `PresenceBadge` `CounterBadge` `Tag` `Persona` `Divider` `InfoLabel` `Image` `List`
+**Data Display** (12)
+`Avatar` `AvatarGroup` `Badge` `PresenceBadge` `CounterBadge` `Tag` `Persona` `Divider` `InfoLabel` `InfoButton` `Image` `List`
 
 **Layout** (9)
 `Card` `Accordion` `TabList` `Tree` `Carousel` `Overflow` `Grid` `Stack` `Flex` (plus `Tree.ItemPersonaLayout`)

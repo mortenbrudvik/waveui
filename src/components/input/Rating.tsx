@@ -4,15 +4,29 @@ import { cn } from '../../lib/cn';
 import { composeEventHandlers } from '../../lib/composeEventHandlers';
 import { warnDeprecated, warnOnce } from '../../lib/dev';
 import { getArrowIntent, getDirection } from '../../lib/direction';
-import { StarIcon } from '../../lib/icons';
-import { focusRing } from '../../lib/styles';
+import { isOwnEvent } from '../../lib/events';
+import { slotRendersContent, type Slot } from '../../lib/slot';
 import type { Size } from '../../lib/types';
 import { useControllable } from '../../hooks/useControllable';
+import { useEventCallback } from '../../hooks/useEventCallback';
 import { useFieldContext, useFieldControl } from '../../hooks/useFieldControl';
 import { useFormReset } from '../../hooks/useFormReset';
 import { useMergedRefs } from '../../hooks/useMergedRefs';
 import { useRovingTabIndex } from '../../hooks/useRovingTabIndex';
 import { HiddenInput } from '../internal/HiddenInput';
+import {
+  INERT_RATING_CONTEXT,
+  RatingContext,
+  RatingItem,
+  ratingItems,
+  resolveRatingColor,
+  StarGlyph,
+  useRatingItemChecks,
+  useRatingItemRegistry,
+  useStarGlyphs,
+  type RatingColor,
+  type RatingContextValue,
+} from './Rating.item';
 
 /**
  * The Rating's built-in star names, for localization. Each member is optional and falls back to
@@ -20,7 +34,8 @@ import { HiddenInput } from '../internal/HiddenInput';
  */
 export interface RatingLabels {
   /**
-   * Accessible name of the star that chooses `value` (1 to `max`).
+   * Accessible name of the radio that chooses `value`: a whole star (1 to `max`), and with
+   * `step={0.5}` a half value too ("2.5 stars").
    * @default (value) => value === 1 ? '1 star' : `${value} stars`
    */
   star?: (value: number, max: number) => string;
@@ -31,9 +46,13 @@ const defaultStarLabel = (value: number) => `${value} star${value !== 1 ? 's' : 
 /** Properties for the Rating component. */
 export interface RatingProps extends Omit<
   React.HTMLAttributes<HTMLDivElement>,
-  'onChange' | 'defaultValue'
+  'onChange' | 'defaultValue' | 'color'
 > {
-  /** Controlled rating value (`0` = no rating). */
+  /**
+   * Controlled rating value (`0` = no rating): a whole number of stars, or with `step={0.5}` a
+   * multiple of 0.5. A value between two steps (2.7) checks no radio, is drawn as the step below
+   * it (2.5) and holds the tab stop there; the keys move it to the next or previous step.
+   */
   value?: number;
   /** Initial rating for uncontrolled usage (also the value a form reset restores).
    * @default 0
@@ -51,10 +70,50 @@ export interface RatingProps extends Omit<
    * @default 5
    */
   max?: number;
+  /**
+   * The grain of the rating: `1` (whole stars) or `0.5` (half stars). With `0.5`, each star stays
+   * one pointer target of at least 24×24px (a larger `size` keeps a larger one): the half is
+   * chosen by the pointer's position over it (the half at the inline start, which mirrors under
+   * `dir="rtl"`), and two transparent radios per star, the half value then the full value, serve
+   * the keyboard and screen readers. The keys then move by half a star. A value other than `0.5`
+   * (from untyped code) counts as `1`. RatingDisplay has no `step`: it draws any fraction.
+   * @default 1
+   */
+  step?: 0.5 | 1;
   /** Size of the star icons. Every size keeps a target of at least 24×24px.
    * @default 'medium'
    */
   size?: Size;
+  /**
+   * Color of the filled stars: `marigold` (default), `brand` or `neutral`; unfilled stars keep a
+   * 3:1 outline. Fluent's default is `neutral`. A value outside the three (from untyped code)
+   * renders as `marigold`; the root carries `data-color` with the resolved value.
+   * @default 'marigold'
+   */
+  color?: RatingColor;
+  /**
+   * The glyph of a filled star. `iconFilled` and `iconOutline` are the glyphs of a filled and an
+   * unfilled star, as a pair; decorative. Fluent's RatingDisplay takes one `icon`; here a filled
+   * and an unfilled star must differ by shape, not by color alone.
+   *
+   * - Each glyph is sized by `size` (an SVG child fills the star) and takes the star's color
+   *   (paint it with `currentColor`). A half-filled star (`step={0.5}`) clips the filled glyph
+   *   over the unfilled one from the inline start.
+   * - `null`, `undefined` and a value that renders nothing draw the default star. A value that
+   *   renders nothing, and a pair with only one of the two set, log a development warning.
+   * - A `<button>` or `Button` element (or a slot object whose `as` is one) is not nested in the
+   *   star: its children become the glyph (the default star when they render nothing), its props
+   *   are dropped, and a development warning says so (in place of the warning for a value that
+   *   renders nothing).
+   * - A `Rating.Item` that sets its own pair draws that one instead.
+   */
+  iconFilled?: Slot<'span'>;
+  /**
+   * The glyph of an unfilled star, as a pair with `iconFilled` (its rules apply); decorative.
+   * Fluent's RatingDisplay takes one `icon`; here a filled and an unfilled star must differ by
+   * shape, not by color alone.
+   */
+  iconOutline?: Slot<'span'>;
   /** Whether the rating is disabled and non-interactive.
    * @default false
    */
@@ -69,10 +128,16 @@ export interface RatingProps extends Omit<
   /** Id of the form the rating belongs to, when it is rendered outside that form. */
   form?: string;
   /**
-   * Names of the stars ("1 star", "2 stars", …), for localization. The group's own name is
-   * `aria-label` (default "Rating"). Unset members keep their English defaults.
+   * Names of the stars ("1 star", "2 stars", …, and "2.5 stars" for a half value), for
+   * localization. The group's own name is `aria-label` (default "Rating"). Unset members keep
+   * their English defaults.
    */
   labels?: RatingLabels;
+  /**
+   * Custom stars: one `Rating.Item` per value from 1 to `max`, in place of the generated stars
+   * (when the children render content). `max` still sets the key range and the star names.
+   */
+  children?: React.ReactNode;
   /** Ref to the `role="radiogroup"` element. */
   ref?: React.Ref<HTMLDivElement>;
 }
@@ -92,7 +157,7 @@ export interface RatingDisplayLabels {
 }
 
 /** Properties for the RatingDisplay (read-only) component. */
-export interface RatingDisplayProps extends React.HTMLAttributes<HTMLDivElement> {
+export interface RatingDisplayProps extends Omit<React.HTMLAttributes<HTMLDivElement>, 'color'> {
   /**
    * Rating value to display. A fraction is drawn as a partly filled star (`4.6` fills 60% of the
    * fifth star), so the stars show the value the accessible name reports.
@@ -106,6 +171,36 @@ export interface RatingDisplayProps extends React.HTMLAttributes<HTMLDivElement>
    * @default 'medium'
    */
   size?: Size;
+  /**
+   * Color of the filled stars: `marigold` (default), `brand` or `neutral`; unfilled stars keep a
+   * 3:1 outline. Fluent's default is `neutral`. A value outside the three (from untyped code)
+   * renders as `marigold`; the root carries `data-color` with the resolved value.
+   * @default 'marigold'
+   */
+  color?: RatingColor;
+  /**
+   * The glyph of a filled star. `iconFilled` and `iconOutline` are the glyphs of a filled and an
+   * unfilled star, as a pair; decorative. Fluent's RatingDisplay takes one `icon`; here a filled
+   * and an unfilled star must differ by shape, not by color alone.
+   *
+   * - Each glyph is sized by `size` (an SVG child fills the star) and takes the star's color
+   *   (paint it with `currentColor`). A partly filled star clips the filled glyph over the
+   *   unfilled one from the inline start, and the `compact` star is the filled glyph.
+   * - `null`, `undefined` and a value that renders nothing draw the default star. A value that
+   *   renders nothing, and a pair with only one of the two set, log a development warning.
+   * - A `<button>` or `Button` element (or a slot object whose `as` is one) is not nested in the
+   *   star: its children become the glyph (the default star when they render nothing), its props
+   *   are dropped, and a development warning says so (in place of the warning for a value that
+   *   renders nothing).
+   * - A `RatingDisplay.Item` that sets its own pair draws that one instead.
+   */
+  iconFilled?: Slot<'span'>;
+  /**
+   * The glyph of an unfilled star, as a pair with `iconFilled` (its rules apply); decorative.
+   * Fluent's RatingDisplay takes one `icon`; here a filled and an unfilled star must differ by
+   * shape, not by color alone.
+   */
+  iconOutline?: Slot<'span'>;
   /**
    * Shows the value as text after the stars, formatted with `locale` (up to one decimal).
    * @default false
@@ -130,67 +225,33 @@ export interface RatingDisplayProps extends React.HTMLAttributes<HTMLDivElement>
   locale?: string;
   /** Built-in texts, for localization. */
   labels?: RatingDisplayLabels;
+  /**
+   * Custom stars: one `RatingDisplay.Item` per value from 1 to `max`, in place of the generated
+   * stars (when the children render content). A `compact` display ignores them.
+   */
+  children?: React.ReactNode;
   /** Ref to the root element. */
   ref?: React.Ref<HTMLDivElement>;
 }
 
-const sizeMap: Record<Size, string> = {
-  'extra-small': 'h-3 w-3',
-  small: 'h-4 w-4',
-  medium: 'h-5 w-5',
-  large: 'h-6 w-6',
-  'extra-large': 'h-8 w-8',
-};
-
-/** Padding that gives every interactive star a target of at least 24×24px (WCAG 2.5.8). */
-const targetPaddingMap: Record<Size, string> = {
-  'extra-small': 'p-1.5', // 12px icon + 12px
-  small: 'p-1', // 16px icon + 8px
-  medium: 'p-0.5', // 20px icon + 4px
-  large: 'p-0.5',
-  'extra-large': 'p-0.5',
-};
-
-/** A filled star, or an outlined one (the outline keeps a 3:1 non-text contrast). */
-function Star({ filled, className }: { filled: boolean; className: string }) {
-  return filled ? (
-    <StarIcon className={className} />
-  ) : (
-    <StarIcon className={className} fill="none" stroke="currentColor" strokeWidth={1.5} />
-  );
-}
-
-/**
- * A star rating input (`role="radiogroup"` of `role="radio"` stars).
- *
- * - One tab stop (the chosen star, else the first). Keys choose relative to the current rating and
- *   move focus to the chosen star, as in 0.4: Right/Up one star more, Left/Down one fewer
- *   (Left/Right mirrored under `dir="rtl"`), Home/End the first/last star. From an empty rating,
- *   Right/Up/Home choose 1 star. Keys at the ends (and Left/Down while empty) emit nothing.
- * - The keyboard cannot clear a rating: Left/Down stop at 1 star (APG radio group; 0.4 went down
- *   to 0). Only a controlled `value={0}` (or a form reset while `defaultValue` is 0) clears it.
- * - `onValueChange` (and the deprecated `onChange` alias) fire only when the rating changes, so
- *   choosing the current star again calls neither.
- * - Hovering previews a value; the preview never outlives the hover or a disabled state.
- * - Inside a `Field` it is named by the Field label (instead of the default "Rating") and
- *   described by its hint and error. The stars are named "1 star", "2 stars", …; `labels`
- *   localizes these names.
- * - With `name` (or `required`) it takes part in native forms; a form reset restores
- *   `defaultValue`.
- */
-export const Rating = ({
+const RatingRoot = ({
   value: valueProp,
   defaultValue,
   onValueChange,
   onChange,
   max = 5,
+  step: stepProp,
   size = 'medium',
+  color,
+  iconFilled,
+  iconOutline,
   disabled = false,
   name,
   required,
   form,
   labels,
   className,
+  children,
   id,
   'aria-label': ariaLabel,
   'aria-labelledby': ariaLabelledBy,
@@ -209,6 +270,9 @@ export const Rating = ({
     onValueChange?.(next);
     onChange?.(next);
   });
+  // The items draw whole or half stars only, so the keys move by one of the two (untyped code
+  // may pass another number).
+  const step: 0.5 | 1 = stepProp === 0.5 ? 0.5 : 1;
 
   const [hovered, setHovered] = React.useState(0);
   // A hover preview must not survive the rating becoming disabled (adjust state during render).
@@ -217,34 +281,41 @@ export const Rating = ({
     setPrevDisabled(disabled);
     if (disabled) setHovered(0);
   }
-  const displayValue = disabled ? value : hovered || value;
+  const drawnValue = disabled ? value : hovered || value;
 
-  // Roving tab stop (the chosen star, else the first) and focus moves; the keys are handled below.
+  // Roving tab stop (the radio of the chosen value, else the first) and focus moves; the keys are
+  // handled below. A value between two steps holds the tab stop on the radio below it (D23).
   const { containerProps, getTabIndex, focusValue } = useRovingTabIndex({
-    activeValue: value > 0 ? String(value) : null,
+    activeValue: value >= step ? String(Math.floor(value / step) * step) : null,
   });
 
-  // Keys count from the current rating, not from the focused star (0.4 semantics): from an empty
-  // rating, Tab lands on the unchosen first star and Right/Up/Home choose it. Never wraps.
+  // The next and previous multiples of `step`: a value between two steps (a controlled 2.7 at
+  // step 0.5) moves to the step above or below it (3 or 2.5).
+  const up = (v: number) => Math.floor(v / step) * step + step;
+  const down = (v: number) => Math.ceil(v / step) * step - step;
+
+  // Keys count from the current rating, not from the focused radio (0.4 semantics): from an empty
+  // rating, Tab lands on the unchosen first radio and Right/Up/Home choose it. Never wraps.
+  // Keys from a portal rendered among the children (a popup opened from one) are not the rating's.
   const handleKeyDown = (e: React.KeyboardEvent<HTMLDivElement>) => {
-    if (e.defaultPrevented || e.altKey || e.ctrlKey || e.metaKey) return;
+    if (e.defaultPrevented || e.altKey || e.ctrlKey || e.metaKey || !isOwnEvent(e)) return;
     let next: number;
-    if (e.key === 'Home') next = 1;
+    if (e.key === 'Home') next = step;
     else if (e.key === 'End') next = max;
-    else if (e.key === 'ArrowUp') next = value + 1;
-    else if (e.key === 'ArrowDown') next = value - 1;
+    else if (e.key === 'ArrowUp') next = up(value);
+    else if (e.key === 'ArrowDown') next = down(value);
     else {
       const intent = getArrowIntent(e.key, {
         orientation: 'horizontal',
         dir: getDirection(e.currentTarget),
       });
       if (!intent) return;
-      next = intent === 'next' ? value + 1 : value - 1;
+      next = intent === 'next' ? up(value) : down(value);
     }
     e.preventDefault();
     next = Math.min(next, max);
     // The ends are no-ops (nothing is emitted, focus stays), and Left/Down never clear to 0.
-    if (disabled || next < 1 || next === value) return;
+    if (disabled || next < step || next === value) return;
     focusValue(String(next));
     setValue(next);
   };
@@ -278,8 +349,59 @@ export const Rating = ({
     rootRef.current?.querySelector<HTMLElement>('[data-roving-value][tabindex="0"]')?.focus();
   };
 
-  const starSize = sizeMap[size];
+  // A pointer click on a half star focuses the radio it chose, so the keyboard continues from
+  // there, without scrolling: the star is under the pointer already (D22).
+  const focusChosen = useEventCallback((key: string) => {
+    rootRef.current
+      ?.querySelector<HTMLElement>(`[data-roving-value="${key}"]`)
+      ?.focus({ preventScroll: true });
+  });
+
+  const resolvedColor = resolveRatingColor(color);
+  const glyphs = useStarGlyphs('Rating', iconFilled, iconOutline);
   const starLabel = labels?.star ?? defaultStarLabel;
+  const { registerItem, counts } = useRatingItemRegistry();
+  // Whether the root draws its own children instead of the `max` generated stars (D26): the
+  // generated stars always cover every value on their own, so only a custom item set can leave
+  // one missing.
+  const hasItems = slotRendersContent(children);
+  useRatingItemChecks(counts, max, hasItems);
+  const context = React.useMemo<RatingContextValue>(
+    () => ({
+      kind: 'input',
+      value,
+      drawnValue,
+      step,
+      max,
+      size,
+      color: resolvedColor,
+      glyphs,
+      disabled,
+      starLabel,
+      getTabIndex,
+      choose: (next, focus) => {
+        setValue(next);
+        if (focus) focusChosen(String(next));
+      },
+      preview: setHovered,
+      registerItem,
+    }),
+    [
+      value,
+      drawnValue,
+      step,
+      max,
+      size,
+      resolvedColor,
+      glyphs,
+      disabled,
+      starLabel,
+      getTabIndex,
+      setValue,
+      focusChosen,
+      registerItem,
+    ],
+  );
 
   return (
     <div
@@ -287,6 +409,7 @@ export const Rating = ({
       aria-label={defaultName}
       {...fieldProps}
       aria-disabled={disabled || undefined}
+      data-color={resolvedColor}
       className={cn(
         ratingClassNames.root,
         'relative inline-flex items-center gap-0.5',
@@ -304,39 +427,7 @@ export const Rating = ({
         checkDefaultPrevented: false,
       })}
     >
-      {Array.from({ length: max }, (_, i) => {
-        const starValue = i + 1;
-        const key = String(starValue);
-        const filled = displayValue >= starValue;
-        return (
-          <button
-            key={key}
-            type="button"
-            role="radio"
-            aria-checked={value === starValue}
-            aria-label={starLabel(starValue, max)}
-            data-roving-value={key}
-            tabIndex={disabled ? -1 : getTabIndex(key)}
-            disabled={disabled}
-            className={cn(
-              ratingClassNames.star,
-              'inline-flex cursor-pointer rounded border-0 bg-transparent transition-colors motion-reduce:transition-none disabled:cursor-not-allowed',
-              targetPaddingMap[size],
-              focusRing,
-              filled ? 'text-rating' : 'text-stroke-accessible',
-            )}
-            onClick={() => {
-              // Choosing the current star again is a no-op for both callbacks (useControllable).
-              if (!disabled) setValue(starValue);
-            }}
-            onMouseEnter={() => {
-              if (!disabled) setHovered(starValue);
-            }}
-          >
-            <Star filled={filled} className={cn(ratingClassNames.icon, starSize)} />
-          </button>
-        );
-      })}
+      <RatingContext.Provider value={context}>{ratingItems(children, max)}</RatingContext.Provider>
       <HiddenInput
         type="radio"
         name={name}
@@ -349,7 +440,7 @@ export const Rating = ({
     </div>
   );
 };
-Rating.displayName = 'Rating';
+RatingRoot.displayName = 'Rating';
 
 /** Text size of the value and the count, following the star size. */
 const textSizeMap: Record<Size, string> = {
@@ -376,30 +467,23 @@ function supportedLocale(locale: string | undefined): string | undefined {
   }
 }
 
-/**
- * A read-only star rating (`role="img"` named "Rating: <value> out of <max>"). A fractional value
- * is drawn with a partly filled star, so the stars and the name show the same value.
- *
- * - `showValue` adds the value as text after the stars, `count` the number of ratings ("(1,160)",
- *   also added to the name), and `compact` shows one filled star with the value instead of `max`
- *   stars (the root carries `data-compact`). Without them only the stars show.
- * - The value (up to one decimal) and the count are formatted with `locale`, in the text and in
- *   the name; `labels` localizes the name. Pass `locale` when rendering on the server.
- */
-export const RatingDisplay = ({
+const RatingDisplayRoot = ({
   value,
   max = 5,
   size = 'medium',
+  color,
+  iconFilled,
+  iconOutline,
   showValue = false,
   count,
   compact = false,
   locale,
   labels,
   className,
+  children,
   ref,
   ...rest
 }: RatingDisplayProps) => {
-  const starSize = sizeMap[size];
   const formatLocale = supportedLocale(locale);
   const invalidLocale = locale !== undefined && formatLocale === undefined;
   React.useEffect(() => {
@@ -426,58 +510,52 @@ export const RatingDisplay = ({
   const showText = showValue || compact || count !== undefined;
   const textSize = textSizeMap[size];
 
+  const resolvedColor = resolveRatingColor(color);
+  const glyphs = useStarGlyphs('RatingDisplay', iconFilled, iconOutline);
+  const { registerItem, counts } = useRatingItemRegistry();
+  // A compact display ignores `children` (D26): it never renders items of its own, so a value
+  // from 1 to `max` without an item is never "missing" on purpose.
+  const hasItems = !compact && slotRendersContent(children);
+  useRatingItemChecks(counts, max, hasItems);
+  // Read-only: the stars take the inert actions (they choose, preview and rove nothing).
+  const context = React.useMemo<RatingContextValue>(
+    () => ({
+      ...INERT_RATING_CONTEXT,
+      kind: 'display',
+      value,
+      drawnValue: value,
+      max,
+      size,
+      color: resolvedColor,
+      glyphs,
+      registerItem,
+    }),
+    [value, max, size, resolvedColor, glyphs, registerItem],
+  );
+
   return (
     <div
       ref={ref}
       role="img"
       aria-label={name}
       data-compact={compact ? '' : undefined}
+      data-color={resolvedColor}
       className={cn(ratingDisplayClassNames.root, 'inline-flex items-center gap-0.5', className)}
       {...rest}
     >
       {compact ? (
-        <span className={cn(ratingDisplayClassNames.star, 'inline-flex text-rating')}>
-          <Star filled className={cn(ratingDisplayClassNames.icon, starSize)} />
-        </span>
+        <StarGlyph
+          starClassName={ratingDisplayClassNames.star}
+          iconClassName={ratingDisplayClassNames.icon}
+          fraction={1}
+          size={size}
+          color={resolvedColor}
+          glyphs={glyphs}
+        />
       ) : (
-        Array.from({ length: max }, (_, i) => {
-          // The share of this star that the value covers, in whole percent.
-          const percent = Math.round(Math.min(1, Math.max(0, value - i)) * 100);
-          if (percent > 0 && percent < 100) {
-            // The outline of an empty star, with the filled star clipped to the fraction over it
-            // from the inline start (the reading direction of the stars, also under RTL).
-            return (
-              <span
-                key={i}
-                className={cn(
-                  ratingDisplayClassNames.star,
-                  'relative inline-flex text-stroke-accessible',
-                )}
-              >
-                <Star filled={false} className={cn(ratingDisplayClassNames.icon, starSize)} />
-                <span
-                  className="absolute inset-y-0 start-0 flex overflow-hidden text-rating"
-                  style={{ width: `${percent}%` }}
-                >
-                  <Star filled className={cn(ratingDisplayClassNames.icon, starSize, 'shrink-0')} />
-                </span>
-              </span>
-            );
-          }
-          const filled = percent === 100;
-          return (
-            <span
-              key={i}
-              className={cn(
-                ratingDisplayClassNames.star,
-                'inline-flex',
-                filled ? 'text-rating' : 'text-stroke-accessible',
-              )}
-            >
-              <Star filled={filled} className={cn(ratingDisplayClassNames.icon, starSize)} />
-            </span>
-          );
-        })
+        <RatingContext.Provider value={context}>
+          {ratingItems(children, max)}
+        </RatingContext.Provider>
       )}
       {showText && (
         <span
@@ -498,4 +576,70 @@ export const RatingDisplay = ({
     </div>
   );
 };
-RatingDisplay.displayName = 'RatingDisplay';
+RatingDisplayRoot.displayName = 'RatingDisplay';
+
+/**
+ * A star rating input (`role="radiogroup"` of `role="radio"` stars).
+ *
+ * - One tab stop (the radio of the chosen value, else the first). Keys choose relative to the
+ *   current rating and move focus to the chosen radio, as in 0.4: Right/Up one `step` more (a
+ *   star, or half a star), Left/Down one fewer (Left/Right mirrored under `dir="rtl"`), Home the
+ *   smallest value (`step`) and End `max`. From an empty rating, Right/Up/Home choose `step`.
+ *   Keys at the ends (and Left/Down while empty) emit nothing.
+ * - The keyboard cannot clear a rating: Left/Down stop at `step` (APG radio group; 0.4 went down
+ *   to 0). Only a controlled `value={0}` (or a form reset while `defaultValue` is 0) clears it.
+ * - `step={0.5}` offers half stars. Each star stays one pointer target, which chooses by the
+ *   pointer's position (its half from the inline start, else its full value) and then focuses
+ *   the radio it chose; it holds two transparent radios ("2.5 stars", "3 stars") for the
+ *   keyboard and screen readers, and draws the focus ring of either. A controlled value between
+ *   two steps checks no radio and is drawn as the step below it; the keys move it to the next or
+ *   previous step.
+ * - `onValueChange` (and the deprecated `onChange` alias) fire only when the rating changes, so
+ *   choosing the current star again calls neither.
+ * - Hovering previews a value (half stars preview by the pointer's position); the preview never
+ *   outlives the hover or a disabled state.
+ * - `color` colors the filled stars (`marigold`, the default, `brand` or `neutral`; the root
+ *   carries `data-color`); `iconFilled` and `iconOutline` replace the star glyphs, as a pair.
+ * - Inside a `Field` it is named by the Field label (instead of the default "Rating") and
+ *   described by its hint and error. The stars are named "1 star", "2 stars", … (and a half value
+ *   "2.5 stars"); `labels` localizes these names.
+ * - With `name` (or `required`) it takes part in native forms; a form reset restores
+ *   `defaultValue`.
+ * - The stars are generated from `max`. Children that render content replace them: one
+ *   `Rating.Item` per value from 1 to `max`, chosen, previewed, roved and named as the generated
+ *   stars are (`max` still sets the key range and the star names).
+ *
+ * Sub-component: `Rating.Item` (the same component as `RatingDisplay.Item`). React Server
+ * Components import its flat name `RatingItem` (dotted access needs a client file).
+ */
+export const Rating = /* @__PURE__ */ Object.assign(RatingRoot, { Item: RatingItem });
+
+/**
+ * A read-only star rating (`role="img"` named "Rating: <value> out of <max>"). A fractional value
+ * is drawn with a partly filled star, so the stars and the name show the same value.
+ *
+ * - `showValue` adds the value as text after the stars, `count` the number of ratings ("(1,160)",
+ *   also added to the name), and `compact` shows one filled star with the value instead of `max`
+ *   stars (the root carries `data-compact`). Without them only the stars show.
+ * - The value (up to one decimal) and the count are formatted with `locale`, in the text and in
+ *   the name; `labels` localizes the name. Pass `locale` when rendering on the server.
+ * - `color` colors the filled stars (`marigold`, the default, `brand` or `neutral`; the root
+ *   carries `data-color`); `iconFilled` and `iconOutline` replace the star glyphs, as a pair.
+ * - The stars are generated from `max`. Children that render content replace them: one
+ *   `RatingDisplay.Item` per value from 1 to `max`. A `compact` display ignores them.
+ *
+ * Sub-component: `RatingDisplay.Item` (the same component as `Rating.Item`). React Server
+ * Components import its flat name `RatingDisplayItem`, or `RatingItem` (dotted access needs a
+ * client file).
+ */
+export const RatingDisplay = /* @__PURE__ */ Object.assign(RatingDisplayRoot, {
+  Item: RatingItem,
+});
+
+/**
+ * Flat name of `RatingDisplay.Item` for React Server Components (the same component as
+ * `RatingItem`).
+ */
+export const RatingDisplayItem = RatingItem;
+
+export { RatingItem, type RatingItemProps, type RatingColor } from './Rating.item';

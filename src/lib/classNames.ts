@@ -213,9 +213,24 @@ export const dividerClassNames = {
   label: 'wave-divider__label',
 } as const;
 
-/** InfoLabel: `root` on the outer span; `infoButton` on the info button; `info` on its popup. */
+/**
+ * InfoButton: `root` on the `<button>`; `info` on the `role="note"` popup that shows your `info`
+ * (Fluent's `info` slot, the popover surface); `beak` on its arrow.
+ */
+export const infoButtonClassNames = {
+  root: 'wave-info-button',
+  info: 'wave-info-button__info',
+  beak: 'wave-info-button__beak',
+} as const;
+
+/**
+ * InfoLabel: `root` on the outer span; `label` on its Label (which also carries Label's root);
+ * `infoButton` on its InfoButton (which also carries InfoButton's root); `info` on the popup, the
+ * InfoButton's note (which also carries InfoButton's `info`).
+ */
 export const infoLabelClassNames = {
   root: 'wave-info-label',
+  label: 'wave-info-label__label',
   infoButton: 'wave-info-label__info-button',
   info: 'wave-info-label__info',
 } as const;
@@ -618,8 +633,9 @@ export const alphaSliderClassNames = {
 } as const;
 
 /**
- * Rating: `root` on the `role="radiogroup"` element; `star` on each `role="radio"` button; `icon`
- * on each star `<svg>`.
+ * Rating: `root` on the `role="radiogroup"` element; `star` on each star (a RatingItem: the
+ * `role="radio"` button, or with `step={0.5}` the span around its two radios); `icon` on each
+ * star glyph (the default `<svg>`, or the span of your `iconFilled`/`iconOutline`).
  */
 export const ratingClassNames = {
   root: 'wave-rating',
@@ -628,8 +644,21 @@ export const ratingClassNames = {
 } as const;
 
 /**
- * RatingDisplay: `root` on the `role="img"` element; `star` on each star span; `icon` on the star
- * `<svg>` elements; `value` on the value span; `count` on the count span.
+ * RatingItem (also Rating.Item, RatingDisplay.Item and RatingDisplayItem): `root` on the star
+ * element (the `role="radio"` button in a Rating, the span around its two radios with
+ * `step={0.5}`, the star span in a RatingDisplay), which also carries its rating's `star` class;
+ * `icon` on each glyph it draws (the default `<svg>`, or the span of an `iconFilled`/`iconOutline`
+ * glyph), which also carries its rating's `icon` class.
+ */
+export const ratingItemClassNames = {
+  root: 'wave-rating-item',
+  icon: 'wave-rating-item__icon',
+} as const;
+
+/**
+ * RatingDisplay: `root` on the `role="img"` element; `star` on each star span (a RatingItem, and
+ * the one star of `compact`); `icon` on the star glyphs; `value` on the value span; `count` on the
+ * count span.
  */
 export const ratingDisplayClassNames = {
   root: 'wave-rating-display',

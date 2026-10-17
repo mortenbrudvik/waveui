@@ -5,7 +5,6 @@ import { isDev, reportMissingContext, warnOnce } from '../../lib/dev';
 import { slotRendersContent } from '../../lib/slot';
 import { composeEventHandlers } from '../../lib/composeEventHandlers';
 import { focusElement, getFirstTabbable, isConnectedAndFocusable } from '../../lib/focus';
-import { getLayerTreeElements } from '../../lib/layers';
 import type { PopupAlign, PopupSide, PopupTarget } from '../../lib/types';
 import { useId } from '../../hooks/useId';
 import { useControllable, type SetValue } from '../../hooks/useControllable';
@@ -25,6 +24,7 @@ import {
 import { Portal } from '../portal/Portal';
 import {
   getTabbableThrough,
+  isFocusInSurfaceTree,
   PopoverBeak,
   usePopoverTabOrder,
   type PopoverPhysicalSide,
@@ -316,20 +316,6 @@ function referencesText(doc: Document, ids: string): boolean {
 
 const subscribeNothing = (): (() => void) => () => {};
 
-/**
- * Whether focus is inside the content or in a layer opened from it (a menu of the content, whose
- * portal lives elsewhere): what keeps a hover-opened popover open. Focus on the trigger does not
- * count, although the trigger belongs to the dismiss layer.
- */
-function isFocusInsideContentTree(surface: HTMLElement | null, layerId: string): boolean {
-  const active = surface?.ownerDocument.activeElement;
-  if (!surface || !active) return false;
-  if (surface.contains(active)) return true;
-  return getLayerTreeElements(layerId, { includeOwnElements: false }).some((el) =>
-    el.contains(active),
-  );
-}
-
 /** Why an open popover opened: hover (it closes by hover), or anything else (it is pinned). */
 type OpenReason = 'hover' | 'other';
 
@@ -561,7 +547,7 @@ const PopoverRoot = ({
   // does not.
   const hoverEnabled = openOnHover && !openOnContext;
   const canHoverClose = useEventCallback(
-    () => reason === 'hover' && !isFocusInsideContentTree(surfaceRef.current, layerId),
+    () => reason === 'hover' && !isFocusInSurfaceTree(surfaceRef.current, layerId),
   );
   const {
     triggerHandlers: hoverTriggerHandlers,

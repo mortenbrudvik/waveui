@@ -1,5 +1,5 @@
 import type { Meta, StoryObj } from '@storybook/react';
-import { WaveProvider, Button, Badge, Input } from '../src';
+import { WaveProvider, Button, Badge, Combobox, Field, Input, SpinButton } from '../src';
 
 /** Sample content that relies on the provider for its colours, font and direction. */
 function SampleContent({ title = 'Theme preview' }: { title?: string }) {
@@ -101,6 +101,38 @@ export const LightInsideDark: Story = {
       <WaveProvider theme="light" className="m-6 rounded-md border border-border">
         <SampleContent title="Light preview" />
       </WaveProvider>
+    </WaveProvider>
+  ),
+};
+
+/**
+ * `inputDefaults` sets the `size` and `appearance` of every text-entry control below the provider
+ * (Input, Combobox, SpinButton, …) that does not set its own. A nested provider overrides only the
+ * keys it defines: the last field is still small, but underlined.
+ */
+export const InputDefaults: Story = {
+  args: { inputDefaults: { size: 'small', appearance: 'filled-darker' } },
+  render: (args) => (
+    <WaveProvider {...args}>
+      <div className="flex flex-col gap-4 p-6">
+        <Field label="Name">
+          <Input placeholder="Type something..." />
+        </Field>
+        <Field label="Fruit">
+          <Combobox placeholder="Pick a fruit">
+            <Combobox.Option value="apple">Apple</Combobox.Option>
+            <Combobox.Option value="banana">Banana</Combobox.Option>
+          </Combobox>
+        </Field>
+        <Field label="Quantity">
+          <SpinButton defaultValue={1} />
+        </Field>
+        <WaveProvider inputDefaults={{ appearance: 'underline' }}>
+          <Field label="Underlined name (nested provider)">
+            <Input placeholder="Type something..." />
+          </Field>
+        </WaveProvider>
+      </div>
     </WaveProvider>
   ),
 };
