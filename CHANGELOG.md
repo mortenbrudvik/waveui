@@ -5,7 +5,7 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [0.8.0] - Unreleased
+## [0.8.0] - 2026-10-17
 
 The third Fluent UI v9 parity release: Phase 3 of the [roadmap](docs/ROADMAP.md), notifications, color and trees, and a stable class name on every component and part, together with the Dialog fixes of [#4](https://github.com/mortenbrudvik/waveui/issues/4) (the surface's own margin, the body's text colour). It closes 4 high, 6 medium and 10 low gaps of the [Fluent UI v9 comparison](docs/research/fluent-ui-v9-comparison.md) (the ids in backticks below) and mitigates one more (`buttons-29`, which the public contexts of Phase 13 close); with it, all seven high gaps of the comparison are closed. Fluent's names are used where they fit Wave's conventions (`Toast.Title`, `MessageBar.Actions`, `ColorArea`, `HsvColor`, `navigationMode`, `Tree.ItemPersonaLayout`, and `buttonClassNames` after Fluent's `*ClassNames`); a state callback is named after its state and receives the value first, with extra data in a second, optional `details` argument (`onCheckedItemsChange(checkedItems, details?)`, Fluent's `onCheckedChange(event, data)`). **Nothing public was removed**, and no public type was narrowed. Changes of behaviour, DOM structure and types that are not additions are listed under [Changed](#changed): read them, and [Upgrading from 0.7](#upgrading-from-07), before upgrading if your tests assert Wave's DOM, class strings or console output.
 
