@@ -216,7 +216,7 @@ Both libraries implement the keyboard patterns of the WAI-ARIA Authoring Practic
 | Opening a Popover | moves focus into the surface | leaves focus on the trigger; Tab moves into the content | deliberate |
 | Disabled options and menu items | stay reachable with the arrow keys, as the APG recommends | skipped | a gap: options planned for 0.10, menu items in the backlog |
 | Closing the open item of a single-mode Accordion | not possible unless `collapsible` is set | always possible | a gap: no non-collapsible mode (backlog) |
-| Arrow keys between toasts | move between the toasts of a Toaster | not supported: Tab and Shift+Tab move through the toasts' controls | a gap (a roadmap follow-up) |
+| Arrow keys between toasts | move between the toasts of a Toaster (marked as a stopgap in Fluent's source) | not supported: Tab and Shift+Tab move through the toasts' controls | a gap (a roadmap follow-up) |
 | Dismissing a focused toast | Delete | Delete or Backspace (the delete key of Mac keyboards) | deliberate |
 | Checking a parent in a multi-select Tree | checks that item only (the nested Tree leaves the cascade to you) | checks the item and all its descendants; a parent shows mixed | deliberate |
 | Left and Right in a ColorArea, right to left | not mirrored | mirrored (saturation grows toward the end) | deliberate |
@@ -402,7 +402,7 @@ A type checker catches renamed props and changed callback signatures, but not th
 | Dialog | Close button | none in a modal dialog unless you add one | always rendered, named by `closeLabel` |
 | Drawer | `position` | `start` | `end` |
 | Toast | `timeout` | 3000ms | 5000ms; a toast with an action stays until it is dismissed unless you pass `timeout` |
-| Toast | pausing | off (`pauseOnHover`, `pauseOnWindowBlur`) | always: every toast while the pointer or focus is anywhere in the toast region, and while the window is in the background |
+| Toast | pausing | on focus (the toasts of a position); hover and window blur opt-in (`pauseOnHover`, `pauseOnWindowBlur`) | always: every toast while the pointer or focus is anywhere in the toast region, and while the window is in the background |
 | Toast | dismiss button | none unless you add one | on every toast |
 | Toast | severity | the dispatch options (`intent`) | the rendered Toast's `status` (the options' `status` for other content) |
 | Tree (multi-select) | checking a parent | checks the item only | checks it and its descendants; the parent shows mixed |
@@ -673,7 +673,7 @@ Each family has a table of names and, below it, what changes when you move code 
 
 - **Native forms.** Every value control and picker takes part in `<form>` submission (under a `name`), validation and reset ([3.10](#310-forms)).
 - **Announcements without a provider.** `announce()` and the live regions of MessageBar, Toast and the pickers work without setup; Fluent's `useAnnounce` needs an announcer that you mount.
-- **Toasts** pause while the pointer or focus is anywhere in the toast region, on window blur and in a hidden tab (in Fluent, pausing is opt-in), a toast with an action waits for the user, and toasts stay reachable by Tab over an open Dialog and move out of the way of an open Drawer. MessageBar and Toast say their severity ("Warning"), and the text can be translated.
+- **Toasts** pause while the pointer or focus is anywhere in the toast region, on window blur and in a hidden tab (in Fluent, pausing on hover and window blur is opt-in), a toast with an action waits for the user, and toasts stay reachable by Tab over an open Dialog and move out of the way of an open Drawer. MessageBar and Toast say their severity ("Warning"), and the text can be translated.
 - **Tree checks cascade** in the nested Tree, and a parent shows mixed; Fluent computes the cascade only with its flat-tree helper.
 - **Server HTML.** A Tooltip's text and a closed picker's options are in the server HTML; Fluent renders no tooltip on the server.
 - **Dialog isolation with `inert`** instead of `aria-modal`, so toasts and live regions stay available to assistive technology while a dialog is open. Fluent can switch to `inert` too (`inertTrapFocus`); WaveUI's isolation also exempts its toasts and live regions. `finalFocusRef` and a documented chain of fallbacks decide where focus returns ([README: Dialogs and triggers](../README.md#dialogs-and-triggers)).
