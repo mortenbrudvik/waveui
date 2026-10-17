@@ -756,6 +756,31 @@ describe('Tree - navigationMode="treegrid" (fix round)', () => {
     expect(item('Readme.md')).toHaveFocus();
   });
 
+  it('an action inside a closed details element is skipped by the shared roving rule', async () => {
+    const user = userEvent.setup();
+    render(
+      <Tree aria-label="Files" navigationMode="treegrid">
+        <Tree.Item
+          value="readme"
+          actions={
+            <>
+              <details>
+                <summary>More</summary>
+                <button type="button">Inside details</button>
+              </details>
+              <button type="button">Rename Readme</button>
+            </>
+          }
+        >
+          Readme.md
+        </Tree.Item>
+      </Tree>,
+    );
+    act(() => item('Readme.md').focus());
+    await user.keyboard('{ArrowRight}');
+    expect(button('Rename Readme')).toHaveFocus();
+  });
+
   it('Space and * on an action change no check, selection or expansion', async () => {
     const user = userEvent.setup();
     const onCheckedItemsChange = vi.fn();

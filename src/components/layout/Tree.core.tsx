@@ -16,7 +16,7 @@ import { useControllable } from '../../hooks/useControllable';
 import { useEventCallback } from '../../hooks/useEventCallback';
 import { useId } from '../../hooks/useId';
 import { useMergedRefs } from '../../hooks/useMergedRefs';
-import { useRovingTabIndex } from '../../hooks/useRovingTabIndex';
+import { isHiddenByCss, useRovingTabIndex } from '../../hooks/useRovingTabIndex';
 import {
   TreeCheckForcedContext,
   TreeContext,
@@ -111,30 +111,16 @@ const ASIDE_OFF_WITH_ACTIONS =
 const END_CELL_SHARED = '[&>*]:[grid-area:1/1] forced-colors:flex [@media(hover:none)]:flex';
 
 /**
- * Whether CSS inside `toolbar` keeps `el` from taking focus: `display: none` on it or on an
- * ancestor inside the toolbar, or `visibility: hidden`/`collapse` on it (the roving hook skips the
- * same elements; a focus call on them is ignored by browsers).
- */
-function isHiddenByCss(el: HTMLElement, toolbar: HTMLElement): boolean {
-  const view = el.ownerDocument.defaultView;
-  if (!view) return false;
-  for (let node: HTMLElement | null = el; node && node !== toolbar; node = node.parentElement) {
-    if (view.getComputedStyle(node).display === 'none') return true;
-  }
-  const { visibility } = view.getComputedStyle(el);
-  return visibility === 'hidden' || visibility === 'collapse';
-}
-
-/**
  * Focuses the first action of an item's own row that takes focus, trying them in order and
  * skipping what the roving hook skips: natively disabled, marked `data-roving-disabled`,
  * `aria-disabled` unless focusable-disabled, hidden form inputs, anything inside a `hidden` or
- * `inert` element of the toolbar, and what CSS hides (a focus call on it is ignored). `false` when
+ * `inert` element of the toolbar, and what CSS hides (the hook's own `isHiddenByCss`). `false` when
  * focus did not move into the row's actions.
  */
 function focusFirstAction(item: HTMLElement): boolean {
   const toolbar = item.querySelector<HTMLElement>(':scope > [data-tree-row] [data-tree-actions]');
   if (!toolbar) return false;
+  const cssHidden = new Map<Element, boolean>();
   for (const el of Array.from(toolbar.querySelectorAll<HTMLElement>(ACTION_ITEM_SELECTOR))) {
     if (isHiddenInput(el) || el.matches(':disabled')) continue;
     const concealed = el.closest('[hidden], [inert]');
@@ -147,7 +133,7 @@ function focusFirstAction(item: HTMLElement): boolean {
     ) {
       continue;
     }
-    if (isHiddenByCss(el, toolbar)) continue;
+    if (isHiddenByCss(el, toolbar, cssHidden)) continue;
     el.focus();
     if (el.ownerDocument.activeElement === el) return true;
   }

@@ -301,8 +301,14 @@ function canHoldTabStop(item: ResolvedItem): boolean {
  * hides the whole item set and does not count: showing it again changes nothing the hook observes,
  * so nothing would re-stamp. `cache` holds, for one resolution, whether an element hides its whole
  * subtree (the `display` and `<details>` checks).
+ *
+ * Internal: shared with Tree's treegrid navigation; not exported from the package.
  */
-function isHiddenByCss(el: Element, container: Element, cache: Map<Element, boolean>): boolean {
+export function isHiddenByCss(
+  el: Element,
+  container: Element,
+  cache: Map<Element, boolean>,
+): boolean {
   const view = el.ownerDocument.defaultView;
   if (!view) return false;
   for (let node: Element | null = el; node && node !== container; node = node.parentElement) {
