@@ -42,7 +42,8 @@ export interface SwatchItem {
 /** Built-in strings of the SwatchPicker component (C-NAMING). */
 export interface SwatchPickerLabels {
   /**
-   * Said where the picker's role cannot carry `aria-required` (the grid layout): a hidden text
+   * Said where the picker's role cannot carry `aria-required` (the grid layout, and the group of
+   * `focusMode="tab"`): a hidden text
    * joined into the picker's description while it is required.
    * @default 'Required'
    */
