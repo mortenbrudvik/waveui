@@ -110,6 +110,16 @@ export interface MessageBarProps extends React.HTMLAttributes<HTMLDivElement> {
    */
   dismiss?: Slot<'span'> | SlotObject<'button'>;
   /**
+   * How the text and the actions share the bar. `'singleline'`: the actions sit on the text's row
+   * (the text wraps inside its column; it is never cut off). `'multiline'`: the actions get a row of
+   * their own under the text. `'auto'`: the actions stay on the text's row while the text fits on
+   * one line, measured after mount (the server renders one row), and move below it otherwise; a bar
+   * without `MessageBar.Actions` is `'multiline'`, the 0.7 look. The root renders the layout in use
+   * as `data-layout` (`singleline` or `multiline`). Fluent's `layout`.
+   * @default 'auto'
+   */
+  layout?: 'auto' | 'singleline' | 'multiline';
+  /**
    * The message: body text, with the parts `MessageBar.Title` and `MessageBar.Actions` as direct
    * children (see the component docs).
    */
@@ -368,6 +378,7 @@ const MessageBarRoot = ({
   onDismiss,
   icon,
   dismiss,
+  layout = 'auto',
   children,
   className,
   ref,
@@ -503,6 +514,12 @@ const MessageBarRoot = ({
     }
   }, [missingRegionName]);
 
+  // Layout (D17): one DOM order in every layout (icon, text, actions, Dismiss), so a layout change
+  // never moves a focused element; only classes change. Without actions the bar keeps 0.7's markup.
+  const hasActions = actions.length > 0;
+  const resolvedLayout: 'singleline' | 'multiline' =
+    layout === 'auto' ? (hasActions ? 'singleline' : 'multiline') : layout;
+
   // The text column: the severity text, the title (and a space, so the two never run together),
   // then the body in its order.
   const text = (
@@ -530,6 +547,7 @@ const MessageBarRoot = ({
     <div
       ref={ref}
       role={defaultRole}
+      data-layout={resolvedLayout}
       {...rest}
       aria-labelledby={labelledBy}
       className={cn(
@@ -542,9 +560,14 @@ const MessageBarRoot = ({
     >
       <MessageBarPartContext.Provider value={CONTENT_PLACEMENT}>
         {renderedIcon}
-        {actions.length > 0 ? (
+        {hasActions ? (
           // A layout wrapper (not a part): the text column and the actions, in this DOM order.
-          <div className="flex min-w-0 flex-1 items-start gap-x-3 gap-y-2">
+          <div
+            className={cn(
+              'flex min-w-0 flex-1 gap-x-3 gap-y-2',
+              resolvedLayout === 'multiline' ? 'flex-col' : 'items-start',
+            )}
+          >
             {text}
             <MessageBarPartContext.Provider value={ACTIONS_PLACEMENT}>
               {actions.map(({ key, element }) => (

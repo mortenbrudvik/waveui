@@ -1,9 +1,10 @@
 import * as React from 'react';
 import { afterEach, describe, expect, expectTypeOf, it, vi } from 'vitest';
 import { renderToString } from 'react-dom/server';
-import { render, screen, within } from '@testing-library/react';
+import { act, render, screen, within } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import { MessageBar, MessageBarActions, MessageBarTitle } from '../MessageBar';
-import type { MessageBarActionsProps, MessageBarTitleProps } from '../MessageBar';
+import type { MessageBarActionsProps, MessageBarProps, MessageBarTitleProps } from '../MessageBar';
 import { Button } from '../../button/Button';
 import {
   messageBarActionsClassNames,
@@ -16,6 +17,7 @@ import {
   expectThrows,
   findDanglingIdRefs,
   findDanglingIdRefsInHtml,
+  renderWithProviders,
   testCompoundExposure,
   testSystemProps,
 } from '../../../test-utils';
@@ -69,6 +71,38 @@ function actionsOf(node: HTMLElement): HTMLElement {
   const actions = node.closest<HTMLElement>(`.${messageBarActionsClassNames.root}`);
   if (!actions) throw new Error('not inside MessageBar.Actions');
   return actions;
+}
+
+const statuses = ['info', 'success', 'warning', 'error'] as const;
+const layouts = ['singleline', 'multiline'] as const;
+
+/** Classes that cut text off; no layout may put them on the text column (D17, WCAG 1.4.10). */
+const CLIPPING_CLASSES = [
+  'truncate',
+  'text-ellipsis',
+  'text-clip',
+  'overflow-hidden',
+  'line-clamp-1',
+];
+
+/** A bar with a title, a link in its text, two actions and the Dismiss button. */
+function FullBar({
+  layout,
+  status,
+}: {
+  layout?: MessageBarProps['layout'];
+  status?: MessageBarProps['status'];
+}) {
+  return (
+    <MessageBar layout={layout} status={status} onDismiss={() => {}}>
+      <MessageBar.Title>Update available</MessageBar.Title>
+      Read the <a href="#notes">release notes</a>.
+      <MessageBar.Actions>
+        <Button>Update now</Button>
+        <Button>Later</Button>
+      </MessageBar.Actions>
+    </MessageBar>
+  );
 }
 
 describe('MessageBar parts (P3-04)', () => {
@@ -491,5 +525,112 @@ describe('MessageBar parts (P3-04)', () => {
       );
       await expectNoA11yViolations();
     });
+  });
+
+  describe('layouts (D17)', () => {
+    it.each([
+      ['auto without actions', 'multiline', undefined, false],
+      ['singleline without actions', 'singleline', 'singleline', false],
+      ['multiline without actions', 'multiline', 'multiline', false],
+      ['auto with actions, first render', 'singleline', undefined, true],
+      ['singleline with actions', 'singleline', 'singleline', true],
+      ['multiline with actions', 'multiline', 'multiline', true],
+    ] as const)('%s: data-layout="%s"', (_label, expected, layout, withActions) => {
+      render(
+        <MessageBar layout={layout}>
+          Body
+          {withActions && (
+            <MessageBar.Actions>
+              <Button>Retry</Button>
+            </MessageBar.Actions>
+          )}
+        </MessageBar>,
+      );
+      expect(screen.getByRole('status')).toHaveAttribute('data-layout', expected);
+    });
+
+    it.each(layouts)(
+      'keeps one DOM order in the %s layout: icon, text, actions, Dismiss',
+      (layout) => {
+        render(<FullBar layout={layout} />);
+        const bar = screen.getByRole('status');
+        const icon = bar.querySelector<HTMLElement>(`.${messageBarClassNames.icon}`);
+        expect(icon).not.toBeNull();
+        const order = [
+          icon!,
+          textColumn(bar),
+          actionsOf(screen.getByRole('button', { name: 'Update now' })),
+          screen.getByRole('button', { name: 'Dismiss' }),
+        ];
+        for (let i = 1; i < order.length; i++) {
+          expect(
+            order[i - 1].compareDocumentPosition(order[i]) & Node.DOCUMENT_POSITION_FOLLOWING,
+          ).toBeTruthy();
+        }
+      },
+    );
+
+    it.each(layouts)(
+      'tabs through the text, the actions and Dismiss in the %s layout',
+      async (layout) => {
+        const user = userEvent.setup();
+        render(<FullBar layout={layout} />);
+        await user.tab();
+        expect(screen.getByRole('link', { name: 'release notes' })).toHaveFocus();
+        await user.tab();
+        expect(screen.getByRole('button', { name: 'Update now' })).toHaveFocus();
+        await user.tab();
+        expect(screen.getByRole('button', { name: 'Later' })).toHaveFocus();
+        await user.tab();
+        expect(screen.getByRole('button', { name: 'Dismiss' })).toHaveFocus();
+      },
+    );
+
+    it('stacks the actions under the text only in the multiline layout', () => {
+      const { rerender } = render(<FullBar layout="singleline" />);
+      const actions = actionsOf(screen.getByRole('button', { name: 'Update now' }));
+      expect(actions.parentElement).not.toHaveClass('flex-col');
+      rerender(<FullBar layout="multiline" />);
+      expect(actions.parentElement).toHaveClass('flex-col');
+    });
+
+    it('keeps the focused action when the layout changes (nothing moves in the DOM)', () => {
+      const { rerender } = render(<FullBar layout="singleline" />);
+      const action = screen.getByRole('button', { name: 'Update now' });
+      act(() => action.focus());
+      rerender(<FullBar layout="multiline" />);
+      expect(screen.getByRole('button', { name: 'Update now' })).toBe(action);
+      expect(action).toHaveFocus();
+    });
+
+    it.each(layouts)('never cuts the text off and uses no inline style (%s)', (layout) => {
+      render(<FullBar layout={layout} />);
+      const bar = screen.getByRole('status');
+      const text = textColumn(bar);
+      expect(text).not.toHaveClass('whitespace-nowrap');
+      for (const cls of CLIPPING_CLASSES) expect(text).not.toHaveClass(cls);
+      expect(bar).not.toHaveAttribute('style');
+      expect(bar.querySelectorAll('[style]')).toHaveLength(0);
+    });
+
+    it('places the actions and the Dismiss button at the end in RTL', () => {
+      renderWithProviders(<FullBar layout="singleline" />, { dir: 'rtl' });
+      const bar = screen.getByRole('status');
+      expect(bar.closest('[dir]')).toHaveAttribute('dir', 'rtl');
+      const dismiss = screen.getByRole('button', { name: 'Dismiss' });
+      expect(dismiss).toHaveClass('ms-auto');
+      const actions = actionsOf(screen.getByRole('button', { name: 'Update now' }));
+      expect(
+        textColumn(bar).compareDocumentPosition(actions) & Node.DOCUMENT_POSITION_FOLLOWING,
+      ).toBeTruthy();
+    });
+
+    it.each(statuses.flatMap((status) => layouts.map((layout) => [status, layout] as const)))(
+      'has no accessibility violations: %s bar with a title and actions (%s)',
+      async (status, layout) => {
+        render(<FullBar status={status} layout={layout} />);
+        await expectNoA11yViolations();
+      },
+    );
   });
 });

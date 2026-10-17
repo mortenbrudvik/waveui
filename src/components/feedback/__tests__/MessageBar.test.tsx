@@ -55,6 +55,46 @@ describe('MessageBar', () => {
     expectTypeOf<MessageBarProps['ref']>().toEqualTypeOf<React.Ref<HTMLDivElement> | undefined>();
   });
 
+  describe('layout (P3-04)', () => {
+    it('renders data-layout="multiline" by default and keeps the 0.7 markup of a bar without actions', () => {
+      render(
+        <MessageBar onDismiss={() => {}} data-testid="bar">
+          Msg
+        </MessageBar>,
+      );
+      const bar = screen.getByTestId('bar');
+      expect(bar).toHaveAttribute('data-layout', 'multiline');
+      expect(Array.from(bar.children, (child) => child.tagName)).toEqual(['SPAN', 'DIV', 'BUTTON']);
+      expect(bar.children[1]).toHaveClass('min-w-0', 'flex-1', 'text-body-1');
+      expect(bar.children[1]).not.toHaveClass('whitespace-nowrap');
+    });
+
+    it('an explicit singleline bar without actions renders the same markup', () => {
+      const { container, rerender } = render(<MessageBar onDismiss={() => {}}>Msg</MessageBar>);
+      const auto = container.innerHTML.replace('data-layout="multiline"', '');
+      rerender(
+        <MessageBar layout="singleline" onDismiss={() => {}}>
+          Msg
+        </MessageBar>,
+      );
+      expect(screen.getByRole('status')).toHaveAttribute('data-layout', 'singleline');
+      expect(container.innerHTML.replace('data-layout="singleline"', '')).toBe(auto);
+    });
+
+    it('types layout as a union', () => {
+      expectTypeOf<MessageBarProps['layout']>().toEqualTypeOf<
+        'auto' | 'singleline' | 'multiline' | undefined
+      >();
+      const elements = [
+        // @ts-expect-error `wrap` is not a layout
+        <MessageBar key="1" layout="wrap">
+          Msg
+        </MessageBar>,
+      ];
+      expect(elements).toHaveLength(1);
+    });
+  });
+
   it('renders children', () => {
     render(<MessageBar>Hello world</MessageBar>);
     expect(screen.getByText('Hello world')).toBeInTheDocument();
