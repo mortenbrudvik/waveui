@@ -572,4 +572,117 @@ describe('a region that loses focus silently (fix round 1)', () => {
     advance(5000);
     expect(getToasts()).toHaveLength(0);
   });
+
+  it('keeps the origin when the window blurs with focus in a layer opened from a toast', () => {
+    const { input } = openMenuFromToast();
+    const archive = screen.getByRole('button', { name: 'Archive' });
+    // The window loses focus: a blur with no related target, focus stays on the element.
+    fireEvent.blur(archive, { relatedTarget: null });
+    fireEvent.keyDown(archive, { key: 'Escape' });
+    expect(screen.getByRole('button', { name: 'More' })).toHaveFocus();
+    fireEvent.keyDown(screen.getByRole('button', { name: 'More' }), { key: 'Escape' });
+    expect(getToasts()).toHaveLength(0);
+    expect(input).toHaveFocus();
+  });
+});
+
+/** A button that opens a plain portal (no dismiss layer, no anchor): a Dialog's shape. */
+function PlainPortalStandIn() {
+  const [open, setOpen] = React.useState(false);
+  const innerRef = React.useRef<HTMLButtonElement>(null);
+  React.useLayoutEffect(() => {
+    if (open) innerRef.current?.focus();
+  }, [open]);
+  return (
+    <>
+      <button type="button" onClick={() => setOpen(true)}>
+        Open plain
+      </button>
+      {open ? (
+        <Portal>
+          <button ref={innerRef} type="button">
+            Inside plain
+          </button>
+        </Portal>
+      ) : null}
+    </>
+  );
+}
+
+/** A dismiss layer elsewhere in the page, switched by a button. */
+function OutsideLayer() {
+  const [open, setOpen] = React.useState(false);
+  const ref = React.useRef<HTMLButtonElement>(null);
+  useDismiss({ open, onDismiss: () => setOpen(false), refs: [ref], anchorRef: ref, kind: 'menu' });
+  return (
+    <button ref={ref} type="button" onClick={() => setOpen((value) => !value)}>
+      Toggle layer
+    </button>
+  );
+}
+
+/** A toast action that swaps itself for text when pressed (focus falls to the body, no blur). */
+function UndoAction() {
+  const [done, setDone] = React.useState(false);
+  return done ? (
+    <span>Undone</span>
+  ) : (
+    <button type="button" onClick={() => setDone(true)}>
+      Undo
+    </button>
+  );
+}
+
+describe('reconcile focus only after a silent fall to the page (fix round 2)', () => {
+  beforeEach(() => {
+    vi.useFakeTimers();
+  });
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it('keeps every toast paused while focus is in a plain portal opened from a toast, across settled and layer changes', async () => {
+    const { dispatch, dispatchContent } = renderToaster({}, { app: <OutsideLayer /> });
+    dispatchContent(
+      <Toast>
+        <Toast.Title action={<PlainPortalStandIn />}>Saved</Toast.Title>
+      </Toast>,
+      { timeout: 3000 },
+    );
+    act(() => screen.getByRole('button', { name: 'Open plain' }).focus());
+    fireEvent.click(screen.getByRole('button', { name: 'Open plain' }));
+    expect(screen.getByRole('button', { name: 'Inside plain' })).toHaveFocus();
+    // A settled change: another toast.
+    dispatch({ title: 'Other', timeout: 3000 });
+    advance(10_000);
+    expect(getToasts()).toHaveLength(2);
+    // A layer change anywhere in the page.
+    fireEvent.click(screen.getByRole('button', { name: 'Toggle layer' }));
+    await act(async () => {});
+    advance(10_000);
+    expect(getToasts()).toHaveLength(2);
+    expect(screen.getByRole('button', { name: 'Inside plain' })).toHaveFocus();
+  });
+
+  it('does not restore a stale origin on a later unrelated change', async () => {
+    const { dispatch, dispatchContent } = renderToaster({}, { app: <input aria-label="Name" /> });
+    const input = screen.getByRole('textbox', { name: 'Name' });
+    dispatchContent(
+      <Toast>
+        <Toast.Title action={<UndoAction />}>Saved</Toast.Title>
+      </Toast>,
+      { timeout: 0 },
+    );
+    act(() => input.focus());
+    const undo = screen.getByRole('button', { name: 'Undo' });
+    act(() => undo.focus());
+    // The window blurs: the pause ends, the origin is kept, focus stays on Undo.
+    fireEvent.blur(undo, { relatedTarget: null });
+    // Undo is replaced by text: focus falls to the body with no blur.
+    fireEvent.click(undo);
+    expect(document.body).toHaveFocus();
+    dispatch({ title: 'Later', timeout: 0 });
+    await act(async () => {});
+    expect(input).not.toHaveFocus();
+  });
 });

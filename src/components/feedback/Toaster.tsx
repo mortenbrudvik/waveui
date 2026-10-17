@@ -300,6 +300,8 @@ interface ToastTimers {
   clear(): void;
   /** `true` while the pointer (`'hover'`) or focus (`'focus'`) is in the toast region. */
   setPaused(reason: PauseReason, paused: boolean): void;
+  /** Whether the region is paused for `reason`. */
+  isPaused(reason: PauseReason): boolean;
   /** `true` while the window has lost focus or the page is not shown (a background tab). */
   setInBackground(inBackground: boolean): void;
   /** `true` while the Toaster is unmounted (including StrictMode's simulated unmount). */
@@ -357,6 +359,9 @@ function createToastTimers(onExpire: (id: string) => void): ToastTimers {
     clear() {
       for (const id of Array.from(timers.keys())) stop(id);
       started.clear();
+    },
+    isPaused(reason) {
+      return pauses.has(reason);
     },
     setPaused(reason, paused) {
       if (paused) pauses.add(reason);
@@ -1153,28 +1158,31 @@ export const Toaster = ({
     return previousFocus?.isConnected ? previousFocus : null;
   }, []);
 
-  // Focus can leave the region without a blur reaching the viewport: a layer opened from a toast
-  // goes away with its toast while focus is inside it. Whenever the toasts or the layers change,
-  // the 'focus' pause follows where focus really is, and focus that fell to the page body returns
-  // to the remembered origin, as it does when a focused toast goes.
+  // Focus can fall to the page body without a blur reaching the viewport: the node that had it
+  // (a layer opened from a toast, a button replaced by text) is gone. A move to a real element
+  // always sends blur and focus through React, so only a fall to the body is reconciled, whenever
+  // the toasts or the layers change: the 'focus' pause ends, and while the region still held it,
+  // focus returns to the remembered origin, as it does when a focused toast goes. The origin is
+  // forgotten either way.
   const reconcileFocus = useEventCallback(() => {
     const viewport = viewportRef.current;
     if (!viewport) return;
     const doc = viewport.ownerDocument;
-    const active = doc.activeElement;
-    if (active && active !== doc.body && isInToastRegion(viewport, active)) return;
+    if (doc.activeElement && doc.activeElement !== doc.body) return;
+    const held = timers.isPaused('focus');
     timers.setPaused('focus', false);
     const origin = previousFocusRef.current;
-    if (active && active !== doc.body) return;
-    if (origin && isConnectedAndFocusable(origin)) {
-      previousFocusRef.current = null;
-      origin.focus({ preventScroll: true });
-    }
+    previousFocusRef.current = null;
+    if (held && origin && isConnectedAndFocusable(origin)) origin.focus({ preventScroll: true });
   });
   React.useLayoutEffect(() => {
     reconcileFocus();
   }, [settled, reconcileFocus]);
-  React.useLayoutEffect(() => subscribeLayers(reconcileFocus), [reconcileFocus]);
+  // A layer's cleanup can notify while its focused node is still connected: look a tick later.
+  React.useLayoutEffect(
+    () => subscribeLayers(() => queueMicrotask(reconcileFocus)),
+    [reconcileFocus],
+  );
 
   // The latest entries and every container element, for the shortcut's document listener.
   const toastsRef = React.useRef<ToastEntry[]>(settled);
