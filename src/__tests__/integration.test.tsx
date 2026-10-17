@@ -4401,7 +4401,7 @@ describe('compounds composed in a React Server Component', () => {
         await user.click(button('Logo'));
         expect(cellOf('Logo')).toHaveAttribute('aria-selected', 'true');
         expect(cellOf('Blue')).toHaveAttribute('aria-selected', 'false');
-        expect(within(cellOf('Add color') as HTMLElement).getByRole('button')).toBeInTheDocument();
+        expect(cellOf('Add color')).not.toHaveAttribute('aria-selected', 'true');
       },
     }),
     ssrCase({
@@ -5706,10 +5706,10 @@ describe('multi-select Dropdown and Combobox in a form (spec §4.4 #2)', () => {
       await user.click(screen.getByRole('combobox', { name: 'Fruit' }));
       await user.click(screen.getByRole('option', { name: 'Cherry' }));
       expect(new FormData(form).getAll('fruit')).toEqual(['a', 'b', 'c']);
-      expect(onValueChange).toHaveBeenLastCalledWith(['a', 'b', 'c']);
+      expect(onValueChange.mock.calls).toEqual([[['a', 'b', 'c']]]);
 
       await user.click(button('Reset'));
-      expect(onValueChange).toHaveBeenLastCalledWith(['a', 'b']);
+      expect(onValueChange.mock.calls).toEqual([[['a', 'b', 'c']], [['a', 'b']]]);
       expect(new FormData(form).getAll('fruit')).toEqual(['a', 'b']);
     },
   );
@@ -5731,9 +5731,10 @@ describe('a Listbox in a Dialog (spec §4.4 #3)', () => {
     );
     const dialog = screen.getByRole('dialog', { name: 'Order' });
     const list = within(dialog).getByRole('listbox', { name: 'Fruit' });
-    for (let presses = 0; presses < 4 && document.activeElement !== list; presses += 1) {
-      await user.tab();
-    }
+    // The Dialog opens on its Close button; one Tab reaches the list, the next wraps to Close.
+    const close = within(dialog).getByRole('button', { name: 'Close' });
+    expect(close).toHaveFocus();
+    await user.tab();
     expect(list).toHaveFocus();
     const activeName = () =>
       document.getElementById(list.getAttribute('aria-activedescendant') ?? '')?.textContent;
@@ -5782,7 +5783,6 @@ describe('a Tooltip with relationship="label" around a ColorSwatch (spec §4.4 #
           name: 'Ocean blue',
         },
       );
-      expect(blue).toBeInTheDocument();
       await user.tab();
       expect(blue).toHaveFocus();
       await waitFor(() => expect(tooltipSurface()).toHaveTextContent('Ocean blue'));
@@ -5829,7 +5829,9 @@ describe('a Popover opened from an EmptySwatch holding a ColorPicker (spec §4.4
     expect(red).toHaveAttribute('aria-checked', 'true');
     await user.keyboard('{ArrowRight}');
     expect(popup).toContainElement(document.activeElement as HTMLElement);
-    expect(document.activeElement).not.toBe(red);
+    const swatches = within(popup).getAllByRole('radio');
+    expect(swatches.indexOf(red)).toBeGreaterThanOrEqual(0);
+    expect(swatches[swatches.indexOf(red) + 1]).toHaveFocus();
     expect(onOuterChange).not.toHaveBeenCalled();
     const outerRed = screen
       .getByRole('button', { name: 'Red', hidden: true })
@@ -6019,10 +6021,13 @@ describe('the custom picker of the Listbox story, on the package entry alone (sp
     render(<FontPicker onSubmit={() => {}} />);
     const input = screen.getByRole('combobox', { name: 'Font' });
     await user.click(input);
-    await user.keyboard('geo');
+    await user.keyboard('ver{Enter}');
+    expect(input).toHaveValue('Verdana');
+    await user.keyboard('{Control>}a{/Control}geo');
+    expect(input).toHaveValue('geo');
     expect(screen.getAllByRole('option')).toHaveLength(1);
     await user.keyboard('{Escape}');
     expect(screen.queryByRole('listbox')).not.toBeInTheDocument();
-    expect(input).toHaveValue('');
+    expect(input).toHaveValue('Verdana');
   });
 });

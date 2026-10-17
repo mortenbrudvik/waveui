@@ -31,10 +31,10 @@ import ts from 'typescript';
 import { describe, expect, expectTypeOf, it } from 'vitest';
 import type {
   AccordionBaseProps,
-  addDays,
-  addMonths,
   AccordionMultipleProps,
   AccordionSingleProps,
+  addDays,
+  addMonths,
   AlphaSliderLabels,
   AlphaSliderProps,
   BadgeColor,
@@ -968,8 +968,16 @@ describe('0.10 listbox primitives, useActiveDescendant and the date types from t
     expectTypeOf<{ freeform: true }>().not.toExtend<ComboboxProps<true>>();
     // A boolean variable matches neither call signature.
     expectTypeOf<{ multiselect: boolean }>().not.toExtend<DropdownProps>();
+    expectTypeOf<{ multiselect: boolean }>().not.toExtend<ComboboxProps>();
+    expectTypeOf<{ multiselect: boolean }>().not.toExtend<ListboxProps>();
     expectTypeOf<{ multiselect: boolean }>().not.toExtend<
       DropdownProps<true> & { multiselect: true }
+    >();
+    expectTypeOf<{ multiselect: boolean }>().not.toExtend<
+      ComboboxProps<true> & { multiselect: true }
+    >();
+    expectTypeOf<{ multiselect: boolean }>().not.toExtend<
+      ListboxProps<true> & { multiselect: true }
     >();
     // A generic interface can extend ComboboxProps, as DropdownProps does.
     interface WrappedComboboxProps<M extends boolean = false> extends ComboboxProps<M> {
