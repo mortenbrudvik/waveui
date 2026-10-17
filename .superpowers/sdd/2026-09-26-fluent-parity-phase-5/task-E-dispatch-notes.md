@@ -32,3 +32,20 @@ Never run `git checkout`, `restore`, `stash`, `reset` or any other git write. To
 
 ## After the Phase 3 merge (ruling R26, spec rule 22)
 Every part the calendar tasks add (Calendar root, CalendarView header, heading button, the day, month and year grids and cells, week-number cells, the marked-day dot, the footer buttons) follows P3-00: a stable class name from the registry in `src/lib/classNames.ts`, its registry constant and JSDoc, and a case in `src/components/input/__tests__/stableClassNames.test.tsx`. DatePicker already has its Phase 3 classes: the extraction (E2) moves them with the markup unchanged, and Phase 3's DatePicker stable-class tests count as part of the regression suite (rule 23).
+
+## E4 additions (from E3's review)
+- Calendar JSDoc "Server rendering": `today`, `initialVisibleDate` or a value fix the month; only `today` marks the day in the server HTML — reword so the first sentence does not overpromise.
+- The fallback tab stop is the first day in range (it may be an unavailable day, focusable by design): align the JSDoc wording ("first day in range").
+- `required`/`labels.required` JSDoc: a consumer `aria-required` alone also shows the Required hint (ARIA only, not native validation).
+- Add a StrictMode form-reset test: `onValueChange` once with the restored range.
+
+## E5 additions (from E3's review)
+- Widen the `labels` prop JSDoc as E4/E5 use more members; `DatePickerLabels extends CalendarLabels` with `close` (D36); `CalendarValueChangeDetails.range` JSDoc gains the `selectionRange` wording.
+
+## E5 additions (from E4's review, task-E4-review.md)
+- M1: DatePicker JSDoc: Escape steps back from the month/year view first (closes only from the day view); mention the heading button.
+- M2: add a test: minDate after maxDate in different years — arrow keys in the year/month views never hang (pin the current behaviour).
+- M3: a controlled value that moves while the month view is open: decide with R29 (the shared view shows the value's month) — the month view follows the new year; add the test.
+- M4: `showMonthPicker` turned off while the month or year view is open returns to the day view (derive during render, C-HOOKS); test it, focus not on body.
+- M5: add a StrictMode drill-down test (focus in the grid, no duplicate callbacks) and tests pinning the Escape handler's IME (isComposing), already-defaultPrevented and own-event guards.
+- M6: move the two DatePicker checks (dialog name with the heading button, Escape in the month view keeps the dialog open) from Calendar.test.tsx to DatePicker.test.tsx as additions (new tests are allowed; existing ones outside §6.4 stay unchanged).

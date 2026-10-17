@@ -256,3 +256,42 @@ Task P3A: review (sonnet) — Approved, 0 Critical/Important, 2 Minor
 Task P3A: note (→ G1 CHANGELOG, DOM changes): the Dropdown, Combobox and TagPicker popups carry wave-listbox-surface and wave-listbox-surface__list
 Task P3A: complete (commits 5b63233..b1d4e1f)
 Task D5: dispatched (base b1d4e1f, sonnet; follows P3-00)
+Task D5: implemented, committed 7900cba (DONE; RED 19 failing; tab-mode swatches keep data-roving-value (used to focus the first swatch on an invalid submit)); both tsc clean; review package review-D5.diff
+Task D5: review (sonnet) — Approved, 0 Critical/Important, 3 Minor; M1 (ref JSDoc omits tab mode) fixed by the controller (R21, doc only; build-css, prettier clean); M2 (no test that a Row in a Fragment does not warn), M3 (description Tooltip only in tab mode) deferred
+Task D5: complete (commits a65ed99..HEAD)
+Package P5-swatches: complete (D1-D5)
+Task E1: dispatched (sonnet; notes task-E-dispatch-notes.md)
+Task E1: implemented 0d9440e; review (sonnet) Approved, 4 Minor; M1, M2 test gaps closed by the implementer, verified by the controller (19 pass) and committed; M3, M4 deferred
+Task E1: complete
+Task E2: dispatched (opus; pure move, DatePicker suite unchanged, rule 23)
+Task E2: implemented, committed 613f7b7 (DONE; no test edited; baseline 183/183, after 352/352)
+Ruling R27: CalendarView and CalendarDayGrid take an internal partClassNames map (precedent Menu.items.tsx; P3-00 D4: each public component names its own constants literally); DatePicker passes its literal map, the standalone Calendar (E3) passes the calendar constants — cost if wrong: none (internal prop).
+Task E2 notes: an unavailable day's click is blocked in the grid (was in selectDate); the grid id prefix is calendar-grid; CalendarLabels has previousMonth/nextMonth until E3
+Task E2: review (opus) — Approved, 0 Critical/Important, 3 Minor; M1 (CalendarViewPartClassNames should extend CalendarDayGridPartClassNames) → E3; M2, M3 deferred
+Task E2: complete (613f7b7)
+Ruling R28: E3 runs on opus (R4 said sonnet) — hydration-safe today, forms, Field and the required hint, like the tasks that needed fix rounds — cost if wrong: model cost only.
+Task E3: dispatched (opus)
+Task E3: implemented, committed ef07a8c (DONE; 56 Calendar tests, 9 mutations caught; registry keys previousButton/nextButton (E4 reuses them))
+Ruling R29: a DatePicker whose value changes while its dialog is open shows the new month (the shared CalendarView applies D25's rule); 0.7 kept the old month — consistent with the Calendar, a rare case, no DatePicker test changes — record in spec §10 and the CHANGELOG — cost if wrong: an internal opt-out prop on CalendarView.
+Pending spec §10 + G1 CHANGELOG: R29
+Task E3: review (opus) — Approved, 0 Critical/Important, 5 Minor; M1, M2, M4 (JSDoc), M3 (StrictMode reset test) → E4; M5 → E5 notes
+Task E3: complete (ef07a8c)
+Task E4: dispatched (opus)
+Task E4: DONE (implementer report task-E4-report.md); 22 mutations caught
+Ruling R30: keep DatePicker's headingButton/month/year keys — C-CLASS requires a stable class on every public part DatePicker renders, and §3.3 lists only the keys known at spec time — cost if wrong: 3 keys to drop before 1.0 (none removable after)
+Ruling R31: year view arrows stay in the 12-cell decade page while the year is on it; PageUp/PageDown move a decade — spec silent; mirrors the day grid's PageUp/PageDown by month — cost if wrong: key handler change in Calendar.views.tsx. Record R30, R31 in spec §10 (wave D)
+Task E4: committed 15587ea; review (opus) dispatched, package review-E4.diff
+Task E4: review (opus) — Spec PASS, Approved, 0 Critical/Important, 6 Minor; all six routed to E5 notes
+Task E4: complete (15587ea)
+Task E5: dispatched (sonnet, R4)
+Task E5: DONE_WITH_CONCERNS (CalendarLabels + SelectionRange exports → F1 notes; own-event Escape guard untestable, kept defensive); committed b752b49; review (opus) dispatched, package review-E5.diff
+Task E5: review (opus) — Spec PASS WITH FIXES, 0 Critical, 2 Important (I1 footer Escape closes DatePicker in month view; I2 marked dot invisible in forced colours), 8 Minor
+Task E5: fix round 1 (resume implementer, sonnet) — I1, I2 + 7 minors
+Task E5: fix round 1 DONE, committed cca4160; scoped re-review (sonnet) dispatched
+Task E5: re-review (sonnet) — APPROVED, all findings addressed, no new issues
+Task E5: complete (b752b49, cca4160)
+Task E6: dispatched (sonnet)
+Task E6: DONE; controller fix (R21): CloseButton story lacked showCloseButton, open DatePicker stories get docs iframe params; committed 0173a32; review (sonnet) dispatched
+Task E6: review (sonnet) — PASS/PASS, 0 Critical/Important, 2 Minor (Controlled story text; module-path imports, wave C)
+Task E6: complete (0173a32)
+Package P5-calendar (E1–E6): complete

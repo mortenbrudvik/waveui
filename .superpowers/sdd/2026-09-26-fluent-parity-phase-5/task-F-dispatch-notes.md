@@ -19,3 +19,7 @@ Binding spec: `docs/superpowers/specs/2026-09-26-fluent-parity-phase-5-design.md
 ## After the Phase 3 merge
 - F1 also empties `integration.test.tsx`'s `PENDING_FLAT_MEMBERS` (task P3A put `SwatchPickerRow` there) once the barrel exports `SwatchPickerRow`, and checks every new export against Phase 3's class-name completeness test.
 - The CHANGELOG and docs (wave D) start from the merged 0.8.0 section; Phase 4 (0.9.0) still merges in wave F.
+
+## From E5
+- `CalendarLabels` is now a fifth known public-types failure (DatePickerLabels extends it): F1 exports `Calendar`, `CalendarProps`, `CalendarLabels`, `CalendarValueChangeDetails` from the input barrel and checks public-types is clean.
+- `SelectionRange` (dateUtils.ts, used by the public CalendarProps/DatePickerProps) must be exported from the entry too; the public-types test should then be clean.

@@ -10,3 +10,7 @@ Add these to the spec's §6.3 checklist run (`/browser-check`), each with its ob
 6. **Escape hand-off of a custom picker (A6 note):** a custom picker built from the docs closes on Escape and hands Escape to an enclosing Dialog while it shows nothing, and ignores Escape during an IME composition.
 7. **Multi-select Combobox after a toggle (B2 review, R18):** the labels are selected again after a toggle, Escape and a reset; an IME composition started right after a toggle keeps its text; whether screen readers announce the re-selection (acceptable, or noisy?).
 8. **Typing text identical to the whole labels (B2 review):** with sizes S/M/L and M selected, typing `M` over the selected labels changes no value, so React fires no change: note what happens (list closed? Enter submits?) and file a backlog item if it matters.
+
+## From E5
+- Calendar marked-day dot visible in forced colours (Windows High Contrast / emulated forced-colors) on unselected, selected and range days.
+- Calendar view change by keyboard keeps focus in the calendar in Safari; clicking a non-focusing button elsewhere after using the calendar does not pull focus back (accepted edge case, note result).
