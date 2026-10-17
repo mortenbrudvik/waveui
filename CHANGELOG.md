@@ -5,7 +5,7 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [0.9.0] - Unreleased
+## [0.9.0] - 2026-10-17
 
 The Fluent UI v9 parity release for form controls: Phase 4 of the [roadmap](docs/ROADMAP.md), size, appearance, values and labels. It closes 15 medium and 19 low gaps of the [Fluent UI v9 comparison](docs/research/fluent-ui-v9-comparison.md) (the ids in backticks below). Fluent's names are used where they fit Wave's conventions (`size`, `appearance`, `displayValue`, `iconFilled`, `iconOutline`, `RatingItem`, `InfoButton`); where a rule of Wave wins, the JSDoc names the Fluent prop (`openOnHover` for the roadmap's `openOn`). **Nothing public was removed**, and no public type was narrowed except the `color` attribute that `Rating` and `RatingDisplay` inherit from `React.HTMLAttributes`; `WaveContextValue` gains a required `inputDefaults`, so a context value built by hand must add it (see [Types](#types)). Changes of behaviour, DOM structure and types that are not additions are listed under [Changed](#changed): read them before upgrading if your tests assert Wave's DOM or console output.
 
