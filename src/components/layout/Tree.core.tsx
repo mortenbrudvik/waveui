@@ -490,8 +490,9 @@ export interface TreeItemProps extends React.HTMLAttributes<HTMLDivElement> {
 
 /**
  * Sets the typeahead text (`data-roving-text`, read by the roving hook) of every rendered
- * treeitem to the text of its label (a persona layout's name when the label holds one), so neither the icon nor the nested items take part. A
- * consumer `data-roving-text` on a Tree.Item is kept on its label and wins.
+ * treeitem to the text of its label (a persona layout's name when the label holds one), so neither
+ * the icon nor the nested items take part. A consumer `data-roving-text` on a Tree.Item is kept on
+ * its label and wins.
  */
 function syncTypeaheadText(tree: HTMLElement): void {
   tree.querySelectorAll<HTMLElement>('[role="treeitem"]').forEach((treeitem) => {
