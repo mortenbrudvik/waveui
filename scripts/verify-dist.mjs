@@ -44,7 +44,8 @@
  *     does. The bundle also keeps Button's class string `'wave-button'` and drops the Dialog
  *     surface's `'wave-dialog-content'` (the registry is tree-shaken per constant; a listed
  *     string that occurs in no module of dist is an error); an import of only `Field` contains
- *     no InfoButton module, so a Field-only bundle never includes InfoButton's overlay code;
+ *     no InfoButton module, so a Field-only bundle never includes InfoButton's overlay code,
+ *     nor its class string `'wave-info-button'`;
  *   - presence core: an import of only `Presence` contains `hooks/usePresence` (the probe finds
  *     the core where it is used), and the closure of `usePresence` + `Presence`, minified with
  *     bare imports external, stays within {@link PRESENCE_BUDGET} and imports nothing but
@@ -153,6 +154,12 @@ const SERVER_SAFE_MODULES = [
  * and drops the Dialog surface's, so the registry (`lib/classNames`) is tree-shaken per constant.
  */
 const BUTTON_ONLY_STRINGS = { keepStrings: ['wave-button'], dropStrings: ['wave-dialog-content'] };
+
+/**
+ * The class-name strings of the Field-only probe (0.9): Field reaches no InfoButton code, so its
+ * bundle also drops InfoButton's root class from the registry.
+ */
+const FIELD_ONLY_STRINGS = { dropStrings: ['wave-info-button'] };
 
 const JS_FILE = /\.(mjs|cjs|js)$/;
 
@@ -1419,6 +1426,7 @@ export async function verifyDist(
         keep: 'Field',
         drop: 'InfoButton',
         dropModules: [INFO_BUTTON_MODULE],
+        ...FIELD_ONLY_STRINGS,
       })),
     );
   } catch (error) {

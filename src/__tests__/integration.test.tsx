@@ -308,6 +308,8 @@ describe('public barrel (spec §5.11, C-COMPOUND)', () => {
       'ListRegistry',
       'useInputLook',
       'markFieldLabel',
+      'InfoNoteClassContext',
+      'isFocusInSurfaceTree',
       'isFieldLabelElement',
       'FIELD_LABEL',
       'StarGlyph',

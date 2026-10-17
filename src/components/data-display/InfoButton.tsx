@@ -413,7 +413,7 @@ export const InfoButton = ({
             onPointerEnter={hoverSurfaceHandlers.onPointerEnter}
             onPointerLeave={hoverSurfaceHandlers.onPointerLeave}
             className={cn(
-              infoButtonClassNames.surface,
+              infoButtonClassNames.info,
               noteClassName,
               'w-max max-w-[min(20rem,calc(100vw-1rem))] rounded-md border border-border bg-background px-3 py-2 text-caption-1 text-foreground shadow-16',
             )}
@@ -425,9 +425,7 @@ export const InfoButton = ({
               data-wave-popover-arrow=""
               className={infoButtonClassNames.beak}
             />
-            <div id={infoId} className={infoButtonClassNames.info}>
-              {info}
-            </div>
+            <div id={infoId}>{info}</div>
           </div>
         </Portal>
       )}

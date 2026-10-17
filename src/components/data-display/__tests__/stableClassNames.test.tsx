@@ -235,7 +235,7 @@ describe('stable class names (P3-00): data-display folder', () => {
     for (const line of lines) expect(line).toHaveClass(dividerClassNames.line);
   });
 
-  it('InfoButton: root, and the note with its beak and info element; the glyph and the hidden description have no class', async () => {
+  it('InfoButton: root, the note (info) and its beak; the glyph, the hidden description and the wrapper in the note have no class', async () => {
     render(<InfoButton info="Invoices are sent monthly" />);
     const button = screen.getByRole('button', { name: 'Information' });
     expect(button).toHaveClass(infoButtonClassNames.root);
@@ -250,15 +250,16 @@ describe('stable class names (P3-00): data-display folder', () => {
       button.focus();
     });
     await act(async () => {});
+    // The note is the `info` part (Fluent's `info` slot, the popover surface; judgement 24).
     const note = screen.getByRole('note', { name: 'Information' });
-    expect(note).toHaveClass(infoButtonClassNames.surface);
-    // A standalone InfoButton carries none of InfoLabel's classes.
+    expect(note).toHaveClass(infoButtonClassNames.info);
+    // A standalone InfoButton carries none of InfoLabel's classes; the marker stays (as in 0.8).
+    expect(note).toHaveAttribute('data-wave-infolabel-surface');
     expect(note).not.toHaveClass(infoLabelClassNames.info);
     expect(button).not.toHaveClass(infoLabelClassNames.infoButton);
     expect(note.querySelector('[data-wave-popover-arrow]')).toHaveClass(infoButtonClassNames.beak);
-    expect(within(note).getByText('Invoices are sent monthly')).toHaveClass(
-      infoButtonClassNames.info,
-    );
+    // The element inside the note that holds `info` is a wrapper (judgement 27).
+    expect(within(note).getByText('Invoices are sent monthly').className).toBe('');
   });
 
   it('InfoLabel: root, its Label and InfoButton with their part classes, and the note as the info part', async () => {
@@ -275,11 +276,10 @@ describe('stable class names (P3-00): data-display folder', () => {
     });
     await act(async () => {});
     // The popup keeps 0.8's `info` class (the element with the data-wave-infolabel-surface
-    // marker), next to InfoButton's own surface class.
+    // marker), next to InfoButton's own `info` class.
     const note = screen.getByRole('note', { name: 'Email Information' });
     expect(note).toHaveAttribute('data-wave-infolabel-surface');
-    expect(note).toHaveClass(infoButtonClassNames.surface, infoLabelClassNames.info);
-    expect(within(note).getByText('Used to sign in')).toHaveClass(infoButtonClassNames.info);
+    expect(note).toHaveClass(infoButtonClassNames.info, infoLabelClassNames.info);
   });
 
   it("InfoLabel: an InfoButton inside its info content does not take the label's info class", async () => {
@@ -301,7 +301,7 @@ describe('stable class names (P3-00): data-display folder', () => {
     });
     await act(async () => {});
     const innerNote = screen.getByRole('note', { name: 'More' });
-    expect(innerNote).toHaveClass(infoButtonClassNames.surface);
+    expect(innerNote).toHaveClass(infoButtonClassNames.info);
     expect(innerNote).not.toHaveClass(infoLabelClassNames.info);
   });
 

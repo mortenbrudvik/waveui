@@ -214,20 +214,19 @@ export const dividerClassNames = {
 } as const;
 
 /**
- * InfoButton: `root` on the `<button>`; `surface` on the `role="note"` popup; `beak` on its
- * arrow; `info` on the element inside it that holds your `info`.
+ * InfoButton: `root` on the `<button>`; `info` on the `role="note"` popup that shows your `info`
+ * (Fluent's `info` slot, the popover surface); `beak` on its arrow.
  */
 export const infoButtonClassNames = {
   root: 'wave-info-button',
-  surface: 'wave-info-button__surface',
-  beak: 'wave-info-button__beak',
   info: 'wave-info-button__info',
+  beak: 'wave-info-button__beak',
 } as const;
 
 /**
  * InfoLabel: `root` on the outer span; `label` on its Label (which also carries Label's root);
  * `infoButton` on its InfoButton (which also carries InfoButton's root); `info` on the popup, the
- * InfoButton's note (which also carries InfoButton's `surface`).
+ * InfoButton's note (which also carries InfoButton's `info`).
  */
 export const infoLabelClassNames = {
   root: 'wave-info-label',

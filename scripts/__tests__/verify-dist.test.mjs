@@ -116,7 +116,7 @@ function goodFiles() {
   // Field and InfoButton (0.9): Field reaches no InfoButton code, so an import of only Field
   // drops the InfoButton module.
   const field = component('Field');
-  const infoButton = component('InfoButton');
+  const infoButton = component('InfoButton', [], 'infoButtonClassNames');
   const card = component('Card', ['Header']);
   const dialog = component('Dialog', ['Trigger', 'Content']);
   // The presence core (0.7): a hook and a component on it, with React external.
@@ -233,10 +233,12 @@ function createToaster() {
       "exports.cn = function cn(...inputs) { return inputs.filter(Boolean).join(' '); };\n",
     'dist/lib/classNames.mjs':
       "export const buttonClassNames = { root: 'wave-button', icon: 'wave-button__icon' };\n" +
-      "export const dialogContentClassNames = { root: 'wave-dialog-content', body: 'wave-dialog-content__body' };\n",
+      "export const dialogContentClassNames = { root: 'wave-dialog-content', body: 'wave-dialog-content__body' };\n" +
+      "export const infoButtonClassNames = { root: 'wave-info-button', info: 'wave-info-button__info' };\n",
     'dist/lib/classNames.cjs':
       "exports.buttonClassNames = { root: 'wave-button', icon: 'wave-button__icon' };\n" +
-      "exports.dialogContentClassNames = { root: 'wave-dialog-content', body: 'wave-dialog-content__body' };\n",
+      "exports.dialogContentClassNames = { root: 'wave-dialog-content', body: 'wave-dialog-content__body' };\n" +
+      "exports.infoButtonClassNames = { root: 'wave-info-button', info: 'wave-info-button__info' };\n",
     'dist/lib/dev.mjs': dev('export const isDev = isDevEnvironment();\n'),
     'dist/lib/dev.cjs': dev('exports.isDev = isDevEnvironment();\n'),
     'dist/hooks/useThing.mjs': `${DIRECTIVE}import { useState } from 'react';\nexport function useThing() { return useState(0); }\n`,
@@ -272,6 +274,7 @@ function createToaster() {
     'dist/index.mjs':
       "export { cn } from './lib/cn.mjs';\n" +
       "export { buttonClassNames, dialogContentClassNames } from './lib/classNames.mjs';\n" +
+      "export { infoButtonClassNames } from './lib/classNames.mjs';\n" +
       "export { useThing } from './hooks/useThing.mjs';\n" +
       "export { Button } from './components/button/Button.mjs';\n" +
       "export { Field } from './components/input/Field.mjs';\n" +
@@ -310,6 +313,7 @@ function createToaster() {
       'exports.Field = field.Field;\nexports.InfoButton = infoButton.InfoButton;\n' +
       'exports.buttonClassNames = classNames.buttonClassNames;\n' +
       'exports.dialogContentClassNames = classNames.dialogContentClassNames;\n' +
+      'exports.infoButtonClassNames = classNames.infoButtonClassNames;\n' +
       'exports.Card = card.Card;\nexports.CardHeader = card.CardHeader;\n' +
       'exports.Dialog = dialog.Dialog;\nexports.DialogTrigger = dialog.DialogTrigger;\n' +
       'exports.DialogContent = dialog.DialogContent;\n' +
@@ -1132,6 +1136,7 @@ describe('probeTreeShaking: a Field-only bundle (0.9)', () => {
     keep: 'Field',
     drop: 'InfoButton',
     dropModules: ['components/data-display/InfoButton.mjs'],
+    dropStrings: ['wave-info-button'],
   };
 
   it('passes when Field reaches no InfoButton code', async () => {
@@ -1151,6 +1156,23 @@ describe('probeTreeShaking: a Field-only bundle (0.9)', () => {
     expect(await probeTreeShaking(dist, fieldDrop)).toEqual([
       'components/data-display/InfoButton.mjs is in the bundle of an import of only Field (InfoButton must be dropped)',
       'InfoButton code (displayName "InfoButton") is in the bundle of an import of only Field',
+      'the bundle of an import of only Field contains the string "wave-info-button" (an unused class-name constant was not tree-shaken)',
+    ]);
+  });
+
+  it("reports InfoButton's class string in the bundle of an import of only Field", async () => {
+    const files = goodFiles();
+    const { dist } = fixture({
+      // Field now also uses InfoButton's constant (not its module), so its bundle keeps the string.
+      'dist/components/input/Field.mjs': files['dist/components/input/Field.mjs']
+        .replace(
+          "import { cn } from '../../lib/cn.mjs';\n",
+          "import { cn } from '../../lib/cn.mjs';\nimport { infoButtonClassNames } from '../../lib/classNames.mjs';\n",
+        )
+        .replace('return cn(', 'return cn(infoButtonClassNames.root, '),
+    });
+    expect(await probeTreeShaking(dist, fieldDrop)).toEqual([
+      'the bundle of an import of only Field contains the string "wave-info-button" (an unused class-name constant was not tree-shaken)',
     ]);
   });
 });
@@ -1596,6 +1618,7 @@ describe('verifyDist and main', () => {
     expect(errors).toEqual([
       'components/data-display/InfoButton.mjs is in the bundle of an import of only Field (InfoButton must be dropped)',
       'InfoButton code (displayName "InfoButton") is in the bundle of an import of only Field',
+      'the bundle of an import of only Field contains the string "wave-info-button" (an unused class-name constant was not tree-shaken)',
     ]);
   }, 30_000);
 
