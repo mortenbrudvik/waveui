@@ -7,6 +7,7 @@ import { renderSlot, slotRendersContent } from '../../lib/slot';
 import type { Slot } from '../../lib/slot';
 import { focusRing, forcedColors, motionSafeTransition } from '../../lib/styles';
 import type { Shape } from '../../lib/types';
+import { useId } from '../../hooks/useId';
 import { unwrapButtonGlyph, type UnwrappedButton } from '../button/Button.slots';
 import { useSwatchPickerContext, type SwatchPickerSize } from './SwatchPicker.context';
 import { getCheckColors, type CheckColors } from './colorUtils';
@@ -150,6 +151,19 @@ function outlineOffset(spacing: 'small' | 'medium'): string {
   return spacing === 'small' ? 'focus-visible:outline-offset-2' : 'focus-visible:outline-offset-4';
 }
 
+/**
+ * The cell around a swatch's button in the grid layout: it carries only the role and, for a swatch
+ * with a value, `aria-selected` (a `gridcell` role on the button would replace its button role,
+ * which `aria-pressed` needs). Every consumer prop stays on the button.
+ */
+function SwatchGridCell({ selected, children }: { selected?: boolean; children: React.ReactNode }) {
+  return (
+    <div role="gridcell" aria-selected={selected} className="flex shrink-0">
+      {children}
+    </div>
+  );
+}
+
 /** The classes every swatch kind shares: size, shape, box, motion, focus ring and disabled look. */
 function swatchBaseClasses(
   size: SwatchPickerSize,
@@ -198,7 +212,7 @@ export interface ColorSwatchProps extends Omit<
    * @default the picker's
    */
   shape?: Shape;
-  /** Ref to the `role="radio"` button. */
+  /** Ref to the swatch button (`role="radio"` in the row layout, inside its cell in the grid layout). */
   ref?: React.Ref<HTMLButtonElement>;
 }
 
@@ -254,11 +268,13 @@ const SwatchRadio = ({
     select,
     size,
     shape,
+    layout,
     spacing,
     getTabIndex,
     register,
   } = useSwatchContext(kind, sizeProp, shapeProp);
   const isSelected = selectedValue === value;
+  const isGrid = layout === 'grid';
   const glyph = useSwatchIcon(kind, icon);
 
   React.useLayoutEffect(() => register(value), [register, value]);
@@ -268,16 +284,18 @@ const SwatchRadio = ({
     if (!named) warnUnnamedSwatch(kind, value, fallbackKind);
   }, [named, kind, value, fallbackKind]);
 
-  return (
+  const button = (
     <button
       type="button"
-      role="radio"
+      // The grid layout: a plain button inside its gridcell, pressed while selected (D20).
+      role={isGrid ? undefined : 'radio'}
       {...rest}
       ref={ref}
       disabled={disabled}
       aria-label={ariaLabel ?? (ariaLabelledBy ? undefined : defaultName)}
       aria-labelledby={ariaLabelledBy}
-      aria-checked={isSelected}
+      aria-checked={isGrid ? undefined : isSelected}
+      aria-pressed={isGrid ? isSelected || undefined : undefined}
       data-roving-value={value}
       data-selected={isSelected ? '' : undefined}
       tabIndex={getTabIndex(value)}
@@ -317,6 +335,7 @@ const SwatchRadio = ({
       {disabled && <SwatchSlash colors={checkColors} />}
     </button>
   );
+  return isGrid ? <SwatchGridCell selected={isSelected}>{button}</SwatchGridCell> : button;
 };
 SwatchRadio.displayName = 'SwatchRadio';
 
@@ -375,7 +394,7 @@ export interface ImageSwatchProps extends Omit<
    * @default the picker's
    */
   shape?: Shape;
-  /** Ref to the `role="radio"` button. */
+  /** Ref to the swatch button (`role="radio"` in the row layout, inside its cell in the grid layout). */
   ref?: React.Ref<HTMLButtonElement>;
 }
 
@@ -442,7 +461,8 @@ export interface EmptySwatchProps extends React.ButtonHTMLAttributes<HTMLButtonE
 /**
  * An "add" button inside a `SwatchPicker` (for example to open a color dialog): it has no value
  * and is never selected. In the row layout it is a plain button with its own tab stop, outside
- * the radio group's arrow order, and arrow keys pressed on it do nothing. Outside a
+ * the radio group's arrow order, and arrow keys pressed on it do nothing. In the grid layout it
+ * is a cell like the others, in the arrow order (without `aria-selected`). Outside a
  * `SwatchPicker` it throws in development and renders inertly in production.
  *
  * @example
@@ -460,7 +480,15 @@ export const EmptySwatch = ({
   ref,
   ...rest
 }: EmptySwatchProps) => {
-  const { size, shape, spacing } = useSwatchContext('EmptySwatch', sizeProp, shapeProp);
+  const { size, shape, layout, spacing, getTabIndex } = useSwatchContext(
+    'EmptySwatch',
+    sizeProp,
+    shapeProp,
+  );
+  const isGrid = layout === 'grid';
+  // The grid's roving keys address cells by value: an EmptySwatch, which has none, gets its own
+  // (never selected, never submitted).
+  const cellValue = useId('wave-empty-swatch');
   const { glyph, button } = unwrapButtonGlyph(icon);
   useSwatchIconWarning('EmptySwatch', button);
   // The optional-indicator rule: `null`/`undefined` keep the plus, anything that renders nothing
@@ -472,15 +500,16 @@ export const EmptySwatch = ({
       glyph
     );
 
-  return (
+  const control = (
     <button
       type="button"
       {...rest}
       ref={ref}
       aria-label={ariaLabel ?? (ariaLabelledBy ? undefined : 'Add color')}
       aria-labelledby={ariaLabelledBy}
-      // The picker's root skips its arrow handling for events from here.
+      // The row layout's root skips its arrow handling for events from here.
       data-wave-empty-swatch=""
+      {...(isGrid && { 'data-roving-value': cellValue, tabIndex: getTabIndex(cellValue) })}
       className={cn(
         swatchBaseClasses(size, shape, spacing),
         'border-dashed border-stroke-accessible bg-transparent text-foreground',
@@ -493,5 +522,6 @@ export const EmptySwatch = ({
         renderSlot(content, 'span', 'pointer-events-none inline-flex', { 'aria-hidden': true })}
     </button>
   );
+  return isGrid ? <SwatchGridCell>{control}</SwatchGridCell> : control;
 };
 EmptySwatch.displayName = 'EmptySwatch';
