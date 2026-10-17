@@ -488,3 +488,88 @@ describe('region-wide pausing (P3-03, D14)', () => {
     expect(input).toHaveFocus();
   });
 });
+
+describe('a region that loses focus silently (fix round 1)', () => {
+  beforeEach(() => {
+    vi.useFakeTimers();
+  });
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  /** Opens the stand-in menu of a toast with focus coming from the "Name" input. */
+  function openMenuFromToast(props: Parameters<typeof renderToaster>[0] = {}) {
+    const utils = renderToaster(props, { app: <input aria-label="Name" /> });
+    const input = screen.getByRole('textbox', { name: 'Name' });
+    const id = utils.dispatchContent(
+      <Toast>
+        <Toast.Title action={<MenuStandIn />}>Saved</Toast.Title>
+      </Toast>,
+      { toastId: 'menu', timeout: 3000 },
+    );
+    act(() => input.focus());
+    act(() => screen.getByRole('button', { name: 'More' }).focus());
+    fireEvent.click(screen.getByRole('button', { name: 'More' }));
+    expect(screen.getByRole('button', { name: 'Archive' })).toHaveFocus();
+    return { ...utils, input, id };
+  }
+
+  it('resumes the timers of later toasts and returns focus to the origin when the toast with an open layer is dismissed', () => {
+    const { dismiss, dispatch, input, id } = openMenuFromToast();
+    dismiss(id);
+    advance(1000);
+    expect(input).toHaveFocus();
+    dispatch({ title: 'Later', timeout: 3000 });
+    advance(3001);
+    expect(getToasts()).toHaveLength(0);
+  });
+
+  it('does the same when the toast with an open layer is replaced by its toastId', () => {
+    const { dispatch, input } = openMenuFromToast();
+    dispatch({ toastId: 'menu', title: 'Plain', timeout: 3000 });
+    expect(screen.queryByRole('button', { name: 'Archive' })).not.toBeInTheDocument();
+    expect(input).toHaveFocus();
+    advance(3001);
+    expect(getToasts()).toHaveLength(0);
+  });
+
+  it('never remembers an origin that cannot take focus (inside an inert subtree)', () => {
+    const { dispatch, dismissAll } = renderToaster(
+      {},
+      {
+        app: (
+          <div inert>
+            <button type="button">Hidden</button>
+          </div>
+        ),
+      },
+    );
+    dispatch({ title: 'Toast', timeout: 0 });
+    const hidden = screen.getByText('Hidden');
+    act(() => hidden.focus());
+    act(() => within(getToasts()[0]).getByRole('button', { name: 'Dismiss' }).focus());
+    dismissAll();
+    advance(1000);
+    expect(hidden).not.toHaveFocus();
+  });
+
+  it('keeps the earlier origin when the shortcut is pressed with focus in a layer opened from a toast', () => {
+    const { input, dismissAll } = openMenuFromToast({ shortcuts: { focus: altShiftN } });
+    pressAltShiftN(screen.getByRole('button', { name: 'Archive' }));
+    dismissAll();
+    advance(1000);
+    expect(input).toHaveFocus();
+  });
+
+  it('starts a toast dispatched while the region is paused paused', () => {
+    const { dispatch } = renderToaster();
+    dispatch({ title: 'First' });
+    fireEvent.pointerOver(getToasts()[0]);
+    dispatch({ title: 'Fresh' });
+    advance(20_000);
+    expect(getToasts()).toHaveLength(2);
+    fireEvent.pointerOut(getToasts()[0], { relatedTarget: document.body });
+    advance(5000);
+    expect(getToasts()).toHaveLength(0);
+  });
+});
