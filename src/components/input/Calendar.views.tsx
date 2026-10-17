@@ -1,10 +1,12 @@
 import * as React from 'react';
-import type { DayOfWeek } from '../../lib/types';
+import type { DayOfWeek, FirstWeekOfYear } from '../../lib/types';
 import { cn } from '../../lib/cn';
 import { composeEventHandlers } from '../../lib/composeEventHandlers';
 import { focusableDisabledProps } from '../../lib/aria';
 import { getArrowIntent, getDirection } from '../../lib/direction';
 import { disabledStyles, focusRing, forcedColors } from '../../lib/styles';
+import { getWeekNumber } from '../../lib/date';
+import type { CalendarLabels } from './Calendar';
 import {
   addDays,
   addMonths,
@@ -19,7 +21,7 @@ import {
 // An unavailable day stays focusable in the roving grid (`aria-disabled`); the day button adds
 // `disabledStyles`, whose dimmed look lifts while the focus ring shows (opacity would dim the ring).
 const DAY_CLASSES =
-  'flex h-8 w-8 items-center justify-center rounded bg-transparent p-0 text-caption-1 text-foreground not-disabled:not-aria-disabled:hover:bg-subtle-hover data-[outside]:text-muted-foreground data-[today]:border data-[today]:border-primary data-[today]:font-semibold data-[selected]:bg-primary data-[selected]:font-semibold data-[selected]:text-primary-foreground not-disabled:not-aria-disabled:data-[selected]:hover:bg-primary-hover aria-disabled:line-through';
+  'relative flex h-8 w-8 items-center justify-center rounded bg-transparent p-0 text-caption-1 text-foreground not-disabled:not-aria-disabled:hover:bg-subtle-hover data-[outside]:text-muted-foreground data-[today]:border data-[today]:border-primary data-[today]:font-semibold data-[selected]:bg-primary data-[selected]:font-semibold data-[selected]:text-primary-foreground not-disabled:not-aria-disabled:data-[selected]:hover:bg-primary-hover aria-disabled:line-through';
 
 /** Internal: the stable classes of the day view's parts (see `CalendarDayGridProps.partClassNames`). */
 export interface CalendarDayGridPartClassNames {
@@ -29,6 +31,12 @@ export interface CalendarDayGridPartClassNames {
   weekday?: string;
   /** On each day button. */
   day?: string;
+  /** On the header cell of the week-number column. */
+  weekNumberHeader?: string;
+  /** On each week's row header (its number). */
+  weekNumber?: string;
+  /** On the dot inside the button of a marked day. */
+  markedDot?: string;
 }
 
 /** Internal props of {@link CalendarDayGrid}. */
@@ -43,14 +51,29 @@ export interface CalendarDayGridProps {
   weeks: Date[][];
   /** The roving day: the only day button in the tab order, and the start of the arrow keys. */
   focusTarget: Date;
-  /** The selected day (`aria-selected` on its cell, `aria-pressed` on its button). */
-  value: Date | null;
+  /**
+   * The selected days as ISO dates (`yyyy-mm-dd`): `aria-selected` on their cells, `aria-pressed`
+   * and `data-selected` on their buttons.
+   */
+  selectedDays: ReadonlySet<string>;
   /** Today's day (`aria-current="date"`), or `null` while it is unknown (no day is marked). */
   today: Date | null;
   /** First day of the week, the first column (Home and End move to the row's ends). */
   firstDayOfWeek: DayOfWeek;
   /** BCP 47 locale of the weekday names, the day numbers and the day labels. */
   locale?: string;
+  /** Adds a leading column of week numbers. @default false */
+  showWeekNumbers?: boolean;
+  /** Which week is week 1 of a year. @default 'first-day' */
+  firstWeekOfYear?: FirstWeekOfYear;
+  /** Returns `true` for days that draw a dot and are named "marked". */
+  markedDates?: (date: Date) => boolean;
+  /** Replaces the content of a day button (`defaultContent` is the day number). */
+  renderDay?: (date: Date, defaultContent: React.ReactNode) => React.ReactNode;
+  /** The accessible name of a day, from its default name (marked included). */
+  dayLabel?: (date: Date, defaultLabel: string) => string;
+  /** Names of the week-number column and the marked days. */
+  labels?: CalendarLabels;
   /** Whether a day cannot be picked; it stays focusable and is `aria-disabled`. */
   isUnavailable: (date: Date) => boolean;
   /** Called with the day a key moves to (before clamping into the bounds). */
@@ -78,10 +101,16 @@ export const CalendarDayGrid = ({
   viewMonth,
   weeks,
   focusTarget,
-  value,
+  selectedDays,
   today,
   firstDayOfWeek,
   locale,
+  showWeekNumbers = false,
+  firstWeekOfYear = 'first-day',
+  markedDates,
+  renderDay,
+  dayLabel,
+  labels,
   isUnavailable,
   onMoveFocus,
   onDayFocus,
@@ -147,6 +176,20 @@ export const CalendarDayGrid = ({
     >
       <thead>
         <tr>
+          {showWeekNumbers && (
+            // The weekday headers' pattern: a visible symbol hidden from assistive technology and
+            // a visually hidden name (an aria-label alone on an empty header fails axe).
+            <th
+              scope="col"
+              className={cn(
+                partClassNames?.weekNumberHeader,
+                'h-8 w-8 text-center text-caption-1 font-normal text-muted-foreground',
+              )}
+            >
+              <span aria-hidden="true">#</span>
+              <span className="sr-only">{labels?.week ?? 'Week'}</span>
+            </th>
+          )}
           {weekdays.map((weekday) => (
             <th
               key={weekday.long}
@@ -169,9 +212,29 @@ export const CalendarDayGrid = ({
           // Rows and cells are keyed by position, so the focused button survives a month change
           // and focus stays in the grid while it moves to the new day.
           <tr key={row}>
+            {showWeekNumbers && (
+              <th
+                scope="row"
+                aria-label={(labels?.weekNumber ?? defaultWeekNumber)(
+                  getWeekNumber(week[0], { firstDayOfWeek, firstWeekOfYear }),
+                )}
+                className={cn(
+                  partClassNames?.weekNumber,
+                  'h-8 w-8 text-center text-caption-1 font-normal text-muted-foreground',
+                )}
+              >
+                {getWeekNumber(week[0], { firstDayOfWeek, firstWeekOfYear })}
+              </th>
+            )}
             {week.map((day, column) => {
               const iso = formatISODate(day);
-              const isSelected = isSameDay(day, value);
+              const isSelected = selectedDays.has(iso);
+              const isMarked = !!markedDates?.(day);
+              const number = formatDayNumber(day, locale);
+              const baseLabel = formatDayLabel(day, locale);
+              const defaultLabel = isMarked
+                ? (labels?.markedDay ?? defaultMarkedDay)(baseLabel)
+                : baseLabel;
               const isToday = isSameDay(day, today);
               const isFocused = iso === focusIso;
               const unavailable = isUnavailable(day);
@@ -183,13 +246,14 @@ export const CalendarDayGrid = ({
                   <button
                     type="button"
                     tabIndex={isFocused ? 0 : -1}
-                    aria-label={formatDayLabel(day, locale)}
+                    aria-label={dayLabel ? dayLabel(day, defaultLabel) : defaultLabel}
                     aria-pressed={isSelected || undefined}
                     aria-current={isToday ? 'date' : undefined}
                     {...focusableDisabledProps(unavailable)}
                     data-date={iso}
                     data-selected={isSelected ? '' : undefined}
                     data-today={isToday ? '' : undefined}
+                    data-marked={isMarked ? '' : undefined}
                     data-outside={isSameMonth(day, viewMonth) ? undefined : ''}
                     onFocus={() => onDayFocus(day)}
                     onClick={() => {
@@ -203,7 +267,18 @@ export const CalendarDayGrid = ({
                       isSelected && forcedColors.selectedLeaf,
                     )}
                   >
-                    {formatDayNumber(day, locale)}
+                    {renderDay ? renderDay(day, number) : number}
+                    {isMarked && (
+                      // Decorative: the day's name says "marked". It is drawn in the text colour
+                      // of the day, so it follows the selected and forced-colors looks.
+                      <span
+                        aria-hidden="true"
+                        className={cn(
+                          partClassNames?.markedDot,
+                          'pointer-events-none absolute inset-x-0 bottom-0.5 mx-auto h-1 w-1 rounded-full bg-current',
+                        )}
+                      />
+                    )}
                   </button>
                 </td>
               );
@@ -216,6 +291,9 @@ export const CalendarDayGrid = ({
 };
 
 CalendarDayGrid.displayName = 'CalendarDayGrid';
+
+const defaultMarkedDay = (dayLabel: string) => `${dayLabel}, marked`;
+const defaultWeekNumber = (week: number) => `Week ${week}`;
 
 // The month and year cells: the day buttons' look in a wider cell (C-NATIVE padding and
 // background, the gated hover, the selected fill).

@@ -1,11 +1,21 @@
 import * as React from 'react';
-import { afterEach, beforeEach, describe, it, expect, expectTypeOf, vi } from 'vitest';
+import {
+  afterEach,
+  beforeEach,
+  describe,
+  it,
+  expect,
+  expectTypeOf,
+  onTestFinished,
+  vi,
+} from 'vitest';
 import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { hydrateRoot } from 'react-dom/client';
 import { renderToString } from 'react-dom/server';
 import userEvent from '@testing-library/user-event';
 import { composeStories } from '@storybook/react';
 import * as stories from '../../../../stories/DatePicker.stories';
+import type { CalendarLabels } from '../Calendar';
 import { DatePicker, type DatePickerLabels, type DatePickerProps } from '../DatePicker';
 import { formatDate } from '../dateUtils';
 import {
@@ -2117,6 +2127,263 @@ describe('DatePicker', () => {
       await user.type(textbox(), '2025-03-02{Enter}');
       expect(textbox()).toHaveValue('2025-03-02');
       expect(textbox()).not.toHaveAttribute('aria-invalid');
+    });
+  });
+
+  describe('the shared calendar (0.10)', () => {
+    /** Records `defaultPrevented` of every Escape that reaches the document. */
+    function trackEscapes() {
+      const seen: boolean[] = [];
+      const listener = (event: KeyboardEvent) => {
+        if (event.key === 'Escape') seen.push(event.defaultPrevented);
+      };
+      document.addEventListener('keydown', listener);
+      onTestFinished(() => document.removeEventListener('keydown', listener));
+      return seen;
+    }
+
+    it('names the dialog and the grid by the month text, with the heading button inside the heading', async () => {
+      const user = userEvent.setup();
+      render(<DatePicker aria-label="Date" locale="en-US" defaultValue={JUNE_15} />);
+      await user.click(toggle());
+      const popup = dialog();
+      expect(popup).toHaveAccessibleName('June 2025');
+      expect(within(popup).getByRole('grid')).toHaveAccessibleName('June 2025');
+      const heading = within(popup).getByRole('heading', { level: 2, name: 'June 2025' });
+      const button = within(heading).getByRole('button', { name: 'June 2025' });
+      expect(button).toHaveAccessibleDescription('Choose a month');
+      expect(heading).not.toContainElement(
+        document.getElementById(button.getAttribute('aria-describedby') ?? ''),
+      );
+    });
+
+    it('keeps the dialog open on Escape in its month view, focus inside the dialog', async () => {
+      const escapes = trackEscapes();
+      const user = userEvent.setup();
+      const onOpenChange = vi.fn();
+      render(
+        <DatePicker
+          aria-label="Date"
+          locale="en-US"
+          defaultValue={JUNE_15}
+          onOpenChange={onOpenChange}
+        />,
+      );
+      await user.click(toggle());
+      const popup = dialog();
+      await user.click(within(popup).getByRole('button', { name: 'June 2025' }));
+      expect(within(popup).getByRole('grid')).toHaveAccessibleName('2025');
+      expect(popup).toContainElement(document.activeElement as HTMLElement);
+      await user.click(within(popup).getByRole('button', { name: '2025' }));
+      expect(popup).toContainElement(document.activeElement as HTMLElement);
+      await user.keyboard('{Escape}');
+      await act(async () => {});
+      expect(within(popup).getByRole('grid')).toHaveAccessibleName('2025');
+      expect(popup).toContainElement(document.activeElement as HTMLElement);
+      await user.keyboard('{Escape}');
+      await act(async () => {});
+      expect(within(popup).getByRole('grid')).toHaveAccessibleName('June 2025');
+      expect(document.activeElement).toHaveAccessibleName('Sunday, June 15, 2025');
+      expect(onOpenChange).toHaveBeenCalledTimes(1);
+      await user.keyboard('{Escape}');
+      expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+      expect(escapes).toEqual([true, true, true]);
+      expect(onOpenChange.mock.calls).toEqual([[true], [false]]);
+    });
+
+    it('forwards week numbers, firstWeekOfYear and firstDayOfWeek to its calendar', async () => {
+      const user = userEvent.setup();
+      render(
+        <DatePicker
+          aria-label="Date"
+          locale="en-US"
+          defaultValue={JUNE_15}
+          showWeekNumbers
+          firstDayOfWeek={1}
+          firstWeekOfYear="first-four-day-week"
+        />,
+      );
+      await user.click(toggle());
+      const rowHeaders = within(dialog()).getAllByRole('rowheader');
+      expect(rowHeaders[0]).toHaveAttribute('aria-label', 'Week 22');
+      expect(rowHeaders[1]).toHaveAttribute('aria-label', 'Week 23');
+      expect(within(dialog()).getAllByRole('columnheader')[0]).toHaveAccessibleName('Week');
+    });
+
+    it('forwards markedDates, renderDay and dayLabel', async () => {
+      const user = userEvent.setup();
+      render(
+        <DatePicker
+          aria-label="Date"
+          locale="en-US"
+          defaultValue={JUNE_15}
+          markedDates={(date) => date.getDate() === 16}
+          renderDay={(date, content) => (date.getDate() === 17 ? <>{content} (3)</> : content)}
+          dayLabel={(date, label) => (date.getDate() === 17 ? `${label}, 3 events` : label)}
+        />,
+      );
+      await user.click(toggle());
+      expect(dayButton('Monday, June 16, 2025, marked')).toHaveAttribute('data-marked');
+      expect(dayButton('Tuesday, June 17, 2025, 3 events')).toHaveTextContent('17 (3)');
+    });
+
+    it('forwards today and initialVisibleDate', async () => {
+      const user = userEvent.setup();
+      render(
+        <DatePicker
+          aria-label="Date"
+          locale="en-US"
+          today={new Date(2031, 2, 9)}
+          initialVisibleDate={new Date(2031, 2, 1)}
+        />,
+      );
+      await user.click(toggle());
+      expect(screen.getByRole('grid')).toHaveAccessibleName('March 2031');
+      expect(dayButton('Sunday, March 9, 2031')).toHaveAttribute('aria-current', 'date');
+      expect(document.activeElement).toHaveAccessibleName('Sunday, March 9, 2031');
+    });
+
+    it('showMonthPicker={false} keeps the month text plain', async () => {
+      const user = userEvent.setup();
+      render(
+        <DatePicker
+          aria-label="Date"
+          locale="en-US"
+          defaultValue={JUNE_15}
+          showMonthPicker={false}
+        />,
+      );
+      await user.click(toggle());
+      expect(within(dialog()).queryByRole('button', { name: 'June 2025' })).not.toBeInTheDocument();
+      expect(within(dialog()).getByRole('heading', { name: 'June 2025' })).toBeInTheDocument();
+    });
+
+    it('showGoToToday adds the footer button, which focuses today without picking it', async () => {
+      const user = userEvent.setup();
+      const onValueChange = vi.fn();
+      render(
+        <DatePicker
+          aria-label="Date"
+          locale="en-US"
+          defaultValue={new Date(2025, 8, 3)}
+          showGoToToday
+          onValueChange={onValueChange}
+        />,
+      );
+      await user.click(toggle());
+      await user.click(within(dialog()).getByRole('button', { name: 'Go to today' }));
+      expect(screen.getByRole('grid')).toHaveAccessibleName('June 2025');
+      expect(document.activeElement).toHaveAccessibleName('Wednesday, June 18, 2025');
+      expect(screen.getByRole('dialog')).toBeInTheDocument();
+      expect(onValueChange).not.toHaveBeenCalled();
+    });
+
+    it('has no footer by default', async () => {
+      const user = userEvent.setup();
+      render(<DatePicker aria-label="Date" locale="en-US" />);
+      await user.click(toggle());
+      expect(within(dialog()).queryByRole('button', { name: 'Close' })).not.toBeInTheDocument();
+      expect(
+        within(dialog()).queryByRole('button', { name: 'Go to today' }),
+      ).not.toBeInTheDocument();
+    });
+
+    describe('showCloseButton', () => {
+      it('closes the calendar and returns focus to the toggle, as Escape does', async () => {
+        const user = userEvent.setup();
+        const onOpenChange = vi.fn();
+        render(
+          <DatePicker
+            aria-label="Date"
+            locale="en-US"
+            showCloseButton
+            onOpenChange={onOpenChange}
+          />,
+        );
+        await user.click(toggle());
+        await user.click(within(dialog()).getByRole('button', { name: 'Close' }));
+        expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+        expect(toggle()).toHaveFocus();
+        expect(onOpenChange.mock.calls).toEqual([[true], [false]]);
+      });
+
+      it('returns focus to the input after Alt+ArrowDown, as Escape does', async () => {
+        const user = userEvent.setup();
+        render(<DatePicker aria-label="Date" locale="en-US" showCloseButton />);
+        act(() => textbox().focus());
+        await user.keyboard('{Alt>}{ArrowDown}{/Alt}');
+        await user.click(within(dialog()).getByRole('button', { name: 'Close' }));
+        expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+        expect(textbox()).toHaveFocus();
+      });
+
+      it('closes from the month view too, and selects nothing', async () => {
+        const user = userEvent.setup();
+        const onValueChange = vi.fn();
+        render(
+          <DatePicker
+            aria-label="Date"
+            locale="en-US"
+            defaultValue={JUNE_15}
+            showCloseButton
+            onValueChange={onValueChange}
+          />,
+        );
+        await user.click(toggle());
+        await user.click(within(dialog()).getByRole('button', { name: 'June 2025' }));
+        await user.click(within(dialog()).getByRole('button', { name: 'Close' }));
+        expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+        expect(onValueChange).not.toHaveBeenCalled();
+      });
+
+      it('is the last tab stop of the dialog, after Go to today, and the trap wraps to the grid', async () => {
+        const user = userEvent.setup();
+        render(<DatePicker aria-label="Date" locale="en-US" showCloseButton showGoToToday />);
+        await user.click(toggle());
+        expect(document.activeElement).toHaveAccessibleName('Wednesday, June 18, 2025');
+        await user.tab();
+        expect(document.activeElement).toHaveAccessibleName('Go to today');
+        await user.tab();
+        expect(document.activeElement).toHaveAccessibleName('Close');
+        await user.tab();
+        expect(dialog()).toContainElement(document.activeElement as HTMLElement);
+        expect(document.activeElement).not.toHaveAccessibleName('Close');
+      });
+
+      it('localizes its name with labels.close, and the footer with labels.goToToday', async () => {
+        const user = userEvent.setup();
+        const labels: DatePickerLabels = { close: 'Schließen', goToToday: 'Heute' };
+        render(<DatePicker aria-label="Date" showCloseButton showGoToToday labels={labels} />);
+        await user.click(toggle());
+        expect(within(dialog()).getByRole('button', { name: 'Schließen' })).toBeInTheDocument();
+        expect(within(dialog()).getByRole('button', { name: 'Heute' })).toBeInTheDocument();
+      });
+
+      it('passes axe with the footer', async () => {
+        const user = userEvent.setup();
+        render(<DatePicker aria-label="Date" locale="en-US" showCloseButton showGoToToday />);
+        await user.click(toggle());
+        expect(await axe(document.body)).toHaveNoViolations();
+      });
+
+      it('gives its footer buttons their own padding, background and gated hover', async () => {
+        const user = userEvent.setup();
+        render(<DatePicker aria-label="Date" locale="en-US" showCloseButton showGoToToday />);
+        await user.click(toggle());
+        for (const name of ['Close', 'Go to today']) {
+          expect(within(dialog()).getByRole('button', { name })).toHaveClass(
+            'p-0',
+            'bg-transparent',
+            'not-disabled:not-aria-disabled:hover:bg-subtle-hover',
+            'focus-visible:outline-2',
+          );
+        }
+      });
+    });
+
+    it('types its labels as the calendar labels with close', () => {
+      expectTypeOf<DatePickerLabels>().toExtend<CalendarLabels>();
+      expectTypeOf<DatePickerLabels['close']>().toEqualTypeOf<string | undefined>();
     });
   });
 

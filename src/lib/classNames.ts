@@ -557,8 +557,12 @@ export const timePickerClassNames = {
  * `previousMonthButton` and `nextMonthButton` on the navigation buttons (by a month, and in the
  * month and year views by a year and a decade); `heading` on the `<h2>` (the month, year or
  * decade); `headingButton` on its button to the month and year views; `grid` on the calendar's
- * `role="grid"` element of every view; `weekday` on each weekday header cell; `day`, `month` and
- * `year` on each day, month and year button.
+ * `role="grid"` element of every view; `weekday` on each weekday header cell; `weekNumberHeader`
+ * on the header cell of the week-number column and `weekNumber` on each week's row header
+ * (`showWeekNumbers`); `day`, `month` and `year` on each day, month and year button; `markedDot`
+ * on the dot inside a marked day's button; `footer` on the row of the footer buttons
+ * (`showGoToToday`, `showCloseButton`), with `todayButton` on "Go to today" and `closeButton` on
+ * "Close".
  */
 export const datePickerClassNames = {
   root: 'wave-date-picker',
@@ -574,9 +578,15 @@ export const datePickerClassNames = {
   nextMonthButton: 'wave-date-picker__next-month-button',
   grid: 'wave-date-picker__grid',
   weekday: 'wave-date-picker__weekday',
+  weekNumberHeader: 'wave-date-picker__week-number-header',
+  weekNumber: 'wave-date-picker__week-number',
   day: 'wave-date-picker__day',
+  markedDot: 'wave-date-picker__marked-dot',
   month: 'wave-date-picker__month',
   year: 'wave-date-picker__year',
+  footer: 'wave-date-picker__footer',
+  todayButton: 'wave-date-picker__today-button',
+  closeButton: 'wave-date-picker__close-button',
 } as const;
 
 /**
@@ -584,8 +594,11 @@ export const datePickerClassNames = {
  * and the heading; `previousButton` and `nextButton` on the navigation buttons (by a month, a
  * year or a decade); `heading` on the month, year or decade text (a `<div>`, which labels the
  * grid); `headingButton` on the heading's button to the month and year views; `grid` on the
- * `role="grid"` element of every view; `weekday` on each weekday header cell; `day`, `month` and
- * `year` on each day, month and year button.
+ * `role="grid"` element of every view; `weekday` on each weekday header cell; `weekNumberHeader`
+ * on the header cell of the week-number column and `weekNumber` on each week's row header
+ * (`showWeekNumbers`); `day`, `month` and `year` on each day, month and year button; `markedDot`
+ * on the dot inside a marked day's button; `footer` on the row of the footer buttons, with
+ * `todayButton` on "Go to today" (`showGoToToday`).
  */
 export const calendarClassNames = {
   root: 'wave-calendar',
@@ -596,9 +609,14 @@ export const calendarClassNames = {
   nextButton: 'wave-calendar__next-button',
   grid: 'wave-calendar__grid',
   weekday: 'wave-calendar__weekday',
+  weekNumberHeader: 'wave-calendar__week-number-header',
+  weekNumber: 'wave-calendar__week-number',
   day: 'wave-calendar__day',
+  markedDot: 'wave-calendar__marked-dot',
   month: 'wave-calendar__month',
   year: 'wave-calendar__year',
+  footer: 'wave-calendar__footer',
+  todayButton: 'wave-calendar__today-button',
 } as const;
 
 /**

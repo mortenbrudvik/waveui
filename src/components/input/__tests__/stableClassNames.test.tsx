@@ -1015,6 +1015,72 @@ describe('stable class names: the 0.10 calendar parts', () => {
     ]);
   });
 
+  it('Calendar: week numbers, the marked-day dot and the footer button are parts', () => {
+    render(
+      <Calendar
+        aria-label="Due date"
+        locale="en-US"
+        today={new Date(2025, 5, 12)}
+        showWeekNumbers
+        showGoToToday
+        markedDates={(date) => date.getDate() === 16}
+      />,
+    );
+    const group = screen.getByRole('group', { name: 'Due date' });
+    const grid = within(group).getByRole('grid');
+    expect(stableClassesOf(within(grid).getAllByRole('columnheader')[0])).toEqual([
+      calendarClassNames.weekNumberHeader,
+    ]);
+    expect(stableClassesOf(within(grid).getAllByRole('columnheader')[1])).toEqual([
+      calendarClassNames.weekday,
+    ]);
+    expect(stableClassesOf(within(grid).getAllByRole('rowheader')[0])).toEqual([
+      calendarClassNames.weekNumber,
+    ]);
+    const marked = within(grid).getByRole('button', { name: 'Monday, June 16, 2025, marked' });
+    expect(stableClassesOf(marked)).toEqual([calendarClassNames.day]);
+    expect(stableClassesOf(marked.querySelector('[aria-hidden="true"]'))).toEqual([
+      calendarClassNames.markedDot,
+    ]);
+    const today = within(group).getByRole('button', { name: 'Go to today' });
+    expect(stableClassesOf(today)).toEqual([calendarClassNames.todayButton]);
+    expect(stableClassesOf(today.parentElement)).toEqual([calendarClassNames.footer]);
+  });
+
+  it('DatePicker: the same parts carry its classes, and the Close button its own', async () => {
+    const user = userEvent.setup();
+    render(
+      <DatePicker
+        aria-label="Start date"
+        locale="en-US"
+        today={new Date(2025, 5, 12)}
+        showWeekNumbers
+        showGoToToday
+        showCloseButton
+        markedDates={(date) => date.getDate() === 16}
+      />,
+    );
+    await user.click(screen.getByRole('button', { name: 'Open calendar' }));
+    const dialog = screen.getByRole('dialog');
+    const grid = within(dialog).getByRole('grid');
+    expect(stableClassesOf(within(grid).getAllByRole('columnheader')[0])).toEqual([
+      datePickerClassNames.weekNumberHeader,
+    ]);
+    expect(stableClassesOf(within(grid).getAllByRole('rowheader')[0])).toEqual([
+      datePickerClassNames.weekNumber,
+    ]);
+    const marked = within(grid).getByRole('button', { name: 'Monday, June 16, 2025, marked' });
+    expect(stableClassesOf(marked.querySelector('[aria-hidden="true"]'))).toEqual([
+      datePickerClassNames.markedDot,
+    ]);
+    const today = within(dialog).getByRole('button', { name: 'Go to today' });
+    expect(stableClassesOf(today)).toEqual([datePickerClassNames.todayButton]);
+    const close = within(dialog).getByRole('button', { name: 'Close' });
+    expect(stableClassesOf(close)).toEqual([datePickerClassNames.closeButton]);
+    expect(stableClassesOf(close.parentElement)).toEqual([datePickerClassNames.footer]);
+    expect(close.parentElement).toBe(today.parentElement);
+  });
+
   it('renders the calendar classes in the server HTML (renderToString)', () => {
     const host = parse(
       renderToString(

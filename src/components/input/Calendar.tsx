@@ -1,5 +1,5 @@
 import * as React from 'react';
-import type { DayOfWeek } from '../../lib/types';
+import type { DayOfWeek, FirstWeekOfYear } from '../../lib/types';
 import { cn } from '../../lib/cn';
 import { focusableDisabledProps, joinIds, preventIfDisabled } from '../../lib/aria';
 import { calendarClassNames } from '../../lib/classNames';
@@ -32,6 +32,7 @@ import {
   getCalendarDays,
   getDecadeStart,
   getDecadeYears,
+  getSelectionRange,
   getYearMonths,
   isDateInRange,
   isMonthOutOfRange,
@@ -41,11 +42,15 @@ import {
   isYearOutOfRange,
   startOfDay,
   startOfMonth,
+  type SelectionRange,
 } from './dateUtils';
 
 /**
- * The calendar's built-in texts, for localization. Each member is optional and falls back to its
- * English default. Month and weekday names and the day labels follow `locale`.
+ * The built-in texts of the calendar, for localization: the names of the navigation buttons in
+ * the day, month and year views, the hints of the heading button, the "Go to today" button, the
+ * week-number column and the marked days, and (Calendar only) the required hint. Each member is
+ * optional and falls back to its English default. Month and weekday names and the day labels follow
+ * `locale`. DatePicker's labels extend this type.
  */
 export interface CalendarLabels {
   /** Name of the previous-month button.
@@ -106,7 +111,10 @@ export interface CalendarLabels {
 
 /** Second argument of `Calendar`'s `onValueChange`. */
 export interface CalendarValueChangeDetails {
-  /** The selected days in order (local midnight): the picked day; `[]` for `null`. */
+  /**
+   * The selected days in order (local midnight): the picked day, or with `selectionRange` its
+   * week, work week or month (the days that are not available left out); `[]` for `null`.
+   */
   range: Date[];
 }
 
@@ -171,8 +179,58 @@ export interface CalendarProps extends Omit<
    */
   showMonthPicker?: boolean;
   /**
-   * Names of the navigation buttons, the heading button's hints and the required hint, for
-   * localization.
+   * Adds a leading column of week numbers: a row header per week (`Week 23`, from
+   * `labels.weekNumber`) under a header cell named `labels.week`. The numbers follow
+   * `firstDayOfWeek` and `firstWeekOfYear`; the column is not focusable and the keys skip it.
+   * @default false
+   */
+  showWeekNumbers?: boolean;
+  /**
+   * Which week is week 1 of a year. ISO 8601 is `'first-four-day-week'` with `firstDayOfWeek={1}`.
+   * @default 'first-day'
+   */
+  firstWeekOfYear?: FirstWeekOfYear;
+  /**
+   * Adds a footer button that shows today's month in the day view and focuses today without
+   * selecting it. It is disabled while today is outside `minDate`/`maxDate`.
+   * @default false
+   */
+  showGoToToday?: boolean;
+  /**
+   * Days that draw a dot under the number (in the text colour of the day) and say "marked" in
+   * their name (`labels.markedDay`); also `data-marked` on the day's button (Fluent's
+   * `getMarkedDays`). Called with local-midnight dates.
+   */
+  markedDates?: (date: Date) => boolean;
+  /**
+   * Replaces the content inside a day's button, which keeps its role, state and keys;
+   * `defaultContent` is the day number. The content must be non-interactive (no buttons or links),
+   * and the button's name does not follow it: set the name with `dayLabel`. The marked-day dot is
+   * drawn next to the content.
+   */
+  renderDay?: (date: Date, defaultContent: React.ReactNode) => React.ReactNode;
+  /**
+   * The accessible name of a day, from its default name (the date in words, `Monday, June 2,
+   * 2025`, with `labels.markedDay` applied for a marked day). Use it to say what `renderDay` shows.
+   */
+  dayLabel?: (date: Date, defaultLabel: string) => string;
+  /**
+   * What a pick selects: the day, or its week, work week (`workWeekDays`) or month. The value is
+   * the picked day, `details.range` the selected days, and every day of the range is
+   * `aria-selected`, `aria-pressed` and `data-selected`. Days that are not available are left
+   * out. Fluent's `dateRangeType`.
+   * @default 'day'
+   */
+  selectionRange?: SelectionRange;
+  /**
+   * The days of `selectionRange="work-week"` (0 = Sunday), within the week that starts on
+   * `firstDayOfWeek`.
+   * @default [1, 2, 3, 4, 5]
+   */
+  workWeekDays?: readonly DayOfWeek[];
+  /**
+   * Names of the navigation buttons, the heading button's hints, the "Go to today" button, the
+   * week-number column, the marked days and the required hint, for localization.
    */
   labels?: CalendarLabels;
   /** Form field name: the day is submitted as ISO `yyyy-mm-dd` (hidden input). */
@@ -209,6 +267,12 @@ export interface CalendarViewPartClassNames extends CalendarDayGridPartClassName
   month?: string;
   /** On each year button of the year view. */
   year?: string;
+  /** On the row of the footer buttons. */
+  footer?: string;
+  /** On the "Go to today" button. */
+  todayButton?: string;
+  /** On the "Close" button. */
+  closeButton?: string;
 }
 
 /** Internal props of {@link CalendarView}. */
@@ -240,7 +304,31 @@ export interface CalendarViewProps {
    * @default true
    */
   showMonthPicker?: boolean;
-  /** Names of the navigation buttons and the heading button's hints. */
+  /** Adds a leading column of week numbers to the day view. @default false */
+  showWeekNumbers?: boolean;
+  /** Which week is week 1 of a year. @default 'first-day' */
+  firstWeekOfYear?: FirstWeekOfYear;
+  /** Returns `true` for days that draw a dot and are named "marked". */
+  markedDates?: (date: Date) => boolean;
+  /** Replaces the content of a day button. */
+  renderDay?: (date: Date, defaultContent: React.ReactNode) => React.ReactNode;
+  /** The accessible name of a day, from its default name. */
+  dayLabel?: (date: Date, defaultLabel: string) => string;
+  /**
+   * What a pick selects (the day, or its week, work week or month): the days drawn selected. The
+   * parent receives only the picked day.
+   * @default 'day'
+   */
+  selectionRange?: SelectionRange;
+  /** The days of the `'work-week'` range. @default [1, 2, 3, 4, 5] */
+  workWeekDays?: readonly DayOfWeek[];
+  /** Adds a footer button that shows today's month and focuses today. @default false */
+  showGoToToday?: boolean;
+  /** Adds a footer "Close" button that calls this (DatePicker closes its dialog). */
+  onClose?: () => void;
+  /** Name of the "Close" button. @default 'Close' */
+  closeLabel?: string;
+  /** Names of the navigation buttons, the heading button's hints and the footer buttons. */
   labels?: CalendarLabels;
   /** Element of the heading: `h2` in DatePicker's dialog (its title), else `div`. */
   headingAs: 'h2' | 'div';
@@ -258,6 +346,13 @@ const NAV_BUTTON_CLASSES =
 // The heading's button keeps the heading's text style, set on itself (C-NATIVE).
 const HEADING_BUTTON_CLASSES =
   'flex h-8 items-center justify-center rounded bg-transparent p-0 px-2 text-body-1 font-semibold text-foreground not-disabled:not-aria-disabled:hover:bg-subtle-hover';
+
+// The footer's text buttons (C-NATIVE: their own padding and background).
+const FOOTER_BUTTON_CLASSES =
+  'flex h-8 items-center justify-center rounded bg-transparent p-0 px-3 text-body-1 text-foreground not-disabled:not-aria-disabled:hover:bg-subtle-hover';
+
+/** The days of `'work-week'` unless `workWeekDays` says otherwise (Monday to Friday). */
+const DEFAULT_WORK_WEEK_DAYS: readonly DayOfWeek[] = [1, 2, 3, 4, 5];
 
 /** The 42 grid days as 6 weeks. */
 function toWeeks(days: Date[]): Date[][] {
@@ -305,6 +400,16 @@ export const CalendarView = ({
   today: todayProp,
   initialVisibleDate,
   showMonthPicker = true,
+  showWeekNumbers,
+  firstWeekOfYear,
+  markedDates,
+  renderDay,
+  dayLabel,
+  selectionRange = 'day',
+  workWeekDays = DEFAULT_WORK_WEEK_DAYS,
+  showGoToToday = false,
+  onClose,
+  closeLabel,
   labels,
   headingAs: Heading,
   headingId,
@@ -312,7 +417,10 @@ export const CalendarView = ({
 }: CalendarViewProps) => {
   const today =
     todayProp === undefined ? startOfDay(new Date()) : todayProp && startOfDay(todayProp);
-  const [view, setView] = React.useState<CalendarViewKind>('day');
+  const [viewState, setView] = React.useState<CalendarViewKind>('day');
+  // Without the month picker the headings are no buttons: only the day view exists.
+  const view = showMonthPicker ? viewState : 'day';
+  if (viewState !== view) setView(view);
   // Day view: the shown month and the day moved to.
   const [viewMonth, setViewMonth] = React.useState<Date>(() =>
     // Without a value, an `initialVisibleDate` or a known today the month comes from the clock:
@@ -330,6 +438,8 @@ export const CalendarView = ({
   const gridRef = React.useRef<HTMLTableElement | null>(null);
   /** Set by a view change: the next layout effect moves focus into the new grid. */
   const focusGridRef = React.useRef(false);
+  /** Bumped by "Go to today": the next layout effect moves focus to the focused day. */
+  const [focusRequest, setFocusRequest] = React.useState(0);
   const gridId = useId('calendar-grid');
   const hintId = useId('calendar-heading-hint');
 
@@ -340,14 +450,30 @@ export const CalendarView = ({
   const [seenValueIso, setSeenValueIso] = React.useState(valueIso);
   if (seenValueIso !== valueIso) {
     setSeenValueIso(valueIso);
-    if (value && !isSameMonth(value, viewMonth)) {
-      setViewMonth(startOfMonth(clampDate(value, minDate, maxDate)));
-      setFocusedDay(null);
+    if (value) {
+      if (!isSameMonth(value, viewMonth)) {
+        setViewMonth(startOfMonth(clampDate(value, minDate, maxDate)));
+        setFocusedDay(null);
+      }
+      // The month and year views follow the value too, to its year and its decade.
+      setMonthViewYear(value.getFullYear());
+      setFocusedMonth(null);
+      setDecade(getDecadeStart(value.getFullYear()));
+      setFocusedYear(null);
     }
   }
 
   const isUnavailable = (date: Date) =>
     !isDateInRange(date, minDate, maxDate) || !!disabledDates?.(startOfDay(date));
+
+  // The days drawn selected: the range around the value (its available days).
+  const selectedDays = new Set(
+    value
+      ? getSelectionRange(value, selectionRange, firstDayOfWeek, workWeekDays, isUnavailable).map(
+          formatISODate,
+        )
+      : [],
+  );
 
   const weeks = React.useMemo(
     () => toWeeks(getCalendarDays(viewMonth, firstDayOfWeek)),
@@ -468,6 +594,15 @@ export const CalendarView = ({
     setView(next);
   };
 
+  /** "Go to today": today's month in the day view, today focused; nothing is selected. */
+  const goToToday = () => {
+    const target = clampDate(today ?? startOfDay(new Date()), minDate, maxDate);
+    setViewMonth(startOfMonth(target));
+    setFocusedDay(target);
+    setFocusRequest((request) => request + 1);
+    changeView('day');
+  };
+
   /** The day view's heading button: the months of the focused day's year, its month focused. */
   const showMonths = () => {
     setFocusedDay(focusTarget);
@@ -524,16 +659,22 @@ export const CalendarView = ({
   // period changes under it (the buttons are keyed by position, so the focused one shows another
   // cell). A view change moves focus into the new grid in the same commit, since the element that
   // had it (the heading button that becomes text, a picked cell) may be gone.
+  const previousViewRef = React.useRef(view);
   React.useLayoutEffect(() => {
-    const moveIn = focusGridRef.current;
+    const viewChanged = previousViewRef.current !== view;
+    previousViewRef.current = view;
+    const requested = focusGridRef.current;
     focusGridRef.current = false;
     const grid = gridRef.current;
     if (!grid) return;
     const active = grid.ownerDocument.activeElement;
-    if (!moveIn && (!active || !grid.contains(active))) return;
+    // A view change the props made (the month picker turned off) lost the element that had focus:
+    // focus then moves into the new grid, unless it already rests on another element.
+    const lost = viewChanged && (!active || active === grid.ownerDocument.body);
+    if (!requested && !lost && (!active || !grid.contains(active))) return;
     const button = grid.querySelector<HTMLElement>('button[tabindex="0"]');
     if (button && button !== active) button.focus();
-  }, [view, periodKey, cellKey]);
+  }, [view, periodKey, cellKey, focusRequest]);
 
   /* ---- render ------------------------------------------------------- */
 
@@ -571,6 +712,9 @@ export const CalendarView = ({
     headingText = formatDecade(decade, locale);
   }
 
+  // Unknown today (before hydration) leaves the button enabled; the clock decides once it is known.
+  const todayOutOfRange = !!today && !isDateInRange(today, minDate, maxDate);
+
   const headingButtonTarget = showMonthPicker && view !== 'year' ? view : null;
   const hint =
     view === 'day'
@@ -587,10 +731,16 @@ export const CalendarView = ({
         viewMonth={viewMonth}
         weeks={weeks}
         focusTarget={focusTarget}
-        value={value}
+        selectedDays={selectedDays}
         today={today}
         firstDayOfWeek={firstDayOfWeek}
         locale={locale}
+        showWeekNumbers={showWeekNumbers}
+        firstWeekOfYear={firstWeekOfYear}
+        markedDates={markedDates}
+        renderDay={renderDay}
+        dayLabel={dayLabel}
+        labels={labels}
         isUnavailable={isUnavailable}
         onMoveFocus={moveFocus}
         onDayFocus={handleDayFocus}
@@ -719,6 +869,40 @@ export const CalendarView = ({
         </button>
       </div>
       {grid}
+      {(showGoToToday || onClose) && (
+        <div className={cn(partClassNames?.footer, 'mt-2 flex items-center justify-end gap-2')}>
+          {showGoToToday && (
+            <button
+              type="button"
+              // Natively disabled, since it never disables itself by its own activation.
+              disabled={todayOutOfRange}
+              onClick={goToToday}
+              className={cn(
+                partClassNames?.todayButton,
+                FOOTER_BUTTON_CLASSES,
+                focusRing,
+                disabledStyles,
+              )}
+            >
+              {labels?.goToToday ?? 'Go to today'}
+            </button>
+          )}
+          {onClose && (
+            <button
+              type="button"
+              onClick={onClose}
+              className={cn(
+                partClassNames?.closeButton,
+                FOOTER_BUTTON_CLASSES,
+                focusRing,
+                disabledStyles,
+              )}
+            >
+              {closeLabel ?? 'Close'}
+            </button>
+          )}
+        </div>
+      )}
     </>
   );
 };
@@ -738,6 +922,11 @@ const CALENDAR_PART_CLASS_NAMES: CalendarViewPartClassNames = {
   day: calendarClassNames.day,
   month: calendarClassNames.month,
   year: calendarClassNames.year,
+  weekNumberHeader: calendarClassNames.weekNumberHeader,
+  weekNumber: calendarClassNames.weekNumber,
+  markedDot: calendarClassNames.markedDot,
+  footer: calendarClassNames.footer,
+  todayButton: calendarClassNames.todayButton,
 };
 
 /**
@@ -791,6 +980,14 @@ export const Calendar = ({
   today: todayProp,
   initialVisibleDate,
   showMonthPicker = true,
+  showWeekNumbers,
+  firstWeekOfYear,
+  showGoToToday,
+  markedDates,
+  renderDay,
+  dayLabel,
+  selectionRange = 'day',
+  workWeekDays,
   labels,
   name,
   form,
@@ -805,8 +1002,20 @@ export const Calendar = ({
   ref,
   ...rest
 }: CalendarProps) => {
+  const isUnavailable = (date: Date) =>
+    !isDateInRange(date, minDate, maxDate) || !!disabledDates?.(startOfDay(date));
   const [value, setValue] = useControllable<Date | null>(valueProp, defaultValue ?? null, (next) =>
-    onValueChange?.(next, { range: next ? [next] : [] }),
+    onValueChange?.(next, {
+      range: next
+        ? getSelectionRange(
+            next,
+            selectionRange,
+            firstDayOfWeek,
+            workWeekDays ?? DEFAULT_WORK_WEEK_DAYS,
+            isUnavailable,
+          )
+        : [],
+    }),
   );
 
   /** Commits a day (or `null`) as local midnight; nothing is emitted when it is the same day. */
@@ -903,6 +1112,14 @@ export const Calendar = ({
         today={today}
         initialVisibleDate={initialVisibleDate}
         showMonthPicker={showMonthPicker}
+        showWeekNumbers={showWeekNumbers}
+        firstWeekOfYear={firstWeekOfYear}
+        showGoToToday={showGoToToday}
+        markedDates={markedDates}
+        renderDay={renderDay}
+        dayLabel={dayLabel}
+        selectionRange={selectionRange}
+        workWeekDays={workWeekDays}
         labels={labels}
         headingAs="div"
         headingId={headingId}

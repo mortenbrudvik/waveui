@@ -25,7 +25,9 @@ import {
   makeDate,
   startOfDay,
   startOfMonth,
+  startOfWeek,
 } from '../../lib/date';
+import type { DayOfWeek } from '../../lib/types';
 
 /* ------------------------------------------------------------------ */
 /*  Day arithmetic (the shared helpers live in lib/date)               */
@@ -105,6 +107,40 @@ export function getCalendarDays(viewMonth: Date, firstDayOfWeek: number): Date[]
   const days: Date[] = [];
   for (let i = 0; i < 42; i++) days.push(addDays(first, i - offset));
   return days;
+}
+
+/** What a pick selects (the Calendar's `selectionRange`). */
+export type SelectionRange = 'day' | 'week' | 'work-week' | 'month';
+
+/**
+ * The days a pick of `date` selects, in order, at local midnight: the day itself (`'day'`, whatever
+ * its availability), its week from `firstDayOfWeek`, the days of that week named by `workWeekDays`
+ * (`'work-week'`, in the order of the week), or its whole month. The days of the other modes that
+ * `isUnavailable` names are left out.
+ */
+export function getSelectionRange(
+  date: Date,
+  mode: SelectionRange,
+  firstDayOfWeek: DayOfWeek,
+  workWeekDays: readonly DayOfWeek[],
+  isUnavailable?: (date: Date) => boolean,
+): Date[] {
+  const day = startOfDay(date);
+  let days: Date[];
+  if (mode === 'day') return [day];
+  if (mode === 'month') {
+    const first = startOfMonth(day);
+    days = Array.from({ length: daysInMonth(day.getFullYear(), day.getMonth()) }, (_, i) =>
+      addDays(first, i),
+    );
+  } else {
+    const start = startOfWeek(day, firstDayOfWeek);
+    days = Array.from({ length: 7 }, (_, i) => addDays(start, i));
+    if (mode === 'work-week') {
+      days = days.filter((weekDay) => workWeekDays.includes(weekDay.getDay() as DayOfWeek));
+    }
+  }
+  return isUnavailable ? days.filter((candidate) => !isUnavailable(candidate)) : days;
 }
 
 /* ------------------------------------------------------------------ */

@@ -1,11 +1,11 @@
 import * as React from 'react';
 import { afterEach, beforeEach, describe, expect, it, onTestFinished, vi } from 'vitest';
-import { act, render, screen, within } from '@testing-library/react';
+import { act, fireEvent, render, screen, within } from '@testing-library/react';
 import { hydrateRoot } from 'react-dom/client';
 import { renderToString } from 'react-dom/server';
 import userEvent from '@testing-library/user-event';
 import { Calendar, type CalendarValueChangeDetails } from '../Calendar';
-import { DatePicker } from '../DatePicker';
+import { calendarClassNames } from '../../../lib/classNames';
 import { axe, renderWithProviders, testSystemProps } from '../../../test-utils';
 import { FIELD_TEST_IDS, FIELD_TEST_TEXT, renderWithFieldContext } from '../../../test-utils-field';
 
@@ -782,21 +782,6 @@ describe('Calendar', () => {
         'Jahr wählen',
       );
     });
-
-    it('names the dialog and the grid of a DatePicker by the month text, as before', async () => {
-      const user = userEvent.setup();
-      render(<DatePicker aria-label="Date" locale="en-US" defaultValue={JUNE_15} />);
-      await user.click(screen.getByRole('button', { name: 'Open calendar' }));
-      const dialog = screen.getByRole('dialog');
-      expect(dialog).toHaveAccessibleName('June 2025');
-      expect(within(dialog).getByRole('grid')).toHaveAccessibleName('June 2025');
-      const heading = within(dialog).getByRole('heading', { level: 2, name: 'June 2025' });
-      const button = within(heading).getByRole('button', { name: 'June 2025' });
-      expect(button).toHaveAccessibleDescription('Choose a month');
-      expect(heading).not.toContainElement(
-        document.getElementById(button.getAttribute('aria-describedby') ?? ''),
-      );
-    });
   });
 
   describe('month and year views (D26, D27)', () => {
@@ -1284,39 +1269,743 @@ describe('Calendar', () => {
       await openYears(user, '2568');
       expectFocusedCell('2568');
     });
+  });
 
-    it('keeps a DatePicker open on Escape in its month view, focus inside its dialog', async () => {
-      const escapes = trackEscapes();
+  describe('week numbers (D30)', () => {
+    function renderWeeks(props: Partial<React.ComponentProps<typeof Calendar>> = {}) {
       const user = userEvent.setup();
-      const onOpenChange = vi.fn();
+      const utils = render(
+        <Calendar aria-label="Due date" locale="en-US" today={TODAY} showWeekNumbers {...props} />,
+      );
+      return { user, ...utils };
+    }
+
+    it('adds a row header per week, named "Week n", under a header cell with a hidden "Week"', () => {
+      renderWeeks();
+      const rowHeaders = within(grid()).getAllByRole('rowheader');
+      expect(rowHeaders).toHaveLength(6);
+      expect(rowHeaders[0]).toHaveAttribute('scope', 'row');
+      expect(rowHeaders[0]).toHaveAttribute('aria-label', 'Week 23');
+      expect(rowHeaders.map((header) => header.textContent)).toEqual([
+        '23',
+        '24',
+        '25',
+        '26',
+        '27',
+        '28',
+      ]);
+      const headers = within(grid()).getAllByRole('columnheader');
+      expect(headers).toHaveLength(8);
+      const corner = headers[0];
+      expect(corner.querySelector('[aria-hidden="true"]')).toHaveTextContent('#');
+      expect(corner.querySelector('.sr-only')).toHaveTextContent('Week');
+      expect(corner).toHaveAccessibleName('Week');
+    });
+
+    it('draws no week column by default', () => {
+      render(<Calendar aria-label="Due date" locale="en-US" today={TODAY} />);
+      expect(within(grid()).queryAllByRole('rowheader')).toHaveLength(0);
+      expect(within(grid()).getAllByRole('columnheader')).toHaveLength(7);
+    });
+
+    it('localizes the header text and the row names with labels', () => {
+      renderWeeks({
+        labels: { week: 'Woche', weekNumber: (week) => `Kalenderwoche ${week}` },
+      });
+      expect(within(grid()).getAllByRole('columnheader')[0]).toHaveAccessibleName('Woche');
+      expect(within(grid()).getAllByRole('rowheader')[0]).toHaveAttribute(
+        'aria-label',
+        'Kalenderwoche 23',
+      );
+    });
+
+    it('applies firstWeekOfYear and firstDayOfWeek (the three rules at a year boundary)', () => {
+      const first = (props: Partial<React.ComponentProps<typeof Calendar>>) => {
+        const { unmount } = renderWeeks({
+          initialVisibleDate: new Date(2021, 0, 15),
+          firstDayOfWeek: 1,
+          ...props,
+        });
+        const text = within(grid()).getAllByRole('rowheader')[0].textContent;
+        unmount();
+        return text;
+      };
+      // The first row of January 2021 starts on Monday 28 December 2020.
+      expect(first({})).toBe('1');
+      expect(first({ firstWeekOfYear: 'first-day' })).toBe('1');
+      expect(first({ firstWeekOfYear: 'first-full-week' })).toBe('52');
+      expect(first({ firstWeekOfYear: 'first-four-day-week' })).toBe('53');
+    });
+
+    it('numbers the weeks in ISO 8601 with Monday weeks and the four-day rule', () => {
+      renderWeeks({ firstDayOfWeek: 1, firstWeekOfYear: 'first-four-day-week' });
+      // The grid starts on Monday 26 May 2025 (ISO week 22).
+      expect(within(grid()).getAllByRole('rowheader')[0]).toHaveAttribute('aria-label', 'Week 22');
+      expect(within(grid()).getAllByRole('rowheader')[1]).toHaveAttribute('aria-label', 'Week 23');
+    });
+
+    it('is skipped by the keys and the tab order', async () => {
+      const user = userEvent.setup();
       render(
-        <DatePicker
-          aria-label="Date"
+        <Calendar
+          aria-label="Due date"
           locale="en-US"
+          today={TODAY}
           defaultValue={JUNE_15}
-          onOpenChange={onOpenChange}
+          showWeekNumbers
         />,
       );
-      await user.click(screen.getByRole('button', { name: 'Open calendar' }));
-      const dialog = screen.getByRole('dialog');
-      await user.click(within(dialog).getByRole('button', { name: 'June 2025' }));
-      expect(within(dialog).getByRole('grid')).toHaveAccessibleName('2025');
-      expect(dialog).toContainElement(document.activeElement as HTMLElement);
-      await user.click(within(dialog).getByRole('button', { name: '2025' }));
-      expect(dialog).toContainElement(document.activeElement as HTMLElement);
-      await user.keyboard('{Escape}');
-      await act(async () => {});
-      expect(within(dialog).getByRole('grid')).toHaveAccessibleName('2025');
-      expect(dialog).toContainElement(document.activeElement as HTMLElement);
-      await user.keyboard('{Escape}');
-      await act(async () => {});
-      expect(within(dialog).getByRole('grid')).toHaveAccessibleName('June 2025');
+      expect(grid().querySelectorAll('th[tabindex], th button')).toHaveLength(0);
+      expect(tabStops()).toHaveLength(1);
+      act(() => tabStops()[0].focus());
+      await user.keyboard('{ArrowLeft}');
+      expect(focusedLabel()).toBe('Saturday, June 14, 2025');
+      await user.keyboard('{Home}');
+      expect(focusedLabel()).toBe('Sunday, June 8, 2025');
+      await user.keyboard('{ArrowLeft}');
+      expect(focusedLabel()).toBe('Saturday, June 7, 2025');
+      await user.keyboard('{End}{ArrowRight}');
+      expect(focusedLabel()).toBe('Sunday, June 8, 2025');
+    });
+
+    it('passes axe', async () => {
+      renderWeeks({ defaultValue: JUNE_15, markedDates: (date) => date.getDate() === 20 });
+      expect(await axe(document.body)).toHaveNoViolations();
+    });
+
+    it('keeps the month and year views free of week numbers', async () => {
+      const { user } = renderWeeks();
+      await user.click(screen.getByRole('button', { name: 'June 2025' }));
+      expect(within(grid()).queryAllByRole('rowheader')).toHaveLength(0);
+    });
+  });
+
+  describe('marked days (D31)', () => {
+    const marked = (date: Date) => date.getDate() === 16;
+
+    it('draws a decorative dot in the current text colour and names the day "marked"', () => {
+      render(<Calendar aria-label="Due date" locale="en-US" today={TODAY} markedDates={marked} />);
+      const button = dayButton('Monday, June 16, 2025, marked');
+      expect(button).toHaveAttribute('data-marked');
+      const dot = button.querySelector(`.${calendarClassNames.markedDot}`);
+      expect(dot).toHaveAttribute('aria-hidden', 'true');
+      expect(dot).toHaveClass('bg-current');
+      expect(dot).toBeEmptyDOMElement();
+      expect(button).toHaveTextContent('16');
+      expect(grid().querySelectorAll('button[data-marked]')).toHaveLength(1);
+      expect(dayButton('Tuesday, June 17, 2025')).not.toHaveAttribute('data-marked');
+      expect(
+        dayButton('Tuesday, June 17, 2025').querySelector(`.${calendarClassNames.markedDot}`),
+      ).toBeNull();
+    });
+
+    it('calls markedDates with local-midnight dates', () => {
+      const markedDates = vi.fn((_date: Date) => false);
+      render(<Calendar aria-label="Due date" today={TODAY} markedDates={markedDates} />);
+      expect(markedDates).toHaveBeenCalled();
+      for (const [date] of markedDates.mock.calls) {
+        expect([date.getHours(), date.getMinutes(), date.getSeconds()]).toEqual([0, 0, 0]);
+      }
+    });
+
+    it('localizes the suffix with labels.markedDay', () => {
+      render(
+        <Calendar
+          aria-label="Due date"
+          locale="en-US"
+          today={TODAY}
+          markedDates={marked}
+          labels={{ markedDay: (label) => `${label} (event)` }}
+        />,
+      );
+      expect(dayButton('Monday, June 16, 2025 (event)')).toBeInTheDocument();
+    });
+
+    it('keeps the dot on a selected day', () => {
+      render(
+        <Calendar
+          aria-label="Due date"
+          locale="en-US"
+          today={TODAY}
+          defaultValue={new Date(2025, 5, 16)}
+          markedDates={marked}
+        />,
+      );
+      const button = dayButton('Monday, June 16, 2025, marked');
+      expect(button).toHaveAttribute('aria-pressed', 'true');
+      expect(button.querySelector(`.${calendarClassNames.markedDot}`)).not.toBeNull();
+    });
+  });
+
+  describe('custom day content (D31)', () => {
+    it('renderDay replaces the content inside the button, which keeps its name and state', async () => {
+      const user = userEvent.setup();
+      const onValueChange = vi.fn();
+      const renderDay = vi.fn((date: Date, content: React.ReactNode) => (
+        <span data-testid={`day-${date.getDate()}`}>
+          {content}
+          {date.getDate() === 17 ? <i>3 events</i> : null}
+        </span>
+      ));
+      render(
+        <Calendar
+          aria-label="Due date"
+          locale="en-US"
+          today={TODAY}
+          onValueChange={onValueChange}
+          renderDay={renderDay}
+        />,
+      );
+      const button = dayButton('Tuesday, June 17, 2025');
+      expect(button).toHaveTextContent('173 events');
+      expect(button).toContainElement(screen.getAllByTestId('day-17')[0]);
+      expect(renderDay).toHaveBeenCalledWith(expect.any(Date), '17');
+      await user.click(button);
+      expect(onValueChange).toHaveBeenCalledTimes(1);
+      expect(dayButton('Tuesday, June 17, 2025')).toHaveAttribute('aria-pressed', 'true');
+    });
+
+    it('dayLabel sets the name and receives the default label (marked included)', () => {
+      const dayLabel = vi.fn((date: Date, label: string) =>
+        date.getDate() === 17 ? `${label}, 3 events` : label,
+      );
+      render(
+        <Calendar
+          aria-label="Due date"
+          locale="en-US"
+          today={TODAY}
+          markedDates={(date) => date.getDate() === 16}
+          dayLabel={dayLabel}
+          renderDay={(date, content) => (date.getDate() === 17 ? <>{content} (3)</> : content)}
+        />,
+      );
+      expect(dayButton('Tuesday, June 17, 2025, 3 events')).toHaveTextContent('17 (3)');
+      expect(dayLabel).toHaveBeenCalledWith(expect.any(Date), 'Monday, June 16, 2025, marked');
+      expect(dayButton('Monday, June 16, 2025, marked')).toBeInTheDocument();
+    });
+
+    it('passes axe with custom content', async () => {
+      render(
+        <Calendar
+          aria-label="Due date"
+          locale="en-US"
+          today={TODAY}
+          renderDay={(_date, content) => <span>{content}</span>}
+          dayLabel={(_date, label) => `${label}!`}
+        />,
+      );
+      expect(await axe(document.body)).toHaveNoViolations();
+    });
+  });
+
+  describe('range selection (D29)', () => {
+    const times = (days: Date[] | undefined) => days?.map((day) => day.getTime());
+    const jun = (...days: number[]) => days.map((day) => new Date(2025, 5, day).getTime());
+
+    function renderRange(props: Partial<React.ComponentProps<typeof Calendar>>) {
+      const user = userEvent.setup();
+      const onValueChange = vi.fn();
+      render(
+        <Calendar
+          aria-label="Due date"
+          locale="en-US"
+          today={TODAY}
+          onValueChange={onValueChange}
+          {...props}
+        />,
+      );
+      const selected = () =>
+        Array.from(grid().querySelectorAll<HTMLElement>('button[data-selected]')).map((button) =>
+          button.getAttribute('data-date'),
+        );
+      const lastDetails = () =>
+        (onValueChange.mock.calls.at(-1) as [Date | null, CalendarValueChangeDetails])[1];
+      return { user, onValueChange, selected, lastDetails };
+    }
+
+    it("'week' selects the week of the picked day, the value being the picked day", async () => {
+      const { user, onValueChange, selected, lastDetails } = renderRange({
+        selectionRange: 'week',
+      });
+      await user.click(dayButton('Wednesday, June 18, 2025'));
+      expect(fields(onValueChange.mock.calls[0][0])).toEqual([2025, 6, 18]);
+      expect(times(lastDetails().range)).toEqual(jun(15, 16, 17, 18, 19, 20, 21));
+      expect(selected()).toEqual([
+        '2025-06-15',
+        '2025-06-16',
+        '2025-06-17',
+        '2025-06-18',
+        '2025-06-19',
+        '2025-06-20',
+        '2025-06-21',
+      ]);
+      for (const iso of selected()) {
+        const button = grid().querySelector<HTMLElement>(`button[data-date="${iso}"]`);
+        expect(button).toHaveAttribute('aria-pressed', 'true');
+        expect(button?.closest('[role="gridcell"]')).toHaveAttribute('aria-selected', 'true');
+      }
+      expect(dayButton('Saturday, June 14, 2025')).not.toHaveAttribute('aria-pressed');
+      expect(grid()).not.toHaveAttribute('aria-multiselectable');
+    });
+
+    it("'week' follows firstDayOfWeek", async () => {
+      const { user, lastDetails } = renderRange({ selectionRange: 'week', firstDayOfWeek: 1 });
+      await user.click(dayButton('Sunday, June 15, 2025'));
+      expect(times(lastDetails().range)).toEqual(jun(9, 10, 11, 12, 13, 14, 15));
+    });
+
+    it("'work-week' selects Monday to Friday of the week", async () => {
+      const { user, selected, lastDetails } = renderRange({ selectionRange: 'work-week' });
+      await user.click(dayButton('Wednesday, June 18, 2025'));
+      expect(times(lastDetails().range)).toEqual(jun(16, 17, 18, 19, 20));
+      expect(selected()).toHaveLength(5);
+    });
+
+    it("'work-week' with workWeekDays, in the order of the week", async () => {
+      const { user, lastDetails } = renderRange({
+        selectionRange: 'work-week',
+        workWeekDays: [6, 0],
+      });
+      await user.click(dayButton('Wednesday, June 18, 2025'));
+      expect(times(lastDetails().range)).toEqual(jun(15, 21));
+    });
+
+    it("'work-week' with Monday weeks lists Saturday before Sunday", async () => {
+      const { user, lastDetails } = renderRange({
+        selectionRange: 'work-week',
+        workWeekDays: [0, 6],
+        firstDayOfWeek: 1,
+      });
+      await user.click(dayButton('Wednesday, June 18, 2025'));
+      expect(times(lastDetails().range)).toEqual(jun(21, 22));
+    });
+
+    it("'month' selects every day of the month, not the days of the neighbouring months", async () => {
+      const { user, selected, lastDetails } = renderRange({ selectionRange: 'month' });
+      await user.click(dayButton('Wednesday, June 18, 2025'));
+      expect(lastDetails().range).toHaveLength(30);
+      expect(times(lastDetails().range)?.[0]).toBe(new Date(2025, 5, 1).getTime());
+      expect(times(lastDetails().range)?.[29]).toBe(new Date(2025, 5, 30).getTime());
+      expect(selected()).toHaveLength(30);
+      expect(dayButton('Tuesday, July 1, 2025')).not.toHaveAttribute('data-selected');
+    });
+
+    it('leaves unavailable days out of the range', async () => {
+      const { user, selected, lastDetails } = renderRange({
+        selectionRange: 'week',
+        minDate: new Date(2025, 5, 17),
+        disabledDates: (date) => date.getDate() === 19,
+      });
+      await user.click(dayButton('Wednesday, June 18, 2025'));
+      expect(times(lastDetails().range)).toEqual(jun(17, 18, 20, 21));
+      expect(selected()).toEqual(['2025-06-17', '2025-06-18', '2025-06-20', '2025-06-21']);
+    });
+
+    it('draws the range of a controlled value, also when it moves', () => {
+      const { rerender } = render(
+        <Calendar
+          aria-label="Due date"
+          locale="en-US"
+          today={TODAY}
+          selectionRange="week"
+          value={new Date(2025, 5, 4)}
+        />,
+      );
+      expect(grid().querySelectorAll('button[data-selected]')).toHaveLength(7);
+      expect(dayButton('Sunday, June 1, 2025')).toHaveAttribute('aria-pressed', 'true');
+      rerender(
+        <Calendar
+          aria-label="Due date"
+          locale="en-US"
+          today={TODAY}
+          selectionRange="week"
+          value={new Date(2025, 5, 18)}
+        />,
+      );
+      expect(dayButton('Sunday, June 1, 2025')).not.toHaveAttribute('aria-pressed');
+      expect(dayButton('Saturday, June 21, 2025')).toHaveAttribute('aria-pressed', 'true');
+    });
+
+    it('picking another day of the selected week still fires, picking the same day does not', async () => {
+      const { user, onValueChange } = renderRange({
+        selectionRange: 'week',
+        defaultValue: new Date(2025, 5, 18),
+      });
+      await user.click(dayButton('Thursday, June 19, 2025'));
+      expect(onValueChange).toHaveBeenCalledTimes(1);
+      await user.click(dayButton('Thursday, June 19, 2025'));
+      expect(onValueChange).toHaveBeenCalledTimes(1);
+    });
+
+    it('emits the range of the restored value on a form reset', async () => {
+      const user = userEvent.setup();
+      const onValueChange = vi.fn();
+      render(
+        <form>
+          <Calendar
+            aria-label="Due date"
+            locale="en-US"
+            today={TODAY}
+            selectionRange="week"
+            defaultValue={new Date(2025, 5, 18)}
+            onValueChange={onValueChange}
+          />
+          <button type="reset">Reset</button>
+        </form>,
+      );
+      await user.click(dayButton('Sunday, June 8, 2025'));
+      onValueChange.mockClear();
+      await user.click(screen.getByRole('button', { name: 'Reset' }));
+      expect(onValueChange).toHaveBeenCalledTimes(1);
+      expect(times(onValueChange.mock.calls[0][1].range)).toEqual(jun(15, 16, 17, 18, 19, 20, 21));
+    });
+
+    it('does not mark the month view by range', async () => {
+      const { user } = renderRange({ selectionRange: 'month', defaultValue: JUNE_15 });
+      await user.click(screen.getByRole('button', { name: 'June 2025' }));
+      expect(grid().querySelectorAll('button[data-selected]')).toHaveLength(1);
+    });
+  });
+
+  describe('Go to today (D32)', () => {
+    function renderToday(props: Partial<React.ComponentProps<typeof Calendar>> = {}) {
+      const user = userEvent.setup();
+      const onValueChange = vi.fn();
+      render(
+        <Calendar
+          aria-label="Due date"
+          locale="en-US"
+          today={TODAY}
+          showGoToToday
+          onValueChange={onValueChange}
+          {...props}
+        />,
+      );
+      return { user, onValueChange };
+    }
+
+    it('adds no footer by default', () => {
+      render(<Calendar aria-label="Due date" today={TODAY} />);
+      expect(screen.queryByRole('button', { name: 'Go to today' })).not.toBeInTheDocument();
+    });
+
+    it('shows the month of today and focuses today without selecting anything', async () => {
+      const { user, onValueChange } = renderToday({ defaultValue: new Date(2025, 8, 3) });
+      expect(grid()).toHaveAccessibleName('September 2025');
+      await user.click(screen.getByRole('button', { name: 'Go to today' }));
+      expect(grid()).toHaveAccessibleName('June 2025');
+      expect(document.activeElement).toHaveAccessibleName('Thursday, June 12, 2025');
+      expect(onValueChange).not.toHaveBeenCalled();
+      expect(grid().querySelectorAll('button[data-selected]')).toHaveLength(0);
+    });
+
+    it('focuses today when its month is already shown but another day has the focus', async () => {
+      const { user, onValueChange } = renderToday({ defaultValue: JUNE_15 });
+      act(() => tabStops()[0].focus());
+      await user.keyboard('{ArrowDown}');
+      expect(focusedLabel()).toBe('Sunday, June 22, 2025');
+      await user.click(screen.getByRole('button', { name: 'Go to today' }));
+      expect(focusedLabel()).toBe('Thursday, June 12, 2025');
+      expect(tabStops()).toHaveLength(1);
+      expect(onValueChange).not.toHaveBeenCalled();
+    });
+
+    it('focuses today again when it is already the roving day and the button has the focus', async () => {
+      const { user } = renderToday();
+      const button = screen.getByRole('button', { name: 'Go to today' });
+      await user.click(button);
+      expect(focusedLabel()).toBe('Thursday, June 12, 2025');
+      await user.tab();
+      expect(button).toHaveFocus();
+      await user.keyboard('{Enter}');
+      expect(focusedLabel()).toBe('Thursday, June 12, 2025');
+    });
+
+    it('returns from the month and year views to the day view of today', async () => {
+      const { user } = renderToday({ defaultValue: new Date(2020, 1, 3) });
+      await user.click(screen.getByRole('button', { name: 'February 2020' }));
+      await user.click(screen.getByRole('button', { name: '2020' }));
+      expect(grid()).toHaveAccessibleName(/^2020\s*–\s*2029$/);
+      await user.click(screen.getByRole('button', { name: 'Go to today' }));
+      expect(grid()).toHaveAccessibleName('June 2025');
+      expect(document.activeElement).toHaveAccessibleName('Thursday, June 12, 2025');
+    });
+
+    it('is natively disabled while today is outside minDate/maxDate', () => {
+      renderToday({ minDate: new Date(2025, 5, 13) });
+      const button = screen.getByRole('button', { name: 'Go to today' });
+      expect(button).toBeDisabled();
+      expect(button).not.toHaveAttribute('aria-disabled');
+    });
+
+    it('is disabled after maxDate too, and enabled on the bounds', () => {
+      const { unmount } = render(
+        <Calendar aria-label="A" today={TODAY} showGoToToday maxDate={new Date(2025, 5, 11)} />,
+      );
+      expect(screen.getByRole('button', { name: 'Go to today' })).toBeDisabled();
+      unmount();
+      render(
+        <Calendar
+          aria-label="B"
+          today={TODAY}
+          showGoToToday
+          minDate={TODAY}
+          maxDate={new Date(2025, 5, 12, 23)}
+        />,
+      );
+      expect(screen.getByRole('button', { name: 'Go to today' })).toBeEnabled();
+    });
+
+    it('localizes the name with labels.goToToday', () => {
+      renderToday({ labels: { goToToday: 'Zu heute' } });
+      expect(screen.getByRole('button', { name: 'Zu heute' })).toBeInTheDocument();
+    });
+
+    it('comes after the grid in the tab order', async () => {
+      const { user } = renderToday();
+      await user.tab();
+      await user.tab();
+      await user.tab();
+      await user.tab();
+      expect(focusedLabel()).toBe('Thursday, June 12, 2025');
+      await user.tab();
+      expect(document.activeElement).toHaveAccessibleName('Go to today');
+    });
+
+    it('is enabled in the server HTML without today, and disabled once hydrated out of range', () => {
+      const element = (
+        <Calendar
+          aria-label="Due date"
+          locale="en-US"
+          initialVisibleDate={TODAY}
+          showGoToToday
+          minDate={new Date(2030, 0, 1)}
+        />
+      );
+      const host = document.createElement('div');
+      host.innerHTML = renderToString(element);
+      const serverButton = Array.from(host.querySelectorAll('button')).find(
+        (button) => button.textContent === 'Go to today',
+      );
+      expect(serverButton).toBeDefined();
+      expect(serverButton?.hasAttribute('disabled')).toBe(false);
+      render(element);
+      expect(screen.getByRole('button', { name: 'Go to today' })).toBeDisabled();
+    });
+
+    it('passes axe', async () => {
+      renderToday();
+      expect(await axe(document.body)).toHaveNoViolations();
+    });
+  });
+
+  describe('view state (E4 review)', () => {
+    function renderView(props: Partial<React.ComponentProps<typeof Calendar>> = {}) {
+      const user = userEvent.setup();
+      const onValueChange = vi.fn();
+      const utils = render(
+        <Calendar
+          aria-label="Due date"
+          locale="en-US"
+          today={TODAY}
+          defaultValue={JUNE_15}
+          onValueChange={onValueChange}
+          {...props}
+        />,
+      );
+      return { user, onValueChange, ...utils };
+    }
+
+    function expectFocusInGrid() {
+      expect(document.activeElement).not.toBe(document.body);
+      expect(grid()).toContainElement(document.activeElement as HTMLElement);
+    }
+
+    it('M2: inverted bounds in different years never hang the year and month keys', async () => {
+      const { user } = renderView({
+        defaultValue: null,
+        minDate: new Date(2027, 2, 1),
+        maxDate: new Date(2023, 4, 1),
+      });
+      const keys =
+        '{ArrowRight}{ArrowLeft}{ArrowDown}{ArrowUp}{End}{Home}{PageDown}{PageUp}{PageDown}';
+      // The month first shown is minDate's, the bound the inverted range clamps into.
+      await user.click(screen.getByRole('button', { name: 'March 2027' }));
+      await user.keyboard(keys);
+      expectFocusInGrid();
+      // The keys clamp into the bound that wins (maxDate's May 2023) and end there.
+      expect(grid()).toHaveAccessibleName('2023');
+      expect(document.activeElement).toHaveAccessibleName('May 2023');
+      await user.click(screen.getByRole('button', { name: /^20\d\d$/ }));
+      await user.keyboard(keys);
+      expectFocusInGrid();
+      expect(grid()).toHaveAccessibleName(/^2020\s*–\s*2029$/);
+      expect(document.activeElement).toHaveTextContent('2023');
+      expect(
+        within(grid())
+          .getAllByRole('button')
+          .filter((b) => b.tabIndex === 0),
+      ).toHaveLength(1);
+    });
+
+    it('M3: the month view follows a controlled value that moves to another year', async () => {
+      const { user, rerender } = renderView({ value: JUNE_15, defaultValue: undefined });
+      await user.click(screen.getByRole('button', { name: 'June 2025' }));
+      expect(grid()).toHaveAccessibleName('2025');
+      rerender(
+        <Calendar
+          aria-label="Due date"
+          locale="en-US"
+          today={TODAY}
+          value={new Date(2027, 2, 3)}
+        />,
+      );
+      expect(grid()).toHaveAccessibleName('2027');
+      const march = within(grid()).getByRole('button', { name: 'March 2027' });
+      expect(march).toHaveAttribute('tabindex', '0');
+      expect(march).toHaveAttribute('aria-pressed', 'true');
+    });
+
+    it('M3: the year view follows it to the decade of the new value', async () => {
+      const { user, rerender } = renderView({ value: JUNE_15, defaultValue: undefined });
+      await user.click(screen.getByRole('button', { name: 'June 2025' }));
+      await user.click(screen.getByRole('button', { name: '2025' }));
+      expect(grid()).toHaveAccessibleName(/^2020\s*–\s*2029$/);
+      rerender(
+        <Calendar
+          aria-label="Due date"
+          locale="en-US"
+          today={TODAY}
+          value={new Date(2041, 2, 3)}
+        />,
+      );
+      expect(grid()).toHaveAccessibleName(/^2040\s*–\s*2049$/);
+      expect(within(grid()).getByRole('button', { name: '2041' })).toHaveAttribute(
+        'aria-pressed',
+        'true',
+      );
+    });
+
+    it('M4: turning showMonthPicker off while the month view is open returns to the days', async () => {
+      const { user, rerender } = renderView();
+      await user.click(screen.getByRole('button', { name: 'June 2025' }));
+      expect(grid()).toHaveAccessibleName('2025');
+      rerender(
+        <Calendar
+          aria-label="Due date"
+          locale="en-US"
+          today={TODAY}
+          defaultValue={JUNE_15}
+          showMonthPicker={false}
+        />,
+      );
+      expect(grid()).toHaveAccessibleName('June 2025');
+      expectFocusInGrid();
       expect(document.activeElement).toHaveAccessibleName('Sunday, June 15, 2025');
-      expect(onOpenChange).toHaveBeenCalledTimes(1);
-      await user.keyboard('{Escape}');
-      expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
-      expect(escapes).toEqual([true, true, true]);
-      expect(onOpenChange.mock.calls).toEqual([[true], [false]]);
+      expect(screen.queryByRole('button', { name: 'June 2025' })).not.toBeInTheDocument();
+    });
+
+    it('M4: ... and from the year view; turning it on again shows the days, not the old view', async () => {
+      const { user, rerender } = renderView();
+      await user.click(screen.getByRole('button', { name: 'June 2025' }));
+      await user.click(screen.getByRole('button', { name: '2025' }));
+      const element = (showMonthPicker: boolean) => (
+        <Calendar
+          aria-label="Due date"
+          locale="en-US"
+          today={TODAY}
+          defaultValue={JUNE_15}
+          showMonthPicker={showMonthPicker}
+        />
+      );
+      rerender(element(false));
+      expect(grid()).toHaveAccessibleName('June 2025');
+      expectFocusInGrid();
+      rerender(element(true));
+      expect(grid()).toHaveAccessibleName('June 2025');
+      expect(screen.getByRole('button', { name: 'June 2025' })).toBeInTheDocument();
+    });
+
+    it('M5: a drill down and back fires nothing twice in StrictMode and keeps focus in the grid', async () => {
+      const user = userEvent.setup();
+      const onValueChange = vi.fn();
+      render(
+        <React.StrictMode>
+          <Calendar
+            aria-label="Due date"
+            locale="en-US"
+            today={TODAY}
+            defaultValue={JUNE_15}
+            onValueChange={onValueChange}
+          />
+        </React.StrictMode>,
+      );
+      await user.click(screen.getByRole('button', { name: 'June 2025' }));
+      expectFocusInGrid();
+      await user.click(screen.getByRole('button', { name: '2025' }));
+      expectFocusInGrid();
+      await user.click(within(grid()).getByRole('button', { name: '2026' }));
+      expectFocusInGrid();
+      await user.click(within(grid()).getByRole('button', { name: 'March 2026' }));
+      expect(grid()).toHaveAccessibleName('March 2026');
+      expectFocusInGrid();
+      expect(onValueChange).not.toHaveBeenCalled();
+      await user.click(dayButton('Sunday, March 15, 2026'));
+      expect(onValueChange).toHaveBeenCalledTimes(1);
+    });
+
+    describe('M5: the Escape handler', () => {
+      /** `defaultPrevented` of every Escape that reaches the document. */
+      function trackEscapes() {
+        const seen: boolean[] = [];
+        const listener = (event: KeyboardEvent) => {
+          if (event.key === 'Escape') seen.push(event.defaultPrevented);
+        };
+        document.addEventListener('keydown', listener);
+        onTestFinished(() => document.removeEventListener('keydown', listener));
+        return seen;
+      }
+
+      async function openMonths(wrapper?: (ui: React.ReactElement) => React.ReactElement) {
+        const user = userEvent.setup();
+        const ui = (
+          <Calendar aria-label="Due date" locale="en-US" today={TODAY} defaultValue={JUNE_15} />
+        );
+        render(wrapper ? wrapper(ui) : ui);
+        await user.click(screen.getByRole('button', { name: 'June 2025' }));
+        return user;
+      }
+
+      it('goes back one level and consumes the key', async () => {
+        const escapes = trackEscapes();
+        const user = await openMonths();
+        await user.keyboard('{Escape}');
+        expect(grid()).toHaveAccessibleName('June 2025');
+        expect(escapes).toEqual([true]);
+      });
+
+      it('ignores a key of an IME composition', async () => {
+        await openMonths();
+        fireEvent.keyDown(document.activeElement as HTMLElement, {
+          key: 'Escape',
+          isComposing: true,
+        });
+        expect(grid()).toHaveAccessibleName('2025');
+      });
+
+      it('ignores a key that was already handled', async () => {
+        const user = await openMonths((ui) => (
+          <div onKeyDownCapture={(event) => event.preventDefault()}>{ui}</div>
+        ));
+        await user.keyboard('{Escape}');
+        expect(grid()).toHaveAccessibleName('2025');
+      });
+
+      it('ignores other keys', async () => {
+        const user = await openMonths();
+        await user.keyboard('x');
+        expect(grid()).toHaveAccessibleName('2025');
+      });
     });
   });
 

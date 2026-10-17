@@ -4,6 +4,7 @@ import { cn } from '../../lib/cn';
 import { joinIds } from '../../lib/aria';
 import { datePickerClassNames } from '../../lib/classNames';
 import { composeEventHandlers } from '../../lib/composeEventHandlers';
+import type { DayOfWeek, FirstWeekOfYear } from '../../lib/types';
 import { warnDeprecated, warnOnce } from '../../lib/dev';
 import { FOCUSABLE_SELECTOR } from '../../lib/focus';
 import { CalendarIcon, DismissIcon } from '../../lib/icons';
@@ -20,7 +21,7 @@ import { usePopupPosition } from '../../hooks/usePopupPosition';
 import { useRestoreFocus } from '../../hooks/useRestoreFocus';
 import { HiddenInput } from '../internal/HiddenInput';
 import { Portal } from '../portal/Portal';
-import { CalendarView, type CalendarViewPartClassNames } from './Calendar';
+import { CalendarView, type CalendarLabels, type CalendarViewPartClassNames } from './Calendar';
 import {
   formatDate as formatLocaleDate,
   formatISODate,
@@ -38,11 +39,14 @@ import type { RoutedHandlers } from './routedHandlers';
 export type DatePickerInvalidReason = 'unparseable' | 'out-of-range' | 'disabled';
 
 /**
- * The DatePicker's built-in button names and error texts, for localization. Each member is
+ * The DatePicker's built-in button names and error texts, for localization: its own (clear, open
+ * calendar, the errors of typed text, Close) and those of the calendar in its dialog
+ * ({@link CalendarLabels}: the navigation buttons, the heading button's hints, "Go to today", the
+ * week-number column and the marked days; its `required` hint does not apply). Each member is
  * optional and falls back to its English default. Month and weekday names and the day labels
  * follow `locale`.
  */
-export interface DatePickerLabels {
+export interface DatePickerLabels extends CalendarLabels {
   /** Name of the clear button.
    * @default 'Clear date'
    */
@@ -51,14 +55,10 @@ export interface DatePickerLabels {
    * @default 'Open calendar'
    */
   openCalendar?: string;
-  /** Name of the calendar's previous-month button.
-   * @default 'Previous month'
+  /** Name of the footer button that closes the calendar (`showCloseButton`).
+   * @default 'Close'
    */
-  previousMonth?: string;
-  /** Name of the calendar's next-month button.
-   * @default 'Next month'
-   */
-  nextMonth?: string;
+  close?: string;
   /**
    * Error text for typed text that is not a date. `pattern` is the default format of `locale`
    * written with English field letters (`'MM/DD/YYYY'`, `'DD.MM.YYYY'`), or `undefined` with a
@@ -161,7 +161,63 @@ export interface DatePickerProps extends Omit<
    * First day of the week (0 = Sunday, 1 = Monday, etc.).
    * @default 0
    */
-  firstDayOfWeek?: 0 | 1 | 2 | 3 | 4 | 5 | 6;
+  firstDayOfWeek?: DayOfWeek;
+  /**
+   * The day marked as today in the calendar (`aria-current="date"`) and the start of its keys when
+   * no day is selected. See `Calendar`'s `today`.
+   * @default the current date
+   */
+  today?: Date;
+  /**
+   * The month the calendar shows first when there is no value, clamped into `minDate`/`maxDate`.
+   * @default today's month
+   */
+  initialVisibleDate?: Date;
+  /**
+   * Turns the calendar's month text into a button that shows the month view, whose heading, the
+   * year, is a button to the year view. Escape steps back from the year view to the month view
+   * and from there to the days; it closes the calendar only from the day view.
+   * @default true
+   */
+  showMonthPicker?: boolean;
+  /**
+   * Adds a leading column of week numbers to the calendar.
+   * @default false
+   */
+  showWeekNumbers?: boolean;
+  /**
+   * Which week is week 1 of a year. ISO 8601 is `'first-four-day-week'` with `firstDayOfWeek={1}`.
+   * @default 'first-day'
+   */
+  firstWeekOfYear?: FirstWeekOfYear;
+  /**
+   * Adds a "Go to today" button to the calendar's footer: it shows today's month and focuses
+   * today without selecting it, and is disabled while today is outside `minDate`/`maxDate`.
+   * @default false
+   */
+  showGoToToday?: boolean;
+  /**
+   * Adds a Close button to the calendar's footer; it closes the calendar as Escape does from the
+   * day view (focus returns to the toggle, or to the input after Alt+ArrowDown).
+   * @default false
+   */
+  showCloseButton?: boolean;
+  /**
+   * Days that draw a dot and say "marked" in their name in the calendar (`labels.markedDay`).
+   * Called with local-midnight dates.
+   */
+  markedDates?: (date: Date) => boolean;
+  /**
+   * Replaces the content inside a calendar day's button; `defaultContent` is the day number. The
+   * content must be non-interactive, and the button's name does not follow it: set the name with
+   * `dayLabel`.
+   */
+  renderDay?: (date: Date, defaultContent: React.ReactNode) => React.ReactNode;
+  /**
+   * The accessible name of a calendar day, from its default name (the date in words, with
+   * `labels.markedDay` applied for a marked day).
+   */
+  dayLabel?: (date: Date, defaultLabel: string) => string;
   /**
    * Controlled open state of the calendar. The calendar renders only in the browser: an open
    * picker is closed in the server HTML and opens once it has hydrated.
@@ -231,6 +287,12 @@ const CALENDAR_PART_CLASS_NAMES: CalendarViewPartClassNames = {
   day: datePickerClassNames.day,
   month: datePickerClassNames.month,
   year: datePickerClassNames.year,
+  weekNumberHeader: datePickerClassNames.weekNumberHeader,
+  weekNumber: datePickerClassNames.weekNumber,
+  markedDot: datePickerClassNames.markedDot,
+  footer: datePickerClassNames.footer,
+  todayButton: datePickerClassNames.todayButton,
+  closeButton: datePickerClassNames.closeButton,
 };
 
 /**
@@ -247,9 +309,14 @@ const CALENDAR_PART_CLASS_NAMES: CalendarViewPartClassNames = {
  *   modal dialog labelled by the month heading. Focus moves to the selected day (else today, else
  *   the first available day of the month) and Tab stays inside. Arrow keys move by day/week
  *   (mirrored in RTL), PageUp/PageDown by month, Shift+PageUp/PageDown by year (the day is clamped
- *   to the month), Home/End to the start/end of the week, Enter/Space select. Escape closes and
- *   returns focus to where the calendar was opened from (the toggle, or the input after
- *   Alt+ArrowDown); a press outside closes it too. Unavailable days stay focusable
+ *   to the month), Home/End to the start/end of the week, Enter/Space select. The month text is a
+ *   button (the heading button, `showMonthPicker`) that shows the month view, whose heading, the
+ *   year, leads to the year view; Escape steps back from the year view to the month view and from
+ *   there to the days, and closes only from the day view, returning focus to where the calendar
+ *   was opened from (the toggle, or the input after Alt+ArrowDown); a press outside closes it too.
+ *   `showCloseButton` adds a Close button that closes as Escape does from the day view, and
+ *   `showGoToToday` a button that shows today's month. `showWeekNumbers`, `markedDates`,
+ *   `renderDay` and `dayLabel` shape the day grid as in `Calendar`. Unavailable days stay focusable
  *   (`aria-disabled`); a day focused by pointer becomes the starting point of the arrow keys. The
  *   selected day is `aria-selected` on its gridcell and `aria-pressed` on its focusable button, so
  *   the state is announced when focus lands on it; today is `aria-current="date"`.
@@ -290,6 +357,16 @@ export const DatePicker = (props: DatePickerProps) => {
     readOnly,
     clearable = false,
     firstDayOfWeek = 0,
+    today,
+    initialVisibleDate,
+    showMonthPicker,
+    showWeekNumbers,
+    firstWeekOfYear,
+    showGoToToday,
+    showCloseButton = false,
+    markedDates,
+    renderDay,
+    dayLabel,
     open: openProp,
     defaultOpen,
     onOpenChange,
@@ -615,11 +692,14 @@ export const DatePicker = (props: DatePickerProps) => {
     close(inputRef.current);
   };
 
+  /** Closes the calendar, as Escape does: focus returns to where it was opened from. */
+  const requestClose = () => close(openedFromInput ? inputRef.current : null);
+
   const handleDialogKeyDown = (event: React.KeyboardEvent<HTMLDivElement>) => {
     if (event.key !== 'Escape' || event.defaultPrevented || event.nativeEvent.isComposing) return;
     // Consumed here, so enclosing layers (a Dialog around the picker) ignore it.
     event.preventDefault();
-    close(openedFromInput ? inputRef.current : null);
+    requestClose();
   };
 
   /* ---- render ------------------------------------------------------ */
@@ -760,6 +840,17 @@ export const DatePicker = (props: DatePickerProps) => {
               disabledDates={disabledDates}
               firstDayOfWeek={firstDayOfWeek}
               locale={locale}
+              today={today}
+              initialVisibleDate={initialVisibleDate}
+              showMonthPicker={showMonthPicker}
+              showWeekNumbers={showWeekNumbers}
+              firstWeekOfYear={firstWeekOfYear}
+              showGoToToday={showGoToToday}
+              markedDates={markedDates}
+              renderDay={renderDay}
+              dayLabel={dayLabel}
+              onClose={showCloseButton ? requestClose : undefined}
+              closeLabel={labels?.close}
               labels={labels}
               headingAs="h2"
               headingId={headingId}
