@@ -1223,10 +1223,12 @@ export const Toaster = ({
   // is removed (a hovered toast dismissed, timed out or pushed out by the limit, a menu item that
   // closed its menu), the browser's next boundary event is a `pointerover` on the element now under
   // the pointer with no related target, from which React synthesises no leave. So the 'hover' pause
-  // also ends on any `pointerover` that did not pass through the region: in React's tree, which
-  // takes in a portal opened from a toast (D14, as the enter and leave handlers do), or in the DOM
-  // and the layers anchored in it. A document listener in the bubble phase, so React's own
-  // listeners (on the root and portal containers, below the document) have marked the event first.
+  // also ends on any `pointerover` that did not pass through the region in React's tree, which
+  // takes in a portal opened from a toast (D14, as the enter and leave handlers do). The DOM and
+  // layer check after it (`isInToastRegion`) is defensive: it keeps the pause for a layer anchored
+  // in a toast but rendered outside the Toaster's tree. A document listener in the bubble phase, so
+  // React's own listeners (on the root and portal containers, below the document) have marked the
+  // event first.
   const regionPointerOverRef = React.useRef<Event | null>(null);
   React.useEffect(() => {
     const handlePointerOver = (event: Event) => {

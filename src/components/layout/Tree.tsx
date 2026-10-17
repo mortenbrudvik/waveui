@@ -6,10 +6,10 @@ export type { TreeItemPersonaLayoutProps } from './Tree.itemPersonaLayout';
 
 /**
  * A hierarchical list (WAI-ARIA Tree View pattern) with a single tab stop: Up/Down move between
- * visible items, Home/End to the first/last, Right expands or moves to the first child (or into the row's actions, see below), Left
- * collapses or moves to the parent (both mirrored in RTL), Enter activates (and toggles a
- * parent), and so does Space unless the tree has checkboxes, `*` expands the siblings, and typing
- * jumps to an item by its text.
+ * visible items, Home/End to the first/last, Right expands or moves to the first child (or into
+ * the row's actions, see below), Left collapses or moves to the parent (both mirrored in RTL),
+ * Enter activates (and toggles a parent), and so does Space unless the tree has checkboxes, `*`
+ * expands the siblings, and typing jumps to an item by its text.
  *
  * Keyboard focus enters at the `selected` item, else the first item; while focus is inside, the
  * tab stop follows it, so Shift+Tab leaves the tree.

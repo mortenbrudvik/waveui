@@ -285,7 +285,7 @@ export const ColorArea = ({
       event.preventDefault();
       if (axis !== activeAxis) setActiveAxis(axis);
       // Every handled key moves focus to its axis's input, even when an earlier
-      // assistive-technology change already made that axis the Tab stop (D19 review, Task C8).
+      // assistive-technology change already made that axis the Tab stop.
       setFocusToken((token) => token + 1);
       applyAxis(axis, clampPercent(next));
     },
