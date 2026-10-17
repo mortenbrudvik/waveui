@@ -1,8 +1,10 @@
 import * as React from 'react';
 import { afterEach, describe, it, expect, vi } from 'vitest';
-import { act, render, screen } from '@testing-library/react';
+import { act, fireEvent, render, screen } from '@testing-library/react';
 import { SwatchPicker } from '../SwatchPicker';
-import { ColorSwatch } from '../SwatchPicker.swatches';
+import { ColorSwatch, EmptySwatch, ImageSwatch } from '../SwatchPicker.swatches';
+import { Button } from '../../button/Button';
+import userEvent from '@testing-library/user-event';
 import { Tooltip } from '../../overlays/Tooltip';
 import { expectThrows, testComposedHandler, testSystemProps } from '../../../test-utils';
 
@@ -231,5 +233,285 @@ describe('ColorSwatch', () => {
     );
     const swatch = screen.getByRole('radio', { name: 'Red' });
     expect(swatch).toHaveStyle({ margin: '8px', backgroundColor: 'rgb(209, 52, 56)' });
+  });
+});
+
+describe('ColorSwatch options (D21, D22)', () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it('disabled: native disabled, a slash, dimmed, skipped by the arrows, never selected', async () => {
+    const onValueChange = vi.fn();
+    const user = userEvent.setup();
+    render(
+      <SwatchPicker aria-label="Color" defaultValue="a" onValueChange={onValueChange}>
+        <ColorSwatch value="a" color="#000001" aria-label="A" />
+        <ColorSwatch value="b" color="#000002" aria-label="B" disabled />
+        <ColorSwatch value="c" color="#000003" aria-label="C" />
+      </SwatchPicker>,
+    );
+    const b = screen.getByRole('radio', { name: 'B' });
+    expect(b).toBeDisabled();
+    expect(b.className).toContain('disabled:opacity-50');
+    expect(b.querySelector('svg[data-wave-swatch-slash]')).not.toBeNull();
+    expect(
+      screen.getByRole('radio', { name: 'C' }).querySelector('[data-wave-swatch-slash]'),
+    ).toBeNull();
+    await user.click(b);
+    expect(onValueChange).not.toHaveBeenCalled();
+    act(() => screen.getByRole('radio', { name: 'A' }).focus());
+    await user.keyboard('{ArrowRight}');
+    expect(screen.getByRole('radio', { name: 'C' })).toHaveFocus();
+    expect(onValueChange).toHaveBeenCalledWith('c');
+    await act(async () => {});
+  });
+
+  it('icon: shown while not selected, replaced by the check while selected', () => {
+    const swatch = (value: string) => (
+      <SwatchPicker aria-label="Color" value={value}>
+        <ColorSwatch value="a" color="#d13438" aria-label="A" icon={<i data-testid="glyph" />} />
+      </SwatchPicker>
+    );
+    const { rerender } = render(swatch(''));
+    expect(screen.getByTestId('glyph').parentElement).toHaveAttribute('aria-hidden', 'true');
+    expect(screen.getByRole('radio', { name: 'A' }).querySelector('svg')).toBeNull();
+    rerender(swatch('a'));
+    expect(screen.queryByTestId('glyph')).toBeNull();
+    expect(screen.getByRole('radio', { name: 'A' }).querySelector('svg')).not.toBeNull();
+  });
+
+  it('unwraps a button passed as icon, warning once', () => {
+    const warn = spyWarn();
+    render(
+      <SwatchPicker aria-label="Color">
+        <ColorSwatch
+          value="a"
+          color="#d13438"
+          aria-label="A"
+          icon={<button type="button">Glyph</button>}
+        />
+        <ColorSwatch value="b" color="#d13439" aria-label="B" icon={<Button>Glyph</Button>} />
+      </SwatchPicker>,
+    );
+    expect(screen.getAllByRole('radio')).toHaveLength(2);
+    expect(screen.queryByRole('button')).toBeNull();
+    expect(screen.getAllByText('Glyph')).toHaveLength(2);
+    expect(warn.mock.calls).toEqual([
+      [
+        '[WaveUI] ColorSwatch: `icon` received a button element; its children render as the ' +
+          'glyph of the swatch and its props were dropped (buttons cannot be nested). Pass ' +
+          'icon content instead, e.g. `icon={<MyIcon />}`.',
+      ],
+    ]);
+  });
+
+  it('borderColor sets the inline border color', () => {
+    render(
+      <SwatchPicker aria-label="Color">
+        <ColorSwatch value="w" color="#ffffff" aria-label="White" borderColor="#808080" />
+      </SwatchPicker>,
+    );
+    expect(screen.getByRole('radio', { name: 'White' })).toHaveStyle({
+      borderColor: 'rgb(128, 128, 128)',
+    });
+  });
+
+  it('per-swatch size and shape override the picker', () => {
+    render(
+      <SwatchPicker aria-label="Color" size="large" shape="square">
+        <ColorSwatch value="a" color="#000001" aria-label="A" size="extra-small" shape="rounded" />
+        <ColorSwatch value="b" color="#000002" aria-label="B" />
+      </SwatchPicker>,
+    );
+    const a = screen.getByRole('radio', { name: 'A' });
+    expect(a).toHaveClass('w-5', 'h-5', 'rounded');
+    expect(a).not.toHaveClass('w-10', 'rounded-none');
+    expect(screen.getByRole('radio', { name: 'B' })).toHaveClass('w-10', 'h-10', 'rounded-none');
+  });
+
+  it('carries the forced-colors classes, with a Highlight ring while selected', () => {
+    render(
+      <SwatchPicker aria-label="Color" defaultValue="a">
+        <ColorSwatch value="a" color="#000001" aria-label="A" />
+        <ColorSwatch value="b" color="#000002" aria-label="B" />
+      </SwatchPicker>,
+    );
+    expect(screen.getByRole('radio', { name: 'A' })).toHaveClass(
+      'forced-colors:forced-color-adjust-none',
+      'forced-colors:focus-visible:outline-[Highlight]',
+      'forced-colors:ring-[Highlight]',
+    );
+    expect(screen.getByRole('radio', { name: 'B' })).toHaveClass(
+      'forced-colors:focus-visible:outline-[Highlight]',
+    );
+    expect(screen.getByRole('radio', { name: 'B' })).not.toHaveClass(
+      'forced-colors:ring-[Highlight]',
+    );
+  });
+
+  it('spacing="small" shrinks the gap and the focus outline offset to 2', () => {
+    const picker = (spacing?: 'small') => (
+      <SwatchPicker aria-label="Color" spacing={spacing}>
+        <ColorSwatch value="a" color="#000001" aria-label="A" />
+      </SwatchPicker>
+    );
+    const { rerender } = render(picker('small'));
+    expect(screen.getByRole('radio', { name: 'A' })).toHaveClass('focus-visible:outline-offset-2');
+    expect(screen.getByRole('radiogroup')).toHaveClass('gap-1');
+    rerender(picker());
+    expect(screen.getByRole('radio', { name: 'A' })).toHaveClass('focus-visible:outline-offset-4');
+    expect(screen.getByRole('radiogroup')).toHaveClass('gap-2');
+  });
+});
+
+describe('ImageSwatch', () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it('draws src as a covering background image, with a token check when selected', () => {
+    render(
+      <SwatchPicker aria-label="Pattern" defaultValue="dots">
+        <ImageSwatch value="dots" src="/dots.png" aria-label="Dots" />
+      </SwatchPicker>,
+    );
+    const swatch = screen.getByRole('radio', { name: 'Dots' });
+    expect(swatch.style.backgroundImage).toContain('/dots.png');
+    expect(swatch).toHaveClass('bg-cover');
+    expect(swatch).toHaveAttribute('aria-checked', 'true');
+    expect(swatch.querySelector('svg')).not.toBeNull();
+    expect(swatch.innerHTML).toContain('text-foreground');
+    expect(swatch.innerHTML).toContain('text-background');
+    expect(swatch).not.toHaveClass('forced-colors:forced-color-adjust-none');
+  });
+
+  it('is named by its value and warns once per kind when unnamed', () => {
+    const warn = spyWarn();
+    render(
+      <SwatchPicker aria-label="Pattern">
+        <ImageSwatch value="dots" src="/dots.png" />
+        <ImageSwatch value="stripes" src="/stripes.png" />
+      </SwatchPicker>,
+    );
+    expect(screen.getByRole('radio', { name: 'dots' })).toBeInTheDocument();
+    expect(warn.mock.calls).toEqual([
+      [
+        '[WaveUI] ImageSwatch: swatch "dots" has no accessible name, so it is announced by its ' +
+          'value. Pass `aria-label`, or wrap it in a Tooltip with `relationship="label"`.',
+      ],
+    ]);
+  });
+
+  it('disabled draws the slash and cannot be selected', () => {
+    render(
+      <SwatchPicker aria-label="Pattern">
+        <ImageSwatch value="dots" src="/dots.png" aria-label="Dots" disabled />
+      </SwatchPicker>,
+    );
+    const swatch = screen.getByRole('radio', { name: 'Dots' });
+    expect(swatch).toBeDisabled();
+    expect(swatch.querySelector('svg[data-wave-swatch-slash]')).not.toBeNull();
+  });
+});
+
+describe('EmptySwatch', () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it('is a plain button named "Add color", outside the radio group order', async () => {
+    const onClick = vi.fn();
+    const onValueChange = vi.fn();
+    const user = userEvent.setup();
+    render(
+      <SwatchPicker aria-label="Color" defaultValue="a" onValueChange={onValueChange}>
+        <ColorSwatch value="a" color="#000001" aria-label="A" />
+        <ColorSwatch value="b" color="#000002" aria-label="B" />
+        <EmptySwatch onClick={onClick} />
+      </SwatchPicker>,
+    );
+    expect(screen.getAllByRole('radio')).toHaveLength(2);
+    const add = screen.getByRole('button', { name: 'Add color' });
+    expect(add).toHaveAttribute('type', 'button');
+    expect(add).not.toHaveAttribute('role');
+    expect(add).not.toHaveAttribute('data-roving-value');
+    expect(add).toHaveClass(
+      'border-dashed',
+      'border-stroke-accessible',
+      'forced-colors:border-[ButtonText]',
+    );
+    expect(add.querySelector('svg')).not.toBeNull();
+    await user.click(add);
+    expect(onClick).toHaveBeenCalledTimes(1);
+    // Arrow keys on the empty swatch are not handled: focus stays, nothing is selected.
+    act(() => add.focus());
+    await user.keyboard('{ArrowRight}{ArrowLeft}{ArrowDown}{Home}{End}');
+    expect(add).toHaveFocus();
+    expect(onValueChange).not.toHaveBeenCalled();
+    expect(screen.getByRole('radio', { name: 'A' })).toHaveAttribute('aria-checked', 'true');
+    // An arrow key on a radio still works.
+    act(() => screen.getByRole('radio', { name: 'A' }).focus());
+    await user.keyboard('{ArrowRight}');
+    expect(screen.getByRole('radio', { name: 'B' })).toHaveFocus();
+    await act(async () => {});
+  });
+
+  it('takes a custom name, size and shape, and its icon follows the optional-indicator rule', () => {
+    render(
+      <SwatchPicker aria-label="Color" size="large" shape="square">
+        <EmptySwatch
+          aria-label="New"
+          size="extra-small"
+          shape="circular"
+          icon={<i data-testid="p" />}
+        />
+        <EmptySwatch aria-label="Bare" icon={false} />
+        <EmptySwatch aria-label="Default" icon={null} />
+      </SwatchPicker>,
+    );
+    const custom = screen.getByRole('button', { name: 'New' });
+    expect(custom).toHaveClass('w-5', 'h-5', 'rounded-full');
+    expect(screen.getByTestId('p').parentElement).toHaveAttribute('aria-hidden', 'true');
+    expect(screen.getByRole('button', { name: 'Bare' }).querySelector('svg')).toBeNull();
+    expect(screen.getByRole('button', { name: 'Default' }).querySelector('svg')).not.toBeNull();
+    expect(screen.getByRole('button', { name: 'Default' })).toHaveClass('w-10', 'rounded-none');
+  });
+
+  it('unwraps a button passed as icon, warning once', () => {
+    const warn = spyWarn();
+    render(
+      <SwatchPicker aria-label="Color">
+        <EmptySwatch icon={<button type="button">Plus</button>} />
+      </SwatchPicker>,
+    );
+    expect(screen.getAllByRole('button')).toHaveLength(1);
+    expect(screen.getByText('Plus')).toBeInTheDocument();
+    expect(warn.mock.calls).toEqual([
+      [
+        '[WaveUI] EmptySwatch: `icon` received a button element; its children render as the ' +
+          'glyph of the swatch and its props were dropped (buttons cannot be nested). Pass ' +
+          'icon content instead, e.g. `icon={<MyIcon />}`.',
+      ],
+    ]);
+  });
+
+  it('ignores an arrow key that bubbles from it (fireEvent)', () => {
+    const onValueChange = vi.fn();
+    render(
+      <SwatchPicker aria-label="Color" onValueChange={onValueChange}>
+        <ColorSwatch value="a" color="#000001" aria-label="A" />
+        <EmptySwatch />
+      </SwatchPicker>,
+    );
+    const add = screen.getByRole('button', { name: 'Add color' });
+    act(() => add.focus());
+    fireEvent.keyDown(add, { key: 'ArrowLeft' });
+    expect(add).toHaveFocus();
+    expect(onValueChange).not.toHaveBeenCalled();
+  });
+
+  it('throws outside a picker in development', () => {
+    expectThrows(<EmptySwatch />, '[WaveUI] EmptySwatch must be used within SwatchPicker');
   });
 });

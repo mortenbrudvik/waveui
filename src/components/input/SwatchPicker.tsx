@@ -63,11 +63,17 @@ export interface SwatchPickerProps extends Omit<
    * context, so they may be wrapped in a `Tooltip` or another element that forwards its own props.
    */
   children?: React.ReactNode;
-  /** Size of each swatch button (24, 32 or 40px).
+  /** Size of each swatch button (20, 24, 32 or 40px). A 20px swatch passes the target-size bar
+   * through its spacing; a swatch's own `size` overrides this.
    * @default 'medium'
    */
   size?: SwatchPickerSize;
-  /** Shape of each swatch button.
+  /** Gap between swatches: 4px or 8px. At `'small'` the focus outline's offset shrinks from 4px to
+   * 2px, so it does not cover the neighbour.
+   * @default 'medium'
+   */
+  spacing?: 'small' | 'medium';
+  /** Shape of each swatch button (a swatch's own `shape` overrides this).
    * @default 'circular'
    */
   shape?: Shape;
@@ -119,6 +125,7 @@ export const SwatchPicker = ({
   children,
   size = 'medium',
   shape = 'circular',
+  spacing = 'medium',
   name,
   required,
   form,
@@ -202,22 +209,26 @@ export const SwatchPicker = ({
       shape,
       layout: 'row',
       focusMode: 'arrow',
-      spacing: 'medium',
+      spacing,
       getTabIndex,
       register,
     }),
-    [value, setValue, size, shape, getTabIndex, register],
+    [value, setValue, size, shape, spacing, getTabIndex, register],
   );
 
   return (
     <div
       role="radiogroup"
       {...fieldProps}
-      className={cn('relative flex flex-wrap gap-2', className)}
+      className={cn('relative flex flex-wrap', spacing === 'small' ? 'gap-1' : 'gap-2', className)}
       {...rest}
       ref={mergedRef}
       data-roving-container=""
-      onKeyDown={composeEventHandlers(onKeyDown, containerProps.onKeyDown)}
+      onKeyDown={composeEventHandlers(onKeyDown, (event: React.KeyboardEvent<HTMLDivElement>) => {
+        // An EmptySwatch is no radio: arrow keys pressed on it would otherwise move to and select one.
+        if ((event.target as HTMLElement).hasAttribute?.('data-wave-empty-swatch')) return;
+        containerProps.onKeyDown(event);
+      })}
       onFocus={composeEventHandlers(onFocus, containerProps.onFocus, {
         checkDefaultPrevented: false,
       })}

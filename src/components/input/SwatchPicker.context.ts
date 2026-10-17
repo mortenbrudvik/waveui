@@ -9,8 +9,8 @@ import type { Shape, Size } from '../../lib/types';
  * component.
  */
 
-/** Size of the swatches (0.10: `'extra-small'` joins in a later package of this phase). */
-export type SwatchPickerSize = Extract<Size, 'small' | 'medium' | 'large'>;
+/** Size of the swatches: 20, 24, 32 or 40px. */
+export type SwatchPickerSize = Extract<Size, 'extra-small' | 'small' | 'medium' | 'large'>;
 
 /** The state and behaviour a `SwatchPicker` gives the swatches it renders (D18). */
 export interface SwatchPickerContextValue {
