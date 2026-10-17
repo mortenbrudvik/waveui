@@ -19,6 +19,7 @@ import type { Status, Slot, SlotObject } from '../../lib/types';
 import { useId } from '../../hooks/useId';
 import { useMergedRefs } from '../../hooks/useMergedRefs';
 import { Button } from '../button/Button';
+import { useMessageBarReflow } from './MessageBar.reflow';
 import {
   BUTTON_OWN_PROP_KEYS,
   MERGED_DISABLED_FOCUSABLE_PROPS,
@@ -517,13 +518,30 @@ const MessageBarRoot = ({
   // Layout (D17): one DOM order in every layout (icon, text, actions, Dismiss), so a layout change
   // never moves a focused element; only classes change. Without actions the bar keeps 0.7's markup.
   const hasActions = actions.length > 0;
+  // `'auto'` with actions measures its text (MessageBar.reflow.ts); the elements it reads are held
+  // in state through callback refs, attached only while it measures (no extra render otherwise).
+  const measuring = layout === 'auto' && hasActions;
+  const [rootElement, setRootElement] = React.useState<HTMLDivElement | null>(null);
+  const [textElement, setTextElement] = React.useState<HTMLDivElement | null>(null);
+  const rootRef = useMergedRefs<HTMLDivElement>(ref, measuring ? setRootElement : undefined);
+  const measuredLayout = useMessageBarReflow(rootElement, textElement, measuring);
   const resolvedLayout: 'singleline' | 'multiline' =
-    layout === 'auto' ? (hasActions ? 'singleline' : 'multiline') : layout;
+    layout === 'auto' ? (hasActions ? measuredLayout : 'multiline') : layout;
+  // While it measures one row, the text column does not wrap, so text that does not fit overflows
+  // the column (never cut off) and the measurement sees it.
+  const unwrapped = measuring && resolvedLayout === 'singleline';
 
   // The text column: the severity text, the title (and a space, so the two never run together),
   // then the body in its order.
   const text = (
-    <div className={cn(messageBarClassNames.body, 'min-w-0 flex-1 text-body-1')}>
+    <div
+      ref={measuring ? setTextElement : undefined}
+      className={cn(
+        messageBarClassNames.body,
+        'min-w-0 flex-1 text-body-1',
+        unwrapped && 'whitespace-nowrap',
+      )}
+    >
       <StatusText id={namedByTitle && statusText ? statusTextId : undefined} label={statusText} />
       {title && (
         <MessageBarPartContext.Provider value={titlePlacement}>
@@ -545,7 +563,7 @@ const MessageBarRoot = ({
 
   return (
     <div
-      ref={ref}
+      ref={rootRef}
       role={defaultRole}
       data-layout={resolvedLayout}
       {...rest}
