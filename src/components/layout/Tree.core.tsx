@@ -92,12 +92,19 @@ const TREE_ITEM_SELECTOR = '[role="treeitem"]';
 /** Every focusable control a row's actions can hold (Toolbar's rule). */
 const ACTION_ITEM_SELECTOR = 'button, [href], input, select, textarea, [role="button"], [tabindex]';
 
-/** Shows a row's actions while its item has focus (`:focus`, also after a click, so Tab reaches them). */
-const ACTIONS_ON_ITEM_FOCUS = '[&:focus>[data-tree-row]_[data-tree-actions]]:visible';
+/**
+ * Shows a row's actions while focus is on its item (also after a click) or inside the item's own
+ * row, never in its child group, so Tab and the treegrid arrows reach them. The item's
+ * `:focus-within`, not its `:focus`: while focus moves from the item into an action, Chromium has
+ * already ended the item's `:focus` (but keeps `:focus-within` on it, the common ancestor) when it
+ * checks that the action can take focus, and a hidden action refuses it.
+ */
+const ACTIONS_ON_ITEM_FOCUS =
+  '[&:focus-within:not(:has(>[role=group]_:focus))>[data-tree-row]_[data-tree-actions]]:visible';
 
-/** Makes the aside invisible while its item has focus, where the actions take its place. */
+/** Makes the aside invisible while its actions show for focus, where they take its place. */
 const ASIDE_OFF_ON_ITEM_FOCUS =
-  '[@media(hover:hover)]:not-forced-colors:[&:focus>[data-tree-row]_[data-tree-aside]]:invisible';
+  '[@media(hover:hover)]:not-forced-colors:[&:focus-within:not(:has(>[role=group]_:focus))>[data-tree-row]_[data-tree-aside]]:invisible';
 
 /**
  * The actions stay invisible until the row is hovered or the item or an action has focus, and

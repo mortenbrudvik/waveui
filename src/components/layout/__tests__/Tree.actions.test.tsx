@@ -196,7 +196,7 @@ describe('Tree.Item - row content', () => {
         '[@media(hover:hover)]:not-forced-colors:group-focus-within/end:invisible',
       );
       expect(item('Documents')).toHaveClass(
-        '[@media(hover:hover)]:not-forced-colors:[&:focus>[data-tree-row]_[data-tree-aside]]:invisible',
+        '[@media(hover:hover)]:not-forced-colors:[&:focus-within:not(:has(>[role=group]_:focus))>[data-tree-row]_[data-tree-aside]]:invisible',
       );
       expect(rowOf('Documents').querySelector('[data-tree-end]')).toHaveClass(
         'group/end',
@@ -241,7 +241,27 @@ describe('Tree.Item - actions', () => {
       '[@media(hover:none)]:visible',
     );
     expect(rowOf('Documents')).toHaveClass('group/row');
-    expect(item('Documents')).toHaveClass('[&:focus>[data-tree-row]_[data-tree-actions]]:visible');
+    expect(item('Documents')).toHaveClass(
+      '[&:focus-within:not(:has(>[role=group]_:focus))>[data-tree-row]_[data-tree-actions]]:visible',
+    );
+    // Not `:focus` on the item alone: Chromium ends it while focus moves from the item into an
+    // action, so the hidden action refused the focus (E2b R6).
+    expect(item('Documents').className).not.toMatch(/\[&:focus>/);
+  });
+
+  it('reveals an item’s actions for focus on the item or its own actions, never for a child item', () => {
+    render(<Rows />);
+    // The selector of the item's reveal variant, as the browser reads it.
+    const ownFocus = ':focus-within:not(:has(>[role=group] :focus))';
+    act(() => item('Documents').focus());
+    expect(item('Documents').matches(ownFocus)).toBe(true);
+    act(() => button('Rename Documents').focus());
+    expect(item('Documents').matches(ownFocus)).toBe(true);
+    act(() => item('Work').focus());
+    expect(item('Documents').matches(ownFocus)).toBe(false);
+    expect(item('Work').matches(ownFocus)).toBe(true);
+    act(() => button('Rename Work').focus());
+    expect(item('Documents').matches(ownFocus)).toBe(false);
   });
 
   it.each<[string, React.ReactNode]>([
