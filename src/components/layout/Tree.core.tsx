@@ -109,13 +109,16 @@ const ASIDE_OFF_ON_ITEM_FOCUS =
 /**
  * The actions stay invisible until the row is hovered or the item or an action has focus, and
  * always show in forced colors and without hover (touch). An invisible action takes no focus.
+ * They also show while a surface opened from an action is open (its trigger is expanded) and
+ * while focus is in such a surface (`data-focus-in-popup`), so the surface's focus return, which
+ * runs after its trigger already reports it closed, reaches the action.
  */
 const ACTIONS_VISIBILITY =
-  'invisible group-hover/row:visible focus-within:visible forced-colors:visible [@media(hover:none)]:visible';
+  'invisible group-hover/row:visible focus-within:visible forced-colors:visible [@media(hover:none)]:visible has-[[aria-expanded=true]]:visible data-[focus-in-popup]:visible';
 
 /** The aside gives way to the actions where the two share one place. */
 const ASIDE_OFF_WITH_ACTIONS =
-  'not-forced-colors:group-hover/row:invisible [@media(hover:hover)]:not-forced-colors:group-focus-within/end:invisible';
+  'not-forced-colors:group-hover/row:invisible [@media(hover:hover)]:not-forced-colors:group-focus-within/end:invisible [@media(hover:hover)]:not-forced-colors:group-has-[[aria-expanded=true]]/end:invisible [@media(hover:hover)]:not-forced-colors:group-has-[[data-focus-in-popup]]/end:invisible';
 
 /** Aside and actions share one cell, and sit side by side where the actions always show. */
 const END_CELL_SHARED = '[&>*]:[grid-area:1/1] forced-colors:flex [@media(hover:none)]:flex';
@@ -581,6 +584,31 @@ const TreeItemActions = ({
     tabStop,
   });
 
+  // Focus in a surface opened from an action (a Menu, Popover or Dialog rendered in a portal, whose
+  // focus events reach the toolbar through the React tree): `'inside'`. Once focus leaves such a
+  // surface for anywhere but the toolbar, `'leaving'` until the next frame, because the surface's
+  // focus return comes later in that close (its layout phase, or a microtask).
+  const [popupFocus, setPopupFocus] = React.useState<'inside' | 'leaving' | null>(null);
+  React.useEffect(() => {
+    if (popupFocus !== 'leaving') return;
+    const frame = requestAnimationFrame(() => setPopupFocus(null));
+    return () => cancelAnimationFrame(frame);
+  }, [popupFocus]);
+
+  const handleToolbarFocus = (event: React.FocusEvent<HTMLSpanElement>) => {
+    rovingFocus(event);
+    setPopupFocus(event.currentTarget.contains(event.target) ? null : 'inside');
+  };
+
+  const handleToolbarBlur = (event: React.FocusEvent<HTMLSpanElement>) => {
+    // An action's own blur: its focus-within reveal decides.
+    if (event.currentTarget.contains(event.target)) return;
+    const next = event.relatedTarget;
+    // Back to an action: its focus clears the hold.
+    if (next instanceof Node && event.currentTarget.contains(next)) return;
+    setPopupFocus('leaving');
+  };
+
   /** Whether the key is treegrid's "previous" for an action (the roving order settles it). */
   const handleKeyDown = (event: React.KeyboardEvent<HTMLSpanElement>): boolean => {
     // A key from a popup an action opened reaches here through the React tree: not ours.
@@ -624,8 +652,10 @@ const TreeItemActions = ({
       data-tree-actions=""
       data-roving-container=""
       ref={rovingRef}
+      data-focus-in-popup={popupFocus === null ? undefined : ''}
       onKeyDown={handleToolbarKeyDown}
-      onFocus={rovingFocus}
+      onFocus={handleToolbarFocus}
+      onBlur={handleToolbarBlur}
       className={cn(
         treeItemClassNames.actions,
         'inline-flex items-center gap-1',

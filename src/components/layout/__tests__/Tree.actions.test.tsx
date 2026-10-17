@@ -2,6 +2,7 @@ import * as React from 'react';
 import { describe, it, expect, vi, afterEach } from 'vitest';
 import { act, fireEvent, render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
+import { createPortal } from 'react-dom';
 import { Tree, type TreeProps } from '../Tree';
 import { Menu } from '../../navigation/Menu';
 import { MenuButton } from '../../button/MenuButton';
@@ -194,6 +195,8 @@ describe('Tree.Item - row content', () => {
       expect(shared).toHaveClass(
         'not-forced-colors:group-hover/row:invisible',
         '[@media(hover:hover)]:not-forced-colors:group-focus-within/end:invisible',
+        '[@media(hover:hover)]:not-forced-colors:group-has-[[aria-expanded=true]]/end:invisible',
+        '[@media(hover:hover)]:not-forced-colors:group-has-[[data-focus-in-popup]]/end:invisible',
       );
       expect(item('Documents')).toHaveClass(
         '[@media(hover:hover)]:not-forced-colors:[&:focus-within:not(:has(>[role=group]_:focus))>[data-tree-row]_[data-tree-aside]]:invisible',
@@ -239,6 +242,10 @@ describe('Tree.Item - actions', () => {
       'focus-within:visible',
       'forced-colors:visible',
       '[@media(hover:none)]:visible',
+      // While a surface opened from an action is open, and while focus is in it: its focus return
+      // must reach the action (E2-fix2 review).
+      'has-[[aria-expanded=true]]:visible',
+      'data-[focus-in-popup]:visible',
     );
     expect(rowOf('Documents')).toHaveClass('group/row');
     expect(item('Documents')).toHaveClass(
@@ -250,18 +257,123 @@ describe('Tree.Item - actions', () => {
   });
 
   it('reveals an item’s actions for focus on the item or its own actions, never for a child item', () => {
-    render(<Rows />);
-    // The selector of the item's reveal variant, as the browser reads it.
-    const ownFocus = ':focus-within:not(:has(>[role=group] :focus))';
+    render(
+      <Tree aria-label="Files" defaultExpandedItems={['docs', 'work']}>
+        <Tree.Item value="docs" actions={<button type="button">Rename Documents</button>}>
+          Documents
+          <Tree.Item value="work" actions={<button type="button">Rename Work</button>}>
+            Work
+            <Tree.Item value="plan" actions={<button type="button">Rename Plan</button>}>
+              Plan
+            </Tree.Item>
+          </Tree.Item>
+        </Tree.Item>
+      </Tree>,
+    );
+    // The selector of the item's reveal variant as the browser reads it, taken from the
+    // component's own class (the arbitrary variant, its underscores as spaces).
+    const suffix = '>[data-tree-row]_[data-tree-actions]]:visible';
+    const variant = Array.from(item('Documents').classList).find((name) => name.endsWith(suffix))!;
+    const ownFocus = variant.slice('[&'.length, -suffix.length).replaceAll('_', ' ');
+    expect(ownFocus).toBe(':focus-within:not(:has(>[role=group] :focus))');
+    const shown = () =>
+      ['Documents', 'Work', 'Plan'].filter((name) => item(name).matches(ownFocus));
     act(() => item('Documents').focus());
-    expect(item('Documents').matches(ownFocus)).toBe(true);
+    expect(shown()).toEqual(['Documents']);
     act(() => button('Rename Documents').focus());
-    expect(item('Documents').matches(ownFocus)).toBe(true);
+    expect(shown()).toEqual(['Documents']);
     act(() => item('Work').focus());
-    expect(item('Documents').matches(ownFocus)).toBe(false);
-    expect(item('Work').matches(ownFocus)).toBe(true);
+    expect(shown()).toEqual(['Work']);
     act(() => button('Rename Work').focus());
-    expect(item('Documents').matches(ownFocus)).toBe(false);
+    expect(shown()).toEqual(['Work']);
+    // A grandchild: neither its parent nor its grandparent.
+    act(() => item('Plan').focus());
+    expect(shown()).toEqual(['Plan']);
+    act(() => button('Rename Plan').focus());
+    expect(shown()).toEqual(['Plan']);
+  });
+
+  describe('focus in a surface opened from an action', () => {
+    /** An action that renders a popup button into a portal, as a Menu, Popover or Dialog does. */
+    function PortalAction() {
+      return (
+        <>
+          <button type="button">Open</button>
+          {createPortal(<button type="button">In popup</button>, document.body)}
+        </>
+      );
+    }
+
+    function PortalRows() {
+      return (
+        <>
+          <Tree aria-label="Files">
+            <Tree.Item value="docs" actions={<PortalAction />}>
+              Documents
+            </Tree.Item>
+          </Tree>
+          <button type="button">Elsewhere</button>
+        </>
+      );
+    }
+
+    it('keeps the toolbar shown while focus is in the popup, so the focus return reaches the action', () => {
+      render(<PortalRows />);
+      const actions = toolbar('Documents');
+      act(() => button('Open').focus());
+      expect(actions).not.toHaveAttribute('data-focus-in-popup');
+      act(() => button('In popup').focus());
+      expect(actions).toHaveAttribute('data-focus-in-popup', '');
+      // The popup's close returns focus to its trigger: the hold ends.
+      act(() => button('Open').focus());
+      expect(actions).not.toHaveAttribute('data-focus-in-popup');
+    });
+
+    it('ends the hold on the next frame once focus has left the popup for somewhere else', async () => {
+      render(<PortalRows />);
+      const actions = toolbar('Documents');
+      act(() => button('In popup').focus());
+      expect(actions).toHaveAttribute('data-focus-in-popup', '');
+      act(() => button('Elsewhere').focus());
+      // Still held in this task: a close returning focus to the trigger comes before the frame.
+      expect(actions).toHaveAttribute('data-focus-in-popup', '');
+      await act(() => new Promise<void>((resolve) => requestAnimationFrame(() => resolve())));
+      expect(actions).not.toHaveAttribute('data-focus-in-popup');
+    });
+
+    it('a Menu opened from an action: held while open, released once focus is back on its trigger', async () => {
+      const user = userEvent.setup();
+      render(
+        <Tree aria-label="Files" navigationMode="treegrid">
+          <Tree.Item
+            value="docs"
+            actions={
+              <Menu>
+                <Menu.Trigger>
+                  <MenuButton size="small" aria-label="More" />
+                </Menu.Trigger>
+                <Menu.Popover>
+                  <Menu.Item>Rename</Menu.Item>
+                </Menu.Popover>
+              </Menu>
+            }
+          >
+            Documents
+          </Tree.Item>
+        </Tree>,
+      );
+      const actions = toolbar('Documents');
+      await user.tab();
+      await user.keyboard('{ArrowRight}');
+      expect(button('More')).toHaveFocus();
+      await user.keyboard('{ArrowDown}');
+      expect(screen.getByRole('menuitem', { name: 'Rename' })).toHaveFocus();
+      expect(button('More')).toHaveAttribute('aria-expanded', 'true');
+      expect(actions).toHaveAttribute('data-focus-in-popup', '');
+      await user.keyboard('{Escape}');
+      expect(button('More')).toHaveFocus();
+      expect(actions).not.toHaveAttribute('data-focus-in-popup');
+    });
   });
 
   it.each<[string, React.ReactNode]>([
