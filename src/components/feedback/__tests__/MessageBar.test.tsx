@@ -8,6 +8,7 @@ import { MessageBar } from '../MessageBar';
 import type { MessageBarProps } from '../MessageBar';
 import { StatusIcon, StatusText } from '../MessageBar.status';
 import { Button } from '../../button/Button';
+import { messageBarClassNames } from '../../../lib/classNames';
 import type { Slot } from '../../../lib/types';
 import {
   asClientReference,
@@ -168,6 +169,24 @@ describe('MessageBar', () => {
       );
       expect(screen.getByTestId('bar').querySelector('[aria-hidden="true"]')).toBeNull();
     });
+
+    it.each([
+      ['null', null],
+      ['false', false],
+      ['an empty string', ''],
+    ] as const)(
+      'icon set to %s renders no icon element at all (status icon rule)',
+      (_name, icon) => {
+        render(
+          <MessageBar icon={icon as Slot<'span'>} data-testid="bar">
+            Msg
+          </MessageBar>,
+        );
+        const bar = screen.getByTestId('bar');
+        expect(bar.getElementsByClassName(messageBarClassNames.icon)).toHaveLength(0);
+        expect(bar.querySelector('[aria-hidden="true"]')).toBeNull();
+      },
+    );
   });
 
   describe('status tokens (button-provider#3)', () => {

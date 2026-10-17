@@ -15,6 +15,7 @@ import {
 } from '../../lib/slot';
 import { focusRing } from '../../lib/styles';
 import type { Status, Slot, SlotObject } from '../../lib/types';
+import { useId } from '../../hooks/useId';
 import { useMergedRefs } from '../../hooks/useMergedRefs';
 import { Button } from '../button/Button';
 import {
@@ -30,6 +31,16 @@ import {
   StatusText,
   getStatusLabel,
 } from './MessageBar.status';
+import {
+  ACTIONS_PLACEMENT,
+  CONTENT_PLACEMENT,
+  EXTRA_TITLE_PLACEMENT,
+  MessageBarActions,
+  MessageBarPartContext,
+  MessageBarTitle,
+  partitionMessageBarChildren,
+  useTitlePlacement,
+} from './MessageBar.parts';
 
 /** Properties for the MessageBar component. */
 export interface MessageBarProps extends React.HTMLAttributes<HTMLDivElement> {
@@ -96,7 +107,10 @@ export interface MessageBarProps extends React.HTMLAttributes<HTMLDivElement> {
    * Pass icon content instead, e.g. `dismiss={<CloseIcon />}`.
    */
   dismiss?: Slot<'span'> | SlotObject<'button'>;
-  /** Message content to display. */
+  /**
+   * The message: body text, with the parts `MessageBar.Title` and `MessageBar.Actions` as direct
+   * children (see the component docs).
+   */
   children: React.ReactNode;
   /** Ref to the root `<div>`. */
   ref?: React.Ref<HTMLDivElement>;
@@ -322,22 +336,8 @@ function resolveDismiss(dismiss: MessageBarProps['dismiss']): DismissParts | nul
   };
 }
 
-/**
- * An inline message that tells the user about the state of a page or task: a status icon, a
- * visually hidden status label ("Warning:"), the message and an optional dismiss button.
- *
- * - The status sets the tint, the logical start border, the icon and the role (`alert` for
- *   `warning`/`error`, `status` otherwise). Screen readers hear the severity through `statusLabel`.
- * - The dismiss button is always the MessageBar's own `<button>` wired to `onDismiss`
- *   (`type="button"` unless a merged button slot sets its own `type`); the `dismiss` slot only
- *   replaces its content (see {@link MessageBarProps.dismiss}).
- *
- * @example
- * <MessageBar status="warning" onDismiss={() => setVisible(false)}>
- *   Your subscription expires in 3 days.
- * </MessageBar>
- */
-export const MessageBar = ({
+// The MessageBar root, documented on the exported `MessageBar` const.
+const MessageBarRoot = ({
   status = 'info',
   statusLabel,
   onDismiss,
@@ -355,7 +355,9 @@ export const MessageBar = ({
   );
   const renderedIcon =
     icon !== undefined ? (
-      renderSlot(icon, 'span', iconClassName, { 'aria-hidden': true })
+      slotRendersContent(icon) ? (
+        renderSlot(icon, 'span', iconClassName, { 'aria-hidden': true })
+      ) : null
     ) : (
       <span aria-hidden="true" className={iconClassName}>
         <StatusIcon status={status} size={20} />
@@ -443,6 +445,35 @@ export const MessageBar = ({
     );
   }
 
+  // Parts (D15): a static scan of the direct children (Fragments flattened, Server Component
+  // references included), so the title and the actions are placed in the server HTML too.
+  const { title, ownTitleId, actions, body } = partitionMessageBarChildren(children);
+  const generatedTitleId = useId('wave-message-bar-title');
+  const titlePlacement = useTitlePlacement(ownTitleId, generatedTitleId);
+
+  // The text column: the severity text, the title (and a space, so the two never run together),
+  // then the body in its order.
+  const text = (
+    <div className={cn(messageBarClassNames.body, 'min-w-0 flex-1 text-body-1')}>
+      <StatusText label={getStatusLabel(status, statusLabel)} />
+      {title && (
+        <MessageBarPartContext.Provider value={titlePlacement}>
+          {title.element}
+        </MessageBarPartContext.Provider>
+      )}
+      {title && ' '}
+      {body.map(({ key, node, extraTitle }) =>
+        extraTitle ? (
+          <MessageBarPartContext.Provider key={key} value={EXTRA_TITLE_PLACEMENT}>
+            {node}
+          </MessageBarPartContext.Provider>
+        ) : (
+          <React.Fragment key={key}>{node}</React.Fragment>
+        ),
+      )}
+    </div>
+  );
+
   return (
     <div
       ref={ref}
@@ -456,14 +487,61 @@ export const MessageBar = ({
         className,
       )}
     >
-      {renderedIcon}
-      <div className={cn(messageBarClassNames.body, 'min-w-0 flex-1 text-body-1')}>
-        <StatusText label={getStatusLabel(status, statusLabel)} />
-        {children}
-      </div>
-      {renderedDismiss}
+      <MessageBarPartContext.Provider value={CONTENT_PLACEMENT}>
+        {renderedIcon}
+        {actions.length > 0 ? (
+          // A layout wrapper (not a part): the text column and the actions, in this DOM order.
+          <div className="flex min-w-0 flex-1 items-start gap-x-3 gap-y-2">
+            {text}
+            <MessageBarPartContext.Provider value={ACTIONS_PLACEMENT}>
+              {actions.map(({ key, element }) => (
+                <React.Fragment key={key}>{element}</React.Fragment>
+              ))}
+            </MessageBarPartContext.Provider>
+          </div>
+        ) : (
+          text
+        )}
+        {renderedDismiss}
+      </MessageBarPartContext.Provider>
     </div>
   );
 };
+MessageBarRoot.displayName = 'MessageBar';
 
-MessageBar.displayName = 'MessageBar';
+/**
+ * An inline message that tells the user about the state of a page or task: a status icon, a
+ * visually hidden status label ("Warning:"), an optional title, the message, optional actions and
+ * an optional dismiss button.
+ *
+ * - The status sets the tint, the logical start border, the icon and the role (`alert` for
+ *   `warning`/`error`, `status` otherwise). Screen readers hear the severity through `statusLabel`.
+ * - Parts, as direct children: `MessageBar.Title` (a semibold lead-in, read first after the
+ *   severity) and `MessageBar.Actions` (buttons after the text on one row, or below it with
+ *   `layout="multiline"`). The built-in Dismiss button stays the bar's own.
+ * - With its default roles the bar is a live region and the title is read as the start of its
+ *   content; give the bar `role="region"` (a notice that stays on the page) and the title names it.
+ * - The dismiss button is always the MessageBar's own `<button>` wired to `onDismiss`
+ *   (`type="button"` unless a merged button slot sets its own `type`); the `dismiss` slot only
+ *   replaces its content (see {@link MessageBarProps.dismiss}).
+ *
+ * React Server Components cannot dot into a client module: import the flat names
+ * `MessageBarTitle` and `MessageBarActions` there; `MessageBar.Title` and `MessageBar.Actions`
+ * work in client files.
+ *
+ * @example
+ * <MessageBar status="warning" onDismiss={() => setVisible(false)}>
+ *   <MessageBar.Title>Update available</MessageBar.Title>
+ *   A new version is ready to install.
+ *   <MessageBar.Actions>
+ *     <Button size="small">Update now</Button>
+ *   </MessageBar.Actions>
+ * </MessageBar>
+ */
+export const MessageBar = /* @__PURE__ */ Object.assign(MessageBarRoot, {
+  Title: MessageBarTitle,
+  Actions: MessageBarActions,
+});
+
+export { MessageBarTitle, MessageBarActions };
+export type { MessageBarTitleProps, MessageBarActionsProps } from './MessageBar.parts';
