@@ -921,7 +921,7 @@ describe('size (Phase 4 D14)', () => {
       'h-[16px]',
       'w-[32px]',
       'mt-0.5',
-      'before:-inset-y-1',
+      'before:-inset-y-[5px]',
       'before:inset-x-0',
     );
     expect(thumb()).toHaveClass(

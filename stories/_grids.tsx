@@ -11,8 +11,9 @@ const APPEARANCES: readonly InputAppearance[] = [
 
 /**
  * A size × appearance grid for the "Sizes and appearances" stories: one row per appearance, one
- * cell per size. The `filled-lighter` row sits on a surface other than the page background, as
- * the docs recommend.
+ * cell per size. A row wraps rather than overlaps when its controls are wider than the viewport
+ * (the pickers' stories set a fixed width). The `filled-lighter` row sits on a surface other than
+ * the page background, as the docs recommend.
  */
 export function SizeAppearanceGrid({
   render,
@@ -26,8 +27,8 @@ export function SizeAppearanceGrid({
           key={appearance}
           className={
             appearance === 'filled-lighter'
-              ? 'grid grid-cols-3 items-start gap-3 rounded bg-secondary p-3'
-              : 'grid grid-cols-3 items-start gap-3 p-3'
+              ? 'flex flex-wrap items-start gap-3 rounded bg-secondary p-3'
+              : 'flex flex-wrap items-start gap-3 p-3'
           }
         >
           {SIZES.map((size) => (

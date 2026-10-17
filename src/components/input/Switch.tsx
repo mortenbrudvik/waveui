@@ -36,7 +36,8 @@ const SWITCH_SIZE: Readonly<
   Record<SwitchSize, { track: string; thumb: string; on: string; off: string; offset: string }>
 > = {
   small: {
-    track: 'h-[16px] w-[32px] before:absolute before:inset-x-0 before:-inset-y-1',
+    // The target layer is placed against the padding box inside the 1px border: 14 + 2 × 5 = 24px.
+    track: 'h-[16px] w-[32px] before:absolute before:inset-x-0 before:-inset-y-[5px]',
     thumb: 'h-[10px] w-[10px]',
     on: 'translate-x-[18px] wave-rtl:-translate-x-[18px]',
     off: 'translate-x-[2px] wave-rtl:-translate-x-[2px]',
