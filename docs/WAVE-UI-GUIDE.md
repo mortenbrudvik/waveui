@@ -815,7 +815,17 @@ export const chipClassNames = {
 
 ```tsx
 // src/components/button/Chip.tsx
+import * as React from 'react';
+import { cn } from '../../lib/cn';
 import { chipClassNames } from '../../lib/classNames';
+import { renderSlot } from '../../lib/slot';
+import { focusRing } from '../../lib/styles';
+import type { Slot } from '../../lib/types';
+
+export interface ChipProps extends React.ButtonHTMLAttributes<HTMLButtonElement> {
+  icon?: Slot<'span'>;
+  ref?: React.Ref<HTMLButtonElement>;
+}
 
 export const Chip = ({ icon, className, ref, children, ...rest }: ChipProps) => (
   <button
@@ -979,11 +989,13 @@ Escape                           → close
 Tab                  → enters at the selected item, else the first
 ArrowDown / ArrowUp  → next / previous visible item
 ArrowRight           → expand, or move to the first child (mirrored in RTL); with
-                       navigationMode="treegrid", into the item's actions instead (a collapsed
-                       parent still expands first)
+                       navigationMode="treegrid", into the item's actions instead when it has
+                       one that can take focus (a collapsed parent still expands first; without
+                       an action, an open parent moves to its first child)
 ArrowLeft            → collapse, or move to the parent (mirrored in RTL); from the first action
                        (treegrid), back to the item
-Home / End           → first / last visible item
+Home / End           → first / last visible item (on an action, the first / last action of
+                       the row)
 Enter                → activate (onItemSelect) and toggle a parent
 Space                → activate; in a checkbox tree (selectionMode="multiple"), toggle the check
 *                    → expand all siblings
@@ -1019,7 +1031,7 @@ PageDown / PageUp      → brightness −10 / +10
 Home / End             → saturation 0 / 100
 ```
 
-The area holds two visually hidden native range inputs, saturation and brightness; focus, and the Tab stop, follow the axis that changed, so the channel that changed is announced. Unless the primary pointer is coarse (`(pointer: coarse)`: a touch device), the other input is `tabIndex=-1` and `aria-hidden`, so desktop screen readers meet one 2-D slider (the server renders this model too); on touch devices both stay exposed, so a touch screen reader can swipe each. A pointer press jumps and drags with pointer capture. `ColorSlider` and `AlphaSlider` are one native range input each, with the same keys on their axis.
+The area holds two visually hidden native range inputs, saturation and brightness; a key moves focus, and the Tab stop, to the axis the key moves (also at a boundary, where the value stays), so the channel that changed is announced; a change from assistive technology (a swipe) moves only the Tab stop, not focus. Unless the primary pointer is coarse (`(pointer: coarse)`: a touch device), the other input is `tabIndex=-1` and `aria-hidden`, so desktop screen readers meet one 2-D slider (the server renders this model too); on touch devices both stay exposed, so a touch screen reader can swipe each. A pointer press jumps and drags with pointer capture. `ColorSlider` and `AlphaSlider` are one native range input each, with the same keys on their axis.
 
 #### DataGrid
 
@@ -1213,7 +1225,7 @@ Live regions must exist before their content changes. `Toaster` keeps two perman
 Background colors are replaced and box shadows removed in forced-colors mode, so state that is shown only by a background fades away. Wave's components add Tailwind `forced-colors:` variants with system colors:
 
 - `src/lib/styles.ts` `forcedColors` recipes: `selectedLeaf` (`Highlight`/`HighlightText` with `forced-color-adjust: none`, for leaf indicators only: the Switch thumb, check glyphs, the ProgressBar fill, the selected day), `selectedContainer` (a `Highlight` outline for selected options, rows and cards), `control` (`ButtonText` borders), `border` (`CanvasText`), `fill` (a `Highlight` background with `forced-color-adjust: none`, for leaf indicators drawn with their own background: step and pager dots, connectors), `rangeInput` (a native range input: rail `CanvasText`, thumb `Highlight`, `GrayText` while disabled, a `Highlight` focus outline), `ringArc` (a border-drawn ring: the arc `Highlight` on a `Canvas` track) and `disabled` (`GrayText`).
-- Components with forced-colors styling include Switch, Checkbox, RadioGroup, SwatchPicker, Slider, ProgressBar, Spinner, Skeleton (`GrayText` placeholders), DatePicker, TimePicker, Select, listbox options, List, Tree, Card, DataGrid, Pagination, Stepper (completed connectors `Highlight`, the others `CanvasText`), Carousel, TeachingPopover (step dots), PresenceBadge, ColorArea, ColorSlider and AlphaSlider (the field and the rails keep their colors with `forced-color-adjust: none` on those elements only; the thumbs draw their ring and focus indicator in `CanvasText`, `Canvas` and `Highlight`), the Tree checkbox and radio indicators (Checkbox's recipe) and the Button family (every Button appearance draws a 1px border, so it keeps an edge). Dialog and Drawer draw a 1px border, so their edge stays visible where the shadow disappears.
+- Components with forced-colors styling include Switch, Checkbox, RadioGroup, SwatchPicker, Slider, ProgressBar, Spinner, Skeleton (`GrayText` placeholders), DatePicker, TimePicker, Select, listbox options, List, Tree, Card, DataGrid, Pagination, Stepper (completed connectors `Highlight`, the others `CanvasText`), Carousel, TeachingPopover (step dots), PresenceBadge, ColorArea, ColorSlider and AlphaSlider (the field, the rails and the thumbs' fill keep their colors with `forced-color-adjust: none`; the thumbs draw their ring and focus indicator in `CanvasText`, `Canvas` and `Highlight`), the Tree checkbox and radio indicators (Checkbox's recipe) and the Button family (every Button appearance draws a 1px border, so it keeps an edge). Dialog and Drawer draw a 1px border, so their edge stays visible where the shadow disappears.
 - Text inputs use `focus:outline-hidden`, which Tailwind turns into a visible outline in forced colors.
 
 **System color keywords**: `Canvas`, `CanvasText`, `LinkText`, `Highlight`, `HighlightText`, `ButtonFace`, `ButtonText`, `GrayText`.

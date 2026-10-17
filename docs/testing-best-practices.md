@@ -503,7 +503,7 @@ it('puts both icon classes on the icon span', () => {
 - **Presence.** A toast's container mounts through the presence core: `mockAnimations({ animated: (el) => el.hasAttribute('data-wave-toast') })` keeps a dismissed toast `exiting` (and `inert`) until `motion.finishAll()`, so a test can check that focus moved to the next toast before the exit ends and that the exiting toast no longer counts toward `limit`.
 - **The shortcut.** `shortcuts={{ focus: (event) => event.altKey && event.shiftKey && event.code === 'KeyN' }}` and `await user.keyboard('{Alt>}{Shift>}N{/Shift}{/Alt}')` from anywhere in the page; Escape and Delete go to the focused container (`act(() => container.focus())`).
 - **Timers.** The fake-timer recipe of section 7. A toast with an action gets no timer unless the dispatch passes `timeout`: assert `vi.getTimerCount()` or that the toast is still there after the default 5 seconds.
-- **Server rendering.** A test file with `// @vitest-environment node` can dispatch through a module-level handle (the dispatch returns an id and does nothing) and `renderToString` a page with a bound Toaster (no toast in the HTML).
+- **Server rendering.** A test file with `// @vitest-environment node` can dispatch through a handle created at module scope of the test file (the rule above is about sharing a bound handle between tests; here no Toaster ever binds it, so nothing is shared, and the dispatch returns an id and does nothing) and `renderToString` a page with a bound Toaster (no toast in the HTML).
 
 ### ResizeObserver layout: the MessageBar reflow
 
