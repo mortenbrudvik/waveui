@@ -103,6 +103,35 @@ import {
   createToaster,
   useOverflowMenu,
   useToastController,
+  Avatar,
+  ColorPickerHexField,
+  ColorPickerPreview,
+  ColorPickerSwatches,
+  MessageBarActions,
+  MessageBarTitle,
+  Persona,
+  ToastBody,
+  ToastClose,
+  ToastFooter,
+  ToastTitle,
+  TreeItemPersonaLayout,
+  avatarClassNames,
+  buttonClassNames,
+  dialogContentClassNames,
+  dialogTitleClassNames,
+  menuButtonClassNames,
+  menuItemClassNames,
+  menuPopoverClassNames,
+  messageBarTitleClassNames,
+  personaClassNames,
+  splitButtonClassNames,
+  toastBodyClassNames,
+  toastClassNames,
+  toasterClassNames,
+  toastTitleClassNames,
+  toggleButtonClassNames,
+  toolbarClassNames,
+  toolbarToggleButtonClassNames,
   type CheckedValuesChangeDetails,
   type DialogProps,
   type MenuProps,
@@ -3835,6 +3864,8 @@ describe('compounds composed in a React Server Component', () => {
   }
   const ssrCase = <P extends Parts>(c: SsrCase<P>) => c as unknown as SsrCase;
 
+  const toastDismiss = vi.fn();
+
   const cases: SsrCase[] = [
     ssrCase({
       name: 'Carousel',
@@ -4191,6 +4222,110 @@ describe('compounds composed in a React Server Component', () => {
         await user.click(alice);
         expect(alice).toBeChecked();
         expect(screen.getByRole('row', { name: /Alice/ })).toHaveAttribute('aria-selected', 'true');
+      },
+    }),
+    ssrCase({
+      name: 'Toast (a title with an action, a body with a subtitle, a footer)',
+      parts: { Title: ToastTitle, Body: ToastBody, Footer: ToastFooter, Close: ToastClose },
+      tree: ({ Title, Body, Footer, Close }) => (
+        <Toast status="success" onDismiss={toastDismiss}>
+          <Title
+            action={
+              <Close>
+                <Button>Undo</Button>
+              </Close>
+            }
+          >
+            Saved
+          </Title>
+          <Body subtitle="2 files">Your changes are saved.</Body>
+          <Footer>
+            <Button>View changes</Button>
+          </Footer>
+        </Toast>
+      ),
+      serverText: 'Your changes are saved.',
+      interact: async (user) => {
+        toastDismiss.mockClear();
+        // Rendered by the app, not dispatched: its own live region (spec D10).
+        const toast = screen.getByRole('status');
+        expect(toast).toHaveTextContent(/^Success:\s*Saved/);
+        expect(within(toast).getByText('2 files')).toHaveClass(toastBodyClassNames.subtitle);
+        await user.click(button('Undo'));
+        expect(toastDismiss).toHaveBeenCalledTimes(1);
+      },
+    }),
+    ssrCase({
+      name: 'MessageBar (a titled region with actions; no ResizeObserver, as in consumers’ jsdom)',
+      parts: { Title: MessageBarTitle, Actions: MessageBarActions },
+      tree: ({ Title, Actions }) => (
+        <MessageBar status="warning" role="region">
+          <Title>Update available</Title>A new version is ready to install.
+          <Actions>
+            <Button>Install</Button>
+          </Actions>
+        </MessageBar>
+      ),
+      serverText: 'Update available',
+      interact: async (user) => {
+        // The default layout="auto" with actions must not need a ResizeObserver (review focus).
+        expect(globalThis.ResizeObserver).toBeUndefined();
+        const bar = screen.getByRole('region', { name: 'Warning: Update available' });
+        expect(bar).toHaveAttribute('data-layout', 'singleline');
+        expect(within(bar).getByText('Update available')).toHaveClass(
+          messageBarTitleClassNames.root,
+        );
+        await user.click(within(bar).getByRole('button', { name: 'Install' }));
+        expect(bar).toHaveAttribute('data-layout', 'singleline');
+      },
+    }),
+    ssrCase({
+      name: 'ColorPicker (a custom layout of the preview, the hex field and the swatches)',
+      parts: {
+        HexField: ColorPickerHexField,
+        Swatches: ColorPickerSwatches,
+        Preview: ColorPickerPreview,
+      },
+      tree: ({ HexField, Swatches, Preview }) => (
+        <ColorPicker aria-label="Accent" defaultValue="#0f6cbd">
+          <Preview />
+          <HexField />
+          <Swatches />
+        </ColorPicker>
+      ),
+      serverText: 'value="#0f6cbd"',
+      interact: async (user) => {
+        const hex = screen.getByRole('textbox', { name: 'Hex color value' });
+        expect(hex).toHaveValue('#0f6cbd');
+        await user.click(screen.getByRole('radio', { name: 'Red' }));
+        expect(hex).toHaveValue('#d13438');
+      },
+    }),
+    ssrCase({
+      name: 'Tree (persona rows in a checkbox tree)',
+      parts: { Item: TreeItem, ItemPersonaLayout: TreeItemPersonaLayout },
+      tree: ({ Item, ItemPersonaLayout }) => (
+        <Tree aria-label="People" selectionMode="multiple" defaultCheckedItems={['ada']}>
+          <Item value="ada">
+            <ItemPersonaLayout media={<Avatar name="Ada Lovelace" />} description="Engineer">
+              Ada Lovelace
+            </ItemPersonaLayout>
+          </Item>
+          <Item value="grace">
+            <ItemPersonaLayout description="Admiral">Grace Hopper</ItemPersonaLayout>
+          </Item>
+        </Tree>
+      ),
+      serverText: 'aria-checked="true"',
+      interact: async (user) => {
+        const ada = screen.getByRole('treeitem', { name: 'Ada Lovelace' });
+        expect(ada).toHaveAccessibleDescription('Engineer');
+        expect(ada).toHaveAttribute('aria-checked', 'true');
+        const grace = screen.getByRole('treeitem', { name: 'Grace Hopper' });
+        expect(grace).toHaveAttribute('aria-checked', 'false');
+        // The checkbox is named like its item: by the person's name, not the description (D25, D28).
+        await user.click(screen.getByRole('checkbox', { name: 'Grace Hopper' }));
+        expect(grace).toHaveAttribute('aria-checked', 'true');
       },
     }),
   ];
@@ -5147,5 +5282,149 @@ describe('a Tree with a MenuButton in its actions (spec §4.4 #9)', () => {
     await user.keyboard('{Escape}');
     expect(onOpenChange).toHaveBeenCalledTimes(1);
     expect(onOpenChange).toHaveBeenCalledWith(false, expect.objectContaining({ reason: 'escape' }));
+  });
+});
+
+// ---------------------------------------------------------------------------
+// 0.8: stable class names across compounds, server-safe exports (spec §4.4 #10–#11)
+// ---------------------------------------------------------------------------
+
+describe('stable class names across compounds (spec §4.4 #10)', () => {
+  it('a Toolbar.ToggleButton carries the classes of Button, ToggleButton and its own, on its root and its icon', () => {
+    render(
+      <Toolbar aria-label="Formatting">
+        <Toolbar.ToggleButton name="format" value="bold" icon={<svg data-testid="bold-icon" />}>
+          Bold
+        </Toolbar.ToggleButton>
+      </Toolbar>,
+    );
+    expect(screen.getByRole('toolbar', { name: 'Formatting' })).toHaveClass(toolbarClassNames.root);
+    expect(button('Bold')).toHaveClass(
+      buttonClassNames.root,
+      toggleButtonClassNames.root,
+      toolbarToggleButtonClassNames.root,
+    );
+    expect(screen.getByTestId('bold-icon').parentElement).toHaveClass(
+      buttonClassNames.icon,
+      toggleButtonClassNames.icon,
+      toolbarToggleButtonClassNames.icon,
+    );
+  });
+
+  it('a SplitButton’s halves carry the Button class and their part classes', () => {
+    render(<SplitButton>Save</SplitButton>);
+    expect(screen.getByRole('group')).toHaveClass(splitButtonClassNames.root);
+    expect(button('Save')).toHaveClass(
+      buttonClassNames.root,
+      splitButtonClassNames.primaryActionButton,
+    );
+    expect(button('More options')).toHaveClass(
+      buttonClassNames.root,
+      splitButtonClassNames.menuButton,
+    );
+  });
+
+  it('Dialog.Content’s close button and title heading carry their classes', () => {
+    render(
+      <Dialog open onOpenChange={() => {}}>
+        <Dialog.Content title="Settings">Body</Dialog.Content>
+      </Dialog>,
+    );
+    const dialog = screen.getByRole('dialog', { name: 'Settings' });
+    expect(dialog).toHaveClass(dialogContentClassNames.root);
+    expect(within(dialog).getByRole('heading', { name: 'Settings' })).toHaveClass(
+      dialogTitleClassNames.root,
+    );
+    expect(within(dialog).getByRole('button', { name: 'Close' })).toHaveClass(
+      buttonClassNames.root,
+      dialogContentClassNames.closeButton,
+    );
+  });
+
+  it('Persona’s built-in Avatar carries the Avatar classes and the Persona part class', () => {
+    const { container } = render(<Persona name="Ada Lovelace" secondaryText="Engineer" />);
+    expect(container.firstElementChild).toHaveClass(personaClassNames.root);
+    const avatar = container.querySelector(`.${personaClassNames.avatar}`);
+    expect(avatar).not.toBeNull();
+    expect(avatar).toHaveClass(avatarClassNames.root, avatarClassNames.visual);
+  });
+
+  it('a Menu in a toast carries both components’ classes', async () => {
+    const user = userEvent.setup();
+    render(
+      <Toaster>
+        <UploadToastButton />
+      </Toaster>,
+    );
+    await user.click(button('Upload'));
+    expect(toastRegion()).toHaveClass(toasterClassNames.root);
+    const group = toastGroup('Success: File uploaded');
+    expect(group).toHaveClass(toasterClassNames.toast);
+    const label = within(group).getByText('File uploaded');
+    expect(label).toHaveClass(toastTitleClassNames.label);
+    expect(label.closest(`.${toastTitleClassNames.root}`)).not.toBeNull();
+    expect(label.closest(`.${toastClassNames.root}`)).not.toBeNull();
+    const more = button('More');
+    expect(more).toHaveClass(buttonClassNames.root, menuButtonClassNames.root);
+    expect(more.closest(`.${toastTitleClassNames.action}`)).not.toBeNull();
+    await user.click(more);
+    expect(screen.getByRole('menu', { name: 'More' })).toHaveClass(menuPopoverClassNames.root);
+    expect(menuitem('Open file')).toHaveClass(menuItemClassNames.root);
+  });
+});
+
+/** Created at module scope, as an app's toasts module creates it (P3-08). */
+const pageToaster = createToaster();
+
+describe('server-safe 0.8 exports in a server render (spec §4.4 #11)', () => {
+  /** A Server Component that styles app markup with a class-name constant (no client code). */
+  function StyleNote() {
+    return <p data-selector={`.${buttonClassNames.root}`}>Buttons</p>;
+  }
+
+  it('a Server Component reads a class-name constant from the entry: a plain string that Button renders first', () => {
+    const html = renderToString(
+      <>
+        <StyleNote />
+        <Button>Save</Button>
+      </>,
+    );
+    expect(typeof buttonClassNames.root).toBe('string');
+    expect(html).toContain(`data-selector=".${buttonClassNames.root}"`);
+    expect(html).toMatch(new RegExp(`<button[^>]* class="${buttonClassNames.root}[ "]`));
+  });
+
+  it('a page whose module created a toaster handle renders no toast on the server; the hydrated Toaster shows the handle’s toasts', async () => {
+    const tree = (
+      <Toaster toaster={pageToaster}>
+        <p>Page</p>
+      </Toaster>
+    );
+    const html = renderToString(tree);
+    expect(html).toContain('Page');
+    expect(html).not.toContain('role="group"');
+    expect(findDanglingIdRefsInHtml(html)).toEqual([]);
+
+    const container = document.createElement('div');
+    container.innerHTML = html;
+    document.body.appendChild(container);
+    let root: Root | undefined;
+    try {
+      const error = vi.spyOn(console, 'error');
+      await act(async () => {
+        root = hydrateRoot(container, tree);
+      });
+      expect(error).not.toHaveBeenCalled();
+      act(() => {
+        pageToaster.dispatchToast({ title: 'Welcome back', timeout: 0 });
+      });
+      expect(screen.getByRole('group', { name: 'Info: Welcome back' })).toBeInTheDocument();
+      act(() => pageToaster.dismissAllToasts());
+      await act(async () => {});
+      expect(screen.queryByRole('group', { name: 'Info: Welcome back' })).toBeNull();
+    } finally {
+      act(() => root?.unmount());
+      container.remove();
+    }
   });
 });
