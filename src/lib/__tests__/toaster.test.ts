@@ -106,10 +106,9 @@ describe('createToaster (P3-08, toaster-5)', () => {
     handle.dispatchToast({ toastId: 'sync', title: 'Synced' });
     const controller = fakeController();
     bindToasterHandle(handle, {}, controller);
-    expect(controller.dispatchToast.mock.calls.map(([options]) => (options as { title: string }).title)).toEqual([
-      'Synced',
-      'Other',
-    ]);
+    expect(
+      controller.dispatchToast.mock.calls.map(([options]) => (options as { title: string }).title),
+    ).toEqual(['Synced', 'Other']);
   });
 
   it('removes a waiting toast with dismissToast, and every waiting toast with dismissAllToasts', () => {
@@ -166,6 +165,8 @@ describe('createToaster (P3-08, toaster-5)', () => {
   });
 
   it('reports an object that createToaster did not make as unknown', () => {
-    expect(bindToasterHandle(fakeController(), {}, fakeController())).toEqual({ status: 'unknown' });
+    expect(bindToasterHandle(fakeController(), {}, fakeController())).toEqual({
+      status: 'unknown',
+    });
   });
 });

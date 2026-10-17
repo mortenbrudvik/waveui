@@ -115,6 +115,7 @@ describe('createToaster with a Toaster (P3-08, toaster-5)', () => {
     expect(appRegion).toHaveAttribute('data-position', 'top-end');
     expect(within(appRegion).getByText('App one')).toBeInTheDocument();
     expect(within(appRegion).queryByText('App two')).not.toBeInTheDocument();
+    expect(chatRegion).toHaveAttribute('data-position', 'bottom-start');
     expect(within(chatRegion).getByText('Chat one')).toBeInTheDocument();
     expect(within(chatRegion).queryByText('App one')).not.toBeInTheDocument();
   });
@@ -250,7 +251,17 @@ describe('createToaster with a Toaster (P3-08, toaster-5)', () => {
         surfaceRef.current = el;
         if (el) {
           el.getBoundingClientRect = () =>
-            ({ left: 704, right: 1024, top: 0, bottom: 768, width: 320, height: 768, x: 704, y: 0, toJSON: () => ({}) }) as DOMRect;
+            ({
+              left: 704,
+              right: 1024,
+              top: 0,
+              bottom: 768,
+              width: 320,
+              height: 768,
+              x: 704,
+              y: 0,
+              toJSON: () => ({}),
+            }) as DOMRect;
         }
       }, []);
       return (

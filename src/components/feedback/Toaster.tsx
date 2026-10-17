@@ -427,7 +427,12 @@ export interface ToasterProps extends React.HTMLAttributes<HTMLDivElement> {
   limit?: number;
   /** Keyboard shortcuts; Escape, Delete and Backspace need none (see the component docs). */
   shortcuts?: ToasterShortcuts;
-  /** Binds this Toaster to a handle from `createToaster()`: toasts dispatched through the handle render here. */
+  /**
+   * Binds this Toaster to a handle from `createToaster()`: toasts dispatched through the handle
+   * render here. A handle binds one Toaster: a second Toaster given a bound handle does not bind
+   * (development warning), and does not take the handle over when the first unmounts; the handle
+   * queues again until a Toaster binds it.
+   */
   toaster?: ToasterHandle;
   /** Ref to the toast region (the portaled `<div role="region">`). */
   ref?: React.Ref<HTMLDivElement>;

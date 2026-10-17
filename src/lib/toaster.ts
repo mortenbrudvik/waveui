@@ -1,8 +1,10 @@
 /**
- * The toaster module (P3-01, P3-08): the options recogniser and the toaster handle. Server-safe: it imports only types and touches no DOM, so a
- * Server Component may import it.
+ * The toaster module (P3-01, P3-08): the options recogniser and the toaster handle. Server-safe:
+ * it imports only types (and the dependency-free global registry) and touches no DOM, so a Server
+ * Component may import it.
  */
 import type * as React from 'react';
+import { getGlobalRegistry } from './globalRegistry';
 import type {
   ToastController,
   ToastDispatchOptions,
@@ -45,8 +47,11 @@ interface HandleState {
   queue: QueuedDispatch[];
 }
 
-const handleStates = new WeakMap<object, HandleState>();
-let handleCount = 0;
+/** Shared by the ESM and CJS copies of the library, so either copy's Toaster binds either's handle. */
+const handleRegistry = getGlobalRegistry('toasterHandles', () => ({
+  states: new WeakMap<object, HandleState>(),
+  count: 0,
+}));
 
 /**
  * Creates a handle. It touches no DOM, so a module-scope handle is safe during server rendering;
@@ -66,8 +71,8 @@ let handleCount = 0;
  * };
  */
 export function createToaster(): ToasterHandle {
-  handleCount += 1;
-  const prefix = `wave-toaster-h${handleCount}`;
+  handleRegistry.count += 1;
+  const prefix = `wave-toaster-h${handleRegistry.count}`;
   let dispatchCount = 0;
   const state: HandleState = { controller: null, owner: null, queue: [] };
   const nextId = () => {
@@ -117,15 +122,13 @@ export function createToaster(): ToasterHandle {
       else state.queue = [];
     },
   };
-  handleStates.set(handle, state);
+  handleRegistry.states.set(handle, state);
   return handle;
 }
 
 /** The result of {@link bindToasterHandle}. */
 export type ToasterHandleBinding =
-  | { status: 'bound'; unbind: () => void }
-  | { status: 'taken' }
-  | { status: 'unknown' };
+  { status: 'bound'; unbind: () => void } | { status: 'taken' } | { status: 'unknown' };
 
 /**
  * Internal (the Toaster's layout effect; not exported from the package): binds `handle` to the
@@ -138,7 +141,7 @@ export function bindToasterHandle(
   owner: object,
   controller: ToastController,
 ): ToasterHandleBinding {
-  const state = handleStates.get(handle);
+  const state = handleRegistry.states.get(handle);
   if (!state) return { status: 'unknown' };
   if (state.owner !== null && state.owner !== owner) return { status: 'taken' };
   state.owner = owner;
