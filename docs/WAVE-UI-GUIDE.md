@@ -601,7 +601,7 @@ export const Panel = /* @__PURE__ */ Object.assign(PanelRoot, { Header: PanelHea
 - **Component JSDoc** sits only on the exported `Object.assign(…)` const (the root gets none, also when it lives in a sibling module, as `MenuRoot` in `Menu.root.tsx` does; likewise on a wrapper-call export and on the first overload), so it reaches `index.d.ts`, and it names no internal symbol (`XRoot`) or spec label. Storybook autodocs read it from there (`.storybook/exportDocblocks.ts`), so stories never repeat it (no meta JSDoc, no `docs.description.component` for a compound): `.storybook/__tests__/exportDocblocks.test.ts` gates this, and verify-dist fails on an undocumented exported component.
 - A part rendered outside its root throws `[WaveUI] <Part> must be used within <Root>` in development; in production it logs that once per message and renders inert (`reportMissingContext` from `src/lib/dev.ts`).
 
-Compound components: `Accordion`, `Breadcrumb`, `Card`, `Carousel`, `ColorPicker`, `Combobox`, `DataGrid`, `Dialog`, `Drawer`, `Dropdown`, `List`, `Menu`, `MessageBar`, `Nav`, `Overflow`, `Popover`, `RadioGroup`, `Skeleton`, `Stepper`, `TabList`, `Table`, `Toast`, `Toolbar`, `Tree`. The README lists every flat name. Fragments are looked into (each element of a Fragment is a Breadcrumb item, an AvatarGroup member or a Carousel slide), but a component that renders a part itself is not recognised where a compound classifies its children: write `Carousel.Item`s, and nested `Tree.Item`s, in the compound itself (directly, in Fragments, or for Tree from a render function such as `children.map(renderNode)`).
+Compound components: `Accordion`, `Breadcrumb`, `Card`, `Carousel`, `ColorPicker`, `Combobox`, `DataGrid`, `Dialog`, `Drawer`, `Dropdown`, `List`, `Listbox`, `Menu`, `MessageBar`, `Nav`, `Overflow`, `Popover`, `RadioGroup`, `Rating`, `RatingDisplay`, `Skeleton`, `Stepper`, `SwatchPicker`, `TabList`, `Table`, `Toast`, `Toolbar`, `Tree`. The README lists every flat name. Fragments are looked into (each element of a Fragment is a Breadcrumb item, an AvatarGroup member or a Carousel slide), but a component that renders a part itself is not recognised where a compound classifies its children: write `Carousel.Item`s, and nested `Tree.Item`s, in the compound itself (directly, in Fragments, or for Tree from a render function such as `children.map(renderNode)`).
 
 ### Pattern 3: Slot System
 
@@ -929,10 +929,10 @@ Dropdown, Combobox, TagPicker and Listbox are built on public pieces, so a picke
 The rules (the "Consumer contract" in `useListbox`'s JSDoc):
 
 - **One container.** A listbox's options live in one list at a time: inline and `hidden` while closed, portaled while open, never both, not even for an exit animation. `ListboxSurface` does this.
-- **The combobox modes.** Spread `getComboboxProps()` on the combobox element, then set `aria-expanded` from `expanded` (open with an option to show). Attach both `onKeyDown` and `onKeyUp`: without `onKeyUp`, the native click of a `<button>` combobox on Space keyup toggles the list again.
+- **The combobox modes.** Spread `getComboboxProps()` on the combobox element, then set `aria-expanded` to a value of your own, `const expanded = open && listbox.items.length > 0` (open with an option to show; `useListbox` returns no `expanded`), and pass the same value to `ListboxSurface`'s `expanded`. Attach both `onKeyDown` and `onKeyUp`: without `onKeyUp`, the native click of a `<button>` combobox on Space keyup toggles the list again.
 - **Escape with nothing shown.** While the listbox is open but shows no option, close it on Escape yourself (outside an IME composition) without calling `listbox.onKeyDown`, so the key reaches an enclosing layer such as a Dialog.
 - **Display text.** `listbox.getItem(value)?.label ?? collectOptionLabels(children).get(value)`: options register in a layout effect, so the server HTML and the first render read the labels from the children.
-- **Standalone mode.** Spread `getListboxProps()` on the list (`tabIndex: 0`, `aria-activedescendant`, and a `ref` through which a press on an option focuses the list: merge it with yours), attach `onKeyDown` and `onKeyUp` to the list, and pass the list's own focus as `open`. `getComboboxProps()` is not used; Tab, Escape and the Alt+arrow keys stay with the page.
+- **Standalone mode.** Spread `getListboxProps()` on the list (`tabIndex: 0`, `aria-activedescendant`, and a `ref` through which a press on an option focuses the list: merge it with yours), attach `onKeyDown` to the list (`onKeyUp` only guards a `<button>` combobox's Space keyup, so the list needs none), and pass the list's own focus as `open`. `getComboboxProps()` is not used; Tab, Escape and the Alt+arrow keys stay with the page.
 - **Forms and Field.** `HiddenInput` is internal: submit the value through a plain `<input type="hidden">`, and wire a surrounding Field with `useFieldControl` ([Pattern 8](#pattern-8-composite-controls-and-field)).
 
 A list in the page with an option component of your own (standalone mode, `ListboxProvider`):
@@ -993,7 +993,6 @@ export function AccentList() {
       aria-label="Accent color"
       {...listProps}
       onKeyDown={listbox.onKeyDown}
-      onKeyUp={listbox.onKeyUp}
       onFocus={(event) => {
         if (event.target === event.currentTarget) setFocused(true);
       }}
@@ -1539,7 +1538,7 @@ The **high-contrast theme** (`WaveProvider theme="high-contrast"`) is a separate
 - Validation errors: `Field`'s `error`, or `error="…"` on Input/Select/Textarea, render a `role="alert"` message linked with `aria-describedby`; a Field `validationState="warning"` message is announced too, without marking the control invalid
 - Hide decorative elements with `aria-hidden="true"` (Wave's icon slots do it for you)
 - Name progress indicators and landmarks: `ProgressBar` `label`, `Spinner` `label` (default "Loading"), `Toolbar` and `Nav` `aria-label`
-- Translate the names and hidden texts components render themselves: `closeLabel` (Dialog.Content, Drawer, TeachingPopover), `statusLabel` (MessageBar, Toast), `dismissLabel` (Toast, `dispatchToast` options, Tag), Carousel `labels` and `autoPlayLabels`, Stepper `statusLabels`, Pagination `getItemAriaLabel`, and the `labels` objects of AlphaSlider, ColorArea, ColorPicker, ColorSlider, Combobox, DataGrid, DatePicker, Dropdown, Rating, RatingDisplay, SpinButton, TagPicker, TeachingPopover and TimePicker (the README's "Built-in text" lists every one)
+- Translate the names and hidden texts components render themselves: `closeLabel` (Dialog.Content, Drawer, TeachingPopover), `statusLabel` (MessageBar, Toast), `dismissLabel` (Toast, `dispatchToast` options, Tag), Carousel `labels` and `autoPlayLabels`, Stepper `statusLabels`, Pagination `getItemAriaLabel`, and the `labels` objects of AlphaSlider, Calendar, ColorArea, ColorPicker, ColorSlider, Combobox, DataGrid, DatePicker, Dropdown, Listbox, Rating, RatingDisplay, SpinButton, SwatchPicker, TagPicker, TeachingPopover and TimePicker (the README's "Built-in text" lists every one)
 
 ---
 

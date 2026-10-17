@@ -692,7 +692,7 @@ Keep it a pure pass-through: the mock replaces React for the whole test file.
 
 ### Active-descendant widgets: `aria-activedescendant` and `data-active`
 
-Listbox, the listbox pickers (Dropdown, Combobox, TagPicker, TimePicker) and composites on `useActiveDescendant` keep DOM focus on one element, the combobox or the list, and point its `aria-activedescendant` at the active option. Assert that pointer and the option's `data-active`, never DOM focus on an option: an option never has focus.
+Listbox, the listbox pickers (Dropdown, Combobox, TagPicker, TimePicker) and composites on `useActiveDescendant` keep DOM focus on one element, the combobox or the list, and point its `aria-activedescendant` at the active option. Assert that reference and the option's `data-active`, never DOM focus on an option: an option never has focus.
 
 ```tsx
 // src/components/input/__tests__/Listbox.test.tsx
@@ -730,9 +730,9 @@ it('has an active option only while focused, and the keys move it', async () => 
 });
 ```
 
-- **Resolve the pointer.** Read `aria-activedescendant` and look the element up (`document.getElementById`), then assert it by its text, or compare it with `option(name).id`. Option ids are generated (`useId`): never write a literal one. A closed popup and an unfocused list carry none (`not.toHaveAttribute('aria-activedescendant')`).
+- **Resolve the reference.** Read `aria-activedescendant` and look the element up (`document.getElementById`), then assert it by its text, or compare it with `option(name).id`. Option ids are generated (`useId`): never write a literal one. A closed popup and an unfocused list carry none (`not.toHaveAttribute('aria-activedescendant')`).
 - **Focus stays put.** After the keys, assert `toHaveFocus()` on the combobox or the list, never on the option.
-- **Pointer moves.** `user.hover(option)` or `fireEvent.pointerMove(option)` makes the option active without scrolling the list; a keyboard move scrolls it into view (`{ block: 'nearest' }`). To assert scrolling, replace `Element.prototype.scrollIntoView` with a spy and put the original back in `finally` (`src/test-setup.ts` installs its `vi.fn()` stub only where jsdom has none).
+- **Pointer moves.** `user.hover(option)` or `fireEvent.pointerMove(option)` makes the option active without scrolling the list; a keyboard move scrolls it into view (`{ block: 'nearest' }`). To assert scrolling, spy on `Element.prototype.scrollIntoView`: in a suite whose `afterEach` calls `vi.restoreAllMocks()`, `vi.spyOn(Element.prototype, 'scrollIntoView')` is enough (`Listbox.test.tsx`); otherwise replace the method with a spy and put the original back in `finally`, as the hook tests do (`useActiveDescendant.test.tsx`, `useListbox.test.tsx`). `src/test-setup.ts` installs its `vi.fn()` stub only where jsdom has none.
 - **Callbacks.** `onActiveOptionChange` (and the hooks' `onActiveValueChange`) report every change after the commit, `null` included when the list closes or loses focus: assert the whole sequence (`expect(onActiveOptionChange.mock.calls).toEqual([['apple'], ['cherry'], [null]])`), and once per change in StrictMode.
 - **The hook alone.** `useActiveDescendant.test.tsx` renders a probe component that hands the hook's result out through `useImperativeHandle` (`resultRef`) and calls its methods in `act()`, as `useListbox.test.tsx`'s `Picker` does.
 - **Server HTML.** A closed picker or an unfocused Listbox renders no `aria-activedescendant`; `findDanglingIdRefsInHtml(renderToString(…))` fails on one that points at no element.

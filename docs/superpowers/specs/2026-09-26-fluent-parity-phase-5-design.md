@@ -834,7 +834,7 @@ Every item's acceptance criteria (roadmap Phase 5) are met and covered by tests;
 | `datepicker-5` | L | P5-05 | P5-calendar |
 | `datepicker-6` | L | P5-05 | P5-calendar |
 
-8 medium and 20 low gaps. Not closed here: `swatchpicker-5` and `datepicker-7` (intentional differences, ROADMAP §8.3), `combobox-5`, `dropdown-5` and `datepicker-9` (P7-01), `combobox-7` (backlog), the other `tagpicker-*` gaps (Phase 6).
+8 medium and 20 low gaps. Not closed here: `swatchpicker-5` and `datepicker-7` (intentional differences, ROADMAP §8.3), `combobox-5`, `dropdown-5`, `datepicker-9` and `tagpicker-10` (P7-01), `combobox-7` (P11-04, virtualization), the other `tagpicker-*` gaps (Phase 6).
 
 ---
 
