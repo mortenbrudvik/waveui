@@ -16,7 +16,7 @@ import {
 import type { CoreSize, InputAppearance, Slot } from '../../lib/types';
 import { useId } from '../../hooks/useId';
 import { useFieldContext, useFieldControl } from '../../hooks/useFieldControl';
-import { useInputLook } from './inputLook';
+import { legacyNativeSize, useInputLook } from './inputLook';
 
 /**
  * Props of the error message element that {@link Input}, `Select` and `Textarea` render after the
@@ -139,6 +139,8 @@ export interface InputProps extends Omit<React.InputHTMLAttributes<HTMLInputElem
    *
    * A number is the native `size` attribute (the visible width in characters), as in 0.8: it
    * still renders, warns once in development and is removed in 1.0. Use `htmlSize` for it.
+   * A string of digits only (`size="20"` from untyped code) counts as that number. Any other value
+   * outside the three sizes renders as if `size` were not set.
    */
   size?: CoreSize | number;
   /** The native `size` attribute: the visible width of the field in characters. */
@@ -227,7 +229,7 @@ export const Input = ({
     { nativeRequired: true },
   );
   const invalidLook = isInvalidLook(invalid, fieldProps['aria-invalid']);
-  const numericSize = typeof sizeProp === 'number' ? sizeProp : undefined;
+  const numericSize = legacyNativeSize(sizeProp);
   const nativeSize = resolveDeprecatedProp(
     'Input',
     htmlSize,
@@ -236,7 +238,7 @@ export const Input = ({
     'htmlSize',
   );
   const { size, appearance } = useInputLook(
-    typeof sizeProp === 'number' ? undefined : sizeProp,
+    numericSize === undefined && typeof sizeProp !== 'number' ? sizeProp : undefined,
     appearanceProp,
   );
 

@@ -393,7 +393,7 @@ function mergeIntoLabelElement(
     htmlFor: state.controlId,
     className: cn(state.className, own.className),
   };
-  if (own.id === undefined) merged.id = state.labelId;
+  if (!own.id) merged.id = state.labelId;
   // The element's own `required` (`false` included) wins; else a required Field makes it show its
   // indicator.
   if (own.required === undefined && state.required) merged.required = true;
@@ -569,12 +569,14 @@ export const Field = ({
   // A Label or InfoLabel element renders in place of Field's own <label> (D32). Recognized by its
   // marker: Field imports neither component, so a Field-only bundle has no info button code.
   const labelElement = isFieldLabelElement(label) ? label : undefined;
-  const labelHtmlFor = labelElement?.props.htmlFor;
+  // An empty `htmlFor` or `id` on the element counts as unset (`||`); Field's own `htmlFor` keeps
+  // its 0.7 meaning (`??`).
+  const labelHtmlFor = labelElement?.props.htmlFor || undefined;
   const controlId = targetId ?? htmlFor ?? labelHtmlFor ?? fieldId;
   // A label pointing at another element would leave the control unnamed.
   const labelPointsElsewhere = labelHtmlFor !== undefined && labelHtmlFor !== controlId;
   const hasLabel = slotRendersContent(label);
-  const labelId = hasLabel ? (labelElement?.props.id ?? `${fieldId}-label`) : undefined;
+  const labelId = hasLabel ? labelElement?.props.id || `${fieldId}-label` : undefined;
   // The error message keeps its 0.5 id; the other states get their own.
   const messageId = hasMessage ? `${fieldId}-${invalid ? 'error' : 'message'}` : undefined;
   const errorId = invalid ? messageId : undefined;

@@ -524,6 +524,32 @@ describe('htmlSize and the numeric size (Phase 4 D10)', () => {
     expect(warn).toHaveBeenCalledWith(NUMERIC_SIZE_WARNING);
   });
 
+  it('a digit-only size string (0.7 HTML style from untyped code) is the numeric legacy form', () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    render(<Input aria-label="Name" size={'20' as unknown as number} />);
+    expect(field()).toHaveAttribute('size', '20');
+    expect(field()).toHaveAttribute('data-size', 'medium');
+    expect(field()).toHaveClass('h-8', 'px-3', 'text-body-1');
+    expect(warn).toHaveBeenCalledTimes(1);
+    expect(warn).toHaveBeenCalledWith(NUMERIC_SIZE_WARNING);
+  });
+
+  it('another untyped size string renders the medium outline defaults, without the attribute', () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    render(
+      <Input
+        aria-label="Name"
+        size={'huge' as unknown as 'medium'}
+        appearance={'glass' as unknown as 'outline'}
+      />,
+    );
+    expect(field()).not.toHaveAttribute('size');
+    expect(field()).toHaveAttribute('data-size', 'medium');
+    expect(field()).toHaveAttribute('data-appearance', 'outline');
+    expect(field()).toHaveClass('h-8', 'px-3', 'text-body-1', 'border-input');
+    expect(warn).not.toHaveBeenCalled();
+  });
+
   it('types: CoreSize or a number', () => {
     expectTypeOf<InputProps['size']>().toEqualTypeOf<CoreSize | number | undefined>();
     // @ts-expect-error not a size

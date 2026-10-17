@@ -614,12 +614,13 @@ export const RatingItem = ({
         look.colorClass,
         className,
       )}
-      onClick={composeEventHandlers(onClick, () => {
-        // Choosing the current star again is a no-op for both callbacks (useControllable).
-        if (!ctx.disabled) ctx.choose(value, false);
+      onClick={composeEventHandlers(onClick, (event) => {
+        // Choosing the current star again is a no-op for both callbacks (useControllable). A click
+        // from a portal rendered inside the star (a custom glyph's popup) is not the star's.
+        if (!ctx.disabled && isOwnEvent(event)) ctx.choose(value, false);
       })}
-      onMouseEnter={composeEventHandlers(onMouseEnter, () => {
-        if (!ctx.disabled) ctx.preview(value);
+      onMouseEnter={composeEventHandlers(onMouseEnter, (event) => {
+        if (!ctx.disabled && isOwnEvent(event)) ctx.preview(value);
       })}
     >
       <GlyphLayer filled={filled} glyph={look.glyph} className={sizeMap[ctx.size]} />

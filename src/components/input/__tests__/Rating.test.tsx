@@ -1,4 +1,5 @@
 import * as React from 'react';
+import { createPortal } from 'react-dom';
 import { hydrateRoot } from 'react-dom/client';
 import { renderToString } from 'react-dom/server';
 import { afterEach, describe, it, expect, expectTypeOf, vi } from 'vitest';
@@ -241,6 +242,22 @@ describe('Rating — roving focus between the stars', () => {
     render(<Rating />);
     await user.tab();
     expect(star(1)).toHaveFocus();
+  });
+
+  it('ignores keys from a portal rendered among its children (C-COMPOSE)', () => {
+    const onValueChange = vi.fn();
+    render(
+      <Rating aria-label="Service" max={2} defaultValue={1} onValueChange={onValueChange}>
+        <Rating.Item value={1} />
+        <Rating.Item value={2} />
+        <span>{createPortal(<input aria-label="Note" />, document.body)}</span>
+      </Rating>,
+    );
+    const note = screen.getByRole('textbox', { name: 'Note' });
+    fireEvent.keyDown(note, { key: 'ArrowRight' });
+    fireEvent.keyDown(note, { key: 'End' });
+    expect(star(1)).toHaveAttribute('aria-checked', 'true');
+    expect(onValueChange).not.toHaveBeenCalled();
   });
 
   it('ArrowRight and ArrowUp move focus to the next star and select it', async () => {

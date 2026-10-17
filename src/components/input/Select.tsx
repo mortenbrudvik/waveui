@@ -12,7 +12,7 @@ import {
 import type { CoreSize, InputAppearance } from '../../lib/types';
 import { useFieldControl } from '../../hooks/useFieldControl';
 import { isInvalidLook, useControlErrorMessage, type InputErrorMessageProps } from './Input';
-import { useInputLook } from './inputLook';
+import { legacyNativeSize, useInputLook } from './inputLook';
 
 /** Properties for the Select component. */
 export interface SelectProps extends Omit<React.SelectHTMLAttributes<HTMLSelectElement>, 'size'> {
@@ -38,6 +38,8 @@ export interface SelectProps extends Omit<React.SelectHTMLAttributes<HTMLSelectE
    *
    * A number is the native `size` attribute (the number of visible rows), as in 0.8: it still
    * renders, warns once in development and is removed in 1.0. Use `htmlSize` for it.
+   * A string of digits only (`size="20"` from untyped code) counts as that number. Any other value
+   * outside the three sizes renders as if `size` were not set.
    */
   size?: CoreSize | number;
   /** The native `size` attribute: the number of visible rows. */
@@ -118,7 +120,7 @@ export const Select = ({
     { nativeRequired: true },
   );
   const invalidLook = isInvalidLook(invalid, fieldProps['aria-invalid']);
-  const numericSize = typeof sizeProp === 'number' ? sizeProp : undefined;
+  const numericSize = legacyNativeSize(sizeProp);
   const nativeSize = resolveDeprecatedProp(
     'Select',
     htmlSize,
@@ -127,7 +129,7 @@ export const Select = ({
     'htmlSize',
   );
   const { size, appearance } = useInputLook(
-    typeof sizeProp === 'number' ? undefined : sizeProp,
+    numericSize === undefined && typeof sizeProp !== 'number' ? sizeProp : undefined,
     appearanceProp,
   );
 

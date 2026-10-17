@@ -474,6 +474,30 @@ describe('half stars (Phase 4 D22, D23)', () => {
     expect(onValueChange).not.toHaveBeenCalled();
   });
 
+  it('step 1: ignores clicks and mouse enters from a portal rendered inside a star (C-COMPOSE)', () => {
+    const onValueChange = vi.fn();
+    const PortalGlyph = () => (
+      <svg>{createPortal(<span data-testid="portaled">Tip</span>, document.body)}</svg>
+    );
+    render(
+      <Rating
+        aria-label="Service"
+        max={1}
+        onValueChange={onValueChange}
+        iconFilled={<PortalGlyph />}
+        iconOutline={<PortalGlyph />}
+      />,
+    );
+    const portaled = screen.getByTestId('portaled');
+    fireEvent.mouseEnter(portaled);
+    fireEvent.mouseOver(portaled);
+    // No preview: the star stays unfilled.
+    expect(radio('1 star')).toHaveClass('text-stroke-accessible');
+    fireEvent.click(portaled);
+    expect(onValueChange).not.toHaveBeenCalled();
+    expect(radio('1 star')).toHaveAttribute('aria-checked', 'false');
+  });
+
   it('submits half values, and a form reset restores a half defaultValue', () => {
     render(
       <form aria-label="Form">

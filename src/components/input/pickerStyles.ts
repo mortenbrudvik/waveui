@@ -4,6 +4,7 @@
  */
 
 import { cn } from '../../lib/cn';
+import { hitAreaLayer } from '../../lib/styles';
 import type { CoreSize, InputAppearance } from '../../lib/types';
 
 /**
@@ -17,7 +18,7 @@ export const PICKER_ICON_BUTTON_CLASSES =
 
 /** The button box of each size: 20px with a 24px hit layer, 24px (the 0.7 box) or 32px. */
 const BUTTON_BOX: Readonly<Record<CoreSize, string>> = {
-  small: 'size-5 before:absolute before:-inset-0.5',
+  small: cn('size-5', hitAreaLayer),
   medium: '',
   large: 'size-8',
 };

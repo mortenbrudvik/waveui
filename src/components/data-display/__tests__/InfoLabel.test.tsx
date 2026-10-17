@@ -389,6 +389,18 @@ describe('InfoLabel', () => {
       expect(label).toHaveTextContent('Password*');
     });
 
+    it('an empty id counts as unset: the label gets the generated id the button names itself by', () => {
+      render(
+        <InfoLabel info="x" id="">
+          Password
+        </InfoLabel>,
+      );
+      const label = screen.getByText('Password').closest('label') as HTMLLabelElement;
+      expect(label.id).not.toBe('');
+      const button = screen.getByRole('button', { name: 'Password Information' });
+      expect(button.getAttribute('aria-labelledby')?.split(' ')[0]).toBe(label.id);
+    });
+
     it('keeps className, style, ref and a data-* attribute on the root <span>', () => {
       let rootFromRef: HTMLSpanElement | null = null;
       render(

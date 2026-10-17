@@ -1180,6 +1180,26 @@ describe('TagPicker', () => {
       expect(root).toHaveAttribute('data-appearance', 'outline');
     });
 
+    it('an untyped own size (small, or unknown) and appearance render the medium outline defaults', () => {
+      for (const size of ['small', 'huge']) {
+        const { unmount } = render(
+          <TagPicker
+            aria-label="Fruit"
+            options={OPTIONS}
+            defaultValue={['a']}
+            size={size as unknown as TagPickerSize}
+            appearance={'glass' as unknown as 'outline'}
+          />,
+        );
+        expect(control()).toHaveClass('gap-1', 'px-2', 'py-1.5', 'border-input');
+        expect(tag()).toHaveClass('px-2', 'py-0.5', 'text-body-1');
+        const root = input().closest('[data-size]') as HTMLElement;
+        expect(root).toHaveAttribute('data-size', 'medium');
+        expect(root).toHaveAttribute('data-appearance', 'outline');
+        unmount();
+      }
+    });
+
     it.each([
       [
         'large',

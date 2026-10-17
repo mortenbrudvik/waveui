@@ -356,11 +356,9 @@ export const TagPicker = (props: TagPickerProps) => {
     sizes: TAG_PICKER_SIZES,
     defaultSize: 'medium',
   });
-  // A size outside the union (from untyped code) renders, and is reported in the data attribute,
-  // as the default: TypeScript rejects one, but the value still reaches this render (as Checkbox
-  // guards CHECKBOX_SIZE).
-  const resolvedSize: TagPickerSize = Object.hasOwn(TAG_PICKER_SIZE, size) ? size : 'medium';
-  const sizeClasses = TAG_PICKER_SIZE[resolvedSize];
+  // A size outside TAG_PICKER_SIZES (from untyped code) is skipped by useInputLook, so `size` is
+  // always one of them and the data attribute carries the resolved value.
+  const sizeClasses = TAG_PICKER_SIZE[size];
 
   const [selected, setSelected] = useControllable<readonly string[]>(
     valueProp,
@@ -566,7 +564,7 @@ export const TagPicker = (props: TagPickerProps) => {
 
   return (
     <div
-      data-size={resolvedSize}
+      data-size={size}
       data-appearance={appearance}
       {...rest}
       ref={rootMergedRef}

@@ -75,7 +75,8 @@ export const InfoLabel = ({
 }: InfoLabelProps) => {
   const content = resolveDeprecatedProp('InfoLabel', children, label, 'label', 'children');
   const generatedLabelId = useId('info-label');
-  const labelId = id ?? generatedLabelId;
+  // An empty `id` counts as unset, so the button's name never points at an empty id.
+  const labelId = id || generatedLabelId;
   const buttonId = useId('info-label-button');
   return (
     <span ref={ref} className={cn('inline-flex items-center gap-0', className)} {...rest}>

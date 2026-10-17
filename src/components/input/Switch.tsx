@@ -309,7 +309,9 @@ export const Switch = ({
           // style overrides (C-NATIVE): the thumb offsets rely on it staying at zero.
           'relative inline-flex shrink-0 items-center rounded-full border p-0 transition-colors duration-200 motion-reduce:transition-none',
           sizeMetrics.track,
-          hasLabel && sizeMetrics.offset,
+          // The offset centres the track on the label line beside it; above the label, the
+          // column gap alone separates them.
+          hasLabel && labelPosition !== 'above' && sizeMetrics.offset,
           focusRing,
           checked
             ? cn('border-primary bg-primary', unavailable ? disabledOnTrack : onTrack)

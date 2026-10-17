@@ -88,4 +88,62 @@ describe('useInputLook (Phase 4 D6)', () => {
     );
     expect(look()).toBe('extra-large outline');
   });
+
+  // Values from untyped code (plain JS, CMS config, an untyped `inputDefaults`): TypeScript rejects
+  // them, but they still reach the hook. They count as unset, so the data attributes always carry
+  // the resolved value (C-CLASS).
+  describe('values outside the unions (untyped code)', () => {
+    const bogusSize = 'huge' as unknown as 'medium';
+    const bogusAppearance = 'glass' as unknown as InputAppearance;
+
+    it('an own size outside the core sizes falls through to the Field, the provider, the default', () => {
+      const { unmount } = renderWithFieldContext(
+        <WaveProvider inputDefaults={{ size: 'small' }}>
+          <Probe size={bogusSize} />
+        </WaveProvider>,
+        { size: 'large' },
+      );
+      expect(look()).toBe('large outline');
+      unmount();
+      const second = render(
+        <WaveProvider inputDefaults={{ size: 'small' }}>
+          <Probe size={bogusSize} />
+        </WaveProvider>,
+      );
+      expect(look()).toBe('small outline');
+      second.unmount();
+      render(<Probe size={bogusSize} />);
+      expect(look()).toBe('medium outline');
+    });
+
+    it('an own size outside the control sizes falls through', () => {
+      const options = {
+        sizes: ['medium', 'large', 'extra-large'] as const,
+        defaultSize: 'medium' as const,
+      };
+      render(<Probe size={'small' as unknown as 'medium'} options={options} />);
+      expect(look()).toBe('medium outline');
+    });
+
+    it('an own appearance outside the four falls through to the provider, then the default', () => {
+      const { unmount } = render(
+        <WaveProvider inputDefaults={{ appearance: 'underline' }}>
+          <Probe appearance={bogusAppearance} />
+        </WaveProvider>,
+      );
+      expect(look()).toBe('medium underline');
+      unmount();
+      render(<Probe appearance={bogusAppearance} />);
+      expect(look()).toBe('medium outline');
+    });
+
+    it('an untyped provider appearance is skipped', () => {
+      render(
+        <WaveProvider inputDefaults={{ appearance: bogusAppearance }}>
+          <Probe />
+        </WaveProvider>,
+      );
+      expect(look()).toBe('medium outline');
+    });
+  });
 });

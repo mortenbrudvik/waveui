@@ -322,6 +322,34 @@ describe('sizes and appearances (Phase 4 P4-01)', () => {
     );
   });
 
+  it('a digit-only size string (0.7 HTML style from untyped code) is the numeric legacy form', () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    renderSelect({ size: '5' as unknown as number });
+    // Same role change as above: the native `size` is 5 here.
+    const el = screen.getByLabelText('Country');
+    expect(el).toHaveAttribute('size', '5');
+    expect(el).toHaveAttribute('data-size', 'medium');
+    expect(el).toHaveClass('h-8', 'text-body-1');
+    expect(warn).toHaveBeenCalledTimes(1);
+    expect(warn).toHaveBeenCalledWith(
+      '[WaveUI] Select: `size={number}` is deprecated and will be removed in 1.0. Use `htmlSize` instead.',
+    );
+  });
+
+  it('another untyped size string renders the medium outline defaults, without the attribute', () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    renderSelect({
+      size: 'huge' as unknown as 'medium',
+      appearance: 'glass' as unknown as 'outline',
+    });
+    const el = select();
+    expect(el).not.toHaveAttribute('size');
+    expect(el).toHaveAttribute('data-size', 'medium');
+    expect(el).toHaveAttribute('data-appearance', 'outline');
+    expect(el).toHaveClass('h-8', 'text-body-1', 'border-input');
+    expect(warn).not.toHaveBeenCalled();
+  });
+
   it('htmlSize alone does not warn', () => {
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
     renderSelect({ htmlSize: 3 });

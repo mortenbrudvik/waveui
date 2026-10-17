@@ -1134,6 +1134,43 @@ describe('Field', () => {
       }
     });
 
+    it('an empty htmlFor or id on the element counts as unset (no warning, no empty ids)', () => {
+      const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+      try {
+        const { unmount } = render(
+          <Field
+            label={
+              <Label htmlFor="" id="">
+                Name
+              </Label>
+            }
+          >
+            <input />
+          </Field>,
+        );
+        const label = screen.getByText('Name').closest('label') as HTMLLabelElement;
+        const input = screen.getByRole('textbox', { name: 'Name' });
+        expect(input.id).not.toBe('');
+        expect(label).toHaveAttribute('for', input.id);
+        expect(label.id).not.toBe('');
+        unmount();
+        render(
+          <Field label={<Label id="">Plan</Label>}>
+            <div role="radiogroup" />
+          </Field>,
+        );
+        const planLabel = screen.getByText('Plan').closest('label') as HTMLLabelElement;
+        expect(planLabel.id).not.toBe('');
+        expect(screen.getByRole('radiogroup', { name: 'Plan' })).toHaveAttribute(
+          'aria-labelledby',
+          planLabel.id,
+        );
+        expect(warn).not.toHaveBeenCalled();
+      } finally {
+        warn.mockRestore();
+      }
+    });
+
     it('recognizes client-reference label elements', () => {
       const ReferenceLabel = asClientReference(Label);
       const { container } = render(

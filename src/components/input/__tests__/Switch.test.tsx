@@ -934,6 +934,15 @@ describe('size (Phase 4 D14)', () => {
     expect(thumb()).toHaveClass('translate-x-[18px]', 'wave-rtl:-translate-x-[18px]');
   });
 
+  it('small with the label above: no offset (the column gap alone, 4px); beside it, the offset', () => {
+    const { rerender } = render(<Switch label="Wi-Fi" size="small" labelPosition="above" />);
+    expect(control().closest('label')).toHaveClass('flex-col', 'gap-1');
+    expect(control()).toHaveClass('h-[16px]', 'w-[32px]');
+    expect(control()).not.toHaveClass('mt-0.5');
+    rerender(<Switch label="Wi-Fi" size="small" labelPosition="before" />);
+    expect(control()).toHaveClass('mt-0.5');
+  });
+
   it('mirrors the small thumb in RTL through the wave-rtl classes', () => {
     renderWithProviders(<Switch label="Wi-Fi" size="small" defaultChecked />, { dir: 'rtl' });
     expect(thumb()).toHaveClass('wave-rtl:-translate-x-[18px]');

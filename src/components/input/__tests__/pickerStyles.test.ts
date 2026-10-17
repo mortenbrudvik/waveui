@@ -6,6 +6,7 @@ import {
   pickerGlyphSize,
   pickerIconButtonClasses,
 } from '../pickerStyles';
+import { hitAreaLayer } from '../../../lib/styles';
 
 const tokens = (classes: string) => classes.split(/\s+/).filter(Boolean);
 
@@ -22,6 +23,15 @@ describe('picker metrics (Phase 4 D11)', () => {
     );
     expect(small).not.toContain('h-6');
     expect(tokens(pickerIconButtonClasses('large'))).toEqual(expect.arrayContaining(['size-8']));
+  });
+
+  it('the small box carries the shared hit layer of src/lib/styles', () => {
+    expect(tokens(pickerIconButtonClasses('small'))).toEqual(
+      expect.arrayContaining(tokens(hitAreaLayer)),
+    );
+    expect(tokens(pickerIconButtonClasses('medium'))).not.toEqual(
+      expect.arrayContaining(tokens(hitAreaLayer)),
+    );
   });
 
   it('on filled-darker the hover fill is one step darker', () => {

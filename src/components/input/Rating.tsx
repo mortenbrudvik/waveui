@@ -3,6 +3,7 @@ import { cn } from '../../lib/cn';
 import { composeEventHandlers } from '../../lib/composeEventHandlers';
 import { warnDeprecated, warnOnce } from '../../lib/dev';
 import { getArrowIntent, getDirection } from '../../lib/direction';
+import { isOwnEvent } from '../../lib/events';
 import { slotRendersContent, type Slot } from '../../lib/slot';
 import type { Size } from '../../lib/types';
 import { useControllable } from '../../hooks/useControllable';
@@ -294,8 +295,9 @@ const RatingRoot = ({
 
   // Keys count from the current rating, not from the focused radio (0.4 semantics): from an empty
   // rating, Tab lands on the unchosen first radio and Right/Up/Home choose it. Never wraps.
+  // Keys from a portal rendered among the children (a popup opened from one) are not the rating's.
   const handleKeyDown = (e: React.KeyboardEvent<HTMLDivElement>) => {
-    if (e.defaultPrevented || e.altKey || e.ctrlKey || e.metaKey) return;
+    if (e.defaultPrevented || e.altKey || e.ctrlKey || e.metaKey || !isOwnEvent(e)) return;
     let next: number;
     if (e.key === 'Home') next = step;
     else if (e.key === 'End') next = max;

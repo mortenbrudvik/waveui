@@ -1565,6 +1565,21 @@ describe('sizes and appearances (Phase 4 P4-01)', () => {
     expect(clear()).not.toHaveClass('before:absolute');
   });
 
+  it('an untyped size or appearance renders the medium outline defaults (no TypeError)', () => {
+    render(
+      <SearchBox
+        aria-label="Search"
+        defaultValue="x"
+        size={'huge' as unknown as 'medium'}
+        appearance={'glass' as unknown as 'outline'}
+      />,
+    );
+    expect(root()).toHaveClass('h-8', 'text-body-1', 'border-input', 'bg-background');
+    expect(root()).toHaveAttribute('data-size', 'medium');
+    expect(root()).toHaveAttribute('data-appearance', 'outline');
+    expect(clear()).toHaveClass('h-6', 'w-6', 'me-1');
+  });
+
   it('small: 20px clear button with a 24px hit area anchored on the button itself', () => {
     render(<SearchBox aria-label="Search" defaultValue="x" size="small" />);
     expect(root()).toHaveClass('h-6', 'text-caption-1');
