@@ -109,6 +109,20 @@ export function getCalendarDays(viewMonth: Date, firstDayOfWeek: number): Date[]
   return days;
 }
 
+/**
+ * Whether a day cannot be picked: outside `min`/`max` (whole days) or named by `disabledDates`
+ * (called with local midnight). The one rule behind the focusable-but-unavailable look, the
+ * drawn range and the emitted range.
+ */
+export function isDayUnavailable(
+  date: Date,
+  min?: Date | null,
+  max?: Date | null,
+  disabledDates?: (date: Date) => boolean,
+): boolean {
+  return !isDateInRange(date, min, max) || !!disabledDates?.(startOfDay(date));
+}
+
 /** What a pick selects (the Calendar's `selectionRange`). */
 export type SelectionRange = 'day' | 'week' | 'work-week' | 'month';
 

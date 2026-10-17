@@ -35,6 +35,7 @@ import {
   getSelectionRange,
   getYearMonths,
   isDateInRange,
+  isDayUnavailable,
   isMonthOutOfRange,
   isSameDay,
   isSameMonth,
@@ -377,8 +378,8 @@ function clampYear(year: number, min?: Date, max?: Date): number {
 type CalendarViewKind = 'day' | 'month' | 'year';
 
 /**
- * Internal: the header (the previous button, the heading, the next button) and the grid of a
- * calendar, in one of three views: the days of a month, the months of a year (the month view) and
+ * Internal: the header (the previous button, the heading, the next button), the grid and the
+ * optional footer (Go to today, Close) of a calendar, in one of three views: the days of a month, the months of a year (the month view) and
  * the years of a decade (the year view). It renders no element of its own (a fragment). It opens
  * on the day view of the month of `value`, else `initialVisibleDate`'s, else today's, clamped into
  * `minDate`/`maxDate`, and keeps that month until navigated or until `value` changes to a day of
@@ -387,7 +388,10 @@ type CalendarViewKind = 'day' | 'month' | 'year';
  * With `showMonthPicker`, the day view's heading is a button to the month view, and the month
  * view's heading a button to the year view; a picked year shows its months and a picked month its
  * days. Escape in the year and month views goes back one level to the period shown before (and is
- * consumed). Each view change moves focus into the new grid in the same commit.
+ * consumed, also on the footer's buttons). Each view change moves focus into the new grid in the
+ * same commit. The day view can add a week-number column, a dot and a name suffix for marked
+ * days, custom day content, and a range around the picked day (`selectionRange`); the footer has
+ * "Go to today" (`showGoToToday`) and a Close button (`onClose`).
  */
 export const CalendarView = ({
   value,
@@ -456,15 +460,15 @@ export const CalendarView = ({
         setFocusedDay(null);
       }
       // The month and year views follow the value too, to its year and its decade.
-      setMonthViewYear(value.getFullYear());
+      const year = clampYear(value.getFullYear(), minDate, maxDate);
+      setMonthViewYear(year);
       setFocusedMonth(null);
-      setDecade(getDecadeStart(value.getFullYear()));
+      setDecade(getDecadeStart(year));
       setFocusedYear(null);
     }
   }
 
-  const isUnavailable = (date: Date) =>
-    !isDateInRange(date, minDate, maxDate) || !!disabledDates?.(startOfDay(date));
+  const isUnavailable = (date: Date) => isDayUnavailable(date, minDate, maxDate, disabledDates);
 
   // The days drawn selected: the range around the value (its available days).
   const selectedDays = new Set(
@@ -659,6 +663,18 @@ export const CalendarView = ({
   // period changes under it (the buttons are keyed by position, so the focused one shows another
   // cell). A view change moves focus into the new grid in the same commit, since the element that
   // had it (the heading button that becomes text, a picked cell) may be gone.
+  const headerRef = React.useRef<HTMLDivElement | null>(null);
+  /** Whether focus last rested in the header or the grid (a removed element fires no event). */
+  const viewHadFocusRef = React.useRef(false);
+  React.useEffect(() => {
+    const onFocusIn = (event: FocusEvent) => {
+      const target = event.target as Node | null;
+      viewHadFocusRef.current =
+        !!target && (!!gridRef.current?.contains(target) || !!headerRef.current?.contains(target));
+    };
+    document.addEventListener('focusin', onFocusIn);
+    return () => document.removeEventListener('focusin', onFocusIn);
+  }, []);
   const previousViewRef = React.useRef(view);
   React.useLayoutEffect(() => {
     const viewChanged = previousViewRef.current !== view;
@@ -668,9 +684,11 @@ export const CalendarView = ({
     const grid = gridRef.current;
     if (!grid) return;
     const active = grid.ownerDocument.activeElement;
-    // A view change the props made (the month picker turned off) lost the element that had focus:
-    // focus then moves into the new grid, unless it already rests on another element.
-    const lost = viewChanged && (!active || active === grid.ownerDocument.body);
+    // A view change the props made (the month picker turned off) removed the element that had
+    // focus: focus then moves into the new grid, if the view had focus and it now rests on
+    // nothing. A calendar that did not have focus keeps it where it is.
+    const lost =
+      viewChanged && viewHadFocusRef.current && (!active || active === grid.ownerDocument.body);
     if (!requested && !lost && (!active || !grid.contains(active))) return;
     const button = grid.querySelector<HTMLElement>('button[tabindex="0"]');
     if (button && button !== active) button.focus();
@@ -809,6 +827,7 @@ export const CalendarView = ({
   return (
     <>
       <div
+        ref={headerRef}
         className={cn(partClassNames?.header, 'mb-2 flex items-center justify-between gap-2')}
         onKeyDown={handleEscape}
       >
@@ -870,7 +889,10 @@ export const CalendarView = ({
       </div>
       {grid}
       {(showGoToToday || onClose) && (
-        <div className={cn(partClassNames?.footer, 'mt-2 flex items-center justify-end gap-2')}>
+        <div
+          className={cn(partClassNames?.footer, 'mt-2 flex items-center justify-end gap-2')}
+          onKeyDown={handleEscape}
+        >
           {showGoToToday && (
             <button
               type="button"
@@ -935,8 +957,11 @@ const CALENDAR_PART_CLASS_NAMES: CalendarViewPartClassNames = {
  *
  * - **Structure**: a `role="group"` root, named with `aria-label`/`aria-labelledby` or by a
  *   surrounding `Field`, around the previous-month button, the month text (a polite live region
- *   that labels the grid), the next-month button and a `role="grid"` table of six weeks. The
- *   month text is no heading, since a component cannot know the page's heading levels.
+ *   that labels the grid), the next-month button and a `role="grid"` table of six weeks, with an
+ *   optional leading column of week numbers (`showWeekNumbers`, `firstWeekOfYear`) and an
+ *   optional footer button, "Go to today" (`showGoToToday`), which shows today's month and focuses
+ *   today without selecting it. The month text is no heading, since a component cannot know the
+ *   page's heading levels.
  * - **Month and year views** (`showMonthPicker`, on by default): the month text is a button
  *   (named by that text, its hint `labels.chooseMonth`) that shows the 12 months of the year; their
  *   heading, the year, is a button to the year view, a decade with the year before and after it
@@ -954,7 +979,12 @@ const CALENDAR_PART_CLASS_NAMES: CalendarViewPartClassNames = {
  * - **Value**: `onValueChange` fires only when the day changes, with local midnight and `details`;
  *   picking the selected day again does nothing. A value that moves to another month shows that
  *   month. The selected day is `aria-selected` on its gridcell and `aria-pressed` on its button;
- *   today is `aria-current="date"`.
+ *   today is `aria-current="date"`. With `selectionRange` a pick selects the day's week, work
+ *   week (`workWeekDays`) or month: every available day of it is drawn and marked selected, the
+ *   value is the picked day, and `details.range` lists the selected days in order.
+ * - **Marked days and custom content**: `markedDates` draws a dot in the text colour under the
+ *   number, sets `data-marked` and says "marked" in the day's name; `renderDay` replaces the
+ *   content of the day button (non-interactive content only) and `dayLabel` sets its name.
  * - **Forms and Field**: `name`/`required` add a hidden input (ISO `yyyy-mm-dd`) that resets with
  *   its form (to `defaultValue`); a required calendar that the form reports missing focuses its
  *   tab stop. Inside a `Field` the group takes the label, the description and `aria-invalid`; it
@@ -1002,8 +1032,7 @@ export const Calendar = ({
   ref,
   ...rest
 }: CalendarProps) => {
-  const isUnavailable = (date: Date) =>
-    !isDateInRange(date, minDate, maxDate) || !!disabledDates?.(startOfDay(date));
+  const isUnavailable = (date: Date) => isDayUnavailable(date, minDate, maxDate, disabledDates);
   const [value, setValue] = useControllable<Date | null>(valueProp, defaultValue ?? null, (next) =>
     onValueChange?.(next, {
       range: next

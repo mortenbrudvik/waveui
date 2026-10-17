@@ -119,7 +119,7 @@ describe('Calendar', () => {
       expect(screen.getByRole('button', { name: 'Nächster Monat' })).toBeInTheDocument();
     });
 
-    it('orders the tab stops: previous month, the heading button, next month, then one day of the grid', async () => {
+    it('tabs through previous month, the heading button, next month and one day of the grid, then leaves', async () => {
       const user = userEvent.setup();
       render(<Calendar aria-label="Due date" today={TODAY} locale="en-US" />);
       await user.tab();
@@ -1389,7 +1389,7 @@ describe('Calendar', () => {
       expect(button).toHaveAttribute('data-marked');
       const dot = button.querySelector(`.${calendarClassNames.markedDot}`);
       expect(dot).toHaveAttribute('aria-hidden', 'true');
-      expect(dot).toHaveClass('bg-current');
+      expect(dot).toHaveClass('bg-current', 'forced-colors:forced-color-adjust-none');
       expect(dot).toBeEmptyDOMElement();
       expect(button).toHaveTextContent('16');
       expect(grid().querySelectorAll('button[data-marked]')).toHaveLength(1);
@@ -1660,6 +1660,49 @@ describe('Calendar', () => {
       expect(times(onValueChange.mock.calls[0][1].range)).toEqual(jun(15, 16, 17, 18, 19, 20, 21));
     });
 
+    it('a week across a year end is drawn on the outside days and emitted in full', async () => {
+      const { user, onValueChange, selected, lastDetails } = renderRange({
+        selectionRange: 'week',
+        firstDayOfWeek: 1,
+        initialVisibleDate: new Date(2025, 11, 1),
+      });
+      await user.click(dayButton('Wednesday, December 31, 2025'));
+      expect(onValueChange).toHaveBeenCalledTimes(1);
+      expect(fields(onValueChange.mock.calls[0][0])).toEqual([2025, 12, 31]);
+      expect(lastDetails().range.map((day) => fields(day))).toEqual([
+        [2025, 12, 29],
+        [2025, 12, 30],
+        [2025, 12, 31],
+        [2026, 1, 1],
+        [2026, 1, 2],
+        [2026, 1, 3],
+        [2026, 1, 4],
+      ]);
+      expect(selected()).toEqual([
+        '2025-12-29',
+        '2025-12-30',
+        '2025-12-31',
+        '2026-01-01',
+        '2026-01-02',
+        '2026-01-03',
+        '2026-01-04',
+      ]);
+    });
+
+    it('a week across a month end keeps both months in the range', async () => {
+      const { user, lastDetails } = renderRange({ selectionRange: 'week' });
+      await user.click(dayButton('Monday, June 30, 2025'));
+      expect(lastDetails().range.map((day) => fields(day))).toEqual([
+        [2025, 6, 29],
+        [2025, 6, 30],
+        [2025, 7, 1],
+        [2025, 7, 2],
+        [2025, 7, 3],
+        [2025, 7, 4],
+        [2025, 7, 5],
+      ]);
+    });
+
     it('does not mark the month view by range', async () => {
       const { user } = renderRange({ selectionRange: 'month', defaultValue: JUNE_15 });
       await user.click(screen.getByRole('button', { name: 'June 2025' }));
@@ -1731,6 +1774,24 @@ describe('Calendar', () => {
       expect(document.activeElement).toHaveAccessibleName('Thursday, June 12, 2025');
     });
 
+    it('Escape on the button steps back from the year and month views, consumed', async () => {
+      const { user } = renderToday();
+      await user.click(screen.getByRole('button', { name: 'June 2025' }));
+      await user.click(screen.getByRole('button', { name: '2025' }));
+      const button = screen.getByRole('button', { name: 'Go to today' });
+      const seen: boolean[] = [];
+      const listener = (event: KeyboardEvent) => seen.push(event.defaultPrevented);
+      document.addEventListener('keydown', listener);
+      onTestFinished(() => document.removeEventListener('keydown', listener));
+      act(() => button.focus());
+      await user.keyboard('{Escape}');
+      expect(grid()).toHaveAccessibleName('2025');
+      act(() => screen.getByRole('button', { name: 'Go to today' }).focus());
+      await user.keyboard('{Escape}');
+      expect(grid()).toHaveAccessibleName('June 2025');
+      expect(seen).toEqual([true, true]);
+    });
+
     it('is natively disabled while today is outside minDate/maxDate', () => {
       renderToday({ minDate: new Date(2025, 5, 13) });
       const button = screen.getByRole('button', { name: 'Go to today' });
@@ -1799,7 +1860,7 @@ describe('Calendar', () => {
     });
   });
 
-  describe('view state (E4 review)', () => {
+  describe('view state', () => {
     function renderView(props: Partial<React.ComponentProps<typeof Calendar>> = {}) {
       const user = userEvent.setup();
       const onValueChange = vi.fn();
@@ -1821,7 +1882,7 @@ describe('Calendar', () => {
       expect(grid()).toContainElement(document.activeElement as HTMLElement);
     }
 
-    it('M2: inverted bounds in different years never hang the year and month keys', async () => {
+    it('inverted bounds in different years never hang the year and month keys', async () => {
       const { user } = renderView({
         defaultValue: null,
         minDate: new Date(2027, 2, 1),
@@ -1848,7 +1909,7 @@ describe('Calendar', () => {
       ).toHaveLength(1);
     });
 
-    it('M3: the month view follows a controlled value that moves to another year', async () => {
+    it('the month view follows a controlled value that moves to another year', async () => {
       const { user, rerender } = renderView({ value: JUNE_15, defaultValue: undefined });
       await user.click(screen.getByRole('button', { name: 'June 2025' }));
       expect(grid()).toHaveAccessibleName('2025');
@@ -1866,7 +1927,50 @@ describe('Calendar', () => {
       expect(march).toHaveAttribute('aria-pressed', 'true');
     });
 
-    it('M3: the year view follows it to the decade of the new value', async () => {
+    it('clamps the year a moved controlled value is shown in to minDate and maxDate', async () => {
+      const bounds = { minDate: new Date(2020, 0, 1), maxDate: new Date(2026, 11, 31) };
+      const { user, rerender } = renderView({ value: JUNE_15, defaultValue: undefined, ...bounds });
+      await user.click(screen.getByRole('button', { name: 'June 2025' }));
+      const moved = (
+        <Calendar
+          aria-label="Due date"
+          locale="en-US"
+          today={TODAY}
+          value={new Date(2030, 2, 3)}
+          {...bounds}
+        />
+      );
+      rerender(moved);
+      expect(grid()).toHaveAccessibleName('2026');
+      await user.click(screen.getByRole('button', { name: '2026' }));
+      expect(grid()).toHaveAccessibleName(/^2020\s*–\s*2029$/);
+    });
+
+    it('does not pull focus into the grid when the month picker is turned off while focus is elsewhere', async () => {
+      const element = (showMonthPicker: boolean) => (
+        <>
+          <button type="button">Outside</button>
+          <Calendar
+            aria-label="Due date"
+            locale="en-US"
+            today={TODAY}
+            defaultValue={JUNE_15}
+            showMonthPicker={showMonthPicker}
+          />
+        </>
+      );
+      const user = userEvent.setup();
+      const { rerender } = render(element(true));
+      await user.click(screen.getByRole('button', { name: 'June 2025' }));
+      act(() => screen.getByRole('button', { name: 'Outside' }).focus());
+      act(() => screen.getByRole('button', { name: 'Outside' }).blur());
+      expect(document.body).toHaveFocus();
+      rerender(element(false));
+      expect(grid()).toHaveAccessibleName('June 2025');
+      expect(document.body).toHaveFocus();
+    });
+
+    it('the year view follows it to the decade of the new value', async () => {
       const { user, rerender } = renderView({ value: JUNE_15, defaultValue: undefined });
       await user.click(screen.getByRole('button', { name: 'June 2025' }));
       await user.click(screen.getByRole('button', { name: '2025' }));
@@ -1886,7 +1990,7 @@ describe('Calendar', () => {
       );
     });
 
-    it('M4: turning showMonthPicker off while the month view is open returns to the days', async () => {
+    it('turning showMonthPicker off while the month view is open returns to the days', async () => {
       const { user, rerender } = renderView();
       await user.click(screen.getByRole('button', { name: 'June 2025' }));
       expect(grid()).toHaveAccessibleName('2025');
@@ -1905,7 +2009,7 @@ describe('Calendar', () => {
       expect(screen.queryByRole('button', { name: 'June 2025' })).not.toBeInTheDocument();
     });
 
-    it('M4: ... and from the year view; turning it on again shows the days, not the old view', async () => {
+    it('the same from the year view; turning it on again shows the days, not the old view', async () => {
       const { user, rerender } = renderView();
       await user.click(screen.getByRole('button', { name: 'June 2025' }));
       await user.click(screen.getByRole('button', { name: '2025' }));
@@ -1926,7 +2030,7 @@ describe('Calendar', () => {
       expect(screen.getByRole('button', { name: 'June 2025' })).toBeInTheDocument();
     });
 
-    it('M5: a drill down and back fires nothing twice in StrictMode and keeps focus in the grid', async () => {
+    it('a drill down and back fires nothing twice in StrictMode and keeps focus in the grid', async () => {
       const user = userEvent.setup();
       const onValueChange = vi.fn();
       render(
@@ -1954,7 +2058,7 @@ describe('Calendar', () => {
       expect(onValueChange).toHaveBeenCalledTimes(1);
     });
 
-    describe('M5: the Escape handler', () => {
+    describe('the Escape handler', () => {
       /** `defaultPrevented` of every Escape that reaches the document. */
       function trackEscapes() {
         const seen: boolean[] = [];

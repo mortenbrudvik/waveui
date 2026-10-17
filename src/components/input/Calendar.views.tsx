@@ -275,7 +275,7 @@ export const CalendarDayGrid = ({
                         aria-hidden="true"
                         className={cn(
                           partClassNames?.markedDot,
-                          'pointer-events-none absolute inset-x-0 bottom-0.5 mx-auto h-1 w-1 rounded-full bg-current',
+                          'pointer-events-none absolute inset-x-0 bottom-0.5 mx-auto h-1 w-1 rounded-full bg-current forced-colors:forced-color-adjust-none',
                         )}
                       />
                     )}

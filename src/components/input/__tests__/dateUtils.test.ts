@@ -21,6 +21,7 @@ import {
   getWeekdayNames,
   getYearMonths,
   isDateInRange,
+  isDayUnavailable,
   isMonthOutOfRange,
   isSameDay,
   isSameMonth,
@@ -468,52 +469,79 @@ describe('dateUtils — time helpers', () => {
     expect(generateTimeOptions(30, 'nine', '17:00', '24h')).toEqual([]);
     expect(generateTimeOptions(30, '17:00', '09:00', '24h')).toEqual([]);
   });
+});
 
-  describe('getSelectionRange', () => {
-    const day = (n: number) => new Date(2025, 5, n);
-    const dates = (range: Date[]) => range.map((d) => d.getDate());
+describe('dateUtils — getSelectionRange', () => {
+  const day = (n: number) => new Date(2025, 5, n);
+  const dates = (range: Date[]) => range.map((d) => d.getDate());
 
-    it("'day' is the day at local midnight, whatever its availability", () => {
-      const range = getSelectionRange(new Date(2025, 5, 18, 15, 30), 'day', 0, [1], () => true);
-      expect(range).toEqual([day(18)]);
-    });
+  it("'day' is the day at local midnight, whatever its availability", () => {
+    const range = getSelectionRange(new Date(2025, 5, 18, 15, 30), 'day', 0, [1], () => true);
+    expect(range).toEqual([day(18)]);
+  });
 
-    it("'week' is the seven days from the week start of firstDayOfWeek", () => {
-      expect(dates(getSelectionRange(day(18), 'week', 0, [1]))).toEqual([
-        15, 16, 17, 18, 19, 20, 21,
-      ]);
-      expect(dates(getSelectionRange(day(15), 'week', 1, [1]))).toEqual([
-        9, 10, 11, 12, 13, 14, 15,
-      ]);
-    });
+  it("'week' is the seven days from the week start of firstDayOfWeek", () => {
+    expect(dates(getSelectionRange(day(18), 'week', 0, [1]))).toEqual([15, 16, 17, 18, 19, 20, 21]);
+    expect(dates(getSelectionRange(day(15), 'week', 1, [1]))).toEqual([9, 10, 11, 12, 13, 14, 15]);
+  });
 
-    it("'work-week' keeps the workWeekDays of that week, in the order of the week", () => {
-      expect(dates(getSelectionRange(day(18), 'work-week', 0, [1, 2, 3, 4, 5]))).toEqual([
-        16, 17, 18, 19, 20,
-      ]);
-      expect(dates(getSelectionRange(day(18), 'work-week', 0, [6, 0]))).toEqual([15, 21]);
-      expect(dates(getSelectionRange(day(18), 'work-week', 1, [0, 6]))).toEqual([21, 22]);
-      expect(getSelectionRange(day(18), 'work-week', 1, [])).toEqual([]);
-    });
+  it("'work-week' keeps the workWeekDays of that week, in the order of the week", () => {
+    expect(dates(getSelectionRange(day(18), 'work-week', 0, [1, 2, 3, 4, 5]))).toEqual([
+      16, 17, 18, 19, 20,
+    ]);
+    expect(dates(getSelectionRange(day(18), 'work-week', 0, [6, 0]))).toEqual([15, 21]);
+    expect(dates(getSelectionRange(day(18), 'work-week', 1, [0, 6]))).toEqual([21, 22]);
+    expect(getSelectionRange(day(18), 'work-week', 1, [])).toEqual([]);
+  });
 
-    it("'month' is every day of the month, February of a leap year included", () => {
-      expect(getSelectionRange(day(18), 'month', 0, [1])).toHaveLength(30);
-      expect(getSelectionRange(new Date(2024, 1, 10), 'month', 0, [1])).toHaveLength(29);
-      expect(getSelectionRange(new Date(2025, 1, 10), 'month', 0, [1])).toHaveLength(28);
-    });
+  it("'month' is every day of the month, February of a leap year included", () => {
+    expect(getSelectionRange(day(18), 'month', 0, [1])).toHaveLength(30);
+    expect(getSelectionRange(new Date(2024, 1, 10), 'month', 0, [1])).toHaveLength(29);
+    expect(getSelectionRange(new Date(2025, 1, 10), 'month', 0, [1])).toHaveLength(28);
+  });
 
-    it('leaves out the days isUnavailable names, in every range mode but day', () => {
-      const unavailable = (d: Date) => d.getDate() % 2 === 0;
-      expect(dates(getSelectionRange(day(18), 'week', 0, [1], unavailable))).toEqual([
-        15, 17, 19, 21,
-      ]);
-      expect(getSelectionRange(day(18), 'month', 0, [1], unavailable)).toHaveLength(15);
-    });
+  it('leaves out the days isUnavailable names, in every range mode but day', () => {
+    const unavailable = (d: Date) => d.getDate() % 2 === 0;
+    expect(dates(getSelectionRange(day(18), 'week', 0, [1], unavailable))).toEqual([
+      15, 17, 19, 21,
+    ]);
+    expect(getSelectionRange(day(18), 'month', 0, [1], unavailable)).toHaveLength(15);
+  });
 
-    it('returns local-midnight dates across a month end', () => {
-      for (const d of getSelectionRange(new Date(2025, 5, 30, 23, 59), 'week', 0, [1])) {
-        expect([d.getHours(), d.getMinutes()]).toEqual([0, 0]);
-      }
-    });
+  it('runs a week across a month end and a year end at local midnight', () => {
+    const june = getSelectionRange(new Date(2025, 5, 30, 23, 59), 'week', 0, [1]);
+    expect(june.map((d) => formatISODate(d))).toEqual([
+      '2025-06-29',
+      '2025-06-30',
+      '2025-07-01',
+      '2025-07-02',
+      '2025-07-03',
+      '2025-07-04',
+      '2025-07-05',
+    ]);
+    const december = getSelectionRange(new Date(2025, 11, 31), 'week', 1, [1]);
+    expect(december.map((d) => formatISODate(d))).toEqual([
+      '2025-12-29',
+      '2025-12-30',
+      '2025-12-31',
+      '2026-01-01',
+      '2026-01-02',
+      '2026-01-03',
+      '2026-01-04',
+    ]);
+    for (const d of [...june, ...december]) expect([d.getHours(), d.getMinutes()]).toEqual([0, 0]);
+  });
+});
+
+describe('dateUtils — isDayUnavailable', () => {
+  it('is true outside the bounds and for disabled dates, and false otherwise', () => {
+    const min = new Date(2025, 5, 10);
+    const max = new Date(2025, 5, 20);
+    const disabled = (d: Date) => d.getDate() === 15;
+    expect(isDayUnavailable(new Date(2025, 5, 9), min, max, disabled)).toBe(true);
+    expect(isDayUnavailable(new Date(2025, 5, 21), min, max, disabled)).toBe(true);
+    expect(isDayUnavailable(new Date(2025, 5, 15, 12), min, max, disabled)).toBe(true);
+    expect(isDayUnavailable(new Date(2025, 5, 20, 18), min, max, disabled)).toBe(false);
+    expect(isDayUnavailable(new Date(2025, 5, 12))).toBe(false);
   });
 });

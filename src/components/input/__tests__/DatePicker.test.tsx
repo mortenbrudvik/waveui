@@ -2317,6 +2317,39 @@ describe('DatePicker', () => {
         expect(textbox()).toHaveFocus();
       });
 
+      it('Escape on the footer buttons steps back in the month view and closes only from the days', async () => {
+        const user = userEvent.setup();
+        const onOpenChange = vi.fn();
+        render(
+          <DatePicker
+            aria-label="Date"
+            locale="en-US"
+            defaultValue={JUNE_15}
+            showCloseButton
+            showGoToToday
+            onOpenChange={onOpenChange}
+          />,
+        );
+        await user.click(toggle());
+        await user.click(within(dialog()).getByRole('button', { name: 'June 2025' }));
+        for (const name of ['Go to today', 'Close']) {
+          act(() => within(dialog()).getByRole('button', { name }).focus());
+          await user.keyboard('{Escape}');
+          expect(screen.getByRole('dialog')).toBeInTheDocument();
+          expect(screen.getByRole('grid')).toHaveAccessibleName('June 2025');
+          await user.click(within(dialog()).getByRole('button', { name: 'June 2025' }));
+        }
+        expect(onOpenChange.mock.calls).toEqual([[true]]);
+        act(() => within(dialog()).getByRole('button', { name: 'Close' }).focus());
+        await user.keyboard('{Escape}');
+        expect(screen.getByRole('grid')).toHaveAccessibleName('June 2025');
+        expect(screen.getByRole('dialog')).toBeInTheDocument();
+        act(() => within(dialog()).getByRole('button', { name: 'Close' }).focus());
+        await user.keyboard('{Escape}');
+        expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+        expect(onOpenChange.mock.calls).toEqual([[true], [false]]);
+      });
+
       it('closes from the month view too, and selects nothing', async () => {
         const user = userEvent.setup();
         const onValueChange = vi.fn();
@@ -2336,7 +2369,7 @@ describe('DatePicker', () => {
         expect(onValueChange).not.toHaveBeenCalled();
       });
 
-      it('is the last tab stop of the dialog, after Go to today, and the trap wraps to the grid', async () => {
+      it('is the last tab stop of the dialog, after Go to today, and the trap wraps to the previous-month button', async () => {
         const user = userEvent.setup();
         render(<DatePicker aria-label="Date" locale="en-US" showCloseButton showGoToToday />);
         await user.click(toggle());
@@ -2346,8 +2379,7 @@ describe('DatePicker', () => {
         await user.tab();
         expect(document.activeElement).toHaveAccessibleName('Close');
         await user.tab();
-        expect(dialog()).toContainElement(document.activeElement as HTMLElement);
-        expect(document.activeElement).not.toHaveAccessibleName('Close');
+        expect(document.activeElement).toHaveAccessibleName('Previous month');
       });
 
       it('localizes its name with labels.close, and the footer with labels.goToToday', async () => {
