@@ -17,62 +17,21 @@
  * Internal module (not exported from the package).
  */
 
+import {
+  addDays,
+  addMonths,
+  daysInMonth,
+  isSameDay,
+  makeDate,
+  startOfDay,
+  startOfMonth,
+} from '../../lib/date';
+
 /* ------------------------------------------------------------------ */
-/*  Day arithmetic                                                     */
+/*  Day arithmetic (the shared helpers live in lib/date)               */
 /* ------------------------------------------------------------------ */
 
-/**
- * Builds a local-midnight date without the `new Date(y, …)` two-digit-year mapping (years 0–99
- * would otherwise become 1900–1999).
- */
-function makeDate(year: number, monthIndex: number, day: number): Date {
-  const date = new Date(2000, 0, 1);
-  date.setFullYear(year, monthIndex, day);
-  date.setHours(0, 0, 0, 0);
-  return date;
-}
-
-/** The start (local midnight) of `date`'s calendar day, as a new `Date`. */
-export function startOfDay(date: Date): Date {
-  return makeDate(date.getFullYear(), date.getMonth(), date.getDate());
-}
-
-/** The first day (local midnight) of `date`'s month. */
-export function startOfMonth(date: Date): Date {
-  return makeDate(date.getFullYear(), date.getMonth(), 1);
-}
-
-/** The number of days in the given month (`monthIndex` may be out of range; it is normalized). */
-function daysInMonth(year: number, monthIndex: number): number {
-  return makeDate(year, monthIndex + 1, 0).getDate();
-}
-
-/** `date` plus `amount` calendar days, at local midnight (month/year boundaries included). */
-export function addDays(date: Date, amount: number): Date {
-  return makeDate(date.getFullYear(), date.getMonth(), date.getDate() + amount);
-}
-
-/**
- * `date` plus `amount` months, at local midnight. The day is clamped to the length of the target
- * month, so Jan 31 + 1 month is Feb 28 (29 in a leap year) and Mar 31 − 1 month is Feb 28/29 —
- * never a day of the following month.
- */
-export function addMonths(date: Date, amount: number): Date {
-  const target = makeDate(date.getFullYear(), date.getMonth() + amount, 1);
-  const day = Math.min(date.getDate(), daysInMonth(target.getFullYear(), target.getMonth()));
-  return makeDate(target.getFullYear(), target.getMonth(), day);
-}
-
-/** Whether both dates are on the same calendar day. `false` when either is missing. */
-export function isSameDay(a: Date | null | undefined, b: Date | null | undefined): boolean {
-  return (
-    !!a &&
-    !!b &&
-    a.getFullYear() === b.getFullYear() &&
-    a.getMonth() === b.getMonth() &&
-    a.getDate() === b.getDate()
-  );
-}
+export { addDays, addMonths, isSameDay, startOfDay, startOfMonth };
 
 /** Whether both dates are in the same month of the same year. */
 export function isSameMonth(a: Date, b: Date): boolean {
