@@ -66,8 +66,11 @@ export interface UseRovingTabIndexOptions {
    *  'active' — APG Toolbar (and the static Menu). Either way a nested composite or a control that
    *  uses the arrow keys itself (text field, select, slider, spin button, editable combobox) holds
    *  it only when no other item can: arrows pressed there never lead back to the other items, so
-   *  focusing one keeps the tab stop on the last focused other item. */
-  tabStop?: 'active' | 'last-focused';
+   *  focusing one keeps the tab stop on the last focused other item. 'none': no item holds it
+   *  (every item gets tabIndex -1), for a composite reached only by the arrow keys of an enclosing
+   *  widget or by a script (a tree row's actions); the keys, `focusValue`, `focusFirst` and
+   *  `focusLast` keep working. */
+  tabStop?: 'active' | 'last-focused' | 'none';
   /** true ⇒ the hook writes tabIndex 0/-1 onto item elements itself and assigns
    *  data-roving-value="auto-<n>" to items that lack one. For containers that do not render their
    *  items (Toolbar children, Menu items, Tree rows). Default false (items call getTabIndex).
@@ -135,7 +138,7 @@ interface StoreOptions {
   manageTabIndex: boolean;
   items: readonly string[] | undefined;
   activeValue: string | null;
-  tabStop: 'active' | 'last-focused';
+  tabStop: 'active' | 'last-focused' | 'none';
   /**
    * Whether an element with a composite role but no roving container of its own is a nested
    * composite (one item). Off in the 0.4 call shape and with explicit `items`, where such an element
@@ -536,12 +539,15 @@ class RovingStore {
     if (!this.options.manageTabIndex || !this.container) return;
     this.release(this.container);
     const resolved = this.resolve();
-    const stop = resolveTabStop(
-      resolved.map(toEntry),
-      this.options.activeValue,
-      this.options.tabStop,
-      this.lastFocused,
-    );
+    const stop =
+      this.options.tabStop === 'none'
+        ? null
+        : resolveTabStop(
+            resolved.map(toEntry),
+            this.options.activeValue,
+            this.options.tabStop,
+            this.lastFocused,
+          );
     for (const item of resolved) {
       if (item.nested) continue;
       const { element } = item;
@@ -691,7 +697,9 @@ function startsOnItem(item: ResolvedItem | null, target: EventTarget | null, con
  *   `input[type=hidden]` is no item.
  * - **Tab stop** (`tabStop`): `'active'` — the enabled `activeValue` item, else the first enabled
  *   item; `'last-focused'` — the last focused enabled item, else the `'active'` rule. A nested
- *   composite or a control that uses the arrow keys itself holds it only when no other item can.
+ *   composite or a control that uses the arrow keys itself holds it only when no other item can;
+ *   `'none'` — no item: every item is `tabIndex=-1`, and focus reaches the items only through the
+ *   keys or a script.
  * - **Keys** are ignored when another handler already called `preventDefault()`; with Meta; with
  *   Alt or Ctrl, except a single character typed with AltGr (Ctrl+Alt on Windows), which is
  *   typeahead text (arrows, Home, End and Space with Ctrl+Alt stay ignored); and when they start
@@ -794,9 +802,12 @@ export function useRovingTabIndex(
     }
     return items.map((value): SnapshotEntry => [value, 1]);
   }, [items, domItems]);
-  const tabStopValue = stopEntries
-    ? resolveTabStop(stopEntries, activeValue, tabStop, focusedStop)
-    : activeValue || null;
+  const tabStopValue =
+    tabStop === 'none'
+      ? null
+      : stopEntries
+        ? resolveTabStop(stopEntries, activeValue, tabStop, focusedStop)
+        : activeValue || null;
 
   const getTabIndex = React.useCallback(
     (value: string): 0 | -1 => (value === tabStopValue ? 0 : -1),
