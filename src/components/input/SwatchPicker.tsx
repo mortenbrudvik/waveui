@@ -78,16 +78,29 @@ export interface SwatchPickerProps extends Omit<
    * Swatches rendered directly, in order, after `items` (e.g. `ColorSwatch`): read the picker's
    * context, so they may be wrapped in a `Tooltip` or another element that forwards its own props.
    * `SwatchPicker.Row` elements start rows; in the grid layout every run of other children (and
-   * `items`, with the children that follow them) renders in a row of its own.
+   * `items`, with the children that follow them) renders in a row of its own. A `SwatchPicker.Row`
+   * must be a direct child or inside a Fragment: a wrapper component around a Row lands in an
+   * implicit row, and nested rows are reported in development.
    */
   children?: React.ReactNode;
   /**
    * `'row'`: a radio group whose arrow keys select (and wrap). `'grid'`: rows of cells
    * (`SwatchPicker.Row`) whose arrow keys move focus in two dimensions without selecting; Space,
-   * Enter and a click select.
+   * Enter and a click select. Changing it while mounted remounts the swatches, so focus falls
+   * back to the page.
    * @default 'row'
    */
   layout?: 'row' | 'grid';
+  /**
+   * `'arrow'`: one tab stop and arrow keys, with the radio group (row layout) or grid (grid
+   * layout) semantics. `'tab'`: every enabled swatch is its own tab stop and the arrow keys do
+   * nothing, so the picker is a `role="group"` of toggle buttons (`aria-pressed`, the selected
+   * one pressed) in both layouts; rows have no role, and Space, Enter and a click select
+   * (pressing the selected swatch again keeps it selected). The required hint (`labels.required`)
+   * applies, as the group cannot carry `aria-required`.
+   * @default 'arrow'
+   */
+  focusMode?: 'arrow' | 'tab';
   /** Built-in strings, for localization. */
   labels?: SwatchPickerLabels;
   /** Size of each swatch button (20, 24, 32 or 40px). A 20px swatch passes the target-size bar
@@ -111,8 +124,9 @@ export interface SwatchPickerProps extends Omit<
   name?: string;
   /**
    * A swatch must be selected before the form can be submitted (native validation). The row
-   * layout says so with `aria-required`; the grid layout, whose role does not allow it, with the
-   * hidden `labels.required` text in its description.
+   * layout says so with `aria-required`; the grid layout and tab mode, whose roles do not allow
+   * it, with the hidden `labels.required` text in the description (which a consumer
+   * `aria-required` alone also shows).
    */
   required?: boolean;
   /** Id of the form the picker belongs to, when it is rendered outside that form. */
@@ -127,13 +141,26 @@ export interface SwatchPickerRowProps extends React.HTMLAttributes<HTMLDivElemen
   ref?: React.Ref<HTMLDivElement>;
 }
 
+/** The gap class the root and the rows share. */
+function swatchGap(spacing: 'small' | 'medium'): string {
+  return spacing === 'small' ? 'gap-1' : 'gap-2';
+}
+
+/** Tab mode: every swatch is a tab stop. */
+const tabStop = (): 0 => 0;
+
+/** True inside a `SwatchPicker.Row`: a second Row there is reported. */
+const SwatchRowContext = React.createContext(false);
+
 /**
  * One row of swatches in a `SwatchPicker` (also exported as the flat `SwatchPickerRow`, for React
  * Server Components). In the grid layout it is a `role="row"` element whose swatches are its
  * cells; Up and Down move between rows, and the row does not wrap (a wrapped swatch would sit
- * where Up and Down do not reach it): size it yourself. In the row layout it is a full-width line
- * without a role, and its swatches stay radios of the one group. Outside a `SwatchPicker` it
- * throws in development.
+ * where Up and Down do not reach it): size it yourself. In the row layout and in tab mode
+ * (`focusMode="tab"`) it is a full-width line without a role, and its swatches stay radios of the
+ * one group (row layout) or toggle buttons. Place it as a direct child of the `SwatchPicker` or
+ * inside a Fragment: a wrapper component around a Row lands in an implicit row, and a Row inside
+ * a Row is reported in development. Outside a `SwatchPicker` it throws in development.
  *
  * @example
  * <SwatchPicker layout="grid" aria-label="Accent color">
@@ -144,21 +171,35 @@ export interface SwatchPickerRowProps extends React.HTMLAttributes<HTMLDivElemen
  * </SwatchPicker>
  */
 export const SwatchPickerRow = ({ className, ref, ...rest }: SwatchPickerRowProps) => {
-  const { layout, spacing } = useSwatchPickerContext('SwatchPicker.Row');
-  const gap = spacing === 'small' ? 'gap-1' : 'gap-2';
+  const { layout, focusMode, spacing } = useSwatchPickerContext('SwatchPicker.Row');
+  const nested = React.useContext(SwatchRowContext);
+  React.useEffect(() => {
+    if (nested) {
+      warnOnce(
+        'SwatchPicker.Row:nested',
+        'SwatchPicker.Row: a Row inside a Row nests rows. Rows must be direct children of the ' +
+          'SwatchPicker (or inside a Fragment); a wrapper component around a Row lands in an ' +
+          'implicit row.',
+      );
+    }
+  }, [nested]);
+  const isGridRow = layout === 'grid' && focusMode === 'arrow';
   return (
-    <div
-      role={layout === 'grid' ? 'row' : undefined}
-      {...rest}
-      ref={ref}
-      className={cn(
-        swatchPickerRowClassNames.root,
-        // The grid layout's rows never wrap: Up and Down would not reach a wrapped swatch.
-        layout === 'grid' ? 'flex' : 'flex basis-full flex-wrap',
-        gap,
-        className,
-      )}
-    />
+    <SwatchRowContext.Provider value>
+      <div
+        role={isGridRow ? 'row' : undefined}
+        {...rest}
+        ref={ref}
+        className={cn(
+          swatchPickerRowClassNames.root,
+          // The grid's rows never wrap: Up and Down would not reach a wrapped swatch. Tab mode
+          // has no arrow keys, so its rows wrap like the row layout's.
+          isGridRow ? 'flex' : 'flex basis-full flex-wrap',
+          swatchGap(spacing),
+          className,
+        )}
+      />
+    </SwatchRowContext.Provider>
   );
 };
 SwatchPickerRow.displayName = 'SwatchPickerRow';
@@ -207,6 +248,7 @@ const SwatchPickerRoot = ({
   onChange,
   children,
   layout = 'row',
+  focusMode = 'arrow',
   labels,
   size = 'medium',
   shape = 'circular',
@@ -232,9 +274,13 @@ const SwatchPickerRoot = ({
     onValueChange?.(next);
     onChange?.(next);
   });
+  const isTab = focusMode === 'tab';
+  // The grid layout's rows are visual in tab mode: the grid keys and roles belong to arrow mode.
   const isGrid = layout === 'grid';
+  const isArrowGrid = isGrid && !isTab;
 
-  // Both hooks run on every render (hook order); only the layout's own one gets the container.
+  // Both hooks run on every render (hook order); only the layout's own one gets the container,
+  // and tab mode none (every swatch is a tab stop, the arrow keys do nothing).
   const radio = useRovingTabIndex({
     activeValue: value || null,
     orientation: 'both',
@@ -243,10 +289,11 @@ const SwatchPickerRoot = ({
   });
   // APG grid: the arrow keys move focus only; a swatch's own click (Space, Enter) selects.
   const grid = useRovingGrid({ activeValue: value || null });
-  const { containerProps, getTabIndex } = isGrid ? grid : radio;
+  const { containerProps, getTabIndex: rovingTabIndex } = isArrowGrid ? grid : radio;
+  const getTabIndex = isTab ? tabStop : rovingTabIndex;
 
   const rootRef = React.useRef<HTMLDivElement>(null);
-  const mergedRef = useMergedRefs<HTMLDivElement>(ref, containerProps.ref, rootRef);
+  const mergedRef = useMergedRefs<HTMLDivElement>(ref, isTab ? null : containerProps.ref, rootRef);
 
   const field = useFieldContext();
   const {
@@ -267,14 +314,17 @@ const SwatchPickerRoot = ({
     { labelable: false },
   );
   const isRequired = required ?? field?.required ?? false;
-  // `grid` does not allow aria-required (a consumer's included): its description says it instead.
+  const role = isTab ? 'group' : isGrid ? 'grid' : 'radiogroup';
+  // Only `radiogroup` allows aria-required (a consumer's included): the description of a `grid`
+  // or `group` says it instead.
   const requiredHintId = useId('wave-swatch-picker-required');
   const showRequiredHint =
-    isGrid && fieldAriaRequired !== undefined && String(fieldAriaRequired) !== 'false';
+    role !== 'radiogroup' &&
+    fieldAriaRequired !== undefined &&
+    String(fieldAriaRequired) !== 'false';
 
   const unnamed =
     fieldProps['aria-label'] === undefined && fieldProps['aria-labelledby'] === undefined;
-  const role = isGrid ? 'grid' : 'radiogroup';
   const unlabelledItem = items?.find((item) => !item.label)?.value;
   React.useEffect(() => {
     if (unnamed) {
@@ -307,12 +357,12 @@ const SwatchPickerRoot = ({
       size,
       shape,
       layout,
-      focusMode: 'arrow',
+      focusMode,
       spacing,
       getTabIndex,
       register,
     }),
-    [value, setValue, size, shape, layout, spacing, getTabIndex, register],
+    [value, setValue, size, shape, layout, focusMode, spacing, getTabIndex, register],
   );
 
   const itemSwatches = items?.map((item) => (
@@ -328,31 +378,32 @@ const SwatchPickerRoot = ({
     <div
       role={role}
       {...fieldProps}
-      aria-required={isGrid ? undefined : fieldAriaRequired}
+      aria-required={role === 'radiogroup' ? fieldAriaRequired : undefined}
       aria-describedby={joinIds(fieldDescribedBy, showRequiredHint && requiredHintId)}
       data-layout={layout}
-      data-focus-mode="arrow"
+      data-focus-mode={focusMode}
       data-size={size}
       data-shape={shape}
       data-spacing={spacing}
       className={cn(
         swatchPickerClassNames.root,
         isGrid ? 'relative flex flex-col' : 'relative flex flex-wrap',
-        spacing === 'small' ? 'gap-1' : 'gap-2',
+        swatchGap(spacing),
         className,
       )}
       {...rest}
       ref={mergedRef}
-      data-roving-container=""
+      data-roving-container={isTab ? undefined : ''}
       onKeyDown={composeEventHandlers(onKeyDown, (event: React.KeyboardEvent<HTMLDivElement>) => {
-        // An EmptySwatch is no radio: arrow keys pressed on it would otherwise move to and select
-        // one. In the grid layout it is a cell like the others.
+        // Tab mode has no arrow handling. An EmptySwatch is no radio: arrow keys pressed on it
+        // would otherwise move to and select one. In the grid layout it is a cell like the others.
+        if (isTab) return;
         if (!isGrid && (event.target as HTMLElement).hasAttribute?.('data-wave-empty-swatch')) {
           return;
         }
         containerProps.onKeyDown(event);
       })}
-      onFocus={composeEventHandlers(onFocus, containerProps.onFocus, {
+      onFocus={composeEventHandlers(onFocus, isTab ? undefined : containerProps.onFocus, {
         checkDefaultPrevented: false,
       })}
     >

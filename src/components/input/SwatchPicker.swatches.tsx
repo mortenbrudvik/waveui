@@ -281,12 +281,14 @@ const SwatchRadio = ({
     size,
     shape,
     layout,
+    focusMode,
     spacing,
     getTabIndex,
     register,
   } = useSwatchContext(kind, sizeProp, shapeProp);
   const isSelected = selectedValue === value;
-  const isGrid = layout === 'grid';
+  const isTab = focusMode === 'tab';
+  const isGrid = layout === 'grid' && !isTab;
   const glyph = useSwatchIcon(kind, icon);
 
   React.useLayoutEffect(() => register(value), [register, value]);
@@ -299,15 +301,16 @@ const SwatchRadio = ({
   const button = (
     <button
       type="button"
-      // The grid layout: a plain button inside its gridcell, pressed while selected (D20).
-      role={isGrid ? undefined : 'radio'}
+      // The grid layout: a plain button inside its gridcell, pressed while selected (D20); tab
+      // mode (D19): a toggle button of a group, `aria-pressed` always present.
+      role={isGrid || isTab ? undefined : 'radio'}
       {...rest}
       ref={ref}
       disabled={disabled}
       aria-label={ariaLabel ?? (ariaLabelledBy ? undefined : defaultName)}
       aria-labelledby={ariaLabelledBy}
-      aria-checked={isGrid ? undefined : isSelected}
-      aria-pressed={isGrid ? isSelected || undefined : undefined}
+      aria-checked={isGrid || isTab ? undefined : isSelected}
+      aria-pressed={isTab ? isSelected : isGrid ? isSelected || undefined : undefined}
       data-roving-value={value}
       data-selected={isSelected ? '' : undefined}
       tabIndex={getTabIndex(value)}
@@ -498,12 +501,13 @@ export const EmptySwatch = ({
   ref,
   ...rest
 }: EmptySwatchProps) => {
-  const { size, shape, layout, spacing, getTabIndex } = useSwatchContext(
+  const { size, shape, layout, focusMode, spacing, getTabIndex } = useSwatchContext(
     'EmptySwatch',
     sizeProp,
     shapeProp,
   );
-  const isGrid = layout === 'grid';
+  // Tab mode has no grid cells: the button is a tab stop of its own, like in the row layout.
+  const isGrid = layout === 'grid' && focusMode !== 'tab';
   // The grid's roving keys address cells by value: an EmptySwatch, which has none, gets its own
   // (never selected, never submitted).
   const cellValue = useId('wave-empty-swatch');
