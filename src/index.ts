@@ -13,7 +13,10 @@ export { resolveSlot, renderSlot } from './lib/slot';
 export type { Slot, SlotObject, ResolvedSlot } from './lib/slot';
 export { composeEventHandlers } from './lib/composeEventHandlers';
 export { mergeRefs } from './lib/mergeRefs';
+export type { DismissReason } from './lib/layers';
 export * from './lib/classNames';
+export { addDays, addMonths, isSameDay, startOfWeek, getWeekNumber } from './lib/date';
+export type { GetWeekNumberOptions } from './lib/date';
 export { hsvToHex, hexToHsv } from './lib/color';
 export { createToaster } from './lib/toaster';
 export type { ToasterHandle } from './lib/toaster';
@@ -47,6 +50,32 @@ export type {
   UsePresenceOptions,
   UsePresenceResult,
 } from './hooks/usePresence';
+export { useActiveDescendant } from './hooks/useActiveDescendant';
+export type {
+  UseActiveDescendantOptions,
+  UseActiveDescendantResult,
+} from './hooks/useActiveDescendant';
+export {
+  useListbox,
+  useListboxOption,
+  collectOptionLabels,
+  markListboxElement,
+} from './hooks/useListbox';
+export type {
+  ListboxItem,
+  ListboxOpenChangeReason,
+  ListboxSelectDetails,
+  UseListboxOptions,
+  UseListboxResult,
+  ListboxComboboxProps,
+  ListboxListProps,
+  ListboxStore,
+  ListboxContextValue,
+  UseListboxOptionProps,
+  ListboxOptionElementProps,
+  UseListboxOptionResult,
+  ListboxElementKind,
+} from './hooks/useListbox';
 
 // Provider
 export { WaveProvider, useWaveTheme, getThemeClassName } from './components/provider/WaveProvider';

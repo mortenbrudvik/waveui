@@ -33,6 +33,8 @@ import type {
   AccordionBaseProps,
   AccordionMultipleProps,
   AccordionSingleProps,
+  addDays,
+  addMonths,
   AlphaSliderLabels,
   AlphaSliderProps,
   BadgeColor,
@@ -41,6 +43,9 @@ import type {
   BreadcrumbItemOwnProps,
   buttonClassNames,
   ButtonProps,
+  CalendarLabels,
+  CalendarProps,
+  CalendarValueChangeDetails,
   CheckboxLabelPosition,
   CheckboxProps,
   CheckboxShape,
@@ -48,6 +53,7 @@ import type {
   CheckedValues,
   CheckedValuesChangeDetails,
   CheckedValuesChangeHandler,
+  collectOptionLabels,
   ColorAreaLabels,
   ColorAreaProps,
   ColorPickerHexFieldProps,
@@ -58,34 +64,66 @@ import type {
   ColorPickerSwatchesProps,
   ColorSliderLabels,
   ColorSliderProps,
+  ColorSwatchProps,
+  Combobox,
+  ComboboxComponent,
   ComboboxLabels,
   ComboboxProps,
   CompoundButtonProps,
   CoreSize,
   CounterBadgeProps,
+  DatePickerLabels,
   DatePickerProps,
+  DayOfWeek,
   DialogModalType,
   DialogOpenChangeDetails,
   DialogOpenChangeReason,
   DialogProps,
+  DismissReason,
   DrawerOpenChangeDetails,
   DrawerOpenChangeReason,
   DrawerProps,
+  Dropdown,
+  DropdownComponent,
   DropdownLabels,
   DropdownProps,
+  EmptySwatchProps,
   FieldContextValue,
   FieldControlIdClaim,
   FieldProps,
+  FirstWeekOfYear,
+  getWeekNumber,
+  GetWeekNumberOptions,
   HsvColor,
   IconPosition,
+  ImageSwatchProps,
   InfoButtonProps,
   InfoLabelProps,
   InputAppearance,
   InputDefaults,
   InputProps,
+  isSameDay,
   LabelPosition,
   LabelProps,
   LinkProps,
+  Listbox,
+  ListboxComboboxProps,
+  ListboxComponent,
+  ListboxContextValue,
+  ListboxElementKind,
+  ListboxItem,
+  ListboxLabels,
+  ListboxListProps,
+  ListboxOpenChangeReason,
+  ListboxOptionElementProps,
+  ListboxProps,
+  ListboxProvider,
+  ListboxProviderProps,
+  ListboxSelectDetails,
+  ListboxStore,
+  ListboxSurface,
+  ListboxSurfaceProps,
+  markListboxElement,
   Menu,
   MenuButtonProps,
   MenuGroupHeaderProps,
@@ -116,6 +154,7 @@ import type {
   NavSubItemButtonProps,
   NavSubItemOwnProps,
   OpenChangeDetails,
+  OptionGroupProps,
   Orientation,
   PopoverProps,
   PopoverTriggerChildProps,
@@ -138,6 +177,7 @@ import type {
   SearchBoxProps,
   SelectProps,
   SelectionMode,
+  CalendarSelectionRange,
   Size,
   SliderProps,
   SliderSize,
@@ -151,7 +191,12 @@ import type {
   SpinnerProps,
   SplitButtonMenuButtonProps,
   SplitButtonProps,
+  startOfWeek,
   Status,
+  SwatchPickerLabels,
+  SwatchPickerProps,
+  SwatchPickerRowProps,
+  SwatchPickerSize,
   SwitchLabelPosition,
   SwitchProps,
   SwitchSize,
@@ -195,6 +240,18 @@ import type {
   TreeItemPersonaLayoutProps,
   TreeItemProps,
   TreeProps,
+  useActiveDescendant,
+  UseActiveDescendantOptions,
+  UseActiveDescendantResult,
+  useListbox,
+  useListboxOption,
+  UseListboxOptionProps,
+  UseListboxOptionResult,
+  UseListboxOptions,
+  useListboxPopup,
+  UseListboxPopupOptions,
+  UseListboxPopupResult,
+  UseListboxResult,
   UsePresenceOptions,
   UsePresenceResult,
   UseRovingTabIndexOptions,
@@ -834,6 +891,184 @@ describe('0.7 menus, popovers and toolbars from the package entry', () => {
     // @ts-expect-error the pressed state of a toolbar toggle is the Toolbar's checkedValues
     const pressed: ToolbarToggleButtonProps = { name: 'format', value: 'bold', pressed: true };
     expect([huge, checkbox, pressed]).toHaveLength(3);
+  });
+});
+
+// The 0.10 listbox primitives, useActiveDescendant and the date types, imported from the package
+// entry (compile-time, `tsconfig.dev.json`).
+describe('0.10 listbox primitives, useActiveDescendant and the date types from the package entry', () => {
+  it('useActiveDescendant: its options and result', () => {
+    expectTypeOf<UseActiveDescendantResult['activeDescendantId']>().toEqualTypeOf<
+      string | undefined
+    >();
+    expectTypeOf<typeof useActiveDescendant>()
+      .parameter(0)
+      .toEqualTypeOf<UseActiveDescendantOptions>();
+    expectTypeOf<typeof useActiveDescendant>().returns.toEqualTypeOf<UseActiveDescendantResult>();
+  });
+
+  it('useListbox: its modes, callbacks, element props, context and store', () => {
+    expectTypeOf<UseListboxOptions['mode']>().toEqualTypeOf<
+      'editable' | 'select-only' | 'standalone'
+    >();
+    expectTypeOf<ListboxListProps['tabIndex']>().toEqualTypeOf<0 | -1>();
+    expectTypeOf<typeof useListbox>().parameter(0).toEqualTypeOf<UseListboxOptions>();
+    expectTypeOf<typeof useListbox>().returns.toEqualTypeOf<UseListboxResult>();
+    expectTypeOf<ListboxOpenChangeReason>().toEqualTypeOf<
+      'keyboard' | 'select' | 'escape' | 'tab'
+    >();
+    expectTypeOf<NonNullable<UseListboxOptions['onOpenChange']>>()
+      .parameter(1)
+      .toEqualTypeOf<OpenChangeDetails<ListboxOpenChangeReason> | undefined>();
+    expectTypeOf<UseListboxOptions['onSelect']>()
+      .parameter(1)
+      .toEqualTypeOf<ListboxSelectDetails | undefined>();
+    expectTypeOf<ListboxSelectDetails['item']>().toEqualTypeOf<ListboxItem>();
+    expectTypeOf<
+      ReturnType<UseListboxResult['getComboboxProps']>
+    >().toEqualTypeOf<ListboxComboboxProps>();
+    expectTypeOf<
+      ReturnType<UseListboxResult['getListboxProps']>
+    >().toEqualTypeOf<ListboxListProps>();
+    expectTypeOf<UseListboxResult['context']>().toEqualTypeOf<ListboxContextValue>();
+    expectTypeOf<ListboxContextValue['mode']>().toEqualTypeOf<UseListboxOptions['mode']>();
+    // The store's members that option components of your own build on.
+    expectTypeOf<ListboxContextValue['store']>().toEqualTypeOf<ListboxStore>();
+    expectTypeOf<ListboxStore['getIndex']>().toEqualTypeOf<(value: string) => number>();
+    expectTypeOf<ListboxStore['register']>().toEqualTypeOf<
+      (item: ListboxItem, element: RefObject<HTMLElement | null>) => () => void
+    >();
+  });
+
+  it('useListboxOption, markListboxElement and collectOptionLabels', () => {
+    expectTypeOf<typeof useListboxOption>().parameter(0).toEqualTypeOf<UseListboxOptionProps>();
+    expectTypeOf<typeof useListboxOption>().returns.toEqualTypeOf<UseListboxOptionResult>();
+    expectTypeOf<
+      UseListboxOptionResult['optionProps']
+    >().toEqualTypeOf<ListboxOptionElementProps>();
+    expectTypeOf<ListboxOptionElementProps<HTMLLIElement>['ref']>().toEqualTypeOf<
+      RefCallback<HTMLLIElement>
+    >();
+    expectTypeOf<ListboxElementKind>().toEqualTypeOf<'option' | 'group'>();
+    expectTypeOf<typeof markListboxElement>().parameter(1).toEqualTypeOf<ListboxElementKind>();
+    expectTypeOf<typeof collectOptionLabels>().parameter(0).toEqualTypeOf<ReactNode>();
+    expectTypeOf<typeof collectOptionLabels>().returns.toEqualTypeOf<Map<string, string>>();
+  });
+
+  it('ListboxProvider, ListboxSurface, useListboxPopup and DismissReason', () => {
+    expectTypeOf<typeof ListboxProvider>().parameter(0).toEqualTypeOf<ListboxProviderProps>();
+    expectTypeOf<ListboxProviderProps['value']>().toEqualTypeOf<ListboxContextValue>();
+    expectTypeOf<typeof ListboxSurface>().parameter(0).toEqualTypeOf<ListboxSurfaceProps>();
+    expectTypeOf<ListboxSurfaceProps['listbox']>().toEqualTypeOf<UseListboxResult>();
+    expectTypeOf<ListboxSurfaceProps['floatingProps']>().toEqualTypeOf<
+      UseListboxPopupResult['floatingProps']
+    >();
+    expectTypeOf<typeof useListboxPopup>().parameter(0).toEqualTypeOf<UseListboxPopupOptions>();
+    expectTypeOf<typeof useListboxPopup>().returns.toEqualTypeOf<UseListboxPopupResult>();
+    expectTypeOf<DismissReason>().toEqualTypeOf<'escape' | 'outside-press' | 'focus-outside'>();
+    expectTypeOf<UseListboxPopupOptions['onDismiss']>().toEqualTypeOf<
+      (reason: DismissReason) => void
+    >();
+  });
+
+  it('DayOfWeek and FirstWeekOfYear', () => {
+    expectTypeOf<DayOfWeek>().toEqualTypeOf<0 | 1 | 2 | 3 | 4 | 5 | 6>();
+    expectTypeOf<FirstWeekOfYear>().toEqualTypeOf<
+      'first-day' | 'first-full-week' | 'first-four-day-week'
+    >();
+  });
+
+  it('Dropdown, Combobox and Listbox: the single-select shape is the default, multiselect a literal', () => {
+    expectTypeOf<ComponentProps<typeof Dropdown>>().toEqualTypeOf<DropdownProps>();
+    expectTypeOf<ComponentProps<typeof Combobox>>().toEqualTypeOf<ComboboxProps>();
+    expectTypeOf<ComponentProps<typeof Listbox>>().toEqualTypeOf<ListboxProps>();
+    expectTypeOf<typeof Dropdown>().toExtend<DropdownComponent>();
+    expectTypeOf<typeof Combobox>().toExtend<ComboboxComponent>();
+    expectTypeOf<typeof Listbox>().toExtend<ListboxComponent>();
+    expectTypeOf<DropdownProps['value']>().toEqualTypeOf<string | undefined>();
+    expectTypeOf<DropdownProps<true>['value']>().toEqualTypeOf<readonly string[] | undefined>();
+    expectTypeOf<ListboxProps['value']>().toEqualTypeOf<string | undefined>();
+    expectTypeOf<ListboxProps<true>['value']>().toEqualTypeOf<readonly string[] | undefined>();
+    expectTypeOf<ComboboxProps['freeform']>().toEqualTypeOf<boolean | undefined>();
+    // A `never`-typed member (not an absent key), so ComboboxProps stays an extendable interface.
+    expectTypeOf<ComboboxProps<true>['freeform']>().toEqualTypeOf<undefined>();
+    // freeform is not available with multiselect.
+    expectTypeOf<{ freeform: true }>().not.toExtend<ComboboxProps<true>>();
+    // A boolean variable matches neither call signature.
+    expectTypeOf<{ multiselect: boolean }>().not.toExtend<DropdownProps>();
+    expectTypeOf<{ multiselect: boolean }>().not.toExtend<ComboboxProps>();
+    expectTypeOf<{ multiselect: boolean }>().not.toExtend<ListboxProps>();
+    expectTypeOf<{ multiselect: boolean }>().not.toExtend<
+      DropdownProps<true> & { multiselect: true }
+    >();
+    expectTypeOf<{ multiselect: boolean }>().not.toExtend<
+      ComboboxProps<true> & { multiselect: true }
+    >();
+    expectTypeOf<{ multiselect: boolean }>().not.toExtend<
+      ListboxProps<true> & { multiselect: true }
+    >();
+    // A generic interface can extend ComboboxProps, as DropdownProps does.
+    interface WrappedComboboxProps<M extends boolean = false> extends ComboboxProps<M> {
+      wrapperLabel?: string;
+    }
+    expectTypeOf<WrappedComboboxProps['freeform']>().toEqualTypeOf<boolean | undefined>();
+    expectTypeOf<WrappedComboboxProps<true>['freeform']>().toEqualTypeOf<undefined>();
+    expectTypeOf<ListboxLabels['added']>().toEqualTypeOf<
+      ((label: string, count: number) => string) | undefined
+    >();
+  });
+
+  it('SwatchPicker: the extra-small size, optional items and the swatch props', () => {
+    expectTypeOf<'extra-small'>().toExtend<SwatchPickerSize>();
+    expectTypeOf<SwatchPickerSize>().toEqualTypeOf<'extra-small' | 'small' | 'medium' | 'large'>();
+    expectTypeOf<Partial<Pick<SwatchPickerProps, 'items'>>>().toEqualTypeOf<
+      Pick<SwatchPickerProps, 'items'>
+    >();
+    expectTypeOf<SwatchPickerProps['layout']>().toEqualTypeOf<'row' | 'grid' | undefined>();
+    expectTypeOf<SwatchPickerProps['focusMode']>().toEqualTypeOf<'arrow' | 'tab' | undefined>();
+    expectTypeOf<SwatchPickerProps['labels']>().toEqualTypeOf<SwatchPickerLabels | undefined>();
+    expectTypeOf<SwatchPickerLabels['required']>().toEqualTypeOf<string | undefined>();
+    expectTypeOf<SwatchPickerRowProps['ref']>().toEqualTypeOf<Ref<HTMLDivElement> | undefined>();
+    expectTypeOf<ColorSwatchProps['color']>().toEqualTypeOf<string>();
+    expectTypeOf<ImageSwatchProps['src']>().toEqualTypeOf<string>();
+    expectTypeOf<EmptySwatchProps['size']>().toEqualTypeOf<SwatchPickerSize | undefined>();
+  });
+
+  it('OptionGroup: the label is an optional ReactNode', () => {
+    expectTypeOf<OptionGroupProps['label']>().toEqualTypeOf<ReactNode>();
+    expectTypeOf<Partial<Pick<OptionGroupProps, 'label'>>>().toEqualTypeOf<
+      Pick<OptionGroupProps, 'label'>
+    >();
+  });
+
+  it('Calendar: the value callback, the labels DatePicker extends and the selection range', () => {
+    expectTypeOf<NonNullable<CalendarProps['onValueChange']>>().parameters.toEqualTypeOf<
+      [date: Date | null, details?: CalendarValueChangeDetails]
+    >();
+    expectTypeOf<DatePickerLabels>().toExtend<CalendarLabels>();
+    expectTypeOf<CalendarProps['firstDayOfWeek']>().toEqualTypeOf<DayOfWeek | undefined>();
+    expectTypeOf<
+      NonNullable<CalendarProps['selectionRange']>
+    >().toEqualTypeOf<CalendarSelectionRange>();
+    expectTypeOf<CalendarSelectionRange>().toEqualTypeOf<'day' | 'week' | 'work-week' | 'month'>();
+  });
+
+  it('the date helpers: their signatures', () => {
+    expectTypeOf<typeof addDays>().toEqualTypeOf<(date: Date, amount: number) => Date>();
+    expectTypeOf<typeof addMonths>().toEqualTypeOf<(date: Date, amount: number) => Date>();
+    expectTypeOf<typeof isSameDay>().toEqualTypeOf<
+      (a: Date | null | undefined, b: Date | null | undefined) => boolean
+    >();
+    expectTypeOf<typeof startOfWeek>().toEqualTypeOf<
+      (date: Date, firstDayOfWeek?: DayOfWeek) => Date
+    >();
+    expectTypeOf<typeof getWeekNumber>().toEqualTypeOf<
+      (date: Date, options?: GetWeekNumberOptions) => number
+    >();
+    expectTypeOf<GetWeekNumberOptions['firstDayOfWeek']>().toEqualTypeOf<DayOfWeek | undefined>();
+    expectTypeOf<GetWeekNumberOptions['firstWeekOfYear']>().toEqualTypeOf<
+      FirstWeekOfYear | undefined
+    >();
   });
 });
 

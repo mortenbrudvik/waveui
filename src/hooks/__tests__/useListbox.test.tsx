@@ -12,10 +12,13 @@ import {
   useListbox,
   useListboxOption,
   type ListboxItem,
+  type ListboxOpenChangeReason,
+  type ListboxSelectDetails,
   type UseListboxOptions,
   type UseListboxResult,
 } from '../useListbox';
 import { asClientReference, expectThrows } from '../../test-utils';
+import type { OpenChangeDetails } from '../../lib/types';
 
 /* ------------------------------------------------------------------ */
 /*  Stand-ins for P05's Option / OptionGroup                           */
@@ -93,8 +96,8 @@ interface PickerProps extends HarnessOptions {
   filterByText?: boolean;
   /** While open, render the list in a portal (remounts the options). */
   portal?: boolean;
-  onSelectSpy?: (value: string, item: ListboxItem) => void;
-  onOpenChangeSpy?: (open: boolean, reason: string) => void;
+  onSelectSpy?: (value: string, details?: ListboxSelectDetails) => void;
+  onOpenChangeSpy?: (open: boolean, details?: OpenChangeDetails<ListboxOpenChangeReason>) => void;
   onRootRender?: () => void;
   resultRef?: React.RefObject<UseListboxResult | null>;
 }
@@ -108,7 +111,7 @@ function Picker(props: PickerProps) {
     filterByText = false,
     portal = false,
     mode = 'select-only',
-    multiple = false,
+    multiselect = false,
     onSelectSpy,
     onOpenChangeSpy,
     onRootRender,
@@ -130,20 +133,20 @@ function Picker(props: PickerProps) {
   );
   const lb = useListbox({
     open,
-    onOpenChange: (next, reason) => {
+    onOpenChange: (next, details) => {
       setOpen(next);
       if (!next) setDraft(null);
-      onOpenChangeSpy?.(next, reason);
+      onOpenChangeSpy?.(next, details);
     },
     mode,
-    multiple,
-    selectedValues: multiple ? values : value ? [value] : [],
-    onSelect: (v, item) => {
-      if (multiple)
+    multiselect,
+    selectedValues: multiselect ? values : value ? [value] : [],
+    onSelect: (v, details) => {
+      if (multiselect)
         setValues((prev) => (prev.includes(v) ? prev.filter((x) => x !== v) : [...prev, v]));
       else setValue(v);
       setDraft(null);
-      onSelectSpy?.(v, item);
+      onSelectSpy?.(v, details);
     },
     filter,
     ...options,
@@ -183,7 +186,7 @@ function Picker(props: PickerProps) {
         )}
         {portal && open ? createPortal(list, document.body) : list}
         <output data-testid="items">{lb.items.map((i) => i.value).join(',')}</output>
-        <output data-testid="value">{multiple ? values.join(',') : value}</output>
+        <output data-testid="value">{multiselect ? values.join(',') : value}</output>
       </div>
     </ListboxContext.Provider>
   );
@@ -917,7 +920,7 @@ describe('useListbox — ids and aria-activedescendant (input-pickers#3)', () =>
     expect(ref.current?.getListboxProps()).not.toHaveProperty('aria-multiselectable');
 
     rerender(
-      <Picker resultRef={ref} mode="editable" multiple idPrefix="tags">
+      <Picker resultRef={ref} mode="editable" multiselect idPrefix="tags">
         {FRUITS}
       </Picker>,
     );
@@ -1006,7 +1009,13 @@ describe('useListbox — one navigable list, derived active value (input-pickers
     await user.keyboard('{ArrowDown}');
     expect(activeText()).toBe('Beta');
     await user.keyboard('{Enter}');
-    expect(onSelect).toHaveBeenCalledWith('b', expect.objectContaining({ value: 'b' }));
+    expect(onSelect).toHaveBeenCalledWith(
+      'b',
+      expect.objectContaining({
+        item: expect.objectContaining({ value: 'b' }),
+        event: expect.any(Event),
+      }),
+    );
     expect(combobox()).toHaveValue('Beta');
   });
 
@@ -1213,6 +1222,68 @@ describe('useListbox — one navigable list, derived active value (input-pickers
     rerender(<InlineFilter query="da" />);
     expect(activeText()).toBe('Date');
   });
+
+  it('highlightOnFilter compares the enabled navigation values, not the full navigable set', () => {
+    // Pins the accepted difference from 0.7 recorded at spec §1.1.2 (ruling R10): the values
+    // useActiveDescendant tracks for activateFirstOnChange are useListbox's navigation values
+    // (enabled only, by default), not the full navigable (filtered, disabled included) set.
+    const itemsWith = (disabledB: boolean): ListboxItem[] => [
+      { value: 'a', label: 'Apple' },
+      { value: 'b', label: 'Banana', disabled: disabledB },
+      { value: 'c', label: 'Cherry' },
+    ];
+    function Probe({ includeB, disabledB }: { includeB: boolean; disabledB: boolean }) {
+      const [open, setOpen] = React.useState(true);
+      const lb = useListbox({
+        open,
+        onOpenChange: setOpen,
+        mode: 'editable',
+        selectedValues: [],
+        onSelect: () => {},
+        items: itemsWith(disabledB),
+        filter: (item) => item.value !== 'b' || includeB, // only b's filtered-set membership moves
+        highlightOnFilter: true,
+      });
+      return (
+        <ListboxContext.Provider value={lb.context}>
+          <input {...lb.getComboboxProps()} aria-label="Fruit" onKeyDown={lb.onKeyDown} readOnly />
+          <ul {...lb.getListboxProps()} aria-label="Fruits">
+            {lb.items.map((item) => (
+              <Row key={item.value} item={item} />
+            ))}
+          </ul>
+        </ListboxContext.Provider>
+      );
+    }
+
+    // (a) A disabled option entering or leaving the filtered set does not move the highlight to
+    // the first option: the enabled navigation values ([a, c]) never include the disabled b, so
+    // they do not change either way.
+    const { rerender, unmount } = render(<Probe includeB={false} disabledB />);
+    expect(activeText()).toBe('Apple'); // fallback: the first enabled option
+    key('ArrowDown');
+    expect(activeText()).toBe('Cherry');
+    rerender(<Probe includeB disabledB />); // the disabled Banana enters the filtered set
+    expect(activeText()).toBe('Cherry'); // unmoved
+    rerender(<Probe includeB={false} disabledB />); // and leaves it again
+    expect(activeText()).toBe('Cherry'); // still unmoved
+    unmount();
+
+    // (b) An option becoming disabled or enabled while open moves the highlight to the first
+    // enabled option: it enters or leaves the enabled navigation values although the filtered set
+    // (includeB) never changes.
+    const second = render(<Probe includeB disabledB={false} />);
+    expect(activeText()).toBe('Apple');
+    key('ArrowDown');
+    key('ArrowDown');
+    expect(activeText()).toBe('Cherry');
+    second.rerender(<Probe includeB disabledB />); // Banana becomes disabled
+    expect(activeText()).toBe('Apple'); // moved to the first enabled option
+    key('ArrowDown');
+    expect(activeText()).toBe('Cherry');
+    second.rerender(<Probe includeB disabledB={false} />); // Banana becomes enabled again
+    expect(activeText()).toBe('Apple'); // moved again
+  });
 });
 
 /* ------------------------------------------------------------------ */
@@ -1239,7 +1310,7 @@ interface DataPickerProps extends HarnessOptions {
   items: readonly ListboxItem[];
   defaultOpen?: boolean;
   onRowRender?: (value: string) => void;
-  onSelectSpy?: (value: string, item: ListboxItem) => void;
+  onSelectSpy?: (value: string, details?: ListboxSelectDetails) => void;
   /** React key of a row. @default the item value */
   rowKey?: (item: ListboxItem, index: number) => string;
 }
@@ -1260,9 +1331,9 @@ function DataPicker({
     onOpenChange: setOpen,
     mode,
     selectedValues: value ? [value] : [],
-    onSelect: (v, item) => {
+    onSelect: (v, details) => {
       setValue(v);
-      onSelectSpy?.(v, item);
+      onSelectSpy?.(v, details);
     },
     items,
     ...options,
@@ -1310,7 +1381,10 @@ describe('useListbox — data mode', () => {
     key('ArrowDown');
     expect(activeText()).toBe('Apple');
     key('Enter');
-    expect(onSelect).toHaveBeenCalledWith('a', ITEMS[0]);
+    expect(onSelect).toHaveBeenCalledWith(
+      'a',
+      expect.objectContaining({ item: ITEMS[0], event: expect.any(Event) }),
+    );
   });
 
   it('async shrink with autoHighlight: the activedescendant points at an existing option', () => {
@@ -1328,7 +1402,10 @@ describe('useListbox — data mode', () => {
     const onSelect = vi.fn();
     render(<DataPicker items={ITEMS} defaultOpen onSelectSpy={onSelect} />);
     fireEvent.click(screen.getByRole('option', { name: 'Date' }));
-    expect(onSelect).toHaveBeenCalledWith('d', ITEMS[3]);
+    expect(onSelect).toHaveBeenCalledWith(
+      'd',
+      expect.objectContaining({ item: ITEMS[3], event: expect.any(Event) }),
+    );
   });
 
   it('warns about duplicate item values', () => {
@@ -1592,14 +1669,26 @@ describe('useListbox — select-only keys (APG)', () => {
     expect(expanded()).toBe(true);
     key('ArrowDown');
     expect(key('Enter').defaultPrevented).toBe(true);
-    expect(onSelect).toHaveBeenLastCalledWith('b', expect.objectContaining({ label: 'Banana' }));
+    expect(onSelect).toHaveBeenLastCalledWith(
+      'b',
+      expect.objectContaining({
+        item: expect.objectContaining({ label: 'Banana' }),
+        event: expect.any(Event),
+      }),
+    );
     expect(expanded()).toBe(false);
 
     expect(key(' ').defaultPrevented).toBe(true);
     expect(expanded()).toBe(true);
     key('ArrowDown');
     expect(key(' ').defaultPrevented).toBe(true);
-    expect(onSelect).toHaveBeenLastCalledWith('c', expect.objectContaining({ label: 'Cherry' }));
+    expect(onSelect).toHaveBeenLastCalledWith(
+      'c',
+      expect.objectContaining({
+        item: expect.objectContaining({ label: 'Cherry' }),
+        event: expect.any(Event),
+      }),
+    );
     expect(expanded()).toBe(false);
   });
 
@@ -1639,7 +1728,10 @@ describe('useListbox — select-only keys (APG)', () => {
     key('ArrowUp', { altKey: true });
     expect(expanded()).toBe(false);
     expect(screen.getByTestId('value')).toHaveTextContent('c');
-    expect(onOpenChange).toHaveBeenLastCalledWith(false, 'select');
+    expect(onOpenChange).toHaveBeenLastCalledWith(
+      false,
+      expect.objectContaining({ reason: 'select', event: expect.any(Event) }),
+    );
   });
 
   it('Tab commits the active option and closes without preventing the focus move', () => {
@@ -1649,15 +1741,18 @@ describe('useListbox — select-only keys (APG)', () => {
     key('ArrowDown');
     expect(key('Tab').defaultPrevented).toBe(false);
     expect(screen.getByTestId('value')).toHaveTextContent('b');
-    expect(onOpenChange).toHaveBeenLastCalledWith(false, 'tab');
+    expect(onOpenChange).toHaveBeenLastCalledWith(
+      false,
+      expect.objectContaining({ reason: 'tab', event: expect.any(Event) }),
+    );
   });
 
-  it('multiple: opens on the first selected option in list order; Tab and Alt+ArrowUp close without committing', () => {
+  it('multiselect: opens on the first selected option in list order; Tab and Alt+ArrowUp close without committing', () => {
     const onSelect = vi.fn();
     const onOpenChange = vi.fn();
     render(
       <Picker
-        multiple
+        multiselect
         defaultValues={['c', 'a']}
         onSelectSpy={onSelect}
         onOpenChangeSpy={onOpenChange}
@@ -1670,13 +1765,19 @@ describe('useListbox — select-only keys (APG)', () => {
     key('ArrowDown');
     key('Tab');
     expect(expanded()).toBe(false);
-    expect(onOpenChange).toHaveBeenLastCalledWith(false, 'tab');
+    expect(onOpenChange).toHaveBeenLastCalledWith(
+      false,
+      expect.objectContaining({ reason: 'tab', event: expect.any(Event) }),
+    );
     key('ArrowUp');
     expect(activeText()).toBe('Apple');
     key('ArrowDown');
     key('ArrowUp', { altKey: true });
     expect(expanded()).toBe(false);
-    expect(onOpenChange).toHaveBeenLastCalledWith(false, 'keyboard');
+    expect(onOpenChange).toHaveBeenLastCalledWith(
+      false,
+      expect.objectContaining({ reason: 'keyboard', event: expect.any(Event) }),
+    );
     expect(onSelect).not.toHaveBeenCalled();
     expect(screen.getByTestId('value')).toHaveTextContent(/^c,a$/);
   });
@@ -1686,7 +1787,10 @@ describe('useListbox — select-only keys (APG)', () => {
     render(<Picker onOpenChangeSpy={onOpenChange}>{FRUITS}</Picker>);
     key('ArrowDown');
     expect(key('Escape').defaultPrevented).toBe(true);
-    expect(onOpenChange).toHaveBeenLastCalledWith(false, 'escape');
+    expect(onOpenChange).toHaveBeenLastCalledWith(
+      false,
+      expect.objectContaining({ reason: 'escape', event: expect.any(Event) }),
+    );
     expect(key('Escape').defaultPrevented).toBe(false);
   });
 
@@ -1756,7 +1860,10 @@ describe('useListbox — editable keys (APG)', () => {
     expect(activeText()).toBe('Banana');
     expect(key('ArrowUp', { altKey: true }).defaultPrevented).toBe(true);
     expect(expanded()).toBe(false);
-    expect(onOpenChange).toHaveBeenLastCalledWith(false, 'keyboard');
+    expect(onOpenChange).toHaveBeenLastCalledWith(
+      false,
+      expect.objectContaining({ reason: 'keyboard', event: expect.any(Event) }),
+    );
     expect(onSelect).not.toHaveBeenCalled();
     expect(screen.getByTestId('value')).toBeEmptyDOMElement();
 
@@ -1846,7 +1953,7 @@ describe('useListbox — editable keys (APG)', () => {
     const user = userEvent.setup();
     const onSelect = vi.fn();
     render(
-      <Picker mode="editable" multiple filterByText autoHighlight={false} onSelectSpy={onSelect}>
+      <Picker mode="editable" multiselect filterByText autoHighlight={false} onSelectSpy={onSelect}>
         <Opt value="a">Apple</Opt>
         <Opt value="b">Banana</Opt>
         <Opt value="bl">Blueberry</Opt>
@@ -1964,7 +2071,10 @@ describe('useListbox — editable keys (APG)', () => {
     );
     key('ArrowDown');
     expect(key('Escape').defaultPrevented).toBe(true);
-    expect(onOpenChange).toHaveBeenLastCalledWith(false, 'escape');
+    expect(onOpenChange).toHaveBeenLastCalledWith(
+      false,
+      expect.objectContaining({ reason: 'escape', event: expect.any(Event) }),
+    );
     expect(onClearDraft).not.toHaveBeenCalled();
     expect(combobox()).toHaveValue('Apple');
     expect(key('Escape').defaultPrevented).toBe(true);
@@ -1997,13 +2107,16 @@ describe('useListbox — editable keys (APG)', () => {
     );
     key('ArrowDown');
     expect(key('Tab').defaultPrevented).toBe(false);
-    expect(onOpenChange).toHaveBeenLastCalledWith(false, 'tab');
+    expect(onOpenChange).toHaveBeenLastCalledWith(
+      false,
+      expect.objectContaining({ reason: 'tab', event: expect.any(Event) }),
+    );
     expect(onSelect).not.toHaveBeenCalled();
   });
 
-  it('multiple: Enter commits and keeps the listbox open on the same option', () => {
+  it('multiselect: Enter commits and keeps the listbox open on the same option', () => {
     render(
-      <Picker mode="editable" multiple>
+      <Picker mode="editable" multiselect>
         {FRUITS}
       </Picker>,
     );
@@ -2017,9 +2130,9 @@ describe('useListbox — editable keys (APG)', () => {
     expect(screen.getByTestId('value')).toHaveTextContent('b,c');
   });
 
-  it('multiple: clicking an option keeps the listbox open', () => {
+  it('multiselect: clicking an option keeps the listbox open', () => {
     render(
-      <Picker mode="editable" multiple defaultOpen>
+      <Picker mode="editable" multiselect defaultOpen>
         {FRUITS}
       </Picker>,
     );
@@ -2125,6 +2238,125 @@ describe('useListbox — disabled options (input-pickers#28)', () => {
     key('ArrowDown'); // reopens on the selected Apple
     key('ArrowDown');
     expect(activeText()).toBe('Banana');
+  });
+});
+
+/* ------------------------------------------------------------------ */
+/*  disabledOptionsFocusable (option-1)                                */
+/* ------------------------------------------------------------------ */
+
+describe('useListbox — disabledOptionsFocusable (option-1)', () => {
+  const A_B_DISABLED_C = (
+    <>
+      <Opt value="a">Apple</Opt>
+      <Opt value="b" disabled>
+        Banana
+      </Opt>
+      <Opt value="c">Cherry</Opt>
+    </>
+  );
+
+  it('skips disabled options by default (0.7)', () => {
+    render(<Picker>{A_B_DISABLED_C}</Picker>);
+    key('ArrowDown');
+    expect(activeText()).toBe('Apple');
+    key('ArrowDown');
+    expect(activeText()).toBe('Cherry');
+  });
+
+  it('reaches disabled options with the arrows, Home/End, PageUp/PageDown and typeahead', () => {
+    const ref = React.createRef<UseListboxResult>();
+    render(
+      <Picker disabledOptionsFocusable resultRef={ref}>
+        {A_B_DISABLED_C}
+      </Picker>,
+    );
+    key('ArrowDown'); // opens on the first option
+    expect(activeText()).toBe('Apple');
+    key('ArrowDown');
+    expect(activeText()).toBe('Banana');
+    expect(activeOption()).toHaveAttribute('aria-disabled', 'true');
+    expect(combobox()).toHaveAttribute('aria-activedescendant', ref.current?.getOptionId('b'));
+    key('End');
+    expect(activeText()).toBe('Cherry');
+    key('Home');
+    expect(activeText()).toBe('Apple');
+    key('PageDown'); // clamped: only 3 options
+    expect(activeText()).toBe('Cherry');
+    key('PageUp');
+    expect(activeText()).toBe('Apple');
+    key('b'); // typeahead
+    expect(activeText()).toBe('Banana');
+    expect(combobox()).toHaveAttribute('aria-activedescendant', ref.current?.getOptionId('b'));
+  });
+
+  it('commits nothing on a disabled active option and keeps the list open', () => {
+    const onSelect = vi.fn();
+    render(
+      <Picker disabledOptionsFocusable defaultOpen onSelectSpy={onSelect}>
+        {A_B_DISABLED_C}
+      </Picker>,
+    );
+    key('ArrowDown'); // Apple -> Banana
+    expect(activeText()).toBe('Banana');
+    expect(key('Enter').defaultPrevented).toBe(true);
+    expect(onSelect).not.toHaveBeenCalled();
+    expect(expanded()).toBe(true);
+    expect(key(' ').defaultPrevented).toBe(true);
+    expect(onSelect).not.toHaveBeenCalled();
+    expect(expanded()).toBe(true);
+    fireEvent.click(screen.getByRole('option', { name: 'Banana' }));
+    expect(onSelect).not.toHaveBeenCalled();
+    expect(expanded()).toBe(true);
+    expect(activeText()).toBe('Banana');
+  });
+
+  it('closes without committing on Tab and Alt+ArrowUp from a disabled active option', () => {
+    const onSelect = vi.fn();
+    const onOpenChange = vi.fn();
+    render(
+      <Picker
+        disabledOptionsFocusable
+        defaultOpen
+        onSelectSpy={onSelect}
+        onOpenChangeSpy={onOpenChange}
+      >
+        {A_B_DISABLED_C}
+      </Picker>,
+    );
+    key('ArrowDown'); // Apple -> Banana
+    expect(activeText()).toBe('Banana');
+    expect(key('Tab').defaultPrevented).toBe(false);
+    expect(onSelect).not.toHaveBeenCalled();
+    expect(onOpenChange).toHaveBeenLastCalledWith(
+      false,
+      expect.objectContaining({ reason: 'tab', event: expect.any(Event) }),
+    );
+    expect(expanded()).toBe(false);
+
+    onOpenChange.mockClear();
+    key('ArrowDown'); // reopens on the first option (nothing selected)
+    expect(activeText()).toBe('Apple');
+    key('ArrowDown');
+    expect(activeText()).toBe('Banana');
+    expect(key('ArrowUp', { altKey: true }).defaultPrevented).toBe(true);
+    expect(onSelect).not.toHaveBeenCalled();
+    expect(onOpenChange).toHaveBeenLastCalledWith(
+      false,
+      expect.objectContaining({ reason: 'keyboard', event: expect.any(Event) }),
+    );
+    expect(expanded()).toBe(false);
+  });
+
+  it('lets the fallback be a disabled option', () => {
+    const ref = React.createRef<UseListboxResult>();
+    render(
+      <Picker disabledOptionsFocusable defaultValue="b" defaultOpen resultRef={ref}>
+        {A_B_DISABLED_C}
+      </Picker>,
+    );
+    expect(activeText()).toBe('Banana');
+    expect(combobox()).toHaveAttribute('aria-activedescendant', ref.current?.getOptionId('b'));
   });
 });
 
@@ -2312,6 +2544,618 @@ describe('useListbox — scrollIntoView (input-pickers#18)', () => {
 });
 
 /* ------------------------------------------------------------------ */
+/*  onActiveValueChange and multiselect (F5-foundation)                */
+/* ------------------------------------------------------------------ */
+
+describe('useListbox — onActiveValueChange', () => {
+  it('reports the active option (open, arrows, hover, filter, close) once each', () => {
+    const onActiveValueChange = vi.fn();
+    render(
+      <React.StrictMode>
+        <Picker onActiveValueChange={onActiveValueChange}>{FRUITS}</Picker>
+      </React.StrictMode>,
+    );
+    key('ArrowDown'); // opens: nothing selected, so autoHighlight starts at the first option
+    key('ArrowDown'); // moves to the second option
+    fireEvent.pointerMove(screen.getByRole('option', { name: 'Cherry' })); // hovers the third
+    key('Escape'); // closes
+    expect(onActiveValueChange.mock.calls).toEqual([['a'], ['b'], ['c'], [null]]);
+  });
+});
+
+describe('useListbox — multiselect', () => {
+  it('puts multiselect in the context and the option result', () => {
+    const onResult = vi.fn();
+    function Probe({ value }: { value: string }) {
+      const context = React.useContext(ListboxContext);
+      const { multiselect, optionProps } = useListboxOption({ value });
+      onResult(multiselect, context?.multiselect);
+      return <li {...optionProps}>{value}</li>;
+    }
+    const { rerender } = render(
+      <Picker multiselect>
+        <Probe value="a" />
+      </Picker>,
+    );
+    expect(onResult).toHaveBeenLastCalledWith(true, true);
+
+    rerender(
+      <Picker>
+        <Probe value="a" />
+      </Picker>,
+    );
+    expect(onResult).toHaveBeenLastCalledWith(false, false);
+  });
+});
+
+/* ------------------------------------------------------------------ */
+/*  Standalone mode (listbox-1)                                        */
+/* ------------------------------------------------------------------ */
+
+interface StandaloneListProps extends Omit<HarnessOptions, 'mode'> {
+  children?: React.ReactNode;
+  /** The initial selection; each commit updates it (a toggle with `multiselect`). */
+  defaultValues?: string[];
+  /** A fixed selection, as from a parent that ignores `onSelect`. */
+  values?: readonly string[];
+  onSelectSpy?: (value: string, details?: ListboxSelectDetails) => void;
+  onOpenChangeSpy?: (open: boolean, details?: OpenChangeDetails<ListboxOpenChangeReason>) => void;
+  resultRef?: React.RefObject<UseListboxResult | null>;
+}
+
+/** A listbox that holds focus itself (the standalone Listbox's model): `open` is its focus. */
+function StandaloneList(props: StandaloneListProps) {
+  const {
+    children = FRUITS,
+    defaultValues = [],
+    values,
+    multiselect = false,
+    onSelectSpy,
+    onOpenChangeSpy,
+    resultRef,
+    ...options
+  } = props;
+  const [focused, setFocused] = React.useState(false);
+  const [selected, setSelected] = React.useState<readonly string[]>(defaultValues);
+  const lb = useListbox({
+    ...options,
+    open: focused,
+    onOpenChange: onOpenChangeSpy,
+    mode: 'standalone',
+    multiselect,
+    selectedValues: values ?? selected,
+    onSelect: (v, details) => {
+      onSelectSpy?.(v, details);
+      setSelected((s) => {
+        if (!multiselect) return [v];
+        return s.includes(v) ? s.filter((x) => x !== v) : [...s, v];
+      });
+    },
+  });
+  React.useImperativeHandle(resultRef, () => lb);
+  return (
+    <ListboxContext.Provider value={lb.context}>
+      <ul
+        {...lb.getListboxProps()}
+        aria-label="Fruits"
+        onKeyDown={lb.onKeyDown}
+        onFocus={() => setFocused(true)}
+        onBlur={() => setFocused(false)}
+      >
+        {children}
+      </ul>
+      <output data-testid="value">{(values ?? selected).join(',')}</output>
+    </ListboxContext.Provider>
+  );
+}
+
+function fruitList(): HTMLElement {
+  return screen.getByRole('listbox', { name: 'Fruits' });
+}
+
+/** The text of the option the list's aria-activedescendant points at. */
+function listActiveText(): string | null {
+  const id = fruitList().getAttribute('aria-activedescendant');
+  return id ? (document.getElementById(id)?.textContent ?? null) : null;
+}
+
+/** A keydown on the list; `true` when nothing prevented it. */
+function listKey(k: string, init: Partial<KeyboardEventInit> = {}): boolean {
+  return fireEvent.keyDown(fruitList(), { key: k, ...init });
+}
+
+function selectedText(): string | null {
+  return screen.getByTestId('value').textContent;
+}
+
+describe('useListbox — standalone mode (listbox-1)', () => {
+  it('the list is tabbable and carries aria-activedescendant only while it has focus', async () => {
+    const user = userEvent.setup();
+    const ref = React.createRef<UseListboxResult>();
+    render(
+      <>
+        <StandaloneList defaultValues={['c']} resultRef={ref} />
+        <button type="button">After</button>
+      </>,
+    );
+    const list = fruitList();
+    expect(list).toHaveAttribute('tabindex', '0');
+    expect(list).not.toHaveAttribute('aria-activedescendant');
+    // No mouse-down prevention on the list, and no aria-multiselectable without multiselect.
+    expect(ref.current?.getListboxProps()).toEqual({
+      id: ref.current?.listboxId,
+      role: 'listbox',
+      tabIndex: 0,
+      ref: expect.any(Function),
+    });
+    expect(ref.current?.context.mode).toBe('standalone');
+
+    await user.tab();
+    expect(list).toHaveFocus();
+    expect(listActiveText()).toBe('Cherry'); // the selected option (autoHighlight)
+    expect(ref.current?.getListboxProps()).toEqual({
+      id: ref.current?.listboxId,
+      role: 'listbox',
+      tabIndex: 0,
+      'aria-activedescendant': ref.current?.getOptionId('c'),
+      ref: expect.any(Function),
+    });
+
+    await user.tab();
+    expect(screen.getByRole('button', { name: 'After' })).toHaveFocus();
+    expect(list).not.toHaveAttribute('aria-activedescendant');
+  });
+
+  it('the combobox modes keep the list out of the tab order and add no pointer press to options', () => {
+    const ref = React.createRef<UseListboxResult>();
+    const onMouseDownType = vi.fn();
+    function Probe({ value }: { value: string }) {
+      const { optionProps } = useListboxOption({ value });
+      onMouseDownType(typeof optionProps.onMouseDown);
+      return <li {...optionProps}>{value}</li>;
+    }
+    for (const mode of ['select-only', 'editable'] as const) {
+      const { unmount } = render(
+        <Picker mode={mode} defaultOpen resultRef={ref}>
+          <Probe value="a" />
+        </Picker>,
+      );
+      expect(activeText()).toBe('a'); // the combobox carries aria-activedescendant
+      expect(screen.getByRole('listbox', { name: 'Fruits' })).not.toHaveAttribute(
+        'aria-activedescendant',
+      );
+      expect(ref.current?.getListboxProps()).toEqual({
+        id: ref.current?.listboxId,
+        role: 'listbox',
+        tabIndex: -1,
+        onMouseDown: expect.any(Function),
+      });
+      expect(ref.current?.context.mode).toBe(mode);
+      expect(onMouseDownType).toHaveBeenLastCalledWith('undefined');
+      unmount();
+    }
+  });
+
+  it('ArrowDown/ArrowUp move without wrapping and Home/End go to the ends, all prevented', () => {
+    render(<StandaloneList />);
+    act(() => fruitList().focus());
+    expect(listActiveText()).toBe('Apple');
+    expect(listKey('ArrowDown')).toBe(false);
+    expect(listActiveText()).toBe('Banana');
+    expect(listKey('End')).toBe(false);
+    expect(listActiveText()).toBe('Date');
+    expect(listKey('ArrowDown')).toBe(false);
+    expect(listActiveText()).toBe('Date');
+    expect(listKey('Home')).toBe(false);
+    expect(listActiveText()).toBe('Apple');
+    expect(listKey('ArrowUp')).toBe(false);
+    expect(listActiveText()).toBe('Apple');
+  });
+
+  it('from no active option, ArrowDown moves to the first option and ArrowUp to the last', () => {
+    render(<StandaloneList autoHighlight={false} />);
+    act(() => fruitList().focus());
+    expect(listActiveText()).toBeNull();
+    listKey('ArrowDown');
+    expect(listActiveText()).toBe('Apple');
+    act(() => fruitList().blur()); // losing focus forgets the highlight
+    act(() => fruitList().focus());
+    expect(listActiveText()).toBeNull();
+    listKey('ArrowUp');
+    expect(listActiveText()).toBe('Date');
+  });
+
+  it('PageDown/PageUp move ten options, clamped', () => {
+    render(
+      <StandaloneList>
+        {Array.from({ length: 25 }, (_, i) => (
+          <Opt key={i} value={`v${i}`}>{`Option ${i}`}</Opt>
+        ))}
+      </StandaloneList>,
+    );
+    act(() => fruitList().focus());
+    expect(listKey('PageDown')).toBe(false);
+    expect(listActiveText()).toBe('Option 10');
+    listKey('PageDown');
+    listKey('PageDown');
+    expect(listActiveText()).toBe('Option 24');
+    expect(listKey('PageUp')).toBe(false);
+    expect(listActiveText()).toBe('Option 14');
+  });
+
+  it('typeahead is on by default and moves; a Space typed during a search continues it', () => {
+    vi.useFakeTimers();
+    const onSelect = vi.fn();
+    try {
+      render(
+        <StandaloneList onSelectSpy={onSelect}>
+          <Opt value="nm">New Mexico</Opt>
+          <Opt value="ny">New York</Opt>
+          <Opt value="c">Cherry</Opt>
+        </StandaloneList>,
+      );
+      act(() => fruitList().focus());
+      expect(listKey('c')).toBe(false);
+      expect(listActiveText()).toBe('Cherry');
+      act(() => vi.advanceTimersByTime(600)); // the typeahead buffer resets
+      for (const k of ['n', 'e', 'w']) listKey(k);
+      expect(listKey(' ')).toBe(false);
+      listKey('y');
+      expect(listActiveText()).toBe('New York');
+      expect(onSelect).not.toHaveBeenCalled();
+      act(() => vi.advanceTimersByTime(600));
+      expect(listKey(' ')).toBe(false); // no search in progress: Space commits
+      expect(onSelect.mock.calls.map(([value]) => value)).toEqual(['ny']);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('Enter and Space commit the active option and keep it active; onOpenChange is never called', () => {
+    const onSelect = vi.fn();
+    const onOpenChange = vi.fn();
+    render(
+      <React.StrictMode>
+        <StandaloneList onSelectSpy={onSelect} onOpenChangeSpy={onOpenChange} />
+      </React.StrictMode>,
+    );
+    act(() => fruitList().focus());
+    listKey('ArrowDown');
+    expect(listKey('Enter')).toBe(false);
+    expect(onSelect.mock.calls).toEqual([
+      [
+        'b',
+        {
+          item: expect.objectContaining({ value: 'b', label: 'Banana' }),
+          event: expect.any(Event),
+        },
+      ],
+    ]);
+    expect(selectedText()).toBe('b');
+    expect(listActiveText()).toBe('Banana');
+    listKey('ArrowDown');
+    expect(listKey(' ')).toBe(false);
+    expect(onSelect.mock.calls.map(([value]) => value)).toEqual(['b', 'c']);
+    expect(selectedText()).toBe('c');
+    expect(listActiveText()).toBe('Cherry');
+    expect(fruitList()).toHaveFocus();
+    expect(onOpenChange).not.toHaveBeenCalled();
+  });
+
+  it('a single-select commit keeps the committed option active while the selection stays', () => {
+    const onSelect = vi.fn();
+    render(<StandaloneList values={['a']} onSelectSpy={onSelect} />);
+    act(() => fruitList().focus());
+    expect(listActiveText()).toBe('Apple'); // the selected option
+    listKey('ArrowDown');
+    listKey('Enter');
+    expect(onSelect.mock.calls.map(([value]) => value)).toEqual(['b']);
+    expect(selectedText()).toBe('a'); // the parent kept its selection
+    expect(listActiveText()).toBe('Banana'); // not back to the selected Apple
+  });
+
+  it('multiselect: Enter and Space toggle the active option, which stays active', () => {
+    const onOpenChange = vi.fn();
+    render(
+      <StandaloneList multiselect defaultValues={['a', 'c']} onOpenChangeSpy={onOpenChange} />,
+    );
+    expect(fruitList()).toHaveAttribute('aria-multiselectable', 'true');
+    act(() => fruitList().focus());
+    expect(listActiveText()).toBe('Apple'); // the first selected option in list order
+    expect(listKey(' ')).toBe(false); // Apple off
+    expect(selectedText()).toBe('c');
+    expect(listActiveText()).toBe('Apple'); // not the remaining selected Cherry
+    listKey('ArrowDown');
+    expect(listKey('Enter')).toBe(false); // Banana on
+    expect(selectedText()).toBe('c,b');
+    expect(listActiveText()).toBe('Banana');
+    expect(screen.getByRole('option', { name: 'Banana' })).toHaveAttribute('aria-selected', 'true');
+    expect(screen.getByRole('option', { name: 'Apple' })).toHaveAttribute('aria-selected', 'false');
+    expect(onOpenChange).not.toHaveBeenCalled();
+  });
+
+  it('Enter and Space with no active option commit nothing and close nothing', () => {
+    const onSelect = vi.fn();
+    const onOpenChange = vi.fn();
+    render(
+      <StandaloneList
+        autoHighlight={false}
+        onSelectSpy={onSelect}
+        onOpenChangeSpy={onOpenChange}
+      />,
+    );
+    act(() => fruitList().focus());
+    expect(listKey('Enter')).toBe(false);
+    expect(listKey(' ')).toBe(false);
+    expect(onSelect).not.toHaveBeenCalled();
+    expect(onOpenChange).not.toHaveBeenCalled();
+  });
+
+  it('calls no onOpenChange for the keys that open a combobox list, also while not focused', () => {
+    const onSelect = vi.fn();
+    const onOpenChange = vi.fn();
+    render(<StandaloneList onSelectSpy={onSelect} onOpenChangeSpy={onOpenChange} />);
+    // `open` (the focus state) is false: nothing is active, and nothing asks to open.
+    for (const k of ['ArrowDown', 'ArrowUp', 'Home', 'End', 'Enter', ' ', 'b']) listKey(k);
+    expect(onOpenChange).not.toHaveBeenCalled();
+    expect(onSelect).not.toHaveBeenCalled();
+    expect(fruitList()).not.toHaveAttribute('aria-activedescendant');
+  });
+
+  it('leaves Tab, Escape and Alt+Arrow keys to the page: not handled, not prevented', () => {
+    const onSelect = vi.fn();
+    const onOpenChange = vi.fn();
+    render(<StandaloneList onSelectSpy={onSelect} onOpenChangeSpy={onOpenChange} />);
+    act(() => fruitList().focus());
+    listKey('ArrowDown');
+    expect(listActiveText()).toBe('Banana');
+    expect(listKey('Tab')).toBe(true);
+    expect(listKey('Tab', { shiftKey: true })).toBe(true);
+    expect(listKey('Escape')).toBe(true);
+    for (const arrow of ['ArrowDown', 'ArrowUp', 'ArrowLeft', 'ArrowRight']) {
+      expect(listKey(arrow, { altKey: true }), arrow).toBe(true);
+    }
+    expect(listActiveText()).toBe('Banana');
+    expect(onSelect).not.toHaveBeenCalled();
+    expect(onOpenChange).not.toHaveBeenCalled();
+  });
+
+  it('leaves ArrowLeft and ArrowRight alone (a vertical list): not prevented, nothing moves', () => {
+    render(<StandaloneList />);
+    act(() => fruitList().focus());
+    listKey('ArrowDown');
+    expect(listActiveText()).toBe('Banana');
+    expect(listKey('ArrowLeft')).toBe(true);
+    expect(listKey('ArrowRight')).toBe(true);
+    expect(listActiveText()).toBe('Banana');
+  });
+
+  it('a press on an option of an unfocused list focuses the list and activates the option without scrolling; the click commits it', () => {
+    const scroll = vi.fn();
+    const original = Element.prototype.scrollIntoView;
+    Element.prototype.scrollIntoView = scroll;
+    const onSelect = vi.fn();
+    try {
+      render(<StandaloneList defaultValues={['a']} onSelectSpy={onSelect} />);
+      const cherry = screen.getByRole('option', { name: 'Cherry' });
+      expect(fruitList()).not.toHaveFocus();
+      // Prevented: the browser would focus the list itself, and the selected Apple (the focus
+      // fallback) would scroll into view under the pointer before the click.
+      expect(fireEvent.mouseDown(cherry)).toBe(false);
+      expect(fruitList()).toHaveFocus();
+      expect(listActiveText()).toBe('Cherry');
+      expect(scroll).not.toHaveBeenCalled();
+      fireEvent.click(cherry);
+      expect(onSelect.mock.calls).toEqual([
+        ['c', { item: expect.objectContaining({ value: 'c' }), event: expect.any(Event) }],
+      ]);
+      expect(selectedText()).toBe('c');
+      expect(listActiveText()).toBe('Cherry');
+      expect(scroll).not.toHaveBeenCalled();
+    } finally {
+      Element.prototype.scrollIntoView = original;
+    }
+  });
+
+  it('a real click on an option of an unfocused list selects it without scrolling', async () => {
+    const scroll = vi.fn();
+    const original = Element.prototype.scrollIntoView;
+    Element.prototype.scrollIntoView = scroll;
+    const onSelect = vi.fn();
+    try {
+      const user = userEvent.setup();
+      render(<StandaloneList defaultValues={['a']} onSelectSpy={onSelect} />);
+      await user.click(screen.getByRole('option', { name: 'Cherry' }));
+      expect(fruitList()).toHaveFocus();
+      expect(onSelect.mock.calls.map(([value]) => value)).toEqual(['c']);
+      expect(listActiveText()).toBe('Cherry');
+      expect(scroll).not.toHaveBeenCalled();
+    } finally {
+      Element.prototype.scrollIntoView = original;
+    }
+  });
+
+  it('a press on a focused list moves the active option without scrolling; the next key move scrolls', () => {
+    const scroll = vi.fn();
+    const original = Element.prototype.scrollIntoView;
+    Element.prototype.scrollIntoView = scroll;
+    try {
+      render(<StandaloneList />);
+      act(() => fruitList().focus());
+      expect(listActiveText()).toBe('Apple');
+      scroll.mockClear();
+      fireEvent.mouseDown(screen.getByRole('option', { name: 'Date' }));
+      expect(listActiveText()).toBe('Date');
+      expect(scroll).not.toHaveBeenCalled();
+      listKey('ArrowUp');
+      expect(listActiveText()).toBe('Cherry');
+      expect(scroll).toHaveBeenCalledTimes(1);
+      expect(scroll.mock.contexts[0]).toBe(screen.getByRole('option', { name: 'Cherry' }));
+    } finally {
+      Element.prototype.scrollIntoView = original;
+    }
+  });
+
+  it('multiselect: a press and a click toggle the pressed option on, once, and keep it active', () => {
+    const onSelect = vi.fn();
+    render(<StandaloneList multiselect defaultValues={['a']} onSelectSpy={onSelect} />);
+    const cherry = screen.getByRole('option', { name: 'Cherry' });
+    fireEvent.mouseDown(cherry);
+    fireEvent.click(cherry);
+    expect(onSelect.mock.calls).toEqual([
+      ['c', { item: expect.objectContaining({ value: 'c' }), event: expect.any(Event) }],
+    ]);
+    expect(selectedText()).toBe('a,c');
+    expect(fruitList()).toHaveFocus();
+    // Not the first selected option (Apple), which is the fallback.
+    expect(listActiveText()).toBe('Cherry');
+  });
+
+  it('a press on a disabled option focuses the list and keeps the active option, without scrolling; its click commits nothing', () => {
+    const scroll = vi.fn();
+    const original = Element.prototype.scrollIntoView;
+    Element.prototype.scrollIntoView = scroll;
+    const onSelect = vi.fn();
+    try {
+      render(
+        <StandaloneList onSelectSpy={onSelect}>
+          <Opt value="a">Apple</Opt>
+          <Opt value="b" disabled>
+            Banana
+          </Opt>
+          <Opt value="c">Cherry</Opt>
+        </StandaloneList>,
+      );
+      const banana = screen.getByRole('option', { name: 'Banana' });
+      fireEvent.mouseDown(banana);
+      expect(fruitList()).toHaveFocus();
+      expect(listActiveText()).toBe('Apple'); // the focus fallback
+      expect(scroll).not.toHaveBeenCalled();
+      listKey('ArrowDown'); // skips the disabled Banana
+      expect(listActiveText()).toBe('Cherry');
+      scroll.mockClear(); // the key move scrolled
+      fireEvent.mouseDown(banana); // the list has focus: nothing changes
+      expect(listActiveText()).toBe('Cherry');
+      expect(scroll).not.toHaveBeenCalled();
+      fireEvent.click(banana);
+      expect(onSelect).not.toHaveBeenCalled();
+    } finally {
+      Element.prototype.scrollIntoView = original;
+    }
+  });
+
+  it('a press on a disabled option of an unfocused list starts on the selected option without scrolling', () => {
+    const scroll = vi.fn();
+    const original = Element.prototype.scrollIntoView;
+    Element.prototype.scrollIntoView = scroll;
+    const options = (
+      <>
+        <Opt value="a">Apple</Opt>
+        <Opt value="b" disabled>
+          Banana
+        </Opt>
+        <Opt value="c">Cherry</Opt>
+      </>
+    );
+    try {
+      const { unmount } = render(<StandaloneList defaultValues={['c']}>{options}</StandaloneList>);
+      fireEvent.mouseDown(screen.getByRole('option', { name: 'Banana' }));
+      expect(fruitList()).toHaveFocus();
+      expect(listActiveText()).toBe('Cherry'); // the selected option, not the first
+      expect(scroll).not.toHaveBeenCalled();
+      unmount();
+
+      // No fallback (autoHighlight={false}): the list takes focus with no active option.
+      render(<StandaloneList autoHighlight={false}>{options}</StandaloneList>);
+      fireEvent.mouseDown(screen.getByRole('option', { name: 'Banana' }));
+      expect(fruitList()).toHaveFocus();
+      expect(listActiveText()).toBeNull();
+      expect(scroll).not.toHaveBeenCalled();
+    } finally {
+      Element.prototype.scrollIntoView = original;
+    }
+  });
+
+  it('disabledOptionsFocusable: a press activates a disabled option, whose click commits nothing', () => {
+    const onSelect = vi.fn();
+    render(
+      <StandaloneList disabledOptionsFocusable onSelectSpy={onSelect}>
+        <Opt value="a">Apple</Opt>
+        <Opt value="b" disabled>
+          Banana
+        </Opt>
+        <Opt value="c">Cherry</Opt>
+      </StandaloneList>,
+    );
+    const banana = screen.getByRole('option', { name: 'Banana' });
+    fireEvent.mouseDown(banana);
+    expect(fruitList()).toHaveFocus();
+    expect(listActiveText()).toBe('Banana');
+    fireEvent.click(banana);
+    expect(onSelect).not.toHaveBeenCalled();
+    expect(listActiveText()).toBe('Banana');
+  });
+
+  it('warns once when the list drops the hook ref, so a press cannot focus it; the click still commits', () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    // Not mocked: an unexpected error still prints.
+    const error = vi.spyOn(console, 'error');
+    const onSelect = vi.fn();
+    function OwnRefList() {
+      const ownRef = React.useRef<HTMLUListElement>(null);
+      const [focused, setFocused] = React.useState(false);
+      const [selected, setSelected] = React.useState<readonly string[]>([]);
+      const lb = useListbox({
+        open: focused,
+        mode: 'standalone',
+        selectedValues: selected,
+        onSelect: (v, details) => {
+          onSelect(v, details);
+          setSelected([v]);
+        },
+      });
+      return (
+        <ListboxContext.Provider value={lb.context}>
+          {/* The own ref after the spread replaces the hook's ref instead of merging with it. */}
+          <ul
+            {...lb.getListboxProps()}
+            ref={ownRef}
+            aria-label="Fruits"
+            onKeyDown={lb.onKeyDown}
+            onFocus={() => setFocused(true)}
+            onBlur={() => setFocused(false)}
+          >
+            {FRUITS}
+          </ul>
+          <output data-testid="value">{selected.join(',')}</output>
+        </ListboxContext.Provider>
+      );
+    }
+    try {
+      render(<OwnRefList />);
+      const banana = screen.getByRole('option', { name: 'Banana' });
+      fireEvent.mouseDown(banana);
+      expect(fruitList()).not.toHaveFocus();
+      fireEvent.click(banana);
+      expect(onSelect.mock.calls).toEqual([
+        ['b', { item: expect.objectContaining({ value: 'b' }), event: expect.any(Event) }],
+      ]);
+      expect(selectedText()).toBe('b');
+      fireEvent.mouseDown(screen.getByRole('option', { name: 'Cherry' }));
+      expect(warn.mock.calls).toEqual([
+        [
+          '[WaveUI] useListbox: the list element is unknown, so a pointer press cannot focus the list. Pass the `ref` of `getListboxProps()` to the list element, merged with your own ref.',
+        ],
+      ]);
+      expect(error).not.toHaveBeenCalled();
+    } finally {
+      warn.mockRestore();
+      error.mockRestore();
+    }
+  });
+});
+
+/* ------------------------------------------------------------------ */
 /*  StrictMode, context guard, SSR                                     */
 /* ------------------------------------------------------------------ */
 
@@ -2362,7 +3206,7 @@ describe('useListboxOption — context guard (C-CONTEXT)', () => {
   it('throws a [WaveUI] error in development outside a listbox', () => {
     expectThrows(
       <Opt value="a">Apple</Opt>,
-      '[WaveUI] Option must be used within a listbox (Combobox or Dropdown)',
+      '[WaveUI] Option must be used within a listbox (Listbox, Combobox, Dropdown or a ListboxProvider)',
     );
   });
 
@@ -2386,7 +3230,9 @@ describe('useListboxOption — context guard (C-CONTEXT)', () => {
         'Banana',
       ]);
       expect(error.mock.calls).toEqual([
-        ['[WaveUI] Option must be used within a listbox (Combobox or Dropdown)'],
+        [
+          '[WaveUI] Option must be used within a listbox (Listbox, Combobox, Dropdown or a ListboxProvider)',
+        ],
       ]);
     } finally {
       error.mockRestore();

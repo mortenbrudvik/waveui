@@ -89,12 +89,14 @@ const require = createRequire(import.meta.url);
 
 /**
  * A temporary bridge: components whose flat sub-component names (`<Parent><Member>`,
- * C-COMPOUND) are not exported from `dist/index.mjs` yet. The list is empty: Fluent parity
- * phase 3 (0.8) listed `ColorPicker`, `MessageBar`, `Toast` and `Tree` while their new parts
+ * C-COMPOUND) are not exported from `dist/index.mjs` yet. The list is empty: phase 5 (0.10)
+ * listed `SwatchPicker` until the input barrel exported `SwatchPickerRow`. Phase 2 (0.7) did the
+ * same for `Toolbar`, which became a compound (`Toolbar.Button`, …) before the button barrel
+ * exported the flat names of its parts, and phase 3 (0.8) for `ColorPicker`, `MessageBar`,
+ * `Toast` and `Tree` while their new parts
  * (`Toast.Title`, `MessageBar.Actions`, `ColorPicker.HexField`, `Tree.ItemPersonaLayout`, …)
- * landed before the barrels exported their flat names, and emptied it again once the barrels did
- * (as phase 2 did for `Toolbar`). A future compound whose parts land before their flat names goes
- * on it the same way. The rules:
+ * landed before the barrels exported their flat names. A future compound whose parts land before
+ * their flat names goes on it the same way. The rules:
  *   - an entry whose flat names all exist fails the check ("remove it"), and so does an entry
  *     that is not an exported component, so the list only shrinks;
  *   - an entry that is exported but not a compound yet is tolerated;
@@ -135,6 +137,17 @@ export const OPT_IN_MODULES = [
   'lib/toaster.mjs',
 ];
 
+/**
+ * The exclusion probes of 0.10 (spec D37): an import of only `Calendar` holds no listbox code (the
+ * hook, `Option`, `Dropdown`), and an import of only `Listbox` holds no calendar code.
+ */
+const CALENDAR_ONLY = {
+  keep: 'Calendar',
+  drop: 'Dropdown',
+  dropModules: ['hooks/useListbox.mjs', 'components/input/Option.mjs'],
+};
+const LISTBOX_ONLY = { keep: 'Listbox', drop: 'Calendar' };
+
 /** An import of only this component holds the presence core (spec D29): its toasts mount on it. */
 const TOASTER_INCLUDE_KEEP = 'Toaster';
 
@@ -145,6 +158,8 @@ const TOASTER_INCLUDE_KEEP = 'Toaster';
 const SERVER_SAFE_MODULES = [
   'lib/color.mjs',
   'lib/color.cjs',
+  'lib/date.mjs',
+  'lib/date.cjs',
   'lib/toaster.mjs',
   'lib/toaster.cjs',
 ];
@@ -378,6 +393,8 @@ export const REQUIRED_DECLARATIONS = [
   'ButtonProps',
   'Menu',
   'usePresence',
+  'useActiveDescendant',
+  'Calendar',
   'buttonClassNames',
 ];
 
@@ -814,12 +831,24 @@ const check = (path, m) => {
       throw new Error('a dispatch on the server added a global (it must do nothing)');
     }
   }
+  if (/^lib\\/date\\.[cm]?js$/.test(path)) {
+    const day = new Date(2024, 0, 31);
+    const next = typeof m.addDays === 'function' ? m.addDays(day, 1) : undefined;
+    if (!(next instanceof Date) || next.getMonth() !== 1 || next.getDate() !== 1) {
+      throw new Error('addDays(new Date(2024, 0, 31), 1) returned ' + String(next) + ', not 1 February 2024');
+    }
+    if (day.getDate() !== 31) throw new Error('addDays changed its argument');
+  }
   if (/^index\\.[cm]?js$/.test(path)) {
-    for (const name of ['hsvToHex', 'hexToHsv', 'createToaster']) {
+    for (const name of ['hsvToHex', 'hexToHsv', 'createToaster', 'addDays']) {
       if (typeof m[name] !== 'function') throw new Error(name + ' is not exported');
       if (m[name].$$typeof === Symbol.for('react.client.reference')) {
         throw new Error(name + ' is a client reference (re-exported from a "use client" module)');
       }
+    }
+    const next = m.addDays(new Date(2024, 0, 31), 1);
+    if (!(next instanceof Date) || next.getMonth() !== 1 || next.getDate() !== 1) {
+      throw new Error('addDays(new Date(2024, 0, 31), 1) returned ' + String(next) + ', not a Date');
     }
   }
 };
@@ -1429,6 +1458,9 @@ export async function verifyDist(
         ...FIELD_ONLY_STRINGS,
       })),
     );
+    // D37 (0.10): a Calendar holds no listbox code, a Listbox no calendar code.
+    errors.push(...(await probeTreeShaking(distRoot, CALENDAR_ONLY)));
+    errors.push(...(await probeTreeShaking(distRoot, LISTBOX_ONLY)));
   } catch (error) {
     errors.push(`tree-shaking probe failed: ${error.message}`);
   }

@@ -144,6 +144,7 @@ const NO_ELEMENT: readonly string[] = [
   'DialogTrigger', // clones its child
   'DrawerClose', // clones its child
   'DrawerTrigger', // clones its child
+  'ListboxProvider', // a context provider: the custom picker renders the list (phase 5)
   'MenuTrigger', // clones its child
   'Popover', // a context provider: Popover.Content renders the surface
   'PopoverTrigger', // clones its child

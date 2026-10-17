@@ -25,7 +25,7 @@ export const Z_INDEX = {
  */
 export type LayerKind = 'modal' | 'popover' | 'menu' | 'listbox' | 'tooltip' | 'toast';
 
-/** Why a layer is being dismissed. */
+/** Why a popup layer is dismissed: Escape, a press outside it, or focus moving outside it. */
 export type DismissReason = 'escape' | 'outside-press' | 'focus-outside';
 
 /** A registered layer. Getters are allowed, so fields can read the latest options. */

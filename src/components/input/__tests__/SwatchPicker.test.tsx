@@ -195,7 +195,7 @@ describe('SwatchPicker — shape and size', () => {
   });
 
   it('accepts a readonly item list, such as a module-level `as const` palette (C-NAMING)', () => {
-    expectTypeOf<SwatchPickerProps['items']>().toEqualTypeOf<readonly SwatchItem[]>();
+    expectTypeOf<SwatchPickerProps['items']>().toEqualTypeOf<readonly SwatchItem[] | undefined>();
     const palette = [
       { value: 'red', color: '#d13438', label: 'Red' },
       { value: 'blue', color: '#0f6cbd', label: 'Blue' },

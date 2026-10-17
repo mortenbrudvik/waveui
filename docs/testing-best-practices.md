@@ -690,6 +690,57 @@ Keep it a pure pass-through: the mock replaces React for the whole test file.
 
 `Tree.selection.ts` holds the cascade as pure functions (`collectItems`, `computeCheckStates`, `toggleCheck`). Test them without rendering: build the item tree from JSX children, then assert the state map and the emitted arrays (tree order, fully checked parents included, unmatched values kept at the end). Render only for what the model cannot show: the attributes, the keys and the callback.
 
+### Active-descendant widgets: `aria-activedescendant` and `data-active`
+
+Listbox, the listbox pickers (Dropdown, Combobox, TagPicker, TimePicker) and composites on `useActiveDescendant` keep DOM focus on one element, the combobox or the list, and point its `aria-activedescendant` at the active option. Assert that reference and the option's `data-active`, never DOM focus on an option: an option never has focus.
+
+```tsx
+// src/components/input/__tests__/Listbox.test.tsx
+import { render, screen } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
+import { Listbox } from '../Listbox';
+import { Option } from '../Option';
+
+const list = () => screen.getByRole('listbox', { name: 'Fruits' });
+const option = (name: string) => screen.getByRole('option', { name });
+
+/** The option the list's `aria-activedescendant` points at. */
+const active = () => {
+  const id = list().getAttribute('aria-activedescendant');
+  return id ? document.getElementById(id) : null;
+};
+
+it('has an active option only while focused, and the keys move it', async () => {
+  const user = userEvent.setup();
+  render(
+    <Listbox aria-label="Fruits" defaultValue="banana">
+      <Option value="apple">Apple</Option>
+      <Option value="banana">Banana</Option>
+      <Option value="cherry">Cherry</Option>
+    </Listbox>,
+  );
+  expect(active()).toBeNull();
+  await user.tab();
+  expect(active()).toHaveTextContent('Banana');
+  expect(option('Banana')).toHaveAttribute('data-active');
+  await user.keyboard('{ArrowDown}');
+  expect(active()).toHaveTextContent('Cherry');
+  expect(option('Banana')).not.toHaveAttribute('data-active');
+  expect(list()).toHaveFocus();
+});
+```
+
+- **Resolve the reference.** Read `aria-activedescendant` and look the element up (`document.getElementById`), then assert it by its text, or compare it with `option(name).id`. Option ids are generated (`useId`): never write a literal one. A closed popup and an unfocused list carry none (`not.toHaveAttribute('aria-activedescendant')`).
+- **Focus stays put.** After the keys, assert `toHaveFocus()` on the combobox or the list, never on the option.
+- **Pointer moves.** `user.hover(option)` or `fireEvent.pointerMove(option)` makes the option active without scrolling the list; a keyboard move scrolls it into view (`{ block: 'nearest' }`). To assert scrolling, spy on `Element.prototype.scrollIntoView`: in a suite whose `afterEach` calls `vi.restoreAllMocks()`, `vi.spyOn(Element.prototype, 'scrollIntoView')` is enough (`Listbox.test.tsx`); otherwise replace the method with a spy and put the original back in `finally`, as the hook tests do (`useActiveDescendant.test.tsx`, `useListbox.test.tsx`). `src/test-setup.ts` installs its `vi.fn()` stub only where jsdom has none.
+- **Callbacks.** `onActiveOptionChange` (and the hooks' `onActiveValueChange`) report every change after the commit, `null` included when the list closes or loses focus: assert the whole sequence (`expect(onActiveOptionChange.mock.calls).toEqual([['apple'], ['cherry'], [null]])`), and once per change in StrictMode.
+- **The hook alone.** `useActiveDescendant.test.tsx` renders a probe component that hands the hook's result out through `useImperativeHandle` (`resultRef`) and calls its methods in `act()`, as `useListbox.test.tsx`'s `Picker` does.
+- **Server HTML.** A closed picker or an unfocused Listbox renders no `aria-activedescendant`; `findDanglingIdRefsInHtml(renderToString(…))` fails on one that points at no element.
+
+### Dates: a fixed clock
+
+The Calendar and DatePicker suites fix the clock with `vi.setSystemTime(NOW)` in a `beforeEach` and undo it with `vi.useRealTimers()` in the `afterEach` (it mocks `Date` without fake timers). They pass `locale="en-US"`, so headings and day names are known, and a fixed `today` where the case is about today (`Calendar` and `DatePicker` take one; a Calendar without it marks no day as today in the server HTML and the hydration render). Compare dates by their local fields (each suite's `fields(date)`, `[year, month, day]`), never by `toISOString()`, so the suites pass in every time zone. The day buttons are named by their full date (`dayButton('Sunday, June 15, 2025')`).
+
 ## 6. Controlled components and callbacks
 
 - **One call per interaction.** Every stateful component has a StrictMode test that its value callback fires exactly once per interaction.

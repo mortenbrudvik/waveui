@@ -4,9 +4,9 @@ A comparison for developers choosing between the two libraries, and a guide for 
 
 WaveUI is an independent React component library that follows Microsoft's Fluent 2 design language. It is not Microsoft's `@fluentui/react-components` and not a drop-in replacement for it: it covers most of Fluent UI React v9's components with its own API, styled with Tailwind CSS 4 instead of CSS-in-JS.
 
-- **Compared:** WaveUI 0.8.0 (`@mortenbrudvik/waveui`; released 2026-10-17) and Fluent UI React v9 (`@fluentui/react-components` 9.74.9, released 2026-09-23, the latest release on 2026-09-26). 0.8.0 adds toasts with React content, MessageBar parts, ColorArea and the color sliders, Tree multi-select and row actions, and stable class names to 0.7.0 (released 2026-09-26).
+- **Compared:** WaveUI 0.10.0 (`@mortenbrudvik/waveui`; this revision was written for its release) and Fluent UI React v9 (`@fluentui/react-components` 9.74.9, released 2026-09-23, the latest release on 2026-09-26). 0.9.0 (released 2026-10-17) added sizes and appearances for the inputs and pickers, SpinButton's empty value, display value and press-and-hold, half stars and colors for Rating, and InfoLabel as a Field label with a standalone InfoButton to 0.8.0 (released 2026-10-17); 0.10.0 adds multi-select Dropdown and Combobox, custom filtering, a standalone Listbox and the listbox hooks, swatch children and kinds, and a standalone Calendar with month and year views.
 - **Not covered:** Fluent UI React v8 (`@fluentui/react`) and Fluent UI Web Components, which are separate libraries.
-- **Related documents:** the [README](../README.md) is WaveUI's API reference. The [gap analysis](research/fluent-ui-v9-comparison.md) is the detailed comparison behind this guide: it lists 475 differences with ids, measured against WaveUI 0.5. WaveUI 0.6, 0.7 and 0.8 closed 97 of them, including all seven rated high impact (submenus and checkbox and radio menu items in 0.7; toasts with rich content, a color area, a hue slider and Tree multi-select in 0.8). The [roadmap](ROADMAP.md) schedules the rest up to 1.0.
+- **Related documents:** the [README](../README.md) is WaveUI's API reference. The [gap analysis](research/fluent-ui-v9-comparison.md) is the detailed comparison behind this guide: it lists 475 differences with ids, measured against WaveUI 0.5. WaveUI 0.6 to 0.10 closed 159 of them (0.9 closed 34 and 0.10 28), including all seven rated high impact (submenus and checkbox and radio menu items in 0.7; toasts with rich content, a color area, a hue slider and Tree multi-select in 0.8). The [roadmap](ROADMAP.md) schedules the rest up to 1.0.
 
 ## Contents
 
@@ -22,7 +22,7 @@ WaveUI is an independent React component library that follows Microsoft's Fluent
 
 ## 1. At a glance
 
-| | Fluent UI React v9 | WaveUI 0.8 |
+| | Fluent UI React v9 | WaveUI 0.10 |
 |---|---|---|
 | Maintained by | Microsoft | an independent open-source project with one maintainer |
 | API status | stable since 9.0.0 (June 2022), semantic versioning | before 1.0: a minor release adds features and may change behavior; renamed props keep working as deprecated aliases until 1.0, which removes them and freezes the API |
@@ -34,10 +34,10 @@ WaveUI is an independent React component library that follows Microsoft's Fluent
 | Customization | a slot for every part, static class names, app-wide style hooks, recomposition hooks | `className`, `data-*` state attributes, a stable class name on every component and part (`wave-button__icon`, exported as `buttonClassNames`), slots for icons and content |
 | Server rendering | a style renderer that collects the styles into the server HTML | nothing beyond the stylesheet import |
 | Forms | the controls built on native inputs submit; Dropdown, TagPicker, SwatchPicker and ColorPicker do not | every value control and picker takes part: it submits under a `name`, validates `required` and resets with its form |
-| Components | about 60 stable ones; charts in a separate package, the date and time pickers in compat packages | 68, including Pagination, Stepper and layout primitives |
+| Components | about 60 stable ones; charts in a separate package, the date and time pickers in compat packages | 74, including Pagination, Stepper and layout primitives |
 | Motion | built into overlays and disclosures | a presence primitive that menus and toasts mount through; motion on components is planned for 0.15 |
 | Runtime dependencies | 62 direct (60 Fluent packages, Griffel and `@swc/helpers`); 89 packages installed | 3 (`@floating-ui/react-dom`, `clsx`, `tailwind-merge`) |
-| Whole library, minified and gzipped | 326 KiB of JavaScript | 161 KiB of JavaScript and 11 KiB of CSS |
+| Whole library, minified and gzipped | 326 KiB of JavaScript | 179 KiB of JavaScript and 12 KiB of CSS |
 | Icons | `@fluentui/react-icons` | none built in; icon props take any element, `@fluentui/react-icons` included |
 | License | MIT (Fluent's font and icon assets have their own terms) | MIT |
 
@@ -48,7 +48,7 @@ WaveUI is an independent React component library that follows Microsoft's Fluent
 - **You need a stable API today.** Fluent v9 has been stable since June 2022 and follows semantic versioning. WaveUI is before 1.0: each minor release changes some behavior (listed under "Changed" in its [CHANGELOG](../CHANGELOG.md)), and the API is frozen only at 1.0.
 - **You want long-term backing and an ecosystem.** Fluent is maintained by Microsoft, with a documentation site and a large community (over 20,000 GitHub stars). WaveUI has one maintainer.
 - **You build for Microsoft 365 or Teams, or need exact Fluent visuals.** Fluent ships the Teams themes and is Microsoft's own implementation. WaveUI uses Fluent 2's values but does not aim for pixel parity, and its dark theme draws brand fills differently ([3.2](#32-themes-and-tokens)).
-- **You need something WaveUI does not have yet:** charts, virtualized lists and grids, column resizing, multi-select Dropdown and Combobox, input sizes and appearances, TagGroup, InlineDrawer and NavDrawer, non-modal dialogs. [Section 7](#7-not-in-waveui-yet) gives the planned release of each; charts are not planned.
+- **You need something WaveUI does not have yet:** charts, virtualized lists and grids, column resizing, TagGroup and a composable TagPicker, InlineDrawer and NavDrawer, non-modal dialogs. [Section 7](#7-not-in-waveui-yet) gives the planned release of each; charts are not planned.
 - **You are on React 17 or 18, or must support older browsers.**
 - **You want to rebuild components from their parts.** Fluent exposes a slot on every part, app-wide style hooks, each component's state and render hooks (`use*_unstable`, `render*_unstable`) and its focus-management hooks. WaveUI has a stable class name on every part (0.8) and plans slots for structural parts and public contexts for 0.18.
 - **Your team prefers CSS-in-JS to utility classes.**
@@ -59,8 +59,8 @@ WaveUI is an independent React component library that follows Microsoft's Fluent
 - **You use React 19 and Server Components.** A stylesheet import and `WaveProvider` are the whole setup; there is no style renderer to configure.
 - **Your forms rely on native HTML forms.** Every value control and picker submits its value under a `name`, blocks submission when `required`, and resets with its `<form>`.
 - **You want these accessibility defaults without extra work:** toasts that stay reachable over a dialog, live regions without a provider, accordion triggers in headings, grid rows whose checkboxes are named after the row, development warnings for unnamed controls ([6](#6-only-in-waveui)).
-- **You need Pagination, a Stepper, layout primitives (Stack, Flex, Grid), tab panels, or date and time pickers in the main package.**
-- **Size matters.** A page of form controls costs about a quarter less than with Fluent, and the whole library about 47% less, stylesheet included; a single button or the overlays cost about the same ([3.11](#311-size-and-dependencies)). WaveUI has three runtime dependencies.
+- **You need Pagination, a Stepper, layout primitives (Stack, Flex, Grid), tab panels, or date and time pickers and a calendar in the main package.**
+- **Size matters.** A page of form controls costs about 15% less than with Fluent, and the whole library about 40% less, stylesheet included; a single button or the overlays cost about the same ([3.11](#311-size-and-dependencies)). WaveUI has three runtime dependencies.
 
 Both libraries implement the WAI-ARIA Authoring Practices patterns (with the differences of [3.9](#39-keyboard-behavior)), support right-to-left layouts and Windows high contrast, work with `@fluentui/react-icons`, and run in the Next.js App Router.
 
@@ -68,7 +68,7 @@ Both libraries implement the WAI-ARIA Authoring Practices patterns (with the dif
 
 ### 3.1 Styling
 
-| | Fluent UI v9 | WaveUI 0.8 |
+| | Fluent UI v9 | WaveUI 0.10 |
 |---|---|---|
 | Engine | Griffel, an atomic CSS-in-JS library: each component's styles ship as precompiled atomic rules in its JavaScript, and Griffel inserts them into the page at runtime; a build plugin can extract them into a CSS file instead | Tailwind CSS 4 utility classes, shipped as a precompiled stylesheet (`@mortenbrudvik/waveui/styles`) or generated by your own Tailwind build (`@import '@mortenbrudvik/waveui/tailwind'`). Nothing is generated at runtime |
 | Your styles on a component | `className` (merged after the component's classes by `mergeClasses`), your own `makeStyles`, and a `className` on any slot (`icon={{ className }}`) | `className`, merged last by `cn()` (clsx and tailwind-merge): Tailwind classes or your own CSS classes |
@@ -177,11 +177,11 @@ Both libraries mark their component modules `"use client"`, and both work in the
 
 Fluent's motion package (`@fluentui/react-motion`) is stable: `createPresenceComponent`, `createMotionComponent`, `PresenceGroup` and `motionTokens`, on the Web Animations API (its ready-made motion components, such as `Fade` and `Collapse`, are still in preview). Dialog, Drawer, Popover and Menu animate their surfaces by default, and Accordion and Tree their panels, each through a motion slot (`surfaceMotion`, `backdropMotion`, `collapseMotion`) you can replace or turn off.
 
-WaveUI 0.8 has the mechanism but ships no enter or exit animations. `Presence` and `usePresence` mount and unmount an element with CSS transitions: the element carries `data-presence` (`entering`, `entered`, `exiting`, `exited`), you style its enter with `data-[presence=entering]:starting:` classes and its exit with `data-[presence=exiting]:` classes, and it stays mounted and `inert` until the exit finishes ([README: Enter and exit motion](../README.md#enter-and-exit-motion)). `Menu.Popover` and the toasts in a Toaster mount through it, and they animate only with classes you add (a toast's container carries `wave-toaster__toast`). Dialog, Drawer, Popover, Tooltip, Accordion and Tree open and close without animation until 0.15.
+WaveUI 0.10 has the mechanism but ships no enter or exit animations. `Presence` and `usePresence` mount and unmount an element with CSS transitions: the element carries `data-presence` (`entering`, `entered`, `exiting`, `exited`), you style its enter with `data-[presence=entering]:starting:` classes and its exit with `data-[presence=exiting]:` classes, and it stays mounted and `inert` until the exit finishes ([README: Enter and exit motion](../README.md#enter-and-exit-motion)). `Menu.Popover`, the toasts in a Toaster and the note of an InfoButton or InfoLabel mount through it, and they animate only with classes you add (a toast's container carries `wave-toaster__toast`, the note `wave-info-button__info`). Dialog, Drawer, Popover, Tooltip, Accordion and Tree open and close without animation until 0.15.
 
 ### 3.7 Positioning and portals
 
-| Fluent UI v9 | WaveUI 0.8 |
+| Fluent UI v9 | WaveUI 0.10 |
 |---|---|
 | `positioning="above"`, `"above-start"`, `"above-end"` | `side="top"`, with `align="center"`, `"start"` or `"end"` |
 | `positioning="below"`, `"below-start"`, `"below-end"` | `side="bottom"`, with `align` |
@@ -197,7 +197,7 @@ Fluent sets `positioning` on the root (`Menu`, `Popover`, `Tooltip`). WaveUI set
 
 ### 3.8 Focus, modal dialogs and announcements
 
-- **Focus management.** Fluent builds its keyboard behavior on tabster and exports its hooks: `useArrowNavigationGroup`, `useFocusableGroup`, `useModalAttributes`, `useRestoreFocusTarget`, `useFocusFinders` and more. WaveUI has its own focus and dismiss-layer code and exports one hook from it, `useRovingTabIndex` (arrow keys along one axis, typeahead, right-to-left, and `tabStop: 'none'` for a composite reached by arrow keys only). Grid navigation, focusable groups and the modal layer become public in 0.12.
+- **Focus management.** Fluent builds its keyboard behavior on tabster and exports its hooks: `useArrowNavigationGroup`, `useFocusableGroup`, `useModalAttributes`, `useRestoreFocusTarget`, `useFocusFinders` and more. WaveUI has its own focus and dismiss-layer code and exports two hooks from it: `useRovingTabIndex` (arrow keys along one axis, typeahead, right-to-left, and `tabStop: 'none'` for a composite reached by arrow keys only) and `useActiveDescendant` (focus stays on one element whose `aria-activedescendant` names the active item; the listboxes are built on it, and Fluent keeps its own in `@fluentui/react-aria`). Grid navigation, focusable groups and the modal layer become public in 0.12.
 - **Modal dialogs.** Both keep keyboard focus in a modal dialog and hide the rest of the page from assistive technology, in different ways. Fluent's Dialog sets `aria-modal="true"` and traps focus with tabster by default (`inertTrapFocus` switches it to `inert`). WaveUI's Dialog and Drawer never set `aria-modal`: they make the rest of the page `inert` except WaveUI's own toasts and live regions, so a toast shown over a dialog is still announced, and Tab can reach it.
 - **Announcements.** Fluent's `useAnnounce` does nothing unless an announcer is mounted, and `FluentProvider` does not mount one. WaveUI's `announce(message, politeness?)` and `useAnnounce()` need no provider.
 
@@ -205,16 +205,19 @@ Fluent sets `positioning` on the root (`Menu`, `Popover`, `Tooltip`). WaveUI set
 
 Both libraries implement the keyboard patterns of the WAI-ARIA Authoring Practices (APG), and they differ in the details below. Most differences are deliberate on WaveUI's side: it keeps an APG variant or its own earlier behavior, and the [roadmap](ROADMAP.md#83-intentional-differences-no-change-planned) records why. The others are gaps, scheduled or in the backlog.
 
-| Behavior | Fluent UI v9 | WaveUI 0.8 | Status in WaveUI |
+| Behavior | Fluent UI v9 | WaveUI 0.10 | Status in WaveUI |
 |---|---|---|---|
 | Arrow keys in a TabList | move focus; Enter or Space selects (`selectTabOnFocus` defaults to `false`) | select the tab (`selectTabOnFocus` defaults to `true`) | deliberate; both are APG variants |
-| Arrow keys in a SwatchPicker | move focus (`focusMode="arrow"`) | select, as in an APG radio group | deliberate; `focusMode` is planned for 0.10 |
+| Arrow keys in a SwatchPicker | move focus; Enter, Space or a click selects | select in the default row layout, as in an APG radio group; move focus in `layout="grid"`, and stop at the grid's ends | deliberate; `focusMode="tab"` makes every swatch a Tab stop in both, and in WaveUI the swatches are then a group of toggle buttons (Fluent keeps the radio and grid roles) |
 | Arrow keys in a Toolbar | both axes | the axis of `orientation` (APG toolbar) | deliberate |
 | Checkbox and switch menu items | a click, Enter and Space change the item and keep the menu open | Space changes the item and keeps the menu open; Enter and a click change it and close the menu (APG menu) | deliberate |
 | Radio menu items | a click, Enter and Space check the item and close the menu | as checkbox items | deliberate |
 | Clicking a DatePicker's input | opens the calendar | does not: the calendar button and Alt+ArrowDown do (APG date picker dialog) | deliberate |
 | Opening a Popover | moves focus into the surface | leaves focus on the trigger; Tab moves into the content | deliberate |
-| Disabled options and menu items | stay reachable with the arrow keys, as the APG recommends | skipped | a gap: options planned for 0.10, menu items in the backlog |
+| Disabled options and menu items | stay reachable with the arrow keys, as the APG recommends | skipped; `disabledOptionsFocusable` keeps disabled options reachable in Dropdown, Combobox and Listbox | options: opt-in, the default stays; menu items: a gap (backlog) |
+| Typing in a Combobox that has a selection | clears the selection; a blur selects an option whose text matches | keeps the selection until an option is chosen; a blur selects nothing | deliberate |
+| Home and End in a Combobox | move to the first and last option while the list is open | move the caret in the text, as in an APG editable combobox | deliberate |
+| PageUp and PageDown in a calendar | PageUp shows the next month and PageDown the previous; with Ctrl, the next and previous year | PageUp shows the previous month and PageDown the next; with Shift, the previous and next year (the APG date picker) | deliberate |
 | Closing the open item of a single-mode Accordion | not possible unless `collapsible` is set | always possible | a gap: no non-collapsible mode (backlog) |
 | Arrow keys between toasts | move between the toasts of a Toaster (marked as a stopgap in Fluent's source) | not supported: Tab and Shift+Tab move through the toasts' controls | a gap (a roadmap follow-up) |
 | Dismissing a focused toast | Delete | Delete or Backspace (the delete key of Mac keyboards) | deliberate |
@@ -225,7 +228,7 @@ Both libraries implement the keyboard patterns of the WAI-ARIA Authoring Practic
 
 ### 3.10 Forms
 
-| | Fluent UI v9 | WaveUI 0.8 |
+| | Fluent UI v9 | WaveUI 0.10 |
 |---|---|---|
 | Native `<form>` submission | through the native input inside Input, Textarea, Select, Checkbox, Radio, Switch, Slider and SpinButton; Dropdown, TagPicker, SwatchPicker and ColorPicker submit nothing, and Combobox submits its displayed text | every value control and picker submits its value through a hidden input when it has a `name` (DatePicker as `yyyy-mm-dd`, TimePicker as `HH:mm`, ColorArea, ColorSlider and AlphaSlider as hex, a multi-value picker as one entry per value), and honors `form` |
 | Form reset | native inputs only | every value control returns to its default value |
@@ -239,25 +242,25 @@ A RadioGroup gets no generated `name` in WaveUI: pass one to submit its value. S
 
 Measured with esbuild 0.28.2 (minified ESM, gzip level 9), with `react` and `react-dom` external and everything else bundled, each library's own dependencies included. Each row imports the same components from both libraries, with the parts a basic use needs (Fluent's `Option`, `DialogSurface`, `MenuList`, …). The Button, form, overlay and table rows leave the providers out; "Everything" is each package's whole entry (for Fluent, `@fluentui/react-components` without the compat pickers and charts). Sizes are in KiB (1,024 bytes).
 
-| What the app imports | Fluent UI v9, JavaScript | WaveUI 0.8, JavaScript |
+| What the app imports | Fluent UI v9, JavaScript | WaveUI 0.10, JavaScript |
 |---|---|---|
 | Button | 61.7 KiB (12.1 KiB gzip) | 39.1 KiB (12.4 KiB gzip) |
-| Button and the provider | 96.3 KiB (23.2 KiB gzip) | 40.2 KiB (12.8 KiB gzip) |
-| Button, Field, Input, Checkbox, Switch, Dropdown | 239.3 KiB (64.4 KiB gzip) | 114.3 KiB (38.9 KiB gzip) |
-| Dialog, Menu, Popover, Tooltip | 210.6 KiB (65.2 KiB gzip) | 172.7 KiB (58.4 KiB gzip) |
+| Button and the provider | 96.3 KiB (23.2 KiB gzip) | 40.4 KiB (12.8 KiB gzip) |
+| Button, Field, Input, Checkbox, Switch, Dropdown | 239.3 KiB (64.4 KiB gzip) | 127.7 KiB (43.4 KiB gzip) |
+| Dialog, Menu, Popover, Tooltip | 210.6 KiB (65.2 KiB gzip) | 172.9 KiB (58.4 KiB gzip) |
 | DataGrid, Table | 151.8 KiB (45.5 KiB gzip) | 60.0 KiB (20.3 KiB gzip) |
-| Everything | 1,279.0 KiB (325.6 KiB gzip) | 494.0 KiB (161.3 KiB gzip) |
+| Everything | 1,279.0 KiB (325.6 KiB gzip) | 546.2 KiB (179.1 KiB gzip) |
 
-- **CSS.** Fluent's styles are inside its JavaScript and inserted at runtime. WaveUI's precompiled stylesheet adds 63.3 KiB (10.9 KiB gzip) once, whatever the app uses; on the Tailwind path, your build generates only the classes it finds.
-- **With the stylesheet counted** (gzip): a Button with its provider costs about the same (Fluent 23.2 KiB, WaveUI 23.7 KiB), and so do the overlays (65.2 and 69.3 KiB). The form controls (64.4 and 49.8 KiB), the tables (45.5 and 31.2 KiB) and the whole library (325.6 and 172.2 KiB) cost less in WaveUI.
-- **Providers.** `FluentProvider` with `webLightTheme` adds 34.6 KiB (11.1 KiB gzip); `WaveProvider` adds 1.1 KiB (0.4 KiB gzip).
+- **CSS.** Fluent's styles are inside its JavaScript and inserted at runtime. WaveUI's precompiled stylesheet adds 68.0 KiB (11.6 KiB gzip) once, whatever the app uses; on the Tailwind path, your build generates only the classes it finds.
+- **With the stylesheet counted** (gzip): a Button with its provider costs about the same (Fluent 23.2 KiB, WaveUI 24.4 KiB), and so do the overlays (65.2 and 70.0 KiB). The form controls (64.4 and 55.0 KiB), the tables (45.5 and 31.9 KiB) and the whole library (325.6 and 190.7 KiB) cost less in WaveUI.
+- **Providers.** `FluentProvider` with `webLightTheme` adds 34.6 KiB (11.1 KiB gzip); `WaveProvider` adds 1.3 KiB (0.4 KiB gzip).
 - **What the numbers leave out.** Fluent's components have more parts and features ([7](#7-not-in-waveui-yet)): its DataGrid sorts, resizes columns and selects on row click, and its overlays animate, which WaveUI's do not yet. WaveUI's compounds carry all their parts, so its Menu row includes checkbox, radio, switch and link items, groups and submenus that Fluent's row does not. Fluent's style modules are 16 to 48% of its bundles here; Griffel's build-time extraction moves their style rules into a CSS file, which this measurement does not do. Parse and execution time, and the cost of inserting styles at runtime, are not measured.
 - **Where the bytes go** (minified). Nearly half of Fluent's Button bundle is its `tokens` object (one runtime reference in Button's styles keeps all of it), and tabster, the keyboard-navigation library, is 73 KiB of the whole library. Of WaveUI's Button bundle, 28 KiB is `tailwind-merge`, which merges your `className` with the component's and is shared by every component.
-- **Install.** `@fluentui/react-components` installs 89 packages (215 MB, of which `@fluentui/react-icons` is 174 MB; an app that keeps Fluent's icons keeps that package either way). WaveUI installs 8.2 MB (5.48 MB of it source maps) and six dependency packages (its three dependencies and theirs, 1.6 MB).
+- **Install.** `@fluentui/react-components` installs 89 packages (215 MB, of which `@fluentui/react-icons` is 174 MB; an app that keeps Fluent's icons keeps that package either way). WaveUI installs 9.5 MB (6.31 MB of it source maps) and six dependency packages (its three dependencies and theirs, 1.6 MB).
 
 ### 3.12 Hooks and utilities
 
-| Fluent UI v9 | WaveUI 0.8 | Note |
+| Fluent UI v9 | WaveUI 0.10 | Note |
 |---|---|---|
 | `useId(prefix?, providedId?)` | `useId(prefix?)` | |
 | `mergeCallbacks(a, b)` | `composeEventHandlers(theirs, ours)` | `ours` does not run when `theirs` called `preventDefault()`; Fluent calls both |
@@ -267,6 +270,10 @@ Measured with esbuild 0.28.2 (minified ESM, gzip level 9), with `react` and `rea
 | `useTimeout`, `useAnimationFrame` | none | |
 | `useAnnounce` | `useAnnounce`, `announce` | no provider needed |
 | `useToastController(toasterId)` in any component | `useToastController()` inside a `<Toaster>`, or a handle from `createToaster()` bound with `<Toaster toaster={handle}>`, callable from any code | one handle per Toaster replaces `toasterId` |
+| `useComboboxFilter(query, options, config)`, a render helper | `filter(option, query)` on Combobox and TagPicker | a predicate: the picker filters the options it renders and announces "No matches" |
+| `useListbox_unstable`, `ListboxProvider` | `useListbox`, `useListboxOption`, `useListboxPopup`, `ListboxSurface`, `ListboxProvider`, `collectOptionLabels`, `markListboxElement` | public and documented for pickers of your own ([README: Listbox and custom pickers](../README.md#listbox-and-custom-pickers)) |
+| `useActiveDescendant`, from `@fluentui/react-aria` (not exported by `@fluentui/react-components`) | `useActiveDescendant` | state-based: nothing reads the DOM during render, so the active option's id is in the server HTML |
+| the compat Calendar's date utilities (`addDays`, `addMonths`, `getWeekNumber`, …) | `addDays`, `addMonths`, `isSameDay`, `startOfWeek`, `getWeekNumber` | server-safe; every result is local midnight (Fluent's keep the time of day) |
 | `mergeClasses` | `cn` | |
 | `slot`, `assertSlots`, `use*_unstable`, `render*_unstable` | `resolveSlot`, `renderSlot` for icon-like slots | no recomposition hooks; structural slots and public contexts are planned for 0.18 |
 
@@ -276,20 +283,22 @@ Measured with esbuild 0.28.2 (minified ESM, gzip level 9), with `react` and `rea
 
 Fluent callbacks receive `(event, data)`. WaveUI state callbacks are named after their state and receive the new value first; extra data comes in a second `details` argument, which is typed optional until 1.0. They fire only when the value changes. `onChange` is always the native DOM change event.
 
-| Fluent UI v9 | WaveUI 0.8 |
+| Fluent UI v9 | WaveUI 0.10 |
 |---|---|
 | Input `onChange={(ev, data) => set(data.value)}` | `onValueChange={set}` |
 | Checkbox, Switch `onChange(ev, { checked })` | `onCheckedChange(checked)` |
 | RadioGroup, Slider, Rating `onChange(ev, { value })` | `onValueChange(value)` |
-| SpinButton `onChange(ev, { value, displayValue })` | `onValueChange(value)`, on a step, or when typed text is committed on blur or Enter |
+| SpinButton `onChange(ev, { value, displayValue })` | `onValueChange(value)`, on a step, or when typed text is committed on blur or Enter (with `allowEmpty`, also `null`) |
 | SearchBox `onChange(ev, { value })` | `onValueChange(value)`, and `onClear()` when the user clears the field |
 | Textarea, Select `onChange(ev, { value })` | the native `onChange(event)` (no `onValueChange` yet) |
-| Combobox, Dropdown `onOptionSelect(ev, { optionValue, selectedOptions })` | `onValueChange(value)` |
+| Combobox, Dropdown `onOptionSelect(ev, { optionValue, selectedOptions })` | `onValueChange(value)`, or `onValueChange(values)`, an array, with `multiselect` |
+| Combobox, Dropdown `onActiveOptionChange(ev, { previousOption, nextOption })` | `onActiveOptionChange(value)`, also on pointer hover, and with `null` when the list closes |
 | TagPicker `onOptionSelect(ev, { value, selectedOptions })` | `onValueChange(values)` |
 | SwatchPicker `onSelectionChange(ev, { selectedValue })` | `onValueChange(value)` |
 | ColorPicker `onColorChange(ev, { color })`, an HSV object | `onValueChange(hex)`, a hex string |
 | ColorArea, ColorSlider, AlphaSlider `onChange(ev, { color })` | `onValueChange(color)`, an `HsvColor` (the same `{ h, s, v, a? }`) |
 | DatePicker `onSelectDate(date)` | `onValueChange(date)` |
+| Calendar `onSelectDate(date, selectedDateRangeArray)`, on every pick | `onValueChange(date, { range })`, only when the date changes |
 | TimePicker `onTimeChange(ev, { selectedTime })`, a `Date` | `onValueChange(time)`, an `HH:mm` string |
 | TabList `onTabSelect(ev, { value })` | `onValueChange(value)` |
 | Nav `onNavItemSelect(ev, { value, categoryValue })` | `onValueChange(value)` |
@@ -327,7 +336,7 @@ A WaveUI callback that needs the event gets it in `details` where there is one (
 
 Fluent exports each part on its own (`DialogTrigger`, `MenuItem`). WaveUI groups the parts under their compound (`Dialog.Trigger`, `Menu.Item`) and also exports each one under a flat name, the compound's name followed by the part's (`DialogTrigger`, `MenuItem`, `TabListTab`), which Server Components need. Most parts keep Fluent's name; these do not:
 
-| Fluent UI v9 | WaveUI 0.8 |
+| Fluent UI v9 | WaveUI 0.10 |
 |---|---|
 | `DialogSurface` (and `DialogBody`) | `Dialog.Content` / `DialogContent` |
 | `DialogContent` | none: put the content in `Dialog.Content` |
@@ -375,21 +384,21 @@ In Fluent, a component's `ref` reaches its "primary slot", usually the native co
 
 ### 4.4 Slots
 
-- **Which props are slots.** Every Fluent part is a slot: you pass content (`icon={<Icon />}`), props (`icon={{ className }}`), a render function, or `null` to remove it. In WaveUI, the icon-like, content and dismiss props are slots (`icon`, `iconAfter`, `action`, `contentBefore`, `contentAfter`, `dismiss`, `dismissIcon`, `expandIcon`, `menuIcon`, `checkmark`, `validationMessageIcon`): each takes content, or an object with `as`, `className`, `children` and attributes ([README: Slots](../README.md#slots)). Structural parts (a Dialog's body, a Checkbox's indicator) are not slots until 0.18, and no slot takes a render function.
-- **Hiding a glyph: `null` versus `false`.** Fluent removes an optional glyph with `null` (`menuIcon={null}`). In WaveUI, `null` keeps the default glyph and `false` hides it (MenuButton's `menuIcon`, the `expandIcon` of Combobox, TimePicker and `Tree.Item`). SplitButton's chevron cannot be hidden. For status icons (MessageBar's and Toast's `icon`, Field's `validationMessageIcon`), `null` removes the icon in both.
+- **Which props are slots.** Every Fluent part is a slot: you pass content (`icon={<Icon />}`), props (`icon={{ className }}`), a render function, or `null` to remove it. In WaveUI, the icon-like, content and dismiss props are slots (`icon`, `iconAfter`, `action`, `contentBefore`, `contentAfter`, `dismiss`, `dismissIcon`, `expandIcon`, `menuIcon`, `checkmark`, `checkIcon`, `iconFilled`, `iconOutline`, `validationMessageIcon`): each takes content, or an object with `as`, `className`, `children` and attributes ([README: Slots](../README.md#slots)). Structural parts (a Dialog's body, a Checkbox's indicator) are not slots until 0.18, and no slot takes a render function.
+- **Hiding a glyph: `null` versus `false`.** Fluent removes an optional glyph with `null` (`menuIcon={null}`). In WaveUI, `null` keeps the default glyph and `false` hides it (MenuButton's `menuIcon`, the `expandIcon` of Dropdown, Combobox, TimePicker and `Tree.Item`, the `icon` of `EmptySwatch`). SplitButton's chevron and an `Option`'s check cannot be hidden: `checkIcon={null}`, which removes Fluent's check, keeps WaveUI's, the sign of the selection that does not rely on color. For status icons (MessageBar's and Toast's `icon`, Field's `validationMessageIcon`), `null` removes the icon in both.
 - **Dismiss buttons.** A `Button` passed to MessageBar's `dismiss`, SearchBox's `dismiss` or Tag's `dismissIcon` is merged into the component's own button, never nested inside it.
 
 ### 4.5 Sizes and appearances
 
 - **Buttons.** Fluent's default `appearance="secondary"` is WaveUI's default `appearance="outline"`: the look is the same, so buttons without `appearance` need no change, and `appearance="secondary"` becomes `"outline"`. A Fluent `appearance="outline"` (transparent with a border) still compiles in WaveUI and quietly gets WaveUI's `outline`, which is the filled look of Fluent's `secondary`; the closest match is `appearance="outline"` with a `bg-transparent` class. WaveUI has no `secondary` value. `primary`, `subtle` and `transparent` match. `small`, `medium` and `large` are 24, 32 and 40px in both, and WaveUI adds `extra-small` (20px) and `extra-large` (48px). There is no `shape`: use a class (`rounded-full`).
-- **Inputs and pickers** have no `size` or `appearance` until 0.9: every text input, select and picker is 32px high with an outline. On Input and Select, `size` is still the native HTML attribute (a number); 0.9 moves that attribute to `htmlSize`.
-- **Other scales.** Avatar sizes are named (`extra-small` to `extra-large`, 24 to 56px) instead of Fluent's pixel values; Spinner uses WaveUI's five size names at different pixel sizes; Badge has no `tiny`; Skeleton takes `width` and `height` instead of sizes.
+- **Inputs and pickers.** Input, Textarea, Select, SearchBox, SpinButton, Combobox, Dropdown, DatePicker and TimePicker take Fluent's `size` (`small`, `medium`, `large`: 24, 32 and 40px tall) and `appearance` (`outline`, `underline`, `filled-darker`, `filled-lighter`), with the same defaults, `medium` and `outline`; Textarea also takes `underline`, which Fluent's lacks. TagPicker takes `medium`, `large` and `extra-large`, as in Fluent. Without the prop, the size comes from a surrounding Field's `size`, then from `WaveProvider`'s `inputDefaults`, which also sets the default `appearance`. On Input and Select the native `size` attribute is `htmlSize`: a number passed as `size` still renders it and warns in development until 1.0. Checkbox takes `size` (`medium`, `large`) and `shape` (`square`, `circular`), and Switch and Slider `size` (`small`, `medium`), as in Fluent.
+- **Other scales.** Avatar sizes are named (`extra-small` to `extra-large`, 24 to 56px) instead of Fluent's pixel values; Spinner uses WaveUI's five size names at different pixel sizes; SwatchPicker's `extra-small` to `large` are 20, 24, 32 and 40px (Fluent: 20, 24, 28 and 32px); Badge has no `tiny`; Skeleton takes `width` and `height` instead of sizes.
 
 ### 4.6 Defaults that differ
 
 A type checker catches renamed props and changed callback signatures, but not these defaults:
 
-| Component | What | Fluent UI v9 | WaveUI 0.8 |
+| Component | What | Fluent UI v9 | WaveUI 0.10 |
 |---|---|---|---|
 | TabList | arrow keys | move focus (`selectTabOnFocus={false}`) | select (`selectTabOnFocus={true}`) |
 | Popover | position | above, centered | below, start-aligned |
@@ -408,7 +417,11 @@ A type checker catches renamed props and changed callback signatures, but not th
 | Tree (multi-select) | checking a parent | checks the item only | checks it and its descendants; the parent shows mixed |
 | ProgressBar | `max` | 1 | 100 |
 | Rating | `size` | `extra-large` | `medium` |
+| Rating, RatingDisplay | `color` | `neutral` | `marigold` |
 | SwatchPicker | `shape` | `square` | `circular` |
+| Calendar, DatePicker | "Go to today" | shown (`showGoToToday`) | hidden unless `showGoToToday` |
+| Calendar, DatePicker | weeks in the day grid | four to six | always six |
+| Calendar, DatePicker | month picker | beside the day grid | in place of the day grid, opened from the heading button (`showMonthPicker`) |
 | Avatar | color | `neutral` | brand |
 | AvatarGroup | layout | `spread` | overlapping |
 | Carousel | autoplay interval | 4000ms | 5000ms |
@@ -421,10 +434,10 @@ A type checker catches renamed props and changed callback signatures, but not th
 The other changes that compile without an error, described in the sections linked:
 
 - **Keyboard:** the rows of [3.9](#39-keyboard-behavior); every Nav item is a Tab stop; SearchBox's clear button is a Tab stop, and Escape clears the text first; a Table that overflows becomes a focusable scroll region; any focusable control inside a Toolbar joins its arrow-key order.
-- **Names, roles and elements** (which tests and screen readers see): a Dialog has no `aria-modal` ([3.8](#38-focus-modal-dialogs-and-announcements)); an unnamed SplitButton menu half is called "More options"; a ToggleButton with `role="switch"` or `"radio"` reports `aria-checked`; a named `Toolbar.Group` is a `role="group"`; the Carousel's dots are buttons, not tabs; Accordion triggers are headings (`h3` by default); MessageBar and Toast say their severity, and a toast in a Toaster is a `role="group"` named by its severity and title; Checkbox, Switch and Radio are buttons with `aria-checked`; a Badge is a `<span>`, a horizontal Divider an `<hr>`, and each `Overflow.Item` renders a wrapper `<div>`.
-- **Props that keep their name but not their meaning:** `menuIcon={null}` shows the chevron ([4.4](#44-slots)); Button `appearance="outline"` looks like Fluent's `secondary` ([4.5](#45-sizes-and-appearances)); `className` on Input, Textarea, Select and Slider styles the control, not a wrapper ([4.3](#43-where-ref-goes)); SplitButton's `onClick` belongs to the primary action alone; Badge `color="important"` is dark orange until 1.0; Spinner's size names mean other pixel sizes.
+- **Names, roles and elements** (which tests and screen readers see): a Dialog has no `aria-modal` ([3.8](#38-focus-modal-dialogs-and-announcements)); an unnamed SplitButton menu half is called "More options"; a ToggleButton with `role="switch"` or `"radio"` reports `aria-checked`; a named `Toolbar.Group` is a `role="group"`; the Carousel's dots are buttons, not tabs; Accordion triggers are headings (`h3` by default); MessageBar and Toast say their severity, and a toast in a Toaster is a `role="group"` named by its severity and title; Checkbox, Switch and Radio are buttons with `aria-checked`; a multi-select Dropdown, Combobox or Listbox keeps `role="listbox"` with `aria-selected` options (Fluent's becomes a menu of `menuitemcheckbox` items); SwatchPicker's `focusMode="tab"` renders a group of toggle buttons, and an EmptySwatch is a button, not a radio; a Badge is a `<span>`, a horizontal Divider an `<hr>`, and each `Overflow.Item` renders a wrapper `<div>`.
+- **Props that keep their name but not their meaning:** `menuIcon={null}` shows the chevron, and `checkIcon={null}` the check ([4.4](#44-slots)); Button `appearance="outline"` looks like Fluent's `secondary` ([4.5](#45-sizes-and-appearances)); `className` on Input, Textarea, Select and Slider styles the control, not a wrapper ([4.3](#43-where-ref-goes)); SplitButton's `onClick` belongs to the primary action alone; Badge `color="important"` is dark orange until 1.0; Spinner's size names mean other pixel sizes.
 - **Forms** ([3.10](#310-forms)): a required Field now also blocks submission while a RadioGroup or picker inside it is empty; a Dropdown, TagPicker, SwatchPicker or ColorPicker with a `name` now submits its value, and a Combobox submits its value rather than its text.
-- **Behavior:** a Combobox filters its options as the user types ([5.3](#53-pickers)); a DatePicker always accepts typed dates, and a TimePicker shows 12-hour times whatever the locale; state callbacks fire only when the value changes ([4.1](#41-callbacks)); a submenu shares its parent's checked values; an InfoLabel opens on hover and focus as well as on click; a TeachingPopover does not trap focus ([5.8](#58-overlays)); an auto-playing Carousel starts paused under reduced motion.
+- **Behavior:** a Combobox filters its options as the user types, typing never clears its selection, and a blur selects nothing ([5.3](#53-pickers)); toggles in a multi-select Dropdown, Combobox or Listbox are announced, and the pickers' `clearable` clears every value; `onActiveOptionChange` also reports pointer hover and the close; a DatePicker always accepts typed dates, and a TimePicker shows 12-hour times whatever the locale; state callbacks fire only when the value changes, a Calendar's `onValueChange` included ([4.1](#41-callbacks)); a submenu shares its parent's checked values; an InfoLabel or InfoButton opens on hover and focus as well as on click (`openOnHover={false}` keeps Fluent's click only); a TeachingPopover does not trap focus ([5.8](#58-overlays)); an auto-playing Carousel starts paused under reduced motion.
 - **Styling:** a bare `hover:` class loses to WaveUI's built-in hover colors, and the precompiled stylesheet lacks utilities that WaveUI does not use itself ([3.1](#31-styling)).
 - **Looks and motion:** no open and close animations until 0.15 ([3.6](#36-motion)); the dark theme's brand fills, the warning color, the focus ring and the disabled look ([3.2](#32-themes-and-tokens)).
 
@@ -434,7 +447,7 @@ Each family has a table of names and, below it, what changes when you move code 
 
 ### 5.1 Buttons and actions
 
-| Fluent UI v9 | WaveUI 0.8 | Not in WaveUI yet (planned) |
+| Fluent UI v9 | WaveUI 0.10 | Not in WaveUI yet (planned) |
 |---|---|---|
 | `Button` | `Button` | `shape` (backlog) |
 | `CompoundButton` | `CompoundButton` | `secondaryContent` as a slot (backlog) |
@@ -451,58 +464,63 @@ Each family has a table of names and, below it, what changes when you move code 
 
 ### 5.2 Form inputs
 
-| Fluent UI v9 | WaveUI 0.8 | Not in WaveUI yet (planned) |
+| Fluent UI v9 | WaveUI 0.10 | Not in WaveUI yet (planned) |
 |---|---|---|
-| `Field` | `Field` | `size` (0.9); a render function as child (0.18) |
-| `Label` | `Label` | a custom required indicator (0.9) |
-| `Input` | `Input` | `size`, `appearance` (0.9) |
-| `Textarea` | `Textarea` | `size`, `appearance` (0.9); `resize`, `onValueChange` (backlog) |
-| `Select` | `Select` | `size`, `appearance` (0.9); an icon slot, `onValueChange` (backlog) |
-| `Checkbox` | `Checkbox` | `size`, `shape` (0.9) |
+| `Field` | `Field` | a render function as child (0.18) |
+| `Label` | `Label` | |
+| `Input` | `Input` | |
+| `Textarea` | `Textarea` | `resize`, `onValueChange` (backlog) |
+| `Select` | `Select` | an icon slot, `onValueChange` (backlog) |
+| `Checkbox` | `Checkbox` | |
 | `RadioGroup`, `Radio` | `RadioGroup`, `RadioGroup.Item` | the `horizontal-stacked` layout (backlog) |
-| `Switch` | `Switch` | `size` (0.9) |
-| `Slider` | `Slider` | `size` (0.9); vertical sliders (backlog) |
-| `SpinButton` | `SpinButton` | `size`, `appearance`, `displayValue`, an empty value, press-and-hold, `precision` (0.9) |
-| `SearchBox` | `SearchBox` | `size`, `appearance` (0.9) |
-| `Rating`, `RatingItem` | `Rating` | half stars, `color`, custom icons, `RatingItem` (0.9) |
-| `RatingDisplay` | `RatingDisplay` | `color`, a custom icon (0.9) |
+| `Switch` | `Switch` | |
+| `Slider` | `Slider` | vertical sliders (backlog) |
+| `SpinButton` | `SpinButton` | |
+| `SearchBox` | `SearchBox` | |
+| `Rating`, `RatingItem` | `Rating`, `Rating.Item` (flat `RatingItem`) | |
+| `RatingDisplay` | `RatingDisplay`, `RatingDisplay.Item` | |
 
-- **Field.** `label`, `hint`, `validationState`, `validationMessage`, `validationMessageIcon`, `orientation` and `required` keep their names, values and defaults, and WaveUI adds `error` as a shorthand for an error message. Field wires the control inside it by itself; instead of Fluent's render-function child (`{(props) => <MyInput {...props} />}`), a custom control calls `useFieldControl`. Give each Field one control. When the control needs a wrapper (a Tooltip, a layout row), put a plain `<div>` around the wrapper, and the Field still labels the control: `<Field label="Name"><div><Tooltip content="…"><Input /></Tooltip></div></Field>`.
-- **Input.** `onChange(ev, { value })` becomes `onValueChange(value)`. `contentBefore` and `contentAfter` keep their names.
+- **Field.** `label`, `hint`, `validationState`, `validationMessage`, `validationMessageIcon`, `orientation` and `required` keep their names, values and defaults, and WaveUI adds `error` as a shorthand for an error message. `size` sizes the label and is the default size of the text control or picker inside it. A `Label` or `InfoLabel` element passed as `label` is rendered in place of Field's own label, and the control is named by its text alone. Field wires the control inside it by itself; instead of Fluent's render-function child (`{(props) => <MyInput {...props} />}`), a custom control calls `useFieldControl`. Give each Field one control. When the control needs a wrapper (a Tooltip, a layout row), put a plain `<div>` around the wrapper, and the Field still labels the control: `<Field label="Name"><div><Tooltip content="…"><Input /></Tooltip></div></Field>`.
+- **Label.** `required` takes content (`required={<span>(required)</span>}`) in place of the asterisk, as Fluent's `required` slot does.
+- **Input.** `onChange(ev, { value })` becomes `onValueChange(value)`. `contentBefore` and `contentAfter` keep their names. For `size` and `appearance`, see [4.5](#45-sizes-and-appearances).
 - **Textarea and Select** have only the native `onChange`: read `event.target.value`.
 - **Checkbox.** Fluent's tri-state `checked: boolean | 'mixed'` becomes a boolean `checked` plus `indeterminate`, and `onChange(ev, { checked })` becomes `onCheckedChange(checked)`. The rich `label` and `labelPosition` (`before`, `after`) match. WaveUI adds `disabledFocusable`.
 - **RadioGroup.** `layout` becomes `orientation` (`vertical`, `horizontal`), and `onChange(ev, { value })` becomes `onValueChange(value)`. There is no per-item change callback.
 - **Switch.** `onChange(ev, { checked })` becomes `onCheckedChange(checked)`; `labelPosition` (`before`, `after`, `above`) and `disabledFocusable` match.
 - **Slider.** `onChange(ev, { value })` becomes `onValueChange(value)`. It is a native range input filled up to the thumb; there is no `vertical`.
-- **SpinButton.** `onChange(ev, { value, displayValue })` becomes `onValueChange(value)`, and `stepPage` becomes `largeStep`. The value is always a number: no `null` and no `displayValue` until 0.9.
+- **SpinButton.** `onChange(ev, { value, displayValue })` becomes `onValueChange(value)`, and `stepPage` becomes `largeStep`. `displayValue` and `precision` keep their names; an empty value (`null`) needs `allowEmpty`, without which the value is always a number. Holding a step button repeats it on Fluent's schedule, also for touch and pen.
 - **SearchBox.** `onChange` becomes `onValueChange(value)`, and `onClear()` tells a clear apart from typing. The clear button is a Tab stop, and Escape clears the text before it reaches an enclosing dialog.
-- **Rating.** `onChange(ev, { value })` becomes `onValueChange(value)`, and `itemLabel(value)` becomes `labels.star(value, max)`. WaveUI adds `disabled`, `required` and form support; whole stars only until 0.9.
-- **RatingDisplay.** `value`, `max`, `count` and `compact` match; WaveUI adds `showValue` and `locale`.
+- **Rating.** `onChange(ev, { value })` becomes `onValueChange(value)`, and `itemLabel(value)` becomes `labels.star(value, max)`. `step={0.5}`, `color`, `iconFilled` and `iconOutline` keep their names, and `RatingItem` is `Rating.Item`. WaveUI adds `disabled`, `required` and form support.
+- **RatingDisplay.** `value`, `max`, `count`, `compact` and `color` match; Fluent's `icon` becomes the pair `iconFilled` and `iconOutline`. WaveUI adds `showValue` and `locale`.
 
 ### 5.3 Pickers
 
-| Fluent UI v9 | WaveUI 0.8 | Not in WaveUI yet (planned) |
+| Fluent UI v9 | WaveUI 0.10 | Not in WaveUI yet (planned) |
 |---|---|---|
-| `Combobox`, `Option`, `OptionGroup` | `Combobox`, `Combobox.Option`, `Combobox.OptionGroup` | `size`, `appearance` (0.9); `multiselect`, custom filtering, a controllable query (0.10); `positioning` (0.12) |
-| `Dropdown` | `Dropdown`, `Dropdown.Option`, `Dropdown.OptionGroup` | as Combobox; a custom chevron (0.10) |
-| `Listbox` on its own | none: a selectable `List` covers most uses | `Listbox` and listbox hooks (0.10) |
-| `TagPicker`, `TagPickerControl`, `TagPickerGroup`, `TagPickerInput`, `TagPickerButton`, `TagPickerList`, `TagPickerOption`, `TagPickerOptionGroup` | `TagPicker` (an `options` array) | `size` (0.9); composable parts, rich tags and options, free tagging (0.11) |
+| `Combobox`, `Option`, `OptionGroup` | `Combobox`, `Combobox.Option`, `Combobox.OptionGroup` (also `Option` and `OptionGroup`) | `positioning`, inline popups (0.12); virtualization (0.16) |
+| `Dropdown` | `Dropdown`, `Dropdown.Option`, `Dropdown.OptionGroup` | as Combobox |
+| `Listbox` on its own | `Listbox`, `Listbox.Option`, `Listbox.OptionGroup` | |
+| `TagPicker`, `TagPickerControl`, `TagPickerGroup`, `TagPickerInput`, `TagPickerButton`, `TagPickerList`, `TagPickerOption`, `TagPickerOptionGroup` | `TagPicker` (an `options` array) | composable parts, rich tags and options, free tagging (0.11); `positioning` (0.12) |
 | `ColorPicker`, `ColorArea`, `ColorSlider`, `AlphaSlider` | `ColorPicker` (with `ColorPicker.HexField`, `.Swatches`, `.Preview`), `ColorArea`, `ColorSlider`, `AlphaSlider` | |
-| `SwatchPicker`, `ColorSwatch`, `ImageSwatch`, `EmptySwatch`, `SwatchPickerRow` | `SwatchPicker` (an `items` array) | swatch children, a grid layout, image and empty swatches, `focusMode` (0.10) |
-| `DatePicker` (compat package) | `DatePicker` | `size` (0.9); month and year pickers (0.10) |
-| `Calendar` (compat package) | none: the grid exists only inside DatePicker | `Calendar` (0.10) |
-| `TimePicker` (compat package) | `TimePicker` | `size`, `appearance` (0.9) |
+| `SwatchPicker`, `ColorSwatch`, `ImageSwatch`, `EmptySwatch`, `SwatchPickerRow` | `SwatchPicker`, `SwatchPicker.Row`, `ColorSwatch`, `ImageSwatch`, `EmptySwatch` | |
+| `DatePicker` (compat package) | `DatePicker` | `positioning`, inline popups (0.12) |
+| `Calendar` (compat package) | `Calendar` | |
+| `TimePicker` (compat package) | `TimePicker` | seconds, format and parse functions (backlog) |
 
-- **Combobox and Dropdown.** `selectedOptions` and `onOptionSelect(ev, { optionValue, optionText, selectedOptions })` become `value`, `defaultValue` and `onValueChange(value)`, a string (`''` for no selection). Every option needs a `value` (Fluent falls back to its text); Fluent's `text` is WaveUI's `label` (what the control shows) or `textValue` (what typeahead and filtering match). A Combobox filters its options as the user types and announces "No matches"; in Fluent you filter yourself (`useComboboxFilter`). `clearable` and `freeform` keep their names.
-- **TagPicker.** Fluent assembles the picker from parts and renders the options you pass as children. WaveUI's `TagPicker` takes `options: { value, label }[]`, filters them and renders the tags itself; `selectedOptions` and `onOptionSelect` become `value` and `onValueChange(values)`.
+- **Combobox and Dropdown.** `selectedOptions` and `onOptionSelect(ev, { optionValue, optionText, selectedOptions })` become `value`, `defaultValue` and `onValueChange(value)`, a string (`''` for no selection). With `multiselect` they are arrays in selection order (`value={['red', 'blue']}`, `onValueChange(values)`), the options draw checkboxes, and each toggle is announced. Write `multiselect` as a literal: `multiselect={flag}` with a `boolean` variable matches neither call signature of the component, because the two modes' value types differ, so render one element per mode. Every option needs a `value` (Fluent falls back to its text); Fluent's `text` is WaveUI's `label` (what the control shows) or `textValue` (what typeahead and filtering match).
+- **Filtering.** A Combobox filters its options as the user types and announces "No matches". Fluent's `useComboboxFilter(query, options, config)`, which you call to render the matching options, becomes a predicate on the Combobox (and on TagPicker), `filter(option, query)`, and the typed text is `query`, `defaultQuery` and `onQueryChange(query)`: `filter={() => true}` with options you fetch gives a server-side search ([README: Filtering and async search](../README.md#filtering-and-async-search)). A multi-select Combobox shows the selected labels in its input; typing replaces them with a query and never removes a value.
+- **More Combobox and Dropdown props.** `clearable` and `freeform` keep their names; `freeform` is single-select only, and `clearable` clears every value of a multi-select picker (Fluent offers no clear button there). `onActiveOptionChange(value)` reports what `aria-activedescendant` points at ([4.1](#41-callbacks)). Dropdown's `expandIcon` replaces the chevron and `renderValue(value)` the button's content (Fluent: the `button` slot's children). `disabledOptionsFocusable` keeps disabled options in the arrow-key order, as Fluent always does. An `Option`'s `checkIcon` replaces the check ([4.4](#44-slots)), and an `OptionGroup`'s `label` is optional, as in Fluent; name a group without one with `aria-label`.
+- **Listbox.** Fluent's `Listbox` with `Option`s, outside a combobox, becomes WaveUI's `Listbox` with `Listbox.Option`s (or `Option`s): a list that keeps focus itself and points `aria-activedescendant` at the active option, with `value`, `defaultValue`, `onValueChange` and `multiselect` as on the pickers. Space and Enter select, so the selection does not follow the arrow keys. Use `List` with `selectable` when each item needs real focus or actions of its own. For a picker of your own, the listbox hooks are public ([3.12](#312-hooks-and-utilities)).
+- **TagPicker.** Fluent assembles the picker from parts and renders the options you pass as children. WaveUI's `TagPicker` takes `options: { value, label }[]`, filters them and renders the tags itself; `selectedOptions` and `onOptionSelect` become `value` and `onValueChange(values)`, and `filter`, `query` and `onQueryChange` work as on Combobox.
 - **ColorPicker.** Fluent's value is an HSV object (`color: { h, s, v, a }`). WaveUI's ColorPicker keeps a hex string (`value` and `onValueChange(hex)`: `#rrggbb`, or `#rrggbbaa` below full opacity), while `ColorArea`, `ColorSlider` and `AlphaSlider` take Fluent's `HsvColor` (`value` and `onValueChange(color)` for Fluent's `color` and `onChange`). Compose them as in Fluent: inside a ColorPicker, a part without `value` and `defaultValue` binds to the picker (`<ColorPicker><ColorArea /><ColorSlider /><AlphaSlider /></ColorPicker>`), and `ColorPicker.HexField`, `ColorPicker.Swatches` and `ColorPicker.Preview` add the hex field, the presets and a preview. Without children the picker renders an area, a hue slider, the hex field, the presets and, with `showOpacity`, an alpha slider. ColorSlider's `vertical` becomes `orientation="vertical"`; `hsvToHex` and `hexToHsv` convert at the boundary. The area mirrors in right-to-left layouts, and its value texts name the color ([README: Color](../README.md#color)).
-- **SwatchPicker.** `selectedValue` and `onSelectionChange(ev, { selectedValue, selectedSwatch })` become `value` and `onValueChange(value)`, with the swatches in `items: { value, color, label }[]`.
-- **DatePicker.** Both take `value: Date | null`; `onSelectDate(date)` becomes `onValueChange(date)`, and WaveUI adds `defaultValue`. The input always accepts typing and validates it (`onInvalidInput(text, reason)`); Fluent accepts typing only with `allowTextInput` and reports through `onValidationResult`. Fluent's `restrictedDates: Date[]` becomes a predicate, `disabledDates: (date) => boolean`, and `firstDayOfWeek` is a number (0 is Sunday).
+- **SwatchPicker.** `selectedValue` and `onSelectionChange(ev, { selectedValue, selectedSwatch })` become `value` and `onValueChange(value)`. Swatches are children, as in Fluent: `ColorSwatch` (`value`, `color`, `disabled`, `icon`, `borderColor`, `size`, `shape`), `ImageSwatch` (`value`, `src`) and `EmptySwatch`, a button that runs your `onClick` (Fluent's is a radio that is never checked); `items: { value, color, label }[]` still works and renders before the children. Name a swatch with `aria-label`, or wrap it in a `Tooltip`. `layout="grid"` takes `SwatchPicker.Row` rows (Fluent's `renderSwatchPickerGrid` has no counterpart); `focusMode`, `size` and `spacing` keep their names, and `shape` defaults to `circular` (Fluent: `square`). For the keys, see [3.9](#39-keyboard-behavior).
+- **DatePicker.** Both take `value: Date | null`; `onSelectDate(date)` becomes `onValueChange(date)`, and WaveUI adds `defaultValue`. The input always accepts typing and validates it (`onInvalidInput(text, reason)`); Fluent accepts typing only with `allowTextInput` and reports through `onValidationResult`. Fluent's `restrictedDates: Date[]` becomes a predicate, `disabledDates: (date) => boolean`, and `firstDayOfWeek` is a number (0 is Sunday). The calendar props keep Fluent's names where they fit (`today`, `showWeekNumbers`, `firstWeekOfYear`, `showGoToToday`, `showCloseButton`), with `showMonthPicker` for `isMonthPickerVisible`, `initialVisibleDate` for `initialPickerDate` and `markedDates(date)` for the Calendar's `getMarkedDays`; `firstWeekOfYear` takes strings (`'first-four-day-week'`) for Fluent's enum, and `showGoToToday` is off by default (Fluent: on). The heading opens the month and year views in place of the day grid (Fluent shows the month picker beside it unless `showMonthPickerAsOverlay`).
+- **Calendar.** Fluent's compat `Calendar` is `Calendar` in the main package. It takes DatePicker's calendar props (above, except `showCloseButton`), and `value`, `defaultValue` and `onValueChange(date, { range })`, fired only when the date changes (Fluent's `onSelectDate(date, selectedDateRangeArray)` fires on every pick), `selectionRange` (`'day'`, `'week'`, `'work-week'`, `'month'`) for `dateRangeType`, `workWeekDays`, `renderDay(date, defaultContent)` and `dayLabel` for the imperative `customDayCellRef`, and `labels` for `strings`. The month and year views replace the day grid, as in DatePicker. It submits with a form (`name`, `required`) and takes a Field's label. For server rendering, pass `locale`, and `today`, `initialVisibleDate` or a value ([README: Calendar](../README.md#calendar)).
 - **TimePicker.** Fluent's value is a `Date` (`selectedTime`, `onTimeChange(ev, { selectedTime, selectedTimeText, errorType })`); WaveUI's is an `HH:mm` string (`value`, `onValueChange`). `startHour` and `endHour` become `minTime` and `maxTime` (inclusive time strings), `increment` becomes `step` (30 minutes by default in both), and `hourCycle` becomes `format: '12h' | '24h'`, which defaults to `'12h'` whatever the locale until 1.0.
 
 ### 5.4 Data display
 
-| Fluent UI v9 | WaveUI 0.8 | Not in WaveUI yet (planned) |
+| Fluent UI v9 | WaveUI 0.10 | Not in WaveUI yet (planned) |
 |---|---|---|
 | `Avatar` | `Avatar` | `shape`, `color`, Fluent's size range, better initials (0.13) |
 | `AvatarGroup`, `AvatarGroupItem`, `AvatarGroupPopover` | `AvatarGroup` (`max`) | the `spread` and `pie` layouts, parts (0.13) |
@@ -515,7 +533,7 @@ Each family has a table of names and, below it, what changes when you move code 
 | `Tag` | `Tag` | `appearance`, `size`, `disabled`, slots (0.11) |
 | `InteractionTag`, `TagGroup` | none | 0.11 |
 | `List`, `ListItem` | `List`, `List.Item` | navigation without selection, `onAction`, `disabledSelection` (0.14) |
-| `InfoLabel`, `InfoButton` | `InfoLabel` | rich info content, Label features, `InfoButton` (0.9) |
+| `InfoLabel`, `InfoButton` | `InfoLabel`, `InfoButton` | |
 
 - **Avatar and AvatarGroup.** Initials are always brand-colored and the avatar is always circular. AvatarGroup's children are plain `Avatar`s, and its `size` sizes only the overflow button.
 - **Badge and CounterBadge.** The `color` values and default are the same, and each library draws them from its own palette ([3.2](#32-themes-and-tokens)). One value differs in meaning: through 0.x, `important` renders the same dark orange as `severe` (Fluent's `important` is near black), and it becomes Fluent's neutral in 1.0. CounterBadge's `count`, `overflowCount`, `dot` and `showZero` match; its second `appearance` is `outline` (Fluent: `ghost`). A Badge renders a `<span>` (Fluent: a `<div>`).
@@ -524,11 +542,11 @@ Each family has a table of names and, below it, what changes when you move code 
 - **Divider.** `vertical` becomes `orientation="vertical"`; a plain horizontal divider renders an `<hr>`.
 - **Tag.** `dismissible` and `onDismiss()` sit on the tag itself; Fluent routes dismissal through `TagGroup`'s `onDismiss`. Until TagGroup exists, move focus yourself before removing a tag ([README: Tags](../README.md#tags)).
 - **List.** Selection needs `selectable`; `selectionMode` is `single` or `multiple` (Fluent: `multiselect`), item values are strings, and `onSelectionChange(selected)` receives the array. An item `action` turns the list into a grid with row actions, which Fluent's List has no equivalent for.
-- **InfoLabel.** `label` and `info` are strings, and the info opens on hover, focus and click (Fluent's InfoButton opens on click only). It cannot be a Field's label yet.
+- **InfoLabel and InfoButton.** InfoLabel's label is its `children`, and `info` takes any content, as in Fluent; an InfoLabel can be a Field's `label`, and the control is then named by the label text alone. The info opens on hover and keyboard focus as well as on click (`openOnHover={false}` keeps Fluent's click only), and opening never moves focus: Tab from the open button enters the note, where Fluent moves focus into it. InfoLabel's button is named "‹label› Information".
 
 ### 5.5 Feedback
 
-| Fluent UI v9 | WaveUI 0.8 | Not in WaveUI yet (planned) |
+| Fluent UI v9 | WaveUI 0.10 | Not in WaveUI yet (planned) |
 |---|---|---|
 | `MessageBar`, `MessageBarBody`, `MessageBarTitle`, `MessageBarActions` | `MessageBar`, `MessageBar.Title`, `MessageBar.Actions` (the body is the bar's children) | `shape`, politeness (backlog) |
 | `MessageBarGroup` | none | with motion (0.15) |
@@ -545,7 +563,7 @@ Each family has a table of names and, below it, what changes when you move code 
 
 ### 5.6 Layout and disclosure
 
-| Fluent UI v9 | WaveUI 0.8 | Not in WaveUI yet (planned) |
+| Fluent UI v9 | WaveUI 0.10 | Not in WaveUI yet (planned) |
 |---|---|---|
 | `Card`, `CardHeader`, `CardFooter` | `Card`, `Card.Header`, `Card.Body`, `Card.Footer` | `appearance`, `size`, `orientation`, header image and action slots (0.13) |
 | `CardPreview` | none: the Card has no padding, so media reaches its edges | 0.13 |
@@ -568,7 +586,7 @@ Each family has a table of names and, below it, what changes when you move code 
 
 ### 5.7 Navigation
 
-| Fluent UI v9 | WaveUI 0.8 | Not in WaveUI yet (planned) |
+| Fluent UI v9 | WaveUI 0.10 | Not in WaveUI yet (planned) |
 |---|---|---|
 | `Menu`, `MenuTrigger`, `MenuPopover`, `MenuList`, `MenuItem`, `MenuDivider` | `Menu`, `Menu.Trigger`, `Menu.Popover`, `Menu.Item`, `Menu.Divider` | `onOpenChange` details, `subText`, `secondaryContent` (backlog) |
 | `MenuItemCheckbox`, `MenuItemRadio`, `MenuItemSwitch`, `MenuItemLink` | `Menu.ItemCheckbox`, `Menu.ItemRadio`, `Menu.ItemSwitch`, `Menu.ItemLink` | |
@@ -584,7 +602,7 @@ Each family has a table of names and, below it, what changes when you move code 
 
 ### 5.8 Overlays
 
-| Fluent UI v9 | WaveUI 0.8 | Not in WaveUI yet (planned) |
+| Fluent UI v9 | WaveUI 0.10 | Not in WaveUI yet (planned) |
 |---|---|---|
 | `Dialog`, `DialogTrigger`, `DialogSurface`, `DialogBody`, `DialogTitle`, `DialogContent`, `DialogActions` | `Dialog`, `Dialog.Trigger`, `Dialog.Content`, `Dialog.Title`, `Dialog.Footer`, `Dialog.Close` | `modalType="non-modal"`, backdrop options (0.11); motion (0.15) |
 | `Popover`, `PopoverTrigger`, `PopoverSurface` | `Popover`, `Popover.Trigger`, `Popover.Content` | `positioning` (0.12); `trapFocus`, `withArrow`, `inline`, appearances (backlog) |
@@ -600,7 +618,7 @@ Each family has a table of names and, below it, what changes when you move code 
 
 ### 5.9 Tables
 
-| Fluent UI v9 | WaveUI 0.8 | Not in WaveUI yet (planned) |
+| Fluent UI v9 | WaveUI 0.10 | Not in WaveUI yet (planned) |
 |---|---|---|
 | `Table`, `TableHeader`, `TableHeaderCell`, `TableBody`, `TableRow`, `TableCell` | `Table`, `Table.Header`, `Table.HeaderCell`, `Table.Body`, `Table.Row`, `Table.Cell` | sortable headers, `TableSelectionCell`, `TableCellLayout`, `TableCellActions` (0.14); `TableResizeHandle`, rendering without table elements (0.16); `size` (backlog) |
 | `DataGrid`, `DataGridHeader`, `DataGridHeaderCell`, `DataGridBody`, `DataGridRow`, `DataGridCell` | `DataGrid`, `DataGrid.Header`, `DataGrid.HeaderCell`, `DataGrid.Body`, `DataGrid.Row`, `DataGrid.Cell` | column `compare` and built-in sorting (0.14); column resizing, headless state, virtualization (0.16) |
@@ -633,7 +651,7 @@ Each family has a table of names and, below it, what changes when you move code 
   ```
 
   ```tsx
-  // WaveUI 0.8: the grid never reorders rows, so you sort them yourself (here by the one sortable column)
+  // WaveUI 0.10: the grid never reorders rows, so you sort them yourself (here by the one sortable column)
   const columns: DataGridColumn[] = [{ id: 'name', label: 'Name', sortable: true }];
 
   const [sort, setSort] = React.useState<DataGridSort | null>(null);
@@ -665,7 +683,7 @@ Each family has a table of names and, below it, what changes when you move code 
 - **Stack, Flex and Grid:** layout primitives with named gap sizes and a polymorphic `as`. Fluent v9 has only migration shims for them (StackShim, FlexShim, GridShim).
 - **Tab panels:** `TabList.Panel` and `TabList.Panels`, wired to their tabs in both directions.
 - **Drawers without state:** `Drawer.Trigger` and `Drawer.Close`.
-- **DatePicker and TimePicker in the main package.** Fluent ships them as separate compat packages.
+- **DatePicker, TimePicker and Calendar in the main package.** Fluent ships them as separate compat packages.
 - **Hooks:** `useControllable` (Fluent does not export its `useControllableState` from the main package) and `useIsOverflowing` for truncated text.
 - **An `error` prop on Input, Select and Textarea.** In Fluent, errors go through Field only.
 
@@ -684,20 +702,14 @@ Each family has a table of names and, below it, what changes when you move code 
 
 ## 7. Not in WaveUI yet
 
-The [roadmap](ROADMAP.md) plans to close every high- and medium-impact gap of the gap analysis by 1.0, one theme per minor release. The versions below are the roadmap's plan, not dates: a release ships when its work is done. For a sense of pace: WaveUI 0.1 came out in March 2026 and 0.7 on 2026-09-26; 0.6, 0.7 and 0.8 were the first three phases of the roadmap.
+The [roadmap](ROADMAP.md) plans to close every high- and medium-impact gap of the gap analysis by 1.0, one theme per minor release. The versions below are the roadmap's plan, not dates: a release ships when its work is done. For a sense of pace: WaveUI 0.1 came out in March 2026, 0.7 on 2026-09-26, and 0.8 and 0.9 on 2026-10-17; 0.6 to 0.10 are the first five phases of the roadmap.
 
-| Fluent UI v9 capability | WaveUI 0.8 | Planned |
+| Fluent UI v9 capability | WaveUI 0.10 | Planned |
 |---|---|---|
-| `size` and `appearance` on inputs and pickers | one size (32px), outline look | 0.9 |
-| SpinButton `displayValue`, an empty value, press-and-hold; Rating half stars, icons and colors | whole values | 0.9 |
-| InfoLabel as a Field label, rich info content, `InfoButton` | string info | 0.9 |
-| Multi-select Dropdown and Combobox; custom filtering; a standalone Listbox | single value | 0.10 |
-| SwatchPicker children, grid, image and empty swatches | `items` array | 0.10 |
-| A standalone Calendar; month and year pickers | grid inside DatePicker | 0.10 |
 | Tag `appearance`, `size`, `disabled`; TagGroup; InteractionTag; a composable TagPicker | plain Tag | 0.11 |
 | Drawer sizes, the bottom position, header and footer parts; non-modal Dialog and Drawer; InlineDrawer; NavDrawer and Hamburger | a modal side Drawer | 0.11 |
 | Public positioning, dismiss and modal-layer hooks; a `positioning` prop | internal | 0.12 |
-| Grid and group keyboard navigation hooks (tabster's `useArrowNavigationGroup`, `useFocusableGroup`) | `useRovingTabIndex` | 0.12 |
+| Grid and group keyboard navigation hooks (tabster's `useArrowNavigationGroup`, `useFocusableGroup`) | `useRovingTabIndex`, `useActiveDescendant` | 0.12 |
 | Avatar shapes, colors and Fluent's sizes; AvatarGroup layouts; Persona lines and positions; Fluent's PresenceBadge names | see [5.4](#54-data-display) | 0.13 |
 | Card appearances and header slots, `CardPreview`; Carousel groups, swiping and thumbnails; TabList appearances, sizes and icons | one look each | 0.13 |
 | Overflow priority and start direction; Breadcrumb overflow | overflow from the end | 0.14 |
@@ -843,7 +855,7 @@ export function RenameDialog({ toasterId }: { toasterId: string }) {
 }
 ```
 
-The same dialog in WaveUI 0.8. `Stack` replaces the `makeStyles` column (its default gap is 12px, Fluent's `spacingVerticalM`), `Dialog.Content` takes the title and draws the Close button, `Dialog.Close` replaces the close triggers, and the toast keeps its parts (`Toast.Title`) with the severity on the Toast:
+The same dialog in WaveUI 0.10. `Stack` replaces the `makeStyles` column (its default gap is 12px, Fluent's `spacingVerticalM`), `Dialog.Content` takes the title and draws the Close button, `Dialog.Close` replaces the close triggers, and the toast keeps its parts (`Toast.Title`) with the severity on the Toast:
 
 ```tsx
 'use client';
@@ -905,8 +917,8 @@ export function RenameDialog() {
 
 ## 9. Sources and method
 
-- **Versions:** WaveUI 0.8.0 (the repository at the `v0.8.0` tag, identical to the npm package) and `@fluentui/react-components` 9.74.9 with its sub-packages (for example `react-menu` 9.25.6, `react-dialog` 9.18.5, `react-combobox` 9.17.7), plus `@fluentui/react-datepicker-compat` 0.6.39, `@fluentui/react-timepicker-compat` 0.4.41 and `@fluentui/react-calendar-compat` 0.4.7.
+- **Versions:** WaveUI 0.10.0 (the `feat/fluent-parity-phase-5` branch, with 0.9.0 merged in, as prepared for the release; the sizes of 3.11 from its `npm run build` output) and `@fluentui/react-components` 9.74.9 with its sub-packages (for example `react-menu` 9.25.6, `react-dialog` 9.18.5, `react-combobox` 9.17.7), plus `@fluentui/react-datepicker-compat` 0.6.39, `@fluentui/react-timepicker-compat` 0.4.41 and `@fluentui/react-calendar-compat` 0.4.7.
 - **Method:** each claim about Fluent was checked against the published type declarations and compiled source of those packages, and against microsoft/fluentui at `8add8c8` (2026-09-26) for defaults and behavior. Each claim about WaveUI was checked against its source and README. The planned releases come from the [roadmap](ROADMAP.md), which schedules the gaps of the [gap analysis](research/fluent-ui-v9-comparison.md) by their ids.
-- **Sizes:** esbuild 0.28.2, `--bundle --minify --format=esm --platform=browser --target=es2022`, `process.env.NODE_ENV` set to `"production"`, `react`, `react-dom` and `react/jsx-runtime` external, gzip at level 9, React 19.3.0. Each probe re-exports the named components (`export { Button } from '…'`). The numbers depend on the bundler and on how dependency versions resolved on 2026-09-26. WaveUI's CHANGELOG reports smaller numbers for itself because it measures with its dependencies external.
+- **Sizes:** esbuild 0.28.2, `--bundle --minify --format=esm --platform=browser --target=es2022`, `process.env.NODE_ENV` set to `"production"`, `react`, `react-dom` and `react/jsx-runtime` external, gzip at level 9, React 19.3.0. Each probe re-exports the named components (`export { Button } from '…'`). The numbers depend on the bundler and on how dependency versions resolved (Fluent's on 2026-09-26, WaveUI's on 2026-10-17). WaveUI's CHANGELOG reports smaller numbers for itself because it measures with its dependencies external.
 - **Fluent facts from its documentation:** the browser support matrix (the Fluent UI React v9 docs, "Browser Support Matrix"), the server-rendering setup (Griffel's SSR guide), and the release history (npm: 9.0.0 on 2022-06-28, 243 stable 9.x releases since).
 - **Keep it current.** Update this guide with each WaveUI minor release: [section 7](#7-not-in-waveui-yet) and the "planned" columns follow the roadmap, and the gap analysis holds the detail per gap.

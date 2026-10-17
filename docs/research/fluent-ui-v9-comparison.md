@@ -607,6 +607,9 @@ This section covers only confirmed and adjusted gaps, highest impact first. Miss
 - **ColorSwatch:**
   - No disabled swatches (colorswatch-1).
   - No icon, contrast border, or per-swatch size and shape (colorswatch-2).
+- **ImageSwatch and EmptySwatch** (missing components, described in section 3):
+  - No image or pattern swatch (imageswatch-1).
+  - No "add colour" placeholder swatch (emptyswatch-1).
 </details>
 
 ### 4.4 Data display

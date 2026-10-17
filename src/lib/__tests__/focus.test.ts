@@ -9,6 +9,7 @@ import {
   focusElement,
   isConnectedAndFocusable,
   containsFocus,
+  isFocused,
 } from '../focus';
 
 function mount(html: string): HTMLElement {
@@ -258,11 +259,43 @@ describe('focusElement', () => {
     expect(focusElement(c.querySelector<HTMLButtonElement>('#d'))).toBe(false);
   });
 
+  it('reports success for an element focused inside a shadow root', () => {
+    const host = mount('');
+    const button = document.createElement('button');
+    host.attachShadow({ mode: 'open' }).appendChild(button);
+    expect(focusElement(button)).toBe(true);
+  });
+
   it('passes focus options through', () => {
     const c = mount(`<button id="b">b</button>`);
     expect(focusElement(c.querySelector<HTMLButtonElement>('#b'), { preventScroll: true })).toBe(
       true,
     );
+  });
+});
+
+describe('isFocused', () => {
+  it('reports the focused element of the document', () => {
+    const c = mount(`<button id="a">a</button><button id="b">b</button>`);
+    const a = c.querySelector<HTMLButtonElement>('#a')!;
+    a.focus();
+    expect(isFocused(a)).toBe(true);
+    expect(isFocused(c.querySelector('#b')!)).toBe(false);
+    expect(isFocused(c)).toBe(false);
+  });
+
+  it('reports the focused element of a shadow root, not its host', () => {
+    const host = mount('');
+    const button = document.createElement('button');
+    host.attachShadow({ mode: 'open' }).appendChild(button);
+    button.focus();
+    // The document reports the host as its active element.
+    expect(document.activeElement).toBe(host);
+    expect(isFocused(button)).toBe(true);
+  });
+
+  it('reports a disconnected element as not focused', () => {
+    expect(isFocused(document.createElement('button'))).toBe(false);
   });
 });
 

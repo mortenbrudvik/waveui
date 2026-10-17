@@ -17,62 +17,23 @@
  * Internal module (not exported from the package).
  */
 
+import {
+  addDays,
+  addMonths,
+  daysInMonth,
+  isSameDay,
+  makeDate,
+  startOfDay,
+  startOfMonth,
+  startOfWeek,
+} from '../../lib/date';
+import type { DayOfWeek } from '../../lib/types';
+
 /* ------------------------------------------------------------------ */
-/*  Day arithmetic                                                     */
+/*  Day arithmetic (the shared helpers live in lib/date)               */
 /* ------------------------------------------------------------------ */
 
-/**
- * Builds a local-midnight date without the `new Date(y, …)` two-digit-year mapping (years 0–99
- * would otherwise become 1900–1999).
- */
-function makeDate(year: number, monthIndex: number, day: number): Date {
-  const date = new Date(2000, 0, 1);
-  date.setFullYear(year, monthIndex, day);
-  date.setHours(0, 0, 0, 0);
-  return date;
-}
-
-/** The start (local midnight) of `date`'s calendar day, as a new `Date`. */
-export function startOfDay(date: Date): Date {
-  return makeDate(date.getFullYear(), date.getMonth(), date.getDate());
-}
-
-/** The first day (local midnight) of `date`'s month. */
-export function startOfMonth(date: Date): Date {
-  return makeDate(date.getFullYear(), date.getMonth(), 1);
-}
-
-/** The number of days in the given month (`monthIndex` may be out of range; it is normalized). */
-function daysInMonth(year: number, monthIndex: number): number {
-  return makeDate(year, monthIndex + 1, 0).getDate();
-}
-
-/** `date` plus `amount` calendar days, at local midnight (month/year boundaries included). */
-export function addDays(date: Date, amount: number): Date {
-  return makeDate(date.getFullYear(), date.getMonth(), date.getDate() + amount);
-}
-
-/**
- * `date` plus `amount` months, at local midnight. The day is clamped to the length of the target
- * month, so Jan 31 + 1 month is Feb 28 (29 in a leap year) and Mar 31 − 1 month is Feb 28/29 —
- * never a day of the following month.
- */
-export function addMonths(date: Date, amount: number): Date {
-  const target = makeDate(date.getFullYear(), date.getMonth() + amount, 1);
-  const day = Math.min(date.getDate(), daysInMonth(target.getFullYear(), target.getMonth()));
-  return makeDate(target.getFullYear(), target.getMonth(), day);
-}
-
-/** Whether both dates are on the same calendar day. `false` when either is missing. */
-export function isSameDay(a: Date | null | undefined, b: Date | null | undefined): boolean {
-  return (
-    !!a &&
-    !!b &&
-    a.getFullYear() === b.getFullYear() &&
-    a.getMonth() === b.getMonth() &&
-    a.getDate() === b.getDate()
-  );
-}
+export { addDays, addMonths, isSameDay, startOfDay, startOfMonth };
 
 /** Whether both dates are in the same month of the same year. */
 export function isSameMonth(a: Date, b: Date): boolean {
@@ -98,6 +59,39 @@ export function clampDate(date: Date, min?: Date | null, max?: Date | null): Dat
   return day;
 }
 
+/** The first year of `year`'s decade (2025 gives 2020). */
+export function getDecadeStart(year: number): number {
+  return Math.floor(year / 10) * 10;
+}
+
+/** The 12 months of `year`, as the 1st of each month (the cells of the month view). */
+export function getYearMonths(year: number): Date[] {
+  return Array.from({ length: 12 }, (_, month) => makeDate(year, month, 1));
+}
+
+/**
+ * The 12 years of the year view, as January 1 of each: the decade starting at `decadeStart`, with
+ * the year before and the year after it.
+ */
+export function getDecadeYears(decadeStart: number): Date[] {
+  return Array.from({ length: 12 }, (_, index) => makeDate(decadeStart - 1 + index, 0, 1));
+}
+
+/** Whether every day of `month`'s month lies outside `[min, max]` (calendar days). */
+export function isMonthOutOfRange(month: Date, min?: Date | null, max?: Date | null): boolean {
+  const first = startOfMonth(month);
+  const last = makeDate(first.getFullYear(), first.getMonth() + 1, 0);
+  return (!!min && last < startOfDay(min)) || (!!max && first > startOfDay(max));
+}
+
+/** Whether every day of `year` lies outside `[min, max]` (calendar days). */
+export function isYearOutOfRange(year: number, min?: Date | null, max?: Date | null): boolean {
+  return (
+    (!!min && makeDate(year, 11, 31) < startOfDay(min)) ||
+    (!!max && makeDate(year, 0, 1) > startOfDay(max))
+  );
+}
+
 /**
  * The 42 days (6 weeks) of the calendar grid showing `viewMonth`'s month: the first row starts on
  * `firstDayOfWeek` (0 = Sunday) on or before the 1st.
@@ -108,6 +102,54 @@ export function getCalendarDays(viewMonth: Date, firstDayOfWeek: number): Date[]
   const days: Date[] = [];
   for (let i = 0; i < 42; i++) days.push(addDays(first, i - offset));
   return days;
+}
+
+/**
+ * Whether a day cannot be picked: outside `min`/`max` (whole days) or named by `disabledDates`
+ * (called with local midnight). The one rule behind the focusable-but-unavailable look, the
+ * drawn range and the emitted range.
+ */
+export function isDayUnavailable(
+  date: Date,
+  min?: Date | null,
+  max?: Date | null,
+  disabledDates?: (date: Date) => boolean,
+): boolean {
+  return !isDateInRange(date, min, max) || !!disabledDates?.(startOfDay(date));
+}
+
+/** What a pick selects (the Calendar's `selectionRange`). */
+export type CalendarSelectionRange = 'day' | 'week' | 'work-week' | 'month';
+
+/**
+ * The days a pick of `date` selects, in order, at local midnight: the day itself (`'day'`, whatever
+ * its availability), its week from `firstDayOfWeek`, the days of that week named by `workWeekDays`
+ * (`'work-week'`, in the order of the week), or its whole month. The days of the other modes that
+ * `isUnavailable` names are left out.
+ */
+export function getSelectionRange(
+  date: Date,
+  mode: CalendarSelectionRange,
+  firstDayOfWeek: DayOfWeek,
+  workWeekDays: readonly DayOfWeek[],
+  isUnavailable?: (date: Date) => boolean,
+): Date[] {
+  const day = startOfDay(date);
+  let days: Date[];
+  if (mode === 'day') return [day];
+  if (mode === 'month') {
+    const first = startOfMonth(day);
+    days = Array.from({ length: daysInMonth(day.getFullYear(), day.getMonth()) }, (_, i) =>
+      addDays(first, i),
+    );
+  } else {
+    const start = startOfWeek(day, firstDayOfWeek);
+    days = Array.from({ length: 7 }, (_, i) => addDays(start, i));
+    if (mode === 'work-week') {
+      days = days.filter((weekDay) => workWeekDays.includes(weekDay.getDay() as DayOfWeek));
+    }
+  }
+  return isUnavailable ? days.filter((candidate) => !isUnavailable(candidate)) : days;
 }
 
 /* ------------------------------------------------------------------ */
@@ -394,6 +436,31 @@ export function getWeekdayNames(locale: string | undefined, firstDayOfWeek = 0):
 /** The calendar heading, e.g. `May 2025` / `Mai 2025`. */
 export function formatMonthYear(date: Date, locale?: string): string {
   return getFormatter(locale, { month: 'long', year: 'numeric' }).format(date);
+}
+
+/** The short month name of a month cell, e.g. `Mar` / `Mär`. */
+export function formatMonthShort(date: Date, locale?: string): string {
+  return getFormatter(locale, { month: 'short' }).format(date);
+}
+
+/**
+ * The year of a year cell and of the month view's heading, in the locale's digits and the
+ * calendar of {@link getCalendar}, without an era: `2025`, the Buddhist `2568` of `th-TH`.
+ */
+export function formatYear(date: Date, locale?: string): string {
+  const parts = getFormatter(locale, { year: 'numeric' }).formatToParts(date);
+  return parts.find((part) => part.type === 'year')?.value ?? String(date.getFullYear());
+}
+
+/**
+ * The year view's heading: the decade starting at `decadeStart` as a range of years
+ * (`Intl.DateTimeFormat#formatRange`), e.g. `2020 – 2029`.
+ */
+export function formatDecade(decadeStart: number, locale?: string): string {
+  return getFormatter(locale, { year: 'numeric' }).formatRange(
+    makeDate(decadeStart, 0, 1),
+    makeDate(decadeStart + 9, 11, 31),
+  );
 }
 
 /** The accessible name of a day cell, e.g. `Monday, May 26, 2025`. */

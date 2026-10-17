@@ -601,7 +601,7 @@ export const Panel = /* @__PURE__ */ Object.assign(PanelRoot, { Header: PanelHea
 - **Component JSDoc** sits only on the exported `Object.assign(…)` const (the root gets none, also when it lives in a sibling module, as `MenuRoot` in `Menu.root.tsx` does; likewise on a wrapper-call export and on the first overload), so it reaches `index.d.ts`, and it names no internal symbol (`XRoot`) or spec label. Storybook autodocs read it from there (`.storybook/exportDocblocks.ts`), so stories never repeat it (no meta JSDoc, no `docs.description.component` for a compound): `.storybook/__tests__/exportDocblocks.test.ts` gates this, and verify-dist fails on an undocumented exported component.
 - A part rendered outside its root throws `[WaveUI] <Part> must be used within <Root>` in development; in production it logs that once per message and renders inert (`reportMissingContext` from `src/lib/dev.ts`).
 
-Compound components: `Accordion`, `Breadcrumb`, `Card`, `Carousel`, `ColorPicker`, `Combobox`, `DataGrid`, `Dialog`, `Drawer`, `Dropdown`, `List`, `Menu`, `MessageBar`, `Nav`, `Overflow`, `Popover`, `RadioGroup`, `Skeleton`, `Stepper`, `TabList`, `Table`, `Toast`, `Toolbar`, `Tree`. The README lists every flat name. Fragments are looked into (each element of a Fragment is a Breadcrumb item, an AvatarGroup member or a Carousel slide), but a component that renders a part itself is not recognised where a compound classifies its children: write `Carousel.Item`s, and nested `Tree.Item`s, in the compound itself (directly, in Fragments, or for Tree from a render function such as `children.map(renderNode)`).
+Compound components: `Accordion`, `Breadcrumb`, `Card`, `Carousel`, `ColorPicker`, `Combobox`, `DataGrid`, `Dialog`, `Drawer`, `Dropdown`, `List`, `Listbox`, `Menu`, `MessageBar`, `Nav`, `Overflow`, `Popover`, `RadioGroup`, `Rating`, `RatingDisplay`, `Skeleton`, `Stepper`, `SwatchPicker`, `TabList`, `Table`, `Toast`, `Toolbar`, `Tree`. The README lists every flat name. Fragments are looked into (each element of a Fragment is a Breadcrumb item, an AvatarGroup member or a Carousel slide), but a component that renders a part itself is not recognised where a compound classifies its children: write `Carousel.Item`s, and nested `Tree.Item`s, in the compound itself (directly, in Fragments, or for Tree from a render function such as `children.map(renderNode)`).
 
 ### Pattern 3: Slot System
 
@@ -913,13 +913,221 @@ Masked.displayName = 'Masked';
 - **Fields.** `Field size` sets the label's type ramp and, in the horizontal layout, its top padding; it reaches the controls inside through `FieldContextValue.size`, which is absent when the prop is unset so that the provider's default still applies. A `Label` or `InfoLabel` element passed as `label` is recognised by the marker in `fieldLabel.ts` (not by an import, so a Field-only bundle carries no InfoButton code) and rendered in place of Field's own `<label>`.
 - **Guidance for consumers.** The filled appearances have no visible stroke, so a filled field needs a visible label (a placeholder is not one); use `filled-darker` on the page background and `filled-lighter` on a surface other than the page background.
 
+### Pattern 12: Building a Custom Picker
+
+Dropdown, Combobox, TagPicker and Listbox are built on public pieces, so a picker the library does not ship (a font picker, a list with rich rows) gets the same option model, keys and ARIA. The [README](../README.md#listbox-and-custom-pickers) has a complete popup picker (`SizePicker`), and the `CustomPicker` story in `stories/Listbox.stories.tsx` an editable one that filters as you type.
+
+| Piece | Role |
+|---|---|
+| `useListbox(options)` | The listbox: its options (registered, or `items`), the active option (on `useActiveDescendant`, Pattern 13), keys and typeahead, `filter`, `multiselect`, `disabledOptionsFocusable`. `mode` is `'select-only'` (a button combobox, as Dropdown), `'editable'` (an `<input>` combobox, as Combobox) or `'standalone'` (a list that holds focus, as Listbox). You own the open state (`open`, `onOpenChange(open, details)`) and the value (`selectedValues`, `onSelect(value, details)`). |
+| `useListboxPopup(options)` | The popup's dismiss layer (`onDismiss(reason)`, a `DismissReason`: `'escape'`, `'outside-press'` or `'focus-outside'`; presses and focus inside `rootRef` are inside) and its position against the element passed to `setReference` (merge it into your combobox's ref). Destructure the result: `react-hooks/refs` rejects reading the members of an object whose member is passed to a `ref`. |
+| `ListboxSurface` | Renders the list: in a portaled surface while it is shown, `hidden` in place otherwise, so the options register from the first render. Provides the options' context. `listClassName` and `surfaceClassName` are merged last. |
+| `ListboxProvider` | Provides the options' context (`listbox.context`) to a list you render yourself. |
+| `Option`, `OptionGroup` | The built-in option and group; `Option` reads `multiselect` from the context and draws its check (in a multi-select list, a checkbox square; `ListboxSurface`'s `showCheck={false}` turns it off). |
+| `useListboxOption(props, ref?)`, `markListboxElement(component, kind)`, `collectOptionLabels(children)` | Option components of your own: `useListboxOption` registers the option and reads its flags; the mark lets `collectOptionLabels` read its label before it registers. |
+
+The rules (the "Consumer contract" in `useListbox`'s JSDoc):
+
+- **One container.** A listbox's options live in one list at a time: inline and `hidden` while closed, portaled while open, never both, not even for an exit animation. `ListboxSurface` does this.
+- **The combobox modes.** Spread `getComboboxProps()` on the combobox element, then set `aria-expanded` to a value of your own, `const expanded = open && listbox.items.length > 0` (open with an option to show; `useListbox` returns no `expanded`), and pass the same value to `ListboxSurface`'s `expanded`. Attach both `onKeyDown` and `onKeyUp`: without `onKeyUp`, the native click of a `<button>` combobox on Space keyup toggles the list again.
+- **Escape with nothing shown.** While the listbox is open but shows no option, close it on Escape yourself (outside an IME composition) without calling `listbox.onKeyDown`, so the key reaches an enclosing layer such as a Dialog.
+- **Display text.** `listbox.getItem(value)?.label ?? collectOptionLabels(children).get(value)`: options register in a layout effect, so the server HTML and the first render read the labels from the children.
+- **Standalone mode.** Spread `getListboxProps()` on the list (`tabIndex: 0`, `aria-activedescendant`, and a `ref` through which a press on an option focuses the list: merge it with yours), attach `onKeyDown` to the list (`onKeyUp` only guards a `<button>` combobox's Space keyup, so the list needs none), and pass the list's own focus as `open`. `getComboboxProps()` is not used; Tab, Escape and the Alt+arrow keys stay with the page.
+- **Forms and Field.** `HiddenInput` is internal: submit the value through a plain `<input type="hidden">`, and wire a surrounding Field with `useFieldControl` ([Pattern 8](#pattern-8-composite-controls-and-field)).
+
+A list in the page with an option component of your own (standalone mode, `ListboxProvider`):
+
+```tsx
+import * as React from 'react';
+import {
+  ListboxProvider,
+  markListboxElement,
+  useListbox,
+  useListboxOption,
+} from '@mortenbrudvik/waveui';
+
+interface ColorOptionProps {
+  value: string;
+  /** The swatch color (runtime data). */
+  color: string;
+  disabled?: boolean;
+  children: React.ReactNode;
+}
+
+function ColorOptionImpl({ value, color, disabled, children }: ColorOptionProps) {
+  const { optionProps, selected } = useListboxOption<HTMLLIElement>({ value, disabled });
+  return (
+    <li
+      {...optionProps}
+      className="flex items-center gap-2 rounded px-3 py-1.5 data-[active]:bg-subtle-hover data-[active]:outline-2 data-[active]:outline-ring data-[disabled]:text-muted-foreground"
+    >
+      <span aria-hidden="true" className="size-3 rounded-full" style={{ background: color }} />
+      {children}
+      {selected && (
+        <span aria-hidden="true" className="ms-auto">
+          ✓
+        </span>
+      )}
+    </li>
+  );
+}
+ColorOptionImpl.displayName = 'ColorOption';
+
+// Marked, so collectOptionLabels reads its label before it registers (server HTML, first render).
+export const ColorOption = markListboxElement(ColorOptionImpl, 'option');
+
+export function AccentList() {
+  // Standalone mode: `open` is the list's own focus.
+  const [focused, setFocused] = React.useState(false);
+  const [value, setValue] = React.useState('teal');
+  const listbox = useListbox({
+    open: focused,
+    mode: 'standalone',
+    selectedValues: [value],
+    onSelect: (next) => setValue(next),
+  });
+  // `tabIndex: 0`, `aria-activedescendant` and a ref the pointer press focuses the list through.
+  const listProps = listbox.getListboxProps();
+  return (
+    <ul
+      aria-label="Accent color"
+      {...listProps}
+      onKeyDown={listbox.onKeyDown}
+      onFocus={(event) => {
+        if (event.target === event.currentTarget) setFocused(true);
+      }}
+      onBlur={(event) => {
+        if (event.target === event.currentTarget) setFocused(false);
+      }}
+      // The active option shows focus; with none active, the list draws its own ring.
+      className={`m-0 flex list-none flex-col p-1 ${
+        listbox.activeValue === null
+          ? 'focus-visible:outline-2 focus-visible:outline-ring'
+          : 'focus:outline-hidden'
+      }`}
+    >
+      <ListboxProvider value={listbox.context}>
+        <ColorOption value="teal" color="teal">
+          Teal
+        </ColorOption>
+        <ColorOption value="plum" color="plum">
+          Plum
+        </ColorOption>
+        <ColorOption value="gold" color="gold" disabled>
+          Gold
+        </ColorOption>
+      </ListboxProvider>
+    </ul>
+  );
+}
+```
+
+- **The option's props.** Spread `optionProps` on the `<li>`: `id`, `role="option"`, `aria-selected`, `aria-disabled`, `hidden` (filtered out, or hidden itself), the `data-active`, `data-selected` and `data-disabled` styling hooks, `onClick`, `onPointerMove` and, in standalone mode, `onMouseDown` (the press). Compose your own handlers with them (`composeEventHandlers`, your handler first).
+- **Re-renders.** The option reads its active, selected and hidden flags from the listbox's store through `useSyncExternalStore`, so moving the active option re-renders only the old and the new option.
+- **Focus.** The active option never has DOM focus: style `data-active` as its focus indicator. A disabled option is skipped by the keys (unless `disabledOptionsFocusable`) and never committed.
+- **Marks.** Mark every option and group component of your own (`markListboxElement(GroupImpl, 'group')` walks its children); an unmarked component is opaque to `collectOptionLabels`, so its label is unknown until it registers.
+
+### Pattern 13: Active-Descendant Widgets
+
+A composite widget moves focus among its items in one of two ways:
+
+- **Roving tab index** (`useRovingTabIndex`): DOM focus moves to the item, which holds the one Tab stop. Toolbar, RadioGroup, Menu, Tree and SwatchPicker's row and grid layouts use it (the grid through the internal `useRovingGrid`); use it when the items are controls of their own.
+- **Active descendant** (`useActiveDescendant`): DOM focus stays on one element, an `<input>` or the list, and its `aria-activedescendant` names the active item. The comboboxes and Listbox use it; use it when typing must stay in an input, or when the items are not focusable controls.
+
+`useListbox` is built on `useActiveDescendant`; use the hook directly for a composite that is not a listbox, such as a command palette:
+
+```tsx
+import * as React from 'react';
+import { useActiveDescendant, useId } from '@mortenbrudvik/waveui';
+
+interface Command {
+  id: string;
+  label: string;
+}
+
+export function CommandPalette({
+  commands,
+  onRun,
+}: {
+  commands: readonly Command[];
+  onRun: (command: Command) => void;
+}) {
+  const inputId = useId('palette');
+  const listId = `${inputId}-list`;
+  const optionId = (id: string) => `${inputId}-${id}`;
+  const [query, setQuery] = React.useState('');
+  const matches = commands.filter((command) =>
+    command.label.toLowerCase().includes(query.toLowerCase()),
+  );
+  const active = useActiveDescendant({
+    items: matches.map((command) => command.id),
+    getId: optionId,
+    fallback: matches[0]?.id ?? null,
+    activateFirstOnChange: true,
+  });
+
+  return (
+    <>
+      <input
+        id={inputId}
+        role="combobox"
+        aria-label="Command"
+        aria-expanded={true}
+        aria-controls={listId}
+        aria-autocomplete="list"
+        aria-activedescendant={active.activeDescendantId}
+        value={query}
+        onChange={(event) => setQuery(event.target.value)}
+        onKeyDown={(event) => {
+          if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
+            event.preventDefault();
+            if (event.key === 'ArrowDown') active.next();
+            else active.prev();
+          } else if (event.key === 'Enter' && !event.nativeEvent.isComposing) {
+            const command = matches.find((match) => match.id === active.activeValue);
+            if (!command) return;
+            event.preventDefault();
+            onRun(command);
+            setQuery('');
+          }
+        }}
+      />
+      <ul id={listId} role="listbox" aria-label="Commands">
+        {matches.map((command) => (
+          <li
+            key={command.id}
+            id={optionId(command.id)}
+            role="option"
+            aria-selected={command.id === active.activeValue}
+            data-active={command.id === active.activeValue ? '' : undefined}
+            onPointerMove={() => active.highlight(command.id)}
+            onClick={() => onRun(command)}
+            className="px-3 py-1.5 data-[active]:bg-subtle-hover"
+          >
+            {command.label}
+          </li>
+        ))}
+      </ul>
+    </>
+  );
+}
+```
+
+- **Items and ids.** `items` are the values in navigation order and `getId(value)` the DOM id of a value's element. Derive ids from values, not positions, so a filtered list keeps them.
+- **Enabled.** While `enabled` is `false` (a closed popup, an unfocused list) nothing is active and the moved-to item is forgotten; a move made in the same update that enables the hook is kept (move, then open).
+- **Fallback.** `fallback` is active while nothing was moved to (the selected item, for example). A moved-to item that leaves `items` is dropped and does not come back when it returns. `activateFirstOnChange` makes the first item active whenever `items` changes while enabled, for a list that filters as you type.
+- **Moves.** `next()` and `prev()` (wrapping with `loop`), `first()`, `last()`, `move(delta)` (PageUp/PageDown: clamped, never wrapping) and `setActiveValue(value)` scroll the item into view (`{ block: 'nearest' }`; `getElement` replaces the id lookup); `highlight(value)` (pointer movement) and `setActiveValue(value, { scroll: false })` do not, so the list does not move under the pointer. The methods keep their identities across renders.
+- **Reporting.** `onActiveValueChange` reports each change after the commit, `null` included, once (StrictMode too).
+- **Server.** The active item is React state derived during render, so the server HTML of an enabled hook with a fallback carries its id. Render `aria-activedescendant` only while that element exists: a portaled popup is not in the server HTML ([Pattern 9](#pattern-9-overlays-and-triggers)).
+- **Focus and announcements.** The active item has no DOM focus: mark it (`data-active`) and draw its focus indicator yourself. `aria-selected` marks the selection; a palette without one marks the active command, as APG's list-autocomplete combobox does. The hook announces nothing; a widget that needs announcements adds them (`useAnnounce`).
+
 ### Props Interface Conventions
 
 - Extend native HTML attributes: `React.HTMLAttributes<HTMLDivElement>`
 - Omit conflicting native props: `Omit<React.HTMLAttributes<HTMLDivElement>, 'onChange' | 'defaultValue'>`
 - Name value callbacks after the state (`onValueChange`, `onCheckedChange`, `onOpenChange`); `onChange` is only the native change event
 - Declare `ref` in the interface; export the props type with the component (`CardHeaderProps`, `DataGridRowProps`)
-- Use shared types from `src/lib/types.ts`: `Size`, `CoreSize`, `InputAppearance`, `Appearance`, `Status`, `Orientation`, `SelectionMode`, `TextWeight`, `Shape`, `PopupSide`, `PopupAlign`, `BadgeColor`, `IconPosition`, `ValidationState`, `LabelPosition` (take a subset with `Extract<LabelPosition, …>`), `ModalType`, `OpenChangeDetails<R>`, `CheckedValues`, `CheckedValuesChangeHandler`, `PopupTarget`, `VirtualElement`
+- Use shared types from `src/lib/types.ts`: `Size`, `CoreSize`, `InputAppearance`, `Appearance`, `Status`, `Orientation`, `SelectionMode`, `TextWeight`, `Shape`, `PopupSide`, `PopupAlign`, `BadgeColor`, `IconPosition`, `ValidationState`, `LabelPosition` (take a subset with `Extract<LabelPosition, …>`), `ModalType`, `OpenChangeDetails<R>`, `CheckedValues`, `CheckedValuesChangeHandler`, `PopupTarget`, `VirtualElement`, `DayOfWeek`, `FirstWeekOfYear`
 - Prefer Fluent's prop name when it fits the conventions (`disabledFocusable`, `iconPosition`, `validationState`, `modalType`, `selectTabOnFocus`, `persistOnItemClick`, `openOnHover`, `openOnContext`, `isAccessible`); open state stays `open`/`defaultOpen`/`onOpenChange`, a state callback is named after its state (`checkedValues` → `onCheckedValuesChange`, not Fluent's `onCheckedValueChange`), and extra callback data goes in a second, optional `details` argument (`onOpenChange(open, details?)`, `onCheckedValuesChange(checkedValues, details?)`)
 - One delay vocabulary: `openDelay` and `closeDelay` in milliseconds (Menu 250/250, Popover 250/500, Tooltip 200/100). Menu's and Popover's apply to mouse hover only, Tooltip's `openDelay` also to keyboard focus
 
@@ -975,7 +1183,8 @@ In a Toolbar, a nested composite (a RadioGroup, a TabList) keeps its own Tab sto
 | Component | Arrow keys |
 |---|---|
 | Toolbar | Left/Right (Up/Down when `orientation="vertical"`), wrapping; in a `Toolbar.RadioGroup` also the cross axis, within the group |
-| RadioGroup, SwatchPicker | all four arrows, wrapping; moving selects |
+| RadioGroup, SwatchPicker (row layout) | all four arrows, wrapping; moving selects |
+| SwatchPicker (`layout="grid"`) | Left/Right in reading order across the rows, Up/Down to the nearest swatch of the previous/next row, Home/End in the row, Ctrl+Home/End in the grid; stops at the ends; moving only focuses (Space, Enter or a click selects) |
 | TabList | Left/Right (Up/Down when vertical), wrapping; moving selects (automatic activation), or with `selectTabOnFocus={false}` only moves focus (manual activation: Enter or Space selects) |
 | Menu | Up/Down, wrapping; typeahead; Right/Left open and close submenus (mirrored in RTL) |
 | List (selectable) | Up/Down, wrapping; typeahead above 7 items; Enter/Space toggle selection |
@@ -1044,6 +1253,20 @@ PageUp / PageDown                → move by 10 while open
 Enter / Space                    → open, or commit the active option
 Alt+ArrowUp, Tab                 → commit the active option and close
 Escape                           → close
+```
+
+With `multiselect` (Dropdown, Combobox), Enter (and Dropdown's Space) toggles the active option and keeps the list open; Tab, Escape and Alt+ArrowUp close without committing. With `disabledOptionsFocusable` the keys reach disabled options, which commit nothing.
+
+#### Listbox (a list that holds focus)
+
+```
+Tab                              → enters the list (one Tab stop); the active option is the
+                                   selected one, else the first (aria-activedescendant)
+ArrowDown / ArrowUp              → move, stopping at the ends
+Home / End, PageUp / PageDown    → first / last, by 10
+Printable characters             → typeahead
+Enter / Space                    → select (toggle with multiselect)
+Tab, Escape, Alt+arrows          → left to the page (an enclosing Dialog closes on Escape)
 ```
 
 #### Tree
@@ -1161,17 +1384,19 @@ Escape          → close (only the topmost layer: an open listbox inside closes
 
 Focus moves into the dialog on open (the first focusable element, unless something inside already has focus, such as an `autoFocus` input; that also holds for a dialog opened over another one or nested in its content, and for a `Popover.Content` opened from a dialog). Tab inside a plain `<Portal>` rendered in the dialog moves natively between the portal's elements and wraps to the dialog's first or last element at the portal's edges. On close it goes to `finalFocusRef` when given, else back to the element that had focus when the dialog opened (a trigger's wrapper span resolves to the element inside it): the trigger for a trigger click, the parent's own button of a controlled Dialog, or a text field focused before a keyboard-shortcut open. When nothing had focus (opened from code, or a Safari click), it goes to the trigger that opened the dialog, else the first mounted trigger; when that element is gone, to a mounted trigger, then to an element next to where the opener was (the next row's action after a delete), then to the overlay below.
 
-#### DatePicker calendar
+#### Calendar and the DatePicker calendar
 
 ```
-Alt+ArrowDown (input)             → open the calendar
+Alt+ArrowDown (DatePicker input)  → open the calendar
 Arrow keys                        → previous / next day, previous / next week (mirrored in RTL)
 PageUp / PageDown                 → previous / next month (day clamped to the month)
 Shift+PageUp / Shift+PageDown     → previous / next year
 Home / End                        → start / end of the week
 Enter / Space                     → select the day
-Escape                            → close and return focus
+Escape                            → DatePicker: close and return focus; Calendar: left to the page
 ```
+
+The heading is a button (`showMonthPicker`, on by default) to the month view, and the month view's heading to the year view. Month view: the arrows move by a month and a row of four, Home/End to the row's ends, PageUp/PageDown by a year, Enter/Space show the month's days. Year view: the arrows, Home and End stay on the shown page of 12 years while the target year is on it, PageUp/PageDown move a decade, Enter/Space show the year's months. Escape in the month or year view goes back one view and is consumed, also from the header and footer buttons; only the day view's Escape reaches a DatePicker, which closes.
 
 Typed text in the DatePicker input is kept and marked invalid when it is not an available date. When a controlled parent then selects another day, the rejected text is replaced by that date and the error cleared; switching the picker to `readOnly` or `disabled` while the user types drops the typed text.
 
@@ -1313,7 +1538,7 @@ The **high-contrast theme** (`WaveProvider theme="high-contrast"`) is a separate
 - Validation errors: `Field`'s `error`, or `error="…"` on Input/Select/Textarea, render a `role="alert"` message linked with `aria-describedby`; a Field `validationState="warning"` message is announced too, without marking the control invalid
 - Hide decorative elements with `aria-hidden="true"` (Wave's icon slots do it for you)
 - Name progress indicators and landmarks: `ProgressBar` `label`, `Spinner` `label` (default "Loading"), `Toolbar` and `Nav` `aria-label`
-- Translate the names and hidden texts components render themselves: `closeLabel` (Dialog.Content, Drawer, TeachingPopover), `statusLabel` (MessageBar, Toast), `dismissLabel` (Toast, `dispatchToast` options, Tag), Carousel `labels` and `autoPlayLabels`, Stepper `statusLabels`, Pagination `getItemAriaLabel`, and the `labels` objects of AlphaSlider, ColorArea, ColorPicker, ColorSlider, Combobox, DataGrid, DatePicker, Dropdown, Rating, RatingDisplay, SpinButton, TagPicker, TeachingPopover and TimePicker (the README's "Built-in text" lists every one)
+- Translate the names and hidden texts components render themselves: `closeLabel` (Dialog.Content, Drawer, TeachingPopover), `statusLabel` (MessageBar, Toast), `dismissLabel` (Toast, `dispatchToast` options, Tag), Carousel `labels` and `autoPlayLabels`, Stepper `statusLabels`, Pagination `getItemAriaLabel`, and the `labels` objects of AlphaSlider, Calendar, ColorArea, ColorPicker, ColorSlider, Combobox, DataGrid, DatePicker, Dropdown, Listbox, Rating, RatingDisplay, SpinButton, SwatchPicker, TagPicker, TeachingPopover and TimePicker (the README's "Built-in text" lists every one)
 
 ---
 
@@ -1781,12 +2006,13 @@ export function ConfirmDelete({ onDelete }: { onDelete: () => void }) {
 | Navigate to a page | `Link`, `Breadcrumb`, `Nav`, `Pagination` |
 | Single-line text input | `Input`, `SearchBox` |
 | Multi-line text input | `Textarea` |
-| Select from options | `Dropdown` (select-only), `Combobox` (type to filter), `Select` (native) |
-| Pick multiple items | `TagPicker`, `Checkbox` group, selectable `List` |
+| Select from options | `Dropdown` (select-only), `Combobox` (type to filter), `Listbox` (in the page), `Select` (native) |
+| Pick multiple items | `TagPicker`, `Dropdown`/`Combobox`/`Listbox` with `multiselect`, `Checkbox` group, selectable `List` |
+| Build a picker of your own | `useListbox`, `useListboxPopup`, `ListboxSurface`, `Option` ([Pattern 12](#pattern-12-building-a-custom-picker)) |
 | Boolean toggle | `Switch`, `Checkbox`, `ToggleButton` |
 | Choose one from few | `RadioGroup` |
 | Pick a number | `Slider`, `SpinButton` |
-| Pick a color | `ColorPicker`, `ColorArea`, `ColorSlider`, `AlphaSlider`, `SwatchPicker` |
+| Pick a color | `ColorPicker`, `ColorArea`, `ColorSlider`, `AlphaSlider`, `SwatchPicker` (with `ColorSwatch`, `ImageSwatch`, `EmptySwatch`) |
 | Show user identity | `Avatar`, `AvatarGroup`, `Persona` |
 | Categorize items | `Badge`, `Tag`, `CounterBadge` |
 | Show status | `PresenceBadge`, `MessageBar` |
@@ -1796,7 +2022,7 @@ export function ConfirmDelete({ onDelete }: { onDelete: () => void }) {
 | Offer actions in a popup | `Menu` with `MenuButton` or `SplitButton` |
 | Show progress | `Spinner`, `ProgressBar`, `Skeleton` |
 | Notify users | `Toast` / `Toaster` (`createToaster()` from outside components), `MessageBar` |
-| Pick a date | `DatePicker` |
+| Pick a date | `DatePicker`, `Calendar` (in the page) |
 | Pick a time | `TimePicker` |
 | Guide users | `TeachingPopover` |
 | Show step progress | `Stepper` |
@@ -1809,13 +2035,13 @@ export function ConfirmDelete({ onDelete }: { onDelete: () => void }) {
 
 ## 12. Quick Reference
 
-### Component Catalog (69 components)
+### Component Catalog (74 components)
 
 **Buttons & Actions** (7)
 `Button` `CompoundButton` `ToggleButton` `SplitButton` `MenuButton` `Link` `Toolbar` (plus the Toolbar parts `Toolbar.Button`, `Toolbar.ToggleButton`, `Toolbar.RadioGroup`, `Toolbar.RadioButton`, `Toolbar.Group`, `Toolbar.Divider`)
 
-**Input & Forms** (22)
-`Input` `Textarea` `Field` `Label` `Checkbox` `RadioGroup` `Switch` `Select` `SearchBox` `Slider` `SpinButton` `Combobox` `Dropdown` `TagPicker` `Rating` `ColorPicker` `ColorArea` `ColorSlider` `AlphaSlider` `SwatchPicker` `DatePicker` `TimePicker` (plus `RadioGroup.Item`/`RadioItem`, `Option`/`OptionGroup`, `RatingDisplay` and the ColorPicker parts `ColorPicker.HexField`, `ColorPicker.Swatches`, `ColorPicker.Preview`)
+**Input & Forms** (27)
+`Input` `Textarea` `Field` `Label` `Checkbox` `RadioGroup` `Switch` `Select` `SearchBox` `Slider` `SpinButton` `Combobox` `Dropdown` `Listbox` `TagPicker` `Rating` `ColorPicker` `ColorArea` `ColorSlider` `AlphaSlider` `SwatchPicker` `ColorSwatch` `ImageSwatch` `EmptySwatch` `DatePicker` `Calendar` `TimePicker` (plus `RadioGroup.Item`/`RadioItem`, `Option`/`OptionGroup` (also `Listbox.Option`/`Listbox.OptionGroup`), `SwatchPicker.Row`, `RatingDisplay`, the ColorPicker parts `ColorPicker.HexField`, `ColorPicker.Swatches`, `ColorPicker.Preview`, and `ListboxSurface`/`ListboxProvider` for custom pickers)
 
 **Data Display** (12)
 `Avatar` `AvatarGroup` `Badge` `PresenceBadge` `CounterBadge` `Tag` `Persona` `Divider` `InfoLabel` `InfoButton` `Image` `List`
@@ -1929,8 +2155,14 @@ not-disabled:not-aria-disabled:active:bg-subtle-pressed
 | `src/hooks/useHoverIntent.ts`, `src/hooks/useContextMenuAnchor.ts`, `src/lib/events.ts` | Hover opening and the safe zone, context gestures, event predicates (internal) |
 | `src/components/navigation/Menu.*.tsx` | The Menu modules (root, context, items, trigger, popover, item kinds, groups, links, split rows) |
 | `src/hooks/useFieldControl.ts` | `FieldContext` and the Field wiring for controls |
-| `src/hooks/useListbox.ts` | Listbox model of Combobox, Dropdown, TagPicker and TimePicker (internal) |
-| `src/hooks/useDismiss.ts`, `src/lib/layers.ts` | Layered Escape and outside-press dismissal (internal) |
+| `src/hooks/useListbox.ts` | The listbox of Listbox, Combobox, Dropdown, TagPicker, TimePicker and custom pickers: `useListbox`, `useListboxOption`, `collectOptionLabels`, `markListboxElement` (public) |
+| `src/hooks/useActiveDescendant.ts` | The active item of an `aria-activedescendant` composite (public; `useListbox` is built on it) |
+| `src/components/input/Option.tsx` | `Option`, `OptionGroup`, and the custom-picker pieces `ListboxSurface`, `useListboxPopup`, `ListboxProvider` |
+| `src/hooks/useRovingGrid.ts` | Roving focus in two dimensions, SwatchPicker's grid layout (internal) |
+| `src/components/input/Calendar.tsx`, `src/components/input/Calendar.views.tsx` | Calendar and the views it shares with DatePicker's dialog (the day, month and year grids) |
+| `src/components/input/SwatchPicker*.ts(x)` | The SwatchPicker modules (root and rows, the swatch kinds, the context) |
+| `src/lib/date.ts` | `addDays`, `addMonths`, `isSameDay`, `startOfWeek`, `getWeekNumber` (public, server-safe) |
+| `src/hooks/useDismiss.ts`, `src/lib/layers.ts` | Layered Escape and outside-press dismissal (internal; the `DismissReason` type is public) |
 | `src/components/provider/WaveProvider.tsx` | Theme provider |
 | `src/components/portal/Portal.tsx` | Themed portal |
 | `src/test-utils.ts`, `src/test-utils-field.tsx` | Shared test helpers |
@@ -1941,7 +2173,10 @@ not-disabled:not-aria-disabled:active:bg-subtle-pressed
 |--------|------------|----------|----------|-------|
 | Button | Tab | – | Enter/Space | Tab |
 | Toolbar | Tab (last focused control) | Left/Right (Up/Down vertical), Home/End; `disabledFocusable` controls included; Up/Down within a radio group | Enter/Space (press, check) | Tab |
-| RadioGroup, SwatchPicker | Tab (selected item) | All arrows, Home/End | Selects on move | Tab |
+| RadioGroup, SwatchPicker (row layout) | Tab (selected item) | All arrows, Home/End | Selects on move | Tab |
+| SwatchPicker (`layout="grid"`) | Tab (last focused, else selected swatch) | Arrows (row by row), Home/End, Ctrl+Home/End | Enter/Space | Tab |
+| SwatchPicker (`focusMode="tab"`) | Tab (every swatch) | – | Enter/Space | Tab |
+| Listbox | Tab (the list) | Down/Up, Home/End, PageUp/PageDown, typeahead | Enter/Space | Tab |
 | Tabs | Tab (selected tab) | Left/Right (Up/Down vertical), Home/End | Selects on move (with `selectTabOnFocus={false}`: Enter/Space) | Tab |
 | Combobox, TagPicker, TimePicker | Tab | Down/Up (open and move) | Enter | Escape / Tab |
 | Dropdown | Tab | Down/Up/Home/End, typeahead, PageUp/PageDown | Enter/Space | Escape / Tab (commits) |
@@ -1951,10 +2186,10 @@ not-disabled:not-aria-disabled:active:bg-subtle-pressed
 | ColorArea | Tab (one stop) | Arrows, Shift+arrows, PageUp/PageDown, Home/End | – | Tab |
 | List (selectable) | Tab | Up/Down, Home/End | Enter/Space (toggle) | Tab |
 | DataGrid | Tab (one tab stop) | Arrows, Home/End, Ctrl+Home/End, PageUp/PageDown | Enter/F2 (into cell), Space (select row) | Tab / Escape (from cell widgets) |
-| DatePicker calendar | Alt+Down on the input, or the toggle | Arrows, PageUp/PageDown, Shift+PageUp/PageDown, Home/End | Enter/Space | Escape |
+| DatePicker calendar, Calendar | Alt+Down on the input, or the toggle (Calendar: Tab) | Arrows, PageUp/PageDown, Shift+PageUp/PageDown, Home/End; the heading button to the month and year views | Enter/Space | Escape (one view back; in the day view, closes a DatePicker) / Tab |
 | Dialog / Drawer | Auto-focus | Tab (trapped) | Enter | Escape |
 
-*RadioGroup, SwatchPicker and Tabs use automatic activation: moving focus selects (Tabs with `selectTabOnFocus={false}` use manual activation). Accordion, Carousel, Nav, Breadcrumb and Pagination use plain Tab navigation between native buttons and links.*
+*RadioGroup, the row-layout SwatchPicker and Tabs use automatic activation: moving focus selects (Tabs with `selectTabOnFocus={false}` use manual activation). Accordion, Carousel, Nav, Breadcrumb and Pagination use plain Tab navigation between native buttons and links.*
 
 ---
 

@@ -21,6 +21,7 @@ import {
   AccordionPanel,
   AccordionTrigger,
   Button,
+  Calendar,
   Card,
   Carousel,
   CarouselItem,
@@ -28,6 +29,7 @@ import {
   ColorArea,
   ColorPicker,
   ColorSlider,
+  ColorSwatch,
   Combobox,
   ComboboxOption,
   DataGrid,
@@ -44,12 +46,18 @@ import {
   DrawerTrigger,
   Dropdown,
   DropdownOption,
+  EmptySwatch,
   Field,
+  ImageSwatch,
   InfoButton,
   InfoLabel,
   Input,
   Label,
   Link,
+  Listbox,
+  ListboxOption,
+  ListboxOptionGroup,
+  ListboxSurface,
   Menu,
   MessageBar,
   MenuButton,
@@ -65,6 +73,7 @@ import {
   NavCategory,
   NavItem,
   NavSubItem,
+  Option,
   Overflow,
   OverflowItem,
   Popover,
@@ -83,6 +92,7 @@ import {
   SplitButton,
   Stack,
   SwatchPicker,
+  SwatchPickerRow,
   Switch,
   Table,
   TabList,
@@ -106,6 +116,9 @@ import {
   TreeItem,
   colorAreaClassNames,
   createToaster,
+  useListbox,
+  useListboxPopup,
+  useMergedRefs,
   useOverflowMenu,
   useToastController,
   WaveProvider,
@@ -140,6 +153,7 @@ import {
   toolbarToggleButtonClassNames,
   type CheckedValuesChangeDetails,
   type DialogProps,
+  type ListboxItem,
   type MenuProps,
 } from '../index';
 import { getOpenLayers } from '../lib/layers';
@@ -287,11 +301,7 @@ describe('public barrel (spec §5.11, C-COMPOUND)', () => {
       'useModalLayer',
       'useModalIsolation',
       'useDismiss',
-      'useListbox',
-      'collectOptionLabels',
-      'markListboxElement',
-      'useListboxPopup',
-      'ListboxSurface',
+      'ListboxContext',
       'getPaginationRange',
       'useControlErrorMessage',
       'isInvalidLook',
@@ -5019,6 +5029,111 @@ describe('compounds composed in a React Server Component', () => {
         expect(grace).toHaveAttribute('aria-checked', 'true');
       },
     }),
+    ssrCase({
+      name: 'Listbox (grouped options)',
+      parts: { Option: ListboxOption, Group: ListboxOptionGroup },
+      tree: ({ Option: Item, Group }) => (
+        <Listbox aria-label="Fruit" defaultValue="banana">
+          <Group label="Citrus">
+            <Item value="orange">Orange</Item>
+          </Group>
+          <Group label="Other">
+            <Item value="banana">Banana</Item>
+            <Item value="cherry">Cherry</Item>
+          </Group>
+        </Listbox>
+      ),
+      serverText: 'Citrus',
+      interact: async (user) => {
+        const list = screen.getByRole('listbox', { name: 'Fruit' });
+        const citrus = within(list).getByRole('group', { name: 'Citrus' });
+        expect(within(citrus).getAllByRole('option')).toHaveLength(1);
+        const other = within(list).getByRole('group', { name: 'Other' });
+        expect(within(other).getAllByRole('option')).toHaveLength(2);
+        expect(screen.getByRole('option', { name: 'Banana' })).toHaveAttribute(
+          'aria-selected',
+          'true',
+        );
+        await user.click(screen.getByRole('option', { name: 'Cherry' }));
+        expect(screen.getByRole('option', { name: 'Cherry' })).toHaveAttribute(
+          'aria-selected',
+          'true',
+        );
+        expect(screen.getByRole('option', { name: 'Banana' })).toHaveAttribute(
+          'aria-selected',
+          'false',
+        );
+      },
+    }),
+    ssrCase({
+      name: 'SwatchPicker (grid layout: an explicit row, then loose swatches in an implicit row)',
+      parts: { Row: SwatchPickerRow, Color: ColorSwatch, Image: ImageSwatch, Empty: EmptySwatch },
+      tree: ({ Row, Color, Image: Picture, Empty }) => (
+        <SwatchPicker layout="grid" aria-label="Palette" defaultValue="blue">
+          <Row>
+            <Color value="red" color="#d13438" aria-label="Red" />
+            <Color value="blue" color="#0f6cbd" aria-label="Blue" />
+          </Row>
+          <Picture
+            value="logo"
+            src="data:image/gif;base64,R0lGODlhAQABAAAAACw="
+            aria-label="Logo"
+          />
+          <Empty aria-label="Add color" />
+        </SwatchPicker>
+      ),
+      serverText: 'role="grid"',
+      interact: async (user) => {
+        expect(screen.getByRole('grid', { name: 'Palette' })).toBeInTheDocument();
+        // The explicit row, and one implicit row for the loose swatches after it.
+        expect(screen.getAllByRole('row')).toHaveLength(2);
+        const cellOf = (name: string) => button(name).closest('[role="gridcell"]');
+        expect(cellOf('Blue')).toHaveAttribute('aria-selected', 'true');
+        await user.click(button('Logo'));
+        expect(cellOf('Logo')).toHaveAttribute('aria-selected', 'true');
+        expect(cellOf('Blue')).toHaveAttribute('aria-selected', 'false');
+        expect(cellOf('Add color')).not.toHaveAttribute('aria-selected', 'true');
+      },
+    }),
+    ssrCase({
+      name: 'SwatchPicker (row layout: a row of swatches and an image swatch)',
+      parts: { Row: SwatchPickerRow, Color: ColorSwatch, Image: ImageSwatch },
+      tree: ({ Row, Color, Image: Picture }) => (
+        <SwatchPicker aria-label="Palette" defaultValue="red">
+          <Row>
+            <Color value="red" color="#d13438" aria-label="Red" />
+            <Color value="blue" color="#0f6cbd" aria-label="Blue" />
+          </Row>
+          <Picture
+            value="logo"
+            src="data:image/gif;base64,R0lGODlhAQABAAAAACw="
+            aria-label="Logo"
+          />
+        </SwatchPicker>
+      ),
+      serverText: 'role="radiogroup"',
+      interact: async (user) => {
+        expect(screen.getByRole('radio', { name: 'Red' })).toBeChecked();
+        await user.click(screen.getByRole('radio', { name: 'Logo' }));
+        expect(screen.getByRole('radio', { name: 'Logo' })).toBeChecked();
+        expect(screen.getByRole('radio', { name: 'Red' })).not.toBeChecked();
+      },
+    }),
+    ssrCase({
+      name: 'Calendar (a today prop, so the server and the client agree)',
+      parts: {},
+      tree: () => <Calendar aria-label="Date" locale="en-US" today={JUNE_12} />,
+      serverText: 'June 2025',
+      interact: async (user) => {
+        const today = screen.getByRole('button', { name: 'Thursday, June 12, 2025' });
+        expect(today).toHaveAttribute('aria-current', 'date');
+        await user.click(screen.getByRole('button', { name: 'Friday, June 20, 2025' }));
+        expect(screen.getByRole('button', { name: 'Friday, June 20, 2025' })).toHaveAttribute(
+          'aria-pressed',
+          'true',
+        );
+      },
+    }),
   ];
 
   const hydrated: Array<{ root: Root; container: HTMLElement }> = [];
@@ -6118,5 +6233,492 @@ describe('server-safe 0.8 exports in a server render (spec §4.4 #11)', () => {
       container.remove();
       error.mockRestore();
     }
+  });
+});
+
+// ---------------------------------------------------------------------------
+// 0.10: listbox, multi-select pickers, swatches and the calendar (spec §4.4 #1–#8)
+// ---------------------------------------------------------------------------
+
+/** `form.checkValidity()` inside `act()`: an invalid required control focuses itself. */
+function formIsValid(form: HTMLFormElement): boolean {
+  let valid = false;
+  act(() => {
+    valid = form.checkValidity();
+  });
+  return valid;
+}
+
+const fruitListboxOptions = [
+  <Listbox.Option key="apple" value="apple">
+    Apple
+  </Listbox.Option>,
+  <Listbox.Option key="banana" value="banana">
+    Banana
+  </Listbox.Option>,
+  <Listbox.Option key="cherry" value="cherry">
+    Cherry
+  </Listbox.Option>,
+];
+
+const accentSwatches = [
+  { value: 'red', color: '#d13438', label: 'Red' },
+  { value: 'blue', color: '#0f6cbd', label: 'Blue' },
+  { value: 'green', color: '#107c10', label: 'Green' },
+];
+
+const JUNE_12 = new Date(2025, 5, 12);
+const JUNE_15 = new Date(2025, 5, 15);
+
+describe('the real Field around Listbox, Calendar and SwatchPicker (spec §4.4 #1)', () => {
+  it('a Listbox takes the Field label, hint and error; a required Field blocks an empty submit', async () => {
+    const user = userEvent.setup();
+    render(
+      <form aria-label="Order">
+        <Field label="Fruit" hint="Pick one." error="Choose a fruit" required>
+          <Listbox name="fruit">{fruitListboxOptions}</Listbox>
+        </Field>
+      </form>,
+    );
+    const list = screen.getByRole('listbox', { name: /Fruit/ });
+    expect(list).toHaveAccessibleDescription(/Choose a fruit/);
+    expect(list).toHaveAccessibleDescription(/Pick one\./);
+    expect(list).toHaveAttribute('aria-invalid', 'true');
+    expect(list).toHaveAttribute('aria-required', 'true');
+    expect(duplicateIds()).toEqual([]);
+    const form = screen.getByRole('form', { name: 'Order' }) as HTMLFormElement;
+    expect(formIsValid(form)).toBe(false);
+    await user.click(screen.getByRole('option', { name: 'Banana' }));
+    expect(formIsValid(form)).toBe(true);
+    expect(new FormData(form).getAll('fruit')).toEqual(['banana']);
+    await expectNoA11yViolations(document.body);
+  });
+
+  it('a Listbox under a Field validation message in the warning state is described, not invalid', async () => {
+    render(
+      <Field label="Fruit" validationState="warning" validationMessage="Bananas are out of season">
+        <Listbox>{fruitListboxOptions}</Listbox>
+      </Field>,
+    );
+    const list = screen.getByRole('listbox', { name: /Fruit/ });
+    expect(list).toHaveAccessibleDescription('Bananas are out of season');
+    expect(list).not.toHaveAttribute('aria-invalid');
+    await expectNoA11yViolations(document.body);
+  });
+
+  it('a Calendar is the Field’s labelled group: described by the error, hint and required hint', async () => {
+    render(
+      <Field label="Delivery date" hint="Pick a day." error="Choose a date" required>
+        <Calendar locale="en-US" today={JUNE_12} />
+      </Field>,
+    );
+    const group = screen.getByRole('group', { name: /Delivery date/ });
+    expect(group).toHaveAccessibleDescription(/Choose a date/);
+    expect(group).toHaveAccessibleDescription(/Pick a day\./);
+    expect(group).toHaveAccessibleDescription(/Required/);
+    expect(group).toHaveAttribute('aria-invalid', 'true');
+    // A group cannot carry aria-required: the hidden hint says so.
+    expect(group).not.toHaveAttribute('aria-required');
+    expect(duplicateIds()).toEqual([]);
+    await expectNoA11yViolations(document.body);
+  });
+
+  it('a required Field makes a Calendar natively required until a day is picked', async () => {
+    const user = userEvent.setup();
+    render(
+      <form aria-label="Order">
+        <Field label="Delivery date" required>
+          <Calendar locale="en-US" today={JUNE_12} />
+        </Field>
+      </form>,
+    );
+    const form = screen.getByRole('form', { name: 'Order' }) as HTMLFormElement;
+    expect(formIsValid(form)).toBe(false);
+    await user.click(screen.getByRole('button', { name: 'Friday, June 20, 2025' }));
+    expect(formIsValid(form)).toBe(true);
+  });
+
+  it('a grid-layout SwatchPicker in a required Field is named, described as required and axe clean', async () => {
+    render(
+      <Field label="Accent color" required>
+        <SwatchPicker layout="grid" items={accentSwatches} />
+      </Field>,
+    );
+    const grid = screen.getByRole('grid', { name: /Accent color/ });
+    expect(grid).toHaveAccessibleDescription(/Required/);
+    expect(duplicateIds()).toEqual([]);
+    await expectNoA11yViolations(document.body);
+  });
+});
+
+describe('multi-select Dropdown and Combobox in a form (spec §4.4 #2)', () => {
+  const pickers = [
+    {
+      name: 'Dropdown',
+      picker: (props: { onValueChange: (value: string[]) => void }) => (
+        <Dropdown aria-label="Fruit" multiselect name="fruit" defaultValue={['a', 'b']} {...props}>
+          <Dropdown.Option value="a">Apple</Dropdown.Option>
+          <Dropdown.Option value="b">Banana</Dropdown.Option>
+          <Dropdown.Option value="c">Cherry</Dropdown.Option>
+        </Dropdown>
+      ),
+    },
+    {
+      name: 'Combobox',
+      picker: (props: { onValueChange: (value: string[]) => void }) => (
+        <Combobox aria-label="Fruit" multiselect name="fruit" defaultValue={['a', 'b']} {...props}>
+          <Combobox.Option value="a">Apple</Combobox.Option>
+          <Combobox.Option value="b">Banana</Combobox.Option>
+          <Combobox.Option value="c">Cherry</Combobox.Option>
+        </Combobox>
+      ),
+    },
+  ];
+
+  it.each(pickers)(
+    '$name: one entry per value; a reset restores defaultValue and reports nothing when unchanged',
+    async ({ picker }) => {
+      const user = userEvent.setup();
+      const onValueChange = vi.fn<(value: string[]) => void>();
+      render(
+        <form aria-label="Order">
+          {picker({ onValueChange })}
+          <button type="reset">Reset</button>
+        </form>,
+      );
+      const form = screen.getByRole('form', { name: 'Order' }) as HTMLFormElement;
+      expect(new FormData(form).getAll('fruit')).toEqual(['a', 'b']);
+
+      // Unchanged: a reset restores what is already there and reports nothing.
+      await user.click(button('Reset'));
+      expect(onValueChange).not.toHaveBeenCalled();
+      expect(new FormData(form).getAll('fruit')).toEqual(['a', 'b']);
+
+      await user.click(screen.getByRole('combobox', { name: 'Fruit' }));
+      await user.click(screen.getByRole('option', { name: 'Cherry' }));
+      expect(new FormData(form).getAll('fruit')).toEqual(['a', 'b', 'c']);
+      expect(onValueChange.mock.calls).toEqual([[['a', 'b', 'c']]]);
+
+      await user.click(button('Reset'));
+      expect(onValueChange.mock.calls).toEqual([[['a', 'b', 'c']], [['a', 'b']]]);
+      expect(new FormData(form).getAll('fruit')).toEqual(['a', 'b']);
+    },
+  );
+});
+
+describe('a Listbox in a Dialog (spec §4.4 #3)', () => {
+  it('takes focus from Tab, answers its keys, and leaves Escape to the Dialog', async () => {
+    const user = userEvent.setup();
+    const onOpenChange = vi.fn();
+    const onValueChange = vi.fn();
+    render(
+      <Dialog open onOpenChange={onOpenChange}>
+        <Dialog.Content title="Order">
+          <Listbox aria-label="Fruit" onValueChange={onValueChange}>
+            {fruitListboxOptions}
+          </Listbox>
+        </Dialog.Content>
+      </Dialog>,
+    );
+    const dialog = screen.getByRole('dialog', { name: 'Order' });
+    const list = within(dialog).getByRole('listbox', { name: 'Fruit' });
+    // The Dialog opens on its Close button; one Tab reaches the list, the next wraps to Close.
+    const close = within(dialog).getByRole('button', { name: 'Close' });
+    expect(close).toHaveFocus();
+    await user.tab();
+    expect(list).toHaveFocus();
+    const activeName = () =>
+      document.getElementById(list.getAttribute('aria-activedescendant') ?? '')?.textContent;
+    expect(activeName()).toBe('Apple');
+
+    await user.keyboard('{ArrowDown}');
+    expect(activeName()).toBe('Banana');
+    await user.keyboard('{Enter}');
+    expect(onValueChange).toHaveBeenCalledTimes(1);
+    expect(onValueChange.mock.calls[0][0]).toBe('banana');
+    expect(within(dialog).getByRole('option', { name: 'Banana' })).toHaveAttribute(
+      'aria-selected',
+      'true',
+    );
+    expect(onOpenChange).not.toHaveBeenCalled();
+
+    // The list consumes no Escape: it reaches the Dialog.
+    await user.keyboard('{Escape}');
+    expect(onOpenChange).toHaveBeenCalledTimes(1);
+    expect(onOpenChange).toHaveBeenCalledWith(false, expect.objectContaining({ reason: 'escape' }));
+    await expectNoA11yViolations(document.body);
+  });
+});
+
+describe('a Tooltip with relationship="label" around a ColorSwatch (spec §4.4 #4)', () => {
+  it.each([
+    ['the row layout', { layout: 'row', focusMode: 'arrow' }],
+    ['the grid layout', { layout: 'grid', focusMode: 'arrow' }],
+    ['tab mode in the row layout', { layout: 'row', focusMode: 'tab' }],
+    ['tab mode in the grid layout', { layout: 'grid', focusMode: 'tab' }],
+  ] as const)(
+    '%s: the swatch is named by the tooltip, which shows on focus',
+    async (_name, props) => {
+      const user = userEvent.setup();
+      render(
+        <SwatchPicker {...props} aria-label="Palette">
+          <Tooltip content="Ocean blue" relationship="label">
+            <ColorSwatch value="blue" color="#0f6cbd" />
+          </Tooltip>
+          <ColorSwatch value="red" color="#d13438" aria-label="Red" />
+        </SwatchPicker>,
+      );
+      const blue = screen.getByRole(
+        props.layout === 'row' && props.focusMode !== 'tab' ? 'radio' : 'button',
+        {
+          name: 'Ocean blue',
+        },
+      );
+      await user.tab();
+      expect(blue).toHaveFocus();
+      await waitFor(() => expect(tooltipSurface()).toHaveTextContent('Ocean blue'));
+      await user.keyboard('{Escape}');
+    },
+  );
+});
+
+describe('a Popover opened from an EmptySwatch holding a ColorPicker (spec §4.4 #5)', () => {
+  it('arrow keys inside the Popover do not move the grid’s focus; the ColorPicker keeps its own swatches', async () => {
+    const user = userEvent.setup();
+    const onOuterChange = vi.fn();
+    render(
+      <SwatchPicker
+        layout="grid"
+        aria-label="Palette"
+        items={accentSwatches}
+        defaultValue="red"
+        onValueChange={onOuterChange}
+      >
+        <Popover>
+          <Popover.Trigger>
+            <EmptySwatch />
+          </Popover.Trigger>
+          <Popover.Content aria-label="Custom color">
+            <ColorPicker aria-label="Custom" defaultValue="#0f6cbd" />
+          </Popover.Content>
+        </Popover>
+      </SwatchPicker>,
+    );
+    await user.click(button('Add color'));
+    const popup = await screen.findByRole('dialog', { name: 'Custom color' });
+    const hex = within(popup).getByRole('textbox', { name: 'Hex color value' });
+    act(() => hex.focus());
+    for (const key of ['ArrowLeft', 'ArrowRight', 'ArrowDown', 'ArrowUp', 'Home', 'End']) {
+      expect(fireEvent.keyDown(hex, { key })).toBe(true);
+    }
+    expect(hex).toHaveFocus();
+
+    // The picker's own swatches select and roam inside the popover.
+    const red = within(popup).getByRole('radio', { name: 'Red' });
+    await user.click(red);
+    expect(hex).toHaveValue('#d13438');
+    expect(red).toHaveAttribute('aria-checked', 'true');
+    await user.keyboard('{ArrowRight}');
+    expect(popup).toContainElement(document.activeElement as HTMLElement);
+    const swatches = within(popup).getAllByRole('radio');
+    expect(swatches.indexOf(red)).toBeGreaterThanOrEqual(0);
+    expect(swatches[swatches.indexOf(red) + 1]).toHaveFocus();
+    expect(onOuterChange).not.toHaveBeenCalled();
+    const outerRed = screen
+      .getByRole('button', { name: 'Red', hidden: true })
+      .closest('[role="gridcell"]');
+    expect(outerRed).toHaveAttribute('aria-selected', 'true');
+    await user.keyboard('{Escape}');
+  });
+});
+
+describe('a DatePicker in a Dialog (spec §4.4 #6)', () => {
+  it('Escape leaves the month view, then closes the DatePicker and returns focus, then closes the Dialog', async () => {
+    const user = userEvent.setup();
+    const onOpenChange = vi.fn();
+    render(
+      <Dialog open onOpenChange={onOpenChange}>
+        <Dialog.Content title="Order">
+          <DatePicker aria-label="Delivery date" locale="en-US" defaultValue={JUNE_15} />
+        </Dialog.Content>
+      </Dialog>,
+    );
+    const dialog = screen.getByRole('dialog', { name: 'Order' });
+    const toggle = within(dialog).getByRole('button', { name: 'Open calendar' });
+    await user.click(toggle);
+    const calendar = screen.getAllByRole('dialog').find((el) => el !== dialog)!;
+    expect(within(calendar).getByRole('grid')).toHaveAccessibleName('June 2025');
+
+    await user.click(within(calendar).getByRole('button', { name: 'June 2025' }));
+    expect(within(calendar).getByRole('grid')).toHaveAccessibleName('2025');
+    await expectNoA11yViolations(document.body);
+
+    // 1: the month view gives way to the day view; the DatePicker and the Dialog stay.
+    await user.keyboard('{Escape}');
+    await act(async () => {});
+    expect(within(calendar).getByRole('grid')).toHaveAccessibleName('June 2025');
+    expect(calendar).toBeInTheDocument();
+    expect(onOpenChange).not.toHaveBeenCalled();
+
+    // 2: the DatePicker closes and focus returns to its toggle.
+    await user.keyboard('{Escape}');
+    await act(async () => {});
+    expect(screen.getAllByRole('dialog')).toEqual([dialog]);
+    expect(toggle).toHaveFocus();
+    expect(onOpenChange).not.toHaveBeenCalled();
+
+    // 3: the Dialog closes.
+    await user.keyboard('{Escape}');
+    expect(onOpenChange).toHaveBeenCalledTimes(1);
+    expect(onOpenChange).toHaveBeenCalledWith(false, expect.objectContaining({ reason: 'escape' }));
+  });
+});
+
+describe('the custom picker of the Listbox story, on the package entry alone (spec §4.4 #8, R24)', () => {
+  const FONTS = ['Arial', 'Georgia', 'Verdana', 'Times New Roman', 'Courier New'] as const;
+
+  const matchesFont = (item: ListboxItem, text: string) =>
+    (item.textValue ?? item.label).toLowerCase().includes(text.toLowerCase());
+
+  /** The story's editable font picker: `useListbox`, `useListboxPopup`, `ListboxSurface`, `Option`. */
+  function FontPicker({ onSubmit }: { onSubmit: (font: string) => void }) {
+    const [open, setOpen] = React.useState(false);
+    const [value, setValue] = React.useState('');
+    const [draft, setDraft] = React.useState<string | null>(null);
+    const rootRef = React.useRef<HTMLDivElement>(null);
+    const inputRef = React.useRef<HTMLInputElement>(null);
+    const listbox = useListbox({
+      open,
+      onOpenChange: (next) => {
+        setOpen(next);
+        if (!next) setDraft(null);
+      },
+      mode: 'editable',
+      selectedValues: value ? [value] : [],
+      onSelect: (next) => {
+        setValue(next);
+        setDraft(null);
+      },
+      filter: draft ? (item) => matchesFont(item, draft) : undefined,
+      autoHighlight: draft ? 'first' : false,
+    });
+    const expanded = open && listbox.items.length > 0;
+    const { layerId, setReference, surfaceRef, floatingProps } = useListboxPopup({
+      open,
+      surfaceOpen: expanded,
+      onDismiss: () => {
+        setOpen(false);
+        setDraft(null);
+      },
+      rootRef,
+      anchorRef: inputRef,
+    });
+    const inputMergedRef = useMergedRefs<HTMLInputElement>(inputRef, setReference);
+
+    return (
+      <form
+        aria-label="Fonts form"
+        onSubmit={(event) => {
+          event.preventDefault();
+          onSubmit(String(new FormData(event.currentTarget).get('font') ?? ''));
+        }}
+      >
+        <div ref={rootRef}>
+          <input
+            type="text"
+            aria-label="Font"
+            autoComplete="off"
+            {...listbox.getComboboxProps()}
+            aria-expanded={expanded}
+            ref={inputMergedRef}
+            value={draft ?? value}
+            onChange={(event) => {
+              setDraft(event.target.value);
+              if (!open) setOpen(true);
+            }}
+            onBlur={() => setDraft(null)}
+            onKeyDown={(event) => {
+              if (event.key === 'Escape' && open && !expanded && !event.nativeEvent.isComposing) {
+                setOpen(false);
+                setDraft(null);
+                return;
+              }
+              listbox.onKeyDown(event);
+            }}
+            onKeyUp={listbox.onKeyUp}
+          />
+          <ListboxSurface
+            listbox={listbox}
+            layerId={layerId}
+            surfaceRef={surfaceRef}
+            floatingProps={floatingProps}
+            open={open}
+            expanded={expanded}
+            aria-label="Fonts"
+          >
+            {FONTS.map((font) => (
+              <Option key={font} value={font}>
+                {font}
+              </Option>
+            ))}
+          </ListboxSurface>
+        </div>
+        <input type="hidden" name="font" value={value} />
+        <button type="submit">Submit</button>
+      </form>
+    );
+  }
+
+  it('opens, filters, selects and submits through FormData', async () => {
+    const user = userEvent.setup();
+    const onSubmit = vi.fn<(font: string) => void>();
+    render(<FontPicker onSubmit={onSubmit} />);
+    const input = screen.getByRole('combobox', { name: 'Font' });
+    expect(input).toHaveAttribute('aria-expanded', 'false');
+    expect(screen.queryByRole('listbox')).not.toBeInTheDocument();
+
+    // Typing opens the list and filters the fonts.
+    await user.click(input);
+    await user.keyboard('a');
+    expect(input).toHaveAttribute('aria-expanded', 'true');
+    const fonts = () => screen.getAllByRole('option').map((option) => option.textContent);
+    expect(fonts()).toEqual(['Arial', 'Georgia', 'Verdana', 'Times New Roman']);
+    await user.keyboard('r');
+    expect(fonts()).toEqual(['Arial']);
+
+    // Enter selects the highlighted match, closes the list and shows the font.
+    await user.keyboard('{Enter}');
+    expect(input).toHaveValue('Arial');
+    expect(input).toHaveAttribute('aria-expanded', 'false');
+    expect(screen.queryByRole('listbox')).not.toBeInTheDocument();
+
+    await user.click(button('Submit'));
+    expect(onSubmit).toHaveBeenCalledWith('Arial');
+
+    // Reopened by the keyboard, the whole list is back and the choice is selected; a click selects.
+    await user.click(input);
+    await user.keyboard('{ArrowDown}');
+    expect(fonts()).toHaveLength(FONTS.length);
+    expect(screen.getByRole('option', { name: 'Arial' })).toHaveAttribute('aria-selected', 'true');
+    await user.click(screen.getByRole('option', { name: 'Verdana' }));
+    expect(input).toHaveValue('Verdana');
+    await user.click(button('Submit'));
+    expect(onSubmit).toHaveBeenLastCalledWith('Verdana');
+    await expectNoA11yViolations(document.body);
+  });
+
+  it('closes on Escape with options shown and restores the selected font’s name', async () => {
+    const user = userEvent.setup();
+    render(<FontPicker onSubmit={() => {}} />);
+    const input = screen.getByRole('combobox', { name: 'Font' });
+    await user.click(input);
+    await user.keyboard('ver{Enter}');
+    expect(input).toHaveValue('Verdana');
+    await user.keyboard('{Control>}a{/Control}geo');
+    expect(input).toHaveValue('geo');
+    expect(screen.getAllByRole('option')).toHaveLength(1);
+    await user.keyboard('{Escape}');
+    expect(screen.queryByRole('listbox')).not.toBeInTheDocument();
+    expect(input).toHaveValue('Verdana');
   });
 });

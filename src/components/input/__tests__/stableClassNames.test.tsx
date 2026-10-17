@@ -10,15 +10,22 @@ import { render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { renderToString } from 'react-dom/server';
 import {
+  calendarClassNames,
   checkboxClassNames,
   colorPickerClassNames,
+  colorPickerSwatchesClassNames,
+  colorSwatchClassNames,
   comboboxClassNames,
   datePickerClassNames,
   dropdownClassNames,
+  emptySwatchClassNames,
   fieldClassNames,
+  imageSwatchClassNames,
   infoLabelClassNames,
   inputClassNames,
   labelClassNames,
+  listboxClassNames,
+  listboxSurfaceClassNames,
   optionClassNames,
   optionGroupClassNames,
   radioGroupClassNames,
@@ -31,13 +38,17 @@ import {
   sliderClassNames,
   spinButtonClassNames,
   swatchPickerClassNames,
+  swatchPickerRowClassNames,
   switchClassNames,
   tagPickerClassNames,
   textareaClassNames,
   timePickerClassNames,
 } from '../../../lib/classNames';
+import { useListbox } from '../../../hooks/useListbox';
+import { useMergedRefs } from '../../../hooks/useMergedRefs';
 import { Button } from '../../button/Button';
 import { InfoLabel } from '../../data-display/InfoLabel';
+import { Calendar } from '../Calendar';
 import { Checkbox } from '../Checkbox';
 import { ColorPicker } from '../ColorPicker';
 import { Combobox, Option, OptionGroup } from '../Combobox';
@@ -46,6 +57,8 @@ import { Dropdown } from '../Dropdown';
 import { Field } from '../Field';
 import { Input } from '../Input';
 import { Label } from '../Label';
+import { Listbox } from '../Listbox';
+import { ListboxSurface, useListboxPopup } from '../Option';
 import { RadioGroup } from '../RadioGroup';
 import { Rating, RatingDisplay } from '../Rating';
 import { SearchBox } from '../SearchBox';
@@ -53,6 +66,7 @@ import { Select } from '../Select';
 import { Slider } from '../Slider';
 import { SpinButton } from '../SpinButton';
 import { SwatchPicker } from '../SwatchPicker';
+import { ColorSwatch, EmptySwatch, ImageSwatch } from '../SwatchPicker.swatches';
 import { Switch } from '../Switch';
 import { TagPicker } from '../TagPicker';
 import { Textarea } from '../Textarea';
@@ -63,6 +77,57 @@ function parse(html: string): HTMLDivElement {
   const host = document.createElement('div');
   host.innerHTML = html;
   return host;
+}
+
+/**
+ * A minimal custom picker on the public listbox primitives (P5-03): its `ListboxSurface` renders
+ * the list in place while closed and in the portaled surface while open.
+ */
+function CustomPicker() {
+  const [open, setOpen] = React.useState(false);
+  const rootRef = React.useRef<HTMLDivElement>(null);
+  const anchorRef = React.useRef<HTMLButtonElement>(null);
+  const listbox = useListbox({
+    open,
+    onOpenChange: (next) => setOpen(next),
+    mode: 'select-only',
+    selectedValues: [],
+    onSelect: () => {},
+  });
+  const expanded = open && listbox.items.length > 0;
+  const { layerId, setReference, surfaceRef, floatingProps } = useListboxPopup({
+    open,
+    surfaceOpen: expanded,
+    onDismiss: () => setOpen(false),
+    rootRef,
+    anchorRef,
+  });
+  const buttonRef = useMergedRefs<HTMLButtonElement>(anchorRef, setReference);
+  return (
+    <div ref={rootRef}>
+      <button
+        type="button"
+        aria-label="Font"
+        {...listbox.getComboboxProps()}
+        aria-expanded={expanded}
+        ref={buttonRef}
+        onClick={() => setOpen((current) => !current)}
+      >
+        Pick a font
+      </button>
+      <ListboxSurface
+        listbox={listbox}
+        layerId={layerId}
+        surfaceRef={surfaceRef}
+        floatingProps={floatingProps}
+        open={open}
+        expanded={expanded}
+        aria-label="Fonts"
+      >
+        <Option value="georgia">Georgia</Option>
+      </ListboxSurface>
+    </div>
+  );
 }
 
 describe('stable class names: input folder', () => {
@@ -622,5 +687,524 @@ describe('stable class names: input folder', () => {
     expect(input).toHaveClass(inputClassNames.input);
     expect(input?.parentElement).toHaveClass(inputClassNames.root);
     expect(host.querySelector('p')).toHaveClass(fieldClassNames.hint);
+  });
+});
+
+/** Every class of an element that comes from the registry (`wave-…`), sorted. */
+function stableClassesOf(element: Element | null | undefined): string[] {
+  return [...(element?.classList ?? [])].filter((cls) => cls.startsWith('wave-')).sort();
+}
+
+describe('stable class names: the 0.10 listbox and swatch parts', () => {
+  it('Option: the multi-select box is the indicator part; its check glyph the checkIcon part', () => {
+    render(
+      <Listbox aria-label="Fruit" multiselect defaultValue={['apple']}>
+        <Option value="apple">Apple</Option>
+        <Option value="pear">Pear</Option>
+      </Listbox>,
+    );
+    const apple = screen.getByRole('option', { name: 'Apple' });
+    const box = apple.querySelector('[data-wave-option-box]');
+    expect(box).toHaveClass(optionClassNames.indicator);
+    expect(box?.querySelector('svg')).toHaveClass(optionClassNames.checkIcon);
+    expect(within(apple).getByText('Apple')).toHaveClass(optionClassNames.content);
+    // An unselected option draws the box (the indicator) without a glyph.
+    const pear = screen.getByRole('option', { name: 'Pear' });
+    const pearBox = pear.querySelector('[data-wave-option-box]');
+    expect(pearBox).toHaveClass(optionClassNames.indicator);
+    expect(pearBox?.firstElementChild).toBeNull();
+  });
+
+  it('Option: the span of a checkIcon slot is the checkIcon part, single and multi-select', () => {
+    render(
+      <>
+        <Listbox aria-label="Single" defaultValue="apple">
+          <Option value="apple" checkIcon={<svg data-testid="single-glyph" />}>
+            Apple
+          </Option>
+        </Listbox>
+        <Listbox aria-label="Multi" multiselect defaultValue={['apple']}>
+          <Option value="apple" checkIcon={<svg data-testid="multi-glyph" />}>
+            Apple
+          </Option>
+        </Listbox>
+      </>,
+    );
+    expect(screen.getByTestId('single-glyph').parentElement).toHaveClass(
+      optionClassNames.checkIcon,
+    );
+    const multiGlyph = screen.getByTestId('multi-glyph').parentElement;
+    expect(multiGlyph).toHaveClass(optionClassNames.checkIcon);
+    expect(multiGlyph?.parentElement).toHaveClass(optionClassNames.indicator);
+  });
+
+  it('OptionGroup: a rich label renders in the label part; a label-less group renders none', () => {
+    render(
+      <Listbox aria-label="Fruit">
+        <OptionGroup
+          label={
+            <>
+              <svg aria-hidden="true" /> Citrus
+            </>
+          }
+        >
+          <Option value="orange">Orange</Option>
+        </OptionGroup>
+        <OptionGroup aria-label="Berries">
+          <Option value="strawberry">Strawberry</Option>
+        </OptionGroup>
+      </Listbox>,
+    );
+    const citrus = screen.getByRole('group', { name: 'Citrus' });
+    expect(citrus).toHaveClass(optionGroupClassNames.list);
+    expect(citrus.previousElementSibling).toHaveClass(optionGroupClassNames.label);
+    const berries = screen.getByRole('group', { name: 'Berries' });
+    expect(berries).toHaveClass(optionGroupClassNames.list);
+    expect(berries.previousElementSibling).toBeNull();
+    expect(berries.parentElement).toHaveClass(optionGroupClassNames.root);
+  });
+
+  it('Listbox: the root on the <ul> (where className lands), with Option and OptionGroup parts', () => {
+    render(
+      <Listbox aria-label="Fruit" className="wave-test-custom-class">
+        <Listbox.Option value="apple">Apple</Listbox.Option>
+        <Listbox.OptionGroup label="Citrus">
+          <Listbox.Option value="orange">Orange</Listbox.Option>
+        </Listbox.OptionGroup>
+      </Listbox>,
+    );
+    const listbox = screen.getByRole('listbox', { name: 'Fruit' });
+    expect(stableClassesOf(listbox)).toEqual([listboxClassNames.root, 'wave-test-custom-class']);
+    expect(screen.getByRole('option', { name: 'Apple' })).toHaveClass(optionClassNames.root);
+    expect(screen.getByRole('group', { name: 'Citrus' })).toHaveClass(optionGroupClassNames.list);
+  });
+
+  it('ListboxSurface: the root on the portaled surface and list on the <ul>', async () => {
+    const user = userEvent.setup();
+    render(<CustomPicker />);
+    // Closed: the list renders in place, hidden, and keeps its part class; no surface exists.
+    const inline = screen.getByRole('listbox', { hidden: true });
+    expect(stableClassesOf(inline)).toEqual([listboxSurfaceClassNames.list]);
+    expect(document.querySelector('[data-wave-listbox-surface]')).toBeNull();
+    await user.click(screen.getByRole('combobox', { name: 'Font' }));
+    const list = screen.getByRole('listbox', { name: 'Fonts' });
+    expect(stableClassesOf(list)).toEqual([listboxSurfaceClassNames.list]);
+    const surface = list.parentElement;
+    expect(surface).toHaveAttribute('data-wave-listbox-surface');
+    expect(stableClassesOf(surface)).toEqual([listboxSurfaceClassNames.root]);
+    expect(screen.getByRole('option', { name: 'Georgia' })).toHaveClass(optionClassNames.root);
+  });
+
+  it.each([
+    [
+      'Dropdown',
+      () => (
+        <Dropdown aria-label="Fruit" defaultOpen>
+          <Option value="apple">Apple</Option>
+        </Dropdown>
+      ),
+      dropdownClassNames,
+    ],
+    [
+      'Combobox',
+      () => (
+        <Combobox aria-label="Fruit" defaultOpen>
+          <Option value="apple">Apple</Option>
+        </Combobox>
+      ),
+      comboboxClassNames,
+    ],
+    [
+      'TagPicker',
+      () => (
+        <TagPicker aria-label="Fruit" options={[{ value: 'apple', label: 'Apple' }]} defaultOpen />
+      ),
+      tagPickerClassNames,
+    ],
+  ] as const)(
+    '%s: its list and surface carry ListboxSurface’s classes and its own parts (D5)',
+    (_name, ui, host) => {
+      render(ui());
+      const listbox = screen.getByRole('listbox');
+      expect(stableClassesOf(listbox)).toEqual(
+        [listboxSurfaceClassNames.list, host.listbox].sort(),
+      );
+      expect(stableClassesOf(listbox.parentElement)).toEqual(
+        [listboxSurfaceClassNames.root, host.surface].sort(),
+      );
+    },
+  );
+
+  it('Dropdown: an expandIcon slot renders in the expandIcon part, renderValue in the value part', () => {
+    render(
+      <Dropdown
+        aria-label="Color"
+        defaultValue="red"
+        expandIcon={<svg data-testid="own-chevron" />}
+        renderValue={(value) => <b data-testid="rich-value">{value.toUpperCase()}</b>}
+      >
+        <Option value="red">Red</Option>
+      </Dropdown>,
+    );
+    expect(screen.getByTestId('own-chevron').parentElement).toHaveClass(
+      dropdownClassNames.expandIcon,
+    );
+    expect(screen.getByTestId('rich-value').parentElement).toHaveClass(dropdownClassNames.value);
+  });
+
+  it('Dropdown: the multi-select value text is the value part', () => {
+    render(
+      <Dropdown aria-label="Colors" multiselect defaultValue={['red', 'blue']}>
+        <Option value="red">Red</Option>
+        <Option value="blue">Blue</Option>
+      </Dropdown>,
+    );
+    const button = screen.getByRole('combobox', { name: 'Colors' });
+    expect(within(button).getByText('Red, Blue')).toHaveClass(dropdownClassNames.value);
+  });
+
+  it('SwatchPicker (row layout): each swatch kind carries its root, the swatch part and its icon part', () => {
+    render(
+      <SwatchPicker
+        aria-label="Accent"
+        defaultValue="blue"
+        items={[{ value: 'blue', color: '#0f6cbd', label: 'Blue' }]}
+      >
+        <ColorSwatch
+          value="red"
+          color="#d13438"
+          aria-label="Red"
+          icon={<svg data-testid="red-glyph" />}
+        />
+        <ColorSwatch value="grey" color="#8a8886" aria-label="Grey" disabled />
+        <ImageSwatch value="dots" src="/dots.png" aria-label="Dots" />
+        <EmptySwatch />
+      </SwatchPicker>,
+    );
+    expect(stableClassesOf(screen.getByRole('radiogroup', { name: 'Accent' }))).toEqual([
+      swatchPickerClassNames.root,
+    ]);
+    // `items` render as ColorSwatches: the same classes as a ColorSwatch child.
+    const blue = screen.getByRole('radio', { name: 'Blue' });
+    const grey = screen.getByRole('radio', { name: 'Grey' });
+    for (const swatch of [blue, screen.getByRole('radio', { name: 'Red' }), grey]) {
+      expect(stableClassesOf(swatch)).toEqual(
+        [colorSwatchClassNames.root, swatchPickerClassNames.swatch].sort(),
+      );
+    }
+    expect(stableClassesOf(screen.getByRole('radio', { name: 'Dots' }))).toEqual(
+      [imageSwatchClassNames.root, swatchPickerClassNames.swatch].sort(),
+    );
+    const add = screen.getByRole('button', { name: 'Add color' });
+    expect(stableClassesOf(add)).toEqual(
+      [emptySwatchClassNames.root, swatchPickerClassNames.swatch].sort(),
+    );
+    // Icons: the slot's span on a ColorSwatch, the default plus glyph's span on an EmptySwatch.
+    expect(screen.getByTestId('red-glyph').parentElement).toHaveClass(colorSwatchClassNames.icon);
+    expect(stableClassesOf(add.firstElementChild)).toEqual([emptySwatchClassNames.icon]);
+    // The check of the selected swatch and the slash of a disabled one are uncontrolled glyphs
+    // that fill the swatch button, so they carry no class (phase 3 Appendix A, judgement 26).
+    expect(blue.querySelectorAll('[class*="wave-"]')).toHaveLength(0);
+    expect(grey.querySelector('[data-wave-swatch-slash]')).not.toBeNull();
+    expect(grey.querySelectorAll('[class*="wave-"]')).toHaveLength(0);
+  });
+
+  it('SwatchPicker (grid layout): explicit and implicit rows carry the row root; cells carry none', () => {
+    render(
+      <SwatchPicker
+        aria-label="Accent"
+        layout="grid"
+        required
+        items={[{ value: 'blue', color: '#0f6cbd', label: 'Blue' }]}
+      >
+        <EmptySwatch />
+        <SwatchPicker.Row className="wave-test-custom-class">
+          <ColorSwatch value="red" color="#d13438" aria-label="Red" />
+        </SwatchPicker.Row>
+      </SwatchPicker>,
+    );
+    const grid = screen.getByRole('grid', { name: 'Accent' });
+    expect(stableClassesOf(grid)).toEqual([swatchPickerClassNames.root]);
+    const rows = screen.getAllByRole('row');
+    expect(rows).toHaveLength(2);
+    expect(stableClassesOf(rows[0])).toEqual([swatchPickerRowClassNames.root]);
+    expect(stableClassesOf(rows[1])).toEqual([
+      swatchPickerRowClassNames.root,
+      'wave-test-custom-class',
+    ]);
+    // The gridcell around each swatch button is a layout wrapper, not a part.
+    for (const cell of screen.getAllByRole('gridcell')) expect(stableClassesOf(cell)).toEqual([]);
+    expect(stableClassesOf(screen.getByRole('button', { name: 'Red' }))).toEqual(
+      [colorSwatchClassNames.root, swatchPickerClassNames.swatch].sort(),
+    );
+    expect(stableClassesOf(screen.getByRole('button', { name: 'Add color' }))).toEqual(
+      [emptySwatchClassNames.root, swatchPickerClassNames.swatch].sort(),
+    );
+    // The visually hidden required hint is no part (spec D4).
+    const hint = grid.querySelector('span[hidden]');
+    expect(hint).toHaveTextContent('Required');
+    expect(stableClassesOf(hint)).toEqual([]);
+  });
+
+  it('SwatchPicker.Row in the row layout carries the row root too', () => {
+    render(
+      <SwatchPicker aria-label="Accent">
+        <SwatchPicker.Row data-testid="line">
+          <ColorSwatch value="red" color="#d13438" aria-label="Red" />
+        </SwatchPicker.Row>
+      </SwatchPicker>,
+    );
+    expect(stableClassesOf(screen.getByTestId('line'))).toEqual([swatchPickerRowClassNames.root]);
+  });
+
+  it('ColorPicker.Swatches with layout="grid": a grid of the presets with the part classes', () => {
+    render(
+      <ColorPicker aria-label="Accent color" defaultValue="#0f6cbd">
+        <ColorPicker.Swatches layout="grid">
+          <EmptySwatch />
+        </ColorPicker.Swatches>
+      </ColorPicker>,
+    );
+    const grid = screen.getByRole('grid', { name: 'Preset colors' });
+    expect(stableClassesOf(grid)).toEqual(
+      [colorPickerSwatchesClassNames.root, swatchPickerClassNames.root].sort(),
+    );
+    // The presets and the extra swatch share one implicit row.
+    const rows = screen.getAllByRole('row');
+    expect(rows).toHaveLength(1);
+    expect(stableClassesOf(rows[0])).toEqual([swatchPickerRowClassNames.root]);
+    const blue = within(rows[0]).getByRole('button', { name: 'Blue' });
+    expect(blue).toHaveAttribute('aria-pressed', 'true');
+    expect(stableClassesOf(blue)).toEqual(
+      [colorSwatchClassNames.root, swatchPickerClassNames.swatch].sort(),
+    );
+    expect(stableClassesOf(within(rows[0]).getByRole('button', { name: 'Add color' }))).toEqual(
+      [emptySwatchClassNames.root, swatchPickerClassNames.swatch].sort(),
+    );
+  });
+
+  it('renders the 0.10 classes in the server HTML (renderToString)', () => {
+    const host = parse(
+      renderToString(
+        <>
+          <Listbox aria-label="Fruit" multiselect defaultValue={['apple']}>
+            <Option value="apple">Apple</Option>
+          </Listbox>
+          <SwatchPicker aria-label="Accent" layout="grid">
+            <ColorSwatch value="red" color="#d13438" aria-label="Red" />
+          </SwatchPicker>
+        </>,
+      ),
+    );
+    expect(host.querySelector('[role="listbox"]')).toHaveClass(listboxClassNames.root);
+    expect(host.querySelector('[data-wave-option-box]')).toHaveClass(optionClassNames.indicator);
+    expect(host.querySelector('[role="row"]')).toHaveClass(swatchPickerRowClassNames.root);
+    expect(host.querySelector('[role="gridcell"] button')).toHaveClass(
+      colorSwatchClassNames.root,
+      swatchPickerClassNames.swatch,
+    );
+  });
+});
+
+describe('stable class names: the 0.10 calendar parts', () => {
+  it('Calendar: root on the group, and its header, buttons, heading, grid, weekdays and days', () => {
+    render(<Calendar aria-label="Due date" locale="en-US" today={new Date(2025, 5, 12)} />);
+    const group = screen.getByRole('group', { name: 'Due date' });
+    expect(stableClassesOf(group)).toEqual([calendarClassNames.root]);
+    const previous = within(group).getByRole('button', { name: 'Previous month' });
+    expect(stableClassesOf(previous)).toEqual([calendarClassNames.previousButton]);
+    expect(stableClassesOf(previous.parentElement)).toEqual([calendarClassNames.header]);
+    expect(stableClassesOf(within(group).getByRole('button', { name: 'Next month' }))).toEqual([
+      calendarClassNames.nextButton,
+    ]);
+    const heading = within(group).getByRole('button', { name: 'June 2025' }).parentElement;
+    expect(heading).toHaveAttribute('aria-live', 'polite');
+    expect(stableClassesOf(heading)).toEqual([calendarClassNames.heading]);
+    const grid = within(group).getByRole('grid');
+    expect(stableClassesOf(grid)).toEqual([calendarClassNames.grid]);
+    expect(stableClassesOf(within(grid).getAllByRole('columnheader')[0])).toEqual([
+      calendarClassNames.weekday,
+    ]);
+    expect(
+      stableClassesOf(within(grid).getByRole('button', { name: 'Thursday, June 12, 2025' })),
+    ).toEqual([calendarClassNames.day]);
+    // Layout wrappers (the gridcells) and the hidden texts are no parts.
+    expect(stableClassesOf(within(grid).getAllByRole('gridcell')[0])).toEqual([]);
+  });
+
+  it("Calendar: the required hint is no part, and DatePicker's calendar keeps its own classes", async () => {
+    const user = userEvent.setup();
+    render(
+      <>
+        <Calendar aria-label="Due date" required today={new Date(2025, 5, 12)} />
+        <DatePicker aria-label="Start date" />
+      </>,
+    );
+    const group = screen.getByRole('group', { name: 'Due date' });
+    const hint = document.getElementById(group.getAttribute('aria-describedby') ?? '');
+    expect(hint).toHaveTextContent('Required');
+    expect(stableClassesOf(hint)).toEqual([]);
+    await user.click(screen.getByRole('button', { name: 'Open calendar' }));
+    const dialog = screen.getByRole('dialog');
+    expect(stableClassesOf(within(dialog).getByRole('grid'))).toEqual([datePickerClassNames.grid]);
+    expect(stableClassesOf(within(dialog).getByRole('button', { name: 'Previous month' }))).toEqual(
+      [datePickerClassNames.previousMonthButton],
+    );
+  });
+
+  it('Calendar: the heading button, and the month and year grids with their cells', async () => {
+    const user = userEvent.setup();
+    render(
+      <Calendar
+        aria-label="Due date"
+        locale="en-US"
+        today={new Date(2025, 5, 12)}
+        defaultValue={new Date(2025, 5, 15)}
+      />,
+    );
+    const group = screen.getByRole('group', { name: 'Due date' });
+    const headingButton = within(group).getByRole('button', { name: 'June 2025' });
+    expect(stableClassesOf(headingButton)).toEqual([calendarClassNames.headingButton]);
+    // The hidden hint is no part.
+    const hint = document.getElementById(headingButton.getAttribute('aria-describedby') ?? '');
+    expect(hint).toHaveTextContent('Choose a month');
+    expect(stableClassesOf(hint)).toEqual([]);
+    await user.click(headingButton);
+    let grid = within(group).getByRole('grid', { name: '2025' });
+    expect(stableClassesOf(grid)).toEqual([calendarClassNames.grid]);
+    const june = within(grid).getByRole('button', { name: 'June 2025' });
+    expect(stableClassesOf(june)).toEqual([calendarClassNames.month]);
+    expect(stableClassesOf(june.closest('[role="gridcell"]'))).toEqual([]);
+    expect(stableClassesOf(within(group).getByRole('button', { name: 'Previous year' }))).toEqual([
+      calendarClassNames.previousButton,
+    ]);
+    expect(stableClassesOf(within(group).getByRole('button', { name: 'Next year' }))).toEqual([
+      calendarClassNames.nextButton,
+    ]);
+    const yearButton = within(group).getByRole('button', { name: '2025' });
+    expect(stableClassesOf(yearButton)).toEqual([calendarClassNames.headingButton]);
+    expect(stableClassesOf(yearButton.parentElement)).toEqual([calendarClassNames.heading]);
+    await user.click(yearButton);
+    grid = within(group).getByRole('grid');
+    expect(stableClassesOf(grid)).toEqual([calendarClassNames.grid]);
+    expect(stableClassesOf(within(grid).getByRole('button', { name: '2025' }))).toEqual([
+      calendarClassNames.year,
+    ]);
+    expect(stableClassesOf(within(grid).getByRole('button', { name: '2019' }))).toEqual([
+      calendarClassNames.year,
+    ]);
+    expect(
+      stableClassesOf(document.getElementById(grid.getAttribute('aria-labelledby') ?? '')),
+    ).toEqual([calendarClassNames.heading]);
+    expect(stableClassesOf(within(group).getByRole('button', { name: 'Previous decade' }))).toEqual(
+      [calendarClassNames.previousButton],
+    );
+  });
+
+  it("DatePicker: the heading button, months and years carry DatePicker's classes", async () => {
+    const user = userEvent.setup();
+    render(
+      <DatePicker aria-label="Start date" locale="en-US" defaultValue={new Date(2025, 5, 15)} />,
+    );
+    await user.click(screen.getByRole('button', { name: 'Open calendar' }));
+    const dialog = screen.getByRole('dialog');
+    const headingButton = within(dialog).getByRole('button', { name: 'June 2025' });
+    expect(stableClassesOf(headingButton)).toEqual([datePickerClassNames.headingButton]);
+    expect(stableClassesOf(headingButton.parentElement)).toEqual([datePickerClassNames.heading]);
+    await user.click(headingButton);
+    const months = within(dialog).getByRole('grid', { name: '2025' });
+    expect(stableClassesOf(months)).toEqual([datePickerClassNames.grid]);
+    expect(stableClassesOf(within(months).getByRole('button', { name: 'June 2025' }))).toEqual([
+      datePickerClassNames.month,
+    ]);
+    expect(stableClassesOf(within(dialog).getByRole('button', { name: 'Previous year' }))).toEqual([
+      datePickerClassNames.previousMonthButton,
+    ]);
+    await user.click(within(dialog).getByRole('button', { name: '2025' }));
+    const years = within(dialog).getByRole('grid');
+    expect(stableClassesOf(years)).toEqual([datePickerClassNames.grid]);
+    expect(stableClassesOf(within(years).getByRole('button', { name: '2025' }))).toEqual([
+      datePickerClassNames.year,
+    ]);
+    expect(stableClassesOf(within(dialog).getByRole('button', { name: 'Next decade' }))).toEqual([
+      datePickerClassNames.nextMonthButton,
+    ]);
+  });
+
+  it('Calendar: week numbers, the marked-day dot and the footer button are parts', () => {
+    render(
+      <Calendar
+        aria-label="Due date"
+        locale="en-US"
+        today={new Date(2025, 5, 12)}
+        showWeekNumbers
+        showGoToToday
+        markedDates={(date) => date.getDate() === 16}
+      />,
+    );
+    const group = screen.getByRole('group', { name: 'Due date' });
+    const grid = within(group).getByRole('grid');
+    expect(stableClassesOf(within(grid).getAllByRole('columnheader')[0])).toEqual([
+      calendarClassNames.weekNumberHeader,
+    ]);
+    expect(stableClassesOf(within(grid).getAllByRole('columnheader')[1])).toEqual([
+      calendarClassNames.weekday,
+    ]);
+    expect(stableClassesOf(within(grid).getAllByRole('rowheader')[0])).toEqual([
+      calendarClassNames.weekNumber,
+    ]);
+    const marked = within(grid).getByRole('button', { name: 'Monday, June 16, 2025, marked' });
+    expect(stableClassesOf(marked)).toEqual([calendarClassNames.day]);
+    expect(stableClassesOf(marked.querySelector('[aria-hidden="true"]'))).toEqual([
+      calendarClassNames.markedDot,
+    ]);
+    const today = within(group).getByRole('button', { name: 'Go to today' });
+    expect(stableClassesOf(today)).toEqual([calendarClassNames.todayButton]);
+    expect(stableClassesOf(today.parentElement)).toEqual([calendarClassNames.footer]);
+  });
+
+  it('DatePicker: the same parts carry its classes, and the Close button its own', async () => {
+    const user = userEvent.setup();
+    render(
+      <DatePicker
+        aria-label="Start date"
+        locale="en-US"
+        today={new Date(2025, 5, 12)}
+        showWeekNumbers
+        showGoToToday
+        showCloseButton
+        markedDates={(date) => date.getDate() === 16}
+      />,
+    );
+    await user.click(screen.getByRole('button', { name: 'Open calendar' }));
+    const dialog = screen.getByRole('dialog');
+    const grid = within(dialog).getByRole('grid');
+    expect(stableClassesOf(within(grid).getAllByRole('columnheader')[0])).toEqual([
+      datePickerClassNames.weekNumberHeader,
+    ]);
+    expect(stableClassesOf(within(grid).getAllByRole('rowheader')[0])).toEqual([
+      datePickerClassNames.weekNumber,
+    ]);
+    const marked = within(grid).getByRole('button', { name: 'Monday, June 16, 2025, marked' });
+    expect(stableClassesOf(marked.querySelector('[aria-hidden="true"]'))).toEqual([
+      datePickerClassNames.markedDot,
+    ]);
+    const today = within(dialog).getByRole('button', { name: 'Go to today' });
+    expect(stableClassesOf(today)).toEqual([datePickerClassNames.todayButton]);
+    const close = within(dialog).getByRole('button', { name: 'Close' });
+    expect(stableClassesOf(close)).toEqual([datePickerClassNames.closeButton]);
+    expect(stableClassesOf(close.parentElement)).toEqual([datePickerClassNames.footer]);
+    expect(close.parentElement).toBe(today.parentElement);
+  });
+
+  it('renders the calendar classes in the server HTML (renderToString)', () => {
+    const host = parse(
+      renderToString(
+        <Calendar aria-label="Due date" locale="en-US" today={new Date(2025, 5, 12)} />,
+      ),
+    );
+    expect(host.querySelector('[role="group"]')).toHaveClass(calendarClassNames.root);
+    expect(host.querySelector('[role="grid"]')).toHaveClass(calendarClassNames.grid);
+    expect(host.querySelector('[data-date="2025-06-12"]')).toHaveClass(calendarClassNames.day);
   });
 });
