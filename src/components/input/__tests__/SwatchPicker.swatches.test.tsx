@@ -306,17 +306,6 @@ describe('ColorSwatch options (D21, D22)', () => {
     ]);
   });
 
-  it('borderColor sets the inline border color', () => {
-    render(
-      <SwatchPicker aria-label="Color">
-        <ColorSwatch value="w" color="#ffffff" aria-label="White" borderColor="#808080" />
-      </SwatchPicker>,
-    );
-    expect(screen.getByRole('radio', { name: 'White' })).toHaveStyle({
-      borderColor: 'rgb(128, 128, 128)',
-    });
-  });
-
   it('per-swatch size and shape override the picker', () => {
     render(
       <SwatchPicker aria-label="Color" size="large" shape="square">
@@ -513,5 +502,209 @@ describe('EmptySwatch', () => {
 
   it('throws outside a picker in development', () => {
     expectThrows(<EmptySwatch />, '[WaveUI] EmptySwatch must be used within SwatchPicker');
+  });
+});
+
+describe('swatch kinds: system props and production', () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+    vi.unstubAllEnvs();
+  });
+
+  testSystemProps(ImageSwatch, {
+    expectedTag: 'button',
+    displayName: 'ImageSwatch',
+    defaultProps: { value: 'dots', src: '/dots.png', 'aria-label': 'Dots' },
+    wrapper: ({ children }) => (
+      <SwatchPicker aria-label="Pattern" defaultValue="dots">
+        {children}
+      </SwatchPicker>
+    ),
+    a11yVariants: [
+      { name: 'unselected', props: { value: 'other', src: '/o.png', 'aria-label': 'Other' } },
+      {
+        name: 'disabled',
+        props: { value: 'off', src: '/o.png', 'aria-label': 'Off', disabled: true },
+      },
+    ],
+  });
+
+  testSystemProps(EmptySwatch, {
+    expectedTag: 'button',
+    displayName: 'EmptySwatch',
+    defaultProps: {},
+    wrapper: ({ children }) => (
+      <SwatchPicker aria-label="Color" defaultValue="a">
+        <ColorSwatch value="a" color="#000001" aria-label="A" />
+        {children}
+      </SwatchPicker>
+    ),
+  });
+
+  it('ImageSwatch renders inert in production outside a picker', () => {
+    vi.stubEnv('NODE_ENV', 'production');
+    const error = vi.spyOn(console, 'error').mockImplementation(() => {});
+    render(<ImageSwatch value="x" src="/x.png" aria-label="X" />);
+    const swatch = screen.getByRole('radio', { name: 'X' });
+    expect(swatch).toHaveAttribute('tabindex', '-1');
+    expect(swatch).toHaveAttribute('aria-checked', 'false');
+    expect(error.mock.calls).toEqual([['[WaveUI] ImageSwatch must be used within SwatchPicker']]);
+  });
+
+  it('ImageSwatch throws outside a picker in development', () => {
+    expectThrows(
+      <ImageSwatch value="x" src="/x.png" />,
+      '[WaveUI] ImageSwatch must be used within SwatchPicker',
+    );
+  });
+
+  it('EmptySwatch renders inert in production outside a picker', async () => {
+    vi.stubEnv('NODE_ENV', 'production');
+    const error = vi.spyOn(console, 'error').mockImplementation(() => {});
+    const onClick = vi.fn();
+    render(<EmptySwatch onClick={onClick} />);
+    await userEvent.setup().click(screen.getByRole('button', { name: 'Add color' }));
+    expect(onClick).toHaveBeenCalledTimes(1);
+    expect(error.mock.calls).toEqual([['[WaveUI] EmptySwatch must be used within SwatchPicker']]);
+  });
+});
+
+describe('swatch fix round 1', () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it('a disabled selected swatch keeps its selected state under the slash; the tab stop is enabled', () => {
+    render(
+      <SwatchPicker aria-label="Color" defaultValue="b">
+        <ColorSwatch value="a" color="#000001" aria-label="A" />
+        <ColorSwatch value="b" color="#000002" aria-label="B" disabled />
+      </SwatchPicker>,
+    );
+    const b = screen.getByRole('radio', { name: 'B' });
+    expect(b).toHaveAttribute('aria-checked', 'true');
+    expect(b).toHaveAttribute('data-selected');
+    expect(b).toHaveClass('ring-2');
+    // The check (a halo and a glyph) and the slash.
+    expect(b.querySelectorAll('svg')).toHaveLength(3);
+    expect(b.querySelector('svg[data-wave-swatch-slash]')).not.toBeNull();
+    expect(screen.getByRole('radio', { name: 'A' })).toHaveAttribute('tabindex', '0');
+  });
+
+  it('draws the slash lines with their own stroke', () => {
+    render(
+      <SwatchPicker aria-label="Color">
+        <ColorSwatch value="a" color="#000001" aria-label="A" disabled />
+      </SwatchPicker>,
+    );
+    const slash = screen.getByRole('radio', { name: 'A' }).querySelector('svg')!;
+    expect(slash).not.toHaveAttribute('stroke');
+    const lines = slash.querySelectorAll('line');
+    expect(lines).toHaveLength(2);
+    lines.forEach((line) => expect(line).toHaveAttribute('stroke', 'currentColor'));
+  });
+
+  it('EmptySwatch keeps the plus for an unwrapped button without children, hides it for [] and ""', () => {
+    const warn = spyWarn();
+    render(
+      <SwatchPicker aria-label="Color">
+        <EmptySwatch aria-label="Button" icon={<button type="button" />} />
+        <EmptySwatch aria-label="Array" icon={[]} />
+        <EmptySwatch aria-label="Text" icon="" />
+      </SwatchPicker>,
+    );
+    expect(screen.getByRole('button', { name: 'Button' }).querySelector('svg')).not.toBeNull();
+    expect(screen.getByRole('button', { name: 'Array' }).querySelector('svg')).toBeNull();
+    expect(screen.getByRole('button', { name: 'Array' }).querySelector('span')).toBeNull();
+    expect(screen.getByRole('button', { name: 'Text' }).querySelector('svg')).toBeNull();
+    expect(screen.getByRole('button', { name: 'Text' }).querySelector('span')).toBeNull();
+    expect(warn).toHaveBeenCalledTimes(1);
+  });
+
+  it('a selected ImageSwatch has a forced-colors sign; an unselected one does not', () => {
+    render(
+      <SwatchPicker aria-label="Pattern" defaultValue="a">
+        <ImageSwatch value="a" src="/a.png" aria-label="A" />
+        <ImageSwatch value="b" src="/b.png" aria-label="B" />
+      </SwatchPicker>,
+    );
+    expect(screen.getByRole('radio', { name: 'A' })).toHaveClass(
+      'forced-colors:border-[Highlight]',
+    );
+    expect(screen.getByRole('radio', { name: 'B' })).not.toHaveClass(
+      'forced-colors:border-[Highlight]',
+    );
+  });
+
+  it('borderColor goes through a variable, so the forced-colors edge wins', () => {
+    render(
+      <SwatchPicker aria-label="Color">
+        <ColorSwatch value="w" color="#ffffff" aria-label="White" borderColor="#808080" />
+        <ColorSwatch value="k" color="#000000" aria-label="Black" />
+      </SwatchPicker>,
+    );
+    const white = screen.getByRole('radio', { name: 'White' });
+    expect(white.style.getPropertyValue('--wave-swatch-border')).toBe('#808080');
+    expect(white.style.borderColor).toBe('');
+    expect(white).toHaveClass('forced-colors:border-[CanvasText]');
+    expect(
+      screen.getByRole('radio', { name: 'Black' }).style.getPropertyValue('--wave-swatch-border'),
+    ).toBe('');
+  });
+
+  it('EmptySwatch drops its default name when aria-labelledby is passed', () => {
+    render(
+      <SwatchPicker aria-label="Color">
+        <span id="lbl">Custom</span>
+        <EmptySwatch aria-labelledby="lbl" />
+      </SwatchPicker>,
+    );
+    const add = screen.getByRole('button', { name: 'Custom' });
+    expect(add).not.toHaveAttribute('aria-label');
+  });
+
+  it('a disabled ImageSwatch cannot be clicked or reached by an arrow', async () => {
+    const onValueChange = vi.fn();
+    const user = userEvent.setup();
+    render(
+      <SwatchPicker aria-label="Pattern" defaultValue="a" onValueChange={onValueChange}>
+        <ImageSwatch value="a" src="/a.png" aria-label="A" />
+        <ImageSwatch value="b" src="/b.png" aria-label="B" disabled />
+        <ImageSwatch value="c" src="/c.png" aria-label="C" />
+      </SwatchPicker>,
+    );
+    await user.click(screen.getByRole('radio', { name: 'B' }));
+    expect(onValueChange).not.toHaveBeenCalled();
+    act(() => screen.getByRole('radio', { name: 'A' }).focus());
+    await user.keyboard('{ArrowRight}');
+    expect(screen.getByRole('radio', { name: 'C' })).toHaveFocus();
+    expect(screen.getByRole('radio', { name: 'B' })).toHaveAttribute('aria-checked', 'false');
+    await act(async () => {});
+  });
+
+  it('escapes quotes and parentheses in src', () => {
+    render(
+      <SwatchPicker aria-label="Pattern">
+        <ImageSwatch value="a" src={'/a"b(c).png'} aria-label="A" />
+      </SwatchPicker>,
+    );
+    expect(screen.getByRole('radio', { name: 'A' }).getAttribute('style')).toContain(
+      'background-image: url("/a\\"b(c).png")',
+    );
+  });
+
+  it('Tab from the radio group reaches EmptySwatch as its own tab stop', async () => {
+    const user = userEvent.setup();
+    render(
+      <SwatchPicker aria-label="Color" defaultValue="a">
+        <ColorSwatch value="a" color="#000001" aria-label="A" />
+        <ColorSwatch value="b" color="#000002" aria-label="B" />
+        <EmptySwatch />
+      </SwatchPicker>,
+    );
+    act(() => screen.getByRole('radio', { name: 'A' }).focus());
+    await user.tab();
+    expect(screen.getByRole('button', { name: 'Add color' })).toHaveFocus();
+    await act(async () => {});
   });
 });

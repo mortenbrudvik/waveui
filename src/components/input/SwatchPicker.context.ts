@@ -3,8 +3,8 @@ import { reportMissingContext, warnOnce } from '../../lib/dev';
 import type { Shape, Size } from '../../lib/types';
 
 /*
- * The context a `SwatchPicker` gives the swatches it renders (`ColorSwatch` and, from a later
- * package, `ImageSwatch` and `EmptySwatch`): the selected value, how to select, the picker's
+ * The context a `SwatchPicker` gives the swatches it renders (`ColorSwatch`, `ImageSwatch` and
+ * `EmptySwatch`; the last reads only the appearance): the selected value, how to select, the picker's
  * appearance and focus behaviour, and the duplicate-value registry (D18). Internal; imports no
  * component.
  */

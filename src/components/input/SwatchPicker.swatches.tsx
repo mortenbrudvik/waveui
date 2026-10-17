@@ -7,7 +7,7 @@ import { renderSlot, slotRendersContent } from '../../lib/slot';
 import type { Slot } from '../../lib/slot';
 import { focusRing, forcedColors, motionSafeTransition } from '../../lib/styles';
 import type { Shape } from '../../lib/types';
-import { unwrapButtonGlyph } from '../button/Button.slots';
+import { unwrapButtonGlyph, type UnwrappedButton } from '../button/Button.slots';
 import { useSwatchPickerContext, type SwatchPickerSize } from './SwatchPicker.context';
 import { getCheckColors, type CheckColors } from './colorUtils';
 
@@ -75,8 +75,6 @@ function SwatchSlash({ colors }: { colors: CheckColors | null }) {
       aria-hidden="true"
       viewBox="0 0 24 24"
       fill="none"
-      stroke="currentColor"
-      strokeLinecap="round"
       className="pointer-events-none absolute inset-0 h-full w-full"
     >
       <line
@@ -84,6 +82,8 @@ function SwatchSlash({ colors }: { colors: CheckColors | null }) {
         y1="19"
         x2="19"
         y2="5"
+        stroke="currentColor"
+        strokeLinecap="round"
         strokeWidth={4}
         className={colors ? undefined : 'text-background'}
         style={colors ? { color: colors.halo } : undefined}
@@ -93,6 +93,8 @@ function SwatchSlash({ colors }: { colors: CheckColors | null }) {
         y1="19"
         x2="19"
         y2="5"
+        stroke="currentColor"
+        strokeLinecap="round"
         strokeWidth={2}
         className={colors ? undefined : 'text-foreground'}
         style={colors ? { color: colors.glyph } : undefined}
@@ -116,6 +118,12 @@ function warnUnnamedSwatch(kind: string, value: string, fallback: string): void 
  */
 function useSwatchIcon(kind: string, icon: Slot<'span'> | undefined): Slot<'span'> | undefined {
   const { glyph, button } = unwrapButtonGlyph(icon);
+  useSwatchIconWarning(kind, button);
+  return glyph;
+}
+
+/** The one-time `<Kind>:icon-button` warning for an unwrapped button. */
+function useSwatchIconWarning(kind: string, button: UnwrappedButton | null): void {
   React.useEffect(() => {
     if (button) {
       warnOnce(
@@ -126,12 +134,38 @@ function useSwatchIcon(kind: string, icon: Slot<'span'> | undefined): Slot<'span
       );
     }
   }, [button, kind]);
-  return glyph;
 }
 
-/** Focus outline offset: 4px, 2px at `spacing="small"` so it does not cover the neighbour (D22). */
+/** The picker's context with this swatch's own `size` and `shape` applied over the picker's. */
+function useSwatchContext(kind: string, size?: SwatchPickerSize, shape?: Shape) {
+  const context = useSwatchPickerContext(kind);
+  return { ...context, size: size ?? context.size, shape: shape ?? context.shape };
+}
+
+/**
+ * Focus outline offset: 4px, clear of a selected swatch's ring band (ring and offset, 4px); 2px at
+ * `spacing="small"` so it does not cover the neighbour (D22), where it lies over that band.
+ */
 function outlineOffset(spacing: 'small' | 'medium'): string {
   return spacing === 'small' ? 'focus-visible:outline-offset-2' : 'focus-visible:outline-offset-4';
+}
+
+/** The classes every swatch kind shares: size, shape, box, motion, focus ring and disabled look. */
+function swatchBaseClasses(
+  size: SwatchPickerSize,
+  shape: Shape,
+  spacing: 'small' | 'medium',
+): string {
+  return cn(
+    sizeMap[size],
+    shapeMap[shape],
+    // The padding is set here (C-NATIVE).
+    'relative flex shrink-0 items-center justify-center border-2 p-0',
+    motionSafeTransition,
+    focusRing,
+    outlineOffset(spacing),
+    'disabled:cursor-not-allowed disabled:opacity-50',
+  );
 }
 
 /** Properties for the ColorSwatch component. */
@@ -151,7 +185,7 @@ export interface ColorSwatchProps extends Omit<
   icon?: Slot<'span'>;
   /**
    * CSS color of the swatch's border, for a color close to the page background (set by hand, as
-   * in Fluent).
+   * in Fluent). In forced colors the system border color replaces it.
    */
   borderColor?: string;
   /**
@@ -182,7 +216,7 @@ interface SwatchRadioProps extends Omit<
   /** The luminance-picked glyph colors; `null`: the theme's foreground over a background halo. */
   checkColors: CheckColors | null;
   /** The swatch's own background, border color and image (they win over a consumer `style`). */
-  paint: React.CSSProperties;
+  paint: Record<string, string>;
   /** Classes of the image swatch's covering background. */
   paintClassName?: string;
   /** A color swatch keeps its colors in forced colors (the color is the content). */
@@ -218,14 +252,12 @@ const SwatchRadio = ({
   const {
     value: selectedValue,
     select,
-    size: pickerSize,
-    shape: pickerShape,
+    size,
+    shape,
     spacing,
     getTabIndex,
     register,
-  } = useSwatchPickerContext(kind);
-  const size = sizeProp ?? pickerSize;
-  const shape = shapeProp ?? pickerShape;
+  } = useSwatchContext(kind, sizeProp, shapeProp);
   const isSelected = selectedValue === value;
   const glyph = useSwatchIcon(kind, icon);
 
@@ -251,21 +283,17 @@ const SwatchRadio = ({
       tabIndex={getTabIndex(value)}
       onClick={composeEventHandlers(onClick, () => select(value))}
       className={cn(
-        sizeMap[size],
-        shapeMap[shape],
-        // The padding is set here (C-NATIVE); the swatch color is its background.
-        'relative flex shrink-0 items-center justify-center border-2 border-transparent p-0',
+        swatchBaseClasses(size, shape, spacing),
+        // A `borderColor` arrives as a variable, so the forced-colors edge below still wins.
+        'border-[color:var(--wave-swatch-border,transparent)]',
         paintClassName,
-        motionSafeTransition,
         // User colors are the content: keep them (and the check glyph) in forced colors, with a
         // Highlight outline, which an opted-out element would otherwise draw in author colors.
         keepsColors &&
           'forced-colors:forced-color-adjust-none forced-colors:focus-visible:outline-[Highlight]',
         forcedColors.border,
-        focusRing,
-        // Outside the selection ring, so both stay visible together.
-        outlineOffset(spacing),
-        'disabled:cursor-not-allowed disabled:opacity-50',
+        // An image stays in forced colors, so its selection needs a sign of its own.
+        isSelected && !keepsColors && 'forced-colors:border-[Highlight]',
         isSelected
           ? cn(
               'ring-2 ring-foreground ring-offset-2 ring-offset-background',
@@ -296,8 +324,7 @@ SwatchRadio.displayName = 'SwatchRadio';
 // button (an explicit exception to C-ROUTING's root/control split).
 /**
  * One color swatch of a `SwatchPicker`, read from `items` or rendered directly as a child.
- * Outside a `SwatchPicker` it throws in development and renders inertly in production
- * (C-CONTEXT).
+ * Outside a `SwatchPicker` it throws in development and renders inertly in production.
  *
  * **Naming**: give it `aria-label`, or wrap it in a `Tooltip` with `relationship="label"` (its
  * `aria-labelledby` reaches this element, since every rest prop lands on the swatch's own
@@ -322,7 +349,7 @@ export const ColorSwatch = ({ color, borderColor, ...rest }: ColorSwatchProps) =
       keepsColors
       paint={{
         backgroundColor: color,
-        ...(borderColor !== undefined && { borderColor }),
+        ...(borderColor !== undefined && { '--wave-swatch-border': borderColor }),
       }}
     />
   );
@@ -428,36 +455,37 @@ export const EmptySwatch = ({
   size: sizeProp,
   shape: shapeProp,
   className,
-  'aria-label': ariaLabel = 'Add color',
+  'aria-label': ariaLabel,
+  'aria-labelledby': ariaLabelledBy,
   ref,
   ...rest
 }: EmptySwatchProps) => {
-  const { size: pickerSize, shape: pickerShape, spacing } = useSwatchPickerContext('EmptySwatch');
-  const size = sizeProp ?? pickerSize;
-  const shape = shapeProp ?? pickerShape;
-  const glyph = useSwatchIcon('EmptySwatch', icon);
+  const { size, shape, spacing } = useSwatchContext('EmptySwatch', sizeProp, shapeProp);
+  const { glyph, button } = unwrapButtonGlyph(icon);
+  useSwatchIconWarning('EmptySwatch', button);
   // The optional-indicator rule: `null`/`undefined` keep the plus, anything that renders nothing
-  // hides it.
-  const content = glyph == null ? <AddIcon size={glyphSizeMap[size]} /> : glyph;
+  // hides it; an unwrapped button whose children render nothing keeps the plus too.
+  const content =
+    icon == null || (button !== null && !slotRendersContent(glyph)) ? (
+      <AddIcon size={glyphSizeMap[size]} />
+    ) : (
+      glyph
+    );
 
   return (
     <button
       type="button"
       {...rest}
       ref={ref}
-      aria-label={ariaLabel}
+      aria-label={ariaLabel ?? (ariaLabelledBy ? undefined : 'Add color')}
+      aria-labelledby={ariaLabelledBy}
       // The picker's root skips its arrow handling for events from here.
       data-wave-empty-swatch=""
       className={cn(
-        sizeMap[size],
-        shapeMap[shape],
-        'relative flex shrink-0 items-center justify-center border-2 border-dashed border-stroke-accessible bg-transparent p-0 text-foreground',
+        swatchBaseClasses(size, shape, spacing),
+        'border-dashed border-stroke-accessible bg-transparent text-foreground',
         forcedColors.control,
-        motionSafeTransition,
-        focusRing,
-        outlineOffset(spacing),
         'not-disabled:not-aria-disabled:hover:bg-subtle-hover',
-        'disabled:cursor-not-allowed disabled:opacity-50',
         className,
       )}
     >
