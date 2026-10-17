@@ -111,11 +111,30 @@ const ASIDE_OFF_WITH_ACTIONS =
 const END_CELL_SHARED = '[&>*]:[grid-area:1/1] forced-colors:flex [@media(hover:none)]:flex';
 
 /**
- * The first action the toolbar's arrow keys reach, by the roving hook's rule: not natively
- * disabled, not marked `data-roving-disabled`, not `aria-disabled` unless focusable-disabled, not a
- * hidden form input and not inside a `hidden` or `inert` element of the toolbar.
+ * Whether CSS inside `toolbar` keeps `el` from taking focus: `display: none` on it or on an
+ * ancestor inside the toolbar, or `visibility: hidden`/`collapse` on it (the roving hook skips the
+ * same elements; a focus call on them is ignored by browsers).
  */
-function firstAction(toolbar: HTMLElement): HTMLElement | null {
+function isHiddenByCss(el: HTMLElement, toolbar: HTMLElement): boolean {
+  const view = el.ownerDocument.defaultView;
+  if (!view) return false;
+  for (let node: HTMLElement | null = el; node && node !== toolbar; node = node.parentElement) {
+    if (view.getComputedStyle(node).display === 'none') return true;
+  }
+  const { visibility } = view.getComputedStyle(el);
+  return visibility === 'hidden' || visibility === 'collapse';
+}
+
+/**
+ * Focuses the first action of an item's own row that takes focus, trying them in order and
+ * skipping what the roving hook skips: natively disabled, marked `data-roving-disabled`,
+ * `aria-disabled` unless focusable-disabled, hidden form inputs, anything inside a `hidden` or
+ * `inert` element of the toolbar, and what CSS hides (a focus call on it is ignored). `false` when
+ * focus did not move into the row's actions.
+ */
+function focusFirstAction(item: HTMLElement): boolean {
+  const toolbar = item.querySelector<HTMLElement>(':scope > [data-tree-row] [data-tree-actions]');
+  if (!toolbar) return false;
   for (const el of Array.from(toolbar.querySelectorAll<HTMLElement>(ACTION_ITEM_SELECTOR))) {
     if (isHiddenInput(el) || el.matches(':disabled')) continue;
     const concealed = el.closest('[hidden], [inert]');
@@ -128,18 +147,11 @@ function firstAction(toolbar: HTMLElement): HTMLElement | null {
     ) {
       continue;
     }
-    return el;
+    if (isHiddenByCss(el, toolbar)) continue;
+    el.focus();
+    if (el.ownerDocument.activeElement === el) return true;
   }
-  return null;
-}
-
-/** Focuses the first action of an item's own row; `false` when the row has none. */
-function focusFirstAction(item: HTMLElement): boolean {
-  const toolbar = item.querySelector<HTMLElement>(':scope > [data-tree-row] [data-tree-actions]');
-  const first = toolbar ? firstAction(toolbar) : null;
-  if (!first) return false;
-  first.focus();
-  return true;
+  return false;
 }
 
 /* ------------------------------------------------------------------ */
@@ -193,14 +205,6 @@ export interface TreeProps extends React.HTMLAttributes<HTMLDivElement> {
   /** Controlled checked items (`selectionMode="multiple"`); see the cascade rule in the component docs. */
   checkedItems?: readonly string[];
   /**
-   * `'tree'`: Tab from a focused item enters its actions. `'treegrid'`: the "next" arrow (ArrowRight,
-   * ArrowLeft in RTL) moves into an item's actions and "previous" returns; on an expanded parent
-   * "next" no longer moves to the first child (ArrowDown does). The roles stay `tree` and `treeitem`
-   * (Fluent's `navigationMode`).
-   * @default 'tree'
-   */
-  navigationMode?: 'tree' | 'treegrid';
-  /**
    * Initially checked items (uncontrolled).
    * @default []
    */
@@ -210,6 +214,14 @@ export interface TreeProps extends React.HTMLAttributes<HTMLDivElement> {
    * WaveUI always passes `details`; it is typed optional until 1.0.
    */
   onCheckedItemsChange?: (checkedItems: string[], details?: TreeCheckedItemsChangeDetails) => void;
+  /**
+   * `'tree'`: Tab from a focused item enters its actions. `'treegrid'`: the "next" arrow
+   * (ArrowRight, ArrowLeft in RTL) moves into an item's actions and "previous" returns; on an
+   * expanded parent "next" no longer moves to the first child (ArrowDown does). The roles stay
+   * `tree` and `treeitem` (Fluent's `navigationMode`).
+   * @default 'tree'
+   */
+  navigationMode?: 'tree' | 'treegrid';
   /** Ref to the `role="tree"` element. */
   ref?: React.Ref<HTMLDivElement>;
 }
@@ -530,7 +542,10 @@ function isOwnClick(event: React.MouseEvent<HTMLElement>): boolean {
 interface TreeItemActionsProps {
   /** Id of the element that names the item. */
   labelledBy: string;
-  /** `'last-focused'` while the actions hold a Tab stop (their item has focus, tree mode), else `'none'`. */
+  /**
+   * `'last-focused'` while the actions hold a Tab stop (their item has focus, tree mode), else
+   * `'none'`.
+   */
   tabStop: 'last-focused' | 'none';
   /** `'treegrid'`: the arrows do not wrap, and "previous" on the first action returns to the item. */
   navigationMode: 'tree' | 'treegrid';
@@ -565,9 +580,10 @@ const TreeItemActions = ({
     tabStop,
   });
 
-  const handleKeyDown = (event: React.KeyboardEvent<HTMLSpanElement>) => {
+  /** Whether the key is treegrid's "previous" for an action (the roving order settles it). */
+  const handleKeyDown = (event: React.KeyboardEvent<HTMLSpanElement>): boolean => {
     // A key from a popup an action opened reaches here through the React tree: not ours.
-    if (event.defaultPrevented || !isOwnEvent(event)) return;
+    if (event.defaultPrevented || !isOwnEvent(event)) return false;
     const target = event.target as HTMLElement;
     const popup = target.getAttribute('aria-haspopup');
     if (
@@ -576,16 +592,24 @@ const TreeItemActions = ({
       popup !== 'false'
     ) {
       event.preventDefault();
-      return;
+      return false;
     }
     if (!treegrid || event.altKey || event.ctrlKey || event.metaKey || isEditableTarget(target)) {
-      return;
+      return false;
     }
     const intent = getArrowIntent(event.key, {
       orientation: 'horizontal',
       dir: getDirection(event.currentTarget),
     });
-    if (intent === 'prev' && target === firstAction(event.currentTarget)) {
+    return intent === 'prev';
+  };
+
+  const handleToolbarKeyDown = (event: React.KeyboardEvent<HTMLSpanElement>) => {
+    const isPrev = handleKeyDown(event);
+    if (event.defaultPrevented) return;
+    rovingKeyDown(event);
+    // "Previous" that the roving order did not take (the first action it reaches) returns.
+    if (isPrev && event.target === document.activeElement) {
       event.preventDefault();
       onReturn();
     }
@@ -599,7 +623,7 @@ const TreeItemActions = ({
       data-tree-actions=""
       data-roving-container=""
       ref={rovingRef}
-      onKeyDown={composeEventHandlers(handleKeyDown, rovingKeyDown)}
+      onKeyDown={handleToolbarKeyDown}
       onFocus={rovingFocus}
       className={cn(
         treeItemClassNames.actions,

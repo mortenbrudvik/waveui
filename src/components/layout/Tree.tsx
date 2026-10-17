@@ -24,8 +24,8 @@ export type { TreeCheckedItemsChangeDetails, TreeItemProps, TreeProps } from './
  * hover and focus, and always where there is no hover or colors are forced), `aside` (a count or a
  * badge that describes the item), `iconAfter` and `expandIcon`. Tab from the focused item enters
  * its actions and Shift+Tab returns. Keys and clicks on the actions never activate or check the
- * item. With `navigationMode="treegrid"`, Right (Left in right-to-left layouts) moves from an item
- * into its actions and Left returns, the actions take no Tab stop, and on an open parent Right
+ * item. With `navigationMode="treegrid"`, Right (Left in right-to-left layouts) moves from an
+ * item into its actions and Left returns, the actions take no Tab stop, and on an open parent Right
  * moves into its actions rather than to its first child (Down does); the roles stay `tree` and
  * `treeitem`.
  *

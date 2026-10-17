@@ -728,3 +728,81 @@ describe('Tree - navigationMode="treegrid"', () => {
     expect(item('Documents')).toHaveAttribute('role', 'treeitem');
   });
 });
+
+describe('Tree - navigationMode="treegrid" (fix round)', () => {
+  it('an action hidden by CSS is skipped: "next" lands on the first visible action and "previous" there returns', async () => {
+    const user = userEvent.setup();
+    render(
+      <Tree aria-label="Files" navigationMode="treegrid">
+        <Tree.Item
+          value="readme"
+          actions={
+            <>
+              <button type="button" style={{ display: 'none' }}>
+                Responsive
+              </button>
+              <button type="button">Rename Readme</button>
+            </>
+          }
+        >
+          Readme.md
+        </Tree.Item>
+      </Tree>,
+    );
+    act(() => item('Readme.md').focus());
+    await user.keyboard('{ArrowRight}');
+    expect(button('Rename Readme')).toHaveFocus();
+    await user.keyboard('{ArrowLeft}');
+    expect(item('Readme.md')).toHaveFocus();
+  });
+
+  it('Space and * on an action change no check, selection or expansion', async () => {
+    const user = userEvent.setup();
+    const onCheckedItemsChange = vi.fn();
+    const onItemSelect = vi.fn();
+    render(
+      <Rows
+        navigationMode="treegrid"
+        defaultExpandedItems={[]}
+        selectionMode="multiple"
+        onCheckedItemsChange={onCheckedItemsChange}
+        onItemSelect={onItemSelect}
+      />,
+    );
+    act(() => item('Readme.md').focus());
+    await user.keyboard('{ArrowRight}');
+    expect(button('Rename Readme')).toHaveFocus();
+    await user.keyboard(' ');
+    await user.keyboard('*');
+    expect(onCheckedItemsChange).not.toHaveBeenCalled();
+    expect(onItemSelect).not.toHaveBeenCalled();
+    expect(item('Documents')).toHaveAttribute('aria-expanded', 'false');
+  });
+
+  it('Space on an action changes nothing in a single-select tree', async () => {
+    const user = userEvent.setup();
+    const onItemSelect = vi.fn();
+    render(
+      <Rows
+        navigationMode="treegrid"
+        selectionMode="single"
+        selected={null}
+        onItemSelect={onItemSelect}
+      />,
+    );
+    act(() => item('Readme.md').focus());
+    await user.keyboard('{ArrowRight}');
+    await user.keyboard(' ');
+    expect(onItemSelect).not.toHaveBeenCalled();
+  });
+
+  it('a nested item: "next" enters its actions and "previous" returns to it, not to its parent', async () => {
+    const user = userEvent.setup();
+    render(<Rows navigationMode="treegrid" />);
+    act(() => item('Work').focus());
+    await user.keyboard('{ArrowRight}');
+    expect(button('Rename Work')).toHaveFocus();
+    await user.keyboard('{ArrowLeft}');
+    expect(item('Work')).toHaveFocus();
+  });
+});
