@@ -20,10 +20,13 @@ import { isHiddenByCss, useRovingTabIndex } from '../../hooks/useRovingTabIndex'
 import {
   TreeCheckForcedContext,
   TreeContext,
+  TreeItemContext,
   TreeLabelContext,
   TreeParentContext,
   useTreeContext,
+  type PersonaLayoutIds,
   type TreeContextValue,
+  type TreeItemContextValue,
   type TreeSelectionEntry,
 } from './Tree.context';
 import {
@@ -487,7 +490,7 @@ export interface TreeItemProps extends React.HTMLAttributes<HTMLDivElement> {
 
 /**
  * Sets the typeahead text (`data-roving-text`, read by the roving hook) of every rendered
- * treeitem to the text of its label, so neither the icon nor the nested items take part. A
+ * treeitem to the text of its label (a persona layout's name when the label holds one), so neither the icon nor the nested items take part. A
  * consumer `data-roving-text` on a Tree.Item is kept on its label and wins.
  */
 function syncTypeaheadText(tree: HTMLElement): void {
@@ -496,7 +499,11 @@ function syncTypeaheadText(tree: HTMLElement): void {
       ':scope > [data-tree-row] > [data-tree-label]',
     );
     if (!label) return;
-    const text = label.getAttribute('data-roving-text') ?? label.textContent ?? '';
+    // A persona layout's name is the item's name, so it is its typeahead text too (not the media,
+    // such as an avatar's initials, or the description).
+    const personaName = label.querySelector<HTMLElement>('[data-tree-persona-name]');
+    const text =
+      label.getAttribute('data-roving-text') ?? personaName?.textContent ?? label.textContent ?? '';
     if (treeitem.getAttribute('data-roving-text') !== text) {
       treeitem.setAttribute('data-roving-text', text);
     }
@@ -682,6 +689,18 @@ export const TreeItem = ({
   const ancestorListed = React.useContext(TreeCheckForcedContext);
   const itemRef = React.useRef<HTMLDivElement>(null);
   const mergedRef = useMergedRefs<HTMLDivElement>(ref, itemRef);
+  // A Tree.ItemPersonaLayout in the label registers its name and description: the item is named
+  // by the name only and described by the description.
+  const [layoutIds, setLayoutIds] = React.useState<PersonaLayoutIds | null>(null);
+  const registerLayout = React.useCallback((ids: PersonaLayoutIds) => {
+    setLayoutIds(ids);
+    return () => setLayoutIds((current) => (current === ids ? null : current));
+  }, []);
+  const itemContext = React.useMemo<TreeItemContextValue>(
+    () => ({ registerLayout }),
+    [registerLayout],
+  );
+  const nameId = layoutIds?.nameId ?? labelId;
 
   const { registerValue, registerTopLevel } = ctx;
   React.useEffect(() => registerValue(value), [registerValue, value]);
@@ -889,7 +908,7 @@ export const TreeItem = ({
       <span
         role="checkbox"
         aria-checked={checkState === 'mixed' ? 'mixed' : checkState === 'checked'}
-        aria-labelledby={labelId}
+        aria-labelledby={nameId}
         tabIndex={-1}
         data-tree-checkbox=""
         onMouseDown={keepFocusOnItem}
@@ -958,10 +977,14 @@ export const TreeItem = ({
       // Named by its label only: the treeitem also contains its icon and its child group. A
       // consumer aria-labelledby or aria-label replaces it.
       aria-labelledby={
-        rest['aria-labelledby'] ?? (rest['aria-label'] === undefined ? labelId : undefined)
+        rest['aria-labelledby'] ?? (rest['aria-label'] === undefined ? nameId : undefined)
       }
       // The aside describes the item, after a consumer description.
-      aria-describedby={joinIds(rest['aria-describedby'], hasAside ? asideId : undefined)}
+      aria-describedby={joinIds(
+        rest['aria-describedby'],
+        hasAside ? asideId : undefined,
+        layoutIds?.descriptionId,
+      )}
       aria-expanded={hasChildren ? isExpanded : undefined}
       // From the checked list, after the rest props, so a consumer cannot contradict it.
       aria-checked={
@@ -1009,7 +1032,11 @@ export const TreeItem = ({
           )}
         >
           <TreeCheckForcedContext.Provider value={false}>
-            <TreeLabelContext.Provider value>{labelContent}</TreeLabelContext.Provider>
+            <TreeLabelContext.Provider value>
+              <TreeItemContext.Provider value={itemContext}>
+                {labelContent}
+              </TreeItemContext.Provider>
+            </TreeLabelContext.Provider>
           </TreeCheckForcedContext.Provider>
         </span>
         {iconAfterNode}
@@ -1036,7 +1063,7 @@ export const TreeItem = ({
             )}
             {hasActions && (
               <TreeItemActions
-                labelledBy={labelId}
+                labelledBy={nameId}
                 tabStop={
                   ctx.navigationMode === 'tree' && ctx.focusedItem === value
                     ? 'last-focused'

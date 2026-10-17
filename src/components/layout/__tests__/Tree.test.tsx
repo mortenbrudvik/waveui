@@ -88,7 +88,7 @@ describe('Tree', () => {
     ],
   });
 
-  testCompoundExposure(Tree, ['Item']);
+  testCompoundExposure(Tree, ['Item', 'ItemPersonaLayout']);
   testDisplayName(Tree.Item, 'TreeItem');
 
   it('exports Tree.Item under its flat name (C-COMPOUND)', () => {

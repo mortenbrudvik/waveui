@@ -1,6 +1,8 @@
 import { TreeItem, TreeRoot } from './Tree.core';
+import { TreeItemPersonaLayout } from './Tree.itemPersonaLayout';
 
 export type { TreeCheckedItemsChangeDetails, TreeItemProps, TreeProps } from './Tree.core';
+export type { TreeItemPersonaLayoutProps } from './Tree.itemPersonaLayout';
 
 /**
  * A hierarchical list (WAI-ARIA Tree View pattern) with a single tab stop: Up/Down move between
@@ -31,13 +33,15 @@ export type { TreeCheckedItemsChangeDetails, TreeItemProps, TreeProps } from './
  *
  * Items are `Tree.Item` elements; nested items are written in their parent's children (directly,
  * in Fragments, or returned by a render function), not rendered by a component of their own.
- * Every item needs a `value` that is unique within the Tree.
+ * Every item needs a `value` that is unique within the Tree. `Tree.ItemPersonaLayout` lays out a
+ * person (media, name and description) as an item's label.
  *
- * `Tree.Item` is also exported as `TreeItem` for React Server Components, which cannot use the
- * dotted form.
+ * `Tree.Item` and `Tree.ItemPersonaLayout` are also exported as `TreeItem` and
+ * `TreeItemPersonaLayout` for React Server Components, which cannot use the dotted form.
  */
 export const Tree = /* @__PURE__ */ Object.assign(TreeRoot, {
   Item: TreeItem,
+  ItemPersonaLayout: TreeItemPersonaLayout,
 });
 
-export { TreeItem };
+export { TreeItem, TreeItemPersonaLayout };

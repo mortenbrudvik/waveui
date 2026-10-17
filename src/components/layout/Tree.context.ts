@@ -61,6 +61,32 @@ export const TreeParentContext = React.createContext<string | null>(null);
  */
 export const TreeLabelContext = React.createContext(false);
 
+/** The ids a Tree.ItemPersonaLayout registers with its item. */
+export interface PersonaLayoutIds {
+  /** The name element: the item's name. */
+  nameId: string;
+  /** The description element, while it renders: it joins the item's description. */
+  descriptionId: string | undefined;
+}
+
+/** What a Tree.Item gives the content of its label. */
+export interface TreeItemContextValue {
+  /** Registers a persona layout's ids with the item; returns the unregistration. */
+  registerLayout: (ids: PersonaLayoutIds) => () => void;
+}
+
+export const TreeItemContext = React.createContext<TreeItemContextValue | null>(null);
+
+const INERT_ITEM_CONTEXT: TreeItemContextValue = { registerLayout: () => () => {} };
+
+/** C-CONTEXT: throws in development, logs once and returns an inert value in production. */
+export function useTreeItemContext(component: string): TreeItemContextValue {
+  const context = React.useContext(TreeItemContext);
+  if (context) return context;
+  reportMissingContext(component, '<Tree.Item>');
+  return INERT_ITEM_CONTEXT;
+}
+
 const INERT_CONTEXT: TreeContextValue = {
   expanded: new Set(),
   toggle: () => {},

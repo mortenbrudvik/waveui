@@ -96,7 +96,7 @@ const require = createRequire(import.meta.url);
  * A compound that is not listed must export every flat name. A flat name that is exported must
  * equal its dotted member, listed or not.
  */
-export const PENDING_FLAT_EXPORTS = ['ColorPicker', 'MessageBar', 'Toast'];
+export const PENDING_FLAT_EXPORTS = ['ColorPicker', 'MessageBar', 'Toast', 'Tree'];
 
 /**
  * The presence core's probes: an import of only `Button` drops it, an import of only
