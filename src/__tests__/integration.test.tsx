@@ -5409,8 +5409,8 @@ describe('server-safe 0.8 exports in a server render (spec §4.4 #11)', () => {
     container.innerHTML = html;
     document.body.appendChild(container);
     let root: Root | undefined;
+    const error = vi.spyOn(console, 'error');
     try {
-      const error = vi.spyOn(console, 'error');
       await act(async () => {
         root = hydrateRoot(container, tree);
       });
@@ -5425,6 +5425,7 @@ describe('server-safe 0.8 exports in a server render (spec §4.4 #11)', () => {
     } finally {
       act(() => root?.unmount());
       container.remove();
+      error.mockRestore();
     }
   });
 });

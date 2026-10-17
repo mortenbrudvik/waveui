@@ -1,5 +1,5 @@
 import * as React from 'react';
-import { describe, it, expect, vi, afterEach } from 'vitest';
+import { describe, it, expect, vi, afterEach, onTestFinished } from 'vitest';
 import { act, fireEvent, render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { createPortal } from 'react-dom';
@@ -370,7 +370,21 @@ describe('Tree.Item - actions', () => {
       expect(screen.getByRole('menuitem', { name: 'Rename' })).toHaveFocus();
       expect(button('More')).toHaveAttribute('aria-expanded', 'true');
       expect(actions).toHaveAttribute('data-focus-in-popup', '');
+      // The hold is still on when the close's focus return reaches the trigger (the trigger
+      // already reports the menu closed then), so the action can take focus.
+      const onReturn: [hold: string | null, expanded: string | null][] = [];
+      const more = button('More');
+      const recordHold = () => {
+        onReturn.push([
+          actions.getAttribute('data-focus-in-popup'),
+          more.getAttribute('aria-expanded'),
+        ]);
+      };
+      more.addEventListener('focus', recordHold);
+      onTestFinished(() => more.removeEventListener('focus', recordHold));
       await user.keyboard('{Escape}');
+      expect(onReturn).not.toHaveLength(0);
+      for (const entry of onReturn) expect(entry).toEqual(['', 'false']);
       expect(button('More')).toHaveFocus();
       expect(actions).not.toHaveAttribute('data-focus-in-popup');
     });

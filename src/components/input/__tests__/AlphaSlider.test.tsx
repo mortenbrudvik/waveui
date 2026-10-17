@@ -2,6 +2,8 @@ import * as React from 'react';
 import { describe, it, expect, expectTypeOf, vi } from 'vitest';
 import { act, fireEvent, render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
+import { renderToString } from 'react-dom/server';
+import { hydrateRoot } from 'react-dom/client';
 import { AlphaSlider, type AlphaSliderProps } from '../AlphaSlider';
 import { alphaSliderClassNames } from '../../../lib/classNames';
 import { renderWithProviders, testSystemProps } from '../../../test-utils';
@@ -200,6 +202,41 @@ describe('AlphaSlider', () => {
     await user.keyboard('{ArrowUp}');
     expect(onHsvChange.mock.calls).toEqual([[{ h: 0, s: 1, v: 1, a: 0.51 }]]);
     expect(slider('Transparenz')).toHaveValue('49');
+  });
+
+  it('reports each change once in StrictMode', async () => {
+    const user = userEvent.setup();
+    const onValueChange = vi.fn();
+    render(
+      <React.StrictMode>
+        <AlphaSlider defaultValue={{ h: 0, s: 1, v: 1, a: 0.4 }} onValueChange={onValueChange} />
+      </React.StrictMode>,
+    );
+    act(() => slider().focus());
+    await user.keyboard('{ArrowRight}');
+    expect(onValueChange.mock.calls).toEqual([[{ h: 0, s: 1, v: 1, a: 0.41 }]]);
+  });
+
+  it('renders on the server and hydrates without warnings', () => {
+    const ui = <AlphaSlider defaultValue={{ h: 0, s: 1, v: 1, a: 0.4 }} />;
+    const html = renderToString(ui);
+    expect(html).toContain('--wave-color-slider-gradient');
+    const container = document.createElement('div');
+    container.innerHTML = html;
+    document.body.appendChild(container);
+    const error = vi.spyOn(console, 'error');
+    let root: ReturnType<typeof hydrateRoot> | undefined;
+    try {
+      act(() => {
+        root = hydrateRoot(container, ui);
+      });
+      expect(error).not.toHaveBeenCalled();
+      expect(slider()).toHaveValue('40');
+    } finally {
+      act(() => root?.unmount());
+      container.remove();
+      error.mockRestore();
+    }
   });
 
   it('types: no channel; transparency is a boolean', () => {

@@ -760,6 +760,7 @@ describe('the hover pause after the hovered toast is removed (fix E2, T13)', () 
     advance(10_000);
     expect(getToasts()).toHaveLength(1);
     fireEvent.pointerOut(portaled, { relatedTarget: document.body });
+    fireEvent.pointerOver(document.body, { relatedTarget: portaled });
     advance(3000);
     expect(getToasts()).toHaveLength(0);
   });
