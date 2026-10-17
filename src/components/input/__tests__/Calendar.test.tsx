@@ -1,11 +1,12 @@
 import * as React from 'react';
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, onTestFinished, vi } from 'vitest';
 import { act, render, screen, within } from '@testing-library/react';
 import { hydrateRoot } from 'react-dom/client';
 import { renderToString } from 'react-dom/server';
 import userEvent from '@testing-library/user-event';
 import { Calendar, type CalendarValueChangeDetails } from '../Calendar';
-import { renderWithProviders, testSystemProps } from '../../../test-utils';
+import { DatePicker } from '../DatePicker';
+import { axe, renderWithProviders, testSystemProps } from '../../../test-utils';
 import { FIELD_TEST_IDS, FIELD_TEST_TEXT, renderWithFieldContext } from '../../../test-utils-field';
 
 /** The clock in every test: Wednesday 18 June 2025, 14:30 local time. */
@@ -47,6 +48,13 @@ function focusedLabel() {
   return document.activeElement?.getAttribute('aria-label');
 }
 
+/** The element that labels the grid: the month text (or the year, or the decade). */
+function headingElement() {
+  const heading = document.getElementById(grid().getAttribute('aria-labelledby') ?? '');
+  if (!heading) throw new Error('the grid has no heading');
+  return heading;
+}
+
 /** The `[data-date]` of the day marked `aria-current="date"`, or `null`. */
 function markedToday(container: ParentNode = document) {
   return container.querySelector('[aria-current="date"]')?.getAttribute('data-date') ?? null;
@@ -83,10 +91,20 @@ describe('Calendar', () => {
     it('renders the month text in a live div, not a heading, which labels the grid', () => {
       render(<Calendar aria-label="Due date" today={TODAY} locale="en-US" />);
       expect(screen.queryByRole('heading')).not.toBeInTheDocument();
-      const heading = screen.getByText('June 2025');
+      const heading = headingElement();
       expect(heading.tagName).toBe('DIV');
+      expect(heading).toHaveTextContent('June 2025');
       expect(heading).toHaveAttribute('aria-live', 'polite');
-      expect(grid()).toHaveAttribute('aria-labelledby', heading.id);
+      expect(grid()).toHaveAccessibleName('June 2025');
+    });
+
+    it('keeps the month text plain with showMonthPicker={false}', () => {
+      render(
+        <Calendar aria-label="Due date" today={TODAY} locale="en-US" showMonthPicker={false} />,
+      );
+      expect(screen.queryByRole('button', { name: 'June 2025' })).not.toBeInTheDocument();
+      expect(screen.getByText('June 2025')).toBe(headingElement());
+      expect(screen.queryByText('Choose a month')).not.toBeInTheDocument();
     });
 
     it('localizes the month buttons with labels', () => {
@@ -101,11 +119,13 @@ describe('Calendar', () => {
       expect(screen.getByRole('button', { name: 'Nächster Monat' })).toBeInTheDocument();
     });
 
-    it('orders the tab stops: previous month, next month, then one day of the grid', async () => {
+    it('orders the tab stops: previous month, the heading button, next month, then one day of the grid', async () => {
       const user = userEvent.setup();
       render(<Calendar aria-label="Due date" today={TODAY} locale="en-US" />);
       await user.tab();
       expect(document.activeElement).toHaveAccessibleName('Previous month');
+      await user.tab();
+      expect(document.activeElement).toHaveAccessibleName('June 2025');
       await user.tab();
       expect(document.activeElement).toHaveAccessibleName('Next month');
       await user.tab();
@@ -412,6 +432,32 @@ describe('Calendar', () => {
       expect(dayButton('Sunday, June 15, 2025')).toHaveAttribute('aria-pressed', 'true');
     });
 
+    it('emits the restored range once per form reset in StrictMode', async () => {
+      const user = userEvent.setup();
+      const onValueChange =
+        vi.fn<(date: Date | null, details?: CalendarValueChangeDetails) => void>();
+      render(
+        <React.StrictMode>
+          <form aria-label="Form">
+            <Calendar
+              aria-label="Date"
+              locale="en-US"
+              today={TODAY}
+              defaultValue={JUNE_15}
+              onValueChange={onValueChange}
+            />
+          </form>
+        </React.StrictMode>,
+      );
+      await user.click(dayButton('Friday, June 20, 2025'));
+      onValueChange.mockClear();
+      act(() => (screen.getByRole('form', { name: 'Form' }) as HTMLFormElement).reset());
+      expect(onValueChange).toHaveBeenCalledTimes(1);
+      const [date, details] = onValueChange.mock.calls[0];
+      expect(date?.getTime()).toBe(JUNE_15.getTime());
+      expect(details?.range.map((day) => day.getTime())).toEqual([JUNE_15.getTime()]);
+    });
+
     it('a reset without a default emits null with an empty range', async () => {
       const user = userEvent.setup();
       const onValueChange =
@@ -701,6 +747,576 @@ describe('Calendar', () => {
       );
       expect(grid()).toHaveAccessibleName('September 2025');
       expect(tabStops()[0]).toHaveAccessibleName('Wednesday, September 3, 2025');
+    });
+  });
+
+  describe('the heading button (D26)', () => {
+    it('is named by the month text and described by a hidden hint outside the heading', () => {
+      render(<Calendar aria-label="Due date" today={TODAY} locale="en-US" />);
+      const button = screen.getByRole('button', { name: 'June 2025' });
+      expect(button).toHaveAttribute('type', 'button');
+      expect(button).toHaveAccessibleDescription('Choose a month');
+      const hint = document.getElementById(button.getAttribute('aria-describedby') ?? '');
+      expect(hint).toHaveAttribute('hidden');
+      const heading = headingElement();
+      expect(heading).toContainElement(button);
+      expect(heading).not.toContainElement(hint);
+      expect(heading).toHaveAttribute('aria-live', 'polite');
+      expect(grid()).toHaveAccessibleName('June 2025');
+    });
+
+    it('localizes the hints with labels.chooseMonth and labels.chooseYear', async () => {
+      const user = userEvent.setup();
+      render(
+        <Calendar
+          aria-label="Datum"
+          today={TODAY}
+          locale="de-DE"
+          labels={{ chooseMonth: 'Monat wählen', chooseYear: 'Jahr wählen' }}
+        />,
+      );
+      const button = screen.getByRole('button', { name: 'Juni 2025' });
+      expect(button).toHaveAccessibleDescription('Monat wählen');
+      await user.click(button);
+      expect(screen.getByRole('button', { name: '2025' })).toHaveAccessibleDescription(
+        'Jahr wählen',
+      );
+    });
+
+    it('names the dialog and the grid of a DatePicker by the month text, as before', async () => {
+      const user = userEvent.setup();
+      render(<DatePicker aria-label="Date" locale="en-US" defaultValue={JUNE_15} />);
+      await user.click(screen.getByRole('button', { name: 'Open calendar' }));
+      const dialog = screen.getByRole('dialog');
+      expect(dialog).toHaveAccessibleName('June 2025');
+      expect(within(dialog).getByRole('grid')).toHaveAccessibleName('June 2025');
+      const heading = within(dialog).getByRole('heading', { level: 2, name: 'June 2025' });
+      const button = within(heading).getByRole('button', { name: 'June 2025' });
+      expect(button).toHaveAccessibleDescription('Choose a month');
+      expect(heading).not.toContainElement(
+        document.getElementById(button.getAttribute('aria-describedby') ?? ''),
+      );
+    });
+  });
+
+  describe('month and year views (D26, D27)', () => {
+    function renderCalendar(props: Partial<React.ComponentProps<typeof Calendar>> = {}) {
+      const user = userEvent.setup();
+      const onValueChange = vi.fn();
+      const utils = render(
+        <Calendar
+          aria-label="Due date"
+          locale="en-US"
+          today={TODAY}
+          defaultValue={JUNE_15}
+          onValueChange={onValueChange}
+          {...props}
+        />,
+      );
+      return { user, onValueChange, ...utils };
+    }
+
+    function group() {
+      return screen.getByRole('group', { name: 'Due date' });
+    }
+
+    /** Focus is on an element of the calendar, never on `<body>`. */
+    function expectFocusInCalendar() {
+      expect(document.activeElement).not.toBe(document.body);
+      expect(group()).toContainElement(document.activeElement as HTMLElement);
+    }
+
+    /** The focused cell of the grid (the active element, which must be in the grid). */
+    function expectFocusedCell(name: string) {
+      expectFocusInCalendar();
+      expect(grid()).toContainElement(document.activeElement as HTMLElement);
+      expect(document.activeElement).toHaveAccessibleName(name);
+    }
+
+    function cell(name: string) {
+      return within(grid()).getByRole('button', { name });
+    }
+
+    const DECADE_2020 = /^2020\s*–\s*2029$/;
+    const DECADE_2030 = /^2030\s*–\s*2039$/;
+    const DECADE_2010 = /^2010\s*–\s*2019$/;
+
+    /** Opens the month view from the day view's heading button. */
+    async function openMonths(user: ReturnType<typeof userEvent.setup>, heading = 'June 2025') {
+      await user.click(screen.getByRole('button', { name: heading }));
+    }
+
+    /** Opens the year view from the month view's heading button. */
+    async function openYears(user: ReturnType<typeof userEvent.setup>, heading = '2025') {
+      await user.click(screen.getByRole('button', { name: heading }));
+    }
+
+    /** Records `defaultPrevented` of every Escape that reaches the document. */
+    function trackEscapes() {
+      const seen: boolean[] = [];
+      const listener = (event: KeyboardEvent) => {
+        if (event.key === 'Escape') seen.push(event.defaultPrevented);
+      };
+      document.addEventListener('keydown', listener);
+      onTestFinished(() => document.removeEventListener('keydown', listener));
+      return seen;
+    }
+
+    it('the heading button shows the month view and focuses the month of the focused day', async () => {
+      const { user } = renderCalendar();
+      await user.click(screen.getByRole('button', { name: 'Next month' }));
+      await openMonths(user, 'July 2025');
+      expect(grid()).toHaveAccessibleName('2025');
+      expectFocusedCell('July 2025');
+      expect(within(grid()).getAllByRole('gridcell')).toHaveLength(12);
+      expect(within(grid()).getAllByRole('row')).toHaveLength(3);
+      expect(cell('July 2025')).toHaveTextContent('Jul');
+      expect(cell('July 2025')).toHaveAttribute('tabindex', '0');
+      expect(
+        within(grid())
+          .getAllByRole('button')
+          .filter((button) => button.tabIndex === 0),
+      ).toHaveLength(1);
+      // The header moves by a year, and its heading button leads to the year view.
+      expect(screen.getByRole('button', { name: 'Previous year' })).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: 'Next year' })).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: '2025' })).toHaveAccessibleDescription(
+        'Choose a year',
+      );
+      expect(headingElement()).toHaveAttribute('aria-live', 'polite');
+      expect(screen.queryByRole('button', { name: 'Previous month' })).not.toBeInTheDocument();
+    });
+
+    it('marks the selected month (aria-selected, aria-pressed) and the current month', async () => {
+      const { user } = renderCalendar({ defaultValue: new Date(2025, 2, 3) });
+      await openMonths(user, 'March 2025');
+      const march = cell('March 2025');
+      expect(march.closest('[role="gridcell"]')).toHaveAttribute('aria-selected', 'true');
+      expect(march).toHaveAttribute('aria-pressed', 'true');
+      expect(march).toHaveAttribute('data-selected');
+      expect(cell('June 2025')).toHaveAttribute('aria-current', 'date');
+      expect(cell('June 2025')).not.toHaveAttribute('aria-pressed');
+      expect(cell('June 2025').closest('[role="gridcell"]')).toHaveAttribute(
+        'aria-selected',
+        'false',
+      );
+      expect(within(grid()).getAllByRole('button', { current: 'date' })).toHaveLength(1);
+    });
+
+    it('moves between months with the arrows, Home/End and PageUp/PageDown', async () => {
+      const { user } = renderCalendar();
+      await openMonths(user);
+      expectFocusedCell('June 2025');
+      await user.keyboard('{ArrowRight}');
+      expectFocusedCell('July 2025');
+      await user.keyboard('{ArrowDown}');
+      expectFocusedCell('November 2025');
+      await user.keyboard('{ArrowLeft}');
+      expectFocusedCell('October 2025');
+      await user.keyboard('{ArrowUp}');
+      expectFocusedCell('June 2025');
+      await user.keyboard('{Home}');
+      expectFocusedCell('May 2025');
+      await user.keyboard('{End}');
+      expectFocusedCell('August 2025');
+      await user.keyboard('{PageDown}');
+      expectFocusedCell('August 2026');
+      expect(grid()).toHaveAccessibleName('2026');
+      await user.keyboard('{PageUp}{PageUp}');
+      expectFocusedCell('August 2024');
+      expect(grid()).toHaveAccessibleName('2024');
+      // Crossing the end of a year shows the next one.
+      await user.keyboard('{ArrowDown}{ArrowRight}');
+      expectFocusedCell('January 2025');
+      expect(grid()).toHaveAccessibleName('2025');
+      await user.keyboard('{ArrowUp}');
+      expectFocusedCell('September 2024');
+    });
+
+    it('mirrors ArrowLeft/ArrowRight in RTL in the month and year views', async () => {
+      const user = userEvent.setup();
+      renderWithProviders(
+        <Calendar aria-label="Due date" locale="en-US" today={TODAY} defaultValue={JUNE_15} />,
+        { dir: 'rtl' },
+      );
+      await openMonths(user);
+      await user.keyboard('{ArrowLeft}');
+      expectFocusedCell('July 2025');
+      await user.keyboard('{ArrowRight}{ArrowRight}');
+      expectFocusedCell('May 2025');
+      await openYears(user);
+      await user.keyboard('{ArrowLeft}');
+      expectFocusedCell('2026');
+      await user.keyboard('{ArrowRight}{ArrowRight}');
+      expectFocusedCell('2024');
+    });
+
+    it('a month pick shows its days, keeping the day of the month clamped to the month', async () => {
+      const { user, onValueChange } = renderCalendar({ defaultValue: new Date(2025, 0, 31) });
+      await openMonths(user, 'January 2025');
+      await user.keyboard('{ArrowRight}{Enter}');
+      expect(grid()).toHaveAccessibleName('February 2025');
+      expect(focusedLabel()).toBe('Friday, February 28, 2025');
+      expectFocusInCalendar();
+      expect(tabStops()).toHaveLength(1);
+      // A click picks too; picking selects no day.
+      await openMonths(user, 'February 2025');
+      await user.click(cell('April 2025'));
+      expect(grid()).toHaveAccessibleName('April 2025');
+      expect(focusedLabel()).toBe('Monday, April 28, 2025');
+      expectFocusInCalendar();
+      expect(onValueChange).not.toHaveBeenCalled();
+    });
+
+    it('a month pick clamps the day into minDate/maxDate', async () => {
+      const { user } = renderCalendar({
+        defaultValue: new Date(2025, 0, 31),
+        maxDate: new Date(2025, 1, 20),
+      });
+      await openMonths(user, 'January 2025');
+      await user.click(cell('February 2025'));
+      expect(grid()).toHaveAccessibleName('February 2025');
+      expect(focusedLabel()).toBe('Thursday, February 20, 2025');
+    });
+
+    it('the year view shows the decade with the year before and after, and its keys', async () => {
+      const { user } = renderCalendar();
+      await openMonths(user);
+      await openYears(user);
+      expect(grid()).toHaveAccessibleName(DECADE_2020);
+      expect(headingElement()).toHaveTextContent(DECADE_2020);
+      expect(headingElement()).toHaveAttribute('aria-live', 'polite');
+      // The decade heading is text: no button, no hint.
+      expect(within(headingElement()).queryByRole('button')).not.toBeInTheDocument();
+      expect(screen.queryByText('Choose a year')).not.toBeInTheDocument();
+      expect(screen.getByRole('button', { name: 'Previous decade' })).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: 'Next decade' })).toBeInTheDocument();
+      const years = within(grid()).getAllByRole('button');
+      expect(years.map((year) => year.textContent)).toEqual([
+        '2019',
+        '2020',
+        '2021',
+        '2022',
+        '2023',
+        '2024',
+        '2025',
+        '2026',
+        '2027',
+        '2028',
+        '2029',
+        '2030',
+      ]);
+      expect(cell('2019')).toHaveAttribute('data-outside');
+      expect(cell('2030')).toHaveAttribute('data-outside');
+      expect(cell('2020')).not.toHaveAttribute('data-outside');
+      expect(cell('2025')).toHaveAttribute('aria-pressed', 'true');
+      expect(cell('2025')).toHaveAttribute('aria-current', 'date');
+      expectFocusedCell('2025');
+      await user.keyboard('{ArrowRight}');
+      expectFocusedCell('2026');
+      await user.keyboard('{ArrowDown}');
+      expectFocusedCell('2030');
+      expect(grid()).toHaveAccessibleName(DECADE_2020);
+      await user.keyboard('{ArrowRight}');
+      expectFocusedCell('2031');
+      expect(grid()).toHaveAccessibleName(DECADE_2030);
+      await user.keyboard('{Home}');
+      expectFocusedCell('2029');
+      expect(grid()).toHaveAccessibleName(DECADE_2030);
+      await user.keyboard('{PageUp}');
+      expectFocusedCell('2019');
+      expect(grid()).toHaveAccessibleName(DECADE_2020);
+      await user.keyboard('{End}');
+      expectFocusedCell('2022');
+      await user.keyboard('{ArrowUp}');
+      expectFocusedCell('2018');
+      expect(grid()).toHaveAccessibleName(DECADE_2010);
+      await user.keyboard('{PageDown}{PageDown}');
+      expectFocusedCell('2038');
+      expect(grid()).toHaveAccessibleName(DECADE_2030);
+    });
+
+    it('a year pick shows its months with the same month focused', async () => {
+      const { user } = renderCalendar();
+      await openMonths(user);
+      await user.keyboard('{ArrowRight}');
+      await openYears(user);
+      expectFocusedCell('2025');
+      await user.keyboard('{ArrowRight}{ArrowRight}{Enter}');
+      expect(grid()).toHaveAccessibleName('2027');
+      expectFocusedCell('July 2027');
+      await openYears(user, '2027');
+      await user.click(cell('2021'));
+      expect(grid()).toHaveAccessibleName('2021');
+      expectFocusedCell('July 2021');
+      await user.keyboard('{Enter}');
+      expect(grid()).toHaveAccessibleName('July 2021');
+      expect(focusedLabel()).toBe('Thursday, July 15, 2021');
+    });
+
+    it('the header buttons move by a year and by a decade', async () => {
+      const { user } = renderCalendar();
+      await openMonths(user);
+      await user.click(screen.getByRole('button', { name: 'Next year' }));
+      expect(grid()).toHaveAccessibleName('2026');
+      expect(within(grid()).getByRole('button', { name: 'June 2026' })).toHaveAttribute(
+        'tabindex',
+        '0',
+      );
+      await openYears(user, '2026');
+      await user.click(screen.getByRole('button', { name: 'Previous decade' }));
+      expect(grid()).toHaveAccessibleName(DECADE_2010);
+      expect(cell('2016')).toHaveAttribute('tabindex', '0');
+      expectFocusInCalendar();
+    });
+
+    it('Escape goes from the years to the months to the days, each showing its period before drilling up', async () => {
+      const escapes = trackEscapes();
+      const { user } = renderCalendar();
+      await openMonths(user);
+      await user.keyboard('{PageDown}');
+      expectFocusedCell('June 2026');
+      await openYears(user, '2026');
+      await user.keyboard('{PageDown}{ArrowRight}');
+      expectFocusedCell('2037');
+      await user.keyboard('{Escape}');
+      expect(grid()).toHaveAccessibleName('2026');
+      expectFocusedCell('June 2026');
+      await user.keyboard('{ArrowRight}{Escape}');
+      expect(grid()).toHaveAccessibleName('June 2025');
+      expectFocusedCell('Sunday, June 15, 2025');
+      expect(escapes).toEqual([true, true]);
+      // In the day view Escape is not the calendar's.
+      await user.keyboard('{Escape}');
+      expect(escapes).toEqual([true, true, false]);
+      expect(grid()).toHaveAccessibleName('June 2025');
+    });
+
+    it('Escape on a header button of the month view goes back too', async () => {
+      const escapes = trackEscapes();
+      const { user } = renderCalendar();
+      await openMonths(user);
+      act(() => screen.getByRole('button', { name: 'Next year' }).focus());
+      await user.keyboard('{Escape}');
+      expect(grid()).toHaveAccessibleName('June 2025');
+      expectFocusedCell('Sunday, June 15, 2025');
+      expect(escapes).toEqual([true]);
+    });
+
+    it('never leaves focus on <body> across the view changes', async () => {
+      const { user } = renderCalendar();
+      act(() => tabStops()[0].focus());
+      await user.tab({ shift: true });
+      await user.tab({ shift: true });
+      expect(document.activeElement).toHaveAccessibleName('June 2025');
+      await user.keyboard('{Enter}');
+      expectFocusedCell('June 2025');
+      await user.tab({ shift: true });
+      await user.tab({ shift: true });
+      expect(document.activeElement).toHaveAccessibleName('2025');
+      // The heading button becomes text in the year view: focus moves into the grid.
+      await user.keyboard(' ');
+      expectFocusedCell('2025');
+      await user.keyboard('{Enter}');
+      expectFocusedCell('June 2025');
+      await user.keyboard('{Enter}');
+      expectFocusedCell('Sunday, June 15, 2025');
+      await openMonths(user);
+      expectFocusedCell('June 2025');
+      await user.keyboard('{Escape}');
+      expectFocusedCell('Sunday, June 15, 2025');
+    });
+
+    it('marks months and years wholly outside minDate/maxDate aria-disabled, focusable and unpickable', async () => {
+      const { user } = renderCalendar({
+        minDate: new Date(2025, 2, 15),
+        maxDate: new Date(2027, 9, 1),
+      });
+      await openMonths(user);
+      for (const name of ['January 2025', 'February 2025']) {
+        expect(cell(name)).toHaveAttribute('aria-disabled', 'true');
+        expect(cell(name)).not.toBeDisabled();
+      }
+      expect(cell('March 2025')).not.toHaveAttribute('aria-disabled');
+      expect(screen.getByRole('button', { name: 'Previous year' })).toHaveAttribute(
+        'aria-disabled',
+        'true',
+      );
+      // A click focuses it and picks nothing.
+      await user.click(cell('January 2025'));
+      expect(cell('January 2025')).toHaveFocus();
+      expect(grid()).toHaveAccessibleName('2025');
+      await user.keyboard('{Enter}');
+      expect(grid()).toHaveAccessibleName('2025');
+      // The keys stay within the bounds.
+      await user.keyboard('{ArrowRight}');
+      expectFocusedCell('March 2025');
+      await user.keyboard('{ArrowLeft}{PageUp}');
+      expectFocusedCell('March 2025');
+      await user.keyboard('{End}');
+      expectFocusedCell('April 2025');
+      await user.keyboard('{PageDown}{PageDown}{ArrowDown}{ArrowDown}');
+      expectFocusedCell('October 2027');
+      expect(cell('November 2027')).toHaveAttribute('aria-disabled', 'true');
+      expect(screen.getByRole('button', { name: 'Next year' })).toHaveAttribute(
+        'aria-disabled',
+        'true',
+      );
+      await openYears(user, '2027');
+      for (const year of ['2019', '2024', '2028', '2030']) {
+        expect(cell(year)).toHaveAttribute('aria-disabled', 'true');
+      }
+      for (const year of ['2025', '2026', '2027']) {
+        expect(cell(year)).not.toHaveAttribute('aria-disabled');
+      }
+      await user.click(cell('2024'));
+      expect(cell('2024')).toHaveFocus();
+      expect(grid()).toHaveAccessibleName(DECADE_2020);
+    });
+
+    it('inverted bounds (minDate after maxDate) disable the header buttons and the keys clamp', async () => {
+      const { user } = renderCalendar({
+        defaultValue: null,
+        minDate: new Date(2025, 5, 20),
+        maxDate: new Date(2025, 5, 10),
+      });
+      const expectHeaderDisabled = (previous: string, next: string) => {
+        expect(screen.getByRole('button', { name: previous })).toHaveAttribute(
+          'aria-disabled',
+          'true',
+        );
+        expect(screen.getByRole('button', { name: next })).toHaveAttribute('aria-disabled', 'true');
+      };
+      expectHeaderDisabled('Previous month', 'Next month');
+      expect(tabStops()).toHaveLength(1);
+      act(() => tabStops()[0].focus());
+      await user.keyboard('{PageDown}{PageUp}{Shift>}{PageDown}{PageUp}{/Shift}{ArrowRight}');
+      expect(grid()).toHaveAccessibleName('June 2025');
+      expect(tabStops()).toHaveLength(1);
+      await user.click(screen.getByRole('button', { name: 'Next month' }));
+      expect(grid()).toHaveAccessibleName('June 2025');
+      await openMonths(user);
+      expectHeaderDisabled('Previous year', 'Next year');
+      await user.keyboard('{PageDown}{PageUp}{ArrowRight}{ArrowLeft}');
+      expect(grid()).toHaveAccessibleName('2025');
+      expectFocusedCell('June 2025');
+      await openYears(user);
+      expectHeaderDisabled('Previous decade', 'Next decade');
+      await user.keyboard('{PageDown}{PageUp}{ArrowDown}');
+      expect(grid()).toHaveAccessibleName(DECADE_2020);
+      expectFocusedCell('2025');
+    });
+
+    it('bounds that exclude whole decades disable the decade buttons, and paging clamps', async () => {
+      const { user } = renderCalendar({
+        minDate: new Date(2021, 1, 1),
+        maxDate: new Date(2028, 5, 30),
+      });
+      await openMonths(user);
+      await openYears(user);
+      for (const name of ['Previous decade', 'Next decade']) {
+        expect(screen.getByRole('button', { name })).toHaveAttribute('aria-disabled', 'true');
+      }
+      for (const year of ['2019', '2020', '2029', '2030']) {
+        expect(cell(year)).toHaveAttribute('aria-disabled', 'true');
+      }
+      await user.keyboard('{PageUp}');
+      expectFocusedCell('2021');
+      await user.keyboard('{PageDown}');
+      expectFocusedCell('2028');
+      await user.click(screen.getByRole('button', { name: 'Next decade' }));
+      expect(grid()).toHaveAccessibleName(DECADE_2020);
+    });
+
+    it('a month where every day is unavailable keeps one tab stop, and the keys end', async () => {
+      const { user } = renderCalendar({ defaultValue: null, disabledDates: () => true });
+      expect(tabStops()).toHaveLength(1);
+      expect(tabStops()[0]).toHaveAccessibleName('Thursday, June 12, 2025');
+      act(() => tabStops()[0].focus());
+      await user.keyboard('{ArrowRight}{ArrowDown}{Home}{End}{PageDown}{ArrowLeft}');
+      expect(focusedLabel()).toBe('Sunday, July 20, 2025');
+      expect(tabStops()).toHaveLength(1);
+      await user.keyboard('{Enter}');
+      expect(tabStops()).toHaveLength(1);
+      // Its month is no less reachable in the month view.
+      await openMonths(user, 'July 2025');
+      expect(cell('July 2025')).not.toHaveAttribute('aria-disabled');
+    });
+
+    it('gives every button of every view its own padding, background, gated hover and focus ring', async () => {
+      const { user } = renderCalendar();
+      const expectButtonClasses = () => {
+        for (const button of within(group()).getAllByRole('button')) {
+          expect(button).toHaveClass(
+            'p-0',
+            'bg-transparent',
+            'not-disabled:not-aria-disabled:hover:bg-subtle-hover',
+            'focus-visible:outline-2',
+          );
+        }
+      };
+      expectButtonClasses();
+      await openMonths(user);
+      expectButtonClasses();
+      await openYears(user);
+      expectButtonClasses();
+      // The navigation buttons and the cells are at least 32px tall.
+      for (const button of within(group()).getAllByRole('button')) {
+        expect(button.className).toMatch(/(^|\s)h-(8|10|12)(\s|$)/);
+      }
+    });
+
+    it('passes axe in the month and the year view', async () => {
+      const { user } = renderCalendar({ minDate: new Date(2025, 2, 15) });
+      await openMonths(user);
+      expect(await axe(document.body)).toHaveNoViolations();
+      await openYears(user);
+      expect(await axe(document.body)).toHaveNoViolations();
+    });
+
+    it('writes the years in the locale digits and calendar (th-TH)', async () => {
+      const { user } = renderCalendar({ locale: 'th-TH' });
+      const month = new Intl.DateTimeFormat('th-TH', { month: 'long', year: 'numeric' }).format(
+        JUNE_15,
+      );
+      await openMonths(user, month);
+      expect(grid()).toHaveAccessibleName('2568');
+      await openYears(user, '2568');
+      expectFocusedCell('2568');
+    });
+
+    it('keeps a DatePicker open on Escape in its month view, focus inside its dialog', async () => {
+      const escapes = trackEscapes();
+      const user = userEvent.setup();
+      const onOpenChange = vi.fn();
+      render(
+        <DatePicker
+          aria-label="Date"
+          locale="en-US"
+          defaultValue={JUNE_15}
+          onOpenChange={onOpenChange}
+        />,
+      );
+      await user.click(screen.getByRole('button', { name: 'Open calendar' }));
+      const dialog = screen.getByRole('dialog');
+      await user.click(within(dialog).getByRole('button', { name: 'June 2025' }));
+      expect(within(dialog).getByRole('grid')).toHaveAccessibleName('2025');
+      expect(dialog).toContainElement(document.activeElement as HTMLElement);
+      await user.click(within(dialog).getByRole('button', { name: '2025' }));
+      expect(dialog).toContainElement(document.activeElement as HTMLElement);
+      await user.keyboard('{Escape}');
+      await act(async () => {});
+      expect(within(dialog).getByRole('grid')).toHaveAccessibleName('2025');
+      expect(dialog).toContainElement(document.activeElement as HTMLElement);
+      await user.keyboard('{Escape}');
+      await act(async () => {});
+      expect(within(dialog).getByRole('grid')).toHaveAccessibleName('June 2025');
+      expect(document.activeElement).toHaveAccessibleName('Sunday, June 15, 2025');
+      expect(onOpenChange).toHaveBeenCalledTimes(1);
+      await user.keyboard('{Escape}');
+      expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+      expect(escapes).toEqual([true, true, true]);
+      expect(onOpenChange.mock.calls).toEqual([[true], [false]]);
     });
   });
 

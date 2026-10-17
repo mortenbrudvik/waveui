@@ -554,9 +554,11 @@ export const timePickerClassNames = {
  * DatePicker: `root` on the outer element; `input` on the text input; `clearButton` on the clear
  * button; `openCalendarButton` on the calendar button; `errorMessage` on the `role="alert"`
  * message; `surface` on the portaled `role="dialog"` calendar; `header` on its month row;
- * `previousMonthButton` and `nextMonthButton` on the month buttons; `heading` on the month
- * `<h2>`; `grid` on the calendar's `role="grid"` element; `weekday` on each weekday header cell;
- * `day` on each day button.
+ * `previousMonthButton` and `nextMonthButton` on the navigation buttons (by a month, and in the
+ * month and year views by a year and a decade); `heading` on the `<h2>` (the month, year or
+ * decade); `headingButton` on its button to the month and year views; `grid` on the calendar's
+ * `role="grid"` element of every view; `weekday` on each weekday header cell; `day`, `month` and
+ * `year` on each day, month and year button.
  */
 export const datePickerClassNames = {
   root: 'wave-date-picker',
@@ -568,27 +570,35 @@ export const datePickerClassNames = {
   header: 'wave-date-picker__header',
   previousMonthButton: 'wave-date-picker__previous-month-button',
   heading: 'wave-date-picker__heading',
+  headingButton: 'wave-date-picker__heading-button',
   nextMonthButton: 'wave-date-picker__next-month-button',
   grid: 'wave-date-picker__grid',
   weekday: 'wave-date-picker__weekday',
   day: 'wave-date-picker__day',
+  month: 'wave-date-picker__month',
+  year: 'wave-date-picker__year',
 } as const;
 
 /**
  * Calendar: `root` on the `role="group"` element; `header` on the row of the navigation buttons
- * and the heading; `previousButton` and `nextButton` on the navigation buttons; `heading` on the
- * month text (a `<div>`, which labels the grid); `grid` on the `role="grid"` element; `weekday`
- * on each weekday header cell; `day` on each day button.
+ * and the heading; `previousButton` and `nextButton` on the navigation buttons (by a month, a
+ * year or a decade); `heading` on the month, year or decade text (a `<div>`, which labels the
+ * grid); `headingButton` on the heading's button to the month and year views; `grid` on the
+ * `role="grid"` element of every view; `weekday` on each weekday header cell; `day`, `month` and
+ * `year` on each day, month and year button.
  */
 export const calendarClassNames = {
   root: 'wave-calendar',
   header: 'wave-calendar__header',
   previousButton: 'wave-calendar__previous-button',
   heading: 'wave-calendar__heading',
+  headingButton: 'wave-calendar__heading-button',
   nextButton: 'wave-calendar__next-button',
   grid: 'wave-calendar__grid',
   weekday: 'wave-calendar__weekday',
   day: 'wave-calendar__day',
+  month: 'wave-calendar__month',
+  year: 'wave-calendar__year',
 } as const;
 
 /**

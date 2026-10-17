@@ -224,10 +224,13 @@ const CALENDAR_PART_CLASS_NAMES: CalendarViewPartClassNames = {
   header: datePickerClassNames.header,
   previousMonthButton: datePickerClassNames.previousMonthButton,
   heading: datePickerClassNames.heading,
+  headingButton: datePickerClassNames.headingButton,
   nextMonthButton: datePickerClassNames.nextMonthButton,
   grid: datePickerClassNames.grid,
   weekday: datePickerClassNames.weekday,
   day: datePickerClassNames.day,
+  month: datePickerClassNames.month,
+  year: datePickerClassNames.year,
 };
 
 /**

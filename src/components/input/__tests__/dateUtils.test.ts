@@ -2,20 +2,29 @@ import { describe, it, expect } from 'vitest';
 import {
   addDays,
   addMonths,
+  addYears,
   clampDate,
   formatDate,
   formatDayLabel,
+  formatDecade,
   formatISODate,
+  formatMonthShort,
   formatMonthYear,
+  formatYear,
   generateTimeOptions,
   getCalendarDays,
+  getDecadeStart,
+  getDecadeYears,
   getLocaleDateFormat,
   getMonthNames,
   getWeekdayNames,
+  getYearMonths,
   isDateInRange,
+  isMonthOutOfRange,
   isSameDay,
   isSameMonth,
   isValidLocaleTag,
+  isYearOutOfRange,
   minutesToTime,
   minutesToValue,
   normalizeTimeStep,
@@ -316,6 +325,84 @@ describe('dateUtils — calendar systems', () => {
       new Intl.DateTimeFormat('th-TH', { month: 'long', year: 'numeric' }).format(june15),
     );
     expect(formatMonthYear(june15, 'th-TH')).toContain('2568');
+  });
+});
+
+describe('dateUtils — month and year views', () => {
+  it('addYears moves by whole years at local midnight, clamping February 29', () => {
+    const moved = addYears(new Date(2024, 1, 29, 15, 30), 1);
+    expect(fields(moved)).toEqual([2025, 2, 28]);
+    expect(isMidnight(moved)).toBe(true);
+    expect(fields(addYears(new Date(2025, 5, 15), -10))).toEqual([2015, 6, 15]);
+  });
+
+  it('getDecadeStart floors a year to its decade', () => {
+    expect(getDecadeStart(2025)).toBe(2020);
+    expect(getDecadeStart(2020)).toBe(2020);
+    expect(getDecadeStart(2029)).toBe(2020);
+    expect(getDecadeStart(2030)).toBe(2030);
+  });
+
+  it('getYearMonths lists the 12 months of a year (the 1st, local midnight)', () => {
+    const months = getYearMonths(2025);
+    expect(months.map(fields)).toEqual(
+      Array.from({ length: 12 }, (_, month) => [2025, month + 1, 1]),
+    );
+    expect(months.every(isMidnight)).toBe(true);
+  });
+
+  it('getDecadeYears lists the decade with the year before and the year after it (January 1)', () => {
+    const years = getDecadeYears(2020);
+    expect(years.map((year) => year.getFullYear())).toEqual([
+      2019, 2020, 2021, 2022, 2023, 2024, 2025, 2026, 2027, 2028, 2029, 2030,
+    ]);
+    expect(years.map(fields)[0]).toEqual([2019, 1, 1]);
+    expect(years.every(isMidnight)).toBe(true);
+  });
+
+  it('isMonthOutOfRange is true only for a month wholly outside the bounds', () => {
+    const min = new Date(2025, 2, 15, 18);
+    const max = new Date(2025, 9, 1);
+    expect(isMonthOutOfRange(new Date(2025, 1, 1), min, max)).toBe(true);
+    expect(isMonthOutOfRange(new Date(2025, 2, 1), min, max)).toBe(false);
+    expect(isMonthOutOfRange(new Date(2025, 9, 1), min, max)).toBe(false);
+    expect(isMonthOutOfRange(new Date(2025, 10, 1), min, max)).toBe(true);
+    expect(isMonthOutOfRange(new Date(1990, 0, 1))).toBe(false);
+  });
+
+  it('isYearOutOfRange is true only for a year wholly outside the bounds', () => {
+    const min = new Date(2021, 1, 1);
+    const max = new Date(2028, 5, 30);
+    expect(isYearOutOfRange(2020, min, max)).toBe(true);
+    expect(isYearOutOfRange(2021, min, max)).toBe(false);
+    expect(isYearOutOfRange(2028, min, max)).toBe(false);
+    expect(isYearOutOfRange(2029, min, max)).toBe(true);
+    expect(isYearOutOfRange(1900)).toBe(false);
+  });
+
+  it('formats the month and year cells and the decade heading in the locale', () => {
+    const june = new Date(2025, 5, 1);
+    expect(formatMonthShort(june, 'en-US')).toBe('Jun');
+    expect(formatMonthShort(new Date(2025, 2, 1), 'de-DE')).toBe('Mär');
+    expect(formatYear(june, 'en-US')).toBe('2025');
+    expect(formatDecade(2020, 'en-US')).toBe(
+      new Intl.DateTimeFormat('en-US', { year: 'numeric' }).formatRange(
+        new Date(2020, 0, 1),
+        new Date(2029, 11, 31),
+      ),
+    );
+    expect(formatDecade(2020, 'en-US')).toMatch(/^2020\s*–\s*2029$/);
+  });
+
+  it('writes the years in the locale digits and the grid-compatible calendar (th-TH, fa-IR)', () => {
+    const june = new Date(2025, 5, 1);
+    // The Buddhist year of th-TH, without its era; the Gregorian year of fa-IR in its digits.
+    expect(formatYear(june, 'th-TH')).toBe('2568');
+    expect(formatDecade(2020, 'th-TH')).toContain('2563');
+    expect(formatYear(june, 'fa-IR')).toBe('۲۰۲۵');
+    expect(formatMonthShort(june, 'fa-IR')).toBe(
+      new Intl.DateTimeFormat('fa-IR', { month: 'short', calendar: 'gregory' }).format(june),
+    );
   });
 });
 

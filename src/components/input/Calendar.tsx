@@ -4,6 +4,7 @@ import { cn } from '../../lib/cn';
 import { focusableDisabledProps, joinIds, preventIfDisabled } from '../../lib/aria';
 import { calendarClassNames } from '../../lib/classNames';
 import { warnOnce } from '../../lib/dev';
+import { isOwnEvent } from '../../lib/events';
 import { ChevronLeftIcon, ChevronRightIcon } from '../../lib/icons';
 import { disabledStyles, focusRing } from '../../lib/styles';
 import { useControllable } from '../../hooks/useControllable';
@@ -13,18 +14,31 @@ import { useId } from '../../hooks/useId';
 import { useIsClient } from '../../hooks/useIsClient';
 import { useMergedRefs } from '../../hooks/useMergedRefs';
 import { HiddenInput } from '../internal/HiddenInput';
-import { CalendarDayGrid, type CalendarDayGridPartClassNames } from './Calendar.views';
+import { makeDate } from '../../lib/date';
+import {
+  CalendarDayGrid,
+  CalendarPickerGrid,
+  type CalendarDayGridPartClassNames,
+} from './Calendar.views';
 import {
   addDays,
   addMonths,
   clampDate,
+  formatDecade,
   formatISODate,
+  formatMonthShort,
   formatMonthYear,
+  formatYear,
   getCalendarDays,
+  getDecadeStart,
+  getDecadeYears,
+  getYearMonths,
   isDateInRange,
+  isMonthOutOfRange,
   isSameDay,
   isSameMonth,
   isValidLocaleTag,
+  isYearOutOfRange,
   startOfDay,
   startOfMonth,
 } from './dateUtils';
@@ -83,8 +97,8 @@ export interface CalendarLabels {
    */
   markedDay?: (dayLabel: string) => string;
   /**
-   * Said in the calendar's description while it is required (its role cannot carry
-   * `aria-required`).
+   * Said in the calendar's description while it is required (`required`, a required Field, or a
+   * consumer `aria-required` alone), since its role cannot carry `aria-required`.
    * @default 'Required'
    */
   required?: string;
@@ -147,7 +161,19 @@ export interface CalendarProps extends Omit<
    * @default today's month
    */
   initialVisibleDate?: Date;
-  /** Names of the month buttons and the required hint, for localization. */
+  /**
+   * Turns the month text into a button that shows the month view (the 12 months of the year),
+   * whose heading, the year, is a button to the year view (a decade with the year before and
+   * after it). A picked year shows its months and a picked month its days; Escape goes back a
+   * level to the period shown before. Fluent's `isMonthPickerVisible`, here as a drill-down in one
+   * pane.
+   * @default true
+   */
+  showMonthPicker?: boolean;
+  /**
+   * Names of the navigation buttons, the heading button's hints and the required hint, for
+   * localization.
+   */
   labels?: CalendarLabels;
   /** Form field name: the day is submitted as ISO `yyyy-mm-dd` (hidden input). */
   name?: string;
@@ -156,7 +182,8 @@ export interface CalendarProps extends Omit<
   /**
    * Blocks form submission while no day is selected; the form's report focuses the calendar's
    * tab stop. Said in the description (`labels.required`), as the group cannot carry
-   * `aria-required`.
+   * `aria-required`. A consumer `aria-required` alone also shows that hint (assistive technology
+   * only: it does not block submission).
    */
   required?: boolean;
   /** Ref to the root element. */
@@ -168,14 +195,20 @@ export interface CalendarProps extends Omit<
  * renders the view (DatePicker passes its own).
  */
 export interface CalendarViewPartClassNames extends CalendarDayGridPartClassNames {
-  /** On the row of the month buttons and the heading. */
+  /** On the row of the navigation buttons and the heading. */
   header?: string;
-  /** On the previous-month button. */
+  /** On the previous button (previous month, year or decade). */
   previousMonthButton?: string;
-  /** On the month heading. */
+  /** On the heading (the month, the year or the decade). */
   heading?: string;
-  /** On the next-month button. */
+  /** On the heading's button, which shows the month or the year view. */
+  headingButton?: string;
+  /** On the next button (next month, year or decade). */
   nextMonthButton?: string;
+  /** On each month button of the month view. */
+  month?: string;
+  /** On each year button of the year view. */
+  year?: string;
 }
 
 /** Internal props of {@link CalendarView}. */
@@ -202,11 +235,16 @@ export interface CalendarViewProps {
   today?: Date | null;
   /** The month shown first when there is no value (else today's, else the clock's). */
   initialVisibleDate?: Date;
-  /** Names of the month buttons. */
+  /**
+   * The heading is a button that shows the month view, whose heading shows the year view.
+   * @default true
+   */
+  showMonthPicker?: boolean;
+  /** Names of the navigation buttons and the heading button's hints. */
   labels?: CalendarLabels;
-  /** Element of the month heading: `h2` in DatePicker's dialog (its title), else `div`. */
+  /** Element of the heading: `h2` in DatePicker's dialog (its title), else `div`. */
   headingAs: 'h2' | 'div';
-  /** Id of the month heading (it labels the grid; DatePicker also labels its dialog with it). */
+  /** Id of the heading (it labels the grid; DatePicker also labels its dialog with it). */
   headingId: string;
   /** Stable classes of the view's parts. */
   partClassNames?: CalendarViewPartClassNames;
@@ -217,6 +255,10 @@ export interface CalendarViewProps {
 const NAV_BUTTON_CLASSES =
   'flex h-8 w-8 items-center justify-center rounded bg-transparent p-0 text-foreground not-disabled:not-aria-disabled:hover:bg-subtle-hover';
 
+// The heading's button keeps the heading's text style, set on itself (C-NATIVE).
+const HEADING_BUTTON_CLASSES =
+  'flex h-8 items-center justify-center rounded bg-transparent p-0 px-2 text-body-1 font-semibold text-foreground not-disabled:not-aria-disabled:hover:bg-subtle-hover';
+
 /** The 42 grid days as 6 weeks. */
 function toWeeks(days: Date[]): Date[][] {
   const weeks: Date[][] = [];
@@ -224,13 +266,33 @@ function toWeeks(days: Date[]): Date[][] {
   return weeks;
 }
 
+/** The years of the year view of the decade starting at `decade` (the year before and after it). */
+function inDecadeGrid(year: number, decade: number): boolean {
+  return year >= decade - 1 && year <= decade + 10;
+}
+
+/** `year` clamped into the years of `[min, max]` (as `clampDate` clamps a day). */
+function clampYear(year: number, min?: Date, max?: Date): number {
+  if (min && year < min.getFullYear()) return min.getFullYear();
+  if (max && year > max.getFullYear()) return max.getFullYear();
+  return year;
+}
+
+/** Which grid a calendar view shows. */
+type CalendarViewKind = 'day' | 'month' | 'year';
+
 /**
- * Internal: the header (previous-month button, month heading, next-month button) and the day grid
- * of a calendar, with the shown month and the roving day as state. It renders no element of its
- * own (a fragment). It opens on the month of `value`, else `initialVisibleDate`'s, else today's,
- * clamped into `minDate`/`maxDate`, and keeps that month until navigated or until `value` changes
- * to a day of another month, whose month it then shows (DatePicker mounts it with each opening of
- * its dialog).
+ * Internal: the header (the previous button, the heading, the next button) and the grid of a
+ * calendar, in one of three views: the days of a month, the months of a year (the month view) and
+ * the years of a decade (the year view). It renders no element of its own (a fragment). It opens
+ * on the day view of the month of `value`, else `initialVisibleDate`'s, else today's, clamped into
+ * `minDate`/`maxDate`, and keeps that month until navigated or until `value` changes to a day of
+ * another month, whose month it then shows (DatePicker mounts it with each opening of its dialog).
+ *
+ * With `showMonthPicker`, the day view's heading is a button to the month view, and the month
+ * view's heading a button to the year view; a picked year shows its months and a picked month its
+ * days. Escape in the year and month views goes back one level to the period shown before (and is
+ * consumed). Each view change moves focus into the new grid in the same commit.
  */
 export const CalendarView = ({
   value,
@@ -242,6 +304,7 @@ export const CalendarView = ({
   locale,
   today: todayProp,
   initialVisibleDate,
+  showMonthPicker = true,
   labels,
   headingAs: Heading,
   headingId,
@@ -249,14 +312,26 @@ export const CalendarView = ({
 }: CalendarViewProps) => {
   const today =
     todayProp === undefined ? startOfDay(new Date()) : todayProp && startOfDay(todayProp);
+  const [view, setView] = React.useState<CalendarViewKind>('day');
+  // Day view: the shown month and the day moved to.
   const [viewMonth, setViewMonth] = React.useState<Date>(() =>
     // Without a value, an `initialVisibleDate` or a known today the month comes from the clock:
     // on the server, the server's (the Calendar warns after such a hydration render).
     startOfMonth(clampDate(value ?? initialVisibleDate ?? today ?? new Date(), minDate, maxDate)),
   );
   const [focusedDay, setFocusedDay] = React.useState<Date | null>(null);
+  // Month view: the shown year and the month moved to. Year view: the first year of the shown
+  // decade and the year moved to. Each view keeps its state while a higher view is shown, so
+  // Escape shows the period it showed before.
+  const [monthViewYear, setMonthViewYear] = React.useState(() => viewMonth.getFullYear());
+  const [focusedMonth, setFocusedMonth] = React.useState<Date | null>(null);
+  const [decade, setDecade] = React.useState(() => getDecadeStart(viewMonth.getFullYear()));
+  const [focusedYear, setFocusedYear] = React.useState<number | null>(null);
   const gridRef = React.useRef<HTMLTableElement | null>(null);
+  /** Set by a view change: the next layout effect moves focus into the new grid. */
+  const focusGridRef = React.useRef(false);
   const gridId = useId('calendar-grid');
+  const hintId = useId('calendar-heading-hint');
 
   // A value that changes to a day of another month shows that month (adjusted during render,
   // C-HOOKS): a controlled value set by the parent, a form reset, or a picked day of the next
@@ -279,9 +354,12 @@ export const CalendarView = ({
     [viewMonth, firstDayOfWeek],
   );
 
+  /* ---- day view ----------------------------------------------------- */
+
   // The focused day is derived: the day moved to while it is shown (a pointer-focused day of the
   // previous/next month counts too), else the selected day of the month, else today (clamped into
-  // the range; skipped while today is unknown), else the first available day of the month.
+  // the range; skipped while today is unknown), else the first day of the month in range (it may
+  // be unavailable: unavailable days are focusable).
   const inView = (date: Date | null | undefined): date is Date =>
     !!date && isSameMonth(date, viewMonth);
   const inGrid = (date: Date | null | undefined): date is Date =>
@@ -319,62 +397,189 @@ export const CalendarView = ({
     if (!isSameDay(day, focusTarget)) setFocusedDay(day);
   };
 
-  const previousDisabled = !!minDate && addDays(viewMonth, -1) < startOfDay(minDate);
-  const nextDisabled = !!maxDate && addMonths(viewMonth, 1) > startOfDay(maxDate);
+  /* ---- month view --------------------------------------------------- */
 
-  // Roving focus: while the grid holds focus, focus follows the focused day, also when the month
-  // changes under it (the buttons are keyed by position, so the focused one shows another day).
-  const viewIso = formatISODate(viewMonth);
+  const minMonth = minDate && startOfMonth(minDate);
+  const maxMonth = maxDate && startOfMonth(maxDate);
+  const clampMonth = (month: Date) => clampDate(startOfMonth(month), minMonth, maxMonth);
+  const inMonthView = (date: Date | null | undefined): date is Date =>
+    !!date && date.getFullYear() === monthViewYear;
+  const firstMonthInRange = clampMonth(makeDate(monthViewYear, 0, 1));
+  const monthTarget = inMonthView(focusedMonth)
+    ? focusedMonth
+    : inMonthView(value)
+      ? startOfMonth(value)
+      : inMonthView(clampedToday)
+        ? startOfMonth(clampedToday)
+        : inMonthView(firstMonthInRange)
+          ? firstMonthInRange
+          : makeDate(monthViewYear, 0, 1);
+
+  /** A key moves the focused month; the shown year follows it. */
+  const moveMonthFocus = (next: Date) => {
+    const target = clampMonth(next);
+    setFocusedMonth(target);
+    setMonthViewYear(target.getFullYear());
+  };
+
+  const navigateYear = (delta: number) => {
+    const nextYear = monthViewYear + delta;
+    const moved = clampMonth(addMonths(monthTarget, delta * 12));
+    setMonthViewYear(nextYear);
+    setFocusedMonth(moved.getFullYear() === nextYear ? moved : null);
+  };
+
+  /* ---- year view ---------------------------------------------------- */
+
+  const firstYearInRange = clampYear(decade, minDate, maxDate);
+  const yearTarget =
+    focusedYear !== null && inDecadeGrid(focusedYear, decade)
+      ? focusedYear
+      : value && inDecadeGrid(value.getFullYear(), decade)
+        ? value.getFullYear()
+        : clampedToday && inDecadeGrid(clampedToday.getFullYear(), decade)
+          ? clampedToday.getFullYear()
+          : inDecadeGrid(firstYearInRange, decade)
+            ? firstYearInRange
+            : decade;
+
+  /**
+   * A key moves the focused year. The arrows keep the decade while the year is in its grid (the
+   * year before and after it included), PageUp/PageDown show the previous and next decade; a
+   * year the bounds clamp outside that grid shows its own decade.
+   */
+  const moveYearFocus = (next: number, preferredDecade: number) => {
+    const target = clampYear(next, minDate, maxDate);
+    setFocusedYear(target);
+    setDecade(inDecadeGrid(target, preferredDecade) ? preferredDecade : getDecadeStart(target));
+  };
+
+  const navigateDecade = (delta: number) => {
+    const nextDecade = decade + delta * 10;
+    const moved = clampYear(yearTarget + delta * 10, minDate, maxDate);
+    setDecade(nextDecade);
+    setFocusedYear(inDecadeGrid(moved, nextDecade) ? moved : null);
+  };
+
+  /* ---- view changes ------------------------------------------------- */
+
+  const changeView = (next: CalendarViewKind) => {
+    focusGridRef.current = true;
+    setView(next);
+  };
+
+  /** The day view's heading button: the months of the focused day's year, its month focused. */
+  const showMonths = () => {
+    setFocusedDay(focusTarget);
+    setMonthViewYear(focusTarget.getFullYear());
+    setFocusedMonth(startOfMonth(focusTarget));
+    changeView('month');
+  };
+
+  /** The month view's heading button: the decade of the focused month, its year focused. */
+  const showYears = () => {
+    setFocusedMonth(monthTarget);
+    setDecade(getDecadeStart(monthTarget.getFullYear()));
+    setFocusedYear(monthTarget.getFullYear());
+    changeView('year');
+  };
+
+  /** A picked month shows its days; the focused day keeps its day of the month, clamped. */
+  const pickMonth = (month: Date) => {
+    const monthsAway =
+      (month.getFullYear() - focusTarget.getFullYear()) * 12 +
+      (month.getMonth() - focusTarget.getMonth());
+    const day = clampDate(addMonths(focusTarget, monthsAway), minDate, maxDate);
+    setViewMonth(month);
+    setFocusedDay(isSameMonth(day, month) ? day : null);
+    changeView('day');
+  };
+
+  /** A picked year shows its months; the focused month keeps its month, clamped. */
+  const pickYear = (yearDate: Date) => {
+    const year = yearDate.getFullYear();
+    const month = clampMonth(makeDate(year, monthTarget.getMonth(), 1));
+    setMonthViewYear(year);
+    setFocusedMonth(month.getFullYear() === year ? month : null);
+    changeView('month');
+  };
+
+  // Escape goes back one level (C-POPUPS: an inner widget that consumes Escape prevents its
+  // default, so a DatePicker stays open); the day view leaves it to the surroundings.
+  const handleEscape = (event: React.KeyboardEvent<HTMLElement>) => {
+    if (event.key !== 'Escape' || view === 'day' || !isOwnEvent(event)) return;
+    if (event.defaultPrevented || event.nativeEvent.isComposing) return;
+    event.preventDefault();
+    changeView(view === 'year' ? 'month' : 'day');
+  };
+
+  /* ---- focus -------------------------------------------------------- */
+
+  const periodKey =
+    view === 'day' ? formatISODate(viewMonth) : view === 'month' ? monthViewYear : decade;
+  const cellKey =
+    view === 'day' ? focusIso : view === 'month' ? formatISODate(monthTarget) : yearTarget;
+
+  // Roving focus: while the grid holds focus, focus follows the focused cell, also when the
+  // period changes under it (the buttons are keyed by position, so the focused one shows another
+  // cell). A view change moves focus into the new grid in the same commit, since the element that
+  // had it (the heading button that becomes text, a picked cell) may be gone.
   React.useLayoutEffect(() => {
+    const moveIn = focusGridRef.current;
+    focusGridRef.current = false;
     const grid = gridRef.current;
     if (!grid) return;
     const active = grid.ownerDocument.activeElement;
-    if (!active || !grid.contains(active)) return;
-    const button = grid.querySelector<HTMLElement>(`button[data-date="${focusIso}"]`);
+    if (!moveIn && (!active || !grid.contains(active))) return;
+    const button = grid.querySelector<HTMLElement>('button[tabindex="0"]');
     if (button && button !== active) button.focus();
-  }, [focusIso, viewIso]);
+  }, [view, periodKey, cellKey]);
 
-  return (
-    <>
-      <div className={cn(partClassNames?.header, 'mb-2 flex items-center justify-between gap-2')}>
-        <button
-          type="button"
-          aria-label={labels?.previousMonth ?? 'Previous month'}
-          aria-controls={gridId}
-          {...focusableDisabledProps(previousDisabled)}
-          onClick={preventIfDisabled(previousDisabled, () => navigateMonth(-1))}
-          className={cn(
-            partClassNames?.previousMonthButton,
-            NAV_BUTTON_CLASSES,
-            focusRing,
-            disabledStyles,
-          )}
-        >
-          <ChevronLeftIcon className="wave-rtl:-scale-x-100" />
-        </button>
-        <Heading
-          id={headingId}
-          aria-live="polite"
-          className={cn(partClassNames?.heading, 'text-body-1 font-semibold')}
-        >
-          {formatMonthYear(viewMonth, locale)}
-        </Heading>
-        <button
-          type="button"
-          aria-label={labels?.nextMonth ?? 'Next month'}
-          aria-controls={gridId}
-          {...focusableDisabledProps(nextDisabled)}
-          onClick={preventIfDisabled(nextDisabled, () => navigateMonth(1))}
-          className={cn(
-            partClassNames?.nextMonthButton,
-            NAV_BUTTON_CLASSES,
-            focusRing,
-            disabledStyles,
-          )}
-        >
-          <ChevronRightIcon className="wave-rtl:-scale-x-100" />
-        </button>
-      </div>
+  /* ---- render ------------------------------------------------------- */
+
+  let previousLabel: string;
+  let nextLabel: string;
+  let previousDisabled: boolean;
+  let nextDisabled: boolean;
+  let navigate: (delta: number) => void;
+  let headingText: string;
+  if (view === 'day') {
+    previousLabel = labels?.previousMonth ?? 'Previous month';
+    nextLabel = labels?.nextMonth ?? 'Next month';
+    previousDisabled = !!minDate && addDays(viewMonth, -1) < startOfDay(minDate);
+    nextDisabled = !!maxDate && addMonths(viewMonth, 1) > startOfDay(maxDate);
+    navigate = navigateMonth;
+    headingText = formatMonthYear(viewMonth, locale);
+  } else if (view === 'month') {
+    previousLabel = labels?.previousYear ?? 'Previous year';
+    nextLabel = labels?.nextYear ?? 'Next year';
+    previousDisabled = isYearOutOfRange(monthViewYear - 1, minDate, maxDate);
+    nextDisabled = isYearOutOfRange(monthViewYear + 1, minDate, maxDate);
+    navigate = navigateYear;
+    headingText = formatYear(makeDate(monthViewYear, 0, 1), locale);
+  } else {
+    previousLabel = labels?.previousDecade ?? 'Previous decade';
+    nextLabel = labels?.nextDecade ?? 'Next decade';
+    // A decade is wholly outside when its last year is before minDate or its first after maxDate.
+    previousDisabled =
+      isYearOutOfRange(decade - 1, minDate, undefined) ||
+      isYearOutOfRange(decade - 10, undefined, maxDate);
+    nextDisabled =
+      isYearOutOfRange(decade + 10, undefined, maxDate) ||
+      isYearOutOfRange(decade + 19, minDate, undefined);
+    navigate = navigateDecade;
+    headingText = formatDecade(decade, locale);
+  }
+
+  const headingButtonTarget = showMonthPicker && view !== 'year' ? view : null;
+  const hint =
+    view === 'day'
+      ? (labels?.chooseMonth ?? 'Choose a month')
+      : (labels?.chooseYear ?? 'Choose a year');
+
+  let grid: React.ReactNode;
+  if (view === 'day') {
+    grid = (
       <CalendarDayGrid
         ref={gridRef}
         id={gridId}
@@ -392,21 +597,147 @@ export const CalendarView = ({
         onPick={onPick}
         partClassNames={partClassNames}
       />
+    );
+  } else if (view === 'month') {
+    const months = getYearMonths(monthViewYear);
+    grid = (
+      <CalendarPickerGrid
+        ref={gridRef}
+        id={gridId}
+        headingId={headingId}
+        cells={months.map((month) => ({
+          date: month,
+          text: formatMonthShort(month, locale),
+          label: formatMonthYear(month, locale),
+          selected: !!value && isSameMonth(month, value),
+          current: !!today && isSameMonth(month, today),
+          outside: false,
+          unavailable: isMonthOutOfRange(month, minDate, maxDate),
+        }))}
+        focusIndex={monthTarget.getMonth()}
+        onMoveFocus={(delta) => moveMonthFocus(addMonths(monthTarget, delta))}
+        onPage={(direction) => moveMonthFocus(addMonths(monthTarget, direction * 12))}
+        onCellFocus={(month) => {
+          if (!isSameMonth(month, monthTarget)) setFocusedMonth(month);
+        }}
+        onPick={pickMonth}
+        onKeyDown={handleEscape}
+        partClassNames={{ grid: partClassNames?.grid, cell: partClassNames?.month }}
+      />
+    );
+  } else {
+    const years = getDecadeYears(decade);
+    grid = (
+      <CalendarPickerGrid
+        ref={gridRef}
+        id={gridId}
+        headingId={headingId}
+        cells={years.map((yearDate) => {
+          const year = yearDate.getFullYear();
+          return {
+            date: yearDate,
+            text: formatYear(yearDate, locale),
+            selected: value?.getFullYear() === year,
+            current: today?.getFullYear() === year,
+            outside: year < decade || year > decade + 9,
+            unavailable: isYearOutOfRange(year, minDate, maxDate),
+          };
+        })}
+        focusIndex={yearTarget - (decade - 1)}
+        onMoveFocus={(delta) => moveYearFocus(yearTarget + delta, decade)}
+        onPage={(direction) => moveYearFocus(yearTarget + direction * 10, decade + direction * 10)}
+        onCellFocus={(yearDate) => {
+          if (yearDate.getFullYear() !== yearTarget) setFocusedYear(yearDate.getFullYear());
+        }}
+        onPick={pickYear}
+        onKeyDown={handleEscape}
+        partClassNames={{ grid: partClassNames?.grid, cell: partClassNames?.year }}
+      />
+    );
+  }
+
+  return (
+    <>
+      <div
+        className={cn(partClassNames?.header, 'mb-2 flex items-center justify-between gap-2')}
+        onKeyDown={handleEscape}
+      >
+        <button
+          type="button"
+          aria-label={previousLabel}
+          aria-controls={gridId}
+          {...focusableDisabledProps(previousDisabled)}
+          onClick={preventIfDisabled(previousDisabled, () => navigate(-1))}
+          className={cn(
+            partClassNames?.previousMonthButton,
+            NAV_BUTTON_CLASSES,
+            focusRing,
+            disabledStyles,
+          )}
+        >
+          <ChevronLeftIcon className="wave-rtl:-scale-x-100" />
+        </button>
+        <Heading
+          id={headingId}
+          aria-live="polite"
+          className={cn(partClassNames?.heading, 'text-body-1 font-semibold')}
+        >
+          {headingButtonTarget ? (
+            // Named by its text, so the grid and a DatePicker's dialog keep their names; the hint
+            // is outside the heading, which names them.
+            <button
+              type="button"
+              aria-describedby={hintId}
+              onClick={headingButtonTarget === 'day' ? showMonths : showYears}
+              className={cn(partClassNames?.headingButton, HEADING_BUTTON_CLASSES, focusRing)}
+            >
+              {headingText}
+            </button>
+          ) : (
+            headingText
+          )}
+        </Heading>
+        {headingButtonTarget && (
+          <span id={hintId} hidden>
+            {hint}
+          </span>
+        )}
+        <button
+          type="button"
+          aria-label={nextLabel}
+          aria-controls={gridId}
+          {...focusableDisabledProps(nextDisabled)}
+          onClick={preventIfDisabled(nextDisabled, () => navigate(1))}
+          className={cn(
+            partClassNames?.nextMonthButton,
+            NAV_BUTTON_CLASSES,
+            focusRing,
+            disabledStyles,
+          )}
+        >
+          <ChevronRightIcon className="wave-rtl:-scale-x-100" />
+        </button>
+      </div>
+      {grid}
     </>
   );
 };
 
 CalendarView.displayName = 'CalendarView';
 
-// The Calendar's parts carry its own stable classes (the view's keys name the day view's buttons).
+// The Calendar's parts carry its own stable classes (the view's keys name the day view's buttons;
+// the navigation buttons of every view share them).
 const CALENDAR_PART_CLASS_NAMES: CalendarViewPartClassNames = {
   header: calendarClassNames.header,
   previousMonthButton: calendarClassNames.previousButton,
   heading: calendarClassNames.heading,
+  headingButton: calendarClassNames.headingButton,
   nextMonthButton: calendarClassNames.nextButton,
   grid: calendarClassNames.grid,
   weekday: calendarClassNames.weekday,
   day: calendarClassNames.day,
+  month: calendarClassNames.month,
+  year: calendarClassNames.year,
 };
 
 /**
@@ -417,11 +748,20 @@ const CALENDAR_PART_CLASS_NAMES: CalendarViewPartClassNames = {
  *   surrounding `Field`, around the previous-month button, the month text (a polite live region
  *   that labels the grid), the next-month button and a `role="grid"` table of six weeks. The
  *   month text is no heading, since a component cannot know the page's heading levels.
+ * - **Month and year views** (`showMonthPicker`, on by default): the month text is a button
+ *   (named by that text, its hint `labels.chooseMonth`) that shows the 12 months of the year; their
+ *   heading, the year, is a button to the year view, a decade with the year before and after it
+ *   (muted). The header buttons move by a year, then by a decade. A picked year shows its months
+ *   and a picked month its days (the focused day keeps its day of the month, clamped); Escape
+ *   goes back a level to the period shown before. Each view change moves focus into the new
+ *   grid. Months and years wholly outside `minDate`/`maxDate` stay focusable, `aria-disabled`.
  * - **Keyboard**: one tab stop in the grid, the focused day (the selected day of the shown month,
- *   else today, else the first available day). Arrow keys move by day and week (mirrored in RTL),
- *   PageUp/PageDown by month, Shift+PageUp/PageDown by year (the day is clamped to the month),
- *   Home/End to the start and end of the week; Enter, Space and a click pick the day. Unavailable
- *   days (`minDate`, `maxDate`, `disabledDates`) stay focusable and are `aria-disabled`.
+ *   else today, else the first day of the month in range, which may be unavailable). Arrow keys
+ *   move by day and week (mirrored in RTL), PageUp/PageDown by month, Shift+PageUp/PageDown by
+ *   year (the day is clamped to the month), Home/End to the start and end of the week; Enter,
+ *   Space and a click pick the day. Unavailable days (`minDate`, `maxDate`, `disabledDates`) stay
+ *   focusable and are `aria-disabled`. In the month and year views the arrows move by a cell and a
+ *   row of four, Home/End to the row's ends, PageUp/PageDown by a year (months) or ten (years).
  * - **Value**: `onValueChange` fires only when the day changes, with local midnight and `details`;
  *   picking the selected day again does nothing. A value that moves to another month shows that
  *   month. The selected day is `aria-selected` on its gridcell and `aria-pressed` on its button;
@@ -431,10 +771,10 @@ const CALENDAR_PART_CLASS_NAMES: CalendarViewPartClassNames = {
  *   tab stop. Inside a `Field` the group takes the label, the description and `aria-invalid`; it
  *   says "required" in its description (`labels.required`), since a group cannot carry
  *   `aria-required`.
- * - **Server rendering**: pass `locale`, and `today` (or `initialVisibleDate`, or a value) so the
- *   server and the browser render the same month and mark the same day. Without `today` the
- *   server HTML marks no day and the browser marks today once hydrated; without any date the
- *   month shown first comes from the server's clock (development warning).
+ * - **Server rendering**: pass `locale`, and `today`, `initialVisibleDate` or a value, so the
+ *   server and the browser render the same month. Only `today` marks a day in the server HTML:
+ *   without it the server HTML marks none and the browser marks today once hydrated. Without any
+ *   of the three the month shown first comes from the server's clock (development warning).
  *
  * @example
  * <Calendar aria-label="Due date" defaultValue={new Date(2025, 5, 12)} onValueChange={setDue} />
@@ -450,6 +790,7 @@ export const Calendar = ({
   locale,
   today: todayProp,
   initialVisibleDate,
+  showMonthPicker = true,
   labels,
   name,
   form,
@@ -561,6 +902,7 @@ export const Calendar = ({
         locale={locale}
         today={today}
         initialVisibleDate={initialVisibleDate}
+        showMonthPicker={showMonthPicker}
         labels={labels}
         headingAs="div"
         headingId={headingId}

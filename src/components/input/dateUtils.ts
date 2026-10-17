@@ -57,6 +57,44 @@ export function clampDate(date: Date, min?: Date | null, max?: Date | null): Dat
   return day;
 }
 
+/** `date` plus `amount` years (negative to go back), at local midnight; February 29 becomes 28. */
+export function addYears(date: Date, amount: number): Date {
+  return addMonths(date, amount * 12);
+}
+
+/** The first year of `year`'s decade (2025 gives 2020). */
+export function getDecadeStart(year: number): number {
+  return Math.floor(year / 10) * 10;
+}
+
+/** The 12 months of `year`, as the 1st of each month (the cells of the month view). */
+export function getYearMonths(year: number): Date[] {
+  return Array.from({ length: 12 }, (_, month) => makeDate(year, month, 1));
+}
+
+/**
+ * The 12 years of the year view, as January 1 of each: the decade starting at `decadeStart`, with
+ * the year before and the year after it.
+ */
+export function getDecadeYears(decadeStart: number): Date[] {
+  return Array.from({ length: 12 }, (_, index) => makeDate(decadeStart - 1 + index, 0, 1));
+}
+
+/** Whether every day of `month`'s month lies outside `[min, max]` (calendar days). */
+export function isMonthOutOfRange(month: Date, min?: Date | null, max?: Date | null): boolean {
+  const first = startOfMonth(month);
+  const last = makeDate(first.getFullYear(), first.getMonth() + 1, 0);
+  return (!!min && last < startOfDay(min)) || (!!max && first > startOfDay(max));
+}
+
+/** Whether every day of `year` lies outside `[min, max]` (calendar days). */
+export function isYearOutOfRange(year: number, min?: Date | null, max?: Date | null): boolean {
+  return (
+    (!!min && makeDate(year, 11, 31) < startOfDay(min)) ||
+    (!!max && makeDate(year, 0, 1) > startOfDay(max))
+  );
+}
+
 /**
  * The 42 days (6 weeks) of the calendar grid showing `viewMonth`'s month: the first row starts on
  * `firstDayOfWeek` (0 = Sunday) on or before the 1st.
@@ -353,6 +391,31 @@ export function getWeekdayNames(locale: string | undefined, firstDayOfWeek = 0):
 /** The calendar heading, e.g. `May 2025` / `Mai 2025`. */
 export function formatMonthYear(date: Date, locale?: string): string {
   return getFormatter(locale, { month: 'long', year: 'numeric' }).format(date);
+}
+
+/** The short month name of a month cell, e.g. `Mar` / `Mär`. */
+export function formatMonthShort(date: Date, locale?: string): string {
+  return getFormatter(locale, { month: 'short' }).format(date);
+}
+
+/**
+ * The year of a year cell and of the month view's heading, in the locale's digits and the
+ * calendar of {@link getCalendar}, without an era: `2025`, the Buddhist `2568` of `th-TH`.
+ */
+export function formatYear(date: Date, locale?: string): string {
+  const parts = getFormatter(locale, { year: 'numeric' }).formatToParts(date);
+  return parts.find((part) => part.type === 'year')?.value ?? String(date.getFullYear());
+}
+
+/**
+ * The year view's heading: the decade starting at `decadeStart` as a range of years
+ * (`Intl.DateTimeFormat#formatRange`), e.g. `2020 – 2029`.
+ */
+export function formatDecade(decadeStart: number, locale?: string): string {
+  return getFormatter(locale, { year: 'numeric' }).formatRange(
+    makeDate(decadeStart, 0, 1),
+    makeDate(decadeStart + 9, 11, 31),
+  );
 }
 
 /** The accessible name of a day cell, e.g. `Monday, May 26, 2025`. */

@@ -1,6 +1,7 @@
 import * as React from 'react';
 import type { DayOfWeek } from '../../lib/types';
 import { cn } from '../../lib/cn';
+import { composeEventHandlers } from '../../lib/composeEventHandlers';
 import { focusableDisabledProps } from '../../lib/aria';
 import { getArrowIntent, getDirection } from '../../lib/direction';
 import { disabledStyles, focusRing, forcedColors } from '../../lib/styles';
@@ -215,3 +216,182 @@ export const CalendarDayGrid = ({
 };
 
 CalendarDayGrid.displayName = 'CalendarDayGrid';
+
+// The month and year cells: the day buttons' look in a wider cell (C-NATIVE padding and
+// background, the gated hover, the selected fill).
+const PICKER_CELL_CLASSES =
+  'flex h-12 w-14 items-center justify-center rounded bg-transparent p-0 text-caption-1 text-foreground not-disabled:not-aria-disabled:hover:bg-subtle-hover data-[outside]:text-muted-foreground data-[today]:border data-[today]:border-primary data-[today]:font-semibold data-[selected]:bg-primary data-[selected]:font-semibold data-[selected]:text-primary-foreground not-disabled:not-aria-disabled:data-[selected]:hover:bg-primary-hover';
+
+/** The cells of a row of the month and year grids. */
+const PICKER_COLUMNS = 4;
+
+/** Internal: one cell of the month or the year grid. */
+export interface CalendarPickerCell {
+  /** The month (its 1st) or the year (its January 1). */
+  date: Date;
+  /** The visible text (`Jun`, `2025`). */
+  text: string;
+  /** The accessible name when it differs from the text (`June 2025`). */
+  label?: string;
+  /** The value's month or year (`aria-selected` on the cell, `aria-pressed` on the button). */
+  selected: boolean;
+  /** Today's month or year (`aria-current="date"`). */
+  current: boolean;
+  /** A year before or after the decade (muted). */
+  outside: boolean;
+  /** Wholly outside `minDate`/`maxDate`: `aria-disabled`, focusable, not pickable. */
+  unavailable: boolean;
+}
+
+/** Internal: the stable classes of a month or year grid's parts. */
+export interface CalendarPickerGridPartClassNames {
+  /** On the `role="grid"` table. */
+  grid?: string;
+  /** On each cell button. */
+  cell?: string;
+}
+
+/** Internal props of {@link CalendarPickerGrid}. */
+export interface CalendarPickerGridProps {
+  /** Id of the table (the header's buttons control it). */
+  id: string;
+  /** Id of the heading, which labels the table. */
+  headingId: string;
+  /** The 12 cells, in reading order (3 rows of 4). */
+  cells: readonly CalendarPickerCell[];
+  /** Index of the roving cell: the only cell button in the tab order. */
+  focusIndex: number;
+  /** Called with the number of cells a key moves by (arrows, Home and End). */
+  onMoveFocus: (delta: number) => void;
+  /** Called with the direction of PageUp (`-1`) and PageDown (`1`). */
+  onPage: (direction: -1 | 1) => void;
+  /** Called when a cell button receives focus (pointer or assistive technology). */
+  onCellFocus: (date: Date) => void;
+  /** Called with an available cell that is clicked (Enter and Space click the focused button). */
+  onPick: (date: Date) => void;
+  /** Called before the grid's own key handling (the calendar's Escape levels). */
+  onKeyDown?: React.KeyboardEventHandler<HTMLTableElement>;
+  /** Stable classes of the grid's parts. */
+  partClassNames?: CalendarPickerGridPartClassNames;
+  /** Ref to the table. */
+  ref?: React.Ref<HTMLTableElement>;
+}
+
+/**
+ * Internal: the month view (the 12 months of a year) or the year view (a decade with the year
+ * before and after it) of a calendar, a `role="grid"` table of 3 rows of 4 cells with one roving
+ * button in the tab order. Arrow keys move by a cell and a row (mirrored in RTL), Home/End to the
+ * row's ends; PageUp/PageDown are passed to the view. Marked `data-wave-calendar-grid`, as the day
+ * grid.
+ */
+export const CalendarPickerGrid = ({
+  id,
+  headingId,
+  cells,
+  focusIndex,
+  onMoveFocus,
+  onPage,
+  onCellFocus,
+  onPick,
+  onKeyDown,
+  partClassNames,
+  ref,
+}: CalendarPickerGridProps) => {
+  const handleKeyDown = (event: React.KeyboardEvent<HTMLTableElement>) => {
+    if (event.altKey || event.ctrlKey || event.metaKey) return;
+    const column = focusIndex % PICKER_COLUMNS;
+    switch (event.key) {
+      case 'ArrowLeft':
+      case 'ArrowRight': {
+        const intent = getArrowIntent(event.key, {
+          orientation: 'horizontal',
+          dir: getDirection(event.currentTarget),
+        });
+        event.preventDefault();
+        onMoveFocus(intent === 'next' ? 1 : -1);
+        return;
+      }
+      case 'ArrowDown':
+        event.preventDefault();
+        onMoveFocus(PICKER_COLUMNS);
+        return;
+      case 'ArrowUp':
+        event.preventDefault();
+        onMoveFocus(-PICKER_COLUMNS);
+        return;
+      case 'Home':
+        event.preventDefault();
+        onMoveFocus(-column);
+        return;
+      case 'End':
+        event.preventDefault();
+        onMoveFocus(PICKER_COLUMNS - 1 - column);
+        return;
+      case 'PageDown':
+      case 'PageUp':
+        event.preventDefault();
+        onPage(event.key === 'PageDown' ? 1 : -1);
+        return;
+      default:
+      // Enter and Space activate the focused cell button natively (click).
+    }
+  };
+
+  const rows: CalendarPickerCell[][] = [];
+  for (let i = 0; i < cells.length; i += PICKER_COLUMNS) {
+    rows.push(cells.slice(i, i + PICKER_COLUMNS));
+  }
+
+  return (
+    <table
+      ref={ref}
+      id={id}
+      role="grid"
+      aria-labelledby={headingId}
+      data-wave-calendar-grid=""
+      onKeyDown={composeEventHandlers(onKeyDown, handleKeyDown)}
+      className={cn(partClassNames?.grid, 'border-collapse')}
+    >
+      <tbody>
+        {rows.map((row, rowIndex) => (
+          // Keyed by position, so the focused button survives a change of the year or decade.
+          <tr key={rowIndex}>
+            {row.map((cell, column) => {
+              const index = rowIndex * PICKER_COLUMNS + column;
+              return (
+                <td key={column} role="gridcell" aria-selected={cell.selected} className="p-0">
+                  <button
+                    type="button"
+                    tabIndex={index === focusIndex ? 0 : -1}
+                    aria-label={cell.label}
+                    aria-pressed={cell.selected || undefined}
+                    aria-current={cell.current ? 'date' : undefined}
+                    {...focusableDisabledProps(cell.unavailable)}
+                    data-selected={cell.selected ? '' : undefined}
+                    data-today={cell.current ? '' : undefined}
+                    data-outside={cell.outside ? '' : undefined}
+                    onFocus={() => onCellFocus(cell.date)}
+                    onClick={() => {
+                      if (!cell.unavailable) onPick(cell.date);
+                    }}
+                    className={cn(
+                      partClassNames?.cell,
+                      PICKER_CELL_CLASSES,
+                      focusRing,
+                      disabledStyles,
+                      cell.selected && forcedColors.selectedLeaf,
+                    )}
+                  >
+                    {cell.text}
+                  </button>
+                </td>
+              );
+            })}
+          </tr>
+        ))}
+      </tbody>
+    </table>
+  );
+};
+
+CalendarPickerGrid.displayName = 'CalendarPickerGrid';

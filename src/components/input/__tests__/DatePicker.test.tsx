@@ -733,6 +733,8 @@ describe('DatePicker', () => {
       await user.tab();
       expect(screen.getByRole('button', { name: 'Previous month' })).toHaveFocus();
       await user.tab();
+      expect(screen.getByRole('button', { name: 'June 2025' })).toHaveFocus();
+      await user.tab();
       await user.tab();
       expect(dayButton('Sunday, June 15, 2025')).toHaveFocus();
       await user.tab({ shift: true });
@@ -1739,6 +1741,7 @@ describe('DatePicker', () => {
         />,
       );
       await openCalendar(user);
+      await user.tab();
       await user.tab();
       await user.tab();
       const next = screen.getByRole('button', { name: 'Next month' });

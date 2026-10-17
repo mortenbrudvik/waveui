@@ -901,9 +901,9 @@ describe('stable class names: the 0.10 calendar parts', () => {
     expect(stableClassesOf(within(group).getByRole('button', { name: 'Next month' }))).toEqual([
       calendarClassNames.nextButton,
     ]);
-    expect(stableClassesOf(within(group).getByText('June 2025'))).toEqual([
-      calendarClassNames.heading,
-    ]);
+    const heading = within(group).getByRole('button', { name: 'June 2025' }).parentElement;
+    expect(heading).toHaveAttribute('aria-live', 'polite');
+    expect(stableClassesOf(heading)).toEqual([calendarClassNames.heading]);
     const grid = within(group).getByRole('grid');
     expect(stableClassesOf(grid)).toEqual([calendarClassNames.grid]);
     expect(stableClassesOf(within(grid).getAllByRole('columnheader')[0])).toEqual([
@@ -934,6 +934,85 @@ describe('stable class names: the 0.10 calendar parts', () => {
     expect(stableClassesOf(within(dialog).getByRole('button', { name: 'Previous month' }))).toEqual(
       [datePickerClassNames.previousMonthButton],
     );
+  });
+
+  it('Calendar: the heading button, and the month and year grids with their cells', async () => {
+    const user = userEvent.setup();
+    render(
+      <Calendar
+        aria-label="Due date"
+        locale="en-US"
+        today={new Date(2025, 5, 12)}
+        defaultValue={new Date(2025, 5, 15)}
+      />,
+    );
+    const group = screen.getByRole('group', { name: 'Due date' });
+    const headingButton = within(group).getByRole('button', { name: 'June 2025' });
+    expect(stableClassesOf(headingButton)).toEqual([calendarClassNames.headingButton]);
+    // The hidden hint is no part.
+    const hint = document.getElementById(headingButton.getAttribute('aria-describedby') ?? '');
+    expect(hint).toHaveTextContent('Choose a month');
+    expect(stableClassesOf(hint)).toEqual([]);
+    await user.click(headingButton);
+    let grid = within(group).getByRole('grid', { name: '2025' });
+    expect(stableClassesOf(grid)).toEqual([calendarClassNames.grid]);
+    const june = within(grid).getByRole('button', { name: 'June 2025' });
+    expect(stableClassesOf(june)).toEqual([calendarClassNames.month]);
+    expect(stableClassesOf(june.closest('[role="gridcell"]'))).toEqual([]);
+    expect(stableClassesOf(within(group).getByRole('button', { name: 'Previous year' }))).toEqual([
+      calendarClassNames.previousButton,
+    ]);
+    expect(stableClassesOf(within(group).getByRole('button', { name: 'Next year' }))).toEqual([
+      calendarClassNames.nextButton,
+    ]);
+    const yearButton = within(group).getByRole('button', { name: '2025' });
+    expect(stableClassesOf(yearButton)).toEqual([calendarClassNames.headingButton]);
+    expect(stableClassesOf(yearButton.parentElement)).toEqual([calendarClassNames.heading]);
+    await user.click(yearButton);
+    grid = within(group).getByRole('grid');
+    expect(stableClassesOf(grid)).toEqual([calendarClassNames.grid]);
+    expect(stableClassesOf(within(grid).getByRole('button', { name: '2025' }))).toEqual([
+      calendarClassNames.year,
+    ]);
+    expect(stableClassesOf(within(grid).getByRole('button', { name: '2019' }))).toEqual([
+      calendarClassNames.year,
+    ]);
+    expect(
+      stableClassesOf(document.getElementById(grid.getAttribute('aria-labelledby') ?? '')),
+    ).toEqual([calendarClassNames.heading]);
+    expect(stableClassesOf(within(group).getByRole('button', { name: 'Previous decade' }))).toEqual(
+      [calendarClassNames.previousButton],
+    );
+  });
+
+  it("DatePicker: the heading button, months and years carry DatePicker's classes", async () => {
+    const user = userEvent.setup();
+    render(
+      <DatePicker aria-label="Start date" locale="en-US" defaultValue={new Date(2025, 5, 15)} />,
+    );
+    await user.click(screen.getByRole('button', { name: 'Open calendar' }));
+    const dialog = screen.getByRole('dialog');
+    const headingButton = within(dialog).getByRole('button', { name: 'June 2025' });
+    expect(stableClassesOf(headingButton)).toEqual([datePickerClassNames.headingButton]);
+    expect(stableClassesOf(headingButton.parentElement)).toEqual([datePickerClassNames.heading]);
+    await user.click(headingButton);
+    const months = within(dialog).getByRole('grid', { name: '2025' });
+    expect(stableClassesOf(months)).toEqual([datePickerClassNames.grid]);
+    expect(stableClassesOf(within(months).getByRole('button', { name: 'June 2025' }))).toEqual([
+      datePickerClassNames.month,
+    ]);
+    expect(stableClassesOf(within(dialog).getByRole('button', { name: 'Previous year' }))).toEqual([
+      datePickerClassNames.previousMonthButton,
+    ]);
+    await user.click(within(dialog).getByRole('button', { name: '2025' }));
+    const years = within(dialog).getByRole('grid');
+    expect(stableClassesOf(years)).toEqual([datePickerClassNames.grid]);
+    expect(stableClassesOf(within(years).getByRole('button', { name: '2025' }))).toEqual([
+      datePickerClassNames.year,
+    ]);
+    expect(stableClassesOf(within(dialog).getByRole('button', { name: 'Next decade' }))).toEqual([
+      datePickerClassNames.nextMonthButton,
+    ]);
   });
 
   it('renders the calendar classes in the server HTML (renderToString)', () => {
