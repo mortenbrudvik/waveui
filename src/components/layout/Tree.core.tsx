@@ -759,28 +759,32 @@ export const TreeItem = ({
 
   // Focus in the actions: tracked from the events, because a removed element fires no reliable
   // blur. A blur that leaves for another element, or from an element still in the document, ends it.
-  const focusInActions = React.useRef(false);
+  const focusedAction = React.useRef<Element | null>(null);
   const inOwnActions = (event: React.FocusEvent<HTMLElement>) =>
     (event.target as Element).closest('[data-tree-actions]')?.closest('[role="treeitem"]') ===
     event.currentTarget;
   // Focus on the item, or on one of its own actions (a click), makes it the active item.
   const handleFocus = (event: React.FocusEvent<HTMLDivElement>) => {
     if (event.target === event.currentTarget || inOwnActions(event)) ctx.onItemFocus(value);
-    if (inOwnActions(event)) focusInActions.current = true;
+    if (inOwnActions(event)) focusedAction.current = event.target as Element;
   };
 
   const handleActionsBlur = (event: React.FocusEvent<HTMLDivElement>) => {
     if (inOwnActions(event) && (event.relatedTarget !== null || event.target.isConnected)) {
-      focusInActions.current = false;
+      focusedAction.current = null;
     }
   };
-  // An action that had focus is gone and focus fell to the page: it goes to the item instead.
+  // An action that had focus is gone (no longer in the document) and focus fell to the page: it
+  // goes to the item instead. Focus anywhere else ends the record at the next render.
   React.useLayoutEffect(() => {
-    if (!focusInActions.current) return;
+    const action = focusedAction.current;
+    if (!action) return;
     const item = itemRef.current;
     const active = item?.ownerDocument.activeElement;
-    if (item && (!active || active === item.ownerDocument.body)) {
-      focusInActions.current = false;
+    if (active && active !== item.ownerDocument.body) {
+      focusedAction.current = null;
+    } else if (item && !action.isConnected) {
+      focusedAction.current = null;
       item.focus({ preventScroll: true });
     }
   });

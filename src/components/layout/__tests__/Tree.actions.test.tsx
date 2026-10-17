@@ -440,6 +440,54 @@ describe('Tree.Item - actions', () => {
       await act(async () => {});
     });
 
+    it('leaves focus alone when the action was blurred to the page before it went away', async () => {
+      const user = userEvent.setup();
+      const { rerender } = render(
+        <Dynamic actions={<button type="button">Rename Readme</button>} />,
+      );
+      act(() => item('Readme.md').focus());
+      await user.tab();
+      expect(button('Rename Readme')).toHaveFocus();
+      act(() => button('Rename Readme').blur());
+      rerender(<Dynamic actions={false} />);
+      expect(document.body).toHaveFocus();
+    });
+
+    it('does not jump to the item on a later render once focus has been elsewhere', async () => {
+      const user = userEvent.setup();
+      let hide: () => void = () => {};
+      function SelfHiding() {
+        const [shown, setShown] = React.useState(true);
+        React.useEffect(() => {
+          hide = () => setShown(false);
+        }, []);
+        return shown ? <button type="button">Rename Readme</button> : null;
+      }
+      const ui = (note: string) => (
+        <>
+          <Tree aria-label="Files">
+            <Tree.Item value="readme" actions={<SelfHiding />} data-note={note}>
+              Readme.md
+            </Tree.Item>
+          </Tree>
+          <button type="button">After</button>
+        </>
+      );
+      const { rerender } = render(ui('a'));
+      act(() => item('Readme.md').focus());
+      await user.tab();
+      expect(button('Rename Readme')).toHaveFocus();
+      // The action removes itself: only SelfHiding re-renders, the item does not.
+      act(() => hide());
+      expect(document.body).toHaveFocus();
+      await user.click(button('After'));
+      rerender(ui('b'));
+      expect(button('After')).toHaveFocus();
+      await user.click(document.body);
+      rerender(ui('c'));
+      expect(document.body).toHaveFocus();
+    });
+
     it('leaves focus alone when it was not in the actions', async () => {
       const user = userEvent.setup();
       const { rerender } = render(
