@@ -46,11 +46,11 @@ class MessageBarReflowStore {
   }
 
   /** Forgets the measurement: the next render uses the one-row layout and measures again. */
-  reset(): void {
+  reset(notify = true): void {
     if (!this.reflowing) return;
     this.reflowing = false;
     this.neededWidth = 0;
-    this.emit();
+    if (notify) this.emit();
   }
 
   /**
@@ -91,7 +91,10 @@ class MessageBarReflowStore {
     }
     return () => {
       for (const cleanup of cleanups) cleanup();
-      this.reset();
+      // Silent: on unmount the layout cleanups run before useSyncExternalStore unsubscribes, and a
+      // notification would schedule an update on a deleted fiber. A bar that stays mounted reads
+      // the reset snapshot on its next render (useSyncExternalStore re-checks it after each commit).
+      this.reset(false);
     };
   }
 

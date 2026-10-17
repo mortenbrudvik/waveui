@@ -11,6 +11,24 @@ import { messageBarClassNames } from '../../../lib/classNames';
 import { installResizeObserverMock, mockRect } from '../../../test-utils';
 import type { ResizeObserverMock } from '../../../test-utils';
 
+/** The listeners React subscribed to a store through useSyncExternalStore (see the mock below). */
+const storeListeners = vi.hoisted(() => [] as Array<ReturnType<typeof vi.fn>>);
+
+vi.mock('react', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('react')>();
+  // A pass-through that records each listener, so a test can assert none is notified.
+  const useSyncExternalStore: typeof actual.useSyncExternalStore = (subscribe, ...rest) =>
+    actual.useSyncExternalStore(
+      (listener) => {
+        const spy = vi.fn(listener);
+        storeListeners.push(spy);
+        return subscribe(spy);
+      },
+      ...rest,
+    );
+  return { ...actual, default: { ...actual, useSyncExternalStore }, useSyncExternalStore };
+});
+
 /** Resolves after the next animation frame (the reflow measures a resize one frame later). */
 const nextFrame = () => new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
 
@@ -138,11 +156,17 @@ describe('MessageBar reflow (D17)', () => {
     await resize(bar);
     expect(bar).toHaveAttribute('data-layout', 'multiline');
 
-    setWidths(bar, { root: 549, text: 349, content: 350 });
+    // Multiline geometry: the wrapped column never overflows, yet the bar stays multiline until it
+    // is wide enough (a rule that reads the overflow in every layout would loop here).
+    setWidths(bar, { root: 400, text: 400, content: 400 });
     await resize(bar);
     expect(bar).toHaveAttribute('data-layout', 'multiline');
 
-    setWidths(bar, { root: 550, text: 350, content: 350 });
+    setWidths(bar, { root: 549, text: 549, content: 549 });
+    await resize(bar);
+    expect(bar).toHaveAttribute('data-layout', 'multiline');
+
+    setWidths(bar, { root: 550, text: 550, content: 350 });
     await resize(bar);
     expect(bar).toHaveAttribute('data-layout', 'singleline');
   });
@@ -237,6 +261,31 @@ describe('MessageBar reflow (D17)', () => {
     expect(bar).toHaveAttribute('data-layout', 'singleline');
   });
 
+  it('releases every observer and the pending frame on unmount, and notifies no listener', async () => {
+    const roDisconnect = vi.spyOn(globalThis.ResizeObserver.prototype, 'disconnect');
+    const moDisconnect = vi.spyOn(globalThis.MutationObserver.prototype, 'disconnect');
+    const cancelFrame = vi.spyOn(globalThis, 'cancelAnimationFrame');
+    const { unmount } = render(<ReflowBar />);
+    const bar = screen.getByRole('status');
+    setWidths(bar, { root: 400, text: 200, content: 350 });
+    await resize(bar);
+    expect(bar).toHaveAttribute('data-layout', 'multiline');
+
+    // A resize whose frame is still pending when the bar unmounts.
+    ro.trigger(bar);
+    const framesCancelled = cancelFrame.mock.calls.length;
+    roDisconnect.mockClear();
+    moDisconnect.mockClear();
+    for (const listener of storeListeners) listener.mockClear();
+    unmount();
+    expect(roDisconnect).toHaveBeenCalledTimes(1);
+    expect(moDisconnect).toHaveBeenCalledTimes(1);
+    expect(cancelFrame.mock.calls.length).toBeGreaterThan(framesCancelled);
+    // The layout cleanups run before the store unsubscribes: a notification would update a deleted fiber.
+    expect(storeListeners.length).toBeGreaterThan(0);
+    for (const listener of storeListeners) expect(listener).not.toHaveBeenCalled();
+  });
+
   it('leaves one observer on the root in StrictMode', () => {
     const observe = vi.spyOn(globalThis.ResizeObserver.prototype, 'observe');
     const disconnect = vi.spyOn(globalThis.ResizeObserver.prototype, 'disconnect');
@@ -286,6 +335,13 @@ describe('MessageBar reflow (D17)', () => {
 });
 
 describe('MessageBar reflow without ResizeObserver', () => {
+  it('stops following window resizes on unmount', () => {
+    const remove = vi.spyOn(window, 'removeEventListener');
+    const { unmount } = render(<ReflowBar />);
+    unmount();
+    expect(remove).toHaveBeenCalledWith('resize', expect.any(Function));
+  });
+
   it('renders one row, measures after each render of the bar and follows window resizes', () => {
     expect(typeof globalThis.ResizeObserver).toBe('undefined');
     const { rerender } = render(<ReflowBar />);
