@@ -178,6 +178,15 @@ function markAllDismissed(toasts: ToastEntry[]): ToastEntry[] {
     .map((toast) => (toast.dismissed ? toast : { ...toast, dismissed: true }));
 }
 
+/** The shown, not dismissed toast dispatched last (the highest `seq`), or `undefined`. */
+function findNewestToast(toasts: readonly ToastEntry[]): ToastEntry | undefined {
+  let newest: ToastEntry | undefined;
+  for (const toast of toasts) {
+    if (toast.shown && !toast.dismissed && (!newest || toast.seq > newest.seq)) newest = toast;
+  }
+  return newest;
+}
+
 /** Whether a toast holds an action: an element in its Tab order other than its Dismiss button. */
 function hasAction(container: HTMLElement, toast: ToastRegistration | null): boolean {
   const dismissButton = toast?.getDismissButton() ?? null;
@@ -378,6 +387,16 @@ export type ToastPosition =
   | 'bottom-right'
   | 'bottom-left';
 
+/** Keyboard shortcuts of a Toaster (Fluent's shape). */
+export interface ToasterShortcuts {
+  /**
+   * Returns `true` for the key press that moves focus to the most recently dispatched toast, for
+   * example `(event) => event.altKey && event.shiftKey && event.code === 'KeyN'`. Use a modifier
+   * (or let people change or turn off the shortcut): a single-character shortcut fails WCAG 2.1.4.
+   */
+  focus?: (event: KeyboardEvent) => boolean;
+}
+
 /** Properties for the Toaster container component. */
 export interface ToasterProps extends React.HTMLAttributes<HTMLDivElement> {
   /**
@@ -395,6 +414,8 @@ export interface ToasterProps extends React.HTMLAttributes<HTMLDivElement> {
    * @default Infinity
    */
   limit?: number;
+  /** Keyboard shortcuts; Escape, Delete and Backspace need none (see the component docs). */
+  shortcuts?: ToasterShortcuts;
   /** Ref to the toast region (the portaled `<div role="region">`). */
   ref?: React.Ref<HTMLDivElement>;
 }
@@ -499,6 +520,7 @@ interface ToastContainerProps {
   onExited: (id: string) => void;
   getFocusFallback: (from: HTMLElement | null) => HTMLElement | null;
   announce: (id: string, announcement: Announcement) => void;
+  registerContainer: (id: string, node: HTMLElement | null) => void;
 }
 
 function isTitlePart(
@@ -699,6 +721,7 @@ function ToastContainer({
   onExited,
   getFocusFallback,
   announce,
+  registerContainer,
 }: ToastContainerProps) {
   const { id, dismissed } = entry;
   // Mounted through the presence core (D29): a dismissed toast exits, `inert`, and is removed when
@@ -714,10 +737,14 @@ function ToastContainer({
   const containerRef = React.useRef<HTMLDivElement | null>(null);
   // The last element, for the focus fallback, which may run after the container has unmounted.
   const lastElementRef = React.useRef<HTMLDivElement | null>(null);
-  const attach = React.useCallback((node: HTMLDivElement | null) => {
-    containerRef.current = node;
-    if (node) lastElementRef.current = node;
-  }, []);
+  const attach = React.useCallback(
+    (node: HTMLDivElement | null) => {
+      containerRef.current = node;
+      if (node) lastElementRef.current = node;
+      registerContainer(id, node);
+    },
+    [id, registerContainer],
+  );
   const mergedRef = useMergedRefs<HTMLDivElement>(attach, presenceRef);
   // Focus leaves a dismissed toast in its dismissing commit: `enabled` flipping to `false` moves it
   // in the layout phase, while the inert node is still there; a toast removed with the Toaster
@@ -894,6 +921,8 @@ ToastContainer.displayName = 'ToastContainer';
  *   toasts once no toast is left (kept across the moves between toasts and while another window
  *   is active; forgotten once focus has returned to it, and when focus leaves the toasts for
  *   another element or for the page body).
+ * - **Keyboard:** `shortcuts.focus` names a key press that moves focus to the newest toast (use a
+ *   modifier, WCAG 2.1.4).
  * - Each toast's dismiss button is named "Dismiss"; pass `dismissLabel` to `dispatchToast` for
  *   other languages.
  * - `limit` caps how many toasts show at once: the others wait in a queue, in dispatch order,
@@ -908,6 +937,7 @@ ToastContainer.displayName = 'ToastContainer';
 export const Toaster = ({
   position = 'bottom-end',
   limit: limitProp,
+  shortcuts,
   className,
   style,
   children,
@@ -1111,6 +1141,45 @@ export const Toaster = ({
     return previousFocus?.isConnected ? previousFocus : null;
   }, []);
 
+  // The latest entries and every container element, for the shortcut's document listener.
+  const toastsRef = React.useRef<ToastEntry[]>(settled);
+  React.useLayoutEffect(() => {
+    toastsRef.current = settled;
+  });
+  const containersRef = React.useRef(new Map<string, HTMLElement>());
+  const registerContainer = React.useCallback((id: string, node: HTMLElement | null) => {
+    if (node) containersRef.current.set(id, node);
+    else containersRef.current.delete(id);
+  }, []);
+
+  // The focus shortcut (D14): a document listener, so the key works wherever focus is. It focuses
+  // the container of the newest toast that is shown and not dismissed and remembers where focus
+  // was (unless it is already in the toasts).
+  const hasFocusShortcut = typeof shortcuts?.focus === 'function';
+  const handleShortcut = useEventCallback((event: KeyboardEvent) => {
+    if (event.defaultPrevented || event.isComposing || !shortcuts?.focus?.(event)) return;
+    const newest = findNewestToast(toastsRef.current);
+    const target = newest ? containersRef.current.get(newest.id) : undefined;
+    if (!target?.isConnected) return;
+    event.preventDefault();
+    const viewport = viewportRef.current;
+    const active = target.ownerDocument.activeElement;
+    if (
+      active instanceof HTMLElement &&
+      active !== target.ownerDocument.body &&
+      !viewport?.contains(active)
+    ) {
+      previousFocusRef.current = active;
+    }
+    target.focus({ preventScroll: false });
+  });
+  React.useEffect(() => {
+    if (!hasFocusShortcut) return undefined;
+    const listener = (event: KeyboardEvent) => handleShortcut(event);
+    document.addEventListener('keydown', listener);
+    return () => document.removeEventListener('keydown', listener);
+  }, [hasFocusShortcut, handleShortcut]);
+
   // Focus entering the toasts from an element outside: return there when the focused toast goes.
   // Focus that arrives with no related target keeps what is remembered: that is the Toaster's own
   // move to the next toast in the dismissing commit (the dismissed container is still there, inert,
@@ -1205,6 +1274,7 @@ export const Toaster = ({
               onExited={removeExited}
               getFocusFallback={getFocusFallback}
               announce={announce}
+              registerContainer={registerContainer}
             />
           ))}
         </div>

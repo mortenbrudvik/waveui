@@ -16,6 +16,7 @@ export type {
   ToastController,
   ToastPosition,
   ToastDispatchOptions,
+  ToasterShortcuts,
 } from './Toaster';
 
 /**
