@@ -344,3 +344,8 @@ Task H1: /gate started
 Task H1: /gate PASSED (9 steps + docs/output criteria) against origin/main at 9e271ad
 Task H1: /browser-check is user-invoked only (disable-model-invocation) — handed to the user with the checklist; not replicated
 Final whole-branch review (opus) dispatched
+Final review (opus): not ready — 0 Critical, 2 Important (I-1 multiselect Combobox loses an edit equal to the labels text; I-2 real-browser checklist not run — user-only skill), 10 Minor
+Ruling R34: one final fix dispatch (opus): I-1 + Minors 1 (SelectionRange -> CalendarSelectionRange, unreleased so free now; docs follow), 2 (onOpenChange details if the spec asks), 4 (month/year line-through), 5 (one focus check), 6 (Listbox ignores button !== 0 — settles H1 item 2), 7 (insertedText not exported), 8 (remove addYears), 9 (scrolled Listbox focus indicator); parked: 3 (Listbox/Calendar error look — new design, backlog), 10 (test helper duplication) — cost if wrong: small follow-ups
+Final fix: DONE (8/9; item 3 declined — D39 limits details to useListbox, a reason union is new API); gate 9/9 per fixer; committed 1ffefb2; scoped re-review (opus) dispatched
+Final fix re-review (opus): APPROVED, all 8 addressed, item 3 decline sound; 2 new Minor (N-1 scripted input without beforeinput — negligible, parked; N-2 Listbox non-primary press focus in real browsers → H1 checklist)
+Status: all plan tasks complete except H1 step 2 (real-browser checklist, user-run /browser-check); workspace kept until then

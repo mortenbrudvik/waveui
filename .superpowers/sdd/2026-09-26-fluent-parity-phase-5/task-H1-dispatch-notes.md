@@ -17,3 +17,8 @@ Add these to the spec's §6.3 checklist run (`/browser-check`), each with its ob
 
 ## From the Phase 4 merge
 - Multi-select Dropdown/Combobox/TagPicker at size small and large: the value text, the check boxes in the list and the clear/expand buttons do not overlap or clip (Phase 4 sizes x Phase 5 multiselect; jsdom asserts only classes).
+
+## From the final fix round
+- Multi-select Combobox with a one-character label (`M` selected): typing `M` then `e` gives the query `Me` (native input listener), in Chromium, Firefox and Safari; undo/redo still shows the labels.
+- Listbox: while the active option is scrolled out of view, the list draws its own focus ring (IntersectionObserver); scrolling the option back in shows the option ring instead.
+- Listbox: a right or middle press on an unfocused standalone Listbox — in a real browser it still focuses the list and activates the selected/first option (as a native select size); confirm nothing is selected (jsdom cannot show the focus part).
