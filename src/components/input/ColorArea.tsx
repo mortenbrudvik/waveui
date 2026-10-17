@@ -317,11 +317,15 @@ export const ColorArea = ({
     if (s === shown.s && v === shown.v) return;
     part.setColor({ ...color, s, v });
   });
-  /** Focuses the input of the active axis (the press moves focus there instead of the point). */
+  /**
+   * Focuses the input of the active axis (the press moves focus there instead of the point),
+   * without the focus ring: Chromium treats this script focus as keyboard focus, where the
+   * browser's own focus of a pressed control shows none. Browsers without the `focusVisible`
+   * option ignore it.
+   */
   const focusActiveAxis = useEventCallback(() => {
-    (activeAxis === 'saturation' ? saturationRef : brightnessRef).current?.focus({
-      preventScroll: true,
-    });
+    const options: FocusOptions = { preventScroll: true, focusVisible: false };
+    (activeAxis === 'saturation' ? saturationRef : brightnessRef).current?.focus(options);
   });
 
   const handlePointerDown = composeEventHandlers(

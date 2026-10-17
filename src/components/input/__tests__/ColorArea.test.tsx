@@ -1,5 +1,14 @@
 import * as React from 'react';
-import { describe, it, expect, expectTypeOf, vi, afterEach, beforeEach } from 'vitest';
+import {
+  describe,
+  it,
+  expect,
+  expectTypeOf,
+  vi,
+  afterEach,
+  beforeEach,
+  onTestFinished,
+} from 'vitest';
 import { act, fireEvent, render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { renderToString } from 'react-dom/server';
@@ -619,6 +628,31 @@ describe('ColorArea', () => {
       });
       expect(brightnessInput()).toHaveFocus();
     });
+
+    it.each(['mouse', 'touch', 'pen'])(
+      'a %s press focuses the Tab stop without a focus ring (focusVisible: false); a key keeps it',
+      async (pointerType) => {
+        const user = userEvent.setup();
+        const { root } = renderArea();
+        const focus = vi.spyOn(HTMLInputElement.prototype, 'focus');
+        onTestFinished(() => focus.mockRestore());
+        fireEvent.pointerDown(root, {
+          pointerId: 1,
+          button: 0,
+          isPrimary: true,
+          pointerType,
+          clientX: 50,
+          clientY: 25,
+        });
+        expect(saturationInput()).toHaveFocus();
+        expect(focus.mock.calls).toEqual([[{ preventScroll: true, focusVisible: false }]]);
+        focus.mockClear();
+        // A key moves focus by script too, and keeps the ring the browser gives it.
+        await user.keyboard('{ArrowUp}');
+        expect(brightnessInput()).toHaveFocus();
+        expect(focus.mock.calls).toEqual([[{ preventScroll: true }]]);
+      },
+    );
 
     it('ignores a secondary button', () => {
       const secondary = renderArea();
