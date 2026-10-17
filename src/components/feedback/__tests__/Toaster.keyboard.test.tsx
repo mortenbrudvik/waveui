@@ -1,10 +1,14 @@
 import * as React from 'react';
 import { afterEach, beforeEach, describe, expect, it, onTestFinished, vi } from 'vitest';
-import { act, fireEvent, render, screen } from '@testing-library/react';
+import { createPortal } from 'react-dom';
+import { act, fireEvent, render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { Toaster } from '../Toast';
+import { Toast, Toaster } from '../Toast';
 import type { ToastController } from '../Toast';
 import { mockAnimations } from '../../../test-utils';
+import { useDismiss } from '../../../hooks/useDismiss';
+import { useModalLayer } from '../../../hooks/useModalLayer';
+import { Portal } from '../../portal/Portal';
 import { ControllerProbe, advance, getToasts, renderToaster } from './toasterHarness';
 
 /** The stories' shortcut: Alt+Shift+N (with modifiers, WCAG 2.1.4). */
@@ -143,5 +147,246 @@ describe('the focus shortcut (P3-03, toaster-2)', () => {
       advance(10_000);
       expect(getToasts()).toHaveLength(1);
     });
+  });
+});
+
+/** A portaled element rendered from a toast (a stand-in for a Menu or Dialog opened from it). */
+function PortaledAction() {
+  return createPortal(<button type="button">Portaled action</button>, document.body);
+}
+
+/** An open, Escape-enabled dismiss layer anchored on a toast's button (a Tooltip stand-in). */
+function AnchoredLayer({ onDismiss }: { onDismiss: () => void }) {
+  const [open, setOpen] = React.useState(true);
+  const anchorRef = React.useRef<HTMLButtonElement>(null);
+  const surfaceRef = React.useRef<HTMLDivElement>(null);
+  const { layerId } = useDismiss({
+    open,
+    onDismiss: () => {
+      onDismiss();
+      setOpen(false);
+    },
+    refs: [surfaceRef, anchorRef],
+    anchorRef,
+    kind: 'tooltip',
+  });
+  return (
+    <>
+      <button ref={anchorRef} type="button">
+        Details
+      </button>
+      {open ? (
+        <Portal layerId={layerId}>
+          <div ref={surfaceRef}>More about the upload</div>
+        </Portal>
+      ) : null}
+    </>
+  );
+}
+
+/** An open modal below the toasts (the useModalLayer harness of the Dialog and Menu tests). */
+function StandInModal({ onDismiss }: { onDismiss: () => void }) {
+  const [node, setNode] = React.useState<HTMLDivElement | null>(null);
+  const surfaceRef = React.useRef<HTMLDivElement | null>(null);
+  const attach = React.useCallback((el: HTMLDivElement | null) => {
+    surfaceRef.current = el;
+    setNode(el);
+  }, []);
+  const { layerId } = useModalLayer({ open: true, onDismiss, refs: [surfaceRef], container: node });
+  return (
+    <Portal layerId={layerId}>
+      <div ref={attach} role="dialog" aria-label="Settings" tabIndex={-1}>
+        <button type="button">Inside</button>
+      </div>
+    </Portal>
+  );
+}
+
+const viewToast = (
+  <Toast>
+    <Toast.Title action={<button type="button">View</button>}>Saved</Toast.Title>
+  </Toast>
+);
+
+describe('Escape (P3-03, D14)', () => {
+  it('dismisses every toast and returns focus to the origin (entered by Tab)', async () => {
+    const user = userEvent.setup();
+    const { dispatchContent } = renderToaster({}, { app: <input aria-label="Name" /> });
+    const input = screen.getByRole('textbox', { name: 'Name' });
+    dispatchContent(viewToast, { timeout: 0 });
+    dispatchContent(<p>Second</p>, { timeout: 0 });
+    await user.click(input);
+    await user.tab();
+    expect(screen.getByRole('button', { name: 'View' })).toHaveFocus();
+    await user.keyboard('{Escape}');
+    expect(getToasts()).toHaveLength(0);
+    expect(input).toHaveFocus();
+  });
+
+  it('returns focus to the origin when focus entered by a click', async () => {
+    const user = userEvent.setup();
+    const { dispatchContent } = renderToaster({}, { app: <input aria-label="Name" /> });
+    const input = screen.getByRole('textbox', { name: 'Name' });
+    dispatchContent(viewToast, { timeout: 0 });
+    await user.click(input);
+    await user.click(screen.getByRole('button', { name: 'View' }));
+    await user.keyboard('{Escape}');
+    expect(getToasts()).toHaveLength(0);
+    expect(input).toHaveFocus();
+  });
+
+  it('returns focus to the origin when focus entered by the shortcut', async () => {
+    const user = userEvent.setup();
+    const { dispatch } = renderToaster(
+      { shortcuts: { focus: altShiftN } },
+      { app: <input aria-label="Name" /> },
+    );
+    const input = screen.getByRole('textbox', { name: 'Name' });
+    dispatch({ title: 'Saved', timeout: 0 });
+    await user.click(input);
+    await user.keyboard('{Alt>}{Shift>}N{/Shift}{/Alt}');
+    await user.keyboard('{Escape}');
+    expect(getToasts()).toHaveLength(0);
+    expect(input).toHaveFocus();
+  });
+
+  it('leaves focus on the page body without an origin', async () => {
+    const user = userEvent.setup();
+    const { dispatchContent } = renderToaster();
+    dispatchContent(viewToast, { timeout: 0 });
+    act(() => screen.getByRole('button', { name: 'View' }).focus());
+    await user.keyboard('{Escape}');
+    expect(getToasts()).toHaveLength(0);
+    expect(document.body).toHaveFocus();
+  });
+
+  it('does nothing when the consumer’s onKeyDown prevents it', async () => {
+    const user = userEvent.setup();
+    const { dispatchContent } = renderToaster({ onKeyDown: (event) => event.preventDefault() });
+    dispatchContent(viewToast, { timeout: 0 });
+    act(() => screen.getByRole('button', { name: 'View' }).focus());
+    await user.keyboard('{Escape}');
+    expect(getToasts()).toHaveLength(1);
+  });
+
+  it('leaves an Escape pressed in a portal rendered from a toast alone', async () => {
+    const user = userEvent.setup();
+    const { dispatchContent } = renderToaster();
+    dispatchContent(
+      <Toast>
+        <Toast.Title>Draft</Toast.Title>
+        <Toast.Body>
+          <PortaledAction />
+        </Toast.Body>
+      </Toast>,
+      { timeout: 0 },
+    );
+    act(() => screen.getByRole('button', { name: 'Portaled action' }).focus());
+    await user.keyboard('{Escape}');
+    expect(getToasts()).toHaveLength(1);
+  });
+
+  it('lets an open layer anchored in a toast take the first Escape; the next dismisses the toasts', async () => {
+    const user = userEvent.setup();
+    const onLayerDismiss = vi.fn();
+    const { dispatchContent } = renderToaster();
+    dispatchContent(
+      <Toast>
+        <Toast.Title action={<AnchoredLayer onDismiss={onLayerDismiss} />}>Upload done</Toast.Title>
+      </Toast>,
+      { timeout: 0 },
+    );
+    act(() => screen.getByRole('button', { name: 'Details' }).focus());
+    await user.keyboard('{Escape}');
+    expect(onLayerDismiss).toHaveBeenCalledTimes(1);
+    expect(screen.queryByText('More about the upload')).not.toBeInTheDocument();
+    expect(getToasts()).toHaveLength(1);
+    await user.keyboard('{Escape}');
+    expect(getToasts()).toHaveLength(0);
+  });
+
+  it('leaves a modal below open (the key is prevented) and returns focus into it', async () => {
+    const user = userEvent.setup();
+    const onModalDismiss = vi.fn();
+    const { dispatch } = renderToaster({}, { app: <StandInModal onDismiss={onModalDismiss} /> });
+    dispatch({ title: 'Saved', timeout: 0 });
+    const inside = screen.getByRole('button', { name: 'Inside' });
+    act(() => inside.focus());
+    await user.tab();
+    expect(within(getToasts()[0]).getByRole('button', { name: 'Dismiss' })).toHaveFocus();
+    await user.keyboard('{Escape}');
+    expect(getToasts()).toHaveLength(0);
+    expect(onModalDismiss).not.toHaveBeenCalled();
+    expect(screen.getByRole('dialog', { name: 'Settings' })).toBeInTheDocument();
+    expect(inside).toHaveFocus();
+  });
+});
+
+describe('Delete and Backspace (P3-03, D14)', () => {
+  it('dismiss the focused toast and move focus to the next container', async () => {
+    const user = userEvent.setup();
+    const { dispatch } = renderToaster();
+    dispatch({ title: 'First', timeout: 0 });
+    dispatch({ title: 'Second', timeout: 0 });
+    dispatch({ title: 'Third', timeout: 0 });
+    const [first, second, third] = getToasts();
+    act(() => first.focus());
+    await user.keyboard('{Delete}');
+    expect(screen.queryByText('First')).not.toBeInTheDocument();
+    expect(second).toHaveFocus();
+    await user.keyboard('{Backspace}');
+    expect(screen.queryByText('Second')).not.toBeInTheDocument();
+    expect(third).toHaveFocus();
+  });
+
+  it('dismiss from a button inside the toast; focus goes to the next toast’s first control', async () => {
+    const user = userEvent.setup();
+    const { dispatchContent } = renderToaster();
+    dispatchContent(viewToast, { timeout: 0 });
+    dispatchContent(
+      <Toast>
+        <Toast.Title>Second</Toast.Title>
+      </Toast>,
+      { timeout: 0 },
+    );
+    act(() => screen.getByRole('button', { name: 'View' }).focus());
+    await user.keyboard('{Delete}');
+    expect(getToasts()).toHaveLength(1);
+    expect(within(getToasts()[0]).getByRole('button', { name: 'Dismiss' })).toHaveFocus();
+  });
+
+  it('edit a field inside a toast instead of dismissing it', async () => {
+    const user = userEvent.setup();
+    const { dispatchContent } = renderToaster();
+    dispatchContent(
+      <Toast>
+        <Toast.Title>Reply</Toast.Title>
+        <Toast.Body>
+          <input aria-label="Message" defaultValue="Hi!" />
+        </Toast.Body>
+      </Toast>,
+      { timeout: 0 },
+    );
+    const field = screen.getByRole('textbox', { name: 'Message' });
+    await user.type(field, '{Backspace}');
+    expect(field).toHaveValue('Hi');
+    expect(getToasts()).toHaveLength(1);
+  });
+
+  it('keep the toast for a key pressed in a portal rendered from it', async () => {
+    const user = userEvent.setup();
+    const { dispatchContent } = renderToaster();
+    dispatchContent(
+      <Toast>
+        <Toast.Title>Draft</Toast.Title>
+        <Toast.Body>
+          <PortaledAction />
+        </Toast.Body>
+      </Toast>,
+      { timeout: 0 },
+    );
+    act(() => screen.getByRole('button', { name: 'Portaled action' }).focus());
+    await user.keyboard('{Delete}');
+    expect(getToasts()).toHaveLength(1);
   });
 });

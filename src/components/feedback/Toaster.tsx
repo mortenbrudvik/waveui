@@ -1,9 +1,11 @@
 import * as React from 'react';
 import { joinIds } from '../../lib/aria';
 import { cn } from '../../lib/cn';
+import { composeEventHandlers } from '../../lib/composeEventHandlers';
 import { toasterClassNames } from '../../lib/classNames';
 import { reportMissingContext, warnOnce } from '../../lib/dev';
 import { getDirection } from '../../lib/direction';
+import { isEditableTarget, isOwnEvent } from '../../lib/events';
 import { getFirstTabbable, getTabbableElements } from '../../lib/focus';
 import { getOpenLayers, subscribeLayers } from '../../lib/layers';
 import { focusRing } from '../../lib/styles';
@@ -852,6 +854,16 @@ function ToastContainer({
       `Toaster: the dispatched Toast has status "${toastStatus}" but the dispatch options pass "${optionStatus}"; the Toast's status is used. Remove \`status\` from the options.`,
     );
   }, [entry, optionStatus, toast]);
+  // Delete or Backspace on the container or inside it dismisses the toast (D14; Backspace is the
+  // delete key of Mac keyboards), except in an editable field and for a key pressed in a portal
+  // opened from the toast (its target is outside the container).
+  const handleKeyDown = (event: React.KeyboardEvent<HTMLDivElement>) => {
+    if (event.key !== 'Delete' && event.key !== 'Backspace') return;
+    if (event.defaultPrevented || !isOwnEvent(event) || isEditableTarget(event.target)) return;
+    event.preventDefault();
+    onDismiss(id);
+  };
+
   if (!isMounted) return null;
   return (
     <div
@@ -871,6 +883,7 @@ function ToastContainer({
         if (next instanceof Node && event.currentTarget.contains(next)) return;
         timers.resume(id, 'focus');
       }}
+      onKeyDown={handleKeyDown}
     >
       {ownSeverityLabel ? <StatusText label={ownSeverityLabel} id={ownStatusTextId} /> : null}
       <ToastContext.Provider value={context}>
@@ -922,7 +935,9 @@ ToastContainer.displayName = 'ToastContainer';
  *   is active; forgotten once focus has returned to it, and when focus leaves the toasts for
  *   another element or for the page body).
  * - **Keyboard:** `shortcuts.focus` names a key press that moves focus to the newest toast (use a
- *   modifier, WCAG 2.1.4).
+ *   modifier, WCAG 2.1.4); Escape in the toast region dismisses every toast and returns focus to
+ *   where it was before focus entered the toasts (a tooltip or menu of a toast closes first, and a
+ *   Dialog below stays open); Delete or Backspace dismisses the focused toast.
  * - Each toast's dismiss button is named "Dismiss"; pass `dismissLabel` to `dispatchToast` for
  *   other languages.
  * - `limit` caps how many toasts show at once: the others wait in a queue, in dispatch order,
@@ -943,6 +958,7 @@ export const Toaster = ({
   children,
   onFocus,
   onBlur,
+  onKeyDown,
   ref,
   ...rest
 }: ToasterProps) => {
@@ -1212,6 +1228,26 @@ export const Toaster = ({
     previousFocusRef.current = null;
   };
 
+  // Escape in the toast region (D14) dismisses every toast and returns focus to where it was
+  // before focus entered the toasts. Left alone: a key pressed in a portal opened from a toast
+  // (its target is outside the viewport; the portal's own widget handles it) and one that an open
+  // Escape-enabled layer anchored in the viewport takes first (a Tooltip on a toast's button, a
+  // Menu opened from a toast). Prevented, so the dismiss-layer stack does not route it to a Dialog
+  // or Drawer below (the region counts as inside every layer).
+  const handleEscape = (event: React.KeyboardEvent<HTMLDivElement>) => {
+    if (event.key !== 'Escape' && event.key !== 'Esc') return;
+    if (event.defaultPrevented || event.nativeEvent.isComposing || !isOwnEvent(event)) return;
+    const viewport = event.currentTarget;
+    if (getOpenLayers().some((layer) => layer.escape && viewport.contains(layer.getAnchor()))) {
+      return;
+    }
+    event.preventDefault();
+    const origin = previousFocusRef.current;
+    previousFocusRef.current = null;
+    if (origin?.isConnected) origin.focus({ preventScroll: true });
+    dismissAllToasts();
+  };
+
   // Each shown toast's message for its first 2 s, while it is not dismissed (a waiting toast is
   // announced when it appears); a replacement is a new dispatch, so it is read again.
   const polite: React.ReactNode[] = [];
@@ -1250,6 +1286,7 @@ export const Toaster = ({
             onBlur?.(event);
             forgetFocusOrigin(event);
           }}
+          onKeyDown={(event) => composeEventHandlers(onKeyDown, handleEscape)(event)}
           className={cn(
             toasterClassNames.root,
             'fixed flex w-80 max-w-[calc(100vw-2rem)] flex-col gap-2',
