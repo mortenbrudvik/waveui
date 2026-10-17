@@ -16,6 +16,7 @@ import * as ImageStories from '../../stories/Image.stories';
 import * as Wave from '../index';
 import {
   Accordion,
+  AlphaSlider,
   AccordionItem,
   AccordionPanel,
   AccordionTrigger,
@@ -24,7 +25,9 @@ import {
   Carousel,
   CarouselItem,
   Checkbox,
+  ColorArea,
   ColorPicker,
+  ColorSlider,
   Combobox,
   ComboboxOption,
   DataGrid,
@@ -46,6 +49,7 @@ import {
   Input,
   Link,
   Menu,
+  MessageBar,
   MenuButton,
   MenuGroup,
   MenuGroupHeader,
@@ -95,6 +99,7 @@ import {
   Tooltip,
   Tree,
   TreeItem,
+  colorAreaClassNames,
   createToaster,
   useOverflowMenu,
   useToastController,
@@ -4794,5 +4799,353 @@ describe('toasts and a modal Dialog: the shortcut and a tooltip (Phase 3 review 
     expect(screen.getByRole('dialog', { name: 'Mail' })).toBeInTheDocument();
     expect(onOpenChange).not.toHaveBeenCalled();
     expect(button('Archive')).toHaveFocus();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// 0.8: message bars, color and trees across components (spec §4.4 #6–#9)
+// ---------------------------------------------------------------------------
+
+describe('a MenuButton in MessageBar.Actions (spec §4.4 #6)', () => {
+  it('reads the severity, the title and the body once, then the actions, and opens the menu from the action', async () => {
+    const user = userEvent.setup();
+    render(
+      <MessageBar status="warning">
+        <MessageBar.Title>Update available</MessageBar.Title>A new version is ready to install.
+        <MessageBar.Actions>
+          <Menu>
+            <Menu.Trigger>
+              <MenuButton>Options</MenuButton>
+            </Menu.Trigger>
+            <Menu.Popover>
+              <Menu.Item>Install tonight</Menu.Item>
+              <Menu.Item>Remind me later</Menu.Item>
+            </Menu.Popover>
+          </Menu>
+        </MessageBar.Actions>
+      </MessageBar>,
+    );
+    const bar = screen.getByRole('alert');
+    // A live-region bar is not named by its title (spec D16): the title is read with the content.
+    expect(bar).not.toHaveAttribute('aria-labelledby');
+    expect(bar.textContent).toMatch(
+      /^Warning: Update available A new version is ready to install\.\s*Options$/,
+    );
+    await user.click(within(bar).getByRole('button', { name: 'Options' }));
+    expect(screen.getByRole('menu', { name: 'Options' })).toBeInTheDocument();
+    expect(menuitem('Install tonight')).toHaveFocus();
+    await expectNoA11yViolations(document.body);
+    await user.keyboard('{Escape}');
+    expect(screen.queryByRole('menu')).not.toBeInTheDocument();
+    expect(button('Options')).toHaveFocus();
+  });
+});
+
+describe('a composed ColorPicker in a Field (spec §4.4 #7)', () => {
+  function ThemeForm({ onSubmit }: { onSubmit: (data: FormData) => void }) {
+    return (
+      <form
+        aria-label="Theme"
+        onSubmit={(event) => {
+          event.preventDefault();
+          onSubmit(new FormData(event.currentTarget));
+        }}
+      >
+        <Field label="Accent color" error="Pick a darker color">
+          <ColorPicker name="accent" defaultValue="#808080">
+            <ColorArea />
+            <ColorSlider />
+            <ColorPicker.HexField />
+          </ColorPicker>
+        </Field>
+        <Button type="submit">Save</Button>
+        <Button type="reset">Reset</Button>
+      </form>
+    );
+  }
+
+  it('names the picker by the Field label and describes its hex input by the Field error', async () => {
+    render(<ThemeForm onSubmit={() => {}} />);
+    const picker = screen.getByRole('group', { name: 'Accent color' });
+    expect(
+      within(picker).getByRole('group', { name: 'Saturation and brightness' }),
+    ).toBeInTheDocument();
+    const hex = within(picker).getByRole('textbox', { name: 'Hex color value' });
+    expect(hex).toHaveAccessibleDescription(/Pick a darker color/);
+    expect(hex).toHaveAttribute('aria-invalid', 'true');
+    expect(within(picker).getByRole('slider', { name: 'Hue' })).toBeInTheDocument();
+    expect(duplicateIds()).toEqual([]);
+    await expectNoA11yViolations(document.body);
+  });
+
+  it('submits the hex color; a form reset restores the default and keeps the working hue', async () => {
+    const onSubmit = vi.fn<(data: FormData) => void>();
+    const user = userEvent.setup();
+    render(<ThemeForm onSubmit={onSubmit} />);
+    const hue = screen.getByRole('slider', { name: 'Hue' });
+    const saturation = screen.getByRole('slider', { name: 'Saturation' });
+    // The gray default has no hue of its own: the slider sets the working hue, the hex stays.
+    fireEvent.change(hue, { target: { value: '120' } });
+    await act(async () => {});
+    fireEvent.change(saturation, { target: { value: '50' } });
+    await act(async () => {});
+    expect(screen.getByRole('textbox', { name: 'Hex color value' })).toHaveValue('#408040');
+
+    await user.click(button('Save'));
+    expect(onSubmit).toHaveBeenCalledTimes(1);
+    expect(onSubmit.mock.calls[0][0].get('accent')).toBe('#408040');
+
+    await user.click(button('Reset'));
+    await act(async () => {});
+    expect(screen.getByRole('textbox', { name: 'Hex color value' })).toHaveValue('#808080');
+    expect(hue).toHaveValue('120');
+    expect(saturation).toHaveValue('0');
+  });
+
+  it('names a standalone ColorSlider by the Field label, not by its "Hue" default', () => {
+    render(
+      <Field label="Accent hue">
+        <ColorSlider />
+      </Field>,
+    );
+    expect(screen.getByRole('slider', { name: 'Accent hue' })).toBeInTheDocument();
+    expect(screen.queryByRole('slider', { name: 'Hue' })).toBeNull();
+  });
+
+  it('a required Field with an error: one control id, no duplicate ids, the area not described by the Field, one required input (review focus)', () => {
+    render(
+      <form aria-label="Theme">
+        <Field label="Accent color" hint="Used for links" error="Pick a darker color" required>
+          <ColorPicker name="accent">
+            <ColorArea />
+            <ColorSlider />
+            <AlphaSlider />
+            <ColorPicker.HexField />
+          </ColorPicker>
+        </Field>
+      </form>,
+    );
+    const picker = screen.getByRole('group', { name: 'Accent color' });
+    expect(duplicateIds()).toEqual([]);
+    const label = screen.getByText(/Accent color/, { selector: 'label' });
+    const controlId = label.getAttribute('for');
+    if (controlId) {
+      expect(document.querySelectorAll(`[id="${controlId}"]`)).toHaveLength(1);
+      expect(picker.id).toBe(controlId);
+    }
+    const area = within(picker).getByRole('group', { name: 'Saturation and brightness' });
+    for (const input of within(area).getAllByRole('slider', { hidden: true })) {
+      expect(input).not.toHaveAccessibleDescription(/Pick a darker color|Used for links/);
+    }
+    const required = picker.querySelectorAll('input[required]');
+    expect(required).toHaveLength(1);
+    expect(required[0]).toHaveAttribute('name', 'accent');
+    const form = screen.getByRole('form', { name: 'Theme' }) as HTMLFormElement;
+    expect(form.checkValidity()).toBe(true);
+  });
+});
+
+/** jsdom has no pointer capture: a capture flag per test, restored afterwards. */
+function stubPointerCapture() {
+  const proto = Element.prototype;
+  const names = ['setPointerCapture', 'releasePointerCapture', 'hasPointerCapture'] as const;
+  const previous = names.map((name) => Object.getOwnPropertyDescriptor(proto, name));
+  let captured = false;
+  const define = (name: (typeof names)[number], value: (...args: never[]) => unknown) =>
+    Object.defineProperty(proto, name, { configurable: true, writable: true, value });
+  define('setPointerCapture', () => {
+    captured = true;
+  });
+  define('releasePointerCapture', () => {
+    captured = false;
+  });
+  define('hasPointerCapture', () => captured);
+  onTestFinished(() => {
+    names.forEach((name, index) => {
+      const descriptor = previous[index];
+      if (descriptor) Object.defineProperty(proto, name, descriptor);
+      else Reflect.deleteProperty(proto, name);
+    });
+  });
+}
+
+describe('a ColorPicker in a Popover (spec §4.4 #8)', () => {
+  it('a drag on the area that ends outside the surface keeps the popover open; Escape closes it and returns focus', async () => {
+    stubPointerCapture();
+    const user = userEvent.setup();
+    render(
+      <Popover>
+        <Popover.Trigger>
+          <Button>Pick color</Button>
+        </Popover.Trigger>
+        <Popover.Content title="Color">
+          <ColorPicker defaultValue="#0f6cbd" />
+        </Popover.Content>
+      </Popover>,
+    );
+    await user.click(button('Pick color'));
+    const popover = screen.getByRole('dialog', { name: 'Color' });
+    const area = within(popover).getByRole('group', { name: 'Saturation and brightness' });
+    const field = area.querySelector<HTMLElement>(`.${colorAreaClassNames.field}`);
+    expect(field).not.toBeNull();
+    mockRect(area, { x: 0, y: 0, width: 200, height: 100 });
+    mockRect(field!, { x: 0, y: 0, width: 200, height: 100 });
+
+    // The press starts inside the surface; the move and the release happen far outside it (with
+    // pointer capture the browser keeps targeting the area).
+    await user.pointer([
+      { keys: '[MouseLeft>]', target: field!, coords: { clientX: 50, clientY: 50 } },
+      { target: field!, coords: { clientX: 500, clientY: 500 } },
+      { keys: '[/MouseLeft]', target: field!, coords: { clientX: 500, clientY: 500 } },
+    ]);
+    expect(screen.getByRole('dialog', { name: 'Color' })).toBeInTheDocument();
+    const saturation = within(area).getByRole('slider', { name: 'Saturation', hidden: true });
+    // The input without the Tab stop is aria-hidden here, and testing-library computes its name as
+    // '': match the raw aria-label instead.
+    const brightness = within(area).getByRole('slider', {
+      hidden: true,
+      name: (_name, element) => element.getAttribute('aria-label') === 'Brightness',
+    });
+    expect(saturation).toHaveValue('100');
+    expect(brightness).toHaveValue('0');
+    expect(saturation).toHaveFocus();
+
+    await user.keyboard('{Escape}');
+    expect(screen.queryByRole('dialog', { name: 'Color' })).not.toBeInTheDocument();
+    expect(button('Pick color')).toHaveFocus();
+  });
+});
+
+describe('a Tree with a MenuButton in its actions (spec §4.4 #9)', () => {
+  function FileActions({ name }: { name: string }) {
+    return (
+      <Menu>
+        <Menu.Trigger>
+          <MenuButton size="small" aria-label={`More actions for ${name}`} />
+        </Menu.Trigger>
+        <Menu.Popover>
+          <Menu.Item>Rename</Menu.Item>
+          <Menu.Item>Delete</Menu.Item>
+        </Menu.Popover>
+      </Menu>
+    );
+  }
+
+  function Files({ onItemSelect }: { onItemSelect?: (value: string) => void }) {
+    return (
+      <Tree aria-label="Files" navigationMode="treegrid" onItemSelect={onItemSelect}>
+        <Tree.Item value="report" actions={<FileActions name="Report.docx" />}>
+          Report.docx
+        </Tree.Item>
+        <Tree.Item value="notes">Notes.txt</Tree.Item>
+      </Tree>
+    );
+  }
+
+  it('ArrowRight reaches the action, ArrowDown opens its menu, Escape returns to it, ArrowLeft to the item', async () => {
+    const onItemSelect = vi.fn();
+    const user = userEvent.setup();
+    render(<Files onItemSelect={onItemSelect} />);
+    await user.tab();
+    const report = screen.getByRole('treeitem', { name: 'Report.docx' });
+    expect(report).toHaveFocus();
+    await user.keyboard('{ArrowRight}');
+    const more = button('More actions for Report.docx');
+    expect(more).toHaveFocus();
+    await user.keyboard('{ArrowDown}');
+    expect(screen.getByRole('menu', { name: 'More actions for Report.docx' })).toBeInTheDocument();
+    expect(menuitem('Rename')).toHaveFocus();
+    await expectNoA11yViolations(document.body);
+    await user.keyboard('{Escape}');
+    expect(screen.queryByRole('menu')).not.toBeInTheDocument();
+    expect(more).toHaveFocus();
+    await user.keyboard('{ArrowLeft}');
+    expect(report).toHaveFocus();
+    expect(onItemSelect).not.toHaveBeenCalled();
+  });
+
+  it('Enter on the action opens its menu and never activates the item', async () => {
+    const onItemSelect = vi.fn();
+    const user = userEvent.setup();
+    render(<Files onItemSelect={onItemSelect} />);
+    await user.tab();
+    await user.keyboard('{ArrowRight}');
+    await user.keyboard('{Enter}');
+    expect(screen.getByRole('menu', { name: 'More actions for Report.docx' })).toBeInTheDocument();
+    expect(onItemSelect).not.toHaveBeenCalled();
+    await user.keyboard('{Escape}');
+    expect(button('More actions for Report.docx')).toHaveFocus();
+  });
+
+  it('a checkbox Tree in a Dialog: Space toggles the item, Escape closes the Dialog', async () => {
+    const onOpenChange = vi.fn();
+    const onCheckedItemsChange = vi.fn();
+    const user = userEvent.setup();
+    render(
+      <Dialog open onOpenChange={onOpenChange}>
+        <Dialog.Content title="Choose folders">
+          <Tree
+            aria-label="Folders"
+            selectionMode="multiple"
+            onCheckedItemsChange={onCheckedItemsChange}
+          >
+            <Tree.Item value="docs">Documents</Tree.Item>
+            <Tree.Item value="music">Music</Tree.Item>
+          </Tree>
+        </Dialog.Content>
+      </Dialog>,
+    );
+    const docs = screen.getByRole('treeitem', { name: 'Documents' });
+    act(() => docs.focus());
+    await act(async () => {});
+    await user.keyboard(' ');
+    expect(docs).toHaveAttribute('aria-checked', 'true');
+    expect(onCheckedItemsChange).toHaveBeenCalledTimes(1);
+    expect(onCheckedItemsChange).toHaveBeenCalledWith(['docs'], {
+      value: 'docs',
+      checked: true,
+      event: expect.any(Event),
+    });
+    expect(screen.getByRole('dialog', { name: 'Choose folders' })).toBeInTheDocument();
+    await user.keyboard('{Escape}');
+    expect(onOpenChange).toHaveBeenCalledWith(false, expect.objectContaining({ reason: 'escape' }));
+  });
+
+  it('in a Dialog: Escape in the action’s menu closes only the menu; Space on the item toggles it; the next Escape closes the Dialog (review focus)', async () => {
+    const onOpenChange = vi.fn();
+    const user = userEvent.setup();
+    render(
+      <Dialog open onOpenChange={onOpenChange}>
+        <Dialog.Content title="Files">
+          <Tree aria-label="Files" selectionMode="multiple" navigationMode="treegrid">
+            <Tree.Item value="report" actions={<FileActions name="Report.docx" />}>
+              Report.docx
+            </Tree.Item>
+            <Tree.Item value="notes">Notes.txt</Tree.Item>
+          </Tree>
+        </Dialog.Content>
+      </Dialog>,
+    );
+    const report = screen.getByRole('treeitem', { name: 'Report.docx' });
+    act(() => report.focus());
+    await act(async () => {});
+    await user.keyboard('{ArrowRight}');
+    await user.keyboard('{ArrowDown}');
+    expect(screen.getByRole('menu', { name: 'More actions for Report.docx' })).toBeInTheDocument();
+
+    await user.keyboard('{Escape}');
+    expect(screen.queryByRole('menu')).not.toBeInTheDocument();
+    expect(button('More actions for Report.docx')).toHaveFocus();
+    expect(onOpenChange).not.toHaveBeenCalled();
+
+    await user.keyboard('{ArrowLeft}');
+    expect(report).toHaveFocus();
+    await user.keyboard(' ');
+    expect(report).toHaveAttribute('aria-checked', 'true');
+    expect(screen.queryByRole('menu')).not.toBeInTheDocument();
+
+    await user.keyboard('{Escape}');
+    expect(onOpenChange).toHaveBeenCalledTimes(1);
+    expect(onOpenChange).toHaveBeenCalledWith(false, expect.objectContaining({ reason: 'escape' }));
   });
 });
