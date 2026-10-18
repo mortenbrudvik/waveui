@@ -149,17 +149,20 @@ function hasToolbarControl(root: HTMLElement): boolean {
  *   `orientation="vertical"`, the other axis does nothing; the arrows wrap, in DOM order across
  *   wrapped rows, and Home/End jump to the first and last control, the same rule as Toolbar.
  *   Natively disabled controls are skipped. Use it for tags that are actions: dismissible tags,
- *   link chips. Renders `aria-orientation`, and `aria-disabled` while disabled.
+ *   InteractionTags (both of their buttons join the arrow order), link chips. Renders
+ *   `aria-orientation`, and `aria-disabled` while disabled.
  * - **List** (`role="list"`): every tag is a list item (`role="listitem"`), every control keeps
  *   its own Tab stop and the group handles no arrow key. A tag rendered as a link or a button
  *   takes no list item role: put the link in the tag's content (`<Tag><a href>…</a></Tag>`), or
  *   wrap the tag in an element with `role="listitem"`.
- * - **Delete and Backspace** on a tag's Dismiss button, or on a link in a dismissible tag's text,
- *   dismiss the tag (a held key dismisses one tag). Enter, Space and a click on the Dismiss button
- *   do too.
- * - **Defaults for its tags**: `size`, `appearance`, `shape` and `dismissible` (a tag's own value
- *   wins), and `disabled`, which disables every tag (a tag cannot re-enable itself).
- * - **`onDismiss(value)`** is called on every dismissal, after the tag's own `onDismiss`. Remove
+ * - **Delete and Backspace** on a tag's Dismiss button, on either button of an InteractionTag with
+ *   an `InteractionTag.Secondary`, or on a link in a dismissible tag's text, dismiss the tag (a
+ *   held key dismisses one tag). Enter, Space and a click on the Dismiss button do too.
+ * - **Defaults for its tags**: `size`, `appearance`, `shape` and, for Tags, `dismissible` (a tag's
+ *   own value wins; an InteractionTag is dismissible when it has a Secondary), and `disabled`,
+ *   which disables every tag (a tag cannot re-enable itself).
+ * - **`onDismiss(value)`** is called on every dismissal, after the Tag's own `onDismiss` or the
+ *   Secondary's `onClick` (whose `preventDefault()` keeps the group from being called). Remove
  *   the tag from your state: when the tag that had focus goes, focus moves to the next tag, else
  *   the previous one, else `fallbackFocusRef`, so it never falls to the page. Give every tag a
  *   `value`. A dismissal you refuse (the tag stays) moves no focus.

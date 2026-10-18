@@ -127,8 +127,10 @@ export interface TagOwnProps {
    * Whether the tag renders a Dismiss button. `onDismiss` and `dismissIcon` take effect only with
    * it (a development warning says so when they are passed without it). `dismissible={false}`
    * opts a tag out of a dismissible TagGroup. A Dismiss button cannot sit inside a link or a
-   * button: for a dismissible link chip, put the link in the content,
-   * `<Tag dismissible><a href="/topics/react">React</a></Tag>`.
+   * button: a dismissible tag rendered as one holds it inside (a development warning). For a
+   * dismissible link chip, put the link in the content,
+   * `<Tag dismissible><a href="/topics/react">React</a></Tag>`; for an action with a separate
+   * Dismiss button, use `InteractionTag`.
    * @default the TagGroup's `dismissible`, else `false`
    */
   dismissible?: boolean;
@@ -642,6 +644,14 @@ const NO_LIST_ITEM_ROLE_ELEMENTS: ReadonlySet<string> = new Set([
   'li',
 ]);
 
+/** `Tag:nested-button` for a dismissible tag whose element is a button. */
+const NESTED_IN_BUTTON_MESSAGE =
+  'Tag: `as="button"` with `dismissible` puts the Dismiss button inside a button. Use InteractionTag instead: `InteractionTag.Primary` for the action, `InteractionTag.Secondary` for Dismiss.';
+
+/** `Tag:nested-button` for a dismissible tag whose element is a link. */
+const NESTED_IN_LINK_MESSAGE =
+  'Tag: a dismissible tag rendered as a link (`as="a"` or a link component) puts the Dismiss button inside the link. Put the link in the tag\'s content: `<Tag dismissible><a href>…</a></Tag>`.';
+
 const LIST_ITEM_MESSAGE =
   'TagGroup: a tag in a `role="list"` group is not a list item (its element is a link, a button or a component). Put a link in the tag\'s content (`<Tag><a href>…</a></Tag>`), or wrap the tag in an element with `role="listitem"`.';
 
@@ -809,6 +819,16 @@ export const Tag: PolymorphicComponent<'span', TagOwnProps> = (props) => {
       );
     }
   }, [ignoredName]);
+
+  // A Dismiss button inside a link or a button is interactive content inside interactive content
+  // (and joins the link's name): the rendered element decides, so a link or button component
+  // counts too. The 0.10 DOM still renders.
+  React.useEffect(() => {
+    if (!dismissible || !isDev || hasWarned('Tag:nested-button')) return;
+    const element = rootRef.current?.localName;
+    if (element === 'button') warnOnce('Tag:nested-button', NESTED_IN_BUTTON_MESSAGE);
+    else if (element === 'a') warnOnce('Tag:nested-button', NESTED_IN_LINK_MESSAGE);
+  });
 
   // A list's children must be list items (axe `aria-required-children`): a tag whose element
   // takes no `listitem` role (a link, a button, a component) needs a wrapping list item.

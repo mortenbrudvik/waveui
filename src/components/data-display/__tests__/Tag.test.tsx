@@ -2271,6 +2271,89 @@ describe('Tag', () => {
     });
   });
 
+  describe('a Dismiss button inside a link or a button (P6-03: D47)', () => {
+    const NESTED_WARNINGS = {
+      button:
+        '[WaveUI] Tag: `as="button"` with `dismissible` puts the Dismiss button inside a button. Use InteractionTag instead: `InteractionTag.Primary` for the action, `InteractionTag.Secondary` for Dismiss.',
+      a: '[WaveUI] Tag: a dismissible tag rendered as a link (`as="a"` or a link component) puts the Dismiss button inside the link. Put the link in the tag\'s content: `<Tag dismissible><a href>…</a></Tag>`.',
+    } as const;
+
+    it.each(['button', 'a'] as const)(
+      'warns Tag:nested-button once for a dismissible Tag rendered as %s',
+      (element) => {
+        const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+        // React reports the nested `<button>` itself (a link holding a button is valid HTML to it).
+        const error = vi.spyOn(console, 'error').mockImplementation(() => {});
+        const tag = (text: string) =>
+          element === 'button' ? (
+            <Tag as="button" type="button" dismissible>
+              {text}
+            </Tag>
+          ) : (
+            <Tag as="a" href="#react" dismissible>
+              {text}
+            </Tag>
+          );
+        const { rerender } = render(tag('React'));
+        rerender(
+          <>
+            {tag('React')}
+            {tag('Vue')}
+          </>,
+        );
+        expect(warn.mock.calls).toEqual([[NESTED_WARNINGS[element]]]);
+        // React's own report of the nesting (its format strings and their arguments).
+        const nesting = [
+          ['In HTML, %s cannot be a descendant of <%s>.', '<button>', 'button'],
+          ['<%s> cannot contain a nested %s.', 'button', '<button>'],
+        ];
+        expect(
+          error.mock.calls.map(([format, child, parent]) => [
+            String(format).split('\n')[0],
+            child,
+            parent,
+          ]),
+        ).toEqual(element === 'button' ? nesting : []);
+        // It still renders the 0.10 DOM.
+        const root = screen.getByText('React').parentElement;
+        expect(root?.localName).toBe(element);
+        expect(root).toContainElement(screen.getByRole('button', { name: 'Dismiss React' }));
+      },
+    );
+
+    it('warns for a link component too, read from the rendered element', () => {
+      const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+      const RouterLink = ({ ref, ...props }: React.ComponentPropsWithRef<'a'>) => (
+        <a ref={ref} {...props} />
+      );
+      render(
+        <Tag as={RouterLink} href="#react" dismissible>
+          React
+        </Tag>,
+      );
+      expect(warn.mock.calls).toEqual([[NESTED_WARNINGS.a]]);
+    });
+
+    it("does not warn without dismissible or for a link in the tag's content", () => {
+      const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+      render(
+        <>
+          <Tag as="a" href="#react">
+            React
+          </Tag>
+          <Tag as="button" type="button" dismissible={false}>
+            Vue
+          </Tag>
+          <Tag dismissible>
+            <a href="#svelte">Svelte</a>
+          </Tag>
+        </>,
+      );
+      expect(warn).not.toHaveBeenCalled();
+      expect(screen.getByRole('button', { name: 'Dismiss Svelte' })).toBeInTheDocument();
+    });
+  });
+
   describe('types (button-provider#8, data-display#1)', () => {
     it('type-checks props against the `as` element', () => {
       const anchorRef = React.createRef<HTMLAnchorElement>();

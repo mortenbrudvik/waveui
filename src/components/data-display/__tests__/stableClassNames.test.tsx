@@ -12,6 +12,9 @@ import {
   imageClassNames,
   infoButtonClassNames,
   infoLabelClassNames,
+  interactionTagClassNames,
+  interactionTagPrimaryClassNames,
+  interactionTagSecondaryClassNames,
   labelClassNames,
   listClassNames,
   listItemClassNames,
@@ -30,6 +33,7 @@ import { Divider } from '../Divider';
 import { Image } from '../Image';
 import { InfoButton } from '../InfoButton';
 import { InfoLabel } from '../InfoLabel';
+import { InteractionTag } from '../InteractionTag';
 import { List } from '../List';
 import { Persona } from '../Persona';
 import { PresenceBadge } from '../PresenceBadge';
@@ -241,6 +245,56 @@ describe('stable class names (P3-00): data-display folder', () => {
     // The tags keep their own root class, and no TagGroup class reaches them.
     expect(within(list).getByRole('listitem')).toHaveClass(tagClassNames.root);
     expect(within(list).getByRole('listitem')).not.toHaveClass(tagGroupClassNames.root);
+  });
+
+  it('InteractionTag: root, Primary and its slot parts, Secondary and its dismiss icon', () => {
+    render(
+      <>
+        <InteractionTag className="wave-test-tag">
+          <InteractionTag.Primary
+            media={<Avatar name="Katri Athokas" />}
+            icon={<Glyph testId="katri-icon" />}
+            secondaryText="Designer"
+          >
+            Katri
+          </InteractionTag.Primary>
+          <InteractionTag.Secondary />
+        </InteractionTag>
+        <InteractionTag>
+          <InteractionTag.Primary>Cherry</InteractionTag.Primary>
+          <InteractionTag.Secondary>
+            <Glyph testId="cherry-glyph" />
+          </InteractionTag.Secondary>
+        </InteractionTag>
+      </>,
+    );
+    const primary = screen.getByRole('button', { name: 'Katri Designer' });
+    const root = primary.parentElement as HTMLElement;
+    expect(root).toHaveClass(interactionTagClassNames.root, 'wave-test-tag');
+    expect(root.classList[0]).toBe(interactionTagClassNames.root);
+    expect(primary).toHaveClass(interactionTagPrimaryClassNames.root);
+    expect(primary.classList[0]).toBe(interactionTagPrimaryClassNames.root);
+    expect(primary.querySelector('[role="img"]')?.parentElement).toHaveClass(
+      interactionTagPrimaryClassNames.media,
+    );
+    expect(iconBox('katri-icon')).toHaveClass(interactionTagPrimaryClassNames.icon);
+    expect(screen.getByText('Katri')).toHaveClass(interactionTagPrimaryClassNames.primaryText);
+    expect(screen.getByText('Designer')).toHaveClass(interactionTagPrimaryClassNames.secondaryText);
+    // The default glyph is the dismiss icon part; the children's wrapper is when it has children.
+    const secondary = screen.getByRole('button', { name: 'Dismiss Katri' });
+    expect(secondary).toHaveClass(interactionTagSecondaryClassNames.root);
+    expect(secondary.classList[0]).toBe(interactionTagSecondaryClassNames.root);
+    expect(secondary.querySelector('[data-wave-icon="dismiss"]')).toHaveClass(
+      interactionTagSecondaryClassNames.dismissIcon,
+    );
+    expect(iconBox('cherry-glyph')).toHaveClass(interactionTagSecondaryClassNames.dismissIcon);
+    expect(screen.getByTestId('cherry-glyph')).not.toHaveClass(
+      interactionTagSecondaryClassNames.dismissIcon,
+    );
+    // No Tag class reaches them (Fluent's InteractionTag does not reuse Tag's either).
+    for (const element of [root, primary, secondary]) {
+      expect(element.className).not.toMatch(/\bwave-tag(?:__|\s|$)/);
+    }
   });
 
   it('Persona: root, the built-in Avatar (its own classes plus the avatar part), the badge element and the texts', () => {

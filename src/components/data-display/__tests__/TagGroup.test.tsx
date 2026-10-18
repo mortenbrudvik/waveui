@@ -7,6 +7,8 @@ import { hydrateRoot } from 'react-dom/client';
 import { TagGroup } from '../TagGroup';
 import type { TagGroupProps } from '../TagGroup';
 import { Tag } from '../Tag';
+import { InteractionTag } from '../InteractionTag';
+import type { InteractionTagProps } from '../InteractionTag';
 import { TagGroupHostContext, TagHostContext } from '../TagGroup.context';
 import type { TagGroupHostOptions } from '../TagGroup.context';
 import { Avatar } from '../Avatar';
@@ -46,6 +48,34 @@ function spyOnWarnings() {
 
 /** The Dismiss button of the tag whose text is `text` ("Dismiss <text>"). */
 const dismissButton = (text: string) => screen.getByRole('button', { name: `Dismiss ${text}` });
+
+/** The Primary of the InteractionTag whose text is `text` (named by its text alone). */
+const primaryButton = (text: string) => screen.getByRole('button', { name: text });
+
+interface InteractionProps extends Omit<InteractionTagProps, 'children'> {
+  /** The Primary's text; also the tag's `value` unless `value` is given. */
+  text: string;
+  /** Renders an `InteractionTag.Secondary` ("Dismiss <text>"). @default true */
+  withSecondary?: boolean;
+  /** The Secondary's `onClick`. */
+  onSecondaryClick?: React.MouseEventHandler<HTMLButtonElement>;
+}
+
+/** An InteractionTag whose Primary is `text` and, by default, a Secondary "Dismiss <text>". */
+function Interaction({
+  text,
+  value = text,
+  withSecondary = true,
+  onSecondaryClick,
+  ...props
+}: InteractionProps) {
+  return (
+    <InteractionTag value={value} {...props}>
+      <InteractionTag.Primary>{text}</InteractionTag.Primary>
+      {withSecondary && <InteractionTag.Secondary onClick={onSecondaryClick} />}
+    </InteractionTag>
+  );
+}
 
 /** Lets the focus move after a removal (a microtask after the commit) land. */
 async function settle() {
@@ -129,7 +159,28 @@ describe('TagGroup', () => {
           children: [<Tag key="red">Red</Tag>, <Tag key="blue">Blue</Tag>],
         },
       },
+      {
+        name: 'InteractionTags with Secondaries',
+        props: {
+          children: [
+            <Interaction key="cherry" text="Cherry" />,
+            <Interaction key="plum" text="Plum" selected />,
+            <Interaction key="fig" text="Fig" withSecondary={false} />,
+          ],
+        },
+      },
+      {
+        name: 'Tags and InteractionTags in a list',
+        props: {
+          role: 'list',
+          children: [<Tag key="red">Red</Tag>, <Interaction key="cherry" text="Cherry" />],
+        },
+      },
       { name: 'disabled', props: { disabled: true, dismissible: true } },
+      {
+        name: 'disabled InteractionTags',
+        props: { disabled: true, children: <Interaction text="Cherry" /> },
+      },
       { name: 'disabled list', props: { role: 'list', disabled: true, dismissible: true } },
       { name: 'vertical', props: { orientation: 'vertical', dismissible: true } },
     ],
@@ -261,6 +312,28 @@ describe('TagGroup', () => {
       expect(list).toHaveAttribute('data-disabled', '');
     });
 
+    it('with role list gives an InteractionTag root role listitem, and both of its buttons keep a Tab stop', async () => {
+      const user = userEvent.setup();
+      const warnings = spyOnWarnings();
+      render(
+        <TagGroup role="list" aria-label="Fruit">
+          <Interaction text="Cherry" data-testid="cherry" />
+          <Interaction text="Plum" role="note" data-testid="plum" />
+        </TagGroup>,
+      );
+      expect(screen.getByTestId('cherry')).toHaveAttribute('role', 'listitem');
+      // The consumer's role wins.
+      expect(screen.getByTestId('plum')).toHaveAttribute('role', 'note');
+      await user.tab();
+      expect(primaryButton('Cherry')).toHaveFocus();
+      await user.keyboard('{ArrowRight}');
+      expect(primaryButton('Cherry')).toHaveFocus();
+      await user.tab();
+      expect(dismissButton('Cherry')).toHaveFocus();
+      // An InteractionTag's root is a list item itself: no list-item warning.
+      expect(warnings()).toEqual([]);
+    });
+
     it('gives no listitem role to a link chip, a list item element or a tag with its own role', () => {
       render(
         <TagGroup role="list" aria-label="Topics">
@@ -330,7 +403,7 @@ describe('TagGroup', () => {
       expect(dismissButton('Blue')).toHaveFocus();
     });
 
-    it('moves and wraps with Left/Right over Dismiss buttons and link chips', async () => {
+    it('moves and wraps with Left/Right over Dismiss buttons, link chips and both InteractionTag buttons', async () => {
       const user = userEvent.setup();
       render(
         <TagGroup aria-label="Topics" dismissible>
@@ -338,6 +411,7 @@ describe('TagGroup', () => {
           <Tag as="a" href="#react" dismissible={false}>
             React
           </Tag>
+          <Interaction text="Cherry" />
           <Tag value="vue">
             <a href="#vue">Vue</a>
           </Tag>
@@ -346,17 +420,21 @@ describe('TagGroup', () => {
       const order = [
         dismissButton('Red'),
         screen.getByRole('link', { name: 'React' }),
+        primaryButton('Cherry'),
+        dismissButton('Cherry'),
         screen.getByRole('link', { name: 'Vue' }),
         dismissButton('Vue'),
       ];
       await user.tab();
       expect(order[0]).toHaveFocus();
-      for (const target of [order[1], order[2], order[3], order[0]]) {
+      for (const target of [...order.slice(1), order[0]]) {
         await user.keyboard('{ArrowRight}');
         expect(target).toHaveFocus();
       }
       await user.keyboard('{ArrowLeft}');
-      expect(order[3]).toHaveFocus();
+      expect(order[5]).toHaveFocus();
+      // One Tab stop: the InteractionTag's buttons are roving items too.
+      expect(order.filter((control) => control.tabIndex === 0)).toEqual([order[5]]);
     });
 
     it('jumps with Home/End', async () => {
@@ -513,8 +591,27 @@ describe('TagGroup', () => {
           <Tag data-testid="own" size="medium" appearance="outline" shape="circular">
             Blue
           </Tag>
+          <Interaction text="Cherry" data-testid="interaction" />
+          <Interaction
+            text="Plum"
+            data-testid="own-interaction"
+            size="medium"
+            appearance="outline"
+            shape="circular"
+          />
         </TagGroup>,
       );
+      const interaction = screen.getByTestId('interaction');
+      expect(interaction).toHaveAttribute('data-size', 'small');
+      expect(interaction).toHaveAttribute('data-appearance', 'brand');
+      expect(interaction).toHaveAttribute('data-shape', 'rounded');
+      expect(primaryButton('Cherry')).toHaveClass('min-h-6', 'bg-selected', 'rounded');
+      expect(dismissButton('Cherry')).toHaveClass('min-w-6', 'bg-selected', 'rounded-e');
+      const ownInteraction = screen.getByTestId('own-interaction');
+      expect(ownInteraction).toHaveAttribute('data-size', 'medium');
+      expect(ownInteraction).toHaveAttribute('data-appearance', 'outline');
+      expect(ownInteraction).toHaveAttribute('data-shape', 'circular');
+      expect(primaryButton('Plum')).toHaveClass('min-h-7', 'border-stroke', 'rounded-full');
       const inherits = screen.getByTestId('inherits');
       expect(inherits).toHaveAttribute('data-size', 'small');
       expect(inherits).toHaveAttribute('data-appearance', 'brand');
@@ -534,9 +631,12 @@ describe('TagGroup', () => {
           <Tag data-testid="blue" disabled={false}>
             Blue
           </Tag>
+          <Interaction text="Cherry" data-testid="cherry" disabled={false} />
         </TagGroup>,
       );
-      for (const text of ['Red', 'Blue']) expect(dismissButton(text)).toBeDisabled();
+      for (const text of ['Red', 'Blue', 'Cherry']) expect(dismissButton(text)).toBeDisabled();
+      expect(primaryButton('Cherry')).toBeDisabled();
+      expect(screen.getByTestId('cherry')).toHaveAttribute('data-disabled', '');
       expect(screen.getByTestId('red')).toHaveAttribute('data-disabled', '');
       expect(screen.getByTestId('blue')).toHaveAttribute('data-disabled', '');
       expect(screen.getByTestId('blue')).toHaveClass('opacity-50');
@@ -620,6 +720,70 @@ describe('TagGroup', () => {
       },
     );
 
+    it.each(['click', 'Enter', 'Space', 'Delete', 'Backspace'] as const)(
+      "calls onDismiss(value) once on %s of a Secondary, after the Secondary's onClick",
+      async (how) => {
+        const user = userEvent.setup();
+        const calls: string[] = [];
+        render(
+          <React.StrictMode>
+            <TagGroup aria-label="Fruit" onDismiss={(value) => calls.push(`group:${value}`)}>
+              <Interaction
+                text="Cherry"
+                value="cherry"
+                onSecondaryClick={() => calls.push('own')}
+              />
+            </TagGroup>
+          </React.StrictMode>,
+        );
+        if (how === 'click') {
+          await user.click(dismissButton('Cherry'));
+        } else {
+          await user.tab();
+          await user.keyboard('{ArrowRight}');
+          expect(dismissButton('Cherry')).toHaveFocus();
+          await user.keyboard(how === 'Space' ? ' ' : `{${how}}`);
+        }
+        expect(calls).toEqual(['own', 'group:cherry']);
+      },
+    );
+
+    it.each(['Delete', 'Backspace'] as const)(
+      'calls onDismiss(value) once on %s on a Primary with a Secondary, and never on one without',
+      async (key) => {
+        const user = userEvent.setup();
+        const onDismiss = vi.fn();
+        render(
+          <TagGroup aria-label="Fruit" onDismiss={onDismiss}>
+            <Interaction text="Cherry" value="cherry" />
+            <Interaction text="Fig" value="fig" withSecondary={false} />
+          </TagGroup>,
+        );
+        await user.tab();
+        expect(primaryButton('Cherry')).toHaveFocus();
+        await user.keyboard(`{${key}}`);
+        expect(onDismiss.mock.calls).toEqual([['cherry']]);
+        await user.keyboard('{End}');
+        expect(primaryButton('Fig')).toHaveFocus();
+        await user.keyboard(`{${key}}`);
+        expect(onDismiss).toHaveBeenCalledTimes(1);
+      },
+    );
+
+    it('a Secondary onClick that calls preventDefault() cancels it', async () => {
+      const user = userEvent.setup();
+      const onDismiss = vi.fn();
+      render(
+        <TagGroup aria-label="Fruit" onDismiss={onDismiss}>
+          <Interaction text="Cherry" onSecondaryClick={(event) => event.preventDefault()} />
+        </TagGroup>,
+      );
+      await user.click(dismissButton('Cherry'));
+      fireEvent.keyDown(dismissButton('Cherry'), { key: 'Delete' });
+      fireEvent.keyDown(primaryButton('Cherry'), { key: 'Backspace' });
+      expect(onDismiss).not.toHaveBeenCalled();
+    });
+
     it("a merged dismissIcon button's onKeyDown preventDefault() cancels Delete", () => {
       const onDismiss = vi.fn();
       const warnings = spyOnWarnings();
@@ -693,12 +857,20 @@ describe('TagGroup', () => {
           <Tag value="red" onDismiss={onTagDismiss}>
             Red
           </Tag>
+          <Interaction text="Cherry" onSecondaryClick={onTagDismiss} />
         </TagGroup>,
       );
       await user.click(dismissButton('Red'));
       fireEvent.click(dismissButton('Red'));
-      for (const key of ['Enter', ' ', 'Delete', 'Backspace']) {
-        fireEvent.keyDown(dismissButton('Red'), { key });
+      for (const control of [
+        dismissButton('Red'),
+        dismissButton('Cherry'),
+        primaryButton('Cherry'),
+      ]) {
+        fireEvent.click(control);
+        for (const key of ['Enter', ' ', 'Delete', 'Backspace']) {
+          fireEvent.keyDown(control, { key });
+        }
       }
       expect(onDismiss).not.toHaveBeenCalled();
       expect(onTagDismiss).not.toHaveBeenCalled();
@@ -756,6 +928,80 @@ describe('TagGroup', () => {
         expect(document.activeElement).not.toBe(document.body);
         expect(screen.getByRole('button', { name: next })).toHaveFocus();
       }
+    });
+
+    it("moves from a Secondary to the next tag's Dismiss control, and from a Primary (Delete) to the next tag's first control", async () => {
+      const user = userEvent.setup();
+      render(<Filters renderTag={(filter) => <Interaction text={filter} />} />);
+      await user.tab();
+      await user.keyboard('{ArrowRight}');
+      expect(dismissButton('Red')).toHaveFocus();
+      await user.keyboard('{Enter}');
+      await settle();
+      expect(screen.queryByRole('button', { name: 'Red' })).toBeNull();
+      expect(document.activeElement).not.toBe(document.body);
+      expect(dismissButton('Blue')).toHaveFocus();
+
+      await user.keyboard('{ArrowLeft}');
+      expect(primaryButton('Blue')).toHaveFocus();
+      await user.keyboard('{Delete}');
+      await settle();
+      expect(screen.queryByRole('button', { name: 'Blue' })).toBeNull();
+      expect(primaryButton('Large')).toHaveFocus();
+    });
+
+    it('moves across Tags and InteractionTags', async () => {
+      const user = userEvent.setup();
+      render(
+        <Filters
+          initial={['Red', 'Cherry', 'Blue', 'Plum']}
+          renderTag={(filter) =>
+            filter === 'Cherry' || filter === 'Plum' ? (
+              <Interaction text={filter} />
+            ) : (
+              <Tag value={filter}>{filter}</Tag>
+            )
+          }
+        />,
+      );
+      await user.tab();
+      expect(dismissButton('Red')).toHaveFocus();
+      await user.keyboard('{Enter}');
+      await settle();
+      // From a Tag's Dismiss button to the InteractionTag's Dismiss control.
+      expect(dismissButton('Cherry')).toHaveFocus();
+      await user.keyboard('{Backspace}');
+      await settle();
+      expect(dismissButton('Blue')).toHaveFocus();
+      // The last tag goes from its Primary: the previous tag's first control.
+      await user.keyboard('{End}{ArrowLeft}');
+      expect(primaryButton('Plum')).toHaveFocus();
+      await user.keyboard('{Delete}');
+      await settle();
+      expect(screen.queryByRole('button', { name: 'Plum' })).toBeNull();
+      expect(dismissButton('Blue')).toHaveFocus();
+    });
+
+    it("moves focus to the same tag's Primary when its focused Secondary unmounts", async () => {
+      const user = userEvent.setup();
+      function Locking() {
+        const [locked, setLocked] = React.useState(false);
+        return (
+          <TagGroup aria-label="Fruit" onDismiss={() => setLocked(true)}>
+            <InteractionTag value="cherry">
+              <InteractionTag.Primary>Cherry</InteractionTag.Primary>
+              {!locked && <InteractionTag.Secondary />}
+            </InteractionTag>
+            <Interaction text="Plum" />
+          </TagGroup>
+        );
+      }
+      render(<Locking />);
+      await user.tab();
+      await user.keyboard('{ArrowRight}{Enter}');
+      await settle();
+      expect(screen.queryByRole('button', { name: 'Dismiss Cherry' })).toBeNull();
+      expect(primaryButton('Cherry')).toHaveFocus();
     });
 
     it('moves focus when a tag wrapped in an element of yours goes', async () => {
@@ -1065,6 +1311,36 @@ describe('TagGroup', () => {
       expect(blue).not.toHaveAttribute('aria-disabled');
     });
 
+    it("an InteractionTag's focused button is held when the group is disabled, and keeps its arrow order", async () => {
+      const user = userEvent.setup();
+      const group = (disabled: boolean) => (
+        <>
+          <TagGroup aria-label="Fruit" disabled={disabled} onDismiss={onDismissSpy}>
+            <Interaction text="Cherry" />
+            <Interaction text="Plum" />
+          </TagGroup>
+          <button type="button">After</button>
+        </>
+      );
+      onDismissSpy.mockClear();
+      const { rerender } = render(group(false));
+      await user.tab();
+      await user.keyboard('{ArrowRight}');
+      expect(dismissButton('Cherry')).toHaveFocus();
+      await act(async () => {
+        rerender(group(true));
+      });
+      const held = dismissButton('Cherry');
+      expect(held).toHaveFocus();
+      expect(held).toHaveAttribute('data-disabled-focusable', '');
+      expect(primaryButton('Cherry')).toBeDisabled();
+      await user.keyboard('{Delete}{Enter}');
+      expect(onDismissSpy).not.toHaveBeenCalled();
+      await user.tab();
+      expect(screen.getByRole('button', { name: 'After' })).toHaveFocus();
+      expect(held).toBeDisabled();
+    });
+
     it('Delete and Enter do nothing on a held control', async () => {
       const user = userEvent.setup();
       onDismissSpy.mockClear();
@@ -1139,6 +1415,66 @@ describe('TagGroup', () => {
       );
     });
 
+    it("an InteractionTag's buttons keep full opacity with dimDisabled false", async () => {
+      const { rerender } = render(
+        <>
+          <TagGroupHostContext.Provider value={{ dimDisabled: false }}>
+            <TagGroup aria-label="Hosted" disabled>
+              <Interaction text="Cherry" data-testid="hosted" />
+            </TagGroup>
+          </TagGroupHostContext.Provider>
+          <TagGroup aria-label="Plain" disabled>
+            <Interaction text="Plum" />
+          </TagGroup>
+        </>,
+      );
+      const opacity = ['disabled:opacity-50', 'aria-disabled:opacity-50'];
+      for (const button of [primaryButton('Cherry'), dismissButton('Cherry')]) {
+        expect(button).toBeDisabled();
+        for (const name of opacity) expect(button).not.toHaveClass(name);
+        expect(button).not.toHaveClass('aria-disabled:focus-visible:opacity-100');
+        expect(button).toHaveClass(
+          'disabled:cursor-not-allowed',
+          'aria-disabled:cursor-not-allowed',
+          ...forcedColors.disabled.split(' '),
+        );
+      }
+      expect(screen.getByTestId('hosted')).not.toHaveClass('opacity-50');
+      // Without a host, each button dims itself.
+      for (const button of [primaryButton('Plum'), dismissButton('Plum')]) {
+        expect(button).toHaveClass(...opacity);
+      }
+
+      // A held button (disabled while focused) keeps its full opacity too.
+      const hosted = (disabled: boolean) => (
+        <TagGroupHostContext.Provider value={{ dimDisabled: false }}>
+          <TagGroup aria-label="Hosted" disabled={disabled}>
+            <Interaction text="Cherry" />
+          </TagGroup>
+        </TagGroupHostContext.Provider>
+      );
+      rerender(hosted(false));
+      act(() => dismissButton('Cherry').focus());
+      await act(async () => {
+        rerender(hosted(true));
+      });
+      expect(dismissButton('Cherry')).toHaveFocus();
+      expect(dismissButton('Cherry')).toHaveAttribute('aria-disabled', 'true');
+      expect(dismissButton('Cherry')).not.toHaveClass('aria-disabled:opacity-50');
+    });
+
+    it('renders hidden on the InteractionTags whose value is in hiddenValues', () => {
+      render(
+        <Hosted
+          host={{ hiddenValues: new Set(['Blue']) }}
+          renderTag={(filter) => <Interaction text={filter} data-testid={filter} />}
+        />,
+      );
+      expect(screen.getByTestId('Blue')).toHaveAttribute('hidden');
+      expect(screen.getByTestId('Red')).not.toHaveAttribute('hidden');
+      expect(screen.queryByRole('button', { name: 'Blue' })).toBeNull();
+    });
+
     it('does not pass the host options to a nested TagGroup', () => {
       render(
         <TagGroupHostContext.Provider
@@ -1186,8 +1522,12 @@ describe('TagGroup', () => {
             Red
           </Tag>
           <Tag data-testid="static">Blue</Tag>
+          <Interaction text="Cherry" data-testid="interaction" />
         </TagGroup>,
       );
+      expect(screen.getByTestId('interaction')).toHaveAttribute('data-wave-tag-item', '');
+      expect(dismissButton('Cherry')).toHaveAttribute('data-wave-tag-dismiss', '');
+      expect(primaryButton('Cherry')).not.toHaveAttribute('data-wave-tag-dismiss');
       expect(screen.getByTestId('group')).toHaveAttribute('data-wave-tag-group', '');
       expect(screen.getByTestId('dismissible')).toHaveAttribute('data-wave-tag-item', '');
       expect(screen.getByTestId('static')).toHaveAttribute('data-wave-tag-item', '');
@@ -1245,6 +1585,36 @@ describe('TagGroup', () => {
       expect(onDismiss).toHaveBeenCalledWith(expect.stringMatching(/^tag-/));
     });
 
+    it('warns once for an InteractionTag without value in a group with onDismiss, and reports a generated id', () => {
+      const warnings = spyOnWarnings();
+      const onDismiss = vi.fn();
+      render(
+        <TagGroup aria-label="Fruit" onDismiss={onDismiss}>
+          <InteractionTag>
+            <InteractionTag.Primary>Cherry</InteractionTag.Primary>
+            <InteractionTag.Secondary />
+          </InteractionTag>
+          <InteractionTag>
+            <InteractionTag.Primary>Fig</InteractionTag.Primary>
+          </InteractionTag>
+        </TagGroup>,
+      );
+      expect(warnings()).toEqual([MISSING_VALUE_WARNING]);
+      fireEvent.click(dismissButton('Cherry'));
+      expect(onDismiss).toHaveBeenCalledWith(expect.stringMatching(/^tag-/));
+    });
+
+    it('warns a value shared by a Tag and an InteractionTag', () => {
+      const warnings = spyOnWarnings();
+      render(
+        <TagGroup aria-label="Fruit" dismissible onDismiss={() => {}}>
+          <Tag value="cherry">Cherry</Tag>
+          <Interaction text="Cherry tomato" value="cherry" />
+        </TagGroup>,
+      );
+      expect(warnings()).toEqual([duplicateWarning('cherry')]);
+    });
+
     it('does not warn in a display-only group', () => {
       const warnings = spyOnWarnings();
       render(
@@ -1292,6 +1662,9 @@ describe('TagGroup', () => {
             </Tag>
           </TagGroup>
           <TagGroup aria-label="Empty" />
+          <TagGroup aria-label="Actions">
+            <Interaction text="Cherry" withSecondary={false} />
+          </TagGroup>
         </>,
       );
       expect(warnings()).toEqual([]);

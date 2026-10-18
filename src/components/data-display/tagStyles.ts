@@ -167,6 +167,115 @@ export const tagDismissStateClasses: Readonly<Record<TagLook, string>> = {
  */
 export const TAG_DISMISS_SELECTED_RING_CLASSES = 'focus-visible:outline-primary-foreground';
 
+// ---------------------------------------------------------------------------
+// InteractionTag: two sibling buttons on the same table
+// ---------------------------------------------------------------------------
+
+/**
+ * What both InteractionTag buttons draw: a 1px border, a colour transition switched off for
+ * reduced motion, and a raised stacking level while their focus ring shows, so the neighbouring
+ * button does not cover the ring.
+ */
+export const INTERACTION_TAG_BUTTON_BASE_CLASSES =
+  'relative inline-flex items-center border transition-colors motion-reduce:transition-none focus-visible:z-10';
+
+/** The Primary button's own layout: no block padding of its own (C-NATIVE), text from the start. */
+export const INTERACTION_TAG_PRIMARY_BASE_CLASSES = 'py-0 text-start';
+
+/**
+ * The Primary's end inset per size, the border included: 12 or 8px alone; next to a Secondary
+ * (the root holds a Dismiss control) 8, 6 or 4px, with no end border (the Secondary's start border
+ * is the divider). Read from the root's named group in CSS, so the server HTML is right without a
+ * registration render.
+ */
+export const interactionTagPrimaryEndInsetClasses: Readonly<Record<TagSize, string>> = {
+  medium: 'pe-2.75 group-has-[[data-wave-tag-dismiss]]/interaction-tag:pe-2',
+  small: 'pe-1.75 group-has-[[data-wave-tag-dismiss]]/interaction-tag:pe-1.5',
+  'extra-small': 'pe-1.75 group-has-[[data-wave-tag-dismiss]]/interaction-tag:pe-1',
+};
+
+/** The Primary's end corners and end border next to a Secondary: square, and none. */
+export const INTERACTION_TAG_PRIMARY_JOINED_CLASSES =
+  'group-has-[[data-wave-tag-dismiss]]/interaction-tag:rounded-e-none group-has-[[data-wave-tag-dismiss]]/interaction-tag:border-e-0';
+
+/**
+ * What the Secondary (the Dismiss button) draws: its content centred, no block padding of its own
+ * (C-NATIVE) and a 6px inline padding around a text label, and in forced colours a Highlight
+ * glyph on hover (its hover fill becomes Canvas there).
+ */
+export const INTERACTION_TAG_SECONDARY_BASE_CLASSES =
+  'shrink-0 justify-center px-1.5 py-0 forced-colors:not-disabled:not-aria-disabled:hover:text-[Highlight]';
+
+/**
+ * The Secondary per size: at least 28, 24 or 24px wide (exactly that with its glyph), as tall as
+ * the Primary (the root stretches both), with the text of the tag's size for a text label.
+ */
+export const interactionTagSecondarySizeClasses: Readonly<Record<TagSize, string>> = {
+  medium: 'min-w-7 text-body-1',
+  small: 'min-w-6 text-caption-1',
+  'extra-small': 'min-w-6 text-caption-1',
+};
+
+/**
+ * Border, fill and text of both buttons per look, with their hover and pressed fills behind the
+ * literal gate (C-TOKENS): the neutral states on filled tags, Button's outline states on outline
+ * tags, the brand states on brand tags and the primary states on selected ones. Compose the
+ * selected look with {@link INTERACTION_TAG_SELECTED_FORCED_COLORS}.
+ */
+export const interactionTagLookClasses: Readonly<Record<TagLook, string>> = {
+  filled:
+    'border-transparent bg-muted text-foreground not-disabled:not-aria-disabled:hover:bg-muted-hover not-disabled:not-aria-disabled:active:bg-muted-pressed',
+  outline:
+    'border-stroke bg-transparent text-foreground not-disabled:not-aria-disabled:hover:border-stroke-hover not-disabled:not-aria-disabled:hover:bg-subtle-hover not-disabled:not-aria-disabled:active:bg-subtle-pressed',
+  brand:
+    'border-transparent bg-selected text-selected-foreground not-disabled:not-aria-disabled:hover:bg-selected-hover not-disabled:not-aria-disabled:active:bg-selected-pressed',
+  selected:
+    'border-primary bg-primary text-primary-foreground not-disabled:not-aria-disabled:hover:bg-primary-hover not-disabled:not-aria-disabled:active:bg-primary-pressed',
+};
+
+/**
+ * The selected buttons in forced colours, after `forcedColors.selectedContainer` (a Highlight
+ * outline inside): a Highlight border too, as a pressed Button draws it.
+ */
+export const INTERACTION_TAG_SELECTED_FORCED_COLORS = 'forced-colors:border-[Highlight]';
+
+/**
+ * The divider between the two buttons: the Secondary's start border, after the look's border
+ * colour. Decorative: the neutral stroke, or the on-primary colour on a selected tag.
+ */
+export const interactionTagDividerClasses: Readonly<Record<TagLook, string>> = {
+  filled: 'border-s-stroke',
+  outline: 'border-s-stroke',
+  brand: 'border-s-stroke',
+  selected: 'border-s-primary-foreground',
+};
+
+/** The Secondary's corners per shape: square at its start, the tag's shape at its end. */
+export const interactionTagSecondaryShapeClasses: Readonly<Record<TagShape, string>> = {
+  circular: 'rounded-s-none rounded-e-full',
+  rounded: 'rounded-s-none rounded-e',
+};
+
+/**
+ * The disabled look of both buttons while natively disabled; a held button (`aria-disabled`) adds
+ * `mergedAriaDisabledClasses`. Each button dims itself: the root is never dimmed.
+ */
+export const INTERACTION_TAG_DISABLED_CLASSES = 'disabled:cursor-not-allowed disabled:opacity-50';
+
+/**
+ * The disabled cursor alone, for a host that dims the area holding its tags as a whole (the
+ * host's `dimDisabled: false`): no button dims itself then.
+ */
+export const INTERACTION_TAG_UNDIMMED_DISABLED_CLASSES =
+  'disabled:cursor-not-allowed aria-disabled:cursor-not-allowed';
+
+/**
+ * The pointer target of both buttons at `extra-small`: a transparent layer 2px above and below
+ * the 20px button (24px tall), as wide as the button, so two neighbouring targets never overlap.
+ */
+export const INTERACTION_TAG_EXTRA_SMALL_HIT_CLASSES =
+  'before:absolute before:inset-x-0 before:-inset-y-0.5';
+
 /**
  * The root utilities of a text-only, non-dismissible, unselected, enabled tag of a size,
  * appearance and shape, without a stable class (TagPicker's count chip carries its own).

@@ -4,6 +4,7 @@ import { fn } from 'storybook/test';
 import { Avatar, Button, Tag } from '../src';
 import type { TagAppearance, TagShape, TagSize } from '../src';
 import { TagGroup } from '../src/components/data-display/TagGroup';
+import { InteractionTag } from '../src/components/data-display/InteractionTag';
 import type { TagGroupProps } from '../src/components/data-display/TagGroup';
 import { orientationArgType } from './_helpers';
 
@@ -89,6 +90,60 @@ function FilterBar(props: TagGroupProps) {
  */
 export const Default: Story = {
   render: (args) => <FilterBar {...args} />,
+};
+
+const PEOPLE = ['Katri Athokas', 'Elvia Atkins', 'Cameron Evans'];
+
+/** Reviewers kept in state: the group's `onDismiss(value)` removes one, "Add reviewer" restores them. */
+function Reviewers(props: TagGroupProps) {
+  const { onDismiss, ...rest } = props;
+  const [people, setPeople] = React.useState(PEOPLE);
+  const add = React.useRef<HTMLButtonElement>(null);
+  return (
+    <div className="flex flex-wrap items-center gap-2">
+      <TagGroup
+        {...rest}
+        fallbackFocusRef={add}
+        onDismiss={(value) => {
+          onDismiss?.(value);
+          setPeople((current) => current.filter((person) => person !== value));
+        }}
+      >
+        {people.map((person) => (
+          <InteractionTag key={person} value={person}>
+            <InteractionTag.Primary media={<Avatar name={person} />} onClick={fn()}>
+              {person}
+            </InteractionTag.Primary>
+            <InteractionTag.Secondary />
+          </InteractionTag>
+        ))}
+      </TagGroup>
+      <Button
+        ref={add}
+        appearance="subtle"
+        size="small"
+        disabledFocusable={people.length === PEOPLE.length}
+        onClick={() => setPeople(PEOPLE)}
+      >
+        Add reviewer
+      </Button>
+    </div>
+  );
+}
+
+/**
+ * Reviewers as InteractionTags, each with a Secondary: the Primary opens the person, the
+ * Secondary removes them. Both buttons of every tag join the toolbar's arrow order; Delete or
+ * Backspace on either removes the reviewer. Focus then moves to the next reviewer's Dismiss
+ * button (from a Primary, to the next reviewer's Primary), else the previous one, else "Add
+ * reviewer", the group's `fallbackFocusRef`.
+ */
+export const WithInteractionTags: Story = {
+  args: {
+    'aria-label': 'Reviewers',
+    dismissible: false,
+  },
+  render: (args) => <Reviewers {...args} />,
 };
 
 /** The group's `size` sizes its tags (28, 24 or 20px tall) and the gap between them. */
