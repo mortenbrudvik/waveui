@@ -354,15 +354,18 @@ InteractionTagRoot.displayName = 'InteractionTag';
  * `secondaryText` (`media` and `icon` are decorative), with the InteractionTag's look. In a
  * selecting TagGroup it is a toggle (`aria-pressed`): a click, Enter or Space adds the tag's
  * `value` to the group's selection or removes it, after its `onClick` (whose `preventDefault()`
- * cancels the toggle). Elsewhere the InteractionTag's `selected` makes it a toggle. Delete and
- * Backspace on it click the tag's Secondary when there is one. Its props, `ref` and `className`
- * go to the button. Flat name of `InteractionTag.Primary`, for React Server Components.
+ * cancels the toggle). Elsewhere the InteractionTag's `selected` makes it a toggle. Either state
+ * renders its `aria-pressed` over one passed here, which applies only when neither is set. Delete
+ * and Backspace on it click the tag's Secondary when there is one. Its props, `ref` and
+ * `className` go to the button. Flat name of `InteractionTag.Primary`, for React Server
+ * Components.
  */
 export const InteractionTagPrimary = ({
   media,
   icon,
   secondaryText,
   disabled: disabledProp = false,
+  'aria-pressed': ariaPressed,
   className,
   children,
   onClick,
@@ -416,7 +419,9 @@ export const InteractionTagPrimary = ({
   return (
     <button
       type="button"
-      aria-pressed={tag.pressed}
+      // The tag's state (`selected`, or a selecting TagGroup's value) decides; a consumer
+      // `aria-pressed` applies only to a Primary that is no toggle of the tag's.
+      aria-pressed={tag.pressed ?? ariaPressed}
       data-selected={tag.selected ? '' : undefined}
       {...rest}
       ref={ref}

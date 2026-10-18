@@ -493,6 +493,29 @@ describe('InteractionTag', () => {
       expect(tag).not.toHaveAttribute('data-selected');
     });
 
+    it("a consumer aria-pressed on the Primary yields to selected and to a selecting group's value, and passes through otherwise (D45)", () => {
+      const { rerender } = render(<Cherry selected primaryProps={{ 'aria-pressed': false }} />);
+      expect(primary()).toHaveAttribute('aria-pressed', 'true');
+
+      rerender(<Cherry selected={false} primaryProps={{ 'aria-pressed': true }} />);
+      expect(primary()).toHaveAttribute('aria-pressed', 'false');
+
+      rerender(
+        <TagGroup aria-label="Fruit" defaultValue={['cherry']}>
+          <Cherry value="cherry" primaryProps={{ 'aria-pressed': false }} />
+          <Cherry value="plum" primaryProps={{ 'aria-pressed': true }} secondaryProps={false} />
+        </TagGroup>,
+      );
+      const [cherry, plum] = screen.getAllByRole('button', { name: 'Cherry' });
+      expect(cherry).toHaveAttribute('aria-pressed', 'true');
+      expect(plum).toHaveAttribute('aria-pressed', 'false');
+
+      // A Primary that is no toggle of the tag's keeps the consumer's own state.
+      rerender(<Cherry primaryProps={{ 'aria-pressed': true }} data-testid="tag" />);
+      expect(primary()).toHaveAttribute('aria-pressed', 'true');
+      expect(screen.getByTestId('tag')).not.toHaveAttribute('data-selected');
+    });
+
     it('calls the consumer onClick of the Primary, and nothing more, outside a TagGroup', async () => {
       const user = userEvent.setup();
       const onClick = vi.fn();
