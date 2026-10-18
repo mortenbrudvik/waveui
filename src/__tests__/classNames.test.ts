@@ -154,10 +154,51 @@ const NO_ELEMENT: readonly string[] = [
 
 /**
  * Constants and keys that a later wave applies (spec §0.2 rule 24, §1.4.3): the "applied" check
- * skips them. Empty since wave C of 0.8, when every Phase 3 part landed. A later phase that
- * registers parts before they exist lists them here and empties the list when they land.
+ * skips them, and a whole constant also the "names a public component" check. Constants and keys
+ * of the Phase 6 parts (spec §1.5), written before the parts exist; INTEGRATION empties the list
+ * in wave D.
  */
-const PENDING_CLASS_NAMES: readonly string[] = [];
+const PENDING_CLASS_NAMES: readonly string[] = [
+  'dialogContentClassNames.positioner',
+  'dialogContentClassNames.titleAction',
+  'dialogContentClassNames.titleActions',
+  'dialogTitleClassNames.action',
+  'drawerBodyClassNames',
+  'drawerClassNames.titleAction',
+  'drawerFooterClassNames',
+  'drawerHeaderClassNames',
+  'drawerHeaderNavigationClassNames',
+  'drawerHeaderTitleClassNames',
+  'hamburgerClassNames',
+  'interactionTagClassNames',
+  'interactionTagPrimaryClassNames',
+  'interactionTagSecondaryClassNames',
+  'navAppItemClassNames',
+  'navAppItemStaticClassNames',
+  'navDividerClassNames',
+  'navDrawerBodyClassNames',
+  'navDrawerClassNames',
+  'navDrawerFooterClassNames',
+  'navDrawerHeaderClassNames',
+  'navItemClassNames.actions',
+  'navSectionHeaderClassNames',
+  'navSubItemClassNames.actions',
+  'tagClassNames.icon',
+  'tagClassNames.media',
+  'tagClassNames.secondaryText',
+  'tagGroupClassNames',
+  'tagPickerButtonClassNames',
+  'tagPickerClassNames.clearButton',
+  'tagPickerClassNames.createOption',
+  'tagPickerClassNames.expandButton',
+  'tagPickerClassNames.expandIcon',
+  'tagPickerClassNames.overflowCount',
+  'tagPickerControlClassNames',
+  'tagPickerGroupClassNames',
+  'tagPickerInputClassNames',
+  'tagPickerListClassNames',
+  'tagPickerOptionClassNames',
+];
 
 const isPending = (name: string, key?: string): boolean =>
   PENDING_CLASS_NAMES.includes(name) ||

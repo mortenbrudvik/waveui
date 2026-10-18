@@ -429,9 +429,35 @@ const INTERNAL_HELPERS: Record<string, string> = {
 
 /**
  * Public type names that a prop refers to before the barrels export them (spec §0.2 rule 24,
- * §1.5), matched against the name after `#` of the walk's labels. Empty since wave C of 0.8.
+ * §1.5), matched against the name after `#` of the walk's labels. The Phase 6 names (0.11 spec
+ * §1.5) that a public declaration reaches through the exported `Dialog`, `Drawer`, `Nav` and
+ * `TagPicker` before INTEGRATION exports them; INTEGRATION empties the list in wave D.
  */
-const PENDING_PUBLIC_TYPES: readonly string[] = [];
+const PENDING_PUBLIC_TYPES: readonly string[] = [
+  'DialogSize',
+  'DrawerBodyProps',
+  'DrawerFooterProps',
+  'DrawerHeaderNavigationProps',
+  'DrawerHeaderProps',
+  'DrawerHeaderTitleProps',
+  'DrawerModalType',
+  'DrawerSize',
+  'DrawerType',
+  'NavAppItemAnchorProps',
+  'NavAppItemButtonProps',
+  'NavAppItemDynamicProps',
+  'NavAppItemOwnProps',
+  'NavAppItemProps',
+  'NavAppItemStaticProps',
+  'NavDividerProps',
+  'NavSectionHeaderProps',
+  'TagPickerButtonProps',
+  'TagPickerControlProps',
+  'TagPickerGroupProps',
+  'TagPickerInputProps',
+  'TagPickerListProps',
+  'TagPickerOptionProps',
+];
 
 /** `components/feedback/Toaster.tsx#ToastDispatchOptions` → `ToastDispatchOptions`. */
 const typeNameOf = (label: string): string => label.slice(label.indexOf('#') + 1);

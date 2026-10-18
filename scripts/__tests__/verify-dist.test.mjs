@@ -1320,15 +1320,18 @@ describe('probeSizeBudget', () => {
 });
 
 describe('the flat-name bridge (PENDING_FLAT_EXPORTS)', () => {
-  it('is closed: the list is empty and the real exports pass, final mode included', async () => {
-    expect(PENDING_FLAT_EXPORTS).toEqual([]);
+  // Phase 6 (0.11 spec §1.5.5): open for TagPicker, and for Drawer and Nav from the commits that
+  // attach their first new member. INTEGRATION restores the closed-bridge case in wave D.
+  it('is open for the Phase 6 compounds only, and the real exports pass outside final mode', async () => {
+    expect(PENDING_FLAT_EXPORTS).toEqual([...new Set(PENDING_FLAT_EXPORTS)].sort());
+    expect(
+      PENDING_FLAT_EXPORTS.filter((name) => !['Drawer', 'Nav', 'TagPicker'].includes(name)),
+    ).toEqual([]);
     const mod = await import('../../src/index.ts');
-    expect(checkFlatExports(mod)).toEqual({ errors: [], pending: [], planned: [] });
-    expect(checkFlatExports(mod, { final: true })).toEqual({
-      errors: [],
-      pending: [],
-      planned: [],
-    });
+    expect(checkFlatExports(mod).errors).toEqual([]);
+    expect(checkFlatExports(mod, { final: true }).errors).toContainEqual(
+      expect.stringMatching(/^PENDING_FLAT_EXPORTS in scripts\/verify-dist\.mjs still lists /),
+    );
   }, 60_000);
 
   it('the real exports carry the flat name of every compound member, the 0.8 parts included', async () => {

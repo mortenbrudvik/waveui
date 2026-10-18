@@ -89,11 +89,12 @@ const require = createRequire(import.meta.url);
 
 /**
  * A temporary bridge: components whose flat sub-component names (`<Parent><Member>`,
- * C-COMPOUND) are not exported from `dist/index.mjs` yet. The list is empty: phase 5 (0.10)
- * listed `SwatchPicker` until the input barrel exported `SwatchPickerRow`. Phase 2 (0.7) did the
- * same for `Toolbar`, which became a compound (`Toolbar.Button`, …) before the button barrel
- * exported the flat names of its parts, and phase 3 (0.8) for `ColorPicker`, `MessageBar`,
- * `Toast` and `Tree` while their new parts
+ * C-COMPOUND) are not exported from `dist/index.mjs` yet. Phase 6 (0.11) lists `TagPicker`, and
+ * `Drawer` and `Nav` from the commits that attach their first new member (its spec's §1.5 and
+ * rule 29); INTEGRATION empties the list. Phase 5 (0.10) listed `SwatchPicker` until the input
+ * barrel exported `SwatchPickerRow`. Phase 2 (0.7) did the same for `Toolbar`, which became a
+ * compound (`Toolbar.Button`, …) before the button barrel exported the flat names of its parts,
+ * and phase 3 (0.8) for `ColorPicker`, `MessageBar`, `Toast` and `Tree` while their new parts
  * (`Toast.Title`, `MessageBar.Actions`, `ColorPicker.HexField`, `Tree.ItemPersonaLayout`, …)
  * landed before the barrels exported their flat names. A future compound whose parts land before
  * their flat names goes on it the same way. The rules:
@@ -105,7 +106,11 @@ const require = createRequire(import.meta.url);
  * A compound that is not listed must export every flat name. A flat name that is exported must
  * equal its dotted member, listed or not.
  */
-export const PENDING_FLAT_EXPORTS = [];
+export const PENDING_FLAT_EXPORTS = [
+  // 'Drawer', // P6-overlays uncomments this line in the commit that attaches Drawer.Header (spec rule 29)
+  // 'Nav', // P6-nav uncomments this line in the commit that attaches Nav.SectionHeader (spec rule 29)
+  'TagPicker', // exported, and a compound from wave C (P6-tagpicker): planned until then
+];
 
 /**
  * The presence core's probes: an import of only `Button` drops it, an import of only

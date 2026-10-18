@@ -178,15 +178,46 @@ export const presenceBadgeClassNames = {
 } as const;
 
 /**
- * Tag: `root` on the rendered element (your `as`, default `<span>`); `primaryText` on the content
- * span; `dismissButton` on the Dismiss button; `dismissIcon` on the icon inside it (what
- * `dismissIcon` renders, a merged Button's icon span, else the default `<svg>`).
+ * Tag: `root` on the rendered element (your `as`, default `<span>`); `media` on the element of the
+ * media slot; `icon` on the icon box; `primaryText` on the content span; `secondaryText` on the
+ * second line of text; `dismissButton` on the Dismiss button; `dismissIcon` on the icon inside it
+ * (what `dismissIcon` renders, a merged Button's icon span, else the default `<svg>`).
  */
 export const tagClassNames = {
   root: 'wave-tag',
+  media: 'wave-tag__media',
+  icon: 'wave-tag__icon',
   primaryText: 'wave-tag__primary-text',
+  secondaryText: 'wave-tag__secondary-text',
   dismissButton: 'wave-tag__dismiss-button',
   dismissIcon: 'wave-tag__dismiss-icon',
+} as const;
+
+/** TagGroup: `root` on the group element (the toolbar or the list). */
+export const tagGroupClassNames = { root: 'wave-tag-group' } as const;
+
+/** InteractionTag: `root` on the element that holds its two buttons. */
+export const interactionTagClassNames = { root: 'wave-interaction-tag' } as const;
+
+/**
+ * InteractionTag.Primary: `root` on its button; `media`, `icon`, `primaryText` and
+ * `secondaryText` on the slot elements.
+ */
+export const interactionTagPrimaryClassNames = {
+  root: 'wave-interaction-tag-primary',
+  media: 'wave-interaction-tag-primary__media',
+  icon: 'wave-interaction-tag-primary__icon',
+  primaryText: 'wave-interaction-tag-primary__primary-text',
+  secondaryText: 'wave-interaction-tag-primary__secondary-text',
+} as const;
+
+/**
+ * InteractionTag.Secondary: `root` on its button; `dismissIcon` on the glyph inside it (the
+ * default glyph, or the element that wraps the children).
+ */
+export const interactionTagSecondaryClassNames = {
+  root: 'wave-interaction-tag-secondary',
+  dismissIcon: 'wave-interaction-tag-secondary__dismiss-icon',
 } as const;
 
 /**
@@ -525,11 +556,14 @@ export const dropdownClassNames = {
 } as const;
 
 /**
- * TagPicker: `root` on the outer element; `control` on the tag area; `group` on the list of tags;
- * `tag` on each tag; `removeButton` on each tag's remove button; `input` on the `role="combobox"`
- * input; `listbox` on the `role="listbox"` list; `option` on each Option it renders (which also
- * carries Option's classes); `surface` on the portaled popup; `emptyMessage` on the "No matches"
- * row.
+ * TagPicker: `root` on the outer element; `control` on the tag area and `group` on the list of
+ * tags (both deprecated, kept until 1.0 next to TagPicker.Control's and TagPicker.Group's own
+ * classes); `tag` on each tag; `removeButton` on each tag's remove button; `input` on the
+ * `role="combobox"` input; `expandButton` on the expand button and `expandIcon` on its glyph;
+ * `clearButton` on the clear button; `listbox` on the `role="listbox"` list; `option` on each
+ * Option it renders (which also carries Option's classes); `createOption` on the create option of
+ * `allowCreate`; `overflowCount` on the "+N" count of the single-line layout; `surface` on the
+ * portaled popup; `emptyMessage` on the "No matches" row.
  */
 export const tagPickerClassNames = {
   root: 'wave-tag-picker',
@@ -538,10 +572,52 @@ export const tagPickerClassNames = {
   tag: 'wave-tag-picker__tag',
   removeButton: 'wave-tag-picker__remove-button',
   input: 'wave-tag-picker__input',
+  expandButton: 'wave-tag-picker__expand-button',
+  expandIcon: 'wave-tag-picker__expand-icon',
+  clearButton: 'wave-tag-picker__clear-button',
   listbox: 'wave-tag-picker__listbox',
   option: 'wave-tag-picker__option',
+  createOption: 'wave-tag-picker__create-option',
+  overflowCount: 'wave-tag-picker__overflow-count',
   surface: 'wave-tag-picker__surface',
   emptyMessage: 'wave-tag-picker__empty-message',
+} as const;
+
+/**
+ * TagPicker.Control: `root` on the field that holds the tags, the trigger and the end buttons (it
+ * also carries TagPicker's `control` part).
+ */
+export const tagPickerControlClassNames = { root: 'wave-tag-picker-control' } as const;
+
+/**
+ * TagPicker.Group: `root` on the list of tags (also a TagGroup's root, and TagPicker's `group`
+ * part).
+ */
+export const tagPickerGroupClassNames = { root: 'wave-tag-picker-group' } as const;
+
+/**
+ * TagPicker.Input: `root` on the `role="combobox"` input (it also carries TagPicker's `input`
+ * part).
+ */
+export const tagPickerInputClassNames = { root: 'wave-tag-picker-input' } as const;
+
+/** TagPicker.Button: `root` on the `role="combobox"` button. */
+export const tagPickerButtonClassNames = { root: 'wave-tag-picker-button' } as const;
+
+/**
+ * TagPicker.List: `root` on the `role="listbox"` list (it also carries ListboxSurface's `list` and
+ * TagPicker's `listbox` parts).
+ */
+export const tagPickerListClassNames = { root: 'wave-tag-picker-list' } as const;
+
+/**
+ * TagPicker.Option (an Option variant): `root` on the option; `media` on the visual before its
+ * text; `secondaryContent` on its second line.
+ */
+export const tagPickerOptionClassNames = {
+  root: 'wave-tag-picker-option',
+  media: 'wave-tag-picker-option__media',
+  secondaryContent: 'wave-tag-picker-option__secondary-content',
 } as const;
 
 /**
@@ -1025,19 +1101,91 @@ export const navCategoryClassNames = {
 
 /**
  * Nav.Item: `root` on the `<a>` (with `href`) or `<button>`; `listItem` on the `<li>` around it;
- * `icon` on the icon span; `content` on the label span.
+ * `icon` on the icon span; `content` on the label span; `actions` on the group of its `actions`.
  */
 export const navItemClassNames = {
   root: 'wave-nav-item',
   listItem: 'wave-nav-item__list-item',
   icon: 'wave-nav-item__icon',
   content: 'wave-nav-item__content',
+  actions: 'wave-nav-item__actions',
 } as const;
 
-/** Nav.SubItem: `root` on the `<a>` or `<button>`; `listItem` on the `<li>` around it. */
+/**
+ * Nav.SubItem: `root` on the `<a>` or `<button>`; `listItem` on the `<li>` around it; `actions` on
+ * the group of its `actions`.
+ */
 export const navSubItemClassNames = {
   root: 'wave-nav-sub-item',
   listItem: 'wave-nav-sub-item__list-item',
+  actions: 'wave-nav-sub-item__actions',
+} as const;
+
+/** Nav.SectionHeader: `root` on the heading element; `listItem` on the list item around it. */
+export const navSectionHeaderClassNames = {
+  root: 'wave-nav-section-header',
+  listItem: 'wave-nav-section-header__list-item',
+} as const;
+
+/** Nav.Divider: `root` on its list item (hidden from assistive technology). */
+export const navDividerClassNames = { root: 'wave-nav-divider' } as const;
+
+/**
+ * Nav.AppItem: `root` on the `<a>` (with `href`) or `<button>`; `listItem` on the list item around
+ * it; `icon` on the icon span; `content` on the label span.
+ */
+export const navAppItemClassNames = {
+  root: 'wave-nav-app-item',
+  listItem: 'wave-nav-app-item__list-item',
+  icon: 'wave-nav-app-item__icon',
+  content: 'wave-nav-app-item__content',
+} as const;
+
+/**
+ * Nav.AppItemStatic: `root` on the `<div>`; `listItem` on the list item around it; `icon` on the
+ * icon span; `content` on the label span.
+ */
+export const navAppItemStaticClassNames = {
+  root: 'wave-nav-app-item-static',
+  listItem: 'wave-nav-app-item-static__list-item',
+  icon: 'wave-nav-app-item-static__icon',
+  content: 'wave-nav-app-item-static__content',
+} as const;
+
+/**
+ * NavDrawer (a Drawer variant: it also carries Drawer's root, and its backdrop Drawer's backdrop
+ * class): `root` on the panel (the portaled `role="dialog"` element of an overlay drawer, the
+ * panel element of an inline one); `backdrop` on the backdrop of a modal overlay; `nav` on the
+ * navigation landmark that fills the panel.
+ */
+export const navDrawerClassNames = {
+  root: 'wave-nav-drawer',
+  backdrop: 'wave-nav-drawer__backdrop',
+  nav: 'wave-nav-drawer__nav',
+} as const;
+
+/** NavDrawer.Header: `root` on the header row. */
+export const navDrawerHeaderClassNames = { root: 'wave-nav-drawer-header' } as const;
+
+/** NavDrawer.Body: `root` on the scrolling body; `list` on its list. */
+export const navDrawerBodyClassNames = {
+  root: 'wave-nav-drawer-body',
+  list: 'wave-nav-drawer-body__list',
+} as const;
+
+/** NavDrawer.Footer: `root` on the footer; `list` on its list. */
+export const navDrawerFooterClassNames = {
+  root: 'wave-nav-drawer-footer',
+  list: 'wave-nav-drawer-footer__list',
+} as const;
+
+/**
+ * Hamburger (a Button variant: it also carries Button's root and icon classes): `root` on the
+ * `<button>`; `icon` on the icon span.
+ */
+export const hamburgerClassNames = {
+  root: 'wave-hamburger',
+  icon: 'wave-hamburger__icon',
 } as const;
 
 /**
@@ -1085,20 +1233,28 @@ export const stepperStepClassNames = {
 // ---------------------------------------------------------------------------
 
 /**
- * Dialog.Content: `root` on the surface (`role="dialog"` or `"alertdialog"`); `backdrop` on the
- * backdrop around it; `closeButton` on the built-in Close button (which also carries Button's
- * root); `body` on the scrolling body. The heading of its `title` prop carries Dialog.Title's
- * class.
+ * Dialog.Content: `root` on the surface (`role="dialog"` or `"alertdialog"`, also while kept
+ * mounted); `backdrop` on the backdrop behind it; `positioner` on the element that centres the
+ * surface (the backdrop's sibling); `titleActions` on the area of header buttons in the top end
+ * corner; `titleAction` on the element of the `titleAction` slot; `closeButton` on the built-in
+ * Close button (which also carries Button's root); `body` on the scrolling body. The heading of
+ * its `title` prop carries Dialog.Title's class.
  */
 export const dialogContentClassNames = {
   root: 'wave-dialog-content',
   backdrop: 'wave-dialog-content__backdrop',
+  positioner: 'wave-dialog-content__positioner',
+  titleActions: 'wave-dialog-content__title-actions',
+  titleAction: 'wave-dialog-content__title-action',
   closeButton: 'wave-dialog-content__close-button',
   body: 'wave-dialog-content__body',
 } as const;
 
-/** Dialog.Title: `root` on the `<h2>`. */
-export const dialogTitleClassNames = { root: 'wave-dialog-title' } as const;
+/** Dialog.Title: `root` on the `<h2>`; `action` on the element of its `action` slot. */
+export const dialogTitleClassNames = {
+  root: 'wave-dialog-title',
+  action: 'wave-dialog-title__action',
+} as const;
 
 /** Dialog.Footer: `root` on the footer element. */
 export const dialogFooterClassNames = { root: 'wave-dialog-footer' } as const;
@@ -1120,21 +1276,54 @@ export const tooltipClassNames = {
 } as const;
 
 /**
- * Drawer: `root` on the portaled panel (`role="dialog"`, while open); `backdrop` on the backdrop;
- * `header` on the header row; `closeButton` on the Close button (which also carries Button's
- * root); `body` on the scrolling body. The heading of its `title` prop carries Drawer.Title's
- * class.
+ * Drawer: `root` on the panel (the portaled `role="dialog"` element of an overlay drawer, while it
+ * is open or kept mounted, or the `<aside>` of an inline one); `backdrop` on the backdrop of a
+ * modal or alert overlay drawer; `header` on the built-in header row (absent with a
+ * Drawer.Header); `titleAction` on the element of the `titleAction` slot in that row;
+ * `closeButton` on every built-in Close button (which also carries Button's root), in the built-in
+ * header and in each Drawer.HeaderTitle; `body` on the scrolling body. The heading of its `title`
+ * prop carries Drawer.Title's class. The panel carries `data-type`, `data-position` and
+ * `data-size`; the body, the header and the footer carry `data-scroll-state`.
  */
 export const drawerClassNames = {
   root: 'wave-drawer',
   backdrop: 'wave-drawer__backdrop',
   header: 'wave-drawer__header',
+  titleAction: 'wave-drawer__title-action',
   closeButton: 'wave-drawer__close-button',
   body: 'wave-drawer__body',
 } as const;
 
-/** Drawer.Title: `root` on the `<h2>`. */
+/**
+ * Drawer.Title: `root` on its heading (an `<h2>`, or the level `headingLevel` picks); also on the
+ * heading of Drawer's `title` prop.
+ */
 export const drawerTitleClassNames = { root: 'wave-drawer-title' } as const;
+
+/** Drawer.Header: `root` on the header element (it replaces the built-in header row). */
+export const drawerHeaderClassNames = { root: 'wave-drawer-header' } as const;
+
+/**
+ * Drawer.HeaderTitle: `root` on the title row; `heading` on the heading that names the drawer;
+ * `action` on the element of the `action` slot. Its Close button carries Drawer's `closeButton`.
+ */
+export const drawerHeaderTitleClassNames = {
+  root: 'wave-drawer-header-title',
+  heading: 'wave-drawer-header-title__heading',
+  action: 'wave-drawer-header-title__action',
+} as const;
+
+/** Drawer.HeaderNavigation: `root` on the navigation element. */
+export const drawerHeaderNavigationClassNames = { root: 'wave-drawer-header-navigation' } as const;
+
+/**
+ * Drawer.Body: `root` on the scrolling body while a Drawer.Body gives it its props (the body also
+ * carries Drawer's `body`), or on the element of a Drawer.Body rendered inside the body.
+ */
+export const drawerBodyClassNames = { root: 'wave-drawer-body' } as const;
+
+/** Drawer.Footer: `root` on the footer element. */
+export const drawerFooterClassNames = { root: 'wave-drawer-footer' } as const;
 
 /**
  * TeachingPopover: `root` on the `role="dialog"` surface; `beak` on the arrow; `closeButton`,

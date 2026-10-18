@@ -910,6 +910,39 @@ describe('getStableClassNames', () => {
     ]);
   });
 
+  // The Phase 6 variants (0.11 spec §1.4): registered in wave A, before their components exist.
+  it("getStableClassNames('TagPickerOption') carries wave-option then wave-tag-picker-option", () => {
+    expect(getStableClassNames('TagPickerOption')).toEqual({
+      constant: 'tagPickerOptionClassNames',
+      root: 'wave-tag-picker-option',
+      carries: ['wave-option', 'wave-tag-picker-option'],
+    });
+  });
+
+  it("getStableClassNames('TagPickerGroup') carries wave-tag-group then wave-tag-picker-group", () => {
+    expect(getStableClassNames('TagPickerGroup')).toEqual({
+      constant: 'tagPickerGroupClassNames',
+      root: 'wave-tag-picker-group',
+      carries: ['wave-tag-group', 'wave-tag-picker-group'],
+    });
+  });
+
+  it("getStableClassNames('NavDrawer') carries wave-drawer then wave-nav-drawer", () => {
+    expect(getStableClassNames('NavDrawer')).toEqual({
+      constant: 'navDrawerClassNames',
+      root: 'wave-nav-drawer',
+      carries: ['wave-drawer', 'wave-nav-drawer'],
+    });
+  });
+
+  it("getStableClassNames('Hamburger') carries wave-button then wave-hamburger", () => {
+    expect(getStableClassNames('Hamburger')).toEqual({
+      constant: 'hamburgerClassNames',
+      root: 'wave-hamburger',
+      carries: ['wave-button', 'wave-hamburger'],
+    });
+  });
+
   it('knows no constant for internal components, contexts or an empty name', () => {
     expect(getStableClassNames('MenuItemRow')).toBeUndefined();
     expect(getStableClassNames('ToasterContext')).toBeUndefined();

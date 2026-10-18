@@ -198,10 +198,29 @@ const menuitem = (name: string) => screen.getByRole('menuitem', { name });
 
 /**
  * Flat names of compound members that a package attaches before the barrels export them (the
- * barrel test's twin of `PENDING_FLAT_EXPORTS` in `scripts/verify-dist.mjs`). Empty since wave C
- * of 0.8; a later phase whose parts land before their flat names lists them here the same way.
+ * barrel test's twin of `PENDING_FLAT_EXPORTS` in `scripts/verify-dist.mjs`). Flat names of the
+ * Phase 6 members (spec §1.5); INTEGRATION empties the list in wave D. `TagPickerOption` is
+ * listed although the barrel names it: it exports only the type, so the runtime barrel has no
+ * such value.
  */
-const PENDING_FLAT_MEMBERS: readonly string[] = [];
+const PENDING_FLAT_MEMBERS: readonly string[] = [
+  'DrawerBody',
+  'DrawerFooter',
+  'DrawerHeader',
+  'DrawerHeaderNavigation',
+  'DrawerHeaderTitle',
+  'NavAppItem',
+  'NavAppItemStatic',
+  'NavDivider',
+  'NavSectionHeader',
+  'TagPickerButton',
+  'TagPickerControl',
+  'TagPickerGroup',
+  'TagPickerInput',
+  'TagPickerList',
+  'TagPickerOption',
+  'TagPickerOptionGroup',
+];
 
 describe('public barrel (spec §5.11, C-COMPOUND)', () => {
   const barrel = Wave as unknown as Record<string, unknown>;
