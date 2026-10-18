@@ -1,12 +1,23 @@
 import { afterEach, describe, it, expect, vi } from 'vitest';
 import * as React from 'react';
 import { renderToString } from 'react-dom/server';
-import { act, fireEvent, render, renderHook, screen } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, renderHook, screen } from '@testing-library/react';
+import { Drawer } from '../Drawer';
 import { scrollSeparatorClasses, useScrollState, type DrawerScrollState } from '../Drawer.scroll';
+import { Button } from '../../button/Button';
+import {
+  drawerClassNames,
+  drawerFooterClassNames,
+  drawerHeaderClassNames,
+} from '../../../lib/classNames';
+import { getTopmostLayer } from '../../../lib/layers';
 import { installResizeObserverMock } from '../../../test-utils';
 
 afterEach(() => {
+  cleanup();
   vi.restoreAllMocks();
+  expect(getTopmostLayer()).toBeNull();
+  expect(document.querySelectorAll('[inert]')).toHaveLength(0);
 });
 
 interface Metrics {
@@ -179,5 +190,188 @@ describe('scrollSeparatorClasses (P6-05 D80, D81)', () => {
       'data-[scroll-state=middle]:border-border',
       'forced-colors:border-[CanvasText]',
     ]);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// The scroll state of a Drawer (P6-05 D80, D81, D82)
+// ---------------------------------------------------------------------------
+
+/** A Drawer whose body, header area and footer render the scroll state. */
+function renderDrawer(options: { composed?: boolean; content?: React.ReactNode } = {}) {
+  const { composed = false, content = <p>Fields</p> } = options;
+  return render(
+    <Drawer defaultOpen title={composed ? undefined : 'Filters'}>
+      {composed && (
+        <Drawer.Header data-testid="header">
+          <Drawer.HeaderTitle>Filters</Drawer.HeaderTitle>
+        </Drawer.Header>
+      )}
+      {content}
+      <Drawer.Footer data-testid="footer">
+        <Button>Apply</Button>
+      </Drawer.Footer>
+    </Drawer>,
+  );
+}
+
+function panel() {
+  return screen.getByRole('dialog', { name: 'Filters' });
+}
+
+function body() {
+  const element = panel().querySelector<HTMLElement>(`.${drawerClassNames.body}`);
+  if (!element) throw new Error('no drawer body');
+  return element;
+}
+
+/** The body, the header area and the footer: the elements that render the scroll state. */
+function stateElements(): HTMLElement[] {
+  const header = panel().firstElementChild as HTMLElement;
+  return [body(), header, screen.getByTestId('footer')];
+}
+
+function expectState(state: DrawerScrollState) {
+  for (const element of stateElements()) {
+    expect(element).toHaveAttribute('data-scroll-state', state);
+  }
+}
+
+describe('Drawer scroll state (P6-05 D80, D81)', () => {
+  it("is 'none' on the body, the built-in header and the footer while the content fits", () => {
+    renderDrawer();
+    expect(panel().firstElementChild).toHaveClass(drawerClassNames.header);
+    expectState('none');
+  });
+
+  it('follows the body: top, middle, bottom, with the 1px tolerance at the end', () => {
+    renderDrawer();
+    stubMetrics(body(), { scrollHeight: 1000, clientHeight: 300 });
+    scroll(body(), 0);
+    expectState('top');
+    scroll(body(), 350);
+    expectState('middle');
+    scroll(body(), 700);
+    expectState('bottom');
+    scroll(body(), 350);
+    expectState('middle');
+    // scrollTop + clientHeight = scrollHeight - 0.4
+    scroll(body(), 699.6);
+    expectState('bottom');
+  });
+
+  it('mirrors the state on a placed Drawer.Header', () => {
+    renderDrawer({ composed: true });
+    expect(screen.getByTestId('header')).toHaveClass(drawerHeaderClassNames.root);
+    stubMetrics(body(), { scrollHeight: 1000, clientHeight: 300 });
+    scroll(body(), 350);
+    expectState('middle');
+  });
+
+  it('measures again when the content grows (MutationObserver)', async () => {
+    function Growing({ long }: { long: boolean }) {
+      return (
+        <Drawer defaultOpen title="Filters">
+          <p>Fields</p>
+          {long && <p>More fields</p>}
+          <Drawer.Footer data-testid="footer">
+            <Button>Apply</Button>
+          </Drawer.Footer>
+        </Drawer>
+      );
+    }
+    const { rerender } = render(<Growing long={false} />);
+    expectState('none');
+    stubMetrics(body(), { scrollHeight: 900, clientHeight: 300, scrollTop: 0 });
+    rerender(<Growing long />);
+    await act(async () => {});
+    expectState('top');
+  });
+
+  it("measures again when a child's size changes (ResizeObserver)", () => {
+    const resizeObserver = installResizeObserverMock();
+    try {
+      renderDrawer({ content: <div data-testid="child">Fields</div> });
+      expectState('none');
+      stubMetrics(body(), { scrollHeight: 900, clientHeight: 300, scrollTop: 0 });
+      resizeObserver.trigger(screen.getByTestId('child'));
+      expectState('top');
+    } finally {
+      resizeObserver.restore();
+    }
+  });
+
+  it('measures on scroll without a ResizeObserver', () => {
+    expect(typeof ResizeObserver).toBe('undefined');
+    renderDrawer();
+    stubMetrics(body(), { scrollHeight: 900, clientHeight: 300 });
+    scroll(body(), 600);
+    expectState('bottom');
+  });
+
+  it('works under StrictMode', () => {
+    render(
+      <React.StrictMode>
+        <Drawer defaultOpen title="Filters">
+          <p>Fields</p>
+          <Drawer.Footer data-testid="footer">
+            <Button>Apply</Button>
+          </Drawer.Footer>
+        </Drawer>
+      </React.StrictMode>,
+    );
+    expectState('none');
+    stubMetrics(body(), { scrollHeight: 900, clientHeight: 300 });
+    scroll(body(), 300);
+    expectState('middle');
+  });
+
+  it("does not re-render the consumer's content when the state changes", () => {
+    // The Profiler reports every commit in which the content rendered.
+    const onRender = vi.fn();
+    renderDrawer({
+      content: (
+        <React.Profiler id="content" onRender={onRender}>
+          <p>Fields</p>
+        </React.Profiler>
+      ),
+    });
+    // The mount renders it (the root renders again once its panel element attaches, as in 0.10).
+    const initial = onRender.mock.calls.length;
+    expect(initial).toBeGreaterThan(0);
+    stubMetrics(body(), { scrollHeight: 900, clientHeight: 300 });
+    scroll(body(), 0);
+    scroll(body(), 300);
+    scroll(body(), 600);
+    expectState('bottom');
+    expect(onRender).toHaveBeenCalledTimes(initial);
+  });
+
+  it('draws the separators with the classes of scrollSeparatorClasses', () => {
+    const header = scrollSeparatorClasses.header.split(' ');
+    const footer = scrollSeparatorClasses.footer.split(' ');
+    const { unmount } = renderDrawer();
+    expect(panel().firstElementChild).toHaveClass(drawerClassNames.header, ...header);
+    expect(screen.getByTestId('footer')).toHaveClass(drawerFooterClassNames.root, ...footer);
+    // The built-in header's 0.10 line becomes the scroll-reactive separator (D82).
+    expect(panel().firstElementChild).not.toHaveClass('border-border');
+    unmount();
+
+    renderDrawer({ composed: true });
+    expect(screen.getByTestId('header')).toHaveClass(drawerHeaderClassNames.root, ...header);
+    expect(body().className).not.toMatch(/scroll-state/);
+  });
+
+  it('adds no document listener while it opens and scrolls', () => {
+    const add = vi.spyOn(document, 'addEventListener');
+    const { unmount } = renderDrawer();
+    stubMetrics(body(), { scrollHeight: 900, clientHeight: 300 });
+    const before = add.mock.calls.length;
+    scroll(body(), 300);
+    scroll(body(), 600);
+    expect(add.mock.calls.slice(before)).toEqual([]);
+    unmount();
+    // Opening registers the modal layer's own listeners (0.10); the scroll store adds none.
+    expect(add.mock.calls.map(([type]) => type)).not.toContain('scroll');
   });
 });

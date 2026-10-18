@@ -6,6 +6,7 @@ import {
   type ModalRequestOpen,
   type ModalTrigger,
 } from './Dialog.shared';
+import type { DrawerScrollState } from './Drawer.scroll';
 
 /*
  * The Drawer's public types and its contexts. Imports no component: the root, the parts and the
@@ -46,6 +47,8 @@ export interface DrawerContextValue {
   panelId: string;
   /** `true` for sub-components rendered inside the panel (a `Drawer.Trigger` there is misplaced). */
   inPanel: boolean;
+  /** The accessible name of the built-in Close button (the Drawer's `closeLabel`). */
+  closeLabel: string;
 }
 
 /** Provided by the Drawer root (`inPanel: false`) and again inside its panel (`inPanel: true`). */
@@ -59,6 +62,7 @@ const inertDrawerContext: DrawerContextValue = {
   trigger: inertModalTrigger,
   panelId: '',
   inPanel: false,
+  closeLabel: 'Close',
 };
 
 /**
@@ -69,3 +73,32 @@ const inertDrawerContext: DrawerContextValue = {
 export function useDrawerContext(componentName: string): DrawerContextValue {
   return useRequiredContext(DrawerContext, componentName, 'Drawer', () => inertDrawerContext);
 }
+
+/**
+ * Where the Drawer put a layout part (`Drawer.Header`, `Drawer.Body`, `Drawer.Footer`): `'placed'`
+ * around the parts its scan of its direct children placed in the header area or after the body,
+ * `'content'` around the body content. Every part provides `'content'` to its own children, so a
+ * part nested in another part, in an element or in a component of yours reads `'content'`: it
+ * renders where it is and warns. `null` outside a Drawer's panel (read as `'content'`).
+ */
+export type DrawerPartPlacement = 'placed' | 'content';
+
+/** See {@link DrawerPartPlacement}. */
+export const DrawerPartContext = React.createContext<DrawerPartPlacement | null>(null);
+DrawerPartContext.displayName = 'DrawerPartContext';
+
+/**
+ * `true` inside a `Drawer.Header` (which provides it to its children), so a `Drawer.HeaderTitle`
+ * there ends with the built-in Close button. The panel provides `false`, so a Drawer opened from a
+ * header does not inherit it.
+ */
+export const DrawerHeaderContext = React.createContext(false);
+DrawerHeaderContext.displayName = 'DrawerHeaderContext';
+
+/**
+ * The scroll state of the panel's scrolling body, which the built-in header, `Drawer.Header` and
+ * `Drawer.Footer` render as `data-scroll-state` to draw their separators. `null` outside a
+ * Drawer's panel (read as `'none'`).
+ */
+export const DrawerScrollStateContext = React.createContext<DrawerScrollState | null>(null);
+DrawerScrollStateContext.displayName = 'DrawerScrollStateContext';

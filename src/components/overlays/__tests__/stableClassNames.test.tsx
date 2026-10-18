@@ -7,7 +7,12 @@ import {
   dialogContentClassNames,
   dialogFooterClassNames,
   dialogTitleClassNames,
+  drawerBodyClassNames,
   drawerClassNames,
+  drawerFooterClassNames,
+  drawerHeaderClassNames,
+  drawerHeaderNavigationClassNames,
+  drawerHeaderTitleClassNames,
   drawerTitleClassNames,
   popoverContentClassNames,
   teachingPopoverClassNames,
@@ -91,6 +96,59 @@ describe('stable class names (P3-00): overlays folder', () => {
     expect(close).toHaveClass(buttonClassNames.root, drawerClassNames.closeButton);
     expect(close.parentElement).toHaveClass(drawerClassNames.header);
     expect(screen.getByText('Filter fields').parentElement).toHaveClass(drawerClassNames.body);
+  });
+
+  it('Drawer.Header, HeaderTitle (heading, action, the Close Button), HeaderNavigation, Body and Footer', () => {
+    render(
+      <Drawer defaultOpen>
+        <Drawer.Header data-testid="header">
+          <Drawer.HeaderNavigation aria-label="Levels">
+            <button type="button">Back</button>
+          </Drawer.HeaderNavigation>
+          <Drawer.HeaderTitle
+            data-testid="title-row"
+            action={
+              <button type="button" aria-label="Expand">
+                +
+              </button>
+            }
+          >
+            Settings
+          </Drawer.HeaderTitle>
+        </Drawer.Header>
+        <Drawer.Body data-testid="body">
+          <p>Settings fields</p>
+        </Drawer.Body>
+        <Drawer.Footer data-testid="footer">
+          <button type="button">Apply</button>
+        </Drawer.Footer>
+      </Drawer>,
+    );
+    const panel = screen.getByRole('dialog', { name: 'Settings' });
+    const header = screen.getByTestId('header');
+    // A placed Header carries only its own class; the built-in row's class is not rendered.
+    expect(header).toHaveClass(drawerHeaderClassNames.root);
+    expect(header).not.toHaveClass(drawerClassNames.header);
+    expect(panel.querySelector(`.${drawerClassNames.header}`)).toBeNull();
+    expect(screen.getByRole('navigation', { name: 'Levels' })).toHaveClass(
+      drawerHeaderNavigationClassNames.root,
+    );
+    const row = screen.getByTestId('title-row');
+    expect(row).toHaveClass(drawerHeaderTitleClassNames.root);
+    expect(screen.getByRole('heading', { name: 'Settings' })).toHaveClass(
+      drawerHeaderTitleClassNames.heading,
+    );
+    expect(screen.getByRole('button', { name: 'Expand' }).parentElement).toHaveClass(
+      drawerHeaderTitleClassNames.action,
+    );
+    const close = screen.getByRole('button', { name: 'Close' });
+    expect(close).toHaveClass(buttonClassNames.root, drawerClassNames.closeButton);
+    expect(close.parentElement).toBe(row);
+    // The placed Body's element is the scrolling body: both classes on one element.
+    const body = screen.getByTestId('body');
+    expect(body).toHaveClass(drawerClassNames.body, drawerBodyClassNames.root);
+    expect(body.parentElement).toBe(panel);
+    expect(screen.getByTestId('footer')).toHaveClass(drawerFooterClassNames.root);
   });
 
   it('Drawer.Title: the root on the heading', () => {

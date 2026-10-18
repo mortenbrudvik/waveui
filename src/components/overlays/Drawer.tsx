@@ -1,4 +1,13 @@
-import { DrawerClose, DrawerTitle, DrawerTrigger } from './Drawer.parts';
+import {
+  DrawerBody,
+  DrawerClose,
+  DrawerFooter,
+  DrawerHeader,
+  DrawerHeaderNavigation,
+  DrawerHeaderTitle,
+  DrawerTitle,
+  DrawerTrigger,
+} from './Drawer.parts';
 import { DrawerRoot } from './Drawer.root';
 
 export type {
@@ -14,6 +23,11 @@ export type {
   DrawerCloseProps,
   DrawerCloseRenderProps,
   DrawerTitleProps,
+  DrawerHeaderProps,
+  DrawerHeaderTitleProps,
+  DrawerHeaderNavigationProps,
+  DrawerBodyProps,
+  DrawerFooterProps,
 } from './Drawer.parts';
 
 /**
@@ -39,22 +53,51 @@ export type {
  *   `className` (a height class for `bottom`) replaces the size. The panel pads the safe-area
  *   insets of the screen edges it touches (the iOS home indicator, once the page sets
  *   `viewport-fit=cover`). Both render as `data-position` and `data-size`.
+ * - **Layout**: the `title` prop and the built-in Close button make the header row; a
+ *   `Drawer.Header` replaces it, with a `Drawer.HeaderNavigation` row (a Back button, commands)
+ *   and a `Drawer.HeaderTitle` (the heading, an `action` area and the Close button). The rest of
+ *   the content scrolls in the body (`Drawer.Body` gives it your props); a `Drawer.Footer` is an
+ *   action row below the body that never scrolls. Make the parts direct children of the Drawer (a
+ *   Fragment there is fine). The header draws a line under itself once the body is scrolled, the
+ *   footer one above itself while content continues below: the body, the header and the footer
+ *   render the body's scroll state as `data-scroll-state` (`none`, `top`, `middle`, `bottom`).
  *
  * The sub-components are also exported under flat names (`DrawerTrigger`, `DrawerClose`,
- * `DrawerTitle`) for React Server Components, which cannot use the dotted form; dotted access
+ * `DrawerTitle`, `DrawerHeader`, `DrawerHeaderTitle`, `DrawerHeaderNavigation`, `DrawerBody`,
+ * `DrawerFooter`) for React Server Components, which cannot use the dotted form; dotted access
  * (`Drawer.Trigger`) needs a client file.
  *
  * @example
- * <Drawer title="Filters">
+ * <Drawer>
  *   <Drawer.Trigger><Button>Filters</Button></Drawer.Trigger>
- *   <FilterForm />
- *   <Drawer.Close><Button appearance="primary">Apply</Button></Drawer.Close>
+ *   <Drawer.Header>
+ *     <Drawer.HeaderTitle>Filters</Drawer.HeaderTitle>
+ *   </Drawer.Header>
+ *   <FilterForm id="filters" />
+ *   <Drawer.Footer>
+ *     <Button appearance="primary" type="submit" form="filters">Apply</Button>
+ *     <Drawer.Close><Button>Cancel</Button></Drawer.Close>
+ *   </Drawer.Footer>
  * </Drawer>
  */
 export const Drawer = /* @__PURE__ */ Object.assign(DrawerRoot, {
   Trigger: DrawerTrigger,
   Close: DrawerClose,
   Title: DrawerTitle,
+  Header: DrawerHeader,
+  HeaderTitle: DrawerHeaderTitle,
+  HeaderNavigation: DrawerHeaderNavigation,
+  Body: DrawerBody,
+  Footer: DrawerFooter,
 });
 
-export { DrawerTrigger, DrawerClose, DrawerTitle };
+export {
+  DrawerTrigger,
+  DrawerClose,
+  DrawerTitle,
+  DrawerHeader,
+  DrawerHeaderTitle,
+  DrawerHeaderNavigation,
+  DrawerBody,
+  DrawerFooter,
+};

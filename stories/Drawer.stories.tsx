@@ -1,8 +1,13 @@
 import * as React from 'react';
 import type { Meta, StoryObj } from '@storybook/react';
 import { fn } from 'storybook/test';
-import { Drawer, Button, Tooltip } from '../src';
+import { Drawer, Button, Field, Input, Switch, Tooltip } from '../src';
 import type { DrawerPosition, DrawerProps } from '../src';
+
+/** Stories that render the drawer open show it in an iframe, so the docs page stays usable. */
+const openStoryParameters = {
+  docs: { story: { inline: false, iframeHeight: 480 } },
+};
 
 const positions = [
   'start',
@@ -15,6 +20,78 @@ const positions = [
 const sizes = ['small', 'medium', 'large', 'full'] as const satisfies readonly NonNullable<
   DrawerProps['size']
 >[];
+
+/** The thirty fields of the LongContent drawer. */
+const longFields = [
+  'Keyword',
+  'Author',
+  'Title',
+  'Publisher',
+  'Series',
+  'Edition',
+  'Language',
+  'Translator',
+  'Illustrator',
+  'Editor',
+  'Genre',
+  'Subject',
+  'Audience',
+  'Format',
+  'Binding',
+  'Pages from',
+  'Pages to',
+  'Published after',
+  'Published before',
+  'Price from',
+  'Price to',
+  'Currency',
+  'Condition',
+  'Seller',
+  'Location',
+  'Shipping',
+  'Rating',
+  'Award',
+  'Collection',
+  'Notes',
+];
+
+/** Paragraphs of the ScrollableTextBody drawer. */
+const termsParagraphs = Array.from(
+  { length: 14 },
+  (_, index) =>
+    `Section ${index + 1}. These terms describe how the service may be used, what it stores and how either party can end the agreement.`,
+);
+
+/** Decorative "expand" glyph (the Button hides its icon slot from assistive technology). */
+const ExpandIcon = () => (
+  <svg viewBox="0 0 16 16" width="16" height="16" fill="none" stroke="currentColor">
+    <path
+      d="M9.5 2.5h4v4M13.5 2.5 9 7M6.5 13.5h-4v-4M2.5 13.5 7 9"
+      strokeWidth="1.2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    />
+  </svg>
+);
+
+/** Decorative Back arrow, mirrored in right-to-left layouts (it points to the inline start). */
+const BackIcon = () => (
+  <svg
+    viewBox="0 0 16 16"
+    width="16"
+    height="16"
+    fill="none"
+    stroke="currentColor"
+    className="wave-rtl:-scale-x-100"
+  >
+    <path
+      d="M13.5 8h-11M7 3.5 2.5 8 7 12.5"
+      strokeWidth="1.2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    />
+  </svg>
+);
 
 const meta = {
   title: 'Components/Overlays/Drawer',
@@ -44,11 +121,11 @@ function renderWithTrigger({ children, ...args }: React.ComponentProps<typeof Dr
         <Button appearance="primary">Open drawer</Button>
       </Drawer.Trigger>
       <p>{children}</p>
-      <div className="mt-4 flex justify-end gap-2">
+      <Drawer.Footer>
         <Drawer.Close>
           <Button appearance="primary">Apply</Button>
         </Drawer.Close>
-      </div>
+      </Drawer.Footer>
     </Drawer>
   );
 }
@@ -94,6 +171,251 @@ export const Sizes: Story = {
 export const BottomPosition: Story = {
   args: { position: 'bottom', size: 'medium', title: 'Details' },
   render: renderWithTrigger,
+};
+
+/**
+ * The composed layout, rendered open: `Drawer.Header` replaces the built-in header row, and its
+ * `Drawer.HeaderTitle` holds the heading, an `action` (here an icon button) and the built-in Close
+ * button, in that order. The content scrolls in the body; `Drawer.Footer` is an action row below
+ * the body that never scrolls, its actions at the inline start.
+ */
+export const HeaderAndFooter: Story = {
+  args: { defaultOpen: true },
+  parameters: openStoryParameters,
+  render: function HeaderAndFooterDrawer({ children, title: _title, ...args }) {
+    return (
+      <Drawer {...args}>
+        <Drawer.Trigger>
+          <Button appearance="primary">Open drawer</Button>
+        </Drawer.Trigger>
+        <Drawer.Header>
+          <Drawer.HeaderTitle
+            action={
+              <Button appearance="subtle" size="small" icon={<ExpandIcon />} aria-label="Expand" />
+            }
+          >
+            Filters
+          </Drawer.HeaderTitle>
+        </Drawer.Header>
+        <p>{children}</p>
+        <Drawer.Footer>
+          <Drawer.Close>
+            <Button appearance="primary">Apply</Button>
+          </Drawer.Close>
+          <Button>Reset</Button>
+        </Drawer.Footer>
+      </Drawer>
+    );
+  },
+};
+
+/**
+ * Content taller than the panel scrolls in the body, between a header and a footer that stay in
+ * place. The separators follow the scroll position: the header draws a line under itself once the
+ * body is scrolled away from its top, the footer one above itself while more content follows
+ * (`data-scroll-state` on the body, the header and the footer).
+ */
+export const LongContent: Story = {
+  args: { title: 'All filters' },
+  render: function LongContentDrawer({ children: _children, ...args }) {
+    return (
+      <Drawer {...args}>
+        <Drawer.Trigger>
+          <Button appearance="primary">Open all filters</Button>
+        </Drawer.Trigger>
+        <div className="flex flex-col gap-3">
+          {longFields.map((field) => (
+            <Field key={field} label={field}>
+              <Input />
+            </Field>
+          ))}
+        </div>
+        <Drawer.Footer>
+          <Drawer.Close>
+            <Button appearance="primary">Apply</Button>
+          </Drawer.Close>
+          <Button>Reset</Button>
+        </Drawer.Footer>
+      </Drawer>
+    );
+  },
+};
+
+/**
+ * A form in the body and its submit button in the footer: the button names the form with the
+ * native `form` attribute, so it submits it from outside, and Enter in a field submits it too.
+ * Here a submit saves the values and closes the drawer.
+ */
+export const FormInDrawer: Story = {
+  render: function FormInDrawerDrawer({ children: _children, title: _title, ...args }) {
+    const formId = React.useId();
+    const [open, setOpen] = React.useState(false);
+    const [saved, setSaved] = React.useState('');
+    const handleOpenChange: NonNullable<DrawerProps['onOpenChange']> = (next, details) => {
+      setOpen(next);
+      args.onOpenChange?.(next, details);
+    };
+    const handleSubmit = (event: React.FormEvent<HTMLFormElement>) => {
+      event.preventDefault();
+      const name = new FormData(event.currentTarget).get('displayName');
+      setSaved(typeof name === 'string' ? name : '');
+      handleOpenChange(false);
+    };
+    return (
+      <div className="flex flex-col items-start gap-2">
+        {/* The story owns the controlled pair; every other arg is forwarded. */}
+        <Drawer {...args} open={open} onOpenChange={handleOpenChange}>
+          <Drawer.Trigger>
+            <Button appearance="primary">Edit profile</Button>
+          </Drawer.Trigger>
+          <Drawer.Header>
+            <Drawer.HeaderTitle>Profile</Drawer.HeaderTitle>
+          </Drawer.Header>
+          <form
+            id={formId}
+            aria-label="Profile"
+            className="flex flex-col gap-3"
+            onSubmit={handleSubmit}
+          >
+            <Field label="Display name">
+              <Input name="displayName" defaultValue={saved} />
+            </Field>
+            <Field label="Email">
+              <Input name="email" type="email" />
+            </Field>
+          </form>
+          <Drawer.Footer>
+            <Button appearance="primary" type="submit" form={formId}>
+              Save
+            </Button>
+            <Drawer.Close>
+              <Button>Cancel</Button>
+            </Drawer.Close>
+          </Drawer.Footer>
+        </Drawer>
+        <p>{saved ? `Saved as ${saved}.` : 'Nothing saved yet.'}</p>
+      </div>
+    );
+  },
+};
+
+/** The levels of the MultipleLevels drawer. */
+type SettingsLevel = 'settings' | 'notifications' | 'privacy';
+
+const levelTitles: Record<SettingsLevel, string> = {
+  settings: 'Settings',
+  notifications: 'Notifications',
+  privacy: 'Privacy',
+};
+
+/**
+ * A drawer with levels: `Drawer.HeaderNavigation` holds the Back button of a deeper level (a
+ * navigation landmark, named because the page may have others), and the `Drawer.HeaderTitle`
+ * follows the level. Focus moves to the Back button when a level opens and back to the item that
+ * opened it on Back. The Back arrow mirrors in right-to-left layouts.
+ */
+export const MultipleLevels: Story = {
+  render: function MultipleLevelsDrawer({ children: _children, title: _title, ...args }) {
+    const [level, setLevel] = React.useState<SettingsLevel>('settings');
+    const backRef = React.useRef<HTMLButtonElement>(null);
+    const itemRefs = React.useRef<Partial<Record<SettingsLevel, HTMLButtonElement | null>>>({});
+    // Set by a level change from inside the drawer; the layout effect then moves focus in the same
+    // commit, since the element that had it (the item, or Back) is gone.
+    const returnToRef = React.useRef<SettingsLevel | null>(null);
+    React.useLayoutEffect(() => {
+      const returnTo = returnToRef.current;
+      if (returnTo === null) return;
+      returnToRef.current = null;
+      if (level === 'settings') itemRefs.current[returnTo]?.focus();
+      else backRef.current?.focus();
+    }, [level]);
+    const openLevel = (next: SettingsLevel) => {
+      returnToRef.current = level === 'settings' ? next : level;
+      setLevel(next);
+    };
+    const handleOpenChange: NonNullable<DrawerProps['onOpenChange']> = (next, details) => {
+      if (!next) setLevel('settings');
+      args.onOpenChange?.(next, details);
+    };
+    return (
+      <Drawer {...args} onOpenChange={handleOpenChange}>
+        <Drawer.Trigger>
+          <Button appearance="primary">Open settings</Button>
+        </Drawer.Trigger>
+        <Drawer.Header>
+          {level !== 'settings' && (
+            <Drawer.HeaderNavigation aria-label="Settings levels">
+              <Button
+                ref={backRef}
+                appearance="subtle"
+                icon={<BackIcon />}
+                onClick={() => openLevel('settings')}
+              >
+                Back
+              </Button>
+            </Drawer.HeaderNavigation>
+          )}
+          <Drawer.HeaderTitle>{levelTitles[level]}</Drawer.HeaderTitle>
+        </Drawer.Header>
+        {level === 'settings' ? (
+          <div className="flex flex-col items-start gap-2">
+            {(['notifications', 'privacy'] as const).map((item) => (
+              <Button
+                key={item}
+                ref={(node) => {
+                  itemRefs.current[item] = node;
+                }}
+                appearance="subtle"
+                onClick={() => openLevel(item)}
+              >
+                {levelTitles[item]}
+              </Button>
+            ))}
+          </div>
+        ) : level === 'notifications' ? (
+          <div className="flex flex-col gap-3">
+            <Switch label="Email notifications" defaultChecked />
+            <Switch label="Push notifications" />
+          </div>
+        ) : (
+          <div className="flex flex-col gap-3">
+            <Switch label="Show my status" defaultChecked />
+            <Switch label="Share usage data" />
+          </div>
+        )}
+      </Drawer>
+    );
+  },
+};
+
+/**
+ * A body with text only: `Drawer.Body` gives the scrolling body your props, here
+ * `tabIndex={0} role="region" aria-label`, so the keyboard can reach and scroll it. The body then
+ * shows the focus ring inside its edge on keyboard focus.
+ */
+export const ScrollableTextBody: Story = {
+  args: { title: 'Terms of service' },
+  render: function ScrollableTextBodyDrawer({ children: _children, ...args }) {
+    return (
+      <Drawer {...args}>
+        <Drawer.Trigger>
+          <Button appearance="primary">Read the terms</Button>
+        </Drawer.Trigger>
+        <Drawer.Body tabIndex={0} role="region" aria-label="Terms text">
+          <div className="flex flex-col gap-3">
+            {termsParagraphs.map((paragraph) => (
+              <p key={paragraph}>{paragraph}</p>
+            ))}
+          </div>
+        </Drawer.Body>
+        <Drawer.Footer>
+          <Drawer.Close>
+            <Button appearance="primary">Accept</Button>
+          </Drawer.Close>
+        </Drawer.Footer>
+      </Drawer>
+    );
+  },
 };
 
 /**
@@ -143,11 +465,11 @@ export const Controlled: Story = {
         {/* The story owns the controlled pair; every other arg is forwarded. */}
         <Drawer {...args} open={open} onOpenChange={handleOpenChange}>
           <p>{children}</p>
-          <div className="mt-4 flex justify-end">
+          <Drawer.Footer>
             <Button appearance="primary" onClick={() => handleOpenChange(false)}>
               Done
             </Button>
-          </div>
+          </Drawer.Footer>
         </Drawer>
       </>
     );

@@ -1,15 +1,18 @@
 import * as React from 'react';
 import { flattenChildren, getElementType, isElementOfType } from '../../lib/children';
 import { cn } from '../../lib/cn';
-import { drawerClassNames, drawerTitleClassNames } from '../../lib/classNames';
+import {
+  drawerBodyClassNames,
+  drawerClassNames,
+  drawerTitleClassNames,
+} from '../../lib/classNames';
 import { isDev, warnOnce } from '../../lib/dev';
-import { DismissIcon } from '../../lib/icons';
 import { slotRendersContent } from '../../lib/slot';
+import { focusRingInset } from '../../lib/styles';
 import { useId } from '../../hooks/useId';
 import { useIsClient } from '../../hooks/useIsClient';
 import { useMergedRefs } from '../../hooks/useMergedRefs';
 import { useModalLayer } from '../../hooks/useModalLayer';
-import { Button } from '../button/Button';
 import { Portal } from '../portal/Portal';
 import {
   ModalSurfaceContext,
@@ -20,20 +23,34 @@ import {
   useModalTriggerSession,
   useTitleRegistry,
   useUnnamedModalWarning,
+  type ModalRequestOpen,
 } from './Dialog.shared';
 import {
   DrawerContext,
+  DrawerHeaderContext,
+  DrawerPartContext,
+  DrawerScrollStateContext,
   type DrawerContextValue,
   type DrawerOpenChangeDetails,
   type DrawerPosition,
   type DrawerSize,
 } from './Drawer.context';
 import { getOverlayPanelClasses } from './Drawer.panel';
-import { DrawerTrigger, NESTED_TRIGGER_WARNING, NESTED_TRIGGER_WARNING_KEY } from './Drawer.parts';
+import {
+  DrawerBody,
+  DrawerCloseButton,
+  DrawerFooter,
+  DrawerHeader,
+  DrawerTrigger,
+  NESTED_TRIGGER_WARNING,
+  NESTED_TRIGGER_WARNING_KEY,
+  type DrawerBodyProps,
+} from './Drawer.parts';
+import { scrollSeparatorClasses, useScrollState } from './Drawer.scroll';
 
 /*
  * The Drawer root: its props, the child scan, the layout and the development checks. Imports the
- * parts, panel and context modules (never `Drawer.tsx`, which holds the compound).
+ * parts, panel, scroll and context modules (never `Drawer.tsx`, which holds the compound).
  */
 
 /** Properties for the Drawer component. */
@@ -77,14 +94,17 @@ export interface DrawerProps extends Omit<React.HTMLAttributes<HTMLDivElement>, 
    */
   size?: DrawerSize;
   /**
-   * Title displayed in the drawer header; it names the drawer (`aria-labelledby`). Without it,
-   * render a `Drawer.Title` or pass `aria-label`/`aria-labelledby`. A title that renders nothing
-   * (`''`, `[]`, `true`) counts as none.
+   * Title displayed in the built-in header; it names the drawer (`aria-labelledby`). Without it,
+   * render a `Drawer.HeaderTitle` (in a `Drawer.Header`) or a `Drawer.Title`, or pass
+   * `aria-label`/`aria-labelledby`. A title that renders nothing (`''`, `[]`, `true`) counts as
+   * none. Ignored, with a development warning, when the children hold a `Drawer.Header`, which
+   * replaces the built-in header. The heading is an `<h2>`; for another level use
+   * `Drawer.HeaderTitle` with `headingLevel`.
    */
   title?: React.ReactNode;
   /**
-   * Accessible name of the built-in Close button (an icon-only button). Localize it with the
-   * page's language.
+   * Accessible name of the built-in Close button (an icon-only button), in the built-in header and
+   * in every `Drawer.HeaderTitle`. Localize it with the page's language.
    * @default 'Close'
    */
   closeLabel?: string;
@@ -95,13 +115,17 @@ export interface DrawerProps extends Omit<React.HTMLAttributes<HTMLDivElement>, 
    */
   finalFocusRef?: React.RefObject<HTMLElement | null>;
   /**
-   * The drawer body. `Drawer.Trigger` children placed directly inside the Drawer, or in a Fragment
-   * there (`{isMobile && <>…</>}`), render in place (outside the panel); everything else renders in
-   * the panel's scrolling body. A `Drawer.Trigger` nested in another element, or rendered by a
-   * component, is panel content, so it only exists while the drawer is open (development warnings
-   * say so, also when an uncontrolled drawer still has no direct trigger a second after it mounts
-   * and therefore cannot open; a controlled drawer whose trigger a component such as a Tooltip
-   * wraps warns only once it opens).
+   * The drawer's content, placed by the Drawer, also from a Fragment (`{isMobile && <>…</>}`) and
+   * when written in a Server Component: `Drawer.Trigger` children render in place (outside the
+   * panel); a `Drawer.Header` replaces the built-in header (the `title` and Close button row); a
+   * `Drawer.Body` gives the scrolling body its props; `Drawer.Footer` renders below the scrolling
+   * body, outside it, wherever it is written among the children; everything else renders in the
+   * scrolling body. A part nested in another element (a `<form>`) or rendered by a component of
+   * yours renders where it is, in the body (a development warning says so). A `Drawer.Trigger`
+   * nested in another element, or rendered by a component, is panel content, so it only exists
+   * while the drawer is open (development warnings say so, also when an uncontrolled drawer still
+   * has no direct trigger a second after it mounts and therefore cannot open; a controlled drawer
+   * whose trigger a component such as a Tooltip wraps warns only once it opens).
    * Put wrappers inside the trigger instead: see `Drawer.Trigger`.
    */
   children: React.ReactNode;
@@ -151,27 +175,164 @@ function hasNestedTrigger(children: React.ReactNode): boolean {
   return visit(children, 0, 0);
 }
 
-/**
- * Splits the Drawer's children into its direct `Drawer.Trigger` elements and the panel content.
- * Fragments are flattened (recursively), so a `Drawer.Trigger` in a Fragment —
- * `{isMobile && <><Drawer.Trigger>…</Drawer.Trigger><Filters /></>}` — counts as a direct child.
- * Every element keeps the key `flattenChildren` gives it: unique across Fragments and stable when a
- * sibling Fragment toggles, so panel content keeps its state. A trigger is recognised also when it
- * was written in a Server Component (a lazy type).
- */
-function splitChildren(children: React.ReactNode): {
+const TITLE_IGNORED_WARNING_KEY = 'Drawer:title-ignored';
+const TITLE_IGNORED_WARNING =
+  'Drawer: `title` and `titleAction` are ignored because a Drawer.Header is among the children. Put a Drawer.HeaderTitle (with its `action`) in the header instead.';
+
+const BODY_DUPLICATE_WARNING_KEY = 'Drawer.Body:duplicate';
+const BODY_DUPLICATE_WARNING =
+  'Drawer has more than one Drawer.Body: the props of the first one apply to the scrolling body, and the children of every one render in their place. Render one Drawer.Body.';
+
+/** How the Drawer sorts its direct children ({@link splitChildren}). */
+interface DrawerPartition {
+  /** The direct `Drawer.Trigger` elements, rendered in place. */
   triggers: React.ReactNode[];
+  /** The direct `Drawer.Header` elements, rendered in the header area in written order. */
+  headers: React.ReactNode[];
+  /** The props of the first direct `Drawer.Body` (its `children` render in `content`). */
+  bodyProps: DrawerBodyProps | undefined;
+  /** How many direct `Drawer.Body` elements there are. */
+  bodyCount: number;
+  /** The body content in written order; a `Drawer.Body` is replaced by its children. */
   content: React.ReactNode[];
-} {
-  const triggers: React.ReactNode[] = [];
-  const content: React.ReactNode[] = [];
-  for (const { key, node } of flattenChildren(children)) {
-    const keyed = React.isValidElement(node) ? React.cloneElement(node, { key }) : node;
-    if (isElementOfType(node, DrawerTrigger)) triggers.push(keyed);
-    else content.push(keyed);
-  }
-  return { triggers, content };
+  /** The direct `Drawer.Footer` elements, rendered after the body in written order. */
+  footers: React.ReactNode[];
 }
+
+/**
+ * Sorts the Drawer's children: its direct `Drawer.Trigger`, `Drawer.Header`, `Drawer.Body` and
+ * `Drawer.Footer` elements and the body content. Fragments are flattened (recursively), so a part
+ * in a Fragment — `{isMobile && <><Drawer.Trigger>…</Drawer.Trigger><Filters /></>}` — counts as a
+ * direct child. Every element keeps the key `flattenChildren` gives it: unique across Fragments and
+ * stable when a sibling Fragment toggles, so body content keeps its state when a part appears. A
+ * part is recognised also when it was written in a Server Component (a lazy type). Runs during
+ * render, so the placement is the same on the server.
+ */
+function splitChildren(children: React.ReactNode): DrawerPartition {
+  const partition: DrawerPartition = {
+    triggers: [],
+    headers: [],
+    bodyProps: undefined,
+    bodyCount: 0,
+    content: [],
+    footers: [],
+  };
+  for (const { key, node } of flattenChildren(children)) {
+    if (isElementOfType<DrawerBodyProps>(node, DrawerBody)) {
+      // The first Body's props go on the scrolling body; every Body's children render in place.
+      partition.bodyCount += 1;
+      if (partition.bodyCount === 1) partition.bodyProps = node.props;
+      partition.content.push(<React.Fragment key={key}>{node.props.children}</React.Fragment>);
+      continue;
+    }
+    const keyed = React.isValidElement(node) ? React.cloneElement(node, { key }) : node;
+    if (isElementOfType(node, DrawerTrigger)) partition.triggers.push(keyed);
+    else if (isElementOfType(node, DrawerHeader)) partition.headers.push(keyed);
+    else if (isElementOfType(node, DrawerFooter)) partition.footers.push(keyed);
+    else partition.content.push(keyed);
+  }
+  return partition;
+}
+
+/** Properties of the built-in header ({@link DrawerBuiltInHeader}). */
+interface DrawerBuiltInHeaderProps {
+  /** The `title` prop, when it renders content. */
+  title: React.ReactNode;
+  /** Whether `title` renders content (else no heading renders). */
+  hasTitle: boolean;
+  /** The heading's id (the panel's `aria-labelledby`). */
+  titleId: string;
+  requestOpen: ModalRequestOpen;
+  closeLabel: string;
+}
+
+/**
+ * The 0.10 header row of the `title` form (no `Drawer.Header` among the children): the `title`
+ * heading and the Close button as its direct children. It reads the body's scroll state for its
+ * separator.
+ */
+function DrawerBuiltInHeader({
+  title,
+  hasTitle,
+  titleId,
+  requestOpen,
+  closeLabel,
+}: DrawerBuiltInHeaderProps) {
+  const scrollState = React.useContext(DrawerScrollStateContext) ?? 'none';
+  return (
+    <div
+      data-scroll-state={scrollState}
+      className={cn(
+        drawerClassNames.header,
+        'flex shrink-0 items-center justify-between gap-2 p-4',
+        scrollSeparatorClasses.header,
+      )}
+    >
+      {hasTitle && (
+        <h2
+          id={titleId}
+          className={cn(drawerTitleClassNames.root, 'text-subtitle-1 font-semibold')}
+        >
+          {title}
+        </h2>
+      )}
+      <DrawerCloseButton
+        requestOpen={requestOpen}
+        label={closeLabel}
+        className="ms-auto text-muted-foreground"
+      />
+    </div>
+  );
+}
+DrawerBuiltInHeader.displayName = 'DrawerBuiltInHeader';
+
+/** Properties of {@link DrawerLayout}. */
+interface DrawerLayoutProps {
+  /** The header area: the built-in header, or the placed `Drawer.Header` elements. */
+  header: React.ReactNode;
+  /** The props of the placed `Drawer.Body`, put on the scrolling body. */
+  bodyProps: DrawerBodyProps | undefined;
+  /** The body content. */
+  content: React.ReactNode;
+  /** The placed `Drawer.Footer` elements. */
+  footers: React.ReactNode;
+}
+
+/**
+ * The panel's layout (internal): the header area, the scrolling body and the footers. It owns the
+ * body's scroll state (`useScrollState`), so a change of the state re-renders this component, the
+ * body element and the parts that read the state (the header area and the footers), never the
+ * consumer's content: the elements it receives as props are the same objects, so React skips them.
+ */
+function DrawerLayout({ header, bodyProps, content, footers }: DrawerLayoutProps) {
+  const [body, setBody] = React.useState<HTMLDivElement | null>(null);
+  const scrollState = useScrollState(body);
+  const { children: _children, className, ref, ...bodyRest } = bodyProps ?? {};
+  const bodyRef = useMergedRefs<HTMLDivElement>(setBody, ref);
+  return (
+    <DrawerScrollStateContext.Provider value={scrollState}>
+      <DrawerHeaderContext.Provider value={false}>
+        <DrawerPartContext.Provider value="placed">{header}</DrawerPartContext.Provider>
+        <div
+          data-scroll-state={scrollState}
+          {...bodyRest}
+          ref={bodyRef}
+          className={cn(
+            drawerClassNames.body,
+            bodyProps && drawerBodyClassNames.root,
+            'min-h-0 flex-1 overflow-y-auto p-4',
+            focusRingInset,
+            className,
+          )}
+        >
+          <DrawerPartContext.Provider value="content">{content}</DrawerPartContext.Provider>
+        </div>
+        <DrawerPartContext.Provider value="placed">{footers}</DrawerPartContext.Provider>
+      </DrawerHeaderContext.Provider>
+    </DrawerScrollStateContext.Provider>
+  );
+}
+DrawerLayout.displayName = 'DrawerLayout';
 
 // The root of `Drawer` (documented on the export in Drawer.tsx).
 export const DrawerRoot = ({
@@ -223,9 +384,26 @@ export const DrawerRoot = ({
   // After useModalLayer's focus restore (effects run in order), start the trigger session, or end
   // it and forget the trigger that opened it.
   useModalTriggerSession(trigger, open);
-  useUnnamedModalWarning(open ? panel : null, titles.hasTitle, 'Drawer', 'Drawer.Title');
+  useUnnamedModalWarning(
+    open ? panel : null,
+    titles.hasTitle,
+    'Drawer',
+    'Drawer.HeaderTitle or a Drawer.Title',
+  );
 
-  const { triggers, content } = splitChildren(children);
+  const { triggers, headers, bodyProps, bodyCount, content, footers } = splitChildren(children);
+  const hasHeader = headers.length > 0;
+  // A Drawer.Header replaces the built-in header, whose `title` it cannot show.
+  const titleRendersContent = slotRendersContent(title);
+  const hasTitle = titleRendersContent && !hasHeader;
+  const titleIgnored = titleRendersContent && hasHeader;
+  React.useEffect(() => {
+    if (titleIgnored) warnOnce(TITLE_IGNORED_WARNING_KEY, TITLE_IGNORED_WARNING);
+  }, [titleIgnored]);
+  const duplicateBody = bodyCount > 1;
+  React.useEffect(() => {
+    if (duplicateBody) warnOnce(BODY_DUPLICATE_WARNING_KEY, BODY_DUPLICATE_WARNING);
+  }, [duplicateBody]);
 
   // A trigger nested in the children is panel content: never rendered while the drawer is closed.
   // The children change on every parent render; once this drawer has warned, it stops walking.
@@ -258,15 +436,13 @@ export const DrawerRoot = ({
   }, []);
 
   const context = React.useMemo<DrawerContextValue>(
-    () => ({ open, requestOpen, trigger, panelId, inPanel: false }),
-    [open, requestOpen, trigger, panelId],
+    () => ({ open, requestOpen, trigger, panelId, inPanel: false, closeLabel }),
+    [open, requestOpen, trigger, panelId, closeLabel],
   );
   const panelContext = React.useMemo<DrawerContextValue>(
     () => ({ ...context, inPanel: true }),
     [context],
   );
-
-  const hasTitle = slotRendersContent(title);
 
   return (
     <DrawerContext.Provider value={context}>
@@ -295,34 +471,24 @@ export const DrawerRoot = ({
             >
               <DrawerContext.Provider value={panelContext}>
                 <ModalSurfaceContext.Provider value={titles.context}>
-                  <div
-                    className={cn(
-                      drawerClassNames.header,
-                      'flex items-center justify-between gap-2 border-b border-border p-4',
-                    )}
-                  >
-                    {hasTitle && (
-                      <h2
-                        id={propTitleId}
-                        className={cn(drawerTitleClassNames.root, 'text-subtitle-1 font-semibold')}
-                      >
-                        {title}
-                      </h2>
-                    )}
-                    <Button
-                      appearance="subtle"
-                      size="small"
-                      icon={<DismissIcon />}
-                      aria-label={closeLabel}
-                      onClick={(event) =>
-                        requestOpen(false, { reason: 'close-button', event: event.nativeEvent })
-                      }
-                      className={cn(drawerClassNames.closeButton, 'ms-auto text-muted-foreground')}
-                    />
-                  </div>
-                  <div className={cn(drawerClassNames.body, 'min-h-0 flex-1 overflow-y-auto p-4')}>
-                    {content}
-                  </div>
+                  <DrawerLayout
+                    header={
+                      hasHeader ? (
+                        headers
+                      ) : (
+                        <DrawerBuiltInHeader
+                          title={title}
+                          hasTitle={hasTitle}
+                          titleId={propTitleId}
+                          requestOpen={requestOpen}
+                          closeLabel={closeLabel}
+                        />
+                      )
+                    }
+                    bodyProps={bodyProps}
+                    content={content}
+                    footers={footers}
+                  />
                 </ModalSurfaceContext.Provider>
               </DrawerContext.Provider>
             </div>

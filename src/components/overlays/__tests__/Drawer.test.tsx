@@ -7,10 +7,20 @@ import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
 import userEvent, { type UserEvent } from '@testing-library/user-event';
 import {
   Drawer,
+  DrawerBody,
   DrawerClose,
+  DrawerFooter,
+  DrawerHeader,
+  DrawerHeaderNavigation,
+  DrawerHeaderTitle,
   DrawerTitle,
   DrawerTrigger,
+  type DrawerBodyProps,
   type DrawerCloseProps,
+  type DrawerFooterProps,
+  type DrawerHeaderNavigationProps,
+  type DrawerHeaderProps,
+  type DrawerHeaderTitleProps,
   type DrawerOpenChangeDetails,
   type DrawerOpenChangeReason,
   type DrawerProps,
@@ -97,12 +107,26 @@ function ChildLayer() {
 describe('Drawer', () => {
   testDisplayName(Drawer, 'Drawer');
 
-  testCompoundExposure(Drawer, ['Trigger', 'Close', 'Title']);
+  testCompoundExposure(Drawer, [
+    'Trigger',
+    'Close',
+    'Title',
+    'Header',
+    'HeaderTitle',
+    'HeaderNavigation',
+    'Body',
+    'Footer',
+  ]);
 
   it('exports every sub-component under its flat name (C-COMPOUND)', () => {
     expect(DrawerTrigger).toBe(Drawer.Trigger);
     expect(DrawerClose).toBe(Drawer.Close);
     expect(DrawerTitle).toBe(Drawer.Title);
+    expect(DrawerHeader).toBe(Drawer.Header);
+    expect(DrawerHeaderTitle).toBe(Drawer.HeaderTitle);
+    expect(DrawerHeaderNavigation).toBe(Drawer.HeaderNavigation);
+    expect(DrawerBody).toBe(Drawer.Body);
+    expect(DrawerFooter).toBe(Drawer.Footer);
   });
 
   it('declares ref in every props interface (C-REF)', () => {
@@ -112,6 +136,15 @@ describe('Drawer', () => {
     expectTypeOf<DrawerTitleProps['ref']>().toEqualTypeOf<
       React.Ref<HTMLHeadingElement> | undefined
     >();
+    expectTypeOf<DrawerHeaderProps['ref']>().toEqualTypeOf<React.Ref<HTMLDivElement> | undefined>();
+    expectTypeOf<DrawerHeaderTitleProps['ref']>().toEqualTypeOf<
+      React.Ref<HTMLDivElement> | undefined
+    >();
+    expectTypeOf<DrawerHeaderNavigationProps['ref']>().toEqualTypeOf<
+      React.Ref<HTMLElement> | undefined
+    >();
+    expectTypeOf<DrawerBodyProps['ref']>().toEqualTypeOf<React.Ref<HTMLDivElement> | undefined>();
+    expectTypeOf<DrawerFooterProps['ref']>().toEqualTypeOf<React.Ref<HTMLDivElement> | undefined>();
   });
 
   describe('system props', () => {
@@ -1189,7 +1222,7 @@ describe('Drawer', () => {
       render(<Drawer defaultOpen>Unnamed</Drawer>);
       expect(warn.mock.calls).toEqual([
         [
-          '[WaveUI] Drawer has no accessible name. Pass `title`, render a Drawer.Title inside it, or give it `aria-label` or `aria-labelledby`.',
+          '[WaveUI] Drawer has no accessible name. Pass `title`, render a Drawer.HeaderTitle or a Drawer.Title inside it, or give it `aria-label` or `aria-labelledby`.',
         ],
       ]);
       warn.mockRestore();
@@ -1226,6 +1259,26 @@ describe('Drawer', () => {
         </Drawer.Close>,
       ],
       ['Drawer.Title', <Drawer.Title key="title">Orphan</Drawer.Title>],
+      [
+        'Drawer.Header',
+        <Drawer.Header key="header">
+          <p>Orphan</p>
+        </Drawer.Header>,
+      ],
+      ['Drawer.HeaderTitle', <Drawer.HeaderTitle key="heading">Orphan</Drawer.HeaderTitle>],
+      [
+        'Drawer.HeaderNavigation',
+        <Drawer.HeaderNavigation key="nav">
+          <button type="button">Back</button>
+        </Drawer.HeaderNavigation>,
+      ],
+      ['Drawer.Body', <Drawer.Body key="body">Orphan</Drawer.Body>],
+      [
+        'Drawer.Footer',
+        <Drawer.Footer key="footer">
+          <button type="button">Apply</button>
+        </Drawer.Footer>,
+      ],
     ])('%s outside Drawer throws in development', (name, element) => {
       expectThrows(element, `[WaveUI] ${name} must be used within Drawer`);
     });
@@ -1797,6 +1850,47 @@ describe('Drawer', () => {
         expect.stringContaining('[WaveUI] Drawer.Trigger must be a direct child of Drawer'),
       );
       warn.mockRestore();
+    });
+
+    it('places a lazy Drawer.Header, Drawer.HeaderTitle, Drawer.Body and Drawer.Footer like the plain parts', async () => {
+      const user = userEvent.setup();
+      const warn = vi.spyOn(console, 'warn');
+      const Header = asClientReference(DrawerHeader);
+      const HeaderTitle = asClientReference(DrawerHeaderTitle);
+      const Body = asClientReference(DrawerBody);
+      const Footer = asClientReference(DrawerFooter);
+      try {
+        render(
+          <Drawer>
+            <lazyParts.Trigger>
+              <button type="button">Open filters</button>
+            </lazyParts.Trigger>
+            <Footer>
+              <lazyParts.Close>
+                <button type="button">Apply</button>
+              </lazyParts.Close>
+            </Footer>
+            <Header>
+              <HeaderTitle>Filters</HeaderTitle>
+            </Header>
+            <Body aria-label="Filter fields" role="region" tabIndex={0}>
+              <p>Body</p>
+            </Body>
+          </Drawer>,
+        );
+        await user.click(button('Open filters'));
+        const panel = screen.getByRole('dialog', { name: 'Filters' });
+        const body = screen.getByRole('region', { name: 'Filter fields' });
+        expect(body.parentElement).toBe(panel);
+        expect(panel.firstElementChild).toContainElement(screen.getByRole('heading'));
+        expect(panel.lastElementChild).toContainElement(button('Apply'));
+        await user.click(button('Close'));
+        expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+        expect(button('Open filters')).toHaveFocus();
+        expect(warn).not.toHaveBeenCalled();
+      } finally {
+        warn.mockRestore();
+      }
     });
 
     it('the nested-trigger check passes over content whose code is still loading', () => {

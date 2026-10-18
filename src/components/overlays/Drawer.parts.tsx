@@ -1,12 +1,37 @@
 import * as React from 'react';
 import { cn } from '../../lib/cn';
-import { drawerTitleClassNames } from '../../lib/classNames';
+import {
+  drawerBodyClassNames,
+  drawerClassNames,
+  drawerFooterClassNames,
+  drawerHeaderClassNames,
+  drawerHeaderNavigationClassNames,
+  drawerHeaderTitleClassNames,
+  drawerTitleClassNames,
+} from '../../lib/classNames';
 import { warnOnce } from '../../lib/dev';
-import { useModalClosePart, useModalTitle, useModalTriggerPart } from './Dialog.shared';
-import { useDrawerContext } from './Drawer.context';
+import { DismissIcon } from '../../lib/icons';
+import { materialiseSlotContent, renderSlot, slotRendersContent, type Slot } from '../../lib/slot';
+import { focusRingInset } from '../../lib/styles';
+import type { HeadingLevel } from '../../lib/types';
+import { Button } from '../button/Button';
+import {
+  useModalClosePart,
+  useModalTitle,
+  useModalTriggerPart,
+  type ModalRequestOpen,
+} from './Dialog.shared';
+import {
+  DrawerHeaderContext,
+  DrawerPartContext,
+  DrawerScrollStateContext,
+  useDrawerContext,
+} from './Drawer.context';
+import { scrollSeparatorClasses } from './Drawer.scroll';
 
 /*
- * The Drawer's parts. Imports the context module only (never the root or `Drawer.tsx`).
+ * The Drawer's parts. Imports the context and scroll modules only (never the root or
+ * `Drawer.tsx`).
  */
 
 /** Props a `Drawer.Trigger` puts on its element (and passes to a render-prop child). */
@@ -63,8 +88,69 @@ export interface DrawerCloseProps extends Omit<React.HTMLAttributes<HTMLElement>
 export interface DrawerTitleProps extends React.HTMLAttributes<HTMLHeadingElement> {
   /** The title; any content. */
   children: React.ReactNode;
+  /**
+   * Level of the heading element (`h1` … `h6`). Fluent's `heading` slot, which also takes another
+   * element.
+   * @default 2
+   */
+  headingLevel?: HeadingLevel;
   /** Ref to the heading element. */
   ref?: React.Ref<HTMLHeadingElement>;
+}
+
+/** Properties for the DrawerHeader sub-component. */
+export interface DrawerHeaderProps extends React.HTMLAttributes<HTMLDivElement> {
+  /** `Drawer.HeaderNavigation`, `Drawer.HeaderTitle`, or any content, in the order written. */
+  children?: React.ReactNode;
+  /** Ref to the header element. */
+  ref?: React.Ref<HTMLDivElement>;
+}
+
+/** Properties for the DrawerHeaderTitle sub-component. */
+export interface DrawerHeaderTitleProps extends React.HTMLAttributes<HTMLDivElement> {
+  /** The title; any content. The heading names the drawer (`aria-labelledby`). */
+  children: React.ReactNode;
+  /**
+   * Content between the heading and the built-in Close button, such as icon buttons for the
+   * drawer's own commands (Fluent's `action`). It comes before the Close button in DOM and Tab
+   * order and is interactive (not `aria-hidden`): name icon-only buttons. Renders nothing when it
+   * renders no content.
+   */
+  action?: Slot<'span'>;
+  /** Id of the heading element, the element that names the drawer. @default a generated id */
+  id?: string;
+  /**
+   * Level of the heading element (`h1` … `h6`). Fluent's `heading` slot, which also takes another
+   * element.
+   * @default 2
+   */
+  headingLevel?: HeadingLevel;
+  /** Ref to the title row (the heading's parent). */
+  ref?: React.Ref<HTMLDivElement>;
+}
+
+/** Properties for the DrawerHeaderNavigation sub-component. */
+export interface DrawerHeaderNavigationProps extends React.HTMLAttributes<HTMLElement> {
+  /** The navigation controls: a Back button, a Toolbar of commands. */
+  children?: React.ReactNode;
+  /** Ref to the `<nav>` element. */
+  ref?: React.Ref<HTMLElement>;
+}
+
+/** Properties for the DrawerBody sub-component. */
+export interface DrawerBodyProps extends React.HTMLAttributes<HTMLDivElement> {
+  /** Content of the scrolling body, rendered in the Body's place among the other content. */
+  children?: React.ReactNode;
+  /** Ref to the scrolling body element. */
+  ref?: React.Ref<HTMLDivElement>;
+}
+
+/** Properties for the DrawerFooter sub-component. */
+export interface DrawerFooterProps extends React.HTMLAttributes<HTMLDivElement> {
+  /** The drawer's actions, typically buttons (wrap closing ones in `Drawer.Close`). */
+  children?: React.ReactNode;
+  /** Ref to the footer element. */
+  ref?: React.Ref<HTMLDivElement>;
 }
 
 /** The warning key of a `Drawer.Trigger` that renders as panel content (the root checks it too). */
@@ -129,12 +215,22 @@ DrawerClose.displayName = 'DrawerClose';
 
 /**
  * A heading that names the drawer (`aria-labelledby`), for rich titles or custom layouts. Render it
- * inside the Drawer's content (instead of the `title` prop).
+ * inside the Drawer's content (instead of the `title` prop); for the title of a composed header,
+ * use `Drawer.HeaderTitle` in a `Drawer.Header`. `headingLevel` picks the heading element (`h2`
+ * by default).
  */
-export const DrawerTitle = ({ id, className, children, ref, ...rest }: DrawerTitleProps) => {
+export const DrawerTitle = ({
+  id,
+  headingLevel = 2,
+  className,
+  children,
+  ref,
+  ...rest
+}: DrawerTitleProps) => {
   const { id: titleId, ref: titleRef } = useModalTitle('Drawer.Title', 'Drawer', id, ref);
+  const Heading: `h${HeadingLevel}` = `h${headingLevel}`;
   return (
-    <h2
+    <Heading
       {...rest}
       id={titleId}
       ref={titleRef}
@@ -145,7 +241,251 @@ export const DrawerTitle = ({ id, className, children, ref, ...rest }: DrawerTit
       )}
     >
       {children}
-    </h2>
+    </Heading>
   );
 };
 DrawerTitle.displayName = 'DrawerTitle';
+
+/** Properties of the internal {@link DrawerCloseButton}. */
+export interface DrawerCloseButtonProps {
+  /** The Drawer's request function: the button asks it to close, reason `close-button`. */
+  requestOpen: ModalRequestOpen;
+  /** The button's accessible name (the Drawer's `closeLabel`). */
+  label: string;
+  /** Placement classes, after the button's own (`drawerClassNames.closeButton`). */
+  className?: string;
+}
+
+/**
+ * The Drawer's built-in Close button (internal): the Wave `Button`, subtle and small, with the
+ * dismiss glyph, named by the Drawer's `closeLabel`. The built-in header and every
+ * `Drawer.HeaderTitle` in a `Drawer.Header` render it; it carries `drawerClassNames.closeButton`.
+ */
+export const DrawerCloseButton = ({ requestOpen, label, className }: DrawerCloseButtonProps) => (
+  <Button
+    appearance="subtle"
+    size="small"
+    icon={<DismissIcon />}
+    aria-label={label}
+    onClick={(event) => requestOpen(false, { reason: 'close-button', event: event.nativeEvent })}
+    className={cn(drawerClassNames.closeButton, className)}
+  />
+);
+DrawerCloseButton.displayName = 'DrawerCloseButton';
+
+/** The warning key of a `Drawer.Header` that the Drawer's scan did not place. */
+const HEADER_UNSCANNED_WARNING_KEY = 'Drawer.Header:unscanned';
+const HEADER_UNSCANNED_WARNING =
+  'Drawer.Header is not a direct child of Drawer, so it renders inside the body instead of replacing the header. Make it a direct child (a Fragment there is fine).';
+
+/** The warning key of a `Drawer.Body` that the Drawer's scan did not place. */
+const BODY_UNSCANNED_WARNING_KEY = 'Drawer.Body:unscanned';
+const BODY_UNSCANNED_WARNING =
+  'Drawer.Body is not a direct child of Drawer, so its props do not reach the scrolling body and it renders as an element inside it. Make it a direct child (a Fragment there is fine).';
+
+/** The warning key of a `Drawer.Footer` that the Drawer's scan did not place. */
+const FOOTER_UNSCANNED_WARNING_KEY = 'Drawer.Footer:unscanned';
+const FOOTER_UNSCANNED_WARNING =
+  'Drawer.Footer is not a direct child of Drawer, so it renders inside the scrolling body instead of below it. Make it a direct child (a Fragment there is fine); a submit button in it can name a form in the body with the `form` attribute.';
+
+/** The warning key of a `Drawer.HeaderTitle` outside a `Drawer.Header`. */
+const HEADER_TITLE_OUTSIDE_WARNING_KEY = 'Drawer.HeaderTitle:outside-header';
+const HEADER_TITLE_OUTSIDE_WARNING =
+  'Drawer.HeaderTitle is not inside a Drawer.Header, so it renders in the body without the Close button. Put it in a Drawer.Header, or use Drawer.Title for a heading in the body.';
+
+/** Whether the Drawer's scan placed the part that reads this (a direct child of the Drawer). */
+function usePlaced(): boolean {
+  return React.useContext(DrawerPartContext) === 'placed';
+}
+
+/** Warns once, from an effect, while `condition` holds. */
+function useWarnWhen(condition: boolean, key: string, message: string): void {
+  React.useEffect(() => {
+    if (condition) warnOnce(key, message);
+  }, [condition, key, message]);
+}
+
+/**
+ * The drawer's header, replacing the built-in one (the `title` and Close button row): a
+ * `Drawer.HeaderNavigation` row and a `Drawer.HeaderTitle`, or your own content. The built-in
+ * Close button ends each `Drawer.HeaderTitle`; a header without one has no Close button (wrap your
+ * own in `Drawer.Close`). Make it a direct child of `Drawer` (a Fragment there is fine); nested in
+ * an element or rendered by a component of yours it renders in the body, with a development
+ * warning. It draws a line under itself while the body is scrolled away from its top
+ * (`data-scroll-state`). Initial focus goes to its first focusable element (a Back button, a title
+ * action): give the control that should start `autoFocus`. A header whose children render nothing
+ * renders no element (the drawer then has no header; Escape, the backdrop and `Drawer.Close` still
+ * close it). Fluent's `DrawerHeader`.
+ */
+export const DrawerHeader = ({ className, children, ref, ...rest }: DrawerHeaderProps) => {
+  useDrawerContext('Drawer.Header');
+  const placed = usePlaced();
+  const scrollState = React.useContext(DrawerScrollStateContext) ?? 'none';
+  useWarnWhen(!placed, HEADER_UNSCANNED_WARNING_KEY, HEADER_UNSCANNED_WARNING);
+  if (!slotRendersContent(children)) return null;
+  return (
+    <div
+      data-scroll-state={scrollState}
+      {...rest}
+      ref={ref}
+      className={cn(
+        drawerHeaderClassNames.root,
+        'flex shrink-0 flex-col gap-2 p-4',
+        scrollSeparatorClasses.header,
+        className,
+      )}
+    >
+      <DrawerHeaderContext.Provider value={true}>
+        <DrawerPartContext.Provider value="content">
+          {materialiseSlotContent(children)}
+        </DrawerPartContext.Provider>
+      </DrawerHeaderContext.Provider>
+    </div>
+  );
+};
+DrawerHeader.displayName = 'DrawerHeader';
+
+/**
+ * A title row for `Drawer.Header`: the heading that names the drawer, your `action` content and
+ * the built-in Close button (named by the Drawer's `closeLabel`), in that DOM and Tab order.
+ * Render one per header; `headingLevel` picks the heading element (`h2` by default). Outside a
+ * `Drawer.Header` it renders without the Close button and warns: use `Drawer.Title` for a heading
+ * in the body. Unlike Fluent's `DrawerHeaderTitle`, whose `action` is where you put a close
+ * button, it renders the Close button itself.
+ */
+export const DrawerHeaderTitle = ({
+  id,
+  headingLevel = 2,
+  action,
+  className,
+  children,
+  ref,
+  ...rest
+}: DrawerHeaderTitleProps) => {
+  const { requestOpen, closeLabel } = useDrawerContext('Drawer.HeaderTitle');
+  const inHeader = React.useContext(DrawerHeaderContext);
+  const { id: headingId, ref: headingRef } = useModalTitle(
+    'Drawer.HeaderTitle',
+    'Drawer',
+    id,
+    undefined,
+  );
+  useWarnWhen(!inHeader, HEADER_TITLE_OUTSIDE_WARNING_KEY, HEADER_TITLE_OUTSIDE_WARNING);
+  const Heading: `h${HeadingLevel}` = `h${headingLevel}`;
+  return (
+    <div
+      {...rest}
+      ref={ref}
+      className={cn(drawerHeaderTitleClassNames.root, 'flex items-start gap-2', className)}
+    >
+      <DrawerPartContext.Provider value="content">
+        <Heading
+          id={headingId}
+          ref={headingRef}
+          className={cn(
+            drawerHeaderTitleClassNames.heading,
+            'min-w-0 flex-1 text-subtitle-1 font-semibold text-foreground',
+          )}
+        >
+          {children}
+        </Heading>
+        {slotRendersContent(action)
+          ? renderSlot(
+              action,
+              'span',
+              cn(drawerHeaderTitleClassNames.action, 'flex min-h-7 shrink-0 items-center gap-1'),
+            )
+          : null}
+        {inHeader && (
+          <DrawerCloseButton
+            requestOpen={requestOpen}
+            label={closeLabel}
+            className="mt-0.5 shrink-0 text-muted-foreground"
+          />
+        )}
+      </DrawerPartContext.Provider>
+    </div>
+  );
+};
+DrawerHeaderTitle.displayName = 'DrawerHeaderTitle';
+
+/**
+ * A `<nav>` row at the top of `Drawer.Header`, for a multi-level drawer's Back button and the
+ * drawer's commands. Give it an `aria-label` when the page has other navigation landmarks.
+ * Fluent's `DrawerHeaderNavigation`.
+ */
+export const DrawerHeaderNavigation = ({
+  className,
+  children,
+  ref,
+  ...rest
+}: DrawerHeaderNavigationProps) => {
+  useDrawerContext('Drawer.HeaderNavigation');
+  return (
+    <nav
+      {...rest}
+      ref={ref}
+      className={cn(drawerHeaderNavigationClassNames.root, 'flex items-center gap-1', className)}
+    >
+      <DrawerPartContext.Provider value="content">{children}</DrawerPartContext.Provider>
+    </nav>
+  );
+};
+DrawerHeaderNavigation.displayName = 'DrawerHeaderNavigation';
+
+/**
+ * Optional: gives the drawer's scrolling body your props (`className`, `style`, `ref`, `id`,
+ * `role`, `tabIndex`, `aria-*`, `data-*`, handlers), for example `tabIndex={0} role="region"
+ * aria-label="…"` to let the keyboard scroll a body without focusable content (the body then
+ * shows the focus ring inside its edge). Its children render in its place among the drawer's
+ * other content. Make it a direct child of `Drawer` (a Fragment there is fine) and render one;
+ * nested in an element or rendered by a component of yours it renders as an element inside the
+ * body, with a development warning. Fluent's `DrawerBody`.
+ */
+export const DrawerBody = ({ className, children, ref, ...rest }: DrawerBodyProps) => {
+  useDrawerContext('Drawer.Body');
+  // The Drawer renders a placed Body's props on its scrolling body and its children in place, so
+  // this element renders only for a Body its scan did not place.
+  useWarnWhen(true, BODY_UNSCANNED_WARNING_KEY, BODY_UNSCANNED_WARNING);
+  return (
+    <div {...rest} ref={ref} className={cn(drawerBodyClassNames.root, focusRingInset, className)}>
+      <DrawerPartContext.Provider value="content">{children}</DrawerPartContext.Provider>
+    </div>
+  );
+};
+DrawerBody.displayName = 'DrawerBody';
+
+/**
+ * The drawer's action row, below the scrolling body: it never scrolls and never covers a focused
+ * field. Its actions start at the inline start and wrap. Make it a direct child of `Drawer` (a
+ * Fragment there is fine): it renders after the body wherever it is written; nested in an element
+ * (a `<form>`) or rendered by a component of yours it renders where it is, in the body, with a
+ * development warning. For a form in the body, give the footer's submit button `form={formId}`.
+ * It draws a line above itself while content continues below (`data-scroll-state`). A footer
+ * whose children render nothing renders no element. Fluent's `DrawerFooter`.
+ */
+export const DrawerFooter = ({ className, children, ref, ...rest }: DrawerFooterProps) => {
+  useDrawerContext('Drawer.Footer');
+  const placed = usePlaced();
+  const scrollState = React.useContext(DrawerScrollStateContext) ?? 'none';
+  useWarnWhen(!placed, FOOTER_UNSCANNED_WARNING_KEY, FOOTER_UNSCANNED_WARNING);
+  if (!slotRendersContent(children)) return null;
+  return (
+    <div
+      data-scroll-state={scrollState}
+      {...rest}
+      ref={ref}
+      className={cn(
+        drawerFooterClassNames.root,
+        'flex shrink-0 flex-wrap items-center gap-2 p-4',
+        scrollSeparatorClasses.footer,
+        className,
+      )}
+    >
+      <DrawerPartContext.Provider value="content">
+        {materialiseSlotContent(children)}
+      </DrawerPartContext.Provider>
+    </div>
+  );
+};
+DrawerFooter.displayName = 'DrawerFooter';
