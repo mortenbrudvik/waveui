@@ -8,7 +8,10 @@ import * as React from 'react';
  * then renders `role="img"` with a `<title>`.
  */
 export interface IconProps extends React.SVGProps<SVGSVGElement> {
-  /** Width and height (number = px, or any CSS length). Default 16 (chevrons 12). */
+  /**
+   * Width and height (number = px, or any CSS length). Default 16 (chevrons 12, the navigation
+   * glyph 20).
+   */
   size?: number | string;
   /** Accessible name; makes the icon a named image instead of a decorative one. */
   title?: string;
@@ -334,6 +337,18 @@ export const PersonIcon = /* @__PURE__ */ createIcon({
   paint: 'fill',
   content: (
     <path d="M10 2a4 4 0 1 1 0 8 4 4 0 0 1 0-8Zm-5.5 10h11A2.5 2.5 0 0 1 18 14.5v.5c0 2.4-2.9 4-8 4s-8-1.6-8-4v-.5A2.5 2.5 0 0 1 4.5 12Z" />
+  ),
+});
+
+/** Navigation glyph: three bars (Hamburger). */
+export const NavigationIcon = /* @__PURE__ */ createIcon({
+  name: 'navigation',
+  displayName: 'NavigationIcon',
+  viewBox: '0 0 20 20',
+  defaultSize: 20,
+  paint: 'fill',
+  content: (
+    <path d="M2.75 4.5h14.5a.75.75 0 0 1 0 1.5H2.75a.75.75 0 0 1 0-1.5Zm0 4.75h14.5a.75.75 0 0 1 0 1.5H2.75a.75.75 0 0 1 0-1.5Zm0 4.75h14.5a.75.75 0 0 1 0 1.5H2.75a.75.75 0 0 1 0-1.5Z" />
   ),
 });
 
