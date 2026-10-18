@@ -4,7 +4,17 @@ import { fn } from 'storybook/test';
 import { Drawer, Button, Tooltip } from '../src';
 import type { DrawerPosition, DrawerProps } from '../src';
 
-const positions = ['start', 'end', 'left', 'right'] as const satisfies readonly DrawerPosition[];
+const positions = [
+  'start',
+  'end',
+  'left',
+  'right',
+  'bottom',
+] as const satisfies readonly DrawerPosition[];
+
+const sizes = ['small', 'medium', 'large', 'full'] as const satisfies readonly NonNullable<
+  DrawerProps['size']
+>[];
 
 const meta = {
   title: 'Components/Overlays/Drawer',
@@ -12,12 +22,14 @@ const meta = {
   args: {
     defaultOpen: false,
     position: 'end',
+    size: 'small',
     title: 'Filters',
     onOpenChange: fn(),
     children: 'Choose the filters to apply to the list.',
   },
   argTypes: {
     position: { control: 'select', options: positions },
+    size: { control: 'select', options: sizes },
   },
 } satisfies Meta<typeof Drawer>;
 
@@ -49,6 +61,38 @@ export const Default: Story = {
 /** Attached to the start edge: the left in left-to-right layouts, the right in right-to-left ones. */
 export const StartPosition: Story = {
   args: { position: 'start', title: 'Navigation' },
+  render: renderWithTrigger,
+};
+
+/**
+ * `size` sets the panel's width at a side: `small` (320px, the default), `medium` (592px), `large`
+ * (940px) or `full` (the whole window). The panel never grows past the window, so a large drawer
+ * on a narrow screen is as wide as the screen.
+ */
+export const Sizes: Story = {
+  render: function SizesDrawers({ children, size: _size, title: _title, ...args }) {
+    return (
+      <div className="flex flex-wrap gap-2">
+        {sizes.map((size) => (
+          <Drawer key={size} {...args} size={size} title={`A ${size} drawer`}>
+            <Drawer.Trigger>
+              <Button>{`Open ${size}`}</Button>
+            </Drawer.Trigger>
+            <p>{children}</p>
+          </Drawer>
+        ))}
+      </div>
+    );
+  },
+};
+
+/**
+ * `position="bottom"` runs the panel along the bottom edge, the window wide; `size` sets its
+ * height (here `medium`, 592px, capped at the window's height). Toasts move above it while it is
+ * open.
+ */
+export const BottomPosition: Story = {
+  args: { position: 'bottom', size: 'medium', title: 'Details' },
   render: renderWithTrigger,
 };
 

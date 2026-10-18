@@ -122,6 +122,8 @@ describe('Drawer', () => {
       conflictingClass: { className: 'w-96', overrides: 'w-80' },
       a11yVariants: [
         { name: 'start position', props: { position: 'start' } },
+        { name: 'bottom position', props: { position: 'bottom' } },
+        { name: 'large size', props: { size: 'large' } },
         { name: 'named by aria-label', props: { title: undefined, 'aria-label': 'Settings' } },
       ],
     });
@@ -330,6 +332,7 @@ describe('Drawer', () => {
       ['start', 'start-0'],
       ['left', 'left-0'],
       ['right', 'right-0'],
+      ['bottom', 'bottom-0'],
     ] as const)('position %s places the panel with %s', (position, expected) => {
       render(
         <Drawer defaultOpen position={position} title="Drawer">
@@ -339,13 +342,14 @@ describe('Drawer', () => {
       expect(screen.getByRole('dialog')).toHaveClass(expected);
     });
 
-    const edgeClasses = ['border-s', 'border-e', 'border-l', 'border-r'];
+    const edgeClasses = ['border-s', 'border-e', 'border-l', 'border-r', 'border-t'];
     it.each([
       [undefined, 'border-s'],
       ['end', 'border-s'],
       ['start', 'border-e'],
       ['left', 'border-r'],
       ['right', 'border-l'],
+      ['bottom', 'border-t'],
     ] as const)('position %s draws a border on the inner edge only, %s', (position, expected) => {
       // High contrast paints the page, the backdrop and the panel black and the shadow is black
       // too (forced colors drop it): only the border marks the edge facing the page.

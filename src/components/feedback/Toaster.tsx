@@ -439,18 +439,19 @@ export interface ToasterProps extends React.HTMLAttributes<HTMLDivElement> {
 }
 
 /**
- * Corner placement. The margin on the toasts' side is `--wave-toaster-offset`, which the Toaster
- * sets while a modal panel covers that side (see {@link getSidePanelOffset}); unset, it is `0`.
+ * Corner placement. The margin on the toasts' side is `--wave-toaster-offset`, and the margin on
+ * their top or bottom edge `--wave-toaster-offset-block`, which the Toaster sets while a modal or
+ * non-modal panel covers that side or that edge (see {@link getPanelOffsets}); unset, each is `0`.
  */
 const positionClasses: Record<ToastPosition, string> = {
-  'top-start': 'top-4 start-4 ms-(--wave-toaster-offset)',
-  'top-end': 'top-4 end-4 me-(--wave-toaster-offset)',
-  'bottom-start': 'bottom-4 start-4 ms-(--wave-toaster-offset)',
-  'bottom-end': 'bottom-4 end-4 me-(--wave-toaster-offset)',
-  'top-right': 'top-4 right-4 mr-(--wave-toaster-offset)', // wave-allow-physical: explicit physical position value
-  'top-left': 'top-4 left-4 ml-(--wave-toaster-offset)', // wave-allow-physical: explicit physical position value
-  'bottom-right': 'bottom-4 right-4 mr-(--wave-toaster-offset)', // wave-allow-physical: explicit physical position value
-  'bottom-left': 'bottom-4 left-4 ml-(--wave-toaster-offset)', // wave-allow-physical: explicit physical position value
+  'top-start': 'top-4 start-4 ms-(--wave-toaster-offset) mt-(--wave-toaster-offset-block)',
+  'top-end': 'top-4 end-4 me-(--wave-toaster-offset) mt-(--wave-toaster-offset-block)',
+  'bottom-start': 'bottom-4 start-4 ms-(--wave-toaster-offset) mb-(--wave-toaster-offset-block)',
+  'bottom-end': 'bottom-4 end-4 me-(--wave-toaster-offset) mb-(--wave-toaster-offset-block)',
+  'top-right': 'top-4 right-4 mr-(--wave-toaster-offset) mt-(--wave-toaster-offset-block)', // wave-allow-physical: explicit physical position value
+  'top-left': 'top-4 left-4 ml-(--wave-toaster-offset) mt-(--wave-toaster-offset-block)', // wave-allow-physical: explicit physical position value
+  'bottom-right': 'bottom-4 right-4 mr-(--wave-toaster-offset) mb-(--wave-toaster-offset-block)', // wave-allow-physical: explicit physical position value
+  'bottom-left': 'bottom-4 left-4 ml-(--wave-toaster-offset) mb-(--wave-toaster-offset-block)', // wave-allow-physical: explicit physical position value
 };
 
 /** The toasts' distance from the window edges (`*-4`), also the tolerance for "at the edge". */
@@ -464,39 +465,66 @@ function isOnRightSide(position: ToastPosition, viewport: HTMLElement): boolean 
   return inline === 'end' ? !rtl : rtl;
 }
 
+/** How far the toasts move away from their corner, per axis, in px (`0`: they stay). */
+interface PanelOffsets {
+  /** Away from the toasts' side (`--wave-toaster-offset`). */
+  inline: number;
+  /** Away from their top or bottom edge (`--wave-toaster-offset-block`). */
+  block: number;
+}
+
+/** No panel at the toasts' corner: they keep it. */
+const NO_PANEL_OFFSETS: PanelOffsets = { inline: 0, block: 0 };
+
 /**
- * How far the toasts move away from their side while an open modal surface (a Drawer panel) covers
- * their corner, so they never hide the panel's controls (WCAG 2.4.11 Focus Not Obscured): the
- * surface's width from that side of the window, which leaves the usual gap between toasts and
- * panel. A surface counts when it reaches the toasts' side and their top or bottom edge (a centered
- * Dialog does not). `0` when no such surface is open, or when the toasts would not fit beside it
- * (a full-width panel on a phone): then they keep their corner.
+ * How far the toasts move away from their corner while an open panel covers it, so they never
+ * hide the panel's controls (WCAG 2.4.11 Focus Not Obscured). It reads every open layer of kind
+ * `'modal'` or `'dialog'` (a modal or non-modal Dialog or Drawer). An element of such a layer
+ * counts when it reaches the toasts' side and their top or bottom edge (a centered Dialog does
+ * not). The toasts move beside it when they fit there (a side panel: the offset is its width from
+ * that side of the window, which leaves the usual gap between toasts and panel); otherwise above
+ * it for bottom toasts, below it for top toasts, when they fit there (a bottom panel: its height);
+ * otherwise it is ignored (a full-width side panel or a full-height bottom panel on a phone), and
+ * they keep their corner. Each axis takes the largest offset of its panels, so a side panel and a
+ * bottom panel open together move the toasts on both axes; an axis without room keeps `0`.
  */
-function getSidePanelOffset(viewport: HTMLElement, position: ToastPosition): number {
-  const modals = getOpenLayers().filter((layer) => layer.kind === 'modal');
-  if (modals.length === 0) return 0;
+function getPanelOffsets(viewport: HTMLElement, position: ToastPosition): PanelOffsets {
+  const panels = getOpenLayers().filter(
+    (layer) => layer.kind === 'modal' || layer.kind === 'dialog',
+  );
+  if (panels.length === 0) return NO_PANEL_OFFSETS;
   const doc = viewport.ownerDocument;
   const view = doc.defaultView;
-  if (!view) return 0;
+  if (!view) return NO_PANEL_OFFSETS;
   // The box fixed elements are placed in: the window without its scrollbars.
   const width = doc.documentElement.clientWidth || view.innerWidth;
   const height = doc.documentElement.clientHeight || view.innerHeight;
   const right = isOnRightSide(position, viewport);
   const top = position.startsWith('top');
+  // Whether the toasts fit in what an offset leaves of the window's width or height.
+  const fitsInline = (offset: number) => width - offset >= viewport.offsetWidth + 2 * EDGE_GAP;
+  const fitsBlock = (offset: number) => height - offset >= viewport.offsetHeight + 2 * EDGE_GAP;
 
-  let offset = 0;
-  for (const layer of modals) {
+  let inline = 0;
+  let block = 0;
+  for (const layer of panels) {
     for (const el of layer.getElements()) {
       if (!el?.isConnected) continue;
       const box = el.getBoundingClientRect();
       if (box.width <= 0 || box.height <= 0) continue;
       const onSide = right ? box.right >= width - EDGE_GAP : box.left <= EDGE_GAP;
       const onEdge = top ? box.top <= EDGE_GAP : box.bottom >= height - EDGE_GAP;
-      if (onSide && onEdge) offset = Math.max(offset, right ? width - box.left : box.right);
+      if (!onSide || !onEdge) continue;
+      const inlineOffset = right ? width - box.left : box.right;
+      const blockOffset = top ? box.bottom : height - box.top;
+      if (fitsInline(inlineOffset)) inline = Math.max(inline, inlineOffset);
+      else if (fitsBlock(blockOffset)) block = Math.max(block, blockOffset);
     }
   }
-  if (offset <= 0 || width - offset < viewport.offsetWidth + 2 * EDGE_GAP) return 0;
-  return Math.ceil(offset);
+  return {
+    inline: inline > 0 && fitsInline(inline) ? Math.ceil(inline) : 0,
+    block: block > 0 && fitsBlock(block) ? Math.ceil(block) : 0,
+  };
 }
 
 /**
@@ -935,9 +963,10 @@ ToastContainer.displayName = 'ToastContainer';
  *   those, the dispatch's `announcement`.
  *   The toasts themselves are not live regions. Each message stays in its live region for 2
  *   seconds (or until its toast goes), so browsing the region later meets the text only once.
- * - While an open modal panel covers the toasts' corner (a Drawer on the same side), the toasts
- *   move beside it, so they never hide its focused controls (WCAG 2.4.11). Without room beside it
- *   (a full-width panel on a narrow screen) they keep their corner.
+ * - While an open panel covers the toasts' corner (a Drawer on the same side, or at the bottom),
+ *   the toasts move beside it, or above a bottom one (below it for top toasts), so they never hide
+ *   its focused controls (WCAG 2.4.11). Without room there (a full-width panel on a narrow screen)
+ *   they keep their corner.
  * - Timers pause while the pointer or focus is anywhere in the toast region, a menu or popover
  *   opened from a toast included (someone reading or operating one toast is reading the stack),
  *   and while the window is in the background (it has lost focus, or the page is not shown, as in
@@ -1022,15 +1051,29 @@ export const Toaster = ({
   const previousFocusRef = React.useRef<HTMLElement | null>(null);
   const dir = useDirection();
 
-  // Beside an open modal panel on the toasts' side (a Drawer), not over its controls. Measured when
-  // a layer opens or closes (synchronously in its layout effect, before paint), on resize, and
-  // after a transition or animation (a panel that slides in reaches its place only then).
-  const [sideOffset, setSideOffset] = React.useState(0);
+  // Beside or above an open panel at the toasts' corner (a Drawer), not over its controls. Measured
+  // when a layer opens or closes (synchronously in its layout effect, before paint), on resize,
+  // after a transition or animation (a panel that slides in reaches its place only then), and when
+  // the region's own size changes (the stack's height decides whether it fits above a panel).
+  const [panelOffsets, setPanelOffsets] = React.useState<PanelOffsets>(NO_PANEL_OFFSETS);
   React.useLayoutEffect(() => {
+    // The region is observed from `update`, so a region that renders after this effect (its portal
+    // waits for hydration) is observed from the next measure: a layer opening runs one.
+    let observer: ResizeObserver | null = null;
+    let observed: HTMLElement | null = null;
     const update = () => {
       const viewport = viewportRef.current;
-      setSideOffset(viewport ? getSidePanelOffset(viewport, position) : 0);
+      if (observer && viewport !== observed) {
+        if (observed) observer.unobserve(observed);
+        if (viewport) observer.observe(viewport);
+        observed = viewport;
+      }
+      const next = viewport ? getPanelOffsets(viewport, position) : NO_PANEL_OFFSETS;
+      setPanelOffsets((current) =>
+        current.inline === next.inline && current.block === next.block ? current : next,
+      );
     };
+    if (typeof ResizeObserver !== 'undefined') observer = new ResizeObserver(() => update());
     update();
     const unsubscribe = subscribeLayers(update);
     window.addEventListener('resize', update);
@@ -1038,6 +1081,7 @@ export const Toaster = ({
     document.addEventListener('animationend', update, true);
     return () => {
       unsubscribe();
+      observer?.disconnect();
       window.removeEventListener('resize', update);
       document.removeEventListener('transitionend', update, true);
       document.removeEventListener('animationend', update, true);
@@ -1350,8 +1394,14 @@ export const Toaster = ({
   }
 
   const viewportStyle =
-    sideOffset > 0
-      ? ({ ...style, '--wave-toaster-offset': `${sideOffset}px` } as React.CSSProperties)
+    panelOffsets.inline > 0 || panelOffsets.block > 0
+      ? ({
+          ...style,
+          ...(panelOffsets.inline > 0 && { '--wave-toaster-offset': `${panelOffsets.inline}px` }),
+          ...(panelOffsets.block > 0 && {
+            '--wave-toaster-offset-block': `${panelOffsets.block}px`,
+          }),
+        } as React.CSSProperties)
       : style;
 
   return (

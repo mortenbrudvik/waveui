@@ -11,6 +11,7 @@ import { toastClassNames, toastTitleClassNames } from '../../../lib/classNames';
 import { Portal } from '../../portal/Portal';
 import {
   expectNoA11yViolations,
+  installResizeObserverMock,
   renderWithProviders,
   testNoImplicitSubmit,
   testSystemProps,
@@ -1609,14 +1610,25 @@ describe('Toaster: beside an open modal side panel (feedback-navigation#50, WCAG
       toJSON: () => ({}),
     }) as DOMRect;
 
-  /** Stand-in for an open Drawer: a modal layer (F4 `useDismiss`) whose surface has `box`. */
-  function StandInPanel({ open, box }: { open: boolean; box: { current: Box } }) {
+  /**
+   * Stand-in for an open Drawer: a modal layer (F4 `useDismiss`) whose surface has `box`; `kind`
+   * picks another layer kind (`'dialog'`: a non-modal Drawer).
+   */
+  function StandInPanel({
+    open,
+    box,
+    kind = 'modal',
+  }: {
+    open: boolean;
+    box: { current: Box };
+    kind?: Parameters<typeof useDismiss>[0]['kind'];
+  }) {
     const surfaceRef = React.useRef<HTMLElement | null>(null);
     const { layerId } = useDismiss({
       open,
       onDismiss: () => {},
       refs: [surfaceRef],
-      kind: 'modal',
+      kind,
     });
     const attach = React.useCallback(
       (el: HTMLDivElement | null) => {
@@ -1746,6 +1758,144 @@ describe('Toaster: beside an open modal side panel (feedback-navigation#50, WCAG
     );
     expect(getViewport()).toHaveStyle({ gap: '12px' });
     expect(offset()).toBe('');
+  });
+
+  describe('above a bottom panel (P6-05 D84)', () => {
+    // A small bottom drawer: the whole width, 320px high.
+    const BOTTOM_EDGE: Box = { left: 0, right: 1024, top: 448, bottom: 768 };
+    // A medium bottom drawer: 592px high, leaving 176px above it.
+    const BOTTOM_MEDIUM: Box = { left: 0, right: 1024, top: 176, bottom: 768 };
+
+    const blockOffset = () => getViewport().style.getPropertyValue('--wave-toaster-offset-block');
+
+    /** Stubs the region's height (jsdom has no layout), as a stack of toasts would give it. */
+    const stubRegionHeight = (height: number) => {
+      Object.defineProperty(getViewport(), 'offsetHeight', { configurable: true, value: height });
+    };
+
+    it.each(['bottom-end', 'bottom-start', 'bottom-right', 'bottom-left'] as const)(
+      '%s toasts move above a bottom panel, and not beside it',
+      (position) => {
+        setup({ position, box: BOTTOM_EDGE });
+        expect(blockOffset()).toBe('320px');
+        expect(offset()).toBe('');
+      },
+    );
+
+    it('top toasts ignore a bottom panel, which does not reach their edge', () => {
+      setup({ position: 'top-end', box: BOTTOM_EDGE });
+      expect(blockOffset()).toBe('');
+      expect(offset()).toBe('');
+    });
+
+    it('a full-viewport panel moves the toasts on neither axis', () => {
+      setup({ box: FULL_WIDTH });
+      expect(blockOffset()).toBe('');
+      expect(offset()).toBe('');
+    });
+
+    it.each([
+      ['top-start', 'mt-(--wave-toaster-offset-block)'],
+      ['top-end', 'mt-(--wave-toaster-offset-block)'],
+      ['top-left', 'mt-(--wave-toaster-offset-block)'],
+      ['top-right', 'mt-(--wave-toaster-offset-block)'],
+      ['bottom-start', 'mb-(--wave-toaster-offset-block)'],
+      ['bottom-end', 'mb-(--wave-toaster-offset-block)'],
+      ['bottom-left', 'mb-(--wave-toaster-offset-block)'],
+      ['bottom-right', 'mb-(--wave-toaster-offset-block)'],
+    ] as const)('%s toasts carry the block margin %s', (position, expected) => {
+      setup({ position, open: false });
+      expect(getViewport()).toHaveClass(expected);
+      const other = expected.startsWith('mt-')
+        ? 'mb-(--wave-toaster-offset-block)'
+        : 'mt-(--wave-toaster-offset-block)';
+      expect(getViewport()).not.toHaveClass(other);
+    });
+
+    it('under RTL, bottom-end toasts move above a bottom panel too (the rule is direction-neutral)', () => {
+      setup({ dir: 'rtl', box: BOTTOM_EDGE });
+      expect(blockOffset()).toBe('320px');
+      expect(offset()).toBe('');
+    });
+
+    it('keeps the corner when the stack does not fit above the panel', () => {
+      const { box, setOpen } = setup({ box: BOTTOM_EDGE, open: false });
+      stubRegionHeight(400);
+      // 448px above a small bottom panel hold a 400px stack and its two 16px gaps.
+      setOpen(true);
+      expect(blockOffset()).toBe('320px');
+      setOpen(false);
+      // 176px above a medium one do not.
+      box.current = BOTTOM_MEDIUM;
+      setOpen(true);
+      expect(blockOffset()).toBe('');
+      expect(offset()).toBe('');
+    });
+
+    it('measures again when the region resizes (its stack grows) and when the window resizes', () => {
+      const resizeObserver = installResizeObserverMock();
+      try {
+        const { box } = setup({ box: BOTTOM_EDGE });
+        expect(blockOffset()).toBe('320px');
+
+        stubRegionHeight(440);
+        resizeObserver.trigger(getViewport());
+        expect(blockOffset()).toBe('');
+
+        stubRegionHeight(100);
+        resizeObserver.trigger(getViewport());
+        expect(blockOffset()).toBe('320px');
+
+        box.current = { ...BOTTOM_EDGE, top: 368 };
+        act(() => {
+          window.dispatchEvent(new Event('resize'));
+        });
+        expect(blockOffset()).toBe('400px');
+      } finally {
+        resizeObserver.restore();
+      }
+    });
+
+    it('clears the block offset when the panel closes', () => {
+      const { setOpen } = setup({ box: BOTTOM_EDGE });
+      expect(blockOffset()).toBe('320px');
+      setOpen(false);
+      expect(blockOffset()).toBe('');
+      expect(getViewport().style.length).toBe(0);
+    });
+
+    it('an end panel and a bottom panel open together move the toasts on both axes', () => {
+      const endBox = { current: END_EDGE };
+      const bottomBox = { current: BOTTOM_EDGE };
+      render(
+        <Toaster>
+          <StandInPanel open box={endBox} />
+          <StandInPanel open box={bottomBox} />
+        </Toaster>,
+      );
+      expect(offset()).toBe('320px');
+      expect(blockOffset()).toBe('320px');
+    });
+
+    it('counts a non-modal surface (the dialog layer kind) as a modal one', () => {
+      render(
+        <Toaster>
+          <StandInPanel open box={{ current: BOTTOM_EDGE }} kind="dialog" />
+        </Toaster>,
+      );
+      expect(blockOffset()).toBe('320px');
+    });
+
+    it('ignores a popover layer that reaches its corner', () => {
+      render(
+        <Toaster>
+          <StandInPanel open box={{ current: BOTTOM_EDGE }} kind="popover" />
+          <StandInPanel open box={{ current: END_EDGE }} kind="popover" />
+        </Toaster>,
+      );
+      expect(blockOffset()).toBe('');
+      expect(offset()).toBe('');
+    });
   });
 });
 
