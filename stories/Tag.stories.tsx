@@ -3,6 +3,7 @@ import type { ArgTypes, Meta, StoryObj } from '@storybook/react';
 import { fn } from 'storybook/test';
 import { Avatar, Button, PresenceBadge, Tag } from '../src';
 import type { TagAppearance, TagProps, TagShape, TagSize } from '../src';
+import { TagGroup } from '../src/components/data-display/TagGroup';
 /** The props Storybook passes (the default `<span>` Tag's props). */
 type TagStoryProps = React.ComponentProps<typeof Tag>;
 
@@ -70,50 +71,31 @@ function DismissibleTag(props: TagStoryProps) {
 const FILTERS = ['Red', 'Blue', 'Large'];
 
 /**
- * A filter bar that keeps its filters in state. Removing a tag moves focus to the next tag's
- * dismiss button, else the previous one, else "Reset filters", so keyboard focus is never lost.
- * "Reset filters" is unavailable but focusable (`disabledFocusable`) while every filter is set.
- * `Tag.test.tsx` implements the same recipe (its `FilterTags` component): keep the two in sync.
+ * A filter bar that keeps its filters in state, on a TagGroup toolbar (one Tab stop, the arrow
+ * keys between the dismiss buttons). The group reports each dismissal with the tag's `value`, and
+ * when the filter that had focus is removed it moves focus to the next filter's dismiss button,
+ * else the previous one, else "Reset filters" (its `fallbackFocusRef`), so keyboard focus is never
+ * lost. "Reset filters" is unavailable but focusable (`disabledFocusable`) while every filter is
+ * set.
  */
 function FilterBar(props: TagStoryProps) {
   const { onDismiss, ...rest } = props;
   const [filters, setFilters] = React.useState(FILTERS);
-  // Each rendered tag by filter, to reach its dismiss button (the tag's only button).
-  const tags = React.useRef(new Map<string, HTMLElement>());
   const reset = React.useRef<HTMLButtonElement>(null);
-
-  const dismiss = (filter: string) => {
-    onDismiss?.();
-    const index = filters.indexOf(filter);
-    const neighbour = filters[index + 1] ?? filters[index - 1];
-    const target =
-      neighbour === undefined
-        ? reset.current
-        : (tags.current.get(neighbour)?.querySelector('button') ?? null);
-    // The neighbour stays mounted, so it can take focus before the tag is removed.
-    target?.focus();
-    setFilters((current) => current.filter((f) => f !== filter));
-  };
 
   return (
     <div className="flex flex-wrap items-center gap-2">
-      <div role="group" aria-label="Active filters" className="flex flex-wrap gap-2">
+      <TagGroup
+        aria-label="Active filters"
+        fallbackFocusRef={reset}
+        onDismiss={(value) => setFilters((current) => current.filter((f) => f !== value))}
+      >
         {filters.map((filter) => (
-          <Tag
-            key={filter}
-            {...rest}
-            ref={(element) => {
-              if (element) tags.current.set(filter, element);
-              return () => {
-                tags.current.delete(filter);
-              };
-            }}
-            onDismiss={() => dismiss(filter)}
-          >
+          <Tag key={filter} {...rest} value={filter} onDismiss={onDismiss}>
             {filter}
           </Tag>
         ))}
-      </div>
+      </TagGroup>
       <Button
         ref={reset}
         appearance="subtle"
@@ -143,9 +125,10 @@ export const Dismissible: Story = {
 };
 
 /**
- * Every dismiss button of a filter bar has its own name ("Remove Red", "Remove Blue", …).
- * Removing a filter moves focus to the next filter's dismiss button, else the previous one, else
- * "Reset filters": the focus recipe of Tag's "Focus after dismissal" docs.
+ * Every dismiss button of a filter bar has its own name ("Remove Red", "Remove Blue", …). The
+ * filters are a TagGroup: Tab reaches the first one, Left/Right move between them, and Enter,
+ * Space, Delete or Backspace removes one. Removing a filter moves focus to the next filter's
+ * dismiss button, else the previous one, else "Reset filters" (the group's `fallbackFocusRef`).
  */
 export const FilterGroup: Story = {
   args: {

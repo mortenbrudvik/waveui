@@ -18,6 +18,7 @@ import {
   personaClassNames,
   presenceBadgeClassNames,
   tagClassNames,
+  tagGroupClassNames,
 } from '../../../lib/classNames';
 import { Button } from '../../button/Button';
 import type { Slot } from '../../../lib/slot';
@@ -33,6 +34,7 @@ import { List } from '../List';
 import { Persona } from '../Persona';
 import { PresenceBadge } from '../PresenceBadge';
 import { Tag } from '../Tag';
+import { TagGroup } from '../TagGroup';
 
 afterEach(() => {
   vi.restoreAllMocks();
@@ -218,6 +220,27 @@ describe('stable class names (P3-00): data-display folder', () => {
     const image = screen.getByText('Ada').parentElement?.querySelector('img');
     expect(image).toHaveClass(tagClassNames.icon);
     expect(image).toHaveAttribute('src', 'tag.svg');
+  });
+
+  it('TagGroup: root on the toolbar and on the list element', () => {
+    render(
+      <>
+        <TagGroup aria-label="Filters" dismissible className="wave-test-toolbar">
+          <Tag>Red</Tag>
+        </TagGroup>
+        <TagGroup role="list" aria-label="Skills" className="wave-test-list">
+          <Tag>React</Tag>
+        </TagGroup>
+      </>,
+    );
+    const toolbar = screen.getByRole('toolbar', { name: 'Filters' });
+    expect(toolbar).toHaveClass(tagGroupClassNames.root, 'wave-test-toolbar');
+    expect(toolbar.classList[0]).toBe(tagGroupClassNames.root);
+    const list = screen.getByRole('list', { name: 'Skills' });
+    expect(list).toHaveClass(tagGroupClassNames.root, 'wave-test-list');
+    // The tags keep their own root class, and no TagGroup class reaches them.
+    expect(within(list).getByRole('listitem')).toHaveClass(tagClassNames.root);
+    expect(within(list).getByRole('listitem')).not.toHaveClass(tagGroupClassNames.root);
   });
 
   it('Persona: root, the built-in Avatar (its own classes plus the avatar part), the badge element and the texts', () => {

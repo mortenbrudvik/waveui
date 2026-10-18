@@ -2,6 +2,7 @@ import { describe, it, expect, expectTypeOf, vi, afterEach } from 'vitest';
 import * as React from 'react';
 import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
+import { createPortal } from 'react-dom';
 import { renderToString } from 'react-dom/server';
 import { hydrateRoot } from 'react-dom/client';
 import { composeStories } from '@storybook/react';
@@ -206,9 +207,9 @@ describe('Tag', () => {
 
   describe('focus after a keyboard dismiss (the recipe of the "Focus after dismissal" docs)', () => {
     /**
-     * A filter bar that follows the documented recipe: when a dismissal removes a tag, focus the
-     * next tag's dismiss button, else the previous one, else a button next to the group. The
-     * `FilterBar` of `stories/Tag.stories.tsx` implements the same recipe: keep the two in sync.
+     * A filter bar that follows the documented recipe for standalone tags (README "Focus after
+     * dismissal"): when a dismissal removes a tag, focus the next tag's dismiss button, else the
+     * previous one, else a button next to the group. A TagGroup does this itself.
      */
     function FilterTags({ initial }: { initial: readonly string[] }) {
       const [filters, setFilters] = React.useState(initial);
@@ -2043,6 +2044,233 @@ describe('Tag', () => {
     expect(onDismiss).toHaveBeenCalledTimes(3);
   });
 
+  describe('Delete and Backspace (P6-02: D33)', () => {
+    it('dismisses on Delete and Backspace outside a TagGroup, once per press', async () => {
+      const user = userEvent.setup();
+      const onDismiss = vi.fn();
+      render(
+        <Tag dismissible onDismiss={onDismiss}>
+          Cherry
+        </Tag>,
+      );
+      await user.tab();
+      await user.keyboard('{Delete}');
+      expect(onDismiss).toHaveBeenCalledTimes(1);
+      await user.keyboard('{Backspace}');
+      expect(onDismiss).toHaveBeenCalledTimes(2);
+
+      const button = screen.getByRole('button', { name: 'Dismiss Cherry' });
+      // A held key repeats: only its first press dismisses.
+      fireEvent.keyDown(button, { key: 'Delete', repeat: true });
+      // Ctrl, Alt and Meta are other shortcuts; Shift is allowed.
+      fireEvent.keyDown(button, { key: 'Delete', ctrlKey: true });
+      fireEvent.keyDown(button, { key: 'Backspace', altKey: true });
+      fireEvent.keyDown(button, { key: 'Backspace', metaKey: true });
+      // An input method composing text owns the key.
+      fireEvent.keyDown(button, { key: 'Backspace', isComposing: true });
+      expect(onDismiss).toHaveBeenCalledTimes(2);
+      fireEvent.keyDown(button, { key: 'Delete', shiftKey: true });
+      expect(onDismiss).toHaveBeenCalledTimes(3);
+    });
+
+    it("dismisses through the button's own click, so the key reaches its onClick (detail 0)", () => {
+      const onClick = vi.fn((event: React.MouseEvent) => event.detail);
+      const onDismiss = vi.fn();
+      vi.spyOn(console, 'warn').mockImplementation(() => {});
+      render(
+        <Tag
+          dismissible
+          onDismiss={onDismiss}
+          dismissIcon={
+            <button type="button" onClick={onClick}>
+              <CustomIcon />
+            </button>
+          }
+        >
+          Cherry
+        </Tag>,
+      );
+      fireEvent.keyDown(screen.getByRole('button', { name: 'Dismiss Cherry' }), {
+        key: 'Delete',
+      });
+      expect(onClick).toHaveBeenCalledTimes(1);
+      expect(onClick).toHaveReturnedWith(0);
+      expect(onDismiss).toHaveBeenCalledTimes(1);
+      expect(vi.mocked(console.warn).mock.calls).toEqual([
+        [expect.stringContaining(BUTTON_SLOT_WARNING)],
+      ]);
+    });
+
+    it.each([
+      ['onKeyDown', { onKeyDown: (event: React.KeyboardEvent) => event.preventDefault() }],
+      ['onClick', { onClick: (event: React.MouseEvent) => event.preventDefault() }],
+    ] as const)("a merged button's %s preventDefault() cancels Delete", (_name, handlers) => {
+      const onDismiss = vi.fn();
+      const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+      render(
+        <Tag
+          dismissible
+          onDismiss={onDismiss}
+          dismissIcon={
+            <button type="button" {...handlers}>
+              <CustomIcon />
+            </button>
+          }
+        >
+          Cherry
+        </Tag>,
+      );
+      fireEvent.keyDown(screen.getByRole('button', { name: 'Dismiss Cherry' }), {
+        key: 'Delete',
+      });
+      expect(onDismiss).not.toHaveBeenCalled();
+      expect(warn.mock.calls).toEqual([[expect.stringContaining(BUTTON_SLOT_WARNING)]]);
+    });
+
+    it('a merged disabledFocusable Button blocks Delete', async () => {
+      const user = userEvent.setup();
+      const onDismiss = vi.fn();
+      const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+      render(
+        <Tag
+          dismissible
+          onDismiss={onDismiss}
+          dismissIcon={<Button disabledFocusable icon={<CustomIcon />} />}
+        >
+          Cherry
+        </Tag>,
+      );
+      await user.tab();
+      const button = screen.getByRole('button', { name: 'Dismiss Cherry' });
+      expect(button).toHaveFocus();
+      await user.keyboard('{Delete}{Backspace}');
+      expect(onDismiss).not.toHaveBeenCalled();
+      expect(warn.mock.calls).toEqual([[expect.stringContaining(BUTTON_SLOT_WARNING)]]);
+    });
+
+    it('dismisses a tag on Delete while a link in its text has focus', async () => {
+      const user = userEvent.setup();
+      const onDismiss = vi.fn();
+      render(
+        <Tag dismissible onDismiss={onDismiss}>
+          <a href="#react">React</a>
+        </Tag>,
+      );
+      await user.tab();
+      expect(screen.getByRole('link', { name: 'React' })).toHaveFocus();
+      await user.keyboard('{Delete}');
+      expect(onDismiss).toHaveBeenCalledTimes(1);
+      await user.keyboard('{Backspace}');
+      expect(onDismiss).toHaveBeenCalledTimes(2);
+      // The link keeps focus: the tag is the app's to remove.
+      expect(screen.getByRole('link', { name: 'React' })).toHaveFocus();
+      fireEvent.keyDown(screen.getByRole('link', { name: 'React' }), {
+        key: 'Delete',
+        repeat: true,
+      });
+      expect(onDismiss).toHaveBeenCalledTimes(2);
+    });
+
+    it('does not dismiss from an input in its text, from a portal opened from it, without a Dismiss button or while disabled', async () => {
+      const user = userEvent.setup();
+      const onDismiss = vi.fn();
+      const portalTarget = document.createElement('div');
+      document.body.appendChild(portalTarget);
+      try {
+        const { rerender } = render(
+          <Tag dismissible onDismiss={onDismiss}>
+            <a href="#react">React</a>
+            <input aria-label="Rename" defaultValue="React" />
+            {/* A popup opened from the tag: in the React tree, outside the tag in the DOM. */}
+            {createPortal(<button type="button">In a popup</button>, portalTarget)}
+          </Tag>,
+        );
+        await user.click(screen.getByRole('textbox', { name: 'Rename' }));
+        await user.keyboard('{Backspace}{Delete}');
+        expect(screen.getByRole('textbox', { name: 'Rename' })).toHaveValue('Reac');
+        fireEvent.keyDown(screen.getByRole('button', { name: 'In a popup' }), { key: 'Delete' });
+        expect(onDismiss).not.toHaveBeenCalled();
+
+        rerender(
+          <Tag dismissible onDismiss={onDismiss} disabled>
+            <a href="#react">React</a>
+          </Tag>,
+        );
+        fireEvent.keyDown(screen.getByRole('link', { name: 'React' }), { key: 'Delete' });
+        rerender(
+          <Tag onDismiss={onDismiss} dismissible={false}>
+            <a href="#react">React</a>
+          </Tag>,
+        );
+        fireEvent.keyDown(screen.getByRole('link', { name: 'React' }), { key: 'Delete' });
+        expect(onDismiss).not.toHaveBeenCalled();
+      } finally {
+        portalTarget.remove();
+      }
+    });
+
+    it("a consumer's onKeyDown on the tag runs first and its preventDefault() cancels Delete on a link", () => {
+      const onDismiss = vi.fn();
+      const onKeyDown = vi.fn((event: React.KeyboardEvent) => event.preventDefault());
+      render(
+        <Tag dismissible onDismiss={onDismiss} onKeyDown={onKeyDown}>
+          <a href="#react">React</a>
+        </Tag>,
+      );
+      fireEvent.keyDown(screen.getByRole('link', { name: 'React' }), { key: 'Delete' });
+      expect(onKeyDown).toHaveBeenCalledTimes(1);
+      expect(onDismiss).not.toHaveBeenCalled();
+    });
+
+    it('renders data-wave-tag-item and data-wave-tag-dismiss', () => {
+      render(
+        <>
+          <Tag data-testid="static">React</Tag>
+          <Tag dismissible data-testid="dismissible">
+            Cherry
+          </Tag>
+        </>,
+      );
+      expect(screen.getByTestId('static')).toHaveAttribute('data-wave-tag-item', '');
+      expect(screen.getByTestId('dismissible')).toHaveAttribute('data-wave-tag-item', '');
+      expect(screen.getByRole('button', { name: 'Dismiss Cherry' })).toHaveAttribute(
+        'data-wave-tag-dismiss',
+        '',
+      );
+    });
+
+    it("moves focus to the link in a standalone tag's text when its focused Dismiss button unmounts, and nowhere when the tag goes", async () => {
+      const user = userEvent.setup();
+      function Lockable() {
+        const [state, setState] = React.useState<'dismissible' | 'locked' | 'removed'>(
+          'dismissible',
+        );
+        return state === 'removed' ? null : (
+          <Tag
+            dismissible={state === 'dismissible'}
+            onDismiss={() => setState('locked')}
+            onKeyDown={(event) => {
+              if (event.key === 'x') setState('removed');
+            }}
+          >
+            <a href="#react">React</a>
+          </Tag>
+        );
+      }
+      render(<Lockable />);
+      await user.tab();
+      await user.tab();
+      expect(screen.getByRole('button', { name: 'Dismiss React' })).toHaveFocus();
+      await user.keyboard('{Enter}');
+      await act(async () => {});
+      expect(screen.getByRole('link', { name: 'React' })).toHaveFocus();
+      await user.keyboard('x');
+      await act(async () => {});
+      expect(screen.queryByRole('link')).toBeNull();
+      expect(document.activeElement).toBe(document.body);
+    });
+  });
+
   describe('types (button-provider#8, data-display#1)', () => {
     it('type-checks props against the `as` element', () => {
       const anchorRef = React.createRef<HTMLAnchorElement>();
@@ -2130,8 +2358,10 @@ describe('Tag stories', () => {
     const reset = screen.getByRole('button', { name: 'Reset filters' });
     expect(reset).toHaveAttribute('aria-disabled', 'true');
     expect(reset).not.toBeDisabled();
+    // A TagGroup toolbar: one Tab stop, then the arrow keys.
     await user.tab();
-    await user.tab();
+    expect(screen.getByRole('button', { name: 'Remove Red' })).toHaveFocus();
+    await user.keyboard('{ArrowRight}');
     expect(screen.getByRole('button', { name: 'Remove Blue' })).toHaveFocus();
 
     await user.keyboard('{Enter}');

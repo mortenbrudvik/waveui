@@ -1,11 +1,11 @@
 import * as React from 'react';
 import { cn } from '../../lib/cn';
 import { tagClassNames } from '../../lib/classNames';
-import { warnDeprecated, warnOnce } from '../../lib/dev';
+import { hasWarned, isDev, warnDeprecated, warnOnce } from '../../lib/dev';
 import { mergeProps } from '../../lib/mergeProps';
 import { getElementType } from '../../lib/children';
 import { composeEventHandlers } from '../../lib/composeEventHandlers';
-import { isOwnEvent } from '../../lib/events';
+import { isEditableTarget, isOwnEvent } from '../../lib/events';
 import {
   materialiseSlotContent,
   renderSlot,
@@ -18,7 +18,9 @@ import { hasRenderedTextLabel, hasTextLabel, observeTextLabel } from '../../lib/
 import type { Slot, SlotObject } from '../../lib/slot';
 import type { PolymorphicComponent, PolymorphicProps } from '../../lib/polymorphic';
 import type { TagAppearance, TagShape, TagSize } from '../../lib/types';
+import { useEventCallback } from '../../hooks/useEventCallback';
 import { useId } from '../../hooks/useId';
+import { useMergedRefs } from '../../hooks/useMergedRefs';
 import { Button } from '../button/Button';
 import {
   BUTTON_OWN_PROP_KEYS,
@@ -27,7 +29,15 @@ import {
   placeButtonIcon,
 } from '../button/Button.slots';
 import { AvatarSizeContext } from './Avatar.context';
-import { useHeldFocus } from './TagGroup.context';
+import {
+  TAG_GROUP_SELECTOR,
+  TagHostContext,
+  isDismissKey,
+  useDismissControlFocus,
+  useHeldFocus,
+  useTagGroupContext,
+  useTagGroupItem,
+} from './TagGroup.context';
 import {
   TAG_AVATAR_SIZE,
   TAG_DISABLED_DIM_CLASSES,
@@ -94,9 +104,9 @@ export interface TagOwnProps {
    */
   selected?: boolean;
   /**
-   * Identifies the tag in a TagGroup: the value its `onDismiss` receives. Renders nothing on the
-   * default `<span>`; with `as`, an element that takes a native `value` (a `<button>`, an `<li>`)
-   * still receives it.
+   * Identifies the tag in a TagGroup: the value its `onDismiss` receives (without one, a generated
+   * id). Give every tag of a group its own value. Renders nothing on the default `<span>`; with
+   * `as`, an element that takes a native `value` (a `<button>`, an `<li>`) still receives it.
    */
   value?: string;
   /**
@@ -114,17 +124,20 @@ export interface TagOwnProps {
    */
   secondaryText?: React.ReactNode;
   /**
-   * Whether the tag renders a dismiss button. `onDismiss` and `dismissIcon` take effect only with
-   * it (a development warning says so when they are passed without it). A Dismiss button cannot
-   * sit inside a link or a button: for a dismissible link chip, put the link in the content,
+   * Whether the tag renders a Dismiss button. `onDismiss` and `dismissIcon` take effect only with
+   * it (a development warning says so when they are passed without it). `dismissible={false}`
+   * opts a tag out of a dismissible TagGroup. A Dismiss button cannot sit inside a link or a
+   * button: for a dismissible link chip, put the link in the content,
    * `<Tag dismissible><a href="/topics/react">React</a></Tag>`.
    * @default the TagGroup's `dismissible`, else `false`
    */
   dismissible?: boolean;
   /**
-   * Called when the dismiss button is activated (click, Enter or Space). Passing it does not render
-   * the dismiss button: set `dismissible` too. When it removes the tag, move focus yourself (see
-   * "Focus after dismissal" on {@link Tag}).
+   * Called when the Dismiss button is activated: a click, Enter, Space, Delete or Backspace (a
+   * held key dismisses once). Passing it does not render the button: set `dismissible` too. In a
+   * TagGroup the group's `onDismiss(value)` is called after it, and focus moves to the next tag
+   * when the tag is removed. A standalone Tag cannot keep focus once you remove it: move focus
+   * yourself (see "Focus after dismissal" on {@link Tag}).
    */
   onDismiss?: () => void;
   /**
@@ -517,6 +530,10 @@ interface TagDismissButtonProps {
   dismissLabel: string;
   /** The id of the tag's primary text, the second half of the name. */
   contentId: string;
+  /** A host's whole name for the button (`TagHostContext`): `aria-label` alone. */
+  dismissName: string | undefined;
+  /** Receives the button, so the tag's root can click it (Delete on a link in the tag's text). */
+  buttonRef: React.Ref<HTMLButtonElement>;
 }
 
 /**
@@ -532,9 +549,17 @@ function TagDismissButton({
   disabled,
   dismissLabel,
   contentId,
+  dismissName,
+  buttonRef,
 }: TagDismissButtonProps) {
   const dismissLabelId = useId('tag-dismiss');
   const dismissTextId = useId('tag-dismiss-text');
+  const { ref: slotRef, ...ownProps } = buttonProps;
+  const ownRef = React.useRef<HTMLButtonElement>(null);
+  const mergedRef = useMergedRefs(ownRef, buttonRef, slotRef as React.Ref<HTMLButtonElement>);
+  // Unmounting while it has focus (`dismissible` turning `false`), the button hands focus to its
+  // tag's own control (a link in the text), else, in a TagGroup, to the next tag (D35).
+  useDismissControlFocus(ownRef);
 
   // C-SLOTS naming (WCAG 2.5.3 Label in Name): the rendered text label of a merged button replaces
   // `dismissLabel` in the name ("Remove Cherry"). The literal content decides on the server and on
@@ -564,22 +589,31 @@ function TagDismissButton({
       ? MERGED_DISABLED_FOCUSABLE_PROPS
       : undefined;
 
+  // A host's name (TagPicker's `labels.remove`) is the whole name: no hidden label text joins the
+  // tag's own text content.
+  const named = dismissName !== undefined;
   return (
     <button
-      {...buttonProps}
-      type={(buttonProps.type as 'button' | 'submit' | 'reset' | undefined) ?? 'button'}
+      {...ownProps}
+      ref={mergedRef}
+      type={(ownProps.type as 'button' | 'submit' | 'reset' | undefined) ?? 'button'}
       {...stateProps}
-      aria-labelledby={`${namedByContent ? dismissTextId : dismissLabelId} ${contentId}`}
-      onFocus={composeEventHandlers(buttonProps.onFocus as FocusHandler | undefined, hold.onFocus, {
+      aria-label={named ? dismissName : undefined}
+      aria-labelledby={
+        named ? undefined : `${namedByContent ? dismissTextId : dismissLabelId} ${contentId}`
+      }
+      onFocus={composeEventHandlers(ownProps.onFocus as FocusHandler | undefined, hold.onFocus, {
         checkDefaultPrevented: false,
       })}
-      onBlur={composeEventHandlers(buttonProps.onBlur as FocusHandler | undefined, hold.onBlur, {
+      onBlur={composeEventHandlers(ownProps.onBlur as FocusHandler | undefined, hold.onBlur, {
         checkDefaultPrevented: false,
       })}
     >
-      <span id={dismissLabelId} className="sr-only">
-        {dismissLabel}
-      </span>
+      {!named && (
+        <span id={dismissLabelId} className="sr-only">
+          {dismissLabel}
+        </span>
+      )}
       {contentMayName ? (
         // The merged button's own content, rendered as is: its text label can name the button.
         // `gap-[inherit]` keeps a gap set on the button between the content items.
@@ -598,12 +632,43 @@ function TagDismissButton({
 }
 TagDismissButton.displayName = 'TagDismissButton';
 
+/** Elements that never take the `listitem` role in a list TagGroup: interactive, or a list item already. */
+const NO_LIST_ITEM_ROLE_ELEMENTS: ReadonlySet<string> = new Set([
+  'a',
+  'button',
+  'input',
+  'select',
+  'textarea',
+  'li',
+]);
+
+const LIST_ITEM_MESSAGE =
+  'TagGroup: a tag in a `role="list"` group is not a list item (its element is a link, a button or a component). Put a link in the tag\'s content (`<Tag><a href>…</a></Tag>`), or wrap the tag in an element with `role="listitem"`.';
+
+/**
+ * Whether a tag root in a list TagGroup is a list item: it has the role, or an element between it
+ * and the group root has it (a wrapping `<li>` or `role="listitem"` element), as the list requires
+ * of its children.
+ */
+function isInListItem(root: HTMLElement): boolean {
+  for (
+    let element: HTMLElement | null = root;
+    element && !element.matches(TAG_GROUP_SELECTOR);
+    element = element.parentElement
+  ) {
+    if (element.getAttribute('role') === 'listitem' || element.localName === 'li') return true;
+  }
+  return false;
+}
+
 /**
  * A compact label (a "chip") for a keyword, category or filter, optionally dismissible.
  *
  * - The dismiss button is a real `<button type="button">` wired to `onDismiss`. Its accessible
  *   name is `dismissLabel` plus the tag's text (its children; not `media`, `icon` or
  *   `secondaryText`): "Dismiss Cherry", so a row of tags has distinguishable dismiss buttons.
+ *   Enter, Space, Delete and Backspace on it dismiss the tag (a held key dismisses once), and so do
+ *   Delete and Backspace on a link in the tag's text.
  * - `dismissIcon` replaces only the icon inside that button (see {@link TagOwnProps.dismissIcon}).
  * - The look: `appearance` (`filled`, `outline` or `brand`), `size` (28, 24 or 20px tall),
  *   `shape` (`circular` or `rounded`) and the look-only `selected`, rendered as `data-appearance`,
@@ -611,14 +676,18 @@ TagDismissButton.displayName = 'TagDismissButton';
  *   dismiss button natively (`data-disabled`).
  * - Slots before and under the text: `media` (an Avatar, sized for the tag), a decorative `icon`
  *   and a second line, `secondaryText`.
+ * - In a TagGroup, a tag takes the group's `size`, `appearance`, `shape` and `dismissible` unless
+ *   it sets its own, is disabled with the group, reports its dismissal to the group's
+ *   `onDismiss(value)`, and is a list item in a `role="list"` group.
  * - Polymorphic: `as="a"` renders a link chip with anchor props type-checked. A dismissible link
  *   chip puts the link in the content, `<Tag dismissible><a href>…</a></Tag>`: a dismiss button
  *   cannot sit inside a link.
  *
- * **Focus after dismissal.** A tag cannot keep focus once you remove it. When `onDismiss` removes
- * the tag, move focus to the next tag's dismiss button (else the previous one, else a sensible
- * element nearby); TagGroup (planned) will do this for you. The neighbour stays mounted, so you
- * can focus it in `onDismiss` before removing the tag.
+ * **Focus after dismissal.** A tag cannot keep focus once you remove it. In a TagGroup, focus
+ * moves to the next tag for you (else the previous one, else the group's `fallbackFocusRef`). For
+ * a standalone tag, move focus to the next tag's dismiss button, else the previous one, else a
+ * nearby control, then remove the tag: the neighbour stays mounted, so you can focus it in
+ * `onDismiss` before removing the tag.
  *
  * @example
  * <Tag>React</Tag>
@@ -639,29 +708,49 @@ export const Tag: PolymorphicComponent<'span', TagOwnProps> = (props) => {
     media,
     icon,
     secondaryText,
-    dismissible,
+    dismissible: dismissibleProp,
     onDismiss,
     dismissIcon,
     dismissLabel = 'Dismiss',
     className,
     children,
+    role,
+    hidden,
     onClick,
     onFocus,
     onBlur,
+    onKeyDown,
     ref,
     ...rest
   } = props as TagImplProps;
   const Component: React.ElementType = as ?? 'span';
   const contentId = useId('tag-content');
+  const group = useTagGroupContext();
+  const host = React.useContext(TagHostContext);
+  const rootRef = React.useRef<HTMLElement>(null);
+  const mergedRef = useMergedRefs<HTMLElement>(rootRef, ref);
+  const primaryTextRef = React.useRef<HTMLSpanElement>(null);
+  const dismissButtonRef = React.useRef<HTMLButtonElement>(null);
 
-  const size: TagSize = isKeyOf(sizeProp, tagSizeClasses) ? sizeProp : 'medium';
+  // The tag's own look, else its TagGroup's, else the 0.10 look.
+  const size: TagSize = isKeyOf(sizeProp, tagSizeClasses) ? sizeProp : (group?.size ?? 'medium');
   const appearance: TagAppearance = isKeyOf(appearanceProp, tagAppearanceClasses)
     ? appearanceProp
-    : 'filled';
-  const shape: TagShape = isKeyOf(shapeProp, tagShapeClasses) ? shapeProp : 'circular';
-  const disabled = disabledProp ?? false;
+    : (group?.appearance ?? 'filled');
+  const shape: TagShape = isKeyOf(shapeProp, tagShapeClasses)
+    ? shapeProp
+    : (group?.shape ?? 'circular');
+  // A disabled group disables every tag: a tag's own `disabled={false}` cannot re-enable it.
+  const disabled = (group?.disabled ?? false) || disabledProp === true;
+  const dismissible = dismissibleProp ?? group?.dismissible ?? false;
   // Disabled wins over the selected look; both attributes still reflect the props.
   const look: TagLook = selected && !disabled ? 'selected' : appearance;
+  // A host that dims the area holding its tags (TagPicker's disabled control) dims them once.
+  const dimDisabled = group?.dimDisabled ?? true;
+
+  const reportedValue = useTagGroupItem(rootRef, value, {
+    reported: dismissible && (group?.reportsDismissals ?? false),
+  });
 
   // A link root is disabled as Nav.Item's link is: `aria-disabled`, `role="link"` and no `href`,
   // so it leaves the Tab order. One that has focus when it is disabled keeps its `href`, and
@@ -697,9 +786,12 @@ export const Tag: PolymorphicComponent<'span', TagOwnProps> = (props) => {
   }, [warning]);
 
   // `onDismiss`/`dismissIcon` alone render no dismiss button (unlike MessageBar's `onDismiss`).
-  // An explicit `dismissible={false}` is a deliberate state, so only a missing flag warns.
+  // An explicit `dismissible={false}` is a deliberate state, and a dismissible TagGroup makes the
+  // tag dismissible, so only a missing flag warns.
   const dismissPropsIgnored =
-    dismissible === undefined && (onDismiss !== undefined || dismissIcon !== undefined);
+    dismissibleProp === undefined &&
+    !(group?.dismissible ?? false) &&
+    (onDismiss !== undefined || dismissIcon !== undefined);
   React.useEffect(() => {
     if (dismissPropsIgnored) {
       warnOnce(
@@ -717,6 +809,15 @@ export const Tag: PolymorphicComponent<'span', TagOwnProps> = (props) => {
       );
     }
   }, [ignoredName]);
+
+  // A list's children must be list items (axe `aria-required-children`): a tag whose element
+  // takes no `listitem` role (a link, a button, a component) needs a wrapping list item.
+  const inList = group?.mode === 'list';
+  React.useEffect(() => {
+    if (!inList || !isDev || hasWarned('TagGroup:list-item')) return;
+    const root = rootRef.current;
+    if (root && !isInListItem(root)) warnOnce('TagGroup:list-item', LIST_ITEM_MESSAGE);
+  });
 
   // Slots that render nothing (`''`, `[]`, `<></>`, an empty generator) render no element and
   // take no room.
@@ -745,6 +846,15 @@ export const Tag: PolymorphicComponent<'span', TagOwnProps> = (props) => {
     }
   }
 
+  // In a list TagGroup the root is a list item, unless its element is interactive or a list item
+  // already, or a component; the consumer's role wins.
+  const listItemRole =
+    inList && typeof Component === 'string' && !NO_LIST_ITEM_ROLE_ELEMENTS.has(Component)
+      ? 'listitem'
+      : undefined;
+  // A host hides the tags it counts instead of showing them (TagPicker's `overflow="count"`).
+  const hiddenByHost = value !== undefined && (group?.hiddenValues?.has(value) ?? false);
+
   const handleClick = linkDisabled
     ? (event: React.MouseEvent<HTMLElement>) => {
         // A click from a portal opened inside the tag is not the link's (C-COMPOSE).
@@ -752,6 +862,18 @@ export const Tag: PolymorphicComponent<'span', TagOwnProps> = (props) => {
         else onClick?.(event);
       }
     : onClick;
+
+  // Delete and Backspace on a focused element in the tag's text (a link chip's link) dismiss the
+  // tag through its Dismiss button's click, which a disabled or held button blocks; never from an
+  // editable field (its Backspace edits), the Dismiss button's own keys or a portal opened inside.
+  const handleRootKeyDown = useEventCallback((event: React.KeyboardEvent<HTMLElement>) => {
+    const text = primaryTextRef.current;
+    const button = dismissButtonRef.current;
+    if (!text || !button || !isDismissKey(event)) return;
+    if (!text.contains(event.target as Node) || isEditableTarget(event.target)) return;
+    event.preventDefault();
+    button.click();
+  });
 
   const ownButtonProps: UnknownProps = {
     type: 'button',
@@ -765,11 +887,23 @@ export const Tag: PolymorphicComponent<'span', TagOwnProps> = (props) => {
       focusRing,
       tagDismissRingClasses[size],
       look === 'selected' && TAG_DISMISS_SELECTED_RING_CLASSES,
+      host?.dismissButtonClassName,
     ),
+    // Delete and Backspace dismiss as Enter does: through the button's own click, so whatever
+    // cancels a click (a merged slot's `preventDefault()`, a held or disabled button) cancels
+    // them too.
+    onKeyDown: (event: React.KeyboardEvent<HTMLButtonElement>) => {
+      if (event.target !== event.currentTarget || !isDismissKey(event)) return;
+      event.preventDefault();
+      event.currentTarget.click();
+    },
   };
-  if (onDismiss) {
+  if (onDismiss || group) {
+    // The tag's own `onDismiss` first, then the group's `onDismiss(value)`, in the same click.
     ownButtonProps.onClick = (event: React.MouseEvent<HTMLButtonElement>) => {
-      if (isOwnEvent(event)) onDismiss();
+      if (!isOwnEvent(event)) return;
+      onDismiss?.();
+      group?.dismiss(reportedValue);
     };
   }
   const dismissButtonProps = slotButtonProps
@@ -779,6 +913,7 @@ export const Tag: PolymorphicComponent<'span', TagOwnProps> = (props) => {
   const primaryText = (
     <span
       id={contentId}
+      ref={primaryTextRef}
       className={cn(
         tagClassNames.primaryText,
         'inline-flex items-center gap-1',
@@ -797,9 +932,11 @@ export const Tag: PolymorphicComponent<'span', TagOwnProps> = (props) => {
       data-selected={selected ? '' : undefined}
       data-disabled={disabled ? '' : undefined}
       data-wave-tag-item=""
+      role={role ?? listItemRole}
+      hidden={hiddenByHost || hidden}
       {...rest}
       {...elementProps}
-      ref={ref}
+      ref={mergedRef}
       className={cn(
         tagClassNames.root,
         TAG_ROOT_BASE_CLASSES,
@@ -809,11 +946,12 @@ export const Tag: PolymorphicComponent<'span', TagOwnProps> = (props) => {
         look === 'selected'
           ? [TAG_SELECTED_CLASSES, forcedColors.selectedContainer]
           : tagAppearanceClasses[appearance],
-        disabled && [TAG_DISABLED_DIM_CLASSES, forcedColors.disabled],
+        disabled && [dimDisabled && TAG_DISABLED_DIM_CLASSES, forcedColors.disabled],
         tagShapeClasses[shape],
         className,
       )}
       onClick={handleClick}
+      onKeyDown={composeEventHandlers(onKeyDown, handleRootKeyDown)}
       onFocus={composeEventHandlers(onFocus, rootHold.onFocus, { checkDefaultPrevented: false })}
       onBlur={composeEventHandlers(onBlur, rootHold.onBlur, { checkDefaultPrevented: false })}
     >
@@ -847,6 +985,8 @@ export const Tag: PolymorphicComponent<'span', TagOwnProps> = (props) => {
           disabled={disabled}
           dismissLabel={dismissLabel}
           contentId={contentId}
+          dismissName={host?.dismissName}
+          buttonRef={dismissButtonRef}
         />
       )}
     </Component>
