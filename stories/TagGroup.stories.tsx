@@ -1,7 +1,7 @@
 import * as React from 'react';
 import type { ArgTypes, Meta, StoryObj } from '@storybook/react';
 import { fn } from 'storybook/test';
-import { Avatar, Button, Tag } from '../src';
+import { Avatar, Button, Tag, Text } from '../src';
 import type { TagAppearance, TagShape, TagSize } from '../src';
 import { TagGroup } from '../src/components/data-display/TagGroup';
 import { InteractionTag } from '../src/components/data-display/InteractionTag';
@@ -146,6 +146,120 @@ export const WithInteractionTags: Story = {
   render: (args) => <Reviewers {...args} />,
 };
 
+const FRUIT = ['Cherry', 'Plum', 'Fig', 'Kiwi'];
+
+/** The selected values as a sentence, for the stories that show them. */
+const selectedText = (values: readonly string[]) =>
+  `Selected: ${values.length > 0 ? values.join(', ') : 'none'}`;
+
+/**
+ * Fruit chips the story keeps the selection of: the group reports each toggle with the new values
+ * (in selection order), and the line below shows them.
+ */
+function SelectableChips(props: TagGroupProps) {
+  const { value: _value, defaultValue, onValueChange, ...rest } = props;
+  const [selected, setSelected] = React.useState<readonly string[]>(defaultValue ?? []);
+  return (
+    <div className="flex flex-col items-start gap-2">
+      <TagGroup
+        {...rest}
+        value={selected}
+        onValueChange={(value) => {
+          onValueChange?.(value);
+          setSelected(value);
+        }}
+      >
+        {FRUIT.map((fruit) => (
+          <InteractionTag key={fruit} value={fruit.toLowerCase()}>
+            <InteractionTag.Primary>{fruit}</InteractionTag.Primary>
+          </InteractionTag>
+        ))}
+      </TagGroup>
+      <Text variant="caption-1">{selectedText(selected)}</Text>
+    </div>
+  );
+}
+
+/**
+ * Filter chips: with `value` and `onValueChange` (Fluent's `selectedValues` and `onTagSelect`)
+ * the group selects, and every `InteractionTag.Primary` is a toggle (`aria-pressed`). Tab reaches
+ * the chips, Left/Right move between them, and Enter or Space toggles one; the arrow keys never
+ * toggle. Plain Tags are never selected.
+ */
+export const Selectable: Story = {
+  args: {
+    'aria-label': 'Fruit',
+    dismissible: false,
+    defaultValue: ['plum'],
+    onValueChange: fn(),
+  },
+  render: (args) => <SelectableChips {...args} />,
+};
+
+/**
+ * Fruit chips with a Dismiss button each: the story keeps the fruit and the selection, removes a
+ * fruit when the group reports its dismissal, and "Restore fruit" brings them back.
+ */
+function SelectableDismissibleChips(props: TagGroupProps) {
+  const { value: _value, defaultValue, onValueChange, onDismiss, ...rest } = props;
+  const [fruit, setFruit] = React.useState(FRUIT);
+  const [selected, setSelected] = React.useState<readonly string[]>(defaultValue ?? []);
+  const restore = React.useRef<HTMLButtonElement>(null);
+  return (
+    <div className="flex flex-col items-start gap-2">
+      <div className="flex flex-wrap items-center gap-2">
+        <TagGroup
+          {...rest}
+          fallbackFocusRef={restore}
+          value={selected}
+          onValueChange={(value) => {
+            onValueChange?.(value);
+            setSelected(value);
+          }}
+          onDismiss={(value) => {
+            onDismiss?.(value);
+            setFruit((current) => current.filter((item) => item.toLowerCase() !== value));
+          }}
+        >
+          {fruit.map((item) => (
+            <InteractionTag key={item} value={item.toLowerCase()}>
+              <InteractionTag.Primary>{item}</InteractionTag.Primary>
+              <InteractionTag.Secondary />
+            </InteractionTag>
+          ))}
+        </TagGroup>
+        <Button
+          ref={restore}
+          appearance="subtle"
+          size="small"
+          disabledFocusable={fruit.length === FRUIT.length}
+          onClick={() => setFruit(FRUIT)}
+        >
+          Restore fruit
+        </Button>
+      </div>
+      <Text variant="caption-1">{selectedText(selected)}</Text>
+    </div>
+  );
+}
+
+/**
+ * Chips that are selected and dismissed: each InteractionTag has a Secondary, and both of its
+ * buttons join the arrow order. Dismissing a selected chip calls `onDismiss` and then
+ * `onValueChange` without its value, so the selection never keeps a removed chip. Focus then
+ * moves to the next chip, else the previous one, else "Restore fruit", the group's
+ * `fallbackFocusRef`.
+ */
+export const SelectableDismissible: Story = {
+  args: {
+    'aria-label': 'Fruit',
+    dismissible: false,
+    defaultValue: ['cherry', 'fig'],
+    onValueChange: fn(),
+  },
+  render: (args) => <SelectableDismissibleChips {...args} />,
+};
+
 /** The group's `size` sizes its tags (28, 24 or 20px tall) and the gap between them. */
 export const Sizes: Story = {
   render: (args) => (
@@ -233,4 +347,57 @@ export const StaticList: Story = {
       </Tag>
     </TagGroup>
   ),
+};
+
+/** A form around the group that prints its entries when it is submitted. */
+function FruitOrder(props: TagGroupProps) {
+  const [submitted, setSubmitted] = React.useState<string | null>(null);
+  return (
+    <form
+      aria-label="Fruit order"
+      className="flex flex-col items-start gap-3"
+      onSubmit={(event) => {
+        event.preventDefault();
+        const entries = [...new FormData(event.currentTarget).entries()];
+        setSubmitted(entries.map(([key, value]) => `${key}=${String(value)}`).join(', '));
+      }}
+      onReset={() => setSubmitted(null)}
+    >
+      <TagGroup {...props}>
+        {FRUIT.map((fruit) => (
+          <InteractionTag key={fruit} value={fruit.toLowerCase()}>
+            <InteractionTag.Primary>{fruit}</InteractionTag.Primary>
+          </InteractionTag>
+        ))}
+      </TagGroup>
+      <div className="flex gap-2">
+        <Button type="submit" appearance="primary" size="small">
+          Order
+        </Button>
+        <Button type="reset" size="small">
+          Reset
+        </Button>
+      </div>
+      <output className="text-caption-1 text-muted-foreground">
+        {submitted === null ? 'Nothing submitted yet' : `Submitted: ${submitted || 'nothing'}`}
+      </output>
+    </form>
+  );
+}
+
+/**
+ * In a form: with `name` the group submits one entry per selected value (the hidden inputs sit in
+ * the group), `required` blocks the submission of an empty selection and moves focus to the
+ * group's Tab stop, and Reset restores `defaultValue`. "Order" prints the submitted entries.
+ */
+export const InAForm: Story = {
+  args: {
+    'aria-label': 'Fruit',
+    dismissible: false,
+    name: 'fruit',
+    required: true,
+    defaultValue: ['plum'],
+    onValueChange: fn(),
+  },
+  render: (args) => <FruitOrder {...args} />,
 };

@@ -855,12 +855,18 @@ describe('InteractionTag', () => {
 
   it('ignores clicks and keys from a popup (portal) opened from the Primary or the Secondary', () => {
     const onDismiss = vi.fn();
+    const onValueChange = vi.fn();
     const onClick = vi.fn();
     const portalTarget = document.createElement('div');
     document.body.appendChild(portalTarget);
     try {
       render(
-        <TagGroup aria-label="Fruit" onDismiss={onDismiss}>
+        <TagGroup
+          aria-label="Fruit"
+          onDismiss={onDismiss}
+          defaultValue={['cherry']}
+          onValueChange={onValueChange}
+        >
           <InteractionTag value="cherry">
             <InteractionTag.Primary>
               Cherry
@@ -880,8 +886,10 @@ describe('InteractionTag', () => {
         fireEvent.click(inPopup);
       }
       // The Secondary's own `onClick` sees the bubbled click (React's portal bubbling), but the
-      // group is never told of a dismissal.
+      // group is never told of a dismissal, and the Primary does not toggle.
       expect(onDismiss).not.toHaveBeenCalled();
+      expect(onValueChange).not.toHaveBeenCalled();
+      expect(primary()).toHaveAttribute('aria-pressed', 'true');
       expect(onClick).toHaveBeenCalledTimes(1);
       expect(onClick.mock.calls[0][0].target).toBe(
         screen.getByRole('button', { name: 'In a dismiss popup' }),

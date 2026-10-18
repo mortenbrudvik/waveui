@@ -39,6 +39,8 @@ const STATIC_TOOLBAR_WARNING =
   '[WaveUI] TagGroup: this toolbar has tags but no control (no Dismiss button, InteractionTag or link). Pass `role="list"` for tags that only display.';
 const LIST_ITEM_WARNING =
   '[WaveUI] TagGroup: a tag in a `role="list"` group is not a list item (its element is a link, a button or a component). Put a link in the tag\'s content (`<Tag><a href>…</a></Tag>`), or wrap the tag in an element with `role="listitem"`.';
+const SELECTED_IN_GROUP_WARNING =
+  "[WaveUI] InteractionTag: `selected` has no effect in a TagGroup that selects (`value`, `defaultValue` or `onValueChange`); the group's `value` decides.";
 
 /** Spies on `console.warn`; read the messages with `warnings()`. */
 function spyOnWarnings() {
@@ -80,6 +82,50 @@ function Interaction({
 /** Lets the focus move after a removal (a microtask after the commit) land. */
 async function settle() {
   await act(async () => {});
+}
+
+const FRUITS = ['Cherry', 'Plum', 'Fig'];
+
+interface ChipsProps extends Partial<TagGroupProps> {
+  /** The Primaries' texts; each tag's `value` is its text in lower case. */
+  fruits?: readonly string[];
+  /** Renders an `InteractionTag.Secondary` on every tag. @default false */
+  withSecondary?: boolean;
+}
+
+/** Selectable fruit chips: InteractionTags in a TagGroup named "Fruit". */
+function Chips({ fruits = FRUITS, withSecondary = false, ...props }: ChipsProps) {
+  return (
+    <TagGroup aria-label="Fruit" {...props}>
+      {fruits.map((fruit) => (
+        <Interaction
+          key={fruit}
+          text={fruit}
+          value={fruit.toLowerCase()}
+          withSecondary={withSecondary}
+        />
+      ))}
+    </TagGroup>
+  );
+}
+
+/** The `aria-pressed` of each Primary of `texts`, in order. */
+const pressedStates = (texts: readonly string[] = FRUITS) =>
+  texts.map((text) => primaryButton(text).getAttribute('aria-pressed'));
+
+/** The form named `name`. */
+const formNamed = (name: string) => screen.getByRole('form', { name }) as HTMLFormElement;
+
+/**
+ * `form.checkValidity()` inside `act()`: it fires `invalid` at a required, empty group's hidden
+ * input, whose handler moves focus (a state update of the held-focus hook).
+ */
+function checkValidity(form: HTMLFormElement): boolean {
+  let valid = false;
+  act(() => {
+    valid = form.checkValidity();
+  });
+  return valid;
 }
 
 interface FiltersProps {
@@ -183,6 +229,47 @@ describe('TagGroup', () => {
       },
       { name: 'disabled list', props: { role: 'list', disabled: true, dismissible: true } },
       { name: 'vertical', props: { orientation: 'vertical', dismissible: true } },
+      {
+        name: 'selecting InteractionTags',
+        props: {
+          defaultValue: ['plum'],
+          children: [
+            <Interaction key="cherry" text="Cherry" withSecondary={false} />,
+            <Interaction key="plum" text="Plum" value="plum" withSecondary={false} />,
+          ],
+        },
+      },
+      {
+        name: 'selecting and dismissible InteractionTags',
+        props: {
+          defaultValue: ['cherry'],
+          children: [
+            <Interaction key="cherry" text="Cherry" value="cherry" />,
+            <Interaction key="plum" text="Plum" value="plum" />,
+          ],
+        },
+      },
+      {
+        name: 'required with name',
+        props: {
+          name: 'fruit',
+          required: true,
+          onValueChange: () => {},
+          children: [
+            <Interaction key="cherry" text="Cherry" value="cherry" withSecondary={false} />,
+            <Interaction key="plum" text="Plum" value="plum" withSecondary={false} />,
+          ],
+        },
+      },
+      {
+        name: 'disabled selecting InteractionTags with name',
+        props: {
+          disabled: true,
+          name: 'fruit',
+          defaultValue: ['cherry'],
+          children: <Interaction text="Cherry" value="cherry" />,
+        },
+      },
     ],
   });
 
@@ -1535,6 +1622,508 @@ describe('TagGroup', () => {
     });
   });
 
+  describe('selection (D38, D39)', () => {
+    it('selects InteractionTags from defaultValue (uncontrolled)', async () => {
+      const user = userEvent.setup();
+      render(<Chips defaultValue={['plum']} />);
+      expect(pressedStates()).toEqual(['false', 'true', 'false']);
+      await user.click(primaryButton('Cherry'));
+      expect(pressedStates()).toEqual(['true', 'true', 'false']);
+      await user.click(primaryButton('Plum'));
+      expect(pressedStates()).toEqual(['true', 'false', 'false']);
+    });
+
+    it('keeps a controlled value when the parent ignores onValueChange', async () => {
+      const user = userEvent.setup();
+      const onValueChange = vi.fn();
+      render(<Chips value={['plum']} onValueChange={onValueChange} />);
+      // Each click is its own task, so each starts from the rendered value again.
+      await user.click(primaryButton('Cherry'));
+      await user.click(primaryButton('Cherry'));
+      await user.click(primaryButton('Plum'));
+      expect(onValueChange.mock.calls).toEqual([[['plum', 'cherry']], [['plum', 'cherry']], [[]]]);
+      expect(pressedStates()).toEqual(['false', 'true', 'false']);
+    });
+
+    it('follows a controlled value', async () => {
+      const user = userEvent.setup();
+      function Controlled() {
+        const [value, setValue] = React.useState<readonly string[]>(['fig']);
+        return <Chips value={value} onValueChange={setValue} />;
+      }
+      render(<Controlled />);
+      expect(pressedStates()).toEqual(['false', 'false', 'true']);
+      await user.click(primaryButton('Cherry'));
+      expect(pressedStates()).toEqual(['true', 'false', 'true']);
+    });
+
+    it('reports values in selection order, once per toggle in StrictMode', async () => {
+      const user = userEvent.setup();
+      const onValueChange = vi.fn();
+      render(
+        <React.StrictMode>
+          <Chips onValueChange={onValueChange} />
+        </React.StrictMode>,
+      );
+      for (const fruit of ['Fig', 'Cherry', 'Fig', 'Plum']) {
+        await user.click(primaryButton(fruit));
+      }
+      expect(onValueChange.mock.calls).toEqual([
+        [['fig']],
+        [['fig', 'cherry']],
+        [['cherry']],
+        [['cherry', 'plum']],
+      ]);
+    });
+
+    it('emits a new array that the group does not keep', async () => {
+      const user = userEvent.setup();
+      const emitted: string[][] = [];
+      render(
+        <Chips
+          onValueChange={(value) => {
+            emitted.push(value);
+            // The callback's array is the app's: changing it does not change the group.
+            value.push('kiwi');
+          }}
+        />,
+      );
+      await user.click(primaryButton('Cherry'));
+      await user.click(primaryButton('Plum'));
+      expect(emitted).toEqual([
+        ['cherry', 'kiwi'],
+        ['cherry', 'plum', 'kiwi'],
+      ]);
+    });
+
+    it('keeps selected values that have no tag', async () => {
+      const user = userEvent.setup();
+      const onValueChange = vi.fn();
+      render(<Chips defaultValue={['kiwi']} onValueChange={onValueChange} />);
+      expect(pressedStates()).toEqual(['false', 'false', 'false']);
+      await user.click(primaryButton('Cherry'));
+      await user.click(primaryButton('Cherry'));
+      expect(onValueChange.mock.calls).toEqual([[['kiwi', 'cherry']], [['kiwi']]]);
+    });
+
+    it('renders aria-pressed true and false on Primaries and data-selected on the root, Primary and Secondary', () => {
+      render(
+        <TagGroup aria-label="Fruit" defaultValue={['cherry']}>
+          <Interaction text="Cherry" value="cherry" data-testid="cherry" />
+          <Interaction text="Plum" value="plum" data-testid="plum" />
+        </TagGroup>,
+      );
+      expect(primaryButton('Cherry')).toHaveAttribute('aria-pressed', 'true');
+      expect(primaryButton('Plum')).toHaveAttribute('aria-pressed', 'false');
+      for (const element of [
+        screen.getByTestId('cherry'),
+        primaryButton('Cherry'),
+        dismissButton('Cherry'),
+      ]) {
+        expect(element).toHaveAttribute('data-selected', '');
+      }
+      for (const element of [
+        screen.getByTestId('plum'),
+        primaryButton('Plum'),
+        dismissButton('Plum'),
+      ]) {
+        expect(element).not.toHaveAttribute('data-selected');
+      }
+      // A Secondary is never a toggle.
+      expect(dismissButton('Cherry')).not.toHaveAttribute('aria-pressed');
+      // The selected look, as InteractionTag's own `selected` draws it.
+      expect(primaryButton('Cherry')).toHaveClass('bg-primary', 'text-primary-foreground');
+      expect(dismissButton('Cherry')).toHaveClass('border-s-primary-foreground');
+      expect(primaryButton('Plum')).toHaveClass('bg-muted');
+      expect(primaryButton('Plum')).not.toHaveClass('bg-primary');
+    });
+
+    it('toggles on Space and Enter, never on an arrow key', async () => {
+      const user = userEvent.setup();
+      const onValueChange = vi.fn();
+      render(<Chips onValueChange={onValueChange} />);
+      await user.tab();
+      expect(primaryButton('Cherry')).toHaveFocus();
+      await user.keyboard('{ArrowRight}{ArrowLeft}{Home}{End}');
+      expect(primaryButton('Fig')).toHaveFocus();
+      expect(onValueChange).not.toHaveBeenCalled();
+      await user.keyboard('{Enter}');
+      await user.keyboard(' ');
+      await user.keyboard('{Home} ');
+      expect(onValueChange.mock.calls).toEqual([[['fig']], [[]], [['cherry']]]);
+    });
+
+    it("runs the Primary's onClick first; its preventDefault() cancels the toggle", async () => {
+      const user = userEvent.setup();
+      const calls: unknown[] = [];
+      render(
+        <TagGroup aria-label="Fruit" onValueChange={(value) => calls.push(['change', value])}>
+          <InteractionTag value="cherry">
+            <InteractionTag.Primary onClick={(event) => event.preventDefault()}>
+              Cherry
+            </InteractionTag.Primary>
+          </InteractionTag>
+          <InteractionTag value="plum">
+            <InteractionTag.Primary onClick={() => calls.push('click')}>
+              Plum
+            </InteractionTag.Primary>
+          </InteractionTag>
+        </TagGroup>,
+      );
+      await user.click(primaryButton('Cherry'));
+      expect(calls).toEqual([]);
+      expect(primaryButton('Cherry')).toHaveAttribute('aria-pressed', 'false');
+      await user.click(primaryButton('Plum'));
+      expect(calls).toEqual(['click', ['change', ['plum']]]);
+    });
+
+    it('selects from [] with only onValueChange', async () => {
+      const user = userEvent.setup();
+      const onValueChange = vi.fn();
+      render(<Chips onValueChange={onValueChange} />);
+      expect(pressedStates()).toEqual(['false', 'false', 'false']);
+      await user.click(primaryButton('Plum'));
+      expect(onValueChange.mock.calls).toEqual([[['plum']]]);
+      expect(pressedStates()).toEqual(['false', 'true', 'false']);
+    });
+
+    it('a group without value, defaultValue or onValueChange does not select', async () => {
+      const user = userEvent.setup();
+      render(<Chips />);
+      for (const text of FRUITS) expect(primaryButton(text)).not.toHaveAttribute('aria-pressed');
+      await user.click(primaryButton('Cherry'));
+      expect(primaryButton('Cherry')).not.toHaveAttribute('aria-pressed');
+    });
+
+    it('never selects a plain Tag', async () => {
+      const user = userEvent.setup();
+      const onValueChange = vi.fn();
+      render(
+        <TagGroup
+          aria-label="Filters"
+          dismissible
+          defaultValue={['red']}
+          onValueChange={onValueChange}
+        >
+          <Tag value="red" data-testid="red">
+            Red
+          </Tag>
+          <Tag value="blue" as="button" dismissible={false} data-testid="blue">
+            Blue
+          </Tag>
+          <Interaction text="Cherry" value="cherry" />
+        </TagGroup>,
+      );
+      for (const testId of ['red', 'blue']) {
+        const tag = screen.getByTestId(testId);
+        expect(tag).not.toHaveAttribute('data-selected');
+        expect(tag).not.toHaveAttribute('aria-pressed');
+        expect(tag.querySelector('[aria-pressed], [data-selected]')).toBeNull();
+      }
+      await user.click(screen.getByText('Red'));
+      await user.click(screen.getByTestId('blue'));
+      expect(onValueChange).not.toHaveBeenCalled();
+      expect(primaryButton('Cherry')).toHaveAttribute('aria-pressed', 'false');
+    });
+
+    it('calls onDismiss and then onValueChange without the value when a selected tag is dismissed', async () => {
+      const user = userEvent.setup();
+      const calls: unknown[] = [];
+      render(
+        <React.StrictMode>
+          <Chips
+            withSecondary
+            defaultValue={['cherry', 'plum']}
+            onDismiss={(value) => calls.push(['dismiss', value])}
+            onValueChange={(value) => calls.push(['change', value])}
+          />
+        </React.StrictMode>,
+      );
+      await user.click(dismissButton('Cherry'));
+      expect(calls).toEqual([
+        ['dismiss', 'cherry'],
+        ['change', ['plum']],
+      ]);
+      expect(pressedStates()).toEqual(['false', 'true', 'false']);
+
+      // Delete on a selected Primary dismisses it through its Secondary: deselected too.
+      fireEvent.keyDown(primaryButton('Plum'), { key: 'Delete' });
+      // A tag that is not selected is only dismissed.
+      await user.click(dismissButton('Fig'));
+      expect(calls).toEqual([
+        ['dismiss', 'cherry'],
+        ['change', ['plum']],
+        ['dismiss', 'plum'],
+        ['change', []],
+        ['dismiss', 'fig'],
+      ]);
+    });
+
+    it('deselects a dismissed tag without onDismiss', async () => {
+      const user = userEvent.setup();
+      const onValueChange = vi.fn();
+      render(<Chips withSecondary defaultValue={['fig']} onValueChange={onValueChange} />);
+      await user.click(dismissButton('Fig'));
+      expect(onValueChange.mock.calls).toEqual([[[]]]);
+    });
+
+    it('a Secondary onClick that calls preventDefault() cancels the dismissal and the deselection', async () => {
+      const user = userEvent.setup();
+      const onDismiss = vi.fn();
+      const onValueChange = vi.fn();
+      render(
+        <TagGroup
+          aria-label="Fruit"
+          defaultValue={['cherry']}
+          onDismiss={onDismiss}
+          onValueChange={onValueChange}
+        >
+          <Interaction
+            text="Cherry"
+            value="cherry"
+            onSecondaryClick={(event) => event.preventDefault()}
+          />
+        </TagGroup>,
+      );
+      await user.click(dismissButton('Cherry'));
+      fireEvent.keyDown(primaryButton('Cherry'), { key: 'Backspace' });
+      expect(onDismiss).not.toHaveBeenCalled();
+      expect(onValueChange).not.toHaveBeenCalled();
+      expect(primaryButton('Cherry')).toHaveAttribute('aria-pressed', 'true');
+    });
+
+    it('toggles nothing while disabled, and keeps reporting the selection', async () => {
+      const user = userEvent.setup();
+      const onValueChange = vi.fn();
+      render(
+        <Chips withSecondary disabled defaultValue={['plum']} onValueChange={onValueChange} />,
+      );
+      await user.click(primaryButton('Cherry'));
+      fireEvent.click(primaryButton('Cherry'));
+      fireEvent.click(dismissButton('Plum'));
+      fireEvent.keyDown(primaryButton('Plum'), { key: 'Delete' });
+      expect(onValueChange).not.toHaveBeenCalled();
+      expect(pressedStates()).toEqual(['false', 'true', 'false']);
+      // Disabled wins over the selected look.
+      expect(primaryButton('Plum')).not.toHaveClass('bg-primary');
+    });
+
+    it('a held Primary does not toggle', async () => {
+      const user = userEvent.setup();
+      const onValueChange = vi.fn();
+      const { rerender } = render(<Chips onValueChange={onValueChange} />);
+      await user.tab();
+      rerender(<Chips onValueChange={onValueChange} disabled />);
+      expect(primaryButton('Cherry')).toHaveFocus();
+      expect(primaryButton('Cherry')).toHaveAttribute('data-disabled-focusable', '');
+      await user.keyboard('{Enter} ');
+      await user.click(primaryButton('Cherry'));
+      expect(onValueChange).not.toHaveBeenCalled();
+    });
+
+    it("ignores an InteractionTag's selected inside a selecting group and warns InteractionTag:selected-in-group", () => {
+      const warnings = spyOnWarnings();
+      const { unmount } = render(
+        <TagGroup aria-label="Fruit" defaultValue={['plum']}>
+          <Interaction text="Cherry" value="cherry" selected />
+          <Interaction text="Plum" value="plum" selected={false} />
+        </TagGroup>,
+      );
+      expect(pressedStates(['Cherry', 'Plum'])).toEqual(['false', 'true']);
+      expect(warnings()).toEqual([SELECTED_IN_GROUP_WARNING]);
+      unmount();
+      // In a group that does not select, `selected` decides, unreported.
+      render(
+        <TagGroup aria-label="Fruit">
+          <Interaction text="Cherry" value="cherry" selected />
+          <Interaction text="Plum" value="plum" />
+        </TagGroup>,
+      );
+      expect(primaryButton('Cherry')).toHaveAttribute('aria-pressed', 'true');
+      expect(primaryButton('Plum')).not.toHaveAttribute('aria-pressed');
+      expect(warnings()).toEqual([SELECTED_IN_GROUP_WARNING]);
+    });
+
+    it('selects InteractionTags of its own, not those of a nested group', async () => {
+      const user = userEvent.setup();
+      const onValueChange = vi.fn();
+      render(
+        <TagGroup aria-label="Fruit" onValueChange={onValueChange}>
+          <Interaction text="Cherry" value="cherry" withSecondary={false} />
+          <TagGroup aria-label="More fruit">
+            <Interaction text="Plum" value="plum" withSecondary={false} />
+          </TagGroup>
+        </TagGroup>,
+      );
+      expect(primaryButton('Plum')).not.toHaveAttribute('aria-pressed');
+      await user.click(primaryButton('Plum'));
+      expect(onValueChange).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('forms (D40)', () => {
+    it('submits one entry per selected value under name, with form', async () => {
+      const user = userEvent.setup();
+      let data: FormData | null = null;
+      render(
+        <>
+          <form
+            aria-label="Order"
+            onSubmit={(event) => {
+              event.preventDefault();
+              data = new FormData(event.currentTarget);
+            }}
+          >
+            <Chips name="fruit" defaultValue={['plum']} />
+            <button type="submit">Send</button>
+          </form>
+          <form id="elsewhere" aria-label="Elsewhere" />
+          <Chips
+            aria-label="Vegetables"
+            fruits={['Leek']}
+            name="veg"
+            form="elsewhere"
+            value={['leek']}
+          />
+        </>,
+      );
+      await user.click(primaryButton('Fig'));
+      await user.click(primaryButton('Cherry'));
+      await user.click(screen.getByRole('button', { name: 'Send' }));
+      expect(data!.getAll('fruit')).toEqual(['plum', 'fig', 'cherry']);
+      expect(data!.getAll('veg')).toEqual([]);
+      expect(new FormData(formNamed('Elsewhere')).getAll('veg')).toEqual(['leek']);
+      // The inputs sit inside the group's root.
+      const group = screen.getByRole('toolbar', { name: 'Fruit' });
+      const inputs = document.querySelectorAll('input[name="fruit"]');
+      expect(inputs).toHaveLength(3);
+      for (const input of inputs) expect(input.parentElement).toBe(group);
+      expect(group).toHaveClass('relative');
+    });
+
+    it("blocks submission while required and empty, and focuses the group's Tab stop", async () => {
+      const user = userEvent.setup();
+      render(
+        <>
+          <form aria-label="Order">
+            <Chips name="fruit" required defaultValue={[]} />
+          </form>
+          <button type="button">After</button>
+        </>,
+      );
+      const form = formNamed('Order');
+      // The Tab stop is the last focused control: Plum.
+      await user.tab();
+      await user.keyboard('{ArrowRight}');
+      await user.click(screen.getByRole('button', { name: 'After' }));
+      let valid = true;
+      act(() => {
+        valid = form.reportValidity();
+      });
+      expect(valid).toBe(false);
+      expect(primaryButton('Plum')).toHaveFocus();
+      await user.keyboard(' ');
+      expect(checkValidity(form)).toBe(true);
+      expect(new FormData(form).getAll('fruit')).toEqual(['plum']);
+    });
+
+    it('blocks submission while required and empty without a name, and submits nothing', () => {
+      render(
+        <form aria-label="Order">
+          <Chips required defaultValue={[]} />
+        </form>,
+      );
+      const form = formNamed('Order');
+      expect(checkValidity(form)).toBe(false);
+      expect(primaryButton('Cherry')).toHaveFocus();
+      expect([...new FormData(form).keys()]).toEqual([]);
+    });
+
+    it('restores defaultValue on form reset and reports nothing when unchanged', async () => {
+      const user = userEvent.setup();
+      const onValueChange = vi.fn();
+      const make = () => (
+        <form aria-label="Order">
+          <Chips name="fruit" defaultValue={['plum']} onValueChange={onValueChange} />
+          <button type="reset">Reset</button>
+        </form>
+      );
+      const { rerender } = render(make());
+      // A new inline defaultValue array with the same values.
+      rerender(make());
+      await user.click(screen.getByRole('button', { name: 'Reset' }));
+      expect(onValueChange).not.toHaveBeenCalled();
+
+      await user.click(primaryButton('Cherry'));
+      await user.click(primaryButton('Plum'));
+      expect(new FormData(formNamed('Order')).getAll('fruit')).toEqual(['cherry']);
+      await user.click(screen.getByRole('button', { name: 'Reset' }));
+      expect(onValueChange.mock.calls).toEqual([[['plum', 'cherry']], [['cherry']], [['plum']]]);
+      expect(pressedStates()).toEqual(['false', 'true', 'false']);
+      expect(new FormData(formNamed('Order')).getAll('fruit')).toEqual(['plum']);
+    });
+
+    it('resets with a form elsewhere through the form prop, also without name', async () => {
+      const user = userEvent.setup();
+      render(
+        <>
+          <form id="order" aria-label="Order" />
+          <Chips form="order" defaultValue={['fig']} />
+        </>,
+      );
+      await user.click(primaryButton('Fig'));
+      expect(pressedStates()).toEqual(['false', 'false', 'false']);
+      act(() => formNamed('Order').reset());
+      expect(pressedStates()).toEqual(['false', 'false', 'true']);
+    });
+
+    it('submits nothing while disabled', () => {
+      render(
+        <form aria-label="Order">
+          <Chips name="fruit" defaultValue={['plum']} disabled />
+          <Chips
+            aria-label="Vegetables"
+            fruits={['Leek']}
+            name="veg"
+            required
+            defaultValue={[]}
+            disabled
+          />
+        </form>,
+      );
+      const form = formNamed('Order');
+      expect(new FormData(form).getAll('fruit')).toEqual([]);
+      // A disabled required group does not block the form either.
+      expect(checkValidity(form)).toBe(true);
+    });
+
+    it('renders no aria-required', () => {
+      render(
+        <>
+          <Chips name="fruit" required defaultValue={[]} />
+          <Chips aria-label="Topics" role="list" name="topic" required defaultValue={['plum']} />
+        </>,
+      );
+      expect(screen.getByRole('toolbar', { name: 'Fruit' })).not.toHaveAttribute('aria-required');
+      expect(screen.getByRole('list', { name: 'Topics' })).not.toHaveAttribute('aria-required');
+      expect(document.querySelectorAll('input[required]')).toHaveLength(2);
+      expect(document.querySelector('[aria-required]')).toBeNull();
+      expect(document.querySelector('div[required]')).toBeNull();
+    });
+
+    it('renders no hidden input without a selection', () => {
+      render(
+        <form aria-label="Order">
+          <TagGroup aria-label="Filters" dismissible name="filters" required>
+            <Tag value="red">Red</Tag>
+          </TagGroup>
+        </form>,
+      );
+      expect(document.querySelector('input')).toBeNull();
+      expect(checkValidity(formNamed('Order'))).toBe(true);
+    });
+  });
+
   describe('values (D37)', () => {
     it('warns once per duplicated value', async () => {
       const warnings = spyOnWarnings();
@@ -1615,6 +2204,49 @@ describe('TagGroup', () => {
       expect(warnings()).toEqual([duplicateWarning('cherry')]);
     });
 
+    it('warns once for an InteractionTag without value in a selecting group, and toggles its generated id', async () => {
+      const user = userEvent.setup();
+      const warnings = spyOnWarnings();
+      const onValueChange = vi.fn();
+      render(
+        <TagGroup aria-label="Fruit" onValueChange={onValueChange}>
+          <InteractionTag>
+            <InteractionTag.Primary>Cherry</InteractionTag.Primary>
+          </InteractionTag>
+          <InteractionTag>
+            <InteractionTag.Primary>Plum</InteractionTag.Primary>
+          </InteractionTag>
+        </TagGroup>,
+      );
+      expect(warnings()).toEqual([MISSING_VALUE_WARNING]);
+      await user.click(primaryButton('Cherry'));
+      expect(onValueChange.mock.calls).toEqual([[[expect.stringMatching(/^tag-/)]]]);
+      expect(primaryButton('Cherry')).toHaveAttribute('aria-pressed', 'true');
+      expect(primaryButton('Plum')).toHaveAttribute('aria-pressed', 'false');
+    });
+
+    it('warns duplicated values in a selecting group without onDismiss', () => {
+      const warnings = spyOnWarnings();
+      render(
+        <TagGroup aria-label="Fruit" defaultValue={[]}>
+          <Interaction text="Cherry" value="cherry" />
+          <Interaction text="Morello" value="cherry" />
+        </TagGroup>,
+      );
+      expect(warnings()).toEqual([duplicateWarning('cherry')]);
+    });
+
+    it('does not warn for a Tag without value in a selecting group without onDismiss', () => {
+      const warnings = spyOnWarnings();
+      render(
+        <TagGroup aria-label="Fruit" dismissible onValueChange={() => {}}>
+          <Tag>Red</Tag>
+          <Interaction text="Cherry" value="cherry" />
+        </TagGroup>,
+      );
+      expect(warnings()).toEqual([]);
+    });
+
     it('does not warn in a display-only group', () => {
       const warnings = spyOnWarnings();
       render(
@@ -1675,6 +2307,17 @@ describe('TagGroup', () => {
           <Tag>Vue</Tag>
         </TagGroup>,
       );
+      expect(warnings()).toEqual([STATIC_TOOLBAR_WARNING]);
+    });
+
+    it("counts a required group's hidden form input as no control", () => {
+      const warnings = spyOnWarnings();
+      render(
+        <TagGroup aria-label="Topics" required onValueChange={() => {}}>
+          <Tag>React</Tag>
+        </TagGroup>,
+      );
+      expect(document.querySelector('input[data-wave-hidden-input]')).not.toBeNull();
       expect(warnings()).toEqual([STATIC_TOOLBAR_WARNING]);
     });
 
@@ -1742,7 +2385,65 @@ describe('TagGroup', () => {
     }
   });
 
+  it('renders a selecting, dismissible group on the server and hydrates it', async () => {
+    const errors = vi.spyOn(console, 'error');
+    const ui = (
+      <form aria-label="Order">
+        <Chips withSecondary name="fruit" defaultValue={['plum', 'kiwi']} onDismiss={() => {}} />
+      </form>
+    );
+    const html = renderToString(ui);
+    expect(html).toContain('role="toolbar"');
+    expect(html).toContain('aria-pressed="true"');
+    expect(html).toContain('aria-pressed="false"');
+    expect(html).not.toContain('tabindex');
+    expect(findDanglingIdRefsInHtml(html)).toEqual([]);
+
+    const container = document.createElement('div');
+    container.innerHTML = html;
+    document.body.appendChild(container);
+    try {
+      // Named and submitted from the server HTML.
+      expect(within(container).getByRole('button', { name: 'Dismiss Plum' })).toBeInTheDocument();
+      const inputs = container.querySelectorAll<HTMLInputElement>('input[name="fruit"]');
+      expect([...inputs].map((input) => [input.type, input.value])).toEqual([
+        ['hidden', 'plum'],
+        ['hidden', 'kiwi'],
+      ]);
+      let root: ReturnType<typeof hydrateRoot> | undefined;
+      await act(async () => {
+        root = hydrateRoot(container, ui);
+      });
+      expect(errors).not.toHaveBeenCalled();
+      const plum = within(container).getByRole('button', { name: 'Plum' });
+      expect(plum).toHaveAttribute('aria-pressed', 'true');
+      const cherry = within(container).getByRole('button', { name: 'Cherry' });
+      expect(cherry).toHaveAttribute('tabindex', '0');
+      fireEvent.click(cherry);
+      expect(cherry).toHaveAttribute('aria-pressed', 'true');
+      const form = within(container).getByRole('form', { name: 'Order' }) as HTMLFormElement;
+      expect(new FormData(form).getAll('fruit')).toEqual(['plum', 'kiwi', 'cherry']);
+      act(() => root?.unmount());
+    } finally {
+      container.remove();
+    }
+  });
+
   it('types its props', () => {
+    expectTypeOf<TagGroupProps['value']>().toEqualTypeOf<readonly string[] | undefined>();
+    expectTypeOf<TagGroupProps['defaultValue']>().toEqualTypeOf<readonly string[] | undefined>();
+    expectTypeOf<TagGroupProps['onValueChange']>().toEqualTypeOf<
+      ((value: string[]) => void) | undefined
+    >();
+    expectTypeOf<Parameters<NonNullable<TagGroupProps['onValueChange']>>[0]>().toEqualTypeOf<
+      string[]
+    >();
+    expectTypeOf<TagGroupProps['name']>().toEqualTypeOf<string | undefined>();
+    expectTypeOf<TagGroupProps['form']>().toEqualTypeOf<string | undefined>();
+    expectTypeOf<TagGroupProps['required']>().toEqualTypeOf<boolean | undefined>();
+    // A readonly array is accepted.
+    const frozen: readonly string[] = Object.freeze(['plum']);
+    expect(<TagGroup value={frozen} defaultValue={frozen} />).toBeTruthy();
     expectTypeOf<TagGroupProps['size']>().toEqualTypeOf<TagSize | undefined>();
     expectTypeOf<TagGroupProps['appearance']>().toEqualTypeOf<TagAppearance | undefined>();
     expectTypeOf<TagGroupProps['shape']>().toEqualTypeOf<TagShape | undefined>();
@@ -1762,7 +2463,9 @@ describe('TagGroup', () => {
       <TagGroup key="3" shape="square" />,
       // @ts-expect-error defaultValue is not a string attribute here
       <TagGroup key="4" defaultValue="x" />,
+      // @ts-expect-error the selection is an array of values
+      <TagGroup key="5" value="x" />,
     ];
-    expect(elements).toHaveLength(4);
+    expect(elements).toHaveLength(5);
   });
 });

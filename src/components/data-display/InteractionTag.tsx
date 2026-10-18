@@ -62,8 +62,8 @@ import type { TagLook } from './tagStyles';
 /** Props of InteractionTag: the element that holds the Primary and Secondary buttons. */
 export interface InteractionTagProps extends React.HTMLAttributes<HTMLDivElement> {
   /**
-   * Identifies the tag in a TagGroup: the value `onDismiss` receives. Give every tag of a group its
-   * own value.
+   * Identifies the tag in a TagGroup: the value `onDismiss` receives and the selection holds. Give
+   * every tag of a group its own value.
    * @default a generated id (a development warning in a group that reports values)
    */
   value?: string;
@@ -92,17 +92,19 @@ export interface InteractionTagProps extends React.HTMLAttributes<HTMLDivElement
    */
   disabled?: boolean;
   /**
-   * Draws the selected look and makes the Primary a toggle: `aria-pressed="true"`, or `"false"`
-   * for `selected={false}`. Leave it `undefined` for an action that is not a toggle (no
-   * `aria-pressed`). Rendered as `data-selected` on the root and both buttons. Disabled wins over
-   * the selected look (`aria-pressed` and `data-selected` still render). Fluent's `selected` is a
-   * look only.
+   * Outside a selecting TagGroup: draws the selected look and makes the Primary a toggle:
+   * `aria-pressed="true"`, or `"false"` for `selected={false}`. Leave it `undefined` for an
+   * action that is not a toggle (no `aria-pressed`). Inside a selecting TagGroup (`value`,
+   * `defaultValue` or `onValueChange`) the group's `value` decides, and a defined `selected` is
+   * ignored (a development warning). Rendered as `data-selected` on the root and both buttons.
+   * Disabled wins over the selected look (`aria-pressed` and `data-selected` still render).
+   * Fluent's `selected` is a look only.
    */
   selected?: boolean;
   ref?: React.Ref<HTMLDivElement>;
 }
 
-/** Props of InteractionTag.Primary: the tag's main action. */
+/** Props of InteractionTag.Primary: the tag's main action (or its toggle in a selecting TagGroup). */
 export interface InteractionTagPrimaryProps extends React.ButtonHTMLAttributes<HTMLButtonElement> {
   /**
    * A visual before the text (an Avatar, sized for the tag: 24, 20 or 16px, unless it sets its
@@ -165,8 +167,13 @@ interface InteractionTagContextValue {
   primaryTextId: string;
   /** The Secondary, which Delete and Backspace on the Primary click (read at key time). */
   secondaryRef: React.RefObject<HTMLButtonElement | null> | null;
-  /** Reports the dismissal to the TagGroup (its `onDismiss(value)`), after the Secondary's `onClick`. */
+  /**
+   * Reports the dismissal to the TagGroup (its `onDismiss(value)`), after the Secondary's
+   * `onClick`, and then removes the tag's value from the group's selection (D39).
+   */
   dismiss: () => void;
+  /** Toggles the tag's value in a selecting TagGroup's selection (the Primary's click). */
+  toggle: () => void;
 }
 
 /** Internal: `null` outside an InteractionTag. */
@@ -185,6 +192,7 @@ const INERT_CONTEXT: InteractionTagContextValue = {
   primaryTextId: '',
   secondaryRef: null,
   dismiss: () => {},
+  toggle: () => {},
 };
 
 function useInteractionTagContext(componentName: string): InteractionTagContextValue {
@@ -211,6 +219,9 @@ function disabledClasses(disabled: boolean, dimDisabled: boolean): string {
     disabled && forcedColors.disabled,
   );
 }
+
+const SELECTED_IN_GROUP_MESSAGE =
+  "InteractionTag: `selected` has no effect in a TagGroup that selects (`value`, `defaultValue` or `onValueChange`); the group's `value` decides.";
 
 /**
  * The state props of a tag button: natively disabled, or, while it keeps the focus it had when it
@@ -256,15 +267,34 @@ const InteractionTagRoot = ({
     : (group?.shape ?? 'circular');
   // A disabled group disables every tag: the tag's own `disabled={false}` cannot re-enable it.
   const disabled = (group?.disabled ?? false) || disabledProp;
-  const pressed = typeof selectedProp === 'boolean' ? selectedProp : undefined;
+  const dimDisabled = group?.dimDisabled ?? true;
+
+  // In a group that reports dismissals or selects, the tag's value (else a generated id).
+  const reportedValue = useTagGroupItem(rootRef, value);
+  // In a selecting TagGroup the group's selection decides (the Primary is always a toggle there);
+  // elsewhere a boolean `selected` does, and `undefined` is an action that is no toggle.
+  const selecting = group?.selecting ?? false;
+  const pressed = selecting
+    ? (group?.isSelected(reportedValue) ?? false)
+    : typeof selectedProp === 'boolean'
+      ? selectedProp
+      : undefined;
   const selected = pressed === true;
   // Disabled wins over the selected look; the attributes still reflect the state.
   const look: TagLook = selected && !disabled ? 'selected' : appearance;
-  const dimDisabled = group?.dimDisabled ?? true;
 
-  const reportedValue = useTagGroupItem(rootRef, value);
+  const selectedIgnored = selecting && selectedProp !== undefined;
+  React.useEffect(() => {
+    if (selectedIgnored) warnOnce('InteractionTag:selected-in-group', SELECTED_IN_GROUP_MESSAGE);
+  }, [selectedIgnored]);
+
+  // The group's `onDismiss(value)`, then the value leaves the selection (D39), in one click.
   const dismiss = useEventCallback(() => {
     group?.dismiss(reportedValue);
+    group?.deselect(reportedValue);
+  });
+  const toggle = useEventCallback(() => {
+    group?.toggle(reportedValue);
   });
 
   // In a list TagGroup the root is a list item; the consumer's role wins.
@@ -284,8 +314,9 @@ const InteractionTagRoot = ({
       primaryTextId,
       secondaryRef,
       dismiss,
+      toggle,
     }),
-    [size, shape, look, disabled, selected, pressed, dimDisabled, primaryTextId, dismiss],
+    [size, shape, look, disabled, selected, pressed, dimDisabled, primaryTextId, dismiss, toggle],
   );
 
   return (
@@ -320,10 +351,12 @@ InteractionTagRoot.displayName = 'InteractionTag';
 
 /**
  * The main action of an {@link InteractionTag}: a `<button type="button">` named by its text and
- * `secondaryText` (`media` and `icon` are decorative), with the InteractionTag's look. With the
- * InteractionTag's `selected` it is a toggle (`aria-pressed`). Delete and Backspace on it click
- * the tag's Secondary when there is one. Its props, `ref` and `className` go to the button.
- * Flat name of `InteractionTag.Primary`, for React Server Components.
+ * `secondaryText` (`media` and `icon` are decorative), with the InteractionTag's look. In a
+ * selecting TagGroup it is a toggle (`aria-pressed`): a click, Enter or Space adds the tag's
+ * `value` to the group's selection or removes it, after its `onClick` (whose `preventDefault()`
+ * cancels the toggle). Elsewhere the InteractionTag's `selected` makes it a toggle. Delete and
+ * Backspace on it click the tag's Secondary when there is one. Its props, `ref` and `className`
+ * go to the button. Flat name of `InteractionTag.Primary`, for React Server Components.
  */
 export const InteractionTagPrimary = ({
   media,
@@ -332,6 +365,7 @@ export const InteractionTagPrimary = ({
   disabled: disabledProp = false,
   className,
   children,
+  onClick,
   onKeyDown,
   onFocus,
   onBlur,
@@ -349,6 +383,12 @@ export const InteractionTagPrimary = ({
   const secondary = materialiseSlotContent(secondaryText);
   const hasSecondary = slotRendersContent(secondary);
   const avatarBox = React.useMemo(() => ({ size: TAG_AVATAR_SIZE[size] }), [size]);
+
+  // In a selecting TagGroup a click (also Enter and Space) toggles the tag's value, after the
+  // consumer's `onClick`; never for a click from a portal opened from the Primary (C-COMPOSE).
+  const handleClick = (event: React.MouseEvent<HTMLButtonElement>) => {
+    if (!disabled && isOwnEvent(event)) tag.toggle();
+  };
 
   // Delete and Backspace dismiss the tag through the Secondary's own click, so whatever cancels
   // that click (its `onClick`'s `preventDefault()`, a disabled or held Secondary) cancels them
@@ -380,6 +420,8 @@ export const InteractionTagPrimary = ({
       data-selected={tag.selected ? '' : undefined}
       {...rest}
       ref={ref}
+      onClick={composeEventHandlers(onClick, handleClick)}
+      // After `onClick`: a held Primary's click is blocked, the toggle included.
       {...buttonStateProps(disabled, hold.held)}
       onKeyDown={composeEventHandlers(onKeyDown, handleKeyDown)}
       onFocus={composeEventHandlers(onFocus, hold.onFocus, { checkDefaultPrevented: false })}
@@ -605,8 +647,11 @@ InteractionTagSecondary.displayName = 'InteractionTagSecondary';
  *   held key dismisses once); without a Secondary they do nothing. Enter, Space and a click on the
  *   Secondary dismiss too: remove the tag in its `onClick`, or in a TagGroup's `onDismiss(value)`,
  *   which is called after it.
- * - **`selected`** draws the selected look and makes the Primary a toggle (`aria-pressed`); leave
- *   it `undefined` for an action that is not a toggle.
+ * - **In a selecting TagGroup** (`value`, `defaultValue` or `onValueChange` on the group) the
+ *   Primary toggles the tag's `value` in the group's selection (`aria-pressed`, the selected
+ *   look), and dismissing a selected tag also removes its value from the selection.
+ * - **`selected`**, outside a selecting TagGroup, draws the selected look and makes the Primary a
+ *   toggle (`aria-pressed`); leave it `undefined` for an action that is not a toggle.
  * - **Look**: `size`, `appearance` and `shape`, Tag's sizes and colours (a TagGroup gives its
  *   defaults); `disabled` disables both buttons natively. The Primary takes `media` (an Avatar,
  *   sized for the tag), `icon` and `secondaryText`.

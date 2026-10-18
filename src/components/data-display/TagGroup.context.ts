@@ -99,6 +99,23 @@ export interface TagGroupContextValue {
   /** Whether the group reports dismissals (`onDismiss` is set): a dismissible tag then needs a `value`. */
   reportsDismissals: boolean;
   /**
+   * Whether the group selects (`value`, `defaultValue` or `onValueChange` is set): its
+   * InteractionTags are toggles, and each needs a `value`.
+   */
+  selecting: boolean;
+  /** Whether `value` is in the group's selection (always `false` in a group that does not select). */
+  isSelected: (value: string) => boolean;
+  /**
+   * Adds `value` to the selection, or removes it, keeping selection order (an InteractionTag
+   * Primary's click). Does nothing in a group that does not select or while it is disabled.
+   */
+  toggle: (value: string) => void;
+  /**
+   * Removes `value` from the selection when it is in it: a dismissed InteractionTag leaves the
+   * selection, after the group's `onDismiss(value)` (D39). Does nothing otherwise.
+   */
+  deselect: (value: string) => void;
+  /**
    * Counts a mounted tag's explicit `value`; a second registration of one value warns once while
    * the group reports values (C-DEV). Call it from a layout effect and the returned remover in its
    * cleanup.
@@ -302,8 +319,8 @@ export interface UseTagGroupItemOptions {
   /**
    * Whether the group reports this tag's value: a tag without `value` then warns once
    * (`TagGroup:missing-value`). A Tag passes whether it is dismissible in a group with
-   * `onDismiss`.
-   * @default whether the group reports dismissals (it has `onDismiss`)
+   * `onDismiss` (a Tag is never selected).
+   * @default whether the group reports dismissals (it has `onDismiss`) or selects
    */
   reported?: boolean;
 }
@@ -313,7 +330,8 @@ export interface UseTagGroupItemOptions {
  *
  * - registers the tag's explicit `value` with the nearest TagGroup from a layout effect (the
  *   duplicate-value warning);
- * - warns once when the group reports the value (`options.reported`) and the tag has none;
+ * - warns once when the group reports the value (`options.reported`: it has `onDismiss` or
+ *   selects) and the tag has none;
  * - in a group, keeps focus in the group when the tag unmounts while focus is inside it: in a
  *   microtask after the commit, to the corresponding control of the next tag, else (order
  *   `'next-then-previous'`) of the previous one, else to the group's `fallbackFocusRef`, else
@@ -338,7 +356,8 @@ export function useTagGroupItem(
     return register(value);
   }, [register, value]);
 
-  const reported = options?.reported ?? group?.reportsDismissals ?? false;
+  const reported =
+    options?.reported ?? ((group?.reportsDismissals ?? false) || (group?.selecting ?? false));
   const missingValue = group !== null && reported && value === undefined;
   React.useEffect(() => {
     if (missingValue) warnOnce('TagGroup:missing-value', MISSING_VALUE_MESSAGE);
