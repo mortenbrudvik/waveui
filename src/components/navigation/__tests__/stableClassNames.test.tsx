@@ -23,6 +23,8 @@ import {
   menuItemSwitchClassNames,
   menuPopoverClassNames,
   menuSplitGroupClassNames,
+  navAppItemClassNames,
+  navAppItemStaticClassNames,
   navCategoryClassNames,
   navClassNames,
   navDividerClassNames,
@@ -279,9 +281,13 @@ describe('stable class names: navigation folder', () => {
     expect(weekly.parentElement?.parentElement).toHaveClass(navCategoryClassNames.list);
   });
 
-  it('Nav parts: section header and its list item, divider', () => {
+  it('Nav parts: section header and its list item, divider, app item (root, list item, icon, content), app item static', () => {
     const tree = (
       <Nav aria-label="Main" defaultValue="weekly">
+        <Nav.AppItem href="#start" icon={<svg data-testid="app-icon" />}>
+          Contoso HR
+        </Nav.AppItem>
+        <Nav.AppItem>Switch app</Nav.AppItem>
         <Nav.SectionHeader>Library</Nav.SectionHeader>
         <Nav.Item value="home">Home</Nav.Item>
         <Nav.Divider />
@@ -290,9 +296,28 @@ describe('stable class names: navigation folder', () => {
           <Nav.SubItem value="weekly">Weekly</Nav.SubItem>
           <Nav.Divider />
         </Nav.Category>
+        <Nav.AppItemStatic icon={<svg data-testid="static-icon" />}>Fabrikam</Nav.AppItemStatic>
       </Nav>
     );
     const check = (root: HTMLElement) => {
+      for (const appItem of [
+        within(root).getByRole('link', { name: 'Contoso HR' }),
+        within(root).getByRole('button', { name: 'Switch app' }),
+      ]) {
+        expect(appItem).toHaveClass(navAppItemClassNames.root);
+        expect(appItem.parentElement).toHaveClass(navAppItemClassNames.listItem);
+        expect(appItem.lastElementChild).toHaveClass(navAppItemClassNames.content);
+      }
+      expect(within(root).getByTestId('app-icon').parentElement).toHaveClass(
+        navAppItemClassNames.icon,
+      );
+      const staticItem = within(root).getByTestId('static-icon').parentElement
+        ?.parentElement as HTMLElement;
+      expect(staticItem).toHaveClass(navAppItemStaticClassNames.root);
+      expect(staticItem).not.toHaveClass(navAppItemClassNames.root);
+      expect(staticItem.parentElement).toHaveClass(navAppItemStaticClassNames.listItem);
+      expect(staticItem.firstElementChild).toHaveClass(navAppItemStaticClassNames.icon);
+      expect(staticItem.lastElementChild).toHaveClass(navAppItemStaticClassNames.content);
       for (const name of ['Library', 'Schedules']) {
         const heading = within(root).getByRole('heading', { name });
         expect(heading).toHaveClass(navSectionHeaderClassNames.root);

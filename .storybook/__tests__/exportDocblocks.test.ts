@@ -342,6 +342,7 @@ describe('component docs of the library (C-DOCS)', () => {
     ['src/components/input/Option.tsx', ['OptionImpl', 'OptionGroupImpl']],
     ['src/components/navigation/Breadcrumb.tsx', ['BreadcrumbItem']],
     ['src/components/navigation/Nav.tsx', ['NavItem', 'NavSubItem']],
+    ['src/components/navigation/Nav.parts.tsx', ['NavAppItem']],
   ])(
     '%s: the definitions behind a wrapper or overloads get their export docblock',
     (file, names) => {

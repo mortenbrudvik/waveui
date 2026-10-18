@@ -1,7 +1,14 @@
 import React from 'react';
 import type { Meta, StoryObj } from '@storybook/react';
 import { fn } from 'storybook/test';
-import { Nav } from '../src';
+import { Avatar, Nav } from '../src';
+
+/** A locally drawn app logo (tokens only: it takes the text colour). */
+const AppLogo = () => (
+  <svg viewBox="0 0 24 24" width="24" height="24" fill="currentColor" className="text-primary">
+    <path d="M4 4h7v7H4zm9 0h7v7h-7zM4 13h7v7H4zm9 3.5a3.5 3.5 0 1 1 7 0 3.5 3.5 0 0 1-7 0z" />
+  </svg>
+);
 
 const meta = {
   title: 'Components/Navigation/Nav',
@@ -126,10 +133,10 @@ export const Controlled: Story = {
 };
 
 /**
- * Fluent's basic layout: `Nav.SectionHeader` puts a heading between groups of items (`<h3>`
- * unless `headingLevel`; it may also sit in a category), and `Nav.Divider` draws a line before the
- * footer group, hidden from assistive technology. Every part renders its own list item, so the
- * Nav's lists stay valid.
+ * Fluent's basic layout: `Nav.AppItem` shows the app's name and logo at the top,
+ * `Nav.SectionHeader` puts a heading between groups of items (`<h3>` unless `headingLevel`; it may
+ * also sit in a category), and `Nav.Divider` draws a line before the footer group, hidden from
+ * assistive technology. Every part renders its own list item, so the Nav's lists stay valid.
  */
 export const Sections: Story = {
   args: {
@@ -137,6 +144,9 @@ export const Sections: Story = {
     style: { minHeight: 400 },
     children: (
       <>
+        <Nav.AppItem href="#start" icon={<AppLogo />}>
+          Contoso HR
+        </Nav.AppItem>
         <Nav.Item value="dashboard">Dashboard</Nav.Item>
         <Nav.Item value="announcements">Announcements</Nav.Item>
         <Nav.Item value="spotlight">Employee spotlight</Nav.Item>
@@ -155,6 +165,28 @@ export const Sections: Story = {
         <Nav.Divider />
         <Nav.Item value="reports">Reports</Nav.Item>
         <Nav.Item value="settings">Settings</Nav.Item>
+      </>
+    ),
+  },
+};
+
+/**
+ * `Nav.AppItem` is the app's name and logo: a link with `href` (here with an Avatar as its icon),
+ * a button without. It is never selected, so a click runs only its own `onClick`.
+ * `Nav.AppItemStatic` shows the same layout as plain text, not focusable.
+ */
+export const AppItem: Story = {
+  args: {
+    defaultValue: 'home',
+    children: (
+      <>
+        <Nav.AppItem href="#start" icon={<Avatar name="Contoso HR" size="medium" />}>
+          Contoso HR
+        </Nav.AppItem>
+        <Nav.Item value="home">Home</Nav.Item>
+        <Nav.Item value="people">People</Nav.Item>
+        <Nav.Divider />
+        <Nav.AppItemStatic icon={<AppLogo />}>Fabrikam Portal</Nav.AppItemStatic>
       </>
     ),
   },

@@ -24,7 +24,7 @@ import {
   type NavRovingContextValue,
   type NoAnchorOnlyAttributes,
 } from './Nav.context';
-import { NavDivider, NavSectionHeader } from './Nav.parts';
+import { NavAppItem, NavAppItemStatic, NavDivider, NavSectionHeader } from './Nav.parts';
 import { NavRoot } from './Nav.root';
 
 /*
@@ -36,7 +36,16 @@ import { NavRoot } from './Nav.root';
  */
 
 export type { NavProps } from './Nav.root';
-export type { NavSectionHeaderProps, NavDividerProps } from './Nav.parts';
+export type {
+  NavSectionHeaderProps,
+  NavDividerProps,
+  NavAppItemOwnProps,
+  NavAppItemAnchorProps,
+  NavAppItemButtonProps,
+  NavAppItemProps,
+  NavAppItemDynamicProps,
+  NavAppItemStaticProps,
+} from './Nav.parts';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -606,10 +615,12 @@ markNavPart(NavSubItem, 'entry');
  *   item). `Nav.SectionHeader` is a heading between groups of items (`<h3>` unless
  *   `headingLevel`, which stands for the `as` of Fluent's NavSectionHeader), and `Nav.Divider` a
  *   line between groups, hidden from assistive technology (Fluent's NavDivider is a separator).
+ * - **App identity**: `Nav.AppItem` shows the app's name and logo at the top, as a link with
+ *   `href` or a button; it is never selected. `Nav.AppItemStatic` shows them as plain text.
  *
  * Sub-components are also exported under flat names (`NavCategory`, `NavItem`, `NavSubItem`,
- * `NavSectionHeader`, `NavDivider`): React Server Components import those, because dotted access
- * (`Nav.Item`) needs a client file.
+ * `NavSectionHeader`, `NavDivider`, `NavAppItem`, `NavAppItemStatic`): React Server Components
+ * import those, because dotted access (`Nav.Item`) needs a client file.
  */
 export const Nav = /* @__PURE__ */ Object.assign(NavRoot, {
   Category: NavCategory,
@@ -617,6 +628,16 @@ export const Nav = /* @__PURE__ */ Object.assign(NavRoot, {
   SubItem: NavSubItem,
   SectionHeader: NavSectionHeader,
   Divider: NavDivider,
+  AppItem: NavAppItem,
+  AppItemStatic: NavAppItemStatic,
 });
 
-export { NavCategory, NavItem, NavSubItem, NavSectionHeader, NavDivider };
+export {
+  NavCategory,
+  NavItem,
+  NavSubItem,
+  NavSectionHeader,
+  NavDivider,
+  NavAppItem,
+  NavAppItemStatic,
+};
