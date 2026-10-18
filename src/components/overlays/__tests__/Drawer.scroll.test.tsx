@@ -1,4 +1,4 @@
-import { afterEach, describe, it, expect, vi } from 'vitest';
+import { afterEach, describe, it, expect, expectTypeOf, vi } from 'vitest';
 import * as React from 'react';
 import { renderToString } from 'react-dom/server';
 import { act, cleanup, fireEvent, render, renderHook, screen } from '@testing-library/react';
@@ -168,6 +168,19 @@ describe('useScrollState (P6-05 D80, D81)', () => {
     const remove = vi.spyOn(el, 'removeEventListener');
     unmount();
     expect(remove).toHaveBeenCalledWith('scroll', expect.any(Function));
+  });
+});
+
+describe('the scroll store’s contract (D108, frozen)', () => {
+  it('types useScrollState, DrawerScrollState and scrollSeparatorClasses as the contract does', () => {
+    expectTypeOf<DrawerScrollState>().toEqualTypeOf<'none' | 'top' | 'middle' | 'bottom'>();
+    expectTypeOf(useScrollState).toEqualTypeOf<
+      (element: HTMLElement | null) => DrawerScrollState
+    >();
+    expectTypeOf(scrollSeparatorClasses).toEqualTypeOf<{
+      readonly header: string;
+      readonly footer: string;
+    }>();
   });
 });
 

@@ -2,7 +2,8 @@ import * as React from 'react';
 
 /*
  * The scroll state of a drawer's scrolling body, which draws the separators of its header and
- * footer. Imports no component; the root, the parts and NavDrawer read it.
+ * footer (the scroll store of D108's contract, module-only). Imports no component; the root, the
+ * parts and NavDrawer read it.
  */
 
 /**
@@ -92,9 +93,9 @@ export function useScrollState(element: HTMLElement | null): DrawerScrollState {
  * never shifts the layout; forced colors draw both lines at all times. Literal strings, so the
  * module makes no call at load and the CSS build sees every class.
  */
-export const scrollSeparatorClasses = {
+export const scrollSeparatorClasses: { readonly header: string; readonly footer: string } = {
   header:
     'border-b border-transparent data-[scroll-state=middle]:border-border data-[scroll-state=bottom]:border-border forced-colors:border-[CanvasText]',
   footer:
     'border-t border-transparent data-[scroll-state=top]:border-border data-[scroll-state=middle]:border-border forced-colors:border-[CanvasText]',
-} as const satisfies { readonly header: string; readonly footer: string };
+};

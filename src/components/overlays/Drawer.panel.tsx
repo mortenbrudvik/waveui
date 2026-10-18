@@ -1,10 +1,34 @@
+import * as React from 'react';
+import { cn } from '../../lib/cn';
+import { composeEventHandlers } from '../../lib/composeEventHandlers';
+import { warnOnce } from '../../lib/dev';
+import type { Slot, SlotObject } from '../../lib/slot';
 import { forcedColors } from '../../lib/styles';
+import type { BackdropAppearance, ModalType } from '../../lib/types';
 import { useIsClient } from '../../hooks/useIsClient';
+import { useMergedRefs } from '../../hooks/useMergedRefs';
+import { useModalLayer } from '../../hooks/useModalLayer';
+import { usePresence } from '../../hooks/usePresence';
+import { useRestoreFocus } from '../../hooks/useRestoreFocus';
+import { Portal } from '../portal/Portal';
+import {
+  useBackdropPress,
+  useModalDismiss,
+  useModalOpener,
+  useOpenInsideWarning,
+  useRaiseOnOpen,
+  type ModalRequestOpen,
+  type ModalTrigger,
+} from './Dialog.shared';
+import { ModalBackdrop } from './Dialog.slots';
 import type { DrawerPosition, DrawerSize, DrawerType } from './Drawer.context';
+import { getTabbableThrough, usePopoverTabOrder } from './Popover.shared';
 
 /*
- * The drawer panel: its open state, its placement, size and safe-area classes. Imports the context
- * module only among the Drawer modules (never the root, the parts or `Drawer.tsx`).
+ * The drawer panel shell (D108): the panel element of both drawer types with its machinery, its
+ * open state, and its placement, size and safe-area classes. Drawer's root and NavDrawer render it.
+ * Imports the context module only among the Drawer modules (never the root, the parts or
+ * `Drawer.tsx`), and no Nav module.
  */
 
 /**
@@ -118,3 +142,288 @@ export function getInlinePanelClasses(position: DrawerPosition, size: DrawerSize
     .filter(Boolean)
     .join(' ');
 }
+
+/** What the drawer panel shell renders and wires (the frozen contract of D108). */
+export interface DrawerPanelProps extends Omit<React.HTMLAttributes<HTMLElement>, 'children'> {
+  /**
+   * The public component, for the warning keys and texts: `'Drawer'`, `'NavDrawer'`
+   * (`<componentName>:open-inside`, `:backdrop-ignored`, `:focus-outside`, `:non-modal-full`).
+   */
+  componentName: string;
+  /**
+   * `'overlay'`: a portal, the backdrop, `role="dialog"` and the modal or non-modal machinery;
+   * `'inline'`: the panel in place, with the inline focus restore only.
+   */
+  type: DrawerType;
+  /** The reported open state, from {@link useDrawerOpen}. */
+  open: boolean;
+  /** The root's request function (`useModalOpenState`): Escape and the backdrop ask through it. */
+  requestOpen: ModalRequestOpen;
+  /** Rendered as `data-position`; picks the overlay's edge or the inline panel's inner edge. */
+  position: DrawerPosition;
+  /** Rendered as `data-size` (always: the component resolves its own default). */
+  size: DrawerSize;
+  /** Inline only: draws the inner edge (`data-separator`). Ignored by an overlay. */
+  separator: boolean;
+  /**
+   * Overlay only: `modal`, `alert` or `non-modal` (`data-modal-type`, the role and the layer kind).
+   * Ignored inline.
+   */
+  modalType: ModalType;
+  /** `false` keeps the panel mounted while closed, `hidden` and `inert`. */
+  unmountOnClose: boolean;
+  /**
+   * The element of an inline panel: `'aside'` (Drawer, a complementary landmark) or `'div'`
+   * (NavDrawer, whose `<nav>` is the landmark).
+   */
+  inlineAs: 'aside' | 'div';
+  /**
+   * The root's triggers (`useModalTrigger()`), or `inertModalTrigger` for a component without
+   * trigger parts (the layer and the inline restore then capture the element that had focus).
+   */
+  trigger: ModalTrigger;
+  /** Where focus goes when the panel closes, if it can take focus (the root's `finalFocusRef`). */
+  finalFocusRef?: React.RefObject<HTMLElement | null>;
+  /**
+   * The panel's stable class(es), first in its `cn()`: `drawerClassNames.root`, followed by a
+   * variant's root (`cn(drawerClassNames.root, navDrawerClassNames.root)`).
+   */
+  rootClassName: string;
+  /**
+   * The backdrop's stable class(es), first in its `cn()`: `drawerClassNames.backdrop`, followed by
+   * a variant's (`cn(drawerClassNames.backdrop, navDrawerClassNames.backdrop)`).
+   */
+  backdropClassName: string;
+  /**
+   * The `backdrop` slot (overlay `modal` and `alert` only; a slot on a non-modal or inline panel
+   * renders nothing and warns). `null` renders no backdrop.
+   */
+  backdrop?: Slot<'div'> | (SlotObject<'div'> & { appearance?: BackdropAppearance });
+  /** The panel's id (always set: triggers point `aria-controls` at it). */
+  id: string;
+  /** Merged with the shell's own ref and the presence ref. */
+  ref?: React.Ref<HTMLElement>;
+  /** The panel's content, rendered as is: the shell adds no header, Close button or padding. */
+  children?: React.ReactNode;
+}
+
+/**
+ * The classes every overlay panel carries after its stable class: a fixed flex column on the
+ * page's background with the overlay shadow, its inner edge in the border colour.
+ */
+const OVERLAY_PANEL_CLASSES =
+  'fixed flex flex-col border-border bg-background text-foreground shadow-64';
+
+/**
+ * The drawer panel shell: the panel element of an overlay (in a portal, with its backdrop and the
+ * modal or non-modal machinery) or of an inline drawer (in place, with the inline focus restore),
+ * on the presence core, with the placement, size, separator and safe-area classes and the
+ * `data-type`, `data-position`, `data-size`, `data-modal-type`, `data-separator` and
+ * `data-presence` attributes. Returns `null` while unmounted. Its hooks key on `open`.
+ *
+ * It renders its `children` raw and provides no context: no header, title registry, Close button
+ * or padding. The component that renders it holds the open state (`useModalOpenState`, then
+ * {@link useDrawerOpen}), renders its triggers itself, names the panel, and calls
+ * `useModalTriggerSession(trigger, open)` after rendering it (the shell's effects run first). A
+ * change of `type` remounts the panel and its content.
+ */
+export const DrawerPanel = ({
+  componentName,
+  type,
+  open,
+  requestOpen,
+  position,
+  size,
+  separator,
+  modalType,
+  unmountOnClose,
+  inlineAs,
+  trigger,
+  finalFocusRef,
+  rootClassName,
+  backdropClassName,
+  backdrop,
+  id,
+  className,
+  onKeyDown,
+  ref,
+  children,
+  ...rest
+}: DrawerPanelProps): React.ReactNode => {
+  const inline = type === 'inline';
+  const overlay = !inline;
+  const nonModal = modalType === 'non-modal';
+  const nonModalOverlay = overlay && nonModal;
+  const keptMounted = !unmountOnClose;
+  // The panel mounts through the presence core (D5, D103), with no motion of its own: kept mounted
+  // while closed with `unmountOnClose={false}`, else removed once it has exited.
+  const {
+    isMounted,
+    ref: presenceRef,
+    presenceProps,
+  } = usePresence(open, { unmountOnExit: unmountOnClose });
+
+  // The panel element of each type, held in state through its own callback ref. A change of `type`
+  // remounts the panel (D105): the overlay's hooks see only the portaled element and the inline
+  // restore only the inline one, also in the commit that swaps them (the inline restore then still
+  // knows the panel that focus was lost from).
+  const [overlayPanel, setOverlayPanel] = React.useState<HTMLElement | null>(null);
+  const [inlinePanel, setInlinePanel] = React.useState<HTMLElement | null>(null);
+  // The mounted panel of either type; each element clears it only while it is still the one held.
+  const panelRef = React.useRef<HTMLElement | null>(null);
+  const attachOverlayPanel = React.useCallback((node: HTMLElement | null) => {
+    if (!node) return undefined;
+    panelRef.current = node;
+    setOverlayPanel(node);
+    return () => {
+      if (panelRef.current === node) panelRef.current = null;
+      setOverlayPanel(null);
+    };
+  }, []);
+  const attachInlinePanel = React.useCallback((node: HTMLElement | null) => {
+    if (!node) return undefined;
+    panelRef.current = node;
+    setInlinePanel(node);
+    return () => {
+      if (panelRef.current === node) panelRef.current = null;
+      setInlinePanel(null);
+    };
+  }, []);
+  const overlayRef = useMergedRefs<HTMLElement>(ref, attachOverlayPanel, presenceRef);
+  const inlineRef = useMergedRefs<HTMLElement>(ref, attachInlinePanel, presenceRef);
+
+  // An inline panel takes no focus on open and returns it on close only from inside (D101). Called
+  // before useModalLayer: on a switch from inline to overlay it restores before the overlay's trap
+  // moves focus in.
+  useRestoreFocus({
+    enabled: open && inline,
+    container: inlinePanel,
+    triggerRef: trigger.focusRef,
+    finalFocusRef,
+    requireFocusInside: true,
+  });
+  // The portal wrapper: a kept-mounted overlay moves to the top of its stack when it opens (D104),
+  // before the layer registers and the trap moves focus in.
+  const portalRef = React.useRef<HTMLDivElement | null>(null);
+  useRaiseOnOpen(open && overlay, keptMounted, portalRef);
+
+  // A backdrop press asks to close, except an alert's (Escape still does; useModalLayer registers
+  // its layer without outside presses).
+  const backdropPress = useBackdropPress(panelRef, modalType !== 'alert');
+  const onDismiss = useModalDismiss(requestOpen, componentName, backdropPress.afterOutsidePress);
+  // Only an overlay is a layer: an inline panel is page content (no trap, isolation, scroll lock,
+  // Escape or outside press; toasts keep their corner). The overlay's layer is the one the Toaster
+  // measures (`modal`, or `dialog` for a non-modal one).
+  const layer = useModalLayer({
+    open: open && overlay,
+    modalType,
+    onDismiss,
+    refs: [panelRef],
+    container: overlayPanel,
+    triggerRef: trigger.focusRef,
+    finalFocusRef,
+  });
+  // A non-modal overlay keeps its place in the page's keyboard order right after its opener
+  // (D87.5). Both hooks are always called (C-HOOKS, D91).
+  const opener = useModalOpener(open && nonModalOverlay, trigger, overlayPanel);
+  const onTabOrderKeyDown = usePopoverTabOrder({
+    enabled: open && nonModalOverlay,
+    surface: overlayPanel,
+    anchorRef: opener,
+    getPreviousStop: getTabbableThrough,
+  });
+  // A popup opened inside a kept-mounted panel that is still open when the panel closes (D106).
+  useOpenInsideWarning(open, keptMounted, layer.layerId, componentName, panelRef);
+  // A non-modal or inline panel has no backdrop: a given slot (not undefined, null or a boolean)
+  // is ignored.
+  const backdropIgnored =
+    (nonModal || inline) &&
+    backdrop !== undefined &&
+    backdrop !== null &&
+    typeof backdrop !== 'boolean';
+  React.useEffect(() => {
+    if (!backdropIgnored) return;
+    warnOnce(
+      `${componentName}:backdrop-ignored`,
+      `${componentName}: \`backdrop\` is ignored: a non-modal or inline drawer has no backdrop, so the page around it stays usable.`,
+    );
+  }, [backdropIgnored, componentName]);
+  // A full non-modal overlay covers the page it leaves usable (D87.8).
+  const coversUsablePage = open && nonModalOverlay && size === 'full';
+  React.useEffect(() => {
+    if (!coversUsablePage) return;
+    warnOnce(
+      `${componentName}:non-modal-full`,
+      `${componentName}: \`size="full"\` with \`modalType="non-modal"\` covers the whole page while leaving it usable, so Tab reaches controls hidden behind the drawer. Use \`modalType="modal"\`, \`type="inline"\`, or a smaller size with its room reserved in the page layout.`,
+    );
+  }, [coversUsablePage, componentName]);
+
+  if (!isMounted) return null;
+
+  if (inline) {
+    const InlinePanel = inlineAs;
+    // In place: no role, tabIndex or modal attributes (D100). The presence attributes come after
+    // the consumer's props: hidden and inert while kept closed.
+    return (
+      <InlinePanel
+        ref={inlineRef}
+        id={id}
+        data-type="inline"
+        data-position={position}
+        data-size={size}
+        data-separator={separator ? '' : undefined}
+        {...rest}
+        {...presenceProps}
+        onKeyDown={onKeyDown}
+        className={cn(
+          rootClassName,
+          inlinePanelClasses,
+          getInlinePanelClasses(position, size),
+          className,
+        )}
+      >
+        {children}
+      </InlinePanel>
+    );
+  }
+
+  return (
+    <Portal ref={portalRef} layerId={layer.layerId}>
+      {/* The backdrop of a modal or alert panel, the panel's sibling; a non-modal one has none.
+          Both carry the presence attributes (D7, D103): hidden and inert while kept closed, so a
+          closed panel leaves no backdrop over the page. */}
+      {!nonModal && (
+        <ModalBackdrop
+          backdrop={backdrop}
+          className={backdropClassName}
+          layerId={layer.layerId}
+          open={open}
+          onMouseDown={backdropPress.onMouseDown}
+          presenceProps={presenceProps}
+        />
+      )}
+      <div
+        ref={overlayRef}
+        role={modalType === 'alert' ? 'alertdialog' : 'dialog'}
+        id={id}
+        tabIndex={-1}
+        data-type="overlay"
+        data-position={position}
+        data-size={size}
+        data-modal-type={modalType}
+        {...rest}
+        {...presenceProps}
+        onKeyDown={composeEventHandlers(onKeyDown, onTabOrderKeyDown)}
+        className={cn(
+          rootClassName,
+          OVERLAY_PANEL_CLASSES,
+          getOverlayPanelClasses(position, size),
+          className,
+        )}
+      >
+        {children}
+      </div>
+    </Portal>
+  );
+};
+DrawerPanel.displayName = 'DrawerPanel';
