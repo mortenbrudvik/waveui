@@ -45,7 +45,17 @@ export interface PickerExpandButtonProps {
    * @default 'outline'
    */
   appearance?: InputAppearance;
-  /** The host's stable class for the button (its `expandButton` part). */
+  /**
+   * The button dims itself while disabled (`disabledStyles`). `false` leaves the dimming to a field
+   * that dims as a whole (TagPicker's control) and keeps only the not-allowed cursor.
+   * @default true
+   */
+  dimDisabled?: boolean;
+  /**
+   * The host's stable class for the button (its `expandButton` part), and any class that places
+   * the button in the host's control. It is merged first, so the button's own classes win where
+   * they conflict.
+   */
   className?: string;
   /** The host's stable class for the glyph `<span>` (its `expandIcon` part). */
   iconClassName?: string;
@@ -71,6 +81,7 @@ export const PickerExpandButton = ({
   onToggle,
   size = 'medium',
   appearance = 'outline',
+  dimDisabled = true,
   className,
   iconClassName,
 }: PickerExpandButtonProps) => {
@@ -110,7 +121,8 @@ export const PickerExpandButton = ({
         pickerIconButtonClasses(size, appearance),
         pickerButtonOffset(size, 1),
         focusRing,
-        disabledStyles,
+        // Inside a field that dims as a whole, a second dimming would multiply the opacity.
+        dimDisabled ? disabledStyles : 'disabled:cursor-not-allowed',
       )}
     >
       {renderSlot(

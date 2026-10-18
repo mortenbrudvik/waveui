@@ -9,6 +9,7 @@ import {
   Option,
   OptionGroup,
   useListboxPopup,
+  type ListboxSurfaceListProps,
   type ListboxSurfaceProps,
   type OptionGroupProps,
   type OptionProps,
@@ -23,6 +24,7 @@ import { listboxSurfaceClassNames } from '../../../lib/classNames';
 import type { Slot } from '../../../lib/slot';
 import {
   asClientReference,
+  expectNoA11yViolations,
   findDanglingIdRefsInHtml,
   mockRect,
   testDisplayName,
@@ -430,7 +432,7 @@ const FONTS = ['Arial', 'Georgia', 'Verdana'];
 
 interface FontPickerProps extends Pick<
   ListboxSurfaceProps,
-  'showCheck' | 'listClassName' | 'surfaceClassName'
+  'showCheck' | 'listClassName' | 'surfaceClassName' | 'listProps'
 > {
   fonts?: readonly string[];
   multiselect?: boolean;
@@ -1110,6 +1112,152 @@ describe('Option parts for custom pickers (option-2, option-3, listbox-2)', () =
       expect(fontSurface()).toHaveClass('shadow-8', 'rounded-lg', 'border', 'bg-background');
       expect(fontSurface()).not.toHaveClass('shadow-4');
       expect(fontSurface()).not.toHaveClass('rounded');
+    });
+  });
+
+  // 0.11 spec §1.11: attributes and a ref for the list element (TagPicker.List builds on them).
+  describe('ListboxSurface listProps', () => {
+    it('ListboxSurface spreads listProps onto the list, and its own attributes win', async () => {
+      const user = userEvent.setup();
+      // The listbox's own attributes, which the type omits, passed anyway (a JavaScript caller).
+      const overridden = {
+        role: 'menu',
+        id: 'my-list',
+        tabIndex: 0,
+        hidden: false,
+        className: 'my-class',
+        'aria-label': 'Not the name',
+        'aria-multiselectable': false,
+      } as unknown as ListboxSurfaceListProps;
+      // A `data-*` attribute, as a wrapper's rest props carry it (TagPicker.List's `data-testid`).
+      const listProps: ListboxSurfaceListProps & { 'data-testid': string } = {
+        ...overridden,
+        'data-testid': 'font-list',
+        'aria-describedby': 'font-hint',
+        title: 'Fonts on this device',
+      };
+      render(
+        <>
+          <p id="font-hint">Pick one or more</p>
+          <FontPicker multiselect listProps={listProps} />
+        </>,
+      );
+      // Closed: the inline list keeps its own `hidden`.
+      const inline = screen.getByTestId('font-list');
+      expect(inline).toHaveAttribute('hidden');
+      expect(inline).toHaveAttribute('role', 'listbox');
+
+      await user.click(fontButton());
+      const list = screen.getByRole('listbox', { name: 'Fonts' });
+      expect(list).toBe(screen.getByTestId('font-list'));
+      expect(list).toHaveAttribute('aria-describedby', 'font-hint');
+      expect(list).toHaveAttribute('title', 'Fonts on this device');
+      // The listbox's own attributes win.
+      expect(list).not.toHaveAttribute('id', 'my-list');
+      expect(fontButton()).toHaveAttribute('aria-controls', list.id);
+      expect(list).toHaveAttribute('tabindex', '-1');
+      expect(list).toHaveAttribute('aria-multiselectable', 'true');
+      expect(list).toHaveAttribute('aria-label', 'Fonts');
+      expect(list).not.toHaveAttribute('hidden');
+      expect(list.className).toBe(
+        `${listboxSurfaceClassNames.list} min-h-0 max-h-60 overflow-auto`,
+      );
+      await expectNoA11yViolations(document.body);
+    });
+
+    it('listProps.ref receives the list, hidden in place and in the popup', async () => {
+      const user = userEvent.setup();
+      const ref = React.createRef<HTMLUListElement>();
+      render(<FontPicker listProps={{ ref }} />);
+      const inline = screen.getByRole('listbox', { hidden: true });
+      expect(ref.current).toBe(inline);
+      expect(ref.current).toHaveAttribute('hidden');
+      expect(ref.current?.closest('[data-wave-portal]')).toBeNull();
+
+      await user.click(fontButton());
+      const list = screen.getByRole('listbox', { name: 'Fonts' });
+      expect(ref.current).toBe(list);
+      expect(fontSurface()).toContainElement(ref.current);
+
+      await user.keyboard('{Escape}');
+      expect(fontSurface()).toBeNull();
+      expect(ref.current).toBe(screen.getByRole('listbox', { hidden: true }));
+      expect(ref.current).toHaveAttribute('hidden');
+    });
+
+    it('composes listProps.onMouseDown before the list’s own (its preventDefault keeps focus)', async () => {
+      const user = userEvent.setup();
+      const seen: boolean[] = [];
+      // Stops the press at the list, so only the list's own handler (not the surface's) can keep
+      // focus on the combobox.
+      const onMouseDown = vi.fn((event: React.MouseEvent<HTMLUListElement>) => {
+        seen.push(event.defaultPrevented);
+        event.stopPropagation();
+      });
+      render(<FontPicker listProps={{ onMouseDown }} />);
+      await user.click(fontButton());
+      expect(fontButton()).toHaveFocus();
+
+      await user.pointer({ keys: '[MouseLeft>]', target: option('Georgia') });
+      expect(onMouseDown).toHaveBeenCalledTimes(1);
+      // The consumer's handler runs first, before the list prevents the default.
+      expect(seen).toEqual([false]);
+      expect(fontButton()).toHaveFocus();
+      await user.pointer({ keys: '[/MouseLeft]', target: option('Georgia') });
+      expect(fontButton()).toHaveTextContent('Georgia');
+      expect(fontButton()).toHaveFocus();
+    });
+
+    it('a consumer’s preventDefault in listProps.onMouseDown also keeps focus', async () => {
+      const user = userEvent.setup();
+      const onMouseDown = vi.fn((event: React.MouseEvent<HTMLUListElement>) => {
+        event.preventDefault();
+      });
+      render(<FontPicker listProps={{ onMouseDown }} />);
+      await user.click(fontButton());
+      expect(fireEvent.mouseDown(option('Verdana'))).toBe(false);
+      expect(onMouseDown).toHaveBeenCalledTimes(1);
+      expect(fontButton()).toHaveFocus();
+    });
+
+    it('a style in listProps reaches the list', async () => {
+      const user = userEvent.setup();
+      render(<FontPicker listProps={{ style: { minWidth: '12rem' } }} />);
+      expect(screen.getByRole('listbox', { hidden: true }).style.minWidth).toBe('12rem');
+      await user.click(fontButton());
+      expect(screen.getByRole('listbox', { name: 'Fonts' }).style.minWidth).toBe('12rem');
+    });
+
+    it('renders the 0.10 list without listProps', () => {
+      const html = renderToString(<FontPicker />);
+      const withEmpty = renderToString(<FontPicker listProps={{}} />);
+      expect(withEmpty).toBe(html);
+    });
+
+    it('types listProps and its ref', () => {
+      expectTypeOf<ListboxSurfaceProps['listProps']>().toEqualTypeOf<
+        ListboxSurfaceListProps | undefined
+      >();
+      expectTypeOf<ListboxSurfaceListProps['ref']>().toEqualTypeOf<
+        React.Ref<HTMLUListElement> | undefined
+      >();
+      expectTypeOf<ListboxSurfaceListProps['style']>().toEqualTypeOf<
+        React.CSSProperties | undefined
+      >();
+      // The listbox's own attributes and the naming props are not part of listProps.
+      type OwnKeys =
+        | 'role'
+        | 'id'
+        | 'hidden'
+        | 'tabIndex'
+        | 'className'
+        | 'aria-label'
+        | 'aria-labelledby'
+        | 'aria-multiselectable'
+        | 'aria-activedescendant';
+      expectTypeOf<Extract<keyof ListboxSurfaceListProps, OwnKeys>>().toBeNever();
+      expectTypeOf<'onMouseDown'>().toExtend<keyof ListboxSurfaceListProps>();
+      expectTypeOf<'aria-describedby'>().toExtend<keyof ListboxSurfaceListProps>();
     });
   });
 

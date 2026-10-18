@@ -122,6 +122,7 @@ import type {
   ListboxSelectDetails,
   ListboxStore,
   ListboxSurface,
+  ListboxSurfaceListProps,
   ListboxSurfaceProps,
   markListboxElement,
   Menu,
@@ -985,6 +986,9 @@ describe('0.10 listbox primitives, useActiveDescendant and the date types from t
     expectTypeOf<ListboxProviderProps['value']>().toEqualTypeOf<ListboxContextValue>();
     expectTypeOf<typeof ListboxSurface>().parameter(0).toEqualTypeOf<ListboxSurfaceProps>();
     expectTypeOf<ListboxSurfaceProps['listbox']>().toEqualTypeOf<UseListboxResult>();
+    expectTypeOf<ListboxSurfaceProps['listProps']>().toEqualTypeOf<
+      ListboxSurfaceListProps | undefined
+    >();
     expectTypeOf<ListboxSurfaceProps['floatingProps']>().toEqualTypeOf<
       UseListboxPopupResult['floatingProps']
     >();

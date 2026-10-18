@@ -5,6 +5,7 @@ import { renderToString } from 'react-dom/server';
 import { hydrateRoot } from 'react-dom/client';
 import { Avatar } from '../Avatar';
 import type { AvatarProps } from '../Avatar';
+import { AvatarSizeContext, type AvatarSizeContextValue } from '../Avatar.context';
 import { PresenceBadge } from '../PresenceBadge';
 import { expectNoA11yViolations, renderWithProviders, testSystemProps } from '../../../test-utils';
 import type { Size } from '../../../lib/types';
@@ -977,5 +978,85 @@ describe('Avatar', () => {
   // button-provider#27 (C-REF): ref is declared in the props interface.
   it('declares ref in AvatarProps (C-REF)', () => {
     expectTypeOf<AvatarProps['ref']>().toEqualTypeOf<React.Ref<HTMLSpanElement> | undefined>();
+  });
+
+  // 0.11 spec §1.10: the internal box that Tag and InteractionTag media give an Avatar.
+  describe('AvatarSizeContext', () => {
+    const inBox = (size: AvatarSizeContextValue['size'], ui: React.ReactNode) => (
+      <AvatarSizeContext.Provider value={{ size }}>{ui}</AvatarSizeContext.Provider>
+    );
+
+    it.each([
+      [24, 'w-6', 'h-6'],
+      [20, 'w-5', 'h-5'],
+      [16, 'w-4', 'h-4'],
+    ] as const)(
+      'an Avatar without size takes the box of AvatarSizeContext (%dpx)',
+      (size, width, height) => {
+        render(inBox(size, <Avatar name="Jane Doe" data-testid="avatar" />));
+        const avatar = screen.getByTestId('avatar');
+        expect(avatar).toHaveClass(width, height, 'text-[10px]');
+        expect(avatar).not.toHaveClass('w-10');
+        expect(avatar).not.toHaveClass('h-10');
+        expect(avatar).not.toHaveClass('text-sm');
+        // No data-size: Avatar renders none (none in 0.10 either).
+        expect(avatar).not.toHaveAttribute('data-size');
+      },
+    );
+
+    it('keeps the person glyph at 60% of the box', () => {
+      const { container } = render(inBox(16, <Avatar data-testid="avatar" />));
+      expect(screen.getByTestId('avatar')).toHaveClass('w-4', 'h-4');
+      expect(container.querySelector('svg')).toHaveAttribute('width', '60%');
+    });
+
+    it('its own size wins over the context', () => {
+      render(inBox(16, <Avatar name="Jane Doe" size="large" data-testid="avatar" />));
+      const avatar = screen.getByTestId('avatar');
+      expect(avatar).toHaveClass('w-12', 'h-12', 'text-base');
+      expect(avatar).not.toHaveClass('w-4');
+      expect(avatar).not.toHaveClass('h-4');
+    });
+
+    it('outside the context it keeps the medium classes', () => {
+      render(
+        <>
+          <Avatar name="Jane Doe" data-testid="outside" />
+          <AvatarSizeContext.Provider value={null}>
+            <Avatar name="John Doe" data-testid="null-box" />
+          </AvatarSizeContext.Provider>
+        </>,
+      );
+      expect(screen.getByTestId('outside')).toHaveClass('w-10', 'h-10', 'text-sm');
+      expect(screen.getByTestId('null-box')).toHaveClass('w-10', 'h-10', 'text-sm');
+    });
+
+    it('with a badge the visual is sized, not the wrapper', () => {
+      render(
+        inBox(
+          20,
+          <Avatar name="Jane Doe" badge={<PresenceBadge status="busy" />} data-testid="root" />,
+        ),
+      );
+      const root = screen.getByTestId('root');
+      const visual = screen.getByRole('img', { name: 'Jane Doe' });
+      expect(root).not.toBe(visual);
+      expect(visual).toHaveClass('w-5', 'h-5', 'text-[10px]');
+      expect(root).not.toHaveClass('w-5');
+      expect(root).not.toHaveClass('h-5');
+    });
+
+    it('is null by default and named for React DevTools', () => {
+      expectTypeOf(AvatarSizeContext).toEqualTypeOf<React.Context<AvatarSizeContextValue | null>>();
+      expectTypeOf<AvatarSizeContextValue['size']>().toEqualTypeOf<16 | 20 | 24>();
+      expect(AvatarSizeContext.displayName).toBe('AvatarSizeContext');
+      let value: AvatarSizeContextValue | null | undefined;
+      const Probe = () => {
+        value = React.useContext(AvatarSizeContext);
+        return null;
+      };
+      render(<Probe />);
+      expect(value).toBeNull();
+    });
   });
 });

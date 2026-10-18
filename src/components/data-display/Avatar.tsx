@@ -7,6 +7,7 @@ import { useMergedRefs } from '../../hooks/useMergedRefs';
 import { PersonIcon } from '../../lib/icons';
 import type { Size, Slot } from '../../lib/types';
 import { renderSlot, slotRendersContent } from '../../lib/slot';
+import { AvatarSizeContext, type AvatarSizeContextValue } from './Avatar.context';
 
 /** Properties for the Avatar component. */
 export interface AvatarProps extends React.HTMLAttributes<HTMLSpanElement> {
@@ -21,7 +22,9 @@ export interface AvatarProps extends React.HTMLAttributes<HTMLSpanElement> {
    * `role="img"` unless `role` is given) and generates the initials shown when there is no image.
    */
   name?: string;
-  /** Size of the avatar.
+  /**
+   * Size of the avatar. Without it, an Avatar in the `media` of a tag (Tag, InteractionTag) takes
+   * the tag's media box instead: 24, 20 or 16px by the tag's size.
    * @default 'medium'
    */
   size?: Size;
@@ -76,6 +79,16 @@ export const avatarSizeClasses: Readonly<Record<Size, string>> = {
   medium: 'w-10 h-10 text-sm', // 40px
   large: 'w-12 h-12 text-base', // 48px
   'extra-large': 'w-14 h-14 text-lg', // 56px
+};
+
+/**
+ * Width, height and text size classes of each box of {@link AvatarSizeContext}, for an Avatar
+ * that sets no `size`: 24px is the `extra-small` size, 20px and 16px are internal boxes.
+ */
+const AVATAR_BOX_CLASSES: Readonly<Record<AvatarSizeContextValue['size'], string>> = {
+  24: avatarSizeClasses['extra-small'],
+  20: 'w-5 h-5 text-[10px]',
+  16: 'w-4 h-4 text-[10px]',
 };
 
 const IMAGE_CLASS = 'w-full h-full object-cover';
@@ -192,7 +205,7 @@ function sameImageKey(a: ImageKey, b: ImageKey): boolean {
 export const Avatar = ({
   src,
   name,
-  size = 'medium',
+  size: sizeProp,
   icon,
   image,
   badge,
@@ -207,6 +220,8 @@ export const Avatar = ({
   'aria-details': ariaDetails,
   ...rest
 }: AvatarProps) => {
+  // The media box of a surrounding Tag or InteractionTag, for an Avatar without its own `size`.
+  const box = React.useContext(AvatarSizeContext);
   const imageSlot =
     image === null || image === undefined || typeof image === 'boolean' || image === ''
       ? undefined
@@ -410,10 +425,18 @@ export const Avatar = ({
       : null;
   const hasBadge = badgeNode !== null;
 
+  // An own `size` wins; without one, the box of a surrounding tag's media, else medium. With a
+  // badge the visual is sized, not the wrapper.
+  const sizeClasses =
+    sizeProp !== undefined
+      ? avatarSizeClasses[sizeProp]
+      : box
+        ? AVATAR_BOX_CLASSES[box.size]
+        : avatarSizeClasses.medium;
   const visualClassName = cn(
     avatarClassNames.visual,
     'inline-flex items-center justify-center rounded-full overflow-hidden shrink-0 font-bold',
-    avatarSizeClasses[size],
+    sizeClasses,
     colorClass,
   );
 

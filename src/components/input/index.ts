@@ -62,6 +62,7 @@ export {
   type ListboxProviderProps,
   ListboxSurface,
   type ListboxSurfaceProps,
+  type ListboxSurfaceListProps,
   useListboxPopup,
   type UseListboxPopupOptions,
   type UseListboxPopupResult,
