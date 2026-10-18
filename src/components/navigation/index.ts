@@ -40,7 +40,16 @@ export type {
   MenuSplitGroupProps,
 } from './Menu';
 
-export { Nav, NavCategory, NavItem, NavSubItem } from './Nav';
+export {
+  Nav,
+  NavCategory,
+  NavItem,
+  NavSubItem,
+  NavSectionHeader,
+  NavDivider,
+  NavAppItem,
+  NavAppItemStatic,
+} from './Nav';
 export type {
   NavProps,
   NavCategoryProps,
@@ -54,7 +63,26 @@ export type {
   NavSubItemAnchorProps,
   NavSubItemButtonProps,
   NavSubItemDynamicProps,
+  NavSectionHeaderProps,
+  NavDividerProps,
+  NavAppItemOwnProps,
+  NavAppItemAnchorProps,
+  NavAppItemButtonProps,
+  NavAppItemProps,
+  NavAppItemDynamicProps,
+  NavAppItemStaticProps,
 } from './Nav';
+
+export { NavDrawer, NavDrawerHeader, NavDrawerBody, NavDrawerFooter } from './NavDrawer';
+export type {
+  NavDrawerProps,
+  NavDrawerHeaderProps,
+  NavDrawerBodyProps,
+  NavDrawerFooterProps,
+} from './NavDrawer';
+
+export { Hamburger } from './Hamburger';
+export type { HamburgerProps } from './Hamburger';
 
 export { Pagination } from './Pagination';
 export type { PaginationProps, PaginationItemType } from './Pagination';

@@ -1,12 +1,15 @@
 import * as React from 'react';
 import type { Meta, StoryObj } from '@storybook/react';
 import { fn } from 'storybook/test';
-import { Avatar, Field, Tag, type ListboxItem } from '../src';
 import {
+  Avatar,
+  Field,
+  Tag,
   TagPicker,
+  type ListboxItem,
   type TagPickerOption,
   type TagPickerProps,
-} from '../src/components/input/TagPicker';
+} from '../src';
 
 const fruitOptions = [
   { value: 'apple', label: 'Apple' },

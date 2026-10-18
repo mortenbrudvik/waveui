@@ -16,6 +16,16 @@ export type { CounterBadgeProps } from './CounterBadge';
 export { Tag } from './Tag';
 export type { TagProps, TagOwnProps } from './Tag';
 
+export { TagGroup } from './TagGroup';
+export type { TagGroupProps } from './TagGroup';
+
+export { InteractionTag, InteractionTagPrimary, InteractionTagSecondary } from './InteractionTag';
+export type {
+  InteractionTagProps,
+  InteractionTagPrimaryProps,
+  InteractionTagSecondaryProps,
+} from './InteractionTag';
+
 export { Persona } from './Persona';
 export type { PersonaProps } from './Persona';
 

@@ -37,6 +37,7 @@ import type {
   addMonths,
   AlphaSliderLabels,
   AlphaSliderProps,
+  BackdropAppearance,
   BadgeColor,
   BreadcrumbItemAnchorProps,
   BreadcrumbItemButtonProps,
@@ -79,10 +80,21 @@ import type {
   DialogOpenChangeDetails,
   DialogOpenChangeReason,
   DialogProps,
+  DialogSize,
   DismissReason,
+  DrawerBodyProps,
+  DrawerFooterProps,
+  DrawerHeaderNavigationProps,
+  DrawerHeaderProps,
+  DrawerHeaderTitleProps,
+  DrawerModalType,
   DrawerOpenChangeDetails,
   DrawerOpenChangeReason,
+  DrawerPosition,
   DrawerProps,
+  DrawerSize,
+  DrawerTriggerRenderProps,
+  DrawerType,
   Dropdown,
   DropdownComponent,
   DropdownLabels,
@@ -92,8 +104,11 @@ import type {
   FieldControlIdClaim,
   FieldProps,
   FirstWeekOfYear,
+  FocusMode,
   getWeekNumber,
   GetWeekNumberOptions,
+  HamburgerProps,
+  HeadingLevel,
   HsvColor,
   IconPosition,
   ImageSwatchProps,
@@ -102,6 +117,10 @@ import type {
   InputAppearance,
   InputDefaults,
   InputProps,
+  InteractionTag,
+  InteractionTagPrimaryProps,
+  InteractionTagProps,
+  InteractionTagSecondaryProps,
   isSameDay,
   LabelPosition,
   LabelProps,
@@ -147,10 +166,23 @@ import type {
   MessageBarTitleProps,
   ModalOpenChangeReason,
   ModalType,
+  NavAppItemAnchorProps,
+  NavAppItemButtonProps,
+  NavAppItemDynamicProps,
+  NavAppItemOwnProps,
+  NavAppItemProps,
+  NavAppItemStaticProps,
+  NavDividerProps,
+  NavDrawer,
+  NavDrawerBodyProps,
+  NavDrawerFooterProps,
+  NavDrawerHeaderProps,
+  NavDrawerProps,
   NavItemAnchorProps,
   NavItemButtonProps,
   NavItemOwnProps,
   NavProps,
+  NavSectionHeaderProps,
   NavSubItemAnchorProps,
   NavSubItemButtonProps,
   NavSubItemOwnProps,
@@ -194,6 +226,7 @@ import type {
   SplitButtonProps,
   startOfWeek,
   Status,
+  SurfaceSize,
   SwatchPickerLabels,
   SwatchPickerProps,
   SwatchPickerRowProps,
@@ -202,8 +235,22 @@ import type {
   SwitchProps,
   SwitchSize,
   TabListProps,
+  TagAppearance,
+  TagGroupProps,
+  TagPicker,
+  TagPickerButtonProps,
+  TagPickerControlProps,
+  TagPickerGroupProps,
+  TagPickerInputProps,
+  TagPickerLabels,
+  TagPickerListProps,
+  TagPickerOption,
+  TagPickerOptionProps,
   TagPickerProps,
   TagPickerSize,
+  TagProps,
+  TagShape,
+  TagSize,
   TeachingPopoverProps,
   TextareaProps,
   TimePickerInvalidReason,
@@ -430,35 +477,9 @@ const INTERNAL_HELPERS: Record<string, string> = {
 
 /**
  * Public type names that a prop refers to before the barrels export them (spec §0.2 rule 24,
- * §1.5), matched against the name after `#` of the walk's labels. The Phase 6 names (0.11 spec
- * §1.5) that a public declaration reaches through the exported `Dialog`, `Drawer`, `Nav` and
- * `TagPicker` before INTEGRATION exports them; INTEGRATION empties the list in wave D.
+ * §1.5), matched against the name after `#` of the walk's labels. Empty since wave D of 0.11.
  */
-const PENDING_PUBLIC_TYPES: readonly string[] = [
-  'DialogSize',
-  'DrawerBodyProps',
-  'DrawerFooterProps',
-  'DrawerHeaderNavigationProps',
-  'DrawerHeaderProps',
-  'DrawerHeaderTitleProps',
-  'DrawerModalType',
-  'DrawerSize',
-  'DrawerType',
-  'NavAppItemAnchorProps',
-  'NavAppItemButtonProps',
-  'NavAppItemDynamicProps',
-  'NavAppItemOwnProps',
-  'NavAppItemProps',
-  'NavAppItemStaticProps',
-  'NavDividerProps',
-  'NavSectionHeaderProps',
-  'TagPickerButtonProps',
-  'TagPickerControlProps',
-  'TagPickerGroupProps',
-  'TagPickerInputProps',
-  'TagPickerListProps',
-  'TagPickerOptionProps',
-];
+const PENDING_PUBLIC_TYPES: readonly string[] = [];
 
 /** `components/feedback/Toaster.tsx#ToastDispatchOptions` → `ToastDispatchOptions`. */
 const typeNameOf = (label: string): string => label.slice(label.indexOf('#') + 1);
@@ -605,6 +626,8 @@ describe('public type surface (src/index.ts)', () => {
     expectTypeOf<NavItemButtonProps>().toExtend<NavItemOwnProps>();
     expectTypeOf<NavSubItemAnchorProps>().toExtend<NavSubItemOwnProps>();
     expectTypeOf<NavSubItemButtonProps>().toExtend<NavSubItemOwnProps>();
+    expectTypeOf<NavAppItemAnchorProps>().toExtend<NavAppItemOwnProps>();
+    expectTypeOf<NavAppItemButtonProps>().toExtend<NavAppItemOwnProps>();
   });
 });
 
@@ -1415,5 +1438,145 @@ describe('0.8 notifications, color, trees and class names from the package entry
       'circular',
       'wave-custom',
     ]);
+  });
+});
+
+// The 0.11 additions (spec §4.7), imported from the package entry (compile-time, `tsconfig.dev.json`).
+describe('0.11 tags, drawers and the app shell from the package entry', () => {
+  it('Tag, TagGroup and InteractionTag: size, appearance, shape, selection and dismissal', () => {
+    expectTypeOf<TagProps['size']>().toEqualTypeOf<TagSize | undefined>();
+    expectTypeOf<TagProps['appearance']>().toEqualTypeOf<TagAppearance | undefined>();
+    expectTypeOf<TagProps['shape']>().toEqualTypeOf<TagShape | undefined>();
+    expectTypeOf<TagGroupProps['size']>().toEqualTypeOf<TagSize | undefined>();
+    expectTypeOf<TagGroupProps['appearance']>().toEqualTypeOf<TagAppearance | undefined>();
+    expectTypeOf<TagGroupProps['shape']>().toEqualTypeOf<TagShape | undefined>();
+    expectTypeOf<InteractionTagProps['size']>().toEqualTypeOf<TagSize | undefined>();
+    expectTypeOf<InteractionTagProps['appearance']>().toEqualTypeOf<TagAppearance | undefined>();
+    expectTypeOf<InteractionTagProps['shape']>().toEqualTypeOf<TagShape | undefined>();
+
+    expectTypeOf<NonNullable<TagGroupProps['onValueChange']>>()
+      .parameter(0)
+      .toEqualTypeOf<string[]>();
+    expectTypeOf<readonly string[]>().toExtend<NonNullable<TagGroupProps['value']>>();
+    expectTypeOf<TagGroupProps['onDismiss']>().toEqualTypeOf<
+      ((value: string) => void) | undefined
+    >();
+
+    expectTypeOf<TagGroupProps['ref']>().toEqualTypeOf<Ref<HTMLDivElement> | undefined>();
+    expectTypeOf<InteractionTagProps['ref']>().toEqualTypeOf<Ref<HTMLDivElement> | undefined>();
+    expectTypeOf<InteractionTagPrimaryProps['ref']>().toEqualTypeOf<
+      Ref<HTMLButtonElement> | undefined
+    >();
+    expectTypeOf<InteractionTagSecondaryProps['ref']>().toEqualTypeOf<
+      Ref<HTMLButtonElement> | undefined
+    >();
+    expectTypeOf<
+      ComponentProps<typeof InteractionTag.Primary>
+    >().toEqualTypeOf<InteractionTagPrimaryProps>();
+  });
+
+  it('TagPicker: the root props, the labels, the parts and TagPickerOption', () => {
+    expectTypeOf<ComponentProps<typeof TagPicker>>().toEqualTypeOf<TagPickerProps>();
+    expectTypeOf<TagPickerProps['options']>().toEqualTypeOf<
+      readonly TagPickerOption[] | undefined
+    >();
+    expectTypeOf<TagPickerLabels['create']>().toEqualTypeOf<
+      ((text: string) => string) | undefined
+    >();
+    expectTypeOf<TagPickerLabels['clear']>().toEqualTypeOf<string | undefined>();
+    expectTypeOf<TagPickerLabels['expand']>().toEqualTypeOf<string | undefined>();
+    expectTypeOf<TagPickerLabels['overflowCount']>().toEqualTypeOf<
+      ((count: number) => string) | undefined
+    >();
+
+    // TagPickerOption is both the interface of an `options` entry and the `TagPicker.Option` part.
+    expectTypeOf<TagPickerOption>().toHaveProperty('value').toEqualTypeOf<string>();
+    expectTypeOf<TagPickerOption>().toHaveProperty('label').toEqualTypeOf<string>();
+    expectTypeOf<typeof TagPicker.Option>().toEqualTypeOf<typeof TagPickerOption>();
+    expectTypeOf<ComponentProps<typeof TagPickerOption>>().toEqualTypeOf<TagPickerOptionProps>();
+
+    expectTypeOf<TagPickerControlProps['ref']>().toEqualTypeOf<Ref<HTMLDivElement> | undefined>();
+    expectTypeOf<TagPickerGroupProps['ref']>().toEqualTypeOf<Ref<HTMLDivElement> | undefined>();
+    expectTypeOf<TagPickerInputProps['ref']>().toEqualTypeOf<Ref<HTMLInputElement> | undefined>();
+    expectTypeOf<TagPickerButtonProps['ref']>().toEqualTypeOf<Ref<HTMLButtonElement> | undefined>();
+    expectTypeOf<TagPickerListProps['ref']>().toEqualTypeOf<Ref<HTMLUListElement> | undefined>();
+
+    // The parts take the root's size and appearance; they have none of their own.
+    // @ts-expect-error TagPicker.Control takes no size
+    const controlSize: TagPickerControlProps['size'] = 'large';
+    // @ts-expect-error TagPicker.Input takes no appearance
+    const inputAppearance: TagPickerInputProps['appearance'] = 'underline';
+    // @ts-expect-error TagPicker.Button takes no size
+    const buttonSize: TagPickerButtonProps['size'] = 'large';
+    // @ts-expect-error TagPicker.List takes no appearance
+    const listAppearance: TagPickerListProps['appearance'] = 'outline';
+    expect([controlSize, inputAppearance, buttonSize, listAppearance]).toEqual([
+      'large',
+      'underline',
+      'large',
+      'outline',
+    ]);
+  });
+
+  it('Dialog and Drawer: sizes, positions, types, modal types, the trigger and the parts', () => {
+    expectTypeOf<'bottom'>().toExtend<DrawerPosition>();
+    expectTypeOf<DrawerSize>().toEqualTypeOf<SurfaceSize>();
+    expectTypeOf<DialogSize>().toEqualTypeOf<SurfaceSize>();
+    expectTypeOf<DrawerModalType>().toEqualTypeOf<ModalType>();
+    expectTypeOf<DrawerType>().toEqualTypeOf<'overlay' | 'inline'>();
+    expectTypeOf<DrawerProps['size']>().toEqualTypeOf<DrawerSize | undefined>();
+    expectTypeOf<DrawerProps['type']>().toEqualTypeOf<DrawerType | undefined>();
+    expectTypeOf<DrawerProps['modalType']>().toEqualTypeOf<DrawerModalType | undefined>();
+    expectTypeOf<DialogProps['modalType']>().toEqualTypeOf<ModalType | undefined>();
+    expectTypeOf<DrawerTriggerRenderProps['aria-haspopup']>().toEqualTypeOf<'dialog' | undefined>();
+    expectTypeOf<DrawerProps['ref']>().toEqualTypeOf<Ref<HTMLElement> | undefined>();
+    expectTypeOf<DrawerHeaderProps['ref']>().toEqualTypeOf<Ref<HTMLDivElement> | undefined>();
+    expectTypeOf<DrawerHeaderTitleProps['ref']>().toEqualTypeOf<Ref<HTMLDivElement> | undefined>();
+    expectTypeOf<DrawerHeaderTitleProps['headingLevel']>().toEqualTypeOf<
+      HeadingLevel | undefined
+    >();
+    expectTypeOf<DrawerHeaderNavigationProps['ref']>().toEqualTypeOf<
+      Ref<HTMLElement> | undefined
+    >();
+    expectTypeOf<DrawerBodyProps['ref']>().toEqualTypeOf<Ref<HTMLDivElement> | undefined>();
+    expectTypeOf<DrawerFooterProps['ref']>().toEqualTypeOf<Ref<HTMLDivElement> | undefined>();
+    expectTypeOf<
+      NonNullable<Extract<DrawerProps['backdrop'], { appearance?: unknown }>['appearance']>
+    >().toEqualTypeOf<BackdropAppearance>();
+  });
+
+  it('Nav parts, NavDrawer and Hamburger', () => {
+    expectTypeOf<NavAppItemProps>().toEqualTypeOf<NavAppItemAnchorProps | NavAppItemButtonProps>();
+    expectTypeOf<NavAppItemDynamicProps['ref']>().toEqualTypeOf<
+      Ref<HTMLAnchorElement | HTMLButtonElement> | undefined
+    >();
+    expectTypeOf<NavAppItemStaticProps['ref']>().toEqualTypeOf<Ref<HTMLDivElement> | undefined>();
+    expectTypeOf<NavSectionHeaderProps['ref']>().toEqualTypeOf<
+      Ref<HTMLHeadingElement> | undefined
+    >();
+    expectTypeOf<NavDividerProps['ref']>().toEqualTypeOf<Ref<HTMLLIElement> | undefined>();
+
+    expectTypeOf<NonNullable<NavDrawerBodyProps['focusMode']>>().toEqualTypeOf<FocusMode>();
+    expectTypeOf<NonNullable<NavDrawerProps['modalType']>>().toEqualTypeOf<'modal' | 'non-modal'>();
+    expectTypeOf<NavDrawerProps['size']>().toEqualTypeOf<DrawerSize | undefined>();
+    expectTypeOf<NavDrawerProps['type']>().toEqualTypeOf<DrawerType | undefined>();
+    expectTypeOf<NavDrawerProps['onItemSelect']>().toEqualTypeOf<
+      ((value: string) => void) | undefined
+    >();
+    expectTypeOf<NavDrawerProps['ref']>().toEqualTypeOf<Ref<HTMLDivElement> | undefined>();
+    expectTypeOf<NavDrawerHeaderProps['ref']>().toEqualTypeOf<Ref<HTMLDivElement> | undefined>();
+    expectTypeOf<NavDrawerFooterProps['ref']>().toEqualTypeOf<Ref<HTMLDivElement> | undefined>();
+    expectTypeOf<ComponentProps<typeof NavDrawer.Body>>().toEqualTypeOf<NavDrawerBodyProps>();
+
+    expectTypeOf<HamburgerProps['ref']>().toEqualTypeOf<Ref<HTMLButtonElement> | undefined>();
+    // @ts-expect-error an alert NavDrawer is not supported
+    const alert: NavDrawerProps['modalType'] = 'alert';
+    expect(alert).toBe('alert');
+  });
+
+  it('ListboxSurface listProps (wave A)', () => {
+    expectTypeOf<ListboxSurfaceProps['listProps']>().toEqualTypeOf<
+      ListboxSurfaceListProps | undefined
+    >();
   });
 });

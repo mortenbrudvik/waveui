@@ -1,11 +1,8 @@
 import * as React from 'react';
 import type { ArgTypes, Meta, StoryObj } from '@storybook/react';
 import { fn } from 'storybook/test';
-import { Avatar, Button, Tag, Text } from '../src';
-import type { TagAppearance, TagShape, TagSize } from '../src';
-import { TagGroup } from '../src/components/data-display/TagGroup';
-import { InteractionTag } from '../src/components/data-display/InteractionTag';
-import type { TagGroupProps } from '../src/components/data-display/TagGroup';
+import { Avatar, Button, InteractionTag, Tag, TagGroup, Text } from '../src';
+import type { TagAppearance, TagGroupProps, TagShape, TagSize } from '../src';
 import { orientationArgType } from './_helpers';
 
 const SIZES = ['medium', 'small', 'extra-small'] as const satisfies readonly TagSize[];

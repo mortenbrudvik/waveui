@@ -53,6 +53,11 @@
  *   - opt-in modules (0.8): an import of only `Button` contains none of {@link OPT_IN_MODULES}
  *     (the color parts and helpers, the toaster handle), and an import of only `Toaster`
  *     contains `hooks/usePresence`;
+ *   - 0.11: the exclusion probes of {@link EXCLUSION_PROBES_0_11} and the inclusion probes of
+ *     {@link INCLUSION_PROBES_0_11} (tags, TagPicker, Dialog and Drawer, Nav, Hamburger and
+ *     NavDrawer); no name of {@link MODULE_ONLY_NAMES} is exported from `dist/index.mjs` or
+ *     `dist/index.d.ts`; the roll-ups export each of {@link VALUE_AND_TYPE_DECLARATIONS} both as a
+ *     type and as a value (`TagPickerOption`);
  *
  * Usage: node scripts/verify-dist.mjs [--dist <dir>] [--no-pending | --final]
  *   --dist        the dist directory (default: dist); its parent holds the package.json
@@ -89,9 +94,9 @@ const require = createRequire(import.meta.url);
 
 /**
  * A temporary bridge: components whose flat sub-component names (`<Parent><Member>`,
- * C-COMPOUND) are not exported from `dist/index.mjs` yet. Phase 6 (0.11) lists `TagPicker`, and
- * `Drawer` and `Nav` from the commits that attach their first new member (its spec's §1.5 and
- * rule 29); INTEGRATION empties the list. Phase 5 (0.10) listed `SwatchPicker` until the input
+ * C-COMPOUND) are not exported from `dist/index.mjs` yet. The list is empty: phase 6 (0.11)
+ * listed `TagPicker`, `Drawer` and `Nav` until INTEGRATION exported the flat names of their new
+ * parts (`TagPickerControl`, `DrawerHeader`, `NavSectionHeader`, …). Phase 5 (0.10) listed `SwatchPicker` until the input
  * barrel exported `SwatchPickerRow`. Phase 2 (0.7) did the same for `Toolbar`, which became a
  * compound (`Toolbar.Button`, …) before the button barrel exported the flat names of its parts,
  * and phase 3 (0.8) for `ColorPicker`, `MessageBar`, `Toast` and `Tree` while their new parts
@@ -106,11 +111,7 @@ const require = createRequire(import.meta.url);
  * A compound that is not listed must export every flat name. A flat name that is exported must
  * equal its dotted member, listed or not.
  */
-export const PENDING_FLAT_EXPORTS = [
-  'Drawer', // P6-05's parts are attached; INTEGRATION exports their flat names in wave D (spec rule 29)
-  'Nav', // P6-09's parts are attached; INTEGRATION exports their flat names in wave D (spec rule 29)
-  'TagPicker', // exported, and a compound from wave C (P6-tagpicker): planned until then
-];
+export const PENDING_FLAT_EXPORTS = [];
 
 /**
  * The presence core's probes: an import of only `Button` drops it, an import of only
@@ -180,6 +181,235 @@ const BUTTON_ONLY_STRINGS = { keepStrings: ['wave-button'], dropStrings: ['wave-
  * bundle also drops InfoButton's root class from the registry.
  */
 const FIELD_ONLY_STRINGS = { dropStrings: ['wave-info-button'] };
+
+/**
+ * The exclusion probes of 0.11 (spec §6.2): each import of only `keep` must drop `drop`, the
+ * modules of `dropModules` and the class strings of `dropStrings`. A Tag holds no group, roving,
+ * Avatar or listbox code; a TagGroup and an InteractionTag no listbox or each other's code; a
+ * Combobox none of TagPicker's or the tags'; a Dialog and a Drawer none of each other's root (both
+ * reach only `Dialog.shared` and `Dialog.slots`); a Toaster no surface code (its offset reads
+ * `lib/layers` only); a Nav and a Hamburger none of the drawer panel, the modal layer or each
+ * other's root; a NavDrawer none of the public Drawer or the Nav compound.
+ */
+export const EXCLUSION_PROBES_0_11 = [
+  {
+    keep: 'Tag',
+    drop: 'TagPicker',
+    dropModules: [
+      'components/data-display/TagGroup.mjs',
+      'components/data-display/InteractionTag.mjs',
+      'components/data-display/Avatar.mjs',
+      'components/button/Toolbar.navigation.mjs',
+      'hooks/useListbox.mjs',
+    ],
+    keepStrings: ['wave-tag'],
+    dropStrings: ['wave-tag-group', 'wave-tag-picker'],
+  },
+  {
+    keep: 'TagGroup',
+    drop: 'TagPicker',
+    dropModules: ['hooks/useListbox.mjs', 'components/input/Option.mjs'],
+  },
+  { keep: 'InteractionTag', drop: 'TagGroup' },
+  {
+    keep: 'Combobox',
+    drop: 'TagPicker',
+    dropModules: [
+      'components/input/TagPicker.root.mjs',
+      'components/input/TagPicker.parts.mjs',
+      'components/input/TagPicker.option.mjs',
+      'components/data-display/TagGroup.mjs',
+      'components/data-display/Tag.mjs',
+    ],
+    dropStrings: ['wave-tag-picker-list'],
+  },
+  {
+    keep: 'Dialog',
+    drop: 'Drawer',
+    dropModules: ['components/overlays/Drawer.root.mjs', 'components/overlays/Drawer.panel.mjs'],
+  },
+  { keep: 'Drawer', drop: 'Dialog' },
+  {
+    keep: 'Toaster',
+    drop: 'Drawer',
+    dropModules: [
+      'components/overlays/Dialog.mjs',
+      'components/overlays/Dialog.shared.mjs',
+      'components/overlays/Drawer.root.mjs',
+      'components/overlays/Drawer.panel.mjs',
+    ],
+  },
+  {
+    keep: 'Nav',
+    drop: 'NavDrawer',
+    dropModules: [
+      'components/overlays/Drawer.panel.mjs',
+      'hooks/useModalLayer.mjs',
+      'hooks/useRovingTabIndex.mjs',
+    ],
+    keepStrings: ['wave-nav'],
+    dropStrings: ['wave-nav-drawer', 'wave-hamburger'],
+  },
+  {
+    keep: 'Hamburger',
+    drop: 'NavDrawer',
+    dropModules: [
+      'components/overlays/Drawer.panel.mjs',
+      'hooks/useModalLayer.mjs',
+      'components/navigation/Nav.root.mjs',
+    ],
+    keepStrings: ['wave-hamburger'],
+    dropStrings: ['wave-nav-drawer'],
+  },
+  {
+    keep: 'NavDrawer',
+    drop: 'Drawer',
+    dropModules: [
+      'components/overlays/Drawer.root.mjs',
+      'components/overlays/Drawer.parts.mjs',
+      'components/navigation/Nav.mjs',
+    ],
+  },
+];
+
+/**
+ * The inclusion probes of 0.11 (spec §6.2): an import of only `keep` holds each of `modules`, so
+ * the exclusion probes above cannot pass because a module is missing. A TagPicker is built on the
+ * tags, and Dialog, Drawer and NavDrawer mount through the presence core.
+ */
+export const INCLUSION_PROBES_0_11 = [
+  {
+    keep: 'TagPicker',
+    modules: [
+      'components/input/TagPicker.parts.mjs',
+      'components/input/TagPicker.option.mjs',
+      'components/data-display/Tag.mjs',
+      'components/data-display/TagGroup.mjs',
+    ],
+  },
+  { keep: 'Dialog', modules: ['hooks/usePresence.mjs'] },
+  { keep: 'Drawer', modules: ['components/overlays/Drawer.panel.mjs', 'hooks/usePresence.mjs'] },
+  {
+    keep: 'NavDrawer',
+    modules: [
+      'components/overlays/Drawer.panel.mjs',
+      'components/navigation/Nav.root.mjs',
+      'hooks/usePresence.mjs',
+      'hooks/useRovingTabIndex.mjs',
+    ],
+  },
+];
+
+/**
+ * Names that stay module-only (spec §4.5 of 0.11): `dist/index.mjs` exports none of them and the
+ * rolled-up `dist/index.d.ts` exports none of them as a value or a type ({@link
+ * checkModuleOnlyNames}). The foundation's seams, the tag seams, the drawer panel shell and the
+ * overlay slots, the Nav seam, NavDrawer's contexts and TagPicker's internals. Sorted.
+ */
+export const MODULE_ONLY_NAMES = [
+  'AvatarSizeContext',
+  'AvatarSizeContextValue',
+  'CreateOptionKnown',
+  'DrawerCloseButton',
+  'DrawerCloseButtonProps',
+  'DrawerContext',
+  'DrawerContextValue',
+  'DrawerHeaderContext',
+  'DrawerPanel',
+  'DrawerPanelProps',
+  'DrawerPartContext',
+  'DrawerPartPlacement',
+  'DrawerRoot',
+  'DrawerScrollState',
+  'DrawerScrollStateContext',
+  'ExactMatchCandidate',
+  'FocusWithin',
+  'HeldFocus',
+  'InteractionTagContext',
+  'ModalBackdrop',
+  'ModalBackdropProps',
+  'ModalBackdropSlot',
+  'ModalCloseButton',
+  'ModalCloseButtonProps',
+  'NavCategoryStore',
+  'NavCategoryValueContext',
+  'NavContext',
+  'NavContextValue',
+  'NavDrawerContext',
+  'NavDrawerContextValue',
+  'NavDrawerLayoutContext',
+  'NavDrawerLayoutContextValue',
+  'NavPartKind',
+  'NavRoot',
+  'NavRovingContext',
+  'NavRovingContextValue',
+  'NavValueKind',
+  'ResolvedTagPickerLabels',
+  'TAG_DISMISS_SELECTOR',
+  'TAG_GROUP_SELECTOR',
+  'TAG_ITEM_SELECTOR',
+  'TOOLBAR_ITEM_SELECTOR',
+  'TagGroupContext',
+  'TagGroupContextValue',
+  'TagGroupHostContext',
+  'TagGroupHostOptions',
+  'TagGroupMode',
+  'TagHostContext',
+  'TagHostContextValue',
+  'TagOverflowElements',
+  'TagPickerContext',
+  'TagPickerContextValue',
+  'TagPickerControlContext',
+  'TagPickerControlContextValue',
+  'TagPickerInputOnlyProps',
+  'TagPickerRoot',
+  'TagPickerTriggerKind',
+  'TagPickerTriggerProps',
+  'UseNavRootStateOptions',
+  'UseTagGroupItemOptions',
+  'UseTagOverflowOptions',
+  'UseToolbarNavigationOptions',
+  'containsValue',
+  'createCategoryStore',
+  'createOptionText',
+  'findCategoriesContaining',
+  'findExactMatch',
+  'getNavPartKind',
+  'hasIsolatingModalBelow',
+  'isDismissKey',
+  'isRepeatedActivation',
+  'markNavPart',
+  'scrollSeparatorClasses',
+  'tagListControls',
+  'tagRootClasses',
+  'useBackdropAppearance',
+  'useDismissControlFocus',
+  'useDrawerContext',
+  'useDrawerOpen',
+  'useFocusWithin',
+  'useHeldFocus',
+  'useInitialFocus',
+  'useModalOpener',
+  'useNavContext',
+  'useNavListChildCheck',
+  'useNavRootState',
+  'useNavValue',
+  'useRecordCategory',
+  'useScrollState',
+  'useTagGroupContext',
+  'useTagGroupItem',
+  'useTagOverflow',
+  'useTagPickerContext',
+  'useTagPickerControlContext',
+  'useToolbarNavigation',
+];
+
+/**
+ * Names that `dist/index.d.ts` and `dist/index.d.cts` must export both as a type and as a value
+ * (0.11 spec §6.2): `TagPickerOption` is the interface of an `options` entry and the
+ * `TagPicker.Option` component. A roll-up that keeps only one meaning breaks one of the two uses.
+ */
+export const VALUE_AND_TYPE_DECLARATIONS = ['TagPickerOption'];
 
 const JS_FILE = /\.(mjs|cjs|js)$/;
 
@@ -400,6 +630,8 @@ export const REQUIRED_DECLARATIONS = [
   'usePresence',
   'useActiveDescendant',
   'Calendar',
+  'TagGroup',
+  'NavDrawer',
   'buttonClassNames',
 ];
 
@@ -444,6 +676,7 @@ function indexDeclarations(dts) {
   const types = new Map();
   const exported = new Map();
   const exportedTypes = new Set();
+  const listed = new Map();
   for (const statement of file.statements) {
     for (const name of valueNames(statement)) {
       if (!values.has(name)) values.set(name, statement);
@@ -462,10 +695,11 @@ function indexDeclarations(dts) {
     ) {
       for (const element of statement.exportClause.elements) {
         exported.set(element.name.text, (element.propertyName ?? element.name).text);
+        listed.set(element.name.text, (element.propertyName ?? element.name).text);
       }
     }
   }
-  return { values, types, exported, exportedTypes };
+  return { values, types, exported, exportedTypes, listed };
 }
 
 /**
@@ -505,11 +739,37 @@ export function missingDeclarations(dts, names) {
 }
 
 /**
+ * The names of `names` that a rolled-up declaration file does not export both as a type and as a
+ * value, in the order given: an exported interface or type alias and an exported `declare const`
+ * or `declare function` of one name, or an export list entry (`export { X_2 as X }`) whose local
+ * name declares both (a list exports every meaning; an exported value declaration only the value).
+ */
+export function missingValueAndTypeDeclarations(dts, names) {
+  const { values, types, exported, exportedTypes, listed } = indexDeclarations(dts);
+  return names.filter((name) => {
+    const local = listed.get(name);
+    const value =
+      (local !== undefined && values.has(local)) ||
+      (exported.get(name) === name && values.has(name));
+    const type = exportedTypes.has(name) || (local !== undefined && types.has(local));
+    return !(value && type);
+  });
+}
+
+/**
  * `index.d.ts` and its `index.d.cts` copy for the `require` condition (repo-level#5); each
  * declares and exports `requiredDeclarations` (default {@link REQUIRED_DECLARATIONS}), so an empty
- * or partial roll-up fails; every component the declarations export has a JSDoc (C-DOCS).
+ * or partial roll-up fails, and exports each of `valueAndTypeDeclarations` (default {@link
+ * VALUE_AND_TYPE_DECLARATIONS}) both as a type and as a value; every component the declarations
+ * export has a JSDoc (C-DOCS).
  */
-export function checkDeclarations(dist, { requiredDeclarations = REQUIRED_DECLARATIONS } = {}) {
+export function checkDeclarations(
+  dist,
+  {
+    requiredDeclarations = REQUIRED_DECLARATIONS,
+    valueAndTypeDeclarations = VALUE_AND_TYPE_DECLARATIONS,
+  } = {},
+) {
   const errors = [];
   const dts = join(dist, 'index.d.ts');
   const dcts = join(dist, 'index.d.cts');
@@ -533,6 +793,13 @@ export function checkDeclarations(dist, { requiredDeclarations = REQUIRED_DECLAR
       errors.push(
         `${name} does not declare and export ${missing.join(', ')} (an empty or partial ` +
           "roll-up: check tsconfig.json's rootDir and the declaration plugin in vite.config.ts)",
+      );
+      continue;
+    }
+    for (const both of missingValueAndTypeDeclarations(text, valueAndTypeDeclarations)) {
+      errors.push(
+        `${name} does not export ${both} both as a type and as a value (the interface and the ` +
+          'component of one name: export the name once, without `type`, from the barrel)',
       );
     }
   }
@@ -1087,6 +1354,30 @@ export function checkFlatExports(
   return { errors: errors.sort(), pending: pending.sort(), planned: planned.sort() };
 }
 
+/**
+ * The names of `names` (default {@link MODULE_ONLY_NAMES}) that the package exports although
+ * they are module-only: a value of the module namespace `mod` (`dist/index.mjs`; `index.cjs`
+ * exports the same names, {@link checkCjsParity}), or a value or a type that the rolled-up
+ * declarations `dts` (`dist/index.d.ts`, when given) export.
+ */
+export function checkModuleOnlyNames(mod, dts, names = MODULE_ONLY_NAMES) {
+  const errors = [];
+  const declarations = dts === undefined ? undefined : indexDeclarations(dts);
+  for (const name of names) {
+    if (Object.hasOwn(mod, name)) {
+      errors.push(
+        `dist/index.mjs exports ${name}, which is module-only (keep it out of the barrels)`,
+      );
+    } else if (
+      declarations &&
+      (declarations.exported.has(name) || declarations.exportedTypes.has(name))
+    ) {
+      errors.push(`index.d.ts exports ${name}, which is module-only (keep it out of the barrels)`);
+    }
+  }
+  return errors;
+}
+
 /** The export names of a namespace or CommonJS exports object. */
 function exportNames(mod) {
   return Object.keys(mod).filter((name) => name !== 'default' && name !== '__esModule');
@@ -1425,6 +1716,10 @@ export async function verifyDist(
     pending = flat.pending;
     planned = flat.planned;
     errors.push(...(await checkCjsParity(distRoot)));
+    const dts = join(distRoot, 'index.d.ts');
+    errors.push(
+      ...checkModuleOnlyNames(mod, existsSync(dts) ? readFileSync(dts, 'utf8') : undefined),
+    );
   } catch (error) {
     errors.push(`index.mjs/index.cjs do not load in Node.js: ${error.message}`);
   }
@@ -1466,8 +1761,19 @@ export async function verifyDist(
     // D37 (0.10): a Calendar holds no listbox code, a Listbox no calendar code.
     errors.push(...(await probeTreeShaking(distRoot, CALENDAR_ONLY)));
     errors.push(...(await probeTreeShaking(distRoot, LISTBOX_ONLY)));
+    // 0.11: tags, pickers, overlays and navigation.
+    for (const probe of EXCLUSION_PROBES_0_11) {
+      errors.push(...(await probeTreeShaking(distRoot, probe)));
+    }
   } catch (error) {
     errors.push(`tree-shaking probe failed: ${error.message}`);
+  }
+  try {
+    for (const probe of INCLUSION_PROBES_0_11) {
+      errors.push(...(await probeIncludes(distRoot, probe)));
+    }
+  } catch (error) {
+    errors.push(`0.11 include probe failed: ${error.message}`);
   }
   try {
     errors.push(

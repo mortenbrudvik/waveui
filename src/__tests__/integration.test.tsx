@@ -41,7 +41,12 @@ import {
   DatePicker,
   Dialog,
   Drawer,
+  DrawerBody,
   DrawerClose,
+  DrawerFooter,
+  DrawerHeader,
+  DrawerHeaderNavigation,
+  DrawerHeaderTitle,
   DrawerTitle,
   DrawerTrigger,
   Dropdown,
@@ -69,9 +74,20 @@ import {
   MenuPopover,
   MenuSplitGroup,
   MenuTrigger,
+  Hamburger,
+  InteractionTag,
+  InteractionTagPrimary,
+  InteractionTagSecondary,
   Nav,
+  NavAppItem,
   NavCategory,
+  NavDivider,
+  NavDrawer,
+  NavDrawerBody,
+  NavDrawerFooter,
+  NavDrawerHeader,
   NavItem,
+  NavSectionHeader,
   NavSubItem,
   Option,
   Overflow,
@@ -98,7 +114,16 @@ import {
   TabList,
   TabListPanel,
   TabListTab,
+  Tag,
+  TagGroup,
   TagPicker,
+  TagPickerButton,
+  TagPickerControl,
+  TagPickerGroup,
+  TagPickerInput,
+  TagPickerList,
+  TagPickerOption,
+  TagPickerOptionGroup,
   TeachingPopover,
   Textarea,
   TimePicker,
@@ -198,29 +223,10 @@ const menuitem = (name: string) => screen.getByRole('menuitem', { name });
 
 /**
  * Flat names of compound members that a package attaches before the barrels export them (the
- * barrel test's twin of `PENDING_FLAT_EXPORTS` in `scripts/verify-dist.mjs`). Flat names of the
- * Phase 6 members (spec §1.5); INTEGRATION empties the list in wave D. `TagPickerOption` is
- * listed although the barrel names it: it exports only the type, so the runtime barrel has no
- * such value.
+ * barrel test's twin of `PENDING_FLAT_EXPORTS` in `scripts/verify-dist.mjs`). Empty since wave D
+ * of 0.11; a later phase whose parts land before their flat names lists them here the same way.
  */
-const PENDING_FLAT_MEMBERS: readonly string[] = [
-  'DrawerBody',
-  'DrawerFooter',
-  'DrawerHeader',
-  'DrawerHeaderNavigation',
-  'DrawerHeaderTitle',
-  'NavAppItem',
-  'NavAppItemStatic',
-  'NavDivider',
-  'NavSectionHeader',
-  'TagPickerButton',
-  'TagPickerControl',
-  'TagPickerGroup',
-  'TagPickerInput',
-  'TagPickerList',
-  'TagPickerOption',
-  'TagPickerOptionGroup',
-];
+const PENDING_FLAT_MEMBERS: readonly string[] = [];
 
 describe('public barrel (spec §5.11, C-COMPOUND)', () => {
   const barrel = Wave as unknown as Record<string, unknown>;
@@ -363,6 +369,68 @@ describe('public barrel (spec §5.11, C-COMPOUND)', () => {
       'computeCheckStates',
       'toggleCheck',
       'isHiddenByCss',
+      // 0.11 (spec §4.5): the foundation's seams, the tag seams, the drawer panel shell and the
+      // overlay slots, the Nav seam, NavDrawer's contexts and TagPicker's internals.
+      'useToolbarNavigation',
+      'TOOLBAR_ITEM_SELECTOR',
+      'AvatarSizeContext',
+      'hasIsolatingModalBelow',
+      'TagGroupContext',
+      'useTagGroupContext',
+      'TagGroupHostContext',
+      'TagHostContext',
+      'useTagGroupItem',
+      'useHeldFocus',
+      'isDismissKey',
+      'isRepeatedActivation',
+      'useDismissControlFocus',
+      'TAG_GROUP_SELECTOR',
+      'TAG_ITEM_SELECTOR',
+      'TAG_DISMISS_SELECTOR',
+      'InteractionTagContext',
+      'tagRootClasses',
+      'DrawerRoot',
+      'DrawerContext',
+      'useDrawerContext',
+      'DrawerPartContext',
+      'DrawerHeaderContext',
+      'DrawerScrollStateContext',
+      'DrawerCloseButton',
+      'DrawerPanel',
+      'useDrawerOpen',
+      'useScrollState',
+      'scrollSeparatorClasses',
+      'ModalCloseButton',
+      'ModalBackdrop',
+      'useBackdropAppearance',
+      'useModalOpener',
+      'useInitialFocus',
+      'NavRoot',
+      'useNavRootState',
+      'NavContext',
+      'useNavContext',
+      'NavCategoryValueContext',
+      'useNavValue',
+      'useRecordCategory',
+      'createCategoryStore',
+      'containsValue',
+      'findCategoriesContaining',
+      'NavRovingContext',
+      'useNavListChildCheck',
+      'markNavPart',
+      'getNavPartKind',
+      'NavDrawerContext',
+      'NavDrawerLayoutContext',
+      'TagPickerRoot',
+      'TagPickerContext',
+      'useTagPickerContext',
+      'TagPickerControlContext',
+      'useTagPickerControlContext',
+      'useTagOverflow',
+      'useFocusWithin',
+      'createOptionText',
+      'findExactMatch',
+      'tagListControls',
     ];
     expect(internal.filter((name) => name in barrel)).toEqual([]);
   });
@@ -891,6 +959,19 @@ const fieldCases: FieldCase[] = [
         ]}
       />
     ),
+    ariaRequired: true,
+  },
+  // 0.11: the composable TagPicker, with the Input and with the Button trigger.
+  {
+    name: 'TagPicker (parts)',
+    role: 'combobox',
+    control: () => <PartsPicker />,
+    ariaRequired: true,
+  },
+  {
+    name: 'TagPicker (TagPicker.Button)',
+    role: 'combobox',
+    control: () => <PartsPicker trigger="button" />,
     ariaRequired: true,
   },
   {
@@ -1495,6 +1576,44 @@ describe('confirm Dialog deleting a row inside a Drawer (overlays#10)', () => {
       render(<FileDrawer layout={layout} />);
       await user.click(button('Files'));
       await confirmDelete(user, 'Delete c');
+      expect(button('Delete b')).toHaveFocus();
+    },
+  );
+
+  // 0.11 (spec §4.6 #7, P6-06 D94): the page is dimmed once, and both isolations hold.
+  it.each(layouts)(
+    'Dialog %s: the Dialog’s backdrop is transparent over the dimmed Drawer; both isolations hold',
+    async (_name, layout) => {
+      const user = userEvent.setup();
+      render(
+        <>
+          <button type="button">Page button</button>
+          <FileDrawer layout={layout} />
+        </>,
+      );
+      await user.click(button('Files'));
+      const drawerBackdrop = () =>
+        document.querySelector<HTMLElement>('.' + Wave.drawerClassNames.backdrop);
+      expect(drawerBackdrop()).toHaveAttribute('data-appearance', 'dimmed');
+      expect(
+        screen.getByRole('button', { name: 'Page button', hidden: true }).closest('[inert]'),
+      ).not.toBeNull();
+      await user.click(button('Delete b'));
+      const dialog = screen.getByRole('dialog', { name: 'Delete file?' });
+      const dialogBackdrop = document.querySelector<HTMLElement>(
+        '.' + dialogContentClassNames.backdrop,
+      );
+      expect(dialogBackdrop).toHaveAttribute('data-appearance', 'transparent');
+      expect(drawerBackdrop()).toHaveAttribute('data-appearance', 'dimmed');
+      expect(
+        screen.getByRole('button', { name: 'Page button', hidden: true }).closest('[inert]'),
+      ).not.toBeNull();
+      expect(
+        screen.getByRole('dialog', { name: 'Files', hidden: true }).closest('[inert]'),
+      ).not.toBeNull();
+      expect(dialog.closest('[inert]')).toBeNull();
+      await user.click(button('Cancel'));
+      expect(drawer().closest('[inert]')).toBeNull();
       expect(button('Delete b')).toHaveFocus();
     },
   );
@@ -4468,6 +4587,79 @@ describe('compounds composed in a React Server Component', () => {
   const ssrCase = <P extends Parts>(c: SsrCase<P>) => c as unknown as SsrCase;
 
   const toastDismiss = vi.fn();
+  const secondaryClick = vi.fn();
+
+  type TagParts = {
+    Group: typeof TagGroup;
+    Tag: typeof Tag;
+    ITag: typeof InteractionTag;
+    Primary: typeof InteractionTagPrimary;
+    Secondary: typeof InteractionTagSecondary;
+  };
+  /** Dismissible filter Tags and a selectable InteractionTag in one TagGroup (0.11). */
+  function TagRow({
+    parts: { Group, Tag: PlainTag, ITag, Primary, Secondary },
+  }: {
+    parts: TagParts;
+  }) {
+    const [filters, setFilters] = React.useState(['Red', 'Blue']);
+    return (
+      <Group
+        aria-label="Filters"
+        dismissible
+        defaultValue={['plum']}
+        onDismiss={(value) => setFilters((current) => current.filter((f) => f !== value))}
+      >
+        {filters.map((filter) => (
+          <PlainTag key={filter} value={filter}>
+            {filter}
+          </PlainTag>
+        ))}
+        <ITag value="plum">
+          <Primary>Plum</Primary>
+          <Secondary />
+        </ITag>
+        <ITag value="fig">
+          <Primary>Fig</Primary>
+        </ITag>
+      </Group>
+    );
+  }
+
+  type NavDrawerParts = {
+    Header: typeof NavDrawerHeader;
+    Body: typeof NavDrawerBody;
+    Footer: typeof NavDrawerFooter;
+    Item: typeof NavItem;
+    Category: typeof NavCategory;
+    SubItem: typeof NavSubItem;
+    Burger: typeof Hamburger;
+  };
+  /** An inline, open NavDrawer (its state in a client component) with an inner Hamburger. */
+  function InlineNavDrawer({
+    parts: { Header, Body, Footer, Item, Category, SubItem, Burger },
+  }: {
+    parts: NavDrawerParts;
+  }) {
+    const [open, setOpen] = React.useState(true);
+    return (
+      <NavDrawer type="inline" open={open} onOpenChange={setOpen} defaultValue="profile">
+        <Header>
+          <Burger />
+          Contoso HR
+        </Header>
+        <Body>
+          <Item value="home">Home</Item>
+          <Category value="settings" label="Settings">
+            <SubItem value="profile">Profile</SubItem>
+          </Category>
+        </Body>
+        <Footer>
+          <Item value="help">Help</Item>
+        </Footer>
+      </NavDrawer>
+    );
+  }
 
   const cases: SsrCase[] = [
     ssrCase({
@@ -4515,6 +4707,85 @@ describe('compounds composed in a React Server Component', () => {
         await user.click(button('Apply'));
         expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
         expect(button('Open filters')).toHaveFocus();
+      },
+    }),
+    // 0.11 (spec §4.6 #1d): the header, body and footer parts.
+    ssrCase({
+      name: 'Drawer (Header, HeaderTitle, HeaderNavigation, Body and Footer)',
+      parts: {
+        Trigger: DrawerTrigger,
+        Close: DrawerClose,
+        Header: DrawerHeader,
+        HeaderTitle: DrawerHeaderTitle,
+        HeaderNavigation: DrawerHeaderNavigation,
+        Body: DrawerBody,
+        Footer: DrawerFooter,
+      },
+      tree: ({ Trigger, Close, Header, HeaderTitle, HeaderNavigation, Body, Footer }) => (
+        <Drawer>
+          <Trigger>
+            <Button>Open filters</Button>
+          </Trigger>
+          <Header>
+            <HeaderNavigation aria-label="Levels">
+              <Button appearance="subtle">Back</Button>
+            </HeaderNavigation>
+            <HeaderTitle>Filters</HeaderTitle>
+          </Header>
+          <Body>
+            <p>Body</p>
+          </Body>
+          <Footer>
+            <Close>
+              <Button>Apply</Button>
+            </Close>
+          </Footer>
+        </Drawer>
+      ),
+      serverText: 'Open filters',
+      interact: async (user) => {
+        await user.click(button('Open filters'));
+        const drawer = screen.getByRole('dialog', { name: 'Filters' });
+        expect(drawer).toHaveTextContent('Body');
+        expect(within(drawer).getByRole('navigation', { name: 'Levels' })).toBeInTheDocument();
+        expect(button('Back')).toHaveFocus();
+        await user.click(within(drawer).getByRole('button', { name: 'Close' }));
+        expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+        expect(button('Open filters')).toHaveFocus();
+        await user.click(button('Open filters'));
+        await user.click(button('Apply'));
+        expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+        expect(button('Open filters')).toHaveFocus();
+      },
+    }),
+    // 0.11 (spec §4.6 #1e): an inline drawer renders in the server HTML.
+    ssrCase({
+      name: 'Drawer (inline)',
+      parts: { Trigger: DrawerTrigger, Title: DrawerTitle, Close: DrawerClose },
+      tree: ({ Trigger, Title, Close }) => (
+        <Drawer type="inline" defaultOpen>
+          <Trigger>
+            <Button>Show details</Button>
+          </Trigger>
+          <Title>Details</Title>
+          <p>Shipping address</p>
+          <Close>
+            <Button>Done</Button>
+          </Close>
+        </Drawer>
+      ),
+      serverText: 'Shipping address',
+      interact: async (user) => {
+        expect(screen.getByRole('complementary', { name: 'Details' })).toHaveTextContent(
+          'Shipping address',
+        );
+        await user.click(button('Done'));
+        expect(screen.queryByRole('complementary')).not.toBeInTheDocument();
+        expect(button('Show details')).toHaveFocus();
+        await user.click(button('Show details'));
+        expect(screen.getByRole('complementary', { name: 'Details' })).toBeInTheDocument();
+        await user.click(button('Show details'));
+        expect(screen.queryByRole('complementary')).not.toBeInTheDocument();
       },
     }),
     ssrCase({
@@ -5155,6 +5426,152 @@ describe('compounds composed in a React Server Component', () => {
           'aria-pressed',
           'true',
         );
+      },
+    }),
+    // 0.11 (spec §4.6 #1a): Tags and InteractionTags in a TagGroup.
+    ssrCase({
+      name: 'TagGroup (dismissible Tags and selectable InteractionTags)',
+      parts: {
+        Group: TagGroup,
+        Tag,
+        ITag: InteractionTag,
+        Primary: InteractionTagPrimary,
+        Secondary: InteractionTagSecondary,
+      },
+      tree: (parts) => <TagRow parts={parts as unknown as TagParts} />,
+      serverText: 'role="toolbar"',
+      interact: async (user) => {
+        expect(button('Plum')).toHaveAttribute('aria-pressed', 'true');
+        const red = button('Dismiss Red');
+        act(() => red.focus());
+        await user.keyboard('{Delete}');
+        await act(async () => {});
+        expect(screen.queryByRole('button', { name: 'Dismiss Red' })).not.toBeInTheDocument();
+        expect(button('Dismiss Blue')).toHaveFocus();
+        await user.click(button('Fig'));
+        expect(button('Fig')).toHaveAttribute('aria-pressed', 'true');
+      },
+    }),
+    // 0.11 (spec §4.6 #1b): InteractionTag's parts.
+    ssrCase({
+      name: 'InteractionTag (Primary and Secondary)',
+      parts: { Primary: InteractionTagPrimary, Secondary: InteractionTagSecondary },
+      tree: ({ Primary, Secondary }) => (
+        <InteractionTag value="cherry" selected>
+          <Primary secondaryText="Fruit">Cherry</Primary>
+          <Secondary onClick={secondaryClick} />
+        </InteractionTag>
+      ),
+      serverText: 'Cherry',
+      interact: async (user) => {
+        secondaryClick.mockClear();
+        expect(screen.getByRole('button', { name: /^Cherry/ })).toHaveAttribute(
+          'aria-pressed',
+          'true',
+        );
+        await user.click(button('Dismiss Cherry'));
+        expect(secondaryClick).toHaveBeenCalledTimes(1);
+      },
+    }),
+    // 0.11 (spec §4.6 #1c): the composable TagPicker with a preselected registered option.
+    ssrCase({
+      name: 'TagPicker (parts, a preselected registered option)',
+      parts: {
+        Control: TagPickerControl,
+        Group: TagPickerGroup,
+        Input: TagPickerInput,
+        List: TagPickerList,
+        Option: TagPickerOption,
+        OptionGroup: TagPickerOptionGroup,
+      },
+      tree: ({ Control, Group, Input, List, Option: PickerOption, OptionGroup: PickerGroup }) => (
+        <TagPicker aria-label="Fruits" defaultValue={['cherry']}>
+          <Control>
+            <Group />
+            <Input />
+          </Control>
+          <List>
+            <PickerGroup label="Sweet">
+              <PickerOption value="apple">Apple</PickerOption>
+              <PickerOption value="banana">Banana</PickerOption>
+            </PickerGroup>
+            <PickerOption value="cherry">Sour cherry</PickerOption>
+          </List>
+        </TagPicker>
+      ),
+      serverText: 'Sour cherry',
+      interact: async (user) => {
+        expect(pickedTags()).toEqual(['Sour cherry']);
+        const input = screen.getByRole('combobox', { name: 'Fruits' });
+        await user.click(input);
+        expect(screen.getByRole('group', { name: 'Sweet' })).toBeInTheDocument();
+        await user.click(screen.getByRole('option', { name: 'Apple' }));
+        expect(pickedTags()).toEqual(['Sour cherry', 'Apple']);
+        await user.keyboard('{Escape}');
+        await user.keyboard('{Backspace}');
+        expect(button('Remove Apple')).toHaveFocus();
+        await user.keyboard('{Delete}');
+        await act(async () => {});
+        expect(pickedTags()).toEqual(['Sour cherry']);
+        expect(input).toHaveFocus();
+      },
+    }),
+    // 0.11 (spec §4.6 #1f): section headers, a divider, an app item and item actions.
+    ssrCase({
+      name: 'Nav (section headers, a divider, an app item, item actions)',
+      parts: {
+        AppItem: NavAppItem,
+        SectionHeader: NavSectionHeader,
+        Divider: NavDivider,
+        Item: NavItem,
+      },
+      tree: ({ AppItem, SectionHeader, Divider, Item }) => (
+        <Nav defaultValue="home">
+          <AppItem href="#app">Contoso HR</AppItem>
+          <SectionHeader>Main</SectionHeader>
+          <Item value="home" actions={<button type="button">Pin</button>}>
+            Home
+          </Item>
+          <Divider />
+          <SectionHeader>More</SectionHeader>
+          <Item value="reports">Reports</Item>
+        </Nav>
+      ),
+      serverText: 'Contoso HR',
+      interact: async (user) => {
+        expect(screen.getByRole('link', { name: 'Contoso HR' })).toHaveAttribute('href', '#app');
+        expect(screen.getByRole('heading', { name: 'Main' })).toBeInTheDocument();
+        expect(screen.getByRole('heading', { name: 'More' })).toBeInTheDocument();
+        const pin = within(screen.getByRole('group', { name: 'Home' })).getByRole('button', {
+          name: 'Pin',
+        });
+        await user.click(button('Reports'));
+        expect(button('Reports')).toHaveAttribute('aria-current', 'page');
+        await user.click(pin);
+        expect(button('Reports')).toHaveAttribute('aria-current', 'page');
+        expect(button('Home')).not.toHaveAttribute('aria-current');
+      },
+    }),
+    // 0.11 (spec §4.6 #1g): an inline, open NavDrawer with an inner Hamburger.
+    ssrCase({
+      name: 'NavDrawer (inline and open, with a Hamburger)',
+      parts: {
+        Header: NavDrawerHeader,
+        Body: NavDrawerBody,
+        Footer: NavDrawerFooter,
+        Item: NavItem,
+        Category: NavCategory,
+        SubItem: NavSubItem,
+        Burger: Hamburger,
+      },
+      tree: (parts) => <InlineNavDrawer parts={parts as unknown as NavDrawerParts} />,
+      serverText: 'data-type="inline"',
+      interact: async (user) => {
+        expect(button('Profile')).toHaveAttribute('aria-current', 'page');
+        await user.click(button('Home'));
+        expect(button('Home')).toHaveAttribute('aria-current', 'page');
+        await user.click(button('Navigation'));
+        expect(screen.queryByRole('navigation')).not.toBeInTheDocument();
       },
     }),
   ];
@@ -6170,6 +6587,31 @@ describe('stable class names across compounds (spec §4.4 #10)', () => {
     );
   });
 
+  // 0.11 (spec §4.6 #7): the title-actions area, a title action and the size.
+  it('Dialog.Content’s title-actions area holds the title action and the Close button; data-size', () => {
+    render(
+      <Dialog open onOpenChange={() => {}}>
+        <Dialog.Content
+          title="Settings"
+          size="large"
+          titleAction={<Button aria-label="Expand">⤢</Button>}
+        >
+          Body
+        </Dialog.Content>
+      </Dialog>,
+    );
+    const dialog = screen.getByRole('dialog', { name: 'Settings' });
+    expect(dialog).toHaveAttribute('data-size', 'large');
+    expect(dialog.parentElement).toHaveClass(dialogContentClassNames.positioner);
+    const area = dialog.querySelector<HTMLElement>('.' + dialogContentClassNames.titleActions);
+    expect(area).not.toBeNull();
+    const expand = within(dialog).getByRole('button', { name: 'Expand' });
+    expect(expand.closest('.' + dialogContentClassNames.titleAction)?.parentElement).toBe(area);
+    expect(within(area!).getByRole('button', { name: 'Close' })).toHaveClass(
+      dialogContentClassNames.closeButton,
+    );
+  });
+
   it('Persona’s built-in Avatar carries the Avatar classes and the Persona part class', () => {
     const { container } = render(<Persona name="Ada Lovelace" secondaryText="Engineer" />);
     expect(container.firstElementChild).toHaveClass(personaClassNames.root);
@@ -6743,5 +7185,907 @@ describe('the custom picker of the Listbox story, on the package entry alone (sp
     await user.keyboard('{Escape}');
     expect(screen.queryByRole('listbox')).not.toBeInTheDocument();
     expect(input).toHaveValue('Verdana');
+  });
+});
+
+// ===========================================================================
+// Phase 6 (0.11): tags, drawers and the app shell (0.11 spec §4.6)
+// ===========================================================================
+
+/** Lets a focus move that a component schedules after its commit (a microtask) land. */
+const settleFocus = () => act(async () => {});
+
+/** A locally drawn glyph for icon-only buttons (tokens only: it takes the text colour). */
+const P6Glyph = () => (
+  <svg viewBox="0 0 16 16" width="16" height="16" fill="currentColor" aria-hidden="true">
+    <path d="M3 3h10v10H3z" />
+  </svg>
+);
+
+const P6_FRUITS = [
+  { value: 'apple', label: 'Apple' },
+  { value: 'banana', label: 'Banana' },
+  { value: 'cherry', label: 'Cherry' },
+];
+
+/** The composable TagPicker with its parts written out, the Input or the Button trigger. */
+function PartsPicker({
+  trigger = 'input',
+  ...props
+}: Partial<React.ComponentProps<typeof TagPicker>> & { trigger?: 'input' | 'button' }) {
+  return (
+    <TagPicker options={P6_FRUITS} {...props}>
+      <TagPickerControl>
+        <TagPickerGroup />
+        {trigger === 'input' ? <TagPickerInput /> : <TagPickerButton />}
+      </TagPickerControl>
+      <TagPickerList />
+    </TagPicker>
+  );
+}
+
+/** The texts of the tags in the TagPicker's list of selected values. */
+const pickedTags = () => {
+  const list = screen.queryByRole('list', { name: 'Selected' });
+  return list
+    ? within(list)
+        .queryAllByRole('listitem')
+        .map((item) => item.textContent)
+    : [];
+};
+
+/** A box for `getBoundingClientRect` (jsdom has no layout; its window is 1024 × 768). */
+const p6Rect = (left: number, top: number, right: number, bottom: number): DOMRect =>
+  ({
+    left,
+    top,
+    right,
+    bottom,
+    width: right - left,
+    height: bottom - top,
+    x: left,
+    y: top,
+    toJSON: () => ({}),
+  }) as DOMRect;
+
+/** A ref callback that gives the element `rect` (the drawer panel of a Toaster case). */
+const stubPanelRect = (rect: DOMRect) => (element: HTMLElement | null) => {
+  if (element) element.getBoundingClientRect = () => rect;
+};
+
+const notifications = () => screen.getByRole('region', { name: 'Notifications' });
+
+describe('the real Field around the composable TagPicker (0.11 spec §4.6 #2)', () => {
+  it.each(['input', 'button'] as const)(
+    'a required Field blocks submission until a tag is picked (%s trigger)',
+    async (trigger) => {
+      const user = userEvent.setup();
+      const onSubmit = vi.fn((event: React.FormEvent) => event.preventDefault());
+      render(
+        <form aria-label="Order" onSubmit={onSubmit}>
+          <Field label="Fruit" hint="Pick one or more" error="Pick a fruit" required>
+            <PartsPicker trigger={trigger} name="fruit" />
+          </Field>
+        </form>,
+      );
+      const form = screen.getByRole('form', { name: 'Order' }) as HTMLFormElement;
+      const picker = screen.getByRole('combobox', { name: 'Fruit' });
+      expect(picker.tagName).toBe(trigger === 'input' ? 'INPUT' : 'BUTTON');
+      expect(picker).toHaveAccessibleDescription(/Pick a fruit/);
+      expect(picker).toHaveAccessibleDescription(/Pick one or more/);
+      expect(picker).toHaveAttribute('aria-invalid', 'true');
+      expect(picker).toHaveAttribute('aria-required', 'true');
+      expect(screen.getByRole('alert')).toHaveTextContent('Pick a fruit');
+      expect(duplicateIds()).toEqual([]);
+      await expectNoA11yViolations(document.body);
+
+      act(() => form.requestSubmit());
+      expect(onSubmit).not.toHaveBeenCalled();
+
+      await user.click(picker);
+      await user.click(screen.getByRole('option', { name: 'Banana' }));
+      expect(pickedTags()).toEqual(['Banana']);
+      expect(new FormData(form).getAll('fruit')).toEqual(['banana']);
+      act(() => form.requestSubmit());
+      expect(onSubmit).toHaveBeenCalledTimes(1);
+    },
+  );
+});
+
+describe('TagGroup and InteractionTag across components (0.11 spec §4.6 #3)', () => {
+  it('a TagGroup in a modal Dialog: removals keep focus in the trap, Escape closes the Dialog', async () => {
+    const user = userEvent.setup();
+    const onOpenChange = vi.fn();
+    function FiltersDialog() {
+      const [filters, setFilters] = React.useState(['Red', 'Blue']);
+      const apply = React.useRef<HTMLButtonElement>(null);
+      return (
+        <Dialog open onOpenChange={onOpenChange}>
+          <Dialog.Content title="Filters">
+            <TagGroup
+              aria-label="Active filters"
+              dismissible
+              fallbackFocusRef={apply}
+              onDismiss={(value) => setFilters((current) => current.filter((f) => f !== value))}
+            >
+              {filters.map((filter) => (
+                <Tag key={filter} value={filter}>
+                  {filter}
+                </Tag>
+              ))}
+            </TagGroup>
+            <Button ref={apply}>Apply</Button>
+          </Dialog.Content>
+        </Dialog>
+      );
+    }
+    render(<FiltersDialog />);
+    const dialog = screen.getByRole('dialog', { name: 'Filters' });
+    await expectNoA11yViolations(document.body);
+
+    act(() => within(dialog).getByRole('button', { name: 'Dismiss Red' }).focus());
+    await user.keyboard('{Delete}');
+    await settleFocus();
+    expect(within(dialog).getByRole('button', { name: 'Dismiss Blue' })).toHaveFocus();
+    await user.keyboard('{Backspace}');
+    await settleFocus();
+    expect(within(dialog).queryAllByRole('button', { name: /^Dismiss/ })).toEqual([]);
+    expect(within(dialog).getByRole('button', { name: 'Apply' })).toHaveFocus();
+    expect(onOpenChange).not.toHaveBeenCalled();
+
+    // The group consumes no Escape: from a tag, it reaches the Dialog.
+    act(() => within(dialog).getByRole('button', { name: 'Close' }).focus());
+    await user.keyboard('{Escape}');
+    expect(onOpenChange).toHaveBeenCalledTimes(1);
+    expect(onOpenChange).toHaveBeenCalledWith(false, expect.objectContaining({ reason: 'escape' }));
+  });
+
+  it('Escape on a tag in a Dialog closes the Dialog', async () => {
+    const user = userEvent.setup();
+    const onOpenChange = vi.fn();
+    render(
+      <Dialog open onOpenChange={onOpenChange}>
+        <Dialog.Content title="Filters">
+          <TagGroup aria-label="Active filters" dismissible onDismiss={() => {}}>
+            <Tag value="red">Red</Tag>
+          </TagGroup>
+        </Dialog.Content>
+      </Dialog>,
+    );
+    act(() => button('Dismiss Red').focus());
+    await user.keyboard('{Escape}');
+    expect(onOpenChange).toHaveBeenCalledTimes(1);
+    expect(onOpenChange).toHaveBeenCalledWith(false, expect.objectContaining({ reason: 'escape' }));
+  });
+
+  it('a Popover from an InteractionTag.Primary in a TagGroup keeps its arrow keys, Delete and Escape, and returns focus to the Primary', async () => {
+    const user = userEvent.setup();
+    const onDismiss = vi.fn();
+    render(
+      <TagGroup aria-label="People" onDismiss={onDismiss}>
+        <InteractionTag value="katri">
+          <Popover>
+            <Popover.Trigger>
+              <InteractionTag.Primary>Katri Athokas</InteractionTag.Primary>
+            </Popover.Trigger>
+            <Popover.Content aria-label="Katri Athokas details">
+              <Button>Message</Button>
+              <Button>Call</Button>
+            </Popover.Content>
+          </Popover>
+          <InteractionTag.Secondary />
+        </InteractionTag>
+        <InteractionTag value="elvia">
+          <InteractionTag.Primary>Elvia Atkins</InteractionTag.Primary>
+          <InteractionTag.Secondary />
+        </InteractionTag>
+      </TagGroup>,
+    );
+    const primary = button('Katri Athokas');
+    await user.click(primary);
+    expect(primary).toHaveAttribute('aria-expanded', 'true');
+    const message = button('Message');
+    act(() => message.focus());
+    await expectNoA11yViolations(document.body);
+
+    // Keys in the portaled surface never reach the group: no roving move, no dismissal.
+    await user.keyboard('{ArrowRight}');
+    expect(message).toHaveFocus();
+    await user.keyboard('{End}');
+    expect(message).toHaveFocus();
+    await user.keyboard('{Delete}{Backspace}');
+    expect(onDismiss).not.toHaveBeenCalled();
+    expect(button('Dismiss Katri Athokas')).toBeInTheDocument();
+
+    await user.keyboard('{Escape}');
+    expect(screen.queryByRole('button', { name: 'Message' })).not.toBeInTheDocument();
+    expect(primary).toHaveFocus();
+    expect(primary).toHaveAttribute('aria-expanded', 'false');
+    expect(onDismiss).not.toHaveBeenCalled();
+    // The group's own keys work again from the Primary.
+    await user.keyboard('{ArrowRight}');
+    expect(button('Dismiss Katri Athokas')).toHaveFocus();
+  });
+
+  it('a Tooltip around an InteractionTag.Primary names or describes it', async () => {
+    render(
+      <TagGroup aria-label="Fruit">
+        <InteractionTag value="cherry">
+          <Tooltip content="Sour, for baking" relationship="description">
+            <InteractionTag.Primary>Cherry</InteractionTag.Primary>
+          </Tooltip>
+          <InteractionTag.Secondary />
+        </InteractionTag>
+        <InteractionTag value="plum">
+          <Tooltip content="Plum" relationship="label">
+            <InteractionTag.Primary icon={<P6Glyph />} />
+          </Tooltip>
+        </InteractionTag>
+      </TagGroup>,
+    );
+    expect(button('Cherry')).toHaveAccessibleDescription('Sour, for baking');
+    expect(button('Plum')).toBeInTheDocument();
+    expect(button('Dismiss Cherry')).toBeInTheDocument();
+    await expectNoA11yViolations(document.body);
+  });
+
+  it('an Avatar from the barrel in a tag’s media takes the tag’s size (the Avatar size context)', () => {
+    render(
+      <>
+        <Tag media={<Avatar name="Medium tag" />}>Medium</Tag>
+        <Tag size="small" media={<Avatar name="Small tag" />}>
+          Small
+        </Tag>
+        <TagGroup role="list" aria-label="People" size="extra-small">
+          <Tag media={<Avatar name="Group tag" />}>Inherited</Tag>
+        </TagGroup>
+        <InteractionTag size="small">
+          <InteractionTag.Primary media={<Avatar name="Interaction tag" />}>
+            Interaction
+          </InteractionTag.Primary>
+        </InteractionTag>
+        <Tag media={<Avatar name="Own size" size="large" />}>Own</Tag>
+      </>,
+    );
+    expect(screen.getByRole('img', { name: 'Medium tag' })).toHaveClass('w-6', 'h-6');
+    expect(screen.getByRole('img', { name: 'Small tag' })).toHaveClass('w-5', 'h-5');
+    expect(screen.getByRole('img', { name: 'Group tag' })).toHaveClass('w-4', 'h-4');
+    // Inside the Primary button the Avatar is presentational: find it by its element.
+    expect(
+      button(/^Interaction/).querySelector('[role="img"][aria-label="Interaction tag"]'),
+    ).toHaveClass('w-5', 'h-5');
+    expect(screen.getByRole('img', { name: 'Own size' })).toHaveClass('w-12', 'h-12');
+  });
+});
+
+describe('a TagPicker in a Dialog (0.11 spec §4.6 #4)', () => {
+  function setup() {
+    const onOpenChange = vi.fn();
+    render(
+      <Dialog open onOpenChange={onOpenChange}>
+        <Dialog.Content title="Order">
+          <PartsPicker aria-label="Fruits" defaultValue={['apple', 'banana']} />
+        </Dialog.Content>
+      </Dialog>,
+    );
+    return { onOpenChange, user: userEvent.setup() };
+  }
+  const dialog = () => screen.getByRole('dialog', { name: 'Order' });
+  const input = () => screen.getByRole('combobox', { name: 'Fruits' });
+
+  it('the first Escape closes the list, the second the Dialog', async () => {
+    const { user, onOpenChange } = setup();
+    await user.click(input());
+    expect(input()).toHaveAttribute('aria-expanded', 'true');
+    const listbox = screen.getByRole('listbox');
+    expect(dialog().contains(listbox)).toBe(false);
+    expect(listbox.closest('[inert]')).toBeNull();
+    await expectNoA11yViolations(document.body);
+    await user.keyboard('{Escape}');
+    expect(input()).toHaveAttribute('aria-expanded', 'false');
+    expect(input()).toHaveFocus();
+    expect(onOpenChange).not.toHaveBeenCalled();
+    await user.keyboard('{Escape}');
+    expect(onOpenChange).toHaveBeenCalledTimes(1);
+    expect(onOpenChange).toHaveBeenCalledWith(false, expect.objectContaining({ reason: 'escape' }));
+  });
+
+  it('Escape on a remove button returns to the input without closing the Dialog', async () => {
+    const { user, onOpenChange } = setup();
+    act(() => input().focus());
+    await user.keyboard('{Backspace}');
+    expect(button('Remove Banana')).toHaveFocus();
+    await user.keyboard('{Escape}');
+    expect(input()).toHaveFocus();
+    expect(onOpenChange).not.toHaveBeenCalled();
+    expect(dialog()).toBeInTheDocument();
+  });
+
+  it('removing every tag keeps focus inside the trap, on the input', async () => {
+    const { user, onOpenChange } = setup();
+    act(() => input().focus());
+    await user.keyboard('{Backspace}{Delete}');
+    await settleFocus();
+    expect(pickedTags()).toEqual(['Apple']);
+    expect(input()).toHaveFocus();
+    await user.keyboard('{Backspace}{Delete}');
+    await settleFocus();
+    expect(pickedTags()).toEqual([]);
+    expect(input()).toHaveFocus();
+    expect(dialog().contains(document.activeElement)).toBe(true);
+    expect(onOpenChange).not.toHaveBeenCalled();
+  });
+});
+
+describe('the Toaster beside real drawers (0.11 spec §4.6 #5)', () => {
+  const offset = () => notifications().style.getPropertyValue('--wave-toaster-offset');
+  const blockOffset = () => notifications().style.getPropertyValue('--wave-toaster-offset-block');
+
+  it('a bottom Drawer moves bottom-end toasts above it', () => {
+    render(
+      <Toaster>
+        <Drawer
+          open
+          onOpenChange={() => {}}
+          title="Filters"
+          position="bottom"
+          ref={stubPanelRect(p6Rect(0, 448, 1024, 768))}
+        >
+          <p>Body</p>
+        </Drawer>
+      </Toaster>,
+    );
+    expect(blockOffset()).toBe('320px');
+    expect(offset()).toBe('');
+  });
+
+  it('an end Drawer moves bottom-end toasts beside it', () => {
+    render(
+      <Toaster>
+        <Drawer
+          open
+          onOpenChange={() => {}}
+          title="Filters"
+          ref={stubPanelRect(p6Rect(704, 0, 1024, 768))}
+        >
+          <p>Body</p>
+        </Drawer>
+      </Toaster>,
+    );
+    expect(offset()).toBe('320px');
+    expect(blockOffset()).toBe('');
+  });
+
+  it('a non-modal end Drawer moves the toasts beside it', () => {
+    render(
+      <Toaster>
+        <Drawer
+          open
+          onOpenChange={() => {}}
+          title="Filters"
+          modalType="non-modal"
+          ref={stubPanelRect(p6Rect(704, 0, 1024, 768))}
+        >
+          <p>Body</p>
+        </Drawer>
+      </Toaster>,
+    );
+    expect(offset()).toBe('320px');
+  });
+
+  it('an open inline Drawer at the window’s end edge leaves bottom-end toasts in their corner', () => {
+    render(
+      <Toaster>
+        <Drawer
+          type="inline"
+          open
+          onOpenChange={() => {}}
+          title="Details"
+          ref={stubPanelRect(p6Rect(704, 0, 1024, 768))}
+        >
+          <p>Body</p>
+        </Drawer>
+      </Toaster>,
+    );
+    expect(screen.getByRole('complementary', { name: 'Details' })).toBeInTheDocument();
+    expect(offset()).toBe('');
+    expect(blockOffset()).toBe('');
+  });
+
+  it('bottom-start toasts move clear of an open start overlay NavDrawer and come back when it closes', () => {
+    const ui = (open: boolean) => (
+      <Toaster position="bottom-start">
+        <NavDrawer open={open} onOpenChange={() => {}} ref={stubPanelRect(p6Rect(0, 0, 320, 768))}>
+          <NavDrawerBody>
+            <NavItem value="home">Home</NavItem>
+          </NavDrawerBody>
+        </NavDrawer>
+      </Toaster>
+    );
+    const { rerender } = render(ui(true));
+    expect(offset()).toBe('320px');
+    rerender(ui(false));
+    expect(offset()).toBe('');
+  });
+});
+
+describe('toasts and popups over non-modal surfaces (0.11 spec §4.6 #6)', () => {
+  describe.each([
+    [
+      'Dialog',
+      (onOpenChange: (open: boolean) => void) => (
+        <Dialog open modalType="non-modal" onOpenChange={onOpenChange}>
+          <Dialog.Content title="Settings">
+            <NotifyButton />
+          </Dialog.Content>
+        </Dialog>
+      ),
+    ],
+    [
+      'Drawer',
+      (onOpenChange: (open: boolean) => void) => (
+        <Drawer open modalType="non-modal" title="Settings" onOpenChange={onOpenChange}>
+          <NotifyButton />
+        </Drawer>
+      ),
+    ],
+  ])('a Toast over a non-modal %s', (_name, renderSurface) => {
+    function setup() {
+      const onOpenChange = vi.fn();
+      render(
+        <Toaster>
+          <button type="button">Page button</button>
+          {renderSurface(onOpenChange)}
+        </Toaster>,
+      );
+      return { onOpenChange, user: userEvent.setup() };
+    }
+    const dismiss = () => within(notifications()).queryByRole('button', { name: 'Dismiss' });
+
+    it('is not inert, announced and reached by Tab; Escape in the region dismisses only the toasts', async () => {
+      const { user, onOpenChange } = setup();
+      await user.click(button('Notify'));
+      expect(notifications().closest('[inert]')).toBeNull();
+      expect(button('Page button').closest('[inert]')).toBeNull();
+      expect(within(notifications()).getByRole('status')).toHaveTextContent('Saved');
+      expect(screen.getByRole('dialog', { name: 'Settings' })).not.toHaveAttribute('aria-modal');
+      await expectNoA11yViolations(document.body);
+
+      for (let i = 0; i < 6 && document.activeElement !== dismiss(); i++) await user.tab();
+      expect(dismiss()).toHaveFocus();
+      await user.keyboard('{Escape}');
+      await act(async () => {});
+      expect(dismiss()).toBeNull();
+      expect(screen.getByRole('dialog', { name: 'Settings' })).toBeInTheDocument();
+      expect(onOpenChange).not.toHaveBeenCalled();
+    });
+
+    it('a click on a toast leaves the surface open', async () => {
+      const { user, onOpenChange } = setup();
+      await user.click(button('Notify'));
+      await user.click(within(notifications()).getByText('Saved'));
+      expect(screen.getByRole('dialog', { name: 'Settings' })).toBeInTheDocument();
+      expect(onOpenChange).not.toHaveBeenCalled();
+      await user.click(dismiss()!);
+      await act(async () => {});
+      expect(dismiss()).toBeNull();
+      expect(onOpenChange).not.toHaveBeenCalled();
+    });
+  });
+
+  function MenuOf({ label }: { label: string }) {
+    return (
+      <Menu>
+        <Menu.Trigger>
+          <MenuButton>{label}</MenuButton>
+        </Menu.Trigger>
+        <Menu.Popover>
+          <Menu.Item>Rename</Menu.Item>
+        </Menu.Popover>
+      </Menu>
+    );
+  }
+
+  it('a Menu opened from the page while a non-modal Drawer is open returns focus to its own trigger; one from inside returns into it', async () => {
+    const user = userEvent.setup();
+    const onOpenChange = vi.fn();
+    render(
+      <>
+        <MenuOf label="Page actions" />
+        <Drawer open modalType="non-modal" title="Details" onOpenChange={onOpenChange}>
+          <MenuOf label="Drawer actions" />
+        </Drawer>
+      </>,
+    );
+    await user.click(button('Page actions'));
+    expect(screen.getByRole('menu')).toBeInTheDocument();
+    await user.keyboard('{Escape}');
+    expect(screen.queryByRole('menu')).not.toBeInTheDocument();
+    expect(button('Page actions')).toHaveFocus();
+    expect(onOpenChange).not.toHaveBeenCalled();
+
+    await user.click(button('Drawer actions'));
+    await user.click(menuitem('Rename'));
+    expect(screen.queryByRole('menu')).not.toBeInTheDocument();
+    expect(button('Drawer actions')).toHaveFocus();
+    expect(screen.getByRole('dialog', { name: 'Details' })).toBeInTheDocument();
+    expect(onOpenChange).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    ['Combobox', () => <Combobox aria-label="Fruit">{fruitOptions}</Combobox>],
+    ['Dropdown', () => <Dropdown aria-label="Fruit">{fruitOptions}</Dropdown>],
+    ['TagPicker', () => <PartsPicker aria-label="Fruit" />],
+  ])('a %s in a non-modal Dialog: Escape closes only the popup', async (_name, picker) => {
+    const user = userEvent.setup();
+    const onOpenChange = vi.fn();
+    render(
+      <Dialog open modalType="non-modal" onOpenChange={onOpenChange}>
+        <Dialog.Content title="Order">{picker()}</Dialog.Content>
+      </Dialog>,
+    );
+    const combobox = screen.getByRole('combobox', { name: 'Fruit' });
+    await user.click(combobox);
+    expect(combobox).toHaveAttribute('aria-expanded', 'true');
+    await user.keyboard('{Escape}');
+    expect(combobox).toHaveAttribute('aria-expanded', 'false');
+    expect(combobox).toHaveFocus();
+    expect(onOpenChange).not.toHaveBeenCalled();
+    await user.keyboard('{Escape}');
+    expect(onOpenChange).toHaveBeenCalledTimes(1);
+    expect(onOpenChange).toHaveBeenCalledWith(false, expect.objectContaining({ reason: 'escape' }));
+  });
+
+  it('a SpinButton in a non-modal Dialog commits its typed value when the page is clicked; the dialog stays open', async () => {
+    const user = userEvent.setup();
+    const onValueChange = vi.fn();
+    const onOpenChange = vi.fn();
+    render(
+      <>
+        <button type="button">Page button</button>
+        <Dialog open modalType="non-modal" onOpenChange={onOpenChange}>
+          <Dialog.Content title="Page size">
+            <SpinButton aria-label="Rows" defaultValue={10} onValueChange={onValueChange} />
+          </Dialog.Content>
+        </Dialog>
+      </>,
+    );
+    const rows = screen.getByRole('spinbutton', { name: 'Rows' });
+    await user.clear(rows);
+    await user.type(rows, '50');
+    await user.click(button('Page button'));
+    expect(onValueChange.mock.calls).toEqual([[50]]);
+    expect(button('Page button')).toHaveFocus();
+    expect(screen.getByRole('dialog', { name: 'Page size' })).toBeInTheDocument();
+    expect(onOpenChange).not.toHaveBeenCalled();
+  });
+});
+
+describe('Dialog title actions and the Close button slot (0.11 spec §4.6 #7)', () => {
+  it.each([
+    ['label', 'Expand', undefined],
+    ['description', 'Expand', 'Show the report full screen'],
+  ] as const)(
+    'a Tooltip (%s) around an icon-only Button in titleAction names it; Tab goes title action → Close',
+    async (relationship, name, description) => {
+      const user = userEvent.setup();
+      render(
+        <Dialog open onOpenChange={() => {}}>
+          <Dialog.Content
+            title="Report"
+            titleAction={
+              <Tooltip
+                content={relationship === 'label' ? name : description!}
+                relationship={relationship}
+              >
+                <Button
+                  appearance="subtle"
+                  icon={<P6Glyph />}
+                  aria-label={relationship === 'description' ? name : undefined}
+                />
+              </Tooltip>
+            }
+          >
+            <p>Body</p>
+          </Dialog.Content>
+        </Dialog>,
+      );
+      const dialog = screen.getByRole('dialog', { name: 'Report' });
+      const action = within(dialog).getByRole('button', { name });
+      if (description) expect(action).toHaveAccessibleDescription(description);
+      act(() => action.focus());
+      await user.tab();
+      expect(within(dialog).getByRole('button', { name: 'Close' })).toHaveFocus();
+      await expectNoA11yViolations(document.body);
+    },
+  );
+});
+
+describe('kept-mounted surfaces (0.11 spec §4.6 #8)', () => {
+  const wrapperOf = (element: Element | null) => element?.closest('[data-wave-portal]') ?? null;
+  const follows = (a: Element | null, b: Element | null) =>
+    Boolean(a && b && b.compareDocumentPosition(a) & Node.DOCUMENT_POSITION_FOLLOWING);
+
+  it('a kept-mounted Dialog opened from inside a Drawer stacks above it', async () => {
+    const user = userEvent.setup();
+    render(
+      <Drawer defaultOpen title="Rows">
+        <Dialog unmountOnClose={false}>
+          <Dialog.Trigger>
+            <Button>Delete row</Button>
+          </Dialog.Trigger>
+          <Dialog.Content title="Delete row?">
+            <Dialog.Close>
+              <Button>Cancel</Button>
+            </Dialog.Close>
+          </Dialog.Content>
+        </Dialog>
+      </Drawer>,
+    );
+    await user.click(button('Delete row'));
+    const dialog = screen.getByRole('dialog', { name: 'Delete row?' });
+    const drawer = screen.getByRole('dialog', { name: 'Rows', hidden: true });
+    expect(follows(wrapperOf(dialog), wrapperOf(drawer))).toBe(true);
+    expect(drawer.closest('[inert]')).not.toBeNull();
+    expect(dialog.closest('[inert]')).toBeNull();
+    await user.keyboard('{Escape}');
+    expect(button('Delete row')).toHaveFocus();
+    expect(screen.getByRole('dialog', { name: 'Rows' })).toBeInTheDocument();
+  });
+
+  it('a kept-mounted Dialog rendered beside an open Drawer opens above it', async () => {
+    const user = userEvent.setup();
+    function Beside() {
+      const [open, setOpen] = React.useState(false);
+      return (
+        <>
+          <Dialog open={open} onOpenChange={setOpen} unmountOnClose={false}>
+            <Dialog.Content title="Delete row?">
+              <p>Gone for good.</p>
+            </Dialog.Content>
+          </Dialog>
+          <Drawer defaultOpen title="Rows">
+            <Button onClick={() => setOpen(true)}>Delete row</Button>
+          </Drawer>
+        </>
+      );
+    }
+    render(<Beside />);
+    await user.click(button('Delete row'));
+    const dialog = screen.getByRole('dialog', { name: 'Delete row?' });
+    const drawer = screen.getByRole('dialog', { name: 'Rows', hidden: true });
+    expect(follows(wrapperOf(dialog), wrapperOf(drawer))).toBe(true);
+    expect(drawer.closest('[inert]')).not.toBeNull();
+    expect(dialog.closest('[inert]')).toBeNull();
+  });
+
+  it('a SpinButton’s typed value survives a kept-mounted Dialog’s close and reopen', async () => {
+    const user = userEvent.setup();
+    render(
+      <Dialog unmountOnClose={false}>
+        <Dialog.Trigger>
+          <Button>Page size</Button>
+        </Dialog.Trigger>
+        <Dialog.Content title="Page size">
+          <SpinButton aria-label="Rows" defaultValue={10} />
+        </Dialog.Content>
+      </Dialog>,
+    );
+    await user.click(button('Page size'));
+    const rows = screen.getByRole('spinbutton', { name: 'Rows' });
+    await user.clear(rows);
+    await user.type(rows, '50');
+    await user.click(button('Close'));
+    expect(screen.queryByRole('dialog', { name: 'Page size' })).not.toBeInTheDocument();
+    await user.click(button('Page size'));
+    expect(screen.getByRole('spinbutton', { name: 'Rows' })).toBe(rows);
+    expect(rows).toHaveValue('50');
+  });
+});
+
+describe('Nav and NavDrawer across components (0.11 spec §4.6 #9)', () => {
+  /** Item actions from the barrel: a Tooltip-named ToggleButton and a MenuButton's Menu. */
+  const itemActions = (
+    <>
+      <Tooltip content="Pin" relationship="label">
+        <ToggleButton appearance="subtle" size="small" icon={<P6Glyph />} />
+      </Tooltip>
+      <Menu>
+        <Menu.Trigger>
+          <MenuButton appearance="subtle" size="small" aria-label="More options" />
+        </Menu.Trigger>
+        <Menu.Popover>
+          <Menu.Item>Rename</Menu.Item>
+          <Menu.Item>Remove</Menu.Item>
+        </Menu.Popover>
+      </Menu>
+    </>
+  );
+
+  it('Nav item actions with Menu and Tooltip: Escape returns focus to the MenuButton; axe open and closed', async () => {
+    const user = userEvent.setup();
+    render(
+      <Nav defaultValue="home">
+        <Nav.Item value="home">Home</Nav.Item>
+        <Nav.Item value="reports" actions={itemActions}>
+          Reports
+        </Nav.Item>
+      </Nav>,
+    );
+    const actions = screen.getByRole('group', { name: 'Reports' });
+    const pin = within(actions).getByRole('button', { name: 'Pin' });
+    await user.click(pin);
+    expect(pin).toHaveAttribute('aria-pressed', 'true');
+    expect(button('Reports')).not.toHaveAttribute('aria-current');
+    await expectNoA11yViolations(document.body);
+    const more = within(actions).getByRole('button', { name: 'More options' });
+    await user.click(more);
+    expect(screen.getByRole('menu')).toBeInTheDocument();
+    await expectNoA11yViolations(document.body);
+    await user.keyboard('{Escape}');
+    expect(screen.queryByRole('menu')).not.toBeInTheDocument();
+    expect(more).toHaveFocus();
+    expect(button('Home')).toHaveAttribute('aria-current', 'page');
+  });
+
+  /** A page whose button opens an overlay NavDrawer (controlled). */
+  function OverlayShell({
+    children,
+    focusMode,
+    panelRef,
+  }: {
+    children?: React.ReactNode;
+    focusMode?: 'tab' | 'arrow';
+    panelRef?: React.Ref<HTMLDivElement>;
+  }) {
+    const [open, setOpen] = React.useState(false);
+    return (
+      <>
+        <Hamburger
+          aria-label="Open navigation"
+          aria-expanded={open}
+          aria-haspopup="dialog"
+          onClick={() => setOpen(!open)}
+        />
+        <NavDrawer open={open} onOpenChange={setOpen} defaultValue="home" ref={panelRef}>
+          <NavDrawer.Header>
+            <Hamburger />
+            Contoso HR
+          </NavDrawer.Header>
+          <NavDrawer.Body focusMode={focusMode}>
+            <Nav.Item value="home">Home</Nav.Item>
+            <Nav.Item value="reports" actions={itemActions}>
+              Reports
+            </Nav.Item>
+          </NavDrawer.Body>
+          {children}
+        </NavDrawer>
+      </>
+    );
+  }
+
+  it('a Toast over an overlay NavDrawer is reachable by Tab, announced and beside it', async () => {
+    const user = userEvent.setup();
+    render(
+      <Toaster position="bottom-start">
+        <OverlayShell panelRef={stubPanelRect(p6Rect(0, 0, 320, 768))}>
+          <NavDrawer.Footer>
+            <li>
+              <NotifyButton />
+            </li>
+          </NavDrawer.Footer>
+        </OverlayShell>
+      </Toaster>,
+    );
+    await user.click(button('Open navigation'));
+    const drawer = screen.getByRole('dialog', { name: 'Navigation' });
+    await user.click(within(drawer).getByRole('button', { name: 'Notify' }));
+    expect(notifications().closest('[inert]')).toBeNull();
+    expect(within(notifications()).getByRole('status')).toHaveTextContent('Saved');
+    // Beside the drawer: the bottom-start toasts move clear of its 320px panel.
+    expect(notifications().style.getPropertyValue('--wave-toaster-offset')).toBe('320px');
+    await expectNoA11yViolations(document.body);
+    await user.tab();
+    expect(within(notifications()).getByRole('button', { name: 'Dismiss' })).toHaveFocus();
+    expect(drawer).toBeInTheDocument();
+  });
+
+  it.each(['tab', 'arrow'] as const)(
+    'a Menu from a Nav item action in an overlay NavDrawer (%s body): Escape levels and focus return',
+    async (focusMode) => {
+      const user = userEvent.setup();
+      render(<OverlayShell focusMode={focusMode} />);
+      await user.click(button('Open navigation'));
+      const drawer = screen.getByRole('dialog', { name: 'Navigation' });
+      const more = within(drawer).getByRole('button', { name: 'More options' });
+      if (focusMode === 'arrow') {
+        // The actions join the body's arrow order after their item.
+        act(() => within(drawer).getByRole('button', { name: 'Reports' }).focus());
+        await user.keyboard('{ArrowDown}');
+        expect(within(drawer).getByRole('button', { name: 'Pin' })).toHaveFocus();
+        await user.keyboard('{ArrowDown}');
+        expect(more).toHaveFocus();
+      }
+      await user.click(more);
+      expect(screen.getByRole('menu')).toBeInTheDocument();
+      await user.keyboard('{Escape}');
+      expect(screen.queryByRole('menu')).not.toBeInTheDocument();
+      expect(more).toHaveFocus();
+      expect(screen.getByRole('dialog', { name: 'Navigation' })).toBeInTheDocument();
+      await user.keyboard('{Escape}');
+      expect(screen.queryByRole('dialog', { name: 'Navigation' })).not.toBeInTheDocument();
+      expect(button('Open navigation')).toHaveFocus();
+    },
+  );
+
+  it.each(['inline', 'overlay'] as const)(
+    'a modal Dialog opened from an %s NavDrawer: Escape closes it first and returns focus into the drawer',
+    async (type) => {
+      const user = userEvent.setup();
+      const onOpenChange = vi.fn();
+      render(
+        <NavDrawer type={type} open onOpenChange={onOpenChange} defaultValue="home">
+          <NavDrawer.Body>
+            <Nav.Item value="home">Home</Nav.Item>
+          </NavDrawer.Body>
+          <NavDrawer.Footer>
+            <li>
+              <Dialog>
+                <Dialog.Trigger>
+                  <Button>Sign out</Button>
+                </Dialog.Trigger>
+                <Dialog.Content title="Sign out?">
+                  <p>You will need to sign in again.</p>
+                </Dialog.Content>
+              </Dialog>
+            </li>
+          </NavDrawer.Footer>
+        </NavDrawer>,
+      );
+      await user.click(button('Sign out'));
+      const dialog = screen.getByRole('dialog', { name: 'Sign out?' });
+      expect(dialog).toHaveAttribute('data-modal-type', 'modal');
+      expect(
+        screen.getByRole('navigation', { name: 'Navigation', hidden: true }).closest('[inert]'),
+      ).not.toBeNull();
+      await expectNoA11yViolations(document.body);
+      await user.keyboard('{Escape}');
+      expect(screen.queryByRole('dialog', { name: 'Sign out?' })).not.toBeInTheDocument();
+      expect(button('Sign out')).toHaveFocus();
+      expect(screen.getByRole('navigation', { name: 'Navigation' }).closest('[inert]')).toBeNull();
+      expect(onOpenChange).not.toHaveBeenCalled();
+      if (type === 'overlay') {
+        await user.keyboard('{Escape}');
+        expect(onOpenChange).toHaveBeenCalledWith(
+          false,
+          expect.objectContaining({ reason: 'escape' }),
+        );
+      }
+    },
+  );
+
+  it('a Hamburger in a Tooltip relationship="label" inside a Toolbar is named by the tooltip and one Tab stop', async () => {
+    const user = userEvent.setup();
+    render(
+      <>
+        <Toolbar aria-label="App bar">
+          <Tooltip content="Show navigation" relationship="label">
+            <Hamburger />
+          </Tooltip>
+          <ToolbarButton>Search</ToolbarButton>
+        </Toolbar>
+        <button type="button">After</button>
+      </>,
+    );
+    const hamburger = button('Show navigation');
+    await user.tab();
+    expect(hamburger).toHaveFocus();
+    await user.tab();
+    expect(button('After')).toHaveFocus();
+    await user.tab({ shift: true });
+    expect(hamburger).toHaveFocus();
+    await user.keyboard('{ArrowRight}');
+    expect(button('Search')).toHaveFocus();
+    await expectNoA11yViolations(document.body);
   });
 });

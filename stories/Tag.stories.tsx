@@ -1,9 +1,9 @@
 import * as React from 'react';
 import type { ArgTypes, Meta, StoryObj } from '@storybook/react';
 import { fn } from 'storybook/test';
-import { Avatar, Button, PresenceBadge, Tag } from '../src';
+import { Avatar, Button, PresenceBadge, Tag, TagGroup } from '../src';
 import type { TagAppearance, TagProps, TagShape, TagSize } from '../src';
-import { TagGroup } from '../src/components/data-display/TagGroup';
+
 /** The props Storybook passes (the default `<span>` Tag's props). */
 type TagStoryProps = React.ComponentProps<typeof Tag>;
 

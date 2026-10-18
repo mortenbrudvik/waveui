@@ -1,10 +1,8 @@
 import * as React from 'react';
 import type { ArgTypes, Meta, StoryObj } from '@storybook/react';
 import { fn } from 'storybook/test';
-import { Avatar, Button, Popover } from '../src';
-import type { TagAppearance, TagShape, TagSize } from '../src';
-import { InteractionTag } from '../src/components/data-display/InteractionTag';
-import type { InteractionTagProps } from '../src/components/data-display/InteractionTag';
+import { Avatar, Button, InteractionTag, Popover } from '../src';
+import type { InteractionTagProps, TagAppearance, TagShape, TagSize } from '../src';
 
 const SIZES = ['medium', 'small', 'extra-small'] as const satisfies readonly TagSize[];
 const APPEARANCES = ['filled', 'outline', 'brand'] as const satisfies readonly TagAppearance[];

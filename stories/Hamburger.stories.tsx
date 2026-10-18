@@ -1,9 +1,7 @@
 import React from 'react';
 import type { Meta, StoryObj } from '@storybook/react';
 import { fn } from 'storybook/test';
-import { Nav } from '../src';
-import { Hamburger } from '../src/components/navigation/Hamburger';
-import { NavDrawer } from '../src/components/navigation/NavDrawer';
+import { Hamburger, Nav, NavDrawer } from '../src';
 
 /** A locally drawn grid glyph (tokens only: it takes the text colour). */
 const GridGlyph = () => (

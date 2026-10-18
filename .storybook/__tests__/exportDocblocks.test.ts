@@ -299,7 +299,18 @@ function definitionDocblock(source: string, name: string): string | null {
 describe('component docs of the library (C-DOCS)', () => {
   it('finds the compounds', () => {
     expect(compounds.map(([name]) => name)).toEqual(
-      expect.arrayContaining(['Accordion', 'Card', 'Carousel', 'Dialog', 'List', 'RadioGroup']),
+      expect.arrayContaining([
+        'Accordion',
+        'Card',
+        'Carousel',
+        'Dialog',
+        'List',
+        'RadioGroup',
+        // 0.11
+        'InteractionTag',
+        'NavDrawer',
+        'TagPicker',
+      ]),
     );
   });
 

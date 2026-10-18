@@ -1,9 +1,18 @@
 import React from 'react';
 import type { Meta, StoryObj } from '@storybook/react';
 import { fn } from 'storybook/test';
-import { Drawer, Menu, MenuButton, Nav, ToggleButton, Toolbar, Tooltip } from '../src';
-import { NavDrawer, type NavDrawerProps } from '../src/components/navigation/NavDrawer';
-import { Hamburger } from '../src/components/navigation/Hamburger';
+import {
+  Drawer,
+  Hamburger,
+  Menu,
+  MenuButton,
+  Nav,
+  NavDrawer,
+  ToggleButton,
+  Toolbar,
+  Tooltip,
+  type NavDrawerProps,
+} from '../src';
 
 /** A locally drawn home glyph (tokens only: it takes the text colour). */
 const HomeGlyph = () => (
