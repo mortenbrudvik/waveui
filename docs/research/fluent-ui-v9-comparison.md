@@ -367,13 +367,13 @@ The table includes top-level components, sub-components and public APIs that hav
 
 | # | Fluent component | Status | What it is | Why it matters |
 |---|---|---|---|---|
-| 6 | InlineDrawer | stable | A side or bottom panel that sits in the page layout, with sizes, a separator and motion. | App shells need it for a collapsible nav or a details pane. The verifier lowered it from high because a plain conditional `<aside>` is a workable substitute. |
+| 6 | InlineDrawer | stable | A side or bottom panel that sits in the page layout, with sizes, a separator and motion (drw-7). | App shells need it for a collapsible nav or a details pane. The verifier lowered it from high because a plain conditional `<aside>` is a workable substitute. |
 | 7 | NavDrawer (+ Header, Body, Footer) | stable | Nav inside an inline or overlay drawer. Its body is an arrow-key navigation group. | This is the main responsive app-shell pattern, and it depends on InlineDrawer. WaveUI's `Drawer` is modal only. |
 | 8 | TagGroup | stable | A `role="toolbar"` container with arrow keys, shared size, appearance and disabled, a group `onDismiss`, focus moved after a dismiss, and `selectedValues` / `onTagSelect`. | In WaveUI, dismissing a tag with the keyboard drops focus to `<body>` (`stories/Tag.stories.tsx`), and tags cannot act as selectable filter chips. |
 | 9 | InteractionTag (+ Primary, Secondary) | stable | A tag with a main-action button plus a separate dismiss button. | `Tag as="button"` combined with `dismissible` would nest one button inside another. |
 | 10 | MenuItemLink | stable | A menu item rendered as `<a href>`. | Navigation menus lose `href`, open-in-new-tab and the browser's link context menu. |
 | 11 | MenuGroup + MenuGroupHeader | stable | Labelled item groups (`role="group"`). | Fluent requires them when checkbox and radio items are mixed. A hand-made group works in WaveUI but is undocumented. |
-| 12 | DrawerFooter | stable | A footer pinned below the scrolling body. | Apply and Cancel buttons scroll out of view. The workaround is a sticky class. |
+| 12 | DrawerFooter | stable | A footer pinned below the scrolling body (drw-11). | Apply and Cancel buttons scroll out of view. The workaround is a sticky class. |
 | 13 | ToolbarRadioGroup + ToolbarRadioButton | stable | A button-styled exclusive choice (`role="radio"`) inside a toolbar. | This is the one toolbar item type WaveUI cannot compose. A `role="radiogroup"` wrapper counts as a nested composite and gets no arrow keys (`src/hooks/useRovingTabIndex.ts`). |
 | 14 | CarouselNavImageButton | stable | A carousel nav button that shows a thumbnail of its slide. | Image galleries. WaveUI only has dots (`Carousel.tsx`). |
 | 15 | FlatTree + useHeadlessFlatTree_unstable, flattenTree_unstable | stable | A flat, data-driven tree model that supports virtualization and reordering. | Large trees. WaveUI keeps every visible item in the DOM (`Tree.tsx`). |
@@ -681,6 +681,10 @@ This section covers only confirmed and adjusted gaps, highest impact first. Miss
   - Always pill-shaped (tag-5).
   - No media, icon or secondary-text slots (tag-6).
   - No `selected` or `value` (tag-7).
+- **TagGroup** (a missing component, described in section 3):
+  - Dismissing a tag with the keyboard drops focus to `<body>`: no group moves focus to a neighbouring tag (taggroup-1).
+  - Tags cannot act as selectable filter chips: no `selectedValues` / `onTagSelect` (taggroup-2).
+  - No `role="toolbar"` container with arrow keys and shared size, appearance and disabled for its tags (taggroup-3).
 - **List:**
   - No checkbox checkmark slot (list-4).
   - The selection API differs: string values only, and the root element is fixed (list-5).
