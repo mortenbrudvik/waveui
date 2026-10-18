@@ -2,11 +2,14 @@ import { describe, it, expect, vi } from 'vitest';
 import * as React from 'react';
 import { act, render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
+import { composeStories } from '@storybook/react';
+import * as stories from '../../../../stories/Hamburger.stories';
 import { Hamburger } from '../Hamburger';
 import { NavDrawer } from '../NavDrawer';
 import { Nav } from '../Nav';
 import { Button } from '../../button/Button';
 import { Tooltip } from '../../overlays/Tooltip';
+import { Portal } from '../../portal/Portal';
 import { buttonClassNames, hamburgerClassNames } from '../../../lib/classNames';
 import type { Size } from '../../../lib/types';
 import { testNoImplicitSubmit, testSystemProps } from '../../../test-utils';
@@ -273,6 +276,33 @@ describe('Hamburger', () => {
       expect(onOpenChange).not.toHaveBeenCalled();
     });
 
+    it('renders no aria-haspopup, also over a consumer one (it is inside the surface)', () => {
+      render(<Inline hamburgerProps={{ 'aria-haspopup': 'dialog' }} />);
+      expect(hamburger()).not.toHaveAttribute('aria-haspopup');
+    });
+
+    it('ignores a click that bubbles from a portal opened inside it (C-COMPOSE)', async () => {
+      const user = userEvent.setup();
+      const onOpenChange = vi.fn();
+      render(
+        <Inline
+          onOpenChange={onOpenChange}
+          hamburgerProps={{
+            'aria-label': 'Navigation',
+            children: (
+              <Portal>
+                <button type="button">In a portal</button>
+              </Portal>
+            ),
+          }}
+        />,
+      );
+      await user.click(screen.getByRole('button', { name: 'In a portal' }));
+      expect(onOpenChange).not.toHaveBeenCalled();
+      await user.click(hamburger());
+      expect(onOpenChange).toHaveBeenCalledTimes(1);
+    });
+
     it('wins over a consumer aria-expanded and aria-controls', () => {
       render(<Inline hamburgerProps={{ 'aria-expanded': false, 'aria-controls': 'elsewhere' }} />);
       expect(hamburger()).toHaveAttribute('aria-expanded', 'true');
@@ -319,5 +349,26 @@ describe('Hamburger', () => {
       await act(async () => {});
       expect(screen.getByRole('button', { name: 'Open' })).toHaveFocus();
     });
+  });
+
+  // The InNavDrawer story: the page's Hamburger stays mounted while it opens the drawer.
+  it('InNavDrawer story: the page Hamburger keeps focus when it reopens the drawer', async () => {
+    const { InNavDrawer } = composeStories(stories);
+    const user = userEvent.setup();
+    render(<InNavDrawer />);
+    const outer = hamburger('Show navigation');
+    expect(outer).toHaveAttribute('aria-expanded', 'true');
+    expect(outer).toHaveAttribute(
+      'aria-controls',
+      screen.getByRole('navigation').parentElement!.id,
+    );
+    await user.click(hamburger());
+    expect(screen.queryByRole('navigation')).not.toBeInTheDocument();
+    expect(outer).toHaveFocus();
+    expect(outer).not.toHaveAttribute('aria-controls');
+    await user.click(outer);
+    expect(screen.getByRole('navigation')).toBeInTheDocument();
+    expect(outer).toHaveFocus();
+    expect(outer).toHaveAttribute('aria-expanded', 'true');
   });
 });

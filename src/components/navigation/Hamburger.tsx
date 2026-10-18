@@ -120,14 +120,23 @@ export const Hamburger = ({
     Boolean(rest.title) ||
     slotRendersContent(label);
 
-  // Inside a NavDrawer: the toggle, after the consumer's onClick (`preventDefault()` skips it).
+  // Inside a NavDrawer: the toggle, after the consumer's onClick (`preventDefault()` skips it). A
+  // click that bubbles through the React tree from a portal opened inside it is not its own
+  // (C-COMPOSE).
   const toggle = drawer
-    ? (event: React.MouseEvent<HTMLButtonElement>) =>
-        drawer.requestOpen(!drawer.open, { reason: 'trigger', event: event.nativeEvent })
+    ? (event: React.MouseEvent<HTMLButtonElement>) => {
+        if (!(event.target instanceof Node) || !event.currentTarget.contains(event.target)) return;
+        drawer.requestOpen(!drawer.open, { reason: 'trigger', event: event.nativeEvent });
+      }
     : undefined;
-  // The drawer's state wins over a consumer's (the modal triggers' rule).
+  // The drawer's state wins over a consumer's (the modal triggers' rule); no `aria-haspopup`, as
+  // the Hamburger is inside the surface it toggles.
   const stateProps = drawer
-    ? { 'aria-expanded': drawer.open, 'aria-controls': drawer.panelId }
+    ? {
+        'aria-expanded': drawer.open,
+        'aria-controls': drawer.panelId,
+        'aria-haspopup': undefined,
+      }
     : undefined;
 
   return (

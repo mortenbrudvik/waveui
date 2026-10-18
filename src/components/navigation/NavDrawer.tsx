@@ -141,8 +141,10 @@ export interface NavDrawerProps
   modalType?: Extract<ModalType, 'modal' | 'non-modal'>;
   /**
    * Removes the panel when the drawer closes. `false` keeps it mounted while closed, out of view
-   * and `inert`, so the state of what is inside survives, and a Hamburger outside can always point
-   * `aria-controls` at it. Fluent's `unmountOnClose`. Drawer's default too.
+   * and `inert`, so the state of what is inside survives, and a Hamburger outside can point
+   * `aria-controls` at it at all times: always for an inline drawer, and once the page has
+   * hydrated for an overlay (whose panel is not in the server HTML). Fluent's `unmountOnClose`.
+   * Drawer's default too.
    * @default true
    */
   unmountOnClose?: boolean;
@@ -556,7 +558,23 @@ NavDrawerFooter.displayName = 'NavDrawerFooter';
  *   `NavDrawerFooter`.
  *
  * @example
- * <NavDrawer type="inline" open={open} onOpenChange={setOpen} defaultValue="home">
+ * const [open, setOpen] = useState(false);
+ * const hamburgerRef = useRef<HTMLButtonElement>(null);
+ * <Hamburger
+ *   ref={hamburgerRef}
+ *   aria-expanded={open}
+ *   aria-controls={open ? 'main-nav' : undefined}
+ *   aria-haspopup="dialog"
+ *   onClick={() => setOpen(!open)}
+ * />
+ * <NavDrawer
+ *   id="main-nav"
+ *   open={open}
+ *   onOpenChange={setOpen}
+ *   onItemSelect={() => setOpen(false)}
+ *   finalFocusRef={hamburgerRef}
+ *   defaultValue="home"
+ * >
  *   <NavDrawer.Header>
  *     <Hamburger />
  *     Contoso HR

@@ -86,7 +86,8 @@ export const CustomIcon: Story = {
 
 /**
  * Inside a NavDrawer (in its header) the Hamburger toggles that drawer and reports it with
- * `aria-expanded` and `aria-controls`; here the page's Hamburger opens it again.
+ * `aria-expanded` and `aria-controls`. The page's Hamburger, which stays mounted, toggles it too and
+ * takes focus back when the inner one closes it (`finalFocusRef`).
  */
 export const InNavDrawer: Story = {
   render: function InNavDrawerHamburger(args) {
@@ -94,18 +95,18 @@ export const InNavDrawer: Story = {
     const outerRef = React.useRef<HTMLButtonElement>(null);
     return (
       <div className="flex h-80 flex-col overflow-hidden rounded-md border border-border">
-        {!open && (
-          <div className="p-2">
-            <Hamburger
-              ref={outerRef}
-              aria-expanded={open}
-              aria-label="Show navigation"
-              onClick={() => setOpen(true)}
-            />
-          </div>
-        )}
+        <div className="border-b border-border p-2">
+          <Hamburger
+            ref={outerRef}
+            aria-expanded={open}
+            aria-controls={open ? 'in-nav-drawer-nav' : undefined}
+            aria-label="Show navigation"
+            onClick={() => setOpen(!open)}
+          />
+        </div>
         <div className="flex min-h-0 flex-1">
           <NavDrawer
+            id="in-nav-drawer-nav"
             type="inline"
             open={open}
             onOpenChange={setOpen}

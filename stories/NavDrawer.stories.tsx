@@ -329,6 +329,7 @@ export const NonModal: Story = {
             ref={outerRef}
             aria-expanded={open}
             aria-controls={open ? 'non-modal-nav' : undefined}
+            aria-haspopup="dialog"
             onClick={() => setOpen(!open)}
           />
           <span className="text-subtitle-2 font-semibold">Contoso HR</span>
