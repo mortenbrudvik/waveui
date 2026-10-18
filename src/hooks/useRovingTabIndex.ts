@@ -78,7 +78,12 @@ export interface UseRovingTabIndexOptions {
    *  Matches that cannot take focus are no items: `input[type=hidden]` is skipped, and a control
    *  hidden by CSS inside the container (`display: none` or `visibility: hidden` on it or on an
    *  ancestor inside the container) is treated as disabled (skipped, never the tab stop, stamped
-   *  -1). A container hidden as a whole from outside keeps its items and tab stop. */
+   *  -1). A container hidden as a whole from outside keeps its items and tab stop.
+   *  When the container stops being one (its ref detaches, as when `containerProps` are no longer
+   *  spread, or moves to another element) or `manageTabIndex` turns false, every element the hook
+   *  stamped gets its own `tabindex` back (the attribute it had at its first stamp, or none) and
+   *  loses a `data-roving-value` the hook added (one React rendered stays). The last focused item
+   *  and the generated values are kept, so a container that attaches again starts where it was. */
   manageTabIndex?: boolean;
   /** Called after an arrow, Home/End or typeahead key moved focus to `value`. */
   onFocusMove?: (value: string, event: React.KeyboardEvent) => void;
@@ -442,9 +447,18 @@ class RovingStore {
 
   getServerSnapshot = (): string => '';
 
+  /**
+   * Attaches the store to `container` (`null` detaches it). A container that stops being one (its
+   * ref detached, or the store moved to another element) first hands every element it stamped back
+   * to its author. Only a store that manages tabIndex has stamped anything: `setOptions` hands the
+   * stamps back the moment `manageTabIndex` turns off.
+   */
   setContainer(container: HTMLElement | null): void {
     if (container === this.container) return;
     this.disconnect();
+    if (this.container && this.options.manageTabIndex) {
+      this.release(this.container, this.options.itemSelector, false);
+    }
     this.container = container;
     this.dirty = true;
     if (this.notify) {
@@ -464,6 +478,11 @@ class RovingStore {
   setOptions(options: StoreOptions): void {
     const previous = this.options;
     this.options = options;
+    // `manageTabIndex` turned off: the elements stamped so far go back to their author, found
+    // through the selector they were stamped under.
+    if (previous.manageTabIndex && !options.manageTabIndex && this.container) {
+      this.release(this.container, previous.itemSelector, false);
+    }
     if (
       previous.itemSelector !== options.itemSelector ||
       previous.manageTabIndex !== options.manageTabIndex ||
@@ -544,7 +563,7 @@ class RovingStore {
    */
   stamp(): void {
     if (!this.options.manageTabIndex || !this.container) return;
-    this.release(this.container);
+    this.release(this.container, this.options.itemSelector, true);
     const resolved = this.resolve();
     const stop =
       this.options.tabStop === 'none'
@@ -574,18 +593,28 @@ class RovingStore {
     }
   }
 
-  /** Hands the elements it stamped that now belong to a nested composite back to their author. */
-  private release(container: HTMLElement): void {
+  /**
+   * Hands elements it stamped inside `container` back to their author: the `tabindex` read at the
+   * first stamp is put back (or removed when there was none), a `data-roving-value` the hook added
+   * is removed (one React rendered stays), and the record is dropped, so a later stamp reads the
+   * element afresh. The generated values and the last focused item are kept: a container that
+   * attaches again starts where it was. `nestedOnly`: only the elements that now belong to a nested
+   * composite (every stamp); otherwise all of them (the container detaches or is replaced, or
+   * `manageTabIndex` turns off). Elements are found through `itemSelector`.
+   */
+  private release(container: HTMLElement, itemSelector: string, nestedOnly: boolean): void {
     let candidates: HTMLElement[];
     try {
-      candidates = Array.from(container.querySelectorAll<HTMLElement>(this.options.itemSelector));
+      candidates = Array.from(container.querySelectorAll<HTMLElement>(itemSelector));
     } catch {
       return;
     }
     for (const candidate of candidates) {
       const original = this.stamped.get(candidate);
       if (!original) continue;
-      if (!isInNestedComposite(candidate, container, this.options.roleComposites)) continue;
+      if (nestedOnly && !isInNestedComposite(candidate, container, this.options.roleComposites)) {
+        continue;
+      }
       this.stamped.delete(candidate);
       if (original.tabIndex === null) candidate.removeAttribute('tabindex');
       else candidate.setAttribute('tabindex', original.tabIndex);
@@ -702,6 +731,10 @@ function startsOnItem(item: ResolvedItem | null, target: EventTarget | null, con
  *   tracked with a MutationObserver, so an item that disables itself moves the tab stop without
  *   the owner re-rendering. With `manageTabIndex`, a control hidden by CSS counts as disabled and
  *   `input[type=hidden]` is no item.
+ * - **Hand-back** (`manageTabIndex`): a container that stops being one (its ref detaches or moves
+ *   to another element) or that stops managing tabIndex gives every element it stamped its own
+ *   `tabindex` back and removes the `data-roving-value` it added, so each control is its own Tab
+ *   stop again; attached again, it stamps again from the last focused item.
  * - **Tab stop** (`tabStop`): `'active'` — the enabled `activeValue` item, else the first enabled
  *   item; `'last-focused'` — the last focused enabled item, else the `'active'` rule. A nested
  *   composite or a control that uses the arrow keys itself holds it only when no other item can;
