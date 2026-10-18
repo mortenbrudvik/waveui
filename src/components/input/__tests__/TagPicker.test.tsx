@@ -1,6 +1,6 @@
 import * as React from 'react';
 import { afterEach, describe, it, expect, expectTypeOf, vi } from 'vitest';
-import { act, render, screen, waitFor, within } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { hydrateRoot } from 'react-dom/client';
 import { renderToString } from 'react-dom/server';
 import userEvent from '@testing-library/user-event';
@@ -21,6 +21,7 @@ import { FIELD_TEST_IDS, FIELD_TEST_TEXT, renderWithFieldContext } from '../../.
 import { DismissLayerProvider, useDismiss } from '../../../hooks/useDismiss';
 import { __getAnnouncerText } from '../../../hooks/useAnnounce';
 import type { ListboxItem } from '../../../hooks/useListbox';
+import { tagClassNames, tagPickerClassNames } from '../../../lib/classNames';
 
 const options = [
   { value: 'apple', label: 'Apple' },
@@ -84,6 +85,15 @@ describe('TagPicker', () => {
       { name: 'open with a selected tag', props: { defaultOpen: true, defaultValue: ['apple'] } },
       { name: 'disabled with tags', props: { disabled: true, defaultValue: ['apple', 'date'] } },
       { name: 'read-only with tags', props: { readOnly: true, defaultValue: ['apple', 'date'] } },
+      { name: 'clearable with tags', props: { clearable: true, defaultValue: ['apple', 'date'] } },
+      {
+        name: 'single line with tags',
+        props: { overflow: 'count', defaultValue: ['apple', 'banana', 'date'] },
+      },
+      {
+        name: 'allowCreate open with typed text',
+        props: { allowCreate: true, defaultOpen: true, defaultQuery: 'infra' },
+      },
     ],
   });
 
@@ -392,7 +402,6 @@ describe('TagPicker', () => {
       await user.click(combobox());
       await user.keyboard('{Backspace}{ArrowRight}');
       expect(screen.getByRole('button', { name: 'Remove Apple' })).toHaveFocus();
-      expect(screen.getByRole('button', { name: 'Remove Apple' })).toHaveClass('ms-0.5');
     });
 
     it('Escape on a tag returns focus to the input and is not seen by a parent layer', async () => {
@@ -1554,10 +1563,18 @@ describe('TagPicker', () => {
     const control = () => input().closest('[data-wave-tagpicker-control]') as HTMLElement;
     const tag = () => screen.getByRole('listitem');
 
+    /** A tag is a Tag one size smaller than the picker, filled and rounded (D54, D55). */
+    const expectTag = (size: string) => {
+      expect(tag()).toHaveClass(tagClassNames.root);
+      expect(tag()).toHaveAttribute('data-size', size);
+      expect(tag()).toHaveAttribute('data-appearance', 'filled');
+      expect(tag()).toHaveAttribute('data-shape', 'rounded');
+    };
+
     it('keeps the 0.7 classes at medium', () => {
       render(<TagPicker aria-label="Fruit" options={OPTIONS} defaultValue={['a']} />);
-      expect(control()).toHaveClass('gap-1', 'px-2', 'py-1.5', 'border-input');
-      expect(tag()).toHaveClass('px-2', 'py-0.5', 'text-body-1');
+      expect(control()).toHaveClass('gap-1', 'px-2', 'py-1.5', 'border-input', 'pe-8');
+      expectTag('extra-small');
       expect(input()).toHaveClass('py-0.5', 'text-body-1');
       const root = input().closest('[data-size]') as HTMLElement;
       expect(root).toHaveAttribute('data-size', 'medium');
@@ -1576,7 +1593,7 @@ describe('TagPicker', () => {
           />,
         );
         expect(control()).toHaveClass('gap-1', 'px-2', 'py-1.5', 'border-input');
-        expect(tag()).toHaveClass('px-2', 'py-0.5', 'text-body-1');
+        expectTag('extra-small');
         const root = input().closest('[data-size]') as HTMLElement;
         expect(root).toHaveAttribute('data-size', 'medium');
         expect(root).toHaveAttribute('data-appearance', 'outline');
@@ -1585,22 +1602,12 @@ describe('TagPicker', () => {
     });
 
     it.each([
-      [
-        'large',
-        ['gap-1.5', 'px-2.5', 'py-2'],
-        ['px-2', 'py-1', 'text-body-1'],
-        ['py-1', 'text-body-1'],
-      ],
-      [
-        'extra-large',
-        ['gap-1.5', 'px-3', 'py-2.5'],
-        ['px-2.5', 'py-1', 'text-body-2'],
-        ['py-1', 'text-body-2'],
-      ],
-    ] as const)('%s', (size, controlClasses, tagClasses, inputClasses) => {
+      ['large', ['gap-1.5', 'px-2.5', 'py-2'], 'small', ['py-1', 'text-body-1']],
+      ['extra-large', ['gap-1.5', 'px-3', 'py-2.5'], 'medium', ['py-1', 'text-body-2']],
+    ] as const)('%s', (size, controlClasses, tagSize, inputClasses) => {
       render(<TagPicker aria-label="Fruit" options={OPTIONS} defaultValue={['a']} size={size} />);
       expect(control()).toHaveClass(...controlClasses);
-      expect(tag()).toHaveClass(...tagClasses);
+      expectTag(tagSize);
       expect(input()).toHaveClass(...inputClasses);
     });
 
@@ -1698,14 +1705,554 @@ describe('TagPicker', () => {
       },
     );
 
-    it.each(['medium', 'large', 'extra-large'] as const)(
-      'keeps the remove button\'s 0.7 box and glyph at size="%s"',
-      (size) => {
+    it.each([
+      ['medium', ['size-4'], '10'],
+      ['large', ['size-4'], '12'],
+      ['extra-large', ['size-5'], '12'],
+    ] as const)(
+      'gives the remove button Tag\'s Dismiss box and glyph at size="%s"',
+      (size, box, glyph) => {
         render(<TagPicker aria-label="Fruit" options={OPTIONS} defaultValue={['a']} size={size} />);
         const remove = screen.getByRole('button', { name: 'Remove Apple' });
-        expect(remove).toHaveClass('ms-0.5', 'rounded-sm', 'p-0', 'bg-transparent');
-        expect(remove.querySelector('svg')).toHaveAttribute('width', '12');
+        expect(remove).toHaveClass(
+          tagClassNames.dismissButton,
+          tagPickerClassNames.removeButton,
+          'p-0',
+          'bg-transparent',
+          ...box,
+        );
+        expect(remove).not.toHaveClass('ms-0.5');
+        expect(remove).not.toHaveClass('rounded-sm');
+        expect(remove.querySelector('svg')).toHaveAttribute('width', glyph);
       },
     );
+  });
+  describe('Phase 6: Tag-based tags, the end buttons and the field (P6-04)', () => {
+    const removeButton = (label: string) => screen.getByRole('button', { name: `Remove ${label}` });
+    const control = () => combobox().closest<HTMLElement>('[data-wave-tagpicker-control]')!;
+    /** After the microtask a focus move runs in, focus never fell to the page. */
+    const settle = async () => {
+      await act(async () => {});
+      expect(document.activeElement).not.toBe(document.body);
+    };
+
+    describe('focus after a removal (D56)', () => {
+      it("removes a middle tag with Delete and focuses the next tag's remove button; the last tag hands focus to the input", async () => {
+        const user = userEvent.setup();
+        renderPicker({ defaultValue: ['apple', 'banana', 'cherry'] });
+        act(() => removeButton('Banana').focus());
+        await user.keyboard('{Delete}');
+        await settle();
+        expect(tags()).toEqual(['Apple', 'Cherry']);
+        expect(removeButton('Cherry')).toHaveFocus();
+        await user.keyboard('{Delete}');
+        await settle();
+        expect(tags()).toEqual(['Apple']);
+        expect(combobox()).toHaveFocus();
+      });
+
+      it('a pointer click on a remove button focuses the input, also on a middle tag', async () => {
+        const user = userEvent.setup();
+        renderPicker({ defaultValue: ['apple', 'banana', 'cherry'] });
+        await user.click(removeButton('Banana'));
+        await settle();
+        expect(tags()).toEqual(['Apple', 'Cherry']);
+        expect(combobox()).toHaveFocus();
+        act(() => removeButton('Apple').focus());
+        fireEvent.click(removeButton('Apple'), { detail: 1 });
+        await settle();
+        expect(combobox()).toHaveFocus();
+      });
+
+      it('focuses the next tag when a controlled value drops a focused middle tag', async () => {
+        const { rerender } = renderPicker({ value: ['apple', 'banana', 'cherry'] });
+        act(() => removeButton('Banana').focus());
+        rerender(<TagPicker aria-label="Fruits" options={options} value={['apple', 'cherry']} />);
+        await settle();
+        expect(removeButton('Cherry')).toHaveFocus();
+      });
+
+      it('moves no focus when a controlled parent keeps the tag after a keyboard removal', async () => {
+        const user = userEvent.setup();
+        const onValueChange = vi.fn();
+        renderPicker({ value: ['apple', 'banana'], onValueChange });
+        act(() => removeButton('Apple').focus());
+        await user.keyboard('{Delete}');
+        await settle();
+        expect(onValueChange).toHaveBeenCalledWith(['banana']);
+        expect(tags()).toEqual(['Apple', 'Banana']);
+        expect(removeButton('Apple')).toHaveFocus();
+      });
+
+      it('keeps focus on a remove button while the picker is disabled under it, then skips it', async () => {
+        const user = userEvent.setup();
+        const onValueChange = vi.fn();
+        const ui = (disabled: boolean) => (
+          <>
+            <TagPicker
+              aria-label="Fruits"
+              options={options}
+              defaultValue={['apple', 'banana']}
+              disabled={disabled}
+              onValueChange={onValueChange}
+            />
+            <button type="button">After</button>
+          </>
+        );
+        const { rerender } = render(ui(false));
+        act(() => removeButton('Apple').focus());
+        rerender(ui(true));
+        await settle();
+        const held = removeButton('Apple');
+        expect(held).toHaveFocus();
+        expect(held).toHaveAttribute('aria-disabled', 'true');
+        expect(held).not.toBeDisabled();
+        expect(control()).toHaveClass('opacity-50', 'has-focus-visible:opacity-100');
+        await user.keyboard('{Enter}{Delete}');
+        expect(onValueChange).not.toHaveBeenCalled();
+        await user.tab();
+        expect(screen.getByRole('button', { name: 'After' })).toHaveFocus();
+        expect(removeButton('Apple')).toBeDisabled();
+        await user.tab({ shift: true });
+        expect(screen.getByRole('button', { name: 'After' })).not.toHaveFocus();
+        expect(removeButton('Apple')).not.toHaveFocus();
+      });
+
+      it('calls onValueChange once per removal and onOptionCreate once per creation in StrictMode', async () => {
+        const user = userEvent.setup();
+        const onValueChange = vi.fn();
+        const onOptionCreate = vi.fn();
+        render(
+          <React.StrictMode>
+            <TagPicker
+              aria-label="Fruits"
+              options={options}
+              defaultValue={['apple', 'banana']}
+              allowCreate
+              onValueChange={onValueChange}
+              onOptionCreate={onOptionCreate}
+            />
+          </React.StrictMode>,
+        );
+        await user.click(removeButton('Apple'));
+        expect(onValueChange).toHaveBeenCalledTimes(1);
+        act(() => removeButton('Banana').focus());
+        await user.keyboard('{Backspace}');
+        expect(onValueChange).toHaveBeenCalledTimes(2);
+        await user.type(combobox(), 'kiwi{Enter}');
+        expect(onOptionCreate).toHaveBeenCalledTimes(1);
+        expect(onValueChange).toHaveBeenCalledTimes(3);
+        expect(onValueChange).toHaveBeenLastCalledWith(['kiwi']);
+      });
+    });
+
+    it('dims the disabled field once', () => {
+      renderPicker({ disabled: true, clearable: true, defaultValue: ['apple'] });
+      expect(control()).toHaveClass('opacity-50');
+      expect(screen.getByRole('listitem')).not.toHaveClass('opacity-50');
+      expect(screen.getByRole('button', { name: 'Show options' })).not.toHaveClass(
+        'disabled:opacity-50',
+      );
+      const clear = screen.getByRole('button', { name: 'Clear selection' });
+      expect(clear.className).not.toMatch(/opacity/);
+      expect(combobox().className).not.toMatch(/opacity/);
+      expect(removeButton('Apple').className).not.toMatch(/(^|\s)disabled:opacity-50/);
+    });
+
+    describe('the previous arrow and the field press (D57, D66)', () => {
+      it('the previous arrow at the start of the text focuses the last tag; not with text before the caret, a selection or a modifier', async () => {
+        const user = userEvent.setup();
+        renderPicker({ defaultValue: ['apple', 'banana'] });
+        await user.click(combobox());
+        await user.keyboard('{ArrowLeft}');
+        expect(removeButton('Banana')).toHaveFocus();
+        await user.keyboard('{ArrowRight}');
+        expect(combobox()).toHaveFocus();
+        await user.keyboard('{Shift>}{ArrowLeft}{/Shift}');
+        expect(combobox()).toHaveFocus();
+        await user.keyboard('ab{ArrowLeft}');
+        expect(combobox()).toHaveFocus();
+        act(() => (combobox() as HTMLInputElement).setSelectionRange(0, 2));
+        await user.keyboard('{ArrowLeft}');
+        expect(combobox()).toHaveFocus();
+      });
+
+      it('mirrors the previous arrow in RTL', async () => {
+        const user = userEvent.setup();
+        renderWithProviders(
+          <TagPicker aria-label="Fruits" options={options} defaultValue={['apple', 'banana']} />,
+          { dir: 'rtl' },
+        );
+        await user.click(combobox());
+        await user.keyboard('{ArrowLeft}');
+        expect(combobox()).toHaveFocus();
+        await user.keyboard('{ArrowRight}');
+        expect(removeButton('Banana')).toHaveFocus();
+      });
+
+      it("a press on the control's empty area toggles the list and keeps focus in the input; a press on a tag's text does the same; read-only only focuses; disabled does nothing", async () => {
+        const onOpenChange = vi.fn();
+        const { unmount } = renderPicker({ defaultValue: ['apple'], onOpenChange });
+        const press = (target: Element) => {
+          const allowed = fireEvent.mouseDown(target, { button: 0 });
+          fireEvent.click(target);
+          return allowed;
+        };
+        expect(press(control())).toBe(false);
+        expect(combobox()).toHaveFocus();
+        expect(combobox()).toHaveAttribute('aria-expanded', 'true');
+        expect(press(control())).toBe(false);
+        expect(combobox()).toHaveAttribute('aria-expanded', 'false');
+        const text = within(screen.getByRole('listitem')).getByText('Apple');
+        expect(press(text)).toBe(false);
+        expect(combobox()).toHaveAttribute('aria-expanded', 'true');
+        expect(combobox()).toHaveFocus();
+        unmount();
+
+        const readOnly = renderPicker({ readOnly: true, defaultValue: ['apple'], onOpenChange });
+        onOpenChange.mockClear();
+        expect(press(control())).toBe(false);
+        expect(combobox()).toHaveFocus();
+        expect(onOpenChange).not.toHaveBeenCalled();
+        readOnly.unmount();
+
+        renderPicker({ disabled: true, defaultValue: ['apple'], onOpenChange });
+        expect(press(control())).toBe(true);
+        expect(combobox()).not.toHaveFocus();
+        expect(onOpenChange).not.toHaveBeenCalled();
+      });
+
+      it('a click on the input opens the list and never closes it', async () => {
+        const user = userEvent.setup();
+        renderPicker();
+        await user.click(combobox());
+        expect(combobox()).toHaveAttribute('aria-expanded', 'true');
+        await user.click(combobox());
+        expect(combobox()).toHaveAttribute('aria-expanded', 'true');
+      });
+    });
+
+    describe('filter and the exact match (D58, D60)', () => {
+      it('the default filter matches textValue before label', async () => {
+        const user = userEvent.setup();
+        render(
+          <TagPicker aria-label="Fruits">
+            <TagPicker.Control />
+            <TagPicker.List>
+              <TagPicker.Option value="ny" textValue="Big Apple">
+                New York
+              </TagPicker.Option>
+              <TagPicker.Option value="la">Los Angeles</TagPicker.Option>
+            </TagPicker.List>
+          </TagPicker>,
+        );
+        await user.type(combobox(), 'big');
+        expect(screen.getAllByRole('option').map((o) => o.textContent)).toEqual(['New York']);
+        await user.clear(combobox());
+        await user.type(combobox(), 'york');
+        expect(screen.queryAllByRole('option')).toEqual([]);
+      });
+
+      const fruits = [
+        { value: 'pineapple', label: 'Pineapple' },
+        { value: 'apple', label: 'Apple' },
+      ];
+
+      it('makes the option whose label equals the typed text active (Pineapple, Apple → apple)', async () => {
+        const user = userEvent.setup();
+        const onValueChange = vi.fn();
+        render(<TagPicker aria-label="Fruits" options={fruits} onValueChange={onValueChange} />);
+        await user.type(combobox(), 'appl');
+        expect(activeOption()).toHaveTextContent('Pineapple');
+        await user.type(combobox(), 'e');
+        expect(activeOption()).toHaveTextContent(/^Apple$/);
+        await user.keyboard('{Enter}');
+        expect(onValueChange).toHaveBeenCalledWith(['apple']);
+      });
+
+      it('ranks a pasted text too', async () => {
+        const user = userEvent.setup();
+        render(<TagPicker aria-label="Fruits" options={fruits} />);
+        await user.click(combobox());
+        await user.paste('APPLE');
+        expect(activeOption()).toHaveTextContent(/^Apple$/);
+      });
+
+      it('does not re-rank a controlled query set by the parent', () => {
+        const { rerender } = render(
+          <TagPicker aria-label="Fruits" options={fruits} query="" open />,
+        );
+        rerender(<TagPicker aria-label="Fruits" options={fruits} query="apple" open />);
+        expect(activeOption()).toHaveTextContent('Pineapple');
+      });
+    });
+
+    describe('the expand button (D61)', () => {
+      const expand = () => screen.getByRole('button', { name: 'Show options' });
+
+      it('shows a chevron named Show options, not a Tab stop, with aria-expanded and aria-controls only while expanded', async () => {
+        const user = userEvent.setup();
+        renderPicker();
+        expect(expand()).toHaveAttribute('tabindex', '-1');
+        expect(expand()).toHaveAttribute('type', 'button');
+        expect(expand()).toHaveAttribute('aria-expanded', 'false');
+        expect(expand()).not.toHaveAttribute('aria-controls');
+        expect(expand().querySelector('svg')).not.toBeNull();
+        await user.click(combobox());
+        expect(expand()).toHaveAttribute('aria-expanded', 'true');
+        expect(expand()).toHaveAttribute('aria-controls', screen.getByRole('listbox').id);
+      });
+
+      it('toggles the list on click and keeps focus in the input', async () => {
+        const user = userEvent.setup();
+        renderPicker();
+        await user.click(expand());
+        expect(combobox()).toHaveAttribute('aria-expanded', 'true');
+        expect(combobox()).toHaveFocus();
+        await user.click(expand());
+        expect(combobox()).toHaveAttribute('aria-expanded', 'false');
+        expect(combobox()).toHaveFocus();
+      });
+
+      it('is disabled while disabled or read-only', () => {
+        const { unmount } = renderPicker({ disabled: true });
+        expect(expand()).toBeDisabled();
+        unmount();
+        renderPicker({ readOnly: true });
+        expect(expand()).toBeDisabled();
+      });
+
+      it.each([null, undefined])('keeps the chevron for %s', (expandIcon) => {
+        renderPicker({ expandIcon });
+        expect(expand().querySelector('svg')).not.toBeNull();
+        expect(control()).toHaveClass('pe-8');
+      });
+
+      it.each([false, '', [], <></>])('hides the button and its padding for %s', (expandIcon) => {
+        renderPicker({ expandIcon });
+        expect(screen.queryByRole('button', { name: 'Show options' })).toBeNull();
+        expect(control().className).not.toMatch(/(^|\s)pe-/);
+      });
+
+      it('renders a custom glyph', () => {
+        renderPicker({ expandIcon: <svg data-testid="own-glyph" /> });
+        expect(within(expand()).getByTestId('own-glyph').parentElement).toHaveClass(
+          tagPickerClassNames.expandIcon,
+        );
+      });
+
+      it('unwraps a button glyph and warns TagPicker:expandIcon-button', () => {
+        const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+        renderPicker({ expandIcon: <button type="button">v</button> });
+        expect(expand().querySelector('button')).toBeNull();
+        expect(expand()).toHaveTextContent('v');
+        expect(warn.mock.calls).toEqual([
+          [
+            '[WaveUI] TagPicker: `expandIcon` received a button element; its children render as the glyph of the built-in expand button and its props were dropped (buttons cannot be nested). Pass icon content instead, e.g. `expandIcon={<MyIcon />}`.',
+          ],
+        ]);
+      });
+
+      it("unwraps a button glyph of TagPicker.Control's expandIcon and warns TagPicker.Control:expandIcon-button", () => {
+        const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+        render(
+          <TagPicker aria-label="Fruits" options={options}>
+            <TagPicker.Control expandIcon={<button type="button">v</button>} />
+          </TagPicker>,
+        );
+        expect(expand().querySelector('button')).toBeNull();
+        expect(warn.mock.calls).toEqual([
+          [
+            '[WaveUI] TagPicker.Control: `expandIcon` received a button element; its children render as the glyph of the built-in expand button and its props were dropped (buttons cannot be nested). Pass icon content instead, e.g. `expandIcon={<MyIcon />}`.',
+          ],
+        ]);
+      });
+
+      it("TagPicker.Control's expandIcon wins over the root's", () => {
+        const { unmount } = render(
+          <TagPicker aria-label="Fruits" options={options} expandIcon={<svg data-testid="root" />}>
+            <TagPicker.Control expandIcon={<svg data-testid="control" />} />
+          </TagPicker>,
+        );
+        expect(screen.getByTestId('control')).toBeInTheDocument();
+        expect(screen.queryByTestId('root')).toBeNull();
+        unmount();
+        render(
+          <TagPicker aria-label="Fruits" options={options} expandIcon={<svg data-testid="root" />}>
+            <TagPicker.Control expandIcon={false} />
+          </TagPicker>,
+        );
+        expect(screen.queryByRole('button', { name: 'Show options' })).toBeNull();
+      });
+
+      it.each([
+        ['medium', 'top-1.5', ['h-6', 'w-6'], '12', 'pe-8'],
+        ['large', 'top-1.5', ['size-8'], '16', 'pe-10'],
+        ['extra-large', 'top-2.25', ['size-8'], '16', 'pe-10'],
+      ] as const)(
+        'places the end buttons on the first row at size=%s',
+        (size, top, box, glyph, padding) => {
+          renderPicker({ size });
+          expect(expand()).toHaveClass('absolute', 'end-1', top, ...box);
+          expect(expand().querySelector('svg')).toHaveAttribute('width', glyph);
+          expect(control()).toHaveClass('relative', padding);
+        },
+      );
+    });
+
+    describe('the clear button (D61)', () => {
+      const clear = () => screen.getByRole('button', { name: 'Clear selection' });
+      const queryClear = () => screen.queryByRole('button', { name: 'Clear selection' });
+
+      it('renders no clear button without tags, while read-only, or without clearable', () => {
+        const a = renderPicker({ clearable: true });
+        expect(queryClear()).toBeNull();
+        a.unmount();
+        const b = renderPicker({ clearable: true, readOnly: true, defaultValue: ['apple'] });
+        expect(queryClear()).toBeNull();
+        b.unmount();
+        renderPicker({ defaultValue: ['apple'] });
+        expect(queryClear()).toBeNull();
+      });
+
+      it('is a Tab stop after the input, named Clear selection', async () => {
+        const user = userEvent.setup();
+        renderPicker({ clearable: true, defaultValue: ['apple'] });
+        act(() => combobox().focus());
+        await user.tab();
+        expect(clear()).toHaveFocus();
+        expect(clear()).toHaveAttribute('type', 'button');
+        expect(clear()).toHaveClass('end-7', 'top-1.5');
+        expect(control()).toHaveClass('pe-14');
+      });
+
+      it('clears every tag once, the query, closes the list and focuses the input, announcing nothing', async () => {
+        const user = userEvent.setup();
+        const onValueChange = vi.fn();
+        const onQueryChange = vi.fn();
+        renderPicker({
+          clearable: true,
+          defaultValue: ['apple', 'banana'],
+          onValueChange,
+          onQueryChange,
+        });
+        await user.type(combobox(), 'ch');
+        await waitFor(() => expect(__getAnnouncerText()).toBe(''));
+        onQueryChange.mockClear();
+        await user.click(clear());
+        expect(onValueChange).toHaveBeenCalledTimes(1);
+        expect(onValueChange).toHaveBeenCalledWith([]);
+        expect(onQueryChange).toHaveBeenCalledWith('');
+        expect(combobox()).toHaveValue('');
+        expect(combobox()).toHaveAttribute('aria-expanded', 'false');
+        expect(combobox()).toHaveFocus();
+        expect(tags()).toEqual([]);
+        await act(async () => {});
+        expect(__getAnnouncerText()).toBe('');
+      });
+
+      it('is natively disabled while disabled', () => {
+        renderPicker({ clearable: true, disabled: true, defaultValue: ['apple'] });
+        expect(clear()).toBeDisabled();
+      });
+
+      it('labels.clear names it', () => {
+        renderPicker({ clearable: true, defaultValue: ['apple'], labels: { clear: 'Tøm' } });
+        expect(screen.getByRole('button', { name: 'Tøm' })).toBeInTheDocument();
+      });
+
+      it('readOnly turning on, or a controlled parent emptying the value, while the clear button has focus moves focus to the input', async () => {
+        const ui = (props: Partial<TagPickerProps>) => (
+          <TagPicker aria-label="Fruits" options={options} clearable {...props} />
+        );
+        const { rerender } = render(ui({ value: ['apple'] }));
+        act(() => clear().focus());
+        rerender(ui({ value: ['apple'], readOnly: true }));
+        await settle();
+        expect(combobox()).toHaveFocus();
+        rerender(ui({ value: ['apple'] }));
+        act(() => clear().focus());
+        rerender(ui({ value: [] }));
+        await settle();
+        expect(combobox()).toHaveFocus();
+      });
+
+      it('keeps focus on the clear button while the picker is disabled under it: aria-disabled and data-disabled-focusable, Enter and a click do nothing, then Tab leaves it and it is natively disabled', async () => {
+        const user = userEvent.setup();
+        const onValueChange = vi.fn();
+        const ui = (disabled: boolean) => (
+          <>
+            <TagPicker
+              aria-label="Fruits"
+              options={options}
+              clearable
+              defaultValue={['apple']}
+              disabled={disabled}
+              onValueChange={onValueChange}
+            />
+            <button type="button">After</button>
+          </>
+        );
+        const { rerender } = render(ui(false));
+        act(() => clear().focus());
+        rerender(ui(true));
+        await settle();
+        expect(clear()).toHaveFocus();
+        expect(clear()).toHaveAttribute('aria-disabled', 'true');
+        expect(clear()).toHaveAttribute('data-disabled-focusable', '');
+        expect(control()).toHaveClass('has-focus-visible:opacity-100');
+        await user.keyboard('{Enter} ');
+        fireEvent.click(clear(), { detail: 1 });
+        expect(onValueChange).not.toHaveBeenCalled();
+        expect(tags()).toEqual(['Apple']);
+        await user.tab();
+        expect(screen.getByRole('button', { name: 'After' })).toHaveFocus();
+        expect(clear()).toBeDisabled();
+      });
+
+      it('focuses the TagPicker.Button trigger after a clear', async () => {
+        const user = userEvent.setup();
+        render(
+          <TagPicker aria-label="Fruits" options={options} clearable defaultValue={['apple']}>
+            <TagPicker.Control>
+              <TagPicker.Group />
+              <TagPicker.Button />
+            </TagPicker.Control>
+          </TagPicker>,
+        );
+        await user.click(clear());
+        expect(combobox()).toHaveFocus();
+        expect(combobox().tagName).toBe('BUTTON');
+        expect(tags()).toEqual([]);
+      });
+    });
+
+    it("renders data-overflow='wrap' by default", () => {
+      renderPicker();
+      expect(control().parentElement).toHaveAttribute('data-overflow', 'wrap');
+      expect(control().parentElement).not.toHaveAttribute('data-collapsed');
+    });
+
+    it('keeps the default look pinned (D68, Phase 4 rule 14)', () => {
+      renderPicker({ defaultValue: ['apple'] });
+      expect(control()).toHaveClass(
+        'relative',
+        'flex',
+        'flex-wrap',
+        'items-center',
+        'gap-1',
+        'px-2',
+        'py-1.5',
+        'pe-8',
+        'border-input',
+      );
+      expect(screen.getByRole('list', { name: 'Selected' })).toHaveClass(
+        'flex',
+        'flex-wrap',
+        'items-center',
+        'gap-1',
+      );
+      expect(screen.getByRole('listitem')).toHaveClass('rounded', 'min-h-5', 'bg-muted');
+    });
   });
 });

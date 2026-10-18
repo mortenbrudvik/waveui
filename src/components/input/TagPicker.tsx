@@ -1,784 +1,121 @@
-import * as React from 'react';
-import { cn } from '../../lib/cn';
-import { joinIds } from '../../lib/aria';
-import { tagPickerClassNames } from '../../lib/classNames';
-import { composeEventHandlers } from '../../lib/composeEventHandlers';
-import { warnDeprecated, warnOnce } from '../../lib/dev';
-import { getArrowIntent, getDirection } from '../../lib/direction';
-import { DismissIcon } from '../../lib/icons';
+import { TagPickerRoot } from './TagPicker.root';
 import {
-  focusRing,
-  inputAppearanceClasses,
-  inputFocusWithin,
-  inputInvalidWithin,
-} from '../../lib/styles';
-import type { InputAppearance, Size } from '../../lib/types';
-import { useAnnounce } from '../../hooks/useAnnounce';
-import { useControllable } from '../../hooks/useControllable';
-import { useFieldContext, useFieldControl } from '../../hooks/useFieldControl';
-import { useFormReset } from '../../hooks/useFormReset';
-import { useId } from '../../hooks/useId';
-import { useIsClient } from '../../hooks/useIsClient';
-import { useListbox, type ListboxItem } from '../../hooks/useListbox';
-import { useMergedRefs } from '../../hooks/useMergedRefs';
-import { usePreserveFocus } from '../../hooks/usePreserveFocus';
-import { HiddenInput } from '../internal/HiddenInput';
-import { useInputLook } from './inputLook';
-import { isInvalidLook } from './Input';
-import { ListboxSurface, Option, useListboxPopup } from './Option';
-import { announceToggle } from './pickerLabels';
-import { EMPTY_VALUES, sameValues } from './pickerValues';
-import type { RoutedHandlers } from './routedHandlers';
+  TagPickerButton,
+  TagPickerControl,
+  TagPickerGroup,
+  TagPickerInput,
+  TagPickerList,
+  TagPickerOptionGroup,
+} from './TagPicker.parts';
+import { TagPickerOption } from './TagPicker.option';
 
-/** Represents a single selectable tag option. */
-export interface TagPickerOption {
-  /** Unique identifier for the option. */
-  value: string;
-  /** Display label for the option. */
-  label: string;
-}
+export type { TagPickerLabels, TagPickerProps, TagPickerSize } from './TagPicker.root';
+export type {
+  TagPickerButtonProps,
+  TagPickerControlProps,
+  TagPickerGroupProps,
+  TagPickerInputProps,
+  TagPickerListProps,
+} from './TagPicker.parts';
+export type { TagPickerOptionProps } from './TagPicker.option';
 
 /**
- * The TagPicker's built-in names, descriptions and announcements, for localization. Each member is
- * optional and falls back to its English default.
- */
-export interface TagPickerLabels {
-  /** Name of a tag's remove button.
-   * @default (label) => `Remove ${label}`
-   */
-  remove?: (label: string) => string;
-  /** Name of the list of selected tags.
-   * @default 'Selected'
-   */
-  selected?: string;
-  /** Description of the input that sums up the selected tags (their labels, in order).
-   * @default (labels) => `Selected: ${labels.join(', ')}`
-   */
-  summary?: (labels: string[]) => string;
-  /** Announcement when a tag is added; `count` is the number of tags after the change.
-   * @default (label, count) => `${label} added, ${count} selected`
-   */
-  added?: (label: string, count: number) => string;
-  /** Announcement when a tag is removed; `count` is the number of tags after the change.
-   * @default (label, count) => `${label} removed, ${count} selected`
-   */
-  removed?: (label: string, count: number) => string;
-  /** Status text (announced, and shown in the popup) when the typed text matches no option.
-   * @default 'No matches'
-   */
-  noMatches?: string;
-}
-
-const defaultRemoveLabel = (label: string) => `Remove ${label}`;
-const defaultSummaryLabel = (labels: string[]) => `Selected: ${labels.join(', ')}`;
-
-/**
- * How the picker came to be locked (`disabled` or `readOnly`): not at all, by a change while
- * mounted, or since it mounted.
- */
-type LockState = 'unlocked' | 'locked' | 'mounted-locked';
-
-/** The default `filter` (0.7's match): a case-insensitive substring of the option's label. */
-function matchesText(item: ListboxItem, text: string): boolean {
-  return item.label.toLowerCase().includes(text.toLowerCase());
-}
-
-/** Properties for the TagPicker component. */
-export interface TagPickerProps extends Omit<
-  React.HTMLAttributes<HTMLDivElement>,
-  'onChange' | 'defaultValue' | RoutedHandlers
-> {
-  /** Available options to choose from. */
-  options: readonly TagPickerOption[];
-  /** Controlled array of selected option values (`[]` for none). */
-  value?: readonly string[];
-  /**
-   * Initial selected values for uncontrolled usage; a form reset restores them.
-   * @default []
-   */
-  defaultValue?: readonly string[];
-  /**
-   * Called with the new selection when it changes: a tag is added or removed, or a form reset
-   * restores different tags.
-   */
-  onValueChange?: (value: string[]) => void;
-  /**
-   * Called with the new selection when it changes: a tag is added or removed, or a form reset
-   * restores different tags.
-   * @deprecated Use `onValueChange`.
-   */
-  onChange?: (value: string[]) => void;
-  /**
-   * Controlled open state of the option list. The list renders only in the browser: an open
-   * picker is closed in the server HTML and opens once it has hydrated.
-   */
-  open?: boolean;
-  /**
-   * Initial open state for uncontrolled usage. A picker that starts disabled or read-only starts
-   * closed. The list renders only in the browser: it is closed in the server HTML and opens once
-   * the picker has hydrated.
-   * @default false
-   */
-  defaultOpen?: boolean;
-  /** Called when the option list opens or closes. */
-  onOpenChange?: (open: boolean) => void;
-  /**
-   * Placeholder text shown when no tags are selected.
-   * @default 'Select...'
-   */
-  placeholder?: string;
-  /**
-   * Whether an option matches the typed text (the query). Called with every listed option (its
-   * `value` and `label`; selected options are not listed) and the text whenever the text is not
-   * empty; an option it returns `false` for is filtered out. It may keep options that do not
-   * contain the text: `filter={() => true}` with `query` and `onQueryChange` leaves the matching
-   * to you (a server-side search that replaces `options`), and a filter that always keeps an
-   * option of your own gives a "Create …" entry. With a server-side search, keep the selected
-   * options in `options` (they are never listed): a selected value without an option shows its raw
-   * value as the tag label, with a development warning (the "Async search" story does this).
-   * @default a case-insensitive substring match on the option's `label`
-   */
-  filter?: (option: ListboxItem, query: string) => boolean;
-  /**
-   * Controlled query: the text typed since the last tag was added, which filters the options and
-   * shows in the input (hidden while `disabled` or `readOnly`).
-   */
-  query?: string;
-  /**
-   * Initial query for uncontrolled usage. A TagPicker that starts disabled or read-only starts
-   * without it (as it starts closed).
-   * @default ''
-   */
-  defaultQuery?: string;
-  /**
-   * Called with the new query when it changes: as the user types, and with `''` when it resets (a
-   * tag added, Escape on the closed list, a form reset, or `disabled` or `readOnly` turned on
-   * while text is typed). A blur or a close keeps the text. A TagPicker that mounts disabled or
-   * read-only reports nothing: it keeps a controlled query, which shows once it unlocks.
-   */
-  onQueryChange?: (query: string) => void;
-  /**
-   * Whether the tag picker is disabled: nothing can be added or removed, and the remove buttons
-   * leave the tab order.
-   * @default false
-   */
-  disabled?: boolean;
-  /**
-   * Size of the tags and the field: `medium` (the 0.7 look), `large` or `extra-large` (Fluent's
-   * union; TagPicker has no `small`). Default: the surrounding Field's `size`, else `WaveProvider
-   * inputDefaults.size`, else `'medium'`; a Field or provider `small` gives `'medium'` too. The
-   * option list keeps its size.
-   */
-  size?: TagPickerSize;
-  /**
-   * Look of the field: `outline` (a full border), `underline` (a bottom stroke only),
-   * `filled-darker` or `filled-lighter` (a fill without a visible stroke: give the field a visible
-   * label). Default: `WaveProvider inputDefaults.appearance`, else `'outline'`.
-   */
-  appearance?: InputAppearance;
-  /** Name of the values in form submissions (one hidden input per value). */
-  name?: string;
-  /** Id of the form the values belong to, when the TagPicker is outside it. */
-  form?: string;
-  /**
-   * At least one tag is required to submit the form (native constraint validation). Like a native
-   * readonly input, a `readOnly` TagPicker does not block submission.
-   */
-  required?: boolean;
-  /**
-   * The `autocomplete` attribute of the `<input role="combobox">`. Browser autofill is off unless
-   * you set it (for example `'on'`).
-   * @default 'off'
-   */
-  autoComplete?: string;
-  /** The maximum length of the typed text (`maxlength` of the `<input role="combobox">`). */
-  maxLength?: number;
-  /**
-   * The selection cannot be changed: the input is read-only, the tags have no remove buttons, and
-   * the option list neither opens (click, keyboard, a controlled `open`) nor adds tags; Escape is
-   * left to the page. Turning it (or `disabled`) on while the list is open closes it
-   * (`onOpenChange(false)`); a focused remove button hands focus to the input.
-   */
-  readOnly?: boolean;
-  /**
-   * Names of the remove buttons and the tag list, the summary that describes the input, the
-   * announcements and the "No matches" text, for localization. Unset members keep their English
-   * defaults.
-   */
-  labels?: TagPickerLabels;
-  /** Called when the `<input role="combobox">` receives focus (the root keeps other handlers). */
-  onFocus?: React.FocusEventHandler<HTMLInputElement>;
-  /** Called when the `<input role="combobox">` loses focus. */
-  onBlur?: React.FocusEventHandler<HTMLInputElement>;
-  /**
-   * Called on a key press in the `<input role="combobox">`, before the built-in listbox and tag
-   * keys; `event.preventDefault()` skips them.
-   */
-  onKeyDown?: React.KeyboardEventHandler<HTMLInputElement>;
-  /** Called when a key is released in the `<input role="combobox">`. */
-  onKeyUp?: React.KeyboardEventHandler<HTMLInputElement>;
-  /** Ref to the `<input role="combobox">` (the focusable element). */
-  controlRef?: React.Ref<HTMLInputElement>;
-  /** Ref to the root `<div>`. */
-  ref?: React.Ref<HTMLDivElement>;
-}
-
-/** Sizes of TagPicker (Fluent's): medium (the 0.7 look), large and extra-large. */
-export type TagPickerSize = Extract<Size, 'medium' | 'large' | 'extra-large'>;
-
-const TAG_PICKER_SIZES: readonly TagPickerSize[] = ['medium', 'large', 'extra-large'];
-
-/** Per-size classes of the control, the tags and the input (medium is the 0.7 look). */
-const TAG_PICKER_SIZE: Readonly<
-  Record<TagPickerSize, { control: string; tag: string; input: string }>
-> = {
-  medium: {
-    control: 'gap-1 px-2 py-1.5',
-    tag: 'px-2 py-0.5 text-body-1',
-    input: 'py-0.5 text-body-1',
-  },
-  large: {
-    control: 'gap-1.5 px-2.5 py-2',
-    tag: 'px-2 py-1 text-body-1',
-    input: 'py-1 text-body-1',
-  },
-  'extra-large': {
-    control: 'gap-1.5 px-3 py-2.5',
-    tag: 'px-2.5 py-1 text-body-2',
-    input: 'py-1 text-body-2',
-  },
-};
-
-interface TagRemoveButtonProps {
-  /** The accessible name of the button. */
-  label: string;
-  disabled: boolean;
-  onClick: () => void;
-  onKeyDown: React.KeyboardEventHandler<HTMLButtonElement>;
-  /** The element that receives focus when this button unmounts while focused (the input). */
-  getFallback: () => HTMLElement | null;
-}
-
-/**
- * A tag's remove button. When it unmounts while focused (`readOnly` turned on, or a controlled
- * value dropped its tag), focus moves to the input instead of falling to `<body>` (C-DISABLED).
- */
-function TagRemoveButton({
-  label,
-  disabled,
-  onClick,
-  onKeyDown,
-  getFallback,
-}: TagRemoveButtonProps) {
-  const ref = React.useRef<HTMLButtonElement | null>(null);
-  usePreserveFocus(ref, getFallback);
-  return (
-    <button
-      ref={ref}
-      type="button"
-      data-wave-tagpicker-remove=""
-      disabled={disabled}
-      aria-label={label}
-      className={cn(
-        tagPickerClassNames.removeButton,
-        // Padding and background set here (C-NATIVE), not left to an app-wide rule.
-        'ms-0.5 inline-flex rounded-sm bg-transparent p-0 text-muted-foreground not-disabled:not-aria-disabled:hover:text-foreground disabled:cursor-not-allowed',
-        focusRing,
-      )}
-      onClick={onClick}
-      onKeyDown={onKeyDown}
-    >
-      <DismissIcon size={12} />
-    </button>
-  );
-}
-
-/**
- * A multi-select combobox that shows the selected values as removable tags. Typing filters the
- * options and makes the first match active; ArrowDown/ArrowUp move the highlight
- * (`aria-activedescendant`), Enter adds the highlighted option and keeps the list open (with
- * nothing highlighted — no typed text, or text that matches no option — Enter is left to the
- * surrounding form), Escape closes the list (and then clears the typed text). Backspace in the
- * empty input moves focus to the last tag; Backspace or Delete there removes it. Additions and
- * removals are announced ("Cherry removed, 2 selected"), and so is "No matches" for text that
- * matches no option. `filter` replaces the match (it may keep options that do not contain the
- * text, for a server-side search or a "Create …" entry), and `query`/`defaultQuery`/
- * `onQueryChange` control the typed text, which resets to `''` when a tag is added, on Escape and
- * on a form reset, and stays on a blur.
+ * A multi-select combobox that shows the selected values as removable tags.
  *
- * The tags form a list named "Selected"; the input is described by a summary of the selected
- * labels ("Selected: Apple, Banana"). These built-in texts are English; `labels` localizes them.
- * The `<input>` receives `id`, `aria-label`, `aria-labelledby`, `aria-describedby`,
- * `aria-invalid`, `aria-required`, `aria-errormessage`, `aria-details`, `tabIndex`, `autoFocus`,
- * `onFocus`/`onBlur`/`onKeyDown`/`onKeyUp` and the text input attributes `autoComplete`,
- * `autoCapitalize`, `autoCorrect`, `maxLength`, `inputMode`, `spellCheck` and `enterKeyHint`.
- * `ref`, `className`, `style`, other `aria-*` attributes and the remaining props stay on the root
- * `<div>`. Inside a `Field` the input is labelled and described by it. The tag area shows the
- * error look whenever the input ends up `aria-invalid` (its own `aria-invalid` or a `Field`
- * error). With `name`/`required` the values take part in form submission, validation and reset.
- * Selected values without a matching option are shown with their raw value. The open list renders
- * only in the browser: an open list (`defaultOpen`, `open`) is closed in the server HTML and opens
- * once the picker has hydrated.
+ * - **Two forms.** The array form, `<TagPicker options={…} />`, is the parts with their defaults:
+ *   `TagPicker.Control` (holding `TagPicker.Group` and `TagPicker.Input`) and `TagPicker.List`.
+ *   The parts form replaces only the part you need: your own Tags in `TagPicker.Group` (an
+ *   Avatar in each), rich `TagPicker.Option`s in `TagPicker.List`, or `TagPicker.Button`, a
+ *   select-only trigger, in place of the Input. Render `TagPicker.Control` and `TagPicker.List`
+ *   directly inside TagPicker (a Fragment is fine); without a List the default list is added.
+ *   `options` names the values in both forms (`media` and `secondaryContent` show in the default
+ *   options, `media` in the default tags too); with a List that has children, its options are
+ *   the options, and the options of selected values stay rendered (TagPicker hides them).
+ * - **Keyboard.** Typing filters the options (`filter`, by default a case-insensitive match on
+ *   `textValue ?? label`); the option whose label equals the typed text becomes active, else the
+ *   first match. ArrowDown/ArrowUp move the highlight (`aria-activedescendant`), Enter adds the
+ *   active option and keeps the list open (with nothing active, Enter is left to the surrounding
+ *   form), Escape closes the list (and then clears the typed text). Backspace in the empty input,
+ *   and Left (Right in RTL) with the caret at its start, focus the last tag; Delete, Backspace,
+ *   Enter or Space on a remove button remove its tag and focus the next tag, else the input; a
+ *   click on one focuses the input. Additions and removals are announced ("Cherry removed, 2
+ *   selected"), and so is "No matches" for text that matches no option.
+ * - **Free tagging.** With `allowCreate`, text that matches no option label, no selected value
+ *   (ignoring case) and no option value ends the list with a create option (`Create "infra"`);
+ *   Enter on it or a click adds the text as a tag after `onOptionCreate(text)` and clears the
+ *   text.
+ * - **End buttons.** A chevron (`expandIcon`, `false` hides it) opens and closes the list without
+ *   taking focus; `clearable` adds a clear button, a Tab stop after the input, which removes every
+ *   tag. A press on the field's empty area toggles the list.
+ * - **One line.** `overflow="count"` keeps the tags on one line while focus is outside the picker
+ *   and its list is closed; the tags that do not fit give way to "+N".
+ * - **Names.** The tags form a list named "Selected"; the trigger is described by a summary of the
+ *   selected labels ("Selected: Apple, Banana"). These built-in texts are English; `labels`
+ *   localizes them.
+ * - **Routing.** The trigger (`TagPicker.Input` or `TagPicker.Button`) receives `id`,
+ *   `aria-label`, `aria-labelledby`, `aria-describedby`, `aria-invalid`, `aria-required`,
+ *   `aria-errormessage`, `aria-details`, `tabIndex` and `autoFocus`; the Input also
+ *   `onFocus`/`onBlur`/`onKeyDown`/`onKeyUp`, `controlRef` and the text input attributes
+ *   `autoComplete`, `autoCapitalize`, `autoCorrect`, `maxLength`, `inputMode`, `spellCheck` and
+ *   `enterKeyHint` (with the Button, pass handlers and `ref` on it). `ref`, `className`, `style`,
+ *   other `aria-*` attributes and the remaining props stay on the root `<div>`. Inside a `Field`
+ *   the trigger is labelled and described by it; the field shows the error look whenever the
+ *   trigger ends up `aria-invalid`. With `name`/`required` the values take part in form
+ *   submission, validation and reset. Selected values without a matching option show their raw
+ *   value.
+ * - **Size and appearance**: `size` resolves from its own prop, then the surrounding `Field`'s
+ *   `size`, then `WaveProvider inputDefaults.size`, else `'medium'` (a Field or provider `small`
+ *   gives `'medium'` too, since TagPicker has no `small`); `appearance` from its own prop, then
+ *   `WaveProvider inputDefaults.appearance`, else `'outline'`; both render as `data-size` and
+ *   `data-appearance` on the root `<div>`, and the parts take neither. The tags are one Tag size
+ *   smaller. The option list keeps its size.
+ * - **Server rendering.** The open list renders only in the browser: an open list (`defaultOpen`,
+ *   `open`) is closed in the server HTML and opens once the picker has hydrated; the tags of
+ *   registered options show their labels in the server HTML.
  *
- * **Size and appearance**: `size` resolves from its own prop, then the surrounding `Field`'s
- * `size`, then `WaveProvider inputDefaults.size`, else `'medium'` (a Field or provider `small`
- * gives `'medium'` too, since TagPicker has no `small`); `appearance` from its own prop, then
- * `WaveProvider inputDefaults.appearance`, else `'outline'`; both render as `data-size` and
- * `data-appearance` on the root `<div>`. The option list keeps its size.
+ * Fluent's `selectedOptions` and `onOptionSelect` are `value` and `onValueChange` (plus
+ * `onOptionCreate`). `TagPickerOption` is both the type of an `options` entry and the flat name of
+ * `TagPicker.Option`.
+ *
+ * @example
+ * <TagPicker aria-label="Fruits" options={[{ value: 'apple', label: 'Apple' }]} clearable />
+ *
+ * @example
+ * <TagPicker aria-label="People" value={people} onValueChange={setPeople}>
+ *   <TagPicker.Control>
+ *     <TagPicker.Group>
+ *       {people.map((id) => (
+ *         <Tag key={id} value={id} media={<Avatar name={nameOf(id)} />} dismissLabel="Remove">
+ *           {nameOf(id)}
+ *         </Tag>
+ *       ))}
+ *     </TagPicker.Group>
+ *     <TagPicker.Input />
+ *   </TagPicker.Control>
+ *   <TagPicker.List>
+ *     <TagPicker.Option value="katri" label="Katri Athokas" secondaryContent="Designer">
+ *       Katri Athokas
+ *     </TagPicker.Option>
+ *   </TagPicker.List>
+ * </TagPicker>
  */
-export const TagPicker = (props: TagPickerProps) => {
-  const {
-    options,
-    value: valueProp,
-    defaultValue,
-    onValueChange,
-    onChange,
-    open: openProp,
-    defaultOpen,
-    onOpenChange,
-    placeholder = 'Select...',
-    filter,
-    query: queryProp,
-    defaultQuery,
-    onQueryChange,
-    disabled = false,
-    size: sizeProp,
-    appearance: appearanceProp,
-    name,
-    form,
-    required,
-    autoComplete = 'off',
-    autoCapitalize,
-    autoCorrect,
-    maxLength,
-    readOnly,
-    labels,
-    inputMode,
-    spellCheck,
-    enterKeyHint,
-    autoFocus,
-    tabIndex,
-    id,
-    'aria-label': ariaLabel,
-    'aria-labelledby': ariaLabelledBy,
-    'aria-describedby': ariaDescribedBy,
-    'aria-invalid': ariaInvalid,
-    'aria-required': ariaRequired,
-    'aria-errormessage': ariaErrorMessage,
-    'aria-details': ariaDetails,
-    onFocus,
-    onBlur,
-    onKeyDown,
-    onKeyUp,
-    controlRef,
-    className,
-    ref,
-    ...rest
-  } = props;
+export const TagPicker = /* @__PURE__ */ Object.assign(TagPickerRoot, {
+  Control: TagPickerControl,
+  Group: TagPickerGroup,
+  Input: TagPickerInput,
+  Button: TagPickerButton,
+  List: TagPickerList,
+  Option: TagPickerOption,
+  OptionGroup: TagPickerOptionGroup,
+});
 
-  if (onChange !== undefined) warnDeprecated('TagPicker', 'onChange', 'onValueChange');
-
-  const field = useFieldContext();
-  const isRequired = required ?? field?.required ?? false;
-  // Like a native readonly input, a read-only TagPicker is barred from constraint validation (the
-  // user could not fix it); its values are still submitted.
-  const validates = isRequired && !readOnly;
-  const fieldProps = useFieldControl({
-    id,
-    'aria-label': ariaLabel,
-    'aria-labelledby': ariaLabelledBy,
-    'aria-describedby': ariaDescribedBy,
-    'aria-invalid': ariaInvalid,
-    // An explicit `required={false}` wins over a required Field, so aria-required matches
-    // `isRequired`.
-    'aria-required': ariaRequired ?? required,
-  });
-  // The error look follows the resolved state: the consumer's `aria-invalid` or the Field's.
-  const invalidLook = isInvalidLook(false, fieldProps['aria-invalid']);
-  const { size, appearance } = useInputLook(sizeProp, appearanceProp, {
-    sizes: TAG_PICKER_SIZES,
-    defaultSize: 'medium',
-  });
-  // A size outside TAG_PICKER_SIZES (from untyped code) is skipped by useInputLook, so `size` is
-  // always one of them and the data attribute carries the resolved value.
-  const sizeClasses = TAG_PICKER_SIZE[size];
-
-  const [selected, setSelected] = useControllable<readonly string[]>(
-    valueProp,
-    defaultValue ?? EMPTY_VALUES,
-    (next) => {
-      // The props are read only; the callbacks receive an array of their own.
-      const list = [...next];
-      onValueChange?.(list);
-      onChange?.(list);
-    },
-  );
-  const interactive = !disabled && !readOnly;
-  // A picker that starts disabled or read-only never shows its list, so it starts closed (no close
-  // to report later).
-  const [openState, setOpen] = useControllable(
-    openProp,
-    (defaultOpen ?? false) && interactive,
-    onOpenChange,
-  );
-  // The open list lives in a portal, which renders only in the browser: until then (the server
-  // HTML, hydration) the picker shows the closed inline list and reports it closed, so
-  // aria-controls and aria-activedescendant never name a missing element.
-  const isClient = useIsClient();
-  const open = openState && interactive && isClient;
-  // The query (D12): the text typed since the last tag was added, which filters the options. A
-  // picker that starts locked starts without a query, as it starts closed.
-  const [queryState, setQuery] = useControllable(
-    queryProp,
-    interactive ? (defaultQuery ?? '') : '',
-    onQueryChange,
-  );
-  // Locking the control (readOnly/disabled) while typing drops the typed text: hidden during
-  // render here, and the reset reported from an effect, since `onQueryChange` never runs during
-  // render (D12). `lock` is how the picker came to be locked (previous-value pattern, C-HOOKS):
-  // `'locked'` by a change while mounted, whose reset is reported once, or `'mounted-locked'`
-  // since it mounted, which reports nothing and keeps a controlled query, hidden until the picker
-  // unlocks (R20).
-  const query = interactive ? queryState : '';
-  const [lock, setLock] = React.useState<LockState>(interactive ? 'unlocked' : 'mounted-locked');
-  if (interactive && lock !== 'unlocked') setLock('unlocked');
-  else if (!interactive && lock === 'unlocked') setLock('locked');
-  React.useEffect(() => {
-    if (lock === 'locked') setQuery('');
-  }, [lock, setQuery]);
-  // Locking also closes the list itself, not only the derived `open`, so unlocking does not reopen
-  // it without a user action. The close is reported through onOpenChange (a consumer callback from
-  // an effect, C-HOOKS); a controlled `open` that stays true is still not shown while locked.
-  const lockedOpen = !interactive && openState;
-  React.useEffect(() => {
-    if (lockedOpen) setOpen(false);
-  }, [lockedOpen, setOpen]);
-  // Keeps the shared live regions alive while mounted: every addition and removal is announced
-  // (`announceToggle`).
-  useAnnounce();
-
-  const rootRef = React.useRef<HTMLDivElement | null>(null);
-  const inputRef = React.useRef<HTMLInputElement | null>(null);
-  const summaryId = useId('tagpicker-summary');
-
-  const labelByValue = React.useMemo(() => {
-    const map = new Map<string, string>();
-    for (const option of options) if (!map.has(option.value)) map.set(option.value, option.label);
-    return map;
-  }, [options]);
-  const labelOf = (value: string) => labelByValue.get(value) ?? value;
-
-  const available = React.useMemo<ListboxItem[]>(() => {
-    const chosen = new Set(selected);
-    return options
-      .filter((option) => !chosen.has(option.value))
-      .map((option) => ({ value: option.value, label: option.label }));
-  }, [options, selected]);
-  // useListbox's navigability predicate: `filter` (else the 0.7 match) bound to the typed text,
-  // while there is any (D13).
-  const listFilter = React.useMemo(
-    () => (query ? (item: ListboxItem) => (filter ?? matchesText)(item, query) : undefined),
-    [query, filter],
-  );
-
-  // Unknown values render as tags labelled by the raw value (input-pickers#22).
-  const unknownValues = selected.filter((value) => !labelByValue.has(value)).join('\u0000');
-  React.useEffect(() => {
-    if (!unknownValues) return;
-    warnOnce(
-      'TagPicker:unknown-value',
-      `TagPicker: the selected value(s) ${unknownValues
-        .split('\u0000')
-        .map((v) => `"${v}"`)
-        .join(', ')} match no option; the raw value is shown as the tag label.`,
-    );
-  }, [unknownValues]);
-
-  const getInput = () => inputRef.current;
-  const focusInput = () => inputRef.current?.focus();
-
-  const addTag = (value: string) => {
-    if (!interactive || selected.includes(value)) return;
-    const next = [...selected, value];
-    setSelected(next);
-    setQuery('');
-    announceToggle(labels, labelOf(value), true, next.length);
-  };
-
-  const removeTag = (value: string) => {
-    if (!interactive) return;
-    const next = selected.filter((v) => v !== value);
-    setSelected(next);
-    announceToggle(labels, labelOf(value), false, next.length);
-    focusInput();
-  };
-
-  const listbox = useListbox({
-    open,
-    onOpenChange: (next) => setOpen(next),
-    mode: 'editable',
-    multiselect: true,
-    selectedValues: selected,
-    onSelect: (value) => addTag(value),
-    items: available,
-    filter: listFilter,
-    // Typing a filter makes its first match active (as in Combobox), so Enter adds what the list
-    // shows instead of submitting the form. Nothing is active on open or with the text cleared.
-    autoHighlight: query ? 'first' : false,
-    idPrefix: 'tagpicker-listbox',
-    onClearDraft: query ? () => setQuery('') : undefined,
-  });
-
-  // aria-expanded only while a listbox with options is shown (input-pickers#21).
-  const expanded = open && listbox.items.length > 0;
-  const noMatchesText = labels?.noMatches ?? 'No matches';
-  // The popup shows the options, or "No matches" for a query.
-  const surfaceOpen = open && (expanded || query !== '');
-  const noMatches = surfaceOpen && !expanded;
-  const { layerId, setReference, surfaceRef, floatingProps } = useListboxPopup({
-    open,
-    surfaceOpen,
-    onDismiss: () => setOpen(false),
-    rootRef,
-    anchorRef: inputRef,
-  });
-
-  const rootMergedRef = useMergedRefs<HTMLDivElement>(rootRef, ref);
-  const inputMergedRef = useMergedRefs<HTMLInputElement>(inputRef, controlRef);
-
-  useFormReset(
-    inputRef,
-    () => {
-      // Compared by content (C-FORMS): an inline default is a new array on every render, and a
-      // reset that keeps the same tags reports nothing.
-      const initial = defaultValue ?? EMPTY_VALUES;
-      setSelected((current) => (sameValues(current, initial) ? current : [...initial]));
-      setQuery('');
-    },
-    form,
-  );
-
-  /** The tags' remove buttons, found from an element inside the component (no ref read). */
-  const removeButtons = (from: Element) =>
-    Array.from(
-      from
-        .closest('[data-wave-tagpicker-control]')
-        ?.querySelectorAll<HTMLButtonElement>('[data-wave-tagpicker-remove]') ?? [],
-    );
-
-  const handleInputKeyDown = (event: React.KeyboardEvent<HTMLInputElement>) => {
-    // Read-only: no listbox keys at all (they would open the list, add or remove tags).
-    if (!interactive) return;
-    if (event.key === 'Escape' && open && !surfaceOpen && !event.nativeEvent.isComposing) {
-      // Open with nothing shown (every option selected, no query): close, but leave Escape to an
-      // enclosing layer (overlays#1) instead of consuming it for an invisible list.
-      setOpen(false);
-      return;
-    }
-    if (event.key === 'Backspace' && query === '' && selected.length > 0) {
-      // First Backspace moves to the last tag; Backspace/Delete there removes it (input-pickers#14).
-      event.preventDefault();
-      removeButtons(event.currentTarget).at(-1)?.focus();
-      return;
-    }
-    listbox.onKeyDown(event);
-  };
-
-  const handleTagKeyDown = (event: React.KeyboardEvent<HTMLButtonElement>, value: string) => {
-    if (!interactive) return;
-    const buttons = removeButtons(event.currentTarget);
-    const index = buttons.indexOf(event.currentTarget);
-    if (event.key === 'Backspace' || event.key === 'Delete') {
-      event.preventDefault();
-      removeTag(value);
-      return;
-    }
-    if (event.key === 'Escape') {
-      // Consumed here, so an enclosing layer ignores it (spec §5.4).
-      event.preventDefault();
-      focusInput();
-      return;
-    }
-    const intent = getArrowIntent(event.key, {
-      orientation: 'horizontal',
-      dir: getDirection(event.currentTarget),
-    });
-    if (intent === 'prev' && index > 0) {
-      event.preventDefault();
-      buttons[index - 1].focus();
-    } else if (intent === 'next') {
-      event.preventDefault();
-      if (index < buttons.length - 1) buttons[index + 1].focus();
-      else focusInput();
-    }
-  };
-
-  const listLabelledBy =
-    fieldProps['aria-label'] === undefined
-      ? (fieldProps['aria-labelledby'] ?? field?.labelId)
-      : fieldProps['aria-labelledby'];
-
-  return (
-    <div
-      data-size={size}
-      data-appearance={appearance}
-      {...rest}
-      ref={rootMergedRef}
-      className={cn(tagPickerClassNames.root, 'relative', className)}
-    >
-      <div
-        ref={setReference}
-        data-wave-tagpicker-control=""
-        role="group"
-        aria-disabled={disabled || undefined}
-        className={cn(
-          tagPickerClassNames.control,
-          'flex flex-wrap items-center',
-          sizeClasses.control,
-          inputAppearanceClasses[appearance],
-          inputFocusWithin,
-          invalidLook && inputInvalidWithin,
-          disabled && 'cursor-not-allowed opacity-50',
-        )}
-        onClick={(event) => {
-          if (disabled || (event.target as Element).closest('button')) return;
-          focusInput();
-          if (!open && interactive) setOpen(true);
-        }}
-      >
-        {selected.length > 0 && (
-          <div
-            role="list"
-            aria-label={labels?.selected ?? 'Selected'}
-            className={cn(tagPickerClassNames.group, 'flex flex-wrap items-center gap-1')}
-          >
-            {selected.map((value) => {
-              const label = labelOf(value);
-              return (
-                <div
-                  key={value}
-                  role="listitem"
-                  className={cn(
-                    tagPickerClassNames.tag,
-                    'inline-flex items-center gap-1 rounded bg-muted text-foreground',
-                    sizeClasses.tag,
-                  )}
-                >
-                  {label}
-                  {!readOnly && (
-                    <TagRemoveButton
-                      label={(labels?.remove ?? defaultRemoveLabel)(label)}
-                      disabled={disabled}
-                      onClick={() => removeTag(value)}
-                      onKeyDown={(event) => handleTagKeyDown(event, value)}
-                      getFallback={getInput}
-                    />
-                  )}
-                </div>
-              );
-            })}
-          </div>
-        )}
-        {selected.length > 0 && (
-          // Describes the input. The list itself would read every "Remove …" button name too.
-          <span id={summaryId} hidden>
-            {(labels?.summary ?? defaultSummaryLabel)(selected.map(labelOf))}
-          </span>
-        )}
-        <input
-          type="text"
-          autoComplete={autoComplete}
-          {...fieldProps}
-          {...listbox.getComboboxProps()}
-          aria-expanded={expanded}
-          aria-describedby={joinIds(
-            fieldProps['aria-describedby'],
-            selected.length > 0 ? summaryId : undefined,
-          )}
-          aria-errormessage={ariaErrorMessage}
-          aria-details={ariaDetails}
-          ref={inputMergedRef}
-          disabled={disabled}
-          readOnly={readOnly}
-          placeholder={selected.length === 0 ? placeholder : ''}
-          autoCapitalize={autoCapitalize}
-          autoCorrect={autoCorrect}
-          maxLength={maxLength}
-          inputMode={inputMode}
-          spellCheck={spellCheck}
-          enterKeyHint={enterKeyHint}
-          autoFocus={autoFocus}
-          tabIndex={tabIndex}
-          value={query}
-          onChange={(event) => {
-            if (!interactive) return;
-            setQuery(event.target.value);
-            if (!open) setOpen(true);
-          }}
-          onKeyDown={composeEventHandlers(onKeyDown, handleInputKeyDown)}
-          onKeyUp={composeEventHandlers(onKeyUp, listbox.onKeyUp)}
-          onFocus={onFocus}
-          onBlur={onBlur}
-          className={cn(
-            tagPickerClassNames.input,
-            'min-w-15 flex-1 bg-transparent text-foreground placeholder:text-muted-foreground focus:outline-hidden',
-            sizeClasses.input,
-          )}
-        />
-      </div>
-      {/* Mounted before its text: a live region added together with its text is not announced by
-          every screen reader. The row in the popup is the visible copy. */}
-      <span role="status" className="sr-only">
-        {noMatches && noMatchesText}
-      </span>
-      <ListboxSurface
-        listbox={listbox}
-        layerId={layerId}
-        surfaceRef={surfaceRef}
-        floatingProps={floatingProps}
-        open={open}
-        expanded={expanded}
-        showCheck={false}
-        listClassName={tagPickerClassNames.listbox}
-        surfaceClassName={tagPickerClassNames.surface}
-        emptyContent={
-          query !== '' ? (
-            <div
-              aria-hidden="true"
-              className={cn(
-                tagPickerClassNames.emptyMessage,
-                'px-3 py-1.5 text-body-1 text-muted-foreground',
-              )}
-            >
-              {noMatchesText}
-            </div>
-          ) : undefined
-        }
-        aria-label={fieldProps['aria-label']}
-        aria-labelledby={listLabelledBy}
-      >
-        {expanded &&
-          listbox.items.map((item) => (
-            <Option
-              key={item.value}
-              value={item.value}
-              label={item.label}
-              className={tagPickerClassNames.option}
-            >
-              {item.label}
-            </Option>
-          ))}
-      </ListboxSurface>
-      <HiddenInput
-        name={name}
-        form={form}
-        disabled={disabled}
-        value={selected}
-        type="text"
-        required={validates}
-        onInvalid={focusInput}
-      />
-    </div>
-  );
+export {
+  TagPickerControl,
+  TagPickerGroup,
+  TagPickerInput,
+  TagPickerButton,
+  TagPickerList,
+  // The component (`TagPicker.Option`) and the interface of an `options` entry, one name (D64).
+  TagPickerOption,
+  TagPickerOptionGroup,
 };
-TagPicker.displayName = 'TagPicker';
