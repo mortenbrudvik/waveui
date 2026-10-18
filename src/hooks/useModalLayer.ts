@@ -47,10 +47,13 @@ export interface UseModalLayerOptions extends Omit<UseDismissOptions, 'kind'> {
  * registers a `dialog` layer (Escape only from inside its tree, no outside press, no focus-outside
  * dismissal), keeps the trap, the isolation and the scroll lock off, moves focus in on open with
  * the trap's initial-focus rule (`useInitialFocus`) and restores focus only when it is inside the
- * surface at close, or was lost to `<body>` from inside it. Every hook is always called and keys on
- * `open`: a `modalType` that changes while open applies at once (the trap, isolation and lock
- * follow) and moves no focus. The Tab order of a non-modal surface (its place after the opener) is
- * the component's.
+ * surface (or in a layer opened from it) at close, or was lost to `<body>` from there. Every hook
+ * is always called and keys on `open`: a `modalType` that changes while open applies at once (the
+ * trap, isolation and lock follow). It leaves focus inside the surface where it is; focus outside
+ * it moves in, as on open: a switch to `modal` or `alert` starts the trap (the page turns inert),
+ * and a switch to `non-modal` runs the initial focus (focus in the toast region, which a trap lets
+ * in, moves into the surface). The Tab order of a non-modal surface (its place after the opener)
+ * is the component's.
  *
  * A surface that mounts through the presence core (Dialog, Drawer) passes its open state as
  * `open`, never its mount (`isMounted`), and its element as `container` also while it is mounted
@@ -97,6 +100,7 @@ export function useModalLayer(options: UseModalLayerOptions): DismissLayer {
     triggerRef,
     finalFocusRef,
     requireFocusInside: nonModal,
+    layerId: layer.layerId,
   });
 
   return layer;

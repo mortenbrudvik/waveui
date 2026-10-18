@@ -250,6 +250,27 @@ function isElementTarget(target: unknown): target is HTMLElement {
   return typeof target === 'object' && target !== null && (target as Partial<Node>).nodeType === 1;
 }
 
+/**
+ * Whether a click handler's event came from outside its element in the DOM: it bubbled through the
+ * React tree from a portal (a popup opened inside a trigger). `false` without an event (a
+ * render-prop child that calls `onClick()` bare) or without DOM nodes to compare.
+ */
+function isPortaledClick(event: unknown): boolean {
+  if (typeof event !== 'object' || event === null) return false;
+  const { currentTarget, target } = event as { currentTarget?: unknown; target?: unknown };
+  if (!isNode(currentTarget) || !isNode(target)) return false;
+  return !currentTarget.contains(target);
+}
+
+function isNode(value: unknown): value is Node {
+  return (
+    typeof value === 'object' &&
+    value !== null &&
+    typeof (value as Partial<Node>).nodeType === 'number' &&
+    typeof (value as Partial<Node>).contains === 'function'
+  );
+}
+
 /** The element that has focus, or `null` when focus is on `<body>` (or nowhere). */
 function getFocusedElement(): HTMLElement | null {
   if (typeof document === 'undefined') return null;
@@ -432,6 +453,9 @@ export function useModalTriggerPart<RenderProps>(
   const mergedRef = useMergedRefs<HTMLElement>(attach, ref);
   const toggleModal = React.useCallback(
     (event?: React.MouseEvent<HTMLElement>) => {
+      // A click that bubbled through the React tree from a portal opened inside the trigger (a
+      // Popover in a wrapper span) is not a click on it (C-COMPOSE).
+      if (isPortaledClick(event)) return;
       // Focus returns to this trigger, also when the root has several (overlays#9), and also when
       // a render-prop child calls `onClick()` without the event.
       if (!open) activate(event);
@@ -502,7 +526,9 @@ function createModalOpener(): ModalOpener {
 
 /**
  * The element a non-modal surface takes its keyboard place after (`usePopoverTabOrder`'s
- * `anchorRef`), captured in the insertion phase of the commit in which `enabled` becomes true,
+ * `anchorRef`). Pass the surface's open state as `enabled`, whatever its `modalType`, so a surface
+ * that turns non-modal while open (focus already inside it) still knows its opener. It is
+ * captured in the insertion phase of the commit in which `enabled` becomes true,
  * before focus moves in: `trigger.focusRef.current`, which with nothing focused is the activated
  * or first trigger's focus target and is `null` while an element other than `<body>` has focus
  * (`ModalTrigger.focusRef` rule 1; a focused `tabIndex={-1}` trigger wrapper span resolves as a

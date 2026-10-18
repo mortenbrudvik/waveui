@@ -164,7 +164,9 @@ export const NESTED_TRIGGER_WARNING =
 
 /**
  * Opens and closes the drawer: a click while it is open asks it to close (reason `trigger`), which
- * only the trigger of a non-modal or inline drawer can receive (a modal one makes the page inert).
+ * the trigger of a non-modal or inline drawer can receive (a modal one makes the page inert).
+ * Fluent's `DialogTrigger` never toggles (outside the surface it only opens, inside it only
+ * closes); this trigger always does.
  * Place it directly inside `Drawer`, or in a Fragment there (not inside a wrapper element or a
  * component of your own): it renders in place, not in the panel (an inline drawer's triggers
  * render right before its panel, so the panel follows its button in the reading order); a

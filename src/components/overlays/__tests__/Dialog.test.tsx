@@ -488,10 +488,9 @@ describe('Dialog', () => {
     const FULL_INSET_CLASSES = [
       'pt-[max(1.5rem,env(safe-area-inset-top))]',
       'pb-[max(1.5rem,env(safe-area-inset-bottom))]',
-      'ps-[max(1.5rem,env(safe-area-inset-left))]',
-      'pe-[max(1.5rem,env(safe-area-inset-right))]',
-      'wave-rtl:ps-[max(1.5rem,env(safe-area-inset-right))]',
-      'wave-rtl:pe-[max(1.5rem,env(safe-area-inset-left))]',
+      // The insets are physical: the left one pads the left side in either direction.
+      'pl-[max(1.5rem,env(safe-area-inset-left))]',
+      'pr-[max(1.5rem,env(safe-area-inset-right))]',
     ];
 
     it('size="full" covers the viewport, pads the safe-area insets and moves the title actions by them', () => {
@@ -520,6 +519,19 @@ describe('Dialog', () => {
       );
       expect(area).not.toHaveClass('top-4');
       expect(area).not.toHaveClass('end-4');
+    });
+
+    it('size="full": a consumer padding class replaces the inset padding, also under RTL', () => {
+      renderWithProviders(
+        <Basic
+          dialogProps={{ defaultOpen: true }}
+          contentProps={{ size: 'full', className: 'p-0' }}
+        />,
+        { dir: 'rtl' },
+      );
+      const dialog = screen.getByRole('dialog');
+      expect(dialog).toHaveClass('p-0');
+      expect(dialog.className).not.toMatch(/(^|\s)\S*p[tblrse]-\[max/);
     });
 
     it('lets a consumer class win over a size’s classes', () => {

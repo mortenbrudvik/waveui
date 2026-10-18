@@ -309,7 +309,7 @@ export interface ModalBackdropProps {
   /** The surface's backdrop press handling (`useBackdropPress`), after the slot's own handler. */
   onMouseDown: (event: React.MouseEvent<HTMLElement>) => void;
   /** The presence attributes of the surface's top-level elements (P6-07). */
-  presenceProps?: PresenceAttributes;
+  presenceProps: PresenceAttributes;
 }
 
 /**

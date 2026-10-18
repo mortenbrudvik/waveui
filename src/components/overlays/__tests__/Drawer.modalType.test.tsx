@@ -9,6 +9,7 @@ import {
   type DrawerTriggerRenderProps,
 } from '../Drawer';
 import { Dialog } from '../Dialog';
+import { Popover } from '../Popover';
 import { Toaster } from '../../feedback/Toaster';
 import { dialogContentClassNames, drawerClassNames } from '../../../lib/classNames';
 import { useDismiss } from '../../../hooks/useDismiss';
@@ -600,6 +601,30 @@ describe('Drawer modalType="non-modal" (P6-06 D87)', () => {
       expect(document.documentElement.style.overflow).toBe('');
       expect(button('Cancel order')).toHaveFocus();
     });
+
+    it('a Drawer.Close in a Popover opened inside returns focus to the trigger', async () => {
+      const user = userEvent.setup();
+      render(
+        <Page>
+          <Popover>
+            <Popover.Trigger>
+              <button type="button">More</button>
+            </Popover.Trigger>
+            <Popover.Content aria-label="More options">
+              <Drawer.Close>
+                <button type="button">Close drawer</button>
+              </Drawer.Close>
+            </Popover.Content>
+          </Popover>
+        </Page>,
+      );
+      await user.click(button('Details'));
+      await user.click(button('More'));
+      await user.click(button('Close drawer'));
+      await flushMicrotasks();
+      expect(screen.queryByRole('dialog', { name: 'Order details' })).toBeNull();
+      expect(button('Details')).toHaveFocus();
+    });
   });
 
   describe('a modalType change while open (D91)', () => {
@@ -643,6 +668,65 @@ describe('Drawer modalType="non-modal" (P6-06 D87)', () => {
       expect(button('Switch')).toHaveFocus();
       // The panel element is kept across the switch.
       expect(screen.getByRole('dialog', { name: 'Switching' })).toBe(panel);
+    });
+
+    it('a switch to modal while focus is on the page moves focus in (the page turns inert)', async () => {
+      const user = userEvent.setup();
+      function ToModal() {
+        const [modalType, setModalType] = React.useState<DrawerProps['modalType']>('non-modal');
+        return (
+          <>
+            <button type="button" onClick={() => setModalType('modal')}>
+              Make modal
+            </button>
+            <Drawer defaultOpen title="Switching" modalType={modalType}>
+              <button type="button">Inside</button>
+            </Drawer>
+          </>
+        );
+      }
+      render(<ToModal />);
+      await user.click(button('Make modal'));
+      expect(screen.getByRole('dialog', { name: 'Switching' })).toHaveAttribute(
+        'data-modal-type',
+        'modal',
+      );
+      expect(button('Close')).toHaveFocus();
+      await user.click(button('Close'));
+    });
+
+    it('keeps its place after the trigger once a modal drawer turns non-modal (D87.5)', async () => {
+      const user = userEvent.setup();
+      function OpenedModal() {
+        const [modalType, setModalType] = React.useState<DrawerProps['modalType']>('modal');
+        return (
+          <>
+            <button type="button">Before</button>
+            <Drawer title="Switching" modalType={modalType}>
+              <Drawer.Trigger>
+                <button type="button">Details</button>
+              </Drawer.Trigger>
+              <button type="button" onClick={() => setModalType('non-modal')}>
+                Switch
+              </button>
+            </Drawer>
+            <button type="button">After</button>
+          </>
+        );
+      }
+      render(<OpenedModal />);
+      await user.click(button('Details'));
+      await user.click(button('Switch'));
+      expect(screen.getByRole('dialog', { name: 'Switching' })).toHaveAttribute(
+        'data-modal-type',
+        'non-modal',
+      );
+      expect(button('Switch')).toHaveFocus();
+      await user.tab();
+      expect(button('After')).toHaveFocus();
+      act(() => button('Close').focus());
+      await user.tab({ shift: true });
+      expect(button('Details')).toHaveFocus();
     });
   });
 

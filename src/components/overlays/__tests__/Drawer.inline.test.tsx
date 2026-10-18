@@ -5,6 +5,7 @@ import { renderToString } from 'react-dom/server';
 import { act, cleanup, fireEvent, render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { Drawer, type DrawerProps, type DrawerTriggerRenderProps } from '../Drawer';
+import { Popover } from '../Popover';
 import { drawerClassNames } from '../../../lib/classNames';
 import { getTopmostLayer } from '../../../lib/layers';
 import {
@@ -211,6 +212,32 @@ describe('Drawer type="inline"', () => {
     expect(onOpenChange).toHaveBeenCalledTimes(2);
   });
 
+  it('ignores a click in a popup portaled from inside a wrapper-span trigger (C-COMPOSE)', async () => {
+    const user = userEvent.setup();
+    const onOpenChange = vi.fn();
+    render(
+      <Drawer type="inline" title="Details" defaultOpen onOpenChange={onOpenChange}>
+        <Drawer.Trigger asChild={false}>
+          <span>
+            <button type="button">Show details</button>
+            <Popover defaultOpen>
+              <Popover.Trigger>
+                <button type="button">Help</button>
+              </Popover.Trigger>
+              <Popover.Content aria-label="Help">
+                <button type="button">In the popover</button>
+              </Popover.Content>
+            </Popover>
+          </span>
+        </Drawer.Trigger>
+      </Drawer>,
+    );
+    await user.click(button('In the popover'));
+    expect(onOpenChange).not.toHaveBeenCalled();
+    expect(aside()).not.toBeNull();
+    await user.keyboard('{Escape}');
+  });
+
   it('passes a render-prop trigger no aria-haspopup key', async () => {
     const user = userEvent.setup();
     const received: DrawerTriggerRenderProps[] = [];
@@ -237,6 +264,56 @@ describe('Drawer type="inline"', () => {
   });
 
   describe('closing and focus', () => {
+    it.each([
+      ['the Close button', 'Close'],
+      ['Drawer.Close', 'Done'],
+    ])(
+      'mounted open (defaultOpen), returns focus to the trigger when %s closes it',
+      async (_, name) => {
+        const user = userEvent.setup();
+        render(<Page drawerProps={{ defaultOpen: true }} />);
+        await user.click(button(name));
+        expect(aside()).toBeNull();
+        expect(button('Show details')).toHaveFocus();
+      },
+    );
+
+    it('mounted open (controlled), returns focus to the trigger when its Close button closes it', async () => {
+      const user = userEvent.setup();
+      function Open() {
+        const [open, setOpen] = React.useState(true);
+        return <Controlled open={open} onOpenChange={setOpen} />;
+      }
+      render(<Open />);
+      await user.click(button('Close'));
+      expect(aside()).toBeNull();
+      expect(button('Show details')).toHaveFocus();
+    });
+
+    it('a Drawer.Close in a Popover opened inside returns focus to the trigger', async () => {
+      const user = userEvent.setup();
+      render(
+        <Page>
+          <Popover>
+            <Popover.Trigger>
+              <button type="button">More</button>
+            </Popover.Trigger>
+            <Popover.Content aria-label="More options">
+              <Drawer.Close>
+                <button type="button">Close drawer</button>
+              </Drawer.Close>
+            </Popover.Content>
+          </Popover>
+        </Page>,
+      );
+      await user.click(button('Show details'));
+      await user.click(button('More'));
+      await user.click(button('Close drawer'));
+      await act(async () => {});
+      expect(aside()).toBeNull();
+      expect(button('Show details')).toHaveFocus();
+    });
+
     it('closes from the Close button (close-button) and returns focus to the trigger', async () => {
       const user = userEvent.setup();
       const onOpenChange = vi.fn();

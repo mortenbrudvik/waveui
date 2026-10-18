@@ -1760,4 +1760,111 @@ describe('useRestoreFocus — requireFocusInside (P6-06 D92: surfaces that do no
       nonModal.remove();
     }
   });
+
+  describe('layers opened from the surface (D87.7)', () => {
+    /**
+     * A popup opened from the surface: a layer whose parent is the surface's layer (`'surface'`),
+     * anchored to a button inside the surface and portaled outside it.
+     */
+    function openChildLayer(options: { parentId?: string | null } = {}) {
+      const portal = document.createElement('div');
+      portal.innerHTML = '<button type="button">In the popup</button>';
+      document.body.appendChild(portal);
+      // Read once: the stand-in surface unmounts its content in the commit that closes it.
+      const anchorElement = screen.getByRole('button', { name: 'More' });
+      const anchor = () => anchorElement;
+      const unregister = registerLayer(
+        makeLayer('child', {
+          parentId: options.parentId === undefined ? 'surface' : options.parentId,
+          kind: 'popover',
+          getElements: () => [portal],
+          getAnchor: anchor,
+        }),
+      );
+      return {
+        popupButton: portal.querySelector('button') as HTMLButtonElement,
+        close: () => {
+          unregister();
+          portal.remove();
+        },
+      };
+    }
+
+    function LayerPage({ open, layerId }: { open: boolean; layerId?: string }) {
+      const triggerRef = React.useRef<HTMLButtonElement>(null);
+      return (
+        <>
+          <button type="button" ref={triggerRef}>
+            Trigger
+          </button>
+          <input aria-label="Page field" />
+          <Surface open={open} triggerRef={triggerRef} requireFocusInside layerId={layerId}>
+            <button type="button">More</button>
+          </Surface>
+        </>
+      );
+    }
+
+    it('restores when focus is in a layer opened from the surface (its descendant layer)', () => {
+      const { rerender } = render(<LayerPage open={false} layerId="surface" />);
+      act(() => button('Trigger').focus());
+      rerender(<LayerPage open layerId="surface" />);
+      const child = openChildLayer();
+      try {
+        act(() => child.popupButton.focus());
+        rerender(<LayerPage open={false} layerId="surface" />);
+        expect(button('Trigger')).toHaveFocus();
+      } finally {
+        child.close();
+      }
+    });
+
+    it('restores when focus is in a popup anchored inside the surface, with no layer of its own (an inline panel)', () => {
+      const { rerender } = render(<LayerPage open={false} />);
+      act(() => button('Trigger').focus());
+      rerender(<LayerPage open />);
+      const child = openChildLayer({ parentId: null });
+      try {
+        act(() => child.popupButton.focus());
+        rerender(<LayerPage open={false} />);
+        expect(button('Trigger')).toHaveFocus();
+      } finally {
+        child.close();
+      }
+    });
+
+    it('restores when focus was lost to <body> from a layer opened from the surface', async () => {
+      const { rerender } = render(<LayerPage open={false} layerId="surface" />);
+      act(() => button('Trigger').focus());
+      rerender(<LayerPage open layerId="surface" />);
+      const child = openChildLayer();
+      act(() => child.popupButton.focus());
+      act(() => child.close());
+      await flushMicrotasks();
+      expect(document.activeElement).toBe(document.body);
+      rerender(<LayerPage open={false} layerId="surface" />);
+      expect(button('Trigger')).toHaveFocus();
+    });
+
+    it('leaves focus in a layer that was not opened from the surface', () => {
+      const { rerender } = render(<LayerPage open={false} layerId="surface" />);
+      act(() => button('Trigger').focus());
+      rerender(<LayerPage open layerId="surface" />);
+      const portal = document.createElement('div');
+      portal.innerHTML = '<button type="button">Page popup</button>';
+      document.body.appendChild(portal);
+      const unregister = registerLayer(
+        makeLayer('page-popup', { kind: 'popover', getElements: () => [portal] }),
+      );
+      try {
+        const pagePopupButton = portal.querySelector('button') as HTMLButtonElement;
+        act(() => pagePopupButton.focus());
+        rerender(<LayerPage open={false} layerId="surface" />);
+        expect(pagePopupButton).toHaveFocus();
+      } finally {
+        unregister();
+        portal.remove();
+      }
+    });
+  });
 });

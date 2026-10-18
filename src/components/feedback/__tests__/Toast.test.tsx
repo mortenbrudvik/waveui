@@ -1730,6 +1730,34 @@ describe('Toaster: beside an open modal side panel (feedback-navigation#50, WCAG
     expect(offset()).toBe('400px');
   });
 
+  it('measures again when an open panel changes its size (a Drawer from small to medium)', () => {
+    const resizeObserver = installResizeObserverMock();
+    try {
+      const { box } = setup();
+      expect(offset()).toBe('320px');
+      const panel = screen.getByRole('dialog', { name: 'Filters' });
+      // 592px wide (`size="medium"`): the same element, a new box.
+      box.current = { ...END_EDGE, left: 432 };
+      resizeObserver.trigger(panel);
+      expect(offset()).toBe('592px');
+    } finally {
+      resizeObserver.restore();
+    }
+  });
+
+  it('measures again when an open panel moves without resizing (its position changes)', async () => {
+    const { box } = setup();
+    expect(offset()).toBe('320px');
+    const panel = screen.getByRole('dialog', { name: 'Filters' });
+    // From the end edge to the start edge: the toasts' corner is clear again.
+    box.current = START_EDGE;
+    await act(async () => {
+      panel.setAttribute('data-position', 'start');
+      panel.className = 'start-0';
+    });
+    expect(offset()).toBe('');
+  });
+
   it('keeps the offset for a Dialog opened on top of the panel', () => {
     const box = { current: END_EDGE };
     const dialogBox = { current: CENTERED };

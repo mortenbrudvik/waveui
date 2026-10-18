@@ -8,6 +8,7 @@ import {
   getLayer,
   getOpenLayers,
   getTopmostLayer,
+  isDescendantLayer,
   isInsideLayerTree,
   isInsideOtherOpenModal,
   subscribeLayers,
@@ -47,9 +48,18 @@ export interface UseRestoreFocusOptions {
    * when focus is inside the surface at close, or was lost to `<body>` from an element inside it
    * (removed, or made unable to take focus). Focus elsewhere, or on `<body>` for another reason
    * (nothing had focus, a press on a spot that takes no focus, a close from code), stays where it
-   * is. Wins over `onlyIfFocusInside`. @default false
+   * is. Wins over `onlyIfFocusInside`. Focus in a layer opened from the surface (a Popover or a
+   * confirm Dialog, portaled outside it) counts as inside: a descendant layer of `layerId`, or a
+   * layer anchored to an element inside the surface; so does focus lost to `<body>` from one.
+   * @default false
    */
   requireFocusInside?: boolean;
+  /**
+   * The surface's own dismiss layer, with `requireFocusInside`: focus in one of its descendant
+   * layers counts as inside the surface, also after the surface's layer has unregistered (in the
+   * commit that closes it).
+   */
+  layerId?: string;
 }
 
 interface Latest {
@@ -414,14 +424,37 @@ function getNearbyTargets(
 function isFocusLostFromInside(container: HTMLElement | null | undefined): boolean {
   if (!container) return false;
   const lost = getLostFocus();
-  return !!lost && lost.position.path.includes(container);
+  if (!lost) return false;
+  if (lost.position.path.includes(container)) return true;
+  // Lost from a layer opened from the surface: the overlays that held it are anchored inside.
+  return lost.anchors.some((anchor) => anchor.position.path.includes(container));
+}
+
+/**
+ * Whether `active` is in a layer opened from the surface (portaled outside it): a descendant layer
+ * of the surface's layer (`layerId`), or an open layer whose tree holds it and whose anchor (its
+ * trigger) is inside the surface. The toast region counts as inside every layer, never here.
+ */
+function isInLayerOpenedFrom(
+  active: Element,
+  container: HTMLElement | null | undefined,
+  layerId: string | undefined,
+): boolean {
+  if (!container || active.closest(ALLOW_OUTSIDE_SELECTOR)) return false;
+  return getOpenLayers().some((layer) => {
+    if (layer.id === layerId || !isInsideLayerTree(layer.id, active)) return false;
+    if (layerId !== undefined && isDescendantLayer(layer.id, layerId)) return true;
+    const anchor = layer.getAnchor();
+    return !!anchor && container.contains(anchor);
+  });
 }
 
 /**
  * Whether the restore acts for this close: always while focus is inside the surface; otherwise
  * never for a hover close (`isClosingByHover`, asked only then), and with `onlyIfFocusInside` only
- * when focus was lost to `<body>`. With `requireFocusInside`, from `<body>` only when focus was
- * lost there from inside the surface, and never from anywhere else.
+ * when focus was lost to `<body>`. With `requireFocusInside`, also while focus is in a layer opened
+ * from the surface, from `<body>` only when focus was lost there from inside the surface (or from
+ * such a layer), and never from anywhere else.
  */
 function shouldRestore(options: UseRestoreFocusOptions, isHoverClose: () => boolean): boolean {
   if (typeof document === 'undefined') return false;
@@ -429,7 +462,8 @@ function shouldRestore(options: UseRestoreFocusOptions, isHoverClose: () => bool
   const onBody = !active || active === document.body || active === document.documentElement;
   if (!onBody && options.container?.contains(active)) return true;
   if (options.requireFocusInside) {
-    return onBody && isFocusLostFromInside(options.container) && !isHoverClose();
+    if (!onBody) return isInLayerOpenedFrom(active, options.container, options.layerId);
+    return isFocusLostFromInside(options.container) && !isHoverClose();
   }
   if (!onBody && options.onlyIfFocusInside) return false;
   return !isHoverClose();
@@ -493,8 +527,10 @@ function restore(latest: Latest, opener: OpenerRecord | null): void {
  *
  * - **Capture**: when `enabled` flips to `true`, the opener is captured in an insertion effect —
  *   before React applies `autoFocus` inside the new surface — preferring `triggerRef.current` and
- *   ignoring `<body>` and elements inside `container`. Its place in the document and the triggers
- *   of the overlays it sits in are recorded with it. When focus is already on `<body>` because
+ *   ignoring `<body>` and elements inside `container`. When that finds nothing (a surface that
+ *   mounts open, before the refs of its commit are attached), it is captured again in the layout
+ *   phase of the same commit. Its place in the document and the triggers of the overlays it sits
+ *   in are recorded with it. When focus is already on `<body>` because
  *   the focused element was removed earlier in the same commit (a menu item in a popover that
  *   closes as the dialog it opens appears, the popover coming first in the tree), a document
  *   focus tracker supplies that element with its recorded place and overlay triggers. The tracker
@@ -524,8 +560,10 @@ function restore(latest: Latest, opener: OpenerRecord | null): void {
  * - `onlyIfFocusInside` (popovers): restores only when focus is inside the surface or was lost to
  *   `<body>`.
  * - `requireFocusInside` (surfaces that do not trap focus: a non-modal Dialog or Drawer, an inline
- *   Drawer): restores only when focus is inside the surface, or was lost to `<body>` from an
- *   element inside it; a close from code while focus is on `<body>` or on the page moves nothing.
+ *   Drawer): restores only when focus is inside the surface or in a layer opened from it (a
+ *   descendant layer of `layerId`, or a layer anchored inside the surface), or was lost to
+ *   `<body>` from an element in either; a close from code while focus is on `<body>` or on the
+ *   page moves nothing.
  * - `isHoverClose`: a close by the hover intent restores only when focus is inside the surface, so
  *   a hover close never moves focus from `<body>` or from where the user put it. The same holds for
  *   a surface opened from inside one that closes by hover (a submenu, a hover card in a hover
@@ -572,11 +610,17 @@ export function useRestoreFocus(options: UseRestoreFocusOptions): void {
     if (options.enabled && !wasEnabled) capturedRef.current = captureOpener(options);
   });
 
+  // `enabled` false → true with nothing captured: capture again in the layout phase. A surface
+  // that mounts open (an inline Drawer with `defaultOpen`) captured before the refs of this commit
+  // were attached, so its trigger was not known yet.
   // `enabled` true → false: restore in the layout phase (after every cleanup of this commit, so a
   // modal's isolation is already gone).
   useLayoutEffect(() => {
     const wasEnabled = layoutEnabledRef.current;
     layoutEnabledRef.current = enabled;
+    if (enabled && !wasEnabled && !capturedRef.current) {
+      capturedRef.current = captureOpener(latestRef.current.options);
+    }
     if (!wasEnabled || enabled) return;
     const latest = latestRef.current;
     const captured = capturedRef.current;

@@ -7,7 +7,12 @@ import { reportMissingContext, warnOnce } from '../../lib/dev';
 import { getDirection } from '../../lib/direction';
 import { isEditableTarget, isOwnEvent } from '../../lib/events';
 import { getFirstTabbable, getTabbableElements, isConnectedAndFocusable } from '../../lib/focus';
-import { getOpenLayers, isInsideLayerTree, subscribeLayers } from '../../lib/layers';
+import {
+  getOpenLayers,
+  isInsideLayerTree,
+  subscribeLayers,
+  type LayerRecord,
+} from '../../lib/layers';
 import { focusRing } from '../../lib/styles';
 import { bindToasterHandle, isToastOptions } from '../../lib/toaster';
 import type { ToasterHandle } from '../../lib/toaster';
@@ -476,6 +481,20 @@ interface PanelOffsets {
 /** No panel at the toasts' corner: they keep it. */
 const NO_PANEL_OFFSETS: PanelOffsets = { inline: 0, block: 0 };
 
+/** The open layers the toasts keep clear of: kind `'modal'` or `'dialog'` (a Dialog or Drawer). */
+function getPanelLayers(): LayerRecord[] {
+  return getOpenLayers().filter((layer) => layer.kind === 'modal' || layer.kind === 'dialog');
+}
+
+/** The connected elements of the open panel layers ({@link getPanelLayers}). */
+function getPanelElements(): Set<HTMLElement> {
+  const elements = new Set<HTMLElement>();
+  for (const layer of getPanelLayers()) {
+    for (const el of layer.getElements()) if (el?.isConnected) elements.add(el);
+  }
+  return elements;
+}
+
 /**
  * How far the toasts move away from their corner while an open panel covers it, so they never
  * hide the panel's controls (WCAG 2.4.11 Focus Not Obscured). It reads every open layer of kind
@@ -489,9 +508,7 @@ const NO_PANEL_OFFSETS: PanelOffsets = { inline: 0, block: 0 };
  * bottom panel open together move the toasts on both axes; an axis without room keeps `0`.
  */
 function getPanelOffsets(viewport: HTMLElement, position: ToastPosition): PanelOffsets {
-  const panels = getOpenLayers().filter(
-    (layer) => layer.kind === 'modal' || layer.kind === 'dialog',
-  );
+  const panels = getPanelLayers();
   if (panels.length === 0) return NO_PANEL_OFFSETS;
   const doc = viewport.ownerDocument;
   const view = doc.defaultView;
@@ -1053,14 +1070,32 @@ export const Toaster = ({
 
   // Beside or above an open panel at the toasts' corner (a Drawer), not over its controls. Measured
   // when a layer opens or closes (synchronously in its layout effect, before paint), on resize,
-  // after a transition or animation (a panel that slides in reaches its place only then), and when
-  // the region's own size changes (the stack's height decides whether it fits above a panel).
+  // after a transition or animation (a panel that slides in reaches its place only then), when the
+  // region's own size changes (the stack's height decides whether it fits above a panel), and when
+  // an open panel changes its size, or its classes or style (an open Drawer whose `size` or
+  // `position` changes: a move without a resize is no ResizeObserver entry).
   const [panelOffsets, setPanelOffsets] = React.useState<PanelOffsets>(NO_PANEL_OFFSETS);
   React.useLayoutEffect(() => {
-    // The region is observed from `update`, so a region that renders after this effect (its portal
-    // waits for hydration) is observed from the next measure: a layer opening runs one.
+    // The region and the panels are observed from `update`, so a region that renders after this
+    // effect (its portal waits for hydration) is observed from the next measure: a layer opening
+    // runs one. Only elements not observed yet are added (observing one again would report it).
     let observer: ResizeObserver | null = null;
+    let mutationObserver: MutationObserver | null = null;
     let observed: HTMLElement | null = null;
+    let observedPanels = new Set<HTMLElement>();
+    const observePanels = () => {
+      const panels = getPanelElements();
+      for (const el of observedPanels) if (!panels.has(el)) observer?.unobserve(el);
+      for (const el of panels) if (!observedPanels.has(el)) observer?.observe(el);
+      const changed =
+        panels.size !== observedPanels.size || [...panels].some((el) => !observedPanels.has(el));
+      observedPanels = panels;
+      if (!changed || !mutationObserver) return;
+      mutationObserver.disconnect();
+      for (const el of panels) {
+        mutationObserver.observe(el, { attributes: true, attributeFilter: ['class', 'style'] });
+      }
+    };
     const update = () => {
       const viewport = viewportRef.current;
       if (observer && viewport !== observed) {
@@ -1068,12 +1103,14 @@ export const Toaster = ({
         if (viewport) observer.observe(viewport);
         observed = viewport;
       }
+      observePanels();
       const next = viewport ? getPanelOffsets(viewport, position) : NO_PANEL_OFFSETS;
       setPanelOffsets((current) =>
         current.inline === next.inline && current.block === next.block ? current : next,
       );
     };
     if (typeof ResizeObserver !== 'undefined') observer = new ResizeObserver(() => update());
+    if (typeof MutationObserver !== 'undefined') mutationObserver = new MutationObserver(update);
     update();
     const unsubscribe = subscribeLayers(update);
     window.addEventListener('resize', update);
@@ -1082,6 +1119,7 @@ export const Toaster = ({
     return () => {
       unsubscribe();
       observer?.disconnect();
+      mutationObserver?.disconnect();
       window.removeEventListener('resize', update);
       document.removeEventListener('transitionend', update, true);
       document.removeEventListener('animationend', update, true);

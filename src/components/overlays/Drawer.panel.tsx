@@ -43,10 +43,10 @@ export function useDrawerOpen(type: DrawerType, openState: boolean): boolean {
 }
 
 /** The axis a drawer's `size` applies to: the width at a side, the height at the bottom. */
-export type DrawerSizeAxis = 'width' | 'height';
+type DrawerSizeAxis = 'width' | 'height';
 
 /** The axis `size` sets for a drawer at `position`. */
-export function getDrawerSizeAxis(position: DrawerPosition): DrawerSizeAxis {
+function getDrawerSizeAxis(position: DrawerPosition): DrawerSizeAxis {
   return position === 'bottom' ? 'height' : 'width';
 }
 
@@ -55,9 +55,7 @@ export function getDrawerSizeAxis(position: DrawerPosition): DrawerSizeAxis {
  * follow the user's font size), and `full` the whole axis. A width (height) class in the
  * consumer's `className` replaces the size, as the consumer's class comes last in `cn()`.
  */
-export const drawerSizeClasses: Readonly<
-  Record<DrawerSizeAxis, Readonly<Record<DrawerSize, string>>>
-> = {
+const drawerSizeClasses: Readonly<Record<DrawerSizeAxis, Readonly<Record<DrawerSize, string>>>> = {
   width: { small: 'w-80', medium: 'w-148', large: 'w-235', full: 'w-full' },
   height: { small: 'h-80', medium: 'h-148', large: 'h-235', full: 'h-full' },
 };
@@ -67,7 +65,7 @@ export const drawerSizeClasses: Readonly<
  * shadow cannot, in high contrast (page, backdrop and panel are black) and in forced colors
  * (which drop shadows).
  */
-export const drawerEdgeClasses: Readonly<Record<DrawerPosition, string>> = {
+const drawerEdgeClasses: Readonly<Record<DrawerPosition, string>> = {
   start: 'border-e',
   end: 'border-s',
   left: 'border-r', // wave-allow-physical: the consumer asked for the physical left edge
@@ -79,7 +77,7 @@ export const drawerEdgeClasses: Readonly<Record<DrawerPosition, string>> = {
  * Where an overlay panel is pinned: a side panel spans the window's height, a bottom one its
  * width; neither grows past the window (a size larger than the screen acts as `full`).
  */
-export const overlayPlacementClasses: Readonly<Record<DrawerPosition, string>> = {
+const overlayPlacementClasses: Readonly<Record<DrawerPosition, string>> = {
   start: 'start-0 top-0 h-full max-w-full',
   end: 'end-0 top-0 h-full max-w-full',
   left: 'left-0 top-0 h-full max-w-full', // wave-allow-physical: the consumer asked for the physical left edge
@@ -94,7 +92,7 @@ export const overlayPlacementClasses: Readonly<Record<DrawerPosition, string>> =
  * the bottom edge, and the top one too at `full`. The side insets (a landscape notch) are not
  * padded.
  */
-export function getOverlayInsetClasses(position: DrawerPosition, size: DrawerSize): string {
+function getOverlayInsetClasses(position: DrawerPosition, size: DrawerSize): string {
   if (position === 'bottom' && size !== 'full') return 'pb-[env(safe-area-inset-bottom)]';
   return 'pt-[env(safe-area-inset-top)] pb-[env(safe-area-inset-bottom)]';
 }
@@ -104,7 +102,7 @@ export function getOverlayInsetClasses(position: DrawerPosition, size: DrawerSiz
  * border, the size on the position's axis and the safe-area insets. They go after the panel's
  * base classes and before the consumer's `className`.
  */
-export function getOverlayPanelClasses(position: DrawerPosition, size: DrawerSize): string {
+function getOverlayPanelClasses(position: DrawerPosition, size: DrawerSize): string {
   return [
     overlayPlacementClasses[position],
     drawerEdgeClasses[position],
@@ -119,7 +117,7 @@ export function getOverlayPanelClasses(position: DrawerPosition, size: DrawerSiz
  * transparent unless the Drawer has `separator` (`data-separator`), and always drawn in forced
  * colors.
  */
-export const inlinePanelClasses = [
+const inlinePanelClasses = [
   'relative flex min-h-0 shrink-0 flex-col max-w-full bg-background text-foreground',
   'border-transparent data-[separator]:border-border',
   forcedColors.border,
@@ -132,7 +130,7 @@ export const inlinePanelClasses = [
  * sits is up to the page layout. They go after {@link inlinePanelClasses} and before the
  * consumer's `className`.
  */
-export function getInlinePanelClasses(position: DrawerPosition, size: DrawerSize): string {
+function getInlinePanelClasses(position: DrawerPosition, size: DrawerSize): string {
   const axis = getDrawerSizeAxis(position);
   return [
     drawerEdgeClasses[position],
@@ -324,8 +322,10 @@ export const DrawerPanel = ({
     finalFocusRef,
   });
   // A non-modal overlay keeps its place in the page's keyboard order right after its opener
-  // (D87.5). Both hooks are always called (C-HOOKS, D91).
-  const opener = useModalOpener(open && nonModalOverlay, trigger, overlayPanel);
+  // (D87.5). Both hooks are always called (C-HOOKS, D91). The opener is captured whenever the
+  // overlay opens, so a modal panel that turns non-modal while open (focus inside it by then)
+  // still knows it.
+  const opener = useModalOpener(open && overlay, trigger, overlayPanel);
   const onTabOrderKeyDown = usePopoverTabOrder({
     enabled: open && nonModalOverlay,
     surface: overlayPanel,

@@ -135,7 +135,8 @@ export interface DrawerProps extends Omit<React.HTMLAttributes<HTMLElement>, 'ti
    * after the element that opened it, Escape closes it while focus is inside it, presses on the
    * page never close it, and focus returns to the opener only when it was inside the drawer. A
    * non-modal drawer covers the page under it while Tab still reaches that page: reserve its width
-   * (its height at the bottom) in your layout while it is open (with `size="full"` it covers
+   * (its height at the bottom) in your layout while it is open, or use `modal`, or, for a panel
+   * beside the content, an inline drawer (`type="inline"`) (with `size="full"` it covers
    * everything, and a development warning says so). Every type moves focus to the first focusable
    * element on open. Rendered as `data-modal-type`. Ignored by an inline drawer, which is never
    * modal and renders no `data-modal-type`. Fluent's `modalType`.

@@ -359,8 +359,10 @@ const DialogRoot = ({
 DialogRoot.displayName = 'Dialog';
 
 /**
- * Opens and closes the dialog: a click while it is open asks it to close (reason `trigger`), which
- * only a non-modal dialog's trigger can receive (a modal one makes the page inert). Puts
+ * Opens and closes the dialog: a click while it is open asks it to close (reason `trigger`). Only a
+ * non-modal dialog's trigger, or a trigger rendered inside the dialog's own content, can receive
+ * one (a modal dialog makes the page inert). Fluent's `DialogTrigger` never toggles (outside the
+ * surface it only opens, inside it only closes); this trigger always does. Puts
  * `aria-haspopup="dialog"`, `aria-expanded`, `aria-controls` (while open), a click handler and a
  * ref on its single child (no wrapper element), or passes them to a render-prop child. A custom
  * child component must forward `ref` and spread its props; one that does not is wrapped in a
@@ -396,13 +398,15 @@ DialogClose.displayName = 'DialogClose';
 /**
  * The surface's width cap per size. `full` lifts the caps, the margin, the radius and the border,
  * takes the viewport's dynamic height and pads the safe-area insets (`max()` keeps the 24px
- * padding where there is no inset, and never adds the two).
+ * padding where there is no inset, and never adds the two). The side insets are physical (the
+ * left inset pads the left side in either direction), so the side padding is too: one class per
+ * side, with no direction override that a consumer's padding class would leave behind.
  */
 const sizeClasses: Record<DialogSize, string> = {
   small: 'max-w-[400px]',
   medium: 'max-w-[600px]',
   large: 'max-w-[940px]',
-  full: 'm-0 h-dvh max-h-none max-w-none rounded-none border-0 pt-[max(1.5rem,env(safe-area-inset-top))] pb-[max(1.5rem,env(safe-area-inset-bottom))] ps-[max(1.5rem,env(safe-area-inset-left))] pe-[max(1.5rem,env(safe-area-inset-right))] wave-rtl:ps-[max(1.5rem,env(safe-area-inset-right))] wave-rtl:pe-[max(1.5rem,env(safe-area-inset-left))]',
+  full: 'm-0 h-dvh max-h-none max-w-none rounded-none border-0 pt-[max(1.5rem,env(safe-area-inset-top))] pb-[max(1.5rem,env(safe-area-inset-bottom))] pl-[max(1.5rem,env(safe-area-inset-left))] pr-[max(1.5rem,env(safe-area-inset-right))]', // wave-allow-physical: the safe-area insets are physical sides
 };
 
 /** The title-actions area of a `full` dialog moves by the safe-area insets, as the padding does. */
@@ -535,9 +539,11 @@ export const DialogContent = ({
     triggerRef: trigger.focusRef,
     finalFocusRef,
   });
-  // A non-modal dialog keeps its place in the page's keyboard order right after its opener.
+  // A non-modal dialog keeps its place in the page's keyboard order right after its opener. The
+  // opener is captured whenever the dialog opens, so a modal dialog that turns non-modal while open
+  // (focus inside it by then) still knows it.
   const nonModal = modalType === 'non-modal';
-  const opener = useModalOpener(open && nonModal, trigger, surface);
+  const opener = useModalOpener(open, trigger, surface);
   const onTabOrderKeyDown = usePopoverTabOrder({
     enabled: open && nonModal,
     surface,
