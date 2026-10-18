@@ -22,15 +22,23 @@ import type { DrawerScrollState } from './Drawer.scroll';
 /**
  * Side of the screen the drawer is attached to. `start`/`end` follow the text direction (in a
  * right-to-left layout `end` is the left edge); `left`/`right` are physical sides; `bottom` runs
- * along the bottom edge, as wide as the viewport.
+ * along the bottom edge, as wide as the viewport. An inline drawer sits where the page layout puts
+ * it: the position picks its inner edge (the one facing the page content) and its size's axis.
  */
 export type DrawerPosition = 'start' | 'end' | 'left' | 'right' | 'bottom';
 
 /**
  * How much room a Drawer takes: its width at a side, its height at the bottom. `small` 320px,
- * `medium` 592px, `large` 940px; `full` the viewport. The shared `SurfaceSize`.
+ * `medium` 592px, `large` 940px; `full` the viewport (an inline drawer: its container). The shared
+ * `SurfaceSize`.
  */
 export type DrawerSize = SurfaceSize;
+
+/**
+ * How a Drawer sits on the page: `overlay`, a panel over the page (in a portal), or `inline`, a
+ * panel in the page layout, rendered where the Drawer is. Fluent's `type`.
+ */
+export type DrawerType = 'overlay' | 'inline';
 
 /**
  * How a `Drawer` relates to the page: `modal`, `alert` or `non-modal` (the shared `ModalType`;
@@ -57,6 +65,8 @@ export interface DrawerContextValue {
   trigger: ModalTrigger;
   /** The panel's id (for the trigger's `aria-controls`). */
   panelId: string;
+  /** The drawer's `type`: the trigger of an inline drawer renders no `aria-haspopup`. */
+  type: DrawerType;
   /** `true` for sub-components rendered inside the panel (a `Drawer.Trigger` there is misplaced). */
   inPanel: boolean;
   /** The accessible name of the built-in Close button (the Drawer's `closeLabel`). */
@@ -75,6 +85,7 @@ const inertDrawerContext: DrawerContextValue = {
   requestOpen: () => {},
   trigger: inertModalTrigger,
   panelId: '',
+  type: 'overlay',
   inPanel: false,
   closeLabel: 'Close',
   closeButton: undefined,

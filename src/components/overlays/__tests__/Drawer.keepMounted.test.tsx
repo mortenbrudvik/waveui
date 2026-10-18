@@ -588,6 +588,155 @@ describe('Drawer unmountOnClose', () => {
     });
   });
 
+  describe('inline drawers (type="inline")', () => {
+    const inlinePanel = () => document.querySelector<HTMLElement>('aside');
+
+    it('keeps a never-opened aside in place, hidden and inert, with no layer, isolation or scroll lock', async () => {
+      const user = userEvent.setup();
+      const onOpenChange = vi.fn();
+      const { container } = render(<FormDrawer type="inline" onOpenChange={onOpenChange} />);
+      const element = inlinePanel();
+      expect(element).not.toBeNull();
+      expect(container).toContainElement(element);
+      expect(element).toHaveAttribute('hidden');
+      expect(element).toHaveAttribute('inert');
+      expect(element).toHaveAttribute('data-presence', 'exited');
+      expect(element).toHaveAttribute('data-type', 'inline');
+      expect(document.querySelector('[data-wave-portal]')).toBeNull();
+      expect(backdrop()).toBeNull();
+      expect(screen.queryByRole('complementary')).not.toBeInTheDocument();
+      expect(screen.getByRole('complementary', { hidden: true })).toBe(element);
+      expect(getTopmostLayer()).toBeNull();
+      expect(button('Page button').closest('[inert]')).toBeNull();
+      expect(document.documentElement.style.overflow).toBe('');
+      button('Page button').focus();
+      await user.keyboard('{Escape}');
+      expect(onOpenChange).not.toHaveBeenCalled();
+    });
+
+    it.each([
+      [
+        'the Close button',
+        async (user: ReturnType<typeof userEvent.setup>) => user.click(button('Close')),
+      ],
+      [
+        'Drawer.Close',
+        async (user: ReturnType<typeof userEvent.setup>) => user.click(button('Done')),
+      ],
+      [
+        'the trigger',
+        async (user: ReturnType<typeof userEvent.setup>) => user.click(button('Open filters')),
+      ],
+    ] as const)('keeps what was typed when closed with %s and opened again', async (_, close) => {
+      const user = userEvent.setup();
+      render(<FormDrawer type="inline" />);
+      await user.click(button('Open filters'));
+      expect(inlinePanel()).toHaveAttribute('data-presence', 'entered');
+      expect(inlinePanel()).not.toHaveAttribute('hidden');
+      await user.type(nameField(), 'Ada');
+      await close(user);
+      expect(screen.queryByRole('complementary')).not.toBeInTheDocument();
+      expect(inlinePanel()).toHaveAttribute('hidden');
+      expect(inlinePanel()).toHaveAttribute('inert');
+      await user.click(button('Open filters'));
+      expect(nameField()).toHaveValue('Ada');
+    });
+
+    it('gives the trigger aria-expanded="false" and no aria-controls while kept closed', async () => {
+      const user = userEvent.setup();
+      render(<FormDrawer type="inline" />);
+      const trigger = button('Open filters');
+      expect(trigger).toHaveAttribute('aria-expanded', 'false');
+      expect(trigger).not.toHaveAttribute('aria-controls');
+      expect(trigger).not.toHaveAttribute('aria-haspopup');
+      await user.click(trigger);
+      expect(trigger).toHaveAttribute('aria-controls', inlinePanel()!.id);
+      await user.click(trigger);
+      expect(trigger).toHaveAttribute('aria-expanded', 'false');
+      expect(trigger).not.toHaveAttribute('aria-controls');
+    });
+
+    it('renders the hidden aside in the server HTML and hydrates it without a mismatch', async () => {
+      const onOpenChange = vi.fn();
+      const element = <FormDrawer type="inline" onOpenChange={onOpenChange} />;
+      const html = renderToString(element);
+      const parsed = document.createElement('div'); // detached: nothing reaches document.body
+      parsed.innerHTML = html;
+      const serverAside = parsed.querySelector('aside');
+      expect(serverAside).not.toBeNull();
+      expect(serverAside).toHaveAttribute('hidden');
+      expect(serverAside).toHaveAttribute('inert');
+      expect(serverAside).toHaveAttribute('data-presence', 'exited');
+      const serverTrigger = Array.from(parsed.querySelectorAll('button')).find(
+        (element) => element.textContent === 'Open filters',
+      );
+      expect(serverTrigger).toHaveAttribute('aria-expanded', 'false');
+      expect(serverTrigger).not.toHaveAttribute('aria-controls');
+      const container = document.createElement('div');
+      container.innerHTML = html;
+      document.body.appendChild(container);
+      const error = vi.spyOn(console, 'error');
+      const onRecoverableError = vi.fn();
+      let root: ReturnType<typeof hydrateRoot> | undefined;
+      try {
+        await act(async () => {
+          root = hydrateRoot(container, element, { onRecoverableError });
+        });
+        expect(error).not.toHaveBeenCalled();
+        expect(onRecoverableError).not.toHaveBeenCalled();
+        expect(onOpenChange).not.toHaveBeenCalled();
+        expect(inlinePanel()).toBe(container.querySelector('aside'));
+        expect(inlinePanel()).toHaveAttribute('hidden');
+      } finally {
+        act(() => root?.unmount());
+        container.remove();
+        error.mockRestore();
+      }
+    });
+
+    it('warns once when a controlled kept-mounted inline drawer closes while a popover inside is open', async () => {
+      vi.useFakeTimers({ shouldAdvanceTime: true });
+      const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
+      const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+      function InlineWithPopover({ open }: { open: boolean }) {
+        return (
+          <Drawer
+            type="inline"
+            open={open}
+            onOpenChange={() => {}}
+            unmountOnClose={false}
+            title="Filters"
+          >
+            <Popover>
+              <Popover.Trigger>
+                <button type="button">Help</button>
+              </Popover.Trigger>
+              <Popover.Content>Help text</Popover.Content>
+            </Popover>
+          </Drawer>
+        );
+      }
+      try {
+        const { rerender } = render(<InlineWithPopover open />);
+        await user.click(button('Help'));
+        expect(screen.getByText('Help text')).toBeInTheDocument();
+        rerender(<InlineWithPopover open={false} />);
+        expect(warn).not.toHaveBeenCalled();
+        act(() => {
+          vi.advanceTimersByTime(0);
+        });
+        expect(warn).toHaveBeenCalledTimes(1);
+        expect(warn).toHaveBeenCalledWith(OPEN_INSIDE_WARNING);
+        // Closed from the test: the popover is still open over the page.
+        await user.keyboard('{Escape}');
+        expect(screen.queryByText('Help text')).not.toBeInTheDocument();
+      } finally {
+        warn.mockRestore();
+        vi.useRealTimers();
+      }
+    });
+  });
+
   describe('development warnings name the kept-mounted state', () => {
     it('Drawer.Trigger:nested', () => {
       const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});

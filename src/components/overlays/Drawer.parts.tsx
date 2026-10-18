@@ -35,7 +35,9 @@ import { scrollSeparatorClasses } from './Drawer.scroll';
 
 /** Props a `Drawer.Trigger` puts on its element (and passes to a render-prop child). */
 export interface DrawerTriggerRenderProps extends React.HTMLAttributes<HTMLElement> {
-  /** `'dialog'`; absent on the trigger of an inline drawer, which opens no popup. */
+  /**
+   * `'dialog'` for an overlay drawer; absent (no key) for an inline drawer, which is not a popup.
+   */
   'aria-haspopup'?: 'dialog';
   'aria-expanded': boolean;
   /** The panel's id, while the drawer is open. */
@@ -162,18 +164,20 @@ export const NESTED_TRIGGER_WARNING =
 
 /**
  * Opens and closes the drawer: a click while it is open asks it to close (reason `trigger`), which
- * only the trigger of a non-modal drawer can receive (a modal one makes the page inert). Place it
- * directly inside `Drawer`, or in a Fragment there (not inside a wrapper element or a component of
- * your own): it renders in place, not in the panel; a misplaced one warns in development. A Drawer
- * may have several triggers: focus returns to the one that opened it. Puts `aria-haspopup="dialog"`
- * (an inline drawer's trigger renders none), `aria-expanded`, `aria-controls` (while open), a click
+ * only the trigger of a non-modal or inline drawer can receive (a modal one makes the page inert).
+ * Place it directly inside `Drawer`, or in a Fragment there (not inside a wrapper element or a
+ * component of your own): it renders in place, not in the panel (an inline drawer's triggers
+ * render right before its panel, so the panel follows its button in the reading order); a
+ * misplaced one warns in development. A Drawer may have several triggers: focus returns to the one
+ * that opened it. Puts `aria-haspopup="dialog"` (none on an inline drawer's trigger: an inline
+ * panel is page content, not a popup), `aria-expanded`, `aria-controls` (while open), a click
  * handler and a ref on its single child, or passes them to a render-prop child. A custom child
  * component must forward `ref` and spread its props; one that does not is wrapped in a `<span>`
  * automatically (with a development warning), the span that `asChild={false}` renders. Focus
- * returns to the trigger when the drawer closes. On the span, the state ARIA goes to the first
- * element in the tab order inside it, and focus returns to that element (to the span when you made
- * it the trigger with a `role` such as `button` and `tabIndex={0}`, or when nothing inside it can
- * take focus).
+ * returns to the trigger when the drawer closes (for a non-modal or inline drawer, only when focus
+ * was inside it). On the span, the state ARIA goes to the first element in the tab order inside
+ * it, and focus returns to that element (to the span when you made it the trigger with a `role`
+ * such as `button` and `tabIndex={0}`, or when nothing inside it can take focus).
  *
  * A Tooltip (or any other wrapper) goes inside the trigger, not around it. Use a render-prop child
  * so the trigger props land on the button and the Tooltip describes that same button:
@@ -191,7 +195,7 @@ export const NESTED_TRIGGER_WARNING =
  * </Drawer>
  */
 export const DrawerTrigger = (props: DrawerTriggerProps) => {
-  const { open, requestOpen, trigger, panelId, inPanel } = useDrawerContext('Drawer.Trigger');
+  const { open, requestOpen, trigger, panelId, type, inPanel } = useDrawerContext('Drawer.Trigger');
 
   // Rendered inside its own drawer's panel (e.g. by a component): not rendered (or, kept mounted,
   // hidden) while the drawer is closed.
@@ -200,7 +204,13 @@ export const DrawerTrigger = (props: DrawerTriggerProps) => {
   }, [inPanel]);
 
   return useModalTriggerPart<DrawerTriggerRenderProps>(
-    { open, requestOpen, trigger, controlsId: panelId },
+    {
+      open,
+      requestOpen,
+      trigger,
+      controlsId: panelId,
+      popup: type === 'inline' ? false : 'dialog',
+    },
     props,
     'Drawer.Trigger',
   );
@@ -324,10 +334,10 @@ function useWarnWhen(condition: boolean, key: string, message: string): void {
  * own in `Drawer.Close`). Make it a direct child of `Drawer` (a Fragment there is fine); nested in
  * an element or rendered by a component of yours it renders in the body, with a development
  * warning. It draws a line under itself while the body is scrolled away from its top
- * (`data-scroll-state`). Initial focus goes to its first focusable element (a Back button, a title
- * action): give the control that should start `autoFocus`. A header whose children render nothing
- * renders no element (the drawer then has no header; Escape, the backdrop and `Drawer.Close` still
- * close it). Fluent's `DrawerHeader`.
+ * (`data-scroll-state`). When an overlay drawer opens, focus goes to the header's first focusable
+ * element (a Back button, a title action): give the control that should start `autoFocus`. A
+ * header whose children render nothing renders no element (the drawer then has no header; Escape
+ * and the backdrop of an overlay, and `Drawer.Close`, still close it). Fluent's `DrawerHeader`.
  */
 export const DrawerHeader = ({ className, children, ref, ...rest }: DrawerHeaderProps) => {
   useDrawerContext('Drawer.Header');

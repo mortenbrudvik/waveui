@@ -26,8 +26,10 @@ import {
   type DrawerProps,
   type DrawerTitleProps,
   type DrawerTriggerProps,
+  type DrawerTriggerRenderProps,
+  type DrawerType,
 } from '../Drawer';
-import { Dialog } from '../Dialog';
+import { Dialog, type DialogProps } from '../Dialog';
 import { dialogFooterClassNames, drawerClassNames } from '../../../lib/classNames';
 import { useDismiss } from '../../../hooks/useDismiss';
 import { Portal } from '../../portal/Portal';
@@ -130,7 +132,7 @@ describe('Drawer', () => {
   });
 
   it('declares ref in every props interface (C-REF)', () => {
-    expectTypeOf<DrawerProps['ref']>().toEqualTypeOf<React.Ref<HTMLDivElement> | undefined>();
+    expectTypeOf<DrawerProps['ref']>().toEqualTypeOf<React.Ref<HTMLElement> | undefined>();
     expectTypeOf<DrawerTriggerProps['ref']>().toEqualTypeOf<React.Ref<HTMLElement> | undefined>();
     expectTypeOf<DrawerCloseProps['ref']>().toEqualTypeOf<React.Ref<HTMLElement> | undefined>();
     expectTypeOf<DrawerTitleProps['ref']>().toEqualTypeOf<
@@ -145,6 +147,31 @@ describe('Drawer', () => {
     >();
     expectTypeOf<DrawerBodyProps['ref']>().toEqualTypeOf<React.Ref<HTMLDivElement> | undefined>();
     expectTypeOf<DrawerFooterProps['ref']>().toEqualTypeOf<React.Ref<HTMLDivElement> | undefined>();
+  });
+
+  it('types type, separator and unmountOnClose, and the panel as an HTMLElement (P6-07)', () => {
+    expectTypeOf<DrawerType>().toEqualTypeOf<'overlay' | 'inline'>();
+    expectTypeOf<DrawerProps['type']>().toEqualTypeOf<DrawerType | undefined>();
+    expectTypeOf<DrawerProps['separator']>().toEqualTypeOf<boolean | undefined>();
+    expectTypeOf<DrawerProps['unmountOnClose']>().toEqualTypeOf<boolean | undefined>();
+    expectTypeOf<DialogProps['unmountOnClose']>().toEqualTypeOf<boolean | undefined>();
+    expectTypeOf<DrawerTriggerRenderProps['aria-haspopup']>().toEqualTypeOf<'dialog' | undefined>();
+    // Compile-only: a div ref, a div ref callback and a div-typed handler still type-check.
+    function DivRefs() {
+      const divRef = React.useRef<HTMLDivElement>(null);
+      const onDivClick = (event: React.MouseEvent<HTMLDivElement>) => event.currentTarget;
+      return (
+        <>
+          <Drawer title="Ref" ref={divRef} onClick={onDivClick}>
+            Content
+          </Drawer>
+          <Drawer title="Callback" ref={(node: HTMLDivElement | null) => void node}>
+            Content
+          </Drawer>
+        </>
+      );
+    }
+    expectTypeOf(DivRefs).toBeFunction();
   });
 
   describe('system props', () => {
@@ -175,7 +202,7 @@ describe('Drawer', () => {
       expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
     });
 
-    it('renders only the trigger on the server, also when open by default', () => {
+    it('renders only the trigger of an overlay drawer on the server, also when open by default', () => {
       const html = renderToString(<WithTrigger defaultOpen />);
       expect(html).toContain('Open filters');
       expect(html).not.toContain('role="dialog"');
@@ -184,21 +211,24 @@ describe('Drawer', () => {
     it.each([
       ['a defaultOpen', { defaultOpen: true }],
       ['an open', { open: true }],
-    ])('renders %s drawer closed on the server, so every referenced id exists', (_l, props) => {
-      const serverHtml = renderToString(<WithTrigger {...props} />);
-      expect(findDanglingIdRefsInHtml(serverHtml)).toEqual([]);
-      const parsed = document.createElement('div'); // detached: nothing reaches document.body
-      parsed.innerHTML = serverHtml;
-      const trigger = parsed.querySelector('button');
-      expect(trigger).toHaveAttribute('aria-expanded', 'false');
-      expect(trigger).not.toHaveAttribute('aria-controls');
-    });
+    ])(
+      'renders %s overlay drawer closed on the server, so every referenced id exists',
+      (_l, props) => {
+        const serverHtml = renderToString(<WithTrigger {...props} />);
+        expect(findDanglingIdRefsInHtml(serverHtml)).toEqual([]);
+        const parsed = document.createElement('div'); // detached: nothing reaches document.body
+        parsed.innerHTML = serverHtml;
+        const trigger = parsed.querySelector('button');
+        expect(trigger).toHaveAttribute('aria-expanded', 'false');
+        expect(trigger).not.toHaveAttribute('aria-controls');
+      },
+    );
 
     it.each([
       ['defaultOpen', { defaultOpen: true }],
       ['open', { open: true }],
     ])(
-      'opens once hydrated (%s), without a mismatch or an onOpenChange call',
+      'opens an overlay drawer once hydrated (%s), without a mismatch or an onOpenChange call',
       async (_l, props) => {
         const onOpenChange = vi.fn();
         const element = <WithTrigger {...props} onOpenChange={onOpenChange} />;

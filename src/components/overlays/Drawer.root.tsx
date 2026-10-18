@@ -12,10 +12,10 @@ import { renderSlot, slotRendersContent, type Slot, type SlotObject } from '../.
 import { focusRingInset } from '../../lib/styles';
 import type { BackdropAppearance } from '../../lib/types';
 import { useId } from '../../hooks/useId';
-import { useIsClient } from '../../hooks/useIsClient';
 import { useMergedRefs } from '../../hooks/useMergedRefs';
 import { useModalLayer } from '../../hooks/useModalLayer';
 import { usePresence } from '../../hooks/usePresence';
+import { useRestoreFocus } from '../../hooks/useRestoreFocus';
 import { Portal } from '../portal/Portal';
 import {
   ModalSurfaceContext,
@@ -42,8 +42,14 @@ import {
   type DrawerOpenChangeDetails,
   type DrawerPosition,
   type DrawerSize,
+  type DrawerType,
 } from './Drawer.context';
-import { getOverlayPanelClasses } from './Drawer.panel';
+import {
+  getInlinePanelClasses,
+  getOverlayPanelClasses,
+  inlinePanelClasses,
+  useDrawerOpen,
+} from './Drawer.panel';
 import {
   DrawerBody,
   DrawerCloseButton,
@@ -63,15 +69,16 @@ import { getTabbableThrough, usePopoverTabOrder } from './Popover.shared';
  */
 
 /** Properties for the Drawer component. */
-export interface DrawerProps extends Omit<React.HTMLAttributes<HTMLDivElement>, 'title'> {
+export interface DrawerProps extends Omit<React.HTMLAttributes<HTMLElement>, 'title'> {
   /**
-   * Controlled open state of the drawer. The panel renders only in the browser: an open drawer
-   * is closed in the server HTML and opens once it has hydrated.
+   * Controlled open state of the drawer. An overlay drawer's panel renders only in the browser:
+   * open, it is closed in the server HTML and opens once it has hydrated. An inline drawer renders
+   * in the server HTML: open, or hidden when kept mounted (`unmountOnClose={false}`).
    */
   open?: boolean;
   /**
-   * Default open state for uncontrolled usage. The panel renders only in the browser: a drawer
-   * open by default is closed in the server HTML and opens once it has hydrated.
+   * Default open state for uncontrolled usage. An overlay drawer open by default is closed in the
+   * server HTML and opens once it has hydrated; an inline one is open in the server HTML.
    * @default false
    */
   defaultOpen?: boolean;
@@ -81,24 +88,57 @@ export interface DrawerProps extends Omit<React.HTMLAttributes<HTMLDivElement>, 
    * `outside-press` (the backdrop) — so a controlled drawer can refuse only some ways of closing
    * (for example keep a form with unsaved changes open on `outside-press`); `details.event` is the
    * DOM event behind the request. WaveUI always passes `details`; it is typed optional until 1.0
-   * so that code which calls this prop itself keeps compiling.
+   * so that code which calls this prop itself keeps compiling. An inline drawer asks only with
+   * `trigger` (its `Drawer.Trigger` toggles it), `close` and `close-button`: Escape and presses
+   * outside it never close it.
    *
    * Fires only when the value changes; a controlled drawer stays as it is until the parent updates
    * `open`.
    */
   onOpenChange?: (open: boolean, details?: DrawerOpenChangeDetails) => void;
   /**
+   * How the drawer sits on the page (Fluent's `type`).
+   * - `overlay`: a panel over the page, rendered in a portal while open: modal by default (focus
+   *   moves in and stays there, toasts included; the rest of the page is `inert` and does not
+   *   scroll; Escape and a backdrop press close it), or `modalType="non-modal"`.
+   * - `inline`: a panel in the page layout, rendered where the Drawer is (after its direct
+   *   `Drawer.Trigger`s) as an `<aside>`, a complementary landmark named by its title. The page
+   *   stays usable around it: no backdrop, no focus trap, no portal, no scroll lock; Escape and
+   *   presses outside do not close it. Opening it leaves focus where it is; closing it while focus
+   *   is inside returns focus to `finalFocusRef`, else the element that opened it, else the
+   *   trigger. `position` and `size` pick its inner edge and its width (its height at the bottom);
+   *   where it sits is up to your layout (a flex row of panel and content, for example).
+   *   `modalType` and `backdrop` do not apply to it, and toasts do not move out of its way: it is
+   *   page content.
+   *
+   * Changing `type` remounts the panel and its content (what was typed in it is lost); focus
+   * inside an overlay that becomes inline returns to the trigger, and focus inside an inline panel
+   * that becomes an overlay moves into the overlay. Rendered as `data-type`.
+   * @default 'overlay'
+   */
+  type?: DrawerType;
+  /**
+   * Inline drawers: draws a line on the panel's inner edge, the edge facing the page content
+   * (`data-separator`). An overlay drawer always draws that edge and ignores this prop. In forced
+   * colours an inline drawer's inner edge is always drawn. Fluent's `separator`.
+   * @default false
+   */
+  separator?: boolean;
+  /**
    * Side of the screen the drawer is attached to. `start`/`end` follow the text direction;
    * `left`/`right` are physical sides; `bottom` runs along the bottom edge (`size` sets its
-   * height). Rendered as `data-position`.
+   * height). An inline drawer takes its place from your layout: `position` picks its inner edge
+   * (the one facing the page content: the end edge of a `start` panel, the top edge of a `bottom`
+   * one) and the axis `size` sets. Rendered as `data-position`.
    * @default 'end'
    */
   position?: DrawerPosition;
   /**
    * The panel's width at a side — `small` 320px, `medium` 592px, `large` 940px, `full` the
    * viewport's width — or its height at the bottom (the same values; `full` the viewport's height).
-   * It never exceeds the viewport. A width class in `className` (a height class for `bottom`)
-   * replaces it. Rendered as `data-size`. Fluent's `size`.
+   * It never exceeds the viewport. An inline panel takes the same sizes, where `full` is its
+   * container's width (height), and never grows past its container. A width class in `className`
+   * (a height class for `bottom`) replaces it. Rendered as `data-size`. Fluent's `size`.
    * @default 'small'
    */
   size?: DrawerSize;
@@ -113,7 +153,8 @@ export interface DrawerProps extends Omit<React.HTMLAttributes<HTMLDivElement>, 
    * non-modal drawer covers the page under it while Tab still reaches that page: reserve its width
    * (its height at the bottom) in your layout while it is open (with `size="full"` it covers
    * everything, and a development warning says so). Every type moves focus to the first focusable
-   * element on open. Rendered as `data-modal-type`. Fluent's `modalType`.
+   * element on open. Rendered as `data-modal-type`. Ignored by an inline drawer, which is never
+   * modal and renders no `data-modal-type`. Fluent's `modalType`.
    * @default 'modal'
    */
   modalType?: DrawerModalType;
@@ -124,8 +165,8 @@ export interface DrawerProps extends Omit<React.HTMLAttributes<HTMLDivElement>, 
    * (`'dimmed'` or `'transparent'`) overrides the automatic one: while another modal Dialog or
    * Drawer is open below this one the backdrop is transparent, so the page is dimmed once. `null`
    * renders no backdrop (the page stays inert, and a press outside still closes a modal drawer); a
-   * boolean is no slot. Ignored with `modalType="non-modal"` (a development warning says so).
-   * Fluent's `backdrop`.
+   * boolean is no slot. Ignored with `modalType="non-modal"` and by an inline drawer (a
+   * development warning says so). Fluent's `backdrop`.
    */
   backdrop?: Slot<'div'> | (SlotObject<'div'> & { appearance?: BackdropAppearance });
   /**
@@ -133,8 +174,8 @@ export interface DrawerProps extends Omit<React.HTMLAttributes<HTMLDivElement>, 
    * `Drawer.HeaderTitle`, as `Dialog.Content`'s `closeButton`: decorative content inside the button
    * (the dismiss glyph by default), so the button keeps the name `closeLabel`; a slot object's
    * `aria-label`, `aria-labelledby` or `title` names it instead, and its handlers run before the
-   * close (`preventDefault()` keeps the drawer open). `null` hides them all (Escape and
-   * `Drawer.Close` still close); a boolean is no slot; content that renders nothing keeps the
+   * close (`preventDefault()` keeps the drawer open). `null` hides them all (`Drawer.Close`, and
+   * Escape on an overlay, still close); a boolean is no slot; content that renders nothing keeps the
    * default glyph. A `<button>` or Wave `Button` passed here is merged into the built-in button,
    * never nested (a development warning says so), and its text label names the button. Fluent's
    * `DrawerHeaderTitle` `action` holds Fluent's close button; WaveUI renders its own.
@@ -153,7 +194,9 @@ export interface DrawerProps extends Omit<React.HTMLAttributes<HTMLDivElement>, 
    * `aria-label`/`aria-labelledby`. A title that renders nothing (`''`, `[]`, `true`) counts as
    * none. Ignored, with a development warning, when the children hold a `Drawer.Header`, which
    * replaces the built-in header. The heading is an `<h2>`; for another level use
-   * `Drawer.HeaderTitle` with `headingLevel`.
+   * `Drawer.HeaderTitle` with `headingLevel`. In the server HTML of an inline drawer only `title`
+   * (or `aria-label`/`aria-labelledby`) names the panel: a `Drawer.HeaderTitle` or `Drawer.Title`
+   * names it once the page has hydrated.
    */
   title?: React.ReactNode;
   /**
@@ -166,17 +209,21 @@ export interface DrawerProps extends Omit<React.HTMLAttributes<HTMLDivElement>, 
   /**
    * Where focus goes when the drawer closes, if it can take focus. Otherwise focus returns to the
    * element that had focus when the drawer opened, then to the trigger, then to an element next to
-   * where that opener was.
+   * where that opener was. An inline or non-modal drawer moves focus on close only when focus was
+   * inside it.
    */
   finalFocusRef?: React.RefObject<HTMLElement | null>;
   /**
    * Removes the panel and its content when the drawer closes. `false` keeps them mounted while
    * closed, `hidden` and `inert` (out of the layout, the Tab order and the accessibility tree), so
    * what was typed and the state of the components inside survive closing and opening again; the
-   * content then mounts with the Drawer, closed, and an `autoFocus` inside it never applies (each
-   * open focuses the first focusable element). The panel still renders only in the browser. A
-   * popup opened inside that is still open when the drawer closes stays open over the page (a
-   * development warning says so): close it first. Fluent's `unmountOnClose`.
+   * content then mounts with the Drawer, closed, and an `autoFocus` inside it never applies (an
+   * overlay focuses its first focusable element on each open). An overlay panel still renders only
+   * in the browser; a kept inline panel is in the server HTML, hidden. Kept content still belongs
+   * to its form: a `required` empty field in a closed inline drawer inside a page `<form>` blocks
+   * its submission without a visible message. A popup opened inside that is still open when the
+   * drawer closes stays open over the page (a development warning says so): close it first. A
+   * `key` on the Drawer resets the kept content. Fluent's `unmountOnClose`.
    * @default true
    */
   unmountOnClose?: boolean;
@@ -196,8 +243,11 @@ export interface DrawerProps extends Omit<React.HTMLAttributes<HTMLDivElement>, 
    * Put wrappers inside the trigger instead: see `Drawer.Trigger`.
    */
   children: React.ReactNode;
-  /** Ref to the drawer panel (`role="dialog"`, or `alertdialog` with `modalType="alert"`). */
-  ref?: React.Ref<HTMLDivElement>;
+  /**
+   * Ref to the panel: the `role="dialog"` element of an overlay drawer (`alertdialog` with
+   * `modalType="alert"`), the `<aside>` of an inline one. A ref to a `div` still type-checks.
+   */
+  ref?: React.Ref<HTMLElement>;
 }
 
 const UNREACHABLE_WARNING_KEY = 'Drawer:unreachable';
@@ -432,6 +482,8 @@ export const DrawerRoot = ({
   open: openProp,
   defaultOpen,
   onOpenChange,
+  type = 'overlay',
+  separator = false,
   position = 'end',
   size = 'small',
   modalType = 'modal',
@@ -450,11 +502,13 @@ export const DrawerRoot = ({
   ...rest
 }: DrawerProps) => {
   const [openState, requestOpen] = useModalOpenState(openProp, defaultOpen, onOpenChange);
-  // The panel lives in a portal, which renders only in the browser: until then (the server HTML,
-  // hydration) the drawer reports itself closed, so the trigger's aria-expanded and aria-controls
-  // never describe a panel that is not there.
-  const isClient = useIsClient();
-  const open = openState && isClient;
+  const inline = type === 'inline';
+  const overlay = !inline;
+  // An overlay's panel lives in a portal, which renders only in the browser: until then (the
+  // server HTML, hydration) it reports itself closed, so the trigger's aria-expanded and
+  // aria-controls never describe a panel that is not there. An inline panel renders in place, also
+  // on the server (D107).
+  const open = useDrawerOpen(type, openState);
   // The panel mounts through the presence core (D5, D103), with no motion of its own: kept mounted
   // while closed with `unmountOnClose={false}`, else removed once it has exited.
   const {
@@ -469,44 +523,80 @@ export const DrawerRoot = ({
   const propTitleId = useId('wave-drawer-title');
   const titles = useTitleRegistry();
 
-  const [panel, setPanel] = React.useState<HTMLDivElement | null>(null);
-  const panelRef = React.useRef<HTMLDivElement | null>(null);
-  const attachPanel = React.useCallback((node: HTMLDivElement | null) => {
+  // The panel element of each type, held in state through its own callback ref. A change of `type`
+  // remounts the panel (D105): the overlay's hooks see only the portaled element and the inline
+  // restore only the aside, also in the commit that swaps them (the inline restore then still
+  // knows the aside that focus was lost from).
+  const [overlayPanel, setOverlayPanel] = React.useState<HTMLElement | null>(null);
+  const [inlinePanel, setInlinePanel] = React.useState<HTMLElement | null>(null);
+  // The mounted panel of either type; each element clears it only while it is still the one held.
+  const panelRef = React.useRef<HTMLElement | null>(null);
+  const attachOverlayPanel = React.useCallback((node: HTMLElement | null) => {
+    if (!node) return undefined;
     panelRef.current = node;
-    setPanel(node);
+    setOverlayPanel(node);
+    return () => {
+      if (panelRef.current === node) panelRef.current = null;
+      setOverlayPanel(null);
+    };
   }, []);
-  const mergedRef = useMergedRefs<HTMLDivElement>(ref, attachPanel, presenceRef);
-  // The portal wrapper: a kept-mounted panel moves to the top of its stack when it opens (before
+  const attachInlinePanel = React.useCallback((node: HTMLElement | null) => {
+    if (!node) return undefined;
+    panelRef.current = node;
+    setInlinePanel(node);
+    return () => {
+      if (panelRef.current === node) panelRef.current = null;
+      setInlinePanel(null);
+    };
+  }, []);
+  const overlayRef = useMergedRefs<HTMLElement>(ref, attachOverlayPanel, presenceRef);
+  const inlineRef = useMergedRefs<HTMLElement>(ref, attachInlinePanel, presenceRef);
+  const panel = inline ? inlinePanel : overlayPanel;
+
+  // An inline drawer takes no focus on open and returns it on close only from inside (D101). Called
+  // before useModalLayer: on a switch from inline to overlay it restores before the overlay's trap
+  // moves focus in.
+  useRestoreFocus({
+    enabled: open && inline,
+    container: inlinePanel,
+    triggerRef: trigger.focusRef,
+    finalFocusRef,
+    requireFocusInside: true,
+  });
+  // The portal wrapper: a kept-mounted overlay moves to the top of its stack when it opens (before
   // the layer registers and the trap moves focus in).
   const portalRef = React.useRef<HTMLDivElement | null>(null);
-  useRaiseOnOpen(open, keptMounted, portalRef);
+  useRaiseOnOpen(open && overlay, keptMounted, portalRef);
 
   // A backdrop press asks the drawer to close, except an alert drawer's (Escape still does;
   // useModalLayer registers its layer without outside presses).
   const backdropPress = useBackdropPress(panelRef, modalType !== 'alert');
   const onDismiss = useModalDismiss(requestOpen, 'Drawer', backdropPress.afterOutsidePress);
+  // Only an overlay is a layer: an inline drawer is page content (no trap, isolation, scroll lock,
+  // Escape or outside press; toasts keep their corner).
   const layer = useModalLayer({
-    open,
+    open: open && overlay,
     modalType,
     onDismiss,
     refs: [panelRef],
-    container: panel,
+    container: overlayPanel,
     triggerRef: trigger.focusRef,
     finalFocusRef,
   });
-  // A non-modal drawer keeps its place in the page's keyboard order right after its opener.
+  // A non-modal overlay keeps its place in the page's keyboard order right after its opener.
   const nonModal = modalType === 'non-modal';
-  const opener = useModalOpener(open && nonModal, trigger, panel);
+  const nonModalOverlay = overlay && nonModal;
+  const opener = useModalOpener(open && nonModalOverlay, trigger, overlayPanel);
   const onTabOrderKeyDown = usePopoverTabOrder({
-    enabled: open && nonModal,
-    surface: panel,
+    enabled: open && nonModalOverlay,
+    surface: overlayPanel,
     anchorRef: opener,
     getPreviousStop: getTabbableThrough,
   });
-  // After useModalLayer's focus restore (effects run in order), start the trigger session, or end
-  // it and forget the trigger that opened it.
+  // After both focus restores (effects run in order), start the trigger session, or end it and
+  // forget the trigger that opened it.
   useModalTriggerSession(trigger, open);
-  useOpenInsideWarning(open, keptMounted, layer.layerId, 'Drawer');
+  useOpenInsideWarning(open, keptMounted, layer.layerId, 'Drawer', panelRef);
   useUnnamedModalWarning(
     open ? panel : null,
     titles.hasTitle,
@@ -523,14 +613,18 @@ export const DrawerRoot = ({
   React.useEffect(() => {
     if (titleIgnored) warnOnce(TITLE_IGNORED_WARNING_KEY, TITLE_IGNORED_WARNING);
   }, [titleIgnored]);
-  // A non-modal drawer has no backdrop: a given slot (not undefined, null or a boolean) is ignored.
+  // A non-modal or inline drawer has no backdrop: a given slot (not undefined, null or a boolean)
+  // is ignored.
   const backdropIgnored =
-    nonModal && backdrop !== undefined && backdrop !== null && typeof backdrop !== 'boolean';
+    (nonModal || inline) &&
+    backdrop !== undefined &&
+    backdrop !== null &&
+    typeof backdrop !== 'boolean';
   React.useEffect(() => {
     if (backdropIgnored) warnOnce(BACKDROP_IGNORED_WARNING_KEY, BACKDROP_IGNORED_WARNING);
   }, [backdropIgnored]);
-  // A full non-modal panel covers the page it leaves usable (D87.8).
-  const coversUsablePage = open && nonModal && size === 'full';
+  // A full non-modal overlay covers the page it leaves usable (D87.8).
+  const coversUsablePage = open && nonModalOverlay && size === 'full';
   React.useEffect(() => {
     if (coversUsablePage) warnOnce(NON_MODAL_FULL_WARNING_KEY, NON_MODAL_FULL_WARNING);
   }, [coversUsablePage]);
@@ -571,78 +665,110 @@ export const DrawerRoot = ({
   }, []);
 
   const context = React.useMemo<DrawerContextValue>(
-    () => ({ open, requestOpen, trigger, panelId, inPanel: false, closeLabel, closeButton }),
-    [open, requestOpen, trigger, panelId, closeLabel, closeButton],
+    () => ({ open, requestOpen, trigger, panelId, type, inPanel: false, closeLabel, closeButton }),
+    [open, requestOpen, trigger, panelId, type, closeLabel, closeButton],
   );
   const panelContext = React.useMemo<DrawerContextValue>(
     () => ({ ...context, inPanel: true }),
     [context],
   );
 
+  // The panel's content: the header area, the scrolling body and the footers, for both types.
+  const layout = (
+    <DrawerContext.Provider value={panelContext}>
+      <ModalSurfaceContext.Provider value={titles.context}>
+        <DrawerLayout
+          header={
+            hasHeader ? (
+              headers
+            ) : (
+              <DrawerBuiltInHeader
+                title={title}
+                hasTitle={hasTitle}
+                titleId={propTitleId}
+                titleAction={titleAction}
+                requestOpen={requestOpen}
+                closeLabel={closeLabel}
+                closeButton={closeButton}
+              />
+            )
+          }
+          bodyProps={bodyProps}
+          content={content}
+          footers={footers}
+        />
+      </ModalSurfaceContext.Provider>
+    </DrawerContext.Provider>
+  );
+  const labelledBy = hasTitle ? propTitleId : titles.titleId;
+
   return (
     <DrawerContext.Provider value={context}>
       {triggers}
-      {isMounted && (
-        <Portal ref={portalRef} layerId={layer.layerId}>
-          {/* The backdrop of a modal or alert drawer, the panel's sibling; a non-modal one has none.
-              Both carry the presence attributes (D7, D103): hidden and inert while kept closed, so
-              a closed drawer leaves no backdrop over the page. */}
-          {!nonModal && (
-            <ModalBackdrop
-              backdrop={backdrop}
-              className={drawerClassNames.backdrop}
-              layerId={layer.layerId}
-              open={open}
-              onMouseDown={backdropPress.onMouseDown}
-              presenceProps={presenceProps}
-            />
-          )}
-          <div
-            ref={mergedRef}
-            role={modalType === 'alert' ? 'alertdialog' : 'dialog'}
+      {isMounted &&
+        (inline ? (
+          // In place, after the triggers: a complementary landmark named by its title, with no role,
+          // tabIndex or modal attributes (D100). The presence attributes come after the consumer's
+          // props: hidden and inert while kept closed.
+          <aside
+            ref={inlineRef}
             id={panelId}
-            aria-labelledby={hasTitle ? propTitleId : titles.titleId}
-            tabIndex={-1}
+            aria-labelledby={labelledBy}
+            data-type="inline"
             data-position={position}
             data-size={size}
-            data-modal-type={modalType}
+            data-separator={separator ? '' : undefined}
             {...rest}
             {...presenceProps}
-            onKeyDown={composeEventHandlers(onKeyDown, onTabOrderKeyDown)}
+            onKeyDown={onKeyDown}
             className={cn(
               drawerClassNames.root,
-              'fixed flex flex-col border-border bg-background text-foreground shadow-64',
-              getOverlayPanelClasses(position, size),
+              inlinePanelClasses,
+              getInlinePanelClasses(position, size),
               className,
             )}
           >
-            <DrawerContext.Provider value={panelContext}>
-              <ModalSurfaceContext.Provider value={titles.context}>
-                <DrawerLayout
-                  header={
-                    hasHeader ? (
-                      headers
-                    ) : (
-                      <DrawerBuiltInHeader
-                        title={title}
-                        hasTitle={hasTitle}
-                        titleId={propTitleId}
-                        titleAction={titleAction}
-                        requestOpen={requestOpen}
-                        closeLabel={closeLabel}
-                        closeButton={closeButton}
-                      />
-                    )
-                  }
-                  bodyProps={bodyProps}
-                  content={content}
-                  footers={footers}
-                />
-              </ModalSurfaceContext.Provider>
-            </DrawerContext.Provider>
-          </div>
-        </Portal>
-      )}
+            {layout}
+          </aside>
+        ) : (
+          <Portal ref={portalRef} layerId={layer.layerId}>
+            {/* The backdrop of a modal or alert drawer, the panel's sibling; a non-modal one has
+                none. Both carry the presence attributes (D7, D103): hidden and inert while kept
+                closed, so a closed drawer leaves no backdrop over the page. */}
+            {!nonModal && (
+              <ModalBackdrop
+                backdrop={backdrop}
+                className={drawerClassNames.backdrop}
+                layerId={layer.layerId}
+                open={open}
+                onMouseDown={backdropPress.onMouseDown}
+                presenceProps={presenceProps}
+              />
+            )}
+            <div
+              ref={overlayRef}
+              role={modalType === 'alert' ? 'alertdialog' : 'dialog'}
+              id={panelId}
+              aria-labelledby={labelledBy}
+              tabIndex={-1}
+              data-type="overlay"
+              data-position={position}
+              data-size={size}
+              data-modal-type={modalType}
+              {...rest}
+              {...presenceProps}
+              onKeyDown={composeEventHandlers(onKeyDown, onTabOrderKeyDown)}
+              className={cn(
+                drawerClassNames.root,
+                'fixed flex flex-col border-border bg-background text-foreground shadow-64',
+                getOverlayPanelClasses(position, size),
+                className,
+              )}
+            >
+              {layout}
+            </div>
+          </Portal>
+        ))}
     </DrawerContext.Provider>
   );
 };

@@ -13,6 +13,7 @@ import { DrawerRoot } from './Drawer.root';
 export type {
   DrawerPosition,
   DrawerSize,
+  DrawerType,
   DrawerModalType,
   DrawerOpenChangeReason,
   DrawerOpenChangeDetails,
@@ -32,9 +33,10 @@ export type {
 } from './Drawer.parts';
 
 /**
- * A panel attached to a side or to the bottom of the screen (Fluent UI v2 style), modal by
- * default or non-modal, rendered in a portal (inheriting the WaveProvider theme) while open (and,
- * with `unmountOnClose={false}`, kept there while closed, `hidden` and `inert`).
+ * A side or bottom panel (Fluent UI v2 style): by default an overlay, modal unless it is
+ * non-modal, rendered in a portal (inheriting the WaveProvider theme) while open; with
+ * `type="inline"` a panel in the page layout, rendered in place. With `unmountOnClose={false}`
+ * either kind stays mounted while closed, `hidden` and `inert`.
  *
  * - **Opening**: controlled (`open`), or uncontrolled with a `Drawer.Trigger` placed directly inside
  *   the Drawer or in a Fragment there (it renders in place, outside the panel); the trigger opens
@@ -47,8 +49,18 @@ export type {
  *   the page's order right after the element that opened it; Escape closes it only while focus is
  *   inside it; presses on the page never close it; focus returns to the opener only from inside.
  *   Reserve the panel's room in the page layout while it is open, so it hides no page control.
+ * - **Inline**: `type="inline"` renders the panel where the Drawer is, after its direct triggers,
+ *   as an `<aside>` (a complementary landmark named by its title), also in the server HTML. It is
+ *   page content: no portal, backdrop, focus trap, inert page or scroll lock, and toasts keep
+ *   their corner next to it. Its trigger toggles it (with `aria-expanded` and `aria-controls`, no
+ *   `aria-haspopup`); opening it moves no focus; Escape and presses outside never close it;
+ *   closing it returns focus only when focus was inside. `position` picks its inner edge and
+ *   `size` its width (its height at the bottom); `separator` draws the inner edge. Place it in
+ *   your layout, for example a flex row of the panel and the page content. Changing `type`
+ *   remounts the panel and its content.
  * - **Closing**: Escape (only the topmost layer: a popup opened inside closes first), a click on the
- *   backdrop (a drag that starts inside does not close it), the Close button and `Drawer.Close`.
+ *   backdrop (a drag that starts inside does not close it), the Close button and `Drawer.Close`
+ *   (an inline drawer: the trigger, the Close button and `Drawer.Close`).
  *   `onOpenChange` gets the reason as its second argument (`details.reason`), so a controlled
  *   drawer can refuse some of them. A backdrop press blurs the focused field before the drawer
  *   closes, so a typed value is committed as with the Close button; when a controlled drawer
@@ -58,10 +70,11 @@ export type {
  * - **Size and position**: `position` is `end` (default) or `start`, which follow the text
  *   direction, `left` or `right`, or `bottom` (along the bottom edge, the window wide). `size` sets
  *   the width at a side and the height at the bottom: `small` (default, 320px), `medium` (592px),
- *   `large` (940px) or `full`; the panel never grows past the window. A width class in
- *   `className` (a height class for `bottom`) replaces the size. The panel pads the safe-area
- *   insets of the screen edges it touches (the iOS home indicator, once the page sets
- *   `viewport-fit=cover`). Both render as `data-position` and `data-size`.
+ *   `large` (940px) or `full`; the panel never grows past the window (an inline one past its
+ *   container). A width class in `className` (a height class for `bottom`) replaces the size. An
+ *   overlay panel pads the safe-area insets of the screen edges it touches (the iOS home
+ *   indicator, once the page sets `viewport-fit=cover`). Both render as `data-position` and
+ *   `data-size`, next to `data-type`.
  * - **Layout**: the `title` prop and the built-in Close button make the header row; a
  *   `Drawer.Header` replaces it, with a `Drawer.HeaderNavigation` row (a Back button, commands)
  *   and a `Drawer.HeaderTitle` (the heading, an `action` area and the Close button). The rest of
@@ -77,11 +90,13 @@ export type {
  *   header buttons between the `title` heading and the Close button.
  * - **Kept mounted**: `unmountOnClose={false}` keeps the panel and its content mounted while the
  *   drawer is closed, so a form keeps what was typed and the components inside keep their state;
- *   each open focuses the first focusable element again (an `autoFocus` inside never applies), and
- *   a kept drawer opened while another overlay is open stacks above it.
+ *   each open of an overlay focuses the first focusable element again (an `autoFocus` inside never
+ *   applies), and a kept overlay opened while another overlay is open stacks above it. A kept
+ *   inline drawer is in the server HTML, hidden.
  * - **Presence**: the panel and the backdrop mount through the presence core and render
  *   `data-presence` (`entered` while open, `exited` while kept closed); the backdrop and the
- *   panel are `inert` while exiting and `hidden` and `inert` while kept closed. No motion ships:
+ *   panel (an inline drawer's `<aside>`) are `inert` while exiting and `hidden` and `inert` while
+ *   kept closed. No motion ships:
  *   `data-[presence=…]:` classes in `className` animate the panel, whose motion a closed drawer
  *   waits for before it unmounts or hides (focus, the trap and the isolation follow the open
  *   state at once).

@@ -440,8 +440,10 @@ export function useModalTriggerPart<RenderProps>(
     [open, activate, requestOpen],
   );
 
+  // An inline drawer's trigger gets no `aria-haspopup` key at all, so a render-prop child that
+  // spreads the props has none either.
   const stateAria = {
-    'aria-haspopup': popup === false ? undefined : popup,
+    ...(popup !== false && { 'aria-haspopup': popup }),
     'aria-expanded': open,
     'aria-controls': open ? controlsId : undefined,
   };
@@ -596,19 +598,23 @@ export function useRaiseOnOpen(
  * schedules one check in a new task (`setTimeout(0)`, so a popup that the closing press itself
  * dismisses does not count) and warns once (`<componentName>:open-inside`) when an open layer
  * other than a tooltip descends from the surface's layer (`isDescendantLayer` follows the popup's
- * `parentId`, also after the surface's own layer unregistered). Nothing runs with the default
+ * `parentId`, also after the surface's own layer unregistered) or has its anchor inside
+ * `surfaceRef`'s element (an inline drawer, which registers no layer of its own, so a popup
+ * opened inside it descends from no layer of the surface). Nothing runs with the default
  * `unmountOnClose`, where the popups unmount with the content, or in production.
  *
  * @param open          Whether the surface is open.
  * @param keptMounted   `true` with `unmountOnClose={false}`.
  * @param layerId       The surface's dismiss layer (`useModalLayer`'s `layerId`).
  * @param componentName The public name for the warning key and text: `'Dialog'`, `'Drawer'`.
+ * @param surfaceRef    The surface element, for the anchor check (optional).
  */
 export function useOpenInsideWarning(
   open: boolean,
   keptMounted: boolean,
   layerId: string,
   componentName: string,
+  surfaceRef?: React.RefObject<HTMLElement | null>,
 ): void {
   const wasOpenRef = React.useRef(open);
   React.useEffect(() => {
@@ -616,9 +622,13 @@ export function useOpenInsideWarning(
     wasOpenRef.current = open;
     if (!isDev || open || !wasOpen || !keptMounted) return undefined;
     const timer = setTimeout(() => {
-      const leftOpen = getOpenLayers().some(
-        (layer) => layer.kind !== 'tooltip' && isDescendantLayer(layer.id, layerId),
-      );
+      const surface = surfaceRef?.current ?? null;
+      const leftOpen = getOpenLayers().some((layer) => {
+        if (layer.kind === 'tooltip') return false;
+        if (isDescendantLayer(layer.id, layerId)) return true;
+        const anchor = layer.getAnchor();
+        return !!surface && !!anchor && surface.contains(anchor);
+      });
       if (!leftOpen) return;
       warnOnce(
         `${componentName}:open-inside`,
@@ -626,7 +636,7 @@ export function useOpenInsideWarning(
       );
     }, 0);
     return () => clearTimeout(timer);
-  }, [open, keptMounted, layerId, componentName]);
+  }, [open, keptMounted, layerId, componentName, surfaceRef]);
 }
 
 /**

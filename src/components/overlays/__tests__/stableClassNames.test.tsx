@@ -156,6 +156,26 @@ describe('stable class names (P3-00): overlays folder', () => {
     expect(screen.getByText('Filter fields').parentElement).toHaveClass(drawerClassNames.body);
   });
 
+  it('Drawer (inline): root on the aside, header, title heading, Close Button and body; no backdrop', () => {
+    render(
+      <Drawer type="inline" title="Details" defaultOpen>
+        <p>Order fields</p>
+      </Drawer>,
+    );
+    const panel = screen.getByRole('complementary', { name: 'Details' });
+    expect(panel.localName).toBe('aside');
+    expect(panel).toHaveClass(drawerClassNames.root);
+    expect(document.querySelector('.' + drawerClassNames.backdrop)).toBeNull();
+    expect(panel.previousElementSibling).toBeNull();
+    expect(screen.getByRole('heading', { name: 'Details' })).toHaveClass(
+      drawerTitleClassNames.root,
+    );
+    const close = screen.getByRole('button', { name: 'Close' });
+    expect(close).toHaveClass(buttonClassNames.root, drawerClassNames.closeButton);
+    expect(close.parentElement).toHaveClass(drawerClassNames.header);
+    expect(screen.getByText('Order fields').parentElement).toHaveClass(drawerClassNames.body);
+  });
+
   it('Drawer.Header, HeaderTitle (heading, action, the Close Button), HeaderNavigation, Body and Footer', () => {
     render(
       <Drawer defaultOpen>

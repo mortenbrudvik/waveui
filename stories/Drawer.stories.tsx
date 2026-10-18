@@ -25,6 +25,8 @@ const modalTypes = ['modal', 'alert', 'non-modal'] as const satisfies readonly N
   DrawerProps['modalType']
 >[];
 
+const types = ['overlay', 'inline'] as const satisfies readonly NonNullable<DrawerProps['type']>[];
+
 /** The thirty fields of the LongContent drawer. */
 const longFields = [
   'Keyword',
@@ -102,6 +104,8 @@ const meta = {
   component: Drawer,
   args: {
     defaultOpen: false,
+    type: 'overlay',
+    separator: false,
     position: 'end',
     size: 'small',
     modalType: 'modal',
@@ -111,6 +115,7 @@ const meta = {
     children: 'Choose the filters to apply to the list.',
   },
   argTypes: {
+    type: { control: 'inline-radio', options: types },
     position: { control: 'select', options: positions },
     size: { control: 'select', options: sizes },
     modalType: { control: 'select', options: modalTypes },
@@ -594,4 +599,200 @@ export const KeepMounted: Story = {
       </Drawer.Footer>
     </Drawer>
   ),
+};
+
+/**
+ * `type="inline"`: a details pane in the page layout, here at the end of a flex row, with
+ * `separator` drawing its inner edge. It is an `<aside>` (a complementary landmark named by its
+ * title), rendered right after its `Drawer.Trigger`, which toggles it (`aria-expanded`, no
+ * `aria-haspopup`). The page stays usable: no backdrop, no focus trap, nothing inert. Opening
+ * moves no focus; Escape and presses outside do not close it; closing it from its Close button
+ * returns focus to the trigger.
+ */
+export const Inline: Story = {
+  args: {
+    type: 'inline',
+    separator: true,
+    defaultOpen: true,
+    title: 'Order 1042',
+    children: 'Two items, shipped on Monday to the warehouse in Lyon.',
+  },
+  render: function InlineDrawer({ children, ...args }) {
+    return (
+      <div className="flex h-96 rounded-md border border-border">
+        <div className="flex min-w-0 flex-1 flex-col gap-3 p-4">
+          <p>Orders received this week. The details pane stays open while you work.</p>
+          <Field label="Search orders">
+            <Input />
+          </Field>
+        </div>
+        <Drawer {...args}>
+          <Drawer.Trigger>
+            <Button className="m-4 self-start">Order details</Button>
+          </Drawer.Trigger>
+          <p>{children}</p>
+          <Drawer.Footer>
+            <Button>Print label</Button>
+          </Drawer.Footer>
+        </Drawer>
+      </div>
+    );
+  },
+};
+
+/**
+ * A start pane controlled from a button in the page header: the button carries `aria-expanded`
+ * and, while the pane is rendered, `aria-controls` with the pane's `id`, and the Drawer's
+ * `finalFocusRef` sends focus back to it when the pane's Close button closes it.
+ */
+export const InlineStart: Story = {
+  args: {
+    type: 'inline',
+    position: 'start',
+    separator: true,
+    title: 'Folders',
+    children: 'Inbox, Drafts, Sent and Archive.',
+  },
+  render: function InlineStartDrawer({ children, ...args }) {
+    const [open, setOpen] = React.useState(true);
+    const toggleRef = React.useRef<HTMLButtonElement>(null);
+    const handleOpenChange: NonNullable<DrawerProps['onOpenChange']> = (next, details) => {
+      setOpen(next);
+      args.onOpenChange?.(next, details);
+    };
+    const paneId = 'inline-start-folders';
+    return (
+      <div className="flex h-96 flex-col rounded-md border border-border">
+        <div className="flex items-center gap-2 border-b border-border p-2">
+          <Button
+            ref={toggleRef}
+            aria-expanded={open}
+            aria-controls={open ? paneId : undefined}
+            onClick={() => setOpen((value) => !value)}
+          >
+            Folders
+          </Button>
+          <span className="text-body-1 font-semibold">Mail</span>
+        </div>
+        <div className="flex min-h-0 flex-1">
+          {/* The story owns the controlled pair; every other arg is forwarded. */}
+          <Drawer
+            {...args}
+            id={paneId}
+            open={open}
+            onOpenChange={handleOpenChange}
+            finalFocusRef={toggleRef}
+          >
+            <p>{children}</p>
+          </Drawer>
+          <div className="min-w-0 flex-1 p-4">
+            <p>Select a folder to see its messages.</p>
+          </div>
+        </div>
+      </div>
+    );
+  },
+};
+
+/**
+ * `position="bottom"` on an inline drawer: a pane along the bottom of its container, its top edge
+ * drawn by `separator`, and `size` setting its height (`small`, 320px, capped at the container's
+ * height). Its body scrolls once its content is taller.
+ */
+export const InlineBottom: Story = {
+  args: {
+    type: 'inline',
+    position: 'bottom',
+    separator: true,
+    defaultOpen: true,
+    title: 'Problems',
+    children: 'No problems in the open files.',
+  },
+  render: function InlineBottomDrawer({ children, ...args }) {
+    return (
+      <div className="flex h-128 flex-col rounded-md border border-border">
+        <div className="min-h-0 flex-1 p-4">
+          <p>The editor area. The problems pane below keeps its height.</p>
+        </div>
+        <Drawer {...args}>
+          <Drawer.Trigger>
+            <Button className="mx-4 mb-2 self-start">Problems</Button>
+          </Drawer.Trigger>
+          <p>{children}</p>
+        </Drawer>
+      </div>
+    );
+  },
+};
+
+/**
+ * Whether the media query matches, through `useSyncExternalStore`: `false` on the server and
+ * while hydrating, then the browser's answer, so the server HTML and the first client render
+ * agree.
+ */
+function useMediaQuery(query: string): boolean {
+  return React.useSyncExternalStore(
+    (onChange) => {
+      const list = window.matchMedia(query);
+      list.addEventListener('change', onChange);
+      return () => list.removeEventListener('change', onChange);
+    },
+    () => window.matchMedia(query).matches,
+    () => false,
+  );
+}
+
+/**
+ * `type` follows the window's width: an inline pane next to the content on a wide window (1024px
+ * and up), an overlay on a narrow one, from an SSR-safe media hook (narrow on the server and
+ * until hydration). The pane opens when the window becomes wide and closes when it becomes narrow.
+ * Changing `type` remounts the panel and its content: what was typed in it is lost, so keep values
+ * that must survive the switch in the page's state (here the keyword, a controlled Input). With
+ * focus inside, an overlay that becomes inline sends focus to its trigger, and an inline pane that
+ * becomes an overlay moves focus into it.
+ */
+export const ResponsiveType: Story = {
+  args: {
+    separator: true,
+    title: 'Filters',
+    children: 'Narrow the list of orders.',
+  },
+  render: function ResponsiveTypeDrawer({ children, ...args }) {
+    const wide = useMediaQuery('(min-width: 1024px)');
+    const [open, setOpen] = React.useState(wide);
+    const [wasWide, setWasWide] = React.useState(wide);
+    const [keyword, setKeyword] = React.useState('');
+    if (wide !== wasWide) {
+      setWasWide(wide);
+      setOpen(wide);
+    }
+    const handleOpenChange: NonNullable<DrawerProps['onOpenChange']> = (next, details) => {
+      setOpen(next);
+      args.onOpenChange?.(next, details);
+    };
+    return (
+      <div className="flex h-96 rounded-md border border-border">
+        <div className="flex min-w-0 flex-1 flex-col gap-3 p-4">
+          <p>Orders received this week.</p>
+        </div>
+        {/* The story owns the controlled pair and the type; every other arg is forwarded. */}
+        <Drawer
+          {...args}
+          type={wide ? 'inline' : 'overlay'}
+          open={open}
+          onOpenChange={handleOpenChange}
+        >
+          <Drawer.Trigger>
+            <Button className="m-4 self-start">Filters</Button>
+          </Drawer.Trigger>
+          <div className="flex flex-col gap-3">
+            <p>{children}</p>
+            <Field label="Keyword">
+              <Input value={keyword} onValueChange={setKeyword} />
+            </Field>
+          </div>
+        </Drawer>
+      </div>
+    );
+  },
 };

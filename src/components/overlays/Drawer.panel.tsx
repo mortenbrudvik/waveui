@@ -1,9 +1,22 @@
-import type { DrawerPosition, DrawerSize } from './Drawer.context';
+import { forcedColors } from '../../lib/styles';
+import { useIsClient } from '../../hooks/useIsClient';
+import type { DrawerPosition, DrawerSize, DrawerType } from './Drawer.context';
 
 /*
- * The drawer panel: its placement, size and safe-area classes. Imports the context module only
- * (never the root, the parts or `Drawer.tsx`).
+ * The drawer panel: its open state, its placement, size and safe-area classes. Imports the context
+ * module only among the Drawer modules (never the root, the parts or `Drawer.tsx`).
  */
+
+/**
+ * The open state a drawer reports (its triggers' `aria-expanded`, its contexts): an inline
+ * drawer's state as it is; an overlay's `false` until the page has hydrated (the portal renders
+ * only in the browser), so the server HTML never points `aria-controls` at a panel that is not
+ * there.
+ */
+export function useDrawerOpen(type: DrawerType, openState: boolean): boolean {
+  const isClient = useIsClient();
+  return type === 'inline' ? openState : openState && isClient;
+}
 
 /** The axis a drawer's `size` applies to: the width at a side, the height at the bottom. */
 export type DrawerSizeAxis = 'width' | 'height';
@@ -74,4 +87,34 @@ export function getOverlayPanelClasses(position: DrawerPosition, size: DrawerSiz
     drawerSizeClasses[getDrawerSizeAxis(position)][size],
     getOverlayInsetClasses(position, size),
   ].join(' ');
+}
+
+/**
+ * The base classes of an inline panel: an element of the page layout that keeps its width in a
+ * flex row and lets its body scroll once the layout bounds its height. Its inner edge is
+ * transparent unless the Drawer has `separator` (`data-separator`), and always drawn in forced
+ * colors.
+ */
+export const inlinePanelClasses = [
+  'relative flex min-h-0 shrink-0 flex-col max-w-full bg-background text-foreground',
+  'border-transparent data-[separator]:border-border',
+  forcedColors.border,
+].join(' ');
+
+/**
+ * The classes that place and size an inline panel at `position`: the inner-edge border and the
+ * size on the position's axis (a bottom panel is as wide as its container and never taller than
+ * it). `full` is the container's width (height). No placement, insets or shadow: where the panel
+ * sits is up to the page layout. They go after {@link inlinePanelClasses} and before the
+ * consumer's `className`.
+ */
+export function getInlinePanelClasses(position: DrawerPosition, size: DrawerSize): string {
+  const axis = getDrawerSizeAxis(position);
+  return [
+    drawerEdgeClasses[position],
+    axis === 'height' ? 'w-full max-h-full' : '',
+    drawerSizeClasses[axis][size],
+  ]
+    .filter(Boolean)
+    .join(' ');
 }
