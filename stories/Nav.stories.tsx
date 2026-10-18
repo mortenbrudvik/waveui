@@ -124,3 +124,38 @@ export const Controlled: Story = {
     );
   },
 };
+
+/**
+ * Fluent's basic layout: `Nav.SectionHeader` puts a heading between groups of items (`<h3>`
+ * unless `headingLevel`; it may also sit in a category), and `Nav.Divider` draws a line before the
+ * footer group, hidden from assistive technology. Every part renders its own list item, so the
+ * Nav's lists stay valid.
+ */
+export const Sections: Story = {
+  args: {
+    defaultValue: 'dashboard',
+    style: { minHeight: 400 },
+    children: (
+      <>
+        <Nav.Item value="dashboard">Dashboard</Nav.Item>
+        <Nav.Item value="announcements">Announcements</Nav.Item>
+        <Nav.Item value="spotlight">Employee spotlight</Nav.Item>
+        <Nav.SectionHeader>Employee management</Nav.SectionHeader>
+        <Nav.Category value="jobs" label="Job postings">
+          <Nav.SubItem value="openings">Openings</Nav.SubItem>
+          <Nav.SubItem value="submissions">Submissions</Nav.SubItem>
+        </Nav.Category>
+        <Nav.Item value="interviews">Interviews</Nav.Item>
+        <Nav.SectionHeader>Benefits</Nav.SectionHeader>
+        <Nav.Item value="health">Health plans</Nav.Item>
+        <Nav.Category value="retirement" label="Retirement">
+          <Nav.SubItem value="plans">Plan information</Nav.SubItem>
+          <Nav.SubItem value="contributions">Contributions</Nav.SubItem>
+        </Nav.Category>
+        <Nav.Divider />
+        <Nav.Item value="reports">Reports</Nav.Item>
+        <Nav.Item value="settings">Settings</Nav.Item>
+      </>
+    ),
+  },
+};

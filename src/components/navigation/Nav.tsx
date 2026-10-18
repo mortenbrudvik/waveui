@@ -17,22 +17,26 @@ import {
   containsValue,
   markNavPart,
   useNavContext,
+  useNavListChildCheck,
   useNavValue,
   useRecordCategory,
   type NavContextValue,
   type NavRovingContextValue,
   type NoAnchorOnlyAttributes,
 } from './Nav.context';
+import { NavDivider, NavSectionHeader } from './Nav.parts';
 import { NavRoot } from './Nav.root';
 
 /*
  * The Nav compound: the item types, styles and rendering of Nav.Item and Nav.SubItem, Nav.Category,
  * the `Object.assign` with its JSDoc, the flat names and the type re-exports. Nothing imports this
  * module but the barrel: the root (`Nav.root.tsx`) and the contexts (`Nav.context.ts`) recognise
- * the parts by the markers set next to each `displayName` below.
+ * the parts by the markers set next to each `displayName` below; the structural parts live in
+ * `Nav.parts.tsx`.
  */
 
 export type { NavProps } from './Nav.root';
+export type { NavSectionHeaderProps, NavDividerProps } from './Nav.parts';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -55,7 +59,10 @@ export interface NavCategoryProps extends React.HTMLAttributes<HTMLLIElement> {
    * (`''`, `0`) or a list of nothing renders no icon box.
    */
   icon?: Slot<'span'>;
-  /** The category's sub-items (`Nav.SubItem`), rendered in its list while it is open. */
+  /**
+   * The category's sub-items (`Nav.SubItem`), and `Nav.SectionHeader` and `Nav.Divider`, rendered
+   * in its list while it is open.
+   */
   children?: React.ReactNode;
   /** Ref to the category's `<li>` element. */
   ref?: React.Ref<HTMLLIElement>;
@@ -445,6 +452,9 @@ const NavCategory = ({
     roving.reportCurrentCategory(value, containsCurrent);
     return () => roving.reportCurrentCategory(value, false);
   }, [roving, value, containsCurrent]);
+  // Development only: every child of the open list is an <li> (`Nav.Category:list-child`).
+  const listRef = React.useRef<HTMLUListElement>(null);
+  useNavListChildCheck(listRef, 'Nav.Category', 'sub-items');
 
   let buttonLabel: React.ReactNode = label;
   let items: React.ReactNode = children;
@@ -486,7 +496,11 @@ const NavCategory = ({
       </button>
       {isOpen && (
         <NavCategoryValueContext.Provider value={value}>
-          <ul id={listId} className={cn(navCategoryClassNames.list, 'm-0 list-none p-0')}>
+          <ul
+            ref={listRef}
+            id={listId}
+            className={cn(navCategoryClassNames.list, 'm-0 list-none p-0')}
+          >
             {items}
           </ul>
         </NavCategoryValueContext.Provider>
@@ -587,14 +601,22 @@ markNavPart(NavSubItem, 'entry');
  *   for sub-items your own component renders inside a closed category.
  * - **Values** are unique: among the items and sub-items, and among the categories (a duplicate
  *   warns in development).
+ * - **Structure**: every child of the Nav, and of a category, is a part or your own `<li>`; a
+ *   development warning names anything else (a `<div>`, text, the wrapper of a Tooltip around an
+ *   item). `Nav.SectionHeader` is a heading between groups of items (`<h3>` unless
+ *   `headingLevel`, which stands for the `as` of Fluent's NavSectionHeader), and `Nav.Divider` a
+ *   line between groups, hidden from assistive technology (Fluent's NavDivider is a separator).
  *
- * Sub-components are also exported under flat names (`NavCategory`, `NavItem`, `NavSubItem`):
- * React Server Components import those, because dotted access (`Nav.Item`) needs a client file.
+ * Sub-components are also exported under flat names (`NavCategory`, `NavItem`, `NavSubItem`,
+ * `NavSectionHeader`, `NavDivider`): React Server Components import those, because dotted access
+ * (`Nav.Item`) needs a client file.
  */
 export const Nav = /* @__PURE__ */ Object.assign(NavRoot, {
   Category: NavCategory,
   Item: NavItem,
   SubItem: NavSubItem,
+  SectionHeader: NavSectionHeader,
+  Divider: NavDivider,
 });
 
-export { NavCategory, NavItem, NavSubItem };
+export { NavCategory, NavItem, NavSubItem, NavSectionHeader, NavDivider };

@@ -25,7 +25,9 @@ import {
   menuSplitGroupClassNames,
   navCategoryClassNames,
   navClassNames,
+  navDividerClassNames,
   navItemClassNames,
+  navSectionHeaderClassNames,
   navSubItemClassNames,
   paginationClassNames,
   stepperClassNames,
@@ -275,6 +277,36 @@ describe('stable class names: navigation folder', () => {
     expect(weekly).toHaveClass(navSubItemClassNames.root);
     expect(weekly.parentElement).toHaveClass(navSubItemClassNames.listItem);
     expect(weekly.parentElement?.parentElement).toHaveClass(navCategoryClassNames.list);
+  });
+
+  it('Nav parts: section header and its list item, divider', () => {
+    const tree = (
+      <Nav aria-label="Main" defaultValue="weekly">
+        <Nav.SectionHeader>Library</Nav.SectionHeader>
+        <Nav.Item value="home">Home</Nav.Item>
+        <Nav.Divider />
+        <Nav.Category value="reports" label="Reports">
+          <Nav.SectionHeader headingLevel={4}>Schedules</Nav.SectionHeader>
+          <Nav.SubItem value="weekly">Weekly</Nav.SubItem>
+          <Nav.Divider />
+        </Nav.Category>
+      </Nav>
+    );
+    const check = (root: HTMLElement) => {
+      for (const name of ['Library', 'Schedules']) {
+        const heading = within(root).getByRole('heading', { name });
+        expect(heading).toHaveClass(navSectionHeaderClassNames.root);
+        expect(heading.parentElement).toHaveClass(navSectionHeaderClassNames.listItem);
+      }
+      const dividers = root.querySelectorAll('li[aria-hidden="true"]');
+      expect(dividers).toHaveLength(2);
+      for (const divider of Array.from(dividers)) {
+        expect(divider).toHaveClass(navDividerClassNames.root);
+      }
+    };
+    check(parse(renderToString(tree)));
+    render(tree);
+    check(screen.getByRole('navigation', { name: 'Main' }));
   });
 
   it('Pagination: root, list, every list item, the five button kinds and the ellipses', () => {

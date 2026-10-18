@@ -8,6 +8,7 @@ import {
   NavContext,
   createCategoryStore,
   findCategoriesContaining,
+  useNavListChildCheck,
   type NavContextValue,
   type NavValueKind,
 } from './Nav.context';
@@ -237,6 +238,9 @@ export const NavRoot = ({
     currentCategory,
     children,
   });
+  // Development only: every child of the list is an <li> (`Nav:list-child`).
+  const listRef = React.useRef<HTMLUListElement>(null);
+  useNavListChildCheck(listRef, 'Nav', 'items');
 
   return (
     <NavContext.Provider value={contextValue}>
@@ -250,7 +254,9 @@ export const NavRoot = ({
           className,
         )}
       >
-        <ul className={cn(navClassNames.list, 'm-0 list-none p-0')}>{children}</ul>
+        <ul ref={listRef} className={cn(navClassNames.list, 'm-0 list-none p-0')}>
+          {children}
+        </ul>
       </nav>
     </NavContext.Provider>
   );

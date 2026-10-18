@@ -4,7 +4,7 @@ import { act, fireEvent, render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { hydrateRoot } from 'react-dom/client';
 import { renderToString } from 'react-dom/server';
-import { Nav, NavCategory, NavItem, NavSubItem } from '../Nav';
+import { Nav, NavCategory, NavDivider, NavItem, NavSectionHeader, NavSubItem } from '../Nav';
 import type { NavItemProps, NavProps, NavSubItemProps } from '../Nav';
 import type { Slot } from '../../../lib/types';
 import {
@@ -88,7 +88,7 @@ describe('Nav', () => {
     conflictingClass: { className: 'w-72', overrides: 'w-60' },
   });
 
-  testCompoundExposure(Nav, ['Category', 'Item', 'SubItem']);
+  testCompoundExposure(Nav, ['Category', 'Item', 'SubItem', 'SectionHeader', 'Divider']);
 
   testNoImplicitSubmit(Nav, {
     defaultProps: {
@@ -108,6 +108,8 @@ describe('Nav', () => {
     expect(NavCategory).toBe(Nav.Category);
     expect(NavItem).toBe(Nav.Item);
     expect(NavSubItem).toBe(Nav.SubItem);
+    expect(NavSectionHeader).toBe(Nav.SectionHeader);
+    expect(NavDivider).toBe(Nav.Divider);
   });
 
   // C-COMPOUND: parts written in a Server Component reach the client as lazy references.

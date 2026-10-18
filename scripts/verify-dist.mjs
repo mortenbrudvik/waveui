@@ -108,7 +108,7 @@ const require = createRequire(import.meta.url);
  */
 export const PENDING_FLAT_EXPORTS = [
   'Drawer', // P6-05's parts are attached; INTEGRATION exports their flat names in wave D (spec rule 29)
-  // 'Nav', // P6-nav uncomments this line in the commit that attaches Nav.SectionHeader (spec rule 29)
+  'Nav', // P6-09's parts are attached; INTEGRATION exports their flat names in wave D (spec rule 29)
   'TagPicker', // exported, and a compound from wave C (P6-tagpicker): planned until then
 ];
 
