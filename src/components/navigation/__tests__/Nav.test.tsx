@@ -16,6 +16,11 @@ import {
 } from '../Nav';
 import type { NavItemProps, NavProps, NavSubItemProps } from '../Nav';
 import type { Slot } from '../../../lib/types';
+import { NavContext, NavRovingContext } from '../Nav.context';
+import type { NavContextValue, NavRovingContextValue } from '../Nav.context';
+import { useNavRootState } from '../Nav.root';
+import { navItemClassNames, navSubItemClassNames } from '../../../lib/classNames';
+import type { UseNavRootStateOptions } from '../Nav.root';
 import {
   asClientReference,
   createOverlayTestWrapper,
@@ -1715,5 +1720,307 @@ describe('Nav', () => {
       rerender(<Host tick={1} />);
       expect(onRender.mock.calls.length).toBe(initial);
     });
+  });
+});
+
+// ---------------------------------------------------------------------------
+// The Nav seam (spec §4.3): the roving bookkeeping and the root state hook
+// ---------------------------------------------------------------------------
+
+/** Items, a closed category that holds the current page and an open one (D113). */
+function SeamNav(props: Partial<NavProps>) {
+  return (
+    <Nav defaultValue="intro" defaultOpenCategories={['guides']} {...props}>
+      <Nav.Item value="home">Home</Nav.Item>
+      <Nav.Item value="settings" href="#settings">
+        Settings
+      </Nav.Item>
+      <Nav.Category value="docs" label="Docs">
+        <Nav.SubItem value="intro">Introduction</Nav.SubItem>
+        <Nav.SubItem value="api" href="#api">
+          API
+        </Nav.SubItem>
+      </Nav.Category>
+      <Nav.Category value="guides" label="Guides">
+        <Nav.SubItem value="start">Getting started</Nav.SubItem>
+      </Nav.Category>
+    </Nav>
+  );
+}
+
+/** The links and buttons of the Nav.Item and Nav.SubItem entries of `root`. */
+const entriesOf = (root: ParentNode) =>
+  Array.from(root.querySelectorAll(`.${navItemClassNames.root}, .${navSubItemClassNames.root}`));
+
+describe('renders no data-roving-value outside an arrow body', () => {
+  it('renders none in the DOM, and no id on an item without actions', () => {
+    const { container } = render(<SeamNav />);
+    expect(toggle()).toHaveAttribute('data-contains-current', '');
+    expect(screen.getByRole('button', { name: 'Guides' })).toHaveAttribute('aria-expanded', 'true');
+    expect(container.querySelectorAll('[data-roving-value]')).toHaveLength(0);
+    const entries = entriesOf(container);
+    expect(entries).toHaveLength(3); // Home, Settings and the open category's sub-item
+    for (const entry of entries) expect(entry).not.toHaveAttribute('id');
+  });
+
+  it('renders none in the server HTML', () => {
+    const html = renderToString(<SeamNav />);
+    expect(html).not.toContain('data-roving-value');
+    const parsed = document.createElement('div'); // detached: nothing reaches document.body
+    parsed.innerHTML = html;
+    const entries = entriesOf(parsed);
+    expect(entries).toHaveLength(3); // Home, Settings and the open category's sub-item
+    for (const entry of entries) expect(entry).not.toHaveAttribute('id');
+  });
+});
+
+describe('with NavRovingContext', () => {
+  function renderInBody(reportCurrentCategory: NavRovingContextValue['reportCurrentCategory']) {
+    const roving: NavRovingContextValue = { reportCurrentCategory };
+    return render(
+      <React.StrictMode>
+        <NavRovingContext.Provider value={roving}>
+          <SeamNav defaultOpenCategories={[]} />
+        </NavRovingContext.Provider>
+      </React.StrictMode>,
+    );
+  }
+
+  it('renders the value of every entry and of every toggle, also after the toggle opens', async () => {
+    const user = userEvent.setup();
+    renderInBody(vi.fn());
+    expect(button('Home')).toHaveAttribute('data-roving-value', 'home');
+    expect(screen.getByRole('link', { name: 'Settings' })).toHaveAttribute(
+      'data-roving-value',
+      'settings',
+    );
+    expect(toggle()).toHaveAttribute('data-roving-value', 'wave-nav-category:docs');
+    expect(screen.getByRole('button', { name: 'Guides' })).toHaveAttribute(
+      'data-roving-value',
+      'wave-nav-category:guides',
+    );
+    await user.click(toggle());
+    expect(toggle()).toHaveAttribute('aria-expanded', 'true');
+    expect(toggle()).toHaveAttribute('data-roving-value', 'wave-nav-category:docs');
+    expect(button('Introduction')).toHaveAttribute('data-roving-value', 'intro');
+    expect(screen.getByRole('link', { name: 'API' })).toHaveAttribute('data-roving-value', 'api');
+  });
+
+  it('a consumer data-roving-value does not win over the bookkeeping', () => {
+    render(
+      <NavRovingContext.Provider value={{ reportCurrentCategory: vi.fn() }}>
+        <Nav>
+          <Nav.Item value="home" data-roving-value="mine">
+            Home
+          </Nav.Item>
+        </Nav>
+      </NavRovingContext.Provider>,
+    );
+    expect(button('Home')).toHaveAttribute('data-roving-value', 'home');
+  });
+
+  it('renders none on an app item or on item actions', () => {
+    render(
+      <NavRovingContext.Provider value={{ reportCurrentCategory: vi.fn() }}>
+        <Nav>
+          <Nav.AppItem href="#app">Contoso</Nav.AppItem>
+          <Nav.Item value="home" actions={<button type="button">Pin</button>}>
+            Home
+          </Nav.Item>
+        </Nav>
+      </NavRovingContext.Provider>,
+    );
+    expect(screen.getByRole('link', { name: 'Contoso' })).not.toHaveAttribute('data-roving-value');
+    expect(button('Pin')).not.toHaveAttribute('data-roving-value');
+    expect(button('Home')).toHaveAttribute('data-roving-value', 'home');
+  });
+
+  it('reports the closed category that holds the current page, its opening and its unmount', async () => {
+    const user = userEvent.setup();
+    const report = vi.fn();
+    const { unmount } = renderInBody(report);
+    const docsCalls = () => report.mock.calls.filter(([category]) => category === 'docs');
+    // StrictMode's double mount: the effect, its cleanup, the effect again.
+    expect(docsCalls()).toEqual([
+      ['docs', true],
+      ['docs', false],
+      ['docs', true],
+    ]);
+    expect(docsCalls().at(-1)).toEqual(['docs', true]);
+    expect(report.mock.calls.filter(([category]) => category === 'guides')).toEqual([
+      ['guides', false],
+      ['guides', false],
+      ['guides', false],
+    ]);
+
+    report.mockClear();
+    await user.click(toggle());
+    expect(report.mock.calls).toEqual([
+      ['docs', false],
+      ['docs', false],
+    ]);
+
+    report.mockClear();
+    unmount();
+    expect(report.mock.calls).toEqual(
+      expect.arrayContaining([
+        ['docs', false],
+        ['guides', false],
+      ]),
+    );
+    expect(report.mock.calls.every(([, holdsCurrent]) => holdsCurrent === false)).toBe(true);
+  });
+
+  it('reports and renders nothing for a Nav outside the provider', () => {
+    const report = vi.fn();
+    render(
+      <>
+        <NavRovingContext.Provider value={{ reportCurrentCategory: report }}>
+          <Nav aria-label="Inside">
+            <Nav.Category value="inside" label="Inside category">
+              <Nav.SubItem value="x">X</Nav.SubItem>
+            </Nav.Category>
+          </Nav>
+        </NavRovingContext.Provider>
+        <SeamNav aria-label="Outside" defaultOpenCategories={[]} />
+      </>,
+    );
+    expect(report.mock.calls).toEqual([['inside', false]]);
+    const outside = screen.getByRole('navigation', { name: 'Outside' });
+    expect(outside.querySelectorAll('[data-roving-value]')).toHaveLength(0);
+  });
+});
+
+describe('useNavRootState', () => {
+  type HarnessProps = Partial<Omit<UseNavRootStateOptions, 'children'>> & {
+    children?: React.ReactNode;
+    onContext?: (context: NavContextValue) => void;
+  };
+
+  /** A root built on the hook alone, as NavDrawer is: `componentName: 'Test'`, its own list. */
+  function Harness({ children, onContext, ...options }: HarnessProps) {
+    const context = useNavRootState({
+      componentName: 'Test',
+      value: undefined,
+      defaultValue: '',
+      onValueChange: undefined,
+      openCategories: undefined,
+      defaultOpenCategories: undefined,
+      onOpenCategoriesChange: undefined,
+      currentCategory: undefined,
+      children,
+      ...options,
+    });
+    React.useEffect(() => {
+      onContext?.(context);
+    });
+    return (
+      <NavContext.Provider value={context}>
+        <ul>{children}</ul>
+      </NavContext.Provider>
+    );
+  }
+
+  /** Categories behind a wrapper element and a Fragment, the scan's reach. */
+  const wrapped = (
+    <>
+      <li>
+        <ul>
+          <Nav.Category value="docs" label="Docs">
+            <React.Fragment>
+              <Nav.SubItem value="intro">Introduction</Nav.SubItem>
+            </React.Fragment>
+          </Nav.Category>
+        </ul>
+      </li>
+      <Nav.Category value="guides" label="Guides">
+        <Nav.SubItem value="start">Getting started</Nav.SubItem>
+      </Nav.Category>
+    </>
+  );
+  const guides = () => screen.getByRole('button', { name: 'Guides' });
+
+  it('opens the categories that hold the selected value, found once through wrappers', () => {
+    const { rerender } = render(<Harness value="intro">{wrapped}</Harness>);
+    expect(toggle()).toHaveAttribute('aria-expanded', 'true');
+    expect(guides()).toHaveAttribute('aria-expanded', 'false');
+    expect(button('Introduction')).toHaveAttribute('aria-current', 'page');
+    // The scan runs at mount only: a later value opens nothing.
+    rerender(<Harness value="start">{wrapped}</Harness>);
+    expect(toggle()).toHaveAttribute('aria-expanded', 'true');
+    expect(guides()).toHaveAttribute('aria-expanded', 'false');
+  });
+
+  it('starts from defaultOpenCategories instead of the scan', () => {
+    render(
+      <Harness defaultValue="intro" defaultOpenCategories={['guides']}>
+        {wrapped}
+      </Harness>,
+    );
+    expect(toggle()).toHaveAttribute('aria-expanded', 'false');
+    expect(guides()).toHaveAttribute('aria-expanded', 'true');
+  });
+
+  it('calls onActivate on every activation and onValueChange only on a change (StrictMode)', async () => {
+    const user = userEvent.setup();
+    const onActivate = vi.fn();
+    const onValueChange = vi.fn();
+    const onOpenCategoriesChange = vi.fn();
+    render(
+      <React.StrictMode>
+        <Harness
+          onActivate={onActivate}
+          onValueChange={onValueChange}
+          onOpenCategoriesChange={onOpenCategoriesChange}
+        >
+          <Nav.Item value="home">Home</Nav.Item>
+          <Nav.Category value="docs" label="Docs">
+            <Nav.SubItem value="intro">Introduction</Nav.SubItem>
+          </Nav.Category>
+        </Harness>
+      </React.StrictMode>,
+    );
+    await user.click(button('Home'));
+    await user.click(button('Home'));
+    expect(onActivate.mock.calls).toEqual([['home'], ['home']]);
+    expect(onValueChange.mock.calls).toEqual([['home']]);
+    await user.click(toggle());
+    expect(onOpenCategoriesChange.mock.calls).toEqual([[['docs']]]);
+    expect(button('Home')).toHaveAttribute('aria-current', 'page');
+  });
+
+  it('keys and words the duplicate-value warnings with its componentName', () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const tree = (
+      <Harness defaultOpenCategories={['docs']}>
+        <Nav.Item value="home">Home</Nav.Item>
+        <Nav.Category value="docs" label="Docs">
+          <Nav.SubItem value="home">Start</Nav.SubItem>
+        </Nav.Category>
+        <Nav.Category value="docs" label="Guides">
+          {null}
+        </Nav.Category>
+      </Harness>
+    );
+    const { rerender } = render(tree);
+    rerender(tree);
+    expect(warn.mock.calls).toEqual([
+      [
+        '[WaveUI] Test: several items share the value "home". Nav.Item and Nav.SubItem values must be unique within a Test; every item with the current value is marked as the current page.',
+      ],
+      [
+        '[WaveUI] Test: several categories share the value "docs". Nav.Category values must be unique within a Test; they open and close together.',
+      ],
+    ]);
+  });
+
+  it('returns the same context value across a re-render with unchanged state', () => {
+    const contexts: NavContextValue[] = [];
+    const record = (context: NavContextValue) => contexts.push(context);
+    const items = () => <Nav.Item value="home">Home</Nav.Item>;
+    const { rerender } = render(<Harness onContext={record}>{items()}</Harness>);
+    rerender(<Harness onContext={record}>{items()}</Harness>);
+    expect(contexts).toHaveLength(2);
+    expect(contexts[1]).toBe(contexts[0]);
   });
 });

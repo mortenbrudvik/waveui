@@ -87,18 +87,26 @@ describe('placement', () => {
     },
   );
 
-  it('renders the group after an item whose href is known only at run time', () => {
-    const maybeHref: string | undefined = undefined as string | undefined;
-    render(
-      <Nav>
-        <Nav.Item value="reports" href={maybeHref} actions={<button type="button">Pin</button>}>
-          Reports
-        </Nav.Item>
-      </Nav>,
-    );
-    const item = screen.getByRole('button', { name: 'Reports' });
-    expect(item.nextElementSibling).toBe(group('Reports'));
-  });
+  it.each([
+    ['button', undefined],
+    ['link', '#reports'],
+  ] as const)(
+    'renders the group after a %s item whose href is known only at run time, never inside it',
+    (role, href) => {
+      const maybeHref = href as string | undefined;
+      render(
+        <Nav>
+          <Nav.Item value="reports" href={maybeHref} actions={<button type="button">Pin</button>}>
+            Reports
+          </Nav.Item>
+        </Nav>,
+      );
+      const item = screen.getByRole(role, { name: 'Reports' });
+      expect(within(item).queryAllByRole('button')).toEqual([]);
+      expect(item.nextElementSibling).toBe(group('Reports'));
+      expect(group('Reports').parentElement).toBe(item.parentElement);
+    },
+  );
 
   it('renders the group of a sub-item in an open category, with its own class', () => {
     render(
@@ -501,17 +509,19 @@ describe('server rendering', () => {
     expect(within(parsed).getByRole('button', { name: 'Home' })).not.toHaveAttribute('id');
   });
 
-  it('hydrates without a mismatch', async () => {
+  it('hydrates without a mismatch and logs nothing', async () => {
     const container = document.createElement('div');
     container.innerHTML = renderToString(<ServerNav />);
     document.body.appendChild(container);
     const error = vi.spyOn(console, 'error');
+    const warn = vi.spyOn(console, 'warn');
     let root: ReturnType<typeof hydrateRoot> | undefined;
     try {
       await act(async () => {
         root = hydrateRoot(container, <ServerNav />);
       });
       expect(error).not.toHaveBeenCalled();
+      expect(warn).not.toHaveBeenCalled();
       expect(within(container).getByRole('group', { name: 'Reports' })).toBeInTheDocument();
     } finally {
       act(() => root?.unmount());

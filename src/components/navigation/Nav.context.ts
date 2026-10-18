@@ -29,13 +29,13 @@ export interface NavCategoryStore {
    * value; `null` (an item outside any category) forgets an earlier entry, so a value moved out of
    * a category no longer marks it.
    */
-  record: (value: string, category: string | null) => void;
+  record(value: string, category: string | null): void;
   /** Forgets the entry of `value` while it is still `category`. */
-  forget: (value: string, category: string) => void;
+  forget(value: string, category: string): void;
   /** The category last recorded for a sub-item value. */
-  get: (value: string) => string | undefined;
+  get(value: string): string | undefined;
   /** Subscribes to every change of an entry; returns the unsubscribe function. */
-  subscribe: (listener: () => void) => () => void;
+  subscribe(listener: () => void): () => void;
 }
 
 /** A new, empty category store (one per Nav root, created once). */
@@ -170,7 +170,11 @@ NavRovingContext.displayName = 'NavRovingContext';
 /** What a marked Nav part is to the walks: an entry (Nav.Item, Nav.SubItem) or a category. */
 export type NavPartKind = 'entry' | 'category';
 
-/** The marker property of a Nav part (module-private; read only by {@link getNavPartKind}). */
+/**
+ * The marker property of a Nav part, read only by {@link getNavPartKind}. A registry symbol
+ * (`Symbol.for`), as Field's label marker (`fieldLabel.ts`): the ESM and CJS copies of the package
+ * share it, so a part marked by one copy is recognised by the other.
+ */
 const NAV_PART: symbol = Symbol.for('wave.navPart');
 
 /**
