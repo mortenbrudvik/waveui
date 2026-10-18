@@ -20,6 +20,7 @@ import {
   tagClassNames,
 } from '../../../lib/classNames';
 import { Button } from '../../button/Button';
+import type { Slot } from '../../../lib/slot';
 import { Avatar } from '../Avatar';
 import { AvatarGroup } from '../AvatarGroup';
 import { Badge } from '../Badge';
@@ -184,6 +185,39 @@ describe('stable class names (P3-00): data-display folder', () => {
         '[WaveUI] Tag: `dismissIcon` received a button. Its props were merged into the built-in dismiss button (a button cannot contain another button), which is named by its text label (or `dismissLabel`) and the tag content. Pass icon content instead, e.g. `dismissIcon={<CloseIcon />}`, and handle the dismissal in `onDismiss`.',
       ],
     ]);
+  });
+
+  it('Tag: the media, icon and secondary-text parts', () => {
+    render(
+      <>
+        <Tag
+          media={<Avatar name="Katri Athokas" />}
+          icon={<Glyph testId="katri-icon" />}
+          secondaryText="Designer"
+        >
+          Katri
+        </Tag>
+        <Tag
+          media={{ className: 'text-error', children: <Avatar name="Ada Lovelace" /> }}
+          // A void `as` takes the element's attributes (the slot is typed by its default span).
+          icon={{ as: 'img', src: 'tag.svg', alt: '' } as Slot<'span'>}
+        >
+          Ada
+        </Tag>
+      </>,
+    );
+    expect(screen.getByRole('img', { name: 'Katri Athokas' }).parentElement).toHaveClass(
+      tagClassNames.media,
+    );
+    expect(iconBox('katri-icon')).toHaveClass(tagClassNames.icon);
+    expect(screen.getByText('Designer')).toHaveClass(tagClassNames.secondaryText);
+    expect(screen.getByText('Katri')).toHaveClass(tagClassNames.primaryText);
+    // A slot object keeps the part class on its own element.
+    const media = screen.getByRole('img', { name: 'Ada Lovelace' }).parentElement;
+    expect(media).toHaveClass(tagClassNames.media, 'text-error');
+    const image = screen.getByText('Ada').parentElement?.querySelector('img');
+    expect(image).toHaveClass(tagClassNames.icon);
+    expect(image).toHaveAttribute('src', 'tag.svg');
   });
 
   it('Persona: root, the built-in Avatar (its own classes plus the avatar part), the badge element and the texts', () => {
