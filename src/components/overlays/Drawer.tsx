@@ -69,6 +69,11 @@ export type {
  *   Fragment there is fine). The header draws a line under itself once the body is scrolled, the
  *   footer one above itself while content continues below: the body, the header and the footer
  *   render the body's scroll state as `data-scroll-state` (`none`, `top`, `middle`, `bottom`).
+ * - **Backdrop, Close button and title actions**: the backdrop is the panel's sibling and a slot
+ *   (`backdrop`: `null` removes it, `appearance` picks `dimmed` or `transparent`); a modal opened
+ *   over another modal dims the page once. `closeButton` sets the content of every built-in Close
+ *   button, or hides them (`null`); a button passed there is merged into it. `titleAction` places
+ *   header buttons between the `title` heading and the Close button.
  *
  * The sub-components are also exported under flat names (`DrawerTrigger`, `DrawerClose`,
  * `DrawerTitle`, `DrawerHeader`, `DrawerHeaderTitle`, `DrawerHeaderNavigation`, `DrawerBody`,

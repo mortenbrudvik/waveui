@@ -10,17 +10,16 @@ import {
   drawerTitleClassNames,
 } from '../../lib/classNames';
 import { warnOnce } from '../../lib/dev';
-import { DismissIcon } from '../../lib/icons';
 import { materialiseSlotContent, renderSlot, slotRendersContent, type Slot } from '../../lib/slot';
 import { focusRingInset } from '../../lib/styles';
 import type { HeadingLevel } from '../../lib/types';
-import { Button } from '../button/Button';
 import {
   useModalClosePart,
   useModalTitle,
   useModalTriggerPart,
   type ModalRequestOpen,
 } from './Dialog.shared';
+import { ModalCloseButton } from './Dialog.slots';
 import {
   DrawerHeaderContext,
   DrawerPartContext,
@@ -256,22 +255,30 @@ export interface DrawerCloseButtonProps {
   requestOpen: ModalRequestOpen;
   /** The button's accessible name (the Drawer's `closeLabel`). */
   label: string;
+  /** The Drawer's `closeButton` slot: the button's content, or `null` to render none. */
+  closeButton: Slot<'span'> | undefined;
   /** Placement classes, after the button's own (`drawerClassNames.closeButton`). */
   className?: string;
 }
 
 /**
  * The Drawer's built-in Close button (internal): the Wave `Button`, subtle and small, with the
- * dismiss glyph, named by the Drawer's `closeLabel`. The built-in header and every
+ * dismiss glyph or the Drawer's `closeButton` content (the slot rules of `Dialog.Content`'s
+ * `closeButton`), named by the Drawer's `closeLabel`. The built-in header and every
  * `Drawer.HeaderTitle` in a `Drawer.Header` render it; it carries `drawerClassNames.closeButton`.
+ * Renders nothing for `closeButton={null}`.
  */
-export const DrawerCloseButton = ({ requestOpen, label, className }: DrawerCloseButtonProps) => (
-  <Button
-    appearance="subtle"
-    size="small"
-    icon={<DismissIcon />}
-    aria-label={label}
-    onClick={(event) => requestOpen(false, { reason: 'close-button', event: event.nativeEvent })}
+export const DrawerCloseButton = ({
+  requestOpen,
+  label,
+  closeButton,
+  className,
+}: DrawerCloseButtonProps) => (
+  <ModalCloseButton
+    componentName="Drawer"
+    closeButton={closeButton}
+    closeLabel={label}
+    onClose={(event) => requestOpen(false, { reason: 'close-button', event })}
     className={cn(drawerClassNames.closeButton, className)}
   />
 );
@@ -351,7 +358,8 @@ DrawerHeader.displayName = 'DrawerHeader';
 
 /**
  * A title row for `Drawer.Header`: the heading that names the drawer, your `action` content and
- * the built-in Close button (named by the Drawer's `closeLabel`), in that DOM and Tab order.
+ * the built-in Close button (named by the Drawer's `closeLabel`; the Drawer's `closeButton` sets
+ * its content, or hides it with `null`), in that DOM and Tab order.
  * Render one per header; `headingLevel` picks the heading element (`h2` by default). Outside a
  * `Drawer.Header` it renders without the Close button and warns: use `Drawer.Title` for a heading
  * in the body. Unlike Fluent's `DrawerHeaderTitle`, whose `action` is where you put a close
@@ -366,7 +374,7 @@ export const DrawerHeaderTitle = ({
   ref,
   ...rest
 }: DrawerHeaderTitleProps) => {
-  const { requestOpen, closeLabel } = useDrawerContext('Drawer.HeaderTitle');
+  const { requestOpen, closeLabel, closeButton } = useDrawerContext('Drawer.HeaderTitle');
   const inHeader = React.useContext(DrawerHeaderContext);
   const { id: headingId, ref: headingRef } = useModalTitle(
     'Drawer.HeaderTitle',
@@ -404,6 +412,7 @@ export const DrawerHeaderTitle = ({
           <DrawerCloseButton
             requestOpen={requestOpen}
             label={closeLabel}
+            closeButton={closeButton}
             className="mt-0.5 shrink-0 text-muted-foreground"
           />
         )}

@@ -103,8 +103,10 @@ export interface BackdropPress {
 }
 
 /**
- * What a press on a modal's backdrop does to focus (`Dialog.Content`, the Drawer panel). Presses
- * that start inside the surface bubble through unchanged.
+ * What a press on a modal's backdrop does to focus (`Dialog.Content`, the Drawer panel). The
+ * backdrop is the surface's sibling, so every mouse press on it, its content included, is a
+ * backdrop press (a press that a portal opened from the backdrop's content bubbles through the
+ * React tree is not).
  *
  * - When the press closes the modal (`closesOnPress`), the browser moves focus to `<body>` as
  *   usual, so the focused control blurs while it is still mounted and its blur-time commit runs
@@ -129,7 +131,8 @@ export function useBackdropPress(
 
   const onMouseDown = React.useCallback(
     (event: React.MouseEvent<HTMLElement>) => {
-      if (event.target !== event.currentTarget) return;
+      // C-COMPOSE: only presses on the backdrop element or its content in the DOM.
+      if (!event.currentTarget.contains(event.target as Node)) return;
       if (!closesOnPress) {
         event.preventDefault();
         return;
@@ -578,6 +581,12 @@ export interface ModalSurfaceContextValue {
    * Absent on a surface without a footer part (the Drawer panel).
    */
   setFooterHeight?: (px: number | null) => void;
+  /**
+   * The element `Dialog.Title` actions portal into: the outlet in `Dialog.Content`'s title-actions
+   * area, `null` until it is attached. Absent outside `Dialog.Content` (the Drawer panel), where a
+   * title renders its action right after its heading.
+   */
+  titleActionsOutlet?: HTMLElement | null;
 }
 
 /**

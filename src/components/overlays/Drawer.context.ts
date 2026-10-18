@@ -1,4 +1,5 @@
 import * as React from 'react';
+import type { Slot } from '../../lib/slot';
 import type {
   ModalOpenChangeReason,
   ModalType,
@@ -60,6 +61,8 @@ export interface DrawerContextValue {
   inPanel: boolean;
   /** The accessible name of the built-in Close button (the Drawer's `closeLabel`). */
   closeLabel: string;
+  /** The content of every built-in Close button (the Drawer's `closeButton`; `null` hides them). */
+  closeButton: Slot<'span'> | undefined;
 }
 
 /** Provided by the Drawer root (`inPanel: false`) and again inside its panel (`inPanel: true`). */
@@ -74,6 +77,7 @@ const inertDrawerContext: DrawerContextValue = {
   panelId: '',
   inPanel: false,
   closeLabel: 'Close',
+  closeButton: undefined,
 };
 
 /**

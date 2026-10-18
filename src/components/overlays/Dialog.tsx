@@ -1,4 +1,5 @@
 import * as React from 'react';
+import { createPortal } from 'react-dom';
 import { cn } from '../../lib/cn';
 import {
   dialogContentClassNames,
@@ -7,14 +8,18 @@ import {
 } from '../../lib/classNames';
 import { composeEventHandlers } from '../../lib/composeEventHandlers';
 import { warnOnce } from '../../lib/dev';
-import { DismissIcon } from '../../lib/icons';
-import { slotRendersContent } from '../../lib/slot';
-import type { ModalOpenChangeReason, ModalType, OpenChangeDetails } from '../../lib/types';
+import { renderSlot, slotRendersContent, type Slot, type SlotObject } from '../../lib/slot';
+import type {
+  BackdropAppearance,
+  ModalOpenChangeReason,
+  ModalType,
+  OpenChangeDetails,
+  SurfaceSize,
+} from '../../lib/types';
 import { useId } from '../../hooks/useId';
 import { useIsClient } from '../../hooks/useIsClient';
 import { useMergedRefs } from '../../hooks/useMergedRefs';
 import { useModalLayer } from '../../hooks/useModalLayer';
-import { Button } from '../button/Button';
 import { Portal } from '../portal/Portal';
 import {
   inertModalTrigger,
@@ -35,6 +40,7 @@ import {
   type ModalSurfaceContextValue,
   type ModalTrigger,
 } from './Dialog.shared';
+import { ModalBackdrop, ModalCloseButton } from './Dialog.slots';
 import { getTabbableThrough, usePopoverTabOrder } from './Popover.shared';
 
 /**
@@ -52,6 +58,12 @@ export type DialogOpenChangeDetails = OpenChangeDetails<DialogOpenChangeReason>;
  * `ModalType`; `DrawerModalType` is the same type).
  */
 export type DialogModalType = ModalType;
+
+/**
+ * The width cap of a {@link Dialog}'s surface: `small` 400px, `medium` 600px, `large` 940px, or
+ * `full`, the whole viewport (the shared `SurfaceSize`; `DrawerSize` is the same type).
+ */
+export type DialogSize = SurfaceSize;
 
 /** Properties for the Dialog component. */
 export interface DialogProps {
@@ -87,9 +99,10 @@ export interface DialogProps {
    * closes it while focus is inside it, presses on the page never close it, and focus returns to
    * the opener only when it was inside the dialog. A non-modal dialog covers the page under it
    * while Tab still reaches that page: keep the controls the user works with outside it, or use
-   * `modal`. Every type moves focus to the first focusable element on open (the built-in Close
-   * button); give another element `autoFocus` to start there (an alert dialog's least destructive
-   * action). `Dialog.Trigger` toggles the dialog. Fluent's `modalType`.
+   * `modal` (with `size="full"` it covers everything, and a development warning says so). Every
+   * type moves focus to the first focusable element on open (a title action, else the built-in
+   * Close button); give another element `autoFocus` to start there (an alert dialog's least
+   * destructive action). `Dialog.Trigger` toggles the dialog. Fluent's `modalType`.
    * @default 'modal'
    */
   modalType?: DialogModalType;
@@ -112,13 +125,50 @@ export interface DialogContentProps extends Omit<React.HTMLAttributes<HTMLDivEle
    * (`''`, `[]`, `true`) counts as none.
    */
   title?: React.ReactNode;
-  /** Maximum width of the dialog: 400px (`small`) or 600px (`medium`); it never exceeds the viewport.
+  /**
+   * Width cap: 400px (`small`), 600px (`medium`) or 940px (`large`), never wider than the viewport
+   * (a 1rem margin). `full` covers the viewport: no margin, radius or border, the viewport's
+   * dynamic height, and the safe-area insets as padding (with `viewport-fit=cover`); the body
+   * scrolls under the sticky `Dialog.Footer`. Rendered as `data-size`. Fluent has no size. For
+   * another width, put a width cap in `className` (it replaces the size's).
    * @default 'medium'
    */
-  size?: 'small' | 'medium';
+  size?: DialogSize;
+  /**
+   * The backdrop of a modal or alert dialog: a `div` behind the dialog, `aria-hidden`. Shorthand
+   * content renders inside it; a slot object's `className` (merged last), `style`, data
+   * attributes, `ref` and handlers go to it, and its `appearance` (`'dimmed'` or `'transparent'`)
+   * overrides the automatic one: while another modal Dialog or Drawer is open below this one the
+   * backdrop is transparent, so the page is dimmed once. `null` renders no backdrop (the page stays
+   * inert, and a press outside still closes a modal dialog); a boolean is no slot. Ignored with
+   * `modalType="non-modal"` (a development warning says so). Fluent's `backdrop`.
+   */
+  backdrop?: Slot<'div'> | (SlotObject<'div'> & { appearance?: BackdropAppearance });
+  /**
+   * Content of the built-in Close button (the dismiss glyph by default). It renders inside the
+   * button, decorative (`aria-hidden`), so the button keeps the name `closeLabel`; a slot object's
+   * `aria-label`, `aria-labelledby` or `title` names it instead, and its handlers run before the
+   * close (`preventDefault()` keeps the dialog open). `null` hides the button (Escape and
+   * `Dialog.Close` still close); a boolean is no slot, so `closeButton={cond && <MyIcon />}` keeps
+   * the default; content that renders nothing keeps the default glyph. A `<button>` or Wave
+   * `Button` passed here is merged into the built-in button, never nested (a development warning
+   * says so): its props apply, its text label (`<button>Done</button>`) names the button instead
+   * of `closeLabel`, and a Button's `icon`, `iconPosition` and `disabledFocusable` apply while
+   * `appearance` and `size` are ignored. Fluent's `DialogTitle` `action` holds Fluent's close
+   * button; WaveUI renders its own.
+   */
+  closeButton?: Slot<'span'>;
+  /**
+   * Header buttons for the `title` prop form, placed before the built-in Close button in the
+   * dialog's top end corner, in DOM and Tab order (an expand toggle, a menu). The title's end
+   * padding makes room for them. Interactive: name icon-only buttons. Renders nothing when empty.
+   * See also `Dialog.Title`'s `action`. Fluent's `DialogTitle` `action`, for the `title` prop
+   * form.
+   */
+  titleAction?: Slot<'span'>;
   /**
    * Accessible name of the built-in Close button (an icon-only button). Localize it with the
-   * page's language.
+   * page's language. A text label of a button merged into `closeButton` names it instead.
    * @default 'Close'
    */
   closeLabel?: string;
@@ -140,6 +190,15 @@ export interface DialogFooterProps extends React.HTMLAttributes<HTMLDivElement> 
 export interface DialogTitleProps extends React.HTMLAttributes<HTMLHeadingElement> {
   /** The title; any content. */
   children: React.ReactNode;
+  /**
+   * Header buttons for this title, placed before the built-in Close button in the dialog's top end
+   * corner (after `Dialog.Content`'s `titleAction`), not inside the heading, so they never become
+   * part of the dialog's name. Outside `Dialog.Content` (in a Drawer) they render right after the
+   * heading. Interactive: name icon-only buttons. Renders nothing when empty. Fluent's
+   * `DialogTitle` `action`; unlike Fluent's, it is never filled by default (the Close button is
+   * the Content's).
+   */
+  action?: Slot<'span'>;
   /** Ref to the heading element. */
   ref?: React.Ref<HTMLHeadingElement>;
 }
@@ -306,28 +365,80 @@ export const DialogClose = (props: DialogCloseProps) => {
 };
 DialogClose.displayName = 'DialogClose';
 
-const sizeClasses: Record<'small' | 'medium', string> = {
+/**
+ * The surface's width cap per size. `full` lifts the caps, the margin, the radius and the border,
+ * takes the viewport's dynamic height and pads the safe-area insets (`max()` keeps the 24px
+ * padding where there is no inset, and never adds the two).
+ */
+const sizeClasses: Record<DialogSize, string> = {
   small: 'max-w-[400px]',
   medium: 'max-w-[600px]',
+  large: 'max-w-[940px]',
+  full: 'm-0 h-dvh max-h-none max-w-none rounded-none border-0 pt-[max(1.5rem,env(safe-area-inset-top))] pb-[max(1.5rem,env(safe-area-inset-bottom))] ps-[max(1.5rem,env(safe-area-inset-left))] pe-[max(1.5rem,env(safe-area-inset-right))] wave-rtl:ps-[max(1.5rem,env(safe-area-inset-right))] wave-rtl:pe-[max(1.5rem,env(safe-area-inset-left))]',
 };
+
+/** The title-actions area of a `full` dialog moves by the safe-area insets, as the padding does. */
+const fullTitleActionsClasses =
+  'top-[max(1rem,env(safe-area-inset-top))] end-[max(1rem,env(safe-area-inset-right))] wave-rtl:end-[max(1rem,env(safe-area-inset-left))]';
+
+/** The gap (px) between the titles' text and the title-actions area. */
+const TITLE_ACTIONS_GAP = 8;
+
+const BACKDROP_IGNORED_WARNING_KEY = 'Dialog.Content:backdrop-ignored';
+const BACKDROP_IGNORED_WARNING =
+  'Dialog.Content: `backdrop` is ignored with `modalType="non-modal"`: a non-modal dialog has no backdrop, so the page behind it stays usable.';
+
+const NON_MODAL_FULL_WARNING_KEY = 'Dialog.Content:non-modal-full';
+const NON_MODAL_FULL_WARNING =
+  'Dialog.Content: `size="full"` with `modalType="non-modal"` covers the whole page while leaving it usable, so Tab reaches controls hidden behind the dialog. Use `modalType="modal"`, or a smaller size with the page\'s controls kept clear of it.';
+
+/**
+ * The width (px) of the title-actions area, measured with a `ResizeObserver` (`null` until the
+ * first measurement, and without `ResizeObserver`). The observer's first callback arrives before
+ * the next paint.
+ */
+function useTitleActionsWidth(area: HTMLElement | null): number | null {
+  const [width, setWidth] = React.useState<number | null>(null);
+  React.useLayoutEffect(() => {
+    if (!area || typeof ResizeObserver === 'undefined') return;
+    const observer = new ResizeObserver((entries) => {
+      const entry = entries[entries.length - 1];
+      if (!entry) return;
+      setWidth(entry.borderBoxSize?.[0]?.inlineSize ?? area.offsetWidth);
+    });
+    observer.observe(area, { box: 'border-box' });
+    return () => {
+      observer.disconnect();
+      setWidth(null);
+    };
+  }, [area]);
+  return width;
+}
 
 /**
  * The dialog surface, rendered in a portal (inheriting the WaveProvider theme) while the dialog is
- * open: backdrop, title, Close button and a scrolling body. It takes the full width up to its
- * `size` and never exceeds the viewport (the body scrolls, also sideways for content wider than
- * the dialog). Its 1rem gap to the viewport edges is its own margin, so a margin in `className`
- * replaces the gap: with the width and height caps lifted as well and its height set to the
- * viewport's, it fills the viewport (a full-screen dialog). It is `role="dialog"`, or
- * `role="alertdialog"` when the Dialog has `modalType="alert"` (a `role` you pass wins), and
- * carries `data-modal-type` with the resolved type. A non-modal dialog has no backdrop: the
- * element around the surface only centres it and lets presses through to the page.
+ * open: the backdrop, and the surface centred in the positioner (the backdrop's sibling) with the
+ * title, the title-actions area (title actions, then the Close button) and a scrolling body. It
+ * takes the full width up to its `size` and never exceeds the viewport (the body scrolls, also
+ * sideways for content wider than the dialog); `size="full"` fills the viewport. Its 1rem gap to
+ * the viewport edges is its own margin, so a margin in `className` replaces the gap: with the
+ * width and height caps lifted as well and its height set to the viewport's, it fills the
+ * viewport. It is `role="dialog"`, or `role="alertdialog"` when the Dialog has
+ * `modalType="alert"` (a `role` you pass wins), and carries `data-modal-type` and `data-size` with
+ * the resolved values. A non-modal dialog has no backdrop: the positioner only centres the surface
+ * and lets presses through to the page. The titles' end padding follows the width of the
+ * title-actions area (`--wave-dialog-title-end-padding`, 2rem until it is measured).
  */
 export const DialogContent = ({
   title,
   size = 'medium',
+  backdrop,
+  closeButton,
+  titleAction,
   closeLabel = 'Close',
   children,
   className,
+  style,
   id,
   onKeyDown,
   ref,
@@ -378,34 +489,66 @@ export const DialogContent = ({
   });
   useUnnamedModalWarning(open ? surface : null, titles.hasTitle, 'Dialog.Content', 'Dialog.Title');
 
+  // A non-modal dialog has no backdrop: a given slot (not undefined, null or a boolean) is ignored.
+  const backdropIgnored =
+    nonModal && backdrop !== undefined && backdrop !== null && typeof backdrop !== 'boolean';
+  React.useEffect(() => {
+    if (backdropIgnored) warnOnce(BACKDROP_IGNORED_WARNING_KEY, BACKDROP_IGNORED_WARNING);
+  }, [backdropIgnored]);
+  // A full non-modal dialog covers the page it leaves usable (D87.8).
+  const coversUsablePage = open && nonModal && size === 'full';
+  React.useEffect(() => {
+    if (coversUsablePage) warnOnce(NON_MODAL_FULL_WARNING_KEY, NON_MODAL_FULL_WARNING);
+  }, [coversUsablePage]);
+
+  // The title-actions area (held in state) and the outlet `Dialog.Title` actions portal into. Both
+  // attach in the commit that mounts the surface, so a title's action is in the DOM in the next
+  // commit, the one in which the focus trap starts (it waits for the surface held in state).
+  const [titleActionsArea, setTitleActionsArea] = React.useState<HTMLDivElement | null>(null);
+  const [titleActionsOutlet, setTitleActionsOutlet] = React.useState<HTMLSpanElement | null>(null);
+  const titleActionsWidth = useTitleActionsWidth(titleActionsArea);
+
   // The height of the sticky Dialog.Footer, reserved as the body's scroll padding.
   const [footerHeight, setFooterHeight] = React.useState<number | null>(null);
   const surfaceContext = React.useMemo<ModalSurfaceContextValue>(
-    () => ({ ...titles.context, setFooterHeight }),
-    [titles.context],
+    () => ({ ...titles.context, setFooterHeight, titleActionsOutlet }),
+    [titles.context, titleActionsOutlet],
   );
 
   if (!open) return null;
 
   const hasTitle = slotRendersContent(title);
+  // The titles' end padding: the area's width and a gap while it has a size, none while it is
+  // empty; unset (the 2rem fallback) until it is measured.
+  const titleEndPadding =
+    titleActionsWidth === null
+      ? undefined
+      : titleActionsWidth > 0
+        ? `${titleActionsWidth + TITLE_ACTIONS_GAP}px`
+        : '0px';
+  const surfaceStyle =
+    titleEndPadding === undefined
+      ? style
+      : ({ '--wave-dialog-title-end-padding': titleEndPadding, ...style } as React.CSSProperties);
 
   return (
     <Portal layerId={layer.layerId}>
+      {!nonModal && (
+        <ModalBackdrop
+          backdrop={backdrop}
+          className={dialogContentClassNames.backdrop}
+          layerId={layer.layerId}
+          open={open}
+          onMouseDown={backdropPress.onMouseDown}
+        />
+      )}
       <div
-        // A modal dialog's backdrop centres the surface; a non-modal one has no backdrop, and the
-        // positioner lets presses through to the page around the surface.
-        className={
-          nonModal
-            ? cn(
-                dialogContentClassNames.positioner,
-                'pointer-events-none fixed inset-0 flex items-center justify-center',
-              )
-            : cn(
-                dialogContentClassNames.backdrop,
-                'fixed inset-0 flex items-center justify-center bg-backdrop',
-              )
-        }
-        onMouseDown={nonModal ? undefined : backdropPress.onMouseDown}
+        // Centres the surface and lets presses through to the backdrop (modal) or the page
+        // (non-modal) around it.
+        className={cn(
+          dialogContentClassNames.positioner,
+          'pointer-events-none fixed inset-0 flex items-center justify-center',
+        )}
       >
         <div
           ref={mergedRef}
@@ -414,18 +557,19 @@ export const DialogContent = ({
           aria-labelledby={hasTitle ? propTitleId : titles.titleId}
           tabIndex={-1}
           data-modal-type={modalType}
+          data-size={size}
           {...rest}
+          style={surfaceStyle}
           onKeyDown={composeEventHandlers(onKeyDown, onTabOrderKeyDown)}
           className={cn(
             dialogContentClassNames.root,
             // The border marks the surface where the shadow cannot: in high contrast the page,
             // the backdrop and the surface are black, and forced colors drop shadows. The 1rem gap
-            // to the viewport edges is the surface's own margin, not the backdrop's padding, so a
-            // margin in `className` replaces it and a full-screen dialog can reach the edges. Its
-            // minimum width is zero, so content wider than the room inside the gap scrolls in the
-            // body instead of pushing the surface over the gap.
-            'relative m-4 flex min-w-0 max-h-[calc(100dvh-2rem)] w-full flex-col rounded-lg border border-border bg-background p-6 text-foreground shadow-64',
-            nonModal && 'pointer-events-auto',
+            // to the viewport edges is the surface's own margin, not the positioner's padding, so
+            // a margin in `className` replaces it and a full-screen dialog can reach the edges.
+            // Its minimum width is zero, so content wider than the room inside the gap scrolls in
+            // the body instead of pushing the surface over the gap.
+            'pointer-events-auto relative m-4 flex min-w-0 max-h-[calc(100dvh-2rem)] w-full flex-col rounded-lg border border-border bg-background p-6 text-foreground shadow-64',
             sizeClasses[size],
             className,
           )}
@@ -434,24 +578,39 @@ export const DialogContent = ({
             {hasTitle && (
               <h2
                 id={propTitleId}
-                className={cn(dialogTitleClassNames.root, 'pe-8 text-subtitle-1 font-semibold')}
+                className={cn(
+                  dialogTitleClassNames.root,
+                  'pe-[var(--wave-dialog-title-end-padding,2rem)] text-subtitle-1 font-semibold',
+                )}
               >
                 {title}
               </h2>
             )}
-            <Button
-              appearance="subtle"
-              size="small"
-              icon={<DismissIcon />}
-              aria-label={closeLabel}
-              onClick={(event) =>
-                requestOpen(false, { reason: 'close-button', event: event.nativeEvent })
-              }
+            <div
+              ref={setTitleActionsArea}
               className={cn(
-                dialogContentClassNames.closeButton,
-                'absolute end-4 top-4 text-muted-foreground',
+                dialogContentClassNames.titleActions,
+                'absolute end-4 top-4 flex items-start gap-1',
+                size === 'full' && fullTitleActionsClasses,
               )}
-            />
+            >
+              {slotRendersContent(titleAction)
+                ? renderSlot(
+                    titleAction,
+                    'span',
+                    cn(dialogContentClassNames.titleAction, 'inline-flex items-center gap-1'),
+                  )
+                : null}
+              {/* Each Dialog.Title action portals here, in mount order. */}
+              <span ref={setTitleActionsOutlet} className="contents" />
+              <ModalCloseButton
+                componentName="Dialog.Content"
+                closeButton={closeButton}
+                closeLabel={closeLabel}
+                onClose={(event) => requestOpen(false, { reason: 'close-button', event })}
+                className={cn(dialogContentClassNames.closeButton, 'text-muted-foreground')}
+              />
+            </div>
             <div
               // The scroll padding keeps a focused field above the sticky footer (WCAG 2.4.11).
               className={cn(
@@ -476,24 +635,47 @@ DialogContent.displayName = 'DialogContent';
 
 /**
  * A heading that names the dialog (`aria-labelledby`), for rich titles or custom layouts. Render it
- * inside `Dialog.Content` (instead of the `title` prop). Like the `title` heading it reserves end
- * padding (`pe-8`) so a long first line stays clear of the Close button; a `className` padding wins.
+ * inside `Dialog.Content` (instead of the `title` prop). Like the `title` heading, its end padding
+ * follows the width of the dialog's title-actions area (2rem until it is measured), so a long first
+ * line stays clear of the title actions and the Close button; a `className` padding wins. Its
+ * `action` renders in that area, before the Close button, and never inside the heading.
  */
-export const DialogTitle = ({ id, className, children, ref, ...rest }: DialogTitleProps) => {
+export const DialogTitle = ({
+  id,
+  action,
+  className,
+  children,
+  ref,
+  ...rest
+}: DialogTitleProps) => {
   const { id: titleId, ref: titleRef } = useModalTitle('Dialog.Title', 'Dialog.Content', id, ref);
-  return (
+  // `undefined` outside Dialog.Content (a Drawer), `null` until the content's outlet is attached.
+  const outlet = React.useContext(ModalSurfaceContext)?.titleActionsOutlet;
+  const heading = (
     <h2
       {...rest}
       id={titleId}
       ref={titleRef}
       className={cn(
         dialogTitleClassNames.root,
-        'pe-8 text-subtitle-1 font-semibold text-foreground',
+        'pe-[var(--wave-dialog-title-end-padding,2rem)] text-subtitle-1 font-semibold text-foreground',
         className,
       )}
     >
       {children}
     </h2>
+  );
+  if (!slotRendersContent(action)) return heading;
+  const actionElement = renderSlot(
+    action,
+    'span',
+    cn(dialogTitleClassNames.action, 'inline-flex items-center gap-1'),
+  );
+  return (
+    <>
+      {heading}
+      {outlet === undefined ? actionElement : outlet && createPortal(actionElement, outlet)}
+    </>
   );
 };
 DialogTitle.displayName = 'DialogTitle';
@@ -594,6 +776,16 @@ DialogFooter.displayName = 'DialogFooter';
  *   dialog in the page's order right after the element that opened it; Escape closes it only while
  *   focus is inside it; presses on the page never close it; focus returns to the opener only from
  *   inside. Keep the page's controls clear of the dialog, which covers the page under it.
+ * - **Size**: `Dialog.Content` `size` caps the width at 400px (`small`), 600px (`medium`, the
+ *   default) or 940px (`large`); `full` covers the viewport and pads its safe-area insets.
+ * - **Backdrop**: the backdrop is the surface's sibling and a slot (`backdrop`: `null` removes it,
+ *   `appearance` picks `dimmed` or `transparent`). A modal opened over another modal dims the page
+ *   once: its backdrop is transparent while the lower one is open.
+ * - **Close button and title actions**: `closeButton` sets the built-in Close button's content, or
+ *   hides it (`null`); a button passed there is merged into it. `titleAction` and `Dialog.Title`'s
+ *   `action` place header buttons before the Close button in the top end corner, in DOM and Tab
+ *   order, and the titles' end padding makes room for them. Initial focus goes to the first
+ *   focusable element: a title action, else the Close button.
  * - **Footer**: `Dialog.Footer` sticks to the bottom of the scrolling body, and the body keeps a
  *   focused field above it.
  * - **Naming**: give `Dialog.Content` a `title`, a `Dialog.Title`, or `aria-label`.

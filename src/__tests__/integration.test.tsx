@@ -2520,7 +2520,7 @@ describe('a Toast over an alert Dialog', () => {
   it('a backdrop press does not close the alert or move focus; Escape does close it', async () => {
     const { user, onOpenChange } = setup();
     await user.click(button('Notify'));
-    const backdrop = alertDialog().parentElement!;
+    const backdrop = document.querySelector<HTMLElement>('.' + dialogContentClassNames.backdrop)!;
     await user.click(backdrop);
     expect(onOpenChange).not.toHaveBeenCalled();
     expect(alertDialog()).toBeInTheDocument();
@@ -2621,8 +2621,12 @@ describe('a SpinButton in a Dialog or Drawer: a backdrop press commits its typed
     );
   }
 
-  /** The backdrop behind the open surface (its parent element). */
-  const backdropOf = (role: 'dialog' | 'alertdialog') => screen.getByRole(role).parentElement!;
+  /** The backdrop behind the open surface (its sibling, by the surface's stable class). */
+  const backdropOf = (surface: Surface) =>
+    document.querySelector<HTMLElement>(
+      '.' +
+        (surface === 'Drawer' ? Wave.drawerClassNames.backdrop : dialogContentClassNames.backdrop),
+    )!;
 
   async function typeRows(user: ReturnType<typeof userEvent.setup>, text: string) {
     const rows = screen.getByRole('spinbutton', { name: 'Rows' });
@@ -2641,7 +2645,7 @@ describe('a SpinButton in a Dialog or Drawer: a backdrop press commits its typed
     const onValueChange = vi.fn();
     render(<PageSize surface={surface} defaultOpen onValueChange={onValueChange} />);
     await typeRows(user, '50');
-    await user.click(path === 'backdrop' ? backdropOf('dialog') : button('Close'));
+    await user.click(path === 'backdrop' ? backdropOf(surface) : button('Close'));
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
     expect(onValueChange.mock.calls).toEqual([[50]]);
   });
@@ -2666,7 +2670,7 @@ describe('a SpinButton in a Dialog or Drawer: a backdrop press commits its typed
       }
       render(<RefusesBackdrop />);
       const rows = await typeRows(user, '50');
-      await user.click(backdropOf('dialog'));
+      await user.click(backdropOf(surface));
       expect(screen.getByRole('dialog', { name: 'Page size' })).toBeInTheDocument();
       expect(onValueChange.mock.calls).toEqual([[50]]);
       expect(rows).toHaveFocus();
@@ -2681,7 +2685,7 @@ describe('a SpinButton in a Dialog or Drawer: a backdrop press commits its typed
       <PageSize surface="Dialog" defaultOpen modalType="alert" onValueChange={onValueChange} />,
     );
     const rows = await typeRows(user, '50');
-    await user.click(backdropOf('alertdialog'));
+    await user.click(backdropOf('Dialog'));
     expect(screen.getByRole('alertdialog', { name: 'Page size' })).toBeInTheDocument();
     expect(rows).toHaveFocus();
     expect(onValueChange).not.toHaveBeenCalled();

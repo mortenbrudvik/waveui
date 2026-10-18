@@ -10,13 +10,13 @@ import {
 } from '../Drawer';
 import { Dialog } from '../Dialog';
 import { Toaster } from '../../feedback/Toaster';
-import { drawerClassNames } from '../../../lib/classNames';
+import { dialogContentClassNames, drawerClassNames } from '../../../lib/classNames';
 import { useDismiss } from '../../../hooks/useDismiss';
 import { useRestoreFocus } from '../../../hooks/useRestoreFocus';
 import { Portal } from '../../portal/Portal';
 import { getTopmostLayer } from '../../../lib/layers';
 import type { ModalType } from '../../../lib/types';
-import { expectNoA11yViolations } from '../../../test-utils';
+import { expectNoA11yViolations, renderWithProviders } from '../../../test-utils';
 
 /*
  * P6-06 D86, D87: Drawer's `modalType` — `modal` (the 0.10 drawer), `alert` and `non-modal` (the
@@ -737,6 +737,354 @@ describe('Drawer modalType="non-modal" (P6-06 D87)', () => {
         </main>,
       );
       await user.click(button('Details'));
+      await expectNoA11yViolations();
+    });
+  });
+});
+
+describe('Drawer backdrop, closeButton and titleAction (P6-06 D93–D95, D98)', () => {
+  const dialogBackdrop = () =>
+    document.querySelector<HTMLElement>('.' + dialogContentClassNames.backdrop);
+
+  describe('backdrop', () => {
+    it('renders an aria-hidden, dimmed backdrop as the panel’s previous sibling', () => {
+      render(
+        <Drawer defaultOpen title="Filters">
+          Body
+        </Drawer>,
+      );
+      const panel = screen.getByRole('dialog', { name: 'Filters' });
+      const backdrop = panel.previousElementSibling;
+      expect(backdrop).toBe(backdropElement());
+      expect(backdrop).toHaveClass(drawerClassNames.backdrop, 'fixed', 'inset-0', 'bg-backdrop');
+      expect(backdrop).toHaveAttribute('aria-hidden', 'true');
+      expect(backdrop).toHaveAttribute('data-appearance', 'dimmed');
+    });
+
+    it('gives a slot object’s class, style and data attribute to the backdrop', () => {
+      render(
+        <Drawer
+          defaultOpen
+          title="Filters"
+          backdrop={{ className: 'bg-transparent', style: { opacity: 0.4 }, 'data-testid': 'bd' }}
+        >
+          Body
+        </Drawer>,
+      );
+      const backdrop = screen.getByTestId('bd');
+      expect(backdrop).toBe(backdropElement());
+      expect(backdrop).toHaveClass('bg-transparent');
+      expect(backdrop).not.toHaveClass('bg-backdrop');
+      expect(backdrop.style.opacity).toBe('0.4');
+    });
+
+    it('{ appearance: "transparent" } renders a transparent backdrop', () => {
+      render(
+        <Drawer defaultOpen title="Filters" backdrop={{ appearance: 'transparent' }}>
+          Body
+        </Drawer>,
+      );
+      expect(backdropElement()).toHaveAttribute('data-appearance', 'transparent');
+      expect(backdropElement()).toHaveClass('bg-transparent');
+    });
+
+    it('null renders none: the page stays inert, and a press outside still closes it', async () => {
+      const user = userEvent.setup();
+      const onOpenChange = vi.fn();
+      render(
+        <>
+          <button type="button">Page button</button>
+          <Drawer defaultOpen title="Filters" backdrop={null} onOpenChange={onOpenChange}>
+            Body
+          </Drawer>
+        </>,
+      );
+      expect(backdropElement()).toBeNull();
+      expect(
+        screen.getByRole('button', { name: 'Page button', hidden: true }).closest('[inert]'),
+      ).not.toBeNull();
+      await user.click(document.body);
+      expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+      expect(onOpenChange).toHaveBeenCalledWith(
+        false,
+        expect.objectContaining({ reason: 'outside-press' }),
+      );
+    });
+
+    it('a press on the backdrop’s content closes a modal drawer', async () => {
+      const user = userEvent.setup();
+      render(
+        <Drawer defaultOpen title="Filters" backdrop={<span data-testid="art">Pattern</span>}>
+          Body
+        </Drawer>,
+      );
+      expect(screen.getByTestId('art').parentElement).toBe(backdropElement());
+      await user.click(screen.getByTestId('art'));
+      expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+    });
+
+    it('a Dialog opened beside the drawer is transparent while the drawer stays dimmed', async () => {
+      const user = userEvent.setup();
+      function Beside() {
+        const [confirm, setConfirm] = React.useState(false);
+        return (
+          <>
+            <Drawer defaultOpen title="Orders">
+              <button type="button" onClick={() => setConfirm(true)}>
+                Delete row
+              </button>
+            </Drawer>
+            <Dialog open={confirm} onOpenChange={setConfirm}>
+              <Dialog.Content title="Delete the row?">Sure?</Dialog.Content>
+            </Dialog>
+          </>
+        );
+      }
+      render(<Beside />);
+      await user.click(button('Delete row'));
+      expect(dialogBackdrop()).toHaveAttribute('data-appearance', 'transparent');
+      expect(backdropElement()).toHaveAttribute('data-appearance', 'dimmed');
+      await user.keyboard('{Escape}');
+      expect(dialogBackdrop()).toBeNull();
+      expect(backdropElement()).toHaveAttribute('data-appearance', 'dimmed');
+    });
+
+    it('a drawer opened from a Dialog’s content is transparent', async () => {
+      const user = userEvent.setup();
+      render(
+        <Dialog defaultOpen>
+          <Dialog.Content title="Settings">
+            <Drawer title="Advanced">
+              <Drawer.Trigger>
+                <button type="button">Advanced</button>
+              </Drawer.Trigger>
+              Body
+            </Drawer>
+          </Dialog.Content>
+        </Dialog>,
+      );
+      await user.click(button('Advanced'));
+      expect(backdropElement()).toHaveAttribute('data-appearance', 'transparent');
+      expect(dialogBackdrop()).toHaveAttribute('data-appearance', 'dimmed');
+    });
+
+    it('ignores a backdrop slot on a non-modal drawer, with a warning', async () => {
+      const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+      try {
+        const user = userEvent.setup();
+        render(
+          <React.StrictMode>
+            <Page drawerProps={{ backdrop: { className: 'bg-transparent' } }} />
+          </React.StrictMode>,
+        );
+        await user.click(button('Details'));
+        expect(backdropElement()).toBeNull();
+        expect(warn.mock.calls).toEqual([
+          [
+            '[WaveUI] Drawer: `backdrop` is ignored: a non-modal or inline drawer has no backdrop, so the page around it stays usable.',
+          ],
+        ]);
+      } finally {
+        warn.mockRestore();
+      }
+    });
+  });
+
+  describe('closeButton', () => {
+    it('null hides the built-in header’s Close button; Escape still closes', async () => {
+      const user = userEvent.setup();
+      render(
+        <Drawer defaultOpen title="Filters" closeButton={null}>
+          <button type="button">Apply</button>
+        </Drawer>,
+      );
+      expect(screen.queryByRole('button', { name: 'Close' })).not.toBeInTheDocument();
+      expect(screen.getByRole('heading', { name: 'Filters' }).parentElement).toHaveClass(
+        drawerClassNames.header,
+      );
+      expect(button('Apply')).toHaveFocus();
+      await user.keyboard('{Escape}');
+      expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+    });
+
+    it('null hides every Drawer.HeaderTitle’s Close button', () => {
+      render(
+        <Drawer defaultOpen closeButton={null}>
+          <Drawer.Header>
+            <Drawer.HeaderTitle>Settings</Drawer.HeaderTitle>
+          </Drawer.Header>
+          <Drawer.Header>
+            <Drawer.HeaderTitle>Second header</Drawer.HeaderTitle>
+          </Drawer.Header>
+          Body
+        </Drawer>,
+      );
+      expect(screen.queryByRole('button', { name: 'Close' })).not.toBeInTheDocument();
+      expect(screen.getByRole('dialog', { name: 'Settings' })).toBeInTheDocument();
+    });
+
+    it('renders no built-in header row when nothing is left in it', () => {
+      render(
+        <Drawer defaultOpen aria-label="Quick filters" closeButton={null}>
+          <button type="button">Apply</button>
+        </Drawer>,
+      );
+      const panel = screen.getByRole('dialog', { name: 'Quick filters' });
+      expect(panel.querySelector('.' + drawerClassNames.header)).toBeNull();
+    });
+
+    it('renders content inside the Close buttons of the header and of a Drawer.HeaderTitle', () => {
+      const { unmount } = render(
+        <Drawer defaultOpen title="Filters" closeButton={<svg data-testid="glyph" />}>
+          Body
+        </Drawer>,
+      );
+      const close = button('Close');
+      expect(close).toHaveClass(drawerClassNames.closeButton, 'ms-auto');
+      expect(close).toContainElement(screen.getByTestId('glyph'));
+      expect(screen.getByTestId('glyph').closest('[aria-hidden="true"]')).not.toBeNull();
+      unmount();
+      render(
+        <Drawer defaultOpen closeButton={<svg data-testid="glyph" />} closeLabel="Close settings">
+          <Drawer.Header>
+            <Drawer.HeaderTitle>Settings</Drawer.HeaderTitle>
+          </Drawer.Header>
+          Body
+        </Drawer>,
+      );
+      expect(button('Close settings')).toContainElement(screen.getByTestId('glyph'));
+    });
+
+    it('merges a button with a text label, named by its text, with a warning', async () => {
+      const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+      try {
+        const user = userEvent.setup();
+        const onOpenChange = vi.fn();
+        render(
+          <Drawer
+            defaultOpen
+            title="Filters"
+            onOpenChange={onOpenChange}
+            closeButton={<button type="button">Done</button>}
+          >
+            Body
+          </Drawer>,
+        );
+        const done = button('Done');
+        expect(done).toHaveClass(drawerClassNames.closeButton);
+        expect(done).not.toHaveAttribute('aria-label');
+        expect(warn.mock.calls).toEqual([
+          [
+            '[WaveUI] Drawer: `closeButton` received a button element; its props were merged into the built-in Close button (buttons cannot be nested). Pass icon content instead, e.g. `closeButton={<CloseIcon />}`.',
+          ],
+        ]);
+        await user.click(done);
+        expect(onOpenChange).toHaveBeenCalledWith(
+          false,
+          expect.objectContaining({ reason: 'close-button' }),
+        );
+      } finally {
+        warn.mockRestore();
+      }
+    });
+  });
+
+  describe('titleAction', () => {
+    it.each(['ltr', 'rtl'] as const)(
+      'renders between the heading and the Close button, which drops its ms-auto (%s)',
+      async (dir) => {
+        const user = userEvent.setup();
+        renderWithProviders(
+          <Drawer
+            defaultOpen
+            title="Filters"
+            titleAction={
+              <button type="button" aria-label="Pin">
+                P
+              </button>
+            }
+          >
+            <button type="button">Apply</button>
+          </Drawer>,
+          { dir },
+        );
+        const heading = screen.getByRole('heading', { name: 'Filters' });
+        const pin = button('Pin');
+        const close = button('Close');
+        const action = pin.parentElement;
+        expect(action).toHaveClass(
+          drawerClassNames.titleAction,
+          'ms-auto',
+          'flex',
+          'shrink-0',
+          'items-center',
+          'gap-1',
+        );
+        expect(heading.nextElementSibling).toBe(action);
+        expect(action?.nextElementSibling).toBe(close);
+        expect(close).not.toHaveClass('ms-auto');
+        // Initial focus is the first focusable element, then the Tab order follows the DOM.
+        expect(pin).toHaveFocus();
+        await user.tab();
+        expect(close).toHaveFocus();
+        await user.tab();
+        expect(button('Apply')).toHaveFocus();
+      },
+    );
+
+    it('renders nothing for content that renders nothing, and the Close button keeps ms-auto', () => {
+      render(
+        <Drawer defaultOpen title="Filters" titleAction={[]}>
+          Body
+        </Drawer>,
+      );
+      expect(document.querySelector('.' + drawerClassNames.titleAction)).toBeNull();
+      expect(button('Close')).toHaveClass('ms-auto');
+    });
+
+    it('is ignored next to a Drawer.Header, with the title-ignored warning', () => {
+      const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+      try {
+        render(
+          <Drawer
+            defaultOpen
+            titleAction={
+              <button type="button" aria-label="Pin">
+                P
+              </button>
+            }
+          >
+            <Drawer.Header>
+              <Drawer.HeaderTitle>Settings</Drawer.HeaderTitle>
+            </Drawer.Header>
+            Body
+          </Drawer>,
+        );
+        expect(screen.queryByRole('button', { name: 'Pin' })).not.toBeInTheDocument();
+        expect(warn.mock.calls).toEqual([
+          [
+            '[WaveUI] Drawer: `title` and `titleAction` are ignored because a Drawer.Header is among the children. Put a Drawer.HeaderTitle (with its `action`) in the header instead.',
+          ],
+        ]);
+      } finally {
+        warn.mockRestore();
+      }
+    });
+
+    it('has no accessibility violations with a title action', async () => {
+      render(
+        <Drawer
+          defaultOpen
+          title="Filters"
+          titleAction={
+            <button type="button" aria-label="Pin">
+              P
+            </button>
+          }
+        >
+          Body
+        </Drawer>,
+      );
       await expectNoA11yViolations();
     });
   });

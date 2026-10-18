@@ -51,7 +51,11 @@ describe('stable class names (P3-00): overlays folder', () => {
     );
     const surface = screen.getByRole('dialog', { name: 'Edit profile' });
     expect(surface).toHaveClass(dialogContentClassNames.root);
-    expect(surface.parentElement).toHaveClass(dialogContentClassNames.backdrop);
+    // The backdrop is the positioner's sibling, behind it (P6-06 D93).
+    expect(surface.parentElement).toHaveClass(dialogContentClassNames.positioner);
+    expect(surface.parentElement?.previousElementSibling).toHaveClass(
+      dialogContentClassNames.backdrop,
+    );
     // The `title` prop's heading carries the Dialog.Title class (judgement 13).
     expect(screen.getByRole('heading', { name: 'Edit profile' })).toHaveClass(
       dialogTitleClassNames.root,
@@ -64,6 +68,59 @@ describe('stable class names (P3-00): overlays folder', () => {
       dialogContentClassNames.body,
     );
     expect(screen.getByTestId('footer')).toHaveClass(dialogFooterClassNames.root);
+  });
+
+  it('Dialog.Content: positioner, the title-actions area, titleAction and Dialog.Title action (P6-06)', () => {
+    render(
+      <Dialog defaultOpen>
+        <Dialog.Content
+          titleAction={
+            <button type="button" aria-label="Expand">
+              +
+            </button>
+          }
+        >
+          <Dialog.Title
+            action={
+              <button type="button" aria-label="More">
+                …
+              </button>
+            }
+          >
+            Report
+          </Dialog.Title>
+        </Dialog.Content>
+      </Dialog>,
+    );
+    const surface = screen.getByRole('dialog', { name: 'Report' });
+    expect(surface.parentElement).toHaveClass(dialogContentClassNames.positioner);
+    const close = screen.getByRole('button', { name: 'Close' });
+    expect(close.parentElement).toHaveClass(dialogContentClassNames.titleActions);
+    expect(screen.getByRole('button', { name: 'Expand' }).parentElement).toHaveClass(
+      dialogContentClassNames.titleAction,
+    );
+    expect(screen.getByRole('button', { name: 'More' }).parentElement).toHaveClass(
+      dialogTitleClassNames.action,
+    );
+  });
+
+  it('Drawer: the titleAction element in the built-in header (P6-06)', () => {
+    render(
+      <Drawer
+        title="Filters"
+        defaultOpen
+        titleAction={
+          <button type="button" aria-label="Pin">
+            P
+          </button>
+        }
+      >
+        <p>Filter fields</p>
+      </Drawer>,
+    );
+    const action = screen.getByRole('button', { name: 'Pin' }).parentElement;
+    expect(action).toHaveClass(drawerClassNames.titleAction);
+    expect(action?.parentElement).toHaveClass(drawerClassNames.header);
   });
 
   it('Dialog.Title: the root on the heading', () => {
@@ -88,7 +145,8 @@ describe('stable class names (P3-00): overlays folder', () => {
     );
     const panel = screen.getByRole('dialog', { name: 'Filters' });
     expect(panel).toHaveClass(drawerClassNames.root);
-    expect(panel.parentElement).toHaveClass(drawerClassNames.backdrop);
+    // The backdrop is the panel's sibling, behind it (P6-06 D93).
+    expect(panel.previousElementSibling).toHaveClass(drawerClassNames.backdrop);
     expect(screen.getByRole('heading', { name: 'Filters' })).toHaveClass(
       drawerTitleClassNames.root,
     );

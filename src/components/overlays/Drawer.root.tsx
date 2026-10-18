@@ -8,8 +8,9 @@ import {
   drawerTitleClassNames,
 } from '../../lib/classNames';
 import { isDev, warnOnce } from '../../lib/dev';
-import { slotRendersContent } from '../../lib/slot';
+import { renderSlot, slotRendersContent, type Slot, type SlotObject } from '../../lib/slot';
 import { focusRingInset } from '../../lib/styles';
+import type { BackdropAppearance } from '../../lib/types';
 import { useId } from '../../hooks/useId';
 import { useIsClient } from '../../hooks/useIsClient';
 import { useMergedRefs } from '../../hooks/useMergedRefs';
@@ -27,6 +28,7 @@ import {
   useUnnamedModalWarning,
   type ModalRequestOpen,
 } from './Dialog.shared';
+import { ModalBackdrop } from './Dialog.slots';
 import {
   DrawerContext,
   DrawerHeaderContext,
@@ -113,6 +115,36 @@ export interface DrawerProps extends Omit<React.HTMLAttributes<HTMLDivElement>, 
    */
   modalType?: DrawerModalType;
   /**
+   * The backdrop of a modal or alert drawer, as `Dialog.Content`'s `backdrop`: a `div` behind the
+   * panel, `aria-hidden`. Shorthand content renders inside it; a slot object's `className` (merged
+   * last), `style`, data attributes, `ref` and handlers go to it, and its `appearance`
+   * (`'dimmed'` or `'transparent'`) overrides the automatic one: while another modal Dialog or
+   * Drawer is open below this one the backdrop is transparent, so the page is dimmed once. `null`
+   * renders no backdrop (the page stays inert, and a press outside still closes a modal drawer); a
+   * boolean is no slot. Ignored with `modalType="non-modal"` (a development warning says so).
+   * Fluent's `backdrop`.
+   */
+  backdrop?: Slot<'div'> | (SlotObject<'div'> & { appearance?: BackdropAppearance });
+  /**
+   * Content of the built-in Close button, in the built-in header and in every
+   * `Drawer.HeaderTitle`, as `Dialog.Content`'s `closeButton`: decorative content inside the button
+   * (the dismiss glyph by default), so the button keeps the name `closeLabel`; a slot object's
+   * `aria-label`, `aria-labelledby` or `title` names it instead, and its handlers run before the
+   * close (`preventDefault()` keeps the drawer open). `null` hides them all (Escape and
+   * `Drawer.Close` still close); a boolean is no slot; content that renders nothing keeps the
+   * default glyph. A `<button>` or Wave `Button` passed here is merged into the built-in button,
+   * never nested (a development warning says so), and its text label names the button. Fluent's
+   * `DrawerHeaderTitle` `action` holds Fluent's close button; WaveUI renders its own.
+   */
+  closeButton?: Slot<'span'>;
+  /**
+   * Header buttons for the `title` prop form, between the heading and the built-in Close button in
+   * DOM and Tab order. Ignored, with a development warning, next to a `Drawer.Header` (use the
+   * `action` of `Drawer.HeaderTitle`). Interactive: name icon-only buttons. Renders nothing when
+   * empty. Fluent's `DrawerHeaderTitle` `action`, for the `title` prop form.
+   */
+  titleAction?: Slot<'span'>;
+  /**
    * Title displayed in the built-in header; it names the drawer (`aria-labelledby`). Without it,
    * render a `Drawer.HeaderTitle` (in a `Drawer.Header`) or a `Drawer.Title`, or pass
    * `aria-label`/`aria-labelledby`. A title that renders nothing (`''`, `[]`, `true`) counts as
@@ -123,7 +155,8 @@ export interface DrawerProps extends Omit<React.HTMLAttributes<HTMLDivElement>, 
   title?: React.ReactNode;
   /**
    * Accessible name of the built-in Close button (an icon-only button), in the built-in header and
-   * in every `Drawer.HeaderTitle`. Localize it with the page's language.
+   * in every `Drawer.HeaderTitle`. Localize it with the page's language. A text label of a button
+   * merged into `closeButton` names it instead.
    * @default 'Close'
    */
   closeLabel?: string;
@@ -198,6 +231,10 @@ const TITLE_IGNORED_WARNING_KEY = 'Drawer:title-ignored';
 const TITLE_IGNORED_WARNING =
   'Drawer: `title` and `titleAction` are ignored because a Drawer.Header is among the children. Put a Drawer.HeaderTitle (with its `action`) in the header instead.';
 
+const BACKDROP_IGNORED_WARNING_KEY = 'Drawer:backdrop-ignored';
+const BACKDROP_IGNORED_WARNING =
+  'Drawer: `backdrop` is ignored: a non-modal or inline drawer has no backdrop, so the page around it stays usable.';
+
 const NON_MODAL_FULL_WARNING_KEY = 'Drawer:non-modal-full';
 const NON_MODAL_FULL_WARNING =
   'Drawer: `size="full"` with `modalType="non-modal"` covers the whole page while leaving it usable, so Tab reaches controls hidden behind the drawer. Use `modalType="modal"`, `type="inline"`, or a smaller size with its room reserved in the page layout.';
@@ -265,23 +302,33 @@ interface DrawerBuiltInHeaderProps {
   hasTitle: boolean;
   /** The heading's id (the panel's `aria-labelledby`). */
   titleId: string;
+  /** The `titleAction` slot. */
+  titleAction: Slot<'span'> | undefined;
   requestOpen: ModalRequestOpen;
   closeLabel: string;
+  /** The `closeButton` slot (`null`: no Close button). */
+  closeButton: Slot<'span'> | undefined;
 }
 
 /**
  * The 0.10 header row of the `title` form (no `Drawer.Header` among the children): the `title`
- * heading and the Close button as its direct children. It reads the body's scroll state for its
- * separator.
+ * heading, the `titleAction` content and the Close button as its direct children. The title action
+ * takes the free room (`ms-auto`), so the Close button follows it through the row's gap; without
+ * one the Close button does. It reads the body's scroll state for its separator. A row with
+ * nothing in it (no title, no title action, `closeButton={null}`) renders no element.
  */
 function DrawerBuiltInHeader({
   title,
   hasTitle,
   titleId,
+  titleAction,
   requestOpen,
   closeLabel,
+  closeButton,
 }: DrawerBuiltInHeaderProps) {
   const scrollState = React.useContext(DrawerScrollStateContext) ?? 'none';
+  const hasTitleAction = slotRendersContent(titleAction);
+  if (!hasTitle && !hasTitleAction && closeButton === null) return null;
   return (
     <div
       data-scroll-state={scrollState}
@@ -299,10 +346,18 @@ function DrawerBuiltInHeader({
           {title}
         </h2>
       )}
+      {hasTitleAction
+        ? renderSlot(
+            titleAction,
+            'span',
+            cn(drawerClassNames.titleAction, 'ms-auto flex shrink-0 items-center gap-1'),
+          )
+        : null}
       <DrawerCloseButton
         requestOpen={requestOpen}
         label={closeLabel}
-        className="ms-auto text-muted-foreground"
+        closeButton={closeButton}
+        className={cn(!hasTitleAction && 'ms-auto', 'text-muted-foreground')}
       />
     </div>
   );
@@ -365,6 +420,9 @@ export const DrawerRoot = ({
   position = 'end',
   size = 'small',
   modalType = 'modal',
+  backdrop,
+  closeButton,
+  titleAction,
   title,
   closeLabel = 'Close',
   finalFocusRef,
@@ -432,10 +490,16 @@ export const DrawerRoot = ({
   // A Drawer.Header replaces the built-in header, whose `title` it cannot show.
   const titleRendersContent = slotRendersContent(title);
   const hasTitle = titleRendersContent && !hasHeader;
-  const titleIgnored = titleRendersContent && hasHeader;
+  const titleIgnored = (titleRendersContent || slotRendersContent(titleAction)) && hasHeader;
   React.useEffect(() => {
     if (titleIgnored) warnOnce(TITLE_IGNORED_WARNING_KEY, TITLE_IGNORED_WARNING);
   }, [titleIgnored]);
+  // A non-modal drawer has no backdrop: a given slot (not undefined, null or a boolean) is ignored.
+  const backdropIgnored =
+    nonModal && backdrop !== undefined && backdrop !== null && typeof backdrop !== 'boolean';
+  React.useEffect(() => {
+    if (backdropIgnored) warnOnce(BACKDROP_IGNORED_WARNING_KEY, BACKDROP_IGNORED_WARNING);
+  }, [backdropIgnored]);
   // A full non-modal panel covers the page it leaves usable (D87.8).
   const coversUsablePage = open && nonModal && size === 'full';
   React.useEffect(() => {
@@ -477,8 +541,8 @@ export const DrawerRoot = ({
   }, []);
 
   const context = React.useMemo<DrawerContextValue>(
-    () => ({ open, requestOpen, trigger, panelId, inPanel: false, closeLabel }),
-    [open, requestOpen, trigger, panelId, closeLabel],
+    () => ({ open, requestOpen, trigger, panelId, inPanel: false, closeLabel, closeButton }),
+    [open, requestOpen, trigger, panelId, closeLabel, closeButton],
   );
   const panelContext = React.useMemo<DrawerContextValue>(
     () => ({ ...context, inPanel: true }),
@@ -490,55 +554,58 @@ export const DrawerRoot = ({
       {triggers}
       {open && (
         <Portal layerId={layer.layerId}>
+          {/* The backdrop of a modal or alert drawer, the panel's sibling; a non-modal one has none. */}
+          {!nonModal && (
+            <ModalBackdrop
+              backdrop={backdrop}
+              className={drawerClassNames.backdrop}
+              layerId={layer.layerId}
+              open={open}
+              onMouseDown={backdropPress.onMouseDown}
+            />
+          )}
           <div
-            // The backdrop of a modal or alert drawer. A non-modal drawer has none: this element
-            // then only holds the panel, without a box of its own, so the page stays pressable.
-            className={
-              nonModal ? 'contents' : cn(drawerClassNames.backdrop, 'fixed inset-0 bg-backdrop')
-            }
-            onMouseDown={nonModal ? undefined : backdropPress.onMouseDown}
+            ref={mergedRef}
+            role={modalType === 'alert' ? 'alertdialog' : 'dialog'}
+            id={panelId}
+            aria-labelledby={hasTitle ? propTitleId : titles.titleId}
+            tabIndex={-1}
+            data-position={position}
+            data-size={size}
+            data-modal-type={modalType}
+            {...rest}
+            onKeyDown={composeEventHandlers(onKeyDown, onTabOrderKeyDown)}
+            className={cn(
+              drawerClassNames.root,
+              'fixed flex flex-col border-border bg-background text-foreground shadow-64',
+              getOverlayPanelClasses(position, size),
+              className,
+            )}
           >
-            <div
-              ref={mergedRef}
-              role={modalType === 'alert' ? 'alertdialog' : 'dialog'}
-              id={panelId}
-              aria-labelledby={hasTitle ? propTitleId : titles.titleId}
-              tabIndex={-1}
-              data-position={position}
-              data-size={size}
-              data-modal-type={modalType}
-              {...rest}
-              onKeyDown={composeEventHandlers(onKeyDown, onTabOrderKeyDown)}
-              className={cn(
-                drawerClassNames.root,
-                'fixed flex flex-col border-border bg-background text-foreground shadow-64',
-                getOverlayPanelClasses(position, size),
-                className,
-              )}
-            >
-              <DrawerContext.Provider value={panelContext}>
-                <ModalSurfaceContext.Provider value={titles.context}>
-                  <DrawerLayout
-                    header={
-                      hasHeader ? (
-                        headers
-                      ) : (
-                        <DrawerBuiltInHeader
-                          title={title}
-                          hasTitle={hasTitle}
-                          titleId={propTitleId}
-                          requestOpen={requestOpen}
-                          closeLabel={closeLabel}
-                        />
-                      )
-                    }
-                    bodyProps={bodyProps}
-                    content={content}
-                    footers={footers}
-                  />
-                </ModalSurfaceContext.Provider>
-              </DrawerContext.Provider>
-            </div>
+            <DrawerContext.Provider value={panelContext}>
+              <ModalSurfaceContext.Provider value={titles.context}>
+                <DrawerLayout
+                  header={
+                    hasHeader ? (
+                      headers
+                    ) : (
+                      <DrawerBuiltInHeader
+                        title={title}
+                        hasTitle={hasTitle}
+                        titleId={propTitleId}
+                        titleAction={titleAction}
+                        requestOpen={requestOpen}
+                        closeLabel={closeLabel}
+                        closeButton={closeButton}
+                      />
+                    )
+                  }
+                  bodyProps={bodyProps}
+                  content={content}
+                  footers={footers}
+                />
+              </ModalSurfaceContext.Provider>
+            </DrawerContext.Provider>
           </div>
         </Portal>
       )}

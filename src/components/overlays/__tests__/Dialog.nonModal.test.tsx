@@ -1,4 +1,4 @@
-import { afterEach, describe, it, expect, vi } from 'vitest';
+import { afterEach, beforeEach, describe, it, expect, vi } from 'vitest';
 import * as React from 'react';
 import { act, cleanup, fireEvent, render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
@@ -689,5 +689,67 @@ describe('Dialog modalType="non-modal" (P6-06 D87)', () => {
     fireEvent.keyDown(button('Share'), { key: 'Tab' });
     expect(onKeyDown).toHaveBeenCalled();
     expect(button('Share')).toHaveFocus();
+  });
+
+  describe('development warnings (D87.8, D93)', () => {
+    const NON_MODAL_FULL =
+      '[WaveUI] Dialog.Content: `size="full"` with `modalType="non-modal"` covers the whole page while leaving it usable, so Tab reaches controls hidden behind the dialog. Use `modalType="modal"`, or a smaller size with the page\'s controls kept clear of it.';
+    const BACKDROP_IGNORED =
+      '[WaveUI] Dialog.Content: `backdrop` is ignored with `modalType="non-modal"`: a non-modal dialog has no backdrop, so the page behind it stays usable.';
+
+    let warn: ReturnType<typeof vi.spyOn>;
+    beforeEach(() => {
+      warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    });
+    afterEach(() => {
+      warn.mockRestore();
+    });
+
+    it('warns once when an open non-modal dialog has size="full"', async () => {
+      const user = userEvent.setup();
+      render(
+        <React.StrictMode>
+          <Page contentProps={{ size: 'full' }} />
+        </React.StrictMode>,
+      );
+      expect(warn).not.toHaveBeenCalled();
+      await user.click(button('Details'));
+      expect(warn.mock.calls).toEqual([[NON_MODAL_FULL]]);
+    });
+
+    it.each([
+      ['full with modal', { modalType: 'modal' }, { size: 'full' }],
+      ['large with non-modal', { modalType: 'non-modal' }, { size: 'large' }],
+    ] as const)('does not warn for %s', async (_, dialogProps, contentProps) => {
+      const user = userEvent.setup();
+      render(<Page dialogProps={dialogProps} contentProps={contentProps} />);
+      await user.click(button('Details'));
+      expect(screen.getByRole('dialog', { name: 'Order details' })).toBeInTheDocument();
+      expect(warn).not.toHaveBeenCalled();
+    });
+
+    it('ignores a backdrop slot with a warning: no backdrop renders', async () => {
+      const user = userEvent.setup();
+      render(
+        <React.StrictMode>
+          <Page contentProps={{ backdrop: { className: 'bg-transparent' } }} />
+        </React.StrictMode>,
+      );
+      await user.click(button('Details'));
+      expect(document.querySelector('.' + dialogContentClassNames.backdrop)).toBeNull();
+      expect(warn.mock.calls).toEqual([[BACKDROP_IGNORED]]);
+    });
+
+    it.each([
+      ['null', null],
+      ['false', false],
+      ['undefined', undefined],
+    ] as const)('does not warn for backdrop={%s} (no slot)', async (_, backdrop) => {
+      const user = userEvent.setup();
+      render(<Page contentProps={{ backdrop }} />);
+      await user.click(button('Details'));
+      expect(document.querySelector('.' + dialogContentClassNames.backdrop)).toBeNull();
+      expect(warn).not.toHaveBeenCalled();
+    });
   });
 });

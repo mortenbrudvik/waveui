@@ -28,7 +28,7 @@ import {
   type DrawerTriggerProps,
 } from '../Drawer';
 import { Dialog } from '../Dialog';
-import { dialogFooterClassNames } from '../../../lib/classNames';
+import { dialogFooterClassNames, drawerClassNames } from '../../../lib/classNames';
 import { useDismiss } from '../../../hooks/useDismiss';
 import { Portal } from '../../portal/Portal';
 import { getTopmostLayer } from '../../../lib/layers';
@@ -68,11 +68,11 @@ function button(name: string | RegExp) {
   return screen.getByRole('button', { name });
 }
 
+/** The backdrop: the panel's sibling behind it (P6-06 D93), found by its stable class. */
 function backdrop() {
-  const panel = screen.getByRole('dialog');
-  const parent = panel.parentElement;
-  if (!parent) throw new Error('the drawer panel has no parent');
-  return parent;
+  const element = document.querySelector<HTMLElement>('.' + drawerClassNames.backdrop);
+  if (!element) throw new Error('the drawer has no backdrop');
+  return element;
 }
 
 /** An uncontrolled Drawer with a trigger and a Drawer.Close footer button. */
