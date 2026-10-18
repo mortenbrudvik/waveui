@@ -517,7 +517,7 @@ describe('NavDrawer', () => {
     });
 
     it('warns once per duplicated value with the NavDrawer key and text', () => {
-      const warn = vi.spyOn(console, 'warn');
+      const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
       try {
         render(
           <NavDrawer type="inline" defaultOpen>
@@ -807,7 +807,7 @@ describe('NavDrawer', () => {
     });
 
     it('warns NavDrawer:backdrop-ignored for a backdrop on an inline drawer', () => {
-      const warn = vi.spyOn(console, 'warn');
+      const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
       try {
         render(
           <NavDrawer type="inline" defaultOpen backdrop={{ appearance: 'transparent' }}>
@@ -909,8 +909,8 @@ describe('NavDrawer', () => {
       const container = document.createElement('div');
       container.innerHTML = renderToString(element);
       document.body.appendChild(container);
-      const error = vi.spyOn(console, 'error');
-      const warn = vi.spyOn(console, 'warn');
+      const error = vi.spyOn(console, 'error').mockImplementation(() => {});
+      const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
       const onRecoverableError = vi.fn();
       let root: ReturnType<typeof hydrateRoot> | undefined;
       try {
@@ -941,7 +941,7 @@ describe('NavDrawer', () => {
       expect(html).toBe('');
       const container = document.createElement('div');
       document.body.appendChild(container);
-      const error = vi.spyOn(console, 'error');
+      const error = vi.spyOn(console, 'error').mockImplementation(() => {});
       let root: ReturnType<typeof hydrateRoot> | undefined;
       try {
         await act(async () => {
@@ -1038,7 +1038,7 @@ describe('NavDrawer', () => {
       '[WaveUI] NavDrawer: a list item sits outside NavDrawer.Body and NavDrawer.Footer, the parts that render a list. Move Nav.Item, Nav.Category and the other Nav parts into NavDrawer.Body or NavDrawer.Footer.';
 
     it('warns NavDrawer:unreachable once for an uncontrolled closed drawer', () => {
-      const warn = vi.spyOn(console, 'warn');
+      const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
       try {
         const { rerender } = render(<NavDrawer type="inline">{parts}</NavDrawer>);
         rerender(<NavDrawer type="inline">{parts}</NavDrawer>);
@@ -1050,7 +1050,7 @@ describe('NavDrawer', () => {
 
     it('warns NavDrawer:unreachable after an inner Hamburger closes an uncontrolled drawer', async () => {
       const user = userEvent.setup();
-      const warn = vi.spyOn(console, 'warn');
+      const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
       try {
         render(
           <NavDrawer type="inline" defaultOpen>
@@ -1066,7 +1066,7 @@ describe('NavDrawer', () => {
     });
 
     it('does not warn for a controlled closed drawer', () => {
-      const warn = vi.spyOn(console, 'warn');
+      const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
       try {
         render(<Page />);
         expect(warn).not.toHaveBeenCalled();
@@ -1089,7 +1089,7 @@ describe('NavDrawer', () => {
         </Nav.Item>,
       ],
     ])('warns NavDrawer:loose-items once for %s', (_, child) => {
-      const warn = vi.spyOn(console, 'warn');
+      const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
       try {
         const tree = (
           <NavDrawer type="inline" defaultOpen>
@@ -1110,7 +1110,7 @@ describe('NavDrawer', () => {
     it.each(['Body', 'Footer'] as const)(
       'warns NavDrawer.%s:list-child for a <div> in its list',
       (part) => {
-        const warn = vi.spyOn(console, 'warn');
+        const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
         const Part = part === 'Body' ? NavDrawer.Body : NavDrawer.Footer;
         try {
           render(
@@ -1132,7 +1132,7 @@ describe('NavDrawer', () => {
     );
 
     it('warns NavDrawer:non-modal-full for an open non-modal full overlay only', () => {
-      const warn = vi.spyOn(console, 'warn');
+      const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
       try {
         const { unmount } = render(<Page initialOpen drawerProps={{ size: 'full' }} />);
         unmount();
@@ -1151,7 +1151,7 @@ describe('NavDrawer', () => {
     });
 
     it('warns neither Drawer:unnamed nor Button:icon-only-name', () => {
-      const warn = vi.spyOn(console, 'warn');
+      const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
       try {
         render(<Page initialOpen />);
         expect(warn).not.toHaveBeenCalled();

@@ -84,7 +84,7 @@ describe('Hamburger', () => {
     });
 
     it('never warns Button:icon-only-name', () => {
-      const warn = vi.spyOn(console, 'warn');
+      const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
       try {
         render(
           <>
@@ -139,7 +139,7 @@ describe('Hamburger', () => {
       ['an empty array', []],
       ['an empty Fragment', <></>],
     ] as const)('keeps the glyph for %s and warns once', (_, icon) => {
-      const warn = vi.spyOn(console, 'warn');
+      const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
       try {
         const { rerender } = render(<Hamburger icon={icon} />);
         rerender(<Hamburger icon={icon} />);
@@ -162,7 +162,7 @@ describe('Hamburger', () => {
         { as: 'button' as const, children: <svg data-testid="inner" /> },
       ],
     ])('unwraps %s (no nested button) and warns once', (what, icon) => {
-      const warn = vi.spyOn(console, 'warn');
+      const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
       try {
         render(<Hamburger icon={icon as React.ComponentProps<typeof Hamburger>['icon']} />);
         expect(screen.getAllByRole('button')).toHaveLength(1);
@@ -175,7 +175,7 @@ describe('Hamburger', () => {
     });
 
     it('keeps the glyph for an unwrapped button whose children render nothing, warning only that', () => {
-      const warn = vi.spyOn(console, 'warn');
+      const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
       try {
         render(<Hamburger icon={<button type="button" />} />);
         expect(glyph()).not.toBeNull();
