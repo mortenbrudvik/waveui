@@ -1,13 +1,39 @@
 import React from 'react';
 import type { Meta, StoryObj } from '@storybook/react';
 import { fn } from 'storybook/test';
-import { Avatar, Nav } from '../src';
+import { Avatar, Menu, MenuButton, Nav, ToggleButton, Tooltip } from '../src';
 
 /** A locally drawn app logo (tokens only: it takes the text colour). */
 const AppLogo = () => (
   <svg viewBox="0 0 24 24" width="24" height="24" fill="currentColor" className="text-primary">
     <path d="M4 4h7v7H4zm9 0h7v7h-7zM4 13h7v7H4zm9 3.5a3.5 3.5 0 1 1 7 0 3.5 3.5 0 0 1-7 0z" />
   </svg>
+);
+
+/** A locally drawn pin glyph (tokens only: it takes the text colour). */
+const PinGlyph = () => (
+  <svg viewBox="0 0 16 16" width="16" height="16" fill="currentColor" aria-hidden="true">
+    <path d="M5 2h6l-1 4 2 2v1H8.5v5L8 14.5 7.5 14V9H4V8l2-2z" />
+  </svg>
+);
+
+/** An item action: a Pin toggle named by its tooltip, and a "More options" menu. */
+const ItemActionSet = ({ name }: { name: string }) => (
+  <>
+    <Tooltip content={`Pin ${name}`} relationship="label">
+      <ToggleButton appearance="subtle" size="small" icon={<PinGlyph />} />
+    </Tooltip>
+    <Menu>
+      <Menu.Trigger>
+        <MenuButton appearance="subtle" size="small" aria-label={`More options for ${name}`} />
+      </Menu.Trigger>
+      <Menu.Popover>
+        <Menu.Item>Open in new tab</Menu.Item>
+        <Menu.Item>Copy link</Menu.Item>
+        <Menu.Item>Hide</Menu.Item>
+      </Menu.Popover>
+    </Menu>
+  </>
 );
 
 const meta = {
@@ -187,6 +213,43 @@ export const AppItem: Story = {
         <Nav.Item value="people">People</Nav.Item>
         <Nav.Divider />
         <Nav.AppItemStatic icon={<AppLogo />}>Fabrikam Portal</Nav.AppItemStatic>
+      </>
+    ),
+  },
+};
+
+/**
+ * `actions` puts your own controls beside an item or sub-item (Fluent's SplitNavItem): here a Pin
+ * `ToggleButton` named by a `Tooltip` with `relationship="label"` and a "More options"
+ * `MenuButton` with a `Menu`. They sit in a group named by the item, each a Tab stop after it, and
+ * never select it. They are drawn while the row is hovered or has focus, while the pin is pressed
+ * or the menu is open, and always on touch screens; with actions, the selected look covers the
+ * whole row.
+ */
+export const ItemActions: Story = {
+  args: {
+    defaultValue: 'reports',
+    defaultOpenCategories: ['projects'],
+    children: (
+      <>
+        <Nav.Item value="dashboard" actions={<ItemActionSet name="Dashboard" />}>
+          Dashboard
+        </Nav.Item>
+        <Nav.Item value="reports" actions={<ItemActionSet name="Reports" />}>
+          Reports
+        </Nav.Item>
+        <Nav.Item value="archive" disabled actions={<ItemActionSet name="Archive" />}>
+          Archive
+        </Nav.Item>
+        <Nav.Category value="projects" label="Projects">
+          <Nav.SubItem value="alpha" actions={<ItemActionSet name="Alpha" />}>
+            Alpha
+          </Nav.SubItem>
+          <Nav.SubItem value="beta" actions={<ItemActionSet name="Beta" />}>
+            Beta
+          </Nav.SubItem>
+        </Nav.Category>
+        <Nav.Item value="settings">Settings</Nav.Item>
       </>
     ),
   },

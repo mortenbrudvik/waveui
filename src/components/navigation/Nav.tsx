@@ -6,7 +6,7 @@ import {
   navSubItemClassNames,
 } from '../../lib/classNames';
 import type { Slot } from '../../lib/types';
-import { renderSlot, slotRendersContent } from '../../lib/slot';
+import { materialiseSlotContent, renderSlot, slotRendersContent } from '../../lib/slot';
 import { warnDeprecated } from '../../lib/dev';
 import { ChevronDownIcon } from '../../lib/icons';
 import { disabledStyles, focusRingInset } from '../../lib/styles';
@@ -101,6 +101,20 @@ export interface NavItemOwnProps {
   disabled?: boolean;
   /** Label content. */
   children?: React.ReactNode;
+  /**
+   * Controls beside the item in its row (Fluent's SplitNavItem): a ToggleButton that pins the
+   * page, a MenuButton with more commands, each with its own name (a Tooltip with
+   * `relationship="label"` names an icon-only one). They render after the item's link or button,
+   * never inside it, in a group named by the item; each is a Tab stop after the item, and a click
+   * or key on one never selects the item. They are drawn while the row is hovered or has focus,
+   * while one of them is pressed or has its popup open, and always in forced colours and on touch
+   * screens; otherwise they are transparent and still focusable. They stay enabled when the item
+   * is `disabled`. With actions, the selected background and indicator are drawn on the row (the
+   * item's list item, `.wave-nav-item__list-item`), so a `className` on the item no longer covers
+   * them. Content that renders nothing renders no group. Fluent's `actionButton`, `toggleButton`
+   * and `menuButton` slots and their tooltips are your own controls here.
+   */
+  actions?: React.ReactNode;
 }
 
 /**
@@ -259,6 +273,9 @@ const itemClasses = {
   ),
   selected: 'bg-subtle-selected text-primary font-semibold border-s-2 border-s-primary',
   idle: 'text-foreground not-disabled:not-aria-disabled:hover:bg-subtle-hover',
+  // With actions, the selected background and indicator move to the row (D121).
+  selectedInRow: 'text-primary font-semibold',
+  rowSelected: 'bg-subtle-selected border-s-2 border-s-primary',
 };
 
 const subItemClasses = {
@@ -269,7 +286,43 @@ const subItemClasses = {
   ),
   selected: 'text-primary font-semibold',
   idle: 'text-muted-foreground not-disabled:not-aria-disabled:hover:text-foreground not-disabled:not-aria-disabled:hover:bg-subtle-hover',
+  // Sub-items have no selected background: a sub-item row gets only the hover.
+  selectedInRow: 'text-primary font-semibold',
+  rowSelected: undefined,
 };
+
+/** The classes an entry's link or button and its row share. */
+interface NavEntryClasses {
+  base: string;
+  selected: string;
+  idle: string;
+  selectedInRow: string;
+  rowSelected: string | undefined;
+}
+
+/**
+ * The row of an entry with actions (D121): the list item lays out the link or button and the
+ * actions side by side and carries the selected look, or the hover of an enabled entry. A list
+ * item cannot be disabled, so its hover needs no gate.
+ */
+const rowClasses =
+  'group/nav-row flex items-center transition-colors motion-reduce:transition-none';
+const rowHoverClasses = 'hover:bg-subtle-hover';
+
+/**
+ * The actions element (D120). Each direct child is transparent until the row is hovered or has
+ * focus inside it, and is always drawn in forced colours and on devices without hover; a child
+ * that is or holds a pressed toggle or an expanded trigger stays drawn (the first pair covers an
+ * action wrapped in a Tooltip's span, the second a bare one). Opacity keeps every action
+ * focusable, so Shift+Tab and a focus return reach it. No motion.
+ */
+const actionsClasses = cn(
+  'flex shrink-0 items-center gap-1 pe-2',
+  '*:opacity-0 group-hover/nav-row:*:opacity-100 group-focus-within/nav-row:*:opacity-100',
+  'forced-colors:*:opacity-100 [@media(hover:none)]:*:opacity-100',
+  '*:has-[[aria-pressed=true]]:opacity-100 *:has-[[aria-expanded=true]]:opacity-100',
+  '[&>[aria-pressed=true]]:opacity-100 [&>[aria-expanded=true]]:opacity-100',
+);
 
 const categoryButtonClasses = cn(
   'flex w-full items-center gap-2 px-4 py-2 text-body-1 font-semibold text-foreground not-disabled:not-aria-disabled:hover:bg-subtle-hover transition-colors motion-reduce:transition-none',
@@ -301,6 +354,7 @@ function opensElsewhere(event: React.MouseEvent<HTMLElement>): boolean {
 interface NavEntryClassNames {
   root: string;
   listItem: string;
+  actions: string;
   icon?: string;
   content?: string;
 }
@@ -308,20 +362,39 @@ interface NavEntryClassNames {
 /**
  * Shared rendering of Nav.Item and Nav.SubItem (link or button). Inside an arrow-key body
  * (`roving` provided) the link or button also carries `data-roving-value={value}`, after the
- * consumer's attributes; in a plain Nav nothing is added.
+ * consumer's attributes; in a plain Nav nothing is added. With `actions` that render content, the
+ * list item becomes the row (D121) and holds the link or button, then the actions in a group named
+ * by it through `generatedId` (unless the consumer gave an `id`), siblings, never nested (D119).
  */
 function renderNavEntry(
   props: NavEntryProps,
   context: NavContextValue,
   roving: NavRovingContextValue | null,
-  classes: { base: string; selected: string; idle: string },
+  classes: NavEntryClasses,
   stable: NavEntryClassNames,
   withIcon: boolean,
+  generatedId: string,
 ): React.ReactElement {
-  const { value, icon, disabled = false, href, className, children, onClick, ref, ...rest } = props;
+  const {
+    value,
+    icon,
+    disabled = false,
+    href,
+    className,
+    children,
+    onClick,
+    actions,
+    ref,
+    ...rest
+  } = props;
   const isSelected = context.value === value;
   const isLink = href !== undefined;
   const rovingProps = roving ? { 'data-roving-value': value } : undefined;
+  // No empty group (`actions={cond && <Button />}` with `cond` false); the id is rendered only
+  // while the group points at it, so an item without actions keeps its 0.10 HTML.
+  const hasActions = slotRendersContent(actions);
+  const itemId = rest.id ?? generatedId;
+  const idProps = hasActions ? { id: itemId } : undefined;
 
   const handleClick = (event: React.MouseEvent<HTMLElement>) => {
     if (disabled) {
@@ -351,15 +424,36 @@ function renderNavEntry(
   const entryClassName = cn(
     stable.root,
     classes.base,
-    isSelected ? classes.selected : classes.idle,
+    isSelected ? (hasActions ? classes.selectedInRow : classes.selected) : classes.idle,
+    hasActions && 'min-w-0 flex-1',
     className,
   );
 
+  const listItemClassName = hasActions
+    ? cn(
+        stable.listItem,
+        rowClasses,
+        isSelected && classes.rowSelected ? classes.rowSelected : !disabled && rowHoverClasses,
+      )
+    : stable.listItem;
+
+  const actionsGroup = hasActions ? (
+    <span
+      role="group"
+      aria-labelledby={itemId}
+      data-wave-nav-actions=""
+      className={cn(stable.actions, actionsClasses)}
+    >
+      {materialiseSlotContent(actions)}
+    </span>
+  ) : null;
+
   if (isLink) {
     return (
-      <li className={stable.listItem}>
+      <li className={listItemClassName}>
         <a
           {...(rest as React.AnchorHTMLAttributes<HTMLAnchorElement>)}
+          {...idProps}
           {...rovingProps}
           ref={ref as React.Ref<HTMLAnchorElement>}
           href={disabled ? undefined : href}
@@ -371,6 +465,7 @@ function renderNavEntry(
         >
           {content}
         </a>
+        {actionsGroup}
       </li>
     );
   }
@@ -378,10 +473,11 @@ function renderNavEntry(
   // `rel` only belongs on a link: a button item drops it (React types it on every element).
   const { rel, ...buttonRest } = rest;
   return (
-    <li className={stable.listItem}>
+    <li className={listItemClassName}>
       <button
         type="button"
         {...(buttonRest as React.ButtonHTMLAttributes<HTMLButtonElement>)}
+        {...idProps}
         {...rovingProps}
         ref={ref as React.Ref<HTMLButtonElement>}
         disabled={disabled}
@@ -391,6 +487,7 @@ function renderNavEntry(
       >
         {content}
       </button>
+      {actionsGroup}
     </li>
   );
 }
@@ -535,6 +632,9 @@ markNavPart(NavCategory, 'category');
  * `onClick` calls `preventDefault()` (client-side routing), the browser opens nothing, so the item
  * is selected whatever the keys, button or `target`.
  *
+ * `actions` puts your own controls (a pin toggle, a menu button) beside the item in its row, in a
+ * group named by the item; they never select it.
+ *
  * Typed by overloads, resolved in order: without `href` (button props, button events), with a
  * string `href` (anchor props, anchor events), then an `href` that may be `undefined` at run time
  * ({@link NavItemDynamicProps}: events of either element).
@@ -549,6 +649,8 @@ function NavItem(props: NavItemProps | NavItemDynamicProps): React.ReactElement 
   useNavValue(context, 'item', props.value);
   useRecordCategory(context, props.value);
   const roving = React.useContext(NavRovingContext);
+  // Called always, rendered only while the item's actions render (D119).
+  const generatedId = useId('wave-nav-item');
   return renderNavEntry(
     props as NavEntryProps,
     context,
@@ -557,10 +659,12 @@ function NavItem(props: NavItemProps | NavItemDynamicProps): React.ReactElement 
     {
       root: navItemClassNames.root,
       listItem: navItemClassNames.listItem,
+      actions: navItemClassNames.actions,
       icon: navItemClassNames.icon,
       content: navItemClassNames.content,
     },
     true,
+    generatedId,
   );
 }
 NavItem.displayName = 'NavItem';
@@ -570,7 +674,7 @@ markNavPart(NavItem, 'entry');
  * An indented entry inside a `Nav.Category`: a link when `href` is given, a button otherwise.
  * Selected like `Nav.Item` (a click that the browser opens somewhere else selects nothing; one
  * whose default your `onClick` prevents is selected), and typed by overloads like `Nav.Item`
- * (button, link, then {@link NavSubItemDynamicProps}).
+ * (button, link, then {@link NavSubItemDynamicProps}). Takes `actions` like `Nav.Item`.
  *
  * Also exported as `NavSubItem` (import the flat name from React Server Components).
  */
@@ -582,13 +686,20 @@ function NavSubItem(props: NavSubItemProps | NavSubItemDynamicProps): React.Reac
   useNavValue(context, 'item', props.value);
   useRecordCategory(context, props.value);
   const roving = React.useContext(NavRovingContext);
+  // Called always, rendered only while the sub-item's actions render (D119).
+  const generatedId = useId('wave-nav-item');
   return renderNavEntry(
     props as NavEntryProps,
     context,
     roving,
     subItemClasses,
-    { root: navSubItemClassNames.root, listItem: navSubItemClassNames.listItem },
+    {
+      root: navSubItemClassNames.root,
+      listItem: navSubItemClassNames.listItem,
+      actions: navSubItemClassNames.actions,
+    },
     false,
+    generatedId,
   );
 }
 NavSubItem.displayName = 'NavSubItem';
@@ -617,6 +728,11 @@ markNavPart(NavSubItem, 'entry');
  *   line between groups, hidden from assistive technology (Fluent's NavDivider is a separator).
  * - **App identity**: `Nav.AppItem` shows the app's name and logo at the top, as a link with
  *   `href` or a button; it is never selected. `Nav.AppItemStatic` shows them as plain text.
+ * - **Item actions**: `actions` on `Nav.Item` and `Nav.SubItem` (Fluent's SplitNavItem) puts your
+ *   own controls beside the item, in a group named by it; each is a Tab stop after the item, and
+ *   none selects it. They are drawn while the row is hovered or has focus, while one is pressed or
+ *   has its menu open, and always on touch screens and in forced colours. With actions, a selected
+ *   item's background and indicator are drawn on its row (`.wave-nav-item__list-item`).
  *
  * Sub-components are also exported under flat names (`NavCategory`, `NavItem`, `NavSubItem`,
  * `NavSectionHeader`, `NavDivider`, `NavAppItem`, `NavAppItemStatic`): React Server Components

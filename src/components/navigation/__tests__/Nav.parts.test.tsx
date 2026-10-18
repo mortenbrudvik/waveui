@@ -846,7 +846,9 @@ describe('structure', () => {
           <Nav.SubItem value="api">API</Nav.SubItem>
         </Nav.Category>
         <Nav.Divider />
-        <Nav.Item value="settings">Settings</Nav.Item>
+        <Nav.Item value="settings" actions={<button type="button">Pin settings</button>}>
+          Settings
+        </Nav.Item>
         <Nav.AppItemStatic>Fabrikam</Nav.AppItemStatic>
       </Nav>
     );

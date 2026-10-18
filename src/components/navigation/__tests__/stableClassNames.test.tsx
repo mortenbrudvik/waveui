@@ -281,7 +281,7 @@ describe('stable class names: navigation folder', () => {
     expect(weekly.parentElement?.parentElement).toHaveClass(navCategoryClassNames.list);
   });
 
-  it('Nav parts: section header and its list item, divider, app item (root, list item, icon, content), app item static', () => {
+  it('Nav parts: section header and its list item, divider, app item (root, list item, icon, content), app item static, the actions of an item and a sub-item', () => {
     const tree = (
       <Nav aria-label="Main" defaultValue="weekly">
         <Nav.AppItem href="#start" icon={<svg data-testid="app-icon" />}>
@@ -289,11 +289,15 @@ describe('stable class names: navigation folder', () => {
         </Nav.AppItem>
         <Nav.AppItem>Switch app</Nav.AppItem>
         <Nav.SectionHeader>Library</Nav.SectionHeader>
-        <Nav.Item value="home">Home</Nav.Item>
+        <Nav.Item value="home" actions={<button type="button">Pin home</button>}>
+          Home
+        </Nav.Item>
         <Nav.Divider />
         <Nav.Category value="reports" label="Reports">
           <Nav.SectionHeader headingLevel={4}>Schedules</Nav.SectionHeader>
-          <Nav.SubItem value="weekly">Weekly</Nav.SubItem>
+          <Nav.SubItem value="weekly" actions={<button type="button">Pin weekly</button>}>
+            Weekly
+          </Nav.SubItem>
           <Nav.Divider />
         </Nav.Category>
         <Nav.AppItemStatic icon={<svg data-testid="static-icon" />}>Fabrikam</Nav.AppItemStatic>
@@ -323,6 +327,15 @@ describe('stable class names: navigation folder', () => {
         expect(heading).toHaveClass(navSectionHeaderClassNames.root);
         expect(heading.parentElement).toHaveClass(navSectionHeaderClassNames.listItem);
       }
+      // Found through the item: a detached server tree cannot resolve the group's name.
+      const itemActions = within(root).getByRole('button', { name: 'Home' })
+        .nextElementSibling as HTMLElement;
+      expect(itemActions).toHaveClass(navItemClassNames.actions);
+      expect(itemActions.parentElement).toHaveClass(navItemClassNames.listItem);
+      const subItemActions = within(root).getByRole('button', { name: 'Weekly' })
+        .nextElementSibling as HTMLElement;
+      expect(subItemActions).toHaveClass(navSubItemClassNames.actions);
+      expect(subItemActions.parentElement).toHaveClass(navSubItemClassNames.listItem);
       const dividers = root.querySelectorAll('li[aria-hidden="true"]');
       expect(dividers).toHaveLength(2);
       for (const divider of Array.from(dividers)) {
