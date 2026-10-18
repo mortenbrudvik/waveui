@@ -12,6 +12,9 @@ import { renderToString } from 'react-dom/server';
 import {
   breadcrumbClassNames,
   breadcrumbItemClassNames,
+  buttonClassNames,
+  drawerClassNames,
+  hamburgerClassNames,
   menuClassNames,
   menuDividerClassNames,
   menuGroupClassNames,
@@ -28,6 +31,10 @@ import {
   navCategoryClassNames,
   navClassNames,
   navDividerClassNames,
+  navDrawerBodyClassNames,
+  navDrawerClassNames,
+  navDrawerFooterClassNames,
+  navDrawerHeaderClassNames,
   navItemClassNames,
   navSectionHeaderClassNames,
   navSubItemClassNames,
@@ -37,7 +44,9 @@ import {
 } from '../../../lib/classNames';
 import { Breadcrumb } from '../Breadcrumb';
 import { Menu } from '../Menu';
+import { Hamburger } from '../Hamburger';
 import { Nav } from '../Nav';
+import { NavDrawer, type NavDrawerProps } from '../NavDrawer';
 import { Pagination } from '../Pagination';
 import { Stepper } from '../Stepper';
 
@@ -345,6 +354,52 @@ describe('stable class names: navigation folder', () => {
     check(parse(renderToString(tree)));
     render(tree);
     check(screen.getByRole('navigation', { name: 'Main' }));
+  });
+
+  it("NavDrawer: panel root (with Drawer's), backdrop, nav; header, body and footer with their lists; in both types and in the server HTML", () => {
+    const tree = (type: NavDrawerProps['type']) => (
+      <NavDrawer type={type} open onOpenChange={() => {}} aria-label="Main">
+        <NavDrawer.Header>Contoso HR</NavDrawer.Header>
+        <NavDrawer.Body>
+          <Nav.Item value="home">Home</Nav.Item>
+        </NavDrawer.Body>
+        <NavDrawer.Footer>
+          <Nav.Item value="help">Help</Nav.Item>
+        </NavDrawer.Footer>
+      </NavDrawer>
+    );
+    const check = (nav: HTMLElement) => {
+      expect(nav).toHaveClass(navDrawerClassNames.nav);
+      expect(nav.parentElement).toHaveClass(drawerClassNames.root, navDrawerClassNames.root);
+      const [header, body, footer] = Array.from(nav.children);
+      expect(header).toHaveClass(navDrawerHeaderClassNames.root);
+      expect(header).not.toHaveClass(drawerClassNames.header);
+      expect(body).toHaveClass(navDrawerBodyClassNames.root);
+      expect(body).not.toHaveClass(drawerClassNames.body);
+      expect(body.firstElementChild).toHaveClass(navDrawerBodyClassNames.list);
+      expect(footer).toHaveClass(navDrawerFooterClassNames.root);
+      expect(footer.firstElementChild).toHaveClass(navDrawerFooterClassNames.list);
+    };
+    check(parse(renderToString(tree('inline'))).querySelector('nav')!);
+    const { unmount } = render(tree('inline'));
+    check(screen.getByRole('navigation', { name: 'Main' }));
+    unmount();
+    render(tree('overlay'));
+    const dialog = screen.getByRole('dialog', { name: 'Main' });
+    check(within(dialog).getByRole('navigation', { name: 'Main' }));
+    const backdrop = dialog.previousElementSibling;
+    expect(backdrop).toHaveClass(drawerClassNames.backdrop, navDrawerClassNames.backdrop);
+  });
+
+  it("Hamburger: root and icon (with Button's)", () => {
+    const check = (button: HTMLElement) => {
+      expect(button).toHaveClass(buttonClassNames.root, hamburgerClassNames.root);
+      const icon = button.querySelector('[data-wave-icon="navigation"]')!.parentElement;
+      expect(icon).toHaveClass(buttonClassNames.icon, hamburgerClassNames.icon);
+    };
+    check(parse(renderToString(<Hamburger />)).querySelector('button')!);
+    render(<Hamburger />);
+    check(screen.getByRole('button', { name: 'Navigation' }));
   });
 
   it('Pagination: root, list, every list item, the five button kinds and the ellipses', () => {
