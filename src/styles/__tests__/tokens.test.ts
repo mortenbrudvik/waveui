@@ -241,6 +241,8 @@ const TOKENS: Record<string, [string, string, string]> = {
   'secondary-foreground': ['#242424', '#ffffff', '#ffffff'],
   muted: ['#f0f0f0', '#383838', '#1a1a1a'],
   'muted-foreground': ['#616161', '#adadad', '#ffffff'],
+  'muted-hover': ['#e0e0e0', '#424242', '#333333'],
+  'muted-pressed': ['#d1d1d1', '#2e2e2e', '#4d4d4d'],
   primary: ['#0f6cbd', '#62abf5', '#1aebff'],
   'primary-foreground': ['#ffffff', '#000000', '#000000'],
   'primary-hover': ['#115ea3', '#77b7f7', '#6ef3ff'],
@@ -257,6 +259,8 @@ const TOKENS: Record<string, [string, string, string]> = {
   'subtle-selected': ['#ebebeb', '#383838', '#333333'],
   selected: ['#ebf3fc', '#082338', '#003a40'],
   'selected-foreground': ['#0f548c', '#62abf5', '#ffffff'],
+  'selected-hover': ['#cfe4fa', '#0c3b5e', '#005259'],
+  'selected-pressed': ['#b4d6fa', '#061724', '#006b75'],
   border: ['#e0e0e0', '#666666', '#ffffff'],
   stroke: ['#d1d1d1', '#666666', '#ffffff'],
   'stroke-hover': ['#c7c7c7', '#757575', '#ffffff'],
@@ -495,6 +499,32 @@ const CONTRAST_PAIRS: Array<[string, string, number]> = [
   ['presence-glyph', 'presence-busy', 3],
   ['presence-glyph', 'presence-away', 3],
   ['presence-glyph', 'presence-oof', 3],
+  // Tags (0.11). Tag's Dismiss ring on the filled chip and an InteractionTag's ring over its
+  // filled neighbour; 0.10 already relied on it without asserting it: 4.72 / 4.18 / 16.21.
+  ['ring', 'muted', 3],
+  // Text on the hover and pressed fills of neutral chips (foreground text only):
+  // 11.76 / 10.05 / 12.63.
+  ['foreground', 'muted-hover', 4.5],
+  // 10.17 / 13.58 / 8.45.
+  ['foreground', 'muted-pressed', 4.5],
+  // State steps that must be seen (1.15:1, a floor of this phase; 0.10's dismiss hover was
+  // 1.05:1). The pressed step is judged against hover only, as Button's subtle-pressed is:
+  // muted-pressed is 1.07:1 on the dark background and card, so no pressed pair is asserted
+  // against a surface.
+  // 1.16 / 1.17 / 1.38.
+  ['muted-hover', 'muted', 1.15],
+  // 1.16 / 1.35 / 1.49.
+  ['muted-pressed', 'muted-hover', 1.15],
+  // 1.16 / 1.38 / 1.40.
+  ['selected-hover', 'selected', 1.15],
+  // 1.16 / 1.56 / 1.43.
+  ['selected-pressed', 'selected-hover', 1.15],
+  // An outline tag's Dismiss circle on the page: 1.32 / 1.45 / 1.66.
+  ['muted-hover', 'background', 1.15],
+  // On a card: 1.26 / 1.26 / 1.66.
+  ['muted-hover', 'card', 1.15],
+  // Outline tags in a filled-darker TagPicker: 1.21 / 1.83 / 1.66.
+  ['muted-hover', 'input-filled-darker', 1.15],
 ];
 
 /**
@@ -554,6 +584,20 @@ const TABLED_RATIOS: Array<[string, string, [number | null, number | null, numbe
   ['presence-glyph', 'presence-away', [3.82, 11.62, null]],
   ['presence-glyph', 'presence-oof', [6.11, 9.06, null]],
   ['ring', 'background', [5.38, 5.18, 19.56]],
+  // The tag fill states (0.11): the ten tag pairs of CONTRAST_PAIRS, and selected-foreground on
+  // the selected hover and pressed fills (checked by the text matrix).
+  ['ring', 'muted', [4.72, 4.18, 16.21]],
+  ['foreground', 'muted-hover', [11.76, 10.05, 12.63]],
+  ['foreground', 'muted-pressed', [10.17, 13.58, 8.45]],
+  ['muted-hover', 'muted', [1.16, 1.17, 1.38]],
+  ['muted-pressed', 'muted-hover', [1.16, 1.35, 1.49]],
+  ['selected-hover', 'selected', [1.16, 1.38, 1.4]],
+  ['selected-pressed', 'selected-hover', [1.16, 1.56, 1.43]],
+  ['muted-hover', 'background', [1.32, 1.45, 1.66]],
+  ['muted-hover', 'card', [1.26, 1.26, 1.66]],
+  ['muted-hover', 'input-filled-darker', [1.21, 1.83, 1.66]],
+  ['selected-foreground', 'selected-hover', [6.05, 4.81, 8.93]],
+  ['selected-foreground', 'selected-pressed', [5.23, 7.5, 6.25]],
 ];
 
 /**
@@ -632,7 +676,7 @@ const SURFACE_TEXT_TOKENS: Record<string, string> = {
 
 /** Text tokens bound to particular surfaces: their own fill or tint, or the inverted tooltip. */
 const BOUND_TEXT_SURFACES: Record<string, string[]> = {
-  'selected-foreground': ['selected'],
+  'selected-foreground': ['selected', 'selected-hover', 'selected-pressed'],
   'inverted-foreground': ['inverted'],
   // Status icons and badge text: on their tint (MessageBar, Badge, Stepper) and on the page (Toast).
   // Field success messages also sit on cards.
@@ -661,6 +705,15 @@ const NOT_TEXT_TOKENS: Record<string, string> = {
   info: 'fill and start border only (with info-foreground); info text uses info-tint-foreground',
   'primary-hover': 'fill state of primary (with primary-foreground)',
   'primary-pressed': 'fill state of primary (with primary-foreground)',
+  // Not TEXT_SURFACES: primary text is 4.08 / 4.15:1 on muted-hover (light / dark) and
+  // muted-foreground 4.48:1 in dark; a light grey dark enough to be seen cannot keep every text
+  // token at 4.5:1 (#ebebeb, the darkest that does, is 1.05:1 from muted).
+  'muted-hover':
+    'fill state of muted chips (Tag, InteractionTag), with foreground text (CONTRAST_PAIRS)',
+  'muted-pressed':
+    'fill state of muted chips (Tag, InteractionTag), with foreground text (CONTRAST_PAIRS)',
+  'selected-hover': 'fill state of selected (with selected-foreground)',
+  'selected-pressed': 'fill state of selected (with selected-foreground)',
   subtle: 'transparent rest state of subtle controls',
   // Strokes, focus ring and graphics.
   border: 'decorative divider',
@@ -788,6 +841,25 @@ describe('tokens.css — theme groups (repo-level#7, button-provider#6)', () => 
       const decls = themeDecls(theme);
       for (const [token, value] of Object.entries(RAMP_ALIASES[theme])) {
         expect(decls.get(`--wave-${token}`)).toBe(value);
+      }
+    }
+  });
+
+  it('light and dark selected fill states reference the brand ramp, so a re-brand moves them (0.11)', () => {
+    const SELECTED_STATES: Record<'light' | 'dark', Record<string, string>> = {
+      light: {
+        'selected-hover': 'var(--wave-brand-150)',
+        'selected-pressed': 'var(--wave-brand-140)',
+      },
+      dark: {
+        'selected-hover': 'var(--wave-brand-40)',
+        'selected-pressed': 'var(--wave-brand-10)',
+      },
+    };
+    for (const theme of ['light', 'dark'] as const) {
+      const decls = themeDecls(theme);
+      for (const [token, value] of Object.entries(SELECTED_STATES[theme])) {
+        expect(decls.get(`--wave-${token}`), `${theme} ${token}`).toBe(value);
       }
     }
   });

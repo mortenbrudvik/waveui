@@ -28,6 +28,7 @@ const ICONS: Array<[name: string, dataName: string, defaultSize: number]> = [
   ['StarIcon', 'star', 16],
   ['AddIcon', 'add', 16],
   ['PersonIcon', 'person', 16],
+  ['NavigationIcon', 'navigation', 20],
   ['PresenceAvailableIcon', 'presence-available', 16],
   ['PresenceBusyIcon', 'presence-busy', 16],
   ['PresenceAwayIcon', 'presence-away', 16],
@@ -232,6 +233,22 @@ describe('icons (input-datetime#22, button-provider#20)', () => {
     expect(svg).not.toHaveAttribute('stroke');
     expect(svg).toHaveAttribute('width', '60%');
     expect(svg).toHaveAttribute('height', '60%');
+  });
+
+  it('NavigationIcon is three filled bars in a 20x20 box, 20px by default (Hamburger)', () => {
+    const { container } = render(<Icons.NavigationIcon />);
+    const svg = container.querySelector('svg[data-wave-icon="navigation"]')!;
+    expect(svg).toHaveAttribute('viewBox', '0 0 20 20');
+    expect(svg).toHaveAttribute('fill', 'currentColor');
+    expect(svg).not.toHaveAttribute('stroke');
+    expect(svg).toHaveAttribute('width', '20');
+    expect(svg).toHaveAttribute('height', '20');
+    const paths = svg.querySelectorAll('path');
+    expect(paths).toHaveLength(1);
+    // One 1.5px bar, 16px wide (a 14.5px run with round ends), drawn three times 4.75px apart (y
+    // 5.25, 10 and 14.75), each subpath starting from the previous bar's start.
+    const bar = 'h14.5a.75.75 0 0 1 0 1.5H2.75a.75.75 0 0 1 0-1.5Z';
+    expect(paths[0]).toHaveAttribute('d', `M2.75 4.5${bar}m0 4.75${bar}m0 4.75${bar}`);
   });
 
   describe('presence glyphs (PresenceBadge)', () => {

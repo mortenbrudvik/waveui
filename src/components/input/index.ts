@@ -62,6 +62,7 @@ export {
   type ListboxProviderProps,
   ListboxSurface,
   type ListboxSurfaceProps,
+  type ListboxSurfaceListProps,
   useListboxPopup,
   type UseListboxPopupOptions,
   type UseListboxPopupResult,
@@ -101,10 +102,22 @@ export { AlphaSlider, type AlphaSliderProps, type AlphaSliderLabels } from './Al
 
 export {
   TagPicker,
+  TagPickerControl,
+  TagPickerGroup,
+  TagPickerInput,
+  TagPickerButton,
+  TagPickerList,
+  TagPickerOption,
+  TagPickerOptionGroup,
   type TagPickerProps,
-  type TagPickerOption,
   type TagPickerLabels,
   type TagPickerSize,
+  type TagPickerControlProps,
+  type TagPickerGroupProps,
+  type TagPickerInputProps,
+  type TagPickerButtonProps,
+  type TagPickerListProps,
+  type TagPickerOptionProps,
 } from './TagPicker';
 export {
   Rating,

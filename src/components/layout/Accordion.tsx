@@ -11,13 +11,13 @@ import { composeEventHandlers } from '../../lib/composeEventHandlers';
 import { reportMissingContext, warnDeprecated, warnOnce } from '../../lib/dev';
 import { ChevronDownIcon } from '../../lib/icons';
 import { disabledStyles, focusRingInset } from '../../lib/styles';
-import type { SelectionMode } from '../../lib/types';
+import type { HeadingLevel, SelectionMode } from '../../lib/types';
 import { useControllable } from '../../hooks/useControllable';
 import { useId } from '../../hooks/useId';
 import { getPartId } from './disclosureIds';
 
-/** Heading level of the element that wraps each Accordion trigger. */
-export type AccordionHeadingLevel = 1 | 2 | 3 | 4 | 5 | 6;
+/** Heading level of the element that wraps each Accordion trigger: the shared {@link HeadingLevel}. */
+export type AccordionHeadingLevel = HeadingLevel;
 
 /* ------------------------------------------------------------------ */
 /*  Contexts                                                           */

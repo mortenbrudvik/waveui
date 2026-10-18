@@ -5,7 +5,7 @@ import * as React from 'react';
 import { useModalLayer, type UseModalLayerOptions } from '../useModalLayer';
 import { useDismiss, type DismissLayer } from '../useDismiss';
 import { Portal } from '../../components/portal/Portal';
-import { getTopmostLayer } from '../../lib/layers';
+import { getLayer, getTopmostLayer } from '../../lib/layers';
 
 afterEach(() => {
   cleanup();
@@ -625,5 +625,142 @@ describe('useModalLayer', () => {
     );
     await user.click(button('In dialog'));
     expect(onParent).not.toHaveBeenCalled();
+  });
+});
+
+describe('useModalLayer — modalType (P6-06 D91)', () => {
+  it("'non-modal': a dialog layer, no trap, nothing inert, no scroll lock; focus moves in", async () => {
+    const user = userEvent.setup();
+    let layer: DismissLayer | null = null;
+    const { container } = render(
+      <App dialogProps={{ modalType: 'non-modal', onLayer: (l) => (layer = l) }} />,
+    );
+    await user.click(button('Open'));
+    expect(button('First')).toHaveFocus();
+    expect(container).not.toHaveAttribute('inert');
+    expect(document.querySelectorAll('[inert]')).toHaveLength(0);
+    expect(document.documentElement.style.overflow).toBe('');
+    const record = getLayer(layer!.layerId);
+    expect(record?.kind).toBe('dialog');
+    expect(record?.escape).toBe('inside');
+    expect(record?.outsidePress).toBe(false);
+    expect(record?.focusOutside).toBe(false);
+
+    // No trap: focus on the page stays there.
+    act(() => button('Background').focus());
+    await flushMicrotasks();
+    expect(button('Background')).toHaveFocus();
+  });
+
+  it("'non-modal': presses and Escape on the page leave it open; Escape inside closes and restores", async () => {
+    const user = userEvent.setup();
+    render(<App dialogProps={{ modalType: 'non-modal' }} />);
+    await user.click(button('Open'));
+    await user.click(button('Background'));
+    expect(screen.getByRole('dialog', { name: 'Dialog' })).toBeInTheDocument();
+    expect(button('Background')).toHaveFocus();
+    await user.keyboard('{Escape}');
+    expect(screen.getByRole('dialog', { name: 'Dialog' })).toBeInTheDocument();
+    await user.click(button('First'));
+    await user.keyboard('{Escape}');
+    expect(screen.queryByRole('dialog')).toBeNull();
+    expect(button('Open')).toHaveFocus();
+  });
+
+  it("'non-modal': restores focus only from inside", async () => {
+    function Controlled({ open }: { open: boolean }) {
+      const triggerRef = React.useRef<HTMLButtonElement>(null);
+      return (
+        <>
+          <button type="button" ref={triggerRef}>
+            Open
+          </button>
+          <button type="button">Background</button>
+          <Dialog open={open} onOpenChange={() => {}} triggerRef={triggerRef} modalType="non-modal">
+            <button type="button">First</button>
+          </Dialog>
+        </>
+      );
+    }
+    const { rerender } = render(<Controlled open={false} />);
+    act(() => button('Open').focus());
+    rerender(<Controlled open />);
+    expect(button('First')).toHaveFocus();
+    act(() => button('Background').focus());
+    rerender(<Controlled open={false} />);
+    expect(button('Background')).toHaveFocus();
+
+    rerender(<Controlled open />);
+    expect(button('First')).toHaveFocus();
+    rerender(<Controlled open={false} />);
+    expect(button('Open')).toHaveFocus();
+  });
+
+  it("'non-modal': an autoFocus element inside keeps focus", async () => {
+    const user = userEvent.setup();
+    render(
+      <App dialogProps={{ modalType: 'non-modal' }}>
+        <input aria-label="Name" autoFocus />
+      </App>,
+    );
+    await user.click(button('Open'));
+    expect(screen.getByRole('textbox', { name: 'Name' })).toHaveFocus();
+  });
+
+  it("'alert': a modal layer that ignores outside presses; Escape still closes", async () => {
+    const user = userEvent.setup();
+    let layer: DismissLayer | null = null;
+    const { container } = render(
+      <App dialogProps={{ modalType: 'alert', onLayer: (l) => (layer = l) }} />,
+    );
+    await user.click(button('Open'));
+    expect(getLayer(layer!.layerId)?.kind).toBe('modal');
+    expect(getLayer(layer!.layerId)?.outsidePress).toBe(false);
+    expect(container).toHaveAttribute('inert');
+    await user.click(screen.getByTestId('Dialog-backdrop'));
+    expect(screen.getByRole('dialog', { name: 'Dialog' })).toBeInTheDocument();
+    await user.keyboard('{Escape}');
+    expect(screen.queryByRole('dialog')).toBeNull();
+    expect(button('Open')).toHaveFocus();
+  });
+
+  it('applies a modalType change while open at once, without moving focus', async () => {
+    const user = userEvent.setup();
+    function Switch() {
+      const [open, setOpen] = React.useState(false);
+      const [modal, setModal] = React.useState(true);
+      return (
+        <>
+          <button type="button" onClick={() => setOpen(true)}>
+            Open
+          </button>
+          <Dialog open={open} onOpenChange={setOpen} modalType={modal ? 'modal' : 'non-modal'}>
+            <button type="button" onClick={() => setModal((m) => !m)}>
+              Switch
+            </button>
+          </Dialog>
+        </>
+      );
+    }
+    const { container } = render(<Switch />);
+    await user.click(button('Open'));
+    expect(button('Switch')).toHaveFocus();
+    expect(container).toHaveAttribute('inert');
+    expect(document.documentElement.style.overflow).toBe('hidden');
+
+    await user.click(button('Switch'));
+    expect(button('Switch')).toHaveFocus();
+    expect(container).not.toHaveAttribute('inert');
+    expect(document.documentElement.style.overflow).toBe('');
+    act(() => button('Open').focus());
+    await flushMicrotasks();
+    expect(button('Open')).toHaveFocus();
+
+    await user.click(button('Switch'));
+    expect(button('Switch')).toHaveFocus();
+    expect(container).toHaveAttribute('inert');
+    expect(document.documentElement.style.overflow).toBe('hidden');
+    await user.keyboard('{Escape}');
+    expect(button('Open')).toHaveFocus();
   });
 });

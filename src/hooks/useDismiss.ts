@@ -26,8 +26,12 @@ export interface UseDismissOptions {
   anchorRef?: React.RefObject<HTMLElement | null>;
   /** @default 'popover' */
   kind?: LayerKind;
-  /** Whether Escape dismisses the layer. @default true */
-  escape?: boolean;
+  /**
+   * Whether Escape dismisses the layer: always (`true`), never (`false`), or only while the key's
+   * target or the focused element is in the layer's tree (`'inside'`).
+   * @default true
+   */
+  escape?: boolean | 'inside';
   /**
    * Whether a press outside the layer's tree dismisses it. A predicate receives the `pointerdown`
    * event; returning `false` ignores that press. @default true
@@ -82,6 +86,9 @@ export function DismissLayerProvider(props: {
  *   escape-enabled one. Layers stacked below the topmost **isolating** modal (a Dialog/Drawer
  *   whose `useModalIsolation` is active — its ancestors and older siblings) never take Escape, so
  *   a modal that ignores Escape blocks it whether it is nested in a dialog or opened beside it.
+ *   A layer with `escape: 'inside'` (a non-modal Dialog or Drawer) takes Escape only while the
+ *   event target or the focused element is in its tree, so an Escape typed on the page leaves it
+ *   open and goes to the layers below it.
  *   The handler calls `preventDefault()`. Events whose default is already prevented (an inner
  *   widget consumed Escape) and IME composition events are ignored.
  * - **Outside press**: on `pointerdown` (capture) every open layer whose tree does not contain the

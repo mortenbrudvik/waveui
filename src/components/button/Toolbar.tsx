@@ -6,9 +6,9 @@ import type { PolymorphicComponent, PolymorphicProps } from '../../lib/polymorph
 import type { CheckedValues, CheckedValuesChangeHandler, Orientation, Size } from '../../lib/types';
 import { useCheckedValues } from '../../hooks/useCheckedValues';
 import { useMergedRefs } from '../../hooks/useMergedRefs';
-import { useRovingTabIndex } from '../../hooks/useRovingTabIndex';
 import { ToolbarContext, useToolbarCheckableRegistry } from './Toolbar.context';
 import type { ToolbarContextValue } from './Toolbar.context';
+import { useToolbarNavigation } from './Toolbar.navigation';
 import {
   ToolbarButton,
   ToolbarDivider,
@@ -86,13 +86,6 @@ type ToolbarImplProps = ToolbarOwnProps &
     ref?: React.Ref<HTMLElement>;
   };
 
-/**
- * Every focusable control a toolbar can contain, whatever component renders it. Matches that
- * cannot take focus (a `type="hidden"` input, a control CSS hides) are dropped by the roving hook.
- */
-const TOOLBAR_ITEM_SELECTOR =
-  'button, [href], input, select, textarea, [role="button"], [tabindex]';
-
 /** The toolbar's padding per size. */
 const toolbarPaddingClasses: Record<Size, string> = {
   'extra-small': 'p-0.5',
@@ -120,12 +113,7 @@ const ToolbarRoot: PolymorphicComponent<'div', ToolbarOwnProps> = (props) => {
     ...rest
   } = props as ToolbarImplProps;
 
-  const { containerProps } = useRovingTabIndex({
-    itemSelector: TOOLBAR_ITEM_SELECTOR,
-    manageTabIndex: true,
-    tabStop: 'last-focused',
-    orientation,
-  });
+  const { containerProps } = useToolbarNavigation({ orientation });
   const mergedRef = useMergedRefs<HTMLElement>(containerProps.ref, ref);
 
   const checked = useCheckedValues(checkedValues, defaultCheckedValues, onCheckedValuesChange);

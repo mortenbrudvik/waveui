@@ -21,7 +21,7 @@ import {
   writeFileSync,
 } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { basename, dirname, join, resolve } from 'node:path';
+import { basename, dirname, join, posix, resolve } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import {
@@ -32,16 +32,21 @@ import {
   checkDirectives,
   checkFlatExports,
   checkImports,
+  checkModuleOnlyNames,
   checkServerImport,
   clientReferenceStub,
   createWorkDir,
   directivePrologue,
   entryStatus,
+  EXCLUSION_PROBES_0_11,
   expectsUseClient,
   importSpecifiers,
+  INCLUSION_PROBES_0_11,
   isMainModule,
   main,
   missingDeclarations,
+  missingValueAndTypeDeclarations,
+  MODULE_ONLY_NAMES,
   OPT_IN_MODULES,
   PENDING_FLAT_EXPORTS,
   probeIncludes,
@@ -51,6 +56,7 @@ import {
   REQUIRED_DECLARATIONS,
   runScript,
   undocumentedComponents,
+  VALUE_AND_TYPE_DECLARATIONS,
   verifyDist,
 } from '../verify-dist.mjs';
 
@@ -68,7 +74,8 @@ const DIRECTIVE = '"use client";\n';
 /**
  * The fixture's rolled-up declarations: every name on REQUIRED_DECLARATIONS (a utility, a
  * documented component, a props type, a documented compound, a hook and a class-name constant),
- * and the empty export list that ends every roll-up.
+ * `TagPickerOption` as a type and a value (VALUE_AND_TYPE_DECLARATIONS), and the empty export
+ * list that ends every roll-up.
  */
 const DTS =
   'export declare function cn(...inputs: unknown[]): string;\n' +
@@ -78,6 +85,10 @@ const DTS =
   'export declare function usePresence(visible: boolean): { isMounted: boolean };\n' +
   'export declare function useActiveDescendant(): [string | null];\n' +
   '/** A calendar. */\nexport declare const Calendar: (props: object) => null;\n' +
+  '/** A group of tags. */\nexport declare const TagGroup: (props: object) => null;\n' +
+  '/** A navigation drawer. */\nexport declare const NavDrawer: (props: object) => null;\n' +
+  'export declare interface TagPickerOption { value: string; label: string }\n' +
+  '/** An option of a TagPicker. */\nexport declare const TagPickerOption: (props: object) => null;\n' +
   "export declare const buttonClassNames: { readonly root: 'wave-button'; readonly icon: 'wave-button__icon' };\n" +
   '\nexport { }\n';
 
@@ -261,7 +272,7 @@ function createToaster() {
   // src/lib/dev.ts reads the bundler-injected mode at call time.
   const dev = (exportSyntax) =>
     `function isDevEnvironment() {\n  try {\n    return process.env.NODE_ENV !== "production";\n  } catch {\n    return true;\n  }\n}\n${exportSyntax}`;
-  return {
+  return withPhase6Modules({
     'package.json': JSON.stringify({
       name: 'wave-fixture',
       type: 'module',
@@ -394,7 +405,262 @@ function createToaster() {
       'exports.Calendar = calendar.Calendar;\n',
     'dist/index.d.ts': DTS,
     'dist/index.d.cts': DTS,
+  });
+}
+
+/**
+ * The 0.11 modules of the fixture (INTEGRATION): the shape of the real import graph that the
+ * probes of EXCLUSION_PROBES_0_11 and INCLUSION_PROBES_0_11 check, one entry per dist module
+ * (without its extension). `uses` are the [module, export] pairs a module calls; `members` the
+ * parts of a compound (a part of another module is `[Member, module, export]`); `root` the
+ * module and export a compound's root comes from; `exports` the names the entry re-exports;
+ * `constant` the class-name constant the module reads. A `hook` module exports one function.
+ */
+const PHASE6_MODULES = {
+  'components/button/Toolbar.navigation': { hook: 'useToolbarNavigation' },
+  'components/data-display/Avatar': { name: 'Avatar', exports: ['Avatar'] },
+  'components/data-display/Tag': { name: 'Tag', constant: 'tagClassNames', exports: ['Tag'] },
+  'components/data-display/TagGroup': {
+    name: 'TagGroup',
+    constant: 'tagGroupClassNames',
+    uses: [['components/button/Toolbar.navigation', 'useToolbarNavigation']],
+    exports: ['TagGroup'],
+  },
+  'components/data-display/InteractionTag': {
+    name: 'InteractionTag',
+    members: [['Primary'], ['Secondary']],
+    exports: ['InteractionTag', 'InteractionTagPrimary', 'InteractionTagSecondary'],
+  },
+  'components/input/Combobox': {
+    name: 'Combobox',
+    uses: [
+      ['hooks/useListbox', 'useListbox'],
+      ['components/input/Option', 'Option'],
+    ],
+    exports: ['Combobox'],
+  },
+  'components/input/TagPicker.option': {
+    name: 'TagPickerOption',
+    uses: [['components/input/Option', 'Option']],
+  },
+  'components/input/TagPicker.parts': {
+    name: 'TagPickerList',
+    constant: 'tagPickerListClassNames',
+    uses: [
+      ['components/data-display/Tag', 'Tag'],
+      ['components/data-display/TagGroup', 'TagGroup'],
+    ],
+  },
+  'components/input/TagPicker.root': {
+    name: 'TagPickerRoot',
+    displayName: 'TagPicker',
+    constant: 'tagPickerClassNames',
+    uses: [
+      ['hooks/useListbox', 'useListbox'],
+      ['components/data-display/Tag', 'Tag'],
+    ],
+  },
+  'components/input/TagPicker': {
+    name: 'TagPicker',
+    root: ['components/input/TagPicker.root', 'TagPickerRoot'],
+    members: [
+      ['List', 'components/input/TagPicker.parts', 'TagPickerList'],
+      ['Option', 'components/input/TagPicker.option', 'TagPickerOption'],
+    ],
+    exports: ['TagPicker', 'TagPickerList', 'TagPickerOption'],
+  },
+  'components/overlays/Dialog.shared': { hook: 'useModalOpenState' },
+  'hooks/useModalLayer': { hook: 'useModalLayer' },
+  'hooks/useRovingTabIndex': { hook: 'useRovingTabIndex' },
+  'components/overlays/Drawer.panel': {
+    name: 'DrawerPanel',
+    uses: [
+      ['hooks/useModalLayer', 'useModalLayer'],
+      ['hooks/usePresence', 'usePresence'],
+      ['components/overlays/Dialog.shared', 'useModalOpenState'],
+    ],
+  },
+  'components/overlays/Drawer.root': {
+    name: 'DrawerRoot',
+    displayName: 'Drawer',
+    uses: [
+      ['components/overlays/Drawer.panel', 'DrawerPanel'],
+      ['components/overlays/Dialog.shared', 'useModalOpenState'],
+    ],
+  },
+  'components/overlays/Drawer.parts': {
+    name: 'DrawerHeader',
+    uses: [['components/overlays/Dialog.shared', 'useModalOpenState']],
+  },
+  'components/overlays/Drawer': {
+    name: 'Drawer',
+    root: ['components/overlays/Drawer.root', 'DrawerRoot'],
+    members: [['Header', 'components/overlays/Drawer.parts', 'DrawerHeader']],
+    exports: ['Drawer', 'DrawerHeader'],
+  },
+  'components/navigation/Nav.root': {
+    name: 'NavRoot',
+    displayName: 'Nav',
+    constant: 'navClassNames',
+  },
+  'components/navigation/Nav': {
+    name: 'Nav',
+    root: ['components/navigation/Nav.root', 'NavRoot'],
+    members: [['Divider']],
+    exports: ['Nav', 'NavDivider'],
+  },
+  'components/navigation/Hamburger': {
+    name: 'Hamburger',
+    constant: 'hamburgerClassNames',
+    exports: ['Hamburger'],
+  },
+  'components/navigation/NavDrawer': {
+    name: 'NavDrawer',
+    constant: 'navDrawerClassNames',
+    uses: [
+      ['components/overlays/Drawer.panel', 'DrawerPanel'],
+      ['components/navigation/Nav.root', 'NavRoot'],
+      ['hooks/usePresence', 'usePresence'],
+      ['hooks/useRovingTabIndex', 'useRovingTabIndex'],
+    ],
+    members: [['Body']],
+    exports: ['NavDrawer', 'NavDrawerBody'],
+  },
+};
+
+/** The class-name constants of the 0.11 modules (each read by one module above). */
+const PHASE6_CLASS_NAMES = {
+  tagClassNames: 'wave-tag',
+  tagGroupClassNames: 'wave-tag-group',
+  tagPickerClassNames: 'wave-tag-picker',
+  tagPickerListClassNames: 'wave-tag-picker-list',
+  navClassNames: 'wave-nav',
+  navDrawerClassNames: 'wave-nav-drawer',
+  hamburgerClassNames: 'wave-hamburger',
+};
+
+/**
+ * The ESM and CommonJS code of the 0.11 module `path` with `spec` (see PHASE6_MODULES). Every
+ * module starts with `"use client"`; a hook calls its uses, a component calls them in its render
+ * (`function X(props) { … }`), so an import of the component keeps them.
+ */
+function phase6Module(path, spec) {
+  const rel = (target, ext) => {
+    const relative = posix.relative(posix.dirname(path), target);
+    return `${relative.startsWith('.') ? relative : `./${relative}`}.${ext}`;
   };
+  const imports = [];
+  if (!spec.hook) imports.push(['lib/cn', 'cn']);
+  if (spec.constant) imports.push(['lib/classNames', spec.constant]);
+  for (const use of spec.uses ?? []) imports.push(use);
+  if (spec.root) imports.push(spec.root);
+  for (const [, module, name] of spec.members ?? []) if (module) imports.push([module, name]);
+  const esmImports = imports
+    .map(([module, name]) => `import { ${name} } from '${rel(module, 'mjs')}';\n`)
+    .join('');
+  const cjsImports = imports
+    .map(([module, name]) => `const { ${name} } = require('${rel(module, 'cjs')}');\n`)
+    .join('');
+  const calls = (spec.uses ?? []).map(([, name]) => `${name}(props); `).join('');
+  if (spec.hook) {
+    const body = `function ${spec.hook}(props) { ${calls}return null; }\n`;
+    return {
+      esm: `${DIRECTIVE}${esmImports}export ${body}`,
+      cjs: `${DIRECTIVE}${cjsImports}${body}exports.${spec.hook} = ${spec.hook};\n`,
+    };
+  }
+  const { name } = spec;
+  const classes = `${spec.constant ? `${spec.constant}.root, ` : ''}'${name.toLowerCase()}'`;
+  const local = (member) => `${name}${member}`;
+  const rootName = spec.root ? spec.root[1] : `${name}Impl`;
+  let code = '';
+  if (!spec.root) {
+    code +=
+      `function ${rootName}(props) { ${calls}return cn(${classes}, props && props.className); }\n` +
+      `${rootName}.displayName = '${spec.displayName ?? name}';\n`;
+  }
+  const members = spec.members ?? [];
+  for (const [member, module] of members) {
+    if (module) continue;
+    code += `function ${local(member)}() { return null; }\n${local(member)}.displayName = '${local(member)}';\n`;
+  }
+  const memberName = ([member, module, imported]) => (module ? imported : local(member));
+  const assign = members.length
+    ? `/* @__PURE__ */ Object.assign(${rootName}, { ${members
+        .map((member) => `${member[0]}: ${memberName(member)}`)
+        .join(', ')} })`
+    : rootName;
+  const flat = members.map((member) => [local(member[0]), memberName(member)]);
+  return {
+    esm:
+      `${DIRECTIVE}${esmImports}${code}export const ${name} = ${assign};\n` +
+      flat.map(([as, from]) => `export { ${from === as ? as : `${from} as ${as}`} };\n`).join(''),
+    cjs:
+      `${DIRECTIVE}${cjsImports}${code}exports.${name} = ${assign};\n` +
+      flat.map(([as, from]) => `exports.${as} = ${from};\n`).join(''),
+  };
+}
+
+/** `code` (a module of the fixture) importing `name` from `target` and calling it in its render. */
+function withCall(code, path, target, name, ext = 'mjs') {
+  const relative = posix.relative(posix.dirname(path), target);
+  const specifier = `${relative.startsWith('.') ? relative : `./${relative}`}.${ext}`;
+  const line =
+    ext === 'mjs'
+      ? `import { ${name} } from '${specifier}';\n`
+      : `const { ${name} } = require('${specifier}');\n`;
+  const render = /function \w+\(props\) \{ /;
+  expect(code).toMatch(render);
+  return code
+    .replace(DIRECTIVE, `${DIRECTIVE}${line}`)
+    .replace(render, (match) => `${match}${name}(props); `);
+}
+
+/**
+ * The good files with the 0.11 modules added: their code, their class names in the registry and
+ * the entry, and their public names in the entry. The fixture's Dialog mounts through the
+ * presence core and reads `Dialog.shared`, as the real one does.
+ */
+function withPhase6Modules(files) {
+  const result = { ...files };
+  for (const [path, spec] of Object.entries(PHASE6_MODULES)) {
+    const { esm, cjs } = phase6Module(path, spec);
+    result[`dist/${path}.mjs`] = esm;
+    result[`dist/${path}.cjs`] = cjs;
+  }
+  const constants = Object.entries(PHASE6_CLASS_NAMES);
+  result['dist/lib/classNames.mjs'] += constants
+    .map(([name, root]) => `export const ${name} = { root: '${root}' };\n`)
+    .join('');
+  result['dist/lib/classNames.cjs'] += constants
+    .map(([name, root]) => `exports.${name} = { root: '${root}' };\n`)
+    .join('');
+  const publicModules = Object.entries(PHASE6_MODULES).filter(([, spec]) => spec.exports);
+  result['dist/index.mjs'] +=
+    `export { ${constants.map(([name]) => name).join(', ')} } from './lib/classNames.mjs';\n` +
+    publicModules
+      .map(([path, spec]) => `export { ${spec.exports.join(', ')} } from './${path}.mjs';\n`)
+      .join('');
+  result['dist/index.cjs'] +=
+    constants.map(([name]) => `exports.${name} = classNames.${name};\n`).join('') +
+    publicModules
+      .map(
+        ([path, spec], i) =>
+          `const phase6Module${i} = require('./${path}.cjs');\n` +
+          spec.exports.map((name) => `exports.${name} = phase6Module${i}.${name};\n`).join(''),
+      )
+      .join('');
+  for (const ext of ['mjs', 'cjs']) {
+    const path = `dist/components/overlays/Dialog.${ext}`;
+    result[path] = withCall(
+      withCall(files[path], 'components/overlays/Dialog', 'hooks/usePresence', 'usePresence', ext),
+      'components/overlays/Dialog',
+      'components/overlays/Dialog.shared',
+      'useModalOpenState',
+      ext,
+    );
+  }
+  return result;
 }
 
 let fixtureCount = 0;
@@ -584,8 +850,8 @@ describe('checkDeclarations (repo-level#5)', () => {
       'dist/index.d.cts': EMPTY_ROLL_UP,
     });
     expect(checkDeclarations(dist)).toEqual([
-      "index.d.ts does not declare and export cn, Button, ButtonProps, Menu, usePresence, useActiveDescendant, Calendar, buttonClassNames (an empty or partial roll-up: check tsconfig.json's rootDir and the declaration plugin in vite.config.ts)",
-      "index.d.cts does not declare and export cn, Button, ButtonProps, Menu, usePresence, useActiveDescendant, Calendar, buttonClassNames (an empty or partial roll-up: check tsconfig.json's rootDir and the declaration plugin in vite.config.ts)",
+      "index.d.ts does not declare and export cn, Button, ButtonProps, Menu, usePresence, useActiveDescendant, Calendar, TagGroup, NavDrawer, buttonClassNames (an empty or partial roll-up: check tsconfig.json's rootDir and the declaration plugin in vite.config.ts)",
+      "index.d.cts does not declare and export cn, Button, ButtonProps, Menu, usePresence, useActiveDescendant, Calendar, TagGroup, NavDrawer, buttonClassNames (an empty or partial roll-up: check tsconfig.json's rootDir and the declaration plugin in vite.config.ts)",
     ]);
   });
 
@@ -606,7 +872,7 @@ describe('checkDeclarations (repo-level#5)', () => {
     expect(checkDeclarations(fixture({ 'dist/index.d.cts': EMPTY_ROLL_UP }).dist)).toEqual([
       expect.stringMatching(/index\.d\.cts differs/),
       expect.stringMatching(
-        /^index\.d\.cts does not declare and export cn, Button, ButtonProps, Menu, usePresence, useActiveDescendant, Calendar, buttonClassNames \(/,
+        /^index\.d\.cts does not declare and export cn, Button, ButtonProps, Menu, usePresence, useActiveDescendant, Calendar, TagGroup, NavDrawer, buttonClassNames \(/,
       ),
     ]);
   });
@@ -617,7 +883,9 @@ describe('checkDeclarations (repo-level#5)', () => {
       expect.stringMatching(/^index\.d\.cts does not declare and export Card \(/),
     ]);
     const empty = fixture({ 'dist/index.d.ts': EMPTY_ROLL_UP, 'dist/index.d.cts': EMPTY_ROLL_UP });
-    expect(checkDeclarations(empty.dist, { requiredDeclarations: [] })).toEqual([]);
+    expect(
+      checkDeclarations(empty.dist, { requiredDeclarations: [], valueAndTypeDeclarations: [] }),
+    ).toEqual([]);
   });
 });
 
@@ -1345,6 +1613,28 @@ describe('the flat-name bridge (PENDING_FLAT_EXPORTS)', () => {
       ['ColorPicker', 'Preview'],
       ['Tree', 'ItemPersonaLayout'],
       ['Toolbar', 'Button'],
+      // 0.11
+      ['Drawer', 'Header'],
+      ['Drawer', 'HeaderTitle'],
+      ['Drawer', 'HeaderNavigation'],
+      ['Drawer', 'Body'],
+      ['Drawer', 'Footer'],
+      ['Nav', 'SectionHeader'],
+      ['Nav', 'Divider'],
+      ['Nav', 'AppItem'],
+      ['Nav', 'AppItemStatic'],
+      ['NavDrawer', 'Header'],
+      ['NavDrawer', 'Body'],
+      ['NavDrawer', 'Footer'],
+      ['InteractionTag', 'Primary'],
+      ['InteractionTag', 'Secondary'],
+      ['TagPicker', 'Control'],
+      ['TagPicker', 'Group'],
+      ['TagPicker', 'Input'],
+      ['TagPicker', 'Button'],
+      ['TagPicker', 'List'],
+      ['TagPicker', 'Option'],
+      ['TagPicker', 'OptionGroup'],
     ];
     for (const [compound, member] of members) {
       expect(mod[`${compound}${member}`], `${compound}${member}`).toBe(mod[compound][member]);
@@ -1591,16 +1881,262 @@ describe('the 0.10 probes (INTEGRATION)', () => {
     ]);
   }, 30_000);
 
-  it.each(['useActiveDescendant', 'Calendar'])('requires %s in the roll-up', (name) => {
-    expect(REQUIRED_DECLARATIONS).toContain(name);
-    const dts = DTS.split('\n')
-      .filter((line) => !new RegExp(`declare (const|function) ${name}\\b`).test(line))
-      .join('\n');
+  it.each(['useActiveDescendant', 'Calendar', 'TagGroup', 'NavDrawer'])(
+    'requires %s in the roll-up',
+    (name) => {
+      expect(REQUIRED_DECLARATIONS).toContain(name);
+      const dts = DTS.split('\n')
+        .filter((line) => !new RegExp(`declare (const|function) ${name}\\b`).test(line))
+        .join('\n');
+      expect(
+        checkDeclarations(fixture({ 'dist/index.d.ts': dts, 'dist/index.d.cts': dts }).dist),
+      ).toEqual([
+        expect.stringMatching(
+          new RegExp(`^index\\.d\\.ts does not declare and export ${name} \\(`),
+        ),
+        expect.stringMatching(
+          new RegExp(`^index\\.d\\.cts does not declare and export ${name} \\(`),
+        ),
+      ]);
+    },
+  );
+});
+
+describe('the 0.11 probes (INTEGRATION)', () => {
+  /** The module that renders a probe's `keep`: a compound with an imported root renders there. */
+  const RENDER_MODULE = {
+    Tag: 'components/data-display/Tag',
+    TagGroup: 'components/data-display/TagGroup',
+    InteractionTag: 'components/data-display/InteractionTag',
+    Combobox: 'components/input/Combobox',
+    Dialog: 'components/overlays/Dialog',
+    Drawer: 'components/overlays/Drawer.root',
+    Toaster: 'components/feedback/Toaster',
+    Nav: 'components/navigation/Nav.root',
+    Hamburger: 'components/navigation/Hamburger',
+    NavDrawer: 'components/navigation/NavDrawer',
+  };
+  /** An export of a fixture module (path without its extension). */
+  const exportOf = (module) => {
+    const spec = PHASE6_MODULES[module];
+    if (spec) return spec.hook ?? spec.name;
+    return { 'components/overlays/Dialog': 'Dialog', 'hooks/useListbox': 'useListbox' }[module];
+  };
+  /** The module of a dropped component (a probe without `dropModules`). */
+  const DROP_MODULE = {
+    TagGroup: 'components/data-display/TagGroup',
+    Dialog: 'components/overlays/Dialog',
+  };
+  /** The module a defect adds to the bundle of `keep`: the first dropped module, else `drop`'s. */
+  const droppedModule = ({ drop, dropModules = [] }) =>
+    dropModules.length > 0 ? dropModules[0].replace(/\.mjs$/, '') : DROP_MODULE[drop];
+  /** The fixture with `keep`'s render calling an export of the module that must be dropped. */
+  const withDroppedImport = (probe) => {
+    const files = goodFiles();
+    const path = RENDER_MODULE[probe.keep];
+    const module = droppedModule(probe);
+    const file = `dist/${path}.mjs`;
+    return {
+      module,
+      dist: fixture({ [file]: withCall(files[file], path, module, exportOf(module)) }).dist,
+    };
+  };
+
+  it('lists the probes of the spec (§6.2)', () => {
+    expect(EXCLUSION_PROBES_0_11.map(({ keep, drop }) => `${keep} without ${drop}`)).toEqual([
+      'Tag without TagPicker',
+      'TagGroup without TagPicker',
+      'InteractionTag without TagGroup',
+      'Combobox without TagPicker',
+      'Dialog without Drawer',
+      'Drawer without Dialog',
+      'Toaster without Drawer',
+      'Nav without NavDrawer',
+      'Hamburger without NavDrawer',
+      'NavDrawer without Drawer',
+    ]);
+    expect(INCLUSION_PROBES_0_11.map(({ keep }) => keep)).toEqual([
+      'TagPicker',
+      'Dialog',
+      'Drawer',
+      'NavDrawer',
+    ]);
+    for (const { keep } of EXCLUSION_PROBES_0_11) expect(RENDER_MODULE[keep], keep).toBeDefined();
+  });
+
+  it.each(EXCLUSION_PROBES_0_11.map((probe) => [probe.keep, probe.drop, probe]))(
+    'an import of only %s drops %s: passes on a correct dist, reports the dropped module it imports',
+    async (_keep, _drop, probe) => {
+      expect(await probeTreeShaking(fixture().dist, probe)).toEqual([]);
+      const { module, dist } = withDroppedImport(probe);
+      expect(module).toBeDefined();
+      expect(await probeTreeShaking(dist, probe)).toContain(
+        `${module}.mjs is in the bundle of an import of only ${probe.keep} (${probe.drop} must be dropped)`,
+      );
+    },
+    30_000,
+  );
+
+  it('reports the class string of a module a Tag must not reach', async () => {
+    const probe = EXCLUSION_PROBES_0_11[0];
+    const { dist } = withDroppedImport(probe);
+    expect(await probeTreeShaking(dist, probe)).toEqual([
+      'components/button/Toolbar.navigation.mjs is in the bundle of an import of only Tag (TagPicker must be dropped)',
+      'components/data-display/TagGroup.mjs is in the bundle of an import of only Tag (TagPicker must be dropped)',
+      'the bundle of an import of only Tag contains the string "wave-tag-group" (an unused class-name constant was not tree-shaken)',
+    ]);
+  });
+
+  /** A fixture in which `keep` reaches none of its included modules. */
+  const INCLUSION_DEFECTS = {
+    TagPicker: () => ({
+      'dist/components/input/TagPicker.mjs': phase6Module('components/input/TagPicker', {
+        name: 'TagPicker',
+        members: [['List'], ['Option']],
+      }).esm,
+    }),
+    Dialog: (files) => ({
+      'dist/components/overlays/Dialog.mjs': files['dist/components/overlays/Dialog.mjs']
+        .replace("import { usePresence } from '../../hooks/usePresence.mjs';\n", '')
+        .replace('usePresence(props); ', ''),
+    }),
+    Drawer: () => ({
+      'dist/components/overlays/Drawer.root.mjs': phase6Module('components/overlays/Drawer.root', {
+        ...PHASE6_MODULES['components/overlays/Drawer.root'],
+        uses: [],
+      }).esm,
+    }),
+    NavDrawer: () => ({
+      'dist/components/navigation/NavDrawer.mjs': phase6Module('components/navigation/NavDrawer', {
+        ...PHASE6_MODULES['components/navigation/NavDrawer'],
+        uses: [],
+      }).esm,
+    }),
+  };
+
+  it.each(INCLUSION_PROBES_0_11.map((probe) => [probe.keep, probe]))(
+    'an import of only %s holds its modules: passes on a correct dist, reports each one missing',
+    async (keep, probe) => {
+      expect(await probeIncludes(fixture().dist, probe)).toEqual([]);
+      const { dist } = fixture(INCLUSION_DEFECTS[keep](goodFiles()));
+      expect(await probeIncludes(dist, probe)).toEqual(
+        probe.modules.map((path) => `${path} is not in the bundle of an import of only ${keep}`),
+      );
+    },
+    30_000,
+  );
+
+  it('verifyDist runs the exclusion probes', async () => {
+    const { dist } = withDroppedImport(EXCLUSION_PROBES_0_11[7]);
+    const { errors } = await verifyDist(dist, noPending);
+    expect(errors).toEqual([
+      'components/overlays/Drawer.panel.mjs is in the bundle of an import of only Nav (NavDrawer must be dropped)',
+      'hooks/useModalLayer.mjs is in the bundle of an import of only Nav (NavDrawer must be dropped)',
+    ]);
+  }, 30_000);
+
+  it('verifyDist runs the inclusion probes', async () => {
+    const { dist } = fixture(INCLUSION_DEFECTS.NavDrawer());
+    const { errors } = await verifyDist(dist, noPending);
+    expect(errors).toEqual(
+      INCLUSION_PROBES_0_11[3].modules.map(
+        (path) => `${path} is not in the bundle of an import of only NavDrawer`,
+      ),
+    );
+  }, 30_000);
+});
+
+describe('module-only names (0.11 INTEGRATION)', () => {
+  it('lists the module-only names of spec §4.5, sorted and without duplicates', () => {
+    expect(MODULE_ONLY_NAMES).toEqual([...new Set(MODULE_ONLY_NAMES)].sort());
+    expect(MODULE_ONLY_NAMES).toEqual(
+      expect.arrayContaining([
+        'useToolbarNavigation',
+        'TOOLBAR_ITEM_SELECTOR',
+        'AvatarSizeContext',
+        'hasIsolatingModalBelow',
+        'TagGroupContext',
+        'DrawerPanel',
+        'NavRoot',
+        'NavDrawerContext',
+        'TagPickerRoot',
+        'findExactMatch',
+      ]),
+    );
+  });
+
+  it('passes for an entry and a roll-up that export none of them', async () => {
+    const { dist } = fixture();
+    const mod = await import(pathToFileURL(join(dist, 'index.mjs')).href);
+    expect(checkModuleOnlyNames(mod, DTS)).toEqual([]);
+  });
+
+  it('reports a module-only value of the entry and a module-only type of the roll-up', () => {
+    const dts = `${DTS}export declare interface TagGroupContextValue { size: string }\n`;
+    expect(
+      checkModuleOnlyNames({ useToolbarNavigation: () => null, Tag: () => null }, dts),
+    ).toEqual([
+      'index.d.ts exports TagGroupContextValue, which is module-only (keep it out of the barrels)',
+      'dist/index.mjs exports useToolbarNavigation, which is module-only (keep it out of the barrels)',
+    ]);
+    expect(checkModuleOnlyNames({}, undefined, ['Tag'])).toEqual([]);
+  });
+
+  it('verifyDist reports an entry that exports a module-only hook', async () => {
+    const files = goodFiles();
+    const { dist } = fixture({
+      'dist/index.mjs': `${files['dist/index.mjs']}export { useToolbarNavigation } from './components/button/Toolbar.navigation.mjs';\n`,
+      'dist/index.cjs': `${files['dist/index.cjs']}exports.useToolbarNavigation = require('./components/button/Toolbar.navigation.cjs').useToolbarNavigation;\n`,
+    });
+    const { errors } = await verifyDist(dist, noPending);
+    expect(errors).toEqual([
+      'dist/index.mjs exports useToolbarNavigation, which is module-only (keep it out of the barrels)',
+    ]);
+  }, 30_000);
+});
+
+describe('names declared as a type and a value (0.11 INTEGRATION)', () => {
+  it('lists TagPickerOption, the entry interface and the component', () => {
+    expect(VALUE_AND_TYPE_DECLARATIONS).toEqual(['TagPickerOption']);
+    expect(missingValueAndTypeDeclarations(DTS, VALUE_AND_TYPE_DECLARATIONS)).toEqual([]);
+  });
+
+  it('reports a name exported only as a type or only as a value', () => {
+    const typeOnly = DTS.replace(
+      '/** An option of a TagPicker. */\nexport declare const TagPickerOption',
+      '/** An option of a TagPicker. */\ndeclare const TagPickerOption',
+    );
+    const valueOnly = DTS.replace(
+      'export declare interface TagPickerOption',
+      'declare interface TagPickerOption',
+    );
+    expect(typeOnly).not.toBe(DTS);
+    expect(valueOnly).not.toBe(DTS);
+    expect(missingValueAndTypeDeclarations(typeOnly, ['TagPickerOption'])).toEqual([
+      'TagPickerOption',
+    ]);
+    expect(missingValueAndTypeDeclarations(valueOnly, ['TagPickerOption'])).toEqual([
+      'TagPickerOption',
+    ]);
+    // An export list that renames the declarations exports both meanings.
+    const renamed =
+      'declare interface TagPickerOption_2 { value: string }\n' +
+      '/** An option. */\ndeclare const TagPickerOption_2: () => null;\n' +
+      'export { TagPickerOption_2 as TagPickerOption }\n';
+    expect(missingValueAndTypeDeclarations(renamed, ['TagPickerOption'])).toEqual([]);
+  });
+
+  it('checkDeclarations reports a roll-up that keeps only the TagPickerOption interface', () => {
+    const dts = DTS.replace(
+      '/** An option of a TagPicker. */\nexport declare const TagPickerOption: (props: object) => null;\n',
+      '',
+    );
+    expect(dts).not.toBe(DTS);
     expect(
       checkDeclarations(fixture({ 'dist/index.d.ts': dts, 'dist/index.d.cts': dts }).dist),
     ).toEqual([
-      expect.stringMatching(new RegExp(`^index\\.d\\.ts does not declare and export ${name} \\(`)),
-      expect.stringMatching(new RegExp(`^index\\.d\\.cts does not declare and export ${name} \\(`)),
+      'index.d.ts does not export TagPickerOption both as a type and as a value (the interface and the component of one name: export the name once, without `type`, from the barrel)',
+      'index.d.cts does not export TagPickerOption both as a type and as a value (the interface and the component of one name: export the name once, without `type`, from the barrel)',
     ]);
   });
 });

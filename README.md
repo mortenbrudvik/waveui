@@ -1,13 +1,13 @@
 # @mortenbrudvik/waveui
 
-A React component library inspired by the Fluent UI 2 design language: 74 accessible, composable components built with TypeScript, Tailwind CSS 4 and CSS custom properties, with light, dark and high-contrast themes and right-to-left support.
+A React component library inspired by the Fluent UI 2 design language: 78 accessible, composable components built with TypeScript, Tailwind CSS 4 and CSS custom properties, with light, dark and high-contrast themes and right-to-left support.
 
 > This is **not** Microsoft's official `@fluentui/react-components` package.
 
 - [Requirements](#requirements) · [Installation](#installation) · [Quick start](#quick-start)
 - [Styles](#styles) · [Theming](#theming) · [Global effects](#global-effects) · [Styling hooks](#styling-hooks)
 - [React Server Components](#react-server-components) · [Components](#components) · [Usage notes](#usage-notes)
-- [Keyboard support](#keyboard-support) · [Hooks and utilities](#hooks-and-utilities) · [Upgrading from 0.9](#upgrading-from-09) · [Upgrading from 0.8](#upgrading-from-08) · [Upgrading from 0.7](#upgrading-from-07) · [Upgrading from 0.6](#upgrading-from-06) · [Upgrading from 0.5](#upgrading-from-05) · [Upgrading from 0.4](#upgrading-from-04) · [Development](#development)
+- [Keyboard support](#keyboard-support) · [Hooks and utilities](#hooks-and-utilities) · [Upgrading from 0.10](#upgrading-from-010) · [Upgrading from 0.9](#upgrading-from-09) · [Upgrading from 0.8](#upgrading-from-08) · [Upgrading from 0.7](#upgrading-from-07) · [Upgrading from 0.6](#upgrading-from-06) · [Upgrading from 0.5](#upgrading-from-05) · [Upgrading from 0.4](#upgrading-from-04) · [Development](#development)
 
 ## Requirements
 
@@ -209,7 +209,7 @@ Never load `legacy-tokens.css` in an app that defines shadcn/ui-style variables 
 Generated from `src/styles/tokens.css`. A value followed by a ramp or token name is a reference (`var(--wave-brand-80)`); the hex is its default.
 
 <details>
-<summary>All 64 color tokens per theme</summary>
+<summary>All 68 color tokens per theme</summary>
 
 | Token (`--wave-…`)        | Light                          | Dark                           | High contrast                  |
 | ------------------------- | ------------------------------ | ------------------------------ | ------------------------------ |
@@ -219,6 +219,8 @@ Generated from `src/styles/tokens.css`. A value followed by a ramp or token name
 | `secondary`               | `#f5f5f5`                      | `#333333`                      | `#000000`                      |
 | `muted`                   | `#f0f0f0`                      | `#383838`                      | `#1a1a1a`                      |
 | `muted-foreground`        | `#616161`                      | `#adadad`                      | `#ffffff`                      |
+| `muted-hover`             | `#e0e0e0`                      | `#424242`                      | `#333333`                      |
+| `muted-pressed`           | `#d1d1d1`                      | `#2e2e2e`                      | `#4d4d4d`                      |
 | `primary`                 | `#0f6cbd` (brand-80)           | `#62abf5` (brand-110)          | `#1aebff`                      |
 | `primary-foreground`      | `#ffffff`                      | `#000000`                      | `#000000`                      |
 | `primary-hover`           | `#115ea3` (brand-70)           | `#77b7f7` (brand-120)          | `#6ef3ff`                      |
@@ -233,6 +235,8 @@ Generated from `src/styles/tokens.css`. A value followed by a ramp or token name
 | `subtle-selected`         | `#ebebeb`                      | `#383838`                      | `#333333`                      |
 | `selected`                | `#ebf3fc` (brand-160)          | `#082338` (brand-20)           | `#003a40`                      |
 | `selected-foreground`     | `#0f548c` (brand-60)           | `#62abf5` (brand-110)          | `#ffffff`                      |
+| `selected-hover`          | `#cfe4fa` (brand-150)          | `#0c3b5e` (brand-40)           | `#005259`                      |
+| `selected-pressed`        | `#b4d6fa` (brand-140)          | `#061724` (brand-10)           | `#006b75`                      |
 | `border`                  | `#e0e0e0`                      | `#666666`                      | `#ffffff`                      |
 | `stroke`                  | `#d1d1d1`                      | `#666666`                      | `#ffffff`                      |
 | `stroke-hover`            | `#c7c7c7`                      | `#757575`                      | `#ffffff`                      |
@@ -310,7 +314,7 @@ What adding Wave changes outside its own components:
 **Colliding utility names.** Wave's Tailwind color names are unprefixed, because they are the utility vocabulary 0.4 documented and that consumer code uses in `className` overrides. In a shared Tailwind build, or next to another stylesheet that defines the same class names, each of the following names resolves to a single definition in every utility that takes a color (`bg-`, `text-`, `border-`, `ring-`, `outline-`, `fill-`, `stroke-`, `accent-`, `caret-`, `decoration-`, `divide-`, `placeholder-`, `shadow-`, `from-`/`via-`/`to-`, …):
 
 - Shared with shadcn/ui: `background`, `foreground`, `card`, `card-foreground`, `primary`, `primary-foreground`, `secondary`, `secondary-foreground`, `muted`, `muted-foreground`, `accent`, `accent-foreground`, `destructive`, `destructive-foreground`, `border`, `input`, `ring`.
-- Wave's other names: `primary-hover`, `primary-pressed`, `error`, `error-foreground`, `subtle`, `subtle-hover`, `subtle-pressed`, `subtle-selected`, `selected`, `selected-foreground`, `stroke`, `stroke-hover`, `stroke-accessible`, `success`, `success-foreground`, `success-tint`, `success-tint-foreground`, `warning`, `warning-foreground`, `warning-tint`, `warning-tint-foreground`, `error-tint`, `error-tint-foreground`, `severe`, `severe-foreground`, `severe-tint`, `severe-tint-foreground`, `info`, `info-foreground`, `info-tint`, `info-tint-foreground`, `inverted`, `inverted-foreground`, `inverted-border`, `input-filled-darker`, `input-filled-lighter`, `input-filled-stroke`, `track`, `skeleton`, `rating`, `presence-available`, `presence-busy`, `presence-away`, `presence-offline`, `presence-oof`, `presence-glyph`, `backdrop`, `brand-10` … `brand-160`.
+- Wave's other names: `primary-hover`, `primary-pressed`, `error`, `error-foreground`, `subtle`, `subtle-hover`, `subtle-pressed`, `subtle-selected`, `selected`, `selected-foreground`, `selected-hover`, `selected-pressed`, `muted-hover`, `muted-pressed`, `stroke`, `stroke-hover`, `stroke-accessible`, `success`, `success-foreground`, `success-tint`, `success-tint-foreground`, `warning`, `warning-foreground`, `warning-tint`, `warning-tint-foreground`, `error-tint`, `error-tint-foreground`, `severe`, `severe-foreground`, `severe-tint`, `severe-tint-foreground`, `info`, `info-foreground`, `info-tint`, `info-tint-foreground`, `inverted`, `inverted-foreground`, `inverted-border`, `input-filled-darker`, `input-filled-lighter`, `input-filled-stroke`, `track`, `skeleton`, `rating`, `presence-available`, `presence-busy`, `presence-away`, `presence-offline`, `presence-oof`, `presence-glyph`, `backdrop`, `brand-10` … `brand-160`.
 
 Workarounds when your app has its own design system:
 
@@ -368,9 +372,10 @@ export function checkedRows(tree: HTMLElement) {
 
 - Every component and hook module of the package starts with `"use client"`. The entry point, `cn`, the slot helpers, the class-name constants (`buttonClassNames`, …), `hsvToHex`, `hexToHsv`, `createToaster`, the date helpers (`addDays`, `addMonths`, `isSameDay`, `startOfWeek`, `getWeekNumber`) and the types are server-safe, so a Server Component can import from `@mortenbrudvik/waveui`, read the constants, create a toaster handle, compute dates and render Wave components with serializable props.
 - A Server Component **cannot dot into a client component**: `Card.Header` throws "Cannot access Header on the server". Every sub-component is therefore also exported under a flat name. Use the flat names in Server Components and either form in client components.
-- Every compound can be composed in a Server Component. Parts written there reach the client as lazy references, and the compounds recognise them, so the server HTML and the client behaviour are the same as in a client file: Accordion items, Carousel slides, the options of Combobox, Dropdown and Listbox, DataGrid parts, Drawer and Menu triggers, the header of a `Menu.Group`, the halves of a `Menu.SplitGroup`, List, Nav, TabList and Tree items, the stars of a Rating or RatingDisplay, the parts of Toast and MessageBar, the ColorPicker parts, `SwatchPicker.Row` and the swatches (`ColorSwatch`, `ImageSwatch`, `EmptySwatch`, in rows of the grid layout or the implicit ones), `Tree.ItemPersonaLayout`, a `Label` or `InfoLabel` passed as the `label` of a Field, and a `Button` passed as a MessageBar, SearchBox or Tag dismiss slot.
+- Every compound can be composed in a Server Component. Parts written there reach the client as lazy references, and the compounds recognise them, so the server HTML and the client behaviour are the same as in a client file: Accordion items, Carousel slides, the options of Combobox, Dropdown and Listbox, the parts and options of TagPicker, DataGrid parts, Drawer and Menu triggers, the Drawer header, body and footer parts, the tags of a TagGroup and the halves of an InteractionTag, the header of a `Menu.Group`, the halves of a `Menu.SplitGroup`, List, TabList and Tree items, Nav items, categories, section headers, dividers and app items, the header, body and footer of a NavDrawer, the stars of a Rating or RatingDisplay, the parts of Toast and MessageBar, the ColorPicker parts, `SwatchPicker.Row` and the swatches (`ColorSwatch`, `ImageSwatch`, `EmptySwatch`, in rows of the grid layout or the implicit ones), `Tree.ItemPersonaLayout`, a `Label` or `InfoLabel` passed as the `label` of a Field, and a `Button` passed as a MessageBar, SearchBox or Tag dismiss slot.
 - Event handlers and other functions cannot be passed from a Server Component; put interactive parts in a `'use client'` component.
-- A `Popover`, `Dialog`, `Drawer`, popup `Menu`, `Combobox`, `Dropdown`, `DatePicker`, `TimePicker` or `TagPicker` rendered on the server with `defaultOpen` (or `open`) is closed in the server HTML and opens once hydrated, so no ARIA reference points at a popup that is not there. `onOpenChange` is not called for it.
+- A `Popover`, `Dialog`, overlay `Drawer` or `NavDrawer`, popup `Menu`, `Combobox`, `Dropdown`, `DatePicker`, `TimePicker` or `TagPicker` rendered on the server with `defaultOpen` (or `open`) is closed in the server HTML and opens once hydrated, so no ARIA reference points at a popup that is not there. `onOpenChange` is not called for it.
+- An inline `Drawer` or `NavDrawer` (`type="inline"`) renders in the server HTML: open, or `hidden` when it is closed and kept mounted (`unmountOnClose={false}`).
 
 ```tsx
 // app/layout.tsx (Server Component)
@@ -448,13 +453,15 @@ export function SaveArea() {
 | `Combobox`      | `ComboboxOption`, `ComboboxOptionGroup` (also `Option`, `OptionGroup`)                                                                                                           |
 | `DataGrid`      | `DataGridHeader`, `DataGridHeaderCell`, `DataGridBody`, `DataGridRow`, `DataGridCell`                                                                                            |
 | `Dialog`        | `DialogTrigger`, `DialogContent`, `DialogTitle`, `DialogFooter`, `DialogClose`                                                                                                   |
-| `Drawer`        | `DrawerTrigger`, `DrawerTitle`, `DrawerClose`                                                                                                                                    |
+| `Drawer`        | `DrawerTrigger`, `DrawerTitle`, `DrawerClose`, `DrawerHeader`, `DrawerHeaderTitle`, `DrawerHeaderNavigation`, `DrawerBody`, `DrawerFooter`                                       |
 | `Dropdown`      | `DropdownOption`, `DropdownOptionGroup`                                                                                                                                          |
+| `InteractionTag` | `InteractionTagPrimary`, `InteractionTagSecondary`                                                                                                                              |
 | `List`          | `ListItem`                                                                                                                                                                       |
 | `Listbox`       | `ListboxOption`, `ListboxOptionGroup` (also `Option`, `OptionGroup`)                                                                                                             |
 | `Menu`          | `MenuTrigger`, `MenuPopover`, `MenuItem`, `MenuDivider`, `MenuItemCheckbox`, `MenuItemRadio`, `MenuItemSwitch`, `MenuItemLink`, `MenuGroup`, `MenuGroupHeader`, `MenuSplitGroup` |
 | `MessageBar`    | `MessageBarTitle`, `MessageBarActions`                                                                                                                                           |
-| `Nav`           | `NavCategory`, `NavItem`, `NavSubItem`                                                                                                                                           |
+| `Nav`           | `NavCategory`, `NavItem`, `NavSubItem`, `NavSectionHeader`, `NavDivider`, `NavAppItem`, `NavAppItemStatic`                                                                       |
+| `NavDrawer`     | `NavDrawerHeader`, `NavDrawerBody`, `NavDrawerFooter`                                                                                                                            |
 | `Overflow`      | `OverflowItem`                                                                                                                                                                   |
 | `Popover`       | `PopoverTrigger`, `PopoverContent`                                                                                                                                               |
 | `RadioGroup`    | `RadioGroupItem` (also `RadioItem`)                                                                                                                                              |
@@ -465,13 +472,14 @@ export function SaveArea() {
 | `SwatchPicker`  | `SwatchPickerRow`                                                                                                                                                                |
 | `Table`         | `TableHeader`, `TableHeaderCell`, `TableBody`, `TableRow`, `TableCell`                                                                                                           |
 | `TabList`       | `TabListTab`, `TabListPanel`, `TabListPanels`                                                                                                                                    |
+| `TagPicker`     | `TagPickerControl`, `TagPickerGroup`, `TagPickerInput`, `TagPickerButton`, `TagPickerList`, `TagPickerOption`, `TagPickerOptionGroup` (also `OptionGroup`)                       |
 | `Toast`         | `ToastTitle`, `ToastBody`, `ToastFooter`, `ToastClose`                                                                                                                           |
 | `Toolbar`       | `ToolbarButton`, `ToolbarToggleButton`, `ToolbarRadioGroup`, `ToolbarRadioButton`, `ToolbarGroup`, `ToolbarDivider`                                                              |
 | `Tree`          | `TreeItem`, `TreeItemPersonaLayout`                                                                                                                                              |
 
 ## Components
 
-74 components, plus the `Portal` and `Presence` utilities. Every component accepts `ref` as a prop (React 19), a `className`, and the native attributes of its element. Storybook (`npm run dev`) shows every component with its props, states and themes.
+78 components, plus the `Portal` and `Presence` utilities. Every component accepts `ref` as a prop (React 19), a `className`, and the native attributes of its element. Storybook (`npm run dev`) shows every component with its props, states and themes.
 
 Your `className` is merged last with `cn()`, so it replaces a conflicting class **of the same variant**: `bg-error` replaces a resting `bg-primary`. A class behind a variant is replaced only by a class with the same variant. That matters for the gated hover and pressed classes (`not-disabled:not-aria-disabled:hover:…` / `…:active:…`) and the state classes (`data-[selected]:…`, `aria-disabled:…`): they stay next to yours and win while their state applies, because they are more specific. A bare `hover:bg-error` therefore does not override a Button's built-in hover color while the Button is enabled. It still paints on hover while the Button is disabled or `aria-disabled`, and on `appearance="transparent"`, which has no hover background. To override the gated and state classes, use the same prefix (`not-disabled:not-aria-disabled:hover:bg-error`, `data-[selected]:bg-error`) or the important modifier (`hover:bg-error!`); see [Buttons](#buttons).
 
@@ -505,7 +513,7 @@ Your `className` is merged last with `cn()`, so it replaces a conflicting class 
 | `Combobox`     | Editable combobox: typing filters the options (`filter` replaces the match, `query` controls the typed text); `multiselect` selects several values; `freeform` makes the typed text the value; a chevron (`expandIcon`) and `clearable`. `Combobox.Option`, `Combobox.OptionGroup` (see [Multi-select pickers](#multi-select-pickers) and [Filtering and async search](#filtering-and-async-search)).                                                                                                                                                      |
 | `Dropdown`     | Select-only combobox (a button) with typeahead; `multiselect` selects several values; `clearable`, `expandIcon` and `renderValue`. `Dropdown.Option`, `Dropdown.OptionGroup`.                                                                                                                                                                                                                                                                                                                                                                              |
 | `Listbox`      | A list of options in the page that holds focus itself (`aria-activedescendant`), single-select or `multiselect`, with typeahead, groups and native form support; `Listbox.Option`, `Listbox.OptionGroup`. The listbox primitives under the pickers are public, for pickers of your own (see [Listbox and custom pickers](#listbox-and-custom-pickers)).                                                                                                                                                                                                    |
-| `TagPicker`    | Multi-select combobox that shows the selection as removable tags (a list named "Selected"); `size` (`medium`, `large`, `extra-large`), `appearance`; the input is described by a summary of the selection ("Selected: Apple, Banana"), and additions and removals are announced; `filter` and `query` as in Combobox.                                                                                                                                                                                                                                      |
+| `TagPicker`    | Multi-select combobox that shows the selection as removable tags (Tags in a TagGroup list named "Selected", one Tag size below the picker); `size` (`medium`, `large`, `extra-large`), `appearance`; the input is described by a summary of the selection ("Selected: Apple, Banana"), and additions and removals are announced; `filter` and `query` as in Combobox. A chevron opens the list (`expandIcon`), `clearable` removes every tag, `overflow="count"` keeps the tags on one line with a "+N" count, and `allowCreate` with `onOptionCreate` adds a tag of the user's own text. Composable: `TagPicker.Control`, `.Group`, `.Input` or `.Button` (a trigger without text entry), `.List`, `.Option` (`media`, `secondaryContent`) and `.OptionGroup`; a part without children renders its defaults (see [TagPicker parts and free tagging](#tagpicker-parts-and-free-tagging)). |
 | `DatePicker`   | Date input with a calendar dialog (month and year views, week numbers, marked days, optional "Go to today" and Close buttons); `size`, `appearance`; locale-aware format and parse, `minDate`, `maxDate`, `disabledDates`, `onInvalidInput`.                                                                                                                                                                                                                                                                                                               |
 | `Calendar`     | The DatePicker's calendar in the page (`role="group"`): month and year views, week numbers, marked days and custom day content, week, work-week or month ranges, "Go to today", native form support (see [Calendar](#calendar)).                                                                                                                                                                                                                                                                                                                           |
 | `TimePicker`   | Time combobox (`12h`/`24h`, `step`, `minTime`, `maxTime`); `size`, `appearance`; value is `HH:mm`; `open`/`defaultOpen`/`onOpenChange` control the list; rejected text is kept and flagged (`onInvalidInput`).                                                                                                                                                                                                                                                                                                                                             |
@@ -528,7 +536,9 @@ Your `className` is merged last with `cn()`, so it replaces a conflicting class 
 | `Badge`         | Status or category label: `appearance` `filled`, `tint`, `outline`; semantic `color` (see [Badges](#badges)).                                                                                                                                                                  |
 | `CounterBadge`  | Count pill (`99+` above `overflowCount`) or, with `dot`, an unread dot; Badge's `color` palette; `showZero`.                                                                                                                                                                   |
 | `PresenceBadge` | Availability badge with a distinct shape per status.                                                                                                                                                                                                                           |
-| `Tag`           | Chip with an optional dismiss button (`dismissible`, `onDismiss`, `dismissLabel`); `onDismiss` and `dismissIcon` need `dismissible` (a development warning says so). Move focus when you remove a tag (see [Tags](#tags)).                                                     |
+| `Tag`           | Chip: `appearance` (`filled`, `outline`, `brand`), `size` (`medium` 28px, `small`, `extra-small`), `shape` (`circular`, `rounded`), `disabled`, a look-only `selected`, `value` (its key in a TagGroup) and the `media` (an Avatar), `icon` and `secondaryText` slots; an optional Dismiss button (`dismissible`, `onDismiss`, `dismissLabel`) that also dismisses on Delete and Backspace. `onDismiss` and `dismissIcon` need `dismissible` (a development warning says so). In a TagGroup focus moves for you when a tag is removed; on its own, move it yourself (see [Tags](#tags)). |
+| `TagGroup`      | A set of tags: a toolbar (one Tab stop, arrow keys) or, with `role="list"`, a list; default `size`, `appearance`, `shape`, `dismissible` and `disabled` for its tags; `onDismiss(value)`, focus to the next tag (else the previous one, else `fallbackFocusRef`) when the focused tag is removed; selectable InteractionTags through `value`/`defaultValue`/`onValueChange`, with `name`, `form` and `required`. |
+| `InteractionTag` | A tag with an action: `InteractionTag.Primary` (a button, or a toggle in a selecting TagGroup; `media`, `icon`, `secondaryText`) and an optional `InteractionTag.Secondary` (a separate Dismiss button named "Dismiss <text>"); `size`, `appearance`, `shape`, `disabled`, `selected`, `value`. |
 | `InfoLabel`     | A real `<label>` (`children`, `htmlFor`, `required`, `size`, `weight`, `disabled`) with an info button after it that shows `info` (text, links or other content) in a note; `openOnHover`, `infoButtonLabel`. Usable as the `label` of a Field.                                |
 | `InfoButton`    | A button with the info glyph that shows `info` in a `role="note"` next to it, without moving focus: opens on click, on mouse hover and on keyboard focus (`openOnHover={false}`: click only); Tab from the button enters the note; `size`. Named "Information" (`aria-label`). |
 | `Persona`       | Avatar with name, secondary text and presence.                                                                                                                                                                                                                                 |
@@ -572,7 +582,9 @@ Your `className` is merged last with `cn()`, so it replaces a conflicting class 
 | ------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `Breadcrumb` | Trail of links, buttons or text (`Breadcrumb.Item`, `current`).                                                                                                                                                                                                                                                           |
 | `Menu`       | Popup menu (`Menu.Trigger`, `Menu.Popover`, which scrolls when it is taller than the viewport) or static menu; `Menu.Item`, `Menu.Divider`; checkbox, radio and switch items bound to `checkedValues`, `Menu.Group`, `Menu.ItemLink`, submenus, `Menu.SplitGroup`, hover opening and context menus (see [Menus](#menus)). |
-| `Nav`        | Side navigation with items, collapsible categories and sub-items; links or buttons; a collapsed category that holds the current page is marked.                                                                                                                                                                           |
+| `Nav`        | Side navigation with items, collapsible categories and sub-items; links or buttons; a collapsed category that holds the current page is marked. `Nav.SectionHeader` (a heading, `headingLevel`), `Nav.Divider` (decorative), `Nav.AppItem` and `Nav.AppItemStatic` (the app's name at the top), and `actions` on `Nav.Item` and `Nav.SubItem` (your buttons beside the link, shown on hover and focus). Every child of its list is a list item (a development warning says so). |
+| `NavDrawer`  | Nav in a drawer panel (see [Navigation drawers and app shells](#navigation-drawers-and-app-shells)): `type` `overlay` (a modal or non-modal dialog around a `<nav>`) or `inline` (part of the page layout), `position` (default `start`), `size` (default `small`, 320px), `separator`, `modalType`, `unmountOnClose`, `finalFocusRef`, `backdrop`, Nav's value and category props and `onItemSelect(value)` on every activation; `NavDrawer.Header`, `NavDrawer.Body` (`focusMode` `tab` or `arrow`) and `NavDrawer.Footer`. |
+| `Hamburger`  | A `subtle` icon-only Button with the navigation glyph, named "Navigation"; inside a NavDrawer it toggles the drawer (`aria-expanded`, `aria-controls`). |
 | `Stepper`    | Multi-step progress (`Stepper.Step`), horizontal or vertical, optionally `linear`.                                                                                                                                                                                                                                        |
 | `Pagination` | Page buttons with ellipses, previous/next and optional first/last.                                                                                                                                                                                                                                                        |
 
@@ -580,8 +592,8 @@ Your `className` is merged last with `cn()`, so it replaces a conflicting class 
 
 | Component         | Description                                                                                                                                                                                       |
 | ----------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `Dialog`          | Modal dialog (`modalType="alert"` for a confirmation): `Dialog.Trigger`, `Dialog.Content` (`closeLabel` names its Close button), `Dialog.Title`, `Dialog.Footer` (stays in view), `Dialog.Close`. |
-| `Drawer`          | Modal side panel (`position` `start`, `end`, `left`, `right`; `closeLabel`); `Drawer.Trigger`, `Drawer.Title`, `Drawer.Close`.                                                                    |
+| `Dialog`          | Modal dialog (`modalType="alert"` for a confirmation, `"non-modal"` for one the page stays usable around): `Dialog.Trigger` (toggles), `Dialog.Content` (`size` `small`, `medium`, `large`, `full`; `closeLabel` names its Close button, `closeButton` replaces or hides it, `backdrop`, `titleAction`, `unmountOnClose`), `Dialog.Title` (`action`), `Dialog.Footer` (stays in view), `Dialog.Close` (see [Dialogs and triggers](#dialogs-and-triggers)). |
+| `Drawer`          | Side or bottom panel (see [Drawers](#drawers)): `type` `overlay` (`modalType` `modal`, `alert` or `non-modal`) or `inline`; `position` (`start`, `end`, `left`, `right`, `bottom`), `size` (`small` 320px, `medium`, `large`, `full`), `separator`, `backdrop`, `closeButton`, `closeLabel`, `unmountOnClose`; `Drawer.Trigger` (toggles), `Drawer.Title`, `Drawer.Close`, and the layout parts `Drawer.Header`, `Drawer.HeaderTitle`, `Drawer.HeaderNavigation`, `Drawer.Body` and `Drawer.Footer`, whose separators show while content is scrolled under them. |
 | `Popover`         | Non-modal popup anchored to `Popover.Trigger` or a `target`; `side`, `align`; hover cards (`openOnHover`) and context popovers (`openOnContext`).                                                 |
 | `Tooltip`         | Hover and focus text for its child, as a description or (`relationship="label"`) a name; `open`/`defaultOpen`/`onOpenChange`; `openDelay`, `closeDelay`.                                          |
 | `TeachingPopover` | Step-by-step onboarding popover, optionally pointing at a `target`.                                                                                                                               |
@@ -746,7 +758,7 @@ The text inputs and pickers (`Input`, `Textarea`, `Select`, `SearchBox`, `SpinBu
 | `size`       | `'small'` (24px tall), `'medium'` (32px), `'large'` (40px); type `CoreSize`               | `medium`  |
 | `appearance` | `'outline'`, `'underline'`, `'filled-darker'`, `'filled-lighter'`; type `InputAppearance` | `outline` |
 
-`medium` and `outline` are the 0.7 look. `Textarea` sets minimum heights (64, 80 and 96px) instead of a height. `TagPicker` has no `small` (`TagPickerSize`: `'medium'`, `'large'`, `'extra-large'`). The choice controls have their own unions: `Checkbox` `size` `'medium'` (an 18px box) or `'large'` (22px) and `shape` `'square'` or `'circular'`; `Switch` `size` `'small'` (a 32×16px track) or `'medium'` (40×20px); `Slider` `size` `'small'` (a 16px thumb on a 2px rail) or `'medium'` (a 20px thumb on a 4px rail). The icon buttons of the pickers (clear, expand, calendar) scale with `size` and keep a 24×24px target at every size; the step buttons of `SpinButton` are 24, 32 and 40px wide.
+`medium` and `outline` are the 0.7 look. `Textarea` sets minimum heights (64, 80 and 96px) instead of a height. `TagPicker` has no `small` (`TagPickerSize`: `'medium'`, `'large'`, `'extra-large'`), and its tags are one Tag size below it: `extra-small` (20px, 12px text) in a medium picker, `small` (24px) in a large one, `medium` (28px) in an extra-large one; they are filled, or outlined on `filled-darker`. The choice controls have their own unions: `Checkbox` `size` `'medium'` (an 18px box) or `'large'` (22px) and `shape` `'square'` or `'circular'`; `Switch` `size` `'small'` (a 32×16px track) or `'medium'` (40×20px); `Slider` `size` `'small'` (a 16px thumb on a 2px rail) or `'medium'` (a 20px thumb on a 4px rail). The icon buttons of the pickers (clear, expand, calendar) scale with `size` and keep a 24×24px target at every size; the step buttons of `SpinButton` are 24, 32 and 40px wide.
 
 ```tsx
 import { Field, Input, WaveProvider } from '@mortenbrudvik/waveui';
@@ -852,11 +864,11 @@ export function Reviews() {
 | checked values (Menu, Toolbar)                             | `checkedValues` / `defaultCheckedValues` / `onCheckedValuesChange(checkedValues, details)` |
 | checked items (Tree)                                       | `checkedItems` / `defaultCheckedItems` / `onCheckedItemsChange(checkedItems, details)`     |
 
-Extra data goes in a second, optional `details` argument: Dialog and Drawer call `onOpenChange(open, details)` with `details.reason` and `details.event` (see [Dialogs and triggers](#dialogs-and-triggers)), Menu and Toolbar call `onCheckedValuesChange(checkedValues, details)` with `details.name`, `details.checkedItems` (the group's new values) and `details.event` (see [Menus](#menus)), Tree calls `onCheckedItemsChange(checkedItems, details)` with `details.value`, `details.checked` and `details.event` (see [Trees](#trees)), and Calendar calls `onValueChange(date, details)` with `details.range`, the selected days (see [Calendar](#calendar)). These fire only when the value changes. Event callbacks such as `onPageChange`, `onStepChange` and `Tree`'s `onItemSelect` fire on every activation, also when the current item is activated again. Array props that Wave only reads (`openItems`, `expandedItems`, `checkedItems`, `selectedItems`, `columns`, `options`, `items`, `steps`, …) accept readonly arrays such as `as const` values; the callbacks receive a new, mutable array. The 0.4 names still work as deprecated aliases that warn once in development; see the [CHANGELOG](CHANGELOG.md) for the full table.
+Extra data goes in a second, optional `details` argument: Dialog and Drawer call `onOpenChange(open, details)` with `details.reason` and `details.event` (see [Dialogs and triggers](#dialogs-and-triggers)), Menu and Toolbar call `onCheckedValuesChange(checkedValues, details)` with `details.name`, `details.checkedItems` (the group's new values) and `details.event` (see [Menus](#menus)), Tree calls `onCheckedItemsChange(checkedItems, details)` with `details.value`, `details.checked` and `details.event` (see [Trees](#trees)), and Calendar calls `onValueChange(date, details)` with `details.range`, the selected days (see [Calendar](#calendar)). These fire only when the value changes. Event callbacks such as `onPageChange`, `onStepChange`, `Tree`'s and `NavDrawer`'s `onItemSelect` and `TagGroup`'s `onDismiss` fire on every activation, also when the current item is activated again. Array props that Wave only reads (`openItems`, `expandedItems`, `checkedItems`, `selectedItems`, `columns`, `options`, `items`, `steps`, …) accept readonly arrays such as `as const` values; the callbacks receive a new, mutable array. The 0.4 names still work as deprecated aliases that warn once in development; see the [CHANGELOG](CHANGELOG.md) for the full table.
 
 ### Composite controls
 
-Checkbox, Switch, SearchBox, SpinButton, Combobox, Dropdown, TagPicker, DatePicker and TimePicker render a wrapper around their focusable element. `id`, the naming and validation ARIA attributes (`aria-label`, `aria-labelledby`, `aria-describedby`, `aria-invalid`, `aria-required`, `aria-errormessage`, `aria-details`; on Checkbox and Switch also `aria-disabled`), `tabIndex`, `autoFocus`, focus and key handlers (and native input attributes for text fields) go to the focusable element; `className`, `style`, `hidden`, `data-*`, other `aria-*` attributes and `ref` stay on the wrapper. `controlRef` gives you the focusable element. SearchBox and SpinButton draw their field (border, background, focus and invalid look) on that wrapper, so `className`, `style` and `hidden` size, style and hide the visible field, as on Input's slot wrapper.
+Checkbox, Switch, SearchBox, SpinButton, Combobox, Dropdown, TagPicker, DatePicker and TimePicker render a wrapper around their focusable element. `id`, the naming and validation ARIA attributes (`aria-label`, `aria-labelledby`, `aria-describedby`, `aria-invalid`, `aria-required`, `aria-errormessage`, `aria-details`; on Checkbox and Switch also `aria-disabled`), `tabIndex`, `autoFocus`, focus and key handlers (and native input attributes for text fields) go to the focusable element; `className`, `style`, `hidden`, `data-*`, other `aria-*` attributes and `ref` stay on the wrapper. `controlRef` gives you the focusable element. A composite with trigger parts (TagPicker) sends them to whichever trigger renders: `TagPicker.Input`, or `TagPicker.Button` (pass handlers and `ref` on the Button itself). SearchBox and SpinButton draw their field (border, background, focus and invalid look) on that wrapper, so `className`, `style` and `hidden` size, style and hide the visible field, as on Input's slot wrapper.
 
 `Input` with `contentBefore`/`contentAfter` content also renders a bordered wrapper `<span>`, which receives `className`, `style` and `hidden` (so they size and hide the visible field); unlike the controls above, `ref`, `id`, `aria-*` and `data-*` stay on the `<input>`.
 
@@ -956,9 +968,92 @@ export function CountrySearch({ search }: { search: (query: string) => Promise<s
 }
 ```
 
-- **`filter(option, query)`** decides which options match the typed text. It is called whenever the text is not empty, with every option that is not hidden, as a `ListboxItem` (`value`, `label`, `textValue`). The default is a case-insensitive substring of `textValue`, else `label`. A filter may keep options that do not contain the text: one that always keeps an option of yours gives a "Create …" entry. A freeform Combobox filters by its text too.
+- **`filter(option, query)`** decides which options match the typed text. It is called whenever the text is not empty, with every option that is not hidden, as a `ListboxItem` (`value`, `label`, `textValue`). The default is a case-insensitive substring of `textValue`, else `label` (TagPicker's too, since 0.11). A filter may keep options that do not contain the text; for a "Create …" entry in a TagPicker, use `allowCreate` (see [TagPicker parts and free tagging](#tagpicker-parts-and-free-tagging)). A freeform Combobox filters by its text too.
 - **The query** (`query`, `defaultQuery`, `onQueryChange(query)`) is the text typed since the last commit. Combobox resets it to `''` on a commit, a close, a blur, Escape, the clear button and a form reset; TagPicker when a tag is added, on Escape with the list closed and on a form reset (a blur or a close keeps it). Turning on `disabled` or `readOnly` while text is typed reports `''`; a picker that mounts locked keeps a controlled query until it unlocks. A freeform Combobox's text is its value: it never calls `onQueryChange`, and a `query` or `defaultQuery` prop warns in development.
 - The typing model is unchanged: typing never clears a Combobox selection, and a blur selects nothing. The `CustomFilter` and `AsyncSearch` stories of Combobox show both props.
+
+### TagPicker parts and free tagging
+
+`<TagPicker options={…} />` is the parts with their defaults. The parts form replaces only the part you need: your own Tags in `TagPicker.Group`, rich `TagPicker.Option`s in `TagPicker.List`, or `TagPicker.Button` in place of `TagPicker.Input`. A people picker:
+
+```tsx
+import * as React from 'react';
+import { Avatar, Tag, TagPicker } from '@mortenbrudvik/waveui';
+
+const people = [
+  { value: 'katri', name: 'Katri Athokas', role: 'Designer' },
+  { value: 'elvia', name: 'Elvia Atkins', role: 'Engineer' },
+];
+const nameOf = (value: string) => people.find((person) => person.value === value)?.name ?? value;
+
+export function PeoplePicker() {
+  const [value, setValue] = React.useState<string[]>(['katri']);
+  return (
+    <TagPicker aria-label="People" value={value} onValueChange={setValue}>
+      <TagPicker.Control>
+        <TagPicker.Group>
+          {value.map((id) => (
+            <Tag key={id} value={id} media={<Avatar name={nameOf(id)} decorative />} dismissLabel="Remove">
+              {nameOf(id)}
+            </Tag>
+          ))}
+        </TagPicker.Group>
+        <TagPicker.Input />
+      </TagPicker.Control>
+      <TagPicker.List>
+        {people.map((person) => (
+          <TagPicker.Option
+            key={person.value}
+            value={person.value}
+            label={person.name}
+            media={<Avatar name={person.name} decorative />}
+            secondaryContent={person.role}
+          >
+            {person.name}
+          </TagPicker.Option>
+        ))}
+      </TagPicker.List>
+    </TagPicker>
+  );
+}
+```
+
+- **Defaults.** A part without children renders its default content: `<TagPicker.Control />` holds the default tags and the Input, `<TagPicker.Group />` the default tags, `<TagPicker.List />` the options of `options`. Without a `TagPicker.List` the default list is added. An `options` entry's `media` shows in its option and its tag, its `secondaryContent` in its option.
+- **Placement.** Render `TagPicker.Control` and `TagPicker.List` directly inside the TagPicker (a Fragment is fine); a List elsewhere, or a second one, warns in development (`TagPicker.List:placement`).
+- **Selected options stay rendered.** With a List that has children, its options are the options: keep the options of the selected values in it. TagPicker hides them and reads their labels, which the tags, the summary and the announcements use. `label` sets an option's text where the children are not plain text (`TagPicker.Option:label` warns otherwise).
+- **Your own tags** follow the `value` order, render a `value` each and keep the Dismiss button: TagPicker names it with `labels.remove`, and Delete, Backspace, Enter, Space or a click on it removes the tag. With `overflow="count"`, the tags are measured by position, so keep them in `value` order.
+- **Routing.** The trigger that renders (`TagPicker.Input` or `TagPicker.Button`) receives the routed props of the root (`id`, the naming and validation ARIA attributes, `tabIndex`, `autoFocus`; the Input also the focus and key handlers, `controlRef` and the text input attributes). With `TagPicker.Button`, pass handlers and `ref` on the Button. Render exactly one trigger (`TagPicker:trigger` warns otherwise).
+- **`TagPicker.Button`** is a select-only trigger for a short, fixed list: Down, Up and a typed letter open the list and move, Enter and Space add the active option, a click toggles the list. It stays visible as the click area once tags are selected, and ignores `query`.
+- **Free tagging.** `allowCreate` ends the list with a create option (`labels.create`, default `Create "{text}"`) while the trimmed text matches no option label, no selected value (ignoring case) and no option value. Enter on it or a click calls `onOptionCreate(text)`, adds the text as a tag (`onValueChange`) and clears the text. Add an option for the new value in `onOptionCreate`, or the tag shows the raw text. It needs `TagPicker.Input` (`TagPicker:allowCreate-button` warns with the Button). With a server-side search the create option follows the current results.
+- **The exact match.** The option whose label equals the typed text (ignoring case) becomes active, else the first match; no option is active when the list opens.
+- **`clearable`** shows a clear button (`labels.clear`, "Clear selection") while a tag is selected: it removes every tag, clears the text, closes the list and focuses the trigger. It is a Tab stop after the trigger.
+- **`expandIcon`.** A chevron at the end of the field opens and closes the list (`labels.expand`, "Show options"); it is not a Tab stop and keeps focus on the trigger. `false` hides it (the 0.10 field). A press on the field's empty area toggles the list too.
+- **`overflow="count"`** keeps the tags on one line while focus is outside the picker and its list is closed; the tags that do not fit give way to "+N" (`labels.overflowCount`), and focusing the picker shows them all. Screen readers hear the trigger's summary of every tag, not the count. Fluent's single-line layout is a story; WaveUI's is a prop.
+
+```tsx
+import * as React from 'react';
+import { TagPicker, type TagPickerOption } from '@mortenbrudvik/waveui';
+
+export function Topics() {
+  const [options, setOptions] = React.useState<TagPickerOption[]>([
+    { value: 'design', label: 'Design' },
+    { value: 'testing', label: 'Testing' },
+  ]);
+  const [value, setValue] = React.useState<string[]>([]);
+  return (
+    <TagPicker
+      aria-label="Topics"
+      options={options}
+      value={value}
+      onValueChange={setValue}
+      allowCreate
+      // Called before onValueChange reports the new value: the new tag keeps its label.
+      onOptionCreate={(text) => setOptions((current) => [...current, { value: text, label: text }])}
+      clearable
+    />
+  );
+}
+```
 
 ### Listbox and custom pickers
 
@@ -993,8 +1088,8 @@ export function FruitList() {
 
 - `useListbox(options)` holds the listbox: its keys, typeahead, filtering, the active option and the registration of the options. `mode` is `'select-only'` (a button combobox, as Dropdown), `'editable'` (an `<input>` combobox, as Combobox) or `'standalone'` (a list that holds focus, as Listbox). You own the open state (`open`, `onOpenChange(open, details)`) and the value (`selectedValues`, `onSelect(value, details)`, with `details.item` and `details.event`); spread `getComboboxProps()` on your combobox and attach `onKeyDown` and `onKeyUp`.
 - `useListboxPopup(options)` dismisses the popup (Escape, a press outside, focus leaving: `DismissReason`) and positions it, and `ListboxSurface` renders the list: in a portaled surface while it is shown, `hidden` in place otherwise, so the options register from the first render. `listClassName` and `surfaceClassName` are merged last (`max-h-*` replaces the list's height). Two duties remain yours: set your combobox's `aria-expanded` from `expanded` after spreading `getComboboxProps()`, and while the listbox is open with nothing to show, close it on Escape yourself (outside an IME composition) without calling `listbox.onKeyDown`, so the Escape reaches an enclosing layer.
-- `ListboxProvider` provides the listbox's context to its options when you render the list yourself instead of through `ListboxSurface`.
-- Options are `Option` and `OptionGroup`, or components of your own on `useListboxOption`, marked with `markListboxElement` so that `collectOptionLabels(children)` knows their labels before they register (in the server HTML and the first render).
+- `ListboxProvider` provides the listbox's context to its options when you render the list yourself instead of through `ListboxSurface`. `ListboxSurface`'s `listProps` (`ListboxSurfaceListProps`) pass attributes and a `ref` to the list element; the listbox's own `aria-multiselectable` and `aria-activedescendant` always win.
+- Options are `Option` and `OptionGroup` (or `TagPicker.Option`, an Option with `media` and `secondaryContent`), or components of your own on `useListboxOption`, marked with `markListboxElement` so that `collectOptionLabels(children)` knows their labels before they register (in the server HTML and the first render).
 
 ```tsx
 import * as React from 'react';
@@ -1391,14 +1486,20 @@ export function DeleteDialog({ onDelete }: { onDelete: () => void }) {
 }
 ```
 
+- **Triggers toggle.** `Dialog.Trigger` and `Drawer.Trigger` open their surface and, clicked while it is open, close it: a trigger inside its own surface, and the trigger of a non-modal or inline surface, which stays reachable. The trigger of an inline drawer has no `aria-haspopup` (a render-prop trigger reads it as `undefined`).
 - `Dialog.Trigger`, `Drawer.Trigger`, `Popover.Trigger` and `Menu.Trigger` merge their props onto their single child (no wrapper element; a Fragment around one element counts as that element) or pass them to a render-prop child. `asChild={false}` renders the 0.4 wrapper `<span>`; a custom child that neither forwards `ref` nor spreads its props, and text or several children, fall back to that span automatically, with a development warning. The span keeps the trigger's other props, but `aria-haspopup`, `aria-expanded` and `aria-controls` go to the first element in the tab order inside it (after mount), so a button there is announced as opening the popup, and Menu, Popover, Dialog and Drawer return focus to that element (to the span only when nothing inside it can take focus). A span you made the trigger itself, with a `role` such as `button` and `tabIndex={0}`, keeps them and takes focus back; `tabIndex` alone leaves the span generic, so it never carries them. With `openOnContext` (Menu, Popover) the child is a context-menu region, not a popup button: it receives your forwarded props and, of the trigger's own, only its id, ref and context-gesture handlers (no state ARIA, no click toggle).
-- Render `Dialog.Footer` **inside** `Dialog.Content`, one per content. It stays in view: it sticks to the bottom of the scrolling body with an opaque background, and the body reserves its height as scroll padding, so a focused field is never hidden behind it. It keeps its place in the DOM; inside a `<form>` that wraps the fields and the footer, make it the form's last child. Inside a Drawer, `Dialog.Footer` does not stick: it is an action row at the end of the content.
-- Dialog and Drawer trap focus, close on Escape and a backdrop press, lock page scroll and make the rest of the page `inert` while open (toasts and live regions stay available). A backdrop press blurs the focused field before the surface closes, so a typed value (a SpinButton's, a picker's) is committed as with the Close button. When the press does not close the surface (an alert dialog, or a controlled one that refuses `outside-press`), focus ends up where it was.
+- Render `Dialog.Footer` **inside** `Dialog.Content`, one per content. It stays in view: it sticks to the bottom of the scrolling body with an opaque background, and the body reserves its height as scroll padding, so a focused field is never hidden behind it. It keeps its place in the DOM; inside a `<form>` that wraps the fields and the footer, make it the form's last child. Inside a Drawer, use `Drawer.Footer` (see [Drawers](#drawers)); a `Dialog.Footer` there does not stick, it is an action row at the end of the content.
+- A modal or alert Dialog or Drawer traps focus, closes on Escape and a backdrop press, locks page scroll and makes the rest of the page `inert` while open (toasts and live regions stay available). A backdrop press blurs the focused field before the surface closes, so a typed value (a SpinButton's, a picker's) is committed as with the Close button. When the press does not close the surface (an alert dialog, or a controlled one that refuses `outside-press`), focus ends up where it was.
 - **Alert dialogs.** `modalType="alert"` is for a confirmation that needs an answer: the content is `role="alertdialog"`, and a backdrop press does not close it (Escape, the Close button and `Dialog.Close` still do). Initial focus goes to the first focusable element, the built-in Close button; the order of your buttons does not change that, so give the least destructive action `autoFocus` to start there, as above.
 - **Why it opens or closes.** `onOpenChange(open, details)` gets `details.reason` (`'trigger'`, `'close'` for a `.Close` part, `'close-button'` for the built-in Close button, `'escape'`, `'outside-press'` for the backdrop) and `details.event`, the DOM event. A controlled dialog or drawer can refuse some of them (below). `details` is typed optional until 1.0, when it becomes required: read it as `details?.reason`. A render-prop trigger or close part that calls `onClick()` without its event reports a new `click` event with no target, so pass the event on.
 - On close, focus goes to `finalFocusRef` when you pass one. Otherwise it returns to the element that had focus when the modal opened (a trigger's wrapper span resolves to the element inside it, see the trigger bullet above): the trigger for a trigger click, but also the parent's own button of a controlled Dialog, or a text field that had focus when a keyboard shortcut opened it. When nothing had focus (a modal opened from code, or a click in Safari, which does not focus the clicked button), it goes to the trigger that opened the modal, else the first mounted trigger. When that element is gone, focus falls back to a mounted trigger, then to an element next to where the opener was (the next row's action after a delete), then to the overlay below.
-- An `autoFocus` element inside a Dialog or Drawer keeps focus, also in a dialog opened over another one or nested in its content, and in a `Popover.Content` opened from a dialog. `Dialog.Content` and `Drawer` take `closeLabel` (default `'Close'`) to localize the Close button's name.
-- **Size.** `size` caps the dialog's width at 400px (`'small'`) or 600px (`'medium'`, the default). Below the cap it takes the full width, and it never exceeds the viewport: a 1rem margin keeps it off the viewport edges, its height is capped, and the body scrolls (sideways too, for content wider than the dialog). Because the margin and the caps are on the surface, a `className` on `Dialog.Content` replaces them: `max-w-[72rem]` for a wider dialog, `m-0 h-dvh max-h-none max-w-none rounded-none border-0` for a full-screen one, and the same classes behind a breakpoint (`max-[48rem]:m-0 max-[48rem]:h-dvh …`) for a dialog that goes full screen only on narrow screens. These are Tailwind classes for your own Tailwind build. The precompiled `./styles` contains only the utilities Wave uses: there, give `Dialog.Content` a class of your own that sets the same properties, in unlayered CSS loaded after Wave's, because Wave's classes are unlayered and as specific as yours ([Cascade](#styles)).
+- An `autoFocus` element inside a Dialog or Drawer keeps focus (not in a surface kept mounted with `unmountOnClose={false}`, where each open focuses the first focusable element), also in a dialog opened over another one or nested in its content, and in a `Popover.Content` opened from a dialog. `Dialog.Content` and `Drawer` take `closeLabel` (default `'Close'`) to localize the Close button's name.
+- **Size.** `size` caps the dialog's width at 400px (`'small'`), 600px (`'medium'`, the default) or 940px (`'large'`, Drawer's `large`). Below the cap it takes the full width, and it never exceeds the viewport: a 1rem margin keeps it off the viewport edges, its height is capped, and the body scrolls (sideways too, for content wider than the dialog). `'full'` covers the viewport: no margin, radius or border, the viewport's dynamic height, the safe-area insets as padding (with `viewport-fit=cover`), and the body scrolls under the sticky `Dialog.Footer`. `data-size` renders the size. For another width, a width cap in `className` replaces the size's: `max-w-[72rem]`, or the classes behind a breakpoint (`max-[48rem]:m-0 max-[48rem]:h-dvh …`) for a dialog that goes full screen only on narrow screens. These are Tailwind classes for your own Tailwind build. The precompiled `./styles` contains only the utilities Wave uses: there, give `Dialog.Content` a class of your own that sets the same properties, in unlayered CSS loaded after Wave's, because Wave's classes are unlayered and as specific as yours ([Cascade](#styles)).
+- **Non-modal.** `modalType="non-modal"` (Dialog and Drawer) leaves the page usable: no backdrop, no focus trap, nothing `inert`, the page scrolls. Focus moves into the surface on open; Tab and Shift+Tab leave it in the page's order right after the element that opened it; Escape closes it only while focus is inside it; presses on the page never close it; and focus returns to the opener only when it was inside. The surface covers the page under it while Tab still reaches that page, so keep the page's controls clear of it: lay them out beside a centred dialog, reserve a non-modal drawer's width (its height at the bottom) in your layout while it is open, or use an inline drawer (`type="inline"`) for a panel beside the content. With `size="full"` a non-modal surface hides the whole page, and a development warning says so.
+- **Backdrop.** The backdrop is the surface's sibling, `aria-hidden` (`.wave-dialog-content__backdrop`, `.wave-drawer__backdrop`), and a slot on `Dialog.Content` and Drawer: content renders inside it, a slot object's `className`, `style` and handlers go to it, and its `appearance` (`'dimmed'` or `'transparent'`, Fluent's name) picks the fill. A modal opened while another modal Dialog or Drawer is open below it gets a transparent backdrop, so the page dims once; `backdrop={{ appearance: 'dimmed' }}` dims it again. `null` renders no backdrop (the page stays inert, and a press outside still closes a modal); a boolean is no slot. A non-modal surface or an inline drawer ignores `backdrop`, with a development warning.
+- **Close button.** `closeButton` sets the content of the built-in Close button (decorative: the button keeps `closeLabel` as its name, unless a slot object's `aria-label`, `aria-labelledby` or `title` names it); `null` hides it (Escape and `.Close` parts still close). A `<button>` or `Button` passed there is merged into the built-in button, never nested, and its text label names it. Fluent's dialogs have no Close button by default: pass `closeButton={null}` and keep yours, or drop yours.
+- **Title actions.** `Dialog.Content`'s `titleAction` (for the `title` prop) and `Dialog.Title`'s `action` place header buttons before the Close button, in the top end corner, outside the heading, so they never join the dialog's name; the title's end padding follows their width. Drawer's `titleAction` and `Drawer.HeaderTitle`'s `action` do the same in a drawer header. Name icon-only buttons.
+- **Kept mounted.** `unmountOnClose={false}` keeps `Dialog.Content` mounted while closed, `hidden` and `inert`, so a form keeps what was typed; a popup opened inside that is still open when the dialog closes stays open over the page (a development warning says so). Drawers take the same prop. See [Enter and exit motion](#enter-and-exit-motion) for the `data-presence` phases both now carry, and [Drawers](#drawers) for side and bottom panels.
 
 ```tsx
 import * as React from 'react';
@@ -1432,6 +1533,49 @@ export function RenameDialog() {
   );
 }
 ```
+
+### Drawers
+
+A Drawer is a side or bottom panel, by default a modal overlay (see [Dialogs and triggers](#dialogs-and-triggers) for the triggers, closing and focus):
+
+```tsx
+import { Button, Drawer, Field, Input } from '@mortenbrudvik/waveui';
+
+export function FiltersDrawer() {
+  return (
+    <Drawer size="medium">
+      <Drawer.Trigger>
+        <Button>Filters</Button>
+      </Drawer.Trigger>
+      <Drawer.Header>
+        <Drawer.HeaderTitle>Filters</Drawer.HeaderTitle>
+      </Drawer.Header>
+      <form id="filters" onSubmit={(event) => event.preventDefault()}>
+        <Field label="Keyword">
+          <Input name="keyword" />
+        </Field>
+      </form>
+      <Drawer.Footer>
+        <Button appearance="primary" type="submit" form="filters">
+          Apply
+        </Button>
+        <Drawer.Close>
+          <Button>Cancel</Button>
+        </Drawer.Close>
+      </Drawer.Footer>
+    </Drawer>
+  );
+}
+```
+
+- **Position and size.** `position` is `end` (the default) or `start`, which follow the text direction, `left` or `right`, or `bottom` (along the bottom edge). `size` sets the width at a side and the height at the bottom: `small` (320px, the default), `medium` (592px), `large` (940px) or `full`; the panel never grows past the window. A width class in `className` (a height class for `bottom`) replaces the size. Both render as `data-position` and `data-size`. An overlay panel pads the safe-area insets of the screen edges it touches, once the page sets `viewport-fit=cover`.
+- **Header, body and footer.** The `title` prop and the built-in Close button make the header row. A `Drawer.Header` replaces it: a `Drawer.HeaderNavigation` row (a Back button, a Toolbar of commands, in a `<nav>`) and a `Drawer.HeaderTitle` (the heading, `headingLevel`, an `action` area and the built-in Close button, which `closeButton={null}` hides). The rest of the content scrolls in the body; `Drawer.Body` gives it your props. `Drawer.Footer` is an action row below the body that never scrolls, wherever it is written among the children, with its actions at the start (Fluent's DrawerFooter; `justify-end` puts them at the end). Make the parts direct children of the Drawer (a Fragment there is fine): a part nested in another element renders in the body, with a development warning.
+- **Separators.** The header draws a line under itself once the body is scrolled, the footer one above itself while content continues below (always in forced colours). The body, the header and the footer render the body's scroll state as `data-scroll-state` (`none`, `top`, `middle`, `bottom`) for your own styles.
+- **Forms.** The footer is outside the body, so a `<form>` in the body does not contain it: give the form an `id` and its submit button `form`, as above.
+- **Non-modal.** `modalType="non-modal"` leaves the page usable (see [Dialogs and triggers](#dialogs-and-triggers)); reserve the panel's width (its height at the bottom) in your layout while it is open, so it hides no page control. `modalType="alert"` renders `role="alertdialog"`.
+- **Inline.** `type="inline"` renders the panel where the Drawer is, after its direct triggers, as an `<aside>` (a complementary landmark named by its title), also in the server HTML. It is page content: no portal, backdrop, focus trap, inert page or scroll lock, Escape and presses outside never close it, and toasts keep their corner. Its trigger toggles it; opening it moves no focus, and closing it returns focus only when focus was inside. `position` picks its inner edge and `size` its width; `separator` draws the inner edge. Place it in your layout, for example a flex row of the panel and the content. Changing `type` (an overlay below a breakpoint, inline above it) remounts the panel and its content.
+- **Kept mounted.** `unmountOnClose={false}` keeps the panel and its content mounted while closed, `hidden` and `inert`, so a form keeps what was typed; an `autoFocus` inside never applies (each open of an overlay focuses its first focusable element), and a kept inline panel is in the server HTML, hidden. A `required` empty field in a closed kept drawer inside a page `<form>` still blocks its submission.
+- **Motion.** The panel and its backdrop mount through the presence core and render `data-presence` (see [Enter and exit motion](#enter-and-exit-motion)): `data-[presence=…]:` classes in `className` animate the panel, and a closing drawer waits for that motion before it unmounts or hides. No motion ships.
 
 ### Popovers and tooltips
 
@@ -1512,7 +1656,7 @@ export function SavedNotice() {
 - **Gate the enter on the phase.** `@starting-style` applies to every first style of an element, whatever its phase. An ungated `starting:` class, or a `@starting-style` rule without `[data-presence='entering']`, therefore also fades in an element that mounts `entered`: without `appear`, and server-rendered content after hydration, while the core already reports `entered` and has called `onEntered`. The gated form runs only when the core runs the enter phase: a show after mount, `appear`, and a kept-mounted element shown again.
 - **The hook.** `const { isMounted, ref, presenceProps } = usePresence(open)` for your own components: render the element while `isMounted`, pass it `ref` and spread `presenceProps` (`data-presence`, and `inert`/`hidden` when they apply). Destructure the result: `eslint-plugin-react-hooks` treats the whole object as a ref once its `ref` is passed on, and reports reads of its other members during render. Keep focus, dismissal and positioning on your open state, not on `isMounted`, so they happen on close and not after the exit motion.
 - **Browser support.** `starting:` needs `@starting-style` (Chrome and Edge 117+, Safari 17.5+, Firefox 129+); older browsers show the element at once, without its enter motion, and the exit still runs.
-- `Menu.Popover` and the toasts in a `Toaster` mount through the presence core, so menus and toasts take exit classes too (see [Menus](#menus) and [Toasts](#toasts)). An enter class for them takes the same gate; a menu that is open when it mounts (`defaultOpen`) mounts `entered`, so it does not animate that first time. The other overlays get their motion in a later release.
+- `Menu.Popover`, the toasts in a `Toaster`, and since 0.11 `Dialog.Content` and Drawer (the panel and its backdrop, overlay or inline, NavDrawer's too) mount through the presence core, so they take exit classes too (see [Menus](#menus) and [Toasts](#toasts)). An enter class for them takes the same gate; a surface that is open when it mounts (`defaultOpen`) mounts `entered`, so it does not animate that first time. A closing Dialog or Drawer waits for its motion before it unmounts, or hides with `unmountOnClose={false}` (`exited`, `hidden` and `inert`); focus, the trap and the isolation follow the open state at once. Every top-level element of their portal carries the presence attributes. No component ships enter or exit classes yet; Popover and Tooltip get their motion in a later release.
 
 ### Toasts
 
@@ -1569,7 +1713,7 @@ export function App({ undoSend }: { undoSend: () => void }) {
 - **What is announced.** The Toaster reads each toast once, through permanent live regions that need no provider: the severity, the title, the body with its subtitle, then the labels of its actions ("Success: Email sent Your message was delivered. To 3 people Undo"), never the Dismiss button. Hidden text is skipped, and an image's `alt` is read. `announcement` in the options replaces everything but the severity, for a toast whose visible text is no good announcement (a progress toast). Dispatching the same `toastId` again replaces the toast and announces it again.
 - **Timing.** A toast times out after 5 seconds (`timeout` in the options). Every toast pauses while the pointer or focus is anywhere in the toast region, and while the page is in the background (the window has lost focus, or the tab is hidden, also when the Toaster mounted there). A toast with an action (a button, a link or a field besides its Dismiss button) stays until it is dismissed: people who use a screen reader, a switch or voice control need time to reach it. Pass `timeout` to change that deliberately.
 - **Keyboard.** `shortcuts.focus` returns `true` for the key press that moves focus to the newest toast; use a modifier (or let people change the shortcut), since a single-character shortcut fails WCAG 2.1.4. A focused toast is announced by its severity and title. Tab and Shift+Tab move through the toasts' controls; Escape dismisses every toast and returns focus to where it was (a tooltip or menu opened from a toast closes first); Delete or Backspace dismisses the focused toast (the keys are ignored in editable fields), and focus moves to the next toast, or the previous one, else back to where it was before the toasts. An Escape in the toasts never closes a Dialog below them: the next Escape does, once focus is back in the dialog.
-- Toasts stay reachable by Tab over an open Dialog and move out of an open Drawer's way. `statusLabel` and `dismissLabel` (props of `<Toast>`; `statusLabel` is also an option of both `dispatchToast` forms, `dismissLabel` of the text form) translate the hidden status text and the Dismiss button's name.
+- Toasts stay reachable by Tab over an open Dialog and move out of an open overlay Drawer's way, modal or not: beside a side drawer at their corner, above a bottom one (below it for top toasts; `--wave-toaster-offset-block`), and they keep their corner when there is no room. Next to an inline drawer, which is page content, they keep their corner. `statusLabel` and `dismissLabel` (props of `<Toast>`; `statusLabel` is also an option of both `dispatchToast` forms, `dismissLabel` of the text form) translate the hidden status text and the Dismiss button's name.
 - **`limit`** caps how many toasts show at once (`<Toaster limit={3}>`). Further toasts wait in a queue, in dispatch order, and appear as shown toasts go; a waiting toast is not announced and its timer does not run until it shows. A dismissed toast stops counting at once, also while an exit motion of yours runs. Lowering the limit never hides a shown toast. A value below 1 counts as 1 (with a development warning), and a fraction rounds down. Dispatching the id of a waiting toast again replaces it and keeps its place; `dismissToast(id)` removes a waiting toast silently.
 - **`dismissAllToasts()`** removes every toast, shown and waiting, and cancels their timers. When focus was in a toast, it returns to the element that had it before.
 - **Motion.** Each toast mounts through the presence core inside a container with the class `wave-toaster__toast`: style its `data-presence` phases for an enter and exit motion of yours (see [Enter and exit motion](#enter-and-exit-motion)). A dismissed toast stays mounted and `inert` until the exit ends; focus has already moved on. Wave ships no toast motion.
@@ -1635,51 +1779,31 @@ export function UpdateNotice({ onUpdate, onLater }: { onUpdate: () => void; onLa
 
 ### Tags
 
-A tag cannot keep focus once you remove it. When `onDismiss` removes a tag, first move focus to the next tag's dismiss button, else the previous one, else a nearby control (a "Reset filters" or "Add" button), and then remove the tag: the neighbour is still mounted, so focus never falls to the page. TagGroup (planned) will do this for you. The `FilterGroup` story in `stories/Tag.stories.tsx` is the reference:
+Put tags that belong together in a `TagGroup`. By default it is a toolbar: one Tab stop, Left/Right between the tags (mirrored in RTL), Delete or Backspace to dismiss. When the focused tag is removed, focus moves to the next tag, else the previous one, else `fallbackFocusRef`, so it never falls to the page:
 
 ```tsx
 import * as React from 'react';
-import { Button, Tag } from '@mortenbrudvik/waveui';
+import { Button, Tag, TagGroup } from '@mortenbrudvik/waveui';
 
 const ALL_FILTERS = ['Red', 'Blue', 'Large'];
 
 export function Filters() {
   const [filters, setFilters] = React.useState(ALL_FILTERS);
-  const tags = React.useRef(new Map<string, HTMLElement>());
   const reset = React.useRef<HTMLButtonElement>(null);
-
-  const dismiss = (filter: string) => {
-    const index = filters.indexOf(filter);
-    const neighbour = filters[index + 1] ?? filters[index - 1];
-    // The dismiss button is the tag's only button.
-    const target =
-      neighbour === undefined
-        ? reset.current
-        : tags.current.get(neighbour)?.querySelector('button');
-    target?.focus();
-    setFilters((current) => current.filter((f) => f !== filter));
-  };
-
   return (
     <div>
-      <div role="group" aria-label="Active filters">
+      <TagGroup
+        aria-label="Active filters"
+        dismissible
+        fallbackFocusRef={reset}
+        onDismiss={(value) => setFilters((current) => current.filter((f) => f !== value))}
+      >
         {filters.map((filter) => (
-          <Tag
-            key={filter}
-            dismissible
-            dismissLabel="Remove"
-            ref={(element) => {
-              if (element) tags.current.set(filter, element);
-              return () => {
-                tags.current.delete(filter);
-              };
-            }}
-            onDismiss={() => dismiss(filter)}
-          >
+          <Tag key={filter} value={filter} dismissLabel="Remove">
             {filter}
           </Tag>
         ))}
-      </div>
+      </TagGroup>
       {/* Nothing to reset while every filter is set: unavailable, but still focusable. */}
       <Button
         ref={reset}
@@ -1692,6 +1816,33 @@ export function Filters() {
   );
 }
 ```
+
+- **Values.** Give every tag of a group its own `value`: it is what `onDismiss(value)` and the selection report. The group's `size`, `appearance`, `shape`, `dismissible` and `disabled` are the defaults of its tags (a tag's own wins, except that a disabled group disables every tag). `onDismiss` is called on every dismissal, after the Tag's own `onDismiss`; a dismissal you refuse (the tag stays) moves no focus.
+- **Static tags.** `role="list"` makes the group a list of tags that only display: every tag is a list item, every control its own Tab stop, and the group handles no arrow key.
+- **Selectable chips.** With `value`, `defaultValue` or `onValueChange` the group selects through `InteractionTag`s: each `InteractionTag.Primary` is a toggle (`aria-pressed`), and `onValueChange(values)` reports the selected values in selection order. Dismissing a selected tag also deselects it, and `name`, `form` and `required` submit one hidden input per value. Plain Tags are never selected; a Tag's `selected` is only a look.
+
+```tsx
+import * as React from 'react';
+import { InteractionTag, TagGroup } from '@mortenbrudvik/waveui';
+
+export function Topics() {
+  const [topics, setTopics] = React.useState<string[]>(['design']);
+  return (
+    <TagGroup aria-label="Topics" value={topics} onValueChange={setTopics} name="topics">
+      {['design', 'research', 'testing'].map((topic) => (
+        <InteractionTag key={topic} value={topic}>
+          <InteractionTag.Primary>{topic}</InteractionTag.Primary>
+        </InteractionTag>
+      ))}
+    </TagGroup>
+  );
+}
+```
+
+- **InteractionTag** is a tag with an action: `InteractionTag.Primary` is a button (it opens a Popover, a Menu, a page), and an optional `InteractionTag.Secondary` is a separate Dismiss button named "Dismiss <text>" (`dismissLabel`). Both are Tab stops; in a TagGroup both join its arrow order, and Delete or Backspace on either dismisses the tag. Fluent's `hasSecondaryAction` is not needed: the Secondary's presence decides.
+- **The look.** `appearance` (`filled`, `outline`, `brand`), `size` (`medium` 28px, `small` 24px, `extra-small` 20px) and `shape` (`circular`, the default, or `rounded`); `media` (an Avatar, which takes the tag's size), `icon` (decorative) and `secondaryText` (a second line) are slots; `disabled` dims the tag and disables its Dismiss button. Fluent's medium tag is 32px and its default shape `rounded`.
+- **A link chip.** A Dismiss button cannot sit inside a link or a button, so a dismissible Tag rendered as one warns (`Tag:nested-button`). Put the link in the content instead, `<Tag dismissible><a href="/topics/react">React</a></Tag>`: Delete or Backspace on the link dismisses the tag.
+- **On its own.** A standalone Tag cannot keep focus once you remove it. When its `onDismiss` removes it, first move focus to a neighbour (the next tag's Dismiss button, else the previous one, else a nearby control), then remove the tag. Prefer a TagGroup, which does this for you.
 
 ### Sorting and selecting in a DataGrid
 
@@ -1790,6 +1941,110 @@ export function FileTree() {
 - **Navigation modes.** With `navigationMode="tree"` (the default), Tab from the focused item enters its actions (one stop; the arrow keys move inside them) and Shift+Tab returns. With `"treegrid"`, the "next" arrow (Right, Left in RTL) moves into the actions of an expanded parent or a leaf (a collapsed parent still expands first), "previous" returns, and Up and Down move between items from an action; the actions then take no Tab stop. This replaces APG's "next on an open item moves to its first child" (Down does that). The roles stay `tree` and `treeitem` in both modes, as in Fluent.
 - **Persona rows.** `Tree.ItemPersonaLayout` (flat `TreeItemPersonaLayout`, Fluent's name) lays out an item's label as a person: `media` (an Avatar of size 32 fits a row), the name as children and a `description` under it; the item is named by the name and described by the description.
 
+### Navigation
+
+`Nav` is a side navigation of items, collapsible categories and sub-items. Every child of its list renders a list item, so put only Nav parts there, or wrap other content in an `<li>` (a development warning names the rest):
+
+```tsx
+import { Button, Nav, Tooltip } from '@mortenbrudvik/waveui';
+
+export function Sidebar() {
+  return (
+    <Nav aria-label="Main" defaultValue="inbox">
+      <Nav.AppItem href="/">Contoso Mail</Nav.AppItem>
+      <Nav.SectionHeader>Mail</Nav.SectionHeader>
+      <Nav.Item
+        value="inbox"
+        href="/inbox"
+        actions={
+          <Tooltip content="New message" relationship="label">
+            <Button appearance="subtle" size="small" icon={<span aria-hidden>+</span>} />
+          </Tooltip>
+        }
+      >
+        Inbox
+      </Nav.Item>
+      <Nav.Divider />
+      <Nav.Item value="settings" href="/settings">
+        Settings
+      </Nav.Item>
+    </Nav>
+  );
+}
+```
+
+- **Section headers** (`Nav.SectionHeader`) are headings inside list items, `<h3>` by default (`headingLevel`); pick the level that fits the page's outline. **`Nav.Divider`** is a decorative line, hidden from assistive technology (the section header carries the structure).
+- **App items.** `Nav.AppItem` is the app's name at the top, with an `icon`: a link with `href`, else a button, never selected. `Nav.AppItemStatic` is the same row without an action.
+- **Item actions.** `actions` on `Nav.Item` and `Nav.SubItem` (Fluent's SplitNavItem) renders your own controls beside the item's link, never inside it, in a group named by the item: a ToggleButton that pins the page, a MenuButton with more commands, each with its own name (a Tooltip with `relationship="label"` names an icon-only one). Each is a Tab stop after its item, and a click on one never selects the item. They are drawn while the row is hovered or has focus, while one is pressed or has its popup open, and always on touch screens and in forced colours; otherwise they are transparent and still focusable.
+
+### Navigation drawers and app shells
+
+`NavDrawer` puts Nav's items and selection in a drawer panel, and `Hamburger` toggles it. Keep the drawer controlled, and pass the page's Hamburger as `finalFocusRef`, so focus returns to it when a Hamburger inside the drawer closes it:
+
+```tsx
+import * as React from 'react';
+import { Hamburger, Nav, NavDrawer } from '@mortenbrudvik/waveui';
+
+export function Shell({ narrow }: { narrow: boolean }) {
+  const [open, setOpen] = React.useState(!narrow);
+  const outer = React.useRef<HTMLButtonElement>(null);
+  return (
+    <div className="flex">
+      <Hamburger
+        ref={outer}
+        aria-expanded={open}
+        aria-controls={open ? 'main-nav' : undefined}
+        aria-haspopup={narrow ? 'dialog' : undefined}
+        onClick={() => setOpen(!open)}
+      />
+      <NavDrawer
+        id="main-nav"
+        aria-label="Main"
+        type={narrow ? 'overlay' : 'inline'}
+        open={open}
+        onOpenChange={setOpen}
+        // Every activation, the current page included: an overlay closes on it.
+        onItemSelect={() => {
+          if (narrow) setOpen(false);
+        }}
+        finalFocusRef={outer}
+        defaultValue="home"
+      >
+        {narrow && (
+          <NavDrawer.Header>
+            <Hamburger />
+            Contoso HR
+          </NavDrawer.Header>
+        )}
+        <NavDrawer.Body>
+          <Nav.Item value="home" href="/">
+            Home
+          </Nav.Item>
+          <Nav.Item value="reports" href="/reports">
+            Reports
+          </Nav.Item>
+        </NavDrawer.Body>
+        <NavDrawer.Footer>
+          <Nav.Item value="settings" href="/settings">
+            Settings
+          </Nav.Item>
+        </NavDrawer.Footer>
+      </NavDrawer>
+      <main className="min-w-0 flex-1">…</main>
+    </div>
+  );
+}
+```
+
+- **Composition.** `NavDrawer.Header` (a row: a Hamburger, the app's name), `NavDrawer.Body` (the scrolling list) and `NavDrawer.Footer` (a list pinned below it), in the order written. Nav parts go in the Body and the Footer; a list item elsewhere warns (`NavDrawer:loose-items`).
+- **`type` and the breakpoint.** `overlay` (the default) is a modal dialog around a `<nav>` (or `modalType="non-modal"`, which keeps the page usable: keep the page's controls clear of it), rendered in a portal in the browser only; `inline` is part of the page layout, also in the server HTML. A responsive shell switches `type` at a breakpoint and sets the open state when the breakpoint changes (open inline on wide screens, closed as an overlay on narrow ones), so a resize never turns an open pane into a page-blocking modal. Changing `type` remounts the panel and keeps the selection and the open categories. The NavDrawer stories' App shell composes a Toolbar with a Hamburger, a NavDrawer and an inline details Drawer this way.
+- **The Hamburger** is a `subtle` icon-only Button named "Navigation" (`aria-label` localizes it; its name never changes, the state is `aria-expanded`). Inside a NavDrawer it toggles the drawer and renders `aria-expanded` and `aria-controls`; outside, wire it yourself, as above.
+- **Closing on selection.** `onItemSelect(value)` fires on every activation, also when the current page is activated again (not for a disabled item or a link opened in another tab): close an overlay there. `onValueChange` fires only when the value changes, so it misses a tap on the current page. Fluent's `onNavItemSelect`.
+- **The landmark.** One `<nav>`, named "Navigation" by default; an overlay is also a dialog with that name. Rename it (`aria-label`, `aria-labelledby`) when the page has another navigation landmark.
+- **`focusMode`.** Every item is a Tab stop by default (`NavDrawer.Body focusMode="tab"`). `focusMode="arrow"` makes the body one Tab stop, at first the current page, with both arrow pairs (wrapping), Home and End; screen readers do not announce arrow keys in a navigation landmark, so prefer the default unless your users expect an app pane. Fluent's NavDrawer uses arrow keys by default (its `tabbable` adds Tab stops).
+- **Width.** `size` defaults to `small` (320px), Drawer's scale; Fluent's navigation pane is 260px wide, `className="w-65"` on your Tailwind build (or a class of your own with `width: 260px`). `position` defaults to `start` (Drawer's to `end`), and `separator` to on.
+- **Server rendering.** An inline NavDrawer renders in the server HTML (open, or hidden when kept mounted); with `focusMode="arrow"` its Tab stop is set once it has mounted.
+
 ### Slots
 
 Props such as `icon`, `contentBefore` and `dismiss` are slots. A slot accepts content (rendered inside the slot's element) or an object with `as`, `className`, `children` and any attribute of the slot's element:
@@ -1808,14 +2063,16 @@ export const Price = () => (
 
 A slot takes any `React.ReactNode`. Spread an attributes object typed by an interface into a new object (`image={{ ...imgProps }}` for a `React.ImgHTMLAttributes<HTMLImageElement>`).
 
-Icon slots are decorative (`aria-hidden`). Content that renders nothing (`''`, `[]`, `<></>`, or a collection of only `null`, booleans and `''`) counts as no content: a `contentAfter` that renders nothing takes no room, and SearchBox's `contentBefore` keeps the default search icon. The dismiss and clear slots of `MessageBar`, `SearchBox` and `Tag` render their content inside the component's own button; the 0.4 form that passed a button object is deprecated. A Wave `Button` passed there is merged into that button, and its own props never reach the DOM: its `icon` and `iconPosition` place the icon, and `disabledFocusable` makes the built-in button unavailable but focusable. Content that renders nothing keeps the default icon, and a slot object without children (`{ className: 'text-error' }`) wraps it. A slot object that renders a component or a void element (`{ as: CloseIcon }`, `{ as: 'img', src, alt: '' }`) or sets `dangerouslySetInnerHTML` is the icon itself. On `MessageBar`, `dismiss={null}` is the only value that hides the dismiss button (a boolean counts as no slot).
+Icon slots are decorative (`aria-hidden`). Content that renders nothing (`''`, `[]`, `<></>`, or a collection of only `null`, booleans and `''`) counts as no content: a `contentAfter` that renders nothing takes no room, and SearchBox's `contentBefore` keeps the default search icon. The dismiss and clear slots of `MessageBar`, `SearchBox` and `Tag`, and the `closeButton` of `Dialog.Content` and Drawer, render their content inside the component's own button; the 0.4 form that passed a button object is deprecated. A Wave `Button` passed there is merged into that button, and its own props never reach the DOM: its `icon` and `iconPosition` place the icon, and `disabledFocusable` makes the built-in button unavailable but focusable. Content that renders nothing keeps the default icon, and a slot object without children (`{ className: 'text-error' }`) wraps it. A slot object that renders a component or a void element (`{ as: CloseIcon }`, `{ as: 'img', src, alt: '' }`) or sets `dangerouslySetInnerHTML` is the icon itself. On `MessageBar`, `dismiss={null}` is the only value that hides the dismiss button (a boolean counts as no slot), and so is `closeButton={null}` for the Close button of a Dialog or Drawer.
+
+The `backdrop` slot of `Dialog.Content` and Drawer takes content or a slot object with `appearance` (`'dimmed'`, `'transparent'`); `null` renders none, and booleans are no slot. Tag's `media` and `icon` (and an InteractionTag Primary's) are content slots: `media` is not hidden from assistive technology (pass `decorative` to an Avatar whose name repeats the tag's text), `icon` is decorative.
 
 Slots that replace a built-in glyph follow one rule per kind:
 
-- **Optional indicators** (`MenuButton.menuIcon`, the `expandIcon` of Combobox, Dropdown, TimePicker and `Tree.Item`, `EmptySwatch.icon`): `null` or `undefined` keep the default glyph; `false` or any value that renders nothing hides it (for Combobox and TimePicker, the whole expand button; for Dropdown, the chevron and its room).
-- **Required indicators** (`SplitButton.menuIcon`, `Option.checkIcon`): the indicator always shows. A value that renders nothing keeps the default glyph, with a development warning. The check is the sign of an option's selection that does not rely on color, so Fluent's `checkIcon={null}`, which removes it, keeps it here.
+- **Optional indicators** (`MenuButton.menuIcon`, the `expandIcon` of Combobox, Dropdown, TimePicker, TagPicker (and `TagPicker.Control`) and `Tree.Item`, `EmptySwatch.icon`): `null` or `undefined` keep the default glyph; `false` or any value that renders nothing hides it (for Combobox, TimePicker and TagPicker, the whole expand button; for Dropdown, the chevron and its room).
+- **Required indicators** (`SplitButton.menuIcon`, `Option.checkIcon`, `Hamburger.icon`): the indicator always shows. A value that renders nothing keeps the default glyph, with a development warning. The check is the sign of an option's selection that does not rely on color, so Fluent's `checkIcon={null}`, which removes it, keeps it here.
 - **Status icons** (`MessageBar.icon`, `Toast.icon`, Field `validationMessageIcon`): only `undefined` keeps the default icon; `null` or a value that renders nothing shows none.
-- A glyph slot inside a built-in button (`expandIcon`, the `menuIcon` of SplitButton and MenuButton, and the `icon` of `ColorSwatch` and `EmptySwatch`) is decorative content. A `<button>` or `Button` passed there, or a slot object whose `as` is one, is not nested: its children become the glyph and its props are dropped, with a development warning.
+- A glyph slot inside a built-in button (`expandIcon`, the `menuIcon` of SplitButton and MenuButton, the `icon` of `ColorSwatch`, `EmptySwatch` and `Hamburger`, and the children of `InteractionTag.Secondary`, which is itself the button) is decorative content. A `<button>` or `Button` passed there, or a slot object whose `as` is one, is not nested: its children become the glyph and its props are dropped, with a development warning.
 
 ### Built-in text
 
@@ -1823,10 +2080,11 @@ The names and hidden texts that components render themselves are English by defa
 
 | Component                   | Props                                                                                                                                                                                                                                                                                                                                                                                                                            |
 | --------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `Dialog.Content`, `Drawer`  | `closeLabel` (the Close button)                                                                                                                                                                                                                                                                                                                                                                                                  |
+| `Dialog.Content`, `Drawer`  | `closeLabel` (the Close button; on Drawer also the Close button of each `Drawer.HeaderTitle`; a text label of a button merged into `closeButton` names it instead)                                                                                                                                                                                                                                                                                                                                                                                                  |
 | `TeachingPopover`           | `closeLabel` (the Close button), `labels` (`back`, `next`, `done`, `step(index, count)` with a zero-based index)                                                                                                                                                                                                                                                                                                                 |
 | `MessageBar`, `Toast`       | `statusLabel` (the hidden severity text; also an option of both `dispatchToast` forms); `Toast` also `dismissLabel` (also an option of the text form)                                                                                                                                                                                                                                                                            |
-| `Tag`                       | `dismissLabel`                                                                                                                                                                                                                                                                                                                                                                                                                   |
+| `Tag`                       | `dismissLabel` ("Dismiss", with the tag's text)                                                                                                                                                                                                                                                                                                                                                                                                                   |
+| `InteractionTag.Secondary`  | `dismissLabel` ("Dismiss", with the primary text: "Dismiss Cherry") |
 | `Carousel`                  | `labels` (`previous`, `next`, `picker`, `slide(index, total)` with a zero-based index, `carouselRoleDescription`, `slideRoleDescription`), `autoPlayLabels`                                                                                                                                                                                                                                                                      |
 | `Stepper`                   | `statusLabels` (`completed`, `error`; `''` omits the text)                                                                                                                                                                                                                                                                                                                                                                       |
 | `Pagination`                | `getItemAriaLabel(type, page, selected)`                                                                                                                                                                                                                                                                                                                                                                                         |
@@ -1842,27 +2100,32 @@ The names and hidden texts that components render themselves are English by defa
 | `SwatchPicker`              | `labels` (`required`: "Required", said in the description where the picker's role cannot carry `aria-required`, the grid layout and tab mode)                                                                                                                                                                                                                                                                                    |
 | `EmptySwatch`               | `aria-label` ("Add color")                                                                                                                                                                                                                                                                                                                                                                                                       |
 | `TimePicker`                | `labels` (`clear`, `expand`, `list`, `noTimes`, `noMatches`, and the error texts `invalidTime(format)`, `outOfRange(min, max)`)                                                                                                                                                                                                                                                                                                  |
-| `TagPicker`                 | `labels` (`remove(label)`, `selected`, `summary(labels)`, `added(label, count)`, `removed(label, count)`, `noMatches`)                                                                                                                                                                                                                                                                                                           |
+| `TagPicker`                 | `labels` (`remove(label)`, `selected`, `summary(labels)`, `added(label, count)`, `removed(label, count)`, `noMatches`, `create(text)` (`Create "{text}"`), `clear` ("Clear selection"), `expand` ("Show options"), `overflowCount(count)` ("+{count}"))                                                                                                                                                                                                                                                                                                           |
 | `Rating`                    | `labels` (`star(value, max)`; it also names the half values of a `step={0.5}` Rating, "2.5 stars")                                                                                                                                                                                                                                                                                                                               |
 | `RatingDisplay`             | `labels` (`rating(value, max, formattedValue)`, `count(count, formattedCount)`); `locale` formats the value and the count (pass it when rendering on the server)                                                                                                                                                                                                                                                                 |
 | `SpinButton`                | `labels` (`increment`, `decrement`)                                                                                                                                                                                                                                                                                                                                                                                              |
 | `DataGrid`                  | `labels` (`selectAll`, `selectionHeader`); each row's fallback name "Select row": `DataGrid.Row` `selectionLabel`                                                                                                                                                                                                                                                                                                                |
 | `AvatarGroup`               | `overflowLabel`, `unnamedMemberLabel`                                                                                                                                                                                                                                                                                                                                                                                            |
 | `InfoButton`                | `aria-label` (the button and its note; default "Information")                                                                                                                                                                                                                                                                                                                                                                    |
+| `Hamburger`                 | `aria-label` ("Navigation", only while it has no other name) |
+| `NavDrawer`                 | `aria-label` ("Navigation", the landmark and an overlay's dialog) |
 | `InfoLabel`, `SplitButton`  | `infoButtonLabel` (InfoLabel's button is named "‹label› ‹infoButtonLabel›"), `menuButtonLabel`                                                                                                                                                                                                                                                                                                                                   |
 | `Spinner`, `Skeleton.Group` | `label`                                                                                                                                                                                                                                                                                                                                                                                                                          |
 
 Without a text prop, these defaults are replaced through `aria-label`: the PresenceBadge status names ("Available", …: `aria-label` on the badge), the MessageBar "Dismiss" and SearchBox "Clear search" button names (`dismiss={{ 'aria-label': 'Lukk' }}`, which keeps the default icon), and the names of the Breadcrumb, Pagination, Nav, Stepper, Carousel and Toaster regions ("Breadcrumb", "Pagination", "Navigation", "Progress", "Carousel", "Notifications"). The placeholders of Dropdown, DatePicker, TimePicker and SearchBox are `placeholder` props, and ColorPicker's default presets are replaced through `presets`.
 
-0.7 and 0.8 add no other built-in text: the submenu half of a `Menu.SplitGroup`, a context menu (`Menu.Popover`) and a `Toolbar.RadioGroup` are named by the `aria-label` you pass, a toast's container by its severity and title, and a tree row's actions toolbar by its item's label. Nor does 0.10, beyond the rows above: a `Listbox`, a `Calendar` and a `ColorSwatch` or `ImageSwatch` are named by the `aria-label` you pass (or a `Field`'s label, or a `Tooltip` around the swatch), an `OptionGroup` by its label, and the month and year buttons by their text in `locale`.
+0.7 and 0.8 add no other built-in text: the submenu half of a `Menu.SplitGroup`, a context menu (`Menu.Popover`) and a `Toolbar.RadioGroup` are named by the `aria-label` you pass, a toast's container by its severity and title, and a tree row's actions toolbar by its item's label. Nor do 0.10 and 0.11, beyond the rows above: a `TagGroup` is named by the `aria-label` you pass, an inline Drawer by its title; a `Listbox`, a `Calendar` and a `ColorSwatch` or `ImageSwatch` are named by the `aria-label` you pass (or a `Field`'s label, or a `Tooltip` around the swatch), an `OptionGroup` by its label, and the month and year buttons by their text in `locale`.
 
 ## Keyboard support
 
-As implemented in 0.10. Buttons, links, checkboxes, switches and the trigger buttons of Accordion, Carousel, Nav, Breadcrumb and Pagination are native elements: Tab to reach them, Enter or Space to activate. A Link or `Button as="a"` without `href`, and a Button or Link rendered as a `div` or `span`, are buttons: Tab reaches them, Enter (key down) and Space (key up) activate them. A `disabledFocusable` control stays in the Tab order but Enter, Space and clicks do nothing.
+As implemented in 0.11. Buttons, links, checkboxes, switches and the trigger buttons of Accordion, Carousel, Nav, Breadcrumb and Pagination are native elements: Tab to reach them, Enter or Space to activate. A Link or `Button as="a"` without `href`, and a Button or Link rendered as a `div` or `span`, are buttons: Tab reaches them, Enter (key down) and Space (key up) activate them. A `disabledFocusable` control stays in the Tab order but Enter, Space and clicks do nothing.
 
 | Component                             | Keys                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          |
 | ------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Toolbar                               | One Tab stop (the last focused control; focusing a nested composite, such as a radio group or tab list, or a text field, select, slider or spin button keeps it where it was). Left/Right (Up/Down when vertical) move and wrap, Home/End jump; mirrored in RTL; natively disabled controls and controls hidden with CSS are skipped, while `disabledFocusable` controls stay reachable (a Tooltip on them opens on focus). Text fields, selects, sliders, spin buttons and editable comboboxes keep their own arrow keys; a Dropdown keeps Up/Down, Home and End for its list, but Left/Right move past it. A nested composite keeps its own Tab stop and arrow keys; a `Toolbar.RadioGroup` is none: its radios are part of the arrow order, and Up/Down (Left/Right when vertical, mirrored in RTL) also move among them, wrapping inside the group. The arrows never press a toggle or check a radio: Space and Enter do.                                                                                                                                                                                                                                                                                                                                                                 |
+| TagGroup                              | Toolbar (the default): one Tab stop, the last focused control. Left/Right move between the controls (Up/Down with `orientation="vertical"`), mirrored in RTL, wrapping in DOM order across wrapped rows; Home/End jump; natively disabled controls are skipped. Delete or Backspace on a Dismiss button, on either button of an InteractionTag with a Secondary, or on a link in a dismissible tag's text dismisses the tag (a held key dismisses one tag). When the focused tag is removed, focus moves to the same control of the next tag, else the previous one, else `fallbackFocusRef`. In a selecting group Space or Enter on an `InteractionTag.Primary` toggles it. `role="list"`: every control is a Tab stop, and the group handles no arrow key. |
+| InteractionTag                        | Two Tab stops, the Primary and the Secondary; in a TagGroup both join its arrow order. Enter or Space activates the Primary; Delete or Backspace on either button dismisses the tag (with a Secondary), as Enter, Space and a click on the Secondary do. |
+| Tag                                   | The Dismiss button: Enter, Space, Delete and Backspace dismiss (a held key dismisses once), also outside a TagGroup. Delete or Backspace on a link in a dismissible tag's text (`<Tag dismissible><a href>…</a></Tag>`) clicks its Dismiss button. |
 | RadioGroup, SwatchPicker (row layout) | One Tab stop. All four arrows move and select (wrapping), Home/End jump; Left/Right mirrored in RTL. Keys pressed on a link inside a radio's label stay the link's. An `EmptySwatch` in the row layout is a Tab stop of its own, and the arrow keys pressed on it do nothing.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 |
 | SwatchPicker (`layout="grid"`)        | One Tab stop: the last focused swatch, at first the selected one, else the first. The arrows move focus only: Left/Right through the swatches in reading order across the rows (mirrored in RTL), stopping at the grid's first and last swatch; Up/Down to the enabled swatch of the previous/next row nearest the same column, stopping at the first and last row; Home/End to the first/last swatch of the row, Ctrl+Home/Ctrl+End of the grid. Space, Enter and a click select. Disabled swatches are skipped; an `EmptySwatch` is a cell like the others.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 |
 | SwatchPicker (`focusMode="tab"`)      | Every enabled swatch is a Tab stop, and the arrow keys do nothing; Space, Enter and a click select (the selected swatch stays selected).                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      |
@@ -1873,13 +2136,18 @@ As implemented in 0.10. Buttons, links, checkboxes, switches and the trigger but
 | List (selectable)                     | One Tab stop. Up/Down (wrapping), Home/End, Enter/Space toggle, typeahead above 7 items (a Space within 500 ms of a letter continues the search). With item actions (grid): Up/Down between rows, Left/Right into the actions, Enter/F2 into a text field, Escape back.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       |
 | DataGrid                              | One Tab stop. Arrows between cells (Left/Right to the previous/next cell of the row, mirrored in RTL; Up/Down and PageUp/PageDown keep the visual column across `colSpan`/`rowSpan` cells of grouped headers), Home/End row start/end, Ctrl+Home/Ctrl+End grid start/end, PageUp/PageDown 10 rows; Enter/F2 into a cell's widgets, Escape back; Space on a cell toggles its row's selection.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  |
 | Menu                                  | Trigger: Enter/Space/Down open and focus the first item, Up opens on the last; a trigger with `aria-disabled="true"` (a `disabledFocusable` MenuButton or SplitButton) ignores them and its click. Menu: Up/Down (wrapping), Home/End, typeahead, Enter/Space activate (a Space within 500 ms of a letter continues the search); on a checkbox, radio or switch item Space changes it and keeps the menu open, Enter changes it and closes a popup menu; on `Menu.ItemLink` Enter is the browser's link activation. A submenu's item: Right (Left in RTL), Enter and Space open the submenu and focus its first item; in a submenu Left (Right in RTL) and Escape close only it and return focus to its item. `Menu.SplitGroup`: Right (Left in RTL) moves from the action to the submenu button, Left back. Escape closes and returns focus, Tab closes every level. Context menu (`openOnContext`): Shift+F10 or the ContextMenu key on the region opens it at the focused element; Escape and item activation return focus there, and Tab moves on from it.                                                                                                                                                                                                                                |
-| Combobox, TagPicker, TimePicker       | Down/Up open and move, Alt+Down opens, typing makes the first match active (not in a `freeform` Combobox), Enter commits the active option (with no active option, Enter submits the form; TimePicker instead never submits while its text is edited: a complete time within the bounds is committed, erased text clears the value, other text is kept and flagged invalid, and the list closes; leaving the input with edited text settles it the same way and closes the list), Alt+Up and Tab close, Escape closes and then discards typed text. The chevron button (Combobox, TimePicker) is not a Tab stop; the clear button (`clearable`) is a Tab stop after the input. Tab from erased TimePicker text clears the value first, so focus moves past the clear button that goes with it. TagPicker: Backspace in the empty input focuses the last tag, Backspace/Delete removes it. Multi-select (`multiselect`, Combobox): Enter toggles the active option and keeps the list open; Tab, Escape and Alt+Up close without committing; focusing the input selects the shown labels, so typing replaces them with a query, and Backspace and Delete only edit the text. With `disabledOptionsFocusable` (Combobox) the arrow keys reach disabled options, but Enter does nothing on them. |
+| Combobox, TagPicker, TimePicker       | Down/Up open and move, Alt+Down opens, typing makes the first match active (not in a `freeform` Combobox), Enter commits the active option (with no active option, Enter submits the form; TimePicker instead never submits while its text is edited: a complete time within the bounds is committed, erased text clears the value, other text is kept and flagged invalid, and the list closes; leaving the input with edited text settles it the same way and closes the list), Alt+Up and Tab close, Escape closes and then discards typed text. The chevron button (Combobox, TimePicker) is not a Tab stop; the clear button (`clearable`) is a Tab stop after the input. Tab from erased TimePicker text clears the value first, so focus moves past the clear button that goes with it. TagPicker: Backspace in the empty input, and the previous arrow (Left, Right in RTL) with the caret at the start of the text and nothing selected, focus the last tag; on a tag's remove button Left/Right move between the tags (mirrored in RTL) and past the last one return to the trigger, and Delete, Backspace, Enter or Space remove it and focus the next tag's remove button, else the input (a click focuses the input). Typing makes the option whose label equals the text active, else the first match; with `allowCreate` Enter on the create option adds the text. `TagPicker.Button`: Down, Up and a typed letter open and move, Enter and Space add the active option. The chevron is not a Tab stop; the clear button is, after the trigger. Multi-select (`multiselect`, Combobox): Enter toggles the active option and keeps the list open; Tab, Escape and Alt+Up close without committing; focusing the input selects the shown labels, so typing replaces them with a query, and Backspace and Delete only edit the text. With `disabledOptionsFocusable` (Combobox) the arrow keys reach disabled options, but Enter does nothing on them. |
 | Dropdown                              | Down/Up/Home/End and typing open and move, PageUp/PageDown move by 10, Enter/Space commit (a Space within 500 ms of a letter continues the search), Alt+Up and Tab commit and close, Escape closes. The clear button (`clearable`) is a Tab stop after the combobox button. Multi-select (`multiselect`): Enter and Space toggle the active option and keep the list open; Tab, Escape and Alt+Up close without committing. With `disabledOptionsFocusable` the keys reach disabled options, but Enter and Space do nothing on them, and Tab or Alt+Up on one closes the list without selecting.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              |
 | SpinButton                            | Up/Down step, PageUp/PageDown large step, Home/End jump to a finite min/max (otherwise they move the caret; with Shift they select text); Enter commits typed text, Escape reverts it. With the pointer, holding a step button repeats the step; a short press steps once on release.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         |
 | SearchBox                             | Escape clears the text and keeps focus (the key is consumed, so an enclosing Dialog, Drawer or Popover stays open); in an empty field Escape reaches the enclosing overlay.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   |
 | DatePicker                            | Alt+Down opens the calendar. The clear button (`clearable`) is a Tab stop between the input and the calendar button; Tab from erased text clears the value first and moves on to the calendar button. Calendar dialog: the keys of Calendar below; Escape in the month or year view goes back a view, and in the day view closes the calendar and returns focus. Tab stays inside: the previous button, the heading button (`showMonthPicker`), the next button, the grid, then the footer buttons (`showGoToToday`, `showCloseButton`).                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      |
 | Calendar                              | One Tab stop in the grid, after the header buttons: the focused day (the selected day of the shown month, else today, else the first day of the month in range). Day view: arrows by day/week (mirrored in RTL), PageUp/PageDown by month, Shift+PageUp/PageDown by year (the day clamped to the month), Home/End week start/end, Enter/Space select. Month view: arrows by a month and a row of four (mirrored in RTL; past December or January they show the next or previous year), Home/End to the row's ends, PageUp/PageDown by a year, Enter/Space show the month's days. Year view: the arrows, Home and End stay on the shown page of 12 years while the target year is on it (the muted years before and after the decade included), PageUp/PageDown move a decade, Enter/Space show the year's months. Escape in the month or year view goes back a view (it is consumed, also from the header and footer buttons); in the day view it is left to the page.                                                                                                                                                                                                                                                                                                                        |
-| Dialog, Drawer                        | Focus is trapped; Escape closes; focus returns to the first of these that can take focus: `finalFocusRef`, the element that had focus when the modal opened (a trigger's wrapper span resolves to the element inside it), the trigger, an element next to where that opener was.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              |
+| Dialog, Drawer (modal, alert)         | Focus is trapped (in a drawer: header, then body, then footer); Escape closes; the trigger toggles; focus returns to the first of these that can take focus: `finalFocusRef`, the element that had focus when the modal opened (a trigger's wrapper span resolves to the element inside it), the trigger, an element next to where that opener was.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              |
+| Dialog, Drawer (non-modal)            | Focus moves in on open. Tab and Shift+Tab leave the surface in the page's order right after the element that opened it; Escape closes it only while focus is inside; the trigger toggles; focus returns to the opener (or `finalFocusRef`) only when it was inside. |
+| Drawer (inline)                       | Page content: no trap, opening moves no focus, Escape and presses outside never close it; the trigger toggles; closing it while focus is inside returns focus to `finalFocusRef`, else the element that opened it, else the trigger. |
+| Nav                                   | Every item, category and app item is a Tab stop (Enter or Space activates; a category toggles); an item's `actions` follow it in the Tab order. |
+| NavDrawer                             | An overlay as a Drawer (modal or non-modal); an inline one as page content. A Hamburger inside it toggles it, and focus goes to `finalFocusRef` (your page's Hamburger) when it closes with focus inside. |
+| NavDrawer.Body (`focusMode="arrow"`)  | One Tab stop: the last focused element, at first the current page (or the closed category that holds it), else the first item. Down/Right move to the next element and Up/Left to the previous one (Left and Right swap in RTL), wrapping; Home/End jump; item actions join the order. The footer's items stay Tab stops. |
 | Popover, TeachingPopover              | Escape closes. When focus was inside (or lost to `<body>`), Popover returns it to its trigger, TeachingPopover to where focus was before it opened; a close by hover moves no focus. In the Tab order the content follows its trigger (TeachingPopover with `target`: the target): Tab from the trigger enters it, Tab past its end continues after the trigger, Shift+Tab from the element after the trigger enters it at its last element. For a trigger outside the tab order it follows the tab stop before the trigger; with no tab stop before the trigger or target, it is reached at the end of the page. A Tab lap visits it once: Tab from the last element of the page leaves the page, and Shift+Tab from outside the page reaches the page's last element. Focus leaving it does not close it. A context popover (`openOnContext`): Shift+F10 or the ContextMenu key on the region opens it and moves focus into the content, and Escape returns focus to the element that had it; opened by a right click, it is reached by Tab from that element.                                                                                                                                                                                                                              |
 | Tooltip, InfoButton, InfoLabel        | Open on keyboard focus (Tooltip after `openDelay`); Escape closes. InfoButton and InfoLabel: a click pins the note; focus stays on the button when the note opens, Tab from the button enters the note's first focusable element (a link) and Tab past its last element continues after the button; Shift+Tab returns; Escape closes it and returns focus to the button when it was in the note. `openOnHover={false}` opens it on a click (Enter, Space) only.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               |
 | Card (selectable)                     | With the default `selectionControl="card"`: Enter (key down) or Space (key up) selects. With `"checkbox"`: the built-in checkbox.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             |
@@ -1924,6 +2192,23 @@ Typeahead (Menu, selectable List, Tree, Dropdown, Listbox) accepts characters ty
 | `resolveSlot`, `renderSlot`                                                                                                                  | The slot helpers the components use.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   |
 | `getThemeClassName(theme)`                                                                                                                   | The theme classes of a theme.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          |
 
+## Upgrading from 0.10
+
+0.11 removes nothing public; these changes can still affect your tests, styles and types:
+
+1. **Dialog and Drawer backdrops are the surface's siblings.** A test or a style that reached the backdrop through `dialog.parentElement` or `panel.parentElement` uses `.wave-dialog-content__backdrop` or `.wave-drawer__backdrop` (the Dialog surface now sits in `.wave-dialog-content__positioner`).
+2. **Dialog and Drawer mount through the presence core:** their elements carry `data-presence`, and a closed surface without motion unmounts one render after the closing commit (in the same `act()`). A test that queries a closed kept-mounted surface (`unmountOnClose={false}`) passes `{ hidden: true }`.
+3. **A modal opened over another modal no longer dims the page twice:** its backdrop is transparent; `backdrop={{ appearance: 'dimmed' }}` keeps 0.10's look.
+4. **Every Dialog and Drawer trigger toggles:** a trigger inside its own surface, or the trigger of a non-modal or inline surface, closes it when clicked while open. A render-prop `Drawer.Trigger` that reads `aria-haspopup` accepts `undefined` (inline drawers render none).
+5. **Drawer layout:** a hand-made action row (or a `Dialog.Footer`) at the end of a Drawer's content becomes `Drawer.Footer` to stay in view; a `title` or `titleAction` next to a new `Drawer.Header` is ignored (move it into a `Drawer.HeaderTitle`). A test that asserts `pe-8` on a Dialog title asserts `pe-[var(--wave-dialog-title-end-padding,2rem)]`.
+6. **`ModalType` gains `'non-modal'` and `DrawerPosition` `'bottom'`:** an exhaustive `switch` or a `Record` over either needs the case.
+7. **Tag:** a focused Dismiss button dismisses on Delete and Backspace, also outside a TagGroup. Assertions on Tag's exact class string or padding classes change (`ps-3` → `ps-2.75`, `pe-1.5` → `pe-1.25`, `pe-3` → `pe-2.75`, `py-1` → `min-h-7`; `toHaveClass('bg-muted')` does not). Tag's new own props shadow the attributes of the same names: `as="li" value={3}` becomes `value={String(3)}`, and `size`, `shape`, `appearance`, `selected`, `media`, `icon` and `secondaryText` no longer reach an `as` component; an interface that extends `TagProps` and declares one of them with another type no longer compiles. A dismissible Tag rendered as a button or a link (`as="button"`, `as="a"`, a link component) warns `Tag:nested-button` in development: use InteractionTag for a button, and put a link in the tag's content (`<Tag dismissible><a href>…</a></Tag>`).
+8. **TagPicker:** its tags are Tags in a TagGroup, so tests that assert the 0.10 tag classes (`px-2 py-0.5 text-body-1`), the remove button's `ms-0.5 rounded-sm` or its 12px glyph, query `[data-wave-tagpicker-remove]` or count the picker's buttons (one more: "Show options") change; `expandIcon={false}` keeps the 0.10 field. After a keyboard removal focus is on the next tag, not on the input; a press on the empty area of an open TagPicker closes the list. In the parts form, keep the options of selected values in `TagPicker.List`: TagPicker hides them and reads their labels.
+9. **`import { TagPickerOption }`** now brings the component (`TagPicker.Option`) and the entry type; `import { type TagPickerOption }` keeps only the type.
+10. **Nav:** a Nav whose list holds content that is not an `<li>` (a Divider, a heading, a `<div>`, a Tooltip wrapped around a `Nav.Item`) logs a development warning; use `Nav.Divider` or `Nav.SectionHeader`, or wrap the content in an `<li>`. A test that spies on `console.warn` around such a Nav sees the message.
+
+The CHANGELOG's [0.11.0 "Changed" section](CHANGELOG.md#changed) lists every behaviour, DOM and type change.
+
 ## Upgrading from 0.9
 
 0.10 removes nothing public; these changes can still affect your tests and types:
@@ -1936,7 +2221,7 @@ Typeahead (Menu, selectable List, Tree, Dropdown, Listbox) accepts characters ty
 6. `SwatchPickerSize` gains `'extra-small'`: a `Record<SwatchPickerSize, …>` of yours needs the key.
 7. A multi-select Dropdown or Combobox needs a literal `multiselect`: `multiselect={flag}` with a `boolean` variable matches neither call signature of the component, so render two elements, one for each mode.
 
-The CHANGELOG's [0.10.0 "Changed" section](CHANGELOG.md#changed) lists every behaviour, DOM and type change.
+The CHANGELOG's [0.10.0 "Changed" section](CHANGELOG.md#changed-1) lists every behaviour, DOM and type change.
 
 ## Upgrading from 0.8
 
@@ -1951,7 +2236,7 @@ The CHANGELOG's [0.10.0 "Changed" section](CHANGELOG.md#changed) lists every beh
 7. `Rating` and `RatingDisplay` `color` is a `RatingColor` (`'neutral' | 'brand' | 'marigold'`): it narrows the `color?: string` inherited from `React.HTMLAttributes`. Both gain the static member `Item` and render their `children` (0.7 ignored them).
 8. `WaveContextValue` (the result of `useWaveTheme()`) gains `inputDefaults`: code that builds one (a test double) adds it. `InputProps`, `SelectProps` and `SliderProps` declare their own `size`, and `SpinButtonProps` gains `allowEmpty?: false` next to the new `SpinButtonAllowEmptyProps`.
 
-The CHANGELOG's [0.9.0 "Upgrading from 0.8"](CHANGELOG.md#upgrading-from-08) and [0.9.0 "Changed" section](CHANGELOG.md#changed-1) list every behaviour, DOM, visual and type change.
+The CHANGELOG's [0.9.0 "Upgrading from 0.8"](CHANGELOG.md#upgrading-from-08) and [0.9.0 "Changed" section](CHANGELOG.md#changed-2) list every behaviour, DOM, visual and type change.
 
 ## Upgrading from 0.7
 
@@ -1969,7 +2254,7 @@ The CHANGELOG's [0.9.0 "Upgrading from 0.8"](CHANGELOG.md#upgrading-from-08) and
 10. `ToastController['dispatchToast']` is overloaded: a test double that implements it must accept content too.
 11. A `dispatchToast` options argument that is not a plain object (a class instance, `Object.create(defaults)`) is now read as React content and throws when it renders: pass a plain object (spread it: `{ ...defaults, title }`).
 
-The CHANGELOG's [0.8.0 "Changed" section](CHANGELOG.md#changed-2) lists every behaviour, DOM and type change.
+The CHANGELOG's [0.8.0 "Changed" section](CHANGELOG.md#changed-3) lists every behaviour, DOM and type change.
 
 ## Upgrading from 0.6
 
@@ -1985,7 +2270,7 @@ The CHANGELOG's [0.8.0 "Changed" section](CHANGELOG.md#changed-2) lists every be
 8. Wave now requires tailwind-merge 3.7, so an axis shorthand in your `className` (`px-6`) replaces a component's own logical side class of the same variant (`pe-8` on `Dialog.Title`) instead of losing to it in the CSS: write `px-6 pe-8` to keep the side.
 9. Wave requires Node.js 22.12 or later (`engines`; Node.js 20 reached its end of life on 2026-04-30). npm and pnpm warn on an older Node.js (npm stops with `engine-strict`), and Yarn 1 refuses to install.
 
-The CHANGELOG's [0.7.0 "Changed" section](CHANGELOG.md#changed-3) lists every behaviour, DOM and type change.
+The CHANGELOG's [0.7.0 "Changed" section](CHANGELOG.md#changed-4) lists every behaviour, DOM and type change.
 
 ## Upgrading from 0.5
 
@@ -2000,7 +2285,7 @@ The CHANGELOG's [0.7.0 "Changed" section](CHANGELOG.md#changed-3) lists every be
 7. RatingDisplay formats its accessible name with the runtime locale when `locale` is omitted: pass `locale` when rendering on the server.
 8. Badge `color="important"` becomes a neutral color in 1.0: switch to `color="severe"` to keep the orange look.
 
-The CHANGELOG's [0.6.0 "Changed" section](CHANGELOG.md#changed-4) lists every behaviour, DOM and type change.
+The CHANGELOG's [0.6.0 "Changed" section](CHANGELOG.md#changed-5) lists every behaviour, DOM and type change.
 
 ## Upgrading from 0.4
 

@@ -2,7 +2,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { act, cleanup, render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import * as React from 'react';
-import { useFocusTrap, type UseFocusTrapOptions } from '../useFocusTrap';
+import { useFocusTrap, useInitialFocus, type UseFocusTrapOptions } from '../useFocusTrap';
 import { useDismiss } from '../useDismiss';
 import { Portal } from '../../components/portal/Portal';
 import { getTopmostLayer } from '../../lib/layers';
@@ -1001,6 +1001,166 @@ describe('useFocusTrap — listeners', () => {
     } finally {
       add.mockRestore();
       remove.mockRestore();
+    }
+  });
+});
+
+describe("useInitialFocus (P6-06 D91: the trap's initial focus without the trap)", () => {
+  interface SurfaceProps extends Partial<Parameters<typeof useInitialFocus>[1]> {
+    children?: React.ReactNode;
+  }
+
+  /** A stand-in non-modal surface: initial focus only, no trap. */
+  function Surface({ children, enabled = true, ...options }: SurfaceProps) {
+    const [surface, setSurface] = React.useState<HTMLDivElement | null>(null);
+    useInitialFocus(surface, { enabled, ...options });
+    return (
+      <div ref={setSurface} role="dialog" aria-label="Details" tabIndex={-1}>
+        {children}
+      </div>
+    );
+  }
+
+  it('focuses the first tabbable element when the surface appears', () => {
+    render(
+      <Page>
+        <Surface>
+          <button type="button" disabled>
+            Disabled
+          </button>
+          <button type="button">First</button>
+          <button type="button">Second</button>
+        </Surface>
+      </Page>,
+    );
+    expect(button('First')).toHaveFocus();
+  });
+
+  it('keeps an autoFocus element inside that already has focus', () => {
+    render(
+      <Surface>
+        <button type="button">First</button>
+        <input aria-label="Name" autoFocus />
+      </Surface>,
+    );
+    expect(screen.getByRole('textbox', { name: 'Name' })).toHaveFocus();
+  });
+
+  it('keeps focus that is already in a descendant layer of its layer', () => {
+    function Layered() {
+      const [surface, setSurface] = React.useState<HTMLDivElement | null>(null);
+      const surfaceRef = React.useRef<HTMLDivElement | null>(null);
+      const attach = React.useCallback((el: HTMLDivElement | null) => {
+        surfaceRef.current = el;
+        setSurface(el);
+      }, []);
+      const { layerId } = useDismiss({ open: true, onDismiss: () => {}, refs: [surfaceRef] });
+      useInitialFocus(surface, { enabled: true, layerId });
+      return (
+        <Portal layerId={layerId}>
+          <div ref={attach} role="dialog" aria-label="Details" tabIndex={-1}>
+            <button type="button">First</button>
+            <ChildPortal />
+          </div>
+        </Portal>
+      );
+    }
+    function ChildPortal() {
+      const ref = React.useRef<HTMLDivElement>(null);
+      const { layerId } = useDismiss({ open: true, onDismiss: () => {}, refs: [ref] });
+      return (
+        <Portal layerId={layerId}>
+          <div ref={ref}>
+            <input aria-label="Search" autoFocus />
+          </div>
+        </Portal>
+      );
+    }
+    render(<Layered />);
+    expect(screen.getByRole('textbox', { name: 'Search' })).toHaveFocus();
+  });
+
+  it('honours initialFocus, and falls back to the surface when nothing inside is tabbable', () => {
+    function WithRef() {
+      const ref = React.useRef<HTMLButtonElement>(null);
+      return (
+        <Surface initialFocus={ref}>
+          <button type="button">One</button>
+          <button type="button" ref={ref}>
+            Two
+          </button>
+        </Surface>
+      );
+    }
+    const { unmount } = render(<WithRef />);
+    expect(button('Two')).toHaveFocus();
+    unmount();
+
+    render(
+      <Surface>
+        <p>Only text</p>
+      </Surface>,
+    );
+    expect(screen.getByRole('dialog', { name: 'Details' })).toHaveFocus();
+  });
+
+  it('does nothing while disabled', () => {
+    render(
+      <Surface enabled={false}>
+        <button type="button">Inside</button>
+      </Surface>,
+    );
+    expect(button('Inside')).not.toHaveFocus();
+  });
+
+  it('focuses when it becomes enabled, and not again on a later render', () => {
+    function Toggle({ enabled, label }: { enabled: boolean; label: string }) {
+      return (
+        <Page>
+          <Surface enabled={enabled}>
+            <button type="button">{label}</button>
+            <button type="button">Other</button>
+          </Surface>
+        </Page>
+      );
+    }
+    const { rerender } = render(<Toggle enabled={false} label="Inside" />);
+    expect(document.body).toHaveFocus();
+    rerender(<Toggle enabled label="Inside" />);
+    expect(button('Inside')).toHaveFocus();
+    act(() => button('Other').focus());
+    rerender(<Toggle enabled label="Renamed" />);
+    expect(button('Other')).toHaveFocus();
+  });
+
+  it('traps nothing: Tab past the last element leaves, focus outside stays there', async () => {
+    const user = userEvent.setup();
+    render(
+      <Page>
+        <Surface>
+          <button type="button">Inside</button>
+        </Surface>
+      </Page>,
+    );
+    expect(button('Inside')).toHaveFocus();
+    await user.tab();
+    expect(button('After')).toHaveFocus();
+    act(() => button('Before').focus());
+    await flushMicrotasks();
+    expect(button('Before')).toHaveFocus();
+  });
+
+  it('adds no document listener', () => {
+    const add = vi.spyOn(document, 'addEventListener');
+    try {
+      render(
+        <Surface>
+          <button type="button">Inside</button>
+        </Surface>,
+      );
+      expect(add).not.toHaveBeenCalled();
+    } finally {
+      add.mockRestore();
     }
   });
 });

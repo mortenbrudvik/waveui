@@ -12,6 +12,9 @@ import { renderToString } from 'react-dom/server';
 import {
   breadcrumbClassNames,
   breadcrumbItemClassNames,
+  buttonClassNames,
+  drawerClassNames,
+  hamburgerClassNames,
   menuClassNames,
   menuDividerClassNames,
   menuGroupClassNames,
@@ -23,9 +26,17 @@ import {
   menuItemSwitchClassNames,
   menuPopoverClassNames,
   menuSplitGroupClassNames,
+  navAppItemClassNames,
+  navAppItemStaticClassNames,
   navCategoryClassNames,
   navClassNames,
+  navDividerClassNames,
+  navDrawerBodyClassNames,
+  navDrawerClassNames,
+  navDrawerFooterClassNames,
+  navDrawerHeaderClassNames,
   navItemClassNames,
+  navSectionHeaderClassNames,
   navSubItemClassNames,
   paginationClassNames,
   stepperClassNames,
@@ -33,7 +44,9 @@ import {
 } from '../../../lib/classNames';
 import { Breadcrumb } from '../Breadcrumb';
 import { Menu } from '../Menu';
+import { Hamburger } from '../Hamburger';
 import { Nav } from '../Nav';
+import { NavDrawer, type NavDrawerProps } from '../NavDrawer';
 import { Pagination } from '../Pagination';
 import { Stepper } from '../Stepper';
 
@@ -275,6 +288,118 @@ describe('stable class names: navigation folder', () => {
     expect(weekly).toHaveClass(navSubItemClassNames.root);
     expect(weekly.parentElement).toHaveClass(navSubItemClassNames.listItem);
     expect(weekly.parentElement?.parentElement).toHaveClass(navCategoryClassNames.list);
+  });
+
+  it('Nav parts: section header and its list item, divider, app item (root, list item, icon, content), app item static, the actions of an item and a sub-item', () => {
+    const tree = (
+      <Nav aria-label="Main" defaultValue="weekly">
+        <Nav.AppItem href="#start" icon={<svg data-testid="app-icon" />}>
+          Contoso HR
+        </Nav.AppItem>
+        <Nav.AppItem>Switch app</Nav.AppItem>
+        <Nav.SectionHeader>Library</Nav.SectionHeader>
+        <Nav.Item value="home" actions={<button type="button">Pin home</button>}>
+          Home
+        </Nav.Item>
+        <Nav.Divider />
+        <Nav.Category value="reports" label="Reports">
+          <Nav.SectionHeader headingLevel={4}>Schedules</Nav.SectionHeader>
+          <Nav.SubItem value="weekly" actions={<button type="button">Pin weekly</button>}>
+            Weekly
+          </Nav.SubItem>
+          <Nav.Divider />
+        </Nav.Category>
+        <Nav.AppItemStatic icon={<svg data-testid="static-icon" />}>Fabrikam</Nav.AppItemStatic>
+      </Nav>
+    );
+    const check = (root: HTMLElement) => {
+      for (const appItem of [
+        within(root).getByRole('link', { name: 'Contoso HR' }),
+        within(root).getByRole('button', { name: 'Switch app' }),
+      ]) {
+        expect(appItem).toHaveClass(navAppItemClassNames.root);
+        expect(appItem.parentElement).toHaveClass(navAppItemClassNames.listItem);
+        expect(appItem.lastElementChild).toHaveClass(navAppItemClassNames.content);
+      }
+      expect(within(root).getByTestId('app-icon').parentElement).toHaveClass(
+        navAppItemClassNames.icon,
+      );
+      const staticItem = within(root).getByTestId('static-icon').parentElement
+        ?.parentElement as HTMLElement;
+      expect(staticItem).toHaveClass(navAppItemStaticClassNames.root);
+      expect(staticItem).not.toHaveClass(navAppItemClassNames.root);
+      expect(staticItem.parentElement).toHaveClass(navAppItemStaticClassNames.listItem);
+      expect(staticItem.firstElementChild).toHaveClass(navAppItemStaticClassNames.icon);
+      expect(staticItem.lastElementChild).toHaveClass(navAppItemStaticClassNames.content);
+      for (const name of ['Library', 'Schedules']) {
+        const heading = within(root).getByRole('heading', { name });
+        expect(heading).toHaveClass(navSectionHeaderClassNames.root);
+        expect(heading.parentElement).toHaveClass(navSectionHeaderClassNames.listItem);
+      }
+      // Found through the item: a detached server tree cannot resolve the group's name.
+      const itemActions = within(root).getByRole('button', { name: 'Home' })
+        .nextElementSibling as HTMLElement;
+      expect(itemActions).toHaveClass(navItemClassNames.actions);
+      expect(itemActions.parentElement).toHaveClass(navItemClassNames.listItem);
+      const subItemActions = within(root).getByRole('button', { name: 'Weekly' })
+        .nextElementSibling as HTMLElement;
+      expect(subItemActions).toHaveClass(navSubItemClassNames.actions);
+      expect(subItemActions.parentElement).toHaveClass(navSubItemClassNames.listItem);
+      const dividers = root.querySelectorAll('li[aria-hidden="true"]');
+      expect(dividers).toHaveLength(2);
+      for (const divider of Array.from(dividers)) {
+        expect(divider).toHaveClass(navDividerClassNames.root);
+      }
+    };
+    check(parse(renderToString(tree)));
+    render(tree);
+    check(screen.getByRole('navigation', { name: 'Main' }));
+  });
+
+  it("NavDrawer: panel root (with Drawer's), backdrop, nav; header, body and footer with their lists; in both types and in the server HTML", () => {
+    const tree = (type: NavDrawerProps['type']) => (
+      <NavDrawer type={type} open onOpenChange={() => {}} aria-label="Main">
+        <NavDrawer.Header>Contoso HR</NavDrawer.Header>
+        <NavDrawer.Body>
+          <Nav.Item value="home">Home</Nav.Item>
+        </NavDrawer.Body>
+        <NavDrawer.Footer>
+          <Nav.Item value="help">Help</Nav.Item>
+        </NavDrawer.Footer>
+      </NavDrawer>
+    );
+    const check = (nav: HTMLElement) => {
+      expect(nav).toHaveClass(navDrawerClassNames.nav);
+      expect(nav.parentElement).toHaveClass(drawerClassNames.root, navDrawerClassNames.root);
+      const [header, body, footer] = Array.from(nav.children);
+      expect(header).toHaveClass(navDrawerHeaderClassNames.root);
+      expect(header).not.toHaveClass(drawerClassNames.header);
+      expect(body).toHaveClass(navDrawerBodyClassNames.root);
+      expect(body).not.toHaveClass(drawerClassNames.body);
+      expect(body.firstElementChild).toHaveClass(navDrawerBodyClassNames.list);
+      expect(footer).toHaveClass(navDrawerFooterClassNames.root);
+      expect(footer.firstElementChild).toHaveClass(navDrawerFooterClassNames.list);
+    };
+    check(parse(renderToString(tree('inline'))).querySelector('nav')!);
+    const { unmount } = render(tree('inline'));
+    check(screen.getByRole('navigation', { name: 'Main' }));
+    unmount();
+    render(tree('overlay'));
+    const dialog = screen.getByRole('dialog', { name: 'Main' });
+    check(within(dialog).getByRole('navigation', { name: 'Main' }));
+    const backdrop = dialog.previousElementSibling;
+    expect(backdrop).toHaveClass(drawerClassNames.backdrop, navDrawerClassNames.backdrop);
+  });
+
+  it("Hamburger: root and icon (with Button's)", () => {
+    const check = (button: HTMLElement) => {
+      expect(button).toHaveClass(buttonClassNames.root, hamburgerClassNames.root);
+      const icon = button.querySelector('[data-wave-icon="navigation"]')!.parentElement;
+      expect(icon).toHaveClass(buttonClassNames.icon, hamburgerClassNames.icon);
+    };
+    check(parse(renderToString(<Hamburger />)).querySelector('button')!);
+    render(<Hamburger />);
+    check(screen.getByRole('button', { name: 'Navigation' }));
   });
 
   it('Pagination: root, list, every list item, the five button kinds and the ellipses', () => {

@@ -7,18 +7,30 @@ import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
 import userEvent, { type UserEvent } from '@testing-library/user-event';
 import {
   Drawer,
+  DrawerBody,
   DrawerClose,
+  DrawerFooter,
+  DrawerHeader,
+  DrawerHeaderNavigation,
+  DrawerHeaderTitle,
   DrawerTitle,
   DrawerTrigger,
+  type DrawerBodyProps,
   type DrawerCloseProps,
+  type DrawerFooterProps,
+  type DrawerHeaderNavigationProps,
+  type DrawerHeaderProps,
+  type DrawerHeaderTitleProps,
   type DrawerOpenChangeDetails,
   type DrawerOpenChangeReason,
   type DrawerProps,
   type DrawerTitleProps,
   type DrawerTriggerProps,
+  type DrawerTriggerRenderProps,
+  type DrawerType,
 } from '../Drawer';
-import { Dialog } from '../Dialog';
-import { dialogFooterClassNames } from '../../../lib/classNames';
+import { Dialog, type DialogProps } from '../Dialog';
+import { dialogFooterClassNames, drawerClassNames } from '../../../lib/classNames';
 import { useDismiss } from '../../../hooks/useDismiss';
 import { Portal } from '../../portal/Portal';
 import { getTopmostLayer } from '../../../lib/layers';
@@ -58,11 +70,11 @@ function button(name: string | RegExp) {
   return screen.getByRole('button', { name });
 }
 
+/** The backdrop: the panel's sibling behind it (P6-06 D93), found by its stable class. */
 function backdrop() {
-  const panel = screen.getByRole('dialog');
-  const parent = panel.parentElement;
-  if (!parent) throw new Error('the drawer panel has no parent');
-  return parent;
+  const element = document.querySelector<HTMLElement>('.' + drawerClassNames.backdrop);
+  if (!element) throw new Error('the drawer has no backdrop');
+  return element;
 }
 
 /** An uncontrolled Drawer with a trigger and a Drawer.Close footer button. */
@@ -97,21 +109,69 @@ function ChildLayer() {
 describe('Drawer', () => {
   testDisplayName(Drawer, 'Drawer');
 
-  testCompoundExposure(Drawer, ['Trigger', 'Close', 'Title']);
+  testCompoundExposure(Drawer, [
+    'Trigger',
+    'Close',
+    'Title',
+    'Header',
+    'HeaderTitle',
+    'HeaderNavigation',
+    'Body',
+    'Footer',
+  ]);
 
   it('exports every sub-component under its flat name (C-COMPOUND)', () => {
     expect(DrawerTrigger).toBe(Drawer.Trigger);
     expect(DrawerClose).toBe(Drawer.Close);
     expect(DrawerTitle).toBe(Drawer.Title);
+    expect(DrawerHeader).toBe(Drawer.Header);
+    expect(DrawerHeaderTitle).toBe(Drawer.HeaderTitle);
+    expect(DrawerHeaderNavigation).toBe(Drawer.HeaderNavigation);
+    expect(DrawerBody).toBe(Drawer.Body);
+    expect(DrawerFooter).toBe(Drawer.Footer);
   });
 
   it('declares ref in every props interface (C-REF)', () => {
-    expectTypeOf<DrawerProps['ref']>().toEqualTypeOf<React.Ref<HTMLDivElement> | undefined>();
+    expectTypeOf<DrawerProps['ref']>().toEqualTypeOf<React.Ref<HTMLElement> | undefined>();
     expectTypeOf<DrawerTriggerProps['ref']>().toEqualTypeOf<React.Ref<HTMLElement> | undefined>();
     expectTypeOf<DrawerCloseProps['ref']>().toEqualTypeOf<React.Ref<HTMLElement> | undefined>();
     expectTypeOf<DrawerTitleProps['ref']>().toEqualTypeOf<
       React.Ref<HTMLHeadingElement> | undefined
     >();
+    expectTypeOf<DrawerHeaderProps['ref']>().toEqualTypeOf<React.Ref<HTMLDivElement> | undefined>();
+    expectTypeOf<DrawerHeaderTitleProps['ref']>().toEqualTypeOf<
+      React.Ref<HTMLDivElement> | undefined
+    >();
+    expectTypeOf<DrawerHeaderNavigationProps['ref']>().toEqualTypeOf<
+      React.Ref<HTMLElement> | undefined
+    >();
+    expectTypeOf<DrawerBodyProps['ref']>().toEqualTypeOf<React.Ref<HTMLDivElement> | undefined>();
+    expectTypeOf<DrawerFooterProps['ref']>().toEqualTypeOf<React.Ref<HTMLDivElement> | undefined>();
+  });
+
+  it('types type, separator and unmountOnClose, and the panel as an HTMLElement (P6-07)', () => {
+    expectTypeOf<DrawerType>().toEqualTypeOf<'overlay' | 'inline'>();
+    expectTypeOf<DrawerProps['type']>().toEqualTypeOf<DrawerType | undefined>();
+    expectTypeOf<DrawerProps['separator']>().toEqualTypeOf<boolean | undefined>();
+    expectTypeOf<DrawerProps['unmountOnClose']>().toEqualTypeOf<boolean | undefined>();
+    expectTypeOf<DialogProps['unmountOnClose']>().toEqualTypeOf<boolean | undefined>();
+    expectTypeOf<DrawerTriggerRenderProps['aria-haspopup']>().toEqualTypeOf<'dialog' | undefined>();
+    // Compile-only: a div ref, a div ref callback and a div-typed handler still type-check.
+    function DivRefs() {
+      const divRef = React.useRef<HTMLDivElement>(null);
+      const onDivClick = (event: React.MouseEvent<HTMLDivElement>) => event.currentTarget;
+      return (
+        <>
+          <Drawer title="Ref" ref={divRef} onClick={onDivClick}>
+            Content
+          </Drawer>
+          <Drawer title="Callback" ref={(node: HTMLDivElement | null) => void node}>
+            Content
+          </Drawer>
+        </>
+      );
+    }
+    expectTypeOf(DivRefs).toBeFunction();
   });
 
   describe('system props', () => {
@@ -122,6 +182,8 @@ describe('Drawer', () => {
       conflictingClass: { className: 'w-96', overrides: 'w-80' },
       a11yVariants: [
         { name: 'start position', props: { position: 'start' } },
+        { name: 'bottom position', props: { position: 'bottom' } },
+        { name: 'large size', props: { size: 'large' } },
         { name: 'named by aria-label', props: { title: undefined, 'aria-label': 'Settings' } },
       ],
     });
@@ -140,7 +202,7 @@ describe('Drawer', () => {
       expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
     });
 
-    it('renders only the trigger on the server, also when open by default', () => {
+    it('renders only the trigger of an overlay drawer on the server, also when open by default', () => {
       const html = renderToString(<WithTrigger defaultOpen />);
       expect(html).toContain('Open filters');
       expect(html).not.toContain('role="dialog"');
@@ -149,21 +211,24 @@ describe('Drawer', () => {
     it.each([
       ['a defaultOpen', { defaultOpen: true }],
       ['an open', { open: true }],
-    ])('renders %s drawer closed on the server, so every referenced id exists', (_l, props) => {
-      const serverHtml = renderToString(<WithTrigger {...props} />);
-      expect(findDanglingIdRefsInHtml(serverHtml)).toEqual([]);
-      const parsed = document.createElement('div'); // detached: nothing reaches document.body
-      parsed.innerHTML = serverHtml;
-      const trigger = parsed.querySelector('button');
-      expect(trigger).toHaveAttribute('aria-expanded', 'false');
-      expect(trigger).not.toHaveAttribute('aria-controls');
-    });
+    ])(
+      'renders %s overlay drawer closed on the server, so every referenced id exists',
+      (_l, props) => {
+        const serverHtml = renderToString(<WithTrigger {...props} />);
+        expect(findDanglingIdRefsInHtml(serverHtml)).toEqual([]);
+        const parsed = document.createElement('div'); // detached: nothing reaches document.body
+        parsed.innerHTML = serverHtml;
+        const trigger = parsed.querySelector('button');
+        expect(trigger).toHaveAttribute('aria-expanded', 'false');
+        expect(trigger).not.toHaveAttribute('aria-controls');
+      },
+    );
 
     it.each([
       ['defaultOpen', { defaultOpen: true }],
       ['open', { open: true }],
     ])(
-      'opens once hydrated (%s), without a mismatch or an onOpenChange call',
+      'opens an overlay drawer once hydrated (%s), without a mismatch or an onOpenChange call',
       async (_l, props) => {
         const onOpenChange = vi.fn();
         const element = <WithTrigger {...props} onOpenChange={onOpenChange} />;
@@ -330,6 +395,7 @@ describe('Drawer', () => {
       ['start', 'start-0'],
       ['left', 'left-0'],
       ['right', 'right-0'],
+      ['bottom', 'bottom-0'],
     ] as const)('position %s places the panel with %s', (position, expected) => {
       render(
         <Drawer defaultOpen position={position} title="Drawer">
@@ -339,13 +405,14 @@ describe('Drawer', () => {
       expect(screen.getByRole('dialog')).toHaveClass(expected);
     });
 
-    const edgeClasses = ['border-s', 'border-e', 'border-l', 'border-r'];
+    const edgeClasses = ['border-s', 'border-e', 'border-l', 'border-r', 'border-t'];
     it.each([
       [undefined, 'border-s'],
       ['end', 'border-s'],
       ['start', 'border-e'],
       ['left', 'border-r'],
       ['right', 'border-l'],
+      ['bottom', 'border-t'],
     ] as const)('position %s draws a border on the inner edge only, %s', (position, expected) => {
       // High contrast paints the page, the backdrop and the panel black and the shadow is black
       // too (forced colors drop it): only the border marks the edge facing the page.
@@ -1185,7 +1252,7 @@ describe('Drawer', () => {
       render(<Drawer defaultOpen>Unnamed</Drawer>);
       expect(warn.mock.calls).toEqual([
         [
-          '[WaveUI] Drawer has no accessible name. Pass `title`, render a Drawer.Title inside it, or give it `aria-label` or `aria-labelledby`.',
+          '[WaveUI] Drawer has no accessible name. Pass `title`, render a Drawer.HeaderTitle or a Drawer.Title inside it, or give it `aria-label` or `aria-labelledby`.',
         ],
       ]);
       warn.mockRestore();
@@ -1222,6 +1289,26 @@ describe('Drawer', () => {
         </Drawer.Close>,
       ],
       ['Drawer.Title', <Drawer.Title key="title">Orphan</Drawer.Title>],
+      [
+        'Drawer.Header',
+        <Drawer.Header key="header">
+          <p>Orphan</p>
+        </Drawer.Header>,
+      ],
+      ['Drawer.HeaderTitle', <Drawer.HeaderTitle key="heading">Orphan</Drawer.HeaderTitle>],
+      [
+        'Drawer.HeaderNavigation',
+        <Drawer.HeaderNavigation key="nav">
+          <button type="button">Back</button>
+        </Drawer.HeaderNavigation>,
+      ],
+      ['Drawer.Body', <Drawer.Body key="body">Orphan</Drawer.Body>],
+      [
+        'Drawer.Footer',
+        <Drawer.Footer key="footer">
+          <button type="button">Apply</button>
+        </Drawer.Footer>,
+      ],
     ])('%s outside Drawer throws in development', (name, element) => {
       expectThrows(element, `[WaveUI] ${name} must be used within Drawer`);
     });
@@ -1793,6 +1880,47 @@ describe('Drawer', () => {
         expect.stringContaining('[WaveUI] Drawer.Trigger must be a direct child of Drawer'),
       );
       warn.mockRestore();
+    });
+
+    it('places a lazy Drawer.Header, Drawer.HeaderTitle, Drawer.Body and Drawer.Footer like the plain parts', async () => {
+      const user = userEvent.setup();
+      const warn = vi.spyOn(console, 'warn');
+      const Header = asClientReference(DrawerHeader);
+      const HeaderTitle = asClientReference(DrawerHeaderTitle);
+      const Body = asClientReference(DrawerBody);
+      const Footer = asClientReference(DrawerFooter);
+      try {
+        render(
+          <Drawer>
+            <lazyParts.Trigger>
+              <button type="button">Open filters</button>
+            </lazyParts.Trigger>
+            <Footer>
+              <lazyParts.Close>
+                <button type="button">Apply</button>
+              </lazyParts.Close>
+            </Footer>
+            <Header>
+              <HeaderTitle>Filters</HeaderTitle>
+            </Header>
+            <Body aria-label="Filter fields" role="region" tabIndex={0}>
+              <p>Body</p>
+            </Body>
+          </Drawer>,
+        );
+        await user.click(button('Open filters'));
+        const panel = screen.getByRole('dialog', { name: 'Filters' });
+        const body = screen.getByRole('region', { name: 'Filter fields' });
+        expect(body.parentElement).toBe(panel);
+        expect(panel.firstElementChild).toContainElement(screen.getByRole('heading'));
+        expect(panel.lastElementChild).toContainElement(button('Apply'));
+        await user.click(button('Close'));
+        expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+        expect(button('Open filters')).toHaveFocus();
+        expect(warn).not.toHaveBeenCalled();
+      } finally {
+        warn.mockRestore();
+      }
     });
 
     it('the nested-trigger check passes over content whose code is still loading', () => {

@@ -108,6 +108,10 @@
   --wave-secondary: #f5f5f5;
   --wave-muted: #f0f0f0;
   --wave-muted-foreground: #616161;
+  /* Fill states of neutral chips (Tag, InteractionTag; 0.11): `foreground` text only. `muted` →
+     hover → pressed differ by at least 1.15:1. */
+  --wave-muted-hover: #e0e0e0;
+  --wave-muted-pressed: #d1d1d1;
 
   /* Primary (brand) */
   --wave-primary: var(--wave-brand-80);
@@ -129,6 +133,9 @@
   --wave-subtle-selected: #ebebeb;
   --wave-selected: var(--wave-brand-160);
   --wave-selected-foreground: var(--wave-brand-60);
+  /* Fill states of `selected` (brand tags): `selected-foreground` text only. */
+  --wave-selected-hover: var(--wave-brand-150);
+  --wave-selected-pressed: var(--wave-brand-140);
 
   /* Strokes */
   --wave-border: #e0e0e0;
@@ -198,6 +205,10 @@
   --wave-secondary: #333333;
   --wave-muted: #383838;
   --wave-muted-foreground: #adadad;
+  /* Fill states of neutral chips (Tag, InteractionTag; 0.11): `foreground` text only. `muted` →
+     hover → pressed differ by at least 1.15:1. */
+  --wave-muted-hover: #424242;
+  --wave-muted-pressed: #2e2e2e;
 
   /* Primary (brand): brand-110 fill with black text (8.66:1) */
   --wave-primary: var(--wave-brand-110);
@@ -218,6 +229,9 @@
   --wave-subtle-selected: #383838;
   --wave-selected: var(--wave-brand-20);
   --wave-selected-foreground: var(--wave-brand-110);
+  /* Fill states of `selected` (brand tags): `selected-foreground` text only. */
+  --wave-selected-hover: var(--wave-brand-40);
+  --wave-selected-pressed: var(--wave-brand-10);
 
   /* Strokes */
   --wave-border: #666666;
@@ -288,6 +302,10 @@
   --wave-secondary: #000000;
   --wave-muted: #1a1a1a;
   --wave-muted-foreground: #ffffff;
+  /* Fill states of neutral chips (Tag, InteractionTag; 0.11): `foreground` text only. `muted` →
+     hover → pressed differ by at least 1.15:1. */
+  --wave-muted-hover: #333333;
+  --wave-muted-pressed: #4d4d4d;
 
   /* Primary */
   --wave-primary: #1aebff;
@@ -310,6 +328,9 @@
   --wave-subtle-selected: #333333;
   --wave-selected: #003a40;
   --wave-selected-foreground: #ffffff;
+  /* Fill states of `selected` (brand tags): `selected-foreground` text only. */
+  --wave-selected-hover: #005259;
+  --wave-selected-pressed: #006b75;
 
   /* Strokes */
   --wave-border: #ffffff;
@@ -393,6 +414,8 @@
   --color-secondary-foreground: var(--wave-secondary-foreground);
   --color-muted: var(--wave-muted);
   --color-muted-foreground: var(--wave-muted-foreground);
+  --color-muted-hover: var(--wave-muted-hover);
+  --color-muted-pressed: var(--wave-muted-pressed);
   --color-primary: var(--wave-primary);
   --color-primary-foreground: var(--wave-primary-foreground);
   --color-primary-hover: var(--wave-primary-hover);
@@ -409,6 +432,8 @@
   --color-subtle-selected: var(--wave-subtle-selected);
   --color-selected: var(--wave-selected);
   --color-selected-foreground: var(--wave-selected-foreground);
+  --color-selected-hover: var(--wave-selected-hover);
+  --color-selected-pressed: var(--wave-selected-pressed);
   --color-border: var(--wave-border);
   --color-stroke: var(--wave-stroke);
   --color-stroke-hover: var(--wave-stroke-hover);

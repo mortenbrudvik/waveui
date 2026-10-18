@@ -299,7 +299,18 @@ function definitionDocblock(source: string, name: string): string | null {
 describe('component docs of the library (C-DOCS)', () => {
   it('finds the compounds', () => {
     expect(compounds.map(([name]) => name)).toEqual(
-      expect.arrayContaining(['Accordion', 'Card', 'Carousel', 'Dialog', 'List', 'RadioGroup']),
+      expect.arrayContaining([
+        'Accordion',
+        'Card',
+        'Carousel',
+        'Dialog',
+        'List',
+        'RadioGroup',
+        // 0.11
+        'InteractionTag',
+        'NavDrawer',
+        'TagPicker',
+      ]),
     );
   });
 
@@ -342,6 +353,7 @@ describe('component docs of the library (C-DOCS)', () => {
     ['src/components/input/Option.tsx', ['OptionImpl', 'OptionGroupImpl']],
     ['src/components/navigation/Breadcrumb.tsx', ['BreadcrumbItem']],
     ['src/components/navigation/Nav.tsx', ['NavItem', 'NavSubItem']],
+    ['src/components/navigation/Nav.parts.tsx', ['NavAppItem']],
   ])(
     '%s: the definitions behind a wrapper or overloads get their export docblock',
     (file, names) => {

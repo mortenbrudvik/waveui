@@ -9,6 +9,7 @@ import { describe, expect, it, vi } from 'vitest';
 import { render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { renderToString } from 'react-dom/server';
+import { installResizeObserverMock, mockRect } from '../../../test-utils';
 import {
   calendarClassNames,
   checkboxClassNames,
@@ -40,7 +41,15 @@ import {
   swatchPickerClassNames,
   swatchPickerRowClassNames,
   switchClassNames,
+  tagClassNames,
+  tagGroupClassNames,
+  tagPickerButtonClassNames,
   tagPickerClassNames,
+  tagPickerControlClassNames,
+  tagPickerGroupClassNames,
+  tagPickerInputClassNames,
+  tagPickerListClassNames,
+  tagPickerOptionClassNames,
   textareaClassNames,
   timePickerClassNames,
 } from '../../../lib/classNames';
@@ -452,6 +461,138 @@ describe('stable class names: input folder', () => {
     expect(empty.parentElement).toHaveClass(tagPickerClassNames.surface);
   });
 
+  it('TagPicker parts: the member roots next to the 0.8 part classes', () => {
+    render(
+      <TagPicker
+        aria-label="Fruits"
+        options={[
+          { value: 'apple', label: 'Apple' },
+          { value: 'banana', label: 'Banana' },
+        ]}
+        defaultValue={['apple']}
+        defaultOpen
+      />,
+    );
+    const input = screen.getByRole('combobox', { name: 'Fruits' });
+    expect(input).toHaveClass(tagPickerInputClassNames.root, tagPickerClassNames.input);
+    const control = input.closest('[data-wave-tagpicker-control]') as HTMLElement;
+    expect(control).toHaveClass(tagPickerControlClassNames.root, tagPickerClassNames.control);
+    const group = screen.getByRole('list', { name: 'Selected' });
+    expect(stableClassesOf(group)).toEqual(
+      [tagGroupClassNames.root, tagPickerGroupClassNames.root, tagPickerClassNames.group].sort(),
+    );
+    expect(screen.getByRole('listitem')).toHaveClass(tagClassNames.root, tagPickerClassNames.tag);
+    expect(screen.getByRole('button', { name: 'Remove Apple' })).toHaveClass(
+      tagClassNames.dismissButton,
+      tagPickerClassNames.removeButton,
+    );
+    expect(screen.getByRole('listbox')).toHaveClass(
+      listboxSurfaceClassNames.list,
+      tagPickerListClassNames.root,
+      tagPickerClassNames.listbox,
+    );
+    expect(stableClassesOf(screen.getByRole('option', { name: 'Banana' }))).toEqual(
+      [optionClassNames.root, tagPickerOptionClassNames.root, tagPickerClassNames.option].sort(),
+    );
+  });
+
+  it('TagPicker: the expand button and its icon, the clear button, the create option and the +N chip', async () => {
+    const user = userEvent.setup();
+    const ro = installResizeObserverMock();
+    try {
+      render(
+        <TagPicker
+          aria-label="Fruits"
+          options={[
+            { value: 'apple', label: 'Apple' },
+            { value: 'banana', label: 'Banana' },
+            { value: 'cherry', label: 'Cherry' },
+          ]}
+          defaultValue={['apple', 'banana', 'cherry']}
+          clearable
+          allowCreate
+          overflow="count"
+        />,
+      );
+      const expand = screen.getByRole('button', { name: 'Show options' });
+      expect(stableClassesOf(expand)).toEqual([tagPickerClassNames.expandButton]);
+      expect(stableClassesOf(expand.firstElementChild)).toEqual([tagPickerClassNames.expandIcon]);
+      expect(stableClassesOf(screen.getByRole('button', { name: 'Clear selection' }))).toEqual([
+        tagPickerClassNames.clearButton,
+      ]);
+      const control = screen
+        .getByRole('combobox', { name: 'Fruits' })
+        .closest<HTMLElement>('[data-wave-tagpicker-control]')!;
+      mockRect(control, { width: 100 });
+      for (const tag of screen.getAllByRole('listitem')) mockRect(tag, { width: 60 });
+      ro.trigger(control);
+      const chip = control.querySelector<HTMLElement>('[aria-hidden="true"]:not(svg)')!;
+      expect(chip).toHaveTextContent('+2');
+      expect(stableClassesOf(chip)).toEqual([tagPickerClassNames.overflowCount]);
+
+      await user.type(screen.getByRole('combobox', { name: 'Fruits' }), 'infra');
+      const create = screen.getByRole('option', { name: 'Create "infra"' });
+      expect(stableClassesOf(create)).toEqual(
+        [
+          optionClassNames.root,
+          tagPickerClassNames.option,
+          tagPickerClassNames.createOption,
+        ].sort(),
+      );
+    } finally {
+      ro.restore();
+    }
+  });
+
+  it('TagPicker.Option: root with Option’s, media and secondaryContent parts, also on a slot object’s element', () => {
+    render(
+      <TagPicker aria-label="People" defaultOpen>
+        <TagPicker.Control />
+        <TagPicker.List>
+          <TagPicker.Option value="katri" media="K" secondaryContent="Designer">
+            Katri
+          </TagPicker.Option>
+          <TagPicker.Option
+            value="elvia"
+            media={{ as: 'b', children: 'E' }}
+            secondaryContent={{ as: 'em', children: 'Engineer' }}
+          >
+            Elvia
+          </TagPicker.Option>
+        </TagPicker.List>
+      </TagPicker>,
+    );
+    const katri = screen.getByRole('option', { name: /^Katri\s*Designer$/ });
+    expect(stableClassesOf(katri)).toEqual(
+      [optionClassNames.root, tagPickerOptionClassNames.root].sort(),
+    );
+    expect(within(katri).getByText('K')).toHaveClass(tagPickerOptionClassNames.media);
+    expect(within(katri).getByText('Designer')).toHaveClass(
+      tagPickerOptionClassNames.secondaryContent,
+    );
+    const elvia = screen.getByRole('option', { name: /^Elvia\s*Engineer$/ });
+    const media = within(elvia).getByText('E');
+    expect(media.tagName).toBe('B');
+    expect(media).toHaveClass(tagPickerOptionClassNames.media);
+    const second = within(elvia).getByText('Engineer');
+    expect(second.tagName).toBe('EM');
+    expect(second).toHaveClass(tagPickerOptionClassNames.secondaryContent);
+  });
+
+  it('TagPicker.Button: root', () => {
+    render(
+      <TagPicker aria-label="Fruits" options={[{ value: 'apple', label: 'Apple' }]}>
+        <TagPicker.Control>
+          <TagPicker.Group />
+          <TagPicker.Button />
+        </TagPicker.Control>
+      </TagPicker>,
+    );
+    expect(stableClassesOf(screen.getByRole('combobox', { name: 'Fruits' }))).toEqual([
+      tagPickerButtonClassNames.root,
+    ]);
+  });
+
   it('TimePicker: root, input, buttons, glyph, listbox, surface and options with check columns', () => {
     render(<TimePicker aria-label="Start time" clearable defaultValue="09:00" defaultOpen />);
     const input = screen.getByRole('combobox', { name: 'Start time' });
@@ -804,6 +945,7 @@ describe('stable class names: the 0.10 listbox and swatch parts', () => {
         </Dropdown>
       ),
       dropdownClassNames,
+      [],
     ],
     [
       'Combobox',
@@ -813,6 +955,7 @@ describe('stable class names: the 0.10 listbox and swatch parts', () => {
         </Combobox>
       ),
       comboboxClassNames,
+      [],
     ],
     [
       'TagPicker',
@@ -820,14 +963,15 @@ describe('stable class names: the 0.10 listbox and swatch parts', () => {
         <TagPicker aria-label="Fruit" options={[{ value: 'apple', label: 'Apple' }]} defaultOpen />
       ),
       tagPickerClassNames,
+      [tagPickerListClassNames.root],
     ],
   ] as const)(
     '%s: its list and surface carry ListboxSurface’s classes and its own parts (D5)',
-    (_name, ui, host) => {
+    (_name, ui, host, extraListRoots) => {
       render(ui());
       const listbox = screen.getByRole('listbox');
       expect(stableClassesOf(listbox)).toEqual(
-        [listboxSurfaceClassNames.list, host.listbox].sort(),
+        [listboxSurfaceClassNames.list, host.listbox, ...extraListRoots].sort(),
       );
       expect(stableClassesOf(listbox.parentElement)).toEqual(
         [listboxSurfaceClassNames.root, host.surface].sort(),

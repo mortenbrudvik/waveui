@@ -9,6 +9,7 @@ export {
 export type {
   DialogProps,
   DialogModalType,
+  DialogSize,
   DialogOpenChangeReason,
   DialogOpenChangeDetails,
   DialogContentProps,
@@ -31,10 +32,23 @@ export type {
 export { Tooltip } from './Tooltip';
 export type { TooltipProps, TooltipAppearance } from './Tooltip';
 
-export { Drawer, DrawerTrigger, DrawerClose, DrawerTitle } from './Drawer';
+export {
+  Drawer,
+  DrawerTrigger,
+  DrawerClose,
+  DrawerTitle,
+  DrawerHeader,
+  DrawerHeaderTitle,
+  DrawerHeaderNavigation,
+  DrawerBody,
+  DrawerFooter,
+} from './Drawer';
 export type {
   DrawerProps,
   DrawerPosition,
+  DrawerSize,
+  DrawerType,
+  DrawerModalType,
   DrawerOpenChangeReason,
   DrawerOpenChangeDetails,
   DrawerTriggerProps,
@@ -42,6 +56,11 @@ export type {
   DrawerCloseProps,
   DrawerCloseRenderProps,
   DrawerTitleProps,
+  DrawerHeaderProps,
+  DrawerHeaderTitleProps,
+  DrawerHeaderNavigationProps,
+  DrawerBodyProps,
+  DrawerFooterProps,
 } from './Drawer';
 
 export { TeachingPopover } from './TeachingPopover';

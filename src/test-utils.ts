@@ -429,6 +429,10 @@ export const VARIANT_BASES: Readonly<Record<string, readonly string[]>> = {
   menuItemRadioClassNames: ['menuItemClassNames'],
   menuItemSwitchClassNames: ['menuItemClassNames'],
   menuItemLinkClassNames: ['menuItemClassNames'],
+  tagPickerOptionClassNames: ['optionClassNames'],
+  tagPickerGroupClassNames: ['tagGroupClassNames'],
+  navDrawerClassNames: ['drawerClassNames'],
+  hamburgerClassNames: ['buttonClassNames'],
 };
 
 /** A component's stable class names, from {@link getStableClassNames}. */

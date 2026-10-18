@@ -25,6 +25,7 @@ import {
 import { Drawer } from '../Drawer';
 import { useDismiss } from '../../../hooks/useDismiss';
 import { Portal } from '../../portal/Portal';
+import { dialogContentClassNames } from '../../../lib/classNames';
 import { getTopmostLayer } from '../../../lib/layers';
 import type { ModalOpenChangeReason, ModalType, OpenChangeDetails } from '../../../lib/types';
 import {
@@ -64,12 +65,18 @@ function button(name: string | RegExp) {
   return screen.getByRole('button', { name });
 }
 
-/** The backdrop: the element around the dialog surface (outside the surface itself). */
+/** The backdrop: the dialog surface's sibling behind it (P6-06 D93), found by its stable class. */
 function backdrop() {
-  const surface = screen.getByRole('dialog');
-  const parent = surface.parentElement;
-  if (!parent) throw new Error('the dialog surface has no parent');
-  return parent;
+  const element = document.querySelector<HTMLElement>('.' + dialogContentClassNames.backdrop);
+  if (!element) throw new Error('the dialog has no backdrop');
+  return element;
+}
+
+/** The positioner: the element that centres the surface (the 0.10 backdrop's place). */
+function positioner() {
+  const element = document.querySelector<HTMLElement>('.' + dialogContentClassNames.positioner);
+  if (!element) throw new Error('the dialog has no positioner');
+  return element;
 }
 
 function Basic({
@@ -174,7 +181,20 @@ describe('Dialog', () => {
           props: { title: undefined, 'aria-label': 'Edit' },
         },
         { name: 'small', props: { size: 'small' } },
+        { name: 'large', props: { size: 'large' } },
+        { name: 'full', props: { size: 'full' } },
       ],
+    });
+
+    // P6-06: the same system props on a non-modal dialog (no backdrop, the page not inert).
+    describe('in a non-modal Dialog', () => {
+      testSystemProps(Dialog.Content, {
+        expectedTag: 'div',
+        displayName: 'DialogContent',
+        wrapper: createOverlayTestWrapper(Dialog, { defaultOpen: true, modalType: 'non-modal' }),
+        defaultProps: { title: 'Edit profile', children: <p>Body</p> },
+        conflictingClass: { className: 'max-w-[800px]', overrides: 'max-w-[600px]' },
+      });
     });
   });
 
@@ -418,6 +438,7 @@ describe('Dialog', () => {
       render(<Basic dialogProps={{ defaultOpen: true }} />);
       expect(screen.getByRole('dialog')).toHaveClass('m-4');
       expect(backdrop().className).not.toMatch(/(^|\s)p[xytrblse]?-/);
+      expect(positioner().className).not.toMatch(/(^|\s)p[xytrblse]?-/);
     });
 
     it('keeps the gap when its content is wider than the room inside it (issue #4)', () => {
@@ -443,6 +464,158 @@ describe('Dialog', () => {
       expect(dialog).not.toHaveClass('rounded-lg');
       // Nothing around the surface keeps a gap the className cannot reach.
       expect(backdrop().className).not.toMatch(/(^|\s)p[xytrblse]?-/);
+      expect(positioner().className).not.toMatch(/(^|\s)p[xytrblse]?-/);
+    });
+
+    // P6-06 D96 (issue #4): the sizes `large` (940px) and `full` (the viewport, safe areas).
+    it.each([
+      ['small', 'max-w-[400px]'],
+      ['medium', 'max-w-[600px]'],
+      ['large', 'max-w-[940px]'],
+    ] as const)('renders data-size="%s" with its %s cap and the 1rem margin', (size, cap) => {
+      render(<Basic dialogProps={{ defaultOpen: true }} contentProps={{ size }} />);
+      const dialog = screen.getByRole('dialog');
+      expect(dialog).toHaveAttribute('data-size', size);
+      expect(dialog).toHaveClass('w-full', cap, 'm-4', 'max-h-[calc(100dvh-2rem)]');
+    });
+
+    it('renders data-size="medium" by default', () => {
+      render(<Basic dialogProps={{ defaultOpen: true }} />);
+      expect(screen.getByRole('dialog')).toHaveAttribute('data-size', 'medium');
+    });
+
+    /** The safe-area padding of a `full` dialog (24px where there is no inset). */
+    const FULL_INSET_CLASSES = [
+      'pt-[max(1.5rem,env(safe-area-inset-top))]',
+      'pb-[max(1.5rem,env(safe-area-inset-bottom))]',
+      // The insets are physical: the left one pads the left side in either direction.
+      'pl-[max(1.5rem,env(safe-area-inset-left))]',
+      'pr-[max(1.5rem,env(safe-area-inset-right))]',
+    ];
+
+    it('size="full" covers the viewport, pads the safe-area insets and moves the title actions by them', () => {
+      render(<Basic dialogProps={{ defaultOpen: true }} contentProps={{ size: 'full' }} />);
+      const dialog = screen.getByRole('dialog');
+      expect(dialog).toHaveAttribute('data-size', 'full');
+      expect(dialog).toHaveClass(
+        'm-0',
+        'h-dvh',
+        'max-h-none',
+        'max-w-none',
+        'rounded-none',
+        'border-0',
+        ...FULL_INSET_CLASSES,
+      );
+      for (const replaced of ['m-4', 'max-h-[calc(100dvh-2rem)]', 'rounded-lg', 'border']) {
+        expect(dialog).not.toHaveClass(replaced);
+      }
+      expect(dialog.className).not.toMatch(/max-w-\[/);
+      const area = button('Close').parentElement;
+      expect(area).toHaveClass(
+        dialogContentClassNames.titleActions,
+        'top-[max(1rem,env(safe-area-inset-top))]',
+        'end-[max(1rem,env(safe-area-inset-right))]',
+        'wave-rtl:end-[max(1rem,env(safe-area-inset-left))]',
+      );
+      expect(area).not.toHaveClass('top-4');
+      expect(area).not.toHaveClass('end-4');
+    });
+
+    it('size="full": a consumer padding class replaces the inset padding, also under RTL', () => {
+      renderWithProviders(
+        <Basic
+          dialogProps={{ defaultOpen: true }}
+          contentProps={{ size: 'full', className: 'p-0' }}
+        />,
+        { dir: 'rtl' },
+      );
+      const dialog = screen.getByRole('dialog');
+      expect(dialog).toHaveClass('p-0');
+      expect(dialog.className).not.toMatch(/(^|\s)\S*p[tblrse]-\[max/);
+    });
+
+    it('lets a consumer class win over a size’s classes', () => {
+      render(
+        <Basic
+          dialogProps={{ defaultOpen: true }}
+          contentProps={{ size: 'large', className: 'max-w-[72rem]' }}
+        />,
+      );
+      const dialog = screen.getByRole('dialog');
+      expect(dialog).toHaveClass('max-w-[72rem]');
+      expect(dialog).not.toHaveClass('max-w-[940px]');
+    });
+
+    it('size="full" with a long form and a footer keeps the body’s footer scroll padding', () => {
+      const resizeObserver = installResizeObserverMock();
+      try {
+        render(
+          <Dialog defaultOpen>
+            <Dialog.Content title="Profile" size="full">
+              <form aria-label="Profile" onSubmit={(event) => event.preventDefault()}>
+                {Array.from({ length: 30 }, (_, index) => (
+                  <input key={index} aria-label={`Field ${index + 1}`} />
+                ))}
+                <Dialog.Footer data-testid="footer">
+                  <button type="submit">Save</button>
+                </Dialog.Footer>
+              </form>
+            </Dialog.Content>
+          </Dialog>,
+        );
+        const footer = screen.getByTestId('footer');
+        const body = footer.closest<HTMLElement>('.' + dialogContentClassNames.body);
+        expect(body).toHaveClass('min-h-0', 'flex-1', 'overflow-y-auto');
+        mockRect(footer, { height: 64 });
+        resizeObserver.trigger(footer);
+        expect(body?.style.getPropertyValue('--wave-dialog-footer-height')).toBe('64px');
+      } finally {
+        resizeObserver.restore();
+      }
+    });
+
+    describe('size="full" keeps the modal behaviour', () => {
+      function FullDialog() {
+        return (
+          <>
+            <button type="button">Page button</button>
+            <Dialog>
+              <Dialog.Trigger>
+                <button type="button">Open</button>
+              </Dialog.Trigger>
+              <Dialog.Content title="Report" size="full">
+                <button type="button">Inside</button>
+              </Dialog.Content>
+            </Dialog>
+          </>
+        );
+      }
+
+      it.each(['trap', 'Escape', 'inert', 'restore'] as const)('%s', async (behaviour) => {
+        const user = userEvent.setup();
+        render(<FullDialog />);
+        await user.click(button('Open'));
+        const dialog = screen.getByRole('dialog', { name: 'Report' });
+        if (behaviour === 'trap') {
+          expect(button('Close')).toHaveFocus();
+          await user.tab();
+          expect(button('Inside')).toHaveFocus();
+          await user.tab();
+          expect(button('Close')).toHaveFocus();
+        } else if (behaviour === 'Escape') {
+          await user.keyboard('{Escape}');
+          expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+        } else if (behaviour === 'inert') {
+          expect(dialog.closest('[inert]')).toBeNull();
+          expect(
+            screen.getByRole('button', { name: 'Page button', hidden: true }).closest('[inert]'),
+          ).not.toBeNull();
+        } else {
+          await user.click(button('Close'));
+          expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+          expect(button('Open')).toHaveFocus();
+        }
+      });
     });
   });
 
@@ -507,8 +680,10 @@ describe('Dialog', () => {
           </Dialog.Content>
         </Dialog>,
       );
-      // Same end padding as the `title` prop heading: the Close button sits at end-4 top-4.
-      expect(screen.getByRole('heading')).toHaveClass('pe-8');
+      // Same end padding as the `title` prop heading: the title-actions area's width (P6-06 D97).
+      expect(screen.getByRole('heading')).toHaveClass(
+        'pe-[var(--wave-dialog-title-end-padding,2rem)]',
+      );
       rerender(
         <Dialog defaultOpen>
           <Dialog.Content>
@@ -517,7 +692,9 @@ describe('Dialog', () => {
         </Dialog>,
       );
       expect(screen.getByRole('heading')).toHaveClass('pe-12');
-      expect(screen.getByRole('heading')).not.toHaveClass('pe-8');
+      expect(screen.getByRole('heading')).not.toHaveClass(
+        'pe-[var(--wave-dialog-title-end-padding,2rem)]',
+      );
     });
 
     it('warns in development when the dialog has no accessible name', () => {
@@ -2052,11 +2229,13 @@ describe('Dialog', () => {
       );
     }
 
-    /** The element around the surface (the backdrop). */
+    /** The backdrop behind the surface (its sibling, by its stable class; P6-06 D93). */
     function backdropOf(surface: HTMLElement) {
-      const parent = surface.parentElement;
-      if (!parent) throw new Error('the dialog surface has no parent');
-      return parent;
+      const element = surface.ownerDocument.querySelector<HTMLElement>(
+        '.' + dialogContentClassNames.backdrop,
+      );
+      if (!element) throw new Error('the dialog has no backdrop');
+      return element;
     }
 
     it('renders role="alertdialog", named by its title, with data-modal-type="alert"', async () => {
@@ -2142,7 +2321,6 @@ describe('Dialog', () => {
     it('types modalType with the shared ModalType', () => {
       expectTypeOf<DialogModalType>().toEqualTypeOf<ModalType>();
       expectTypeOf<DialogProps['modalType']>().toEqualTypeOf<ModalType | undefined>();
-      // @ts-expect-error non-modal dialogs are planned, not available yet
       const nonModal: DialogProps['modalType'] = 'non-modal';
       expect(nonModal).toBe('non-modal');
     });
@@ -2269,7 +2447,7 @@ describe('Dialog', () => {
       );
       const name = screen.getByRole('textbox', { name: 'Name' });
       act(() => name.focus());
-      await user.click(screen.getByRole('alertdialog').parentElement!);
+      await user.click(backdrop());
       expect(screen.getByRole('alertdialog', { name: 'Rename' })).toBeInTheDocument();
       expect(name).toHaveFocus();
       expect(onBlur).not.toHaveBeenCalled();

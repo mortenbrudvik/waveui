@@ -10,6 +10,7 @@ import {
   type UseRovingTabIndexResult,
 } from '../useRovingTabIndex';
 import { focusableDisabledProps } from '../../lib/aria';
+import { useMergedRefs } from '../useMergedRefs';
 
 type Orientation = UseRovingTabIndexOptions['orientation'];
 
@@ -2488,6 +2489,481 @@ describe('useRovingTabIndex', () => {
       expect(button('Bold')).toHaveFocus();
       fireEvent.keyDown(toolbar, { key: 'End' });
       expect(button('Underline')).toHaveFocus();
+    });
+  });
+
+  describe('hand-back: a container that stops being one gives its controls their tabIndex back', () => {
+    /**
+     * A Toolbar-like managed container whose `containerProps` are spread only while `attached`
+     * (TagGroup switching from toolbar to list, NavDrawer.Body from `'arrow'` to `'tab'`).
+     */
+    function Detachable({
+      attached = true,
+      manageTabIndex = true,
+      children,
+    }: {
+      attached?: boolean;
+      manageTabIndex?: boolean;
+      children: React.ReactNode;
+    }) {
+      const { containerProps } = useRovingTabIndex({
+        itemSelector: TOOLBAR_SELECTOR,
+        manageTabIndex,
+        tabStop: 'last-focused',
+      });
+      return (
+        <div role="group" aria-label="Formatting" {...(attached ? containerProps : {})}>
+          {children}
+        </div>
+      );
+    }
+
+    /** Three buttons that render no tabIndex of their own, and a button after the group. */
+    function threeButtons(props: { attached?: boolean; manageTabIndex?: boolean } = {}) {
+      return (
+        <>
+          <Detachable {...props}>
+            <button type="button">Bold</button>
+            <button type="button">Italic</button>
+            <button type="button">Underline</button>
+          </Detachable>
+          <button type="button">after</button>
+        </>
+      );
+    }
+
+    /** Every element of the group that is stamped, or carries a roving value. */
+    const rovingMarks = () =>
+      Array.from(
+        screen
+          .getByRole('group', { name: 'Formatting' })
+          .querySelectorAll('[tabindex], [data-roving-value]'),
+      );
+
+    it('hands every stamped element its own tabIndex back when the container ref detaches', async () => {
+      const user = userEvent.setup();
+      const ui = (attached: boolean) => (
+        <>
+          <Detachable attached={attached}>
+            <button type="button">Bold</button>
+            <button type="button" tabIndex={0}>
+              Italic
+            </button>
+            <div role="button" tabIndex={0}>
+              Underline
+            </div>
+            <a href="#strike">Strike</a>
+          </Detachable>
+          <button type="button">after</button>
+        </>
+      );
+      const strike = () => screen.getByRole('link', { name: 'Strike' });
+      const { rerender } = render(ui(true));
+      expect(button('Bold')).toHaveAttribute('tabindex', '0');
+      expect(button('Italic')).toHaveAttribute('tabindex', '-1');
+      expect(button('Underline')).toHaveAttribute('tabindex', '-1');
+      expect(strike()).toHaveAttribute('tabindex', '-1');
+
+      rerender(ui(false));
+      expect(button('Bold')).not.toHaveAttribute('tabindex');
+      expect(button('Italic')).toHaveAttribute('tabindex', '0');
+      expect(button('Underline')).toHaveAttribute('tabindex', '0');
+      expect(strike()).not.toHaveAttribute('tabindex');
+
+      // Every control is its own Tab stop again.
+      await user.tab();
+      expect(button('Bold')).toHaveFocus();
+      await user.tab();
+      expect(button('Italic')).toHaveFocus();
+      await user.tab();
+      expect(button('Underline')).toHaveFocus();
+      await user.tab();
+      expect(strike()).toHaveFocus();
+      await user.tab();
+      expect(button('after')).toHaveFocus();
+    });
+
+    it('removes the data-roving-value it added and keeps one React rendered', () => {
+      const ui = (attached: boolean) => (
+        <Detachable attached={attached}>
+          <button type="button" data-roving-value="bold">
+            Bold
+          </button>
+          <button type="button">Italic</button>
+        </Detachable>
+      );
+      const { rerender } = render(ui(true));
+      expect(button('Bold')).toHaveAttribute('data-roving-value', 'bold');
+      expect(button('Italic').getAttribute('data-roving-value')).toMatch(/^auto-\d+$/);
+
+      rerender(ui(false));
+      expect(button('Bold')).toHaveAttribute('data-roving-value', 'bold');
+      expect(button('Italic')).not.toHaveAttribute('data-roving-value');
+    });
+
+    it('removes tabindex from an element that had none', () => {
+      const ui = (attached: boolean) => (
+        <Detachable attached={attached}>
+          <button type="button">Bold</button>
+          <span role="button">Clear</span>
+        </Detachable>
+      );
+      const { rerender } = render(ui(true));
+      // The hook made the span focusable while it managed it.
+      expect(button('Clear')).toHaveAttribute('tabindex', '-1');
+
+      rerender(ui(false));
+      expect(button('Clear')).not.toHaveAttribute('tabindex');
+      expect(button('Bold')).not.toHaveAttribute('tabindex');
+    });
+
+    it('hands the elements back when manageTabIndex turns false', async () => {
+      const user = userEvent.setup();
+      const { rerender } = render(threeButtons());
+      expect(button('Bold')).toHaveAttribute('tabindex', '0');
+      expect(button('Italic')).toHaveAttribute('tabindex', '-1');
+
+      rerender(threeButtons({ manageTabIndex: false }));
+      // The container stays attached; only the stamps go.
+      expect(screen.getByRole('group', { name: 'Formatting' })).toHaveAttribute(
+        'data-roving-container',
+        '',
+      );
+      expect(rovingMarks()).toEqual([]);
+      await user.tab();
+      expect(button('Bold')).toHaveFocus();
+      await user.tab();
+      expect(button('Italic')).toHaveFocus();
+
+      // Managing again stamps again.
+      rerender(threeButtons());
+      expect(button('Bold')).toHaveAttribute('tabindex', '-1');
+      expect(button('Italic')).toHaveAttribute('tabindex', '0');
+      expect(button('Underline')).toHaveAttribute('tabindex', '-1');
+    });
+
+    it('stamps again when the container attaches again, with the last focused item as the Tab stop', async () => {
+      const user = userEvent.setup();
+      const { rerender } = render(threeButtons());
+      await user.tab();
+      await user.keyboard('{ArrowRight}');
+      expect(button('Italic')).toHaveFocus();
+      const italicValue = button('Italic').getAttribute('data-roving-value');
+      expect(italicValue).toMatch(/^auto-\d+$/);
+
+      rerender(threeButtons({ attached: false }));
+      expect(rovingMarks()).toEqual([]);
+
+      rerender(threeButtons({ attached: true }));
+      expect(button('Bold')).toHaveAttribute('tabindex', '-1');
+      expect(button('Italic')).toHaveAttribute('tabindex', '0');
+      expect(button('Underline')).toHaveAttribute('tabindex', '-1');
+      // The generated value is kept, so the last focused item is found again.
+      expect(button('Italic')).toHaveAttribute('data-roving-value', italicValue!);
+
+      focus(button('after'));
+      await user.tab({ shift: true });
+      expect(button('Italic')).toHaveFocus();
+      await user.keyboard('{ArrowRight}');
+      expect(button('Underline')).toHaveFocus();
+    });
+
+    it("StrictMode's ref double call ends stamped", async () => {
+      const user = userEvent.setup();
+      const strict = (props: { attached?: boolean } = {}) => (
+        <React.StrictMode>{threeButtons(props)}</React.StrictMode>
+      );
+      const { rerender } = render(strict());
+      expect(button('Bold')).toHaveAttribute('tabindex', '0');
+      expect(button('Italic')).toHaveAttribute('tabindex', '-1');
+      expect(button('Underline')).toHaveAttribute('tabindex', '-1');
+      for (const name of ['Bold', 'Italic', 'Underline']) {
+        expect(button(name).getAttribute('data-roving-value')).toMatch(/^auto-\d+$/);
+      }
+      await user.tab();
+      expect(button('Bold')).toHaveFocus();
+      await user.keyboard('{ArrowRight}');
+      expect(button('Italic')).toHaveFocus();
+
+      rerender(strict({ attached: false }));
+      expect(rovingMarks()).toEqual([]);
+      rerender(strict({ attached: true }));
+      expect(button('Bold')).toHaveAttribute('tabindex', '-1');
+      expect(button('Italic')).toHaveAttribute('tabindex', '0');
+    });
+
+    it('hands the first container back when the container moves to another element', () => {
+      // The 0.4 call shape reads the container from a ref object in its layout effect, so the
+      // store goes from one element straight to the other, with no detach in between.
+      function Moving({ on }: { on: 'first' | 'second' }) {
+        const containerRef = React.useRef<HTMLDivElement>(null);
+        const { handleKeyDown } = useRovingTabIndex(containerRef, {
+          itemSelector: TOOLBAR_SELECTOR,
+          manageTabIndex: true,
+        });
+        const group = (name: 'first' | 'second', labels: [string, string]) => (
+          <div
+            role="group"
+            aria-label={name}
+            ref={on === name ? containerRef : undefined}
+            onKeyDown={on === name ? handleKeyDown : undefined}
+          >
+            <button type="button">{labels[0]}</button>
+            <button type="button">{labels[1]}</button>
+          </div>
+        );
+        return (
+          <>
+            {group('first', ['One', 'Two'])}
+            {group('second', ['Three', 'Four'])}
+          </>
+        );
+      }
+      const { rerender } = render(<Moving on="first" />);
+      expect(button('One')).toHaveAttribute('tabindex', '0');
+      expect(button('Two')).toHaveAttribute('tabindex', '-1');
+      expect(button('Three')).not.toHaveAttribute('tabindex');
+
+      rerender(<Moving on="second" />);
+      for (const name of ['One', 'Two']) {
+        expect(button(name)).not.toHaveAttribute('tabindex');
+        expect(button(name)).not.toHaveAttribute('data-roving-value');
+      }
+      expect(button('Three')).toHaveAttribute('tabindex', '0');
+      expect(button('Four')).toHaveAttribute('tabindex', '-1');
+    });
+
+    /** A managed container whose items are `selector` matches. */
+    function Selecting({ selector, boldClass = 'a' }: { selector: string; boldClass?: string }) {
+      const { containerProps } = useRovingTabIndex({
+        itemSelector: selector,
+        manageTabIndex: true,
+      });
+      return (
+        <div role="group" aria-label="Formatting" {...containerProps}>
+          <button type="button" className={boldClass}>
+            Bold
+          </button>
+          <button type="button" className="a">
+            Italic
+          </button>
+          <button type="button">Underline</button>
+        </div>
+      );
+    }
+
+    it('hands an element back when a new itemSelector no longer matches it', async () => {
+      const user = userEvent.setup();
+      const { rerender } = render(<Selecting selector="button" />);
+      expect(button('Bold')).toHaveAttribute('tabindex', '0');
+      expect(button('Italic')).toHaveAttribute('tabindex', '-1');
+      expect(button('Underline')).toHaveAttribute('tabindex', '-1');
+
+      rerender(<Selecting selector=".a" />);
+      expect(button('Bold')).toHaveAttribute('tabindex', '0');
+      expect(button('Italic')).toHaveAttribute('tabindex', '-1');
+      // No item any more: its own Tab stop again, without the value the hook added.
+      expect(button('Underline')).not.toHaveAttribute('tabindex');
+      expect(button('Underline')).not.toHaveAttribute('data-roving-value');
+      await user.tab();
+      expect(button('Bold')).toHaveFocus();
+      await user.tab();
+      expect(button('Underline')).toHaveFocus();
+
+      // Matched again, it is stamped again.
+      rerender(<Selecting selector="button" />);
+      expect(button('Underline')).toHaveAttribute('tabindex', '-1');
+      expect(button('Underline').getAttribute('data-roving-value')).toMatch(/^auto-\d+$/);
+    });
+
+    it('hands an element back when it stops matching the itemSelector', async () => {
+      const { rerender } = render(<Selecting selector=".a" />);
+      expect(button('Bold')).toHaveAttribute('tabindex', '0');
+      expect(button('Italic')).toHaveAttribute('tabindex', '-1');
+
+      rerender(<Selecting selector=".a" boldClass="b" />);
+      // The hand-back's writes reach the container's observer, which updates the item set.
+      await act(async () => {});
+      expect(button('Bold')).not.toHaveAttribute('tabindex');
+      expect(button('Bold')).not.toHaveAttribute('data-roving-value');
+      expect(button('Italic')).toHaveAttribute('tabindex', '0');
+    });
+
+    /**
+     * Four controls whose author renders its own `tabIndex` (and a `data-roving-value`) only while
+     * the container is detached: the props change in the commit that detaches it.
+     */
+    function authorAttributes(attached: boolean) {
+      return (
+        <>
+          <Detachable attached={attached}>
+            {/* The Tab stop (stamped 0); the author's 0 is the value the stamp left. */}
+            <button type="button" tabIndex={attached ? undefined : 0}>
+              Bold
+            </button>
+            {/* Stamped -1; the author's -1 is the value the stamp left. */}
+            <button type="button" tabIndex={attached ? undefined : -1}>
+              Italic
+            </button>
+            {/* Stamped -1; the author's 0 is another value. */}
+            <div role="button" tabIndex={attached ? undefined : 0}>
+              Underline
+            </div>
+            <button type="button" data-roving-value={attached ? undefined : 'strike'}>
+              Strike
+            </button>
+          </Detachable>
+          <button type="button">after</button>
+        </>
+      );
+    }
+
+    it('keeps a tabIndex and a data-roving-value the author renders in the commit that detaches the container', async () => {
+      const user = userEvent.setup();
+      const { rerender } = render(authorAttributes(true));
+      expect(button('Bold')).toHaveAttribute('tabindex', '0');
+      expect(button('Italic')).toHaveAttribute('tabindex', '-1');
+      expect(button('Underline')).toHaveAttribute('tabindex', '-1');
+      expect(button('Strike')).toHaveAttribute('tabindex', '-1');
+      expect(button('Strike').getAttribute('data-roving-value')).toMatch(/^auto-\d+$/);
+
+      rerender(authorAttributes(false));
+      expect(button('Bold')).toHaveAttribute('tabindex', '0');
+      expect(button('Italic')).toHaveAttribute('tabindex', '-1');
+      expect(button('Underline')).toHaveAttribute('tabindex', '0');
+      expect(button('Strike')).not.toHaveAttribute('tabindex');
+      expect(button('Strike')).toHaveAttribute('data-roving-value', 'strike');
+
+      // The page's Tab order is the author's: Italic stays out of it.
+      await user.tab();
+      expect(button('Bold')).toHaveFocus();
+      await user.tab();
+      expect(button('Underline')).toHaveFocus();
+      await user.tab();
+      expect(button('Strike')).toHaveFocus();
+      await user.tab();
+      expect(button('after')).toHaveFocus();
+    });
+
+    it('keeps a tabIndex the author renders while the element is stamped', async () => {
+      const ui = (attached: boolean, own: boolean) => (
+        <Detachable attached={attached}>
+          <button type="button">Bold</button>
+          {/* Stamped -1: the author's -1 is the stamp's value, its 0 another one. */}
+          <button type="button" tabIndex={own ? -1 : undefined}>
+            Italic
+          </button>
+          <div role="button" tabIndex={own ? 0 : undefined}>
+            Underline
+          </div>
+        </Detachable>
+      );
+      const { rerender } = render(ui(true, false));
+      rerender(ui(true, true));
+      // Still managed: the stamps stay while the container is attached.
+      expect(button('Bold')).toHaveAttribute('tabindex', '0');
+      expect(button('Italic')).toHaveAttribute('tabindex', '-1');
+      expect(button('Underline')).toHaveAttribute('tabindex', '-1');
+      // The container's observer reads the author's writes.
+      await act(async () => {});
+
+      rerender(ui(false, true));
+      expect(button('Bold')).not.toHaveAttribute('tabindex');
+      expect(button('Italic')).toHaveAttribute('tabindex', '-1');
+      expect(button('Underline')).toHaveAttribute('tabindex', '0');
+    });
+
+    /**
+     * A container that merges `containerProps.ref` with its own ref (Toolbar, TagGroup): the merged
+     * ref attaches and detaches the container in a layout effect, after the hook stamps.
+     */
+    function MergedDetachable({
+      attached = true,
+      children,
+    }: {
+      attached?: boolean;
+      children: React.ReactNode;
+    }) {
+      const { containerProps } = useRovingTabIndex({
+        itemSelector: TOOLBAR_SELECTOR,
+        manageTabIndex: true,
+        tabStop: 'last-focused',
+      });
+      const { ref, ...handlers } = containerProps;
+      const ownRef = React.useRef<HTMLDivElement>(null);
+      const mergedRef = useMergedRefs<HTMLDivElement>(attached ? ref : undefined, ownRef);
+      return (
+        <div role="group" aria-label="Formatting" ref={mergedRef} {...(attached ? handlers : {})}>
+          {children}
+        </div>
+      );
+    }
+
+    function mergedButtons(attached: boolean) {
+      return (
+        <>
+          <MergedDetachable attached={attached}>
+            <button type="button">Bold</button>
+            <button type="button">Italic</button>
+            <button type="button" tabIndex={attached ? undefined : -1}>
+              Underline
+            </button>
+          </MergedDetachable>
+          <button type="button">after</button>
+        </>
+      );
+    }
+
+    it('hands the elements back and stamps them again through a merged ref', async () => {
+      const user = userEvent.setup();
+      const { rerender } = render(mergedButtons(true));
+      expect(button('Bold')).toHaveAttribute('tabindex', '0');
+      expect(button('Italic')).toHaveAttribute('tabindex', '-1');
+      expect(button('Underline')).toHaveAttribute('tabindex', '-1');
+      await user.tab();
+      await user.keyboard('{ArrowRight}');
+      expect(button('Italic')).toHaveFocus();
+
+      rerender(mergedButtons(false));
+      expect(button('Bold')).not.toHaveAttribute('tabindex');
+      expect(button('Italic')).not.toHaveAttribute('tabindex');
+      // The author's -1, rendered in the detaching commit, stays.
+      expect(button('Underline')).toHaveAttribute('tabindex', '-1');
+      expect(rovingMarks().filter((el) => el.hasAttribute('data-roving-value'))).toEqual([]);
+
+      rerender(mergedButtons(true));
+      expect(button('Bold')).toHaveAttribute('tabindex', '-1');
+      expect(button('Italic')).toHaveAttribute('tabindex', '0');
+      expect(button('Underline')).toHaveAttribute('tabindex', '-1');
+      focus(button('after'));
+      await user.tab({ shift: true });
+      expect(button('Italic')).toHaveFocus();
+      await user.keyboard('{ArrowRight}');
+      expect(button('Underline')).toHaveFocus();
+    });
+
+    it('ends stamped through a merged ref in StrictMode, and hands back on detach', async () => {
+      const user = userEvent.setup();
+      const strict = (attached: boolean) => (
+        <React.StrictMode>{mergedButtons(attached)}</React.StrictMode>
+      );
+      const { rerender } = render(strict(true));
+      expect(button('Bold')).toHaveAttribute('tabindex', '0');
+      expect(button('Italic')).toHaveAttribute('tabindex', '-1');
+      expect(button('Underline')).toHaveAttribute('tabindex', '-1');
+      await user.tab();
+      await user.keyboard('{ArrowRight}');
+      expect(button('Italic')).toHaveFocus();
+
+      rerender(strict(false));
+      expect(button('Bold')).not.toHaveAttribute('tabindex');
+      expect(button('Italic')).not.toHaveAttribute('tabindex');
+      expect(button('Underline')).toHaveAttribute('tabindex', '-1');
+
+      rerender(strict(true));
+      expect(button('Bold')).toHaveAttribute('tabindex', '-1');
+      expect(button('Italic')).toHaveAttribute('tabindex', '0');
+      expect(button('Underline')).toHaveAttribute('tabindex', '-1');
     });
   });
 

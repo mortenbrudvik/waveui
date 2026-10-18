@@ -1,7 +1,7 @@
 import * as React from 'react';
-import { reportMissingContext, warnOnce } from '../../lib/dev';
+import { isDev, reportMissingContext, warnOnce } from '../../lib/dev';
 import { focusElement } from '../../lib/focus';
-import type { DismissReason } from '../../lib/layers';
+import { getOpenLayers, isDescendantLayer, type DismissReason } from '../../lib/layers';
 import { mergeProps } from '../../lib/mergeProps';
 import { STATE_ARIA } from '../../lib/renderTrigger';
 import type { ModalOpenChangeReason, OpenChangeDetails } from '../../lib/types';
@@ -103,8 +103,10 @@ export interface BackdropPress {
 }
 
 /**
- * What a press on a modal's backdrop does to focus (`Dialog.Content`, the Drawer panel). Presses
- * that start inside the surface bubble through unchanged.
+ * What a press on a modal's backdrop does to focus (`Dialog.Content`, the Drawer panel). The
+ * backdrop is the surface's sibling, so every mouse press on it, its content included, is a
+ * backdrop press (a press that a portal opened from the backdrop's content bubbles through the
+ * React tree is not).
  *
  * - When the press closes the modal (`closesOnPress`), the browser moves focus to `<body>` as
  *   usual, so the focused control blurs while it is still mounted and its blur-time commit runs
@@ -129,7 +131,8 @@ export function useBackdropPress(
 
   const onMouseDown = React.useCallback(
     (event: React.MouseEvent<HTMLElement>) => {
-      if (event.target !== event.currentTarget) return;
+      // C-COMPOSE: only presses on the backdrop element or its content in the DOM.
+      if (!event.currentTarget.contains(event.target as Node)) return;
       if (!closesOnPress) {
         event.preventDefault();
         return;
@@ -145,7 +148,8 @@ export function useBackdropPress(
     pressFocusRef.current = null;
     if (!element) return;
     // A close requested from the click is committed first (React flushes the update in a
-    // microtask queued before this one), so a closed surface no longer contains the element.
+    // microtask queued before this one): a closed surface no longer contains the element, or
+    // (exiting, or kept mounted) is inert, so the element cannot take focus.
     queueMicrotask(() => {
       if (getFocusedElement() !== null || !surfaceRef.current?.contains(element)) return;
       focusElement(element, { preventScroll: true });
@@ -244,6 +248,27 @@ export const inertModalTrigger: ModalTrigger = {
 
 function isElementTarget(target: unknown): target is HTMLElement {
   return typeof target === 'object' && target !== null && (target as Partial<Node>).nodeType === 1;
+}
+
+/**
+ * Whether a click handler's event came from outside its element in the DOM: it bubbled through the
+ * React tree from a portal (a popup opened inside a trigger). `false` without an event (a
+ * render-prop child that calls `onClick()` bare) or without DOM nodes to compare.
+ */
+function isPortaledClick(event: unknown): boolean {
+  if (typeof event !== 'object' || event === null) return false;
+  const { currentTarget, target } = event as { currentTarget?: unknown; target?: unknown };
+  if (!isNode(currentTarget) || !isNode(target)) return false;
+  return !currentTarget.contains(target);
+}
+
+function isNode(value: unknown): value is Node {
+  return (
+    typeof value === 'object' &&
+    value !== null &&
+    typeof (value as Partial<Node>).nodeType === 'number' &&
+    typeof (value as Partial<Node>).contains === 'function'
+  );
 }
 
 /** The element that has focus, or `null` when focus is on `<body>` (or nowhere). */
@@ -389,20 +414,30 @@ export interface ModalPartProps<RenderProps> extends Omit<
 /** What {@link useModalTriggerPart} reads from the modal root. */
 export interface ModalTriggerState {
   open: boolean;
-  /** Asks the root to open (reason `trigger`). */
+  /**
+   * Asks the root to open or close (reason `trigger`): to open while it is closed, to close while
+   * it is open.
+   */
   requestOpen: ModalRequestOpen;
   trigger: ModalTrigger;
   /** The surface's id for `aria-controls` while the modal is open. */
   controlsId: string | undefined;
+  /**
+   * `'dialog'` renders `aria-haspopup="dialog"`; `false` renders none (an inline drawer, whose
+   * trigger shows and hides a panel in place).
+   * @default 'dialog'
+   */
+  popup?: 'dialog' | false;
 }
 
 /**
- * Renders a `Dialog.Trigger`/`Drawer.Trigger`: its element gets `aria-haspopup="dialog"`,
- * `aria-expanded`, `aria-controls` (while open; these always win over the child's own), a click
- * handler that records the trigger (for the focus return) and asks the root to open (reason
- * `trigger`, with the click event), and a ref that registers it with the root's triggers. On a
- * wrapper span (`asChild={false}`, the automatic fallback), the state ARIA goes to the first
- * element in the tab order inside it (`useTriggerElement`).
+ * Renders a `Dialog.Trigger`/`Drawer.Trigger`: its element gets `aria-haspopup="dialog"` (none
+ * with `popup: false`, an inline drawer's trigger), `aria-expanded`, `aria-controls` (while open;
+ * these always win over the child's own), a click handler that opens and closes the root (reason
+ * `trigger`, with the click event: a click while it is open asks it to close) and records the
+ * trigger that opens it (for the focus return), and a ref that registers it with the root's
+ * triggers. On a wrapper span (`asChild={false}`, the automatic fallback), the state ARIA goes to
+ * the first element in the tab order inside it (`useTriggerElement`).
  *
  * @param modal         The root's state, from its context.
  * @param props         The part's props.
@@ -413,25 +448,30 @@ export function useModalTriggerPart<RenderProps>(
   { children, asChild, ref, ...rest }: ModalPartProps<RenderProps>,
   componentName: string,
 ): React.ReactNode {
-  const { open, requestOpen, trigger, controlsId } = modal;
+  const { open, requestOpen, trigger, controlsId, popup = 'dialog' } = modal;
   const { attach, activate } = useModalTriggerElement(trigger);
   const mergedRef = useMergedRefs<HTMLElement>(attach, ref);
-  const openModal = React.useCallback(
+  const toggleModal = React.useCallback(
     (event?: React.MouseEvent<HTMLElement>) => {
+      // A click that bubbled through the React tree from a portal opened inside the trigger (a
+      // Popover in a wrapper span) is not a click on it (C-COMPOSE).
+      if (isPortaledClick(event)) return;
       // Focus returns to this trigger, also when the root has several (overlays#9), and also when
       // a render-prop child calls `onClick()` without the event.
-      activate(event);
-      requestOpen(true, { reason: 'trigger', event: getNativeEvent(event) });
+      if (!open) activate(event);
+      requestOpen(!open, { reason: 'trigger', event: getNativeEvent(event) });
     },
-    [activate, requestOpen],
+    [open, activate, requestOpen],
   );
 
+  // An inline drawer's trigger gets no `aria-haspopup` key at all, so a render-prop child that
+  // spreads the props has none either.
   const stateAria = {
-    'aria-haspopup': 'dialog' as const,
+    ...(popup !== false && { 'aria-haspopup': popup }),
     'aria-expanded': open,
     'aria-controls': open ? controlsId : undefined,
   };
-  const triggerProps = mergeProps({ ...stateAria, onClick: openModal, ref: mergedRef }, rest, {
+  const triggerProps = mergeProps({ ...stateAria, onClick: toggleModal, ref: mergedRef }, rest, {
     oursWin: STATE_ARIA,
   });
 
@@ -462,6 +502,67 @@ export function useModalClosePart<RenderProps>(
   return useTriggerElement(children, closeProps as RenderProps, { componentName, asChild });
 }
 
+/** The element {@link useModalOpener} captured, while it is in the document. */
+interface ModalOpener {
+  /** Records the opener (or forgets it, `null`). */
+  set: (element: HTMLElement | null) => void;
+  /** The captured opener while it is in the document, else `null`. Read-only. */
+  ref: React.RefObject<HTMLElement | null>;
+}
+
+function createModalOpener(): ModalOpener {
+  let element: HTMLElement | null = null;
+  return {
+    set: (next) => {
+      element = next;
+    },
+    ref: {
+      get current() {
+        return element?.isConnected ? element : null;
+      },
+    },
+  };
+}
+
+/**
+ * The element a non-modal surface takes its keyboard place after (`usePopoverTabOrder`'s
+ * `anchorRef`). Pass the surface's open state as `enabled`, whatever its `modalType`, so a surface
+ * that turns non-modal while open (focus already inside it) still knows its opener. It is
+ * captured in the insertion phase of the commit in which `enabled` becomes true,
+ * before focus moves in: `trigger.focusRef.current`, which with nothing focused is the activated
+ * or first trigger's focus target and is `null` while an element other than `<body>` has focus
+ * (`ModalTrigger.focusRef` rule 1; a focused `tabIndex={-1}` trigger wrapper span resolves as a
+ * trigger), so a focused trigger, the button inside a trigger's span or a controlled surface's own
+ * opener is taken by the next step: else the focused element when it is not `<body>` and not
+ * inside `surface`, else `null`. Cleared when `enabled` becomes false. An opener removed from the
+ * document since reads as `null`, so the surface keeps its portal's place (the end of the page).
+ */
+export function useModalOpener(
+  enabled: boolean,
+  trigger: ModalTrigger,
+  surface: HTMLElement | null,
+): React.RefObject<HTMLElement | null> {
+  const [opener] = React.useState(createModalOpener);
+  const enabledRef = React.useRef(false);
+  React.useInsertionEffect(() => {
+    const wasEnabled = enabledRef.current;
+    enabledRef.current = enabled;
+    if (enabled === wasEnabled) return;
+    if (!enabled) {
+      opener.set(null);
+      return;
+    }
+    const fromTrigger = trigger.focusRef.current;
+    if (fromTrigger) {
+      opener.set(fromTrigger);
+      return;
+    }
+    const focused = getFocusedElement();
+    opener.set(focused && !surface?.contains(focused) ? focused : null);
+  });
+  return opener.ref;
+}
+
 /**
  * Scopes a trigger's activation to one open session (overlays#9): when the modal opens, the
  * activated trigger joins the session; when it closes, the trigger is forgotten, so a later open
@@ -476,6 +577,92 @@ export function useModalTriggerSession(trigger: ModalTrigger, open: boolean): vo
     if (open) trigger.startSession();
     else trigger.endSession();
   }, [trigger, open]);
+}
+
+/**
+ * Moves a kept-mounted surface to the top of its stack when it opens (D104). A portal's z-index is
+ * its layer plus its nesting depth, so at equal depth the wrapper later in the document paints
+ * above: a surface kept mounted since before another overlay opened (a confirm Dialog rendered
+ * next to a Drawer) would open under it. In the commit in which `open` becomes `true`, a layout
+ * effect moves the portal wrapper to the end of its container when it is not the container's last
+ * element child (`container.appendChild(wrapper)`). The closed content is hidden, so the move loses
+ * no visible state, and React removes the wrapper from the same parent later. An unmounting surface
+ * is appended when it opens already, so pass `keptMounted: false` for it: it is never moved.
+ *
+ * Call it before `useModalLayer` (a component's layout effects run in order), so the move happens
+ * before the layer registers, before other modals re-plan their isolation and before the focus
+ * trap moves focus in.
+ *
+ * @param open        Whether the surface is open.
+ * @param keptMounted `true` with `unmountOnClose={false}`.
+ * @param wrapperRef  The `Portal`'s `ref` (its wrapper element).
+ */
+export function useRaiseOnOpen(
+  open: boolean,
+  keptMounted: boolean,
+  wrapperRef: React.RefObject<HTMLElement | null>,
+): void {
+  // The open state of the previous commit: the move happens only in the opening commit, never
+  // while the surface is open (a move would blur the element inside that has focus).
+  const wasOpenRef = React.useRef(false);
+  React.useLayoutEffect(() => {
+    const wasOpen = wasOpenRef.current;
+    wasOpenRef.current = open;
+    if (!open || wasOpen || !keptMounted) return;
+    const wrapper = wrapperRef.current;
+    const container = wrapper?.parentElement;
+    if (wrapper && container && container.lastElementChild !== wrapper) {
+      container.appendChild(wrapper);
+    }
+  });
+}
+
+/**
+ * Development check of a kept-mounted surface (D106): a popup opened inside it (a Popover, a Menu,
+ * a nested Dialog) that is still open when the surface closes stays open over the page, because
+ * the content that would unmount it stays mounted. After each close of a kept-mounted surface it
+ * schedules one check in a new task (`setTimeout(0)`, so a popup that the closing press itself
+ * dismisses does not count) and warns once (`<componentName>:open-inside`) when an open layer
+ * other than a tooltip descends from the surface's layer (`isDescendantLayer` follows the popup's
+ * `parentId`, also after the surface's own layer unregistered) or has its anchor inside
+ * `surfaceRef`'s element (an inline drawer, which registers no layer of its own, so a popup
+ * opened inside it descends from no layer of the surface). Nothing runs with the default
+ * `unmountOnClose`, where the popups unmount with the content, or in production.
+ *
+ * @param open          Whether the surface is open.
+ * @param keptMounted   `true` with `unmountOnClose={false}`.
+ * @param layerId       The surface's dismiss layer (`useModalLayer`'s `layerId`).
+ * @param componentName The public name for the warning key and text: `'Dialog'`, `'Drawer'`.
+ * @param surfaceRef    The surface element, for the anchor check (optional).
+ */
+export function useOpenInsideWarning(
+  open: boolean,
+  keptMounted: boolean,
+  layerId: string,
+  componentName: string,
+  surfaceRef?: React.RefObject<HTMLElement | null>,
+): void {
+  const wasOpenRef = React.useRef(open);
+  React.useEffect(() => {
+    const wasOpen = wasOpenRef.current;
+    wasOpenRef.current = open;
+    if (!isDev || open || !wasOpen || !keptMounted) return undefined;
+    const timer = setTimeout(() => {
+      const surface = surfaceRef?.current ?? null;
+      const leftOpen = getOpenLayers().some((layer) => {
+        if (layer.kind === 'tooltip') return false;
+        if (isDescendantLayer(layer.id, layerId)) return true;
+        const anchor = layer.getAnchor();
+        return !!surface && !!anchor && surface.contains(anchor);
+      });
+      if (!leftOpen) return;
+      warnOnce(
+        `${componentName}:open-inside`,
+        `${componentName} closed while a popup opened inside it is still open. With \`unmountOnClose={false}\` the popup stays open over the page: close it first, or keep the default \`unmountOnClose\`.`,
+      );
+    }, 0);
+    return () => clearTimeout(timer);
+  }, [open, keptMounted, layerId, componentName, surfaceRef]);
 }
 
 /**
@@ -509,6 +696,12 @@ export interface ModalSurfaceContextValue {
    * Absent on a surface without a footer part (the Drawer panel).
    */
   setFooterHeight?: (px: number | null) => void;
+  /**
+   * The element `Dialog.Title` actions portal into: the outlet in `Dialog.Content`'s title-actions
+   * area, `null` until it is attached. Absent outside `Dialog.Content` (the Drawer panel), where a
+   * title renders its action right after its heading.
+   */
+  titleActionsOutlet?: HTMLElement | null;
 }
 
 /**

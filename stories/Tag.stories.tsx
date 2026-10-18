@@ -1,14 +1,27 @@
 import * as React from 'react';
-import type { Meta, StoryObj } from '@storybook/react';
+import type { ArgTypes, Meta, StoryObj } from '@storybook/react';
 import { fn } from 'storybook/test';
-import { Button, Tag } from '../src';
-import type { TagProps } from '../src';
+import { Avatar, Button, PresenceBadge, Tag, TagGroup } from '../src';
+import type { TagAppearance, TagProps, TagShape, TagSize } from '../src';
+
 /** The props Storybook passes (the default `<span>` Tag's props). */
 type TagStoryProps = React.ComponentProps<typeof Tag>;
+
+const SIZES = ['medium', 'small', 'extra-small'] as const satisfies readonly TagSize[];
+const APPEARANCES = ['filled', 'outline', 'brand'] as const satisfies readonly TagAppearance[];
+const SHAPES = ['circular', 'rounded'] as const satisfies readonly TagShape[];
+
+/** The tag vocabulary, declared here (the shared helpers cover the Wave-wide unions). */
+const tagArgTypes = {
+  size: { control: 'inline-radio', options: SIZES },
+  appearance: { control: 'inline-radio', options: APPEARANCES },
+  shape: { control: 'inline-radio', options: SHAPES },
+} satisfies ArgTypes;
 
 const meta = {
   title: 'Components/Data Display/Tag',
   component: Tag,
+  argTypes: tagArgTypes,
   args: {
     children: 'Tag label',
   },
@@ -58,50 +71,31 @@ function DismissibleTag(props: TagStoryProps) {
 const FILTERS = ['Red', 'Blue', 'Large'];
 
 /**
- * A filter bar that keeps its filters in state. Removing a tag moves focus to the next tag's
- * dismiss button, else the previous one, else "Reset filters", so keyboard focus is never lost.
- * "Reset filters" is unavailable but focusable (`disabledFocusable`) while every filter is set.
- * `Tag.test.tsx` implements the same recipe (its `FilterTags` component): keep the two in sync.
+ * A filter bar that keeps its filters in state, on a TagGroup toolbar (one Tab stop, the arrow
+ * keys between the dismiss buttons). The group reports each dismissal with the tag's `value`, and
+ * when the filter that had focus is removed it moves focus to the next filter's dismiss button,
+ * else the previous one, else "Reset filters" (its `fallbackFocusRef`), so keyboard focus is never
+ * lost. "Reset filters" is unavailable but focusable (`disabledFocusable`) while every filter is
+ * set.
  */
 function FilterBar(props: TagStoryProps) {
   const { onDismiss, ...rest } = props;
   const [filters, setFilters] = React.useState(FILTERS);
-  // Each rendered tag by filter, to reach its dismiss button (the tag's only button).
-  const tags = React.useRef(new Map<string, HTMLElement>());
   const reset = React.useRef<HTMLButtonElement>(null);
-
-  const dismiss = (filter: string) => {
-    onDismiss?.();
-    const index = filters.indexOf(filter);
-    const neighbour = filters[index + 1] ?? filters[index - 1];
-    const target =
-      neighbour === undefined
-        ? reset.current
-        : (tags.current.get(neighbour)?.querySelector('button') ?? null);
-    // The neighbour stays mounted, so it can take focus before the tag is removed.
-    target?.focus();
-    setFilters((current) => current.filter((f) => f !== filter));
-  };
 
   return (
     <div className="flex flex-wrap items-center gap-2">
-      <div role="group" aria-label="Active filters" className="flex flex-wrap gap-2">
+      <TagGroup
+        aria-label="Active filters"
+        fallbackFocusRef={reset}
+        onDismiss={(value) => setFilters((current) => current.filter((f) => f !== value))}
+      >
         {filters.map((filter) => (
-          <Tag
-            key={filter}
-            {...rest}
-            ref={(element) => {
-              if (element) tags.current.set(filter, element);
-              return () => {
-                tags.current.delete(filter);
-              };
-            }}
-            onDismiss={() => dismiss(filter)}
-          >
+          <Tag key={filter} {...rest} value={filter} onDismiss={onDismiss}>
             {filter}
           </Tag>
         ))}
-      </div>
+      </TagGroup>
       <Button
         ref={reset}
         appearance="subtle"
@@ -131,9 +125,10 @@ export const Dismissible: Story = {
 };
 
 /**
- * Every dismiss button of a filter bar has its own name ("Remove Red", "Remove Blue", …).
- * Removing a filter moves focus to the next filter's dismiss button, else the previous one, else
- * "Reset filters": the focus recipe of Tag's "Focus after dismissal" docs.
+ * Every dismiss button of a filter bar has its own name ("Remove Red", "Remove Blue", …). The
+ * filters are a TagGroup: Tab reaches the first one, Left/Right move between them, and Enter,
+ * Space, Delete or Backspace removes one. Removing a filter moves focus to the next filter's
+ * dismiss button, else the previous one, else "Reset filters" (the group's `fallbackFocusRef`).
  */
 export const FilterGroup: Story = {
   args: {
@@ -159,23 +154,176 @@ export const CustomDismissIcon: Story = {
   render: (args) => <DismissibleTag {...args} />,
 };
 
+/** A decorative glyph for the `icon` slot: the tag draws it in a 20, 16 or 12px box. */
+function DotIcon() {
+  return (
+    <svg viewBox="0 0 16 16" fill="currentColor">
+      <circle cx="8" cy="8" r="6" />
+    </svg>
+  );
+}
+
+/** `icon` is decorative (`aria-hidden`) and sits before the text, in a box sized for the tag. */
 export const WithIcon: Story = {
   args: {
-    children: (
-      <>
-        <svg
-          width="16"
-          height="16"
-          viewBox="0 0 16 16"
-          fill="currentColor"
-          aria-hidden="true"
-          className="me-1"
-        >
-          <circle cx="8" cy="8" r="6" />
-        </svg>
-        With icon
-      </>
-    ),
+    icon: <DotIcon />,
+    children: 'With icon',
+  },
+};
+
+/**
+ * `appearance`: `filled` (a neutral fill, the default), `outline` (a border on the surface behind
+ * it) or `brand` (a light brand tint). Each dismiss button is named after its tag.
+ */
+export const Appearances: Story = {
+  args: {
+    dismissible: true,
+    onDismiss: fn(),
+  },
+  render: (args) => (
+    <div className="flex flex-wrap items-center gap-2">
+      {APPEARANCES.map((appearance) => (
+        <Tag key={appearance} {...args} appearance={appearance}>
+          {appearance}
+        </Tag>
+      ))}
+    </div>
+  ),
+};
+
+/**
+ * `size`: `medium` (28px tall), `small` (24px) or `extra-small` (20px), with text only, an icon,
+ * an Avatar (24, 20 or 16px) and a dismiss button. Every dismiss button has a 24px pointer target.
+ */
+export const Sizes: Story = {
+  args: {
+    onDismiss: fn(),
+  },
+  // Only the dismissible tag takes `onDismiss` (without `dismissible` it would be ignored).
+  render: ({ onDismiss, ...args }) => (
+    <div className="flex flex-col items-start gap-3">
+      {SIZES.map((size) => (
+        <div key={size} className="flex flex-wrap items-center gap-2">
+          <Tag {...args} size={size}>
+            {size}
+          </Tag>
+          <Tag {...args} size={size} icon={<DotIcon />}>
+            With icon
+          </Tag>
+          <Tag {...args} size={size} media={<Avatar name="Katri Athokas" decorative />}>
+            Katri Athokas
+          </Tag>
+          <Tag {...args} size={size} dismissible onDismiss={onDismiss}>
+            {`Dismissible ${size}`}
+          </Tag>
+        </div>
+      ))}
+    </div>
+  ),
+};
+
+/** `shape`: `circular` (a pill, the default) or `rounded` (4px corners). */
+export const Shapes: Story = {
+  args: {
+    dismissible: true,
+    onDismiss: fn(),
+  },
+  render: (args) => (
+    <div className="flex flex-wrap items-center gap-2">
+      {SHAPES.map((shape) => (
+        <Tag key={shape} {...args} shape={shape}>
+          {shape}
+        </Tag>
+      ))}
+    </div>
+  ),
+};
+
+/**
+ * `disabled` dims the tag and disables its dismiss button natively: it leaves the Tab order and
+ * calls no `onDismiss`.
+ */
+export const Disabled: Story = {
+  args: {
+    disabled: true,
+    onDismiss: fn(),
+  },
+  // Only the dismissible tag takes `onDismiss` (without `dismissible` it would be ignored).
+  render: ({ onDismiss, ...args }) => (
+    <div className="flex flex-wrap items-center gap-2">
+      <Tag {...args}>Disabled</Tag>
+      <Tag {...args} dismissible onDismiss={onDismiss}>
+        Disabled and dismissible
+      </Tag>
+    </div>
+  ),
+};
+
+/**
+ * `selected` is a look only (the brand fill, `data-selected`): a Tag is not interactive, so the
+ * state is not announced. For a tag the user selects, use
+ * [InteractionTag](?path=/docs/components-data-display-interactiontag--docs), whose primary
+ * button is a toggle.
+ */
+export const Selected: Story = {
+  args: {
+    selected: true,
+    dismissible: true,
+    onDismiss: fn(),
+  },
+  render: (args) => (
+    <div className="flex flex-wrap items-center gap-2">
+      {APPEARANCES.map((appearance) => (
+        <Tag key={appearance} {...args} appearance={appearance}>
+          {`Selected ${appearance}`}
+        </Tag>
+      ))}
+    </div>
+  ),
+};
+
+/**
+ * `media` holds an Avatar, which takes the tag's size unless it sets its own. It is not hidden
+ * from assistive technology: an Avatar whose name repeats the tag's text is `decorative`. A
+ * presence badge is sized by hand (`size="extra-small"`). The dismiss button is named after the
+ * text only ("Dismiss Katri Athokas").
+ */
+export const WithMedia: Story = {
+  args: {
+    dismissible: true,
+    onDismiss: fn(),
+  },
+  render: (args) => (
+    <div className="flex flex-wrap items-center gap-2">
+      <Tag {...args} media={<Avatar name="Katri Athokas" decorative />}>
+        Katri Athokas
+      </Tag>
+      <Tag
+        {...args}
+        media={
+          <Avatar
+            name="Elvia Atkins"
+            badge={<PresenceBadge status="available" size="extra-small" />}
+          />
+        }
+      >
+        Reviewer
+      </Tag>
+    </div>
+  ),
+};
+
+/**
+ * `secondaryText` adds a smaller second line under the text; it is not part of the dismiss
+ * button's name. A small or extra-small tag grows to 28px to fit it.
+ */
+export const SecondaryText: Story = {
+  args: {
+    media: <Avatar name="Katri Athokas" decorative />,
+    secondaryText: 'Designer',
+    dismissible: true,
+    onDismiss: fn(),
+    children: 'Katri Athokas',
   },
 };
 
@@ -186,4 +334,17 @@ export const AsLink: AnchorStory = {
     href: '#topics/react',
     children: 'React',
   },
+};
+
+/**
+ * A dismissible link chip puts the link in the tag's content: a dismiss button cannot sit inside
+ * a link. The tag stays a `<span>`, the link and the dismiss button ("Dismiss React") are siblings.
+ */
+export const DismissibleLink: Story = {
+  args: {
+    dismissible: true,
+    onDismiss: fn(),
+    children: <a href="#topics/react">React</a>,
+  },
+  render: (args) => <DismissibleTag {...args} />,
 };

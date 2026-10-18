@@ -216,6 +216,8 @@ Generated from `src/styles/tokens.css`. A value followed by a name is a referenc
 | `secondary` | `#f5f5f5` | `#333333` | `#000000` |
 | `muted` | `#f0f0f0` | `#383838` | `#1a1a1a` |
 | `muted-foreground` | `#616161` | `#adadad` | `#ffffff` |
+| `muted-hover` | `#e0e0e0` | `#424242` | `#333333` |
+| `muted-pressed` | `#d1d1d1` | `#2e2e2e` | `#4d4d4d` |
 | `primary` | `#0f6cbd` (brand-80) | `#62abf5` (brand-110) | `#1aebff` |
 | `primary-foreground` | `#ffffff` | `#000000` | `#000000` |
 | `primary-hover` | `#115ea3` (brand-70) | `#77b7f7` (brand-120) | `#6ef3ff` |
@@ -230,6 +232,8 @@ Generated from `src/styles/tokens.css`. A value followed by a name is a referenc
 | `subtle-selected` | `#ebebeb` | `#383838` | `#333333` |
 | `selected` | `#ebf3fc` (brand-160) | `#082338` (brand-20) | `#003a40` |
 | `selected-foreground` | `#0f548c` (brand-60) | `#62abf5` (brand-110) | `#ffffff` |
+| `selected-hover` | `#cfe4fa` (brand-150) | `#0c3b5e` (brand-40) | `#005259` |
+| `selected-pressed` | `#b4d6fa` (brand-140) | `#061724` (brand-10) | `#006b75` |
 | `border` | `#e0e0e0` | `#666666` | `#ffffff` |
 | `stroke` | `#d1d1d1` | `#666666` | `#ffffff` |
 | `stroke-hover` | `#c7c7c7` | `#757575` | `#ffffff` |
@@ -277,8 +281,8 @@ Generated from `src/styles/tokens.css`. A value followed by a name is a referenc
 
 How the groups are used:
 
-- **Surfaces and text**: `background`/`foreground` for the page, `card` for raised surfaces, `muted` for neutral chips and backgrounds, `muted-foreground` for secondary text.
-- **Interactive**: `primary` fills with `primary-foreground` text, `primary-hover`/`primary-pressed` for their states; `subtle-hover`, `subtle-pressed` and `subtle-selected` for transparent controls, rows and menu items; `selected` with `selected-foreground` for a brand-tinted selection; `ring` for focus.
+- **Surfaces and text**: `background`/`foreground` for the page, `card` for raised surfaces, `muted` for neutral chips and backgrounds, with `muted-hover` and `muted-pressed` for the hover and pressed fills of a chip (a Tag's Dismiss button, an InteractionTag; `foreground` text only, each step at least 1.15:1 from the one before), `muted-foreground` for secondary text.
+- **Interactive**: `primary` fills with `primary-foreground` text, `primary-hover`/`primary-pressed` for their states; `subtle-hover`, `subtle-pressed` and `subtle-selected` for transparent controls, rows and menu items; `selected` with `selected-foreground` for a brand-tinted selection, and `selected-hover`/`selected-pressed` for its states (brand and selected tags; `selected-foreground` text only); `ring` for focus.
 - **Input fills**: `input-filled-darker` and `input-filled-lighter` are the fills of the `filled-darker` and `filled-lighter` appearances (`filled-lighter` follows `background`), and `input-filled-stroke` is their border, transparent except in the high-contrast theme, where it keeps the field's boundary. Every text token keeps 4.5:1 on both fills.
 - **Strokes**: `border` for dividers and surfaces, `stroke` for control borders, `stroke-accessible` where the edge itself must reach 3:1 (unchecked checkboxes, the Switch track, Slider rail, carousel dots, input bottom borders).
 - **Status**: fills (`success`, `warning`, `error`, `severe`, `info`) with their `*-foreground`, and light tints (`*-tint`) with `*-tint-foreground` text for MessageBar and Badge.
@@ -317,8 +321,8 @@ The dark theme uses brand-110 with **black** text (8.66:1); 0.4 used brand-100 w
 |-------|-----|------------|
 | `grey-14` | `#242424` | Default foreground (light) |
 | `grey-38` | `#616161` | Muted foreground and accessible strokes (light) |
-| `grey-82` | `#d1d1d1` | Control borders (`stroke`, `input`) |
-| `grey-88` | `#e0e0e0` | Dividers and borders (`border`), tracks, skeletons |
+| `grey-82` | `#d1d1d1` | Control borders (`stroke`, `input`), pressed chips (`muted-pressed`, light) |
+| `grey-88` | `#e0e0e0` | Dividers and borders (`border`), tracks, skeletons, hovered chips (`muted-hover`, light) |
 | `grey-92` | `#ebebeb` | Pressed and selected subtle controls (`subtle-pressed`, `subtle-selected`) |
 | `grey-94` | `#f0f0f0` | Muted backgrounds |
 | `grey-96` | `#f5f5f5` | Hover states |
@@ -441,7 +445,7 @@ export const Details = ({ open }: { open: boolean }) => (
 - **Server rendering.** On the server and while hydrating the element renders `entered` (or `exited`), so a hydrated element does not replay its enter motion (with the enter gated as above); `appear` runs it only for an element mounted on the client after hydration.
 - **Options.** `unmountOnExit={false}` keeps an exited element mounted, `hidden` and `inert`, so its state (a typed value, a scroll position) survives; `onEntered` and `onExited` report the end of a phase, once per phase (StrictMode included; `onExited` from the commit that unmounts or hides the element).
 - **The hook.** `const { isMounted, ref, presenceProps } = usePresence(open)`: render the element while `isMounted`, pass it `ref` (merge it with your own through `useMergedRefs`) and spread `presenceProps`. Destructure the result, since `eslint-plugin-react-hooks` treats the whole object as a ref once its `ref` is passed on. `<Presence>` does the same for a single child element (or calls a render function with the result).
-- **Where it is used.** Every `Menu.Popover`, root menu and submenu, mounts through the core, with no motion of its own: a consumer can animate a menu with `data-[presence=…]:` classes on `Menu.Popover`, and it still unmounts at once without them. Components added from 0.7 on mount through it; the other overlays and disclosures move onto it when they get their enter and exit motion.
+- **Where it is used.** Every `Menu.Popover`, root menu and submenu, mounts through the core, with no motion of its own: a consumer can animate a menu with `data-[presence=…]:` classes on `Menu.Popover`, and it still unmounts at once without them. Components added from 0.7 on mount through it, and since 0.11 `Dialog.Content` and every Drawer panel and backdrop (overlay or inline, NavDrawer's too), in both `unmountOnClose` modes: with the default the closed surface unmounts once its motion ends; with `unmountOnClose={false}` it stays mounted `exited`, `hidden` and `inert`. Every top-level element of their portal carries the presence attributes. The other overlays and disclosures move onto it when they get their enter and exit motion.
 - **Browser support.** `@starting-style` needs Chrome and Edge 117+, Safari 17.5+ or Firefox 129+; older browsers show the element at once, and the exit still runs.
 
 ### Reduced Motion
@@ -632,8 +636,8 @@ export const StatusLabel = ({ icon, children, ...rest }: StatusLabelProps) => (
 - `null`, `undefined`, `false` and `true` render nothing.
 - `Slot<T>` is `SlotObject<T> | React.ReactNode`, so any `ReactNode` (a promise included) type-checks. An attributes object typed by an interface (`React.ImgHTMLAttributes<HTMLImageElement>`) must be spread into a new object: `image={{ ...imgProps }}`.
 - `slotRendersContent(value)` (`src/lib/slot.ts`) is the one "renders anything" check: `''`, and an array, `Set`, generator or Fragment of only nullish, boolean or `''` items (`[]`, `<></>`, `<>{false}</>`, at any depth), render nothing; `0` is content. Components use it to fall back when a slot is effectively empty (a Field `error={[]}` is no error, a dismiss slot that renders nothing keeps the default icon). It reads a top-level generator once and caches its items: a value you check and then render yourself (not through `renderSlot`/`resolveSlot`) goes through `materialiseSlotContent(value)`, so React never enumerates the generator.
-- Dismiss and clear slots (Tag, MessageBar, SearchBox) share one rule, `slotWrapsDefaultContent(type, props)`: a slot object wraps the default icon only when its element is an intrinsic, non-void tag without `dangerouslySetInnerHTML` whose children render nothing (`{ className: 'text-error' }` styles the default icon). A component `as` (`{ as: CloseIcon }`), a void tag (`{ as: 'img', src, alt: '' }`) and markup of its own are the icon itself. A `<button>`/`Button` passed there, or a slot object whose `as` is one, is merged into the built-in button; its markup (`dangerouslySetInnerHTML`) renders inside that button. A merged Wave `Button` keeps its own props off the DOM (`BUTTON_OWN_PROP_KEYS` in `src/components/button/Button.slots.tsx`): its `icon` and `iconPosition` place the icon in the built-in button's content, and its `disabledFocusable` makes the built-in button unavailable but focusable.
-- Glyph slots inside a built-in button (Combobox and TimePicker `expandIcon`, SplitButton and MenuButton `menuIcon`) never nest a button: a `<button>`/`Button`, or a slot object whose `as` is one, is unwrapped by `unwrapButtonGlyph` (the same module): its children become the glyph, its props are dropped, and a one-time development warning names the slot.
+- Dismiss and clear slots (Tag, MessageBar, SearchBox, and the `closeButton` of `Dialog.Content` and Drawer) share one rule, `slotWrapsDefaultContent(type, props)`: a slot object wraps the default icon only when its element is an intrinsic, non-void tag without `dangerouslySetInnerHTML` whose children render nothing (`{ className: 'text-error' }` styles the default icon). A component `as` (`{ as: CloseIcon }`), a void tag (`{ as: 'img', src, alt: '' }`) and markup of its own are the icon itself. A `<button>`/`Button` passed there, or a slot object whose `as` is one, is merged into the built-in button; its markup (`dangerouslySetInnerHTML`) renders inside that button. A merged Wave `Button` keeps its own props off the DOM (`BUTTON_OWN_PROP_KEYS` in `src/components/button/Button.slots.tsx`): its `icon` and `iconPosition` place the icon in the built-in button's content, and its `disabledFocusable` makes the built-in button unavailable but focusable.
+- Glyph slots inside a built-in button (Combobox, TimePicker and TagPicker `expandIcon`, SplitButton and MenuButton `menuIcon`, `Hamburger.icon`, and the children of `InteractionTag.Secondary`, which is itself the button) never nest a button: a `<button>`/`Button`, or a slot object whose `as` is one, is unwrapped by `unwrapButtonGlyph` (the same module): its children become the glyph, its props are dropped, and a one-time development warning names the slot.
 - The last argument of `renderSlot`/`resolveSlot` holds defaults the slot's own props override; icon slots pass `{ 'aria-hidden': true }`.
 
 ### Pattern 4: Controlled / Uncontrolled (useControllable)
@@ -1121,13 +1125,31 @@ export function CommandPalette({
 - **Server.** The active item is React state derived during render, so the server HTML of an enabled hook with a fallback carries its id. Render `aria-activedescendant` only while that element exists: a portaled popup is not in the server HTML ([Pattern 9](#pattern-9-overlays-and-triggers)).
 - **Focus and announcements.** The active item has no DOM focus: mark it (`data-active`) and draw its focus indicator yourself. `aria-selected` marks the selection; a palette without one marks the active command, as APG's list-autocomplete combobox does. The hook announces nothing; a widget that needs announcements adds them (`useAnnounce`).
 
+### Pattern 14: Focus After Removing an Element That Has It
+
+When the element that has focus unmounts, the browser drops focus to `<body>`. A component that removes such an element (a dismissed tag, a cleared value, a closed row) moves focus first, in two steps:
+
+1. **Record in a layout cleanup.** The cleanup of a `useLayoutEffect` runs while the unmounting nodes are still in the document: check that focus is inside the element (`node.contains(node.ownerDocument.activeElement)`) and record where focus should go (the neighbours, the fallback), reading the DOM then.
+2. **Move in a microtask.** After the commit, focus the first recorded candidate that is still connected and enabled, else the fallback. `usePreserveFocus` (`src/hooks`) runs that step: a remount of the element cancels it (a controlled parent kept the tag), and focus that something else placed first wins.
+
+TagGroup's tags do this (`useRemovalFocus` in `TagGroup.context.ts`): the next tag's corresponding control, else the previous one's, else `fallbackFocusRef`, else nowhere, with a development warning (`TagGroup:focus-lost`). A removal the app refuses moves no focus, because nothing unmounts. Tests assert focus after `await act(async () => {})` (docs/testing-best-practices.md).
+
+### Pattern 15: Compound Parts That Render Defaults
+
+A compound that also has a one-prop form (`<TagPicker options={…} />`) makes that form the parts with their defaults: each part renders its default content when it has no children (`<TagPicker.Control />` holds the default tags and the Input, `<TagPicker.List />` the options of `options`), and the root adds a missing part (no `TagPicker.List`: the default list). A consumer then replaces only the part they need. The rules that keep both forms one component:
+
+- The root finds its parts among its direct children (through `isElementOfType`, so a Server Component's lazy references count) and warns when a part sits elsewhere (`TagPicker.List:placement`).
+- One state for both forms: the root's context holds the value, the query and the trigger wiring, and each part reads it; a part outside the root throws in development (C-CONTEXT).
+- Content the root needs before the parts render (the options' labels for the tags and the summary) is read from the children (`collectOptionLabels`), so the server HTML agrees with the client.
+- Routed props go to whichever trigger part renders (`TagPicker.Input` or `TagPicker.Button`), and exactly one trigger renders (`TagPicker:trigger`).
+
 ### Props Interface Conventions
 
 - Extend native HTML attributes: `React.HTMLAttributes<HTMLDivElement>`
 - Omit conflicting native props: `Omit<React.HTMLAttributes<HTMLDivElement>, 'onChange' | 'defaultValue'>`
 - Name value callbacks after the state (`onValueChange`, `onCheckedChange`, `onOpenChange`); `onChange` is only the native change event
 - Declare `ref` in the interface; export the props type with the component (`CardHeaderProps`, `DataGridRowProps`)
-- Use shared types from `src/lib/types.ts`: `Size`, `CoreSize`, `InputAppearance`, `Appearance`, `Status`, `Orientation`, `SelectionMode`, `TextWeight`, `Shape`, `PopupSide`, `PopupAlign`, `BadgeColor`, `IconPosition`, `ValidationState`, `LabelPosition` (take a subset with `Extract<LabelPosition, …>`), `ModalType`, `OpenChangeDetails<R>`, `CheckedValues`, `CheckedValuesChangeHandler`, `PopupTarget`, `VirtualElement`, `DayOfWeek`, `FirstWeekOfYear`
+- Use shared types from `src/lib/types.ts`: `Size`, `CoreSize`, `InputAppearance`, `Appearance`, `Status`, `Orientation`, `SelectionMode`, `TextWeight`, `Shape`, `PopupSide`, `PopupAlign`, `BadgeColor`, `IconPosition`, `ValidationState`, `LabelPosition` (take a subset with `Extract<LabelPosition, …>`), `ModalType`, `OpenChangeDetails<R>`, `CheckedValues`, `CheckedValuesChangeHandler`, `PopupTarget`, `VirtualElement`, `DayOfWeek`, `FirstWeekOfYear`, `HeadingLevel`, `FocusMode`, `TagSize`, `TagAppearance`, `TagShape`, `SurfaceSize`, `BackdropAppearance`
 - Prefer Fluent's prop name when it fits the conventions (`disabledFocusable`, `iconPosition`, `validationState`, `modalType`, `selectTabOnFocus`, `persistOnItemClick`, `openOnHover`, `openOnContext`, `isAccessible`); open state stays `open`/`defaultOpen`/`onOpenChange`, a state callback is named after its state (`checkedValues` → `onCheckedValuesChange`, not Fluent's `onCheckedValueChange`), and extra callback data goes in a second, optional `details` argument (`onOpenChange(open, details?)`, `onCheckedValuesChange(checkedValues, details?)`)
 - One delay vocabulary: `openDelay` and `closeDelay` in milliseconds (Menu 250/250, Popover 250/500, Tooltip 200/100). Menu's and Popover's apply to mouse hover only, Tooltip's `openDelay` also to keyboard focus
 
@@ -1152,7 +1174,7 @@ export function CommandPalette({
 
 These describe what the components implement.
 
-#### Roving tab index (Toolbar, RadioGroup, SwatchPicker, TabList, Menu, List, Tree)
+#### Roving tab index (Toolbar, TagGroup, RadioGroup, SwatchPicker, TabList, Menu, List, Tree, NavDrawer.Body)
 
 Implemented with `useRovingTabIndex`:
 
@@ -1166,7 +1188,7 @@ Tab          → leaves the group
 
 Only one item holds `tabIndex={0}`. Disabled items are skipped (natively disabled or `aria-disabled`, except the focusable disabled ones below), and so are controls hidden with CSS (`display: none` or `visibility: hidden` inside the container, a closed `<details>`) and the `type="hidden"` input of a named value control. Left/Right are mirrored in RTL. Arrows that start in a text field, select, slider, spin button or editable combobox inside the group are left to that control (a SearchBox in a Toolbar keeps its caret keys). A Dropdown (select-only combobox) keeps Up/Down, Home and End for its list, but Left/Right move past it, so in a vertical Toolbar the arrows cannot leave it.
 
-In a Toolbar, a nested composite (a RadioGroup, a TabList) keeps its own Tab stop and arrow keys (a `Toolbar.RadioGroup` does not: see [Toolbar radio groups](#toolbar-radio-groups)), and focusing it or a text field, select, slider or spin button keeps the toolbar's Tab stop on the last focused other control, so Tab and Shift+Tab can return to the toolbar; such a control holds the stop only when nothing else can. These rules live in `useRovingTabIndex` (the CSS-hidden check in its `manageTabIndex` mode, which Toolbar and Menu use); an `itemSelector` the browser rejects logs a development warning.
+In a Toolbar, a nested composite (a RadioGroup, a TabList) keeps its own Tab stop and arrow keys (a `Toolbar.RadioGroup` does not: see [Toolbar radio groups](#toolbar-radio-groups)), and focusing it or a text field, select, slider or spin button keeps the toolbar's Tab stop on the last focused other control, so Tab and Shift+Tab can return to the toolbar; such a control holds the stop only when nothing else can. These rules live in `useRovingTabIndex` (the CSS-hidden check in its `manageTabIndex` mode, which Toolbar, TagGroup, Menu and an arrow-key NavDrawer body use); an `itemSelector` the browser rejects logs a development warning. When the container stops being one (its ref detaches, as when a TagGroup switches to `role="list"` or a NavDrawer body to `focusMode="tab"`) or `manageTabIndex` turns off, the hook hands every element it stamped back: its own `tabindex` (or the one its author rendered since) and no `data-roving-value` of the hook's, so each control is its own Tab stop again.
 
 **Focusable disabled items.** A control with `disabledFocusable` (Button, CompoundButton, ToggleButton, MenuButton, a SplitButton half, Link, Checkbox, Switch) carries `aria-disabled="true"` and `data-disabled-focusable`, and `useRovingTabIndex` keeps such an item: the arrow keys, Home/End and typeahead reach it, and it may hold the Tab stop (APG allows focusable disabled items in toolbars). Enter, Space and clicks on it do nothing, and a Tooltip on it opens on focus to say why it is unavailable. Natively disabled items and a composite's own `data-roving-disabled` items are still skipped.
 
@@ -1188,6 +1210,8 @@ In a Toolbar, a nested composite (a RadioGroup, a TabList) keeps its own Tab sto
 | TabList | Left/Right (Up/Down when vertical), wrapping; moving selects (automatic activation), or with `selectTabOnFocus={false}` only moves focus (manual activation: Enter or Space selects) |
 | Menu | Up/Down, wrapping; typeahead; Right/Left open and close submenus (mirrored in RTL) |
 | List (selectable) | Up/Down, wrapping; typeahead above 7 items; Enter/Space toggle selection |
+| TagGroup (toolbar) | Toolbar's: Left/Right (Up/Down when vertical), wrapping, Home/End; both buttons of an InteractionTag join the order; Delete/Backspace dismiss; `role="list"`: no arrows, every control a Tab stop |
+| NavDrawer.Body (`focusMode="arrow"`) | Down/Right next, Up/Left previous (Left and Right swap in RTL), wrapping, Home/End; the Tab stop starts at the current page; item actions join the order |
 | Tree | see below |
 
 **Manual tab activation.** By default TabList selects the tab that focus moves to (automatic activation, as APG recommends when a panel shows at once). For panels that are slow to show, `selectTabOnFocus={false}` switches to manual activation: the arrow keys, Home and End only move focus, Enter, Space or a click selects the focused tab, and the Tab stop stays on the selected tab, so Tab away and Shift+Tab back return to it. The shown panel follows the selected tab, not the focused one. (Fluent's default is `false`; Wave keeps `true`, the 0.5 behaviour.)
@@ -1376,13 +1400,37 @@ A trigger with `aria-disabled="true"` (a `disabledFocusable` MenuButton or Split
 
 #### Dialog and Drawer
 
+Modal and alert (`modalType="modal"`, the default, and `"alert"`):
+
 ```
-Tab / Shift+Tab → cycle through the dialog's focusable elements (trapped; toasts included)
+Tab / Shift+Tab → cycle through the dialog's focusable elements (trapped; toasts included;
+                  a drawer's header, then its body, then its footer)
 Escape          → close (only the topmost layer: an open listbox inside closes first, and a
                   SpinButton with typed text or a SearchBox with text consumes it)
 ```
 
 Focus moves into the dialog on open (the first focusable element, unless something inside already has focus, such as an `autoFocus` input; that also holds for a dialog opened over another one or nested in its content, and for a `Popover.Content` opened from a dialog). Tab inside a plain `<Portal>` rendered in the dialog moves natively between the portal's elements and wraps to the dialog's first or last element at the portal's edges. On close it goes to `finalFocusRef` when given, else back to the element that had focus when the dialog opened (a trigger's wrapper span resolves to the element inside it): the trigger for a trigger click, the parent's own button of a controlled Dialog, or a text field focused before a keyboard-shortcut open. When nothing had focus (opened from code, or a Safari click), it goes to the trigger that opened the dialog, else the first mounted trigger; when that element is gone, to a mounted trigger, then to an element next to where the opener was (the next row's action after a delete), then to the overlay below.
+
+The trigger toggles every type: a click on it while the surface is open closes it.
+
+Non-modal (`modalType="non-modal"`):
+
+```
+Tab / Shift+Tab → leave the surface in the page's order: it sits right after the element that
+                  opened it (no trap)
+Escape          → close, only while focus is inside the surface
+```
+
+Focus moves in on open; presses on the page never close it; focus returns to `finalFocusRef`, else the opener, only when it was inside the surface at close.
+
+Inline drawer (`type="inline"`):
+
+```
+Tab / Shift+Tab → page order (the panel is page content, after its direct triggers)
+Escape          → nothing (it is left to the page)
+```
+
+Opening moves no focus; closing it while focus is inside returns focus to `finalFocusRef`, else the element that opened it, else the trigger. NavDrawer follows the same rules for its type; its body's `focusMode="arrow"` makes the list one Tab stop with both arrow pairs, wrapping, and Home and End.
 
 #### Calendar and the DatePicker calendar
 
@@ -1439,7 +1487,20 @@ Option ids stay stable while the list is filtered. `aria-activedescendant` is se
 </div>
 ```
 
-With `modalType="alert"`, `Dialog.Content` is `role="alertdialog"` instead, for a confirmation that needs an answer (a backdrop press does not close it). Dialog and Drawer do **not** set `aria-modal`. While they are open, everything else on the page is made `inert` except the Toaster region and the announcement live regions, so the background is neither focusable, clickable nor readable while toasts stay available. The DatePicker calendar is a transient dialog that keeps `aria-modal="true"`. Name a dialog with `title`, `Dialog.Title`/`Drawer.Title`, `aria-label` or `aria-labelledby` (unnamed dialogs warn in development).
+With `modalType="alert"`, `Dialog.Content` is `role="alertdialog"` instead, for a confirmation that needs an answer (a backdrop press does not close it). Dialog and Drawer do **not** set `aria-modal`. While they are open, everything else on the page is made `inert` except the Toaster region and the announcement live regions, so the background is neither focusable, clickable nor readable while toasts stay available. The DatePicker calendar is a transient dialog that keeps `aria-modal="true"`. Name a dialog with `title`, `Dialog.Title`/`Drawer.Title` (or a `Drawer.HeaderTitle`), `aria-label` or `aria-labelledby` (unnamed dialogs warn in development). The backdrop is the surface's sibling and `aria-hidden`.
+
+A **non-modal** surface (`modalType="non-modal"`) is a `role="dialog"` without isolation and without `aria-modal`: nothing is `inert`, and the page keeps its Tab order, with the surface placed right after its opener. It covers the page under it while Tab still reaches that page, so keep the page's controls clear of it: beside a centred dialog, or in the room a non-modal drawer's width (height at the bottom) leaves while it is open; `size="full"` warns.
+
+An **inline** drawer is no dialog:
+
+```html
+<aside aria-labelledby="title-id">
+  <h2 id="title-id">Details</h2>
+  <!-- content -->
+</aside>
+```
+
+It is a complementary landmark in the page, named by its title, after its direct triggers; its trigger has `aria-expanded` and `aria-controls` and no `aria-haspopup`. An overlay NavDrawer is a dialog named like the `<nav>` inside it; an inline one is the `<nav>` in a panel.
 
 #### Navigation
 
@@ -1451,6 +1512,8 @@ With `modalType="alert"`, `Dialog.Content` is `role="alertdialog"` instead, for 
   </ul>
 </nav>
 ```
+
+Every child of a Nav list is a list item: `Nav.SectionHeader` is a heading (`<h3>` by default) inside a list item, and `Nav.Divider` is an `<li aria-hidden="true">`, decorative, since the headers carry the structure. An item's `actions` render beside its link, never inside it, in a group named by the item, so the link's name stays the page's name. A NavDrawer body with `focusMode="arrow"` is one Tab stop; screen readers do not announce arrow keys in a navigation landmark, which is why every item is a Tab stop by default.
 
 A collapsed `Nav.Category` that contains the current page marks its toggle button with `aria-current="true"` (not `"page"`: the button is not the page's link) and the selected look. A category whose children hold the current item takes it over from the category Nav remembered, so an item moved into another category marks only that one.
 
@@ -1513,8 +1576,8 @@ Live regions must exist before their content changes. `Toaster` keeps two perman
 
 1. **Focus rings**: focusable controls use `focusRing` (`focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring`), cells and rows `focusRingInset`; text inputs show a primary bottom border (`inputFocus`) with `focus:outline-hidden`, which keeps an outline in forced-colors mode. Never use `focus:outline-none`. A focusable control with the disabled look (`disabledFocusable`, a self-disabling boundary button) goes back to full opacity while its ring shows, so the ring keeps its contrast.
 2. **Moving focus into overlays**: Dialog and Drawer focus their first focusable element (or keep an `autoFocus` element, also when stacked over or nested in another dialog, and in a popover opened from one), Menu focuses its first item, the DatePicker calendar its focused day. Build custom overlays on these components rather than re-implementing traps.
-3. **Focus restoration**: when an overlay closes, focus returns to where it came from. Dialog and Drawer use `finalFocusRef` when given, else the element that was focused when they opened (the trigger, for a trigger click; a trigger's wrapper span resolves to the element inside it), or a trigger when nothing had focus. When that element is gone, focus goes to a mounted trigger, then to the element next to where the opener was (the next row's action after a delete), then to the overlay below. Popovers and menus return focus to their trigger (TeachingPopover: to where focus was) when focus was inside them (or lost to `<body>`) at close. A close by hover moves no focus, and neither does the close of a surface opened from inside one that closes by hover (a submenu, a hover card in a hover card). When a focused element disappears (a SearchBox clear button, a dismissed toast, a boundary button), the component moves focus somewhere sensible instead of dropping it to `<body>`; TimePicker and DatePicker settle erased text on Tab before focus moves, so Tab never lands on the clear button that the commit removes.
-4. **Focus trapping**: Dialog and Drawer trap Tab, including the Toaster region and overlays opened from them. Tab inside a plain `<Portal>` rendered in a dialog is native and wraps to the dialog's first or last element at the portal's edges. Focus that lands outside the trap is returned in a microtask after the `focusin`.
+3. **Focus restoration**: when an overlay closes, focus returns to where it came from. Dialog and Drawer use `finalFocusRef` when given, else the element that was focused when they opened (the trigger, for a trigger click; a trigger's wrapper span resolves to the element inside it), or a trigger when nothing had focus. When that element is gone, focus goes to a mounted trigger, then to the element next to where the opener was (the next row's action after a delete), then to the overlay below. A non-modal Dialog or Drawer, and an inline Drawer, move focus on close only when focus was inside them (`useRestoreFocus` with `requireFocusInside`; focus in a popup opened from them counts as inside). Popovers and menus return focus to their trigger (TeachingPopover: to where focus was) when focus was inside them (or lost to `<body>`) at close. A close by hover moves no focus, and neither does the close of a surface opened from inside one that closes by hover (a submenu, a hover card in a hover card). When a focused element disappears (a SearchBox clear button, a dismissed toast, a boundary button), the component moves focus somewhere sensible instead of dropping it to `<body>`; TimePicker and DatePicker settle erased text on Tab before focus moves, so Tab never lands on the clear button that the commit removes.
+4. **Focus trapping**: modal and alert Dialogs and Drawers trap Tab (non-modal and inline ones do not), including the Toaster region and overlays opened from them. Tab inside a plain `<Portal>` rendered in a dialog is native and wraps to the dialog's first or last element at the portal's edges. Focus that lands outside the trap is returned in a microtask after the `focusin`.
 5. **Skip links**: for content-heavy pages, provide a "Skip to main content" link.
 
 ### Forced Colors (Windows High Contrast)
@@ -1538,7 +1601,7 @@ The **high-contrast theme** (`WaveProvider theme="high-contrast"`) is a separate
 - Validation errors: `Field`'s `error`, or `error="…"` on Input/Select/Textarea, render a `role="alert"` message linked with `aria-describedby`; a Field `validationState="warning"` message is announced too, without marking the control invalid
 - Hide decorative elements with `aria-hidden="true"` (Wave's icon slots do it for you)
 - Name progress indicators and landmarks: `ProgressBar` `label`, `Spinner` `label` (default "Loading"), `Toolbar` and `Nav` `aria-label`
-- Translate the names and hidden texts components render themselves: `closeLabel` (Dialog.Content, Drawer, TeachingPopover), `statusLabel` (MessageBar, Toast), `dismissLabel` (Toast, `dispatchToast` options, Tag), Carousel `labels` and `autoPlayLabels`, Stepper `statusLabels`, Pagination `getItemAriaLabel`, and the `labels` objects of AlphaSlider, Calendar, ColorArea, ColorPicker, ColorSlider, Combobox, DataGrid, DatePicker, Dropdown, Listbox, Rating, RatingDisplay, SpinButton, SwatchPicker, TagPicker, TeachingPopover and TimePicker (the README's "Built-in text" lists every one)
+- Translate the names and hidden texts components render themselves: `closeLabel` (Dialog.Content, Drawer, TeachingPopover), `statusLabel` (MessageBar, Toast), `dismissLabel` (Toast, `dispatchToast` options, Tag, `InteractionTag.Secondary`), the `aria-label` defaults of Hamburger and NavDrawer ("Navigation"), Carousel `labels` and `autoPlayLabels`, Stepper `statusLabels`, Pagination `getItemAriaLabel`, and the `labels` objects of AlphaSlider, Calendar, ColorArea, ColorPicker, ColorSlider, Combobox, DataGrid, DatePicker, Dropdown, Listbox, Rating, RatingDisplay, SpinButton, SwatchPicker, TagPicker, TeachingPopover and TimePicker (the README's "Built-in text" lists every one)
 
 ---
 
@@ -1746,7 +1809,84 @@ export function ProfileForm() {
 
 ### Navigation Patterns
 
-**Sidebar navigation (Nav)**:
+**App shell (NavDrawer, Hamburger, inline Drawer)**:
+
+```tsx
+import * as React from 'react';
+import { Drawer, Hamburger, Nav, NavDrawer, Toolbar } from '@mortenbrudvik/waveui';
+
+export function AppShell({ narrow }: { narrow: boolean }) {
+  const [navOpen, setNavOpen] = React.useState(!narrow);
+  const [detailsOpen, setDetailsOpen] = React.useState(false);
+  const [previousNarrow, setPreviousNarrow] = React.useState(narrow);
+  // The breakpoint decides the open states: a resize never turns an open inline pane into a modal.
+  if (narrow !== previousNarrow) {
+    setPreviousNarrow(narrow);
+    setNavOpen(!narrow);
+    setDetailsOpen(false);
+  }
+  const outer = React.useRef<HTMLButtonElement>(null);
+  const type = narrow ? 'overlay' : 'inline';
+  return (
+    <div className="flex h-dvh flex-col">
+      <Toolbar aria-label="App">
+        <Hamburger
+          ref={outer}
+          aria-expanded={navOpen}
+          aria-controls={navOpen ? 'nav' : undefined}
+          aria-haspopup={narrow ? 'dialog' : undefined}
+          onClick={() => setNavOpen(!navOpen)}
+        />
+        <Toolbar.Button className="ms-auto" onClick={() => setDetailsOpen(!detailsOpen)}>
+          Details
+        </Toolbar.Button>
+      </Toolbar>
+      <div className="flex min-h-0 flex-1">
+        <NavDrawer
+          id="nav"
+          aria-label="Main"
+          type={type}
+          open={navOpen}
+          onOpenChange={setNavOpen}
+          onItemSelect={() => {
+            if (narrow) setNavOpen(false);
+          }}
+          finalFocusRef={outer}
+          defaultValue="home"
+        >
+          {narrow && (
+            <NavDrawer.Header>
+              <Hamburger />
+              Contoso HR
+            </NavDrawer.Header>
+          )}
+          <NavDrawer.Body>
+            <Nav.Item value="home" href="/">
+              Home
+            </Nav.Item>
+            <Nav.Category value="settings" label="Settings">
+              <Nav.SubItem value="profile" href="/settings/profile">
+                Profile
+              </Nav.SubItem>
+            </Nav.Category>
+          </NavDrawer.Body>
+        </NavDrawer>
+        <main className="min-w-0 flex-1 overflow-auto p-6">…</main>
+        <Drawer type={type} separator title="Details" open={detailsOpen} onOpenChange={setDetailsOpen}>
+          Owner: People team.
+        </Drawer>
+      </div>
+    </div>
+  );
+}
+```
+
+- **The breakpoint rule.** Above the breakpoint both panes are inline (page content beside `main`); below it they are overlays. Set the open states when the breakpoint changes, during render as above, so a resize never turns an open inline pane into a page-blocking modal. Changing `type` remounts a panel; NavDrawer keeps its selection and open categories.
+- **Two Hamburgers.** The page's Hamburger opens the drawer and is its `finalFocusRef`; the one in `NavDrawer.Header` wires itself (`aria-expanded`, `aria-controls`, the toggle) and closes it, handing focus back to the page's Hamburger, also for an inline drawer that was open from the server.
+- **Closing on selection.** `onItemSelect` fires on every activation, the current page included, so an overlay closes when any item is chosen; `onValueChange` fires only when the value changes.
+- **Landmarks.** Name the NavDrawer (`aria-label="Main"`) when the page has another navigation landmark; the inline details Drawer is an `<aside>` named by its title.
+
+`Nav` on its own (a fixed sidebar):
 
 ```tsx
 import * as React from 'react';
@@ -1772,7 +1912,7 @@ export function Sidebar() {
 }
 ```
 
-The category that contains the selected item (`value` or `defaultValue`) starts open; `defaultOpenCategories` (even `[]`) replaces that, and `openCategories`/`onOpenCategoriesChange` control it. A click that opens a link elsewhere (Ctrl/Cmd/Shift/Alt-click, a mouse button other than the main one, a `target` other than `_self`, a `download` link) selects nothing, unless the item's `onClick` calls `preventDefault()` (client-side routing): the browser then opens nothing elsewhere, and the item is selected. Item values (items and sub-items share them) and category values are unique; a duplicate warns in development. A closed category that contains the current page marks its toggle (`aria-current="true"`, the selected look); for sub-items that your own component renders inside a category, pass the category's value as `currentCategory`.
+The category that contains the selected item (`value` or `defaultValue`) starts open; `defaultOpenCategories` (even `[]`) replaces that, and `openCategories`/`onOpenCategoriesChange` control it. A click that opens a link elsewhere (Ctrl/Cmd/Shift/Alt-click, a mouse button other than the main one, a `target` other than `_self`, a `download` link) selects nothing, unless the item's `onClick` calls `preventDefault()` (client-side routing): the browser then opens nothing elsewhere, and the item is selected. Item values (items and sub-items share them) and category values are unique; a duplicate warns in development. A closed category that contains the current page marks its toggle (`aria-current="true"`, the selected look); for sub-items that your own component renders inside a category, pass the category's value as `currentCategory`. `Nav.SectionHeader`, `Nav.Divider`, `Nav.AppItem` and `Nav.AppItemStatic` structure the list, and `actions` puts your own buttons beside an item (README, "Navigation").
 
 **Breadcrumb**:
 
@@ -2003,22 +2143,22 @@ export function ConfirmDelete({ onDelete }: { onDelete: () => void }) {
 | Need | Component |
 |------|-----------|
 | Trigger an action | `Button`, `CompoundButton`, `SplitButton` |
-| Navigate to a page | `Link`, `Breadcrumb`, `Nav`, `Pagination` |
+| Navigate to a page | `Link`, `Breadcrumb`, `Nav`, `NavDrawer` with `Hamburger` (an app shell), `Pagination` |
 | Single-line text input | `Input`, `SearchBox` |
 | Multi-line text input | `Textarea` |
 | Select from options | `Dropdown` (select-only), `Combobox` (type to filter), `Listbox` (in the page), `Select` (native) |
-| Pick multiple items | `TagPicker`, `Dropdown`/`Combobox`/`Listbox` with `multiselect`, `Checkbox` group, selectable `List` |
+| Pick multiple items | `TagPicker` (its parts: your own Tags, `TagPicker.Option`s, `TagPicker.Button`; `allowCreate` for free tagging), `Dropdown`/`Combobox`/`Listbox` with `multiselect`, `Checkbox` group, selectable `List`, selectable `InteractionTag`s in a `TagGroup` |
 | Build a picker of your own | `useListbox`, `useListboxPopup`, `ListboxSurface`, `Option` ([Pattern 12](#pattern-12-building-a-custom-picker)) |
 | Boolean toggle | `Switch`, `Checkbox`, `ToggleButton` |
 | Choose one from few | `RadioGroup` |
 | Pick a number | `Slider`, `SpinButton` |
 | Pick a color | `ColorPicker`, `ColorArea`, `ColorSlider`, `AlphaSlider`, `SwatchPicker` (with `ColorSwatch`, `ImageSwatch`, `EmptySwatch`) |
 | Show user identity | `Avatar`, `AvatarGroup`, `Persona` |
-| Categorize items | `Badge`, `Tag`, `CounterBadge` |
+| Categorize items | `Badge`, `Tag`, `TagGroup` (a set of tags, with dismissal and focus after a removal), `InteractionTag` (a tag with an action), `CounterBadge` |
 | Show status | `PresenceBadge`, `MessageBar` |
 | Display data | `Table`, `DataGrid`, `List` |
 | Organize content | `Card`, `Accordion`, `TabList`, `Tree`, `Grid`, `Stack`, `Flex` |
-| Overlay content | `Dialog`, `Drawer`, `Popover`, `Tooltip` |
+| Overlay content | `Dialog`, `Drawer` (also non-modal, or inline in the page), `Popover`, `Tooltip` |
 | Offer actions in a popup | `Menu` with `MenuButton` or `SplitButton` |
 | Show progress | `Spinner`, `ProgressBar`, `Skeleton` |
 | Notify users | `Toast` / `Toaster` (`createToaster()` from outside components), `MessageBar` |
@@ -2035,28 +2175,28 @@ export function ConfirmDelete({ onDelete }: { onDelete: () => void }) {
 
 ## 12. Quick Reference
 
-### Component Catalog (74 components)
+### Component Catalog (78 components)
 
 **Buttons & Actions** (7)
 `Button` `CompoundButton` `ToggleButton` `SplitButton` `MenuButton` `Link` `Toolbar` (plus the Toolbar parts `Toolbar.Button`, `Toolbar.ToggleButton`, `Toolbar.RadioGroup`, `Toolbar.RadioButton`, `Toolbar.Group`, `Toolbar.Divider`)
 
 **Input & Forms** (27)
-`Input` `Textarea` `Field` `Label` `Checkbox` `RadioGroup` `Switch` `Select` `SearchBox` `Slider` `SpinButton` `Combobox` `Dropdown` `Listbox` `TagPicker` `Rating` `ColorPicker` `ColorArea` `ColorSlider` `AlphaSlider` `SwatchPicker` `ColorSwatch` `ImageSwatch` `EmptySwatch` `DatePicker` `Calendar` `TimePicker` (plus `RadioGroup.Item`/`RadioItem`, `Option`/`OptionGroup` (also `Listbox.Option`/`Listbox.OptionGroup`), `SwatchPicker.Row`, `RatingDisplay`, the ColorPicker parts `ColorPicker.HexField`, `ColorPicker.Swatches`, `ColorPicker.Preview`, and `ListboxSurface`/`ListboxProvider` for custom pickers)
+`Input` `Textarea` `Field` `Label` `Checkbox` `RadioGroup` `Switch` `Select` `SearchBox` `Slider` `SpinButton` `Combobox` `Dropdown` `Listbox` `TagPicker` `Rating` `ColorPicker` `ColorArea` `ColorSlider` `AlphaSlider` `SwatchPicker` `ColorSwatch` `ImageSwatch` `EmptySwatch` `DatePicker` `Calendar` `TimePicker` (plus the TagPicker parts `TagPicker.Control`, `TagPicker.Group`, `TagPicker.Input`, `TagPicker.Button`, `TagPicker.List`, `TagPicker.Option`, `TagPicker.OptionGroup`, `RadioGroup.Item`/`RadioItem`, `Option`/`OptionGroup` (also `Listbox.Option`/`Listbox.OptionGroup`), `SwatchPicker.Row`, `RatingDisplay`, the ColorPicker parts `ColorPicker.HexField`, `ColorPicker.Swatches`, `ColorPicker.Preview`, and `ListboxSurface`/`ListboxProvider` for custom pickers)
 
-**Data Display** (12)
-`Avatar` `AvatarGroup` `Badge` `PresenceBadge` `CounterBadge` `Tag` `Persona` `Divider` `InfoLabel` `InfoButton` `Image` `List`
+**Data Display** (14)
+`Avatar` `AvatarGroup` `Badge` `PresenceBadge` `CounterBadge` `Tag` `TagGroup` `InteractionTag` `Persona` `Divider` `InfoLabel` `InfoButton` `Image` `List` (plus `InteractionTag.Primary`, `InteractionTag.Secondary`)
 
 **Layout** (9)
 `Card` `Accordion` `TabList` `Tree` `Carousel` `Overflow` `Grid` `Stack` `Flex` (plus `Tree.ItemPersonaLayout`)
 
-**Navigation** (5)
-`Breadcrumb` `Menu` `Nav` `Stepper` `Pagination` (plus the Menu parts `Menu.ItemCheckbox`, `Menu.ItemRadio`, `Menu.ItemSwitch`, `Menu.ItemLink`, `Menu.Group`, `Menu.GroupHeader`, `Menu.SplitGroup`)
+**Navigation** (7)
+`Breadcrumb` `Menu` `Nav` `NavDrawer` `Hamburger` `Stepper` `Pagination` (plus the Menu parts `Menu.ItemCheckbox`, `Menu.ItemRadio`, `Menu.ItemSwitch`, `Menu.ItemLink`, `Menu.Group`, `Menu.GroupHeader`, `Menu.SplitGroup`, the Nav parts `Nav.SectionHeader`, `Nav.Divider`, `Nav.AppItem`, `Nav.AppItemStatic`, and `NavDrawer.Header`, `NavDrawer.Body`, `NavDrawer.Footer`)
 
 **Feedback** (5)
 `MessageBar` `ProgressBar` `Spinner` `Skeleton` `Toast`/`Toaster` (plus `MessageBar.Title`, `MessageBar.Actions`, `Toast.Title`, `Toast.Body`, `Toast.Footer`, `Toast.Close`)
 
 **Overlays** (5)
-`Dialog` `Popover` `Tooltip` `Drawer` `TeachingPopover`
+`Dialog` `Popover` `Tooltip` `Drawer` `TeachingPopover` (plus the Drawer parts `Drawer.Header`, `Drawer.HeaderTitle`, `Drawer.HeaderNavigation`, `Drawer.Body`, `Drawer.Footer`)
 
 **Table** (2)
 `Table` `DataGrid`
@@ -2187,7 +2327,11 @@ not-disabled:not-aria-disabled:active:bg-subtle-pressed
 | List (selectable) | Tab | Up/Down, Home/End | Enter/Space (toggle) | Tab |
 | DataGrid | Tab (one tab stop) | Arrows, Home/End, Ctrl+Home/End, PageUp/PageDown | Enter/F2 (into cell), Space (select row) | Tab / Escape (from cell widgets) |
 | DatePicker calendar, Calendar | Alt+Down on the input, or the toggle (Calendar: Tab) | Arrows, PageUp/PageDown, Shift+PageUp/PageDown, Home/End; the heading button to the month and year views | Enter/Space | Escape (one view back; in the day view, closes a DatePicker) / Tab |
-| Dialog / Drawer | Auto-focus | Tab (trapped) | Enter | Escape |
+| Dialog / Drawer (modal, alert) | Auto-focus | Tab (trapped) | Enter | Escape / the trigger (toggles) |
+| Dialog / Drawer (non-modal) | Auto-focus | Tab (in page order, after the opener) | Enter | Escape (from inside) / Tab out |
+| Drawer (inline), NavDrawer (inline) | Tab (page content) | Tab | Enter | Tab / the trigger (toggles) |
+| TagGroup | Tab (last focused control) | Left/Right (Up/Down vertical), Home/End; `role="list"`: Tab | Enter/Space; Delete/Backspace dismiss | Tab |
+| NavDrawer.Body (`focusMode="arrow"`) | Tab (current page) | All arrows (wrapping), Home/End | Enter/Space | Tab |
 
 *RadioGroup, the row-layout SwatchPicker and Tabs use automatic activation: moving focus selects (Tabs with `selectTabOnFocus={false}` use manual activation). Accordion, Carousel, Nav, Breadcrumb and Pagination use plain Tab navigation between native buttons and links.*
 
