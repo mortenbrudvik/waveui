@@ -81,9 +81,12 @@ export interface UseRovingTabIndexOptions {
    *  -1). A container hidden as a whole from outside keeps its items and tab stop.
    *  When the container stops being one (its ref detaches, as when `containerProps` are no longer
    *  spread, or moves to another element) or `manageTabIndex` turns false, every element the hook
-   *  stamped gets its own `tabindex` back (the attribute it had at its first stamp, or none) and
-   *  loses a `data-roving-value` the hook added (one React rendered stays). The last focused item
-   *  and the generated values are kept, so a container that attaches again starts where it was. */
+   *  stamped gets its own `tabindex` back (the attribute it had at its first stamp, or none; a
+   *  `tabIndex` its author rendered since, the commit that detaches the container included, stays)
+   *  and loses a `data-roving-value` the hook added (one React rendered stays). An element that
+   *  stops being an item (`itemSelector`, or a changed selector, no longer matches it) is handed
+   *  back the same way. The last focused item and the generated values are kept, so a container
+   *  that attaches again starts where it was. */
   manageTabIndex?: boolean;
   /** Called after an arrow, Home/End or typeahead key moved focus to `value`. */
   onFocusMove?: (value: string, event: React.KeyboardEvent) => void;
@@ -226,16 +229,52 @@ function isInNestedComposite(el: Element, container: Element, roleComposites: bo
   return false;
 }
 
-/** What an element looked like before the hook stamped it, to hand it back unchanged. */
+/** What the hook knows of an element it stamped, to hand it back to its author. */
 interface StampedOriginal {
   /**
-   * The author's own `tabindex` attribute, or `null`, read at the first stamp. A `tabIndex` the
-   * author renders differently while the element is stamped is not seen (the stamps overwrite it),
-   * so the hand-back restores the first value.
+   * The author's own `tabindex` attribute, or `null`: read at the first stamp, and replaced by the
+   * one the author writes while the element is stamped (React rendering another `tabIndex`; the
+   * next stamp overwrites it in the DOM).
    */
   tabIndex: string | null;
-  /** Whether the hook added the element's `data-roving-value`. */
-  addedValue: boolean;
+  /** The `tabindex` the hook left on the element at its last stamp. */
+  stamped: string;
+  /** The `data-roving-value` the hook added (a generated value), or `null` when it added none. */
+  addedValue: string | null;
+}
+
+/**
+ * Every element the hook stamps carries both attributes, whatever `itemSelector` matched it: the
+ * hand-back finds its elements through them, also one the selector no longer matches.
+ */
+const STAMPED_SELECTOR = '[tabindex], [data-roving-value]';
+
+function matchesSelector(el: Element, selector: string): boolean {
+  try {
+    return el.matches(selector);
+  } catch {
+    // A selector the browser rejects matches nothing.
+    return false;
+  }
+}
+
+/**
+ * The elements whose last `tabindex` write in `records` left the value it found: the author
+ * (through React) wrote the value the stamp had left. The hook only writes to change a value, so
+ * such a write is never its own. Needs records with `attributeOldValue`.
+ */
+function rewrittenTabIndex(records: readonly MutationRecord[]): Set<Node> {
+  const last = new Map<Node, MutationRecord>();
+  for (const record of records) {
+    if (record.type === 'attributes' && record.attributeName === 'tabindex') {
+      last.set(record.target, record);
+    }
+  }
+  const rewritten = new Set<Node>();
+  for (const [target, record] of last) {
+    if (record.oldValue === (target as Element).getAttribute('tabindex')) rewritten.add(target);
+  }
+  return rewritten;
 }
 
 function isFocusableSelf(el: HTMLElement): boolean {
@@ -450,14 +489,17 @@ class RovingStore {
   /**
    * Attaches the store to `container` (`null` detaches it). A container that stops being one (its
    * ref detached, or the store moved to another element) first hands every element it stamped back
-   * to its author. Only a store that manages tabIndex has stamped anything: `setOptions` hands the
-   * stamps back the moment `manageTabIndex` turns off.
+   * to its author, with the writes its observer has not delivered yet (the `tabIndex` React
+   * rendered in the commit that detaches it). Only a store that manages tabIndex has stamped
+   * anything: `setOptions` hands the stamps back the moment `manageTabIndex` turns off.
    */
   setContainer(container: HTMLElement | null): void {
     if (container === this.container) return;
+    // Disconnecting drops the pending records anyway; the hand-back reads them first.
+    const records = this.takeRecords();
     this.disconnect();
     if (this.container && this.options.manageTabIndex) {
-      this.release(this.container, this.options.itemSelector, false);
+      this.release(this.container, 'all', records);
     }
     this.container = container;
     this.dirty = true;
@@ -478,10 +520,11 @@ class RovingStore {
   setOptions(options: StoreOptions): void {
     const previous = this.options;
     this.options = options;
-    // `manageTabIndex` turned off: the elements stamped so far go back to their author, found
-    // through the selector they were stamped under.
+    // `manageTabIndex` turned off: the elements stamped so far go back to their author. The records
+    // taken here are not delivered; the notification below stands in for them. (A changed
+    // `itemSelector` hands back what it no longer matches at the next stamp.)
     if (previous.manageTabIndex && !options.manageTabIndex && this.container) {
-      this.release(this.container, previous.itemSelector, false);
+      this.release(this.container, 'all', this.takeRecords());
     }
     if (
       previous.itemSelector !== options.itemSelector ||
@@ -558,12 +601,13 @@ class RovingStore {
 
   /**
    * manageTabIndex: writes tabIndex 0 on the tab stop and -1 on every other own item. An element
-   * it stamped that now belongs to a nested composite (a `data-roving-transparent` marker removed)
-   * gets its own `tabindex` back, and loses the `data-roving-value` the hook added.
+   * it stamped that is no longer one of its items (it now belongs to a nested composite, as when a
+   * `data-roving-transparent` marker is removed, or `itemSelector` no longer matches it) is handed
+   * back first. A `tabindex` the author rendered since the last stamp becomes the element's own.
    */
   stamp(): void {
     if (!this.options.manageTabIndex || !this.container) return;
-    this.release(this.container, this.options.itemSelector, true);
+    this.release(this.container, 'stale');
     const resolved = this.resolve();
     const stop =
       this.options.tabStop === 'none'
@@ -577,49 +621,86 @@ class RovingStore {
     for (const item of resolved) {
       if (item.nested) continue;
       const { element } = item;
+      const tabIndex = item.value === stop ? '0' : '-1';
+      const current = element.getAttribute('tabindex');
       let original = this.stamped.get(element);
       if (!original) {
-        original = {
-          tabIndex: element.getAttribute('tabindex'),
-          addedValue: !element.hasAttribute('data-roving-value'),
-        };
+        original = { tabIndex: current, stamped: tabIndex, addedValue: null };
         this.stamped.set(element, original);
+      } else {
+        // Another value than the last stamp left: the author rendered it, so it is the element's own.
+        if (current !== original.stamped) original.tabIndex = current;
+        original.stamped = tabIndex;
       }
-      const tabIndex = item.value === stop ? '0' : '-1';
-      if (element.getAttribute('tabindex') !== tabIndex) element.setAttribute('tabindex', tabIndex);
+      if (current !== tabIndex) element.setAttribute('tabindex', tabIndex);
       if (!element.hasAttribute('data-roving-value')) {
         element.setAttribute('data-roving-value', item.value);
+        original.addedValue = item.value;
       }
     }
   }
 
   /**
-   * Hands elements it stamped inside `container` back to their author: the `tabindex` read at the
-   * first stamp is put back (or removed when there was none), a `data-roving-value` the hook added
-   * is removed (one React rendered stays), and the record is dropped, so a later stamp reads the
-   * element afresh. The generated values and the last focused item are kept: a container that
-   * attaches again starts where it was. `nestedOnly`: only the elements that now belong to a nested
-   * composite (every stamp); otherwise all of them (the container detaches or is replaced, or
-   * `manageTabIndex` turns off). Elements are found through `itemSelector`.
+   * Hands elements it stamped inside `container` back to their author and drops their records, so
+   * a later stamp reads them afresh. The `tabindex` the record holds as the author's is put back
+   * (removed when there was none), unless the author wrote one since the last stamp, which stays:
+   * another value than the stamp's, or the stamp's value written again (seen in the pending
+   * `records`). A `data-roving-value` the hook added is removed while it still holds the generated
+   * value (one React renders stays). The generated values and the last focused item are kept: a
+   * container that attaches again starts where it was. `'stale'`: only the elements that are no
+   * longer its items, because they belong to a nested composite or `itemSelector` no longer matches
+   * them (every stamp); `'all'`: every element (the container detaches or is replaced, or
+   * `manageTabIndex` turns off).
    */
-  private release(container: HTMLElement, itemSelector: string, nestedOnly: boolean): void {
-    let candidates: HTMLElement[];
-    try {
-      candidates = Array.from(container.querySelectorAll<HTMLElement>(itemSelector));
-    } catch {
-      return;
-    }
-    for (const candidate of candidates) {
-      const original = this.stamped.get(candidate);
+  private release(
+    container: HTMLElement,
+    scope: 'stale' | 'all',
+    records: readonly MutationRecord[] = [],
+  ): void {
+    const rewritten = rewrittenTabIndex(records);
+    const { itemSelector, roleComposites } = this.options;
+    for (const element of Array.from(container.querySelectorAll<HTMLElement>(STAMPED_SELECTOR))) {
+      const original = this.stamped.get(element);
       if (!original) continue;
-      if (nestedOnly && !isInNestedComposite(candidate, container, this.options.roleComposites)) {
+      if (
+        scope === 'stale' &&
+        matchesSelector(element, itemSelector) &&
+        !isInNestedComposite(element, container, roleComposites)
+      ) {
         continue;
       }
-      this.stamped.delete(candidate);
-      if (original.tabIndex === null) candidate.removeAttribute('tabindex');
-      else candidate.setAttribute('tabindex', original.tabIndex);
-      if (original.addedValue) candidate.removeAttribute('data-roving-value');
+      this.stamped.delete(element);
+      const current = element.getAttribute('tabindex');
+      const authorWrote = current !== original.stamped || rewritten.has(element);
+      // Written only to change the value: the hook's own writes never keep one (`rewrittenTabIndex`).
+      if (!authorWrote && current !== original.tabIndex) {
+        if (original.tabIndex === null) element.removeAttribute('tabindex');
+        else element.setAttribute('tabindex', original.tabIndex);
+      }
+      if (
+        original.addedValue !== null &&
+        element.getAttribute('data-roving-value') === original.addedValue
+      ) {
+        element.removeAttribute('data-roving-value');
+      }
     }
+  }
+
+  /**
+   * Takes over, as the element's own, a `tabindex` the author wrote with the value the stamp had
+   * left (`rewrittenTabIndex`): the next stamp cannot tell it from its own. Another value is taken
+   * over by the next stamp.
+   */
+  private adopt(records: readonly MutationRecord[]): void {
+    for (const target of rewrittenTabIndex(records)) {
+      const original = this.stamped.get(target as Element);
+      if (original) original.tabIndex = (target as Element).getAttribute('tabindex');
+    }
+  }
+
+  /** The records the observer has not delivered yet; it delivers none of them afterwards. */
+  private takeRecords(): MutationRecord[] {
+    return this.observer?.takeRecords() ?? [];
   }
 
   private valueOf(element: HTMLElement, nested: boolean): string {
@@ -636,7 +717,8 @@ class RovingStore {
 
   private observe(): void {
     if (!this.container || this.observer || typeof MutationObserver === 'undefined') return;
-    this.observer = new MutationObserver(() => {
+    this.observer = new MutationObserver((records) => {
+      this.adopt(records);
       this.stamp();
       this.dirty = true;
       this.notify?.();
@@ -645,6 +727,8 @@ class RovingStore {
       subtree: true,
       childList: true,
       attributes: true,
+      // With the old value, a write that keeps a value shows as the author's (`rewrittenTabIndex`).
+      attributeOldValue: true,
       attributeFilter: OBSERVED_ATTRIBUTES,
     });
     this.dirty = true;
@@ -733,8 +817,10 @@ function startsOnItem(item: ResolvedItem | null, target: EventTarget | null, con
  *   `input[type=hidden]` is no item.
  * - **Hand-back** (`manageTabIndex`): a container that stops being one (its ref detaches or moves
  *   to another element) or that stops managing tabIndex gives every element it stamped its own
- *   `tabindex` back and removes the `data-roving-value` it added, so each control is its own Tab
- *   stop again; attached again, it stamps again from the last focused item.
+ *   `tabindex` back (the one it had, or the one its author rendered since) and removes the
+ *   `data-roving-value` it added, so each control is its own Tab stop again; attached again, it
+ *   stamps again from the last focused item. An element `itemSelector` no longer matches is handed
+ *   back at once.
  * - **Tab stop** (`tabStop`): `'active'` — the enabled `activeValue` item, else the first enabled
  *   item; `'last-focused'` — the last focused enabled item, else the `'active'` rule. A nested
  *   composite or a control that uses the arrow keys itself holds it only when no other item can;

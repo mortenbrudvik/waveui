@@ -993,8 +993,8 @@ describe('Avatar', () => {
     ] as const)(
       'an Avatar without size takes the box of AvatarSizeContext (%dpx)',
       (size, width, height) => {
-        render(inBox(size, <Avatar name="Jane Doe" data-testid="avatar" />));
-        const avatar = screen.getByTestId('avatar');
+        render(inBox(size, <Avatar name="Jane Doe" />));
+        const avatar = screen.getByRole('img', { name: 'Jane Doe' });
         expect(avatar).toHaveClass(width, height, 'text-[10px]');
         expect(avatar).not.toHaveClass('w-10');
         expect(avatar).not.toHaveClass('h-10');
@@ -1011,8 +1011,8 @@ describe('Avatar', () => {
     });
 
     it('its own size wins over the context', () => {
-      render(inBox(16, <Avatar name="Jane Doe" size="large" data-testid="avatar" />));
-      const avatar = screen.getByTestId('avatar');
+      render(inBox(16, <Avatar name="Jane Doe" size="large" />));
+      const avatar = screen.getByRole('img', { name: 'Jane Doe' });
       expect(avatar).toHaveClass('w-12', 'h-12', 'text-base');
       expect(avatar).not.toHaveClass('w-4');
       expect(avatar).not.toHaveClass('h-4');
@@ -1021,14 +1021,14 @@ describe('Avatar', () => {
     it('outside the context it keeps the medium classes', () => {
       render(
         <>
-          <Avatar name="Jane Doe" data-testid="outside" />
+          <Avatar name="Jane Doe" />
           <AvatarSizeContext.Provider value={null}>
-            <Avatar name="John Doe" data-testid="null-box" />
+            <Avatar name="John Doe" />
           </AvatarSizeContext.Provider>
         </>,
       );
-      expect(screen.getByTestId('outside')).toHaveClass('w-10', 'h-10', 'text-sm');
-      expect(screen.getByTestId('null-box')).toHaveClass('w-10', 'h-10', 'text-sm');
+      expect(screen.getByRole('img', { name: 'Jane Doe' })).toHaveClass('w-10', 'h-10', 'text-sm');
+      expect(screen.getByRole('img', { name: 'John Doe' })).toHaveClass('w-10', 'h-10', 'text-sm');
     });
 
     it('with a badge the visual is sized, not the wrapper', () => {

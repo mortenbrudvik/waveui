@@ -638,7 +638,10 @@ export function useListboxPopup(options: UseListboxPopupOptions): UseListboxPopu
   return { layerId, setReference, surfaceRef, floatingProps };
 }
 
-/** Attributes of the list element that ListboxSurface renders (see `listProps`). */
+/**
+ * Attributes of the list element that ListboxSurface renders (see `listProps`). Its content is the
+ * surface's `children`.
+ */
 export type ListboxSurfaceListProps = Omit<
   React.HTMLAttributes<HTMLUListElement>,
   | 'role'
@@ -650,6 +653,8 @@ export type ListboxSurfaceListProps = Omit<
   | 'aria-labelledby'
   | 'aria-multiselectable'
   | 'aria-activedescendant'
+  | 'children'
+  | 'dangerouslySetInnerHTML'
 > & {
   /** Ref to the `role="listbox"` element (it moves between the picker and the popup). */
   ref?: React.Ref<HTMLUListElement>;
@@ -707,9 +712,10 @@ export interface ListboxSurfaceProps {
   surfaceClassName?: string;
   /**
    * Attributes spread onto the list element before the listbox's own (`role`, `id`, `tabIndex`,
-   * `aria-multiselectable` and `hidden` win): `data-*` and other `aria-*` attributes, `style`, and
-   * handlers, composed before the listbox's own `onMouseDown`. `ref` is merged with the list's.
-   * Name the list with `aria-label`/`aria-labelledby` (the props above), not here.
+   * `aria-multiselectable`, `aria-activedescendant` and `hidden` win, also where the listbox
+   * renders none of the last two): `data-*` and other `aria-*` attributes, `style`, and handlers,
+   * composed before the listbox's own `onMouseDown`. `ref` is merged with the list's. Name the list
+   * with `aria-label`/`aria-labelledby` (the props above), not here.
    */
   listProps?: ListboxSurfaceListProps;
   /** The options (`Option`, `OptionGroup` or options of your own on `useListboxOption`). */
@@ -772,6 +778,9 @@ export function ListboxSurface(props: ListboxSurfaceProps) {
         <ul
           {...listRest}
           {...listboxProps}
+          // Absent from `listboxProps` when not set: a caller's value never survives the spread.
+          aria-multiselectable={listboxProps['aria-multiselectable']}
+          aria-activedescendant={listboxProps['aria-activedescendant']}
           onMouseDown={composeEventHandlers(listMouseDown, listboxProps.onMouseDown)}
           ref={listRef}
           aria-label={ariaLabel}

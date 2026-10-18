@@ -245,8 +245,8 @@ describe('icons (input-datetime#22, button-provider#20)', () => {
     expect(svg).toHaveAttribute('height', '20');
     const paths = svg.querySelectorAll('path');
     expect(paths).toHaveLength(1);
-    // One 1.5px bar, 15.5px wide with round ends, drawn three times 4.75px apart (y 5.25, 10 and
-    // 14.75), each subpath starting from the previous bar's start.
+    // One 1.5px bar, 16px wide (a 14.5px run with round ends), drawn three times 4.75px apart (y
+    // 5.25, 10 and 14.75), each subpath starting from the previous bar's start.
     const bar = 'h14.5a.75.75 0 0 1 0 1.5H2.75a.75.75 0 0 1 0-1.5Z';
     expect(paths[0]).toHaveAttribute('d', `M2.75 4.5${bar}m0 4.75${bar}m0 4.75${bar}`);
   });

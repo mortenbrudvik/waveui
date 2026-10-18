@@ -1165,6 +1165,36 @@ describe('Option parts for custom pickers (option-2, option-3, listbox-2)', () =
       await expectNoA11yViolations(document.body);
     });
 
+    it('drops the aria-multiselectable and aria-activedescendant of listProps when the listbox renders none', async () => {
+      const user = userEvent.setup();
+      // A JavaScript caller's values for keys the type omits: a single-select list in a combobox
+      // mode renders neither attribute, and listProps must not add them.
+      const listProps = {
+        'aria-multiselectable': true,
+        'aria-activedescendant': 'font-hint',
+        'data-testid': 'font-list',
+      } as unknown as ListboxSurfaceListProps;
+      render(
+        <>
+          <p id="font-hint">Pick one</p>
+          <FontPicker listProps={listProps} />
+        </>,
+      );
+      const inline = screen.getByTestId('font-list');
+      expect(inline).not.toHaveAttribute('aria-multiselectable');
+      expect(inline).not.toHaveAttribute('aria-activedescendant');
+
+      await user.click(fontButton());
+      await user.keyboard('{ArrowDown}');
+      const list = screen.getByRole('listbox', { name: 'Fonts' });
+      expect(list).toBe(screen.getByTestId('font-list'));
+      expect(list).not.toHaveAttribute('aria-multiselectable');
+      // The active option is the combobox's descendant, not the list's.
+      expect(fontButton()).toHaveAttribute('aria-activedescendant');
+      expect(list).not.toHaveAttribute('aria-activedescendant');
+      await expectNoA11yViolations(document.body);
+    });
+
     it('listProps.ref receives the list, hidden in place and in the popup', async () => {
       const user = userEvent.setup();
       const ref = React.createRef<HTMLUListElement>();
@@ -1256,6 +1286,10 @@ describe('Option parts for custom pickers (option-2, option-3, listbox-2)', () =
         | 'aria-multiselectable'
         | 'aria-activedescendant';
       expectTypeOf<Extract<keyof ListboxSurfaceListProps, OwnKeys>>().toBeNever();
+      // The list's content is the surface's `children`.
+      expectTypeOf<
+        Extract<keyof ListboxSurfaceListProps, 'children' | 'dangerouslySetInnerHTML'>
+      >().toBeNever();
       expectTypeOf<'onMouseDown'>().toExtend<keyof ListboxSurfaceListProps>();
       expectTypeOf<'aria-describedby'>().toExtend<keyof ListboxSurfaceListProps>();
     });
