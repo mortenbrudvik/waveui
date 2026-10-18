@@ -2,193 +2,41 @@ import * as React from 'react';
 import { cn } from '../../lib/cn';
 import {
   navCategoryClassNames,
-  navClassNames,
   navItemClassNames,
   navSubItemClassNames,
 } from '../../lib/classNames';
 import type { Slot } from '../../lib/types';
 import { renderSlot, slotRendersContent } from '../../lib/slot';
-import {
-  reportMissingContext,
-  resolveDeprecatedProp,
-  warnDeprecated,
-  warnOnce,
-} from '../../lib/dev';
-import { getElementType } from '../../lib/children';
+import { warnDeprecated } from '../../lib/dev';
 import { ChevronDownIcon } from '../../lib/icons';
 import { disabledStyles, focusRingInset } from '../../lib/styles';
-import { useControllable } from '../../hooks/useControllable';
-import { useEventCallback } from '../../hooks/useEventCallback';
 import { useId } from '../../hooks/useId';
+import {
+  NavCategoryValueContext,
+  NavRovingContext,
+  containsValue,
+  markNavPart,
+  useNavContext,
+  useNavValue,
+  useRecordCategory,
+  type NavContextValue,
+  type NavRovingContextValue,
+  type NoAnchorOnlyAttributes,
+} from './Nav.context';
+import { NavRoot } from './Nav.root';
 
-// ---------------------------------------------------------------------------
-// Context
-// ---------------------------------------------------------------------------
-
-/** The two value namespaces of a Nav: items (Nav.Item and Nav.SubItem) and categories. */
-type NavValueKind = 'item' | 'category';
-
-/**
- * The category each sub-item was last shown in, by sub-item value: written from layout effects by
- * the mounted sub-items and by a closed category whose children hold the current value, read by
- * the categories with `useSyncExternalStore`. An entry outlives its sub-item, so a category closed
- * after its current sub-item was shown still knows it contains the current page.
+/*
+ * The Nav compound: the item types, styles and rendering of Nav.Item and Nav.SubItem, Nav.Category,
+ * the `Object.assign` with its JSDoc, the flat names and the type re-exports. Nothing imports this
+ * module but the barrel: the root (`Nav.root.tsx`) and the contexts (`Nav.context.ts`) recognise
+ * the parts by the markers set next to each `displayName` below.
  */
-interface NavCategoryStore {
-  /**
-   * Records the category a mounted item renders in, or a closed category whose children hold the
-   * value; `null` (an item outside any category) forgets an earlier entry, so a value moved out of
-   * a category no longer marks it.
-   */
-  record: (value: string, category: string | null) => void;
-  /** Forgets the entry of `value` while it is still `category`. */
-  forget: (value: string, category: string) => void;
-  /** The category last recorded for a sub-item value. */
-  get: (value: string) => string | undefined;
-  subscribe: (listener: () => void) => () => void;
-}
 
-function createCategoryStore(): NavCategoryStore {
-  const categories = new Map<string, string>();
-  const listeners = new Set<() => void>();
-  const notify = () => listeners.forEach((listener) => listener());
-  return {
-    record(value, category) {
-      if ((categories.get(value) ?? null) === category) return;
-      if (category === null) categories.delete(value);
-      else categories.set(value, category);
-      notify();
-    },
-    forget(value, category) {
-      if (categories.get(value) !== category) return;
-      categories.delete(value);
-      notify();
-    },
-    get: (value) => categories.get(value),
-    subscribe(listener) {
-      listeners.add(listener);
-      return () => {
-        listeners.delete(listener);
-      };
-    },
-  };
-}
-
-interface NavContextValue {
-  /** The selected item value (`''` when nothing is selected). */
-  value: string;
-  /** Selects an item (activation handler: also fires the deprecated `onNavItemSelect`). */
-  select: (value: string) => void;
-  openCategories: readonly string[];
-  toggleCategory: (value: string) => void;
-  /** Registers a mounted item or category value (duplicate warning); returns the cleanup. */
-  registerValue: (kind: NavValueKind, value: string) => () => void;
-  /** The `currentCategory` hint of the Nav. */
-  currentCategory: string | undefined;
-  categoryStore: NavCategoryStore;
-}
-
-const NavContext = React.createContext<NavContextValue | null>(null);
-NavContext.displayName = 'NavContext';
-
-const noop = () => {};
-const INERT_NAV_CONTEXT: NavContextValue = {
-  value: '',
-  select: noop,
-  openCategories: [],
-  toggleCategory: noop,
-  registerValue: () => noop,
-  currentCategory: undefined,
-  categoryStore: { record: noop, forget: noop, get: () => undefined, subscribe: () => noop },
-};
-
-/**
- * The value of the Nav.Category a sub-item renders in (`null` outside a category). It renders no
- * element; a sub-item outside a category is valid, so there is no missing-context error.
- */
-const NavCategoryValueContext = React.createContext<string | null>(null);
-NavCategoryValueContext.displayName = 'NavCategoryValueContext';
-
-/** C-CONTEXT: throws in development, logs once and returns an inert value in production. */
-function useNavContext(componentName: string): NavContextValue {
-  const context = React.useContext(NavContext);
-  if (context) return context;
-  reportMissingContext(componentName, 'Nav');
-  return INERT_NAV_CONTEXT;
-}
-
-function warnDuplicateValue(kind: NavValueKind, value: string): void {
-  warnOnce(
-    `Nav:duplicate-${kind}:${value}`,
-    kind === 'item'
-      ? `Nav: several items share the value "${value}". Nav.Item and Nav.SubItem values must be unique within a Nav; every item with the current value is marked as the current page.`
-      : `Nav: several categories share the value "${value}". Nav.Category values must be unique within a Nav; they open and close together.`,
-  );
-}
-
-/** Registers the value of a mounted item or category, so Nav can warn about duplicates. */
-function useNavValue(context: NavContextValue, kind: NavValueKind, value: string): void {
-  const { registerValue } = context;
-  React.useEffect(() => registerValue(kind, value), [registerValue, kind, value]);
-}
-
-/**
- * Records the category a mounted item renders in, which the category reads once closed (`null`
- * outside a category, which forgets a stale entry for the value).
- */
-function useRecordCategory(context: NavContextValue, value: string): void {
-  const category = React.useContext(NavCategoryValueContext);
-  const { categoryStore } = context;
-  React.useLayoutEffect(() => {
-    categoryStore.record(value, category);
-  }, [categoryStore, value, category]);
-}
+export type { NavProps } from './Nav.root';
 
 // ---------------------------------------------------------------------------
 // Types
 // ---------------------------------------------------------------------------
-
-/** Properties for the Nav component. */
-export interface NavProps extends Omit<React.HTMLAttributes<HTMLElement>, 'defaultValue'> {
-  /** Controlled value of the selected nav item. */
-  value?: string;
-  /**
-   * Selected nav item value for uncontrolled usage.
-   * @default ''
-   */
-  defaultValue?: string;
-  /** Called with the new value when the selection changes (not when the current item is re-selected). */
-  onValueChange?: (value: string) => void;
-  /** @deprecated Use `value`. */
-  selectedValue?: string;
-  /** @deprecated Use `defaultValue`. */
-  defaultSelectedValue?: string;
-  /**
-   * @deprecated Use `onValueChange`. Unlike `onValueChange`, it fires on every activation,
-   * re-selecting the current item included (0.4 behaviour).
-   */
-  onNavItemSelect?: (value: string) => void;
-  /** Controlled list of open category values. */
-  openCategories?: readonly string[];
-  /**
-   * Categories open initially (uncontrolled). Without it, the categories that contain the
-   * selected item (`value`, else `defaultValue`) start open, so the current page is visible on the
-   * first render; an empty list keeps every category closed.
-   */
-  defaultOpenCategories?: readonly string[];
-  /** Called with the new list of open category values (a new array) when a category is toggled. */
-  onOpenCategoriesChange?: (openCategories: string[]) => void;
-  /**
-   * The `value` of the category that contains the current item, for sub-items Nav cannot find by
-   * itself (rendered by your own component inside a closed category). Usually not needed: Nav
-   * finds sub-items among a category's children (through Fragments and wrapper elements) and
-   * remembers the category of the current sub-item once it has been shown. A hint, not state:
-   * unlike Fluent's `selectedCategoryValue` it has no default or change callback.
-   */
-  currentCategory?: string;
-  /** Ref to the `<nav>` element. */
-  ref?: React.Ref<HTMLElement>;
-}
 
 /** Properties for the NavCategory sub-component. */
 export interface NavCategoryProps extends React.HTMLAttributes<HTMLLIElement> {
@@ -238,21 +86,6 @@ export interface NavItemOwnProps {
   /** Label content. */
   children?: React.ReactNode;
 }
-
-/**
- * The attributes only a link has (`target`, `download`, `hrefLang`, `ping`, …). Button items
- * declare them as `undefined`, so they are a type error without `href` instead of landing on the
- * `<button>`. `rel` cannot be listed (React types it on every element, RDFa); a button item drops
- * it at run time instead.
- */
-type NoAnchorOnlyAttributes = {
-  [
-    K in Exclude<
-      keyof React.AnchorHTMLAttributes<HTMLAnchorElement>,
-      keyof React.ButtonHTMLAttributes<HTMLButtonElement>
-    >
-  ]?: undefined;
-};
 
 /**
  * Nav.Item rendered as a link (`href` given): anchor attributes, and handlers typed on
@@ -433,90 +266,6 @@ const categoryButtonClasses = cn(
 // Helpers
 // ---------------------------------------------------------------------------
 
-type ElementWithChildren = React.ReactElement<{ value?: unknown; children?: React.ReactNode }>;
-
-function childrenOf(element: ElementWithChildren): React.ReactNode {
-  const { children } = element.props;
-  return typeof children === 'function' ? undefined : children;
-}
-
-/** Whether a thrown value suspends rendering (a loading lazy chunk, a pending promise). */
-function isThenable(value: unknown): boolean {
-  return (
-    (typeof value === 'object' || typeof value === 'function') &&
-    value !== null &&
-    typeof (value as { then?: unknown }).then === 'function'
-  );
-}
-
-/*
- * The walks below run during Nav's render and reach consumer content at any depth. Content that
- * is still loading inside the consumer's own <Suspense> (a promise child, a lazy node, a
- * `React.lazy` component) suspends that boundary when React renders it; walking it must never
- * suspend Nav itself, which would hide the whole Nav behind an outer boundary. So a child that
- * cannot be read yet is skipped, and a lazy type that is still loading is not a part (its
- * children are still walked). Parts written in a Server Component arrive as loaded client
- * references and are recognized.
- */
-
-/** Calls `visit` with each element of `nodes` (as `React.Children.forEach`), skipping pending ones. */
-function forEachElement(nodes: React.ReactNode, visit: (child: ElementWithChildren) => void): void {
-  if (Array.isArray(nodes)) {
-    for (const node of nodes as React.ReactNode[]) forEachElement(node, visit);
-    return;
-  }
-  try {
-    React.Children.forEach(nodes, (child) => {
-      if (React.isValidElement<ElementWithChildren['props']>(child)) visit(child);
-    });
-  } catch (error) {
-    if (!isThenable(error)) throw error;
-  }
-}
-
-/** Whether `element` is one of `types`; a lazy type still loading is none (it never suspends). */
-function isPart(element: ElementWithChildren, ...types: unknown[]): boolean {
-  return types.includes(getElementType(element, { suspend: false }));
-}
-
-/**
- * Whether `nodes` contain a Nav.Item/Nav.SubItem element with `value === selected` (parts written
- * in a Server Component, lazy client references, included). Called during render only.
- */
-function containsValue(nodes: React.ReactNode, selected: string): boolean {
-  let found = false;
-  forEachElement(nodes, (child) => {
-    if (found) return;
-    if (isPart(child, NavItem, NavSubItem) && child.props.value === selected) {
-      found = true;
-    } else {
-      found = containsValue(childrenOf(child), selected);
-    }
-  });
-  return found;
-}
-
-/** The values of the Nav.Category elements (at any depth of JSX) that contain `selected`. */
-function findCategoriesContaining(nodes: React.ReactNode, selected: string): string[] {
-  const result: string[] = [];
-  if (!selected) return result;
-  const visit = (current: React.ReactNode) => {
-    forEachElement(current, (child) => {
-      const inner = childrenOf(child);
-      if (
-        isPart(child, NavCategory) &&
-        typeof child.props.value === 'string' &&
-        containsValue(inner, selected)
-      ) {
-        result.push(child.props.value);
-      }
-      visit(inner);
-    });
-  };
-  visit(nodes);
-  return result;
-}
-
 /**
  * Whether a click on a link opens it somewhere other than the current page, checked as routers
  * do: a modifier key (a new tab or window, a download), a mouse button other than the main one, a
@@ -540,10 +289,15 @@ interface NavEntryClassNames {
   content?: string;
 }
 
-/** Shared rendering of Nav.Item and Nav.SubItem (link or button). */
+/**
+ * Shared rendering of Nav.Item and Nav.SubItem (link or button). Inside an arrow-key body
+ * (`roving` provided) the link or button also carries `data-roving-value={value}`, after the
+ * consumer's attributes; in a plain Nav nothing is added.
+ */
 function renderNavEntry(
   props: NavEntryProps,
   context: NavContextValue,
+  roving: NavRovingContextValue | null,
   classes: { base: string; selected: string; idle: string },
   stable: NavEntryClassNames,
   withIcon: boolean,
@@ -551,6 +305,7 @@ function renderNavEntry(
   const { value, icon, disabled = false, href, className, children, onClick, ref, ...rest } = props;
   const isSelected = context.value === value;
   const isLink = href !== undefined;
+  const rovingProps = roving ? { 'data-roving-value': value } : undefined;
 
   const handleClick = (event: React.MouseEvent<HTMLElement>) => {
     if (disabled) {
@@ -589,6 +344,7 @@ function renderNavEntry(
       <li className={stable.listItem}>
         <a
           {...(rest as React.AnchorHTMLAttributes<HTMLAnchorElement>)}
+          {...rovingProps}
           ref={ref as React.Ref<HTMLAnchorElement>}
           href={disabled ? undefined : href}
           role={disabled ? 'link' : rest.role}
@@ -610,6 +366,7 @@ function renderNavEntry(
       <button
         type="button"
         {...(buttonRest as React.ButtonHTMLAttributes<HTMLButtonElement>)}
+        {...rovingProps}
         ref={ref as React.Ref<HTMLButtonElement>}
         disabled={disabled}
         aria-current={isSelected ? 'page' : undefined}
@@ -651,6 +408,7 @@ const NavCategory = ({
   ...rest
 }: NavCategoryProps) => {
   const context = useNavContext('Nav.Category');
+  const roving = React.useContext(NavRovingContext);
   const {
     value: currentValue,
     openCategories,
@@ -680,6 +438,13 @@ const NavCategory = ({
   }, [categoryStore, holdsCurrentChild, currentValue, value]);
   const containsCurrent =
     !isOpen && (currentCategory === value || holdsShownCurrent || holdsCurrentChild);
+  // Inside an arrow-key body: whether this is a closed category that holds the current page (the
+  // body's first Tab stop), before paint; nothing is reported in a plain Nav.
+  React.useLayoutEffect(() => {
+    if (!roving) return;
+    roving.reportCurrentCategory(value, containsCurrent);
+    return () => roving.reportCurrentCategory(value, false);
+  }, [roving, value, containsCurrent]);
 
   let buttonLabel: React.ReactNode = label;
   let items: React.ReactNode = children;
@@ -705,6 +470,7 @@ const NavCategory = ({
         aria-controls={isOpen ? listId : undefined}
         aria-current={containsCurrent ? true : undefined}
         data-contains-current={containsCurrent ? '' : undefined}
+        data-roving-value={roving ? `wave-nav-category:${value}` : undefined}
         onClick={() => toggleCategory(value)}
         className={cn(navCategoryClassNames.button, categoryButtonClasses)}
       >
@@ -729,6 +495,7 @@ const NavCategory = ({
   );
 };
 NavCategory.displayName = 'NavCategory';
+markNavPart(NavCategory, 'category');
 
 // ---------------------------------------------------------------------------
 // Nav.Item / Nav.SubItem
@@ -758,9 +525,11 @@ function NavItem(props: NavItemProps | NavItemDynamicProps): React.ReactElement 
   const context = useNavContext('Nav.Item');
   useNavValue(context, 'item', props.value);
   useRecordCategory(context, props.value);
+  const roving = React.useContext(NavRovingContext);
   return renderNavEntry(
     props as NavEntryProps,
     context,
+    roving,
     itemClasses,
     {
       root: navItemClassNames.root,
@@ -772,6 +541,7 @@ function NavItem(props: NavItemProps | NavItemDynamicProps): React.ReactElement 
   );
 }
 NavItem.displayName = 'NavItem';
+markNavPart(NavItem, 'entry');
 
 /**
  * An indented entry inside a `Nav.Category`: a link when `href` is given, a button otherwise.
@@ -788,133 +558,18 @@ function NavSubItem(props: NavSubItemProps | NavSubItemDynamicProps): React.Reac
   const context = useNavContext('Nav.SubItem');
   useNavValue(context, 'item', props.value);
   useRecordCategory(context, props.value);
+  const roving = React.useContext(NavRovingContext);
   return renderNavEntry(
     props as NavEntryProps,
     context,
+    roving,
     subItemClasses,
     { root: navSubItemClassNames.root, listItem: navSubItemClassNames.listItem },
     false,
   );
 }
 NavSubItem.displayName = 'NavSubItem';
-
-// ---------------------------------------------------------------------------
-// Nav (root)
-// ---------------------------------------------------------------------------
-
-const NavRoot = ({
-  value: valueProp,
-  defaultValue: defaultValueProp,
-  onValueChange,
-  selectedValue,
-  defaultSelectedValue,
-  onNavItemSelect,
-  openCategories: openCategoriesProp,
-  defaultOpenCategories,
-  onOpenCategoriesChange,
-  currentCategory,
-  className,
-  children,
-  ref,
-  ...rest
-}: NavProps) => {
-  const controlledValue = resolveDeprecatedProp(
-    'Nav',
-    valueProp,
-    selectedValue,
-    'selectedValue',
-    'value',
-  );
-  const defaultValue =
-    resolveDeprecatedProp(
-      'Nav',
-      defaultValueProp,
-      defaultSelectedValue,
-      'defaultSelectedValue',
-      'defaultValue',
-    ) ?? '';
-  if (onNavItemSelect !== undefined) warnDeprecated('Nav', 'onNavItemSelect', 'onValueChange');
-
-  const [value, setValue] = useControllable(controlledValue, defaultValue, onValueChange);
-  const notifyNavItemSelect = useEventCallback(onNavItemSelect);
-  const select = React.useCallback(
-    (next: string) => {
-      setValue(next);
-      // Deprecated event-named alias: every activation, re-selection included (C-NAMING).
-      notifyNavItemSelect(next);
-    },
-    [setValue, notifyNavItemSelect],
-  );
-
-  const [initialOpenCategories] = React.useState<readonly string[]>(
-    () =>
-      defaultOpenCategories ?? findCategoriesContaining(children, controlledValue ?? defaultValue),
-  );
-  const [openCategories, setOpenCategories] = useControllable<readonly string[]>(
-    openCategoriesProp,
-    initialOpenCategories,
-    (next) => onOpenCategoriesChange?.([...next]),
-  );
-  const toggleCategory = React.useCallback(
-    (category: string) => {
-      setOpenCategories((previous) =>
-        previous.includes(category)
-          ? previous.filter((entry) => entry !== category)
-          : [...previous, category],
-      );
-    },
-    [setOpenCategories],
-  );
-
-  // Duplicate values (C-DEV): the mounted items and categories per value (written from their
-  // effects only); a second one with a value already in use warns once per value.
-  const valueCountsRef = React.useRef<Map<string, number> | null>(null);
-  const registerValue = React.useCallback((kind: NavValueKind, entry: string) => {
-    const counts = (valueCountsRef.current ??= new Map<string, number>());
-    const key = `${kind}:${entry}`;
-    const count = (counts.get(key) ?? 0) + 1;
-    counts.set(key, count);
-    if (count > 1) warnDuplicateValue(kind, entry);
-    return () => {
-      const remaining = (counts.get(key) ?? 1) - 1;
-      if (remaining > 0) counts.set(key, remaining);
-      else counts.delete(key);
-    };
-  }, []);
-
-  const [categoryStore] = React.useState(createCategoryStore);
-
-  const contextValue = React.useMemo<NavContextValue>(
-    () => ({
-      value,
-      select,
-      openCategories,
-      toggleCategory,
-      registerValue,
-      currentCategory,
-      categoryStore,
-    }),
-    [value, select, openCategories, toggleCategory, registerValue, currentCategory, categoryStore],
-  );
-
-  return (
-    <NavContext.Provider value={contextValue}>
-      <nav
-        aria-label="Navigation"
-        {...rest}
-        ref={ref}
-        className={cn(
-          navClassNames.root,
-          'w-60 border-e border-border bg-background py-2',
-          className,
-        )}
-      >
-        <ul className={cn(navClassNames.list, 'm-0 list-none p-0')}>{children}</ul>
-      </nav>
-    </NavContext.Provider>
-  );
-};
-NavRoot.displayName = 'Nav';
+markNavPart(NavSubItem, 'entry');
 
 /**
  * A vertical side navigation (`<nav>` landmark, default name "Navigation") with items, links and
