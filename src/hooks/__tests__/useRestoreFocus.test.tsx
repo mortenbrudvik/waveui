@@ -1575,3 +1575,189 @@ describe('useRestoreFocus — onlyIfFocusInside (popovers)', () => {
     expect(document.activeElement).toBe(document.body);
   });
 });
+
+describe('useRestoreFocus — requireFocusInside (P6-06 D92: surfaces that do not trap focus)', () => {
+  /** A trigger, a field on the page and a non-trapping surface the parent controls. */
+  function Page({
+    open,
+    onlyIfFocusInside,
+    finalFocus = false,
+    children,
+  }: {
+    open: boolean;
+    onlyIfFocusInside?: boolean;
+    finalFocus?: boolean;
+    children?: React.ReactNode;
+  }) {
+    const triggerRef = React.useRef<HTMLButtonElement>(null);
+    const finalRef = React.useRef<HTMLButtonElement>(null);
+    return (
+      <>
+        <button type="button" ref={triggerRef}>
+          Trigger
+        </button>
+        <input aria-label="Page field" />
+        <button type="button" ref={finalRef}>
+          Final
+        </button>
+        <Surface
+          open={open}
+          triggerRef={triggerRef}
+          finalFocusRef={finalFocus ? finalRef : undefined}
+          requireFocusInside
+          onlyIfFocusInside={onlyIfFocusInside}
+        >
+          {children}
+        </Surface>
+      </>
+    );
+  }
+
+  const field = () => screen.getByRole('textbox', { name: 'Page field' });
+
+  it('restores to the trigger when focus is inside the surface at close', () => {
+    const { rerender } = render(<Page open={false} />);
+    act(() => button('Trigger').focus());
+    rerender(<Page open />);
+    act(() => button('Inside').focus());
+    rerender(<Page open={false} />);
+    expect(button('Trigger')).toHaveFocus();
+  });
+
+  it('honours finalFocusRef when focus is inside', () => {
+    const { rerender } = render(<Page open={false} finalFocus />);
+    act(() => button('Trigger').focus());
+    rerender(<Page open finalFocus />);
+    act(() => button('Inside').focus());
+    rerender(<Page open={false} finalFocus />);
+    expect(button('Final')).toHaveFocus();
+  });
+
+  it('leaves focus on a page element', () => {
+    const { rerender } = render(<Page open={false} />);
+    act(() => button('Trigger').focus());
+    rerender(<Page open />);
+    act(() => button('Inside').focus());
+    act(() => field().focus());
+    rerender(<Page open={false} />);
+    expect(field()).toHaveFocus();
+  });
+
+  it('leaves focus on <body> when nothing inside lost it (a close from code)', async () => {
+    const { rerender } = render(<Page open={false} />);
+    rerender(<Page open />);
+    expect(document.activeElement).toBe(document.body);
+    rerender(<Page open={false} />);
+    expect(document.activeElement).toBe(document.body);
+
+    // Focus left a page element for <body> (a press on text): not the surface's.
+    rerender(<Page open />);
+    act(() => field().focus());
+    act(() => field().blur());
+    await flushMicrotasks();
+    rerender(<Page open={false} />);
+    expect(document.activeElement).toBe(document.body);
+  });
+
+  it('wins over onlyIfFocusInside, which would restore from <body>', () => {
+    const { rerender } = render(<Page open={false} onlyIfFocusInside />);
+    rerender(<Page open onlyIfFocusInside />);
+    rerender(<Page open={false} onlyIfFocusInside />);
+    expect(document.activeElement).toBe(document.body);
+    expect(button('Trigger')).not.toHaveFocus();
+  });
+
+  it('restores when the focused element inside was removed before the close', async () => {
+    function Removable({ show }: { show: boolean }) {
+      return show ? <button type="button">Remove me</button> : null;
+    }
+    const { rerender } = render(
+      <Page open={false}>
+        <Removable show />
+      </Page>,
+    );
+    act(() => button('Trigger').focus());
+    rerender(
+      <Page open>
+        <Removable show />
+      </Page>,
+    );
+    act(() => button('Remove me').focus());
+    rerender(
+      <Page open>
+        <Removable show={false} />
+      </Page>,
+    );
+    await flushMicrotasks();
+    expect(document.activeElement).toBe(document.body);
+    rerender(
+      <Page open={false}>
+        <Removable show={false} />
+      </Page>,
+    );
+    expect(button('Trigger')).toHaveFocus();
+  });
+
+  it('the unmount path: restores from inside, and leaves focus on the page', async () => {
+    function Conditional({ show, focusPage }: { show: boolean; focusPage?: boolean }) {
+      const triggerRef = React.useRef<HTMLButtonElement>(null);
+      return (
+        <>
+          <button type="button" ref={triggerRef}>
+            Trigger
+          </button>
+          <input aria-label="Page field" autoFocus={focusPage} />
+          {show && <Surface open triggerRef={triggerRef} requireFocusInside />}
+        </>
+      );
+    }
+    const { rerender, unmount } = render(<Conditional show={false} />);
+    act(() => button('Trigger').focus());
+    rerender(<Conditional show />);
+    act(() => button('Inside').focus());
+    rerender(<Conditional show={false} />);
+    await flushMicrotasks();
+    expect(button('Trigger')).toHaveFocus();
+
+    rerender(<Conditional show />);
+    act(() => field().focus());
+    rerender(<Conditional show={false} />);
+    await flushMicrotasks();
+    expect(field()).toHaveFocus();
+    unmount();
+  });
+
+  it('keeps a page popup’s restore target valid while a dialog layer (a non-modal surface) is open', async () => {
+    const user = userEvent.setup();
+    const nonModal = document.createElement('div');
+    nonModal.innerHTML = '<button type="button">In the non-modal</button>';
+    document.body.appendChild(nonModal);
+    const unregister = registerLayer(
+      makeLayer('non-modal', { kind: 'dialog', escape: 'inside', getElements: () => [nonModal] }),
+    );
+    function App() {
+      const [open, setOpen] = React.useState(false);
+      return (
+        <>
+          <button type="button" onClick={() => setOpen(true)}>
+            Menu
+          </button>
+          <Surface open={open} onlyIfFocusInside>
+            <button type="button" onClick={() => setOpen(false)}>
+              Item
+            </button>
+          </Surface>
+        </>
+      );
+    }
+    try {
+      render(<App />);
+      await user.click(button('Menu'));
+      await user.click(button('Item'));
+      expect(button('Menu')).toHaveFocus();
+    } finally {
+      unregister();
+      nonModal.remove();
+    }
+  });
+});

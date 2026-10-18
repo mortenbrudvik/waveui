@@ -9,7 +9,7 @@ const openStoryParameters = {
   docs: { story: { inline: false, iframeHeight: 480 } },
 };
 
-const modalTypes = ['modal', 'alert'] as const satisfies readonly NonNullable<
+const modalTypes = ['modal', 'alert', 'non-modal'] as const satisfies readonly NonNullable<
   DialogProps['modalType']
 >[];
 
@@ -332,4 +332,38 @@ export const Controlled: Story = {
       </>
     );
   },
+};
+
+/**
+ * `modalType="non-modal"`: the page stays usable — no backdrop, no focus trap, nothing inert, the
+ * page scrolls. Tab from the trigger enters the dialog, Tab past its last element continues after
+ * the trigger, Escape inside closes it, presses on the page leave it open, and the trigger toggles
+ * it. The page's controls sit above the centred dialog, so none is hidden behind it.
+ */
+export const NonModal: Story = {
+  args: { defaultOpen: true, modalType: 'non-modal' },
+  render: function NonModalDialog(args) {
+    return (
+      <div className="flex flex-wrap items-end gap-2">
+        <Dialog {...args}>
+          <Dialog.Trigger>
+            <Button appearance="primary">Formatting help</Button>
+          </Dialog.Trigger>
+          <Dialog.Content title="Formatting help" size="small">
+            <p>Wrap text in asterisks for bold, and start a line with a dash for a list.</p>
+            <Dialog.Footer>
+              <Dialog.Close>
+                <Button appearance="primary">Got it</Button>
+              </Dialog.Close>
+            </Dialog.Footer>
+          </Dialog.Content>
+        </Dialog>
+        <Field label="Comment">
+          <Input />
+        </Field>
+        <Button>Post</Button>
+      </div>
+    );
+  },
+  parameters: openStoryParameters,
 };

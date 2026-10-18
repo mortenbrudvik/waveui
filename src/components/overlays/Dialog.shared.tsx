@@ -389,20 +389,30 @@ export interface ModalPartProps<RenderProps> extends Omit<
 /** What {@link useModalTriggerPart} reads from the modal root. */
 export interface ModalTriggerState {
   open: boolean;
-  /** Asks the root to open (reason `trigger`). */
+  /**
+   * Asks the root to open or close (reason `trigger`): to open while it is closed, to close while
+   * it is open.
+   */
   requestOpen: ModalRequestOpen;
   trigger: ModalTrigger;
   /** The surface's id for `aria-controls` while the modal is open. */
   controlsId: string | undefined;
+  /**
+   * `'dialog'` renders `aria-haspopup="dialog"`; `false` renders none (an inline drawer, whose
+   * trigger shows and hides a panel in place).
+   * @default 'dialog'
+   */
+  popup?: 'dialog' | false;
 }
 
 /**
- * Renders a `Dialog.Trigger`/`Drawer.Trigger`: its element gets `aria-haspopup="dialog"`,
- * `aria-expanded`, `aria-controls` (while open; these always win over the child's own), a click
- * handler that records the trigger (for the focus return) and asks the root to open (reason
- * `trigger`, with the click event), and a ref that registers it with the root's triggers. On a
- * wrapper span (`asChild={false}`, the automatic fallback), the state ARIA goes to the first
- * element in the tab order inside it (`useTriggerElement`).
+ * Renders a `Dialog.Trigger`/`Drawer.Trigger`: its element gets `aria-haspopup="dialog"` (none
+ * with `popup: false`, an inline drawer's trigger), `aria-expanded`, `aria-controls` (while open;
+ * these always win over the child's own), a click handler that opens and closes the root (reason
+ * `trigger`, with the click event: a click while it is open asks it to close) and records the
+ * trigger that opens it (for the focus return), and a ref that registers it with the root's
+ * triggers. On a wrapper span (`asChild={false}`, the automatic fallback), the state ARIA goes to
+ * the first element in the tab order inside it (`useTriggerElement`).
  *
  * @param modal         The root's state, from its context.
  * @param props         The part's props.
@@ -413,25 +423,25 @@ export function useModalTriggerPart<RenderProps>(
   { children, asChild, ref, ...rest }: ModalPartProps<RenderProps>,
   componentName: string,
 ): React.ReactNode {
-  const { open, requestOpen, trigger, controlsId } = modal;
+  const { open, requestOpen, trigger, controlsId, popup = 'dialog' } = modal;
   const { attach, activate } = useModalTriggerElement(trigger);
   const mergedRef = useMergedRefs<HTMLElement>(attach, ref);
-  const openModal = React.useCallback(
+  const toggleModal = React.useCallback(
     (event?: React.MouseEvent<HTMLElement>) => {
       // Focus returns to this trigger, also when the root has several (overlays#9), and also when
       // a render-prop child calls `onClick()` without the event.
-      activate(event);
-      requestOpen(true, { reason: 'trigger', event: getNativeEvent(event) });
+      if (!open) activate(event);
+      requestOpen(!open, { reason: 'trigger', event: getNativeEvent(event) });
     },
-    [activate, requestOpen],
+    [open, activate, requestOpen],
   );
 
   const stateAria = {
-    'aria-haspopup': 'dialog' as const,
+    'aria-haspopup': popup === false ? undefined : popup,
     'aria-expanded': open,
     'aria-controls': open ? controlsId : undefined,
   };
-  const triggerProps = mergeProps({ ...stateAria, onClick: openModal, ref: mergedRef }, rest, {
+  const triggerProps = mergeProps({ ...stateAria, onClick: toggleModal, ref: mergedRef }, rest, {
     oursWin: STATE_ARIA,
   });
 
@@ -460,6 +470,65 @@ export function useModalClosePart<RenderProps>(
   );
   const closeProps = mergeProps({ onClick: close, ref: mergedRef }, rest);
   return useTriggerElement(children, closeProps as RenderProps, { componentName, asChild });
+}
+
+/** The element {@link useModalOpener} captured, while it is in the document. */
+interface ModalOpener {
+  /** Records the opener (or forgets it, `null`). */
+  set: (element: HTMLElement | null) => void;
+  /** The captured opener while it is in the document, else `null`. Read-only. */
+  ref: React.RefObject<HTMLElement | null>;
+}
+
+function createModalOpener(): ModalOpener {
+  let element: HTMLElement | null = null;
+  return {
+    set: (next) => {
+      element = next;
+    },
+    ref: {
+      get current() {
+        return element?.isConnected ? element : null;
+      },
+    },
+  };
+}
+
+/**
+ * The element a non-modal surface takes its keyboard place after (`usePopoverTabOrder`'s
+ * `anchorRef`), captured in the insertion phase of the commit in which `enabled` becomes true,
+ * before focus moves in: `trigger.focusRef.current`, which with nothing focused is the activated
+ * or first trigger's focus target and is `null` while an element other than `<body>` has focus
+ * (`ModalTrigger.focusRef` rule 1; a focused `tabIndex={-1}` trigger wrapper span resolves as a
+ * trigger), so a focused trigger, the button inside a trigger's span or a controlled surface's own
+ * opener is taken by the next step: else the focused element when it is not `<body>` and not
+ * inside `surface`, else `null`. Cleared when `enabled` becomes false. An opener removed from the
+ * document since reads as `null`, so the surface keeps its portal's place (the end of the page).
+ */
+export function useModalOpener(
+  enabled: boolean,
+  trigger: ModalTrigger,
+  surface: HTMLElement | null,
+): React.RefObject<HTMLElement | null> {
+  const [opener] = React.useState(createModalOpener);
+  const enabledRef = React.useRef(false);
+  React.useInsertionEffect(() => {
+    const wasEnabled = enabledRef.current;
+    enabledRef.current = enabled;
+    if (enabled === wasEnabled) return;
+    if (!enabled) {
+      opener.set(null);
+      return;
+    }
+    const fromTrigger = trigger.focusRef.current;
+    if (fromTrigger) {
+      opener.set(fromTrigger);
+      return;
+    }
+    const focused = getFocusedElement();
+    opener.set(focused && !surface?.contains(focused) ? focused : null);
+  });
+  return opener.ref;
 }
 
 /**

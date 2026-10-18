@@ -555,22 +555,78 @@ export function useFocusTrap(container: HTMLElement | null, options: UseFocusTra
       lastFocused: null,
     };
     const release = pushTrap(entry);
-
-    // Initial focus is skipped only when focus is already inside the container or one of its
-    // descendant layers (never for the layer's own trigger or an allow-listed toast).
-    const active = container.ownerDocument.activeElement as HTMLElement | null;
-    const focusInside =
-      !!active &&
-      (container.contains(active) ||
-        (!active.closest(entry.allowOutsideSelector) &&
-          isInsideDescendantLayers(latest.current.layerId, active)));
-    if (focusInside) {
-      entry.lastFocused = active;
-    } else {
-      focusFirstPossible(resolveInitialFocus(container, latest.current.initialFocus));
-      const now = container.ownerDocument.activeElement as HTMLElement | null;
-      if (now && container.contains(now)) entry.lastFocused = now;
-    }
+    const focused = applyInitialFocus(container, {
+      layerId: latest.current.layerId,
+      initialFocus: latest.current.initialFocus,
+      allowOutsideSelector: entry.allowOutsideSelector,
+    });
+    if (focused) entry.lastFocused = focused;
     return release;
+  }, [enabled, container]);
+}
+
+/**
+ * The initial focus of a surface (the trap's, and {@link useInitialFocus}'s): skipped when focus is
+ * already inside the container or one of the descendant layers of `layerId` (never for the
+ * layer's own trigger or an allow-listed toast), else `initialFocus` (default: the first tabbable
+ * element), else the container. Returns the focused element when it is inside the container or
+ * those layers (the trap's `lastFocused`), else `null`.
+ */
+function applyInitialFocus(
+  container: HTMLElement,
+  options: {
+    layerId: string | undefined;
+    initialFocus: UseFocusTrapOptions['initialFocus'];
+    allowOutsideSelector: string;
+  },
+): HTMLElement | null {
+  const active = container.ownerDocument.activeElement as HTMLElement | null;
+  const focusInside =
+    !!active &&
+    (container.contains(active) ||
+      (!active.closest(options.allowOutsideSelector) &&
+        isInsideDescendantLayers(options.layerId, active)));
+  if (focusInside) return active;
+  focusFirstPossible(resolveInitialFocus(container, options.initialFocus));
+  const now = container.ownerDocument.activeElement as HTMLElement | null;
+  return now && container.contains(now) ? now : null;
+}
+
+/** Options of {@link useInitialFocus}. */
+export interface UseInitialFocusOptions {
+  /** Whether the surface is open: focus moves in when it becomes `true` with a container. */
+  enabled: boolean;
+  /** The surface's dismiss layer: focus already in one of its descendant layers stays there. */
+  layerId?: string;
+  /** What to focus first. @default 'first' (the first tabbable element, else the container) */
+  initialFocus?: UseFocusTrapOptions['initialFocus'];
+}
+
+/**
+ * The trap's initial focus without the trap (a non-modal Dialog or Drawer, which moves focus in
+ * when it opens but does not keep it there): in the layout phase of the commit in which
+ * `enabled && container` becomes true, does nothing when focus is already inside the container or
+ * one of the layer's descendant layers (an `autoFocus` element wins), else focuses
+ * `initialFocus` (default: the first tabbable element), else the container. `useFocusTrap` runs
+ * the same code when it starts. It adds no listener.
+ */
+export function useInitialFocus(
+  container: HTMLElement | null,
+  options: UseInitialFocusOptions,
+): void {
+  const { enabled } = options;
+  const latestRef = useRef(options);
+
+  useInsertionEffect(() => {
+    latestRef.current = options;
+  });
+
+  useLayoutEffect(() => {
+    if (!enabled || !container) return;
+    applyInitialFocus(container, {
+      layerId: latestRef.current.layerId,
+      initialFocus: latestRef.current.initialFocus,
+      allowOutsideSelector: ALLOW_OUTSIDE_SELECTOR,
+    });
   }, [enabled, container]);
 }

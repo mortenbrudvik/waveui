@@ -21,6 +21,10 @@ const sizes = ['small', 'medium', 'large', 'full'] as const satisfies readonly N
   DrawerProps['size']
 >[];
 
+const modalTypes = ['modal', 'alert', 'non-modal'] as const satisfies readonly NonNullable<
+  DrawerProps['modalType']
+>[];
+
 /** The thirty fields of the LongContent drawer. */
 const longFields = [
   'Keyword',
@@ -100,6 +104,7 @@ const meta = {
     defaultOpen: false,
     position: 'end',
     size: 'small',
+    modalType: 'modal',
     title: 'Filters',
     onOpenChange: fn(),
     children: 'Choose the filters to apply to the list.',
@@ -107,6 +112,7 @@ const meta = {
   argTypes: {
     position: { control: 'select', options: positions },
     size: { control: 'select', options: sizes },
+    modalType: { control: 'select', options: modalTypes },
   },
 } satisfies Meta<typeof Drawer>;
 
@@ -474,4 +480,81 @@ export const Controlled: Story = {
       </>
     );
   },
+};
+
+/**
+ * `modalType="non-modal"`: a details panel beside a page that stays usable — no backdrop, no focus
+ * trap, nothing inert, the page scrolls. Tab from the trigger enters the panel, Tab past its last
+ * element continues after the trigger, Escape inside closes it, and the trigger toggles it. While
+ * the panel is open the page column reserves its width (`pe-80` for the `small` panel's 320px), so
+ * no page control is hidden behind it.
+ */
+export const NonModal: Story = {
+  args: {
+    modalType: 'non-modal',
+    title: 'Order 1042',
+    children: 'Two items, shipped on Monday to the warehouse in Lyon.',
+  },
+  render: function NonModalDrawer({ children, ...args }) {
+    const [open, setOpen] = React.useState(true);
+    const handleOpenChange: NonNullable<DrawerProps['onOpenChange']> = (next, details) => {
+      setOpen(next);
+      args.onOpenChange?.(next, details);
+    };
+    return (
+      <div className={open ? 'pe-80' : undefined}>
+        <div className="flex flex-col gap-3">
+          <p>Orders received this week. Open an order&apos;s details while you keep working.</p>
+          <div className="flex flex-wrap gap-2">
+            {/* The story owns the controlled pair; every other arg is forwarded. */}
+            <Drawer {...args} open={open} onOpenChange={handleOpenChange}>
+              <Drawer.Trigger>
+                <Button appearance="primary">Order details</Button>
+              </Drawer.Trigger>
+              <p>{children}</p>
+              <Drawer.Footer>
+                <Button>Print label</Button>
+                <Drawer.Close>
+                  <Button appearance="primary">Done</Button>
+                </Drawer.Close>
+              </Drawer.Footer>
+            </Drawer>
+            <Button>Refresh</Button>
+          </div>
+          <Field label="Search orders">
+            <Input />
+          </Field>
+        </div>
+      </div>
+    );
+  },
+  parameters: openStoryParameters,
+};
+
+/**
+ * `modalType="alert"`: a drawer that needs an answer. The panel is `role="alertdialog"`, and a
+ * backdrop press does not close it (Escape, the Close button and `Drawer.Close` still do).
+ */
+export const AlertDrawer: Story = {
+  args: {
+    modalType: 'alert',
+    title: 'Discard the draft?',
+    children: 'The draft and its attachments are deleted. This cannot be undone.',
+  },
+  render: ({ children, ...args }) => (
+    <Drawer {...args}>
+      <Drawer.Trigger>
+        <Button>Discard draft</Button>
+      </Drawer.Trigger>
+      <p>{children}</p>
+      <Drawer.Footer>
+        <Drawer.Close>
+          <Button appearance="subtle">Keep editing</Button>
+        </Drawer.Close>
+        <Drawer.Close>
+          <Button appearance="primary">Discard</Button>
+        </Drawer.Close>
+      </Drawer.Footer>
+    </Drawer>
+  ),
 };

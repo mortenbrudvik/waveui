@@ -176,6 +176,17 @@ describe('Dialog', () => {
         { name: 'small', props: { size: 'small' } },
       ],
     });
+
+    // P6-06: the same system props on a non-modal dialog (no backdrop, the page not inert).
+    describe('in a non-modal Dialog', () => {
+      testSystemProps(Dialog.Content, {
+        expectedTag: 'div',
+        displayName: 'DialogContent',
+        wrapper: createOverlayTestWrapper(Dialog, { defaultOpen: true, modalType: 'non-modal' }),
+        defaultProps: { title: 'Edit profile', children: <p>Body</p> },
+        conflictingClass: { className: 'max-w-[800px]', overrides: 'max-w-[600px]' },
+      });
+    });
   });
 
   // button-provider#1 (C-BUTTON-TYPE): the portaled close button never submits a form.

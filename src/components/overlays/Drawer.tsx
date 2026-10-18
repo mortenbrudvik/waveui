@@ -13,6 +13,7 @@ import { DrawerRoot } from './Drawer.root';
 export type {
   DrawerPosition,
   DrawerSize,
+  DrawerModalType,
   DrawerOpenChangeReason,
   DrawerOpenChangeDetails,
 } from './Drawer.context';
@@ -31,13 +32,20 @@ export type {
 } from './Drawer.parts';
 
 /**
- * A modal panel attached to a side or to the bottom of the screen (Fluent UI v2 style), rendered
- * in a portal (inheriting the WaveProvider theme) while open.
+ * A panel attached to a side or to the bottom of the screen (Fluent UI v2 style), modal by
+ * default, rendered in a portal (inheriting the WaveProvider theme) while open.
  *
  * - **Opening**: controlled (`open`), or uncontrolled with a `Drawer.Trigger` placed directly inside
- *   the Drawer or in a Fragment there (it renders in place, outside the panel).
+ *   the Drawer or in a Fragment there (it renders in place, outside the panel); the trigger opens
+ *   and closes it.
  * - **Modal**: focus moves into the panel and Tab stays inside it (toasts included), the rest of the
- *   page is `inert` (instead of `aria-modal`), and the page does not scroll.
+ *   page is `inert` (instead of `aria-modal`), and the page does not scroll. `modalType="alert"`
+ *   renders `role="alertdialog"`, and a backdrop press does not close it.
+ * - **Non-modal**: `modalType="non-modal"` leaves the page usable (no backdrop, no focus trap,
+ *   nothing inert, the page scrolls). Focus moves in on open; Tab and Shift+Tab leave the panel in
+ *   the page's order right after the element that opened it; Escape closes it only while focus is
+ *   inside it; presses on the page never close it; focus returns to the opener only from inside.
+ *   Reserve the panel's room in the page layout while it is open, so it hides no page control.
  * - **Closing**: Escape (only the topmost layer: a popup opened inside closes first), a click on the
  *   backdrop (a drag that starts inside does not close it), the Close button and `Drawer.Close`.
  *   `onOpenChange` gets the reason as its second argument (`details.reason`), so a controlled

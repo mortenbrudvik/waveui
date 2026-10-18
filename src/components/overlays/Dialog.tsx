@@ -5,6 +5,7 @@ import {
   dialogFooterClassNames,
   dialogTitleClassNames,
 } from '../../lib/classNames';
+import { composeEventHandlers } from '../../lib/composeEventHandlers';
 import { warnOnce } from '../../lib/dev';
 import { DismissIcon } from '../../lib/icons';
 import { slotRendersContent } from '../../lib/slot';
@@ -21,6 +22,7 @@ import {
   useBackdropPress,
   useModalClosePart,
   useModalDismiss,
+  useModalOpener,
   useModalOpenState,
   useModalTitle,
   useModalTrigger,
@@ -33,6 +35,7 @@ import {
   type ModalSurfaceContextValue,
   type ModalTrigger,
 } from './Dialog.shared';
+import { getTabbableThrough, usePopoverTabOrder } from './Popover.shared';
 
 /**
  * Why a {@link Dialog} asks to open or close: `trigger` (`Dialog.Trigger`), `close`
@@ -45,8 +48,8 @@ export type DialogOpenChangeReason = ModalOpenChangeReason;
 export type DialogOpenChangeDetails = OpenChangeDetails<DialogOpenChangeReason>;
 
 /**
- * How a {@link Dialog} blocks the page (the shared `ModalType`; Drawer reuses it when it gains
- * `modalType`).
+ * How a {@link Dialog} relates to the page: `modal`, `alert` or `non-modal` (the shared
+ * `ModalType`; `DrawerModalType` is the same type).
  */
 export type DialogModalType = ModalType;
 
@@ -76,11 +79,17 @@ export interface DialogProps {
    */
   onOpenChange?: (open: boolean, details?: DialogOpenChangeDetails) => void;
   /**
-   * `modal`: a backdrop press, Escape, the Close button and `Dialog.Close` close it. `alert`: a
-   * confirmation that needs an answer — `role="alertdialog"`, and a backdrop press does not close
-   * it (Escape still does). Initial focus goes to the first focusable element, the built-in Close
-   * button; give the least destructive action `autoFocus` to focus it instead. (`'non-modal'` is
-   * planned.)
+   * `modal`: the page behind is `inert` and does not scroll; a backdrop press, Escape, the Close
+   * button and `Dialog.Close` close it. `alert`: a confirmation that needs an answer —
+   * `role="alertdialog"`, and a backdrop press does not close it (Escape still does). `non-modal`:
+   * the page stays usable — no backdrop, no focus trap, nothing inert, the page scrolls; Tab and
+   * Shift+Tab leave the dialog in the page's order right after the element that opened it, Escape
+   * closes it while focus is inside it, presses on the page never close it, and focus returns to
+   * the opener only when it was inside the dialog. A non-modal dialog covers the page under it
+   * while Tab still reaches that page: keep the controls the user works with outside it, or use
+   * `modal`. Every type moves focus to the first focusable element on open (the built-in Close
+   * button); give another element `autoFocus` to start there (an alert dialog's least destructive
+   * action). `Dialog.Trigger` toggles the dialog. Fluent's `modalType`.
    * @default 'modal'
    */
   modalType?: DialogModalType;
@@ -149,8 +158,9 @@ export interface DialogTriggerRenderProps extends React.HTMLAttributes<HTMLEleme
 /** Properties for the DialogTrigger sub-component. */
 export interface DialogTriggerProps extends Omit<React.HTMLAttributes<HTMLElement>, 'children'> {
   /**
-   * The element that opens the dialog. A single element receives the trigger props (merged with
-   * its own: handlers composed, classes joined, its own `id` kept); a function receives them.
+   * The element that opens and closes the dialog. A single element receives the trigger props
+   * (merged with its own: handlers composed, classes joined, its own `id` kept); a function
+   * receives them.
    */
   children: React.ReactNode | ((props: DialogTriggerRenderProps) => React.ReactNode);
   /**
@@ -262,15 +272,16 @@ const DialogRoot = ({
 DialogRoot.displayName = 'Dialog';
 
 /**
- * Opens the dialog. Puts `aria-haspopup="dialog"`, `aria-expanded`, `aria-controls` (while open), a
- * click handler and a ref on its single child (no wrapper element), or passes them to a
- * render-prop child. A custom child component must forward `ref` and spread its props; one that
- * does not is wrapped in a `<span>` automatically (with a development warning), the span that
- * `asChild={false}` renders. Focus returns to the trigger when the dialog closes (with several
- * triggers, to the one that opened it). On the span, the state ARIA goes to the first element in
- * the tab order inside it, and focus returns to that element (to the span when you made it the
- * trigger with a `role` such as `button` and `tabIndex={0}`, or when nothing inside it can take
- * focus).
+ * Opens and closes the dialog: a click while it is open asks it to close (reason `trigger`), which
+ * only a non-modal dialog's trigger can receive (a modal one makes the page inert). Puts
+ * `aria-haspopup="dialog"`, `aria-expanded`, `aria-controls` (while open), a click handler and a
+ * ref on its single child (no wrapper element), or passes them to a render-prop child. A custom
+ * child component must forward `ref` and spread its props; one that does not is wrapped in a
+ * `<span>` automatically (with a development warning), the span that `asChild={false}` renders.
+ * Focus returns to the trigger when the dialog closes (with several triggers, to the one that
+ * opened it). On the span, the state ARIA goes to the first element in the tab order inside it,
+ * and focus returns to that element (to the span when you made it the trigger with a `role` such
+ * as `button` and `tabIndex={0}`, or when nothing inside it can take focus).
  */
 export const DialogTrigger = (props: DialogTriggerProps) => {
   const { open, requestOpen, trigger, contentId } = useDialogContext('Dialog.Trigger');
@@ -308,7 +319,8 @@ const sizeClasses: Record<'small' | 'medium', string> = {
  * replaces the gap: with the width and height caps lifted as well and its height set to the
  * viewport's, it fills the viewport (a full-screen dialog). It is `role="dialog"`, or
  * `role="alertdialog"` when the Dialog has `modalType="alert"` (a `role` you pass wins), and
- * carries `data-modal-type` with the resolved type.
+ * carries `data-modal-type` with the resolved type. A non-modal dialog has no backdrop: the
+ * element around the surface only centres it and lets presses through to the page.
  */
 export const DialogContent = ({
   title,
@@ -317,6 +329,7 @@ export const DialogContent = ({
   children,
   className,
   id,
+  onKeyDown,
   ref,
   ...rest
 }: DialogContentProps) => {
@@ -341,18 +354,27 @@ export const DialogContent = ({
   );
   const mergedRef = useMergedRefs<HTMLDivElement>(ref, attachSurface, registerId);
 
-  // An alert dialog needs an answer: a backdrop press does not close it (Escape still does).
-  const closesOnBackdropPress = modalType !== 'alert';
-  const backdropPress = useBackdropPress(surfaceRef, closesOnBackdropPress);
+  // An alert dialog needs an answer: a backdrop press does not close it (Escape still does;
+  // useModalLayer registers its layer without outside presses).
+  const backdropPress = useBackdropPress(surfaceRef, modalType !== 'alert');
   const onDismiss = useModalDismiss(requestOpen, 'Dialog', backdropPress.afterOutsidePress);
   const layer = useModalLayer({
     open,
+    modalType,
     onDismiss,
     refs: [surfaceRef],
-    outsidePress: closesOnBackdropPress,
     container: surface,
     triggerRef: trigger.focusRef,
     finalFocusRef,
+  });
+  // A non-modal dialog keeps its place in the page's keyboard order right after its opener.
+  const nonModal = modalType === 'non-modal';
+  const opener = useModalOpener(open && nonModal, trigger, surface);
+  const onTabOrderKeyDown = usePopoverTabOrder({
+    enabled: open && nonModal,
+    surface,
+    anchorRef: opener,
+    getPreviousStop: getTabbableThrough,
   });
   useUnnamedModalWarning(open ? surface : null, titles.hasTitle, 'Dialog.Content', 'Dialog.Title');
 
@@ -370,11 +392,20 @@ export const DialogContent = ({
   return (
     <Portal layerId={layer.layerId}>
       <div
-        className={cn(
-          dialogContentClassNames.backdrop,
-          'fixed inset-0 flex items-center justify-center bg-backdrop',
-        )}
-        onMouseDown={backdropPress.onMouseDown}
+        // A modal dialog's backdrop centres the surface; a non-modal one has no backdrop, and the
+        // positioner lets presses through to the page around the surface.
+        className={
+          nonModal
+            ? cn(
+                dialogContentClassNames.positioner,
+                'pointer-events-none fixed inset-0 flex items-center justify-center',
+              )
+            : cn(
+                dialogContentClassNames.backdrop,
+                'fixed inset-0 flex items-center justify-center bg-backdrop',
+              )
+        }
+        onMouseDown={nonModal ? undefined : backdropPress.onMouseDown}
       >
         <div
           ref={mergedRef}
@@ -384,6 +415,7 @@ export const DialogContent = ({
           tabIndex={-1}
           data-modal-type={modalType}
           {...rest}
+          onKeyDown={composeEventHandlers(onKeyDown, onTabOrderKeyDown)}
           className={cn(
             dialogContentClassNames.root,
             // The border marks the surface where the shadow cannot: in high contrast the page,
@@ -393,6 +425,7 @@ export const DialogContent = ({
             // minimum width is zero, so content wider than the room inside the gap scrolls in the
             // body instead of pushing the surface over the gap.
             'relative m-4 flex min-w-0 max-h-[calc(100dvh-2rem)] w-full flex-col rounded-lg border border-border bg-background p-6 text-foreground shadow-64',
+            nonModal && 'pointer-events-auto',
             sizeClasses[size],
             className,
           )}
@@ -540,8 +573,8 @@ export const DialogFooter = ({ children, className, ref, ...rest }: DialogFooter
 DialogFooter.displayName = 'DialogFooter';
 
 /**
- * A modal dialog (Fluent UI v2 style): `Dialog` holds the open state; `Dialog.Trigger` opens it and
- * `Dialog.Content` renders the surface in a portal while open.
+ * A dialog (Fluent UI v2 style), modal by default: `Dialog` holds the open state; `Dialog.Trigger`
+ * opens and closes it and `Dialog.Content` renders the surface in a portal while open.
  *
  * - **Modal**: focus moves into the dialog and Tab stays inside it (toasts included), the rest of
  *   the page is `inert` (instead of `aria-modal`, so toasts and live regions stay announced), and
@@ -556,6 +589,11 @@ DialogFooter.displayName = 'DialogFooter';
  *   that had focus when the dialog opened, the trigger, an element next to where that opener was.
  * - **Alert dialogs**: `modalType="alert"` renders `role="alertdialog"` for a confirmation that
  *   needs an answer; a backdrop press does not close it.
+ * - **Non-modal dialogs**: `modalType="non-modal"` leaves the page usable (no backdrop, no focus
+ *   trap, nothing inert, the page scrolls). Focus moves in on open; Tab and Shift+Tab leave the
+ *   dialog in the page's order right after the element that opened it; Escape closes it only while
+ *   focus is inside it; presses on the page never close it; focus returns to the opener only from
+ *   inside. Keep the page's controls clear of the dialog, which covers the page under it.
  * - **Footer**: `Dialog.Footer` sticks to the bottom of the scrolling body, and the body keeps a
  *   focused field above it.
  * - **Naming**: give `Dialog.Content` a `title`, a `Dialog.Title`, or `aria-label`.

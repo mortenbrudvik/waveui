@@ -1,5 +1,10 @@
 import * as React from 'react';
-import type { ModalOpenChangeReason, OpenChangeDetails, SurfaceSize } from '../../lib/types';
+import type {
+  ModalOpenChangeReason,
+  ModalType,
+  OpenChangeDetails,
+  SurfaceSize,
+} from '../../lib/types';
 import {
   inertModalTrigger,
   useRequiredContext,
@@ -25,6 +30,12 @@ export type DrawerPosition = 'start' | 'end' | 'left' | 'right' | 'bottom';
  * `medium` 592px, `large` 940px; `full` the viewport. The shared `SurfaceSize`.
  */
 export type DrawerSize = SurfaceSize;
+
+/**
+ * How a `Drawer` relates to the page: `modal`, `alert` or `non-modal` (the shared `ModalType`;
+ * `DialogModalType` is the same type).
+ */
+export type DrawerModalType = ModalType;
 
 /**
  * Why a `Drawer` asks to open or close: `trigger` (`Drawer.Trigger`), `close`

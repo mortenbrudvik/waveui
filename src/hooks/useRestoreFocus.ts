@@ -42,6 +42,14 @@ export interface UseRestoreFocusOptions {
    * other close keeps the rules above.
    */
   isHoverClose?: () => boolean;
+  /**
+   * Surfaces that do not trap focus (a non-modal Dialog or Drawer, an inline Drawer): restore only
+   * when focus is inside the surface at close, or was lost to `<body>` from an element inside it
+   * (removed, or made unable to take focus). Focus elsewhere, or on `<body>` for another reason
+   * (nothing had focus, a press on a spot that takes no focus, a close from code), stays where it
+   * is. Wins over `onlyIfFocusInside`. @default false
+   */
+  requireFocusInside?: boolean;
 }
 
 interface Latest {
@@ -399,15 +407,30 @@ function getNearbyTargets(
 }
 
 /**
+ * Whether focus was lost to `<body>` from an element inside `container`: the focus tracker's record
+ * of the element that lost it ({@link getLostFocus}) lies in the container (its recorded path holds
+ * it), also when the element has been removed since.
+ */
+function isFocusLostFromInside(container: HTMLElement | null | undefined): boolean {
+  if (!container) return false;
+  const lost = getLostFocus();
+  return !!lost && lost.position.path.includes(container);
+}
+
+/**
  * Whether the restore acts for this close: always while focus is inside the surface; otherwise
  * never for a hover close (`isClosingByHover`, asked only then), and with `onlyIfFocusInside` only
- * when focus was lost to `<body>`.
+ * when focus was lost to `<body>`. With `requireFocusInside`, from `<body>` only when focus was
+ * lost there from inside the surface, and never from anywhere else.
  */
 function shouldRestore(options: UseRestoreFocusOptions, isHoverClose: () => boolean): boolean {
   if (typeof document === 'undefined') return false;
   const active = document.activeElement;
   const onBody = !active || active === document.body || active === document.documentElement;
   if (!onBody && options.container?.contains(active)) return true;
+  if (options.requireFocusInside) {
+    return onBody && isFocusLostFromInside(options.container) && !isHoverClose();
+  }
   if (!onBody && options.onlyIfFocusInside) return false;
   return !isHoverClose();
 }
@@ -500,6 +523,9 @@ function restore(latest: Latest, opener: OpenerRecord | null): void {
  *   open, and is not dropped on `<body>` while a valid target exists. Focus uses `preventScroll`.
  * - `onlyIfFocusInside` (popovers): restores only when focus is inside the surface or was lost to
  *   `<body>`.
+ * - `requireFocusInside` (surfaces that do not trap focus: a non-modal Dialog or Drawer, an inline
+ *   Drawer): restores only when focus is inside the surface, or was lost to `<body>` from an
+ *   element inside it; a close from code while focus is on `<body>` or on the page moves nothing.
  * - `isHoverClose`: a close by the hover intent restores only when focus is inside the surface, so
  *   a hover close never moves focus from `<body>` or from where the user put it. The same holds for
  *   a surface opened from inside one that closes by hover (a submenu, a hover card in a hover

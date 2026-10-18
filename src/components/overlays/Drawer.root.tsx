@@ -1,6 +1,7 @@
 import * as React from 'react';
 import { flattenChildren, getElementType, isElementOfType } from '../../lib/children';
 import { cn } from '../../lib/cn';
+import { composeEventHandlers } from '../../lib/composeEventHandlers';
 import {
   drawerBodyClassNames,
   drawerClassNames,
@@ -18,6 +19,7 @@ import {
   ModalSurfaceContext,
   useBackdropPress,
   useModalDismiss,
+  useModalOpener,
   useModalOpenState,
   useModalTrigger,
   useModalTriggerSession,
@@ -31,6 +33,7 @@ import {
   DrawerPartContext,
   DrawerScrollStateContext,
   type DrawerContextValue,
+  type DrawerModalType,
   type DrawerOpenChangeDetails,
   type DrawerPosition,
   type DrawerSize,
@@ -47,6 +50,7 @@ import {
   type DrawerBodyProps,
 } from './Drawer.parts';
 import { scrollSeparatorClasses, useScrollState } from './Drawer.scroll';
+import { getTabbableThrough, usePopoverTabOrder } from './Popover.shared';
 
 /*
  * The Drawer root: its props, the child scan, the layout and the development checks. Imports the
@@ -94,6 +98,21 @@ export interface DrawerProps extends Omit<React.HTMLAttributes<HTMLDivElement>, 
    */
   size?: DrawerSize;
   /**
+   * `modal`, `alert` or `non-modal`, as Dialog's `modalType`. `modal`: the page behind is `inert`
+   * and does not scroll; a backdrop press, Escape, the Close button and `Drawer.Close` close it.
+   * `alert`: `role="alertdialog"` (a `role` you pass wins), and a backdrop press does not close it
+   * (Escape still does). `non-modal`: no backdrop, and the page stays usable — no focus trap,
+   * nothing inert, the page scrolls; Tab and Shift+Tab leave the drawer in the page's order right
+   * after the element that opened it, Escape closes it while focus is inside it, presses on the
+   * page never close it, and focus returns to the opener only when it was inside the drawer. A
+   * non-modal drawer covers the page under it while Tab still reaches that page: reserve its width
+   * (its height at the bottom) in your layout while it is open (with `size="full"` it covers
+   * everything, and a development warning says so). Every type moves focus to the first focusable
+   * element on open. Rendered as `data-modal-type`. Fluent's `modalType`.
+   * @default 'modal'
+   */
+  modalType?: DrawerModalType;
+  /**
    * Title displayed in the built-in header; it names the drawer (`aria-labelledby`). Without it,
    * render a `Drawer.HeaderTitle` (in a `Drawer.Header`) or a `Drawer.Title`, or pass
    * `aria-label`/`aria-labelledby`. A title that renders nothing (`''`, `[]`, `true`) counts as
@@ -129,7 +148,7 @@ export interface DrawerProps extends Omit<React.HTMLAttributes<HTMLDivElement>, 
    * Put wrappers inside the trigger instead: see `Drawer.Trigger`.
    */
   children: React.ReactNode;
-  /** Ref to the drawer panel (`role="dialog"`). */
+  /** Ref to the drawer panel (`role="dialog"`, or `alertdialog` with `modalType="alert"`). */
   ref?: React.Ref<HTMLDivElement>;
 }
 
@@ -178,6 +197,10 @@ function hasNestedTrigger(children: React.ReactNode): boolean {
 const TITLE_IGNORED_WARNING_KEY = 'Drawer:title-ignored';
 const TITLE_IGNORED_WARNING =
   'Drawer: `title` and `titleAction` are ignored because a Drawer.Header is among the children. Put a Drawer.HeaderTitle (with its `action`) in the header instead.';
+
+const NON_MODAL_FULL_WARNING_KEY = 'Drawer:non-modal-full';
+const NON_MODAL_FULL_WARNING =
+  'Drawer: `size="full"` with `modalType="non-modal"` covers the whole page while leaving it usable, so Tab reaches controls hidden behind the drawer. Use `modalType="modal"`, `type="inline"`, or a smaller size with its room reserved in the page layout.';
 
 const BODY_DUPLICATE_WARNING_KEY = 'Drawer.Body:duplicate';
 const BODY_DUPLICATE_WARNING =
@@ -341,12 +364,14 @@ export const DrawerRoot = ({
   onOpenChange,
   position = 'end',
   size = 'small',
+  modalType = 'modal',
   title,
   closeLabel = 'Close',
   finalFocusRef,
   children,
   className,
   id,
+  onKeyDown,
   ref,
   ...rest
 }: DrawerProps) => {
@@ -370,16 +395,27 @@ export const DrawerRoot = ({
   }, []);
   const mergedRef = useMergedRefs<HTMLDivElement>(ref, attachPanel);
 
-  // Every backdrop press asks the drawer to close.
-  const backdropPress = useBackdropPress(panelRef, true);
+  // A backdrop press asks the drawer to close, except an alert drawer's (Escape still does;
+  // useModalLayer registers its layer without outside presses).
+  const backdropPress = useBackdropPress(panelRef, modalType !== 'alert');
   const onDismiss = useModalDismiss(requestOpen, 'Drawer', backdropPress.afterOutsidePress);
   const layer = useModalLayer({
     open,
+    modalType,
     onDismiss,
     refs: [panelRef],
     container: panel,
     triggerRef: trigger.focusRef,
     finalFocusRef,
+  });
+  // A non-modal drawer keeps its place in the page's keyboard order right after its opener.
+  const nonModal = modalType === 'non-modal';
+  const opener = useModalOpener(open && nonModal, trigger, panel);
+  const onTabOrderKeyDown = usePopoverTabOrder({
+    enabled: open && nonModal,
+    surface: panel,
+    anchorRef: opener,
+    getPreviousStop: getTabbableThrough,
   });
   // After useModalLayer's focus restore (effects run in order), start the trigger session, or end
   // it and forget the trigger that opened it.
@@ -400,6 +436,11 @@ export const DrawerRoot = ({
   React.useEffect(() => {
     if (titleIgnored) warnOnce(TITLE_IGNORED_WARNING_KEY, TITLE_IGNORED_WARNING);
   }, [titleIgnored]);
+  // A full non-modal panel covers the page it leaves usable (D87.8).
+  const coversUsablePage = open && nonModal && size === 'full';
+  React.useEffect(() => {
+    if (coversUsablePage) warnOnce(NON_MODAL_FULL_WARNING_KEY, NON_MODAL_FULL_WARNING);
+  }, [coversUsablePage]);
   const duplicateBody = bodyCount > 1;
   React.useEffect(() => {
     if (duplicateBody) warnOnce(BODY_DUPLICATE_WARNING_KEY, BODY_DUPLICATE_WARNING);
@@ -450,18 +491,24 @@ export const DrawerRoot = ({
       {open && (
         <Portal layerId={layer.layerId}>
           <div
-            className={cn(drawerClassNames.backdrop, 'fixed inset-0 bg-backdrop')}
-            onMouseDown={backdropPress.onMouseDown}
+            // The backdrop of a modal or alert drawer. A non-modal drawer has none: this element
+            // then only holds the panel, without a box of its own, so the page stays pressable.
+            className={
+              nonModal ? 'contents' : cn(drawerClassNames.backdrop, 'fixed inset-0 bg-backdrop')
+            }
+            onMouseDown={nonModal ? undefined : backdropPress.onMouseDown}
           >
             <div
               ref={mergedRef}
-              role="dialog"
+              role={modalType === 'alert' ? 'alertdialog' : 'dialog'}
               id={panelId}
               aria-labelledby={hasTitle ? propTitleId : titles.titleId}
               tabIndex={-1}
               data-position={position}
               data-size={size}
+              data-modal-type={modalType}
               {...rest}
+              onKeyDown={composeEventHandlers(onKeyDown, onTabOrderKeyDown)}
               className={cn(
                 drawerClassNames.root,
                 'fixed flex flex-col border-border bg-background text-foreground shadow-64',

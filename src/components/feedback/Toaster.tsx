@@ -963,10 +963,10 @@ ToastContainer.displayName = 'ToastContainer';
  *   those, the dispatch's `announcement`.
  *   The toasts themselves are not live regions. Each message stays in its live region for 2
  *   seconds (or until its toast goes), so browsing the region later meets the text only once.
- * - While an open panel covers the toasts' corner (a Drawer on the same side, or at the bottom),
- *   the toasts move beside it, or above a bottom one (below it for top toasts), so they never hide
- *   its focused controls (WCAG 2.4.11). Without room there (a full-width panel on a narrow screen)
- *   they keep their corner.
+ * - While an open panel covers the toasts' corner (a modal or non-modal Drawer on the same side,
+ *   or at the bottom), the toasts move beside it, or above a bottom one (below it for top toasts),
+ *   so they never hide its focused controls (WCAG 2.4.11). Without room there (a full-width panel
+ *   on a narrow screen) they keep their corner.
  * - Timers pause while the pointer or focus is anywhere in the toast region, a menu or popover
  *   opened from a toast included (someone reading or operating one toast is reading the stack),
  *   and while the window is in the background (it has lost focus, or the page is not shown, as in

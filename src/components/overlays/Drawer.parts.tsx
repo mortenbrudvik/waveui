@@ -36,7 +36,8 @@ import { scrollSeparatorClasses } from './Drawer.scroll';
 
 /** Props a `Drawer.Trigger` puts on its element (and passes to a render-prop child). */
 export interface DrawerTriggerRenderProps extends React.HTMLAttributes<HTMLElement> {
-  'aria-haspopup': 'dialog';
+  /** `'dialog'`; absent on the trigger of an inline drawer, which opens no popup. */
+  'aria-haspopup'?: 'dialog';
   'aria-expanded': boolean;
   /** The panel's id, while the drawer is open. */
   'aria-controls'?: string;
@@ -48,8 +49,8 @@ export interface DrawerTriggerRenderProps extends React.HTMLAttributes<HTMLEleme
 /** Properties for the DrawerTrigger sub-component. */
 export interface DrawerTriggerProps extends Omit<React.HTMLAttributes<HTMLElement>, 'children'> {
   /**
-   * The element that opens the drawer. A single element receives the trigger props (merged with its
-   * own); a function receives them.
+   * The element that opens and closes the drawer. A single element receives the trigger props
+   * (merged with its own); a function receives them.
    */
   children: React.ReactNode | ((props: DrawerTriggerRenderProps) => React.ReactNode);
   /**
@@ -161,16 +162,19 @@ export const NESTED_TRIGGER_WARNING =
   'Drawer.Trigger must be a direct child of Drawer (a Fragment is fine). Inside another element or a component it is rendered as panel content, which exists only while the drawer is open, so it cannot open the drawer. Make it a direct child, put wrappers such as a Tooltip inside the trigger, or control the Drawer with `open`/`onOpenChange` and open it from your own button.';
 
 /**
- * Opens the drawer. Place it directly inside `Drawer`, or in a Fragment there (not inside a wrapper
- * element or a component of your own): it renders in place, not in the panel; a misplaced one warns
- * in development. A Drawer may have several triggers: focus returns to the one that opened it. Puts
- * `aria-haspopup="dialog"`, `aria-expanded`, `aria-controls` (while open), a click handler and a
- * ref on its single child, or passes them to a render-prop child. A custom child component must
- * forward `ref` and spread its props; one that does not is wrapped in a `<span>` automatically
- * (with a development warning), the span that `asChild={false}` renders. Focus returns to the
- * trigger when the drawer closes. On the span, the state ARIA goes to the first element in the tab
- * order inside it, and focus returns to that element (to the span when you made it the trigger
- * with a `role` such as `button` and `tabIndex={0}`, or when nothing inside it can take focus).
+ * Opens and closes the drawer: a click while it is open asks it to close (reason `trigger`), which
+ * only the trigger of a non-modal drawer can receive (a modal one makes the page inert). Place it
+ * directly inside `Drawer`, or in a Fragment there (not inside a wrapper element or a component of
+ * your own): it renders in place, not in the panel; a misplaced one warns in development. A Drawer
+ * may have several triggers: focus returns to the one that opened it. Puts `aria-haspopup="dialog"`
+ * (an inline drawer's trigger renders none), `aria-expanded`, `aria-controls` (while open), a click
+ * handler and a ref on its single child, or passes them to a render-prop child. A custom child
+ * component must forward `ref` and spread its props; one that does not is wrapped in a `<span>`
+ * automatically (with a development warning), the span that `asChild={false}` renders. Focus
+ * returns to the trigger when the drawer closes. On the span, the state ARIA goes to the first
+ * element in the tab order inside it, and focus returns to that element (to the span when you made
+ * it the trigger with a `role` such as `button` and `tabIndex={0}`, or when nothing inside it can
+ * take focus).
  *
  * A Tooltip (or any other wrapper) goes inside the trigger, not around it. Use a render-prop child
  * so the trigger props land on the button and the Tooltip describes that same button:

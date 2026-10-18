@@ -1760,6 +1760,27 @@ describe('Toaster: beside an open modal side panel (feedback-navigation#50, WCAG
     expect(offset()).toBe('');
   });
 
+  describe('a non-modal panel (the dialog layer kind, P6-06 D90)', () => {
+    it('moves the toasts beside a non-modal panel at the end edge', () => {
+      render(
+        <Toaster>
+          <StandInPanel open box={{ current: END_EDGE }} kind="dialog" />
+        </Toaster>,
+      );
+      expect(offset()).toBe('320px');
+    });
+
+    it('keeps the corner beside a full-width non-modal panel (no room)', () => {
+      render(
+        <Toaster>
+          <StandInPanel open box={{ current: FULL_WIDTH }} kind="dialog" />
+        </Toaster>,
+      );
+      expect(offset()).toBe('');
+      expect(getViewport().style.getPropertyValue('--wave-toaster-offset-block')).toBe('');
+    });
+  });
+
   describe('above a bottom panel (P6-05 D84)', () => {
     // A small bottom drawer: the whole width, 320px high.
     const BOTTOM_EDGE: Box = { left: 0, right: 1024, top: 448, bottom: 768 };
