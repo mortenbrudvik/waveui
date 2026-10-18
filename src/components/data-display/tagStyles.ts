@@ -199,16 +199,23 @@ export const INTERACTION_TAG_PRIMARY_JOINED_CLASSES =
   'group-has-[[data-wave-tag-dismiss]]/interaction-tag:rounded-e-none group-has-[[data-wave-tag-dismiss]]/interaction-tag:border-e-0';
 
 /**
- * What the Secondary (the Dismiss button) draws: its content centred, no block padding of its own
- * (C-NATIVE) and a 6px inline padding around a text label, and in forced colours a Highlight
+ * What the Secondary (the Dismiss button) draws: its content centred, no padding of its own
+ * (C-NATIVE: a glyph Secondary is exactly its minimum width), and in forced colours a Highlight
  * glyph on hover (its hover fill becomes Canvas there).
  */
 export const INTERACTION_TAG_SECONDARY_BASE_CLASSES =
-  'shrink-0 justify-center px-1.5 py-0 forced-colors:not-disabled:not-aria-disabled:hover:text-[Highlight]';
+  'shrink-0 justify-center p-0 forced-colors:not-disabled:not-aria-disabled:hover:text-[Highlight]';
 
 /**
- * The Secondary per size: at least 28, 24 or 24px wide (exactly that with its glyph), as tall as
- * the Primary (the root stretches both), with the text of the tag's size for a text label.
+ * The element that holds the Secondary's children while they render a text label ("Remove"):
+ * 6px on each side, so the label does not touch the divider or the end of the tag.
+ */
+export const INTERACTION_TAG_SECONDARY_LABEL_CLASSES = 'px-1.5';
+
+/**
+ * The Secondary per size: at least 28, 24 or 24px wide (exactly that with a glyph: the 12, 12 or
+ * 10px glyph and the borders fit inside), as tall as the Primary (the root stretches both), with
+ * the text of the tag's size for a text label.
  */
 export const interactionTagSecondarySizeClasses: Readonly<Record<TagSize, string>> = {
   medium: 'min-w-7 text-body-1',

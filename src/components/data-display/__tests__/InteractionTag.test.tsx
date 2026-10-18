@@ -13,6 +13,7 @@ import type {
 } from '../InteractionTag';
 import { Avatar, avatarSizeClasses } from '../Avatar';
 import { TagGroup } from '../TagGroup';
+import { Popover } from '../../overlays/Popover';
 import {
   interactionTagClassNames,
   interactionTagPrimaryClassNames,
@@ -23,6 +24,7 @@ import type { TagAppearance, TagShape, TagSize } from '../../../lib/types';
 import {
   asClientReference,
   expectThrows,
+  findDanglingIdRefs,
   findDanglingIdRefsInHtml,
   renderWithProviders,
   testCompoundExposure,
@@ -316,6 +318,27 @@ describe('InteractionTag', () => {
       expect(secondary('Discard')).toHaveAttribute('aria-labelledby', 'discard-label');
     });
 
+    it('points at no missing id without a Primary, and takes the primary text once one renders', () => {
+      function Chip({ withPrimary }: { withPrimary: boolean }) {
+        return (
+          <InteractionTag>
+            {withPrimary && <InteractionTag.Primary>Cherry</InteractionTag.Primary>}
+            <InteractionTag.Secondary />
+          </InteractionTag>
+        );
+      }
+      const { rerender } = render(<Chip withPrimary={false} />);
+      const button = secondary('Dismiss');
+      expect(findDanglingIdRefs()).toEqual([]);
+      expect(button.getAttribute('aria-labelledby')?.split(' ')).toHaveLength(1);
+
+      rerender(<Chip withPrimary />);
+      expect(button).toHaveAccessibleName('Dismiss Cherry');
+      rerender(<Chip withPrimary={false} />);
+      expect(button).toHaveAccessibleName('Dismiss');
+      expect(findDanglingIdRefs()).toEqual([]);
+    });
+
     it("leaves the secondary text out of the Secondary's name", () => {
       render(
         <InteractionTag>
@@ -434,6 +457,20 @@ describe('InteractionTag', () => {
         fireEvent.keyDown(target, { key: 'Backspace', isComposing: true });
       }
       expect(onClick).not.toHaveBeenCalled();
+    });
+
+    it('a held Enter on the Secondary activates it once', async () => {
+      const user = userEvent.setup();
+      const onClick = vi.fn();
+      render(<Cherry secondaryProps={{ onClick }} />);
+      await user.tab();
+      await user.tab();
+      expect(secondary()).toHaveFocus();
+      // The browser clicks a button on every repeated Enter (`repeat: true`): only the first
+      // press activates it.
+      await user.keyboard('{Enter>4/}');
+      expect(onClick).toHaveBeenCalledTimes(1);
+      expect(fireEvent.keyDown(secondary(), { key: 'Enter', repeat: true })).toBe(false);
     });
 
     it("a consumer onKeyDown runs first and its preventDefault() cancels the key; the Secondary onClick's preventDefault() cancels the group", () => {
@@ -851,8 +888,47 @@ describe('InteractionTag', () => {
     it('gives the buttons their own padding and background (C-NATIVE)', () => {
       render(<Cherry />);
       expect(primary()).toHaveClass('py-0', 'bg-muted');
-      expect(secondary()).toHaveClass('py-0', 'px-1.5', 'bg-muted');
+      expect(secondary()).toHaveClass('p-0', 'bg-muted');
     });
+
+    // jsdom has no layout: the width is pinned by its classes. With no padding of its own, a
+    // glyph Secondary is its minimum width, 28, 24 or 24px (the 12, 12 or 10px glyph and the 1px
+    // borders fit inside); a text label is padded 6px on each side.
+    it.each(SIZES)(
+      'keeps a glyph Secondary at its width at %s; only a text label is padded',
+      (size) => {
+        render(
+          <>
+            <Cherry size={size} />
+            <InteractionTag size={size}>
+              <InteractionTag.Primary>Plum</InteractionTag.Primary>
+              <InteractionTag.Secondary>
+                <Glyph />
+              </InteractionTag.Secondary>
+            </InteractionTag>
+            <InteractionTag size={size}>
+              <InteractionTag.Primary>Fig</InteractionTag.Primary>
+              <InteractionTag.Secondary>Remove</InteractionTag.Secondary>
+            </InteractionTag>
+          </>,
+        );
+        const inlinePadding = /(?:^|\s)(?:p[xse]|padding)-/;
+        for (const button of [secondary(), secondary('Dismiss Plum'), secondary('Remove Fig')]) {
+          expect(button).toHaveClass('p-0', METRICS[size].secondary[0]);
+          expect(button.className).not.toMatch(inlinePadding);
+        }
+        for (const name of ['Dismiss Cherry', 'Dismiss Plum']) {
+          const content = secondary(name).querySelector(
+            `.${interactionTagSecondaryClassNames.dismissIcon}`,
+          );
+          expect(content?.getAttribute('class') ?? '').not.toMatch(inlinePadding);
+        }
+        const label = secondary('Remove Fig').querySelector(
+          `.${interactionTagSecondaryClassNames.dismissIcon}`,
+        );
+        expect(label).toHaveClass('px-1.5');
+      },
+    );
   });
 
   it('sizes an Avatar in the Primary media for the tag; an Avatar own size wins', () => {
@@ -920,6 +996,48 @@ describe('InteractionTag', () => {
     } finally {
       portalTarget.remove();
     }
+  });
+
+  it('ignores clicks and keys from a Popover opened from the Primary', async () => {
+    const user = userEvent.setup();
+    const onDismiss = vi.fn();
+    const onValueChange = vi.fn();
+    render(
+      <TagGroup aria-label="People" onDismiss={onDismiss} onValueChange={onValueChange}>
+        <InteractionTag value="katri">
+          <Popover>
+            <Popover.Trigger>
+              <InteractionTag.Primary>Katri</InteractionTag.Primary>
+            </Popover.Trigger>
+            <Popover.Content title="Katri Athokas">
+              <button type="button">Message</button>
+            </Popover.Content>
+          </Popover>
+          <InteractionTag.Secondary />
+        </InteractionTag>
+        <InteractionTag value="ada">
+          <InteractionTag.Primary>Ada</InteractionTag.Primary>
+        </InteractionTag>
+      </TagGroup>,
+    );
+    // The click that opens the Popover is the Primary's own: it toggles the tag.
+    await user.click(primary('Katri'));
+    expect(onValueChange.mock.calls).toEqual([[['katri']]]);
+    const inPopover = await screen.findByRole('button', { name: 'Message' });
+
+    await user.click(inPopover);
+    act(() => inPopover.focus());
+    await user.keyboard('{Delete}{Backspace}{Enter} ');
+    // The toolbar's arrow keys do not move focus out of the Popover either.
+    await user.keyboard('{ArrowRight}');
+    expect(inPopover).toHaveFocus();
+    expect(onDismiss).not.toHaveBeenCalled();
+    expect(onValueChange).toHaveBeenCalledTimes(1);
+    expect(primary('Katri')).toHaveAttribute('aria-pressed', 'true');
+
+    await user.keyboard('{Escape}');
+    expect(screen.queryByRole('button', { name: 'Message' })).toBeNull();
+    expect(primary('Katri')).toHaveFocus();
   });
 
   it('moves focus to the Primary when a focused Secondary unmounts', async () => {

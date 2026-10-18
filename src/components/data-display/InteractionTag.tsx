@@ -26,6 +26,7 @@ import {
 import { AvatarSizeContext } from './Avatar.context';
 import {
   isDismissKey,
+  isRepeatedActivation,
   useDismissControlFocus,
   useHeldFocus,
   useTagGroupContext,
@@ -38,6 +39,7 @@ import {
   INTERACTION_TAG_PRIMARY_BASE_CLASSES,
   INTERACTION_TAG_PRIMARY_JOINED_CLASSES,
   INTERACTION_TAG_SECONDARY_BASE_CLASSES,
+  INTERACTION_TAG_SECONDARY_LABEL_CLASSES,
   INTERACTION_TAG_SELECTED_FORCED_COLORS,
   INTERACTION_TAG_UNDIMMED_DISABLED_CLASSES,
   TAG_AVATAR_SIZE,
@@ -132,7 +134,7 @@ export interface InteractionTagSecondaryProps extends React.ButtonHTMLAttributes
   /**
    * Visually hidden text that names the button with the Primary's text ("Dismiss Cherry"). A text
    * label in the children replaces it ("Remove Cherry"); an `aria-label` replaces the whole name.
-   * Localise it here.
+   * Localise it here. Fluent's order is the primary text, then the label ("Cherry remove").
    * @default 'Dismiss'
    */
   dismissLabel?: string;
@@ -165,6 +167,8 @@ interface InteractionTagContextValue {
   dimDisabled: boolean;
   /** The id of the Primary's text, the second half of the Secondary's name. */
   primaryTextId: string;
+  /** Which Primaries render, so the Secondary points at the primary text only while one does. */
+  primaries: PrimaryRegistry;
   /** The Secondary, which Delete and Backspace on the Primary click (read at key time). */
   secondaryRef: React.RefObject<HTMLButtonElement | null> | null;
   /**
@@ -175,6 +179,65 @@ interface InteractionTagContextValue {
   /** Toggles the tag's value in a selecting TagGroup's selection (the Primary's click). */
   toggle: () => void;
 }
+
+const noop = () => {};
+
+/**
+ * The Primaries an InteractionTag renders, read by its Secondary, whose name points at the
+ * primary text only while a Primary renders it (no id reference to a missing element). Until the
+ * root's first commit (the server render, hydration and the first client render) a Primary is
+ * assumed, so the server HTML holds the whole name and a tag with a Primary renders once; a
+ * Secondary without one drops the id after that commit, and takes it again when one mounts. An
+ * external store (C-HOOKS): a Primary registers from a layout effect.
+ */
+interface PrimaryRegistry {
+  subscribe: (onChange: () => void) => () => void;
+  /** Whether the Secondary's name may point at the primary text. */
+  hasPrimary: () => boolean;
+  /** For a Primary's layout effect: returns its cleanup. */
+  register: () => () => void;
+  /** For the root's layout effect: from now on the registrations decide. */
+  settle: () => void;
+}
+
+function createPrimaryRegistry(): PrimaryRegistry {
+  let count = 0;
+  let settled = false;
+  const listeners = new Set<() => void>();
+  const notify = () => {
+    for (const listener of listeners) listener();
+  };
+  return {
+    subscribe: (onChange) => {
+      listeners.add(onChange);
+      return () => {
+        listeners.delete(onChange);
+      };
+    },
+    hasPrimary: () => !settled || count > 0,
+    register: () => {
+      count += 1;
+      notify();
+      return () => {
+        count -= 1;
+        notify();
+      };
+    },
+    settle: () => {
+      if (settled) return;
+      settled = true;
+      notify();
+    },
+  };
+}
+
+/** The registry of the inert context: a Primary is always assumed. */
+const INERT_PRIMARY_REGISTRY: PrimaryRegistry = {
+  subscribe: () => noop,
+  hasPrimary: () => true,
+  register: () => noop,
+  settle: noop,
+};
 
 /** Internal: `null` outside an InteractionTag. */
 const InteractionTagContext = React.createContext<InteractionTagContextValue | null>(null);
@@ -190,6 +253,7 @@ const INERT_CONTEXT: InteractionTagContextValue = {
   pressed: undefined,
   dimDisabled: true,
   primaryTextId: '',
+  primaries: INERT_PRIMARY_REGISTRY,
   secondaryRef: null,
   dismiss: () => {},
   toggle: () => {},
@@ -256,6 +320,11 @@ const InteractionTagRoot = ({
   const mergedRef = useMergedRefs<HTMLDivElement>(rootRef, ref);
   const secondaryRef = React.useRef<HTMLButtonElement>(null);
   const primaryTextId = useId('interaction-tag-text');
+  // After the first commit, the Primaries that registered decide the Secondary's name (D43).
+  const [primaries] = React.useState(createPrimaryRegistry);
+  React.useLayoutEffect(() => {
+    primaries.settle();
+  }, [primaries]);
 
   // The tag's own look, else its TagGroup's, else the default look.
   const size: TagSize = isKeyOf(sizeProp, tagSizeClasses) ? sizeProp : (group?.size ?? 'medium');
@@ -312,11 +381,24 @@ const InteractionTagRoot = ({
       pressed,
       dimDisabled,
       primaryTextId,
+      primaries,
       secondaryRef,
       dismiss,
       toggle,
     }),
-    [size, shape, look, disabled, selected, pressed, dimDisabled, primaryTextId, dismiss, toggle],
+    [
+      size,
+      shape,
+      look,
+      disabled,
+      selected,
+      pressed,
+      dimDisabled,
+      primaryTextId,
+      primaries,
+      dismiss,
+      toggle,
+    ],
   );
 
   return (
@@ -379,6 +461,9 @@ export const InteractionTagPrimary = ({
   const { size, look } = tag;
   const disabled = tag.disabled || disabledProp;
   const hold = useHeldFocus(disabled);
+  // Its text names the Secondary while it renders (D43).
+  const registerPrimary = tag.primaries.register;
+  React.useLayoutEffect(() => registerPrimary(), [registerPrimary]);
 
   // Slots that render nothing render no element and take no room.
   const hasMedia = slotRendersContent(media);
@@ -495,8 +580,6 @@ InteractionTagPrimary.displayName = 'InteractionTagPrimary';
 const BUTTON_CHILD_MESSAGE =
   "InteractionTag.Secondary: its content received a button. A button cannot contain a button: its children became the content of the Dismiss button and its props were dropped. Pass icon content, and handle the dismissal in `onClick` or in the TagGroup's `onDismiss`.";
 
-const noop = () => {};
-
 /**
  * The separate Dismiss button of an {@link InteractionTag}: a `<button type="button">` after the
  * Primary, named `dismissLabel` plus the Primary's text ("Dismiss Cherry"). Its children replace
@@ -555,11 +638,18 @@ export const InteractionTagSecondary = ({
     () => (labelTarget ? hasRenderedTextLabel(labelTarget) : literalTextLabel),
     () => literalTextLabel,
   );
+  const hasLabel = hasContent && contentHasTextLabel;
+  // The primary text joins the name while a Primary renders it.
+  const hasPrimary = React.useSyncExternalStore(
+    tag.primaries.subscribe,
+    tag.primaries.hasPrimary,
+    () => true,
+  );
   // A consumer `aria-label` replaces the whole name; a consumer `aria-labelledby` replaces ours.
   const namedByConsumer = ariaLabel !== undefined || ariaLabelledBy !== undefined;
   const labelledBy = namedByConsumer
     ? ariaLabelledBy
-    : joinIds(hasContent && contentHasTextLabel ? contentId : dismissLabelId, tag.primaryTextId);
+    : joinIds(hasLabel ? contentId : dismissLabelId, hasPrimary ? tag.primaryTextId : undefined);
 
   // The consumer's `onClick` first (its `preventDefault()` keeps the group from hearing of it),
   // then the TagGroup's `onDismiss(value)`; never for a click from a portal opened inside.
@@ -568,8 +658,15 @@ export const InteractionTagSecondary = ({
   };
   // Delete and Backspace dismiss as Enter does: through the button's own click, so whatever
   // cancels a click (its `onClick`'s `preventDefault()`, a held or disabled button) cancels them.
+  // A held key dismisses one tag: the browser clicks a button on every repeated Enter, which
+  // would reach the next tag's Dismiss control once focus moved there (D35).
   const handleKeyDown = (event: React.KeyboardEvent<HTMLButtonElement>) => {
-    if (event.target !== event.currentTarget || !isDismissKey(event)) return;
+    if (event.target !== event.currentTarget) return;
+    if (isRepeatedActivation(event)) {
+      event.preventDefault();
+      return;
+    }
+    if (!isDismissKey(event)) return;
     event.preventDefault();
     event.currentTarget.click();
   };
@@ -618,6 +715,8 @@ export const InteractionTagSecondary = ({
           className={cn(
             interactionTagSecondaryClassNames.dismissIcon,
             'inline-flex items-center justify-center',
+            // A text label keeps clear of the divider and the tag's end; a glyph needs no room.
+            hasLabel && INTERACTION_TAG_SECONDARY_LABEL_CLASSES,
           )}
         >
           {content}

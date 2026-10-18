@@ -60,7 +60,9 @@ export interface TagGroupProps extends Omit<React.HTMLAttributes<HTMLDivElement>
    * Called with the tag's `value` on every dismissal: a click, Enter or Space on a Dismiss
    * button, or Delete or Backspace on a tag (Fluent's `onDismiss(event, { value })`). Remove the
    * tag from your state; when it goes, focus moves to the next tag, else the previous one, else
-   * `fallbackFocusRef`. Dismissing a selected tag also removes its value from the selection.
+   * `fallbackFocusRef`. Fluent's TagGroup moves focus as it calls `onDismiss`, whether or not the
+   * tag goes, and has no fallback. Dismissing a selected tag also removes its value from the
+   * selection; Fluent's TagGroup leaves the selection alone.
    */
   onDismiss?: (value: string) => void;
   /**
@@ -78,7 +80,10 @@ export interface TagGroupProps extends Omit<React.HTMLAttributes<HTMLDivElement>
   defaultValue?: readonly string[];
   /** Called with the new selected values when they change (Fluent's `onTagSelect`). */
   onValueChange?: (value: string[]) => void;
-  /** Form field name: one hidden input per selected value (a selecting group only). */
+  /**
+   * Form field name: one hidden input per selected value (a selecting group only). Fluent's
+   * TagGroup submits nothing.
+   */
   name?: string;
   /** The id of the form the hidden inputs belong to, when the group is outside it. */
   form?: string;

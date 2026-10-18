@@ -12,6 +12,7 @@ import type { InteractionTagProps } from '../InteractionTag';
 import { TagGroupHostContext, TagHostContext } from '../TagGroup.context';
 import type { TagGroupHostOptions } from '../TagGroup.context';
 import { Avatar } from '../Avatar';
+import { Button } from '../../button/Button';
 import { Toolbar } from '../../button/Toolbar';
 import { tagGroupClassNames } from '../../../lib/classNames';
 import { forcedColors } from '../../../lib/styles';
@@ -580,6 +581,93 @@ describe('TagGroup', () => {
       expect(dismissButton('Red')).toHaveFocus();
     });
 
+    /** A link chip between two dismissible tags, with its and the group's `disabled` switched. */
+    function Topics({ linkDisabled = false, disabled = false }) {
+      return (
+        <>
+          <button type="button">Before</button>
+          <TagGroup aria-label="Topics" disabled={disabled}>
+            <Tag dismissible value="red">
+              Red
+            </Tag>
+            <Tag as="a" href="#docs" disabled={linkDisabled}>
+              Docs
+            </Tag>
+            <Tag dismissible value="blue">
+              Blue
+            </Tag>
+          </TagGroup>
+          <button type="button">After</button>
+        </>
+      );
+    }
+
+    it('skips a disabled link chip, which has no href: disabled at mount, after mount or by the group', async () => {
+      const user = userEvent.setup();
+      const { rerender } = render(<Topics linkDisabled />);
+      const link = screen.getByRole('link', { name: 'Docs' });
+      const expectDisabledLink = () => {
+        expect(link).not.toHaveAttribute('href');
+        expect(link).toHaveAttribute('aria-disabled', 'true');
+        expect(link).not.toHaveAttribute('data-disabled-focusable');
+      };
+      expectDisabledLink();
+      await user.tab();
+      await user.tab();
+      expect(dismissButton('Red')).toHaveFocus();
+      await user.keyboard('{ArrowRight}');
+      expect(dismissButton('Blue')).toHaveFocus();
+      await user.keyboard('{ArrowLeft}');
+      expect(dismissButton('Red')).toHaveFocus();
+
+      // Enabled, it joins the arrow order; disabled again while focus is elsewhere, it leaves it,
+      // although it keeps the tabindex the toolbar gave it.
+      rerender(<Topics />);
+      await user.keyboard('{ArrowRight}');
+      expect(link).toHaveFocus();
+      await user.keyboard('{ArrowLeft}');
+      rerender(<Topics linkDisabled />);
+      expectDisabledLink();
+      expect(link).toHaveAttribute('tabindex', '-1');
+      await user.keyboard('{ArrowRight}');
+      expect(dismissButton('Blue')).toHaveFocus();
+
+      // A disabled group disables it too: the group has no Tab stop.
+      await user.click(screen.getByRole('button', { name: 'Before' }));
+      rerender(<Topics disabled />);
+      expectDisabledLink();
+      await user.tab();
+      expect(screen.getByRole('button', { name: 'After' })).toHaveFocus();
+    });
+
+    it('keeps a link chip disabled while it has focus in the arrow order, with its href, until focus leaves it', async () => {
+      const user = userEvent.setup();
+      const { rerender } = render(<Topics />);
+      const link = screen.getByRole('link', { name: 'Docs' });
+      await user.tab();
+      await user.tab();
+      await user.keyboard('{ArrowRight}');
+      expect(link).toHaveFocus();
+
+      rerender(<Topics disabled />);
+      expect(link).toHaveFocus();
+      expect(link).toHaveAttribute('href', '#docs');
+      expect(link).toHaveAttribute('aria-disabled', 'true');
+      expect(link).toHaveAttribute('data-disabled-focusable', '');
+      // The toolbar keeps it as its Tab stop while it holds focus.
+      expect(link).toHaveAttribute('tabindex', '0');
+
+      rerender(<Topics linkDisabled />);
+      expect(link).toHaveFocus();
+      await user.keyboard('{ArrowRight}');
+      expect(dismissButton('Blue')).toHaveFocus();
+      // Focus left it: it is a disabled link now, which the arrows skip.
+      expect(link).not.toHaveAttribute('href');
+      expect(link).not.toHaveAttribute('data-disabled-focusable');
+      await user.keyboard('{ArrowLeft}');
+      expect(dismissButton('Red')).toHaveFocus();
+    });
+
     it("runs the consumer's onKeyDown first and its preventDefault() cancels the navigation", async () => {
       const user = userEvent.setup();
       const calls: string[] = [];
@@ -908,6 +996,37 @@ describe('TagGroup', () => {
       fireEvent.keyDown(dismissButton('Red'), { key: 'Delete' });
       expect(onDismiss).toHaveBeenCalledTimes(1);
     });
+
+    it.each([
+      ['Enter', 'Tag'],
+      ['Enter', 'InteractionTag'],
+      ['Delete', 'Tag'],
+      ['Delete', 'InteractionTag'],
+    ] as const)(
+      'a held %s dismisses one %s, although focus moves on to the next tag',
+      async (key, kind) => {
+        const user = userEvent.setup();
+        const onDismiss = vi.fn();
+        render(
+          <Filters
+            groupProps={{ onDismiss }}
+            renderTag={
+              kind === 'InteractionTag' ? (filter) => <Interaction text={filter} /> : undefined
+            }
+          />,
+        );
+        await user.tab();
+        if (kind === 'InteractionTag') await user.keyboard('{ArrowRight}');
+        expect(dismissButton('Red')).toHaveFocus();
+        // The repeated key presses of a held key (`repeat: true`) reach the next tag's Dismiss
+        // control once focus has moved there: the browser would click it on every Enter.
+        await user.keyboard(`{${key}>4/}`);
+        await settle();
+        expect(onDismiss.mock.calls).toEqual([['Red']]);
+        expect(dismissButton('Blue')).toHaveFocus();
+        expect(dismissButton('Large')).toBeInTheDocument();
+      },
+    );
 
     it('ignores Ctrl, Alt and Meta with Delete; Shift is allowed', () => {
       const onDismiss = vi.fn();
@@ -1359,6 +1478,80 @@ describe('TagGroup', () => {
       await settle();
       expect(screen.queryByRole('button', { name: 'Dismiss Red' })).toBeNull();
       expect(dismissButton('Blue')).toHaveFocus();
+    });
+
+    it("skips a tag without an enabled control: a link chip disabled after mount keeps the toolbar's tabindex", async () => {
+      const user = userEvent.setup();
+      function Topics({ linkDisabled }: { linkDisabled: boolean }) {
+        const [values, setValues] = React.useState<readonly string[]>(['red', 'blue']);
+        return (
+          <TagGroup
+            aria-label="Topics"
+            onDismiss={(value) => setValues((current) => current.filter((v) => v !== value))}
+          >
+            {values.includes('red') && (
+              <Tag dismissible value="red">
+                Red
+              </Tag>
+            )}
+            <Tag as="a" href="#docs" disabled={linkDisabled}>
+              Docs
+            </Tag>
+            {values.includes('blue') && (
+              <Tag dismissible value="blue">
+                Blue
+              </Tag>
+            )}
+          </TagGroup>
+        );
+      }
+      const { rerender } = render(<Topics linkDisabled={false} />);
+      rerender(<Topics linkDisabled />);
+      const link = screen.getByRole('link', { name: 'Docs' });
+      expect(link).not.toHaveAttribute('href');
+      // Programmatically focusable, but no enabled control: no candidate.
+      expect(link).toHaveAttribute('tabindex');
+      await user.tab();
+      expect(dismissButton('Red')).toHaveFocus();
+      await user.keyboard('{Enter}');
+      await settle();
+      expect(screen.queryByRole('button', { name: 'Dismiss Red' })).toBeNull();
+      expect(dismissButton('Blue')).toHaveFocus();
+
+      // From the last tag, the previous candidate is skipped the same way: nothing is left, and
+      // the warning says so.
+      const warnings = spyOnWarnings();
+      await user.keyboard('{Delete}');
+      await settle();
+      expect(document.activeElement).toBe(document.body);
+      expect(warnings()).toEqual([FOCUS_LOST_WARNING]);
+    });
+
+    it('moves to a focusable disabled control (disabledFocusable), which the toolbar keeps in its arrow order', async () => {
+      const user = userEvent.setup();
+      const warnings = spyOnWarnings();
+      render(
+        <Filters
+          initial={['Red', 'Blue']}
+          renderTag={(filter) =>
+            filter === 'Blue' ? (
+              <Tag value={filter} dismissIcon={<Button disabledFocusable icon={<svg />} />}>
+                {filter}
+              </Tag>
+            ) : (
+              <Tag value={filter}>{filter}</Tag>
+            )
+          }
+        />,
+      );
+      await user.tab();
+      await user.keyboard('{Enter}');
+      await settle();
+      expect(dismissButton('Blue')).toHaveFocus();
+      expect(dismissButton('Blue')).toHaveAttribute('data-disabled-focusable', '');
+      expect(warnings()).toEqual([
+        expect.stringContaining('[WaveUI] Tag: `dismissIcon` received a button.'),
+      ]);
     });
   });
 

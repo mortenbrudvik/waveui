@@ -33,6 +33,7 @@ import {
   TAG_GROUP_SELECTOR,
   TagHostContext,
   isDismissKey,
+  isRepeatedActivation,
   useDismissControlFocus,
   useHeldFocus,
   useTagGroupContext,
@@ -92,7 +93,8 @@ export interface TagOwnProps {
    * Rendered as `data-disabled`. With `as="a"` the link is disabled too: `aria-disabled="true"`,
    * `role="link"`, no `href` (out of the Tab order) and no click; a link that has focus keeps it,
    * and its `href`, until focus leaves it. With another `as`, an element that takes a native
-   * `disabled` (a `<button>`) or a component receives `disabled`.
+   * `disabled` (a `<button>`) or a component receives `disabled`; a `<button>` that has focus
+   * when it is disabled keeps it, unavailable (`aria-disabled`, no click), until focus leaves it.
    * @default false
    */
   disabled?: boolean;
@@ -130,7 +132,8 @@ export interface TagOwnProps {
    * button: a dismissible tag rendered as one holds it inside (a development warning). For a
    * dismissible link chip, put the link in the content,
    * `<Tag dismissible><a href="/topics/react">React</a></Tag>`; for an action with a separate
-   * Dismiss button, use `InteractionTag`.
+   * Dismiss button, use `InteractionTag`. Fluent's dismissible Tag is a single button that
+   * dismisses when it is activated.
    * @default the TagGroup's `dismissible`, else `false`
    */
   dismissible?: boolean;
@@ -139,7 +142,8 @@ export interface TagOwnProps {
    * held key dismisses once). Passing it does not render the button: set `dismissible` too. In a
    * TagGroup the group's `onDismiss(value)` is called after it, and focus moves to the next tag
    * when the tag is removed. A standalone Tag cannot keep focus once you remove it: move focus
-   * yourself (see "Focus after dismissal" on {@link Tag}).
+   * yourself (see "Focus after dismissal" on {@link Tag}). Fluent's Tag dismisses on Delete and
+   * Backspace only inside a TagGroup.
    */
   onDismiss?: () => void;
   /**
@@ -508,8 +512,11 @@ function isKeyOf<K extends string>(
   return typeof value === 'string' && Object.hasOwn(table, value);
 }
 
-/** Prevents and stops the click of a disabled link root, as a natively disabled control's. */
-function blockLinkClick(event: React.MouseEvent<HTMLElement>) {
+/**
+ * Prevents and stops the click of a disabled link root, or of a held button root, as a natively
+ * disabled control's.
+ */
+function blockRootClick(event: React.MouseEvent<HTMLElement>) {
   event.preventDefault();
   event.stopPropagation();
 }
@@ -764,10 +771,13 @@ export const Tag: PolymorphicComponent<'span', TagOwnProps> = (props) => {
 
   // A link root is disabled as Nav.Item's link is: `aria-disabled`, `role="link"` and no `href`,
   // so it leaves the Tab order. One that has focus when it is disabled keeps its `href`, and
-  // focus, until focus leaves it.
+  // focus, until focus leaves it; so does a button root, which is natively disabled otherwise
+  // (the browser would drop its focus to the page).
   const isLinkRoot = Component === 'a';
   const linkDisabled = isLinkRoot && disabled;
-  const rootHold = useHeldFocus(linkDisabled);
+  const isButtonRoot = Component === 'button';
+  const rootHold = useHeldFocus((isLinkRoot || isButtonRoot) && disabled);
+  const buttonRootHeld = isButtonRoot && rootHold.held;
 
   const {
     buttonProps: slotButtonProps,
@@ -853,7 +863,12 @@ export const Tag: PolymorphicComponent<'span', TagOwnProps> = (props) => {
     typeof Component !== 'string' || elements.has(Component);
   const elementProps: UnknownProps = {};
   if (takesNative(NATIVE_DISABLED_ELEMENTS) && (disabled || disabledProp !== undefined)) {
-    elementProps.disabled = disabled;
+    elementProps.disabled = disabled && !buttonRootHeld;
+  }
+  if (buttonRootHeld) {
+    // The focusable disabled state, its click blocked below (D25).
+    elementProps['aria-disabled'] = true;
+    elementProps['data-disabled-focusable'] = '';
   }
   if (value !== undefined && takesNative(NATIVE_VALUE_ELEMENTS)) elementProps.value = value;
   if (linkDisabled) {
@@ -875,13 +890,14 @@ export const Tag: PolymorphicComponent<'span', TagOwnProps> = (props) => {
   // A host hides the tags it counts instead of showing them (TagPicker's `overflow="count"`).
   const hiddenByHost = value !== undefined && (group?.hiddenValues?.has(value) ?? false);
 
-  const handleClick = linkDisabled
-    ? (event: React.MouseEvent<HTMLElement>) => {
-        // A click from a portal opened inside the tag is not the link's (C-COMPOSE).
-        if (isOwnEvent(event)) blockLinkClick(event);
-        else onClick?.(event);
-      }
-    : onClick;
+  const handleClick =
+    linkDisabled || buttonRootHeld
+      ? (event: React.MouseEvent<HTMLElement>) => {
+          // A click from a portal opened inside the tag is not the root's (C-COMPOSE).
+          if (isOwnEvent(event)) blockRootClick(event);
+          else onClick?.(event);
+        }
+      : onClick;
 
   // Delete and Backspace on a focused element in the tag's text (a link chip's link) dismiss the
   // tag through its Dismiss button's click, which a disabled or held button blocks; never from an
@@ -911,9 +927,15 @@ export const Tag: PolymorphicComponent<'span', TagOwnProps> = (props) => {
     ),
     // Delete and Backspace dismiss as Enter does: through the button's own click, so whatever
     // cancels a click (a merged slot's `preventDefault()`, a held or disabled button) cancels
-    // them too.
+    // them too. A held key dismisses one tag: the browser clicks a button on every repeated
+    // Enter, which would reach the next tag's Dismiss button once focus moved there (D35).
     onKeyDown: (event: React.KeyboardEvent<HTMLButtonElement>) => {
-      if (event.target !== event.currentTarget || !isDismissKey(event)) return;
+      if (event.target !== event.currentTarget) return;
+      if (isRepeatedActivation(event)) {
+        event.preventDefault();
+        return;
+      }
+      if (!isDismissKey(event)) return;
       event.preventDefault();
       event.currentTarget.click();
     },

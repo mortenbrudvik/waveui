@@ -1768,6 +1768,61 @@ describe('Tag', () => {
       expect(link).toHaveAttribute('aria-disabled', 'true');
     });
 
+    /** A button chip whose `disabled` the test switches, with a button after it to Tab to. */
+    function ButtonChip({ disabled, onClick }: { disabled: boolean; onClick: () => void }) {
+      return (
+        <>
+          <Tag as="button" type="button" disabled={disabled} onClick={onClick}>
+            React
+          </Tag>
+          <button type="button">After</button>
+        </>
+      );
+    }
+
+    it('a button root disabled while it has focus keeps focus, unavailable, until focus leaves it (D25)', async () => {
+      const user = userEvent.setup();
+      const onClick = vi.fn();
+      const onParentClick = vi.fn();
+      const { rerender } = render(<ButtonChip disabled={false} onClick={onClick} />, {
+        wrapper: ({ children }) => <div onClick={onParentClick}>{children}</div>,
+      });
+      const chip = screen.getByRole('button', { name: 'React' });
+      await user.tab();
+      expect(chip).toHaveFocus();
+
+      rerender(<ButtonChip disabled onClick={onClick} />);
+      expect(chip).toHaveFocus();
+      expect(chip).not.toBeDisabled();
+      expect(chip).toHaveAttribute('aria-disabled', 'true');
+      expect(chip).toHaveAttribute('data-disabled', '');
+      expect(chip).toHaveAttribute('data-disabled-focusable', '');
+      expect(chip).toHaveClass('opacity-50', 'focus-visible:opacity-100');
+      await user.keyboard('{Enter}');
+      await user.keyboard(' ');
+      await user.click(chip);
+      expect(onClick).not.toHaveBeenCalled();
+      // Blocked as a natively disabled button's click: it does not reach ancestors.
+      expect(onParentClick).not.toHaveBeenCalled();
+      expect(chip).toHaveFocus();
+
+      await user.tab();
+      expect(screen.getByRole('button', { name: 'After' })).toHaveFocus();
+      expect(chip).toBeDisabled();
+      expect(chip).not.toHaveAttribute('aria-disabled');
+      expect(chip).not.toHaveAttribute('data-disabled-focusable');
+
+      // Disabled while focus is elsewhere, it is natively disabled at once.
+      rerender(<ButtonChip disabled={false} onClick={onClick} />);
+      expect(chip).not.toBeDisabled();
+      await user.click(chip);
+      expect(onClick).toHaveBeenCalledTimes(1);
+      await user.click(screen.getByRole('button', { name: 'After' }));
+      rerender(<ButtonChip disabled onClick={onClick} />);
+      expect(chip).toBeDisabled();
+      expect(chip).not.toHaveAttribute('aria-disabled');
+    });
+
     it('forwards disabled and value to an as element that takes them, never to the span or an anchor', () => {
       render(
         <>
@@ -2071,6 +2126,24 @@ describe('Tag', () => {
       expect(onDismiss).toHaveBeenCalledTimes(2);
       fireEvent.keyDown(button, { key: 'Delete', shiftKey: true });
       expect(onDismiss).toHaveBeenCalledTimes(3);
+    });
+
+    it('dismisses once on a held Enter, Delete or Backspace', async () => {
+      const user = userEvent.setup();
+      const onDismiss = vi.fn();
+      render(
+        <Tag dismissible onDismiss={onDismiss}>
+          Cherry
+        </Tag>,
+      );
+      await user.tab();
+      // A held key repeats (`repeat: true`), and the browser clicks a button on every repeated
+      // Enter: only the first press dismisses.
+      for (const key of ['Enter', 'Delete', 'Backspace']) {
+        onDismiss.mockClear();
+        await user.keyboard(`{${key}>4/}`);
+        expect(onDismiss).toHaveBeenCalledTimes(1);
+      }
     });
 
     it("dismisses through the button's own click, so the key reaches its onClick (detail 0)", () => {

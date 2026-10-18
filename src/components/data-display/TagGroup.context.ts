@@ -168,6 +168,17 @@ export function isDismissKey(event: React.KeyboardEvent): boolean {
   );
 }
 
+/**
+ * Whether a key press on a Dismiss control (Tag's Dismiss button, `InteractionTag.Secondary`) is a
+ * repeated Enter: a held Enter, which the browser turns into a click on every repeat. The control
+ * cancels it (`preventDefault()`), so a held Enter dismisses one tag, as a held Delete, Backspace
+ * or Space does; otherwise, once focus moved to the next tag's Dismiss control, the repeats would
+ * dismiss that one too.
+ */
+export function isRepeatedActivation(event: React.KeyboardEvent): boolean {
+  return event.key === 'Enter' && event.repeat;
+}
+
 // ---------------------------------------------------------------------------
 // Focus after a removal (D35)
 // ---------------------------------------------------------------------------
@@ -187,25 +198,39 @@ interface RemovalRecord {
   groupRoot: HTMLElement | null;
 }
 
-/** The first element of `root` (itself first) that can take focus, or `null`. */
-function firstFocusableControl(root: HTMLElement): HTMLElement | null {
-  if (root.matches(FOCUSABLE_SELECTOR) && isFocusable(root)) return root;
+/**
+ * Whether `element` is an enabled control focus may move to: it can take focus, and it is not
+ * `aria-disabled` unless it is a focusable disabled control (`data-disabled-focusable`), which a
+ * toolbar keeps in its arrow order too. A disabled link chip has no `href` but may keep the
+ * `tabindex` a toolbar gave it while it was enabled: focusable, yet no candidate.
+ */
+function isEnabledControl(element: HTMLElement): boolean {
+  if (!isFocusable(element)) return false;
+  return (
+    element.getAttribute('aria-disabled') !== 'true' ||
+    element.hasAttribute('data-disabled-focusable')
+  );
+}
+
+/** The first enabled control of `root` (itself first), or `null`. */
+function firstEnabledControl(root: HTMLElement): HTMLElement | null {
+  if (root.matches(FOCUSABLE_SELECTOR) && isEnabledControl(root)) return root;
   for (const element of root.querySelectorAll<HTMLElement>(FOCUSABLE_SELECTOR)) {
-    if (isFocusable(element)) return element;
+    if (isEnabledControl(element)) return element;
   }
   return null;
 }
 
 /**
  * The control of `candidate` that takes focus: its enabled Dismiss control when the removed
- * control was one, else its first focusable control.
+ * control was one, else its first enabled control (`null`: the candidate does not count).
  */
 function correspondingControl(candidate: HTMLElement, fromDismiss: boolean): HTMLElement | null {
   if (fromDismiss) {
     const dismiss = candidate.querySelector<HTMLElement>(TAG_DISMISS_SELECTOR);
-    if (dismiss && isFocusable(dismiss)) return dismiss;
+    if (dismiss && isEnabledControl(dismiss)) return dismiss;
   }
-  return firstFocusableControl(candidate);
+  return firstEnabledControl(candidate);
 }
 
 /**
@@ -333,9 +358,10 @@ export interface UseTagGroupItemOptions {
  * - warns once when the group reports the value (`options.reported`: it has `onDismiss` or
  *   selects) and the tag has none;
  * - in a group, keeps focus in the group when the tag unmounts while focus is inside it: in a
- *   microtask after the commit, to the corresponding control of the next tag, else (order
- *   `'next-then-previous'`) of the previous one, else to the group's `fallbackFocusRef`, else
- *   nowhere (`TagGroup:focus-lost`). A tag outside a group moves no focus when it goes.
+ *   microtask after the commit, to the corresponding control of the next tag that has an enabled
+ *   one, else (order `'next-then-previous'`) of the previous one, else to the group's
+ *   `fallbackFocusRef`, else nowhere (`TagGroup:focus-lost`). A tag outside a group moves no focus
+ *   when it goes.
  *
  * @param rootRef The tag's root element.
  * @param value   The tag's `value`.
@@ -370,7 +396,7 @@ export function useTagGroupItem(
 /**
  * For a tag's Dismiss control (Tag's Dismiss button, `InteractionTag.Secondary`): when it unmounts
  * while it has focus and its tag stays (`dismissible` turning `false`, a Secondary rendered
- * conditionally), focus moves to its own tag's first focusable control (a link in a Tag's text, the
+ * conditionally), focus moves to its own tag's first enabled control (a link in a Tag's text, the
  * Primary), else, in a group, as {@link useTagGroupItem} moves it. When its tag goes with it, the
  * tag's own move applies.
  *
@@ -410,10 +436,11 @@ export interface HeldFocus {
 
 /**
  * Keeps a tag control that is disabled while it has focus focusable until focus leaves it (Tag's
- * Dismiss button and link root, InteractionTag's buttons): the browser drops focus to the page
- * from a control that becomes natively disabled, and a standalone tag has no neighbour to move it
- * to. Render the native `disabled` while `disabled && !held`, the focusable disabled state while
- * `held`. The hold is adjusted during render from the previous `disabled`, never in an effect.
+ * Dismiss button, its link or button root, InteractionTag's buttons): the browser drops focus to
+ * the page from a control that becomes natively disabled, and a standalone tag has no neighbour to
+ * move it to. Render the native `disabled` while `disabled && !held`, the focusable disabled
+ * state while `held`. The hold is adjusted during render from the previous `disabled`, never in
+ * an effect.
  *
  * @param disabled The control's effective `disabled` (its own, its tag's, its group's).
  *

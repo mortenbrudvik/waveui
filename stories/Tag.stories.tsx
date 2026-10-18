@@ -261,8 +261,9 @@ export const Disabled: Story = {
 
 /**
  * `selected` is a look only (the brand fill, `data-selected`): a Tag is not interactive, so the
- * state is not announced. For a tag the user selects, use InteractionTag, whose primary button
- * is a toggle.
+ * state is not announced. For a tag the user selects, use
+ * [InteractionTag](?path=/docs/components-data-display-interactiontag--docs), whose primary
+ * button is a toggle.
  */
 export const Selected: Story = {
   args: {
