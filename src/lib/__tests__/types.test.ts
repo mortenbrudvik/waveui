@@ -16,6 +16,13 @@ import type {
   OpenChangeDetails,
   ModalOpenChangeReason,
   ModalType,
+  SurfaceSize,
+  BackdropAppearance,
+  HeadingLevel,
+  FocusMode,
+  TagSize,
+  TagAppearance,
+  TagShape,
   CheckedValues,
   CheckedValuesChangeDetails,
   CheckedValuesChangeHandler,
@@ -31,6 +38,9 @@ import type {
 } from '../types';
 import type { VirtualElement as FloatingVirtualElement } from '@floating-ui/react-dom';
 import type { DismissReason } from '../layers';
+import type { AccordionHeadingLevel } from '../../components/layout/Accordion';
+import type { SwatchPickerProps } from '../../components/input/SwatchPicker';
+import type { SwatchPickerContextValue } from '../../components/input/SwatchPicker.context';
 import * as TypesModule from '../types';
 import { resolveSlot, renderSlot } from '../slot';
 
@@ -110,9 +120,52 @@ describe('open-change vocabulary', () => {
     expectTypeOf<Exclude<DismissReason, 'focus-outside'>>().toMatchTypeOf<ModalOpenChangeReason>();
   });
 
-  it('ModalType is modal or alert', () => {
-    expectTypeOf<ModalType>().toEqualTypeOf<'modal' | 'alert'>();
-    expectTypeOf<'non-modal'>().not.toMatchTypeOf<ModalType>();
+  it('ModalType is modal, alert or non-modal', () => {
+    expectTypeOf<ModalType>().toEqualTypeOf<'modal' | 'alert' | 'non-modal'>();
+  });
+});
+
+describe('overlay surface vocabulary (Dialog, Drawer, NavDrawer)', () => {
+  it('SurfaceSize is the core sizes and full', () => {
+    expectTypeOf<SurfaceSize>().toEqualTypeOf<'small' | 'medium' | 'large' | 'full'>();
+    expectTypeOf<CoreSize>().toExtend<SurfaceSize>();
+    expectTypeOf<'extra-large'>().not.toMatchTypeOf<SurfaceSize>();
+  });
+
+  it('BackdropAppearance is dimmed or transparent', () => {
+    expectTypeOf<BackdropAppearance>().toEqualTypeOf<'dimmed' | 'transparent'>();
+  });
+});
+
+describe('heading and focus vocabulary', () => {
+  it('HeadingLevel is 1 to 6, and AccordionHeadingLevel is it', () => {
+    expectTypeOf<HeadingLevel>().toEqualTypeOf<1 | 2 | 3 | 4 | 5 | 6>();
+    expectTypeOf<AccordionHeadingLevel>().toEqualTypeOf<HeadingLevel>();
+    expectTypeOf<7>().not.toMatchTypeOf<HeadingLevel>();
+  });
+
+  it("FocusMode is tab or arrow, and SwatchPicker's focusMode is it", () => {
+    expectTypeOf<FocusMode>().toEqualTypeOf<'tab' | 'arrow'>();
+    expectTypeOf<NonNullable<SwatchPickerProps['focusMode']>>().toEqualTypeOf<FocusMode>();
+    expectTypeOf<SwatchPickerContextValue['focusMode']>().toEqualTypeOf<FocusMode>();
+  });
+});
+
+describe('tag vocabulary (Tag, TagGroup, InteractionTag, TagPicker)', () => {
+  it('TagSize is extra-small, small and medium, a subset of Size', () => {
+    expectTypeOf<TagSize>().toEqualTypeOf<'extra-small' | 'small' | 'medium'>();
+    expectTypeOf<TagSize>().toExtend<Size>();
+    expectTypeOf<'large'>().not.toMatchTypeOf<TagSize>();
+  });
+
+  it('TagAppearance is filled, outline and brand', () => {
+    expectTypeOf<TagAppearance>().toEqualTypeOf<'filled' | 'outline' | 'brand'>();
+  });
+
+  it('TagShape is the rounded and circular subset of Shape', () => {
+    expectTypeOf<TagShape>().toEqualTypeOf<'rounded' | 'circular'>();
+    expectTypeOf<TagShape>().toExtend<Shape>();
+    expectTypeOf<'square'>().not.toMatchTypeOf<TagShape>();
   });
 });
 

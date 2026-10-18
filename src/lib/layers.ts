@@ -21,9 +21,12 @@ export const Z_INDEX = {
 /**
  * What kind of surface a layer is. `modal` marks dialog-like surfaces (focus-restore validation and
  * modal isolation look for them); a modal blocks presses and Escape for the layers below it only
- * while its page isolation is active ({@link registerLayerIsolation}).
+ * while its page isolation is active ({@link registerLayerIsolation}). `dialog` marks a non-modal
+ * Dialog or Drawer: it shields nothing (no isolation), takes Escape only from inside its tree
+ * (`escape: 'inside'`), and the Toaster moves out of its way; focus-restore validation and modal
+ * isolation do not count it.
  */
-export type LayerKind = 'modal' | 'popover' | 'menu' | 'listbox' | 'tooltip' | 'toast';
+export type LayerKind = 'modal' | 'dialog' | 'popover' | 'menu' | 'listbox' | 'tooltip' | 'toast';
 
 /** Why a popup layer is dismissed: Escape, a press outside it, or focus moving outside it. */
 export type DismissReason = 'escape' | 'outside-press' | 'focus-outside';
@@ -41,8 +44,11 @@ export interface LayerRecord {
   getElements(): Array<HTMLElement | null>;
   /** The element the layer is anchored to (its trigger); focus traps leave the layer through it. */
   getAnchor(): HTMLElement | null;
-  /** Whether Escape dismisses the layer. */
-  escape: boolean;
+  /**
+   * Whether Escape dismisses the layer: always (`true`), never (`false`), or only while the key's
+   * target or the focused element is in the layer's tree (`'inside'`).
+   */
+  escape: boolean | 'inside';
   /** Whether a press outside the layer's tree dismisses it; a predicate returning `false` opts out. */
   outsidePress: boolean | ((event: PointerEvent | MouseEvent) => boolean);
   /** Whether focus moving outside the layer's tree dismisses it. */
@@ -78,7 +84,10 @@ interface LayerState {
   counter: number;
   press: PressSnapshot | null;
   listeners: InstalledListeners | null;
-  /** Called after a layer registers or unregisters (modal isolation re-plans). */
+  /**
+   * Called after a layer registers or unregisters (modal isolation re-plans), and after the
+   * isolated set changes (the dim-once snapshot).
+   */
   subscribers: Set<() => void>;
   /** Ids of layers whose modal isolation currently makes the page inert, with a use count. */
   isolated: Map<string, number>;
@@ -214,15 +223,20 @@ export function getTopmostLayer(predicate?: (layer: LayerRecord) => boolean): La
  * every registration is removed.
  */
 export function registerLayerIsolation(layerId: string): () => void {
-  const { isolated } = getState();
-  isolated.set(layerId, (isolated.get(layerId) ?? 0) + 1);
+  const state = getState();
+  const { isolated } = state;
+  const previous = isolated.get(layerId) ?? 0;
+  isolated.set(layerId, previous + 1);
+  // Subscribers (the dim-once snapshot of Dialog and Drawer) read isolation, which changes without
+  // a layer registering: notify when the isolated set gains the layer, and again when it loses it.
+  if (previous === 0) notifySubscribers(state);
   let registered = true;
   return () => {
     if (!registered) return;
     registered = false;
     const count = (isolated.get(layerId) ?? 1) - 1;
     if (count > 0) isolated.set(layerId, count);
-    else isolated.delete(layerId);
+    else if (isolated.delete(layerId)) notifySubscribers(state);
   };
 }
 
@@ -230,6 +244,26 @@ export function registerLayerIsolation(layerId: string): () => void {
 function getIsolationBarrier(state: LayerState): LayerRecord | null {
   if (state.isolated.size === 0) return null;
   return getTopmostLayer((layer) => state.isolated.has(layer.id));
+}
+
+/**
+ * Whether an open layer whose modal isolation is active ({@link registerLayerIsolation}) is
+ * stacked below the layer `layerId` (`compareLayers(self, other) > 0`). A `layerId` that is not
+ * registered yet (the render that opens it) counts as the topmost layer, so every isolating open
+ * layer counts. The layer itself and its descendants never count. Read during render through
+ * `useSyncExternalStore(subscribeLayers, …)` (the dim-once rule of Dialog and Drawer).
+ */
+export function hasIsolatingModalBelow(layerId: string): boolean {
+  const state = getState();
+  if (state.isolated.size === 0) return false;
+  const self = findLayer(state, layerId);
+  return state.stack.some(
+    (layer) =>
+      layer.id !== layerId &&
+      state.isolated.has(layer.id) &&
+      !isDescendantOf(state, layer, layerId) &&
+      (!self || compareLayers(self, layer) > 0),
+  );
 }
 
 /** Whether `layer` is stacked below `barrier` (neither the barrier itself nor above it). */
@@ -250,7 +284,8 @@ export function isBehindIsolatingModal(layer: LayerRecord): boolean {
 /**
  * Calls `listener` synchronously after any layer registers or unregisters (in the committing
  * component's layout effect, so a modal can re-plan its isolation before a newly opened modal
- * moves focus). Returns the unsubscribe function.
+ * moves focus), and after a layer's modal isolation starts or ends ({@link registerLayerIsolation}).
+ * Returns the unsubscribe function.
  */
 export function subscribeLayers(listener: () => void): () => void {
   const { subscribers } = getState();
@@ -399,7 +434,8 @@ function sortTopmostFirst(layers: LayerRecord[]): LayerRecord[] {
  * The layer that handles an Escape whose target / focused element is `target` / `active`.
  * Candidates are the escape-enabled layers that are not stacked below the topmost isolating modal
  * (a modal that ignores Escape never lets the key close something inert behind it — its ancestor
- * dialog as much as an older sibling):
+ * dialog as much as an older sibling); a layer with `escape: 'inside'` is a candidate only while
+ * its tree contains them (the toast region counts as inside every layer):
  * 1. the innermost layer whose tree contains them (the topmost such layer) is the focus scope;
  * 2. the topmost candidate of that scope's subtree handles it — the scope itself or an open
  *    descendant above it (a tooltip or popover opened from the focused dialog closes first, while
@@ -414,10 +450,12 @@ function findEscapeHandler(
   active: Element | null,
 ): LayerRecord | null {
   const barrier = getIsolationBarrier(state);
-  const isCandidate = (layer: LayerRecord) => layer.escape && !isBelowBarrier(layer, barrier);
   const contains = (layer: LayerRecord) =>
     (!!target && isInsideLayerTree(layer.id, target)) ||
     (!!active && isInsideLayerTree(layer.id, active));
+  const isCandidate = (layer: LayerRecord) =>
+    (layer.escape === true || (layer.escape === 'inside' && contains(layer))) &&
+    !isBelowBarrier(layer, barrier);
   const scope = getTopmostLayer(contains);
   const handler = scope
     ? (getTopmostLayer(

@@ -692,7 +692,7 @@ describe('0.6 props and unions from the package entry', () => {
 
   it('overlays: modalType, onOpenChange details and the controlled Tooltip', () => {
     expectTypeOf<DialogModalType>().toEqualTypeOf<ModalType>();
-    expectTypeOf<ModalType>().toEqualTypeOf<'modal' | 'alert'>();
+    expectTypeOf<ModalType>().toEqualTypeOf<'modal' | 'alert' | 'non-modal'>();
     expectTypeOf<DialogProps['modalType']>().toEqualTypeOf<DialogModalType | undefined>();
     expectTypeOf<DialogOpenChangeReason>().toEqualTypeOf<ModalOpenChangeReason>();
     expectTypeOf<ModalOpenChangeReason>().toEqualTypeOf<
@@ -721,7 +721,6 @@ describe('0.6 props and unions from the package entry', () => {
       (open: boolean) => void
     >();
 
-    // @ts-expect-error non-modal dialogs are planned, not available yet
     const nonModal: DialogProps['modalType'] = 'non-modal';
     expect(nonModal).toBe('non-modal');
   });

@@ -2142,7 +2142,6 @@ describe('Dialog', () => {
     it('types modalType with the shared ModalType', () => {
       expectTypeOf<DialogModalType>().toEqualTypeOf<ModalType>();
       expectTypeOf<DialogProps['modalType']>().toEqualTypeOf<ModalType | undefined>();
-      // @ts-expect-error non-modal dialogs are planned, not available yet
       const nonModal: DialogProps['modalType'] = 'non-modal';
       expect(nonModal).toBe('non-modal');
     });

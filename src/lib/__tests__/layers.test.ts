@@ -4,6 +4,7 @@ import {
   Z_INDEX,
   compareLayers,
   getTopmostLayer,
+  hasIsolatingModalBelow,
   isInsideLayerTree,
   isInsideOtherOpenModal,
   registerLayer,
@@ -87,7 +88,7 @@ describe('layers — registry and stacking', () => {
   it('filters the topmost layer with a predicate', () => {
     const a = register(makeLayer('a', { escape: true }));
     register(makeLayer('b', { escape: false }));
-    expect(getTopmostLayer((layer) => layer.escape)).toBe(a);
+    expect(getTopmostLayer((layer) => layer.escape === true)).toBe(a);
   });
 
   it('removes a layer on unregister', () => {
@@ -161,11 +162,12 @@ describe('layers — registry and stacking', () => {
       const unsubscribe = subscribeLayers(listener);
       const unregister = registerLayer(makeLayer('legacy'));
       const unisolate = registerLayerIsolation('legacy');
-      expect(listener).toHaveBeenCalledTimes(1);
+      // The registration and the isolation each notify (isolation changes notify from 0.11).
+      expect(listener).toHaveBeenCalledTimes(2);
       unisolate();
       unregister();
       unsubscribe();
-      expect(listener).toHaveBeenCalledTimes(2);
+      expect(listener).toHaveBeenCalledTimes(4);
     } finally {
       if (original) Object.defineProperty(store, key, original);
       else delete store[key];
@@ -273,6 +275,25 @@ describe('layers — isInsideOtherOpenModal', () => {
     // Closing the dialog: an opener on the page sits behind the still-open drawer.
     expect(isInsideOtherOpenModal(behind, 'dialog')).toBe(true);
     expect(isInsideOtherOpenModal(inDrawer, 'dialog')).toBe(false);
+  });
+
+  it('isInsideOtherOpenModal ignores a dialog layer', () => {
+    const page = element('button');
+    expect(isInsideOtherOpenModal(page)).toBe(false);
+    // A non-modal surface alone cuts nothing off: the page stays a valid restore target.
+    register(makeLayer('non-modal', { kind: 'dialog', getElements: () => [element()] }));
+    expect(isInsideOtherOpenModal(page)).toBe(false);
+  });
+
+  it('checks the modal below a dialog layer stacked above it', () => {
+    const modalSurface = element();
+    const inModal = document.createElement('button');
+    modalSurface.appendChild(inModal);
+    const page = element('button');
+    register(makeLayer('modal', { kind: 'modal', getElements: () => [modalSurface] }));
+    register(makeLayer('non-modal', { kind: 'dialog', getElements: () => [element()] }));
+    expect(isInsideOtherOpenModal(inModal)).toBe(false);
+    expect(isInsideOtherOpenModal(page)).toBe(true);
   });
 });
 
@@ -532,6 +553,114 @@ describe('layers — Escape dispatch', () => {
     pressEscape(document.body, { key: 'Enter' });
     expect(a.onDismiss).not.toHaveBeenCalled();
   });
+
+  describe("escape: 'inside' (non-modal Dialog and Drawer)", () => {
+    it("an 'inside' layer is no Escape candidate while focus and the target are outside its tree: the global fallback skips it and an escape-enabled layer below takes the key", () => {
+      const pageField = element('input');
+      const below = register(makeLayer('below', { getElements: () => [element()] }));
+      const nonModal = register(
+        makeLayer('non-modal', {
+          kind: 'dialog',
+          escape: 'inside',
+          getElements: () => [element()],
+        }),
+      );
+      pageField.focus();
+      const event = pressEscape(pageField);
+      expect(below.onDismiss).toHaveBeenCalledWith('escape', event);
+      expect(nonModal.onDismiss).not.toHaveBeenCalled();
+      expect(event.defaultPrevented).toBe(true);
+    });
+
+    it("leaves an Escape typed on the page alone while only an 'inside' layer is open", () => {
+      const pageField = element('input');
+      const nonModal = register(
+        makeLayer('non-modal', {
+          kind: 'dialog',
+          escape: 'inside',
+          getElements: () => [element()],
+        }),
+      );
+      pageField.focus();
+      const event = pressEscape(pageField);
+      expect(nonModal.onDismiss).not.toHaveBeenCalled();
+      expect(event.defaultPrevented).toBe(false);
+    });
+
+    it("an 'inside' layer takes Escape when focus or the target is inside its tree", () => {
+      const surface = element();
+      const inside = document.createElement('button');
+      surface.appendChild(inside);
+      const nonModal = register(
+        makeLayer('non-modal', { kind: 'dialog', escape: 'inside', getElements: () => [surface] }),
+      );
+      // An unrelated layer opened later is the global topmost one; the focus scope wins.
+      const later = register(makeLayer('later', { getElements: () => [element()] }));
+
+      // Focus and target inside.
+      inside.focus();
+      const both = pressEscape(inside);
+      expect(nonModal.onDismiss).toHaveBeenLastCalledWith('escape', both);
+      expect(both.defaultPrevented).toBe(true);
+
+      // Focus inside, the key dispatched elsewhere (the target outside).
+      const focusOnly = pressEscape(document.body);
+      expect(nonModal.onDismiss).toHaveBeenLastCalledWith('escape', focusOnly);
+
+      // The target inside, focus elsewhere.
+      inside.blur();
+      const targetOnly = pressEscape(inside);
+      expect(nonModal.onDismiss).toHaveBeenLastCalledWith('escape', targetOnly);
+
+      expect(nonModal.onDismiss).toHaveBeenCalledTimes(3);
+      expect(later.onDismiss).not.toHaveBeenCalled();
+    });
+
+    it("an 'inside' layer handles Escape from an escape-disabled descendant (the ancestor rule)", () => {
+      const childSurface = element();
+      const childButton = document.createElement('button');
+      childSurface.appendChild(childButton);
+      const nonModal = register(
+        makeLayer('non-modal', {
+          kind: 'dialog',
+          escape: 'inside',
+          getElements: () => [element()],
+        }),
+      );
+      // A portaled child layer that ignores Escape: outside the dialog's surface in the DOM, inside
+      // its layer tree.
+      const child = register(
+        makeLayer('child', {
+          parentId: 'non-modal',
+          escape: false,
+          getElements: () => [childSurface],
+        }),
+      );
+      const unrelated = register(makeLayer('unrelated', { getElements: () => [element()] }));
+      childButton.focus();
+      const event = pressEscape(childButton);
+      expect(nonModal.onDismiss).toHaveBeenCalledWith('escape', event);
+      expect(child.onDismiss).not.toHaveBeenCalled();
+      expect(unrelated.onDismiss).not.toHaveBeenCalled();
+    });
+
+    it("an 'inside' layer takes Escape typed in the allow-listed toast region", () => {
+      const toasts = element('div', { 'data-wave-focus-trap-allow': '' });
+      const toastButton = document.createElement('button');
+      toasts.appendChild(toastButton);
+      const nonModal = register(
+        makeLayer('non-modal', {
+          kind: 'dialog',
+          escape: 'inside',
+          getElements: () => [element()],
+        }),
+      );
+      toastButton.focus();
+      const event = pressEscape(toastButton);
+      expect(nonModal.onDismiss).toHaveBeenCalledWith('escape', event);
+      expect(event.defaultPrevented).toBe(true);
+    });
+  });
 });
 
 describe('layers — outside press', () => {
@@ -743,5 +872,98 @@ describe('layers — outside press', () => {
     pointer('pointerdown', page);
     page.click();
     expect(calendar.onDismiss).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('layers — hasIsolatingModalBelow (dim once)', () => {
+  it('counts an isolating sibling modal stacked below, not one above', () => {
+    register(makeLayer('drawer', { kind: 'modal' }));
+    isolate('drawer');
+    register(makeLayer('confirm', { kind: 'modal' }));
+    isolate('confirm');
+    expect(hasIsolatingModalBelow('confirm')).toBe(true);
+    expect(hasIsolatingModalBelow('drawer')).toBe(false);
+  });
+
+  it('counts an isolating ancestor below a nested modal', () => {
+    register(makeLayer('drawer', { kind: 'modal' }));
+    isolate('drawer');
+    register(makeLayer('confirm', { kind: 'modal', parentId: 'drawer' }));
+    isolate('confirm');
+    expect(hasIsolatingModalBelow('confirm')).toBe(true);
+  });
+
+  it('is false while no open layer below isolates the page', () => {
+    // A modal-kind layer without isolation (the DatePicker calendar) and a popover never count.
+    register(makeLayer('calendar', { kind: 'modal' }));
+    register(makeLayer('popover'));
+    register(makeLayer('dialog', { kind: 'modal' }));
+    isolate('dialog');
+    expect(hasIsolatingModalBelow('dialog')).toBe(false);
+    // An isolation registered for a layer that is not open does not count either.
+    isolate('closed');
+    expect(hasIsolatingModalBelow('dialog')).toBe(false);
+  });
+
+  it('is false again after the lower modal unregisters', () => {
+    const unregisterDrawer = registerLayer(makeLayer('drawer', { kind: 'modal' }));
+    const unisolateDrawer = registerLayerIsolation('drawer');
+    // Both are idempotent: the afterEach cleanup releases them if an assertion fails first.
+    cleanups.push(unregisterDrawer, unisolateDrawer);
+    register(makeLayer('confirm', { kind: 'modal' }));
+    isolate('confirm');
+    expect(hasIsolatingModalBelow('confirm')).toBe(true);
+    unisolateDrawer();
+    unregisterDrawer();
+    expect(hasIsolatingModalBelow('confirm')).toBe(false);
+  });
+
+  it('treats a layer id that is not registered yet as the topmost layer (the render that opens it)', () => {
+    expect(hasIsolatingModalBelow('opening')).toBe(false);
+    register(makeLayer('drawer', { kind: 'modal' }));
+    isolate('drawer');
+    expect(hasIsolatingModalBelow('opening')).toBe(true);
+  });
+
+  it('never counts the layer itself or an isolated descendant above it', () => {
+    register(makeLayer('drawer', { kind: 'modal' }));
+    isolate('drawer');
+    expect(hasIsolatingModalBelow('drawer')).toBe(false);
+    register(makeLayer('confirm', { kind: 'modal', parentId: 'drawer' }));
+    isolate('confirm');
+    expect(hasIsolatingModalBelow('drawer')).toBe(false);
+  });
+
+  it('never counts an isolated descendant of a layer that is not registered yet', () => {
+    // Effects run child-first: a nested modal can register and isolate before its parent's layer.
+    register(makeLayer('confirm', { kind: 'modal', parentId: 'drawer' }));
+    isolate('confirm');
+    expect(hasIsolatingModalBelow('drawer')).toBe(false);
+  });
+
+  it('registering and unregistering isolation notifies subscribers once per change', () => {
+    register(makeLayer('drawer', { kind: 'modal' }));
+    register(makeLayer('confirm', { kind: 'modal' }));
+    const snapshots: boolean[] = [];
+    const listener = vi.fn(() => {
+      snapshots.push(hasIsolatingModalBelow('confirm'));
+    });
+    cleanups.push(subscribeLayers(listener));
+
+    const first = registerLayerIsolation('drawer');
+    expect(listener).toHaveBeenCalledTimes(1);
+    // A second registration of the same layer changes nothing (counted), so nothing is notified.
+    const second = registerLayerIsolation('drawer');
+    expect(listener).toHaveBeenCalledTimes(1);
+    first();
+    first();
+    expect(listener).toHaveBeenCalledTimes(1);
+    // The last registration removed: the isolated set changes.
+    second();
+    expect(listener).toHaveBeenCalledTimes(2);
+    second();
+    expect(listener).toHaveBeenCalledTimes(2);
+    // Listeners read the new state.
+    expect(snapshots).toEqual([true, false]);
   });
 });

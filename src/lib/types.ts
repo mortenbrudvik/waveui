@@ -47,6 +47,12 @@ export type TextWeight = 'regular' | 'semibold' | 'bold';
 export type CoreSize = Extract<Size, 'small' | 'medium' | 'large'>;
 
 /**
+ * Size of an overlay surface: Dialog.Content's width cap, a Drawer's width (its height at the
+ * bottom). `small`, `medium`, `large`, or `full`, the whole viewport.
+ */
+export type SurfaceSize = CoreSize | 'full';
+
+/**
  * Look of a text input or picker: `outline` (a full border), `underline` (a bottom stroke only),
  * `filled-darker` or `filled-lighter` (a fill without a visible stroke).
  */
@@ -54,6 +60,15 @@ export type InputAppearance = 'outline' | 'underline' | 'filled-darker' | 'fille
 
 /** Geometry of a surface (Image, Skeleton, SwatchPicker, …). */
 export type Shape = 'circular' | 'square' | 'rounded';
+
+/** Size of a tag (Fluent's `TagSize`): `extra-small` (20px tall), `small` (24px) or `medium` (28px). */
+export type TagSize = Extract<Size, 'extra-small' | 'small' | 'medium'>;
+
+/** Colour scheme of a tag (Fluent's `TagAppearance`): a neutral fill, a border, or a light brand tint. */
+export type TagAppearance = 'filled' | 'outline' | 'brand';
+
+/** Corners of a tag (Fluent's `TagShape`): `circular` (a pill) or `rounded` (4px). */
+export type TagShape = Extract<Shape, 'rounded' | 'circular'>;
 
 /**
  * A color in HSV (Fluent's `HsvColor`): `h` is the hue in degrees (0–360), `s` the saturation, `v`
@@ -114,8 +129,26 @@ export interface OpenChangeDetails<R extends string = string> {
 export type ModalOpenChangeReason =
   'trigger' | 'close' | 'close-button' | 'escape' | 'outside-press';
 
-/** How a modal surface blocks the page (`'non-modal'` joins in a later release). */
-export type ModalType = 'modal' | 'alert';
+/**
+ * How a Dialog or Drawer relates to the page (Fluent's `modalType`). `modal`: a backdrop dims the
+ * page, focus stays in the surface, the rest of the page is `inert` and does not scroll. `alert`:
+ * modal, for a confirmation that needs an answer (`role="alertdialog"`; a backdrop press does not
+ * close it). `non-modal`: the page stays usable (no backdrop, no focus trap, nothing inert, the
+ * page scrolls).
+ */
+export type ModalType = 'modal' | 'alert' | 'non-modal';
+
+/** How a modal surface's backdrop paints the page: `dimmed`, or `transparent` (a modal over another). */
+export type BackdropAppearance = 'dimmed' | 'transparent';
+
+/** Level of a heading element, `<h1>` … `<h6>`. */
+export type HeadingLevel = 1 | 2 | 3 | 4 | 5 | 6;
+
+/**
+ * How the keyboard reaches the items of a set: `'tab'`, every item is a Tab stop and the arrow
+ * keys do nothing; `'arrow'`, the set is one Tab stop and the arrow keys move between its items.
+ */
+export type FocusMode = 'tab' | 'arrow';
 
 /**
  * Checked items of a menu or toolbar, per group `name`: `{ sort: ['date'], view: ['ruler', 'grid'] }`.

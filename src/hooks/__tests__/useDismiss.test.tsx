@@ -177,6 +177,34 @@ describe('useDismiss — Escape', () => {
     expect(isOpen('Dialog')).toBe(true);
   });
 
+  it("escape 'inside': Escape from a page field leaves the layer open, from inside it dismisses with 'escape'", async () => {
+    const user = userEvent.setup();
+    const onDismiss = vi.fn();
+    render(
+      <>
+        <input aria-label="Page field" />
+        {/* As a non-modal Dialog or Drawer registers it: no outside-press dismissal. */}
+        <Popup
+          label="Panel"
+          defaultOpen
+          kind="dialog"
+          escape="inside"
+          outsidePress={false}
+          onDismiss={onDismiss}
+        />
+      </>,
+    );
+    await user.click(screen.getByRole('textbox', { name: 'Page field' }));
+    await user.keyboard('{Escape}');
+    expect(onDismiss).not.toHaveBeenCalled();
+    expect(isOpen('Panel')).toBe(true);
+    await user.click(screen.getByRole('button', { name: 'Panel action' }));
+    await user.keyboard('{Escape}');
+    expect(onDismiss).toHaveBeenCalledTimes(1);
+    expect(onDismiss).toHaveBeenCalledWith('escape');
+    expect(isOpen('Panel')).toBe(false);
+  });
+
   it('skips escape-disabled layers and lets an escape-only layer (tooltip) take Escape first', async () => {
     const user = userEvent.setup();
     const onOuter = vi.fn();
@@ -593,6 +621,22 @@ describe('useDismiss — layer API', () => {
     expect(last.isTopmost()).toBe(true);
     rerender(<Harness open={false} />);
     expect(last.isTopmost()).toBe(false);
+  });
+
+  it("kind 'dialog' reaches the record", () => {
+    function Harness({ escape }: { escape: UseDismissOptions['escape'] }) {
+      const ref = React.useRef<HTMLDivElement>(null);
+      useDismiss({ open: true, onDismiss: () => {}, refs: [ref], kind: 'dialog', escape });
+      return <div ref={ref} />;
+    }
+    const { rerender } = render(<Harness escape="inside" />);
+    const record = getTopmostLayer();
+    expect(record?.kind).toBe('dialog');
+    expect(record?.escape).toBe('inside');
+    // The record reads the latest options without re-registering.
+    rerender(<Harness escape={false} />);
+    expect(getTopmostLayer()).toBe(record);
+    expect(record?.escape).toBe(false);
   });
 
   it('reads parentage from DismissLayerContext (provided by DismissLayerProvider)', () => {

@@ -5,7 +5,7 @@ import { composeEventHandlers } from '../../lib/composeEventHandlers';
 import { joinIds } from '../../lib/aria';
 import { flattenChildren, isElementOfType } from '../../lib/children';
 import { warnDeprecated, warnOnce } from '../../lib/dev';
-import type { Shape } from '../../lib/types';
+import type { FocusMode, Shape } from '../../lib/types';
 import { useControllable } from '../../hooks/useControllable';
 import { useFieldContext, useFieldControl } from '../../hooks/useFieldControl';
 import { useFormReset } from '../../hooks/useFormReset';
@@ -101,7 +101,7 @@ export interface SwatchPickerProps extends Omit<
    * applies, as the group cannot carry `aria-required`.
    * @default 'arrow'
    */
-  focusMode?: 'arrow' | 'tab';
+  focusMode?: FocusMode;
   /** Built-in strings, for localization. */
   labels?: SwatchPickerLabels;
   /** Size of each swatch button (20, 24, 32 or 40px). A 20px swatch passes the target-size bar

@@ -1,6 +1,6 @@
 import * as React from 'react';
 import { reportMissingContext, warnOnce } from '../../lib/dev';
-import type { Shape, Size } from '../../lib/types';
+import type { FocusMode, Shape, Size } from '../../lib/types';
 
 /*
  * The context a `SwatchPicker` gives the swatches it renders (`ColorSwatch`, `ImageSwatch` and
@@ -25,7 +25,7 @@ export interface SwatchPickerContextValue {
   /** @default 'row' */
   layout: 'row' | 'grid';
   /** @default 'arrow' */
-  focusMode: 'arrow' | 'tab';
+  focusMode: FocusMode;
   /** @default 'medium' */
   spacing: 'small' | 'medium';
   /** `0` for the swatch that holds the tab stop, `-1` for every other one. */
