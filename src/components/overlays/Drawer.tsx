@@ -33,7 +33,8 @@ export type {
 
 /**
  * A panel attached to a side or to the bottom of the screen (Fluent UI v2 style), modal by
- * default, rendered in a portal (inheriting the WaveProvider theme) while open.
+ * default or non-modal, rendered in a portal (inheriting the WaveProvider theme) while open (and,
+ * with `unmountOnClose={false}`, kept there while closed, `hidden` and `inert`).
  *
  * - **Opening**: controlled (`open`), or uncontrolled with a `Drawer.Trigger` placed directly inside
  *   the Drawer or in a Fragment there (it renders in place, outside the panel); the trigger opens
@@ -74,6 +75,16 @@ export type {
  *   over another modal dims the page once. `closeButton` sets the content of every built-in Close
  *   button, or hides them (`null`); a button passed there is merged into it. `titleAction` places
  *   header buttons between the `title` heading and the Close button.
+ * - **Kept mounted**: `unmountOnClose={false}` keeps the panel and its content mounted while the
+ *   drawer is closed, so a form keeps what was typed and the components inside keep their state;
+ *   each open focuses the first focusable element again (an `autoFocus` inside never applies), and
+ *   a kept drawer opened while another overlay is open stacks above it.
+ * - **Presence**: the panel and the backdrop mount through the presence core and render
+ *   `data-presence` (`entered` while open, `exited` while kept closed); the backdrop and the
+ *   panel are `inert` while exiting and `hidden` and `inert` while kept closed. No motion ships:
+ *   `data-[presence=…]:` classes in `className` animate the panel, whose motion a closed drawer
+ *   waits for before it unmounts or hides (focus, the trap and the isolation follow the open
+ *   state at once).
  *
  * The sub-components are also exported under flat names (`DrawerTrigger`, `DrawerClose`,
  * `DrawerTitle`, `DrawerHeader`, `DrawerHeaderTitle`, `DrawerHeaderNavigation`, `DrawerBody`,

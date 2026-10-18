@@ -158,7 +158,7 @@ export const NESTED_TRIGGER_WARNING_KEY = 'Drawer.Trigger:nested';
 
 /** The text of the {@link NESTED_TRIGGER_WARNING_KEY} warning. */
 export const NESTED_TRIGGER_WARNING =
-  'Drawer.Trigger must be a direct child of Drawer (a Fragment is fine). Inside another element or a component it is rendered as panel content, which exists only while the drawer is open, so it cannot open the drawer. Make it a direct child, put wrappers such as a Tooltip inside the trigger, or control the Drawer with `open`/`onOpenChange` and open it from your own button.';
+  'Drawer.Trigger must be a direct child of Drawer (a Fragment is fine). Inside another element or a component it is rendered as panel content, which is not rendered (or, with `unmountOnClose={false}`, is hidden) while the drawer is closed, so it cannot open the drawer. Make it a direct child, put wrappers such as a Tooltip inside the trigger, or control the Drawer with `open`/`onOpenChange` and open it from your own button.';
 
 /**
  * Opens and closes the drawer: a click while it is open asks it to close (reason `trigger`), which
@@ -193,7 +193,8 @@ export const NESTED_TRIGGER_WARNING =
 export const DrawerTrigger = (props: DrawerTriggerProps) => {
   const { open, requestOpen, trigger, panelId, inPanel } = useDrawerContext('Drawer.Trigger');
 
-  // Rendered inside its own drawer's panel (e.g. by a component): it only exists while open.
+  // Rendered inside its own drawer's panel (e.g. by a component): not rendered (or, kept mounted,
+  // hidden) while the drawer is closed.
   React.useEffect(() => {
     if (inPanel) warnOnce(NESTED_TRIGGER_WARNING_KEY, NESTED_TRIGGER_WARNING);
   }, [inPanel]);

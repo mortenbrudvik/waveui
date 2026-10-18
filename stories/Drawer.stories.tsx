@@ -105,6 +105,7 @@ const meta = {
     position: 'end',
     size: 'small',
     modalType: 'modal',
+    unmountOnClose: true,
     title: 'Filters',
     onOpenChange: fn(),
     children: 'Choose the filters to apply to the list.',
@@ -426,9 +427,9 @@ export const ScrollableTextBody: Story = {
 
 /**
  * `Drawer.Trigger` must be a direct child of `Drawer` (a Fragment is fine): wrapped in another
- * element or component it becomes panel content, which exists only while the drawer is open. To
- * add a Tooltip, put it inside the trigger with a render-prop child, so the trigger props and the
- * description land on the same button.
+ * element or component it becomes panel content, which is not rendered while the drawer is
+ * closed. To add a Tooltip, put it inside the trigger with a render-prop child, so the trigger
+ * props and the description land on the same button.
  */
 export const TriggerWithTooltip: Story = {
   render: function TriggerWithTooltipDrawer({ children, ...args }) {
@@ -553,6 +554,42 @@ export const AlertDrawer: Story = {
         </Drawer.Close>
         <Drawer.Close>
           <Button appearance="primary">Discard</Button>
+        </Drawer.Close>
+      </Drawer.Footer>
+    </Drawer>
+  ),
+};
+
+/**
+ * `unmountOnClose={false}` keeps the panel and its content mounted while the drawer is closed
+ * (`hidden` and `inert`), so the filters keep what was typed and switched: change them, close the
+ * drawer with Done, Escape or the backdrop, and open it again. Each open moves focus to the first
+ * focusable element (the Close button) again.
+ */
+export const KeepMounted: Story = {
+  args: {
+    unmountOnClose: false,
+    title: 'Search filters',
+    children: 'The filters stay as you left them when the drawer opens again.',
+  },
+  render: ({ children, ...args }) => (
+    <Drawer {...args}>
+      <Drawer.Trigger>
+        <Button appearance="primary">Open filters</Button>
+      </Drawer.Trigger>
+      <div className="flex flex-col gap-3">
+        <p>{children}</p>
+        <Field label="Keyword">
+          <Input />
+        </Field>
+        <Field label="Author">
+          <Input />
+        </Field>
+        <Switch label="Only available items" />
+      </div>
+      <Drawer.Footer>
+        <Drawer.Close>
+          <Button appearance="primary">Done</Button>
         </Drawer.Close>
       </Drawer.Footer>
     </Drawer>

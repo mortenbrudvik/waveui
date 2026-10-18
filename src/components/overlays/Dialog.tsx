@@ -20,6 +20,7 @@ import { useId } from '../../hooks/useId';
 import { useIsClient } from '../../hooks/useIsClient';
 import { useMergedRefs } from '../../hooks/useMergedRefs';
 import { useModalLayer } from '../../hooks/useModalLayer';
+import { usePresence } from '../../hooks/usePresence';
 import { Portal } from '../portal/Portal';
 import {
   inertModalTrigger,
@@ -33,6 +34,8 @@ import {
   useModalTrigger,
   useModalTriggerPart,
   useModalTriggerSession,
+  useOpenInsideWarning,
+  useRaiseOnOpen,
   useRequiredContext,
   useTitleRegistry,
   useUnnamedModalWarning,
@@ -113,6 +116,17 @@ export interface DialogProps {
    * send focus somewhere else.
    */
   finalFocusRef?: React.RefObject<HTMLElement | null>;
+  /**
+   * Removes `Dialog.Content` (the surface and everything in it) when the dialog closes. `false`
+   * keeps it mounted while closed, `hidden` and `inert`, so a form inside keeps what was typed and
+   * the components inside keep their state; the surface then mounts with the Dialog, closed (in
+   * the browser only, as an open one), and an `autoFocus` inside it never applies (each open
+   * focuses the first focusable element). A popup opened inside that is still open when the
+   * dialog closes stays open over the page (a development warning says so): close it first.
+   * Fluent's `unmountOnClose`.
+   * @default true
+   */
+  unmountOnClose?: boolean;
   /** `Dialog.Trigger` and `Dialog.Content`. */
   children: React.ReactNode;
 }
@@ -263,6 +277,8 @@ interface DialogContextValue {
   /** The trigger element (`attach`) and the focus-restore target resolved from it (`focusRef`). */
   trigger: ModalTrigger;
   finalFocusRef: React.RefObject<HTMLElement | null> | undefined;
+  /** The resolved `unmountOnClose`: `false` keeps `Dialog.Content` mounted while closed. */
+  unmountOnClose: boolean;
   /** The id of the open dialog surface (for the trigger's `aria-controls`), or `undefined`. */
   contentId: string | undefined;
   /** Registers the surface's id while it is mounted; returns the unregister function. */
@@ -278,6 +294,7 @@ const inertDialogContext: DialogContextValue = {
   modalType: 'modal',
   trigger: inertModalTrigger,
   finalFocusRef: undefined,
+  unmountOnClose: true,
   contentId: undefined,
   registerContentId: () => () => {},
 };
@@ -295,6 +312,7 @@ const DialogRoot = ({
   onOpenChange,
   modalType = 'modal',
   finalFocusRef,
+  unmountOnClose = true,
   children,
 }: DialogProps) => {
   const [openState, requestOpen] = useModalOpenState(open, defaultOpen, onOpenChange);
@@ -320,10 +338,20 @@ const DialogRoot = ({
       modalType,
       trigger,
       finalFocusRef,
+      unmountOnClose,
       contentId,
       registerContentId,
     }),
-    [isOpen, requestOpen, modalType, trigger, finalFocusRef, contentId, registerContentId],
+    [
+      isOpen,
+      requestOpen,
+      modalType,
+      trigger,
+      finalFocusRef,
+      unmountOnClose,
+      contentId,
+      registerContentId,
+    ],
   );
 
   return <DialogContext.Provider value={context}>{children}</DialogContext.Provider>;
@@ -417,17 +445,27 @@ function useTitleActionsWidth(area: HTMLElement | null): number | null {
 
 /**
  * The dialog surface, rendered in a portal (inheriting the WaveProvider theme) while the dialog is
- * open: the backdrop, and the surface centred in the positioner (the backdrop's sibling) with the
- * title, the title-actions area (title actions, then the Close button) and a scrolling body. It
- * takes the full width up to its `size` and never exceeds the viewport (the body scrolls, also
- * sideways for content wider than the dialog); `size="full"` fills the viewport. Its 1rem gap to
- * the viewport edges is its own margin, so a margin in `className` replaces the gap: with the
- * width and height caps lifted as well and its height set to the viewport's, it fills the
- * viewport. It is `role="dialog"`, or `role="alertdialog"` when the Dialog has
- * `modalType="alert"` (a `role` you pass wins), and carries `data-modal-type` and `data-size` with
- * the resolved values. A non-modal dialog has no backdrop: the positioner only centres the surface
- * and lets presses through to the page. The titles' end padding follows the width of the
- * title-actions area (`--wave-dialog-title-end-padding`, 2rem until it is measured).
+ * open, and kept there while it is closed, `hidden` and `inert`, when the Dialog has
+ * `unmountOnClose={false}`: the backdrop, and the surface centred in the positioner (the
+ * backdrop's sibling) with the title, the title-actions area (title actions, then the Close
+ * button) and a scrolling body. It takes the full width up to its `size` and never exceeds the
+ * viewport (the body scrolls, also sideways for content wider than the dialog); `size="full"`
+ * fills the viewport. Its 1rem gap to the viewport edges is its own margin, so a margin in
+ * `className` replaces the gap: with the width and height caps lifted as well and its height set
+ * to the viewport's, it fills the viewport. It is `role="dialog"`, or `role="alertdialog"` when the
+ * Dialog has `modalType="alert"` (a `role` you pass wins), and carries `data-modal-type` and
+ * `data-size` with the resolved values. A non-modal dialog has no backdrop: the positioner only
+ * centres the surface and lets presses through to the page. The titles' end padding follows the
+ * width of the title-actions area (`--wave-dialog-title-end-padding`, 2rem until it is measured).
+ *
+ * It mounts through the presence core: the backdrop, the positioner and the surface render
+ * `data-presence` (`entered` while open, `exited` while kept closed; `entering` and `exiting`
+ * only while a motion of yours runs on the surface), and the backdrop and the positioner are
+ * `inert` while exiting and `hidden` and `inert` while kept closed. No motion ships: animate the
+ * surface with `data-[presence=…]:` classes in `className` (an enter's start as
+ * `data-[presence=entering]:starting:`, each with a `motion-reduce:` counterpart); a closed
+ * surface waits for that motion before it unmounts or hides, while focus, the trap and the
+ * isolation follow the open state at once.
  */
 export const DialogContent = ({
   title,
@@ -444,8 +482,23 @@ export const DialogContent = ({
   ref,
   ...rest
 }: DialogContentProps) => {
-  const { open, requestOpen, modalType, trigger, finalFocusRef, registerContentId } =
-    useDialogContext('Dialog.Content');
+  const {
+    open,
+    requestOpen,
+    modalType,
+    trigger,
+    finalFocusRef,
+    unmountOnClose,
+    registerContentId,
+  } = useDialogContext('Dialog.Content');
+  // Every surface mounts through the presence core (D5, D103), with no motion of its own: kept
+  // mounted while closed with `unmountOnClose={false}`, else removed once it has exited.
+  const {
+    isMounted,
+    ref: presenceRef,
+    presenceProps,
+  } = usePresence(open, { unmountOnExit: unmountOnClose });
+  const keptMounted = !unmountOnClose;
   const generatedId = useId('wave-dialog');
   const contentId = id ?? generatedId;
   const propTitleId = useId('wave-dialog-title');
@@ -463,7 +516,11 @@ export const DialogContent = ({
     (node: HTMLDivElement | null) => (node ? registerContentId(contentId) : undefined),
     [registerContentId, contentId],
   );
-  const mergedRef = useMergedRefs<HTMLDivElement>(ref, attachSurface, registerId);
+  const mergedRef = useMergedRefs<HTMLDivElement>(ref, attachSurface, registerId, presenceRef);
+  // The portal wrapper: a kept-mounted surface moves to the top of its stack when it opens
+  // (before the layer registers and the trap moves focus in).
+  const portalRef = React.useRef<HTMLDivElement | null>(null);
+  useRaiseOnOpen(open, keptMounted, portalRef);
 
   // An alert dialog needs an answer: a backdrop press does not close it (Escape still does;
   // useModalLayer registers its layer without outside presses).
@@ -488,6 +545,7 @@ export const DialogContent = ({
     getPreviousStop: getTabbableThrough,
   });
   useUnnamedModalWarning(open ? surface : null, titles.hasTitle, 'Dialog.Content', 'Dialog.Title');
+  useOpenInsideWarning(open, keptMounted, layer.layerId, 'Dialog');
 
   // A non-modal dialog has no backdrop: a given slot (not undefined, null or a boolean) is ignored.
   const backdropIgnored =
@@ -503,10 +561,11 @@ export const DialogContent = ({
 
   // The title-actions area (held in state) and the outlet `Dialog.Title` actions portal into. Both
   // attach in the commit that mounts the surface, so a title's action is in the DOM in the next
-  // commit, the one in which the focus trap starts (it waits for the surface held in state).
+  // commit, the one in which the focus trap starts (it waits for the surface held in state). The
+  // area is measured only while the dialog is open (a kept-mounted closed one measures nothing).
   const [titleActionsArea, setTitleActionsArea] = React.useState<HTMLDivElement | null>(null);
   const [titleActionsOutlet, setTitleActionsOutlet] = React.useState<HTMLSpanElement | null>(null);
-  const titleActionsWidth = useTitleActionsWidth(titleActionsArea);
+  const titleActionsWidth = useTitleActionsWidth(open ? titleActionsArea : null);
 
   // The height of the sticky Dialog.Footer, reserved as the body's scroll padding.
   const [footerHeight, setFooterHeight] = React.useState<number | null>(null);
@@ -515,7 +574,7 @@ export const DialogContent = ({
     [titles.context, titleActionsOutlet],
   );
 
-  if (!open) return null;
+  if (!isMounted) return null;
 
   const hasTitle = slotRendersContent(title);
   // The titles' end padding: the area's width and a gap while it has a size, none while it is
@@ -532,7 +591,9 @@ export const DialogContent = ({
       : ({ '--wave-dialog-title-end-padding': titleEndPadding, ...style } as React.CSSProperties);
 
   return (
-    <Portal layerId={layer.layerId}>
+    <Portal ref={portalRef} layerId={layer.layerId}>
+      {/* Each top-level element carries the presence attributes (D7, D103): hidden and inert while
+          kept closed, so a closed dialog leaves no backdrop over the page. */}
       {!nonModal && (
         <ModalBackdrop
           backdrop={backdrop}
@@ -540,9 +601,11 @@ export const DialogContent = ({
           layerId={layer.layerId}
           open={open}
           onMouseDown={backdropPress.onMouseDown}
+          presenceProps={presenceProps}
         />
       )}
       <div
+        {...presenceProps}
         // Centres the surface and lets presses through to the backdrop (modal) or the page
         // (non-modal) around it.
         className={cn(
@@ -559,6 +622,7 @@ export const DialogContent = ({
           data-modal-type={modalType}
           data-size={size}
           {...rest}
+          data-presence={presenceProps['data-presence']}
           style={surfaceStyle}
           onKeyDown={composeEventHandlers(onKeyDown, onTabOrderKeyDown)}
           className={cn(
@@ -756,7 +820,8 @@ DialogFooter.displayName = 'DialogFooter';
 
 /**
  * A dialog (Fluent UI v2 style), modal by default: `Dialog` holds the open state; `Dialog.Trigger`
- * opens and closes it and `Dialog.Content` renders the surface in a portal while open.
+ * opens and closes it and `Dialog.Content` renders the surface in a portal while open (and, with
+ * `unmountOnClose={false}`, keeps it there while closed, `hidden` and `inert`).
  *
  * - **Modal**: focus moves into the dialog and Tab stays inside it (toasts included), the rest of
  *   the page is `inert` (instead of `aria-modal`, so toasts and live regions stay announced), and
@@ -788,6 +853,12 @@ DialogFooter.displayName = 'DialogFooter';
  *   focusable element: a title action, else the Close button.
  * - **Footer**: `Dialog.Footer` sticks to the bottom of the scrolling body, and the body keeps a
  *   focused field above it.
+ * - **Kept mounted**: `unmountOnClose={false}` keeps the content mounted while the dialog is
+ *   closed, so a form keeps what was typed and the components inside keep their state; each open
+ *   focuses the first focusable element again (an `autoFocus` inside never applies), and a kept
+ *   dialog opened while another overlay is open stacks above it.
+ * - **Presence**: the surface mounts through the presence core and renders `data-presence`; no
+ *   motion ships, and `data-[presence=…]:` classes on `Dialog.Content` animate it.
  * - **Naming**: give `Dialog.Content` a `title`, a `Dialog.Title`, or `aria-label`.
  *
  * The sub-components are also exported under flat names (`DialogTrigger`, `DialogContent`,

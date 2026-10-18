@@ -71,6 +71,7 @@ const meta = {
   args: {
     defaultOpen: false,
     modalType: 'modal',
+    unmountOnClose: true,
     onOpenChange: fn(),
     children: (
       <>
@@ -641,5 +642,42 @@ export const CustomBackdrop: Story = {
         </Dialog>
       </div>
     );
+  },
+};
+
+/**
+ * `unmountOnClose={false}` keeps `Dialog.Content` mounted while the dialog is closed (`hidden` and
+ * `inert`), so the form keeps what was typed: fill in the fields, close the dialog with Cancel,
+ * Escape or the backdrop, and open it again. Each open moves focus to the first focusable element
+ * (the Close button) again.
+ */
+export const KeepMounted: Story = {
+  args: {
+    unmountOnClose: false,
+    children: (
+      <>
+        <Dialog.Trigger>
+          <Button appearance="primary">Write feedback</Button>
+        </Dialog.Trigger>
+        <Dialog.Content title="Feedback">
+          <div className="flex flex-col gap-3">
+            <Field label="Subject">
+              <Input />
+            </Field>
+            <Field label="Message">
+              <Input />
+            </Field>
+          </div>
+          <Dialog.Footer>
+            <Dialog.Close>
+              <Button appearance="subtle">Cancel</Button>
+            </Dialog.Close>
+            <Dialog.Close>
+              <Button appearance="primary">Send</Button>
+            </Dialog.Close>
+          </Dialog.Footer>
+        </Dialog.Content>
+      </>
+    ),
   },
 };

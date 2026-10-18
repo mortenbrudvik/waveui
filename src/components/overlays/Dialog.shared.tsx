@@ -1,7 +1,7 @@
 import * as React from 'react';
-import { reportMissingContext, warnOnce } from '../../lib/dev';
+import { isDev, reportMissingContext, warnOnce } from '../../lib/dev';
 import { focusElement } from '../../lib/focus';
-import type { DismissReason } from '../../lib/layers';
+import { getOpenLayers, isDescendantLayer, type DismissReason } from '../../lib/layers';
 import { mergeProps } from '../../lib/mergeProps';
 import { STATE_ARIA } from '../../lib/renderTrigger';
 import type { ModalOpenChangeReason, OpenChangeDetails } from '../../lib/types';
@@ -148,7 +148,8 @@ export function useBackdropPress(
     pressFocusRef.current = null;
     if (!element) return;
     // A close requested from the click is committed first (React flushes the update in a
-    // microtask queued before this one), so a closed surface no longer contains the element.
+    // microtask queued before this one): a closed surface no longer contains the element, or
+    // (exiting, or kept mounted) is inert, so the element cannot take focus.
     queueMicrotask(() => {
       if (getFocusedElement() !== null || !surfaceRef.current?.contains(element)) return;
       focusElement(element, { preventScroll: true });
@@ -548,6 +549,84 @@ export function useModalTriggerSession(trigger: ModalTrigger, open: boolean): vo
     if (open) trigger.startSession();
     else trigger.endSession();
   }, [trigger, open]);
+}
+
+/**
+ * Moves a kept-mounted surface to the top of its stack when it opens (D104). A portal's z-index is
+ * its layer plus its nesting depth, so at equal depth the wrapper later in the document paints
+ * above: a surface kept mounted since before another overlay opened (a confirm Dialog rendered
+ * next to a Drawer) would open under it. In the commit in which `open` becomes `true`, a layout
+ * effect moves the portal wrapper to the end of its container when it is not the container's last
+ * element child (`container.appendChild(wrapper)`). The closed content is hidden, so the move loses
+ * no visible state, and React removes the wrapper from the same parent later. An unmounting surface
+ * is appended when it opens already, so pass `keptMounted: false` for it: it is never moved.
+ *
+ * Call it before `useModalLayer` (a component's layout effects run in order), so the move happens
+ * before the layer registers, before other modals re-plan their isolation and before the focus
+ * trap moves focus in.
+ *
+ * @param open        Whether the surface is open.
+ * @param keptMounted `true` with `unmountOnClose={false}`.
+ * @param wrapperRef  The `Portal`'s `ref` (its wrapper element).
+ */
+export function useRaiseOnOpen(
+  open: boolean,
+  keptMounted: boolean,
+  wrapperRef: React.RefObject<HTMLElement | null>,
+): void {
+  // The open state of the previous commit: the move happens only in the opening commit, never
+  // while the surface is open (a move would blur the element inside that has focus).
+  const wasOpenRef = React.useRef(false);
+  React.useLayoutEffect(() => {
+    const wasOpen = wasOpenRef.current;
+    wasOpenRef.current = open;
+    if (!open || wasOpen || !keptMounted) return;
+    const wrapper = wrapperRef.current;
+    const container = wrapper?.parentElement;
+    if (wrapper && container && container.lastElementChild !== wrapper) {
+      container.appendChild(wrapper);
+    }
+  });
+}
+
+/**
+ * Development check of a kept-mounted surface (D106): a popup opened inside it (a Popover, a Menu,
+ * a nested Dialog) that is still open when the surface closes stays open over the page, because
+ * the content that would unmount it stays mounted. After each close of a kept-mounted surface it
+ * schedules one check in a new task (`setTimeout(0)`, so a popup that the closing press itself
+ * dismisses does not count) and warns once (`<componentName>:open-inside`) when an open layer
+ * other than a tooltip descends from the surface's layer (`isDescendantLayer` follows the popup's
+ * `parentId`, also after the surface's own layer unregistered). Nothing runs with the default
+ * `unmountOnClose`, where the popups unmount with the content, or in production.
+ *
+ * @param open          Whether the surface is open.
+ * @param keptMounted   `true` with `unmountOnClose={false}`.
+ * @param layerId       The surface's dismiss layer (`useModalLayer`'s `layerId`).
+ * @param componentName The public name for the warning key and text: `'Dialog'`, `'Drawer'`.
+ */
+export function useOpenInsideWarning(
+  open: boolean,
+  keptMounted: boolean,
+  layerId: string,
+  componentName: string,
+): void {
+  const wasOpenRef = React.useRef(open);
+  React.useEffect(() => {
+    const wasOpen = wasOpenRef.current;
+    wasOpenRef.current = open;
+    if (!isDev || open || !wasOpen || !keptMounted) return undefined;
+    const timer = setTimeout(() => {
+      const leftOpen = getOpenLayers().some(
+        (layer) => layer.kind !== 'tooltip' && isDescendantLayer(layer.id, layerId),
+      );
+      if (!leftOpen) return;
+      warnOnce(
+        `${componentName}:open-inside`,
+        `${componentName} closed while a popup opened inside it is still open. With \`unmountOnClose={false}\` the popup stays open over the page: close it first, or keep the default \`unmountOnClose\`.`,
+      );
+    }, 0);
+    return () => clearTimeout(timer);
+  }, [open, keptMounted, layerId, componentName]);
 }
 
 /**

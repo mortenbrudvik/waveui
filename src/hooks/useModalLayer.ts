@@ -51,6 +51,13 @@ export interface UseModalLayerOptions extends Omit<UseDismissOptions, 'kind'> {
  * `open`: a `modalType` that changes while open applies at once (the trap, isolation and lock
  * follow) and moves no focus. The Tab order of a non-modal surface (its place after the opener) is
  * the component's.
+ *
+ * A surface that mounts through the presence core (Dialog, Drawer) passes its open state as
+ * `open`, never its mount (`isMounted`), and its element as `container` also while it is mounted
+ * closed: the layer, the trap, the isolation and the scroll lock end and focus is restored in the
+ * commit that closes it, while the element still runs its exit motion (`inert`) or stays mounted
+ * (`hidden`, with `unmountOnClose={false}`); the next open starts them again with the same
+ * element.
  */
 export function useModalLayer(options: UseModalLayerOptions): DismissLayer {
   const {

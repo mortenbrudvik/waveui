@@ -15,6 +15,7 @@ import { useId } from '../../hooks/useId';
 import { useIsClient } from '../../hooks/useIsClient';
 import { useMergedRefs } from '../../hooks/useMergedRefs';
 import { useModalLayer } from '../../hooks/useModalLayer';
+import { usePresence } from '../../hooks/usePresence';
 import { Portal } from '../portal/Portal';
 import {
   ModalSurfaceContext,
@@ -24,6 +25,8 @@ import {
   useModalOpenState,
   useModalTrigger,
   useModalTriggerSession,
+  useOpenInsideWarning,
+  useRaiseOnOpen,
   useTitleRegistry,
   useUnnamedModalWarning,
   type ModalRequestOpen,
@@ -167,6 +170,17 @@ export interface DrawerProps extends Omit<React.HTMLAttributes<HTMLDivElement>, 
    */
   finalFocusRef?: React.RefObject<HTMLElement | null>;
   /**
+   * Removes the panel and its content when the drawer closes. `false` keeps them mounted while
+   * closed, `hidden` and `inert` (out of the layout, the Tab order and the accessibility tree), so
+   * what was typed and the state of the components inside survive closing and opening again; the
+   * content then mounts with the Drawer, closed, and an `autoFocus` inside it never applies (each
+   * open focuses the first focusable element). The panel still renders only in the browser. A
+   * popup opened inside that is still open when the drawer closes stays open over the page (a
+   * development warning says so): close it first. Fluent's `unmountOnClose`.
+   * @default true
+   */
+  unmountOnClose?: boolean;
+  /**
    * The drawer's content, placed by the Drawer, also from a Fragment (`{isMobile && <>…</>}`) and
    * when written in a Server Component: `Drawer.Trigger` children render in place (outside the
    * panel); a `Drawer.Header` replaces the built-in header (the `title` and Close button row); a
@@ -174,10 +188,11 @@ export interface DrawerProps extends Omit<React.HTMLAttributes<HTMLDivElement>, 
    * body, outside it, wherever it is written among the children; everything else renders in the
    * scrolling body. A part nested in another element (a `<form>`) or rendered by a component of
    * yours renders where it is, in the body (a development warning says so). A `Drawer.Trigger`
-   * nested in another element, or rendered by a component, is panel content, so it only exists
-   * while the drawer is open (development warnings say so, also when an uncontrolled drawer still
-   * has no direct trigger a second after it mounts and therefore cannot open; a controlled drawer
-   * whose trigger a component such as a Tooltip wraps warns only once it opens).
+   * nested in another element, or rendered by a component, is panel content, so it is not rendered
+   * (or, kept mounted, is hidden) while the drawer is closed (development warnings say so, also
+   * when an uncontrolled drawer still has no direct trigger a second after it mounts and therefore
+   * cannot open; a controlled drawer whose trigger a component such as a Tooltip wraps warns only
+   * once it renders in the panel).
    * Put wrappers inside the trigger instead: see `Drawer.Trigger`.
    */
   children: React.ReactNode;
@@ -187,7 +202,7 @@ export interface DrawerProps extends Omit<React.HTMLAttributes<HTMLDivElement>, 
 
 const UNREACHABLE_WARNING_KEY = 'Drawer:unreachable';
 const UNREACHABLE_WARNING =
-  'Drawer has no way to open: a second after mounting it is still uncontrolled (no `open` prop), closed, and has no Drawer.Trigger as a direct child (or in a Fragment there). A Drawer.Trigger rendered by a component or nested in an element is panel content, which exists only while the drawer is open. Make the trigger a direct child of Drawer, or control the Drawer with `open`/`onOpenChange`.';
+  'Drawer has no way to open: a second after mounting it is still uncontrolled (no `open` prop), closed, and has no Drawer.Trigger as a direct child (or in a Fragment there). A Drawer.Trigger rendered by a component or nested in an element is panel content, which is not rendered or is hidden while the drawer is closed. Make the trigger a direct child of Drawer, or control the Drawer with `open`/`onOpenChange`.';
 
 /**
  * How long after mount (ms) the development check for a drawer without a trigger waits: long
@@ -426,6 +441,7 @@ export const DrawerRoot = ({
   title,
   closeLabel = 'Close',
   finalFocusRef,
+  unmountOnClose = true,
   children,
   className,
   id,
@@ -439,6 +455,14 @@ export const DrawerRoot = ({
   // never describe a panel that is not there.
   const isClient = useIsClient();
   const open = openState && isClient;
+  // The panel mounts through the presence core (D5, D103), with no motion of its own: kept mounted
+  // while closed with `unmountOnClose={false}`, else removed once it has exited.
+  const {
+    isMounted,
+    ref: presenceRef,
+    presenceProps,
+  } = usePresence(open, { unmountOnExit: unmountOnClose });
+  const keptMounted = !unmountOnClose;
   const trigger = useModalTrigger();
   const generatedId = useId('wave-drawer');
   const panelId = id ?? generatedId;
@@ -451,7 +475,11 @@ export const DrawerRoot = ({
     panelRef.current = node;
     setPanel(node);
   }, []);
-  const mergedRef = useMergedRefs<HTMLDivElement>(ref, attachPanel);
+  const mergedRef = useMergedRefs<HTMLDivElement>(ref, attachPanel, presenceRef);
+  // The portal wrapper: a kept-mounted panel moves to the top of its stack when it opens (before
+  // the layer registers and the trap moves focus in).
+  const portalRef = React.useRef<HTMLDivElement | null>(null);
+  useRaiseOnOpen(open, keptMounted, portalRef);
 
   // A backdrop press asks the drawer to close, except an alert drawer's (Escape still does;
   // useModalLayer registers its layer without outside presses).
@@ -478,6 +506,7 @@ export const DrawerRoot = ({
   // After useModalLayer's focus restore (effects run in order), start the trigger session, or end
   // it and forget the trigger that opened it.
   useModalTriggerSession(trigger, open);
+  useOpenInsideWarning(open, keptMounted, layer.layerId, 'Drawer');
   useUnnamedModalWarning(
     open ? panel : null,
     titles.hasTitle,
@@ -510,7 +539,8 @@ export const DrawerRoot = ({
     if (duplicateBody) warnOnce(BODY_DUPLICATE_WARNING_KEY, BODY_DUPLICATE_WARNING);
   }, [duplicateBody]);
 
-  // A trigger nested in the children is panel content: never rendered while the drawer is closed.
+  // A trigger nested in the children is panel content: not rendered (or, kept mounted, hidden) while
+  // the drawer is closed.
   // The children change on every parent render; once this drawer has warned, it stops walking.
   const nestedWarnedRef = React.useRef(false);
   React.useEffect(() => {
@@ -552,9 +582,11 @@ export const DrawerRoot = ({
   return (
     <DrawerContext.Provider value={context}>
       {triggers}
-      {open && (
-        <Portal layerId={layer.layerId}>
-          {/* The backdrop of a modal or alert drawer, the panel's sibling; a non-modal one has none. */}
+      {isMounted && (
+        <Portal ref={portalRef} layerId={layer.layerId}>
+          {/* The backdrop of a modal or alert drawer, the panel's sibling; a non-modal one has none.
+              Both carry the presence attributes (D7, D103): hidden and inert while kept closed, so
+              a closed drawer leaves no backdrop over the page. */}
           {!nonModal && (
             <ModalBackdrop
               backdrop={backdrop}
@@ -562,6 +594,7 @@ export const DrawerRoot = ({
               layerId={layer.layerId}
               open={open}
               onMouseDown={backdropPress.onMouseDown}
+              presenceProps={presenceProps}
             />
           )}
           <div
@@ -574,6 +607,7 @@ export const DrawerRoot = ({
             data-size={size}
             data-modal-type={modalType}
             {...rest}
+            {...presenceProps}
             onKeyDown={composeEventHandlers(onKeyDown, onTabOrderKeyDown)}
             className={cn(
               drawerClassNames.root,
