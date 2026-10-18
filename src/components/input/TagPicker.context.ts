@@ -112,7 +112,7 @@ export interface TagPickerContextValue {
   summaryId: string | undefined;
   /** The trigger element (the Input or the Button). */
   triggerRef: React.RefObject<HTMLElement | null>;
-  /** Places the popup against the trigger: merge it into the trigger's ref. */
+  /** Places the popup against the Control (as wide as the field): merged into its ref. */
   setReference: (element: HTMLElement | null) => void;
   /** The control element, the tag list and the "+N" chip (the single-line layout measures them). */
   controlRef: React.RefObject<HTMLDivElement | null>;

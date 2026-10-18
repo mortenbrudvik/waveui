@@ -710,6 +710,28 @@ describe('TagPicker parts', () => {
       expect(onValueChange).toHaveBeenCalledTimes(2);
     });
 
+    it('ignores the query: a defaultQuery or a controlled query filters nothing (D63)', async () => {
+      const user = userEvent.setup();
+      const { container, unmount } = render(<ButtonForm defaultQuery="zzz" />);
+      act(() => combobox().focus());
+      await user.keyboard('{ArrowDown}');
+      expect(combobox()).toHaveAttribute('aria-expanded', 'true');
+      expect(screen.getAllByRole('option').map((o) => o.textContent)).toEqual([
+        'Apple',
+        'Banana',
+        'Cherry',
+      ]);
+      expect(within(container).getByRole('status')).toHaveTextContent('');
+      expect(screen.queryByText('No matches')).toBeNull();
+      await user.keyboard('{Enter}');
+      expect(tags()).toEqual(['Apple']);
+      unmount();
+      render(<ButtonForm query="zzz" />);
+      act(() => combobox().focus());
+      await user.keyboard('{ArrowDown}');
+      expect(activeOption()).toHaveTextContent('Apple');
+    });
+
     it('shows the placeholder while empty and nothing once a tag is selected', () => {
       const { rerender } = render(<ButtonForm placeholder="Pick fruit" value={[]} />);
       expect(combobox()).toHaveTextContent('Pick fruit');

@@ -112,7 +112,7 @@ describe('TagPicker overflow="count"', () => {
     const user = userEvent.setup();
     render(<Picker clearable />);
     layout(130, 60);
-    expect(chip()).not.toBeNull();
+    expect(chip()).toHaveTextContent('+1');
     const after = screen.getByRole('button', { name: 'After' });
 
     // The clear button, by Shift+Tab from after the picker.
@@ -159,6 +159,45 @@ describe('TagPicker overflow="count"', () => {
       />,
     );
     expect(secondRoot).not.toHaveAttribute('data-collapsed');
+  });
+
+  it('tracks focus in every mode: switching to count while focus is inside stays expanded, and after a blur in wrap mode collapses', async () => {
+    const user = userEvent.setup();
+    const { rerender } = render(<Picker overflow="wrap" />);
+    await user.click(combobox());
+    await user.keyboard('{Escape}');
+    rerender(<Picker overflow="count" />);
+    expect(root()).not.toHaveAttribute('data-collapsed');
+    await user.type(combobox(), 'b');
+    expect(root()).not.toHaveAttribute('data-collapsed');
+    await user.keyboard('{Escape}{Escape}');
+    rerender(<Picker overflow="wrap" />);
+    act(() => screen.getByRole('button', { name: 'After' }).focus());
+    rerender(<Picker overflow="count" />);
+    expect(root()).toHaveAttribute('data-collapsed', '');
+    layout(130, 60);
+    expect(chip()).toHaveTextContent('+1');
+  });
+
+  it('re-measures when a tag’s label changes while collapsed (async options), a visible one and a hidden one', () => {
+    const relabel = (value: string, label: string) =>
+      options.map((option) => (option.value === value ? { ...option, label } : option));
+    const { rerender } = render(<Picker />);
+    layout(130, 60);
+    expect(chip()).toHaveTextContent('+1');
+    // A visible tag grows with its new label.
+    mockRect(tagItems()[1], { width: 100 });
+    rerender(<Picker options={relabel('banana', 'Banana split')} />);
+    expect(tagItems().map((tag) => tag.hidden)).toEqual([false, true, true]);
+    expect(chip()).toHaveTextContent('+2');
+    // A hidden tag shrinks with its new label: it is shown, measured and kept.
+    mockRect(tagItems()[1], { width: 60 });
+    rerender(<Picker options={relabel('banana', 'Banana')} />);
+    expect(chip()).toHaveTextContent('+1');
+    mockRect(tagItems()[2], { width: 10 });
+    rerender(<Picker options={relabel('cherry', 'Ch')} />);
+    expect(tagItems().map((tag) => tag.hidden)).toEqual([false, false, false]);
+    expect(chip()).toBeNull();
   });
 
   it('a press on the chip focuses the input and leaves the list closed', () => {

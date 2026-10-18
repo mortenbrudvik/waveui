@@ -322,7 +322,8 @@ export interface TagPickerGroupProps extends Omit<
   'role' | 'defaultValue'
 > {
   /**
-   * The tags of the selected values: `Tag`s with a `value` each (leave `dismissible` unset).
+   * The tags of the selected values: `Tag`s with a `value` each (leave `dismissible` unset), in
+   * `value` order (the single-line layout matches the tags to the values by position).
    * @default one Tag per selected value, named "Remove <label>" (`labels.remove`)
    */
   children?: React.ReactNode;
@@ -518,7 +519,8 @@ TagPickerGroupImpl.displayName = 'TagPickerGroupImpl';
  * Enter and Space remove its tag, and focus moves to the next tag, else to the trigger; a click
  * focuses the trigger. Left and Right (mirrored in RTL) move between the controls of the list and
  * from the last one to the trigger; Escape returns to the trigger. Its tags take the picker's look,
- * one Tag size smaller (a Tag's own `size` and `appearance` win). Fluent's TagPickerGroup is a
+ * one Tag size smaller (a Tag's own `size` and `appearance` win). With `overflow="count"` the
+ * tags are measured by position: render your own Tags in `value` order. Fluent's TagPickerGroup is a
  * listbox of tags: an option cannot hold a Dismiss button.
  */
 export const TagPickerGroup = (props: TagPickerGroupProps) => {

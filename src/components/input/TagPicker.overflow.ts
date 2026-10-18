@@ -39,8 +39,10 @@ export interface TagOverflowElements {
 class TagOverflowStore {
   private snapshot: ReadonlySet<string> = EMPTY;
   private readonly listeners = new Set<() => void>();
-  /** Widths of the tags (by value), read while each was visible. */
-  private readonly widths = new Map<string, number>();
+  /** Widths of the tags (by value), read while each was visible, with the label they had then. */
+  private readonly widths = new Map<string, { width: number; label: string }>();
+  /** A hidden tag changed its label: every tag shows, and the next pass measures again. */
+  private revealPending = false;
   /** The chip's width at the last measure (0 while it does not render). */
   private chipWidth = 0;
   /** Whether the chip's next width change may measure once more (reset by every trigger). */
@@ -58,25 +60,40 @@ class TagOverflowStore {
   /** Shows every tag again (the layout wraps, or nothing is measured). */
   reset(): void {
     this.chipWidth = 0;
+    this.revealPending = false;
     this.chipPassAllowed = false;
     this.publish(EMPTY);
   }
 
   /** A measure from a trigger (connect, resize, new values): allows one chip pass after it. */
-  measureFromTrigger(values: readonly string[], elements: TagOverflowElements): void {
+  measureFromTrigger(
+    values: readonly string[],
+    labels: readonly string[],
+    elements: TagOverflowElements,
+  ): void {
     this.chipPassAllowed = true;
-    this.measure(values, elements);
+    this.measure(values, labels, elements);
   }
 
   /**
    * After the chip rendered, unmounted or changed: measures once more when its width changed,
    * at most once per trigger, so a count that changes the chip's width cannot loop.
    */
-  measureAfterChip(values: readonly string[], elements: TagOverflowElements): void {
+  measureAfterChip(
+    values: readonly string[],
+    labels: readonly string[],
+    elements: TagOverflowElements,
+  ): void {
+    if (this.revealPending) {
+      // The tags a label change revealed have rendered: measure them (a trigger of its own).
+      this.revealPending = false;
+      this.measureFromTrigger(values, labels, elements);
+      return;
+    }
     if (!this.chipPassAllowed) return;
     if ((elements.chip?.offsetWidth ?? 0) === this.chipWidth) return;
     this.chipPassAllowed = false;
-    this.measure(values, elements);
+    this.measure(values, labels, elements);
   }
 
   /**
@@ -84,7 +101,11 @@ class TagOverflowStore {
    * gaps between them) fit the control's content width less the trigger's minimum width, the
    * chip's width and the gaps around them; at least one tag stays.
    */
-  private measure(values: readonly string[], elements: TagOverflowElements): void {
+  private measure(
+    values: readonly string[],
+    labels: readonly string[],
+    elements: TagOverflowElements,
+  ): void {
     const { control, group, chip, trigger } = elements;
     const chipWidth = chip?.offsetWidth ?? 0;
     this.chipWidth = chipWidth;
@@ -113,15 +134,25 @@ class TagOverflowStore {
     const tags = Array.from(group.querySelectorAll<HTMLElement>(TAG_ITEM_SELECTOR)).filter(
       (element) => element.parentElement?.closest(TAG_GROUP_SELECTOR) === group,
     );
+    let stale = false;
     values.forEach((value, index) => {
       const tag = tags[index];
-      if (tag && !tag.hidden) this.widths.set(value, tag.offsetWidth);
+      const label = labels[index] ?? value;
+      if (tag && !tag.hidden) this.widths.set(value, { width: tag.offsetWidth, label });
+      else if (this.widths.get(value)?.label !== label) stale = true;
     });
+    if (stale) {
+      // A hidden tag's width is unknown for its current label: show every tag, and measure once
+      // they have rendered.
+      this.revealPending = true;
+      this.publish(EMPTY);
+      return;
+    }
 
     let used = 0;
     let visible = 0;
     for (const value of values) {
-      const width = this.widths.get(value) ?? 0;
+      const width = this.widths.get(value)?.width ?? 0;
       const next = used + (visible > 0 ? tagGap : 0) + width;
       if (visible > 0 && next > available) break;
       used = next;
@@ -143,6 +174,8 @@ export interface UseTagOverflowOptions {
   active: boolean;
   /** The selected values, in tag order. */
   values: readonly string[];
+  /** Their labels, in the same order: a changed label re-measures its tag. */
+  labels: readonly string[];
   control: React.RefObject<HTMLElement | null>;
   group: React.RefObject<HTMLElement | null>;
   chip: React.RefObject<HTMLElement | null>;
@@ -152,19 +185,23 @@ export interface UseTagOverflowOptions {
 /**
  * The values of the tags that give way to the "+N" count while TagPicker's single-line layout is
  * active (`undefined` otherwise). It measures when it becomes active, on a resize of the control
- * (one ResizeObserver, created only while active), when the selected values change, and once more
- * when the chip's width changes; it publishes only when the hidden set changes. The server render
+ * (one ResizeObserver, created only while active), when the selected values or their labels
+ * change (a hidden tag whose label changed is shown first, then measured), and once more when
+ * the chip's width changes; it publishes only when the hidden set changes. The server render
  * and the first client render hide nothing.
  */
 export function useTagOverflow(options: UseTagOverflowOptions): ReadonlySet<string> | undefined {
-  const { active, values, control, group, chip, trigger } = options;
+  const { active, values, labels, control, group, chip, trigger } = options;
   const [store] = React.useState(() => new TagOverflowStore());
   const hidden = React.useSyncExternalStore(store.subscribe, store.getSnapshot, getEmpty);
-  const valuesKey = values.join('\u0000');
+  // The values and their labels, compared by content: a new tag or a new label measures again.
+  const valuesKey = `${values.join('\u0000')}\u0001${labels.join('\u0000')}`;
   const valuesRef = React.useRef(values);
+  const labelsRef = React.useRef(labels);
 
   React.useLayoutEffect(() => {
     valuesRef.current = values;
+    labelsRef.current = labels;
   });
 
   React.useLayoutEffect(() => {
@@ -178,7 +215,8 @@ export function useTagOverflow(options: UseTagOverflowOptions): ReadonlySet<stri
       chip: chip.current,
       trigger: trigger.current,
     });
-    const measure = () => store.measureFromTrigger(valuesRef.current, elements());
+    const measure = () =>
+      store.measureFromTrigger(valuesRef.current, labelsRef.current, elements());
     measure();
     const observed = control.current;
     if (!observed || typeof ResizeObserver === 'undefined') return undefined;
@@ -195,7 +233,7 @@ export function useTagOverflow(options: UseTagOverflowOptions): ReadonlySet<stri
   const hiddenCount = hidden.size;
   React.useLayoutEffect(() => {
     if (!active) return;
-    store.measureAfterChip(valuesRef.current, {
+    store.measureAfterChip(valuesRef.current, labelsRef.current, {
       control: control.current,
       group: group.current,
       chip: chip.current,
@@ -204,4 +242,56 @@ export function useTagOverflow(options: UseTagOverflowOptions): ReadonlySet<stri
   }, [active, hiddenCount, store, control, group, chip, trigger]);
 
   return active ? hidden : undefined;
+}
+
+/** Whether focus is inside the picker's root, kept outside React state (see {@link useFocusWithin}). */
+class FocusWithinStore {
+  focused = false;
+  private readonly listeners = new Set<() => void>();
+
+  subscribe = (listener: () => void): (() => void) => {
+    this.listeners.add(listener);
+    return () => {
+      this.listeners.delete(listener);
+    };
+  };
+
+  set(focused: boolean): void {
+    if (focused === this.focused) return;
+    this.focused = focused;
+    for (const listener of Array.from(this.listeners)) listener();
+  }
+}
+
+/** What {@link useFocusWithin} returns. */
+export interface FocusWithin {
+  /** Whether focus is inside the root; always `false` while `active` is. */
+  focusWithin: boolean;
+  /** For the root's `onFocus`: focus inside it in the DOM. */
+  onFocus: (event: React.FocusEvent<HTMLElement>) => void;
+  /** For the root's `onBlur`: focus left it (or the window). */
+  onBlur: (event: React.FocusEvent<HTMLElement>) => void;
+}
+
+/**
+ * Tracks focus inside the root in every mode, but renders only for it while `active` (count
+ * mode): a wrapping picker does not re-render on focus moves, and a switch to count mode reads
+ * where focus is at that moment, so the state never goes stale. The server render and hydration
+ * read `false`.
+ */
+export function useFocusWithin(active: boolean): FocusWithin {
+  const [store] = React.useState(() => new FocusWithinStore());
+  const focusWithin = React.useSyncExternalStore(
+    store.subscribe,
+    () => active && store.focused,
+    () => false,
+  );
+  const onFocus = (event: React.FocusEvent<HTMLElement>) => {
+    if (event.currentTarget.contains(event.target)) store.set(true);
+  };
+  const onBlur = (event: React.FocusEvent<HTMLElement>) => {
+    const next = event.relatedTarget;
+    if (!(next instanceof Node) || !event.currentTarget.contains(next)) store.set(false);
+  };
+  return { focusWithin, onFocus, onBlur };
 }

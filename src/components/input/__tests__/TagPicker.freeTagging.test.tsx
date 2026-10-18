@@ -31,6 +31,18 @@ function createOption(text = 'infra') {
   return screen.queryByRole('option', { name: `Create "${text}"` });
 }
 
+/**
+ * The create option for `text` is listed with its text, never selected, and (when `active`) is
+ * the option `aria-activedescendant` points at.
+ */
+function expectCreateOption(text: string, active = true) {
+  const option = createOption(text);
+  expect(option).toHaveTextContent(`Create "${text}"`);
+  expect(option).toHaveAttribute('aria-selected', 'false');
+  if (active) expect(activeOption()).toBe(option);
+  else expect(activeOption()).not.toBe(option);
+}
+
 function tags() {
   const list = screen.queryByRole('list', { name: 'Selected' });
   return list
@@ -193,7 +205,7 @@ describe('TagPicker free tagging (allowCreate)', () => {
       />,
     );
     await user.type(combobox(), '  infra  ');
-    expect(createOption()).not.toBeNull();
+    expectCreateOption('infra');
     await user.keyboard('{Enter}');
     expect(onOptionCreate).toHaveBeenCalledWith('infra');
     expect(tags()).toEqual(['infra']);
@@ -227,7 +239,7 @@ describe('TagPicker free tagging (allowCreate)', () => {
       record();
       await act(async () => {});
       record();
-      expect(createOption()).not.toBeNull();
+      expectCreateOption('infra');
       expect(statuses.every((text) => text === '')).toBe(true);
       expect(combobox()).toHaveAttribute('aria-expanded', 'true');
       // The text of a selected option's label: no create option, nothing listed.
@@ -303,13 +315,16 @@ describe('TagPicker free tagging (allowCreate)', () => {
     const { rerender } = render(<AsyncPicker results={[]} />);
     await user.type(combobox(), 'apple');
     // Before the results arrive, the text is new.
-    expect(createOption('apple')).not.toBeNull();
+    expectCreateOption('apple');
     rerender(<AsyncPicker results={[{ value: 'apple', label: 'Apple' }]} />);
     expect(screen.getByRole('option', { name: 'Apple' })).toBeInTheDocument();
     expect(createOption('apple')).toBeNull();
     rerender(<AsyncPicker results={[{ value: 'pineapple', label: 'Pineapple' }]} />);
     expect(screen.getByRole('option', { name: 'Pineapple' })).toBeInTheDocument();
-    expect(createOption('apple')).not.toBeNull();
+    // The first match stays active; the create option follows it, last.
+    expectCreateOption('apple', false);
+    expect(activeOption()).toHaveTextContent('Pineapple');
+    expect(screen.getAllByRole('option').at(-1)).toBe(createOption('apple'));
   });
 
   it('offers nothing while disabled or read-only; Tab, blur and close never create', async () => {
@@ -327,11 +342,11 @@ describe('TagPicker free tagging (allowCreate)', () => {
       </>,
     );
     await user.type(combobox(), 'infra');
-    expect(createOption()).not.toBeNull();
+    expectCreateOption('infra');
     await user.keyboard('{Escape}');
     expect(createOption()).toBeNull();
     await user.click(combobox());
-    expect(createOption()).not.toBeNull();
+    expectCreateOption('infra');
     await user.tab();
     await user.click(screen.getByRole('button', { name: 'After' }));
     expect(onOptionCreate).not.toHaveBeenCalled();

@@ -32,7 +32,7 @@ import type {
 import { createOptionText, findExactMatch } from './TagPicker.create';
 import type { ExactMatchCandidate } from './TagPicker.create';
 import type { TagPickerOption } from './TagPicker.option';
-import { useTagOverflow } from './TagPicker.overflow';
+import { useFocusWithin, useTagOverflow } from './TagPicker.overflow';
 import { TagPickerControl, TagPickerList, tagListControls } from './TagPicker.parts';
 
 /**
@@ -255,7 +255,8 @@ export interface TagPickerProps extends Omit<
   /**
    * `'wrap'`: the tags wrap onto more lines. `'count'`: while focus is outside the picker and its
    * list is closed, the tags stay on one line and the ones that do not fit give way to "+N"
-   * (`labels.overflowCount`); focusing the picker shows them all. WaveUI-only: Fluent's
+   * (`labels.overflowCount`); focusing the picker shows them all. The tags are measured by
+   * position: your own Tags in `TagPicker.Group` render in `value` order. WaveUI-only: Fluent's
    * single-line layout is a story, not a prop.
    * @default 'wrap'
    */
@@ -455,45 +456,6 @@ export const TagPickerRoot = (props: TagPickerProps) => {
   // aria-controls and aria-activedescendant never name a missing element.
   const isClient = useIsClient();
   const open = openState && interactive && isClient;
-  // The query (D12): the text typed since the last tag was added, which filters the options. A
-  // picker that starts locked starts without a query, as it starts closed.
-  const [queryState, setQuery] = useControllable(
-    queryProp,
-    interactive ? (defaultQuery ?? '') : '',
-    onQueryChange,
-  );
-  // Locking the control (readOnly/disabled) while typing drops the typed text: hidden during
-  // render here, and the reset reported from an effect, since `onQueryChange` never runs during
-  // render (D12). `lock` is how the picker came to be locked (previous-value pattern, C-HOOKS):
-  // `'locked'` by a change while mounted, whose reset is reported once, or `'mounted-locked'`
-  // since it mounted, which reports nothing and keeps a controlled query, hidden until the picker
-  // unlocks (R20).
-  const query = interactive ? queryState : '';
-  const [lock, setLock] = React.useState<LockState>(interactive ? 'unlocked' : 'mounted-locked');
-  if (interactive && lock !== 'unlocked') setLock('unlocked');
-  else if (!interactive && lock === 'unlocked') setLock('locked');
-  React.useEffect(() => {
-    if (lock === 'locked') setQuery('');
-  }, [lock, setQuery]);
-  // Locking also closes the list itself, not only the derived `open`, so unlocking does not reopen
-  // it without a user action. The close is reported through onOpenChange (a consumer callback from
-  // an effect, C-HOOKS); a controlled `open` that stays true is still not shown while locked.
-  const lockedOpen = !interactive && openState;
-  React.useEffect(() => {
-    if (lockedOpen) setOpen(false);
-  }, [lockedOpen, setOpen]);
-  // Keeps the shared live regions alive while mounted: every addition and removal is announced
-  // (`announceToggle`).
-  useAnnounce();
-
-  const rootRef = React.useRef<HTMLDivElement | null>(null);
-  const triggerRef = React.useRef<HTMLElement | null>(null);
-  const controlElementRef = React.useRef<HTMLDivElement | null>(null);
-  const groupRef = React.useRef<HTMLDivElement | null>(null);
-  const chipRef = React.useRef<HTMLSpanElement | null>(null);
-  const summaryId = useId('tagpicker-summary');
-  const createValue = useId('tagpicker-create');
-
   // The trigger parts (D63): their kind decides the listbox mode; the server HTML and the first
   // render use the editable mode of `TagPicker.Input`.
   const triggersRef = React.useRef(new Map<object, TagPickerTriggerKind>());
@@ -523,6 +485,47 @@ export const TagPickerRoot = (props: TagPickerProps) => {
     if (listCountRef.current > 1) warnOnce('TagPicker.List:placement', LIST_PLACEMENT_MESSAGE);
   });
   const isButtonTrigger = triggerKind === 'button';
+
+  // The query (D12): the text typed since the last tag was added, which filters the options. A
+  // picker that starts locked starts without a query, as it starts closed.
+  const [queryState, setQuery] = useControllable(
+    queryProp,
+    interactive ? (defaultQuery ?? '') : '',
+    onQueryChange,
+  );
+  // Locking the control (readOnly/disabled) while typing drops the typed text: hidden during
+  // render here, and the reset reported from an effect, since `onQueryChange` never runs during
+  // render (D12). `lock` is how the picker came to be locked (previous-value pattern, C-HOOKS):
+  // `'locked'` by a change while mounted, whose reset is reported once, or `'mounted-locked'`
+  // since it mounted, which reports nothing and keeps a controlled query, hidden until the picker
+  // unlocks (R20).
+  // `TagPicker.Button` has no text entry, so no query filters its list (D63).
+  const query = interactive && !isButtonTrigger ? queryState : '';
+  const [lock, setLock] = React.useState<LockState>(interactive ? 'unlocked' : 'mounted-locked');
+  if (interactive && lock !== 'unlocked') setLock('unlocked');
+  else if (!interactive && lock === 'unlocked') setLock('locked');
+  React.useEffect(() => {
+    if (lock === 'locked') setQuery('');
+  }, [lock, setQuery]);
+  // Locking also closes the list itself, not only the derived `open`, so unlocking does not reopen
+  // it without a user action. The close is reported through onOpenChange (a consumer callback from
+  // an effect, C-HOOKS); a controlled `open` that stays true is still not shown while locked.
+  const lockedOpen = !interactive && openState;
+  React.useEffect(() => {
+    if (lockedOpen) setOpen(false);
+  }, [lockedOpen, setOpen]);
+  // Keeps the shared live regions alive while mounted: every addition and removal is announced
+  // (`announceToggle`).
+  useAnnounce();
+
+  const rootRef = React.useRef<HTMLDivElement | null>(null);
+  const triggerRef = React.useRef<HTMLElement | null>(null);
+  const controlElementRef = React.useRef<HTMLDivElement | null>(null);
+  const groupRef = React.useRef<HTMLDivElement | null>(null);
+  const chipRef = React.useRef<HTMLSpanElement | null>(null);
+  const summaryId = useId('tagpicker-summary');
+  const createValue = useId('tagpicker-create');
+
   React.useEffect(() => {
     if (allowCreate && isButtonTrigger) {
       warnOnce('TagPicker:allowCreate-button', ALLOW_CREATE_BUTTON_MESSAGE);
@@ -697,11 +700,17 @@ export const TagPickerRoot = (props: TagPickerProps) => {
   );
 
   // The single-line layout (D62): collapsed while focus is outside the root and the list closed.
-  const [focusWithin, setFocusWithin] = React.useState(false);
+  const {
+    focusWithin,
+    onFocus: trackFocus,
+    onBlur: trackBlur,
+  } = useFocusWithin(overflow === 'count');
   const collapsed = overflow === 'count' && !focusWithin && !open;
+  const tagLabels = React.useMemo(() => selected.map(labelOf), [selected, labelOf]);
   const hiddenValues = useTagOverflow({
     active: collapsed,
     values: selected,
+    labels: tagLabels,
     control: controlElementRef,
     group: groupRef,
     chip: chipRef,
@@ -942,18 +951,9 @@ export const TagPickerRoot = (props: TagPickerProps) => {
       {...rest}
       ref={rootMergedRef}
       className={cn(tagPickerClassNames.root, 'relative', className)}
-      // Focus inside the root (DOM containment) expands the single-line layout; tracked in count
-      // mode only, so a wrapping picker does not render on focus changes.
-      onFocus={(event) => {
-        if (overflow === 'count' && event.currentTarget.contains(event.target)) {
-          setFocusWithin(true);
-        }
-      }}
-      onBlur={(event) => {
-        if (overflow !== 'count') return;
-        const next = event.relatedTarget;
-        if (!(next instanceof Node) || !event.currentTarget.contains(next)) setFocusWithin(false);
-      }}
+      // Focus inside the root (DOM containment) expands the single-line layout.
+      onFocus={trackFocus}
+      onBlur={trackBlur}
     >
       <TagPickerContext.Provider value={context}>{parts}</TagPickerContext.Provider>
       {hasSummary && (
