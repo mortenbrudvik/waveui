@@ -3062,3 +3062,163 @@ describe('useRovingTabIndex', () => {
     });
   });
 });
+
+describe("useRovingTabIndex orientation: 'grid'", () => {
+  const NAMES = ['a1', 'a2', 'a3', 'b1', 'b2', 'b3', 'c1', 'c2'];
+
+  /** Rows from role="row" elements; the third row is shorter, an optional empty row sits between. */
+  function RowGrid({
+    disabled = [],
+    emptyRow = false,
+    dir,
+  }: {
+    disabled?: string[];
+    emptyRow?: boolean;
+    dir?: 'rtl' | 'ltr';
+  }) {
+    const { containerProps, getTabIndex } = useRovingTabIndex({
+      orientation: 'grid',
+      loop: false,
+      tabStop: 'last-focused',
+    });
+    const rows = [['a1', 'a2', 'a3'], ['b1', 'b2', 'b3'], ...(emptyRow ? [[]] : []), ['c1', 'c2']];
+    return (
+      <div role="grid" aria-label="Grid" dir={dir} {...containerProps}>
+        {rows.map((row, r) => (
+          <div role="row" key={r} hidden={row.length === 0 ? true : undefined}>
+            {row.map((v) => (
+              <button
+                key={v}
+                type="button"
+                data-roving-value={v}
+                disabled={disabled.includes(v)}
+                tabIndex={getTabIndex(v)}
+              >
+                {v}
+              </button>
+            ))}
+          </div>
+        ))}
+      </div>
+    );
+  }
+
+  /** A flat list of cells: rows come from the `columns` count. */
+  function FlatGrid({ columns, dir }: { columns?: number; dir?: 'rtl' | 'ltr' }) {
+    const { containerProps, getTabIndex } = useRovingTabIndex({
+      orientation: 'grid',
+      columns,
+      loop: false,
+    });
+    return (
+      <div role="group" aria-label="Flat" dir={dir} {...containerProps}>
+        {NAMES.map((v) => (
+          <button key={v} type="button" data-roving-value={v} tabIndex={getTabIndex(v)}>
+            {v}
+          </button>
+        ))}
+      </div>
+    );
+  }
+
+  const cell = (name: string) => screen.getByRole('button', { name });
+
+  it('moves Left and Right across rows and stops at the ends', async () => {
+    const user = userEvent.setup();
+    render(<RowGrid />);
+    await user.tab();
+    expect(cell('a1')).toHaveFocus();
+    await user.keyboard('{ArrowLeft}');
+    expect(cell('a1')).toHaveFocus();
+    await user.keyboard('{ArrowRight}{ArrowRight}{ArrowRight}');
+    expect(cell('b1')).toHaveFocus();
+  });
+
+  it('moves Up and Down to the same index, else the nearest enabled cell, and stops at the ends', async () => {
+    const user = userEvent.setup();
+    render(<RowGrid disabled={['b3']} />);
+    await user.tab();
+    await user.keyboard('{ArrowRight}{ArrowRight}');
+    expect(cell('a3')).toHaveFocus();
+    await user.keyboard('{ArrowDown}');
+    expect(cell('b2')).toHaveFocus();
+    await user.keyboard('{ArrowDown}{ArrowDown}');
+    expect(cell('c2')).toHaveFocus();
+    await user.keyboard('{ArrowUp}{ArrowUp}{ArrowUp}');
+    expect(cell('a2')).toHaveFocus();
+  });
+
+  it('goes to the row ends with Home and End and to the grid ends with Ctrl+Home and Ctrl+End', async () => {
+    const user = userEvent.setup();
+    render(<RowGrid />);
+    await user.tab();
+    await user.keyboard('{ArrowDown}{End}');
+    expect(cell('b3')).toHaveFocus();
+    await user.keyboard('{Home}');
+    expect(cell('b1')).toHaveFocus();
+    await user.keyboard('{Control>}{End}{/Control}');
+    expect(cell('c2')).toHaveFocus();
+    await user.keyboard('{Control>}{Home}{/Control}');
+    expect(cell('a1')).toHaveFocus();
+  });
+
+  it('skips a hidden empty row', async () => {
+    const user = userEvent.setup();
+    render(<RowGrid emptyRow />);
+    await user.tab();
+    await user.keyboard('{ArrowDown}{ArrowDown}');
+    expect(cell('c1')).toHaveFocus();
+  });
+
+  it('mirrors Left and Right in RTL while Home and End stay the row ends', async () => {
+    const user = userEvent.setup();
+    render(<RowGrid dir="rtl" />);
+    await user.tab();
+    await user.keyboard('{ArrowLeft}');
+    expect(cell('a2')).toHaveFocus();
+    await user.keyboard('{ArrowRight}{ArrowRight}');
+    expect(cell('a1')).toHaveFocus();
+    await user.keyboard('{End}');
+    expect(cell('a3')).toHaveFocus();
+  });
+
+  it('counts rows from a columns count without role="row", with a short last row', async () => {
+    const user = userEvent.setup();
+    render(<FlatGrid columns={3} />);
+    await user.tab();
+    await user.keyboard('{ArrowDown}{ArrowDown}');
+    expect(cell('c1')).toHaveFocus();
+    await user.keyboard('{ArrowRight}{ArrowRight}');
+    expect(cell('c2')).toHaveFocus();
+    await user.keyboard('{ArrowUp}{End}');
+    expect(cell('b3')).toHaveFocus();
+    await user.keyboard('{ArrowDown}');
+    expect(cell('c2')).toHaveFocus();
+  });
+
+  it('warns once and acts as both when there are no rows and no columns', async () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const user = userEvent.setup();
+    const { rerender } = render(<FlatGrid />);
+    rerender(<FlatGrid />);
+    await user.tab();
+    await user.keyboard('{ArrowDown}');
+    expect(cell('a2')).toHaveFocus();
+    expect(warn.mock.calls).toEqual([
+      [expect.stringMatching(/^\[WaveUI\] useRovingTabIndex: orientation "grid" needs/)],
+    ]);
+    warn.mockRestore();
+  });
+
+  it('works in StrictMode', async () => {
+    const user = userEvent.setup();
+    render(
+      <React.StrictMode>
+        <RowGrid />
+      </React.StrictMode>,
+    );
+    await user.tab();
+    await user.keyboard('{ArrowDown}');
+    expect(cell('b1')).toHaveFocus();
+  });
+});

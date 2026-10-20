@@ -26,10 +26,23 @@ export interface UseRovingTabIndexOptions {
   items?: readonly string[];
   /**
    * Arrow key axis: `'horizontal'` uses Left/Right (mirrored in RTL), `'vertical'` uses Up/Down,
-   * `'both'` uses all four.
+   * `'both'` uses all four, in the DOM order of the items.
+   *
+   * `'grid'` is a two-dimensional grid: Left/Right move through the cells in reading order across
+   * rows (mirrored in RTL); Up/Down go to the cell at the same index in the previous or next row,
+   * else to the nearest enabled cell of that row (the earlier one on a tie), skipping rows without
+   * an enabled cell, and stop at the first and last row; Home/End go to the first and last enabled
+   * cell of the row, Ctrl+Home/End of the grid (whatever `homeEndKeys` says). Rows are the
+   * `role="row"` elements inside the container, else groups of `columns` items in DOM order. Without
+   * either, `'grid'` acts as `'both'` and a development warning says so.
    * @default 'horizontal'
    */
-  orientation?: 'horizontal' | 'vertical' | 'both';
+  orientation?: 'horizontal' | 'vertical' | 'both' | 'grid';
+  /**
+   * With `orientation: 'grid'` and no `role="row"` elements: the number of cells per row. The last
+   * row may be shorter.
+   */
+  columns?: number;
   /**
    * Whether arrow keys wrap around at the ends.
    * @default true
@@ -127,6 +140,67 @@ export interface UseRovingTabIndexResult {
   focusFirst: () => void;
   /** Focuses the last enabled item. */
   focusLast: () => void;
+}
+
+/** The rows of a grid: the items of the `role="row"` elements, else groups of `columns` items. */
+function groupIntoRows(
+  ordered: readonly ResolvedItem[],
+  container: HTMLElement,
+  columns: number | undefined,
+): ResolvedItem[][] | null {
+  const rowElements = container.querySelectorAll<HTMLElement>('[role="row"]');
+  if (rowElements.length > 0) {
+    return Array.from(rowElements).map((row) =>
+      ordered.filter((item) => row.contains(item.element)),
+    );
+  }
+  if (columns !== undefined && columns > 0) {
+    const rows: ResolvedItem[][] = [];
+    for (let start = 0; start < ordered.length; start += columns) {
+      rows.push(ordered.slice(start, start + columns));
+    }
+    return rows;
+  }
+  return null;
+}
+
+/**
+ * Where a grid key (Up/Down, Home/End, Ctrl+Home/End) goes from `current`: the cells to try, in
+ * order; `'stay'` when the key is the grid's but nothing is further that way; `undefined` when it is
+ * not a grid key, or focus is not on a cell of a row (the container's own handling applies).
+ */
+function gridTargets(
+  e: React.KeyboardEvent,
+  rows: readonly ResolvedItem[][],
+  current: ResolvedItem | null | undefined,
+): ResolvedItem[] | 'stay' | undefined {
+  const vertical = e.key === 'ArrowUp' || e.key === 'ArrowDown';
+  const homeEnd = e.key === 'Home' || e.key === 'End';
+  if (!current || (!vertical && !homeEnd)) return undefined;
+  const rowIndex = rows.findIndex((row) => row.includes(current));
+  if (rowIndex < 0) return undefined;
+  if (homeEnd) {
+    const scope = (e.ctrlKey ? rows.flat() : rows[rowIndex]).filter((item) => !item.disabled);
+    const target = e.key === 'Home' ? scope[0] : scope[scope.length - 1];
+    return target && target !== current ? [target] : 'stay';
+  }
+  // The column is the index in the row, counting every cell (disabled ones included).
+  const column = rows[rowIndex].indexOf(current);
+  const delta = e.key === 'ArrowDown' ? 1 : -1;
+  for (let r = rowIndex + delta; r >= 0 && r < rows.length; r += delta) {
+    let best: ResolvedItem | undefined;
+    let bestDistance = Infinity;
+    rows[r].forEach((item, index) => {
+      if (item.disabled) return;
+      const distance = Math.abs(index - column);
+      if (distance < bestDistance) {
+        best = item;
+        bestDistance = distance;
+      }
+    });
+    if (best) return [best];
+  }
+  return 'stay';
 }
 
 interface ResolvedItem {
@@ -871,6 +945,7 @@ export function useRovingTabIndex(
     activeValue = null,
     items,
     orientation = 'horizontal',
+    columns,
     loop = true,
     dir,
     itemSelector = DEFAULT_ITEM_SELECTOR,
@@ -911,6 +986,18 @@ export function useRovingTabIndex(
       );
     }
   }, [itemSelector]);
+
+  // C-DEV: a grid needs rows, from role="row" elements or a `columns` count.
+  React.useEffect(() => {
+    if (!isDev || orientation !== 'grid' || columns) return;
+    const container = store.container;
+    if (container && container.querySelector('[role="row"]') === null) {
+      warnOnce(
+        'useRovingTabIndex:grid-rows',
+        'useRovingTabIndex: orientation "grid" needs role="row" elements around the items or a `columns` count; without either it acts as "both".',
+      );
+    }
+  });
 
   // Tab stop during render, from the DOM snapshot (null before the container is known).
   const domItems = React.useMemo(() => parseSnapshot(snapshot), [snapshot]);
@@ -983,7 +1070,10 @@ export function useRovingTabIndex(
     // Ctrl, Alt and Meta combinations are shortcuts, except a single character typed with AltGr
     // (Ctrl+Alt on Windows), which is typeahead text: arrows, Home, End and Space with it stay
     // shortcuts.
-    const shortcut = e.metaKey || ((e.altKey || e.ctrlKey) && !isAltGraphCharacter(e));
+    const gridCtrlHomeEnd =
+      orientation === 'grid' && e.ctrlKey && !e.altKey && (e.key === 'Home' || e.key === 'End');
+    const shortcut =
+      e.metaKey || ((e.altKey || e.ctrlKey) && !isAltGraphCharacter(e) && !gridCtrlHomeEnd);
     if (e.defaultPrevented || shortcut) return;
     if (ownsArrowKeys(e.target)) return;
     const container = store.container ?? (e.currentTarget as HTMLElement);
@@ -1001,13 +1091,20 @@ export function useRovingTabIndex(
     // Where focus goes, in order of preference: an item whose focus() does not move focus (hidden
     // by CSS) passes the key on to the next one.
     let targets: ResolvedItem[] = [];
-    const intent = spaceOnly
-      ? null
-      : getArrowIntent(e.key, {
-          orientation,
-          dir: dir ?? getDirection(e.currentTarget as Element),
-        });
-    if (intent) {
+    const rows =
+      orientation === 'grid' && !spaceOnly ? groupIntoRows(ordered, container, columns) : null;
+    const gridMove = rows ? gridTargets(e, rows, current) : undefined;
+    const intent =
+      spaceOnly || gridMove
+        ? null
+        : getArrowIntent(e.key, {
+            orientation: orientation === 'grid' ? (rows ? 'horizontal' : 'both') : orientation,
+            dir: dir ?? getDirection(e.currentTarget as Element),
+          });
+    if (gridMove) {
+      handled = true;
+      targets = gridMove === 'stay' ? [] : gridMove;
+    } else if (intent) {
       handled = true;
       if (!current) {
         targets = intent === 'next' ? enabled : [...enabled].reverse();
