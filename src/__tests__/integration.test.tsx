@@ -314,6 +314,24 @@ describe('public barrel (spec §5.11, C-COMPOUND)', () => {
     }
   });
 
+  it('exports the overlay hooks and their helpers (0.12)', () => {
+    for (const name of [
+      'usePopupPosition',
+      'useDismiss',
+      'DismissLayerProvider',
+      'useModalLayer',
+      'useFocusTrap',
+      'useInitialFocus',
+      'useRestoreFocus',
+      'useModalOpen',
+      'hasOpenModal',
+    ]) {
+      expect(barrel[name], name).toBeTypeOf('function');
+    }
+    expect(barrel['modalAllowProps']).toEqual({ 'data-wave-focus-trap-allow': '' });
+    expect(barrel['DismissLayerContext']).toBeUndefined();
+  });
+
   it('keeps internal helpers out of the public API', () => {
     const internal = [
       'buttonClassName',
@@ -323,9 +341,8 @@ describe('public barrel (spec §5.11, C-COMPOUND)', () => {
       'HiddenInput',
       'useFormReset',
       'useTriggerElement',
-      'useModalLayer',
       'useModalIsolation',
-      'useDismiss',
+      'useScrollLock',
       'ListboxContext',
       'getPaginationRange',
       'useControlErrorMessage',
@@ -404,7 +421,6 @@ describe('public barrel (spec §5.11, C-COMPOUND)', () => {
       'ModalBackdrop',
       'useBackdropAppearance',
       'useModalOpener',
-      'useInitialFocus',
       'NavRoot',
       'useNavRootState',
       'NavContext',
