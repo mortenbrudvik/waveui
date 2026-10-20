@@ -5,7 +5,7 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [0.12.0] - Unreleased
+## [0.12.0] - 2026-10-20
 
 The seventh Fluent UI v9 parity release: Phase 7 of the [roadmap](docs/ROADMAP.md), the overlay and focus primitives made public. The positioning, dismiss, modal-layer and focus hooks behind WaveUI's own surfaces are public and documented, so an app can build a command palette, a custom popup or a full-screen overlay that joins the layer stack (Escape order, outside presses, toasts), and a `positioning` prop reaches the advanced placement options of nine components. Nothing is removed; see [Upgrading from 0.11](README.md#upgrading-from-011).
 
