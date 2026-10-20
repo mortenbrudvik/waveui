@@ -51,7 +51,7 @@ Phase 7 makes those contracts public and documented, so the next such workaround
 - **D9 — The allow-region contract is public (P7-02, issue #5).** The attribute `data-wave-focus-trap-allow` is documented as public and does not change (taskboard keeps working). A server-safe export `modalAllowProps` (`{ 'data-wave-focus-trap-allow': '' }`) is added for spread, and the README documents what the attribute does: the region's content counts as inside every dismiss layer, its tabbables join every focus trap's Tab cycle, and modal isolation never makes it `inert`. *(name my call)*
 - **D10 — A "modal open" query is public (ride-along, from taskboard).** `useModalOpen(): boolean` (true while any `modal`-kind layer is open; a `useSyncExternalStore` over `subscribeLayers`, `false` on the server) and the non-hook `hasOpenModal(): boolean`. It replaces guessing from `[inert]`. Size S; the maintainer may strike it. *(my call; not in the roadmap)*
 - **D11 — Grid roving is `useRovingTabIndex({ orientation: 'grid' })`.** The internal `useRovingGrid` (SwatchPicker) becomes a thin wrapper over it and stays internal. Rows come from `role="row"` elements (today's rule), or from an optional `columns` count for a flat list of cells. Home/End per row, Ctrl+Home/End for the grid, Up/Down to the same index else the nearest enabled cell: exactly today's `useRovingGrid` rules, so SwatchPicker's tests are the regression suite.
-- **D12 — `useFocusableGroup` semantics are fixed against Fluent before code (§4.2).** `tabBehavior: 'unlimited' | 'limited' | 'limited-trap-focus'`, Enter or F2 enters, Escape leaves. The exact Tab rules of each mode are settled by reading Fluent's tabster source in the plan's first task (the `fluent-parity-researcher` agent), not guessed here; the table in §4.2 states the intent.
+- **D12 — `useFocusableGroup` semantics are fixed against Fluent before code (§4.2).** `tabBehavior: 'unlimited' | 'limited' | 'limited-trap-focus'`, Enter or F2 enters, Escape leaves. The Tab rules of each mode are tabster's groupper rules, read from its docs and Fluent's hook; §4.2 states them.
 - **D13 — `useFocusVisible()` returns a boolean.** True while the last input was the keyboard. One module-level store with ref-counted document listeners, `false` on the server and before the first interaction. It does not replace CSS `:focus-visible`; it exists for logic that needs the mode (a roving item that shows a ring in script-driven widgets). *(my call)*
 - **D14 — Style recipes are exported as constants.** `focusRing`, `focusRingInset`, `inputFocus` (and `inputFocusWithin`, which `inputFocus` pairs with) are exported from the entry. A pack-smoke check proves their classes exist in `dist/styles.css` and in the Tailwind fixture's output, so a consumer who uses them gets the focus look without extra configuration.
 - **D15 — `useGridNavigation` is exported as it is.** It is the static Table's navigation; its options and result types are exported with it (`UseGridNavigationOptions`, `UseGridNavigationResult`, `GridNavigationHandlers`). DataGrid and Table keep using it.
@@ -113,15 +113,19 @@ Exports: `useModalLayer`, `useFocusTrap`, `useInitialFocus` (it is part of the s
 
 ### 4.2 `useFocusableGroup`
 
-`useFocusableGroup({ tabBehavior })` returns props to spread on the group element (`tabIndex`, `onKeyDown`, `data-focusable-group`). Intent per mode (D12 settles the details):
+Settled from the sources (Task 1): Fluent's `useFocusableGroup` is a thin wrapper over tabster's *groupper* (`microsoft/tabster`, `docs/docs/groupper.md`; Fluent's `react-tabster/src/hooks/useFocusableGroup.ts`). A group element is itself focusable (`tabindex` 0).
 
-| Mode | Enter / F2 | Tab inside | Escape |
+`useFocusableGroup({ tabBehavior })` returns `{ groupProps }` to spread on the group element: `ref`, `tabIndex: 0`, `onKeyDown`, `onBlur` and `data-focusable-group` (the `ref`, `onBlur` and key handlers are WaveUI's addition: the limited modes stamp the inner tab stops and need the container and the focus-leave signal).
+
+| Mode | Enter / F2 on the group | Tab / Shift+Tab | Escape from inside |
 |---|---|---|---|
-| `unlimited` (default) | focus the first tabbable inside | the browser's order, through the group and out | focus the group |
-| `limited` | same | inner tabbables are tab stops only after entering; Tab past either end leaves the group | focus the group |
-| `limited-trap-focus` | same | Tab cycles inside until Escape | focus the group |
+| `unlimited` (default) | not intercepted: no Enter is needed | the inner elements are reachable by Tab as usual; the group is one more tab stop | not intercepted |
+| `limited` | focus the first tabbable inside; the inner tab stops come back | before entering, the group is one tab stop (its inner tabbables are skipped); once inside, Tab moves between the inner tabbables and past the last one leaves the group; Shift+Tab before the first returns to the group | focus the group; the inner tabbables are skipped again |
+| `limited-trap-focus` | same | like `limited`, but Tab past the last inner tabbable wraps to the first and Shift+Tab before the first wraps to the last, until Escape | same |
 
-Honours `isFocused`, skips hidden and `inert` elements through the `src/lib/focus.ts` finders, ignores keys from a portaled popup opened inside (C-COMPOSE). Tests: each mode, RTL irrelevant (no horizontal keys), StrictMode, an input inside the group keeps Enter and Escape if it handles them (`isEditableTarget`).
+Skipping is done by setting `tabindex="-1"` on the group's tabbable descendants while the group is not entered (the original value is kept in `data-focusable-group-tabindex` and restored on entering; a `MutationObserver` stamps content added later). Leaving by focus moving outside (`blur` to an element outside the group) counts as leaving. Keys whose target is not inside the group in the DOM (a portaled popup opened from it) and keys that belong to a nested group are ignored (C-COMPOSE); a key a descendant already handled (`defaultPrevented`, such as an input that consumes Escape) is left alone. Differences from Fluent: none planned; tabster's `delegated` option and the `GroupperMoveFocusEvent` are not taken.
+
+Tests: each mode's rules, nested groups, a consuming input, a portaled popup, StrictMode, `renderToString`; RTL irrelevant (no horizontal keys).
 
 ### 4.3 Exports
 
